@@ -476,7 +476,10 @@ impl Receiver {
         self.state
             .mirrors
             .values()
-            .map(|m| m.to_trait_entry(now))
+            .map(|m| {
+                let size = super::state::dir_size_bytes(&m.bare_repo_path);
+                m.to_trait_entry(now, size)
+            })
             .collect()
     }
 

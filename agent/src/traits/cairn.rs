@@ -126,6 +126,7 @@ mod tests {
                 last_refreshed: 1_744_560_000,
                 stale: false,
                 next_gc_at: 1_744_600_000,
+                size_bytes: 4_096,
             }],
         };
         snapshot.save(dir.path()).unwrap();
@@ -151,6 +152,7 @@ mod tests {
         assert_eq!(v["mirrors"][0]["seeder"], "host");
         assert_eq!(v["mirrors"][0]["git_sha"], "deadbeef");
         assert_eq!(v["mirrors"][0]["last_refreshed"], 1_744_560_000u64);
+        assert_eq!(v["mirrors"][0]["size_bytes"], 4_096u64);
     }
 
     #[test]

@@ -183,6 +183,7 @@ type Handler struct {
 // depend on the full aggregator handler type.
 type CairnFleetSource interface {
 	FleetSnapshot(ctx context.Context) (*cairnmesh.Fleet, error)
+	EnvoyMirrors(ctx context.Context, envoyID string) []cairnmesh.EnvoyMirror
 }
 
 // SetCairnFleet wires the fleet aggregator into the UI handler.
@@ -197,6 +198,8 @@ func (h *Handler) SetCairnFleet(src CairnFleetSource) {
 type MeshSource interface {
 	SyncSnapshot(ctx context.Context) (*echomesh.Fleet, error)
 	CryptSnapshot(ctx context.Context) (*sigilmesh.Fleet, error)
+	EnvoyEchoFiles(ctx context.Context, envoyID string) []echomesh.EnvoyFile
+	EnvoySigilFiles(ctx context.Context, envoyID string) []sigilmesh.EnvoyFile
 }
 
 // SetMesh wires the echo/sigil fleet aggregators into the
@@ -415,6 +418,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /envoys/{id}", h.EnvoyDetail)
 	mux.HandleFunc("GET /envoys/{id}/trace", h.EnvoyTrace)
 	mux.HandleFunc("GET /envoys/{id}/trace/viz", h.EnvoyTraceViz)
+	mux.HandleFunc("GET /envoys/{id}/swarm-load", h.EnvoySwarmLoad)
 	mux.HandleFunc("GET /ui/api/envoys/{id}/security", h.EnvoySecurityTraits)
 	mux.HandleFunc("GET /runs", h.Runs)
 	mux.HandleFunc("GET /runs/{id}", h.RunDetail)

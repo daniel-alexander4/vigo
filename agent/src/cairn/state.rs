@@ -363,6 +363,14 @@ pub struct MirrorTraitEntry {
     /// carry the threshold constant.
     pub stale: bool,
     pub next_gc_at: u64,
+    /// Sum of file bytes in the bare repo directory at trait-write
+    /// time. Populated by the receiver's trait projection so the
+    /// server-side /envoys/{id}/swarm-load page can rank per-envoy
+    /// disk consumers without a second trip to the envoy. Zero means
+    /// either the walk failed (I/O error, bare_repo_path missing)
+    /// or the repo genuinely holds no packed objects yet.
+    #[serde(default)]
+    pub size_bytes: u64,
 }
 
 /// Snapshot of source-side cairn state, written at the end of each
@@ -599,8 +607,12 @@ impl MirrorState {
     /// Project this on-disk receiver state into the narrower
     /// `MirrorTraitEntry` shape for upstream reporting. Omits
     /// `bare_repo_path` (reconstructible from seeder/user/project)
-    /// to keep the trait payload small.
-    pub fn to_trait_entry(&self, now: u64) -> MirrorTraitEntry {
+    /// to keep the trait payload small. `size_bytes` is the sum of
+    /// file bytes under `bare_repo_path` — the caller (receiver's
+    /// `mirrors_snapshot`) computes this via [`dir_size_bytes`] so
+    /// the walk only happens at trait-write time, not on every
+    /// serialize round-trip.
+    pub fn to_trait_entry(&self, now: u64, size_bytes: u64) -> MirrorTraitEntry {
         MirrorTraitEntry {
             label: self.label.clone(),
             seeder: self.seeder.clone(),
@@ -611,8 +623,50 @@ impl MirrorState {
             last_refreshed: self.last_refreshed,
             stale: self.is_stale(now),
             next_gc_at: self.next_gc_at,
+            size_bytes,
         }
     }
+}
+
+/// Sum the file bytes reachable under `path`. Returns 0 if the
+/// directory cannot be walked (missing, permission denied, or any
+/// mid-walk I/O error) — size is advisory, not correctness-critical,
+/// so the receiver should never fail a trait write over it.
+///
+/// Capped at [`DIR_SIZE_ENTRY_CAP`] entries to bound CPU in the
+/// pathological case where a mirror's bare repo holds millions of
+/// loose objects. When the cap trips, the partial total is returned
+/// rather than zero — under-reporting is strictly better than a stall
+/// on a check-in path.
+pub fn dir_size_bytes(path: &std::path::Path) -> u64 {
+    const DIR_SIZE_ENTRY_CAP: usize = 50_000;
+    let mut total: u64 = 0;
+    let mut seen: usize = 0;
+    let mut stack: Vec<PathBuf> = vec![path.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(it) => it,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            seen += 1;
+            if seen > DIR_SIZE_ENTRY_CAP {
+                return total;
+            }
+            let meta = match entry.file_type() {
+                Ok(ft) if ft.is_dir() => {
+                    stack.push(entry.path());
+                    continue;
+                }
+                Ok(_) => entry.metadata(),
+                Err(_) => continue,
+            };
+            if let Ok(m) = meta {
+                total = total.saturating_add(m.len());
+            }
+        }
+    }
+    total
 }
 
 /// Persistent receiver state — what we have materialized and what we
@@ -1284,6 +1338,7 @@ mod tests {
             last_refreshed: 1_744_560_000,
             stale: false,
             next_gc_at: 1_744_582_000,
+            size_bytes: 1_234_567,
         };
         let json = serde_json::to_string(&m).unwrap();
         let back: MirrorTraitEntry = serde_json::from_str(&json).unwrap();
@@ -1291,12 +1346,37 @@ mod tests {
     }
 
     #[test]
+    fn mirror_trait_entry_defaults_size_when_absent() {
+        // Older agents (or snapshots persisted before the field was
+        // added) omit size_bytes. Deserialization must fall back to
+        // 0 rather than fail — #[serde(default)] does the work.
+        let older = r#"{"label":"cairn:src:dan:proj","seeder":"src","user":"dan","project":"proj","git_sha":"c","blob_sha":"b","last_refreshed":1,"stale":false,"next_gc_at":2}"#;
+        let entry: MirrorTraitEntry = serde_json::from_str(older).unwrap();
+        assert_eq!(entry.size_bytes, 0);
+    }
+
+    #[test]
     fn mirror_state_to_trait_entry_computes_stale() {
         let m = sample_mirror();
-        let recent = m.to_trait_entry(m.last_refreshed + 10);
+        let recent = m.to_trait_entry(m.last_refreshed + 10, 0);
         assert!(!recent.stale);
-        let ancient = m.to_trait_entry(m.last_refreshed + super::super::STALE_THRESHOLD_SECS + 1);
+        let ancient = m.to_trait_entry(m.last_refreshed + super::super::STALE_THRESHOLD_SECS + 1, 0);
         assert!(ancient.stale);
+    }
+
+    #[test]
+    fn dir_size_bytes_sums_files_recursively() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.bin"), vec![0u8; 1000]).unwrap();
+        std::fs::create_dir(dir.path().join("sub")).unwrap();
+        std::fs::write(dir.path().join("sub").join("b.bin"), vec![0u8; 2500]).unwrap();
+        assert_eq!(super::dir_size_bytes(dir.path()), 3500);
+    }
+
+    #[test]
+    fn dir_size_bytes_returns_zero_for_missing_path() {
+        let bogus = std::path::Path::new("/does/not/exist/at/all");
+        assert_eq!(super::dir_size_bytes(bogus), 0);
     }
 
     #[test]

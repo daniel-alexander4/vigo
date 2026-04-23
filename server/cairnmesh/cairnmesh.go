@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -259,6 +260,53 @@ func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, er
 	return fleet, nil
 }
 
+// EnvoyMirror is one receiver-side cairn mirror held by one envoy,
+// projected out of the cairn trait for the per-envoy Swarm Load
+// page. Fields mirror the wire schema but are exported for cross-
+// package consumption (the handler at server/api formats them for
+// display). `BareRepoPath` is the on-disk location the agent would
+// walk to compute `SizeBytes` — surfaced so the UI can show a
+// recognizable filesystem path instead of the internal label.
+type EnvoyMirror struct {
+	Label         string
+	Seeder        string
+	User          string
+	Project       string
+	GitSha        string
+	BlobSha       string
+	LastRefreshed int64
+	Stale         bool
+	SizeBytes     uint64
+	BareRepoPath  string
+}
+
+// EnvoyMirrors returns the receiver-side mirrors held by one envoy
+// with sizes, in manifest order. Returns nil when the envoy has not
+// reported a cairn trait (or the trait has no `mirrors[]` field,
+// which is normal for publish-only envoys).
+func (a *Aggregator) EnvoyMirrors(ctx context.Context, envoyID string) []EnvoyMirror {
+	env, ok := a.loadTrait(ctx, envoyID)
+	if !ok {
+		return nil
+	}
+	out := make([]EnvoyMirror, 0, len(env.Mirrors))
+	for _, m := range env.Mirrors {
+		out = append(out, EnvoyMirror{
+			Label:         m.Label,
+			Seeder:        m.Seeder,
+			User:          m.User,
+			Project:       m.Project,
+			GitSha:        m.GitSha,
+			BlobSha:       m.BlobSha,
+			LastRefreshed: m.LastRefreshed,
+			Stale:         m.Stale,
+			SizeBytes:     m.SizeBytes,
+			BareRepoPath:  fmt.Sprintf("/var/lib/vigo/cairn/mirrors/%s/%s/%s.git", m.Seeder, m.User, m.Project),
+		})
+	}
+	return out
+}
+
 // loadTrait pulls the latest traits row for an envoy and extracts
 // the `cairn` namespace. Missing rows, malformed JSON, and a
 // missing `cairn` namespace all collapse to `(nil, false)` —
@@ -312,6 +360,7 @@ type mirrorTrait struct {
 	LastRefreshed int64  `json:"last_refreshed"`
 	Stale         bool   `json:"stale"`
 	NextGcAt      int64  `json:"next_gc_at"`
+	SizeBytes     uint64 `json:"size_bytes,omitempty"`
 }
 
 type traitEnvelope struct {

@@ -200,13 +200,18 @@ func funcMap() template.FuncMap {
 		},
 		"swarmFileStatusClass": func(status string) string {
 			switch status {
-			case "complete":
+			case "complete", "source", "live":
+				// Green for anything that reads as "present and healthy."
+				// Source is the seeder (has by construction); live
+				// covers materialized cairn mirrors and per-user
+				// echo/sigil files.
 				return "converged"
 			case "cached":
 				return "cached"
-			case "distributing":
+			case "distributing", "downloading", "stale":
+				// Yellow — in flight or past the stale threshold.
 				return "relapsed"
-			case "revoked":
+			case "revoked", "revoking":
 				return "no-data"
 			case "superseded":
 				// Lavender pill — cairn incremental rotation, not a

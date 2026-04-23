@@ -425,6 +425,43 @@ func recipientsDigest(peers []peerTrait) string {
 	return hex.EncodeToString(h.Sum(nil)[:16])
 }
 
+// EnvoyFile is one sigil ciphertext present on a given envoy,
+// projected from the per-user `users[].files[]` field for the
+// per-envoy Swarm Load page. Path is the user-friendly render
+// (`~<user>/sigil/<name>`) — sigil holds encrypted bytes but the
+// on-disk name is still the one the user set.
+type EnvoyFile struct {
+	User  string
+	Name  string
+	Path  string
+	Size  uint64
+	Mtime int64
+}
+
+// FilesOnEnvoy returns every sigil file this envoy holds across
+// every user with state on it, in user+name order. Used by the
+// per-envoy Swarm Load page to rank disk consumers. Returns nil
+// when the envoy has no sigil trait.
+func (a *Aggregator) FilesOnEnvoy(ctx context.Context, envoyID string) []EnvoyFile {
+	env, ok := a.loadTrait(ctx, envoyID)
+	if !ok {
+		return nil
+	}
+	var out []EnvoyFile
+	for _, u := range env.Users {
+		for _, f := range u.Files {
+			out = append(out, EnvoyFile{
+				User:  u.User,
+				Name:  f.Name,
+				Path:  "~" + u.User + "/sigil/" + f.Name,
+				Size:  f.Size,
+				Mtime: f.Mtime,
+			})
+		}
+	}
+	return out
+}
+
 func (a *Aggregator) loadTrait(ctx context.Context, envoyID string) (*traitEnvelope, bool) {
 	tr, err := a.queries.GetLatestEnvoyTraits(ctx, envoyID)
 	if err != nil {

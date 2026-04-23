@@ -17,6 +17,7 @@ The UI is built with Go templates and HTMX for partial page updates without full
 | [Workflows](workflows.md) | `/workflows` | Multi-step workflow execution |
 | [Spanner](spanner.md) | `/spanner` | Hub-spoke topology and health |
 | [Lode](lode.md) | `/lode` | Admin-distributed payloads — status and per-envoy progress over the swarm substrate |
+| [Envoy Swarm Load](envoy-swarm-load.md) | `/envoys/{id}/swarm-load` | Per-envoy disk footprint across lode, cairn, echo, and sigil — biggest consumers first |
 | [Security](security.md) | `/envoys/{id}` | Envoy detail and security info |
 
 ### Account

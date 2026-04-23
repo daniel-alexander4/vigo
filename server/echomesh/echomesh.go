@@ -406,6 +406,42 @@ func finalizeFiles(summary *UserSummary) {
 	sort.Slice(summary.Files, func(i, j int) bool { return summary.Files[i].Name < summary.Files[j].Name })
 }
 
+// EnvoyFile is one echo file present on a given envoy, projected
+// from the per-user `users[].files[]` field for the per-envoy Swarm
+// Load page. Path is the user-friendly render (`~<user>/echo/<name>`)
+// so the UI never surfaces an internal key.
+type EnvoyFile struct {
+	User  string
+	Name  string
+	Path  string
+	Size  uint64
+	Mtime int64
+}
+
+// FilesOnEnvoy returns every echo file this envoy holds across every
+// user with state on it, in user+name order. Used by the per-envoy
+// Swarm Load page to rank disk consumers. Returns nil when the
+// envoy has no echo trait.
+func (a *Aggregator) FilesOnEnvoy(ctx context.Context, envoyID string) []EnvoyFile {
+	env, ok := a.loadTrait(ctx, envoyID)
+	if !ok {
+		return nil
+	}
+	var out []EnvoyFile
+	for _, u := range env.Users {
+		for _, f := range u.Files {
+			out = append(out, EnvoyFile{
+				User:  u.User,
+				Name:  f.Name,
+				Path:  "~" + u.User + "/echo/" + f.Name,
+				Size:  f.Size,
+				Mtime: f.Mtime,
+			})
+		}
+	}
+	return out
+}
+
 // loadTrait pulls the latest envoy traits row and extracts the
 // `echo` namespace. Missing / malformed / absent namespace all
 // collapse to `(nil, false)` — treated as "not reporting."

@@ -59,6 +59,19 @@ func (h *MeshHandler) CryptSnapshot(ctx context.Context) (*sigilmesh.Fleet, erro
 	return h.crypt.Snapshot(ctx, h.envoyInputsCrypt())
 }
 
+// EnvoyEchoFiles returns per-envoy echo files for the Swarm Load
+// page. Passthrough to the aggregator so the UI handler can consume
+// it through the MeshSource interface without importing echomesh.
+func (h *MeshHandler) EnvoyEchoFiles(ctx context.Context, envoyID string) []echomesh.EnvoyFile {
+	return h.sync.FilesOnEnvoy(ctx, envoyID)
+}
+
+// EnvoySigilFiles returns per-envoy sigil files for the Swarm Load
+// page. Passthrough to the aggregator.
+func (h *MeshHandler) EnvoySigilFiles(ctx context.Context, envoyID string) []sigilmesh.EnvoyFile {
+	return h.crypt.FilesOnEnvoy(ctx, envoyID)
+}
+
 func (h *MeshHandler) envoyInputsSync() []echomesh.EnvoyInput {
 	envoys := h.fleetIndex.AllEnvoys()
 	out := make([]echomesh.EnvoyInput, 0, len(envoys))

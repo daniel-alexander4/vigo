@@ -684,6 +684,71 @@ func (t *PeerTracker) AllBrokenSeeds() map[string][]BrokenSeed {
 	return out
 }
 
+// BlobOnEnvoy summarizes one blob present on a given envoy for the
+// per-envoy Swarm Load page. Carries enough info to rank by size and
+// render a user-facing row without cross-referencing the tracker
+// again. Status is "source" (this envoy seeded the blob), "complete"
+// (fully cached), "downloading" (partial, actively fetching), or
+// "revoking" (seed revoked but envoy hasn't evicted yet).
+type BlobOnEnvoy struct {
+	SHA256        string
+	Label         string
+	Size          uint64
+	Status        string
+	ChunksHave    int
+	ChunksTotal   int
+	SeederID      string
+	DistributedAt time.Time
+	Revoked       bool
+}
+
+// BlobsOnEnvoy returns every blob the given envoy is holding or
+// actively downloading, in manifest order. Used by the per-envoy
+// Swarm Load page to surface cache footprint. Evicted entries are
+// filtered out — they're tombstones, not disk usage.
+func (t *PeerTracker) BlobsOnEnvoy(envoyID string) []BlobOnEnvoy {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	var out []BlobOnEnvoy
+	for sha, blobPeers := range t.peers {
+		ps, held := blobPeers[envoyID]
+		if !held || ps.Evicted {
+			continue
+		}
+		seed, hasSeed := t.seeds[sha]
+		chunksTotal := 0
+		if seed.Size > 0 {
+			chunksTotal = int(seed.Size / uint64(ChunkSize))
+			if seed.Size%uint64(ChunkSize) != 0 {
+				chunksTotal++
+			}
+		}
+		chunksHave := chunksTotal
+		status := "complete"
+		if seed.SeederID == envoyID {
+			status = "source"
+		} else if !ps.Complete {
+			status = "downloading"
+			chunksHave = len(ps.Chunks)
+		}
+		if hasSeed && seed.Revoked && status != "source" {
+			status = "revoking"
+		}
+		out = append(out, BlobOnEnvoy{
+			SHA256:        sha,
+			Label:         seed.Label,
+			Size:          seed.Size,
+			Status:        status,
+			ChunksHave:    chunksHave,
+			ChunksTotal:   chunksTotal,
+			SeederID:      seed.SeederID,
+			DistributedAt: seed.DistributedAt,
+			Revoked:       seed.Revoked,
+		})
+	}
+	return out
+}
+
 // ParseBlobsTrait parses the comma-separated swarm.blobs trait value into
 // individual SHA256 hashes.
 func ParseBlobsTrait(value string) []string {

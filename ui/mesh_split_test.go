@@ -30,12 +30,24 @@ func (m *mockMesh) CryptSnapshot(ctx context.Context) (*sigilmesh.Fleet, error) 
 	return m.crypt, nil
 }
 
+func (m *mockMesh) EnvoyEchoFiles(_ context.Context, _ string) []echomesh.EnvoyFile {
+	return nil
+}
+
+func (m *mockMesh) EnvoySigilFiles(_ context.Context, _ string) []sigilmesh.EnvoyFile {
+	return nil
+}
+
 type mockCairn struct {
 	fleet *cairnmesh.Fleet
 }
 
 func (m *mockCairn) FleetSnapshot(ctx context.Context) (*cairnmesh.Fleet, error) {
 	return m.fleet, nil
+}
+
+func (m *mockCairn) EnvoyMirrors(_ context.Context, _ string) []cairnmesh.EnvoyMirror {
+	return nil
 }
 
 // TestMeshSplit_RBAC pins admin-only gating on the three new pages.

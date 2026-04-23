@@ -43,6 +43,14 @@ func (h *CairnHandler) FleetSnapshot(ctx context.Context) (*cairnmesh.Fleet, err
 	return h.agg.Snapshot(ctx, h.envoyInputs())
 }
 
+// EnvoyMirrors returns this envoy's receiver-side mirrors with
+// sizes for the per-envoy Swarm Load page. Passthrough to the
+// aggregator — the UI handler uses this via the CairnFleetSource
+// interface so ui/ doesn't need to import cairnmesh.
+func (h *CairnHandler) EnvoyMirrors(ctx context.Context, envoyID string) []cairnmesh.EnvoyMirror {
+	return h.agg.EnvoyMirrors(ctx, envoyID)
+}
+
 // envoyInputs converts the fleet index's envoy list into the
 // minimal `(ID, Hostname)` tuples the aggregator consumes.
 func (h *CairnHandler) envoyInputs() []cairnmesh.EnvoyInput {
