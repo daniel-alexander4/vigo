@@ -38,7 +38,7 @@ Resources of type `file`, `directory`, `symlink`, `file_line`, `blockinfile`, `i
 | `/usr/local/etc/rc.d/vigo_envoy` | Agent rc.d script (FreeBSD/NetBSD) |
 | `/var/svc/manifest/system/vigo-envoy.xml` | Agent SMF manifest (illumos) |
 | `/usr/local/sbin/vigosrv` | Server binary |
-| `/usr/local/bin/vigocli` | CLI binary |
+| `/usr/local/bin/vigocli` | CLI binary (installed `0700 root:root` — root-only) |
 | `/usr/local/sbin/vigo-license-manager` | License manager binary |
 | `/srv/vigo/` | Server data directory (config, secrets, database, TLS) |
 | `/etc/systemd/system/vigosrv.service` | Server systemd unit (Linux) |

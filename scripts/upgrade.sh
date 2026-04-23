@@ -478,6 +478,9 @@ if $NEED_HOST_UPDATE; then
         # Pull or full rebuild: extract from the new container.
         docker cp vigo:/usr/local/bin/vigocli /usr/local/bin/vigocli
     fi
+    # Root-only: peer auth trusts any localhost caller, so file mode is the gate.
+    chown root:root /usr/local/bin/vigocli
+    chmod 0700 /usr/local/bin/vigocli
 
     # Agent binary: NOT installed to the host here. The local envoy receives
     # the new binary via auto-update (server detects version mismatch on

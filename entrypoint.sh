@@ -256,7 +256,9 @@ fi
 
 if [ -d /host-bin ]; then
     cp /usr/local/bin/vigocli /host-bin/vigocli
-    echo "Installed vigocli to host."
+    chown root:root /host-bin/vigocli
+    chmod 0700 /host-bin/vigocli
+    echo "Installed vigocli to host (root-only, 0700)."
 fi
 
 echo "Config seeding complete."
