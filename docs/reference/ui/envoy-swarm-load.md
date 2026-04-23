@@ -1,7 +1,7 @@
 
 # Envoy Swarm Load
 
-**Location:** Tab on the envoy detail page (`/envoys/{id}`) — the **Swarm Load** button in the tab bar between Attack Surface and Sessions. HTMX-loads into the detail page's content area like every other tab (Drift, Runs, Traits, Config, Trace, Compliance, Attack Surface, Sessions); there is no standalone route.
+**Location:** Tab on the envoy detail page (`/envoys/{id}`) — the **Swarm** button in the tab bar between Attack Surface and Sessions. HTMX-loads into the detail page's content area like every other tab (Drift, Runs, Traits, Config, Trace, Compliance, Attack Surface, Sessions); there is no standalone route.
 
 Per-envoy disk footprint across the four swarm subsystems — [lode](lode.md) (admin-distributed payloads), [cairn](../../engineering/subsystems/cairn.md) (personal-DR bare repos), [echo](../../engineering/subsystems/echo.md) (LAN plaintext sync), and [sigil](../../engineering/subsystems/sigil.md) (encrypted sync).
 

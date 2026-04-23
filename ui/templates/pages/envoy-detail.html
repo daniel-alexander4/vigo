@@ -55,7 +55,7 @@
             hx-get="/ui/fragments/envoy-swarm-load/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Swarm Load</button>
+            onclick="setActiveTab(this)">Swarm</button>
     {{if .ScrierEnabled}}
     <button class="btn btn--sm" id="tab-sessions"
             hx-get="/ui/fragments/envoy-sessions/{{.Envoy.ID}}"
