@@ -2,14 +2,12 @@
 <span data-ai-page="envoy-detail" data-ai-envoy="{{.Envoy.Hostname}}" hidden></span>
 <div class="page-header">
     <h1>{{.Envoy.Hostname}}</h1>
-    {{if .ScrierEnabled}}
-    <div class="scrier-actions" style="display:flex; justify-content:flex-start; gap:8px; margin:4px 0 8px 0;">
+    <div class="envoy-actions" style="display:flex; justify-content:flex-start; gap:8px; margin:4px 0 8px 0;">
+        {{if .ScrierEnabled}}
         <a href="/scrier/{{.Envoy.ID}}?protocol=ssh" target="_blank" class="btn btn--sm" style="font-size:12px;">SSH</a>
         <a href="/scrier/{{.Envoy.ID}}?protocol=rdp&port=3389" target="_blank" class="btn btn--sm" style="font-size:12px;">RDP</a>
         <a href="/scrier/{{.Envoy.ID}}?protocol=vnc" target="_blank" class="btn btn--sm" style="font-size:12px;">Shadow</a>
-    </div>
-    {{end}}
-    <div class="envoy-actions" style="display:flex; justify-content:flex-start; gap:8px; margin:4px 0 8px 0;">
+        {{end}}
         <a href="/envoys/{{.Envoy.ID}}/swarm-load" class="btn btn--sm" style="font-size:12px;">Swarm Load</a>
     </div>
     <p class="mono">{{.Envoy.IPAddress}} &middot; {{if gt .Envoy.ModuleCount 0}}<a href="/runs/{{.Envoy.LastRunID}}" class="badge-link"><span class="badge" style="background:{{pctColorBg .Envoy.FailurePct}};color:{{pctColor .Envoy.FailurePct}};">{{.Envoy.FailedCount}}/{{.Envoy.ModuleCount}}</span></a>{{else}}{{template "status-badge" dict "Status" .Envoy.Status}}{{end}}{{if .Envoy.AgentVersion}} &middot; Agent {{.Envoy.AgentVersion}}{{end}} &middot; Enrolled {{formatTime .Envoy.EnrolledAt}} &middot; Last seen <span class="time-relative" title="{{formatTime .Envoy.LastSeen}}">{{timeAgo .Envoy.LastSeen}}</span></p>

@@ -29,11 +29,15 @@ type EnvoySwarmLoadPageData struct {
 	Echo  []SwarmLoadRow
 	Sigil []SwarmLoadRow
 
-	LodeTotal  uint64
-	CairnTotal uint64
-	EchoTotal  uint64
-	SigilTotal uint64
-	GrandTotal uint64
+	// Totals are int64 (not the uint64 the wire protocols use) so the
+	// humanBytes template func — which takes int64 — can render them
+	// without a per-section conversion. Disk-footprint values stay
+	// within int64 range indefinitely in practice.
+	LodeTotal  int64
+	CairnTotal int64
+	EchoTotal  int64
+	SigilTotal int64
+	GrandTotal int64
 }
 
 // SwarmLoadRow is one row in any of the four per-subsystem tables.
@@ -49,8 +53,9 @@ type SwarmLoadRow struct {
 	// the template renders it dim under Name.
 	Detail string
 	// Size in bytes. 0 is legal for downloading blobs that haven't
-	// landed a chunk yet.
-	Size uint64
+	// landed a chunk yet. int64 rather than uint64 so the template's
+	// humanBytes helper accepts it without a per-row cast.
+	Size int64
 	// Human-readable size for direct rendering (template doesn't
 	// have to call a helper).
 	SizeHuman string
@@ -91,11 +96,12 @@ func (h *Handler) EnvoySwarmLoad(w http.ResponseWriter, r *http.Request) {
 	if h.swarmTracker != nil {
 		blobs := h.swarmTracker.BlobsOnEnvoy(idStr)
 		for _, b := range blobs {
+			size := int64(b.Size)
 			row := SwarmLoadRow{
 				Name:      userFriendlyBlobName(b.Label, b.SHA256),
 				Detail:    blobDetailLine(b.Label, b.SHA256, b.SeederID, h.swarmFleetIndex),
-				Size:      b.Size,
-				SizeHuman: humanSize(int64(b.Size)),
+				Size:      size,
+				SizeHuman: humanSize(size),
 				Status:    b.Status,
 				When:      formatRelative(b.DistributedAt),
 				Link:      "/lode/" + b.SHA256,
@@ -104,7 +110,7 @@ func (h *Handler) EnvoySwarmLoad(w http.ResponseWriter, r *http.Request) {
 				row.Progress = fmt.Sprintf("%d/%d chunks", b.ChunksHave, b.ChunksTotal)
 			}
 			data.Lode = append(data.Lode, row)
-			data.LodeTotal += b.Size
+			data.LodeTotal += size
 		}
 	}
 
@@ -116,44 +122,47 @@ func (h *Handler) EnvoySwarmLoad(w http.ResponseWriter, r *http.Request) {
 			if m.Stale {
 				status = "stale"
 			}
+			size := int64(m.SizeBytes)
 			data.Cairn = append(data.Cairn, SwarmLoadRow{
 				Name:      m.BareRepoPath,
 				Detail:    fmt.Sprintf("%s/%s — from %s · git %s", m.User, m.Project, m.Seeder, shortSha(m.GitSha)),
-				Size:      m.SizeBytes,
-				SizeHuman: humanSize(int64(m.SizeBytes)),
+				Size:      size,
+				SizeHuman: humanSize(size),
 				Status:    status,
 				When:      formatRelative(time.Unix(m.LastRefreshed, 0)),
 				Link:      "/cairn/" + m.Label,
 			})
-			data.CairnTotal += m.SizeBytes
+			data.CairnTotal += size
 		}
 	}
 
 	// --- Echo (per-user plaintext) ---
 	if h.mesh != nil {
 		for _, f := range h.mesh.EnvoyEchoFiles(r.Context(), idStr) {
+			size := int64(f.Size)
 			data.Echo = append(data.Echo, SwarmLoadRow{
 				Name:      f.Path,
 				Detail:    "user " + f.User,
-				Size:      f.Size,
-				SizeHuman: humanSize(int64(f.Size)),
+				Size:      size,
+				SizeHuman: humanSize(size),
 				Status:    "live",
 				When:      formatRelative(time.Unix(f.Mtime, 0)),
 			})
-			data.EchoTotal += f.Size
+			data.EchoTotal += size
 		}
 
 		// --- Sigil (per-user ciphertext) ---
 		for _, f := range h.mesh.EnvoySigilFiles(r.Context(), idStr) {
+			size := int64(f.Size)
 			data.Sigil = append(data.Sigil, SwarmLoadRow{
 				Name:      f.Path,
 				Detail:    "user " + f.User,
-				Size:      f.Size,
-				SizeHuman: humanSize(int64(f.Size)),
+				Size:      size,
+				SizeHuman: humanSize(size),
 				Status:    "live",
 				When:      formatRelative(time.Unix(f.Mtime, 0)),
 			})
-			data.SigilTotal += f.Size
+			data.SigilTotal += size
 		}
 	}
 
