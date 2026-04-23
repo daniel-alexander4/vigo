@@ -334,6 +334,16 @@ html:not(.theme-dark) .sidebar__logo-img--light { display: inline; }
     opacity: 0.85;
 }
 
+/* Parenthesized role hint next to a nav-link label — e.g. the Swarm group
+   where "Lode (Payloads)" tells an unfamiliar operator what the archaic
+   subsystem name maps to. Same color as the label; smaller font is the
+   only visual subordination. */
+.nav-link__subtitle {
+    font-size: 11px;
+    font-weight: 400;
+    margin-left: 2px;
+}
+
 /* === License Banner === */
 .license-banner {
     display: flex;
