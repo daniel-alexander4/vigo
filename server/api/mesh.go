@@ -129,9 +129,11 @@ func (h *MeshHandler) handleEchoDrilldown(w http.ResponseWriter, r *http.Request
 		files = []echomesh.FileRow{}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(struct {
+	if err := json.NewEncoder(w).Encode(struct {
 		Files []echomesh.FileRow `json:"files"`
-	}{Files: files})
+	}{Files: files}); err != nil {
+		slog.Debug("echo drilldown response encode failed", "error", err)
+	}
 }
 
 func (h *MeshHandler) handleSigilDrilldown(w http.ResponseWriter, r *http.Request) {
@@ -150,7 +152,9 @@ func (h *MeshHandler) handleSigilDrilldown(w http.ResponseWriter, r *http.Reques
 		files = []sigilmesh.FileRow{}
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(struct {
+	if err := json.NewEncoder(w).Encode(struct {
 		Files []sigilmesh.FileRow `json:"files"`
-	}{Files: files})
+	}{Files: files}); err != nil {
+		slog.Debug("sigil drilldown response encode failed", "error", err)
+	}
 }

@@ -1756,6 +1756,16 @@ Same shape as the existing framework report endpoints: JSON at the bare path, HT
 
 - **GET /api/v1/cairn/fleet** — fleet-wide cairn mirror view (aggregated from per-envoy traits).
 
+### Echo
+
+- **GET /api/v1/echo/fleet** — fleet-wide echo mesh view (per-user LAN plaintext sync state aggregated from every envoy's `echo` trait).
+- **GET /api/v1/echo/envoy/{id}/users/{user}/files** — per-(envoy, user) file list drilldown for the `/echo` page.
+
+### Sigil
+
+- **GET /api/v1/sigil/fleet** — fleet-wide sigil mesh view (per-user encrypted sync state aggregated from every envoy's `sigil` trait).
+- **GET /api/v1/sigil/envoy/{id}/users/{user}/files** — per-(envoy, user) file list drilldown for the `/sigil` page.
+
 ### Scrier
 
 - **GET /api/v1/scrier/users** — list the Scrier OS-user mapping table.
