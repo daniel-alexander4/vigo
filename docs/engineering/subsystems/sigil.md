@@ -100,6 +100,8 @@ The agent announces to these hosts via `POST /sigil/announce` on port 1531 and f
 | Password recovery | None — lose the password on every envoy and the data is unrecoverable |
 | Keys per envoy | One age identity per user per envoy |
 
+**Disk-pressure guardrail.** Before every `POST /sigil/push/{user}/{filename}`, the sender probes the recipient at `GET /health/storage?for=sigil&user=<user>` (60 s cache per peer+user) and skips the push if the recipient reports `free_pct <= 10`. The receiver's push handler re-checks `~<user>/sigil` on entry and returns **507 Insufficient Storage** before reading a byte of the body, closing the race between probe and arrival. Skipped pushes are no-ops — no retry backoff, no failure counter; the next watcher event re-probes and sends when the peer recovers. See [Disk Space in swarm operations](../../operations/swarm.md#disk-space) for the fleet-wide policy.
+
 ## Deletion propagation (tombstones)
 
 Deletion is a first-class mesh operation, not a local-only `rm`. When the operator removes a file from `~/sigil/` on any envoy — via `vigo crypt delete <name>` or plain `rm` — the watcher fires a Delete event, the pusher signs a DELETE envelope and fans it out to every peer, and each peer records a **tombstone** and removes its local copy. Tombstones outlive the delete by `tombstone_retention_days` (default **90 days**) so that an envoy that was offline at delete time can't resurrect the file when it reconnects with a stale copy.

@@ -50,6 +50,8 @@ The agent keeps per-user state (file snapshots + tombstones) under `/var/lib/vig
 | Scope | LAN only (TTL=1 multicast, no cross-subnet routing) |
 | Machine identity | Hostname — if two machines share a hostname, echo will self-confuse |
 
+**Disk-pressure guardrail.** Cross-subnet announcements (`POST /echo/announce`) first probe the target at `GET /health/storage?for=echo&user=<user>` and skip if the peer reports `free_pct <= 10` on `~<user>/echo`. Announcements are tiny, but if the recipient can't store the files they point at, there's no point announcing either. Multicast LAN announces are not probed — the announcement itself is sub-KB and the receivers pull files via `GET /echo/{user}/{filename}` at their own discretion (they already self-gate on disk before writing). See [Disk Space in swarm operations](../../operations/swarm.md#disk-space).
+
 ## Platform Support
 
 | Platform | Home Directory | Ownership |

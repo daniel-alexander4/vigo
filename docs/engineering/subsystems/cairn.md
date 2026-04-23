@@ -207,6 +207,8 @@ All caps are immutable constants in `agent/src/cairn/mod.rs`. None can be overri
 | Receiver `git gc --auto` jitter window | 6 hours per repo |
 | Receiver wipe hysteresis | 15 minutes after a label drops out of the receiver's `ClaimsHandle` |
 
+**Disk-pressure guardrail.** `cross_subnet_mirrors::push_bundle` probes each target at `GET /health/storage?for=cairn` before running sha256 or opening the bundle file — a 20 GiB bundle push into a 9%-free peer would land the filesystem at zero, so we skip before burning cycles. The receiver's `/cairn/push/<label>` handler re-checks `/var/lib/vigo/cairn` on entry and returns **507 Insufficient Storage** before streaming the body. LAN claim delivery rides the swarm pull substrate, so its guardrail lives in `swarm::cache::check_disk_space` (size-reserve AND ≥10% free — either gate trips aborts the download). Probes are cached 60 s per (peer, purpose) so the 5 s reactor tick doesn't hammer the health endpoint. See [Disk Space in swarm operations](../../operations/swarm.md#disk-space).
+
 ## LAN peer discovery (Phase 5)
 
 Cairn-enabled envoys announce themselves to each other on the existing swarm multicast channel (`224.0.0.42:1531`). Every regular swarm announcement frame gains one optional line:

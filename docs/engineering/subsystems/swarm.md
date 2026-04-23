@@ -86,7 +86,12 @@ The `max_bandwidth_percent` setting in `server.yaml` sets the upper bound.
 
 ### Disk Space Guardrails
 
-Before downloading, the agent checks available disk space via `statvfs`. If there isn't enough room for the blob plus a safety margin, the download is skipped and the reason is reported to the server. The server tracks these as "skipped" in the distribution status.
+Before downloading, the agent runs `BlobCache::check_disk_space` which enforces two gates — either one aborts the download:
+
+1. **Absolute reserve** — `available_bytes >= blob_size + 512 MiB` (the historical check; protects against accepting a blob that would fully consume the disk).
+2. **Pressure threshold** — `free_pct > 10` on the blobs mountpoint (`/var/lib/vigo/swarm/.blobs`). Swarm is pull-based, so the fleet-wide "sender doesn't push to ≤10%-free recipients" guardrail lands here as "receiver refuses to start a download when its own disk is already pressured."
+
+Both checks go through the shared [`swarm::peer_health`](../../../agent/src/swarm/peer_health.rs) module so the gate matches the one answered by `GET /health/storage?for=swarm` on the same mount. Skipped downloads are reported to the server as "skipped" with the triggering reason. See [Disk Space in swarm operations](../../operations/swarm.md#disk-space) for how the same guardrail shows up in the other three peer-delivery paths.
 
 ## Architecture
 

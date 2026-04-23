@@ -89,9 +89,6 @@ pub fn push_bundle(
         ));
     }
 
-    let sha = sha256_file(bundle_path)
-        .with_context(|| format!("sha256 bundle {}", bundle_path.display()))?;
-
     // Build a fresh mTLS agent per call. The existing swarm
     // peer_client caches one agent for the LAN download path; we
     // could reuse it, but push is low-frequency (once per
@@ -100,6 +97,23 @@ pub fn push_bundle(
     // simple. Optimization deferred.
     let agent = crate::swarm::peer_client::build_peer_agent(tls)
         .context("build mTLS agent for cairn push")?;
+
+    // Pre-flight disk-pressure probe. A 20 GiB bundle into a 9%-free
+    // peer would land the filesystem at 0 free — skip before we burn
+    // cycles on sha256. Cached per (peer, purpose) for 60s, so the
+    // reactor's 5 s tick doesn't probe every loop.
+    use crate::swarm::peer_health::{probe, Purpose};
+    let outcome = probe(&agent, host, &Purpose::Cairn);
+    if !outcome.allow() {
+        return Err(anyhow!(
+            "cairn: skipping push to {} ({})",
+            host,
+            outcome.reason()
+        ));
+    }
+
+    let sha = sha256_file(bundle_path)
+        .with_context(|| format!("sha256 bundle {}", bundle_path.display()))?;
 
     let url = format!(
         "https://{}:{}/cairn/push/{}",

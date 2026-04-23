@@ -284,6 +284,25 @@ fn push_announcement(
     host: &str,
     ann: &Announcement,
 ) -> Result<(), anyhow::Error> {
+    // Pre-flight disk-pressure probe. An announcement is tiny, but if
+    // the peer's `~<user>/echo/` filesystem is ≤10% free it can't
+    // accept the files the announcement refers to either — skip the
+    // round trip. Cached per (peer, purpose) for 60 s so periodic
+    // re-announces don't hammer the health endpoint.
+    use crate::swarm::peer_health::{probe, Purpose};
+    let outcome = probe(
+        http,
+        &format!("{}:{}", host, PEER_PORT),
+        &Purpose::Echo { user: ann.state.user.clone() },
+    );
+    if !outcome.allow() {
+        anyhow::bail!(
+            "skip announce to {} ({})",
+            host,
+            outcome.reason()
+        );
+    }
+
     let url = format!("https://{}:{}/echo/announce", host, PEER_PORT);
     let body = serde_json::to_vec(ann)?;
     let resp = http

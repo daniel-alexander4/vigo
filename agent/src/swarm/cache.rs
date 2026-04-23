@@ -355,6 +355,17 @@ impl BlobCache {
 
     /// Check if there is enough disk space to download a blob of `size` bytes.
     /// Returns Ok(()) if sufficient, Err with a descriptive message if not.
+    ///
+    /// Two gates, both must pass:
+    ///
+    /// 1. Absolute reserve — `available_bytes >= size + reserve_mb`.
+    ///    Originally the only check. Protects against accepting a
+    ///    blob that would fully consume the disk.
+    /// 2. Pressure threshold — `free_pct > min_free_pct` (default 10%,
+    ///    [`crate::swarm::peer_health::DEFAULT_MIN_FREE_PCT`]). Swarm
+    ///    uses a pull model, so the "sender disables sending" guardrail
+    ///    from the push subsystems lands here as "receiver refuses to
+    ///    start a download when the target disk is already pressured."
     pub fn check_disk_space(&self, size: u64) -> Result<()> {
         let available = available_disk_space(&self.dir)?;
         let needed = size + self.reserve_mb * 1024 * 1024;
@@ -365,6 +376,14 @@ impl BlobCache {
                 "insufficient_disk:available_mb={},needed_mb={}",
                 avail_mb,
                 need_mb
+            );
+        }
+        if crate::swarm::peer_health::is_self_pressured(
+            &crate::swarm::peer_health::Purpose::Swarm,
+        ) {
+            bail!(
+                "disk_pressure:free_pct_at_or_below={}",
+                crate::swarm::peer_health::min_free_pct()
             );
         }
         Ok(())

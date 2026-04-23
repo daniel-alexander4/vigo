@@ -248,6 +248,7 @@ mod tests {
         PeerEntry {
             hostname: name.to_string(),
             pubkey: format!("age1{:0>52}", name),
+            sign_pubkey: String::new(),
             last_seen: ts,
             last_seen_addr: None,
         }
@@ -275,6 +276,7 @@ mod tests {
         let rotated = PeerEntry {
             hostname: "host-a".into(),
             pubkey: "age1differentkey".into(),
+            sign_pubkey: String::new(),
             last_seen: 150,
             last_seen_addr: None,
         };
@@ -317,18 +319,21 @@ mod tests {
         t.upsert(PeerEntry {
             hostname: "c".into(),
             pubkey: "age1c".into(),
+            sign_pubkey: String::new(),
             last_seen: 100,
             last_seen_addr: None,
         });
         t.upsert(PeerEntry {
             hostname: "a".into(),
             pubkey: "age1a".into(),
+            sign_pubkey: String::new(),
             last_seen: 200,
             last_seen_addr: None,
         });
         t.upsert(PeerEntry {
             hostname: "stale".into(),
             pubkey: "age1stale".into(),
+            sign_pubkey: String::new(),
             last_seen: 10,
             last_seen_addr: None,
         });
@@ -352,9 +357,11 @@ mod tests {
             machine: "laptop".into(),
             user: "dan".into(),
             pubkey: "age1abc".into(),
+            sign_pubkey: String::new(),
             emitted_at: 1_700_000_000,
             port: 1531,
             generation: 7,
+            tombstones_digest: String::new(),
         };
         let bytes = serde_json::to_vec(&a).unwrap();
         let parsed: Announcement = serde_json::from_slice(&bytes).unwrap();

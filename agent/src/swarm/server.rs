@@ -198,6 +198,13 @@ async fn handle_request(
     let resp = match (&method, path.as_str()) {
         (&Method::GET, "/health") => ok_json(r#"{"status":"ok"}"#),
 
+        // Pre-flight disk-pressure probe — senders ask "is the
+        // filesystem where my push will land >10% free?" before
+        // committing bytes. Query: ?for=<swarm|sigil|cairn|echo>[&user=...].
+        (&Method::GET, "/health/storage") => {
+            handle_health_storage(req.uri().query().unwrap_or(""))
+        }
+
         // Manifest sync endpoints for gossip protocol.
         (&Method::GET, "/manifest/version") => {
             ok_json(&format!(r#"{{"version":{}}}"#, state.manifest.version()))
@@ -489,6 +496,58 @@ fn payload_too_large(msg: &str) -> Response<Full<Bytes>> {
         .unwrap()
 }
 
+fn insufficient_storage(msg: &str) -> Response<Full<Bytes>> {
+    Response::builder()
+        .status(StatusCode::INSUFFICIENT_STORAGE)
+        .body(Full::new(Bytes::from(msg.to_string())))
+        .unwrap()
+}
+
+// ── /health/storage (disk-pressure probe) ──────────────────────────────
+
+/// Answer a sender's pre-flight probe: "what percent of the filesystem
+/// that receives a <purpose> payload is free right now?" Response is a
+/// short JSON doc `{"free_pct": <f64>}`. Never returns 507 — 507 is
+/// reserved for actual push handlers. A malformed query gets 400 and a
+/// purpose whose target path can't be resolved (e.g. user doesn't exist
+/// on this envoy) gets 503.
+fn handle_health_storage(query: &str) -> Response<Full<Bytes>> {
+    let params = parse_query(query);
+    let kind = match params.get("for") {
+        Some(k) => k.as_str(),
+        None => return bad_request("missing 'for' query parameter"),
+    };
+    let user = params.get("user").map(String::as_str);
+    let purpose = match super::peer_health::Purpose::parse(kind, user) {
+        Some(p) => p,
+        None => return bad_request("invalid 'for'/'user' combination"),
+    };
+    match super::peer_health::local_free_pct(&purpose) {
+        Some(pct) => ok_json(&format!(r#"{{"free_pct":{:.4}}}"#, pct)),
+        None => service_unavailable("cannot resolve target mountpoint for purpose"),
+    }
+}
+
+/// Parse a URL-encoded query string into a `HashMap`. Silently drops
+/// entries with invalid percent-encoding. Duplicates: last value wins.
+fn parse_query(q: &str) -> std::collections::HashMap<String, String> {
+    let mut out = std::collections::HashMap::new();
+    for pair in q.split('&') {
+        if pair.is_empty() {
+            continue;
+        }
+        let (k, v) = match pair.split_once('=') {
+            Some(t) => t,
+            None => (pair, ""),
+        };
+        let (Some(k), Some(v)) = (url_decode(k), url_decode(v)) else {
+            continue;
+        };
+        out.insert(k, v);
+    }
+    out
+}
+
 // ── Cairn cross-subnet push handler (Phase 7) ──────────────────────────
 
 /// Handle `POST /cairn/push/<label>` — the cross-subnet direct
@@ -588,6 +647,15 @@ async fn handle_cairn_push(
     }
 
     let _ = project; // validated as non-empty segment above
+
+    // 7a. Receiver-side disk-pressure guard. The sender probes before
+    // push, but the probe is cached 60 s — a concurrent writer could
+    // have pushed free-pct below threshold in that window. Cheap
+    // statvfs on the cairn mirror mountpoint; reject 507 before
+    // reading a byte of the bundle body.
+    if super::peer_health::is_self_pressured(&super::peer_health::Purpose::Cairn) {
+        return insufficient_storage("cairn mirror filesystem under disk pressure");
+    }
 
     // 8-10. Stream the body straight to disk under .tmp while hashing
     // incrementally. Previously we buffered the entire body in memory

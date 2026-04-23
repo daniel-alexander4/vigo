@@ -229,7 +229,7 @@ fn evaluate_resource_when(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::proto::{ConditionalVarDef, PolicyBundle, PolicyModule, PolicyResource};
+    use crate::proto::{PolicyBundle, PolicyModule, PolicyResource};
     use serde_json::json;
 
     fn must_marshal_vars(vars: &Value) -> Vec<u8> {
@@ -297,40 +297,10 @@ mod tests {
         assert_eq!(params["content"], "hostname=web-01.example.com");
     }
 
-    #[test]
-    fn test_eval_bundle_conditional_vars() {
-        let bundle = PolicyBundle {
-            policy_version: 1,
-            conditional_vars: vec![ConditionalVarDef {
-                name: "is_debian".to_string(),
-                r#trait: "os.distro".to_string(),
-                operator: "in".to_string(),
-                operand_json: r#"["debian", "ubuntu"]"#.to_string(),
-            }],
-            modules: vec![PolicyModule {
-                name: "apt-config".to_string(),
-                when: "is_debian".to_string(),
-                resources: vec![PolicyResource {
-                    name: "apt-conf".to_string(),
-                    r#type: "file".to_string(),
-                    attributes: [("target_path".to_string(), "/etc/apt/apt.conf".to_string())].into(),
-                    ..Default::default()
-                }],
-                ..Default::default()
-            }],
-            ..Default::default()
-        };
-
-        // Debian → included
-        let traits = json!({"os": {"distro": "debian"}});
-        let modules = eval_bundle(Some(&bundle), &traits).unwrap();
-        assert_eq!(modules.len(), 1);
-
-        // CentOS → excluded
-        let traits = json!({"os": {"distro": "centos"}});
-        let modules = eval_bundle(Some(&bundle), &traits).unwrap();
-        assert_eq!(modules.len(), 0);
-    }
+    // Removed in 0.27.0: `ConditionalVarDef` / `conditional_vars` — the
+    // former `test_eval_bundle_conditional_vars` exercised a proto field
+    // that is now `reserved 5` in vigo.proto. Conditional-var evaluation
+    // moved to server-side resolution; there's nothing to exercise here.
 
     #[test]
     fn test_eval_bundle_resource_when_filter() {

@@ -309,6 +309,27 @@ fn push_one(
     filename: &str,
     bytes: &[u8],
 ) -> Result<()> {
+    // Pre-flight disk-pressure probe. Peers at or below the free-%
+    // threshold get skipped here so we never put bytes on the wire.
+    // Cached per (peer, purpose) for 60s — fan-out across N peers
+    // probes each one once per minute, not once per file.
+    use crate::swarm::peer_health::{probe, Purpose};
+    let outcome = probe(
+        agent,
+        &target.addr,
+        &Purpose::Sigil { user: user.to_string() },
+    );
+    if !outcome.allow() {
+        warn!(
+            target = %target.label,
+            user = %user,
+            filename = %filename,
+            reason = outcome.reason(),
+            "pusher: skipping push to disk-pressured peer"
+        );
+        return Ok(());
+    }
+
     let url = format!(
         "https://{}/sigil/push/{}/{}",
         target.addr,

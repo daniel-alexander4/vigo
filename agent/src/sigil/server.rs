@@ -155,6 +155,18 @@ pub async fn handle_push(
         return bad_request("invalid filename");
     }
 
+    // Receiver-side disk-pressure guard. Closes the race between the
+    // sender's pre-flight probe and the push arriving — if free-pct on
+    // ~<user>/sigil has dropped at or below the threshold since then,
+    // reject 507 before reading a single body byte. Cheap statvfs call.
+    {
+        use crate::swarm::peer_health::{is_self_pressured, Purpose};
+        let purpose = Purpose::Sigil { user: user.clone() };
+        if is_self_pressured(&purpose) {
+            return insufficient_storage("target filesystem under disk pressure");
+        }
+    }
+
     // Pre-check Content-Length (cheap rejection without reading body).
     if let Some(cl) = req
         .headers()
@@ -515,6 +527,13 @@ fn payload_too_large() -> Response<Full<Bytes>> {
     Response::builder()
         .status(StatusCode::PAYLOAD_TOO_LARGE)
         .body(Full::new(Bytes::from("payload exceeds sigil limit")))
+        .unwrap()
+}
+
+fn insufficient_storage(msg: &str) -> Response<Full<Bytes>> {
+    Response::builder()
+        .status(StatusCode::INSUFFICIENT_STORAGE)
+        .body(Full::new(Bytes::from(msg.to_string())))
         .unwrap()
 }
 

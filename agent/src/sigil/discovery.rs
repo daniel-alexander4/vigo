@@ -216,9 +216,11 @@ mod tests {
             machine: "laptop".into(),
             user: "dan".into(),
             pubkey: "age1abc".into(),
+            sign_pubkey: String::new(),
             emitted_at: 1_700_000_000,
             port: 1531,
             generation: 1,
+            tombstones_digest: String::new(),
         };
         let bytes = serialize(&ann).unwrap();
         let parsed = parse(&bytes).unwrap();
