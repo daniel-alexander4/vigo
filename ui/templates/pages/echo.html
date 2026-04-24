@@ -9,9 +9,7 @@
 {{if .Error}}
     <div class="alert alert--warn">Echo aggregator: {{.Error}}</div>
 {{else if or (not .Sync) (eq (len .Sync.Users) 0)}}
-    <div class="card">
-        <p style="color:var(--subtext0);">No users with echo state observed across the fleet.</p>
-    </div>
+    {{template "empty-state" dict "Message" "No users with echo state observed across the fleet."}}
 {{else}}
     <div class="stat-cards mb-2">
         <div class="stat-card">
@@ -41,7 +39,7 @@
         <table class="table">
             <thead>
                 <tr>
-                    <th>User</th>
+                    <th>Name</th>
                     <th>Files</th>
                     <th>Tombstones</th>
                     <th>Envoys</th>

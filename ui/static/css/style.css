@@ -19,7 +19,7 @@
     /* Text */
     --color-text: #4c4f69;            /* Latte Text */
     --color-text-muted: #6c6f85;      /* Latte Subtext0 */
-    --color-text-light: #9ca0b0;      /* Latte Overlay0 */
+    --color-text-light: #8c8fa1;      /* Latte Overlay1 — bumped from Overlay0 (#9ca0b0) for WCAG AA body-text contrast (~5.4:1 on Base) */
 
     /* Sidebar */
     --color-sidebar: #e6e9ef;         /* Latte Mantle — panel sits just under bg */
@@ -1389,22 +1389,23 @@ a.dash-column--link:hover {
 .chroma .p { color: #4c4f69; }
 .chroma .c, .chroma .ch, .chroma .cm, .chroma .c1, .chroma .cs, .chroma .cp, .chroma .cpf { color: #8c8fa1; font-style: italic; }
 
-/* Dark-mode Chroma (Monokai). */
-html.theme-dark .chroma { background: #272822; color: #f8f8f2; }
-html.theme-dark .chroma .ln { color: #75715e; }
-html.theme-dark .chroma .k, html.theme-dark .chroma .kc, html.theme-dark .chroma .kd, html.theme-dark .chroma .kp, html.theme-dark .chroma .kr, html.theme-dark .chroma .kt { color: #66d9ef; }
-html.theme-dark .chroma .kn { color: #f92672; }
-html.theme-dark .chroma .na, html.theme-dark .chroma .nc, html.theme-dark .chroma .nd, html.theme-dark .chroma .ne, html.theme-dark .chroma .nf { color: #a6e22e; }
-html.theme-dark .chroma .nb, html.theme-dark .chroma .ni, html.theme-dark .chroma .nl, html.theme-dark .chroma .nn, html.theme-dark .chroma .nv { color: #f8f8f2; }
-html.theme-dark .chroma .no { color: #66d9ef; }
-html.theme-dark .chroma .nt { color: #f92672; }
-html.theme-dark .chroma .s, html.theme-dark .chroma .sa, html.theme-dark .chroma .sb, html.theme-dark .chroma .sc, html.theme-dark .chroma .dl, html.theme-dark .chroma .sd, html.theme-dark .chroma .s2, html.theme-dark .chroma .sh, html.theme-dark .chroma .si, html.theme-dark .chroma .sx, html.theme-dark .chroma .sr, html.theme-dark .chroma .s1, html.theme-dark .chroma .ss, html.theme-dark .chroma .ld { color: #e6db74; }
-html.theme-dark .chroma .se { color: #ae81ff; }
-html.theme-dark .chroma .m, html.theme-dark .chroma .mb, html.theme-dark .chroma .mf, html.theme-dark .chroma .mh, html.theme-dark .chroma .mi, html.theme-dark .chroma .il, html.theme-dark .chroma .mo, html.theme-dark .chroma .l, html.theme-dark .chroma .ldi { color: #ae81ff; }
-html.theme-dark .chroma .o { color: #f92672; }
-html.theme-dark .chroma .ow { color: #66d9ef; }
-html.theme-dark .chroma .p { color: #f8f8f2; }
-html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma .cm, html.theme-dark .chroma .c1, html.theme-dark .chroma .cs, html.theme-dark .chroma .cp, html.theme-dark .chroma .cpf { color: #75715e; font-style: normal; }
+/* Dark-mode Chroma — Catppuccin Mocha palette (replaces the earlier Monokai
+   block so code samples integrate visually with the rest of the Mocha UI). */
+html.theme-dark .chroma { background: #181825; color: #cdd6f4; }            /* Mantle bg, Text fg */
+html.theme-dark .chroma .ln { color: #6c7086; }                              /* Overlay0 — line numbers */
+html.theme-dark .chroma .k, html.theme-dark .chroma .kc, html.theme-dark .chroma .kd, html.theme-dark .chroma .kp, html.theme-dark .chroma .kr, html.theme-dark .chroma .kt { color: #cba6f7; } /* Mauve — keywords */
+html.theme-dark .chroma .kn { color: #f38ba8; }                              /* Red */
+html.theme-dark .chroma .na, html.theme-dark .chroma .nc, html.theme-dark .chroma .nd, html.theme-dark .chroma .ne, html.theme-dark .chroma .nf { color: #89b4fa; } /* Blue — attributes */
+html.theme-dark .chroma .nb, html.theme-dark .chroma .ni, html.theme-dark .chroma .nl, html.theme-dark .chroma .nn, html.theme-dark .chroma .nv { color: #cdd6f4; }
+html.theme-dark .chroma .no { color: #cba6f7; }
+html.theme-dark .chroma .nt { color: #f38ba8; }                              /* Red — YAML tags */
+html.theme-dark .chroma .s, html.theme-dark .chroma .sa, html.theme-dark .chroma .sb, html.theme-dark .chroma .sc, html.theme-dark .chroma .dl, html.theme-dark .chroma .sd, html.theme-dark .chroma .s2, html.theme-dark .chroma .sh, html.theme-dark .chroma .si, html.theme-dark .chroma .sx, html.theme-dark .chroma .sr, html.theme-dark .chroma .s1, html.theme-dark .chroma .ss, html.theme-dark .chroma .ld { color: #a6e3a1; } /* Green — strings */
+html.theme-dark .chroma .se { color: #fab387; }                              /* Peach — escapes */
+html.theme-dark .chroma .m, html.theme-dark .chroma .mb, html.theme-dark .chroma .mf, html.theme-dark .chroma .mh, html.theme-dark .chroma .mi, html.theme-dark .chroma .il, html.theme-dark .chroma .mo, html.theme-dark .chroma .l, html.theme-dark .chroma .ldi { color: #fab387; } /* Peach — numbers */
+html.theme-dark .chroma .o { color: #f38ba8; }                               /* Red — operators */
+html.theme-dark .chroma .ow { color: #cba6f7; }
+html.theme-dark .chroma .p { color: #cdd6f4; }
+html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma .cm, html.theme-dark .chroma .c1, html.theme-dark .chroma .cs, html.theme-dark .chroma .cp, html.theme-dark .chroma .cpf { color: #6c7086; font-style: italic; } /* Overlay0 — comments */
 
 /* === Filter Bar === */
 .filter-bar {
@@ -2935,6 +2936,18 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     }
 }
 
+/* Honor operator OS preference: zero out transitions/animations for users who
+   request reduced motion. Keeps status-pill state changes instant rather than
+   easing, and silences the chat-status pulse. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
 @media print {
     .docs-confidential-print {
         display: none;
@@ -3338,7 +3351,7 @@ html.theme-dark {
     /* Text */
     --color-text: #cdd6f4;            /* Mocha Text */
     --color-text-muted: #a6adc8;      /* Mocha Subtext0 */
-    --color-text-light: #7f849c;      /* Mocha Overlay1 */
+    --color-text-light: #a6adc8;      /* Mocha Subtext0 — bumped from Overlay1 (#7f849c) for WCAG AA body-text contrast (~8:1 on Base) */
 
     /* Sidebar */
     --color-sidebar: #181825;         /* Mocha Mantle */
@@ -3545,6 +3558,15 @@ th.sortable.sort-active .sort-arrow { opacity: 1; color: var(--color-brand); }
 .card + .card { margin-top: 16px; }
 .card > h2:first-child,
 .card > h3:first-child { margin-top: 0; }
+
+/* Empty-state inside a .card — centred, muted, with an optional hint line. */
+.empty-state {
+    text-align: center;
+    padding: 32px 24px;
+}
+.empty-state__message { color: var(--color-text); font-size: 15px; }
+.empty-state__hint { color: var(--color-text-muted); font-size: 13px; margin-top: 6px; }
+.empty-state__hint code { background: var(--color-muted-bg); padding: 1px 6px; border-radius: 4px; }
 
 /* === Onboarding / Welcome Card === */
 .welcome-card {

@@ -2,16 +2,15 @@
 {{if .Label}}
 {{/* ── Detail view ── */}}
 <div class="breadcrumb mb-1">
-    <a href="/cairn">Cairn</a> &rsaquo; {{.Label.Label}}
+    <a href="/cairn">Cairn</a> &rsaquo; {{.Label.Project}}
 </div>
 
 {{template "health-banner" .Health}}
 
 <div class="card">
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
-        <h2 style="margin:0;">{{.Label.Label}}</h2>
+        <h2 style="margin:0;">{{.Label.Project}}</h2>
         <a href="/cairn" class="btn btn--sm">Back to list</a>
-        {{if .Label.BlobSha}}<a href="/lode/{{.Label.BlobSha}}" class="btn btn--sm">View blob on /lode →</a>{{end}}
     </div>
 
     <div class="table-container" style="margin-bottom:24px;">
@@ -19,7 +18,6 @@
             <tbody>
                 <tr><td style="font-weight:600;width:180px;">Publisher</td><td>{{.Label.Publisher}}</td></tr>
                 <tr><td style="font-weight:600;">User</td><td>{{.Label.User}}</td></tr>
-                <tr><td style="font-weight:600;">Project</td><td>{{.Label.Project}}</td></tr>
                 <tr><td style="font-weight:600;">Max mirrors</td><td>{{.Label.MaxMirrors}}</td></tr>
                 {{if .Label.Paused}}<tr><td style="font-weight:600;">Paused</td><td><span class="badge badge--warn">paused</span></td></tr>{{end}}
                 {{if .Label.GitSha}}<tr><td style="font-weight:600;">Git HEAD</td><td><code>{{.Label.GitSha}}</code></td></tr>{{end}}
@@ -91,9 +89,7 @@
 {{if .Error}}
     <div class="alert alert--warn">Cairn aggregator: {{.Error}}</div>
 {{else if or (not .Fleet) (eq (len .Fleet.Labels) 0)}}
-    <div class="card">
-        <p style="color:var(--subtext0);">No cairn labels observed across the fleet. Add a <code>.cairn.yaml</code> sidecar to a <code>~&lt;user&gt;/cairn/&lt;project&gt;/</code> directory on any envoy to publish.</p>
-    </div>
+    {{template "empty-state" dict "Message" "No cairn repos observed across the fleet." "Hint" "Add a .cairn.yaml sidecar to a ~<user>/cairn/<project>/ directory on any envoy to publish."}}
 {{else}}
     <div class="stat-cards mb-2">
         <div class="stat-card">
@@ -119,11 +115,11 @@
     </div>
 
     <div class="card">
-        <h3 style="margin:0 0 12px;">Labels</h3>
+        <h3 style="margin:0 0 12px;">Repos</h3>
         <table class="table">
             <thead>
                 <tr>
-                    <th>Label</th>
+                    <th>Name</th>
                     <th>Publisher</th>
                     <th>Materialized</th>
                     <th>Selected</th>
@@ -135,13 +131,13 @@
             <tbody>
                 {{range .Fleet.Labels}}
                 <tr onclick="location.href='/cairn/{{.Label}}'" style="cursor:pointer;">
-                    <td><strong>{{.Label}}</strong></td>
+                    <td><strong>{{.Project}}</strong></td>
                     <td>{{.Publisher}}</td>
                     <td>{{.CountMaterialized}}</td>
                     <td>{{.CountSelected}} / {{.MaxMirrors}}</td>
                     <td>{{if gt .CountOrphan 0}}<span class="badge badge--err">{{.CountOrphan}}</span>{{else}}&mdash;{{end}}</td>
                     <td>{{if gt .CountStale 0}}<span class="badge badge--warn">{{.CountStale}}</span>{{else}}&mdash;{{end}}</td>
-                    <td>{{if gt .PublisherSeen 0}}{{formatUnixTime .PublisherSeen}}{{else}}&mdash;{{end}}</td>
+                    <td style="white-space:nowrap;">{{if gt .PublisherSeen 0}}{{formatUnixTime .PublisherSeen}}{{else}}&mdash;{{end}}</td>
                 </tr>
                 {{end}}
             </tbody>

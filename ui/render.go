@@ -213,10 +213,6 @@ func funcMap() template.FuncMap {
 				return "relapsed"
 			case "revoked", "revoking":
 				return "no-data"
-			case "superseded":
-				// Lavender pill — cairn incremental rotation, not a
-				// safety action; see LodeBlobEntry.Superseded docs.
-				return "superseded"
 			default:
 				return "no-data"
 			}

@@ -40,7 +40,8 @@
      hx-trigger="every {{.PollInterval}}"
      hx-swap="innerHTML"
      hx-include="#envoy-search"
-     hx-vals='{"status": "{{.StatusFilter}}"}'>
+     hx-vals='{"status": "{{.StatusFilter}}"}'
+     aria-live="polite">
     {{template "envoys-table" .}}
 </div>
 {{end}}

@@ -1,10 +1,12 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Lode</h1>
-    <p>Admin-distributed payloads</p>
+    <p>Admin-distributed payloads. <a href="/docs/engineering/subsystems/swarm">What is this?</a></p>
 </div>
 
 {{if not .BlobDetail}}
+{{template "health-banner" .Health}}
+
 <div class="stat-cards">
     <div class="stat-card">
         <div class="stat-card__label">Total Files</div>
@@ -71,7 +73,6 @@
         <table class="table">
             <tbody>
                 <tr><td style="font-weight:600;width:180px;">SHA256</td><td><code>{{.BlobDetail.SHA256}}</code></td></tr>
-                <tr><td style="font-weight:600;">Label</td><td>{{if .BlobDetail.Label}}{{.BlobDetail.Label}}{{else}}<em>none</em>{{end}}</td></tr>
                 <tr><td style="font-weight:600;">Source</td><td><span class="status-pill status-pill--{{if eq .BlobDetail.Source "server"}}converged{{else}}relapsed{{end}}">{{.BlobDetail.Source}}</span></td></tr>
                 {{if .BlobDetail.Retention}}<tr><td style="font-weight:600;">Retention</td><td>{{.BlobDetail.Retention}}</td></tr>{{end}}
                 <tr><td style="font-weight:600;">Size</td><td>{{.BlobDetail.SizeHuman}}</td></tr>
@@ -81,14 +82,11 @@
         </table>
     </div>
 
-    {{if strContains .BlobDetail.Label "cairn:"}}
-    <p class="mt-1"><a href="/cairn/{{.BlobDetail.Label}}">View cairn mesh for this label →</a></p>
-    {{end}}
-
     <div id="lode-envoys"
          hx-get="/ui/fragments/lode-envoys?sha256={{.BlobDetail.SHA256}}"
          hx-trigger="every 5s"
-         hx-swap="innerHTML">
+         hx-swap="innerHTML"
+         aria-live="polite">
     {{template "lode-envoys-fragment" .}}
     </div>
 </div>
@@ -105,34 +103,21 @@
             <thead>
                 <tr>
                     <th>Status</th>
-                    <th>Label</th>
-                    <th>SHA256</th>
-                    <th>Source</th>
+                    <th>Name</th>
                     <th>Size</th>
-                    <th>Chunks</th>
-                    <th>Created</th>
                     <th>Distribution</th>
+                    <th>Created</th>
                 </tr>
             </thead>
             <tbody>
                 {{range .Blobs}}
-                {{/* Superseded cairn blobs render at full contrast with a
-                     Lavender pill — they were rotated out by the publisher, not
-                     safety-revoked, so operators shouldn't read them as failures.
-                     Plain revoked blobs keep the legacy dim treatment. */}}
-                <tr{{if and .Revoked (not .Superseded)}} style="opacity:0.5;"{{end}}>
+                <tr{{if .Revoked}} style="opacity:0.5;"{{end}}>
+                    <td><span class="status-pill status-pill--{{swarmFileStatusClass .Status}}">{{.Status}}</span></td>
                     <td>
-                        <span class="status-pill status-pill--{{swarmFileStatusClass .Status}}"
-                              {{if .Superseded}}title="rotated out by a newer incremental bundle for the same label — receivers still hold the commits in their bare repos"{{end}}>
-                            {{.Status}}
-                        </span>
+                        <a href="/lode/{{.SHA256}}"><strong>{{if .Label}}{{.Label}}{{else}}<em>unlabeled</em>{{end}}</strong></a>
+                        <div style="color:var(--subtext0);font-size:0.9em;"><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code> · seeded by {{.Source}} · {{.Chunks}} chunk{{if ne .Chunks 1}}s{{end}}</div>
                     </td>
-                    <td><a href="/lode/{{.SHA256}}">{{if .Label}}{{.Label}}{{else}}<em>unlabeled</em>{{end}}</a></td>
-                    <td><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code></td>
-                    <td>{{.Source}}</td>
-                    <td>{{.SizeHuman}}</td>
-                    <td>{{.Chunks}}</td>
-                    <td>{{formatTime .CreatedAt}}</td>
+                    <td style="white-space:nowrap;">{{.SizeHuman}}</td>
                     <td>
                         {{if gt .Summary.Total 0}}
                         {{if .Revoked}}
@@ -151,21 +136,18 @@
                         {{end}}
                         {{else}}
                         {{if not .Revoked}}
-                            {{if strContains .Label "cairn:"}}
-                            <a href="/cairn/{{.Label}}">View cairn mesh →</a>
-                            {{else}}
-                            <span class="status-pill status-pill--failed" title="Target spec matched 0 envoys">no targets</span>
-                            {{end}}
+                        <span class="status-pill status-pill--failed" title="Target spec matched 0 envoys">no targets</span>
                         {{else}}<span>—</span>{{end}}
                         {{end}}
                     </td>
+                    <td style="white-space:nowrap;">{{formatTime .CreatedAt}}</td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
     </div>
     {{else}}
-    <p>No files. Use <code>vigocli swarm distribute &lt;file&gt;</code> to distribute a file, or drop a file with a <code>.swarm</code> manifest into any envoy's seed directory.</p>
+    {{template "empty-state" dict "Message" "No payloads." "Hint" "Use vigocli swarm distribute <file> to distribute a file, or drop a file with a .swarm manifest into any envoy's seed directory."}}
     {{end}}
 </div>
 {{end}}

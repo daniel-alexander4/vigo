@@ -1,0 +1,23 @@
+{{/*
+  Shared empty-state panel. Rendered inside a .card so every empty list looks
+  consistent across pages.
+
+  Expects a struct (or anonymous map with `dict`) carrying:
+    .Message — single-sentence "nothing here" line (plain text)
+    .Hint    — optional template.HTML follow-up telling the operator what
+               action produces data; markup preserved because it often
+               includes <code>…</code> for CLI verbs
+
+  Usage (plain hint):
+    {{template "empty-state" dict "Message" "No users with echo state observed."}}
+
+  Usage (hint with markup — pass template.HTML from Go):
+    data.EmptyHint := template.HTML("Use <code>vigocli swarm distribute</code>.")
+    {{template "empty-state" dict "Message" "No payloads." "Hint" .EmptyHint}}
+*/}}
+{{define "empty-state"}}
+<div class="card empty-state">
+    <p class="empty-state__message">{{.Message}}</p>
+    {{if .Hint}}<p class="empty-state__hint">{{.Hint}}</p>{{end}}
+</div>
+{{end}}

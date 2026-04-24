@@ -10,7 +10,8 @@
          id="security-status"
          hx-get="/ui/fragments/security-status"
          hx-trigger="every {{.PollInterval}}"
-         hx-swap="innerHTML">
+         hx-swap="innerHTML"
+         aria-live="polite">
         {{template "security-status" .}}
     </div>
 
