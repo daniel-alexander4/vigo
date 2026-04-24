@@ -64,8 +64,35 @@ const ANNOUNCE_INTERVAL_ACTIVE: Duration = Duration::from_secs(1);
 /// producing more than ~2 announces/sec per envoy.
 const MIN_ANNOUNCE_GAP: Duration = Duration::from_millis(500);
 
-/// Maximum multicast message size (UDP payload).
+/// Maximum multicast message size (UDP payload). Emitted packets must
+/// stay at or below this after the SIG footer is appended, so all
+/// build-time budget checks use [`MAX_CONTENT_SIZE`] — *not* this — to
+/// reserve space for signing.
 const MAX_MSG_SIZE: usize = 1400;
+
+/// Upper bound on the SIG footer appended by [`sign_and_append`].
+/// Shape is `SIG:<unix_seconds>:<128-hex-chars>\n` — 4 + 1 + ≤10 + 1 +
+/// 128 + 1 = 145 bytes in the common case. Rounded up to 160 so the
+/// budget tolerates timestamp-width stretch without revisiting. The
+/// 0.30.12 fix pair: reserve this here and enlarge the receive buffer
+/// past MAX_MSG_SIZE — before, build checks capped at MAX_MSG_SIZE
+/// and the SIG was appended *after*, producing ~1500-byte packets
+/// that the 1400-byte receive buffer silently truncated, stripping
+/// the SIG line and killing cairn authenticity on every datagram.
+const SIG_FOOTER_RESERVE: usize = 160;
+
+/// Effective content budget for `build_announcement`. Subtract the
+/// SIG footer reserve so signed packets still fit in MAX_MSG_SIZE.
+const MAX_CONTENT_SIZE: usize = MAX_MSG_SIZE - SIG_FOOTER_RESERVE;
+
+/// Receive buffer size. Deliberately larger than [`MAX_MSG_SIZE`] so a
+/// sender that slips past the budget (protocol growth, a mismatched
+/// build, a bug) isn't silently truncated — truncation drops the SIG
+/// line and kills cairn authenticity for the whole datagram. A
+/// warn-once fires if `recv_from` fills this buffer, flagging the
+/// sender as misbehaving instead of leaving the investigator to
+/// discover the issue via tcpdump.
+const RECV_BUF_SIZE: usize = 2048;
 
 /// Protocol header.
 const HEADER: &str = "VIGO-SWARM";
@@ -187,13 +214,28 @@ async fn listen_loop(
 
     info!("multicast listener started on 224.0.0.42:{}", MULTICAST_PORT);
 
-    let mut buf = [0u8; MAX_MSG_SIZE];
+    let mut buf = [0u8; RECV_BUF_SIZE];
+    let mut warned_truncation = false;
     loop {
         tokio::select! {
             _ = cancel.cancelled() => return Ok(()),
             result = udp.recv_from(&mut buf) => {
                 match result {
                     Ok((n, src)) => {
+                        if n == RECV_BUF_SIZE && !warned_truncation {
+                            // Datagram filled the receive buffer — the kernel
+                            // may have truncated the tail, which for signed
+                            // cairn packets means losing the SIG line and
+                            // dropping cairn content for this peer. Warn
+                            // once per process so the journal names the
+                            // symptom instead of leaving it to tcpdump.
+                            warn!(
+                                src = %src,
+                                recv_buf_size = RECV_BUF_SIZE,
+                                "swarm multicast: received datagram filled the buffer; a sender is emitting oversized packets and this one may be truncated"
+                            );
+                            warned_truncation = true;
+                        }
                         if let Ok(msg) = std::str::from_utf8(&buf[..n]) {
                             let mut result = parse_announcement(msg, src, &peer_map, &manifest);
                             // Cairn authenticity (0.30.11+): verify the
@@ -604,7 +646,10 @@ fn build_announcement(
 
     // Primary packet. Preamble + CAIRN + as many CAIRNCLAIM as fit under
     // a reserved budget (leave ≥300 bytes for MANIFEST/ADDR/one HAVE).
-    let cairn_budget_limit = MAX_MSG_SIZE - 300;
+    // MAX_CONTENT_SIZE already reserves space for the SIG footer, so a
+    // packet that fills this budget still fits in MAX_MSG_SIZE after
+    // sign_and_append.
+    let cairn_budget_limit = MAX_CONTENT_SIZE - 300;
     let mut msg = String::from(HEADER);
     msg.push('\n');
     msg.push_str(&manifest_line);
@@ -634,7 +679,7 @@ fn build_announcement(
         let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
         let total = chunks_for_size(size);
         let line = format!("HAVE:{}:{}/{}\n", sha, total, total);
-        if msg.len() + line.len() + 30 > MAX_MSG_SIZE {
+        if msg.len() + line.len() + 30 > MAX_CONTENT_SIZE {
             break;
         }
         msg.push_str(&line);
@@ -656,7 +701,7 @@ fn build_announcement(
         let line = if total > 0 && bitmap::encoded_len(total) > 0 {
             let encoded = bitmap::encode(&chunks, total);
             let inline = format!("HAVE:{}:{}/{}:{}\n", sha, have, total, encoded);
-            if msg.len() + inline.len() + 30 <= MAX_MSG_SIZE {
+            if msg.len() + inline.len() + 30 <= MAX_CONTENT_SIZE {
                 inline
             } else {
                 format!("HAVE:{}:{}/{}\n", sha, have, total)
@@ -664,7 +709,7 @@ fn build_announcement(
         } else {
             format!("HAVE:{}:{}/0\n", sha, have)
         };
-        if msg.len() + line.len() + 30 > MAX_MSG_SIZE {
+        if msg.len() + line.len() + 30 > MAX_CONTENT_SIZE {
             break;
         }
         msg.push_str(&line);
@@ -675,7 +720,7 @@ fn build_announcement(
             continue;
         }
         let line = format!("WANT:{}\n", sha);
-        if msg.len() + line.len() + 30 > MAX_MSG_SIZE {
+        if msg.len() + line.len() + 30 > MAX_CONTENT_SIZE {
             break;
         }
         msg.push_str(&line);
@@ -701,8 +746,9 @@ fn build_announcement(
         let mut hard_overflow = 0usize;
         for (label, hosts) in &overflow_claims {
             let line = format!("{}\n", format_claim_line(label, hosts));
-            // Reserve room for ADDR at the tail.
-            if spill.len() + line.len() + addr_line.len() > MAX_MSG_SIZE {
+            // Reserve room for ADDR at the tail. MAX_CONTENT_SIZE leaves
+            // room for the SIG footer that will be appended below.
+            if spill.len() + line.len() + addr_line.len() > MAX_CONTENT_SIZE {
                 hard_overflow += 1;
                 continue;
             }
@@ -1556,6 +1602,81 @@ mod tests {
         // And it did NOT also get parsed as a malformed CAIRN
         // peer line.
         assert!(result.cairn_peer.is_none());
+    }
+
+    #[test]
+    fn build_announcement_packets_fit_under_max_msg_size_when_signed() {
+        // 0.30.12 regression guard. The SIG footer appended by
+        // `sign_and_append` after build is ~145 bytes. Before
+        // MAX_CONTENT_SIZE was introduced, build-time budget checks
+        // used MAX_MSG_SIZE directly and the emitted packet could
+        // exceed MAX_MSG_SIZE by the full SIG length — the 1400-byte
+        // receive buffer then silently truncated the tail, stripping
+        // the SIG line and killing cairn authenticity on every
+        // datagram. Saturate every section of the primary packet AND
+        // force a spillover secondary packet, then confirm both still
+        // fit in MAX_MSG_SIZE after signing.
+        use sha2::Digest;
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
+        let manifest = test_manifest();
+
+        // Enough complete blobs that HAVE lines pack up against the budget.
+        for i in 0..40u32 {
+            let data = format!("blob-{}", i);
+            let sha = hex::encode(sha2::Sha256::digest(data.as_bytes()));
+            cache.write_chunk(&sha, 0, data.as_bytes()).unwrap();
+            cache.assemble(&sha, data.as_bytes().len() as u64, 1).unwrap();
+        }
+
+        let li = CairnLocalInfo {
+            hostname: "danlap.home.arpa".to_string(),
+            users: vec!["dan".to_string(), "anja".to_string(), "elena".to_string()],
+            tags: vec![],
+            pubkey_hex: "a".repeat(64),
+        };
+        // Enough claims to force CAIRNCLAIM overflow into the spillover
+        // packet, so BOTH emitted packets get exercised against the cap.
+        let claims: Vec<(String, Vec<String>)> = (0..12)
+            .map(|i| {
+                (
+                    format!("cairn:danlap:dan:project-{:02}", i),
+                    vec![
+                        "plex.home.arpa".to_string(),
+                        "girlslaptop.home.arpa".to_string(),
+                        "annlap.home.arpa".to_string(),
+                    ],
+                )
+            })
+            .collect();
+
+        let key = ed25519_dalek::SigningKey::from_bytes(&[7u8; 32]);
+        let packets = build_announcement(
+            &cache.list_blobs(),
+            &cache.list_partials(),
+            &cache,
+            &manifest,
+            Ipv4Addr::new(10, 0, 0, 1),
+            1531,
+            Some(&li),
+            &claims,
+            Some(&key),
+            1_700_000_000,
+        );
+
+        assert!(!packets.is_empty(), "primary packet must be emitted");
+        for (i, msg) in packets.iter().enumerate() {
+            assert!(
+                msg.len() <= MAX_MSG_SIZE,
+                "packet {} is {} bytes; exceeds MAX_MSG_SIZE={} — SIG_FOOTER_RESERVE={} may need to grow",
+                i, msg.len(), MAX_MSG_SIZE, SIG_FOOTER_RESERVE,
+            );
+            assert!(
+                msg.contains("\nSIG:"),
+                "packet {} missing SIG footer, bytes={}: {}",
+                i, msg.len(), msg,
+            );
+        }
     }
 
     #[test]
