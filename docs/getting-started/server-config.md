@@ -539,7 +539,7 @@ smtp:
 
 ### swarm
 
-Peer-to-peer content distribution. When enabled, agents download large files from each other instead of all pulling from the server.
+Enables the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **lode** (admin-pushed file distribution), **echo** (user directory sync), **cairn** (user source-control mirroring), and **sigil** (encrypted user directory sync). When enabled, agents open their peer server on port 1531 and participate in multicast discovery; the individual content subsystems opt in via their own matchfile vars or usercrate flags.
 
 ```yaml
 swarm:

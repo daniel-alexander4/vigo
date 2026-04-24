@@ -1,11 +1,18 @@
 
-# Swarm — Peer-to-Peer Content Distribution
+# Swarm — The Envoy P2P Substrate
 
-Swarm distributes large files across your fleet using peer-to-peer transfer over mTLS HTTPS. Instead of every envoy downloading from a central server, envoys share chunks with each other — reducing bandwidth and speeding up rollouts.
+Swarm is the envoy-only peer-to-peer network that Vigo's content subsystems ride on. It is not itself a product feature operators push files with — it's the transport layer: peer discovery, mTLS HTTPS between envoys on port 1531, a manifest CRDT gossiped across the fleet, and content-addressed chunking. Four content subsystems reuse this substrate:
+
+- **[Lode](../../reference/glossary.md#lode)** — administrator-pushed file distribution (`vigocli swarm distribute`). Fleet-wide, operator-scoped.
+- **[Echo](echo.md)** — per-user plaintext home-directory sync. User-scoped, LAN-local by default.
+- **[Cairn](cairn.md)** — per-user source-control repo mirroring for personal disaster recovery. User-scoped.
+- **[Sigil](sigil.md)** — per-user always-encrypted home-directory sync. Ciphertext at rest, password-gated decryption.
+
+Each content subsystem has its own content rules, multicast group, and sidecar format, but all four reuse swarm's mTLS trust, peer channel, and manifest gossip. This page documents the substrate. For a given content type, follow the links above.
 
 ## When to Use Swarm
 
-Swarm is designed for distributing large binary artifacts: agent updates, firmware images, application tarballs, disk images, database dumps. For small config files (a few KB), the normal check-in bundle is more efficient.
+The rest of this page describes swarm's original workload — distributing large binary artifacts — which is what the `vigocli swarm distribute` CLI surfaces today. That content subsystem is called **lode** in the UI and glossary; the CLI still reads `swarm` because it predates the name split. Good candidates are agent updates, firmware images, application tarballs, disk images, database dumps. For small config files (a few KB), the normal check-in bundle is more efficient.
 
 **Good candidates:** 50 MB+ files going to 10+ envoys — agent binaries, container images, OS images, application releases.
 
@@ -33,7 +40,7 @@ Both `vigocli swarm distribute` and the envoy seed directory use the same mechan
 
 ### Agent-Driven Peer Discovery
 
-The agent discovers peers through four layers, tried in order:
+The agent discovers peers through five layers, tried in order:
 
 | Layer | Mechanism | Scope | Latency |
 |-------|-----------|-------|---------|
@@ -91,7 +98,7 @@ Before downloading, the agent runs `BlobCache::check_disk_space` which enforces 
 1. **Absolute reserve** — `available_bytes >= blob_size + 512 MiB` (the historical check; protects against accepting a blob that would fully consume the disk).
 2. **Pressure threshold** — `free_pct > 10` on the blobs mountpoint (`/var/lib/vigo/swarm/.blobs`). Swarm is pull-based, so the fleet-wide "sender doesn't push to ≤10%-free recipients" guardrail lands here as "receiver refuses to start a download when its own disk is already pressured."
 
-Both checks go through the shared [`swarm::peer_health`](../../../agent/src/swarm/peer_health.rs) module so the gate matches the one answered by `GET /health/storage?for=swarm` on the same mount. Skipped downloads are reported to the server as "skipped" with the triggering reason. See [Disk Space in swarm operations](../../operations/swarm.md#disk-space) for how the same guardrail shows up in the other three peer-delivery paths.
+Both checks go through the shared `swarm::peer_health` module so the gate matches the one answered by `GET /health/storage?for=swarm` on the same mount. Skipped downloads are reported to the server as "skipped" with the triggering reason. See [Disk Space in swarm operations](../../operations/swarm.md#disk-space) for how the same guardrail shows up in the other three peer-delivery paths.
 
 ## Architecture
 
@@ -165,7 +172,7 @@ Blob integrity is verified by SHA256 hash after download — if the hash doesn't
 ## Related
 
 - [Swarm Operations](../../operations/swarm.md) — Configuration, monitoring, troubleshooting
-- [vigocli swarm](../../reference/cli/swarm.md) — CLI reference
+- [vigocli lode](../../reference/cli/lode.md) — CLI reference for admin-pushed payloads on this substrate
 - [Server Configuration](../../getting-started/server-config.md) — `swarm:` section
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -16,7 +16,11 @@ The UI is built with Go templates and HTMX for partial page updates without full
 | [Tasks](task.md) | `/task` | Ad-hoc task dispatch and results |
 | [Workflows](workflows.md) | `/workflows` | Multi-step workflow execution |
 | [Spanner](spanner.md) | `/spanner` | Hub-spoke topology and health |
+| [Swarm](swarm.md) | `/swarm` | Envoy P2P substrate overview — fleet status, subsystem counts, seeding allowlist, per-envoy peer table |
 | [Lode](lode.md) | `/lode` | Admin-distributed payloads — status and per-envoy progress over the swarm substrate |
+| Cairn | `/cairn` | Personal-DR repo mirror inventory — one row per repo, publisher, mirror counts, orphan/stale health |
+| Echo | `/echo` | Per-user LAN plaintext sync mesh — one row per user, file/tombstone/envoy counts, divergence status |
+| Sigil | `/sigil` | Per-user encrypted sync mesh — same shape as Echo plus recipient drift and active unlock sessions |
 | [Envoy Swarm Load](envoy-swarm-load.md) | `/envoys/{id}` · Swarm tab | Per-envoy disk footprint across lode, cairn, echo, and sigil — biggest consumers first |
 | [Security](security.md) | `/envoys/{id}` | Envoy detail and security info |
 

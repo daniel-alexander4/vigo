@@ -42,7 +42,7 @@ Dispatch a command to matching envoys.
 | `maxFailures` | No | Abort after this many failures (e.g., `3`, `10%`) |
 | `healthCheck` | No | Command to run between batches |
 | `dryRun` | No | If true, return matched targets without executing |
-| `taskName` | No | Name of a reusable task definition from `stockpile/tasks/*.vgo` |
+| `taskName` | No | Name of a reusable task definition from `worksite/structure/tasks/*.vgo` |
 | `params` | No | Parameter overrides for named tasks |
 
 **Response (201 Created):**
@@ -1743,14 +1743,23 @@ Same shape as the existing framework report endpoints: JSON at the bare path, HT
 - **GET /api/v1/report/cisubuntu** and **GET /api/v1/report/cisubuntu.html** — CIS Ubuntu benchmark report.
 - **GET /api/v1/report/nydfscyber** and **GET /api/v1/report/nydfscyber.html** — NY DFS Cybersecurity (23 NYCRR 500) report.
 
-### Swarm
+### Swarm (substrate)
 
-- **GET /api/v1/swarm/list** — list all active swarm blobs.
-- **GET /api/v1/swarm/match** — preview which envoys match a given target expression.
-- **GET /api/v1/swarm/status/{sha256}** — per-envoy distribution status for one blob.
-- **GET /api/v1/swarm/broken** — blobs with unreachable peers or failed distributions.
-- **POST /api/v1/swarm/distribute** — seed a new blob into the swarm for distribution.
-- **DELETE /api/v1/swarm/{sha256}** — revoke a blob; agents evict on next check-in.
+Substrate-level overview of the envoy P2P network. Content-subsystem operations live under their own prefixes; these endpoints describe the transport layer those subsystems ride on.
+
+- **GET /api/v1/swarm/status** — fleet-wide totals (envoys online, substrate-active, seeders, manifest counts, footprint).
+- **GET /api/v1/swarm/peers** — per-envoy rollup with `?sort=footprint|blobs|hostname` and `?limit=N` (0 for unbounded).
+
+### Lode
+
+Administrator-pushed file distribution on the swarm substrate. These endpoints power `vigocli lode`.
+
+- **GET /api/v1/lode/list** — list all active lode payloads.
+- **GET /api/v1/lode/match** — preview which envoys match a given target expression.
+- **GET /api/v1/lode/status/{sha256}** — per-envoy distribution status for one payload.
+- **GET /api/v1/lode/broken** — payloads with unreachable peers or failed distributions.
+- **POST /api/v1/lode/distribute** — seed a new payload into the swarm for distribution.
+- **DELETE /api/v1/lode/{sha256}** — revoke a payload; agents evict on next check-in.
 
 ### Cairn
 

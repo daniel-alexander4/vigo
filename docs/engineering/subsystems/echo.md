@@ -3,9 +3,11 @@
 
 Echo keeps `~/echo/` in sync across every machine where a user has an account, on the same LAN. Drop a file on any machine and it appears on all the others. Delete a file and it disappears from all of them. No config, no commands, no server involvement.
 
+Echo is one of four content subsystems that ride the [swarm](swarm.md) substrate. The server plays no role in content or discovery — echo reuses swarm's mTLS peer channel (port 1531) for transfers and runs its own multicast group (`224.0.0.43:1532`) for announcements.
+
 ## How It Works
 
-Echo is a **pure peer-to-peer LAN feature**. The Vigo server plays no role at all. Envoys discover each other via UDP multicast and exchange files directly over mTLS.
+Echo is a **pure peer-to-peer LAN feature**. The Vigo server plays no role at all. Envoys discover each other via UDP multicast and exchange files directly over mTLS on swarm's peer port.
 
 1. **Scan.** Every 30 seconds each agent scans `~/echo/` for every local user. Files are hashed (SHA-256), and the in-memory state (file list + deletion tombstones) is compared against the previous snapshot. Added files show up in the new state; deleted files get a tombstone stamped with the current time.
 2. **Announce.** Each agent multicasts its full per-user state on `224.0.0.43:1532`. One announcement per user per cycle. Everything on the wire is LAN-local (TTL=1) and mTLS-authenticated.
@@ -75,8 +77,8 @@ The agent keeps per-user state (file snapshots + tombstones) under `/var/lib/vig
 If you adopted `encrypt: true` in 0.25.0 and want encrypted sync going forward:
 
 1. Decrypt existing ciphertext files with the age CLI directly: `age -d -i ~/.echo/identity.txt ~/echo/foo > /tmp/foo && mv /tmp/foo ~/echo/foo`. Vigo no longer ships `vigo echo decrypt` — use upstream age.
-2. Enroll the user in sigil via `sigil: true` on the user resource, or run `vigo crypt init` on the primary + `vigo crypt enroll` on every secondary.
-3. Move the plaintext files from `~/echo/` to `~/sigil/` via `vigo crypt encrypt`.
+2. Enroll the user in sigil via `sigil: true` on the user resource, or run `vigo sigil init` on the primary + `vigo sigil enroll` on every secondary.
+3. Move the plaintext files from `~/echo/` to `~/sigil/` via `vigo sigil encrypt`.
 4. Delete the leftover `~/.echo/identity.txt` and `~/.echo/recipients.txt` — they're no longer read.
 
 ## Cross-subnet receivers
@@ -131,6 +133,6 @@ If files aren't syncing between two machines:
 
 - [Swarm](swarm.md) — Infrastructure-level P2P blob distribution (operator-controlled, server-orchestrated)
 - [Swarm Operations](../../operations/swarm.md) — Swarm configuration and troubleshooting
-- [Cairn](cairn.md) — Personal-DR git mirroring (sister subsystem; server-coordinated mirror selection, hybrid bare-repo + working-tree layout on receivers)
+- [Cairn](cairn.md) — Personal-DR git mirroring (sister subsystem; pure P2P as of 0.23.0, receivers hold root-owned bare repos only)
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

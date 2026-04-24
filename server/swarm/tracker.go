@@ -396,6 +396,24 @@ func (t *PeerTracker) HasPeerRecord(envoyID, sha256 string) bool {
 	return blobPeers[envoyID] != nil
 }
 
+// ForEachPeer invokes fn for every (sha256, envoyID, complete) tuple
+// currently in the peer table. Holds the read lock for the duration —
+// fn must not re-enter the tracker. Admin-facing endpoints use this
+// to build the per-envoy substrate rollup without exposing the
+// internal peer map shape.
+func (t *PeerTracker) ForEachPeer(fn func(sha256, envoyID string, complete bool)) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	for sha, blobPeers := range t.peers {
+		for envoyID, ps := range blobPeers {
+			if ps == nil || ps.Evicted {
+				continue
+			}
+			fn(sha, envoyID, ps.Complete)
+		}
+	}
+}
+
 // Prune removes stale entries from the peer map.
 func (t *PeerTracker) Prune() {
 	t.mu.Lock()

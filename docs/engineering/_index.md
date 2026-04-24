@@ -32,7 +32,7 @@ Reference for authoring `.vgo` configs.
 
 Optional subsystems. Read the one you're using; skip the rest.
 
-- [Swarm](subsystems/swarm.md) — Peer-to-peer content distribution
+- [Swarm](subsystems/swarm.md) — The envoy P2P substrate (transport layer for lode, echo, cairn, sigil)
 - [Spanner](subsystems/spanner.md) — Hub-spoke multi-server topology
 - [P2P Spanner](subsystems/p2p-spanner.md) — Peer-to-peer spanner (design)
 - [Scrier](subsystems/scrier.md) — Admin remote access (SSH/RDP/VNC) over the envoy's outbound tunnel

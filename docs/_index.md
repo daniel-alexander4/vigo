@@ -40,7 +40,7 @@ See the full [Engineering Guide](engineering/_index.md). Highlights:
 - [Rate Limiting](operations/rate-limiting.md) — Token-bucket rate limiting
 - [Peer Replication](operations/peer-replication.md) — Primary/peer file sync and automatic failover
 - [Geo-Distributed Deployments](operations/geo-distributed.md) — Multi-region fleets
-- [Swarm](operations/swarm.md) — P2P blob distribution operations
+- [Swarm](operations/swarm.md) — envoy P2P substrate operations (lode, echo, cairn, sigil)
 - [Backup & Recovery](operations/backup.md) — Litestream replication, snapshots, web UI download
 - [Disaster Recovery](operations/disaster-recovery.md) — Five failure scenarios with runbooks
 - [Server Migration](operations/server-migration.md) — Moving server without re-enrolling agents

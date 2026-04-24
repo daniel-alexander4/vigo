@@ -5,6 +5,8 @@ Cairn auto-mirrors a small number of a user's personal git repos from one **sour
 
 Cairn is a personal-disaster-recovery tool, not a fleet content distribution mechanism. Fleet-wide content distribution is what modules and `file:` resources are for. Cairn carries history.
 
+Cairn is one of four content subsystems that ride the [swarm](swarm.md) substrate. The server plays no role in selection or delivery — cairn reuses swarm's mTLS peer channel (port 1531) for bundle pushes and swarm's multicast group (`224.0.0.42:1531`) for LAN discovery via `CAIRN:` announcement lines.
+
 ## Status
 
 As of **0.23.0**, cairn is a fully peer-to-peer subsystem. The server plays no role in selection, delivery, or acceptance — the `server/cairn/` package and the `CheckInResponse.cairn_claims` proto field were deleted in Phase 8 of the P2P-first rearchitecture. All mirror discovery, selection, and transport runs directly between envoys.
@@ -17,8 +19,8 @@ As of **0.23.0**, cairn is a fully peer-to-peer subsystem. The server plays no r
 | Cross-subnet `cross_subnet_mirrors:` direct push (`POST /cairn/push/<label>`) | ✅ Phase 7 |
 | `cairn` trait collector (operator visibility) | ✅ |
 | Receiver-side materialization (`agent/src/cairn/receiver.rs`) | ✅ |
-| `vigo repo <verb>` recovery CLI | ✅ |
-| `vigo repo prune` manual stale-cleanup | ✅ |
+| `vigo cairn <verb>` recovery CLI | ✅ |
+| `vigo cairn prune` manual stale-cleanup | ✅ |
 | Home-lab e2e verification | ⏳ (requires `git >= 2.35` on source host) |
 
 ## How It Works
@@ -26,13 +28,13 @@ As of **0.23.0**, cairn is a fully peer-to-peer subsystem. The server plays no r
 1. **Opt in, per envoy.** An operator sets `vars: { cairn: true }` in a matchfile or `common.vgo`. The agent re-reads this from its cached `PolicyBundle.vars_json` after every check-in and flips a shared runtime gate. Dormant envoys never announce themselves and never accept pushed mirrors; flipping the var on or off takes effect without restarting the agent.
 2. **Opt in, per repo.** A user creates a git repo at `~<user>/cairn/<project>/` and commits a `.cairn.yaml` sidecar. The sidecar names the source envoy's hostname, how many mirrors to maintain, optional LAN filter globs, and optional explicit `cross_subnet_mirrors:` cross-subnet targets.
 3. **Discover.** Every 5 seconds, the agent's cairn reactor scans every local user's `~/cairn/*` directory, parses each sidecar with a strict deny-unknown-fields validator, and excludes anything whose `owner` field doesn't match this envoy's hostname.
-4. **Bundle.** For each non-paused source whose `HEAD` has advanced since the last publish, the reactor runs `git bundle create` (as the owning Unix user, never as root) into `/var/lib/vigo/cairn/tmp/`. The first bundle is full; subsequent bundles are incremental from the last published commit. Whether a given bundle was full or incremental — and its size — is persisted in `state.json` and surfaced through the `cairn.sources[].last_publish_full` / `last_bundle_size` trait fields so the `/lode` UI and `vigocli repo` can explain why a seed is only a few KB (an incremental is expected to be small; a full bundle should be repo-sized).
+4. **Bundle.** For each non-paused source whose `HEAD` has advanced since the last publish, the reactor runs `git bundle create` (as the owning Unix user, never as root) into `/var/lib/vigo/cairn/tmp/`. The first bundle is full; subsequent bundles are incremental from the last published commit. Whether a given bundle was full or incremental — and its size — is persisted in `state.json` and surfaced through the `cairn.sources[].last_publish_full` / `last_bundle_size` trait fields so the `/lode` UI and `vigocli cairn` can explain why a seed is only a few KB (an incremental is expected to be small; a full bundle should be repo-sized).
 5. **Publish as swarm seed.** The source writes a content seed `cairn:<host>:<user>:<project>` into the swarm seed directory. Cairn content seeds are flagged as **claim-only** in the manifest (label prefix `cairn:`), so the standard target-spec self-assignment path explicitly skips them.
 6. **LAN discovery.** Every cairn-enabled envoy announces itself on the existing swarm multicast channel with a `CAIRN:<host>:<users>:<tags>` line (Phase 5). Every source envoy builds an in-memory peer table from those announcements.
 7. **LAN selection.** For each non-paused source, the reactor filters the peer table by the sidecar's `include_envoys`/`exclude_envoys` + owner-user-exists check, runs deterministic `sha256(label||host)` selection, picks the top `max_mirrors`, and writes the result to a shared `PendingClaims` cache (Phase 6).
 8. **LAN claim announcement.** The swarm announcer emits one `CAIRNCLAIM:<label>:<host1,host2,...>` line per source per multicast cycle (rate-limited to changes + 60s safety re-announce). LAN receivers parse the line, check whether their own hostname is in the list, and call `ClaimsHandle::ingest_lan_claim` to mark the label as wanted.
 9. **Cross-subnet push.** For each source with a non-empty `cross_subnet_mirrors:` list, the reactor opens a mTLS connection to `https://<target>:1531/cairn/push/<label>` and POSTs the bundle body with `X-Vigo-Seeder` and `X-Vigo-Blob-Sha256` headers (Phase 7). The target's swarm peer server validates the request, writes the blob to its local cache, injects a manifest entry, and calls `ingest_lan_claim` — same final path as a LAN-discovered mirror.
-10. **Materialize.** The receiver-side reactor diffs `ClaimsHandle::snapshot()` against currently-materialized state, finds each newly-claimed content seed in the local swarm cache, unbundles into a root-owned bare repo at `/var/lib/vigo/cairn/mirrors/<seeder>/<user>/<project>.git`. On the next tick the cycle can re-run: a new bundle triggers an incremental unbundle; a claim whose LAN announcement stops arriving ages out after the 90-second TTL; stale mirrors (`now - last_refreshed > 30 days`) surface as warnings and in the `cairn.stale_mirrors` trait but are **never auto-evicted**. Manual cleanup is available via `vigo repo prune`.
+10. **Materialize.** The receiver-side reactor diffs `ClaimsHandle::snapshot()` against currently-materialized state, finds each newly-claimed content seed in the local swarm cache, unbundles into a root-owned bare repo at `/var/lib/vigo/cairn/mirrors/<seeder>/<user>/<project>.git`. On the next tick the cycle can re-run: a new bundle triggers an incremental unbundle; a claim whose LAN announcement stops arriving ages out after the 90-second TTL; stale mirrors (`now - last_refreshed > 30 days`) surface as warnings and in the `cairn.stale_mirrors` trait but are **never auto-evicted**. Manual cleanup is available via `vigo cairn prune`.
 
 The server is absent from every step. It never runs `git`, never downloads bundle bytes, never picks mirrors, never delivers claim lists. The `cairn.sources[]` trait is still emitted for operator observability but no server component consumes it — it's a read-only window onto source-side state.
 
@@ -97,12 +99,12 @@ Receivers hold each mirror as a single **root-owned bare repo** at `/var/lib/vig
 Recovery is a deliberate user action, not a passive filesystem shadow. When a user needs to get their repo back, they run:
 
 ```
-vigo repo recover <project>
+vigo cairn recover <project>
 ```
 
-which clones the bare repo into `~<user>/cairn/<project>/` as a normal writable git repo with full history. See [`vigo repo` CLI reference](../../reference/cli/cairn.md) for the full recovery subcommand tree.
+which clones the bare repo into `~<user>/cairn/<project>/` as a normal writable git repo with full history. See [`vigo cairn` CLI reference](../../reference/cli/agent-cairn.md) for the full recovery subcommand tree.
 
-**Why root-owned bare repo, not a user-owned mirror.** The bare repo is operator data managed by the convergence system; the user should not be able to damage it by accident. User-owned files would also mean the agent has to drop privileges for every update, which was the cause of the 0.21.24 → 0.21.25 regression (root-owned `GIT_DIR` + non-root `git checkout` fails at `index.lock`). Root-owned + on-demand clone via `vigo repo recover` eliminates the ownership split from the hot path entirely.
+**Why root-owned bare repo, not a user-owned mirror.** The bare repo is operator data managed by the convergence system; the user should not be able to damage it by accident. User-owned files would also mean the agent has to drop privileges for every update, which was the cause of the 0.21.24 → 0.21.25 regression (root-owned `GIT_DIR` + non-root `git checkout` fails at `index.lock`). Root-owned + on-demand clone via `vigo cairn recover` eliminates the ownership split from the hot path entirely.
 
 **What recovery gives you.** A real git repo at a writable path, with all tags, the full commit log, and a `.git/` directory. It's indistinguishable from having cloned the original source. From that point forward the recovered repo is yours — subsequent cairn updates on the source side do not automatically propagate to your recovered clone, because it's no longer part of the receiver pipeline.
 
@@ -123,11 +125,11 @@ Note that the sidecar's `owner` field is **not** a security boundary. It's a sin
 | Path | Owner | Contents |
 |------|-------|----------|
 | `/var/lib/vigo/cairn/state.json` | `root:root` 0600 | publisher: per-label `{git_sha, blob_sha}` so restarts don't re-publish identical bundles. Root-only because no user-facing command reads it. |
-| `/var/lib/vigo/cairn/traits.json` | `root:root` 0644 | latest reactor pass snapshot for the `cairn` trait collector. World-readable so `vigo repo source list` (an unprivileged-user command) can read it without sudo — contents are non-sensitive (labels, owner usernames, sidecar config, git/blob shas) and already flow through server trait reports and the swarm manifest. |
+| `/var/lib/vigo/cairn/traits.json` | `root:root` 0644 | latest reactor pass snapshot for the `cairn` trait collector. World-readable so `vigo cairn source list` (an unprivileged-user command) can read it without sudo — contents are non-sensitive (labels, owner usernames, sidecar config, git/blob shas) and already flow through server trait reports and the swarm manifest. |
 | `/var/lib/vigo/cairn/tmp/` | mode `1777` (sticky like `/tmp`) | scratch directory for `git bundle create` output before atomic move into the swarm seed dir |
-| `/var/lib/vigo/cairn/receiver_state.json` | `root:root` 0644 | receiver: per-label `{blob_sha, git_sha, next_gc_at, ...}` + `pending_wipes` for the hysteresis window. World-readable so `vigo repo {list,show,log,branches,peers}` can read it without sudo — the bare repo layout under `mirrors/` is already world-traversable, so the file merely serializes what the filesystem reveals. |
-| `/var/lib/vigo/cairn/mirrors/<seeder>/<user>/<project>.git` | `root:root` mode `0755` | bare receiver repo, readable by any local user (so `vigo repo recover` can clone it without privilege), writable only by the agent. The `mirrors/` subdirectory keeps bare repos namespaced away from publisher state files so the receiver's orphan-cleanup walker has a clean boundary |
-| `~<user>/cairn/<project>/` | `<user>:<user>` | **source side**: operator-created working repo with `.git/`, containing `.cairn.yaml`. **receiver side**: does not exist — the receiver never touches user-space. Users recover into this path on demand via `vigo repo recover <project>`, which creates a real writable git clone |
+| `/var/lib/vigo/cairn/receiver_state.json` | `root:root` 0644 | receiver: per-label `{blob_sha, git_sha, next_gc_at, ...}` + `pending_wipes` for the hysteresis window. World-readable so `vigo cairn {list,show,log,branches,peers}` can read it without sudo — the bare repo layout under `mirrors/` is already world-traversable, so the file merely serializes what the filesystem reveals. |
+| `/var/lib/vigo/cairn/mirrors/<seeder>/<user>/<project>.git` | `root:root` mode `0755` | bare receiver repo, readable by any local user (so `vigo cairn recover` can clone it without privilege), writable only by the agent. The `mirrors/` subdirectory keeps bare repos namespaced away from publisher state files so the receiver's orphan-cleanup walker has a clean boundary |
+| `~<user>/cairn/<project>/` | `<user>:<user>` | **source side**: operator-created working repo with `.git/`, containing `.cairn.yaml`. **receiver side**: does not exist — the receiver never touches user-space. Users recover into this path on demand via `vigo cairn recover <project>`, which creates a real writable git clone |
 
 State files survive agent restarts. The tmp directory is GCed on agent startup for any `*.bundle` older than 1 hour (interrupted bundle operations).
 
@@ -160,10 +162,9 @@ The server's `server/cairnmesh` package reads both fields from every envoy's lat
 
 `/cairn` is a dedicated page for the cairn mesh, separate from the lode (admin-distributed payloads) page that shows the underlying blobs:
 
-- `/cairn` list — fleet-wide view of every cairn label with mirror summary pills (`N active · N pending · N orphan · N stale · selected/max`) per row.
-- `/cairn/{label}` detail — sidecar config (max_mirrors, tags, description, cross_subnet_mirrors, git HEAD) and a per-mirror status table with last-refreshed and status pill per host. Links out to `/lode/{blob_sha}` for the underlying blob's distribution mechanics.
-- `/lode` list — cairn-labeled rows render a "View cairn mesh →" link into `/cairn/{label}` instead of the generic distribution pills, since cairn is claim-driven and the swarm substrate's fan-out model doesn't apply.
-- `/lode/{blob_sha}` detail — when the label is `cairn:*`, a "View cairn mesh for this label →" link appears above the distribution status, routing to `/cairn/{label}` for the full mesh view.
+- `/cairn` list — fleet-wide view of every cairn repo. Each row's primary identifier is the project (repo) name; the publisher hostname sits in the next column. The full `cairn:<host>:<user>:<project>` label is never shown in the UI — it's an internal addressing key, not an operator-facing identifier.
+- `/cairn/{label}` detail — page heading is the project name; a Publisher / User metadata table and sidecar config (max_mirrors, tags, description, cross_subnet_mirrors, git HEAD) sit below, followed by a per-mirror status table with last-refreshed and status pill per host.
+- `/lode` — admin-distributed payloads only. Cairn bundles are filtered out of both the list and the detail view; requests to `/lode/{cairn_bundle_sha}` 303 to `/cairn/{label}`.
 
 Nothing on the server is authoritative for mesh state — the truth still lives in each agent's memory + multicast announcements. The trait is a periodic projection that makes the P2P state observable without breaking it.
 
@@ -421,7 +422,7 @@ A receiver flags a mirror as **stale** when its last successful refresh
 
 **Stale mirrors are never automatically removed.** The whole point of cairn is that your backup is still reachable after your source envoy dies — and a dead source envoy is precisely what makes a mirror look stale. Auto-pruning would destroy the backup at the moment it's most valuable.
 
-Manual cleanup is available via `vigo repo prune` (added in Phase 4 of the P2P-first rearchitecture). That command reads `receiver_state.json`, lists mirrors older than a threshold (default 30 days, configurable via `--older-than`), prints the candidates, and exits. Operators must re-invoke with `--yes` or name a specific label to actually delete.
+Manual cleanup is available via `vigo cairn prune` (added in Phase 4 of the P2P-first rearchitecture). That command reads `receiver_state.json`, lists mirrors older than a threshold (default 30 days, configurable via `--older-than`), prints the candidates, and exits. Operators must re-invoke with `--yes` or name a specific label to actually delete.
 
 ## Observability (`/cairn` UI)
 
@@ -429,20 +430,13 @@ Every envoy's `cairn` trait (publisher sources + receiver mirrors) is joined acr
 
 The page opens with a health banner + problems list covering orphan mirrors (peer holds a mirror the publisher no longer selects), stale mirrors (not refreshed in >30 days), and pending mirrors (selected but not yet materialized). The JSON shape is available at `GET /api/v1/cairn/fleet`.
 
-Cairn-labeled blobs on `/lode` link into `/cairn/{label}` for the full mesh view — `/lode` stays focused on blob distribution mechanics and no longer fuses mirror state into its rows.
+Cairn bundles are excluded from `/lode` entirely — that page shows only admin-distributed payloads. Every cairn publish is visible on `/cairn` and `/cairn/{label}`; pasting a cairn blob sha into `/lode/{sha}` redirects to `/cairn/{label}`.
 
-## Superseded vs revoked bundles on `/lode`
+## Publisher rotation and bundle lifecycle
 
 Every cairn publish writes a new content seed under the same label (`cairn:<host>:<user>:<project>`). The seed's sha256 is derived from the bundle bytes, so every incremental produces a *new* sha. The old sha's last-seen timestamp never refreshes — nothing points at it anymore — and the server's retention pruner (`server/swarm/pruner.go`) eventually calls `manifestStore.Revoke()` on it after the seed's 7-day retention window elapses. Revoked entries gossip fleet-wide and every envoy evicts the blob from cache.
 
-Mechanically this is correct: the bundle is gone. Semantically it's misleading — "revoked" sounds like a safety action ("don't use this, something went wrong") when what actually happened is the bundle did its job (delivered a delta that receivers integrated into their bare repos) and got retired by rotation.
-
-The `/lode` listing (and the admin CLI where relevant) distinguishes the two:
-
-- **Superseded** — cairn-labeled, revoked via retention, and a newer active seed exists under the same label. Rendered with a **Lavender** pill at full contrast. The bare repo on every receiver still holds every commit the old bundle delivered; nothing on the receiver side reacts to the revocation except the cache eviction.
-- **Revoked** — any other revoked seed (non-cairn, or cairn with no successor — the publisher is gone). Rendered with the legacy dim treatment.
-
-Both states are read-only: the operator never has to act on a superseded seed. It's informational so a 1.6 KiB "just-revoked" seed next to a 690 MiB source repo doesn't read as a failure.
+Mechanically this is correct: the bundle is gone. The bare repo on every receiver still holds every commit the old bundle delivered; nothing on the receiver side reacts to the revocation except the cache eviction. The operator never has to act on rotated-out bundles — they're internal cairn state, not a UI surface.
 
 ## Platform Support
 
@@ -473,7 +467,7 @@ Each of these was considered and explicitly deferred — see the locked-in desig
 - It is **not a sync tool.** Receivers are read-only; you cannot edit on a mirror and expect changes to flow back.
 - It is **not a fleet distribution mechanism.** Use modules and `file:` resources for that.
 - It does **not push from the source.** The trigger is a local commit detected by polling, not a git remote push.
-- It does **not maintain a working tree on receivers.** Receivers hold a root-owned bare repo only; there is no `~<user>/cairn/<project>/` on a receiver. Users recover via `vigo repo recover <project>` — see [Receiver Layout](#receiver-layout).
+- It does **not maintain a working tree on receivers.** Receivers hold a root-owned bare repo only; there is no `~<user>/cairn/<project>/` on a receiver. Users recover via `vigo cairn recover <project>` — see [Receiver Layout](#receiver-layout).
 - It does **not run on the server at all** (as of 0.23.0). Selection, delivery, and materialization are all peer-to-peer. The server plays no role in cairn.
 
 ## Troubleshooting
@@ -511,7 +505,7 @@ Bare repos at `/var/lib/vigo/cairn/mirrors/<seeder>/<user>/<project>.git` that a
 
 ### Recovered a repo and then the source pushed a new commit — why isn't my clone updating?
 
-Once you run `vigo repo recover <project>`, the cloned path is a normal git repo that the receiver pipeline does not manage. It's yours. Subsequent source commits flow into the bare mirror at `/var/lib/vigo/cairn/mirrors/...` (which continues to update), but they do not touch your recovered clone. If you want the latest, re-run `vigo repo recover <project>` into a different path, or `git pull` your clone against the bare mirror if you set it up as a remote.
+Once you run `vigo cairn recover <project>`, the cloned path is a normal git repo that the receiver pipeline does not manage. It's yours. Subsequent source commits flow into the bare mirror at `/var/lib/vigo/cairn/mirrors/...` (which continues to update), but they do not touch your recovered clone. If you want the latest, re-run `vigo cairn recover <project>` into a different path, or `git pull` your clone against the bare mirror if you set it up as a remote.
 
 ## Related
 

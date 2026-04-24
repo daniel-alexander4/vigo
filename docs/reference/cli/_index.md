@@ -3,7 +3,7 @@
 
 Vigo has two CLI binaries:
 
-- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the [`vigo repo` recovery CLI](cairn.md) for inspecting and recovering personal-DR git mirrors, and the [`vigo crypt` CLI](sigil.md) for managing [sigil](../../engineering/subsystems/sigil.md) — the per-user encrypted P2P directory.
+- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the [`vigo cairn` recovery CLI](agent-cairn.md) for inspecting and recovering personal-DR git mirrors, and the [`vigo sigil` CLI](agent-sigil.md) for managing [sigil](../../engineering/subsystems/sigil.md) — the per-user encrypted P2P directory.
 - **`vigocli`** -- the admin CLI that talks to the server's REST API (documented below).
 
 ---
@@ -53,9 +53,15 @@ Vigo has two CLI binaries:
 | [vi](vi.md) | Edit a .vgo file with syntax highlighting and validation |
 | [cve](cve.md) | Search the fleet for hosts affected by a specific CVE |
 | [license](license.md) | View license status and manage license keys |
-| [swarm](swarm.md) | Distribute files via P2P and monitor progress |
-| [repo](cairn.md) | Fleet-wide read-only view of cairn personal-DR mirrors |
+| [swarm](swarm.md) | Substrate-level view of the envoy P2P network (status + peers) |
+| [lode](lode.md) | Admin-pushed file distribution on the swarm substrate |
+| [cairn](cairn.md) | Fleet-wide read-only view of cairn personal-DR mirrors |
+| [echo](echo.md) | Fleet-wide read-only view of the echo per-user directory sync mesh |
+| [sigil](sigil.md) | Fleet-wide read-only view of the sigil per-user encrypted directory sync mesh |
 | [scrier](scrier.md) | Remote access — user mappings and interactive shell sessions |
+| [sandgorgon](sandgorgon.md) | Bare-metal lifecycle — commission, provision, decommission |
+| [security](security.md) | Fleet-wide security posture summary and findings |
+| [compliance](compliance.md) | Fleet-wide compliance status by framework |
 | `completion` | Generate shell completion scripts (bash, zsh, fish, powershell) |
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

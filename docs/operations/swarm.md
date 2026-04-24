@@ -1,7 +1,7 @@
 
 # Swarm Operations
 
-How to configure, monitor, and troubleshoot peer-to-peer content distribution.
+How to configure, monitor, and troubleshoot the envoy P2P substrate and the four content subsystems that ride it ([lode](../reference/glossary.md#lode), [echo](../engineering/subsystems/echo.md), [cairn](../engineering/subsystems/cairn.md), [sigil](../engineering/subsystems/sigil.md)).
 
 ## Enabling Swarm
 
@@ -210,13 +210,13 @@ Each subsystem measures the filesystem where its data actually lands — `/var/l
 
 1. **Was the server restarted?** The in-memory PeerTracker is lost on restart. Status goes blank until envoys re-report their traits. Envoys that already have the blob will re-appear as "complete" within 1-2 check-in cycles (~15s). No action needed — wait.
 
-3. **Is the envoy online?** `vigocli envoys` — look for last-seen time.
+2. **Is the envoy online?** `vigocli envoys` — look for last-seen time.
 
-4. **Is swarm enabled on the server?** `swarm.enabled: true` in `server.yaml`.
+3. **Is swarm enabled on the server?** `swarm.enabled: true` in `server.yaml`.
 
-5. **Agent version mismatch?** Check `vigo version` on the envoy vs `cat VERSION` on the server. After `force_update` exec(), the new binary may not take effect until the next restart. Check `journalctl -u vigo-envoy | grep "swarm manager started"`.
+4. **Agent version mismatch?** Check `vigo version` on the envoy vs `cat VERSION` on the server. After `force_update` exec(), the new binary may not take effect until the next restart. Check `journalctl -u vigo-envoy | grep "swarm manager started"`.
 
-6. **Disk space critically low?** If the agent's disk safety check triggers (`free_percent` below threshold), convergence and trait collection are skipped. The seed won't be detected. Free up space.
+5. **Disk space critically low?** If `BlobCache::check_disk_space` trips — either absolute reserve (size + 512 MiB) or the 10% free-pct gate — the download is skipped and the envoy shows "skipped." Free up space or rotate old blobs; the next check-in re-attempts.
 
 ### Downloads fail with "no available peers"
 
@@ -346,14 +346,14 @@ What happens for every action an operator can take on the seeder or downloader.
 | **Delete partial blob** (`rm -rf .blobs/<sha>.partial/`) | Scheduler recreates the partial directory and restarts from chunk 0. | Download restarts from scratch. |
 | **Delete complete blob** (`rm .blobs/<sha>`) | `completed` set still has the hash, but on the next ManifestUpdated evaluation, the manager detects the blob is missing from cache and clears the stale entry. Download restarts. | Self-healing within one check-in cycle. |
 | **Revocation arrives mid-download** | Scheduler polls `manifest.is_revoked` between retry rounds, in the chunk producer loop, and in the consumer before writing each chunk. On revocation it bails with `REVOKED_ERR`, and the outer pipeline wipes the partial directory immediately so the trait collector stops reporting the sha as `downloading`. | Clean. Partial gone on the same gossip cycle; server transitions the envoy from `revoking` → `revoked` on the next check-in. |
-| **Disk full** | `check_disk_space` fails (512 MiB reserve). Download skipped with "insufficient disk space." Status shows "skipped." Retries automatically on every check-in. | Self-healing when space is freed. |
+| **Disk full or under pressure** | `check_disk_space` fails either the absolute-reserve gate (size + 512 MiB) or the 10% free-pct gate. Download skipped with "insufficient disk space" or "disk pressure." Status shows "skipped." Retries automatically on every check-in. | Self-healing when space is freed. |
 | **No peers available** | Scheduler bails with "no progress" after multicast wait + probing. Retries on every check-in cycle. | Resolves when peers come online. |
 | **Seeder goes offline** | Chunk downloads fail → exponential backoff → "no progress" bail. Resumes when seeder (or any peer with the blob) comes back. | Retries automatically. |
 
 ## Related
 
 - [Swarm Concepts](../engineering/subsystems/swarm.md) — How swarm works
-- [vigocli swarm](../reference/cli/swarm.md) — CLI reference
+- [vigocli lode](../reference/cli/lode.md) — CLI reference for admin-pushed payloads on this substrate
 - [Server Configuration](../getting-started/server-config.md) — `swarm:` section
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

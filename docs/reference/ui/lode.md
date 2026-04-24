@@ -5,22 +5,23 @@
 
 Displays all admin-distributed payloads ("lode") with distribution progress across the fleet. The payloads ride the [swarm](../../engineering/subsystems/swarm.md) substrate (peer-to-peer mTLS transport on port 1531); this page is the operator-facing surface for managing and observing those distributions. Auto-refreshes every 5 seconds on the detail view.
 
+**Cairn bundles are excluded.** Personal-DR repo mirrors (labels prefixed with `cairn:`) have their own page at `/cairn` — see the [cairn subsystem docs](../../engineering/subsystems/cairn.md) — and are filtered out of Lode. Pasting a cairn blob sha into `/lode/{sha}` redirects to `/cairn/{label}`.
+
 ## List View
 
-Shows all files in a table with distribution summaries.
+Page opens with a health banner surfacing active delivery problems (e.g., envoys that matched a target but couldn't receive). Headline reads "N payload(s) active, M revoked. No delivery failures." when clean.
+
+Four stat cards follow: Total Files, Total Size, Active Distributions, Seeding Envoys.
+
+The payload table columns:
 
 | Column | Description |
 |--------|-------------|
-| Status | Color-coded pill: `complete` (green), `distributing` (yellow), `revoked` (gray) |
-| Label | File label (original filename), links to detail view |
-| SHA256 | First 12 characters of the content hash |
-| Source | Seeder hostname (the server is an envoy too, so CLI distributions show the server's hostname) |
-| Size | Human-readable file size |
-| Chunks | Number of 1 MiB chunks |
-| Created | When the file was uploaded or seeded |
+| Status | Color-coded pill: `complete` (green), `distributing` (yellow), `cached` (blue), `revoked` (gray) |
+| Name | The payload's label (original filename) as a bold link to the detail view. A dim second line shows the SHA256 short form (full value on hover), the seeder hostname, and the chunk count. |
+| Size | Human-readable payload size |
 | Distribution | Status pill counts: source / complete / cached / downloading / pending / skipped (active blobs), or revoking / revoked (revoked blobs — in-flight and fully-evicted envoy counts). The total excludes the source — it counts only target envoys. `cached` (blue pill) means the envoy already had the blob from a previous distribution. |
-
-Stat cards at the top show total file count, total size, and active distributions (any file with pending or downloading envoys).
+| Created | When the payload was uploaded or seeded |
 
 ## Detail View
 
@@ -40,16 +41,6 @@ Target × source grid of chunk counts with a per-envoy row trailer on the right 
 
 When more than 24 envoys participate in a distribution, visualizations are capped to the 24 alphabetically-first envoys (matching the size of the tiered color palette). A "showing 24 of N envoys" notice appears next to the status pills when the cap is active.
 
-### Cairn Mesh (blob is a cairn seed)
-
-Rendered above the Distribution Status pills when the seed's label starts with `cairn:`. Shows:
-
-- A metadata table for the publisher side — publisher hostname, user, project, max mirrors, git HEAD at the time of the latest publish, paused state, sidecar tags/description/cross_subnet_mirrors.
-- A **Mirror Status** header with pill counts: `N active` (selected *and* materialized), `N pending` (selected but not yet materialized on the receiver), `N orphan` (receivers holding the blob after they were dropped from the selected set), `N stale` (mirrors past the 30-day refresh threshold), and `selected X / max Y`.
-- A per-host Mirror Status table with `Status | Selected | Materialized | Last Refreshed | Git HEAD` columns, one row per envoy. `active` rows show their refreshed time and the short git sha; `pending` rows leave the trailing columns empty until the receiver reports materialization.
-
-Data source: the server joins each publisher's `cairn.sources[].selected_mirrors` against every receiver's `cairn.mirrors[]` trait. Receivers report materialization through the `mirrors[]` field of their `cairn` trait snapshot ([docs/reference/traits/cairn.md](../traits/cairn.md)); until that reaches the server, the receiver shows as `pending` even if the chunks have already landed in the swarm layer.
-
 ### Per-envoy visual identity
 
 Every envoy gets a deterministic hex color assigned by alphabetic slot in a 24-slot tiered palette so the same envoy looks identical across every viz section and across page refreshes:
@@ -64,6 +55,6 @@ Slot assignment is alphabetic by hostname, so an envoy keeps the same color rega
 
 - [Swarm Concepts](../../engineering/subsystems/swarm.md) — How swarm works
 - [Swarm Operations](../../operations/swarm.md) — Configuration and troubleshooting
-- [vigocli swarm](../cli/swarm.md) — CLI reference
+- [vigocli lode](../cli/lode.md) — CLI reference
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

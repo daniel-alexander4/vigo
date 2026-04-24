@@ -1,9 +1,9 @@
 
-# vigocli repo
+# vigocli cairn
 
 Admin-side, fleet-wide view of the [cairn](../../engineering/subsystems/cairn.md) personal-DR mesh. Every envoy's publisher-side source list and receiver-side mirror holdings are joined server-side by `server/cairnmesh` and surfaced through `GET /api/v1/cairn/fleet`; this command is the CLI consumer of that endpoint.
 
-`vigocli repo` is **read-only**. Recovery runs on the envoy holding the mirror, not from the admin host — use the envoy-local [`vigo repo`](cairn.md) CLI for that. Publish, revoke, and seed distribution live in [`vigocli swarm`](swarm.md).
+`vigocli cairn` is **read-only**. Recovery runs on the envoy holding the mirror, not from the admin host — use the envoy-local [`vigo cairn`](agent-cairn.md) CLI for that. Publish, revoke, and seed distribution for admin-pushed payloads live in [`vigocli lode`](lode.md) (lode rides the same swarm substrate).
 
 ## Subcommands
 
@@ -18,15 +18,15 @@ Every subcommand accepts `--json` to emit machine-readable output instead of a t
 ## Usage
 
 ```bash
-vigocli repo <subcommand> [flags]
+vigocli cairn <subcommand> [flags]
 ```
 
-## `vigocli repo status`
+## `vigocli cairn status`
 
 Prints aggregate counts across the fleet.
 
 ```
-$ vigocli repo status
+$ vigocli cairn status
 Cairn fleet — generated 2026-04-19 15:48:02
 
 Publishers (sources)   2
@@ -39,12 +39,12 @@ Participants           3
 
 **Orphan mirrors** are bare repos held by envoys whose publisher no longer selects them (the publisher rotated its LAN picks or was revoked). **Stale mirrors** haven't been refreshed in 30+ days — typically a dead source envoy. Both counts use yellow for any non-zero value.
 
-## `vigocli repo list`
+## `vigocli cairn list`
 
 Prints one row per label. The `LAST BUNDLE` column distinguishes **full** (repo-sized) from **incremental** (delta since the prior bundle — expected to be small).
 
 ```
-$ vigocli repo list
+$ vigocli cairn list
 LABEL                          PUBLISHER  MIRRORS  LAST BUNDLE   SIZE      STATE
 cairn:danlap:dan:notes      danlap     1/3      full          200.0 KB  publishing
 cairn:danlap:dan:vigo       danlap     2/5      incremental   1.6 KB    publishing
@@ -54,12 +54,12 @@ An incremental bundle is **expected** to be small: every commit produces a new d
 
 `STATE` is `publishing` normally, `paused` when the sidecar sets `paused: true`, or `orphan (no publisher)` when the label only appears in receiver-side mirror reports (the source envoy is gone).
 
-## `vigocli repo show <label|project>`
+## `vigocli cairn show <label|project>`
 
 Detailed view of one label with a per-host mirror grid.
 
 ```
-$ vigocli repo show vigo
+$ vigocli cairn show vigo
 Label:          cairn:danlap:dan:vigo
 Publisher:      danlap
 User:           dan
@@ -102,7 +102,7 @@ If the same project is published by two different envoys, the bare project name 
 Every subcommand accepts `--json`. `list` and `show` emit the raw `LabelSummary` / `[]LabelSummary` shape defined in `server/cairnmesh`; `status` emits the full `Fleet` envelope so downstream scripts can pluck totals or the participant list directly.
 
 ```bash
-vigocli repo list --json | jq '.[] | select(.count_stale > 0) | .label'
+vigocli cairn list --json | jq '.[] | select(.count_stale > 0) | .label'
 ```
 
 ## Exit codes
@@ -114,6 +114,6 @@ vigocli repo list --json | jq '.[] | select(.count_stale > 0) | .label'
 
 ## Related
 
-- [`vigo repo`](cairn.md) — envoy-local inspection and recovery
-- [`vigocli swarm`](swarm.md) — blob distribution and revocation
+- [`vigo cairn`](agent-cairn.md) — envoy-local inspection and recovery
+- [`vigocli lode`](lode.md) — admin-pushed payload distribution and revocation on the swarm substrate
 - [cairn concepts](../../engineering/subsystems/cairn.md) — sidecar format, LAN selection, full vs incremental bundles

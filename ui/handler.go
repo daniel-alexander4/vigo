@@ -173,6 +173,7 @@ type Handler struct {
 	fleetCache         *FleetCache
 	cairnFleet      CairnFleetSource
 	mesh               MeshSource
+	swarmAPI           SwarmSource
 }
 
 // CairnFleetSource surfaces the aggregated fleet-wide cairn
@@ -449,6 +450,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Lode pages (admin-distributed payloads riding the swarm substrate) —
 	// always registered because SetSwarm is called after RegisterRoutes.
 	// The handlers check h.swarmTracker at request time.
+	mux.HandleFunc("GET /swarm", h.Swarm)
 	mux.HandleFunc("GET /lode", h.Lode)
 	mux.HandleFunc("GET /lode/{sha256}", h.Lode)
 	mux.HandleFunc("GET /ui/fragments/lode-envoys", h.LodeEnvoysFragment)

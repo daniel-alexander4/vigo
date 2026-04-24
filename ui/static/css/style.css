@@ -87,6 +87,14 @@
     --font-mono: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
     --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --sidebar-width: 240px;
+
+    /* Short aliases used directly by templates. Kept as thin aliases onto the
+       canonical --color-* names so template inline styles don't diverge from
+       the palette. */
+    --subtext0: var(--color-text-muted);
+    --ok:       var(--color-success);
+    --err:      var(--color-danger);
+    --lavender: var(--color-brand-light);
 }
 
 /* === Reset === */
@@ -179,6 +187,8 @@ body {
 .sidebar--collapsed .sidebar:hover .nav-link { padding: 8px 24px; font-size: 13px; }
 .sidebar--collapsed .nav-group__label { font-size: 0; padding: 8px 12px 0; }
 .sidebar--collapsed .sidebar:hover .nav-group__label { font-size: 10px; padding: 16px 24px 4px; }
+.sidebar--collapsed .nav-group__label-hint { font-size: 0; }
+.sidebar--collapsed .sidebar:hover .nav-group__label-hint { font-size: 10px; }
 .sidebar--collapsed .sidebar:hover .nav-group__label--sub { font-size: 10px; padding: 10px 24px 2px 32px; }
 .sidebar--collapsed .nav-group__header { font-size: 0; padding: 8px 12px 0; }
 .sidebar--collapsed .sidebar:hover .nav-group__header { font-size: 12px; padding: 18px 24px 2px; }
@@ -296,6 +306,41 @@ html:not(.theme-dark) .sidebar__logo-img--light { display: inline; }
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--color-sidebar-label);
+}
+
+/* Group label that is itself a link (e.g. "Swarm" → /swarm overview).
+   Preserves the block-level shape of the non-link label variant, adds
+   a subtle hover/active treatment without breaking the small-caps look
+   that makes it read as a group header first and a link second. */
+.nav-group__label--link {
+    display: block;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+    border-radius: 0 6px 6px 0;
+    margin-right: 8px;
+}
+.nav-group__label--link:hover {
+    background: var(--color-sidebar-hover);
+    color: var(--color-text-sidebar);
+}
+.nav-group__label--active {
+    color: var(--color-brand-light);
+    background: var(--color-sidebar-active);
+}
+
+/* Inline hint next to a group label — e.g. "SWARM envoy P2P" where the
+   Catppuccin Lavender hint tells an unfamiliar operator what the group
+   is about without dimming the label itself. Uppercase is dropped so
+   the hint reads as prose; letter-spacing is normalized for the same
+   reason. */
+.nav-group__label-hint {
+    font-size: 10px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+    color: #b4befe;
+    margin-left: 6px;
 }
 
 .nav-group__divider {
@@ -3484,6 +3529,22 @@ th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
 th.sortable:hover { color: var(--color-brand); }
 th.sortable .sort-arrow { font-size: 10px; margin-left: 3px; opacity: 0.3; }
 th.sortable.sort-active .sort-arrow { opacity: 1; color: var(--color-brand); }
+
+/* === Generic card surface ===
+   Used ~70× across templates (Lode, Cairn, Echo, Sigil, Compliance,
+   Workflows, etc.) as a framed content block. The shared chrome —
+   padding, surface background, subtle border, and shadow — gives every
+   page a consistent "card on the page" feel without per-page CSS. */
+.card {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 20px 24px;
+}
+.card + .card { margin-top: 16px; }
+.card > h2:first-child,
+.card > h3:first-child { margin-top: 0; }
 
 /* === Onboarding / Welcome Card === */
 .welcome-card {

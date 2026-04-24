@@ -4,440 +4,225 @@
 package main
 
 import (
-	"bufio"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"strings"
+	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 )
 
-var swarmCmd = &cobra.Command{
-	Use:   "swarm",
-	Short: "Peer-to-peer content distribution",
+// Substrate-level view of the envoy P2P network. `vigocli swarm` is
+// the substrate — the transport layer every content subsystem rides
+// on. Admin-pushed payloads are `vigocli lode`; personal-DR mirrors
+// are `vigocli cairn`; per-user directory sync is `vigocli echo` and
+// `vigocli sigil`. Muscle memory from the pre-rename era points here
+// for content verbs — the command's long help leads with that
+// disambiguation so a mistyped "swarm distribute" produces an obvious
+// pointer at `lode distribute`.
+
+type swarmStatusFleet struct {
+	GeneratedAt            time.Time             `json:"generated_at"`
+	EnvoysTotal            int                   `json:"envoys_total"`
+	EnvoysOnline           int                   `json:"envoys_online"`
+	EnvoysSubstrateActive  int                   `json:"envoys_substrate_active"`
+	EnvoysSeeding          int                   `json:"envoys_seeding"`
+	SeedingAllowlist       []string              `json:"seeding_allowlist"`
+	ServerEnvoyHost        string                `json:"server_envoy_host"`
+	ManifestEntriesActive  int                   `json:"manifest_entries_active"`
+	ManifestEntriesRevoked int                   `json:"manifest_entries_revoked"`
+	Payloads               swarmStatusPayloads   `json:"payloads"`
+	TotalFootprintBytes    int64                 `json:"total_footprint_bytes"`
 }
 
-var swarmDistributeCmd = &cobra.Command{
-	Use:   "distribute <file>",
-	Short: "Seed a file for P2P distribution to envoys",
-	Long: `Places a file in the server's seed directory for P2P distribution.
-The server's agent discovers the seed on the next check-in and auto-distributes
-to envoys matching the target spec. Envoys download from each other over mTLS
-HTTPS on port 1531.
+type swarmStatusPayloads struct {
+	Lode  int `json:"lode"`
+	Cairn int `json:"cairn"`
+}
 
-Examples:
-  vigocli swarm distribute agent-0.8.0-linux-amd64.tar.gz --target '*'
-  vigocli swarm distribute app-v2.tar.gz --target '*.web.*' --label app-v2
-  vigocli swarm distribute firmware.bin --target 'dmi.product_name=PowerEdge R750'`,
-	Args: cobra.ExactArgs(1),
-	RunE: runSwarmDistribute,
+type swarmPeersFleet struct {
+	GeneratedAt time.Time       `json:"generated_at"`
+	Total       int             `json:"total"`
+	Returned    int             `json:"returned"`
+	Sort        string          `json:"sort"`
+	Limit       int             `json:"limit"`
+	Envoys      []swarmPeerRow  `json:"envoys"`
+}
+
+type swarmPeerRow struct {
+	Hostname         string    `json:"hostname"`
+	ID               string    `json:"id"`
+	LastSeen         time.Time `json:"last_seen"`
+	Online           bool      `json:"online"`
+	SubstrateActive  bool      `json:"substrate_active"`
+	SeedingCount     int       `json:"seeding_count"`
+	CachedCount      int       `json:"cached_count"`
+	DownloadingCount int       `json:"downloading_count"`
+	FootprintBytes   int64     `json:"footprint_bytes"`
+}
+
+var swarmCmd = &cobra.Command{
+	Use:   "swarm",
+	Short: "Substrate-level view of the envoy P2P network",
+	Long: `Read-only admin view of the swarm substrate — the envoy P2P network
+four content subsystems ride on.
+
+This command is the SUBSTRATE. For the content verbs that used to live
+under 'vigocli swarm distribute' etc., see:
+
+  vigocli lode      — admin-pushed payloads (was 'swarm distribute')
+  vigocli cairn     — personal-DR git mirror fleet view
+  vigocli echo      — per-user plaintext directory sync mesh
+  vigocli sigil     — per-user encrypted directory sync mesh
+
+Subcommands here report substrate health: who is reachable, who has a
+blob cache, who is seeding, total footprint across the fleet.`,
 }
 
 var swarmStatusCmd = &cobra.Command{
-	Use:   "status <sha256>",
-	Short: "Show distribution progress for a blob",
-	Args:  cobra.ExactArgs(1),
+	Use:   "status",
+	Short: "Fleet-wide substrate totals (envoys, seeders, payloads, footprint)",
+	Args:  cobra.NoArgs,
 	RunE:  runSwarmStatus,
 }
 
-var swarmListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all swarm seeds and their distribution status",
+var swarmPeersCmd = &cobra.Command{
+	Use:   "peers",
+	Short: "One row per envoy with substrate-participation counts",
 	Args:  cobra.NoArgs,
-	RunE:  runSwarmList,
+	RunE:  runSwarmPeers,
 }
 
-var swarmRevokeCmd = &cobra.Command{
-	Use:   "revoke <sha256>",
-	Short: "Revoke a swarm seed: stop distribution and evict from envoys",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runSwarmRevoke,
-}
-
-var swarmBrokenCmd = &cobra.Command{
-	Use:   "broken",
-	Short: "List broken seed manifests across envoys",
-	Args:  cobra.NoArgs,
-	RunE:  runSwarmBroken,
-}
-
-func runSwarmDistribute(cmd *cobra.Command, args []string) error {
-	filePath := args[0]
-	target, _ := cmd.Flags().GetString("target")
-	label, _ := cmd.Flags().GetString("label")
-	retention, _ := cmd.Flags().GetString("retention")
-
-	f, err := os.Open(filePath)
-	if err != nil {
-		return fmt.Errorf("opening file: %w", err)
-	}
-	defer f.Close()
-
-	info, err := f.Stat()
-	if err != nil {
-		return fmt.Errorf("stat: %w", err)
-	}
-
-	// Default label to filename.
-	if label == "" {
-		label = info.Name()
-	}
-
-	// Stream-hash: compute SHA256 while uploading so the file is read only once.
-	// Wrap in a 4 MiB buffered reader — TeeReader prevents sendfile optimization,
-	// so large reads reduce syscall overhead on multi-GiB files.
-	fmt.Printf("Seeding %s (%s)...\n", filePath, formatBytes(info.Size()))
-	h := sha256.New()
-	body := bufio.NewReaderSize(io.TeeReader(f, h), 4<<20)
-
+func runSwarmStatus(cmd *cobra.Command, _ []string) error {
+	asJSON, _ := cmd.Flags().GetBool("json")
 	client := newAPIClient()
-	var resp struct {
-		SHA256 string `json:"sha256"`
-		Size   int64  `json:"size"`
-		Label  string `json:"label"`
+	var resp swarmStatusFleet
+	if err := client.get("/api/v1/swarm/status", &resp); err != nil {
+		return fmt.Errorf("fetching swarm status: %w", err)
 	}
-	headers := map[string]string{
-		"X-Swarm-Label":     label,
-		"X-Swarm-Target":    target,
-		"X-Swarm-Retention": retention,
-	}
-	if err := client.postRaw("/api/v1/swarm/distribute", body, headers, &resp); err != nil {
-		return fmt.Errorf("distributing: %w", err)
+	if asJSON {
+		return writeJSONPretty(resp)
 	}
 
-	localHash := hex.EncodeToString(h.Sum(nil))
-	if resp.SHA256 != localHash {
-		return fmt.Errorf("hash mismatch: local=%s server=%s", localHash, resp.SHA256)
-	}
+	fmt.Printf("Swarm substrate — generated %s\n\n", resp.GeneratedAt.Local().Format("2006-01-02 15:04:05"))
 
-	fmt.Printf("  SHA256: %s\n", resp.SHA256)
-	fmt.Printf("  Size:   %s\n", formatBytes(resp.Size))
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "%s\t%d / %d\n", bold("Envoys online"), resp.EnvoysOnline, resp.EnvoysTotal)
+	fmt.Fprintf(w, "%s\t%d\n", bold("Substrate active"), resp.EnvoysSubstrateActive)
+	fmt.Fprintf(w, "%s\t%d\n", bold("Seeding envoys"), resp.EnvoysSeeding)
+	fmt.Fprintf(w, "%s\t%s\n", bold("Fleet footprint"), formatBytes(resp.TotalFootprintBytes))
+	fmt.Fprintf(w, "%s\t%d active · %d revoked\n", bold("Manifest entries"), resp.ManifestEntriesActive, resp.ManifestEntriesRevoked)
+	fmt.Fprintf(w, "%s\t%d lode · %d cairn\n", bold("Active payloads"), resp.Payloads.Lode, resp.Payloads.Cairn)
+	w.Flush()
 
-	// Check how many envoys match the target spec.
-	var matchResp struct {
-		Count int `json:"count"`
-	}
-	if err := client.get(fmt.Sprintf("/api/v1/swarm/match?target=%s", url.QueryEscape(target)), &matchResp); err == nil {
-		if matchResp.Count == 0 {
-			fmt.Printf("\n  %s target %q matched 0 envoys — no distribution will occur.\n", yellow("Warning:"), target)
-		} else {
-			fmt.Printf("\n  Seeded — distribution begins on next check-in cycle (%d envoys matched).\n", matchResp.Count)
-		}
-	} else {
-		fmt.Printf("\n  Seeded — distribution begins on next check-in cycle.\n")
-	}
-	fmt.Printf("  Track progress: vigocli swarm status %s\n", resp.SHA256)
-	return nil
-}
-
-func runSwarmStatus(cmd *cobra.Command, args []string) error {
-	hash := args[0]
-	client := newAPIClient()
-
-	var resp struct {
-		SHA256     string `json:"sha256"`
-		Label      string `json:"label"`
-		Status     string `json:"status"`
-		ChunkCount int    `json:"chunk_count"`
-		Summary    struct {
-			Source      int `json:"source"`
-			Complete    int `json:"complete"`
-			Cached      int `json:"cached"`
-			Downloading int `json:"downloading"`
-			Pending     int `json:"pending"`
-			Skipped     int `json:"skipped"`
-			Revoking    int `json:"revoking"`
-			Revoked     int `json:"revoked"`
-			Total       int `json:"total"`
-		} `json:"summary"`
-		Envoys []struct {
-			Hostname   string `json:"hostname"`
-			Status     string `json:"status"`
-			ChunksHave int    `json:"chunks_have"`
-			ChunksNeed int    `json:"chunks_need"`
-			SkipReason string `json:"skip_reason,omitempty"`
-		} `json:"envoys"`
-	}
-	if err := client.get("/api/v1/swarm/status/"+hash, &resp); err != nil {
-		return fmt.Errorf("fetching status: %w", err)
-	}
-
-	label := resp.Label
-	if label == "" {
-		label = resp.SHA256[:12] + "..."
-	}
-
-	revoked := resp.Status == "revoked"
-
-	fmt.Printf("Blob: %s\n", bold(label))
-	if resp.SHA256 != "" {
-		fmt.Printf("  SHA256: %s\n", resp.SHA256)
-	}
-	fmt.Printf("  Chunks: %d\n", resp.ChunkCount)
-	if revoked {
-		fmt.Printf("  Status: %s\n", red("revoked (pending eviction from envoys)"))
-	}
 	fmt.Println()
-
-	s := resp.Summary
-	if revoked {
-		// Post-revoke summary: complete/downloading/pending/skipped counts
-		// are no longer meaningful — every envoy that had the blob is
-		// either revoking (still holding it) or revoked (evicted).
-		fmt.Printf("  %s revoking  %s revoked  (%d total)\n\n",
-			yellow(fmt.Sprintf("%d", s.Revoking)),
-			yellow(fmt.Sprintf("%d", s.Revoked)),
-			s.Total,
-		)
+	fmt.Println(bold("Seeding allowlist"))
+	if resp.ServerEnvoyHost == "" && len(resp.SeedingAllowlist) == 0 {
+		fmt.Println("  (none configured — set server.hostname and/or swarm.seeding_envoys in server.yaml)")
 	} else {
-		fmt.Printf("  %s source  %s complete  %s cached  %d downloading  %d pending  %s skipped  (%d total)\n\n",
-			green(fmt.Sprintf("%d", s.Source)),
-			green(fmt.Sprintf("%d", s.Complete)),
-			cyan(fmt.Sprintf("%d", s.Cached)),
-			s.Downloading,
-			s.Pending,
-			yellow(fmt.Sprintf("%d", s.Skipped)),
-			s.Total,
-		)
-	}
-
-	if len(resp.Envoys) == 0 {
-		fmt.Println("  No envoys assigned.")
-		return nil
-	}
-
-	for _, e := range resp.Envoys {
-		var icon, progress string
-		switch e.Status {
-		case "source":
-			// Distinct from "complete": this envoy originated the blob,
-			// didn't download it. Black-star glyph reads unambiguously
-			// as "origin" against the green checkmark used for complete.
-			icon = green("\u2605")
-			progress = green("source")
-		case "complete":
-			icon = green("\u2713")
-			progress = green("complete")
-		case "cached":
-			icon = cyan("\u2713")
-			progress = cyan("cached")
-		case "downloading":
-			icon = "\u25b6"
-			progress = swarmProgressBar(e.ChunksHave, e.ChunksNeed) +
-				fmt.Sprintf(" %d%%", percent(e.ChunksHave, e.ChunksNeed))
-		case "pending":
-			icon = " "
-			progress = dim("pending")
-		case "skipped":
-			icon = yellow("\u26a0")
-			progress = yellow("skipped")
-			if e.SkipReason != "" {
-				progress += dim(" (" + e.SkipReason + ")")
-			}
-		case "revoking":
-			// Seed is revoked but the envoy still has the blob locally.
-			// Yellow to signal in-transition (distinct from skipped's
-			// yellow-with-warning glyph).
-			icon = yellow("\u27f3")
-			progress = yellow("revoking")
-		case "revoked":
-			// Eviction confirmed — blob gone from cache. Yellow keeps
-			// it visually grouped with "revoking" (both are revocation
-			// states) and distinct from green "complete".
-			icon = yellow("\u2717")
-			progress = yellow("revoked")
+		if resp.ServerEnvoyHost != "" {
+			fmt.Printf("  %s  %s\n", resp.ServerEnvoyHost, dim("(server.hostname — implicit)"))
 		}
-		fmt.Printf("  %s %-30s %s\n", icon, e.Hostname, progress)
+		for _, p := range resp.SeedingAllowlist {
+			fmt.Printf("  %s\n", p)
+		}
 	}
-
 	return nil
 }
 
-func runSwarmList(cmd *cobra.Command, args []string) error {
+func runSwarmPeers(cmd *cobra.Command, _ []string) error {
+	asJSON, _ := cmd.Flags().GetBool("json")
+	sortKey, _ := cmd.Flags().GetString("sort")
+	limit, _ := cmd.Flags().GetInt("limit")
+
 	client := newAPIClient()
-
-	type blobEntry struct {
-		SHA256      string `json:"sha256"`
-		Label       string `json:"label"`
-		Size        int64  `json:"size"`
-		Source      string `json:"source"`
-		Target      string `json:"target"`
-		Retention   string `json:"retention"`
-		Complete    int    `json:"complete"`
-		Cached      int    `json:"cached"`
-		Downloading int    `json:"downloading"`
-		Pending     int    `json:"pending"`
-		Skipped     int    `json:"skipped"`
-		Total       int    `json:"total"`
-		Revoked     bool   `json:"revoked"`
-		RevokedAt   string `json:"revoked_at"`
-	}
-
-	var resp struct {
-		Blobs []blobEntry `json:"blobs"`
-	}
-
-	path := "/api/v1/swarm/list"
-	revoked, _ := cmd.Flags().GetBool("revoked")
-	if revoked {
-		path += "?revoked=true"
-	}
+	path := fmt.Sprintf("/api/v1/swarm/peers?sort=%s&limit=%d", url.QueryEscape(sortKey), limit)
+	var resp swarmPeersFleet
 	if err := client.get(path, &resp); err != nil {
-		return fmt.Errorf("listing blobs: %w", err)
+		return fmt.Errorf("fetching swarm peers: %w", err)
+	}
+	if asJSON {
+		return writeJSONPretty(resp)
 	}
 
-	// Client-side filtering.
-	sourceFilter, _ := cmd.Flags().GetString("source")
-	statusFilter, _ := cmd.Flags().GetString("status")
-
-	var filtered []blobEntry
-	for _, b := range resp.Blobs {
-		if sourceFilter != "" && b.Source != sourceFilter {
-			continue
-		}
-		switch statusFilter {
-		case "active":
-			if b.Downloading == 0 && b.Pending == 0 {
-				continue
-			}
-		case "complete":
-			if b.Total == 0 || b.Downloading > 0 || b.Pending > 0 {
-				continue
-			}
-		}
-		filtered = append(filtered, b)
-	}
-
-	if len(filtered) == 0 {
-		fmt.Println("No swarm files.")
+	if resp.Total == 0 {
+		fmt.Println("No envoys reporting on the substrate yet.")
 		return nil
 	}
 
-	fmt.Printf("%-28s %-14s %8s  %-8s %-10s %s\n",
-		"NAME", "SHA256", "SIZE", "SOURCE", "RETENTION", "PROGRESS")
-	fmt.Println(strings.Repeat("-", 95))
+	fmt.Printf("Swarm peers — generated %s · sorted by %s\n\n",
+		resp.GeneratedAt.Local().Format("2006-01-02 15:04:05"),
+		resp.Sort,
+	)
 
-	for _, b := range filtered {
-		label := b.Label
-		if label == "" {
-			label = b.SHA256[:12]
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+		bold("HOSTNAME"),
+		bold("STATUS"),
+		bold("SUBSTRATE"),
+		bold("SEEDING"),
+		bold("CACHED"),
+		bold("DOWNLOADING"),
+		bold("FOOTPRINT"),
+		bold("LAST SEEN"),
+	)
+	for _, p := range resp.Envoys {
+		status := green("online")
+		if !p.Online {
+			status = red("offline")
 		}
-		if len(label) > 27 {
-			label = label[:24] + "..."
+		substrate := dim("idle")
+		if p.SubstrateActive {
+			substrate = green("active")
 		}
-		sha := b.SHA256[:12]
+		last := "—"
+		if !p.LastSeen.IsZero() {
+			last = p.LastSeen.Local().Format("2006-01-02 15:04")
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%d\t%d\t%s\t%s\n",
+			p.Hostname,
+			status,
+			substrate,
+			p.SeedingCount,
+			p.CachedCount,
+			p.DownloadingCount,
+			formatBytes(p.FootprintBytes),
+			last,
+		)
+	}
+	w.Flush()
 
-		source := b.Source
-		if b.Revoked {
-			source = "revoked"
-		}
-
-		ret := b.Retention
-		if ret == "" {
-			ret = "-"
-		}
-		done := b.Complete + b.Cached
-		progress := fmt.Sprintf("%d/%d", done, b.Total)
-		if b.Cached > 0 {
-			progress += fmt.Sprintf(" (%d cached)", b.Cached)
-		}
-		if b.Downloading > 0 {
-			progress += fmt.Sprintf(" (%d dl)", b.Downloading)
-		}
-
-		fmt.Printf("%-28s %-14s %8s  %-8s %-10s %s\n",
-			label, sha, formatBytes(b.Size), source, ret, progress)
+	if resp.Total > resp.Returned {
+		fmt.Printf("\n%s %d of %d envoys. Pass --limit 0 to show all.\n",
+			dim("Showing"), resp.Returned, resp.Total)
 	}
 	return nil
 }
 
-func runSwarmBroken(cmd *cobra.Command, args []string) error {
-	client := newAPIClient()
-
-	var resp struct {
-		Envoys []struct {
-			Hostname    string `json:"hostname"`
-			BrokenSeeds []struct {
-				Filename string `json:"filename"`
-				Error    string `json:"error"`
-			} `json:"broken_seeds"`
-		} `json:"envoys"`
+// sortKeyIsValid screens --sort values on the client so the user gets
+// a clear error here instead of the server silently falling back to
+// the default.
+func sortKeyIsValid(k string) bool {
+	switch strings.ToLower(k) {
+	case "footprint", "blobs", "hostname":
+		return true
 	}
-	if err := client.get("/api/v1/swarm/broken", &resp); err != nil {
-		return fmt.Errorf("listing broken seeds: %w", err)
-	}
-
-	if len(resp.Envoys) == 0 {
-		fmt.Println("No broken seeds.")
-		return nil
-	}
-
-	fmt.Printf("%-30s %-30s %s\n", "ENVOY", "FILENAME", "ERROR")
-	fmt.Println(strings.Repeat("-", 90))
-
-	for _, e := range resp.Envoys {
-		for _, b := range e.BrokenSeeds {
-			fmt.Printf("%-30s %-30s %s\n", e.Hostname, b.Filename, b.Error)
-		}
-	}
-	return nil
-}
-
-func runSwarmRevoke(cmd *cobra.Command, args []string) error {
-	hash := args[0]
-	client := newAPIClient()
-
-	var resp struct {
-		Revoked        string `json:"revoked"`
-		AlreadyRevoked bool   `json:"already_revoked"`
-	}
-	if err := client.delete("/api/v1/swarm/"+hash, &resp); err != nil {
-		return fmt.Errorf("revoking blob: %w", err)
-	}
-
-	if resp.AlreadyRevoked {
-		fmt.Printf("Already revoked: %s\n", resp.Revoked)
-	} else {
-		fmt.Printf("Revoked: %s\n", resp.Revoked)
-	}
-	return nil
-}
-
-// swarmProgressBar renders a 20-character block progress bar.
-// Each block represents 5% completion. Uses Catppuccin Green for filled
-// blocks and Surface1 for empty.
-func swarmProgressBar(have, need int) string {
-	const width = 20
-	if need == 0 {
-		return strings.Repeat("░", width)
-	}
-	filled := have * width / need
-	if filled > width {
-		filled = width
-	}
-	bar := green(strings.Repeat("█", filled)) + dim(strings.Repeat("░", width-filled))
-	return bar
-}
-
-func percent(have, need int) int {
-	if need == 0 {
-		return 0
-	}
-	return have * 100 / need
+	return false
 }
 
 func init() {
-	swarmDistributeCmd.Flags().String("target", "*", "Target spec: hostname glob, trait filter (key=value), or '*' for all")
-	swarmDistributeCmd.Flags().String("label", "", "Human-readable label (defaults to filename)")
-	swarmDistributeCmd.Flags().String("retention", "7d", "Auto-evict from agents after this duration (e.g. 7d, 168h); 0 to keep forever")
-
-	swarmListCmd.Flags().String("source", "", "Filter by source: server or seed")
-	swarmListCmd.Flags().String("status", "", "Filter by status: active or complete")
-	swarmListCmd.Flags().Bool("revoked", false, "Include revoked (expired or operator-revoked) seeds")
-
-	swarmCmd.AddCommand(swarmDistributeCmd, swarmStatusCmd, swarmListCmd, swarmRevokeCmd, swarmBrokenCmd)
+	swarmStatusCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
+	swarmPeersCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
+	swarmPeersCmd.Flags().String("sort", "footprint", "Sort key: footprint | blobs | hostname")
+	swarmPeersCmd.Flags().Int("limit", 50, "Max rows to return; 0 for all")
+	swarmPeersCmd.PreRunE = func(cmd *cobra.Command, _ []string) error {
+		k, _ := cmd.Flags().GetString("sort")
+		if !sortKeyIsValid(k) {
+			return fmt.Errorf("invalid --sort %q; expected footprint | blobs | hostname", k)
+		}
+		return nil
+	}
+	swarmCmd.AddCommand(swarmStatusCmd, swarmPeersCmd)
 }
