@@ -52,6 +52,36 @@ func funcMap() template.FuncMap {
 		"dict":           dict,
 		"pct":            pct,
 		"truncCommand":   truncCommand,
+		"cveURL":         cveURL,
+		"debianCVEURL":   debianCVEURL,
+		"lynisControlURL": lynisControlURL,
+		"secAIQuestion":  securityAIQuestion,
+		"secSeverityClass": func(sev string) string {
+			switch strings.ToLower(sev) {
+			case "critical":
+				return "sec-card--critical"
+			case "high":
+				return "sec-card--high"
+			case "medium":
+				return "sec-card--medium"
+			case "low":
+				return "sec-card--low"
+			default:
+				return "sec-card--info"
+			}
+		},
+		"secSeverityLabel": func(sev string) string {
+			if sev == "" {
+				return "Unassigned"
+			}
+			return strings.ToUpper(sev[:1]) + strings.ToLower(sev[1:])
+		},
+		"secSeverityNorm": func(sev string) string {
+			if sev == "" {
+				return "unassigned"
+			}
+			return strings.ToLower(sev)
+		},
 		"tracePathTree":  tracePathTree,
 		"traceGreenBg":   traceGreenBg,
 		"traceGreenBord": traceGreenBord,

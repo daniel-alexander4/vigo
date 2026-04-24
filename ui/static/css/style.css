@@ -1940,7 +1940,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     padding: 8px 14px; background: none; border: none;
     border-bottom: 2px solid transparent;
     font-size: 12px; cursor: pointer; color: var(--color-muted);
-    white-space: nowrap;
+    white-space: nowrap; text-decoration: none;
 }
 .sec-tab:hover { color: var(--color-fg); }
 .sec-tab--active { color: var(--color-link); border-bottom-color: var(--color-link); }
@@ -1948,8 +1948,23 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     flex: 1; overflow-y: auto; padding: 16px;
     font-size: 13px;
 }
+/* CSS-only tab panes. The first pane renders by default; clicking a
+   tab :target-selects its matching pane. No JavaScript required. */
 .sec-tab-pane { display: none; }
+.sec-tab-pane:first-of-type { display: block; }
+.sec-tab-pane:target { display: block; }
+.sec-tab-pane:target ~ .sec-tab-pane:first-of-type { display: none; }
+.sec-drawer__tabs .sec-tab:target-within { color: var(--color-link); }
+/* Back-compat: the legacy .sec-tab-pane--active class still shows a pane
+   for any callers that set it imperatively. */
 .sec-tab-pane--active { display: block; }
+
+/* HTMX request spinner for the "Fetch Live Detail" button. The indicator
+   element lives inside the drawer fragment; display:none by default,
+   flipped to block while the outer request is in flight. */
+.sec-live-spinner.htmx-indicator { display: none; margin-top: 8px; }
+.sec-live-spinner.htmx-indicator.htmx-request,
+.htmx-request .sec-live-spinner.htmx-indicator { display: block; }
 .sec-findings { list-style: none; padding: 0; margin: 8px 0; }
 .sec-findings li { padding: 4px 0; border-bottom: 1px solid var(--color-border); font-size: 12px; }
 @media (max-width: 768px) {
@@ -3557,7 +3572,25 @@ th.sortable.sort-active .sort-arrow { opacity: 1; color: var(--color-brand); }
 }
 .card + .card { margin-top: 16px; }
 .card > h2:first-child,
-.card > h3:first-child { margin-top: 0; }
+.card > h3:first-child { margin: 0 0 12px; }
+
+/* Card heading row — the recurring "page/section title + action buttons on
+   the right" pattern used at the top of detail-view cards (Lode, Cairn,
+   Sandgorgon, …). Replaces the inline
+   `display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;`
+   that was copy-pasted across four templates. Keep heading(s) + a row of
+   .btn or badge elements inside; children wrap to a new line on narrow
+   viewports via flex-wrap. */
+.card-heading-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.card-heading-row > h1,
+.card-heading-row > h2,
+.card-heading-row > h3 { margin: 0; }
 
 /* Empty-state inside a .card — centred, muted, with an optional hint line. */
 .empty-state {

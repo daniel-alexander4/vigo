@@ -58,6 +58,11 @@ type DataSource interface {
 	PlanDetailData(planID string) (PlanDetailPageData, error)
 	SecurityScanData() SecurityScanPageData
 	SecurityScanTraits(envoyID string) (map[string]string, bool)
+	// SecurityScanContext returns the hostname alongside cached security_scan
+	// traits for a single envoy. Used by the /ui/fragments/security-envoy/{id}
+	// drawer handler which needs both to dispatch a live-detail query to the
+	// agent and to render operator-facing header chrome.
+	SecurityScanContext(envoyID string) (hostname string, traits map[string]string, ok bool)
 	RiskData(baseInterval time.Duration) RiskSummaryData
 	RiskPostureData(baseInterval time.Duration) RiskPosturePageData
 	CertExpirySummary() CertExpirySummary
@@ -174,6 +179,23 @@ type Handler struct {
 	cairnFleet      CairnFleetSource
 	mesh               MeshSource
 	swarmAPI           SwarmSource
+	traitQuery         TraitQueryDispatcher
+}
+
+// TraitQueryDispatcher dispatches a single live trait-value query to one
+// envoy on behalf of a UI fragment handler. Implemented by an adapter over
+// server/grpc.AgentService.DispatchQuery wired in at server startup — kept
+// as a minimal interface here so the ui package doesn't import server/grpc.
+type TraitQueryDispatcher interface {
+	DispatchTraitQuery(ctx context.Context, traitPath, hostname string, timeout time.Duration) (value string, found bool, err error)
+}
+
+// SetTraitQueryDispatcher wires the live-query dispatcher used by fragment
+// handlers that need to reach an agent on demand (currently: the security
+// drawer's live-detail fetch). Nil means the page falls back to
+// cached-trait rendering only.
+func (h *Handler) SetTraitQueryDispatcher(d TraitQueryDispatcher) {
+	h.traitQuery = d
 }
 
 // CairnFleetSource surfaces the aggregated fleet-wide cairn
@@ -421,6 +443,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /envoys/{id}/trace/viz", h.EnvoyTraceViz)
 	mux.HandleFunc("GET /ui/fragments/envoy-swarm-load/{id}", h.EnvoySwarmLoadFragment)
 	mux.HandleFunc("GET /ui/api/envoys/{id}/security", h.EnvoySecurityTraits)
+	mux.HandleFunc("GET /ui/fragments/security-envoy/{id}", h.SecurityEnvoyFragment)
 	mux.HandleFunc("GET /runs", h.Runs)
 	mux.HandleFunc("GET /runs/{id}", h.RunDetail)
 	mux.HandleFunc("GET /runs/{id}/viz", h.RunDetailViz)
@@ -5139,6 +5162,10 @@ func (ds *dbDataSource) SecurityScanData() SecurityScanPageData {
 
 func (ds *dbDataSource) SecurityScanTraits(_ string) (map[string]string, bool) {
 	return nil, false
+}
+
+func (ds *dbDataSource) SecurityScanContext(_ string) (string, map[string]string, bool) {
+	return "", nil, false
 }
 
 func (ds *dbDataSource) RiskData(_ time.Duration) RiskSummaryData {

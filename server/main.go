@@ -1013,6 +1013,7 @@ func run() error {
 		// Wire branding, hostname, observe-only, and CVE searcher into UI handler.
 		uiHandler.SetAgentVersion(agentVersion)
 		uiHandler.SetBranding(cfg.Branding)
+		uiHandler.SetTraitQueryDispatcher(&traitQueryAdapter{agentSvc: agentSvc})
 		uiHandler.SetServerHostname(cfg.Server.Hostname)
 		uiHandler.SetServerConfigPath(configFile)
 		uiHandler.SetPublishApprovalRequired(cfg.Publish.ApprovalRequired)
@@ -1966,6 +1967,26 @@ func (a *healthCheckAdapter) RunChecks() (string, []ui.HealthCheck) {
 		}
 	}
 	return status, uiChecks
+}
+
+// traitQueryAdapter wraps grpc.AgentService to satisfy ui.TraitQueryDispatcher.
+// Used by the security drawer's live-detail fetch and any future
+// fragment handler that needs a single-envoy on-demand trait pull.
+type traitQueryAdapter struct {
+	agentSvc *isgrpc.AgentService
+}
+
+func (a *traitQueryAdapter) DispatchTraitQuery(ctx context.Context, traitPath, hostname string, timeout time.Duration) (string, bool, error) {
+	res, err := a.agentSvc.DispatchQuery(ctx, traitPath, hostname, timeout)
+	if err != nil {
+		return "", false, err
+	}
+	for _, entry := range res.Responded {
+		if entry.Found {
+			return entry.Value, true, nil
+		}
+	}
+	return "", false, nil
 }
 
 // traitLookupAdapter wraps fleet.FleetIndex to satisfy ui.TraitLookup.

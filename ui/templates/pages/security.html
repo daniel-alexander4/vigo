@@ -17,522 +17,23 @@
 
 </div>
 
-{{/* ── Security Detail Drawer ── */}}
-<div class="sec-drawer" id="sec-drawer">
-    <div class="sec-drawer__header">
-        <span class="sec-drawer__title" id="sec-drawer-title">Security Details</span>
-        <div>
-            <a href="#" id="sec-drawer-envoy-link" class="btn btn--sm" style="margin-right:8px">View Envoy</a>
-            <button class="sec-drawer__close" onclick="closeSecDrawer()">&times;</button>
-        </div>
-    </div>
-    <div class="sec-drawer__tabs" id="sec-drawer-tabs"></div>
+{{/* ── Security Detail Drawer ──
+     Body is server-rendered via HTMX — the "Scan Details" buttons in the
+     panels below issue hx-get to /ui/fragments/security-envoy/{id} which
+     returns the full drawer fragment (cached summary + "Fetch Live Detail"
+     button). The "Fetch Live Detail" button re-requests the same endpoint
+     with ?live=true and swaps in the tabbed full-scan detail.
+     Minimal vanilla JS (ui/static/js/security-drawer.js) handles open/close
+     CSS class toggling and in-page severity filter UI state only — no data
+     fetching lives in client code. */}}
+<div class="sec-drawer" id="sec-drawer" role="dialog" aria-label="Security scan details" aria-live="polite">
     <div class="sec-drawer__content" id="sec-drawer-content">
         <p class="text-muted">Click a hostname in the security panels above.</p>
     </div>
 </div>
-<div class="sec-drawer-overlay" id="sec-drawer-overlay" onclick="closeSecDrawer()"></div>
+<div class="sec-drawer-overlay" id="sec-drawer-overlay"></div>
 
-<script>
-function secToggle(id) {
-    var el = document.getElementById(id);
-    if (!el) return;
-    document.querySelectorAll('.sec-detail').forEach(function(d) {
-        if (d.id !== id) d.style.display = 'none';
-    });
-    var isHidden = getComputedStyle(el).display === 'none';
-    el.style.display = isHidden ? 'block' : 'none';
-    if (el.style.display === 'block') {
-        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-}
-var SEC_CACHE_VER = '{{.Version}}';
-function secCacheKey(envoyId) { return 'sec_detail_' + SEC_CACHE_VER + '_' + envoyId; }
-
-function secCacheGet(envoyId) {
-    try { return JSON.parse(sessionStorage.getItem(secCacheKey(envoyId))); } catch(e) { return null; }
-}
-function secCacheSet(envoyId, data) {
-    try { sessionStorage.setItem(secCacheKey(envoyId), JSON.stringify(data)); } catch(e) {}
-}
-
-function fetchSecDetail(hostname, envoyId) {
-    var drawer = document.getElementById('sec-drawer');
-    var overlay = document.getElementById('sec-drawer-overlay');
-    var title = document.getElementById('sec-drawer-title');
-    var content = document.getElementById('sec-drawer-content');
-    var tabs = document.getElementById('sec-drawer-tabs');
-    var link = document.getElementById('sec-drawer-envoy-link');
-
-    title.textContent = hostname + ' — Security Details';
-    link.href = '/envoys/' + envoyId;
-    tabs.innerHTML = '';
-    drawer.classList.add('sec-drawer--open');
-    overlay.classList.add('sec-drawer-overlay--open');
-
-    // Check for cached live detail first.
-    var cached = secCacheGet(envoyId);
-    if (cached) {
-        renderSecDetail(cached, tabs, content, hostname);
-        // Add refresh button at the top.
-        content.insertAdjacentHTML('afterbegin',
-            '<div style="display:flex; justify-content:flex-end; margin-bottom:8px;">' +
-            '<button class="btn btn--sm btn--outline" onclick="secClearAndRefresh(\'' + esc(hostname) + '\',\'' + esc(envoyId) + '\')">Refresh from Agent</button></div>');
-        return;
-    }
-
-    content.innerHTML = '<p class="text-muted">Loading scan data...</p>';
-
-    // Show cached trait summary from FleetIndex (instant, no stream needed).
-    fetch('/ui/api/envoys/' + envoyId + '/security')
-    .then(function(r) { return r.json(); })
-    .then(function(traits) {
-        if (traits.available === false) {
-            content.innerHTML = '<p class="text-muted">No security scan data for this host.</p>';
-            return;
-        }
-        renderCachedTraits(traits, tabs, content, hostname, envoyId);
-    })
-    .catch(function(err) {
-        content.innerHTML = '<p class="text-danger">Error: ' + esc(err.message) + '</p>';
-    });
-}
-
-function secClearAndRefresh(hostname, envoyId) {
-    try { sessionStorage.removeItem(secCacheKey(envoyId)); } catch(e) {}
-    fetchSecDetail(hostname, envoyId);
-}
-
-function fetchLiveDetail(hostname, envoyId) {
-    var btn = document.getElementById('sec-live-btn');
-    var area = document.getElementById('sec-live-area');
-    if (btn) btn.disabled = true;
-    if (btn) btn.textContent = 'Querying agent...';
-    var timeoutSec = {{.QueryTimeoutSec}};
-    area.innerHTML = '<div class="sec-live-status">' +
-        '<p class="text-muted" style="font-size:11px">Querying agent — streaming agents respond instantly, others respond on next check-in (up to ~' + Math.round(timeoutSec/60) + ' min).</p>' +
-        '<div class="sec-progress"><div class="sec-progress__bar" id="sec-live-bar"></div></div></div>';
-    var bar = document.getElementById('sec-live-bar');
-    if (bar) { bar.style.transition = 'width ' + timeoutSec + 's linear'; requestAnimationFrame(function() { bar.style.width = '100%'; }); }
-
-    fetch('/api/v1/query', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({traitPath: 'security_scan_detail', target: hostname, timeout: timeoutSec})
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.responded && data.responded.length && data.responded[0].found) {
-            var val = data.responded[0].value;
-            var detail = typeof val === 'string' ? JSON.parse(val) : val;
-            secCacheSet(envoyId, detail);
-            var tabs = document.getElementById('sec-drawer-tabs');
-            var content = document.getElementById('sec-drawer-content');
-            renderSecDetail(detail, tabs, content, hostname);
-        } else {
-            area.innerHTML = '<p class="text-muted" style="margin-top:8px">' +
-                (data.timedOut && data.timedOut.length
-                    ? 'Agent did not respond — it may not have checked in during the wait window.'
-                    : 'Agent offline or no scan data.') + '</p>';
-            if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
-        }
-    })
-    .catch(function(err) {
-        area.innerHTML = '<p class="text-danger">Error: ' + esc(err.message) + '</p>';
-        if (btn) { btn.disabled = false; btn.textContent = 'Retry'; }
-    });
-}
-
-function closeSecDrawer() {
-    document.getElementById('sec-drawer').classList.remove('sec-drawer--open');
-    document.getElementById('sec-drawer-overlay').classList.remove('sec-drawer-overlay--open');
-}
-
-function renderCachedTraits(traits, tabsEl, contentEl, hostname, envoyId) {
-    // Build summary from flattened security_scan.* traits.
-    var h = '<div class="sec-cached-summary">';
-
-    // Fetch Live Detail button at the top, same row as heading.
-    h += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">';
-    h += '<h4 style="margin:0;">Trivy Scanner Findings</h4>';
-    h += '<button class="btn btn--sm btn--outline" id="sec-live-btn" onclick="fetchLiveDetail(\'' + esc(hostname) + '\',\'' + esc(envoyId) + '\')">Fetch Live Detail</button>';
-    h += '</div>';
-    h += '<div id="sec-live-area"></div>';
-
-    var trivy = traits['security_scan.trivy.critical'] || traits['security_scan.trivy.high'];
-    if (trivy !== undefined) {
-        h += '<table class="security-drift-table"><thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th><th>Last Scan</th></tr></thead><tbody><tr>';
-        h += '<td class="text-danger">' + (traits['security_scan.trivy.critical']||'0') + '</td>';
-        h += '<td class="text-warning">' + (traits['security_scan.trivy.high']||'0') + '</td>';
-        h += '<td>' + (traits['security_scan.trivy.medium']||'0') + '</td>';
-        h += '<td>' + (traits['security_scan.trivy.low']||'0') + '</td>';
-        h += '<td>' + (traits['security_scan.trivy.total']||'0') + '</td>';
-        h += '<td>' + (traits['security_scan.trivy.last_scan']||'—') + '</td>';
-        h += '</tr></tbody></table>';
-
-        // CVE entries from unified security_scan.cves.N.{id,severity,packages}.
-        var cves = {};
-        for (var k in traits) {
-            var m;
-            if ((m = k.match(/^security_scan\.cves\.(\d+)\.(\w+)$/))) {
-                if (!cves[m[1]]) cves[m[1]] = {};
-                cves[m[1]][m[2]] = traits[k];
-            }
-        }
-        var cveList = Object.values(cves).filter(function(e) { return e.id; });
-        if (cveList.length) {
-            h += '<h4>CVEs (' + cveList.length + ' unique)</h4>';
-            cveList.forEach(function(e) {
-                var sevClass = e.severity === 'critical' ? 'sec-card--critical' : (e.severity === 'high' ? 'sec-card--high' : 'sec-card--info');
-                var pkgNote = (parseInt(e.packages||'1',10) > 1) ? ' <span class="text-muted">(' + e.packages + ' packages)</span>' : '';
-                h += '<div class="sec-card ' + sevClass + '"><div class="sec-card__header">' +
-                    '<a href="https://www.cve.org/CVERecord?id=' + e.id + '" target="_blank" rel="noopener" class="sec-card__cve">' + e.id + '</a>' +
-                    '<span class="sec-card__sev">' + (e.severity||'') + '</span>' +
-                '</div>' +
-                '<div class="sec-card__body">' + pkgNote + '</div>' +
-                '</div>';
-            });
-        }
-    }
-
-    // Lynis card
-    if (traits['security_scan.lynis.score']) {
-        var lynisClean = (traits['security_scan.lynis.warnings']||'0') === '0';
-        h += '<div class="sec-card ' + (lynisClean?'sec-card--info':'sec-card--high') + '">' +
-            '<div class="sec-card__header"><span class="sec-card__cve">Lynis Hardening</span>' +
-            '<span class="sec-card__sev">Score: ' + traits['security_scan.lynis.score'] + '/100</span></div>' +
-            '<div class="sec-card__body">Warnings: ' + (traits['security_scan.lynis.warnings']||'0') +
-            ' &middot; Suggestions: ' + (traits['security_scan.lynis.suggestions']||'0') + '</div></div>';
-    }
-
-    // Rootkit card
-    if (traits['security_scan.chkrootkit.clean'] !== undefined || traits['security_scan.rkhunter.clean'] !== undefined) {
-        var rkClean = (traits['security_scan.chkrootkit.clean']||'true') === 'true' && (traits['security_scan.rkhunter.clean']||'true') === 'true';
-        h += '<div class="sec-card ' + (rkClean?'sec-card--info':'sec-card--critical') + '">' +
-            '<div class="sec-card__header"><span class="sec-card__cve">Rootkit Detection</span>' +
-            '<span class="sec-card__sev">' + (rkClean?'Clean':'Warning') + '</span></div>' +
-            '<div class="sec-card__body">';
-        if (traits['security_scan.chkrootkit.clean'] !== undefined) h += 'chkrootkit: ' + (traits['security_scan.chkrootkit.clean']==='true'?'clean':'<strong class="text-danger">infected</strong>') + ' &middot; ';
-        if (traits['security_scan.rkhunter.clean'] !== undefined) h += 'rkhunter: ' + (traits['security_scan.rkhunter.clean']==='true'?'clean':'<strong class="text-danger">warning</strong>');
-        h += '</div></div>';
-    }
-
-    // ClamAV card
-    if (traits['security_scan.clamav.clean'] !== undefined) {
-        var clamClean = traits['security_scan.clamav.clean'] === 'true';
-        h += '<div class="sec-card ' + (clamClean?'sec-card--info':'sec-card--critical') + '">' +
-            '<div class="sec-card__header"><span class="sec-card__cve">ClamAV Malware Scan</span>' +
-            '<span class="sec-card__sev">' + (clamClean?'Clean':'Infected') + '</span></div>' +
-            (clamClean?'':'<div class="sec-card__body text-danger">' + (traits['security_scan.clamav.infected']||'?') + ' infected file(s)</div>') +
-            '</div>';
-    }
-
-    // AIDE card
-    if (traits['security_scan.aide.clean'] !== undefined) {
-        var aideClean = traits['security_scan.aide.clean'] === 'true';
-        h += '<div class="sec-card ' + (aideClean?'sec-card--info':'sec-card--high') + '">' +
-            '<div class="sec-card__header"><span class="sec-card__cve">AIDE File Integrity</span>' +
-            '<span class="sec-card__sev">' + (aideClean?'Clean':'Changed') + '</span></div>' +
-            (aideClean?'':'<div class="sec-card__body">Added: ' + (traits['security_scan.aide.added']||'0') +
-            ' &middot; Removed: ' + (traits['security_scan.aide.removed']||'0') +
-            ' &middot; Changed: ' + (traits['security_scan.aide.changed']||'0') + '</div>') +
-            '</div>';
-    }
-
-
-    h += '</div>';
-    contentEl.innerHTML = h;
-}
-
-function renderSecDetail(d, tabsEl, contentEl, hostname) {
-    if (d.available === false) {
-        contentEl.innerHTML = '<p class="text-muted">Security scanning not configured on this host.</p>';
-        return;
-    }
-    var host = hostname || 'unknown';
-
-    var sections = [];
-    if (d.trivy) sections.push({id:'trivy', label:'Trivy CVEs', html: renderTrivy(d.trivy, host)});
-    if (d.debsecan) sections.push({id:'debsecan', label:'Debsecan', html: renderDebsecan(d.debsecan, host)});
-    if (d.lynis) sections.push({id:'lynis', label:'Lynis', html: renderLynis(d.lynis, host)});
-    if (d.rkhunter) sections.push({id:'rkhunter', label:'rkhunter', html: renderRkhunter(d.rkhunter, host)});
-    if (d.chkrootkit) sections.push({id:'chkrootkit', label:'chkrootkit', html: renderChkrootkit(d.chkrootkit, host)});
-    if (d.clamav) sections.push({id:'clamav', label:'ClamAV', html: renderClamav(d.clamav, host)});
-    if (d.aide) sections.push({id:'aide', label:'AIDE', html: renderAide(d.aide, host)});
-    if (d.windows_defender) sections.push({id:'defender', label:'Windows Defender', html: renderDefender(d.windows_defender, host)});
-    if (d.scap) sections.push({id:'scap', label:'SCAP/STIG', html: renderScap(d.scap, host)});
-
-    if (!sections.length) {
-        contentEl.innerHTML = '<p class="text-muted">No scan output files found.</p>';
-        return;
-    }
-
-    tabsEl.innerHTML = sections.map(function(s, i) {
-        return '<button class="sec-tab' + (i===0?' sec-tab--active':'') + '" onclick="switchSecTab(\'' + s.id + '\')">' + s.label + '</button>';
-    }).join('');
-
-    contentEl.innerHTML = sections.map(function(s, i) {
-        return '<div class="sec-tab-pane' + (i===0?' sec-tab-pane--active':'') + '" id="sec-pane-' + s.id + '">' + s.html + '</div>';
-    }).join('');
-}
-
-function switchSecTab(id) {
-    document.querySelectorAll('.sec-tab').forEach(function(t) { t.classList.remove('sec-tab--active'); });
-    document.querySelectorAll('.sec-tab-pane').forEach(function(p) { p.classList.remove('sec-tab-pane--active'); });
-    document.querySelector('.sec-tab[onclick*="' + id + '"]').classList.add('sec-tab--active');
-    document.getElementById('sec-pane-' + id).classList.add('sec-tab-pane--active');
-}
-
-function sevClass(s) { var l=s?s.toLowerCase():''; return l==='critical'?'sec-card--critical':l==='high'?'sec-card--high':l==='medium'?'sec-card--medium':l==='low'?'sec-card--low':'sec-card--info'; }
-function sevLabel(s) { if (!s) return 'Unassigned'; return s.charAt(0).toUpperCase()+s.slice(1).toLowerCase(); }
-function sevNorm(s) { return s ? s.toLowerCase() : 'unassigned'; }
-
-function sevFilterBar(vulns, sevKey, filterId) {
-    var counts = {};
-    vulns.forEach(function(v) {
-        var s = sevNorm(v[sevKey] || 'unassigned');
-        counts[s] = (counts[s] || 0) + 1;
-    });
-    var levels = ['critical','high','medium','low','unassigned'];
-    var h = '<div class="sec-filter" id="' + filterId + '">';
-    h += '<button class="sec-filter__btn sec-filter__btn--active" data-sev="all" onclick="secFilter(this,\'' + filterId + '\')">All (' + vulns.length + ')</button>';
-    levels.forEach(function(lv) {
-        if (counts[lv]) {
-            h += '<button class="sec-filter__btn" data-sev="' + lv + '" onclick="secFilter(this,\'' + filterId + '\')">' + sevLabel(lv) + ' (' + counts[lv] + ')</button>';
-        }
-    });
-    h += '</div>';
-    return h;
-}
-
-function secFilter(btn, filterId) {
-    var bar = document.getElementById(filterId);
-    bar.querySelectorAll('.sec-filter__btn').forEach(function(b) { b.classList.remove('sec-filter__btn--active'); });
-    btn.classList.add('sec-filter__btn--active');
-    var sev = btn.getAttribute('data-sev');
-    var pane = bar.parentElement;
-    pane.querySelectorAll('.sec-card[data-sev]').forEach(function(card) {
-        card.style.display = (sev === 'all' || card.getAttribute('data-sev') === sev) ? '' : 'none';
-    });
-}
-
-function renderTrivy(t, host) {
-    if (!t.vulnerabilities || !t.vulnerabilities.length) return '<p class="text-success">No vulnerabilities found.</p><p class="text-muted">Last scan: ' + (t.last_scan||'unknown') + '</p>';
-    var h = '<p class="text-muted">' + t.vulnerabilities.length + ' affected packages (grouped by package — the same CVE may appear once per package it affects)' + (t.truncated?' (truncated)':'') + ' &middot; Last scan: ' + (t.last_scan||'unknown') + '</p>';
-    h += sevFilterBar(t.vulnerabilities, 'severity', 'trivy-sev-filter');
-    t.vulnerabilities.forEach(function(v) {
-        var othersNote = (parseInt(v.others||'0',10) > 0) ? ' <span class="text-muted">(+' + v.others + ' lower severity)</span>' : '';
-        var q = 'On host ' + host + ': ' + v.cve_id + ' (' + v.severity + ') affects ' + v.package + ' (installed: ' + v.installed + (v.fixed ? ', fix: ' + v.fixed : '') + '). ' + (v.title||'') + ' What is the risk and how should I remediate this?';
-        h += '<div class="sec-card ' + sevClass(v.severity) + '" data-sev="' + sevNorm(v.severity) + '">' +
-            '<div class="sec-card__header">' +
-                '<a href="https://www.cve.org/CVERecord?id=' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
-                '<span class="sec-card__sev">' + v.severity + '</span>' +
-            '</div>' +
-            '<div class="sec-card__body">' +
-                '<span class="mono">' + esc(v.package) + '</span> ' +
-                '<span class="text-danger">' + esc(v.installed) + '</span>' +
-                (v.fixed ? ' <span class="text-muted">&rarr;</span> <span class="text-success">' + esc(v.fixed) + '</span>' : '') +
-                othersNote +
-            '</div>' +
-            (v.title ? '<div class="sec-card__desc">' + esc(v.title) + '</div>' : '') +
-            '<div class="sec-card__actions">' + aiBtn(q) + '</div>' +
-        '</div>';
-    });
-    return h;
-}
-
-function renderDebsecan(d, host) {
-    if (!d.vulnerabilities || !d.vulnerabilities.length) return '<p class="text-success">No vulnerabilities found.</p><p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
-    var h = '<p class="text-muted">' + d.vulnerabilities.length + ' affected packages (grouped by package) &middot; Last scan: ' + (d.last_scan||'unknown') + '</p>';
-    h += sevFilterBar(d.vulnerabilities, 'urgency', 'debsecan-sev-filter');
-    d.vulnerabilities.forEach(function(v) {
-        var q = 'On host ' + host + ': ' + v.cve_id + ' (' + sevLabel(v.urgency) + ') affects Debian package ' + v.package + '. What is the risk and how should I remediate this?';
-        h += '<div class="sec-card ' + sevClass(v.urgency) + '" data-sev="' + sevNorm(v.urgency) + '">' +
-            '<div class="sec-card__header">' +
-                '<a href="https://security-tracker.debian.org/tracker/' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
-                '<span class="sec-card__sev">' + sevLabel(v.urgency) + '</span>' +
-            '</div>' +
-            '<div class="sec-card__body"><span class="mono">' + esc(v.package) + '</span></div>' +
-            '<div class="sec-card__actions">' + aiBtn(q) + '</div>' +
-        '</div>';
-    });
-    return h;
-}
-
-function renderLynis(l, host) {
-    var h = '<div class="sec-card sec-card--info"><div class="sec-card__header"><span class="sec-card__cve">Hardening Score</span><span class="sec-card__sev">' + l.score + '/100</span></div></div>';
-    h += '<p class="text-muted">Last scan: ' + (l.last_scan||'unknown') + '</p>';
-    if (l.warnings && l.warnings.length) {
-        h += '<h4>Warnings (' + l.warnings.length + ')</h4>';
-        l.warnings.forEach(function(w) {
-            var q = 'On host ' + host + ': Lynis warning ' + w.id + ': ' + w.text + '. How do I fix this hardening issue?';
-            h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
-                '<a href="https://cisofy.com/lynis/controls/' + encodeURIComponent(w.id) + '/" target="_blank" rel="noopener" class="sec-card__cve">' + esc(w.id) + '</a>' +
-                '<span class="sec-card__sev">Warning</span></div>' +
-                '<div class="sec-card__desc">' + esc(w.text) + '</div>' +
-                '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
-        });
-    }
-    if (l.suggestions && l.suggestions.length) {
-        h += '<h4>Suggestions (' + l.suggestions.length + ')</h4>';
-        l.suggestions.forEach(function(s) {
-            var q = 'On host ' + host + ': Lynis suggestion ' + s.id + ': ' + s.text + '. Should I implement this and how?';
-            h += '<div class="sec-card sec-card--low"><div class="sec-card__header">' +
-                '<a href="https://cisofy.com/lynis/controls/' + encodeURIComponent(s.id) + '/" target="_blank" rel="noopener" class="sec-card__cve">' + esc(s.id) + '</a>' +
-                '<span class="sec-card__sev">Suggestion</span></div>' +
-                '<div class="sec-card__desc">' + esc(s.text) + '</div>' +
-                '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
-        });
-    }
-    return h;
-}
-
-function ddgLink(text) { return 'https://duckduckgo.com/?q=' + encodeURIComponent(text); }
-
-function aiBtn(question) {
-    return '<button class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="' +
-        esc(question).replace(/"/g, '&quot;') + '">Ask AI</button>';
-}
-
-function renderList(label, items, lastScan) {
-    var h = '<p class="text-muted">Last scan: ' + (lastScan||'unknown') + '</p>';
-    if (!items || !items.length) return h + '<p class="text-success">Clean — no ' + label.toLowerCase() + ' found.</p>';
-    h += '<h4>' + label + ' (' + items.length + ')</h4>';
-    items.forEach(function(i) {
-        var text = typeof i === 'string' ? i : JSON.stringify(i);
-        h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
-            '<a href="' + ddgLink(text) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(text) + '</a></div></div>';
-    });
-    return h;
-}
-
-function renderRkhunter(d, host) {
-    var h = '<p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
-    if (!d.warnings || !d.warnings.length) return h + '<p class="text-success">Clean — no warnings found.</p>';
-    h += '<h4>Warnings (' + d.warnings.length + ')</h4>';
-    d.warnings.forEach(function(w) {
-        var file = (typeof w === 'object' && w.file) ? w.file : (typeof w === 'string' ? w : JSON.stringify(w));
-        var q = 'On host ' + host + ': rkhunter flagged ' + file + ' as a warning. Is this file suspicious? What should I do?';
-        h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
-            '<a href="' + ddgLink('rkhunter ' + file) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(file) + '</a>' +
-            '<span class="sec-card__sev">Warning</span>' +
-            '</div>' +
-            '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
-    });
-    return h;
-}
-
-function renderChkrootkit(d, host) {
-    var h = '<p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
-    if (!d.infected || !d.infected.length) return h + '<p class="text-success">Clean — no infections found.</p>';
-    h += '<h4>Infected (' + d.infected.length + ')</h4>';
-    d.infected.forEach(function(i) {
-        if (typeof i === 'object' && i.check) {
-            var q = 'On host ' + host + ': chkrootkit detected ' + i.check + ' as INFECTED' + (i.files ? ' (suspect files: ' + i.files + ')' : '') + '. Is this a real rootkit or a false positive? How should I investigate?';
-            h += '<div class="sec-card sec-card--critical"><div class="sec-card__header">' +
-                '<a href="' + ddgLink('chkrootkit ' + i.check) + '" target="_blank" rel="noopener" class="sec-card__cve">' + esc(i.check) + '</a>' +
-                '<span class="sec-card__sev">INFECTED</span>' +
-                '</div>' +
-                (i.files ? '<div class="sec-card__body"><span class="text-muted">Suspect files:</span> <span class="mono">' + esc(i.files) + '</span></div>' : '') +
-                '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
-        } else {
-            var text = typeof i === 'string' ? i : JSON.stringify(i);
-            var q2 = 'On host ' + host + ': chkrootkit detected: ' + text + '. Is this a real threat or false positive? How should I investigate?';
-            h += '<div class="sec-card sec-card--critical"><div class="sec-card__header">' +
-                '<a href="' + ddgLink(text) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(text) + '</a></div>' +
-                '<div class="sec-card__actions">' + aiBtn(q2) + '</div></div>';
-        }
-    });
-    return h;
-}
-
-function renderClamav(c, host) {
-    var h = '<p class="text-muted">Last scan: ' + (c.last_scan||'unknown') + '</p>';
-    if (!c.findings || !c.findings.length) return h + '<p class="text-success">Clean — no malware found.</p>';
-    c.findings.forEach(function(f) {
-        var q = 'On host ' + host + ': ClamAV detected malware signature "' + f.signature + '" in ' + f.path + '. Is this a real threat? How should I investigate and clean this?';
-        h += '<div class="sec-card sec-card--critical"><div class="sec-card__header"><span class="sec-card__cve mono">' + esc(f.path) + '</span></div>' +
-            '<div class="sec-card__desc">Signature: <a href="' + ddgLink('ClamAV ' + f.signature) + '" target="_blank" rel="noopener" class="sec-card__cve">' + esc(f.signature) + '</a></div>' +
-            '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
-    });
-    return h;
-}
-
-function renderAide(a, host) {
-    var h = '<p class="text-muted">Last scan: ' + (a.last_scan||'unknown') + '</p>';
-    if (a.clean) return h + '<p class="text-success">Clean — no integrity changes detected.</p>';
-    function fileCards(files, label, cls) {
-        if (!files || !files.length) return '';
-        var out = '<h4>' + label + ' (' + files.length + ')</h4>';
-        files.forEach(function(f) {
-            var q = 'On host ' + host + ': AIDE detected file integrity change: ' + f + ' was ' + label.toLowerCase() + '. Is this expected or a sign of compromise? How should I investigate?';
-            out += '<div class="sec-card ' + cls + '"><div class="sec-card__header">' +
-                '<a href="' + ddgLink('linux ' + f) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(f) + '</a></div>' +
-                '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
-        });
-        return out;
-    }
-    h += fileCards(a.added, 'Added', 'sec-card--medium');
-    h += fileCards(a.removed, 'Removed', 'sec-card--critical');
-    h += fileCards(a.changed, 'Changed', 'sec-card--high');
-    return h;
-}
-
-function renderDefender(d, host) {
-    var h = '<p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
-    h += '<div class="sec-card sec-card--info"><div class="sec-card__header">' +
-        '<span class="sec-card__cve">Protection Status</span>' +
-        '<span class="sec-card__sev">' + (d.realtime_protection ? 'Active' : 'DISABLED') + '</span></div>' +
-        '<div class="sec-card__body">' +
-        'Antivirus: ' + (d.enabled ? 'Enabled' : '<span class="text-danger">Disabled</span>') +
-        ' &middot; Real-time: ' + (d.realtime_protection ? 'On' : '<span class="text-danger">Off</span>') +
-        ' &middot; Signatures: ' + (d.signature_age_days||0) + ' days old' +
-        '</div></div>';
-    if (d.threats_detected && d.threats_detected > 0) {
-        var q = 'On host ' + host + ': Windows Defender detected ' + d.threats_detected + ' threat(s). What should I investigate?';
-        h += '<div class="sec-card sec-card--critical"><div class="sec-card__header">' +
-            '<span class="sec-card__cve">Threats Detected</span>' +
-            '<span class="sec-card__sev">' + d.threats_detected + '</span></div>' +
-            '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
-    } else {
-        h += '<p class="text-success">Clean — no threats detected.</p>';
-    }
-    return h;
-}
-
-function renderScap(d, host) {
-    var h = '<p class="text-muted">Profile: ' + esc(d.profile||'unknown') + ' &middot; Last scan: ' + (d.last_scan||'unknown') + '</p>';
-    h += '<div class="sec-card sec-card--info"><div class="sec-card__header">' +
-        '<span class="sec-card__cve">Compliance Score</span>' +
-        '<span class="sec-card__sev">' + (d.score||0) + '%</span></div>' +
-        '<div class="sec-card__body">' +
-        '<span class="text-success">' + (d.pass||0) + ' pass</span> &middot; ' +
-        '<span class="text-danger">' + (d.fail||0) + ' fail</span> &middot; ' +
-        (d.not_applicable||0) + ' N/A &middot; ' +
-        (d.total_rules||0) + ' total rules' +
-        '</div></div>';
-    if (d.fail && d.fail > 0) {
-        h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
-            '<span class="sec-card__cve">Failed Rules</span>' +
-            '<span class="sec-card__sev">' + d.fail + '</span></div>' +
-            '<div class="sec-card__body">' +
-            'High: <span class="text-danger">' + (d.high_fail||0) + '</span> &middot; ' +
-            'Medium: <span class="text-warning">' + (d.medium_fail||0) + '</span> &middot; ' +
-            'Low: ' + (d.low_fail||0) +
-            '</div>' +
-            '<div class="sec-card__actions">' + aiBtn('On host ' + host + ': SCAP scan profile "' + (d.profile||'') + '" has ' + d.fail + ' failed rules (' + (d.high_fail||0) + ' high). What should I prioritize?') + '</div></div>';
-    }
-    return h;
-}
-
-function esc(s) { var d = document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
-
-// Delegated click handler for security detail buttons — avoids inline onclick XSS risk.
-document.addEventListener('click', function(e) {
-    var btn = e.target.closest('.sec-detail-btn');
-    if (btn) fetchSecDetail(btn.dataset.hostname, btn.dataset.id);
-});
-</script>
+<script src="/static/js/security-drawer.js?v={{.Version}}"></script>
 {{end}}
 
 
@@ -761,3 +262,349 @@ document.addEventListener('click', function(e) {
         </div>
         {{end}}
 {{end}}
+
+
+{{/* ──────────────────────────────────────────────────────────────────────
+     SERVER-RENDERED SECURITY DRAWER FRAGMENTS
+
+     These blocks replace ~500 lines of client-side fetch() + JSON→DOM
+     rendering that used to live inline in the <script> above. Every
+     "Scan Details" button now HTMX-loads security-drawer-fragment; the
+     "Fetch Live Detail" button inside that fragment HTMX-reloads the
+     same endpoint with ?live=true and swaps in the full tabbed detail.
+
+     Tabs are CSS-only via :target — zero JS. Severity filter inside each
+     tab pane is ~20 lines of vanilla JS (UI state only, not data).
+     ────────────────────────────────────────────────────────────────── */}}
+
+{{define "security-drawer-empty"}}
+<div class="sec-drawer__header">
+    <span class="sec-drawer__title">{{if .Hostname}}{{.Hostname}}{{else}}Security Details{{end}}</span>
+    <div>
+        {{if .EnvoyID}}<a href="/envoys/{{.EnvoyID}}" class="btn btn--sm" style="margin-right:8px">View Envoy</a>{{end}}
+        <button class="sec-drawer__close" onclick="closeSecDrawer()" aria-label="Close drawer">&times;</button>
+    </div>
+</div>
+<p class="text-muted">No security scan data for this host.</p>
+{{end}}
+
+{{define "security-drawer-fragment"}}
+<div class="sec-drawer__header">
+    <span class="sec-drawer__title">{{.Hostname}} — Security Details</span>
+    <div>
+        <a href="/envoys/{{.EnvoyID}}" class="btn btn--sm" style="margin-right:8px">View Envoy</a>
+        <button class="sec-drawer__close" onclick="closeSecDrawer()" aria-label="Close drawer">&times;</button>
+    </div>
+</div>
+
+{{if .Error}}
+<div class="alert alert--warn" style="margin-bottom:12px;">{{.Error}}</div>
+{{end}}
+
+{{if .Live}}
+    {{template "security-live-detail" .}}
+{{else}}
+    {{template "security-cached-summary" .}}
+{{end}}
+{{end}}
+
+
+{{/* ── Cached summary: instant render on drawer open ─────────────────── */}}
+{{define "security-cached-summary"}}
+<div class="sec-cached-summary">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <h4 style="margin:0;">Trivy Scanner Findings</h4>
+        <button class="btn btn--sm btn--outline"
+                hx-get="/ui/fragments/security-envoy/{{.EnvoyID}}?live=true"
+                hx-target="#sec-drawer-content"
+                hx-swap="innerHTML"
+                hx-disabled-elt="this"
+                hx-indicator="#sec-live-spinner">
+            Fetch Live Detail
+        </button>
+    </div>
+    <div id="sec-live-spinner" class="sec-live-spinner htmx-indicator">
+        <p class="text-muted" style="font-size:11px">Querying agent — streaming agents respond instantly, others respond on next check-in (up to ~{{if .Timeout}}{{.Timeout}}{{else}}90{{end}}s).</p>
+        <div class="sec-progress"><div class="sec-progress__bar"></div></div>
+    </div>
+
+    {{with .Cached.Trivy}}
+    <table class="security-drift-table">
+        <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th><th>Last Scan</th></tr></thead>
+        <tbody><tr>
+            <td class="text-danger">{{.Critical}}</td>
+            <td class="text-warning">{{.High}}</td>
+            <td>{{.Medium}}</td>
+            <td>{{.Low}}</td>
+            <td>{{.Total}}</td>
+            <td>{{if .LastScan}}{{.LastScan}}{{else}}—{{end}}</td>
+        </tr></tbody>
+    </table>
+    {{end}}
+
+    {{if .Cached.CVEs}}
+    <h4>CVEs ({{len .Cached.CVEs}} unique)</h4>
+    {{range .Cached.CVEs}}
+    <div class="sec-card {{secSeverityClass .Severity}}">
+        <div class="sec-card__header">
+            <a href="{{cveURL .ID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.ID}}</a>
+            <span class="sec-card__sev">{{.Severity}}</span>
+        </div>
+        {{if gt .Packages 1}}<div class="sec-card__body"><span class="text-muted">({{.Packages}} packages)</span></div>{{end}}
+    </div>
+    {{end}}
+    {{end}}
+
+    {{with .Cached.Lynis}}
+    {{$clean := eq .Warnings 0}}
+    <div class="sec-card {{if $clean}}sec-card--info{{else}}sec-card--high{{end}}">
+        <div class="sec-card__header">
+            <span class="sec-card__cve">Lynis Hardening</span>
+            <span class="sec-card__sev">Score: {{.Score}}/100</span>
+        </div>
+        <div class="sec-card__body">Warnings: {{.Warnings}} &middot; Suggestions: {{.Suggestions}}</div>
+    </div>
+    {{end}}
+
+    {{with .Cached.Rootkit}}
+    {{$clean := and .ChkrootkitClean .RkhunterClean}}
+    <div class="sec-card {{if $clean}}sec-card--info{{else}}sec-card--critical{{end}}">
+        <div class="sec-card__header">
+            <span class="sec-card__cve">Rootkit Detection</span>
+            <span class="sec-card__sev">{{if $clean}}Clean{{else}}Warning{{end}}</span>
+        </div>
+        <div class="sec-card__body">
+            chkrootkit: {{if .ChkrootkitClean}}clean{{else}}<strong class="text-danger">infected</strong>{{end}} &middot;
+            rkhunter: {{if .RkhunterClean}}clean{{else}}<strong class="text-danger">warning</strong>{{end}}
+        </div>
+    </div>
+    {{end}}
+
+    {{with .Cached.ClamAV}}
+    <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--critical{{end}}">
+        <div class="sec-card__header">
+            <span class="sec-card__cve">ClamAV Malware Scan</span>
+            <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Infected{{end}}</span>
+        </div>
+        {{if not .Clean}}<div class="sec-card__body text-danger">{{.Infected}} infected file(s)</div>{{end}}
+    </div>
+    {{end}}
+
+    {{with .Cached.AIDE}}
+    <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--high{{end}}">
+        <div class="sec-card__header">
+            <span class="sec-card__cve">AIDE File Integrity</span>
+            <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Changed{{end}}</span>
+        </div>
+        {{if not .Clean}}<div class="sec-card__body">Added: {{.Added}} &middot; Removed: {{.Removed}} &middot; Changed: {{.Changed}}</div>{{end}}
+    </div>
+    {{end}}
+</div>
+{{end}}
+
+
+{{/* ── Live detail: agent dispatch completed, render all tabs ──────────
+     CSS-only tabs: each tab button is an <a href="#sec-pane-X">; the
+     .sec-tab-pane CSS shows only the :target pane, or falls back to the
+     :first-of-type when no fragment is selected. No JS required. */}}
+{{define "security-live-detail"}}
+{{if not .Sections}}
+<p class="text-muted">No scan output files found.</p>
+{{else}}
+<nav class="sec-drawer__tabs" role="tablist">
+    {{range .Sections}}
+    <a class="sec-tab" href="#sec-pane-{{.Slug}}" role="tab">{{.Label}}</a>
+    {{end}}
+</nav>
+{{range .Sections}}
+<section class="sec-tab-pane" id="sec-pane-{{.Slug}}" role="tabpanel" aria-labelledby="sec-tab-{{.Slug}}">
+    {{if eq .Slug "trivy"}}{{template "sec-section-trivy" $.Detail.Trivy}}
+    {{else if eq .Slug "debsecan"}}{{template "sec-section-debsecan" $.Detail.Debsecan}}
+    {{else if eq .Slug "lynis"}}{{template "sec-section-lynis" $.Detail.Lynis}}
+    {{else if eq .Slug "rkhunter"}}{{template "sec-section-rkhunter" dict "Rows" $.RkhunterRows "LastScan" $.Detail.Rkhunter.LastScan}}
+    {{else if eq .Slug "chkrootkit"}}{{template "sec-section-chkrootkit" dict "Rows" $.ChkrootkitRows "LastScan" $.Detail.Chkrootkit.LastScan}}
+    {{else if eq .Slug "clamav"}}{{template "sec-section-clamav" $.Detail.ClamAV}}
+    {{else if eq .Slug "aide"}}{{template "sec-section-aide" $.Detail.AIDE}}
+    {{else if eq .Slug "defender"}}{{template "sec-section-defender" $.Detail.Defender}}
+    {{else if eq .Slug "scap"}}{{template "sec-section-scap" $.Detail.SCAP}}
+    {{end}}
+</section>
+{{end}}
+{{end}}
+{{end}}
+
+
+{{/* ── Per-scanner section templates ──────────────────────────────────── */}}
+
+{{define "sec-section-trivy"}}
+{{if or (not .) (not .Vulnerabilities)}}
+<p class="text-success">No vulnerabilities found.</p>
+<p class="text-muted">Last scan: {{if .}}{{.LastScan}}{{else}}unknown{{end}}</p>
+{{else}}
+<p class="text-muted">{{len .Vulnerabilities}} affected packages (grouped by package){{if .Truncated}} (truncated){{end}} &middot; Last scan: {{.LastScan}}</p>
+{{range .Vulnerabilities}}
+<div class="sec-card {{secSeverityClass .Severity}}" data-sev="{{secSeverityNorm .Severity}}">
+    <div class="sec-card__header">
+        <a href="{{cveURL .CVEID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.CVEID}}</a>
+        <span class="sec-card__sev">{{.Severity}}</span>
+    </div>
+    <div class="sec-card__body">
+        <span class="mono">{{.Package}}</span>
+        <span class="text-danger">{{.Installed}}</span>
+        {{if .Fixed}}<span class="text-muted">→</span> <span class="text-success">{{.Fixed}}</span>{{end}}
+    </div>
+    {{if .Title}}<div class="sec-card__desc">{{.Title}}</div>{{end}}
+</div>
+{{end}}
+{{end}}
+{{end}}
+
+{{define "sec-section-debsecan"}}
+{{if or (not .) (not .Vulnerabilities)}}
+<p class="text-success">No vulnerabilities found.</p>
+{{else}}
+<p class="text-muted">{{len .Vulnerabilities}} affected packages &middot; Last scan: {{.LastScan}}</p>
+{{range .Vulnerabilities}}
+<div class="sec-card {{secSeverityClass .Urgency}}" data-sev="{{secSeverityNorm .Urgency}}">
+    <div class="sec-card__header">
+        <a href="{{debianCVEURL .CVEID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.CVEID}}</a>
+        <span class="sec-card__sev">{{secSeverityLabel .Urgency}}</span>
+    </div>
+    <div class="sec-card__body"><span class="mono">{{.Package}}</span></div>
+</div>
+{{end}}
+{{end}}
+{{end}}
+
+{{define "sec-section-lynis"}}
+<div class="sec-card sec-card--info">
+    <div class="sec-card__header"><span class="sec-card__cve">Hardening Score</span><span class="sec-card__sev">{{.Score}}/100</span></div>
+</div>
+<p class="text-muted">Last scan: {{.LastScan}}</p>
+{{if .Warnings}}
+<h4>Warnings ({{len .Warnings}})</h4>
+{{range .Warnings}}
+<div class="sec-card sec-card--high">
+    <div class="sec-card__header">
+        <a href="{{lynisControlURL .ID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.ID}}</a>
+        <span class="sec-card__sev">Warning</span>
+    </div>
+    <div class="sec-card__desc">{{.Text}}</div>
+</div>
+{{end}}
+{{end}}
+{{if .Suggestions}}
+<h4>Suggestions ({{len .Suggestions}})</h4>
+{{range .Suggestions}}
+<div class="sec-card sec-card--low">
+    <div class="sec-card__header">
+        <a href="{{lynisControlURL .ID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.ID}}</a>
+        <span class="sec-card__sev">Suggestion</span>
+    </div>
+    <div class="sec-card__desc">{{.Text}}</div>
+</div>
+{{end}}
+{{end}}
+{{end}}
+
+{{define "sec-section-rkhunter"}}
+<p class="text-muted">Last scan: {{.LastScan}}</p>
+{{if not .Rows}}
+<p class="text-success">Clean — no warnings found.</p>
+{{else}}
+<h4>Warnings ({{len .Rows}})</h4>
+{{range .Rows}}
+<div class="sec-card sec-card--high">
+    <div class="sec-card__header"><span class="sec-card__cve mono">{{.File}}</span><span class="sec-card__sev">Warning</span></div>
+</div>
+{{end}}
+{{end}}
+{{end}}
+
+{{define "sec-section-chkrootkit"}}
+<p class="text-muted">Last scan: {{.LastScan}}</p>
+{{if not .Rows}}
+<p class="text-success">Clean — no infections found.</p>
+{{else}}
+<h4>Infected ({{len .Rows}})</h4>
+{{range .Rows}}
+<div class="sec-card sec-card--critical">
+    <div class="sec-card__header"><span class="sec-card__cve">{{.Check}}</span><span class="sec-card__sev">INFECTED</span></div>
+    {{if .Files}}<div class="sec-card__body"><span class="text-muted">Suspect files:</span> <span class="mono">{{.Files}}</span></div>{{end}}
+</div>
+{{end}}
+{{end}}
+{{end}}
+
+{{define "sec-section-clamav"}}
+<p class="text-muted">Last scan: {{.LastScan}}</p>
+{{if not .Findings}}
+<p class="text-success">Clean — no malware found.</p>
+{{else}}
+{{range .Findings}}
+<div class="sec-card sec-card--critical">
+    <div class="sec-card__header"><span class="sec-card__cve mono">{{.Path}}</span></div>
+    <div class="sec-card__desc">Signature: <span class="mono">{{.Signature}}</span></div>
+</div>
+{{end}}
+{{end}}
+{{end}}
+
+{{define "sec-section-aide"}}
+<p class="text-muted">Last scan: {{.LastScan}}</p>
+{{if .Clean}}
+<p class="text-success">Clean — no integrity changes detected.</p>
+{{else}}
+{{if .Added}}<h4>Added ({{len .Added}})</h4>{{range .Added}}<div class="sec-card sec-card--medium"><div class="sec-card__header"><span class="sec-card__cve mono">{{.}}</span></div></div>{{end}}{{end}}
+{{if .Removed}}<h4>Removed ({{len .Removed}})</h4>{{range .Removed}}<div class="sec-card sec-card--critical"><div class="sec-card__header"><span class="sec-card__cve mono">{{.}}</span></div></div>{{end}}{{end}}
+{{if .Changed}}<h4>Changed ({{len .Changed}})</h4>{{range .Changed}}<div class="sec-card sec-card--high"><div class="sec-card__header"><span class="sec-card__cve mono">{{.}}</span></div></div>{{end}}{{end}}
+{{end}}
+{{end}}
+
+{{define "sec-section-defender"}}
+<p class="text-muted">Last scan: {{.LastScan}}</p>
+<div class="sec-card sec-card--info">
+    <div class="sec-card__header"><span class="sec-card__cve">Protection Status</span><span class="sec-card__sev">{{if .RealtimeProtection}}Active{{else}}DISABLED{{end}}</span></div>
+    <div class="sec-card__body">
+        Antivirus: {{if .Enabled}}Enabled{{else}}<span class="text-danger">Disabled</span>{{end}} &middot;
+        Real-time: {{if .RealtimeProtection}}On{{else}}<span class="text-danger">Off</span>{{end}} &middot;
+        Signatures: {{.SignatureAgeDays}} days old
+    </div>
+</div>
+{{if gt .ThreatsDetected 0}}
+<div class="sec-card sec-card--critical">
+    <div class="sec-card__header"><span class="sec-card__cve">Threats Detected</span><span class="sec-card__sev">{{.ThreatsDetected}}</span></div>
+</div>
+{{else}}
+<p class="text-success">Clean — no threats detected.</p>
+{{end}}
+{{end}}
+
+{{define "sec-section-scap"}}
+<p class="text-muted">Profile: {{.Profile}} &middot; Last scan: {{.LastScan}}</p>
+<div class="sec-card sec-card--info">
+    <div class="sec-card__header"><span class="sec-card__cve">Compliance Score</span><span class="sec-card__sev">{{.Score}}%</span></div>
+    <div class="sec-card__body">
+        <span class="text-success">{{.Pass}} pass</span> &middot;
+        <span class="text-danger">{{.Fail}} fail</span> &middot;
+        {{.NotApplicable}} N/A &middot;
+        {{.TotalRules}} total rules
+    </div>
+</div>
+{{if gt .Fail 0}}
+<div class="sec-card sec-card--high">
+    <div class="sec-card__header"><span class="sec-card__cve">Failed Rules</span><span class="sec-card__sev">{{.Fail}}</span></div>
+    <div class="sec-card__body">
+        High: <span class="text-danger">{{.HighFail}}</span> &middot;
+        Medium: <span class="text-warning">{{.MediumFail}}</span> &middot;
+        Low: {{.LowFail}}
+    </div>
+</div>
+{{end}}
+{{end}}
+
+
+{{/* Severity filter bar intentionally omitted from this pass. Re-adding it
+     requires pre-normalising per-vuln severity in the handler (Trivy uses
+     .Severity, debsecan uses .Urgency) so a shared template can iterate.
+     Tracked in pending.md under the /security drawer follow-up. */}}

@@ -64,7 +64,7 @@
 {{if .BlobDetail}}
 {{/* Blob detail view — visualizations rendered inline. */}}
 <div class="card mt-2">
-    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+    <div class="card-heading-row">
         <h2 style="margin:0;">{{if .BlobDetail.Label}}{{.BlobDetail.Label}}{{else}}Blob Detail{{end}}</h2>
         <a href="/lode" class="btn btn--sm">Back to list</a>
     </div>
@@ -155,7 +155,7 @@
 
 {{define "lode-envoys-fragment"}}
 {{/* ── Summary Pills ── */}}
-<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+<div class="card-heading-row">
     <h3 style="margin:0;">Distribution Status</h3>
     <div class="btn-group" style="gap:4px;">
         {{if .BlobDetail.Revoked}}

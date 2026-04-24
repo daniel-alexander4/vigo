@@ -953,9 +953,17 @@ func parseInt64(s string) int64 {
 
 // SecurityScanTraits returns the flattened security_scan.* traits for a single envoy.
 func (ds *DataSource) SecurityScanTraits(envoyID string) (map[string]string, bool) {
+	_, result, ok := ds.SecurityScanContext(envoyID)
+	return result, ok
+}
+
+// SecurityScanContext returns the envoy's hostname alongside its cached
+// security_scan.* traits. Consumed by the server-rendered security drawer
+// fragment which needs the hostname to dispatch a live-detail query.
+func (ds *DataSource) SecurityScanContext(envoyID string) (string, map[string]string, bool) {
 	ts, ok, _ := ds.fleet.GetEnvoyLite(envoyID)
 	if !ok || ts.Traits == nil {
-		return nil, false
+		return "", nil, false
 	}
 	result := make(map[string]string)
 	for k, v := range ts.Traits {
@@ -964,9 +972,9 @@ func (ds *DataSource) SecurityScanTraits(envoyID string) (map[string]string, boo
 		}
 	}
 	if len(result) == 0 {
-		return nil, false
+		return ts.Hostname, nil, false
 	}
-	return result, true
+	return ts.Hostname, result, true
 }
 
 // RunningCVESummary sums the per-envoy `cve_running_correlation.summary.*`

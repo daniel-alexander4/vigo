@@ -1001,6 +1001,10 @@ func (m *mockDataSource) SecurityScanTraits(_ string) (map[string]string, bool) 
 	return nil, false
 }
 
+func (m *mockDataSource) SecurityScanContext(_ string) (string, map[string]string, bool) {
+	return "", nil, false
+}
+
 func (m *mockDataSource) RiskData(_ time.Duration) RiskSummaryData {
 	return RiskSummaryData{}
 }
