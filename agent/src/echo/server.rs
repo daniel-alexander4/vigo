@@ -1,12 +1,16 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! HTTPS route handler for serving echo file contents to peer agents.
-//! Piggybacks on the swarm peer HTTPS server on port 1531 — the peer is
-//! already mTLS-authenticated by the swarm server, so any agent that
-//! reached us is trusted.
+//! HTTPS route handler for serving echo file contents + per-user state
+//! to peer agents. Piggybacks on the swarm peer HTTPS server on port 1531
+//! — the peer is already mTLS-authenticated by the swarm server, so any
+//! agent that reached us is trusted.
 //!
-//! Route: `GET /echo/{user}/{filename}` → raw file bytes
+//! Routes:
+//!   `GET /echo/state/{user}`    → full `UserState` JSON (pulled on
+//!                                 digest-mismatch from the 0.30.11+
+//!                                 digest-only multicast announcement)
+//!   `GET /echo/{user}/{filename}` → raw file bytes
 
 use http_body_util::Full;
 use hyper::body::Bytes;
@@ -15,12 +19,20 @@ use std::fs;
 
 use super::applier::valid_filename;
 use super::scanner::MAX_FILE_SIZE;
+use super::state::UserState;
+use crate::platform::paths::default_echo_dir;
 use crate::platform::users::user_home;
 
 /// Handle a `/echo/...` request. Returns 404 for missing files, 400 for
-/// malformed paths, 413 for oversize files, 200 with raw bytes otherwise.
+/// malformed paths, 413 for oversize files, 200 with raw bytes or JSON.
 pub fn handle(path: &str) -> Response<Full<Bytes>> {
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    // Per-user state pull. Receivers call this on digest mismatch to
+    // catch up; the announcement only carried the digest so we never
+    // leaked file metadata to the LAN.
+    if let ["echo", "state", user] = segments.as_slice() {
+        return handle_state(user);
+    }
     // ["echo", user, filename]
     let (user, name) = match segments.as_slice() {
         ["echo", user, name] => (*user, *name),
@@ -87,6 +99,41 @@ pub fn handle(path: &str) -> Response<Full<Bytes>> {
             .body(Full::new(Bytes::from(bytes)))
             .unwrap(),
         Err(_) => not_found(),
+    }
+}
+
+/// Handle `GET /echo/state/{user}` — return the full UserState JSON for
+/// `user` on this envoy. Called by the multicast-receiver side of a peer
+/// when the announced digest doesn't match the peer's cached value for
+/// this (user, machine) tuple.
+fn handle_state(user: &str) -> Response<Full<Bytes>> {
+    let user = match percent_decode(user) {
+        Some(s) => s,
+        None => return bad_request("invalid user encoding"),
+    };
+    if !valid_username(&user) {
+        return bad_request("invalid user");
+    }
+
+    // Verify this envoy actually has a local account for `user`.
+    // Without a home dir there's nothing to serve and returning an
+    // empty state would look like a live user with zero files.
+    if user_home(&user).is_none() {
+        return not_found();
+    }
+
+    let state_dir = default_echo_dir();
+    let state = UserState::load(&state_dir, &user);
+    match serde_json::to_vec(&state) {
+        Ok(body) => Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/json")
+            .body(Full::new(Bytes::from(body)))
+            .unwrap(),
+        Err(_) => Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Full::new(Bytes::from("serialize state")))
+            .unwrap(),
     }
 }
 

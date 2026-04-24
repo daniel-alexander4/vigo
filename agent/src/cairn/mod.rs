@@ -59,6 +59,7 @@ pub mod gate;
 pub mod git_ops;
 pub mod lan_selector;
 pub mod path_guard;
+pub mod peer_pubkey_cache;
 pub mod peer_table;
 pub mod pending_claims;
 pub mod publisher;

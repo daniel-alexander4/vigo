@@ -1061,6 +1061,17 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     let cairn_peer_table = std::sync::Arc::new(vigo::cairn::peer_table::PeerTable::new());
     let cairn_pending_claims =
         std::sync::Arc::new(vigo::cairn::pending_claims::PendingClaims::new());
+    // Load the envoy's Ed25519 keypair for signing cairn multicast
+    // announcements. The verifying key is embedded in every CAIRN line
+    // so receivers can verify the trailing SIG without needing a
+    // separate pubkey-distribution channel. Trust-on-first-use cache
+    // guards against later pubkey swaps by the same hostname.
+    let (cairn_verify_key, cairn_signing_key) =
+        vigo::auth::keypair::load_or_generate(&cli.data_dir)?;
+    let cairn_pubkey_hex = hex::encode(cairn_verify_key.to_bytes());
+    let cairn_pubkey_cache = std::sync::Arc::new(
+        vigo::cairn::peer_pubkey_cache::PeerPubkeyCache::load_or_empty(),
+    );
     let cairn_local_info = {
         let hostname = std::fs::read_to_string("/etc/hostname")
             .unwrap_or_else(|_| "unknown".to_string())
@@ -1070,8 +1081,10 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
             hostname,
             users: vigo::cairn::peer_table::local_human_users(),
             tags: Vec::new(),
+            pubkey_hex: cairn_pubkey_hex,
         }
     };
+    let cairn_signing_key = std::sync::Arc::new(cairn_signing_key);
 
     // Spawn swarm peer server + multicast discovery for P2P blob distribution.
     // Build TLS certs for the swarm manager (shared with peer server).
@@ -1135,6 +1148,8 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                         Some(cairn_pending_claims.clone()),
                         Some(cairn_claims.clone()),
                         cairn_gate.clone(),
+                        Some(cairn_signing_key.clone()),
+                        Some(cairn_pubkey_cache.clone()),
                     );
                 }
             }

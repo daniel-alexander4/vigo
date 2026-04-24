@@ -151,12 +151,10 @@ async fn announce_loop(
                         warn!(
                             bytes = p.len(),
                             limit = MAX_PAYLOAD,
-                            user = %ann.state.user,
-                            files = ann.state.files.len(),
-                            tombstones = ann.state.tombstones.len(),
-                            "echo announcement exceeds 64 KiB multicast limit — this user's files will not sync \
-                             until the set shrinks or paginated announcements ship. Consider splitting \
-                             ~/echo into smaller directories or using sigil for larger payloads.",
+                            user = %ann.user,
+                            "echo announcement exceeds multicast limit — unexpected for digest-only \
+                             announcements, likely malformed state digest or overflowed machine/user \
+                             identifier. Not a files problem on the 0.30.11+ wire format.",
                         );
                         continue;
                     }
@@ -176,9 +174,8 @@ async fn announce_loop(
                     );
                 } else {
                     debug!(
-                        user = %ann.state.user,
-                        files = ann.state.files.len(),
-                        tombstones = ann.state.tombstones.len(),
+                        user = %ann.user,
+                        digest = %ann.state_digest,
                         bytes = payload.len(),
                         "echo announcement sent"
                     );
@@ -229,31 +226,48 @@ fn _arc_marker() -> Arc<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::echo::state::{FileEntry, UserState};
 
     #[test]
     fn roundtrip_announcement() {
-        let mut state = UserState::empty("dan");
-        state.files.insert(
-            "notes.md".into(),
-            FileEntry { sha256: "abc".into(), mtime: 100, size: 5 },
-        );
         let ann = Announcement {
             machine: "laptop".into(),
+            user: "dan".into(),
             emitted_at: 1000,
             port: 1531,
-            state,
+            generation: 1000,
+            state_digest: "deadbeef".into(),
         };
         let bytes = serialize(&ann).unwrap();
         let parsed = parse(&bytes).unwrap();
         assert_eq!(parsed.machine, "laptop");
-        assert_eq!(parsed.state.user, "dan");
-        assert_eq!(parsed.state.files.len(), 1);
+        assert_eq!(parsed.user, "dan");
+        assert_eq!(parsed.state_digest, "deadbeef");
     }
 
     #[test]
     fn parse_rejects_unknown_header() {
         let bad = b"VIGO-SWARM\n{}";
         assert!(parse(bad).is_none());
+    }
+
+    /// The announcement must never carry file paths, hashes, or mtimes.
+    /// Regression guard — the whole point of 0.30.11's wire-format
+    /// change is to stop leaking that metadata to anyone on the LAN.
+    #[test]
+    fn announcement_reveals_no_file_metadata() {
+        let ann = Announcement {
+            machine: "laptop".into(),
+            user: "dan".into(),
+            emitted_at: 1000,
+            port: 1531,
+            generation: 1000,
+            state_digest: "abc123".into(),
+        };
+        let bytes = serialize(&ann).unwrap();
+        let as_str = std::str::from_utf8(&bytes).unwrap();
+        assert!(!as_str.contains("files"), "announcement must not contain 'files'");
+        assert!(!as_str.contains("tombstones"), "announcement must not contain 'tombstones'");
+        assert!(!as_str.contains("mtime"), "announcement must not contain 'mtime'");
+        assert!(!as_str.contains("sha256"), "announcement must not contain 'sha256'");
     }
 }

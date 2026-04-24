@@ -215,8 +215,10 @@ All caps are immutable constants in `agent/src/cairn/mod.rs`. None can be overri
 Cairn-enabled envoys announce themselves to each other on the existing swarm multicast channel (`224.0.0.42:1531`). Every regular swarm announcement frame gains one optional line:
 
 ```text
-CAIRN:<hostname>:<users-csv>:<tags-csv>
+CAIRN:<hostname>:<users-csv>:<tags-csv>:<ed25519_pubkey_hex>
 ```
+
+The trailing `ed25519_pubkey_hex` (64 chars) is the sender's Ed25519 verifying key, loaded from `/var/lib/vigo/agent.key` (the same keypair used for gRPC mTLS authentication). It pairs with a `SIG:<unix_ts>:<hex64>` line appended as the final line of every announcement; the signature covers the whole packet body above the SIG line, preventing both tamper and replay. Pre-0.30.11 envoys (3-field `CAIRN:` lines without pubkey, no SIG line) are not accepted by 0.30.11+ receivers — fleets must upgrade atomically.
 
 Listeners ingest this line into an in-memory `PeerTable` keyed by canonicalized hostname. Entries carry the hostname, the set of human Unix users present on the peer (read from `/etc/passwd` at the peer's agent startup, filtered to UID ∈ [1000, 65534)), and a tag list sourced from the agent's traits. Entries expire after **5 minutes** without a refresh; the cairn reactor's tick prunes stale entries on every pass, so the table stays bounded without a separate sweeper.
 
@@ -227,6 +229,18 @@ Listeners ingest this line into an in-memory `PeerTable` keyed by canonicalized 
 **Filtering** happens on the source side. When a source envoy needs to pick mirrors for a repo, it snapshots the peer table and applies the sidecar's `include_envoys` / `exclude_envoys` hostname globs plus the repo's `owner` field — the peer must have the owning user in its local `users` list. `when:` expressions over full traits are **not supported in LAN mode** (the multicast frame only carries hostname/users/tags). Sources that need trait-level filtering should use the explicit `cross_subnet_mirrors:` list in the sidecar (Phase 7) for those targets instead.
 
 **No cross-subnet reach yet.** Phase 5 is LAN-only: multicast stays on the broadcast domain. Cross-subnet `cross_subnet_mirrors` direct-push lands in Phase 7.
+
+### Signature verification + TOFU cache (0.30.11+)
+
+Every cairn announcement is signed by the sender's Ed25519 key. Receivers:
+
+1. Extract the `SIG:<ts>:<hex>` line from the packet. Missing SIG = reject the packet's `CAIRN:` + `CAIRNCLAIM:` content (swarm `HAVE:`/`WANT:` lines are still honored — those aren't security-critical).
+2. Decode the `CAIRN:` line's embedded pubkey. Verify the signature against it using `auth::signer::verify_payload` (SHA256(body || timestamp), matches the Go agent's signing convention).
+3. Cross-check the pubkey against a **trust-on-first-use (TOFU) cache** at `/var/lib/vigo/cairn/peer_pubkeys.json`. First sighting of a hostname caches the key; subsequent announcements must match. Mismatch rejects the packet with a `warn!` pointing at the cache file.
+
+**Admin recovery.** A legitimate pubkey rotation (e.g., re-enrolling an envoy) looks like a mismatch to receivers. Resolution: operators delete `peer_pubkeys.json` on each receiver, which re-TOFUs on the next announcement. A log entry flagging the mismatch tells operators exactly what to do.
+
+**Threat coverage.** Protects against on-LAN spoofing of `CAIRNCLAIM:` (an attacker can't announce `cairn:danlap:dan:vigo:attacker-host` without `danlap`'s private key) and replay of stale announcements (timestamp is in the signed payload). The remaining window is a "race-to-first-announcement" attack — mitigation ships in a later phase via server-distributed pubkey bootstrap.
 
 ## LAN claim selection and announcement (Phase 6)
 

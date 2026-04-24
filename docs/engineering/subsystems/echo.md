@@ -10,14 +10,17 @@ Echo is one of four content subsystems that ride the [swarm](swarm.md) substrate
 Echo is a **pure peer-to-peer LAN feature**. The Vigo server plays no role at all. Envoys discover each other via UDP multicast and exchange files directly over mTLS on swarm's peer port.
 
 1. **Scan.** Every 30 seconds each agent scans `~/echo/` for every local user. Files are hashed (SHA-256), and the in-memory state (file list + deletion tombstones) is compared against the previous snapshot. Added files show up in the new state; deleted files get a tombstone stamped with the current time.
-2. **Announce.** Each agent multicasts its full per-user state on `224.0.0.43:1532`. One announcement per user per cycle. Everything on the wire is LAN-local (TTL=1) and mTLS-authenticated.
-3. **Reconcile.** Peers receive the announcement and compare it against their own state for the same user. For each entry:
+2. **Announce.** Each agent multicasts a **digest-only announcement** on `224.0.0.43:1532`: `{machine, user, port, generation, state_digest}`. The digest is a 16-byte truncated SHA-256 over the sorted file + tombstone set. **File paths, sha256s, mtimes never ride on the wire** — everything a LAN observer can see is the peer's identity and a short opaque digest. TTL=1, LAN-local.
+3. **Compare digest.** Each receiver computes its own state_digest for the same user. On match, skip — already in sync. On mismatch, pull the peer's full `UserState` via `GET /echo/state/{user}` over the existing swarm mTLS channel on port 1531.
+4. **Reconcile.** With the full state now in hand, the receiver diffs entry-by-entry:
     - **Peer has a file we don't** → fetch it.
     - **Peer has a newer version** (higher mtime) → fetch it.
     - **Peer has a tombstone we don't, and our file's mtime is older than the deletion time** → delete the file.
     - **Peer has a tombstone but our file is newer than the deletion time** → keep the file (it was re-added after the delete) and our next announce will propagate it back.
-4. **Transfer.** Files are fetched over HTTPS from the sender's swarm peer port (1531) via a dedicated `/echo/{user}/{filename}` route. Content is verified against the announced SHA-256 before being written to the destination.
-5. **Apply.** The receiving agent writes the file to `~/{user}/echo/{filename}` with correct ownership (`chown user:user`) and preserved modification time.
+5. **Transfer.** Files are fetched over HTTPS from the sender's swarm peer port (1531) via a dedicated `/echo/{user}/{filename}` route. Content is verified against the announced SHA-256 before being written to the destination.
+6. **Apply.** The receiving agent writes the file to `~/{user}/echo/{filename}` with correct ownership (`chown user:user`) and preserved modification time.
+
+**Privacy model (0.30.11+).** Earlier builds broadcast the full `UserState` JSON (files + tombstones with paths, hashes, and mtimes) in every multicast packet. On any shared broadcast domain this leaked every user's directory listing to anyone listening. The digest-only model closes that leak: the public wire carries no file metadata at all. File names and hashes are revealed only over the mTLS-authenticated peer channel, and only when the receiver already has a reason to ask (digest changed).
 
 ## Behavior
 

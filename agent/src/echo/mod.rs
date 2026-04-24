@@ -47,6 +47,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use anyhow::Context;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
@@ -208,11 +209,19 @@ async fn scan_and_announce(
             continue;
         }
 
+        // Digest-only announcement — the multicast packet reveals only
+        // that this user has some state with digest D. Receivers pull
+        // the full UserState via mTLS if the digest differs from the
+        // last one they observed. `generation` is the unix-second
+        // emitted_at; good enough to order competing announcements
+        // without introducing a new persisted counter.
         let ann = Announcement {
             machine: machine.to_string(),
+            user: user.clone(),
             emitted_at: now,
             port: PEER_PORT,
-            state: state.clone(),
+            generation: now as u64,
+            state_digest: state.state_digest(),
         };
 
         // Multicast announce.
@@ -264,7 +273,7 @@ async fn run_extra_peer_pusher(
                     if let Err(e) = push_announcement(&http_c, &job.host, &job.announcement) {
                         debug!(
                             host = %job.host,
-                            user = %job.announcement.state.user,
+                            user = %job.announcement.user,
                             error = %e,
                             "echo: extra_peer push failed (will retry next cycle)"
                         );
@@ -279,6 +288,23 @@ async fn run_extra_peer_pusher(
 /// POST a echo announcement to an extra peer's
 /// `/echo/announce` route. Non-2xx responses return an error so
 /// the caller can log them.
+/// Pull the full `UserState` for `user` from a peer via mTLS HTTPS.
+/// Called on digest-mismatch in the multicast receiver; the peer returns
+/// the JSON body served by `GET /echo/state/{user}` on its swarm peer
+/// server. Blocking I/O — caller wraps in `spawn_blocking`.
+fn pull_user_state(http: &ureq::Agent, peer_addr: &str, user: &str) -> Result<UserState, anyhow::Error> {
+    let url = format!("https://{}/echo/state/{}", peer_addr, user);
+    let resp = http.get(&url).call()?;
+    let status = resp.status();
+    if status != 200 {
+        anyhow::bail!("GET {} returned {}", url, status);
+    }
+    let body = resp.into_body().read_to_vec()?;
+    let state: UserState = serde_json::from_slice(&body)
+        .with_context(|| format!("parsing state JSON from {}", url))?;
+    Ok(state)
+}
+
 fn push_announcement(
     http: &ureq::Agent,
     host: &str,
@@ -293,7 +319,7 @@ fn push_announcement(
     let outcome = probe(
         http,
         &format!("{}:{}", host, PEER_PORT),
-        &Purpose::Echo { user: ann.state.user.clone() },
+        &Purpose::Echo { user: ann.user.clone() },
     );
     if !outcome.allow() {
         anyhow::bail!(
@@ -318,6 +344,13 @@ fn push_announcement(
 }
 
 /// Reconcile one incoming announcement against local state and apply.
+///
+/// 0.30.11+ model: the incoming announcement carries only a state digest,
+/// not the full state. If the digest matches what we'd compute from our
+/// local copy, there's nothing to do — skip silently. Otherwise, pull the
+/// full `UserState` from the announcing peer over mTLS and hand the
+/// result to the reconciler. The pull is the only path that reveals
+/// file-level detail, and it rides the authenticated peer channel.
 async fn handle_incoming(
     state_dir: &std::path::Path,
     incoming: IncomingAnnouncement,
@@ -331,7 +364,8 @@ async fn handle_incoming(
         }
     };
     let peer_addr = format!("{}:{}", peer_ip, incoming.announcement.port);
-    let user = incoming.announcement.state.user.clone();
+    let user = incoming.announcement.user.clone();
+    let remote_digest = incoming.announcement.state_digest.clone();
 
     // Only process if we have a home dir for this user locally.
     let home = match crate::platform::users::user_home(&user) {
@@ -344,7 +378,33 @@ async fn handle_incoming(
     let sync_dir = home.join("echo");
 
     let mut local = UserState::load(state_dir, &user);
-    let outcome = reconcile(&local, &incoming.announcement.state);
+    // Cheap short-circuit: if the announcing peer's digest matches our
+    // local state digest, we're already in sync with them — skip the
+    // mTLS pull and the reconciler pass entirely.
+    if local.state_digest() == remote_digest {
+        return;
+    }
+
+    // Pull the peer's full UserState via mTLS. Blocks the reconciler
+    // task on one ureq call per announcement; bounded by ureq's default
+    // timeout so a slow peer doesn't wedge the handler.
+    let peer_addr_pull = peer_addr.clone();
+    let user_pull = user.clone();
+    let http_pull = http.clone();
+    let remote_state = match tokio::task::spawn_blocking(move || {
+        pull_user_state(&http_pull, &peer_addr_pull, &user_pull)
+    })
+    .await
+    {
+        Ok(Ok(s)) => s,
+        Ok(Err(e)) => {
+            debug!(user = %user, peer = %peer_addr, error = %e, "echo: state pull failed");
+            return;
+        }
+        Err(_) => return, // spawn_blocking joined with panic
+    };
+
+    let outcome = reconcile(&local, &remote_state);
 
     if outcome.actions.is_empty() && outcome.merged_tombstones.is_empty() {
         return;

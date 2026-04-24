@@ -77,19 +77,72 @@ impl UserState {
         let cutoff = now - max_age_secs;
         self.tombstones.retain(|_, t| t.deletion_time >= cutoff);
     }
+
+    /// Compute a deterministic digest of `(files, tombstones)`. Used to
+    /// drive the digest-only announcement model: peers include the digest
+    /// on every multicast tick, and receivers pull the full state via
+    /// mTLS only when the digest changes. Matches sigil's approach
+    /// (sha256 → 16-byte truncation → hex) — keeps the wire footprint
+    /// small (~32 hex chars) and prevents leaking file paths to anyone
+    /// on the LAN. Iteration is ordered because both maps are BTreeMap.
+    pub fn state_digest(&self) -> String {
+        use sha2::{Digest, Sha256};
+        let mut h = Sha256::new();
+        for (path, fe) in &self.files {
+            h.update(path.as_bytes());
+            h.update(b"|");
+            h.update(fe.sha256.as_bytes());
+            h.update(b"|");
+            h.update(fe.mtime.to_le_bytes());
+            h.update(b"|");
+            h.update(fe.size.to_le_bytes());
+            h.update(b"\n");
+        }
+        h.update(b"--tombstones--\n");
+        for (path, ts) in &self.tombstones {
+            h.update(path.as_bytes());
+            h.update(b"|");
+            h.update(ts.deletion_time.to_le_bytes());
+            h.update(b"\n");
+        }
+        let full = h.finalize();
+        hex::encode(&full[..16])
+    }
 }
 
-/// Full announcement payload: one machine's view of one user's state.
+/// Digest-only multicast announcement. Carries everything a peer needs to
+/// decide whether to fetch full state, but **no file paths, hashes, or
+/// timestamps** — so the packet reveals nothing about user content to
+/// observers on the LAN.
+///
+/// Model is identical to sigil (`sigil/state.rs::Announcement`): a peer's
+/// announcement tells receivers who this machine is, how to reach it, and
+/// a short digest of the state. Receivers compare the digest against the
+/// last one they observed from this peer; on mismatch, they pull
+/// `GET /echo/state/{user}` from the announcing peer via mTLS and hand
+/// the full `UserState` to the reconciler.
+///
+/// The previous wire format (full `UserState` embedded in the packet)
+/// leaked every user's directory listing to anyone on the broadcast
+/// domain. This struct replaces it; 0.30.11 agents speak only this form.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Announcement {
     /// Stable machine identifier (hostname).
     pub machine: String,
+    /// Per-user subject of this announcement.
+    pub user: String,
     /// Unix seconds when the announcement was built.
     pub emitted_at: i64,
-    /// Port for fetching file content (usually the swarm peer server).
+    /// Port for fetching content + full state (swarm peer mTLS server).
     pub port: u16,
-    #[serde(flatten)]
-    pub state: UserState,
+    /// Monotonic counter bumped on every state mutation — lets receivers
+    /// cheaply detect replay / reordered packets on noisy multicast.
+    #[serde(default)]
+    pub generation: u64,
+    /// Hex-encoded truncated SHA256 over `(files, tombstones)`. Changes
+    /// on every file mutation; receivers compare against the last
+    /// observed value per-peer and pull full state on mismatch.
+    pub state_digest: String,
 }
 
 #[cfg(test)]

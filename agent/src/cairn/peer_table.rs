@@ -335,42 +335,54 @@ pub struct LocalInfo {
     pub hostname: String,
     pub users: Vec<String>,
     pub tags: Vec<String>,
+    /// Hex-encoded Ed25519 verifying key for this envoy, emitted in the
+    /// `CAIRN:` line so receivers can verify the packet's trailing SIG
+    /// without needing a separate pubkey distribution channel.
+    /// Trust-on-first-use: receivers cache `(hostname → pubkey)` on
+    /// first sighting; subsequent announcements must match. 0.30.11+.
+    pub pubkey_hex: String,
 }
 
 impl LocalInfo {
     /// Format the line that rides on the swarm multicast. Shape:
     ///
     /// ```text
-    /// CAIRN:<hostname>:<user1,user2,...>:<tag1,tag2,...>
+    /// CAIRN:<hostname>:<user1,user2,...>:<tag1,tag2,...>:<pubkey_hex>
     /// ```
     ///
     /// No internal colons allowed in usernames or tags (Unix user
     /// names can't contain `:` by convention since it's the passwd
     /// field separator; tags are already constrained by cairn
-    /// sidecar validation to alphanumerics + `-`/`_`). Empty user
-    /// or tag lists serialize as empty substrings.
+    /// sidecar validation to alphanumerics + `-`/`_`). Pubkey is
+    /// lowercase hex, 64 chars for Ed25519. Empty user or tag lists
+    /// serialize as empty substrings.
     pub fn format_announce_line(&self) -> String {
         format!(
-            "CAIRN:{}:{}:{}",
+            "CAIRN:{}:{}:{}:{}",
             self.hostname,
             self.users.join(","),
             self.tags.join(","),
+            self.pubkey_hex,
         )
     }
 
     /// Parse a `CAIRN:` line into a [`LocalInfo`]. Returns
     /// `None` if the shape is wrong (wrong prefix, wrong number of
-    /// fields, empty hostname). Malformed lines are silently
+    /// fields, empty hostname or pubkey). Malformed lines are silently
     /// dropped — the listener must not crash on bad peer input.
     pub fn parse_announce_line(line: &str) -> Option<LocalInfo> {
         let rest = line.strip_prefix("CAIRN:")?;
-        let mut parts = rest.splitn(3, ':');
+        let mut parts = rest.splitn(4, ':');
         let hostname = parts.next()?.trim().to_string();
         if hostname.is_empty() {
             return None;
         }
         let users_csv = parts.next()?;
         let tags_csv = parts.next()?;
+        let pubkey_hex = parts.next()?.trim().to_string();
+        if pubkey_hex.is_empty() {
+            return None;
+        }
         let users: Vec<String> = users_csv
             .split(',')
             .map(|s| s.trim())
@@ -387,6 +399,7 @@ impl LocalInfo {
             hostname: canonicalize_hostname(&hostname),
             users,
             tags,
+            pubkey_hex,
         })
     }
 
@@ -614,11 +627,12 @@ mod tests {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string(), "alice".to_string()],
             tags: vec!["workstation".to_string(), "primary".to_string()],
+            pubkey_hex: "a".repeat(64),
         };
         let line = li.format_announce_line();
         assert_eq!(
             line,
-            "CAIRN:danlap:dan,alice:workstation,primary"
+            format!("CAIRN:danlap:dan,alice:workstation,primary:{}", "a".repeat(64))
         );
         let parsed = LocalInfo::parse_announce_line(&line).unwrap();
         assert_eq!(parsed, li);
@@ -626,32 +640,42 @@ mod tests {
 
     #[test]
     fn parse_handles_empty_users_and_tags() {
-        let line = "CAIRN:plex::";
-        let parsed = LocalInfo::parse_announce_line(line).unwrap();
+        // The 4th field (pubkey_hex) is required and non-empty; users and tags can be empty.
+        let line = format!("CAIRN:plex:::{}", "a".repeat(64));
+        let parsed = LocalInfo::parse_announce_line(&line).unwrap();
         assert_eq!(parsed.hostname, "plex");
         assert!(parsed.users.is_empty());
         assert!(parsed.tags.is_empty());
+        assert_eq!(parsed.pubkey_hex.len(), 64);
     }
 
     #[test]
     fn parse_rejects_missing_prefix() {
-        assert!(LocalInfo::parse_announce_line("danlap:dan:ws").is_none());
+        assert!(LocalInfo::parse_announce_line("danlap:dan:ws:pk").is_none());
     }
 
     #[test]
     fn parse_rejects_empty_hostname() {
-        assert!(LocalInfo::parse_announce_line("CAIRN::dan:ws").is_none());
+        assert!(LocalInfo::parse_announce_line("CAIRN::dan:ws:pk").is_none());
     }
 
     #[test]
     fn parse_rejects_too_few_fields() {
         assert!(LocalInfo::parse_announce_line("CAIRN:danlap").is_none());
         assert!(LocalInfo::parse_announce_line("CAIRN:danlap:dan").is_none());
+        // 3-field form (pre-0.30.11) is no longer accepted — pubkey is required.
+        assert!(LocalInfo::parse_announce_line("CAIRN:danlap:dan:ws").is_none());
+    }
+
+    #[test]
+    fn parse_rejects_empty_pubkey() {
+        // Trailing colon with no pubkey is malformed — rejected.
+        assert!(LocalInfo::parse_announce_line("CAIRN:danlap:dan:ws:").is_none());
     }
 
     #[test]
     fn parse_canonicalizes_hostname() {
-        let parsed = LocalInfo::parse_announce_line("CAIRN:DANLAP::").unwrap();
+        let parsed = LocalInfo::parse_announce_line(&format!("CAIRN:DANLAP:::{}", "b".repeat(64))).unwrap();
         assert_eq!(parsed.hostname, "danlap");
     }
 

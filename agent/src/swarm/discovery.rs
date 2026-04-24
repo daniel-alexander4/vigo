@@ -98,6 +98,8 @@ pub fn spawn(
     cairn_pending_claims: Option<Arc<CairnPendingClaims>>,
     cairn_claims_handle: Option<CairnClaimsHandle>,
     cairn_gate: crate::cairn::Gate,
+    cairn_signing_key: Option<Arc<ed25519_dalek::SigningKey>>,
+    cairn_pubkey_cache: Option<Arc<crate::cairn::peer_pubkey_cache::PeerPubkeyCache>>,
 ) {
     // Build one shared peer agent at spawn time. Wrapped in an Arc so the
     // listener can clone it cheaply into the blocking tasks it spawns per
@@ -123,6 +125,7 @@ pub fn spawn(
         .as_ref()
         .map(|li| li.hostname.clone());
     let gate_listen = cairn_gate.clone();
+    let pubkey_cache_listen = cairn_pubkey_cache.clone();
 
     // Listener task.
     tokio::spawn(async move {
@@ -135,6 +138,7 @@ pub fn spawn(
             cairn_claims_listen,
             listen_hostname,
             gate_listen,
+            pubkey_cache_listen,
         )
         .await
         {
@@ -154,6 +158,7 @@ pub fn spawn(
             cairn_local_info,
             cairn_pending_claims,
             cairn_gate,
+            cairn_signing_key,
         )
         .await
         {
@@ -163,6 +168,7 @@ pub fn spawn(
 }
 
 /// Listen for multicast announcements and update the peer map.
+#[allow(clippy::too_many_arguments)]
 async fn listen_loop(
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
@@ -172,6 +178,7 @@ async fn listen_loop(
     cairn_claims_handle: Option<CairnClaimsHandle>,
     local_hostname: Option<String>,
     cairn_gate: crate::cairn::Gate,
+    cairn_pubkey_cache: Option<Arc<crate::cairn::peer_pubkey_cache::PeerPubkeyCache>>,
 ) -> anyhow::Result<()> {
     let socket = create_multicast_socket()?;
     socket.set_nonblocking(true)?;
@@ -188,7 +195,23 @@ async fn listen_loop(
                 match result {
                     Ok((n, src)) => {
                         if let Ok(msg) = std::str::from_utf8(&buf[..n]) {
-                            let result = parse_announcement(msg, src, &peer_map, &manifest);
+                            let mut result = parse_announcement(msg, src, &peer_map, &manifest);
+                            // Cairn authenticity (0.30.11+): verify the
+                            // SIG line against the embedded pubkey on
+                            // the CAIRN line and cross-check the pubkey
+                            // against the TOFU cache. On any failure,
+                            // strip cairn_peer + cairn_claims so we
+                            // don't act on spoofed content. Swarm
+                            // HAVE/WANT parsing is kept — those lines
+                            // are not security-critical and losing
+                            // them on a rollout gap would stall blob
+                            // discovery for no gain.
+                            if let Some(cache) = cairn_pubkey_cache.as_ref() {
+                                if !verify_cairn_authenticity(msg, &result, cache) {
+                                    result.cairn_peer = None;
+                                    result.cairn_claims.clear();
+                                }
+                            }
                             // Ingest any cairn peer info into the
                             // local peer table. Skipped while the
                             // local gate is off — a dormant envoy
@@ -290,6 +313,7 @@ async fn announce_loop(
     cairn_local_info: Option<CairnLocalInfo>,
     cairn_pending_claims: Option<Arc<CairnPendingClaims>>,
     cairn_gate: crate::cairn::Gate,
+    cairn_signing_key: Option<Arc<ed25519_dalek::SigningKey>>,
 ) -> anyhow::Result<()> {
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     socket.set_multicast_ttl_v4(1)?; // LAN-local only
@@ -387,6 +411,14 @@ async fn announce_loop(
             Vec::new()
         };
 
+        // Sign announcements only when the cairn gate is on — an
+        // envoy with cairn disabled emits no CAIRN/CAIRNCLAIM lines,
+        // so there's nothing for a SIG to cover that matters.
+        let sign_for_this_tick = if gate_on {
+            cairn_signing_key.as_deref()
+        } else {
+            None
+        };
         let packets = build_announcement(
             &complete,
             &partials,
@@ -396,6 +428,8 @@ async fn announce_loop(
             swarm_port,
             announce_local_info,
             &claim_snapshot,
+            sign_for_this_tick,
+            now_unix_seconds(),
         );
         for msg in &packets {
             if let Err(e) = udp.send_to(msg.as_bytes(), dest).await {
@@ -422,6 +456,119 @@ async fn announce_loop(
 }
 
 /// Build a multicast announcement message.
+/// Append an Ed25519 signature line covering the current packet body.
+/// Shape: `SIG:<unix_seconds>:<hex-encoded-64-byte-signature>\n`. The
+/// signed payload is the exact bytes of the packet up to (but not
+/// including) the SIG line. Timestamp is folded into the signature per
+/// `auth::signer::sign_payload` so a stale announcement can't be
+/// replayed against a receiver that observed it already.
+fn sign_and_append(msg: &mut String, key: &ed25519_dalek::SigningKey, timestamp_secs: i64) {
+    let ts_string = timestamp_secs.to_string();
+    let sig = crate::auth::signer::sign_payload(msg.as_bytes(), &ts_string, key);
+    msg.push_str(&format!("SIG:{}:{}\n", ts_string, hex::encode(sig)));
+}
+
+/// Extract the SIG line from a multicast packet, if present. Returns
+/// `(body_without_sig, timestamp_string, signature_bytes)`. Unsigned
+/// packets return `None` — caller decides how to treat them (current
+/// policy: drop cairn_peer + cairn_claims; swarm HAVE/WANT still
+/// honored so blob discovery isn't held hostage to sig rollout).
+pub fn extract_sig(packet: &str) -> Option<(&str, String, Vec<u8>)> {
+    // SIG line is the last non-empty line of the packet. Locate it by
+    // scanning backwards — faster than reparsing line-by-line.
+    let trimmed = packet.trim_end_matches('\n');
+    let sig_start = trimmed.rfind("\nSIG:")?;
+    let sig_line = &trimmed[sig_start + 1..];
+    let rest = sig_line.strip_prefix("SIG:")?;
+    let (ts, sig_hex) = rest.split_once(':')?;
+    let sig_bytes = hex::decode(sig_hex).ok()?;
+    // Body is everything before the `\nSIG:` separator, PLUS the
+    // trailing newline that preceded SIG (the signer included it when
+    // it appended SIG, so the verifier must include it too).
+    Some((&packet[..=sig_start], ts.to_string(), sig_bytes))
+}
+
+/// Verify an incoming packet's cairn authenticity: SIG line present,
+/// signature valid under the CAIRN line's embedded pubkey, and that
+/// pubkey matches the TOFU cache for the sender's hostname. Returns
+/// true iff cairn content should be trusted. Packets without a CAIRN
+/// line pass through (nothing to verify). Packets with CAIRN but no
+/// valid sig return false and the caller strips cairn state.
+fn verify_cairn_authenticity(
+    raw_packet: &str,
+    result: &AnnouncementResult,
+    cache: &std::sync::Arc<crate::cairn::peer_pubkey_cache::PeerPubkeyCache>,
+) -> bool {
+    use crate::cairn::peer_pubkey_cache::CheckOutcome;
+    let peer = match result.cairn_peer.as_ref() {
+        Some(p) => p,
+        None => return true, // no cairn content to verify
+    };
+    if peer.pubkey_hex.is_empty() {
+        warn!(hostname = %peer.hostname, "cairn: announcement missing embedded pubkey, dropping cairn content");
+        return false;
+    }
+
+    // Parse SIG line (if any) + isolate the signed body.
+    let (body, ts_string, sig_bytes) = match extract_sig(raw_packet) {
+        Some(parts) => parts,
+        None => {
+            warn!(hostname = %peer.hostname, "cairn: announcement missing SIG line, dropping cairn content");
+            return false;
+        }
+    };
+
+    // Decode pubkey_hex into a VerifyingKey.
+    let pub_bytes = match hex::decode(&peer.pubkey_hex) {
+        Ok(b) if b.len() == 32 => b,
+        _ => {
+            warn!(hostname = %peer.hostname, "cairn: embedded pubkey malformed, dropping cairn content");
+            return false;
+        }
+    };
+    let pub_array: [u8; 32] = pub_bytes.try_into().expect("len checked");
+    let verifying_key = match ed25519_dalek::VerifyingKey::from_bytes(&pub_array) {
+        Ok(k) => k,
+        Err(_) => {
+            warn!(hostname = %peer.hostname, "cairn: embedded pubkey invalid, dropping cairn content");
+            return false;
+        }
+    };
+
+    if !crate::auth::signer::verify_payload(body.as_bytes(), &ts_string, &sig_bytes, &verifying_key) {
+        warn!(hostname = %peer.hostname, "cairn: SIG verification failed, dropping cairn content");
+        return false;
+    }
+
+    // TOFU cache cross-check. First sighting: cache the pubkey and
+    // accept. Match: refresh last-seen. Mismatch: reject — the
+    // hostname is announcing with a different key than we've trusted
+    // before, either a re-enrollment (admin clears the cache) or a
+    // spoof (we never accept silently).
+    match cache.check(&peer.hostname, &peer.pubkey_hex) {
+        CheckOutcome::FirstSighting | CheckOutcome::Match => {
+            cache.accept(&peer.hostname, &peer.pubkey_hex, now_unix_seconds());
+            true
+        }
+        CheckOutcome::Mismatch { cached_prefix } => {
+            warn!(
+                hostname = %peer.hostname,
+                announced_pubkey_prefix = %peer.pubkey_hex.chars().take(12).collect::<String>(),
+                cached_pubkey_prefix = %cached_prefix,
+                "cairn: pubkey mismatch — dropping cairn content. Clear /var/lib/vigo/cairn/peer_pubkeys.json if the hostname was legitimately re-enrolled."
+            );
+            false
+        }
+    }
+}
+
+fn now_unix_seconds() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
 /// Build the multicast announcement(s) for one cycle. Returns one packet
 /// in the common case, or two when cairn content would crowd out swarm
 /// HAVE/WANT lines.
@@ -449,6 +596,8 @@ fn build_announcement(
     port: u16,
     cairn_local_info: Option<&CairnLocalInfo>,
     cairn_claims: &[(String, Vec<String>)],
+    signing_key: Option<&ed25519_dalek::SigningKey>,
+    timestamp_secs: i64,
 ) -> Vec<String> {
     let manifest_line = format!("MANIFEST:{}\n", manifest.version());
     let addr_line = format!("ADDR:{}:{}\n", local_ip, port);
@@ -533,6 +682,9 @@ fn build_announcement(
     }
 
     msg.push_str(&addr_line);
+    if let Some(key) = signing_key {
+        sign_and_append(&mut msg, key, timestamp_secs);
+    }
     let mut packets = vec![msg];
 
     // Spillover packet for the rare case where CAIRN+CAIRNCLAIM alone
@@ -557,6 +709,9 @@ fn build_announcement(
             spill.push_str(&line);
         }
         spill.push_str(&addr_line);
+        if let Some(key) = signing_key {
+            sign_and_append(&mut spill, key, timestamp_secs);
+        }
         packets.push(spill);
         if hard_overflow > 0 {
             warn!(
@@ -946,7 +1101,7 @@ mod tests {
         cache.write_chunk(&sha, 0, data).unwrap();
         cache.assemble(&sha, data.len() as u64, 1).unwrap();
 
-        let packets = build_announcement(&cache.list_blobs(), &cache.list_partials(), &cache, &manifest, Ipv4Addr::new(10, 0, 0, 1), 1531, None, &[]);
+        let packets = build_announcement(&cache.list_blobs(), &cache.list_partials(), &cache, &manifest, Ipv4Addr::new(10, 0, 0, 1), 1531, None, &[], None, 0);
         let msg = &packets[0];
         assert!(msg.starts_with("VIGO-SWARM\n"));
         assert!(msg.contains("MANIFEST:"));
@@ -1166,6 +1321,8 @@ mod tests {
             1531,
             None,
             &[],
+            None,
+            0,
         );
         let msg = &packets[0];
 
@@ -1207,6 +1364,7 @@ mod tests {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec!["workstation".to_string()],
+                    pubkey_hex: "a".repeat(64),
         };
         let packets = build_announcement(
             &[],
@@ -1217,6 +1375,8 @@ mod tests {
             1531,
             Some(&li),
             &[],
+            None,
+            0,
         );
         let msg = &packets[0];
         assert!(msg.contains("CAIRN:danlap:dan:workstation"));
@@ -1236,6 +1396,8 @@ mod tests {
             1531,
             None,
             &[],
+            None,
+            0,
         );
         let msg = &packets[0];
         assert!(!msg.contains("CAIRN:"));
@@ -1243,14 +1405,18 @@ mod tests {
 
     #[test]
     fn parse_announcement_recovers_cairn_line() {
-        let msg = "VIGO-SWARM\n\
-                   MANIFEST:1\n\
-                   ADDR:10.0.0.1:1531\n\
-                   CAIRN:plex:dan,alice:homelab\n";
+        let pubkey_hex = "a".repeat(64);
+        let msg = format!(
+            "VIGO-SWARM\n\
+             MANIFEST:1\n\
+             ADDR:10.0.0.1:1531\n\
+             CAIRN:plex:dan,alice:homelab:{}\n",
+            pubkey_hex
+        );
         let pm = PeerMap::new();
         let manifest = test_manifest();
         let result = parse_announcement(
-            msg,
+            &msg,
             "10.0.0.1:1531".parse().unwrap(),
             &pm,
             &manifest,
@@ -1259,6 +1425,7 @@ mod tests {
         assert_eq!(li.hostname, "plex");
         assert_eq!(li.users, vec!["dan".to_string(), "alice".to_string()]);
         assert_eq!(li.tags, vec!["homelab".to_string()]);
+        assert_eq!(li.pubkey_hex, pubkey_hex);
     }
 
     #[test]
@@ -1320,6 +1487,8 @@ mod tests {
             1531,
             None,
             &claims,
+            None,
+            0,
         );
         let msg = &packets[0];
         assert!(msg.contains("CAIRNCLAIM:cairn:danlap:dan:vigo-web:plex,annlap"));
@@ -1328,16 +1497,20 @@ mod tests {
 
     #[test]
     fn parse_announcement_recovers_cairn_claim_lines() {
-        let msg = "VIGO-SWARM\n\
-                   MANIFEST:1\n\
-                   ADDR:10.0.0.1:1531\n\
-                   CAIRN:danlap:dan:workstation\n\
-                   CAIRNCLAIM:cairn:danlap:dan:vigo-web:plex,annlap\n\
-                   CAIRNCLAIM:cairn:danlap:dan:dotfiles:plex\n";
+        let pubkey_hex = "a".repeat(64);
+        let msg = format!(
+            "VIGO-SWARM\n\
+             MANIFEST:1\n\
+             ADDR:10.0.0.1:1531\n\
+             CAIRN:danlap:dan:workstation:{}\n\
+             CAIRNCLAIM:cairn:danlap:dan:vigo-web:plex,annlap\n\
+             CAIRNCLAIM:cairn:danlap:dan:dotfiles:plex\n",
+            pubkey_hex
+        );
         let pm = PeerMap::new();
         let manifest = test_manifest();
         let result = parse_announcement(
-            msg,
+            &msg,
             "10.0.0.1:1531".parse().unwrap(),
             &pm,
             &manifest,
@@ -1404,6 +1577,8 @@ mod tests {
             1531,
             None,
             &claims,
+            None,
+            0,
         );
         // The oversized claim line must not appear in any emitted packet.
         for msg in &packets {
@@ -1441,6 +1616,7 @@ mod tests {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec![],
+                    pubkey_hex: "a".repeat(64),
         };
         let claims = vec![("cairn:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
         let packets = build_announcement(
@@ -1452,6 +1628,8 @@ mod tests {
             1531,
             Some(&li),
             &claims,
+            None,
+            0,
         );
         let msg = &packets[0];
         let cairn_pos = msg.find("CAIRN:danlap:").expect("CAIRN line present");
@@ -1483,6 +1661,7 @@ mod tests {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec![],
+                    pubkey_hex: "a".repeat(64),
         };
         let claims = vec![("cairn:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
         let packets = build_announcement(
@@ -1494,6 +1673,8 @@ mod tests {
             1531,
             Some(&li),
             &claims,
+            None,
+            0,
         );
         let joined: String = packets.join("");
         assert!(joined.contains("CAIRN:danlap:"), "CAIRN line must survive heavy HAVE load");
@@ -1524,6 +1705,7 @@ mod tests {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec![],
+                    pubkey_hex: "a".repeat(64),
         };
 
         let packets = build_announcement(
@@ -1535,6 +1717,8 @@ mod tests {
             1531,
             Some(&li),
             &claims,
+            None,
+            0,
         );
         assert_eq!(packets.len(), 2, "expected a spillover packet");
         // CAIRN peer line appears in both packets so the receiver can
@@ -1584,9 +1768,123 @@ mod tests {
             1531,
             None,
             &claims,
+            None,
+            0,
         );
         assert!(packets.len() >= 1);
         assert!(packets[0].contains(&format!("HAVE:{}:1/1", sha)),
             "primary packet must still carry HAVE lines when spillover is used");
+    }
+
+    // ----- 0.30.11 cairn signature tests -----
+
+    #[test]
+    fn signed_announcement_verifies_round_trip() {
+        let (verify, sign) = crate::auth::keypair::generate_keypair().unwrap();
+        let pubkey_hex = hex::encode(verify.to_bytes());
+        let li = CairnLocalInfo {
+            hostname: "danlap".to_string(),
+            users: vec!["dan".to_string()],
+            tags: vec![],
+            pubkey_hex: pubkey_hex.clone(),
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
+        let manifest = test_manifest();
+        let claims = vec![("cairn:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
+        let packets = build_announcement(
+            &[],
+            &[],
+            &cache,
+            &manifest,
+            Ipv4Addr::new(10, 0, 0, 1),
+            1531,
+            Some(&li),
+            &claims,
+            Some(&sign),
+            1_700_000_000,
+        );
+        let msg = &packets[0];
+
+        // Packet must carry a trailing SIG line.
+        assert!(msg.ends_with("\n"), "packet must end with newline");
+        let sig_line = msg.lines().last().unwrap();
+        assert!(sig_line.starts_with("SIG:1700000000:"), "SIG line present: got {}", sig_line);
+
+        // Verify through the public path (extract_sig + verify_payload).
+        let (body, ts, sig_bytes) = extract_sig(msg).expect("extract sig");
+        assert_eq!(ts, "1700000000");
+        assert_eq!(sig_bytes.len(), 64);
+        assert!(crate::auth::signer::verify_payload(body.as_bytes(), &ts, &sig_bytes, &verify));
+    }
+
+    #[test]
+    fn tampered_signed_announcement_fails_verification() {
+        let (verify, sign) = crate::auth::keypair::generate_keypair().unwrap();
+        let li = CairnLocalInfo {
+            hostname: "danlap".to_string(),
+            users: vec!["dan".to_string()],
+            tags: vec![],
+            pubkey_hex: hex::encode(verify.to_bytes()),
+        };
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
+        let manifest = test_manifest();
+        let packets = build_announcement(
+            &[],
+            &[],
+            &cache,
+            &manifest,
+            Ipv4Addr::new(10, 0, 0, 1),
+            1531,
+            Some(&li),
+            &[],
+            Some(&sign),
+            1_700_000_000,
+        );
+        // Tamper with the body (swap the CAIRNCLAIM target). Verification must fail.
+        let tampered = packets[0].replace("danlap", "attacker");
+        let (body, ts, sig_bytes) = extract_sig(&tampered).expect("extract sig");
+        assert!(!crate::auth::signer::verify_payload(body.as_bytes(), &ts, &sig_bytes, &verify),
+            "tampered packet must not verify");
+    }
+
+    #[test]
+    fn unsigned_announcement_has_no_sig_line() {
+        // When build_announcement is called without a signing key (pre-
+        // 0.30.11 behavior, or a non-cairn envoy), it emits no SIG line.
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
+        let manifest = test_manifest();
+        let packets = build_announcement(
+            &[],
+            &[],
+            &cache,
+            &manifest,
+            Ipv4Addr::new(10, 0, 0, 1),
+            1531,
+            None,
+            &[],
+            None,
+            0,
+        );
+        assert!(!packets[0].contains("\nSIG:"), "packet must not carry SIG when unsigned");
+        assert_eq!(extract_sig(&packets[0]), None);
+    }
+
+    #[test]
+    fn tofu_cache_blocks_pubkey_swap() {
+        use crate::cairn::peer_pubkey_cache::{CheckOutcome, PeerPubkeyCache};
+        let cache = PeerPubkeyCache::empty();
+        let pk1 = "a".repeat(64);
+        let pk2 = "b".repeat(64);
+        assert_eq!(cache.check("danlap", &pk1), CheckOutcome::FirstSighting);
+        cache.accept("danlap", &pk1, 100);
+        assert_eq!(cache.check("danlap", &pk1), CheckOutcome::Match);
+        // Pubkey swap for the same hostname is rejected.
+        match cache.check("danlap", &pk2) {
+            CheckOutcome::Mismatch { .. } => {}
+            other => panic!("expected Mismatch, got {:?}", other),
+        }
     }
 }
