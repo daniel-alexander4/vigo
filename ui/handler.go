@@ -66,6 +66,12 @@ type DataSource interface {
 	RiskData(baseInterval time.Duration) RiskSummaryData
 	RiskPostureData(baseInterval time.Duration) RiskPosturePageData
 	CertExpirySummary() CertExpirySummary
+	// EnvoyCertDetails returns the expiring-or-expired certificates
+	// for a single envoy, sorted most-urgent first. Filter narrows to a
+	// specific urgency bucket: "expired" (days<0), "7d" (0..6), "30d"
+	// (7..29), or "" for all three combined. Empty when the envoy has
+	// no cert_lifecycle trait rows matching the filter.
+	EnvoyCertDetails(envoyID, bucket string) ([]CertDetail, string, bool)
 	RunningCVESummary() RunningCVESummary
 }
 
@@ -107,6 +113,19 @@ type CertHostRow struct {
 	Expired      int
 	ExpiringIn7  int
 	ExpiringIn30 int
+}
+
+// CertDetail is one certificate row shown in the /security page cert-
+// expiry expansion. Assembled by DataSource.EnvoyCertDetails from the
+// envoy's `cert_lifecycle.certificates.*` traits.
+type CertDetail struct {
+	Path          string   // absolute path on disk
+	CN            string   // common name (may be empty)
+	SANs          []string // subject alternative names
+	Issuer        string   // issuer distinguished name
+	NotAfter      string   // RFC3339 end-of-validity
+	DaysRemaining int      // negative when already expired
+	IsCA          bool
 }
 
 // ReportBuilder builds compliance reports for HTMX fragment rendering.
@@ -553,6 +572,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Security page — always available. AI chat is optional.
 	mux.HandleFunc("GET /security", h.SecurityPage)
+	mux.HandleFunc("GET /security/certs/{id}", h.SecurityCerts)
 	if h.assistant != nil {
 		mux.HandleFunc("POST /ui/ask", h.AskStream)
 	}
@@ -5166,6 +5186,10 @@ func (ds *dbDataSource) SecurityScanTraits(_ string) (map[string]string, bool) {
 
 func (ds *dbDataSource) SecurityScanContext(_ string) (string, map[string]string, bool) {
 	return "", nil, false
+}
+
+func (ds *dbDataSource) EnvoyCertDetails(_, _ string) ([]CertDetail, string, bool) {
+	return nil, "", false
 }
 
 func (ds *dbDataSource) RiskData(_ time.Duration) RiskSummaryData {

@@ -1965,6 +1965,14 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 .sec-live-spinner.htmx-indicator { display: none; margin-top: 8px; }
 .sec-live-spinner.htmx-indicator.htmx-request,
 .htmx-request .sec-live-spinner.htmx-indicator { display: block; }
+
+/* Active-state highlight for stat cards used as bucket-filter tabs
+   on /security/certs/{id}. Matches the base card padding/shape, gains a
+   subtle tint + thicker left border to signal "this filter is on". */
+.stat-card--active {
+    background: var(--color-primary-tint-faint);
+    border-left-width: 4px;
+}
 .sec-findings { list-style: none; padding: 0; margin: 8px 0; }
 .sec-findings li { padding: 4px 0; border-bottom: 1px solid var(--color-border); font-size: 12px; }
 @media (max-width: 768px) {

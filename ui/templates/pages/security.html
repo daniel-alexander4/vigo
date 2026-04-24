@@ -209,13 +209,19 @@
                 </div>
             </div>
 
-            {{/* ── Cert expiry panel ── */}}
+            {{/* ── Cert expiry panel ──
+                 The hostname + three count cells all link to the dedicated
+                 /security/certs/{id} page. Inline expansion was abandoned
+                 because the parent security-status fragment auto-refreshes
+                 on PollInterval — any injected child row would blink out on
+                 the next tick. Count cells pre-filter the destination page
+                 via the bucket query param. */}}
             <div class="sec-detail" id="sec-panel-certs">
                 <h4>Certificates Expiring Soon</h4>
                 {{if .Certs.PerHost}}
                 <p class="text-muted" style="font-size:13px;margin-bottom:8px;">
                     {{.Certs.HostsAffected}} host{{if ne .Certs.HostsAffected 1}}s{{end}} with expiring or expired certs.
-                    Counts are per-cert (a host can hold multiple).
+                    Counts are per-cert (a host can hold multiple). Click a hostname or count to see which certs.
                 </p>
                 <div class="security-drift-table-wrap">
                     <table class="security-drift-table">
@@ -223,11 +229,20 @@
                         <tbody>
                             {{range .Certs.PerHost}}
                             <tr>
-                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
-                                <td class="{{if .Expired}}text-danger{{else}}text-success{{end}}">{{.Expired}}</td>
-                                <td class="{{if .ExpiringIn7}}text-warning{{end}}">{{.ExpiringIn7}}</td>
-                                <td>{{.ExpiringIn30}}</td>
-                                <td><a href="/envoys/{{.ID}}" class="btn btn--sm btn--outline">View Envoy</a></td>
+                                <td><a href="/security/certs/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td>
+                                    {{if .Expired}}<a href="/security/certs/{{.ID}}?bucket=expired" class="text-danger">{{.Expired}}</a>
+                                    {{else}}<span class="text-success">0</span>{{end}}
+                                </td>
+                                <td>
+                                    {{if .ExpiringIn7}}<a href="/security/certs/{{.ID}}?bucket=7d" class="text-warning">{{.ExpiringIn7}}</a>
+                                    {{else}}0{{end}}
+                                </td>
+                                <td>
+                                    {{if .ExpiringIn30}}<a href="/security/certs/{{.ID}}?bucket=30d">{{.ExpiringIn30}}</a>
+                                    {{else}}0{{end}}
+                                </td>
+                                <td><a href="/security/certs/{{.ID}}" class="btn btn--sm btn--outline">View Certs</a></td>
                             </tr>
                             {{end}}
                         </tbody>
@@ -608,3 +623,5 @@
      requires pre-normalising per-vuln severity in the handler (Trivy uses
      .Severity, debsecan uses .Urgency) so a shared template can iterate.
      Tracked in pending.md under the /security drawer follow-up. */}}
+
+

@@ -23,6 +23,7 @@ The UI is built with Go templates and HTMX for partial page updates without full
 | Sigil | `/sigil` | Per-user encrypted sync mesh — same shape as Echo plus recipient drift and active unlock sessions |
 | [Envoy Swarm Load](envoy-swarm-load.md) | `/envoys/{id}` · Swarm tab | Per-envoy disk footprint across lode, cairn, echo, and sigil — biggest consumers first |
 | [Security](security.md) | `/envoys/{id}` | Envoy detail and security info |
+| Security Certs | `/security/certs/{id}` | Per-envoy certificate expiry detail — linked from the /security page's Certs Expiring Soon panel; supports `?bucket=expired\|7d\|30d` filter |
 
 ### Account
 

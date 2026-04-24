@@ -278,6 +278,98 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 // the existing SecurityPage.QueryTimeoutSec used by the legacy client flow.
 const securityLiveTimeoutSec = 90
 
+// SecurityCertsPageData drives the dedicated /security/certs/{id} page —
+// the per-envoy expiring-certificate inventory. Rendered as a full page
+// rather than an inline expansion on /security because the parent
+// security-status fragment auto-refreshes every PollInterval and would
+// wipe any injected child content on the next tick. The dedicated page
+// survives page reloads cleanly and can be bookmarked or linked from
+// other surfaces (Scrier notes, run output, etc.).
+type SecurityCertsPageData struct {
+	PageData
+	EnvoyID      string
+	Hostname     string
+	Bucket       string       // "expired" | "7d" | "30d" | "" (all <30d)
+	Certs        []CertDetail // filtered subset when Bucket is set
+	AllCerts     []CertDetail // unfiltered <30d set used for the stat cards
+	Expired      int
+	ExpiringIn7  int
+	ExpiringIn30 int
+}
+
+// SecurityCerts renders the dedicated /security/certs/{id} page listing
+// one envoy's certificates expiring within 30 days. Query param `bucket`
+// narrows to one of expired / 7d / 30d; absent means show all three.
+func (h *Handler) SecurityCerts(w http.ResponseWriter, r *http.Request) {
+	envoyID := r.PathValue("id")
+	if _, err := uuid.Parse(envoyID); err != nil {
+		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
+		return
+	}
+	bucket := r.URL.Query().Get("bucket")
+	switch bucket {
+	case "", "expired", "7d", "30d":
+	default:
+		http.Error(w, "invalid bucket", http.StatusBadRequest)
+		return
+	}
+
+	all, hostname, ok := h.dataSource.EnvoyCertDetails(envoyID, "")
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	var expired, in7, in30 int
+	for _, c := range all {
+		switch {
+		case c.DaysRemaining < 0:
+			expired++
+		case c.DaysRemaining < 7:
+			in7++
+		case c.DaysRemaining < 30:
+			in30++
+		}
+	}
+
+	// Apply bucket filter for the displayed table; stat-card counts use `all`.
+	var shown []CertDetail
+	if bucket == "" {
+		shown = all
+	} else {
+		for _, c := range all {
+			switch bucket {
+			case "expired":
+				if c.DaysRemaining < 0 {
+					shown = append(shown, c)
+				}
+			case "7d":
+				if c.DaysRemaining >= 0 && c.DaysRemaining < 7 {
+					shown = append(shown, c)
+				}
+			case "30d":
+				if c.DaysRemaining >= 7 && c.DaysRemaining < 30 {
+					shown = append(shown, c)
+				}
+			}
+		}
+	}
+
+	data := SecurityCertsPageData{
+		PageData:     PageData{Title: "Certificates — " + hostname, ActiveNav: "security"},
+		EnvoyID:      envoyID,
+		Hostname:     hostname,
+		Bucket:       bucket,
+		Certs:        shown,
+		AllCerts:     all,
+		Expired:      expired,
+		ExpiringIn7:  in7,
+		ExpiringIn30: in30,
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "security-certs", data)
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 func buildSecurityCached(traits map[string]string) SecurityDrawerCached {

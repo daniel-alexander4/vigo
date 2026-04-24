@@ -1081,3 +1081,120 @@ func (ds *DataSource) CertExpirySummary() ui.CertExpirySummary {
 	})
 	return summary
 }
+
+// EnvoyCertDetails assembles per-certificate rows for one envoy from its
+// `cert_lifecycle.certificates.N.*` flattened trait fields. Filters to
+// certs with days_remaining < 30 (matches the fleet-panel threshold).
+// The `bucket` argument narrows further: "expired" keeps only days<0,
+// "7d" keeps 0..6, "30d" keeps 7..29; empty string returns all three.
+// Returns the envoy's hostname alongside the rows so the caller can
+// render a header without a separate lookup.
+func (ds *DataSource) EnvoyCertDetails(envoyID, bucket string) ([]ui.CertDetail, string, bool) {
+	const prefix = "cert_lifecycle.certificates."
+	ts, ok, _ := ds.fleet.GetEnvoyLite(envoyID)
+	if !ok || ts.Traits == nil {
+		return nil, "", false
+	}
+	// Group flattened keys by index, then materialize one CertDetail per index.
+	type rowBuf struct {
+		Path          string
+		CN            string
+		SANs          []string
+		Issuer        string
+		NotAfter      string
+		DaysRemaining int
+		IsCA          bool
+		HasDays       bool
+	}
+	rows := map[string]*rowBuf{}
+	getRow := func(idx string) *rowBuf {
+		if r, ok := rows[idx]; ok {
+			return r
+		}
+		r := &rowBuf{}
+		rows[idx] = r
+		return r
+	}
+	for k, v := range ts.Traits {
+		if !strings.HasPrefix(k, prefix) {
+			continue
+		}
+		rest := strings.TrimPrefix(k, prefix)
+		dot := strings.Index(rest, ".")
+		if dot < 0 {
+			continue
+		}
+		idx, field := rest[:dot], rest[dot+1:]
+		if strings.Contains(idx, ".") {
+			continue
+		}
+		r := getRow(idx)
+		switch {
+		case field == "path":
+			r.Path = v
+		case field == "cn":
+			r.CN = v
+		case field == "issuer":
+			r.Issuer = v
+		case field == "not_after", field == "expires":
+			if r.NotAfter == "" {
+				r.NotAfter = v
+			}
+		case field == "days_remaining":
+			if n, err := strconv.Atoi(v); err == nil {
+				r.DaysRemaining = n
+				r.HasDays = true
+			}
+		case field == "is_ca":
+			r.IsCA = v == "true"
+		case strings.HasPrefix(field, "sans."):
+			// sans.0, sans.1, … — preserve index order.
+			sanIdx, err := strconv.Atoi(strings.TrimPrefix(field, "sans."))
+			if err == nil {
+				for len(r.SANs) <= sanIdx {
+					r.SANs = append(r.SANs, "")
+				}
+				r.SANs[sanIdx] = v
+			}
+		}
+	}
+
+	out := make([]ui.CertDetail, 0, len(rows))
+	for _, r := range rows {
+		if !r.HasDays {
+			continue
+		}
+		// Fleet-panel threshold: certs with >= 30 days remaining aren't "expiring soon".
+		if r.DaysRemaining >= 30 {
+			continue
+		}
+		if bucket == "expired" && r.DaysRemaining >= 0 {
+			continue
+		}
+		if bucket == "7d" && (r.DaysRemaining < 0 || r.DaysRemaining >= 7) {
+			continue
+		}
+		if bucket == "30d" && (r.DaysRemaining < 7 || r.DaysRemaining >= 30) {
+			continue
+		}
+		// Strip any trailing empty slots in SANs caused by sparse indexes.
+		sans := r.SANs
+		for len(sans) > 0 && sans[len(sans)-1] == "" {
+			sans = sans[:len(sans)-1]
+		}
+		out = append(out, ui.CertDetail{
+			Path:          r.Path,
+			CN:            r.CN,
+			SANs:          sans,
+			Issuer:        r.Issuer,
+			NotAfter:      r.NotAfter,
+			DaysRemaining: r.DaysRemaining,
+			IsCA:          r.IsCA,
+		})
+	}
+	// Most-urgent first: expired (most-negative) before soonest-expiring.
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].DaysRemaining < out[j].DaysRemaining
+	})
+	return out, ts.Hostname, true
+}

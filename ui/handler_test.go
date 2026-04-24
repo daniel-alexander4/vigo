@@ -1005,6 +1005,10 @@ func (m *mockDataSource) SecurityScanContext(_ string) (string, map[string]strin
 	return "", nil, false
 }
 
+func (m *mockDataSource) EnvoyCertDetails(_, _ string) ([]CertDetail, string, bool) {
+	return nil, "", false
+}
+
 func (m *mockDataSource) RiskData(_ time.Duration) RiskSummaryData {
 	return RiskSummaryData{}
 }

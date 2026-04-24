@@ -387,7 +387,7 @@ async fn announce_loop(
             Vec::new()
         };
 
-        let msg = build_announcement(
+        let packets = build_announcement(
             &complete,
             &partials,
             &cache,
@@ -397,8 +397,10 @@ async fn announce_loop(
             announce_local_info,
             &claim_snapshot,
         );
-        if let Err(e) = udp.send_to(msg.as_bytes(), dest).await {
-            debug!(error = %e, "multicast announce failed");
+        for msg in &packets {
+            if let Err(e) = udp.send_to(msg.as_bytes(), dest).await {
+                debug!(error = %e, "multicast announce failed");
+            }
         }
         last_send = tokio::time::Instant::now();
 
@@ -420,6 +422,24 @@ async fn announce_loop(
 }
 
 /// Build a multicast announcement message.
+/// Build the multicast announcement(s) for one cycle. Returns one packet
+/// in the common case, or two when cairn content would crowd out swarm
+/// HAVE/WANT lines.
+///
+/// Priority inversion fix (0.30.10): earlier revisions appended
+/// CAIRN/CAIRNCLAIM last so they'd be the first thing dropped on MTU
+/// overflow. That silently broke cairn on any envoy with more than
+/// ~15 cached swarm blobs — HAVE lines would fill the packet and the
+/// coordination announcements never went out. Cairn content is both
+/// low-bandwidth (a few labels × short hostname lists) and
+/// high-criticality (receivers fire on CAIRNCLAIM, nothing fires without
+/// it), while HAVE content is high-bandwidth and self-healing (the next
+/// 5s cycle retries). Pack cairn first; let HAVE spill across cycles.
+///
+/// Large-fleet edge case: ~60+ cairn labels on one source envoy could
+/// push CAIRN+CAIRNCLAIM past MTU on its own. Split into a second
+/// packet in that case — receivers tolerate either packet shape
+/// (every section is optional past HEADER+MANIFEST+ADDR).
 fn build_announcement(
     complete: &[String],
     partials: &[String],
@@ -429,12 +449,37 @@ fn build_announcement(
     port: u16,
     cairn_local_info: Option<&CairnLocalInfo>,
     cairn_claims: &[(String, Vec<String>)],
-) -> String {
+) -> Vec<String> {
+    let manifest_line = format!("MANIFEST:{}\n", manifest.version());
+    let addr_line = format!("ADDR:{}:{}\n", local_ip, port);
+
+    // Primary packet. Preamble + CAIRN + as many CAIRNCLAIM as fit under
+    // a reserved budget (leave ≥300 bytes for MANIFEST/ADDR/one HAVE).
+    let cairn_budget_limit = MAX_MSG_SIZE - 300;
     let mut msg = String::from(HEADER);
     msg.push('\n');
-    msg.push_str(&format!("MANIFEST:{}\n", manifest.version()));
+    msg.push_str(&manifest_line);
 
-    // Announce complete blobs.
+    if let Some(li) = cairn_local_info {
+        let line = format!("{}\n", li.format_announce_line());
+        if msg.len() + line.len() <= cairn_budget_limit {
+            msg.push_str(&line);
+        }
+    }
+
+    let mut overflow_claims: Vec<(String, Vec<String>)> = Vec::new();
+    for (label, hosts) in cairn_claims {
+        let line = format!("{}\n", format_claim_line(label, hosts));
+        if msg.len() + line.len() > cairn_budget_limit {
+            overflow_claims.push((label.clone(), hosts.clone()));
+            continue;
+        }
+        msg.push_str(&line);
+    }
+
+    // Swarm blob lines, appended after cairn. Same overflow break pattern
+    // as before — losing a HAVE line is safe, the next cycle retries and
+    // peers still see the blob via other paths.
     for sha in complete {
         let path = cache.dir().join(sha);
         let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
@@ -446,13 +491,7 @@ fn build_announcement(
         msg.push_str(&line);
     }
 
-    // Announce partial blobs so other peers can source chunks from us.
     for sha in partials {
-        // Skip stale `.partial/` directories left behind for blobs that have
-        // already completed — those are announced via the `complete` loop
-        // above. Without this guard, an orphan partial dir would route
-        // through the complete-blob branch of `chunk_bitmap` and try to
-        // materialize a 40 GB HashSet.
         if cache.has_blob(sha) {
             continue;
         }
@@ -461,11 +500,6 @@ fn build_announcement(
             continue;
         }
         let have = chunks.len() as u32;
-        // Look up total from the manifest so listeners can decode the
-        // bitmap and so the sentinel carries the real denominator. If the
-        // manifest has no record (shouldn't happen for an in-flight
-        // download, but guard anyway), fall back to the `/0` sentinel and
-        // let the listener resolve via /meta.
         let total = manifest
             .get_entry(sha)
             .map(|e| chunks_for_size(e.size))
@@ -476,8 +510,6 @@ fn build_announcement(
             if msg.len() + inline.len() + 30 <= MAX_MSG_SIZE {
                 inline
             } else {
-                // Bitmap would overflow MTU — emit the bitmap-less form
-                // so the listener defers to an async /meta probe.
                 format!("HAVE:{}:{}/{}\n", sha, have, total)
             }
         } else {
@@ -489,12 +521,9 @@ fn build_announcement(
         msg.push_str(&line);
     }
 
-    // Announce blobs we need (solicitation: "WANT" lines).
-    // Peers hearing a WANT for a blob they have will include it in their
-    // next announcement, cutting discovery from 5s to <1s.
     for sha in manifest.active_blobs() {
         if complete.contains(&sha) || partials.iter().any(|p| p == &sha) {
-            continue; // Already have it (complete or partial).
+            continue;
         }
         let line = format!("WANT:{}\n", sha);
         if msg.len() + line.len() + 30 > MAX_MSG_SIZE {
@@ -503,35 +532,42 @@ fn build_announcement(
         msg.push_str(&line);
     }
 
-    msg.push_str(&format!("ADDR:{}:{}\n", local_ip, port));
+    msg.push_str(&addr_line);
+    let mut packets = vec![msg];
 
-    // Append cairn peer info last so it's the first thing
-    // dropped if the message overflows MTU. On overflow, other
-    // envoys miss this announcement's cairn info but will see
-    // the next one (typically 5 seconds later) — graceful
-    // degradation rather than truncated swarm info.
-    if let Some(li) = cairn_local_info {
-        let line = format!("{}\n", li.format_announce_line());
-        if msg.len() + line.len() <= MAX_MSG_SIZE {
-            msg.push_str(&line);
+    // Spillover packet for the rare case where CAIRN+CAIRNCLAIM alone
+    // exceed the cairn budget. Carries only the lines that didn't fit,
+    // plus the minimum envelope (HEADER + MANIFEST + CAIRN + ADDR) so
+    // the receiver can identify the sender and ingest claims.
+    if !overflow_claims.is_empty() {
+        let mut spill = String::from(HEADER);
+        spill.push('\n');
+        spill.push_str(&manifest_line);
+        if let Some(li) = cairn_local_info {
+            spill.push_str(&format!("{}\n", li.format_announce_line()));
+        }
+        let mut hard_overflow = 0usize;
+        for (label, hosts) in &overflow_claims {
+            let line = format!("{}\n", format_claim_line(label, hosts));
+            // Reserve room for ADDR at the tail.
+            if spill.len() + line.len() + addr_line.len() > MAX_MSG_SIZE {
+                hard_overflow += 1;
+                continue;
+            }
+            spill.push_str(&line);
+        }
+        spill.push_str(&addr_line);
+        packets.push(spill);
+        if hard_overflow > 0 {
+            warn!(
+                overflow_labels = hard_overflow,
+                total_labels = cairn_claims.len(),
+                "cairn claim list exceeds two-packet capacity — some labels deferred to next cycle"
+            );
         }
     }
 
-    // Append CAIRNCLAIM lines from the shared pending-claims
-    // map. Each line is a single label's claim list; multiple
-    // lines per announcement are fine. Drop lines that would
-    // exceed the MTU — the next announcement cycle (5s later)
-    // will retry, and the safety-net re-broadcast window ensures
-    // receivers catch up even under sustained pressure.
-    for (label, hosts) in cairn_claims {
-        let line = format!("{}\n", format_claim_line(label, hosts));
-        if msg.len() + line.len() > MAX_MSG_SIZE {
-            break;
-        }
-        msg.push_str(&line);
-    }
-
-    msg
+    packets
 }
 
 /// Result of parsing a multicast announcement.
@@ -910,7 +946,8 @@ mod tests {
         cache.write_chunk(&sha, 0, data).unwrap();
         cache.assemble(&sha, data.len() as u64, 1).unwrap();
 
-        let msg = build_announcement(&cache.list_blobs(), &cache.list_partials(), &cache, &manifest, Ipv4Addr::new(10, 0, 0, 1), 1531, None, &[]);
+        let packets = build_announcement(&cache.list_blobs(), &cache.list_partials(), &cache, &manifest, Ipv4Addr::new(10, 0, 0, 1), 1531, None, &[]);
+        let msg = &packets[0];
         assert!(msg.starts_with("VIGO-SWARM\n"));
         assert!(msg.contains("MANIFEST:"));
         assert!(msg.contains(&format!("HAVE:{}:1/1", sha)));
@@ -1120,7 +1157,7 @@ mod tests {
 
         manifest.record_seed(&sha, "label", "*", "7d", "seeder", size, "10.0.0.9:1531");
 
-        let msg = build_announcement(
+        let packets = build_announcement(
             &cache.list_blobs(),
             &cache.list_partials(),
             &cache,
@@ -1130,6 +1167,7 @@ mod tests {
             None,
             &[],
         );
+        let msg = &packets[0];
 
         // The line must carry an inline bitmap (three colon-separated
         // segments after HAVE:) — no /0 sentinel, no bare have/total form.
@@ -1146,7 +1184,7 @@ mod tests {
         let pm = PeerMap::new();
         let listener_manifest = test_manifest();
         let result = parse_announcement(
-            &msg,
+            msg,
             "10.0.0.9:1531".parse().unwrap(),
             &pm,
             &listener_manifest,
@@ -1170,7 +1208,7 @@ mod tests {
             users: vec!["dan".to_string()],
             tags: vec!["workstation".to_string()],
         };
-        let msg = build_announcement(
+        let packets = build_announcement(
             &[],
             &[],
             &cache,
@@ -1180,6 +1218,7 @@ mod tests {
             Some(&li),
             &[],
         );
+        let msg = &packets[0];
         assert!(msg.contains("CAIRN:danlap:dan:workstation"));
     }
 
@@ -1188,7 +1227,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
-        let msg = build_announcement(
+        let packets = build_announcement(
             &[],
             &[],
             &cache,
@@ -1198,6 +1237,7 @@ mod tests {
             None,
             &[],
         );
+        let msg = &packets[0];
         assert!(!msg.contains("CAIRN:"));
     }
 
@@ -1271,7 +1311,7 @@ mod tests {
                 vec!["plex".to_string()],
             ),
         ];
-        let msg = build_announcement(
+        let packets = build_announcement(
             &[],
             &[],
             &cache,
@@ -1281,6 +1321,7 @@ mod tests {
             None,
             &claims,
         );
+        let msg = &packets[0];
         assert!(msg.contains("CAIRNCLAIM:cairn:danlap:dan:vigo-web:plex,annlap"));
         assert!(msg.contains("CAIRNCLAIM:cairn:danlap:dan:dotfiles:plex"));
     }
@@ -1349,12 +1390,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
-        // Synthesize a claim list large enough to definitely
-        // exceed the 1400-byte MTU ceiling.
+        // Synthesize a single claim line large enough to definitely
+        // exceed MAX_MSG_SIZE even in a dedicated spillover packet.
         let many_hosts: Vec<String> =
             (0..200).map(|i| format!("peer-with-a-long-name-{}", i)).collect();
         let claims = vec![("cairn:h:u:huge".to_string(), many_hosts)];
-        let msg = build_announcement(
+        let packets = build_announcement(
             &[],
             &[],
             &cache,
@@ -1364,15 +1405,188 @@ mod tests {
             None,
             &claims,
         );
-        // The oversized claim line must have been dropped rather
-        // than truncated — bounded by the check that the line
-        // length + existing msg fits MAX_MSG_SIZE.
-        assert!(
-            !msg.contains("CAIRNCLAIM:cairn:h:u:huge:"),
-            "oversized claim line should have been dropped",
+        // The oversized claim line must not appear in any emitted packet.
+        for msg in &packets {
+            assert!(
+                !msg.contains("CAIRNCLAIM:cairn:h:u:huge:"),
+                "oversized claim line should have been dropped, found in packet: {}",
+                msg,
+            );
+        }
+        // The primary packet is still valid.
+        assert!(packets[0].starts_with("VIGO-SWARM\n"));
+        assert!(packets[0].contains("ADDR:"));
+    }
+
+    // ----- 0.30.10 priority-inversion + spillover tests -----
+
+    #[test]
+    fn build_announcement_places_cairn_before_have() {
+        // Regression: CAIRN/CAIRNCLAIM must be emitted BEFORE HAVE lines
+        // so a blob-heavy source still reaches receivers with
+        // coordination info. Prior to 0.30.10, HAVE packed first and
+        // CAIRN fell off MTU on any cache with ~15+ blobs.
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
+        let manifest = test_manifest();
+
+        // A complete blob so HAVE is emitted.
+        let data = b"x";
+        use sha2::Digest;
+        let sha = hex::encode(sha2::Sha256::digest(data));
+        cache.write_chunk(&sha, 0, data).unwrap();
+        cache.assemble(&sha, data.len() as u64, 1).unwrap();
+
+        let li = CairnLocalInfo {
+            hostname: "danlap".to_string(),
+            users: vec!["dan".to_string()],
+            tags: vec![],
+        };
+        let claims = vec![("cairn:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
+        let packets = build_announcement(
+            &cache.list_blobs(),
+            &cache.list_partials(),
+            &cache,
+            &manifest,
+            Ipv4Addr::new(10, 0, 0, 1),
+            1531,
+            Some(&li),
+            &claims,
         );
-        // And the rest of the announcement is still valid.
-        assert!(msg.starts_with("VIGO-SWARM\n"));
-        assert!(msg.contains("ADDR:"));
+        let msg = &packets[0];
+        let cairn_pos = msg.find("CAIRN:danlap:").expect("CAIRN line present");
+        let cairnclaim_pos = msg.find("CAIRNCLAIM:cairn:danlap:dan:vigo:plex")
+            .expect("CAIRNCLAIM line present");
+        let have_pos = msg.find("HAVE:").expect("HAVE line present");
+        assert!(cairn_pos < have_pos, "CAIRN must precede HAVE");
+        assert!(cairnclaim_pos < have_pos, "CAIRNCLAIM must precede HAVE");
+    }
+
+    #[test]
+    fn build_announcement_preserves_cairn_under_heavy_have_load() {
+        // Simulate the failure mode Dan hit in production on 2026-04-23:
+        // ~60 cached blobs starve cairn of MTU budget. The new packing
+        // guarantees CAIRN/CAIRNCLAIM survive.
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
+        let manifest = test_manifest();
+
+        use sha2::Digest;
+        for i in 0..60u32 {
+            let data = format!("blob-{}", i);
+            let sha = hex::encode(sha2::Sha256::digest(data.as_bytes()));
+            cache.write_chunk(&sha, 0, data.as_bytes()).unwrap();
+            cache.assemble(&sha, data.len() as u64, 1).unwrap();
+        }
+
+        let li = CairnLocalInfo {
+            hostname: "danlap".to_string(),
+            users: vec!["dan".to_string()],
+            tags: vec![],
+        };
+        let claims = vec![("cairn:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
+        let packets = build_announcement(
+            &cache.list_blobs(),
+            &cache.list_partials(),
+            &cache,
+            &manifest,
+            Ipv4Addr::new(10, 0, 0, 1),
+            1531,
+            Some(&li),
+            &claims,
+        );
+        let joined: String = packets.join("");
+        assert!(joined.contains("CAIRN:danlap:"), "CAIRN line must survive heavy HAVE load");
+        assert!(joined.contains("CAIRNCLAIM:cairn:danlap:dan:vigo:plex"),
+            "CAIRNCLAIM line must survive heavy HAVE load");
+    }
+
+    #[test]
+    fn build_announcement_spills_cairnclaims_to_second_packet() {
+        // A large-fleet publisher with many cairn labels overflows the
+        // cairn budget of the primary packet. Remaining CAIRNCLAIM
+        // lines land in a second packet on the same cycle.
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
+        let manifest = test_manifest();
+
+        // 30 labels × ~40 bytes each = ~1.2 KB of CAIRNCLAIM, past the
+        // cairn budget (MAX_MSG_SIZE - 300 = 1100 bytes).
+        let claims: Vec<(String, Vec<String>)> = (0..30)
+            .map(|i| {
+                (
+                    format!("cairn:danlap:dan:project-{:02}", i),
+                    vec!["plex".to_string(), "annlap".to_string()],
+                )
+            })
+            .collect();
+        let li = CairnLocalInfo {
+            hostname: "danlap".to_string(),
+            users: vec!["dan".to_string()],
+            tags: vec![],
+        };
+
+        let packets = build_announcement(
+            &[],
+            &[],
+            &cache,
+            &manifest,
+            Ipv4Addr::new(10, 0, 0, 1),
+            1531,
+            Some(&li),
+            &claims,
+        );
+        assert_eq!(packets.len(), 2, "expected a spillover packet");
+        // CAIRN peer line appears in both packets so the receiver can
+        // attribute the claims to a sender regardless of which packet
+        // arrives first.
+        assert!(packets[0].contains("CAIRN:danlap:"));
+        assert!(packets[1].contains("CAIRN:danlap:"));
+        // Every label lands somewhere across the two packets.
+        let joined: String = packets.join("");
+        for i in 0..30 {
+            let label = format!("CAIRNCLAIM:cairn:danlap:dan:project-{:02}:plex,annlap", i);
+            assert!(joined.contains(&label), "missing claim line for {}", i);
+        }
+    }
+
+    #[test]
+    fn build_announcement_spillover_preserves_have_on_primary() {
+        // The primary packet should still carry HAVE lines when it
+        // triggers a cairn spillover — the spillover is additive, not a
+        // replacement. Proves we didn't regress swarm discovery by
+        // fixing cairn.
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
+        let manifest = test_manifest();
+
+        use sha2::Digest;
+        let data = b"a";
+        let sha = hex::encode(sha2::Sha256::digest(data));
+        cache.write_chunk(&sha, 0, data).unwrap();
+        cache.assemble(&sha, data.len() as u64, 1).unwrap();
+
+        let claims: Vec<(String, Vec<String>)> = (0..30)
+            .map(|i| {
+                (
+                    format!("cairn:danlap:dan:project-{:02}", i),
+                    vec!["plex".to_string(), "annlap".to_string()],
+                )
+            })
+            .collect();
+
+        let packets = build_announcement(
+            &cache.list_blobs(),
+            &cache.list_partials(),
+            &cache,
+            &manifest,
+            Ipv4Addr::new(10, 0, 0, 1),
+            1531,
+            None,
+            &claims,
+        );
+        assert!(packets.len() >= 1);
+        assert!(packets[0].contains(&format!("HAVE:{}:1/1", sha)),
+            "primary packet must still carry HAVE lines when spillover is used");
     }
 }

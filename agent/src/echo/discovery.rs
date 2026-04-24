@@ -29,9 +29,19 @@ pub const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 43);
 pub const MULTICAST_PORT: u16 = 1532;
 pub const HEADER: &str = "ECHO-1";
 
-/// Maximum UDP payload we'll send/receive. A typical LAN MTU is 1500; we
-/// allow slightly larger for jumbo-ish frames but cap well under 64 KiB.
-pub const MAX_PAYLOAD: usize = 16 * 1024;
+/// Maximum UDP payload we'll send/receive. The announcement is a JSON
+/// serialization of `UserState` (all of a user's echo files + tombstones
+/// for one machine); per-file overhead is ~150 bytes JSON so the
+/// ceiling is ~400 files per announcement at 64 KiB.
+///
+/// Raised from 16 KiB to 64 KiB in 0.30.10. The old ceiling started
+/// failing loudly (via the `warn!` + drop path below) for users with
+/// dense home directories; 64 KiB matches the UDP payload maximum and
+/// moves the failure horizon out by ~4×. Past this, the correct fix is
+/// paginated announcements (split the file map across multiple packets
+/// with page + total markers). Not done here — tracked in pending.md
+/// as a follow-up for when any real deployment trips the new ceiling.
+pub const MAX_PAYLOAD: usize = 64 * 1024;
 
 /// Received announcement with the sender's socket address attached.
 #[derive(Debug)]
@@ -138,9 +148,16 @@ async fn announce_loop(
                 let payload = match serialize(&ann) {
                     Some(p) if p.len() <= MAX_PAYLOAD => p,
                     Some(p) => {
-                        warn!(bytes = p.len(), limit = MAX_PAYLOAD,
+                        warn!(
+                            bytes = p.len(),
+                            limit = MAX_PAYLOAD,
                             user = %ann.state.user,
-                            "echo announcement too large, dropping");
+                            files = ann.state.files.len(),
+                            tombstones = ann.state.tombstones.len(),
+                            "echo announcement exceeds 64 KiB multicast limit — this user's files will not sync \
+                             until the set shrinks or paginated announcements ship. Consider splitting \
+                             ~/echo into smaller directories or using sigil for larger payloads.",
+                        );
                         continue;
                     }
                     None => continue,
