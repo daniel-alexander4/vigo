@@ -136,11 +136,16 @@ type ReportBuilder struct {
 	// Framework returns a per-framework report (any is *api.ComplianceReport).
 	Framework func(r *http.Request, slug string) (any, error)
 	// EnvoyFrameworkStatus returns per-envoy compliance status for one
-	// framework, using the same math as the framework fleet-row
-	// partition. Single source of truth so the envoy-detail Compliance
-	// tab and the /compliance/<slug> fleet row render identical numbers
-	// for the same envoy. Returns ok=false when slug is unknown.
+	// framework, using the unified scorer's partition. Single source of
+	// truth so the envoy-detail Compliance tab and the /compliance/<slug>
+	// fleet row render identical numbers for the same envoy. Returns
+	// ok=false when slug is unknown.
 	EnvoyFrameworkStatus func(r *http.Request, hostname, slug string) (EnvoyFrameworkStatus, bool)
+	// EnvoyFrameworkDetail returns the per-envoy partition detail for one
+	// framework: Status totals plus a per-control breakdown. Powers the
+	// /envoys/<id>/compliance/<slug> drilldown, which must match the
+	// Standards tab card that linked to it.
+	EnvoyFrameworkDetail func(r *http.Request, hostname, slug string) (*EnvoyFrameworkDetail, bool)
 }
 
 // EnvoyFrameworkStatus is one envoy's bucketed per-framework totals.
@@ -156,6 +161,28 @@ type EnvoyFrameworkStatus struct {
 	Missing         int
 	Total           int
 	CoveragePercent float64
+}
+
+// EnvoyFrameworkDetail pairs the partition totals with a per-control
+// breakdown for rendering the envoy-framework drilldown page. The sum
+// of each status bucket count across Controls equals the corresponding
+// field in Status.
+type EnvoyFrameworkDetail struct {
+	Status   EnvoyFrameworkStatus
+	Controls []ControlStatusRow
+}
+
+// ControlStatusRow is one control's status for one envoy, classified by
+// the unified scorer's partition rule. Status values: "covered" (module
+// tag), "architectural" (framework credits Vigo's construction without a
+// module), "waived", "partial", "missing".
+type ControlStatusRow struct {
+	ControlID          string
+	Title              string
+	Status             string
+	Modules            []string // present when Status == "covered"
+	Evidence           string
+	RecommendedModules []string // present when Status == "missing"
 }
 
 // Handler serves all UI pages.
@@ -2608,18 +2635,44 @@ func (h *Handler) standardsData() StandardsPageData {
 		data.TotalControls = s.Total
 	}
 
-	// Compute waiver alerts from ConfigStore.
+	// Compute waiver alerts — merge config-file + DB-managed waivers.
+	// Same merge the unified scorer uses so the badge count matches the
+	// rows shown on /compliance/waivers.
+	now := time.Now()
+	soonThreshold := now.AddDate(0, 0, 30)
+	countedKeys := make(map[string]bool) // "stdKey|controlID" dedup across sources
+	countWaiver := func(stdKey, controlID, expires string) {
+		key := stdKey + "|" + controlID
+		if countedKeys[key] {
+			return
+		}
+		countedKeys[key] = true
+		data.TotalActiveWaivers++
+		if expires != "" {
+			if exp, err := time.Parse("2006-01-02", expires); err == nil && exp.Before(soonThreshold) {
+				data.ExpiringWaivers++
+			}
+		}
+	}
 	if h.configStore != nil {
-		now := time.Now()
-		soonThreshold := now.AddDate(0, 0, 30)
-		for _, controls := range h.configStore.AllWaivers() {
-			for _, w := range controls {
-				data.TotalActiveWaivers++
-				if w.Expires != "" {
-					if exp, err := time.Parse("2006-01-02", w.Expires); err == nil && exp.Before(soonThreshold) {
-						data.ExpiringWaivers++
-					}
+		for stdKey, controls := range h.configStore.AllWaivers() {
+			for controlID, w := range controls {
+				countWaiver(stdKey, controlID, w.Expires)
+			}
+		}
+	}
+	if h.queries != nil {
+		if dbWaivers, err := h.queries.ListComplianceWaivers(context.Background()); err == nil {
+			for _, w := range dbWaivers {
+				stdKey := w.Framework
+				if mapped, ok := config.StandardKeyForSlug[w.Framework]; ok {
+					stdKey = mapped
 				}
+				expires := ""
+				if w.ExpiresAt.Valid {
+					expires = w.ExpiresAt.Time.Format("2006-01-02")
+				}
+				countWaiver(stdKey, w.ControlID, expires)
 			}
 		}
 	}
@@ -2651,6 +2704,11 @@ func (h *Handler) computeStandardsSummary() standardsSummary {
 }
 
 // standardsFromReport extracts aggregate standards stats from an executive report.
+// Overall percentage is the unweighted mean of per-framework scores — each
+// framework carries equal weight regardless of control count (the ratified
+// semantic, matching what the Executive page shows as its headline score).
+// Display counts sum across frameworks — disjoint buckets from the unified
+// scorer, so no waiver double-counting.
 func (h *Handler) standardsFromReport(report any) standardsSummary {
 	// The report is *api.ExecutiveReport but we can't import it here.
 	// Use the Frameworks field via reflection-free interface assertion.
@@ -2680,15 +2738,28 @@ func (h *Handler) standardsFromReport(report any) standardsSummary {
 	}
 
 	var s standardsSummary
+	var pctSum float64
+	pctCount := 0
 	for _, fw := range r.Frameworks {
+		fwTotal := fw.Satisfied + fw.Waived + fw.Partial + fw.NotSatisfied
+		if fwTotal == 0 {
+			continue
+		}
 		s.Satisfied += fw.Satisfied
 		s.Waived += fw.Waived
 		s.Partial += fw.Partial
 		s.NotSatisfied += fw.NotSatisfied
-		s.Total += fw.Satisfied + fw.Waived + fw.Partial + fw.NotSatisfied
+		s.Total += fwTotal
+		pctSum += fw.ScorePercent
+		pctCount++
 	}
-	if s.Total > 0 {
-		s.Pct = math.Round(float64(s.Satisfied+s.Waived)/float64(s.Total)*1000) / 10
+	if pctCount > 0 {
+		s.Pct = math.Round(pctSum/float64(pctCount)*10) / 10
+	}
+	if s.Pct < 0 || s.Pct > 100 {
+		slog.Warn("standards summary percent outside [0,100] — aggregator invariant broken",
+			"percent", s.Pct, "satisfied", s.Satisfied, "waived", s.Waived,
+			"partial", s.Partial, "not_satisfied", s.NotSatisfied, "total", s.Total)
 	}
 	return s
 }
@@ -2721,13 +2792,64 @@ func (h *Handler) ComplianceWaivers(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	soonThreshold := now.AddDate(0, 0, 30)
 
-	if h.configStore != nil {
-		allWaivers := h.configStore.AllWaivers()
+	// Collect config-file waivers and DB-managed waivers into a single
+	// (standardKey → controlID → entry) map. Same merge the unified scorer
+	// does — without it, DB-created waivers silently influence every
+	// compliance score but never appear on this page.
+	type mergedEntry struct {
+		reason     string
+		approvedBy string
+		expires    string
+	}
+	merged := make(map[string]map[string]mergedEntry) // standardKey → controlID → entry
 
+	if h.configStore != nil {
+		for stdKey, controls := range h.configStore.AllWaivers() {
+			if _, ok := merged[stdKey]; !ok {
+				merged[stdKey] = make(map[string]mergedEntry)
+			}
+			for controlID, w := range controls {
+				merged[stdKey][controlID] = mergedEntry{
+					reason:     w.Reason,
+					approvedBy: w.ApprovedBy,
+					expires:    w.Expires,
+				}
+			}
+		}
+	}
+	if h.queries != nil {
+		if dbWaivers, err := h.queries.ListComplianceWaivers(r.Context()); err == nil {
+			for _, w := range dbWaivers {
+				stdKey := w.Framework
+				if mapped, ok := config.StandardKeyForSlug[w.Framework]; ok {
+					stdKey = mapped
+				}
+				if _, ok := merged[stdKey]; !ok {
+					merged[stdKey] = make(map[string]mergedEntry)
+				}
+				// Config-file waiver wins on conflict — operators edit
+				// those directly, DB waivers are convenience-API only.
+				if _, present := merged[stdKey][w.ControlID]; present {
+					continue
+				}
+				expires := ""
+				if w.ExpiresAt.Valid {
+					expires = w.ExpiresAt.Time.Format("2006-01-02")
+				}
+				merged[stdKey][w.ControlID] = mergedEntry{
+					reason:     w.Reason,
+					approvedBy: w.Approver,
+					expires:    expires,
+				}
+			}
+		}
+	}
+
+	if h.configStore != nil {
 		// Build set of all covered controls per standard across fleet.
 		coveredControls := make(map[string]map[string]bool) // standard → controlID → true
 
-		for stdKey := range allWaivers {
+		for stdKey := range merged {
 			controlIndex := h.configStore.ComplianceControlIndex(stdKey)
 			if controlIndex == nil {
 				continue
@@ -2740,22 +2862,21 @@ func (h *Handler) ComplianceWaivers(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Build rows sorted by expiry (soonest first).
-		for stdKey, controls := range allWaivers {
+		for stdKey, controls := range merged {
 			displayName := standardDisplayName(stdKey)
 			covered := coveredControls[stdKey]
-			for controlID, w := range controls {
+			for controlID, entry := range controls {
 				row := waiverRow{
 					Framework:    displayName,
 					FrameworkKey: stdKey,
 					Control:      controlID,
-					Reason:       w.Reason,
-					ApprovedBy:   w.ApprovedBy,
-					Expires:      w.Expires,
+					Reason:       entry.reason,
+					ApprovedBy:   entry.approvedBy,
+					Expires:      entry.expires,
 					Enforced:     covered[controlID],
 				}
-				if w.Expires != "" {
-					if exp, err := time.Parse("2006-01-02", w.Expires); err == nil && exp.Before(soonThreshold) {
+				if entry.expires != "" {
+					if exp, err := time.Parse("2006-01-02", entry.expires); err == nil && exp.Before(soonThreshold) {
 						row.ExpiringSoon = true
 					}
 				}
@@ -3814,14 +3935,18 @@ type MissingControlRec struct {
 }
 
 // EnvoyStandardCoverageData holds data for the per-envoy standard coverage fragment.
+// Status and Controls come from the unified scorer so the drilldown's header
+// numbers match the Standards tab card that linked to it; Covered +
+// Waived + Partial + Missing = Total by construction.
 type EnvoyStandardCoverageData struct {
-	EnvoyID          string
-	Hostname         string
-	FrameworkTitle   string
-	Coverage         *config.StandardCoverage
-	MissingWithRecs  []MissingControlRec
-	ModuleConvergence string // envoy convergence status (converged, failed, etc.)
-	ModulePct        float64 // module convergence percentage (100 = all modules converged)
+	EnvoyID           string
+	Hostname          string
+	FrameworkTitle    string
+	Status            EnvoyFrameworkStatus
+	Controls          []ControlStatusRow
+	ModuleConvergence string  // envoy convergence status (converged, failed, etc.)
+	ModulePct         float64 // module convergence percentage (100 = all modules converged)
+	Unavailable       bool    // true when no findings could be produced (framework disabled, slug unknown, etc.)
 }
 
 // AttackSurfaceData holds data for the envoy attack surface tab.
@@ -4060,6 +4185,8 @@ func (h *Handler) EnvoyComplianceDetail(w http.ResponseWriter, r *http.Request) 
 }
 
 // EnvoyStandardCoverageFragment renders the per-envoy standard coverage content.
+// Routes through ReportBuilder.EnvoyFrameworkDetail so the header numbers
+// match the Standards tab card that linked here (same partition math).
 func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	fw := r.PathValue("framework")
@@ -4100,27 +4227,25 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 		modPct = 25
 	}
 
-	coverage := h.configStore.EnvoyStandardCoverage(detail.Envoy.Hostname, standardKey)
-
-	// Build recommendations for missing controls.
-	var missingRecs []MissingControlRec
-	if coverage != nil {
-		for _, controlID := range coverage.MissingControls {
-			rec := MissingControlRec{ControlID: controlID}
-			rec.RecommendedModules = h.configStore.RecommendModulesForControl(standardKey, controlID)
-			missingRecs = append(missingRecs, rec)
-		}
-	}
-
 	data := EnvoyStandardCoverageData{
-		EnvoyID:          idStr,
-		Hostname:         detail.Envoy.Hostname,
-		FrameworkTitle:   standardDisplayNameFromSlug(fw),
-		Coverage:         coverage,
-		MissingWithRecs:  missingRecs,
+		EnvoyID:           idStr,
+		Hostname:          detail.Envoy.Hostname,
+		FrameworkTitle:    standardDisplayNameFromSlug(fw),
 		ModuleConvergence: detail.Envoy.Status,
-		ModulePct:        modPct,
+		ModulePct:         modPct,
 	}
+
+	if h.reportBuilder != nil && h.reportBuilder.EnvoyFrameworkDetail != nil {
+		if d, ok := h.reportBuilder.EnvoyFrameworkDetail(r, detail.Envoy.Hostname, fw); ok {
+			data.Status = d.Status
+			data.Controls = d.Controls
+		} else {
+			data.Unavailable = true
+		}
+	} else {
+		data.Unavailable = true
+	}
+
 	h.renderer.RenderFragment(w, "envoy-compliance-detail", "envoy-standard-coverage-fragment", data)
 }
 

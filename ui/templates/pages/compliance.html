@@ -48,7 +48,7 @@
         <span class="compliance-gauge__pct" style="color:{{pctColorInv .StandardsPct}}">
             {{printf "%.0f" .StandardsPct}}%
         </span>
-        <span class="compliance-gauge__label">of {{.TotalControls}} controls satisfied across all active frameworks</span>
+        <span class="compliance-gauge__label">compliance score &middot; mean of active framework scores &middot; {{.TotalControls}} controls across frameworks</span>
     </div>
     <div class="compliance-gauge__bar">
         {{if gt .TotalControls 0}}

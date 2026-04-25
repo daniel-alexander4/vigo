@@ -11,7 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"net"
 	"net/http"
 	"os"
@@ -743,20 +742,9 @@ func run() error {
 		}
 	}()
 
-	// Start daily standards compliance snapshotting.
-	go func() {
-		persistComplianceSnapshot(ctx, queries, fleetIndex, configStore)
-		ticker := time.NewTicker(24 * time.Hour)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				persistComplianceSnapshot(ctx, queries, fleetIndex, configStore)
-			}
-		}
-	}()
+	// Daily standards compliance snapshot — goroutine started below after
+	// reportHandler is constructed so the snapshot job can route through the
+	// unified scorer.
 
 	// Start MTTR stats computation (daily, on same cadence as compliance snapshots).
 	go func() {
@@ -841,6 +829,21 @@ func run() error {
 	queryHandler := api.NewQueryHandler(agentSvc)
 	exportHandler := api.NewExportHandler(queries, fleetIndex, configStore, cfg.Export)
 	reportHandler := api.NewReportHandler(queries, fleetIndex, configStore, version)
+
+	// Start daily standards compliance snapshotting through the unified scorer.
+	go func() {
+		persistComplianceSnapshot(ctx, queries, configStore, reportHandler)
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				persistComplianceSnapshot(ctx, queries, configStore, reportHandler)
+			}
+		}
+	}()
 	cveHandler := api.NewCVEHandler(fleetIndex)
 	peerHandler := api.NewPeerHandler(peerSvc)
 
@@ -1030,6 +1033,7 @@ func run() error {
 				return reportHandler.BuildFrameworkReport(r, slug)
 			},
 			EnvoyFrameworkStatus: reportHandler.ComputeEnvoyFrameworkStatus,
+			EnvoyFrameworkDetail: reportHandler.ComputeEnvoyFrameworkDetail,
 		})
 		uiHandler.SetIntegrationsConfig(cfg.Integrations, cfg.GRC)
 		uiHandler.SetTraitLookup(&traitLookupAdapter{fleetIndex: fleetIndex})
@@ -2159,114 +2163,65 @@ func migrateConvergenceHistory(sqlDB *sql.DB) {
 }
 
 // persistComplianceSnapshot writes per-framework standards compliance
-// scores to the compliance_history table. Runs daily.
-func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex, configStore *config.ConfigStore) {
-	if configStore == nil {
+// scores to the compliance_history table. Runs daily. Routes through the
+// unified scorer (api.ReportHandler.ComputeFrameworkScoreCtx) so the
+// snapshot numbers agree with every live UI page.
+func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, configStore *config.ConfigStore, reportHandler *api.ReportHandler) {
+	if configStore == nil || reportHandler == nil {
 		return
-	}
-	envoys := fleetIdx.AllEnvoys()
-	var activeHostnames []string
-	for _, e := range envoys {
-		if !e.Revoked {
-			activeHostnames = append(activeHostnames, e.Hostname)
-		}
 	}
 
 	type fwEntry struct {
 		name        string
+		slug        string
 		standardKey string
 	}
 	fwDefs := []fwEntry{
-		{"HIPAA", "hipaa"},
-		{"HITRUST CSF", "hitrust"},
-		{"SOC 2", "soc2"},
-		{"PCI DSS v4.0", "pci-dss"},
-		{"NIST 800-53", "nist-800-53"},
-		{"ISO 27001", "iso-27001"},
-		{"GDPR", "gdpr"},
-		{"NERC CIP", "nerc-cip"},
-		{"Cyber Essentials+", "cyber-essentials"},
-		{"IEC 62443", "iec-62443"},
-		{"SOX", "sox"},
-		{"FINRA", "finra"},
-		{"MiFID II", "mifid2"},
-		{"CCSS", "ccss"},
-		{"FDA 21 CFR Part 11", "fda-21cfr11"},
-		{"Gaming Commission", "gaming"},
-		{"CIS Windows", "cis-windows"},
-		{"CIS Ubuntu", "cis-ubuntu"},
-		{"CIS RHEL", "cis-rhel"},
-		{"ABA Cybersecurity", "aba-cyber"},
-		{"NY DFS Cyber (23 NYCRR 500)", "ny-dfs-cyber"},
+		{"HIPAA", "compliance", "hipaa"},
+		{"HITRUST CSF", "hitrust", "hitrust"},
+		{"SOC 2", "soc2", "soc2"},
+		{"PCI DSS v4.0", "pci", "pci-dss"},
+		{"NIST 800-53", "nist", "nist-800-53"},
+		{"ISO 27001", "iso27001", "iso-27001"},
+		{"GDPR", "gdpr", "gdpr"},
+		{"NERC CIP", "nerccip", "nerc-cip"},
+		{"Cyber Essentials+", "cyberessentials", "cyber-essentials"},
+		{"IEC 62443", "iec62443", "iec-62443"},
+		{"SOX", "sox", "sox"},
+		{"FINRA", "finra", "finra"},
+		{"MiFID II", "mifid2", "mifid2"},
+		{"CCSS", "ccss", "ccss"},
+		{"FDA 21 CFR Part 11", "fda21cfr11", "fda-21cfr11"},
+		{"Gaming Commission", "gaming", "gaming"},
+		{"CIS Windows", "ciswindows", "cis-windows"},
+		{"CIS Ubuntu", "cisubuntu", "cis-ubuntu"},
+		{"CIS RHEL", "cisrhel", "cis-rhel"},
+		{"ABA Cybersecurity", "abacyber", "aba-cyber"},
+		{"NY DFS Cyber (23 NYCRR 500)", "nydfscyber", "ny-dfs-cyber"},
 	}
 
-	// Load all active waivers once and group by framework slug.
-	waivedBySlug := make(map[string]map[string]bool)
-	if waivers, err := queries.ListComplianceWaivers(ctx); err == nil {
-		for _, w := range waivers {
-			if _, ok := waivedBySlug[w.Framework]; !ok {
-				waivedBySlug[w.Framework] = make(map[string]bool)
-			}
-			waivedBySlug[w.Framework][w.ControlID] = true
-		}
-	}
-
+	recorded := 0
 	for _, fw := range fwDefs {
 		if !configStore.IsStandardEnabled(fw.standardKey) {
 			continue
 		}
-
-		var totalControls, totalCovered, totalMissing int
-		envoyCount := 0
-
-		// Find the URL slug for this framework's standard key so we can look up waivers.
-		slug := config.SlugForStandardKey[fw.standardKey]
-		waivedControls := waivedBySlug[slug]
-
-		for _, hostname := range activeHostnames {
-			cov := configStore.EnvoyStandardCoverage(hostname, fw.standardKey)
-			if cov == nil || cov.TotalControls == 0 {
-				continue
-			}
-			envoyCount++
-			totalControls = cov.TotalControls
-
-			covered := len(cov.CoveredControls)
-			missing := len(cov.MissingControls)
-
-			// Waived missing controls count as covered.
-			if len(waivedControls) > 0 {
-				for _, mc := range cov.MissingControls {
-					if waivedControls[mc] {
-						covered++
-						missing--
-					}
-				}
-			}
-
-			totalCovered += covered
-			totalMissing += missing
-		}
-		scorePct := float64(0)
-		satisfied := 0
-		notSatisfied := 0
-		if envoyCount > 0 && totalControls > 0 {
-			avgCovered := float64(totalCovered) / float64(envoyCount)
-			avgMissing := float64(totalMissing) / float64(envoyCount)
-			scorePct = math.Round(avgCovered/float64(totalControls)*1000) / 10
-			satisfied = int(math.Round(avgCovered))
-			notSatisfied = int(math.Round(avgMissing))
+		score, ok := reportHandler.ComputeFrameworkScoreCtx(ctx, fw.slug)
+		if !ok {
+			slog.Warn("compliance snapshot: scorer returned not-ok", "framework", fw.name, "slug", fw.slug)
+			continue
 		}
 		if err := queries.UpsertComplianceSnapshot(ctx, db.UpsertComplianceSnapshotParams{
 			Framework:     fw.name,
-			ScorePercent:  scorePct,
-			Satisfied:     int64(satisfied),
-			Partial:       0, // coverage-based scoring is binary; partial comes from findings
-			NotSatisfied:  int64(notSatisfied),
-			TotalControls: int64(totalControls),
+			ScorePercent:  score.Fleet.CoveragePercent,
+			Satisfied:     int64(score.Fleet.Covered),
+			Partial:       int64(score.Fleet.Partial),
+			NotSatisfied:  int64(score.Fleet.Missing),
+			TotalControls: int64(score.Total),
 		}); err != nil {
 			slog.Error("failed to persist compliance snapshot", "framework", fw.name, "error", err)
+			continue
 		}
+		recorded++
 	}
-	slog.Info("compliance snapshot recorded", "frameworks", len(fwDefs))
+	slog.Info("compliance snapshot recorded", "frameworks", recorded)
 }

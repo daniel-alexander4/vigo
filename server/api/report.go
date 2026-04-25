@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -124,11 +125,11 @@ type frameworkDef struct {
 }
 
 // frameworkDef returns the framework metadata + findings builder for a slug.
-// The builders capture r so audit-chain context reaches HITRUST/SOC 2/etc.
-func (h *ReportHandler) frameworkDef(r *http.Request, slug string) (frameworkDef, bool) {
-	as := h.auditStatusFromRequest(r)
+// Callers must pass a pre-computed AuditChainStatus so the same status can be
+// shared across every findings-builder invocation in a single scoring pass.
+func (h *ReportHandler) frameworkDef(as AuditChainStatus, slug string) (frameworkDef, bool) {
 	fws := map[string]frameworkDef{
-		"compliance":      {"HIPAA Compliance Report", "HIPAA", func() []ControlFinding { return h.hipaaControls(r) }},
+		"compliance":      {"HIPAA Compliance Report", "HIPAA", func() []ControlFinding { return h.buildControlFindings(h.fleetIndex.ConvergenceSummary(), as) }},
 		"hitrust":         {"HITRUST CSF Compliance Report", "HITRUST CSF", func() []ControlFinding { return h.buildHITRUSTFindings(as) }},
 		"soc2":            {"SOC 2 Trust Services Criteria Report", "SOC 2", func() []ControlFinding { return h.buildSOC2Findings(as) }},
 		"pci":             {"PCI DSS v4.0 Compliance Report", "PCI DSS v4.0", func() []ControlFinding { return h.buildPCIDSSFindings(as) }},
@@ -160,7 +161,7 @@ func (h *ReportHandler) frameworkDef(r *http.Request, slug string) (frameworkDef
 // the DB. A waiver promotes a not-satisfied finding to "waived" but never
 // overrides a "satisfied" status (already-passing controls keep passing;
 // the waiver badge still surfaces in the evidence string).
-func (h *ReportHandler) buildFrameworkFindings(r *http.Request, slug string, fw frameworkDef) []ControlFinding {
+func (h *ReportHandler) buildFrameworkFindings(ctx context.Context, slug string, fw frameworkDef) []ControlFinding {
 	findings := fw.controls()
 	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
 		if fileWaivers := h.configStore.Waivers(standardKey); len(fileWaivers) > 0 {
@@ -174,7 +175,7 @@ func (h *ReportHandler) buildFrameworkFindings(r *http.Request, slug string, fw 
 			}
 		}
 	}
-	if waivers, err := h.queries.ListComplianceWaiversByFramework(r.Context(), slug); err == nil {
+	if waivers, err := h.queries.ListComplianceWaiversByFramework(ctx, slug); err == nil {
 		for i := range findings {
 			for _, w := range waivers {
 				if w.ControlID == findings[i].ControlID {
@@ -235,53 +236,282 @@ func partitionEnvoyFindings(findings []ControlFinding, coverage *config.Standard
 }
 
 // ComputeEnvoyFrameworkStatus returns per-envoy compliance numbers for one
-// framework. This is the single source of truth — both BuildFrameworkReport
-// (framework page fleet row) and the envoy-detail Compliance tab call this
-// (indirectly via ReportBuilder), guaranteeing the two pages render
-// identical numbers for the same envoy.
+// framework. Thin wrapper over ComputeFrameworkScore — kept because the
+// envoy-detail Compliance tab asks about a single hostname and this is
+// the cheapest way to answer.
 func (h *ReportHandler) ComputeEnvoyFrameworkStatus(r *http.Request, hostname, slug string) (ui.EnvoyFrameworkStatus, bool) {
-	fw, ok := h.frameworkDef(r, slug)
+	score, ok := h.ComputeFrameworkScore(r, slug)
 	if !ok {
 		return ui.EnvoyFrameworkStatus{}, false
 	}
-	findings := h.buildFrameworkFindings(r, slug, fw)
+	if st, present := score.PerEnvoy[hostname]; present {
+		return st, true
+	}
+	// Envoy not in the active fleet index — partition anyway using
+	// whatever coverage the config store has. Keeps the drilldown and
+	// envoy-detail usable for envoys that are enrolled but have no
+	// recent activity.
 	var coverage *config.StandardCoverage
 	if standardKey, keyOK := config.StandardKeyForSlug[slug]; keyOK {
 		coverage = h.configStore.EnvoyStandardCoverage(hostname, standardKey)
 	}
-	covered, waived, partial, missing := partitionEnvoyFindings(findings, coverage)
-	total := len(findings)
+	covered, waived, partial, missing := partitionEnvoyFindings(score.Controls, coverage)
 	pct := 0.0
-	if total > 0 {
-		pct = float64(covered) / float64(total) * 100
+	if score.Total > 0 {
+		pct = float64(covered) / float64(score.Total) * 100
 	}
 	return ui.EnvoyFrameworkStatus{
 		Covered:         covered,
 		Waived:          waived,
 		Partial:         partial,
 		Missing:         missing,
-		Total:           total,
+		Total:           score.Total,
 		CoveragePercent: pct,
 	}, true
+}
+
+// ComputeEnvoyFrameworkDetail returns the per-envoy partition detail for
+// one framework: totals plus a per-control status breakdown. Used by the
+// /envoys/<id>/compliance/<slug> drilldown so the page agrees with the
+// Standards tab card that linked to it.
+func (h *ReportHandler) ComputeEnvoyFrameworkDetail(r *http.Request, hostname, slug string) (*ui.EnvoyFrameworkDetail, bool) {
+	score, ok := h.ComputeFrameworkScore(r, slug)
+	if !ok {
+		return nil, false
+	}
+
+	standardKey, _ := config.StandardKeyForSlug[slug]
+	var coverage *config.StandardCoverage
+	if standardKey != "" {
+		coverage = h.configStore.EnvoyStandardCoverage(hostname, standardKey)
+	}
+	coveredByModules := make(map[string][]string)
+	if coverage != nil {
+		for _, cc := range coverage.CoveredControls {
+			coveredByModules[cc.ControlID] = cc.Modules
+		}
+	}
+
+	rows := make([]ui.ControlStatusRow, 0, len(score.Controls))
+	for _, f := range score.Controls {
+		row := ui.ControlStatusRow{
+			ControlID: f.ControlID,
+			Title:     f.Title,
+			Evidence:  f.Evidence,
+		}
+		switch {
+		case len(coveredByModules[f.ControlID]) > 0:
+			row.Status = "covered"
+			row.Modules = coveredByModules[f.ControlID]
+		case f.Status == "satisfied":
+			row.Status = "architectural"
+		case f.Status == "waived":
+			row.Status = "waived"
+		case f.Status == "partial":
+			row.Status = "partial"
+		default:
+			row.Status = "missing"
+			if standardKey != "" {
+				row.RecommendedModules = h.configStore.RecommendModulesForControl(standardKey, f.ControlID)
+			}
+		}
+		rows = append(rows, row)
+	}
+
+	status, _ := h.ComputeEnvoyFrameworkStatus(r, hostname, slug)
+	return &ui.EnvoyFrameworkDetail{
+		Status:   status,
+		Controls: rows,
+	}, true
+}
+
+// FrameworkScore is the authoritative compliance score for one framework,
+// computed by the single-source-of-truth scorer. Every compliance UI
+// surface derives its displayed numbers from this struct — per-envoy fleet
+// rows from PerEnvoy, framework-page summary cards and the compliance
+// overview cards from Fleet, daily snapshots from Fleet. Direct access to
+// PerEnvoy also powers the envoy-detail Standards tab and its drilldown
+// page.
+type FrameworkScore struct {
+	Slug  string
+	Name  string
+	Title string
+	Total int // framework control count (N)
+
+	// Fleet is the macro-averaged aggregate across all active envoys.
+	// Covered + Waived + Partial + Missing == Total (forced balance).
+	Fleet FrameworkFleetAggregate
+
+	// PerEnvoy is the partition result for every active envoy, keyed by
+	// hostname. Covered + Waived + Partial + Missing == Total for each
+	// entry.
+	PerEnvoy map[string]ui.EnvoyFrameworkStatus
+
+	// Controls is the findings list with waivers applied.
+	Controls []ControlFinding
+}
+
+// FrameworkFleetAggregate summarizes a framework across all active envoys
+// using macro-averaging (mean of per-envoy values). Covered + Waived +
+// Partial + Missing == Total by construction.
+type FrameworkFleetAggregate struct {
+	ActiveEnvoys    int
+	Total           int     // framework control count (N)
+	Covered         int     // round(mean(per-envoy covered))
+	Waived          int     // round(mean(per-envoy waived))
+	Partial         int     // round(mean(per-envoy partial))
+	Missing         int     // Total - Covered - Waived - Partial (balanced)
+	CoveragePercent float64 // mean of per-envoy CoveragePercent, 1-decimal rounded
+}
+
+// ComputeFrameworkScore is the single source of truth for framework
+// compliance scoring. Every compliance UI surface and the daily snapshot
+// job must derive their numbers from this function. Returns ok=false
+// when the slug is unknown.
+func (h *ReportHandler) ComputeFrameworkScore(r *http.Request, slug string) (*FrameworkScore, bool) {
+	return h.computeFrameworkScore(r.Context(), h.auditStatusFromRequest(r), slug)
+}
+
+// ComputeFrameworkScoreCtx is the context-only variant for callers without
+// an *http.Request (the daily snapshot job in server/main.go). Performs
+// its own audit-chain lookup.
+func (h *ReportHandler) ComputeFrameworkScoreCtx(ctx context.Context, slug string) (*FrameworkScore, bool) {
+	var as AuditChainStatus
+	if v, err := audit.Verify(ctx, h.queries); err == nil {
+		as.Valid = v.Valid
+		as.EntryCount = v.EntryCount
+		as.Error = v.Error
+	}
+	return h.computeFrameworkScore(ctx, as, slug)
+}
+
+func (h *ReportHandler) computeFrameworkScore(ctx context.Context, as AuditChainStatus, slug string) (*FrameworkScore, bool) {
+	fw, ok := h.frameworkDef(as, slug)
+	if !ok {
+		return nil, false
+	}
+	findings := h.buildFrameworkFindings(ctx, slug, fw)
+	total := len(findings)
+
+	score := &FrameworkScore{
+		Slug:     slug,
+		Name:     fw.name,
+		Title:    fw.title,
+		Total:    total,
+		PerEnvoy: make(map[string]ui.EnvoyFrameworkStatus),
+		Controls: findings,
+	}
+
+	standardKey, hasKey := config.StandardKeyForSlug[slug]
+
+	var activeHostnames []string
+	if h.fleetIndex != nil {
+		for _, e := range h.fleetIndex.AllEnvoys() {
+			if !e.Revoked {
+				activeHostnames = append(activeHostnames, e.Hostname)
+			}
+		}
+	}
+
+	for _, hostname := range activeHostnames {
+		var coverage *config.StandardCoverage
+		if hasKey {
+			coverage = h.configStore.EnvoyStandardCoverage(hostname, standardKey)
+		}
+		covered, waived, partial, missing := partitionEnvoyFindings(findings, coverage)
+		pct := 0.0
+		if total > 0 {
+			pct = float64(covered) / float64(total) * 100
+		}
+		score.PerEnvoy[hostname] = ui.EnvoyFrameworkStatus{
+			Covered:         covered,
+			Waived:          waived,
+			Partial:         partial,
+			Missing:         missing,
+			Total:           total,
+			CoveragePercent: pct,
+		}
+	}
+
+	score.Fleet = aggregateFleetPartitions(score.PerEnvoy, total)
+
+	if score.Fleet.CoveragePercent < 0 || score.Fleet.CoveragePercent > 100 {
+		slog.Warn("compliance score outside [0,100] — scorer invariant broken",
+			"slug", slug, "percent", score.Fleet.CoveragePercent,
+			"covered", score.Fleet.Covered, "waived", score.Fleet.Waived,
+			"partial", score.Fleet.Partial, "missing", score.Fleet.Missing, "total", total)
+	}
+	slog.Debug("framework score computed",
+		"slug", slug, "envoys", score.Fleet.ActiveEnvoys,
+		"covered", score.Fleet.Covered, "waived", score.Fleet.Waived,
+		"partial", score.Fleet.Partial, "missing", score.Fleet.Missing,
+		"total", total, "score_pct", score.Fleet.CoveragePercent)
+
+	return score, true
+}
+
+// aggregateFleetPartitions macro-averages per-envoy partition counts into
+// a single fleet aggregate. Buckets are rounded; Missing is forced so
+// Covered + Waived + Partial + Missing == Total. CoveragePercent is the
+// unweighted mean of per-envoy CoveragePercent, rounded to one decimal.
+// Split out for testability — invariants are pure arithmetic that should
+// not require a full fleet+configStore fixture.
+func aggregateFleetPartitions(perEnvoy map[string]ui.EnvoyFrameworkStatus, total int) FrameworkFleetAggregate {
+	agg := FrameworkFleetAggregate{
+		ActiveEnvoys: len(perEnvoy),
+		Total:        total,
+	}
+	if agg.ActiveEnvoys == 0 || total == 0 {
+		return agg
+	}
+	var sumCovered, sumWaived, sumPartial, sumPct float64
+	for _, st := range perEnvoy {
+		sumCovered += float64(st.Covered)
+		sumWaived += float64(st.Waived)
+		sumPartial += float64(st.Partial)
+		sumPct += st.CoveragePercent
+	}
+	inv := 1.0 / float64(agg.ActiveEnvoys)
+	agg.Covered = int(math.Round(sumCovered * inv))
+	agg.Waived = int(math.Round(sumWaived * inv))
+	agg.Partial = int(math.Round(sumPartial * inv))
+	// If rounding pushed the non-missing buckets past Total, trim from the
+	// largest so the bars sum to Total and Missing stays ≥ 0.
+	if sum := agg.Covered + agg.Waived + agg.Partial; sum > total {
+		overshoot := sum - total
+		switch {
+		case agg.Covered >= agg.Waived && agg.Covered >= agg.Partial:
+			agg.Covered -= overshoot
+		case agg.Waived >= agg.Partial:
+			agg.Waived -= overshoot
+		default:
+			agg.Partial -= overshoot
+		}
+	}
+	agg.Missing = total - agg.Covered - agg.Waived - agg.Partial
+	if agg.Missing < 0 {
+		agg.Missing = 0
+	}
+	agg.CoveragePercent = math.Round(sumPct*inv*10) / 10
+	return agg
 }
 
 // BuildFrameworkReport builds a compliance report for the given framework slug.
 // Returns nil if the slug is unknown. Exported for use by the UI handler.
 func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*ComplianceReport, error) {
-	fw, ok := h.frameworkDef(r, slug)
+	score, ok := h.ComputeFrameworkScore(r, slug)
 	if !ok {
 		return nil, fmt.Errorf("unknown framework: %s", slug)
 	}
-	findings := h.buildFrameworkFindings(r, slug, fw)
+	findings := score.Controls
 
-	report, err := h.BuildReport(r, fw.title, findings)
+	report, err := h.BuildReport(r, score.Title, findings)
 	if err != nil {
 		return nil, err
 	}
 	report.Slug = slug
-	report.FrameworkName = fw.name
+	report.FrameworkName = score.Name
 
-	frameworkTotalControls := len(findings)
 	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
 		// Collect per-envoy module sets for per-control coverage calculation.
 		type envoyModules struct {
@@ -292,18 +522,16 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 
 		for i := range report.Fleet {
 			node := &report.Fleet[i]
-			coverage := h.configStore.EnvoyStandardCoverage(node.Hostname, standardKey)
-			covered, waived, partial, missing := partitionEnvoyFindings(findings, coverage)
-			node.TotalControls = frameworkTotalControls
-			node.CoveredControls = covered
-			node.WaivedCount = waived
-			node.PartialCount = partial
-			node.MissingCount = missing
-			node.CoveragePercent = 0
-			if frameworkTotalControls > 0 {
-				node.CoveragePercent = float64(covered) / float64(frameworkTotalControls) * 100
+			if st, present := score.PerEnvoy[node.Hostname]; present {
+				node.TotalControls = st.Total
+				node.CoveredControls = st.Covered
+				node.WaivedCount = st.Waived
+				node.PartialCount = st.Partial
+				node.MissingCount = st.Missing
+				node.CoveragePercent = st.CoveragePercent
 			}
 
+			coverage := h.configStore.EnvoyStandardCoverage(node.Hostname, standardKey)
 			mods := make(map[string]bool)
 			if coverage != nil {
 				for _, cc := range coverage.CoveredControls {
@@ -375,23 +603,17 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 		}
 	}
 
-	// Recompute fleet-average summary from the corrected per-envoy data.
-	var fleetCoverageSum float64
-	fleetCoverageCount := 0
-	for _, n := range report.Fleet {
-		if n.TotalControls > 0 {
-			fleetCoverageSum += n.CoveragePercent
-			fleetCoverageCount++
-		}
-	}
-	if fleetCoverageCount > 0 && frameworkTotalControls > 0 {
-		fleetPct := math.Round(fleetCoverageSum/float64(fleetCoverageCount)*10) / 10
-		report.Summary.CoveragePercent = fleetPct
-		avgCovered := fleetPct / 100 * float64(frameworkTotalControls)
-		report.Summary.Satisfied = int(math.Round(avgCovered))
-		report.Summary.NotSatisfied = frameworkTotalControls - report.Summary.Satisfied
-		report.Summary.Partial = 0
-		report.Summary.TotalControls = frameworkTotalControls
+	// Summary comes straight from the unified scorer's fleet aggregate —
+	// macro-averaged per-envoy buckets that balance to Total by construction.
+	// Real Partial count, real Waived count (no more forced zeros, no more
+	// Satisfied synthesized from avg%×Total).
+	if score.Fleet.ActiveEnvoys > 0 {
+		report.Summary.CoveragePercent = score.Fleet.CoveragePercent
+		report.Summary.Satisfied = score.Fleet.Covered
+		report.Summary.Waived = score.Fleet.Waived
+		report.Summary.Partial = score.Fleet.Partial
+		report.Summary.NotSatisfied = score.Fleet.Missing
+		report.Summary.TotalControls = score.Fleet.Total
 	}
 
 	return report, nil
@@ -412,13 +634,16 @@ type ComplianceReport struct {
 }
 
 // ComplianceReportSummary is the top-level compliance summary.
+// Satisfied + Waived + Partial + NotSatisfied == TotalControls by construction
+// (the unified scorer balances rounding into Missing).
 type ComplianceReportSummary struct {
 	TotalNodes         int     `json:"total_nodes"`
 	Satisfied          int     `json:"satisfied"`
+	Waived             int     `json:"waived"`
 	Partial            int     `json:"partial"`
 	NotSatisfied       int     `json:"not_satisfied"`
 	TotalControls      int     `json:"total_controls"`
-	CoveragePercent    float64 `json:"coverage_percent"`    // fleet-average module coverage
+	CoveragePercent    float64 `json:"coverage_percent"` // fleet macro-average
 	ConvergencePercent float64 `json:"convergence_percent"`
 	// Convergence breakdown (kept for JSON API consumers).
 	Converged   int `json:"converged"`
@@ -2012,165 +2237,63 @@ func complianceRating(pct float64) string {
 	}
 }
 
-// buildFrameworkCoverage computes per-standard compliance scores using the
-// authoritative findings functions (which correctly distinguish satisfied,
-// partial, and not_satisfied). Active waivers boost not_satisfied/partial
-// controls to satisfied.
+// buildFrameworkCoverage computes per-standard compliance scores for every
+// enabled framework. Routes through the single-source-of-truth scorer so
+// these numbers agree with the per-framework page and the envoy-detail
+// Standards tab. Buckets are disjoint (Covered / Waived / Partial / Missing),
+// so callers that sum them get sensible totals without waiver double-counting.
 func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSummary {
 	if h.configStore == nil {
 		return nil
 	}
 
-	as := h.auditStatusFromRequest(r)
-
+	// Ordered list of (name, slug) pairs so Executive report slug lookups
+	// stay stable across enablement changes.
 	type fwEntry struct {
-		name     string
-		slug     string
-		controls func() []ControlFinding
+		name string
+		slug string
 	}
 	fwDefs := []fwEntry{
-		{"HIPAA", "compliance", func() []ControlFinding { return h.buildControlFindings(h.fleetIndex.ConvergenceSummary(), as) }},
-		{"HITRUST CSF", "hitrust", func() []ControlFinding { return h.buildHITRUSTFindings(as) }},
-		{"SOC 2", "soc2", func() []ControlFinding { return h.buildSOC2Findings(as) }},
-		{"PCI DSS v4.0", "pci", func() []ControlFinding { return h.buildPCIDSSFindings(as) }},
-		{"NIST 800-53", "nist", func() []ControlFinding { return h.buildNIST80053Findings(as) }},
-		{"ISO 27001", "iso27001", func() []ControlFinding { return h.buildISO27001Findings(as) }},
-		{"GDPR", "gdpr", func() []ControlFinding { return h.buildGDPRFindings(as) }},
-		{"NERC CIP", "nerccip", func() []ControlFinding { return h.buildNERCCIPFindings(as) }},
-		{"Cyber Essentials+", "cyberessentials", func() []ControlFinding { return h.buildCyberEssentialsPlusFindings(as) }},
-		{"IEC 62443", "iec62443", func() []ControlFinding { return h.buildIEC62443Findings(as) }},
-		{"SOX", "sox", func() []ControlFinding { return h.buildSOXFindings(as) }},
-		{"FINRA", "finra", func() []ControlFinding { return h.buildFINRAFindings(as) }},
-		{"MiFID II", "mifid2", func() []ControlFinding { return h.buildMiFID2Findings(as) }},
-		{"CCSS", "ccss", func() []ControlFinding { return h.buildCCSSFindings(as) }},
-		{"FDA 21 CFR Part 11", "fda21cfr11", func() []ControlFinding { return h.buildFDA21CFR11Findings(as) }},
-		{"Gaming Commission", "gaming", func() []ControlFinding { return h.buildGamingFindings(as) }},
-		{"CIS Windows", "ciswindows", func() []ControlFinding { return h.buildCISWindowsFindings(as) }},
-		{"CIS Ubuntu", "cisubuntu", func() []ControlFinding { return h.buildCISUbuntuFindings(as) }},
-		{"CIS RHEL", "cisrhel", func() []ControlFinding { return h.buildCISRHELFindings(as) }},
-		{"ABA Cybersecurity", "abacyber", func() []ControlFinding { return h.buildABACyberFindings(as) }},
-		{"NY DFS Cyber (23 NYCRR 500)", "nydfscyber", func() []ControlFinding { return h.buildNYDFSCyberFindings(as) }},
-	}
-
-	// Filter to enabled frameworks only.
-	if h.configStore != nil {
-		var filtered []fwEntry
-		for _, fw := range fwDefs {
-			standardKey := config.StandardKeyForSlug[fw.slug]
-			if h.configStore.IsStandardEnabled(standardKey) {
-				filtered = append(filtered, fw)
-			}
-		}
-		fwDefs = filtered
-	}
-
-	// Load all active waivers: merge config-file waivers + DB waivers.
-	waiversByKey := make(map[string]map[string]bool) // standard_key → control_id → true
-	if h.configStore != nil {
-		for standard, controls := range h.configStore.AllWaivers() {
-			if _, ok := waiversByKey[standard]; !ok {
-				waiversByKey[standard] = make(map[string]bool)
-			}
-			for controlID := range controls {
-				waiversByKey[standard][controlID] = true
-			}
-		}
-	}
-	// Also merge DB-managed waivers (keyed by slug, need to convert).
-	if waivers, err := h.queries.ListComplianceWaivers(r.Context()); err == nil {
-		for _, w := range waivers {
-			stdKey := w.Framework
-			if mapped, ok := config.StandardKeyForSlug[w.Framework]; ok {
-				stdKey = mapped
-			}
-			if _, ok := waiversByKey[stdKey]; !ok {
-				waiversByKey[stdKey] = make(map[string]bool)
-			}
-			waiversByKey[stdKey][w.ControlID] = true
-		}
-	}
-
-	envoys := h.fleetIndex.AllEnvoys()
-	var activeHostnames []string
-	for _, e := range envoys {
-		if !e.Revoked {
-			activeHostnames = append(activeHostnames, e.Hostname)
-		}
+		{"HIPAA", "compliance"},
+		{"HITRUST CSF", "hitrust"},
+		{"SOC 2", "soc2"},
+		{"PCI DSS v4.0", "pci"},
+		{"NIST 800-53", "nist"},
+		{"ISO 27001", "iso27001"},
+		{"GDPR", "gdpr"},
+		{"NERC CIP", "nerccip"},
+		{"Cyber Essentials+", "cyberessentials"},
+		{"IEC 62443", "iec62443"},
+		{"SOX", "sox"},
+		{"FINRA", "finra"},
+		{"MiFID II", "mifid2"},
+		{"CCSS", "ccss"},
+		{"FDA 21 CFR Part 11", "fda21cfr11"},
+		{"Gaming Commission", "gaming"},
+		{"CIS Windows", "ciswindows"},
+		{"CIS Ubuntu", "cisubuntu"},
+		{"CIS RHEL", "cisrhel"},
+		{"ABA Cybersecurity", "abacyber"},
+		{"NY DFS Cyber (23 NYCRR 500)", "nydfscyber"},
 	}
 
 	frameworks := make([]FrameworkSummary, 0, len(fwDefs))
 	for _, fw := range fwDefs {
-		findings := fw.controls()
-		frameworkTotalControls := len(findings)
-
-		// Build a set of valid control IDs from the findings builder.
-		// Only controls in this set count toward coverage — module tags
-		// referencing unknown control IDs are ignored.
-		validControls := make(map[string]bool, frameworkTotalControls)
-		for _, f := range findings {
-			validControls[f.ControlID] = true
-		}
-
-		// Compute fleet-average coverage using module-to-control assignment
-		// with the findings count as the denominator.
 		standardKey, hasKey := config.StandardKeyForSlug[fw.slug]
-		waivedSet := waiversByKey[standardKey]
-		var fleetCoverageSum float64
-		fleetCoverageCount := 0
-		fleetSatisfiedSum := 0
-		fleetWaivedSum := 0
-		if hasKey && h.configStore != nil && frameworkTotalControls > 0 {
-			for _, hostname := range activeHostnames {
-				cov := h.configStore.EnvoyStandardCoverage(hostname, standardKey)
-				if cov == nil {
-					continue
-				}
-				// Only count controls that exist in the findings list.
-				covered := 0
-				for _, cc := range cov.CoveredControls {
-					if validControls[cc.ControlID] {
-						covered++
-					}
-				}
-				// Waivers boost missing controls to covered.
-				waived := 0
-				if len(waivedSet) > 0 {
-					for _, mc := range cov.MissingControls {
-						if waivedSet[mc] && validControls[mc] {
-							waived++
-						}
-					}
-				}
-				total := covered + waived
-				pct := float64(total) / float64(frameworkTotalControls) * 100
-				fleetCoverageSum += pct
-				fleetSatisfiedSum += covered
-				fleetWaivedSum += waived
-				fleetCoverageCount++
-			}
+		if !hasKey || !h.configStore.IsStandardEnabled(standardKey) {
+			continue
 		}
-
-		scorePct := float64(0)
-		avgSatisfied := 0
-		avgNotSatisfied := frameworkTotalControls
-		if fleetCoverageCount > 0 {
-			scorePct = math.Round(fleetCoverageSum/float64(fleetCoverageCount)*10) / 10
-			avgSatisfied = int(math.Round(float64(fleetSatisfiedSum+fleetWaivedSum) / float64(fleetCoverageCount)))
-			avgNotSatisfied = frameworkTotalControls - avgSatisfied
+		score, ok := h.ComputeFrameworkScore(r, fw.slug)
+		if !ok {
+			continue
 		}
-
-		// Count total active waivers for this framework (regardless of
-		// whether the control is covered or missing). This shows operators
-		// that waivers exist even when all controls are satisfied.
-		totalWaivers := len(waivedSet)
-
 		frameworks = append(frameworks, FrameworkSummary{
 			Name:         fw.name,
-			Satisfied:    avgSatisfied,
-			Waived:       totalWaivers,
-			Partial:      0,
-			NotSatisfied: avgNotSatisfied,
-			ScorePercent: scorePct,
+			Satisfied:    score.Fleet.Covered,
+			Waived:       score.Fleet.Waived,
+			Partial:      score.Fleet.Partial,
+			NotSatisfied: score.Fleet.Missing,
+			ScorePercent: score.Fleet.CoveragePercent,
 		})
 	}
 	sort.Slice(frameworks, func(i, j int) bool {
@@ -2212,12 +2335,14 @@ func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport,
 	// Framework scores using findings-based scoring (with waivers applied).
 	frameworks := h.buildFrameworkCoverage(r)
 
-	// Compute overall compliance score as the average across all frameworks
-	// that have data. This is the true compliance score (not convergence).
+	// Compute overall compliance score as the unweighted mean across all
+	// frameworks that have data. This is the true compliance score (not
+	// convergence). Unweighted mean, per the ratified rule — every framework
+	// carries equal weight regardless of control count.
 	compliancePct := float64(0)
 	fwCount := 0
 	for _, fw := range frameworks {
-		total := fw.Satisfied + fw.Partial + fw.NotSatisfied
+		total := fw.Satisfied + fw.Waived + fw.Partial + fw.NotSatisfied
 		if total > 0 {
 			compliancePct += fw.ScorePercent
 			fwCount++

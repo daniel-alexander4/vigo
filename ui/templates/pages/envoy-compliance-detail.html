@@ -16,9 +16,11 @@
 {{end}}
 
 {{define "envoy-standard-coverage-fragment"}}
-{{if .Coverage}}
+{{if .Unavailable}}
+<p class="text-muted" style="padding:20px;">No compliance data available for {{.FrameworkTitle}}.</p>
+{{else}}
 
-<!-- Summary cards -->
+<!-- Summary cards: partition buckets from the unified scorer -->
 <div class="stat-cards" style="margin-bottom:24px;">
     <div class="stat-card">
         <div class="stat-card__value {{if ge .ModulePct 95.0}}text-success{{else if ge .ModulePct 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .ModulePct}}%</div>
@@ -26,45 +28,61 @@
         <div class="text-muted" style="font-size:11px;margin-top:4px;">{{.ModuleConvergence}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value {{if ge .Coverage.CoveragePercent 95.0}}text-success{{else if ge .Coverage.CoveragePercent 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .Coverage.CoveragePercent}}%</div>
+        <div class="stat-card__value {{if ge .Status.CoveragePercent 95.0}}text-success{{else if ge .Status.CoveragePercent 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .Status.CoveragePercent}}%</div>
         <div class="stat-card__label">{{.FrameworkTitle}}</div>
-        <div class="text-muted" style="font-size:11px;margin-top:4px;">{{len .Coverage.CoveredControls}}/{{.Coverage.TotalControls}} controls</div>
+        <div class="text-muted" style="font-size:11px;margin-top:4px;">{{.Status.Covered}}/{{.Status.Total}} controls</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value text-success">{{len .Coverage.CoveredControls}}</div>
+        <div class="stat-card__value text-success">{{.Status.Covered}}</div>
         <div class="stat-card__label">Covered</div>
     </div>
+    {{if gt .Status.Waived 0}}
     <div class="stat-card">
-        <div class="stat-card__value text-danger">{{len .Coverage.MissingControls}}</div>
+        <div class="stat-card__value text-info">{{.Status.Waived}}</div>
+        <div class="stat-card__label">Waived</div>
+    </div>
+    {{end}}
+    {{if gt .Status.Partial 0}}
+    <div class="stat-card">
+        <div class="stat-card__value text-warning">{{.Status.Partial}}</div>
+        <div class="stat-card__label">Partial</div>
+    </div>
+    {{end}}
+    <div class="stat-card">
+        <div class="stat-card__value text-danger">{{.Status.Missing}}</div>
         <div class="stat-card__label">Missing</div>
     </div>
 </div>
 
-<!-- Controls list -->
+<!-- Controls list: every control with its partition status -->
 <h3 class="section-heading">{{.FrameworkTitle}} Controls</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Control</th><th>Status</th><th>Modules</th></tr></thead>
+        <thead><tr><th>Control</th><th>Title</th><th>Status</th><th>Detail</th></tr></thead>
         <tbody>
-            {{range .Coverage.CoveredControls}}
+            {{range .Controls}}
             <tr>
                 <td class="mono">{{.ControlID}}</td>
-                <td><span class="badge badge--compliant">covered</span></td>
-                <td>{{joinStrings .Modules ", "}}</td>
-            </tr>
-            {{end}}
-            {{range .MissingWithRecs}}
-            <tr>
-                <td class="mono">{{.ControlID}}</td>
-                <td><span class="badge badge--failed">not covered</span></td>
-                <td>{{if .RecommendedModules}}<span class="text-warning">assign: {{joinStrings .RecommendedModules ", "}}</span>{{else}}<span class="text-muted">no module available</span>{{end}}</td>
+                <td>{{.Title}}</td>
+                <td>
+                    {{if eq .Status "covered"}}<span class="badge badge--compliant">covered</span>
+                    {{else if eq .Status "architectural"}}<span class="badge badge--compliant">architectural</span>
+                    {{else if eq .Status "waived"}}<span class="badge badge--info">waived</span>
+                    {{else if eq .Status "partial"}}<span class="badge badge--relapsed">partial</span>
+                    {{else}}<span class="badge badge--failed">missing</span>{{end}}
+                </td>
+                <td>
+                    {{if eq .Status "covered"}}{{joinStrings .Modules ", "}}
+                    {{else if eq .Status "architectural"}}<span class="text-muted">satisfied by Vigo construction</span>
+                    {{else if eq .Status "waived"}}<span class="text-muted">{{.Evidence}}</span>
+                    {{else if eq .Status "partial"}}<span class="text-muted">{{.Evidence}}</span>
+                    {{else}}{{if .RecommendedModules}}<span class="text-warning">assign: {{joinStrings .RecommendedModules ", "}}</span>{{else}}<span class="text-muted">no module available</span>{{end}}
+                    {{end}}
+                </td>
             </tr>
             {{end}}
         </tbody>
     </table>
 </div>
-
-{{else}}
-<p class="text-muted" style="padding:20px;">No compliance data available for {{.FrameworkTitle}}.</p>
 {{end}}
 {{end}}

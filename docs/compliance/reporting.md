@@ -56,7 +56,8 @@ curl -s https://vigo:8443/api/v1/export/oscal | jq .
 
 ### Summary Section
 
-- **Compliance percentage** — fleet-wide compliance rate
+- **Compliance percentage** — fleet-wide compliance rate. On the per-framework report this is the macro-average of per-envoy coverage (mean of `covered / total_controls` across active envoys). On the executive summary and the `/compliance` overview, the overall score is the unweighted mean of per-framework scores — every active framework contributes equally regardless of control count.
+- **Bucket counts** — Satisfied / Waived / Partial / Missing are disjoint and sum to the framework's total control count. Each bucket is the rounded per-envoy average, balanced so the four add up to Total.
 - **Node counts** — total, converged, failed, relapsed, diverged, offline
 
 - **Audit chain status** — SHA-256 hash chain integrity (valid/broken)

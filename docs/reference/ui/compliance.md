@@ -7,14 +7,14 @@ The Compliance section provides fleet-wide compliance overview, framework-specif
 
 ### Compliance Gauge
 
-A large percentage display with a segmented progress bar showing control coverage. The gauge includes explanatory text ("N% of M controls satisfied across all active frameworks") and a color legend for the bar segments:
+A large percentage display with a segmented progress bar showing control coverage. The gauge shows the overall compliance score followed by an explanatory subtitle ("compliance score · mean of active framework scores · N controls across frameworks") and a color legend:
 
 - **Green**: Satisfied controls
 - **Blue**: Waived controls (if any)
 - **Yellow**: Partially satisfied controls
 - **Red**: Not met controls
 
-The progress bar is segmented proportionally so operators can see the distribution at a glance.
+**Math:** The overall percentage is the **unweighted mean of per-framework scores** — every active framework contributes equally regardless of control count. Per-framework scores are themselves macro-averages (mean of per-envoy coverage percentages), so each envoy contributes equally within a framework. The breakdown counts below are sums across frameworks; each framework's bucket counts are themselves rounded averages per envoy. Waivers, architectural satisfactions (controls Vigo satisfies by construction, e.g. bcrypt auth, mTLS, unique UUIDs), module-tag coverage, and partial credits are partitioned into disjoint buckets that sum to the framework's total control count.
 
 ### Breakdown Cards
 
@@ -74,13 +74,15 @@ Each page includes:
 
 - Back navigation to the compliance hub
 - Download buttons (JSON, HTML, Print)
-- Fleet compliance gauge and breakdown cards
+- Fleet compliance gauge with segmented bar (green/blue/yellow/red for satisfied/waived/partial/missing) and inline bucket counts
 - Audit chain status banner
 - Controls table with control ID, title, status badge, and evidence
-- Fleet status table with per-envoy details
+- Fleet status table with per-envoy details (covered / waived / partial / missing all pulled from the unified scorer, so each row agrees with the card on the envoy-detail page)
 - **Viz View** button (`/compliance/{framework}/viz`) — switches to a visual view with a fleet coverage heatmap (envoys × controls, color-coded by coverage threshold) and a satisfied/partial/not_satisfied donut chart
 
-Report data is fetched from the existing `GET /api/v1/report/{framework}` API endpoint via JavaScript.
+The top summary card uses **macro averages** across active envoys: each bucket count is the rounded per-envoy mean, balanced so Covered + Waived + Partial + Missing equals the framework's total control count. CoveragePercent is the mean of per-envoy percentages, rounded to one decimal.
+
+Report data is fetched from `GET /ui/fragments/compliance-report/{framework}` via HTMX.
 
 ## Executive Summary Page (`/compliance/executive`)
 
