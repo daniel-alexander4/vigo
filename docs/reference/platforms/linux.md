@@ -57,7 +57,48 @@ systemctl restart vigo-envoy
 journalctl -u vigo-envoy -f
 ```
 
-The service is configured with automatic restart on failure and `WatchdogSec` for health monitoring.
+The unit is written by `vigo bootstrap` at install time and is refreshed
+automatically on every agent upgrade — `update::apply` compares the
+on-disk unit against the current template and rewrites + `daemon-reload`s
+when they differ, so envoys installed on older agent versions pick up
+new unit fields without a manual reinstall.
+
+Current unit contents:
+
+```ini
+[Unit]
+Description=Vigo Configuration Management Agent
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/vigo
+Restart=always
+RestartSec=10
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
+```
+
+`LimitNOFILE=65536` raises both soft and hard FD limits from the
+systemd defaults (soft 1024 / hard 524288). The swarm peer server, blob
+cache, LMDB state store, and per-user multicast/sigil sockets all
+consume FDs; under load the soft default of 1024 can be exhausted,
+which the agent surfaces as `accept failed error=No file descriptors
+available (os error 24)` in the journal and recovers from with a 100ms
+backoff + once-per-second rate-limited warning.
+
+To monitor agent FD usage from the server side, query the `agent_self`
+trait on any envoy:
+
+```sh
+vigocli traits get <envoy> agent_self
+```
+
+Reports `open_fds`, `rss_bytes`, `vsz_bytes`, `threads`, and
+`uptime_secs` from `/proc/self/{status,fd}` on every check-in.
 
 
 ## Package Managers
