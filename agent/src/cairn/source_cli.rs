@@ -476,6 +476,216 @@ fn confirm(prompt: &str) -> Result<bool> {
     Ok(trimmed == "y" || trimmed == "yes")
 }
 
+// ============================================================
+// vigo cairn leave
+// ============================================================
+//
+// Self-unenroll this user's cairn publishing on this envoy. Bulk of
+// `source remove`: enumerate `~<user>/cairn/*/.cairn.yaml`, confirm,
+// delete each (default) or pause each (`--pause`) or delete + prune
+// receiver-side mirrors for this user's published projects (`--purge`).
+//
+// Scope notes:
+// - Publisher-only by default. Receiver-side mirrors at
+//   /var/lib/vigo/cairn/mirrors/ are root-owned, fleet-level state;
+//   `leave` does NOT touch them without `--purge`.
+// - The invoking user is the only scope. Leave run by `dan` does not
+//   affect `alice`'s cairn enrollment on the same envoy.
+
+#[cfg_attr(test, derive(Debug))]
+struct LeaveOpts {
+    pause: bool,
+    purge: bool,
+    yes: bool,
+}
+
+fn parse_leave_args(args: &[String]) -> Result<LeaveOpts> {
+    let mut out = LeaveOpts {
+        pause: false,
+        purge: false,
+        yes: false,
+    };
+    for a in args {
+        match a.as_str() {
+            "--pause" => out.pause = true,
+            "--purge" => out.purge = true,
+            "--yes" | "-y" => out.yes = true,
+            "--help" | "-h" => {
+                print_leave_usage();
+                std::process::exit(0);
+            }
+            other if other.starts_with("--") => bail!("unknown flag: {}", other),
+            _ => bail!("vigo cairn leave takes no positional arguments; got {}", a),
+        }
+    }
+    if out.pause && out.purge {
+        bail!("--pause and --purge are mutually exclusive");
+    }
+    Ok(out)
+}
+
+fn print_leave_usage() {
+    eprintln!(
+        "vigo cairn leave — remove or pause all this user's cairn sidecars
+
+USAGE:
+    vigo cairn leave [--pause | --purge] [--yes]
+
+FLAGS:
+    --pause    set paused: true on every sidecar instead of deleting
+               (use when you're going offline temporarily)
+    --purge    delete sidecars AND prune this envoy's receiver mirrors
+               scoped to your user's projects (requires root for the prune)
+    --yes      skip the interactive confirmation prompt
+               (default is a dry-run listing + y/N prompt)
+
+Scope: only sidecars authored by the invoking user under ~/cairn/*/.cairn.yaml.
+Other users' cairn enrollment on this envoy is untouched."
+    );
+}
+
+/// Enumerate `.cairn.yaml` sidecars under the invoking user's
+/// ~/cairn/*/ tree. Returns `(project_name, sidecar_path)` pairs.
+fn list_user_sidecars(home: &Path) -> Vec<(String, PathBuf)> {
+    let cairn_root = home.join("cairn");
+    let mut out = Vec::new();
+    let entries = match std::fs::read_dir(&cairn_root) {
+        Ok(e) => e,
+        Err(_) => return out,
+    };
+    for ent in entries.flatten() {
+        let path = ent.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let sidecar = path.join(".cairn.yaml");
+        if !sidecar.is_file() {
+            continue;
+        }
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            out.push((name.to_string(), sidecar));
+        }
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+pub fn cmd_leave(args: &[String]) -> Result<()> {
+    let opts = parse_leave_args(args)?;
+    let home = home_dir()?;
+    let sidecars = list_user_sidecars(&home);
+
+    if sidecars.is_empty() {
+        println!("no cairn sidecars under {}/cairn/ — nothing to do.", home.display());
+        return Ok(());
+    }
+
+    let action = if opts.pause {
+        "pause"
+    } else if opts.purge {
+        "remove (and purge receiver mirrors)"
+    } else {
+        "remove"
+    };
+
+    println!("Will {} {} sidecar(s):", action, sidecars.len());
+    for (name, path) in &sidecars {
+        println!("  {:<30} {}", name, path.display());
+    }
+
+    if !opts.yes {
+        println!();
+        if !confirm(&format!("Proceed with {}?", action))? {
+            println!("aborted.");
+            return Ok(());
+        }
+    }
+
+    let mut ok = 0usize;
+    let mut fail = 0usize;
+    for (name, path) in &sidecars {
+        let result = if opts.pause {
+            pause_sidecar(path)
+        } else {
+            remove_sidecar(path)
+        };
+        match result {
+            Ok(()) => {
+                let verb = if opts.pause { "paused" } else { "removed" };
+                println!("  \u{2713} {} {}", verb, name);
+                ok += 1;
+            }
+            Err(e) => {
+                eprintln!("  failed {}: {}", name, e);
+                fail += 1;
+            }
+        }
+    }
+
+    if opts.purge {
+        let user = home
+            .file_name()
+            .and_then(|n| n.to_str())
+            .ok_or_else(|| anyhow!("cannot resolve username from home dir"))?
+            .to_string();
+        let host = local_hostname()?;
+        println!();
+        println!(
+            "running `vigo cairn prune --seeder {} --user {} --yes` for receiver mirrors…",
+            host, user
+        );
+        let exe = std::env::current_exe().context("resolving current exe for purge prune")?;
+        let status = std::process::Command::new(&exe)
+            .args([
+                "cairn", "prune", "--seeder", &host, "--user", &user, "--yes",
+            ])
+            .status()
+            .context("spawning prune subprocess")?;
+        if !status.success() {
+            eprintln!(
+                "  prune subprocess exited non-zero ({}); some receiver mirrors may remain",
+                status
+            );
+        }
+    }
+
+    if fail > 0 {
+        bail!(
+            "{} sidecar(s) processed, {} failed — see errors above",
+            ok, fail
+        );
+    }
+
+    let summary = if opts.pause {
+        format!(
+            "reactor stops publishing paused sources on next tick. Run `vigo cairn source resume <project>` to re-enable."
+        )
+    } else {
+        format!(
+            "reactor drops these labels on next tick. Receiver mirrors on other envoys persist until their own `vigo cairn prune` runs."
+        )
+    };
+    println!("\n{}", summary);
+    Ok(())
+}
+
+fn remove_sidecar(path: &Path) -> Result<()> {
+    std::fs::remove_file(path)
+        .with_context(|| format!("removing {}", path.display()))
+}
+
+fn pause_sidecar(path: &Path) -> Result<()> {
+    let mut cfg = sidecar::load(path)
+        .with_context(|| format!("loading {}", path.display()))?;
+    if cfg.paused {
+        return Ok(());
+    }
+    cfg.paused = true;
+    sidecar::save(path, &cfg)
+        .with_context(|| format!("writing {}", path.display()))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -690,5 +900,91 @@ mod tests {
         let repo_str = repo.to_str().unwrap().to_string();
         let err = cmd_remove(&args(&[&repo_str, "--yes"])).unwrap_err();
         assert!(err.to_string().contains("does not exist"));
+    }
+
+    // ---------- leave ----------
+
+    /// Populate `<home>/cairn/<name>/.cairn.yaml` with a minimal valid
+    /// sidecar. Returns the sidecar path.
+    fn seed_sidecar(home: &Path, name: &str, owner: &str) -> PathBuf {
+        let repo = home.join("cairn").join(name);
+        std::fs::create_dir_all(&repo).unwrap();
+        let sidecar = repo.join(".cairn.yaml");
+        std::fs::write(
+            &sidecar,
+            format!(
+                "owner: {}\nmax_mirrors: 3\ntags: []\npaused: false\ndescription: \"\"\n",
+                owner
+            ),
+        )
+        .unwrap();
+        sidecar
+    }
+
+    fn with_home<R>(home: &Path, f: impl FnOnce() -> R) -> R {
+        let prev = std::env::var("HOME").ok();
+        std::env::set_var("HOME", home);
+        let r = f();
+        match prev {
+            Some(v) => std::env::set_var("HOME", v),
+            None => std::env::remove_var("HOME"),
+        }
+        r
+    }
+
+    #[test]
+    fn leave_noop_when_no_sidecars() {
+        let dir = tempdir().unwrap();
+        with_home(dir.path(), || {
+            cmd_leave(&args(&["--yes"])).unwrap();
+        });
+    }
+
+    #[test]
+    fn leave_removes_all_user_sidecars() {
+        let dir = tempdir().unwrap();
+        seed_sidecar(dir.path(), "alpha", "testhost");
+        seed_sidecar(dir.path(), "beta", "testhost");
+        let alpha = dir.path().join("cairn/alpha/.cairn.yaml");
+        let beta = dir.path().join("cairn/beta/.cairn.yaml");
+        assert!(alpha.exists() && beta.exists());
+
+        with_home(dir.path(), || {
+            cmd_leave(&args(&["--yes"])).unwrap();
+        });
+        assert!(!alpha.exists());
+        assert!(!beta.exists());
+    }
+
+    #[test]
+    fn leave_pause_flips_paused_field() {
+        let dir = tempdir().unwrap();
+        seed_sidecar(dir.path(), "alpha", "testhost");
+        let alpha = dir.path().join("cairn/alpha/.cairn.yaml");
+
+        with_home(dir.path(), || {
+            cmd_leave(&args(&["--pause", "--yes"])).unwrap();
+        });
+        let cfg = sidecar::load(&alpha).unwrap();
+        assert!(cfg.paused);
+        assert!(alpha.exists());
+    }
+
+    #[test]
+    fn leave_rejects_pause_and_purge_together() {
+        let err = parse_leave_args(&args(&["--pause", "--purge"])).unwrap_err();
+        assert!(err.to_string().contains("mutually exclusive"));
+    }
+
+    #[test]
+    fn leave_rejects_positional() {
+        let err = parse_leave_args(&args(&["someproj"])).unwrap_err();
+        assert!(err.to_string().contains("no positional"));
+    }
+
+    #[test]
+    fn leave_rejects_unknown_flag() {
+        let err = parse_leave_args(&args(&["--bogus"])).unwrap_err();
+        assert!(err.to_string().contains("unknown flag"));
     }
 }

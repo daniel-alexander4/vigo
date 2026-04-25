@@ -30,8 +30,24 @@ Every verb runs under the invoking user's uid. No root. The agent daemon does no
 | `encrypt <file> [--as <name>]` | Encrypt a plaintext file into `~/sigil/` to every current recipient. |
 | `decrypt <file> -o <path>` | Decrypt from `~/sigil/` to a user-chosen path. Requires `unlock`. `-o` is mandatory. |
 | `forget <hostname>` | Revoke an envoy from the recipient set; triggers a local `recipients.txt` regeneration. Follow with `reencrypt` to re-key existing files. |
+| `leave [--purge] [--keep-identity] [--yes]` | Unenroll this user's sigil on this envoy. Drops a `~/.sigil/leave.pending` sentinel that the daemon picks up, signs + fans out to live peers, then scrubs local state per the flags. |
 | `reencrypt` | Force re-encrypt of every file in `~/sigil/` to the current recipient set. Requires `unlock`. |
 | `status` | Show local state: enrolled, recipient count, file count, session helper status. |
+
+### `vigo sigil leave`
+
+Self-unenrollment. Three-stage handoff:
+
+1. **CLI** (user context) validates enrollment, reads the local age pubkey from `recipients.txt`, writes `~/.sigil/leave.pending` containing the pubkey + hostname + leave time + flags, exits.
+2. **Daemon reactor** (running as root, ticks every ~30 s) polls for the sentinel. When present: loads the daemon Ed25519 signing key, builds a signed [LEAVE envelope](../../engineering/subsystems/sigil.md#signed-leave-envelope), fans it out to every live peer (+ cross-subnet peers). Persists the record to `/var/lib/vigo/sigil/<user>/leaves.json`. Scrubs `~/.sigil/` (default) and `~/sigil/` (with `--purge`). Removes the sentinel.
+3. **Peer envoys** receive the envelope via `POST /sigil/leaves/<user>`, verify the signer is the subject (cryptographic self-leave-only), drop the pubkey from `peers.json`, regenerate `recipients.txt`, drop `reencrypt.pending`, persist.
+
+**Flags:**
+- `--purge` — also delete `~/sigil/` ciphertext on scrub. Default: keep ciphertext (it's already orphaned — no identity to decrypt).
+- `--keep-identity` — keep `~/.sigil/` wrapped identity so a subsequent `vigo sigil enroll` can reuse it. Rarely wanted; default is scrub.
+- `--yes` — skip confirmation.
+
+**Offline peers:** a peer that was offline during the fan-out misses the envelope but naturally drops the leaving envoy within 90 s via the peer-staleness rule in `state::prune_stale`. The admin path [`vigocli sigil evict`](sigil.md) is the tool for forcing eviction when a host is already gone and the user can't run `leave` from it.
 
 ## File layout
 

@@ -240,9 +240,188 @@ func runSigilShow(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// ---------- vigocli sigil members ----------
+
+var sigilMembersCmd = &cobra.Command{
+	Use:   "members [user]",
+	Short: "List enrolled envoys for a sigil user",
+	Long: `Print the list of envoys currently enrolled in a user's sigil circle,
+sourced from the 'sigil' trait projection. Pass [user] to scope to one
+user; omit it to list every enrolled user + their envoys.
+
+Read-only. Does not contact the envoys.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runSigilMembers(args)
+	},
+}
+
+func runSigilMembers(args []string) error {
+	client := newAPIClient()
+	var fleet sigilFleet
+	if err := client.get("/api/v1/sigil/fleet", &fleet); err != nil {
+		return fmt.Errorf("fetch sigil fleet: %w", err)
+	}
+
+	filter := ""
+	if len(args) == 1 {
+		filter = args[0]
+	}
+
+	for _, u := range fleet.Users {
+		if filter != "" && u.User != filter {
+			continue
+		}
+		fmt.Printf("USER: %s\n", u.User)
+		tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(tw, "HOST\tSTATUS\tFILES\tSESSION")
+		sort.Slice(u.Envoys, func(i, j int) bool { return u.Envoys[i].Hostname < u.Envoys[j].Hostname })
+		for _, e := range u.Envoys {
+			sess := "-"
+			if e.SessionUnlocked {
+				sess = "unlocked"
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", e.Hostname, e.Status, e.FileCount, sess)
+		}
+		tw.Flush()
+		fmt.Println()
+	}
+	if filter != "" {
+		found := false
+		for _, u := range fleet.Users {
+			if u.User == filter {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("no sigil members found for user %q", filter)
+		}
+	}
+	return nil
+}
+
+// ---------- vigocli sigil evict ----------
+
+var sigilEvictCmd = &cobra.Command{
+	Use:   "evict",
+	Short: "Remove a host from a user's sigil circle fleet-wide",
+	Long: `Dispatch a task to every enrolled envoy instructing the agent to drop
+the target host's age pubkey from its peer table, regenerate
+recipients.txt, and queue a reencrypt so the evicted host cannot
+decrypt future ciphertext.
+
+The admin path is authenticated end-to-end by mTLS + admin token —
+not by a P2P envelope — so a gone host can be evicted even though it
+cannot sign a LEAVE for itself.
+
+Offline envoys pick up the eviction on their next check-in via the
+normal task-dispatch retry.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		host, _ := cmd.Flags().GetString("host")
+		user, _ := cmd.Flags().GetString("user")
+		allUsers, _ := cmd.Flags().GetBool("all-users")
+		yes, _ := cmd.Flags().GetBool("yes")
+		if host == "" {
+			return fmt.Errorf("--host is required")
+		}
+		if user == "" && !allUsers {
+			return fmt.Errorf("either --user <u> or --all-users is required")
+		}
+		if user != "" && allUsers {
+			return fmt.Errorf("--user and --all-users are mutually exclusive")
+		}
+		return runSigilEvict(host, user, allUsers, yes)
+	},
+}
+
+func runSigilEvict(host, user string, allUsers, yes bool) error {
+	client := newAPIClient()
+	var fleet sigilFleet
+	if err := client.get("/api/v1/sigil/fleet", &fleet); err != nil {
+		return fmt.Errorf("fetch sigil fleet: %w", err)
+	}
+
+	type target struct {
+		user   string
+		pubkey string
+	}
+	var targets []target
+	for _, u := range fleet.Users {
+		if !allUsers && u.User != user {
+			continue
+		}
+		for _, e := range u.Envoys {
+			if e.Hostname == host {
+				// Note: the fleet projection doesn't surface the age pubkey directly.
+				// We use RecipientsDigest as a marker that the user is enrolled there
+				// and let the agent look up its own peer-table entry by hostname
+				// during _apply-evict. Fallback plan: if RecipientsDigest is empty,
+				// still dispatch — agent will be a no-op.
+				_ = e.RecipientsDigest
+				targets = append(targets, target{user: u.User, pubkey: ""})
+			}
+		}
+	}
+	if len(targets) == 0 {
+		return fmt.Errorf("host %q is not enrolled in any matching sigil circle", host)
+	}
+
+	if !yes {
+		fmt.Printf("Will evict %s from %d user circle(s):\n", host, len(targets))
+		for _, t := range targets {
+			fmt.Printf("  user=%s\n", t.user)
+		}
+		fmt.Print("Proceed? [y/N] ")
+		var resp string
+		fmt.Scanln(&resp)
+		if strings.ToLower(strings.TrimSpace(resp)) != "y" {
+			fmt.Println("aborted.")
+			return nil
+		}
+	}
+
+	// For each target user, look up the host's age pubkey and dispatch.
+	// Falling back to the agent's own peer-table lookup: we dispatch
+	// `_apply-evict` with --pubkey unset when the fleet projection doesn't
+	// carry it, and the agent resolves it locally from its own peers.json.
+	// This keeps the server simple.
+	for _, t := range targets {
+		// Find the pubkey from the Participants field or similar. The current
+		// sigilFleet struct doesn't expose per-envoy age pubkey directly, so we
+		// instruct agents to resolve locally via hostname. If an agent can't
+		// find the hostname in its peer table, _apply-evict is a no-op.
+		cmd := fmt.Sprintf("vigo sigil _apply-evict --user %s --hostname %s --pubkey LOOKUP",
+			shellQuote(t.user), shellQuote(host))
+		req := map[string]any{
+			"command": cmd,
+			"target":  "*",
+			"timeout": 60,
+		}
+		var result map[string]any
+		if err := client.post("/api/v1/task", req, &result); err != nil {
+			return fmt.Errorf("dispatch evict for user %s: %w", t.user, err)
+		}
+		fmt.Printf("✓ dispatched evict for user=%s\n", t.user)
+	}
+	return nil
+}
+
+func shellQuote(s string) string {
+	// Minimal quoting — task dispatch splits on whitespace. For typical
+	// usernames and hostnames (alphanumeric + hyphen), no quoting needed.
+	return s
+}
+
 func init() {
 	sigilStatusCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
 	sigilListCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
 	sigilShowCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
-	sigilCmd.AddCommand(sigilStatusCmd, sigilListCmd, sigilShowCmd)
+
+	sigilEvictCmd.Flags().String("host", "", "Hostname to evict from the circle")
+	sigilEvictCmd.Flags().String("user", "", "User whose circle to evict from")
+	sigilEvictCmd.Flags().Bool("all-users", false, "Evict the host from every user's sigil circle it belongs to")
+	sigilEvictCmd.Flags().Bool("yes", false, "Skip the confirmation prompt")
+
+	sigilCmd.AddCommand(sigilStatusCmd, sigilListCmd, sigilShowCmd, sigilMembersCmd, sigilEvictCmd)
 }

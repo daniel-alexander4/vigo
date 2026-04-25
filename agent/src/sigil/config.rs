@@ -74,6 +74,22 @@ pub fn enroll_pending_path(home: &Path) -> PathBuf {
     dot_dir(home).join("enroll.pending")
 }
 
+/// Sentinel file that tells the daemon reactor to process a
+/// self-leave. Dropped by `vigo sigil leave` (running as the user);
+/// consumed by the daemon (running as root) — the daemon signs the
+/// LEAVE envelope, fans it out to live peers, and scrubs per the
+/// sentinel's flags. Removed by the daemon on successful processing.
+pub fn leave_pending_path(home: &Path) -> PathBuf {
+    dot_dir(home).join("leave.pending")
+}
+
+/// Sentinel file that tells the session helper to drain a pending
+/// reencrypt. Dropped when a LEAVE lands and recipients.txt changes;
+/// cleared after `cmd_reencrypt` runs successfully.
+pub fn reencrypt_pending_path(home: &Path) -> PathBuf {
+    dot_dir(home).join("reencrypt.pending")
+}
+
 /// `/var/lib/vigo/sigil/<username>/` — root-owned state dir for
 /// one user's peer table and reactor bookkeeping. Created lazily.
 pub fn agent_state_dir(username: &str) -> PathBuf {
@@ -82,6 +98,13 @@ pub fn agent_state_dir(username: &str) -> PathBuf {
 
 pub fn peers_path(username: &str) -> PathBuf {
     agent_state_dir(username).join("peers.json")
+}
+
+/// Persisted LEAVE records — signed envelopes accepted from peers
+/// plus self-leaves. Root-owned 0600. Participates in digest gossip
+/// alongside tombstones so offline-during-leave peers catch up.
+pub fn leaves_path(username: &str) -> PathBuf {
+    agent_state_dir(username).join("leaves.json")
 }
 
 /// Raw Ed25519 private signing key (32 bytes). Root-owned, 0600.

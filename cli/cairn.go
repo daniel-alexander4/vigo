@@ -366,9 +366,107 @@ func writeJSONPretty(v any) error {
 	return enc.Encode(v)
 }
 
+// ---------- vigocli cairn evict ----------
+
+var cairnEvictCmd = &cobra.Command{
+	Use:   "evict",
+	Short: "Prune all cairn mirrors sourced from a host fleet-wide",
+	Long: `Dispatch a task to every envoy instructing the cairn reactor to prune
+any receiver-side mirrors whose seeder hostname matches the target.
+Useful for decommissioning a host: after eviction, no envoy in the
+fleet will hold mirrors sourced from the evicted host.
+
+Scope with --user <u> to limit the prune to a specific user's
+mirrors (otherwise every user's mirrors sourced from the host are
+pruned).
+
+Cairn has no cryptographic membership — admin evict is just a
+fleet-wide prune. Evicted hosts' own mirrors on themselves are
+untouched (they can rebuild the local set from their sidecars).`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		host, _ := cmd.Flags().GetString("host")
+		user, _ := cmd.Flags().GetString("user")
+		yes, _ := cmd.Flags().GetBool("yes")
+		if host == "" {
+			return fmt.Errorf("--host is required")
+		}
+		return runCairnEvict(host, user, yes)
+	},
+}
+
+func runCairnEvict(host, user string, yes bool) error {
+	client := newAPIClient()
+	if !yes {
+		scope := "all users"
+		if user != "" {
+			scope = "user=" + user
+		}
+		fmt.Printf("Will prune every mirror on every envoy whose seeder is %s (%s).\n", host, scope)
+		fmt.Print("Proceed? [y/N] ")
+		var resp string
+		fmt.Scanln(&resp)
+		if strings.ToLower(strings.TrimSpace(resp)) != "y" {
+			fmt.Println("aborted.")
+			return nil
+		}
+	}
+
+	cmdStr := fmt.Sprintf("vigo cairn prune --seeder %s", host)
+	if user != "" {
+		cmdStr += " --user " + user
+	}
+	cmdStr += " --yes"
+
+	req := map[string]any{
+		"command": cmdStr,
+		"target":  "*",
+		"timeout": 120,
+	}
+	var result map[string]any
+	if err := client.post("/api/v1/task", req, &result); err != nil {
+		return fmt.Errorf("dispatch evict: %w", err)
+	}
+	fmt.Printf("✓ dispatched: %s\n", cmdStr)
+	fmt.Println("  watch `vigocli cairn status` to confirm mirrors drop fleet-wide.")
+	return nil
+}
+
+// ---------- vigocli cairn members ----------
+
+var cairnMembersCmd = &cobra.Command{
+	Use:   "members",
+	Short: "List envoys participating in cairn (publishing and/or receiving)",
+	Long:  `Read-only view of envoys participating in the cairn mesh, sourced from the cairn trait projection.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runCairnMembers()
+	},
+}
+
+func runCairnMembers() error {
+	client := newAPIClient()
+	// /api/v1/cairn/fleet returns an aggregated projection; reuse
+	// the existing status handler's output pattern. Minimal impl:
+	// delegate to `vigocli cairn status` for now and let operators
+	// filter server-side in future follow-ups.
+	fmt.Println("cairn participating envoys (from fleet trait projection):")
+	fmt.Println()
+	var fleet map[string]any
+	if err := client.get("/api/v1/cairn/fleet", &fleet); err != nil {
+		return fmt.Errorf("fetch cairn fleet: %w", err)
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(fleet)
+}
+
 func init() {
 	cairnStatusCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
 	cairnListCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
 	cairnShowCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
-	cairnCmd.AddCommand(cairnStatusCmd, cairnListCmd, cairnShowCmd)
+
+	cairnEvictCmd.Flags().String("host", "", "Seeder hostname to evict fleet-wide")
+	cairnEvictCmd.Flags().String("user", "", "Optionally scope to one user's mirrors")
+	cairnEvictCmd.Flags().Bool("yes", false, "Skip confirmation prompt")
+
+	cairnCmd.AddCommand(cairnStatusCmd, cairnListCmd, cairnShowCmd, cairnEvictCmd, cairnMembersCmd)
 }

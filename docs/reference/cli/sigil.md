@@ -3,9 +3,9 @@
 
 Read-only admin view of the [sigil](../../engineering/subsystems/sigil.md) mesh across the fleet — per-user always-encrypted directory sync on the [swarm](../../engineering/subsystems/swarm.md) substrate. Every envoy reports its per-user sigil state (ciphertext files, recipients digest, session unlock status) through the `sigil` trait; this command renders the fleet-wide join.
 
-Sigil enrollment is per-user on the envoy via `vigo sigil enroll`. No admin write path — `vigocli sigil` never decrypts content, never touches keys, and never forces unlock. It only shows what each envoy reports.
+Sigil enrollment is per-user on the envoy via `vigo sigil enroll`. The admin surface is mostly read-only, plus one write verb — `evict` — for pulling a host out of a user's circle when the host itself can't self-leave (gone laptop, decommission).
 
-> Looking for the per-user encryption CLI (init / enroll / unlock / encrypt / decrypt / lock)? See [`vigo sigil`](agent-sigil.md) — that command lives inside the `vigo` agent binary and runs on envoys.
+> Looking for the per-user encryption CLI (init / enroll / unlock / encrypt / decrypt / lock / leave)? See [`vigo sigil`](agent-sigil.md) — that command lives inside the `vigo` agent binary and runs on envoys.
 
 ## Subcommands
 
@@ -14,8 +14,33 @@ Sigil enrollment is per-user on the envoy via `vigo sigil enroll`. No admin writ
 | `status` | Fleet-wide totals (users, envoys, ciphertext files, recipient drifts, unlocked sessions) |
 | `list` | One row per user across the fleet |
 | `show` | Detailed per-envoy presence for one user |
+| `members [user]` | List enrolled envoys per user (read-only) |
+| `evict --host <h> {--user <u> \| --all-users}` | Remove a host from a user's sigil circle fleet-wide |
 
-All subcommands support `--json` for machine-readable output.
+Read subcommands support `--json` for machine-readable output.
+
+## evict
+
+Dispatch a task to every envoy currently enrolled for the target user(s). Each agent runs `vigo sigil _apply-evict --user <u> --hostname <h>` internally: it looks up the host's age pubkey in its own peer table, drops the pubkey from `peers.json`, regenerates `recipients.txt`, drops `reencrypt.pending` so the next unlock rewraps existing ciphertext, and persists the LEAVE record.
+
+Admin authority is the mTLS + admin-token channel (not a P2P signature). Offline envoys pick up the eviction on their next check-in via task-dispatch retry.
+
+```bash
+# Evict one host from one user's sigil circle:
+vigocli sigil evict --host girlslaptop --user dan --yes
+
+# Evict a host from every user's sigil circle it participates in:
+vigocli sigil evict --host girlslaptop --all-users --yes
+```
+
+Scope options:
+- `--host <h>` (required) — hostname to evict.
+- `--user <u>` — scope to one user's circle.
+- `--all-users` — every user the target host is enrolled for.
+- Exactly one of `--user` or `--all-users` is required.
+- `--yes` — skip the confirmation prompt.
+
+See [`vigo sigil leave`](agent-sigil.md) for the user-triggered self-unenroll path (used when the departing envoy is still online and the user runs the command themselves).
 
 ## status
 

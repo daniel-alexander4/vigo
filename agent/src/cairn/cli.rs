@@ -27,6 +27,7 @@
 //! vigo cairn source resume <project>    # resume publishing
 //! vigo cairn source show <project>      # print a sidecar
 //! vigo cairn source validate <path>     # dry-run sidecar validation
+//! vigo cairn leave                      # remove all this user's sidecars here
 //! ```
 //!
 //! ### Permission model
@@ -64,6 +65,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "recover" => cmd_recover(&args[1..]),
         "recover-all" => cmd_recover_all(&args[1..]),
         "prune" => cmd_prune(&args[1..]),
+        "leave" => super::source_cli::cmd_leave(&args[1..]),
         "source" => dispatch_source(&args[1..]),
         other => bail!(
             "unknown `vigo cairn` subcommand: {}\nrun `vigo cairn --help` for usage",
@@ -96,6 +98,7 @@ COMMANDS:
     recover <project> [opts]         clone a mirror to a user-owned path
     recover-all [--dest <dir>]       clone every mirror owned by the caller
     prune [opts]                     manually remove stale mirrors (requires root)
+    leave [--pause|--purge] [--yes]  remove or pause all this user's sidecars on this envoy
     source <subcommand>              manage .cairn.yaml sidecars
                                      (add, remove, pause, resume, show, validate, list)
                                      run `vigo cairn source --help` for detail
@@ -983,6 +986,14 @@ struct PruneOpts {
     /// the staleness filter is BYPASSED — the operator is explicitly
     /// targeting a mirror regardless of age.
     target: Option<String>,
+    /// Optional `--seeder <hostname>`. When set, candidates are every
+    /// mirror whose seeder hostname matches (case-insensitive), regardless
+    /// of age. Used by admin eviction to prune all mirrors originating
+    /// from a specific host. Combines with `--user` as AND.
+    seeder: Option<String>,
+    /// Optional `--user <username>`. When set, candidates are scoped to
+    /// mirrors owned by this user. Combines with `--seeder` as AND.
+    user: Option<String>,
 }
 
 fn parse_prune_args(args: &[String]) -> Result<PruneOpts> {
@@ -990,6 +1001,8 @@ fn parse_prune_args(args: &[String]) -> Result<PruneOpts> {
         older_than_secs: crate::cairn::STALE_THRESHOLD_SECS,
         yes: false,
         target: None,
+        seeder: None,
+        user: None,
     };
     let mut saw_dry_run = false;
     let mut i = 0;
@@ -1009,6 +1022,22 @@ fn parse_prune_args(args: &[String]) -> Result<PruneOpts> {
                     .get(i)
                     .ok_or_else(|| anyhow!("--older-than requires a duration (e.g. 60d)"))?;
                 opts.older_than_secs = parse_prune_duration(v)?;
+                i += 1;
+            }
+            "--seeder" => {
+                i += 1;
+                let v = args
+                    .get(i)
+                    .ok_or_else(|| anyhow!("--seeder requires a hostname"))?;
+                opts.seeder = Some(v.trim().to_ascii_lowercase());
+                i += 1;
+            }
+            "--user" => {
+                i += 1;
+                let v = args
+                    .get(i)
+                    .ok_or_else(|| anyhow!("--user requires a username"))?;
+                opts.user = Some(v.trim().to_string());
                 i += 1;
             }
             flag if flag.starts_with("--") => {
@@ -1066,6 +1095,26 @@ fn select_prune_candidates(
     if let Some(target) = &opts.target {
         let m = resolve_mirror(state, caller, target)?;
         return Ok(vec![m.clone()]);
+    }
+    // --seeder / --user scoping: when either is set, bypass the age
+    // filter (this is the admin-eviction or self-leave-purge path —
+    // operator is explicitly targeting a scope, not a stale sweep).
+    if opts.seeder.is_some() || opts.user.is_some() {
+        return Ok(caller_visible_mirrors(state, caller)
+            .into_iter()
+            .filter(|m| {
+                opts.seeder
+                    .as_deref()
+                    .map(|h| m.seeder.eq_ignore_ascii_case(h))
+                    .unwrap_or(true)
+                    && opts
+                        .user
+                        .as_deref()
+                        .map(|u| m.user == u)
+                        .unwrap_or(true)
+            })
+            .cloned()
+            .collect());
     }
     Ok(caller_visible_mirrors(state, caller)
         .into_iter()
@@ -1458,6 +1507,7 @@ mod tests {
             older_than_secs: crate::cairn::STALE_THRESHOLD_SECS,
             yes: false,
             target: None,
+            ..Default::default()
         };
         let candidates = select_prune_candidates(&state, &c, &opts, now).unwrap();
         let labels: Vec<&str> = candidates.iter().map(|m| m.label.as_str()).collect();
@@ -1477,6 +1527,7 @@ mod tests {
             older_than_secs: 7 * 86400,
             yes: false,
             target: None,
+            ..Default::default()
         };
         let cands = select_prune_candidates(&state, &c, &opts_7, now).unwrap();
         assert_eq!(cands.len(), 2);
@@ -1486,6 +1537,7 @@ mod tests {
             older_than_secs: 30 * 86400,
             yes: false,
             target: None,
+            ..Default::default()
         };
         let cands = select_prune_candidates(&state, &c, &opts_30, now).unwrap();
         assert_eq!(cands.len(), 1);
@@ -1496,6 +1548,7 @@ mod tests {
             older_than_secs: 90 * 86400,
             yes: false,
             target: None,
+            ..Default::default()
         };
         let cands = select_prune_candidates(&state, &c, &opts_90, now).unwrap();
         assert!(cands.is_empty());
@@ -1514,6 +1567,7 @@ mod tests {
             older_than_secs: crate::cairn::STALE_THRESHOLD_SECS,
             yes: true,
             target: Some("fresh".to_string()),
+            ..Default::default()
         };
         let cands = select_prune_candidates(&state, &c, &opts, now).unwrap();
         assert_eq!(cands.len(), 1);
@@ -1530,6 +1584,7 @@ mod tests {
             older_than_secs: crate::cairn::STALE_THRESHOLD_SECS,
             yes: true,
             target: Some("nonexistent".to_string()),
+            ..Default::default()
         };
         let err = select_prune_candidates(&state, &c, &opts, now);
         assert!(err.is_err());
@@ -1548,6 +1603,7 @@ mod tests {
             older_than_secs: 30 * 86400,
             yes: false,
             target: None,
+            ..Default::default()
         };
         let cands = select_prune_candidates(&state, &c, &opts, now).unwrap();
         assert_eq!(cands.len(), 1);

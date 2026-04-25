@@ -55,7 +55,11 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "delete" => cmd_delete(&args[1..]),
         "list" | "ls" => cmd_list(&args[1..]),
         "forget" => cmd_forget(&args[1..]),
+        "leave" => cmd_leave(&args[1..]),
         "reencrypt" => cmd_reencrypt(&args[1..]),
+        // Hidden verb — invoked by the server via TaskDispatch when an
+        // admin runs `vigocli sigil evict`. Not advertised in --help.
+        "_apply-evict" => cmd_apply_evict(&args[1..]),
         other => bail!(
             "unknown `vigo sigil` subcommand: {}\nrun `vigo sigil --help` for usage",
             other
@@ -79,7 +83,8 @@ SUBCOMMANDS:
     decrypt <file> -o <path>       Decrypt from ~/sigil/ to a user-chosen path
     delete <name>                  Remove a file from ~/sigil/; tombstone propagates to peers
     list [--long] [--tombstones]   List ciphertext files + tombstones in ~/sigil/
-    forget <hostname>              Revoke an envoy from the recipient set
+    forget <hostname>              Revoke an envoy from the recipient set (local only)
+    leave [--purge] [--keep-identity] [--yes]  Unenroll this user from sigil on this envoy
     reencrypt                      Force re-encrypt of ~/sigil/ to current recipients
     status                         Show local sigil state
 
@@ -787,6 +792,250 @@ fn cmd_forget(args: &[String]) -> Result<()> {
     println!("  Run `vigo sigil reencrypt` to re-encrypt existing files");
     println!("  so the revoked host cannot decrypt them from its cached ciphertext.");
     Ok(())
+}
+
+// ---------- leave ----------
+//
+// Self-unenrollment. Three-stage handoff:
+//
+// 1. CLI (user context) validates state, reads own pubkey from
+//    recipients.txt, writes `~/.sigil/leave.pending` with the leave
+//    parameters, exits.
+// 2. Daemon reactor (running as root) polls the sentinel every
+//    announce cycle. When present: loads the daemon signing key,
+//    builds + fans out the signed LEAVE envelope to every live peer,
+//    records the leave in `/var/lib/vigo/sigil/<user>/leaves.json`,
+//    scrubs user-side state per the sentinel's flags, removes the
+//    sentinel.
+// 3. Peers receiving the envelope via `POST /sigil/leaves/<user>`
+//    verify the signature, apply locally (drop pubkey + regenerate
+//    recipients + drop reencrypt.pending), persist.
+//
+// Offline peers miss the live fan-out but naturally drop the leaving
+// envoy via STALE_SECS (90s without announcement); once this envoy
+// stops announcing for user X, peers prune. Admin evict covers the
+// "gone host with cached ciphertext" case via `vigocli sigil evict`.
+
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct LeavePendingSpec {
+    pub age_pubkey: String,
+    pub hostname: String,
+    pub leave_time: i64,
+    pub keep_identity: bool,
+    pub purge_content: bool,
+}
+
+fn cmd_leave(args: &[String]) -> Result<()> {
+    let mut keep_identity = false;
+    let mut purge_content = false;
+    let mut yes = false;
+    for a in args {
+        match a.as_str() {
+            "--keep-identity" => keep_identity = true,
+            "--purge" => purge_content = true,
+            "--yes" | "-y" => yes = true,
+            "--help" | "-h" => {
+                eprintln!(
+                    "vigo sigil leave — unenroll this user's sigil on this envoy\n\n\
+                     USAGE:\n    vigo sigil leave [--purge] [--keep-identity] [--yes]\n\n\
+                     FLAGS:\n    \
+                     --purge          also delete ~/sigil/ ciphertext (default: keep, orphaned)\n    \
+                     --keep-identity  keep ~/.sigil/ so a re-enroll can reuse the wrapped\n                     \
+                     identity. Default is to scrub.\n    \
+                     --yes            skip the confirmation prompt"
+                );
+                return Ok(());
+            }
+            other if other.starts_with("--") => bail!("unknown flag: {}", other),
+            _ => bail!("vigo sigil leave takes no positional arguments; got {}", a),
+        }
+    }
+
+    let home = user_home_for_invocation()?;
+    if !config::is_enrolled(&home) {
+        bail!("not enrolled on this envoy — nothing to leave");
+    }
+
+    // Read own pubkey (user-readable — first non-comment line in
+    // recipients.txt, written by init/enroll).
+    let pubkey = read_local_pubkey(&home)?;
+    let hostname = read_local_hostname()?;
+    let leave_time = now_secs_signed();
+
+    println!("This will unenroll this envoy from your sigil circle.");
+    println!("  pubkey:   {}", pubkey);
+    println!("  hostname: {}", hostname);
+    if purge_content {
+        println!("  ~/sigil/ ciphertext will be DELETED (--purge).");
+    } else {
+        println!("  ~/sigil/ ciphertext will be kept (orphaned — you can't decrypt here).");
+    }
+    if keep_identity {
+        println!("  ~/.sigil/ wrapped identity will be KEPT (--keep-identity).");
+    } else {
+        println!("  ~/.sigil/ wrapped identity will be scrubbed.");
+    }
+
+    if !yes {
+        use std::io::{self, BufRead, Write};
+        print!("Proceed? [y/N] ");
+        io::stdout().flush().ok();
+        let stdin = io::stdin();
+        let mut line = String::new();
+        stdin.lock().read_line(&mut line)?;
+        if !matches!(line.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            println!("aborted.");
+            return Ok(());
+        }
+    }
+
+    let spec = LeavePendingSpec {
+        age_pubkey: pubkey,
+        hostname,
+        leave_time,
+        keep_identity,
+        purge_content,
+    };
+    let pending_path = config::leave_pending_path(&home);
+    let json = serde_json::to_string_pretty(&spec).context("serializing leave spec")?;
+    fs::write(&pending_path, json)
+        .with_context(|| format!("writing {}", pending_path.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&pending_path, fs::Permissions::from_mode(0o600));
+    }
+
+    println!();
+    println!("\u{2713} leave queued at {}", pending_path.display());
+    println!("  the agent will sign + propagate the LEAVE within one announce cycle (~30 s).");
+    println!("  Run `vigo sigil status` afterwards to confirm the sentinel cleared.");
+    Ok(())
+}
+
+fn read_local_pubkey(home: &Path) -> Result<String> {
+    let path = config::recipients_path(home);
+    let text = fs::read_to_string(&path)
+        .with_context(|| format!("reading {}", path.display()))?;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        return Ok(trimmed.to_string());
+    }
+    bail!("no pubkey found in {}", path.display())
+}
+
+fn read_local_hostname() -> Result<String> {
+    let raw = fs::read_to_string("/etc/hostname")
+        .context("reading /etc/hostname")?;
+    let trimmed = raw.trim().to_ascii_lowercase();
+    if trimmed.is_empty() {
+        bail!("/etc/hostname is empty");
+    }
+    Ok(trimmed)
+}
+
+fn now_secs_signed() -> i64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+// ---------- _apply-evict (hidden, server-dispatched) ----------
+
+/// Server-invoked hidden verb. Runs as root via TaskDispatch when an
+/// admin runs `vigocli sigil evict`. Takes `--user <u>` + `--hostname
+/// <h>`, looks the pubkey up from the local peer table (so the
+/// admin dispatcher doesn't need to know it), and applies the
+/// eviction via `apply_leave`. `--pubkey <p>` is optional: supply it
+/// to bypass the peer-table lookup (e.g., when evicting a host that
+/// never reached this envoy's multicast range).
+///
+/// Does NOT sign or fan out an envelope — admin path authority is the
+/// mTLS control plane, not a P2P signature. No-op if the user is not
+/// enrolled on this envoy OR the hostname isn't in this envoy's peer
+/// table for that user.
+fn cmd_apply_evict(args: &[String]) -> Result<()> {
+    let mut user: Option<String> = None;
+    let mut pubkey: Option<String> = None;
+    let mut hostname: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--user" => {
+                i += 1;
+                user = Some(args.get(i).context("--user requires a value")?.clone());
+                i += 1;
+            }
+            "--pubkey" => {
+                i += 1;
+                pubkey = Some(args.get(i).context("--pubkey requires a value")?.clone());
+                i += 1;
+            }
+            "--hostname" => {
+                i += 1;
+                hostname = Some(args.get(i).context("--hostname requires a value")?.clone());
+                i += 1;
+            }
+            other => bail!("unknown flag: {}", other),
+        }
+    }
+    let user = user.context("--user is required")?;
+    let hostname = hostname.context("--hostname is required")?;
+
+    // Resolve pubkey — either explicit from the caller, or looked up
+    // from the peer table.
+    let pubkey = match pubkey {
+        Some(p) if p != "LOOKUP" && !p.is_empty() => p,
+        _ => {
+            let table = PeerTable::load(&user);
+            match table.peers.get(&hostname) {
+                Some(p) => p.pubkey.clone(),
+                None => {
+                    // No-op: hostname unknown to this envoy for this user.
+                    // This is expected on envoys where the evicted host never
+                    // appeared. Report success so task-dispatch doesn't retry.
+                    println!(
+                        "(no-op) {} is not in peers.json for user {} on this envoy",
+                        hostname, user
+                    );
+                    return Ok(());
+                }
+            }
+        }
+    };
+
+    // Resolve the user's home dir for recipients.txt regeneration.
+    let home = resolve_user_home(&user)?;
+    let leave_time = now_secs_signed();
+    crate::sigil::apply_leave(&user, &pubkey, &hostname, leave_time, &home)
+        .context("apply_leave")?;
+    let shown = &pubkey[..pubkey.len().min(12)];
+    println!(
+        "\u{2713} evicted {} (pubkey {}...) from {}'s sigil circle on this envoy",
+        hostname, shown, user
+    );
+    Ok(())
+}
+
+fn resolve_user_home(username: &str) -> Result<PathBuf> {
+    #[cfg(unix)]
+    {
+        use nix::unistd::User;
+        let user = User::from_name(username)
+            .ok()
+            .flatten()
+            .with_context(|| format!("cannot resolve user {}", username))?;
+        Ok(user.dir)
+    }
+    #[cfg(not(unix))]
+    {
+        bail!("sigil _apply-evict is Unix-only")
+    }
 }
 
 // ---------- reencrypt ----------

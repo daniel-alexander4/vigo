@@ -286,6 +286,14 @@ async fn handle_request(
             tokio::task::block_in_place(|| crate::sigil::server::handle_tombstones_list(p))
         }
 
+        // Sigil: receive a signed LEAVE envelope from a peer that is
+        // unenrolling. Verifies the signer is the subject, then drops
+        // the pubkey from the peer table, regenerates recipients.txt,
+        // drops the reencrypt.pending sentinel, and records the LEAVE.
+        (&Method::POST, p) if p.starts_with("/sigil/leaves/") => {
+            crate::sigil::server::handle_leave(p, req, peer_addr).await
+        }
+
         _ => not_found(),
     };
 

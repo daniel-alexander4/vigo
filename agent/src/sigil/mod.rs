@@ -29,6 +29,7 @@ pub mod cli;
 pub mod config;
 pub mod crypt;
 pub mod discovery;
+pub mod leaves;
 pub mod pusher;
 pub mod server;
 pub mod session;
@@ -166,6 +167,9 @@ async fn run(
                 return;
             }
             _ = announce_timer.tick() => {
+                // Process any pending leaves before announcing so
+                // a fresh leave lands on peers in the same cycle.
+                process_pending_leaves(&machine).await;
                 if let Err(e) = announce_all(&machine, &out_tx).await {
                     warn!(error = %e, "sigil: announce cycle error");
                 }
@@ -187,6 +191,120 @@ async fn run(
             }
         }
     }
+}
+
+/// Poll every enrolled user for a `~/.sigil/leave.pending` sentinel
+/// dropped by `vigo sigil leave`. For each sentinel present:
+///
+/// 1. Load the daemon signing key for the user.
+/// 2. Build + fan out a signed LEAVE envelope to every live peer.
+/// 3. Persist the LEAVE to local `leaves.json` and apply locally
+///    (mostly a no-op on the leaving envoy since self isn't in its
+///    own peer table; still drops `reencrypt.pending` and the
+///    `leaves.json` entry for completeness / future audit).
+/// 4. Scrub user-side state per the sentinel's flags.
+/// 5. Remove the sentinel.
+///
+/// Best-effort on network push — individual failures logged, not
+/// escalated. Peers that miss the live fan-out naturally drop this
+/// envoy via STALE_SECS (90 s) when announcements stop.
+async fn process_pending_leaves(machine: &str) {
+    let enrolled = match enrolled_users() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    for user in enrolled {
+        let home = match home_for_user(&user) {
+            Some(h) => h,
+            None => continue,
+        };
+        let pending = config::leave_pending_path(&home);
+        if !pending.exists() {
+            continue;
+        }
+        match process_one_leave(machine, &user, &home, &pending).await {
+            Ok(()) => {
+                info!(user = %user, "sigil: leave processed, sentinel cleared");
+            }
+            Err(e) => {
+                warn!(user = %user, error = %e, "sigil: leave processing failed");
+            }
+        }
+    }
+}
+
+async fn process_one_leave(
+    machine: &str,
+    user: &str,
+    home: &Path,
+    pending: &Path,
+) -> Result<()> {
+    let raw = fs::read_to_string(pending)
+        .with_context(|| format!("reading {}", pending.display()))?;
+    let spec: super::sigil::cli::LeavePendingSpec =
+        serde_json::from_str(&raw).context("parsing leave.pending")?;
+
+    let signing_key = load_local_signing_key(user)
+        .context("cannot load daemon signing key")?;
+
+    let envelope = leaves::build_envelope(
+        &signing_key,
+        machine,
+        user,
+        &spec.age_pubkey,
+        spec.leave_time,
+    );
+
+    // Persist first, push second: if fan-out fails mid-flight we've
+    // at least recorded the LEAVE locally. `apply_leave` is
+    // idempotent across repeat deliveries.
+    apply_leave(user, &spec.age_pubkey, &spec.hostname, spec.leave_time, home)?;
+
+    if let Some(tls) = DAEMON_TLS.get() {
+        // Spawn into the runtime so the blocking pushes don't pin
+        // the announcer loop — we're already in an async context.
+        let tls = tls.clone();
+        let envelope_clone = envelope.clone();
+        tokio::spawn(async move {
+            if let Err(e) = pusher::fan_out_leave(&tls, envelope_clone).await {
+                warn!(error = %e, "sigil: LEAVE fan-out error");
+            }
+        });
+    } else {
+        warn!("sigil: DAEMON_TLS not initialised, skipping LEAVE fan-out (peers catch up via staleness)");
+    }
+
+    // Scrub user-side state per flags.
+    if spec.purge_content {
+        let content = config::content_dir(home);
+        if content.exists() {
+            if let Err(e) = fs::remove_dir_all(&content) {
+                warn!(path = %content.display(), error = %e, "sigil: purge ~/sigil/ failed");
+            }
+        }
+    }
+    if !spec.keep_identity {
+        let dot = config::dot_dir(home);
+        // Preserve leave.pending (we're about to remove it) by
+        // removing items individually. Belt-and-suspenders: the
+        // rm-pending step at the end still fires even if this loop
+        // raced some other file.
+        for name in [
+            "identity.age",
+            "identity.salt",
+            "recipients.txt",
+            "config.yaml",
+        ] {
+            let p = dot.join(name);
+            if p.exists() {
+                let _ = fs::remove_file(&p);
+            }
+        }
+    }
+
+    fs::remove_file(pending)
+        .with_context(|| format!("removing {}", pending.display()))?;
+    Ok(())
 }
 
 /// Prune expired tombstones for every enrolled user. Runs once per
@@ -719,6 +837,73 @@ fn now_secs() -> i64 {
 pub fn regenerate_recipients_now(user: &str, home: &Path) -> Result<()> {
     let table = PeerTable::load(user);
     regenerate_recipients(user, home, &table)
+}
+
+/// Shared local-apply for a LEAVE. Called by:
+///
+/// - `POST /sigil/leaves/<user>` handler after verifying a signed
+///   envelope from a peer
+/// - `vigo sigil leave` after signing its own envelope
+/// - `vigo sigil _apply-evict` after the admin task dispatch lands
+///
+/// Steps: drop the pubkey from `peers.json`, persist the table,
+/// record the LEAVE in `leaves.json`, regenerate `recipients.txt`
+/// (omitting the pubkey), drop the `reencrypt.pending` sentinel so
+/// the next `vigo sigil unlock` (or the running session helper)
+/// rewraps existing ciphertext. Idempotent — repeat calls with the
+/// same args are no-ops after the first.
+pub fn apply_leave(
+    user: &str,
+    age_pubkey_leaving: &str,
+    hostname_leaving: &str,
+    leave_time: i64,
+    home: &Path,
+) -> Result<()> {
+    // 1. Peer table: drop the pubkey if still present.
+    let mut table = PeerTable::load(user);
+    let peer_was_present = table.forget_by_pubkey(age_pubkey_leaving);
+    if peer_was_present {
+        table.save()?;
+    }
+
+    // 2. Leave table: record the leave (monotonic on leave_time).
+    let mut leaves = leaves::LeavesTable::load(user);
+    let record = leaves::LeaveRecord {
+        leave_time,
+        hostname_leaving: hostname_leaving.to_string(),
+    };
+    let leaves_changed = leaves.upsert(age_pubkey_leaving, record);
+    if leaves_changed {
+        leaves.save()?;
+    }
+
+    // 3. Recipients.txt — regenerate unconditionally when a peer was
+    //    dropped. Cheap and side-effect-free if the pubkey wasn't there.
+    if peer_was_present {
+        regenerate_recipients(user, home, &table)?;
+    }
+
+    // 4. Reencrypt sentinel — drop only when something actually
+    //    changed, else we'd churn the session helper across repeated
+    //    idempotent deliveries.
+    if peer_was_present || leaves_changed {
+        let sentinel = config::reencrypt_pending_path(home);
+        if let Some(parent) = sentinel.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if !sentinel.exists() {
+            if let Err(e) = fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&sentinel)
+            {
+                warn!(path = %sentinel.display(), error = %e, "sigil: failed to drop reencrypt.pending");
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Periodic unicast-announce loop for each enrolled user's

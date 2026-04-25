@@ -37,6 +37,7 @@ use hyper::{Request, Response, StatusCode};
 
 use crate::platform::users::user_home;
 
+use super::leaves::{self, LeaveEnvelope};
 use super::state::PeerTable;
 use super::tombstones::{self, DeleteEnvelope, Tombstone, TombstoneTable};
 
@@ -416,6 +417,116 @@ pub fn handle_tombstones_list(path: &str) -> Response<Full<Bytes>> {
             .unwrap(),
         Err(_) => internal_error("serialize tombstone table"),
     }
+}
+
+// ---------- LEAVE (POST /sigil/leaves/{user}) ----------
+
+/// Handle a signed LEAVE envelope from a peer.
+///
+/// Pipeline mirrors `handle_tombstone_delete`:
+/// 1. Parse body as `LeaveEnvelope`.
+/// 2. Validate path user matches envelope user.
+/// 3. Look up the signing pubkey registered for
+///    `envelope.hostname_leaving` in the local peer table. Signer
+///    MUST be the subject — we do NOT allow one peer to sign a
+///    LEAVE for another (self-leave-only at the P2P layer).
+/// 4. Verify signature; reject with 403 on failure.
+/// 5. Call shared `apply_leave` to drop the pubkey from peer table,
+///    regenerate recipients.txt, drop reencrypt.pending, persist to
+///    leaves.json.
+pub async fn handle_leave(
+    path: &str,
+    req: Request<hyper::body::Incoming>,
+    _peer_addr: SocketAddr,
+) -> Response<Full<Bytes>> {
+    let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    let user = match segments.as_slice() {
+        ["sigil", "leaves", user] => *user,
+        _ => return not_found(),
+    };
+    let user = match percent_decode(user) {
+        Some(s) => s,
+        None => return bad_request("invalid user encoding"),
+    };
+    if !valid_username(&user) {
+        return bad_request("invalid user");
+    }
+
+    let collected = match req.into_body().collect().await {
+        Ok(c) => c,
+        Err(_) => return bad_request("read body"),
+    };
+    let body_bytes = collected.to_bytes();
+    if body_bytes.len() > MAX_ANNOUNCE_BYTES {
+        return payload_too_large();
+    }
+
+    let envelope: LeaveEnvelope = match serde_json::from_slice(&body_bytes) {
+        Ok(e) => e,
+        Err(e) => return bad_request(&format!("malformed envelope: {}", e)),
+    };
+
+    if envelope.user != user {
+        return bad_request("path / envelope user mismatch");
+    }
+
+    let table = PeerTable::load(&user);
+    let expected_pubkey = match table.sign_pubkey_for(&envelope.hostname_leaving) {
+        Some(s) if !s.is_empty() => s.to_string(),
+        _ => {
+            tracing::warn!(
+                user = %user,
+                hostname_leaving = %envelope.hostname_leaving,
+                "sigil: LEAVE rejected — subject unknown to peer table or has no signing pubkey"
+            );
+            return forbidden("unknown subject or no signing pubkey");
+        }
+    };
+
+    if let Err(e) = leaves::verify_envelope(&envelope, &expected_pubkey) {
+        tracing::warn!(
+            user = %user,
+            hostname_leaving = %envelope.hostname_leaving,
+            error = %e,
+            "sigil: LEAVE rejected — signature verification failed"
+        );
+        return forbidden("signature verification failed");
+    }
+
+    // Apply locally via the shared helper. Needs the user's home
+    // dir to regenerate recipients.txt. If we can't resolve the
+    // home (rare: user removed between announce + LEAVE), still
+    // persist the LEAVE record so future announcements respect it.
+    if let Some(home) = user_home(&user) {
+        if let Err(e) = super::apply_leave(
+            &user,
+            &envelope.age_pubkey_leaving,
+            &envelope.hostname_leaving,
+            envelope.leave_time,
+            &home,
+        ) {
+            tracing::warn!(error = %e, "sigil: apply_leave failed");
+            return internal_error("apply_leave");
+        }
+    } else {
+        // No home — persist to leaves.json at minimum.
+        let mut table = super::leaves::LeavesTable::load(&user);
+        let record = super::leaves::LeaveRecord {
+            leave_time: envelope.leave_time,
+            hostname_leaving: envelope.hostname_leaving.clone(),
+        };
+        if table.upsert(&envelope.age_pubkey_leaving, record) {
+            if let Err(e) = table.save() {
+                tracing::warn!(error = %e, "sigil LEAVE: leaves.json save failed");
+            }
+        }
+    }
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .body(Full::new(Bytes::from(r#"{"status":"accepted"}"#)))
+        .unwrap()
 }
 
 // ---------- announce (POST /sigil/announce) ----------

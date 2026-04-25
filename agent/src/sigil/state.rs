@@ -179,6 +179,26 @@ impl PeerTable {
         self.peers.remove(hostname).is_some()
     }
 
+    /// Remove a peer by age pubkey. Used when applying a LEAVE envelope,
+    /// where the authoritative key is the subject's age pubkey (a
+    /// re-enrolled host under the same hostname has a different pubkey,
+    /// so keying by pubkey prevents replays from affecting the reborn
+    /// host). Returns true if a matching peer was removed.
+    pub fn forget_by_pubkey(&mut self, age_pubkey: &str) -> bool {
+        let key = self
+            .peers
+            .iter()
+            .find(|(_, p)| p.pubkey == age_pubkey)
+            .map(|(k, _)| k.clone());
+        match key {
+            Some(k) => {
+                self.peers.remove(&k);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Drop peers whose `last_seen` is older than `now - STALE_SECS`.
     /// Returns true if any peer was dropped (caller should regenerate
     /// recipients.txt when so).

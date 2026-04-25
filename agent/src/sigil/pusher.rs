@@ -442,6 +442,83 @@ pub(crate) fn build_agent_for_mod(tls: &TlsCerts) -> Result<ureq::Agent> {
     build_agent(tls)
 }
 
+/// Fan a signed LEAVE envelope out to every live peer + cross-subnet
+/// peer for `user`. Called from `mod.rs` when the daemon processes a
+/// `leave.pending` sentinel. Offline peers are skipped; they catch
+/// up via natural staleness (90 s without announcement → dropped
+/// from live_pubkeys on the peer side).
+///
+/// Best-effort: individual push failures are logged but do not fail
+/// the overall call. The caller has already persisted the LEAVE to
+/// local `leaves.json` and removed the sentinel — propagation is
+/// pure network push.
+pub async fn fan_out_leave(
+    tls: &TlsCerts,
+    envelope: super::leaves::LeaveEnvelope,
+) -> Result<()> {
+    let agent = build_agent(tls)?;
+    let lan_targets = lan_targets_for(&envelope.user);
+    let extra_targets = extra_targets_for(&envelope.user);
+    let total = lan_targets.len() + extra_targets.len();
+    if total == 0 {
+        debug!(user = %envelope.user, "pusher: no LEAVE targets");
+        return Ok(());
+    }
+    info!(
+        user = %envelope.user,
+        age_pubkey = %envelope.age_pubkey_leaving,
+        lan = lan_targets.len(),
+        extra = extra_targets.len(),
+        "pusher: fanning out LEAVE",
+    );
+    let mut handles = Vec::with_capacity(total);
+    for target in lan_targets.into_iter().chain(extra_targets) {
+        let agent = agent.clone();
+        let envelope = envelope.clone();
+        handles.push(tokio::task::spawn_blocking(move || {
+            push_leave_one(&agent, &target, &envelope)
+        }));
+    }
+    for h in handles {
+        match h.await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => warn!(error = %e, "pusher: peer LEAVE failed"),
+            Err(e) => warn!(error = %e, "pusher: LEAVE spawn_blocking join failed"),
+        }
+    }
+    Ok(())
+}
+
+/// One LEAVE attempt. Blocking; runs inside `spawn_blocking`.
+fn push_leave_one(
+    agent: &ureq::Agent,
+    target: &PushTarget,
+    envelope: &super::leaves::LeaveEnvelope,
+) -> Result<()> {
+    let url = format!(
+        "https://{}/sigil/leaves/{}",
+        target.addr,
+        urlencode(&envelope.user),
+    );
+    let body = serde_json::to_vec(envelope).context("serializing LEAVE envelope")?;
+    let resp = agent
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .send(body)
+        .with_context(|| format!("POST {}", url))?;
+    let status = resp.status();
+    if !status.is_success() {
+        anyhow::bail!("peer {} returned HTTP {}", target.label, status.as_u16());
+    }
+    debug!(
+        target = %target.label,
+        user = %envelope.user,
+        age_pubkey = %envelope.age_pubkey_leaving,
+        "pusher: LEAVE accepted"
+    );
+    Ok(())
+}
+
 /// Build the mTLS-configured ureq agent used for sigil pushes.
 /// Separate from swarm::peer_client's agent because we need a
 /// longer timeout (5 min vs. 30 s) to accommodate 1 GiB blobs.

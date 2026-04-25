@@ -31,6 +31,7 @@ It does not require the daemon to be running and it makes no network calls. Ever
 | `recover <project> [opts]` | Clone a mirror to a user-owned path |
 | `recover-all [--dest <dir>]` | Clone every mirror owned by the caller |
 | `prune [opts]` | Remove stale mirrors manually (dry-run by default, requires root with `--yes`) |
+| `leave [--pause \| --purge] [--yes]` | Remove or pause all this user's cairn sidecars on this envoy |
 | `source add <path>` | Write a new `.cairn.yaml` sidecar in a repo |
 | `source remove <project>` | Delete a sidecar |
 | `source pause <project>` | Stop publishing (sets `paused: true`) |
@@ -181,6 +182,31 @@ sudo vigo cairn prune vigo-web
 ```
 
 **Exit status:** 0 on success (including the dry-run case with no candidates). 1 if any bare-repo removal failed — the state file is still persisted with the successful removals, so re-running the command will retry only the failures.
+
+## `vigo cairn leave [--pause | --purge] [--yes]`
+
+Self-unenrollment for the invoking user on this envoy. Enumerates every `.cairn.yaml` sidecar under `~/cairn/*/` owned by the invoking user, confirms with a y/N prompt unless `--yes`, then:
+
+- **Default** — deletes every sidecar. The cairn reactor drops these labels on its next tick. Receiver mirrors on *other* envoys persist until their own `vigo cairn prune` runs.
+- `--pause` — sets `paused: true` on every sidecar instead of deleting. Use when you're going offline temporarily and want to keep enrollment intact. Resume with `vigo cairn source resume <project>` per project.
+- `--purge` — deletes sidecars AND runs `vigo cairn prune --seeder <this-host> --user <invoking-user> --yes` to clear receiver-side mirrors for your projects on this envoy. Requires root for the prune step (bare repos are root-owned).
+
+Scope: only sidecars owned by the invoking user. Other users' cairn enrollment on this envoy is untouched.
+
+```
+$ vigo cairn leave --yes
+Will remove 3 sidecar(s):
+  dotfiles      /home/dan/cairn/dotfiles/.cairn.yaml
+  notes         /home/dan/cairn/notes/.cairn.yaml
+  vigo-web      /home/dan/cairn/vigo-web/.cairn.yaml
+  ✓ removed dotfiles
+  ✓ removed notes
+  ✓ removed vigo-web
+
+reactor drops these labels on next tick. Receiver mirrors on other envoys persist until their own `vigo cairn prune` runs.
+```
+
+Admin counterpart for evicting a gone host from the fleet: [`vigocli cairn evict --host <h>`](cairn.md).
 
 ## `vigo cairn source list`
 

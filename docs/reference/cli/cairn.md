@@ -3,7 +3,9 @@
 
 Admin-side, fleet-wide view of the [cairn](../../engineering/subsystems/cairn.md) personal-DR mesh. Every envoy's publisher-side source list and receiver-side mirror holdings are joined server-side by `server/cairnmesh` and surfaced through `GET /api/v1/cairn/fleet`; this command is the CLI consumer of that endpoint.
 
-`vigocli cairn` is **read-only**. Recovery runs on the envoy holding the mirror, not from the admin host — use the envoy-local [`vigo cairn`](agent-cairn.md) CLI for that. Publish, revoke, and seed distribution for admin-pushed payloads live in [`vigocli lode`](lode.md) (lode rides the same swarm substrate).
+`vigocli cairn` is mostly **read-only**. Recovery runs on the envoy holding the mirror, not from the admin host — use the envoy-local [`vigo cairn`](agent-cairn.md) CLI for that. Publish, revoke, and seed distribution for admin-pushed payloads live in [`vigocli lode`](lode.md) (lode rides the same swarm substrate).
+
+The one write verb is `evict` — a fleet-wide prune of every mirror sourced from a named host, useful for host decommission.
 
 ## Subcommands
 
@@ -12,8 +14,24 @@ Admin-side, fleet-wide view of the [cairn](../../engineering/subsystems/cairn.md
 | `status` | Fleet-wide cairn totals (publishers, labels, mirrors, orphans, stale) |
 | `list` | One row per cairn label with publisher, mirror counts, bundle type, size |
 | `show <label\|project>` | Detailed view of one label with per-host mirror grid |
+| `members` | List envoys participating in cairn (read-only) |
+| `evict --host <h> [--user <u>]` | Prune every mirror sourced from `<h>` fleet-wide |
 
-Every subcommand accepts `--json` to emit machine-readable output instead of a table.
+Every read subcommand accepts `--json` to emit machine-readable output instead of a table.
+
+## `vigocli cairn evict`
+
+Dispatches `vigo cairn prune --seeder <host> [--user <user>] --yes` to every online envoy via the task-dispatch primitive. Offline envoys pick up the task on their next check-in. No cryptographic membership — authority is the mTLS admin channel.
+
+```bash
+vigocli cairn evict --host girlslaptop --yes
+vigocli cairn evict --host girlslaptop --user dan --yes
+```
+
+Scope options:
+- `--host <h>` (required) — seeder hostname to evict.
+- `--user <u>` — limit to one user's mirrors. Default: every user's mirrors sourced from the host.
+- `--yes` — skip the confirmation prompt.
 
 ## Usage
 

@@ -136,6 +136,58 @@ While a tombstone is active, re-pushing that filename is rejected with 410 Gone 
 
 Filename reuse with a fresh name is the recommended pattern.
 
+## Leaving sigil
+
+Two paths exist for removing a host from a user's sigil circle — both land on the same local-apply function (`apply_leave` in `agent/src/sigil/mod.rs`) but differ in how the agent learns about the leave.
+
+### Path A — self-leave (user-triggered, P2P)
+
+User runs `vigo sigil leave` on the departing envoy. The CLI drops a `~/.sigil/leave.pending` sentinel; the daemon reactor picks it up on its next announce tick (~30 s), builds a **signed LEAVE envelope** (`agent/src/sigil/leaves.rs`), fans it out to every live peer via `POST /sigil/leaves/<user>`, persists the record to `/var/lib/vigo/sigil/<user>/leaves.json`, and scrubs local state per the sentinel's flags.
+
+### Signed LEAVE envelope
+
+The envelope is a direct analogue of the DELETE tombstone envelope:
+
+```rust
+struct LeaveEnvelope {
+    user: String,
+    age_pubkey_leaving: String,        // the subject's age pubkey — the authoritative key
+    hostname_leaving: String,          // for audit/routing
+    leave_time: i64,
+    signer_sign_pubkey: String,        // audit; not used for verification
+    signature: String,                 // ed25519 over canonical(user|age_pubkey|leave_time)
+}
+```
+
+**Self-leave enforcement**: on receipt, the agent verifies the signature against the Ed25519 signing pubkey registered for `hostname_leaving` in its local `peers.json`. Signer must be the subject. A peer cannot sign a LEAVE for another peer — cross-member eviction via envelope is cryptographically impossible.
+
+Records are keyed by `age_pubkey_leaving`, not hostname: a host that re-enrolls generates a fresh age identity, so a replayed old LEAVE targets only the old pubkey and can't affect the reborn host.
+
+Retention: 90 days (matches tombstones). A digest of the sorted `(age_pubkey, leave_time)` pairs piggybacks on future announcement payloads so offline-during-leave peers can catch up on reconnect via `GET /sigil/leaves/<user>` — scheduled for Phase B.1.
+
+### Path B — admin eviction (server-triggered, control plane)
+
+Admin runs `vigocli sigil evict --host <h> {--user <u> | --all-users}`. The CLI queries `/api/v1/sigil/fleet` to find affected users, then dispatches a shell command via `POST /api/v1/task`:
+
+```
+vigo sigil _apply-evict --user <u> --hostname <h>
+```
+
+Each enrolled agent receives the task, resolves the target's age pubkey from its own peer table, calls `apply_leave` directly (no envelope, no fan-out — the agent is authoritative for its own state). Offline agents pick up the task on next check-in via normal task-dispatch retry.
+
+No signed envelope; authority is end-to-end mTLS + admin token at the control plane, not a P2P signature. This is the right shape for "gone host, can't self-leave" scenarios where no-one can produce the subject's signature.
+
+### Local scrub on self-leave
+
+`vigo sigil leave` defaults to **delete identity, keep ciphertext**. `~/.sigil/` is removed (wrapped identity, salt, recipients, config); `~/sigil/` ciphertext is left in place but orphaned — the host no longer has an identity to decrypt it locally. Flags:
+
+- `--purge` — also delete `~/sigil/` ciphertext.
+- `--keep-identity` — keep `~/.sigil/` (rare; used when planning to re-enroll with the same keys).
+
+### Reencrypt queueing on peers
+
+When a LEAVE lands on a peer, the agent drops `~<user>/.sigil/reencrypt.pending`. Existing ciphertext in `~/sigil/` was wrapped for N recipients including the evicted one; it remains decryptable by the evicted host unless re-wrapped. The session helper drains the sentinel on its next tick (if the user is unlocked) or on the next `vigo sigil unlock` invocation — reencryption is eventually consistent and user-interactive by design.
+
 ## Threat Model
 
 **Sigil protects against:**
