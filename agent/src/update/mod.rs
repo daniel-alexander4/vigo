@@ -291,6 +291,26 @@ pub async fn apply(
     #[cfg(unix)]
     remove_legacy_cairn_shim();
 
+    // Refresh the systemd unit file if the bootstrap template has
+    // changed since this envoy was first installed. Without this,
+    // envoys bootstrapped on older agent versions never pick up new
+    // unit fields — most recently `LimitNOFILE=65536`, missing on
+    // hosts installed before that template change. Without the bump
+    // the soft FD limit stays at the systemd default of 1024 and the
+    // swarm peer server hits EMFILE under modest load.
+    #[cfg(target_os = "linux")]
+    {
+        if std::path::Path::new("/usr/bin/systemctl").exists()
+            || std::path::Path::new("/bin/systemctl").exists()
+        {
+            match crate::bootstrap::systemd::refresh_unit_file_if_changed().await {
+                Ok(true) => info!("systemd unit refreshed for new agent version"),
+                Ok(false) => debug!("systemd unit already current"),
+                Err(e) => warn!(error = %e, "could not refresh systemd unit; continuing"),
+            }
+        }
+    }
+
     // Exec replaces the current process.
     if exec_self {
         #[cfg(unix)]

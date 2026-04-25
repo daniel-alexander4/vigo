@@ -20,6 +20,11 @@ pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
     super::derive_grpc_addr(bootstrap_server, grpc_port)
 }
 
+/// Path to the installed unit file. Exported so the upgrade path
+/// (`update::apply`) can re-write it on every binary upgrade — see
+/// [`refresh_unit_file_if_changed`].
+pub const UNIT_FILE_PATH: &str = UNIT_PATH;
+
 /// Generate the systemd unit file content.
 /// The agent reads server address from the config file written during bootstrap.
 fn unit_file() -> String {
@@ -101,6 +106,43 @@ pub async fn install_service(
     println!("  journalctl -u {} -f    # follow logs", SERVICE_NAME);
 
     Ok(grpc_addr)
+}
+
+/// Re-write the systemd unit file if its contents differ from the current
+/// template. Designed for the upgrade path so envoys bootstrapped on older
+/// agent versions pick up new unit fields (e.g. `LimitNOFILE=65536`,
+/// `Wants=network-online.target`) without a manual reinstall. If a change
+/// is written, `systemctl daemon-reload` is invoked so the new limits
+/// take effect on the next service restart — which `update::apply`
+/// triggers via the post-rename `exec` call.
+///
+/// Returns `Ok(true)` if the file changed and was rewritten,
+/// `Ok(false)` if it already matched. Best-effort: any I/O error is
+/// returned to the caller but does not abort the upgrade.
+pub async fn refresh_unit_file_if_changed() -> Result<bool> {
+    let target = unit_file();
+    let current = std::fs::read_to_string(UNIT_PATH).unwrap_or_default();
+    if current == target {
+        return Ok(false);
+    }
+
+    std::fs::write(UNIT_PATH, &target)
+        .with_context(|| format!("rewrite systemd unit at {}", UNIT_PATH))?;
+    info!(path = UNIT_PATH, "refreshed systemd unit file");
+
+    // daemon-reload picks up the new contents. We do NOT restart the
+    // service here — the surrounding upgrade already exec()s into the
+    // new binary, which re-reads the (new) unit on its next service
+    // start cycle.
+    let status = tokio::process::Command::new("systemctl")
+        .args(["daemon-reload"])
+        .status()
+        .await
+        .context("run systemctl daemon-reload after unit refresh")?;
+    if !status.success() {
+        bail!("systemctl daemon-reload after unit refresh exited with {}", status);
+    }
+    Ok(true)
 }
 
 /// Remove the legacy /usr/local/bin/cairn shim symlink from 0.22.0-0.22.1.

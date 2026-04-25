@@ -24,6 +24,7 @@ use hyper::{Method, Request, Response, StatusCode};
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
 use tokio_rustls::TlsAcceptor;
@@ -101,6 +102,15 @@ pub async fn run(
 
     info!(port, "swarm peer server listening");
 
+    // Rate-limit accept-error logging to at most one warn per second per
+    // process. Without this, EMFILE (FD exhaustion) lets the kernel return
+    // the error in microseconds and a `warn! + continue` loop fills the
+    // journal at syscall rate — observed in the field as 8000 lines/sec
+    // sustained, hundreds of GB of syslog. The sleep also gives the
+    // pressure that caused the error a chance to clear.
+    let mut last_accept_warn: Option<Instant> = None;
+    let mut accept_error_suppressed: u64 = 0;
+
     loop {
         let (tcp_stream, peer_addr) = tokio::select! {
             _ = cancel.cancelled() => {
@@ -111,7 +121,24 @@ pub async fn run(
                 match result {
                     Ok(v) => v,
                     Err(e) => {
-                        warn!(error = %e, "accept failed");
+                        let should_log = last_accept_warn
+                            .map(|t| t.elapsed() >= Duration::from_secs(1))
+                            .unwrap_or(true);
+                        if should_log {
+                            warn!(
+                                error = %e,
+                                suppressed = accept_error_suppressed,
+                                "accept failed"
+                            );
+                            last_accept_warn = Some(Instant::now());
+                            accept_error_suppressed = 0;
+                        } else {
+                            accept_error_suppressed += 1;
+                        }
+                        // Back off so we don't tight-loop. EMFILE in particular
+                        // returns from the syscall in microseconds; without a
+                        // sleep this branch can fire >100k times per second.
+                        tokio::time::sleep(Duration::from_millis(100)).await;
                         continue;
                     }
                 }
