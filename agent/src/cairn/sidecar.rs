@@ -13,8 +13,9 @@
 //! The file must be ≤ [`MAX_SIDECAR_BYTES`] bytes. Larger files are
 //! rejected without parsing as a defense against YAML bombs.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Write;
 use std::path::Path;
 use thiserror::Error;
 use tracing::warn;
@@ -325,6 +326,116 @@ fn is_valid_hostname(s: &str) -> bool {
         }
     }
     true
+}
+
+// ---------- writer ----------
+
+/// Serializable form used only by `save`. Mirrors `RawSidecar` but
+/// with `Serialize` derived and with optional-filter fields skipped
+/// when empty so the on-disk YAML stays minimal.
+#[derive(Serialize)]
+struct WireSidecar<'a> {
+    owner: &'a str,
+    max_mirrors: usize,
+    tags: &'a [String],
+    paused: bool,
+    description: &'a str,
+    #[serde(skip_serializing_if = "<[String]>::is_empty")]
+    include_envoys: &'a [String],
+    #[serde(skip_serializing_if = "<[String]>::is_empty")]
+    exclude_envoys: &'a [String],
+    #[serde(skip_serializing_if = "str::is_empty")]
+    when: &'a str,
+    #[serde(skip_serializing_if = "<[String]>::is_empty")]
+    cross_subnet_mirrors: &'a [String],
+}
+
+/// Serialize a validated `SidecarConfig` back to canonical YAML.
+/// Deterministic field order, no optional-empty noise. Re-parseable by
+/// `load`/`parse_str` into an identical `SidecarConfig`.
+pub fn to_yaml(cfg: &SidecarConfig) -> Result<String, SidecarError> {
+    let wire = WireSidecar {
+        owner: &cfg.owner,
+        max_mirrors: cfg.max_mirrors,
+        tags: &cfg.tags,
+        paused: cfg.paused,
+        description: &cfg.description,
+        include_envoys: &cfg.include_envoys,
+        exclude_envoys: &cfg.exclude_envoys,
+        when: &cfg.when,
+        cross_subnet_mirrors: &cfg.cross_subnet_mirrors,
+    };
+    serde_yaml::to_string(&wire).map_err(SidecarError::Parse)
+}
+
+/// Atomically write a validated sidecar to `path`. Uses temp-file +
+/// rename so a crash mid-write never leaves a partial file the reactor
+/// could consume. File is created with mode 0644 so a root agent and
+/// other local users can read it; the sidecar holds no secrets.
+pub fn save(path: &Path, cfg: &SidecarConfig) -> Result<(), SidecarError> {
+    let yaml = to_yaml(cfg)?;
+    let parent = path.parent().ok_or_else(|| {
+        SidecarError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "sidecar path has no parent directory",
+        ))
+    })?;
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| {
+            SidecarError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "sidecar path has no file name",
+            ))
+        })?;
+    let tmp = parent.join(format!(".{}.tmp", file_name));
+    {
+        let mut f = fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&tmp)
+            .map_err(SidecarError::Io)?;
+        f.write_all(yaml.as_bytes()).map_err(SidecarError::Io)?;
+        f.sync_all().map_err(SidecarError::Io)?;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o644);
+        fs::set_permissions(&tmp, perms).map_err(SidecarError::Io)?;
+    }
+    fs::rename(&tmp, path).map_err(SidecarError::Io)?;
+    Ok(())
+}
+
+/// Append `.cairn.yaml` to the `.gitignore` at `repo_root` if it is
+/// not already listed. Creates `.gitignore` if absent. Matches any
+/// existing line that is exactly `.cairn.yaml` or `/.cairn.yaml`
+/// (leading-slash glob root), which are the two idiomatic spellings
+/// for a repo-root file.
+pub fn append_to_gitignore(repo_root: &Path) -> std::io::Result<bool> {
+    let gitignore = repo_root.join(".gitignore");
+    let existing = match fs::read_to_string(&gitignore) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(e),
+    };
+    let already = existing.lines().any(|line| {
+        let trimmed = line.trim();
+        trimmed == ".cairn.yaml" || trimmed == "/.cairn.yaml"
+    });
+    if already {
+        return Ok(false);
+    }
+    let mut contents = existing;
+    if !contents.is_empty() && !contents.ends_with('\n') {
+        contents.push('\n');
+    }
+    contents.push_str(".cairn.yaml\n");
+    fs::write(&gitignore, contents)?;
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -833,5 +944,121 @@ cross_subnet_mirrors:
         }
         let cfg = parse_str(&yaml).unwrap();
         assert_eq!(cfg.cross_subnet_mirrors.len(), MAX_EXTRA_MIRRORS);
+    }
+
+    // ---------- writer round-trips ----------
+
+    fn sample_cfg() -> SidecarConfig {
+        SidecarConfig {
+            owner: "danlap".to_string(),
+            max_mirrors: 3,
+            tags: vec!["work".to_string(), "backup".to_string()],
+            paused: false,
+            description: "dev machine mirror".to_string(),
+            include_envoys: vec![],
+            exclude_envoys: vec![],
+            when: String::new(),
+            cross_subnet_mirrors: vec![],
+        }
+    }
+
+    #[test]
+    fn to_yaml_roundtrips_through_parse() {
+        let cfg = sample_cfg();
+        let yaml = to_yaml(&cfg).unwrap();
+        let parsed = parse_str(&yaml).unwrap();
+        assert_eq!(parsed, cfg);
+    }
+
+    #[test]
+    fn to_yaml_skips_empty_optional_fields() {
+        let cfg = sample_cfg();
+        let yaml = to_yaml(&cfg).unwrap();
+        assert!(!yaml.contains("include_envoys"), "got:\n{}", yaml);
+        assert!(!yaml.contains("exclude_envoys"), "got:\n{}", yaml);
+        assert!(!yaml.contains("when"), "got:\n{}", yaml);
+        assert!(!yaml.contains("cross_subnet_mirrors"), "got:\n{}", yaml);
+    }
+
+    #[test]
+    fn to_yaml_emits_populated_optional_fields() {
+        let mut cfg = sample_cfg();
+        cfg.include_envoys = vec!["*.lan".to_string()];
+        cfg.cross_subnet_mirrors = vec!["plex".to_string()];
+        let yaml = to_yaml(&cfg).unwrap();
+        assert!(yaml.contains("include_envoys"), "got:\n{}", yaml);
+        assert!(yaml.contains("cross_subnet_mirrors"), "got:\n{}", yaml);
+        let parsed = parse_str(&yaml).unwrap();
+        assert_eq!(parsed, cfg);
+    }
+
+    #[test]
+    fn save_then_load_roundtrips() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".cairn.yaml");
+        let cfg = sample_cfg();
+        save(&path, &cfg).unwrap();
+        let loaded = load(&path).unwrap();
+        assert_eq!(loaded, cfg);
+    }
+
+    #[test]
+    fn save_is_atomic_no_tmp_leftover() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".cairn.yaml");
+        save(&path, &sample_cfg()).unwrap();
+        // No stray .tmp alongside the sidecar.
+        let entries: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(entries, vec![".cairn.yaml".to_string()], "got: {:?}", entries);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn save_sets_644_mode() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(".cairn.yaml");
+        save(&path, &sample_cfg()).unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o644);
+    }
+
+    #[test]
+    fn append_to_gitignore_creates_file_when_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let added = append_to_gitignore(dir.path()).unwrap();
+        assert!(added);
+        let contents = std::fs::read_to_string(dir.path().join(".gitignore")).unwrap();
+        assert_eq!(contents.trim(), ".cairn.yaml");
+    }
+
+    #[test]
+    fn append_to_gitignore_is_idempotent() {
+        let dir = tempfile::tempdir().unwrap();
+        append_to_gitignore(dir.path()).unwrap();
+        let added = append_to_gitignore(dir.path()).unwrap();
+        assert!(!added);
+    }
+
+    #[test]
+    fn append_to_gitignore_recognises_leading_slash_form() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(".gitignore"), "/.cairn.yaml\n").unwrap();
+        let added = append_to_gitignore(dir.path()).unwrap();
+        assert!(!added);
+    }
+
+    #[test]
+    fn append_to_gitignore_appends_to_existing_file_without_trailing_newline() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(".gitignore"), "target/").unwrap();
+        append_to_gitignore(dir.path()).unwrap();
+        let contents = std::fs::read_to_string(dir.path().join(".gitignore")).unwrap();
+        assert!(contents.starts_with("target/\n"));
+        assert!(contents.contains(".cairn.yaml"));
     }
 }

@@ -42,6 +42,16 @@ The server is absent from every step. It never runs `git`, never downloads bundl
 
 Every synced repo must have a `.cairn.yaml` file at its root. This is mandatory opt-in: a `.git/` directory under `~<user>/cairn/` without a sidecar is left alone. Operators can have personal git work there that cairn never touches.
 
+### Authoring: CLI, not hand-editing
+
+The supported way to create, edit, pause, and remove sidecars is the `vigo cairn source` CLI (see [CLI reference](../../reference/cli/agent-cairn.md)):
+
+- `vigo cairn source add <path>` writes a validated sidecar with the full schema enforced at write time, not at reactor-tick time.
+- `vigo cairn source pause|resume <project>` flips the `paused` field without rewriting the file by hand.
+- `vigo cairn source show|validate` surface parse errors on demand.
+
+Hand-editing the YAML still works — the reactor doesn't care where the file came from — but the CLI catches mistakes that hand-editing silently lets slip through (unknown fields, missing mandatory keys, out-of-range `max_mirrors`, overlong descriptions). The on-disk format remains the single source of truth so a sidecar committed to a git repo rides along with clones.
+
 ```yaml
 owner: my-laptop
 max_mirrors: 5

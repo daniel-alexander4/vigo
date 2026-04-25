@@ -21,6 +21,12 @@
 //! vigo cairn recover <project> [opts]   # clone to user path
 //! vigo cairn recover-all [--dest D]     # bulk recovery
 //! vigo cairn source list                # what this envoy publishes
+//! vigo cairn source add <path>          # write a new sidecar
+//! vigo cairn source remove <project>    # delete a sidecar
+//! vigo cairn source pause <project>     # stop publishing
+//! vigo cairn source resume <project>    # resume publishing
+//! vigo cairn source show <project>      # print a sidecar
+//! vigo cairn source validate <path>     # dry-run sidecar validation
 //! ```
 //!
 //! ### Permission model
@@ -69,15 +75,8 @@ pub fn run(args: Vec<String>) -> Result<()> {
 fn dispatch_source(args: &[String]) -> Result<()> {
     let sub = args.first().map(String::as_str).unwrap_or("");
     match sub {
-        "" | "--help" | "-h" => {
-            eprintln!("usage: vigo cairn source list");
-            Ok(())
-        }
         "list" => cmd_source_list(&args[1..]),
-        other => bail!(
-            "`vigo cairn source {}` is not yet implemented — see `vigo cairn source list`",
-            other
-        ),
+        _ => super::source_cli::dispatch(args),
     }
 }
 
@@ -97,7 +96,9 @@ COMMANDS:
     recover <project> [opts]         clone a mirror to a user-owned path
     recover-all [--dest <dir>]       clone every mirror owned by the caller
     prune [opts]                     manually remove stale mirrors (requires root)
-    source list                      list repos this envoy publishes as a source
+    source <subcommand>              manage .cairn.yaml sidecars
+                                     (add, remove, pause, resume, show, validate, list)
+                                     run `vigo cairn source --help` for detail
 
 OPTIONS for recover:
     --dest <path>                    override the default destination

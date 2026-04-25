@@ -67,6 +67,7 @@ pub mod reactor;
 pub mod receiver;
 pub mod sidecar;
 pub mod source;
+pub mod source_cli;
 pub mod state;
 
 pub use gate::Gate;
