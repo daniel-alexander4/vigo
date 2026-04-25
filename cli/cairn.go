@@ -169,7 +169,7 @@ func runRepoList(cmd *cobra.Command, _ []string) error {
 	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
 		bold("LABEL"), bold("PUBLISHER"), bold("MIRRORS"), bold("LAST BUNDLE"), bold("SIZE"), bold("STATE"))
 	for _, s := range sorted {
-		mirrors := fmt.Sprintf("%d/%d", s.CountMaterialized, s.MaxMirrors)
+		mirrors := fmt.Sprintf("%d/%d", s.CountMaterialized, s.CountSelected)
 		if s.CountOrphan > 0 {
 			mirrors += " " + yellow(fmt.Sprintf("(+%d orphan)", s.CountOrphan))
 		}

@@ -41,7 +41,7 @@ Participants           3
 
 ## `vigocli cairn list`
 
-Prints one row per label. The `LAST BUNDLE` column distinguishes **full** (repo-sized) from **incremental** (delta since the prior bundle — expected to be small).
+Prints one row per label. The `MIRRORS` column is `materialized / selected` — how many receivers currently hold the mirror, out of how many the publisher picked on its most recent LAN selection pass. The sidecar's `max_mirrors` is the ceiling that selection is clamped to; use `vigocli cairn show <label>` to see the selected/materialized/max triple. The `LAST BUNDLE` column distinguishes **full** (repo-sized) from **incremental** (delta since the prior bundle — expected to be small).
 
 ```
 $ vigocli cairn list
