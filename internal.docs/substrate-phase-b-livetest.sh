@@ -339,6 +339,23 @@ else
 fi
 
 step "restoring $THIRD enrollment"
+# vigocli sigil evict dispatches via TaskDispatch — the actual
+# self-evict scrub on the evicted host runs async via the agent
+# stream. Poll for identity.age to disappear (timeout 30s) before
+# trying to re-enroll, otherwise `vigo sigil enroll` bails with
+# "already enrolled" because the scrub hasn't landed yet.
+note "waiting for $THIRD self-evict scrub (identity.age removal) — up to 30s"
+scrubbed=0
+for _ in $(seq 1 30); do
+    if ! on_host "$THIRD" 'test -f $HOME/.sigil/identity.age' >/dev/null 2>&1; then
+        scrubbed=1
+        break
+    fi
+    sleep 1
+done
+if (( scrubbed == 0 )); then
+    warn "$THIRD identity.age still present after 30s — re-enroll will likely fail"
+fi
 if reenroll "$THIRD"; then pass "$THIRD re-enrolled"; else fail "$THIRD re-enroll failed"; fi
 
 # ───────────────────────── 6. --purge variant ─────────────────────────
