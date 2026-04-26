@@ -333,9 +333,18 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     let identity = crypt::unwrap_identity(&blob, password.as_bytes(), &salt)?;
 
     // Parent shell PID — so the session helper can self-terminate
-    // when the shell exits. We are ourselves a child of the shell,
-    // so getppid() = shell's PID.
-    let parent_pid = unsafe { libc::getppid() } as u32;
+    // when the shell exits. Naive `getppid()` returns the immediate
+    // parent, which is `sudo`, `env`, or another wrapper when the
+    // user invokes `sudo env HOME=… vigo sigil unlock` (the only
+    // pattern that actually works against env-stripping sudo
+    // configs). Those wrappers exit a moment after `vigo unlock`
+    // returns, so the helper's watchdog would see a dead PID and
+    // shut the helper down within one ~10s tick — making
+    // unlock-then-decrypt-in-a-separate-command fail with
+    // "session helper not running" 100% of the time. Walk up the
+    // ppid chain past known intermediates to find the actual shell.
+    let parent_pid = resolve_shell_pid()
+        .unwrap_or_else(|| unsafe { libc::getppid() } as u32);
     let cfg = config::load_config(&home);
     session::spawn_helper(&identity, parent_pid, cfg.idle_timeout_minutes)?;
 
@@ -1287,6 +1296,58 @@ fn user_home_for_invocation() -> Result<PathBuf> {
     let username = user_for_invocation()?;
     super::home_for_user(&username)
         .ok_or_else(|| anyhow!("could not resolve home directory for user {}", username))
+}
+
+/// Walk up `/proc/<pid>/status::PPid` from `getppid()` past known
+/// privilege-escalation wrappers (`sudo`, `env`, `su`, `doas`) and
+/// our own binary, returning the first PID whose `comm` looks like
+/// an actual shell or other user-controlled parent. The session
+/// helper's parent-PID watchdog uses this so it survives wrapper
+/// exits but still self-terminates when the user's shell goes away.
+///
+/// Returns `None` on Linux when the walk fails (proc unreadable,
+/// hits PID 1, exceeds depth limit) — caller falls back to bare
+/// `getppid()`. On macOS this always returns `None` (no `/proc`);
+/// the watchdog there falls back to the immediate parent, which
+/// for the typical `sudo` invocation is sudo itself, with the same
+/// caveat. macOS users can rely on the idle timeout (default 60 m).
+#[cfg(target_os = "linux")]
+fn resolve_shell_pid() -> Option<u32> {
+    let me_name = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+        .unwrap_or_default();
+    let intermediates: &[&str] = &["sudo", "env", "su", "doas"];
+    let mut pid = unsafe { libc::getppid() } as u32;
+    for _ in 0..20 {
+        if pid <= 1 {
+            return None;
+        }
+        let comm = fs::read_to_string(format!("/proc/{}/comm", pid))
+            .ok()?
+            .trim()
+            .to_string();
+        let is_intermediate = intermediates.iter().any(|s| **s == comm)
+            || comm == me_name;
+        if !is_intermediate {
+            return Some(pid);
+        }
+        let status = fs::read_to_string(format!("/proc/{}/status", pid)).ok()?;
+        let mut next: Option<u32> = None;
+        for line in status.lines() {
+            if let Some(rest) = line.strip_prefix("PPid:") {
+                next = rest.trim().parse().ok();
+                break;
+            }
+        }
+        pid = next?;
+    }
+    None
+}
+
+#[cfg(not(target_os = "linux"))]
+fn resolve_shell_pid() -> Option<u32> {
+    None
 }
 
 #[cfg(unix)]
