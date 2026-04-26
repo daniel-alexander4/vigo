@@ -100,23 +100,29 @@ No root required. Does not contact the Vigo server."
 
 fn cmd_init(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
-    bootstrap_identity(&home, /* is_init */ true)
+    let username = user_for_invocation()?;
+    bootstrap_identity(&home, &username, /* is_init */ true)
 }
 
 // ---------- enroll ----------
 
 fn cmd_enroll(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
-    bootstrap_identity(&home, /* is_init */ false)
+    let username = user_for_invocation()?;
+    bootstrap_identity(&home, &username, /* is_init */ false)
 }
 
 /// Generate a fresh wrapped identity, seed `recipients.txt` with the
 /// freshly-minted pubkey, and create `~/sigil/`. Shared between
 /// `init` and `enroll` — the mechanics are identical, only the
-/// operator-facing wording differs.
-fn bootstrap_identity(home: &Path, is_init: bool) -> Result<()> {
+/// operator-facing wording differs. `username` is the invoker
+/// resolved by `user_for_invocation` and is used to chown every
+/// file we drop under `~/.sigil/` and `~/sigil/` so the elevated
+/// (sudo'd) process doesn't leave root-owned state in the user's
+/// home.
+fn bootstrap_identity(home: &Path, username: &str, is_init: bool) -> Result<()> {
     let dot = config::dot_dir(home);
-    fs::create_dir_all(&dot)
+    create_user_dir(&dot, username, 0o700)
         .with_context(|| format!("creating {}", dot.display()))?;
 
     let id_path = config::identity_path(home);
@@ -158,15 +164,15 @@ fn bootstrap_identity(home: &Path, is_init: bool) -> Result<()> {
     let blob = crypt::wrap_identity(&identity, password.as_bytes(), &salt)
         .context("wrapping identity")?;
 
-    // Write wrapped identity + salt (0600).
-    write_private(&id_path, &blob)?;
-    write_private(&salt_path, &salt)?;
+    // Write wrapped identity + salt (0600, owned by the user).
+    write_private(&id_path, &blob, username)?;
+    write_private(&salt_path, &salt, username)?;
 
     // Seed recipients.txt with this envoy's pubkey.
-    append_recipient(&rec_path, &public.to_string())?;
+    append_recipient(&rec_path, &public.to_string(), username)?;
 
-    // Create ~/sigil/ (0700).
-    create_content_dir(&content_dir)?;
+    // Create ~/sigil/ (0700, owned by the user).
+    create_user_dir(&content_dir, username, 0o700)?;
 
     // Seed a self-documenting config.yaml if one doesn't already exist so
     // the operator opening ~/.sigil/config.yaml can tell what it's for
@@ -174,7 +180,7 @@ fn bootstrap_identity(home: &Path, is_init: bool) -> Result<()> {
     // operator edits).
     let cfg_path = config::config_path(home);
     if !cfg_path.exists() {
-        if let Err(e) = write_config_template(&cfg_path) {
+        if let Err(e) = write_config_template(&cfg_path, username) {
             tracing::warn!(
                 path = %cfg_path.display(),
                 error = %e,
@@ -200,12 +206,7 @@ fn bootstrap_identity(home: &Path, is_init: bool) -> Result<()> {
     // a peer rotates its pubkey or ages out — heartbeat announces
     // from already-known peers don't trigger a regen.
     let regen_marker = config::regen_pending_path(home);
-    if let Err(e) = fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(&regen_marker)
-    {
+    if let Err(e) = write_user_file(&regen_marker, b"", username) {
         tracing::warn!(
             path = %regen_marker.display(),
             error = %e,
@@ -493,22 +494,8 @@ fn cmd_decrypt(args: &[String]) -> Result<()> {
     // → getuid passwd lookup) so the user can read their own
     // decrypted output even when the agent binary is invoked through
     // sudo and runs in a root context.
-    write_user_file(&out, &plaintext)?;
-    #[cfg(unix)]
-    {
-        let username = user_for_invocation()?;
-        if let Err(e) = super::chown_to_user(&out, &username) {
-            // Non-fatal — the file is at least 0600 and contains the
-            // user's own decrypted content. They can chown manually
-            // if needed.
-            tracing::warn!(
-                path = %out.display(),
-                user = %username,
-                error = %e,
-                "sigil decrypt: chown to invoking user failed (file is 0600 root-owned)"
-            );
-        }
-    }
+    let username = user_for_invocation()?;
+    write_user_file(&out, &plaintext, &username)?;
     println!("✓ Wrote {} bytes to {}", plaintext.len(), out.display());
     Ok(())
 }
@@ -942,13 +929,8 @@ fn cmd_leave(args: &[String]) -> Result<()> {
     };
     let pending_path = config::leave_pending_path(&home);
     let json = serde_json::to_string_pretty(&spec).context("serializing leave spec")?;
-    fs::write(&pending_path, json)
-        .with_context(|| format!("writing {}", pending_path.display()))?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = fs::set_permissions(&pending_path, fs::Permissions::from_mode(0o600));
-    }
+    let username = user_for_invocation()?;
+    write_user_file(&pending_path, json.as_bytes(), &username)?;
 
     println!();
     println!("\u{2713} leave queued at {}", pending_path.display());
@@ -1197,7 +1179,7 @@ fn reencrypt_one(
     let plain_tmp = dir.join(format!(".{}.sigil.reenc.plain.tmp", name));
     let enc_tmp = dir.join(format!(".{}.sigil.reenc.enc.tmp", name));
 
-    write_user_file(&plain_tmp, &plaintext)?;
+    write_user_file(&plain_tmp, &plaintext, username)?;
     let result = (|| -> Result<()> {
         crypt::encrypt_file(&plain_tmp, &enc_tmp, recipients)?;
         super::finalize_user_ciphertext(&enc_tmp, path, username)?;
@@ -1225,8 +1207,14 @@ fn valid_content_name(name: &str) -> bool {
     !name.contains('/') && !name.contains('\\') && !name.contains('\0')
 }
 
+/// Truncate-or-create write of `bytes` to `path` with mode 0600,
+/// then chown to `username`. Used for sentinels (regen.pending,
+/// leave.pending), the per-user config.yaml seed, and the decrypt
+/// `-o` plaintext output. The chown call is idempotent — no-op when
+/// the path is already user-owned (running directly as the user
+/// rather than under sudo).
 #[cfg(unix)]
-fn write_user_file(path: &Path, bytes: &[u8]) -> Result<()> {
+fn write_user_file(path: &Path, bytes: &[u8], username: &str) -> Result<()> {
     use std::os::unix::fs::OpenOptionsExt;
     let mut f = fs::OpenOptions::new()
         .write(true)
@@ -1237,11 +1225,13 @@ fn write_user_file(path: &Path, bytes: &[u8]) -> Result<()> {
         .with_context(|| format!("creating {}", path.display()))?;
     f.write_all(bytes)?;
     f.sync_all().ok();
+    super::chown_to_user(path, username)
+        .with_context(|| format!("chown {} to {}", path.display(), username))?;
     Ok(())
 }
 
 #[cfg(not(unix))]
-fn write_user_file(path: &Path, bytes: &[u8]) -> Result<()> {
+fn write_user_file(path: &Path, bytes: &[u8], _username: &str) -> Result<()> {
     fs::write(path, bytes).with_context(|| format!("writing {}", path.display()))
 }
 
@@ -1355,8 +1345,13 @@ fn read_one_password(prompt: &str) -> Result<String> {
     }
 }
 
+/// Create-new write of `content` to `path` with mode 0600, then
+/// chown to `username`. Differs from `write_user_file` in that it
+/// fails if `path` already exists — used for first-time identity
+/// material (identity.age, identity.salt) where overwriting would
+/// be a footgun.
 #[cfg(unix)]
-fn write_private(path: &Path, content: &[u8]) -> Result<()> {
+fn write_private(path: &Path, content: &[u8], username: &str) -> Result<()> {
     use std::os::unix::fs::OpenOptionsExt;
     let mut f = fs::OpenOptions::new()
         .write(true)
@@ -1366,11 +1361,13 @@ fn write_private(path: &Path, content: &[u8]) -> Result<()> {
         .with_context(|| format!("creating {}", path.display()))?;
     f.write_all(content)?;
     f.sync_all().ok();
+    super::chown_to_user(path, username)
+        .with_context(|| format!("chown {} to {}", path.display(), username))?;
     Ok(())
 }
 
 #[cfg(not(unix))]
-fn write_private(path: &Path, content: &[u8]) -> Result<()> {
+fn write_private(path: &Path, content: &[u8], _username: &str) -> Result<()> {
     let mut f = fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -1381,28 +1378,44 @@ fn write_private(path: &Path, content: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Create `path` as a user-owned directory with the given mode if
+/// it doesn't already exist. Idempotent — chowns existing dirs to
+/// `username` to repair anything left over from a pre-fix run.
 #[cfg(unix)]
-fn create_content_dir(path: &Path) -> Result<()> {
+fn create_user_dir(path: &Path, username: &str, mode: u32) -> Result<()> {
     use std::os::unix::fs::DirBuilderExt;
-    if path.is_dir() {
-        return Ok(());
+    if !path.is_dir() {
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(mode)
+            .create(path)
+            .with_context(|| format!("creating {}", path.display()))?;
     }
-    std::fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(path)
-        .with_context(|| format!("creating {}", path.display()))
+    super::chown_to_user(path, username)
+        .with_context(|| format!("chown {} to {}", path.display(), username))?;
+    Ok(())
 }
 
 #[cfg(not(unix))]
-fn create_content_dir(path: &Path) -> Result<()> {
+fn create_user_dir(path: &Path, _username: &str, _mode: u32) -> Result<()> {
     if path.is_dir() {
         return Ok(());
     }
     fs::create_dir_all(path).with_context(|| format!("creating {}", path.display()))
 }
 
-fn append_recipient(path: &Path, pubkey: &str) -> Result<()> {
+fn append_recipient(path: &Path, pubkey: &str, username: &str) -> Result<()> {
+    #[cfg(unix)]
+    let mut f = {
+        use std::os::unix::fs::OpenOptionsExt;
+        fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .mode(0o600)
+            .open(path)
+            .with_context(|| format!("opening {}", path.display()))?
+    };
+    #[cfg(not(unix))]
     let mut f = fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -1410,6 +1423,12 @@ fn append_recipient(path: &Path, pubkey: &str) -> Result<()> {
         .with_context(|| format!("opening {}", path.display()))?;
     writeln!(f, "{}", pubkey)?;
     f.sync_all().ok();
+    drop(f);
+    #[cfg(unix)]
+    super::chown_to_user(path, username)
+        .with_context(|| format!("chown {} to {}", path.display(), username))?;
+    #[cfg(not(unix))]
+    let _ = username;
     Ok(())
 }
 
@@ -1441,7 +1460,7 @@ cross_subnet_peers: []
 idle_timeout_minutes: 60
 ";
 
-fn write_config_template(path: &Path) -> Result<()> {
+fn write_config_template(path: &Path, username: &str) -> Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
@@ -1453,11 +1472,15 @@ fn write_config_template(path: &Path) -> Result<()> {
             .with_context(|| format!("creating {}", path.display()))?;
         f.write_all(CONFIG_TEMPLATE.as_bytes())?;
         f.sync_all().ok();
+        drop(f);
+        super::chown_to_user(path, username)
+            .with_context(|| format!("chown {} to {}", path.display(), username))?;
     }
     #[cfg(not(unix))]
     {
         fs::write(path, CONFIG_TEMPLATE)
             .with_context(|| format!("writing {}", path.display()))?;
+        let _ = username;
     }
     Ok(())
 }
