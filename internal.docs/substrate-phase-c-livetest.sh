@@ -171,10 +171,11 @@ cleanup() {
     # Remove the workstation-side test payload file we generated.
     [[ -n "${LODE_FILE:-}" && -f "$LODE_FILE" ]] && rm -f "$LODE_FILE"
 
-    # Echo cleanup: remove the test file from every envoy if it
-    # somehow survived. Safe — name is unique to this run.
+    # Echo cleanup: remove the test file from every reachable envoy
+    # if it somehow survived. Safe — name is unique to this run.
     if [[ -n "${ECHO_NAME:-}" ]]; then
-        for h in "$PRIMARY" "$SECONDARY" "$THIRD"; do
+        for h in "${ALL_HOSTS[@]}"; do
+            (( ${HOST_REACHABLE[$h]:-0} == 0 )) && continue
             on_host_as_user "$h" "$ECHO_USER" "rm -f \$HOME/echo/$ECHO_NAME" >/dev/null 2>&1 || true
         done
     fi
@@ -207,28 +208,79 @@ if ! vigocli --help >/dev/null 2>&1; then
 fi
 pass "vigocli reachable"
 
+# Resolve fleet hostnames to IPs (used for swarm-peers.json IP matching
+# in §1 — the swarm peer table is keyed by IP:port, not hostname) and
+# probe each host for reachability so we can SKIP rather than FAIL on
+# offline envoys.
+declare -A HOST_IP
+declare -A HOST_REACHABLE
+ALL_HOSTS=("$PRIMARY" "$SECONDARY" "$THIRD")
+for h in "${ALL_HOSTS[@]}"; do
+    # Resolve via getent (works for /etc/hosts entries + DNS). Falls
+    # back to "" if the name doesn't resolve at all.
+    ip=$(getent hosts "$h" 2>/dev/null | awk '{print $1}' | head -1)
+    HOST_IP[$h]="$ip"
+    # Reachability: is_local hosts are always reachable; remote hosts
+    # get a 3-second ssh probe (BatchMode disables password prompts so
+    # a stale known_hosts entry can't hang the test).
+    if is_local "$h"; then
+        HOST_REACHABLE[$h]=1
+        note "$h: local (ip=${ip:-unresolved}) — reachable"
+    elif ssh -o BatchMode=yes -o ConnectTimeout=3 "$h" true 2>/dev/null; then
+        HOST_REACHABLE[$h]=1
+        note "$h: remote (ip=${ip:-unresolved}) — reachable"
+    else
+        HOST_REACHABLE[$h]=0
+        warn "$h: UNREACHABLE — assertions for this host will be skipped"
+    fi
+done
+
+# How many envoys are participating? Sections that depend on cross-host
+# propagation degrade gracefully when fewer than the expected count
+# are reachable.
+REACHABLE_COUNT=0
+for h in "${ALL_HOSTS[@]}"; do
+    (( HOST_REACHABLE[$h] == 1 )) && REACHABLE_COUNT=$((REACHABLE_COUNT + 1))
+done
+if (( REACHABLE_COUNT < 2 )); then
+    fail "fewer than 2 reachable envoys ($REACHABLE_COUNT) — propagation tests cannot run"
+    exit 1
+fi
+
 # ───────────────────────── 1. Swarm health (read-only) ─────────────────────────
 section "1. Swarm health — peer table + manifest gossip"
 
-# Each envoy's peers.json should list the other two. peers.json is
-# root-owned 0600 in /var/lib/vigo/swarm/, so reads need sudo. Fleet
-# expectations: this is a 3-host test, so peer count == 2 on each.
-for h in "$PRIMARY" "$SECONDARY" "$THIRD"; do
+# Swarm peers.json is a blob-holder index: a JSON array of records
+# of shape {sha256, address, chunk_count, source, age_secs} — keyed
+# by IP:port, NOT hostname. So we assert that each REACHABLE peer's
+# IP appears in every other reachable envoy's peers.json (i.e. the
+# fleet has successfully cross-probed each other for blobs).
+for h in "${ALL_HOSTS[@]}"; do
+    if (( HOST_REACHABLE[$h] == 0 )); then
+        skip "$h: swarm peers.json (host unreachable)"
+        continue
+    fi
     step "$h: swarm peers.json"
     out=$(on_host "$h" 'sudo cat /var/lib/vigo/swarm/peers.json 2>/dev/null' || true)
     if [[ -z "$out" ]]; then
         fail "$h: peers.json missing or unreadable"
         continue
     fi
-    # Confirm the other two hostnames appear. We don't parse JSON —
-    # a substring match is enough since hostnames are stable strings.
-    others=("$PRIMARY" "$SECONDARY" "$THIRD")
-    for other in "${others[@]}"; do
+    for other in "${ALL_HOSTS[@]}"; do
         [[ "$other" == "$h" ]] && continue
-        if grep -q "\"$other\"" <<<"$out"; then
-            pass "$h: peers.json knows $other"
+        if (( HOST_REACHABLE[$other] == 0 )); then
+            skip "$h: peers.json should include $other (skipped — $other unreachable, expected absent)"
+            continue
+        fi
+        other_ip="${HOST_IP[$other]}"
+        if [[ -z "$other_ip" ]]; then
+            warn "$h: cannot verify $other in peers.json — $other has no resolved IP"
+            continue
+        fi
+        if grep -q "\"address\":\"$other_ip:" <<<"$out"; then
+            pass "$h: peers.json knows $other ($other_ip)"
         else
-            fail "$h: peers.json missing $other"
+            fail "$h: peers.json missing $other ($other_ip)"
         fi
     done
 done
@@ -238,7 +290,11 @@ done
 # (gossip is eventually-consistent — a small skew during a window
 # where one envoy hasn't picked up a recent change is normal).
 declare -A MANIFEST_COUNTS
-for h in "$PRIMARY" "$SECONDARY" "$THIRD"; do
+for h in "${ALL_HOSTS[@]}"; do
+    if (( HOST_REACHABLE[$h] == 0 )); then
+        skip "$h: manifest entry count (host unreachable)"
+        continue
+    fi
     step "$h: swarm manifest entry count"
     cnt=$(on_host "$h" "sudo grep -oE '\"sha256\"' /var/lib/vigo/swarm/manifest.json 2>/dev/null | wc -l" || echo 0)
     cnt=$(tr -d '[:space:]' <<<"$cnt")
@@ -250,18 +306,19 @@ for h in "$PRIMARY" "$SECONDARY" "$THIRD"; do
     fi
 done
 
-if (( ${#MANIFEST_COUNTS[@]} == 3 )); then
-    counts=( "${MANIFEST_COUNTS[$PRIMARY]}" "${MANIFEST_COUNTS[$SECONDARY]}" "${MANIFEST_COUNTS[$THIRD]}" )
+# Cross-fleet manifest delta — only meaningful when ≥2 reachable
+# envoys reported a count.
+if (( ${#MANIFEST_COUNTS[@]} >= 2 )); then
     max=0; min=999999
-    for c in "${counts[@]}"; do
+    for c in "${MANIFEST_COUNTS[@]}"; do
         (( c > max )) && max=$c
         (( c < min )) && min=$c
     done
     delta=$((max - min))
     if (( delta <= 2 )); then
-        pass "manifest entry counts agree across fleet (delta=$delta)"
+        pass "manifest entry counts agree across reachable fleet (min=$min max=$max delta=$delta)"
     else
-        fail "manifest entry counts diverge across fleet (min=$min max=$max delta=$delta)"
+        fail "manifest entry counts diverge across reachable fleet (min=$min max=$max delta=$delta)"
     fi
 fi
 
@@ -312,8 +369,13 @@ fi
 
 # Verify materialization on each envoy. Lode writes the canonical
 # blob to /var/lib/vigo/swarm/.blobs/<sha256> and a friendly symlink
-# to /var/lib/vigo/swarm/files/<label>. Check both.
-for h in "$PRIMARY" "$SECONDARY" "$THIRD"; do
+# to /var/lib/vigo/swarm/files/<label>. Check both. Unreachable hosts
+# are skipped (they couldn't have received the payload).
+for h in "${ALL_HOSTS[@]}"; do
+    if (( HOST_REACHABLE[$h] == 0 )); then
+        skip "$h: blob materialization (host unreachable)"
+        continue
+    fi
     step "$h: blob materialized"
     if on_host "$h" "sudo test -f /var/lib/vigo/swarm/.blobs/$LODE_SHA"; then
         pass "$h: /var/lib/vigo/swarm/.blobs/${LODE_SHA:0:12}... present"
@@ -352,7 +414,11 @@ fi
 # .blobs/ briefly during graveyard sweep, so we don't assert on
 # .blobs/ removal — the symlink removal is the operator-visible
 # contract).
-for h in "$PRIMARY" "$SECONDARY" "$THIRD"; do
+for h in "${ALL_HOSTS[@]}"; do
+    if (( HOST_REACHABLE[$h] == 0 )); then
+        skip "$h: friendly symlink removed post-revoke (host unreachable)"
+        continue
+    fi
     step "$h: friendly symlink removed post-revoke"
     if on_host "$h" "sudo test -e /var/lib/vigo/swarm/files/$LODE_LABEL"; then
         fail "$h: files/$LODE_LABEL still present after revoke"
@@ -369,10 +435,16 @@ LODE_SHA=""
 # ───────────────────────── 3. Echo end-to-end ─────────────────────────
 section "3. Echo — drop file, sync, modify, propagate back, delete"
 
-# Pre-flight: every envoy must have ~$ECHO_USER/echo/. The agent
-# auto-creates it when the user is enrolled in echo, but on first
-# boot it might not exist. mkdir is idempotent.
-for h in "$PRIMARY" "$SECONDARY" "$THIRD"; do
+# Echo round-trip needs PRIMARY and SECONDARY both reachable. Skip
+# the whole section if not — we'd just be timing out on every assertion.
+if (( HOST_REACHABLE[$PRIMARY] == 0 || HOST_REACHABLE[$SECONDARY] == 0 )); then
+    skip "echo round-trip needs both $PRIMARY and $SECONDARY reachable"
+else
+# Pre-flight: every reachable envoy must have ~$ECHO_USER/echo/. The
+# agent auto-creates it when the user is enrolled in echo, but on
+# first boot it might not exist. mkdir is idempotent.
+for h in "${ALL_HOSTS[@]}"; do
+    (( HOST_REACHABLE[$h] == 0 )) && continue
     on_host_as_user "$h" "$ECHO_USER" 'mkdir -p $HOME/echo' >/dev/null 2>&1 || true
 done
 
@@ -461,3 +533,4 @@ if (( deleted == 1 )); then
 else
     fail "$ECHO_NAME still present on $SECONDARY after ${ECHO_TIMEOUT}s"
 fi
+fi  # close: if echo round-trip prerequisites met
