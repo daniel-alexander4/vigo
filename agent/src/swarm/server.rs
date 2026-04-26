@@ -321,6 +321,14 @@ async fn handle_request(
             crate::sigil::server::handle_leave(p, req, peer_addr).await
         }
 
+        // Sigil: catch-up pull of the full leaves table for a user.
+        // Returns JSON of the LeavesTable; peers use this after seeing
+        // an announcement leaves_digest that differs from their own.
+        // Mirrors the tombstones GET handler.
+        (&Method::GET, p) if p.starts_with("/sigil/leaves/") => {
+            tokio::task::block_in_place(|| crate::sigil::server::handle_leaves_list(p))
+        }
+
         _ => not_found(),
     };
 

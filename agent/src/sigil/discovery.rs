@@ -221,6 +221,7 @@ mod tests {
             port: 1531,
             generation: 1,
             tombstones_digest: String::new(),
+            leaves_digest: String::new(),
         };
         let bytes = serialize(&ann).unwrap();
         let parsed = parse(&bytes).unwrap();

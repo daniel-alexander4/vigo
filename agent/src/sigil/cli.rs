@@ -488,8 +488,27 @@ fn cmd_decrypt(args: &[String]) -> Result<()> {
 
     // Write plaintext to -o path. If the destination file exists,
     // overwrite (user asked for it). Permissions: 0600 so a
-    // default-umask shell doesn't accidentally world-read plaintext.
+    // default-umask shell doesn't accidentally world-read plaintext;
+    // ownership chowned to the invoking user (resolved via SUDO_USER
+    // → getuid passwd lookup) so the user can read their own
+    // decrypted output even when the agent binary is invoked through
+    // sudo and runs in a root context.
     write_user_file(&out, &plaintext)?;
+    #[cfg(unix)]
+    {
+        let username = user_for_invocation()?;
+        if let Err(e) = super::chown_to_user(&out, &username) {
+            // Non-fatal — the file is at least 0600 and contains the
+            // user's own decrypted content. They can chown manually
+            // if needed.
+            tracing::warn!(
+                path = %out.display(),
+                user = %username,
+                error = %e,
+                "sigil decrypt: chown to invoking user failed (file is 0600 root-owned)"
+            );
+        }
+    }
     println!("✓ Wrote {} bytes to {}", plaintext.len(), out.display());
     Ok(())
 }

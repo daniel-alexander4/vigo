@@ -118,7 +118,7 @@ Deletion is a first-class mesh operation, not a local-only `rm`. When the operat
 6. Any future PUSH of the same filename from any peer → 410 Gone (anti-resurrection) unless the tombstone is cleared by a newer-mtime republish.
 7. Any future PULL of the tombstoned filename → 410 Gone. The puller records the tombstone locally on receiving this response — lazy catch-up for the rare code path that reaches pull.
 
-**Catch-up after partition:** every announcement carries a 16-byte `tombstones_digest` (truncated SHA-256 over sorted `filename|deletion_time` entries). A peer that observes a digest mismatch pulls the full tombstone list via `GET /sigil/tombstones/<user>` and merges it. This is the common-case recovery path for "envoy was offline during a delete, comes back up with the old file." No peer-initiated work is required to converge.
+**Catch-up after partition:** every announcement carries a 16-byte `tombstones_digest` (truncated SHA-256 over sorted `filename|deletion_time` entries) **and** a 16-byte `leaves_digest` (the analogous digest over `(age_pubkey, leave_time)` pairs from `LeavesTable`). A peer that observes a digest mismatch on either pulls the full table via `GET /sigil/tombstones/<user>` or `GET /sigil/leaves/<user>` and merges it. This is the common-case recovery path for "envoy was offline during a delete or LEAVE, comes back up with stale state." For tombstone catch-up the receiver also drops any local files newly covered by tombstones; for leaves catch-up it runs `apply_leave` on each newly-merged entry so the peer table prune + recipients regen + reencrypt sentinel fire just as they would have on the original LEAVE envelope. No peer-initiated work is required to converge.
 
 ### Signing keys
 

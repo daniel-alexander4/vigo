@@ -420,6 +420,8 @@ async fn announce_all(
         let sign_pubkey = load_local_sign_pubkey(&user).unwrap_or_default();
         let tombstones_digest =
             hex::encode(TombstoneTable::load(&user).digest());
+        let leaves_digest =
+            hex::encode(leaves::LeavesTable::load(&user).digest());
         let ann = Announcement {
             machine: machine.to_string(),
             user: user.clone(),
@@ -429,6 +431,7 @@ async fn announce_all(
             port: PEER_PORT,
             generation: 0,
             tombstones_digest,
+            leaves_digest,
         };
         if let Err(e) = out_tx.send(ann).await {
             warn!(error = %e, user = %user, "sigil: announce channel send failed");
@@ -564,6 +567,16 @@ fn handle_incoming(inc: IncomingAnnouncement) {
         maybe_catchup_tombstones(&announcement.user, &announcement.machine, from,
             &announcement.tombstones_digest);
     }
+
+    // Leaves catch-up: identical pattern, distinct table. Lets an
+    // envoy that was offline during a LEAVE observe the signed
+    // history when it rejoins, instead of just seeing the leaver
+    // vanish from the live announce stream. Empty announcer digest
+    // skips (pre-0.30.24 peer that doesn't advertise one).
+    if !announcement.leaves_digest.is_empty() {
+        maybe_catchup_leaves(&announcement.user, &announcement.machine, from,
+            &announcement.leaves_digest);
+    }
 }
 
 /// If the announcer's tombstone digest differs from this envoy's
@@ -664,6 +677,137 @@ async fn catchup_tombstones_from(user: &str, source_hostname: &str, url: &str) -
             "sigil: tombstone catch-up merged"
         );
     }
+    Ok(())
+}
+
+/// Sibling of `maybe_catchup_tombstones` for the per-user
+/// `LeavesTable`. Triggered when an announcer's `leaves_digest`
+/// disagrees with this envoy's local digest. Background pull +
+/// merge; for each newly-merged entry (peer leaving the mesh) we
+/// run `apply_leave` to drop the pubkey from `peers.json`,
+/// regenerate `recipients.txt`, and drop `reencrypt.pending` —
+/// keeping the catch-up path side-effect-equivalent to receiving
+/// the original LEAVE envelope live.
+fn maybe_catchup_leaves(
+    user: &str,
+    source_hostname: &str,
+    source_addr: std::net::SocketAddr,
+    remote_digest_hex: &str,
+) {
+    let local = leaves::LeavesTable::load(user);
+    let local_digest_hex = hex::encode(local.digest());
+    if local_digest_hex == remote_digest_hex {
+        return;
+    }
+    debug!(
+        user = %user,
+        source = %source_hostname,
+        local = %local_digest_hex,
+        remote = %remote_digest_hex,
+        "sigil: leaves digest mismatch, triggering catch-up"
+    );
+
+    let user = user.to_string();
+    let source_hostname = source_hostname.to_string();
+    let url = format!(
+        "https://{}/sigil/leaves/{}",
+        source_addr,
+        url_encode_seg(&user)
+    );
+    tokio::spawn(async move {
+        if let Err(e) = catchup_leaves_from(&user, &source_hostname, &url).await {
+            debug!(
+                user = %user,
+                source = %source_hostname,
+                error = %e,
+                "sigil: leaves catch-up failed"
+            );
+        }
+    });
+}
+
+async fn catchup_leaves_from(user: &str, source_hostname: &str, url: &str) -> Result<()> {
+    let tls = match DAEMON_TLS.get() {
+        Some(t) => t.clone(),
+        None => anyhow::bail!("no TLS certs available for catch-up"),
+    };
+    let agent = pusher::build_agent_for_mod(&tls)?;
+    let url = url.to_string();
+
+    let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+        let mut resp = agent
+            .get(&url)
+            .call()
+            .with_context(|| format!("GET {}", url))?;
+        let status = resp.status();
+        if !status.is_success() {
+            anyhow::bail!("peer returned HTTP {}", status.as_u16());
+        }
+        let body = resp
+            .body_mut()
+            .read_to_vec()
+            .context("reading leaves response body")?;
+        Ok(body)
+    })
+    .await
+    .context("catch-up join")??;
+
+    let remote: leaves::LeavesTable =
+        serde_json::from_slice(&body).context("parsing leaves response")?;
+
+    // Identify entries that are new or advanced relative to local
+    // BEFORE the merge so we can run apply_leave for each — the
+    // signed envelope's side effects (peer table prune + recipients
+    // regen + reencrypt sentinel) only fire for entries we hadn't
+    // already processed locally.
+    let local_pre = leaves::LeavesTable::load(user);
+    let new_entries: Vec<(String, leaves::LeaveRecord)> = remote
+        .leaves
+        .iter()
+        .filter(|(pk, r)| {
+            local_pre
+                .leave_time_for(pk)
+                .map(|prior| r.leave_time > prior)
+                .unwrap_or(true)
+        })
+        .map(|(pk, r)| (pk.clone(), r.clone()))
+        .collect();
+
+    if new_entries.is_empty() {
+        return Ok(());
+    }
+
+    let home = match home_for_user(user) {
+        Some(h) => h,
+        None => {
+            debug!(user = %user, "sigil: leaves catch-up: no resolvable home for user");
+            return Ok(());
+        }
+    };
+
+    for (pubkey, record) in &new_entries {
+        if let Err(e) = apply_leave(
+            user,
+            pubkey,
+            &record.hostname_leaving,
+            record.leave_time,
+            &home,
+        ) {
+            debug!(
+                user = %user,
+                pubkey = %pubkey,
+                error = %e,
+                "sigil: leaves catch-up: apply_leave failed"
+            );
+        }
+    }
+
+    tracing::info!(
+        user = %user,
+        source = %source_hostname,
+        merged = new_entries.len(),
+        "sigil: leaves catch-up merged"
+    );
     Ok(())
 }
 
@@ -1158,6 +1302,8 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
         let sign_pubkey = load_local_sign_pubkey(&user).unwrap_or_default();
         let tombstones_digest =
             hex::encode(TombstoneTable::load(&user).digest());
+        let leaves_digest =
+            hex::encode(leaves::LeavesTable::load(&user).digest());
         let ann = Announcement {
             machine: machine.to_string(),
             user: user.clone(),
@@ -1167,6 +1313,7 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
             port: PEER_PORT,
             generation: 0,
             tombstones_digest,
+            leaves_digest,
         };
         let body = serde_json::to_vec(&ann).context("serializing announcement")?;
         for host in &cfg.cross_subnet_peers {
@@ -1301,7 +1448,7 @@ pub(crate) fn finalize_user_ciphertext(
 }
 
 #[cfg(unix)]
-fn chown_to_user(path: &Path, username: &str) -> Result<()> {
+pub(crate) fn chown_to_user(path: &Path, username: &str) -> Result<()> {
     use std::ffi::CString;
     use std::os::unix::fs::MetadataExt;
 

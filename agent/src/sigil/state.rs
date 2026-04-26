@@ -278,6 +278,15 @@ pub struct Announcement {
     /// for this peer."
     #[serde(default)]
     pub tombstones_digest: String,
+    /// Hex-encoded 16-byte digest of the per-user `LeavesTable`
+    /// (`(age_pubkey, leave_time)` pairs). Mirrors `tombstones_digest`
+    /// so an offline-during-LEAVE peer that comes back observes the
+    /// historical leave envelopes via catch-up rather than just seeing
+    /// the leaver vanish from announcements. Empty string from
+    /// pre-0.30.24 peers; receivers treat empty as "skip leaves
+    /// catch-up for this peer."
+    #[serde(default)]
+    pub leaves_digest: String,
 }
 
 #[cfg(test)]
@@ -402,6 +411,7 @@ mod tests {
             port: 1531,
             generation: 7,
             tombstones_digest: String::new(),
+            leaves_digest: String::new(),
         };
         let bytes = serde_json::to_vec(&a).unwrap();
         let parsed: Announcement = serde_json::from_slice(&bytes).unwrap();

@@ -446,6 +446,41 @@ pub fn handle_tombstones_list(path: &str) -> Response<Full<Bytes>> {
     }
 }
 
+// ---------- leaves list (GET /sigil/leaves/{user}) ----------
+
+/// Return the full leaves table for `user` as JSON. Mirror of
+/// `handle_tombstones_list`. Used by peers that observed a
+/// `leaves_digest` mismatch on an announcement and need to catch
+/// up — typical case is an envoy that was offline during a LEAVE
+/// rejoining the mesh and discovering the historical envelopes via
+/// digest divergence rather than just observing the leaver vanish
+/// from announcements. Does blocking I/O; caller wraps in
+/// `block_in_place`.
+pub fn handle_leaves_list(path: &str) -> Response<Full<Bytes>> {
+    let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    let user = match segments.as_slice() {
+        ["sigil", "leaves", user] => *user,
+        _ => return not_found(),
+    };
+    let user = match percent_decode(user) {
+        Some(s) => s,
+        None => return bad_request("invalid user encoding"),
+    };
+    if !valid_username(&user) {
+        return bad_request("invalid user");
+    }
+
+    let table = leaves::LeavesTable::load(&user);
+    match serde_json::to_vec(&table) {
+        Ok(body) => Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/json")
+            .body(Full::new(Bytes::from(body)))
+            .unwrap(),
+        Err(_) => internal_error("serialize leaves table"),
+    }
+}
+
 // ---------- LEAVE (POST /sigil/leaves/{user}) ----------
 
 /// Handle a signed LEAVE envelope from a peer.
