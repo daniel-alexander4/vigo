@@ -103,7 +103,10 @@ impl TombstoneTable {
 
     /// Load from disk, or return empty if the file is missing or
     /// malformed. Never errors — absence is the common case on
-    /// first boot. Malformed content is logged and discarded.
+    /// first boot. Malformed content is logged, discarded, and the
+    /// empty replacement is written back so subsequent loads stop
+    /// re-parsing the same broken file (otherwise every reactor tick
+    /// re-warns until the next legitimate save happens to land).
     pub fn load(user: &str) -> Self {
         let path = tombstones_path(user);
         match fs::read_to_string(&path) {
@@ -111,9 +114,17 @@ impl TombstoneTable {
                 tracing::warn!(
                     path = %path.display(),
                     error = %e,
-                    "sigil: malformed tombstones.json, starting fresh"
+                    "sigil: malformed tombstones.json, starting fresh and overwriting"
                 );
-                Self::empty(user)
+                let empty = Self::empty(user);
+                if let Err(save_err) = empty.save() {
+                    tracing::warn!(
+                        path = %path.display(),
+                        error = %save_err,
+                        "sigil: failed to overwrite malformed tombstones.json; will re-warn next load"
+                    );
+                }
+                empty
             }),
             Err(_) => Self::empty(user),
         }

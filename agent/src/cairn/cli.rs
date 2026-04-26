@@ -914,11 +914,14 @@ fn cmd_source_list(_args: &[String]) -> Result<()> {
         "PROJECT", "OWNER", "MIRRORS", "PAUSED", "FILTERS", "STATUS"
     );
     for src in sources {
-        let project = src
-            .get("project")
-            .and_then(|s| s.as_str())
-            .unwrap_or("?");
-        let owner = src.get("owner").and_then(|s| s.as_str()).unwrap_or("?");
+        // The trait carries the canonical label
+        // (`cairn:<hostname>:<user>:<project>`), not separate
+        // project/owner fields. Parse the label to surface them in
+        // the table; fall back to "?" only if the label is malformed.
+        let label = src.get("label").and_then(|s| s.as_str()).unwrap_or("");
+        let label_parts: Vec<&str> = label.splitn(4, ':').collect();
+        let owner = if label_parts.len() == 4 { label_parts[1] } else { "?" };
+        let project = if label_parts.len() == 4 { label_parts[3] } else { "?" };
         let max_mirrors = src.get("max_mirrors").and_then(|s| s.as_u64()).unwrap_or(0);
         let paused = src.get("paused").and_then(|b| b.as_bool()).unwrap_or(false);
         let include = src

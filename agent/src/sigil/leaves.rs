@@ -93,7 +93,10 @@ impl LeavesTable {
     }
 
     /// Load from disk, or return empty on missing/malformed. Never
-    /// errors — absence is the common case on first boot.
+    /// errors — absence is the common case on first boot. Malformed
+    /// content is logged, discarded, and the empty replacement is
+    /// written back so subsequent loads stop re-parsing the same
+    /// broken file. Mirrors the self-heal in `TombstoneTable::load`.
     pub fn load(user: &str) -> Self {
         let path = leaves_path(user);
         match fs::read_to_string(&path) {
@@ -101,9 +104,17 @@ impl LeavesTable {
                 tracing::warn!(
                     path = %path.display(),
                     error = %e,
-                    "sigil: malformed leaves.json, starting fresh"
+                    "sigil: malformed leaves.json, starting fresh and overwriting"
                 );
-                Self::empty(user)
+                let empty = Self::empty(user);
+                if let Err(save_err) = empty.save() {
+                    tracing::warn!(
+                        path = %path.display(),
+                        error = %save_err,
+                        "sigil: failed to overwrite malformed leaves.json; will re-warn next load"
+                    );
+                }
+                empty
             }),
             Err(_) => Self::empty(user),
         }
