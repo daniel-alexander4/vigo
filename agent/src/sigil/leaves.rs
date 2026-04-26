@@ -109,7 +109,30 @@ impl LeavesTable {
         }
     }
 
-    /// Atomic save via temp + rename. Root-owned, 0600.
+    /// CLI-facing load that reads the user-side mirror at
+    /// `~/.sigil/leaves.json` instead of the daemon-only canonical
+    /// path. Used by `vigo sigil status` / future leaves verbs running
+    /// as the unprivileged user. Same fall-through semantics as `load`.
+    pub fn load_user(user: &str, home: &std::path::Path) -> Self {
+        let path = config::leaves_user_path(home);
+        match fs::read_to_string(&path) {
+            Ok(s) => serde_json::from_str(&s).unwrap_or_else(|e| {
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %e,
+                    "sigil: malformed user-mirror leaves.json, starting fresh"
+                );
+                Self::empty(user)
+            }),
+            Err(_) => Self::empty(user),
+        }
+    }
+
+    /// Atomic save via temp + rename. Canonical state is root-owned
+    /// 0600 at `agent_state_dir/<user>/leaves.json`. After the
+    /// canonical write succeeds, a best-effort mirror is also written
+    /// at `~<user>/.sigil/leaves.json` (user-owned, 0600) so user-side
+    /// CLI verbs can read it without sudo.
     pub fn save(&self) -> Result<()> {
         let dir = config::agent_state_dir(&self.user);
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
@@ -137,6 +160,9 @@ impl LeavesTable {
         }
 
         fs::rename(&tmp, &path).with_context(|| format!("renaming to {}", path.display()))?;
+
+        // User-side mirror — best-effort, see write_user_mirror_json.
+        super::write_user_mirror_json(&self.user, "leaves.json", &json);
         Ok(())
     }
 

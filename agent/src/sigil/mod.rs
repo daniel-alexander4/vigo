@@ -626,6 +626,68 @@ pub fn home_for_user_pub(username: &str) -> Option<PathBuf> {
     home_for_user(username)
 }
 
+/// Best-effort writer for user-side state mirrors (tombstones.json,
+/// leaves.json — daemon-owned tables that the CLI needs to read as
+/// the unprivileged user). Looks up the user's home, writes JSON via
+/// temp+rename with mode 0600, then chowns the result to the user.
+/// Any failure is logged at debug and swallowed: the canonical
+/// daemon-side state has already been written by the caller, so a
+/// missing or stale mirror only degrades CLI visibility — never
+/// correctness. No-op when the user has no resolvable home.
+pub(crate) fn write_user_mirror_json(user: &str, filename: &str, json: &str) {
+    let home = match home_for_user(user) {
+        Some(h) => h,
+        None => {
+            debug!(user = %user, "sigil: skipping user-mirror write (no home)");
+            return;
+        }
+    };
+    let dot = home.join(".sigil");
+    if let Err(e) = fs::create_dir_all(&dot) {
+        debug!(path = %dot.display(), error = %e, "sigil: mkdir for user mirror");
+        return;
+    }
+    let path = dot.join(filename);
+    let tmp = path.with_extension("json.tmp");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = match fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp)
+        {
+            Ok(f) => f,
+            Err(e) => {
+                debug!(path = %tmp.display(), error = %e, "sigil: open user-mirror tmp");
+                return;
+            }
+        };
+        if let Err(e) = f.write_all(json.as_bytes()) {
+            debug!(path = %tmp.display(), error = %e, "sigil: write user-mirror tmp");
+            return;
+        }
+        f.sync_all().ok();
+    }
+    #[cfg(not(unix))]
+    {
+        if let Err(e) = fs::write(&tmp, json.as_bytes()) {
+            debug!(path = %tmp.display(), error = %e, "sigil: write user-mirror tmp");
+            return;
+        }
+    }
+    if let Err(e) = fs::rename(&tmp, &path) {
+        debug!(path = %path.display(), error = %e, "sigil: rename user-mirror");
+        return;
+    }
+    #[cfg(unix)]
+    if let Err(e) = chown_to_user(&path, user) {
+        debug!(path = %path.display(), error = %e, "sigil: chown user-mirror");
+    }
+}
+
 /// Enumerate all users on this envoy who have completed sigil
 /// enrollment (identity.age exists under their home).
 pub(crate) fn enrolled_users() -> Result<HashSet<String>> {

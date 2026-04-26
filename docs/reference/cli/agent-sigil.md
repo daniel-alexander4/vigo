@@ -58,13 +58,15 @@ Self-unenrollment. Three-stage handoff:
   recipients.txt   # every enrolled envoy's pubkey for this user, one per line
   config.yaml      # user-managed: cross_subnet_peers, idle_timeout_minutes
   enroll.pending   # sentinel dropped by the user executor; removed on first enroll
+  tombstones.json  # daemon-written user-readable mirror of the tombstone table
+  leaves.json      # daemon-written user-readable mirror of the LEAVE record table
 
 ~/sigil/
   foo.pdf          # age ciphertext at rest
   notes.md         # age ciphertext at rest
 ```
 
-Plus agent-owned state at `/var/lib/vigo/sigil/<user>/peers.json` (root-owned, 0600). The user never reads this; it's the agent's peer bookkeeping.
+Plus agent-owned state at `/var/lib/vigo/sigil/<user>/{peers,tombstones,leaves}.json` (root-owned, 0600) — the canonical tables the daemon maintains. `tombstones.json` and `leaves.json` are mirrored to `~/.sigil/` (user-owned, 0600) on every save so `vigo sigil list` and `status` can read them without sudo. `peers.json` has no user-side mirror today; the user CLI doesn't display peer state.
 
 ## Typical flow
 

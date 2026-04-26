@@ -114,7 +114,7 @@ Deletion is a first-class mesh operation, not a local-only `rm`. When the operat
 2. Watcher catches the Remove event, emits a `DeleteJob { user, filename, deletion_time }`.
 3. Pusher loads A's Ed25519 signing key (`/var/lib/vigo/sigil/<user>/signing.key`, root-owned), builds a signed `DeleteEnvelope`, and POSTs it to every live LAN peer at `https://<peer>:1531/sigil/tombstones/<user>/<filename>` plus every `cross_subnet_peers:` host.
 4. Receiver validates the envelope against the sender's known signing pubkey from its local `peers.json`. Unknown sender or mismatched signature → 403 Forbidden.
-5. On valid envelope: receiver records a tombstone in `/var/lib/vigo/sigil/<user>/tombstones.json`, removes the local ciphertext file if present, returns 200 OK.
+5. On valid envelope: receiver records a tombstone in `/var/lib/vigo/sigil/<user>/tombstones.json` (root-owned canonical) and mirrors the table to `~<user>/.sigil/tombstones.json` (user-owned 0600) so `vigo sigil list` / `status` running as the unprivileged user can see it. Removes the local ciphertext file if present, returns 200 OK. The same daemon-side-canonical + user-side-mirror pattern applies to `leaves.json`.
 6. Any future PUSH of the same filename from any peer → 410 Gone (anti-resurrection) unless the tombstone is cleared by a newer-mtime republish.
 7. Any future PULL of the tombstoned filename → 410 Gone. The puller records the tombstone locally on receiving this response — lazy catch-up for the rare code path that reaches pull.
 

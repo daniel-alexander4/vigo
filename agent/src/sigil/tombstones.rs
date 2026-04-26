@@ -35,8 +35,11 @@
 //! fresh `notes.md` with entirely different contents.
 //!
 //! Persistence: `/var/lib/vigo/sigil/<username>/tombstones.json`
-//! (root-owned, 0600). Mirrors `peers.json` layout. Agent-exclusive
-//! — the user's own `~/.sigil/` never touches these bytes.
+//! (root-owned, 0600) — canonical, daemon-only. After every save the
+//! daemon also writes a user-readable mirror at
+//! `~<user>/.sigil/tombstones.json` (user-owned, 0600) so `vigo sigil
+//! list` / `status` can read the table without sudo. The mirror is
+//! best-effort: a failed mirror write never fails the canonical save.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -116,7 +119,30 @@ impl TombstoneTable {
         }
     }
 
-    /// Atomic save via temp + rename. Root-owned, 0600.
+    /// CLI-facing load that reads the user-side mirror at
+    /// `~/.sigil/tombstones.json` instead of the daemon-only canonical
+    /// path. Used by `vigo sigil list` / `status` (running as the
+    /// unprivileged user). Same fall-through semantics as `load`.
+    pub fn load_user(user: &str, home: &std::path::Path) -> Self {
+        let path = config::tombstones_user_path(home);
+        match fs::read_to_string(&path) {
+            Ok(s) => serde_json::from_str(&s).unwrap_or_else(|e| {
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %e,
+                    "sigil: malformed user-mirror tombstones.json, starting fresh"
+                );
+                Self::empty(user)
+            }),
+            Err(_) => Self::empty(user),
+        }
+    }
+
+    /// Atomic save via temp + rename. Canonical state is root-owned
+    /// 0600 at `agent_state_dir/<user>/tombstones.json`. After the
+    /// canonical write succeeds, a best-effort mirror is also written
+    /// at `~<user>/.sigil/tombstones.json` (user-owned, 0600) so
+    /// `vigo sigil list` / `status` can read it without sudo.
     pub fn save(&self) -> Result<()> {
         let dir = config::agent_state_dir(&self.user);
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
@@ -144,6 +170,9 @@ impl TombstoneTable {
         }
 
         fs::rename(&tmp, &path).with_context(|| format!("renaming to {}", path.display()))?;
+
+        // User-side mirror — best-effort, see write_user_mirror_json.
+        super::write_user_mirror_json(&self.user, "tombstones.json", &json);
         Ok(())
     }
 

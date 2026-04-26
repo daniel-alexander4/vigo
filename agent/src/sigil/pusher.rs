@@ -105,11 +105,18 @@ async fn fan_out(agent: &ureq::Agent, job: PushJob) -> Result<()> {
 
     // Collect targets: LAN peers from peers.json + cross_subnet_peers from
     // the user's config.yaml.
-    let lan_targets = lan_targets_for(&user);
+    let (lan_targets, stats) = lan_targets_for(&user);
     let extra_targets = extra_targets_for(&user);
     let total = lan_targets.len() + extra_targets.len();
     if total == 0 {
-        debug!(user = %user, filename = %filename, "pusher: no targets; nothing to push");
+        warn!(
+            user = %user,
+            filename = %filename,
+            peers_total = stats.peers_total,
+            stale = stats.stale,
+            no_addr = stats.no_addr,
+            "pusher: no targets; nothing to push"
+        );
         return Ok(());
     }
     info!(
@@ -231,11 +238,18 @@ async fn fan_out_delete(agent: &ureq::Agent, job: DeleteJob) -> Result<()> {
     let envelope =
         tombstones::build_envelope(&signing_key, &hostname, &user, &filename, deletion_time);
 
-    let lan_targets = lan_targets_for(&user);
+    let (lan_targets, stats) = lan_targets_for(&user);
     let extra_targets = extra_targets_for(&user);
     let total = lan_targets.len() + extra_targets.len();
     if total == 0 {
-        debug!(user = %user, filename = %filename, "pusher: no delete targets");
+        warn!(
+            user = %user,
+            filename = %filename,
+            peers_total = stats.peers_total,
+            stale = stats.stale,
+            no_addr = stats.no_addr,
+            "pusher: no DELETE targets; tombstone recorded locally only"
+        );
         return Ok(());
     }
     info!(
@@ -366,17 +380,37 @@ struct PushTarget {
     label: String,
 }
 
-fn lan_targets_for(user: &str) -> Vec<PushTarget> {
+/// Per-call diagnostic counters from `lan_targets_for`. Surfaces why a
+/// fan-out had zero targets when the peers.json appeared populated.
+struct LanTargetStats {
+    /// Total entries in peers.json (excluding self).
+    peers_total: usize,
+    /// Peers skipped because `now - last_seen > STALE_SECS`.
+    stale: usize,
+    /// Peers skipped because `last_seen_addr` was None.
+    no_addr: usize,
+}
+
+fn lan_targets_for(user: &str) -> (Vec<PushTarget>, LanTargetStats) {
     let table = PeerTable::load(user);
     let now = super::now_secs_pub();
+    let mut stats = LanTargetStats {
+        peers_total: table.peers.len(),
+        stale: 0,
+        no_addr: 0,
+    };
     let mut out = Vec::new();
     for (host, peer) in &table.peers {
         if now - peer.last_seen > STALE_SECS {
+            stats.stale += 1;
             continue;
         }
         let addr = match &peer.last_seen_addr {
             Some(a) => a.clone(),
-            None => continue, // can't push without a known IP
+            None => {
+                stats.no_addr += 1;
+                continue;
+            }
         };
         // Strip any port the SocketAddr display included — we
         // always target the peer server on 1531, not the UDP
@@ -387,7 +421,7 @@ fn lan_targets_for(user: &str) -> Vec<PushTarget> {
             label: host.clone(),
         });
     }
-    out
+    (out, stats)
 }
 
 fn extra_targets_for(user: &str) -> Vec<PushTarget> {
@@ -457,11 +491,17 @@ pub async fn fan_out_leave(
     envelope: super::leaves::LeaveEnvelope,
 ) -> Result<()> {
     let agent = build_agent(tls)?;
-    let lan_targets = lan_targets_for(&envelope.user);
+    let (lan_targets, stats) = lan_targets_for(&envelope.user);
     let extra_targets = extra_targets_for(&envelope.user);
     let total = lan_targets.len() + extra_targets.len();
     if total == 0 {
-        debug!(user = %envelope.user, "pusher: no LEAVE targets");
+        warn!(
+            user = %envelope.user,
+            peers_total = stats.peers_total,
+            stale = stats.stale,
+            no_addr = stats.no_addr,
+            "pusher: no LEAVE targets; envelope recorded locally only"
+        );
         return Ok(());
     }
     info!(

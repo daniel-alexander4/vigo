@@ -172,9 +172,10 @@ async fn run(
                                 EventAction::Push => {
                                     match load_and_verify(&user, &filename) {
                                         Ok(bytes) => {
+                                            let size = bytes.len();
                                             let job = PushJob {
-                                                user,
-                                                filename,
+                                                user: user.clone(),
+                                                filename: filename.clone(),
                                                 bytes: Arc::new(bytes),
                                             };
                                             if let Err(e) = out_tx.try_send(job) {
@@ -182,10 +183,17 @@ async fn run(
                                                     error = %e,
                                                     "sigil watcher: pusher channel full or closed, dropping push event"
                                                 );
+                                            } else {
+                                                info!(
+                                                    user = %user,
+                                                    filename = %filename,
+                                                    size_bytes = size,
+                                                    "sigil watcher: PushJob enqueued"
+                                                );
                                             }
                                         }
                                         Err(e) => {
-                                            debug!(
+                                            warn!(
                                                 user = %user,
                                                 filename = %filename,
                                                 error = %e,
@@ -197,14 +205,21 @@ async fn run(
                                 EventAction::Delete => {
                                     let deletion_time = crate::sigil::now_secs_pub();
                                     let job = DeleteJob {
-                                        user,
-                                        filename,
+                                        user: user.clone(),
+                                        filename: filename.clone(),
                                         deletion_time,
                                     };
                                     if let Err(e) = del_tx.try_send(job) {
                                         warn!(
                                             error = %e,
                                             "sigil watcher: delete channel full or closed, dropping delete event"
+                                        );
+                                    } else {
+                                        info!(
+                                            user = %user,
+                                            filename = %filename,
+                                            deletion_time = deletion_time,
+                                            "sigil watcher: DeleteJob enqueued"
                                         );
                                     }
                                 }

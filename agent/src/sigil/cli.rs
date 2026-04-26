@@ -262,18 +262,17 @@ fn cmd_status(_args: &[String]) -> Result<()> {
         println!("  files:            (content dir missing)");
     }
 
-    // Tombstone count. Lives in /var/lib/vigo/sigil/<user>/ which
-    // is root-owned 0600, so the user CLI needs to read it via the
-    // daemon-maintained state path. load() tolerates read failures
-    // (returns empty), so unprivileged invocations degrade to 0
-    // silently rather than erroring.
+    // Tombstone count. The canonical table lives in
+    // /var/lib/vigo/sigil/<user>/tombstones.json (root 0600), but the
+    // daemon mirrors every save to ~/.sigil/tombstones.json (user
+    // 0600). Read the user-side mirror so this works without sudo.
     if config::is_enrolled(&home) {
         let username = home
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or("");
         if !username.is_empty() {
-            let table = tombstones::TombstoneTable::load(username);
+            let table = tombstones::TombstoneTable::load_user(username, &home);
             println!("  tombstones:       {}", table.tombstones.len());
         }
     }
@@ -539,10 +538,10 @@ fn cmd_list(args: &[String]) -> Result<()> {
     }
     let content_dir = config::content_dir(&home);
 
-    // Load tombstone table. File lives in /var/lib/vigo/sigil/<user>/
-    // which is root-owned 0600 — unprivileged CLI invocations read-fail
-    // silently and show an empty tombstone view. `status` uses the same
-    // load-or-empty pattern.
+    // Load tombstone table from the user-side mirror at
+    // ~/.sigil/tombstones.json (the daemon writes this on every save
+    // alongside the canonical root-owned copy). Missing or malformed
+    // mirror is treated as empty.
     let username = home
         .file_name()
         .and_then(|n| n.to_str())
@@ -551,7 +550,7 @@ fn cmd_list(args: &[String]) -> Result<()> {
     let tombstone_table = if username.is_empty() {
         tombstones::TombstoneTable::empty("")
     } else {
-        tombstones::TombstoneTable::load(&username)
+        tombstones::TombstoneTable::load_user(&username, &home)
     };
 
     // Build the row set.
@@ -637,7 +636,11 @@ fn cmd_list(args: &[String]) -> Result<()> {
     }
 
     if rows.is_empty() {
-        println!("(no files in {})", content_dir.display());
+        if tombstones_only {
+            println!("(no tombstones)");
+        } else {
+            println!("(no files in {})", content_dir.display());
+        }
         return Ok(());
     }
 

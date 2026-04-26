@@ -70,6 +70,23 @@ pub fn recipients_path(home: &Path) -> PathBuf {
     dot_dir(home).join("recipients.txt")
 }
 
+/// User-side mirror of the daemon's tombstone table. Written by the
+/// daemon after every canonical save to `agent_state_dir/<user>/
+/// tombstones.json`; consumed by `vigo sigil list` / `status` running
+/// as the user. Same content, different ACL surface — the canonical
+/// file stays root-only, the mirror is chown'd to the user 0600.
+pub fn tombstones_user_path(home: &Path) -> PathBuf {
+    dot_dir(home).join("tombstones.json")
+}
+
+/// User-side mirror of the daemon's leaves table. Same rationale as
+/// `tombstones_user_path` — root-owned canonical at
+/// `agent_state_dir/<user>/leaves.json`, user-readable mirror in
+/// `~/.sigil/`.
+pub fn leaves_user_path(home: &Path) -> PathBuf {
+    dot_dir(home).join("leaves.json")
+}
+
 pub fn enroll_pending_path(home: &Path) -> PathBuf {
     dot_dir(home).join("enroll.pending")
 }
