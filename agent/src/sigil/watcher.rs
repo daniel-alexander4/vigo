@@ -29,7 +29,7 @@
 //! has. Document, don't solve.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -93,15 +93,29 @@ pub fn spawn(
     (push_rx, del_rx)
 }
 
+/// A live watch on `~user/sigil/`. Tracks `(dev, inode)` so the
+/// reconciler can detect a delete-and-recreate (e.g.,
+/// `vigo sigil leave --purge` followed by `vigo sigil enroll`) and
+/// re-arm the inotify watch on the new directory inode. Without
+/// this, the kernel auto-removes the watch on dir-deletion (IN_IGNORED)
+/// but the reconciler's "user is enrolled and a watch exists" check
+/// happily skips re-adding, leaving the daemon blind to events on
+/// the recreated dir until something else flushes the entry.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct WatchEntry {
+    path: PathBuf,
+    dev: u64,
+    inode: u64,
+}
+
 async fn run(
     out_tx: mpsc::Sender<PushJob>,
     del_tx: mpsc::Sender<DeleteJob>,
     cancel: CancellationToken,
 ) {
-    // Map of user → watched path, so we know what to add/remove on
-    // reconcile. Using HashMap here because we compare membership not
-    // ordering; notify's watcher internally hashes paths anyway.
-    let watches: Arc<Mutex<HashMap<String, PathBuf>>> = Arc::new(Mutex::new(HashMap::new()));
+    // Map of user → watched-path metadata, so the reconciler can
+    // detect a stale watch (path gone or inode rotated) and re-arm.
+    let watches: Arc<Mutex<HashMap<String, WatchEntry>>> = Arc::new(Mutex::new(HashMap::new()));
 
     let (raw_tx, mut raw_rx) = tokio::sync::mpsc::unbounded_channel::<RawEvent>();
 
@@ -240,11 +254,19 @@ enum RawEvent {
 }
 
 /// Reconcile the watcher's active watches against the current set of
-/// enrolled users. Adds watches for newly-enrolled users, removes
-/// watches for users who unenrolled.
+/// enrolled users. Three actions per pass:
+///   1. Drop watches for users no longer enrolled.
+///   2. Drop watches whose underlying directory was deleted or
+///      replaced (inode rotated). The kernel already detached the
+///      inotify watch at the IN_IGNORED event, but the reconciler
+///      doesn't see that — without an explicit (dev, inode) check
+///      the entry persists forever and we miss every event on the
+///      recreated dir.
+///   3. Add watches for newly-enrolled users (or for users whose
+///      stale entry was just dropped in step 2).
 fn reconcile_watches(
     watcher: &mut notify::RecommendedWatcher,
-    watches: &Arc<Mutex<HashMap<String, PathBuf>>>,
+    watches: &Arc<Mutex<HashMap<String, WatchEntry>>>,
 ) {
     let desired: std::collections::HashSet<String> = match enrolled_users() {
         Ok(s) => s,
@@ -255,23 +277,46 @@ fn reconcile_watches(
     };
 
     let mut active = watches.lock().unwrap();
-    // Drop watches for users no longer enrolled.
-    let stale: Vec<String> = active
+
+    // Step 1: drop watches for users no longer enrolled.
+    let unenrolled: Vec<String> = active
         .keys()
         .filter(|u| !desired.contains(*u))
         .cloned()
         .collect();
-    for user in stale {
-        if let Some(path) = active.remove(&user) {
-            if let Err(e) = watcher.unwatch(&path) {
+    for user in unenrolled {
+        if let Some(entry) = active.remove(&user) {
+            if let Err(e) = watcher.unwatch(&entry.path) {
                 debug!(user = %user, error = %e, "watcher: unwatch failed");
             } else {
-                info!(user = %user, path = %path.display(), "watcher: removed");
+                info!(user = %user, path = %entry.path.display(), "watcher: removed");
             }
         }
     }
 
-    // Add watches for newly-enrolled users.
+    // Step 2: drop watches whose dir was deleted or replaced (purge +
+    // re-enroll rotates the inode under the same path).
+    let rotated: Vec<String> = active
+        .iter()
+        .filter_map(|(user, entry)| match path_inode(&entry.path) {
+            Some((dev, inode)) if dev == entry.dev && inode == entry.inode => None,
+            _ => Some(user.clone()),
+        })
+        .collect();
+    for user in rotated {
+        if let Some(entry) = active.remove(&user) {
+            // unwatch may already have been auto-cleaned by the
+            // kernel (IN_IGNORED on dir delete); ignore the result.
+            let _ = watcher.unwatch(&entry.path);
+            info!(
+                user = %user,
+                path = %entry.path.display(),
+                "watcher: stale watch dropped (inode rotated or path gone)"
+            );
+        }
+    }
+
+    // Step 3: add watches for users with no current entry.
     for user in &desired {
         if active.contains_key(user) {
             continue;
@@ -281,13 +326,17 @@ fn reconcile_watches(
             None => continue,
         };
         let content = config::content_dir(&home);
-        if !content.is_dir() {
-            continue;
-        }
+        let (dev, inode) = match path_inode(&content) {
+            Some(t) => t,
+            None => continue, // dir doesn't exist yet; try again next tick
+        };
         match watcher.watch(&content, RecursiveMode::NonRecursive) {
             Ok(()) => {
                 info!(user = %user, path = %content.display(), "watcher: added");
-                active.insert(user.clone(), content);
+                active.insert(
+                    user.clone(),
+                    WatchEntry { path: content, dev, inode },
+                );
             }
             Err(e) => {
                 warn!(
@@ -298,6 +347,24 @@ fn reconcile_watches(
                 );
             }
         }
+    }
+}
+
+/// Stat a path and return `(dev, inode)`, or `None` if the path
+/// doesn't exist. Used to detect a delete-and-recreate of a watched
+/// directory across reconcile ticks.
+fn path_inode(path: &Path) -> Option<(u64, u64)> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata(path).ok().map(|m| (m.dev(), m.ino()))
+    }
+    #[cfg(not(unix))]
+    {
+        // Non-unix: fall back to "exists?" — no inode rotation
+        // detection. Sigil ships Linux + macOS in Phase 1, so this
+        // path is unreachable in practice.
+        std::fs::metadata(path).ok().map(|_| (0, 0))
     }
 }
 
@@ -314,7 +381,7 @@ pub enum EventAction {
 /// resolve to Push.
 fn resolve_event(
     ev: &Event,
-    watches: &HashMap<String, PathBuf>,
+    watches: &HashMap<String, WatchEntry>,
 ) -> Option<(String, String, EventAction)> {
     // Classify the event: Create/Modify → Push, Remove → Delete. Anything
     // else (metadata-only, access events) ignored.
@@ -333,8 +400,8 @@ fn resolve_event(
     let parent = p.parent()?;
 
     // Which user owns this watched dir?
-    for (user, path) in watches.iter() {
-        if path == parent {
+    for (user, entry) in watches.iter() {
+        if entry.path == parent {
             return Some((user.clone(), name.to_string(), action));
         }
     }
@@ -361,10 +428,25 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
+    /// Helper: build a single-entry watches map for resolve_event
+    /// tests. (dev, inode) don't affect resolve_event — they're only
+    /// consulted by the reconciler for stale-watch detection.
+    fn one_watch(user: &str, path: &str) -> HashMap<String, WatchEntry> {
+        let mut w = HashMap::new();
+        w.insert(
+            user.to_string(),
+            WatchEntry {
+                path: PathBuf::from(path),
+                dev: 0,
+                inode: 0,
+            },
+        );
+        w
+    }
+
     #[test]
     fn resolve_event_matches_watched_dir() {
-        let mut watches = HashMap::new();
-        watches.insert("dan".to_string(), PathBuf::from("/home/dan/sigil"));
+        let watches = one_watch("dan", "/home/dan/sigil");
         let ev = Event {
             kind: EventKind::Create(notify::event::CreateKind::File),
             paths: vec![PathBuf::from("/home/dan/sigil/tax.pdf")],
@@ -379,8 +461,7 @@ mod tests {
 
     #[test]
     fn resolve_event_ignores_dotfiles() {
-        let mut watches = HashMap::new();
-        watches.insert("dan".to_string(), PathBuf::from("/home/dan/sigil"));
+        let watches = one_watch("dan", "/home/dan/sigil");
         let ev = Event {
             kind: EventKind::Create(notify::event::CreateKind::File),
             paths: vec![PathBuf::from("/home/dan/sigil/.foo.tmp")],
@@ -391,8 +472,7 @@ mod tests {
 
     #[test]
     fn resolve_event_ignores_unrelated_parent() {
-        let mut watches = HashMap::new();
-        watches.insert("dan".to_string(), PathBuf::from("/home/dan/sigil"));
+        let watches = one_watch("dan", "/home/dan/sigil");
         let ev = Event {
             kind: EventKind::Create(notify::event::CreateKind::File),
             paths: vec![PathBuf::from("/tmp/stray.txt")],
@@ -403,8 +483,7 @@ mod tests {
 
     #[test]
     fn resolve_event_removes_become_delete_action() {
-        let mut watches = HashMap::new();
-        watches.insert("dan".to_string(), PathBuf::from("/home/dan/sigil"));
+        let watches = one_watch("dan", "/home/dan/sigil");
         let ev = Event {
             kind: EventKind::Remove(notify::event::RemoveKind::File),
             paths: vec![PathBuf::from("/home/dan/sigil/foo.pdf")],
@@ -422,13 +501,50 @@ mod tests {
         // during atomic renames (.foo.sigil.enc.tmp) get removed
         // at rename time and we don't want to propagate that as a
         // user-visible deletion.
-        let mut watches = HashMap::new();
-        watches.insert("dan".to_string(), PathBuf::from("/home/dan/sigil"));
+        let watches = one_watch("dan", "/home/dan/sigil");
         let ev = Event {
             kind: EventKind::Remove(notify::event::RemoveKind::File),
             paths: vec![PathBuf::from("/home/dan/sigil/.foo.tmp")],
             attrs: Default::default(),
         };
         assert!(resolve_event(&ev, &watches).is_none());
+    }
+
+    #[test]
+    fn path_inode_returns_some_for_existing_dir() {
+        let tmp = std::env::temp_dir();
+        let (dev, inode) = path_inode(&tmp).expect("temp dir always exists");
+        // Sanity: same path queried twice produces the same answer.
+        let (dev2, inode2) = path_inode(&tmp).unwrap();
+        assert_eq!((dev, inode), (dev2, inode2));
+    }
+
+    #[test]
+    fn path_inode_returns_none_for_missing_path() {
+        let bogus = PathBuf::from("/nonexistent/sigil/watcher/probe");
+        assert!(path_inode(&bogus).is_none());
+    }
+
+    #[test]
+    fn path_inode_detects_inode_rotation_after_recreate() {
+        // Create a tempdir, capture its (dev, inode), delete it, recreate
+        // at the same path, and verify the new inode differs. This is
+        // the exact scenario the reconciler's stale-watch detection
+        // needs to catch (purge + re-enroll under the same ~/sigil/
+        // path, but a different underlying inode).
+        let dir = std::env::temp_dir().join(format!(
+            "sigil-watcher-rotation-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let before = path_inode(&dir).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(&dir).unwrap();
+        let after = path_inode(&dir).unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        // Same fs (dev should match), different inode.
+        assert_eq!(before.0, after.0, "dev should be unchanged");
+        assert_ne!(before.1, after.1, "inode should rotate after recreate");
     }
 }
