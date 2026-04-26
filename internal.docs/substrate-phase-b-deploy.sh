@@ -44,6 +44,11 @@ log "cross-compiling agent ($EXPECTED_VERSION)"
 make dist-agent
 ok "cross-compile complete"
 
+# Pre-authenticate sudo once so the in-loop sudo calls don't re-prompt and
+# can't silently die on a swallowed password prompt.
+log "pre-authenticating sudo (one prompt, cached for the rest of the run)"
+sudo -v
+
 for h in "${ENVOYS[@]}"; do
     log "deploying to $h"
     if is_local "$h"; then
@@ -59,13 +64,40 @@ for h in "${ENVOYS[@]}"; do
     esac
     note "arch=$arch  binary=$bin"
     if is_local "$h"; then
-        sudo install -m 0755 "$bin" /usr/local/sbin/vigo
-        sudo systemctl restart vigo-envoy
-        reported=$(vigo --version 2>&1 | awk '{print $NF}')
+        note "installing $bin → /usr/local/sbin/vigo"
+        if ! sudo install -m 0755 "$bin" /usr/local/sbin/vigo; then
+            err "install failed (exit $?)"
+            exit 1
+        fi
+        note "restarting vigo-envoy"
+        if ! sudo systemctl restart vigo-envoy; then
+            err "systemctl restart failed — last log lines:"
+            sudo journalctl -u vigo-envoy -n 20 --no-pager >&2 || true
+            exit 1
+        fi
+        note "querying version"
+        if ! version_output=$(vigo version 2>&1); then
+            err "vigo version failed: $version_output"
+            exit 1
+        fi
+        reported=$(awk '{print $NF}' <<<"$version_output")
     else
-        scp -q "$bin" "$h:/tmp/vigo"
-        ssh "$h" 'sudo install -m 0755 /tmp/vigo /usr/local/sbin/vigo && sudo systemctl restart vigo-envoy'
-        reported=$(ssh "$h" 'vigo --version' 2>&1 | awk '{print $NF}')
+        note "scp $bin → $h:/tmp/vigo"
+        if ! scp -q "$bin" "$h:/tmp/vigo"; then
+            err "scp to $h failed (exit $?)"
+            exit 1
+        fi
+        note "remote install + restart on $h"
+        if ! ssh "$h" 'sudo install -m 0755 /tmp/vigo /usr/local/sbin/vigo && sudo systemctl restart vigo-envoy'; then
+            err "remote install/restart on $h failed (exit $?)"
+            ssh "$h" 'sudo journalctl -u vigo-envoy -n 20 --no-pager' >&2 || true
+            exit 1
+        fi
+        if ! version_output=$(ssh "$h" 'vigo version' 2>&1); then
+            err "remote vigo version on $h failed: $version_output"
+            exit 1
+        fi
+        reported=$(awk '{print $NF}' <<<"$version_output")
     fi
     if [[ "$reported" == "$EXPECTED_VERSION" ]]; then
         ok "$h running $reported"
