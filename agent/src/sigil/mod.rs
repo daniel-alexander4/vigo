@@ -1238,15 +1238,41 @@ pub fn apply_leave(
         let sentinel = config::reencrypt_pending_path(home);
         if let Some(parent) = sentinel.parent() {
             let _ = fs::create_dir_all(parent);
+            #[cfg(unix)]
+            let _ = chown_to_user(parent, user);
         }
         if !sentinel.exists() {
-            if let Err(e) = fs::OpenOptions::new()
+            #[cfg(unix)]
+            let open_result = {
+                use std::os::unix::fs::OpenOptionsExt;
+                fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .truncate(true)
+                    .mode(0o600)
+                    .open(&sentinel)
+            };
+            #[cfg(not(unix))]
+            let open_result = fs::OpenOptions::new()
                 .create(true)
                 .write(true)
                 .truncate(true)
-                .open(&sentinel)
-            {
-                warn!(path = %sentinel.display(), error = %e, "sigil: failed to drop reencrypt.pending");
+                .open(&sentinel);
+            match open_result {
+                Ok(_) => {
+                    #[cfg(unix)]
+                    if let Err(e) = chown_to_user(&sentinel, user) {
+                        warn!(
+                            path = %sentinel.display(),
+                            user = %user,
+                            error = %e,
+                            "sigil: chown reencrypt.pending failed (file is 0600 root-owned)"
+                        );
+                    }
+                }
+                Err(e) => {
+                    warn!(path = %sentinel.display(), error = %e, "sigil: failed to drop reencrypt.pending");
+                }
             }
         }
     }
