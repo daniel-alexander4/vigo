@@ -116,7 +116,7 @@ pub fn push_bundle(
         .with_context(|| format!("sha256 bundle {}", bundle_path.display()))?;
 
     let url = format!(
-        "https://{}:{}/gitmirror/push/{}",
+        "https://{}:{}/swarm/gitmirror/push/{}",
         host,
         SWARM_PEER_PORT,
         url_encode_label(label),

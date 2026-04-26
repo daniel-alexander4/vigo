@@ -22,7 +22,7 @@ import (
 //
 // Mirrors the shape of `vigocli swarm gitmirror` + `vigocli swarm filesync`. No write
 // verbs — cryptsync enrollment is per-user on the envoy via
-// `vigo cryptsync enroll`.
+// `vigo swarm cryptsync enroll`.
 
 // cryptsyncFleet mirrors `server/cryptsyncmesh.Fleet`. Duplicated rather than
 // imported so the CLI stays decoupled from the server package
@@ -75,7 +75,7 @@ recipients digest, and session unlock status — through the 'cryptsync'
 trait on every check-in. The server joins every envoy's report into a
 fleet view; this command renders it. One row per user.
 
-Cryptsync enrollment is per-user on the envoy via 'vigo cryptsync enroll'. No
+Cryptsync enrollment is per-user on the envoy via 'vigo swarm cryptsync enroll'. No
 admin write path — this command never decrypts content, never touches
 keys, and never forces unlock. It only shows what each envoy is
 reporting.`,
@@ -391,7 +391,7 @@ func runCryptsyncEvict(host, user string, allUsers, yes bool) error {
 		// cryptsyncFleet struct doesn't expose per-envoy age pubkey directly, so we
 		// instruct agents to resolve locally via hostname. If an agent can't
 		// find the hostname in its peer table, _apply-evict is a no-op.
-		cmd := fmt.Sprintf("vigo cryptsync _apply-evict --user %s --hostname %s --pubkey LOOKUP",
+		cmd := fmt.Sprintf("vigo swarm cryptsync _apply-evict --user %s --hostname %s --pubkey LOOKUP",
 			shellQuote(t.user), shellQuote(host))
 		req := map[string]any{
 			"command": cmd,

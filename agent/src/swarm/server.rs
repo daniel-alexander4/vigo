@@ -833,12 +833,12 @@ async fn handle_gitmirror_push(
     ok_json(r#"{"status":"accepted"}"#)
 }
 
-/// Handle `POST /filesync/announce` — cross-subnet unicast announcements
+/// Handle `POST /swarm/filesync/announce` — cross-subnet unicast announcements
 /// from peers listed in a user's `~<user>/.filesync/config.yaml` →
 /// `cross_subnet_peers:`. The body is a JSON-serialized filesync Announcement.
 /// The sender's TCP peer address is used as the reconciler's peer (same
 /// model as multicast, where the UDP source IP is used), so subsequent
-/// `GET /filesync/<user>/<file>` fetches go back to the real remote host
+/// `GET /swarm/filesync/<user>/<file>` fetches go back to the real remote host
 /// rather than a self-reported hostname.
 ///
 /// mTLS already attests the sender at the transport layer; the

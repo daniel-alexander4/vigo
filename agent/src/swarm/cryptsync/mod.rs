@@ -608,7 +608,7 @@ fn maybe_catchup_tombstones(
     // Build the URL using the announcement source socket so we
     // pull from the exact peer that told us about the divergence.
     let url = format!(
-        "https://{}/cryptsync/tombstones/{}",
+        "https://{}/swarm/cryptsync/tombstones/{}",
         source_addr,
         url_encode_seg(&user)
     );
@@ -710,7 +710,7 @@ fn maybe_catchup_leaves(
     let user = user.to_string();
     let source_hostname = source_hostname.to_string();
     let url = format!(
-        "https://{}/cryptsync/leaves/{}",
+        "https://{}/swarm/cryptsync/leaves/{}",
         source_addr,
         url_encode_seg(&user)
     );
@@ -1343,7 +1343,7 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
         };
         let body = serde_json::to_vec(&ann).context("serializing announcement")?;
         for host in &cfg.cross_subnet_peers {
-            let url = format!("https://{}:{}/cryptsync/announce", host, PEER_PORT);
+            let url = format!("https://{}:{}/swarm/cryptsync/announce", host, PEER_PORT);
             let body = body.clone();
             let agent = agent.clone();
             // Fire-and-forget in spawn_blocking — announcer shouldn't

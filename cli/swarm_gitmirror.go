@@ -411,7 +411,7 @@ func runGitmirrorEvict(host, user string, yes bool) error {
 		}
 	}
 
-	cmdStr := fmt.Sprintf("vigo gitmirror prune --seeder %s", host)
+	cmdStr := fmt.Sprintf("vigo swarm gitmirror prune --seeder %s", host)
 	if user != "" {
 		cmdStr += " --user " + user
 	}

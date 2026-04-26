@@ -157,7 +157,7 @@ pub fn signing_pubkey_path(username: &str) -> PathBuf {
 pub struct UserConfig {
     /// Hostnames of cross-subnet receivers unreachable via multicast.
     /// The sender POSTs recipient announcements to each peer's
-    /// `https://<host>:1531/cryptsync/announce`. Empty by default.
+    /// `https://<host>:1531/swarm/cryptsync/announce`. Empty by default.
     #[serde(default)]
     pub cross_subnet_peers: Vec<String>,
 

@@ -7,10 +7,10 @@
 //! agent that reached us is trusted.
 //!
 //! Routes:
-//!   `GET /filesync/state/{user}`    → full `UserState` JSON (pulled on
+//!   `GET /swarm/filesync/state/{user}`    → full `UserState` JSON (pulled on
 //!                                 digest-mismatch from the 0.30.11+
 //!                                 digest-only multicast announcement)
-//!   `GET /filesync/{user}/{filename}` → raw file bytes
+//!   `GET /swarm/filesync/{user}/{filename}` → raw file bytes
 
 use http_body_util::Full;
 use hyper::body::Bytes;
@@ -23,19 +23,20 @@ use super::state::UserState;
 use crate::platform::paths::default_filesync_dir;
 use crate::platform::users::user_home;
 
-/// Handle a `/filesync/...` request. Returns 404 for missing files, 400 for
-/// malformed paths, 413 for oversize files, 200 with raw bytes or JSON.
+/// Handle a `/swarm/filesync/...` request. Returns 404 for missing files,
+/// 400 for malformed paths, 413 for oversize files, 200 with raw bytes or
+/// JSON.
 pub fn handle(path: &str) -> Response<Full<Bytes>> {
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     // Per-user state pull. Receivers call this on digest mismatch to
     // catch up; the announcement only carried the digest so we never
     // leaked file metadata to the LAN.
-    if let ["filesync", "state", user] = segments.as_slice() {
+    if let ["swarm", "filesync", "state", user] = segments.as_slice() {
         return handle_state(user);
     }
-    // ["filesync", user, filename]
+    // ["swarm", "filesync", user, filename]
     let (user, name) = match segments.as_slice() {
-        ["filesync", user, name] => (*user, *name),
+        ["swarm", "filesync", user, name] => (*user, *name),
         _ => return not_found(),
     };
 
@@ -102,7 +103,7 @@ pub fn handle(path: &str) -> Response<Full<Bytes>> {
     }
 }
 
-/// Handle `GET /filesync/state/{user}` — return the full UserState JSON for
+/// Handle `GET /swarm/filesync/state/{user}` — return the full UserState JSON for
 /// `user` on this envoy. Called by the multicast-receiver side of a peer
 /// when the announced digest doesn't match the peer's cached value for
 /// this (user, machine) tuple.

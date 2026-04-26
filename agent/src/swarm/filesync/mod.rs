@@ -290,10 +290,10 @@ async fn run_extra_peer_pusher(
 /// the caller can log them.
 /// Pull the full `UserState` for `user` from a peer via mTLS HTTPS.
 /// Called on digest-mismatch in the multicast receiver; the peer returns
-/// the JSON body served by `GET /filesync/state/{user}` on its swarm peer
-/// server. Blocking I/O — caller wraps in `spawn_blocking`.
+/// the JSON body served by `GET /swarm/filesync/state/{user}` on its swarm
+/// peer server. Blocking I/O — caller wraps in `spawn_blocking`.
 fn pull_user_state(http: &ureq::Agent, peer_addr: &str, user: &str) -> Result<UserState, anyhow::Error> {
-    let url = format!("https://{}/filesync/state/{}", peer_addr, user);
+    let url = format!("https://{}/swarm/filesync/state/{}", peer_addr, user);
     let resp = http.get(&url).call()?;
     let status = resp.status();
     if status != 200 {
@@ -329,7 +329,7 @@ fn push_announcement(
         );
     }
 
-    let url = format!("https://{}:{}/filesync/announce", host, PEER_PORT);
+    let url = format!("https://{}:{}/swarm/filesync/announce", host, PEER_PORT);
     let body = serde_json::to_vec(ann)?;
     let resp = http
         .post(&url)

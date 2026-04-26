@@ -34,7 +34,7 @@ pub fn config_path(home: &Path) -> PathBuf {
 pub struct UserConfig {
     /// Hostnames of cross-subnet receivers that can't be reached via
     /// multicast. The sender POSTs state announcements to each peer's
-    /// `https://<host>:1531/filesync/announce`. Empty by default.
+    /// `https://<host>:1531/swarm/filesync/announce`. Empty by default.
     #[serde(default)]
     pub cross_subnet_peers: Vec<String>,
 }

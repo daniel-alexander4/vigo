@@ -7,20 +7,21 @@
 //!
 //! Routes (dispatched from `agent/src/swarm/server.rs`):
 //!
-//! - `GET /cryptsync/pull/{user}/{filename}` — serve ciphertext bytes
-//!   from `~<user>/cryptsync/<filename>`. Mirrors filesync's pull
+//! - `GET /swarm/cryptsync/pull/{user}/{filename}` — serve ciphertext
+//!   bytes from `~<user>/cryptsync/<filename>`. Mirrors filesync's pull
 //!   path but with a `/pull/` prefix segment for clarity (cryptsync
 //!   has a matching `/push/`, filesync does not).
 //!
-//! - `POST /cryptsync/push/{user}/{filename}` — receive a ciphertext
-//!   blob from a peer and write it into `~<user>/cryptsync/<filename>`
-//!   atomically. Body capped at 1 GiB (vs. filesync's 128 KiB cap on
-//!   `/filesync/announce` — push is a different beast).
+//! - `POST /swarm/cryptsync/push/{user}/{filename}` — receive a
+//!   ciphertext blob from a peer and write it into
+//!   `~<user>/cryptsync/<filename>` atomically. Body capped at 1 GiB
+//!   (vs. filesync's 128 KiB cap on `/swarm/filesync/announce` — push
+//!   is a different beast).
 //!
-//! - `POST /cryptsync/announce` — receive an Announcement JSON from
-//!   a cross-subnet peer listed in some local user's `cross_subnet_peers:`.
-//!   Body capped at 128 KiB. Feeds into the same reconciler channel
-//!   as multicast discovery.
+//! - `POST /swarm/cryptsync/announce` — receive an Announcement JSON
+//!   from a cross-subnet peer listed in some local user's
+//!   `cross_subnet_peers:`. Body capped at 128 KiB. Feeds into the same
+//!   reconciler channel as multicast discovery.
 //!
 //! Note: Week 2 ships the push/pull handlers so the routes are wired
 //! and exercised by tests, but the sender-side fan-out that actually
@@ -47,16 +48,16 @@ pub const MAX_PUSH_BYTES: usize = 1024 * 1024 * 1024; // 1 GiB
 /// Max size of an announcement body.
 pub const MAX_ANNOUNCE_BYTES: usize = 128 * 1024;
 
-// ---------- pull (GET /cryptsync/pull/{user}/{filename}) ----------
+// ---------- pull (GET /swarm/cryptsync/pull/{user}/{filename}) ----------
 
-/// Handle `GET /cryptsync/pull/{user}/{filename}` — serve one
+/// Handle `GET /swarm/cryptsync/pull/{user}/{filename}` — serve one
 /// ciphertext file. Returns 404 for missing files, 400 for malformed
 /// paths. Does blocking I/O; caller should wrap in
 /// `tokio::task::block_in_place`.
 pub fn handle_pull(path: &str) -> Response<Full<Bytes>> {
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     let (user, name) = match segments.as_slice() {
-        ["cryptsync", "pull", user, name] => (*user, *name),
+        ["swarm", "cryptsync", "pull", user, name] => (*user, *name),
         _ => return not_found(),
     };
 
@@ -83,7 +84,7 @@ pub fn handle_pull(path: &str) -> Response<Full<Bytes>> {
     // Anti-resurrection — if this filename is currently tombstoned,
     // return 410 Gone instead of serving bytes. The puller interprets
     // 410 as "learn about this delete" and records the tombstone
-    // locally; see `agent/src/cryptsync/server.rs` docs.
+    // locally; see `agent/src/swarm/cryptsync/server.rs` docs.
     let table = TombstoneTable::load(&user);
     if let Some(dt) = table.active_deletion_time(&name) {
         return gone_with_tombstone(&name, dt);
@@ -127,9 +128,9 @@ pub fn handle_pull(path: &str) -> Response<Full<Bytes>> {
     }
 }
 
-// ---------- push (POST /cryptsync/push/{user}/{filename}) ----------
+// ---------- push (POST /swarm/cryptsync/push/{user}/{filename}) ----------
 
-/// Handle `POST /cryptsync/push/{user}/{filename}` — write a
+/// Handle `POST /swarm/cryptsync/push/{user}/{filename}` — write a
 /// ciphertext blob into `~<user>/cryptsync/<filename>` via temp-file
 /// + rename. Returns 201 on success, 400/404/413 on error.
 pub async fn handle_push(
@@ -138,7 +139,7 @@ pub async fn handle_push(
 ) -> Response<Full<Bytes>> {
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     let (user, name) = match segments.as_slice() {
-        ["cryptsync", "push", user, name] => (*user, *name),
+        ["swarm", "cryptsync", "push", user, name] => (*user, *name),
         _ => return not_found(),
     };
     let user = match percent_decode(user) {
@@ -286,7 +287,7 @@ fn write_tmp(tmp: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
     }
 }
 
-// ---------- DELETE tombstone (POST /cryptsync/tombstones/{user}/{filename}) ----------
+// ---------- DELETE tombstone (POST /swarm/cryptsync/tombstones/{user}/{filename}) ----------
 
 /// Handle a signed DELETE envelope from a peer.
 ///
@@ -314,7 +315,7 @@ pub async fn handle_tombstone_delete(
 ) -> Response<Full<Bytes>> {
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     let (user, name) = match segments.as_slice() {
-        ["cryptsync", "tombstones", user, name] => (*user, *name),
+        ["swarm", "cryptsync", "tombstones", user, name] => (*user, *name),
         _ => return not_found(),
     };
     let user = match percent_decode(user) {
@@ -415,7 +416,7 @@ pub async fn handle_tombstone_delete(
         .unwrap()
 }
 
-// ---------- tombstones list (GET /cryptsync/tombstones/{user}) ----------
+// ---------- tombstones list (GET /swarm/cryptsync/tombstones/{user}) ----------
 
 /// Return the full tombstone table for `user` as JSON. Used by
 /// peers that observed a tombstones_digest mismatch on an
@@ -424,7 +425,7 @@ pub async fn handle_tombstone_delete(
 pub fn handle_tombstones_list(path: &str) -> Response<Full<Bytes>> {
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     let user = match segments.as_slice() {
-        ["cryptsync", "tombstones", user] => *user,
+        ["swarm", "cryptsync", "tombstones", user] => *user,
         _ => return not_found(),
     };
     let user = match percent_decode(user) {
@@ -446,7 +447,7 @@ pub fn handle_tombstones_list(path: &str) -> Response<Full<Bytes>> {
     }
 }
 
-// ---------- leaves list (GET /cryptsync/leaves/{user}) ----------
+// ---------- leaves list (GET /swarm/cryptsync/leaves/{user}) ----------
 
 /// Return the full leaves table for `user` as JSON. Mirror of
 /// `handle_tombstones_list`. Used by peers that observed a
@@ -459,7 +460,7 @@ pub fn handle_tombstones_list(path: &str) -> Response<Full<Bytes>> {
 pub fn handle_leaves_list(path: &str) -> Response<Full<Bytes>> {
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     let user = match segments.as_slice() {
-        ["cryptsync", "leaves", user] => *user,
+        ["swarm", "cryptsync", "leaves", user] => *user,
         _ => return not_found(),
     };
     let user = match percent_decode(user) {
@@ -481,7 +482,7 @@ pub fn handle_leaves_list(path: &str) -> Response<Full<Bytes>> {
     }
 }
 
-// ---------- LEAVE (POST /cryptsync/leaves/{user}) ----------
+// ---------- LEAVE (POST /swarm/cryptsync/leaves/{user}) ----------
 
 /// Handle a signed LEAVE envelope from a peer.
 ///
@@ -503,7 +504,7 @@ pub async fn handle_leave(
 ) -> Response<Full<Bytes>> {
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
     let user = match segments.as_slice() {
-        ["cryptsync", "leaves", user] => *user,
+        ["swarm", "cryptsync", "leaves", user] => *user,
         _ => return not_found(),
     };
     let user = match percent_decode(user) {
@@ -591,9 +592,9 @@ pub async fn handle_leave(
         .unwrap()
 }
 
-// ---------- announce (POST /cryptsync/announce) ----------
+// ---------- announce (POST /swarm/cryptsync/announce) ----------
 
-/// Handle `POST /cryptsync/announce` — feed a unicast announcement
+/// Handle `POST /swarm/cryptsync/announce` — feed a unicast announcement
 /// into the cryptsync daemon's reconciler channel. Returns 503 if the
 /// daemon is not running (no TLS certs, not spawned yet).
 pub async fn handle_announce(

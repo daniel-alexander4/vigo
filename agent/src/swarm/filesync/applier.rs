@@ -64,7 +64,7 @@ fn fetch_file(
     }
 
     let url = format!(
-        "https://{}/filesync/{}/{}",
+        "https://{}/swarm/filesync/{}/{}",
         peer_addr,
         urlencode(user),
         urlencode(name)

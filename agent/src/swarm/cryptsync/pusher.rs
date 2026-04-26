@@ -290,7 +290,7 @@ fn push_delete_one(
     // accept bodies — so this stays POST. Routing is unambiguous
     // because the path segment carries the verb semantic.
     let url = format!(
-        "https://{}/cryptsync/tombstones/{}/{}",
+        "https://{}/swarm/cryptsync/tombstones/{}/{}",
         target.addr,
         urlencode(&envelope.user),
         urlencode(&envelope.filename),
@@ -344,7 +344,7 @@ fn push_one(
     }
 
     let url = format!(
-        "https://{}/cryptsync/push/{}/{}",
+        "https://{}/swarm/cryptsync/push/{}/{}",
         target.addr,
         urlencode(user),
         urlencode(filename)
@@ -535,7 +535,7 @@ fn push_leave_one(
     envelope: &super::leaves::LeaveEnvelope,
 ) -> Result<()> {
     let url = format!(
-        "https://{}/cryptsync/leaves/{}",
+        "https://{}/swarm/cryptsync/leaves/{}",
         target.addr,
         urlencode(&envelope.user),
     );

@@ -1507,7 +1507,7 @@ const CONFIG_TEMPLATE: &str = "\
 
 # Hostnames of cryptsync peers unreachable via LAN multicast (different
 # subnet, NAT, VPN). The agent POSTs this envoy's announcement to each
-# listed host at https://<host>:1531/cryptsync/announce in addition to
+# listed host at https://<host>:1531/swarm/cryptsync/announce in addition to
 # the LAN multicast on 224.0.0.44:1533. Leave empty if every peer is on
 # the same subnet as this envoy.
 #
