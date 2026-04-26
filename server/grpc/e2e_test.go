@@ -72,13 +72,13 @@ func startTestServerWithConfig(t *testing.T, configDir string) (string, *config.
 func setupE2EConfig(t *testing.T, modules map[string]string, envoysYAML string) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "examples")
-	for _, sub := range []string{"stockpile/stones", "scaffolding/envoys", "scaffolding/roles"} {
+	for _, sub := range []string{"stockpile/modules", "scaffolding/envoys", "scaffolding/roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for name, content := range modules {
-		if err := os.WriteFile(filepath.Join(dir, "stockpile", "stones", name+".vgo"), []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "stockpile", "modules", name+".vgo"), []byte(content), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -220,7 +220,7 @@ envoys:
 	}
 
 	// Add a new module and update envoy config.
-	if err := os.WriteFile(filepath.Join(configDir, "stockpile", "stones", "certbot.vgo"), []byte(`
+	if err := os.WriteFile(filepath.Join(configDir, "stockpile", "modules", "certbot.vgo"), []byte(`
 name: certbot
 resources:
   - name: install-certbot

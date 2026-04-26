@@ -81,7 +81,7 @@ ssh_exec, network_config, cisco_vlan, cisco_interface, cisco_acl, junos_interfac
 
 ## Trait Collectors (40)
 
-os, hardware, network, packages, time, identity, virtual, uptime, loadavg, mountpoints, processors, dmi, cloud, filesystem, kernel, users, memory, blockdevices, docker, systemd, selinux, timezone, locale, swap, gpu, cert_lifecycle, ports, security_scan, tpm, secureboot, display, package_updates, swarm, swarm_seeds, cairn, connwaer, package_source_audit, kernel_module_attestation, listeners, cve_running_correlation
+os, hardware, network, packages, time, identity, virtual, uptime, loadavg, mountpoints, processors, dmi, cloud, filesystem, kernel, users, memory, blockdevices, docker, systemd, selinux, timezone, locale, swap, gpu, cert_lifecycle, ports, security_scan, tpm, secureboot, display, package_updates, swarm, swarm_seeds, gitmirror, connwaer, package_source_audit, kernel_module_attestation, listeners, cve_running_correlation
 
 Each collector has platform-specific implementations. Traits are available in `when:` conditional expressions and Go templates. The four newest Linux-only collectors (`package_source_audit`, `kernel_module_attestation`, `listeners`, `cve_running_correlation`) cover repo allowlist drift, unsigned kernel modules, port → process attribution, and CVE × running-binary correlation.
 

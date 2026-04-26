@@ -63,7 +63,7 @@ func openExecTestDB(t *testing.T) *sql.DB {
 func insertPushRunWithStatus(t *testing.T, sqlDB *sql.DB, id, status string) {
 	t.Helper()
 	_, err := sqlDB.Exec(
-		`INSERT INTO push_runs (id, command, target_glob, operator, status) VALUES (?, 'echo test', '*', 'test', ?)`,
+		`INSERT INTO push_runs (id, command, target_glob, operator, status) VALUES (?, 'filesync test', '*', 'test', ?)`,
 		id, status,
 	)
 	if err != nil {
@@ -100,7 +100,7 @@ func TestRunWorkflow_CreatesDBRecord(t *testing.T) {
 	engine.workflows["test-wf"] = &WorkflowDef{
 		Name: "test-wf",
 		Steps: []StepDef{
-			{Name: "step1", Command: "echo hello", Target: "*"},
+			{Name: "step1", Command: "filesync hello", Target: "*"},
 		},
 	}
 	engine.mu.Unlock()
@@ -154,9 +154,9 @@ func TestExecuteWorkflow_CompletesAllSteps(t *testing.T) {
 	def := &WorkflowDef{
 		Name: "deploy",
 		Steps: []StepDef{
-			{Name: "setup", Command: "echo setup", Target: "*.web.*"},
-			{Name: "deploy", Command: "echo deploy", Target: "*.web.*"},
-			{Name: "verify", Command: "echo verify", Target: "*.web.*"},
+			{Name: "setup", Command: "filesync setup", Target: "*.web.*"},
+			{Name: "deploy", Command: "filesync deploy", Target: "*.web.*"},
+			{Name: "verify", Command: "filesync verify", Target: "*.web.*"},
 		},
 	}
 	engine.mu.Lock()
@@ -244,9 +244,9 @@ func TestExecuteWorkflow_StepFailure_OnFailureBranch(t *testing.T) {
 	def := &WorkflowDef{
 		Name: "deploy",
 		Steps: []StepDef{
-			{Name: "deploy", Command: "echo deploy", Target: "*.web.*", OnFailure: "rollback"},
-			{Name: "verify", Command: "echo verify", Target: "*.web.*"},
-			{Name: "rollback", Command: "echo rollback", Target: "*.web.*"},
+			{Name: "deploy", Command: "filesync deploy", Target: "*.web.*", OnFailure: "rollback"},
+			{Name: "verify", Command: "filesync verify", Target: "*.web.*"},
+			{Name: "rollback", Command: "filesync rollback", Target: "*.web.*"},
 		},
 	}
 	engine.mu.Lock()
@@ -274,14 +274,14 @@ func TestExecuteWorkflow_StepFailure_OnFailureBranch(t *testing.T) {
 
 	// First call should be the deploy step.
 	call0 := runner.getCall(0)
-	if call0.Command != "echo deploy" {
-		t.Errorf("expected first call command 'echo deploy', got %q", call0.Command)
+	if call0.Command != "filesync deploy" {
+		t.Errorf("expected first call command 'filesync deploy', got %q", call0.Command)
 	}
 
 	// Second call should be the rollback step.
 	call1 := runner.getCall(1)
-	if call1.Command != "echo rollback" {
-		t.Errorf("expected second call command 'echo rollback', got %q", call1.Command)
+	if call1.Command != "filesync rollback" {
+		t.Errorf("expected second call command 'filesync rollback', got %q", call1.Command)
 	}
 
 	// After rollback step completes, the workflow ends (rollback is the last step at idx 2,
@@ -310,7 +310,7 @@ func TestExecuteWorkflow_StepFailure_NoOnFailure_WorkflowFails(t *testing.T) {
 	def := &WorkflowDef{
 		Name: "simple",
 		Steps: []StepDef{
-			{Name: "step1", Command: "echo step1", Target: "*"},
+			{Name: "step1", Command: "filesync step1", Target: "*"},
 		},
 	}
 	engine.mu.Lock()
@@ -350,8 +350,8 @@ func TestExecuteWorkflow_RespectsAbortFlag(t *testing.T) {
 	def := &WorkflowDef{
 		Name: "deploy",
 		Steps: []StepDef{
-			{Name: "step1", Command: "echo step1", Target: "*"},
-			{Name: "step2", Command: "echo step2", Target: "*"},
+			{Name: "step1", Command: "filesync step1", Target: "*"},
+			{Name: "step2", Command: "filesync step2", Target: "*"},
 		},
 	}
 	engine.mu.Lock()
@@ -472,9 +472,9 @@ func TestExecuteWorkflow_OnSuccessBranching(t *testing.T) {
 	def := &WorkflowDef{
 		Name: "branch",
 		Steps: []StepDef{
-			{Name: "check", Command: "echo check", Target: "*", OnSuccess: "notify"},
-			{Name: "deploy", Command: "echo deploy", Target: "*"},
-			{Name: "notify", Command: "echo notify", Target: "*"},
+			{Name: "check", Command: "filesync check", Target: "*", OnSuccess: "notify"},
+			{Name: "deploy", Command: "filesync deploy", Target: "*"},
+			{Name: "notify", Command: "filesync notify", Target: "*"},
 		},
 	}
 	engine.mu.Lock()
@@ -502,12 +502,12 @@ func TestExecuteWorkflow_OnSuccessBranching(t *testing.T) {
 	}
 
 	call0 := runner.getCall(0)
-	if call0.Command != "echo check" {
-		t.Errorf("expected first call 'echo check', got %q", call0.Command)
+	if call0.Command != "filesync check" {
+		t.Errorf("expected first call 'filesync check', got %q", call0.Command)
 	}
 	call1 := runner.getCall(1)
-	if call1.Command != "echo notify" {
-		t.Errorf("expected second call 'echo notify', got %q", call1.Command)
+	if call1.Command != "filesync notify" {
+		t.Errorf("expected second call 'filesync notify', got %q", call1.Command)
 	}
 
 	// Workflow should be complete (notify is last step at idx 2, next would be idx 3 which exits loop).
@@ -535,7 +535,7 @@ func TestExecuteWorkflow_PollPushCompletion_Failed(t *testing.T) {
 	def := &WorkflowDef{
 		Name: "failing",
 		Steps: []StepDef{
-			{Name: "step1", Command: "echo step1", Target: "*"},
+			{Name: "step1", Command: "filesync step1", Target: "*"},
 		},
 	}
 	engine.mu.Lock()
@@ -583,8 +583,8 @@ func TestExecuteWorkflow_PollFailure_OnFailureBranch(t *testing.T) {
 	def := &WorkflowDef{
 		Name: "deploy-with-cleanup",
 		Steps: []StepDef{
-			{Name: "deploy", Command: "echo deploy", Target: "*", OnFailure: "cleanup"},
-			{Name: "cleanup", Command: "echo cleanup", Target: "*"},
+			{Name: "deploy", Command: "filesync deploy", Target: "*", OnFailure: "cleanup"},
+			{Name: "cleanup", Command: "filesync cleanup", Target: "*"},
 		},
 	}
 	engine.mu.Lock()
@@ -704,7 +704,7 @@ func TestExecuteWorkflow_RollingParams(t *testing.T) {
 		Steps: []StepDef{
 			{
 				Name:        "deploy",
-				Command:     "echo deploy",
+				Command:     "filesync deploy",
 				Target:      "*.web.*",
 				BatchSize:   "25%",
 				MaxFailures: "2",

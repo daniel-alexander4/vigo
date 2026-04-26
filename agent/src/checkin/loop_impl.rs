@@ -70,10 +70,10 @@ pub struct LoopConfig {
     /// Swarm download coordinator. When set, check-in responses are forwarded
     /// to the manager instead of spawning ad-hoc download tasks.
     pub swarm_manager: Option<crate::swarm::manager::SwarmManager>,
-    /// Live on/off switch for the cairn subsystem. Re-evaluated after
-    /// every accepted policy bundle so operators can flip `cairn: true`
+    /// Live on/off switch for the gitmirror subsystem. Re-evaluated after
+    /// every accepted policy bundle so operators can flip `gitmirror: true`
     /// in a matchfile without restarting the agent.
-    pub cairn_gate: Option<crate::cairn::Gate>,
+    pub gitmirror_gate: Option<crate::swarm::gitmirror::Gate>,
 }
 
 impl Default for LoopConfig {
@@ -89,7 +89,7 @@ impl Default for LoopConfig {
             peer_map: None,
             manifest: None,
             swarm_manager: None,
-            cairn_gate: None,
+            gitmirror_gate: None,
         }
     }
 }
@@ -724,21 +724,21 @@ async fn deliver_pending(client: &mut Client, store: &StateStore) {
     }
 }
 
-/// Re-read the cairn matchfile var from the freshly-accepted bundle
+/// Re-read the gitmirror matchfile var from the freshly-accepted bundle
 /// and propagate the result to the shared gate. Logs only on
 /// transitions so the steady state is quiet.
-fn sync_cairn_gate(
-    gate: Option<&crate::cairn::Gate>,
+fn sync_gitmirror_gate(
+    gate: Option<&crate::swarm::gitmirror::Gate>,
     store: &StateStore,
 ) {
     let Some(gate) = gate else { return };
-    let new_state = crate::cairn::matchfile_enables_cairn(Some(store));
+    let new_state = crate::swarm::gitmirror::matchfile_enables_gitmirror(Some(store));
     let prev = gate.set(new_state);
     if prev != new_state {
         if new_state {
-            info!("cairn: enabled by matchfile var (live flip; no restart required)");
+            info!("gitmirror: enabled by matchfile var (live flip; no restart required)");
         } else {
-            info!("cairn: disabled by matchfile var (live flip; reactor will idle)");
+            info!("gitmirror: disabled by matchfile var (live flip; reactor will idle)");
         }
     }
 }
@@ -877,7 +877,7 @@ pub async fn daemon_loop(
     let peer_map = cfg.peer_map;
     let manifest = cfg.manifest;
     let swarm_manager = cfg.swarm_manager;
-    let cairn_gate = cfg.cairn_gate;
+    let gitmirror_gate = cfg.gitmirror_gate;
 
     let mut bo = Backoff::new();
     let mut last_fingerprint = String::new();
@@ -982,7 +982,7 @@ pub async fn daemon_loop(
                 // Accept bundle after successful online convergence.
                 if let Some(ref store) = state_store {
                     accept_bundle(store, &policy_state, traits_json.as_deref());
-                    sync_cairn_gate(cairn_gate.as_ref(), store);
+                    sync_gitmirror_gate(gitmirror_gate.as_ref(), store);
                     crate::swarm::evict_expired(store);
                 }
                 crate::swarm::reject_seeds(&rr.rejected_seeds);
@@ -1051,7 +1051,7 @@ pub async fn daemon_loop(
                             // Cache state after stream disconnect.
                             if let Some(ref store) = state_store {
                                 accept_bundle(store, &policy_state, traits_json.as_deref());
-                                sync_cairn_gate(cairn_gate.as_ref(), store);
+                                sync_gitmirror_gate(gitmirror_gate.as_ref(), store);
                             }
 
                             if cancel.is_cancelled() {

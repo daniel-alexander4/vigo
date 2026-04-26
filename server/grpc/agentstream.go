@@ -957,8 +957,8 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 }
 
 
-// Echo is an agent-side LAN-only P2P feature — the server has no role.
-// No server-side ingest function lives here. See agent/src/echo/.
+// Filesync is an agent-side LAN-only P2P feature — the server has no role.
+// No server-side ingest function lives here. See agent/src/filesync/.
 
 func parseRetentionDuration(s string) time.Duration {
 	if len(s) > 1 && s[len(s)-1] == 'd' {

@@ -249,8 +249,8 @@ vars:
     - "permit tcp any any eq 80"
     - "permit tcp any any eq 443"
     - "permit tcp any any eq 22"
-    - "permit icmp any any echo"
-    - "permit icmp any any echo-reply"
+    - "permit icmp any any filesync"
+    - "permit icmp any any filesync-reply"
   denied_entries:
     - "deny ip 10.0.0.0 0.255.255.255 any"
     - "deny ip 172.16.0.0 0.15.255.255 any"

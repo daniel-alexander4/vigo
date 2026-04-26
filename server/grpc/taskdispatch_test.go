@@ -114,7 +114,7 @@ func TestStreamManagerDispatchPush(t *testing.T) {
 		Msg: &pb.ServerStreamMessage_TaskDispatch{
 			TaskDispatch: &pb.TaskDispatch{
 				TaskId:  "push-1",
-				Command: "echo test",
+				Command: "filesync test",
 			},
 		},
 	}

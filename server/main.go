@@ -894,7 +894,7 @@ func run() error {
 		slog.Warn("stream_edit globally disabled — all stream_edit attributes will be stripped from policy bundles")
 	}
 
-	// Cairn is fully P2P as of 0.23.0 — no server-side ClaimTable,
+	// Gitmirror is fully P2P as of 0.23.0 — no server-side ClaimTable,
 	// no trait-driven Builder, no SetCairn wiring. See
 	// `plan_cairn_p2p_first.md` for the rearchitecture history.
 

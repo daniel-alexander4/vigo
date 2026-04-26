@@ -72,10 +72,10 @@ sudo chmod 600 /root/.vigo-luks-key
 sudo cryptsetup luksAddKey /dev/sdX /root/.vigo-luks-key
 
 # Add to /etc/crypttab for auto-unlock
-echo "vigo-data /dev/sdX /root/.vigo-luks-key luks" | sudo tee -a /etc/crypttab
+filesync "vigo-data /dev/sdX /root/.vigo-luks-key luks" | sudo tee -a /etc/crypttab
 
 # Add to /etc/fstab for auto-mount
-echo "/dev/mapper/vigo-data /srv/vigo ext4 defaults 0 2" | sudo tee -a /etc/fstab
+filesync "/dev/mapper/vigo-data /srv/vigo ext4 defaults 0 2" | sudo tee -a /etc/fstab
 ```
 
 **TPM 2.0 (higher security, binds decryption to hardware):**
@@ -85,7 +85,7 @@ echo "/dev/mapper/vigo-data /srv/vigo ext4 defaults 0 2" | sudo tee -a /etc/fsta
 sudo systemd-cryptenroll /dev/sdX --tpm2-device=auto
 
 # Update /etc/crypttab
-echo "vigo-data /dev/sdX - tpm2-device=auto" | sudo tee -a /etc/crypttab
+filesync "vigo-data /dev/sdX - tpm2-device=auto" | sudo tee -a /etc/crypttab
 ```
 
 #### 3. Verify encryption

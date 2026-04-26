@@ -22,7 +22,7 @@ func newConfigTraceTestStore(t *testing.T) *config.ConfigStore {
 	dir := t.TempDir()
 
 	// Create directory structure.
-	for _, sub := range []string{"stockpile/stones", "scaffolding"} {
+	for _, sub := range []string{"stockpile/modules", "scaffolding"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatalf("mkdir %s: %v", sub, err)
 		}
@@ -51,7 +51,7 @@ resources:
     type: package
     package: nginx
 `
-	if err := os.WriteFile(filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), []byte(moduleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), []byte(moduleYAML), 0644); err != nil {
 		t.Fatalf("write nginx.vgo: %v", err)
 	}
 

@@ -6,25 +6,25 @@ package ui
 import (
 	"net/http"
 
-	"git.alexander4.io/vigo/server/sigilmesh"
-	"git.alexander4.io/vigo/server/echomesh"
+	"git.alexander4.io/vigo/server/swarm/cryptsyncmesh"
+	"git.alexander4.io/vigo/server/swarm/filesyncmesh"
 )
 
 // MeshRedirect preserves the pre-split `/mesh` URL — redirects to the
-// subsystem page an operator was looking for. `?tab=crypt` → sigil;
-// anything else defaults to echo. One-minor-release compatibility
+// subsystem page an operator was looking for. `?tab=crypt` → cryptsync;
+// anything else defaults to filesync. One-minor-release compatibility
 // step; safe to remove once muscle-memory URLs have migrated.
 func (h *Handler) MeshRedirect(w http.ResponseWriter, r *http.Request) {
-	dest := "/echo"
+	dest := "/filesync"
 	if r.URL.Query().Get("tab") == "crypt" {
-		dest = "/sigil"
+		dest = "/swarm/cryptsync"
 	}
 	http.Redirect(w, r, dest, http.StatusMovedPermanently)
 }
 
 // findSyncUser finds a user summary by username. Used by the
-// echo drilldown fragment handler.
-func findSyncUser(f *echomesh.Fleet, user string) *echomesh.UserSummary {
+// filesync drilldown fragment handler.
+func findSyncUser(f *filesyncmesh.Fleet, user string) *filesyncmesh.UserSummary {
 	if f == nil {
 		return nil
 	}
@@ -37,8 +37,8 @@ func findSyncUser(f *echomesh.Fleet, user string) *echomesh.UserSummary {
 }
 
 // findCryptUser finds a user summary by username. Used by the
-// sigil drilldown fragment handler.
-func findCryptUser(f *sigilmesh.Fleet, user string) *sigilmesh.UserSummary {
+// cryptsync drilldown fragment handler.
+func findCryptUser(f *cryptsyncmesh.Fleet, user string) *cryptsyncmesh.UserSummary {
 	if f == nil {
 		return nil
 	}

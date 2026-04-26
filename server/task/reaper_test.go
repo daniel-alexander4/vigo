@@ -67,7 +67,7 @@ func insertPushRun(t *testing.T, sqlDB *sql.DB, id, status, createdAt string, ti
 	t.Helper()
 	_, err := sqlDB.Exec(
 		`INSERT INTO push_runs (id, command, target_glob, operator, status, created_at, timeout_secs)
-		 VALUES (?, 'echo test', '*', 'admin', ?, ?, ?)`,
+		 VALUES (?, 'filesync test', '*', 'admin', ?, ?, ?)`,
 		id, status, createdAt, timeoutSecs,
 	)
 	if err != nil {

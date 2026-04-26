@@ -1,0 +1,77 @@
+# scripts/check-legacy-naming.allowlist — exceptions for the
+# 0.31.0 substrate-rename verification script.
+#
+# Format:
+#   <path>:<line>:<token>   exact-line allowlist
+#   <path>:*:<token>        whole-file allowlist (ignore every match in this file)
+#
+# Lines starting with '#' and blank lines are comments.
+# The third field is the matched token regex as printed by the script
+# (e.g. `\bcairn\b`, `/var/lib/vigo/cairn\b`).
+#
+# Add a line here only when the legacy term is genuinely unavoidable —
+# typically: historical commit messages preserved in completed.md, the
+# user's literal disk-layout path (~/cairn/...), or test fixtures that
+# deliberately probe the legacy terminology.
+
+# completed.md is the historical record — every entry there is from
+# before its surrounding rename and stays as-it-was for accuracy.
+.claude/projects/-home-dan-cairn-vigo/memory/completed.md:*:cairn
+
+# Memory files live outside the repo working tree (in
+# ~/.claude/projects/...) so `git ls-files` doesn't return them.
+# Listed here as a safety net in case future tooling brings them in.
+
+# Dan's literal disk layout still has projects under ~/cairn/. The
+# substrate rename does not move his personal directories on disk; it
+# only renames the code-side per-user expectation (~/gitmirror/<project>/)
+# inside agent code. References to ~/cairn/vigo-lic point at his actual
+# vendor-side license repo on this workstation.
+
+# The substrate-rename plan document describes the rename — every
+# legacy term appears as part of the mapping description. Allowlisted
+# wholesale.
+internal.docs/plan-substrate-rename.md:*:cairn
+
+# The France GTM plan lists "Cairn" as a product name in its glossary
+# section; that prose was authored before the rename. Future pass.
+internal.docs/plan-france-linux-migration-gtm.md:*:cairn
+
+# multi-axis-audit.md references the memory directory absolute path
+# `-home-dan-cairn-vigo` (Dan's literal workstation path).
+internal.docs/multi-axis-audit.md:*:cairn
+
+# Historical probe scripts under internal.docs/ targeting the old sigil
+# subsystem. They no longer run — vigo sigil verbs were folded into
+# `vigo swarm cryptsync`. Kept as historical context until Dan deletes.
+internal.docs/sigil-peers-probe.sh:*:sigil
+internal.docs/sigil-tombstone-probe.sh:*:sigil
+
+# Substrate audit + phase-rollout docs were authored under the legacy
+# vocabulary. They describe the substrate before this rename and stay
+# as-was for historical accuracy.
+internal.docs/substrate-audit.md:*:cairn
+internal.docs/substrate-livetest-all.sh:*:cairn
+internal.docs/substrate-livetests.md:*:cairn
+internal.docs/substrate-perms-repair.sh:*:cairn
+internal.docs/substrate-phase-b-deploy.sh:*:cairn
+internal.docs/substrate-phase-b-livetest.md:*:cairn
+internal.docs/substrate-phase-b-livetest.sh:*:cairn
+internal.docs/substrate-phase-b.md:*:cairn
+internal.docs/substrate-phase-c-livetest.sh:*:cairn
+internal.docs/substrate-phase-d-livetest.sh:*:cairn
+internal.docs/substrate-unified-plan.md:*:cairn
+
+# scripts/migrate-0.30.sh handles upgrades from 0.29.x to 0.30.x and
+# references the older state-on-disk paths.
+scripts/migrate-0.30.sh:*:cairn
+
+# The verification script itself contains the legacy tokens as the
+# patterns it greps for.
+scripts/check-legacy-naming.sh:*:cairn
+
+# CLAUDE.md references Dan's literal workstation path ~/cairn/vigo-lic.
+# This is the on-disk location of the vigo-lic sister repo, distinct
+# from the (now renamed) gitmirror substrate.
+CLAUDE.md:55:\bcairn\b
+CLAUDE.md:120:\bcairn\b

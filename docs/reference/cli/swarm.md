@@ -3,7 +3,7 @@
 
 Read-only admin view of the [swarm substrate](../../engineering/subsystems/swarm.md) — the envoy peer-to-peer network that all four content subsystems ride on.
 
-> **This is the substrate, not content.** For admin-pushed payloads (formerly `vigocli swarm distribute`), use [`vigocli lode`](lode.md). For personal-DR mirrors, [`vigocli cairn`](cairn.md). For per-user sync meshes, [`vigocli echo`](echo.md) and [`vigocli sigil`](sigil.md).
+> **This is the substrate, not content.** For admin-pushed payloads (formerly `vigocli swarm distribute`), use [`vigocli swarm payload`](swarm-payload.md). For personal-DR mirrors, [`vigocli swarm gitmirror`](swarm-gitmirror.md). For per-user sync meshes, [`vigocli swarm filesync`](swarm-filesync.md) and [`vigocli swarm cryptsync`](swarm-cryptsync.md).
 
 ## Subcommands
 
@@ -28,7 +28,7 @@ Substrate active  5
 Seeding envoys    2
 Fleet footprint   482 MB
 Manifest entries  12 active · 3 revoked
-Active payloads   8 lode · 4 cairn
+Active payloads   8 payload · 4 gitmirror
 
 Seeding allowlist
   vigoserver  (server.hostname — implicit)
@@ -39,7 +39,7 @@ Counts reflect the rollup of server-side state (`PeerTracker` + `ManifestStore` 
 
 - **Substrate active** — envoys with at least one peer record in the tracker or acting as a seeder for at least one payload
 - **Fleet footprint** — sum of cached blob sizes across all envoys (excludes in-flight partials)
-- **Active payloads** — split by content subsystem; echo/sigil are per-user and don't surface here
+- **Active payloads** — split by content subsystem; filesync/cryptsync are per-user and don't surface here
 
 ## peers
 
@@ -82,7 +82,7 @@ annlap          offline  idle       0        0       0            0 B        202
 
 - [Swarm Substrate](../../engineering/subsystems/swarm.md) — How the peer-to-peer network works
 - [Swarm page](../ui/swarm.md) — `/swarm` in the web UI
-- [`vigocli lode`](lode.md) — Admin-pushed payloads on the substrate
-- [`vigocli cairn`](cairn.md), [`vigocli echo`](echo.md), [`vigocli sigil`](sigil.md) — Other content subsystems on the substrate
+- [`vigocli swarm payload`](swarm-payload.md) — Admin-pushed payloads on the substrate
+- [`vigocli swarm gitmirror`](swarm-gitmirror.md), [`vigocli swarm filesync`](swarm-filesync.md), [`vigocli swarm cryptsync`](swarm-cryptsync.md) — Other content subsystems on the substrate
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

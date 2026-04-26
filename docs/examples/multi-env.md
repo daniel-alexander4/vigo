@@ -5,7 +5,7 @@ This example shows how to maintain different variable values for production and 
 
 ## Module Definition
 
-`stockpile/stones/webapp.vgo`:
+`stockpile/modules/webapp.vgo`:
 
 ```yaml
 name: webapp

@@ -5,7 +5,7 @@
 
 ### Via Vigo Module (recommended)
 
-If you run Vigo, deploy Connwaer using the included module. Copy `example-configs/stockpile/stones/system/connwaer.vgo.example` to your stockpile and assign it to nodes that need compliance verification. The module handles the binary, config file, directories, user, and systemd service.
+If you run Vigo, deploy Connwaer using the included module. Copy `example-configs/stockpile/modules/system/connwaer.vgo.example` to your stockpile and assign it to nodes that need compliance verification. The module handles the binary, config file, directories, user, and systemd service.
 
 ### Manual Installation
 

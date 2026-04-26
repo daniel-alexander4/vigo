@@ -5,7 +5,7 @@ This example sets up firewall rules, fail2ban, OpenSSH hardening, and sudo confi
 
 ## Firewall Module
 
-`stockpile/stones/firewall.vgo`:
+`stockpile/modules/firewall.vgo`:
 
 ```yaml
 name: firewall
@@ -33,7 +33,7 @@ resources:
 
   - name: ufw-enable
     type: exec
-    command: 'echo "y" | ufw enable'
+    command: 'filesync "y" | ufw enable'
     onlyif: "ufw status | grep -q inactive"
     when: "os_family('debian')"
     depends_on: [ufw-default-deny]
@@ -76,7 +76,7 @@ vars:
 
 ## SSH Hardening Module
 
-`stockpile/stones/ssh-hardening.vgo`:
+`stockpile/modules/ssh-hardening.vgo`:
 
 ```yaml
 name: ssh-hardening
@@ -115,7 +115,7 @@ resources:
 
 ## Fail2ban Module
 
-`stockpile/stones/fail2ban.vgo`:
+`stockpile/modules/fail2ban.vgo`:
 
 ```yaml
 name: fail2ban
@@ -157,7 +157,7 @@ resources:
 
 ## Sudo Module
 
-`stockpile/stones/sudo-config.vgo`:
+`stockpile/modules/sudo-config.vgo`:
 
 ```yaml
 name: sudo-config

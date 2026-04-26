@@ -1021,7 +1021,7 @@ func FlattenJSON(prefix string, data map[string]any, out map[string]string) {
 					// `"dan"` with literal double-quote characters),
 					// which breaks every downstream consumer that
 					// compares flattened trait values against plain
-					// strings — most visibly cairn's
+					// strings — most visibly gitmirror's
 					// envoyHasHumanUser filter.
 					out[elemKey] = e
 				default:

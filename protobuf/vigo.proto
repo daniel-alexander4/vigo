@@ -273,8 +273,8 @@ message CheckInResponse {
   // Field 19 (retired_seeds) was removed in 0.19.41 — revocations now flow
   // exclusively through manifest_entries via the manifest CRDT.
   // Field 22 (cairn_claims) was removed in 0.23.0 when the server-side
-  // cairn ClaimTable was deleted as part of the P2P-first rearchitecture
-  // (plan_cairn_p2p_first.md). Cairn now runs LAN-native via multicast
+  // gitmirror ClaimTable was deleted as part of the P2P-first rearchitecture
+  // (plan_gitmirror_p2p_first.md). Gitmirror now runs LAN-native via multicast
   // + direct cross-subnet push; the server plays no role in claim selection.
   reserved 22;
   reserved "cairn_claims";
@@ -948,7 +948,7 @@ message PeerSyncMessage {
 }
 
 message PeerFileChange {
-  string path = 1;           // relative to /srv/vigo (e.g., "worksite/stockpile/stones/nginx.vgo")
+  string path = 1;           // relative to /srv/vigo (e.g., "worksite/stockpile/modules/nginx.vgo")
   bytes content = 2;         // file contents (empty = deletion)
   int64 mtime_unix = 3;      // modification time (unix seconds)
   uint32 mode = 4;           // file permissions

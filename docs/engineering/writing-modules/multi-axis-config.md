@@ -5,7 +5,7 @@ Vigo composes an envoy's effective config from **a small number of orthogonal ax
 
 The whole config operation lives under a single parent directory, the **worksite** (`/srv/vigo/worksite/`). Inside it, three subtrees have distinct roles:
 
-- **`stockpile/`** — the module library (parts depot). Holds `stones/` (module definitions), `usercrates/`, `templates/`, and `compliance.vgo` directory-inherited claims. Nothing in here references specific envoys.
+- **`stockpile/`** — the module library (parts depot). Holds `modules/` (module definitions), `usercrates/`, `templates/`, and `compliance.vgo` directory-inherited claims. Nothing in here references specific envoys.
 - **`scaffolding/`** — the envoy-assignment tree (orders). Holds `envoys.vgo` matchfiles, `roles.vgo`, `common.vgo` inheritance, `waivers.vgo`, `environments.vgo`, and customer/site subdirs.
 - **`structure/`** — the validated published output. `vigocli config publish` syncs stockpile + scaffolding here after modlint; the server reads from this directory.
 
@@ -18,7 +18,7 @@ Operators edit `stockpile/` and `scaffolding/`. Never `structure/`.
 | **Directory structure** | `scaffolding/<org>/<site>/` | Organizes by business axis (customer, site, tenant). Inheritance via `common.vgo`. **Not used for env.** |
 | **Matchfiles** | `scaffolding/**/envoys.vgo` (or any `.vgo` with an `envoys:` block in scaffolding) | Maps hostname patterns to roles + environment + tags + vars. First-match-wins. |
 | **Roles** | `scaffolding/roles.vgo` | Named groupings of modules. Supports `when:` (role-wide) and `case:` (per-platform module groups). |
-| **Modules** | `stockpile/stones/**/*.vgo` | Reusable resource sets. Declared once, referenced by roles or `common.vgo`. Directory name is `stones/` on disk; YAML keys and identifiers stay `module`. |
+| **Modules** | `stockpile/modules/**/*.vgo` | Reusable resource sets. Declared once, referenced by roles or `common.vgo`. Directory name is `modules/` on disk; YAML keys and identifiers stay `module`. |
 | **Usercrates** | `stockpile/**/usercrates/*.vgo` | Per-user modules. Auto-apply within directory scope — no need to list in `common.vgo`. |
 | **Environment** | `environment:` field on match block | Cross-cutting env declaration. Orthogonal to directory structure. |
 | **Per-env overrides** | `scaffolding/**/environments.vgo` | Env-specific module sets + vars. Scope follows ancestor chain. |
@@ -138,7 +138,7 @@ For an envoy `web01.customerA.example.com` checking in:
 /srv/vigo/worksite/
 ├── stockpile/                    ← module library (parts)
 │   ├── compliance.vgo            ← fleet-wide claims
-│   ├── stones/                   ← module definitions (directory named "stones"; YAML keys stay "module")
+│   ├── modules/                   ← module definitions (directory named "modules"; YAML keys stay "module")
 │   │   ├── nginx.vgo
 │   │   ├── postgres.vgo
 │   │   └── compliance.vgo        ← claims inherited by every stone beneath
@@ -172,10 +172,10 @@ For an envoy `web01.customerA.example.com` checking in:
 Key rules:
 
 - **Nothing in stockpile talks about envoys.** Stockpile is the parts library. No matchfiles, no roles, no common.vgo, no waivers.
-- **Nothing in scaffolding is a module definition.** Scaffolding is the assignment tree. No stones, no usercrates, no templates.
+- **Nothing in scaffolding is a module definition.** Scaffolding is the assignment tree. No modules, no usercrates, no templates.
 - **No env in directory paths.** No `prod/` or `staging/` directories. Env is a field on the match block.
 - **Roles live once.** `scaffolding/roles.vgo`, fleet-wide.
-- **Modules live once.** `stockpile/stones/*.vgo`, the shared library.
+- **Modules live once.** `stockpile/modules/*.vgo`, the shared library.
 - **Usercrates live at any scope within stockpile.** Root for fleet-wide, customer subdir for customer-scoped.
 - **Organization axes** (customer, site, tenant, region, cloud) mirror your business, not your infrastructure. `aws/` or `gcp/` also works if cloud is your organizing axis. These subdirs live under `scaffolding/` (for matchfiles) and/or `stockpile/` (for customer-specific usercrates).
 
@@ -196,7 +196,7 @@ Conditional vars and match vars flowed all the way to the agent via protobuf `Co
 The single flat `stockpile/` directory (which held modules, envoys.vgo, roles.vgo, common.vgo, compliance.vgo-for-waivers, usercrates, templates all together, plus a nested `.live/`) was split over three releases:
 
 - **0.28.0** — moved the tree under `worksite/`, promoted `.live/` out as sibling `structure/`.
-- **0.29.0** — split into `stockpile/` (module library) and `scaffolding/` (envoy rules) subtrees; renamed `stockpile/modules/` → `stockpile/stones/` at the filesystem level (YAML keys + Go/Rust identifiers keep `module`); renamed waivers-tree `compliance.vgo` → `waivers.vgo`.
+- **0.29.0** — split into `stockpile/` (module library) and `scaffolding/` (envoy rules) subtrees; renamed `stockpile/modules/` → `stockpile/modules/` at the filesystem level (YAML keys + Go/Rust identifiers keep `module`); renamed waivers-tree `compliance.vgo` → `waivers.vgo`.
 - **0.29.1** — enforced filename-per-tree as fatal checks at publish and load (previously a silent warning).
 
 Migration is automatic on first boot via `entrypoint.sh` — no operator action needed on existing deployments.

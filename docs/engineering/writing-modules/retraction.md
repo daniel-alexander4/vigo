@@ -25,18 +25,18 @@ publish:
 
 ### On new or changed modules
 
-1. Run `vigocli config publish` after adding or modifying a module in `stockpile/stones/`
+1. Run `vigocli config publish` after adding or modifying a module in `stockpile/modules/`
 2. The publish pipeline detects new/changed modules and reads their content
 3. The server generates a deterministic retract module (flipping each resource to its absent state)
 4. The AI reviews and improves the draft, especially for `exec` resources where reversal requires reasoning
-5. A `.retract` file is written alongside the module in `stockpile/stones/`
+5. A `.retract` file is written alongside the module in `stockpile/modules/`
 
 ### On removed modules
 
-1. Run `vigocli config publish` after removing a module from `stockpile/stones/`
+1. Run `vigocli config publish` after removing a module from `stockpile/modules/`
 2. The publish pipeline detects the removal and reads the module content from the previous config
 3. The server generates the retract module and looks up which envoys previously ran it
-4. A `.retract` file is written to `stockpile/stones/` with a detailed summary of affected envoys and per-resource confidence levels
+4. A `.retract` file is written to `stockpile/modules/` with a detailed summary of affected envoys and per-resource confidence levels
 
 ## Generated Output
 
@@ -64,7 +64,7 @@ The generated `.retract` file is inert --- it won't be loaded by the config syst
 
 ## Applying a Retraction
 
-1. Review the generated file: `stockpile/stones/<name>.retract`
+1. Review the generated file: `stockpile/modules/<name>.retract`
 2. Rename to `<name>-retract.vgo`
 3. Add module `<name>-retract` to the relevant match blocks or roles
 4. Run `vigocli config publish`
@@ -90,14 +90,14 @@ Returns generated retract YAML, warnings, and affected envoy list for each modul
 
 ## Example Retractions
 
-Every example module in `example-configs/stockpile/stones/` has a pre-built retraction counterpart in `example-configs/retractions/modules/`. These follow the same reversal rules documented above and serve as reference implementations.
+Every example module in `example-configs/stockpile/modules/` has a pre-built retraction counterpart in `example-configs/retractions/modules/`. These follow the same reversal rules documented above and serve as reference implementations.
 
 To use an example retraction:
 
 1. Copy the retraction to your stockpile:
    ```bash
    cp example-configs/retractions/modules/web/nginx-retract.vgo.example \
-      /srv/vigo/worksite/stockpile/stones/nginx-retract.vgo
+      /srv/vigo/worksite/stockpile/modules/nginx-retract.vgo
    ```
 2. Review the file, especially any `# REVIEW:` or `# WARNING:` comments
 3. Add `nginx-retract` to the relevant match blocks or roles

@@ -20,9 +20,6 @@ pub mod push;
 pub mod swarm;
 pub mod traits;
 pub mod transport;
-pub mod sigil;
-pub mod cairn;
-pub mod echo;
 pub mod tunnel;
 pub mod update;
 

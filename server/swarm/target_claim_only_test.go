@@ -5,18 +5,18 @@ package swarm
 
 import "testing"
 
-// TestIsClaimOnlyLabel_CairnNamespaces pins the set of label
+// TestIsClaimOnlyLabel_GitmirrorNamespaces pins the set of label
 // prefixes that are routed through per-subsystem claim tables rather
 // than the standard wildcard target fan-out. Must stay in lockstep
 // with agent/src/swarm/manifest.rs::is_claim_only_label — when new
 // claim-only namespaces are added, update both sides in the same
 // commit.
-func TestIsClaimOnlyLabel_CairnNamespaces(t *testing.T) {
+func TestIsClaimOnlyLabel_GitmirrorNamespaces(t *testing.T) {
 	claimOnly := []string{
-		"cairn:host:user:proj",
-		"cairn-meta:host:user:proj",
-		"cairn:",      // edge: empty after prefix — still claim-only
-		"cairn-meta:", // edge: empty after prefix — still claim-only
+		"gitmirror:host:user:proj",
+		"gitmirror-meta:host:user:proj",
+		"gitmirror:",      // edge: empty after prefix — still claim-only
+		"gitmirror-meta:", // edge: empty after prefix — still claim-only
 	}
 	for _, l := range claimOnly {
 		if !IsClaimOnlyLabel(l) {
@@ -25,17 +25,17 @@ func TestIsClaimOnlyLabel_CairnNamespaces(t *testing.T) {
 	}
 }
 
-// TestIsClaimOnlyLabel_StandardNamespaces verifies non-cairn labels
+// TestIsClaimOnlyLabel_StandardNamespaces verifies non-gitmirror labels
 // fall through to the standard target-pattern fan-out path.
 func TestIsClaimOnlyLabel_StandardNamespaces(t *testing.T) {
 	standard := []string{
 		"",
 		"module-bundle",
 		"Win11_25H2_English_x64.iso",
-		"echo:user:file",
-		"cairnfoo",      // missing colon — not a namespace match
-		"foo:cairn:bar", // not at start
-		"CAIRN:X:Y:Z",   // case-sensitive, not claim-only
+		"filesync:user:file",
+		"gitmirrorfoo",      // missing colon — not a namespace match
+		"foo:gitmirror:bar", // not at start
+		"GITMIRROR:X:Y:Z",   // case-sensitive, not claim-only
 	}
 	for _, l := range standard {
 		if IsClaimOnlyLabel(l) {

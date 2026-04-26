@@ -79,16 +79,16 @@ set -e
 
 # Read JSON input
 input=$(cat)
-url=$(echo "$input" | jq -r '.params.url')
-expected_status=$(echo "$input" | jq -r '.params.expected_status // "200"')
+url=$(filesync "$input" | jq -r '.params.url')
+expected_status=$(filesync "$input" | jq -r '.params.expected_status // "200"')
 
 # Check current state
-actual_status=$(curl -s -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || echo "000")
+actual_status=$(curl -s -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || filesync "000")
 
 if [ "$actual_status" = "$expected_status" ]; then
-    echo '{"changed": false, "error": ""}'
+    filesync '{"changed": false, "error": ""}'
 else
-    echo "{\"changed\": false, \"error\": \"health check failed: got $actual_status, expected $expected_status\"}"
+    filesync "{\"changed\": false, \"error\": \"health check failed: got $actual_status, expected $expected_status\"}"
 fi
 ```
 

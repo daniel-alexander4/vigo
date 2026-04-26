@@ -30,35 +30,35 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 		PageData: PageData{Title: "Swarm Load: test", ActiveNav: "envoys"},
 		Hostname: "raspberrypi",
 		EnvoyID:  "00000000-0000-0000-0000-000000000001",
-		Lode: []SwarmLoadRow{
+		Payload: []SwarmLoadRow{
 			{
 				Name: "firmware.bin", Detail: "abc123 · admin",
 				Size: 1_048_576, SizeHuman: "1.0 MiB",
-				Status: "complete", When: "2h ago", Link: "/lode/abc",
+				Status: "complete", When: "2h ago", Link: "/swarm/payload/abc",
 			},
 			{
-				Name: "cairn: dan/vigo (from danlap)", Detail: "abc456 · danlap",
+				Name: "gitmirror: dan/vigo (from danlap)", Detail: "abc456 · danlap",
 				Size: 8192, SizeHuman: "8.0 KiB",
-				Status: "downloading", Progress: "3/16 chunks", When: "1m ago", Link: "/lode/abc456",
+				Status: "downloading", Progress: "3/16 chunks", When: "1m ago", Link: "/swarm/payload/abc456",
 			},
 		},
-		Cairn: []SwarmLoadRow{{
-			Name: "/var/lib/vigo/cairn/mirrors/danlap/dan/vigo.git",
+		Gitmirror: []SwarmLoadRow{{
+			Name: "/var/lib/vigo/swarm/gitmirror/mirrors/danlap/dan/vigo.git",
 			Detail: "dan/vigo — from danlap · git deadbeef",
 			Size: 4_096, SizeHuman: "4.0 KiB",
-			Status: "stale", When: "45d ago", Link: "/cairn/cairn:danlap:dan:vigo",
+			Status: "stale", When: "45d ago", Link: "/swarm/gitmirror/gitmirror:danlap:dan:vigo",
 		}},
-		Echo: []SwarmLoadRow{{
-			Name: "~dan/echo/notes.md", Detail: "user dan",
+		Filesync: []SwarmLoadRow{{
+			Name: "~dan/filesync/notes.md", Detail: "user dan",
 			Size: 2_048, SizeHuman: "2.0 KiB",
 			Status: "live", When: "just now",
 		}},
-		Sigil: []SwarmLoadRow{{
-			Name: "~dan/sigil/secrets.age", Detail: "user dan",
+		Cryptsync: []SwarmLoadRow{{
+			Name: "~dan/cryptsync/secrets.age", Detail: "user dan",
 			Size: 512, SizeHuman: "512 B",
 			Status: "live", When: "10m ago",
 		}},
-		LodeTotal: 1_056_768, CairnTotal: 4_096, EchoTotal: 2_048, SigilTotal: 512,
+		LodeTotal: 1_056_768, GitmirrorTotal: 4_096, EchoTotal: 2_048, CryptsyncTotal: 512,
 		GrandTotal: 1_063_424,
 	}
 	rec := httptest.NewRecorder()
@@ -71,11 +71,11 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 	// up at least one won't appear.
 	for _, must := range []string{
 		"Total Swarm Footprint",
-		">Lode<", ">Cairn<", ">Echo<", ">Sigil<",
+		">Payload<", ">Gitmirror<", ">Filesync<", ">Cryptsync<",
 		"firmware.bin",
-		"/var/lib/vigo/cairn/mirrors/danlap/dan/vigo.git",
-		"~dan/echo/notes.md",
-		"~dan/sigil/secrets.age",
+		"/var/lib/vigo/swarm/gitmirror/mirrors/danlap/dan/vigo.git",
+		"~dan/filesync/notes.md",
+		"~dan/cryptsync/secrets.age",
 	} {
 		if !strings.Contains(body, must) {
 			t.Errorf("rendered body missing %q\n--- body snippet ---\n%s", must, truncateForTest(body, 1200))
@@ -96,7 +96,7 @@ func truncateForTest(s string, n int) string {
 }
 
 // TestUserFriendlyBlobName pins the label-to-display transforms that
-// the Swarm Load page applies to every row's Name column. Cairn labels
+// the Swarm Load page applies to every row's Name column. Gitmirror labels
 // must render in human-readable form; admin payload labels pass
 // through unchanged; unlabeled blobs fall back to a short sha so the
 // operator always has something to grab.
@@ -108,10 +108,10 @@ func TestUserFriendlyBlobName(t *testing.T) {
 		want  string
 	}{
 		{
-			name:  "cairn label renders as user/project",
-			label: "cairn:danlap:dan:vigo",
+			name:  "gitmirror label renders as user/project",
+			label: "gitmirror:danlap:dan:vigo",
 			sha:   "abc123def456",
-			want:  "cairn: dan/vigo (from danlap)",
+			want:  "gitmirror: dan/vigo (from danlap)",
 		},
 		{
 			name:  "admin payload keeps its filename label",
@@ -126,10 +126,10 @@ func TestUserFriendlyBlobName(t *testing.T) {
 			want:  "abc123def456",
 		},
 		{
-			name:  "malformed cairn label passes through",
-			label: "cairn:broken",
+			name:  "malformed gitmirror label passes through",
+			label: "gitmirror:broken",
 			sha:   "aabbcc",
-			want:  "cairn:broken",
+			want:  "gitmirror:broken",
 		},
 	}
 	for _, c := range cases {

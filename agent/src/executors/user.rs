@@ -520,17 +520,17 @@ impl Executor for UserExecutor {
                         partial_errors.push(e);
                     }
 
-                    // Sigil enrollment marker. `sigil: true` drops
-                    // ~/.sigil/enroll.pending so the user's first
-                    // `vigo sigil *` invocation runs interactive enrollment.
+                    // Cryptsync enrollment marker. `cryptsync: true` drops
+                    // ~/.cryptsync/enroll.pending so the user's first
+                    // `vigo swarm cryptsync *` invocation runs interactive enrollment.
                     // Idempotent; never blocks user creation.
-                    if params.get("sigil").map(|s| s == "true").unwrap_or(false) {
+                    if params.get("cryptsync").map(|s| s == "true").unwrap_or(false) {
                         let home = Self::resolve_home(&name, params, None);
-                        if let Err(e) = crate::sigil::mark_for_enroll(
+                        if let Err(e) = crate::swarm::cryptsync::mark_for_enroll(
                             &name,
                             std::path::Path::new(&home),
                         ) {
-                            partial_errors.push(format!("sigil mark_for_enroll: {}", e));
+                            partial_errors.push(format!("cryptsync mark_for_enroll: {}", e));
                         }
                     }
 
@@ -876,17 +876,17 @@ impl Executor for UserExecutor {
                         }
                     }
 
-                    // Sigil enrollment marker (idempotent — no-op if
+                    // Cryptsync enrollment marker (idempotent — no-op if
                     // already enrolled or already marked). Runs on every
-                    // convergence so flipping `sigil: true` on an
+                    // convergence so flipping `cryptsync: true` on an
                     // existing user triggers enrollment on next login.
-                    if params.get("sigil").map(|s| s == "true").unwrap_or(false) {
+                    if params.get("cryptsync").map(|s| s == "true").unwrap_or(false) {
                         let home = Self::resolve_home(&name, params, Some(entry));
-                        if let Err(e) = crate::sigil::mark_for_enroll(
+                        if let Err(e) = crate::swarm::cryptsync::mark_for_enroll(
                             &name,
                             std::path::Path::new(&home),
                         ) {
-                            partial_errors.push(format!("sigil mark_for_enroll: {}", e));
+                            partial_errors.push(format!("cryptsync mark_for_enroll: {}", e));
                         }
                     }
 

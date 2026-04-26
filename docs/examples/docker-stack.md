@@ -5,7 +5,7 @@ This example uses the `docker_image`, `docker_container`, and `docker_compose` [
 
 ## Module Definition
 
-`stockpile/stones/redis.vgo`:
+`stockpile/modules/redis.vgo`:
 
 ```yaml
 name: redis
@@ -33,7 +33,7 @@ resources:
 
 ## Multi-Container Stack
 
-`stockpile/stones/app-stack.vgo`:
+`stockpile/modules/app-stack.vgo`:
 
 ```yaml
 name: app-stack
@@ -121,7 +121,7 @@ vigocli task run \
 
 For multi-container stacks that already have a `docker-compose.yml`, use the `docker_compose` executor instead of managing individual containers:
 
-`stockpile/stones/compose-app.vgo`:
+`stockpile/modules/compose-app.vgo`:
 
 ```yaml
 name: compose-app

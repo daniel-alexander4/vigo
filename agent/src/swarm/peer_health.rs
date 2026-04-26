@@ -3,8 +3,8 @@
 
 //! Shared peer disk-pressure probe.
 //!
-//! Before any of the four peer-delivery subsystems (swarm pull, sigil push,
-//! cairn push, echo announce) commits bytes to a remote peer, the sender
+//! Before any of the four peer-delivery subsystems (swarm pull, cryptsync push,
+//! gitmirror push, filesync announce) commits bytes to a remote peer, the sender
 //! asks the peer "how full is the filesystem this will land on?" over the
 //! existing mTLS HTTPS on port 1531 (`GET /health/storage`). If the peer
 //! reports `free_pct <= DEFAULT_MIN_FREE_PCT` (10%), the send is skipped —
@@ -12,14 +12,14 @@
 //! recovers on a later tick.
 //!
 //! Probe results are cached per `(peer, purpose)` for [`CACHE_TTL`] (60s)
-//! so a sigil fan-out across many peers in the same burst doesn't hammer
+//! so a cryptsync fan-out across many peers in the same burst doesn't hammer
 //! the health endpoint. Callers fail closed: unreachable or malformed
 //! probe responses are treated as pressured.
 //!
 //! The [`Purpose`] enum captures which mountpoint the receiver should
 //! measure — the subsystems write to different directories that may sit
 //! on different filesystems (`/var/lib/vigo/swarm/.blobs`,
-//! `/var/lib/vigo/cairn`, `~<user>/sigil`, `~<user>/echo`).
+//! `/var/lib/vigo/swarm/gitmirror`, `~<user>/cryptsync`, `~<user>/filesync`).
 //!
 //! Symmetrically, receivers call [`local_free_pct`] to compute their own
 //! free-pct for a given purpose — used both to answer probe requests and
@@ -67,12 +67,12 @@ const PEER_PORT: u16 = 1531;
 pub enum Purpose {
     /// Swarm blob cache: `/var/lib/vigo/swarm/.blobs`.
     Swarm,
-    /// Cairn mirror store: `/var/lib/vigo/cairn`.
-    Cairn,
-    /// Sigil per-user ciphertext: `~<user>/sigil`.
-    Sigil { user: String },
-    /// Echo per-user plaintext: `~<user>/echo`.
-    Echo { user: String },
+    /// Gitmirror mirror store: `/var/lib/vigo/swarm/gitmirror`.
+    Gitmirror,
+    /// Cryptsync per-user ciphertext: `~<user>/cryptsync`.
+    Cryptsync { user: String },
+    /// Filesync per-user plaintext: `~<user>/filesync`.
+    Filesync { user: String },
 }
 
 impl Purpose {
@@ -80,17 +80,17 @@ impl Purpose {
     pub fn tag(&self) -> &'static str {
         match self {
             Purpose::Swarm => "swarm",
-            Purpose::Cairn => "cairn",
-            Purpose::Sigil { .. } => "sigil",
-            Purpose::Echo { .. } => "echo",
+            Purpose::Gitmirror => "gitmirror",
+            Purpose::Cryptsync { .. } => "cryptsync",
+            Purpose::Filesync { .. } => "filesync",
         }
     }
 
     /// The user bound to this purpose, if any. Used for per-user
-    /// target paths (`~<user>/sigil`, `~<user>/echo`).
+    /// target paths (`~<user>/cryptsync`, `~<user>/filesync`).
     pub fn user(&self) -> Option<&str> {
         match self {
-            Purpose::Sigil { user } | Purpose::Echo { user } => Some(user.as_str()),
+            Purpose::Cryptsync { user } | Purpose::Filesync { user } => Some(user.as_str()),
             _ => None,
         }
     }
@@ -107,9 +107,9 @@ impl Purpose {
     pub fn parse(kind: &str, user: Option<&str>) -> Option<Self> {
         match (kind, user) {
             ("swarm", _) => Some(Purpose::Swarm),
-            ("cairn", _) => Some(Purpose::Cairn),
-            ("sigil", Some(u)) if !u.is_empty() => Some(Purpose::Sigil { user: u.to_string() }),
-            ("echo", Some(u)) if !u.is_empty() => Some(Purpose::Echo { user: u.to_string() }),
+            ("gitmirror", _) => Some(Purpose::Gitmirror),
+            ("cryptsync", Some(u)) if !u.is_empty() => Some(Purpose::Cryptsync { user: u.to_string() }),
+            ("filesync", Some(u)) if !u.is_empty() => Some(Purpose::Filesync { user: u.to_string() }),
             _ => None,
         }
     }
@@ -192,17 +192,17 @@ pub fn local_free_pct(purpose: &Purpose) -> Option<f64> {
 
 /// Resolve the target path for a purpose. Returns a path whose
 /// containing filesystem is the one to measure. The path may not
-/// exist yet (e.g., a user who has never run `vigo sigil enroll`);
+/// exist yet (e.g., a user who has never run `vigo cryptsync enroll`);
 /// [`free_pct_for_path`] walks up to the nearest existing ancestor.
 pub fn target_path(purpose: &Purpose) -> Option<PathBuf> {
     match purpose {
         Purpose::Swarm => Some(crate::platform::paths::default_blobs_dir()),
-        Purpose::Cairn => Some(crate::platform::paths::default_cairn_dir()),
-        Purpose::Sigil { user } => {
-            crate::platform::users::user_home(user).map(|h| h.join("sigil"))
+        Purpose::Gitmirror => Some(crate::platform::paths::default_gitmirror_dir()),
+        Purpose::Cryptsync { user } => {
+            crate::platform::users::user_home(user).map(|h| h.join("cryptsync"))
         }
-        Purpose::Echo { user } => {
-            crate::platform::users::user_home(user).map(|h| h.join("echo"))
+        Purpose::Filesync { user } => {
+            crate::platform::users::user_home(user).map(|h| h.join("filesync"))
         }
     }
 }
@@ -285,7 +285,7 @@ fn fetch(agent: &ureq::Agent, url: &str) -> Result<f64> {
 }
 
 /// Compute free-pct on the nearest existing ancestor of `path`.
-/// `statvfs(2)` requires an existing path, but `~user/sigil` may not
+/// `statvfs(2)` requires an existing path, but `~user/cryptsync` may not
 /// exist yet on a freshly-enrolled envoy — walking up to the home
 /// directory (or root) gives a correct answer for the same filesystem.
 fn free_pct_for_path(path: &Path) -> Result<f64> {
@@ -381,23 +381,23 @@ mod tests {
 
     #[test]
     fn purpose_roundtrips_through_query_and_parse() {
-        let p = Purpose::Sigil { user: "alice".into() };
-        assert_eq!(p.query(), "for=sigil&user=alice");
+        let p = Purpose::Cryptsync { user: "alice".into() };
+        assert_eq!(p.query(), "for=cryptsync&user=alice");
         assert_eq!(
-            Purpose::parse("sigil", Some("alice")),
-            Some(Purpose::Sigil { user: "alice".into() })
+            Purpose::parse("cryptsync", Some("alice")),
+            Some(Purpose::Cryptsync { user: "alice".into() })
         );
         assert_eq!(Purpose::parse("swarm", None), Some(Purpose::Swarm));
-        assert_eq!(Purpose::parse("cairn", Some("ignored")), Some(Purpose::Cairn));
-        assert_eq!(Purpose::parse("sigil", None), None);
-        assert_eq!(Purpose::parse("echo", Some("")), None);
+        assert_eq!(Purpose::parse("gitmirror", Some("ignored")), Some(Purpose::Gitmirror));
+        assert_eq!(Purpose::parse("cryptsync", None), None);
+        assert_eq!(Purpose::parse("filesync", Some("")), None);
         assert_eq!(Purpose::parse("bogus", None), None);
     }
 
     #[test]
     fn purpose_query_urlencodes_user() {
-        let p = Purpose::Echo { user: "a b+c".into() };
-        assert_eq!(p.query(), "for=echo&user=a%20b%2Bc");
+        let p = Purpose::Filesync { user: "a b+c".into() };
+        assert_eq!(p.query(), "for=filesync&user=a%20b%2Bc");
     }
 
     #[test]

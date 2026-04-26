@@ -136,7 +136,7 @@ func TestValidate_AllFourViolations_ReportedTogether(t *testing.T) {
 
 func TestValidate_CleanLayout_Passes(t *testing.T) {
 	dir := t.TempDir()
-	stockpileDir := filepath.Join(dir, "stockpile", "stones")
+	stockpileDir := filepath.Join(dir, "stockpile", "modules")
 	scaffoldingDir := filepath.Join(dir, "scaffolding")
 	_ = os.MkdirAll(stockpileDir, 0o755)
 	_ = os.MkdirAll(scaffoldingDir, 0o755)

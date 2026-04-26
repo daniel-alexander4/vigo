@@ -380,7 +380,7 @@ html:not(.theme-dark) .sidebar__logo-img--light { display: inline; }
 }
 
 /* Parenthesized role hint next to a nav-link label — e.g. the Swarm group
-   where "Lode (Payloads)" tells an unfamiliar operator what the archaic
+   where "Payloads" tells an unfamiliar operator what the archaic
    subsystem name maps to. Same color as the label; smaller font is the
    only visual subordination. */
 .nav-link__subtitle {
@@ -910,7 +910,7 @@ a.dash-column--link:hover {
     background: var(--color-danger-bg);
     color: var(--color-danger);
 }
-/* Cairn mirror-presence variants — aliased to the existing palette
+/* Gitmirror mirror-presence variants — aliased to the existing palette
    so the mesh view matches the rest of the UI without inventing new
    semantic colors. `active` = success, `pending` = in-flight (cached),
    `orphan` = drift warning. */
@@ -926,7 +926,7 @@ a.dash-column--link:hover {
     background: var(--color-warning-bg);
     color: var(--color-warning);
 }
-/* Superseded: cairn incremental rotation, not a safety action.
+/* Superseded: gitmirror incremental rotation, not a safety action.
    Catppuccin Mocha Lavender (#b4befe) is the standing substitute for
    any dim/muted treatment (see feedback_no_dim_without_asking memory).
    Row stays at full contrast so the pill carries the meaning. */
@@ -2256,7 +2256,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 .badge--neutral, .badge--tombstoned { background: var(--color-badge-neutral-bg); color: var(--color-badge-neutral-text); }
 
 /* === Health banner — top-of-page status strip ===
-   Rendered first on /lode, /echo, /cairn, /sigil so an on-call
+   Rendered first on /swarm/payload, /swarm/filesync, /swarm/gitmirror, /swarm/cryptsync so an on-call
    operator sees "is anything broken" inside the first viewport. The severity
    modifier maps to the page-wide worst problem. */
 .health-banner {
@@ -3567,7 +3567,7 @@ th.sortable .sort-arrow { font-size: 10px; margin-left: 3px; opacity: 0.3; }
 th.sortable.sort-active .sort-arrow { opacity: 1; color: var(--color-brand); }
 
 /* === Generic card surface ===
-   Used ~70× across templates (Lode, Cairn, Echo, Sigil, Compliance,
+   Used ~70× across templates (Payload, Gitmirror, Filesync, Cryptsync, Compliance,
    Workflows, etc.) as a framed content block. The shared chrome —
    padding, surface background, subtle border, and shadow — gives every
    page a consistent "card on the page" feel without per-page CSS. */
@@ -3583,7 +3583,7 @@ th.sortable.sort-active .sort-arrow { opacity: 1; color: var(--color-brand); }
 .card > h3:first-child { margin: 0 0 12px; }
 
 /* Card heading row — the recurring "page/section title + action buttons on
-   the right" pattern used at the top of detail-view cards (Lode, Cairn,
+   the right" pattern used at the top of detail-view cards (Payload, Gitmirror,
    Sandgorgon, …). Replaces the inline
    `display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;`
    that was copy-pasted across four templates. Keep heading(s) + a row of

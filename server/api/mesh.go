@@ -12,25 +12,25 @@ import (
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
-	"git.alexander4.io/vigo/server/sigilmesh"
-	"git.alexander4.io/vigo/server/echomesh"
+	"git.alexander4.io/vigo/server/swarm/cryptsyncmesh"
+	"git.alexander4.io/vigo/server/swarm/filesyncmesh"
 )
 
-// MeshHandler serves the fleet-wide echo + sigil mesh
+// MeshHandler serves the fleet-wide filesync + cryptsync mesh
 // observability endpoints. Both aggregators live alongside because
 // the UI renders them on a single `/mesh` page with subsystem tabs.
 type MeshHandler struct {
 	fleetIndex *fleet.FleetIndex
-	sync       *echomesh.Aggregator
-	crypt      *sigilmesh.Aggregator
+	sync       *filesyncmesh.Aggregator
+	crypt      *cryptsyncmesh.Aggregator
 	authMethod string
 }
 
 func NewMeshHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, authMethod string) *MeshHandler {
 	return &MeshHandler{
 		fleetIndex: fleetIndex,
-		sync:       echomesh.NewAggregator(queries),
-		crypt:      sigilmesh.NewAggregator(queries),
+		sync:       filesyncmesh.NewAggregator(queries),
+		crypt:      cryptsyncmesh.NewAggregator(queries),
 		authMethod: authMethod,
 	}
 }
@@ -40,93 +40,93 @@ func NewMeshHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, authMetho
 // visible to admins.
 func (h *MeshHandler) RegisterRoutes(mux *http.ServeMux) {
 	adminMW := auth.RequireAdmin(h.authMethod)
-	mux.Handle("GET /api/v1/echo/fleet", adminMW(http.HandlerFunc(h.handleEchoFleet)))
-	mux.Handle("GET /api/v1/sigil/fleet", adminMW(http.HandlerFunc(h.handleSigilFleet)))
-	mux.Handle("GET /api/v1/echo/envoy/{id}/users/{user}/files",
-		adminMW(http.HandlerFunc(h.handleEchoDrilldown)))
-	mux.Handle("GET /api/v1/sigil/envoy/{id}/users/{user}/files",
-		adminMW(http.HandlerFunc(h.handleSigilDrilldown)))
+	mux.Handle("GET /api/v1/swarm/filesync/fleet", adminMW(http.HandlerFunc(h.handleFilesyncFleet)))
+	mux.Handle("GET /api/v1/swarm/cryptsync/fleet", adminMW(http.HandlerFunc(h.handleCryptsyncFleet)))
+	mux.Handle("GET /api/v1/swarm/filesync/envoy/{id}/users/{user}/files",
+		adminMW(http.HandlerFunc(h.handleFilesyncDrilldown)))
+	mux.Handle("GET /api/v1/swarm/cryptsync/envoy/{id}/users/{user}/files",
+		adminMW(http.HandlerFunc(h.handleCryptsyncDrilldown)))
 }
 
-// SyncSnapshot returns the cached echo fleet view. Used by the
+// SyncSnapshot returns the cached filesync fleet view. Used by the
 // UI handler directly (no HTTP round-trip).
-func (h *MeshHandler) SyncSnapshot(ctx context.Context) (*echomesh.Fleet, error) {
+func (h *MeshHandler) SyncSnapshot(ctx context.Context) (*filesyncmesh.Fleet, error) {
 	return h.sync.Snapshot(ctx, h.envoyInputsSync())
 }
 
-// CryptSnapshot returns the cached sigil fleet view.
-func (h *MeshHandler) CryptSnapshot(ctx context.Context) (*sigilmesh.Fleet, error) {
+// CryptSnapshot returns the cached cryptsync fleet view.
+func (h *MeshHandler) CryptSnapshot(ctx context.Context) (*cryptsyncmesh.Fleet, error) {
 	return h.crypt.Snapshot(ctx, h.envoyInputsCrypt())
 }
 
-// EnvoyEchoFiles returns per-envoy echo files for the Swarm Load
+// EnvoyFilesyncFiles returns per-envoy filesync files for the Swarm Load
 // page. Passthrough to the aggregator so the UI handler can consume
-// it through the MeshSource interface without importing echomesh.
-func (h *MeshHandler) EnvoyEchoFiles(ctx context.Context, envoyID string) []echomesh.EnvoyFile {
+// it through the MeshSource interface without importing filesyncmesh.
+func (h *MeshHandler) EnvoyFilesyncFiles(ctx context.Context, envoyID string) []filesyncmesh.EnvoyFile {
 	return h.sync.FilesOnEnvoy(ctx, envoyID)
 }
 
-// EnvoySigilFiles returns per-envoy sigil files for the Swarm Load
+// EnvoyCryptsyncFiles returns per-envoy cryptsync files for the Swarm Load
 // page. Passthrough to the aggregator.
-func (h *MeshHandler) EnvoySigilFiles(ctx context.Context, envoyID string) []sigilmesh.EnvoyFile {
+func (h *MeshHandler) EnvoyCryptsyncFiles(ctx context.Context, envoyID string) []cryptsyncmesh.EnvoyFile {
 	return h.crypt.FilesOnEnvoy(ctx, envoyID)
 }
 
-func (h *MeshHandler) envoyInputsSync() []echomesh.EnvoyInput {
+func (h *MeshHandler) envoyInputsSync() []filesyncmesh.EnvoyInput {
 	envoys := h.fleetIndex.AllEnvoys()
-	out := make([]echomesh.EnvoyInput, 0, len(envoys))
+	out := make([]filesyncmesh.EnvoyInput, 0, len(envoys))
 	for _, e := range envoys {
-		out = append(out, echomesh.EnvoyInput{
+		out = append(out, filesyncmesh.EnvoyInput{
 			ID: e.ID, Hostname: e.Hostname, Revoked: e.Revoked,
 		})
 	}
 	return out
 }
 
-func (h *MeshHandler) envoyInputsCrypt() []sigilmesh.EnvoyInput {
+func (h *MeshHandler) envoyInputsCrypt() []cryptsyncmesh.EnvoyInput {
 	envoys := h.fleetIndex.AllEnvoys()
-	out := make([]sigilmesh.EnvoyInput, 0, len(envoys))
+	out := make([]cryptsyncmesh.EnvoyInput, 0, len(envoys))
 	for _, e := range envoys {
-		out = append(out, sigilmesh.EnvoyInput{
+		out = append(out, cryptsyncmesh.EnvoyInput{
 			ID: e.ID, Hostname: e.Hostname, Revoked: e.Revoked,
 		})
 	}
 	return out
 }
 
-func (h *MeshHandler) handleEchoFleet(w http.ResponseWriter, r *http.Request) {
+func (h *MeshHandler) handleFilesyncFleet(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
 		http.Error(w, `{"error":"fleet index not available"}`, http.StatusServiceUnavailable)
 		return
 	}
 	fleet, err := h.SyncSnapshot(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "echo fleet query failed")
+		writeJSONError(w, http.StatusInternalServerError, "filesync fleet query failed")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(fleet); err != nil {
-		slog.Debug("echo fleet response encode failed", "error", err)
+		slog.Debug("filesync fleet response encode failed", "error", err)
 	}
 }
 
-func (h *MeshHandler) handleSigilFleet(w http.ResponseWriter, r *http.Request) {
+func (h *MeshHandler) handleCryptsyncFleet(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
 		http.Error(w, `{"error":"fleet index not available"}`, http.StatusServiceUnavailable)
 		return
 	}
 	fleet, err := h.CryptSnapshot(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "sigil fleet query failed")
+		writeJSONError(w, http.StatusInternalServerError, "cryptsync fleet query failed")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(fleet); err != nil {
-		slog.Debug("sigil fleet response encode failed", "error", err)
+		slog.Debug("cryptsync fleet response encode failed", "error", err)
 	}
 }
 
-func (h *MeshHandler) handleEchoDrilldown(w http.ResponseWriter, r *http.Request) {
+func (h *MeshHandler) handleFilesyncDrilldown(w http.ResponseWriter, r *http.Request) {
 	envoyID := r.PathValue("id")
 	user := r.PathValue("user")
 	if envoyID == "" || user == "" {
@@ -135,21 +135,21 @@ func (h *MeshHandler) handleEchoDrilldown(w http.ResponseWriter, r *http.Request
 	}
 	files, err := h.sync.FullFileList(r.Context(), envoyID, user)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "echo drilldown failed")
+		writeJSONError(w, http.StatusInternalServerError, "filesync drilldown failed")
 		return
 	}
 	if files == nil {
-		files = []echomesh.FileRow{}
+		files = []filesyncmesh.FileRow{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(struct {
-		Files []echomesh.FileRow `json:"files"`
+		Files []filesyncmesh.FileRow `json:"files"`
 	}{Files: files}); err != nil {
-		slog.Debug("echo drilldown response encode failed", "error", err)
+		slog.Debug("filesync drilldown response encode failed", "error", err)
 	}
 }
 
-func (h *MeshHandler) handleSigilDrilldown(w http.ResponseWriter, r *http.Request) {
+func (h *MeshHandler) handleCryptsyncDrilldown(w http.ResponseWriter, r *http.Request) {
 	envoyID := r.PathValue("id")
 	user := r.PathValue("user")
 	if envoyID == "" || user == "" {
@@ -158,16 +158,16 @@ func (h *MeshHandler) handleSigilDrilldown(w http.ResponseWriter, r *http.Reques
 	}
 	files, err := h.crypt.FullFileList(r.Context(), envoyID, user)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "sigil drilldown failed")
+		writeJSONError(w, http.StatusInternalServerError, "cryptsync drilldown failed")
 		return
 	}
 	if files == nil {
-		files = []sigilmesh.FileRow{}
+		files = []cryptsyncmesh.FileRow{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(struct {
-		Files []sigilmesh.FileRow `json:"files"`
+		Files []cryptsyncmesh.FileRow `json:"files"`
 	}{Files: files}); err != nil {
-		slog.Debug("sigil drilldown response encode failed", "error", err)
+		slog.Debug("cryptsync drilldown response encode failed", "error", err)
 	}
 }

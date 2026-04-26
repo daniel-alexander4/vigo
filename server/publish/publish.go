@@ -186,7 +186,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// Run modlint on candidate-changed module and usercrate files. Returns
 	// a map of rel-path → linted bytes WITHOUT writing to stockpile.
 	candidateLintable := append(
-		filterBySubdir(candidateChanged, "stockpile/stones"),
+		filterBySubdir(candidateChanged, "stockpile/modules"),
 		filterUsercrates(candidateChanged)...,
 	)
 	var lintedOverrides map[string][]byte

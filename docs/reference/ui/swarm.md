@@ -3,9 +3,9 @@
 
 **Route:** `/swarm` · **Active nav:** `swarm`
 
-Fleet-wide view of the [swarm substrate](../../engineering/subsystems/swarm.md) — the envoy peer-to-peer network that Lode, Cairn, Echo, and Sigil all ride on. Admin-only.
+Fleet-wide view of the [swarm substrate](../../engineering/subsystems/swarm.md) — the envoy peer-to-peer network that Payload, Gitmirror, Filesync, and Cryptsync all ride on. Admin-only.
 
-The nav group label "Swarm" is itself the link to this page; the four child links (Lode / Echo / Cairn / Sigil) remain the drill-downs into each content subsystem's state.
+The nav group label "Swarm" is itself the link to this page; the four child links (Payload / Filesync / Gitmirror / Cryptsync) remain the drill-downs into each content subsystem's state.
 
 ## Sections
 
@@ -22,12 +22,12 @@ Active-payload count per subsystem plus a deep-link to the subsystem page:
 
 | Subsystem | What it is | Deep link |
 |-----------|-----------|-----------|
-| Lode | Admin-pushed payloads | `/lode` |
-| Cairn | Personal-DR repo mirrors | `/cairn` |
-| Echo | Per-user plaintext sync | `/echo` |
-| Sigil | Per-user encrypted sync | `/sigil` |
+| Payload | Admin-pushed payloads | `/payload` |
+| Gitmirror | Personal-DR repo mirrors | `/gitmirror` |
+| Filesync | Per-user plaintext sync | `/filesync` |
+| Cryptsync | Per-user encrypted sync | `/cryptsync` |
 
-Echo and Sigil don't surface payload counts here — those are per-user content. Use the dedicated pages for user-level detail.
+Filesync and Cryptsync don't surface payload counts here — those are per-user content. Use the dedicated pages for user-level detail.
 
 ### Seeding Allowlist (table)
 

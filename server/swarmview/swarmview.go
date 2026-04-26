@@ -10,7 +10,7 @@
 // join. Types + snapshot functions live here so `server/api` and
 // `ui/` can both consume them without creating an import cycle — the
 // same split the content-subsystem aggregators use
-// (cairnmesh/echomesh/sigilmesh).
+// (gitmirrormesh/filesyncmesh/cryptsyncmesh).
 //
 // All functions are pure reads over already-in-memory data; nothing
 // here runs on the agent check-in hot path.
@@ -26,8 +26,8 @@ import (
 
 // EnvoyInput is the minimal per-envoy shape swarmview needs from the
 // fleet index. Declared here so this package doesn't import
-// server/fleet — matches the pattern in server/cairnmesh and
-// server/echomesh. Callers convert fleet.EnvoyState → EnvoyInput
+// server/fleet — matches the pattern in server/gitmirrormesh and
+// server/filesyncmesh. Callers convert fleet.EnvoyState → EnvoyInput
 // before calling Snapshot*.
 type EnvoyInput struct {
 	ID       string
@@ -54,8 +54,8 @@ type Status struct {
 
 // PayloadCounts breaks active seeds out by content subsystem.
 type PayloadCounts struct {
-	Lode  int `json:"lode"`
-	Cairn int `json:"cairn"`
+	Payload  int `json:"payload"`
+	Gitmirror int `json:"gitmirror"`
 }
 
 // Peers is the per-envoy rollup.
@@ -109,10 +109,10 @@ func SnapshotStatus(src Sources) Status {
 	if src.Tracker != nil {
 		for sha, seed := range src.Tracker.ListSeeds() {
 			seedSize[sha] = seed.Size
-			if strings.HasPrefix(seed.Label, "cairn:") {
-				out.Payloads.Cairn++
+			if strings.HasPrefix(seed.Label, "gitmirror:") {
+				out.Payloads.Gitmirror++
 			} else {
-				out.Payloads.Lode++
+				out.Payloads.Payload++
 			}
 			if seed.SeederID != "" {
 				seedingEnvoys[seed.SeederID] = true

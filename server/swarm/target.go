@@ -11,13 +11,13 @@ import (
 // IsClaimOnlyLabel reports whether a swarm blob label is routed
 // through a per-subsystem claim table instead of the standard
 // target-pattern fan-out. Today the only claim-only namespace is
-// cairn — content seeds are published with target "*" so the
+// gitmirror — content seeds are published with target "*" so the
 // swarm layer distributes them freely, but the actual per-envoy
-// mirror set is decided server-side by the cairn ClaimTable and
-// delivered via CheckInResponse.cairn_claims.
+// mirror set is decided server-side by the gitmirror ClaimTable and
+// delivered via CheckInResponse.gitmirror_claims.
 //
 // Status/UI code uses this predicate to bypass the wildcard pending
-// fan-out for cairn blobs — otherwise envoys that are excluded
+// fan-out for gitmirror blobs — otherwise envoys that are excluded
 // by the sidecar's exclude_envoys/include_envoys/when filters would
 // still show up as "pending" in swarm status output forever, even
 // though they will never actually receive the blob.
@@ -26,7 +26,7 @@ import (
 // agent/src/swarm/manifest.rs::is_claim_only_label. When adding a
 // new claim-only namespace, update both sides in the same commit.
 func IsClaimOnlyLabel(label string) bool {
-	return strings.HasPrefix(label, "cairn:") || strings.HasPrefix(label, "cairn-meta:")
+	return strings.HasPrefix(label, "gitmirror:") || strings.HasPrefix(label, "gitmirror-meta:")
 }
 
 // MatchTarget checks whether an envoy matches a target spec. Supports

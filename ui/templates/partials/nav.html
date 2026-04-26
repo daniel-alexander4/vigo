@@ -38,18 +38,18 @@
         {{end}}
         {{if .SwarmEnabled}}
         <a href="/swarm" class="nav-group__label nav-group__label--link{{if eq .ActiveNav "swarm"}} nav-group__label--active{{end}}">Swarm <span class="nav-group__label-hint">Envoy P2P</span></a>
-        <a href="/lode" class="nav-link{{if eq .ActiveNav "lode"}} nav-link--active{{end}}" title="P2P Administrator Pushed File Distribution">
-            Lode <span class="nav-link__subtitle">(Payloads)</span>
+        <a href="/swarm/payload" class="nav-link{{if eq .ActiveNav "payload"}} nav-link--active{{end}}" title="P2P Administrator Pushed File Distribution">
+            Payload <span class="nav-link__subtitle">(Payloads)</span>
         </a>
         {{if .CurrentUser.IsAdmin}}
-        <a href="/echo" class="nav-link{{if eq .ActiveNav "echo"}} nav-link--active{{end}}" title="P2P Synchronized User Directory">
-            Echo <span class="nav-link__subtitle">(Files)</span>
+        <a href="/swarm/filesync" class="nav-link{{if eq .ActiveNav "filesync"}} nav-link--active{{end}}" title="P2P Synchronized User Directory">
+            Filesync <span class="nav-link__subtitle">(Files)</span>
         </a>
-        <a href="/cairn" class="nav-link{{if eq .ActiveNav "cairn"}} nav-link--active{{end}}" title="P2P Distributed Source Control Repositories">
-            Cairn <span class="nav-link__subtitle">(Repos)</span>
+        <a href="/swarm/gitmirror" class="nav-link{{if eq .ActiveNav "gitmirror"}} nav-link--active{{end}}" title="P2P Distributed Source Control Repositories">
+            Gitmirror <span class="nav-link__subtitle">(Repos)</span>
         </a>
-        <a href="/sigil" class="nav-link{{if eq .ActiveNav "sigil"}} nav-link--active{{end}}" title="Fully Encrypted P2P Synchronized User Directory">
-            Sigil <span class="nav-link__subtitle">(Encrypted)</span>
+        <a href="/swarm/cryptsync" class="nav-link{{if eq .ActiveNav "cryptsync"}} nav-link--active{{end}}" title="Fully Encrypted P2P Synchronized User Directory">
+            Cryptsync <span class="nav-link__subtitle">(Encrypted)</span>
         </a>
         {{end}}
         {{end}}
@@ -76,12 +76,6 @@
         </a>
         <a href="/risk" class="nav-link{{if eq .ActiveNav "risk"}} nav-link--active{{end}}">
             Risk Posture
-        </a>
-        <div class="nav-group__divider"></div>
-
-        <div class="nav-group__label">Bare Metal</div>
-        <a href="/sandgorgon" class="nav-link{{if or (eq .ActiveNav "sandgorgon") (eq .ActiveNav "sandgorgon-certs")}} nav-link--active{{end}}">
-            Sandgorgon
         </a>
         <div class="nav-group__divider"></div>
 

@@ -33,7 +33,7 @@ This section covers the operational aspects of running a Vigo server in producti
 - [Rate Limiting](rate-limiting.md) -- Token-bucket rate limiting on check-in RPCs
 - [Peer Replication](peer-replication.md) -- Primary/peer file sync and automatic failover
 - [Geo-Distributed Deployments](geo-distributed.md) -- Multi-region fleets across US, Europe, and beyond
-- [Swarm](swarm.md) -- The envoy P2P substrate: config, monitoring, troubleshooting (covers lode, echo, cairn, sigil)
+- [Swarm](swarm.md) -- The envoy P2P substrate: config, monitoring, troubleshooting (covers payload, filesync, gitmirror, cryptsync)
 
 ## Backup & Recovery
 

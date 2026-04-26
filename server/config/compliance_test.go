@@ -28,7 +28,7 @@ func sortFrameworkClaims(m map[string][]string) {
 func TestCompliance_EnvoysTreeRoot_WaiversMerge(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -67,7 +67,7 @@ waivers:
 func TestCompliance_EnvoysTreeSubdir_WaiversInherit(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -105,7 +105,7 @@ waivers:
 func TestCompliance_EnvoysTree_ComplianceKeyIgnored(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -145,18 +145,18 @@ waivers:
 func TestCompliance_ModulesTreeRoot_ClaimsInheritFleetwide(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "compliance.vgo"), `
 compliance:
   cis: ["1.1.1"]
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "users", "dan.vgo"), `
 name: users/dan
 resources:
   - name: dan
@@ -189,18 +189,18 @@ envoys:
 func TestCompliance_ModulesTreeSubdir_ClaimsScopedToSubtree(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "users", "compliance.vgo"), `
 compliance:
   cis-ubuntu: ["5.4.1"]
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "users", "dan.vgo"), `
 name: users/dan
 resources:
   - name: dan
@@ -244,16 +244,16 @@ envoys:
 func TestCompliance_ModulesTree_UnionWithModuleOwnBlock(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "compliance.vgo"), `
 compliance:
   cis: ["1.1.1"]
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "users", "compliance.vgo"), `
 compliance:
   cis: ["1.1.2"]
   nist: ["AC-3"]
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "users", "dan.vgo"), `
 name: users/dan
 compliance:
   cis: ["1.1.3"]
@@ -302,7 +302,7 @@ envoys:
 func TestCompliance_ModulesTree_WaiversIgnored(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "compliance.vgo"), `
 compliance:
   cis: ["1.1.1"]
 waivers:
@@ -311,7 +311,7 @@ waivers:
       reason: "should not take effect"
       approved_by: "dan"
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -326,7 +326,7 @@ envoys:
 
 	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 	if err == nil {
-		t.Fatal("expected NewConfigStore to reject waivers: in stockpile/stones/compliance.vgo")
+		t.Fatal("expected NewConfigStore to reject waivers: in stockpile/modules/compliance.vgo")
 	}
 	if !strings.Contains(err.Error(), "waivers: block in a stockpile compliance.vgo") {
 		t.Errorf("error should identify the wrong-key violation; got: %s", err)
@@ -341,7 +341,7 @@ envoys:
 func TestCompliance_UnknownTopLevelKey_Rejected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -375,7 +375,7 @@ vars:
 func TestCompliance_LegacyWaiversFile_Skipped(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -419,15 +419,15 @@ waivers:
 func TestCompliance_MultiFramework_UnionAcrossLevels(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "compliance.vgo"), `
 compliance:
   cis: ["5.4.1"]
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "users", "compliance.vgo"), `
 compliance:
   nist-800-53: ["AC-3", "AC-6"]
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "users", "dan.vgo"), `
 name: users/dan
 resources:
   - name: dan
@@ -466,7 +466,7 @@ envoys:
 func TestCompliance_WaiverExpiry_StillWorks(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop

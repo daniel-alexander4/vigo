@@ -11,7 +11,7 @@ An opaque byte sequence distributed by the [swarm](../engineering/subsystems/swa
 
 ## bundle
 
-A self-contained git repository archive produced by `git bundle create`, used as [cairn](../engineering/subsystems/cairn.md)'s unit of distribution. Bundles can be full (complete repository history) or incremental (deltas since a previous bundle). Receivers materialize bundles into bare repositories at `/var/lib/vigo/cairn/mirrors/<seeder>/<user>/<project>.git`.
+A self-contained git repository archive produced by `git bundle create`, used as [gitmirror](../engineering/subsystems/gitmirror.md)'s unit of distribution. Bundles can be full (complete repository history) or incremental (deltas since a previous bundle). Receivers materialize bundles into bare repositories at `/var/lib/vigo/swarm/gitmirror/mirrors/<seeder>/<user>/<project>.git`.
 
 ## compliance
 
@@ -33,9 +33,9 @@ A managed node running the `vigo` Rust agent. Each envoy enrolls once, receives 
 
 The Rust implementation of a resource type in the agent (`file`, `package`, `service`, `user`, `cron`, etc.). Executors check current state, act only on drift (idempotent), and return one of `None`/`Created`/`Updated`/`Deleted`/`Skipped`/`Blocked`. See the [Executor Reference](executors/_index.md).
 
-## lode
+## payload
 
-Administrator-pushed file distribution on top of the [swarm](#swarm) substrate. An operator runs `vigocli swarm distribute <file>` (or drops a payload + `.swarm` sidecar on a seeder) and the blob replicates across the fleet via swarm's peer channel. Lode is one of four content subsystems that ride swarm; the other three ([echo](#echo), [cairn](#cairn), [sigil](#sigil)) are user-scoped, while lode is operator-scoped and fleet-wide. Surfaced in the web UI at [`/lode`](ui/lode.md). The CLI verb still reads `vigocli swarm …` because it predates the name split.
+Administrator-pushed file distribution on top of the [swarm](#swarm) substrate. An operator runs `vigocli swarm distribute <file>` (or drops a payload + `.swarm` sidecar on a seeder) and the blob replicates across the fleet via swarm's peer channel. Payload is one of four content subsystems that ride swarm; the other three ([filesync](#filesync), [gitmirror](#gitmirror), [cryptsync](#cryptsync)) are user-scoped, while payload is operator-scoped and fleet-wide. Surfaced in the web UI at [`/payload`](ui/swarm-payload.md). The CLI verb still reads `vigocli swarm …` because it predates the name split.
 
 ## manifest
 
@@ -47,7 +47,7 @@ Any `.vgo` file containing an `envoys:` block with `- match:` entries. Maps host
 
 ## module
 
-A reusable resource set in `stockpile/stones/*.vgo`. Declares resources, default vars, and optional compliance claims. Composed into [roles](#role), applied to [envoys](#envoy) via [matchfiles](#matchfile) or directory-level `common.vgo` inheritance. Modules are the primary composition unit for envoy-wide config. See [Config Format](../engineering/writing-modules/config-format.md) and [Resource Language](../engineering/writing-modules/resource-types.md).
+A reusable resource set in `stockpile/modules/*.vgo`. Declares resources, default vars, and optional compliance claims. Composed into [roles](#role), applied to [envoys](#envoy) via [matchfiles](#matchfile) or directory-level `common.vgo` inheritance. Modules are the primary composition unit for envoy-wide config. See [Config Format](../engineering/writing-modules/config-format.md) and [Resource Language](../engineering/writing-modules/resource-types.md).
 
 ## resource
 
@@ -83,11 +83,11 @@ The envoy-assignment tree under [worksite](#worksite), at `/srv/vigo/worksite/sc
 
 ## stockpile
 
-The module library tree under [worksite](#worksite), at `/srv/vigo/worksite/stockpile/`. Holds reusable module content: [stones](#stone) (module definitions), [usercrates](#usercrate), `templates/` (Go template files referenced by `source:`), and `compliance.vgo` claim-inheritance files. Nothing in stockpile talks about specific envoys; all envoy assignment lives in [scaffolding](#scaffolding). The narrowed-meaning stockpile shipped in 0.29.0 — earlier versions conflated module library and envoy rules in a single flat tree.
+The module library tree under [worksite](#worksite), at `/srv/vigo/worksite/stockpile/`. Holds reusable module content: [modules](#stone) (module definitions), [usercrates](#usercrate), `templates/` (Go template files referenced by `source:`), and `compliance.vgo` claim-inheritance files. Nothing in stockpile talks about specific envoys; all envoy assignment lives in [scaffolding](#scaffolding). The narrowed-meaning stockpile shipped in 0.29.0 — earlier versions conflated module library and envoy rules in a single flat tree.
 
 ## stone
 
-A module definition file in `stockpile/stones/**/*.vgo`. The directory name `stones/` is the filesystem-level construction metaphor for what the YAML + code call a [module](#module) — the YAML key (`modules:`) and Go/Rust identifiers (`ModuleDefinition`) still use "module" for industry-standard recognition. Operators writing `modules: [nginx]` in a role are referencing the stone at `stockpile/stones/nginx.vgo`. Filesystem rename shipped 0.29.0.
+A module definition file in `stockpile/modules/**/*.vgo`. The directory name `modules/` is the filesystem-level construction metaphor for what the YAML + code call a [module](#module) — the YAML key (`modules:`) and Go/Rust identifiers (`ModuleDefinition`) still use "module" for industry-standard recognition. Operators writing `modules: [nginx]` in a role are referencing the stone at `stockpile/modules/nginx.vgo`. Filesystem rename shipped 0.29.0.
 
 ## structure
 
@@ -95,7 +95,7 @@ The validated published output tree under [worksite](#worksite), at `/srv/vigo/w
 
 ## swarm
 
-The envoy-only P2P network substrate. Swarm is the transport layer that all P2P content subsystems ride on: peer discovery (multicast on `224.0.0.42:1531` + registry-backed hints), mTLS HTTPS between envoys on port 1531, manifest CRDT gossip, and content-addressed chunking. Swarm does not itself define *what* gets distributed — the four content subsystems do: [lode](#lode) (admin-pushed blobs), [echo](#echo) (plaintext home-dir sync), [cairn](#cairn) (source-control repo mirrors), [sigil](#sigil) (encrypted home-dir sync). Each subsystem has its own content rules but reuses swarm's peer channel, port, and mTLS trust. See [Swarm](../engineering/subsystems/swarm.md).
+The envoy-only P2P network substrate. Swarm is the transport layer that all P2P content subsystems ride on: peer discovery (multicast on `224.0.0.42:1531` + registry-backed hints), mTLS HTTPS between envoys on port 1531, manifest CRDT gossip, and content-addressed chunking. Swarm does not itself define *what* gets distributed — the four content subsystems do: [payload](#payload) (admin-pushed blobs), [filesync](#filesync) (plaintext home-dir sync), [gitmirror](#gitmirror) (source-control repo mirrors), [cryptsync](#cryptsync) (encrypted home-dir sync). Each subsystem has its own content rules but reuses swarm's peer channel, port, and mTLS trust. See [Swarm](../engineering/subsystems/swarm.md).
 
 ## trait
 
@@ -107,17 +107,17 @@ A config module scoped to one or more users' environments (account creation, hom
 
 **Usage:** drop a usercrate file into `stockpile/usercrates/alice.vgo` to apply alice fleet-wide, or into `stockpile/<site>/usercrates/alice.vgo` to scope her to a specific branch. Per-envoy opt-out via `exclude_usercrates: [alice]` on a match block. Name collisions with regular modules are fatal at load time — usercrates and modules share one namespace.
 
-## sigil
+## cryptsync
 
-Per-user always-encrypted home-directory sync on the [swarm](#swarm) substrate. Files dropped into `~/sigil/` are age-encrypted to every enrolled envoy in the user's mesh and synced as ciphertext — every envoy holds the same encrypted bytes, only mesh members can decrypt. Requires the user's sigil password for decryption. The encryption-first sibling of [echo](#echo): same transport, different content rules. See [Sigil](../engineering/subsystems/sigil.md).
+Per-user always-encrypted home-directory sync on the [swarm](#swarm) substrate. Files dropped into `~/cryptsync/` are age-encrypted to every enrolled envoy in the user's mesh and synced as ciphertext — every envoy holds the same encrypted bytes, only mesh members can decrypt. Requires the user's cryptsync password for decryption. The encryption-first sibling of [filesync](#filesync): same transport, different content rules. See [Cryptsync](../engineering/subsystems/cryptsync.md).
 
-## cairn
+## gitmirror
 
-Personal disaster-recovery source-control distribution on the [swarm](#swarm) substrate. The agent scans `~/cairn/<project>/` for repositories with a `.cairn.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P on top of swarm — no server involvement in selection or delivery. Opt-in per-envoy via the matchfile var `vars: { cairn: true }`. See [Cairn](../engineering/subsystems/cairn.md).
+Personal disaster-recovery source-control distribution on the [swarm](#swarm) substrate. The agent scans `~/gitmirror/<project>/` for repositories with a `.gitmirror.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P on top of swarm — no server involvement in selection or delivery. Opt-in per-envoy via the matchfile var `vars: { gitmirror: true }`. See [Gitmirror](../engineering/subsystems/gitmirror.md).
 
-## echo
+## filesync
 
-Per-user home-directory sync on the [swarm](#swarm) substrate. Files in `~/echo/` replicate to peer envoys over swarm's mTLS peer HTTPS channel, with echo's own LAN multicast group on `224.0.0.43:1532` for discovery. Plaintext at rest (encryption moved to [sigil](#sigil) as of 0.26.1). Cross-subnet peers via `cross_subnet_peers:` in `~/.echo/config.yaml`. See [Echo](../engineering/subsystems/echo.md).
+Per-user home-directory sync on the [swarm](#swarm) substrate. Files in `~/filesync/` replicate to peer envoys over swarm's mTLS peer HTTPS channel, with filesync's own LAN multicast group on `224.0.0.43:1532` for discovery. Plaintext at rest (encryption moved to [cryptsync](#cryptsync) as of 0.26.1). Cross-subnet peers via `cross_subnet_peers:` in `~/.filesync/config.yaml`. See [Filesync](../engineering/subsystems/filesync.md).
 
 ## waiver
 
@@ -125,7 +125,7 @@ A per-envoy compliance exception — "accept this control as satisfied despite t
 
 ## worksite
 
-The parent directory for the whole Vigo config operation, at `/srv/vigo/worksite/`. Contains three sibling subtrees: [stockpile](#stockpile) (module library), [scaffolding](#scaffolding) (envoy-assignment rules), and [structure](#structure) (validated published output). Operators edit stockpile + scaffolding; the server reads structure. The construction metaphor: stockpile holds the [stones](#stone) (parts), scaffolding is the framework that determines what gets built where, structure is the finished building. Shipped 0.28.0; tree split into stockpile + scaffolding in 0.29.0.
+The parent directory for the whole Vigo config operation, at `/srv/vigo/worksite/`. Contains three sibling subtrees: [stockpile](#stockpile) (module library), [scaffolding](#scaffolding) (envoy-assignment rules), and [structure](#structure) (validated published output). Operators edit stockpile + scaffolding; the server reads structure. The construction metaphor: stockpile holds the [modules](#stone) (parts), scaffolding is the framework that determines what gets built where, structure is the finished building. Shipped 0.28.0; tree split into stockpile + scaffolding in 0.29.0.
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

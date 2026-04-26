@@ -31,7 +31,7 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 
 All examples follow these patterns:
 
-- Modules live in `stockpile/stones/`
+- Modules live in `stockpile/modules/`
 - Roles live in `stockpile/roles/`
 - Node assignments live in `stockpile/envoys/envoys.vgo`
 - Go templates (`{{ }}`) are only used in `content:` attributes

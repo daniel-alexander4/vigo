@@ -118,7 +118,7 @@ http {
 
 ### Vigo Version
 
-`stockpile/stones/nginx.vgo`:
+`stockpile/modules/nginx.vgo`:
 
 
 ```yaml

@@ -44,7 +44,7 @@ Encrypt and store a secret value. The type determines how the value is processed
 vigocli secrets set <type> <key> [flags]
 ```
 
-For `raw` secrets, the value can be provided via `--from-file`, stdin pipe, or interactive prompt. For `os` and `web` types, the value is always prompted interactively with echo disabled and password complexity enforcement (12+ chars, uppercase, lowercase, digit, special character).
+For `raw` secrets, the value can be provided via `--from-file`, stdin pipe, or interactive prompt. For `os` and `web` types, the value is always prompted interactively with filesync disabled and password complexity enforcement (12+ chars, uppercase, lowercase, digit, special character).
 
 The `os` and `web` types store the original plaintext at `<key>.txt` (encrypted) for recovery via `reveal-password`. The `os` type requires `openssl` to be installed.
 
@@ -56,7 +56,7 @@ The `os` and `web` types store the original plaintext at `<key>.txt` (encrypted)
 
 ### Examples
 
-#### Store a raw secret (interactive prompt, echo disabled)
+#### Store a raw secret (interactive prompt, filesync disabled)
 
 ```bash
 vigocli secrets set raw vigo/db/password
@@ -77,7 +77,7 @@ vigocli secrets set raw vigo/db/dsn --from-file /tmp/dsn.txt
 #### Store a raw secret from stdin pipe
 
 ```bash
-echo "s3cret" | vigocli secrets set raw vigo/api/key
+filesync "s3cret" | vigocli secrets set raw vigo/api/key
 ```
 
 #### Set an OS user password (SHA-512 crypt)

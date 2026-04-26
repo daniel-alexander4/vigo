@@ -502,7 +502,7 @@ func handleRetractionPregen(res *publish.Result) {
 		if result.RetractYAML == "" {
 			continue
 		}
-		retractPath := filepath.Join(publish.StockpileDir, "stones", result.Name+".retract")
+		retractPath := filepath.Join(publish.StockpileDir, "modules", result.Name+".retract")
 		if err := os.WriteFile(retractPath, []byte(result.RetractYAML), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", retractPath, err)
 			continue
@@ -517,7 +517,7 @@ func handleRetractionPregen(res *publish.Result) {
 
 func printRetractionResult(result retractAPIResult) {
 	// Write the .retract file to stockpile/modules/.
-	retractPath := filepath.Join(publish.StockpileDir, "stones", result.Name+".retract")
+	retractPath := filepath.Join(publish.StockpileDir, "modules", result.Name+".retract")
 	if result.RetractYAML != "" {
 		if err := os.WriteFile(retractPath, []byte(result.RetractYAML), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", retractPath, err)

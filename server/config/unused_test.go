@@ -12,15 +12,15 @@ func TestUnusedModules(t *testing.T) {
 	dir := setupDir(t)
 
 	// Three modules defined: nginx, sshd, orphan.
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "sshd.vgo"), `
 name: sshd
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "orphan.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "orphan.vgo"), `
 name: orphan
 resources: []
 `)
@@ -54,7 +54,7 @@ envoys:
 	if result.UnusedModules[0].Name != "orphan" {
 		t.Errorf("expected unused module 'orphan', got %q", result.UnusedModules[0].Name)
 	}
-	if result.UnusedModules[0].SourceFile != "stones/orphan.vgo" {
+	if result.UnusedModules[0].SourceFile != "modules/orphan.vgo" {
 		t.Errorf("expected source file 'modules/orphan.vgo', got %q", result.UnusedModules[0].SourceFile)
 	}
 
@@ -67,7 +67,7 @@ envoys:
 func TestUnusedMatchFiles(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
@@ -107,11 +107,11 @@ envoys:
 func TestUnusedCommonModulesNotFlagged(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "monitoring.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "monitoring.vgo"), `
 name: monitoring
 resources: []
 `)
@@ -149,11 +149,11 @@ envoys:
 func TestUnusedRoleCaseModulesNotFlagged(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "ssl.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "ssl.vgo"), `
 name: ssl
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "debug.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "debug.vgo"), `
 name: debug
 resources: []
 `)
@@ -192,7 +192,7 @@ envoys:
 func TestUnusedNothingUnused(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources: []
 `)

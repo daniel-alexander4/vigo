@@ -292,7 +292,7 @@ func TestSelfProtect_PathSimilarBinaryAllowed(t *testing.T) {
 }
 
 func TestValidatePushCommand_StopAgent(t *testing.T) {
-	err := ValidatePushCommand("systemctl stop vigo-envoy && echo done")
+	err := ValidatePushCommand("systemctl stop vigo-envoy && filesync done")
 	if err == nil {
 		t.Fatal("expected error")
 	}

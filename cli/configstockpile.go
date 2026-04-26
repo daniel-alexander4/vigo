@@ -64,7 +64,7 @@ type stockpileModule struct {
 }
 
 func runStockpileSearch(query, stockpileDir string) error {
-	modulesDir := filepath.Join(stockpileDir, "stones")
+	modulesDir := filepath.Join(stockpileDir, "modules")
 	query = strings.ToLower(query)
 
 	var results []searchResult

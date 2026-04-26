@@ -21,8 +21,8 @@ Custom trait scripts:
 
 ```bash
 #!/bin/bash
-version=$(/opt/app/bin/app --version 2>/dev/null || echo "unknown")
-echo "{\"app\": {\"version\": \"$version\"}}"
+version=$(/opt/app/bin/app --version 2>/dev/null || filesync "unknown")
+filesync "{\"app\": {\"version\": \"$version\"}}"
 ```
 
 This produces a trait at `custom.app.version` (custom traits are namespaced under `custom.`).

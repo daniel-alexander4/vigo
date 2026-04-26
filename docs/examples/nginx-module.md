@@ -5,7 +5,7 @@ A complete nginx module demonstrating the package-config-service pattern with `n
 
 ## Module Definition
 
-`stockpile/stones/nginx.vgo`:
+`stockpile/modules/nginx.vgo`:
 
 ```yaml
 name: nginx

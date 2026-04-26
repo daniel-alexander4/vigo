@@ -41,64 +41,10 @@ if [ -d "${DATA_DIR}/stockpile" ] && [ ! -d "${VIGO_WORKSITE}" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Phase 2 migration: flat stockpile → stockpile + scaffolding split (0.29.0)
-# ---------------------------------------------------------------------------
-# Pre-0.29 layout: worksite/stockpile/ flat (modules/, envoys.vgo, roles.vgo,
-#                  common.vgo, compliance.vgo holding waivers, etc.)
-# New layout:      worksite/stockpile/ holds module library (stones/,
-#                  usercrates/, templates/, compliance.vgo claims, tasks/,
-#                  workflows/) and worksite/scaffolding/ holds envoy rules
-#                  (envoys.vgo, roles.vgo, common.vgo, waivers.vgo,
-#                  environments.vgo, customer subdirs).
-#
-# Detected by `worksite/stockpile/modules/` existing (old flat layout).
-# Safe to run once — after the split, modules/ is gone from stockpile/.
-
-if [ -d "${VIGO_STOCKPILE}/modules" ] && [ ! -d "${VIGO_STOCKPILE}/stones" ]; then
-    mkdir -p "${VIGO_WORKSITE}/scaffolding"
-
-    # Rename the module library: modules/ → stones/
-    mv "${VIGO_STOCKPILE}/modules" "${VIGO_STOCKPILE}/stones"
-
-    # Files that live directly in stockpile/ and belong in scaffolding/.
-    for f in envoys.vgo roles.vgo common.vgo environments.vgo; do
-        if [ -f "${VIGO_STOCKPILE}/${f}" ]; then
-            mv "${VIGO_STOCKPILE}/${f}" "${VIGO_WORKSITE}/scaffolding/${f}"
-        fi
-    done
-
-    # compliance.vgo containing waivers: becomes scaffolding/waivers.vgo.
-    # We key on the `waivers:` block appearing in the file — if present,
-    # the file is a waiver file and moves; if only `compliance:`, it's
-    # a claim file and stays.
-    if [ -f "${VIGO_STOCKPILE}/compliance.vgo" ]; then
-        if grep -q '^waivers:' "${VIGO_STOCKPILE}/compliance.vgo"; then
-            mv "${VIGO_STOCKPILE}/compliance.vgo" "${VIGO_WORKSITE}/scaffolding/waivers.vgo"
-        fi
-        # Otherwise leave in stockpile/ as the claim file.
-    fi
-
-    # Customer/site subdirs (anything other than the module-library subdirs)
-    # move under scaffolding/. A subdir is "library" if it matches one of
-    # stones, usercrates, templates, tasks, workflows — otherwise it's an
-    # envoy-tree subdir with its own matchfile/common.vgo and moves.
-    for sub in "${VIGO_STOCKPILE}"/*/; do
-        [ -d "$sub" ] || continue
-        name=$(basename "$sub")
-        case "$name" in
-            stones|usercrates|templates|tasks|workflows) continue ;;
-        esac
-        mv "$sub" "${VIGO_WORKSITE}/scaffolding/${name}"
-    done
-
-    echo "Migrated worksite/stockpile/ flat layout → stockpile/ + scaffolding/ (modules→stones, waivers.vgo split)."
-fi
-
-# ---------------------------------------------------------------------------
 # Create directory structure
 # ---------------------------------------------------------------------------
 
-mkdir -p "${VIGO_STOCKPILE}/stones" "${VIGO_STOCKPILE}/templates" "${VIGO_STOCKPILE}/tasks" "${VIGO_STOCKPILE}/workflows" "${VIGO_STOCKPILE}/usercrates"
+mkdir -p "${VIGO_STOCKPILE}/modules" "${VIGO_STOCKPILE}/templates" "${VIGO_STOCKPILE}/tasks" "${VIGO_STOCKPILE}/workflows" "${VIGO_STOCKPILE}/usercrates"
 mkdir -p "${VIGO_WORKSITE}/scaffolding"
 mkdir -p -m 750 "${VIGO_STRUCTURE}"
 mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/custom-traits"
@@ -211,9 +157,9 @@ fi
 # Seed worksite examples (stockpile + scaffolding)
 find "${SEED_DIR}/example-configs/worksite" -name '*.vgo.example' -type f | while IFS= read -r src; do
     rel="${src#${SEED_DIR}/example-configs/worksite/}"
-    # Skip compliance stones and roles — gated behind paid license.
+    # Skip compliance modules and roles — gated behind paid license.
     case "$rel" in
-        stockpile/stones/compliance/*|scaffolding/compliance-roles.vgo.example) continue ;;
+        stockpile/modules/compliance/*|scaffolding/compliance-roles.vgo.example) continue ;;
     esac
     dest="${EXAMPLES_DIR}/worksite/${rel}"
     if [ ! -f "$dest" ]; then

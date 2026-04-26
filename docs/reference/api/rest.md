@@ -1750,30 +1750,30 @@ Substrate-level overview of the envoy P2P network. Content-subsystem operations 
 - **GET /api/v1/swarm/status** — fleet-wide totals (envoys online, substrate-active, seeders, manifest counts, footprint).
 - **GET /api/v1/swarm/peers** — per-envoy rollup with `?sort=footprint|blobs|hostname` and `?limit=N` (0 for unbounded).
 
-### Lode
+### Payload
 
-Administrator-pushed file distribution on the swarm substrate. These endpoints power `vigocli lode`.
+Administrator-pushed file distribution on the swarm substrate. These endpoints power `vigocli swarm payload`.
 
-- **GET /api/v1/lode/list** — list all active lode payloads.
-- **GET /api/v1/lode/match** — preview which envoys match a given target expression.
-- **GET /api/v1/lode/status/{sha256}** — per-envoy distribution status for one payload.
-- **GET /api/v1/lode/broken** — payloads with unreachable peers or failed distributions.
-- **POST /api/v1/lode/distribute** — seed a new payload into the swarm for distribution.
-- **DELETE /api/v1/lode/{sha256}** — revoke a payload; agents evict on next check-in.
+- **GET /api/v1/swarm/payload/list** — list all active payload payloads.
+- **GET /api/v1/swarm/payload/match** — preview which envoys match a given target expression.
+- **GET /api/v1/swarm/payload/status/{sha256}** — per-envoy distribution status for one payload.
+- **GET /api/v1/swarm/payload/broken** — payloads with unreachable peers or failed distributions.
+- **POST /api/v1/swarm/payload/distribute** — seed a new payload into the swarm for distribution.
+- **DELETE /api/v1/swarm/payload/{sha256}** — revoke a payload; agents evict on next check-in.
 
-### Cairn
+### Gitmirror
 
-- **GET /api/v1/cairn/fleet** — fleet-wide cairn mirror view (aggregated from per-envoy traits).
+- **GET /api/v1/swarm/gitmirror/fleet** — fleet-wide gitmirror mirror view (aggregated from per-envoy traits).
 
-### Echo
+### Filesync
 
-- **GET /api/v1/echo/fleet** — fleet-wide echo mesh view (per-user LAN plaintext sync state aggregated from every envoy's `echo` trait).
-- **GET /api/v1/echo/envoy/{id}/users/{user}/files** — per-(envoy, user) file list drilldown for the `/echo` page.
+- **GET /api/v1/swarm/filesync/fleet** — fleet-wide filesync mesh view (per-user LAN plaintext sync state aggregated from every envoy's `filesync` trait).
+- **GET /api/v1/swarm/filesync/envoy/{id}/users/{user}/files** — per-(envoy, user) file list drilldown for the `/filesync` page.
 
-### Sigil
+### Cryptsync
 
-- **GET /api/v1/sigil/fleet** — fleet-wide sigil mesh view (per-user encrypted sync state aggregated from every envoy's `sigil` trait).
-- **GET /api/v1/sigil/envoy/{id}/users/{user}/files** — per-(envoy, user) file list drilldown for the `/sigil` page.
+- **GET /api/v1/swarm/cryptsync/fleet** — fleet-wide cryptsync mesh view (per-user encrypted sync state aggregated from every envoy's `cryptsync` trait).
+- **GET /api/v1/swarm/cryptsync/envoy/{id}/users/{user}/files** — per-(envoy, user) file list drilldown for the `/cryptsync` page.
 
 ### Scrier
 

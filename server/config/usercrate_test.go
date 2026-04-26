@@ -224,7 +224,7 @@ func TestUsercrate_NameCollisionWithModule(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	// Both a regular module and a usercrate named "dan" — must fail to
 	// load with a clear error message.
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "dan.vgo"), `
 name: dan
 resources:
   - name: placeholder

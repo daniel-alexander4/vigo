@@ -12,7 +12,7 @@ import (
 func TestConfigLoadDeviceEntry(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "switch-base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "switch-base.vgo"), `
 name: switch-base
 resources:
   - name: set-hostname
@@ -67,7 +67,7 @@ envoys:
 func TestConfigLoadDeviceEntryDefaultPort(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -108,7 +108,7 @@ envoys:
 func TestConfigValidateGatewayExists(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -139,7 +139,7 @@ envoys:
 func TestConfigValidateGatewayCycle(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -270,14 +270,14 @@ envoys:
 func TestDevicesForGateway(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "switch-base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "switch-base.vgo"), `
 name: switch-base
 resources:
   - name: set-hostname
     type: ssh_exec
     command: "hostname test"
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "router-base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "router-base.vgo"), `
 name: router-base
 resources:
   - name: set-hostname
@@ -375,7 +375,7 @@ envoys:
 func TestAllDeviceEntries(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop

@@ -124,14 +124,14 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	sandgorgonHandler := NewSandgorgonHandler(queries, fleetIndex, "", serverAddr)
 	sandgorgonHandler.RegisterRoutes(mux)
 
-	// Mount cairn fleet aggregator. Share the handler with the
-	// UI so the `/cairn` page reads the cached aggregation
+	// Mount gitmirror fleet aggregator. Share the handler with the
+	// UI so the `/gitmirror` page reads the cached aggregation
 	// directly rather than round-tripping through the REST endpoint.
-	cairnHandler := NewCairnHandler(fleetIndex, queries)
-	cairnHandler.RegisterRoutes(mux)
-	uiHandler.SetCairnFleet(cairnHandler)
+	gitmirrorHandler := NewGitmirrorHandler(fleetIndex, queries)
+	gitmirrorHandler.RegisterRoutes(mux)
+	uiHandler.SetGitmirrorFleet(gitmirrorHandler)
 
-	// Mount echo + sigil mesh observability endpoints. Same
+	// Mount filesync + cryptsync mesh observability endpoints. Same
 	// handler-sharing pattern — the `/mesh` UI page reads the
 	// cached aggregators directly. Admin-only RBAC is enforced
 	// inside RegisterRoutes; the UI handler adds its own check.
@@ -206,9 +206,9 @@ func MaxBodyMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		// Skip body limiting for lode distribute — streams to disk
+		// Skip body limiting for payload distribute — streams to disk
 		// via io.Copy and doesn't buffer in memory.
-		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/lode/distribute" {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/swarm/payload/distribute" {
 			next.ServeHTTP(w, r)
 			return
 		}

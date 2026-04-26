@@ -5,7 +5,7 @@ This walkthrough builds a complete nginx module with package installation, confi
 
 ## Module Structure
 
-A module is a YAML file with a `.vgo` extension in `stockpile/stones/`. It contains:
+A module is a YAML file with a `.vgo` extension in `stockpile/modules/`. It contains:
 
 ```yaml
 name: module-name
@@ -19,7 +19,7 @@ resources:
 
 ## Step 1: Create the Module
 
-Create `stockpile/stones/nginx.vgo`:
+Create `stockpile/modules/nginx.vgo`:
 
 ```yaml
 name: nginx

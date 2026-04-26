@@ -34,9 +34,9 @@ use super::meta::chunks_for_size;
 use super::peer_client;
 use super::peermap::{PeerMap, PeerSource};
 use crate::update::TlsCerts;
-use crate::cairn::peer_table::{LocalInfo as CairnLocalInfo, PeerTable as CairnPeerTable};
-use crate::cairn::pending_claims::{format_claim_line, parse_claim_line, PendingClaims as CairnPendingClaims};
-use crate::cairn::receiver::ClaimsHandle as CairnClaimsHandle;
+use crate::swarm::gitmirror::peer_table::{LocalInfo as GitmirrorLocalInfo, PeerTable as GitmirrorPeerTable};
+use crate::swarm::gitmirror::pending_claims::{format_claim_line, parse_claim_line, PendingClaims as GitmirrorPendingClaims};
+use crate::swarm::gitmirror::receiver::ClaimsHandle as GitmirrorClaimsHandle;
 
 /// Multicast group address.
 const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 42);
@@ -78,7 +78,7 @@ const MAX_MSG_SIZE: usize = 1400;
 /// past MAX_MSG_SIZE — before, build checks capped at MAX_MSG_SIZE
 /// and the SIG was appended *after*, producing ~1500-byte packets
 /// that the 1400-byte receive buffer silently truncated, stripping
-/// the SIG line and killing cairn authenticity on every datagram.
+/// the SIG line and killing gitmirror authenticity on every datagram.
 const SIG_FOOTER_RESERVE: usize = 160;
 
 /// Effective content budget for `build_announcement`. Subtract the
@@ -88,7 +88,7 @@ const MAX_CONTENT_SIZE: usize = MAX_MSG_SIZE - SIG_FOOTER_RESERVE;
 /// Receive buffer size. Deliberately larger than [`MAX_MSG_SIZE`] so a
 /// sender that slips past the budget (protocol growth, a mismatched
 /// build, a bug) isn't silently truncated — truncation drops the SIG
-/// line and kills cairn authenticity for the whole datagram. A
+/// line and kills gitmirror authenticity for the whole datagram. A
 /// warn-once fires if `recv_from` fills this buffer, flagging the
 /// sender as misbehaving instead of leaving the investigator to
 /// discover the issue via tcpdump.
@@ -120,13 +120,13 @@ pub fn spawn(
     swarm_port: u16,
     cancel: tokio_util::sync::CancellationToken,
     announce: Arc<super::AnnounceSignal>,
-    cairn_peer_table: Option<Arc<CairnPeerTable>>,
-    cairn_local_info: Option<CairnLocalInfo>,
-    cairn_pending_claims: Option<Arc<CairnPendingClaims>>,
-    cairn_claims_handle: Option<CairnClaimsHandle>,
-    cairn_gate: crate::cairn::Gate,
-    cairn_signing_key: Option<Arc<ed25519_dalek::SigningKey>>,
-    cairn_pubkey_cache: Option<Arc<crate::cairn::peer_pubkey_cache::PeerPubkeyCache>>,
+    gitmirror_peer_table: Option<Arc<GitmirrorPeerTable>>,
+    gitmirror_local_info: Option<GitmirrorLocalInfo>,
+    gitmirror_pending_claims: Option<Arc<GitmirrorPendingClaims>>,
+    gitmirror_claims_handle: Option<GitmirrorClaimsHandle>,
+    gitmirror_gate: crate::swarm::gitmirror::Gate,
+    gitmirror_signing_key: Option<Arc<ed25519_dalek::SigningKey>>,
+    gitmirror_pubkey_cache: Option<Arc<crate::swarm::gitmirror::peer_pubkey_cache::PeerPubkeyCache>>,
 ) {
     // Build one shared peer agent at spawn time. Wrapped in an Arc so the
     // listener can clone it cheaply into the blocking tasks it spawns per
@@ -146,13 +146,13 @@ pub fn spawn(
     let manifest_listen = manifest.clone();
     let cancel_listen = cancel.clone();
     let listen_agent = shared_agent.clone();
-    let cairn_table_listen = cairn_peer_table.clone();
-    let cairn_claims_listen = cairn_claims_handle.clone();
-    let listen_hostname = cairn_local_info
+    let gitmirror_table_listen = gitmirror_peer_table.clone();
+    let gitmirror_claims_listen = gitmirror_claims_handle.clone();
+    let listen_hostname = gitmirror_local_info
         .as_ref()
         .map(|li| li.hostname.clone());
-    let gate_listen = cairn_gate.clone();
-    let pubkey_cache_listen = cairn_pubkey_cache.clone();
+    let gate_listen = gitmirror_gate.clone();
+    let pubkey_cache_listen = gitmirror_pubkey_cache.clone();
 
     // Listener task.
     tokio::spawn(async move {
@@ -161,8 +161,8 @@ pub fn spawn(
             manifest_listen,
             listen_agent,
             cancel_listen,
-            cairn_table_listen,
-            cairn_claims_listen,
+            gitmirror_table_listen,
+            gitmirror_claims_listen,
             listen_hostname,
             gate_listen,
             pubkey_cache_listen,
@@ -182,10 +182,10 @@ pub fn spawn(
             swarm_port,
             cancel,
             announce,
-            cairn_local_info,
-            cairn_pending_claims,
-            cairn_gate,
-            cairn_signing_key,
+            gitmirror_local_info,
+            gitmirror_pending_claims,
+            gitmirror_gate,
+            gitmirror_signing_key,
         )
         .await
         {
@@ -201,11 +201,11 @@ async fn listen_loop(
     manifest: Arc<Manifest>,
     shared_agent: Option<Arc<ureq::Agent>>,
     cancel: tokio_util::sync::CancellationToken,
-    cairn_peer_table: Option<Arc<CairnPeerTable>>,
-    cairn_claims_handle: Option<CairnClaimsHandle>,
+    gitmirror_peer_table: Option<Arc<GitmirrorPeerTable>>,
+    gitmirror_claims_handle: Option<GitmirrorClaimsHandle>,
     local_hostname: Option<String>,
-    cairn_gate: crate::cairn::Gate,
-    cairn_pubkey_cache: Option<Arc<crate::cairn::peer_pubkey_cache::PeerPubkeyCache>>,
+    gitmirror_gate: crate::swarm::gitmirror::Gate,
+    gitmirror_pubkey_cache: Option<Arc<crate::swarm::gitmirror::peer_pubkey_cache::PeerPubkeyCache>>,
 ) -> anyhow::Result<()> {
     let socket = create_multicast_socket()?;
     socket.set_nonblocking(true)?;
@@ -225,8 +225,8 @@ async fn listen_loop(
                         if n == RECV_BUF_SIZE && !warned_truncation {
                             // Datagram filled the receive buffer — the kernel
                             // may have truncated the tail, which for signed
-                            // cairn packets means losing the SIG line and
-                            // dropping cairn content for this peer. Warn
+                            // gitmirror packets means losing the SIG line and
+                            // dropping gitmirror content for this peer. Warn
                             // once per process so the journal names the
                             // symptom instead of leaving it to tcpdump.
                             warn!(
@@ -238,50 +238,50 @@ async fn listen_loop(
                         }
                         if let Ok(msg) = std::str::from_utf8(&buf[..n]) {
                             let mut result = parse_announcement(msg, src, &peer_map, &manifest);
-                            // Cairn authenticity (0.30.11+): verify the
+                            // Gitmirror authenticity (0.30.11+): verify the
                             // SIG line against the embedded pubkey on
-                            // the CAIRN line and cross-check the pubkey
+                            // the GITMIRROR line and cross-check the pubkey
                             // against the TOFU cache. On any failure,
-                            // strip cairn_peer + cairn_claims so we
+                            // strip gitmirror_peer + gitmirror_claims so we
                             // don't act on spoofed content. Swarm
                             // HAVE/WANT parsing is kept — those lines
                             // are not security-critical and losing
                             // them on a rollout gap would stall blob
                             // discovery for no gain.
-                            if let Some(cache) = cairn_pubkey_cache.as_ref() {
-                                if !verify_cairn_authenticity(msg, &result, cache) {
-                                    result.cairn_peer = None;
-                                    result.cairn_claims.clear();
+                            if let Some(cache) = gitmirror_pubkey_cache.as_ref() {
+                                if !verify_gitmirror_authenticity(msg, &result, cache) {
+                                    result.gitmirror_peer = None;
+                                    result.gitmirror_claims.clear();
                                 }
                             }
-                            // Ingest any cairn peer info into the
+                            // Ingest any gitmirror peer info into the
                             // local peer table. Skipped while the
                             // local gate is off — a dormant envoy
-                            // drops received CAIRN lines on the
+                            // drops received GITMIRROR lines on the
                             // floor so the local peer table doesn't
                             // accumulate state that should not exist.
-                            let sender_hostname = result.cairn_peer.as_ref().map(|li| li.hostname.clone());
-                            let gate_on = cairn_gate.enabled();
+                            let sender_hostname = result.gitmirror_peer.as_ref().map(|li| li.hostname.clone());
+                            let gate_on = gitmirror_gate.enabled();
                             if gate_on {
                                 if let (Some(table), Some(li)) =
-                                    (cairn_peer_table.as_ref(), result.cairn_peer.clone())
+                                    (gitmirror_peer_table.as_ref(), result.gitmirror_peer.clone())
                                 {
                                     table.update(li.into_peer_entry());
                                 }
                             }
-                            // Ingest any CAIRNCLAIM entries:
+                            // Ingest any GITMIRRORCLAIM entries:
                             // check whether the local hostname is
                             // in each claim list and update the
                             // ClaimsHandle accordingly. Skipped
                             // when the gate is off.
                             if gate_on {
                                 if let (Some(ch), Some(my_host), Some(sender)) = (
-                                    cairn_claims_handle.as_ref(),
+                                    gitmirror_claims_handle.as_ref(),
                                     local_hostname.as_ref(),
                                     sender_hostname.as_ref(),
                                 ) {
-                                    let now = crate::cairn::state::unix_seconds_now();
-                                    for (label, hosts) in &result.cairn_claims {
+                                    let now = crate::swarm::gitmirror::state::unix_seconds_now();
+                                    for (label, hosts) in &result.gitmirror_claims {
                                         let in_list = hosts.iter().any(|h| h == my_host);
                                         ch.ingest_lan_claim(label, sender, in_list, now);
                                     }
@@ -352,10 +352,10 @@ async fn announce_loop(
     swarm_port: u16,
     cancel: tokio_util::sync::CancellationToken,
     announce: Arc<super::AnnounceSignal>,
-    cairn_local_info: Option<CairnLocalInfo>,
-    cairn_pending_claims: Option<Arc<CairnPendingClaims>>,
-    cairn_gate: crate::cairn::Gate,
-    cairn_signing_key: Option<Arc<ed25519_dalek::SigningKey>>,
+    gitmirror_local_info: Option<GitmirrorLocalInfo>,
+    gitmirror_pending_claims: Option<Arc<GitmirrorPendingClaims>>,
+    gitmirror_gate: crate::swarm::gitmirror::Gate,
+    gitmirror_signing_key: Option<Arc<ed25519_dalek::SigningKey>>,
 ) -> anyhow::Result<()> {
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     socket.set_multicast_ttl_v4(1)?; // LAN-local only
@@ -421,16 +421,16 @@ async fn announce_loop(
             .into_iter()
             .filter(|sha| !manifest.is_revoked(sha))
             .collect();
-        // The cairn gate may flip at runtime — re-read on every
-        // iteration. When off, skip emitting the CAIRN and
-        // CAIRNCLAIM lines; receivers will see the envoy drop
+        // The gitmirror gate may flip at runtime — re-read on every
+        // iteration. When off, skip emitting the GITMIRROR and
+        // GITMIRRORCLAIM lines; receivers will see the envoy drop
         // out of their peer tables on the next TTL cycle.
-        let gate_on = cairn_gate.enabled();
-        let announce_local_info = if gate_on { cairn_local_info.as_ref() } else { None };
+        let gate_on = gitmirror_gate.enabled();
+        let announce_local_info = if gate_on { gitmirror_local_info.as_ref() } else { None };
 
         // Short-circuit only if we have nothing AT ALL to announce.
-        // A pure cairn receiver (no swarm blobs cached yet) still
-        // needs to announce its cairn peer info so source envoys
+        // A pure gitmirror receiver (no swarm blobs cached yet) still
+        // needs to announce its gitmirror peer info so source envoys
         // can pick it — otherwise we'd be invisible to the LAN peer
         // table until we happened to download something.
         if complete.is_empty() && partials.is_empty() && announce_local_info.is_none() {
@@ -442,10 +442,10 @@ async fn announce_loop(
         // Decoupled from the reactor's cadence — the announcer
         // emits whatever the reactor has staged, without needing
         // a channel or lock coordination. Empty snapshot when the
-        // gate is off so the announcement carries no CAIRNCLAIM
+        // gate is off so the announcement carries no GITMIRRORCLAIM
         // lines.
         let claim_snapshot: Vec<(String, Vec<String>)> = if gate_on {
-            cairn_pending_claims
+            gitmirror_pending_claims
                 .as_ref()
                 .map(|pc| pc.snapshot())
                 .unwrap_or_default()
@@ -453,11 +453,11 @@ async fn announce_loop(
             Vec::new()
         };
 
-        // Sign announcements only when the cairn gate is on — an
-        // envoy with cairn disabled emits no CAIRN/CAIRNCLAIM lines,
+        // Sign announcements only when the gitmirror gate is on — an
+        // envoy with gitmirror disabled emits no GITMIRROR/GITMIRRORCLAIM lines,
         // so there's nothing for a SIG to cover that matters.
         let sign_for_this_tick = if gate_on {
-            cairn_signing_key.as_deref()
+            gitmirror_signing_key.as_deref()
         } else {
             None
         };
@@ -513,7 +513,7 @@ fn sign_and_append(msg: &mut String, key: &ed25519_dalek::SigningKey, timestamp_
 /// Extract the SIG line from a multicast packet, if present. Returns
 /// `(body_without_sig, timestamp_string, signature_bytes)`. Unsigned
 /// packets return `None` — caller decides how to treat them (current
-/// policy: drop cairn_peer + cairn_claims; swarm HAVE/WANT still
+/// policy: drop gitmirror_peer + gitmirror_claims; swarm HAVE/WANT still
 /// honored so blob discovery isn't held hostage to sig rollout).
 pub fn extract_sig(packet: &str) -> Option<(&str, String, Vec<u8>)> {
     // SIG line is the last non-empty line of the packet. Locate it by
@@ -530,24 +530,24 @@ pub fn extract_sig(packet: &str) -> Option<(&str, String, Vec<u8>)> {
     Some((&packet[..=sig_start], ts.to_string(), sig_bytes))
 }
 
-/// Verify an incoming packet's cairn authenticity: SIG line present,
-/// signature valid under the CAIRN line's embedded pubkey, and that
+/// Verify an incoming packet's gitmirror authenticity: SIG line present,
+/// signature valid under the GITMIRROR line's embedded pubkey, and that
 /// pubkey matches the TOFU cache for the sender's hostname. Returns
-/// true iff cairn content should be trusted. Packets without a CAIRN
-/// line pass through (nothing to verify). Packets with CAIRN but no
-/// valid sig return false and the caller strips cairn state.
-fn verify_cairn_authenticity(
+/// true iff gitmirror content should be trusted. Packets without a GITMIRROR
+/// line pass through (nothing to verify). Packets with GITMIRROR but no
+/// valid sig return false and the caller strips gitmirror state.
+fn verify_gitmirror_authenticity(
     raw_packet: &str,
     result: &AnnouncementResult,
-    cache: &std::sync::Arc<crate::cairn::peer_pubkey_cache::PeerPubkeyCache>,
+    cache: &std::sync::Arc<crate::swarm::gitmirror::peer_pubkey_cache::PeerPubkeyCache>,
 ) -> bool {
-    use crate::cairn::peer_pubkey_cache::CheckOutcome;
-    let peer = match result.cairn_peer.as_ref() {
+    use crate::swarm::gitmirror::peer_pubkey_cache::CheckOutcome;
+    let peer = match result.gitmirror_peer.as_ref() {
         Some(p) => p,
-        None => return true, // no cairn content to verify
+        None => return true, // no gitmirror content to verify
     };
     if peer.pubkey_hex.is_empty() {
-        warn!(hostname = %peer.hostname, "cairn: announcement missing embedded pubkey, dropping cairn content");
+        warn!(hostname = %peer.hostname, "gitmirror: announcement missing embedded pubkey, dropping gitmirror content");
         return false;
     }
 
@@ -555,7 +555,7 @@ fn verify_cairn_authenticity(
     let (body, ts_string, sig_bytes) = match extract_sig(raw_packet) {
         Some(parts) => parts,
         None => {
-            warn!(hostname = %peer.hostname, "cairn: announcement missing SIG line, dropping cairn content");
+            warn!(hostname = %peer.hostname, "gitmirror: announcement missing SIG line, dropping gitmirror content");
             return false;
         }
     };
@@ -564,7 +564,7 @@ fn verify_cairn_authenticity(
     let pub_bytes = match hex::decode(&peer.pubkey_hex) {
         Ok(b) if b.len() == 32 => b,
         _ => {
-            warn!(hostname = %peer.hostname, "cairn: embedded pubkey malformed, dropping cairn content");
+            warn!(hostname = %peer.hostname, "gitmirror: embedded pubkey malformed, dropping gitmirror content");
             return false;
         }
     };
@@ -572,13 +572,13 @@ fn verify_cairn_authenticity(
     let verifying_key = match ed25519_dalek::VerifyingKey::from_bytes(&pub_array) {
         Ok(k) => k,
         Err(_) => {
-            warn!(hostname = %peer.hostname, "cairn: embedded pubkey invalid, dropping cairn content");
+            warn!(hostname = %peer.hostname, "gitmirror: embedded pubkey invalid, dropping gitmirror content");
             return false;
         }
     };
 
     if !crate::auth::signer::verify_payload(body.as_bytes(), &ts_string, &sig_bytes, &verifying_key) {
-        warn!(hostname = %peer.hostname, "cairn: SIG verification failed, dropping cairn content");
+        warn!(hostname = %peer.hostname, "gitmirror: SIG verification failed, dropping gitmirror content");
         return false;
     }
 
@@ -597,7 +597,7 @@ fn verify_cairn_authenticity(
                 hostname = %peer.hostname,
                 announced_pubkey_prefix = %peer.pubkey_hex.chars().take(12).collect::<String>(),
                 cached_pubkey_prefix = %cached_prefix,
-                "cairn: pubkey mismatch — dropping cairn content. Clear /var/lib/vigo/cairn/peer_pubkeys.json if the hostname was legitimately re-enrolled."
+                "gitmirror: pubkey mismatch — dropping gitmirror content. Clear /var/lib/vigo/swarm/gitmirror/peer_pubkeys.json if the hostname was legitimately re-enrolled."
             );
             false
         }
@@ -612,21 +612,21 @@ fn now_unix_seconds() -> i64 {
 }
 
 /// Build the multicast announcement(s) for one cycle. Returns one packet
-/// in the common case, or two when cairn content would crowd out swarm
+/// in the common case, or two when gitmirror content would crowd out swarm
 /// HAVE/WANT lines.
 ///
 /// Priority inversion fix (0.30.10): earlier revisions appended
-/// CAIRN/CAIRNCLAIM last so they'd be the first thing dropped on MTU
-/// overflow. That silently broke cairn on any envoy with more than
+/// GITMIRROR/GITMIRRORCLAIM last so they'd be the first thing dropped on MTU
+/// overflow. That silently broke gitmirror on any envoy with more than
 /// ~15 cached swarm blobs — HAVE lines would fill the packet and the
-/// coordination announcements never went out. Cairn content is both
+/// coordination announcements never went out. Gitmirror content is both
 /// low-bandwidth (a few labels × short hostname lists) and
-/// high-criticality (receivers fire on CAIRNCLAIM, nothing fires without
+/// high-criticality (receivers fire on GITMIRRORCLAIM, nothing fires without
 /// it), while HAVE content is high-bandwidth and self-healing (the next
-/// 5s cycle retries). Pack cairn first; let HAVE spill across cycles.
+/// 5s cycle retries). Pack gitmirror first; let HAVE spill across cycles.
 ///
-/// Large-fleet edge case: ~60+ cairn labels on one source envoy could
-/// push CAIRN+CAIRNCLAIM past MTU on its own. Split into a second
+/// Large-fleet edge case: ~60+ gitmirror labels on one source envoy could
+/// push GITMIRROR+GITMIRRORCLAIM past MTU on its own. Split into a second
 /// packet in that case — receivers tolerate either packet shape
 /// (every section is optional past HEADER+MANIFEST+ADDR).
 fn build_announcement(
@@ -636,42 +636,42 @@ fn build_announcement(
     manifest: &Manifest,
     local_ip: Ipv4Addr,
     port: u16,
-    cairn_local_info: Option<&CairnLocalInfo>,
-    cairn_claims: &[(String, Vec<String>)],
+    gitmirror_local_info: Option<&GitmirrorLocalInfo>,
+    gitmirror_claims: &[(String, Vec<String>)],
     signing_key: Option<&ed25519_dalek::SigningKey>,
     timestamp_secs: i64,
 ) -> Vec<String> {
     let manifest_line = format!("MANIFEST:{}\n", manifest.version());
     let addr_line = format!("ADDR:{}:{}\n", local_ip, port);
 
-    // Primary packet. Preamble + CAIRN + as many CAIRNCLAIM as fit under
+    // Primary packet. Preamble + GITMIRROR + as many GITMIRRORCLAIM as fit under
     // a reserved budget (leave ≥300 bytes for MANIFEST/ADDR/one HAVE).
     // MAX_CONTENT_SIZE already reserves space for the SIG footer, so a
     // packet that fills this budget still fits in MAX_MSG_SIZE after
     // sign_and_append.
-    let cairn_budget_limit = MAX_CONTENT_SIZE - 300;
+    let gitmirror_budget_limit = MAX_CONTENT_SIZE - 300;
     let mut msg = String::from(HEADER);
     msg.push('\n');
     msg.push_str(&manifest_line);
 
-    if let Some(li) = cairn_local_info {
+    if let Some(li) = gitmirror_local_info {
         let line = format!("{}\n", li.format_announce_line());
-        if msg.len() + line.len() <= cairn_budget_limit {
+        if msg.len() + line.len() <= gitmirror_budget_limit {
             msg.push_str(&line);
         }
     }
 
     let mut overflow_claims: Vec<(String, Vec<String>)> = Vec::new();
-    for (label, hosts) in cairn_claims {
+    for (label, hosts) in gitmirror_claims {
         let line = format!("{}\n", format_claim_line(label, hosts));
-        if msg.len() + line.len() > cairn_budget_limit {
+        if msg.len() + line.len() > gitmirror_budget_limit {
             overflow_claims.push((label.clone(), hosts.clone()));
             continue;
         }
         msg.push_str(&line);
     }
 
-    // Swarm blob lines, appended after cairn. Same overflow break pattern
+    // Swarm blob lines, appended after gitmirror. Same overflow break pattern
     // as before — losing a HAVE line is safe, the next cycle retries and
     // peers still see the blob via other paths.
     for sha in complete {
@@ -732,15 +732,15 @@ fn build_announcement(
     }
     let mut packets = vec![msg];
 
-    // Spillover packet for the rare case where CAIRN+CAIRNCLAIM alone
-    // exceed the cairn budget. Carries only the lines that didn't fit,
-    // plus the minimum envelope (HEADER + MANIFEST + CAIRN + ADDR) so
+    // Spillover packet for the rare case where GITMIRROR+GITMIRRORCLAIM alone
+    // exceed the gitmirror budget. Carries only the lines that didn't fit,
+    // plus the minimum envelope (HEADER + MANIFEST + GITMIRROR + ADDR) so
     // the receiver can identify the sender and ingest claims.
     if !overflow_claims.is_empty() {
         let mut spill = String::from(HEADER);
         spill.push('\n');
         spill.push_str(&manifest_line);
-        if let Some(li) = cairn_local_info {
+        if let Some(li) = gitmirror_local_info {
             spill.push_str(&format!("{}\n", li.format_announce_line()));
         }
         let mut hard_overflow = 0usize;
@@ -762,8 +762,8 @@ fn build_announcement(
         if hard_overflow > 0 {
             warn!(
                 overflow_labels = hard_overflow,
-                total_labels = cairn_claims.len(),
-                "cairn claim list exceeds two-packet capacity — some labels deferred to next cycle"
+                total_labels = gitmirror_claims.len(),
+                "gitmirror claim list exceeds two-packet capacity — some labels deferred to next cycle"
             );
         }
     }
@@ -781,18 +781,18 @@ struct AnnouncementResult {
     /// via the sentinel `HAVE:<sha>:<have>/<total>` form and we need to
     /// pull `/blob/<sha>/meta` to discover which chunks it actually has.
     bitmap_probes: Vec<(String, String)>,
-    /// Parsed `CAIRN:` line if the announcer included one. Used by
-    /// the listener to refresh the cairn peer table. Absence means
-    /// the announcer is not cairn-enabled (dormant subsystem from
+    /// Parsed `GITMIRROR:` line if the announcer included one. Used by
+    /// the listener to refresh the gitmirror peer table. Absence means
+    /// the announcer is not gitmirror-enabled (dormant subsystem from
     /// Phase 2's matchfile gate) — the peer table stays untouched.
-    cairn_peer: Option<CairnLocalInfo>,
-    /// Parsed `CAIRNCLAIM:` lines. Each entry is a (label,
+    gitmirror_peer: Option<GitmirrorLocalInfo>,
+    /// Parsed `GITMIRRORCLAIM:` lines. Each entry is a (label,
     /// host_list) pair naming which envoys the announcer has
     /// selected to mirror that label. The listener pairs each
-    /// entry with the sender's hostname (from the `cairn_peer`
+    /// entry with the sender's hostname (from the `gitmirror_peer`
     /// field above) and calls `ClaimsHandle::ingest_lan_claim`.
     /// Malformed lines are dropped silently.
-    cairn_claims: Vec<(String, Vec<String>)>,
+    gitmirror_claims: Vec<(String, Vec<String>)>,
 }
 
 /// Parse a received multicast announcement and update the peer map.
@@ -866,17 +866,17 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
             }
         } else if let Some(rest) = line.strip_prefix("ADDR:") {
             addr = Some(rest.to_string());
-        } else if line.starts_with("CAIRNCLAIM:") {
-            // Order matters: CAIRNCLAIM: must be tried before
-            // CAIRN: because both share the CAIRN prefix.
+        } else if line.starts_with("GITMIRRORCLAIM:") {
+            // Order matters: GITMIRRORCLAIM: must be tried before
+            // GITMIRROR: because both share the GITMIRROR prefix.
             if let Some((label, hosts)) = parse_claim_line(line) {
-                result.cairn_claims.push((label, hosts));
+                result.gitmirror_claims.push((label, hosts));
             }
-        } else if line.starts_with("CAIRN:") {
+        } else if line.starts_with("GITMIRROR:") {
             // Parse and stash for listener ingest. Malformed lines
             // are dropped silently by parse_announce_line.
-            if let Some(li) = CairnLocalInfo::parse_announce_line(line) {
-                result.cairn_peer = Some(li);
+            if let Some(li) = GitmirrorLocalInfo::parse_announce_line(line) {
+                result.gitmirror_peer = Some(li);
             }
         }
     }
@@ -1399,14 +1399,14 @@ mod tests {
         assert_eq!(peers[0].chunks, expected);
     }
 
-    // ----- cairn peer announcement round-trip -----
+    // ----- gitmirror peer announcement round-trip -----
 
     #[test]
-    fn build_announcement_appends_cairn_line_when_local_info_present() {
+    fn build_announcement_appends_gitmirror_line_when_local_info_present() {
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
-        let li = CairnLocalInfo {
+        let li = GitmirrorLocalInfo {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec!["workstation".to_string()],
@@ -1425,11 +1425,11 @@ mod tests {
             0,
         );
         let msg = &packets[0];
-        assert!(msg.contains("CAIRN:danlap:dan:workstation"));
+        assert!(msg.contains("GITMIRROR:danlap:dan:workstation"));
     }
 
     #[test]
-    fn build_announcement_omits_cairn_line_when_none() {
+    fn build_announcement_omits_gitmirror_line_when_none() {
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
@@ -1446,17 +1446,17 @@ mod tests {
             0,
         );
         let msg = &packets[0];
-        assert!(!msg.contains("CAIRN:"));
+        assert!(!msg.contains("GITMIRROR:"));
     }
 
     #[test]
-    fn parse_announcement_recovers_cairn_line() {
+    fn parse_announcement_recovers_gitmirror_line() {
         let pubkey_hex = "a".repeat(64);
         let msg = format!(
             "VIGO-SWARM\n\
              MANIFEST:1\n\
              ADDR:10.0.0.1:1531\n\
-             CAIRN:plex:dan,alice:homelab:{}\n",
+             GITMIRROR:plex:dan,alice:homelab:{}\n",
             pubkey_hex
         );
         let pm = PeerMap::new();
@@ -1467,7 +1467,7 @@ mod tests {
             &pm,
             &manifest,
         );
-        let li = result.cairn_peer.expect("cairn line must be parsed");
+        let li = result.gitmirror_peer.expect("gitmirror line must be parsed");
         assert_eq!(li.hostname, "plex");
         assert_eq!(li.users, vec!["dan".to_string(), "alice".to_string()]);
         assert_eq!(li.tags, vec!["homelab".to_string()]);
@@ -1475,7 +1475,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_announcement_without_cairn_line_returns_none() {
+    fn parse_announcement_without_gitmirror_line_returns_none() {
         let msg = "VIGO-SWARM\n\
                    MANIFEST:1\n\
                    ADDR:10.0.0.1:1531\n";
@@ -1487,15 +1487,15 @@ mod tests {
             &pm,
             &manifest,
         );
-        assert!(result.cairn_peer.is_none());
+        assert!(result.gitmirror_peer.is_none());
     }
 
     #[test]
-    fn parse_announcement_ignores_malformed_cairn_line() {
+    fn parse_announcement_ignores_malformed_gitmirror_line() {
         let msg = "VIGO-SWARM\n\
                    MANIFEST:1\n\
                    ADDR:10.0.0.1:1531\n\
-                   CAIRN:\n";
+                   GITMIRROR:\n";
         let pm = PeerMap::new();
         let manifest = test_manifest();
         let result = parse_announcement(
@@ -1504,23 +1504,23 @@ mod tests {
             &pm,
             &manifest,
         );
-        assert!(result.cairn_peer.is_none());
+        assert!(result.gitmirror_peer.is_none());
     }
 
-    // --- CAIRNCLAIM round-trip (Phase 6) ---
+    // --- GITMIRRORCLAIM round-trip (Phase 6) ---
 
     #[test]
-    fn build_announcement_appends_cairn_claim_lines() {
+    fn build_announcement_appends_gitmirror_claim_lines() {
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
         let claims = vec![
             (
-                "cairn:danlap:dan:vigo-web".to_string(),
+                "gitmirror:danlap:dan:vigo-web".to_string(),
                 vec!["plex".to_string(), "annlap".to_string()],
             ),
             (
-                "cairn:danlap:dan:dotfiles".to_string(),
+                "gitmirror:danlap:dan:dotfiles".to_string(),
                 vec!["plex".to_string()],
             ),
         ];
@@ -1537,20 +1537,20 @@ mod tests {
             0,
         );
         let msg = &packets[0];
-        assert!(msg.contains("CAIRNCLAIM:cairn:danlap:dan:vigo-web:plex,annlap"));
-        assert!(msg.contains("CAIRNCLAIM:cairn:danlap:dan:dotfiles:plex"));
+        assert!(msg.contains("GITMIRRORCLAIM:gitmirror:danlap:dan:vigo-web:plex,annlap"));
+        assert!(msg.contains("GITMIRRORCLAIM:gitmirror:danlap:dan:dotfiles:plex"));
     }
 
     #[test]
-    fn parse_announcement_recovers_cairn_claim_lines() {
+    fn parse_announcement_recovers_gitmirror_claim_lines() {
         let pubkey_hex = "a".repeat(64);
         let msg = format!(
             "VIGO-SWARM\n\
              MANIFEST:1\n\
              ADDR:10.0.0.1:1531\n\
-             CAIRN:danlap:dan:workstation:{}\n\
-             CAIRNCLAIM:cairn:danlap:dan:vigo-web:plex,annlap\n\
-             CAIRNCLAIM:cairn:danlap:dan:dotfiles:plex\n",
+             GITMIRROR:danlap:dan:workstation:{}\n\
+             GITMIRRORCLAIM:gitmirror:danlap:dan:vigo-web:plex,annlap\n\
+             GITMIRRORCLAIM:gitmirror:danlap:dan:dotfiles:plex\n",
             pubkey_hex
         );
         let pm = PeerMap::new();
@@ -1561,34 +1561,34 @@ mod tests {
             &pm,
             &manifest,
         );
-        assert_eq!(result.cairn_peer.as_ref().map(|li| li.hostname.clone()),
+        assert_eq!(result.gitmirror_peer.as_ref().map(|li| li.hostname.clone()),
             Some("danlap".to_string()));
-        assert_eq!(result.cairn_claims.len(), 2);
+        assert_eq!(result.gitmirror_claims.len(), 2);
         assert_eq!(
-            result.cairn_claims[0],
+            result.gitmirror_claims[0],
             (
-                "cairn:danlap:dan:vigo-web".to_string(),
+                "gitmirror:danlap:dan:vigo-web".to_string(),
                 vec!["plex".to_string(), "annlap".to_string()],
             ),
         );
         assert_eq!(
-            result.cairn_claims[1],
+            result.gitmirror_claims[1],
             (
-                "cairn:danlap:dan:dotfiles".to_string(),
+                "gitmirror:danlap:dan:dotfiles".to_string(),
                 vec!["plex".to_string()],
             ),
         );
     }
 
     #[test]
-    fn parse_announcement_cairnclaim_prefix_match_is_specific() {
-        // Regression: `CAIRNCLAIM:` must match BEFORE `CAIRN:`
+    fn parse_announcement_gitmirrorclaim_prefix_match_is_specific() {
+        // Regression: `GITMIRRORCLAIM:` must match BEFORE `GITMIRROR:`
         // otherwise the latter's parser would see a malformed peer
         // line and drop it. Both should work together.
         let msg = "VIGO-SWARM\n\
                    MANIFEST:1\n\
                    ADDR:10.0.0.1:1531\n\
-                   CAIRNCLAIM:cairn:h:u:p:some-host\n";
+                   GITMIRRORCLAIM:gitmirror:h:u:p:some-host\n";
         let pm = PeerMap::new();
         let manifest = test_manifest();
         let result = parse_announcement(
@@ -1597,11 +1597,11 @@ mod tests {
             &pm,
             &manifest,
         );
-        // CAIRNCLAIM was picked up correctly.
-        assert_eq!(result.cairn_claims.len(), 1);
-        // And it did NOT also get parsed as a malformed CAIRN
+        // GITMIRRORCLAIM was picked up correctly.
+        assert_eq!(result.gitmirror_claims.len(), 1);
+        // And it did NOT also get parsed as a malformed GITMIRROR
         // peer line.
-        assert!(result.cairn_peer.is_none());
+        assert!(result.gitmirror_peer.is_none());
     }
 
     #[test]
@@ -1612,7 +1612,7 @@ mod tests {
         // used MAX_MSG_SIZE directly and the emitted packet could
         // exceed MAX_MSG_SIZE by the full SIG length — the 1400-byte
         // receive buffer then silently truncated the tail, stripping
-        // the SIG line and killing cairn authenticity on every
+        // the SIG line and killing gitmirror authenticity on every
         // datagram. Saturate every section of the primary packet AND
         // force a spillover secondary packet, then confirm both still
         // fit in MAX_MSG_SIZE after signing.
@@ -1629,18 +1629,18 @@ mod tests {
             cache.assemble(&sha, data.as_bytes().len() as u64, 1).unwrap();
         }
 
-        let li = CairnLocalInfo {
+        let li = GitmirrorLocalInfo {
             hostname: "danlap.home.arpa".to_string(),
             users: vec!["dan".to_string(), "anja".to_string(), "elena".to_string()],
             tags: vec![],
             pubkey_hex: "a".repeat(64),
         };
-        // Enough claims to force CAIRNCLAIM overflow into the spillover
+        // Enough claims to force GITMIRRORCLAIM overflow into the spillover
         // packet, so BOTH emitted packets get exercised against the cap.
         let claims: Vec<(String, Vec<String>)> = (0..12)
             .map(|i| {
                 (
-                    format!("cairn:danlap:dan:project-{:02}", i),
+                    format!("gitmirror:danlap:dan:project-{:02}", i),
                     vec![
                         "plex.home.arpa".to_string(),
                         "girlslaptop.home.arpa".to_string(),
@@ -1688,7 +1688,7 @@ mod tests {
         // exceed MAX_MSG_SIZE even in a dedicated spillover packet.
         let many_hosts: Vec<String> =
             (0..200).map(|i| format!("peer-with-a-long-name-{}", i)).collect();
-        let claims = vec![("cairn:h:u:huge".to_string(), many_hosts)];
+        let claims = vec![("gitmirror:h:u:huge".to_string(), many_hosts)];
         let packets = build_announcement(
             &[],
             &[],
@@ -1704,7 +1704,7 @@ mod tests {
         // The oversized claim line must not appear in any emitted packet.
         for msg in &packets {
             assert!(
-                !msg.contains("CAIRNCLAIM:cairn:h:u:huge:"),
+                !msg.contains("GITMIRRORCLAIM:gitmirror:h:u:huge:"),
                 "oversized claim line should have been dropped, found in packet: {}",
                 msg,
             );
@@ -1717,11 +1717,11 @@ mod tests {
     // ----- 0.30.10 priority-inversion + spillover tests -----
 
     #[test]
-    fn build_announcement_places_cairn_before_have() {
-        // Regression: CAIRN/CAIRNCLAIM must be emitted BEFORE HAVE lines
+    fn build_announcement_places_gitmirror_before_have() {
+        // Regression: GITMIRROR/GITMIRRORCLAIM must be emitted BEFORE HAVE lines
         // so a blob-heavy source still reaches receivers with
         // coordination info. Prior to 0.30.10, HAVE packed first and
-        // CAIRN fell off MTU on any cache with ~15+ blobs.
+        // GITMIRROR fell off MTU on any cache with ~15+ blobs.
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
@@ -1733,13 +1733,13 @@ mod tests {
         cache.write_chunk(&sha, 0, data).unwrap();
         cache.assemble(&sha, data.len() as u64, 1).unwrap();
 
-        let li = CairnLocalInfo {
+        let li = GitmirrorLocalInfo {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec![],
                     pubkey_hex: "a".repeat(64),
         };
-        let claims = vec![("cairn:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
+        let claims = vec![("gitmirror:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
         let packets = build_announcement(
             &cache.list_blobs(),
             &cache.list_partials(),
@@ -1753,19 +1753,19 @@ mod tests {
             0,
         );
         let msg = &packets[0];
-        let cairn_pos = msg.find("CAIRN:danlap:").expect("CAIRN line present");
-        let cairnclaim_pos = msg.find("CAIRNCLAIM:cairn:danlap:dan:vigo:plex")
-            .expect("CAIRNCLAIM line present");
+        let gitmirror_pos = msg.find("GITMIRROR:danlap:").expect("GITMIRROR line present");
+        let gitmirrorclaim_pos = msg.find("GITMIRRORCLAIM:gitmirror:danlap:dan:vigo:plex")
+            .expect("GITMIRRORCLAIM line present");
         let have_pos = msg.find("HAVE:").expect("HAVE line present");
-        assert!(cairn_pos < have_pos, "CAIRN must precede HAVE");
-        assert!(cairnclaim_pos < have_pos, "CAIRNCLAIM must precede HAVE");
+        assert!(gitmirror_pos < have_pos, "GITMIRROR must precede HAVE");
+        assert!(gitmirrorclaim_pos < have_pos, "GITMIRRORCLAIM must precede HAVE");
     }
 
     #[test]
-    fn build_announcement_preserves_cairn_under_heavy_have_load() {
+    fn build_announcement_preserves_gitmirror_under_heavy_have_load() {
         // Simulate the failure mode Dan hit in production on 2026-04-23:
-        // ~60 cached blobs starve cairn of MTU budget. The new packing
-        // guarantees CAIRN/CAIRNCLAIM survive.
+        // ~60 cached blobs starve gitmirror of MTU budget. The new packing
+        // guarantees GITMIRROR/GITMIRRORCLAIM survive.
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
@@ -1778,13 +1778,13 @@ mod tests {
             cache.assemble(&sha, data.len() as u64, 1).unwrap();
         }
 
-        let li = CairnLocalInfo {
+        let li = GitmirrorLocalInfo {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec![],
                     pubkey_hex: "a".repeat(64),
         };
-        let claims = vec![("cairn:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
+        let claims = vec![("gitmirror:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
         let packets = build_announcement(
             &cache.list_blobs(),
             &cache.list_partials(),
@@ -1798,31 +1798,31 @@ mod tests {
             0,
         );
         let joined: String = packets.join("");
-        assert!(joined.contains("CAIRN:danlap:"), "CAIRN line must survive heavy HAVE load");
-        assert!(joined.contains("CAIRNCLAIM:cairn:danlap:dan:vigo:plex"),
-            "CAIRNCLAIM line must survive heavy HAVE load");
+        assert!(joined.contains("GITMIRROR:danlap:"), "GITMIRROR line must survive heavy HAVE load");
+        assert!(joined.contains("GITMIRRORCLAIM:gitmirror:danlap:dan:vigo:plex"),
+            "GITMIRRORCLAIM line must survive heavy HAVE load");
     }
 
     #[test]
-    fn build_announcement_spills_cairnclaims_to_second_packet() {
-        // A large-fleet publisher with many cairn labels overflows the
-        // cairn budget of the primary packet. Remaining CAIRNCLAIM
+    fn build_announcement_spills_gitmirrorclaims_to_second_packet() {
+        // A large-fleet publisher with many gitmirror labels overflows the
+        // gitmirror budget of the primary packet. Remaining GITMIRRORCLAIM
         // lines land in a second packet on the same cycle.
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
 
-        // 30 labels × ~40 bytes each = ~1.2 KB of CAIRNCLAIM, past the
-        // cairn budget (MAX_MSG_SIZE - 300 = 1100 bytes).
+        // 30 labels × ~40 bytes each = ~1.2 KB of GITMIRRORCLAIM, past the
+        // gitmirror budget (MAX_MSG_SIZE - 300 = 1100 bytes).
         let claims: Vec<(String, Vec<String>)> = (0..30)
             .map(|i| {
                 (
-                    format!("cairn:danlap:dan:project-{:02}", i),
+                    format!("gitmirror:danlap:dan:project-{:02}", i),
                     vec!["plex".to_string(), "annlap".to_string()],
                 )
             })
             .collect();
-        let li = CairnLocalInfo {
+        let li = GitmirrorLocalInfo {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec![],
@@ -1842,15 +1842,15 @@ mod tests {
             0,
         );
         assert_eq!(packets.len(), 2, "expected a spillover packet");
-        // CAIRN peer line appears in both packets so the receiver can
+        // GITMIRROR peer line appears in both packets so the receiver can
         // attribute the claims to a sender regardless of which packet
         // arrives first.
-        assert!(packets[0].contains("CAIRN:danlap:"));
-        assert!(packets[1].contains("CAIRN:danlap:"));
+        assert!(packets[0].contains("GITMIRROR:danlap:"));
+        assert!(packets[1].contains("GITMIRROR:danlap:"));
         // Every label lands somewhere across the two packets.
         let joined: String = packets.join("");
         for i in 0..30 {
-            let label = format!("CAIRNCLAIM:cairn:danlap:dan:project-{:02}:plex,annlap", i);
+            let label = format!("GITMIRRORCLAIM:gitmirror:danlap:dan:project-{:02}:plex,annlap", i);
             assert!(joined.contains(&label), "missing claim line for {}", i);
         }
     }
@@ -1858,9 +1858,9 @@ mod tests {
     #[test]
     fn build_announcement_spillover_preserves_have_on_primary() {
         // The primary packet should still carry HAVE lines when it
-        // triggers a cairn spillover — the spillover is additive, not a
+        // triggers a gitmirror spillover — the spillover is additive, not a
         // replacement. Proves we didn't regress swarm discovery by
-        // fixing cairn.
+        // fixing gitmirror.
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
@@ -1874,7 +1874,7 @@ mod tests {
         let claims: Vec<(String, Vec<String>)> = (0..30)
             .map(|i| {
                 (
-                    format!("cairn:danlap:dan:project-{:02}", i),
+                    format!("gitmirror:danlap:dan:project-{:02}", i),
                     vec!["plex".to_string(), "annlap".to_string()],
                 )
             })
@@ -1897,13 +1897,13 @@ mod tests {
             "primary packet must still carry HAVE lines when spillover is used");
     }
 
-    // ----- 0.30.11 cairn signature tests -----
+    // ----- 0.30.11 gitmirror signature tests -----
 
     #[test]
     fn signed_announcement_verifies_round_trip() {
         let (verify, sign) = crate::auth::keypair::generate_keypair().unwrap();
         let pubkey_hex = hex::encode(verify.to_bytes());
-        let li = CairnLocalInfo {
+        let li = GitmirrorLocalInfo {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec![],
@@ -1912,7 +1912,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
-        let claims = vec![("cairn:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
+        let claims = vec![("gitmirror:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
         let packets = build_announcement(
             &[],
             &[],
@@ -1942,7 +1942,7 @@ mod tests {
     #[test]
     fn tampered_signed_announcement_fails_verification() {
         let (verify, sign) = crate::auth::keypair::generate_keypair().unwrap();
-        let li = CairnLocalInfo {
+        let li = GitmirrorLocalInfo {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec![],
@@ -1963,7 +1963,7 @@ mod tests {
             Some(&sign),
             1_700_000_000,
         );
-        // Tamper with the body (swap the CAIRNCLAIM target). Verification must fail.
+        // Tamper with the body (swap the GITMIRRORCLAIM target). Verification must fail.
         let tampered = packets[0].replace("danlap", "attacker");
         let (body, ts, sig_bytes) = extract_sig(&tampered).expect("extract sig");
         assert!(!crate::auth::signer::verify_payload(body.as_bytes(), &ts, &sig_bytes, &verify),
@@ -1973,7 +1973,7 @@ mod tests {
     #[test]
     fn unsigned_announcement_has_no_sig_line() {
         // When build_announcement is called without a signing key (pre-
-        // 0.30.11 behavior, or a non-cairn envoy), it emits no SIG line.
+        // 0.30.11 behavior, or a non-gitmirror envoy), it emits no SIG line.
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
@@ -1995,7 +1995,7 @@ mod tests {
 
     #[test]
     fn tofu_cache_blocks_pubkey_swap() {
-        use crate::cairn::peer_pubkey_cache::{CheckOutcome, PeerPubkeyCache};
+        use crate::swarm::gitmirror::peer_pubkey_cache::{CheckOutcome, PeerPubkeyCache};
         let cache = PeerPubkeyCache::empty();
         let pk1 = "a".repeat(64);
         let pk2 = "b".repeat(64);

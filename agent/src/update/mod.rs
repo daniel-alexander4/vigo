@@ -282,15 +282,6 @@ pub async fn apply(
         "binary updated successfully"
     );
 
-    // Remove the legacy /usr/local/bin/cairn shim symlink if
-    // present (shipped in 0.22.0-0.22.1). The `repo` subcommand is
-    // now `vigo cairn <verb>`; the shim's argv[0] detection was
-    // deleted, so the symlink would point at a binary that no
-    // longer honors it. Clean up on every upgrade so envoys that
-    // carried the shim get rid of it automatically.
-    #[cfg(unix)]
-    remove_legacy_cairn_shim();
-
     // Refresh the systemd unit file if the bootstrap template has
     // changed since this envoy was first installed. Without this,
     // envoys bootstrapped on older agent versions never pick up new
@@ -334,26 +325,6 @@ pub async fn apply(
     }
 
     Ok(())
-}
-
-/// Remove the legacy `/usr/local/bin/cairn` shim symlink from
-/// 0.22.0-0.22.1. Best-effort: if the path doesn't exist, does
-/// nothing. If the path exists but isn't a symlink (operator
-/// replaced it with a real file), leaves it alone.
-#[cfg(unix)]
-fn remove_legacy_cairn_shim() {
-    const SHIM_PATH: &str = "/usr/local/bin/cairn";
-    let shim = Path::new(SHIM_PATH);
-    let Ok(meta) = std::fs::symlink_metadata(shim) else {
-        return;
-    };
-    if !meta.file_type().is_symlink() {
-        return;
-    }
-    match std::fs::remove_file(shim) {
-        Ok(()) => info!(path = SHIM_PATH, "removed legacy cairn shim symlink"),
-        Err(e) => warn!(path = SHIM_PATH, error = %e, "failed to remove legacy cairn shim"),
-    }
 }
 
 /// Check for a self-update and apply it if available.

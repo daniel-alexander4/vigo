@@ -40,7 +40,7 @@ Examples:
 		}
 
 		// Apply filters.
-		moduleFilter, _ := cmd.Flags().GetString("stone")
+		moduleFilter, _ := cmd.Flags().GetString("module")
 		varFilter, _ := cmd.Flags().GetString("var")
 
 		var filtered []struct {
@@ -86,7 +86,7 @@ Examples:
 }
 
 func init() {
-	configDedupCmd.Flags().String("stone", "", "filter to a specific stone (module) name")
+	configDedupCmd.Flags().String("module", "", "filter to a specific module name")
 	configDedupCmd.Flags().String("var", "", "filter to a specific variable name")
 	configCmd.AddCommand(configDedupCmd)
 }

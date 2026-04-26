@@ -145,7 +145,7 @@ Traits are available in templates (`{{ .Traits.device.model }}`) and `when:` exp
 ## Example Module
 
 ```yaml
-# stockpile/stones/switch-base.vgo
+# stockpile/modules/switch-base.vgo
 name: switch-base
 resources:
   - name: login-banner

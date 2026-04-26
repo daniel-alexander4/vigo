@@ -22,7 +22,7 @@ func newPreviewTestDeps(t *testing.T) (*config.ConfigStore, *fleet.FleetIndex) {
 	t.Helper()
 	dir := t.TempDir()
 
-	for _, sub := range []string{"stockpile/stones", "scaffolding"} {
+	for _, sub := range []string{"stockpile/modules", "scaffolding"} {
 		os.MkdirAll(filepath.Join(dir, sub), 0755)
 	}
 
@@ -47,7 +47,7 @@ resources:
     type: package
     package: nginx
 `
-	os.WriteFile(filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), []byte(moduleYAML), 0644)
+	os.WriteFile(filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), []byte(moduleYAML), 0644)
 
 	pgYAML := `name: postgres
 
@@ -56,7 +56,7 @@ resources:
     type: package
     package: postgresql
 `
-	os.WriteFile(filepath.Join(dir, "stockpile", "stones", "postgres.vgo"), []byte(pgYAML), 0644)
+	os.WriteFile(filepath.Join(dir, "stockpile", "modules", "postgres.vgo"), []byte(pgYAML), 0644)
 
 	provider, err := secrets.NewLocalProvider("", t.TempDir())
 	if err != nil {

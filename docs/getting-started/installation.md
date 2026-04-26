@@ -25,7 +25,7 @@ This populates `/srv/vigo/` with everything needed to run the server:
 ├── secrets/                 # encrypted secret files
 ├── worksite/                # edit .vgo config files here
 │   ├── stockpile/           # module library
-│   │   ├── stones/          # reusable module definitions
+│   │   ├── modules/          # reusable module definitions
 │   │   ├── usercrates/      # user-scoped auto-apply modules
 │   │   └── templates/       # Go template fragments
 │   ├── scaffolding/         # envoy rules — envoys.vgo, roles.vgo,

@@ -428,7 +428,7 @@ func newTestConfigStore(t *testing.T, envMap map[string]string) *config.ConfigSt
 	dir := t.TempDir()
 
 	// ConfigStore expects envoys/, modules/, and roles/ subdirectories.
-	for _, sub := range []string{"stockpile/stones", "scaffolding/envoys", "scaffolding/roles"} {
+	for _, sub := range []string{"stockpile/modules", "scaffolding/envoys", "scaffolding/roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatalf("mkdir %s: %v", sub, err)
 		}

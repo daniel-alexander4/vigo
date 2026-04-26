@@ -1811,7 +1811,7 @@ func globContains(pattern, query string) bool {
 }
 
 // stockpileSubdir returns the module-library subtree under cs.dir.
-// Contains stones/, usercrates/, templates/, and directory-inherited
+// Contains modules/, usercrates/, templates/, and directory-inherited
 // compliance.vgo claim files.
 func (cs *ConfigStore) stockpileSubdir() string { return filepath.Join(cs.dir, "stockpile") }
 
@@ -1820,10 +1820,10 @@ func (cs *ConfigStore) stockpileSubdir() string { return filepath.Join(cs.dir, "
 // environments.vgo, and customer/site subdirs.
 func (cs *ConfigStore) scaffoldingSubdir() string { return filepath.Join(cs.dir, "scaffolding") }
 
-// modulesDir returns the path to the stones directory (named "stones" on
+// modulesDir returns the path to the modules directory (named "modules" on
 // disk; YAML keys and Go identifiers retain "module" for industry-standard
 // recognition).
-func (cs *ConfigStore) modulesDir() string { return filepath.Join(cs.dir, "stockpile", "stones") }
+func (cs *ConfigStore) modulesDir() string { return filepath.Join(cs.dir, "stockpile", "modules") }
 
 // templatesDir returns the path to the templates subdirectory.
 func (cs *ConfigStore) templatesDir() string { return filepath.Join(cs.dir, "stockpile", "templates") }
@@ -3097,7 +3097,7 @@ func validateComplianceTopLevelKeys(data []byte, relPath string) error {
 // per-file source entries for trace display.
 //
 // Unlike loadScaffoldingWaivers, this walker descends into the stockpile
-// subtree (which contains stones/, usercrates/, templates/). Waivers
+// subtree (which contains modules/, usercrates/, templates/). Waivers
 // declared in a stockpile-tree compliance.vgo are ignored (modlint flags
 // them as a warning); this loader only harvests the compliance: block.
 func loadModuleComplianceConfigs(stockpileDir string) (map[string]map[string][]string, []ModuleComplianceSource, error) {

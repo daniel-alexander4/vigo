@@ -44,7 +44,7 @@ After enrollment, the envoy appears in the dashboard and begins checking in ever
 
 ## 3. Write a Module
 
-Create a file at `/srv/vigo/worksite/stockpile/stones/motd.vgo`:
+Create a file at `/srv/vigo/worksite/stockpile/modules/motd.vgo`:
 
 ```yaml
 name: motd

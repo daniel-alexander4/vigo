@@ -10,15 +10,15 @@ import (
 	"git.alexander4.io/vigo/server/swarm"
 )
 
-// TestSnapshotStatusSplitsByLabelPrefix pins the "cairn:" label
-// prefix → Cairn bucket, everything else → Lode bucket rule used
+// TestSnapshotStatusSplitsByLabelPrefix pins the "gitmirror:" label
+// prefix → Gitmirror bucket, everything else → Payload bucket rule used
 // by the substrate status rollup. The rule lives implicitly in the
 // seed-label naming convention, so this test guards against a seed
 // prefix rename silently miscounting payloads on the /swarm page.
 func TestSnapshotStatusSplitsByLabelPrefix(t *testing.T) {
 	tracker := swarm.NewPeerTracker(5 * time.Minute)
 	tracker.RegisterSeed("aaaa", swarm.SeedState{Label: "app-v2.tar.gz", SeederID: "envoy-1", Size: 100})
-	tracker.RegisterSeed("bbbb", swarm.SeedState{Label: "cairn:danlap:dan:web", SeederID: "envoy-2", Size: 50})
+	tracker.RegisterSeed("bbbb", swarm.SeedState{Label: "gitmirror:danlap:dan:web", SeederID: "envoy-2", Size: 50})
 	tracker.RegisterSeed("cccc", swarm.SeedState{Label: "firmware.bin", SeederID: "envoy-1", Size: 200})
 
 	src := Sources{
@@ -32,11 +32,11 @@ func TestSnapshotStatusSplitsByLabelPrefix(t *testing.T) {
 	}
 
 	s := SnapshotStatus(src)
-	if s.Payloads.Lode != 2 {
-		t.Errorf("expected 2 lode payloads (app-v2 + firmware), got %d", s.Payloads.Lode)
+	if s.Payloads.Payload != 2 {
+		t.Errorf("expected 2 payload payloads (app-v2 + firmware), got %d", s.Payloads.Payload)
 	}
-	if s.Payloads.Cairn != 1 {
-		t.Errorf("expected 1 cairn payload, got %d", s.Payloads.Cairn)
+	if s.Payloads.Gitmirror != 1 {
+		t.Errorf("expected 1 gitmirror payload, got %d", s.Payloads.Gitmirror)
 	}
 	// Both seeders are distinct envoys.
 	if s.EnvoysSeeding != 2 {

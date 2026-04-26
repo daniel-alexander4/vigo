@@ -271,9 +271,9 @@ func checkConfigDir(dir string) preStartCheck {
 }
 
 func checkConfigValidation(dir string) preStartCheck {
-	modulesDir := filepath.Join(dir, "stockpile", "stones")
+	modulesDir := filepath.Join(dir, "stockpile", "modules")
 	if _, err := os.Stat(modulesDir); err != nil {
-		return preStartCheck{"config_validation", "skip", "stones dir not found"}
+		return preStartCheck{"config_validation", "skip", "modules dir not found"}
 	}
 
 	var totalModules, totalErrors, totalWarnings int

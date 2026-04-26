@@ -57,7 +57,7 @@ vigocli ask "write a module for nginx with TLS"
 ### Pipe a config file for review
 
 ```bash
-vigocli ask < stockpile/stones/nginx.vgo
+vigocli ask < stockpile/modules/nginx.vgo
 ```
 
 The piped content is automatically prefixed with "Review this configuration:" before being sent to the AI.

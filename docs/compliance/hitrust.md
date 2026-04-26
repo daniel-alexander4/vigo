@@ -100,8 +100,8 @@ Vigo satisfies or provides evidence for **31 HITRUST CSF control references** ac
 ## Quick Start
 
 ```bash
-cp example-configs/stockpile/stones/compliance/hitrust/*.vgo.example /srv/vigo/worksite/stockpile/stones/
-for f in /srv/vigo/worksite/stockpile/stones/hitrust-*.vgo.example; do mv "$f" "${f%.example}"; done
+cp example-configs/stockpile/modules/compliance/hitrust/*.vgo.example /srv/vigo/worksite/stockpile/modules/
+for f in /srv/vigo/worksite/stockpile/modules/hitrust-*.vgo.example; do mv "$f" "${f%.example}"; done
 cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/worksite/stockpile/compliance-roles.vgo
 ```
 

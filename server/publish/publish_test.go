@@ -19,7 +19,7 @@ import (
 // withTestDirs temporarily overrides StockpileDir and StructureDir for testing,
 // restoring them when the test completes. The returned "stockpile" is actually
 // the worksite root — tests write files to it like they always did (modules/,
-// envoys/, roles/) and those paths are now mapped through to stockpile/stones/
+// envoys/, roles/) and those paths are now mapped through to stockpile/modules/
 // + scaffolding/ by this helper.
 func withTestDirs(t *testing.T) (stockpile, live string) {
 	t.Helper()
@@ -37,18 +37,18 @@ func withTestDirs(t *testing.T) (stockpile, live string) {
 		setTestDirs(origStockpile, origLive)
 	})
 
-	for _, sub := range []string{"stockpile/stones", "stockpile/templates", "stockpile/usercrates", "scaffolding/envoys", "scaffolding/roles"} {
+	for _, sub := range []string{"stockpile/modules", "stockpile/templates", "stockpile/usercrates", "scaffolding/envoys", "scaffolding/roles"} {
 		if err := os.MkdirAll(filepath.Join(worksite, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
 	// Return worksite as the first value so existing tests that write to
 	// filepath.Join(stockpile, "modules", ...) end up at worksite/modules/
-	// — but we also create symlinks so modules/ → stockpile/stones/ and
+	// — but we also create symlinks so modules/ → stockpile/modules/ and
 	// envoys/ → scaffolding/envoys/ from the test's POV.
 	// Simpler: return worksite directly and rely on tests using the new
 	// layout. But many tests don't know that, so we expose compat symlinks.
-	if err := os.Symlink(filepath.Join(worksite, "stockpile", "stones"), filepath.Join(worksite, "modules")); err != nil {
+	if err := os.Symlink(filepath.Join(worksite, "stockpile", "modules"), filepath.Join(worksite, "modules")); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(filepath.Join(worksite, "scaffolding", "envoys"), filepath.Join(worksite, "envoys")); err != nil {
@@ -135,7 +135,7 @@ name: risky
 resources:
   - name: run-something
     type: exec
-    command: "echo hello"
+    command: "filesync hello"
 `)
 	writeFile(t, filepath.Join(stockpile, "envoys", "all.vgo"), `
 envoys:
@@ -161,7 +161,7 @@ func TestPublish_SyncsFiles(t *testing.T) {
 		t.Error("expected files to be synced")
 	}
 
-	if _, err := os.Stat(filepath.Join(live, "stockpile", "stones", "nginx.vgo")); err != nil {
+	if _, err := os.Stat(filepath.Join(live, "stockpile", "modules", "nginx.vgo")); err != nil {
 		t.Error("nginx.vgo not synced to live modules/")
 	}
 	if _, err := os.Stat(filepath.Join(live, "scaffolding", "envoys", "web.vgo")); err != nil {
@@ -235,7 +235,7 @@ envoys:
 	// .live must contain the linted bytes — at minimum, the canonical
 	// Lint output. Round-trip stability is enough: if we lint the
 	// stockpile source ourselves and compare, .live should match.
-	livePath := filepath.Join(live, "stockpile", "stones", "users", "dan.vgo")
+	livePath := filepath.Join(live, "stockpile", "modules", "users", "dan.vgo")
 	liveBytes, err := os.ReadFile(livePath)
 	if err != nil {
 		t.Fatalf(".live dan.vgo missing: %v", err)
@@ -305,15 +305,15 @@ func TestPublish_RemovesFilesNotInProposed(t *testing.T) {
 	writeValidConfig(t, stockpile)
 
 	// Pre-populate live with an extra file.
-	os.MkdirAll(filepath.Join(live, "stockpile", "stones"), 0o755)
-	writeFile(t, filepath.Join(live, "stockpile", "stones", "old.vgo"), "old content")
+	os.MkdirAll(filepath.Join(live, "stockpile", "modules"), 0o755)
+	writeFile(t, filepath.Join(live, "stockpile", "modules", "old.vgo"), "old content")
 
 	_, err := Publish(noURLOpts())
 	if err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(live, "stockpile", "stones", "old.vgo")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(live, "stockpile", "modules", "old.vgo")); !os.IsNotExist(err) {
 		t.Error("old.vgo should have been removed from live")
 	}
 }
@@ -325,15 +325,15 @@ envoys:
   - match: "bad.example.com"
     modules: [nonexistent]
 `)
-	os.MkdirAll(filepath.Join(live, "stockpile", "stones"), 0o755)
-	writeFile(t, filepath.Join(live, "stockpile", "stones", "existing.vgo"), "keep me")
+	os.MkdirAll(filepath.Join(live, "stockpile", "modules"), 0o755)
+	writeFile(t, filepath.Join(live, "stockpile", "modules", "existing.vgo"), "keep me")
 
 	_, err := Publish(noURLOpts())
 	if err == nil {
 		t.Fatal("expected validation failure")
 	}
 
-	data, readErr := os.ReadFile(filepath.Join(live, "stockpile", "stones", "existing.vgo"))
+	data, readErr := os.ReadFile(filepath.Join(live, "stockpile", "modules", "existing.vgo"))
 	if readErr != nil {
 		t.Fatal("live file should still exist")
 	}
@@ -413,10 +413,10 @@ func TestDiff_DetectsChanges(t *testing.T) {
 	writeValidConfig(t, stockpile)
 
 	// Populate live with different content.
-	os.MkdirAll(filepath.Join(live, "stockpile", "stones"), 0o755)
-	writeFile(t, filepath.Join(live, "stockpile", "stones", "nginx.vgo"), "old content")
-	os.MkdirAll(filepath.Join(live, "stockpile", "stones"), 0o755)
-	writeFile(t, filepath.Join(live, "stockpile", "stones", "deleted.vgo"), "will be removed")
+	os.MkdirAll(filepath.Join(live, "stockpile", "modules"), 0o755)
+	writeFile(t, filepath.Join(live, "stockpile", "modules", "nginx.vgo"), "old content")
+	os.MkdirAll(filepath.Join(live, "stockpile", "modules"), 0o755)
+	writeFile(t, filepath.Join(live, "stockpile", "modules", "deleted.vgo"), "will be removed")
 
 	_, changed, removed, err := diffTrees(stockpile, live)
 	if err != nil {
@@ -630,8 +630,8 @@ resources:
     target_path: "/opt/app"
 `, srv.URL)
 	writeFile(t, filepath.Join(stockpile, "modules", "download.vgo"), badModule)
-	os.MkdirAll(filepath.Join(live, "stockpile", "stones"), 0o755)
-	writeFile(t, filepath.Join(live, "stockpile", "stones", "download.vgo"), badModule) // same content
+	os.MkdirAll(filepath.Join(live, "stockpile", "modules"), 0o755)
+	writeFile(t, filepath.Join(live, "stockpile", "modules", "download.vgo"), badModule) // same content
 
 	writeFile(t, filepath.Join(stockpile, "envoys", "all.vgo"), `
 envoys:

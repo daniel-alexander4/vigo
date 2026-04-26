@@ -92,24 +92,25 @@ enum Commands {
     Traits {
         collectors: Vec<String>,
     },
-    /// User-facing cairn inspection and recovery tree.
+    /// User-facing gitmirror inspection and recovery tree.
     /// Pure local state reads; does not start the daemon or touch the
-    /// network. Dispatched from `vigo cairn ...`.
-    Cairn {
+    /// network. Dispatched from `vigo swarm gitmirror ...`.
+    Gitmirror {
         args: Vec<String>,
     },
-    /// User-facing sigil key management + encrypted-directory verbs.
-    /// Dispatched from `vigo sigil ...`. Week 1 verbs are pure user-home
-    /// file operations; later weeks add session-helper and transport paths.
-    Sigil {
+    /// User-facing cryptsync key management + encrypted-directory verbs.
+    /// Dispatched from `vigo swarm cryptsync ...`. Week 1 verbs are pure
+    /// user-home file operations; later weeks add session-helper and
+    /// transport paths.
+    Cryptsync {
         args: Vec<String>,
     },
-    /// Hidden: sigil session helper daemon. Invoked by
-    /// `vigo sigil unlock` via `current_exe()` + `setsid()`; never by
-    /// a human. Reads the unwrapped age identity from stdin, binds
-    /// its Unix socket, serves DECRYPT/STATUS/LOCK until timeout or
-    /// parent-PID exit.
-    SigilSessionDaemon {
+    /// Hidden: cryptsync session helper daemon. Invoked by
+    /// `vigo swarm cryptsync unlock` via `current_exe()` + `setsid()`;
+    /// never by a human. Reads the unwrapped age identity from stdin,
+    /// binds its Unix socket, serves DECRYPT/STATUS/LOCK until timeout
+    /// or parent-PID exit.
+    CryptsyncSessionDaemon {
         args: Vec<String>,
     },
 }
@@ -269,14 +270,19 @@ fn parse_args() -> Result<Cli> {
             "traits" => {
                 Commands::Traits { collectors: positional[1..].to_vec() }
             }
-            "cairn" => {
-                Commands::Cairn { args: positional[1..].to_vec() }
-            }
-            "sigil" => {
-                Commands::Sigil { args: positional[1..].to_vec() }
-            }
-            "sigil-session-daemon" => {
-                Commands::SigilSessionDaemon { args: positional[1..].to_vec() }
+            "swarm" => match positional.get(1).map(|s| s.as_str()) {
+                Some("gitmirror") => Commands::Gitmirror { args: positional[2..].to_vec() },
+                Some("cryptsync") => Commands::Cryptsync { args: positional[2..].to_vec() },
+                Some(other) => bail!(
+                    "unknown swarm subcommand: {}\nExpected one of: gitmirror | cryptsync",
+                    other
+                ),
+                None => bail!(
+                    "vigo swarm requires a subcommand: gitmirror | cryptsync"
+                ),
+            },
+            "cryptsync-session-daemon" => {
+                Commands::CryptsyncSessionDaemon { args: positional[1..].to_vec() }
             }
             other => bail!("unknown command: {}\nRun with --help for usage", other),
         });
@@ -321,10 +327,10 @@ COMMANDS:
     version     Print agent version
     status      Show agent state (config, cached policy, pending results)
     traits      Print collected traits as JSON [COLLECTORS...]
-    cairn       Inspect + recover cairn mirrors on this envoy
-                  list | show | log | branches | peers | recover | recover-all
-    sigil       Manage sigil — per-user encrypted P2P directory
-                  init | enroll | status | unlock | lock | encrypt | decrypt | forget | reencrypt
+    swarm gitmirror     Inspect + recover gitmirror mirrors on this envoy
+                          list | show | log | branches | peers | recover | recover-all
+    swarm cryptsync     Manage cryptsync — per-user encrypted P2P directory
+                          init | enroll | status | unlock | lock | encrypt | decrypt | forget | reencrypt
 
 With no command, runs as a daemon.
 
@@ -933,6 +939,31 @@ fn print_trace(
 
 /// Run the daemon loop with polling + streaming modes.
 async fn run_daemon(cli: &Cli) -> Result<()> {
+    // Self-heal the systemd unit file at startup so envoys whose
+    // binary was deployed via a path that bypassed `update::apply`
+    // (manual `scp` + `systemctl restart`, package install, image
+    // build) still end up with the current template. Best-effort:
+    // we do NOT fail daemon startup on any error here — the agent
+    // can still run with a stale unit, the next restart just won't
+    // pick up new fields. Linux+systemd only; the helper internally
+    // skips on platforms without the unit path.
+    //
+    // Why here instead of just in `update::apply`: the parity gap
+    // surfaced on 2026-04-26 when girlslaptop's vigo-envoy.service
+    // shipped without `LimitNOFILE=65536`, the agent hit EMFILE in
+    // its swarm accept loop, and 836 GiB of syslog filled the
+    // disk. Update path *did* have the refresh, but the host's
+    // upgrade pathway didn't route through it. Calling on every
+    // daemon start closes the gap regardless of deployment route.
+    #[cfg(target_os = "linux")]
+    {
+        match bootstrap::systemd::refresh_unit_file_if_changed().await {
+            Ok(true) => info!("systemd unit refreshed on startup"),
+            Ok(false) => {} // already current, nothing to log
+            Err(e) => warn!(error = %e, "systemd unit refresh failed (non-fatal)"),
+        }
+    }
+
     let (_, priv_key) = auth::keypair::load_or_generate(&cli.data_dir)?;
     let envoy_id = load_envoy_id(&cli.data_dir)?;
     let (ca, cert, key) = resolve_tls_paths(cli, &cli.data_dir);
@@ -1035,56 +1066,56 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // Clean up any stale ephemeral SSH keys left by crashed Scrier sessions.
     vigo::tunnel::sshauth::cleanup_stale_keys();
 
-    // Cairn claims handle: shared between the swarm manager (reader
+    // Gitmirror claims handle: shared between the swarm manager (reader
     // via `.shared()`), the check-in handler (writer for server-
     // delivered claims), the swarm discovery listener (writer for
-    // LAN-ingested claims), and the cairn reactor (reader through
+    // LAN-ingested claims), and the gitmirror reactor (reader through
     // the receiver). Constructed here, before swarm discovery spawns,
     // so all of the above can share the same Arc.
-    let cairn_claims = vigo::cairn::receiver::ClaimsHandle::new();
+    let gitmirror_claims = vigo::swarm::gitmirror::receiver::ClaimsHandle::new();
 
-    // Cairn live on/off switch. Initial value comes from the cached
+    // Gitmirror live on/off switch. Initial value comes from the cached
     // policy bundle; the check-in loop re-reads after every accepted
     // bundle and calls `set` to propagate flips without a restart. All
-    // cairn consumers (discovery announcer, peer server handler,
+    // gitmirror consumers (discovery announcer, peer server handler,
     // reactor) consult this gate at their natural sample points.
-    let cairn_gate = vigo::cairn::Gate::new(
-        vigo::cairn::matchfile_enables_cairn(state_store.as_deref()),
+    let gitmirror_gate = vigo::swarm::gitmirror::Gate::new(
+        vigo::swarm::gitmirror::matchfile_enables_gitmirror(state_store.as_deref()),
     );
 
-    // Cairn LAN peer table + local info + pending claims. Always
+    // Gitmirror LAN peer table + local info + pending claims. Always
     // constructed so the gate can flip at runtime without restarting
     // the agent; the structures are inert while the gate is off (no
-    // writes to the peer table, no CAIRN / CAIRNCLAIM lines
-    // emitted, no `/cairn/push` accepted). Hostname read is a
+    // writes to the peer table, no GITMIRROR / GITMIRRORCLAIM lines
+    // emitted, no `/gitmirror/push` accepted). Hostname read is a
     // single cheap syscall so we do it unconditionally.
-    let cairn_peer_table = std::sync::Arc::new(vigo::cairn::peer_table::PeerTable::new());
-    let cairn_pending_claims =
-        std::sync::Arc::new(vigo::cairn::pending_claims::PendingClaims::new());
-    // Load the envoy's Ed25519 keypair for signing cairn multicast
-    // announcements. The verifying key is embedded in every CAIRN line
+    let gitmirror_peer_table = std::sync::Arc::new(vigo::swarm::gitmirror::peer_table::PeerTable::new());
+    let gitmirror_pending_claims =
+        std::sync::Arc::new(vigo::swarm::gitmirror::pending_claims::PendingClaims::new());
+    // Load the envoy's Ed25519 keypair for signing gitmirror multicast
+    // announcements. The verifying key is embedded in every GITMIRROR line
     // so receivers can verify the trailing SIG without needing a
     // separate pubkey-distribution channel. Trust-on-first-use cache
     // guards against later pubkey swaps by the same hostname.
-    let (cairn_verify_key, cairn_signing_key) =
+    let (gitmirror_verify_key, gitmirror_signing_key) =
         vigo::auth::keypair::load_or_generate(&cli.data_dir)?;
-    let cairn_pubkey_hex = hex::encode(cairn_verify_key.to_bytes());
-    let cairn_pubkey_cache = std::sync::Arc::new(
-        vigo::cairn::peer_pubkey_cache::PeerPubkeyCache::load_or_empty(),
+    let gitmirror_pubkey_hex = hex::encode(gitmirror_verify_key.to_bytes());
+    let gitmirror_pubkey_cache = std::sync::Arc::new(
+        vigo::swarm::gitmirror::peer_pubkey_cache::PeerPubkeyCache::load_or_empty(),
     );
-    let cairn_local_info = {
+    let gitmirror_local_info = {
         let hostname = std::fs::read_to_string("/etc/hostname")
             .unwrap_or_else(|_| "unknown".to_string())
             .trim()
             .to_string();
-        vigo::cairn::peer_table::LocalInfo {
+        vigo::swarm::gitmirror::peer_table::LocalInfo {
             hostname,
-            users: vigo::cairn::peer_table::local_human_users(),
+            users: vigo::swarm::gitmirror::peer_table::local_human_users(),
             tags: Vec::new(),
-            pubkey_hex: cairn_pubkey_hex,
+            pubkey_hex: gitmirror_pubkey_hex,
         }
     };
-    let cairn_signing_key = std::sync::Arc::new(cairn_signing_key);
+    let gitmirror_signing_key = std::sync::Arc::new(gitmirror_signing_key);
 
     // Spawn swarm peer server + multicast discovery for P2P blob distribution.
     // Build TLS certs for the swarm manager (shared with peer server).
@@ -1114,19 +1145,19 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                 let swarm_cancel = cancel.clone();
                 let pm = peer_map.clone();
                 let sm = shared_manifest.clone();
-                // Cairn server-side context for cross-subnet
+                // Gitmirror server-side context for cross-subnet
                 // push (Phase 7). Constructed unconditionally; the
-                // gate field is consulted by the `/cairn/push`
+                // gate field is consulted by the `/gitmirror/push`
                 // handler, which returns 403 while dormant.
-                let cairn_srv_ctx = Some(swarm::server::CairnServerCtx {
-                    claims: cairn_claims.clone(),
+                let gitmirror_srv_ctx = Some(swarm::server::GitmirrorServerCtx {
+                    claims: gitmirror_claims.clone(),
                     manifest: shared_manifest.clone(),
-                    local_hostname: cairn_local_info.hostname.clone(),
-                    gate: cairn_gate.clone(),
+                    local_hostname: gitmirror_local_info.hostname.clone(),
+                    gate: gitmirror_gate.clone(),
                 });
                 tokio::spawn(async move {
                     if let Err(e) = swarm::server::run(
-                        swarm_port, blobs_dir.clone(), tls_acceptor, bw_monitor, pm, sm, swarm_cancel, cairn_srv_ctx,
+                        swarm_port, blobs_dir.clone(), tls_acceptor, bw_monitor, pm, sm, swarm_cancel, gitmirror_srv_ctx,
                     ).await {
                         warn!(error = %e, "swarm peer server exited with error");
                     }
@@ -1143,13 +1174,13 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                         swarm_port,
                         cancel.clone(),
                         announce_signal.clone(),
-                        Some(cairn_peer_table.clone()),
-                        Some(cairn_local_info.clone()),
-                        Some(cairn_pending_claims.clone()),
-                        Some(cairn_claims.clone()),
-                        cairn_gate.clone(),
-                        Some(cairn_signing_key.clone()),
-                        Some(cairn_pubkey_cache.clone()),
+                        Some(gitmirror_peer_table.clone()),
+                        Some(gitmirror_local_info.clone()),
+                        Some(gitmirror_pending_claims.clone()),
+                        Some(gitmirror_claims.clone()),
+                        gitmirror_gate.clone(),
+                        Some(gitmirror_signing_key.clone()),
+                        Some(gitmirror_pubkey_cache.clone()),
                     );
                 }
             }
@@ -1160,7 +1191,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     }
 
     // Swarm download manager — long-lived coordinator for all P2P downloads.
-    // `cairn_claims` was constructed above so swarm discovery could
+    // `gitmirror_claims` was constructed above so swarm discovery could
     // share the same Arc for LAN claim ingest.
     let swarm_manager = swarm::manager::SwarmManager::spawn(
         shared_peer_map.clone(),
@@ -1168,42 +1199,42 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         state_store.clone(),
         swarm_tls.clone(),
         cancel.clone(),
-        Some(cairn_claims.shared()),
+        Some(gitmirror_claims.shared()),
         announce_signal.clone(),
     );
 
     // Echo daemon — per-user LAN-only directory sync. Piggybacks on the
     // swarm peer HTTPS server for content transport; uses its own multicast
     // group/port for peer discovery. No server involvement.
-    vigo::echo::spawn(swarm_tls.clone(), cancel.clone());
+    vigo::swarm::filesync::spawn(swarm_tls.clone(), cancel.clone());
 
-    // Sigil daemon — per-user always-encrypted P2P directory.
+    // Cryptsync daemon — per-user always-encrypted P2P directory.
     // Separate multicast group (224.0.0.44:1533) and separate peer
     // table from echo; no shared state. HTTPS push/pull routes
     // ride the same swarm peer server on port 1531. TLS certs feed
     // the watcher+pusher+cross_subnet_peers unicast; without them the
     // daemon still runs in passive mode (discovery + serves pulls).
-    vigo::sigil::spawn(swarm_tls.clone(), cancel.clone());
+    vigo::swarm::cryptsync::spawn(swarm_tls.clone(), cancel.clone());
 
-    // Cairn subsystem — git-commit-triggered repo sync over swarm.
+    // Gitmirror subsystem — git-commit-triggered repo sync over swarm.
     // Pass both halves of the receiver wiring: the claims handle (for
     // the per-envoy wanted-labels set) and the in-memory swarm manifest
     // (for resolving labels to blob shas inside the receiver tick).
     //
-    // The reactor is always spawned; its tick consults `cairn_gate`
+    // The reactor is always spawned; its tick consults `gitmirror_gate`
     // and runs the publish/receive work only while the gate is on. The
     // check-in loop flips the gate after every accepted policy bundle
     // so operators can enable/disable the subsystem without restarting
     // the agent.
-    vigo::cairn::spawn(
+    vigo::swarm::gitmirror::spawn(
         swarm_tls.clone(),
         cancel.clone(),
-        Some(cairn_claims.clone()),
+        Some(gitmirror_claims.clone()),
         Some(shared_manifest.clone()),
         state_store.clone(),
-        Some(cairn_peer_table.clone()),
-        Some(cairn_pending_claims.clone()),
-        cairn_gate.clone(),
+        Some(gitmirror_peer_table.clone()),
+        Some(gitmirror_pending_claims.clone()),
+        gitmirror_gate.clone(),
     );
 
     let cfg = checkin::loop_impl::LoopConfig {
@@ -1221,7 +1252,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         peer_map: Some(shared_peer_map.clone()),
         manifest: Some(shared_manifest.clone()),
         swarm_manager: Some(swarm_manager),
-        cairn_gate: Some(cairn_gate.clone()),
+        gitmirror_gate: Some(gitmirror_gate.clone()),
     };
 
     checkin::loop_impl::daemon_loop(cancel, &mut client, &executors, None, cfg).await
@@ -1561,23 +1592,23 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        Some(Commands::Cairn { args }) => {
-            // All vigo cairn subcommands are pure local state reads
+        Some(Commands::Gitmirror { args }) => {
+            // All vigo gitmirror subcommands are pure local state reads
             // and/or user-owned `git clone` spawns. Dispatcher lives
-            // in agent/src/cairn/cli.rs.
-            vigo::cairn::cli::run(args.clone())
+            // in agent/src/gitmirror/cli.rs.
+            vigo::swarm::gitmirror::cli::run(args.clone())
         }
 
-        Some(Commands::Sigil { args }) => {
-            // Sigil verbs. Week 1 (init/enroll/status) is pure
+        Some(Commands::Cryptsync { args }) => {
+            // Cryptsync verbs. Week 1 (init/enroll/status) is pure
             // user-home file ops; later weeks add session-helper IPC.
-            vigo::sigil::cli::run(args.clone())
+            vigo::swarm::cryptsync::cli::run(args.clone())
         }
 
-        Some(Commands::SigilSessionDaemon { args }) => {
-            // Hidden: sigil session helper daemon entry point.
-            // Not in `vigo --help`; invoked only by `vigo sigil unlock`.
-            vigo::sigil::session::daemon_main(args.clone()).await
+        Some(Commands::CryptsyncSessionDaemon { args }) => {
+            // Hidden: cryptsync session helper daemon entry point.
+            // Not in `vigo --help`; invoked only by `vigo cryptsync unlock`.
+            vigo::swarm::cryptsync::session::daemon_main(args.clone()).await
         }
 
         Some(Commands::Traits { collectors: args }) => {

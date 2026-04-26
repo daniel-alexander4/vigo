@@ -11,7 +11,7 @@ func TestExecWithoutGuard_IsError(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
-			{Name: "run-thing", Type: "exec", Attributes: map[string]any{"command": "echo hello"}},
+			{Name: "run-thing", Type: "exec", Attributes: map[string]any{"command": "filesync hello"}},
 		},
 	}
 
@@ -276,8 +276,8 @@ func TestMultipleResources_AllValidated(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "good-file", Type: "file", Attributes: map[string]any{"target_path": "/etc/foo", "content": "bar", "owner": "root", "group": "root", "mode": "0644"}},
-			{Name: "bad-exec", Type: "exec", Attributes: map[string]any{"command": "echo hello"}},
-			{Name: "good-exec", Type: "exec", Attributes: map[string]any{"command": "echo world", "unless": "test -f /tmp/done"}},
+			{Name: "bad-exec", Type: "exec", Attributes: map[string]any{"command": "filesync hello"}},
+			{Name: "good-exec", Type: "exec", Attributes: map[string]any{"command": "filesync world", "unless": "test -f /tmp/done"}},
 		},
 	}
 

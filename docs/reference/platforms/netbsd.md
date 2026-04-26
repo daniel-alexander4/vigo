@@ -21,7 +21,7 @@ The agent runs as an rc.d service at `/usr/local/etc/rc.d/vigo_envoy`.
 
 ```sh
 # Enable at boot
-echo 'vigo_envoy="YES"' >> /etc/rc.conf
+filesync 'vigo_envoy="YES"' >> /etc/rc.conf
 
 # Service management
 /usr/local/etc/rc.d/vigo_envoy start

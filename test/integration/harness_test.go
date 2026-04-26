@@ -126,16 +126,16 @@ func startServer(t *testing.T, modules map[string]string, envoysYAML string) *te
 	queries := db.New(testDB)
 	reg := registry.NewRegistry(queries)
 
-	// Build the worksite directory (0.29.0 layout): stockpile/stones/ for
+	// Build the worksite directory (0.29.0 layout): stockpile/modules/ for
 	// module definitions, scaffolding/ for matchfiles. Config extension is
 	// .vgo; .yaml is not recognized.
 	configDir := filepath.Join(t.TempDir(), "worksite")
-	stonesDir := filepath.Join(configDir, "stockpile", "stones")
+	modulesDir := filepath.Join(configDir, "stockpile", "modules")
 	scaffoldingDir := filepath.Join(configDir, "scaffolding")
-	os.MkdirAll(stonesDir, 0755)
+	os.MkdirAll(modulesDir, 0755)
 	os.MkdirAll(scaffoldingDir, 0755)
 	for name, content := range modules {
-		os.WriteFile(filepath.Join(stonesDir, name+".vgo"), []byte(content), 0644)
+		os.WriteFile(filepath.Join(modulesDir, name+".vgo"), []byte(content), 0644)
 	}
 	if envoysYAML != "" {
 		os.WriteFile(filepath.Join(scaffoldingDir, "envoys.vgo"), []byte(envoysYAML), 0644)

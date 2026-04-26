@@ -845,6 +845,6 @@ func colorBold(_ string) string {
 }
 
 func init() {
-	configTraceCmd.Flags().StringVar(&traceModuleFlag, "stone", "", "Filter trace to show only the branch for this stone (module)")
+	configTraceCmd.Flags().StringVar(&traceModuleFlag, "module", "", "Filter trace to show only the branch for this module")
 	configCmd.AddCommand(configTraceCmd)
 }

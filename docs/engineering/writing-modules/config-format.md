@@ -351,7 +351,7 @@ Compliance claims and waivers use **distinct filenames in distinct trees** — f
 
 **Cross-contamination is a hard error.** Putting `waivers.vgo` in stockpile, `compliance.vgo` in scaffolding, or a `waivers:` block inside `stockpile/compliance.vgo`, or a `compliance:` block inside `scaffolding/waivers.vgo` — all rejected by `vigocli config publish` with an actionable move hint, and rejected on reload if someone hand-edits `structure/`.
 
-**Claims** from a `stockpile/**/compliance.vgo` are unioned into every module defined anywhere beneath that file. A module at `stockpile/stones/users/dan.vgo` inherits claims from `stockpile/stones/users/compliance.vgo` AND from `stockpile/compliance.vgo` if both exist, plus whatever the module itself declares in its own inline `compliance:` block. All sources union with dedupe.
+**Claims** from a `stockpile/**/compliance.vgo` are unioned into every module defined anywhere beneath that file. A module at `stockpile/modules/users/dan.vgo` inherits claims from `stockpile/modules/users/compliance.vgo` AND from `stockpile/compliance.vgo` if both exist, plus whatever the module itself declares in its own inline `compliance:` block. All sources union with dedupe.
 
 **Waivers** apply only to envoys whose matchfile lives under the same scaffolding subtree. `scaffolding/customerA/waivers.vgo` waivers don't cross into `scaffolding/customerB/`. Waived controls count as "accepted" in compliance scoring and render with a distinct "waived" badge on dashboards — not hidden.
 
@@ -363,7 +363,7 @@ compliance:
 ```
 
 ```yaml
-# stockpile/stones/users/compliance.vgo — claims scoped to user stones
+# stockpile/modules/users/compliance.vgo — claims scoped to user modules
 compliance:
   cis: ["5.4.1"]
   nist-800-53: ["AC-3", "AC-6", "AC-6(1)", "IA-2", "IA-5"]
@@ -392,9 +392,9 @@ waivers:
 - `approved_by` — who approved (required)
 - `expires` — optional expiration date (YYYY-MM-DD). Expired waivers are automatically excluded.
 
-### Why compliance.vgo is a special filename under stockpile/stones/
+### Why compliance.vgo is a special filename under stockpile/modules/
 
-The module loader walks every `.vgo` file under `stockpile/stones/` and parses it as a module definition (requires `name:` and `resources:`). `compliance.vgo` has neither — it's a directory-level claim declaration with a `compliance:` block only. The loader and the publish-time linter both key off the literal filename `compliance.vgo` under `stockpile/` and route it to a separate claim-inheritance walker instead of the module parser. This is the only named exception in the module library.
+The module loader walks every `.vgo` file under `stockpile/modules/` and parses it as a module definition (requires `name:` and `resources:`). `compliance.vgo` has neither — it's a directory-level claim declaration with a `compliance:` block only. The loader and the publish-time linter both key off the literal filename `compliance.vgo` under `stockpile/` and route it to a separate claim-inheritance walker instead of the module parser. This is the only named exception in the module library.
 
 ### Rationale for the filename split
 
@@ -410,7 +410,7 @@ The only valid top-level keys in either file are `compliance:` and `waivers:`. A
 Existing deployments migrate automatically on first boot via `entrypoint.sh`:
 
 - `/srv/vigo/stockpile/` → `/srv/vigo/worksite/stockpile/` (if old layout exists)
-- `stockpile/modules/` → `stockpile/stones/`
+- `stockpile/modules/` → `stockpile/modules/`
 - `stockpile/.live/` → `worksite/structure/`
 - `stockpile/envoys.vgo`, `stockpile/roles.vgo`, `stockpile/common.vgo` → `scaffolding/`
 - `stockpile/compliance.vgo` containing a `waivers:` block → `scaffolding/waivers.vgo` (waivers side)

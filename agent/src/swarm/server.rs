@@ -35,7 +35,7 @@ use super::cache::BlobCache;
 use super::manifest::Manifest;
 use super::meta::chunks_for_size;
 use super::peermap::PeerMap;
-use crate::cairn::receiver::ClaimsHandle as CairnClaimsHandle;
+use crate::swarm::gitmirror::receiver::ClaimsHandle as GitmirrorClaimsHandle;
 
 /// Default swarm peer port.
 pub const DEFAULT_PORT: u16 = 1531;
@@ -50,27 +50,27 @@ struct ServerState {
     bandwidth: BandwidthMonitor,
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
-    /// Cairn server-side context for cross-subnet `/cairn/push`
-    /// handling (Phase 7). `None` when cairn is disabled on this
-    /// envoy — in which case the `/cairn/push` route returns
+    /// Gitmirror server-side context for cross-subnet `/gitmirror/push`
+    /// handling (Phase 7). `None` when gitmirror is disabled on this
+    /// envoy — in which case the `/gitmirror/push` route returns
     /// 403 regardless of sender identity, which is the correct
-    /// response for a dormant cairn subsystem.
-    cairn_ctx: Option<CairnServerCtx>,
+    /// response for a dormant gitmirror subsystem.
+    gitmirror_ctx: Option<GitmirrorServerCtx>,
 }
 
-/// Handles that the cairn push handler needs to validate and
+/// Handles that the gitmirror push handler needs to validate and
 /// accept an incoming bundle. Built once at swarm server startup and
 /// cloned into the per-request handler. The `gate` field is consulted
-/// on every `/cairn/push` request so enable/disable flips take
+/// on every `/gitmirror/push` request so enable/disable flips take
 /// effect without restarting the agent; when the gate is off the
 /// handler returns 403 just as it used to when this context itself
 /// was absent.
 #[derive(Clone)]
-pub struct CairnServerCtx {
-    pub claims: CairnClaimsHandle,
+pub struct GitmirrorServerCtx {
+    pub claims: GitmirrorClaimsHandle,
     pub manifest: Arc<Manifest>,
     pub local_hostname: String,
-    pub gate: crate::cairn::Gate,
+    pub gate: crate::swarm::gitmirror::Gate,
 }
 
 /// Run the swarm peer HTTPS server until cancellation.
@@ -82,7 +82,7 @@ pub async fn run(
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
     cancel: tokio_util::sync::CancellationToken,
-    cairn_ctx: Option<CairnServerCtx>,
+    gitmirror_ctx: Option<GitmirrorServerCtx>,
 ) -> Result<()> {
     let cache = BlobCache::new(blobs_dir).context("initializing swarm server blob cache")?;
 
@@ -92,7 +92,7 @@ pub async fn run(
         bandwidth,
         peer_map,
         manifest,
-        cairn_ctx,
+        gitmirror_ctx,
     });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -227,7 +227,7 @@ async fn handle_request(
 
         // Pre-flight disk-pressure probe — senders ask "is the
         // filesystem where my push will land >10% free?" before
-        // committing bytes. Query: ?for=<swarm|sigil|cairn|echo>[&user=...].
+        // committing bytes. Query: ?for=<swarm|cryptsync|gitmirror|filesync>[&user=...].
         (&Method::GET, "/health/storage") => {
             handle_health_storage(req.uri().query().unwrap_or(""))
         }
@@ -254,79 +254,79 @@ async fn handle_request(
             tokio::task::block_in_place(|| handle_blob_request(p, inm.as_deref(), state))
         }
 
-        // Echo: serve raw file bytes from a user's ~/echo/ directory.
-        // /echo/{user}/{filename}
-        (&Method::GET, p) if p.starts_with("/echo/") => {
-            tokio::task::block_in_place(|| crate::echo::server::handle(p))
+        // Filesync: serve raw file bytes from a user's ~/filesync/ directory.
+        // /filesync/{user}/{filename}
+        (&Method::GET, p) if p.starts_with("/swarm/filesync/") => {
+            tokio::task::block_in_place(|| crate::swarm::filesync::server::handle(p))
         }
 
-        // Echo cross-subnet announce. Source envoys POST their
+        // Filesync cross-subnet announce. Source envoys POST their
         // Announcement JSON here (configured via `cross_subnet_peers:` in
-        // `~<user>/.echo/config.yaml`). The handler resolves the
+        // `~<user>/.filesync/config.yaml`). The handler resolves the
         // sender's peer address from the TCP connection and feeds the
         // announcement into the same reconciler path that multicast
-        // uses. Returns 503 if echo isn't running on this envoy.
-        (&Method::POST, "/echo/announce") => {
+        // uses. Returns 503 if filesync isn't running on this envoy.
+        (&Method::POST, "/swarm/filesync/announce") => {
             handle_echo_announce(req, peer_addr).await
         }
 
-        // Cairn cross-subnet push (Phase 7). Source envoys POST
-        // a bundle directly to this endpoint when a `.cairn.yaml`
+        // Gitmirror cross-subnet push (Phase 7). Source envoys POST
+        // a bundle directly to this endpoint when a `.gitmirror.yaml`
         // sidecar lists an explicit `cross_subnet_mirrors:` target. The
         // handler validates the sender, writes the blob to the local
         // swarm cache, injects a manifest entry, and ingests a LAN
-        // claim so the cairn receiver picks it up on the next
+        // claim so the gitmirror receiver picks it up on the next
         // tick — same path as a LAN-discovered mirror.
-        (&Method::POST, p) if p.starts_with("/cairn/push/") => {
-            handle_cairn_push(p, req, state).await
+        (&Method::POST, p) if p.starts_with("/swarm/gitmirror/push/") => {
+            handle_gitmirror_push(p, req, state).await
         }
 
-        // Sigil: pull ciphertext from a user's ~/sigil/.
-        // Symmetric with echo's pull but under /sigil/pull/.
-        (&Method::GET, p) if p.starts_with("/sigil/pull/") => {
-            tokio::task::block_in_place(|| crate::sigil::server::handle_pull(p))
+        // Cryptsync: pull ciphertext from a user's ~/cryptsync/.
+        // Symmetric with filesync's pull but under /cryptsync/pull/.
+        (&Method::GET, p) if p.starts_with("/swarm/cryptsync/pull/") => {
+            tokio::task::block_in_place(|| crate::swarm::cryptsync::server::handle_pull(p))
         }
 
-        // Sigil: receive a ciphertext blob from a peer and
-        // write it into the target user's ~/sigil/. 1 GiB cap.
-        (&Method::POST, p) if p.starts_with("/sigil/push/") => {
-            crate::sigil::server::handle_push(p, req).await
+        // Cryptsync: receive a ciphertext blob from a peer and
+        // write it into the target user's ~/cryptsync/. 1 GiB cap.
+        (&Method::POST, p) if p.starts_with("/swarm/cryptsync/push/") => {
+            crate::swarm::cryptsync::server::handle_push(p, req).await
         }
 
-        // Sigil: cross-subnet unicast announcement from a peer
+        // Cryptsync: cross-subnet unicast announcement from a peer
         // listed in some local user's `cross_subnet_peers:`. 128 KiB cap.
-        // Feeds the sigil reconciler's inbound channel.
-        (&Method::POST, "/sigil/announce") => {
-            crate::sigil::server::handle_announce(req, peer_addr).await
+        // Feeds the cryptsync reconciler's inbound channel.
+        (&Method::POST, "/swarm/cryptsync/announce") => {
+            crate::swarm::cryptsync::server::handle_announce(req, peer_addr).await
         }
 
-        // Sigil: receive a signed DELETE envelope from a peer.
+        // Cryptsync: receive a signed DELETE envelope from a peer.
         // Records a tombstone locally and removes the local file.
-        (&Method::POST, p) if p.starts_with("/sigil/tombstones/") => {
-            crate::sigil::server::handle_tombstone_delete(p, req, peer_addr).await
+        (&Method::POST, p) if p.starts_with("/swarm/cryptsync/tombstones/") => {
+            crate::swarm::cryptsync::server::handle_tombstone_delete(p, req, peer_addr).await
         }
 
-        // Sigil: catch-up pull of the full tombstone list for a user.
+        // Cryptsync: catch-up pull of the full tombstone list for a user.
         // Returns JSON of the TombstoneTable; peers use this after seeing
         // an announcement digest that differs from their own view.
-        (&Method::GET, p) if p.starts_with("/sigil/tombstones/") => {
-            tokio::task::block_in_place(|| crate::sigil::server::handle_tombstones_list(p))
+        (&Method::GET, p) if p.starts_with("/swarm/cryptsync/tombstones/") => {
+            tokio::task::block_in_place(|| crate::swarm::cryptsync::server::handle_tombstones_list(p))
         }
 
-        // Sigil: receive a signed LEAVE envelope from a peer that is
+        // Cryptsync: receive a signed LEAVE envelope from a peer that is
         // unenrolling. Verifies the signer is the subject, then drops
         // the pubkey from the peer table, regenerates recipients.txt,
         // drops the reencrypt.pending sentinel, and records the LEAVE.
-        (&Method::POST, p) if p.starts_with("/sigil/leaves/") => {
-            crate::sigil::server::handle_leave(p, req, peer_addr).await
+        (&Method::POST, p) if p.starts_with("/swarm/cryptsync/leaves/") => {
+            crate::swarm::cryptsync::server::handle_leave(p, req, peer_addr).await
         }
 
-        // Sigil: catch-up pull of the full leaves table for a user.
+        // Cryptsync: catch-up pull of the full leaves table for a user.
         // Returns JSON of the LeavesTable; peers use this after seeing
         // an announcement leaves_digest that differs from their own.
         // Mirrors the tombstones GET handler.
-        (&Method::GET, p) if p.starts_with("/sigil/leaves/") => {
-            tokio::task::block_in_place(|| crate::sigil::server::handle_leaves_list(p))
+        (&Method::GET, p) if p.starts_with("/swarm/cryptsync/leaves/") => {
+            tokio::task::block_in_place(|| crate::swarm::cryptsync::server::handle_leaves_list(p))
         }
 
         _ => not_found(),
@@ -591,13 +591,13 @@ fn parse_query(q: &str) -> std::collections::HashMap<String, String> {
     out
 }
 
-// ── Cairn cross-subnet push handler (Phase 7) ──────────────────────────
+// ── Gitmirror cross-subnet push handler (Phase 7) ──────────────────────────
 
-/// Handle `POST /cairn/push/<label>` — the cross-subnet direct
+/// Handle `POST /gitmirror/push/<label>` — the cross-subnet direct
 /// push endpoint.
 ///
-/// Path format: `/cairn/push/<url-encoded-label>`. The label is
-/// a full content-seed label `cairn:<seeder>:<user>:<project>`;
+/// Path format: `/gitmirror/push/<url-encoded-label>`. The label is
+/// a full content-seed label `gitmirror:<seeder>:<user>:<project>`;
 /// we accept it url-encoded (colons percent-escaped) or raw.
 ///
 /// Required headers:
@@ -610,51 +610,51 @@ fn parse_query(q: &str) -> std::collections::HashMap<String, String> {
 ///
 /// Validation order (each rejection returns a specific 4xx):
 ///
-/// 1. Cairn enabled on this envoy (`cairn_ctx.is_some()`)
+/// 1. Gitmirror enabled on this envoy (`gitmirror_ctx.is_some()`)
 /// 2. Label parses into (seeder, user, project) segments
 /// 3. Label's `<seeder>` segment equals `X-Vigo-Seeder`
 /// 4. Local user from `<user>` segment exists
-/// 5. Body size ≤ [`crate::cairn::MAX_BUNDLE_SIZE`]
+/// 5. Body size ≤ [`crate::swarm::gitmirror::MAX_BUNDLE_SIZE`]
 /// 6. Body sha256 matches `X-Vigo-Blob-Sha256`
 ///
 /// On accept:
 ///
 /// - Body is written atomically to the blob cache at the computed
 ///   sha path.
-/// - A manifest entry is recorded locally so the cairn
+/// - A manifest entry is recorded locally so the gitmirror
 ///   receiver's next tick can resolve the label → blob.
 /// - The `ClaimsHandle` receives an `ingest_lan_claim(label,
 ///   sender, true, now)` so the reactor picks it up on its next
 ///   tick.
 ///
 /// Returns 200 OK with a short JSON body on success.
-async fn handle_cairn_push(
+async fn handle_gitmirror_push(
     path: &str,
     req: Request<hyper::body::Incoming>,
     state: &ServerState,
 ) -> Response<Full<Bytes>> {
-    // 1. Cairn must be enabled on this envoy. The context is
+    // 1. Gitmirror must be enabled on this envoy. The context is
     // always present on new builds, but the gate may be off — both
     // conditions return the same 403 to the caller.
-    let ctx = match state.cairn_ctx.as_ref() {
+    let ctx = match state.gitmirror_ctx.as_ref() {
         Some(c) => c.clone(),
-        None => return forbidden("cairn not enabled on this envoy"),
+        None => return forbidden("gitmirror not enabled on this envoy"),
     };
     if !ctx.gate.enabled() {
-        return forbidden("cairn not enabled on this envoy");
+        return forbidden("gitmirror not enabled on this envoy");
     }
 
     // 2. Extract the label from the URL path.
-    let raw_label = path.trim_start_matches("/cairn/push/");
+    let raw_label = path.trim_start_matches("/swarm/gitmirror/push/");
     let label = match url_decode(raw_label) {
         Some(l) => l,
         None => return bad_request("malformed label url-encoding"),
     };
 
     // 3. Parse label segments.
-    let (seeder, user, project) = match parse_cairn_label(&label) {
+    let (seeder, user, project) = match parse_gitmirror_label(&label) {
         Some(t) => t,
-        None => return bad_request("malformed cairn label"),
+        None => return bad_request("malformed gitmirror label"),
     };
 
     // 4. Read required headers.
@@ -683,7 +683,7 @@ async fn handle_cairn_push(
         return bad_request("X-Vigo-Blob-Sha256 is not a 64-char hex sha256");
     }
 
-    // 7. Local user must exist. Cairn won't materialize a
+    // 7. Local user must exist. Gitmirror won't materialize a
     // mirror for a user with no local account on this envoy.
     if crate::platform::users::lookup_user(&user).is_none() {
         return forbidden(&format!("user '{}' does not exist on this envoy", user));
@@ -694,10 +694,10 @@ async fn handle_cairn_push(
     // 7a. Receiver-side disk-pressure guard. The sender probes before
     // push, but the probe is cached 60 s — a concurrent writer could
     // have pushed free-pct below threshold in that window. Cheap
-    // statvfs on the cairn mirror mountpoint; reject 507 before
+    // statvfs on the gitmirror mirror mountpoint; reject 507 before
     // reading a byte of the bundle body.
-    if super::peer_health::is_self_pressured(&super::peer_health::Purpose::Cairn) {
-        return insufficient_storage("cairn mirror filesystem under disk pressure");
+    if super::peer_health::is_self_pressured(&super::peer_health::Purpose::Gitmirror) {
+        return insufficient_storage("gitmirror mirror filesystem under disk pressure");
     }
 
     // 8-10. Stream the body straight to disk under .tmp while hashing
@@ -749,11 +749,11 @@ async fn handle_cairn_push(
             if let Ok(data) = frame.into_data() {
                 let chunk: &[u8] = &data;
                 total = total.saturating_add(chunk.len() as u64);
-                if total > crate::cairn::MAX_BUNDLE_SIZE {
+                if total > crate::swarm::gitmirror::MAX_BUNDLE_SIZE {
                     let _ = std::fs::remove_file(&tmp_path);
                     return payload_too_large(&format!(
                         "bundle size exceeds MAX_BUNDLE_SIZE ({} GiB)",
-                        crate::cairn::MAX_BUNDLE_SIZE / (1024 * 1024 * 1024),
+                        crate::swarm::gitmirror::MAX_BUNDLE_SIZE / (1024 * 1024 * 1024),
                     ));
                 }
                 hasher.update(chunk);
@@ -795,12 +795,12 @@ async fn handle_cairn_push(
         warn!(
             error = %e,
             path = %final_path.display(),
-            "cairn push: failed to move blob into place"
+            "gitmirror push: failed to move blob into place"
         );
         return service_unavailable(&format!("failed to write blob: {}", e));
     }
 
-    // 11. Inject a manifest entry so the cairn receiver reactor
+    // 11. Inject a manifest entry so the gitmirror receiver reactor
     // can resolve the label → blob. The seeder_address field is
     // set to the literal "direct-push" to distinguish manual
     // injections from manifest entries that came through normal
@@ -817,9 +817,9 @@ async fn handle_cairn_push(
     );
 
     // 12. Ingest the LAN claim so the receiver picks it up on
-    // its next tick. Same path as a CAIRNCLAIM multicast —
+    // its next tick. Same path as a GITMIRRORCLAIM multicast —
     // the source hostname is used for dedup keying.
-    let now = crate::cairn::state::unix_seconds_now();
+    let now = crate::swarm::gitmirror::state::unix_seconds_now();
     ctx.claims.ingest_lan_claim(&label, &seeder, true, now);
 
     info!(
@@ -827,22 +827,22 @@ async fn handle_cairn_push(
         seeder = %seeder,
         size = body_len,
         sha = %&actual_sha[..12.min(actual_sha.len())],
-        "cairn push: accepted bundle"
+        "gitmirror push: accepted bundle"
     );
 
     ok_json(r#"{"status":"accepted"}"#)
 }
 
-/// Handle `POST /echo/announce` — cross-subnet unicast announcements
-/// from peers listed in a user's `~<user>/.echo/config.yaml` →
-/// `cross_subnet_peers:`. The body is a JSON-serialized echo Announcement.
+/// Handle `POST /filesync/announce` — cross-subnet unicast announcements
+/// from peers listed in a user's `~<user>/.filesync/config.yaml` →
+/// `cross_subnet_peers:`. The body is a JSON-serialized filesync Announcement.
 /// The sender's TCP peer address is used as the reconciler's peer (same
 /// model as multicast, where the UDP source IP is used), so subsequent
-/// `GET /echo/<user>/<file>` fetches go back to the real remote host
+/// `GET /filesync/<user>/<file>` fetches go back to the real remote host
 /// rather than a self-reported hostname.
 ///
 /// mTLS already attests the sender at the transport layer; the
-/// authorization question here is "is echo accepting work?" — if
+/// authorization question here is "is filesync accepting work?" — if
 /// the daemon hasn't spawned (no TLS certs on this envoy, for example),
 /// return 503. Otherwise feed the announcement into the reconciler path.
 async fn handle_echo_announce(
@@ -862,26 +862,26 @@ async fn handle_echo_announce(
     };
     let body_bytes = collected.to_bytes();
     if body_bytes.len() > MAX_ANNOUNCE_BYTES {
-        return payload_too_large("echo announcement exceeds size limit");
+        return payload_too_large("filesync announcement exceeds size limit");
     }
 
-    let announcement: crate::echo::state::Announcement =
+    let announcement: crate::swarm::filesync::state::Announcement =
         match serde_json::from_slice(&body_bytes) {
             Ok(a) => a,
             Err(e) => return bad_request(&format!("malformed announcement: {}", e)),
         };
 
-    if crate::echo::submit_announcement(peer_addr, announcement) {
+    if crate::swarm::filesync::submit_announcement(peer_addr, announcement) {
         ok_json(r#"{"status":"accepted"}"#)
     } else {
-        service_unavailable("echo daemon not running on this envoy")
+        service_unavailable("filesync daemon not running on this envoy")
     }
 }
 
-/// Parse a cairn content-seed label `cairn:<seeder>:<user>:<project>`
+/// Parse a gitmirror content-seed label `gitmirror:<seeder>:<user>:<project>`
 /// into its three segments. Returns `None` for malformed labels.
-fn parse_cairn_label(label: &str) -> Option<(String, String, String)> {
-    let rest = label.strip_prefix("cairn:")?;
+fn parse_gitmirror_label(label: &str) -> Option<(String, String, String)> {
+    let rest = label.strip_prefix("gitmirror:")?;
     let mut parts = rest.splitn(3, ':');
     let seeder = parts.next()?;
     let user = parts.next()?;
@@ -992,7 +992,7 @@ mod tests {
             bandwidth: BandwidthMonitor::new(),
             peer_map: Arc::new(PeerMap::new()),
             manifest,
-            cairn_ctx: None,
+            gitmirror_ctx: None,
         })
     }
 
@@ -1002,45 +1002,45 @@ mod tests {
         assert_eq!(build_meta_etag(42, 1000), r#""42-1000""#);
     }
 
-    // ── Phase 7 cairn push pure helpers ────────────────────
+    // ── Phase 7 gitmirror push pure helpers ────────────────────
 
     #[test]
-    fn parse_cairn_label_accepts_valid_shape() {
-        let (s, u, p) = parse_cairn_label("cairn:danlap:dan:vigo-web").unwrap();
+    fn parse_gitmirror_label_accepts_valid_shape() {
+        let (s, u, p) = parse_gitmirror_label("gitmirror:danlap:dan:vigo-web").unwrap();
         assert_eq!(s, "danlap");
         assert_eq!(u, "dan");
         assert_eq!(p, "vigo-web");
     }
 
     #[test]
-    fn parse_cairn_label_accepts_project_with_dashes_and_dots() {
-        let (_, _, p) = parse_cairn_label("cairn:h:u:my-repo.v2").unwrap();
+    fn parse_gitmirror_label_accepts_project_with_dashes_and_dots() {
+        let (_, _, p) = parse_gitmirror_label("gitmirror:h:u:my-repo.v2").unwrap();
         assert_eq!(p, "my-repo.v2");
     }
 
     #[test]
-    fn parse_cairn_label_rejects_missing_prefix() {
-        assert!(parse_cairn_label("danlap:dan:vigo-web").is_none());
+    fn parse_gitmirror_label_rejects_missing_prefix() {
+        assert!(parse_gitmirror_label("danlap:dan:vigo-web").is_none());
     }
 
     #[test]
-    fn parse_cairn_label_rejects_too_few_segments() {
-        assert!(parse_cairn_label("cairn:dan:vigo-web").is_none());
-        assert!(parse_cairn_label("cairn:danlap").is_none());
+    fn parse_gitmirror_label_rejects_too_few_segments() {
+        assert!(parse_gitmirror_label("gitmirror:dan:vigo-web").is_none());
+        assert!(parse_gitmirror_label("gitmirror:danlap").is_none());
     }
 
     #[test]
-    fn parse_cairn_label_rejects_empty_segment() {
-        assert!(parse_cairn_label("cairn::dan:vigo-web").is_none());
-        assert!(parse_cairn_label("cairn:dan::vigo-web").is_none());
-        assert!(parse_cairn_label("cairn:dan:user:").is_none());
+    fn parse_gitmirror_label_rejects_empty_segment() {
+        assert!(parse_gitmirror_label("gitmirror::dan:vigo-web").is_none());
+        assert!(parse_gitmirror_label("gitmirror:dan::vigo-web").is_none());
+        assert!(parse_gitmirror_label("gitmirror:dan:user:").is_none());
     }
 
     #[test]
     fn url_decode_handles_percent_colons() {
         assert_eq!(
-            url_decode("cairn%3Adanlap%3Adan%3Avigo-web").unwrap(),
-            "cairn:danlap:dan:vigo-web",
+            url_decode("gitmirror%3Adanlap%3Adan%3Avigo-web").unwrap(),
+            "gitmirror:danlap:dan:vigo-web",
         );
     }
 
@@ -1054,8 +1054,8 @@ mod tests {
         // If someone passes the label without percent-encoding,
         // we still handle it (colons are legal in URL paths).
         assert_eq!(
-            url_decode("cairn:danlap:dan:vigo-web").unwrap(),
-            "cairn:danlap:dan:vigo-web",
+            url_decode("gitmirror:danlap:dan:vigo-web").unwrap(),
+            "gitmirror:danlap:dan:vigo-web",
         );
     }
 

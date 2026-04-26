@@ -1,7 +1,7 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Swarm</h1>
-    <p>Envoy peer-to-peer substrate. Lode, Cairn, Echo, and Sigil all ride on this transport. <a href="/docs/engineering/subsystems/swarm">What is this?</a></p>
+    <p>Envoy peer-to-peer substrate. Payload, Gitmirror, Filesync, and Cryptsync all ride on this transport. <a href="/docs/engineering/subsystems/swarm">What is this?</a></p>
 </div>
 
 {{if not .Status.GeneratedAt.IsZero}}
@@ -26,7 +26,7 @@
 
 <div class="card mt-2">
     <h2 style="margin:0 0 16px;">Content Subsystems</h2>
-    <p style="color:var(--subtext0);margin-bottom:12px;">Active payloads by subsystem, counted server-side from the manifest CRDT. Echo and Sigil are per-user content and don't surface as payload counts here — use their dedicated pages for user-level detail.</p>
+    <p style="color:var(--subtext0);margin-bottom:12px;">Active payloads by subsystem, counted server-side from the manifest CRDT. Filesync and Cryptsync are per-user content and don't surface as payload counts here — use their dedicated pages for user-level detail.</p>
     <div class="table-container">
         <table class="table">
             <thead>
@@ -38,24 +38,24 @@
             </thead>
             <tbody>
                 <tr>
-                    <td><strong>Lode</strong> <span style="color:var(--subtext0);">— admin-pushed payloads</span></td>
-                    <td>{{.Status.Payloads.Lode}}</td>
-                    <td><a href="/lode">/lode</a></td>
+                    <td><strong>Payload</strong> <span style="color:var(--subtext0);">— admin-pushed payloads</span></td>
+                    <td>{{.Status.Payloads.Payload}}</td>
+                    <td><a href="/swarm/payload">/payload</a></td>
                 </tr>
                 <tr>
-                    <td><strong>Cairn</strong> <span style="color:var(--subtext0);">— personal-DR repo mirrors</span></td>
-                    <td>{{.Status.Payloads.Cairn}}</td>
-                    <td><a href="/cairn">/cairn</a></td>
+                    <td><strong>Gitmirror</strong> <span style="color:var(--subtext0);">— personal-DR repo mirrors</span></td>
+                    <td>{{.Status.Payloads.Gitmirror}}</td>
+                    <td><a href="/swarm/gitmirror">/gitmirror</a></td>
                 </tr>
                 <tr>
-                    <td><strong>Echo</strong> <span style="color:var(--subtext0);">— per-user plaintext sync</span></td>
+                    <td><strong>Filesync</strong> <span style="color:var(--subtext0);">— per-user plaintext sync</span></td>
                     <td>—</td>
-                    <td><a href="/echo">/echo</a></td>
+                    <td><a href="/swarm/filesync">/filesync</a></td>
                 </tr>
                 <tr>
-                    <td><strong>Sigil</strong> <span style="color:var(--subtext0);">— per-user encrypted sync</span></td>
+                    <td><strong>Cryptsync</strong> <span style="color:var(--subtext0);">— per-user encrypted sync</span></td>
                     <td>—</td>
-                    <td><a href="/sigil">/sigil</a></td>
+                    <td><a href="/swarm/cryptsync">/cryptsync</a></td>
                 </tr>
             </tbody>
         </table>

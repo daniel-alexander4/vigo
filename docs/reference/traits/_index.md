@@ -3,7 +3,7 @@
 
 Traits are auto-discovered facts about a managed machine (envoy). The Vigo agent ships 40 built-in trait collectors covering OS identity, hardware, network, installed and running packages, security posture, certificates, listening services, kernel module attestation, swarm participation, and CVE × running-binary correlation. Most run cross-platform on Linux, macOS, FreeBSD, OpenBSD, and NetBSD; six are Linux-only (`tpm`, `secureboot`, `package_source_audit`, `kernel_module_attestation`, `listeners`, `cve_running_correlation`); 13 run on Windows. Traits are reported to the server on each check-in and are available in `.vgo` config files for `when:` conditional expressions and Go template rendering (via `.Traits`).
 
-Each collector runs in parallel under a per-collector timeout (5s default; up to 30s for `cve_running_correlation` and 60s for `security_scan`). Failed collectors are logged and skipped without affecting other collectors. Collectors are classified as **volatile** (run every cycle: time, uptime, loadavg, mountpoints, filesystem, users, memory, swap, ports, swarm, swarm_seeds, cairn), **stable** (cached across ~12 cycles: everything else), or **periodic** (cached across ~hourly intervals: `package_updates`, `cloud`, `cve_running_correlation`).
+Each collector runs in parallel under a per-collector timeout (5s default; up to 30s for `cve_running_correlation` and 60s for `security_scan`). Failed collectors are logged and skipped without affecting other collectors. Collectors are classified as **volatile** (run every cycle: time, uptime, loadavg, mountpoints, filesystem, users, memory, swap, ports, swarm, swarm_seeds, gitmirror), **stable** (cached across ~12 cycles: everything else), or **periodic** (cached across ~hourly intervals: `package_updates`, `cloud`, `cve_running_correlation`).
 
 ## Trait Collectors
 
@@ -44,7 +44,7 @@ The trait paths and structure are identical across platforms so `when:` expressi
 | Display | `display` | Display server detection (X11, Wayland, both, none) | [display.md](display.md) |
 | Swarm Cache | `swarm` | Cached blobs, chunk sources, per-chunk timing, download duration | [swarm.md](swarm.md) |
 | Swarm Seeds | `swarm_seeds` | Seed files and broken manifests for envoy-originated distribution | — |
-| Cairn | `cairn` | Publisher-side state (active sources, per-source sha, discovery/publish errors) plus receiver-side materialized mirrors | [cairn.md](cairn.md) |
+| Gitmirror | `gitmirror` | Publisher-side state (active sources, per-source sha, discovery/publish errors) plus receiver-side materialized mirrors | [gitmirror.md](gitmirror.md) |
 | Package Source Audit | `package_source_audit` | Linux-only: apt/yum/dnf package sources with URL (credentials stripped), suite, components, enabled state | [package_source_audit.md](package_source_audit.md) |
 | Kernel Module Attestation | `kernel_module_attestation` | Linux-only: loaded kernel modules with signature status (signed / unsigned / bad_signature) from `/proc/modules` + sysfs taint | [kernel_module_attestation.md](kernel_module_attestation.md) |
 | Listeners | `listeners` | Linux-only: per-listener rows correlating `/proc/net/tcp*` LISTEN sockets with owning PID, command, and binary via `/proc/*/fd/*` | [listeners.md](listeners.md) |

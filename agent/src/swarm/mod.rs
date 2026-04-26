@@ -16,8 +16,11 @@
 pub mod bandwidth;
 pub mod bitmap;
 pub mod cache;
+pub mod cryptsync;
 pub mod discovery;
 pub mod download;
+pub mod filesync;
+pub mod gitmirror;
 pub mod manager;
 pub mod manifest;
 pub mod meta;

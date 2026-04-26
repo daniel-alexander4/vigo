@@ -18,7 +18,7 @@
 //! - `VIGO_SEEDS_DIR`     → [`default_seeds_dir`]
 //! - `VIGO_GRAVEYARD_DIR` → [`default_graveyard_dir`]
 //! - `VIGO_REJECTED_DIR`  → [`default_rejected_dir`]
-//! - `VIGO_ECHO_DIR`  → [`default_echo_dir`]
+//! - `VIGO_FILESYNC_DIR`  → [`default_filesync_dir`]
 //! - `VIGO_EXECUTORS_DIR` → [`default_executors_dir`]
 //!
 //! These are NOT part of the user-facing configuration surface. They
@@ -193,42 +193,42 @@ pub fn default_rejected_dir() -> PathBuf {
     default_data_dir().join("swarm").join("seed").join("admin_rejected")
 }
 
-/// Default echo state directory (per-user snapshots + tombstones).
+/// Default filesync state directory (per-user snapshots + tombstones).
 #[cfg(all(unix, not(target_os = "macos")))]
-pub fn default_echo_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_ECHO_DIR") { return p; }
-    PathBuf::from("/var/lib/vigo/echo")
+pub fn default_filesync_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_FILESYNC_DIR") { return p; }
+    PathBuf::from("/var/lib/vigo/swarm/filesync")
 }
 
 #[cfg(target_os = "macos")]
-pub fn default_echo_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_ECHO_DIR") { return p; }
-    PathBuf::from("/Library/Vigo/echo")
+pub fn default_filesync_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_FILESYNC_DIR") { return p; }
+    PathBuf::from("/Library/Vigo/swarm/filesync")
 }
 
 #[cfg(windows)]
-pub fn default_echo_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_ECHO_DIR") { return p; }
-    default_data_dir().join("echo")
+pub fn default_filesync_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_FILESYNC_DIR") { return p; }
+    default_data_dir().join("swarm").join("filesync")
 }
 
-/// Default cairn state directory (last_seeded_sha, bundle tmp dir).
+/// Default gitmirror state directory (last_seeded_sha, bundle tmp dir).
 #[cfg(all(unix, not(target_os = "macos")))]
-pub fn default_cairn_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_CAIRN_DIR") { return p; }
-    PathBuf::from("/var/lib/vigo/cairn")
+pub fn default_gitmirror_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_GITMIRROR_DIR") { return p; }
+    PathBuf::from("/var/lib/vigo/swarm/gitmirror")
 }
 
 #[cfg(target_os = "macos")]
-pub fn default_cairn_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_CAIRN_DIR") { return p; }
-    PathBuf::from("/Library/Vigo/cairn")
+pub fn default_gitmirror_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_GITMIRROR_DIR") { return p; }
+    PathBuf::from("/Library/Vigo/swarm/gitmirror")
 }
 
 #[cfg(windows)]
-pub fn default_cairn_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_CAIRN_DIR") { return p; }
-    default_data_dir().join("cairn")
+pub fn default_gitmirror_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_GITMIRROR_DIR") { return p; }
+    default_data_dir().join("swarm").join("gitmirror")
 }
 
 /// Default custom executors directory.
@@ -322,7 +322,7 @@ mod tests {
         for var in [
             "VIGO_DATA_DIR", "VIGO_STATE_DIR", "VIGO_SNAPSHOT_DIR",
             "VIGO_FLAGS_DIR", "VIGO_BLOBS_DIR", "VIGO_SEEDS_DIR",
-            "VIGO_GRAVEYARD_DIR", "VIGO_REJECTED_DIR", "VIGO_ECHO_DIR",
+            "VIGO_GRAVEYARD_DIR", "VIGO_REJECTED_DIR", "VIGO_FILESYNC_DIR",
             "VIGO_EXECUTORS_DIR",
         ] {
             std::env::remove_var(var);

@@ -5,7 +5,7 @@ This example sets up PostgreSQL with managed credentials using `secret:` referen
 
 ## PostgreSQL Module
 
-`stockpile/stones/postgresql.vgo`:
+`stockpile/modules/postgresql.vgo`:
 
 ```yaml
 name: postgresql
@@ -76,7 +76,7 @@ resources:
 
 ## Application Database Setup
 
-`stockpile/stones/app-database.vgo`:
+`stockpile/modules/app-database.vgo`:
 
 ```yaml
 name: app-database
@@ -192,7 +192,7 @@ For the `local` secrets backend, create the secret file:
 
 ```bash
 mkdir -p /srv/vigo/secrets/vigo/app
-echo -n 'my-secure-password' > /srv/vigo/secrets/vigo/app/db_password
+filesync -n 'my-secure-password' > /srv/vigo/secrets/vigo/app/db_password
 chmod 600 /srv/vigo/secrets/vigo/app/db_password
 ```
 

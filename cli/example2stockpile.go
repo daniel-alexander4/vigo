@@ -214,7 +214,7 @@ func runOrganize(exampleDir, stockpileDir string) error {
 		examplePaths[name] = destRel
 	}
 
-	modulesDir := filepath.Join(stockpileDir, "stones")
+	modulesDir := filepath.Join(stockpileDir, "modules")
 	entries, err := os.ReadDir(modulesDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -236,7 +236,7 @@ func runOrganize(exampleDir, stockpileDir string) error {
 			continue
 		}
 
-		currentRel := filepath.Join("stones", entry.Name())
+		currentRel := filepath.Join("modules", entry.Name())
 		if currentRel == exDest {
 			continue
 		}

@@ -7,7 +7,7 @@ This example sets up Prometheus node_exporter, Prometheus server, and Grafana us
 
 Deployed to every envoy for metrics collection.
 
-`stockpile/stones/node-exporter.vgo`:
+`stockpile/modules/node-exporter.vgo`:
 
 ```yaml
 name: node-exporter
@@ -48,7 +48,7 @@ resources:
 
 Deployed to monitoring servers.
 
-`stockpile/stones/prometheus.vgo`:
+`stockpile/modules/prometheus.vgo`:
 
 ```yaml
 name: prometheus
@@ -106,7 +106,7 @@ resources:
 
 ## Grafana Module
 
-`stockpile/stones/grafana.vgo`:
+`stockpile/modules/grafana.vgo`:
 
 ```yaml
 name: grafana

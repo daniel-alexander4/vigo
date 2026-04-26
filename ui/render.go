@@ -233,8 +233,8 @@ func funcMap() template.FuncMap {
 			case "complete", "source", "live":
 				// Green for anything that reads as "present and healthy."
 				// Source is the seeder (has by construction); live
-				// covers materialized cairn mirrors and per-user
-				// echo/sigil files.
+				// covers materialized gitmirror mirrors and per-user
+				// filesync/cryptsync files.
 				return "converged"
 			case "cached":
 				return "cached"
@@ -299,7 +299,7 @@ func funcMap() template.FuncMap {
 		},
 		// deref unwraps a *bool into a bool so templates can branch on
 		// the value without Go template's nil-is-not-false quirk.
-		// Used for `cairnmesh.LabelSummary.LastPublishFull`.
+		// Used for `gitmirrormesh.LabelSummary.LastPublishFull`.
 		"deref": func(b *bool) bool {
 			if b == nil {
 				return false
@@ -307,7 +307,7 @@ func funcMap() template.FuncMap {
 			return *b
 		},
 		// humanBytes renders a byte count as a compact string
-		// ("1.6 KiB", "12.1 MiB"). Mirrors ui/lode.go::humanSize for
+		// ("1.6 KiB", "12.1 MiB"). Mirrors ui/payload.go::humanSize for
 		// template-only call sites that can't reuse the Go helper.
 		"humanBytes": humanSize,
 	}

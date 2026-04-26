@@ -16,12 +16,12 @@ import (
 
 // Substrate-level view of the envoy P2P network. `vigocli swarm` is
 // the substrate — the transport layer every content subsystem rides
-// on. Admin-pushed payloads are `vigocli lode`; personal-DR mirrors
-// are `vigocli cairn`; per-user directory sync is `vigocli echo` and
-// `vigocli sigil`. Muscle memory from the pre-rename era points here
+// on. Admin-pushed payloads are `vigocli swarm payload`; personal-DR mirrors
+// are `vigocli swarm gitmirror`; per-user directory sync is `vigocli swarm filesync` and
+// `vigocli swarm cryptsync`. Muscle memory from the pre-rename era points here
 // for content verbs — the command's long help leads with that
 // disambiguation so a mistyped "swarm distribute" produces an obvious
-// pointer at `lode distribute`.
+// pointer at `payload distribute`.
 
 type swarmStatusFleet struct {
 	GeneratedAt            time.Time             `json:"generated_at"`
@@ -38,8 +38,8 @@ type swarmStatusFleet struct {
 }
 
 type swarmStatusPayloads struct {
-	Lode  int `json:"lode"`
-	Cairn int `json:"cairn"`
+	Payload  int `json:"payload"`
+	Gitmirror int `json:"gitmirror"`
 }
 
 type swarmPeersFleet struct {
@@ -72,10 +72,10 @@ four content subsystems ride on.
 This command is the SUBSTRATE. For the content verbs that used to live
 under 'vigocli swarm distribute' etc., see:
 
-  vigocli lode      — admin-pushed payloads (was 'swarm distribute')
-  vigocli cairn     — personal-DR git mirror fleet view
-  vigocli echo      — per-user plaintext directory sync mesh
-  vigocli sigil     — per-user encrypted directory sync mesh
+  vigocli swarm payload      — admin-pushed payloads (was 'swarm distribute')
+  vigocli swarm gitmirror     — personal-DR git mirror fleet view
+  vigocli swarm filesync      — per-user plaintext directory sync mesh
+  vigocli swarm cryptsync     — per-user encrypted directory sync mesh
 
 Subcommands here report substrate health: who is reachable, who has a
 blob cache, who is seeding, total footprint across the fleet.`,
@@ -114,7 +114,7 @@ func runSwarmStatus(cmd *cobra.Command, _ []string) error {
 	fmt.Fprintf(w, "%s\t%d\n", bold("Seeding envoys"), resp.EnvoysSeeding)
 	fmt.Fprintf(w, "%s\t%s\n", bold("Fleet footprint"), formatBytes(resp.TotalFootprintBytes))
 	fmt.Fprintf(w, "%s\t%d active · %d revoked\n", bold("Manifest entries"), resp.ManifestEntriesActive, resp.ManifestEntriesRevoked)
-	fmt.Fprintf(w, "%s\t%d lode · %d cairn\n", bold("Active payloads"), resp.Payloads.Lode, resp.Payloads.Cairn)
+	fmt.Fprintf(w, "%s\t%d payload · %d gitmirror\n", bold("Active payloads"), resp.Payloads.Payload, resp.Payloads.Gitmirror)
 	w.Flush()
 
 	fmt.Println()
@@ -225,4 +225,5 @@ func init() {
 		return nil
 	}
 	swarmCmd.AddCommand(swarmStatusCmd, swarmPeersCmd)
+	swarmCmd.AddCommand(payloadCmd, gitmirrorCmd, filesyncCmd, cryptsyncCmd)
 }

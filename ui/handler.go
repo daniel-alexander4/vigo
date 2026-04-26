@@ -37,9 +37,9 @@ import (
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/peer"
 	"git.alexander4.io/vigo/server/spanner"
-	"git.alexander4.io/vigo/server/sigilmesh"
-	"git.alexander4.io/vigo/server/cairnmesh"
-	"git.alexander4.io/vigo/server/echomesh"
+	"git.alexander4.io/vigo/server/swarm/cryptsyncmesh"
+	"git.alexander4.io/vigo/server/swarm/gitmirrormesh"
+	"git.alexander4.io/vigo/server/swarm/filesyncmesh"
 )
 
 // DataSource abstracts data fetching for UI handlers.
@@ -222,7 +222,7 @@ type Handler struct {
 	serverEnvoyHost    string
 	traitLookup        TraitLookup
 	fleetCache         *FleetCache
-	cairnFleet      CairnFleetSource
+	gitmirrorFleet      GitmirrorFleetSource
 	mesh               MeshSource
 	swarmAPI           SwarmSource
 	traitQuery         TraitQueryDispatcher
@@ -244,34 +244,34 @@ func (h *Handler) SetTraitQueryDispatcher(d TraitQueryDispatcher) {
 	h.traitQuery = d
 }
 
-// CairnFleetSource surfaces the aggregated fleet-wide cairn
-// view. Used by the swarm list (to decorate cairn rows with
+// GitmirrorFleetSource surfaces the aggregated fleet-wide gitmirror
+// view. Used by the swarm list (to decorate gitmirror rows with
 // mirror summary pills) and the swarm detail page (to render the
-// Cairn Mesh card). Implemented by `*api.CairnHandler` in
+// Gitmirror Mesh card). Implemented by `*api.GitmirrorHandler` in
 // the main binary; a tiny interface so the UI package doesn't
 // depend on the full aggregator handler type.
-type CairnFleetSource interface {
-	FleetSnapshot(ctx context.Context) (*cairnmesh.Fleet, error)
-	EnvoyMirrors(ctx context.Context, envoyID string) []cairnmesh.EnvoyMirror
+type GitmirrorFleetSource interface {
+	FleetSnapshot(ctx context.Context) (*gitmirrormesh.Fleet, error)
+	EnvoyMirrors(ctx context.Context, envoyID string) []gitmirrormesh.EnvoyMirror
 }
 
-// SetCairnFleet wires the fleet aggregator into the UI handler.
+// SetGitmirrorFleet wires the fleet aggregator into the UI handler.
 // Called from gateway.go after both handlers are constructed.
-func (h *Handler) SetCairnFleet(src CairnFleetSource) {
-	h.cairnFleet = src
+func (h *Handler) SetGitmirrorFleet(src GitmirrorFleetSource) {
+	h.gitmirrorFleet = src
 }
 
-// MeshSource surfaces the echo + sigil fleet aggregators.
+// MeshSource surfaces the filesync + cryptsync fleet aggregators.
 // Implemented by `*api.MeshHandler`; tiny interface so the UI
 // package doesn't depend on the full handler type.
 type MeshSource interface {
-	SyncSnapshot(ctx context.Context) (*echomesh.Fleet, error)
-	CryptSnapshot(ctx context.Context) (*sigilmesh.Fleet, error)
-	EnvoyEchoFiles(ctx context.Context, envoyID string) []echomesh.EnvoyFile
-	EnvoySigilFiles(ctx context.Context, envoyID string) []sigilmesh.EnvoyFile
+	SyncSnapshot(ctx context.Context) (*filesyncmesh.Fleet, error)
+	CryptSnapshot(ctx context.Context) (*cryptsyncmesh.Fleet, error)
+	EnvoyFilesyncFiles(ctx context.Context, envoyID string) []filesyncmesh.EnvoyFile
+	EnvoyCryptsyncFiles(ctx context.Context, envoyID string) []cryptsyncmesh.EnvoyFile
 }
 
-// SetMesh wires the echo/sigil fleet aggregators into the
+// SetMesh wires the filesync/cryptsync fleet aggregators into the
 // UI handler. Called from gateway.go.
 func (h *Handler) SetMesh(src MeshSource) {
 	h.mesh = src
@@ -516,30 +516,33 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /workflows/{id}", h.WorkflowDetail)
 	mux.HandleFunc("GET /audit", h.Audit)
 	mux.HandleFunc("GET /audit/verify", h.AuditVerify)
-	// Lode pages (admin-distributed payloads riding the swarm substrate) —
+	// Payload pages (admin-distributed payloads riding the swarm substrate) —
 	// always registered because SetSwarm is called after RegisterRoutes.
 	// The handlers check h.swarmTracker at request time.
 	mux.HandleFunc("GET /swarm", h.Swarm)
-	mux.HandleFunc("GET /lode", h.Lode)
-	mux.HandleFunc("GET /lode/{sha256}", h.Lode)
-	mux.HandleFunc("GET /ui/fragments/lode-envoys", h.LodeEnvoysFragment)
+	mux.HandleFunc("GET /swarm/payload", h.Payload)
+	mux.HandleFunc("GET /swarm/payload/{sha256}", h.Payload)
+	mux.HandleFunc("GET /ui/fragments/swarm-payload-envoys", h.LodeEnvoysFragment)
 
-	// Echo, sigil, cairn observability — sibling pages
+	// Filesync, cryptsync, gitmirror observability — sibling pages
 	// under the Swarm nav group. Each admin-only; viewer sees a 403.
-	mux.HandleFunc("GET /echo", h.Echo)
-	mux.HandleFunc("GET /ui/fragments/echo-user/{user}", h.EchoUserDrilldown)
-	mux.HandleFunc("GET /sigil", h.Sigil)
-	mux.HandleFunc("GET /ui/fragments/sigil-user/{user}", h.SigilUserDrilldown)
-	mux.HandleFunc("GET /cairn", h.Cairn)
-	mux.HandleFunc("GET /cairn/{label}", h.Cairn)
-	// Backwards-compat: /mesh → /echo (or /sigil when ?tab=crypt).
+	mux.HandleFunc("GET /swarm/filesync", h.Filesync)
+	mux.HandleFunc("GET /ui/fragments/swarm-filesync-user/{user}", h.EchoUserDrilldown)
+	mux.HandleFunc("GET /swarm/cryptsync", h.Cryptsync)
+	mux.HandleFunc("GET /ui/fragments/swarm-cryptsync-user/{user}", h.CryptsyncUserDrilldown)
+	mux.HandleFunc("GET /swarm/gitmirror", h.Gitmirror)
+	mux.HandleFunc("GET /swarm/gitmirror/{label}", h.Gitmirror)
+	// Backwards-compat: /mesh → /filesync (or /cryptsync when ?tab=crypt).
 	// Keep for one minor release so muscle-memory URLs don't 404.
 	mux.HandleFunc("GET /mesh", h.MeshRedirect)
 
-	mux.HandleFunc("GET /sandgorgon", h.Sandgorgon)
-	mux.HandleFunc("GET /sandgorgon/assets/{id}", h.SandgorgonAsset)
-	mux.HandleFunc("GET /sandgorgon/certificates", h.SandgorgonCertificates)
-	mux.HandleFunc("GET /ui/fragments/sandgorgon-assets", h.SandgorgonAssetsFragment)
+	// Sandgorgon UI surface deferred to v2: nav menu and page routes
+	// removed in this release. Server/CLI/DB/REST handlers preserved
+	// so the v2 release can re-expose without re-plumbing.
+	// mux.HandleFunc("GET /sandgorgon", h.Sandgorgon)
+	// mux.HandleFunc("GET /sandgorgon/assets/{id}", h.SandgorgonAsset)
+	// mux.HandleFunc("GET /sandgorgon/certificates", h.SandgorgonCertificates)
+	// mux.HandleFunc("GET /ui/fragments/sandgorgon-assets", h.SandgorgonAssetsFragment)
 
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)

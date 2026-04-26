@@ -539,7 +539,7 @@ smtp:
 
 ### swarm
 
-Enables the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **lode** (admin-pushed file distribution), **echo** (user directory sync), **cairn** (user source-control mirroring), and **sigil** (encrypted user directory sync). When enabled, agents open their peer server on port 1531 and participate in multicast discovery; the individual content subsystems opt in via their own matchfile vars or usercrate flags.
+Enables the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **payload** (admin-pushed file distribution), **filesync** (user directory sync), **gitmirror** (user source-control mirroring), and **cryptsync** (encrypted user directory sync). When enabled, agents open their peer server on port 1531 and participate in multicast discovery; the individual content subsystems opt in via their own matchfile vars or usercrate flags.
 
 ```yaml
 swarm:

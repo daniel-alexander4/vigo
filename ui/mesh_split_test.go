@@ -9,44 +9,44 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"git.alexander4.io/vigo/server/sigilmesh"
-	"git.alexander4.io/vigo/server/cairnmesh"
-	"git.alexander4.io/vigo/server/echomesh"
+	"git.alexander4.io/vigo/server/swarm/cryptsyncmesh"
+	"git.alexander4.io/vigo/server/swarm/gitmirrormesh"
+	"git.alexander4.io/vigo/server/swarm/filesyncmesh"
 )
 
 // mockMesh implements MeshSource with injectable snapshots so the
 // split-out page handlers can be exercised without standing up a
 // full aggregator + DB.
 type mockMesh struct {
-	sync  *echomesh.Fleet
-	crypt *sigilmesh.Fleet
+	sync  *filesyncmesh.Fleet
+	crypt *cryptsyncmesh.Fleet
 }
 
-func (m *mockMesh) SyncSnapshot(ctx context.Context) (*echomesh.Fleet, error) {
+func (m *mockMesh) SyncSnapshot(ctx context.Context) (*filesyncmesh.Fleet, error) {
 	return m.sync, nil
 }
 
-func (m *mockMesh) CryptSnapshot(ctx context.Context) (*sigilmesh.Fleet, error) {
+func (m *mockMesh) CryptSnapshot(ctx context.Context) (*cryptsyncmesh.Fleet, error) {
 	return m.crypt, nil
 }
 
-func (m *mockMesh) EnvoyEchoFiles(_ context.Context, _ string) []echomesh.EnvoyFile {
+func (m *mockMesh) EnvoyFilesyncFiles(_ context.Context, _ string) []filesyncmesh.EnvoyFile {
 	return nil
 }
 
-func (m *mockMesh) EnvoySigilFiles(_ context.Context, _ string) []sigilmesh.EnvoyFile {
+func (m *mockMesh) EnvoyCryptsyncFiles(_ context.Context, _ string) []cryptsyncmesh.EnvoyFile {
 	return nil
 }
 
-type mockCairn struct {
-	fleet *cairnmesh.Fleet
+type mockGitmirror struct {
+	fleet *gitmirrormesh.Fleet
 }
 
-func (m *mockCairn) FleetSnapshot(ctx context.Context) (*cairnmesh.Fleet, error) {
+func (m *mockGitmirror) FleetSnapshot(ctx context.Context) (*gitmirrormesh.Fleet, error) {
 	return m.fleet, nil
 }
 
-func (m *mockCairn) EnvoyMirrors(_ context.Context, _ string) []cairnmesh.EnvoyMirror {
+func (m *mockGitmirror) EnvoyMirrors(_ context.Context, _ string) []gitmirrormesh.EnvoyMirror {
 	return nil
 }
 
@@ -56,22 +56,22 @@ func TestMeshSplit_RBAC(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
 	h.mesh = &mockMesh{}
-	h.cairnFleet = &mockCairn{}
+	h.gitmirrorFleet = &mockGitmirror{}
 
 	cases := []struct {
 		path    string
 		handler http.HandlerFunc
 	}{
-		{"/echo", h.Echo},
-		{"/ui/fragments/echo-user/dan", h.EchoUserDrilldown},
-		{"/sigil", h.Sigil},
-		{"/ui/fragments/sigil-user/dan", h.SigilUserDrilldown},
-		{"/cairn", h.Cairn},
+		{"/filesync", h.Filesync},
+		{"/ui/fragments/filesync-user/dan", h.EchoUserDrilldown},
+		{"/swarm/cryptsync", h.Cryptsync},
+		{"/ui/fragments/cryptsync-user/dan", h.CryptsyncUserDrilldown},
+		{"/swarm/gitmirror", h.Gitmirror},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
 		req := viewerRequest(http.MethodGet, c.path)
-		if c.path == "/ui/fragments/echo-user/dan" || c.path == "/ui/fragments/sigil-user/dan" {
+		if c.path == "/ui/fragments/filesync-user/dan" || c.path == "/ui/fragments/cryptsync-user/dan" {
 			req.SetPathValue("user", "dan")
 		}
 		c.handler(rec, req)
@@ -91,10 +91,10 @@ func TestMeshRedirect_PreservesMuscleMemoryURLs(t *testing.T) {
 		from string
 		to   string
 	}{
-		{"/mesh", "/echo"},
-		{"/mesh?tab=sync", "/echo"},
-		{"/mesh?tab=crypt", "/sigil"},
-		{"/mesh?tab=unknown", "/echo"},
+		{"/mesh", "/filesync"},
+		{"/mesh?tab=sync", "/filesync"},
+		{"/mesh?tab=crypt", "/swarm/cryptsync"},
+		{"/mesh?tab=unknown", "/filesync"},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
@@ -114,66 +114,66 @@ func TestMeshRedirect_PreservesMuscleMemoryURLs(t *testing.T) {
 func TestEcho_EmptyRendersHealthy(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
-	h.mesh = &mockMesh{sync: &echomesh.Fleet{}}
+	h.mesh = &mockMesh{sync: &filesyncmesh.Fleet{}}
 
 	rec := httptest.NewRecorder()
-	h.Echo(rec, adminRequest(http.MethodGet, "/echo"))
+	h.Filesync(rec, adminRequest(http.MethodGet, "/filesync"))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Echo returned %d, want 200", rec.Code)
+		t.Fatalf("Filesync returned %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
-	if !containsAll(body, "Echo", "health-banner--ok") {
-		t.Errorf("empty echo should render healthy banner; body sample:\n%s", snippet(body, 1000))
+	if !containsAll(body, "Filesync", "health-banner--ok") {
+		t.Errorf("empty filesync should render healthy banner; body sample:\n%s", snippet(body, 1000))
 	}
 }
 
-func TestSigil_EmptyRendersHealthy(t *testing.T) {
+func TestCryptsync_EmptyRendersHealthy(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
-	h.mesh = &mockMesh{crypt: &sigilmesh.Fleet{}}
+	h.mesh = &mockMesh{crypt: &cryptsyncmesh.Fleet{}}
 
 	rec := httptest.NewRecorder()
-	h.Sigil(rec, adminRequest(http.MethodGet, "/sigil"))
+	h.Cryptsync(rec, adminRequest(http.MethodGet, "/swarm/cryptsync"))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Sigil returned %d, want 200", rec.Code)
+		t.Fatalf("Cryptsync returned %d, want 200", rec.Code)
 	}
-	if !containsAll(rec.Body.String(), "Sigil", "health-banner--ok") {
-		t.Error("empty sigil should render healthy banner")
+	if !containsAll(rec.Body.String(), "Cryptsync", "health-banner--ok") {
+		t.Error("empty cryptsync should render healthy banner")
 	}
 }
 
-func TestCairn_EmptyRendersHealthy(t *testing.T) {
+func TestGitmirror_EmptyRendersHealthy(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
-	h.cairnFleet = &mockCairn{fleet: &cairnmesh.Fleet{}}
+	h.gitmirrorFleet = &mockGitmirror{fleet: &gitmirrormesh.Fleet{}}
 
 	rec := httptest.NewRecorder()
-	h.Cairn(rec, adminRequest(http.MethodGet, "/cairn"))
+	h.Gitmirror(rec, adminRequest(http.MethodGet, "/swarm/gitmirror"))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Cairn returned %d, want 200", rec.Code)
+		t.Fatalf("Gitmirror returned %d, want 200", rec.Code)
 	}
-	if !containsAll(rec.Body.String(), "Cairn", "health-banner--ok") {
-		t.Error("empty cairn should render healthy banner")
+	if !containsAll(rec.Body.String(), "Gitmirror", "health-banner--ok") {
+		t.Error("empty gitmirror should render healthy banner")
 	}
 }
 
-// TestCairn_OrphanPromotesBannerErr — when an aggregator surfaces
+// TestGitmirror_OrphanPromotesBannerErr — when an aggregator surfaces
 // orphan mirrors, the banner must be err-level and list the problem.
-func TestCairn_OrphanPromotesBannerErr(t *testing.T) {
+func TestGitmirror_OrphanPromotesBannerErr(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
-	h.cairnFleet = &mockCairn{fleet: &cairnmesh.Fleet{
-		Labels: []cairnmesh.LabelSummary{
-			{Label: "cairn:plex:dan:notes", Publisher: "plex",
+	h.gitmirrorFleet = &mockGitmirror{fleet: &gitmirrormesh.Fleet{
+		Labels: []gitmirrormesh.LabelSummary{
+			{Label: "gitmirror:plex:dan:notes", Publisher: "plex",
 				CountOrphan: 2, CountMaterialized: 3, CountSelected: 3, MaxMirrors: 5},
 		},
-		Totals: cairnmesh.Totals{Labels: 1, Mirrors: 3, OrphanMirrors: 2},
+		Totals: gitmirrormesh.Totals{Labels: 1, Mirrors: 3, OrphanMirrors: 2},
 	}}
 
 	rec := httptest.NewRecorder()
-	h.Cairn(rec, adminRequest(http.MethodGet, "/cairn"))
+	h.Gitmirror(rec, adminRequest(http.MethodGet, "/swarm/gitmirror"))
 	body := rec.Body.String()
-	if !containsAll(body, "health-banner--err", "orphan", "cairn:plex:dan:notes") {
+	if !containsAll(body, "health-banner--err", "orphan", "gitmirror:plex:dan:notes") {
 		t.Errorf("orphan mirrors should surface in err-level banner; body sample:\n%s", snippet(body, 1500))
 	}
 }

@@ -36,12 +36,12 @@ func (m *mockProvider) Close() error { return nil }
 
 // --- helpers ---
 
-// setupDir creates a worksite-shaped config directory: stockpile/stones/
+// setupDir creates a worksite-shaped config directory: stockpile/modules/
 // for the module library, scaffolding/default/ for envoy entries.
 func setupDir(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "examples")
-	for _, sub := range []string{"stockpile/stones", "stockpile/usercrates", "stockpile/templates", "scaffolding/default"} {
+	for _, sub := range []string{"stockpile/modules", "stockpile/usercrates", "stockpile/templates", "scaffolding/default"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -79,7 +79,7 @@ func writeRoles(t *testing.T, dir string, roleSnippets ...string) {
 func TestLookupsInResourceAttributes(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "users.vgo"), `
 name: users
 resources:
   - name: dan
@@ -164,7 +164,7 @@ envoys:
 func TestMatchBlockTagsPopulateEnvoyConfig(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -220,7 +220,7 @@ func equalStrings(a, b []string) bool {
 func TestLoadModuleAndResolve(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -256,7 +256,7 @@ envoys:
 func TestRoleResolution(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -264,7 +264,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "certbot.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "certbot.vgo"), `
 name: certbot
 resources:
   - name: install-certbot
@@ -303,7 +303,7 @@ envoys:
 func TestModuleDefaultVarsOverriddenByClient(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 vars:
   worker_processes: "auto"
@@ -340,7 +340,7 @@ envoys:
 func TestSecretResolution(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app
 resources:
   - name: config
@@ -375,7 +375,7 @@ envoys:
 func TestKnownSecretEnforcement(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app
 resources: []
 `)
@@ -397,7 +397,7 @@ envoys:
 func TestHardFailUnresolvable(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app
 resources: []
 `)
@@ -419,7 +419,7 @@ envoys:
 func TestMultipleSecretErrorsCollected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app
 resources:
   - name: config-file
@@ -509,11 +509,11 @@ func TestSecretErrorHintCategories(t *testing.T) {
 func TestPatternMatching(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
@@ -549,11 +549,11 @@ envoys:
 func TestFirstMatchWins(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "explicit.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "explicit.vgo"), `
 name: explicit
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "pattern.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "pattern.vgo"), `
 name: pattern
 resources: []
 `)
@@ -584,11 +584,11 @@ envoys:
 func TestMultipleClientFiles(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "postgres.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "postgres.vgo"), `
 name: postgres
 resources: []
 `)
@@ -643,7 +643,7 @@ func TestUnconfiguredClient(t *testing.T) {
 func TestConfigReload(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app
 resources: []
 `)
@@ -679,7 +679,7 @@ envoys:
 func TestBadConfigKeepsOld(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app
 resources: []
 `)
@@ -763,7 +763,7 @@ func TestRoleReferencesUnknownModule(t *testing.T) {
 func TestDedupModules(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
@@ -792,7 +792,7 @@ envoys:
 func TestNodesReferencingSecret(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app
 resources:
   - name: config
@@ -800,7 +800,7 @@ resources:
     target_path: /etc/app/config
     content: "secret:myapp/db/config"
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "other.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "other.vgo"), `
 name: other
 resources: []
 `)
@@ -841,7 +841,7 @@ func TestSourceFileLoading(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(tmplDir, "nginx.conf.tmpl"), `worker_processes {{ .Vars.worker_processes }};`)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 vars:
   worker_processes: "auto"
@@ -891,7 +891,7 @@ func TestSourceAndContentMutuallyExclusive(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(tmplDir, "test.tmpl"), "template content")
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "bad.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "bad.vgo"), `
 name: bad
 resources:
   - name: both-set
@@ -919,7 +919,7 @@ envoys:
 func TestSourceFileMissing(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "bad.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "bad.vgo"), `
 name: bad
 resources:
   - name: missing-source
@@ -952,7 +952,7 @@ func TestSourceFileNestedTemplatesDir(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(nestedDir, "default.conf.tmpl"), `server { listen {{ .Vars.port }}; }`)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 vars:
   port: "80"
@@ -1131,7 +1131,7 @@ func TestRenderVars(t *testing.T) {
 func TestLoadModuleConditionalBlockLoadsCorrectly(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "debian-tools.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "debian-tools.vgo"), `
 name: debian-tools
 resources:
   - conditional_block:
@@ -1182,7 +1182,7 @@ envoys:
 func TestLoadModuleMixedPlainAndConditionalBlock(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "mixed.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "mixed.vgo"), `
 name: mixed
 resources:
   - name: always-run
@@ -1244,7 +1244,7 @@ envoys:
 func TestLoadModuleConditionalBlockDependsOnAcrossBoundary(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "cross-dep.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "cross-dep.vgo"), `
 name: cross-dep
 resources:
   - name: setup-repo
@@ -1293,7 +1293,7 @@ envoys:
 func TestLoadModuleConditionalBlockWithResourceLevelConditionals(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "dual-cond.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "dual-cond.vgo"), `
 name: dual-cond
 resources:
   - conditional_block:
@@ -1333,7 +1333,7 @@ envoys:
 func TestLoadModuleConditionalBlockEmptyResourcesError(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "bad-block.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "bad-block.vgo"), `
 name: bad-block
 resources:
   - conditional_block:
@@ -1361,7 +1361,7 @@ envoys:
 func TestRoleWithConditionalModuleRef(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -1369,7 +1369,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "certbot.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "certbot.vgo"), `
 name: certbot
 resources:
   - name: install-certbot
@@ -1414,7 +1414,7 @@ envoys:
 func TestClientWithConditionalModuleRef(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "redis.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "redis.vgo"), `
 name: redis
 resources:
   - name: install-redis
@@ -1447,11 +1447,11 @@ envoys:
 func TestMixedPlainAndConditionalModuleRefsInRole(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "certbot.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "certbot.vgo"), `
 name: certbot
 resources: []
 `)
@@ -1490,7 +1490,7 @@ envoys:
 func TestExcludeResources(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "hardening.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "hardening.vgo"), `
 name: hardening
 resources:
   - name: disable-xserver
@@ -1537,15 +1537,15 @@ envoys:
 func TestConditionalRoleRef(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "sshd.vgo"), `
 name: sshd
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "iis.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "iis.vgo"), `
 name: iis
 resources: []
 `)
@@ -1597,11 +1597,11 @@ func TestConditionalRoleRefPreservesModuleWhen(t *testing.T) {
 	// the module's own condition should take precedence.
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "certbot.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "certbot.vgo"), `
 name: certbot
 resources: []
 `)
@@ -1644,7 +1644,7 @@ func TestBackwardCompatPlainStringModulesStillWork(t *testing.T) {
 	// string module references continues to load without any changes.
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -1652,7 +1652,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "certbot.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "certbot.vgo"), `
 name: certbot
 resources:
   - name: install-certbot
@@ -1697,12 +1697,12 @@ envoys:
 func TestIdempotencyValidation_BlocksUnguardedExec(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "bad.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "bad.vgo"), `
 name: bad
 resources:
   - name: yolo-exec
     type: exec
-    command: "echo hello"
+    command: "filesync hello"
 `)
 	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
@@ -1732,12 +1732,12 @@ envoys:
 func TestIdempotencyValidation_DangerousModeAllowsUnguardedExec(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "bad.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "bad.vgo"), `
 name: bad
 resources:
   - name: yolo-exec
     type: exec
-    command: "echo hello"
+    command: "filesync hello"
 `)
 	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
@@ -1758,7 +1758,7 @@ envoys:
 func TestIdempotencyValidation_GuardedExecPasses(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "good.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "good.vgo"), `
 name: good
 resources:
   - name: guarded-exec
@@ -1781,7 +1781,7 @@ envoys:
 func TestVgoFileExtension_LoadedByConfigStore(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -1816,22 +1816,22 @@ envoys:
 func TestMultipleIdempotencyErrorsCollected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "bad1.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "bad1.vgo"), `
 name: bad1
 resources:
   - name: yolo-exec
     type: exec
-    command: "echo one"
+    command: "filesync one"
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "bad2.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "bad2.vgo"), `
 name: bad2
 resources:
   - name: another-yolo
     type: exec
-    command: "echo two"
+    command: "filesync two"
   - name: third-yolo
     type: exec
-    command: "echo three"
+    command: "filesync three"
 `)
 	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
@@ -1892,7 +1892,7 @@ func TestDuplicateModulesKeysMerged(t *testing.T) {
 	dir := setupDir(t)
 
 	for _, name := range []string{"docker", "grafana", "envoy-exporter"} {
-		writeFile(t, filepath.Join(dir, "stockpile", "stones", name+".vgo"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "stockpile", "modules", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -1945,7 +1945,7 @@ func TestDuplicateRolesKeysMerged(t *testing.T) {
 	dir := setupDir(t)
 
 	for _, name := range []string{"nginx", "redis"} {
-		writeFile(t, filepath.Join(dir, "stockpile", "stones", name+".vgo"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "stockpile", "modules", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -2002,7 +2002,7 @@ func TestTemplateRendering(t *testing.T) {
 func TestBeforeResolvesToDependsOn(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base-packages
 before: [app-config]
 resources:
@@ -2011,7 +2011,7 @@ resources:
     package: curl
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app-config
 resources:
   - name: app-conf
@@ -2056,7 +2056,7 @@ envoys:
 func TestBeforeUnknownTargetErrors(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base-packages
 before: [missing-module]
 resources:
@@ -2085,7 +2085,7 @@ func TestBeforeNoDuplicateDependsOn(t *testing.T) {
 
 	// app-config already depends_on base-packages, and base-packages also
 	// declares before: [app-config]. Should not duplicate the dependency.
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
 name: base-packages
 before: [app-config]
 resources:
@@ -2094,7 +2094,7 @@ resources:
     package: curl
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app-config
 depends_on: [base-packages]
 resources:
@@ -2137,7 +2137,7 @@ envoys:
 func TestOverlappingGlobFirstWins(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install
@@ -2145,7 +2145,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "apache.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "apache.vgo"), `
 name: apache
 resources:
   - name: install
@@ -2205,7 +2205,7 @@ func TestEmptyEnvoysDir(t *testing.T) {
 func TestNodeVarsOverrideModuleDefaults(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "webserver.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "webserver.vgo"), `
 name: webserver
 vars:
   port: "80"
@@ -2242,7 +2242,7 @@ envoys:
 func TestSourcePathTraversalDotDot(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app
 resources:
   - name: conf
@@ -2268,7 +2268,7 @@ envoys:
 func TestSourcePathAbsoluteRejected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app
 resources:
   - name: conf
@@ -2291,7 +2291,7 @@ envoys:
 func TestConcurrentGetDuringReload(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install
@@ -2344,7 +2344,7 @@ envoys:
 func TestReloadBumpsVersion(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install
@@ -2377,7 +2377,7 @@ envoys:
 func TestReloadFailureKeepsOldConfig(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install
@@ -2443,7 +2443,7 @@ func TestSourceSymlinkEscapeRejected(t *testing.T) {
 	}
 
 	// Write a module that references the symlink as source.
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "evil.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "evil.vgo"), `
 name: evil
 resources:
   - name: evil-file
@@ -2471,21 +2471,21 @@ envoys:
 func TestRoleIncludes(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "firewall.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "firewall.vgo"), `
 name: firewall
 resources:
   - name: fw-rules
     type: file
     target_path: /etc/iptables/rules.v4
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "sshd.vgo"), `
 name: sshd
 resources:
   - name: sshd-config
     type: file
     target_path: /etc/ssh/sshd_config
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -2534,7 +2534,7 @@ envoys:
 func TestRoleIncludesNestedRejected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "a.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "a.vgo"), `
 name: a
 resources:
   - name: r
@@ -2572,14 +2572,14 @@ envoys:
 func TestRoleIncludesDedup(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "shared.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "shared.vgo"), `
 name: shared
 resources:
   - name: r
     type: file
     target_path: /tmp/shared
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "web.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "web.vgo"), `
 name: web
 resources:
   - name: r
@@ -2630,7 +2630,7 @@ envoys:
 func TestConfigTrace(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 vars:
   worker_processes: "auto"
@@ -2643,7 +2643,7 @@ resources:
     type: file
     target_path: /etc/nginx/nginx.conf
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "firewall.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "firewall.vgo"), `
 name: firewall
 resources:
   - name: fw
@@ -2719,7 +2719,7 @@ envoys:
 
 func TestConfigTraceNoMatch(t *testing.T) {
 	dir := setupDir(t)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "a.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "a.vgo"), `
 name: a
 resources:
   - name: r
@@ -2745,7 +2745,7 @@ envoys:
 func TestConfigTraceGlobPattern(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app
 resources:
   - name: r
@@ -2781,7 +2781,7 @@ envoys:
 func setupInheritanceDir(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "config")
-	for _, sub := range []string{"stockpile/stones", "stockpile/usercrates", "scaffolding"} {
+	for _, sub := range []string{"stockpile/modules", "stockpile/usercrates", "scaffolding"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -2792,21 +2792,21 @@ func setupInheritanceDir(t *testing.T) string {
 func TestInheritance_BasicModules(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "sshd.vgo"), `
 name: sshd
 resources:
   - name: install-sshd
     type: package
     package: openssh-server
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "monitoring.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "monitoring.vgo"), `
 name: monitoring
 resources:
   - name: install-monitoring
     type: package
     package: prometheus-node-exporter
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -2862,7 +2862,7 @@ func TestInheritance_MultiLevel(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
 	for _, name := range []string{"sshd", "logging", "nginx"} {
-		writeFile(t, filepath.Join(dir, "stockpile", "stones", name+".vgo"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "stockpile", "modules", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -2917,7 +2917,7 @@ func TestInheritance_ExcludeModules(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
 	for _, name := range []string{"sshd", "monitoring", "nginx"} {
-		writeFile(t, filepath.Join(dir, "stockpile", "stones", name+".vgo"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "stockpile", "modules", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -2967,7 +2967,7 @@ envoys:
 func TestInheritance_VarsOverride(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app
 resources:
   - name: install-app
@@ -3014,14 +3014,14 @@ func TestInheritance_SubdirInheritsFromRoot(t *testing.T) {
 	// Entries in any subdirectory (including one named "envoys") inherit.
 	dir := setupInheritanceDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "sshd.vgo"), `
 name: sshd
 resources:
   - name: install-sshd
     type: package
     package: openssh-server
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app
 resources:
   - name: install-app
@@ -3070,7 +3070,7 @@ func TestInheritance_TraceShowsChain(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
 	for _, name := range []string{"sshd", "nginx"} {
-		writeFile(t, filepath.Join(dir, "stockpile", "stones", name+".vgo"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "stockpile", "modules", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -3125,7 +3125,7 @@ func TestInheritance_InheritedRoles(t *testing.T) {
 	dir := setupInheritanceDir(t)
 
 	for _, name := range []string{"sshd", "monitoring", "nginx"} {
-		writeFile(t, filepath.Join(dir, "stockpile", "stones", name+".vgo"), fmt.Sprintf(`
+		writeFile(t, filepath.Join(dir, "stockpile", "modules", name+".vgo"), fmt.Sprintf(`
 name: %s
 resources:
   - name: install-%s
@@ -3227,7 +3227,7 @@ func TestBuildComplianceIndex(t *testing.T) {
 func TestEnvoyStandardCoverage(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "sshd.vgo"), `
 name: sshd
 compliance:
   hipaa: [AC-1, SC-8]
@@ -3237,7 +3237,7 @@ resources:
     type: file
     target_path: /etc/ssh/sshd_config
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 compliance:
   pci-dss: ["6.5.1"]
@@ -3386,7 +3386,7 @@ func TestResolveWhenDisplay(t *testing.T) {
 func TestTraceSecretRefs(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "db.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "db.vgo"), `
 name: db
 vars:
   dsn: "secret:vigo/db/dsn"
@@ -3432,7 +3432,7 @@ envoys:
 func TestTraceDependencies(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 depends_on: [sshd]
 resources:
@@ -3450,7 +3450,7 @@ resources:
     state: running
     depends_on: [install-nginx]
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "sshd.vgo"), `
 name: sshd
 resources:
   - name: sshd-config
@@ -3502,7 +3502,7 @@ envoys:
 func TestTraceComplianceTags(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "sshd.vgo"), `
 name: sshd
 compliance:
   hipaa: [AC-1, SC-8]
@@ -3542,7 +3542,7 @@ envoys:
 func TestTraceConditionals(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "scanner.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "scanner.vgo"), `
 name: scanner
 resources:
   - name: run-scan
@@ -3594,7 +3594,7 @@ envoys:
 func TestTraceVarSourceOrdering(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
 name: app
 vars:
   port: "8080"
@@ -3644,7 +3644,7 @@ envoys:
 func TestFilterByModuleFiltersNewSections(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "sshd.vgo"), `
 name: sshd
 compliance:
   hipaa: [AC-1]
@@ -3654,7 +3654,7 @@ resources:
     target_path: /etc/ssh/sshd_config
     when: "is_enabled"
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), `
 name: nginx
 compliance:
   pci-dss: ["6.5.1"]
