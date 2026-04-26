@@ -180,7 +180,6 @@ The following paths are accessible without authentication regardless of the conf
 
 | Path prefix | Purpose |
 |-------------|---------|
-
 | `/bootstrap` | Agent bootstrap script and certificate endpoints |
 | `/api/v1/agent/` | Agent binary downloads |
 | `/api/v1/bootstrap/` | Agent enrollment registration |

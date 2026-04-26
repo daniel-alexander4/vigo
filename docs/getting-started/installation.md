@@ -23,13 +23,14 @@ This populates `/srv/vigo/` with everything needed to run the server:
 ├── license/                 # license .lic files
 ├── db/                      # SQLite database
 ├── secrets/                 # encrypted secret files
-├── stockpile/               # edit .vgo config files here
-│   ├── modules/
-│   ├── roles/
-│   ├── envoys/
-│   ├── templates/
-│   ├── vars/
-│   └── .live/               # published config (do not edit directly)
+├── worksite/                # edit .vgo config files here
+│   ├── stockpile/           # module library
+│   │   ├── stones/          # reusable module definitions
+│   │   ├── usercrates/      # user-scoped auto-apply modules
+│   │   └── templates/       # Go template fragments
+│   ├── scaffolding/         # envoy rules — envoys.vgo, roles.vgo,
+│   │                        # common.vgo, environments.vgo, waivers.vgo
+│   └── structure/           # published config (do not edit directly)
 ├── config-history/          # rollback snapshots
 ├── example-configs/                # example .vgo modules, roles, and nodes
 └── docs/                    # browsable documentation

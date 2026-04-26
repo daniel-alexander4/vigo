@@ -60,7 +60,6 @@ The agent's pull loop. Returns the modules to apply based on current state.
 **Response: `CheckInResponse`**
 
 | Field | Type | Description |
-
 |-------|------|-------------|
 | `modules` | repeated Module | Ordered module list with desired state |
 | `interval` | string | Check-in interval (e.g., "5m") |
@@ -121,7 +120,6 @@ Submits collected traits (facts) from the agent.
 | Field | Type | Description |
 |-------|------|-------------|
 | `envoy_id` | string | Agent's UUID |
-
 | `traits_json` | bytes | JSON-encoded traits map |
 | `signature` | bytes | ED25519 signature |
 | `timestamp` | Timestamp | Request timestamp |

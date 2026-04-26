@@ -86,10 +86,10 @@ envoys:
 
 Every envoy inherits `motd` from `common.vgo`. As you add more modules to `common.vgo`, all envoys get them automatically.
 
-Alternatively, for a flat layout without inheritance, you can put the envoy entry in a `envoys/` directory:
+Alternatively, put the envoy entry in the scaffolding matchfile:
 
 ```yaml
-# /srv/vigo/worksite/stockpile/envoys/envoys.vgo
+# /srv/vigo/worksite/scaffolding/envoys.vgo
 envoys:
   - match: "*"
     modules: [motd]
@@ -97,13 +97,13 @@ envoys:
 
 ## 5. Publish the Config
 
-Configs in `stage/` don't take effect until published:
+Configs under `worksite/stockpile/` and `worksite/scaffolding/` don't take effect until published:
 
 ```bash
 vigocli config publish
 ```
 
-This validates the config, syncs it to the `.live/` directory, and triggers the server to reload.
+This validates the config, syncs it to the `worksite/structure/` directory, and triggers the server to reload.
 
 ## 6. Wait for Check-in
 

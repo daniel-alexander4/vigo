@@ -8,12 +8,13 @@ Vigo exposes two API surfaces:
 
 ## Proto File
 
-All gRPC message definitions live in [`protobuf/vigo.proto`](../../../protobuf/vigo.proto). The proto defines two services:
+All gRPC message definitions live in [`protobuf/vigo.proto`](../../../protobuf/vigo.proto). The proto defines three services:
 
 | Service | Port | Transport | Purpose |
 |---------|------|-----------|---------|
 | `VigoAgent` | 1530 | gRPC over mTLS | Agent enrollment, check-in, result reporting, streaming |
 | `VigoAdmin` | 8443 | gRPC-gateway REST (HTTPS) | Admin operations via CLI and UI |
+| `VigoPeer` | 1532 | gRPC over mTLS | Hub-spoke spanner peer coordination (SyncStream, Promote, Status) |
 
 ## Authentication
 
@@ -23,8 +24,8 @@ All gRPC message definitions live in [`protobuf/vigo.proto`](../../../protobuf/v
 
 ## Further Reading
 
-- [gRPC Agent Service](grpc-agent.md) -- the 6-RPC agent service
-- [gRPC Admin Service](grpc-admin.md) -- the 23-RPC admin service
+- [gRPC Agent Service](grpc-agent.md) -- the 8-RPC agent service
+- [gRPC Admin Service](grpc-admin.md) -- the 24-RPC admin service
 - [REST API](rest.md) -- direct REST endpoints (pushes, workflows, query, AI, etc.)
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

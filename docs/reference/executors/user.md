@@ -26,7 +26,7 @@ Manages local user accounts -- create, modify, and delete users with configurabl
 | `purge_groups` | No | `false` | When `true` with `groups`, removes user from supplementary groups not in the list (`usermod -G` instead of `-aG`). |
 | `sudo_passwd` | No | `false` | If `true`, grant sudo access with password required. Writes `/etc/sudoers.d/<username>`. Mutually exclusive with `sudo_nopasswd`. |
 | `sudo_nopasswd` | No | `false` | If `true`, grant passwordless sudo access. Writes `/etc/sudoers.d/<username>` with `NOPASSWD`. Mutually exclusive with `sudo_passwd`. |
-| `sigil` | No | `false` | If `true`, mark this user for [sigil](../../engineering/subsystems/sigil.md) enrollment. Drops an empty sentinel at `~/.sigil/enroll.pending` after user creation. The next time the user runs any `vigo crypt *` verb interactively, the CLI detects the sentinel, prompts for the sigil password, generates a wrapped age identity, and removes the sentinel. Idempotent; no-op if the user is already enrolled. |
+| `sigil` | No | `false` | If `true`, mark this user for [sigil](../../engineering/subsystems/sigil.md) enrollment. Drops an empty sentinel at `~/.sigil/enroll.pending` after user creation. The next time the user runs any `vigo sigil *` verb interactively, the CLI detects the sentinel, prompts for the sigil password, generates a wrapped age identity, and removes the sentinel. Idempotent; no-op if the user is already enrolled. |
 
 ## States
 
