@@ -173,7 +173,10 @@ note "vigocli prefix: $VIGOCLI_CMD"
 section "1. Phase A — cairn source CLI (on $PRIMARY as $SIGIL_USER)"
 
 step "preparing test repo on $PRIMARY"
-on_host "$PRIMARY" 'mkdir -p $HOME/cairn/sourcetest && cd $HOME/cairn/sourcetest && git init -q && echo x > x && git add . && git commit -qm init' \
+# Clean any prior-run residue so init/add/commit are deterministic —
+# without rm -rf, a repeat run finds an already-committed repo and
+# the commit step exits non-zero ("nothing to commit").
+on_host "$PRIMARY" 'rm -rf $HOME/cairn/sourcetest && mkdir -p $HOME/cairn/sourcetest && cd $HOME/cairn/sourcetest && git init -q && echo x > x && git add . && git commit -qm init' \
     && pass "test repo created" \
     || fail "test repo creation failed"
 
@@ -365,6 +368,15 @@ expect_nonzero "$SECONDARY: ~/sigil/ removed by --purge" \
 section "7. Regression — DELETE tombstone path (on $SECONDARY)"
 
 if reenroll "$SECONDARY"; then note "$SECONDARY re-enrolled for §7"; else fail "could not enroll $SECONDARY for §7"; fi
+
+# §6's --purge destroyed ~/sigil/; reenroll just recreated it under
+# the same path but a different inode. The watcher's reconciler
+# detects the rotation and re-arms its inotify watch on the next
+# 30s tick (see agent/src/sigil/watcher.rs). Wait for that tick
+# before the encrypt — without it, the inotify event is captured
+# against the dead watch and no PushJob/DeleteJob is generated.
+note "waiting 35s for watcher reconciler to re-arm on the recreated ~/sigil/"
+sleep 35
 
 on_host "$SECONDARY" 'echo regress > /tmp/r.txt && vigo sigil encrypt /tmp/r.txt --as regress.age' >/dev/null 2>&1
 expect_zero "$SECONDARY: delete regress.age" \
