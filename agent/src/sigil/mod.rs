@@ -170,6 +170,11 @@ async fn run(
                 // Process any pending leaves before announcing so
                 // a fresh leave lands on peers in the same cycle.
                 process_pending_leaves(&machine).await;
+                // Process any post-reenroll regen requests so a
+                // fresh `vigo sigil enroll` picks up live peers
+                // within one tick instead of waiting for the next
+                // peer pubkey rotation.
+                process_pending_regens();
                 if let Err(e) = announce_all(&machine, &out_tx).await {
                     warn!(error = %e, "sigil: announce cycle error");
                 }
@@ -307,6 +312,56 @@ async fn process_one_leave(
     Ok(())
 }
 
+/// Poll every enrolled user for a `~/.sigil/regen.pending` sentinel
+/// dropped by `vigo sigil enroll` after a fresh enrollment. For each
+/// sentinel present: regenerate `recipients.txt` from the current
+/// daemon-side peer table (folding in every live peer the daemon
+/// already knows about) and remove the sentinel. Idempotent; if the
+/// sentinel reappears between ticks (e.g., a second enroll), the
+/// next tick processes it again.
+///
+/// This closes the post-reenroll gap where the announce path's
+/// upsert returns `false` for already-known peers (heartbeat case)
+/// and so never triggers a regen, leaving recipients.txt stuck at
+/// "self only" until something explicitly forces a refresh.
+fn process_pending_regens() {
+    let enrolled = match enrolled_users() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    for user in enrolled {
+        let home = match home_for_user(&user) {
+            Some(h) => h,
+            None => continue,
+        };
+        let pending = config::regen_pending_path(&home);
+        if !pending.exists() {
+            continue;
+        }
+        let table = PeerTable::load(&user);
+        match regenerate_recipients(&user, &home, &table) {
+            Ok(()) => {
+                info!(user = %user, "sigil: post-enroll recipients regen complete");
+                if let Err(e) = fs::remove_file(&pending) {
+                    warn!(
+                        user = %user,
+                        path = %pending.display(),
+                        error = %e,
+                        "sigil: failed to clear regen.pending sentinel"
+                    );
+                }
+            }
+            Err(e) => {
+                warn!(
+                    user = %user,
+                    error = %e,
+                    "sigil: post-enroll recipients regen failed; will retry next tick"
+                );
+            }
+        }
+    }
+}
+
 /// Prune expired tombstones for every enrolled user. Runs once per
 /// `TOMBSTONE_GC_INTERVAL`. Default retention is 90 days; per-user
 /// override via `tombstone_retention_days` in config.yaml (future —
@@ -416,6 +471,44 @@ fn handle_incoming(inc: IncomingAnnouncement) {
         .trim()
         .to_string();
     if !self_host.is_empty() && announcement.machine == self_host {
+        return;
+    }
+
+    // Reject announces from pubkeys we've already recorded as left.
+    // Without this guard, a still-running peer that missed its own
+    // LEAVE (or whose admin evict didn't fully scrub it) would be
+    // re-admitted on its next announce and silently leak back into
+    // recipients.txt. The check is keyed by age pubkey, so a
+    // re-enrolled host under the same hostname (different pubkey) is
+    // unaffected. Pre-emptive forget covers the race where a stale
+    // entry survived in peers.json from before the LEAVE landed.
+    let leaves = leaves::LeavesTable::load(&announcement.user);
+    if leaves.leave_time_for(&announcement.pubkey).is_some() {
+        let mut table = PeerTable::load(&announcement.user);
+        if table.forget_by_pubkey(&announcement.pubkey) {
+            if let Err(e) = table.save() {
+                warn!(
+                    error = %e,
+                    user = %announcement.user,
+                    "sigil: peer table save after pre-emptive forget failed"
+                );
+            }
+            if let Some(home) = home_for_user(&announcement.user) {
+                if let Err(e) = regenerate_recipients(&announcement.user, &home, &table) {
+                    warn!(
+                        error = %e,
+                        user = %announcement.user,
+                        "sigil: recipients regen after pre-emptive forget failed"
+                    );
+                }
+            }
+        }
+        debug!(
+            user = %announcement.user,
+            machine = %announcement.machine,
+            pubkey = %announcement.pubkey,
+            "sigil: rejecting announce from pubkey in leaves.json"
+        );
         return;
     }
 
@@ -844,15 +937,25 @@ fn load_local_pubkey(home: &Path) -> Result<String> {
 
 /// Regenerate `~<user>/.sigil/recipients.txt` from the current
 /// peer table. Preserves this envoy's own pubkey (first line) and
-/// appends live peers sorted by pubkey. Writes atomically via
-/// temp + rename; chowns the resulting file to the user.
+/// appends live peers sorted by pubkey, filtered against
+/// `leaves.json` so a peer that left can never leak back into
+/// recipients even if a stale entry survived in `peers.json`.
+/// Writes atomically via temp + rename; chowns the resulting file
+/// to the user.
 fn regenerate_recipients(user: &str, home: &Path, table: &PeerTable) -> Result<()> {
     let path = config::recipients_path(home);
     let self_pubkey = load_local_pubkey(home)?;
+    let leaves = leaves::LeavesTable::load(user);
     let now = now_secs();
     let mut all: Vec<String> = Vec::new();
     all.push(self_pubkey);
     for pk in table.live_pubkeys(now) {
+        if leaves.leave_time_for(&pk).is_some() {
+            // Defense in depth: handle_incoming should already have
+            // pre-emptively forgotten this peer, but skip here too in
+            // case an older entry slipped through.
+            continue;
+        }
         if !all.contains(&pk) {
             all.push(pk);
         }

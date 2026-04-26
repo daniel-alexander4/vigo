@@ -177,6 +177,8 @@ Each enrolled agent receives the task, resolves the target's age pubkey from its
 
 No signed envelope; authority is end-to-end mTLS + admin token at the control plane, not a P2P signature. This is the right shape for "gone host, can't self-leave" scenarios where no-one can produce the subject's signature.
 
+**Self-evict scrub:** the dispatch goes to `target: "*"` so the evicted host receives `_apply-evict` for itself. Peer tables never include self, so the standard pubkey-lookup path would short-circuit as a no-op and leave the host's identity intact — blocking subsequent `vigo sigil enroll` (which bails when `~/.sigil/identity.age` already exists). The agent detects the self case (local `/etc/hostname` matches the `--hostname` argument) and instead scrubs `~/.sigil/identity.age`, `identity.salt`, `recipients.txt`, and `config.yaml` — same set as a `!keep_identity` self-leave. `~/sigil/` ciphertext is preserved (operator can `rm -rf` for full wipe). Re-enroll then proceeds cleanly.
+
 ### Local scrub on self-leave
 
 `vigo sigil leave` defaults to **delete identity, keep ciphertext**. `~/.sigil/` is removed (wrapped identity, salt, recipients, config); `~/sigil/` ciphertext is left in place but orphaned — the host no longer has an identity to decrypt it locally. Flags:

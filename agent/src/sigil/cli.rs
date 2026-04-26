@@ -194,6 +194,25 @@ fn bootstrap_identity(home: &Path, is_init: bool) -> Result<()> {
         }
     }
 
+    // Drop regen.pending so the daemon reactor folds existing live
+    // peers into the freshly-seeded recipients.txt on its next tick.
+    // Without this, recipients.txt would stay at "self only" until
+    // a peer rotates its pubkey or ages out — heartbeat announces
+    // from already-known peers don't trigger a regen.
+    let regen_marker = config::regen_pending_path(home);
+    if let Err(e) = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&regen_marker)
+    {
+        tracing::warn!(
+            path = %regen_marker.display(),
+            error = %e,
+            "sigil: failed to drop regen.pending sentinel; recipients sync delayed until next peer change"
+        );
+    }
+
     println!("wrote {} (0600, wrapped)", id_path.display());
     println!("wrote {} (0600)", salt_path.display());
     println!("wrote {}", rec_path.display());
@@ -990,8 +1009,49 @@ fn cmd_apply_evict(args: &[String]) -> Result<()> {
     let user = user.context("--user is required")?;
     let hostname = hostname.context("--hostname is required")?;
 
-    // Resolve pubkey — either explicit from the caller, or looked up
-    // from the peer table.
+    // Self-evict path: the server dispatches `_apply-evict` to *every*
+    // envoy via `target: "*"`, including the evicted host itself. The
+    // evicted host can't resolve the pubkey via peer-table lookup
+    // (peer tables never include self) and used to early-return as a
+    // no-op, leaving identity.age intact and blocking subsequent
+    // re-enrollment. Detect the self case and scrub local sigil state
+    // so the operator can re-enroll the host cleanly afterward.
+    let local_hostname = std::fs::read_to_string("/etc/hostname")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if !local_hostname.is_empty() && local_hostname == hostname {
+        let home = resolve_user_home(&user)?;
+        let dot = config::dot_dir(&home);
+        if !config::is_enrolled(&home) {
+            println!(
+                "(no-op) {} is the local host but {} is not enrolled in sigil here",
+                hostname, user
+            );
+            return Ok(());
+        }
+        // Mirror the !keep_identity scrub in process_one_leave —
+        // remove the identity, salt, recipients, config; preserve
+        // ~/sigil/ ciphertext (operator can `rm -rf ~/sigil` manually
+        // if they want full purge).
+        for name in ["identity.age", "identity.salt", "recipients.txt", "config.yaml"] {
+            let p = dot.join(name);
+            if p.exists() {
+                if let Err(e) = std::fs::remove_file(&p) {
+                    eprintln!("warning: failed to scrub {}: {}", p.display(), e);
+                }
+            }
+        }
+        println!(
+            "\u{2713} self-evict on {}: scrubbed sigil identity for user {}; \
+             re-enroll with `vigo sigil enroll` to rejoin",
+            hostname, user
+        );
+        return Ok(());
+    }
+
+    // Foreign-evict path: resolve the pubkey from the local peer
+    // table (or use the caller-supplied one) and apply the LEAVE.
     let pubkey = match pubkey {
         Some(p) if p != "LOOKUP" && !p.is_empty() => p,
         _ => {

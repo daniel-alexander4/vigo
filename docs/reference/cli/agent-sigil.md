@@ -58,6 +58,9 @@ Self-unenrollment. Three-stage handoff:
   recipients.txt   # every enrolled envoy's pubkey for this user, one per line
   config.yaml      # user-managed: cross_subnet_peers, idle_timeout_minutes
   enroll.pending   # sentinel dropped by the user executor; removed on first enroll
+  regen.pending    # sentinel dropped by `vigo sigil enroll` after seeding self
+                   # so the daemon folds existing live peers into recipients.txt
+                   # within one reactor tick (≤30 s). Removed by the daemon.
   tombstones.json  # daemon-written user-readable mirror of the tombstone table
   leaves.json      # daemon-written user-readable mirror of the LEAVE record table
 

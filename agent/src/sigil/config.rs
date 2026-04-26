@@ -107,6 +107,19 @@ pub fn reencrypt_pending_path(home: &Path) -> PathBuf {
     dot_dir(home).join("reencrypt.pending")
 }
 
+/// Sentinel file that tells the daemon reactor to regenerate
+/// `recipients.txt` from the daemon-side `peers.json` immediately.
+/// Dropped by `vigo sigil enroll` after seeding the user-side files
+/// — the daemon picks it up on the next reactor tick (≤30 s) and
+/// folds existing live peers into the freshly-seeded recipients.
+/// Without this, post-reenroll recipients.txt would stay at "self
+/// only" until a peer rotated its pubkey or aged out, since the
+/// announce path skips regeneration on heartbeat-only upserts.
+/// Cleared by the daemon after the regen runs.
+pub fn regen_pending_path(home: &Path) -> PathBuf {
+    dot_dir(home).join("regen.pending")
+}
+
 /// `/var/lib/vigo/sigil/<username>/` — root-owned state dir for
 /// one user's peer table and reactor bookkeeping. Created lazily.
 pub fn agent_state_dir(username: &str) -> PathBuf {
