@@ -190,6 +190,12 @@ No signed envelope; authority is end-to-end mTLS + admin token at the control pl
 
 When a LEAVE lands on a peer, the agent drops `~<user>/.sigil/reencrypt.pending`. Existing ciphertext in `~/sigil/` was wrapped for N recipients including the evicted one; it remains decryptable by the evicted host unless re-wrapped. The session helper drains the sentinel on its next tick (if the user is unlocked) or on the next `vigo sigil unlock` invocation — reencryption is eventually consistent and user-interactive by design.
 
+### State persistence — per-user serialization
+
+`TombstoneTable`, `LeavesTable`, and `PeerTable` all follow a load → mutate → save pattern. Two concurrent paths against the same user (e.g., the watcher fanning out N DeleteJobs from a single `vigo sigil leave --purge`, or simultaneous DELETE envelopes from different peers) would race their load-modify-save pairs — both load identical state, each upserts a different entry, the second save() overwrites the first, and the loser's update is silently lost. The atomic temp+rename guards readers against partial writes but doesn't serialize concurrent writers.
+
+`agent/src/sigil/locks.rs` exposes a `user_lock(table, user)` helper backed by three per-user lock maps (one per table type). Each table type has a `modify(user, |&mut Self| -> bool)` constructor that holds the per-user lock for the entire load+mutate+save+mirror sequence. Granularity is per-user so user A's tombstone activity doesn't block user B's, and per-table-type so a tombstone modify on user dan doesn't block a peer-table modify on user dan. Save still calls `write_user_mirror_json` inside the lock so canonical and user-side mirror stay in lockstep. Holding the lock across local file I/O is intentional — saves are rare and brief (milliseconds on local disk), and a copy-then-CAS shape would add code without a real win.
+
 ## Threat Model
 
 **Sigil protects against:**
