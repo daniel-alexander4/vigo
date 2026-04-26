@@ -162,10 +162,18 @@ if (( ${#CIPHERTEXT_REPAIR_NEEDED[@]} > 0 )); then
     note "After running on each envoy, re-run this script (no flags) to confirm."
 fi
 
-if (( REPAIR == 0 && (${#SENTINEL_REPAIR_NEEDED[@]} + ${#CIPHERTEXT_REPAIR_NEEDED[@]}) == 0 )); then
-    section "Result"
-    ok "no repair needed across the fleet"
-elif (( REPAIR == 0 )); then
-    section "Result"
-    note "audit-only run. Re-run with --repair to fix sentinels + dirs automatically."
+if (( REPAIR == 0 )); then
+    # Bash + `set -u` chokes on `${#assoc_array[@]}` when the array
+    # has never had a key assigned, so iterate to count instead.
+    sentinel_count=0
+    for _k in "${!SENTINEL_REPAIR_NEEDED[@]}"; do sentinel_count=$((sentinel_count + 1)); done
+    cipher_count=0
+    for _k in "${!CIPHERTEXT_REPAIR_NEEDED[@]}"; do cipher_count=$((cipher_count + 1)); done
+    if (( sentinel_count + cipher_count == 0 )); then
+        section "Result"
+        ok "no repair needed across the fleet"
+    else
+        section "Result"
+        note "audit-only run. Re-run with --repair to fix sentinels + dirs automatically."
+    fi
 fi
