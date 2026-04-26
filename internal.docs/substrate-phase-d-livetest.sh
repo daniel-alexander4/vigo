@@ -2,65 +2,67 @@
 #
 # substrate-phase-d-livetest.sh
 #
-# Sigil end-to-end livetest. Companion to phase-{a,b,c} —
-# phase-c covers swarm health + lode + echo; phase-d covers the
-# sigil-specific surface that 0.30.24 + 0.30.25 changed:
+# Cryptsync end-to-end livetest. Companion to phase-{a,b,c} —
+# phase-c covers swarm health + payload + filesync; phase-d covers the
+# cryptsync-specific surface that 0.30.24 + 0.30.25 changed:
 #
-#   §1  Sigil encrypt perms — `vigo sigil encrypt` on PRIMARY
-#       lands as `<user>:<group> 0600`, even though the binary
+#   §1  Cryptsync encrypt perms — `vigo swarm cryptsync encrypt` on
+#       PRIMARY lands as `<user>:<group> 0600`, even though the binary
 #       runs in a root context (the agent lives at
 #       /usr/local/sbin/vigo and is invoked via sudo).
 #       Validates the 0644-ownership fix in 0.30.24.
 #
-#   §2  Sigil push fan-out perms — the ciphertext propagates to
-#       SECONDARY's `~<user>/sigil/<name>` and lands there with
+#   §2  Cryptsync push fan-out perms — the ciphertext propagates to
+#       SECONDARY's `~<user>/cryptsync/<name>` and lands there with
 #       the same `<user>:<group> 0600` perms. Validates the
-#       receiver-side path (POST /sigil/push/<user>/<name>).
+#       receiver-side path (POST /swarm/cryptsync/push/<user>/<name>).
 #
-#   §3  Sigil decrypt -o perms — `vigo sigil decrypt -o <path>`
-#       writes plaintext as `<user>:<group> 0600` even when run
-#       through sudo. Validates the decrypt fix in 0.30.25.
+#   §3  Cryptsync decrypt -o perms — `vigo swarm cryptsync decrypt -o
+#       <path>` writes plaintext as `<user>:<group> 0600` even when
+#       run through sudo. Validates the decrypt fix in 0.30.25.
 #
-#   §4  Sigil leaves catch-up smoke — confirm the GET
-#       /sigil/leaves/<user> route is wired and returns the
-#       expected LeavesTable JSON shape. Validates the B.1
-#       endpoint that supports offline-during-LEAVE rejoin.
+#   §4  Cryptsync leaves catch-up smoke — confirm the GET
+#       /swarm/cryptsync/leaves/<user> route is wired and that the
+#       daemon-side LeavesTable file exists and is parseable.
+#       Validates the B.1 endpoint that supports offline-during-LEAVE
+#       rejoin.
 #
 # Run from PRIMARY's workstation account (sudo cached). Same SSH
 # prerequisites as phase-c (passwordless SSH to envoys).
 #
 # Optional env (defaults match phase-c):
-#   PRIMARY       danlap
-#   SECONDARY     annlap
-#   THIRD         plex
-#   SIGIL_USER    dan      — must be sigil-enrolled on PRIMARY
-#                            and reachable via passwordless SSH
-#   VIGO_BIN      /usr/local/sbin/vigo
-#   FANOUT_TIMEOUT 30      — seconds to wait for push to land
-#   PRE_DECRYPT_UNLOCK 0   — set 1 to assume the user has already
-#                            run `vigo sigil unlock` on PRIMARY,
-#                            so §3 (decrypt) can run. Default skips
-#                            §3 because unlock requires the sigil
-#                            password and this script is unattended.
+#   PRIMARY            danlap
+#   SECONDARY          annlap
+#   THIRD              plex
+#   CRYPTSYNC_USER     dan      — must be cryptsync-enrolled on PRIMARY
+#                                 and reachable via passwordless SSH
+#   VIGO_BIN           /usr/local/sbin/vigo
+#   FANOUT_TIMEOUT     30       — seconds to wait for push to land
+#   PRE_DECRYPT_UNLOCK 0        — set 1 to assume the user has already
+#                                 run `vigo swarm cryptsync unlock` on
+#                                 PRIMARY, so §3 (decrypt) can run.
+#                                 Default skips §3 because unlock
+#                                 requires the cryptsync password and
+#                                 this script is unattended.
 
 set -uo pipefail
 
 PRIMARY="${PRIMARY:-danlap}"
 SECONDARY="${SECONDARY:-annlap}"
 THIRD="${THIRD:-plex}"
-SIGIL_USER="${SIGIL_USER:-dan}"
+CRYPTSYNC_USER="${CRYPTSYNC_USER:-dan}"
 VIGO_BIN="${VIGO_BIN:-/usr/local/sbin/vigo}"
 FANOUT_TIMEOUT="${FANOUT_TIMEOUT:-30}"
 PRE_DECRYPT_UNLOCK="${PRE_DECRYPT_UNLOCK:-0}"
 
-# Wrap a vigo invocation so HOME points at $SIGIL_USER's home even
+# Wrap a vigo invocation so HOME points at $CRYPTSYNC_USER's home even
 # under env-stripping sudo configs (default Ubuntu sudo resets HOME
 # to /root, which makes pre-0.30.26 binaries fail with "not enrolled"
 # because they read $HOME first instead of resolving via passwd).
 # Using `sudo env HOME=...` instead of `sudo HOME=...` because some
 # sudo configs only forward env vars passed via the `env` shim.
-SIGIL_HOME="/home/$SIGIL_USER"
-VIGO_INVOKE="sudo env HOME=$SIGIL_HOME LOGNAME=$SIGIL_USER USER=$SIGIL_USER $VIGO_BIN"
+CRYPTSYNC_HOME="/home/$CRYPTSYNC_USER"
+VIGO_INVOKE="sudo env HOME=$CRYPTSYNC_HOME LOGNAME=$CRYPTSYNC_USER USER=$CRYPTSYNC_USER $VIGO_BIN"
 
 GREEN=$'\033[38;2;166;227;161m'
 RED=$'\033[38;2;243;139;168m'
@@ -107,8 +109,8 @@ stat_remote() {
 cleanup() {
     section "Cleanup"
     if [[ -n "${TEST_NAME:-}" ]]; then
-        note "removing ~$SIGIL_USER/sigil/$TEST_NAME from PRIMARY (mesh DELETE)"
-        on_host "$PRIMARY" "$VIGO_INVOKE sigil delete '$TEST_NAME' >/dev/null 2>&1 || sudo rm -f '$SIGIL_HOME/sigil/$TEST_NAME'" >/dev/null 2>&1 || true
+        note "removing ~$CRYPTSYNC_USER/cryptsync/$TEST_NAME from PRIMARY (mesh DELETE)"
+        on_host "$PRIMARY" "$VIGO_INVOKE swarm cryptsync delete '$TEST_NAME' >/dev/null 2>&1 || sudo rm -f '$CRYPTSYNC_HOME/cryptsync/$TEST_NAME'" >/dev/null 2>&1 || true
     fi
     [[ -n "${PLAIN_LOCAL:-}" && -f "$PLAIN_LOCAL" ]] && rm -f "$PLAIN_LOCAL"
     [[ -n "${PLAIN_DECRYPTED:-}" && -f "$PLAIN_DECRYPTED" ]] && sudo rm -f "$PLAIN_DECRYPTED" 2>/dev/null || true
@@ -132,7 +134,7 @@ trap cleanup EXIT
 
 section "Preflight"
 note "PRIMARY=$PRIMARY  SECONDARY=$SECONDARY  THIRD=$THIRD"
-note "SIGIL_USER=$SIGIL_USER  VIGO_BIN=$VIGO_BIN"
+note "CRYPTSYNC_USER=$CRYPTSYNC_USER  VIGO_BIN=$VIGO_BIN"
 note "fanout timeout: ${FANOUT_TIMEOUT}s"
 
 # vigo binary must exist on PRIMARY at the expected path.
@@ -142,21 +144,21 @@ if ! on_host "$PRIMARY" "sudo test -x $VIGO_BIN" >/dev/null 2>&1; then
 fi
 pass "vigo binary present on $PRIMARY"
 
-# User must be sigil-enrolled on PRIMARY (identity.age exists).
-if ! on_host "$PRIMARY" "sudo test -f /home/$SIGIL_USER/.sigil/identity.age" >/dev/null 2>&1; then
-    fail "$SIGIL_USER is not sigil-enrolled on $PRIMARY (~/.sigil/identity.age missing)"
+# User must be cryptsync-enrolled on PRIMARY (identity.age exists).
+if ! on_host "$PRIMARY" "sudo test -f /home/$CRYPTSYNC_USER/.cryptsync/identity.age" >/dev/null 2>&1; then
+    fail "$CRYPTSYNC_USER is not cryptsync-enrolled on $PRIMARY (~/.cryptsync/identity.age missing)"
     exit 1
 fi
-pass "$SIGIL_USER is sigil-enrolled on $PRIMARY"
+pass "$CRYPTSYNC_USER is cryptsync-enrolled on $PRIMARY"
 
-# Resolve uid:gid for the sigil user once — used by every assertion.
-SIGIL_UID=$(on_host "$PRIMARY" "id -u $SIGIL_USER 2>/dev/null" | tr -d '[:space:]')
-SIGIL_GID=$(on_host "$PRIMARY" "id -g $SIGIL_USER 2>/dev/null" | tr -d '[:space:]')
-if [[ -z "$SIGIL_UID" || -z "$SIGIL_GID" ]]; then
-    fail "could not resolve $SIGIL_USER uid:gid on $PRIMARY"
+# Resolve uid:gid for the cryptsync user once — used by every assertion.
+CRYPTSYNC_UID=$(on_host "$PRIMARY" "id -u $CRYPTSYNC_USER 2>/dev/null" | tr -d '[:space:]')
+CRYPTSYNC_GID=$(on_host "$PRIMARY" "id -g $CRYPTSYNC_USER 2>/dev/null" | tr -d '[:space:]')
+if [[ -z "$CRYPTSYNC_UID" || -z "$CRYPTSYNC_GID" ]]; then
+    fail "could not resolve $CRYPTSYNC_USER uid:gid on $PRIMARY"
     exit 1
 fi
-note "$SIGIL_USER uid=$SIGIL_UID gid=$SIGIL_GID"
+note "$CRYPTSYNC_USER uid=$CRYPTSYNC_UID gid=$CRYPTSYNC_GID"
 
 # Probe SECONDARY for reachability (skip §2 if unreachable).
 SECONDARY_REACHABLE=0
@@ -168,44 +170,44 @@ else
     warn "$SECONDARY unreachable — §2 (push fan-out) will be skipped"
 fi
 
-# ─────────────────── 1. Sigil encrypt perms ───────────────────
+# ─────────────────── 1. Cryptsync encrypt perms ───────────────────
 
-section "1. Sigil encrypt perms — local file lands as $SIGIL_USER:$SIGIL_USER 0600"
+section "1. Cryptsync encrypt perms — local file lands as $CRYPTSYNC_USER:$CRYPTSYNC_USER 0600"
 
 PLAIN_LOCAL="/tmp/phase-d-plain-$$-$(date +%s).txt"
 TEST_NAME="phase-d-perms-$$-$(date +%s).txt"
 echo "phase-d perms probe $(date +%s)" > "$PLAIN_LOCAL"
 
-step "encrypt $PLAIN_LOCAL → ~/sigil/$TEST_NAME on $PRIMARY (via sudo, HOME=$SIGIL_HOME)"
+step "encrypt $PLAIN_LOCAL → ~/cryptsync/$TEST_NAME on $PRIMARY (via sudo, HOME=$CRYPTSYNC_HOME)"
 # We deliberately put the plaintext in /tmp (readable by other users)
-# and ask vigo to encrypt it under SIGIL_USER's home — the act of
+# and ask vigo to encrypt it under CRYPTSYNC_USER's home — the act of
 # crossing the user boundary is what surfaces the chown bug, since
 # the sudo'd vigo process is root but the resulting ciphertext must
-# end up owned by SIGIL_USER.
-encrypt_out=$(on_host "$PRIMARY" "$VIGO_INVOKE sigil encrypt '$PLAIN_LOCAL' --as '$TEST_NAME' 2>&1")
+# end up owned by CRYPTSYNC_USER.
+encrypt_out=$(on_host "$PRIMARY" "$VIGO_INVOKE swarm cryptsync encrypt '$PLAIN_LOCAL' --as '$TEST_NAME' 2>&1")
 if [[ $? -ne 0 ]]; then
     fail "encrypt failed: $(head -2 <<<"$encrypt_out" | tr '\n' ' ')"
     exit 1
 fi
 pass "encrypt returned 0"
 
-step "stat $PRIMARY:$SIGIL_HOME/sigil/$TEST_NAME"
-local_stat=$(stat_remote "$PRIMARY" "$SIGIL_HOME/sigil/$TEST_NAME")
+step "stat $PRIMARY:$CRYPTSYNC_HOME/cryptsync/$TEST_NAME"
+local_stat=$(stat_remote "$PRIMARY" "$CRYPTSYNC_HOME/cryptsync/$TEST_NAME")
 if [[ -z "$local_stat" ]]; then
     fail "ciphertext not present on $PRIMARY"
 else
     note "$PRIMARY: $local_stat"
     read -r owner group mode <<<"$local_stat"
-    if [[ "$owner" == "$SIGIL_USER" && "$group" == "$SIGIL_USER" && "$mode" == "600" ]]; then
-        pass "$PRIMARY: ciphertext is $SIGIL_USER:$SIGIL_USER 0600"
+    if [[ "$owner" == "$CRYPTSYNC_USER" && "$group" == "$CRYPTSYNC_USER" && "$mode" == "600" ]]; then
+        pass "$PRIMARY: ciphertext is $CRYPTSYNC_USER:$CRYPTSYNC_USER 0600"
     else
-        fail "$PRIMARY: ciphertext is $owner:$group $mode (expected $SIGIL_USER:$SIGIL_USER 600)"
+        fail "$PRIMARY: ciphertext is $owner:$group $mode (expected $CRYPTSYNC_USER:$CRYPTSYNC_USER 600)"
     fi
 fi
 
-# ─────────────────── 2. Sigil push fan-out perms ───────────────────
+# ─────────────────── 2. Cryptsync push fan-out perms ───────────────────
 
-section "2. Sigil push fan-out — receiver-side perms preserved"
+section "2. Cryptsync push fan-out — receiver-side perms preserved"
 
 if (( SECONDARY_REACHABLE == 0 )); then
     skip "fan-out check needs $SECONDARY reachable"
@@ -214,7 +216,7 @@ else
     elapsed=0
     landed=0
     while (( elapsed < FANOUT_TIMEOUT )); do
-        if on_host "$SECONDARY" "sudo test -f $SIGIL_HOME/sigil/$TEST_NAME" >/dev/null 2>&1; then
+        if on_host "$SECONDARY" "sudo test -f $CRYPTSYNC_HOME/cryptsync/$TEST_NAME" >/dev/null 2>&1; then
             landed=1
             break
         fi
@@ -226,32 +228,32 @@ else
     else
         pass "$TEST_NAME appeared on $SECONDARY in ${elapsed}s"
 
-        step "stat $SECONDARY:$SIGIL_HOME/sigil/$TEST_NAME"
-        remote_stat=$(stat_remote "$SECONDARY" "$SIGIL_HOME/sigil/$TEST_NAME")
+        step "stat $SECONDARY:$CRYPTSYNC_HOME/cryptsync/$TEST_NAME"
+        remote_stat=$(stat_remote "$SECONDARY" "$CRYPTSYNC_HOME/cryptsync/$TEST_NAME")
         if [[ -z "$remote_stat" ]]; then
             fail "ciphertext disappeared from $SECONDARY between probe and stat"
         else
             note "$SECONDARY: $remote_stat"
             read -r owner group mode <<<"$remote_stat"
-            if [[ "$owner" == "$SIGIL_USER" && "$group" == "$SIGIL_USER" && "$mode" == "600" ]]; then
-                pass "$SECONDARY: ciphertext is $SIGIL_USER:$SIGIL_USER 0600"
+            if [[ "$owner" == "$CRYPTSYNC_USER" && "$group" == "$CRYPTSYNC_USER" && "$mode" == "600" ]]; then
+                pass "$SECONDARY: ciphertext is $CRYPTSYNC_USER:$CRYPTSYNC_USER 0600"
             else
-                fail "$SECONDARY: ciphertext is $owner:$group $mode (expected $SIGIL_USER:$SIGIL_USER 600)"
+                fail "$SECONDARY: ciphertext is $owner:$group $mode (expected $CRYPTSYNC_USER:$CRYPTSYNC_USER 600)"
             fi
         fi
     fi
 fi
 
-# ─────────────────── 3. Sigil decrypt -o perms ───────────────────
+# ─────────────────── 3. Cryptsync decrypt -o perms ───────────────────
 
-section "3. Sigil decrypt -o perms — plaintext output owned by $SIGIL_USER 0600"
+section "3. Cryptsync decrypt -o perms — plaintext output owned by $CRYPTSYNC_USER 0600"
 
 if (( PRE_DECRYPT_UNLOCK == 0 )); then
-    skip "decrypt requires the user to have run \`vigo sigil unlock\` (set PRE_DECRYPT_UNLOCK=1 to enable)"
+    skip "decrypt requires the user to have run \`vigo swarm cryptsync unlock\` (set PRE_DECRYPT_UNLOCK=1 to enable)"
 else
     PLAIN_DECRYPTED="/tmp/phase-d-decrypted-$$-$(date +%s).txt"
     step "decrypt $TEST_NAME → $PLAIN_DECRYPTED on $PRIMARY (via sudo)"
-    decrypt_out=$(on_host "$PRIMARY" "$VIGO_INVOKE sigil decrypt '$TEST_NAME' -o '$PLAIN_DECRYPTED' 2>&1")
+    decrypt_out=$(on_host "$PRIMARY" "$VIGO_INVOKE swarm cryptsync decrypt '$TEST_NAME' -o '$PLAIN_DECRYPTED' 2>&1")
     if [[ $? -ne 0 ]]; then
         fail "decrypt failed: $(head -2 <<<"$decrypt_out" | tr '\n' ' ')"
     else
@@ -259,17 +261,17 @@ else
         decrypt_stat=$(stat_remote "$PRIMARY" "$PLAIN_DECRYPTED")
         note "$PLAIN_DECRYPTED: $decrypt_stat"
         read -r owner group mode <<<"$decrypt_stat"
-        if [[ "$owner" == "$SIGIL_USER" && "$group" == "$SIGIL_USER" && "$mode" == "600" ]]; then
-            pass "decrypt output is $SIGIL_USER:$SIGIL_USER 0600"
+        if [[ "$owner" == "$CRYPTSYNC_USER" && "$group" == "$CRYPTSYNC_USER" && "$mode" == "600" ]]; then
+            pass "decrypt output is $CRYPTSYNC_USER:$CRYPTSYNC_USER 0600"
         else
-            fail "decrypt output is $owner:$group $mode (expected $SIGIL_USER:$SIGIL_USER 600)"
+            fail "decrypt output is $owner:$group $mode (expected $CRYPTSYNC_USER:$CRYPTSYNC_USER 600)"
         fi
     fi
 fi
 
 # ─────────────────── 4. Leaves catch-up smoke ───────────────────
 
-section "4. Sigil leaves catch-up — GET /sigil/leaves/$SIGIL_USER returns valid JSON"
+section "4. Cryptsync leaves catch-up — GET /swarm/cryptsync/leaves/$CRYPTSYNC_USER returns valid JSON"
 
 # We can't easily curl the mTLS endpoint from outside the agent
 # (the test driver doesn't have the fleet CA + agent cert handy),
@@ -280,8 +282,8 @@ section "4. Sigil leaves catch-up — GET /sigil/leaves/$SIGIL_USER returns vali
 
 # 4a. LeavesTable file readable + JSON-parseable (always present
 #     on enrolled hosts, even if the leaves array is empty).
-step "$PRIMARY: /var/lib/vigo/sigil/$SIGIL_USER/leaves.json parseable"
-leaves_json=$(on_host "$PRIMARY" "sudo cat /var/lib/vigo/sigil/$SIGIL_USER/leaves.json 2>/dev/null || echo '{}'")
+step "$PRIMARY: /var/lib/vigo/swarm/cryptsync/$CRYPTSYNC_USER/leaves.json parseable"
+leaves_json=$(on_host "$PRIMARY" "sudo cat /var/lib/vigo/swarm/cryptsync/$CRYPTSYNC_USER/leaves.json 2>/dev/null || echo '{}'")
 if printf '%s' "$leaves_json" | python3 -c 'import sys, json; json.load(sys.stdin)' 2>/dev/null; then
     leaves_count=$(printf '%s' "$leaves_json" | python3 -c 'import sys, json; d=json.load(sys.stdin); print(len(d.get("leaves",{})))' 2>/dev/null || echo "0")
     pass "$PRIMARY: leaves.json parseable, $leaves_count entries"
@@ -294,12 +296,12 @@ fi
 #     post-deploy; full multicast capture is overkill for a smoke.
 #     We grep the last 200 lines of vigo-envoy for the path that
 #     would be exercised on every announce.
-step "$PRIMARY: vigo-envoy journal mentions sigil announce activity"
-journal_out=$(on_host "$PRIMARY" "sudo journalctl -u vigo-envoy.service -n 200 --no-pager 2>/dev/null | grep -E 'sigil.*(announce|leaves|digest)' | tail -3" 2>/dev/null || true)
+step "$PRIMARY: vigo-envoy journal mentions cryptsync announce activity"
+journal_out=$(on_host "$PRIMARY" "sudo journalctl -u vigo-envoy.service -n 200 --no-pager 2>/dev/null | grep -E 'cryptsync.*(announce|leaves|digest)' | tail -3" 2>/dev/null || true)
 if [[ -n "$journal_out" ]]; then
-    note "recent sigil log lines:"
+    note "recent cryptsync log lines:"
     while IFS= read -r line; do note "  $line"; done <<<"$journal_out"
-    pass "$PRIMARY: sigil announce path active"
+    pass "$PRIMARY: cryptsync announce path active"
 else
-    skip "$PRIMARY: no recent sigil announce log lines (daemon may have just restarted)"
+    skip "$PRIMARY: no recent cryptsync announce log lines (daemon may have just restarted)"
 fi

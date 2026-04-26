@@ -9,21 +9,23 @@
 #
 # Phase scope (see substrate-livetests.md for detail):
 #
-#   phase-b  — cairn source CLI + leave/evict (cairn + sigil).
-#              Sections 4–7 require SIGIL_PASSWORD_FILE; skipped
-#              gracefully if absent.
-#   phase-c  — swarm health (peers + manifest gossip), lode
-#              distribute/revoke, echo round-trip.
-#   phase-d  — sigil encrypt/push/decrypt perms, leaves catch-up
+#   phase-b  — gitmirror source CLI + leave/evict (gitmirror +
+#              cryptsync). Sections 4–7 require SIGIL_PASSWORD_FILE;
+#              skipped gracefully if absent. NOTE: phase-b script
+#              still uses pre-0.31.0 vocabulary (sigil, cairn) and
+#              will fail against current binaries until rewritten.
+#   phase-c  — swarm health (peers + manifest gossip), payload
+#              distribute/revoke, filesync round-trip.
+#   phase-d  — cryptsync encrypt/push/decrypt perms, leaves catch-up
 #              smoke. Section 3 (decrypt) requires
 #              PRE_DECRYPT_UNLOCK=1; skipped by default.
 #
 # All env vars accepted by the underlying scripts (PRIMARY,
-# SECONDARY, THIRD, SIGIL_USER, VIGO_BIN, etc.) pass through
-# transparently — set them before invoking this wrapper.
+# SECONDARY, THIRD, FILESYNC_USER, CRYPTSYNC_USER, VIGO_BIN, etc.)
+# pass through transparently — set them before invoking this wrapper.
 #
 # Run: ./substrate-livetest-all.sh
-#      SIGIL_PASSWORD_FILE=~/.pw PRE_DECRYPT_UNLOCK=1 ./substrate-livetest-all.sh
+#      PRE_DECRYPT_UNLOCK=1 ./substrate-livetest-all.sh
 
 set -uo pipefail
 
@@ -37,9 +39,9 @@ RESET=$'\033[0m'
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PHASES=(
-    "phase-b:Cairn source CLI + leave/evict (cairn + sigil)"
-    "phase-c:Swarm health, lode, echo"
-    "phase-d:Sigil encrypt/push/decrypt + leaves catch-up"
+    "phase-b:Gitmirror source CLI + leave/evict (gitmirror + cryptsync)"
+    "phase-c:Swarm health, payload, filesync"
+    "phase-d:Cryptsync encrypt/push/decrypt + leaves catch-up"
 )
 
 declare -A PHASE_RC
