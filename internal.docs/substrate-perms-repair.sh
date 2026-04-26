@@ -125,11 +125,19 @@ for h in "${ALL_HOSTS[@]}"; do
     fi
 done
 
+# Count populated keys via iteration — bash + `set -u` chokes on
+# `${#assoc_array[@]}` when the array has never had a key assigned,
+# even though the array was declared.
+sentinel_count=0
+for _k in "${!SENTINEL_REPAIR_NEEDED[@]}"; do sentinel_count=$((sentinel_count + 1)); done
+cipher_count=0
+for _k in "${!CIPHERTEXT_REPAIR_NEEDED[@]}"; do cipher_count=$((cipher_count + 1)); done
+
 # ─────────── automatic repair (no password) ───────────
 
 if (( REPAIR == 1 )); then
     section "Automatic repair (sentinels + dirs)"
-    if (( ${#SENTINEL_REPAIR_NEEDED[@]} == 0 )); then
+    if (( sentinel_count == 0 )); then
         ok "no sentinels or dirs need repair"
     else
         for h in "${!SENTINEL_REPAIR_NEEDED[@]}"; do
@@ -142,7 +150,7 @@ fi
 
 # ─────────── manual repair (interactive password) ───────────
 
-if (( ${#CIPHERTEXT_REPAIR_NEEDED[@]} > 0 )); then
+if (( cipher_count > 0 )); then
     section "Manual repair required (interactive password)"
     note "These envoys have root-owned ciphertext under ~$SIGIL_USER/sigil/."
     note "Run on EACH envoy listed (the password prompt is local)."
@@ -163,12 +171,6 @@ if (( ${#CIPHERTEXT_REPAIR_NEEDED[@]} > 0 )); then
 fi
 
 if (( REPAIR == 0 )); then
-    # Bash + `set -u` chokes on `${#assoc_array[@]}` when the array
-    # has never had a key assigned, so iterate to count instead.
-    sentinel_count=0
-    for _k in "${!SENTINEL_REPAIR_NEEDED[@]}"; do sentinel_count=$((sentinel_count + 1)); done
-    cipher_count=0
-    for _k in "${!CIPHERTEXT_REPAIR_NEEDED[@]}"; do cipher_count=$((cipher_count + 1)); done
     if (( sentinel_count + cipher_count == 0 )); then
         section "Result"
         ok "no repair needed across the fleet"
