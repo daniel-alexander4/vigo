@@ -413,6 +413,7 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
         );
     }
     let dst = content_dir.join(&target_name);
+    let username = user_for_invocation()?;
 
     // Atomic write via temp file, so a crash mid-encrypt doesn't
     // leave a half-written ciphertext in ~/sigil/.
@@ -421,8 +422,10 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
         let _ = fs::remove_file(&tmp);
         return Err(e);
     }
-    fs::rename(&tmp, &dst)
-        .with_context(|| format!("rename {} → {}", tmp.display(), dst.display()))?;
+    if let Err(e) = super::finalize_user_ciphertext(&tmp, &dst, &username) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
 
     println!(
         "✓ Encrypted to {} recipient(s); wrote {}",
@@ -1120,6 +1123,7 @@ fn cmd_reencrypt(_args: &[String]) -> Result<()> {
         );
     }
     let recipients = config::load_recipients(&home)?;
+    let username = user_for_invocation()?;
 
     let mut count = 0usize;
     let mut skipped = 0usize;
@@ -1136,7 +1140,7 @@ fn cmd_reencrypt(_args: &[String]) -> Result<()> {
         if name.starts_with('.') {
             continue;
         }
-        match reencrypt_one(&path, &recipients) {
+        match reencrypt_one(&path, &recipients, &username) {
             Ok(()) => count += 1,
             Err(e) => {
                 eprintln!("skip {}: {}", path.display(), e);
@@ -1153,7 +1157,11 @@ fn cmd_reencrypt(_args: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn reencrypt_one(path: &Path, recipients: &[age::x25519::Recipient]) -> Result<()> {
+fn reencrypt_one(
+    path: &Path,
+    recipients: &[age::x25519::Recipient],
+    username: &str,
+) -> Result<()> {
     let ciphertext = fs::read(path)
         .with_context(|| format!("reading {}", path.display()))?;
     if ciphertext.is_empty() || !is_age_ciphertext(&ciphertext) {
@@ -1162,17 +1170,18 @@ fn reencrypt_one(path: &Path, recipients: &[age::x25519::Recipient]) -> Result<(
     let plaintext = session::request_decrypt(&ciphertext)?;
 
     // Write plaintext to a temp file in the same dir, then re-encrypt.
+    // Use write_user_file so the ephemeral plaintext is created 0600
+    // — narrows the window where another local user could read it via
+    // a directory listing.
     let dir = path.parent().context("no parent")?;
     let name = path.file_name().context("no name")?.to_string_lossy().to_string();
     let plain_tmp = dir.join(format!(".{}.sigil.reenc.plain.tmp", name));
     let enc_tmp = dir.join(format!(".{}.sigil.reenc.enc.tmp", name));
 
-    fs::write(&plain_tmp, &plaintext)
-        .with_context(|| format!("writing {}", plain_tmp.display()))?;
+    write_user_file(&plain_tmp, &plaintext)?;
     let result = (|| -> Result<()> {
         crypt::encrypt_file(&plain_tmp, &enc_tmp, recipients)?;
-        fs::rename(&enc_tmp, path)
-            .with_context(|| format!("rename {} → {}", enc_tmp.display(), path.display()))?;
+        super::finalize_user_ciphertext(&enc_tmp, path, username)?;
         Ok(())
     })();
     let _ = fs::remove_file(&plain_tmp);
@@ -1218,6 +1227,37 @@ fn write_user_file(path: &Path, bytes: &[u8]) -> Result<()> {
 }
 
 // ---------- helpers ----------
+
+/// Resolve the invoking user's username — `SUDO_USER` (when running
+/// under sudo, the typical case for `vigo sigil` since the agent
+/// binary lives in `/usr/local/sbin`), falling back to a `getuid()`
+/// passwd lookup. Companion to `user_home_for_invocation` — used so
+/// chown-to-user calls during ciphertext finalization point at the
+/// real invoker rather than the elevated process's effective uid.
+fn user_for_invocation() -> Result<String> {
+    if let Ok(s) = std::env::var("SUDO_USER") {
+        if !s.is_empty() && s != "root" {
+            return Ok(s);
+        }
+    }
+    #[cfg(unix)]
+    {
+        let uid = unsafe { libc::getuid() };
+        if let Ok(passwd) = fs::read_to_string("/etc/passwd") {
+            for line in passwd.lines() {
+                let fields: Vec<&str> = line.split(':').collect();
+                if fields.len() >= 7 {
+                    if let Ok(u) = fields[2].parse::<u32>() {
+                        if u == uid {
+                            return Ok(fields[0].to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    bail!("could not resolve invoking user (set $SUDO_USER)")
+}
 
 /// Resolve the invoking user's home directory.
 fn user_home_for_invocation() -> Result<PathBuf> {

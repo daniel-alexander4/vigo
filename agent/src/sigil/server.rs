@@ -233,7 +233,16 @@ pub async fn handle_push(
 
     let target = content_dir.join(&name);
     let tmp: PathBuf = content_dir.join(format!(".{}.sigil.push.tmp", name));
-    match write_and_rename(&tmp, &target, &bytes) {
+    if let Err(e) = write_tmp(&tmp, &bytes) {
+        tracing::warn!(
+            path = %tmp.display(),
+            error = %e,
+            "sigil push: tmp write failed"
+        );
+        let _ = fs::remove_file(&tmp);
+        return internal_error("write failed");
+    }
+    match super::finalize_user_ciphertext(&tmp, &target, &user) {
         Ok(()) => Response::builder()
             .status(StatusCode::CREATED)
             .header("Content-Type", "application/json")
@@ -243,20 +252,38 @@ pub async fn handle_push(
             tracing::warn!(
                 path = %target.display(),
                 error = %e,
-                "sigil push: write failed"
+                "sigil push: finalize failed"
             );
+            let _ = fs::remove_file(&tmp);
             internal_error("write failed")
         }
     }
 }
 
-fn write_and_rename(tmp: &std::path::Path, target: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
+/// Write the pushed ciphertext to a temp path with mode 0600. The
+/// dotfile name keeps it hidden during the brief window before
+/// `finalize_user_ciphertext` chowns + renames it into place.
+fn write_tmp(tmp: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(tmp)?;
+        f.write_all(data)?;
+        f.sync_all().ok();
+        Ok(())
+    }
+    #[cfg(not(unix))]
     {
         let mut f = fs::File::create(tmp)?;
         f.write_all(data)?;
         f.sync_all().ok();
+        Ok(())
     }
-    fs::rename(tmp, target)
 }
 
 // ---------- DELETE tombstone (POST /sigil/tombstones/{user}/{filename}) ----------

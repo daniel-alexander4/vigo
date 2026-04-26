@@ -1265,6 +1265,41 @@ pub fn mark_for_enroll(username: &str, home: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Finalize a freshly-written ciphertext temp file: enforce mode
+/// 0600 on the temp, atomically rename to `dst`, then chown `dst`
+/// to `username`. Both write paths into `~<user>/sigil/` — the
+/// encrypt CLI verb (cmd_encrypt, reencrypt_one, both run as root
+/// when invoked through the sudo-only `/usr/local/sbin/vigo` binary)
+/// and the agent's push receiver (always root) — call this so the
+/// resulting ciphertext lands as `<user>:<group> 0600` regardless of
+/// which root context wrote it.
+#[cfg(unix)]
+pub(crate) fn finalize_user_ciphertext(
+    tmp: &Path,
+    dst: &Path,
+    username: &str,
+) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(tmp, fs::Permissions::from_mode(0o600))
+        .with_context(|| format!("set 0600 on {}", tmp.display()))?;
+    fs::rename(tmp, dst)
+        .with_context(|| format!("rename {} → {}", tmp.display(), dst.display()))?;
+    chown_to_user(dst, username)
+        .with_context(|| format!("chown {} to {}", dst.display(), username))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+pub(crate) fn finalize_user_ciphertext(
+    tmp: &Path,
+    dst: &Path,
+    _username: &str,
+) -> Result<()> {
+    fs::rename(tmp, dst)
+        .with_context(|| format!("rename {} → {}", tmp.display(), dst.display()))?;
+    Ok(())
+}
+
 #[cfg(unix)]
 fn chown_to_user(path: &Path, username: &str) -> Result<()> {
     use std::ffi::CString;
