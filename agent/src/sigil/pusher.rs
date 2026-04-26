@@ -180,26 +180,25 @@ async fn fan_out_delete(agent: &ureq::Agent, job: DeleteJob) -> Result<()> {
     // Record tombstone locally BEFORE fanning out — if we crash
     // between steps, the authoritative state is "this envoy
     // deleted foo.pdf," and next announce will carry the digest
-    // change so peers catch up.
-    {
-        let mut table = TombstoneTable::load(&user);
-        let changed = table.upsert(
+    // change so peers catch up. Wrapped in TombstoneTable::modify
+    // so concurrent DeleteJobs for the same user can't race their
+    // load-modify-save pairs (lost-update + tmp-rename collision
+    // observed during bulk-delete on §6 livetest run).
+    if let Err(e) = TombstoneTable::modify(&user, |table| {
+        table.upsert(
             &filename,
             Tombstone {
                 deletion_time,
                 source_hostname: hostname.clone(),
             },
+        )
+    }) {
+        warn!(
+            user = %user,
+            filename = %filename,
+            error = %e,
+            "pusher: tombstone save failed"
         );
-        if changed {
-            if let Err(e) = table.save() {
-                warn!(
-                    user = %user,
-                    filename = %filename,
-                    error = %e,
-                    "pusher: tombstone save failed"
-                );
-            }
-        }
     }
 
     // Double-check local removal. The file should already be gone

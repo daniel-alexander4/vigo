@@ -177,6 +177,23 @@ impl LeavesTable {
         Ok(())
     }
 
+    /// Atomic load → mutate → save under the per-user leaves lock.
+    /// Mirrors `TombstoneTable::modify`; same lost-update race
+    /// applies if multiple LEAVE envelopes for the same user land
+    /// concurrently. Closure returns `true` to trigger save().
+    pub fn modify<F>(user: &str, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut Self) -> bool,
+    {
+        let lock = super::locks::user_lock("leaves", user);
+        let _guard = lock.lock().unwrap_or_else(|p| p.into_inner());
+        let mut table = Self::load(user);
+        if f(&mut table) {
+            table.save()?;
+        }
+        Ok(())
+    }
+
     /// Insert-or-update a LEAVE. Later `leave_time` wins. Returns
     /// true if this call changed the stored record (new key OR
     /// leave_time advanced); callers can skip an unnecessary

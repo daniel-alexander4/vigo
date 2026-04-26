@@ -141,11 +141,20 @@ async fn run(
     let mut interval = tokio::time::interval(RECONCILE_INTERVAL);
     interval.tick().await; // consume the immediate tick
 
-    // Event dedupe: remember the last emit time per (user, filename).
+    // Event dedupe: remember the last emit time per
+    // (user, filename, action). Action is part of the key so a Push
+    // followed by a Delete on the same filename within DEBOUNCE
+    // (typical for `vigo sigil encrypt foo && vigo sigil delete foo`
+    // or for the §7 livetest's encrypt-then-delete probe) doesn't
+    // squelch the second event. CREATE+MODIFY pairs from the
+    // encrypt CLI's atomic rename still collapse correctly because
+    // both resolve to action=Push and so share a key.
+    //
     // Pruned on each reconcile tick so the map is bounded by the rate
-    // of distinct filenames touched within the reconcile window, not
-    // by the envoy's lifetime.
-    let mut last_emit: HashMap<(String, String), std::time::Instant> = HashMap::new();
+    // of distinct (filename, action) touched within the reconcile
+    // window, not by the envoy's lifetime.
+    let mut last_emit: HashMap<(String, String, EventAction), std::time::Instant> =
+        HashMap::new();
 
     loop {
         tokio::select! {
@@ -173,7 +182,7 @@ async fn run(
                         if let Some((user, filename, action)) =
                             resolve_event(&ev, &watches.lock().unwrap())
                         {
-                            let key = (user.clone(), filename.clone());
+                            let key = (user.clone(), filename.clone(), action);
                             let now = std::time::Instant::now();
                             if let Some(prev) = last_emit.get(&key) {
                                 if now.duration_since(*prev) < DEBOUNCE {
@@ -369,7 +378,7 @@ fn path_inode(path: &Path) -> Option<(u64, u64)> {
 }
 
 /// Push or delete — what the watcher does with a resolved event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum EventAction {
     Push,
     Delete,
@@ -523,6 +532,30 @@ mod tests {
     fn path_inode_returns_none_for_missing_path() {
         let bogus = PathBuf::from("/nonexistent/sigil/watcher/probe");
         assert!(path_inode(&bogus).is_none());
+    }
+
+    #[test]
+    fn debounce_key_separates_push_from_delete() {
+        // The watcher's dedupe map is keyed by (user, filename, action)
+        // so a Push followed by a Delete on the same filename within
+        // DEBOUNCE doesn't squelch the second event. The §7 livetest
+        // (encrypt then immediate delete) and any rapid re-encrypt
+        // cycle depend on this. Two CREATEs for the same file still
+        // collapse because they share action=Push.
+        let push_key = ("dan".to_string(), "regress.age".to_string(), EventAction::Push);
+        let delete_key = ("dan".to_string(), "regress.age".to_string(), EventAction::Delete);
+        let push_key_again = ("dan".to_string(), "regress.age".to_string(), EventAction::Push);
+        assert_ne!(push_key, delete_key);
+        assert_eq!(push_key, push_key_again);
+
+        // Round-trip through a HashMap to confirm Hash + Eq are wired
+        // such that lookup distinguishes the actions.
+        let mut m: HashMap<(String, String, EventAction), u32> = HashMap::new();
+        m.insert(push_key.clone(), 1);
+        assert!(m.get(&delete_key).is_none(), "Push key must not collide with Delete key");
+        m.insert(delete_key.clone(), 2);
+        assert_eq!(m.get(&push_key), Some(&1));
+        assert_eq!(m.get(&delete_key), Some(&2));
     }
 
     #[test]

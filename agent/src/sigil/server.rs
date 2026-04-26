@@ -352,19 +352,19 @@ pub async fn handle_tombstone_delete(
         return forbidden("signature verification failed");
     }
 
-    // Record tombstone locally.
-    let mut table = TombstoneTable::load(&user);
-    let changed = table.upsert(
-        &name,
-        Tombstone {
-            deletion_time: envelope.deletion_time,
-            source_hostname: envelope.source_hostname.clone(),
-        },
-    );
-    if changed {
-        if let Err(e) = table.save() {
-            tracing::warn!(error = %e, "sigil DELETE: tombstone save failed");
-        }
+    // Record tombstone locally under the per-user lock so
+    // simultaneous DELETE envelopes from different peers don't
+    // race their load-modify-save pairs.
+    if let Err(e) = TombstoneTable::modify(&user, |table| {
+        table.upsert(
+            &name,
+            Tombstone {
+                deletion_time: envelope.deletion_time,
+                source_hostname: envelope.source_hostname.clone(),
+            },
+        )
+    }) {
+        tracing::warn!(error = %e, "sigil DELETE: tombstone save failed");
     }
 
     // Remove the local file if still present. Idempotent.

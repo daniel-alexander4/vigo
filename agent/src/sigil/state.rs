@@ -128,6 +128,26 @@ impl PeerTable {
         Ok(())
     }
 
+    /// Atomic load → mutate → save under the per-user peers lock.
+    /// Use this for any read-modify-write (upsert from announce,
+    /// forget, prune_stale) — it prevents the lost-update race
+    /// where two concurrent callers both load the same starting
+    /// state and the second save() overwrites the first. Closure
+    /// returns `true` if it mutated the table; the helper only
+    /// saves when so.
+    pub fn modify<F>(user: &str, f: F) -> Result<()>
+    where
+        F: FnOnce(&mut Self) -> bool,
+    {
+        let lock = super::locks::user_lock("peers", user);
+        let _guard = lock.lock().unwrap_or_else(|p| p.into_inner());
+        let mut table = Self::load(user);
+        if f(&mut table) {
+            table.save()?;
+        }
+        Ok(())
+    }
+
     /// Insert-or-update. Returns true if this produced a real change
     /// (new peer, pubkey rotation, or last_seen advanced meaningfully)
     /// — the caller can skip `save()` + `regenerate_recipients()` when

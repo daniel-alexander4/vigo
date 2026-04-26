@@ -30,6 +30,7 @@ pub mod config;
 pub mod crypt;
 pub mod discovery;
 pub mod leaves;
+pub mod locks;
 pub mod pusher;
 pub mod server;
 pub mod session;
@@ -373,17 +374,19 @@ fn gc_tombstones_all() {
     };
     let now = now_secs();
     for user in enrolled {
-        let mut table = TombstoneTable::load(&user);
-        let dropped = table.gc(now, tombstones::DEFAULT_RETENTION_SECS);
+        let mut dropped: usize = 0;
+        if let Err(e) = TombstoneTable::modify(&user, |table| {
+            dropped = table.gc(now, tombstones::DEFAULT_RETENTION_SECS);
+            dropped > 0
+        }) {
+            warn!(
+                user = %user,
+                error = %e,
+                "sigil: tombstone save after gc failed"
+            );
+            continue;
+        }
         if dropped > 0 {
-            if let Err(e) = table.save() {
-                warn!(
-                    user = %user,
-                    error = %e,
-                    "sigil: tombstone save after gc failed"
-                );
-                continue;
-            }
             info!(
                 user = %user,
                 dropped = dropped,
@@ -484,15 +487,21 @@ fn handle_incoming(inc: IncomingAnnouncement) {
     // entry survived in peers.json from before the LEAVE landed.
     let leaves = leaves::LeavesTable::load(&announcement.user);
     if leaves.leave_time_for(&announcement.pubkey).is_some() {
-        let mut table = PeerTable::load(&announcement.user);
-        if table.forget_by_pubkey(&announcement.pubkey) {
-            if let Err(e) = table.save() {
-                warn!(
-                    error = %e,
-                    user = %announcement.user,
-                    "sigil: peer table save after pre-emptive forget failed"
-                );
+        let mut snapshot: Option<PeerTable> = None;
+        if let Err(e) = PeerTable::modify(&announcement.user, |table| {
+            let dropped = table.forget_by_pubkey(&announcement.pubkey);
+            if dropped {
+                snapshot = Some(table.clone());
             }
+            dropped
+        }) {
+            warn!(
+                error = %e,
+                user = %announcement.user,
+                "sigil: peer table save after pre-emptive forget failed"
+            );
+        }
+        if let Some(table) = snapshot {
             if let Some(home) = home_for_user(&announcement.user) {
                 if let Err(e) = regenerate_recipients(&announcement.user, &home, &table) {
                     warn!(
@@ -520,13 +529,21 @@ fn handle_incoming(inc: IncomingAnnouncement) {
         last_seen_addr: Some(from.to_string()),
     };
 
-    let mut table = PeerTable::load(&announcement.user);
-    let real_change = table.upsert(entry);
-    if let Err(e) = table.save() {
+    // Lock-protected upsert. Capture a post-update snapshot so we can
+    // call regenerate_recipients outside the lock without re-reading
+    // the table — and only when upsert reported a real_change.
+    let mut snapshot: Option<PeerTable> = None;
+    if let Err(e) = PeerTable::modify(&announcement.user, |table| {
+        let real_change = table.upsert(entry);
+        if real_change {
+            snapshot = Some(table.clone());
+        }
+        real_change
+    }) {
         warn!(error = %e, user = %announcement.user, "sigil: peer table save failed");
     }
 
-    if real_change {
+    if let Some(table) = snapshot {
         if let Some(home) = home_for_user(&announcement.user) {
             if let Err(e) = regenerate_recipients(&announcement.user, &home, &table) {
                 warn!(
@@ -626,14 +643,21 @@ async fn catchup_tombstones_from(user: &str, source_hostname: &str, url: &str) -
 
     let remote: TombstoneTable =
         serde_json::from_slice(&body).context("parsing tombstones response")?;
-    let mut local = TombstoneTable::load(user);
-    let changed = local.merge(&remote);
-    if changed {
-        local.save().context("saving merged tombstones")?;
+    let mut merged_snapshot: Option<TombstoneTable> = None;
+    TombstoneTable::modify(user, |local| {
+        let changed = local.merge(&remote);
+        if changed {
+            merged_snapshot = Some(local.clone());
+        }
+        changed
+    })
+    .context("saving merged tombstones")?;
+    if let Some(snapshot) = merged_snapshot {
         // Removed any local files newly-covered by tombstones so
         // the receiver converges to the same file-set as the rest
-        // of the mesh.
-        remove_files_for_active_tombstones(user, &local);
+        // of the mesh. Done outside the lock — file IO that doesn't
+        // touch the table is fine concurrently with another modify.
+        remove_files_for_active_tombstones(user, &snapshot);
         tracing::info!(
             user = %user,
             source = %source_hostname,
@@ -679,12 +703,18 @@ fn prune_all() {
     };
     let now = now_secs();
     for user in enrolled {
-        let mut table = PeerTable::load(&user);
-        if table.prune_stale(now) {
-            if let Err(e) = table.save() {
-                warn!(error = %e, user = %user, "sigil: peer table save after prune failed");
-                continue;
+        let mut snapshot: Option<PeerTable> = None;
+        if let Err(e) = PeerTable::modify(&user, |table| {
+            let pruned = table.prune_stale(now);
+            if pruned {
+                snapshot = Some(table.clone());
             }
+            pruned
+        }) {
+            warn!(error = %e, user = %user, "sigil: peer table save after prune failed");
+            continue;
+        }
+        if let Some(table) = snapshot {
             if let Some(home) = home_for_user(&user) {
                 if let Err(e) = regenerate_recipients(&user, &home, &table) {
                     warn!(
@@ -1024,28 +1054,37 @@ pub fn apply_leave(
     leave_time: i64,
     home: &Path,
 ) -> Result<()> {
-    // 1. Peer table: drop the pubkey if still present.
-    let mut table = PeerTable::load(user);
-    let peer_was_present = table.forget_by_pubkey(age_pubkey_leaving);
-    if peer_was_present {
-        table.save()?;
-    }
+    // 1. Peer table: drop the pubkey if still present, under the
+    //    per-user peers lock so a concurrent announce-driven upsert
+    //    can't undo this drop.
+    let mut peer_table_after: Option<PeerTable> = None;
+    PeerTable::modify(user, |table| {
+        let dropped = table.forget_by_pubkey(age_pubkey_leaving);
+        if dropped {
+            peer_table_after = Some(table.clone());
+        }
+        dropped
+    })?;
+    let peer_was_present = peer_table_after.is_some();
 
     // 2. Leave table: record the leave (monotonic on leave_time).
-    let mut leaves = leaves::LeavesTable::load(user);
-    let record = leaves::LeaveRecord {
-        leave_time,
-        hostname_leaving: hostname_leaving.to_string(),
-    };
-    let leaves_changed = leaves.upsert(age_pubkey_leaving, record);
-    if leaves_changed {
-        leaves.save()?;
-    }
+    //    Leaves are mutually-independent of peers but get the same
+    //    treatment for symmetry and to handle simultaneous LEAVE
+    //    envelopes for the same user from different sources.
+    let mut leaves_changed = false;
+    leaves::LeavesTable::modify(user, |leaves| {
+        let record = leaves::LeaveRecord {
+            leave_time,
+            hostname_leaving: hostname_leaving.to_string(),
+        };
+        leaves_changed = leaves.upsert(age_pubkey_leaving, record);
+        leaves_changed
+    })?;
 
-    // 3. Recipients.txt — regenerate unconditionally when a peer was
-    //    dropped. Cheap and side-effect-free if the pubkey wasn't there.
-    if peer_was_present {
-        regenerate_recipients(user, home, &table)?;
+    // 3. Recipients.txt — regenerate when a peer was dropped, using
+    //    the post-drop snapshot we captured under the lock.
+    if let Some(table) = peer_table_after.as_ref() {
+        regenerate_recipients(user, home, table)?;
     }
 
     // 4. Reencrypt sentinel — drop only when something actually
