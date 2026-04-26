@@ -53,6 +53,15 @@ VIGO_BIN="${VIGO_BIN:-/usr/local/sbin/vigo}"
 FANOUT_TIMEOUT="${FANOUT_TIMEOUT:-30}"
 PRE_DECRYPT_UNLOCK="${PRE_DECRYPT_UNLOCK:-0}"
 
+# Wrap a vigo invocation so HOME points at $SIGIL_USER's home even
+# under env-stripping sudo configs (default Ubuntu sudo resets HOME
+# to /root, which makes pre-0.30.26 binaries fail with "not enrolled"
+# because they read $HOME first instead of resolving via passwd).
+# Using `sudo env HOME=...` instead of `sudo HOME=...` because some
+# sudo configs only forward env vars passed via the `env` shim.
+SIGIL_HOME="/home/$SIGIL_USER"
+VIGO_INVOKE="sudo env HOME=$SIGIL_HOME LOGNAME=$SIGIL_USER USER=$SIGIL_USER $VIGO_BIN"
+
 GREEN=$'\033[38;2;166;227;161m'
 RED=$'\033[38;2;243;139;168m'
 YELLOW=$'\033[38;2;249;226;175m'
@@ -99,7 +108,7 @@ cleanup() {
     section "Cleanup"
     if [[ -n "${TEST_NAME:-}" ]]; then
         note "removing ~$SIGIL_USER/sigil/$TEST_NAME from PRIMARY (mesh DELETE)"
-        on_host "$PRIMARY" "sudo $VIGO_BIN sigil delete '$TEST_NAME' >/dev/null 2>&1 || sudo rm -f '/home/$SIGIL_USER/sigil/$TEST_NAME'" >/dev/null 2>&1 || true
+        on_host "$PRIMARY" "$VIGO_INVOKE sigil delete '$TEST_NAME' >/dev/null 2>&1 || sudo rm -f '$SIGIL_HOME/sigil/$TEST_NAME'" >/dev/null 2>&1 || true
     fi
     [[ -n "${PLAIN_LOCAL:-}" && -f "$PLAIN_LOCAL" ]] && rm -f "$PLAIN_LOCAL"
     [[ -n "${PLAIN_DECRYPTED:-}" && -f "$PLAIN_DECRYPTED" ]] && sudo rm -f "$PLAIN_DECRYPTED" 2>/dev/null || true
@@ -167,21 +176,21 @@ PLAIN_LOCAL="/tmp/phase-d-plain-$$-$(date +%s).txt"
 TEST_NAME="phase-d-perms-$$-$(date +%s).txt"
 echo "phase-d perms probe $(date +%s)" > "$PLAIN_LOCAL"
 
-step "encrypt $PLAIN_LOCAL → ~/sigil/$TEST_NAME on $PRIMARY (via sudo)"
+step "encrypt $PLAIN_LOCAL → ~/sigil/$TEST_NAME on $PRIMARY (via sudo, HOME=$SIGIL_HOME)"
 # We deliberately put the plaintext in /tmp (readable by other users)
 # and ask vigo to encrypt it under SIGIL_USER's home — the act of
 # crossing the user boundary is what surfaces the chown bug, since
 # the sudo'd vigo process is root but the resulting ciphertext must
 # end up owned by SIGIL_USER.
-encrypt_out=$(on_host "$PRIMARY" "sudo $VIGO_BIN sigil encrypt '$PLAIN_LOCAL' --as '$TEST_NAME' 2>&1")
+encrypt_out=$(on_host "$PRIMARY" "$VIGO_INVOKE sigil encrypt '$PLAIN_LOCAL' --as '$TEST_NAME' 2>&1")
 if [[ $? -ne 0 ]]; then
     fail "encrypt failed: $(head -2 <<<"$encrypt_out" | tr '\n' ' ')"
     exit 1
 fi
 pass "encrypt returned 0"
 
-step "stat $PRIMARY:/home/$SIGIL_USER/sigil/$TEST_NAME"
-local_stat=$(stat_remote "$PRIMARY" "/home/$SIGIL_USER/sigil/$TEST_NAME")
+step "stat $PRIMARY:$SIGIL_HOME/sigil/$TEST_NAME"
+local_stat=$(stat_remote "$PRIMARY" "$SIGIL_HOME/sigil/$TEST_NAME")
 if [[ -z "$local_stat" ]]; then
     fail "ciphertext not present on $PRIMARY"
 else
@@ -205,7 +214,7 @@ else
     elapsed=0
     landed=0
     while (( elapsed < FANOUT_TIMEOUT )); do
-        if on_host "$SECONDARY" "sudo test -f /home/$SIGIL_USER/sigil/$TEST_NAME" >/dev/null 2>&1; then
+        if on_host "$SECONDARY" "sudo test -f $SIGIL_HOME/sigil/$TEST_NAME" >/dev/null 2>&1; then
             landed=1
             break
         fi
@@ -217,8 +226,8 @@ else
     else
         pass "$TEST_NAME appeared on $SECONDARY in ${elapsed}s"
 
-        step "stat $SECONDARY:/home/$SIGIL_USER/sigil/$TEST_NAME"
-        remote_stat=$(stat_remote "$SECONDARY" "/home/$SIGIL_USER/sigil/$TEST_NAME")
+        step "stat $SECONDARY:$SIGIL_HOME/sigil/$TEST_NAME"
+        remote_stat=$(stat_remote "$SECONDARY" "$SIGIL_HOME/sigil/$TEST_NAME")
         if [[ -z "$remote_stat" ]]; then
             fail "ciphertext disappeared from $SECONDARY between probe and stat"
         else
@@ -242,7 +251,7 @@ if (( PRE_DECRYPT_UNLOCK == 0 )); then
 else
     PLAIN_DECRYPTED="/tmp/phase-d-decrypted-$$-$(date +%s).txt"
     step "decrypt $TEST_NAME → $PLAIN_DECRYPTED on $PRIMARY (via sudo)"
-    decrypt_out=$(on_host "$PRIMARY" "sudo $VIGO_BIN sigil decrypt '$TEST_NAME' -o '$PLAIN_DECRYPTED' 2>&1")
+    decrypt_out=$(on_host "$PRIMARY" "$VIGO_INVOKE sigil decrypt '$TEST_NAME' -o '$PLAIN_DECRYPTED' 2>&1")
     if [[ $? -ne 0 ]]; then
         fail "decrypt failed: $(head -2 <<<"$decrypt_out" | tr '\n' ' ')"
     else

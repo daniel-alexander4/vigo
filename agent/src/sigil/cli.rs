@@ -1247,61 +1247,72 @@ fn write_user_file(path: &Path, bytes: &[u8]) -> Result<()> {
 
 // ---------- helpers ----------
 
-/// Resolve the invoking user's username — `SUDO_USER` (when running
-/// under sudo, the typical case for `vigo sigil` since the agent
-/// binary lives in `/usr/local/sbin`), falling back to a `getuid()`
-/// passwd lookup. Companion to `user_home_for_invocation` — used so
-/// chown-to-user calls during ciphertext finalization point at the
-/// real invoker rather than the elevated process's effective uid.
+/// Resolve the invoking user's username. Resolution priority is
+/// chosen for robustness against env-stripping sudo configurations
+/// that reset `HOME`, `USER`, and `LOGNAME` to root's values:
+///
+/// 1. `getuid()` if non-zero — the real uid is preserved through
+///    setuid (for setuid-root installs of `vigo`) and is the most
+///    authoritative signal that we're running directly for that
+///    user. A non-zero ruid means `sudo` did not elevate.
+/// 2. `SUDO_USER` — sudo's authoritative record of who escalated.
+///    Survives `sudo --reset-environment` and `env_reset` because
+///    sudo always sets it. Only consulted when `getuid()` is 0 (so
+///    we don't shadow a setuid-from-user invocation).
+/// 3. `USER` env var — last-resort fallback for rare setups
+///    without sudo (root-direct invocation, CI containers).
+///
+/// Companion to `user_home_for_invocation` — both helpers MUST
+/// resolve to the same user, otherwise we'd write into one user's
+/// home but chown to a different user's uid.
 fn user_for_invocation() -> Result<String> {
+    #[cfg(unix)]
+    {
+        let uid = unsafe { libc::getuid() };
+        if uid != 0 {
+            if let Some(name) = passwd_name_for_uid(uid) {
+                return Ok(name);
+            }
+        }
+    }
     if let Ok(s) = std::env::var("SUDO_USER") {
         if !s.is_empty() && s != "root" {
             return Ok(s);
         }
     }
-    #[cfg(unix)]
-    {
-        let uid = unsafe { libc::getuid() };
-        if let Ok(passwd) = fs::read_to_string("/etc/passwd") {
-            for line in passwd.lines() {
-                let fields: Vec<&str> = line.split(':').collect();
-                if fields.len() >= 7 {
-                    if let Ok(u) = fields[2].parse::<u32>() {
-                        if u == uid {
-                            return Ok(fields[0].to_string());
-                        }
-                    }
-                }
-            }
+    if let Ok(s) = std::env::var("USER") {
+        if !s.is_empty() {
+            return Ok(s);
         }
     }
-    bail!("could not resolve invoking user (set $SUDO_USER)")
+    bail!("could not resolve invoking user (set $SUDO_USER or $USER, or run with non-root real uid)")
 }
 
-/// Resolve the invoking user's home directory.
+/// Resolve the invoking user's home directory by delegating to
+/// `user_for_invocation` and then doing a passwd lookup. Avoids
+/// trusting `$HOME` because sudo configs commonly strip it to
+/// root's home, which would silently steer sigil verbs at
+/// `/root/.sigil/` instead of the invoker's actual sigil state.
 fn user_home_for_invocation() -> Result<PathBuf> {
-    if let Some(h) = std::env::var_os("HOME").map(PathBuf::from) {
-        if !h.as_os_str().is_empty() {
-            return Ok(h);
-        }
-    }
-    #[cfg(unix)]
-    {
-        let uid = unsafe { libc::getuid() };
-        if let Ok(passwd) = fs::read_to_string("/etc/passwd") {
-            for line in passwd.lines() {
-                let fields: Vec<&str> = line.split(':').collect();
-                if fields.len() >= 7 {
-                    if let Ok(u) = fields[2].parse::<u32>() {
-                        if u == uid {
-                            return Ok(PathBuf::from(fields[5]));
-                        }
-                    }
+    let username = user_for_invocation()?;
+    super::home_for_user(&username)
+        .ok_or_else(|| anyhow!("could not resolve home directory for user {}", username))
+}
+
+#[cfg(unix)]
+fn passwd_name_for_uid(uid: u32) -> Option<String> {
+    let passwd = fs::read_to_string("/etc/passwd").ok()?;
+    for line in passwd.lines() {
+        let fields: Vec<&str> = line.split(':').collect();
+        if fields.len() >= 7 {
+            if let Ok(u) = fields[2].parse::<u32>() {
+                if u == uid {
+                    return Some(fields[0].to_string());
                 }
             }
         }
     }
-    Err(anyhow!("could not resolve home directory (set $HOME)"))
+    None
 }
 
 fn prompt_password(confirm: bool) -> Result<String> {
