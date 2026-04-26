@@ -101,28 +101,43 @@ on_host_as_user() {
 
 # ───────────────── lode helpers ─────────────────
 
-# Poll vigocli lode status until the per-envoy state shows every
-# host as complete / cached / source (i.e. no downloading, pending,
-# skipped, or revoking). Returns 0 on success, 1 on timeout.
+# Poll vigocli lode status until every TEST envoy (PRIMARY/SECONDARY/
+# THIRD that's reachable) shows complete / cached / source on its
+# per-envoy line. The fleet may include other envoys (girlslaptop,
+# raspberrypi, etc.) that aren't under test and may be perpetually
+# pending — checking the summary "downloading + pending == 0" would
+# wait for those too and time out.
+#
+# Per-envoy line shape (cli/lode.go renders):
+#     "  ✓ <hostname>                    complete"
+#     "  ✓ <hostname>                    cached"
+#     "  ★ <hostname>                    source"
+# Returns 0 on success, 1 on timeout.
 wait_lode_complete() {
     local sha=$1 timeout=$2
     local elapsed=0
     while (( elapsed < timeout )); do
         local out
         out=$(vigocli lode status "$sha" 2>&1 || true)
-        # Summary line shape:
-        #   "  N source  N complete  N cached  N downloading  N pending  N skipped  (T total)"
-        # We want downloading + pending == 0 AND total > 0.
-        local summary
-        summary=$(grep -E 'source.*complete.*cached' <<<"$out" | head -1)
-        if [[ -n "$summary" ]]; then
-            local downloading pending total
-            downloading=$(awk '{for(i=1;i<=NF;i++) if($i=="downloading") print $(i-1)}' <<<"$summary")
-            pending=$(awk '{for(i=1;i<=NF;i++) if($i=="pending") print $(i-1)}' <<<"$summary")
-            total=$(awk '{for(i=1;i<=NF;i++) if($i=="total)") print $(i-1)}' <<<"$summary" | tr -d '(')
-            if [[ -n "$total" && "$total" -gt 0 && "$downloading" == "0" && "$pending" == "0" ]]; then
-                return 0
+        local all_done=1
+        for h in "${ALL_HOSTS[@]}"; do
+            (( HOST_REACHABLE[$h] == 0 )) && continue
+            # Match the envoy's line and capture its status word.
+            local line
+            line=$(grep -E "^[[:space:]]+[^[:space:]]+[[:space:]]+$h[[:space:]]+" <<<"$out" | head -1)
+            if [[ -z "$line" ]]; then
+                all_done=0
+                break
             fi
+            local status
+            status=$(awk '{print $NF}' <<<"$line")
+            case "$status" in
+                complete|cached|source) ;;
+                *) all_done=0; break ;;
+            esac
+        done
+        if (( all_done == 1 )); then
+            return 0
         fi
         sleep 3
         elapsed=$((elapsed + 3))
@@ -130,23 +145,35 @@ wait_lode_complete() {
     return 1
 }
 
-# Same shape, but waits for revocation to complete on every envoy.
+# Wait until every TEST envoy's per-envoy line shows "revoked".
+# Same scope-to-test-envoys logic as wait_lode_complete — fleet
+# envoys not under test may remain in revoking state indefinitely
+# if they're offline.
 wait_lode_revoked() {
     local sha=$1 timeout=$2
     local elapsed=0
     while (( elapsed < timeout )); do
         local out
         out=$(vigocli lode status "$sha" 2>&1 || true)
-        # Post-revoke summary shape:
-        #   "  N revoking  N revoked  (T total)"
-        local summary
-        summary=$(grep -E 'revoking.*revoked' <<<"$out" | head -1)
-        if [[ -n "$summary" ]]; then
-            local revoking
-            revoking=$(awk '{for(i=1;i<=NF;i++) if($i=="revoking") print $(i-1)}' <<<"$summary")
-            if [[ "$revoking" == "0" ]]; then
-                return 0
+        local all_revoked=1
+        for h in "${ALL_HOSTS[@]}"; do
+            (( HOST_REACHABLE[$h] == 0 )) && continue
+            local line
+            line=$(grep -E "^[[:space:]]+[^[:space:]]+[[:space:]]+$h[[:space:]]+" <<<"$out" | head -1)
+            if [[ -z "$line" ]]; then
+                # Hostname disappeared from the listing — counts as
+                # post-revoke (server stopped tracking).
+                continue
             fi
+            local status
+            status=$(awk '{print $NF}' <<<"$line")
+            if [[ "$status" != "revoked" ]]; then
+                all_revoked=0
+                break
+            fi
+        done
+        if (( all_revoked == 1 )); then
+            return 0
         fi
         sleep 3
         elapsed=$((elapsed + 3))
@@ -212,14 +239,18 @@ pass "vigocli reachable"
 # in §1 — the swarm peer table is keyed by IP:port, not hostname) and
 # probe each host for reachability so we can SKIP rather than FAIL on
 # offline envoys.
-declare -A HOST_IP
+declare -A HOST_IP        # primary IPv4 for human-readable logging
+declare -A HOST_IPV4_LIST # space-separated list of every IPv4 the host has
 declare -A HOST_REACHABLE
 ALL_HOSTS=("$PRIMARY" "$SECONDARY" "$THIRD")
 for h in "${ALL_HOSTS[@]}"; do
-    # Resolve via getent (works for /etc/hosts entries + DNS). Falls
-    # back to "" if the name doesn't resolve at all.
-    ip=$(getent hosts "$h" 2>/dev/null | awk '{print $1}' | head -1)
-    HOST_IP[$h]="$ip"
+    # Use ahostsv4 — `getent hosts` happily returns IPv6 (which the
+    # swarm peer table never records, since peer probes go to LAN
+    # IPv4 + port 1531). ahostsv4 also expands all addresses so a
+    # multi-homed host's other interfaces still match.
+    ipv4_list=$(getent ahostsv4 "$h" 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ')
+    HOST_IPV4_LIST[$h]="$ipv4_list"
+    HOST_IP[$h]=$(awk '{print $1}' <<<"$ipv4_list")
     # Reachability: is_local hosts are always reachable; remote hosts
     # get a 3-second ssh probe (BatchMode disables password prompts so
     # a stale known_hosts entry can't hang the test).
@@ -272,15 +303,24 @@ for h in "${ALL_HOSTS[@]}"; do
             skip "$h: peers.json should include $other (skipped — $other unreachable, expected absent)"
             continue
         fi
-        other_ip="${HOST_IP[$other]}"
-        if [[ -z "$other_ip" ]]; then
-            warn "$h: cannot verify $other in peers.json — $other has no resolved IP"
+        other_ips="${HOST_IPV4_LIST[$other]}"
+        if [[ -z "$other_ips" ]]; then
+            warn "$h: cannot verify $other in peers.json — $other has no resolved IPv4"
             continue
         fi
-        if grep -q "\"address\":\"$other_ip:" <<<"$out"; then
-            pass "$h: peers.json knows $other ($other_ip)"
+        # Match any IPv4 the host has — multi-homed hosts may show up
+        # under whichever interface answered the probe from $h.
+        matched_ip=""
+        for ip in $other_ips; do
+            if grep -q "\"address\":\"$ip:" <<<"$out"; then
+                matched_ip="$ip"
+                break
+            fi
+        done
+        if [[ -n "$matched_ip" ]]; then
+            pass "$h: peers.json knows $other ($matched_ip)"
         else
-            fail "$h: peers.json missing $other ($other_ip)"
+            fail "$h: peers.json missing $other (tried: $other_ips)"
         fi
     done
 done
@@ -325,7 +365,10 @@ fi
 # ───────────────────────── 2. Lode end-to-end ─────────────────────────
 section "2. Lode — distribute, verify fan-out, revoke"
 
-LODE_LABEL="phase-c-lode-$$-$(date +%s)"
+# Keep the label ≤27 chars — `vigocli lode list` truncates anything
+# longer to first 24 chars + "...", which would defeat the
+# substring grep below.
+LODE_LABEL="pc-lode-$(date +%s)"
 LODE_FILE="/tmp/${LODE_LABEL}.bin"
 step "generating 32 KiB random payload at $LODE_FILE"
 if head -c 32768 /dev/urandom > "$LODE_FILE"; then
