@@ -10,10 +10,8 @@
 # Phase scope (see substrate-livetests.md for detail):
 #
 #   phase-b  — gitmirror source CLI + leave/evict (gitmirror +
-#              cryptsync). Sections 4–7 require SIGIL_PASSWORD_FILE;
-#              skipped gracefully if absent. NOTE: phase-b script
-#              still uses pre-0.31.0 vocabulary (sigil, cairn) and
-#              will fail against current binaries until rewritten.
+#              cryptsync). Sections 4–7 require
+#              CRYPTSYNC_PASSWORD_FILE; skipped gracefully if absent.
 #   phase-c  — swarm health (peers + manifest gossip), payload
 #              distribute/revoke, filesync round-trip.
 #   phase-d  — cryptsync encrypt/push/decrypt perms, leaves catch-up
@@ -25,7 +23,7 @@
 # pass through transparently — set them before invoking this wrapper.
 #
 # Run: ./substrate-livetest-all.sh
-#      PRE_DECRYPT_UNLOCK=1 ./substrate-livetest-all.sh
+#      CRYPTSYNC_PASSWORD_FILE=~/.pw PRE_DECRYPT_UNLOCK=1 ./substrate-livetest-all.sh
 
 set -uo pipefail
 

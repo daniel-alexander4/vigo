@@ -1378,8 +1378,8 @@ fn prompt_password(confirm: bool) -> Result<String> {
 }
 
 /// Read one password line. When stdin is a TTY, use rpassword so
-/// keystrokes aren't filesynced. When stdin is piped (scripting,
-/// automation, tests), read a plain line from stdin — no filesync
+/// keystrokes aren't echoed. When stdin is piped (scripting,
+/// automation, tests), read a plain line from stdin — no echo
 /// suppression needed because the input is coming from a pipe, not a
 /// terminal. Either way the password never hits argv or env.
 fn read_one_password(prompt: &str) -> Result<String> {

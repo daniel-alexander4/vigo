@@ -10,17 +10,19 @@
 # vigocli host. Assumes passwordless SSH + sudo on every target host.
 #
 # Required for sections 4–7:
-#   SIGIL_PASSWORD_FILE  default ~/.sigil-test-password — mode 0600 file
-#                        containing the user's sigil password on a single line.
-#                        Sections 4–7 are SKIPPED if the file is missing.
+#   CRYPTSYNC_PASSWORD_FILE  default ~/.cryptsync-test-password — mode 0600
+#                            file containing the user's cryptsync password
+#                            on a single line. Sections 4–7 are SKIPPED if
+#                            the file is missing.
 #
 # Optional env:
-#   PRIMARY        default danlap   — cairn primary, sigil recipient watcher
-#   SECONDARY      default annlap   — sigil leave/evict subject
-#   THIRD          default plex     — additional sigil peer (evicted in §5)
-#   ABSENT         default girlslaptop — host expected to fail evict gracefully
-#   SIGIL_USER     default dan
-#   VIGOCLI_CMD    default "sudo vigocli" — vigocli is installed mode 0700
+#   PRIMARY         default danlap   — gitmirror primary, cryptsync recipient watcher
+#   SECONDARY       default annlap   — cryptsync leave/evict subject
+#   THIRD           default plex     — additional cryptsync peer (evicted in §5)
+#   ABSENT          default girlslaptop — host expected to fail evict gracefully
+#   CRYPTSYNC_USER  default dan      — used as the gitmirror sidecar owner in §1–3
+#                                       and the cryptsync user in §4–7
+#   VIGOCLI_CMD     default "sudo vigocli" — vigocli is installed mode 0700
 #                                            root:root and must be invoked as
 #                                            root. Override for remote/docker
 #                                            hosts: "ssh server sudo vigocli"
@@ -32,8 +34,8 @@ PRIMARY="${PRIMARY:-danlap}"
 SECONDARY="${SECONDARY:-annlap}"
 THIRD="${THIRD:-plex}"
 ABSENT="${ABSENT:-girlslaptop}"
-SIGIL_USER="${SIGIL_USER:-dan}"
-SIGIL_PASSWORD_FILE="${SIGIL_PASSWORD_FILE:-$HOME/.sigil-test-password}"
+CRYPTSYNC_USER="${CRYPTSYNC_USER:-dan}"
+CRYPTSYNC_PASSWORD_FILE="${CRYPTSYNC_PASSWORD_FILE:-$HOME/.cryptsync-test-password}"
 VIGOCLI_CMD="${VIGOCLI_CMD:-sudo vigocli}"
 
 GREEN=$'\033[38;2;166;227;161m'
@@ -112,7 +114,7 @@ on_host() {
 # straight through bash -c (local) or ssh (remote).
 reenroll() {
     local host=$1
-    if printf '%s\n' "$PW" | on_host "$host" 'vigo sigil enroll' >/dev/null 2>&1; then
+    if printf '%s\n' "$PW" | on_host "$host" 'vigo swarm cryptsync enroll' >/dev/null 2>&1; then
         return 0
     fi
     return 1
@@ -122,7 +124,7 @@ cleanup() {
     section "Cleanup"
     if [[ -n "${PW:-}" ]]; then
         for h in "$SECONDARY" "$THIRD"; do
-            if on_host "$h" 'test -f $HOME/.sigil/identity.age' >/dev/null 2>&1; then
+            if on_host "$h" 'test -f $HOME/.cryptsync/identity.age' >/dev/null 2>&1; then
                 note "$h still enrolled — no restore needed"
             elif reenroll "$h"; then
                 note "$h re-enrolled"
@@ -131,7 +133,7 @@ cleanup() {
             fi
         done
     else
-        note "no sigil password loaded; skipping enrollment restore"
+        note "no cryptsync password loaded; skipping enrollment restore"
     fi
 
     section "Summary"
@@ -153,136 +155,136 @@ trap cleanup EXIT
 section "Preflight"
 HAVE_PASSWORD=0
 PW=""
-if [[ -r "$SIGIL_PASSWORD_FILE" ]]; then
-    mode=$(stat -c %a "$SIGIL_PASSWORD_FILE")
+if [[ -r "$CRYPTSYNC_PASSWORD_FILE" ]]; then
+    mode=$(stat -c %a "$CRYPTSYNC_PASSWORD_FILE")
     if [[ "$mode" != "600" ]]; then
-        fail "$SIGIL_PASSWORD_FILE must be mode 600 (currently $mode)"
+        fail "$CRYPTSYNC_PASSWORD_FILE must be mode 600 (currently $mode)"
         exit 1
     fi
-    PW=$(<"$SIGIL_PASSWORD_FILE")
+    PW=$(<"$CRYPTSYNC_PASSWORD_FILE")
     HAVE_PASSWORD=1
-    note "loaded sigil password from $SIGIL_PASSWORD_FILE"
+    note "loaded cryptsync password from $CRYPTSYNC_PASSWORD_FILE"
 else
-    note "no $SIGIL_PASSWORD_FILE — sections 4–7 will be skipped"
+    note "no $CRYPTSYNC_PASSWORD_FILE — sections 4–7 will be skipped"
 fi
 
 note "PRIMARY=$PRIMARY  SECONDARY=$SECONDARY  THIRD=$THIRD  ABSENT=$ABSENT"
 note "vigocli prefix: $VIGOCLI_CMD"
 
-# ───────────────────────── 1. Phase A — cairn source CLI ─────────────────────────
-section "1. Phase A — cairn source CLI (on $PRIMARY as $SIGIL_USER)"
+# ───────────────────────── 1. Phase A — gitmirror source CLI ─────────────────────────
+section "1. Phase A — gitmirror source CLI (on $PRIMARY as $CRYPTSYNC_USER)"
 
 step "preparing test repo on $PRIMARY"
 # Clean any prior-run residue so init/add/commit are deterministic —
 # without rm -rf, a repeat run finds an already-committed repo and
 # the commit step exits non-zero ("nothing to commit").
-on_host "$PRIMARY" 'rm -rf $HOME/cairn/sourcetest && mkdir -p $HOME/cairn/sourcetest && cd $HOME/cairn/sourcetest && git init -q && echo x > x && git add . && git commit -qm init' \
+on_host "$PRIMARY" 'rm -rf $HOME/gitmirror/sourcetest && mkdir -p $HOME/gitmirror/sourcetest && cd $HOME/gitmirror/sourcetest && git init -q && echo x > x && git add . && git commit -qm init' \
     && pass "test repo created" \
     || fail "test repo creation failed"
 
-expect_zero "vigo cairn source add" \
-    on_host "$PRIMARY" "vigo cairn source add \$HOME/cairn/sourcetest --tags smoke --description 'phase A test'"
+expect_zero "vigo swarm gitmirror source add" \
+    on_host "$PRIMARY" "vigo swarm gitmirror source add \$HOME/gitmirror/sourcetest --tags smoke --description 'phase A test'"
 
-expect_match ".gitignore contains .cairn.yaml" '\.cairn\.yaml' \
-    on_host "$PRIMARY" 'cat $HOME/cairn/sourcetest/.gitignore'
+expect_match ".gitignore contains .gitmirror.yaml" '\.gitmirror\.yaml' \
+    on_host "$PRIMARY" 'cat $HOME/gitmirror/sourcetest/.gitignore'
 
 expect_match "show reports owner=$PRIMARY" "owner:.*$PRIMARY" \
-    on_host "$PRIMARY" 'vigo cairn source show sourcetest'
+    on_host "$PRIMARY" 'vigo swarm gitmirror source show sourcetest'
 
-expect_zero "source pause" on_host "$PRIMARY" 'vigo cairn source pause sourcetest'
+expect_zero "source pause" on_host "$PRIMARY" 'vigo swarm gitmirror source pause sourcetest'
 sleep 6
 expect_match "list shows sourcetest paused (PAUSED column = yes)" 'sourcetest.*yes' \
-    on_host "$PRIMARY" 'vigo cairn source list'
-expect_zero "source resume" on_host "$PRIMARY" 'vigo cairn source resume sourcetest'
+    on_host "$PRIMARY" 'vigo swarm gitmirror source list'
+expect_zero "source resume" on_host "$PRIMARY" 'vigo swarm gitmirror source resume sourcetest'
 
 expect_zero "validate good yaml" \
-    on_host "$PRIMARY" 'vigo cairn source validate $HOME/cairn/sourcetest/.cairn.yaml'
+    on_host "$PRIMARY" 'vigo swarm gitmirror source validate $HOME/gitmirror/sourcetest/.gitmirror.yaml'
 
 on_host "$PRIMARY" 'echo "garbage: yes" > /tmp/bad.yaml' >/dev/null
 expect_nonzero "validate rejects garbage yaml" \
-    on_host "$PRIMARY" 'vigo cairn source validate /tmp/bad.yaml'
+    on_host "$PRIMARY" 'vigo swarm gitmirror source validate /tmp/bad.yaml'
 
 expect_zero "source remove --yes" \
-    on_host "$PRIMARY" 'vigo cairn source remove sourcetest --yes'
+    on_host "$PRIMARY" 'vigo swarm gitmirror source remove sourcetest --yes'
 expect_nonzero "sidecar gone after remove" \
-    on_host "$PRIMARY" 'test -f $HOME/cairn/sourcetest/.cairn.yaml'
+    on_host "$PRIMARY" 'test -f $HOME/gitmirror/sourcetest/.gitmirror.yaml'
 
-# ───────────────────────── 2. Phase B — vigo cairn leave ─────────────────────────
-section "2. Phase B — vigo cairn leave (on $PRIMARY as $SIGIL_USER)"
+# ───────────────────────── 2. Phase B — vigo swarm gitmirror leave ─────────────────────────
+section "2. Phase B — vigo swarm gitmirror leave (on $PRIMARY as $CRYPTSYNC_USER)"
 
 for n in leave1 leave2; do
-    on_host "$PRIMARY" "mkdir -p \$HOME/cairn/$n && cd \$HOME/cairn/$n && git init -q && echo $n > x && git add . && git commit -qm $n" >/dev/null
+    on_host "$PRIMARY" "mkdir -p \$HOME/gitmirror/$n && cd \$HOME/gitmirror/$n && git init -q && echo $n > x && git add . && git commit -qm $n" >/dev/null
     expect_zero "add source $n" \
-        on_host "$PRIMARY" "vigo cairn source add \$HOME/cairn/$n --no-gitignore"
+        on_host "$PRIMARY" "vigo swarm gitmirror source add \$HOME/gitmirror/$n --no-gitignore"
 done
 
-expect_zero "leave --pause --yes" on_host "$PRIMARY" 'vigo cairn leave --pause --yes'
+expect_zero "leave --pause --yes" on_host "$PRIMARY" 'vigo swarm gitmirror leave --pause --yes'
 expect_match "both sidecars paused" 'paused: true' \
-    on_host "$PRIMARY" 'grep ^paused $HOME/cairn/leave1/.cairn.yaml $HOME/cairn/leave2/.cairn.yaml'
+    on_host "$PRIMARY" 'grep ^paused $HOME/gitmirror/leave1/.gitmirror.yaml $HOME/gitmirror/leave2/.gitmirror.yaml'
 
-expect_zero "resume leave1" on_host "$PRIMARY" 'vigo cairn source resume leave1'
+expect_zero "resume leave1" on_host "$PRIMARY" 'vigo swarm gitmirror source resume leave1'
 
-expect_zero "leave --yes (delete)" on_host "$PRIMARY" 'vigo cairn leave --yes'
-expect_nonzero "leave1 sidecar gone" on_host "$PRIMARY" 'test -f $HOME/cairn/leave1/.cairn.yaml'
-expect_nonzero "leave2 sidecar gone" on_host "$PRIMARY" 'test -f $HOME/cairn/leave2/.cairn.yaml'
+expect_zero "leave --yes (delete)" on_host "$PRIMARY" 'vigo swarm gitmirror leave --yes'
+expect_nonzero "leave1 sidecar gone" on_host "$PRIMARY" 'test -f $HOME/gitmirror/leave1/.gitmirror.yaml'
+expect_nonzero "leave2 sidecar gone" on_host "$PRIMARY" 'test -f $HOME/gitmirror/leave2/.gitmirror.yaml'
 
-on_host "$PRIMARY" 'rm -rf $HOME/cairn/leave1 $HOME/cairn/leave2' >/dev/null
+on_host "$PRIMARY" 'rm -rf $HOME/gitmirror/leave1 $HOME/gitmirror/leave2' >/dev/null
 
-# ───────────────────────── 3. Phase B — cairn prune + vigocli evict ─────────────────────────
-section "3. Phase B — cairn prune --seeder + vigocli cairn evict"
+# ───────────────────────── 3. Phase B — gitmirror prune + vigocli evict ─────────────────────────
+section "3. Phase B — gitmirror prune --seeder + vigocli swarm gitmirror evict"
 
-expect_zero "$SECONDARY: vigo cairn list --seeder $PRIMARY" \
-    on_host "$SECONDARY" "vigo cairn list --seeder $PRIMARY"
+expect_zero "$SECONDARY: vigo swarm gitmirror list --seeder $PRIMARY" \
+    on_host "$SECONDARY" "vigo swarm gitmirror list --seeder $PRIMARY"
 
 expect_zero "$SECONDARY: prune --seeder (lists candidates)" \
-    on_host "$SECONDARY" "sudo vigo cairn prune --seeder $PRIMARY"
+    on_host "$SECONDARY" "sudo vigo swarm gitmirror prune --seeder $PRIMARY"
 
 expect_zero "$SECONDARY: prune --seeder --yes" \
-    on_host "$SECONDARY" "sudo vigo cairn prune --seeder $PRIMARY --yes"
+    on_host "$SECONDARY" "sudo vigo swarm gitmirror prune --seeder $PRIMARY --yes"
 
-expect_zero "vigocli cairn members" vigocli cairn members
-expect_zero "vigocli cairn evict --host $ABSENT" vigocli cairn evict --host "$ABSENT" --yes
+expect_zero "vigocli swarm gitmirror members" vigocli swarm gitmirror members
+expect_zero "vigocli swarm gitmirror evict --host $ABSENT" vigocli swarm gitmirror evict --host "$ABSENT" --yes
 sleep 10
-expect_zero "vigocli cairn status" vigocli cairn status
+expect_zero "vigocli swarm gitmirror status" vigocli swarm gitmirror status
 
-# ───────────────────────── sections 4–7 require sigil password ─────────────────────────
+# ───────────────────────── sections 4–7 require cryptsync password ─────────────────────────
 if (( HAVE_PASSWORD == 0 )); then
-    for s in "4. vigo sigil leave" "5. vigocli sigil evict" "6. sigil leave --purge" "7. DELETE tombstone regression"; do
+    for s in "4. vigo swarm cryptsync leave" "5. vigocli swarm cryptsync evict" "6. cryptsync leave --purge" "7. DELETE tombstone regression"; do
         section "$s"
-        skip "no SIGIL_PASSWORD_FILE — section skipped"
+        skip "no CRYPTSYNC_PASSWORD_FILE — section skipped"
     done
     exit 0
 fi
 
-# ───────────────────────── 4. Phase B — vigo sigil leave ─────────────────────────
-section "4. Phase B — vigo sigil leave (on $SECONDARY as $SIGIL_USER)"
+# ───────────────────────── 4. Phase B — vigo swarm cryptsync leave ─────────────────────────
+section "4. Phase B — vigo swarm cryptsync leave (on $SECONDARY as $CRYPTSYNC_USER)"
 
-expect_zero "$SECONDARY: sigil status" on_host "$SECONDARY" 'vigo sigil status'
+expect_zero "$SECONDARY: cryptsync status" on_host "$SECONDARY" 'vigo swarm cryptsync status'
 
 on_host "$SECONDARY" 'echo phase-b > /tmp/test.txt' >/dev/null
 expect_zero "$SECONDARY: encrypt smoketest.age" \
-    on_host "$SECONDARY" 'vigo sigil encrypt /tmp/test.txt --as smoketest.age'
+    on_host "$SECONDARY" 'vigo swarm cryptsync encrypt /tmp/test.txt --as smoketest.age'
 
-before=$(on_host "$PRIMARY" 'wc -l < $HOME/.sigil/recipients.txt' 2>/dev/null || echo 0)
+before=$(on_host "$PRIMARY" 'wc -l < $HOME/.cryptsync/recipients.txt' 2>/dev/null || echo 0)
 note "$PRIMARY recipients before leave: $before"
 
-expect_zero "$SECONDARY: sigil leave --yes" on_host "$SECONDARY" 'vigo sigil leave --yes'
+expect_zero "$SECONDARY: cryptsync leave --yes" on_host "$SECONDARY" 'vigo swarm cryptsync leave --yes'
 
 note "waiting 45s for daemon reactor (30s tick) to process leave.pending + fan out envelope"
 sleep 45
 
-# Default leave removes individual files inside ~/.sigil/ (identity.age,
+# Default leave removes individual files inside ~/.cryptsync/ (identity.age,
 # identity.salt, recipients.txt, config.yaml) but does NOT remove the
 # directory itself. The signature of "daemon processed the sentinel" is
 # (a) identity.age is gone and (b) leave.pending is gone.
 expect_nonzero "$SECONDARY: identity.age removed (default leave)" \
-    on_host "$SECONDARY" 'test -f $HOME/.sigil/identity.age'
+    on_host "$SECONDARY" 'test -f $HOME/.cryptsync/identity.age'
 expect_nonzero "$SECONDARY: leave.pending consumed by daemon" \
-    on_host "$SECONDARY" 'test -f $HOME/.sigil/leave.pending'
-expect_zero "$SECONDARY: ~/sigil/ ciphertext dir kept (orphaned)" \
-    on_host "$SECONDARY" 'test -d $HOME/sigil'
+    on_host "$SECONDARY" 'test -f $HOME/.cryptsync/leave.pending'
+expect_zero "$SECONDARY: ~/cryptsync/ ciphertext dir kept (orphaned)" \
+    on_host "$SECONDARY" 'test -d $HOME/cryptsync'
 
-after=$(on_host "$PRIMARY" 'wc -l < $HOME/.sigil/recipients.txt' 2>/dev/null || echo 0)
+after=$(on_host "$PRIMARY" 'wc -l < $HOME/.cryptsync/recipients.txt' 2>/dev/null || echo 0)
 note "$PRIMARY recipients after leave: $after"
 if (( after < before )); then
     pass "$PRIMARY recipients shrank ($before → $after)"
@@ -291,15 +293,15 @@ else
 fi
 
 expect_zero "$PRIMARY: reencrypt.pending sentinel dropped" \
-    on_host "$PRIMARY" 'test -f $HOME/.sigil/reencrypt.pending'
+    on_host "$PRIMARY" 'test -f $HOME/.cryptsync/reencrypt.pending'
 
 # NOTE: reencrypt.pending is created when a peer leaves but is NEVER
-# auto-removed by any code path (verified in agent/src/sigil/mod.rs +
-# cli.rs — only leave.pending and enroll.pending have remove_file calls).
+# auto-removed by any code path (verified in agent/src/swarm/cryptsync/mod.rs
+# + cli.rs — only leave.pending and enroll.pending have remove_file calls).
 # So we don't assert it's cleared after unlock — that would always fail.
 # This is a real UX gap in the agent; tracking separately.
 step "$PRIMARY: unlock (verifies session helper accepts piped password)"
-if printf '%s\n' "$PW" | on_host "$PRIMARY" 'vigo sigil unlock' >/dev/null 2>&1; then
+if printf '%s\n' "$PW" | on_host "$PRIMARY" 'vigo swarm cryptsync unlock' >/dev/null 2>&1; then
     pass "$PRIMARY unlock succeeded"
 else
     fail "$PRIMARY unlock failed"
@@ -308,27 +310,27 @@ fi
 step "restoring $SECONDARY enrollment"
 if reenroll "$SECONDARY"; then pass "$SECONDARY re-enrolled"; else fail "$SECONDARY re-enroll failed"; fi
 
-# ───────────────────────── 5. Phase B — vigocli sigil evict ─────────────────────────
-section "5. Phase B — vigocli sigil evict (server host)"
+# ───────────────────────── 5. Phase B — vigocli swarm cryptsync evict ─────────────────────────
+section "5. Phase B — vigocli swarm cryptsync evict (server host)"
 
-expect_zero "vigocli sigil members $SIGIL_USER" vigocli sigil members "$SIGIL_USER"
+expect_zero "vigocli swarm cryptsync members $CRYPTSYNC_USER" vigocli swarm cryptsync members "$CRYPTSYNC_USER"
 
-expect_zero "vigocli sigil evict --host $THIRD --user $SIGIL_USER" \
-    vigocli sigil evict --host "$THIRD" --user "$SIGIL_USER" --yes
+expect_zero "vigocli swarm cryptsync evict --host $THIRD --user $CRYPTSYNC_USER" \
+    vigocli swarm cryptsync evict --host "$THIRD" --user "$CRYPTSYNC_USER" --yes
 # Server dispatches via TaskDispatch over AgentStream — agent picks up the
 # task within seconds, _apply-evict regenerates recipients.txt locally.
 sleep 10
-if on_host "$PRIMARY" "grep -q $THIRD \$HOME/.sigil/recipients.txt" >/dev/null 2>&1; then
+if on_host "$PRIMARY" "grep -q $THIRD \$HOME/.cryptsync/recipients.txt" >/dev/null 2>&1; then
     fail "$THIRD pubkey still in $PRIMARY recipients.txt"
 else
     pass "$THIRD pubkey gone from $PRIMARY recipients.txt"
 fi
 
 # Known fleet-projection gap: girlslaptop. Either succeeds (if fleet has it)
-# or fails with the 'not enrolled in any matching sigil circle' error. Both
+# or fails with the 'not enrolled in any matching cryptsync circle' error. Both
 # outcomes are acceptable here — we just want it to not crash the server.
-step "vigocli sigil evict --host $ABSENT --all-users (may report 'not enrolled')"
-if vigocli sigil evict --host "$ABSENT" --all-users --yes >/tmp/livetest.out 2>&1; then
+step "vigocli swarm cryptsync evict --host $ABSENT --all-users (may report 'not enrolled')"
+if vigocli swarm cryptsync evict --host "$ABSENT" --all-users --yes >/tmp/livetest.out 2>&1; then
     pass "evict $ABSENT succeeded"
 else
     if grep -qi 'not enrolled\|no matching\|not found' /tmp/livetest.out; then
@@ -339,15 +341,15 @@ else
 fi
 
 step "restoring $THIRD enrollment"
-# vigocli sigil evict dispatches via TaskDispatch — the actual
+# vigocli swarm cryptsync evict dispatches via TaskDispatch — the actual
 # self-evict scrub on the evicted host runs async via the agent
 # stream. Poll for identity.age to disappear (timeout 30s) before
-# trying to re-enroll, otherwise `vigo sigil enroll` bails with
+# trying to re-enroll, otherwise `vigo swarm cryptsync enroll` bails with
 # "already enrolled" because the scrub hasn't landed yet.
 note "waiting for $THIRD self-evict scrub (identity.age removal) — up to 30s"
 scrubbed=0
 for _ in $(seq 1 30); do
-    if ! on_host "$THIRD" 'test -f $HOME/.sigil/identity.age' >/dev/null 2>&1; then
+    if ! on_host "$THIRD" 'test -f $HOME/.cryptsync/identity.age' >/dev/null 2>&1; then
         scrubbed=1
         break
     fi
@@ -359,46 +361,46 @@ fi
 if reenroll "$THIRD"; then pass "$THIRD re-enrolled"; else fail "$THIRD re-enroll failed"; fi
 
 # ───────────────────────── 6. --purge variant ─────────────────────────
-section "6. --purge variant on sigil leave (on $SECONDARY)"
+section "6. --purge variant on cryptsync leave (on $SECONDARY)"
 
 # Make sure secondary is enrolled before the test
-if ! on_host "$SECONDARY" 'test -f $HOME/.sigil/identity.age' >/dev/null 2>&1; then
+if ! on_host "$SECONDARY" 'test -f $HOME/.cryptsync/identity.age' >/dev/null 2>&1; then
     if reenroll "$SECONDARY"; then note "re-enrolled $SECONDARY for §6"; else fail "could not enroll $SECONDARY for §6"; fi
 fi
 
-on_host "$SECONDARY" 'echo secret > /tmp/s.txt && vigo sigil encrypt /tmp/s.txt' >/dev/null 2>&1
-expect_zero "$SECONDARY: ~/sigil has content" \
-    on_host "$SECONDARY" '[ -n "$(ls $HOME/sigil/ 2>/dev/null)" ]'
+on_host "$SECONDARY" 'echo secret > /tmp/s.txt && vigo swarm cryptsync encrypt /tmp/s.txt' >/dev/null 2>&1
+expect_zero "$SECONDARY: ~/cryptsync has content" \
+    on_host "$SECONDARY" '[ -n "$(ls $HOME/cryptsync/ 2>/dev/null)" ]'
 
-expect_zero "$SECONDARY: sigil leave --purge --yes" \
-    on_host "$SECONDARY" 'vigo sigil leave --purge --yes'
+expect_zero "$SECONDARY: cryptsync leave --purge --yes" \
+    on_host "$SECONDARY" 'vigo swarm cryptsync leave --purge --yes'
 note "waiting 45s for daemon to process purge"
 sleep 45
-# --purge removes the ~/sigil/ content directory entirely AND removes the
-# identity files from ~/.sigil/. The ~/.sigil/ directory itself stays.
+# --purge removes the ~/cryptsync/ content directory entirely AND removes the
+# identity files from ~/.cryptsync/. The ~/.cryptsync/ directory itself stays.
 expect_nonzero "$SECONDARY: identity.age removed by --purge" \
-    on_host "$SECONDARY" 'test -f $HOME/.sigil/identity.age'
-expect_nonzero "$SECONDARY: ~/sigil/ removed by --purge" \
-    on_host "$SECONDARY" 'test -d $HOME/sigil'
+    on_host "$SECONDARY" 'test -f $HOME/.cryptsync/identity.age'
+expect_nonzero "$SECONDARY: ~/cryptsync/ removed by --purge" \
+    on_host "$SECONDARY" 'test -d $HOME/cryptsync'
 
 # ───────────────────────── 7. Regression — DELETE tombstone path ─────────────────────────
 section "7. Regression — DELETE tombstone path (on $SECONDARY)"
 
 if reenroll "$SECONDARY"; then note "$SECONDARY re-enrolled for §7"; else fail "could not enroll $SECONDARY for §7"; fi
 
-# §6's --purge destroyed ~/sigil/; reenroll just recreated it under
+# §6's --purge destroyed ~/cryptsync/; reenroll just recreated it under
 # the same path but a different inode. The watcher's reconciler
 # detects the rotation and re-arms its inotify watch on the next
-# 30s tick (see agent/src/sigil/watcher.rs). Wait for that tick
-# before the encrypt — without it, the inotify event is captured
+# 30s tick (see agent/src/swarm/cryptsync/watcher.rs). Wait for that
+# tick before the encrypt — without it, the inotify event is captured
 # against the dead watch and no PushJob/DeleteJob is generated.
-note "waiting 35s for watcher reconciler to re-arm on the recreated ~/sigil/"
+note "waiting 35s for watcher reconciler to re-arm on the recreated ~/cryptsync/"
 sleep 35
 
-on_host "$SECONDARY" 'echo regress > /tmp/r.txt && vigo sigil encrypt /tmp/r.txt --as regress.age' >/dev/null 2>&1
+on_host "$SECONDARY" 'echo regress > /tmp/r.txt && vigo swarm cryptsync encrypt /tmp/r.txt --as regress.age' >/dev/null 2>&1
 expect_zero "$SECONDARY: delete regress.age" \
-    on_host "$SECONDARY" 'vigo sigil delete regress.age'
+    on_host "$SECONDARY" 'vigo swarm cryptsync delete regress.age'
 note "waiting 45s for tombstone gossip (one announce tick at 30s + slack)"
 sleep 45
 expect_match "tombstone propagated to $PRIMARY" 'regress\.age' \
-    on_host "$PRIMARY" 'vigo sigil list --tombstones'
+    on_host "$PRIMARY" 'vigo swarm cryptsync list --tombstones'
