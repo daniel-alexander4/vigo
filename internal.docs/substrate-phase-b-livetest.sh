@@ -88,15 +88,28 @@ expect_match() {
     fi
 }
 
-# Run a command on a remote host via ssh. The remote shell will expand
-# anything not pre-quoted locally — pass single-quoted strings to defer
-# expansion to the remote.
-on_host() { ssh "$1" "$2"; }
+# Run a command on a host. If $1 matches the local hostname (short, full, or
+# 'localhost'), bash -c locally; otherwise ssh. Pass single-quoted command
+# strings so $HOME etc. expand on the target shell.
+LOCAL_SHORT=$(hostname -s)
+LOCAL_FULL=$(hostname)
+is_local() {
+    [[ "$1" == "$LOCAL_SHORT" || "$1" == "$LOCAL_FULL" || "$1" == "localhost" ]]
+}
+on_host() {
+    local host=$1; shift
+    if is_local "$host"; then
+        bash -c "$*"
+    else
+        ssh "$host" "$*"
+    fi
+}
 
-# Re-enroll a user on a host using the password from $PW.
+# Re-enroll a user on a host using the password from $PW. Stdin is piped
+# straight through bash -c (local) or ssh (remote).
 reenroll() {
     local host=$1
-    if printf '%s\n' "$PW" | ssh "$host" 'vigo sigil enroll' >/dev/null 2>&1; then
+    if printf '%s\n' "$PW" | on_host "$host" 'vigo sigil enroll' >/dev/null 2>&1; then
         return 0
     fi
     return 1
@@ -106,7 +119,7 @@ cleanup() {
     section "Cleanup"
     if [[ -n "${PW:-}" ]]; then
         for h in "$SECONDARY" "$THIRD"; do
-            if ssh "$h" 'test -f $HOME/.sigil/identity.age' >/dev/null 2>&1; then
+            if on_host "$h" 'test -f $HOME/.sigil/identity.age' >/dev/null 2>&1; then
                 note "$h still enrolled — no restore needed"
             elif reenroll "$h"; then
                 note "$h re-enrolled"
@@ -272,7 +285,7 @@ expect_zero "$PRIMARY: reencrypt.pending sentinel" \
     on_host "$PRIMARY" 'test -f $HOME/.sigil/reencrypt.pending'
 
 step "$PRIMARY: unlock + drain reencrypt sentinel"
-if printf '%s\n' "$PW" | ssh "$PRIMARY" 'vigo sigil unlock' >/dev/null 2>&1; then
+if printf '%s\n' "$PW" | on_host "$PRIMARY" 'vigo sigil unlock' >/dev/null 2>&1; then
     pass "$PRIMARY unlock succeeded"
 else
     fail "$PRIMARY unlock failed"

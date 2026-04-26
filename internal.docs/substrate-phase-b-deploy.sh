@@ -33,6 +33,12 @@ note() { printf '%s    %s%s\n' "$LAV" "$*" "$RESET"; }
 
 cd "$REPO_ROOT"
 EXPECTED_VERSION=$(cat VERSION)
+LOCAL_SHORT=$(hostname -s)
+LOCAL_FULL=$(hostname)
+
+is_local() {
+    [[ "$1" == "$LOCAL_SHORT" || "$1" == "$LOCAL_FULL" || "$1" == "localhost" ]]
+}
 
 log "cross-compiling agent ($EXPECTED_VERSION)"
 make dist-agent
@@ -40,16 +46,27 @@ ok "cross-compile complete"
 
 for h in "${ENVOYS[@]}"; do
     log "deploying to $h"
-    arch=$(ssh "$h" 'uname -m')
+    if is_local "$h"; then
+        arch=$(uname -m)
+        note "$h is local — skipping ssh/scp"
+    else
+        arch=$(ssh "$h" 'uname -m')
+    fi
     case "$arch" in
         x86_64|amd64)  bin="dist/agent/linux/amd64/vigo" ;;
         aarch64|arm64) bin="dist/agent/linux/arm64/vigo" ;;
         *) err "unknown arch on $h: $arch"; exit 1 ;;
     esac
     note "arch=$arch  binary=$bin"
-    scp -q "$bin" "$h:/tmp/vigo"
-    ssh "$h" 'sudo install -m 0755 /tmp/vigo /usr/local/sbin/vigo && sudo systemctl restart vigo-envoy'
-    reported=$(ssh "$h" 'vigo --version' 2>&1 | awk '{print $NF}')
+    if is_local "$h"; then
+        sudo install -m 0755 "$bin" /usr/local/sbin/vigo
+        sudo systemctl restart vigo-envoy
+        reported=$(vigo --version 2>&1 | awk '{print $NF}')
+    else
+        scp -q "$bin" "$h:/tmp/vigo"
+        ssh "$h" 'sudo install -m 0755 /tmp/vigo /usr/local/sbin/vigo && sudo systemctl restart vigo-envoy'
+        reported=$(ssh "$h" 'vigo --version' 2>&1 | awk '{print $NF}')
+    fi
     if [[ "$reported" == "$EXPECTED_VERSION" ]]; then
         ok "$h running $reported"
     else
