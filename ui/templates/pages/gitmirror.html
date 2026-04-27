@@ -89,7 +89,7 @@
 {{if .Error}}
     <div class="alert alert--warn">Gitmirror aggregator: {{.Error}}</div>
 {{else if or (not .Fleet) (eq (len .Fleet.Labels) 0)}}
-    {{template "empty-state" dict "Message" "No gitmirror repos observed across the fleet." "Hint" "Add a .gitmirror.yaml sidecar to a ~<user>/swarm/gitmirror/<project>/ directory on any envoy to publish."}}
+    {{template "empty-state" dict "Message" "No gitmirror repos observed across the fleet." "Hint" "Add a .gitmirror.yaml sidecar to a ~<user>/gitmirror/<project>/ directory on any envoy to publish."}}
 {{else}}
     <div class="stat-cards mb-2">
         <div class="stat-card">

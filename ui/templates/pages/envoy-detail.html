@@ -306,8 +306,8 @@
 
 {{template "swarm-load-section" dict "Title" "Payload" "Subtitle" "Admin-distributed payloads cached on this envoy (includes gitmirror bundle content while it sits in .blobs/)." "Rows" .Payload}}
 {{template "swarm-load-section" dict "Title" "Gitmirror" "Subtitle" "Materialized bare git repos under /var/lib/vigo/swarm/gitmirror/mirrors/." "Rows" .Gitmirror}}
-{{template "swarm-load-section" dict "Title" "Filesync" "Subtitle" "Per-user LAN plaintext sync files under ~user/swarm/filesync/." "Rows" .Filesync}}
-{{template "swarm-load-section" dict "Title" "Cryptsync" "Subtitle" "Per-user encrypted sync files under ~user/swarm/cryptsync/ (sizes are ciphertext-on-disk)." "Rows" .Cryptsync}}
+{{template "swarm-load-section" dict "Title" "Filesync" "Subtitle" "Per-user LAN plaintext sync files under ~user/filesync/." "Rows" .Filesync}}
+{{template "swarm-load-section" dict "Title" "Cryptsync" "Subtitle" "Per-user encrypted sync files under ~user/cryptsync/ (sizes are ciphertext-on-disk)." "Rows" .Cryptsync}}
 {{end}}
 
 {{define "swarm-load-section"}}
