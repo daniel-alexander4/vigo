@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! User-facing `vigo cryptsync <verb>` subcommand tree.
+//! User-facing `vigo swarm cryptsync <verb>` subcommand tree.
 //!
 //! All verbs are **user-mode** operations — they touch files under
 //! the invoking user's `~/.cryptsync/` and their `~/cryptsync/`
@@ -9,15 +9,15 @@
 //! server or the agent daemon for Week 1 verbs.
 //!
 //! ```text
-//! vigo cryptsync init                          # primary envoy, first time
-//! vigo cryptsync enroll                        # per-envoy, one-time
-//! vigo cryptsync status                        # show local state
-//! vigo cryptsync unlock                        # (week 3) hold key in session helper
-//! vigo cryptsync lock                          # (week 3) scrub held key
-//! vigo cryptsync encrypt <file> [--as <name>]  # (week 3) add to ~/cryptsync/
-//! vigo cryptsync decrypt <file> -o <path>      # (week 3) decrypt to user path
-//! vigo cryptsync forget <hostname>             # (week 3) revoke an envoy
-//! vigo cryptsync reencrypt                     # (week 3) force re-encrypt
+//! vigo swarm cryptsync init                          # primary envoy, first time
+//! vigo swarm cryptsync enroll                        # per-envoy, one-time
+//! vigo swarm cryptsync status                        # show local state
+//! vigo swarm cryptsync unlock                        # (week 3) hold key in session helper
+//! vigo swarm cryptsync lock                          # (week 3) scrub held key
+//! vigo swarm cryptsync encrypt <file> [--as <name>]  # (week 3) add to ~/cryptsync/
+//! vigo swarm cryptsync decrypt <file> -o <path>      # (week 3) decrypt to user path
+//! vigo swarm cryptsync forget <hostname>             # (week 3) revoke an envoy
+//! vigo swarm cryptsync reencrypt                     # (week 3) force re-encrypt
 //! ```
 //!
 //! Phase 1 Week 1 implements `init`, `enroll`, and `status`. The
@@ -37,7 +37,7 @@ use super::session;
 use super::state::PeerTable;
 use super::tombstones;
 
-/// Dispatch `vigo cryptsync <verb> [args...]`.
+/// Dispatch `vigo swarm cryptsync <verb> [args...]`.
 pub fn run(args: Vec<String>) -> Result<()> {
     let verb = args.first().map(String::as_str).unwrap_or("");
     match verb {
@@ -61,7 +61,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
         // admin runs `vigocli cryptsync evict`. Not advertised in --help.
         "_apply-evict" => cmd_apply_evict(&args[1..]),
         other => bail!(
-            "unknown `vigo cryptsync` subcommand: {}\nrun `vigo cryptsync --help` for usage",
+            "unknown `vigo swarm cryptsync` subcommand: {}\nrun `vigo swarm cryptsync --help` for usage",
             other
         ),
     }
@@ -69,10 +69,10 @@ pub fn run(args: Vec<String>) -> Result<()> {
 
 fn print_usage() {
     eprintln!(
-        "vigo cryptsync — per-user encrypted P2P directory
+        "vigo swarm cryptsync — per-user encrypted P2P directory
 
 USAGE:
-    vigo cryptsync <SUBCOMMAND>
+    vigo swarm cryptsync <SUBCOMMAND>
 
 SUBCOMMANDS:
     init                           Primary envoy setup (first time for this user)
@@ -155,7 +155,7 @@ fn bootstrap_identity(home: &Path, username: &str, is_init: bool) -> Result<()> 
     // root-only `/var/lib/vigo/swarm/cryptsync/<user>/signing.key` so
     // deletions can propagate autonomously on the daemon's schedule
     // without requiring the user to be unlocked. A compromised signing
-    // key is rapidly recoverable via `vigo cryptsync forget` on peers;
+    // key is rapidly recoverable via `vigo swarm cryptsync forget` on peers;
     // a compromised encryption key is not, which is why only the
     // encryption identity is password-wrapped.
     let identity = Identity::generate();
@@ -225,7 +225,7 @@ fn bootstrap_identity(home: &Path, username: &str, is_init: bool) -> Result<()> 
     println!("public key: {}", public);
     println!();
     if is_init {
-        println!("This envoy is now the primary. Add more envoys with `vigo cryptsync enroll`");
+        println!("This envoy is now the primary. Add more envoys with `vigo swarm cryptsync enroll`");
         println!("after provisioning them via the user's usercrate with `cryptsync: true`.");
     } else {
         println!("This envoy is now enrolled. The primary envoy's reactor will pick up");
@@ -315,8 +315,8 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo cryptsync init` (primary) or \
-             `vigo cryptsync enroll` (secondary) first"
+            "not enrolled on this envoy — run `vigo swarm cryptsync init` (primary) or \
+             `vigo swarm cryptsync enroll` (secondary) first"
         );
     }
     let id_path = config::identity_path(&home);
@@ -335,7 +335,7 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     // Parent shell PID — so the session helper can self-terminate
     // when the shell exits. Naive `getppid()` returns the immediate
     // parent, which is `sudo`, `env`, or another wrapper when the
-    // user invokes `sudo env HOME=… vigo cryptsync unlock` (the only
+    // user invokes `sudo env HOME=… vigo swarm cryptsync unlock` (the only
     // pattern that actually works against env-stripping sudo
     // configs). Those wrappers exit a moment after `vigo unlock`
     // returns, so the helper's watchdog would see a dead PID and
@@ -387,7 +387,7 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
         }
         i += 1;
     }
-    let src = file.context("usage: vigo cryptsync encrypt <file> [--as <name>]")?;
+    let src = file.context("usage: vigo swarm cryptsync encrypt <file> [--as <name>]")?;
     let src_meta = fs::metadata(&src)
         .with_context(|| format!("stat {}", src.display()))?;
     if !src_meta.is_file() {
@@ -396,8 +396,8 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo cryptsync init` (primary) or \
-             `vigo cryptsync enroll` (secondary) first"
+            "not enrolled on this envoy — run `vigo swarm cryptsync init` (primary) or \
+             `vigo swarm cryptsync enroll` (secondary) first"
         );
     }
     let recipients = config::load_recipients(&home)?;
@@ -418,7 +418,7 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
     let content_dir = config::content_dir(&home);
     if !content_dir.is_dir() {
         bail!(
-            "{} does not exist — run `vigo cryptsync enroll` first",
+            "{} does not exist — run `vigo swarm cryptsync enroll` first",
             content_dir.display()
         );
     }
@@ -469,14 +469,14 @@ fn cmd_decrypt(args: &[String]) -> Result<()> {
         }
         i += 1;
     }
-    let name = name.context("usage: vigo cryptsync decrypt <file> -o <path>")?;
+    let name = name.context("usage: vigo swarm cryptsync decrypt <file> -o <path>")?;
     let out = out_path.context("-o <path> is required")?;
 
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo cryptsync init` (primary) or \
-             `vigo cryptsync enroll` (secondary) first"
+            "not enrolled on this envoy — run `vigo swarm cryptsync init` (primary) or \
+             `vigo swarm cryptsync enroll` (secondary) first"
         );
     }
     let content_dir = config::content_dir(&home);
@@ -491,7 +491,7 @@ fn cmd_decrypt(args: &[String]) -> Result<()> {
     // message when the helper isn't running.
     if session::connect().is_err() {
         bail!(
-            "session helper not running — run `vigo cryptsync unlock` first"
+            "session helper not running — run `vigo swarm cryptsync unlock` first"
         );
     }
     let plaintext = session::request_decrypt(&ciphertext)?;
@@ -514,7 +514,7 @@ fn cmd_decrypt(args: &[String]) -> Result<()> {
 fn cmd_delete(args: &[String]) -> Result<()> {
     let name = args
         .first()
-        .context("usage: vigo cryptsync delete <name>")?
+        .context("usage: vigo swarm cryptsync delete <name>")?
         .clone();
     if !valid_content_name(&name) {
         bail!(
@@ -525,8 +525,8 @@ fn cmd_delete(args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo cryptsync init` (primary) or \
-             `vigo cryptsync enroll` (secondary) first"
+            "not enrolled on this envoy — run `vigo swarm cryptsync init` (primary) or \
+             `vigo swarm cryptsync enroll` (secondary) first"
         );
     }
     let content_dir = config::content_dir(&home);
@@ -569,8 +569,8 @@ fn cmd_list(args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo cryptsync init` (primary) or \
-             `vigo cryptsync enroll` (secondary) first"
+            "not enrolled on this envoy — run `vigo swarm cryptsync init` (primary) or \
+             `vigo swarm cryptsync enroll` (secondary) first"
         );
     }
     let content_dir = config::content_dir(&home);
@@ -805,7 +805,7 @@ fn now_secs() -> i64 {
 fn cmd_forget(args: &[String]) -> Result<()> {
     let hostname = args
         .first()
-        .context("usage: vigo cryptsync forget <hostname>")?
+        .context("usage: vigo swarm cryptsync forget <hostname>")?
         .clone();
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
@@ -829,7 +829,7 @@ fn cmd_forget(args: &[String]) -> Result<()> {
     crate::swarm::cryptsync::regenerate_recipients_now(&username, &home)?;
 
     println!("✓ Forgot {}. Recipients regenerated.", hostname);
-    println!("  Run `vigo cryptsync reencrypt` to re-encrypt existing files");
+    println!("  Run `vigo swarm cryptsync reencrypt` to re-encrypt existing files");
     println!("  so the revoked host cannot decrypt them from its cached ciphertext.");
     Ok(())
 }
@@ -876,8 +876,8 @@ fn cmd_leave(args: &[String]) -> Result<()> {
             "--yes" | "-y" => yes = true,
             "--help" | "-h" => {
                 eprintln!(
-                    "vigo cryptsync leave — unenroll this user's cryptsync on this envoy\n\n\
-                     USAGE:\n    vigo cryptsync leave [--purge] [--keep-identity] [--yes]\n\n\
+                    "vigo swarm cryptsync leave — unenroll this user's cryptsync on this envoy\n\n\
+                     USAGE:\n    vigo swarm cryptsync leave [--purge] [--keep-identity] [--yes]\n\n\
                      FLAGS:\n    \
                      --purge          also delete ~/cryptsync/ ciphertext (default: keep, orphaned)\n    \
                      --keep-identity  keep ~/.cryptsync/ so a re-enroll can reuse the wrapped\n                     \
@@ -887,7 +887,7 @@ fn cmd_leave(args: &[String]) -> Result<()> {
                 return Ok(());
             }
             other if other.starts_with("--") => bail!("unknown flag: {}", other),
-            _ => bail!("vigo cryptsync leave takes no positional arguments; got {}", a),
+            _ => bail!("vigo swarm cryptsync leave takes no positional arguments; got {}", a),
         }
     }
 
@@ -944,7 +944,7 @@ fn cmd_leave(args: &[String]) -> Result<()> {
     println!();
     println!("\u{2713} leave queued at {}", pending_path.display());
     println!("  the agent will sign + propagate the LEAVE within one announce cycle (~30 s).");
-    println!("  Run `vigo cryptsync status` afterwards to confirm the sentinel cleared.");
+    println!("  Run `vigo swarm cryptsync status` afterwards to confirm the sentinel cleared.");
     Ok(())
 }
 
@@ -1057,7 +1057,7 @@ fn cmd_apply_evict(args: &[String]) -> Result<()> {
         }
         println!(
             "\u{2713} self-evict on {}: scrubbed cryptsync identity for user {}; \
-             re-enroll with `vigo cryptsync enroll` to rejoin",
+             re-enroll with `vigo swarm cryptsync enroll` to rejoin",
             hostname, user
         );
         return Ok(());
@@ -1128,7 +1128,7 @@ fn cmd_reencrypt(_args: &[String]) -> Result<()> {
     }
     if session::connect().is_err() {
         bail!(
-            "session helper not running — run `vigo cryptsync unlock` first; \
+            "session helper not running — run `vigo swarm cryptsync unlock` first; \
              reencrypt needs the identity to decrypt existing ciphertext"
         );
     }

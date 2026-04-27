@@ -37,7 +37,7 @@
 //! Persistence: `/var/lib/vigo/swarm/cryptsync/<username>/tombstones.json`
 //! (root-owned, 0600) — canonical, daemon-only. After every save the
 //! daemon also writes a user-readable mirror at
-//! `~<user>/.cryptsync/tombstones.json` (user-owned, 0600) so `vigo cryptsync
+//! `~<user>/.cryptsync/tombstones.json` (user-owned, 0600) so `vigo swarm cryptsync
 //! list` / `status` can read the table without sudo. The mirror is
 //! best-effort: a failed mirror write never fails the canonical save.
 
@@ -132,7 +132,7 @@ impl TombstoneTable {
 
     /// CLI-facing load that reads the user-side mirror at
     /// `~/.cryptsync/tombstones.json` instead of the daemon-only canonical
-    /// path. Used by `vigo cryptsync list` / `status` (running as the
+    /// path. Used by `vigo swarm cryptsync list` / `status` (running as the
     /// unprivileged user). Same fall-through semantics as `load`.
     pub fn load_user(user: &str, home: &std::path::Path) -> Self {
         let path = config::tombstones_user_path(home);
@@ -153,7 +153,7 @@ impl TombstoneTable {
     /// 0600 at `agent_state_dir/<user>/tombstones.json`. After the
     /// canonical write succeeds, a best-effort mirror is also written
     /// at `~<user>/.cryptsync/tombstones.json` (user-owned, 0600) so
-    /// `vigo cryptsync list` / `status` can read it without sudo.
+    /// `vigo swarm cryptsync list` / `status` can read it without sudo.
     pub fn save(&self) -> Result<()> {
         let dir = config::agent_state_dir(&self.user);
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! `vigo gitmirror source <verb>` — authoring surface for gitmirror sidecars.
+//! `vigo swarm gitmirror source <verb>` — authoring surface for gitmirror sidecars.
 //!
 //! The CLI is the supported way to create, edit, pause, resume, and
 //! remove `.gitmirror.yaml` files. Hand-editing the file still works —
@@ -13,13 +13,13 @@
 //! Sub-verbs:
 //!
 //! ```text
-//! vigo gitmirror source add <path>       # write a new sidecar
-//! vigo gitmirror source remove <project> # delete a sidecar
-//! vigo gitmirror source pause <project>  # set paused: true
-//! vigo gitmirror source resume <project> # set paused: false
-//! vigo gitmirror source show <project>   # print the sidecar
-//! vigo gitmirror source validate <path>  # parse+validate, no write
-//! vigo gitmirror source list             # (lives in cli.rs, uses scan_local)
+//! vigo swarm gitmirror source add <path>       # write a new sidecar
+//! vigo swarm gitmirror source remove <project> # delete a sidecar
+//! vigo swarm gitmirror source pause <project>  # set paused: true
+//! vigo swarm gitmirror source resume <project> # set paused: false
+//! vigo swarm gitmirror source show <project>   # print the sidecar
+//! vigo swarm gitmirror source validate <path>  # parse+validate, no write
+//! vigo swarm gitmirror source list             # (lives in cli.rs, uses scan_local)
 //! ```
 //!
 //! Design notes:
@@ -38,7 +38,7 @@ use std::path::{Path, PathBuf};
 use super::sidecar::{self, SidecarConfig};
 use super::{MAX_MIRRORS, MIN_MIRRORS};
 
-/// Top-level dispatch for `vigo gitmirror source <verb>`.
+/// Top-level dispatch for `vigo swarm gitmirror source <verb>`.
 pub fn dispatch(args: &[String]) -> Result<()> {
     let sub = args.first().map(String::as_str).unwrap_or("");
     match sub {
@@ -54,7 +54,7 @@ pub fn dispatch(args: &[String]) -> Result<()> {
         "validate" => cmd_validate(&args[1..]),
         // `list` is dispatched by the parent cli.rs.
         other => bail!(
-            "unknown `vigo gitmirror source` subcommand: {}\nrun `vigo gitmirror source --help` for usage",
+            "unknown `vigo swarm gitmirror source` subcommand: {}\nrun `vigo swarm gitmirror source --help` for usage",
             other
         ),
     }
@@ -62,10 +62,10 @@ pub fn dispatch(args: &[String]) -> Result<()> {
 
 fn print_usage() {
     eprintln!(
-        "vigo gitmirror source — manage .gitmirror.yaml sidecars
+        "vigo swarm gitmirror source — manage .gitmirror.yaml sidecars
 
 USAGE:
-    vigo gitmirror source <subcommand> [args]
+    vigo swarm gitmirror source <subcommand> [args]
 
 SUBCOMMANDS:
     add <path> [opts]             create a new sidecar in a repo
@@ -181,7 +181,7 @@ fn parse_add(args: &[String]) -> Result<AddOpts> {
             }
         }
     }
-    out.path = positional.ok_or_else(|| anyhow!("usage: vigo gitmirror source add <path> [opts]"))?;
+    out.path = positional.ok_or_else(|| anyhow!("usage: vigo swarm gitmirror source add <path> [opts]"))?;
     Ok(out)
 }
 
@@ -216,8 +216,8 @@ fn cmd_add(args: &[String]) -> Result<()> {
     let sidecar_path = canon.join(".gitmirror.yaml");
     if sidecar_path.exists() {
         bail!(
-            "{} already exists — use `vigo gitmirror source show` to inspect, or \
-             `vigo gitmirror source remove` then re-run `add` to replace",
+            "{} already exists — use `vigo swarm gitmirror source show` to inspect, or \
+             `vigo swarm gitmirror source remove` then re-run `add` to replace",
             sidecar_path.display()
         );
     }
@@ -267,7 +267,7 @@ fn cmd_add(args: &[String]) -> Result<()> {
     }
 
     println!(
-        "  reactor picks up new sources within 5 seconds — run `vigo gitmirror source list` \
+        "  reactor picks up new sources within 5 seconds — run `vigo swarm gitmirror source list` \
          to confirm."
     );
     Ok(())
@@ -296,7 +296,7 @@ fn cmd_remove(args: &[String]) -> Result<()> {
     println!("\u{2713} removed {}", sidecar_path.display());
     println!(
         "  reactor stops publishing on next tick. Receiver mirrors on other envoys \
-         persist until their own `vigo gitmirror prune` runs."
+         persist until their own `vigo swarm gitmirror prune` runs."
     );
     Ok(())
 }
@@ -375,7 +375,7 @@ fn cmd_show(args: &[String]) -> Result<()> {
 fn cmd_validate(args: &[String]) -> Result<()> {
     let path = args
         .first()
-        .ok_or_else(|| anyhow!("usage: vigo gitmirror source validate <path>"))?;
+        .ok_or_else(|| anyhow!("usage: vigo swarm gitmirror source validate <path>"))?;
     let p = PathBuf::from(path);
     let cfg = sidecar::load(&p).with_context(|| format!("loading {}", p.display()))?;
     println!(
@@ -415,7 +415,7 @@ fn parse_project_with_yes(args: &[String], verb: &str) -> Result<(String, bool)>
         }
     }
     let project = positional
-        .ok_or_else(|| anyhow!("usage: vigo gitmirror source {} <project>", verb))?;
+        .ok_or_else(|| anyhow!("usage: vigo swarm gitmirror source {} <project>", verb))?;
     Ok((project, yes))
 }
 
@@ -477,7 +477,7 @@ fn confirm(prompt: &str) -> Result<bool> {
 }
 
 // ============================================================
-// vigo gitmirror leave
+// vigo swarm gitmirror leave
 // ============================================================
 //
 // Self-unenroll this user's gitmirror publishing on this envoy. Bulk of
@@ -515,7 +515,7 @@ fn parse_leave_args(args: &[String]) -> Result<LeaveOpts> {
                 std::process::exit(0);
             }
             other if other.starts_with("--") => bail!("unknown flag: {}", other),
-            _ => bail!("vigo gitmirror leave takes no positional arguments; got {}", a),
+            _ => bail!("vigo swarm gitmirror leave takes no positional arguments; got {}", a),
         }
     }
     if out.pause && out.purge {
@@ -526,10 +526,10 @@ fn parse_leave_args(args: &[String]) -> Result<LeaveOpts> {
 
 fn print_leave_usage() {
     eprintln!(
-        "vigo gitmirror leave — remove or pause all this user's gitmirror sidecars
+        "vigo swarm gitmirror leave — remove or pause all this user's gitmirror sidecars
 
 USAGE:
-    vigo gitmirror leave [--pause | --purge] [--yes]
+    vigo swarm gitmirror leave [--pause | --purge] [--yes]
 
 FLAGS:
     --pause    set paused: true on every sidecar instead of deleting
@@ -631,7 +631,7 @@ pub fn cmd_leave(args: &[String]) -> Result<()> {
         let host = local_hostname()?;
         println!();
         println!(
-            "running `vigo gitmirror prune --seeder {} --user {} --yes` for receiver mirrors…",
+            "running `vigo swarm gitmirror prune --seeder {} --user {} --yes` for receiver mirrors…",
             host, user
         );
         let exe = std::env::current_exe().context("resolving current exe for purge prune")?;
@@ -658,11 +658,11 @@ pub fn cmd_leave(args: &[String]) -> Result<()> {
 
     let summary = if opts.pause {
         format!(
-            "reactor stops publishing paused sources on next tick. Run `vigo gitmirror source resume <project>` to re-enable."
+            "reactor stops publishing paused sources on next tick. Run `vigo swarm gitmirror source resume <project>` to re-enable."
         )
     } else {
         format!(
-            "reactor drops these labels on next tick. Receiver mirrors on other envoys persist until their own `vigo gitmirror prune` runs."
+            "reactor drops these labels on next tick. Receiver mirrors on other envoys persist until their own `vigo swarm gitmirror prune` runs."
         )
     };
     println!("\n{}", summary);

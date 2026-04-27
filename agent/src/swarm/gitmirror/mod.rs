@@ -9,7 +9,7 @@
 //! `git push`. Receivers are read-only mirrors: they hold a bare repo
 //! under `/var/lib/vigo/swarm/gitmirror/mirrors/<seeder>/<user>/<project>.git`.
 //! Users recover into a working clone on demand via
-//! `vigo gitmirror recover <project>`.
+//! `vigo swarm gitmirror recover <project>`.
 //!
 //! Gitmirror is a personal-DR tool, not a fleet distribution mechanism.
 //! Fleet-wide content distribution is what modules and `file:` resources
@@ -168,7 +168,7 @@ pub const MAX_PER_SOURCE_MIRRORS: usize = 20;
 /// backup at the moment it's most valuable. The receiver reactor
 /// emits a rate-limited `warn!` log line and surfaces stale labels
 /// through the `gitmirror.stale_mirrors` trait; manual cleanup is
-/// available via `vigo gitmirror prune`.
+/// available via `vigo swarm gitmirror prune`.
 pub const STALE_THRESHOLD_SECS: u64 = 30 * 24 * 60 * 60;
 
 /// Spawn the gitmirror subsystem.

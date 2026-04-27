@@ -109,7 +109,7 @@ Receivers hold each mirror as a single **root-owned bare repo** at `/var/lib/vig
 Recovery is a deliberate user action, not a passive filesystem shadow. When a user needs to get their repo back, they run:
 
 ```
-vigo gitmirror recover <project>
+vigo swarm gitmirror recover <project>
 ```
 
 which clones the bare repo into `~<user>/gitmirror/<project>/` as a normal writable git repo with full history. See [`vigo swarm gitmirror` CLI reference](../../reference/cli/agent-swarm-gitmirror.md) for the full recovery subcommand tree.

@@ -3,7 +3,7 @@
 
 //! Filesystem watcher for `~<user>/cryptsync/` directories.
 //!
-//! When the user's `vigo cryptsync encrypt` CLI writes a ciphertext file
+//! When the user's `vigo swarm cryptsync encrypt` CLI writes a ciphertext file
 //! into `~<user>/cryptsync/<name>`, the agent daemon (running as root)
 //! needs to notice and fan out the bytes to every peer in the user's
 //! mesh. Rather than poll, we watch each enrolled user's
@@ -95,7 +95,7 @@ pub fn spawn(
 
 /// A live watch on `~user/cryptsync/`. Tracks `(dev, inode)` so the
 /// reconciler can detect a delete-and-recreate (e.g.,
-/// `vigo cryptsync leave --purge` followed by `vigo cryptsync enroll`) and
+/// `vigo swarm cryptsync leave --purge` followed by `vigo swarm cryptsync enroll`) and
 /// re-arm the inotify watch on the new directory inode. Without
 /// this, the kernel auto-removes the watch on dir-deletion (IN_IGNORED)
 /// but the reconciler's "user is enrolled and a watch exists" check
@@ -144,7 +144,7 @@ async fn run(
     // Event dedupe: remember the last emit time per
     // (user, filename, action). Action is part of the key so a Push
     // followed by a Delete on the same filename within DEBOUNCE
-    // (typical for `vigo cryptsync encrypt foo && vigo cryptsync delete foo`
+    // (typical for `vigo swarm cryptsync encrypt foo && vigo swarm cryptsync delete foo`
     // or for the §7 livetest's encrypt-then-delete probe) doesn't
     // squelch the second event. CREATE+MODIFY pairs from the
     // encrypt CLI's atomic rename still collapse correctly because

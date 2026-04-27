@@ -15,7 +15,7 @@
 //! - **A bare git repo per claim** at
 //!   `/var/lib/vigo/swarm/gitmirror/mirrors/<seeder>/<user>/<project>.git`,
 //!   root-owned. Stores the full git history; users recover into a
-//!   working clone on demand via `vigo gitmirror recover <project>`.
+//!   working clone on demand via `vigo swarm gitmirror recover <project>`.
 //!
 //! ### Trust model
 //!
@@ -315,7 +315,7 @@ impl Receiver {
     /// wipe every existing mirror because the "known" set is empty,
     /// and the next check-in would re-download them all from scratch.
     /// The rescanned state is persisted immediately so the
-    /// out-of-process `vigo gitmirror list` CLI sees it before the first
+    /// out-of-process `vigo swarm gitmirror list` CLI sees it before the first
     /// reactor tick writes.
     pub fn new(state_dir: PathBuf, claims: ClaimsHandle) -> Self {
         let mut state = ReceiverState::load(&state_dir);
@@ -355,7 +355,7 @@ impl Receiver {
     /// passes this into the traits snapshot so the staleness is
     /// visible via the `gitmirror.stale_mirrors` trait. Stale mirrors
     /// are never auto-pruned by this function — removal is strictly
-    /// manual via `vigo gitmirror prune`.
+    /// manual via `vigo swarm gitmirror prune`.
     pub fn tick(&mut self, manifest: &Manifest, cache: &BlobCache) -> Vec<String> {
         let now = unix_seconds_now();
         let claims = self.claims.snapshot();
@@ -459,7 +459,7 @@ impl Receiver {
                     seeder = %mirror.seeder,
                     age_days,
                     "gitmirror receiver: mirror is stale — source envoy may be gone. \
-                     Run `vigo gitmirror prune` to remove manually if you no longer need it."
+                     Run `vigo swarm gitmirror prune` to remove manually if you no longer need it."
                 );
                 self.last_stale_warn.insert(label.clone(), now);
             }
@@ -662,7 +662,7 @@ impl Receiver {
     /// Wipe a mirror's bare repo and drop the state entries. The
     /// receiver no longer owns any user-space files (as of 0.22.0);
     /// if the user had recovered this mirror via
-    /// `vigo gitmirror recover`, that recovered clone lives under a
+    /// `vigo swarm gitmirror recover`, that recovered clone lives under a
     /// user-owned path the receiver never touches, so wipe leaves
     /// it alone.
     fn wipe(&mut self, label: &str) {
@@ -899,7 +899,7 @@ fn ensure_bare_parent(bare_repo: &Path) -> std::io::Result<()> {
 /// Run the bare-repo init + fetch pipeline. Returns the HEAD sha
 /// after a successful fetch from the bundle. As of 0.22.0 the
 /// receiver no longer maintains a working tree — recovery happens
-/// on demand via `vigo gitmirror recover`.
+/// on demand via `vigo swarm gitmirror recover`.
 ///
 /// Each sub-step tags its error with a bracketed step name
 /// (`materialize[init]`, `materialize[fetch]`,

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! User-facing `vigo gitmirror <verb>` subcommand tree.
+//! User-facing `vigo swarm gitmirror <verb>` subcommand tree.
 //!
 //! All subcommands are **pure local state reads** or user-owned
 //! `git clone` spawns. No daemon required, no server contact, no
@@ -13,21 +13,21 @@
 //! The subcommand tree:
 //!
 //! ```text
-//! vigo gitmirror list                       # what's mirrored here
-//! vigo gitmirror show <project>             # details on one mirror
-//! vigo gitmirror log <project> [-n N]       # commit history
-//! vigo gitmirror branches <project>         # refs + tags
-//! vigo gitmirror peers <project>            # swarm peers holding the blob
-//! vigo gitmirror recover <project> [opts]   # clone to user path
-//! vigo gitmirror recover-all [--dest D]     # bulk recovery
-//! vigo gitmirror source list                # what this envoy publishes
-//! vigo gitmirror source add <path>          # write a new sidecar
-//! vigo gitmirror source remove <project>    # delete a sidecar
-//! vigo gitmirror source pause <project>     # stop publishing
-//! vigo gitmirror source resume <project>    # resume publishing
-//! vigo gitmirror source show <project>      # print a sidecar
-//! vigo gitmirror source validate <path>     # dry-run sidecar validation
-//! vigo gitmirror leave                      # remove all this user's sidecars here
+//! vigo swarm gitmirror list                       # what's mirrored here
+//! vigo swarm gitmirror show <project>             # details on one mirror
+//! vigo swarm gitmirror log <project> [-n N]       # commit history
+//! vigo swarm gitmirror branches <project>         # refs + tags
+//! vigo swarm gitmirror peers <project>            # swarm peers holding the blob
+//! vigo swarm gitmirror recover <project> [opts]   # clone to user path
+//! vigo swarm gitmirror recover-all [--dest D]     # bulk recovery
+//! vigo swarm gitmirror source list                # what this envoy publishes
+//! vigo swarm gitmirror source add <path>          # write a new sidecar
+//! vigo swarm gitmirror source remove <project>    # delete a sidecar
+//! vigo swarm gitmirror source pause <project>     # stop publishing
+//! vigo swarm gitmirror source resume <project>    # resume publishing
+//! vigo swarm gitmirror source show <project>      # print a sidecar
+//! vigo swarm gitmirror source validate <path>     # dry-run sidecar validation
+//! vigo swarm gitmirror leave                      # remove all this user's sidecars here
 //! ```
 //!
 //! ### Permission model
@@ -68,7 +68,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "leave" => super::source_cli::cmd_leave(&args[1..]),
         "source" => dispatch_source(&args[1..]),
         other => bail!(
-            "unknown `vigo gitmirror` subcommand: {}\nrun `vigo gitmirror --help` for usage",
+            "unknown `vigo swarm gitmirror` subcommand: {}\nrun `vigo swarm gitmirror --help` for usage",
             other
         ),
     }
@@ -84,10 +84,10 @@ fn dispatch_source(args: &[String]) -> Result<()> {
 
 fn print_usage() {
     eprintln!(
-        "vigo gitmirror — inspect and recover personal-DR git mirrors
+        "vigo swarm gitmirror — inspect and recover personal-DR git mirrors
 
 USAGE:
-    vigo gitmirror <command> [args]
+    vigo swarm gitmirror <command> [args]
 
 COMMANDS:
     list                             list mirrors materialized on this envoy
@@ -101,7 +101,7 @@ COMMANDS:
     leave [--pause|--purge] [--yes]  remove or pause all this user's sidecars on this envoy
     source <subcommand>              manage .gitmirror.yaml sidecars
                                      (add, remove, pause, resume, show, validate, list)
-                                     run `vigo gitmirror source --help` for detail
+                                     run `vigo swarm gitmirror source --help` for detail
 
 OPTIONS for recover:
     --dest <path>                    override the default destination
@@ -433,7 +433,7 @@ fn truncate(s: &str, max: usize) -> String {
 fn cmd_repo_show(args: &[String]) -> Result<()> {
     let project = args
         .first()
-        .context("usage: vigo gitmirror show <project>")?;
+        .context("usage: vigo swarm gitmirror show <project>")?;
     let caller = resolve_caller()?;
     let state = load_receiver_state()?;
     let m = resolve_mirror(&state, &caller, project)?;
@@ -530,7 +530,7 @@ fn cmd_repo_log(args: &[String]) -> Result<()> {
         }
         i += 1;
     }
-    let project = project.context("usage: vigo gitmirror log <project> [-n N]")?;
+    let project = project.context("usage: vigo swarm gitmirror log <project> [-n N]")?;
     let caller = resolve_caller()?;
     let state = load_receiver_state()?;
     let m = resolve_mirror(&state, &caller, &project)?;
@@ -550,7 +550,7 @@ fn cmd_repo_log(args: &[String]) -> Result<()> {
 fn cmd_repo_branches(args: &[String]) -> Result<()> {
     let project = args
         .first()
-        .context("usage: vigo gitmirror branches <project>")?;
+        .context("usage: vigo swarm gitmirror branches <project>")?;
     let caller = resolve_caller()?;
     let state = load_receiver_state()?;
     let m = resolve_mirror(&state, &caller, project)?;
@@ -583,7 +583,7 @@ fn cmd_repo_branches(args: &[String]) -> Result<()> {
 fn cmd_repo_peers(args: &[String]) -> Result<()> {
     let project = args
         .first()
-        .context("usage: vigo gitmirror peers <project>")?;
+        .context("usage: vigo swarm gitmirror peers <project>")?;
     let caller = resolve_caller()?;
     let state = load_receiver_state()?;
     let m = resolve_mirror(&state, &caller, project)?;
@@ -692,7 +692,7 @@ fn cmd_recover(args: &[String]) -> Result<()> {
         }
         i += 1;
     }
-    let project = project.context("usage: vigo gitmirror recover <project> [opts]")?;
+    let project = project.context("usage: vigo swarm gitmirror recover <project> [opts]")?;
 
     let caller = resolve_caller()?;
     let state = load_receiver_state()?;
@@ -722,9 +722,9 @@ fn perform_recover(
                      Recovering here would overwrite it — and the mirror is older than your source, \
                      so uncommitted work would be lost.\n\n\
                      To recover to a different path:\n  \
-                     vigo gitmirror recover {} --dest ~/{}-rescue\n\n\
+                     vigo swarm gitmirror recover {} --dest ~/{}-rescue\n\n\
                      To overwrite anyway (only if the source is already broken):\n  \
-                     vigo gitmirror recover {} --force",
+                     vigo swarm gitmirror recover {} --force",
                     dest.display(),
                     m.project,
                     m.project,
@@ -971,10 +971,10 @@ fn cmd_source_list(_args: &[String]) -> Result<()> {
 }
 
 // ============================================================
-// vigo gitmirror prune
+// vigo swarm gitmirror prune
 // ============================================================
 
-/// Parsed flags and positional for `vigo gitmirror prune`.
+/// Parsed flags and positional for `vigo swarm gitmirror prune`.
 #[derive(Debug, Default, PartialEq, Eq)]
 struct PruneOpts {
     /// Staleness threshold in seconds. Default: STALE_THRESHOLD_SECS.
@@ -1169,7 +1169,7 @@ fn cmd_prune(args: &[String]) -> Result<()> {
     // are root-owned. Unprivileged callers can list but not delete.
     if !caller.is_root {
         bail!(
-            "vigo gitmirror prune --yes requires root — bare repos are root-owned. \
+            "vigo swarm gitmirror prune --yes requires root — bare repos are root-owned. \
              Re-run with sudo."
         );
     }

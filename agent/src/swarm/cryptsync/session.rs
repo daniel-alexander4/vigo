@@ -8,11 +8,11 @@
 //!
 //! Lifecycle:
 //!
-//! 1. User runs `vigo cryptsync unlock` — CLI reads password, unwraps
+//! 1. User runs `vigo swarm cryptsync unlock` — CLI reads password, unwraps
 //!    `identity.age` via Argon2id, captures the login shell's PID.
-//! 2. CLI spawns the binary as `vigo cryptsync-session-daemon
+//! 2. CLI spawns the binary as `vigo swarm cryptsync-session-daemon
 //!    --parent-pid <shell-pid> --idle-mins <N>` with `setsid()` so
-//!    the daemon outlives the shell's `vigo cryptsync unlock` child.
+//!    the daemon outlives the shell's `vigo swarm cryptsync unlock` child.
 //! 3. CLI writes the unwrapped age identity (bech32 "AGE-SECRET-KEY-
 //!    1..." string) to the daemon's stdin and closes.
 //! 4. Daemon reads stdin once, zeroizes the buffer, holds the parsed
@@ -167,9 +167,9 @@ fn parse_ok_or_err(line: &str) -> Result<Vec<u8>> {
 
 /// Spawn the session helper daemon from the `unlock` CLI path.
 ///
-/// The helper runs as `vigo cryptsync-session-daemon --parent-pid X
+/// The helper runs as `vigo swarm cryptsync-session-daemon --parent-pid X
 /// --idle-mins M` with `setsid()` so it outlives the shell's
-/// `vigo cryptsync unlock` child. The unwrapped identity is piped in via
+/// `vigo swarm cryptsync unlock` child. The unwrapped identity is piped in via
 /// stdin as the bech32 `AGE-SECRET-KEY-1...` string followed by a
 /// newline, then stdin is closed. The daemon reads once and zeroizes
 /// its buffer.
@@ -184,7 +184,7 @@ pub fn spawn_helper(identity: &Identity, parent_pid: u32, idle_mins: u32) -> Res
     std::thread::sleep(Duration::from_millis(100));
 
     // Route stderr to a per-user log file in the runtime dir so
-    // daemon errors are recoverable via `vigo cryptsync status` / tail
+    // daemon errors are recoverable via `vigo swarm cryptsync status` / tail
     // without keeping the parent shell's stderr pipe open (which
     // blocks `sed`, `tee`, etc. from seeing EOF on the pipeline).
     let log_path = runtime_dir()?.join("cryptsync.log");
@@ -244,7 +244,7 @@ pub fn spawn_helper(identity: &Identity, parent_pid: u32, idle_mins: u32) -> Res
 
 // ---------- server side: run as the daemon ----------
 
-/// Daemon entry point — invoked via `vigo cryptsync-session-daemon
+/// Daemon entry point — invoked via `vigo swarm cryptsync-session-daemon
 /// --parent-pid X --idle-mins M`. Reads the age identity from stdin,
 /// runs the socket server until:
 /// - the parent PID disappears, OR

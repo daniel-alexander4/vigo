@@ -1,12 +1,12 @@
 
-# vigo cryptsync CLI Reference
+# vigo swarm cryptsync CLI Reference
 
 `vigo swarm cryptsync` is the user-facing interface to [cryptsync](../../engineering/subsystems/cryptsync.md), the per-user encrypted P2P directory. It runs inside the `vigo` agent binary, operates on files under the invoking user's home, and does not require root. The agent daemon is never contacted directly by the CLI — `unlock` spawns its own session helper daemon, and `encrypt`/`decrypt` talk to that helper over a local Unix socket.
 
 ## Invocation
 
 ```
-vigo cryptsync <verb> [args]
+vigo swarm cryptsync <verb> [args]
 ```
 
 Every verb runs under the invoking user's uid. No root. The agent daemon does not need to be running for `init`, `enroll`, `status`, or `encrypt` — only for fan-out of the written ciphertext to other envoys.
@@ -77,7 +77,7 @@ Plus agent-owned state at `/var/lib/vigo/swarm/cryptsync/<user>/{peers,tombstone
 
 **Primary envoy, one-time:**
 ```
-$ vigo cryptsync init
+$ vigo swarm cryptsync init
 cryptsync password: ****
 confirm password:   ****
 wrote ~/.cryptsync/identity.age (0600, wrapped)
@@ -91,30 +91,30 @@ public key: age1abc...
 **Secondary envoy (after usercrate applied with `cryptsync: true`):**
 ```
 $ ssh dan@laptop.home
-$ vigo cryptsync status       # detects enroll.pending, runs enrollment interactively
+$ vigo swarm cryptsync status       # detects enroll.pending, runs enrollment interactively
 cryptsync password: ****
 ...
 ```
 
 **Daily use:**
 ```
-$ vigo cryptsync encrypt ~/Downloads/tax.pdf
+$ vigo swarm cryptsync encrypt ~/Downloads/tax.pdf
 ✓ Encrypted to 3 recipient(s); wrote ~/cryptsync/tax.pdf
 
-$ vigo cryptsync unlock
+$ vigo swarm cryptsync unlock
 cryptsync password: ****
 ✓ Unlocked. Session helper running until logout, lock, or 60 min idle.
 
-$ vigo cryptsync decrypt tax.pdf -o /tmp/tax.pdf
+$ vigo swarm cryptsync decrypt tax.pdf -o /tmp/tax.pdf
 ✓ Wrote 847293 bytes to /tmp/tax.pdf
 
-$ vigo cryptsync lock
+$ vigo swarm cryptsync lock
 ✓ Locked. Key scrubbed.
 ```
 
 **Listing files:**
 ```
-$ vigo cryptsync list
+$ vigo swarm cryptsync list
   FILENAME               SIZE        MODIFIED            STATUS
   notes.md               3.4 KiB     4m ago              live
   tax-2025.pdf           847 KiB     2d ago              live
@@ -130,7 +130,7 @@ Flags:
 
 **Deleting a file from the mesh:**
 ```
-$ vigo cryptsync delete tax.pdf
+$ vigo swarm cryptsync delete tax.pdf
 ✓ Removed /home/dan/cryptsync/tax.pdf; tombstone will propagate on next watcher cycle.
 ```
 
@@ -138,14 +138,14 @@ $ vigo cryptsync delete tax.pdf
 
 **Revoking an envoy:**
 ```
-$ vigo cryptsync forget laptop.home
+$ vigo swarm cryptsync forget laptop.home
 ✓ Forgot laptop.home. Recipients regenerated.
   Run `vigo swarm cryptsync reencrypt` to re-encrypt existing files
   so the revoked host cannot decrypt them from its cached ciphertext.
 
-$ vigo cryptsync unlock
+$ vigo swarm cryptsync unlock
 cryptsync password: ****
-$ vigo cryptsync reencrypt
+$ vigo swarm cryptsync reencrypt
 ✓ Re-encrypted 47 file(s) to 2 recipient(s); skipped 0
 ```
 

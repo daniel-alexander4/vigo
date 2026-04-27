@@ -192,7 +192,7 @@ pub fn local_free_pct(purpose: &Purpose) -> Option<f64> {
 
 /// Resolve the target path for a purpose. Returns a path whose
 /// containing filesystem is the one to measure. The path may not
-/// exist yet (e.g., a user who has never run `vigo cryptsync enroll`);
+/// exist yet (e.g., a user who has never run `vigo swarm cryptsync enroll`);
 /// [`free_pct_for_path`] walks up to the nearest existing ancestor.
 pub fn target_path(purpose: &Purpose) -> Option<PathBuf> {
     match purpose {

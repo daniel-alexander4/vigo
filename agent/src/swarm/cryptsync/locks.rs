@@ -9,7 +9,7 @@
 //! upserts a different entry, both save, and the last writer wins
 //! — the loser's update is silently lost. We've observed this in
 //! practice when the watcher fires multiple Remove events within
-//! the same tick (e.g., `vigo cryptsync leave --purge` removes every
+//! the same tick (e.g., `vigo swarm cryptsync leave --purge` removes every
 //! file in `~/cryptsync/`, each one becoming a DeleteJob; the pusher
 //! processes them in parallel under `MAX_INFLIGHT`). The .tmp
 //! collision in the rename phase produces a save error, but even

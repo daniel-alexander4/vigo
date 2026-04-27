@@ -1593,7 +1593,7 @@ async fn main() -> Result<()> {
         }
 
         Some(Commands::Gitmirror { args }) => {
-            // All vigo gitmirror subcommands are pure local state reads
+            // All vigo swarm gitmirror subcommands are pure local state reads
             // and/or user-owned `git clone` spawns. Dispatcher lives
             // in agent/src/gitmirror/cli.rs.
             vigo::swarm::gitmirror::cli::run(args.clone())
@@ -1607,7 +1607,7 @@ async fn main() -> Result<()> {
 
         Some(Commands::CryptsyncSessionDaemon { args }) => {
             // Hidden: cryptsync session helper daemon entry point.
-            // Not in `vigo --help`; invoked only by `vigo cryptsync unlock`.
+            // Not in `vigo --help`; invoked only by `vigo swarm cryptsync unlock`.
             vigo::swarm::cryptsync::session::daemon_main(args.clone()).await
         }
 

@@ -170,7 +170,7 @@ Retention: 90 days (matches tombstones). A digest of the sorted `(age_pubkey, le
 Admin runs `vigocli swarm cryptsync evict --host <h> {--user <u> | --all-users}`. The CLI queries `/api/v1/swarm/cryptsync/fleet` to find affected users, then dispatches a shell command via `POST /api/v1/task`:
 
 ```
-vigo cryptsync _apply-evict --user <u> --hostname <h>
+vigo swarm cryptsync _apply-evict --user <u> --hostname <h>
 ```
 
 Each enrolled agent receives the task, resolves the target's age pubkey from its own peer table, calls `apply_leave` directly (no envelope, no fan-out — the agent is authoritative for its own state). Offline agents pick up the task on next check-in via normal task-dispatch retry.

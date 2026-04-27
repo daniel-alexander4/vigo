@@ -420,7 +420,7 @@ func (h *LodeHandler) Status(w http.ResponseWriter, r *http.Request) {
 			// LAN/cross-subnet peer-to-peer. The UI's per-payload
 			// "pending envoys" fan-out is skipped for claim-only
 			// labels; operators view gitmirror state via the
-			// receiver's `vigo gitmirror list` command or the
+			// receiver's `vigo swarm gitmirror list` command or the
 			// `gitmirror.sources[]` trait payload.
 		} else if target != "" {
 			for _, envoy := range h.fleetIndex.AllEnvoys() {

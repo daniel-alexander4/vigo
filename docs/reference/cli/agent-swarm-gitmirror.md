@@ -1,5 +1,5 @@
 
-# vigo gitmirror CLI Reference
+# vigo swarm gitmirror CLI Reference
 
 `vigo swarm gitmirror` is the user-facing inspection and recovery surface for [gitmirror](../../engineering/subsystems/gitmirror.md) — the personal-DR git mirroring subsystem. It runs on envoys, reads only local state, and works when the server is unreachable. That last property is load-bearing: the command you need when your source envoy died is exactly the command that has to work when the rest of the fleet might also be unavailable.
 
@@ -8,7 +8,7 @@
 The command lives inside the `vigo` agent binary:
 
 ```
-vigo gitmirror <verb> [args]
+vigo swarm gitmirror <verb> [args]
 ```
 
 It does not require the daemon to be running and it makes no network calls. Every subcommand reads from files under `/var/lib/vigo/swarm/gitmirror/` and `/var/lib/vigo/swarm/`.
@@ -55,7 +55,7 @@ If the argument is ambiguous (e.g. the prefix matches multiple mirrors, or the s
 Prints a table of every mirror materialized on this envoy and visible to the caller.
 
 ```
-$ vigo gitmirror list
+$ vigo swarm gitmirror list
 LABEL                                          BRANCH   LAST COMMIT  AGE        SIZE       OWNER
 gitmirror:danlap:dan:vigo-web                   main     f43f6ef3eea2 3h ago     11.1 MiB   dan
 gitmirror:danlap:dan:dotfiles                   main     a891c4b27e34 2d ago     340.0 KiB  dan
@@ -89,7 +89,7 @@ This is the most load-bearing command when your source envoy is gone and you're 
 Clones the mirror's bare repo into a user-owned destination path. The clone runs as the calling user, so the resulting repository is owned by them and is immediately usable as a normal git repo (full history, working tree, `.git/` directory, writable).
 
 ```
-$ vigo gitmirror recover vigo-web
+$ vigo swarm gitmirror recover vigo-web
 ✓ Recovered vigo-web to /home/dan/gitmirror/vigo-web
   cd /home/dan/gitmirror/vigo-web
 ```
@@ -115,10 +115,10 @@ error: /home/dan/gitmirror/vigo-web exists and looks like an active source repo
        lost.
 
        To recover to a different path:
-         vigo gitmirror recover vigo-web --dest ~/vigo-web-rescue
+         vigo swarm gitmirror recover vigo-web --dest ~/vigo-web-rescue
 
        To overwrite anyway (only if the source is already broken):
-         vigo gitmirror recover vigo-web --force
+         vigo swarm gitmirror recover vigo-web --force
 ```
 
 If the destination exists but does NOT look like an active source repo (e.g. plain non-empty directory with no `.git/`), the refusal is a generic "path is not empty" with a suggestion to use `--dest` or `--force`.
@@ -136,7 +136,7 @@ This is the "my laptop died, give me everything" command. Run it on any receiver
 Remove stale mirrors from this receiver. **Dry-run by default** — a bare invocation prints the candidate list and exits without touching anything. You must pass `--yes` or name a specific mirror to actually delete.
 
 ```
-$ vigo gitmirror prune
+$ vigo swarm gitmirror prune
 LABEL                                                   AGE          SIZE         OWNER
 gitmirror:decommissioned-laptop:dan:old-project          45d ago      12.3 MiB     dan
 gitmirror:decommissioned-laptop:dan:notes                47d ago      450.0 KiB    dan
@@ -166,19 +166,19 @@ dry run — 2 mirror(s) would be removed. re-invoke with --yes to apply.
 
 ```
 # See what's stale without removing anything.
-vigo gitmirror prune
+vigo swarm gitmirror prune
 
 # Same thing, explicit about intent.
-vigo gitmirror prune --dry-run
+vigo swarm gitmirror prune --dry-run
 
 # Remove everything stale per the default 30-day threshold.
-sudo vigo gitmirror prune --yes
+sudo vigo swarm gitmirror prune --yes
 
 # Tighter threshold: 60 days.
-sudo vigo gitmirror prune --older-than 60d --yes
+sudo vigo swarm gitmirror prune --older-than 60d --yes
 
 # Remove exactly one mirror by project name, regardless of age.
-sudo vigo gitmirror prune vigo-web
+sudo vigo swarm gitmirror prune vigo-web
 ```
 
 **Exit status:** 0 on success (including the dry-run case with no candidates). 1 if any bare-repo removal failed — the state file is still persisted with the successful removals, so re-running the command will retry only the failures.
@@ -194,7 +194,7 @@ Self-unenrollment for the invoking user on this envoy. Enumerates every `.gitmir
 Scope: only sidecars owned by the invoking user. Other users' gitmirror enrollment on this envoy is untouched.
 
 ```
-$ vigo gitmirror leave --yes
+$ vigo swarm gitmirror leave --yes
 Will remove 3 sidecar(s):
   dotfiles      /home/dan/gitmirror/dotfiles/.gitmirror.yaml
   notes         /home/dan/gitmirror/notes/.gitmirror.yaml
@@ -213,7 +213,7 @@ Admin counterpart for evicting a gone host from the fleet: [`vigocli swarm gitmi
 Lists repos this envoy is publishing as a source. Reads from `/var/lib/vigo/swarm/gitmirror/traits.json` (updated by the reactor on every 5-second tick), so the output is at most 5 seconds stale.
 
 ```
-$ vigo gitmirror source list
+$ vigo swarm gitmirror source list
 PROJECT         OWNER      MIRRORS  PAUSED   FILTERS                        STATUS
 vigo-web        dan        5        no       exclude=raspberry*             publishing
 dotfiles        dan        3        no       (none)                         publishing
@@ -228,7 +228,7 @@ Useful when debugging "why isn't my new repo syncing?" — the status column sur
 Creates a new `.gitmirror.yaml` sidecar in the repo at `<path>` and enrolls it for gitmirror mirroring. The CLI is the supported authoring path — users don't hand-edit `.gitmirror.yaml` unless they want to.
 
 ```
-$ vigo gitmirror source add ~/gitmirror/notes --tags personal --max-mirrors 3
+$ vigo swarm gitmirror source add ~/gitmirror/notes --tags personal --max-mirrors 3
 ✓ wrote /home/dan/gitmirror/notes/.gitmirror.yaml
 ✓ appended .gitmirror.yaml to /home/dan/gitmirror/notes/.gitignore
   reactor picks up new sources within 5 seconds — run `vigo swarm gitmirror source list` to confirm.
@@ -257,7 +257,7 @@ $ vigo gitmirror source add ~/gitmirror/notes --tags personal --max-mirrors 3
 Deletes the sidecar for a project. Prompts unless `--yes`. Does NOT purge receiver-side mirrors on other envoys — those persist until each envoy's own `vigo swarm gitmirror prune` runs.
 
 ```
-$ vigo gitmirror source remove notes
+$ vigo swarm gitmirror source remove notes
 Delete /home/dan/gitmirror/notes/.gitmirror.yaml? The project's local mirror on peers is NOT removed. [y/N] y
 ✓ removed /home/dan/gitmirror/notes/.gitmirror.yaml
   reactor stops publishing on next tick. Receiver mirrors on other envoys persist until their own `vigo swarm gitmirror prune` runs.
@@ -268,7 +268,7 @@ Delete /home/dan/gitmirror/notes/.gitmirror.yaml? The project's local mirror on 
 Flip the `paused` field in the sidecar. Paused sources stop publishing new bundles on the next reactor tick; resuming picks publishing back up.
 
 ```
-$ vigo gitmirror source pause notes
+$ vigo swarm gitmirror source pause notes
 ✓ paused /home/dan/gitmirror/notes/.gitmirror.yaml
 ```
 
@@ -277,7 +277,7 @@ $ vigo gitmirror source pause notes
 Prints the sidecar contents in a readable format, plus a validation pass — any parse errors surface here instead of waiting for the next reactor tick.
 
 ```
-$ vigo gitmirror source show notes
+$ vigo swarm gitmirror source show notes
 project:     notes
 path:        /home/dan/gitmirror/notes
 sidecar:     /home/dan/gitmirror/notes/.gitmirror.yaml
@@ -292,7 +292,7 @@ tags:        personal
 Dry-run a sidecar — parse and validate it without writing. Takes a path to the sidecar file, not a project. Useful for templating or CI flows.
 
 ```
-$ vigo gitmirror source validate ./.gitmirror.yaml
+$ vigo swarm gitmirror source validate ./.gitmirror.yaml
 ✓ ./.gitmirror.yaml parses and validates (owner=danlap, max_mirrors=3, paused=false)
 ```
 

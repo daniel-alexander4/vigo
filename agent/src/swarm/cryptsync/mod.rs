@@ -172,7 +172,7 @@ async fn run(
                 // a fresh leave lands on peers in the same cycle.
                 process_pending_leaves(&machine).await;
                 // Process any post-reenroll regen requests so a
-                // fresh `vigo cryptsync enroll` picks up live peers
+                // fresh `vigo swarm cryptsync enroll` picks up live peers
                 // within one tick instead of waiting for the next
                 // peer pubkey rotation.
                 process_pending_regens();
@@ -200,7 +200,7 @@ async fn run(
 }
 
 /// Poll every enrolled user for a `~/.cryptsync/leave.pending` sentinel
-/// dropped by `vigo cryptsync leave`. For each sentinel present:
+/// dropped by `vigo swarm cryptsync leave`. For each sentinel present:
 ///
 /// 1. Load the daemon signing key for the user.
 /// 2. Build + fan out a signed LEAVE envelope to every live peer.
@@ -314,7 +314,7 @@ async fn process_one_leave(
 }
 
 /// Poll every enrolled user for a `~/.cryptsync/regen.pending` sentinel
-/// dropped by `vigo cryptsync enroll` after a fresh enrollment. For each
+/// dropped by `vigo swarm cryptsync enroll` after a fresh enrollment. For each
 /// sentinel present: regenerate `recipients.txt` from the current
 /// daemon-side peer table (folding in every live peer the daemon
 /// already knows about) and remove the sentinel. Idempotent; if the
@@ -994,7 +994,7 @@ pub(crate) fn home_for_user(username: &str) -> Option<PathBuf> {
 /// deletions would break the pusher's reactive model. The tradeoff
 /// is documented in `docs/engineering/subsystems/cryptsync.md`:
 /// a compromised signing key authorizes destructive operations on
-/// this envoy's behalf until peers `vigo cryptsync forget <host>` it,
+/// this envoy's behalf until peers `vigo swarm cryptsync forget <host>` it,
 /// but can't decrypt content.
 fn ensure_signing_identity(user: &str) -> Result<()> {
     let key_path = config::signing_key_path(user);
@@ -1182,13 +1182,13 @@ pub fn regenerate_recipients_now(user: &str, home: &Path) -> Result<()> {
 ///
 /// - `POST /cryptsync/leaves/<user>` handler after verifying a signed
 ///   envelope from a peer
-/// - `vigo cryptsync leave` after signing its own envelope
-/// - `vigo cryptsync _apply-evict` after the admin task dispatch lands
+/// - `vigo swarm cryptsync leave` after signing its own envelope
+/// - `vigo swarm cryptsync _apply-evict` after the admin task dispatch lands
 ///
 /// Steps: drop the pubkey from `peers.json`, persist the table,
 /// record the LEAVE in `leaves.json`, regenerate `recipients.txt`
 /// (omitting the pubkey), drop the `reencrypt.pending` sentinel so
-/// the next `vigo cryptsync unlock` (or the running session helper)
+/// the next `vigo swarm cryptsync unlock` (or the running session helper)
 /// rewraps existing ciphertext. Idempotent — repeat calls with the
 /// same args are no-ops after the first.
 pub fn apply_leave(
@@ -1380,7 +1380,7 @@ fn pusher_agent(tls: &TlsCerts) -> Result<ureq::Agent> {
 /// Called by the user executor (`agent/src/executors/user.rs`) after
 /// successful user creation when the user resource has
 /// `cryptsync: true`. Drops the `~<home>/.cryptsync/enroll.pending`
-/// sentinel so the first interactive `vigo cryptsync *` invocation by
+/// sentinel so the first interactive `vigo swarm cryptsync *` invocation by
 /// that user runs enrollment.
 ///
 /// Idempotent:

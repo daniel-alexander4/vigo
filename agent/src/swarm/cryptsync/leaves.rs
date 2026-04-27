@@ -122,7 +122,7 @@ impl LeavesTable {
 
     /// CLI-facing load that reads the user-side mirror at
     /// `~/.cryptsync/leaves.json` instead of the daemon-only canonical
-    /// path. Used by `vigo cryptsync status` / future leaves verbs running
+    /// path. Used by `vigo swarm cryptsync status` / future leaves verbs running
     /// as the unprivileged user. Same fall-through semantics as `load`.
     pub fn load_user(user: &str, home: &std::path::Path) -> Self {
         let path = config::leaves_user_path(home);

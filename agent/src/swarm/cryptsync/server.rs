@@ -204,7 +204,7 @@ pub async fn handle_push(
     // republish. We don't have a sender-provided mtime here (the
     // pusher doesn't send one in v1), so the simpler rule is: reject
     // any push of a tombstoned filename with 410, and require the
-    // operator to explicitly `vigo cryptsync reencrypt` or to encrypt
+    // operator to explicitly `vigo swarm cryptsync reencrypt` or to encrypt
     // a new file (which clears the tombstone at the source on the
     // next watcher event). See `docs/engineering/subsystems/cryptsync.md`.
     {
@@ -220,7 +220,7 @@ pub async fn handle_push(
     };
     let content_dir = home.join("cryptsync");
     // Create the content dir if missing — pushing to a freshly-enrolled
-    // envoy may arrive before the user runs `vigo cryptsync init/enroll`
+    // envoy may arrive before the user runs `vigo swarm cryptsync init/enroll`
     // locally (rare race but valid; the envoy can't decrypt without the
     // identity but the ciphertext is still legal to store).
     if let Err(e) = fs::create_dir_all(&content_dir) {

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Cryptsync trait snapshot — shared between the `vigo cryptsync list`
+//! Cryptsync trait snapshot — shared between the `vigo swarm cryptsync list`
 //! CLI verb and the daemon's `cryptsync` trait collector.
 //!
 //! A snapshot answers one question: "for this user on this envoy, what
@@ -125,7 +125,7 @@ pub fn build_trait_payload() -> Result<TraitPayload> {
 }
 
 /// Build the per-user snapshot. Shared between the trait collector
-/// and `vigo cryptsync list` via its re-exported accessors.
+/// and `vigo swarm cryptsync list` via its re-exported accessors.
 pub fn build_user_snapshot(user: &str, home: &Path) -> Result<UserSnapshot> {
     let content_dir = config::content_dir(home);
     let mut files_all: Vec<FileEntry> = Vec::new();
