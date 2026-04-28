@@ -308,6 +308,7 @@ func (h *ReportHandler) ComputeEnvoyFrameworkDetail(r *http.Request, hostname, s
 		row := ui.ControlStatusRow{
 			ControlID: f.ControlID,
 			Title:     f.Title,
+			Scope:     f.Scope,
 			Evidence:  f.Evidence,
 		}
 		switch {
@@ -325,7 +326,11 @@ func (h *ReportHandler) ComputeEnvoyFrameworkDetail(r *http.Request, hostname, s
 			row.Status = "partial"
 		default:
 			row.Status = "missing"
-			if standardKey != "" {
+			// For documented-scope controls, the recommended remediation is
+			// to upload a supporting document (Phase C). Module tags don't
+			// apply. For enforced/attested-scope controls, point operators
+			// at the modules that would cover this control.
+			if standardKey != "" && f.Scope != ScopeDocumented {
 				row.RecommendedModules = h.configStore.RecommendModulesForControl(standardKey, f.ControlID)
 			}
 		}
@@ -666,14 +671,40 @@ type ComplianceReportSummary struct {
 
 // ControlFinding maps a compliance control to its implementation status.
 type ControlFinding struct {
-	ControlID      string  `json:"control_id"`
-	Title          string  `json:"title"`
-	Status         string  `json:"status"` // "satisfied", "partial", "not_satisfied"
-	Evidence       string  `json:"evidence"`
-	FleetPercent   float64 `json:"fleet_percent"`    // percentage of fleet with modules covering this control
-	FleetCovered   int     `json:"fleet_covered"`    // envoys with coverage
-	FleetTotal     int     `json:"fleet_total"`      // total active envoys
+	ControlID    string  `json:"control_id"`
+	Title        string  `json:"title"`
+	Status       string  `json:"status"` // "satisfied", "partial", "not_satisfied", "waived"
+	Scope        string  `json:"scope"`  // see ScopeEnforced/Attested/Documented/NotApplicable
+	Evidence     string  `json:"evidence"`
+	FleetPercent float64 `json:"fleet_percent"` // percentage of fleet with modules covering this control
+	FleetCovered int     `json:"fleet_covered"` // envoys with coverage
+	FleetTotal   int     `json:"fleet_total"`   // total active envoys
 }
+
+// Control scope classifies whether a framework control is something
+// Vigo can enforce/measure on envoys, or whether the operator must
+// satisfy it through documentation/process Vigo retains as evidence.
+//
+//   - ScopeEnforced — Vigo modules apply the technical control
+//     (firewall rules, package state, file mode, sysctl, user mgmt,
+//     SSH config, AppArmor profiles, etc.). Coverage flips when the
+//     envoy's modules carry the matching `compliance:` tag.
+//   - ScopeAttested — Vigo collects evidence but doesn't enforce —
+//     drift detection, security_scan trait, audit chain integrity,
+//     Connwaer fleet checks. Coverage requires the relevant signal
+//     to be present and healthy.
+//   - ScopeDocumented — operator satisfies via uploaded artifact
+//     (BAA, IR plan, risk assessment, training records). Coverage
+//     requires at least one valid attached doc (Phase C).
+//   - ScopeNotApplicable — control is out of deployment scope (e.g.,
+//     HIPAA "Isolating Health Care Clearinghouse Functions" for a
+//     non-clearinghouse). Excluded from the framework denominator.
+const (
+	ScopeEnforced      = "enforced"
+	ScopeAttested      = "attested"
+	ScopeDocumented    = "documented"
+	ScopeNotApplicable = "not_applicable"
+)
 
 // FleetEnvoyStatus is a per-envoy compliance entry.
 type FleetEnvoyStatus struct {
@@ -826,27 +857,62 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 	}, nil
 }
 
-// catalogControl is shorthand for a {ID, Title} pair used by every
-// framework's control-catalog builder. Status defaults to
-// "not_satisfied" so the partition rule treats unmapped controls as
-// missing — coverage flips to "covered" when an envoy's modules carry
-// the matching `compliance:` tag, "waived" when a waiver applies, or
-// "partial" when a future Connwaer escalation lands. Evidence is left
-// empty: the per-control row in the report renders the recommended
-// modules for missing controls and the waiver detail for waived ones.
-func catalogControl(id, title string) ControlFinding {
-	return ControlFinding{ControlID: id, Title: title, Status: "not_satisfied"}
+// catalogControl is shorthand for a {ID, Title, Scope} triple used by
+// every framework's control-catalog builder. Status defaults to
+// "not_satisfied"; scope is the caller's responsibility (see
+// ScopeEnforced / ScopeAttested / ScopeDocumented / ScopeNotApplicable).
+//
+// The partition rule treats unmapped controls as missing — coverage
+// flips to "covered" when an envoy's modules carry the matching
+// `compliance:` tag (enforced/attested), or when the documented
+// control has at least one attached evidence doc (Phase C),
+// "waived" when a waiver applies, or "partial" when a Connwaer
+// escalation lands at less than full fleet coverage. Evidence is
+// left empty: the per-control row in the report renders the
+// recommended modules for missing controls and the waiver detail for
+// waived ones.
+func catalogControl(id, title, scope string) ControlFinding {
+	return ControlFinding{ControlID: id, Title: title, Status: "not_satisfied", Scope: scope}
 }
 
-// catalog converts a list of {id, title} pairs into the catalog's
-// ControlFinding slice. Strictly cosmetic — keeps the per-framework
-// builders short and free of repeated struct boilerplate.
-func catalog(entries [][2]string) []ControlFinding {
+// scopedCatalog converts a list of {id, title} pairs into a catalog
+// slice where every entry shares the given scope. Most framework
+// builders organize their entries into a small number of scope-uniform
+// sections (e.g., all CIS-Ubuntu controls are enforced; HIPAA
+// §164.312 Technical Safeguards are mostly enforced; HIPAA §164.308
+// Administrative Safeguards are mostly documented), so the scope-per-
+// section idiom keeps builders compact.
+func scopedCatalog(scope string, entries [][2]string) []ControlFinding {
 	out := make([]ControlFinding, 0, len(entries))
 	for _, e := range entries {
-		out = append(out, catalogControl(e[0], e[1]))
+		out = append(out, catalogControl(e[0], e[1], scope))
 	}
 	return out
+}
+
+// concatCatalogs flattens several scoped sections into one
+// ControlFinding slice. Keeps builders that need mixed scopes (HIPAA,
+// SOC 2, NIST, ISO 27001) clean: build each section with
+// scopedCatalog, then concat.
+func concatCatalogs(sections ...[]ControlFinding) []ControlFinding {
+	total := 0
+	for _, s := range sections {
+		total += len(s)
+	}
+	out := make([]ControlFinding, 0, total)
+	for _, s := range sections {
+		out = append(out, s...)
+	}
+	return out
+}
+
+// catalog is the legacy single-section helper retained for tests and
+// for any framework that's truly scope-uniform. It defaults the
+// scope to ScopeEnforced — fine for CIS benchmarks (technical
+// hardening), but the wrong default for HIPAA/SOC 2/NIST. Prefer
+// scopedCatalog/concatCatalogs in new code.
+func catalog(entries [][2]string) []ControlFinding {
+	return scopedCatalog(ScopeEnforced, entries)
 }
 
 // buildHIPAAFindings returns the HIPAA Security Rule control catalog
@@ -857,82 +923,114 @@ func catalog(entries [][2]string) []ControlFinding {
 // missing. Vigo's own architectural posture (server-side mTLS, RBAC,
 // audit chain, etc.) lives separately in server/compliance.AppControls
 // and never enters this catalog.
+//
+// Scope assignment: §164.308 Administrative + §164.314 Organizational
+// + §164.316 Policies/Procedures are predominantly documented (policy
+// artifacts the operator produces); §164.310 Physical is a mix
+// (mostly documented, a few enforced); §164.312 Technical is
+// predominantly enforced (Vigo modules apply the technical control).
+// A handful of cross-section overrides handle outliers — e.g.,
+// §164.308(a)(5)(ii)(B) Protection from Malicious Software is
+// enforced (AV/EDR module) even though the surrounding subsection is
+// documented.
 func (h *ReportHandler) buildHIPAAFindings() []ControlFinding {
-	return catalog([][2]string{
-		// §164.308 — Administrative Safeguards
-		{"164.308(a)(1)(i)", "Security Management Process"},
-		{"164.308(a)(1)(ii)(A)", "Risk Analysis"},
-		{"164.308(a)(1)(ii)(B)", "Risk Management"},
-		{"164.308(a)(1)(ii)(C)", "Sanction Policy"},
-		{"164.308(a)(1)(ii)(D)", "Information System Activity Review"},
-		{"164.308(a)(2)", "Assigned Security Responsibility"},
-		{"164.308(a)(3)(i)", "Workforce Security"},
-		{"164.308(a)(3)(ii)(A)", "Authorization and/or Supervision"},
-		{"164.308(a)(3)(ii)(B)", "Workforce Clearance Procedure"},
-		{"164.308(a)(3)(ii)(C)", "Termination Procedures"},
-		{"164.308(a)(4)(i)", "Information Access Management"},
-		{"164.308(a)(4)(ii)(A)", "Isolating Health Care Clearinghouse Functions"},
-		{"164.308(a)(4)(ii)(B)", "Access Authorization"},
-		{"164.308(a)(4)(ii)(C)", "Access Establishment and Modification"},
-		{"164.308(a)(5)(i)", "Security Awareness and Training"},
-		{"164.308(a)(5)(ii)(A)", "Security Reminders"},
-		{"164.308(a)(5)(ii)(B)", "Protection from Malicious Software"},
-		{"164.308(a)(5)(ii)(C)", "Log-in Monitoring"},
-		{"164.308(a)(5)(ii)(D)", "Password Management"},
-		{"164.308(a)(6)(i)", "Security Incident Procedures"},
-		{"164.308(a)(6)(ii)", "Response and Reporting"},
-		{"164.308(a)(7)(i)", "Contingency Plan"},
-		{"164.308(a)(7)(ii)(A)", "Data Backup Plan"},
-		{"164.308(a)(7)(ii)(B)", "Disaster Recovery Plan"},
-		{"164.308(a)(7)(ii)(C)", "Emergency Mode Operation Plan"},
-		{"164.308(a)(7)(ii)(D)", "Testing and Revision Procedures"},
-		{"164.308(a)(7)(ii)(E)", "Applications and Data Criticality Analysis"},
-		{"164.308(a)(8)", "Evaluation"},
-		{"164.308(b)(1)", "Business Associate Contracts and Other Arrangements"},
-		{"164.308(b)(4)", "Written Contract or Other Arrangement"},
-		// §164.310 — Physical Safeguards
-		{"164.310(a)(1)", "Facility Access Controls"},
-		{"164.310(a)(2)(i)", "Contingency Operations"},
-		{"164.310(a)(2)(ii)", "Facility Security Plan"},
-		{"164.310(a)(2)(iii)", "Access Control and Validation Procedures"},
-		{"164.310(a)(2)(iv)", "Maintenance Records"},
-		{"164.310(b)", "Workstation Use"},
-		{"164.310(c)", "Workstation Security"},
-		{"164.310(d)(1)", "Device and Media Controls"},
-		{"164.310(d)(2)(i)", "Disposal"},
-		{"164.310(d)(2)(ii)", "Media Re-use"},
-		{"164.310(d)(2)(iii)", "Accountability"},
-		{"164.310(d)(2)(iv)", "Data Backup and Storage"},
-		// §164.312 — Technical Safeguards
-		{"164.312(a)(1)", "Access Control"},
-		{"164.312(a)(2)(i)", "Unique User Identification"},
-		{"164.312(a)(2)(ii)", "Emergency Access Procedure"},
-		{"164.312(a)(2)(iii)", "Automatic Logoff"},
-		{"164.312(a)(2)(iv)", "Encryption and Decryption"},
-		{"164.312(b)", "Audit Controls"},
-		{"164.312(c)(1)", "Integrity"},
-		{"164.312(c)(2)", "Mechanism to Authenticate Electronic Protected Health Information"},
-		{"164.312(d)", "Person or Entity Authentication"},
-		{"164.312(e)(1)", "Transmission Security"},
-		{"164.312(e)(2)(i)", "Integrity Controls"},
-		{"164.312(e)(2)(ii)", "Encryption (Transmission)"},
-		// §164.314 — Organizational Requirements
-		{"164.314(a)(1)", "Business Associate Contracts or Other Arrangements"},
-		{"164.314(a)(2)(i)", "Business Associate Contracts"},
-		{"164.314(a)(2)(ii)", "Other Arrangements"},
-		{"164.314(a)(2)(iii)", "Business Associate Contracts with Subcontractors"},
-		{"164.314(b)(1)", "Requirements for Group Health Plans"},
-		{"164.314(b)(2)(i)", "Group Health Plan — Safeguards"},
-		{"164.314(b)(2)(ii)", "Group Health Plan — Adequate Separation"},
-		{"164.314(b)(2)(iii)", "Group Health Plan — Subcontractor Agreements"},
-		{"164.314(b)(2)(iv)", "Group Health Plan — Reporting"},
-		// §164.316 — Policies, Procedures, Documentation
-		{"164.316(a)", "Policies and Procedures"},
-		{"164.316(b)(1)", "Documentation"},
-		{"164.316(b)(2)(i)", "Time Limit"},
-		{"164.316(b)(2)(ii)", "Availability"},
-		{"164.316(b)(2)(iii)", "Updates"},
-	})
+	return concatCatalogs(
+		// §164.308 — Administrative Safeguards (mostly documented)
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"164.308(a)(1)(i)", "Security Management Process"},
+			{"164.308(a)(1)(ii)(A)", "Risk Analysis"},
+			{"164.308(a)(1)(ii)(B)", "Risk Management"},
+			{"164.308(a)(1)(ii)(C)", "Sanction Policy"},
+			{"164.308(a)(2)", "Assigned Security Responsibility"},
+			{"164.308(a)(3)(i)", "Workforce Security"},
+			{"164.308(a)(3)(ii)(A)", "Authorization and/or Supervision"},
+			{"164.308(a)(3)(ii)(B)", "Workforce Clearance Procedure"},
+			{"164.308(a)(3)(ii)(C)", "Termination Procedures"},
+			{"164.308(a)(4)(i)", "Information Access Management"},
+			{"164.308(a)(4)(ii)(A)", "Isolating Health Care Clearinghouse Functions"},
+			{"164.308(a)(4)(ii)(B)", "Access Authorization"},
+			{"164.308(a)(4)(ii)(C)", "Access Establishment and Modification"},
+			{"164.308(a)(5)(i)", "Security Awareness and Training"},
+			{"164.308(a)(5)(ii)(A)", "Security Reminders"},
+			{"164.308(a)(6)(i)", "Security Incident Procedures"},
+			{"164.308(a)(6)(ii)", "Response and Reporting"},
+			{"164.308(a)(7)(i)", "Contingency Plan"},
+			{"164.308(a)(7)(ii)(B)", "Disaster Recovery Plan"},
+			{"164.308(a)(7)(ii)(C)", "Emergency Mode Operation Plan"},
+			{"164.308(a)(7)(ii)(D)", "Testing and Revision Procedures"},
+			{"164.308(a)(7)(ii)(E)", "Applications and Data Criticality Analysis"},
+			{"164.308(a)(8)", "Evaluation"},
+			{"164.308(b)(1)", "Business Associate Contracts and Other Arrangements"},
+			{"164.308(b)(4)", "Written Contract or Other Arrangement"},
+		}),
+		// §164.308 — Administrative outliers Vigo can enforce
+		scopedCatalog(ScopeEnforced, [][2]string{
+			{"164.308(a)(5)(ii)(B)", "Protection from Malicious Software"},
+			{"164.308(a)(5)(ii)(D)", "Password Management"},
+			{"164.308(a)(7)(ii)(A)", "Data Backup Plan"},
+		}),
+		// §164.308 — Administrative outliers Vigo can attest to
+		scopedCatalog(ScopeAttested, [][2]string{
+			{"164.308(a)(1)(ii)(D)", "Information System Activity Review"},
+			{"164.308(a)(5)(ii)(C)", "Log-in Monitoring"},
+		}),
+		// §164.310 — Physical Safeguards (mostly documented)
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"164.310(a)(1)", "Facility Access Controls"},
+			{"164.310(a)(2)(i)", "Contingency Operations"},
+			{"164.310(a)(2)(ii)", "Facility Security Plan"},
+			{"164.310(a)(2)(iii)", "Access Control and Validation Procedures"},
+			{"164.310(a)(2)(iv)", "Maintenance Records"},
+			{"164.310(b)", "Workstation Use"},
+			{"164.310(c)", "Workstation Security"},
+			{"164.310(d)(1)", "Device and Media Controls"},
+			{"164.310(d)(2)(iii)", "Accountability"},
+			{"164.310(d)(2)(iv)", "Data Backup and Storage"},
+		}),
+		// §164.310 — Physical outliers Vigo can enforce (Sandgorgon decom)
+		scopedCatalog(ScopeEnforced, [][2]string{
+			{"164.310(d)(2)(i)", "Disposal"},
+			{"164.310(d)(2)(ii)", "Media Re-use"},
+		}),
+		// §164.312 — Technical Safeguards (mostly enforced)
+		scopedCatalog(ScopeEnforced, [][2]string{
+			{"164.312(a)(1)", "Access Control"},
+			{"164.312(a)(2)(i)", "Unique User Identification"},
+			{"164.312(a)(2)(ii)", "Emergency Access Procedure"},
+			{"164.312(a)(2)(iii)", "Automatic Logoff"},
+			{"164.312(a)(2)(iv)", "Encryption and Decryption"},
+			{"164.312(c)(1)", "Integrity"},
+			{"164.312(c)(2)", "Mechanism to Authenticate Electronic Protected Health Information"},
+			{"164.312(d)", "Person or Entity Authentication"},
+			{"164.312(e)(1)", "Transmission Security"},
+			{"164.312(e)(2)(i)", "Integrity Controls"},
+			{"164.312(e)(2)(ii)", "Encryption (Transmission)"},
+		}),
+		// §164.312 — Technical outliers Vigo can attest to
+		scopedCatalog(ScopeAttested, [][2]string{
+			{"164.312(b)", "Audit Controls"},
+		}),
+		// §164.314 — Organizational Requirements (all documented — contracts)
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"164.314(a)(1)", "Business Associate Contracts or Other Arrangements"},
+			{"164.314(a)(2)(i)", "Business Associate Contracts"},
+			{"164.314(a)(2)(ii)", "Other Arrangements"},
+			{"164.314(a)(2)(iii)", "Business Associate Contracts with Subcontractors"},
+			{"164.314(b)(1)", "Requirements for Group Health Plans"},
+			{"164.314(b)(2)(i)", "Group Health Plan — Safeguards"},
+			{"164.314(b)(2)(ii)", "Group Health Plan — Adequate Separation"},
+			{"164.314(b)(2)(iii)", "Group Health Plan — Subcontractor Agreements"},
+			{"164.314(b)(2)(iv)", "Group Health Plan — Reporting"},
+		}),
+		// §164.316 — Policies, Procedures, Documentation (all documented)
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"164.316(a)", "Policies and Procedures"},
+			{"164.316(b)(1)", "Documentation"},
+			{"164.316(b)(2)(i)", "Time Limit"},
+			{"164.316(b)(2)(ii)", "Availability"},
+			{"164.316(b)(2)(iii)", "Updates"},
+		}),
+	)
 }
 
 func (h *ReportHandler) handleComplianceReport(w http.ResponseWriter, r *http.Request) {
@@ -1172,85 +1270,117 @@ func (h *ReportHandler) handleHITRUSTReportHTML(w http.ResponseWriter, r *http.R
 // (2017 with 2022 revisions). Common Criteria CC1-CC9 plus the
 // optional category criteria A1 (Availability), C1 (Confidentiality),
 // PI1 (Processing Integrity), and P1-P8 (Privacy). AICPA-licensed: IDs
-// + short titles only — descriptive paragraphs from the TSC reference
-// library never reproduced here.
+// + short titles only.
+//
+// Scope assignment: CC1-CC3, CC9, most P controls, and PI are
+// predominantly documented (governance, policy, application-level
+// data quality). CC6 access controls and CC8 change management are
+// predominantly enforced via Vigo modules. CC4 monitoring and CC7
+// detection are attested via Vigo's drift detection + audit chain.
 func (h *ReportHandler) buildSOC2Findings() []ControlFinding {
-	return catalog([][2]string{
-		// CC1 — Control Environment
-		{"CC1.1", "COSO Principle 1: Integrity and Ethics"},
-		{"CC1.2", "COSO Principle 2: Board Oversight"},
-		{"CC1.3", "COSO Principle 3: Management Structure"},
-		{"CC1.4", "COSO Principle 4: Commitment to Competence"},
-		{"CC1.5", "COSO Principle 5: Accountability"},
-		// CC2 — Communication and Information
-		{"CC2.1", "Internal Information Quality"},
-		{"CC2.2", "Internal Communication of Objectives and Responsibilities"},
-		{"CC2.3", "External Communication"},
-		// CC3 — Risk Assessment
-		{"CC3.1", "Specifies Suitable Objectives"},
-		{"CC3.2", "Risk Identification and Analysis"},
-		{"CC3.3", "Fraud Risk Assessment"},
-		{"CC3.4", "Identifies and Assesses Changes"},
-		// CC4 — Monitoring Activities
-		{"CC4.1", "Ongoing and Separate Evaluations"},
-		{"CC4.2", "Communication of Deficiencies"},
-		// CC5 — Control Activities
-		{"CC5.1", "Selection and Development of Control Activities"},
-		{"CC5.2", "Technology General Controls"},
-		{"CC5.3", "Deployment of Policies and Procedures"},
+	return concatCatalogs(
+		// CC1-CC3, CC9 — Control Environment / Communication / Risk / Risk Mitigation
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"CC1.1", "COSO Principle 1: Integrity and Ethics"},
+			{"CC1.2", "COSO Principle 2: Board Oversight"},
+			{"CC1.3", "COSO Principle 3: Management Structure"},
+			{"CC1.4", "COSO Principle 4: Commitment to Competence"},
+			{"CC1.5", "COSO Principle 5: Accountability"},
+			{"CC2.1", "Internal Information Quality"},
+			{"CC2.2", "Internal Communication of Objectives and Responsibilities"},
+			{"CC2.3", "External Communication"},
+			{"CC3.1", "Specifies Suitable Objectives"},
+			{"CC3.2", "Risk Identification and Analysis"},
+			{"CC3.3", "Fraud Risk Assessment"},
+			{"CC3.4", "Identifies and Assesses Changes"},
+			{"CC9.1", "Risk Mitigation Activities"},
+			{"CC9.2", "Vendor and Business Partner Risk Management"},
+		}),
+		// CC4 — Monitoring (Vigo's drift detection + audit chain)
+		scopedCatalog(ScopeAttested, [][2]string{
+			{"CC4.1", "Ongoing and Separate Evaluations"},
+			{"CC4.2", "Communication of Deficiencies"},
+		}),
+		// CC5 — Control Activities (mixed)
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"CC5.1", "Selection and Development of Control Activities"},
+			{"CC5.3", "Deployment of Policies and Procedures"},
+		}),
+		scopedCatalog(ScopeEnforced, [][2]string{
+			{"CC5.2", "Technology General Controls"},
+		}),
 		// CC6 — Logical and Physical Access Controls
-		{"CC6.1", "Logical Access Security Software"},
-		{"CC6.2", "User Registration and Authorization"},
-		{"CC6.3", "Role-Based Access and Least Privilege"},
-		{"CC6.4", "Physical Access to Facilities"},
-		{"CC6.5", "Disposal of Physical Devices"},
-		{"CC6.6", "Restriction of Access from Outside System Boundaries"},
-		{"CC6.7", "Restriction of Information in Transit and at Rest"},
-		{"CC6.8", "Prevention of Unauthorized Software"},
+		scopedCatalog(ScopeEnforced, [][2]string{
+			{"CC6.1", "Logical Access Security Software"},
+			{"CC6.2", "User Registration and Authorization"},
+			{"CC6.3", "Role-Based Access and Least Privilege"},
+			{"CC6.5", "Disposal of Physical Devices"},
+			{"CC6.6", "Restriction of Access from Outside System Boundaries"},
+			{"CC6.7", "Restriction of Information in Transit and at Rest"},
+			{"CC6.8", "Prevention of Unauthorized Software"},
+		}),
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"CC6.4", "Physical Access to Facilities"},
+		}),
 		// CC7 — System Operations
-		{"CC7.1", "Detection of Configuration Changes and Vulnerabilities"},
-		{"CC7.2", "Monitoring System Components for Anomalies"},
-		{"CC7.3", "Evaluation of Security Events"},
-		{"CC7.4", "Response to Identified Security Incidents"},
-		{"CC7.5", "Recovery from Identified Security Incidents"},
-		// CC8 — Change Management
-		{"CC8.1", "Change Management Process"},
-		// CC9 — Risk Mitigation
-		{"CC9.1", "Risk Mitigation Activities"},
-		{"CC9.2", "Vendor and Business Partner Risk Management"},
+		scopedCatalog(ScopeAttested, [][2]string{
+			{"CC7.1", "Detection of Configuration Changes and Vulnerabilities"},
+			{"CC7.2", "Monitoring System Components for Anomalies"},
+		}),
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"CC7.3", "Evaluation of Security Events"},
+			{"CC7.4", "Response to Identified Security Incidents"},
+			{"CC7.5", "Recovery from Identified Security Incidents"},
+		}),
+		// CC8 — Change Management (vigocli config publish workflow)
+		scopedCatalog(ScopeEnforced, [][2]string{
+			{"CC8.1", "Change Management Process"},
+		}),
 		// A — Availability
-		{"A1.1", "Capacity Management"},
-		{"A1.2", "Environmental Protections, Backup, and Recovery Infrastructure"},
-		{"A1.3", "Recovery Plan Testing"},
+		scopedCatalog(ScopeEnforced, [][2]string{
+			{"A1.1", "Capacity Management"},
+		}),
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"A1.2", "Environmental Protections, Backup, and Recovery Infrastructure"},
+			{"A1.3", "Recovery Plan Testing"},
+		}),
 		// C — Confidentiality
-		{"C1.1", "Identification and Maintenance of Confidential Information"},
-		{"C1.2", "Disposal of Confidential Information"},
-		// PI — Processing Integrity
-		{"PI1.1", "Quality of System Processing — Definitions and Specifications"},
-		{"PI1.2", "Inputs Are Complete and Accurate"},
-		{"PI1.3", "System Processing Is Complete, Valid, Accurate, Timely, and Authorized"},
-		{"PI1.4", "Outputs Are Complete and Accurate"},
-		{"PI1.5", "Stored Items Are Complete, Accurate, and Retained as Specified"},
-		// P — Privacy
-		{"P1.1", "Notice to Data Subjects"},
-		{"P2.1", "Choice and Consent"},
-		{"P3.1", "Collection — Personal Information Limited to Purpose"},
-		{"P3.2", "Collection — Lawfulness and Explicit Consent for Sensitive Data"},
-		{"P4.1", "Use of Personal Information"},
-		{"P4.2", "Retention of Personal Information"},
-		{"P4.3", "Disposal of Personal Information"},
-		{"P5.1", "Access to Personal Information by Data Subjects"},
-		{"P5.2", "Correction or Amendment of Personal Information"},
-		{"P6.1", "Disclosure to Third Parties — Authorized"},
-		{"P6.2", "Disclosure to Third Parties — Records of Disclosure"},
-		{"P6.3", "Notification of Unauthorized Disclosure"},
-		{"P6.4", "Disclosure to Third Parties — Privacy Practices"},
-		{"P6.5", "Third-Party Compliance Monitoring"},
-		{"P6.6", "Notification of Privacy Incidents to Data Subjects"},
-		{"P6.7", "Accountability for Disclosure of Personal Information"},
-		{"P7.1", "Quality of Personal Information"},
-		{"P8.1", "Monitoring and Enforcement of Privacy Compliance"},
-	})
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"C1.1", "Identification and Maintenance of Confidential Information"},
+		}),
+		scopedCatalog(ScopeEnforced, [][2]string{
+			{"C1.2", "Disposal of Confidential Information"},
+		}),
+		// PI — Processing Integrity (application-level concerns)
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"PI1.1", "Quality of System Processing — Definitions and Specifications"},
+			{"PI1.2", "Inputs Are Complete and Accurate"},
+			{"PI1.3", "System Processing Is Complete, Valid, Accurate, Timely, and Authorized"},
+			{"PI1.4", "Outputs Are Complete and Accurate"},
+			{"PI1.5", "Stored Items Are Complete, Accurate, and Retained as Specified"},
+		}),
+		// P — Privacy (all policy/process)
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"P1.1", "Notice to Data Subjects"},
+			{"P2.1", "Choice and Consent"},
+			{"P3.1", "Collection — Personal Information Limited to Purpose"},
+			{"P3.2", "Collection — Lawfulness and Explicit Consent for Sensitive Data"},
+			{"P4.1", "Use of Personal Information"},
+			{"P4.2", "Retention of Personal Information"},
+			{"P4.3", "Disposal of Personal Information"},
+			{"P5.1", "Access to Personal Information by Data Subjects"},
+			{"P5.2", "Correction or Amendment of Personal Information"},
+			{"P6.1", "Disclosure to Third Parties — Authorized"},
+			{"P6.2", "Disclosure to Third Parties — Records of Disclosure"},
+			{"P6.3", "Notification of Unauthorized Disclosure"},
+			{"P6.4", "Disclosure to Third Parties — Privacy Practices"},
+			{"P6.5", "Third-Party Compliance Monitoring"},
+			{"P6.6", "Notification of Privacy Incidents to Data Subjects"},
+			{"P6.7", "Accountability for Disclosure of Personal Information"},
+			{"P7.1", "Quality of Personal Information"},
+			{"P8.1", "Monitoring and Enforcement of Privacy Compliance"},
+		}),
+	)
 }
 
 func (h *ReportHandler) handleSOC2Report(w http.ResponseWriter, r *http.Request) {
@@ -1267,13 +1397,162 @@ func (h *ReportHandler) handleSOC2ReportHTML(w http.ResponseWriter, r *http.Requ
 
 // buildPCIDSSFindings returns the PCI DSS v4.0 control catalog —
 // requirements 1-12 with their full sub-requirement enumeration. PCI
-// SSC-licensed: only IDs and short titles are reproduced; the full
-// PCI DSS test procedures and guidance are never reproduced here.
+// SSC-licensed: only IDs and short titles are reproduced.
+//
+// Scope assignment: every "X.1.1 / X.1.2 — security policies and
+// operational procedures / roles and responsibilities documented"
+// pattern is documented. Req 9 (physical access) is entirely
+// documented. Req 12 (governance/policies) is entirely documented.
+// Req 11 (test security) is largely attested. The technical
+// requirements (1-8 sub-controls, Req 10 audit logging, etc.) are
+// mostly enforced with a small documented tail.
 func (h *ReportHandler) buildPCIDSSFindings() []ControlFinding {
-	return catalog([][2]string{
+	return concatCatalogs(
+		// Req 1-8, 10 — every "X.1.1 / X.1.2 — security policies and
+		// operational procedures / roles documented" entry is a written
+		// artifact the operator produces.
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"1.1.1", "All security policies and operational procedures for Requirement 1 are documented"},
+			{"1.1.2", "Roles and responsibilities for activities in Requirement 1 are documented"},
+			{"2.1.1", "All security policies and operational procedures for Requirement 2 are documented"},
+			{"2.1.2", "Roles and responsibilities for activities in Requirement 2 are documented"},
+			{"3.1.1", "All security policies and operational procedures for Requirement 3 are documented"},
+			{"3.1.2", "Roles and responsibilities for activities in Requirement 3 are documented"},
+			{"4.1.1", "All security policies and operational procedures for Requirement 4 are documented"},
+			{"4.1.2", "Roles and responsibilities for activities in Requirement 4 are documented"},
+			{"5.1.1", "All security policies and operational procedures for Requirement 5 are documented"},
+			{"5.1.2", "Roles and responsibilities for activities in Requirement 5 are documented"},
+			{"5.4.1", "Processes and mechanisms for protecting against phishing attacks"},
+			{"6.1.1", "All security policies and operational procedures for Requirement 6 are documented"},
+			{"6.1.2", "Roles and responsibilities for activities in Requirement 6 are documented"},
+			{"6.2.1", "Bespoke and custom software is developed securely"},
+			{"6.2.2", "Software development personnel receive training in secure software development"},
+			{"6.2.3", "Bespoke and custom software is reviewed prior to release"},
+			{"6.2.3.1", "Code reviews ensure code is developed per secure coding guidelines"},
+			{"6.2.4", "Software engineering techniques used to prevent or mitigate common attacks"},
+			{"7.1.1", "All security policies and operational procedures for Requirement 7 are documented"},
+			{"7.1.2", "Roles and responsibilities for activities in Requirement 7 are documented"},
+			{"8.1.1", "All security policies and operational procedures for Requirement 8 are documented"},
+			{"8.1.2", "Roles and responsibilities for activities in Requirement 8 are documented"},
+			{"3.6.1", "Procedures defined for protecting cryptographic keys"},
+			{"3.6.1.1", "Documented description of cryptographic architecture maintained"},
+			{"3.6.1.3", "Access to cryptographic keys is restricted to fewest custodians necessary"},
+			{"3.7.1", "Key-management policies and procedures defined for generation"},
+			{"3.7.2", "Key-management policies for secure distribution of cryptographic keys"},
+			{"3.7.3", "Key-management policies for secure storage of cryptographic keys"},
+			{"3.7.4", "Key-management policies for cryptographic key cryptoperiod and key changes"},
+			{"3.7.5", "Key-management policies for retirement, replacement, or destruction of keys"},
+			{"3.7.6", "Manual cleartext key-management operations require split knowledge and dual control"},
+			{"3.7.7", "Key-management policies for prevention of unauthorized substitution of keys"},
+			{"3.7.8", "Key custodians formally acknowledge their responsibilities in writing"},
+			{"3.7.9", "Where used, additional requirements for service provider key management"},
+			{"10.1.1", "All security policies and operational procedures for Requirement 10 are documented"},
+			{"10.1.2", "Roles and responsibilities for activities in Requirement 10 are documented"},
+			// Req 9 — Restrict physical access to cardholder data
+			{"9.1.1", "All security policies and operational procedures for Requirement 9 are documented"},
+			{"9.1.2", "Roles and responsibilities for activities in Requirement 9 are documented"},
+			{"9.2.1", "Appropriate facility entry controls in place to restrict physical access"},
+			{"9.2.1.1", "Individual physical access to sensitive areas is monitored with cameras or access control"},
+			{"9.2.2", "Physical and/or logical controls implemented to restrict use of publicly accessible network jacks"},
+			{"9.2.3", "Physical access to wireless access points, networking equipment, and gateways restricted"},
+			{"9.2.4", "Access to consoles in sensitive areas restricted via locking"},
+			{"9.3.1", "Procedures implemented for authorizing and managing physical access of personnel to the CDE"},
+			{"9.3.1.1", "Physical access to sensitive areas within the CDE for personnel is controlled"},
+			{"9.3.2", "Procedures implemented for authorizing and managing visitor access to the CDE"},
+			{"9.3.3", "Visitors to sensitive areas are escorted at all times"},
+			{"9.3.4", "Visitor logs maintained for visits to sensitive areas"},
+			{"9.4.1", "All media with cardholder data physically secured"},
+			{"9.4.1.1", "Offline media backups stored in a secure location"},
+			{"9.4.1.2", "Security of offline media backup locations reviewed at least every 12 months"},
+			{"9.4.2", "All media with CHD classified per sensitivity"},
+			{"9.4.3", "Media with CHD sent outside facility secured"},
+			{"9.4.4", "Management approval obtained prior to moving media containing CHD outside facility"},
+			{"9.4.5", "Inventory logs of all electronic media with CHD maintained"},
+			{"9.4.5.1", "Inventories of electronic media with CHD reviewed at least every 12 months"},
+			{"9.4.6", "Hard-copy materials with CHD destroyed when no longer needed"},
+			{"9.4.7", "Electronic media with CHD destroyed when no longer needed"},
+			{"9.5.1", "POI devices that capture payment card data via direct physical interaction are protected"},
+			{"9.5.1.1", "Inventory of POI devices is maintained"},
+			{"9.5.1.2", "POI device surfaces are periodically inspected for tampering or unauthorized substitution"},
+			{"9.5.1.2.1", "Frequency of POI device inspections defined per risk analysis"},
+			{"9.5.1.3", "Training provided for personnel in POI environments to be aware of attempted tampering"},
+			// Req 12 — Governance / policies / programs
+			{"12.1.1", "Overall information security policy established, published, maintained, and disseminated"},
+			{"12.1.2", "Information security policy reviewed at least once every 12 months"},
+			{"12.1.3", "Security policy clearly defines information security roles and responsibilities"},
+			{"12.1.4", "Responsibility for information security formally assigned to a CISO or other knowledgeable executive"},
+			{"12.2.1", "Acceptable use policies for end-user technologies documented"},
+			{"12.3.1", "Targeted risk analysis performed for each PCI DSS requirement that provides flexibility"},
+			{"12.3.2", "Targeted risk analysis performed for each PCI DSS requirement that is met via the customized approach"},
+			{"12.3.3", "Cryptographic cipher suites and protocols in use documented and reviewed annually"},
+			{"12.3.4", "Hardware and software technologies in use are reviewed annually"},
+			{"12.4.1", "Service providers — executive management establishes responsibility for protection of CHD"},
+			{"12.4.2", "Service providers — reviews performed at least once every three months to confirm personnel are performing their tasks"},
+			{"12.4.2.1", "Service providers — review documented and signed off by responsible personnel"},
+			{"12.5.1", "Inventory of system components in scope for PCI DSS maintained"},
+			{"12.5.2", "PCI DSS scope is documented and confirmed at least once every 12 months and upon significant change"},
+			{"12.5.2.1", "Service providers — PCI DSS scope confirmation performed at least once every six months"},
+			{"12.5.3", "Service providers — significant changes to organizational structure result in a documented review of the impact on PCI DSS scope"},
+			{"12.6.1", "Formal security awareness program implemented"},
+			{"12.6.2", "Security awareness program reviewed at least every 12 months"},
+			{"12.6.3", "Personnel receive security awareness training upon hire and at least every 12 months"},
+			{"12.6.3.1", "Security awareness training includes specific awareness of threats relevant to job role"},
+			{"12.6.3.2", "Security awareness training includes awareness about acceptable use of end-user technologies"},
+			{"12.7.1", "Personnel screened prior to hire to minimize risk of attacks from internal sources"},
+			{"12.8.1", "Written agreements with TPSPs maintained"},
+			{"12.8.2", "Written agreements with TPSPs include acknowledgement of TPSP responsibility for security of CHD"},
+			{"12.8.3", "Established process for engaging TPSPs"},
+			{"12.8.4", "Program implemented to monitor TPSPs' PCI DSS compliance status"},
+			{"12.8.5", "Information maintained about which PCI DSS requirements are managed by each TPSP"},
+			{"12.9.1", "Service providers — TPSPs acknowledge in writing they are responsible for security of CHD"},
+			{"12.9.2", "Service providers — support customers' requests for information regarding PCI DSS compliance status"},
+			{"12.10.1", "Incident response plan exists and is ready to be activated"},
+			{"12.10.2", "At least once every 12 months, IR plan is reviewed, tested, and updated as needed"},
+			{"12.10.3", "Specific personnel designated to be available 24/7 to respond to suspected or confirmed security incidents"},
+			{"12.10.4", "Personnel responsible for responding to incidents trained appropriately"},
+			{"12.10.4.1", "Frequency of periodic training defined per risk analysis"},
+			{"12.10.5", "IR plan includes monitoring and responding to alerts from security monitoring systems"},
+			{"12.10.6", "IR plan modified and evolved per lessons learned"},
+			{"12.10.7", "IR procedures are in place to be initiated upon detection of stored PAN where it is not expected"},
+		}),
+		// Req 11 — Test security of systems and networks regularly
+		// (Vigo can attest via security_scan trait + drift detection;
+		// pen-test execution and network IDS deployment are
+		// operator-driven testing programs.)
+		scopedCatalog(ScopeAttested, [][2]string{
+			{"11.1.1", "All security policies and operational procedures for Requirement 11 are documented"},
+			{"11.1.2", "Roles and responsibilities for activities in Requirement 11 are documented"},
+			{"11.2.1", "Authorized and unauthorized wireless access points managed"},
+			{"11.2.2", "Inventory of authorized wireless access points maintained, including documented business justification"},
+			{"11.3.1", "Internal vulnerability scans performed at least every three months"},
+			{"11.3.1.1", "All other applicable vulnerabilities not ranked as high-risk or critical are managed"},
+			{"11.3.1.2", "Internal vulnerability scans performed via authenticated scanning"},
+			{"11.3.1.3", "Internal vulnerability scans performed after any significant change"},
+			{"11.3.2", "External vulnerability scans performed via PCI SSC ASV at least every three months"},
+			{"11.3.2.1", "External vulnerability scans performed after any significant change"},
+			{"11.4.1", "External and internal penetration testing methodology defined"},
+			{"11.4.2", "Internal penetration testing performed at least once every 12 months"},
+			{"11.4.3", "External penetration testing performed at least once every 12 months"},
+			{"11.4.4", "Exploitable vulnerabilities and security weaknesses found during penetration testing corrected"},
+			{"11.4.5", "If segmentation used to reduce CDE scope, penetration testing on segmentation controls performed"},
+			{"11.4.6", "Service providers — penetration testing on segmentation controls performed at least every six months"},
+			{"11.4.7", "Multi-tenant service providers — support customers for external penetration testing"},
+			{"11.5.1", "Network intrusion-detection/prevention techniques used to detect and prevent intrusions"},
+			{"11.5.1.1", "Service providers — covert malware communication channels detected, alerted, and prevented"},
+			{"11.5.2", "Change-detection mechanism deployed for critical files"},
+			{"11.6.1", "Change- and tamper-detection mechanism deployed for payment pages"},
+			{"10.4.1", "Audit logs reviewed at least once daily"},
+			{"10.4.1.1", "Automated mechanisms used to perform audit log reviews"},
+			{"10.4.2", "Logs of all other system components reviewed periodically"},
+			{"10.4.2.1", "Frequency of periodic log reviews defined per risk analysis"},
+			{"10.4.3", "Exceptions and anomalies identified during the review process addressed"},
+			{"10.7.1", "Failures of critical security control systems detected, alerted, and addressed promptly"},
+			{"10.7.2", "Service providers — failures of critical security control systems detected, alerted, addressed"},
+			{"10.7.3", "Failures of critical security controls responded to promptly"},
+		}),
+		// Reqs 1-8, 10 (technical) — Vigo modules apply the control.
+		scopedCatalog(ScopeEnforced, [][2]string{
 		// Req 1 — Install and maintain network security controls
-		{"1.1.1", "All security policies and operational procedures for Requirement 1 are documented"},
-		{"1.1.2", "Roles and responsibilities for activities in Requirement 1 are documented"},
 		{"1.2.1", "Configuration standards for NSC rulesets defined and enforced"},
 		{"1.2.2", "All changes to network connections and NSC configurations are approved"},
 		{"1.2.3", "Accurate network diagram(s) maintained"},
@@ -1292,8 +1571,6 @@ func (h *ReportHandler) buildPCIDSSFindings() []ControlFinding {
 		{"1.4.5", "Disclosure of internal IP addresses and routing information limited"},
 		{"1.5.1", "Security controls implemented on computing devices that connect to both untrusted networks and the CDE"},
 		// Req 2 — Apply secure configurations
-		{"2.1.1", "All security policies and operational procedures for Requirement 2 are documented"},
-		{"2.1.2", "Roles and responsibilities for activities in Requirement 2 are documented"},
 		{"2.2.1", "Configuration standards developed, implemented, and maintained"},
 		{"2.2.2", "Vendor default accounts managed"},
 		{"2.2.3", "Primary functions requiring different security levels are managed"},
@@ -1304,8 +1581,6 @@ func (h *ReportHandler) buildPCIDSSFindings() []ControlFinding {
 		{"2.3.1", "Wireless vendor defaults are changed at installation"},
 		{"2.3.2", "Wireless encryption keys changed when personnel with knowledge leave or change roles"},
 		// Req 3 — Protect stored account data
-		{"3.1.1", "All security policies and operational procedures for Requirement 3 are documented"},
-		{"3.1.2", "Roles and responsibilities for activities in Requirement 3 are documented"},
 		{"3.2.1", "Account data storage minimized through data-retention and disposal policies"},
 		{"3.3.1", "SAD is not retained after authorization"},
 		{"3.3.1.1", "Full track data is not retained after authorization"},
@@ -1319,30 +1594,14 @@ func (h *ReportHandler) buildPCIDSSFindings() []ControlFinding {
 		{"3.5.1.1", "Hashes used to render PAN unreadable are keyed cryptographic hashes"},
 		{"3.5.1.2", "If disk-level or partition-level encryption used, additional requirements apply"},
 		{"3.5.1.3", "If disk-level or partition-level encryption used to render PAN unreadable, it is implemented per defined requirements"},
-		{"3.6.1", "Procedures defined for protecting cryptographic keys"},
-		{"3.6.1.1", "Documented description of cryptographic architecture maintained"},
 		{"3.6.1.2", "Secret and private keys for stored data encryption stored in secure forms"},
-		{"3.6.1.3", "Access to cryptographic keys is restricted to fewest custodians necessary"},
 		{"3.6.1.4", "Cryptographic keys stored in fewest possible locations"},
-		{"3.7.1", "Key-management policies and procedures defined for generation"},
-		{"3.7.2", "Key-management policies for secure distribution of cryptographic keys"},
-		{"3.7.3", "Key-management policies for secure storage of cryptographic keys"},
-		{"3.7.4", "Key-management policies for cryptographic key cryptoperiod and key changes"},
-		{"3.7.5", "Key-management policies for retirement, replacement, or destruction of keys"},
-		{"3.7.6", "Manual cleartext key-management operations require split knowledge and dual control"},
-		{"3.7.7", "Key-management policies for prevention of unauthorized substitution of keys"},
-		{"3.7.8", "Key custodians formally acknowledge their responsibilities in writing"},
-		{"3.7.9", "Where used, additional requirements for service provider key management"},
 		// Req 4 — Protect cardholder data with strong cryptography during transmission
-		{"4.1.1", "All security policies and operational procedures for Requirement 4 are documented"},
-		{"4.1.2", "Roles and responsibilities for activities in Requirement 4 are documented"},
 		{"4.2.1", "Strong cryptography and security protocols used to safeguard PAN during transmission"},
 		{"4.2.1.1", "Inventory of trusted keys and certificates maintained"},
 		{"4.2.1.2", "Wireless networks transmitting PAN use strong cryptography"},
 		{"4.2.2", "PAN is secured with strong cryptography whenever sent via end-user messaging technologies"},
 		// Req 5 — Protect all systems and networks from malicious software
-		{"5.1.1", "All security policies and operational procedures for Requirement 5 are documented"},
-		{"5.1.2", "Roles and responsibilities for activities in Requirement 5 are documented"},
 		{"5.2.1", "Anti-malware solution(s) deployed on all system components"},
 		{"5.2.2", "Anti-malware solution(s) detect, remove, block, contain malware"},
 		{"5.2.3", "Anti-malware solution(s) cover all common types of malware"},
@@ -1353,15 +1612,7 @@ func (h *ReportHandler) buildPCIDSSFindings() []ControlFinding {
 		{"5.3.3", "Anti-malware mechanisms scan removable electronic media when in use"},
 		{"5.3.4", "Audit logs from anti-malware solutions are enabled and retained per Req 10"},
 		{"5.3.5", "Anti-malware mechanisms cannot be disabled or altered by users"},
-		{"5.4.1", "Processes and mechanisms for protecting against phishing attacks"},
 		// Req 6 — Develop and maintain secure systems and software
-		{"6.1.1", "All security policies and operational procedures for Requirement 6 are documented"},
-		{"6.1.2", "Roles and responsibilities for activities in Requirement 6 are documented"},
-		{"6.2.1", "Bespoke and custom software is developed securely"},
-		{"6.2.2", "Software development personnel receive training in secure software development"},
-		{"6.2.3", "Bespoke and custom software is reviewed prior to release"},
-		{"6.2.3.1", "Code reviews ensure code is developed per secure coding guidelines"},
-		{"6.2.4", "Software engineering techniques used to prevent or mitigate common attacks"},
 		{"6.3.1", "Security vulnerabilities identified and managed"},
 		{"6.3.2", "Inventory of bespoke and third-party software components maintained"},
 		{"6.3.3", "All system components protected from known vulnerabilities by installing applicable security patches"},
@@ -1375,8 +1626,6 @@ func (h *ReportHandler) buildPCIDSSFindings() []ControlFinding {
 		{"6.5.5", "Live PANs not used in pre-production environments"},
 		{"6.5.6", "Test data and test accounts removed from system components before production release"},
 		// Req 7 — Restrict access to system components and CHD by business need to know
-		{"7.1.1", "All security policies and operational procedures for Requirement 7 are documented"},
-		{"7.1.2", "Roles and responsibilities for activities in Requirement 7 are documented"},
 		{"7.2.1", "Access control model defines access needs and assignment of access"},
 		{"7.2.2", "Access assigned to users based on job classification and function"},
 		{"7.2.3", "Required privileges approved by authorized personnel"},
@@ -1388,8 +1637,6 @@ func (h *ReportHandler) buildPCIDSSFindings() []ControlFinding {
 		{"7.3.2", "Access control system configured to enforce permissions assigned"},
 		{"7.3.3", "Access control system has a default 'deny-all' setting"},
 		// Req 8 — Identify users and authenticate access to system components
-		{"8.1.1", "All security policies and operational procedures for Requirement 8 are documented"},
-		{"8.1.2", "Roles and responsibilities for activities in Requirement 8 are documented"},
 		{"8.2.1", "All users assigned a unique ID before access to system components is allowed"},
 		{"8.2.2", "Group, shared, or generic accounts only used as exceptions and managed"},
 		{"8.2.3", "Service-provider tech support accounts use unique credentials per customer"},
@@ -1418,36 +1665,7 @@ func (h *ReportHandler) buildPCIDSSFindings() []ControlFinding {
 		{"8.6.2", "Passwords/passphrases for application/system accounts are not hard-coded in scripts, config, or source"},
 		{"8.6.3", "Passwords/passphrases for application/system accounts are protected against misuse"},
 		// Req 9 — Restrict physical access to cardholder data
-		{"9.1.1", "All security policies and operational procedures for Requirement 9 are documented"},
-		{"9.1.2", "Roles and responsibilities for activities in Requirement 9 are documented"},
-		{"9.2.1", "Appropriate facility entry controls in place to restrict physical access"},
-		{"9.2.1.1", "Individual physical access to sensitive areas is monitored with cameras or access control"},
-		{"9.2.2", "Physical and/or logical controls implemented to restrict use of publicly accessible network jacks"},
-		{"9.2.3", "Physical access to wireless access points, networking equipment, and gateways restricted"},
-		{"9.2.4", "Access to consoles in sensitive areas restricted via locking"},
-		{"9.3.1", "Procedures implemented for authorizing and managing physical access of personnel to the CDE"},
-		{"9.3.1.1", "Physical access to sensitive areas within the CDE for personnel is controlled"},
-		{"9.3.2", "Procedures implemented for authorizing and managing visitor access to the CDE"},
-		{"9.3.3", "Visitors to sensitive areas are escorted at all times"},
-		{"9.3.4", "Visitor logs maintained for visits to sensitive areas"},
-		{"9.4.1", "All media with cardholder data physically secured"},
-		{"9.4.1.1", "Offline media backups stored in a secure location"},
-		{"9.4.1.2", "Security of offline media backup locations reviewed at least every 12 months"},
-		{"9.4.2", "All media with CHD classified per sensitivity"},
-		{"9.4.3", "Media with CHD sent outside facility secured"},
-		{"9.4.4", "Management approval obtained prior to moving media containing CHD outside facility"},
-		{"9.4.5", "Inventory logs of all electronic media with CHD maintained"},
-		{"9.4.5.1", "Inventories of electronic media with CHD reviewed at least every 12 months"},
-		{"9.4.6", "Hard-copy materials with CHD destroyed when no longer needed"},
-		{"9.4.7", "Electronic media with CHD destroyed when no longer needed"},
-		{"9.5.1", "POI devices that capture payment card data via direct physical interaction are protected"},
-		{"9.5.1.1", "Inventory of POI devices is maintained"},
-		{"9.5.1.2", "POI device surfaces are periodically inspected for tampering or unauthorized substitution"},
-		{"9.5.1.2.1", "Frequency of POI device inspections defined per risk analysis"},
-		{"9.5.1.3", "Training provided for personnel in POI environments to be aware of attempted tampering"},
 		// Req 10 — Log and monitor all access to system components and CHD
-		{"10.1.1", "All security policies and operational procedures for Requirement 10 are documented"},
-		{"10.1.2", "Roles and responsibilities for activities in Requirement 10 are documented"},
 		{"10.2.1", "Audit logs enabled and active for all system components"},
 		{"10.2.1.1", "Audit logs capture all individual user access to CHD"},
 		{"10.2.1.2", "Audit logs capture all actions taken by any user with administrative access"},
@@ -1461,79 +1679,14 @@ func (h *ReportHandler) buildPCIDSSFindings() []ControlFinding {
 		{"10.3.2", "Audit log files protected to prevent modifications"},
 		{"10.3.3", "Audit log files promptly backed up to a secure central log server"},
 		{"10.3.4", "File integrity monitoring or change-detection mechanisms used on audit logs"},
-		{"10.4.1", "Audit logs reviewed at least once daily"},
-		{"10.4.1.1", "Automated mechanisms used to perform audit log reviews"},
-		{"10.4.2", "Logs of all other system components reviewed periodically"},
-		{"10.4.2.1", "Frequency of periodic log reviews defined per risk analysis"},
-		{"10.4.3", "Exceptions and anomalies identified during the review process addressed"},
 		{"10.5.1", "Retain audit log history for at least 12 months, with at least 3 months immediately available"},
 		{"10.6.1", "System clocks and time synchronized using time-synchronization technology"},
 		{"10.6.2", "Systems are configured with the correct, consistent time"},
 		{"10.6.3", "Time synchronization settings and data are protected"},
-		{"10.7.1", "Failures of critical security control systems detected, alerted, and addressed promptly"},
-		{"10.7.2", "Service providers — failures of critical security control systems detected, alerted, addressed"},
-		{"10.7.3", "Failures of critical security controls responded to promptly"},
 		// Req 11 — Test security of systems and networks regularly
-		{"11.1.1", "All security policies and operational procedures for Requirement 11 are documented"},
-		{"11.1.2", "Roles and responsibilities for activities in Requirement 11 are documented"},
-		{"11.2.1", "Authorized and unauthorized wireless access points managed"},
-		{"11.2.2", "Inventory of authorized wireless access points maintained, including documented business justification"},
-		{"11.3.1", "Internal vulnerability scans performed at least every three months"},
-		{"11.3.1.1", "All other applicable vulnerabilities not ranked as high-risk or critical are managed"},
-		{"11.3.1.2", "Internal vulnerability scans performed via authenticated scanning"},
-		{"11.3.1.3", "Internal vulnerability scans performed after any significant change"},
-		{"11.3.2", "External vulnerability scans performed via PCI SSC ASV at least every three months"},
-		{"11.3.2.1", "External vulnerability scans performed after any significant change"},
-		{"11.4.1", "External and internal penetration testing methodology defined"},
-		{"11.4.2", "Internal penetration testing performed at least once every 12 months"},
-		{"11.4.3", "External penetration testing performed at least once every 12 months"},
-		{"11.4.4", "Exploitable vulnerabilities and security weaknesses found during penetration testing corrected"},
-		{"11.4.5", "If segmentation used to reduce CDE scope, penetration testing on segmentation controls performed"},
-		{"11.4.6", "Service providers — penetration testing on segmentation controls performed at least every six months"},
-		{"11.4.7", "Multi-tenant service providers — support customers for external penetration testing"},
-		{"11.5.1", "Network intrusion-detection/prevention techniques used to detect and prevent intrusions"},
-		{"11.5.1.1", "Service providers — covert malware communication channels detected, alerted, and prevented"},
-		{"11.5.2", "Change-detection mechanism deployed for critical files"},
-		{"11.6.1", "Change- and tamper-detection mechanism deployed for payment pages"},
 		// Req 12 — Support information security with organizational policies and programs
-		{"12.1.1", "Overall information security policy established, published, maintained, and disseminated"},
-		{"12.1.2", "Information security policy reviewed at least once every 12 months"},
-		{"12.1.3", "Security policy clearly defines information security roles and responsibilities"},
-		{"12.1.4", "Responsibility for information security formally assigned to a CISO or other knowledgeable executive"},
-		{"12.2.1", "Acceptable use policies for end-user technologies documented"},
-		{"12.3.1", "Targeted risk analysis performed for each PCI DSS requirement that provides flexibility"},
-		{"12.3.2", "Targeted risk analysis performed for each PCI DSS requirement that is met via the customized approach"},
-		{"12.3.3", "Cryptographic cipher suites and protocols in use documented and reviewed annually"},
-		{"12.3.4", "Hardware and software technologies in use are reviewed annually"},
-		{"12.4.1", "Service providers — executive management establishes responsibility for protection of CHD"},
-		{"12.4.2", "Service providers — reviews performed at least once every three months to confirm personnel are performing their tasks"},
-		{"12.4.2.1", "Service providers — review documented and signed off by responsible personnel"},
-		{"12.5.1", "Inventory of system components in scope for PCI DSS maintained"},
-		{"12.5.2", "PCI DSS scope is documented and confirmed at least once every 12 months and upon significant change"},
-		{"12.5.2.1", "Service providers — PCI DSS scope confirmation performed at least once every six months"},
-		{"12.5.3", "Service providers — significant changes to organizational structure result in a documented review of the impact on PCI DSS scope"},
-		{"12.6.1", "Formal security awareness program implemented"},
-		{"12.6.2", "Security awareness program reviewed at least every 12 months"},
-		{"12.6.3", "Personnel receive security awareness training upon hire and at least every 12 months"},
-		{"12.6.3.1", "Security awareness training includes specific awareness of threats relevant to job role"},
-		{"12.6.3.2", "Security awareness training includes awareness about acceptable use of end-user technologies"},
-		{"12.7.1", "Personnel screened prior to hire to minimize risk of attacks from internal sources"},
-		{"12.8.1", "Written agreements with TPSPs maintained"},
-		{"12.8.2", "Written agreements with TPSPs include acknowledgement of TPSP responsibility for security of CHD"},
-		{"12.8.3", "Established process for engaging TPSPs"},
-		{"12.8.4", "Program implemented to monitor TPSPs' PCI DSS compliance status"},
-		{"12.8.5", "Information maintained about which PCI DSS requirements are managed by each TPSP"},
-		{"12.9.1", "Service providers — TPSPs acknowledge in writing they are responsible for security of CHD"},
-		{"12.9.2", "Service providers — support customers' requests for information regarding PCI DSS compliance status"},
-		{"12.10.1", "Incident response plan exists and is ready to be activated"},
-		{"12.10.2", "At least once every 12 months, IR plan is reviewed, tested, and updated as needed"},
-		{"12.10.3", "Specific personnel designated to be available 24/7 to respond to suspected or confirmed security incidents"},
-		{"12.10.4", "Personnel responsible for responding to incidents trained appropriately"},
-		{"12.10.4.1", "Frequency of periodic training defined per risk analysis"},
-		{"12.10.5", "IR plan includes monitoring and responding to alerts from security monitoring systems"},
-		{"12.10.6", "IR plan modified and evolved per lessons learned"},
-		{"12.10.7", "IR procedures are in place to be initiated upon detection of stored PAN where it is not expected"},
-	})
+		}),
+	)
 }
 
 func (h *ReportHandler) handlePCIReport(w http.ResponseWriter, r *http.Request) {
@@ -1551,11 +1704,221 @@ func (h *ReportHandler) handlePCIReportHTML(w http.ResponseWriter, r *http.Reque
 // buildNIST80053Findings returns the NIST 800-53 Rev 5 Moderate
 // baseline catalog (per NIST SP 800-53B). U.S. Government work
 // product — public domain — full control titles enumerated verbatim.
+//
+// Scope assignment: every "X-1 Policy and Procedures" control across
+// all families is documented (governance artifact). AT (training),
+// CA except CA-7 (assessments), IR mostly (response plans), MA, MP
+// except MP-6 (media handling), PE (physical), PL, PM, PS, PT
+// (privacy notices), SA, and SR (supply chain) are all documented.
+// AC, AU mostly, CM, IA, MP-6, CP-9 family + CP-10, SC, and SI
+// mostly are enforced. CA-7, AU-6 family, RA-5 family, SI-4 family,
+// SI-5 are attested via Vigo's drift detection / vulnerability
+// scanning / system monitoring.
 func (h *ReportHandler) buildNIST80053Findings() []ControlFinding {
-	return catalog([][2]string{
-		// AC — Access Control
-		{"AC-1", "Policy and Procedures"},
-		{"AC-2", "Account Management"},
+	return concatCatalogs(
+		// Documented — every "X-1 Policy and Procedures", plus AT/CA/
+		// IR-mostly/MA/MP-except-6/PE/PL/PM/PS/PT/SA/SR families and
+		// CP plans (except CP-9 backups + CP-10 recovery).
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"AC-1", "Policy and Procedures"},
+			{"AT-1", "Policy and Procedures"},
+			{"AT-2", "Literacy Training and Awareness"},
+			{"AT-2(2)", "Literacy Training and Awareness | Insider Threat"},
+			{"AT-2(3)", "Literacy Training and Awareness | Social Engineering and Mining"},
+			{"AT-3", "Role-Based Training"},
+			{"AT-4", "Training Records"},
+			{"AU-1", "Policy and Procedures"},
+			{"CA-1", "Policy and Procedures"},
+			{"CA-2", "Control Assessments"},
+			{"CA-2(1)", "Control Assessments | Independent Assessors"},
+			{"CA-3", "Information Exchange"},
+			{"CA-5", "Plan of Action and Milestones"},
+			{"CA-6", "Authorization"},
+			{"CA-8", "Penetration Testing"},
+			{"CA-9", "Internal System Connections"},
+			{"CM-1", "Policy and Procedures"},
+			{"CM-9", "Configuration Management Plan"},
+			{"CM-10", "Software Usage Restrictions"},
+			{"CP-1", "Policy and Procedures"},
+			{"CP-2", "Contingency Plan"},
+			{"CP-2(1)", "Contingency Plan | Coordinate with Related Plans"},
+			{"CP-2(3)", "Contingency Plan | Resume Mission and Business Functions"},
+			{"CP-2(8)", "Contingency Plan | Identify Critical Assets"},
+			{"CP-3", "Contingency Training"},
+			{"CP-4", "Contingency Plan Testing"},
+			{"CP-4(1)", "Contingency Plan Testing | Coordinate with Related Plans"},
+			{"CP-6", "Alternate Storage Site"},
+			{"CP-6(1)", "Alternate Storage Site | Separation from Primary Site"},
+			{"CP-6(3)", "Alternate Storage Site | Accessibility"},
+			{"CP-7", "Alternate Processing Site"},
+			{"CP-7(1)", "Alternate Processing Site | Separation from Primary Site"},
+			{"CP-7(2)", "Alternate Processing Site | Accessibility"},
+			{"CP-7(3)", "Alternate Processing Site | Priority of Service"},
+			{"CP-8", "Telecommunications Services"},
+			{"CP-8(1)", "Telecommunications Services | Priority of Service Provisions"},
+			{"CP-8(2)", "Telecommunications Services | Single Points of Failure"},
+			{"IA-1", "Policy and Procedures"},
+			{"IR-1", "Policy and Procedures"},
+			{"IR-2", "Incident Response Training"},
+			{"IR-3", "Incident Response Testing"},
+			{"IR-3(2)", "Incident Response Testing | Coordination with Related Plans"},
+			{"IR-4", "Incident Handling"},
+			{"IR-7", "Incident Response Assistance"},
+			{"IR-7(1)", "Incident Response Assistance | Automation Support for Availability of Information"},
+			{"IR-8", "Incident Response Plan"},
+			{"MA-1", "Policy and Procedures"},
+			{"MA-2", "Controlled Maintenance"},
+			{"MA-3", "Maintenance Tools"},
+			{"MA-3(1)", "Maintenance Tools | Inspect Tools"},
+			{"MA-3(2)", "Maintenance Tools | Inspect Media"},
+			{"MA-3(3)", "Maintenance Tools | Prevent Unauthorized Removal"},
+			{"MA-4", "Nonlocal Maintenance"},
+			{"MA-4(2)", "Nonlocal Maintenance | Document Nonlocal Maintenance"},
+			{"MA-5", "Maintenance Personnel"},
+			{"MA-6", "Timely Maintenance"},
+			{"MP-1", "Policy and Procedures"},
+			{"MP-2", "Media Access"},
+			{"MP-3", "Media Marking"},
+			{"MP-4", "Media Storage"},
+			{"MP-5", "Media Transport"},
+			{"MP-7", "Media Use"},
+			{"PE-1", "Policy and Procedures"},
+			{"PE-2", "Physical Access Authorizations"},
+			{"PE-3", "Physical Access Control"},
+			{"PE-4", "Access Control for Transmission"},
+			{"PE-5", "Access Control for Output Devices"},
+			{"PE-6", "Monitoring Physical Access"},
+			{"PE-6(1)", "Monitoring Physical Access | Intrusion Alarms and Surveillance Equipment"},
+			{"PE-8", "Visitor Access Records"},
+			{"PE-9", "Power Equipment and Cabling"},
+			{"PE-10", "Emergency Shutoff"},
+			{"PE-11", "Emergency Power"},
+			{"PE-12", "Emergency Lighting"},
+			{"PE-13", "Fire Protection"},
+			{"PE-13(1)", "Fire Protection | Detection Systems — Automatic Activation and Notification"},
+			{"PE-14", "Environmental Controls"},
+			{"PE-15", "Water Damage Protection"},
+			{"PE-16", "Delivery and Removal"},
+			{"PE-17", "Alternate Work Site"},
+			{"PL-1", "Policy and Procedures"},
+			{"PL-2", "System Security and Privacy Plans"},
+			{"PL-4", "Rules of Behavior"},
+			{"PL-4(1)", "Rules of Behavior | Social Media and External Site/Application Usage Restrictions"},
+			{"PL-8", "Security and Privacy Architectures"},
+			{"PL-10", "Baseline Selection"},
+			{"PL-11", "Baseline Tailoring"},
+			{"PM-1", "Information Security Program Plan"},
+			{"PM-2", "Information Security Program Leadership Role"},
+			{"PM-3", "Information Security and Privacy Resources"},
+			{"PM-4", "Plan of Action and Milestones Process"},
+			{"PM-5", "System Inventory"},
+			{"PM-6", "Measures of Performance"},
+			{"PM-7", "Enterprise Architecture"},
+			{"PM-8", "Critical Infrastructure Plan"},
+			{"PM-9", "Risk Management Strategy"},
+			{"PM-10", "Authorization Process"},
+			{"PM-11", "Mission and Business Process Definition"},
+			{"PM-12", "Insider Threat Program"},
+			{"PM-13", "Security and Privacy Workforce"},
+			{"PM-14", "Testing, Training, and Monitoring"},
+			{"PM-15", "Security and Privacy Groups and Associations"},
+			{"PM-16", "Threat Awareness Program"},
+			{"PM-17", "Protecting Controlled Unclassified Information on External Systems"},
+			{"PM-18", "Privacy Program Plan"},
+			{"PM-19", "Privacy Program Leadership Role"},
+			{"PM-20", "Dissemination of Privacy Program Information"},
+			{"PM-21", "Accounting of Disclosures"},
+			{"PM-22", "Personally Identifiable Information Quality Management"},
+			{"PM-23", "Data Governance Body"},
+			{"PM-24", "Data Integrity Board"},
+			{"PM-25", "Minimization of PII Used in Testing, Training, and Research"},
+			{"PM-26", "Complaint Management"},
+			{"PM-27", "Privacy Reporting"},
+			{"PM-28", "Risk Framing"},
+			{"PM-29", "Risk Management Program Leadership Roles"},
+			{"PM-30", "Supply Chain Risk Management Strategy"},
+			{"PM-31", "Continuous Monitoring Strategy"},
+			{"PM-32", "Purposing"},
+			{"PS-1", "Policy and Procedures"},
+			{"PS-2", "Position Risk Designation"},
+			{"PS-3", "Personnel Screening"},
+			{"PS-4", "Personnel Termination"},
+			{"PS-5", "Personnel Transfer"},
+			{"PS-6", "Access Agreements"},
+			{"PS-7", "External Personnel Security"},
+			{"PS-8", "Personnel Sanctions"},
+			{"PS-9", "Position Descriptions"},
+			{"PT-1", "Policy and Procedures"},
+			{"PT-2", "Authority to Process Personally Identifiable Information"},
+			{"PT-3", "Personally Identifiable Information Processing Purposes"},
+			{"PT-4", "Consent"},
+			{"PT-5", "Privacy Notice"},
+			{"PT-6", "System of Records Notice"},
+			{"RA-1", "Policy and Procedures"},
+			{"RA-2", "Security Categorization"},
+			{"RA-3", "Risk Assessment"},
+			{"RA-3(1)", "Risk Assessment | Supply Chain Risk Assessment"},
+			{"RA-7", "Risk Response"},
+			{"RA-9", "Criticality Analysis"},
+			{"SA-1", "Policy and Procedures"},
+			{"SA-2", "Allocation of Resources"},
+			{"SA-3", "System Development Life Cycle"},
+			{"SA-4", "Acquisition Process"},
+			{"SA-4(1)", "Acquisition Process | Functional Properties of Controls"},
+			{"SA-4(2)", "Acquisition Process | Design and Implementation Information for Controls"},
+			{"SA-4(9)", "Acquisition Process | Functions, Ports, Protocols, and Services in Use"},
+			{"SA-4(10)", "Acquisition Process | Use of Approved PIV Products"},
+			{"SA-5", "System Documentation"},
+			{"SA-8", "Security and Privacy Engineering Principles"},
+			{"SA-9", "External System Services"},
+			{"SA-9(2)", "External System Services | Identification of Functions, Ports, Protocols, and Services"},
+			{"SA-10", "Developer Configuration Management"},
+			{"SA-11", "Developer Testing and Evaluation"},
+			{"SA-15", "Development Process, Standards, and Tools"},
+			{"SA-22", "Unsupported System Components"},
+			{"SC-1", "Policy and Procedures"},
+			{"SI-1", "Policy and Procedures"},
+			{"SR-1", "Policy and Procedures"},
+			{"SR-2", "Supply Chain Risk Management Plan"},
+			{"SR-2(1)", "Supply Chain Risk Management Plan | Establish SCRM Team"},
+			{"SR-3", "Supply Chain Controls and Processes"},
+			{"SR-5", "Acquisition Strategies, Tools, and Methods"},
+			{"SR-6", "Supplier Assessments and Reviews"},
+			{"SR-8", "Notification Agreements"},
+			{"SR-10", "Inspection of Systems or Components"},
+			{"SR-11", "Component Authenticity"},
+			{"SR-11(1)", "Component Authenticity | Anti-counterfeit Training"},
+			{"SR-11(2)", "Component Authenticity | Configuration Control for Component Service and Repair"},
+			{"SR-12", "Component Disposal"},
+		}),
+		// Attested — Vigo collects evidence (drift detection, security
+		// scan trait, audit chain integrity, system monitoring).
+		scopedCatalog(ScopeAttested, [][2]string{
+			{"AU-6", "Audit Record Review, Analysis, and Reporting"},
+			{"AU-6(1)", "Audit Record Review | Automated Process Integration"},
+			{"AU-6(3)", "Audit Record Review | Correlate Audit Record Repositories"},
+			{"CA-7", "Continuous Monitoring"},
+			{"CA-7(1)", "Continuous Monitoring | Independent Assessment"},
+			{"CA-7(4)", "Continuous Monitoring | Risk Monitoring"},
+			{"IR-5", "Incident Monitoring"},
+			{"IR-6", "Incident Reporting"},
+			{"IR-6(1)", "Incident Reporting | Automated Reporting"},
+			{"IR-6(3)", "Incident Reporting | Supply Chain Coordination"},
+			{"IR-4(1)", "Incident Handling | Automated Incident Handling Processes"},
+			{"RA-5", "Vulnerability Monitoring and Scanning"},
+			{"RA-5(2)", "Vulnerability Monitoring | Update Vulnerabilities to be Scanned"},
+			{"RA-5(11)", "Vulnerability Monitoring | Public Disclosure Program"},
+			{"SI-4", "System Monitoring"},
+			{"SI-4(2)", "System Monitoring | Automated Tools and Mechanisms for Real-Time Analysis"},
+			{"SI-4(4)", "System Monitoring | Inbound and Outbound Communications Traffic"},
+			{"SI-4(5)", "System Monitoring | System-Generated Alerts"},
+			{"SI-5", "Security Alerts, Advisories, and Directives"},
+		}),
+		// Enforced — AC, AU (logging), CM, IA, SC, SI mostly + media
+		// sanitization + backup family.
+		scopedCatalog(ScopeEnforced, [][2]string{
+			// AC — Access Control
+			{"AC-2", "Account Management"},
 		{"AC-2(1)", "Account Management | Automated System Account Management"},
 		{"AC-2(2)", "Account Management | Automated Temporary and Emergency Account Management"},
 		{"AC-2(3)", "Account Management | Disable Accounts"},
@@ -1594,23 +1957,12 @@ func (h *ReportHandler) buildNIST80053Findings() []ControlFinding {
 		{"AC-20(2)", "Use of External Systems | Portable Storage Devices — Restricted Use"},
 		{"AC-21", "Information Sharing"},
 		{"AC-22", "Publicly Accessible Content"},
-		// AT — Awareness and Training
-		{"AT-1", "Policy and Procedures"},
-		{"AT-2", "Literacy Training and Awareness"},
-		{"AT-2(2)", "Literacy Training and Awareness | Insider Threat"},
-		{"AT-2(3)", "Literacy Training and Awareness | Social Engineering and Mining"},
-		{"AT-3", "Role-Based Training"},
-		{"AT-4", "Training Records"},
 		// AU — Audit and Accountability
-		{"AU-1", "Policy and Procedures"},
 		{"AU-2", "Event Logging"},
 		{"AU-3", "Content of Audit Records"},
 		{"AU-3(1)", "Content of Audit Records | Additional Audit Information"},
 		{"AU-4", "Audit Log Storage Capacity"},
 		{"AU-5", "Response to Audit Logging Process Failures"},
-		{"AU-6", "Audit Record Review, Analysis, and Reporting"},
-		{"AU-6(1)", "Audit Record Review | Automated Process Integration"},
-		{"AU-6(3)", "Audit Record Review | Correlate Audit Record Repositories"},
 		{"AU-7", "Audit Record Reduction and Report Generation"},
 		{"AU-7(1)", "Audit Record Reduction | Automatic Processing"},
 		{"AU-8", "Time Stamps"},
@@ -1618,20 +1970,7 @@ func (h *ReportHandler) buildNIST80053Findings() []ControlFinding {
 		{"AU-9(4)", "Protection of Audit Information | Access by Subset of Privileged Users"},
 		{"AU-11", "Audit Record Retention"},
 		{"AU-12", "Audit Record Generation"},
-		// CA — Assessment, Authorization, and Monitoring
-		{"CA-1", "Policy and Procedures"},
-		{"CA-2", "Control Assessments"},
-		{"CA-2(1)", "Control Assessments | Independent Assessors"},
-		{"CA-3", "Information Exchange"},
-		{"CA-5", "Plan of Action and Milestones"},
-		{"CA-6", "Authorization"},
-		{"CA-7", "Continuous Monitoring"},
-		{"CA-7(1)", "Continuous Monitoring | Independent Assessment"},
-		{"CA-7(4)", "Continuous Monitoring | Risk Monitoring"},
-		{"CA-8", "Penetration Testing"},
-		{"CA-9", "Internal System Connections"},
 		// CM — Configuration Management
-		{"CM-1", "Policy and Procedures"},
 		{"CM-2", "Baseline Configuration"},
 		{"CM-2(2)", "Baseline Configuration | Automation Support for Accuracy and Currency"},
 		{"CM-2(3)", "Baseline Configuration | Retention of Previous Configurations"},
@@ -1650,36 +1989,14 @@ func (h *ReportHandler) buildNIST80053Findings() []ControlFinding {
 		{"CM-8", "System Component Inventory"},
 		{"CM-8(1)", "System Component Inventory | Updates During Installation and Removal"},
 		{"CM-8(3)", "System Component Inventory | Automated Unauthorized Component Detection"},
-		{"CM-9", "Configuration Management Plan"},
-		{"CM-10", "Software Usage Restrictions"},
 		{"CM-11", "User-Installed Software"},
 		{"CM-12", "Information Location"},
-		// CP — Contingency Planning
-		{"CP-1", "Policy and Procedures"},
-		{"CP-2", "Contingency Plan"},
-		{"CP-2(1)", "Contingency Plan | Coordinate with Related Plans"},
-		{"CP-2(3)", "Contingency Plan | Resume Mission and Business Functions"},
-		{"CP-2(8)", "Contingency Plan | Identify Critical Assets"},
-		{"CP-3", "Contingency Training"},
-		{"CP-4", "Contingency Plan Testing"},
-		{"CP-4(1)", "Contingency Plan Testing | Coordinate with Related Plans"},
-		{"CP-6", "Alternate Storage Site"},
-		{"CP-6(1)", "Alternate Storage Site | Separation from Primary Site"},
-		{"CP-6(3)", "Alternate Storage Site | Accessibility"},
-		{"CP-7", "Alternate Processing Site"},
-		{"CP-7(1)", "Alternate Processing Site | Separation from Primary Site"},
-		{"CP-7(2)", "Alternate Processing Site | Accessibility"},
-		{"CP-7(3)", "Alternate Processing Site | Priority of Service"},
-		{"CP-8", "Telecommunications Services"},
-		{"CP-8(1)", "Telecommunications Services | Priority of Service Provisions"},
-		{"CP-8(2)", "Telecommunications Services | Single Points of Failure"},
 		{"CP-9", "System Backup"},
 		{"CP-9(1)", "System Backup | Testing for Reliability and Integrity"},
 		{"CP-9(8)", "System Backup | Cryptographic Protection"},
 		{"CP-10", "System Recovery and Reconstitution"},
 		{"CP-10(2)", "System Recovery and Reconstitution | Transaction Recovery"},
 		// IA — Identification and Authentication
-		{"IA-1", "Policy and Procedures"},
 		{"IA-2", "Identification and Authentication (Organizational Users)"},
 		{"IA-2(1)", "Identification and Authentication | Multi-Factor Authentication to Privileged Accounts"},
 		{"IA-2(2)", "Identification and Authentication | Multi-Factor Authentication to Non-privileged Accounts"},
@@ -1703,145 +2020,8 @@ func (h *ReportHandler) buildNIST80053Findings() []ControlFinding {
 		{"IA-12(2)", "Identity Proofing | Identity Evidence"},
 		{"IA-12(3)", "Identity Proofing | Identity Evidence Validation and Verification"},
 		{"IA-12(5)", "Identity Proofing | Address Confirmation"},
-		// IR — Incident Response
-		{"IR-1", "Policy and Procedures"},
-		{"IR-2", "Incident Response Training"},
-		{"IR-3", "Incident Response Testing"},
-		{"IR-3(2)", "Incident Response Testing | Coordination with Related Plans"},
-		{"IR-4", "Incident Handling"},
-		{"IR-4(1)", "Incident Handling | Automated Incident Handling Processes"},
-		{"IR-5", "Incident Monitoring"},
-		{"IR-6", "Incident Reporting"},
-		{"IR-6(1)", "Incident Reporting | Automated Reporting"},
-		{"IR-6(3)", "Incident Reporting | Supply Chain Coordination"},
-		{"IR-7", "Incident Response Assistance"},
-		{"IR-7(1)", "Incident Response Assistance | Automation Support for Availability of Information"},
-		{"IR-8", "Incident Response Plan"},
-		// MA — Maintenance
-		{"MA-1", "Policy and Procedures"},
-		{"MA-2", "Controlled Maintenance"},
-		{"MA-3", "Maintenance Tools"},
-		{"MA-3(1)", "Maintenance Tools | Inspect Tools"},
-		{"MA-3(2)", "Maintenance Tools | Inspect Media"},
-		{"MA-3(3)", "Maintenance Tools | Prevent Unauthorized Removal"},
-		{"MA-4", "Nonlocal Maintenance"},
-		{"MA-4(2)", "Nonlocal Maintenance | Document Nonlocal Maintenance"},
-		{"MA-5", "Maintenance Personnel"},
-		{"MA-6", "Timely Maintenance"},
-		// MP — Media Protection
-		{"MP-1", "Policy and Procedures"},
-		{"MP-2", "Media Access"},
-		{"MP-3", "Media Marking"},
-		{"MP-4", "Media Storage"},
-		{"MP-5", "Media Transport"},
 		{"MP-6", "Media Sanitization"},
-		{"MP-7", "Media Use"},
-		// PE — Physical and Environmental Protection
-		{"PE-1", "Policy and Procedures"},
-		{"PE-2", "Physical Access Authorizations"},
-		{"PE-3", "Physical Access Control"},
-		{"PE-4", "Access Control for Transmission"},
-		{"PE-5", "Access Control for Output Devices"},
-		{"PE-6", "Monitoring Physical Access"},
-		{"PE-6(1)", "Monitoring Physical Access | Intrusion Alarms and Surveillance Equipment"},
-		{"PE-8", "Visitor Access Records"},
-		{"PE-9", "Power Equipment and Cabling"},
-		{"PE-10", "Emergency Shutoff"},
-		{"PE-11", "Emergency Power"},
-		{"PE-12", "Emergency Lighting"},
-		{"PE-13", "Fire Protection"},
-		{"PE-13(1)", "Fire Protection | Detection Systems — Automatic Activation and Notification"},
-		{"PE-14", "Environmental Controls"},
-		{"PE-15", "Water Damage Protection"},
-		{"PE-16", "Delivery and Removal"},
-		{"PE-17", "Alternate Work Site"},
-		// PL — Planning
-		{"PL-1", "Policy and Procedures"},
-		{"PL-2", "System Security and Privacy Plans"},
-		{"PL-4", "Rules of Behavior"},
-		{"PL-4(1)", "Rules of Behavior | Social Media and External Site/Application Usage Restrictions"},
-		{"PL-8", "Security and Privacy Architectures"},
-		{"PL-10", "Baseline Selection"},
-		{"PL-11", "Baseline Tailoring"},
-		// PM — Program Management (apply to all baselines)
-		{"PM-1", "Information Security Program Plan"},
-		{"PM-2", "Information Security Program Leadership Role"},
-		{"PM-3", "Information Security and Privacy Resources"},
-		{"PM-4", "Plan of Action and Milestones Process"},
-		{"PM-5", "System Inventory"},
-		{"PM-6", "Measures of Performance"},
-		{"PM-7", "Enterprise Architecture"},
-		{"PM-8", "Critical Infrastructure Plan"},
-		{"PM-9", "Risk Management Strategy"},
-		{"PM-10", "Authorization Process"},
-		{"PM-11", "Mission and Business Process Definition"},
-		{"PM-12", "Insider Threat Program"},
-		{"PM-13", "Security and Privacy Workforce"},
-		{"PM-14", "Testing, Training, and Monitoring"},
-		{"PM-15", "Security and Privacy Groups and Associations"},
-		{"PM-16", "Threat Awareness Program"},
-		{"PM-17", "Protecting Controlled Unclassified Information on External Systems"},
-		{"PM-18", "Privacy Program Plan"},
-		{"PM-19", "Privacy Program Leadership Role"},
-		{"PM-20", "Dissemination of Privacy Program Information"},
-		{"PM-21", "Accounting of Disclosures"},
-		{"PM-22", "Personally Identifiable Information Quality Management"},
-		{"PM-23", "Data Governance Body"},
-		{"PM-24", "Data Integrity Board"},
-		{"PM-25", "Minimization of PII Used in Testing, Training, and Research"},
-		{"PM-26", "Complaint Management"},
-		{"PM-27", "Privacy Reporting"},
-		{"PM-28", "Risk Framing"},
-		{"PM-29", "Risk Management Program Leadership Roles"},
-		{"PM-30", "Supply Chain Risk Management Strategy"},
-		{"PM-31", "Continuous Monitoring Strategy"},
-		{"PM-32", "Purposing"},
-		// PS — Personnel Security
-		{"PS-1", "Policy and Procedures"},
-		{"PS-2", "Position Risk Designation"},
-		{"PS-3", "Personnel Screening"},
-		{"PS-4", "Personnel Termination"},
-		{"PS-5", "Personnel Transfer"},
-		{"PS-6", "Access Agreements"},
-		{"PS-7", "External Personnel Security"},
-		{"PS-8", "Personnel Sanctions"},
-		{"PS-9", "Position Descriptions"},
-		// PT — PII Processing and Transparency
-		{"PT-1", "Policy and Procedures"},
-		{"PT-2", "Authority to Process Personally Identifiable Information"},
-		{"PT-3", "Personally Identifiable Information Processing Purposes"},
-		{"PT-4", "Consent"},
-		{"PT-5", "Privacy Notice"},
-		{"PT-6", "System of Records Notice"},
-		// RA — Risk Assessment
-		{"RA-1", "Policy and Procedures"},
-		{"RA-2", "Security Categorization"},
-		{"RA-3", "Risk Assessment"},
-		{"RA-3(1)", "Risk Assessment | Supply Chain Risk Assessment"},
-		{"RA-5", "Vulnerability Monitoring and Scanning"},
-		{"RA-5(2)", "Vulnerability Monitoring | Update Vulnerabilities to be Scanned"},
-		{"RA-5(11)", "Vulnerability Monitoring | Public Disclosure Program"},
-		{"RA-7", "Risk Response"},
-		{"RA-9", "Criticality Analysis"},
-		// SA — System and Services Acquisition
-		{"SA-1", "Policy and Procedures"},
-		{"SA-2", "Allocation of Resources"},
-		{"SA-3", "System Development Life Cycle"},
-		{"SA-4", "Acquisition Process"},
-		{"SA-4(1)", "Acquisition Process | Functional Properties of Controls"},
-		{"SA-4(2)", "Acquisition Process | Design and Implementation Information for Controls"},
-		{"SA-4(9)", "Acquisition Process | Functions, Ports, Protocols, and Services in Use"},
-		{"SA-4(10)", "Acquisition Process | Use of Approved PIV Products"},
-		{"SA-5", "System Documentation"},
-		{"SA-8", "Security and Privacy Engineering Principles"},
-		{"SA-9", "External System Services"},
-		{"SA-9(2)", "External System Services | Identification of Functions, Ports, Protocols, and Services"},
-		{"SA-10", "Developer Configuration Management"},
-		{"SA-11", "Developer Testing and Evaluation"},
-		{"SA-15", "Development Process, Standards, and Tools"},
-		{"SA-22", "Unsupported System Components"},
 		// SC — System and Communications Protection
-		{"SC-1", "Policy and Procedures"},
 		{"SC-2", "Separation of System and User Functionality"},
 		{"SC-4", "Information in Shared System Resources"},
 		{"SC-5", "Denial-of-Service Protection"},
@@ -1867,15 +2047,9 @@ func (h *ReportHandler) buildNIST80053Findings() []ControlFinding {
 		{"SC-28(1)", "Protection of Information at Rest | Cryptographic Protection"},
 		{"SC-39", "Process Isolation"},
 		// SI — System and Information Integrity
-		{"SI-1", "Policy and Procedures"},
 		{"SI-2", "Flaw Remediation"},
 		{"SI-2(2)", "Flaw Remediation | Automated Flaw Remediation Status"},
 		{"SI-3", "Malicious Code Protection"},
-		{"SI-4", "System Monitoring"},
-		{"SI-4(2)", "System Monitoring | Automated Tools and Mechanisms for Real-Time Analysis"},
-		{"SI-4(4)", "System Monitoring | Inbound and Outbound Communications Traffic"},
-		{"SI-4(5)", "System Monitoring | System-Generated Alerts"},
-		{"SI-5", "Security Alerts, Advisories, and Directives"},
 		{"SI-7", "Software, Firmware, and Information Integrity"},
 		{"SI-7(1)", "Software Integrity | Integrity Checks"},
 		{"SI-7(7)", "Software Integrity | Integration of Detection and Response"},
@@ -1885,20 +2059,8 @@ func (h *ReportHandler) buildNIST80053Findings() []ControlFinding {
 		{"SI-11", "Error Handling"},
 		{"SI-12", "Information Management and Retention"},
 		{"SI-16", "Memory Protection"},
-		// SR — Supply Chain Risk Management
-		{"SR-1", "Policy and Procedures"},
-		{"SR-2", "Supply Chain Risk Management Plan"},
-		{"SR-2(1)", "Supply Chain Risk Management Plan | Establish SCRM Team"},
-		{"SR-3", "Supply Chain Controls and Processes"},
-		{"SR-5", "Acquisition Strategies, Tools, and Methods"},
-		{"SR-6", "Supplier Assessments and Reviews"},
-		{"SR-8", "Notification Agreements"},
-		{"SR-10", "Inspection of Systems or Components"},
-		{"SR-11", "Component Authenticity"},
-		{"SR-11(1)", "Component Authenticity | Anti-counterfeit Training"},
-		{"SR-11(2)", "Component Authenticity | Configuration Control for Component Service and Repair"},
-		{"SR-12", "Component Disposal"},
-	})
+		}),
+	)
 }
 
 func (h *ReportHandler) handleNISTReport(w http.ResponseWriter, r *http.Request) {
@@ -1918,106 +2080,120 @@ func (h *ReportHandler) handleNISTReportHTML(w http.ResponseWriter, r *http.Requ
 // people, physical, technological). ISO is licensed: only IDs and
 // short titles are reproduced here; the descriptive paragraphs from
 // the standard are never reproduced.
+//
+// Scope assignment: A.5 organizational, A.6 people, A.7 physical are
+// all documented (governance, HR, contracts, physical security). A.8
+// technological is mostly enforced — Vigo modules apply the technical
+// control. Logging (A.8.15), monitoring (A.8.16), and SDL items are
+// attested or documented.
 func (h *ReportHandler) buildISO27001Findings() []ControlFinding {
-	return catalog([][2]string{
-		// A.5 — Organizational controls
-		{"A.5.1", "Policies for information security"},
-		{"A.5.2", "Information security roles and responsibilities"},
-		{"A.5.3", "Segregation of duties"},
-		{"A.5.4", "Management responsibilities"},
-		{"A.5.5", "Contact with authorities"},
-		{"A.5.6", "Contact with special interest groups"},
-		{"A.5.7", "Threat intelligence"},
-		{"A.5.8", "Information security in project management"},
-		{"A.5.9", "Inventory of information and other associated assets"},
-		{"A.5.10", "Acceptable use of information and other associated assets"},
-		{"A.5.11", "Return of assets"},
-		{"A.5.12", "Classification of information"},
-		{"A.5.13", "Labelling of information"},
-		{"A.5.14", "Information transfer"},
-		{"A.5.15", "Access control"},
-		{"A.5.16", "Identity management"},
-		{"A.5.17", "Authentication information"},
-		{"A.5.18", "Access rights"},
-		{"A.5.19", "Information security in supplier relationships"},
-		{"A.5.20", "Addressing information security within supplier agreements"},
-		{"A.5.21", "Managing information security in the ICT supply chain"},
-		{"A.5.22", "Monitoring, review and change management of supplier services"},
-		{"A.5.23", "Information security for use of cloud services"},
-		{"A.5.24", "Information security incident management planning and preparation"},
-		{"A.5.25", "Assessment and decision on information security events"},
-		{"A.5.26", "Response to information security incidents"},
-		{"A.5.27", "Learning from information security incidents"},
-		{"A.5.28", "Collection of evidence"},
-		{"A.5.29", "Information security during disruption"},
-		{"A.5.30", "ICT readiness for business continuity"},
-		{"A.5.31", "Legal, statutory, regulatory and contractual requirements"},
-		{"A.5.32", "Intellectual property rights"},
-		{"A.5.33", "Protection of records"},
-		{"A.5.34", "Privacy and protection of PII"},
-		{"A.5.35", "Independent review of information security"},
-		{"A.5.36", "Compliance with policies, rules and standards for information security"},
-		{"A.5.37", "Documented operating procedures"},
-		// A.6 — People controls
-		{"A.6.1", "Screening"},
-		{"A.6.2", "Terms and conditions of employment"},
-		{"A.6.3", "Information security awareness, education and training"},
-		{"A.6.4", "Disciplinary process"},
-		{"A.6.5", "Responsibilities after termination or change of employment"},
-		{"A.6.6", "Confidentiality or non-disclosure agreements"},
-		{"A.6.7", "Remote working"},
-		{"A.6.8", "Information security event reporting"},
-		// A.7 — Physical controls
-		{"A.7.1", "Physical security perimeters"},
-		{"A.7.2", "Physical entry"},
-		{"A.7.3", "Securing offices, rooms and facilities"},
-		{"A.7.4", "Physical security monitoring"},
-		{"A.7.5", "Protecting against physical and environmental threats"},
-		{"A.7.6", "Working in secure areas"},
-		{"A.7.7", "Clear desk and clear screen"},
-		{"A.7.8", "Equipment siting and protection"},
-		{"A.7.9", "Security of assets off-premises"},
-		{"A.7.10", "Storage media"},
-		{"A.7.11", "Supporting utilities"},
-		{"A.7.12", "Cabling security"},
-		{"A.7.13", "Equipment maintenance"},
-		{"A.7.14", "Secure disposal or re-use of equipment"},
-		// A.8 — Technological controls
-		{"A.8.1", "User endpoint devices"},
-		{"A.8.2", "Privileged access rights"},
-		{"A.8.3", "Information access restriction"},
-		{"A.8.4", "Access to source code"},
-		{"A.8.5", "Secure authentication"},
-		{"A.8.6", "Capacity management"},
-		{"A.8.7", "Protection against malware"},
-		{"A.8.8", "Management of technical vulnerabilities"},
-		{"A.8.9", "Configuration management"},
-		{"A.8.10", "Information deletion"},
-		{"A.8.11", "Data masking"},
-		{"A.8.12", "Data leakage prevention"},
-		{"A.8.13", "Information backup"},
-		{"A.8.14", "Redundancy of information processing facilities"},
-		{"A.8.15", "Logging"},
-		{"A.8.16", "Monitoring activities"},
-		{"A.8.17", "Clock synchronization"},
-		{"A.8.18", "Use of privileged utility programs"},
-		{"A.8.19", "Installation of software on operational systems"},
-		{"A.8.20", "Networks security"},
-		{"A.8.21", "Security of network services"},
-		{"A.8.22", "Segregation of networks"},
-		{"A.8.23", "Web filtering"},
-		{"A.8.24", "Use of cryptography"},
-		{"A.8.25", "Secure development life cycle"},
-		{"A.8.26", "Application security requirements"},
-		{"A.8.27", "Secure system architecture and engineering principles"},
-		{"A.8.28", "Secure coding"},
-		{"A.8.29", "Security testing in development and acceptance"},
-		{"A.8.30", "Outsourced development"},
-		{"A.8.31", "Separation of development, test and production environments"},
-		{"A.8.32", "Change management"},
-		{"A.8.33", "Test information"},
-		{"A.8.34", "Protection of information systems during audit testing"},
-	})
+	return concatCatalogs(
+		// A.5 — Organizational controls (governance, contracts, BCP, incidents)
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"A.5.1", "Policies for information security"},
+			{"A.5.2", "Information security roles and responsibilities"},
+			{"A.5.3", "Segregation of duties"},
+			{"A.5.4", "Management responsibilities"},
+			{"A.5.5", "Contact with authorities"},
+			{"A.5.6", "Contact with special interest groups"},
+			{"A.5.7", "Threat intelligence"},
+			{"A.5.8", "Information security in project management"},
+			{"A.5.9", "Inventory of information and other associated assets"},
+			{"A.5.10", "Acceptable use of information and other associated assets"},
+			{"A.5.11", "Return of assets"},
+			{"A.5.12", "Classification of information"},
+			{"A.5.13", "Labelling of information"},
+			{"A.5.14", "Information transfer"},
+			{"A.5.15", "Access control"},
+			{"A.5.16", "Identity management"},
+			{"A.5.17", "Authentication information"},
+			{"A.5.18", "Access rights"},
+			{"A.5.19", "Information security in supplier relationships"},
+			{"A.5.20", "Addressing information security within supplier agreements"},
+			{"A.5.21", "Managing information security in the ICT supply chain"},
+			{"A.5.22", "Monitoring, review and change management of supplier services"},
+			{"A.5.23", "Information security for use of cloud services"},
+			{"A.5.24", "Information security incident management planning and preparation"},
+			{"A.5.25", "Assessment and decision on information security events"},
+			{"A.5.26", "Response to information security incidents"},
+			{"A.5.27", "Learning from information security incidents"},
+			{"A.5.28", "Collection of evidence"},
+			{"A.5.29", "Information security during disruption"},
+			{"A.5.30", "ICT readiness for business continuity"},
+			{"A.5.31", "Legal, statutory, regulatory and contractual requirements"},
+			{"A.5.32", "Intellectual property rights"},
+			{"A.5.33", "Protection of records"},
+			{"A.5.34", "Privacy and protection of PII"},
+			{"A.5.35", "Independent review of information security"},
+			{"A.5.36", "Compliance with policies, rules and standards for information security"},
+			{"A.5.37", "Documented operating procedures"},
+			// A.6 — People controls (all HR/training/contracts)
+			{"A.6.1", "Screening"},
+			{"A.6.2", "Terms and conditions of employment"},
+			{"A.6.3", "Information security awareness, education and training"},
+			{"A.6.4", "Disciplinary process"},
+			{"A.6.5", "Responsibilities after termination or change of employment"},
+			{"A.6.6", "Confidentiality or non-disclosure agreements"},
+			{"A.6.7", "Remote working"},
+			{"A.6.8", "Information security event reporting"},
+			// A.7 — Physical controls (all physical security)
+			{"A.7.1", "Physical security perimeters"},
+			{"A.7.2", "Physical entry"},
+			{"A.7.3", "Securing offices, rooms and facilities"},
+			{"A.7.4", "Physical security monitoring"},
+			{"A.7.5", "Protecting against physical and environmental threats"},
+			{"A.7.6", "Working in secure areas"},
+			{"A.7.7", "Clear desk and clear screen"},
+			{"A.7.8", "Equipment siting and protection"},
+			{"A.7.9", "Security of assets off-premises"},
+			{"A.7.10", "Storage media"},
+			{"A.7.11", "Supporting utilities"},
+			{"A.7.12", "Cabling security"},
+			{"A.7.13", "Equipment maintenance"},
+			{"A.7.14", "Secure disposal or re-use of equipment"},
+			// A.8 — Technological documented (capacity planning, SDL, secure dev process, redundancy)
+			{"A.8.6", "Capacity management"},
+			{"A.8.14", "Redundancy of information processing facilities"},
+			{"A.8.25", "Secure development life cycle"},
+			{"A.8.26", "Application security requirements"},
+			{"A.8.27", "Secure system architecture and engineering principles"},
+			{"A.8.28", "Secure coding"},
+			{"A.8.29", "Security testing in development and acceptance"},
+			{"A.8.30", "Outsourced development"},
+			{"A.8.33", "Test information"},
+			{"A.8.34", "Protection of information systems during audit testing"},
+		}),
+		// A.8 — Technological attested (logging, monitoring, DLP)
+		scopedCatalog(ScopeAttested, [][2]string{
+			{"A.8.15", "Logging"},
+			{"A.8.16", "Monitoring activities"},
+			{"A.8.12", "Data leakage prevention"},
+		}),
+		// A.8 — Technological enforced (Vigo modules apply)
+		scopedCatalog(ScopeEnforced, [][2]string{
+			{"A.8.1", "User endpoint devices"},
+			{"A.8.2", "Privileged access rights"},
+			{"A.8.3", "Information access restriction"},
+			{"A.8.4", "Access to source code"},
+			{"A.8.5", "Secure authentication"},
+			{"A.8.7", "Protection against malware"},
+			{"A.8.8", "Management of technical vulnerabilities"},
+			{"A.8.9", "Configuration management"},
+			{"A.8.10", "Information deletion"},
+			{"A.8.11", "Data masking"},
+			{"A.8.13", "Information backup"},
+			{"A.8.17", "Clock synchronization"},
+			{"A.8.18", "Use of privileged utility programs"},
+			{"A.8.19", "Installation of software on operational systems"},
+			{"A.8.20", "Networks security"},
+			{"A.8.21", "Security of network services"},
+			{"A.8.22", "Segregation of networks"},
+			{"A.8.23", "Web filtering"},
+			{"A.8.24", "Use of cryptography"},
+			{"A.8.31", "Separation of development, test and production environments"},
+			{"A.8.32", "Change management"},
+		}),
+	)
 }
 
 func (h *ReportHandler) handleISO27001Report(w http.ResponseWriter, r *http.Request) {
@@ -2036,60 +2212,72 @@ func (h *ReportHandler) handleISO27001ReportHTML(w http.ResponseWriter, r *http.
 // catalog. Enumerates the articles relevant to technical and
 // organizational measures, data subject rights, breach handling, DPO,
 // and accountability. Public EU text — full titles allowed.
+//
+// Scope assignment: most GDPR articles are documented (lawful basis,
+// consent, data subject rights procedures, DPO designation, transfer
+// agreements). Article 32(1)(a)-(c) (encryption, integrity,
+// availability, restore) are enforced by Vigo modules. Article 17
+// (erasure) is enforced via the cascade-delete decommission flow.
 func (h *ReportHandler) buildGDPRFindings() []ControlFinding {
-	return catalog([][2]string{
-		// Chapter II — Principles
-		{"Art.5(1)(a)", "Lawfulness, Fairness and Transparency"},
-		{"Art.5(1)(b)", "Purpose Limitation"},
-		{"Art.5(1)(c)", "Data Minimisation"},
-		{"Art.5(1)(d)", "Accuracy"},
-		{"Art.5(1)(e)", "Storage Limitation"},
-		{"Art.5(1)(f)", "Integrity and Confidentiality"},
-		{"Art.5(2)", "Accountability"},
-		{"Art.6(1)", "Lawfulness of Processing"},
-		{"Art.7", "Conditions for Consent"},
-		{"Art.9(1)", "Processing of Special Categories of Personal Data"},
-		// Chapter III — Rights of the Data Subject
-		{"Art.12", "Transparent Information, Communication, and Modalities"},
-		{"Art.13", "Information to be Provided where Personal Data are Collected from the Data Subject"},
-		{"Art.14", "Information to be Provided where Personal Data are Not Obtained from the Data Subject"},
-		{"Art.15", "Right of Access by the Data Subject"},
-		{"Art.16", "Right to Rectification"},
-		{"Art.17", "Right to Erasure (Right to be Forgotten)"},
-		{"Art.18", "Right to Restriction of Processing"},
-		{"Art.19", "Notification Obligation regarding Rectification, Erasure, or Restriction"},
-		{"Art.20", "Right to Data Portability"},
-		{"Art.21", "Right to Object"},
-		{"Art.22", "Automated Individual Decision-Making, Including Profiling"},
-		// Chapter IV — Controller and Processor
-		{"Art.24", "Responsibility of the Controller"},
-		{"Art.25(1)", "Data Protection by Design"},
-		{"Art.25(2)", "Data Protection by Default"},
-		{"Art.26", "Joint Controllers"},
-		{"Art.28", "Processor Obligations and Contracts"},
-		{"Art.29", "Processing Under the Authority of Controller or Processor"},
-		{"Art.30(1)", "Records of Processing Activities — Controller"},
-		{"Art.30(2)", "Records of Processing Activities — Processor"},
-		{"Art.31", "Cooperation with Supervisory Authority"},
-		{"Art.32(1)(a)", "Pseudonymisation and Encryption"},
-		{"Art.32(1)(b)", "Confidentiality, Integrity, Availability, and Resilience"},
-		{"Art.32(1)(c)", "Ability to Restore Availability and Access"},
-		{"Art.32(1)(d)", "Process for Regular Testing and Evaluation"},
-		{"Art.32(2)", "Risk Assessment for Processing"},
-		{"Art.33(1)", "Notification of Personal Data Breach to Supervisory Authority"},
-		{"Art.33(2)", "Processor Notification of Breach to Controller"},
-		{"Art.33(3)", "Content of Breach Notification"},
-		{"Art.33(5)", "Breach Documentation"},
-		{"Art.34", "Communication of Personal Data Breach to the Data Subject"},
-		{"Art.35", "Data Protection Impact Assessment"},
-		{"Art.36", "Prior Consultation with Supervisory Authority"},
-		{"Art.37", "Designation of the Data Protection Officer"},
-		{"Art.38", "Position of the Data Protection Officer"},
-		{"Art.39", "Tasks of the Data Protection Officer"},
-		// Chapter V — Transfers
-		{"Art.44", "General Principle for Transfers"},
-		{"Art.46", "Transfers Subject to Appropriate Safeguards"},
-	})
+	return concatCatalogs(
+		// Articles where Vigo modules apply the technical control.
+		scopedCatalog(ScopeEnforced, [][2]string{
+			{"Art.5(1)(f)", "Integrity and Confidentiality"},
+			{"Art.17", "Right to Erasure (Right to be Forgotten)"},
+			{"Art.32(1)(a)", "Pseudonymisation and Encryption"},
+			{"Art.32(1)(b)", "Confidentiality, Integrity, Availability, and Resilience"},
+			{"Art.32(1)(c)", "Ability to Restore Availability and Access"},
+		}),
+		// Articles Vigo can attest to via audit log + drift detection.
+		scopedCatalog(ScopeAttested, [][2]string{
+			{"Art.30(1)", "Records of Processing Activities — Controller"},
+			{"Art.30(2)", "Records of Processing Activities — Processor"},
+			{"Art.32(1)(d)", "Process for Regular Testing and Evaluation"},
+			{"Art.33(5)", "Breach Documentation"},
+		}),
+		// Articles requiring documented policies / procedures /
+		// agreements / data subject response procedures / DPO.
+		scopedCatalog(ScopeDocumented, [][2]string{
+			{"Art.5(1)(a)", "Lawfulness, Fairness and Transparency"},
+			{"Art.5(1)(b)", "Purpose Limitation"},
+			{"Art.5(1)(c)", "Data Minimisation"},
+			{"Art.5(1)(d)", "Accuracy"},
+			{"Art.5(1)(e)", "Storage Limitation"},
+			{"Art.5(2)", "Accountability"},
+			{"Art.6(1)", "Lawfulness of Processing"},
+			{"Art.7", "Conditions for Consent"},
+			{"Art.9(1)", "Processing of Special Categories of Personal Data"},
+			{"Art.12", "Transparent Information, Communication, and Modalities"},
+			{"Art.13", "Information to be Provided where Personal Data are Collected from the Data Subject"},
+			{"Art.14", "Information to be Provided where Personal Data are Not Obtained from the Data Subject"},
+			{"Art.15", "Right of Access by the Data Subject"},
+			{"Art.16", "Right to Rectification"},
+			{"Art.18", "Right to Restriction of Processing"},
+			{"Art.19", "Notification Obligation regarding Rectification, Erasure, or Restriction"},
+			{"Art.20", "Right to Data Portability"},
+			{"Art.21", "Right to Object"},
+			{"Art.22", "Automated Individual Decision-Making, Including Profiling"},
+			{"Art.24", "Responsibility of the Controller"},
+			{"Art.25(1)", "Data Protection by Design"},
+			{"Art.25(2)", "Data Protection by Default"},
+			{"Art.26", "Joint Controllers"},
+			{"Art.28", "Processor Obligations and Contracts"},
+			{"Art.29", "Processing Under the Authority of Controller or Processor"},
+			{"Art.31", "Cooperation with Supervisory Authority"},
+			{"Art.32(2)", "Risk Assessment for Processing"},
+			{"Art.33(1)", "Notification of Personal Data Breach to Supervisory Authority"},
+			{"Art.33(2)", "Processor Notification of Breach to Controller"},
+			{"Art.33(3)", "Content of Breach Notification"},
+			{"Art.34", "Communication of Personal Data Breach to the Data Subject"},
+			{"Art.35", "Data Protection Impact Assessment"},
+			{"Art.36", "Prior Consultation with Supervisory Authority"},
+			{"Art.37", "Designation of the Data Protection Officer"},
+			{"Art.38", "Position of the Data Protection Officer"},
+			{"Art.39", "Tasks of the Data Protection Officer"},
+			{"Art.44", "General Principle for Transfers"},
+			{"Art.46", "Transfers Subject to Appropriate Safeguards"},
+		}),
+	)
 }
 
 func (h *ReportHandler) handleGDPRReport(w http.ResponseWriter, r *http.Request) {

@@ -44,10 +44,10 @@ func TestFrameworkCatalogCounts(t *testing.T) {
 }
 
 // TestFrameworkCatalogsAreUniqueAndStatusInitialized verifies every
-// catalog entry has a unique ControlID within its framework and a
-// non-empty default Status. Empty Status would cause partition logic
-// to silently miscount; duplicate IDs would cause module-tag coverage
-// to over-count.
+// catalog entry has a unique ControlID within its framework, a
+// non-empty default Status, and a valid Scope. Empty Status or Scope
+// would cause partition logic to silently miscount; duplicate IDs
+// would cause module-tag coverage to over-count.
 func TestFrameworkCatalogsAreUniqueAndStatusInitialized(t *testing.T) {
 	h := &ReportHandler{}
 	cases := []struct {
@@ -93,6 +93,54 @@ func TestFrameworkCatalogsAreUniqueAndStatusInitialized(t *testing.T) {
 			if f.Title == "" {
 				t.Errorf("%s: %q has empty Title", tc.name, f.ControlID)
 			}
+			switch f.Scope {
+			case ScopeEnforced, ScopeAttested, ScopeDocumented, ScopeNotApplicable:
+				// ok
+			case "":
+				t.Errorf("%s: %q has empty Scope (use scopedCatalog/concatCatalogs)", tc.name, f.ControlID)
+			default:
+				t.Errorf("%s: %q has invalid Scope %q (must be enforced/attested/documented/not_applicable)", tc.name, f.ControlID, f.Scope)
+			}
+		}
+	}
+}
+
+// TestPartitionedFrameworksHaveMixedScopes pins that the major
+// audit-relevant frameworks have non-trivial documented and attested
+// sections — i.e., the scope tagging actually distinguishes
+// operator-uploaded artifacts from Vigo-enforced controls. This
+// catches future regressions where someone re-flattens a multi-scope
+// builder back to a single ScopeEnforced section.
+func TestPartitionedFrameworksHaveMixedScopes(t *testing.T) {
+	h := &ReportHandler{}
+	cases := []struct {
+		name     string
+		findings []ControlFinding
+	}{
+		{"HIPAA", h.buildHIPAAFindings()},
+		{"SOC 2", h.buildSOC2Findings()},
+		{"PCI DSS", h.buildPCIDSSFindings()},
+		{"NIST 800-53", h.buildNIST80053Findings()},
+		{"ISO 27001", h.buildISO27001Findings()},
+		{"GDPR", h.buildGDPRFindings()},
+	}
+	for _, tc := range cases {
+		var enforced, attested, documented int
+		for _, f := range tc.findings {
+			switch f.Scope {
+			case ScopeEnforced:
+				enforced++
+			case ScopeAttested:
+				attested++
+			case ScopeDocumented:
+				documented++
+			}
+		}
+		if documented == 0 {
+			t.Errorf("%s: zero documented controls — scope tagging looks regressed", tc.name)
+		}
+		if enforced == 0 {
+			t.Errorf("%s: zero enforced controls — scope tagging looks regressed", tc.name)
 		}
 	}
 }

@@ -176,10 +176,18 @@ type EnvoyFrameworkDetail struct {
 // ControlStatusRow is one control's status for one envoy, classified by
 // the unified scorer's partition rule. Status values: "covered" (module
 // tag or Connwaer trait escalation), "waived", "partial", "missing".
+//
+// Scope captures who is responsible for satisfying the control:
+// "enforced" (Vigo modules), "attested" (Vigo evidence), "documented"
+// (operator uploads — see /api/v1/compliance/docs), or
+// "not_applicable" (out of deployment scope). The UI surfaces scope
+// alongside Status so an operator looking at a missing control sees
+// whether they need to assign a module or upload a document.
 type ControlStatusRow struct {
 	ControlID          string
 	Title              string
 	Status             string
+	Scope              string
 	Modules            []string // present when Status == "covered"
 	Evidence           string
 	RecommendedModules []string // present when Status == "missing"

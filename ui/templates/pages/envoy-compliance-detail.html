@@ -58,12 +58,19 @@
 <h3 class="section-heading">{{.FrameworkTitle}} Controls</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Control</th><th>Title</th><th>Status</th><th>Detail</th></tr></thead>
+        <thead><tr><th>Control</th><th>Title</th><th>Scope</th><th>Status</th><th>Detail</th></tr></thead>
         <tbody>
             {{range .Controls}}
             <tr>
                 <td class="mono">{{.ControlID}}</td>
                 <td>{{.Title}}</td>
+                <td>
+                    {{if eq .Scope "enforced"}}<span class="badge badge--info">enforced</span>
+                    {{else if eq .Scope "attested"}}<span class="badge badge--info">attested</span>
+                    {{else if eq .Scope "documented"}}<span class="badge badge--info">documented</span>
+                    {{else if eq .Scope "not_applicable"}}<span class="badge">N/A</span>
+                    {{else}}<span class="badge">—</span>{{end}}
+                </td>
                 <td>
                     {{if eq .Status "covered"}}<span class="badge badge--compliant">covered</span>
                     {{else if eq .Status "waived"}}<span class="badge badge--info">waived</span>
@@ -74,6 +81,7 @@
                     {{if eq .Status "covered"}}{{if .Modules}}{{joinStrings .Modules ", "}}{{else}}<span class="text-muted">{{.Evidence}}</span>{{end}}
                     {{else if eq .Status "waived"}}<span class="text-muted">{{.Evidence}}</span>
                     {{else if eq .Status "partial"}}<span class="text-muted">{{.Evidence}}</span>
+                    {{else if eq .Scope "documented"}}<span class="text-warning">requires uploaded documentation</span>
                     {{else}}{{if .RecommendedModules}}<span class="text-warning">assign: {{joinStrings .RecommendedModules ", "}}</span>{{else}}<span class="text-muted">no module available</span>{{end}}
                     {{end}}
                 </td>
