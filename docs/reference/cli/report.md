@@ -124,7 +124,7 @@ vigocli report cis --format html --output /tmp/cis-report.html
 
 ### nist
 
-Generate a NIST 800-53 compliance report (41 controls across 10 families — AC, AU, CA, CM, CP, IA, IR, SC, SI).
+Generate a NIST 800-53 compliance report (287 Moderate-baseline controls across 20 families: AC, AT, AU, CA, CM, CP, IA, IR, MA, MP, PE, PL, PM, PS, PT, RA, SA, SC, SI, SR).
 
 ```bash
 vigocli report nist
@@ -133,7 +133,7 @@ vigocli report nist --format html --output /tmp/nist-report.html
 
 ### iso27001
 
-Generate an ISO 27001 compliance report (33 Annex A controls across 11 domains).
+Generate an ISO 27001 compliance report (93 Annex A controls across the 2022-revision themes: organizational, people, physical, technological).
 
 ```bash
 vigocli report iso27001
@@ -142,7 +142,7 @@ vigocli report iso27001 --format html --output /tmp/iso27001-report.html
 
 ### gdpr
 
-Generate a GDPR compliance report (13 articles covering technical measures under Art. 5, 17, 25, 30, 32, 33, 35).
+Generate a GDPR compliance report (46 articles covering technical and organizational measures, data subject rights, breach handling, DPO, and transfers).
 
 ```bash
 vigocli report gdpr

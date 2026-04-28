@@ -15,7 +15,12 @@ A self-contained git repository archive produced by `git bundle create`, used as
 
 ## compliance
 
-Standards-framework coverage — whether an envoy's modules satisfy controls in regulatory frameworks (HIPAA, SOC 2, PCI DSS, NIST 800-53, ISO 27001, etc.). Measured as coverage percentage per framework. Distinct from [convergence](#convergence): convergence is "did my modules apply successfully," compliance is "do my modules satisfy standard X." See [Compliance](../compliance/overview.md).
+Standards-framework coverage. Splits into two surfaces, kept separate as of 0.32.0:
+
+- **Envoy compliance** — whether a managed node's modules satisfy controls in regulatory frameworks (HIPAA, SOC 2, PCI DSS, NIST 800-53, ISO 27001, etc.). Measured as coverage percentage per framework. A control counts as covered iff (a) the envoy has a module tagged with that control via `compliance:`, (b) a [Connwaer](#connwaer) trait check on the envoy escalates it, or (c) a [waiver](#waiver) applies. This is the surface framework reports under `/api/v1/report/<slug>` measure.
+- **Vigo product compliance** — what the Vigo server and agent satisfy by construction (mTLS, RBAC, audit hash chain, secret encryption, etc.). Lives in `server/compliance/AppControls` and is surfaced separately at `/platform/compliance` (Platform → Data). Useful for vendor questionnaires; never folded into framework scoring.
+
+Distinct from [convergence](#convergence): convergence is "did my modules apply successfully," compliance is "do my modules satisfy framework X." See [scope](#scope) for how each framework control is classified, and [Compliance](../compliance/overview.md) for the full overview.
 
 ## connwaer
 
@@ -71,7 +76,7 @@ Vigo's admin remote-access subsystem: interactive SSH, RDP, and VNC sessions to 
 
 ## seed
 
-The originating instance of a swarm blob on an envoy — the source of truth for that blob. Seeds are created when an operator runs `vigocli swarm distribute <file>` (server-side seed directory) or when an envoy drops a payload + `.swarm` sidecar into `/var/lib/vigo/swarm/seed/` (envoy-side, subject to allowlist). Peers pull chunks from seeds until they have full local copies.
+The originating instance of a swarm blob on an envoy — the source of truth for that blob. Today seeds are created exclusively by `vigocli swarm payload distribute`, which writes into the server's bind-mounted seed directory. The envoy-originated seed verb (`vigo swarm seed add`) is deferred — see `pending.md` for status. Peers pull chunks from seeds until they have full local copies.
 
 ## spanner
 
@@ -118,6 +123,17 @@ Personal disaster-recovery source-control distribution on the [swarm](#swarm) su
 ## filesync
 
 Per-user home-directory sync on the [swarm](#swarm) substrate. Files in `~/filesync/` replicate to peer envoys over swarm's mTLS peer HTTPS channel, with filesync's own LAN multicast group on `224.0.0.43:1532` for discovery. Plaintext at rest (encryption moved to [cryptsync](#cryptsync) as of 0.26.1). Cross-subnet peers via `cross_subnet_peers:` in `~/.filesync/config.yaml`. See [Filesync](../engineering/subsystems/filesync.md).
+
+## scope
+
+A per-control classification on every framework catalog entry that captures who is responsible for satisfying it. Shipped 0.32.3 alongside the catalog completion in 0.32.2.
+
+- **enforced** — Vigo modules apply the technical control (firewall rules, package state, file mode, sysctl, user management, SSH config, AppArmor profiles, etc.). Coverage flips when an envoy's modules carry the matching `compliance:` tag.
+- **attested** — Vigo collects evidence but doesn't enforce. Drift detection, [security_scan](traits/security_scan.md) trait, audit-chain integrity, [Connwaer](#connwaer) fleet checks. Coverage requires the relevant signal to be present and healthy.
+- **documented** — operator satisfies via uploaded artifact (BAA, IR plan, risk assessment, training records, signed contracts). Coverage requires at least one valid attached document.
+- **not_applicable** — control is out of deployment scope (e.g., HIPAA "Isolating Health Care Clearinghouse Functions" for a non-clearinghouse). Excluded from the framework denominator.
+
+Surfaced as the Scope column on per-envoy compliance detail pages so a "missing" control tells the operator whether to assign a module or upload a document. See [Compliance](../compliance/_index.md).
 
 ## waiver
 

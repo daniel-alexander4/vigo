@@ -58,13 +58,13 @@ See the full [Engineering Guide](engineering/_index.md). Highlights:
 ## Compliance
 
 - [Compliance Reporting](compliance/reporting.md) — HIPAA reports in JSON, HTML, and OSCAL
-- [HITRUST CSF](compliance/hitrust.md) — 31 control references mapped across 8 domains
-- [SOC 2](compliance/soc2.md) — 32 Trust Services Criteria across 5 categories
-- [PCI DSS v4.0](compliance/pci-dss.md) — 42 requirements + 4 enforcement modules
-- [CIS Benchmarks](compliance/cis-benchmarks.md) — Ubuntu, RHEL, Windows Level 1 modules
-- [NIST 800-53](compliance/nist-800-53.md) — 41 Federal/FedRAMP controls
-- [ISO 27001](compliance/iso-27001.md) — 33 Annex A controls
-- [GDPR](compliance/gdpr.md) — 13 EU data protection articles
+- [HITRUST CSF](compliance/hitrust.md) — 33 control references across 8 domains
+- [SOC 2](compliance/soc2.md) — 60 Trust Services Criteria across CC1-CC9, A1, C1, PI1, P1-P8
+- [PCI DSS v4.0](compliance/pci-dss.md) — ~245 sub-requirements across Reqs 1-12
+- [CIS Benchmarks](compliance/cis-benchmarks.md) — Ubuntu, RHEL, Windows Level 1 + Level 2 modules
+- [NIST 800-53](compliance/nist-800-53.md) — 287 Federal/FedRAMP Moderate-baseline controls
+- [ISO 27001](compliance/iso-27001.md) — 93 Annex A controls (2022 revision)
+- [GDPR](compliance/gdpr.md) — 46 EU data protection articles
 - [NERC CIP](compliance/nerc-cip.md) — 18 energy sector requirements
 - [Cyber Essentials Plus](compliance/cyber-essentials-plus.md) — UK government certification
 - [Database Encryption at Rest](compliance/database-encryption.md) — LUKS/dm-crypt for SQLite, TDE for PostgreSQL
