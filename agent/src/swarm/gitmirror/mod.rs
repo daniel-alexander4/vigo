@@ -251,161 +251,24 @@ pub(crate) fn activate() -> Result<(), String> {
     }
 }
 
-/// Check the cached `PolicyBundle.vars_json` for `gitmirror_blacklisted`.
+/// Check whether gitmirror should be active on this envoy right now.
 ///
-/// **Default-on semantics:** gitmirror is enabled on every enrolled
-/// envoy unless the server explicitly says otherwise. Returns `true`
-/// (enabled) in every ambiguous case so a fresh-enroll, a state-store
-/// hiccup, or a parse failure all fail open. The only thing that
-/// disables the subsystem is the server actively setting
-/// `gitmirror_blacklisted: true` (or a truthy equivalent) in
-/// `vars_json`, which it does when the envoy's hostname matches a
-/// pattern in `swarm.gitmirror.blacklist` in server.yaml.
-///
-/// Recognised truthy shapes for `gitmirror_blacklisted`:
-/// - JSON boolean `true`.
-/// - JSON string `"true"`, `"yes"`, or `"1"` (case-insensitive).
-/// - JSON number `1` (or any non-zero integer).
-///
-/// Everything else — including absence — means "not blacklisted = enabled".
+/// Thin wrapper over [`crate::swarm::gates::substrate_active`] —
+/// applies the global `swarm_enabled` AND `swarm_gitmirror_enabled`
+/// AND NOT `gitmirror_blacklisted` rule from the cached
+/// `PolicyBundle.vars_json`. See `crate::swarm::gates` for the
+/// fail-open semantics and recognised value shapes.
 ///
 /// Public: `agent/src/main.rs` calls this before wiring the swarm
 /// discovery subsystem so the gate is consistent across LAN peer
 /// announcements, peer-table construction, and the reactor.
 pub fn gitmirror_enabled_for_envoy(state_store: Option<&crate::state::StateStore>) -> bool {
-    let Some(store) = state_store else {
-        warn!("gitmirror: no state store available at startup; subsystem enabled (fail-open default)");
-        return true;
-    };
-
-    let rtxn = match store.read_txn() {
-        Ok(r) => r,
-        Err(e) => {
-            warn!(error = %e, "gitmirror: could not open state store read txn; subsystem enabled (fail-open default)");
-            return true;
-        }
-    };
-
-    let bundle_bytes = match store.policy.load(&rtxn) {
-        Ok(Some((_, b))) => b,
-        Ok(None) => {
-            // Fresh enrollment with no policy bundle yet — default-on
-            // means gitmirror runs immediately. The server's first
-            // check-in response will deliver the blacklist signal if
-            // applicable.
-            return true;
-        }
-        Err(e) => {
-            warn!(error = %e, "gitmirror: could not read cached policy bundle; subsystem enabled (fail-open default)");
-            return true;
-        }
-    };
-
-    !vars_json_blacklists_gitmirror(&bundle_bytes.vars_json)
+    crate::swarm::gates::substrate_active(
+        crate::swarm::gates::Substrate::Gitmirror,
+        state_store,
+    )
 }
 
-/// Parse a `vars_json` byte slice and return `true` iff
-/// `gitmirror_blacklisted` is set to a truthy value. Broken out of
-/// [`gitmirror_enabled_for_envoy`] so tests can exercise the parse
-/// logic without stubbing an entire `StateStore`.
-fn vars_json_blacklists_gitmirror(vars_json: &[u8]) -> bool {
-    if vars_json.is_empty() {
-        return false;
-    }
-
-    let val: serde_json::Value = match serde_json::from_slice(vars_json) {
-        Ok(v) => v,
-        Err(e) => {
-            warn!(error = %e, "gitmirror: vars_json parse failed; treating as not blacklisted (fail-open default)");
-            return false;
-        }
-    };
-
-    let Some(v) = val.get("gitmirror_blacklisted") else {
-        return false;
-    };
-
-    match v {
-        serde_json::Value::Bool(b) => *b,
-        serde_json::Value::String(s) => matches!(
-            s.to_ascii_lowercase().as_str(),
-            "true" | "yes" | "1"
-        ),
-        serde_json::Value::Number(n) => n.as_i64().map_or(false, |i| i != 0),
-        _ => false,
-    }
-}
-
-#[cfg(test)]
-mod gate_tests {
-    use super::vars_json_blacklists_gitmirror;
-
-    #[test]
-    fn empty_vars_json_is_not_blacklisted() {
-        assert!(!vars_json_blacklists_gitmirror(b""));
-    }
-
-    #[test]
-    fn missing_blacklist_key_is_not_blacklisted() {
-        assert!(!vars_json_blacklists_gitmirror(br#"{"other": true}"#));
-    }
-
-    #[test]
-    fn blacklist_true_bool_disables() {
-        assert!(vars_json_blacklists_gitmirror(br#"{"gitmirror_blacklisted": true}"#));
-    }
-
-    #[test]
-    fn blacklist_false_bool_is_not_blacklisted() {
-        assert!(!vars_json_blacklists_gitmirror(br#"{"gitmirror_blacklisted": false}"#));
-    }
-
-    #[test]
-    fn blacklist_string_true_disables() {
-        assert!(vars_json_blacklists_gitmirror(br#"{"gitmirror_blacklisted": "true"}"#));
-        assert!(vars_json_blacklists_gitmirror(br#"{"gitmirror_blacklisted": "True"}"#));
-        assert!(vars_json_blacklists_gitmirror(br#"{"gitmirror_blacklisted": "YES"}"#));
-        assert!(vars_json_blacklists_gitmirror(br#"{"gitmirror_blacklisted": "1"}"#));
-    }
-
-    #[test]
-    fn blacklist_string_false_is_not_blacklisted() {
-        assert!(!vars_json_blacklists_gitmirror(br#"{"gitmirror_blacklisted": "false"}"#));
-        assert!(!vars_json_blacklists_gitmirror(br#"{"gitmirror_blacklisted": "no"}"#));
-        assert!(!vars_json_blacklists_gitmirror(br#"{"gitmirror_blacklisted": "0"}"#));
-        assert!(!vars_json_blacklists_gitmirror(br#"{"gitmirror_blacklisted": ""}"#));
-    }
-
-    #[test]
-    fn blacklist_number_nonzero_disables() {
-        assert!(vars_json_blacklists_gitmirror(br#"{"gitmirror_blacklisted": 1}"#));
-        assert!(vars_json_blacklists_gitmirror(br#"{"gitmirror_blacklisted": 42}"#));
-    }
-
-    #[test]
-    fn blacklist_number_zero_is_not_blacklisted() {
-        assert!(!vars_json_blacklists_gitmirror(br#"{"gitmirror_blacklisted": 0}"#));
-    }
-
-    #[test]
-    fn blacklist_null_is_not_blacklisted() {
-        assert!(!vars_json_blacklists_gitmirror(br#"{"gitmirror_blacklisted": null}"#));
-    }
-
-    #[test]
-    fn malformed_json_is_not_blacklisted() {
-        assert!(!vars_json_blacklists_gitmirror(b"{not valid json"));
-    }
-
-    #[test]
-    fn non_object_root_is_not_blacklisted() {
-        assert!(!vars_json_blacklists_gitmirror(br#"["gitmirror_blacklisted"]"#));
-        assert!(!vars_json_blacklists_gitmirror(br#""gitmirror_blacklisted""#));
-    }
-
-    #[test]
-    fn blacklist_coexists_with_other_vars() {
-        let vars = br#"{"app_name": "web", "gitmirror_blacklisted": true, "timeout": 30}"#;
-        assert!(vars_json_blacklists_gitmirror(vars));
-    }
-}
+// Per-bit truthy/falsy parsing is exercised by the test module on
+// `crate::swarm::gates`. The gitmirror-specific wrapper above is a
+// pass-through and doesn't need its own test surface.

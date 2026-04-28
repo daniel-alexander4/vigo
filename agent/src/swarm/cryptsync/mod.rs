@@ -29,6 +29,7 @@ pub mod cli;
 pub mod config;
 pub mod crypt;
 pub mod discovery;
+pub mod gate;
 pub mod leaves;
 pub mod locks;
 pub mod pusher;
