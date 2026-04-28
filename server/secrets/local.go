@@ -225,6 +225,50 @@ func (p *LocalProvider) Close() error {
 	return nil
 }
 
+// Encrypt wraps plaintext with the local provider's master key. Output
+// is `nonce || ciphertext || GCM tag` — the same envelope format used
+// by readAndDecrypt for secrets on disk. Exposed for callers (compliance
+// docs store, audit-bundle export, etc.) that need to envelope-encrypt
+// bytes outside the secrets directory.
+func (p *LocalProvider) Encrypt(plaintext []byte) ([]byte, error) {
+	p.mu.RLock()
+	gcm := p.gcm
+	p.mu.RUnlock()
+	if gcm == nil {
+		return nil, fmt.Errorf("local provider not initialized")
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, fmt.Errorf("generating nonce: %w", err)
+	}
+	out := make([]byte, 0, len(nonce)+len(plaintext)+gcm.Overhead())
+	out = append(out, nonce...)
+	out = gcm.Seal(out, nonce, plaintext, nil)
+	return out, nil
+}
+
+// Decrypt reverses Encrypt. Returns an error if the ciphertext is
+// truncated, corrupted, or wrapped under a different master key.
+func (p *LocalProvider) Decrypt(envelope []byte) ([]byte, error) {
+	p.mu.RLock()
+	gcm := p.gcm
+	p.mu.RUnlock()
+	if gcm == nil {
+		return nil, fmt.Errorf("local provider not initialized")
+	}
+	nonceSize := gcm.NonceSize()
+	if len(envelope) < nonceSize+gcm.Overhead() {
+		return nil, fmt.Errorf("envelope too short for nonce + GCM tag")
+	}
+	nonce := envelope[:nonceSize]
+	ct := envelope[nonceSize:]
+	plaintext, err := gcm.Open(nil, nonce, ct, nil)
+	if err != nil {
+		return nil, fmt.Errorf("decrypting envelope: %w (wrong master key?)", err)
+	}
+	return plaintext, nil
+}
+
 // secretPath returns the filesystem path for a secret key.
 func (p *LocalProvider) secretPath(key string) string {
 	return filepath.Join(p.secretsDir, filepath.FromSlash(key))

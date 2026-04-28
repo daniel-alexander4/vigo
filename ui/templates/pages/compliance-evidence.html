@@ -212,6 +212,37 @@ function filterControls(status, btn) {
     <p class="text-muted" style="margin:0;">No envoys enforce modules mapped to this control.</p>
 </div>
 {{end}}
+<div style="padding:8px 16px 12px;background:var(--color-bg);">
+    <h4 style="margin:0 0 6px;font-size:13px;font-weight:600;">Supporting Documentation</h4>
+    {{if .Docs}}
+    <table class="table" style="font-size:12px;">
+        <thead><tr><th>Filename</th><th>Type</th><th>MIME</th><th>Size</th><th>SHA-256</th><th>Uploaded By</th><th>Uploaded</th><th></th></tr></thead>
+        <tbody>
+            {{range .Docs}}
+            <tr>
+                <td>{{.Filename}}</td>
+                <td>{{if .DocType}}<span class="badge badge--info">{{.DocType}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
+                <td class="mono">{{.MimeType}}</td>
+                <td>{{.SizeBytes}}</td>
+                <td class="mono" title="{{.SHA256}}">{{slice .SHA256 0 12}}</td>
+                <td>{{.UploadedBy}}</td>
+                <td class="text-muted">{{.UploadedAt}}</td>
+                <td><a class="btn btn--sm" href="/api/v1/compliance/docs/{{.ID}}/download">Download</a></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p class="text-muted" style="margin:0 0 8px;font-size:12px;">No documents attached. Upload a policy, contract, plan, or other artifact below to satisfy this control.</p>
+    {{end}}
+    <form method="POST" action="/api/v1/compliance/docs" enctype="multipart/form-data" style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <input type="file" name="file" required>
+        <input type="text" name="doc_type" placeholder="Doc type (e.g. BAA, IR Plan)" style="font-size:12px;">
+        <input type="hidden" name="links" value='[{"framework":"{{.Slug}}","control_id":"{{.ControlID}}"}]'>
+        <button type="submit" class="btn btn--sm">Upload</button>
+        <span class="text-muted" style="font-size:11px;">PDF, DOCX, XLSX, PPTX, TXT, MD, PNG, JPG, SVG up to 50 MiB</span>
+    </form>
+</div>
 {{end}}
 
 {{define "evidence-coverage"}}

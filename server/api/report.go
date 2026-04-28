@@ -24,11 +24,26 @@ import (
 
 // ReportHandler generates compliance reports in HTML and JSON formats.
 type ReportHandler struct {
-	queries     *db.Queries
-	fleetIndex  *fleet.FleetIndex
-	configStore *config.ConfigStore
-	version     string
+	queries       *db.Queries
+	fleetIndex    *fleet.FleetIndex
+	configStore   *config.ConfigStore
+	version       string
+	docsResolver  DocsResolver // nil-safe; flips documented-scope controls to covered when set
 }
+
+// DocsResolver answers "is there at least one active compliance doc
+// attached to this (framework, control_id)?" — the signal that flips a
+// documented-scope control out of missing. Implemented by
+// *compliancedocs.Store; kept as an interface in the api package so
+// nothing here imports the store package directly (avoids cycle risk).
+type DocsResolver interface {
+	HasActiveDocForControl(ctx context.Context, framework, controlID string) (bool, error)
+}
+
+// SetDocsResolver wires the compliance-docs store. Optional — when
+// nil, partition logic falls back to "documented controls always
+// missing" (Phase B behavior).
+func (h *ReportHandler) SetDocsResolver(d DocsResolver) { h.docsResolver = d }
 
 // NewReportHandler creates a ReportHandler.
 func NewReportHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex, configStore *config.ConfigStore, version string) *ReportHandler {
@@ -214,12 +229,23 @@ func (h *ReportHandler) buildFrameworkFindings(ctx context.Context, slug string,
 //     separately from covered per auditor practice (PCI compensating
 //     controls, SOC 2 SoA exceptions, ISO 27001 SoA "N/A with
 //     justification"); never rolled into covered.
-//  4. Partial — Status == "partial" (framework-specific half-credit
+//  4. Documented-scope coverage — when the control's Scope is
+//     ScopeDocumented and the operator has uploaded at least one
+//     document attached to (framework, control_id), the control flips
+//     to covered. Without an attached doc, documented-scope controls
+//     fall through to missing. This is the only path documented
+//     controls take to covered: modules don't apply.
+//  5. Partial — Status == "partial" (framework-specific half-credit
 //     or partial Connwaer fleet coverage).
-//  5. Else missing.
+//  6. Else missing.
+//
+// docCovered (optional) is the set of control IDs satisfied by an
+// attached document for this framework. Build via collectDocCoverage
+// before calling. Pass nil when no docs resolver is wired or when
+// the documented bucket isn't relevant to the caller.
 //
 // Covered + Waived + Partial + Missing = len(findings).
-func partitionEnvoyFindings(findings []ControlFinding, coverage *config.StandardCoverage) (covered, waived, partial, missing int) {
+func partitionEnvoyFindings(findings []ControlFinding, coverage *config.StandardCoverage, docCovered map[string]bool) (covered, waived, partial, missing int) {
 	coveredByModules := make(map[string]bool)
 	if coverage != nil {
 		for _, cc := range coverage.CoveredControls {
@@ -237,6 +263,8 @@ func partitionEnvoyFindings(findings []ControlFinding, coverage *config.Standard
 			covered++
 		case f.Status == "waived":
 			waived++
+		case f.Scope == ScopeDocumented && docCovered[f.ControlID]:
+			covered++
 		case f.Status == "partial":
 			partial++
 		default:
@@ -244,6 +272,37 @@ func partitionEnvoyFindings(findings []ControlFinding, coverage *config.Standard
 		}
 	}
 	return
+}
+
+// collectDocCoverage queries the docs resolver for every documented-
+// scope control in findings and returns the set of control IDs that
+// have at least one active document attached. Returns nil when the
+// resolver isn't wired or no entry has Scope == ScopeDocumented.
+func collectDocCoverage(ctx context.Context, resolver DocsResolver, slug string, findings []ControlFinding) map[string]bool {
+	if resolver == nil {
+		return nil
+	}
+	standardKey, ok := config.StandardKeyForSlug[slug]
+	if !ok {
+		standardKey = slug
+	}
+	out := make(map[string]bool)
+	for _, f := range findings {
+		if f.Scope != ScopeDocumented {
+			continue
+		}
+		if out[f.ControlID] {
+			continue
+		}
+		has, err := resolver.HasActiveDocForControl(ctx, standardKey, f.ControlID)
+		if err == nil && has {
+			out[f.ControlID] = true
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // ComputeEnvoyFrameworkStatus returns per-envoy compliance numbers for one
@@ -266,7 +325,8 @@ func (h *ReportHandler) ComputeEnvoyFrameworkStatus(r *http.Request, hostname, s
 	if standardKey, keyOK := config.StandardKeyForSlug[slug]; keyOK {
 		coverage = h.configStore.EnvoyStandardCoverage(hostname, standardKey)
 	}
-	covered, waived, partial, missing := partitionEnvoyFindings(score.Controls, coverage)
+	docCovered := collectDocCoverage(r.Context(), h.docsResolver, slug, score.Controls)
+	covered, waived, partial, missing := partitionEnvoyFindings(score.Controls, coverage, docCovered)
 	pct := 0.0
 	if score.Total > 0 {
 		pct = float64(covered) / float64(score.Total) * 100
@@ -432,12 +492,13 @@ func (h *ReportHandler) computeFrameworkScore(ctx context.Context, as AuditChain
 		}
 	}
 
+	docCovered := collectDocCoverage(ctx, h.docsResolver, slug, findings)
 	for _, hostname := range activeHostnames {
 		var coverage *config.StandardCoverage
 		if hasKey {
 			coverage = h.configStore.EnvoyStandardCoverage(hostname, standardKey)
 		}
-		covered, waived, partial, missing := partitionEnvoyFindings(findings, coverage)
+		covered, waived, partial, missing := partitionEnvoyFindings(findings, coverage, docCovered)
 		pct := 0.0
 		if total > 0 {
 			pct = float64(covered) / float64(total) * 100

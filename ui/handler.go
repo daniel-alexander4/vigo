@@ -233,6 +233,7 @@ type Handler struct {
 	mesh               MeshSource
 	swarmAPI           SwarmSource
 	traitQuery         TraitQueryDispatcher
+	complianceDocs     ComplianceDocsListing
 }
 
 // TraitQueryDispatcher dispatches a single live trait-value query to one
@@ -282,6 +283,36 @@ type MeshSource interface {
 // UI handler. Called from gateway.go.
 func (h *Handler) SetMesh(src MeshSource) {
 	h.mesh = src
+}
+
+// ComplianceDocsListing is a UI-facing slice of operator-uploaded
+// compliance documents attached to a (framework, control_id). The
+// concrete store lives in server/compliancedocs but the UI package
+// references it through this small interface to avoid a server-on-ui
+// import edge.
+type ComplianceDocsListing interface {
+	DocsForControl(ctx context.Context, framework, controlID string) ([]ComplianceDocsListingItem, error)
+}
+
+// ComplianceDocsListingItem is the minimal projection the UI needs to
+// render one attached document in the per-control drill-down.
+type ComplianceDocsListingItem struct {
+	ID         string
+	Filename   string
+	DocType    string
+	MimeType   string
+	SizeBytes  int64
+	SHA256     string
+	UploadedBy string
+	UploadedAt string
+}
+
+// SetComplianceDocs wires the compliance-docs listing source into the
+// UI handler. Optional — when nil, the per-control drill-down hides
+// its Documents section. Called from gateway.go after both handlers
+// are constructed.
+func (h *Handler) SetComplianceDocs(src ComplianceDocsListing) {
+	h.complianceDocs = src
 }
 
 // SetAgentVersion sets the detected agent binary version for display on the dashboard.
@@ -3080,7 +3111,24 @@ type EvidenceControlsData struct {
 
 // EvidenceControlDrillData holds data for the per-control drill-down fragment.
 type EvidenceControlDrillData struct {
-	Envoys []EvidenceControlEnvoy
+	Slug      string
+	ControlID string
+	Envoys    []EvidenceControlEnvoy
+	Docs      []EvidenceControlDoc
+}
+
+// EvidenceControlDoc is one operator-uploaded compliance document
+// linked to (Slug, ControlID). Surfaced under the drill-down so the
+// auditor or operator can see which artifacts back the control.
+type EvidenceControlDoc struct {
+	ID         string
+	Filename   string
+	DocType    string
+	MimeType   string
+	SizeBytes  int64
+	SHA256     string
+	UploadedBy string
+	UploadedAt string
 }
 
 // EvidenceControlEnvoy is a single envoy's enforcement evidence for a control.
@@ -3456,7 +3504,34 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 		})
 	}
 
-	h.renderer.RenderFragment(w, "compliance-evidence", "evidence-control-drill", EvidenceControlDrillData{Envoys: envoys})
+	data := EvidenceControlDrillData{Slug: slug, ControlID: controlID, Envoys: envoys}
+
+	// Resolve the compliance tag key for the URL slug so doc lookups
+	// match how compliance.vgo and module tags reference frameworks
+	// (e.g., URL slug "compliance" → standard key "hipaa").
+	if h.complianceDocs != nil {
+		standardKey := slug
+		if mapped, ok := config.StandardKeyForSlug[slug]; ok {
+			standardKey = mapped
+		}
+		if items, err := h.complianceDocs.DocsForControl(r.Context(), standardKey, controlID); err == nil {
+			data.Docs = make([]EvidenceControlDoc, 0, len(items))
+			for _, it := range items {
+				data.Docs = append(data.Docs, EvidenceControlDoc{
+					ID:         it.ID,
+					Filename:   it.Filename,
+					DocType:    it.DocType,
+					MimeType:   it.MimeType,
+					SizeBytes:  it.SizeBytes,
+					SHA256:     it.SHA256,
+					UploadedBy: it.UploadedBy,
+					UploadedAt: it.UploadedAt,
+				})
+			}
+		}
+	}
+
+	h.renderer.RenderFragment(w, "compliance-evidence", "evidence-control-drill", data)
 }
 
 // EvidenceCoverageFragment renders the fleet coverage table for a framework.

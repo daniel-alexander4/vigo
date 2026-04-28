@@ -19,6 +19,7 @@ import (
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	vigoai "git.alexander4.io/vigo/server/ai"
 	"git.alexander4.io/vigo/server/bootstrap"
+	"git.alexander4.io/vigo/server/compliancedocs"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/spanner"
@@ -34,7 +35,7 @@ import (
 // NewGateway creates an HTTP mux that proxies REST requests to the gRPC server
 // at the given address using mTLS credentials. It registers the VigoAdmin
 // service handlers on /api/ paths and mounts the web UI on /.
-func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, hub *spanner.Hub, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, peerSvc *peer.Service, aw auditRecorder, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, error) {
+func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, hub *spanner.Hub, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, error) {
 	// Build TLS credentials for the gateway's connection to gRPC.
 	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
 	if err != nil {
@@ -123,6 +124,18 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	// Mount sandgorgon (bare metal lifecycle) endpoints.
 	sandgorgonHandler := NewSandgorgonHandler(queries, fleetIndex, "", serverAddr)
 	sandgorgonHandler.RegisterRoutes(mux)
+
+	// Mount compliance docs (operator-uploaded artifacts for
+	// documented-scope controls). Always mount the routes — the
+	// handler 503s when the store isn't configured, so the API
+	// surface remains discoverable but inert without `compliance.docs`
+	// in server.yaml.
+	complianceDocsHandler := NewComplianceDocsHandler(complianceDocsStore)
+	complianceDocsHandler.SetAuditWriter(aw)
+	complianceDocsHandler.RegisterRoutes(mux)
+	if complianceDocsStore != nil {
+		uiHandler.SetComplianceDocs(&complianceDocsListing{store: complianceDocsStore})
+	}
 
 	// Mount gitmirror fleet aggregator. Share the handler with the
 	// UI so the `/gitmirror` page reads the cached aggregation

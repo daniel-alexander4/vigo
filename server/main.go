@@ -40,6 +40,7 @@ import (
 	"git.alexander4.io/vigo/server/backup"
 	"git.alexander4.io/vigo/server/bootstrap"
 	"git.alexander4.io/vigo/server/ca"
+	"git.alexander4.io/vigo/server/compliancedocs"
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/grc"
@@ -1009,7 +1010,36 @@ func run() error {
 			}
 		}
 
-		gwMux, uiHandler, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, docsDir, assistant, hub, runStore, fleetIndex, authMethod, enforcer, cfg.Publish, cfg.Branding, peerSvc, auditWriter, gwOpts...)
+		// Compliance docs store: operator-uploaded artifacts for
+		// documented-scope controls. Only LocalProvider exposes the
+		// Encrypt/Decrypt envelope today; under isopass or any other
+		// backend the store stays nil and the REST routes return 503.
+		var complianceDocsStore *compliancedocs.Store
+		if lp, ok := provider.(*secrets.LocalProvider); ok {
+			docsCfg := cfg.Compliance.Docs
+			cdStore, cdErr := compliancedocs.New(
+				docsCfg.ComplianceDocsDir(),
+				queries,
+				lp,
+				compliancedocs.Caps{
+					MaxDocBytes:          docsCfg.ComplianceMaxDocBytes(),
+					MaxPerFrameworkBytes: docsCfg.ComplianceMaxPerFrameworkBytes(),
+					MaxTotalBytes:        docsCfg.ComplianceMaxTotalBytes(),
+				},
+				docsCfg.ComplianceMimeAllowlist(),
+			)
+			if cdErr != nil {
+				slog.Warn("compliance docs store unavailable", "error", cdErr)
+			} else {
+				complianceDocsStore = cdStore
+				reportHandler.SetDocsResolver(cdStore)
+				slog.Info("compliance docs store ready",
+					"dir", docsCfg.ComplianceDocsDir(),
+					"max_doc_bytes", docsCfg.ComplianceMaxDocBytes())
+			}
+		}
+
+		gwMux, uiHandler, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, docsDir, assistant, hub, runStore, fleetIndex, authMethod, enforcer, cfg.Publish, cfg.Branding, peerSvc, auditWriter, complianceDocsStore, gwOpts...)
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}

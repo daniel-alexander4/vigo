@@ -10,19 +10,22 @@ import (
 
 // Permission constants for fine-grained RBAC.
 const (
-	PermFleetRead       = "fleet.read"
-	PermFleetWrite      = "fleet.write"
-	PermConfigPublish   = "config.publish"
-	PermConfigRollback  = "config.rollback"
-	PermPushExecute     = "push.execute"
-	PermQueryExecute    = "query.execute"
-	PermWorkflowExecute = "workflow.execute"
-	PermUsersManage     = "users.manage"
-	PermTokensManage    = "tokens.manage"
-	PermWebhooksManage  = "webhooks.manage"
-	PermBackupManage    = "backup.manage"
-	PermEnrollManage    = "enrollment.manage"
-	PermAuditRead       = "audit.read"
+	PermFleetRead          = "fleet.read"
+	PermFleetWrite         = "fleet.write"
+	PermConfigPublish      = "config.publish"
+	PermConfigRollback     = "config.rollback"
+	PermPushExecute        = "push.execute"
+	PermQueryExecute       = "query.execute"
+	PermWorkflowExecute    = "workflow.execute"
+	PermUsersManage        = "users.manage"
+	PermTokensManage       = "tokens.manage"
+	PermWebhooksManage     = "webhooks.manage"
+	PermBackupManage       = "backup.manage"
+	PermEnrollManage       = "enrollment.manage"
+	PermAuditRead          = "audit.read"
+	PermComplianceRead     = "compliance.read"
+	PermComplianceDocsWrite = "compliance.docs.write"
+	PermComplianceDocsPurge = "compliance.docs.purge"
 )
 
 // AllPermissions is the complete set of permissions (granted to admins).
@@ -32,11 +35,12 @@ var AllPermissions = []string{
 	PermPushExecute, PermQueryExecute, PermWorkflowExecute,
 	PermUsersManage, PermTokensManage, PermWebhooksManage,
 	PermBackupManage, PermEnrollManage, PermAuditRead,
+	PermComplianceRead, PermComplianceDocsWrite, PermComplianceDocsPurge,
 }
 
 // ViewerPermissions is the default set for the viewer role.
 var ViewerPermissions = []string{
-	PermFleetRead, PermAuditRead,
+	PermFleetRead, PermAuditRead, PermComplianceRead,
 }
 
 // DefaultPermissions returns the default permission set for a role.

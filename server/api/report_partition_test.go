@@ -30,7 +30,7 @@ func TestPartitionEnvoyFindings(t *testing.T) {
 		},
 	}
 
-	covered, waived, partial, missing := partitionEnvoyFindings(findings, coverage)
+	covered, waived, partial, missing := partitionEnvoyFindings(findings, coverage, nil)
 
 	if covered != 3 { // c-mod + c-connwaer + c-dual
 		t.Errorf("covered = %d, want 3", covered)
@@ -59,7 +59,7 @@ func TestPartitionEnvoyFindingsNilCoverage(t *testing.T) {
 		{ControlID: "c-miss", Status: "not_satisfied"},
 	}
 
-	covered, waived, partial, missing := partitionEnvoyFindings(findings, nil)
+	covered, waived, partial, missing := partitionEnvoyFindings(findings, nil, nil)
 
 	if covered != 1 { // c-connwaer (Connwaer trait escalation)
 		t.Errorf("covered = %d, want 1 (Connwaer trait escalation)", covered)
@@ -87,7 +87,7 @@ func TestPartitionEnvoyFindingsEnvoyOnly(t *testing.T) {
 		{ControlID: "c", Status: "not_satisfied"},
 	}
 
-	covered, waived, partial, missing := partitionEnvoyFindings(findings, nil)
+	covered, waived, partial, missing := partitionEnvoyFindings(findings, nil, nil)
 
 	if covered != 0 {
 		t.Errorf("covered = %d, want 0 — Vigo's own posture must not inflate envoy scoring", covered)

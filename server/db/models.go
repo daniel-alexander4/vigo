@@ -40,6 +40,29 @@ type AuditEntry struct {
 	Payload   string    `json:"payload"`
 }
 
+type ComplianceDoc struct {
+	ID           string         `json:"id"`
+	DocType      string         `json:"doc_type"`
+	Filename     string         `json:"filename"`
+	MimeType     string         `json:"mime_type"`
+	SizeBytes    int64          `json:"size_bytes"`
+	Sha256       string         `json:"sha256"`
+	UploadedBy   string         `json:"uploaded_by"`
+	UploadedAt   time.Time      `json:"uploaded_at"`
+	ReplacedAt   sql.NullTime   `json:"replaced_at"`
+	ReplacedByID sql.NullString `json:"replaced_by_id"`
+	DeletedAt    sql.NullTime   `json:"deleted_at"`
+	DeletedBy    sql.NullString `json:"deleted_by"`
+}
+
+type ComplianceDocLink struct {
+	DocID     string    `json:"doc_id"`
+	Framework string    `json:"framework"`
+	ControlID string    `json:"control_id"`
+	LinkedAt  time.Time `json:"linked_at"`
+	LinkedBy  string    `json:"linked_by"`
+}
+
 type ComplianceHistory struct {
 	ID            string  `json:"id"`
 	SnapshotDate  string  `json:"snapshot_date"`

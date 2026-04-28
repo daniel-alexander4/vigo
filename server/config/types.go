@@ -180,12 +180,80 @@ func (s ScrierSection) ScrierMaxSessions() int {
 	return s.MaxSessions
 }
 
-// ComplianceSection configures which compliance frameworks are active and
+// ComplianceSection configures which compliance frameworks are active,
 // which package-manager sources count as approved for the
-// `package_source_audit` trait.
+// `package_source_audit` trait, and where operator-uploaded
+// documentation artifacts (BAA, IR plan, risk assessment, training
+// records, etc.) live.
 type ComplianceSection struct {
-	Standards       []string `yaml:"standards" doc:"Enabled framework slugs (e.g. hipaa, soc2, pci). Empty means all frameworks are enabled." example:"[hipaa, soc2, pci_dss, nist_800_53]"`
-	ApprovedSources []string `yaml:"approved_sources" doc:"URL prefixes allowed as package-manager sources. Each package_source_audit.sources.N row is annotated with approved=true if its URL starts with any listed prefix, approved=false otherwise. Empty disables the annotation entirely." example:"[http://archive.ubuntu.com/, https://download.docker.com/, https://download.fedoraproject.org/]"`
+	Standards       []string         `yaml:"standards" doc:"Enabled framework slugs (e.g. hipaa, soc2, pci). Empty means all frameworks are enabled." example:"[hipaa, soc2, pci_dss, nist_800_53]"`
+	ApprovedSources []string         `yaml:"approved_sources" doc:"URL prefixes allowed as package-manager sources. Each package_source_audit.sources.N row is annotated with approved=true if its URL starts with any listed prefix, approved=false otherwise. Empty disables the annotation entirely." example:"[http://archive.ubuntu.com/, https://download.docker.com/, https://download.fedoraproject.org/]"`
+	Docs            ComplianceDocsSection `yaml:"docs" doc:"Operator-uploaded documentation store for documented-scope controls." long:"Configures where Vigo writes envelope-encrypted compliance artifacts (BAA, IR plan, risk assessment, training records, signed contracts) and how aggressively to cap upload sizes. Files land at <docs_dir>/<id>, encrypted with the same AES-256-GCM master key used by the secrets provider; metadata lives in compliance_docs / compliance_doc_links."`
+}
+
+// ComplianceDocsSection configures the on-disk store for operator-
+// uploaded compliance documentation.
+type ComplianceDocsSection struct {
+	DocsDir              string   `yaml:"docs_dir" doc:"Directory where envelope-encrypted compliance docs are written." default:"/srv/vigo/compliance-docs" example:"/srv/vigo/compliance-docs"`
+	MaxDocBytes          int64    `yaml:"max_doc_bytes" doc:"Reject any single uploaded doc larger than this. 50 MiB default." default:"52428800" example:"52428800 (50 MiB), 104857600 (100 MiB)"`
+	MaxPerFrameworkBytes int64    `yaml:"max_per_framework_bytes" doc:"Cap on the total ciphertext size attached to any single framework. 5 GiB default." default:"5368709120" example:"5368709120 (5 GiB)"`
+	MaxTotalBytes        int64    `yaml:"max_total_bytes" doc:"Hard cap on total compliance-doc storage across the deployment. 50 GiB default." default:"53687091200" example:"53687091200 (50 GiB)"`
+	MimeAllowlist        []string `yaml:"mime_allowlist" doc:"MIME types accepted for upload (validated against detected magic bytes, not just the declared header). Empty falls back to the built-in list (PDF, DOCX, XLSX, PPTX, TXT, MD, PNG, JPG, SVG)." example:"[application/pdf, image/png]"`
+}
+
+// ComplianceDocsDir returns the configured docs directory, defaulting
+// to /srv/vigo/compliance-docs.
+func (c ComplianceDocsSection) ComplianceDocsDir() string {
+	if c.DocsDir == "" {
+		return "/srv/vigo/compliance-docs"
+	}
+	return c.DocsDir
+}
+
+// ComplianceMaxDocBytes returns the per-doc upload cap in bytes,
+// defaulting to 50 MiB.
+func (c ComplianceDocsSection) ComplianceMaxDocBytes() int64 {
+	if c.MaxDocBytes <= 0 {
+		return 50 << 20
+	}
+	return c.MaxDocBytes
+}
+
+// ComplianceMaxPerFrameworkBytes returns the per-framework total cap,
+// defaulting to 5 GiB.
+func (c ComplianceDocsSection) ComplianceMaxPerFrameworkBytes() int64 {
+	if c.MaxPerFrameworkBytes <= 0 {
+		return 5 << 30
+	}
+	return c.MaxPerFrameworkBytes
+}
+
+// ComplianceMaxTotalBytes returns the deployment-wide total cap,
+// defaulting to 50 GiB.
+func (c ComplianceDocsSection) ComplianceMaxTotalBytes() int64 {
+	if c.MaxTotalBytes <= 0 {
+		return 50 << 30
+	}
+	return c.MaxTotalBytes
+}
+
+// ComplianceMimeAllowlist returns the configured MIME allowlist or the
+// built-in default list when unset.
+func (c ComplianceDocsSection) ComplianceMimeAllowlist() []string {
+	if len(c.MimeAllowlist) == 0 {
+		return []string{
+			"application/pdf",
+			"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+			"application/vnd.openxmlformats-officedocument.presentationml.presentation",
+			"text/plain",
+			"text/markdown",
+			"image/png",
+			"image/jpeg",
+			"image/svg+xml",
+		}
+	}
+	return c.MimeAllowlist
 }
 
 // StreamEditSection configures guardrails for stream_edit pipelines.
