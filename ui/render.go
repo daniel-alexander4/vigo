@@ -48,6 +48,7 @@ func funcMap() template.FuncMap {
 		"pctColorBgInv":  pctColorBgInv,
 		"highlightYAML":  highlightYAML,
 		"truncUUID":      truncUUID,
+		"labelDisplayName": labelDisplayName,
 		"sub":            func(a, b int) int { return a - b },
 		"dict":           dict,
 		"pct":            pct,
@@ -638,6 +639,21 @@ func truncGitSha(sha string) string {
 		return sha[:12]
 	}
 	return sha
+}
+
+// labelDisplayName returns the rightmost colon-delimited segment of a
+// swarm blob label. Gitmirror labels look like
+// `cairn:<seeder>:<user>:<repo>`; the repo at the tail is the only
+// part operators care about at a glance — seeder/user are already
+// surfaced in the row's subtitle. Labels without a colon (e.g. admin
+// payload labels like `pc-payload-1777298130`) pass through unchanged.
+// Templates pair this with `title="{{.Label}}"` so the full label is
+// still recoverable on hover.
+func labelDisplayName(label string) string {
+	if i := strings.LastIndex(label, ":"); i >= 0 && i < len(label)-1 {
+		return label[i+1:]
+	}
+	return label
 }
 
 // dict creates a map from key-value pairs for use in templates.
