@@ -16,14 +16,14 @@
 #              distribute/revoke, filesync round-trip.
 #   phase-d  — cryptsync encrypt/push/decrypt perms, leaves catch-up
 #              smoke. Section 3 (decrypt) requires
-#              PRE_DECRYPT_UNLOCK=1; skipped by default.
+#              CRYPTSYNC_PASSWORD_FILE; skipped gracefully if absent.
 #
 # All env vars accepted by the underlying scripts (PRIMARY,
 # SECONDARY, THIRD, FILESYNC_USER, CRYPTSYNC_USER, VIGO_BIN, etc.)
 # pass through transparently — set them before invoking this wrapper.
 #
 # Run: ./substrate-livetest-all.sh
-#      CRYPTSYNC_PASSWORD_FILE=~/.pw PRE_DECRYPT_UNLOCK=1 ./substrate-livetest-all.sh
+#      CRYPTSYNC_PASSWORD_FILE=~/.pw ./substrate-livetest-all.sh
 
 set -uo pipefail
 

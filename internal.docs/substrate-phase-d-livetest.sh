@@ -21,6 +21,14 @@
 #       <path>` writes plaintext as `<user>:<group> 0600` even when
 #       run through sudo. Validates the decrypt fix in 0.30.25.
 #
+#       Self-contained: §3 runs unlock + decrypt + lock inside a
+#       single SSH/bash session on PRIMARY. Crossing SSH invocations
+#       doesn't work — the session helper's parent-PID watchdog
+#       watches the non-interactive bash that ran `vigo unlock`, and
+#       that bash exits the moment its compound command finishes,
+#       leaving any later SSH call to find a torn-down helper.
+#       Skipped gracefully if CRYPTSYNC_PASSWORD_FILE is absent.
+#
 #   §4  Cryptsync leaves catch-up smoke — confirm the GET
 #       /swarm/cryptsync/leaves/<user> route is wired and that the
 #       daemon-side LeavesTable file exists and is parseable.
@@ -31,19 +39,17 @@
 # prerequisites as phase-c (passwordless SSH to envoys).
 #
 # Optional env (defaults match phase-c):
-#   PRIMARY            danlap
-#   SECONDARY          annlap
-#   THIRD              plex
-#   CRYPTSYNC_USER     dan      — must be cryptsync-enrolled on PRIMARY
-#                                 and reachable via passwordless SSH
-#   VIGO_BIN           /usr/local/sbin/vigo
-#   FANOUT_TIMEOUT     30       — seconds to wait for push to land
-#   PRE_DECRYPT_UNLOCK 0        — set 1 to assume the user has already
-#                                 run `vigo swarm cryptsync unlock` on
-#                                 PRIMARY, so §3 (decrypt) can run.
-#                                 Default skips §3 because unlock
-#                                 requires the cryptsync password and
-#                                 this script is unattended.
+#   PRIMARY                  danlap
+#   SECONDARY                annlap
+#   THIRD                    plex
+#   CRYPTSYNC_USER           dan      — must be cryptsync-enrolled on PRIMARY
+#                                       and reachable via passwordless SSH
+#   VIGO_BIN                 /usr/local/sbin/vigo
+#   FANOUT_TIMEOUT           30       — seconds to wait for push to land
+#   CRYPTSYNC_PASSWORD_FILE  ~/.cryptsync-test-password (mode 0600).
+#                            Holds the cryptsync password for §3's
+#                            unlock. Section is skipped if the file
+#                            is absent.
 
 set -uo pipefail
 
@@ -53,7 +59,7 @@ THIRD="${THIRD:-plex}"
 CRYPTSYNC_USER="${CRYPTSYNC_USER:-dan}"
 VIGO_BIN="${VIGO_BIN:-/usr/local/sbin/vigo}"
 FANOUT_TIMEOUT="${FANOUT_TIMEOUT:-30}"
-PRE_DECRYPT_UNLOCK="${PRE_DECRYPT_UNLOCK:-0}"
+CRYPTSYNC_PASSWORD_FILE="${CRYPTSYNC_PASSWORD_FILE:-$HOME/.cryptsync-test-password}"
 
 # Wrap a vigo invocation so HOME points at $CRYPTSYNC_USER's home even
 # under env-stripping sudo configs (default Ubuntu sudo resets HOME
@@ -170,6 +176,24 @@ else
     warn "$SECONDARY unreachable — §2 (push fan-out) will be skipped"
 fi
 
+# Load the cryptsync password once (used by §3's unlock). Mode-checked
+# the same way phase-b does — the file holds a password and must not
+# be world-readable.
+HAVE_PASSWORD=0
+PW=""
+if [[ -r "$CRYPTSYNC_PASSWORD_FILE" ]]; then
+    mode=$(stat -c %a "$CRYPTSYNC_PASSWORD_FILE")
+    if [[ "$mode" != "600" ]]; then
+        fail "$CRYPTSYNC_PASSWORD_FILE must be mode 600 (currently $mode)"
+        exit 1
+    fi
+    PW=$(<"$CRYPTSYNC_PASSWORD_FILE")
+    HAVE_PASSWORD=1
+    note "loaded cryptsync password from $CRYPTSYNC_PASSWORD_FILE"
+else
+    note "no $CRYPTSYNC_PASSWORD_FILE — §3 (decrypt) will be skipped"
+fi
+
 # ─────────────────── 1. Cryptsync encrypt perms ───────────────────
 
 section "1. Cryptsync encrypt perms — local file lands as $CRYPTSYNC_USER:$CRYPTSYNC_USER 0600"
@@ -248,14 +272,37 @@ fi
 
 section "3. Cryptsync decrypt -o perms — plaintext output owned by $CRYPTSYNC_USER 0600"
 
-if (( PRE_DECRYPT_UNLOCK == 0 )); then
-    skip "decrypt requires the user to have run \`vigo swarm cryptsync unlock\` (set PRE_DECRYPT_UNLOCK=1 to enable)"
+if (( HAVE_PASSWORD == 0 )); then
+    skip "no \$CRYPTSYNC_PASSWORD_FILE — §3 needs the password to unlock the session helper"
 else
     PLAIN_DECRYPTED="/tmp/phase-d-decrypted-$$-$(date +%s).txt"
-    step "decrypt $TEST_NAME → $PLAIN_DECRYPTED on $PRIMARY (via sudo)"
-    decrypt_out=$(on_host "$PRIMARY" "$VIGO_INVOKE swarm cryptsync decrypt '$TEST_NAME' -o '$PLAIN_DECRYPTED' 2>&1")
-    if [[ $? -ne 0 ]]; then
-        fail "decrypt failed: $(head -2 <<<"$decrypt_out" | tr '\n' ' ')"
+    step "unlock + decrypt $TEST_NAME → $PLAIN_DECRYPTED on $PRIMARY (single SSH session)"
+
+    # Run unlock and decrypt inside one SSH/bash session so the session
+    # helper spawned by unlock is still alive when decrypt connects.
+    # Crossing SSH invocations doesn't work: the helper's parent-PID
+    # watchdog watches the non-interactive bash that ran `vigo unlock`,
+    # and that bash exits the moment its compound command finishes,
+    # leaving any later SSH call to find a torn-down helper.
+    #
+    # $VIGO_INVOKE / $TEST_NAME / $PLAIN_DECRYPTED expand on this side
+    # before the script is sent over SSH; \$-prefixed vars expand on
+    # the remote bash. Password arrives on stdin (ssh forwards it).
+    remote_script="
+read -r CRYPTSYNC_PW
+printf '%s\n' \"\$CRYPTSYNC_PW\" | $VIGO_INVOKE swarm cryptsync unlock 2>&1
+unlock_rc=\$?
+if [ \$unlock_rc -ne 0 ]; then exit \$unlock_rc; fi
+sleep 1
+$VIGO_INVOKE swarm cryptsync decrypt '$TEST_NAME' -o '$PLAIN_DECRYPTED' 2>&1
+decrypt_rc=\$?
+$VIGO_INVOKE swarm cryptsync lock >/dev/null 2>&1 || true
+exit \$decrypt_rc
+"
+    decrypt_out=$(printf '%s\n' "$PW" | on_host "$PRIMARY" "$remote_script" 2>&1)
+    decrypt_rc=$?
+    if (( decrypt_rc != 0 )); then
+        fail "decrypt failed: $(head -3 <<<"$decrypt_out" | tr '\n' ' ')"
     else
         pass "decrypt returned 0"
         decrypt_stat=$(stat_remote "$PRIMARY" "$PLAIN_DECRYPTED")
