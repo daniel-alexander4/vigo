@@ -65,7 +65,7 @@
 {{/* Blob detail view — visualizations rendered inline. */}}
 <div class="card mt-2">
     <div class="card-heading-row">
-        <h2 style="margin:0;">{{if .BlobDetail.Label}}{{.BlobDetail.Label}}{{else}}Blob Detail{{end}}</h2>
+        <h2 style="margin:0;">{{if .BlobDetail.Label}}{{labelDisplayName .BlobDetail.Label}}{{else}}Blob Detail{{end}}</h2>
         <a href="/swarm/payload" class="btn btn--sm">Back to list</a>
     </div>
 
@@ -114,7 +114,7 @@
                 <tr{{if .Revoked}} style="opacity:0.5;"{{end}}>
                     <td><span class="status-pill status-pill--{{swarmFileStatusClass .Status}}">{{.Status}}</span></td>
                     <td>
-                        <a href="/swarm/payload/{{.SHA256}}"{{if .Label}} title="{{.Label}}"{{end}}><strong>{{if .Label}}{{labelDisplayName .Label}}{{else}}<em>unlabeled</em>{{end}}</strong></a>
+                        <a href="/swarm/payload/{{.SHA256}}"><strong>{{if .Label}}{{labelDisplayName .Label}}{{else}}<em>unlabeled</em>{{end}}</strong></a>
                         <div style="color:var(--subtext0);font-size:0.9em;"><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code> · seeded by {{.Source}} · {{.Chunks}} chunk{{if ne .Chunks 1}}s{{end}}</div>
                     </td>
                     <td style="white-space:nowrap;">{{.SizeHuman}}</td>
