@@ -44,8 +44,6 @@ type Status struct {
 	EnvoysOnline           int           `json:"envoys_online"`
 	EnvoysSubstrateActive  int           `json:"envoys_substrate_active"`
 	EnvoysSeeding          int           `json:"envoys_seeding"`
-	SeedingAllowlist       []string      `json:"seeding_allowlist"`
-	ServerEnvoyHost        string        `json:"server_envoy_host"`
 	ManifestEntriesActive  int           `json:"manifest_entries_active"`
 	ManifestEntriesRevoked int           `json:"manifest_entries_revoked"`
 	Payloads               PayloadCounts `json:"payloads"`
@@ -87,19 +85,15 @@ type PeerRow struct {
 // function so the caller can convert from fleet.EnvoyState lazily
 // without forcing a cycle back into server/fleet.
 type Sources struct {
-	Tracker          *swarm.PeerTracker
-	ManifestStore    *swarm.ManifestStore
-	FleetSource      func() []EnvoyInput
-	SeedingAllowlist []string
-	ServerEnvoyHost  string
+	Tracker       *swarm.PeerTracker
+	ManifestStore *swarm.ManifestStore
+	FleetSource   func() []EnvoyInput
 }
 
 // SnapshotStatus builds the fleet-wide status rollup.
 func SnapshotStatus(src Sources) Status {
 	out := Status{
-		GeneratedAt:      time.Now().UTC(),
-		SeedingAllowlist: append([]string(nil), src.SeedingAllowlist...),
-		ServerEnvoyHost:  src.ServerEnvoyHost,
+		GeneratedAt: time.Now().UTC(),
 	}
 
 	// Seed totals split by content-subsystem label prefix and size

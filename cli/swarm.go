@@ -29,8 +29,6 @@ type swarmStatusFleet struct {
 	EnvoysOnline           int                   `json:"envoys_online"`
 	EnvoysSubstrateActive  int                   `json:"envoys_substrate_active"`
 	EnvoysSeeding          int                   `json:"envoys_seeding"`
-	SeedingAllowlist       []string              `json:"seeding_allowlist"`
-	ServerEnvoyHost        string                `json:"server_envoy_host"`
 	ManifestEntriesActive  int                   `json:"manifest_entries_active"`
 	ManifestEntriesRevoked int                   `json:"manifest_entries_revoked"`
 	Payloads               swarmStatusPayloads   `json:"payloads"`
@@ -116,19 +114,6 @@ func runSwarmStatus(cmd *cobra.Command, _ []string) error {
 	fmt.Fprintf(w, "%s\t%d active · %d revoked\n", bold("Manifest entries"), resp.ManifestEntriesActive, resp.ManifestEntriesRevoked)
 	fmt.Fprintf(w, "%s\t%d payload · %d gitmirror\n", bold("Active payloads"), resp.Payloads.Payload, resp.Payloads.Gitmirror)
 	w.Flush()
-
-	fmt.Println()
-	fmt.Println(bold("Seeding allowlist"))
-	if resp.ServerEnvoyHost == "" && len(resp.SeedingAllowlist) == 0 {
-		fmt.Println("  (none configured — set server.hostname and/or swarm.seeding_envoys in server.yaml)")
-	} else {
-		if resp.ServerEnvoyHost != "" {
-			fmt.Printf("  %s  %s\n", resp.ServerEnvoyHost, dim("(server.hostname — implicit)"))
-		}
-		for _, p := range resp.SeedingAllowlist {
-			fmt.Printf("  %s\n", p)
-		}
-	}
 	return nil
 }
 

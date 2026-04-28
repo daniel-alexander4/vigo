@@ -29,10 +29,6 @@ Active-payload count per subsystem plus a deep-link to the subsystem page:
 
 Filesync and Cryptsync don't surface payload counts here — those are per-user content. Use the dedicated pages for user-level detail.
 
-### Seeding Allowlist (table)
-
-Which envoys are permitted to originate seeds, derived from `swarm.seeding_envoys` in `server.yaml` plus the implicit `server.hostname` entry.
-
 ### Peers (table)
 
 One row per non-revoked envoy. Columns: hostname (link to envoy detail), online/offline status, substrate-active flag, seeding count, cached blob count, downloading count, footprint size, last-seen time.

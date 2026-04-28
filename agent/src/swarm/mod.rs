@@ -156,54 +156,6 @@ pub fn evict_expired(state: &StateStore) {
     info!(count = expired.len(), "evicted expired swarm blobs");
 }
 
-/// Move seeds rejected by the server's authorization policy into admin_rejected/.
-/// Removes the .swarm manifest and blob cache symlink so the trait collector
-/// stops re-reporting them. The files stay on disk for the operator to inspect.
-pub fn reject_seeds(rejected: &[crate::proto::RejectedSeed]) {
-    if rejected.is_empty() {
-        return;
-    }
-
-    let seeds_dir = crate::platform::paths::default_seeds_dir();
-    let rejected_dir = crate::platform::paths::default_rejected_dir();
-    if let Err(e) = std::fs::create_dir_all(&rejected_dir) {
-        warn!(error = %e, "failed to create admin_rejected directory");
-        return;
-    }
-
-    let blobs_dir = crate::platform::paths::default_blobs_dir();
-    let mut count = 0;
-
-    for item in rejected {
-        let sha256 = &item.sha256;
-        let blob_path = blobs_dir.join(sha256);
-
-        // Resolve the blob symlink back to the seed file.
-        if let Ok(source) = std::fs::read_link(&blob_path) {
-            if source.starts_with(&seeds_dir) {
-                // Move seed file to admin_rejected/.
-                if let Some(filename) = source.file_name() {
-                    let dest = rejected_dir.join(filename);
-                    std::fs::rename(&source, &dest).ok();
-                    // Remove the .swarm manifest.
-                    let manifest = source.with_extension("swarm");
-                    std::fs::remove_file(&manifest).ok();
-                    count += 1;
-                }
-            }
-        }
-
-        // Remove the blob cache symlink.
-        std::fs::remove_file(&blob_path).ok();
-        // Remove .sources metadata.
-        std::fs::remove_file(blobs_dir.join(format!("{}.sources", sha256))).ok();
-    }
-
-    if count > 0 {
-        info!(count, "moved rejected seeds to admin_rejected/");
-    }
-}
-
 /// Delete graveyard blobs older than 7 days. Called on every check-in cycle.
 /// The graveyard holds blobs that were revoked (operator action or retention
 /// expiry) so they can be resurrected by a same-SHA reseed within the grace

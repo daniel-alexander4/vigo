@@ -272,21 +272,13 @@ message CheckInResponse {
   bool tunnel_requested = 17;                  // server wants agent to open a TunnelStream (Scrier)
   // Field 19 (retired_seeds) was removed in 0.19.41 — revocations now flow
   // exclusively through manifest_entries via the manifest CRDT.
-  // Field 22 (cairn_claims) was removed in 0.23.0 when the server-side
-  // gitmirror ClaimTable was deleted as part of the P2P-first rearchitecture
-  // (plan_gitmirror_p2p_first.md). Gitmirror now runs LAN-native via multicast
-  // + direct cross-subnet push; the server plays no role in claim selection.
-  reserved 22;
-  reserved "cairn_claims";
+  // Field 21 (rejected_seeds) and 22 (cairn_claims) were removed in 0.32.x
+  // when the seeding-envoys allowlist (and its corresponding RejectedSeed
+  // wire message) were dropped in favor of receiver-side blacklisting and
+  // the legacy server-side gitmirror ClaimTable was deleted in 0.23.0.
+  reserved 21, 22;
+  reserved "rejected_seeds", "cairn_claims";
   repeated SwarmManifestEntry manifest_entries = 20; // manifest updates for gossip (revocations, new seeds)
-  repeated RejectedSeed rejected_seeds = 21;         // seeds this envoy's seeding attempt was rejected for
-}
-
-// RejectedSeed signals an envoy that its seed was rejected by the server's
-// authorization policy. The agent should move the file to admin_rejected/.
-message RejectedSeed {
-  string sha256 = 1;  // hash of the rejected blob
-  string reason = 2;  // human-readable rejection reason
 }
 
 // SwarmManifestEntry is a single entry in the swarm manifest CRDT,

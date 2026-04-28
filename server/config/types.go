@@ -113,26 +113,17 @@ type ServerConfig struct {
 	StreamEdit   StreamEditSection   `yaml:"stream_edit" docs:"concepts/stream-edit" doc:"Guardrails for file resources that pipe content through agent-local scripts." long:"Guardrails on the file resource's 'stream_edit:' attribute, which pipes content through agent-local scripts before it's written to disk. Controls whether stream-edits are allowed at all, the allowed interpreters (bash, python, etc.), time/memory limits per transform, and whether results can be cached across convergence cycles. Turn stream-edits off in hardened deployments; tune the limits when debugging long-running transforms."`
 	Compliance   ComplianceSection   `yaml:"compliance" docs:"concepts/compliance" doc:"Which compliance frameworks are active in this deployment (empty = all)." long:"Scopes which compliance frameworks this deployment reports against. An empty list activates every framework Vigo knows — HIPAA, SOC 2, PCI DSS, ISO 27001, NIST 800-53, CIS, GDPR, and the rest. An explicit list restricts dashboards, reports, and waiver tooling to that subset — useful when the organization is only audited against one or two frameworks and seeing the full catalog adds noise."`
 	Scrier       ScrierSection       `yaml:"scrier" docs:"concepts/scrier" doc:"Scrier browser-based remote access — SSH and RDP via guacd tunnel." long:"Browser-based remote access to any enrolled envoy — interactive SSH, Windows RDP, or console-shadow VNC, all routed through the envoy's outbound agent stream so no inbound ports are required on the target side. Every session is logged in scrier_sessions and an audit event is emitted on disconnect. Configure this when administrators need ad-hoc access to envoys behind customer firewalls without punching holes in them."`
-	Swarm        SwarmSection        `yaml:"swarm" docs:"concepts/swarm" doc:"Peer-to-peer content distribution — seed directory, port, bandwidth cap, seeding allowlist." long:"Peer-to-peer content distribution between envoys over mTLS on port 1531 (agent-to-agent, not server-to-agent). Configures the seed directory the server writes into, the bandwidth cap as a percentage of detected link speed (so swarm transfers don't starve real workloads), and the allowlist of envoy hostnames permitted to originate seeds. Essential for fleets large enough that pulling every blob from the server would saturate its uplink."`
+	Swarm        SwarmSection        `yaml:"swarm" docs:"concepts/swarm" doc:"Peer-to-peer content distribution — seed directory, port, bandwidth cap." long:"Peer-to-peer content distribution between envoys over mTLS on port 1531 (agent-to-agent, not server-to-agent). Configures the seed directory the server writes into and the bandwidth cap as a percentage of detected link speed (so swarm transfers don't starve real workloads). Essential for fleets large enough that pulling every blob from the server would saturate its uplink."`
 }
 
 // SwarmSection configures peer-to-peer content distribution. When enabled,
 // the server stores content-addressed blobs and coordinates distribution
 // to agents via the swarm protocol on port 1531.
-//
-// SeedingEnvoys is the authoritative list of envoy hostnames permitted to
-// originate seeds. Entries are hostname patterns matched with filepath.Match
-// semantics (supports `*`, `?`, `[abc]`; segments between dots are matched
-// independently, so `*.ci.example.com` matches `build-01.ci.example.com` but
-// NOT `a.b.ci.example.com`). The server's own envoy (identified by
-// ServerSection.Hostname) is implicitly allowed and does not need to appear
-// in the list. An empty list means only the server's envoy can seed.
 type SwarmSection struct {
-	Enabled             bool     `yaml:"enabled" doc:"Enable peer-to-peer content distribution." default:"false" example:"true"`
-	SeedDir             string   `yaml:"seed_dir" doc:"Directory where server-distributed seeds are written (bind-mounted to agents)." default:"/var/lib/vigo/swarm/seed" example:"/var/lib/vigo/swarm/seed"`
-	Port                int      `yaml:"port" doc:"TCP port on which agents serve blobs to each other over mTLS." default:"1531" example:"1-65535; must be open between envoys"`
-	MaxBandwidthPercent int      `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
-	SeedingEnvoys       []string `yaml:"seeding_envoys" doc:"Hostname patterns (filepath.Match globs) allowed to originate seeds. The server's own envoy is implicitly allowed." example:"[build-*.ci.example.com, *.seed.internal]"`
+	Enabled             bool   `yaml:"enabled" doc:"Enable peer-to-peer content distribution." default:"false" example:"true"`
+	SeedDir             string `yaml:"seed_dir" doc:"Directory where server-distributed seeds are written (bind-mounted to agents)." default:"/var/lib/vigo/swarm/seed" example:"/var/lib/vigo/swarm/seed"`
+	Port                int    `yaml:"port" doc:"TCP port on which agents serve blobs to each other over mTLS." default:"1531" example:"1-65535; must be open between envoys"`
+	MaxBandwidthPercent int    `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
 }
 
 // ScrierSection configures the Scrier remote access feature.

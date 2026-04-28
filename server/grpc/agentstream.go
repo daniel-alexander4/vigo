@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -372,11 +371,6 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 		// Agents self-assign via the manifest CRDT — no per-envoy
 		// assignments needed on the server.
-		if s.peerTracker != nil {
-			for _, sha := range s.peerTracker.PopRejectedSeeds(envoyID) {
-				resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
-			}
-		}
 		// Ship the manifest CRDT so agents can pick up server-initiated
 		// revocations. Multicast handles agent-to-agent propagation, but
 		// operator-initiated revokes (`vigocli swarm revoke`) only update
@@ -434,11 +428,6 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			if info, ok := s.reassignStore.Pop(envoyID); ok {
 				resp.ReassignAddr = info.TargetAddr
 				resp.ReassignId = info.NewEnvoyID
-			}
-		}
-		if s.peerTracker != nil {
-			for _, sha := range s.peerTracker.PopRejectedSeeds(envoyID) {
-				resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
 			}
 		}
 		resp.ManifestEntries = s.collectManifestEntries()
@@ -610,12 +599,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 	}
 
-	// Swarm: signal seed rejections and ship the manifest CRDT.
-	if s.peerTracker != nil {
-		for _, sha := range s.peerTracker.PopRejectedSeeds(envoyID) {
-			resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
-		}
-	}
+	// Swarm: ship the manifest CRDT.
 	resp.ManifestEntries = s.collectManifestEntries()
 
 	// Build ProxiedDevice list for gateway envoys. Network devices whose
@@ -781,33 +765,6 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 	}
 }
 
-// authorizeSeed checks whether an envoy is permitted to originate a seed.
-// The rule is a single allowlist match: the envoy's hostname must either
-// equal the server's own envoy hostname (server.hostname in server.yaml —
-// every server runs a local vigo agent, so it's always allowed) or match
-// a pattern in swarm.seeding_envoys. Returns ("", true) on approval, or
-// (reason, false) on rejection. Rejections are surfaced to the envoy via
-// the rejected_seeds check-in response; the file is moved into the
-// envoy-local admin_rejected/ directory with the reason attached.
-func (s *AgentService) authorizeSeed(envoyID string) (string, bool) {
-	es := s.fleetIndex.GetEnvoy(envoyID)
-	if es == nil {
-		return "unknown envoy", false
-	}
-
-	if s.serverEnvoyHost != "" && es.Hostname == s.serverEnvoyHost {
-		return "", true
-	}
-
-	for _, pat := range s.swarmCfg.SeedingEnvoys {
-		if matched, _ := filepath.Match(pat, es.Hostname); matched {
-			return "", true
-		}
-	}
-
-	return fmt.Sprintf("hostname %q not in swarm.seeding_envoys", es.Hostname), false
-}
-
 func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 	if s.fleetIndex == nil {
 		return
@@ -837,25 +794,6 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 
 	// Store broken seeds for this envoy (replaces previous list).
 	s.peerTracker.SetBrokenSeeds(envoyID, seedData.BrokenSeeds)
-
-	// Authorization gate: check if this envoy is permitted to seed.
-	if reason, allowed := s.authorizeSeed(envoyID); !allowed {
-		var rejectedHashes []string
-		for _, seed := range seedData.Seeds {
-			if swarm.IsValidHash(seed.SHA256) && seed.Size > 0 {
-				rejectedHashes = append(rejectedHashes, seed.SHA256)
-			}
-		}
-		if len(rejectedHashes) > 0 {
-			s.peerTracker.SetRejectedSeeds(envoyID, rejectedHashes)
-			slog.Info("swarm seeds rejected",
-				"envoy", envoyID,
-				"count", len(rejectedHashes),
-				"reason", reason,
-			)
-		}
-		return
-	}
 
 	// Build peer address for the seeding envoy.
 	var peerAddr string

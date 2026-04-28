@@ -64,40 +64,6 @@
 </div>
 
 <div class="card mt-2">
-    <h2 style="margin:0 0 16px;">Seeding Allowlist</h2>
-    <p style="color:var(--subtext0);margin-bottom:12px;">Envoys whose hostname matches one of these patterns (or the server's own envoy) can originate seeds. Configure via <code>swarm.seeding_envoys</code> in <code>server.yaml</code>.</p>
-    <div class="table-container">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Pattern</th>
-                    <th>Source</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{if .Status.ServerEnvoyHost}}
-                <tr>
-                    <td><code>{{.Status.ServerEnvoyHost}}</code></td>
-                    <td>server.hostname (implicit)</td>
-                </tr>
-                {{end}}
-                {{range .Status.SeedingAllowlist}}
-                <tr>
-                    <td><code>{{.}}</code></td>
-                    <td>server.yaml</td>
-                </tr>
-                {{end}}
-                {{if and (not .Status.ServerEnvoyHost) (not .Status.SeedingAllowlist)}}
-                <tr>
-                    <td colspan="2" style="color:var(--subtext0);">No envoys permitted to seed. Set <code>server.hostname</code> and/or <code>swarm.seeding_envoys</code> in <code>server.yaml</code>.</td>
-                </tr>
-                {{end}}
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<div class="card mt-2">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:16px;">
         <h2 style="margin:0;">Peers</h2>
         <div style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--subtext0);">

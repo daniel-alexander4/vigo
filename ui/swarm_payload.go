@@ -38,8 +38,6 @@ type LodePageData struct {
 	ActiveDistributions int
 	Blobs               []LodeBlobEntry
 	BlobDetail          *LodeBlobDetail
-	SeedingEnvoys       []string // hostname patterns from swarm.seeding_envoys in server.yaml
-	ServerEnvoyHost     string   // server.hostname — the implicit always-allowed envoy
 
 	// Visualization data — populated on the detail view.
 	Matrix     *ChunkMatrix
@@ -97,13 +95,12 @@ type SwarmSummary struct {
 	Total       int
 }
 
-// SetSwarm configures the swarm peer tracker, hostname resolver, swarm config,
-// and the server's own envoy hostname (implicitly allowed to seed) for the UI.
-func (h *Handler) SetSwarm(tracker *swarm.PeerTracker, resolver SwarmHostnameResolver, swarmCfg config.SwarmSection, serverEnvoyHost string) {
+// SetSwarm configures the swarm peer tracker, hostname resolver, and swarm
+// config for the UI.
+func (h *Handler) SetSwarm(tracker *swarm.PeerTracker, resolver SwarmHostnameResolver, swarmCfg config.SwarmSection) {
 	h.swarmTracker = tracker
 	h.swarmFleetIndex = resolver
 	h.swarmConfig = swarmCfg
-	h.serverEnvoyHost = serverEnvoyHost
 }
 
 // Payload renders the admin-distributed-payload list or detail page.
@@ -185,10 +182,6 @@ func (h *Handler) lodeList(w http.ResponseWriter, r *http.Request) {
 	if data.TotalSizeHuman == "" {
 		data.TotalSizeHuman = "0 B"
 	}
-
-	// Seeding allowlist (read-only — configured in server.yaml).
-	data.SeedingEnvoys = append(data.SeedingEnvoys, h.swarmConfig.SeedingEnvoys...)
-	data.ServerEnvoyHost = h.serverEnvoyHost
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "payload", data)

@@ -111,8 +111,6 @@ pub struct RunResult {
     pub server_pubkey_pem: String,
     /// Server requests immediate binary update and restart.
     pub force_update: bool,
-    /// Seeds the server rejected (authorization policy) — agent moves to admin_rejected/.
-    pub rejected_seeds: Vec<crate::proto::RejectedSeed>,
     /// Manifest entries from the server (fallback gossip channel).
     pub swarm_manifest_entries: Vec<crate::proto::SwarmManifestEntry>,
 }
@@ -314,7 +312,6 @@ fn converge(
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
-            rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
         });
     } else {
@@ -331,7 +328,6 @@ fn converge(
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
-            rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
         });
     };
@@ -360,7 +356,6 @@ fn converge(
                 proxied_devices: proxied_devices.clone(),
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
-                rejected_seeds: resp.rejected_seeds.clone(),
                 swarm_manifest_entries: resp.manifest_entries.clone(),
             });
         }
@@ -384,7 +379,6 @@ fn converge(
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
-            rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
         });
     }
@@ -407,7 +401,6 @@ fn converge(
                 proxied_devices,
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
-                rejected_seeds: resp.rejected_seeds.clone(),
                 swarm_manifest_entries: resp.manifest_entries.clone(),
             });
         }
@@ -448,7 +441,6 @@ fn converge(
         proxied_devices,
         server_pubkey_pem: resp.server_pubkey_pem.clone(),
         force_update: resp.force_update,
-        rejected_seeds: resp.rejected_seeds.clone(),
         swarm_manifest_entries: resp.manifest_entries.clone(),
     })
 }
@@ -985,7 +977,6 @@ pub async fn daemon_loop(
                     sync_gitmirror_gate(gitmirror_gate.as_ref(), store);
                     crate::swarm::evict_expired(store);
                 }
-                crate::swarm::reject_seeds(&rr.rejected_seeds);
                 crate::swarm::cleanup_graveyard();
                 crate::swarm::cleanup_stale_partials();
                 if let Some(ref m) = manifest {
@@ -1301,7 +1292,6 @@ async fn stream_loop(
         if let Some(ref store) = state_store {
             crate::swarm::evict_expired(store);
         }
-        crate::swarm::reject_seeds(&resp.rejected_seeds);
         crate::swarm::cleanup_graveyard();
         if let Some(ref m) = manifest {
             crate::swarm::merge_manifest_entries(m, &resp.manifest_entries, peer_map);
@@ -1960,7 +1950,6 @@ mod tests {
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,
-            rejected_seeds: vec![],
             swarm_manifest_entries: vec![],
         };
 
@@ -1986,7 +1975,6 @@ mod tests {
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,
-            rejected_seeds: vec![],
             swarm_manifest_entries: vec![],
         };
 
@@ -2164,7 +2152,6 @@ mod tests {
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,
-            rejected_seeds: vec![],
             swarm_manifest_entries: vec![],
         };
 

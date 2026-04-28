@@ -120,11 +120,10 @@ which clones the bare repo into `~<user>/gitmirror/<project>/` as a normal writa
 
 ## Source Identity and Security
 
-Gitmirror does not have its own authentication layer. Security is provided by three existing layers stacked together:
+Gitmirror does not have its own authentication layer. Security is provided by two existing layers stacked together:
 
 1. **Swarm transport security** — every byte moves over mTLS on the existing swarm peer port (1531). An envoy can only be a seeder if it's enrolled and approved. Content integrity is guaranteed by SHA256 verification of every assembled blob (`agent/src/swarm/cache.rs`).
-2. **Swarm seed authorization** — the `swarm.seeding_envoys` allowlist in `server.yaml` gates which envoys can introduce new seeds (hostname globs; the server's own envoy is implicit). Gitmirror publishes through the same path, so the same allowlist applies.
-3. **Server-mediated seeder→label verification** — every label embeds the seeder hostname as its second segment (`gitmirror:<seeder>:<user>:<project>`). The *server* validates the match against authoritative fleet data in `server/gitmirror/builder.go::OnTraitReport` before it ever issues a claim: if an envoy reports a `gitmirror.sources[]` entry whose label claims a different seeder than the envoy's own hostname in the fleet index, the entry is rejected. Receivers then trust the claim list because it arrives over the existing mTLS-authenticated check-in channel and has already been server-validated. They never act on raw manifest entries.
+2. **Server-mediated seeder→label verification** — every label embeds the seeder hostname as its second segment (`gitmirror:<seeder>:<user>:<project>`). The *server* validates the match against authoritative fleet data in `server/gitmirror/builder.go::OnTraitReport` before it ever issues a claim: if an envoy reports a `gitmirror.sources[]` entry whose label claims a different seeder than the envoy's own hostname in the fleet index, the entry is rejected. Receivers then trust the claim list because it arrives over the existing mTLS-authenticated check-in channel and has already been server-validated. They never act on raw manifest entries.
 
 Note that the check is server-mediated rather than receiver-side because peer-to-peer blob downloads deliberately disable TLS hostname verification (`agent/src/swarm/peer_client.rs::build_peer_agent` calls `disable_verification(true)`) — peers connect by IP and the cert SAN is hostname-based, so the wire identity is unavailable to the downloader. Content integrity still comes from SHA256; identity comes from the fleet index.
 

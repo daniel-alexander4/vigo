@@ -1070,21 +1070,13 @@ func run() error {
 			lodeHandler := api.NewLodeHandler(seedDir, peerTracker, fleetIndex, manifestStore, queries)
 			lodeHandler.SetForcePusher(agentSvc)
 			lodeHandler.RegisterRoutes(gwMux)
-			swarmAPIHandler := api.NewSwarmHandler(peerTracker, manifestStore, fleetIndex, cfg.Swarm, cfg.Server.Hostname)
+			swarmAPIHandler := api.NewSwarmHandler(peerTracker, manifestStore, fleetIndex)
 			swarmAPIHandler.RegisterRoutes(gwMux)
 			uiHandler.SetSwarmAPI(swarmAPIHandler)
 			agentSvc.SetSwarm(peerTracker, manifestStore)
-			agentSvc.SetSwarmConfig(cfg.Swarm, cfg.Server.Hostname)
-			uiHandler.SetSwarm(peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex}, cfg.Swarm, cfg.Server.Hostname)
-			slog.Info("swarm enabled", "seed_dir", seedDir, "port", cfg.Swarm.Port,
-				"seeding_envoys", len(cfg.Swarm.SeedingEnvoys),
-				"server_envoy_host", cfg.Server.Hostname)
-			for _, pat := range cfg.Swarm.SeedingEnvoys {
-				if pat == "*" {
-					slog.Warn("swarm.seeding_envoys contains bare '*' — every enrolled envoy is permitted to seed",
-						"hint", "narrow to a hostname glob (e.g. build-*.ci.example.com) unless this is intentional")
-				}
-			}
+			agentSvc.SetSwarmConfig(cfg.Swarm)
+			uiHandler.SetSwarm(peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex}, cfg.Swarm)
+			slog.Info("swarm enabled", "seed_dir", seedDir, "port", cfg.Swarm.Port)
 
 			swarmPruner := swarm.NewRetentionPruner(7 * 24 * time.Hour)
 			swarmPruner.SetTracker(peerTracker)

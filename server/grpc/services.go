@@ -62,8 +62,7 @@ type AgentService struct {
 	tunnelMgr          *tunnelManager           // Scrier tunnel manager (nil when disabled)
 	peerTracker        *swarm.PeerTracker       // swarm peer tracker (nil when swarm disabled)
 	manifestStore      *swarm.ManifestStore     // swarm manifest CRDT (nil when swarm disabled)
-	swarmCfg           config.SwarmSection      // swarm seeding allowlist + other swarm settings
-	serverEnvoyHost    string                   // server.hostname — the server's own envoy, implicitly allowed to seed
+	swarmCfg           config.SwarmSection      // swarm config section (subsystem blacklists, etc.)
 }
 
 // workflowTriggerer is the interface for auto-triggering workflows on trait changes.
@@ -117,11 +116,11 @@ func (s *AgentService) SetSwarm(pt *swarm.PeerTracker, ms *swarm.ManifestStore) 
 	s.manifestStore = ms
 }
 
-// SetSwarmConfig stores the swarm section (seeding_envoys allowlist) and the
-// server's own envoy hostname, which is implicitly permitted to seed.
-func (s *AgentService) SetSwarmConfig(sc config.SwarmSection, serverEnvoyHost string) {
+// SetSwarmConfig stores the swarm config section so subsystem-level
+// gates (e.g., gitmirror/cryptsync blacklists) can be consulted at
+// check-in time.
+func (s *AgentService) SetSwarmConfig(sc config.SwarmSection) {
 	s.swarmCfg = sc
-	s.serverEnvoyHost = serverEnvoyHost
 }
 
 // isRecentlyActive returns true if the envoy has checked in within 3× the check-in interval.

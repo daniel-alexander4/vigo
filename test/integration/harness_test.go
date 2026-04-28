@@ -275,7 +275,6 @@ func runAgent(t *testing.T, serverAddr, dataDir string, extraArgs ...string) (st
 		"VIGO_BLOBS_DIR="+filepath.Join(dataDir, "swarm", ".blobs"),
 		"VIGO_SEEDS_DIR="+filepath.Join(dataDir, "swarm", "seed"),
 		"VIGO_GRAVEYARD_DIR="+filepath.Join(dataDir, "swarm", "graveyard"),
-		"VIGO_REJECTED_DIR="+filepath.Join(dataDir, "swarm", "seed", "admin_rejected"),
 		"VIGO_ECHO_DIR="+filepath.Join(dataDir, "echo"),
 		"VIGO_EXECUTORS_DIR="+filepath.Join(dataDir, "executors"),
 	)

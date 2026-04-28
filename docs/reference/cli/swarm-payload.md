@@ -223,30 +223,6 @@ danlap                         firmware.bin                   missing .swarm man
 plex                           backup.tar.gz                  invalid manifest: expected value at line 1
 ```
 
-## Seed Authorization
-
-An envoy can originate a seed if either:
-1. Its hostname equals `server.hostname` in `server.yaml` — the server's own envoy is implicitly allowed. Every server runs a local vigo agent, so this is the canonical "server-side seeding" path (including `vigocli swarm payload distribute`, which writes directly to the server's seed dir).
-2. Its hostname matches any pattern in `swarm.seeding_envoys` in `server.yaml`.
-
-Otherwise the seed is rejected at check-in time. The agent moves the file into the envoy-local `seed/admin_rejected/` directory with a reason (`hostname "web-03.prod" not in swarm.seeding_envoys`) so the operator can act on it.
-
-Patterns use `filepath.Match` semantics — supports `*`, `?`, `[abc]`. Dots are literal; segments between dots are matched independently. So `*.ci.example.com` matches `build-01.ci.example.com` but not `a.b.ci.example.com` (list both if you need multi-segment coverage).
-
-Configure in `server.yaml`:
-
-```yaml
-server:
-  hostname: "vigo.example.com"        # the server's own envoy — implicitly allowed
-
-swarm:
-  seeding_envoys:
-    - "build-*.ci.example.com"
-    - "vault.ops.example.com"
-```
-
-A bare `*` permits every enrolled envoy to seed and logs a WARN at server startup; narrow the glob unless that's intentional.
-
 ## Related
 
 - [Swarm Substrate](../../engineering/subsystems/swarm.md) — The envoy P2P transport payload rides on

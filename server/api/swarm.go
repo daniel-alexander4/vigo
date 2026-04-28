@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/swarmview"
@@ -22,7 +21,7 @@ type SwarmHandler struct {
 }
 
 // NewSwarmHandler creates a substrate-overview handler.
-func NewSwarmHandler(tracker *swarm.PeerTracker, manifest *swarm.ManifestStore, fleetIndex *fleet.FleetIndex, swarmCfg config.SwarmSection, serverEnvoyHost string) *SwarmHandler {
+func NewSwarmHandler(tracker *swarm.PeerTracker, manifest *swarm.ManifestStore, fleetIndex *fleet.FleetIndex) *SwarmHandler {
 	return &SwarmHandler{
 		src: swarmview.Sources{
 			Tracker:       tracker,
@@ -44,8 +43,6 @@ func NewSwarmHandler(tracker *swarm.PeerTracker, manifest *swarm.ManifestStore, 
 				}
 				return out
 			},
-			SeedingAllowlist: swarmCfg.SeedingEnvoys,
-			ServerEnvoyHost:  serverEnvoyHost,
 		},
 	}
 }

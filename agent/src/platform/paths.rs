@@ -17,7 +17,6 @@
 //! - `VIGO_BLOBS_DIR`     → [`default_blobs_dir`]
 //! - `VIGO_SEEDS_DIR`     → [`default_seeds_dir`]
 //! - `VIGO_GRAVEYARD_DIR` → [`default_graveyard_dir`]
-//! - `VIGO_REJECTED_DIR`  → [`default_rejected_dir`]
 //! - `VIGO_FILESYNC_DIR`  → [`default_filesync_dir`]
 //! - `VIGO_EXECUTORS_DIR` → [`default_executors_dir`]
 //!
@@ -172,25 +171,6 @@ pub fn default_graveyard_dir() -> PathBuf {
 pub fn default_graveyard_dir() -> PathBuf {
     if let Some(p) = env_override("VIGO_GRAVEYARD_DIR") { return p; }
     default_data_dir().join("swarm").join("graveyard")
-}
-
-/// Default admin-rejected seeds directory (seeds the server denied).
-#[cfg(all(unix, not(target_os = "macos")))]
-pub fn default_rejected_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_REJECTED_DIR") { return p; }
-    PathBuf::from("/var/lib/vigo/swarm/seed/admin_rejected")
-}
-
-#[cfg(target_os = "macos")]
-pub fn default_rejected_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_REJECTED_DIR") { return p; }
-    PathBuf::from("/Library/Vigo/swarm/seed/admin_rejected")
-}
-
-#[cfg(windows)]
-pub fn default_rejected_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_REJECTED_DIR") { return p; }
-    default_data_dir().join("swarm").join("seed").join("admin_rejected")
 }
 
 /// Default filesync state directory (per-user snapshots + tombstones).
