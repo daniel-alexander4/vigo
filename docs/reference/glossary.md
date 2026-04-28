@@ -113,7 +113,7 @@ Per-user always-encrypted home-directory sync on the [swarm](#swarm) substrate. 
 
 ## gitmirror
 
-Personal disaster-recovery source-control distribution on the [swarm](#swarm) substrate. The agent scans `~/gitmirror/<project>/` for repositories with a `.gitmirror.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P on top of swarm — no server involvement in selection or delivery. Opt-in per-envoy via the matchfile var `vars: { gitmirror: true }`. See [Gitmirror](../engineering/subsystems/gitmirror.md).
+Personal disaster-recovery source-control distribution on the [swarm](#swarm) substrate. The agent scans `~/gitmirror/<project>/` for repositories with a `.gitmirror.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P on top of swarm — no server involvement in selection or delivery. Default-on per-envoy; operators deny specific hosts via hostname globs in `swarm.gitmirror.blacklist` in server.yaml. See [Gitmirror](../engineering/subsystems/gitmirror.md).
 
 ## filesync
 

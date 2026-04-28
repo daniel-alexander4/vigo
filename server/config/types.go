@@ -120,10 +120,20 @@ type ServerConfig struct {
 // the server stores content-addressed blobs and coordinates distribution
 // to agents via the swarm protocol on port 1531.
 type SwarmSection struct {
-	Enabled             bool   `yaml:"enabled" doc:"Enable peer-to-peer content distribution." default:"false" example:"true"`
-	SeedDir             string `yaml:"seed_dir" doc:"Directory where server-distributed seeds are written (bind-mounted to agents)." default:"/var/lib/vigo/swarm/seed" example:"/var/lib/vigo/swarm/seed"`
-	Port                int    `yaml:"port" doc:"TCP port on which agents serve blobs to each other over mTLS." default:"1531" example:"1-65535; must be open between envoys"`
-	MaxBandwidthPercent int    `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
+	Enabled             bool                   `yaml:"enabled" doc:"Enable peer-to-peer content distribution." default:"false" example:"true"`
+	SeedDir             string                 `yaml:"seed_dir" doc:"Directory where server-distributed seeds are written (bind-mounted to agents)." default:"/var/lib/vigo/swarm/seed" example:"/var/lib/vigo/swarm/seed"`
+	Port                int                    `yaml:"port" doc:"TCP port on which agents serve blobs to each other over mTLS." default:"1531" example:"1-65535; must be open between envoys"`
+	MaxBandwidthPercent int                    `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
+	Gitmirror           SwarmGitmirrorSection  `yaml:"gitmirror" doc:"Gitmirror subsystem (personal-DR repo backup) operability gates." long:"Gitmirror runs by default on every enrolled envoy. Use blacklist to deny specific envoys."`
+}
+
+// SwarmGitmirrorSection configures per-subsystem gates for gitmirror.
+// Gitmirror is default-on across the fleet — every enrolled envoy
+// receives bundles by default. The blacklist denies specific hostnames
+// (filepath.Match globs), and a blacklist add triggers automatic
+// fleet-wide eviction of the matching envoys' held mirrors.
+type SwarmGitmirrorSection struct {
+	Blacklist []string `yaml:"blacklist" doc:"Hostname patterns (filepath.Match globs) of envoys denied from receiving gitmirror bundles. Adding a host evicts its existing mirrors fleet-wide; removing a host re-allows it but does not re-replicate previous bundles." example:"[raspberrypi, *.test.example.com]"`
 }
 
 // ScrierSection configures the Scrier remote access feature.

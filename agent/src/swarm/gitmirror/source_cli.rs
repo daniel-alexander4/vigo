@@ -367,6 +367,30 @@ fn cmd_show(args: &[String]) -> Result<()> {
     if !cfg.cross_subnet_mirrors.is_empty() {
         println!("cross_subnet_mirrors: {}", cfg.cross_subnet_mirrors.join(", "));
     }
+
+    // Receivers — taken from the publisher-side state.json's most
+    // recent reactor selection for this label. Empty when the source
+    // is paused, hasn't yet published, or no LAN peers qualify.
+    let suffix = format!(":{}", project);
+    let snapshot = super::state::TraitsSnapshot::load(
+        &crate::platform::paths::default_gitmirror_dir(),
+    )
+    .unwrap_or(None);
+    let mirrors: Vec<String> = snapshot
+        .as_ref()
+        .map(|s| {
+            s.sources
+                .iter()
+                .filter(|src| src.label.ends_with(&suffix))
+                .flat_map(|src| src.selected_mirrors.iter().cloned())
+                .collect()
+        })
+        .unwrap_or_default();
+    if mirrors.is_empty() {
+        println!("receivers:   (none — paused, never published, or no qualifying LAN peers)");
+    } else {
+        println!("receivers:   {}", mirrors.join(", "));
+    }
     Ok(())
 }
 

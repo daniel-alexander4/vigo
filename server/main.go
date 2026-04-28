@@ -1078,6 +1078,43 @@ func run() error {
 			uiHandler.SetSwarm(peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex}, cfg.Swarm)
 			slog.Info("swarm enabled", "seed_dir", seedDir, "port", cfg.Swarm.Port)
 
+			// Track blacklist state across reloads so we can diff and
+			// dispatch eviction tasks for hostnames that newly match.
+			lastGitmirrorBlacklist := append([]string(nil), cfg.Swarm.Gitmirror.Blacklist...)
+
+			configStore.SetOnReloadSuccess(func() {
+				// Re-read server.yaml directly — ConfigStore.Reload() only
+				// refreshes worksite YAML, not server.yaml. Same pattern
+				// reloadComplianceStandards uses.
+				newCfg, err := config.LoadServerConfig(configFile, provider, secretsCfg.Backend)
+				if err != nil {
+					slog.Warn("config reload: failed to re-read server.yaml for swarm section", "error", err)
+					return
+				}
+				agentSvc.SetSwarmConfig(newCfg.Swarm)
+				uiHandler.SetSwarm(peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex}, newCfg.Swarm)
+
+				newBL := newCfg.Swarm.Gitmirror.Blacklist
+				envoyInputs := fleetIndex.AllEnvoys()
+				hostnames := make([]string, 0, len(envoyInputs))
+				for _, e := range envoyInputs {
+					hostnames = append(hostnames, e.Hostname)
+				}
+				newlyBlacklisted := diffNewlyMatched(lastGitmirrorBlacklist, newBL, hostnames)
+				for _, hostname := range newlyBlacklisted {
+					slog.Info("gitmirror: dispatching blacklist eviction", "hostname", hostname)
+					if _, err := agentSvc.DispatchPush(ctx, isgrpc.DispatchParams{
+						Command:     "vigo swarm gitmirror _apply-blacklist",
+						TargetSpec:  hostname,
+						Operator:    "config.reload",
+						TimeoutSecs: 120,
+					}); err != nil {
+						slog.Warn("gitmirror: blacklist eviction dispatch failed", "hostname", hostname, "error", err)
+					}
+				}
+				lastGitmirrorBlacklist = append([]string(nil), newBL...)
+			})
+
 			swarmPruner := swarm.NewRetentionPruner(7 * 24 * time.Hour)
 			swarmPruner.SetTracker(peerTracker)
 			swarmPruner.SetManifestStore(manifestStore)
@@ -2026,6 +2063,38 @@ func (a *swarmHostnameAdapter) MatchingEnvoys(target string) []string {
 		}
 	}
 	return names
+}
+
+// diffNewlyMatched returns hostnames that match any pattern in `next` but
+// none in `prev`. Used by the swarm blacklist reload hook to compute the
+// set of envoys that should receive a `_apply-blacklist` dispatch when
+// the operator publishes a config that adds them to a denylist. Patterns
+// are filepath.Match globs.
+func diffNewlyMatched(prev, next, hostnames []string) []string {
+	var out []string
+	for _, h := range hostnames {
+		nowMatches := false
+		for _, pat := range next {
+			if m, _ := filepath.Match(pat, h); m {
+				nowMatches = true
+				break
+			}
+		}
+		if !nowMatches {
+			continue
+		}
+		previouslyMatched := false
+		for _, pat := range prev {
+			if m, _ := filepath.Match(pat, h); m {
+				previouslyMatched = true
+				break
+			}
+		}
+		if !previouslyMatched {
+			out = append(out, h)
+		}
+	}
+	return out
 }
 
 // runSecurityPostureSnapshot takes a daily security posture snapshot.

@@ -1080,7 +1080,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // gitmirror consumers (discovery announcer, peer server handler,
     // reactor) consult this gate at their natural sample points.
     let gitmirror_gate = vigo::swarm::gitmirror::Gate::new(
-        vigo::swarm::gitmirror::matchfile_enables_gitmirror(state_store.as_deref()),
+        vigo::swarm::gitmirror::gitmirror_enabled_for_envoy(state_store.as_deref()),
     );
 
     // Gitmirror LAN peer table + local info + pending claims. Always

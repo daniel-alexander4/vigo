@@ -3,11 +3,12 @@
 
 //! Runtime on/off switch for the gitmirror subsystem.
 //!
-//! Gitmirror is opt-in per-envoy via the matchfile var `gitmirror: true`.
-//! The var is delivered on every check-in inside `PolicyBundle.vars_json`
-//! and cached in the LMDB state store. The agent re-reads the cache after
-//! every accepted bundle and drives this gate; every subsystem component
-//! that cares about the flag (discovery announcer, peer push handler,
+//! Gitmirror is **default-on per-envoy**: every enrolled envoy participates
+//! unless its hostname matches a glob in `swarm.gitmirror.blacklist` in
+//! server.yaml. The server emits `gitmirror_blacklisted: true|false` in
+//! `PolicyBundle.vars_json` on every check-in; the agent re-reads the
+//! cached bundle and drives this gate. Every subsystem component that
+//! cares about the flag (discovery announcer, peer push handler,
 //! reactor) consults [`Gate::enabled`] at its own natural sample point.
 //!
 //! All the gitmirror data structures (`PeerTable`, `PendingClaims`,

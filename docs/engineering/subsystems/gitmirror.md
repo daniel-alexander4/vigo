@@ -25,7 +25,7 @@ As of **0.23.0**, gitmirror is a fully peer-to-peer subsystem. The server plays 
 
 ## How It Works
 
-1. **Opt in, per envoy.** An operator sets `vars: { gitmirror: true }` in a matchfile or `common.vgo`. The agent re-reads this from its cached `PolicyBundle.vars_json` after every check-in and flips a shared runtime gate. Dormant envoys never announce themselves and never accept pushed mirrors; flipping the var on or off takes effect without restarting the agent.
+1. **Default on, per envoy.** Gitmirror runs on every enrolled envoy by default. Operators deny specific hosts via hostname globs in `swarm.gitmirror.blacklist` in server.yaml. The server emits `gitmirror_blacklisted: true|false` in `PolicyBundle.vars_json` on every check-in; the agent re-reads the cached bundle and flips a shared runtime gate. Blacklisted envoys never announce themselves and never accept pushed mirrors; adding/removing a host takes effect within one check-in cycle. Adding a host also auto-dispatches `_apply-blacklist` which wipes existing mirrors locally.
 2. **Opt in, per repo.** A user creates a git repo at `~<user>/gitmirror/<project>/` and commits a `.gitmirror.yaml` sidecar. The sidecar names the source envoy's hostname, how many mirrors to maintain, optional LAN filter globs, and optional explicit `cross_subnet_mirrors:` cross-subnet targets.
 3. **Discover.** Every 5 seconds, the agent's gitmirror reactor scans every local user's `~/gitmirror/*` directory, parses each sidecar with a strict deny-unknown-fields validator, and excludes anything whose `owner` field doesn't match this envoy's hostname.
 4. **Bundle.** For each non-paused source whose `HEAD` has advanced since the last publish, the reactor runs `git bundle create` (as the owning Unix user, never as root) into `/var/lib/vigo/swarm/gitmirror/tmp/`. The first bundle is full; subsequent bundles are incremental from the last published commit. Whether a given bundle was full or incremental — and its size — is persisted in `state.json` and surfaced through the `gitmirror.sources[].last_publish_full` / `last_bundle_size` trait fields so the `/payload` UI and `vigocli swarm gitmirror` can explain why a seed is only a few KB (an incremental is expected to be small; a full bundle should be repo-sized).
@@ -146,19 +146,25 @@ If `receiver_state.json` is missing, corrupt, or has a stale schema version, the
 
 ## Activation
 
-**Gitmirror is opt-in.** The subsystem is dormant by default and only starts on envoys whose matchfile explicitly enables it via a var:
+**Gitmirror is default-on.** Every enrolled envoy participates unless its hostname matches a glob in `swarm.gitmirror.blacklist` in server.yaml:
 
 ```yaml
-# stockpile/envoys/workstations/common.vgo
-vars:
-  gitmirror: true
+# server.yaml
+swarm:
+  gitmirror:
+    blacklist:
+      - "raspberrypi"
+      - "*.test.example.com"
 ```
 
-Every envoy matched by a file under `stockpile/envoys/workstations/` inherits `gitmirror: true` through the existing `common.vgo` directory-inheritance cascade, so one edit enables gitmirror for a whole class of envoys at once. Match blocks can override with their own `vars: { gitmirror: false }` where needed (child-wins semantics are built into the existing var cascade — no new precedence rule).
+Adding a host to the blacklist does two things on the next check-in cycle:
 
-On a fresh deploy, envoys *without* the var stay dormant — no participation, no publisher scan, no receiver, no multicast announcements, nothing. The subsystem is effectively unstarted.
+1. The agent receives `gitmirror_blacklisted: true` in `PolicyBundle.vars_json` and flips its shared runtime gate OFF — multicast announcer, `/gitmirror/push` handler, and reactor all idle on the next sample point.
+2. The server dispatches the hidden agent verb `vigo swarm gitmirror _apply-blacklist` via `TaskDispatch` to the affected envoy. That verb wipes every locally-held mirror regardless of seeder and persists the cleared `receiver_state.json`. Symmetric with cryptsync's `_apply-evict` for receiver-side eviction.
 
-The flag arrives at the agent through the normal check-in path: the server renders the envoy's merged vars map into `PolicyBundle.vars_json` and the agent caches it in the LMDB state store for offline convergence. The agent re-reads the cached var after every accepted policy bundle and drives a shared runtime gate (`gitmirror::Gate`). Every subsystem consumer — the multicast announcer, the `/gitmirror/push` handler, and the reactor tick — consults the gate at its natural sample point. Flipping the matchfile var and republishing takes effect within one check-in cycle; no agent restart required.
+Removing a host from the blacklist re-enables the gate but does not auto-replicate previous bundles. The next reactor tick on the publishers picks fresh receivers; existing publishers that previously had the un-blacklisted envoy in their `selected_mirrors` will deterministically re-select it via the sha256 score, restoring the mirror at the next bundle publish.
+
+The gate state arrives through the normal check-in path: the server renders per-envoy gates into `PolicyBundle.vars_json` and the agent caches the bundle in LMDB for offline convergence. The agent re-reads the cached `gitmirror_blacklisted` after every accepted policy bundle. Default-open semantics: any ambiguous case (no bundle yet, parse failure, missing field) is treated as "not blacklisted", so a fresh-enroll runs gitmirror immediately.
 
 ### Fleet observability: the `/gitmirror` page
 
@@ -181,21 +187,13 @@ OFF→ON transitions run the activation sequence (cleanup of orphan bundles, res
 
 ### Preconditions (must also hold for the reactor to start)
 
-1. The matchfile var `gitmirror: true` is set for this envoy.
+1. This envoy's hostname is not matched by any glob in `swarm.gitmirror.blacklist`.
 2. `git` is installed at version ≥ 2.35 (`git_ops::check_version()` rejects older hosts at startup).
-3. At least one user has a `~<user>/gitmirror/<project>/` directory containing a valid `.gitmirror.yaml` — this enables publishing; receive-only envoys need only the var.
+3. At least one user has a `~<user>/gitmirror/<project>/` directory containing a valid `.gitmirror.yaml` — this enables publishing; receive-only envoys need only an unblocked gate.
 
 ### Fresh-enrollment behavior
 
-A just-enrolled envoy has no cached policy bundle yet, so the gate starts off. As soon as the first successful check-in writes the cache, the check-in loop re-evaluates the var and flips the gate on (or leaves it off if the matchfile didn't set it). The reactor picks up the flip within one tick — typically ≤5 seconds after the first check-in lands — with no agent restart required.
-
-### Values accepted for the var
-
-- JSON/YAML boolean `true` — the canonical shape
-- String `"true"`, `"yes"`, or `"1"` (case-insensitive) — tolerant to operator typing
-- Integer `1` or any non-zero number — also tolerated
-
-Anything else (including absence, `false`, `null`, `"no"`, `0`, or any other value) means disabled.
+A just-enrolled envoy has no cached policy bundle yet. Default-open semantics treat that as "not blacklisted", so gitmirror starts in the ON state immediately. The first check-in delivers the canonical `gitmirror_blacklisted` bit; if the envoy actually is blacklisted, the gate flips OFF on that tick and the reactor stops on the next pass.
 
 ## Limits
 
@@ -231,7 +229,7 @@ The trailing `ed25519_pubkey_hex` (64 chars) is the sender's Ed25519 verifying k
 
 Listeners ingest this line into an in-memory `PeerTable` keyed by canonicalized hostname. Entries carry the hostname, the set of human Unix users present on the peer (read from `/etc/passwd` at the peer's agent startup, filtered to UID ∈ [1000, 65534)), and a tag list sourced from the agent's traits. Entries expire after **5 minutes** without a refresh; the gitmirror reactor's tick prunes stale entries on every pass, so the table stays bounded without a separate sweeper.
 
-**Opt-in gate:** an envoy only announces the `GITMIRROR:` line if its matchfile var `gitmirror: true` is set. A dormant subsystem never broadcasts its local info, so it never lands in any peer's table — "presence in the table" IS the participation signal. There's no separate capability bit to check.
+**Default-on gate:** every enrolled envoy announces the `GITMIRROR:` line unless it's blacklisted via `swarm.gitmirror.blacklist`. A blacklisted envoy stops broadcasting, so it never lands in any peer's table — "presence in the table" IS the participation signal. There's no separate capability bit to check.
 
 **Graceful overflow:** if the swarm announcement is close to the 1400-byte UDP MTU ceiling, the `GITMIRROR:` line is dropped from that announcement (not truncated). The next announcement cycle typically lands 5 seconds later and other peers refresh their TTL then. Worst case: a peer table entry ages up to 5 minutes behind reality, which is well within the TTL window.
 
@@ -350,7 +348,7 @@ Body: the bundle bytes. HTTP over the same mTLS transport the swarm peer server 
 
 The receiver's `/gitmirror/push/*` handler gates every request through a specific validation chain. Each rejection returns a distinct 4xx with a human-readable reason (surfaced in the source's push-error log):
 
-1. **Gitmirror must be enabled** on the receiver. A dormant envoy (no `vars: { gitmirror: true }` in the matchfile) returns `403 gitmirror not enabled on this envoy`.
+1. **Gitmirror must be enabled** on the receiver. A blacklisted envoy (hostname matches `swarm.gitmirror.blacklist` in server.yaml) returns `403 gitmirror not enabled on this envoy`.
 2. **Label must parse** into `gitmirror:<seeder>:<user>:<project>` segments. Malformed labels → `400 malformed gitmirror label`.
 3. **Seeder match**: the `<seeder>` segment inside the label must equal the `X-Vigo-Seeder` header. A compromised envoy (with a valid fleet cert) cannot push a mirror labeled as a different seeder — the seeder claim is validated against both self-reported sources.
 4. **Blob sha header format**: must be a 64-character lowercase hex sha256.
@@ -406,20 +404,14 @@ Both paths coexist: a single repo can have LAN mirrors (picked automatically) an
 
 ### Example deployment
 
-Two envoys in Dan's homelab plus one off-site colo:
+Two envoys in Dan's homelab plus one off-site colo. Gitmirror runs on all three by default — no matchfile configuration is required to opt in. To deny a specific envoy, add it to `swarm.gitmirror.blacklist` in `server.yaml`:
 
 ```yaml
-# stockpile/envoys/workstations/danlap.vgo
-- match: "danlap.home.arpa"
-  vars: { gitmirror: true }
-
-# stockpile/envoys/homelab/plex.vgo
-- match: "plex.home.arpa"
-  vars: { gitmirror: true }
-
-# stockpile/envoys/offsite/colo-box.vgo
-- match: "colo-box.dr.example.net"
-  vars: { gitmirror: true }
+# server.yaml — example: deny gitmirror on a noisy raspberrypi
+swarm:
+  gitmirror:
+    blacklist:
+      - "raspberrypi"
 ```
 
 ```yaml

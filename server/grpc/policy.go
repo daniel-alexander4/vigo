@@ -166,6 +166,48 @@ func buildPolicyModule(mod config.ModuleConfig, seEnabled bool, seAllowed []stri
 // filterBundleByTraits removes modules and resources from a pre-built policy
 // bundle based on the envoy's traits. Used after the policy cache returns a
 // shared base bundle — the cache can't do per-envoy filtering.
+// injectServerVars merges server-derived per-envoy gates into bundle.VarsJson,
+// preserving any operator-set vars from cfg.Vars. Called by request handlers
+// that have envoy hostname access — the cache layer doesn't know per-envoy
+// state, so injection happens after customizeStubs returns. The bundle's
+// VarsJson is reassigned to a fresh slice; the cached base bundle is not
+// mutated.
+func injectServerVars(bundle *pb.PolicyBundle, server map[string]any) error {
+	if len(server) == 0 {
+		return nil
+	}
+	merged := make(map[string]any, len(server)+8)
+	if len(bundle.VarsJson) > 0 {
+		var existing map[string]any
+		if err := json.Unmarshal(bundle.VarsJson, &existing); err != nil {
+			return fmt.Errorf("re-parsing vars_json: %w", err)
+		}
+		for k, v := range existing {
+			merged[k] = v
+		}
+	}
+	for k, v := range server {
+		merged[k] = v
+	}
+	out, err := json.Marshal(merged)
+	if err != nil {
+		return fmt.Errorf("re-marshaling vars_json: %w", err)
+	}
+	bundle.VarsJson = out
+	return nil
+}
+
+// hostnameMatchesAny returns true iff hostname matches any filepath.Match
+// glob in the patterns slice. Used by per-envoy blacklist checks.
+func hostnameMatchesAny(patterns []string, hostname string) bool {
+	for _, pat := range patterns {
+		if matched, _ := filepath.Match(pat, hostname); matched {
+			return true
+		}
+	}
+	return false
+}
+
 func filterBundleByTraits(bundle *pb.PolicyBundle, traits map[string]any) *pb.PolicyBundle {
 	if traits == nil || bundle == nil {
 		return bundle

@@ -65,6 +65,10 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "recover" => cmd_recover(&args[1..]),
         "recover-all" => cmd_recover_all(&args[1..]),
         "prune" => cmd_prune(&args[1..]),
+        // Hidden — invoked by the server via TaskDispatch when an envoy
+        // newly matches `swarm.gitmirror.blacklist`. Wipes ALL local
+        // mirrors regardless of seeder. Not advertised in --help.
+        "_apply-blacklist" => cmd_apply_blacklist(&args[1..]),
         "leave" => super::source_cli::cmd_leave(&args[1..]),
         "source" => dispatch_source(&args[1..]),
         other => bail!(
@@ -1201,6 +1205,56 @@ fn cmd_prune(args: &[String]) -> Result<()> {
 
     println!();
     println!("{} removed, {} failed", removed, failed);
+    if failed > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+/// Hidden agent verb invoked by the server via TaskDispatch when an
+/// envoy newly matches `swarm.gitmirror.blacklist`. Wipes ALL locally-
+/// held mirrors regardless of seeder, then persists `receiver_state.json`.
+/// The corresponding gate flip happens automatically when the next
+/// CheckInResponse delivers `gitmirror_blacklisted: true`; this verb
+/// only handles the destructive eviction half.
+///
+/// Symmetric in shape with cryptsync's `_apply-evict`. Idempotent —
+/// re-running on an envoy whose mirrors are already wiped is a no-op.
+fn cmd_apply_blacklist(_args: &[String]) -> Result<()> {
+    let mut state = load_receiver_state()?;
+    if state.mirrors.is_empty() {
+        println!("gitmirror: no mirrors to evict (already clean)");
+        return Ok(());
+    }
+
+    let base = platform::paths::default_gitmirror_dir();
+    let mut removed = 0usize;
+    let mut failed = 0usize;
+    let labels: Vec<String> = state.mirrors.keys().cloned().collect();
+
+    for label in &labels {
+        let Some(m) = state.mirrors.get(label) else { continue };
+        match remove_mirror_on_disk(m) {
+            Ok(()) => {
+                state.mirrors.remove(label);
+                state.pending_wipes.remove(label);
+                removed += 1;
+            }
+            Err(e) => {
+                eprintln!("failed to remove {}: {}", label, e);
+                failed += 1;
+            }
+        }
+    }
+
+    if let Err(e) = state.save(&base) {
+        bail!("failed to save receiver_state.json after blacklist evict: {}", e);
+    }
+
+    println!(
+        "gitmirror: blacklist eviction complete — {} mirror(s) removed, {} failed",
+        removed, failed
+    );
     if failed > 0 {
         std::process::exit(1);
     }

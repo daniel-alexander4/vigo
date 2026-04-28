@@ -496,6 +496,20 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		bundle = filterBundleByTraits(bundle, traitsMap)
 	}
 
+	// Inject server-derived per-envoy gates into vars_json. The agent
+	// reads `gitmirror_blacklisted` (and analogous keys for other
+	// substrates) to decide whether to participate. Cached bundles share
+	// vars_json across patterns; injectServerVars allocates a fresh
+	// slice so the per-envoy state never leaks into the cache.
+	gates := map[string]any{}
+	if hostnameMatchesAny(s.swarmCfg.Gitmirror.Blacklist, envoy.Hostname) {
+		gates["gitmirror_blacklisted"] = true
+	}
+	if err := injectServerVars(bundle, gates); err != nil {
+		slog.Warn("failed to inject server vars into policy bundle",
+			"envoy", envoy.Hostname, "error", err)
+	}
+
 	// Include custom traits manifest.
 	traitEntries, traitErr := s.traitsScanner.ScanDir()
 	if traitErr != nil {

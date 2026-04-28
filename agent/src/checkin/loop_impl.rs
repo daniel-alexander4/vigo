@@ -724,13 +724,13 @@ fn sync_gitmirror_gate(
     store: &StateStore,
 ) {
     let Some(gate) = gate else { return };
-    let new_state = crate::swarm::gitmirror::matchfile_enables_gitmirror(Some(store));
+    let new_state = crate::swarm::gitmirror::gitmirror_enabled_for_envoy(Some(store));
     let prev = gate.set(new_state);
     if prev != new_state {
         if new_state {
-            info!("gitmirror: enabled by matchfile var (live flip; no restart required)");
+            info!("gitmirror: enabled (envoy removed from swarm.gitmirror.blacklist; live flip, no restart required)");
         } else {
-            info!("gitmirror: disabled by matchfile var (live flip; reactor will idle)");
+            info!("gitmirror: disabled (envoy added to swarm.gitmirror.blacklist; live flip, reactor will idle)");
         }
     }
 }
