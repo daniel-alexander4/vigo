@@ -486,6 +486,44 @@ Valid `standards` keys: `hipaa`, `hitrust`, `soc2`, `pci-dss`, `nist-800-53`, `i
 
 `approved_sources` annotation runs at trait-ingest time and on server-startup rehydration. Operators can change the allowlist and republish config; existing envoys pick up the new classification on their next check-in (no retroactive update of historical trait snapshots).
 
+#### compliance.docs
+
+Operator-uploaded documentation store for `documented`-scope framework controls (BAA, IR plan, risk assessment, training records, signed contracts). Files land envelope-encrypted at `<docs_dir>/<id>` with the secrets master key; metadata lives in `compliance_docs` and per-control attachments in `compliance_doc_links`. Uploaded via the per-control "Supporting Documentation" panel on the Compliance Evidence page or via [`POST /api/v1/compliance/docs`](../reference/api/rest.md#compliance-documentation).
+
+Available only when the deployment uses the `local` secrets backend; under any other backend the routes return `503` and documented-scope controls remain "missing — requires uploaded documentation".
+
+```yaml
+compliance:
+  docs:
+    docs_dir: "/srv/vigo/compliance-docs"
+    max_doc_bytes: 52428800             # 50 MiB per uploaded doc
+    max_per_framework_bytes: 5368709120 # 5 GiB total per framework
+    max_total_bytes: 53687091200        # 50 GiB total across all frameworks
+    mime_allowlist:
+      - "application/pdf"
+      - "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+      - "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      - "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+      - "text/plain"
+      - "text/markdown"
+      - "image/png"
+      - "image/jpeg"
+      - "image/svg+xml"
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `docs_dir` | `/srv/vigo/compliance-docs` | Directory where envelope-encrypted artifacts are written. Bind-mount this into the Docker container so docs survive container recreates. |
+| `max_doc_bytes` | `52428800` (50 MiB) | Reject any single uploaded doc larger than this. |
+| `max_per_framework_bytes` | `5368709120` (5 GiB) | Cap on the total ciphertext attached to any single framework. |
+| `max_total_bytes` | `53687091200` (50 GiB) | Hard cap on total compliance-doc storage across the deployment. |
+| `mime_allowlist` | built-in default | MIME types accepted for upload. Magic-byte detected, not just declared header — a JPEG renamed to `.pdf` is rejected. Empty falls back to the built-in list (PDF, DOCX, XLSX, PPTX, TXT, MD, PNG, JPG, SVG). |
+
+Permissions for the REST surface (see [Authentication](../operations/authentication.md)):
+- `compliance.read` — list, download, view per-control attachments. Granted to the viewer role by default.
+- `compliance.docs.write` — upload, replace, soft-delete, manage links.
+- `compliance.docs.purge` — physically remove ciphertext + metadata for a soft-deleted doc.
+
 ### grc
 
 Push compliance evidence to external GRC platforms (Vanta, Drata, ServiceNow GRC) on a configurable schedule.

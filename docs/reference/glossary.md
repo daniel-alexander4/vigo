@@ -130,10 +130,22 @@ A per-control classification on every framework catalog entry that captures who 
 
 - **enforced** — Vigo modules apply the technical control (firewall rules, package state, file mode, sysctl, user management, SSH config, AppArmor profiles, etc.). Coverage flips when an envoy's modules carry the matching `compliance:` tag.
 - **attested** — Vigo collects evidence but doesn't enforce. Drift detection, [security_scan](traits/security_scan.md) trait, audit-chain integrity, [Connwaer](#connwaer) fleet checks. Coverage requires the relevant signal to be present and healthy.
-- **documented** — operator satisfies via uploaded artifact (BAA, IR plan, risk assessment, training records, signed contracts). Coverage requires at least one valid attached document.
+- **documented** — operator satisfies via uploaded artifact (BAA, IR plan, risk assessment, training records, signed contracts). Coverage flips when at least one active [compliance doc](#compliance-docs) is linked to the (framework, control_id). Without an attached doc, documented-scope controls render as "missing — requires uploaded documentation".
 - **not_applicable** — control is out of deployment scope (e.g., HIPAA "Isolating Health Care Clearinghouse Functions" for a non-clearinghouse). Excluded from the framework denominator.
 
 Surfaced as the Scope column on per-envoy compliance detail pages so a "missing" control tells the operator whether to assign a module or upload a document. See [Compliance](../compliance/_index.md).
+
+## compliance docs
+
+The operator-uploaded artifact store that backs `documented`-scope framework controls — BAAs, incident response plans, risk assessments, training records, signed third-party contracts, etc. Shipped 0.32.4. Files land envelope-encrypted at rest under `compliance.docs.docs_dir` (default `/srv/vigo/compliance-docs/`), wrapped with the same AES-256-GCM master key the secrets provider uses. Metadata lives in the `compliance_docs` table; per-control attachments live in `compliance_doc_links` so a single uploaded BAA can satisfy HIPAA 164.308(b), HITRUST 09.f, SOC 2 CC9.2 with one upload.
+
+Magic-byte MIME validation rejects renamed file types (e.g., a JPEG masquerading as `.pdf`). Default allowlist: PDF, DOCX, XLSX, PPTX, TXT, MD, PNG, JPG, SVG. Configurable size caps: 50 MiB per doc, 5 GiB per framework, 50 GiB total — overridable in `compliance.docs.{max_doc_bytes, max_per_framework_bytes, max_total_bytes}`.
+
+Soft-delete is the default — the doc disappears from listings but the ciphertext stays on disk so historical [audit bundles](../reference/api/rest.md#compliance-documentation) can still verify it. Physical purge requires the dedicated `compliance.docs.purge` permission. Every upload, replace, soft-delete, purge, link, unlink, and download writes a tamper-evident audit-chain entry with the doc's SHA-256.
+
+Operators interact via the "Supporting Documentation" panel in the per-control drilldown on the Compliance Evidence page, or via [`POST /api/v1/compliance/docs`](../reference/api/rest.md#compliance-documentation) for tooling.
+
+Available only on the `local` secrets backend today; under any other backend the routes return `503` and documented-scope controls stay missing.
 
 ## waiver
 

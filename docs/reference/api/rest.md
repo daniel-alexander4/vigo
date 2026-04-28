@@ -940,6 +940,103 @@ Returns the current compliance status for a envoy.
 
 ---
 
+## Compliance Documentation
+
+Operator-uploaded artifacts (BAA, IR plan, risk assessment, training records, signed contracts, etc.) that satisfy `documented`-scope framework controls. Files are envelope-encrypted at rest with the secrets master key under `compliance.docs.docs_dir` (default `/srv/vigo/compliance-docs/`); metadata is in `compliance_docs` and link rows in `compliance_doc_links`.
+
+Available only when the deployment uses the `local` secrets backend — under any other backend the routes return `503 Service Unavailable`. Uploaded by [permission](authentication.md): `compliance.docs.write` to upload/replace/soft-delete and to manage links; `compliance.read` to list/download; `compliance.docs.purge` to physically remove a soft-deleted doc and its ciphertext.
+
+Every mutation records an entry in the [tamper-evident audit chain](../../compliance/tamper-evident-audit.md) with the doc's SHA-256.
+
+### POST /api/v1/compliance/docs
+
+Upload a new artifact.
+
+**Content-Type:** `multipart/form-data`
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `file` | Yes | The binary upload. Magic-byte detected MIME must match the configured allowlist (PDF, DOCX, XLSX, PPTX, TXT, MD, PNG, JPG, SVG by default). |
+| `filename` | No | Override the multipart `Filename`. Defaults to the upload's filename when omitted. |
+| `mime_type` | No | Declared MIME type. Validated against magic-byte detection — a renamed `.pdf` containing JPEG bytes is rejected. |
+| `doc_type` | No | Free-form category for cross-framework reuse hints (`BAA`, `IR Plan`, `Risk Assessment`, `Security Policy`, `Training Records`, `Pentest Report`, etc.). |
+| `links` | No | JSON array of `{"framework": "...", "control_id": "..."}` pairs. The doc is linked to each (framework, control_id) on creation. May be empty; manage links later via the link endpoints. |
+
+Size caps come from `compliance.docs.{max_doc_bytes, max_per_framework_bytes, max_total_bytes}` in `server.yaml`. Defaults: 50 MiB per doc, 5 GiB per framework, 50 GiB total.
+
+**Response (201):** doc metadata.
+
+```json
+{
+  "id": "8f3a...",
+  "doc_type": "BAA",
+  "filename": "acme-baa.pdf",
+  "mime_type": "application/pdf",
+  "size_bytes": 142133,
+  "sha256": "9b71c1...",
+  "uploaded_by": "alice",
+  "uploaded_at": "2026-04-27T21:25:00-07:00"
+}
+```
+
+### GET /api/v1/compliance/docs
+
+List active (non-soft-deleted) doc metadata. Optional filter by `?framework=&control_id=` to narrow to docs attached to a specific control.
+
+**Response:** `{"docs": [{...}, {...}]}`
+
+### GET /api/v1/compliance/docs/{id}
+
+Single-doc metadata. Soft-deleted docs are still readable here so audit history remains queryable.
+
+### GET /api/v1/compliance/docs/{id}/download
+
+Stream the decrypted doc. Sets `Content-Type` from the stored `mime_type`, `Content-Disposition: attachment; filename=...`, and `X-Compliance-Doc-Sha256` for integrity verification at the client.
+
+### PUT /api/v1/compliance/docs/{id}
+
+Replace an existing doc. Same multipart shape as `POST`. The new doc inherits the predecessor's `(framework, control_id)` link set unless `links` is provided. The predecessor stays in place with `replaced_at` + `replaced_by_id` populated so audit history points to the new revision.
+
+### DELETE /api/v1/compliance/docs/{id}
+
+Soft-delete: hides the doc from list/by-control views but keeps the row + ciphertext on disk so historical audit bundles can still verify it. Returns `409 Conflict` if already soft-deleted.
+
+### POST /api/v1/compliance/docs/{id}/purge
+
+Physical purge: removes ciphertext from disk and the metadata row from the database. Cascades through `compliance_doc_links`. Reserved for the `compliance.docs.purge` permission.
+
+### GET /api/v1/compliance/docs/{id}/links
+
+List every `(framework, control_id)` pair the doc is attached to.
+
+**Response:**
+
+```json
+{
+  "links": [
+    {"framework": "hipaa", "control_id": "164.308(b)(1)", "linked_at": "...", "linked_by": "alice"},
+    {"framework": "hitrust", "control_id": "09.f", "linked_at": "...", "linked_by": "alice"},
+    {"framework": "soc2", "control_id": "CC9.2", "linked_at": "...", "linked_by": "alice"}
+  ]
+}
+```
+
+### POST /api/v1/compliance/docs/{id}/links
+
+Attach an existing doc to an additional `(framework, control_id)`. Idempotent — duplicate links are no-ops.
+
+**Request body:**
+
+```json
+{ "framework": "soc2", "control_id": "CC9.2" }
+```
+
+### DELETE /api/v1/compliance/docs/{id}/links/{framework}/{controlID}
+
+Detach a doc from a single `(framework, control_id)` without touching the underlying file. The doc may still be linked to other controls.
+
+---
+
 ## Envoy Force Update
 
 ### POST /api/v1/envoys/{id}/update

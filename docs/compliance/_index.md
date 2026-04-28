@@ -22,7 +22,7 @@ Every catalog control carries a **scope** that classifies who is responsible for
 
 - **enforced** — Vigo modules apply the technical control. Coverage flips when one of the envoy's assigned modules carries the matching `compliance:` tag.
 - **attested** — Vigo collects evidence but doesn't enforce. Drift detection, the security_scan trait, audit-chain integrity, and Connwaer fleet checks all feed this lane.
-- **documented** — the operator satisfies the control by uploading an artifact (BAA, incident-response plan, risk assessment, training records, signed contract). Documentation upload + retention ships in a follow-up; until then, documented controls render as "missing — requires uploaded documentation".
+- **documented** — the operator satisfies the control by uploading an artifact (BAA, incident-response plan, risk assessment, training records, signed contract). Uploads land at the per-control "Supporting Documentation" panel on the Compliance Evidence page or via [`POST /api/v1/compliance/docs`](../reference/api/rest.md#compliance-documentation); the file is envelope-encrypted at rest with the secrets master key. Once at least one active document is linked, the control flips from missing to covered.
 - **not_applicable** — the control is out of scope for this deployment (e.g., HIPAA `164.308(a)(4)(ii)(A)` "Isolating Health Care Clearinghouse Functions" for a non-clearinghouse). Excluded from the framework denominator.
 
 Per-envoy detail pages render Scope alongside Status so a missing control tells the operator whether they need to assign a module or upload a document.
