@@ -369,6 +369,19 @@ watcher:
 #     blacklist:
 #       - "raspberrypi"
 #       - "*.test.example.com"
+#
+#   # Cryptsync runs by default on every enrolled envoy. Setting
+#   # `enabled: false` halts cryptsync fleet-wide (announcer, listener,
+#   # push handler all idle); identity material under ~user/.cryptsync/
+#   # is preserved so re-enabling resumes operation without
+#   # re-enrollment. Adding a host to `blacklist` scrubs its identity
+#   # material fleet-wide and removes its pubkey from peer recipient
+#   # lists on the next `vigocli config publish`.
+#   cryptsync:
+#     enabled: true
+#     blacklist:
+#       - "raspberrypi"
+#       - "*.test.example.com"
 
 
 # ── Gossip & Fleet Primitives ────────────────────────────────────────────
