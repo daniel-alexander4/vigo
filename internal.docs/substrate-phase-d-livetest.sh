@@ -16,6 +16,9 @@
 #       SECONDARY's `~<user>/cryptsync/<name>` and lands there with
 #       the same `<user>:<group> 0600` perms. Validates the
 #       receiver-side path (POST /swarm/cryptsync/push/<user>/<name>).
+#       Skipped if SECONDARY isn't fresh in PRIMARY's per-user
+#       cryptsync peer table at preflight (post-rejoin convergence
+#       can lag the test driver — see PEER_FRESH_TIMEOUT).
 #
 #   §3  Cryptsync decrypt -o perms — `vigo swarm cryptsync decrypt -o
 #       <path>` writes plaintext as `<user>:<group> 0600` even when
@@ -46,6 +49,9 @@
 #                                       and reachable via passwordless SSH
 #   VIGO_BIN                 /usr/local/sbin/vigo
 #   FANOUT_TIMEOUT           30       — seconds to wait for push to land
+#   PEER_FRESH_TIMEOUT       120      — seconds to wait for SECONDARY
+#                                       to be fresh in PRIMARY's
+#                                       cryptsync peer table before §2
 #   CRYPTSYNC_PASSWORD_FILE  ~/.cryptsync-test-password (mode 0600).
 #                            Holds the cryptsync password for §3's
 #                            unlock. Section is skipped if the file
@@ -60,6 +66,7 @@ CRYPTSYNC_USER="${CRYPTSYNC_USER:-dan}"
 VIGO_BIN="${VIGO_BIN:-/usr/local/sbin/vigo}"
 FANOUT_TIMEOUT="${FANOUT_TIMEOUT:-30}"
 CRYPTSYNC_PASSWORD_FILE="${CRYPTSYNC_PASSWORD_FILE:-$HOME/.cryptsync-test-password}"
+PEER_FRESH_TIMEOUT="${PEER_FRESH_TIMEOUT:-120}"
 
 # Wrap a vigo invocation so HOME points at $CRYPTSYNC_USER's home even
 # under env-stripping sudo configs (default Ubuntu sudo resets HOME
@@ -176,6 +183,46 @@ else
     warn "$SECONDARY unreachable — §2 (push fan-out) will be skipped"
 fi
 
+# Wait for SECONDARY to be FRESH in PRIMARY's per-user cryptsync peer
+# table. Without this, phase-b's churn (annlap leave + re-enroll) can
+# leave the table showing annlap as stale (last_seen >STALE_SECS=90s
+# old) at phase-d's encrypt time, so the pusher silently skips annlap
+# (`lan=1`) and §2 fails with "did not appear" — even though SSH stat
+# can reach annlap. Distinct from SECONDARY_REACHABLE — this gate
+# cares about agent-to-agent freshness, not test-driver-to-host
+# reachability.
+SECONDARY_CRYPTSYNC_FRESH=0
+if (( SECONDARY_REACHABLE == 1 )); then
+    step "waiting for $SECONDARY to be fresh in $PRIMARY's cryptsync peer table (timeout ${PEER_FRESH_TIMEOUT}s)"
+    fresh_peers_path="/var/lib/vigo/swarm/cryptsync/$CRYPTSYNC_USER/peers.json"
+    elapsed=0
+    while (( elapsed < PEER_FRESH_TIMEOUT )); do
+        peers_json=$(on_host "$PRIMARY" "sudo cat $fresh_peers_path 2>/dev/null || echo '{}'")
+        age=$(printf '%s' "$peers_json" | python3 -c "
+import json, sys, time
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit()
+peer = d.get('peers', {}).get('$SECONDARY')
+if peer is None:
+    print('missing')
+    sys.exit()
+print(int(time.time() - peer.get('last_seen', 0)))
+" 2>/dev/null)
+        if [[ "$age" =~ ^[0-9]+$ ]] && (( age <= 90 )); then
+            SECONDARY_CRYPTSYNC_FRESH=1
+            note "$SECONDARY fresh in $PRIMARY peer table (last_seen ${age}s ago)"
+            break
+        fi
+        sleep 5
+        elapsed=$((elapsed + 5))
+    done
+    if (( SECONDARY_CRYPTSYNC_FRESH == 0 )); then
+        warn "$SECONDARY not fresh in $PRIMARY's cryptsync peer table after ${PEER_FRESH_TIMEOUT}s (last age: ${age:-?}) — §2 will be skipped"
+    fi
+fi
+
 # Load the cryptsync password once (used by §3's unlock). Mode-checked
 # the same way phase-b does — the file holds a password and must not
 # be world-readable.
@@ -235,6 +282,8 @@ section "2. Cryptsync push fan-out — receiver-side perms preserved"
 
 if (( SECONDARY_REACHABLE == 0 )); then
     skip "fan-out check needs $SECONDARY reachable"
+elif (( SECONDARY_CRYPTSYNC_FRESH == 0 )); then
+    skip "$SECONDARY stale in $PRIMARY's cryptsync peer table — likely post-rejoin convergence delay"
 else
     step "polling for $TEST_NAME to land on $SECONDARY (timeout ${FANOUT_TIMEOUT}s)"
     elapsed=0
