@@ -317,6 +317,17 @@ watcher:
 #     - "http://security.ubuntu.com/"
 #     - "https://download.docker.com/"
 #     - "https://packages.cloud.google.com/"
+#
+#   # Compliance documentation store — operator-uploaded artifacts that
+#   # satisfy documented-scope controls (BAA, IR plan, risk assessment,
+#   # training records, signed contracts). Files land envelope-encrypted
+#   # at <docs_dir>/<id>; metadata in compliance_docs / compliance_doc_links.
+#   #
+#   docs:
+#     docs_dir: "/srv/vigo/compliance-docs"
+#     max_doc_bytes: 52428800             # 50 MiB per uploaded doc
+#     max_per_framework_bytes: 5368709120 # 5 GiB total per framework
+#     max_total_bytes: 53687091200        # 50 GiB total across all frameworks
 
 
 # ── Publish / Blast Radius ────────────────────────────────────────────────
@@ -348,6 +359,16 @@ watcher:
 #   seed_dir: "/var/lib/vigo/swarm/seed"        # where vigocli distribute writes seeds (default)
 #   port: 1531                                  # agent swarm listen port
 #   max_bandwidth_percent: 50                   # max % of link speed agents use for swarm
+#
+#   # Gitmirror runs by default on every enrolled envoy. Use blacklist to
+#   # deny specific hosts (filepath.Match globs). Adding a host triggers
+#   # fleet-wide eviction of its existing mirrors on the next
+#   # `vigocli config publish`. Default-allow: empty list means every
+#   # enrolled envoy participates.
+#   gitmirror:
+#     blacklist:
+#       - "raspberrypi"
+#       - "*.test.example.com"
 
 
 # ── Gossip & Fleet Primitives ────────────────────────────────────────────
