@@ -1037,6 +1037,48 @@ Detach a doc from a single `(framework, control_id)` without touching the underl
 
 ---
 
+## Audit Bundle Export
+
+Self-contained zip suitable for handing to an external auditor. Bundles a single framework's compliance report (HTML + PDF), structured per-control evidence, the raw audit-chain entries for the period, daily fleet convergence history, and decrypted copies of every operator-uploaded compliance document attached to the framework's controls.
+
+Permission gate: `audit.read` is mandatory; `compliance.read` is checked separately and gates inclusion of the `docs/` directory + the `documents` block in `evidence.json`. A caller with `audit.read` but not `compliance.read` still receives a usable bundle minus the artifacts.
+
+The download itself records a tamper-evident audit-chain entry (`compliance.bundle.download`).
+
+### GET /api/v1/report/audit-bundle/{slug}
+
+Stream the zip.
+
+| Query param | Default | Description |
+|-------------|---------|-------------|
+| `period` | `365d` | Lookback window for `audit-log.csv` and `convergence.csv`. Accepts integer days (`365`, `30`), `Nd`, `Nmo`, or `Ny`. |
+
+**Response:** `Content-Type: application/zip`, attachment with filename `vigo-audit-bundle-<slug>-<YYYYMMDD>.zip`.
+
+**Bundle layout:**
+
+| Path | Description |
+|------|-------------|
+| `manifest.json` | Framework, period, generated-at, list of artifacts with their plaintext SHA-256 digests. Auditors verify integrity by extracting the zip and `sha256sum`-ing each path. |
+| `report.pdf` | WeasyPrint-rendered compliance report. Omitted with a `warnings` entry in `manifest.json` if the container lacks `weasyprint`. |
+| `report.html` | Same content as text/html, always present so the bundle is readable without a PDF viewer. |
+| `evidence.json` | Per-control structured evidence: scope, status, modules, traits, attached doc IDs + filenames + SHA-256 (when `compliance.read` is held). |
+| `docs/<doc-id>__<filename>` | Decrypted copies of every active compliance doc linked to the framework's controls. Filename sanitized — path separators stripped so docs/ is flat. Only present with `compliance.read`. |
+| `audit-log.csv` | Audit-chain entries with timestamps within the period. Columns: id, timestamp, event_type, actor, source, summary, payload, prev_hash, hash. |
+| `convergence.csv` | Daily fleet convergence snapshots within the period. Columns: recorded_at, total, converged, relapsed, diverged, failed, offline, no_data. |
+
+**Verification example:**
+
+```bash
+unzip vigo-audit-bundle-hipaa-20260427.zip -d audit/
+cd audit
+jq -r '.artifacts[] | "\(.sha256)  \(.path)"' manifest.json | sha256sum -c
+```
+
+Every line should print `<path>: OK`. A mismatch indicates the bundle was tampered with after generation, the bundle was assembled across two different config publishes, or a doc was replaced/purged between zip-write attempts.
+
+---
+
 ## Envoy Force Update
 
 ### POST /api/v1/envoys/{id}/update

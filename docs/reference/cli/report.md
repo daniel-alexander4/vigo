@@ -194,5 +194,52 @@ vigocli report executive --format html --output /tmp/executive-summary.html
 # JSON to file
 vigocli report executive --format json --output /tmp/executive.json
 ```
+
+### audit-bundle
+
+Download a self-contained zip suitable for handing to an external auditor: HTML + PDF report, per-control evidence, audit-chain entries, fleet convergence history, and decrypted copies of every uploaded compliance document linked to the framework's controls.
+
+```bash
+vigocli report audit-bundle <framework> [flags]
+```
+
+**Args:**
+
+| Arg | Description |
+|-----|-------------|
+| `framework` | Framework slug — `compliance` (HIPAA), `soc2`, `pci`, `nist`, `iso27001`, `gdpr`, `cisubuntu`, etc. See `vigocli report --help` for the full list. |
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--period` | `365d` | Lookback window for `audit-log.csv` and `convergence.csv`. Accepts `Nd` (days), `Nmo` (30-day months), `Ny` (365-day years), or a bare integer (days). |
+| `--output` | `vigo-audit-bundle-<framework>.zip` | Local path to write the zip. |
+
+**Permissions:** `audit.read` is mandatory; `compliance.read` is checked separately on the server and gates inclusion of the `docs/` directory in the bundle. Without `compliance.read`, the bundle still ships but its `docs/` folder is empty and `evidence.json` omits the per-control document list.
+
+**Examples:**
+
+```bash
+# Default: 365-day HIPAA bundle, written to ./vigo-audit-bundle-compliance.zip
+vigocli report audit-bundle compliance
+
+# Quarterly PCI snapshot
+vigocli report audit-bundle pci --period 90d --output pci-q1.zip
+
+# Annual NIST 800-53 evidence package
+vigocli report audit-bundle nist --period 12mo --output nist-annual.zip
+```
+
+**Verify the bundle after extraction:**
+
+```bash
+unzip vigo-audit-bundle-compliance.zip -d audit/
+cd audit
+jq -r '.artifacts[] | "\(.sha256)  \(.path)"' manifest.json | sha256sum -c
+```
+
+Every line should print `<path>: OK`. A mismatch indicates the bundle was tampered with after generation.
+
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

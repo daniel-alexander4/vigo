@@ -958,6 +958,7 @@ func run() error {
 		workflowHandler.RegisterRoutes(mux)
 		exportHandler.RegisterRoutes(mux)
 		reportHandler.RegisterRoutes(mux)
+		reportHandler.SetAuditWriter(auditWriter)
 		usersHandler.RegisterRoutes(mux)
 		tokensHandler.RegisterRoutes(mux)
 		scrierAPIHandler.RegisterRoutes(mux)

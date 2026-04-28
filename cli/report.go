@@ -479,6 +479,72 @@ var remediationListCmd = &cobra.Command{
 	},
 }
 
+var reportAuditBundleCmd = &cobra.Command{
+	Use:   "audit-bundle <framework>",
+	Short: "Download a self-contained audit bundle (zip) for one framework",
+	Long: `Stream a zip archive containing a complete, auditor-ready snapshot for
+one compliance framework over a configurable period.
+
+The bundle contains:
+  manifest.json    sha256 of every other artifact in the bundle
+  report.pdf       compliance report rendered via WeasyPrint
+  report.html      same content as text/html (auditor fallback)
+  evidence.json    per-control: scope, status, modules, attached docs
+  docs/            decrypted copies of every uploaded compliance doc
+                   linked to the framework's controls (requires
+                   compliance.read; under any other backend or without
+                   the permission, the docs/ directory is empty)
+  audit-log.csv    audit-chain entries within the period
+  convergence.csv  daily fleet convergence percentages within the period
+
+Verify the bundle after extraction:
+
+  unzip bundle.zip -d audit/
+  cd audit && jq -r '.artifacts[] | "\(.sha256)  \(.path)"' manifest.json | sha256sum -c
+
+Examples:
+  vigocli report audit-bundle hipaa
+  vigocli report audit-bundle pci --period 90d --output pci-q1-bundle.zip
+  vigocli report audit-bundle nist --period 12mo --output nist-annual.zip`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		slug := args[0]
+		period, _ := cmd.Flags().GetString("period")
+		output, _ := cmd.Flags().GetString("output")
+
+		path := "/api/v1/report/audit-bundle/" + slug
+		if period != "" {
+			path += "?period=" + period
+		}
+
+		client := newAPIClient()
+		resp, err := client.getRaw(path)
+		if err != nil {
+			return fmt.Errorf("downloading audit bundle: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode/100 != 2 {
+			body, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("server returned %d: %s", resp.StatusCode, string(body))
+		}
+
+		if output == "" {
+			output = fmt.Sprintf("vigo-audit-bundle-%s.zip", slug)
+		}
+		f, err := os.Create(output)
+		if err != nil {
+			return fmt.Errorf("creating output file: %w", err)
+		}
+		defer f.Close()
+		n, err := io.Copy(f, resp.Body)
+		if err != nil {
+			return fmt.Errorf("writing bundle: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "Wrote %d bytes to %s\n", n, output)
+		return nil
+	},
+}
+
 func init() {
 	reportComplianceCmd.Flags().String("format", "json", "Output format: json or html")
 	reportComplianceCmd.Flags().String("output", "", "Write output to file instead of stdout")
@@ -490,10 +556,12 @@ func init() {
 	reportPCICmd.Flags().String("output", "", "Write output to file instead of stdout")
 	reportCISCmd.Flags().String("format", "json", "Output format: json or html")
 	reportCISCmd.Flags().String("output", "", "Write output to file instead of stdout")
+	reportAuditBundleCmd.Flags().String("period", "365d", "Lookback period for audit-log + convergence history (e.g. 30d, 90d, 12mo, 3y)")
+	reportAuditBundleCmd.Flags().String("output", "", "Write zip to file (default: vigo-audit-bundle-<framework>.zip)")
 	reportCmd.AddCommand(reportComplianceCmd, reportHITRUSTCmd, reportSOC2Cmd, reportPCICmd, reportCISCmd,
 		reportNISTCmd, reportISO27001Cmd, reportGDPRCmd, reportNERCCIPCmd, reportCyberEssentialsCmd,
 		reportIEC62443Cmd, reportSOXCmd, reportFINRACmd, reportMiFID2Cmd, reportCCSSCmd, reportFDA21CFR11Cmd, reportGamingCmd, reportCISWindowsCmd,
-		reportABACyberCmd, reportNYDFSCyberCmd, reportExecutiveCmd)
+		reportABACyberCmd, reportNYDFSCyberCmd, reportExecutiveCmd, reportAuditBundleCmd)
 
 	remediationRunCmd.Flags().Bool("dry-run", false, "Preview targets without acting")
 	remediationCmd.AddCommand(remediationRunCmd, remediationStatusCmd, remediationListCmd)

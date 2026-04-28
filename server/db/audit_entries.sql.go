@@ -189,3 +189,43 @@ func (q *Queries) ListAuditEntriesAsc(ctx context.Context) ([]AuditEntry, error)
 	}
 	return items, nil
 }
+
+const listAuditEntriesSince = `-- name: ListAuditEntriesSince :many
+SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
+FROM audit_entries
+WHERE timestamp >= ?1
+ORDER BY id ASC
+`
+
+func (q *Queries) ListAuditEntriesSince(ctx context.Context, timestamp time.Time) ([]AuditEntry, error) {
+	rows, err := q.db.QueryContext(ctx, listAuditEntriesSince, timestamp)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AuditEntry{}
+	for rows.Next() {
+		var i AuditEntry
+		if err := rows.Scan(
+			&i.ID,
+			&i.PrevHash,
+			&i.Hash,
+			&i.Timestamp,
+			&i.EventType,
+			&i.Actor,
+			&i.Source,
+			&i.Summary,
+			&i.Payload,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

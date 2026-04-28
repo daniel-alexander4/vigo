@@ -124,6 +124,10 @@ Personal disaster-recovery source-control distribution on the [swarm](#swarm) su
 
 Per-user home-directory sync on the [swarm](#swarm) substrate. Files in `~/filesync/` replicate to peer envoys over swarm's mTLS peer HTTPS channel, with filesync's own LAN multicast group on `224.0.0.43:1532` for discovery. Plaintext at rest (encryption moved to [cryptsync](#cryptsync) as of 0.26.1). Cross-subnet peers via `cross_subnet_peers:` in `~/.filesync/config.yaml`. See [Filesync](../engineering/subsystems/filesync.md).
 
+## audit bundle
+
+A self-contained zip a Vigo operator can hand directly to an external auditor. Generated per-framework via [`GET /api/v1/report/audit-bundle/{slug}`](../reference/api/rest.md#audit-bundle-export) or `vigocli report audit-bundle <framework>`. Contains `manifest.json` (SHA-256 of every other artifact), `report.pdf` (WeasyPrint-rendered) + `report.html` (auditor-readable fallback), `evidence.json` (structured per-control: scope, status, modules, attached docs), `docs/<id>__<filename>` (decrypted copies of every operator-uploaded compliance document linked to the framework's controls), `audit-log.csv` (audit-chain entries within the lookback window), and `convergence.csv` (daily fleet convergence in the same window). Default period is 365 days; configurable per request. Verify integrity after extraction with `jq -r '.artifacts[] | "\(.sha256)  \(.path)"' manifest.json | sha256sum -c`. Shipped 0.32.5.
+
 ## scope
 
 A per-control classification on every framework catalog entry that captures who is responsible for satisfying it. Shipped 0.32.3 alongside the catalog completion in 0.32.2.

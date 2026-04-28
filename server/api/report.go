@@ -24,20 +24,29 @@ import (
 
 // ReportHandler generates compliance reports in HTML and JSON formats.
 type ReportHandler struct {
-	queries       *db.Queries
-	fleetIndex    *fleet.FleetIndex
-	configStore   *config.ConfigStore
-	version       string
-	docsResolver  DocsResolver // nil-safe; flips documented-scope controls to covered when set
+	queries        *db.Queries
+	fleetIndex     *fleet.FleetIndex
+	configStore    *config.ConfigStore
+	version        string
+	docsResolver   DocsResolver  // nil-safe; flips documented-scope controls to covered when set
+	auditWriterRef auditRecorder // nil-safe; records bundle-download events
 }
 
-// DocsResolver answers "is there at least one active compliance doc
-// attached to this (framework, control_id)?" — the signal that flips a
-// documented-scope control out of missing. Implemented by
+// DocsResolver answers questions about operator-uploaded compliance
+// documentation for a framework/control pair. Implemented by
 // *compliancedocs.Store; kept as an interface in the api package so
 // nothing here imports the store package directly (avoids cycle risk).
+//
+// HasActiveDocForControl is the signal that flips a documented-scope
+// control out of missing in partition logic. ListByControl + Get are
+// used by the framework report's "Supporting Documentation" section
+// (Phase E) and the audit-bundle export (Phase D) — both need
+// per-control metadata, and the bundle additionally needs the
+// decrypted plaintext.
 type DocsResolver interface {
 	HasActiveDocForControl(ctx context.Context, framework, controlID string) (bool, error)
+	ListByControl(ctx context.Context, framework, controlID string) ([]db.ComplianceDoc, error)
+	Get(ctx context.Context, id string) ([]byte, db.ComplianceDoc, error)
 }
 
 // SetDocsResolver wires the compliance-docs store. Optional — when
@@ -127,6 +136,7 @@ func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/report/abacyber.html", h.handleABACyberReportHTML)
 	mux.HandleFunc("GET /api/v1/report/nydfscyber", h.handleNYDFSCyberReport)
 	mux.HandleFunc("GET /api/v1/report/nydfscyber.html", h.handleNYDFSCyberReportHTML)
+	h.registerAuditBundleRoute(mux)
 }
 
 // frameworkDef describes one framework's metadata and control builder.
@@ -692,6 +702,40 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 		report.Summary.TotalControls = score.Fleet.Total
 	}
 
+	// Supporting documentation — populate the report's Documents slice
+	// from the docs resolver so the HTML/PDF report and the audit
+	// bundle share one source of truth. Best-effort: per-control
+	// errors are skipped (the doc store is optional and may be 503
+	// under non-local secrets backends).
+	if h.docsResolver != nil {
+		standardKey, ok := config.StandardKeyForSlug[slug]
+		if !ok {
+			standardKey = slug
+		}
+		for _, c := range score.Controls {
+			if c.Scope != ScopeDocumented {
+				continue
+			}
+			rows, err := h.docsResolver.ListByControl(r.Context(), standardKey, c.ControlID)
+			if err != nil {
+				continue
+			}
+			for _, doc := range rows {
+				report.Documents = append(report.Documents, ReportDocAttachment{
+					ControlID:  c.ControlID,
+					DocID:      doc.ID,
+					Filename:   doc.Filename,
+					DocType:    doc.DocType,
+					MimeType:   doc.MimeType,
+					SizeBytes:  doc.SizeBytes,
+					SHA256:     doc.Sha256,
+					UploadedBy: doc.UploadedBy,
+					UploadedAt: doc.UploadedAt.Format(time.RFC3339),
+				})
+			}
+		}
+	}
+
 	return report, nil
 }
 
@@ -700,13 +744,33 @@ type ComplianceReport struct {
 	Title         string                  `json:"title"`
 	FrameworkName string                  `json:"framework_name,omitempty"`
 	Slug          string                  `json:"slug,omitempty"`
-	GeneratedAt string                  `json:"generated_at"`
-	GeneratedBy string                  `json:"generated_by"`
-	Version     string                  `json:"version"`
-	Summary     ComplianceReportSummary `json:"summary"`
-	Controls    []ControlFinding        `json:"controls"`
-	Fleet       []FleetEnvoyStatus       `json:"fleet"`
-	AuditChain  AuditChainStatus        `json:"audit_chain"`
+	GeneratedAt   string                  `json:"generated_at"`
+	GeneratedBy   string                  `json:"generated_by"`
+	Version       string                  `json:"version"`
+	Summary       ComplianceReportSummary `json:"summary"`
+	Controls      []ControlFinding        `json:"controls"`
+	Fleet         []FleetEnvoyStatus      `json:"fleet"`
+	AuditChain    AuditChainStatus        `json:"audit_chain"`
+	// Documents lists every operator-uploaded artifact attached to
+	// any control in this framework. Renders as a "Supporting
+	// Documentation" section in the HTML/PDF report (Phase E) and
+	// is the source of truth for the docs/ directory in audit
+	// bundles (Phase D).
+	Documents []ReportDocAttachment `json:"documents,omitempty"`
+}
+
+// ReportDocAttachment is a single doc-to-control row surfaced in the
+// PDF/HTML report and the audit bundle.
+type ReportDocAttachment struct {
+	ControlID  string `json:"control_id"`
+	DocID      string `json:"doc_id"`
+	Filename   string `json:"filename"`
+	DocType    string `json:"doc_type,omitempty"`
+	MimeType   string `json:"mime_type"`
+	SizeBytes  int64  `json:"size_bytes"`
+	SHA256     string `json:"sha256"`
+	UploadedBy string `json:"uploaded_by"`
+	UploadedAt string `json:"uploaded_at"`
 }
 
 // ComplianceReportSummary is the top-level compliance summary.
@@ -1203,6 +1267,30 @@ func renderComplianceHTML(w http.ResponseWriter, r *ComplianceReport) {
 			}
 			fmt.Fprintf(w, `<tr><td>%s</td><td><span class="badge %s">%s</span></td><td>%s</td><td>%s</td><td>%s</td></tr>
 `, html.EscapeString(n.Hostname), badgeClass, html.EscapeString(n.Status), html.EscapeString(n.OS), html.EscapeString(n.IP), n.LastSeen)
+		}
+		fmt.Fprint(w, `</tbody></table>`)
+	}
+
+	// Supporting documentation — operator-uploaded artifacts attached
+	// to documented-scope controls. When the report is opened
+	// standalone, filenames link to /api/v1/compliance/docs/<id>/download.
+	// When the report is bundled (Phase D), the audit-bundle assembler
+	// also copies each doc to docs/<id>__<filename> so the PDF
+	// references and the on-disk files line up.
+	if len(r.Documents) > 0 {
+		fmt.Fprint(w, `<h2>Supporting Documentation</h2>
+<table>
+<thead><tr><th>Control</th><th>Filename</th><th>Type</th><th>MIME</th><th>Size</th><th>SHA-256</th><th>Uploaded</th></tr></thead>
+<tbody>
+`)
+		for _, d := range r.Documents {
+			short := d.SHA256
+			if len(short) > 12 {
+				short = short[:12]
+			}
+			href := "/api/v1/compliance/docs/" + d.DocID + "/download"
+			fmt.Fprintf(w, `<tr><td>%s</td><td><a href="%s">%s</a></td><td>%s</td><td>%s</td><td>%d</td><td><span title="%s">%s</span></td><td>%s</td></tr>
+`, html.EscapeString(d.ControlID), html.EscapeString(href), html.EscapeString(d.Filename), html.EscapeString(d.DocType), html.EscapeString(d.MimeType), d.SizeBytes, html.EscapeString(d.SHA256), html.EscapeString(short), html.EscapeString(d.UploadedAt))
 		}
 		fmt.Fprint(w, `</tbody></table>`)
 	}
