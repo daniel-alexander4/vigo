@@ -7,6 +7,15 @@ title: Compliance
 
 Guides for deploying Vigo in regulated environments.
 
+## Envoy compliance vs. Vigo product compliance
+
+Two separate concepts — keep them straight.
+
+- **Envoy compliance** is what the framework reports under `/api/v1/report/<slug>` measure. They answer: "do my managed nodes satisfy the framework?" A control counts as covered for an envoy only when (a) one of the envoy's assigned modules is tagged with that control via `compliance:`, (b) a Connwaer trait check on the envoy itself escalates the control to satisfied, or (c) a waiver applies. Vigo's own server-side architecture does **not** inflate per-envoy or fleet aggregates — a freshly enrolled envoy with no modules assigned reports 0 covered, 0 waived, 0 partial, every catalog control missing. That is the honest number.
+- **Vigo product compliance** is what the Vigo server and agent satisfy by construction (mTLS transport, RBAC, password policy, audit hash chain, secret encryption, etc.). It lives in `server/compliance/AppControls` and is surfaced separately on the `/platform/compliance` page (under Platform → Data in the nav). Useful for vendor questionnaires and customer audits; never folded into framework scoring.
+
+The motivation: prior to 0.32.0 the framework reports baked Vigo's own architecture into per-envoy scores, so the same control could be marked satisfied for every envoy in the fleet because the server hardens its own gRPC traffic. That conflated two different audiences (fleet operators vs. customers auditing Vigo itself) and inflated the numbers operators care about. The 0.32.0 split keeps each surface honest.
+
 ## Quick Start
 
 Vigo ships with pre-built compliance roles for 22 frameworks. Copy the roles file and the modules you need:

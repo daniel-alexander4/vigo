@@ -66,14 +66,12 @@
                 <td>{{.Title}}</td>
                 <td>
                     {{if eq .Status "covered"}}<span class="badge badge--compliant">covered</span>
-                    {{else if eq .Status "architectural"}}<span class="badge badge--compliant">architectural</span>
                     {{else if eq .Status "waived"}}<span class="badge badge--info">waived</span>
                     {{else if eq .Status "partial"}}<span class="badge badge--relapsed">partial</span>
                     {{else}}<span class="badge badge--failed">missing</span>{{end}}
                 </td>
                 <td>
-                    {{if eq .Status "covered"}}{{joinStrings .Modules ", "}}
-                    {{else if eq .Status "architectural"}}<span class="text-muted">satisfied by Vigo construction</span>
+                    {{if eq .Status "covered"}}{{if .Modules}}{{joinStrings .Modules ", "}}{{else}}<span class="text-muted">{{.Evidence}}</span>{{end}}
                     {{else if eq .Status "waived"}}<span class="text-muted">{{.Evidence}}</span>
                     {{else if eq .Status "partial"}}<span class="text-muted">{{.Evidence}}</span>
                     {{else}}{{if .RecommendedModules}}<span class="text-warning">assign: {{joinStrings .RecommendedModules ", "}}</span>{{else}}<span class="text-muted">no module available</span>{{end}}

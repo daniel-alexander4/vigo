@@ -150,10 +150,11 @@ type ReportBuilder struct {
 
 // EnvoyFrameworkStatus is one envoy's bucketed per-framework totals.
 // Partition rule: a finding is counted once, in this priority order —
-// module-tagged coverage, then architectural satisfaction (Status =
-// "satisfied" with no module tag, e.g. bcrypt auth, mTLS, unique UUIDs),
-// then waiver, then partial, else missing. Covered + Waived + Partial +
-// Missing = Total.
+// module-tagged coverage, then Connwaer-trait escalation (Status =
+// "satisfied" set by a fleet-trait check on the envoy itself), then
+// waiver, then partial, else missing. Vigo's own architectural posture
+// is surfaced separately via /platform/compliance and never inflates
+// these per-envoy buckets. Covered + Waived + Partial + Missing = Total.
 type EnvoyFrameworkStatus struct {
 	Covered         int
 	Waived          int
@@ -174,8 +175,7 @@ type EnvoyFrameworkDetail struct {
 
 // ControlStatusRow is one control's status for one envoy, classified by
 // the unified scorer's partition rule. Status values: "covered" (module
-// tag), "architectural" (framework credits Vigo's construction without a
-// module), "waived", "partial", "missing".
+// tag or Connwaer trait escalation), "waived", "partial", "missing".
 type ControlStatusRow struct {
 	ControlID          string
 	Title              string
