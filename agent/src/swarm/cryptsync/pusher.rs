@@ -145,7 +145,7 @@ async fn fan_out(agent: &ureq::Agent, job: PushJob) -> Result<()> {
     for h in handles {
         match h.await {
             Ok(Ok(())) => {}
-            Ok(Err(e)) => warn!(error = %e, "pusher: peer push failed"),
+            Ok(Err(e)) => warn!(error = %format!("{e:#}"), "pusher: peer push failed"),
             Err(e) => warn!(error = %e, "pusher: spawn_blocking join failed"),
         }
     }
@@ -271,7 +271,7 @@ async fn fan_out_delete(agent: &ureq::Agent, job: DeleteJob) -> Result<()> {
     for h in handles {
         match h.await {
             Ok(Ok(())) => {}
-            Ok(Err(e)) => warn!(error = %e, "pusher: peer DELETE failed"),
+            Ok(Err(e)) => warn!(error = %format!("{e:#}"), "pusher: peer DELETE failed"),
             Err(e) => warn!(error = %e, "pusher: DELETE spawn_blocking join failed"),
         }
     }
@@ -521,7 +521,7 @@ pub async fn fan_out_leave(
     for h in handles {
         match h.await {
             Ok(Ok(())) => {}
-            Ok(Err(e)) => warn!(error = %e, "pusher: peer LEAVE failed"),
+            Ok(Err(e)) => warn!(error = %format!("{e:#}"), "pusher: peer LEAVE failed"),
             Err(e) => warn!(error = %e, "pusher: LEAVE spawn_blocking join failed"),
         }
     }
