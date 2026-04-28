@@ -25,7 +25,7 @@
             <div class="stat-card__value">{{.Sync.Totals.Files}}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-card__label">Tombstones</div>
+            <div class="stat-card__label">Revoked</div>
             <div class="stat-card__value">{{.Sync.Totals.Tombstones}}</div>
         </div>
         <div class="stat-card">
@@ -41,7 +41,7 @@
                 <tr>
                     <th>Name</th>
                     <th>Files</th>
-                    <th>Tombstones</th>
+                    <th>Revoked</th>
                     <th>Envoys</th>
                     <th>Status</th>
                 </tr>
@@ -81,7 +81,7 @@
                 <th>Hostname</th>
                 <th>Status</th>
                 <th>Files</th>
-                <th>Tombstones</th>
+                <th>Revoked</th>
                 <th>Digest</th>
             </tr>
         </thead>
@@ -118,7 +118,7 @@
                 <td><code>{{.Name}}</code></td>
                 <td>
                     {{if eq .Status "live"}}<span class="badge badge--ok">live</span>
-                    {{else if eq .Status "tombstoned"}}<span class="badge badge--neutral">tombstoned</span>
+                    {{else if eq .Status "tombstoned"}}<span class="badge badge--neutral">revoked</span>
                     {{else if eq .Status "partial"}}<span class="badge badge--warn">partial</span>
                     {{else if eq .Status "divergent"}}<span class="badge badge--err">divergent</span>
                     {{else}}<span class="badge">{{.Status}}</span>{{end}}
@@ -137,7 +137,7 @@
     {{end}}
 
     {{if gt (len .User.Tombstones) 0}}
-    <h4 class="mt-2">Tombstones ({{len .User.Tombstones}})</h4>
+    <h4 class="mt-2">Revoked ({{len .User.Tombstones}})</h4>
     <table class="table">
         <thead>
             <tr>

@@ -63,14 +63,14 @@ var filesyncCmd = &cobra.Command{
 	Short: "Fleet-wide view of filesync per-user LAN directory sync",
 	Long: `Read-only admin view of the filesync mesh across every envoy.
 
-Each envoy reports its per-user filesync state — files, tombstones, and
-peer digest — through the 'filesync' trait on every check-in. The server
-joins every envoy's report into a fleet view; this command renders
-it. One row per user.
+Each envoy reports its per-user filesync state — files, revoked entries,
+and peer digest — through the 'filesync' trait on every check-in. The
+server joins every envoy's report into a fleet view; this command
+renders it. One row per user.
 
 Filesync membership is per-user: users opt in by dropping files into
 ~<user>/filesync/ on any envoy. There is no admin write path — this
-command never touches files or tombstones.`,
+command never touches files or revocation records.`,
 }
 
 var echoStatusCmd = &cobra.Command{
@@ -119,7 +119,7 @@ func runEchoStatus(cmd *cobra.Command, _ []string) error {
 	fmt.Fprintf(w, "%s\t%d\n", bold("Users"), fleet.Totals.Users)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Envoys reporting"), fleet.Totals.Envoys)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Files"), fleet.Totals.Files)
-	fmt.Fprintf(w, "%s\t%d\n", bold("Tombstones"), fleet.Totals.Tombstones)
+	fmt.Fprintf(w, "%s\t%d\n", bold("Revoked"), fleet.Totals.Tombstones)
 	fmt.Fprintf(w, "%s\t%s\n", bold("Divergences"), meshCountWarn(fleet.Totals.Divergences))
 	fmt.Fprintf(w, "%s\t%d\n", bold("Participants"), len(fleet.Participants))
 	w.Flush()
@@ -202,7 +202,7 @@ func runEchoShow(cmd *cobra.Command, args []string) error {
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n",
-		bold("HOST"), bold("STATUS"), bold("FILES"), bold("TOMBSTONES"), bold("LAST UPDATE"))
+		bold("HOST"), bold("STATUS"), bold("FILES"), bold("REVOKED"), bold("LAST UPDATE"))
 	for _, e := range sorted {
 		status := echoPresenceStatus(e.Status)
 		updated := "—"
