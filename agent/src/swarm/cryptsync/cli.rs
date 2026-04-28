@@ -60,6 +60,10 @@ pub fn run(args: Vec<String>) -> Result<()> {
         // Hidden verb — invoked by the server via TaskDispatch when an
         // admin runs `vigocli cryptsync evict`. Not advertised in --help.
         "_apply-evict" => cmd_apply_evict(&args[1..]),
+        // Hidden verb — invoked by the server via TaskDispatch on
+        // `swarm.cryptsync.blacklist` add. Host-level eviction across
+        // every locally-enrolled user. Not advertised in --help.
+        "_apply-blacklist" => cmd_apply_blacklist(&args[1..]),
         other => bail!(
             "unknown `vigo swarm cryptsync` subcommand: {}\nrun `vigo swarm cryptsync --help` for usage",
             other
@@ -1095,6 +1099,111 @@ fn cmd_apply_evict(args: &[String]) -> Result<()> {
         "\u{2713} evicted {} (pubkey {}...) from {}'s cryptsync circle on this envoy",
         hostname, shown, user
     );
+    Ok(())
+}
+
+// ---------- _apply-blacklist (hidden, server-dispatched) ----------
+
+/// Server-invoked hidden verb. Runs as root via TaskDispatch when an
+/// admin adds a hostname to `swarm.cryptsync.blacklist` in server.yaml
+/// and runs `vigocli config publish`. Host-level eviction across every
+/// locally-enrolled user — the dispatched task targets all envoys
+/// (target=*), so each envoy runs the appropriate path:
+///
+/// - On the blacklisted host (local hostname == --hostname): scrub
+///   identity material for every locally-enrolled user. Re-enrollment
+///   from a workstation is required to rejoin.
+/// - On every other envoy: walk locally-enrolled users, drop the
+///   blacklisted host's pubkey from each user's peer table +
+///   recipient list (delegates to `apply_leave` per-user, mirroring
+///   the per-user `_apply-evict` foreign path).
+///
+/// Idempotent: re-running on an already-blacklisted host is a no-op
+/// (no identity to scrub) and re-running on an envoy that already
+/// dropped the pubkey for every user is a no-op.
+fn cmd_apply_blacklist(args: &[String]) -> Result<()> {
+    let mut hostname: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--hostname" => {
+                i += 1;
+                hostname = Some(args.get(i).context("--hostname requires a value")?.clone());
+                i += 1;
+            }
+            other => bail!("unknown flag: {}", other),
+        }
+    }
+    let hostname = hostname.context("--hostname is required")?;
+
+    let local_hostname = std::fs::read_to_string("/etc/hostname")
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let users = crate::swarm::cryptsync::enrolled_users()
+        .context("enumerating locally-enrolled cryptsync users")?;
+
+    if users.is_empty() {
+        println!("(no-op) no cryptsync-enrolled users on this envoy");
+        return Ok(());
+    }
+
+    let is_self = !local_hostname.is_empty() && local_hostname == hostname;
+    let mut acted = 0usize;
+
+    for user in &users {
+        let home = match super::home_for_user(user) {
+            Some(h) => h,
+            None => continue,
+        };
+        if is_self {
+            // Self-evict: scrub identity material for this user. Same
+            // file set the per-user `_apply-evict` self-path scrubs.
+            let dot = config::dot_dir(&home);
+            for name in ["identity.age", "identity.salt", "recipients.txt", "config.yaml"] {
+                let p = dot.join(name);
+                if p.exists() {
+                    if let Err(e) = std::fs::remove_file(&p) {
+                        eprintln!("warning: failed to scrub {}: {}", p.display(), e);
+                    }
+                }
+            }
+            acted += 1;
+        } else {
+            // Foreign-evict: drop hostname's pubkey from this user's
+            // peer table + regenerate recipients via apply_leave.
+            // Pubkey resolved from local peer table; if the host
+            // never reached this envoy's multicast for this user,
+            // it's a no-op for that user (peer not in table).
+            let table = PeerTable::load(user);
+            let pubkey = match table.peers.get(&hostname) {
+                Some(p) => p.pubkey.clone(),
+                None => continue,
+            };
+            let leave_time = now_secs_signed();
+            if let Err(e) = crate::swarm::cryptsync::apply_leave(
+                user, &pubkey, &hostname, leave_time, &home,
+            ) {
+                eprintln!("warning: apply_leave failed for user {}: {}", user, e);
+                continue;
+            }
+            acted += 1;
+        }
+    }
+
+    if is_self {
+        println!(
+            "\u{2713} self-evict on {}: scrubbed cryptsync identity for {} user(s); \
+             re-enroll with `vigocli swarm cryptsync enroll-fleet --user <u>` or \
+             `vigo swarm cryptsync enroll` to rejoin",
+            hostname, acted
+        );
+    } else {
+        println!(
+            "\u{2713} evicted {} from {} user circle(s) on this envoy",
+            hostname, acted
+        );
+    }
     Ok(())
 }
 

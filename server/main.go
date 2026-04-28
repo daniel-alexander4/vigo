@@ -1112,6 +1112,7 @@ func run() error {
 			// Track blacklist state across reloads so we can diff and
 			// dispatch eviction tasks for hostnames that newly match.
 			lastGitmirrorBlacklist := append([]string(nil), cfg.Swarm.Gitmirror.Blacklist...)
+			lastCryptsyncBlacklist := append([]string(nil), cfg.Swarm.Cryptsync.Blacklist...)
 
 			configStore.SetOnReloadSuccess(func() {
 				// Re-read server.yaml directly — ConfigStore.Reload() only
@@ -1125,14 +1126,14 @@ func run() error {
 				agentSvc.SetSwarmConfig(newCfg.Swarm)
 				uiHandler.SetSwarm(peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex}, newCfg.Swarm)
 
-				newBL := newCfg.Swarm.Gitmirror.Blacklist
 				envoyInputs := fleetIndex.AllEnvoys()
 				hostnames := make([]string, 0, len(envoyInputs))
 				for _, e := range envoyInputs {
 					hostnames = append(hostnames, e.Hostname)
 				}
-				newlyBlacklisted := diffNewlyMatched(lastGitmirrorBlacklist, newBL, hostnames)
-				for _, hostname := range newlyBlacklisted {
+
+				newGitBL := newCfg.Swarm.Gitmirror.Blacklist
+				for _, hostname := range diffNewlyMatched(lastGitmirrorBlacklist, newGitBL, hostnames) {
 					slog.Info("gitmirror: dispatching blacklist eviction", "hostname", hostname)
 					if _, err := agentSvc.DispatchPush(ctx, isgrpc.DispatchParams{
 						Command:     "vigo swarm gitmirror _apply-blacklist",
@@ -1143,7 +1144,28 @@ func run() error {
 						slog.Warn("gitmirror: blacklist eviction dispatch failed", "hostname", hostname, "error", err)
 					}
 				}
-				lastGitmirrorBlacklist = append([]string(nil), newBL...)
+				lastGitmirrorBlacklist = append([]string(nil), newGitBL...)
+
+				// Cryptsync `_apply-blacklist` is host-level and dispatched
+				// to ALL envoys with the target host as the argument: the
+				// blacklisted host self-evicts identity material for every
+				// locally-enrolled user, and every other envoy drops the
+				// blacklisted host's pubkey from each user's peer table +
+				// recipient list. One dispatch per newly-matching host.
+				newCryptBL := newCfg.Swarm.Cryptsync.Blacklist
+				for _, hostname := range diffNewlyMatched(lastCryptsyncBlacklist, newCryptBL, hostnames) {
+					slog.Info("cryptsync: dispatching blacklist eviction", "hostname", hostname)
+					cmd := fmt.Sprintf("vigo swarm cryptsync _apply-blacklist --hostname %s", hostname)
+					if _, err := agentSvc.DispatchPush(ctx, isgrpc.DispatchParams{
+						Command:     cmd,
+						TargetSpec:  "*",
+						Operator:    "config.reload",
+						TimeoutSecs: 120,
+					}); err != nil {
+						slog.Warn("cryptsync: blacklist eviction dispatch failed", "hostname", hostname, "error", err)
+					}
+				}
+				lastCryptsyncBlacklist = append([]string(nil), newCryptBL...)
 			})
 
 			swarmPruner := swarm.NewRetentionPruner(7 * 24 * time.Hour)

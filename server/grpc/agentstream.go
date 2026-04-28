@@ -496,14 +496,29 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		bundle = filterBundleByTraits(bundle, traitsMap)
 	}
 
-	// Inject server-derived per-envoy gates into vars_json. The agent
-	// reads `gitmirror_blacklisted` (and analogous keys for other
-	// substrates) to decide whether to participate. Cached bundles share
-	// vars_json across patterns; injectServerVars allocates a fresh
-	// slice so the per-envoy state never leaks into the cache.
+	// Inject server-derived per-envoy gates into vars_json. The agent's
+	// `swarm/gates.rs::substrate_active` helper ANDs `swarm_enabled`,
+	// `swarm_<sub>_enabled`, and NOT `<sub>_blacklisted` — the keys we
+	// emit here. Cached bundles share vars_json across patterns;
+	// injectServerVars allocates a fresh slice so the per-envoy state
+	// never leaks into the cache.
+	//
+	// Fail-open semantics on the agent: missing keys are treated as
+	// "enabled / not blacklisted". We only set keys when their value
+	// would change behavior — that keeps vars_json small and makes
+	// `vigo swarm cryptsync show` etc. read cleaner during debugging.
 	gates := map[string]any{}
+	if !s.swarmCfg.Enabled {
+		gates["swarm_enabled"] = false
+	}
 	if hostnameMatchesAny(s.swarmCfg.Gitmirror.Blacklist, envoy.Hostname) {
 		gates["gitmirror_blacklisted"] = true
+	}
+	if s.swarmCfg.Cryptsync.Enabled != nil && !*s.swarmCfg.Cryptsync.Enabled {
+		gates["swarm_cryptsync_enabled"] = false
+	}
+	if hostnameMatchesAny(s.swarmCfg.Cryptsync.Blacklist, envoy.Hostname) {
+		gates["cryptsync_blacklisted"] = true
 	}
 	if err := injectServerVars(bundle, gates); err != nil {
 		slog.Warn("failed to inject server vars into policy bundle",

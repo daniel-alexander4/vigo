@@ -125,6 +125,7 @@ type SwarmSection struct {
 	Port                int                    `yaml:"port" doc:"TCP port on which agents serve blobs to each other over mTLS." default:"1531" example:"1-65535; must be open between envoys"`
 	MaxBandwidthPercent int                    `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
 	Gitmirror           SwarmGitmirrorSection  `yaml:"gitmirror" doc:"Gitmirror subsystem (personal-DR repo backup) operability gates." long:"Gitmirror runs by default on every enrolled envoy. Use blacklist to deny specific envoys."`
+	Cryptsync           SwarmCryptsyncSection  `yaml:"cryptsync" doc:"Cryptsync subsystem (per-user encrypted P2P sync) operability gates." long:"Cryptsync runs by default on every enrolled envoy. Use blacklist to deny specific envoys from holding cryptsync content."`
 }
 
 // SwarmGitmirrorSection configures per-subsystem gates for gitmirror.
@@ -134,6 +135,24 @@ type SwarmSection struct {
 // fleet-wide eviction of the matching envoys' held mirrors.
 type SwarmGitmirrorSection struct {
 	Blacklist []string `yaml:"blacklist" doc:"Hostname patterns (filepath.Match globs) of envoys denied from receiving gitmirror bundles. Adding a host evicts its existing mirrors fleet-wide; removing a host re-allows it but does not re-replicate previous bundles." example:"[raspberrypi, *.test.example.com]"`
+}
+
+// SwarmCryptsyncSection configures per-subsystem gates for cryptsync.
+// Cryptsync is default-on across the fleet — every enrolled envoy can
+// hold ciphertext for any enrolled user. The blacklist denies specific
+// hostnames; a blacklist add triggers automatic fleet-wide eviction:
+// the blacklisted host scrubs its identity material for every locally-
+// enrolled user, and every other envoy drops the blacklisted host's
+// pubkey from each user's peer table + recipient list.
+//
+// Enabled is a *bool so YAML can distinguish "operator did not set it"
+// (default true) from "operator set it to false" (halt cryptsync).
+// Setting Enabled=false is non-destructive — identity material under
+// ~user/.cryptsync/ is preserved so re-enabling resumes operation
+// without re-enrollment. The destructive path is the blacklist.
+type SwarmCryptsyncSection struct {
+	Enabled   *bool    `yaml:"enabled" doc:"Whether cryptsync runs fleet-wide. Default true. Set false to halt cryptsync (announcer, listener, push handler all idle); identity material preserved." default:"true" example:"true"`
+	Blacklist []string `yaml:"blacklist" doc:"Hostname patterns (filepath.Match globs) of envoys denied from holding cryptsync content. Adding a host scrubs its identity material fleet-wide and removes its pubkey from peer recipient lists." example:"[raspberrypi, *.test.example.com]"`
 }
 
 // ScrierSection configures the Scrier remote access feature.
