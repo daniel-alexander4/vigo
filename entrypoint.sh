@@ -85,31 +85,14 @@ if [ -d "${DATA_DIR}/worksite" ] && [ ! -d "${VIGO_STACKS}" ]; then
     echo "Migrated /srv/vigo/worksite/ → /srv/vigo/stacks/ (structure/ → .live/, scaffolding/ → stockpile/)."
 fi
 
-if [ -d "${DATA_DIR}/example-stockpile" ] && [ ! -d "${EXAMPLES_DIR}" ]; then
-    mkdir -p "${VIGO_STACKS}"
-    mv "${DATA_DIR}/example-stockpile" "${EXAMPLES_DIR}"
-    # Re-flatten the legacy worksite/{stockpile,scaffolding}/ split so
-    # ex.rel paths line up with the post-0.33.0 stockpile/ layout.
-    if [ -d "${EXAMPLES_DIR}/worksite/stockpile" ]; then
-        find "${EXAMPLES_DIR}/worksite/stockpile" -mindepth 1 -maxdepth 1 -exec mv -t "${EXAMPLES_DIR}/" {} +
-        rmdir "${EXAMPLES_DIR}/worksite/stockpile" 2>/dev/null || true
-    fi
-    if [ -d "${EXAMPLES_DIR}/worksite/scaffolding" ]; then
-        find "${EXAMPLES_DIR}/worksite/scaffolding" -mindepth 1 -maxdepth 1 -exec mv -t "${EXAMPLES_DIR}/" {} +
-        rmdir "${EXAMPLES_DIR}/worksite/scaffolding" 2>/dev/null || true
-    fi
-    rmdir "${EXAMPLES_DIR}/worksite" 2>/dev/null || true
-    echo "Migrated /srv/vigo/example-stockpile/ → /srv/vigo/stacks/examples/ (flattened worksite/ split)."
-fi
-
-# Promote retract templates out of examples/retractions/ to a sibling
-# anti-examples/ tree (0.33.1). The mirror layout makes it visually
-# obvious if a module example is missing its paired retract; the
-# `vigocli config anti-examples mirror-check` verb enforces it.
-if [ -d "${EXAMPLES_DIR}/retractions" ] && [ ! -d "${ANTI_EXAMPLES_DIR}" ]; then
-    mv "${EXAMPLES_DIR}/retractions" "${ANTI_EXAMPLES_DIR}"
-    echo "Migrated examples/retractions/ → anti-examples/."
-fi
+# Drop the legacy /srv/vigo/example-stockpile/ entirely — it's
+# superseded by stacks/examples/, which is rebuilt from /seed/ below
+# on every startup. Same for examples/retractions/ → anti-examples/:
+# previous in-place migrations were silently lossy on directory
+# conflicts (`mv -t target/ ... 2>/dev/null`) and accumulated four
+# overlaid layouts on volumes that survived multiple bumps. The
+# nuke-and-rebuild step below makes those migrations unnecessary.
+rm -rf "${DATA_DIR}/example-stockpile"
 
 # ---------------------------------------------------------------------------
 # Create directory structure
@@ -228,13 +211,29 @@ if [ ! -d "${VIGO_LIVE}/stockpile" ] && [ -d "${VIGO_STOCKPILE}" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Seed example configs into stacks/examples/ (skip files that already exist)
+# Rebuild stacks/examples/ and stacks/anti-examples/ from the image seed
 # ---------------------------------------------------------------------------
+#
+# Both trees are read-only reference templates — operators copy *from*
+# them via `vigocli config examples copy` / `config anti-examples copy`,
+# never edit them in place. Rebuilding from /seed/ on every startup
+# guarantees the tree matches the running image and prevents the four-
+# overlaid-layouts accumulation that prior in-place migrations produced
+# (post-0.33.0 stockpile/ flat layout overlaid on legacy
+# worksite/{stockpile,scaffolding}/... and worksite/stockpile/stones/...
+# from earlier renames).
+#
+# Anything custom that an operator dropped under examples/ or
+# anti-examples/ will be removed; this is by design — those trees are
+# not for operator content.
 
-# Seed worksite examples — flatten the legacy worksite/{stockpile,
-# scaffolding}/ split into a single stacks/examples/ tree so paths
-# match the post-0.33.0 stockpile layout. `vigocli config examples
-# copy <name>` then writes destinations relative to stockpile/.
+rm -rf "${EXAMPLES_DIR}" "${ANTI_EXAMPLES_DIR}"
+mkdir -p "${EXAMPLES_DIR}" "${ANTI_EXAMPLES_DIR}"
+
+# Seed examples — flatten the legacy worksite/{stockpile,scaffolding}/
+# split in the seed source into a single examples/ tree so paths match
+# the post-0.33.0 stockpile layout. `vigocli config examples copy
+# <name>` then writes destinations relative to stockpile/.
 find "${SEED_DIR}/example-configs/worksite" -name '*.vgo.example' -type f | while IFS= read -r src; do
     rel="${src#${SEED_DIR}/example-configs/worksite/}"
     # Skip compliance modules and roles — gated behind paid license.
@@ -248,14 +247,12 @@ find "${SEED_DIR}/example-configs/worksite" -name '*.vgo.example' -type f | whil
         scaffolding/*) rel="${rel#scaffolding/}" ;;
     esac
     dest="${EXAMPLES_DIR}/${rel}"
-    if [ ! -f "$dest" ]; then
-        mkdir -p "$(dirname "$dest")"
-        cp "$src" "$dest"
-    fi
+    mkdir -p "$(dirname "$dest")"
+    cp "$src" "$dest"
 done
 
-# Seed retract templates into anti-examples/ — sibling to examples/.
-# The mirror layout pairs each module example with its retract:
+# Seed retract templates — sibling to examples/. The mirror layout
+# pairs each module example with its retract:
 #   examples/modules/<cat>/<name>.vgo.example
 #   anti-examples/modules/<cat>/<name>-retract.vgo.example
 find "${SEED_DIR}/example-configs/retractions" -name '*.vgo.example' -type f | while IFS= read -r src; do
@@ -265,10 +262,8 @@ find "${SEED_DIR}/example-configs/retractions" -name '*.vgo.example' -type f | w
         modules/compliance/*) continue ;;
     esac
     dest="${ANTI_EXAMPLES_DIR}/${rel}"
-    if [ ! -f "$dest" ]; then
-        mkdir -p "$(dirname "$dest")"
-        cp "$src" "$dest"
-    fi
+    mkdir -p "$(dirname "$dest")"
+    cp "$src" "$dest"
 done
 
 # Documentation stays inside the container at /seed/docs/ (not seeded to

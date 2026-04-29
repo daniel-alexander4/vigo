@@ -31,7 +31,7 @@ stockpile/modules/system/ssh-hardening.vgo.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		exampleDir, _ := cmd.Flags().GetString("example-dir")
-		return runOrganize(exampleDir, publish.StockpileDir)
+		return runOrganize(publish.StockpileDir, exampleDir)
 	},
 }
 

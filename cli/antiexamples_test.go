@@ -171,6 +171,58 @@ func TestRunMirrorCheck_EmptyTreesPass(t *testing.T) {
 	}
 }
 
+// --- findExamples multi-tree walking ---
+
+func TestFindExamples_WalksMultipleTrees(t *testing.T) {
+	// `vigocli config examples list` walks both stacks/examples/ and
+	// stacks/anti-examples/ so install templates and their paired
+	// retracts surface from one command.
+	exDir := t.TempDir()
+	antiDir := t.TempDir()
+	mustWrite(t, filepath.Join(exDir, "modules", "web", "nginx.vgo.example"), "")
+	mustWrite(t, filepath.Join(exDir, "modules", "databases", "postgres.vgo.example"), "")
+	mustWrite(t, filepath.Join(antiDir, "modules", "web", "nginx-retract.vgo.example"), "")
+	mustWrite(t, filepath.Join(antiDir, "modules", "databases", "postgres-retract.vgo.example"), "")
+
+	got, err := findExamples(exDir, antiDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 4 {
+		t.Errorf("findExamples merged count = %d, want 4", len(got))
+	}
+	// Each tree contributes paths relative to its own root, so the
+	// rel paths line up cleanly when used to compute stockpile dests.
+	wantRels := map[string]struct{}{
+		"modules/databases/postgres.vgo.example":         {},
+		"modules/databases/postgres-retract.vgo.example": {},
+		"modules/web/nginx.vgo.example":                  {},
+		"modules/web/nginx-retract.vgo.example":          {},
+	}
+	for _, ex := range got {
+		if _, ok := wantRels[ex.rel]; !ok {
+			t.Errorf("unexpected rel %q in merged list", ex.rel)
+		}
+	}
+}
+
+func TestFindExamples_SkipsMissingDirsButRequiresAtLeastOne(t *testing.T) {
+	exDir := t.TempDir()
+	mustWrite(t, filepath.Join(exDir, "modules", "web", "nginx.vgo.example"), "")
+	// One real dir, one nonexistent — should succeed with the real one.
+	got, err := findExamples(exDir, filepath.Join(t.TempDir(), "nope"))
+	if err != nil {
+		t.Errorf("missing tree should be skipped silently: %v", err)
+	}
+	if len(got) != 1 {
+		t.Errorf("got %d, want 1", len(got))
+	}
+	// Both nonexistent — must error.
+	if _, err := findExamples(filepath.Join(t.TempDir(), "x"), filepath.Join(t.TempDir(), "y")); err == nil {
+		t.Errorf("all-missing should error")
+	}
+}
+
 // --- helpers ---
 
 func mustWrite(t *testing.T, path, content string) {

@@ -39,26 +39,28 @@ Examples:
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		exampleDir, _ := cmd.Flags().GetString("example-dir")
+		antiExampleDir, _ := cmd.Flags().GetString("anti-example-dir")
 
 		if args[0] == "all" {
-			return runCopyAll(exampleDir, publish.StockpileDir)
+			return runCopyAll(publish.StockpileDir, exampleDir, antiExampleDir)
 		}
-		return runCopyOne(args[0], exampleDir, publish.StockpileDir)
+		return runCopyOne(args[0], publish.StockpileDir, exampleDir, antiExampleDir)
 	},
 }
 
 var examplesListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "Show available example modules",
+	Short: "Show available example modules and retract templates",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		exampleDir, _ := cmd.Flags().GetString("example-dir")
-		return runListExamples(exampleDir)
+		antiExampleDir, _ := cmd.Flags().GetString("anti-example-dir")
+		return runListExamples(exampleDir, antiExampleDir)
 	},
 }
 
-func runListExamples(exampleDir string) error {
-	examples, err := findExamples(exampleDir)
+func runListExamples(exampleDirs ...string) error {
+	examples, err := findExamples(exampleDirs...)
 	if err != nil {
 		return err
 	}
@@ -77,8 +79,8 @@ func runListExamples(exampleDir string) error {
 	return nil
 }
 
-func runCopyAll(exampleDir, stockpileDir string) error {
-	examples, err := findExamples(exampleDir)
+func runCopyAll(stockpileDir string, exampleDirs ...string) error {
+	examples, err := findExamples(exampleDirs...)
 	if err != nil {
 		return err
 	}
@@ -112,8 +114,8 @@ func runCopyAll(exampleDir, stockpileDir string) error {
 	return nil
 }
 
-func runCopyOne(name, exampleDir, stockpileDir string) error {
-	examples, err := findExamples(exampleDir)
+func runCopyOne(name, stockpileDir string, exampleDirs ...string) error {
+	examples, err := findExamples(exampleDirs...)
 	if err != nil {
 		return err
 	}
@@ -201,8 +203,8 @@ func runCopyOne(name, exampleDir, stockpileDir string) error {
 	return nil
 }
 
-func runOrganize(exampleDir, stockpileDir string) error {
-	examples, err := findExamples(exampleDir)
+func runOrganize(stockpileDir string, exampleDirs ...string) error {
+	examples, err := findExamples(exampleDirs...)
 	if err != nil {
 		return err
 	}
@@ -278,33 +280,52 @@ type exampleFile struct {
 	rel string // relative to example dir (e.g., "modules/system/ssh-hardening.vgo.example")
 }
 
-func findExamples(exampleDir string) ([]exampleFile, error) {
-	if _, err := os.Stat(exampleDir); os.IsNotExist(err) {
-		return nil, fmt.Errorf("example directory not found: %s", exampleDir)
-	}
-
+// findExamples walks one or more *.vgo.example trees and returns a unified
+// flat list. Each tree contributes paths relative to its own root so the
+// destination logic (strip ".example", join under stockpile) works
+// uniformly across examples/ and anti-examples/. Missing dirs are
+// silently skipped — fresh installs may not have anti-examples/ on
+// startup yet, and the caller (list/copy) shouldn't fail if one tree is
+// empty. Returns an error only if every passed dir is missing.
+func findExamples(exampleDirs ...string) ([]exampleFile, error) {
 	var examples []exampleFile
-	err := filepath.WalkDir(exampleDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
+	seen := 0
+	for _, exampleDir := range exampleDirs {
+		if exampleDir == "" {
+			continue
 		}
-		if !strings.HasSuffix(d.Name(), ".vgo.example") {
+		if _, err := os.Stat(exampleDir); os.IsNotExist(err) {
+			continue
+		}
+		seen++
+		err := filepath.WalkDir(exampleDir, func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			if !strings.HasSuffix(d.Name(), ".vgo.example") {
+				return nil
+			}
+			rel, _ := filepath.Rel(exampleDir, path)
+			examples = append(examples, exampleFile{abs: path, rel: rel})
 			return nil
+		})
+		if err != nil {
+			return nil, err
 		}
-		rel, _ := filepath.Rel(exampleDir, path)
-		examples = append(examples, exampleFile{abs: path, rel: rel})
-		return nil
-	})
-	if err != nil {
-		return nil, err
+	}
+	if seen == 0 {
+		return nil, fmt.Errorf("no example directories found: %v", exampleDirs)
 	}
 	sort.Slice(examples, func(i, j int) bool { return examples[i].rel < examples[j].rel })
 	return examples, nil
 }
 
 func init() {
-	// Shared flag on parent so all subcommands inherit it.
+	// Shared flags on parent so all subcommands inherit them. The
+	// `examples` verbs walk both trees by default so install templates
+	// and their paired retracts surface from one command.
 	configExamplesCmd.PersistentFlags().String("example-dir", defaultExampleDir, "Path to stacks/examples directory")
+	configExamplesCmd.PersistentFlags().String("anti-example-dir", defaultAntiExampleDir, "Path to stacks/anti-examples directory")
 
 	configExamplesCmd.AddCommand(examplesCopyCmd, examplesListCmd)
 	configCmd.AddCommand(configExamplesCmd)
