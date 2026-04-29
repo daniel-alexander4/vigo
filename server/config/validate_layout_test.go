@@ -30,7 +30,7 @@ func TestValidate_WaiversKeyInComplianceVgo_Rejected(t *testing.T) {
 		"compliance:\n  cis-ubuntu: [\"1.1.1\"]\n"+
 			"waivers:\n  cis-ubuntu:\n    - control: \"5.4.1\"\n      reason: test\n      approved_by: dan\n"), 0o644)
 
-	err := validateStacksLayout(dir)
+	err := validateStockpileLayout(stockpileDir)
 	if err == nil {
 		t.Fatal("expected violation for waivers: block in compliance.vgo, got nil")
 	}
@@ -50,7 +50,7 @@ func TestValidate_ComplianceKeyInWaiversVgo_Rejected(t *testing.T) {
 		"waivers:\n  cis-ubuntu:\n    - control: \"5.4.1\"\n      reason: test\n      approved_by: dan\n"+
 			"compliance:\n  cis-ubuntu: [\"1.1.1\"]\n"), 0o644)
 
-	err := validateStacksLayout(dir)
+	err := validateStockpileLayout(stockpileDir)
 	if err == nil {
 		t.Fatal("expected violation for compliance: block in waivers.vgo, got nil")
 	}
@@ -69,7 +69,7 @@ func TestValidate_StrayWaiversFilename_Rejected(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(stockpileDir, "corp-waivers.vgo"),
 		[]byte("waivers:\n  cis-ubuntu:\n    - control: \"5.4.1\"\n      reason: r\n      approved_by: d\n"), 0o644)
 
-	err := validateStacksLayout(dir)
+	err := validateStockpileLayout(stockpileDir)
 	if err == nil {
 		t.Fatal("expected violation for waivers: block in non-waivers.vgo file, got nil")
 	}
@@ -85,7 +85,7 @@ func TestValidate_StrayClaimsFilename_Rejected(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(stockpileDir, "corp-compliance.vgo"),
 		[]byte("compliance:\n  cis-ubuntu: [\"5.1.1\"]\n"), 0o644)
 
-	err := validateStacksLayout(dir)
+	err := validateStockpileLayout(stockpileDir)
 	if err == nil {
 		t.Fatal("expected violation for claims-only file not named compliance.vgo, got nil")
 	}
@@ -104,7 +104,7 @@ func TestValidate_ModuleWithComplianceBlock_NotRejected(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(stockpileDir, "openssh.vgo"),
 		[]byte("name: openssh\ncompliance:\n  cis-ubuntu: [\"5.4.1\"]\nresources:\n  - name: foo\n    type: package\n    package: openssh-server\n"), 0o644)
 
-	if err := validateStacksLayout(dir); err != nil {
+	if err := validateStockpileLayout(stockpileDir); err != nil {
 		t.Errorf("module file with compliance: block should pass; got: %s", err)
 	}
 }
@@ -118,7 +118,7 @@ func TestValidate_CleanLayout_Passes(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(stockpileDir, "waivers.vgo"),
 		[]byte("waivers:\n  cis-ubuntu:\n    - control: \"5.4.1\"\n      reason: r\n      approved_by: d\n"), 0o644)
 
-	if err := validateStacksLayout(dir); err != nil {
+	if err := validateStockpileLayout(stockpileDir); err != nil {
 		t.Errorf("clean stockpile should pass validation, got: %s", err)
 	}
 }
@@ -143,7 +143,7 @@ func TestValidate_AllFourViolations_ReportedTogether(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(stockpileDir, "corp-compliance.vgo"),
 		[]byte("compliance:\n  cis-ubuntu: [\"5.1.1\"]\n"), 0o644)
 
-	err := validateStacksLayout(dir)
+	err := validateStockpileLayout(stockpileDir)
 	if err == nil {
 		t.Fatal("expected violations, got nil")
 	}

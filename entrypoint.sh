@@ -78,6 +78,10 @@ if [ -d "${DATA_DIR}/worksite" ] && [ ! -d "${VIGO_STACKS}" ]; then
         cp -rn "${VIGO_STACKS}/scaffolding/." "${VIGO_STOCKPILE}/" 2>/dev/null || true
         rm -rf "${VIGO_STACKS}/scaffolding"
     fi
+    # Drop any legacy .live/scaffolding/ left over from the prior
+    # two-tree publish. Post-0.33.3 the publisher only writes to
+    # .live/stockpile/; scaffolding/ here is inert disk waste.
+    rm -rf "${VIGO_LIVE}/scaffolding"
     echo "Migrated /srv/vigo/worksite/ → /srv/vigo/stacks/ (structure/ → .live/, scaffolding/ → stockpile/)."
 fi
 

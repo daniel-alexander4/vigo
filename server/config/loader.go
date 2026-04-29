@@ -1851,7 +1851,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	// published .live/ directory. Publish also runs this check, but
 	// the loader re-checks defensively: a violation here means we refuse
 	// the reload and keep the previous good config live.
-	if err := validateStacksLayout(cs.dir); err != nil {
+	if err := validateStockpileLayout(cs.stockpileSubdir()); err != nil {
 		return fmt.Errorf("config layout: %w", err)
 	}
 
@@ -2971,7 +2971,7 @@ func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*Commo
 // ONLY. Compliance claims live in stockpile/**/compliance.vgo ONLY —
 // picked up separately by loadModuleComplianceConfigs. A compliance:
 // block in a waivers.vgo is a fatal validator error at publish time
-// (caught by validateStacksLayout); at load time it's ignored with a
+// (caught by validateStockpileLayout); at load time it's ignored with a
 // slog.Warn.
 func loadStockpileWaivers(dir string) (map[string]map[string]*WaiverEntry, []WaiverFileEntry, error) {
 	merged := make(map[string]map[string]*WaiverEntry)

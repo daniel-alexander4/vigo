@@ -12,9 +12,9 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// validateStacksLayout enforces filename-and-content rules for the
-// single stockpile tree at load time. Intentional duplicate of
-// server/publish.validateStacksLayout — config/ can't import publish/
+// validateStockpileLayout enforces filename-and-content rules for the
+// stockpile tree at load time. Intentional duplicate of
+// server/publish.validateStockpileLayout — config/ can't import publish/
 // (would be a cycle) and the rule set is small enough that a direct
 // copy is cheaper than introducing a shared package.
 //
@@ -34,18 +34,17 @@ import (
 //     resources:/name:/vars:) not named compliance.vgo —
 //     stray-filename rejection. Module definitions carrying their own
 //     compliance: block are not affected.
-func validateStacksLayout(stacksDir string) error {
-	stockpile := filepath.Join(stacksDir, "stockpile")
-	if _, err := os.Stat(stockpile); err != nil {
+func validateStockpileLayout(stockpileDir string) error {
+	if _, err := os.Stat(stockpileDir); err != nil {
 		// stockpile doesn't exist yet (fresh install); nothing to check.
 		return nil
 	}
 
-	problems := scanStockpileLayout(stockpile)
+	problems := scanStockpileLayout(stockpileDir)
 	if len(problems) == 0 {
 		return nil
 	}
-	return fmt.Errorf("stacks layout violations:\n  - %s", strings.Join(problems, "\n  - "))
+	return fmt.Errorf("stockpile layout violations:\n  - %s", strings.Join(problems, "\n  - "))
 }
 
 func scanStockpileLayout(stockpileDir string) []string {

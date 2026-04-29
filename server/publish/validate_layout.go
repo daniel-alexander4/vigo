@@ -12,8 +12,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// validateStacksLayout enforces filename-and-content rules for the
-// single stockpile tree. Mirrors server/config.validateStacksLayout —
+// validateStockpileLayout enforces filename-and-content rules for the
+// stockpile tree. Mirrors server/config.validateStockpileLayout —
 // publish/ runs this pre-publish; the loader runs it again at reload
 // time defensively. The two copies exist because publish imports
 // config but not vice versa, and the rule set is small enough that a
@@ -31,16 +31,15 @@ import (
 //     resources:/name:/vars:) not named compliance.vgo —
 //     stray-filename rejection. Module definitions carrying their own
 //     compliance: block are not affected.
-func validateStacksLayout(stacksDir string) error {
-	stockpile := filepath.Join(stacksDir, "stockpile")
-	if _, err := os.Stat(stockpile); err != nil {
+func validateStockpileLayout(stockpileDir string) error {
+	if _, err := os.Stat(stockpileDir); err != nil {
 		return nil
 	}
-	problems := scanStockpileLayout(stockpile)
+	problems := scanStockpileLayout(stockpileDir)
 	if len(problems) == 0 {
 		return nil
 	}
-	return fmt.Errorf("stacks layout violations:\n  - %s", strings.Join(problems, "\n  - "))
+	return fmt.Errorf("stockpile layout violations:\n  - %s", strings.Join(problems, "\n  - "))
 }
 
 // scanStockpileLayout walks the stockpile subtree and rejects any file
