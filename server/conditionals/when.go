@@ -37,12 +37,28 @@ type FuncCallExpr struct {
 	Args []string
 }
 
-func (BoolLitExpr) whenExprNode()  {}
-func (VarRefExpr) whenExprNode()   {}
-func (NotWhenExpr) whenExprNode()  {}
-func (AndWhenExpr) whenExprNode()  {}
-func (OrWhenExpr) whenExprNode()   {}
-func (FuncCallExpr) whenExprNode() {}
+// StringLitExpr represents a single-quoted string literal used as a
+// comparison operand (e.g. the right side of `var != ''`). Distinct from
+// FuncCallExpr arguments, which carry their string args inline.
+type StringLitExpr struct{ Value string }
+
+// EqExpr represents string equality (`==`). Operands are typically
+// StringLitExpr or VarRefExpr — both treated as strings, not booleans.
+type EqExpr struct{ Left, Right WhenExpr }
+
+// NeqExpr represents string inequality (`!=`). Same operand contract as
+// EqExpr.
+type NeqExpr struct{ Left, Right WhenExpr }
+
+func (BoolLitExpr) whenExprNode()   {}
+func (VarRefExpr) whenExprNode()    {}
+func (NotWhenExpr) whenExprNode()   {}
+func (AndWhenExpr) whenExprNode()   {}
+func (OrWhenExpr) whenExprNode()    {}
+func (FuncCallExpr) whenExprNode()  {}
+func (StringLitExpr) whenExprNode() {}
+func (EqExpr) whenExprNode()        {}
+func (NeqExpr) whenExprNode()       {}
 
 // -- Lexer --
 
@@ -60,6 +76,8 @@ const (
 	tokRParen
 	tokString // single-quoted string
 	tokComma
+	tokEq  // ==
+	tokNeq // !=
 )
 
 type token struct {
@@ -93,6 +111,42 @@ func lex(input string) ([]token, error) {
 		case ch == ',':
 			l.tokens = append(l.tokens, token{kind: tokComma, val: ","})
 			l.pos++
+		case ch == '!':
+			// `!=` (inequality) — must be checked before falling through to
+			// the bare `!` (NOT) case so we don't tokenize `!=` as
+			// `!` followed by `=`.
+			if l.pos+1 < len(l.input) && l.input[l.pos+1] == '=' {
+				l.tokens = append(l.tokens, token{kind: tokNeq, val: "!="})
+				l.pos += 2
+				continue
+			}
+			// Symbol form of `not`. Parity with the server-side runtime
+			// evaluator (server/config/template.go) and the agent's Rust
+			// parser, both of which accept `!`.
+			l.tokens = append(l.tokens, token{kind: tokNot, val: "!"})
+			l.pos++
+		case ch == '=':
+			// `==` (equality) — bare `=` is invalid (no assignment in
+			// when expressions).
+			if l.pos+1 >= len(l.input) || l.input[l.pos+1] != '=' {
+				return nil, fmt.Errorf("unexpected character %q at position %d (did you mean `==`?)", ch, l.pos)
+			}
+			l.tokens = append(l.tokens, token{kind: tokEq, val: "=="})
+			l.pos += 2
+		case ch == '&':
+			// Symbol form of `and` — must be `&&`, single `&` is invalid.
+			if l.pos+1 >= len(l.input) || l.input[l.pos+1] != '&' {
+				return nil, fmt.Errorf("unexpected character %q at position %d (did you mean `&&`?)", ch, l.pos)
+			}
+			l.tokens = append(l.tokens, token{kind: tokAnd, val: "&&"})
+			l.pos += 2
+		case ch == '|':
+			// Symbol form of `or` — must be `||`, single `|` is invalid.
+			if l.pos+1 >= len(l.input) || l.input[l.pos+1] != '|' {
+				return nil, fmt.Errorf("unexpected character %q at position %d (did you mean `||`?)", ch, l.pos)
+			}
+			l.tokens = append(l.tokens, token{kind: tokOr, val: "||"})
+			l.pos += 2
 		case ch == '\'':
 			str, err := l.lexString()
 			if err != nil {
@@ -221,19 +275,44 @@ func (p *whenParser) parseOrExpr() (WhenExpr, error) {
 }
 
 func (p *whenParser) parseAndExpr() (WhenExpr, error) {
-	left, err := p.parseUnary()
+	left, err := p.parseComparison()
 	if err != nil {
 		return nil, err
 	}
 	for p.current().kind == tokAnd {
 		p.advance()
-		right, err := p.parseUnary()
+		right, err := p.parseComparison()
 		if err != nil {
 			return nil, err
 		}
 		left = &AndWhenExpr{Left: left, Right: right}
 	}
 	return left, nil
+}
+
+// parseComparison sits between AND and unary in the precedence ladder so
+// `a && b == c` parses as `a && (b == c)` (matching C/Java/Python).
+// Comparison is non-chainable: `a == b == c` is rejected.
+func (p *whenParser) parseComparison() (WhenExpr, error) {
+	left, err := p.parseUnary()
+	if err != nil {
+		return nil, err
+	}
+	if p.current().kind != tokEq && p.current().kind != tokNeq {
+		return left, nil
+	}
+	op := p.advance().kind
+	right, err := p.parseUnary()
+	if err != nil {
+		return nil, err
+	}
+	if p.current().kind == tokEq || p.current().kind == tokNeq {
+		return nil, fmt.Errorf("comparison operators do not chain — wrap in parens or use `&&`")
+	}
+	if op == tokEq {
+		return &EqExpr{Left: left, Right: right}, nil
+	}
+	return &NeqExpr{Left: left, Right: right}, nil
 }
 
 func (p *whenParser) parseUnary() (WhenExpr, error) {
@@ -262,6 +341,12 @@ func (p *whenParser) parsePrimary() (WhenExpr, error) {
 			return p.parseFuncCall(name)
 		}
 		return &VarRefExpr{Name: name}, nil
+	case tokString:
+		// Bare string literal — only valid as a comparison operand.
+		// Whether that's the actual context here is a typing question
+		// the parser doesn't enforce; an EqExpr/NeqExpr arm wraps this,
+		// or the runtime evaluator errors out.
+		return &StringLitExpr{Value: p.advance().val}, nil
 	case tokLParen:
 		p.advance()
 		expr, err := p.parseOrExpr()
@@ -310,6 +395,12 @@ func EvalWhenExpr(expr WhenExpr, resolve func(string) bool) (bool, error) {
 
 // EvalWhenExprWithFuncs evaluates a when expression using the given variable
 // resolver and optional function resolver for builtins.
+//
+// Comparison operands (EqExpr/NeqExpr) must be reduced to StringLitExpr
+// before evaluation — i.e. SubstituteVars has run with the relevant vars
+// map. An unsubstituted VarRefExpr inside a comparison is an error: the
+// boolean `resolve` callback can't produce the string semantics that
+// comparison needs.
 func EvalWhenExprWithFuncs(expr WhenExpr, resolve func(string) bool, funcs func(string, []string) (bool, error)) (bool, error) {
 	switch e := expr.(type) {
 	case *BoolLitExpr:
@@ -345,9 +436,36 @@ func EvalWhenExprWithFuncs(expr WhenExpr, resolve func(string) bool, funcs func(
 			return false, fmt.Errorf("function call %q not supported in this context", e.Name)
 		}
 		return funcs(e.Name, e.Args)
+	case *EqExpr:
+		l, lok := stringOperand(e.Left)
+		r, rok := stringOperand(e.Right)
+		if !lok || !rok {
+			return false, fmt.Errorf("`==` operands must be string literals (substitute vars first); got %T == %T", e.Left, e.Right)
+		}
+		return l == r, nil
+	case *NeqExpr:
+		l, lok := stringOperand(e.Left)
+		r, rok := stringOperand(e.Right)
+		if !lok || !rok {
+			return false, fmt.Errorf("`!=` operands must be string literals (substitute vars first); got %T != %T", e.Left, e.Right)
+		}
+		return l != r, nil
+	case *StringLitExpr:
+		return false, fmt.Errorf("string literal %q used outside a comparison context", e.Value)
 	default:
 		return false, fmt.Errorf("unknown expression type %T", expr)
 	}
+}
+
+// stringOperand extracts the string value of a comparison operand if it's
+// a concrete StringLitExpr. Returns false for any other node type, which
+// signals that the caller still needs to substitute or that the operand
+// isn't string-typed.
+func stringOperand(expr WhenExpr) (string, bool) {
+	if s, ok := expr.(*StringLitExpr); ok {
+		return s.Value, true
+	}
+	return "", false
 }
 
 // -- Helpers --
@@ -355,13 +473,17 @@ func EvalWhenExprWithFuncs(expr WhenExpr, resolve func(string) bool, funcs func(
 // ContainsFuncCalls returns true if the expression contains any function calls.
 func ContainsFuncCalls(expr WhenExpr) bool {
 	switch e := expr.(type) {
-	case *BoolLitExpr, *VarRefExpr:
+	case *BoolLitExpr, *VarRefExpr, *StringLitExpr:
 		return false
 	case *NotWhenExpr:
 		return ContainsFuncCalls(e.Operand)
 	case *AndWhenExpr:
 		return ContainsFuncCalls(e.Left) || ContainsFuncCalls(e.Right)
 	case *OrWhenExpr:
+		return ContainsFuncCalls(e.Left) || ContainsFuncCalls(e.Right)
+	case *EqExpr:
+		return ContainsFuncCalls(e.Left) || ContainsFuncCalls(e.Right)
+	case *NeqExpr:
 		return ContainsFuncCalls(e.Left) || ContainsFuncCalls(e.Right)
 	case *FuncCallExpr:
 		return true
@@ -371,22 +493,65 @@ func ContainsFuncCalls(expr WhenExpr) bool {
 }
 
 // SubstituteVars returns a new expression tree with all VarRefExpr nodes
-// replaced by BoolLitExpr based on the vars map. Function calls are unchanged.
+// replaced by BoolLitExpr based on the vars map. Function calls are
+// unchanged.
+//
+// Inside EqExpr/NeqExpr, VarRefExpr operands are substituted with
+// StringLitExpr instead — comparison context is string-typed, not
+// boolean-typed. If the var isn't in the map, the VarRefExpr is left
+// unsubstituted so TristateEval can mark the result unknown.
 func SubstituteVars(expr WhenExpr, vars map[string]any) WhenExpr {
 	switch e := expr.(type) {
 	case *BoolLitExpr:
 		return e
 	case *VarRefExpr:
 		return &BoolLitExpr{Value: WhenVarIsTrue(e.Name, vars)}
+	case *StringLitExpr:
+		return e
 	case *NotWhenExpr:
 		return &NotWhenExpr{Operand: SubstituteVars(e.Operand, vars)}
 	case *AndWhenExpr:
 		return &AndWhenExpr{Left: SubstituteVars(e.Left, vars), Right: SubstituteVars(e.Right, vars)}
 	case *OrWhenExpr:
 		return &OrWhenExpr{Left: SubstituteVars(e.Left, vars), Right: SubstituteVars(e.Right, vars)}
+	case *EqExpr:
+		return &EqExpr{
+			Left:  substituteStringOperand(e.Left, vars),
+			Right: substituteStringOperand(e.Right, vars),
+		}
+	case *NeqExpr:
+		return &NeqExpr{
+			Left:  substituteStringOperand(e.Left, vars),
+			Right: substituteStringOperand(e.Right, vars),
+		}
 	case *FuncCallExpr:
 		return e
 	default:
+		return e
+	}
+}
+
+// substituteStringOperand resolves a comparison operand to a StringLitExpr
+// when possible. Var refs become StringLitExpr from the vars map (with any
+// non-string value formatted via fmt.Sprintf("%v", v)). Unresolved var
+// refs are left in place so TristateEval can return unknown.
+func substituteStringOperand(expr WhenExpr, vars map[string]any) WhenExpr {
+	switch e := expr.(type) {
+	case *VarRefExpr:
+		v, ok := vars[e.Name]
+		if !ok {
+			return e
+		}
+		if s, ok := v.(string); ok {
+			return &StringLitExpr{Value: s}
+		}
+		return &StringLitExpr{Value: fmt.Sprintf("%v", v)}
+	case *StringLitExpr:
+		return e
+	default:
+		// Booleans, function calls, nested comparisons — passed through
+		// unchanged. EvalWhenExpr will surface a typed error if such an
+		// operand actually reaches it.
 		return e
 	}
 }
@@ -411,8 +576,24 @@ func TristateEval(expr WhenExpr) *bool {
 	switch e := expr.(type) {
 	case *BoolLitExpr:
 		return &e.Value
-	case *VarRefExpr:
-		return nil // unknown — variable was not substituted
+	case *VarRefExpr, *StringLitExpr:
+		return nil // unknown — substituteStringOperand left this in place
+	case *EqExpr:
+		l, lok := stringOperand(e.Left)
+		r, rok := stringOperand(e.Right)
+		if !lok || !rok {
+			return nil
+		}
+		result := l == r
+		return &result
+	case *NeqExpr:
+		l, lok := stringOperand(e.Left)
+		r, rok := stringOperand(e.Right)
+		if !lok || !rok {
+			return nil
+		}
+		result := l != r
+		return &result
 	case *NotWhenExpr:
 		inner := TristateEval(e.Operand)
 		if inner == nil {
@@ -493,6 +674,12 @@ func ExprString(expr WhenExpr) string {
 			quotedArgs = append(quotedArgs, "'"+arg+"'")
 		}
 		return e.Name + "(" + strings.Join(quotedArgs, ", ") + ")"
+	case *StringLitExpr:
+		return "'" + e.Value + "'"
+	case *EqExpr:
+		return ExprString(e.Left) + " == " + ExprString(e.Right)
+	case *NeqExpr:
+		return ExprString(e.Left) + " != " + ExprString(e.Right)
 	default:
 		return "?"
 	}

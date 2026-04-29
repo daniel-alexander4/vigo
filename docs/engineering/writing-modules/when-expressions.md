@@ -22,7 +22,11 @@ when: "os_family('redhat') && !version_ge('9')"
 | `&&` | Logical AND | `os_family('debian') && arch('amd64')` |
 | `\|\|` | Logical OR | `file_exists('/a') \|\| file_exists('/b')` |
 | `!` | Logical NOT | `!is_container` |
+| `==` | String equality | `release == 'jammy'` |
+| `!=` | String inequality | `'{{ .Vars.target_release }}' != ''` |
 | `(` `)` | Grouping | `(os_family('debian') \|\| os_family('redhat')) && arch('amd64')` |
+
+`==` and `!=` are string-typed: operands must be single-quoted string literals or variable references. Function calls return booleans and aren't comparable. Comparisons don't chain — write `(a == b) && (b == c)`, not `a == b == c`. Precedence sits between unary `!` and `&&`, matching C / Java / Python: `a && b == c` parses as `a && (b == c)`.
 
 ## Builtin Functions (16)
 
