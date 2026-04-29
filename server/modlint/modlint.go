@@ -300,6 +300,13 @@ var yamlBoolPattern = regexp.MustCompile(`(?m)^(\s*\w[\w_]*:\s+)(yes|no|on|off|Y
 // but all subsequent non-empty lines share a common indent prefix. This happens
 // when a role definition is pasted into a module file. Strips the common indent
 // and warns.
+//
+// Gating rule: the first non-empty line must be a `key: value` shape with a
+// non-empty value on the same line. If it's a `key:` block-introducer (no
+// value after the colon), subsequent indented content is the legitimate
+// nested block and stripping would corrupt the file. This distinction
+// keeps non-module YAML safe — `envoys:`, `roles:`, `environments:`,
+// `waivers:` all use the block-introducer shape.
 func fixOverIndentation(lines []string, r *Result) []string {
 	// Find the first non-empty line.
 	firstIdx := -1
@@ -317,6 +324,14 @@ func fixOverIndentation(lines []string, r *Result) []string {
 	firstLine := lines[firstIdx]
 	if len(firstLine) > 0 && (firstLine[0] == ' ' || firstLine[0] == '\t') {
 		return lines // First line is also indented — not this pattern.
+	}
+
+	// First line must be a `key: value` form (not a `key:` block-introducer).
+	// A trailing `:` with nothing after means the next indented content IS
+	// the value — stripping its indent would re-parent every nested key as
+	// a top-level peer and corrupt the file.
+	if isBlockIntroducer(firstLine) {
+		return lines
 	}
 
 	// Find minimum indent of all subsequent non-empty, non-comment lines.
@@ -355,6 +370,33 @@ func fixOverIndentation(lines []string, r *Result) []string {
 		"stripped %d leading spaces from all lines after 'name:' — this looks like a role definition pasted as a module file",
 		minIndent)
 	return fixed
+}
+
+// isBlockIntroducer reports whether line `l` is a YAML key with no value
+// on the same line — the form `<key>:` (optionally followed by a comment).
+// Such lines introduce a nested block whose content must be indented;
+// the over-indent fixer must NOT strip that indent.
+func isBlockIntroducer(l string) bool {
+	// Strip a trailing comment, if any. YAML comments start at `#` only
+	// when preceded by a space (or the start of the line) — we use a
+	// permissive split since either misclassification is fine for the
+	// gating purpose here (false-positive: rule skips when it could
+	// have applied; false-negative: rule applies anyway, same as today).
+	if idx := strings.Index(l, " #"); idx >= 0 {
+		l = l[:idx]
+	}
+	l = strings.TrimRight(l, " \t")
+	if l == "" {
+		return false
+	}
+	colon := strings.LastIndexByte(l, ':')
+	if colon < 0 {
+		return false // not a mapping at all
+	}
+	// Everything after the last `:` must be empty (modulo trailing
+	// whitespace already trimmed). `key: value` has content; `key:`
+	// alone is a block-introducer.
+	return strings.TrimSpace(l[colon+1:]) == ""
 }
 
 func fixUnquotedSpecials(text string, r *Result) string {
