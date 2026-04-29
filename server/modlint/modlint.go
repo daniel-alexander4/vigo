@@ -7,15 +7,30 @@
 // community website (Google Cloud Functions).
 //
 // The pipeline:
-//  1. YAML repair — fix indentation, tabs→spaces, duplicate keys, unquoted
-//     special values, trailing whitespace, missing final newline.
-//  2. Structure normalization — canonical key ordering, consistent 2-space
-//     indentation, normalized quoting.
-//  3. Schema validation — required fields per resource type, unknown types,
-//     cross-references (depends_on, notify, subscribes), DAG cycles,
-//     idempotency checks.
-//  4. Auto-commenting — #~ prefixed comments regenerated on every run.
-//     Hand-written # comments are preserved.
+//  1. YAML repair — strip BOM and leading non-ASCII, normalize line
+//     endings, tabs→spaces, trim trailing whitespace, fix unquoted
+//     YAML 1.1 booleans/nulls in scalar positions, ensure final newline,
+//     unindent role-shaped paste-ins.
+//  2. Parse — into the internal `module` representation, preserving
+//     source-level key order and per-attribute `*yaml.Node` so the
+//     renderer can keep operator formatting (flow vs block, key order).
+//  3. Rule registry — every check is a Rule (`rule_*.go`) and self-
+//     registers via init(). Rules emit `Finding{Severity, Line, Column,
+//     RuleID, Message, FixApplied}`; some mutate the module to apply
+//     auto-fixes (e.g. injecting `when: "changed"` on a service with
+//     subscribes).
+//  4. Render — clean normalized YAML with auto-regenerated `#~` block
+//     comments. The renderer rebuilds from the parsed AST: hand-written
+//     `#` comments are NOT preserved across a lint pass — this is
+//     by design (community-upload normalization wants a single canonical
+//     form), and is covered by the `TestLint_HandWrittenCommentsStripped`
+//     regression test.
+//
+// Result.Findings is the canonical structured output. Errors and
+// Warnings are derived string-slice views over Findings, kept for
+// backward compatibility with callers that pre-date the structured
+// form. New code should consume Findings directly so it can filter by
+// severity or rule ID without parsing message strings.
 package modlint
 
 import (
@@ -43,16 +58,32 @@ type Options struct {
 }
 
 // Result holds the output of a lint pass.
+//
+// Findings is the canonical structured output, carrying severity, source
+// line/column, and rule ID for every issue. Errors and Warnings are
+// derived string-slice views over Findings, kept for backward
+// compatibility with callers that pre-date the structured form. New
+// code should consume Findings directly so it can filter by severity
+// or rule ID without parsing message strings.
 type Result struct {
 	// Output is the cleaned, normalized, commented YAML.
 	Output string
-	// Warnings are non-fatal issues that were auto-fixed.
+	// Findings is the structured list of every lint result, in
+	// rule-registration order. Emitted by repair, parse, and the
+	// rule registry. Severity=Error blocks publish; everything else
+	// is advisory.
+	Findings []Finding
+	// Warnings is a string-slice view over Findings with severity in
+	// {Warning, Info, Hint}. Preserved for callers that print
+	// warnings inline without consulting structured fields.
 	Warnings []string
-	// Errors are fatal issues that could not be auto-fixed.
+	// Errors is a string-slice view over Findings with severity Error.
+	// Preserved for callers that gate on len(Errors) > 0 — equivalent
+	// to !OK().
 	Errors []string
 }
 
-// OK returns true if there are no errors.
+// OK returns true if there are no error-severity findings.
 func (r *Result) OK() bool {
 	return len(r.Errors) == 0
 }
@@ -67,22 +98,84 @@ func Lint(input []byte, opts Options) *Result {
 	// Step 2: Parse into structured form.
 	mod, err := parse(repaired)
 	if err != nil {
-		r.Errors = append(r.Errors, fmt.Sprintf("YAML parse error after repair: %s", err))
+		r.Findings = append(r.Findings, Finding{
+			Severity: Error,
+			RuleID:   "yaml-parse",
+			Message:  fmt.Sprintf("YAML parse error after repair: %s", err),
+		})
+		finalizeFindings(r)
 		return r
 	}
 
-	// Step 3: Schema validation.
-	validate(mod, opts, r)
+	// Step 3: Schema validation via the rule registry. Each rule emits
+	// Findings and may mutate `mod` to apply auto-fixes (e.g. injecting
+	// `when: "changed"` on a service with subscribes). Rules are
+	// registered in their own files (`rule_*.go`) and self-register
+	// via init() — adding a check is a matter of dropping in a new
+	// file, not editing this dispatcher.
+	r.Findings = append(r.Findings, applyRules(mod, opts)...)
 
 	// Step 4: Normalize + auto-comment + serialize.
 	r.Output = render(mod, opts, r)
 
+	finalizeFindings(r)
 	return r
+}
+
+// finalizeFindings populates the legacy Errors/Warnings string-slice
+// views from r.Findings. New code should read r.Findings directly;
+// this exists so callers that pre-date Phase 1 keep working.
+//
+// Errors gets every Severity=Error message. Warnings collapses
+// {Warning, Info, Hint} together — there's no caller today that
+// distinguishes those tiers, and the existing Warnings field has
+// always been a catch-all for "things modlint noticed but didn't
+// reject." When a caller starts caring about the distinction, it
+// should switch to r.Findings rather than expand the string slice.
+func finalizeFindings(r *Result) {
+	for _, f := range r.Findings {
+		if f.Severity == Error {
+			r.Errors = append(r.Errors, f.Message)
+		} else {
+			r.Warnings = append(r.Warnings, f.Message)
+		}
+	}
+}
+
+// errorf appends an Error-severity finding. Helper used by the repair
+// pass and by inline checks that haven't been promoted to a Rule yet.
+// Line=0 means "module-level / no source location."
+func (r *Result) errorf(line int, ruleID, format string, args ...any) {
+	r.Findings = append(r.Findings, Finding{
+		Severity: Error,
+		Line:     line,
+		RuleID:   ruleID,
+		Message:  fmt.Sprintf(format, args...),
+	})
+}
+
+// warnf appends a Warning-severity finding. See errorf for parameter
+// semantics. Used for repair-pass auto-fixes ("converted tabs to
+// spaces") that the operator should be aware of but didn't have to
+// act on.
+func (r *Result) warnf(line int, ruleID, format string, args ...any) {
+	r.Findings = append(r.Findings, Finding{
+		Severity:   Warning,
+		Line:       line,
+		RuleID:     ruleID,
+		Message:    fmt.Sprintf(format, args...),
+		FixApplied: true,
+	})
 }
 
 // --- Module representation ---
 
 // module is the internal representation of a parsed .vgo module.
+//
+// Line and Column reference the YAML root mapping's source position
+// (1-indexed). Both are zero before parse() runs. Used by rules that
+// emit module-level findings so the operator gets a "module foo.vgo:1:1"
+// style pointer rather than an unanchored message.
 type module struct {
 	Name            string
 	DependsOn       []string
@@ -93,9 +186,17 @@ type module struct {
 	Vars            map[string]any
 	VarOrder        []string // preserve original key order
 	Resources       []resource
+
+	Line   int
+	Column int
 }
 
 // resource is the internal representation of a parsed resource.
+//
+// Line and Column reference the resource mapping's first key in the
+// source YAML (typically the `- name:` line). Populated during parse;
+// rules use it to anchor findings to a specific resource without
+// having to re-walk the YAML tree.
 type resource struct {
 	Name       string
 	Type       string
@@ -117,6 +218,9 @@ type resource struct {
 	// normalization to octal string), in which case the writer falls back
 	// to the decoded `Attrs[key]` and the existing yamlScalar path.
 	AttrNodes map[string]*yaml.Node
+
+	Line   int
+	Column int
 }
 
 // --- Step 1: YAML Repair ---
@@ -135,7 +239,7 @@ func repair(input []byte, r *Result) []byte {
 		for i := 0; i < len(text); i++ {
 			if text[i] <= 127 {
 				text = text[i:]
-				r.Warnings = append(r.Warnings, "stripped leading non-ASCII bytes")
+				r.warnf(1, "repair-non-ascii", "stripped leading non-ASCII bytes")
 				break
 			}
 		}
@@ -155,7 +259,7 @@ func repair(input []byte, r *Result) []byte {
 		if strings.Contains(line, "\t") {
 			line = strings.ReplaceAll(line, "\t", "  ")
 			if line != original {
-				r.Warnings = append(r.Warnings, fmt.Sprintf("line %d: converted tabs to spaces", i+1))
+				r.warnf(i+1, "repair-tabs", "line %d: converted tabs to spaces", i+1)
 			}
 		}
 
@@ -247,10 +351,9 @@ func fixOverIndentation(lines []string, r *Result) []string {
 			fixed[i] = strings.TrimPrefix(line, prefix)
 		}
 	}
-	r.Warnings = append(r.Warnings, fmt.Sprintf(
+	r.warnf(0, "repair-over-indent",
 		"stripped %d leading spaces from all lines after 'name:' — this looks like a role definition pasted as a module file",
-		minIndent,
-	))
+		minIndent)
 	return fixed
 }
 
@@ -266,7 +369,7 @@ func fixUnquotedSpecials(text string, r *Result) string {
 		if lower == "no" || lower == "off" {
 			replacement = "false"
 		}
-		r.Warnings = append(r.Warnings, fmt.Sprintf("converted unquoted %q to %s", val, replacement))
+		r.warnf(0, "repair-unquoted-bool", "converted unquoted %q to %s", val, replacement)
 		return prefix + replacement + suffix
 	})
 }
@@ -288,7 +391,9 @@ func parse(data []byte) (*module, error) {
 	}
 
 	mod := &module{
-		Vars: make(map[string]any),
+		Vars:   make(map[string]any),
+		Line:   root.Line,
+		Column: root.Column,
 	}
 
 	seen := make(map[string]bool)
@@ -365,6 +470,8 @@ func parseOneResource(node *yaml.Node) (resource, error) {
 	var res resource
 	res.Attrs = make(map[string]any)
 	res.AttrNodes = make(map[string]*yaml.Node)
+	res.Line = node.Line
+	res.Column = node.Column
 
 	// Structural fields we pull out explicitly.
 	structural := map[string]bool{
@@ -449,68 +556,11 @@ func extractKeyOrder(node *yaml.Node) []string {
 }
 
 // --- Step 3: Validate ---
-
-func validate(mod *module, opts Options, r *Result) {
-	// Structural checks that aren't in validate.ValidateModule.
-	if mod.Name == "" && !opts.IsUsercrate {
-		r.Errors = append(r.Errors, "missing required 'name' field")
-	}
-	if len(mod.Resources) == 0 {
-		r.Errors = append(r.Errors, "module has no resources")
-	}
-
-	// Check for duplicate resource names.
-	names := make(map[string]bool, len(mod.Resources))
-	for _, res := range mod.Resources {
-		if res.Name != "" {
-			if names[res.Name] {
-				r.Errors = append(r.Errors, fmt.Sprintf("duplicate resource name %q", res.Name))
-			}
-			names[res.Name] = true
-		}
-	}
-
-	// Delegate type-specific and cross-reference validation to the
-	// canonical validator. This ensures modlint and the server use
-	// identical validation rules.
-	vm := toValidateModule(mod)
-	findings := vigovalidate.ValidateModule(vm)
-	for _, f := range findings {
-		if f.Severity == vigovalidate.SeverityError {
-			r.Errors = append(r.Errors, f.Message)
-		} else {
-			r.Warnings = append(r.Warnings, f.Message)
-		}
-	}
-
-	// Auto-fix: service with state restarted/reloaded + subscribes but no
-	// when: "changed" will fire every cycle. Add the guard automatically.
-	for i := range mod.Resources {
-		res := &mod.Resources[i]
-		if res.Type != "service" {
-			continue
-		}
-		state := attrStr(res.Attrs, "state")
-		if state != "restarted" && state != "reloaded" {
-			continue
-		}
-		if len(res.Subscribes) > 0 && !strings.Contains(res.When, "changed") {
-			res.When = "changed"
-			r.Warnings = append(r.Warnings, fmt.Sprintf("resource %q: added when: \"changed\" — service with state %q and subscribes must be gated to prevent restart every cycle", res.Name, state))
-		}
-	}
-
-	// Community: reject secret: references.
-	if opts.CommunityUpload {
-		for _, res := range mod.Resources {
-			for _, key := range res.AttrOrder {
-				if s, ok := res.Attrs[key].(string); ok && strings.HasPrefix(s, "secret:") {
-					r.Errors = append(r.Errors, fmt.Sprintf("resource %q: community modules cannot use secret: references (attribute %q)", res.Name, key))
-				}
-			}
-		}
-	}
-}
+//
+// All validation runs through the rule registry now (see rule.go and
+// the per-check rule_*.go files). The pipeline applies each registered
+// rule in order and aggregates findings; adding a new check is a
+// matter of dropping in a new rule_*.go that calls register() in init().
 
 // toValidateModule converts a modlint module to a validate.Module.
 func toValidateModule(mod *module) vigovalidate.Module {
