@@ -1,27 +1,36 @@
 
 # Config Publish Pipeline
 
-Operators edit `.vgo` files in a stage directory. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then atomically syncs to the hidden `.live` directory the server reads from.
+Operators edit `.vgo` files in `stacks/stockpile/`. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then atomically syncs to `stacks/.live/stockpile/`, the locked-read-only directory the server reads from.
 
 ## Directory Layout
 
 ```
-/srv/vigo/
-├── stage/                        ← operators edit here
+/srv/vigo/stacks/
+├── stockpile/                    ← operators edit here
 │   ├── modules/                  # Module definitions
-│   ├── templates/                # Template files for source: references
-│   ├── roles.vgo                 # All role definitions
-│   ├── common.vgo                # Inherited by all subdirs
-│   ├── production/
-│   │   ├── common.vgo            # Inherited by production subdirs
-│   │   └── web/web.vgo           # Leaf entries with match:
-│   └── staging/staging.vgo
-└── .live/                        ← server reads here (hidden, do not edit)
+│   ├── usercrates/               # Per-user modules (auto-apply)
+│   ├── templates/                # Go template files for source: references
+│   ├── tasks/                    # Reusable task definitions
+│   ├── workflows/                # Workflow definitions
+│   ├── roles.vgo                 # Role definitions (single, fleet-wide)
+│   ├── common.vgo                # Fleet-wide directory-inherited defaults
+│   ├── waivers.vgo               # Fleet-wide compliance waivers
+│   ├── compliance.vgo            # Fleet-wide compliance claims
+│   ├── envoys.vgo                # Top-level matchfile (any .vgo with envoys: works)
+│   └── customerA/
+│       ├── common.vgo            # Inherited by customerA subtree
+│       ├── envoys.vgo            # Per-customer matchfile
+│       └── web/web.vgo           # Per-host matchfile
+├── examples/                     ← read-only install templates (image-seeded)
+├── anti-examples/                ← read-only retract templates (mirrors examples/modules)
+└── .live/                        ← server reads here (locked, do not edit)
+    └── stockpile/                ← canonical bytes synced from stockpile after modlint
 ```
 
 The directory structure is both file organization and an inheritance hierarchy. See [Config Format: Directory Inheritance](../engineering/writing-modules/config-format.md#directory-inheritance) for details.
 
-The legacy layout with `envoys/`, `roles/`, and `vars/` directories is still supported.
+Publish only walks `stockpile/`. Sibling subtrees (`examples/`, `anti-examples/`, `.live/`) are outside the walk and never appear in the diff or sync.
 
 ## Usage
 
@@ -47,12 +56,12 @@ vigocli config publish --skip-url-check
 
 ## How It Works
 
-1. Normalizes whitespace in all `.vgo`/`.yaml` files (strip trailing spaces, fix line endings)
-2. Diffs `stage/` against `.live/` using SHA-256 hashes to find new, changed, and removed files
+1. Normalizes whitespace in all `.vgo` files (strip trailing spaces, fix line endings, replace tabs in YAML indentation, drop UTF-8 BOM). Templates (`.tmpl`) are not normalized — operators may rely on whitespace inside Go template directives.
+2. Diffs `stockpile/` against `.live/stockpile/` using SHA-256 hashes to find new, changed, and removed files. Only `.vgo` and `.tmpl` files are tracked; everything else under stockpile is invisible to publish.
 3. Runs the **module linter** on changed/new module files (see below)
-4. Loads all `.vgo` files from `stage/` using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because modules, roles, and envoy entries cross-reference each other.
+4. Loads all `.vgo` files from a staging copy of stockpile using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because modules, roles, and envoy entries cross-reference each other.
 5. HTTP/HTTPS URLs in **changed modules only** are probed for aliveness (HEAD with GET fallback). Unchanged modules are skipped.
-6. If validation passes and `--dry-run` is not set, atomically syncs `modules/`, `roles/`, `envoys/`, `templates/`, and `vars/` to `.live/`
+6. If validation passes and `--dry-run` is not set, atomically syncs the staging tree into `.live/stockpile/`. Sibling subtrees of stockpile (`examples/`, `anti-examples/`) are never read by the publisher.
 7. The CLI calls `POST /api/v1/config/reload` to trigger a server-side config reload
 8. If nothing changed, the command reports "Nothing to publish" and does not touch `.live/`
 
