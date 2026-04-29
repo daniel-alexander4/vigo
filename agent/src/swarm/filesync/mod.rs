@@ -37,10 +37,13 @@
 pub mod applier;
 pub mod config;
 pub mod discovery;
+pub mod gate;
 pub mod reconciler;
 pub mod scanner;
 pub mod server;
 pub mod state;
+
+pub use gate::Gate;
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;

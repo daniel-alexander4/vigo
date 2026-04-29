@@ -577,7 +577,7 @@ smtp:
 
 ### swarm
 
-Enables the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **payload** (admin-pushed file distribution), **filesync** (user directory sync), **gitmirror** (user source-control mirroring), and **cryptsync** (encrypted user directory sync). When enabled, agents open their peer server on port 1531 and participate in multicast discovery. Gitmirror runs on every enrolled envoy by default; deny specific hosts via `swarm.gitmirror.blacklist`. The other content subsystems opt in via their own usercrate flags or per-user directory presence.
+Enables the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **payload** (admin-pushed file distribution), **filesync** (user directory sync), **gitmirror** (user source-control mirroring), and **cryptsync** (encrypted user directory sync). When enabled, agents open their peer server on port 1531 and participate in multicast discovery. Gitmirror, cryptsync, and filesync run on every enrolled envoy by default; deny specific hosts via the per-subsystem `blacklist`, or halt cryptsync/filesync fleet-wide via `enabled: false`.
 
 ```yaml
 swarm:
@@ -586,6 +586,16 @@ swarm:
   port: 1531
   max_bandwidth_percent: 50
   gitmirror:
+    blacklist:
+      - "raspberrypi"
+      - "*.test.example.com"
+  cryptsync:
+    enabled: true
+    blacklist:
+      - "raspberrypi"
+      - "*.test.example.com"
+  filesync:
+    enabled: true
     blacklist:
       - "raspberrypi"
       - "*.test.example.com"
@@ -598,6 +608,10 @@ swarm:
 | `port` | `1531` | Agent peer server listen port (mTLS HTTPS) |
 | `max_bandwidth_percent` | `50` | Maximum network bandwidth agents will use for swarm transfers (percentage of interface capacity) |
 | `gitmirror.blacklist` | `[]` | Hostname patterns (filepath.Match globs) of envoys denied from receiving gitmirror bundles. Adding a host evicts its existing mirrors fleet-wide on the next config reload (`vigocli config publish`); removing it re-allows participation but does not re-replicate previous bundles automatically. Default-allow: an empty list means every enrolled envoy participates. |
+| `cryptsync.enabled` | `true` | Whether cryptsync runs fleet-wide. Set `false` to halt cryptsync (announcer, listener, push handler all idle); identity material under `~user/.cryptsync/` is preserved so re-enabling resumes operation without re-enrollment. |
+| `cryptsync.blacklist` | `[]` | Hostname patterns (filepath.Match globs) of envoys denied from holding cryptsync content. Adding a host scrubs its identity material fleet-wide and removes its pubkey from peer recipient lists on the next config reload (`vigocli config publish`). |
+| `filesync.enabled` | `true` | Whether filesync runs fleet-wide. Set `false` to halt filesync (multicast announcer, listener, push handler all idle); content under `~user/filesync/` is preserved so re-enabling resumes operation untouched. |
+| `filesync.blacklist` | `[]` | Hostname patterns (filepath.Match globs) of envoys denied from participating in filesync. Gate-only — content under `~user/filesync/` is **not** scrubbed on add (filesync content is plaintext user data; destructive removal is a manual operator action). |
 
 Agents listen on the configured port for peer chunk requests using the same mTLS certificates as gRPC communication. Multicast discovery uses UDP on `224.0.0.42` at the same port.
 

@@ -15,8 +15,7 @@
 //! `<substrate>_blacklisted`. All three default-on (a missing or
 //! ambiguous bit is treated as "not setting OFF") so a fresh-enrolled
 //! envoy with no policy bundle yet runs every subsystem until the
-//! server says otherwise. Filesync has no `<substrate>_blacklisted` —
-//! it gets the global + per-substrate flags only.
+//! server says otherwise.
 //!
 //! Centralizing the AND here means every consumer (multicast
 //! announcer, peer-server route handler, reactor tick) goes through
@@ -57,8 +56,10 @@ impl Substrate {
             Substrate::Payload => Some("payload_blacklisted"),
             Substrate::Gitmirror => Some("gitmirror_blacklisted"),
             Substrate::Cryptsync => Some("cryptsync_blacklisted"),
-            // Filesync has no per-host blacklist by design.
-            Substrate::Filesync => None,
+            // Filesync's blacklist is gate-only — a blacklisted host
+            // stops announcing and stops responding to peer requests,
+            // but ~user/filesync/ is left alone (plaintext user data).
+            Substrate::Filesync => Some("filesync_blacklisted"),
         }
     }
 
@@ -211,7 +212,18 @@ mod tests {
     }
 
     #[test]
-    fn filesync_has_no_blacklist_key() {
-        assert!(Substrate::Filesync.blacklist_key().is_none());
+    fn every_substrate_has_a_blacklist_key() {
+        for sub in [
+            Substrate::Payload,
+            Substrate::Gitmirror,
+            Substrate::Cryptsync,
+            Substrate::Filesync,
+        ] {
+            assert!(
+                sub.blacklist_key().is_some(),
+                "{} must have a blacklist key",
+                sub.name()
+            );
+        }
     }
 }

@@ -520,6 +520,12 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	if hostnameMatchesAny(s.swarmCfg.Cryptsync.Blacklist, envoy.Hostname) {
 		gates["cryptsync_blacklisted"] = true
 	}
+	if s.swarmCfg.Filesync.Enabled != nil && !*s.swarmCfg.Filesync.Enabled {
+		gates["swarm_filesync_enabled"] = false
+	}
+	if hostnameMatchesAny(s.swarmCfg.Filesync.Blacklist, envoy.Hostname) {
+		gates["filesync_blacklisted"] = true
+	}
 	if err := injectServerVars(bundle, gates); err != nil {
 		slog.Warn("failed to inject server vars into policy bundle",
 			"envoy", envoy.Hostname, "error", err)

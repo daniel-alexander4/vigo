@@ -395,6 +395,21 @@ watcher:
 #     blacklist:
 #       - "raspberrypi"
 #       - "*.test.example.com"
+#
+#   # Filesync runs by default on every enrolled envoy. Setting
+#   # `enabled: false` halts filesync fleet-wide (multicast announcer,
+#   # listener, push handler all idle); user content under
+#   # ~user/filesync/ is preserved so re-enabling resumes operation
+#   # untouched. Adding a host to `blacklist` stops it announcing /
+#   # responding to peer requests but does NOT scrub its
+#   # ~user/filesync/ — filesync content is plaintext user data, so
+#   # the blacklist is gate-only by design. Operators who want
+#   # destructive removal do it manually.
+#   filesync:
+#     enabled: true
+#     blacklist:
+#       - "raspberrypi"
+#       - "*.test.example.com"
 
 
 # ── Gossip & Fleet Primitives ────────────────────────────────────────────

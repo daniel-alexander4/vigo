@@ -126,6 +126,7 @@ type SwarmSection struct {
 	MaxBandwidthPercent int                    `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
 	Gitmirror           SwarmGitmirrorSection  `yaml:"gitmirror" doc:"Gitmirror subsystem (personal-DR repo backup) operability gates." long:"Gitmirror runs by default on every enrolled envoy. Use blacklist to deny specific envoys."`
 	Cryptsync           SwarmCryptsyncSection  `yaml:"cryptsync" doc:"Cryptsync subsystem (per-user encrypted P2P sync) operability gates." long:"Cryptsync runs by default on every enrolled envoy. Use blacklist to deny specific envoys from holding cryptsync content."`
+	Filesync            SwarmFilesyncSection   `yaml:"filesync" doc:"Filesync subsystem (per-user plaintext LAN P2P sync) operability gates." long:"Filesync runs by default on every enrolled envoy. Use enabled:false to halt fleet-wide, or blacklist to deny specific envoys from participating."`
 }
 
 // SwarmGitmirrorSection configures per-subsystem gates for gitmirror.
@@ -153,6 +154,28 @@ type SwarmGitmirrorSection struct {
 type SwarmCryptsyncSection struct {
 	Enabled   *bool    `yaml:"enabled" doc:"Whether cryptsync runs fleet-wide. Default true. Set false to halt cryptsync (announcer, listener, push handler all idle); identity material preserved." default:"true" example:"true"`
 	Blacklist []string `yaml:"blacklist" doc:"Hostname patterns (filepath.Match globs) of envoys denied from holding cryptsync content. Adding a host scrubs its identity material fleet-wide and removes its pubkey from peer recipient lists." example:"[raspberrypi, *.test.example.com]"`
+}
+
+// SwarmFilesyncSection configures per-subsystem gates for filesync.
+// Filesync is default-on across the fleet — every enrolled envoy
+// participates by default. Setting Enabled=false halts filesync
+// fleet-wide (multicast announcer, listener, and push handler all
+// idle); user content under ~user/filesync/ is preserved so re-
+// enabling resumes operation untouched.
+//
+// The Blacklist is gate-only by design: a blacklisted host stops
+// announcing and stops responding to peer requests, but its
+// ~user/filesync/ directory is NOT scrubbed. Filesync content is
+// plaintext user data, and a config typo wiping someone's home
+// directory is a far bigger blast radius than the cryptsync /
+// gitmirror destructive-blacklist semantic. Operators who want
+// to wipe blacklisted-host content do so manually.
+//
+// Enabled is a *bool so YAML can distinguish "operator did not set
+// it" (default true) from "operator set it to false" (halt filesync).
+type SwarmFilesyncSection struct {
+	Enabled   *bool    `yaml:"enabled" doc:"Whether filesync runs fleet-wide. Default true. Set false to halt filesync (announcer, listener, push handler all idle); ~user/filesync/ content preserved." default:"true" example:"true"`
+	Blacklist []string `yaml:"blacklist" doc:"Hostname patterns (filepath.Match globs) of envoys denied from participating in filesync. Gate-only — content under ~user/filesync/ is NOT scrubbed on add (filesync content is plaintext user data; destructive removal is a manual operator action)." example:"[raspberrypi, *.test.example.com]"`
 }
 
 // ScrierSection configures the Scrier remote access feature.
