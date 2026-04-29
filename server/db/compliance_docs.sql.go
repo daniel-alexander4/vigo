@@ -32,6 +32,61 @@ func (q *Queries) AddComplianceDocLink(ctx context.Context, arg AddComplianceDoc
 	return err
 }
 
+const countActiveDocsByControlForFramework = `-- name: CountActiveDocsByControlForFramework :many
+SELECT l.control_id, CAST(COUNT(*) AS INTEGER) AS total
+FROM compliance_docs d
+INNER JOIN compliance_doc_links l ON l.doc_id = d.id
+WHERE d.deleted_at IS NULL AND l.framework = ?1
+GROUP BY l.control_id
+`
+
+type CountActiveDocsByControlForFrameworkRow struct {
+	ControlID string `json:"control_id"`
+	Total     int64  `json:"total"`
+}
+
+func (q *Queries) CountActiveDocsByControlForFramework(ctx context.Context, framework string) ([]CountActiveDocsByControlForFrameworkRow, error) {
+	rows, err := q.db.QueryContext(ctx, countActiveDocsByControlForFramework, framework)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountActiveDocsByControlForFrameworkRow{}
+	for rows.Next() {
+		var i CountActiveDocsByControlForFrameworkRow
+		if err := rows.Scan(&i.ControlID, &i.Total); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const countActiveDocsForControl = `-- name: CountActiveDocsForControl :one
+SELECT CAST(COUNT(*) AS INTEGER) AS total
+FROM compliance_docs d
+INNER JOIN compliance_doc_links l ON l.doc_id = d.id
+WHERE d.deleted_at IS NULL AND l.framework = ?1 AND l.control_id = ?2
+`
+
+type CountActiveDocsForControlParams struct {
+	Framework string `json:"framework"`
+	ControlID string `json:"control_id"`
+}
+
+func (q *Queries) CountActiveDocsForControl(ctx context.Context, arg CountActiveDocsForControlParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countActiveDocsForControl, arg.Framework, arg.ControlID)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const createComplianceDoc = `-- name: CreateComplianceDoc :one
 INSERT INTO compliance_docs (id, doc_type, filename, mime_type, size_bytes, sha256, uploaded_by)
 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)

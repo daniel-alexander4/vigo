@@ -139,6 +139,35 @@ func funcMap() template.FuncMap {
 			}
 			return float64(part) / float64(total) * 100
 		},
+		// controlNature maps a control's Scope tag to a human-readable
+		// nature label for the framework report table. enforced and
+		// attested are both Technical (Vigo applies or measures);
+		// documented is Process (operator-uploaded artifact);
+		// not_applicable is N/A. Unknown scopes fall back to "—".
+		"controlNature": func(scope string) string {
+			switch scope {
+			case "enforced", "attested":
+				return "Technical"
+			case "documented":
+				return "Process"
+			case "not_applicable":
+				return "N/A"
+			default:
+				return "—"
+			}
+		},
+		"controlNatureClass": func(scope string) string {
+			switch scope {
+			case "enforced", "attested":
+				return "badge--info"
+			case "documented":
+				return "badge--pending"
+			case "not_applicable":
+				return "badge--unknown"
+			default:
+				return "badge--unknown"
+			}
+		},
 		"cssClass": func(s string) string {
 			r := strings.NewReplacer(" ", "-", ".", "-", "(", "", ")", "", "/", "-", ":", "-", ",", "")
 			return r.Replace(strings.ToLower(s))

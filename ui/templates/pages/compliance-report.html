@@ -57,12 +57,15 @@
 <h3 class="section-heading">{{if .FrameworkName}}{{.FrameworkName}}{{else}}{{.Title}}{{end}} Controls</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Control</th><th>Title</th><th>Fleet Coverage</th><th>Evidence</th></tr></thead>
+        <thead><tr><th>Control</th><th>Title</th><th>Nature</th><th>Fleet Coverage</th><th>Documents</th><th>Evidence</th></tr></thead>
         <tbody>
             {{range .Controls}}
             <tr>
                 <td class="mono">{{.ControlID}}</td>
                 <td>{{.Title}}</td>
+                <td>
+                    <span class="badge {{controlNatureClass .Scope}}" title="scope: {{.Scope}}">{{controlNature .Scope}}</span>
+                </td>
                 <td>
                     {{if gt .FleetTotal 0}}
                     {{/* Waived controls paint with the waiver color regardless of percent —
@@ -75,8 +78,39 @@
                     <span class="badge badge--failed">0%</span>
                     {{end}}
                 </td>
+                <td>
+                    {{if gt .DocCount 0}}
+                    <button type="button"
+                            class="btn btn--sm"
+                            hx-get="/ui/fragments/evidence-control-drill/{{$.Slug}}/{{.ControlID}}"
+                            hx-target="#docs-row-{{cssClass .ControlID}}"
+                            hx-swap="innerHTML"
+                            onclick="document.getElementById('docs-row-{{cssClass .ControlID}}').parentElement.style.display=document.getElementById('docs-row-{{cssClass .ControlID}}').parentElement.style.display==='table-row'?'none':'table-row';">
+                        &#128206; {{.DocCount}} attached
+                    </button>
+                    {{else if eq .Scope "documented"}}
+                    <button type="button"
+                            class="btn btn--sm"
+                            hx-get="/ui/fragments/evidence-control-drill/{{$.Slug}}/{{.ControlID}}"
+                            hx-target="#docs-row-{{cssClass .ControlID}}"
+                            hx-swap="innerHTML"
+                            onclick="document.getElementById('docs-row-{{cssClass .ControlID}}').parentElement.style.display=document.getElementById('docs-row-{{cssClass .ControlID}}').parentElement.style.display==='table-row'?'none':'table-row';"
+                            title="No docs uploaded — click to upload">
+                        Upload
+                    </button>
+                    {{else}}
+                    <span class="text-muted">&mdash;</span>
+                    {{end}}
+                </td>
                 <td class="text-muted">{{.Evidence}}</td>
             </tr>
+            {{if or (gt .DocCount 0) (eq .Scope "documented")}}
+            <tr style="display:none;">
+                <td colspan="6" style="padding:0;background:var(--color-bg);">
+                    <div id="docs-row-{{cssClass .ControlID}}"></div>
+                </td>
+            </tr>
+            {{end}}
             {{end}}
         </tbody>
     </table>

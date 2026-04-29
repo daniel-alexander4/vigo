@@ -76,7 +76,8 @@ Each page includes:
 - Download buttons (JSON, HTML, Print)
 - Fleet compliance gauge with segmented bar (green/blue/yellow/red for satisfied/waived/partial/missing) and inline bucket counts
 - Audit chain status banner
-- Controls table with control ID, title, status badge, and evidence
+- Controls table with control ID, title, **Nature** (Technical for `enforced`/`attested` scope, Process for `documented`, N/A for `not_applicable`), fleet coverage, **Documents** (count of operator-uploaded docs attached, click to expand inline; Process controls without docs show an Upload button), and evidence
+- The Documents cell expands the existing `evidence-control-drill` fragment in place — same supporting-documentation table and upload form as `/compliance/evidence`. Reuses `GET /ui/fragments/evidence-control-drill/{slug}/{controlID}`.
 - Fleet status table with per-envoy details (covered / waived / partial / missing all pulled from the unified scorer, so each row agrees with the card on the envoy-detail page)
 - **Viz View** button (`/compliance/{framework}/viz`) — switches to a visual view with a fleet coverage heatmap (envoys × controls, color-coded by coverage threshold) and a satisfied/partial/not_satisfied donut chart
 

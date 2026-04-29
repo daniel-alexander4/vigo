@@ -38,6 +38,11 @@ Claims and waivers live in **different filenames in different trees** — enforc
 
 Putting `waivers.vgo` in stockpile, `compliance.vgo` in scaffolding, or mixing the keys inside a file is rejected with a move hint. No silent warnings.
 
+The validator also rejects misnamed files in the right tree:
+
+- **`scaffolding/<anything>.vgo`** with a top-level `waivers:` block but not literally named `waivers.vgo` — the loader globs the exact filename, so a stray `corp-waivers.vgo` would silently not load. Rename to `waivers.vgo` (or split into a real waivers.vgo + a different-purpose file).
+- **`stockpile/<anything>.vgo`** that is "claims-only" (top-level `compliance:` with no `resources:` / `name:` / `vars:`) but not named `compliance.vgo` — same trap. Rename to `compliance.vgo` so directory-level claim inheritance picks it up. Module definitions carrying their own `compliance:` block are not affected.
+
 ## Resolution order — one diagram
 
 For an envoy `web01.customerA.example.com` checking in:

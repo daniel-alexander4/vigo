@@ -45,6 +45,8 @@ type ReportHandler struct {
 // decrypted plaintext.
 type DocsResolver interface {
 	HasActiveDocForControl(ctx context.Context, framework, controlID string) (bool, error)
+	CountActiveDocsForControl(ctx context.Context, framework, controlID string) (int, error)
+	ActiveDocCountsByControl(ctx context.Context, framework string) (map[string]int, error)
 	ListByControl(ctx context.Context, framework, controlID string) ([]db.ComplianceDoc, error)
 	Get(ctx context.Context, id string) ([]byte, db.ComplianceDoc, error)
 }
@@ -482,6 +484,26 @@ func (h *ReportHandler) computeFrameworkScore(ctx context.Context, as AuditChain
 	findings := h.buildFrameworkFindings(ctx, slug, fw)
 	total := len(findings)
 
+	standardKey, hasKey := config.StandardKeyForSlug[slug]
+
+	// Stamp per-control attached-doc counts so the framework page can
+	// show a "📎 N" badge next to controls with operator-uploaded
+	// evidence. One DB call per framework — controls without docs
+	// stay at zero and add no cost.
+	if h.docsResolver != nil {
+		docKey := slug
+		if hasKey {
+			docKey = standardKey
+		}
+		if counts, err := h.docsResolver.ActiveDocCountsByControl(ctx, docKey); err == nil {
+			for i := range findings {
+				if n, ok := counts[findings[i].ControlID]; ok {
+					findings[i].DocCount = n
+				}
+			}
+		}
+	}
+
 	score := &FrameworkScore{
 		Slug:     slug,
 		Name:     fw.name,
@@ -490,8 +512,6 @@ func (h *ReportHandler) computeFrameworkScore(ctx context.Context, as AuditChain
 		PerEnvoy: make(map[string]ui.EnvoyFrameworkStatus),
 		Controls: findings,
 	}
-
-	standardKey, hasKey := config.StandardKeyForSlug[slug]
 
 	var activeHostnames []string
 	if h.fleetIndex != nil {
@@ -804,6 +824,7 @@ type ControlFinding struct {
 	FleetPercent float64 `json:"fleet_percent"` // percentage of fleet with modules covering this control
 	FleetCovered int     `json:"fleet_covered"` // envoys with coverage
 	FleetTotal   int     `json:"fleet_total"`   // total active envoys
+	DocCount     int     `json:"doc_count"`     // number of operator-uploaded docs attached to this control (active, non-deleted)
 }
 
 // Control scope classifies whether a framework control is something

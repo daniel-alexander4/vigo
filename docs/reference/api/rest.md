@@ -1842,7 +1842,12 @@ Framework-specific compliance reports in JSON and printable HTML formats. Each f
       "control_id": "CC6.1",
       "title": "Logical and Physical Access Controls",
       "status": "satisfied",
-      "evidence": "..."
+      "scope": "enforced",
+      "evidence": "...",
+      "fleet_percent": 100.0,
+      "fleet_covered": 5,
+      "fleet_total": 5,
+      "doc_count": 0
     }
   ],
   "summary": {

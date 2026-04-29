@@ -257,6 +257,20 @@ func TestLinks_AddRemoveList(t *testing.T) {
 		}
 	}
 
+	// CountActiveDocsForControl returns 1 (one doc linked to 164.308(b)(1)).
+	if n, err := store.CountActiveDocsForControl(context.Background(), "hipaa", "164.308(b)(1)"); err != nil || n != 1 {
+		t.Errorf("CountActiveDocsForControl: got (%d, %v), want (1, nil)", n, err)
+	}
+
+	// ActiveDocCountsByControl returns the per-control map for one framework.
+	counts, err := store.ActiveDocCountsByControl(context.Background(), "hipaa")
+	if err != nil {
+		t.Fatalf("ActiveDocCountsByControl: %v", err)
+	}
+	if counts["164.308(b)(1)"] != 1 {
+		t.Errorf("ActiveDocCountsByControl[164.308(b)(1)] = %d, want 1", counts["164.308(b)(1)"])
+	}
+
 	// Detach one link; the doc itself stays.
 	if err := store.RemoveLink(context.Background(), row.ID, "soc2", "CC9.2"); err != nil {
 		t.Fatalf("RemoveLink: %v", err)
@@ -267,6 +281,9 @@ func TestLinks_AddRemoveList(t *testing.T) {
 	}
 	if got {
 		t.Error("HasActiveDocForControl still true after RemoveLink")
+	}
+	if n, err := store.CountActiveDocsForControl(context.Background(), "soc2", "CC9.2"); err != nil || n != 0 {
+		t.Errorf("CountActiveDocsForControl post-remove: got (%d, %v), want (0, nil)", n, err)
 	}
 }
 

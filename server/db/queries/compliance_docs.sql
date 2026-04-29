@@ -35,6 +35,19 @@ SELECT EXISTS(
     WHERE d.deleted_at IS NULL AND l.framework = ?1 AND l.control_id = ?2
 ) AS present;
 
+-- name: CountActiveDocsForControl :one
+SELECT CAST(COUNT(*) AS INTEGER) AS total
+FROM compliance_docs d
+INNER JOIN compliance_doc_links l ON l.doc_id = d.id
+WHERE d.deleted_at IS NULL AND l.framework = ?1 AND l.control_id = ?2;
+
+-- name: CountActiveDocsByControlForFramework :many
+SELECT l.control_id, CAST(COUNT(*) AS INTEGER) AS total
+FROM compliance_docs d
+INNER JOIN compliance_doc_links l ON l.doc_id = d.id
+WHERE d.deleted_at IS NULL AND l.framework = ?1
+GROUP BY l.control_id;
+
 -- name: SumComplianceDocsBytes :one
 SELECT CAST(COALESCE(SUM(size_bytes), 0) AS INTEGER) AS total
 FROM compliance_docs

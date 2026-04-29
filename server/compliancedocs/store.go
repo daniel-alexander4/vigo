@@ -299,6 +299,38 @@ func (s *Store) HasActiveDocForControl(ctx context.Context, framework, controlID
 	return got != 0, nil
 }
 
+// CountActiveDocsForControl returns the number of non-deleted docs
+// attached to (framework, controlID). Used by the framework report
+// page to show a per-control attachment count next to documented-scope
+// rows so operators can see at a glance which Process controls have
+// supporting evidence.
+func (s *Store) CountActiveDocsForControl(ctx context.Context, framework, controlID string) (int, error) {
+	n, err := s.queries.CountActiveDocsForControl(ctx, db.CountActiveDocsForControlParams{
+		Framework: framework,
+		ControlID: controlID,
+	})
+	if err != nil {
+		return 0, err
+	}
+	return int(n), nil
+}
+
+// ActiveDocCountsByControl returns a map of control_id → attached-doc
+// count for a single framework, in one round trip. Empty map when no
+// docs are attached for any control. Used by the framework report
+// page to populate per-control doc counts without N+1 queries.
+func (s *Store) ActiveDocCountsByControl(ctx context.Context, framework string) (map[string]int, error) {
+	rows, err := s.queries.CountActiveDocsByControlForFramework(ctx, framework)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]int, len(rows))
+	for _, r := range rows {
+		out[r.ControlID] = int(r.Total)
+	}
+	return out, nil
+}
+
 // AddLink attaches an existing doc to a (framework, controlID) pair.
 // Idempotent — the underlying SQL uses INSERT OR IGNORE so duplicate
 // links are no-ops, not errors.

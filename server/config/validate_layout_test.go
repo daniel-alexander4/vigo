@@ -150,3 +150,55 @@ func TestValidate_CleanLayout_Passes(t *testing.T) {
 		t.Errorf("clean worksite should pass validation, got: %s", err)
 	}
 }
+
+// Stray-filename validator branches: a top-level waivers: block in any
+// non-waivers.vgo file under scaffolding silently doesn't load (loader
+// globs the exact filename); same for claims-only files in stockpile
+// not named compliance.vgo. Both are rejected with rename hints.
+
+func TestValidate_StrayWaiversFilename_Rejected(t *testing.T) {
+	dir := t.TempDir()
+	scaffoldingDir := filepath.Join(dir, "scaffolding")
+	_ = os.MkdirAll(scaffoldingDir, 0o755)
+	_ = os.WriteFile(filepath.Join(scaffoldingDir, "corp-waivers.vgo"),
+		[]byte("waivers:\n  cis:\n    - control: \"5.4.1\"\n      reason: r\n      approved_by: d\n"), 0o644)
+
+	err := validateWorksiteLayout(dir)
+	if err == nil {
+		t.Fatal("expected violation for waivers: block in non-waivers.vgo file, got nil")
+	}
+	if !strings.Contains(err.Error(), "Rename to waivers.vgo") {
+		t.Errorf("error should include rename hint; got: %s", err)
+	}
+}
+
+func TestValidate_StrayClaimsFilename_Rejected(t *testing.T) {
+	dir := t.TempDir()
+	stockpileDir := filepath.Join(dir, "stockpile")
+	_ = os.MkdirAll(stockpileDir, 0o755)
+	_ = os.WriteFile(filepath.Join(stockpileDir, "corp-compliance.vgo"),
+		[]byte("compliance:\n  cis-ubuntu: [\"5.1.1\"]\n"), 0o644)
+
+	err := validateWorksiteLayout(dir)
+	if err == nil {
+		t.Fatal("expected violation for claims-only file not named compliance.vgo, got nil")
+	}
+	if !strings.Contains(err.Error(), "Rename to compliance.vgo") {
+		t.Errorf("error should include rename hint; got: %s", err)
+	}
+}
+
+// Module files (with name:/resources:) carrying a top-level compliance:
+// block are NOT claims-only — they're module defs declaring their own
+// claims, and must NOT be rejected.
+func TestValidate_ModuleWithComplianceBlock_NotRejected(t *testing.T) {
+	dir := t.TempDir()
+	stockpileDir := filepath.Join(dir, "stockpile", "modules")
+	_ = os.MkdirAll(stockpileDir, 0o755)
+	_ = os.WriteFile(filepath.Join(stockpileDir, "openssh.vgo"),
+		[]byte("name: openssh\ncompliance:\n  cis-ubuntu: [\"5.4.1\"]\nresources:\n  - name: foo\n    type: package\n    package: openssh-server\n"), 0o644)
+
+	if err := validateWorksiteLayout(dir); err != nil {
+		t.Errorf("module file with compliance: block should pass; got: %s", err)
+	}
+}

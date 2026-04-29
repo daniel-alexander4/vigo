@@ -63,6 +63,18 @@ func scanStockpileLayout(stockpileDir string) []string {
 						"(compliance.vgo in stockpile holds only compliance: claims).",
 					relSlash))
 			}
+			return nil
+		}
+		// Catch a non-canonical filename that looks like a claims-only
+		// file (top-level compliance: only, no resources:/name:/vars: —
+		// i.e., not a module def). Operators sometimes name them
+		// `complaince.vgo` or `usercrates-compliance.vgo`; without this
+		// check the file silently isn't loaded as claims.
+		if filepath.Ext(base) == ".vgo" && looksLikeClaimsOnly(path) {
+			problems = append(problems, fmt.Sprintf(
+				"stockpile/%s: looks like a claims-only file (top-level compliance: with no resources/name/vars) but is not named compliance.vgo. "+
+					"Rename to compliance.vgo so directory-level claim inheritance loads it.",
+				relSlash))
 		}
 		return nil
 	})
@@ -93,10 +105,37 @@ func scanScaffoldingLayout(scaffoldingDir string) []string {
 						"(waivers.vgo in scaffolding holds only waivers: entries).",
 					relSlash))
 			}
+			return nil
+		}
+		// Catch a non-canonical filename carrying a top-level waivers:
+		// block — the loader globs for the exact name `waivers.vgo`, so
+		// stray filenames silently don't load. Reject with a rename hint.
+		if filepath.Ext(base) == ".vgo" && hasTopLevelYAMLKey(path, "waivers") {
+			problems = append(problems, fmt.Sprintf(
+				"scaffolding/%s: top-level waivers: block in a non-waivers.vgo file. "+
+					"Rename to waivers.vgo (the loader only globs that exact filename).",
+				relSlash))
 		}
 		return nil
 	})
 	return problems
+}
+
+// looksLikeClaimsOnly returns true when a YAML file has a top-level
+// `compliance:` key and lacks any of the keys typical of a module
+// definition (`resources:`, `name:`, `vars:`). Used by the stockpile
+// layout check to flag misnamed compliance.vgo files — the loader
+// globs the exact filename, so a typo silently drops the claims.
+func looksLikeClaimsOnly(path string) bool {
+	if !hasTopLevelYAMLKey(path, "compliance") {
+		return false
+	}
+	for _, k := range []string{"resources", "name", "vars"} {
+		if hasTopLevelYAMLKey(path, k) {
+			return false
+		}
+	}
+	return true
 }
 
 func hasTopLevelYAMLKey(path, key string) bool {
