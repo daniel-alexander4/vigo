@@ -297,19 +297,19 @@ Health check endpoint that validates server subsystems.
 {
   "status": "healthy",
   "checks": [
-    {"name": "database", "status": "pass"},
-    {"name": "tls", "status": "pass", "message": "expires 2027-03-13"},
-    {"name": "secrets", "status": "pass", "message": "local"},
-    {"name": "license", "status": "pass", "message": "compliant, 42/100 envoys"},
-    {"name": "spanner", "status": "skip", "message": "standalone"},
-    {"name": "smtp", "status": "skip", "message": "not configured"},
-    {"name": "config", "status": "pass", "message": "15 modules, 8 entries"},
-    {"name": "stale_envoys", "status": "pass"}
+    {"name": "database", "scope": "server", "status": "pass"},
+    {"name": "tls", "scope": "server", "status": "pass", "message": "expires 2027-03-13"},
+    {"name": "secrets", "scope": "server", "status": "pass", "message": "local"},
+    {"name": "license", "scope": "server", "status": "pass", "message": "compliant, 42/100 envoys"},
+    {"name": "spanner", "scope": "server", "status": "skip", "message": "standalone"},
+    {"name": "integrations", "scope": "server", "status": "skip", "message": "no integrations configured"},
+    {"name": "config", "scope": "server", "status": "pass", "message": "15 modules, 8 entries"},
+    {"name": "stale_envoys", "scope": "fleet", "status": "pass"}
   ]
 }
 ```
 
-Check statuses: `pass`, `warn`, `fail`, `skip`. Overall status: `healthy`, `degraded`, `unhealthy`.
+Check statuses: `pass`, `warn`, `fail`, `skip`. Check scope: `server` (Vigo itself) or `fleet` (managed envoys). Overall status: `healthy`, `degraded`, `unhealthy`. The Vigo Health page renders only `server`-scope checks; `fleet` conditions surface on the dashboard and envoys views.
 
 ---
 

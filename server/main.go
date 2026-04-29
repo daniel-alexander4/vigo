@@ -2049,6 +2049,7 @@ func (a *healthCheckAdapter) RunChecks() (string, []ui.HealthCheck) {
 		uiChecks[i] = ui.HealthCheck{
 			Name:    c.Name,
 			Status:  string(c.Status),
+			Scope:   string(c.Scope),
 			Message: c.Message,
 		}
 	}

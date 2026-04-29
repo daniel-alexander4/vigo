@@ -205,6 +205,50 @@ func TestDoctor_BadTLSCert(t *testing.T) {
 	}
 }
 
+func TestDoctor_CheckScopes(t *testing.T) {
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
+	certFile, keyFile := generateTestCerts(t)
+	enforcer := newTestLicenseEnforcer(t)
+	configStore := newDoctorTestConfigStore(t)
+
+	handler := NewDoctorHandler(DoctorConfig{
+		SQLDB:       sqlDB,
+		CertFile:    certFile,
+		KeyFile:     keyFile,
+		Enforcer:    enforcer,
+		ConfigStore: configStore,
+		Queries:     queries,
+		Interval:    5 * time.Minute,
+	})
+
+	_, checks := handler.RunChecks()
+
+	wantScope := map[string]CheckScope{
+		"database":     ScopeServer,
+		"tls":          ScopeServer,
+		"secrets":      ScopeServer,
+		"license":      ScopeServer,
+		"spanner":      ScopeServer,
+		"integrations": ScopeServer,
+		"config":       ScopeServer,
+		"stale_envoys": ScopeFleet,
+	}
+	for _, c := range checks {
+		want, ok := wantScope[c.Name]
+		if !ok {
+			t.Errorf("unexpected check %q", c.Name)
+			continue
+		}
+		if c.Scope != want {
+			t.Errorf("check %q: scope = %q, want %q", c.Name, c.Scope, want)
+		}
+	}
+	if len(checks) != len(wantScope) {
+		t.Errorf("got %d checks, want %d", len(checks), len(wantScope))
+	}
+}
+
 func TestDoctor_StaleEnvoys(t *testing.T) {
 	sqlDB := openMigratedTestDB(t)
 	queries := db.New(sqlDB)

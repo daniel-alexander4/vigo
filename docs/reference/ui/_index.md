@@ -42,7 +42,7 @@ The following pages are only visible to authenticated admin users.
 | Enrollment | `/admin/enrollment` | Approved enrollment patterns |
 | Tokens | `/admin/tokens` | Bootstrap and API token management |
 | Webhooks | `/admin/webhooks` | Webhook endpoint configuration |
-| Health | `/admin/health` | System health checks (doctor) |
+| Vigo Health | `/health` | Server diagnostics — database, TLS, secrets, license, spanner, integrations, config (server-scope only; fleet conditions surface on the dashboard and envoys views) |
 | Backup | `/admin/backup` | Backup status, snapshot creation, download |
 | [Server Config](server-config.md) | `/server/config` | Read-only schema view of server.yaml — enabled/disabled per section with all available options |
 

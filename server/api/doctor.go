@@ -29,10 +29,23 @@ const (
 	StatusSkip CheckStatus = "skip"
 )
 
+// CheckScope distinguishes diagnostics that describe the Vigo server
+// itself from those that describe the managed fleet. The Vigo Health
+// page renders only server-scope checks; fleet-scope conditions belong
+// on dashboard/envoy surfaces and must not drag the server's headline
+// status down.
+type CheckScope string
+
+const (
+	ScopeServer CheckScope = "server"
+	ScopeFleet  CheckScope = "fleet"
+)
+
 // DoctorCheck is a single health check result.
 type DoctorCheck struct {
 	Name    string      `json:"name"`
 	Status  CheckStatus `json:"status"`
+	Scope   CheckScope  `json:"scope"`
 	Message string      `json:"message,omitempty"`
 }
 
@@ -155,43 +168,43 @@ func (h *DoctorHandler) handleDoctor(w http.ResponseWriter, r *http.Request) {
 
 func (h *DoctorHandler) checkDatabase(ctx context.Context) DoctorCheck {
 	if err := h.sqlDB.PingContext(ctx); err != nil {
-		return DoctorCheck{Name: "database", Status: StatusFail, Message: err.Error()}
+		return DoctorCheck{Name: "database", Scope: ScopeServer, Status: StatusFail, Message: err.Error()}
 	}
-	return DoctorCheck{Name: "database", Status: StatusPass}
+	return DoctorCheck{Name: "database", Scope: ScopeServer, Status: StatusPass}
 }
 
 func (h *DoctorHandler) checkTLS() DoctorCheck {
 	cert, err := tls.LoadX509KeyPair(h.certFile, h.keyFile)
 	if err != nil {
-		return DoctorCheck{Name: "tls", Status: StatusFail, Message: err.Error()}
+		return DoctorCheck{Name: "tls", Scope: ScopeServer, Status: StatusFail, Message: err.Error()}
 	}
 
 	if len(cert.Certificate) == 0 {
-		return DoctorCheck{Name: "tls", Status: StatusFail, Message: "no certificates in chain"}
+		return DoctorCheck{Name: "tls", Scope: ScopeServer, Status: StatusFail, Message: "no certificates in chain"}
 	}
 
 	leaf, err := x509.ParseCertificate(cert.Certificate[0])
 	if err != nil {
-		return DoctorCheck{Name: "tls", Status: StatusFail, Message: fmt.Sprintf("parsing cert: %v", err)}
+		return DoctorCheck{Name: "tls", Scope: ScopeServer, Status: StatusFail, Message: fmt.Sprintf("parsing cert: %v", err)}
 	}
 
 	daysLeft := int(time.Until(leaf.NotAfter).Hours() / 24)
 	expiry := leaf.NotAfter.Format("2006-01-02")
 
 	if daysLeft < 0 {
-		return DoctorCheck{Name: "tls", Status: StatusFail, Message: fmt.Sprintf("cert expired %s", expiry)}
+		return DoctorCheck{Name: "tls", Scope: ScopeServer, Status: StatusFail, Message: fmt.Sprintf("cert expired %s", expiry)}
 	}
 	if daysLeft < 30 {
-		return DoctorCheck{Name: "tls", Status: StatusWarn, Message: fmt.Sprintf("cert expires in %d days (%s)", daysLeft, expiry)}
+		return DoctorCheck{Name: "tls", Scope: ScopeServer, Status: StatusWarn, Message: fmt.Sprintf("cert expires in %d days (%s)", daysLeft, expiry)}
 	}
-	return DoctorCheck{Name: "tls", Status: StatusPass, Message: fmt.Sprintf("expires %s", expiry)}
+	return DoctorCheck{Name: "tls", Scope: ScopeServer, Status: StatusPass, Message: fmt.Sprintf("expires %s", expiry)}
 }
 
 func (h *DoctorHandler) checkSecrets() DoctorCheck {
 	if h.secretsBackend == "" {
-		return DoctorCheck{Name: "secrets", Status: StatusSkip}
+		return DoctorCheck{Name: "secrets", Scope: ScopeServer, Status: StatusSkip}
 	}
-	return DoctorCheck{Name: "secrets", Status: StatusPass, Message: h.secretsBackend}
+	return DoctorCheck{Name: "secrets", Scope: ScopeServer, Status: StatusPass, Message: h.secretsBackend}
 }
 
 func (h *DoctorHandler) checkLicense(ctx context.Context) DoctorCheck {
@@ -201,13 +214,13 @@ func (h *DoctorHandler) checkLicense(ctx context.Context) DoctorCheck {
 	case license.StageCompliant:
 		msg := fmt.Sprintf("%s, %d/%d envoys", status.Stage, status.ActiveEnvoys, status.MaxEnvoys)
 		if status.DaysRemaining > 0 && status.DaysRemaining <= 30 {
-			return DoctorCheck{Name: "license", Status: StatusWarn, Message: fmt.Sprintf("%s, expires in %d days", msg, status.DaysRemaining)}
+			return DoctorCheck{Name: "license", Scope: ScopeServer, Status: StatusWarn, Message: fmt.Sprintf("%s, expires in %d days", msg, status.DaysRemaining)}
 		}
-		return DoctorCheck{Name: "license", Status: StatusPass, Message: msg}
+		return DoctorCheck{Name: "license", Scope: ScopeServer, Status: StatusPass, Message: msg}
 	case license.StageGrace:
-		return DoctorCheck{Name: "license", Status: StatusWarn, Message: fmt.Sprintf("Grace Period: %s (%d days left)", status.Violation, status.GraceDaysLeft)}
+		return DoctorCheck{Name: "license", Scope: ScopeServer, Status: StatusWarn, Message: fmt.Sprintf("Grace Period: %s (%d days left)", status.Violation, status.GraceDaysLeft)}
 	default:
-		return DoctorCheck{Name: "license", Status: StatusFail, Message: fmt.Sprintf("%s: %s", status.Stage, status.Violation)}
+		return DoctorCheck{Name: "license", Scope: ScopeServer, Status: StatusFail, Message: fmt.Sprintf("%s: %s", status.Stage, status.Violation)}
 	}
 }
 
@@ -215,21 +228,21 @@ func (h *DoctorHandler) checkSpanner() DoctorCheck {
 	switch h.role {
 	case config.RoleHub:
 		if h.hub == nil {
-			return DoctorCheck{Name: "spanner", Status: StatusFail, Message: "hub mode but no spoke connections"}
+			return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusFail, Message: "hub mode but no spoke connections"}
 		}
-		return DoctorCheck{Name: "spanner", Status: StatusPass, Message: fmt.Sprintf("hub, %d spokes", h.hub.SpokeCount())}
+		return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusPass, Message: fmt.Sprintf("hub, %d spokes", h.hub.SpokeCount())}
 	case config.RoleSpoke:
-		return DoctorCheck{Name: "spanner", Status: StatusPass, Message: "spoke"}
+		return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusPass, Message: "spoke"}
 	default:
-		return DoctorCheck{Name: "spanner", Status: StatusSkip, Message: "standalone"}
+		return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusSkip, Message: "standalone"}
 	}
 }
 
 func (h *DoctorHandler) checkIntegrations() DoctorCheck {
 	if !h.integrations {
-		return DoctorCheck{Name: "integrations", Status: StatusSkip, Message: "no integrations configured"}
+		return DoctorCheck{Name: "integrations", Scope: ScopeServer, Status: StatusSkip, Message: "no integrations configured"}
 	}
-	return DoctorCheck{Name: "integrations", Status: StatusPass, Message: "enabled"}
+	return DoctorCheck{Name: "integrations", Scope: ScopeServer, Status: StatusPass, Message: "enabled"}
 }
 
 func (h *DoctorHandler) checkConfig() DoctorCheck {
@@ -237,15 +250,15 @@ func (h *DoctorHandler) checkConfig() DoctorCheck {
 	msg := fmt.Sprintf("%d modules, %d entries", stats.Modules, stats.Entries)
 
 	if stats.Modules == 0 {
-		return DoctorCheck{Name: "config", Status: StatusWarn, Message: "no modules loaded"}
+		return DoctorCheck{Name: "config", Scope: ScopeServer, Status: StatusWarn, Message: "no modules loaded"}
 	}
-	return DoctorCheck{Name: "config", Status: StatusPass, Message: msg}
+	return DoctorCheck{Name: "config", Scope: ScopeServer, Status: StatusPass, Message: msg}
 }
 
 func (h *DoctorHandler) checkStaleEnvoys(ctx context.Context) DoctorCheck {
 	envoys, err := h.queries.ListEnvoys(ctx)
 	if err != nil {
-		return DoctorCheck{Name: "stale_envoys", Status: StatusFail, Message: err.Error()}
+		return DoctorCheck{Name: "stale_envoys", Scope: ScopeFleet, Status: StatusFail, Message: err.Error()}
 	}
 
 	staleThreshold := 2 * h.baseInterval
@@ -263,14 +276,14 @@ func (h *DoctorHandler) checkStaleEnvoys(ctx context.Context) DoctorCheck {
 	}
 
 	if len(stale) == 0 {
-		return DoctorCheck{Name: "stale_envoys", Status: StatusPass}
+		return DoctorCheck{Name: "stale_envoys", Scope: ScopeFleet, Status: StatusPass}
 	}
 
 	msg := fmt.Sprintf("%d stale", len(stale))
 	if len(stale) <= 5 {
 		msg += ": " + joinHostnames(stale)
 	}
-	return DoctorCheck{Name: "stale_envoys", Status: StatusWarn, Message: msg}
+	return DoctorCheck{Name: "stale_envoys", Scope: ScopeFleet, Status: StatusWarn, Message: msg}
 }
 
 func joinHostnames(names []string) string {

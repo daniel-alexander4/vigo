@@ -336,9 +336,13 @@ type CVESearcher interface {
 }
 
 // HealthCheck is a single diagnostic check result for the health page.
+// Scope is "server" for diagnostics that describe Vigo itself and
+// "fleet" for ones that describe managed envoys; the Vigo Health page
+// renders only server-scope checks.
 type HealthCheck struct {
 	Name    string
 	Status  string // "pass", "warn", "fail", "skip"
+	Scope   string // "server", "fleet"
 	Message string
 }
 
@@ -7511,9 +7515,9 @@ func (h *Handler) Approvals(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "approvals", data)
 }
 
-// Health renders the system health diagnostics page.
+// Health renders the Vigo Health diagnostics page.
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
-	data := PageData{Title: "System Health", ActiveNav: "health"}
+	data := PageData{Title: "Vigo Health", ActiveNav: "health"}
 	h.setCommonWithRequest(&data, r)
 	h.renderer.Render(w, "health", data)
 }
@@ -8759,20 +8763,48 @@ func (h *Handler) ApprovalsFragment(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `</tbody></table>`)
 }
 
-// HealthFragment returns the system health diagnostics via HTMX.
+// HealthFragment returns the Vigo Health diagnostics via HTMX.
+//
+// Renders only server-scope checks — fleet conditions like stale envoys
+// belong on dashboard/envoy surfaces and must not influence the
+// server's headline status. Skips count as not-applicable: they are
+// shown in the table but excluded from the pass-rate denominator and
+// from the overall status rollup.
 func (h *Handler) HealthFragment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if h.healthChecker == nil {
 		fmt.Fprintf(w, `<p>Health checks not available.</p>`)
 		return
 	}
-	status, checks := h.healthChecker.RunChecks()
-	passCount := 0
-	for _, c := range checks {
-		if c.Status == "pass" {
-			passCount++
+	_, allChecks := h.healthChecker.RunChecks()
+
+	serverChecks := make([]HealthCheck, 0, len(allChecks))
+	for _, c := range allChecks {
+		// Treat empty scope as server for forward compatibility with
+		// any check that hasn't been tagged yet.
+		if c.Scope == "" || c.Scope == "server" {
+			serverChecks = append(serverChecks, c)
 		}
 	}
+
+	passCount, skipCount := 0, 0
+	status := "healthy"
+	for _, c := range serverChecks {
+		switch c.Status {
+		case "pass":
+			passCount++
+		case "skip":
+			skipCount++
+		case "warn":
+			if status == "healthy" {
+				status = "degraded"
+			}
+		case "fail":
+			status = "unhealthy"
+		}
+	}
+	applicable := len(serverChecks) - skipCount
+
 	statusCSS := "success"
 	if status == "degraded" {
 		statusCSS = "warning"
@@ -8781,11 +8813,15 @@ func (h *Handler) HealthFragment(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, `<div class="stat-grid">`)
 	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Overall Status</div><div class="stat-card__value text-%s">%s</div></div>`, statusCSS, template.HTMLEscapeString(status))
-	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Checks Passed</div><div class="stat-card__value">%d / %d</div></div>`, passCount, len(checks))
+	if skipCount > 0 {
+		fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Checks Passed</div><div class="stat-card__value">%d / %d <span style="font-size:0.65em;font-weight:normal">(%d skipped)</span></div></div>`, passCount, applicable, skipCount)
+	} else {
+		fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Checks Passed</div><div class="stat-card__value">%d / %d</div></div>`, passCount, applicable)
+	}
 	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Version</div><div class="stat-card__value" style="font-size:1rem">%s</div></div>`, template.HTMLEscapeString(h.version))
 	fmt.Fprintf(w, `</div>`)
 	fmt.Fprintf(w, `<div class="card mt-3"><h2>Diagnostic Checks</h2><table class="table"><thead><tr><th>Check</th><th>Status</th><th>Details</th></tr></thead><tbody>`)
-	for _, c := range checks {
+	for _, c := range serverChecks {
 		checkCSS := "info"
 		switch c.Status {
 		case "pass":
