@@ -511,6 +511,15 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	if !s.swarmCfg.Enabled {
 		gates["swarm_enabled"] = false
 	}
+	if s.swarmCfg.Payload.Enabled != nil && !*s.swarmCfg.Payload.Enabled {
+		gates["swarm_payload_enabled"] = false
+	}
+	if hostnameMatchesAny(s.swarmCfg.Payload.Blacklist, envoy.Hostname) {
+		gates["payload_blacklisted"] = true
+	}
+	if s.swarmCfg.Gitmirror.Enabled != nil && !*s.swarmCfg.Gitmirror.Enabled {
+		gates["swarm_gitmirror_enabled"] = false
+	}
 	if hostnameMatchesAny(s.swarmCfg.Gitmirror.Blacklist, envoy.Hostname) {
 		gates["gitmirror_blacklisted"] = true
 	}

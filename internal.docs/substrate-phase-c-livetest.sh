@@ -5,16 +5,16 @@
 # Companion to substrate-phase-b-livetest.sh, covering the parts of
 # the swarm substrate that phase-b doesn't touch:
 #
-#   §1  Swarm health         — read-only assertions: each envoy's
-#                              peers.json knows the others; manifest.json
-#                              is non-empty and roughly consistent across
-#                              the fleet.
-#   §2  Payload end-to-end   — distribute a small payload, poll status
+#   §1  Payload + swarm health — distribute a small payload, poll status
 #                              until every envoy is complete/cached/source,
-#                              verify the file lands at the documented
-#                              materialization paths, revoke, verify
-#                              eviction.
-#   §3  Filesync end-to-end  — drop a file in PRIMARY's ~/filesync/, verify
+#                              SAMPLE peers.json and manifest gossip while
+#                              the blob is still present (peer table only
+#                              populates as a side-effect of active
+#                              fetches — sampling on a cold fleet shows
+#                              empty and is a measurement artifact, not
+#                              a fleet failure), verify materialization,
+#                              revoke, verify eviction.
+#   §2  Filesync end-to-end  — drop a file in PRIMARY's ~/filesync/, verify
 #                              it propagates to SECONDARY, modify on
 #                              SECONDARY, verify the update reflects on
 #                              PRIMARY, delete on PRIMARY, verify removal.
@@ -278,14 +278,62 @@ if (( REACHABLE_COUNT < 2 )); then
     exit 1
 fi
 
-# ───────────────────────── 1. Swarm health (read-only) ─────────────────────────
-section "1. Swarm health — peer table + manifest gossip"
+# ───────────────────────── 1. Payload + swarm health ─────────────────────────
+section "1. Payload + swarm health — distribute, sample peer table + manifest mid-flow, revoke"
+
+# Keep the label ≤27 chars — `vigocli swarm payload list` truncates
+# anything longer to first 24 chars + "...", which would defeat the
+# substring grep below.
+PAYLOAD_LABEL="pc-payload-$(date +%s)"
+PAYLOAD_FILE="/tmp/${PAYLOAD_LABEL}.bin"
+step "generating 32 KiB random payload at $PAYLOAD_FILE"
+if head -c 32768 /dev/urandom > "$PAYLOAD_FILE"; then
+    PAYLOAD_LOCAL_SHA=$(sha256sum "$PAYLOAD_FILE" | awk '{print $1}')
+    pass "payload created (sha256=${PAYLOAD_LOCAL_SHA:0:12}...)"
+else
+    fail "could not create test payload"
+    exit 1
+fi
+
+step "vigocli swarm payload distribute --target '*' --label $PAYLOAD_LABEL"
+distribute_out=$(vigocli swarm payload distribute "$PAYLOAD_FILE" --target '*' --label "$PAYLOAD_LABEL" 2>&1)
+if [[ $? -ne 0 ]]; then
+    fail "distribute failed: $(head -2 <<<"$distribute_out" | tr '\n' ' ')"
+    exit 1
+fi
+pass "distribute returned 0"
+
+# Pull the SHA back from the CLI output ("  SHA256: <hex>"). Compare
+# with the local hash to sanity-check the upload.
+PAYLOAD_SHA=$(grep -oE 'SHA256: [0-9a-f]{64}' <<<"$distribute_out" | head -1 | awk '{print $2}')
+if [[ -z "$PAYLOAD_SHA" ]]; then
+    fail "could not extract SHA256 from distribute output"
+    exit 1
+fi
+if [[ "$PAYLOAD_SHA" != "$PAYLOAD_LOCAL_SHA" ]]; then
+    fail "server-reported SHA $PAYLOAD_SHA != local $PAYLOAD_LOCAL_SHA"
+else
+    pass "server SHA matches local hash"
+fi
+note "tracking sha=${PAYLOAD_SHA:0:16}..."
+
+step "polling payload status until every envoy is complete/cached/source (timeout ${PAYLOAD_TIMEOUT}s)"
+if wait_payload_complete "$PAYLOAD_SHA" "$PAYLOAD_TIMEOUT"; then
+    pass "all envoys reported complete within ${PAYLOAD_TIMEOUT}s"
+else
+    fail "payload distribution did not complete within ${PAYLOAD_TIMEOUT}s"
+    note "current status:"
+    vigocli swarm payload status "$PAYLOAD_SHA" 2>&1 | head -20 | while IFS= read -r line; do note "  $line"; done
+fi
 
 # Swarm peers.json is a blob-holder index: a JSON array of records
 # of shape {sha256, address, chunk_count, source, age_secs} — keyed
-# by IP:port, NOT hostname. So we assert that each REACHABLE peer's
-# IP appears in every other reachable envoy's peers.json (i.e. the
-# fleet has successfully cross-probed each other for blobs).
+# by IP:port, NOT hostname. It only populates as a side-effect of
+# active fetches, so we sample it HERE (post-distribute, pre-revoke):
+# every reachable envoy just exchanged chunks with every other
+# reachable envoy, so each one's peers.json should know the others.
+# Sampling on a cold fleet (or post-revoke) shows empty and is a
+# measurement artifact, not a fleet failure.
 for h in "${ALL_HOSTS[@]}"; do
     if (( HOST_REACHABLE[$h] == 0 )); then
         skip "$h: swarm peers.json (host unreachable)"
@@ -347,8 +395,10 @@ for h in "${ALL_HOSTS[@]}"; do
 done
 
 # Cross-fleet manifest delta — only meaningful when ≥2 reachable
-# envoys reported a count.
-if (( ${#MANIFEST_COUNTS[@]} >= 2 )); then
+# envoys reported a count. The `-v` guard sidesteps `set -u`
+# tripping on an empty associative array when every host failed
+# the count probe.
+if [[ -v MANIFEST_COUNTS[@] ]] && (( ${#MANIFEST_COUNTS[@]} >= 2 )); then
     max=0; min=999999
     for c in "${MANIFEST_COUNTS[@]}"; do
         (( c > max )) && max=$c
@@ -360,54 +410,6 @@ if (( ${#MANIFEST_COUNTS[@]} >= 2 )); then
     else
         fail "manifest entry counts diverge across reachable fleet (min=$min max=$max delta=$delta)"
     fi
-fi
-
-# ───────────────────────── 2. Payload end-to-end ─────────────────────────
-section "2. Payload — distribute, verify fan-out, revoke"
-
-# Keep the label ≤27 chars — `vigocli swarm payload list` truncates
-# anything longer to first 24 chars + "...", which would defeat the
-# substring grep below.
-PAYLOAD_LABEL="pc-payload-$(date +%s)"
-PAYLOAD_FILE="/tmp/${PAYLOAD_LABEL}.bin"
-step "generating 32 KiB random payload at $PAYLOAD_FILE"
-if head -c 32768 /dev/urandom > "$PAYLOAD_FILE"; then
-    PAYLOAD_LOCAL_SHA=$(sha256sum "$PAYLOAD_FILE" | awk '{print $1}')
-    pass "payload created (sha256=${PAYLOAD_LOCAL_SHA:0:12}...)"
-else
-    fail "could not create test payload"
-    exit 1
-fi
-
-step "vigocli swarm payload distribute --target '*' --label $PAYLOAD_LABEL"
-distribute_out=$(vigocli swarm payload distribute "$PAYLOAD_FILE" --target '*' --label "$PAYLOAD_LABEL" 2>&1)
-if [[ $? -ne 0 ]]; then
-    fail "distribute failed: $(head -2 <<<"$distribute_out" | tr '\n' ' ')"
-    exit 1
-fi
-pass "distribute returned 0"
-
-# Pull the SHA back from the CLI output ("  SHA256: <hex>"). Compare
-# with the local hash to sanity-check the upload.
-PAYLOAD_SHA=$(grep -oE 'SHA256: [0-9a-f]{64}' <<<"$distribute_out" | head -1 | awk '{print $2}')
-if [[ -z "$PAYLOAD_SHA" ]]; then
-    fail "could not extract SHA256 from distribute output"
-    exit 1
-fi
-if [[ "$PAYLOAD_SHA" != "$PAYLOAD_LOCAL_SHA" ]]; then
-    fail "server-reported SHA $PAYLOAD_SHA != local $PAYLOAD_LOCAL_SHA"
-else
-    pass "server SHA matches local hash"
-fi
-note "tracking sha=${PAYLOAD_SHA:0:16}..."
-
-step "polling payload status until every envoy is complete/cached/source (timeout ${PAYLOAD_TIMEOUT}s)"
-if wait_payload_complete "$PAYLOAD_SHA" "$PAYLOAD_TIMEOUT"; then
-    pass "all envoys reported complete within ${PAYLOAD_TIMEOUT}s"
-else
-    fail "payload distribution did not complete within ${PAYLOAD_TIMEOUT}s"
-    note "current status:"
-    vigocli swarm payload status "$PAYLOAD_SHA" 2>&1 | head -20 | while IFS= read -r line; do note "  $line"; done
 fi
 
 # Verify materialization on each envoy. Payload writes the canonical
@@ -475,8 +477,8 @@ done
 # but produces a noisier cleanup log).
 PAYLOAD_SHA=""
 
-# ───────────────────────── 3. Filesync end-to-end ─────────────────────────
-section "3. Filesync — drop file, sync, modify, propagate back, delete"
+# ───────────────────────── 2. Filesync end-to-end ─────────────────────────
+section "2. Filesync — drop file, sync, modify, propagate back, delete"
 
 # Filesync round-trip needs PRIMARY and SECONDARY both reachable. Skip
 # the whole section if not — we'd just be timing out on every assertion.

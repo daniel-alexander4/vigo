@@ -221,20 +221,31 @@ fn urlencode(s: &str) -> String {
     out
 }
 
+/// Set a file's mtime to the given unix-second timestamp. Returns true on
+/// success, false on any failure (path conversion, syscall error, or
+/// non-unix build). Shared with the scanner's resurrection path — when a
+/// previously-tombstoned file reappears, the scanner bumps its mtime so
+/// peers' tombstones can't out-rank it on the next reconcile.
 #[cfg(unix)]
-fn set_mtime(path: &Path, mtime: i64) {
+pub(super) fn set_mtime(path: &Path, mtime: i64) -> bool {
     use std::ffi::CString;
     let c_path = match CString::new(path.to_string_lossy().as_bytes()) {
         Ok(p) => p,
-        Err(_) => return,
+        Err(_) => return false,
     };
     let times = [
         libc::timespec { tv_sec: 0, tv_nsec: libc::UTIME_OMIT },
         libc::timespec { tv_sec: mtime as libc::time_t, tv_nsec: 0 },
     ];
-    unsafe {
-        libc::utimensat(libc::AT_FDCWD, c_path.as_ptr(), times.as_ptr(), 0);
-    }
+    let rc = unsafe {
+        libc::utimensat(libc::AT_FDCWD, c_path.as_ptr(), times.as_ptr(), 0)
+    };
+    rc == 0
+}
+
+#[cfg(not(unix))]
+pub(super) fn set_mtime(_path: &Path, _mtime: i64) -> bool {
+    false
 }
 
 #[cfg(test)]

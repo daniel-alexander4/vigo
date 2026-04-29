@@ -577,7 +577,7 @@ smtp:
 
 ### swarm
 
-Enables the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **payload** (admin-pushed file distribution), **filesync** (user directory sync), **gitmirror** (user source-control mirroring), and **cryptsync** (encrypted user directory sync). When enabled, agents open their peer server on port 1531 and participate in multicast discovery. Gitmirror, cryptsync, and filesync run on every enrolled envoy by default; deny specific hosts via the per-subsystem `blacklist`, or halt cryptsync/filesync fleet-wide via `enabled: false`.
+Enables the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **payload** (admin-pushed file distribution), **gitmirror** (user source-control mirroring), **cryptsync** (encrypted user directory sync), and **filesync** (user directory sync). When enabled, agents open their peer server on port 1531 and participate in multicast discovery. All four content subsystems run on every enrolled envoy by default; halt any one fleet-wide via its `enabled: false`, or deny specific hosts via its `blacklist`.
 
 ```yaml
 swarm:
@@ -585,7 +585,13 @@ swarm:
   seed_dir: "/var/lib/vigo/swarm/seed"
   port: 1531
   max_bandwidth_percent: 50
+  payload:
+    enabled: true
+    blacklist:
+      - "raspberrypi"
+      - "*.test.example.com"
   gitmirror:
+    enabled: true
     blacklist:
       - "raspberrypi"
       - "*.test.example.com"
@@ -607,6 +613,9 @@ swarm:
 | `seed_dir` | `/var/lib/vigo/swarm/seed` | Directory where `vigocli swarm distribute` writes seed files |
 | `port` | `1531` | Agent peer server listen port (mTLS HTTPS) |
 | `max_bandwidth_percent` | `50` | Maximum network bandwidth agents will use for swarm transfers (percentage of interface capacity) |
+| `payload.enabled` | `true` | Whether payload reception runs fleet-wide. Set `false` to halt agents accepting new payload assignments; already-cached blobs are preserved so re-enabling resumes operation untouched. |
+| `payload.blacklist` | `[]` | Hostname patterns (filepath.Match globs) of envoys denied from receiving payload distributions. Gate-only — already-cached blobs on a newly-blacklisted host are not evicted automatically. |
+| `gitmirror.enabled` | `true` | Whether gitmirror runs fleet-wide. Set `false` to halt gitmirror (publisher and receiver idle); already-held mirrors at `/var/lib/vigo/swarm/gitmirror/mirrors/` are preserved so re-enabling resumes operation untouched. |
 | `gitmirror.blacklist` | `[]` | Hostname patterns (filepath.Match globs) of envoys denied from receiving gitmirror bundles. Adding a host evicts its existing mirrors fleet-wide on the next config reload (`vigocli config publish`); removing it re-allows participation but does not re-replicate previous bundles automatically. Default-allow: an empty list means every enrolled envoy participates. |
 | `cryptsync.enabled` | `true` | Whether cryptsync runs fleet-wide. Set `false` to halt cryptsync (announcer, listener, push handler all idle); identity material under `~user/.cryptsync/` is preserved so re-enabling resumes operation without re-enrollment. |
 | `cryptsync.blacklist` | `[]` | Hostname patterns (filepath.Match globs) of envoys denied from holding cryptsync content. Adding a host scrubs its identity material fleet-wide and removes its pubkey from peer recipient lists on the next config reload (`vigocli config publish`). |

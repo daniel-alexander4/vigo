@@ -360,12 +360,29 @@ watcher:
 #   port: 1531                                  # agent swarm listen port
 #   max_bandwidth_percent: 50                   # max % of link speed agents use for swarm
 #
-#   # Gitmirror runs by default on every enrolled envoy. Use blacklist to
-#   # deny specific hosts (filepath.Match globs). Adding a host triggers
-#   # fleet-wide eviction of its existing mirrors on the next
-#   # `vigocli config publish`. Default-allow: empty list means every
-#   # enrolled envoy participates.
+#   # Payload runs by default on every enrolled envoy. Setting
+#   # `enabled: false` halts payload reception fleet-wide (agents stop
+#   # applying new payload manifest entries); already-cached blobs
+#   # under /var/lib/vigo/swarm/ are preserved so re-enabling resumes
+#   # operation untouched. The blacklist denies specific hostnames —
+#   # gate-only, never destructive (already-cached blobs on a newly-
+#   # blacklisted host are not evicted automatically).
+#   payload:
+#     enabled: true
+#     blacklist:
+#       - "raspberrypi"
+#       - "*.test.example.com"
+#
+#   # Gitmirror runs by default on every enrolled envoy. Setting
+#   # `enabled: false` halts gitmirror fleet-wide (publisher and
+#   # receiver idle); already-held mirrors at
+#   # /var/lib/vigo/swarm/gitmirror/mirrors/ are preserved so re-
+#   # enabling resumes operation untouched. Adding a host to
+#   # `blacklist` triggers fleet-wide eviction of its existing
+#   # mirrors on the next `vigocli config publish`. Default-allow:
+#   # empty blacklist means every enrolled envoy participates.
 #   gitmirror:
+#     enabled: true
 #     blacklist:
 #       - "raspberrypi"
 #       - "*.test.example.com"
@@ -470,7 +487,7 @@ watcher:
 
 # ── Task Dispatch ────────────────────────────────────────────────────────
 # When require_definition is true, only named task definitions (from the
-# stockpile/tasks/ directory) can be dispatched. Ad-hoc commands are rejected with 403.
+# stacks/stockpile/tasks/ directory) can be dispatched. Ad-hoc commands are rejected with 403.
 
 # task:
 #   require_definition: false                  # default false — allow ad-hoc commands

@@ -60,9 +60,14 @@ func (p *RetentionPruner) Start(ctx context.Context, interval time.Duration) {
 }
 
 // Prune revokes expired seed entries in the tracker and gossips the
-// revocation through the manifest CRDT.
+// revocation through the manifest CRDT, then garbage-collects revoked
+// manifest entries older than the retention window. Without the GC
+// pass, revoked entries accumulate forever in the in-memory store —
+// agents already prune their persisted manifest at the same window
+// (manifest.rs::prune_revoked, called from the check-in loop), so this
+// keeps the two sides symmetric.
 func (p *RetentionPruner) Prune(_ context.Context) {
-	var seedsRevoked int
+	var seedsRevoked, manifestPruned int
 	if p.tracker != nil {
 		for _, sha256 := range p.tracker.ExpiredSeeds() {
 			p.tracker.RevokeSeed(sha256)
@@ -72,8 +77,13 @@ func (p *RetentionPruner) Prune(_ context.Context) {
 			seedsRevoked++
 		}
 	}
+	if p.manifestStore != nil {
+		manifestPruned = p.manifestStore.PruneRevoked(p.retention)
+	}
 
-	if seedsRevoked > 0 {
-		slog.Info("swarm retention pruner complete", "seeds_revoked", seedsRevoked)
+	if seedsRevoked > 0 || manifestPruned > 0 {
+		slog.Info("swarm retention pruner complete",
+			"seeds_revoked", seedsRevoked,
+			"manifest_entries_pruned", manifestPruned)
 	}
 }

@@ -157,11 +157,18 @@ pub fn hash_file(path: &Path) -> Result<String> {
 ///
 /// `now` is wall-clock time in unix seconds; used as the deletion timestamp
 /// for files present in `previous` but missing from `current`.
+///
+/// `dir` is the user's `~/filesync/` directory — used to bump on-disk mtime
+/// when a previously-tombstoned file reappears. Without that bump, a file
+/// re-added via `mv` keeps its preserved (older) mtime, which loses the
+/// reconcile vs any peer's tombstone with `deletion_time > preserved_mtime`
+/// and the file gets re-deleted on the next sync round.
 pub fn merge_scan(
     state: &mut UserState,
-    current: BTreeMap<String, FileEntry>,
+    mut current: BTreeMap<String, FileEntry>,
     previous: &BTreeMap<String, FileEntry>,
     now: i64,
+    dir: &Path,
 ) {
     // Detect deletions: names in previous not in current → new tombstone.
     for name in previous.keys() {
@@ -174,9 +181,18 @@ pub fn merge_scan(
     }
 
     // For files currently present, drop any stale tombstones (resurrection)
-    // and update the file map.
-    for (name, entry) in &current {
-        state.tombstones.remove(name);
+    // and update the file map. On resurrection, bump the on-disk mtime to
+    // `now` so peers' tombstones can't out-rank the reappearance.
+    for (name, entry) in current.iter_mut() {
+        if state.tombstones.remove(name).is_some() {
+            // Resurrection: a previously-tombstoned file is back. Bump
+            // its on-disk mtime; if that succeeds, mirror the bump in
+            // the in-memory FileEntry so the next announce digest
+            // reflects it on this same cycle.
+            if super::applier::set_mtime(&dir.join(name), now) {
+                entry.mtime = now;
+            }
+        }
         state.files.insert(name.clone(), entry.clone());
     }
 
@@ -272,6 +288,7 @@ mod tests {
 
     #[test]
     fn merge_scan_tombstones_deletions() {
+        let dir = tempfile::tempdir().unwrap();
         let mut state = UserState::empty("dan");
         let mut previous = BTreeMap::new();
         previous.insert(
@@ -281,27 +298,79 @@ mod tests {
         state.files = previous.clone();
 
         let current = BTreeMap::new();
-        merge_scan(&mut state, current, &previous, 100);
+        merge_scan(&mut state, current, &previous, 100, dir.path());
 
         assert!(state.files.is_empty());
         assert_eq!(state.tombstones.get("gone.txt").unwrap().deletion_time, 100);
     }
 
     #[test]
-    fn merge_scan_resurrection_clears_tombstone() {
+    fn merge_scan_resurrection_clears_tombstone_and_bumps_mtime() {
+        // Set up a real directory + file so set_mtime has a target.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.md");
+        fs::write(&path, b"hello").unwrap();
+        // Force an "old" on-disk mtime to simulate a `mv`-preserved file.
+        let _ = super::super::applier::set_mtime(&path, 100);
+        let on_disk_mtime = path.metadata().unwrap()
+            .modified().unwrap()
+            .duration_since(SystemTime::UNIX_EPOCH).unwrap()
+            .as_secs() as i64;
+        assert_eq!(on_disk_mtime, 100, "set_mtime fixture must succeed");
+
         let mut state = UserState::empty("dan");
+        // Prior cycle had a tombstone with deletion_time=200 (newer than
+        // the file's preserved mtime). Without the resurrection bump,
+        // any peer with this tombstone would re-delete the file.
         state.tombstones.insert(
             "notes.md".into(),
-            Tombstone { deletion_time: 50 },
+            Tombstone { deletion_time: 200 },
         );
         let previous = BTreeMap::new();
         let mut current = BTreeMap::new();
         current.insert(
             "notes.md".to_string(),
-            FileEntry { sha256: "b".into(), mtime: 100, size: 2 },
+            FileEntry { sha256: "b".into(), mtime: 100, size: 5 },
         );
-        merge_scan(&mut state, current, &previous, 200);
+
+        merge_scan(&mut state, current, &previous, 500, dir.path());
+
+        // Tombstone dropped; file present.
         assert!(!state.tombstones.contains_key("notes.md"));
         assert!(state.files.contains_key("notes.md"));
+        // In-memory FileEntry mtime bumped to `now`.
+        assert_eq!(state.files["notes.md"].mtime, 500);
+        // On-disk mtime bumped to `now` so the next stat returns 500.
+        let post_mtime = path.metadata().unwrap()
+            .modified().unwrap()
+            .duration_since(SystemTime::UNIX_EPOCH).unwrap()
+            .as_secs() as i64;
+        assert_eq!(post_mtime, 500);
+    }
+
+    #[test]
+    fn merge_scan_addition_without_tombstone_does_not_bump_mtime() {
+        // Adding a fresh file (no prior tombstone) must NOT bump mtime.
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fresh.md");
+        fs::write(&path, b"hello").unwrap();
+        let _ = super::super::applier::set_mtime(&path, 100);
+
+        let mut state = UserState::empty("dan");
+        let previous = BTreeMap::new();
+        let mut current = BTreeMap::new();
+        current.insert(
+            "fresh.md".to_string(),
+            FileEntry { sha256: "x".into(), mtime: 100, size: 5 },
+        );
+
+        merge_scan(&mut state, current, &previous, 500, dir.path());
+
+        assert_eq!(state.files["fresh.md"].mtime, 100, "no tombstone → no bump");
+        let post_mtime = path.metadata().unwrap()
+            .modified().unwrap()
+            .duration_since(SystemTime::UNIX_EPOCH).unwrap()
+            .as_secs() as i64;
+        assert_eq!(post_mtime, 100, "no tombstone → on-disk mtime untouched");
     }
 }

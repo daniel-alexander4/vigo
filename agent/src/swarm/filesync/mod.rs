@@ -204,7 +204,7 @@ async fn scan_and_announce(
         // Scanner reuses cached sha256 from previous_files when a file's
         // (size, mtime) is unchanged, so stable directories cost ~nothing.
         let current_files = scan_user_dir(&sync_dir, &previous_files);
-        merge_scan(&mut state, current_files, &previous_files, now);
+        merge_scan(&mut state, current_files, &previous_files, now, &sync_dir);
         state.gc_tombstones(now, TOMBSTONE_MAX_AGE_SECS);
 
         if let Err(e) = state.save(state_dir) {

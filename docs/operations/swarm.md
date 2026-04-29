@@ -155,6 +155,8 @@ All swarm blobs have a default retention of **7 days**.
 
 **Seeders:** Once retention elapses, the server's retention pruner records a revocation in the manifest CRDT. The revocation gossips to all envoys (consumers and the original seeder alike). On the seeder, the blob moves from `.blobs/` to `graveyard/` and the source file + `.swarm` manifest are removed from `seed/` so the trait collector doesn't re-report it. On consumers, the cached blob is evicted. Graveyard files are hard-deleted after another 7 days; within that grace window, a same-SHA reseed resurrects the content without re-downloading.
 
+**Manifest tombstone GC:** The same retention pruner also drops revoked entries from the in-memory manifest store once they've aged past the retention window — the revoke marker has done its job (every reachable agent has observed it and evicted the blob). Without this pass, revoked entries would accumulate in the server's manifest forever; agents prune their persisted manifest on the same window via the check-in loop.
+
 **Manual revoke:** To immediately revoke a blob fleet-wide:
 
 ```bash

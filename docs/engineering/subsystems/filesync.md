@@ -17,6 +17,8 @@ Filesync is a **pure peer-to-peer LAN feature**. The Vigo server plays no role a
     - **Peer has a newer version** (higher mtime) → fetch it.
     - **Peer has a tombstone we don't, and our file's mtime is older than the deletion time** → delete the file.
     - **Peer has a tombstone but our file is newer than the deletion time** → keep the file (it was re-added after the delete) and our next announce will propagate it back.
+
+    Re-adding a previously-tombstoned file by `mv`-ing it back into `~/filesync/` preserves the original mtime, which would lose the comparison against the (newer) tombstone. The scanner detects this case — a file currently present that has a local tombstone — and bumps the file's on-disk mtime to the current scan time before the announce. Without this bump, peers' tombstones would re-delete the file on the next sync round.
 5. **Transfer.** Files are fetched over HTTPS from the sender's swarm peer port (1531) via a dedicated `/filesync/{user}/{filename}` route. Content is verified against the announced SHA-256 before being written to the destination.
 6. **Apply.** The receiving agent writes the file to `~/{user}/filesync/{filename}` with correct ownership (`chown user:user`) and preserved modification time.
 

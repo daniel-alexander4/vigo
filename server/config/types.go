@@ -104,7 +104,7 @@ type ServerConfig struct {
 	Maintenance  MaintenanceSection  `yaml:"maintenance" docs:"operations/maintenance-windows" doc:"Global change freeze — publish is blocked until the configured deadline passes." long:"Global change-freeze switch that blocks 'vigocli config publish' until a specified deadline. Use this during code freezes, customer maintenance windows, or incident response when you need to guarantee no config changes can reach the fleet. Emergency bypass requires editing the file and reloading — not a runtime override — so the freeze is real."`
 	Paths        PathsSection        `yaml:"paths" docs:"getting-started/server-config" doc:"Filesystem paths for migrations, custom traits, docs, tasks, workflows, and agent binaries." long:"Override the default filesystem locations for migrations, custom trait collectors, shipped docs, task definitions, workflow definitions, and the agent-binary distribution directory. Change these only for non-standard installs (packaged distributions, per-host chroots) — the defaults under /srv/vigo and /var/lib/vigo cover every normal deployment."`
 	Peers        PeersSection        `yaml:"peers" docs:"operations/peer-replication" doc:"Peer replication — primary or peer role plus the address list for server redundancy." long:"Active-passive replication that keeps one or more standby vigosrv instances file-synced with the primary, so a server outage doesn't strand the fleet. The primary streams config, secrets, and TLS files to each peer over gRPC; agents receive the peer list at enrollment and automatically fall back to one if the primary becomes unreachable. Configure this whenever the fleet is too large to tolerate an unplanned outage — promotion is then a single 'vigocli server promote' command on a surviving peer."`
-	Task         TaskSection         `yaml:"task" docs:"reference/cli/task" doc:"Task dispatch — optionally require a named definition for every ad-hoc task." long:"Controls ad-hoc task dispatch safety. When require_definition is on, every task sent via 'vigocli task dispatch' must reference a pre-reviewed task definition in /srv/vigo/stockpile/tasks — direct shell commands are refused. Enable this in production to force peer review of anything an operator can fan out to a fleet; leave it off in dev where quick one-off commands are the whole point."`
+	Task         TaskSection         `yaml:"task" docs:"reference/cli/task" doc:"Task dispatch — optionally require a named definition for every ad-hoc task." long:"Controls ad-hoc task dispatch safety. When require_definition is on, every task sent via 'vigocli task dispatch' must reference a pre-reviewed task definition in /srv/vigo/stacks/stockpile/tasks — direct shell commands are refused. Enable this in production to force peer review of anything an operator can fan out to a fleet; leave it off in dev where quick one-off commands are the whole point."`
 	Branding     BrandingSection     `yaml:"branding" docs:"operations/branding" doc:"Custom org name, logo, favicon, and light/dark/auto UI theme." long:"White-label the web UI with the organization's name (shown in the title bar and in exported reports), a custom logo and favicon, and a forced light/dark theme or auto. The logo is inlined into cover blocks of generated PDFs so emailed attestations carry the customer's brand. Useful for MSPs per-customer and for enterprises who want their audit reports to wear their own logo."`
 	License      LicenseSection      `yaml:"license" docs:"operations/licensing" doc:"License enforcement mode — local count or aggregated across spanner spokes." long:"How node-count enforcement aggregates across your topology — 'local' counts envoys registered against this single vigosrv, 'aggregated' sums counts across every spoke in a spanner deployment and enforces a single fleet-wide cap. Pick aggregated on MSP hubs or enterprise spanner setups where one license covers the full customer base. Misconfiguring this either blocks legitimate enrollments (too strict) or silently lets the fleet drift past the contract (too loose)."`
 	GRC          GRCSection          `yaml:"grc" docs:"operations/grc" doc:"GRC platform integrations (Vanta, Drata, ServiceNow) for pushing compliance evidence." long:"Outbound push of compliance evidence into third-party GRC platforms (Vanta, Drata, ServiceNow GRC, Hyperproof, and similar). Each GRC target has its own endpoint, token, and control-mapping block — the server translates Vigo's internal compliance state into whatever format the target expects. Configure this when the organization has already standardized on a GRC system and you want Vigo's evidence to land there without manual uploads."`
@@ -124,17 +124,44 @@ type SwarmSection struct {
 	SeedDir             string                 `yaml:"seed_dir" doc:"Directory where server-distributed seeds are written (bind-mounted to agents)." default:"/var/lib/vigo/swarm/seed" example:"/var/lib/vigo/swarm/seed"`
 	Port                int                    `yaml:"port" doc:"TCP port on which agents serve blobs to each other over mTLS." default:"1531" example:"1-65535; must be open between envoys"`
 	MaxBandwidthPercent int                    `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
-	Gitmirror           SwarmGitmirrorSection  `yaml:"gitmirror" doc:"Gitmirror subsystem (personal-DR repo backup) operability gates." long:"Gitmirror runs by default on every enrolled envoy. Use blacklist to deny specific envoys."`
-	Cryptsync           SwarmCryptsyncSection  `yaml:"cryptsync" doc:"Cryptsync subsystem (per-user encrypted P2P sync) operability gates." long:"Cryptsync runs by default on every enrolled envoy. Use blacklist to deny specific envoys from holding cryptsync content."`
+	Payload             SwarmPayloadSection    `yaml:"payload" doc:"Payload subsystem (admin-pushed file distribution) operability gates." long:"Payload runs by default on every enrolled envoy. Use enabled:false to halt fleet-wide, or blacklist to deny specific envoys from receiving payloads."`
+	Gitmirror           SwarmGitmirrorSection  `yaml:"gitmirror" doc:"Gitmirror subsystem (personal-DR repo backup) operability gates." long:"Gitmirror runs by default on every enrolled envoy. Use enabled:false to halt fleet-wide, or blacklist to deny specific envoys."`
+	Cryptsync           SwarmCryptsyncSection  `yaml:"cryptsync" doc:"Cryptsync subsystem (per-user encrypted P2P sync) operability gates." long:"Cryptsync runs by default on every enrolled envoy. Use enabled:false to halt fleet-wide, or blacklist to deny specific envoys from holding cryptsync content."`
 	Filesync            SwarmFilesyncSection   `yaml:"filesync" doc:"Filesync subsystem (per-user plaintext LAN P2P sync) operability gates." long:"Filesync runs by default on every enrolled envoy. Use enabled:false to halt fleet-wide, or blacklist to deny specific envoys from participating."`
+}
+
+// SwarmPayloadSection configures per-subsystem gates for the payload
+// substrate (admin-pushed file distribution via vigocli swarm payload
+// distribute). Payload is default-on across the fleet — every enrolled
+// envoy accepts payload assignments by default. Setting Enabled=false
+// halts payload reception fleet-wide (agents stop applying new payload
+// manifest entries); already-cached blobs under /var/lib/vigo/swarm/
+// are preserved so re-enabling resumes operation untouched. The
+// blacklist denies specific hostnames from receiving payloads —
+// gate-only, never destructive.
+//
+// Enabled is a *bool so YAML can distinguish "operator did not set it"
+// (default true) from "operator set it to false" (halt payload).
+type SwarmPayloadSection struct {
+	Enabled   *bool    `yaml:"enabled" doc:"Whether payload reception runs fleet-wide. Default true. Set false to halt agents accepting new payload assignments; already-cached blobs preserved." default:"true" example:"true"`
+	Blacklist []string `yaml:"blacklist" doc:"Hostname patterns (filepath.Match globs) of envoys denied from receiving payload distributions. Gate-only — already-cached blobs on a newly-blacklisted host are not evicted automatically." example:"[raspberrypi, *.test.example.com]"`
 }
 
 // SwarmGitmirrorSection configures per-subsystem gates for gitmirror.
 // Gitmirror is default-on across the fleet — every enrolled envoy
-// receives bundles by default. The blacklist denies specific hostnames
-// (filepath.Match globs), and a blacklist add triggers automatic
-// fleet-wide eviction of the matching envoys' held mirrors.
+// receives bundles by default. Setting Enabled=false halts gitmirror
+// fleet-wide (publisher and receiver idle); already-held mirrors at
+// /var/lib/vigo/swarm/gitmirror/mirrors/ are preserved so re-enabling
+// resumes operation untouched. The blacklist denies specific
+// hostnames (filepath.Match globs); a blacklist add triggers
+// automatic fleet-wide eviction of the matching envoys' held mirrors.
+//
+// Enabled is a *bool so YAML can distinguish "operator did not set it"
+// (default true) from "operator set it to false" (halt gitmirror).
+// Setting Enabled=false is non-destructive — locally-held mirrors are
+// preserved. The destructive path is the blacklist.
 type SwarmGitmirrorSection struct {
+	Enabled   *bool    `yaml:"enabled" doc:"Whether gitmirror runs fleet-wide. Default true. Set false to halt gitmirror (publisher and receiver idle); already-held mirrors preserved." default:"true" example:"true"`
 	Blacklist []string `yaml:"blacklist" doc:"Hostname patterns (filepath.Match globs) of envoys denied from receiving gitmirror bundles. Adding a host evicts its existing mirrors fleet-wide; removing a host re-allows it but does not re-replicate previous bundles." example:"[raspberrypi, *.test.example.com]"`
 }
 
@@ -598,8 +625,8 @@ type PathsSection struct {
 	Migrations   string `yaml:"migrations" doc:"Database migration files directory." default:"migrations" example:"migrations  (rarely overridden)"`
 	CustomTraits string `yaml:"custom_traits" doc:"Custom trait collector scripts directory." default:"custom-traits" example:"/srv/vigo/custom-traits"`
 	Docs         string `yaml:"docs" doc:"Documentation directory served by the in-app docs browser." default:"docs" example:"docs, /srv/vigo/docs"`
-	Tasks        string `yaml:"tasks" doc:"Reusable task definitions directory." default:".live/tasks" example:"/srv/vigo/stockpile/.live/tasks"`
-	Workflows    string `yaml:"workflows" doc:"Workflow definitions directory." default:".live/workflows" example:"/srv/vigo/stockpile/.live/workflows"`
+	Tasks        string `yaml:"tasks" doc:"Reusable task definitions directory." default:".live/tasks" example:"/srv/vigo/stacks/.live/tasks"`
+	Workflows    string `yaml:"workflows" doc:"Workflow definitions directory." default:".live/workflows" example:"/srv/vigo/stacks/.live/workflows"`
 	AgentDist    string `yaml:"agent_dist" doc:"Agent binary distribution directory served to bootstrappers." default:"dist/agent" example:"/srv/vigo/dist/agent"`
 	LicenseDir   string `yaml:"license_dir" doc:"License file directory." default:"/srv/vigo/license" example:"/srv/vigo/license"`
 	Snapshots    string `yaml:"snapshots" doc:"Backup snapshot directory." default:"/srv/vigo/snapshots" example:"/srv/vigo/snapshots  (ideally on a separate volume)"`
