@@ -153,7 +153,11 @@ The parent directory for the whole Vigo config operation, at `/srv/vigo/stacks/`
 
 ## examples
 
-The read-only reference tree under [stacks](#stacks), at `/srv/vigo/stacks/examples/`. Seeded from the image at container start with `*.vgo.example` templates the operator can adapt. Materialized into [stockpile](#stockpile) via `vigocli config examples copy <name>`, which strips the `.example` suffix and preserves the source subpath. Never read by the server, never published — it's a parts catalog.
+The read-only install-template tree under [stacks](#stacks), at `/srv/vigo/stacks/examples/`. Seeded from the image at container start with `*.vgo.example` templates the operator can adapt. Materialized into [stockpile](#stockpile) via `vigocli config examples copy <name>`, which strips the `.example` suffix and preserves the source subpath. Never read by the server, never published — it's a parts catalog. Pair with [anti-examples](#anti-examples), which holds the retract template for every module example.
+
+## anti-examples
+
+The read-only retract-template tree under [stacks](#stacks), at `/srv/vigo/stacks/anti-examples/`. Mirrors the directory layout of `examples/modules/` so every install template at `examples/modules/<cat>/<name>.vgo.example` has a paired retract at `anti-examples/modules/<cat>/<name>-retract.vgo.example`. Materialized into [stockpile](#stockpile) via `vigocli config anti-examples copy <name>` — the retract drops in alongside its install module without colliding because of the `-retract` suffix. `vigocli config anti-examples mirror-check` walks both trees and reports module examples missing a paired retract (or orphan retracts). Shipped 0.33.1.
 
 ## live
 

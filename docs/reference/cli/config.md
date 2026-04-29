@@ -20,6 +20,11 @@ Config inspection commands.
 | `config unused` | Find unused modules and match files |
 | `config freeze` | Freeze config publishes until a specified time |
 | `config unfreeze` | Remove the config publish freeze |
+| `config examples list` | Show available install templates under `stacks/examples/` |
+| `config examples copy <name>` | Copy an install template into `stacks/stockpile/` |
+| `config anti-examples list` | Show available retract templates under `stacks/anti-examples/` |
+| `config anti-examples copy <name>` | Copy a retract template into `stacks/stockpile/` |
+| `config anti-examples mirror-check` | Verify every module example has a paired retract (and vice versa) |
 
 ## config edit
 

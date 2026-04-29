@@ -6,7 +6,8 @@ Vigo composes an envoy's effective config from **a small number of orthogonal ax
 The whole config operation lives under a single parent directory, **stacks** (`/srv/vigo/stacks/`). Inside it, three subtrees have distinct roles:
 
 - **`stockpile/`** — the operator's working tree. Holds *every* config primitive: `modules/` (definitions), `usercrates/`, `templates/`, `tasks/`, `workflows/`, plus the assignment files themselves (`envoys.vgo` matchfiles, `roles.vgo`, `common.vgo`, `waivers.vgo`, `environments.vgo`) and directory-inherited `compliance.vgo` claims. **There is one operator-edited tree.**
-- **`examples/`** — read-only reference templates seeded by the image. Operators copy from here into stockpile via `vigocli config examples copy <name>`. Never read by the server, never published.
+- **`examples/`** — read-only install-template tree seeded by the image. Operators copy from here into stockpile via `vigocli config examples copy <name>`.
+- **`anti-examples/`** — read-only retract-template tree, mirroring `examples/modules/` one-for-one. Each install template `examples/modules/<cat>/<name>.vgo.example` has a paired retract at `anti-examples/modules/<cat>/<name>-retract.vgo.example`. Copy with `vigocli config anti-examples copy <name>`; verify completeness with `vigocli config anti-examples mirror-check`. Never read by the server, never published.
 - **`.live/`** — the validated published output. `vigocli config publish` lints stockpile and atomically syncs it here; the server reads `.live/` on every reload.
 
 Operators edit `stockpile/`. Never `.live/`. Never edit `examples/` directly — copy first, then edit your stockpile copy.
@@ -138,6 +139,7 @@ For an envoy `web01.customerA.example.com` checking in:
 | Where do compliance claims live? | `stockpile/**/compliance.vgo` — directory-level, inherited by every module and usercrate in the subtree. Inline `compliance:` on a module definition for module-specific exceptions. |
 | Where do waivers live? | `stockpile/**/waivers.vgo` — at any directory level, scoped by directory. Distinct filename from compliance claims. |
 | Where do I copy an example from? | `vigocli config examples list` to browse, then `vigocli config examples copy <name>` to materialize one into stockpile. |
+| Where does a module example's retract come from? | `vigocli config anti-examples copy <name>` materializes the paired retract from `anti-examples/modules/<cat>/<name>-retract.vgo.example` into stockpile alongside the install module. `vigocli config anti-examples mirror-check` reports any module example missing a paired retract. |
 
 ## Directory layout — reference
 
@@ -169,10 +171,13 @@ For an envoy `web01.customerA.example.com` checking in:
 │       └── usercrates/
 │           └── alice.vgo         ← customerA-only usercrate
 │
-├── examples/                     ← read-only, image-seeded reference templates
-│   ├── modules/...               ← copy via `vigocli config examples copy <name>`
-│   ├── usercrates/...
+├── examples/                     ← read-only install templates (image-seeded)
+│   ├── modules/<cat>/<name>.vgo.example
+│   ├── usercrates/<name>.vgo.example
 │   └── ...
+│
+├── anti-examples/                ← read-only retract templates (mirrors examples/modules)
+│   └── modules/<cat>/<name>-retract.vgo.example
 │
 └── .live/                        ← validated published output (server reads here;
                                     locked read-only between publishes)

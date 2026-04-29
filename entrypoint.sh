@@ -9,6 +9,7 @@ VIGO_STACKS="${DATA_DIR}/stacks"
 VIGO_STOCKPILE="${VIGO_STACKS}/stockpile"
 VIGO_LIVE="${VIGO_STACKS}/.live"
 EXAMPLES_DIR="${VIGO_STACKS}/examples"
+ANTI_EXAMPLES_DIR="${VIGO_STACKS}/anti-examples"
 ENV_FILE="${DATA_DIR}/.env"
 SERVER_YAML="${DATA_DIR}/server.yaml"
 
@@ -95,6 +96,15 @@ if [ -d "${DATA_DIR}/example-stockpile" ] && [ ! -d "${EXAMPLES_DIR}" ]; then
     fi
     rmdir "${EXAMPLES_DIR}/worksite" 2>/dev/null || true
     echo "Migrated /srv/vigo/example-stockpile/ → /srv/vigo/stacks/examples/ (flattened worksite/ split)."
+fi
+
+# Promote retract templates out of examples/retractions/ to a sibling
+# anti-examples/ tree (0.33.1). The mirror layout makes it visually
+# obvious if a module example is missing its paired retract; the
+# `vigocli config anti-examples mirror-check` verb enforces it.
+if [ -d "${EXAMPLES_DIR}/retractions" ] && [ ! -d "${ANTI_EXAMPLES_DIR}" ]; then
+    mv "${EXAMPLES_DIR}/retractions" "${ANTI_EXAMPLES_DIR}"
+    echo "Migrated examples/retractions/ → anti-examples/."
 fi
 
 # ---------------------------------------------------------------------------
@@ -240,14 +250,17 @@ find "${SEED_DIR}/example-configs/worksite" -name '*.vgo.example' -type f | whil
     fi
 done
 
-# Seed retraction examples
+# Seed retract templates into anti-examples/ — sibling to examples/.
+# The mirror layout pairs each module example with its retract:
+#   examples/modules/<cat>/<name>.vgo.example
+#   anti-examples/modules/<cat>/<name>-retract.vgo.example
 find "${SEED_DIR}/example-configs/retractions" -name '*.vgo.example' -type f | while IFS= read -r src; do
     rel="${src#${SEED_DIR}/example-configs/retractions/}"
     # Skip compliance retractions — gated behind paid license.
     case "$rel" in
         modules/compliance/*) continue ;;
     esac
-    dest="${EXAMPLES_DIR}/retractions/${rel}"
+    dest="${ANTI_EXAMPLES_DIR}/${rel}"
     if [ ! -f "$dest" ]; then
         mkdir -p "$(dirname "$dest")"
         cp "$src" "$dest"

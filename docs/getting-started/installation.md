@@ -36,8 +36,10 @@ This populates `/srv/vigo/` with everything needed to run the server:
 │   │   ├── waivers.vgo      # compliance waivers (any depth)
 │   │   ├── environments.vgo # per-env module/var overrides
 │   │   └── compliance.vgo   # directory-inherited claims
-│   ├── examples/            # read-only reference templates
+│   ├── examples/            # read-only install templates
 │   │                        #   (image-seeded; vigocli config examples copy)
+│   ├── anti-examples/       # read-only retract templates (mirrors examples/modules)
+│   │                        #   (vigocli config anti-examples copy / mirror-check)
 │   └── .live/               # published config (locked between publishes)
 ├── config-history/          # rollback snapshots
 └── docs/                    # browsable documentation
