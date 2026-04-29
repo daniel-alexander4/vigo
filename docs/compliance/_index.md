@@ -90,6 +90,7 @@ See `example-configs/stockpile/compliance-roles.vgo.example` for the full list o
 - [Emergency Access Procedure](emergency-access.md) -- Break-glass procedure (HIPAA 164.312(a)(2)(ii))
 - [Decommissioning Procedures](decommissioning.md) -- Secure node and server retirement
 - [Tamper-Evident Audit Trail](tamper-evident-audit.md) -- SHA-256 hash chain for tamper detection
+- [Platform Compliance](platform-compliance.md) -- product-level posture page for vendor questionnaires (`/platform/compliance`)
 - [Compliance Export](compliance-export.md) -- SIEM, CMDB, OSCAL feeds
 - [Security Scanning](security-scanning.md) -- CVE scanning, hardening audits, rootkit and malware detection
 - [Authentication](../operations/authentication.md) -- Session timeout, password policy, audit logging

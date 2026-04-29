@@ -3934,3 +3934,22 @@ a.server-config-card:hover {
     border-radius: 3px;
     color: var(--color-text);
 }
+
+/* /platform/compliance — framework pivot per AppControl card */
+.platform-compliance__pivot {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--color-border);
+}
+.platform-compliance__pivot-list {
+    list-style: none;
+    padding: 0;
+    margin: 6px 0 0;
+}
+.platform-compliance__pivot-list li {
+    margin: 4px 0;
+    line-height: 1.5;
+}
+.platform-compliance__pivot-list li .badge {
+    margin-right: 6px;
+}

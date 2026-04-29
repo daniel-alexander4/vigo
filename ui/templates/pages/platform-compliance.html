@@ -1,0 +1,52 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Platform Compliance</h1>
+    <p>What the Vigo product itself satisfies by construction — independent of any envoy's module assignment. Use this surface for vendor questionnaires and customer security reviews.</p>
+</div>
+
+<div class="card mb-2">
+    <div class="card-body">
+        <p class="text-muted">
+            These are <strong>product-level</strong> controls — capabilities built into the Vigo server and agent.
+            They are deliberately separate from <a href="/compliance">envoy framework reports</a>, which score
+            module coverage, Connwaer attestation, and waivers across your fleet. Platform controls never inflate
+            per-envoy or fleet scores.
+        </p>
+    </div>
+</div>
+
+<div class="filter-bar mb-2">
+    <a href="/platform/compliance" class="btn btn--sm{{if eq .ActiveFramework ""}} btn--primary{{end}}">All frameworks</a>
+    {{range .Frameworks}}
+    <a href="/platform/compliance?framework={{.Slug}}" class="btn btn--sm{{if eq $.ActiveFramework .Slug}} btn--primary{{end}}">{{.Label}}</a>
+    {{end}}
+</div>
+
+{{if .Controls}}
+{{range .Controls}}
+<div class="card mb-2" id="{{.ID}}">
+    <div class="card-body">
+        <h3>{{.Title}}</h3>
+        <p>{{.Description}}</p>
+        <p class="text-muted"><strong>Evidence:</strong> {{.Evidence}}</p>
+        {{if .Frameworks}}
+        <div class="platform-compliance__pivot">
+            <strong>Relevant to:</strong>
+            <ul class="platform-compliance__pivot-list">
+                {{range .Frameworks}}
+                <li><span class="badge badge--info">{{.Label}}</span> {{joinStrings .ControlIDs ", "}}</li>
+                {{end}}
+            </ul>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+{{else}}
+<div class="card">
+    <div class="card-body">
+        <p class="text-muted">No platform controls reference this framework.</p>
+    </div>
+</div>
+{{end}}
+{{end}}

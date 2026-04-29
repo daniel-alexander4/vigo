@@ -30,6 +30,7 @@ import (
 	"git.alexander4.io/vigo/server/ai"
 	"git.alexander4.io/vigo/server/audit"
 	"git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/compliance"
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
@@ -558,6 +559,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /workflows/{id}", h.WorkflowDetail)
 	mux.HandleFunc("GET /audit", h.Audit)
 	mux.HandleFunc("GET /audit/verify", h.AuditVerify)
+	mux.HandleFunc("GET /platform/compliance", h.PlatformCompliance)
 	// Payload pages (admin-distributed payloads riding the swarm substrate) —
 	// always registered because SetSwarm is called after RegisterRoutes.
 	// The handlers check h.swarmTracker at request time.
@@ -2656,6 +2658,104 @@ func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 	data := h.standardsData()
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "compliance", data)
+}
+
+// PlatformControlFramework is the framework pivot rendered on a
+// platform-compliance card.
+type PlatformControlFramework struct {
+	Slug       string
+	Label      string
+	ControlIDs []string
+}
+
+// PlatformControlView is the per-card render shape for /platform/compliance.
+type PlatformControlView struct {
+	ID          string
+	Title       string
+	Description string
+	Evidence    string
+	Frameworks  []PlatformControlFramework
+}
+
+// PlatformFrameworkChip is a filter-bar entry on /platform/compliance.
+type PlatformFrameworkChip struct {
+	Slug  string
+	Label string
+}
+
+// PlatformCompliancePageData backs the /platform/compliance template.
+type PlatformCompliancePageData struct {
+	PageData
+	Controls        []PlatformControlView
+	Frameworks      []PlatformFrameworkChip
+	ActiveFramework string
+}
+
+// PlatformCompliance renders the read-only product-level compliance
+// posture page — what the Vigo server and agent satisfy by construction,
+// independent of any envoy's module assignment. Source of truth:
+// server/compliance.AppControls.
+func (h *Handler) PlatformCompliance(w http.ResponseWriter, r *http.Request) {
+	active := r.URL.Query().Get("framework")
+
+	// Collect every framework slug referenced from any AppControl so the
+	// chip row only shows frameworks that actually have content.
+	chipSeen := make(map[string]bool)
+	var chips []PlatformFrameworkChip
+	for _, c := range compliance.AppControls {
+		for _, fw := range c.Frameworks {
+			if chipSeen[fw.Slug] {
+				continue
+			}
+			chipSeen[fw.Slug] = true
+			chips = append(chips, PlatformFrameworkChip{
+				Slug:  fw.Slug,
+				Label: compliance.FrameworkLabel(fw.Slug),
+			})
+		}
+	}
+	sort.Slice(chips, func(i, j int) bool { return chips[i].Label < chips[j].Label })
+
+	// Build the cards. If a framework filter is active, drop controls that
+	// don't reference that framework.
+	var controls []PlatformControlView
+	for _, c := range compliance.AppControls {
+		if active != "" {
+			match := false
+			for _, fw := range c.Frameworks {
+				if fw.Slug == active {
+					match = true
+					break
+				}
+			}
+			if !match {
+				continue
+			}
+		}
+		view := PlatformControlView{
+			ID:          c.ID,
+			Title:       c.Title,
+			Description: c.Description,
+			Evidence:    c.Evidence,
+		}
+		for _, fw := range c.Frameworks {
+			view.Frameworks = append(view.Frameworks, PlatformControlFramework{
+				Slug:       fw.Slug,
+				Label:      compliance.FrameworkLabel(fw.Slug),
+				ControlIDs: fw.ControlIDs,
+			})
+		}
+		controls = append(controls, view)
+	}
+
+	data := PlatformCompliancePageData{
+		PageData:        PageData{Title: "Platform Compliance", ActiveNav: "platform-compliance"},
+		Controls:        controls,
+		Frameworks:      chips,
+		ActiveFramework: active,
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "platform-compliance", data)
 }
 
 // ComplianceStatus renders the standards compliance gauge/breakdown fragment for HTMX polling.

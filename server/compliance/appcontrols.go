@@ -54,6 +54,43 @@ type FrameworkRef struct {
 	ControlIDs []string
 }
 
+// frameworkLabels maps the framework slugs used in AppControls to
+// the human label shown on /platform/compliance. Mirrors the labels
+// in server/main.go's framework metrics table.
+var frameworkLabels = map[string]string{
+	"compliance":      "HIPAA",
+	"hitrust":         "HITRUST CSF",
+	"soc2":            "SOC 2",
+	"pci":             "PCI DSS v4.0",
+	"nist":            "NIST 800-53",
+	"iso27001":        "ISO 27001",
+	"gdpr":            "GDPR",
+	"nerccip":         "NERC CIP",
+	"cyberessentials": "Cyber Essentials+",
+	"iec62443":        "IEC 62443",
+	"sox":             "SOX",
+	"finra":           "FINRA",
+	"mifid2":          "MiFID II",
+	"ccss":            "CCSS",
+	"fda21cfr11":      "FDA 21 CFR Part 11",
+	"gaming":          "Gaming Commission",
+	"ciswindows":      "CIS Windows",
+	"cisubuntu":       "CIS Ubuntu",
+	"cisrhel":         "CIS RHEL",
+	"abacyber":        "ABA Cybersecurity",
+	"nydfscyber":      "NY DFS Cyber (23 NYCRR 500)",
+}
+
+// FrameworkLabel returns the human label for a framework slug as
+// referenced from AppControls. Falls back to the slug itself if
+// the framework is not in the table.
+func FrameworkLabel(slug string) string {
+	if l, ok := frameworkLabels[slug]; ok {
+		return l
+	}
+	return slug
+}
+
 // AppControls is the registry of Vigo product-level controls.
 //
 // Update this list when a new architectural security capability

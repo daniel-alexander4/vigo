@@ -1087,3 +1087,68 @@ func TestIsDocsPathGated(t *testing.T) {
 		}
 	}
 }
+
+func TestPlatformComplianceHandler(t *testing.T) {
+	h := newTestHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/platform/compliance", nil)
+	rec := httptest.NewRecorder()
+	h.PlatformCompliance(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PlatformCompliance returned %d, want %d", rec.Code, http.StatusOK)
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
+		t.Errorf("Content-Type = %q, want text/html", ct)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"Platform Compliance",
+		"All transport encrypted with mTLS",
+		"All frameworks",
+		"HIPAA",
+		"SOC 2",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("PlatformCompliance body missing %q", want)
+		}
+	}
+}
+
+func TestPlatformComplianceFrameworkFilter(t *testing.T) {
+	h := newTestHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/platform/compliance?framework=soc2", nil)
+	rec := httptest.NewRecorder()
+	h.PlatformCompliance(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PlatformCompliance soc2 filter returned %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	// SOC 2 has at least one mapped AppControl, so the empty-state message
+	// must not appear.
+	if strings.Contains(body, "No platform controls reference this framework") {
+		t.Error("PlatformCompliance with framework=soc2 unexpectedly empty")
+	}
+	// The active chip should pick up btn--primary on the soc2 link.
+	if !strings.Contains(body, `href="/platform/compliance?framework=soc2" class="btn btn--sm btn--primary"`) {
+		t.Error("PlatformCompliance soc2 chip not marked primary")
+	}
+}
+
+func TestPlatformComplianceUnknownFrameworkEmpty(t *testing.T) {
+	h := newTestHandler(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/platform/compliance?framework=does-not-exist", nil)
+	rec := httptest.NewRecorder()
+	h.PlatformCompliance(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("PlatformCompliance unknown filter returned %d, want %d", rec.Code, http.StatusOK)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "No platform controls reference this framework") {
+		t.Error("PlatformCompliance with unknown framework should show empty-state message")
+	}
+}
