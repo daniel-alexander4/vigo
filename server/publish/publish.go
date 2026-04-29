@@ -191,13 +191,16 @@ func ValidateSource(opts Options) (*Result, error) {
 		return nil, fmt.Errorf("computing diff: %w", err)
 	}
 
-	// Run modlint on candidate-changed module and usercrate files. Returns
-	// a map of rel-path → linted bytes WITHOUT writing to stockpile.
-	// Paths are stockpile-relative now (e.g., "modules/nginx.vgo").
+	// Run modlint on candidate-changed module, usercrate, and
+	// scaffolding files (envoys.vgo / roles.vgo / waivers.vgo /
+	// environments.vgo at any depth). Returns a map of rel-path →
+	// linted bytes WITHOUT writing to stockpile. Paths are
+	// stockpile-relative now (e.g., "modules/nginx.vgo").
 	candidateLintable := append(
 		filterBySubdir(candidateChanged, "modules"),
 		filterUsercrates(candidateChanged)...,
 	)
+	candidateLintable = append(candidateLintable, filterScaffoldingFiles(candidateChanged)...)
 	var lintedOverrides map[string][]byte
 	if len(candidateLintable) > 0 {
 		lintedOverrides, err = lintModules(StockpileDir, candidateLintable)
@@ -478,6 +481,32 @@ func filterUsercrates(paths []string) []string {
 	var out []string
 	for _, p := range paths {
 		if isUsercratePath(p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// scaffoldingFileBasenames are the well-known per-directory scaffolding
+// files that the loader walks to assemble fleet-wide config:
+// matchfiles (envoys.vgo), role definitions (roles.vgo), compliance
+// waivers (waivers.vgo), and per-environment overrides
+// (environments.vgo). Each gets its own modlint entry point; this set
+// drives the dispatch in lintModules.
+var scaffoldingFileBasenames = map[string]bool{
+	"envoys.vgo":       true,
+	"roles.vgo":        true,
+	"waivers.vgo":      true,
+	"environments.vgo": true,
+}
+
+// filterScaffoldingFiles returns paths whose basename matches a known
+// scaffolding file. Used alongside filterBySubdir(modules) and
+// filterUsercrates to build the full lintable set.
+func filterScaffoldingFiles(paths []string) []string {
+	var out []string
+	for _, p := range paths {
+		if scaffoldingFileBasenames[filepath.Base(p)] {
 			out = append(out, p)
 		}
 	}
@@ -1049,7 +1078,25 @@ func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
 			return nil, err
 		}
 
-		result := modlint.Lint(data, modlint.Options{IsUsercrate: isUsercratePath(rel)})
+		// Dispatch to the right modlint entry point by filename.
+		// Modules and usercrates share the same entry point with
+		// IsUsercrate gating one rule; the four scaffolding file
+		// types each have their own parser + rule set.
+		opts := modlint.Options{IsUsercrate: isUsercratePath(rel)}
+		var result *modlint.Result
+		switch filepath.Base(rel) {
+		case "envoys.vgo":
+			result = modlint.LintMatchfile(data, opts)
+		case "roles.vgo":
+			result = modlint.LintRolesFile(data, opts)
+		case "waivers.vgo":
+			result = modlint.LintWaiversFile(data, opts)
+		case "environments.vgo":
+			result = modlint.LintEnvironmentsFile(data, opts)
+		default:
+			result = modlint.Lint(data, opts)
+		}
+
 		if !result.OK() {
 			for _, e := range result.Errors {
 				lintErrors = append(lintErrors, fmt.Sprintf("  %s: %s", rel, e))
@@ -1068,7 +1115,47 @@ func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
 	if len(lintErrors) > 0 {
 		return nil, fmt.Errorf("module validation failed:\n%s", strings.Join(lintErrors, "\n"))
 	}
+
+	// Cross-module collisions (two modules managing the same package
+	// or writing to the same target_path). Surfaces only on the
+	// candidate-changed module set — this catches the case where a
+	// publish introduces a collision, without the cost of re-scanning
+	// the entire stockpile every time. Findings are warnings, so
+	// they're appended to lintErrors only when severity is Error
+	// (which fleetDuplicate-* are not, today). They're emitted via
+	// slog so operators see the warning in the publish log.
+	emitFleetWarnings(baseDir, relPaths)
+
 	return overrides, nil
+}
+
+// emitFleetWarnings runs the fleet-level cross-module checks and
+// logs any findings via slog.Warn. Designed for the publish hot path:
+// it does NOT block publish on warning-severity findings, only logs
+// them so the operator sees the collision report alongside the
+// per-file lint output.
+func emitFleetWarnings(baseDir string, relPaths []string) {
+	files := make([]modlint.FleetFile, 0, len(relPaths))
+	for _, rel := range relPaths {
+		// Skip non-module file types — LintFleet only inspects modules.
+		if scaffoldingFileBasenames[filepath.Base(rel)] {
+			continue
+		}
+		if filepath.Base(rel) == "compliance.vgo" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(baseDir, rel))
+		if err != nil {
+			continue
+		}
+		files = append(files, modlint.FleetFile{Path: rel, Data: data})
+	}
+	for _, f := range modlint.LintFleet(files) {
+		slog.Warn("modlint fleet finding",
+			"rule", f.RuleID,
+			"severity", string(f.Severity),
+			"message", f.Message)
+	}
 }
 
 // isUsercratePath reports whether rel (slash-separated, stockpile-relative)

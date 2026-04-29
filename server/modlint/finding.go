@@ -40,13 +40,17 @@ const (
 // FixApplied=true means the rule mutated the module to repair the issue;
 // the finding is informational about what changed. FixApplied=false means
 // the author still needs to act.
+//
+// JSON tags are explicit and stable. Consumers (CI tools, the
+// community-upload Cloud Function, vigocli output filters) depend on
+// these field names. Don't rename without versioning.
 type Finding struct {
-	Severity   Severity
-	Line       int
-	Column     int
-	RuleID     string
-	Message    string
-	FixApplied bool
+	Severity   Severity `json:"severity"`
+	Line       int      `json:"line,omitempty"`
+	Column     int      `json:"column,omitempty"`
+	RuleID     string   `json:"rule_id"`
+	Message    string   `json:"message"`
+	FixApplied bool     `json:"fix_applied,omitempty"`
 }
 
 // String renders a Finding for human display in the same shape as the

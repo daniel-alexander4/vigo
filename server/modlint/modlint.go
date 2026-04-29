@@ -65,22 +65,27 @@ type Options struct {
 // compatibility with callers that pre-date the structured form. New
 // code should consume Findings directly so it can filter by severity
 // or rule ID without parsing message strings.
+//
+// JSON-stable: tags are explicit so external consumers (CI, the
+// community-upload Cloud Function) can rely on the schema. The legacy
+// Errors/Warnings slices are excluded from JSON to keep the schema
+// canonical — JSON consumers should iterate Findings.
 type Result struct {
 	// Output is the cleaned, normalized, commented YAML.
-	Output string
+	Output string `json:"output,omitempty"`
 	// Findings is the structured list of every lint result, in
 	// rule-registration order. Emitted by repair, parse, and the
 	// rule registry. Severity=Error blocks publish; everything else
 	// is advisory.
-	Findings []Finding
+	Findings []Finding `json:"findings"`
 	// Warnings is a string-slice view over Findings with severity in
 	// {Warning, Info, Hint}. Preserved for callers that print
 	// warnings inline without consulting structured fields.
-	Warnings []string
+	Warnings []string `json:"-"`
 	// Errors is a string-slice view over Findings with severity Error.
 	// Preserved for callers that gate on len(Errors) > 0 — equivalent
 	// to !OK().
-	Errors []string
+	Errors []string `json:"-"`
 }
 
 // OK returns true if there are no error-severity findings.
