@@ -37,11 +37,11 @@ func (m *mockProvider) Close() error { return nil }
 // --- helpers ---
 
 // setupDir creates a worksite-shaped config directory: stockpile/modules/
-// for the module library, scaffolding/default/ for envoy entries.
+// for the module library, stockpile/default/ for envoy entries.
 func setupDir(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "examples")
-	for _, sub := range []string{"stockpile/modules", "stockpile/usercrates", "stockpile/templates", "scaffolding/default"} {
+	for _, sub := range []string{"stockpile/modules", "stockpile/usercrates", "stockpile/templates", "stockpile/default"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -71,7 +71,7 @@ func writeRoles(t *testing.T, dir string, roleSnippets ...string) {
 			b.WriteString("  " + line + "\n")
 		}
 	}
-	writeFile(t, filepath.Join(dir, "scaffolding", "roles.vgo"), b.String())
+	writeFile(t, filepath.Join(dir, "stockpile", "roles.vgo"), b.String())
 }
 
 // --- Tests ---
@@ -94,7 +94,7 @@ resources:
       default: /bin/bash
 `)
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "danlap"
     modules: [users]
@@ -172,7 +172,7 @@ resources:
     command: "true"
 `)
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "workstation.example.com"
     modules: [base]
@@ -229,7 +229,7 @@ resources:
     state: present
 `)
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "webservers.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "webservers.vgo"), `
 envoys:
   - match: "test.example.com"
     environment: production
@@ -276,7 +276,7 @@ resources:
 - name: webserver
   modules: [nginx, certbot]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
     environment: production
@@ -314,7 +314,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
     environment: production
@@ -348,7 +348,7 @@ resources:
     target_path: /etc/app/db.conf
     content: "secret:myapp/db/config"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web.example.com"
     environment: production
@@ -379,7 +379,7 @@ func TestKnownSecretEnforcement(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "bad.example.com"
     environment: production
@@ -401,7 +401,7 @@ func TestHardFailUnresolvable(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "fail.example.com"
     environment: production
@@ -427,7 +427,7 @@ resources:
     path: /etc/app/config
     content: "secret:app/config/content"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web-*.prod.example.com"
     environment: production
@@ -517,7 +517,7 @@ resources: []
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*.prod.example.com"
     environment: production
@@ -557,7 +557,7 @@ resources: []
 name: pattern
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web01.prod.example.com"
     environment: staging
@@ -593,13 +593,13 @@ name: postgres
 resources: []
 `)
 	// Two separate client files
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "webservers.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "webservers.vgo"), `
 envoys:
   - match: "web-*"
     environment: production
     modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "databases.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "databases.vgo"), `
 envoys:
   - match: "db-*"
     environment: production
@@ -659,7 +659,7 @@ resources: []
 	}
 
 	// Write a new envoy file and reload.
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "new-hosts.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "new-hosts.vgo"), `
 envoys:
   - match: "new.example.com"
     environment: staging
@@ -683,7 +683,7 @@ func TestBadConfigKeepsOld(t *testing.T) {
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "good.example.com"
     environment: production
@@ -700,7 +700,7 @@ envoys:
 	}
 
 	// Write invalid YAML and reload.
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   invalid yaml: [[[
 `)
@@ -719,7 +719,7 @@ envoys:
 func TestUnknownModuleError(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "bad.example.com"
     modules: [nonexistent]
@@ -734,7 +734,7 @@ envoys:
 func TestUnknownRoleError(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "bad.example.com"
     roles: [nonexistent]
@@ -771,7 +771,7 @@ resources: []
 - name: web
   modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "dup.example.com"
     roles: [web]
@@ -804,7 +804,7 @@ resources:
 name: other
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web-*"
     modules: [app]
@@ -853,7 +853,7 @@ resources:
     owner: root
     mode: "0644"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web.example.com"
     modules: [nginx]
@@ -900,7 +900,7 @@ resources:
     source: templates/test.tmpl
     content: "inline content"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
     modules: [bad]
@@ -927,7 +927,7 @@ resources:
     target_path: /etc/test
     source: templates/nonexistent.tmpl
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
     modules: [bad]
@@ -963,7 +963,7 @@ resources:
     source: templates/nginx/sites/default.conf.tmpl
     mode: "0644"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web.example.com"
     modules: [nginx]
@@ -1146,7 +1146,7 @@ resources:
           command: "apt-get update"
 `)
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "deb.example.com"
     modules: [debian-tools]
@@ -1203,7 +1203,7 @@ resources:
     state: running
 `)
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "mix.example.com"
     modules: [mixed]
@@ -1261,7 +1261,7 @@ resources:
           depends_on: [setup-repo]
 `)
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "dep.example.com"
     modules: [cross-dep]
@@ -1306,7 +1306,7 @@ resources:
           when: "not is_container"
 `)
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "dual.example.com"
     modules: [dual-cond]
@@ -1341,7 +1341,7 @@ resources:
       resources: []
 `)
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "bad.example.com"
     modules: [bad-block]
@@ -1384,7 +1384,7 @@ resources:
       when: "is_debian"
     - certbot
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web.example.com"
     roles: [webserver]
@@ -1422,7 +1422,7 @@ resources:
     package: redis
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "db.example.com"
     modules:
@@ -1462,7 +1462,7 @@ resources: []
     - name: certbot
       when: "is_debian or is_ubuntu"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "mix.example.com"
     roles: [web]
@@ -1507,7 +1507,7 @@ resources:
     key: kernel.randomize_va_space
     value: "2"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "desktop.example.com"
     modules: [hardening]
@@ -1556,7 +1556,7 @@ resources: []
 - name: windows-web
   modules: [iis]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web.example.com"
     roles:
@@ -1612,7 +1612,7 @@ resources: []
     - name: certbot
       when: "file_exists('/usr/bin/certbot')"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web.example.com"
     roles:
@@ -1664,7 +1664,7 @@ resources:
 - name: webserver
   modules: [nginx, certbot]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
     roles: [webserver]
@@ -1704,7 +1704,7 @@ resources:
     type: exec
     command: "filesync hello"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
     modules: [bad]
@@ -1739,7 +1739,7 @@ resources:
     type: exec
     command: "filesync hello"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
     modules: [bad]
@@ -1766,7 +1766,7 @@ resources:
     command: "touch /tmp/done"
     unless: "test -f /tmp/done"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
     modules: [good]
@@ -1793,7 +1793,7 @@ resources:
 - name: web
   modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
     roles: [web]
@@ -1833,7 +1833,7 @@ resources:
     type: exec
     command: "filesync three"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
     modules: [bad1, bad2]
@@ -1902,7 +1902,7 @@ resources:
 `, name, name, name))
 	}
 	// Duplicate modules: keys — should merge, not overwrite.
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "danlap"
     environment: production
@@ -1961,7 +1961,7 @@ resources:
 - name: cache
   modules: [redis]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "test"
     roles: [web]
@@ -2020,7 +2020,7 @@ resources:
     content: "test"
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "app.example.com"
     modules: [base-packages, app-config]
@@ -2065,7 +2065,7 @@ resources:
     package: curl
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "app.example.com"
     modules: [base-packages]
@@ -2104,7 +2104,7 @@ resources:
     content: "test"
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "app.example.com"
     modules: [base-packages, app-config]
@@ -2155,7 +2155,7 @@ resources:
 `)
 	// Two glob patterns that both match "web01.prod.example.com".
 	// First match should win.
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web*.prod.example.com"
     modules: [nginx]
@@ -2216,7 +2216,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
     modules: [webserver]
@@ -2250,7 +2250,7 @@ resources:
     target_path: /etc/app/config
     source: "../../etc/shadow"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
     modules: [app]
@@ -2276,7 +2276,7 @@ resources:
     target_path: /etc/app/config
     source: "/etc/passwd"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
     modules: [app]
@@ -2299,7 +2299,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [nginx]
@@ -2352,7 +2352,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [nginx]
@@ -2385,7 +2385,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [nginx]
@@ -2402,7 +2402,7 @@ envoys:
 	}
 
 	// Write invalid module reference.
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [nonexistent_module_xyz]
@@ -2451,7 +2451,7 @@ resources:
     target_path: /etc/evil.conf
     source: templates/evil.conf
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
     modules: [evil]
@@ -2505,7 +2505,7 @@ resources:
   modules:
     - nginx
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "web.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "web.vgo"), `
 envoys:
   - match: "web01.example.com"
     roles: [webserver]
@@ -2554,7 +2554,7 @@ resources:
   modules:
     - a
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "t.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "t.vgo"), `
 envoys:
   - match: "x"
     roles: [outer]
@@ -2598,7 +2598,7 @@ resources:
     - shared
     - web
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "t.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "t.vgo"), `
 envoys:
   - match: "x"
     roles: [webserver]
@@ -2661,7 +2661,7 @@ resources:
   modules:
     - nginx
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "t.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "t.vgo"), `
 envoys:
   - match: "web01.example.com"
     environment: production
@@ -2726,7 +2726,7 @@ resources:
     type: file
     target_path: /tmp/a
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "t.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "t.vgo"), `
 envoys:
   - match: "other"
     modules: [a]
@@ -2752,7 +2752,7 @@ resources:
     type: file
     target_path: /tmp/app
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "t.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "t.vgo"), `
 envoys:
   - match: "web-*.example.com"
     modules: [app]
@@ -2781,7 +2781,7 @@ envoys:
 func setupInheritanceDir(t *testing.T) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "config")
-	for _, sub := range []string{"stockpile/modules", "stockpile/usercrates", "scaffolding"} {
+	for _, sub := range []string{"stockpile/modules", "stockpile/usercrates", "stockpile"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -2815,13 +2815,13 @@ resources:
 `)
 
 	// Root common.vgo — inherited by all subdirs.
-	writeFile(t, filepath.Join(dir, "scaffolding", "common.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "common.vgo"), `
 modules: [sshd, monitoring]
 `)
 
 	// Leaf entry in a subdirectory.
-	os.MkdirAll(filepath.Join(dir, "scaffolding", "web"), 0o755)
-	writeFile(t, filepath.Join(dir, "scaffolding", "web", "web.vgo"), `
+	os.MkdirAll(filepath.Join(dir, "stockpile", "web"), 0o755)
+	writeFile(t, filepath.Join(dir, "stockpile", "web", "web.vgo"), `
 envoys:
   - match: "web*.example.com"
     modules: [nginx]
@@ -2871,17 +2871,17 @@ resources:
 `, name, name, name))
 	}
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "common.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "common.vgo"), `
 modules: [sshd]
 `)
 
-	os.MkdirAll(filepath.Join(dir, "scaffolding", "production"), 0o755)
-	writeFile(t, filepath.Join(dir, "scaffolding", "production", "common.vgo"), `
+	os.MkdirAll(filepath.Join(dir, "stockpile", "production"), 0o755)
+	writeFile(t, filepath.Join(dir, "stockpile", "production", "common.vgo"), `
 modules: [logging]
 `)
 
-	os.MkdirAll(filepath.Join(dir, "scaffolding", "production", "web"), 0o755)
-	writeFile(t, filepath.Join(dir, "scaffolding", "production", "web", "web.vgo"), `
+	os.MkdirAll(filepath.Join(dir, "stockpile", "production", "web"), 0o755)
+	writeFile(t, filepath.Join(dir, "stockpile", "production", "web", "web.vgo"), `
 envoys:
   - match: "web*.prod.example.com"
     modules: [nginx]
@@ -2926,12 +2926,12 @@ resources:
 `, name, name, name))
 	}
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "common.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "common.vgo"), `
 modules: [sshd, monitoring]
 `)
 
-	os.MkdirAll(filepath.Join(dir, "scaffolding", "containers"), 0o755)
-	writeFile(t, filepath.Join(dir, "scaffolding", "containers", "containers.vgo"), `
+	os.MkdirAll(filepath.Join(dir, "stockpile", "containers"), 0o755)
+	writeFile(t, filepath.Join(dir, "stockpile", "containers", "containers.vgo"), `
 envoys:
   - match: "docker*.example.com"
     modules: [nginx]
@@ -2975,15 +2975,15 @@ resources:
     package: app
 `)
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "common.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "common.vgo"), `
 modules: [app]
 vars:
   log_level: info
   dns_server: "1.1.1.1"
 `)
 
-	os.MkdirAll(filepath.Join(dir, "scaffolding", "staging"), 0o755)
-	writeFile(t, filepath.Join(dir, "scaffolding", "staging", "staging.vgo"), `
+	os.MkdirAll(filepath.Join(dir, "stockpile", "staging"), 0o755)
+	writeFile(t, filepath.Join(dir, "stockpile", "staging", "staging.vgo"), `
 envoys:
   - match: "*.staging.example.com"
     vars:
@@ -3029,12 +3029,12 @@ resources:
     package: myapp
 `)
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "common.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "common.vgo"), `
 modules: [sshd]
 `)
 
-	os.MkdirAll(filepath.Join(dir, "scaffolding", "servers"), 0o755)
-	writeFile(t, filepath.Join(dir, "scaffolding", "servers", "all.vgo"), `
+	os.MkdirAll(filepath.Join(dir, "stockpile", "servers"), 0o755)
+	writeFile(t, filepath.Join(dir, "stockpile", "servers", "all.vgo"), `
 envoys:
   - match: "srv*.example.com"
     modules: [app]
@@ -3079,12 +3079,12 @@ resources:
 `, name, name, name))
 	}
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "common.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "common.vgo"), `
 modules: [sshd]
 `)
 
-	os.MkdirAll(filepath.Join(dir, "scaffolding", "web"), 0o755)
-	writeFile(t, filepath.Join(dir, "scaffolding", "web", "web.vgo"), `
+	os.MkdirAll(filepath.Join(dir, "stockpile", "web"), 0o755)
+	writeFile(t, filepath.Join(dir, "stockpile", "web", "web.vgo"), `
 envoys:
   - match: "web*.example.com"
     modules: [nginx]
@@ -3135,19 +3135,19 @@ resources:
 	}
 
 	// roles.vgo at root.
-	writeFile(t, filepath.Join(dir, "scaffolding", "roles.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "roles.vgo"), `
 roles:
   - name: base-security
     modules: [sshd]
 `)
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "common.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "common.vgo"), `
 roles: [base-security]
 modules: [monitoring]
 `)
 
-	os.MkdirAll(filepath.Join(dir, "scaffolding", "web"), 0o755)
-	writeFile(t, filepath.Join(dir, "scaffolding", "web", "web.vgo"), `
+	os.MkdirAll(filepath.Join(dir, "stockpile", "web"), 0o755)
+	writeFile(t, filepath.Join(dir, "stockpile", "web", "web.vgo"), `
 envoys:
   - match: "web*.example.com"
     modules: [nginx]
@@ -3247,7 +3247,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "t.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "t.vgo"), `
 envoys:
   - match: "web01"
     modules: [sshd, nginx]
@@ -3396,7 +3396,7 @@ resources:
     target_path: /etc/db.conf
     content: "dsn={{ .Vars.dsn }}"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "t.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "t.vgo"), `
 envoys:
   - match: "db01"
     modules: [db]
@@ -3457,7 +3457,7 @@ resources:
     type: file
     target_path: /etc/ssh/sshd_config
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "t.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "t.vgo"), `
 envoys:
   - match: "web01"
     modules: [sshd, nginx]
@@ -3512,7 +3512,7 @@ resources:
     type: file
     target_path: /etc/ssh/sshd_config
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "t.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "t.vgo"), `
 envoys:
   - match: "web01"
     modules: [sshd]
@@ -3554,7 +3554,7 @@ resources:
     command: /usr/bin/status
     when: "is_enabled"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "t.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "t.vgo"), `
 envoys:
   - match: "web01"
     modules: [scanner]
@@ -3604,7 +3604,7 @@ resources:
     type: file
     target_path: /etc/app.conf
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "t.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "t.vgo"), `
 envoys:
   - match: "web01"
     modules: [app]
@@ -3665,7 +3665,7 @@ resources:
     state: present
     when: "os_family('debian')"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "t.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "t.vgo"), `
 envoys:
   - match: "web01"
     modules: [sshd, nginx]

@@ -15,7 +15,7 @@ import (
 )
 
 // Default example directory inside the container.
-const defaultExampleDir = "/srv/vigo/example-stockpile"
+const defaultExampleDir = "/srv/vigo/stacks/examples"
 
 var configExamplesCmd = &cobra.Command{
 	Use:   "examples",
@@ -25,7 +25,7 @@ var configExamplesCmd = &cobra.Command{
 var examplesCopyCmd = &cobra.Command{
 	Use:   "copy <module-name|directory-name|all>",
 	Short: "Copy example modules into stockpile for publishing",
-	Long: `Copy example .vgo files from the example-stockpile directory into stockpile/,
+	Long: `Copy example .vgo files from stacks/examples/ into stacks/stockpile/,
 preserving directory structure and stripping the .example suffix.
 
 Accepts a module name (copies one file) or a directory name (copies all
@@ -304,7 +304,7 @@ func findExamples(exampleDir string) ([]exampleFile, error) {
 
 func init() {
 	// Shared flag on parent so all subcommands inherit it.
-	configExamplesCmd.PersistentFlags().String("example-dir", defaultExampleDir, "Path to example-stockpile directory")
+	configExamplesCmd.PersistentFlags().String("example-dir", defaultExampleDir, "Path to stacks/examples directory")
 
 	configExamplesCmd.AddCommand(examplesCopyCmd, examplesListCmd)
 	configCmd.AddCommand(configExamplesCmd)

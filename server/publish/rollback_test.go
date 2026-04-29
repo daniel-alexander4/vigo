@@ -19,9 +19,9 @@ func TestSnapshotAndRollback(t *testing.T) {
 	os.WriteFile(filepath.Join(modDir, "nginx.vgo"), []byte("name: nginx\nresources: []\n"), 0644)
 
 	// Snapshot.
-	version, err := SnapshotStructure(liveDir, historyDir, 5)
+	version, err := SnapshotLive(liveDir, historyDir, 5)
 	if err != nil {
-		t.Fatalf("SnapshotStructure: %v", err)
+		t.Fatalf("SnapshotLive: %v", err)
 	}
 	if version == "" {
 		t.Fatal("expected non-empty version")
@@ -68,7 +68,7 @@ func TestSnapshotPruning(t *testing.T) {
 	// Create 5 snapshots with max=3.
 	for i := 0; i < 5; i++ {
 		os.WriteFile(filepath.Join(modDir, "test.vgo"), []byte("iteration"), 0644)
-		if _, err := SnapshotStructure(liveDir, historyDir, 3); err != nil {
+		if _, err := SnapshotLive(liveDir, historyDir, 3); err != nil {
 			t.Fatalf("snapshot %d: %v", i, err)
 		}
 	}

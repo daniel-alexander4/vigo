@@ -29,35 +29,37 @@ import (
 )
 
 var (
-	// WorksiteDir is the parent directory for the Vigo config operation —
-	// the whole construction site. Holds stockpile/ (where operators edit)
-	// and structure/ (what the server reads), as sibling subdirectories.
-	WorksiteDir = "/srv/vigo/worksite"
+	// StacksDir is the parent directory for the Vigo config operation —
+	// the whole construction site. Holds stockpile/ (where operators edit),
+	// .live/ (what the server reads), and examples/ (read-only reference
+	// templates seeded by the image), as sibling subdirectories.
+	StacksDir = "/srv/vigo/stacks"
 
 	// StockpileDir is where operators edit .vgo files. A sibling of
-	// StructureDir under WorksiteDir.
-	StockpileDir = "/srv/vigo/worksite/stockpile"
+	// LiveDir under StacksDir.
+	StockpileDir = "/srv/vigo/stacks/stockpile"
 
-	// StructureDir is the validated output directory the server reads.
+	// LiveDir is the validated output directory the server reads.
 	// Only the publish command writes here. A sibling of StockpileDir
-	// under WorksiteDir.
-	StructureDir = "/srv/vigo/worksite/structure"
+	// under StacksDir.
+	LiveDir = "/srv/vigo/stacks/.live"
 )
 
 // setTestDirs overrides paths for testing. Not exported; used via _test.go.
-// Signature matches the pre-rename (stockpile, live) shape so existing test
-// fixtures continue to work — tests pass explicit paths and WorksiteDir is
-// synthesized as the common parent.
-func setTestDirs(stockpile, structure string) {
+// Tests pass explicit paths and StacksDir is synthesized as the common
+// parent so the layout validator walks the right tree.
+func setTestDirs(stockpile, live string) {
 	StockpileDir = stockpile
-	StructureDir = structure
-	WorksiteDir = filepath.Dir(stockpile)
+	LiveDir = live
+	StacksDir = filepath.Dir(stockpile)
 }
 
-// skipDirs are directories that should not be synced from worksite to structure.
-// "structure" skipped because it's the destination (inside the walk root).
+// skipDirs are directories that should not be synced from stacks to .live.
+// ".live" skipped because it's the destination (inside the walk root).
+// "examples" skipped because it's the read-only seed tree, not operator
+// content.
 var skipDirs = map[string]bool{
-	".git": true, "structure": true, ".publish-tmp": true, ".publish-backup": true,
+	".git": true, ".live": true, "examples": true, ".publish-tmp": true, ".publish-backup": true,
 }
 
 // stubProvider accepts all secret refs so validation focuses on structure.
@@ -153,7 +155,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// compliance.vgo in stockpile, no key-in-wrong-file cross-
 	// contamination. Fatal — blocks publish on any violation with an
 	// actionable remediation message.
-	if err := validateWorksiteLayout(WorksiteDir); err != nil {
+	if err := validateStacksLayout(StacksDir); err != nil {
 		return nil, err
 	}
 
@@ -161,7 +163,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// owner-rw and group-readable, and directories are traversable.
 	// This fixes files created by editors or cp that end up with
 	// restrictive permissions (e.g., root-only 0600).
-	if err := normalizeStockpilePermissions(WorksiteDir); err != nil {
+	if err := normalizeStockpilePermissions(StacksDir); err != nil {
 		return nil, fmt.Errorf("normalizing permissions: %w", err)
 	}
 
@@ -170,7 +172,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// that add trailing spaces or mixed line endings. This DOES rewrite
 	// files in stockpile, but only at the byte-stripping level — no
 	// content/structure mangling.
-	if err := normalizeWhitespace(WorksiteDir); err != nil {
+	if err := normalizeWhitespace(StacksDir); err != nil {
 		return nil, fmt.Errorf("normalizing whitespace: %w", err)
 	}
 
@@ -178,7 +180,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// for linting. The "true" diff (staging vs structure) is computed below
 	// after staging is built, since the canonical form may match structure
 	// even when the raw source differs.
-	_, candidateChanged, removed, err := diffTrees(WorksiteDir, StructureDir)
+	_, candidateChanged, removed, err := diffTrees(StacksDir, LiveDir)
 	if err != nil {
 		return nil, fmt.Errorf("computing diff: %w", err)
 	}
@@ -191,7 +193,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	)
 	var lintedOverrides map[string][]byte
 	if len(candidateLintable) > 0 {
-		lintedOverrides, err = lintModules(WorksiteDir, candidateLintable)
+		lintedOverrides, err = lintModules(StacksDir, candidateLintable)
 		if err != nil {
 			return nil, fmt.Errorf("linting modules: %w", err)
 		}
@@ -200,7 +202,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// Build the staging dir (= stockpile + linted overrides via hardlinks
 	// for unchanged files + fresh writes for overrides). Used for both
 	// validation and the .live sync.
-	stagingDir, cleanup, err := buildStagingDir(WorksiteDir, lintedOverrides)
+	stagingDir, cleanup, err := buildStagingDir(StacksDir, lintedOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +218,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// TRUE set of files whose canonical form differs from .live. Without
 	// this, every modlint-touched file would perpetually appear in the
 	// changed list (raw stockpile != linted .live).
-	allFiles, changed, _, err := diffTrees(stagingDir, StructureDir)
+	allFiles, changed, _, err := diffTrees(stagingDir, LiveDir)
 	if err != nil {
 		cleanupOnError()
 		return nil, fmt.Errorf("computing staging diff: %w", err)
@@ -236,7 +238,7 @@ func ValidateSource(opts Options) (*Result, error) {
 		var ie *config.IdempotencyErrors
 		if errors.As(reloadErr, &ie) {
 			for _, m := range ie.Modules {
-				fe := FileError{Path: rewriteStagingPath(m.Path, stagingDir, WorksiteDir)}
+				fe := FileError{Path: rewriteStagingPath(m.Path, stagingDir, StacksDir)}
 				for _, f := range m.Findings {
 					fe.Messages = append(fe.Messages, fmt.Sprintf("%s (%s): %s", f.ResourceName, f.ResourceType, f.Message))
 				}
@@ -247,7 +249,7 @@ func ValidateSource(opts Options) (*Result, error) {
 
 	var urlWarning string
 	if opts.CheckURLs && len(candidateLintable) > 0 {
-		if err := checkURLs(WorksiteDir, candidateLintable, opts.URLTimeout); err != nil {
+		if err := checkURLs(StacksDir, candidateLintable, opts.URLTimeout); err != nil {
 			urlWarning = err.Error()
 		}
 	}
@@ -311,18 +313,18 @@ func Publish(opts Options) (*Result, error) {
 	// the rare error path that bailed before staging existed.
 	source := res.stagingDir
 	if source == "" {
-		source = WorksiteDir
+		source = StacksDir
 	}
 
 	// Compute diff for DB attribution. Diff is staging-vs-live so paths
 	// match what's actually being synced; operators see them as
 	// stockpile-relative because staging mirrors stockpile structure.
-	res.DiffSummary = ComputeAllDiffs(source, StructureDir, res.Changed, res.Removed)
+	res.DiffSummary = ComputeAllDiffs(source, LiveDir, res.Changed, res.Removed)
 
 	// Capture removed module content from .live/ before sync overwrites it.
 	// The retraction feature uses this to generate retract modules.
 	if removedMods := DetectRemovedModules(res.Removed); len(removedMods) > 0 {
-		res.RemovedModuleContent = ReadRemovedModuleContent(StructureDir, removedMods)
+		res.RemovedModuleContent = ReadRemovedModuleContent(LiveDir, removedMods)
 	}
 
 	// Capture added/changed module content for pre-generating retract
@@ -332,20 +334,20 @@ func Publish(opts Options) (*Result, error) {
 		res.ChangedModuleContent = ReadChangedModuleContent(source, changedMods)
 	}
 
-	unlockStructureDir(StructureDir)
-	files, err := atomicSync(source, StructureDir)
+	unlockLiveDir(LiveDir)
+	files, err := atomicSync(source, LiveDir)
 	if err != nil {
-		lockdownStructureDir(StructureDir) // re-lock even on failure
+		lockdownLiveDir(LiveDir) // re-lock even on failure
 		return nil, fmt.Errorf("sync failed: %w", err)
 	}
 	res.Files = files
 
 	// Lock down .live so only the publish command (running as root) can write.
 	// The server reads via the vigo group. Operators cannot write directly.
-	lockdownStructureDir(StructureDir)
+	lockdownLiveDir(LiveDir)
 
 	// Snapshot .live for rollback support.
-	_, _ = SnapshotStructure(StructureDir, HistoryDir, DefaultMaxVersions)
+	_, _ = SnapshotLive(LiveDir, HistoryDir, DefaultMaxVersions)
 
 	return res, nil
 }
@@ -763,11 +765,11 @@ func copyDir(src, dst string) (int, error) {
 	return count, err
 }
 
-// lockdownStructureDir sets read-only permissions on .live and all contents.
+// lockdownLiveDir sets read-only permissions on .live and all contents.
 // Directories get 0500 (owner rx), files get 0400 (owner r).
 // This prevents any writes to .live outside of the publish command,
-// which calls unlockStructureDir before syncing.
-func lockdownStructureDir(live string) {
+// which calls unlockLiveDir before syncing.
+func lockdownLiveDir(live string) {
 	_ = os.Chmod(live, 0o500)
 	_ = filepath.WalkDir(live, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -782,9 +784,9 @@ func lockdownStructureDir(live string) {
 	})
 }
 
-// unlockStructureDir temporarily sets writable permissions on .live so
-// atomicSync can write. Called before sync, lockdownStructureDir after.
-func unlockStructureDir(live string) {
+// unlockLiveDir temporarily sets writable permissions on .live so
+// atomicSync can write. Called before sync, lockdownLiveDir after.
+func unlockLiveDir(live string) {
 	_ = os.Chmod(live, 0o750)
 	_ = filepath.WalkDir(live, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -812,31 +814,31 @@ func PublishFile(srcPath string, opts Options) (*Result, error) {
 	relPath := srcPath
 	if filepath.IsAbs(srcPath) {
 		// Check if the file is already inside the worksite source tree.
-		if rel, err := filepath.Rel(WorksiteDir, srcPath); err == nil && !strings.HasPrefix(rel, "..") {
+		if rel, err := filepath.Rel(StacksDir, srcPath); err == nil && !strings.HasPrefix(rel, "..") {
 			relPath = rel
 		} else {
-			return nil, fmt.Errorf("file %s is not inside %s — copy it there first or use a relative path", srcPath, WorksiteDir)
+			return nil, fmt.Errorf("file %s is not inside %s — copy it there first or use a relative path", srcPath, StacksDir)
 		}
 	}
 
 	// Validate the full config tree (cross-references require all files).
-	store, err := config.NewConfigStore(WorksiteDir, &stubProvider{}, false)
+	store, err := config.NewConfigStore(StacksDir, &stubProvider{}, false)
 	if err != nil {
 		return nil, err
 	}
 
 	// Unlock .live/ for writing, re-lock after.
-	unlockStructureDir(StructureDir)
-	defer lockdownStructureDir(StructureDir)
+	unlockLiveDir(LiveDir)
+	defer lockdownLiveDir(LiveDir)
 
 	// Ensure the target subdirectory exists in .live/.
-	destPath := filepath.Join(StructureDir, relPath)
+	destPath := filepath.Join(LiveDir, relPath)
 	if err := os.MkdirAll(filepath.Dir(destPath), 0o750); err != nil {
 		return nil, fmt.Errorf("creating target dir: %w", err)
 	}
 
 	// Read source and write to .live/.
-	data, err := os.ReadFile(filepath.Join(WorksiteDir, relPath))
+	data, err := os.ReadFile(filepath.Join(StacksDir, relPath))
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", relPath, err)
 	}
@@ -855,10 +857,10 @@ func PublishFile(srcPath string, opts Options) (*Result, error) {
 	}, nil
 }
 
-// CheckStructurePermissions checks that .live is not world-writable. Returns a
+// CheckLivePermissions checks that .live is not world-writable. Returns a
 // warning message if permissions are too open, or empty string if OK.
 // Called at server startup for early detection of misconfigured permissions.
-func CheckStructurePermissions(live string) string {
+func CheckLivePermissions(live string) string {
 	info, err := os.Stat(live)
 	if err != nil {
 		return "" // doesn't exist yet — will be created by first publish

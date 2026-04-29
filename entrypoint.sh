@@ -5,10 +5,10 @@ set -e
 # All persistent state lives under /srv/vigo (bind-mounted from host).
 
 DATA_DIR="/srv/vigo"
-VIGO_WORKSITE="${DATA_DIR}/worksite"
-VIGO_STOCKPILE="${VIGO_WORKSITE}/stockpile"
-VIGO_STRUCTURE="${VIGO_WORKSITE}/structure"
-EXAMPLES_DIR="${DATA_DIR}/example-stockpile"
+VIGO_STACKS="${DATA_DIR}/stacks"
+VIGO_STOCKPILE="${VIGO_STACKS}/stockpile"
+VIGO_LIVE="${VIGO_STACKS}/.live"
+EXAMPLES_DIR="${VIGO_STACKS}/examples"
 ENV_FILE="${DATA_DIR}/.env"
 SERVER_YAML="${DATA_DIR}/server.yaml"
 
@@ -19,25 +19,82 @@ SEED_DIR="/seed"
 # One-time migration to worksite/ layout (0.28.0)
 # ---------------------------------------------------------------------------
 # Pre-0.28 layout: /srv/vigo/stockpile/ (with nested .live/).
-# New layout:      /srv/vigo/worksite/{stockpile, structure}/ as siblings.
+# Mid layout:      /srv/vigo/worksite/{stockpile, structure}/ as siblings.
 # Move the whole tree if the old dir exists and the new dir doesn't.
 # Refuse if BOTH exist to avoid silent merge (operator must resolve).
 
-if [ -d "${DATA_DIR}/stockpile" ] && [ -d "${VIGO_WORKSITE}" ]; then
-    echo "ERROR: both legacy /srv/vigo/stockpile and new /srv/vigo/worksite exist." >&2
+if [ -d "${DATA_DIR}/stockpile" ] && [ -d "${DATA_DIR}/worksite" ]; then
+    echo "ERROR: both legacy /srv/vigo/stockpile and /srv/vigo/worksite exist." >&2
     echo "       Refusing to auto-migrate. Resolve manually and restart." >&2
     exit 1
 fi
 
-if [ -d "${DATA_DIR}/stockpile" ] && [ ! -d "${VIGO_WORKSITE}" ]; then
-    mkdir -p "${VIGO_WORKSITE}"
+if [ -d "${DATA_DIR}/stockpile" ] && [ ! -d "${DATA_DIR}/worksite" ]; then
+    mkdir -p "${DATA_DIR}/worksite"
     # Move nested .live/ out to structure/ first while the old tree is intact.
     if [ -d "${DATA_DIR}/stockpile/.live" ]; then
-        mv "${DATA_DIR}/stockpile/.live" "${VIGO_STRUCTURE}"
+        mv "${DATA_DIR}/stockpile/.live" "${DATA_DIR}/worksite/structure"
     fi
     # Then move the rest (modules, templates, envoys.vgo, roles.vgo, etc.).
-    mv "${DATA_DIR}/stockpile" "${VIGO_STOCKPILE}"
+    mv "${DATA_DIR}/stockpile" "${DATA_DIR}/worksite/stockpile"
     echo "Migrated /srv/vigo/stockpile/ → /srv/vigo/worksite/stockpile/ (.live → structure/)."
+fi
+
+# ---------------------------------------------------------------------------
+# One-time migration to stacks/ layout (0.33.0)
+# ---------------------------------------------------------------------------
+# Mid layout:  /srv/vigo/worksite/{stockpile, scaffolding, structure}/
+# New layout:  /srv/vigo/stacks/{stockpile, .live, examples}/
+# (scaffolding/ stays under stacks/ during phase A; phase B collapses it
+# into stockpile/.)
+#
+# Move the whole tree if the old dir exists and the new dir doesn't.
+# Also relocate the legacy /srv/vigo/example-stockpile/ → stacks/examples/.
+# Refuse if BOTH exist to force operator resolution.
+
+if [ -d "${DATA_DIR}/worksite" ] && [ -d "${VIGO_STACKS}" ]; then
+    echo "ERROR: both legacy /srv/vigo/worksite and /srv/vigo/stacks exist." >&2
+    echo "       Refusing to auto-migrate. Resolve manually and restart." >&2
+    exit 1
+fi
+
+if [ -d "${DATA_DIR}/worksite" ] && [ ! -d "${VIGO_STACKS}" ]; then
+    # Move the entire worksite tree under stacks/.
+    mv "${DATA_DIR}/worksite" "${VIGO_STACKS}"
+    # Promote structure/ to .live/ inside stacks (rename only).
+    if [ -d "${VIGO_STACKS}/structure" ] && [ ! -d "${VIGO_LIVE}" ]; then
+        mv "${VIGO_STACKS}/structure" "${VIGO_LIVE}"
+    fi
+    # Collapse scaffolding/* into stockpile/. After 0.33.0 there is one
+    # operator-edited tree (stockpile/) — roles.vgo, envoys.vgo,
+    # common.vgo, waivers.vgo, environments.vgo move alongside the
+    # modules/usercrates/templates that already live in stockpile/.
+    if [ -d "${VIGO_STACKS}/scaffolding" ]; then
+        mkdir -p "${VIGO_STOCKPILE}"
+        # Use cp -rn (no-clobber) so any existing same-named file in
+        # stockpile/ is preserved; operator resolves the conflict by
+        # hand. Then remove the source.
+        cp -rn "${VIGO_STACKS}/scaffolding/." "${VIGO_STOCKPILE}/" 2>/dev/null || true
+        rm -rf "${VIGO_STACKS}/scaffolding"
+    fi
+    echo "Migrated /srv/vigo/worksite/ → /srv/vigo/stacks/ (structure/ → .live/, scaffolding/ → stockpile/)."
+fi
+
+if [ -d "${DATA_DIR}/example-stockpile" ] && [ ! -d "${EXAMPLES_DIR}" ]; then
+    mkdir -p "${VIGO_STACKS}"
+    mv "${DATA_DIR}/example-stockpile" "${EXAMPLES_DIR}"
+    # Re-flatten the legacy worksite/{stockpile,scaffolding}/ split so
+    # ex.rel paths line up with the post-0.33.0 stockpile/ layout.
+    if [ -d "${EXAMPLES_DIR}/worksite/stockpile" ]; then
+        find "${EXAMPLES_DIR}/worksite/stockpile" -mindepth 1 -maxdepth 1 -exec mv -t "${EXAMPLES_DIR}/" {} +
+        rmdir "${EXAMPLES_DIR}/worksite/stockpile" 2>/dev/null || true
+    fi
+    if [ -d "${EXAMPLES_DIR}/worksite/scaffolding" ]; then
+        find "${EXAMPLES_DIR}/worksite/scaffolding" -mindepth 1 -maxdepth 1 -exec mv -t "${EXAMPLES_DIR}/" {} +
+        rmdir "${EXAMPLES_DIR}/worksite/scaffolding" 2>/dev/null || true
+    fi
+    rmdir "${EXAMPLES_DIR}/worksite" 2>/dev/null || true
+    echo "Migrated /srv/vigo/example-stockpile/ → /srv/vigo/stacks/examples/ (flattened worksite/ split)."
 fi
 
 # ---------------------------------------------------------------------------
@@ -45,8 +102,7 @@ fi
 # ---------------------------------------------------------------------------
 
 mkdir -p "${VIGO_STOCKPILE}/modules" "${VIGO_STOCKPILE}/templates" "${VIGO_STOCKPILE}/tasks" "${VIGO_STOCKPILE}/workflows" "${VIGO_STOCKPILE}/usercrates"
-mkdir -p "${VIGO_WORKSITE}/scaffolding"
-mkdir -p -m 750 "${VIGO_STRUCTURE}"
+mkdir -p -m 750 "${VIGO_LIVE}"
 mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/custom-traits"
 mkdir -p -m 700 "${DATA_DIR}/license" "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
 
@@ -120,48 +176,64 @@ fi
 
 # ---------------------------------------------------------------------------
 # Seed starter config files (skip files that already exist)
-# The seed layout mirrors the on-disk layout: /seed/worksite/{stockpile,
-# scaffolding}/ → /srv/vigo/worksite/{stockpile,scaffolding}/. Everything
-# gets published to structure/ together via vigocli config publish.
+# Seed layout (per repo): /seed/worksite/stockpile/ and /seed/worksite/
+# scaffolding/. Both contribute to the single /srv/vigo/stacks/stockpile/
+# tree at runtime — scaffolding/ contents are merged in alongside
+# modules/usercrates/templates as part of the post-0.33.0 collapse.
 # ---------------------------------------------------------------------------
 
-if [ -d "${SEED_DIR}/worksite" ]; then
-    find "${SEED_DIR}/worksite" -type f | while IFS= read -r src; do
-        rel="${src#${SEED_DIR}/worksite/}"
-        dest="${VIGO_WORKSITE}/${rel}"
+if [ -d "${SEED_DIR}/worksite/stockpile" ]; then
+    find "${SEED_DIR}/worksite/stockpile" -type f | while IFS= read -r src; do
+        rel="${src#${SEED_DIR}/worksite/stockpile/}"
+        dest="${VIGO_STOCKPILE}/${rel}"
         if [ ! -f "$dest" ]; then
             mkdir -p "$(dirname "$dest")"
             cp "$src" "$dest"
         fi
     done
-    echo "Starter config files seeded."
 fi
-
-# Initial publish: sync both stockpile/ and scaffolding/ into structure/
-# on first run so the server has config available at startup. Subsequent
-# changes go through vigocli config publish.
-if [ ! -d "${VIGO_STRUCTURE}/stockpile" ] && [ ! -d "${VIGO_STRUCTURE}/scaffolding" ]; then
-    for subtree in stockpile scaffolding; do
-        if [ -d "${VIGO_WORKSITE}/${subtree}" ]; then
-            cp -r "${VIGO_WORKSITE}/${subtree}" "${VIGO_STRUCTURE}/"
+if [ -d "${SEED_DIR}/worksite/scaffolding" ]; then
+    find "${SEED_DIR}/worksite/scaffolding" -type f | while IFS= read -r src; do
+        rel="${src#${SEED_DIR}/worksite/scaffolding/}"
+        dest="${VIGO_STOCKPILE}/${rel}"
+        if [ ! -f "$dest" ]; then
+            mkdir -p "$(dirname "$dest")"
+            cp "$src" "$dest"
         fi
     done
-    chmod -R u=rwX,g=rX,o= "${VIGO_STRUCTURE}"
-    echo "Initial config published to structure/."
+fi
+echo "Starter config files seeded."
+
+# Initial publish: sync stockpile/ into .live/ on first run so the
+# server has config available at startup. Subsequent changes go through
+# vigocli config publish.
+if [ ! -d "${VIGO_LIVE}/stockpile" ] && [ -d "${VIGO_STOCKPILE}" ]; then
+    cp -r "${VIGO_STOCKPILE}" "${VIGO_LIVE}/stockpile"
+    chmod -R u=rwX,g=rX,o= "${VIGO_LIVE}"
+    echo "Initial config published to .live/."
 fi
 
 # ---------------------------------------------------------------------------
-# Seed example configs into examples/ (skip files that already exist)
+# Seed example configs into stacks/examples/ (skip files that already exist)
 # ---------------------------------------------------------------------------
 
-# Seed worksite examples (stockpile + scaffolding)
+# Seed worksite examples — flatten the legacy worksite/{stockpile,
+# scaffolding}/ split into a single stacks/examples/ tree so paths
+# match the post-0.33.0 stockpile layout. `vigocli config examples
+# copy <name>` then writes destinations relative to stockpile/.
 find "${SEED_DIR}/example-configs/worksite" -name '*.vgo.example' -type f | while IFS= read -r src; do
     rel="${src#${SEED_DIR}/example-configs/worksite/}"
     # Skip compliance modules and roles — gated behind paid license.
     case "$rel" in
         stockpile/modules/compliance/*|scaffolding/compliance-roles.vgo.example) continue ;;
     esac
-    dest="${EXAMPLES_DIR}/worksite/${rel}"
+    # Strip the stockpile/ or scaffolding/ prefix so the example file
+    # tree mirrors the runtime stockpile/ layout one-to-one.
+    case "$rel" in
+        stockpile/*)   rel="${rel#stockpile/}" ;;
+        scaffolding/*) rel="${rel#scaffolding/}" ;;
+    esac
+    dest="${EXAMPLES_DIR}/${rel}"
     if [ ! -f "$dest" ]; then
         mkdir -p "$(dirname "$dest")"
         cp "$src" "$dest"

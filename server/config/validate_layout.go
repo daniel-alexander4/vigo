@@ -12,31 +12,40 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// validateWorksiteLayout enforces the filename-per-tree rule at load
-// time. Intentional duplicate of server/publish.validateWorksiteLayout —
-// config/ can't import publish/ (would be a cycle) and the rule is small
-// enough that a direct copy is cheaper than introducing a shared package.
+// validateStacksLayout enforces filename-and-content rules for the
+// single stockpile tree at load time. Intentional duplicate of
+// server/publish.validateStacksLayout — config/ can't import publish/
+// (would be a cycle) and the rule set is small enough that a direct
+// copy is cheaper than introducing a shared package.
 //
 // Publish runs the same check pre-publish; this load-time mirror
-// guarantees a hand-edited structure/ directory with a misplaced file
-// refuses the reload instead of loading broken config.
-func validateWorksiteLayout(worksiteDir string) error {
-	var problems []string
-
-	stockpile := filepath.Join(worksiteDir, "stockpile")
-	scaffolding := filepath.Join(worksiteDir, "scaffolding")
-
-	if _, err := os.Stat(stockpile); err == nil {
-		problems = append(problems, scanStockpileLayout(stockpile)...)
+// guarantees a hand-edited .live/ directory with a misplaced or
+// mistitled file refuses the reload instead of loading broken config.
+//
+// Rules enforced (single-tree, post-0.33.0 layout):
+//
+//   - compliance.vgo with a top-level waivers: block — mixed-keys
+//     rejection; waivers belong in waivers.vgo.
+//   - waivers.vgo with a top-level compliance: block — mixed-keys
+//     rejection; claims belong in compliance.vgo.
+//   - Any non-waivers.vgo file with a top-level waivers: block —
+//     stray-filename rejection; the loader globs the exact filename.
+//   - Any "claims-only" file (top-level compliance: with no
+//     resources:/name:/vars:) not named compliance.vgo —
+//     stray-filename rejection. Module definitions carrying their own
+//     compliance: block are not affected.
+func validateStacksLayout(stacksDir string) error {
+	stockpile := filepath.Join(stacksDir, "stockpile")
+	if _, err := os.Stat(stockpile); err != nil {
+		// stockpile doesn't exist yet (fresh install); nothing to check.
+		return nil
 	}
-	if _, err := os.Stat(scaffolding); err == nil {
-		problems = append(problems, scanScaffoldingLayout(scaffolding)...)
-	}
 
+	problems := scanStockpileLayout(stockpile)
 	if len(problems) == 0 {
 		return nil
 	}
-	return fmt.Errorf("worksite layout violations:\n  - %s", strings.Join(problems, "\n  - "))
+	return fmt.Errorf("stacks layout violations:\n  - %s", strings.Join(problems, "\n  - "))
 }
 
 func scanStockpileLayout(stockpileDir string) []string {
@@ -49,71 +58,45 @@ func scanStockpileLayout(stockpileDir string) []string {
 		relSlash := filepath.ToSlash(rel)
 		base := filepath.Base(path)
 
-		if base == "waivers.vgo" {
-			problems = append(problems, fmt.Sprintf(
-				"stockpile/%s: waivers live in the scaffolding tree. Move to scaffolding/%s",
-				relSlash, relSlash))
-			return nil
-		}
 		if base == "compliance.vgo" {
 			if hasTopLevelYAMLKey(path, "waivers") {
 				problems = append(problems, fmt.Sprintf(
-					"stockpile/%s: waivers: block in a stockpile compliance.vgo. "+
-						"Move the waivers: entries to scaffolding/waivers.vgo "+
-						"(compliance.vgo in stockpile holds only compliance: claims).",
+					"stockpile/%s: waivers: block in compliance.vgo. "+
+						"Move the waivers: entries to waivers.vgo "+
+						"(compliance.vgo holds only compliance: claims).",
 					relSlash))
 			}
-			return nil
-		}
-		// Catch a non-canonical filename that looks like a claims-only
-		// file (top-level compliance: only, no resources:/name:/vars: —
-		// i.e., not a module def). Operators sometimes name them
-		// `complaince.vgo` or `usercrates-compliance.vgo`; without this
-		// check the file silently isn't loaded as claims.
-		if filepath.Ext(base) == ".vgo" && looksLikeClaimsOnly(path) {
-			problems = append(problems, fmt.Sprintf(
-				"stockpile/%s: looks like a claims-only file (top-level compliance: with no resources/name/vars) but is not named compliance.vgo. "+
-					"Rename to compliance.vgo so directory-level claim inheritance loads it.",
-				relSlash))
-		}
-		return nil
-	})
-	return problems
-}
-
-func scanScaffoldingLayout(scaffoldingDir string) []string {
-	var problems []string
-	_ = filepath.WalkDir(scaffoldingDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
-		}
-		rel, _ := filepath.Rel(scaffoldingDir, path)
-		relSlash := filepath.ToSlash(rel)
-		base := filepath.Base(path)
-
-		if base == "compliance.vgo" {
-			problems = append(problems, fmt.Sprintf(
-				"scaffolding/%s: compliance claims live in the stockpile tree. Move to stockpile/%s",
-				relSlash, relSlash))
 			return nil
 		}
 		if base == "waivers.vgo" {
 			if hasTopLevelYAMLKey(path, "compliance") {
 				problems = append(problems, fmt.Sprintf(
-					"scaffolding/%s: compliance: block in a scaffolding waivers.vgo. "+
-						"Move the compliance: claims to stockpile/compliance.vgo "+
-						"(waivers.vgo in scaffolding holds only waivers: entries).",
+					"stockpile/%s: compliance: block in waivers.vgo. "+
+						"Move the compliance: claims to compliance.vgo "+
+						"(waivers.vgo holds only waivers: entries).",
 					relSlash))
 			}
 			return nil
 		}
-		// Catch a non-canonical filename carrying a top-level waivers:
-		// block — the loader globs for the exact name `waivers.vgo`, so
-		// stray filenames silently don't load. Reject with a rename hint.
+		// Stray waivers.vgo: any non-waivers.vgo file with a top-level
+		// waivers: block silently isn't loaded (loader globs the exact
+		// filename). Reject with a rename hint.
 		if filepath.Ext(base) == ".vgo" && hasTopLevelYAMLKey(path, "waivers") {
 			problems = append(problems, fmt.Sprintf(
-				"scaffolding/%s: top-level waivers: block in a non-waivers.vgo file. "+
+				"stockpile/%s: top-level waivers: block in a non-waivers.vgo file. "+
 					"Rename to waivers.vgo (the loader only globs that exact filename).",
+				relSlash))
+			return nil
+		}
+		// Stray compliance.vgo: a non-canonical filename that looks
+		// like a claims-only file (top-level compliance: only, no
+		// resources:/name:/vars:). Module definitions carrying their
+		// own compliance: block — common in stockpile/modules — are
+		// not flagged because they have resources:/name:.
+		if filepath.Ext(base) == ".vgo" && looksLikeClaimsOnly(path) {
+			problems = append(problems, fmt.Sprintf(
+				"stockpile/%s: looks like a claims-only file (top-level compliance: with no resources/name/vars) but is not named compliance.vgo. "+
+					"Rename to compliance.vgo so directory-level claim inheritance loads it.",
 				relSlash))
 		}
 		return nil

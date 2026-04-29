@@ -35,12 +35,12 @@ resources:
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "waivers.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "waivers.vgo"), `
 waivers:
   cis-ubuntu:
     - control: "5.4.1"
@@ -74,12 +74,12 @@ resources:
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "waivers.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "waivers.vgo"), `
 waivers:
   pci-dss:
     - control: "8.1.1"
@@ -112,12 +112,12 @@ resources:
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "waivers.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "waivers.vgo"), `
 compliance:
   cis: ["5.4.1"]
 waivers:
@@ -131,7 +131,7 @@ waivers:
 	if err == nil {
 		t.Fatal("expected NewConfigStore to reject compliance: in scaffolding/waivers.vgo")
 	}
-	if !strings.Contains(err.Error(), "compliance: block in a scaffolding waivers.vgo") {
+	if !strings.Contains(err.Error(), "compliance: block in waivers.vgo") {
 		t.Errorf("error should identify the wrong-key violation; got: %s", err)
 	}
 }
@@ -163,7 +163,7 @@ resources:
     type: user
     username: dan
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base, users/dan]
@@ -207,7 +207,7 @@ resources:
     type: user
     username: dan
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base, users/dan]
@@ -263,7 +263,7 @@ resources:
     type: user
     username: dan
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [users/dan]
@@ -318,7 +318,7 @@ resources:
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base]
@@ -328,7 +328,7 @@ envoys:
 	if err == nil {
 		t.Fatal("expected NewConfigStore to reject waivers: in stockpile/modules/compliance.vgo")
 	}
-	if !strings.Contains(err.Error(), "waivers: block in a stockpile compliance.vgo") {
+	if !strings.Contains(err.Error(), "waivers: block in compliance.vgo") {
 		t.Errorf("error should identify the wrong-key violation; got: %s", err)
 	}
 }
@@ -348,12 +348,12 @@ resources:
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "waivers.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "waivers.vgo"), `
 vars:
   foo: bar
 `)
@@ -382,7 +382,7 @@ resources:
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base]
@@ -434,7 +434,7 @@ resources:
     type: user
     username: dan
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [users/dan]
@@ -473,12 +473,12 @@ resources:
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "waivers.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "waivers.vgo"), `
 waivers:
   cis:
     - control: "5.4.1"
@@ -532,7 +532,7 @@ resources:
     type: user
     username: alice
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
 `)
@@ -590,11 +590,11 @@ resources:
     username: alice
 `)
 	// Matchfile scoped to customerA envoys.
-	writeFile(t, filepath.Join(dir, "scaffolding", "customerA", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "customerA", "envoys.vgo"), `
 envoys:
   - match: "a01"
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "root01"
 `)
@@ -660,7 +660,7 @@ resources:
     type: user
     username: dan
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
 `)
@@ -669,7 +669,7 @@ envoys:
 	if err == nil {
 		t.Fatal("expected NewConfigStore to reject waivers: in stockpile/usercrates/compliance.vgo")
 	}
-	if !strings.Contains(err.Error(), "waivers: block in a stockpile compliance.vgo") {
+	if !strings.Contains(err.Error(), "waivers: block in compliance.vgo") {
 		t.Errorf("error should identify the wrong-key violation; got: %s", err)
 	}
 }
@@ -685,7 +685,7 @@ compliance:
   cis: ["5.4.1"]
 `)
 	// No other usercrates, no envoys — just a bare compliance.vgo file.
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
 `)

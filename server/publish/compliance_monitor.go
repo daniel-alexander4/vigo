@@ -123,7 +123,7 @@ func (m *ConvergenceMonitor) triggerRollback() {
 
 	slog.Info("convergence monitor: rolling back to previous config", "version", version)
 
-	if err := RollbackToVersion(HistoryDir, version, StructureDir); err != nil {
+	if err := RollbackToVersion(HistoryDir, version, LiveDir); err != nil {
 		slog.Error("convergence monitor: rollback failed", "error", err)
 		return
 	}

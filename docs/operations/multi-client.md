@@ -72,7 +72,7 @@ Vigo solves two-axis inheritance with two mechanisms that already exist in the c
 | **Client** | Directory hierarchy | `acme/`, `globex/`, `initech/` subdirectories |
 | **Environment** | Roles | `env-prod`, `env-stage`, `env-dev` in `roles.vgo` |
 | **Function** | Roles | `webserver`, `database`, `cache` in `roles.vgo` |
-| **Fleet-wide baseline** | Root `common.vgo` | `scaffolding/common.vgo` |
+| **Fleet-wide baseline** | Root `common.vgo` | `stockpile/common.vgo` |
 
 No new features, no scripting, no templating for control flow. Each piece of information exists in exactly one place. When you change it, every affected machine picks it up on the next convergence cycle.
 
@@ -85,7 +85,7 @@ This walkthrough builds a complete config for an MSP managing two clients (Acme 
 Every machine in your fleet — regardless of client or environment — needs basic infrastructure: time sync, SSH hardening, and monitoring.
 
 ```yaml
-# scaffolding/common.vgo
+# stockpile/common.vgo
 modules:
   - ntp
   - sshd-config
@@ -102,7 +102,7 @@ This file sits at the root of the config tree. All subdirectories inherit these 
 Environments differ in two ways: which modules they include and how variables are tuned. Capture both in environment roles.
 
 ```yaml
-# scaffolding/roles.vgo
+# stockpile/roles.vgo
 roles:
   # ── Environment roles ─────────────────────────────────────
   #
@@ -264,7 +264,7 @@ Match: "web*.prod.acme.com" (acme/envoys.vgo)
 Environment: production
 
 Inheritance chain:
-  scaffolding/common.vgo        → ntp, sshd-config, monitoring
+  stockpile/common.vgo        → ntp, sshd-config, monitoring
   stockpile/acme/common.vgo   → acme-dns, acme-tls-certs
 
 Role expansion:

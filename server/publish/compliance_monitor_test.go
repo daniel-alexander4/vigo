@@ -48,12 +48,12 @@ func TestConvergenceMonitorTriggersRollback(t *testing.T) {
 	histDir := filepath.Join(tmpDir, "history")
 
 	// Override package-level dirs.
-	origLive := StructureDir
+	origLive := LiveDir
 	origHist := HistoryDir
-	StructureDir = liveDir
+	LiveDir = liveDir
 	HistoryDir = histDir
 	t.Cleanup(func() {
-		StructureDir = origLive
+		LiveDir = origLive
 		HistoryDir = origHist
 	})
 
@@ -62,7 +62,7 @@ func TestConvergenceMonitorTriggersRollback(t *testing.T) {
 	os.MkdirAll(filepath.Join(liveDir, "modules"), 0o755)
 	os.WriteFile(filepath.Join(liveDir, "modules", "good.vgo"), []byte("name: good"), 0o644)
 	// Snapshot 1 (the "previous good" config).
-	v1, err := SnapshotStructure(liveDir, histDir, 20)
+	v1, err := SnapshotLive(liveDir, histDir, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestConvergenceMonitorTriggersRollback(t *testing.T) {
 
 	// Modify live dir and take another snapshot (the "bad" config that triggers rollback).
 	os.WriteFile(filepath.Join(liveDir, "modules", "bad.vgo"), []byte("name: bad"), 0o644)
-	_, err = SnapshotStructure(liveDir, histDir, 20)
+	_, err = SnapshotLive(liveDir, histDir, 20)
 	if err != nil {
 		t.Fatal(err)
 	}

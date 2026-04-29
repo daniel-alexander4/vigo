@@ -286,7 +286,7 @@ $ vigocli config search --var log_level
 
 ## config publish
 
-Validates `.vgo` files in `/srv/vigo/worksite/stockpile/` then atomically syncs to `/srv/vigo/worksite/structure/` (the hidden directory inside the stockpile that the server reads from). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../../operations/config-publish.md) for full details.
+Validates `.vgo` files in `/srv/vigo/stacks/stockpile/` then atomically syncs to `/srv/vigo/stacks/.live/` (the hidden directory inside the stockpile that the server reads from). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../../operations/config-publish.md) for full details.
 
 ### Usage
 
@@ -465,12 +465,12 @@ $ vigocli config unused
   staging/retired.vgo     retired-*.staging.example.com
 ```
 
-With `--delete`, the command lists all files to be removed, asks for confirmation, deletes them from `/srv/vigo/worksite/stockpile/`, and reminds you to run `vigocli config publish` to sync the changes to `.live/`.
+With `--delete`, the command lists all files to be removed, asks for confirmation, deletes them from `/srv/vigo/stacks/stockpile/`, and reminds you to run `vigocli config publish` to sync the changes to `.live/`.
 
 ```
 $ vigocli config unused --delete
 ...
-Files to delete from /srv/vigo/worksite/stockpile:
+Files to delete from /srv/vigo/stacks/stockpile:
   modules/system/debug-tools.vgo
   modules/legacy/old-monitoring.vgo
   staging/retired.vgo

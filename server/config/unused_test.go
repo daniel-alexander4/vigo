@@ -32,7 +32,7 @@ resources: []
 `)
 
 	// Entry references sshd directly.
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web-*.example.com"
     roles: [web]
@@ -77,12 +77,12 @@ resources: []
 `)
 
 	// Two match files: one matches enrolled hosts, one doesn't.
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "active.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "active.vgo"), `
 envoys:
   - match: "web-*.example.com"
     roles: [web]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "retired.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "retired.vgo"), `
 envoys:
   - match: "old-*.retired.example.com"
     modules: [nginx]
@@ -122,10 +122,10 @@ resources: []
 `)
 
 	// base is referenced via common.vgo, monitoring is orphaned.
-	writeFile(t, filepath.Join(dir, "scaffolding", "common.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "common.vgo"), `
 modules: [base]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "host-*.example.com"
     roles: [empty]
@@ -167,7 +167,7 @@ resources: []
       modules: [ssl]
 `)
 
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
     roles: [web]
@@ -200,7 +200,7 @@ resources: []
 - name: web
   modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "web-*.example.com"
     roles: [web]

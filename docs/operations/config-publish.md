@@ -191,11 +191,11 @@ To set up the recommended permission model:
 groupadd vigo
 
 # Lock down .live (only root/publish can write, vigosrv can read via group)
-chown -R root:vigo /srv/vigo/worksite/structure
-chmod 750 /srv/vigo/worksite/structure
+chown -R root:vigo /srv/vigo/stacks/structure
+chmod 750 /srv/vigo/stacks/structure
 
 # Operators can write to stage
-chmod 770 /srv/vigo/worksite/stockpile
+chmod 770 /srv/vigo/stacks/stockpile
 ```
 
 ## Custom Executor Resources

@@ -126,19 +126,19 @@ func startServer(t *testing.T, modules map[string]string, envoysYAML string) *te
 	queries := db.New(testDB)
 	reg := registry.NewRegistry(queries)
 
-	// Build the worksite directory (0.29.0 layout): stockpile/modules/ for
-	// module definitions, scaffolding/ for matchfiles. Config extension is
+	// Build the stacks directory (0.33.0 layout): stockpile/ holds every
+	// config primitive (modules, matchfiles, etc.). Config extension is
 	// .vgo; .yaml is not recognized.
-	configDir := filepath.Join(t.TempDir(), "worksite")
+	configDir := filepath.Join(t.TempDir(), "stacks")
 	modulesDir := filepath.Join(configDir, "stockpile", "modules")
-	scaffoldingDir := filepath.Join(configDir, "scaffolding")
+	stockpileDir := filepath.Join(configDir, "stockpile")
 	os.MkdirAll(modulesDir, 0755)
-	os.MkdirAll(scaffoldingDir, 0755)
+	os.MkdirAll(stockpileDir, 0755)
 	for name, content := range modules {
 		os.WriteFile(filepath.Join(modulesDir, name+".vgo"), []byte(content), 0644)
 	}
 	if envoysYAML != "" {
-		os.WriteFile(filepath.Join(scaffoldingDir, "envoys.vgo"), []byte(envoysYAML), 0644)
+		os.WriteFile(filepath.Join(stockpileDir, "envoys.vgo"), []byte(envoysYAML), 0644)
 	}
 
 	configStore, err := config.NewConfigStore(configDir, &noopProvider{}, true)

@@ -147,12 +147,12 @@ curl -s https://vigo:8443/api/v1/report/pci.html > pci-report.html
 
 1. Copy the PCI modules and the pre-built compliance roles:
    ```bash
-   cp example-configs/stockpile/modules/compliance/pci-dss/*.vgo.example /srv/vigo/worksite/stockpile/modules/
-   for f in /srv/vigo/worksite/stockpile/modules/pci-*.vgo.example; do mv "$f" "${f%.example}"; done
+   cp example-configs/stockpile/modules/compliance/pci-dss/*.vgo.example /srv/vigo/stacks/stockpile/modules/
+   for f in /srv/vigo/stacks/stockpile/modules/pci-*.vgo.example; do mv "$f" "${f%.example}"; done
 
    # Use the pre-built pci-dss role from compliance-roles.vgo.example,
    # or create your own in roles.vgo:
-   cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/worksite/stockpile/compliance-roles.vgo
+   cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/stacks/stockpile/compliance-roles.vgo
    ```
 
 2. Assign the role to PCI-scope nodes in your match blocks:

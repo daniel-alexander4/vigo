@@ -49,7 +49,7 @@ Every attorney admitted to practice in a US jurisdiction that has adopted the AB
 ## Example Module Assignment
 
 ```yaml
-# scaffolding/roles.vgo
+# stockpile/roles.vgo
 roles:
   aba-cyber:
     modules:
@@ -62,7 +62,7 @@ roles:
 ```
 
 ```yaml
-# scaffolding/envoys.vgo
+# stockpile/envoys.vgo
 envoys:
   - match: "*.lawfirm.com"
     roles: [aba-cyber]

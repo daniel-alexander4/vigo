@@ -42,7 +42,7 @@ Dispatch a command to matching envoys.
 | `maxFailures` | No | Abort after this many failures (e.g., `3`, `10%`) |
 | `healthCheck` | No | Command to run between batches |
 | `dryRun` | No | If true, return matched targets without executing |
-| `taskName` | No | Name of a reusable task definition from `worksite/structure/tasks/*.vgo` |
+| `taskName` | No | Name of a reusable task definition from `.live/tasks/*.vgo` |
 | `params` | No | Parameter overrides for named tasks |
 
 **Response (201 Created):**

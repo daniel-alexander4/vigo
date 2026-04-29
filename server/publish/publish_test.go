@@ -16,48 +16,43 @@ import (
 
 // --- helpers ---
 
-// withTestDirs temporarily overrides StockpileDir and StructureDir for testing,
-// restoring them when the test completes. The returned "stockpile" is actually
-// the worksite root — tests write files to it like they always did (modules/,
-// envoys/, roles/) and those paths are now mapped through to stockpile/modules/
-// + scaffolding/ by this helper.
-func withTestDirs(t *testing.T) (stockpile, live string) {
+// withTestDirs temporarily overrides StockpileDir and LiveDir for testing,
+// restoring them when the test completes. The returned "stacks" is the
+// stacks root — tests write files via shorthand symlinks (modules/,
+// envoys/, roles/) which all resolve to stockpile/modules/, stockpile/
+// envoys/, stockpile/roles/ post-0.33.0 collapse.
+func withTestDirs(t *testing.T) (stacks, live string) {
 	t.Helper()
-	worksite := t.TempDir()
-	live = filepath.Join(t.TempDir(), "structure")
+	stacks = t.TempDir()
+	live = filepath.Join(t.TempDir(), ".live")
 
 	origStockpile := StockpileDir
-	origLive := StructureDir
+	origLive := LiveDir
 
-	// setTestDirs wants an explicit stockpile path; we pass worksite/stockpile.
-	setTestDirs(filepath.Join(worksite, "stockpile"), live)
+	setTestDirs(filepath.Join(stacks, "stockpile"), live)
 
 	t.Cleanup(func() {
-		unlockStructureDir(live) // ensure temp dir cleanup can remove read-only files
+		unlockLiveDir(live) // ensure temp dir cleanup can remove read-only files
 		setTestDirs(origStockpile, origLive)
 	})
 
-	for _, sub := range []string{"stockpile/modules", "stockpile/templates", "stockpile/usercrates", "scaffolding/envoys", "scaffolding/roles"} {
-		if err := os.MkdirAll(filepath.Join(worksite, sub), 0o755); err != nil {
+	for _, sub := range []string{"stockpile/modules", "stockpile/templates", "stockpile/usercrates", "stockpile/envoys", "stockpile/roles"} {
+		if err := os.MkdirAll(filepath.Join(stacks, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	// Return worksite as the first value so existing tests that write to
-	// filepath.Join(stockpile, "modules", ...) end up at worksite/modules/
-	// — but we also create symlinks so modules/ → stockpile/modules/ and
-	// envoys/ → scaffolding/envoys/ from the test's POV.
-	// Simpler: return worksite directly and rely on tests using the new
-	// layout. But many tests don't know that, so we expose compat symlinks.
-	if err := os.Symlink(filepath.Join(worksite, "stockpile", "modules"), filepath.Join(worksite, "modules")); err != nil {
-		t.Fatal(err)
+	// Compat symlinks so existing tests writing to filepath.Join(stacks,
+	// "modules", ...) still land in stockpile/modules/.
+	for _, link := range []struct{ name, target string }{
+		{"modules", "stockpile/modules"},
+		{"envoys", "stockpile/envoys"},
+		{"roles", "stockpile/roles"},
+	} {
+		if err := os.Symlink(filepath.Join(stacks, link.target), filepath.Join(stacks, link.name)); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := os.Symlink(filepath.Join(worksite, "scaffolding", "envoys"), filepath.Join(worksite, "envoys")); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(filepath.Join(worksite, "scaffolding", "roles"), filepath.Join(worksite, "roles")); err != nil {
-		t.Fatal(err)
-	}
-	return worksite, live
+	return stacks, live
 }
 
 func writeFile(t *testing.T, path, content string) {
@@ -164,7 +159,7 @@ func TestPublish_SyncsFiles(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(live, "stockpile", "modules", "nginx.vgo")); err != nil {
 		t.Error("nginx.vgo not synced to live modules/")
 	}
-	if _, err := os.Stat(filepath.Join(live, "scaffolding", "envoys", "web.vgo")); err != nil {
+	if _, err := os.Stat(filepath.Join(live, "stockpile", "envoys", "web.vgo")); err != nil {
 		t.Error("web.vgo not synced to live envoys/")
 	}
 }
@@ -638,8 +633,8 @@ envoys:
   - match: "*.example.com"
     modules: [download]
 `)
-	os.MkdirAll(filepath.Join(live, "scaffolding", "envoys"), 0o755)
-	writeFile(t, filepath.Join(live, "scaffolding", "envoys", "all.vgo"), `
+	os.MkdirAll(filepath.Join(live, "stockpile", "envoys"), 0o755)
+	writeFile(t, filepath.Join(live, "stockpile", "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [download]

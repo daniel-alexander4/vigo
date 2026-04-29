@@ -110,7 +110,7 @@ resources:
 
 Use cloud traits to target entire providers or regions:
 
-`scaffolding/envoys.vgo`:
+`stockpile/envoys.vgo`:
 
 ```yaml
 match:

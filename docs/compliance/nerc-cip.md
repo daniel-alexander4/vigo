@@ -23,9 +23,9 @@ NERC CIP (North American Electric Reliability Corporation Critical Infrastructur
 ## Quick Start
 
 ```bash
-cp example-configs/stockpile/modules/compliance/nerc-cip/*.vgo.example /srv/vigo/worksite/stockpile/modules/
-for f in /srv/vigo/worksite/stockpile/modules/nerc-*.vgo.example; do mv "$f" "${f%.example}"; done
-cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/worksite/stockpile/compliance-roles.vgo
+cp example-configs/stockpile/modules/compliance/nerc-cip/*.vgo.example /srv/vigo/stacks/stockpile/modules/
+for f in /srv/vigo/stacks/stockpile/modules/nerc-*.vgo.example; do mv "$f" "${f%.example}"; done
+cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/stacks/stockpile/compliance-roles.vgo
 ```
 
 Assign the `nerc-cip` role to nodes:

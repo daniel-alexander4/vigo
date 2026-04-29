@@ -23,16 +23,23 @@ This populates `/srv/vigo/` with everything needed to run the server:
 ├── license/                 # license .lic files
 ├── db/                      # SQLite database
 ├── secrets/                 # encrypted secret files
-├── worksite/                # edit .vgo config files here
-│   ├── stockpile/           # module library
-│   │   ├── modules/          # reusable module definitions
+├── stacks/                  # config operation root
+│   ├── stockpile/           # operator-edited working tree
+│   │   ├── modules/         # reusable module definitions
 │   │   ├── usercrates/      # user-scoped auto-apply modules
-│   │   └── templates/       # Go template fragments
-│   ├── scaffolding/         # envoy rules — envoys.vgo, roles.vgo,
-│   │                        # common.vgo, environments.vgo, waivers.vgo
-│   └── structure/           # published config (do not edit directly)
+│   │   ├── templates/       # Go template fragments
+│   │   ├── tasks/           # reusable task definitions
+│   │   ├── workflows/       # workflow definitions
+│   │   ├── envoys.vgo       # matchfile (any .vgo with envoys: works)
+│   │   ├── roles.vgo        # role definitions (single, fleet-wide)
+│   │   ├── common.vgo       # directory-inherited defaults
+│   │   ├── waivers.vgo      # compliance waivers (any depth)
+│   │   ├── environments.vgo # per-env module/var overrides
+│   │   └── compliance.vgo   # directory-inherited claims
+│   ├── examples/            # read-only reference templates
+│   │                        #   (image-seeded; vigocli config examples copy)
+│   └── .live/               # published config (locked between publishes)
 ├── config-history/          # rollback snapshots
-├── example-configs/                # example .vgo modules, roles, and nodes
 └── docs/                    # browsable documentation
 ```
 

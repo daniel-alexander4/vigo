@@ -97,7 +97,7 @@ To use an example retraction:
 1. Copy the retraction to your stockpile:
    ```bash
    cp example-configs/retractions/modules/web/nginx-retract.vgo.example \
-      /srv/vigo/worksite/stockpile/modules/nginx-retract.vgo
+      /srv/vigo/stacks/stockpile/modules/nginx-retract.vgo
    ```
 2. Review the file, especially any `# REVIEW:` or `# WARNING:` comments
 3. Add `nginx-retract` to the relevant match blocks or roles

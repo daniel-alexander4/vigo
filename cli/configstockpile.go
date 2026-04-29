@@ -164,7 +164,7 @@ func truncate(s string, n int) string {
 }
 
 func init() {
-	stockpileOrganizeCmd.Flags().String("example-dir", defaultExampleDir, "Path to example-stockpile directory")
+	stockpileOrganizeCmd.Flags().String("example-dir", defaultExampleDir, "Path to stacks/examples directory")
 
 	configStockpileCmd.AddCommand(stockpileOrganizeCmd, stockpileSearchCmd)
 	configCmd.AddCommand(configStockpileCmd)

@@ -98,11 +98,11 @@ envoys:
 
 Node-level `vars` override the module's default `vars`. Here, `nginx_port` becomes `8080` instead of the default `80`.
 
-**Tip:** If you have modules that should apply to *all* your envoys (like SSH and monitoring), put them in `scaffolding/common.vgo` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../engineering/writing-modules/config-format.md#directory-inheritance).
+**Tip:** If you have modules that should apply to *all* your envoys (like SSH and monitoring), put them in `stockpile/common.vgo` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../engineering/writing-modules/config-format.md#directory-inheritance).
 
 ## Step 4: Use Roles for Reuse
 
-For multiple modules, group them into a role. Create `scaffolding/roles.vgo`:
+For multiple modules, group them into a role. Create `stockpile/roles.vgo`:
 
 ```yaml
 roles:

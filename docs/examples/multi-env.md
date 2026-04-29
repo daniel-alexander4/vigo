@@ -42,7 +42,7 @@ resources:
 
 ## Match Blocks Declare Environment
 
-`scaffolding/envoys.vgo`:
+`stockpile/envoys.vgo`:
 
 ```yaml
 envoys:
@@ -59,7 +59,7 @@ Each match block declares the tier via `environment:`. No inline env-specific va
 
 ## Per-Environment Overrides
 
-`scaffolding/environments.vgo` (sibling to `envoys.vgo`, or at any ancestor directory):
+`stockpile/environments.vgo` (sibling to `envoys.vgo`, or at any ancestor directory):
 
 ```yaml
 env:

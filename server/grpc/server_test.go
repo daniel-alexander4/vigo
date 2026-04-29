@@ -117,7 +117,7 @@ func startTestServer(t *testing.T) (string, func()) {
 
 	// Create a minimal config store (empty examples dir with envoys/, modules/, and roles/ subdirs).
 	nodeConfigsDir := filepath.Join(t.TempDir(), "examples")
-	for _, sub := range []string{"stockpile/modules", "scaffolding/envoys", "scaffolding/roles"} {
+	for _, sub := range []string{"stockpile/modules", "stockpile/envoys", "stockpile/roles"} {
 		if err := os.MkdirAll(filepath.Join(nodeConfigsDir, sub), 0755); err != nil {
 			t.Fatal(err)
 		}

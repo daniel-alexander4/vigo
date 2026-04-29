@@ -72,7 +72,7 @@ func startTestServerWithConfig(t *testing.T, configDir string) (string, *config.
 func setupE2EConfig(t *testing.T, modules map[string]string, envoysYAML string) string {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "examples")
-	for _, sub := range []string{"stockpile/modules", "scaffolding/envoys", "scaffolding/roles"} {
+	for _, sub := range []string{"stockpile/modules", "stockpile/envoys", "stockpile/roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatal(err)
 		}
@@ -83,7 +83,7 @@ func setupE2EConfig(t *testing.T, modules map[string]string, envoysYAML string) 
 		}
 	}
 	if envoysYAML != "" {
-		if err := os.WriteFile(filepath.Join(dir, "scaffolding", "envoys", "envoys.vgo"), []byte(envoysYAML), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "stockpile", "envoys", "envoys.vgo"), []byte(envoysYAML), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -230,7 +230,7 @@ resources:
 `), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(configDir, "scaffolding", "envoys", "envoys.vgo"), []byte(`
+	if err := os.WriteFile(filepath.Join(configDir, "stockpile", "envoys", "envoys.vgo"), []byte(`
 envoys:
   - match: "*.test.example.com"
     modules: [nginx, certbot]

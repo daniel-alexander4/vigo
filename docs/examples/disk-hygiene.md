@@ -6,7 +6,7 @@ Prevent disk and inode exhaustion with a role that bundles five focused modules.
 ## The Role
 
 ```yaml
-# scaffolding/roles.vgo
+# stockpile/roles.vgo
 roles:
   - name: disk-hygiene
     modules: [logrotate, journal-cap, tmp-aging, package-cache, docker-prune]

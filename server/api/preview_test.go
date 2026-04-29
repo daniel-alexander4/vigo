@@ -22,7 +22,7 @@ func newPreviewTestDeps(t *testing.T) (*config.ConfigStore, *fleet.FleetIndex) {
 	t.Helper()
 	dir := t.TempDir()
 
-	for _, sub := range []string{"stockpile/modules", "scaffolding"} {
+	for _, sub := range []string{"stockpile/modules", "stockpile"} {
 		os.MkdirAll(filepath.Join(dir, sub), 0755)
 	}
 
@@ -38,7 +38,7 @@ func newPreviewTestDeps(t *testing.T) (*config.ConfigStore, *fleet.FleetIndex) {
     modules:
       - postgres
 `
-	os.WriteFile(filepath.Join(dir, "scaffolding", "envoys.vgo"), []byte(nodesYAML), 0644)
+	os.WriteFile(filepath.Join(dir, "stockpile", "envoys.vgo"), []byte(nodesYAML), 0644)
 
 	moduleYAML := `name: nginx
 

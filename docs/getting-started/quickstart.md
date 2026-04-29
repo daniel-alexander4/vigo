@@ -44,7 +44,7 @@ After enrollment, the envoy appears in the dashboard and begins checking in ever
 
 ## 3. Write a Module
 
-Create a file at `/srv/vigo/worksite/stockpile/modules/motd.vgo`:
+Create a file at `/srv/vigo/stacks/stockpile/modules/motd.vgo`:
 
 ```yaml
 name: motd
@@ -68,28 +68,28 @@ resources:
 The simplest approach: create a `common.vgo` at the root that assigns the module to all envoys via directory inheritance:
 
 ```yaml
-# /srv/vigo/worksite/scaffolding/common.vgo
+# /srv/vigo/stacks/stockpile/common.vgo
 modules: [motd]
 ```
 
 Then create a catch-all leaf entry in a subdirectory:
 
 ```bash
-mkdir -p /srv/vigo/worksite/stockpile/all
+mkdir -p /srv/vigo/stacks/stockpile/all
 ```
 
 ```yaml
-# /srv/vigo/worksite/stockpile/all/all.vgo
+# /srv/vigo/stacks/stockpile/all/all.vgo
 envoys:
   - match: "*"
 ```
 
 Every envoy inherits `motd` from `common.vgo`. As you add more modules to `common.vgo`, all envoys get them automatically.
 
-Alternatively, put the envoy entry in the scaffolding matchfile:
+Alternatively, put the envoy entry in a stockpile matchfile:
 
 ```yaml
-# /srv/vigo/worksite/scaffolding/envoys.vgo
+# /srv/vigo/stacks/stockpile/envoys.vgo
 envoys:
   - match: "*"
     modules: [motd]
@@ -97,13 +97,13 @@ envoys:
 
 ## 5. Publish the Config
 
-Configs under `worksite/stockpile/` and `worksite/scaffolding/` don't take effect until published:
+Configs under `stockpile/` and `stockpile/` don't take effect until published:
 
 ```bash
 vigocli config publish
 ```
 
-This validates the config, syncs it to the `worksite/structure/` directory, and triggers the server to reload.
+This validates the config, syncs it to the `.live/` directory, and triggers the server to reload.
 
 ## 6. Wait for Check-in
 

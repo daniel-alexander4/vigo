@@ -12,118 +12,106 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// validateWorksiteLayout enforces the filename-per-tree rule introduced in
-// 0.29.0. Four fatal checks:
+// validateStacksLayout enforces filename-and-content rules for the
+// single stockpile tree. Mirrors server/config.validateStacksLayout —
+// publish/ runs this pre-publish; the loader runs it again at reload
+// time defensively. The two copies exist because publish imports
+// config but not vice versa, and the rule set is small enough that a
+// shared package is more friction than the duplication.
 //
-//  1. waivers.vgo under stockpile/ — waivers belong in scaffolding/.
-//  2. compliance.vgo under scaffolding/ — claims belong in stockpile/.
-//  3. stockpile/**/compliance.vgo with a waivers: top-level key — move
-//     the waivers: block to scaffolding/waivers.vgo.
-//  4. scaffolding/**/waivers.vgo with a compliance: top-level key — move
-//     the compliance: block to stockpile/compliance.vgo.
+// Rules enforced (single-tree, post-0.33.0 layout):
 //
-// All four are combined into a single error so operators see every
-// problem in one publish attempt, not one at a time.
-func validateWorksiteLayout(worksiteDir string) error {
-	var problems []string
-
-	stockpile := filepath.Join(worksiteDir, "stockpile")
-	scaffolding := filepath.Join(worksiteDir, "scaffolding")
-
-	if _, err := os.Stat(stockpile); err == nil {
-		if errs := scanStockpileLayout(stockpile); len(errs) > 0 {
-			problems = append(problems, errs...)
-		}
+//   - compliance.vgo with a top-level waivers: block — mixed-keys
+//     rejection; waivers belong in waivers.vgo.
+//   - waivers.vgo with a top-level compliance: block — mixed-keys
+//     rejection; claims belong in compliance.vgo.
+//   - Any non-waivers.vgo file with a top-level waivers: block —
+//     stray-filename rejection (loader globs the exact filename).
+//   - Any "claims-only" file (top-level compliance: with no
+//     resources:/name:/vars:) not named compliance.vgo —
+//     stray-filename rejection. Module definitions carrying their own
+//     compliance: block are not affected.
+func validateStacksLayout(stacksDir string) error {
+	stockpile := filepath.Join(stacksDir, "stockpile")
+	if _, err := os.Stat(stockpile); err != nil {
+		return nil
 	}
-	if _, err := os.Stat(scaffolding); err == nil {
-		if errs := scanScaffoldingLayout(scaffolding); len(errs) > 0 {
-			problems = append(problems, errs...)
-		}
-	}
-
+	problems := scanStockpileLayout(stockpile)
 	if len(problems) == 0 {
 		return nil
 	}
-	return fmt.Errorf("worksite layout violations:\n  - %s", strings.Join(problems, "\n  - "))
+	return fmt.Errorf("stacks layout violations:\n  - %s", strings.Join(problems, "\n  - "))
 }
 
 // scanStockpileLayout walks the stockpile subtree and rejects any file
-// whose filename or key content belongs in scaffolding.
+// whose filename or key content violates the canonical-filename rules.
 func scanStockpileLayout(stockpileDir string) []string {
 	var problems []string
 	_ = filepath.WalkDir(stockpileDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
+		if err != nil || d.IsDir() {
 			return nil
 		}
 		rel, _ := filepath.Rel(stockpileDir, path)
 		relSlash := filepath.ToSlash(rel)
 		base := filepath.Base(path)
 
-		if base == "waivers.vgo" {
-			problems = append(problems, fmt.Sprintf(
-				"stockpile/%s: waivers live in the scaffolding tree. Move to scaffolding/%s",
-				relSlash, relSlash))
-			return nil
-		}
 		if base == "compliance.vgo" {
 			if hasTopLevelKey(path, "waivers") {
 				problems = append(problems, fmt.Sprintf(
-					"stockpile/%s: waivers: block in a stockpile compliance.vgo. "+
-						"Move the waivers: entries to scaffolding/waivers.vgo "+
-						"(compliance.vgo in stockpile holds only compliance: claims).",
+					"stockpile/%s: waivers: block in compliance.vgo. "+
+						"Move the waivers: entries to waivers.vgo "+
+						"(compliance.vgo holds only compliance: claims).",
 					relSlash))
 			}
-		}
-		return nil
-	})
-	return problems
-}
-
-// scanScaffoldingLayout walks the scaffolding subtree and rejects any
-// file whose filename or key content belongs in stockpile.
-func scanScaffoldingLayout(scaffoldingDir string) []string {
-	var problems []string
-	_ = filepath.WalkDir(scaffoldingDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			return nil
-		}
-		rel, _ := filepath.Rel(scaffoldingDir, path)
-		relSlash := filepath.ToSlash(rel)
-		base := filepath.Base(path)
-
-		if base == "compliance.vgo" {
-			problems = append(problems, fmt.Sprintf(
-				"scaffolding/%s: compliance claims live in the stockpile tree. Move to stockpile/%s",
-				relSlash, relSlash))
 			return nil
 		}
 		if base == "waivers.vgo" {
 			if hasTopLevelKey(path, "compliance") {
 				problems = append(problems, fmt.Sprintf(
-					"scaffolding/%s: compliance: block in a scaffolding waivers.vgo. "+
-						"Move the compliance: claims to stockpile/compliance.vgo "+
-						"(waivers.vgo in scaffolding holds only waivers: entries).",
+					"stockpile/%s: compliance: block in waivers.vgo. "+
+						"Move the compliance: claims to compliance.vgo "+
+						"(waivers.vgo holds only waivers: entries).",
 					relSlash))
 			}
+			return nil
+		}
+		if filepath.Ext(base) == ".vgo" && hasTopLevelKey(path, "waivers") {
+			problems = append(problems, fmt.Sprintf(
+				"stockpile/%s: top-level waivers: block in a non-waivers.vgo file. "+
+					"Rename to waivers.vgo (the loader only globs that exact filename).",
+				relSlash))
+			return nil
+		}
+		if filepath.Ext(base) == ".vgo" && looksLikeClaimsOnlyFile(path) {
+			problems = append(problems, fmt.Sprintf(
+				"stockpile/%s: looks like a claims-only file (top-level compliance: with no resources/name/vars) but is not named compliance.vgo. "+
+					"Rename to compliance.vgo so directory-level claim inheritance loads it.",
+				relSlash))
 		}
 		return nil
 	})
 	return problems
 }
 
+// looksLikeClaimsOnlyFile returns true when a file has a top-level
+// compliance: key and lacks any of resources:/name:/vars: that would
+// mark it as a module definition.
+func looksLikeClaimsOnlyFile(path string) bool {
+	if !hasTopLevelKey(path, "compliance") {
+		return false
+	}
+	for _, k := range []string{"resources", "name", "vars"} {
+		if hasTopLevelKey(path, k) {
+			return false
+		}
+	}
+	return true
+}
+
 // hasTopLevelKey returns true if the YAML file at path has the given
-// top-level key set to a non-empty value. Used by the layout validator to
-// detect waivers: blocks in stockpile compliance.vgo and compliance: blocks
-// in scaffolding waivers.vgo.
-//
-// A parse failure is treated as "no such key" — the schema validator in
-// the next pipeline stage catches malformed YAML separately.
+// top-level key set to a non-empty value. A parse failure is treated
+// as "no such key" — the schema validator in the next pipeline stage
+// catches malformed YAML separately.
 func hasTopLevelKey(path, key string) bool {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -137,7 +125,6 @@ func hasTopLevelKey(path, key string) bool {
 	if !ok {
 		return false
 	}
-	// Non-null node with at least one entry counts.
 	if node.Kind == yaml.MappingNode || node.Kind == yaml.SequenceNode {
 		return len(node.Content) > 0
 	}

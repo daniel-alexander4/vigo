@@ -347,13 +347,13 @@ Compliance claims and waivers use **distinct filenames in distinct trees** — f
 | Filename | Tree | Top-level key | What it does |
 |---|---|---|---|
 | `compliance.vgo` | `stockpile/` | `compliance:` | Per-module compliance claims. Claims are unioned into every module and usercrate in the same subtree. |
-| `waivers.vgo` | `scaffolding/` | `waivers:` | Per-envoy compliance exceptions. Waivers follow the same inheritance pattern as `common.vgo` — root applies fleet-wide, subdirs apply only to their subtree. |
+| `waivers.vgo` | `stockpile/` | `waivers:` | Per-envoy compliance exceptions. Waivers follow the same inheritance pattern as `common.vgo` — root applies fleet-wide, subdirs apply only to their subtree. |
 
-**Cross-contamination is a hard error.** Putting `waivers.vgo` in stockpile, `compliance.vgo` in scaffolding, or a `waivers:` block inside `stockpile/compliance.vgo`, or a `compliance:` block inside `scaffolding/waivers.vgo` — all rejected by `vigocli config publish` with an actionable move hint, and rejected on reload if someone hand-edits `structure/`.
+**Mixed keys are a hard error.** A `waivers:` block inside `stockpile/compliance.vgo`, or a `compliance:` block inside `stockpile/waivers.vgo` — both rejected by `vigocli config publish` with an actionable move hint, and rejected on reload if someone hand-edits `.live/`.
 
 **Claims** from a `stockpile/**/compliance.vgo` are unioned into every module defined anywhere beneath that file. A module at `stockpile/modules/users/dan.vgo` inherits claims from `stockpile/modules/users/compliance.vgo` AND from `stockpile/compliance.vgo` if both exist, plus whatever the module itself declares in its own inline `compliance:` block. All sources union with dedupe.
 
-**Waivers** apply only to envoys whose matchfile lives under the same scaffolding subtree. `scaffolding/customerA/waivers.vgo` waivers don't cross into `scaffolding/customerB/`. Waived controls count as "accepted" in compliance scoring and render with a distinct "waived" badge on dashboards — not hidden.
+**Waivers** apply only to envoys whose matchfile lives under the same directory subtree. `stockpile/customerA/waivers.vgo` waivers don't cross into `stockpile/customerB/`. Waived controls count as "accepted" in compliance scoring and render with a distinct "waived" badge on dashboards — not hidden.
 
 ```yaml
 # stockpile/compliance.vgo — claims only
@@ -373,7 +373,7 @@ compliance:
 ```
 
 ```yaml
-# scaffolding/waivers.vgo — fleet-wide waivers
+# stockpile/waivers.vgo — fleet-wide waivers
 waivers:
   cis-ubuntu:
     - control: "6.1.10"
@@ -409,11 +409,11 @@ The only valid top-level keys in either file are `compliance:` and `waivers:`. A
 
 Existing deployments migrate automatically on first boot via `entrypoint.sh`:
 
-- `/srv/vigo/stockpile/` → `/srv/vigo/worksite/stockpile/` (if old layout exists)
+- `/srv/vigo/stockpile/` → `/srv/vigo/stacks/stockpile/` (if old layout exists)
 - `stockpile/modules/` → `stockpile/modules/`
-- `stockpile/.live/` → `worksite/structure/`
-- `stockpile/envoys.vgo`, `stockpile/roles.vgo`, `stockpile/common.vgo` → `scaffolding/`
-- `stockpile/compliance.vgo` containing a `waivers:` block → `scaffolding/waivers.vgo` (waivers side)
+- `stockpile/.live/` → `.live/`
+- `stockpile/envoys.vgo`, `stockpile/roles.vgo`, `stockpile/common.vgo` → `stockpile/`
+- `stockpile/compliance.vgo` containing a `waivers:` block → `stockpile/waivers.vgo` (waivers side)
 
 The migration is idempotent — safe to re-run after upgrades.
 

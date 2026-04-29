@@ -372,7 +372,7 @@ func (h *ConfigHandler) Rollback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := publish.RollbackToVersion(publish.HistoryDir, version, publish.StructureDir); err != nil {
+	if err := publish.RollbackToVersion(publish.HistoryDir, version, publish.LiveDir); err != nil {
 		writeJSONError(w, http.StatusBadRequest, err.Error())
 		return
 	}

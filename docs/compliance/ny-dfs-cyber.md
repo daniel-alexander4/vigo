@@ -37,7 +37,7 @@ Law firms are particularly affected because most large firms in New York handle 
 ## Example Module Assignment
 
 ```yaml
-# scaffolding/roles.vgo
+# stockpile/roles.vgo
 roles:
   ny-dfs-cyber:
     modules:
@@ -48,7 +48,7 @@ roles:
 ```
 
 ```yaml
-# scaffolding/envoys.vgo
+# stockpile/envoys.vgo
 envoys:
   - match: "*.nylawfirm.com"
     roles: [ny-dfs-cyber]
