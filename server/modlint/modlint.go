@@ -520,22 +520,15 @@ func parseOneResource(node *yaml.Node) (resource, error) {
 				if err := val.Decode(&v); err != nil {
 					return res, fmt.Errorf("decoding %q: %w", key, err)
 				}
-				// YAML parses bare octal like 0644 as int 420. Coerce
-				// mode values back to an octal string so "0644" round-trips.
-				// This mutates the value, so don't stash the source node —
-				// the writer must use the corrected scalar path.
-				stashNode := true
-				if key == "mode" {
-					if n, ok := v.(int); ok {
-						v = fmt.Sprintf("%04o", n)
-						stashNode = false
-					}
-				}
+				// `mode` arrives as an integer when the operator typed
+				// `mode: 644` rather than `mode: '0644'`. We deliberately
+				// preserve the integer here so the modeOctalRule can
+				// detect the unquoted-octal trap and emit a proper
+				// auto-fix finding. The rule mutates Attrs["mode"] to
+				// a quoted string before render runs.
 				res.Attrs[key] = v
 				res.AttrOrder = append(res.AttrOrder, key)
-				if stashNode {
-					res.AttrNodes[key] = val
-				}
+				res.AttrNodes[key] = val
 			}
 		}
 	}
@@ -1109,7 +1102,28 @@ func needsQuoting(s string) bool {
 	if strings.Contains(s, ": ") || strings.Contains(s, " #") {
 		return true
 	}
+	// Quote all-digit strings so they round-trip as strings instead of
+	// being reparsed as integers. The classic case is `mode: '0644'`:
+	// without quoting the renderer would emit `mode: 0644`, which YAML
+	// 1.2 parses as int 644 — silently shipping the wrong permissions.
+	// Same risk for any operator-typed numeric string (port numbers
+	// stored as strings, version components, etc.).
+	if isAllDigits(s) {
+		return true
+	}
 	return false
+}
+
+// isAllDigits reports whether s consists only of ASCII decimal digits
+// 0-9. A leading sign is NOT permitted; sign chars trip needsQuoting's
+// special-character check above so we don't double-handle them here.
+func isAllDigits(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return s != ""
 }
 
 func attrStr(attrs map[string]any, key string) string {
