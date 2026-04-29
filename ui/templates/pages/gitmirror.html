@@ -92,13 +92,9 @@
     {{template "empty-state" dict "Message" "No gitmirror repos observed across the fleet." "Hint" "Add a .gitmirror.yaml sidecar to a ~<user>/gitmirror/<project>/ directory on any envoy to publish."}}
 {{else}}
     <div class="stat-cards mb-2">
-        <div class="stat-card">
-            <div class="stat-card__label">Labels</div>
-            <div class="stat-card__value">{{.Fleet.Totals.Labels}}</div>
-        </div>
-        <div class="stat-card">
+        <div class="stat-card" title="Distinct repos being mirrored across the fleet. Click a repo in the table below to see which envoys hold it.">
             <div class="stat-card__label">Mirrors</div>
-            <div class="stat-card__value">{{.Fleet.Totals.Mirrors}}</div>
+            <div class="stat-card__value">{{.Fleet.Totals.Labels}}</div>
         </div>
         <div class="stat-card">
             <div class="stat-card__label">Publishers</div>
