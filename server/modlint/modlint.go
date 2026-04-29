@@ -677,7 +677,7 @@ func render(mod *module, opts Options, r *Result) string {
 	if len(mod.Defaults) > 0 {
 		b.WriteString("\ndefaults:\n")
 		for _, k := range sortedKeys(mod.Defaults) {
-			b.WriteString(fmt.Sprintf("  %s: %s\n", k, yamlScalar(mod.Defaults[k])))
+			emitVarOrDefault(&b, "  ", k, mod.Defaults[k])
 		}
 	}
 
@@ -693,7 +693,7 @@ func render(mod *module, opts Options, r *Result) string {
 			if !ok {
 				continue
 			}
-			b.WriteString(fmt.Sprintf("  %s: %s\n", k, yamlScalar(v)))
+			emitVarOrDefault(&b, "  ", k, v)
 		}
 	}
 
@@ -1102,6 +1102,87 @@ func canonicalAttrOrder(res resource) []string {
 	return order
 }
 
+// emitVarOrDefault writes a `key: value` pair for a vars/defaults entry,
+// handling both scalar and structured values.
+//
+// Scalars use the single-line `key: value` form via yamlScalar. Maps and
+// slices fall back to a block-style emission rooted at `key:` followed by
+// indented yaml.Marshal output, so structured vars (e.g. lists of maps for
+// dnsmasq dhcp-host reservations) survive the canonical writer instead of
+// being stringified through fmt.Sprintf("%v", val).
+//
+// Map keys are sorted alphabetically inside the structured branch so the
+// canonical output is deterministic across runs (yaml.v3 doesn't sort
+// map[string]any keys on its own).
+func emitVarOrDefault(b *strings.Builder, indent, key string, val any) {
+	switch val.(type) {
+	case map[string]any, []any:
+		node, err := sortedYAMLNode(val)
+		if err != nil {
+			// Fall through to the legacy single-line path so we at least
+			// produce *some* output rather than dropping the var. The
+			// resulting bytes may still fail downstream parse, but that's
+			// no worse than the prior behavior.
+			fmt.Fprintf(b, "%s%s: %s\n", indent, key, yamlScalar(val))
+			return
+		}
+		raw, err := yaml.Marshal(node)
+		if err != nil {
+			fmt.Fprintf(b, "%s%s: %s\n", indent, key, yamlScalar(val))
+			return
+		}
+		body := strings.TrimRight(string(raw), "\n")
+		if body == "" || body == "{}" || body == "[]" {
+			fmt.Fprintf(b, "%s%s: %s\n", indent, key, body)
+			return
+		}
+		fmt.Fprintf(b, "%s%s:\n", indent, key)
+		for _, line := range strings.Split(body, "\n") {
+			fmt.Fprintf(b, "%s  %s\n", indent, line)
+		}
+	default:
+		fmt.Fprintf(b, "%s%s: %s\n", indent, key, yamlScalar(val))
+	}
+}
+
+// sortedYAMLNode builds a *yaml.Node for val with map keys sorted
+// alphabetically at every level. Used by emitVarOrDefault to keep canonical
+// output deterministic.
+func sortedYAMLNode(val any) (*yaml.Node, error) {
+	n := &yaml.Node{}
+	switch v := val.(type) {
+	case map[string]any:
+		n.Kind = yaml.MappingNode
+		keys := make([]string, 0, len(v))
+		for k := range v {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			keyNode := &yaml.Node{Kind: yaml.ScalarNode, Value: k}
+			valNode, err := sortedYAMLNode(v[k])
+			if err != nil {
+				return nil, err
+			}
+			n.Content = append(n.Content, keyNode, valNode)
+		}
+	case []any:
+		n.Kind = yaml.SequenceNode
+		for _, item := range v {
+			itemNode, err := sortedYAMLNode(item)
+			if err != nil {
+				return nil, err
+			}
+			n.Content = append(n.Content, itemNode)
+		}
+	default:
+		if err := n.Encode(val); err != nil {
+			return nil, err
+		}
+	}
+	return n, nil
+}
+
 // yamlScalar formats a Go value as a YAML scalar string.
 func yamlScalar(v any) string {
 	switch val := v.(type) {
@@ -1143,6 +1224,13 @@ func needsQuoting(s string) bool {
 	}
 	// Quote strings starting with special YAML characters.
 	if strings.ContainsAny(s[:1], "{}[]&*?|->!%@`,'\"#") {
+		return true
+	}
+	// Quote strings containing flow-indicator characters anywhere — yaml.v3
+	// treats unquoted commas/brackets/braces as flow-context separators even
+	// in block-mapping values, so an unquoted "192.168.1.100,192.168.1.200,12h"
+	// fails to round-trip with "did not find expected ',' or ']'".
+	if strings.ContainsAny(s, ",[]{}") {
 		return true
 	}
 	// Quote strings containing : followed by space.

@@ -6,6 +6,7 @@ package modlint
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // modeOctalRule auto-fixes the YAML-octal-vs-decimal trap.
@@ -53,10 +54,34 @@ func (modeOctalRule) apply(mod *module, _ Options) []Finding {
 			continue
 		}
 
-		// User-typed digits: render the decimal representation as digits
-		// and validate each is 0-7. This treats the value as if the user
-		// had quoted it from the start.
-		digits := strconv.FormatInt(n, 10)
+		// The int alone is ambiguous because yaml.v3 parses leading-zero
+		// scalars as octal (YAML 1.1 carryover), so `mode: 0644` arrives
+		// as int 420 while `mode: 644` arrives as int 644 — both intend
+		// rw-r--r--. Recover the operator's intent from the raw YAML text.
+		var origText string
+		if node, ok := res.AttrNodes["mode"]; ok && node != nil {
+			origText = node.Value
+		}
+
+		// Choose the digit-extraction strategy based on what the operator
+		// actually typed:
+		//   - "0o644" / "0O644" → explicit YAML 1.2 octal; int already
+		//     equals the octal value, so format it back in base 8.
+		//   - "0644" (leading zero followed by digits) → yaml.v3's YAML
+		//     1.1 octal carryover; same path as above.
+		//   - "644" (bare digits, no leading zero) → operator typed the
+		//     octal-positional digits as a decimal int; render in base 10
+		//     and treat each digit as octal (the original 0.33.6 logic).
+		//   - missing node (defensive) → bare-digits path.
+		var digits string
+		switch {
+		case strings.HasPrefix(origText, "0o") || strings.HasPrefix(origText, "0O"):
+			digits = strconv.FormatInt(n, 8)
+		case len(origText) >= 2 && origText[0] == '0' && isAllDigits(origText):
+			digits = strconv.FormatInt(n, 8)
+		default:
+			digits = strconv.FormatInt(n, 10)
+		}
 		if !allOctalDigits(digits) {
 			out = append(out, Finding{
 				Severity: Error,
@@ -93,6 +118,10 @@ func (modeOctalRule) apply(mod *module, _ Options) []Finding {
 		// fixed string value rather than re-emitting the original
 		// bare-integer node.
 		delete(res.AttrNodes, "mode")
+		typed := origText
+		if typed == "" {
+			typed = strconv.FormatInt(n, 10)
+		}
 		out = append(out, Finding{
 			Severity:   Warning,
 			Line:       res.Line,
@@ -100,8 +129,8 @@ func (modeOctalRule) apply(mod *module, _ Options) []Finding {
 			RuleID:     "mode-octal",
 			FixApplied: true,
 			Message: fmt.Sprintf(
-				"resource %q: mode was bare integer %d — auto-quoted to %q (YAML has no octal literal; without quoting the agent applies the wrong permissions)",
-				res.Name, n, fixed,
+				"resource %q: mode was unquoted %s — auto-quoted to %q (YAML lacks an unambiguous octal literal; without quoting the agent applies the wrong permissions)",
+				res.Name, typed, fixed,
 			),
 		})
 	}

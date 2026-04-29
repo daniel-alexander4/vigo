@@ -90,6 +90,84 @@ resources:
 	}
 }
 
+// `mode: 0644` is the most common operator typo: yaml.v3 honors YAML 1.1's
+// leading-zero-octal carryover and parses it as int 420. The rule must
+// recover the original octal intent from the raw YAML text and emit
+// "0644" — NOT "0420" (which would silently ship --w-r-----).
+func TestLint_ModeOctal_LeadingZeroOctal(t *testing.T) {
+	input := `name: m
+resources:
+  - name: nginx-conf
+    type: file
+    target_path: /etc/nginx/nginx.conf
+    content: "..."
+    owner: root
+    group: root
+    mode: 0644
+`
+	r := Lint([]byte(input), Options{})
+	if !r.OK() {
+		t.Fatalf("expected no errors, got: %v", r.Errors)
+	}
+	f := findFinding(r, "mode-octal")
+	if f == nil {
+		t.Fatalf("expected mode-octal finding, got %v", r.Findings)
+	}
+	if f.Severity != Warning || !f.FixApplied {
+		t.Errorf("severity=%q fix=%v, want warning + fix", f.Severity, f.FixApplied)
+	}
+	if !strings.Contains(r.Output, `mode: '0644'`) && !strings.Contains(r.Output, `mode: "0644"`) {
+		t.Errorf("output should canonicalize to quoted '0644'; got:\n%s", r.Output)
+	}
+	if strings.Contains(r.Output, `mode: '0420'`) || strings.Contains(r.Output, `mode: "0420"`) {
+		t.Errorf("output must NOT contain '0420' (the buggy 0.33.6→0.33.10 behavior); got:\n%s", r.Output)
+	}
+}
+
+// YAML 1.2 explicit octal `0o644` should also canonicalize to "0644".
+func TestLint_ModeOctal_ExplicitOctalPrefix(t *testing.T) {
+	input := `name: m
+resources:
+  - name: cfg
+    type: file
+    target_path: /etc/x
+    content: "x"
+    owner: root
+    group: root
+    mode: 0o644
+`
+	r := Lint([]byte(input), Options{})
+	if !r.OK() {
+		t.Fatalf("expected no errors, got: %v", r.Errors)
+	}
+	if !strings.Contains(r.Output, `mode: '0644'`) && !strings.Contains(r.Output, `mode: "0644"`) {
+		t.Errorf("output should canonicalize to quoted '0644'; got:\n%s", r.Output)
+	}
+}
+
+// 4-digit setuid mode written with a leading zero (`04755`) must round-trip
+// to "4755" (setuid + rwxr-xr-x), not to whatever %o of (octal 04755 =
+// decimal 2541) reformats to.
+func TestLint_ModeOctal_LeadingZeroSetuid(t *testing.T) {
+	input := `name: m
+resources:
+  - name: bin
+    type: file
+    target_path: /usr/local/bin/x
+    content: "x"
+    owner: root
+    group: root
+    mode: 04755
+`
+	r := Lint([]byte(input), Options{})
+	if !r.OK() {
+		t.Fatalf("expected no errors, got: %v", r.Errors)
+	}
+	if !strings.Contains(r.Output, `mode: '4755'`) && !strings.Contains(r.Output, `mode: "4755"`) {
+		t.Errorf("output should canonicalize to quoted '4755'; got:\n%s", r.Output)
+	}
+}
+
 // --- file-content-source-conflict ---
 
 func TestLint_FileContentSourceConflict(t *testing.T) {
