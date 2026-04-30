@@ -419,9 +419,13 @@ mod tests {
 
     #[test]
     fn gc_drops_expired() {
+        // gc keeps tombstones with deletion_time >= now - retention_secs.
+        // With now=20_000 and retention=5_000 the cutoff is 15_000, so
+        // new.pdf must sit at or above 15_000 to survive — old.pdf at
+        // 100 is far past expiry and drops.
         let mut tt = TombstoneTable::empty("dan");
         tt.upsert("old.pdf", t(100));
-        tt.upsert("new.pdf", t(10_000));
+        tt.upsert("new.pdf", t(18_000));
         let dropped = tt.gc(/* now */ 20_000, /* retention */ 5_000);
         assert_eq!(dropped, 1);
         assert!(tt.active_deletion_time("old.pdf").is_none());
