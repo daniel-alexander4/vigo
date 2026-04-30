@@ -23,3 +23,4 @@ ADRs are immutable in their decision content. If a decision is reversed, write a
 - [ADR-010: Convergence vs compliance terminology](010-convergence-vs-compliance.md) — distinct concepts, never crossed
 - [ADR-011: Agent-driven swarm](011-agent-driven-swarm.md) — agents self-assign via manifest; server pushes manifest CRDT entries on check-in to bridge operator-initiated revokes to isolated envoys
 - [ADR-012: Cryptsync auto-encrypt-on-write](012-cryptsync-auto-encrypt-on-write.md) — drop-and-forget UX, sweep-on-unlock for plaintext written while locked, three-class failure handling with `.failed` rename
+- [ADR-013: Multi-member gitmirror](013-multi-member-gitmirror.md) — capability tokens + self-certifying project IDs, P2P-first with server reduced to a phonebook, founder-loss recovery via soldier-on or hard-fork
