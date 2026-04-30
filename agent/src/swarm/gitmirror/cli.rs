@@ -1,55 +1,52 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! User-facing `vigo swarm gitmirror <verb>` subcommand tree.
-//!
-//! All subcommands are **pure local state reads** or user-owned
-//! `git clone` spawns. No daemon required, no server contact, no
-//! network calls. This is the command you run when recovering from
-//! a dead source envoy — it has to work when the rest of the fleet
-//! is on fire, so it reads only from files under
-//! `/var/lib/vigo/swarm/gitmirror/` and `/var/lib/vigo/swarm/`.
-//!
-//! The subcommand tree:
+//! `vigo swarm gitmirror project <verb>` — ADR-015 unified-substrate CLI.
 //!
 //! ```text
-//! vigo swarm gitmirror list                       # what's mirrored here
-//! vigo swarm gitmirror show <project>             # details on one mirror
-//! vigo swarm gitmirror log <project> [-n N]       # commit history
-//! vigo swarm gitmirror branches <project>         # refs + tags
-//! vigo swarm gitmirror peers <project>            # swarm peers holding the blob
-//! vigo swarm gitmirror recover <project> [opts]   # clone to user path
-//! vigo swarm gitmirror recover-all [--dest D]     # bulk recovery
-//! vigo swarm gitmirror source list                # what this envoy publishes
-//! vigo swarm gitmirror source add <path>          # write a new sidecar
-//! vigo swarm gitmirror source remove <project>    # delete a sidecar
-//! vigo swarm gitmirror source pause <project>     # stop publishing
-//! vigo swarm gitmirror source resume <project>    # resume publishing
-//! vigo swarm gitmirror source show <project>      # print a sidecar
-//! vigo swarm gitmirror source validate <path>     # dry-run sidecar validation
-//! vigo swarm gitmirror leave                      # remove all this user's sidecars here
+//! vigo swarm gitmirror project init <handle> [--fanout fleet-wide|members-only]
+//! vigo swarm gitmirror project invite <project_id> --fleet <fp> --role <r> [--expires <Nd>]
+//! vigo swarm gitmirror project join <project_id> [--invitation <file|->]
+//! vigo swarm gitmirror project leave <project_id> [--purge] [--yes]
+//! vigo swarm gitmirror project list [--json]
+//! vigo swarm gitmirror project status <project_id>
+//! vigo swarm gitmirror project revoke <project_id> --token-id <hex> [--reason <text>]
+//! vigo swarm gitmirror project reanchor <project_id>
 //! ```
 //!
-//! ### Permission model
+//! The verbs that mint or sign envelopes (`init`, `invite`,
+//! `revoke`, `leave`, `reanchor`) require the user's self-fleet
+//! identity to be unlocked — the session helper at
+//! `$XDG_RUNTIME_DIR/vigo/self-fleet.sock` is the only place the
+//! Ed25519 private key lives; CLI doesn't unwrap directly.
 //!
-//! Unprivileged users are scoped to mirrors whose `owner` field
-//! matches their effective username. Root bypasses the check — an
-//! operator recovering someone else's work can run the command as
-//! root and see everything. The scoping is a filter applied during
-//! listing/show; access to the underlying bare repo is enforced by
-//! file permissions (bare repos are root-owned mode 0755, so any
-//! user can clone from them, but they can only *see* them in the
-//! tool's output if they own the mirror).
+//! Step 3 of the ADR-015 arc lands the local-state surface only.
+//! Verbs that depend on the helper-daemon-mediated transport (push,
+//! fetch, fan-out, gossip) write a sentinel file the daemon will pick
+//! up in step 4 — same pattern cryptsync uses for `leave.pending` /
+//! `reencrypt.pending`.
+
+use std::fs;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, bail, Context, Result};
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use serde::{Deserialize, Serialize};
 
-use super::state::{receiver_state_path, MirrorState, ReceiverState};
-use crate::platform;
+use super::project_state::{
+    self, hex_id, parse_hex_id, project_repo_path, projects_dir, purge_user_state,
+    DrFanout, ProjectConfig, TokenChain,
+};
+use super::tokens::{
+    canonical_bytes, issue_child as token_issue_child, project_id_for, verify_chain,
+    Role, Token, TokenBody, ID_LEN, NEVER_EXPIRES, SIG_LEN,
+};
+use crate::swarm::self_fleet;
 
-/// Top-level dispatch. Parses the verb tree and dispatches.
+/// Top-level dispatch for `vigo swarm gitmirror …`. Called from
+/// `agent/src/main.rs`. Argument shape is `[verb, …]`; an empty or
+/// help-form `verb` prints usage and returns Ok.
 pub fn run(args: Vec<String>) -> Result<()> {
     let verb = args.first().map(String::as_str).unwrap_or("");
     match verb {
@@ -57,84 +54,106 @@ pub fn run(args: Vec<String>) -> Result<()> {
             print_usage();
             Ok(())
         }
-        "list" => cmd_repo_list(&args[1..]),
-        "show" => cmd_repo_show(&args[1..]),
-        "log" => cmd_repo_log(&args[1..]),
-        "branches" => cmd_repo_branches(&args[1..]),
-        "peers" => cmd_repo_peers(&args[1..]),
-        "recover" => cmd_recover(&args[1..]),
-        "recover-all" => cmd_recover_all(&args[1..]),
-        "prune" => cmd_prune(&args[1..]),
-        // Hidden — invoked by the server via TaskDispatch when an envoy
-        // newly matches `swarm.gitmirror.blacklist`. Wipes ALL local
-        // mirrors regardless of seeder. Not advertised in --help.
+        "project" => dispatch_project(&args[1..]),
+        // Hidden verb invoked by the server via TaskDispatch when an
+        // envoy newly matches `swarm.gitmirror.blacklist`. Wipes every
+        // locally-held project bare repo and the `projects/` directory.
+        // Idempotent — re-runs are no-ops.
         "_apply-blacklist" => cmd_apply_blacklist(&args[1..]),
-        "leave" => super::source_cli::cmd_leave(&args[1..]),
-        "source" => dispatch_source(&args[1..]),
         other => bail!(
-            "unknown `vigo swarm gitmirror` subcommand: {}\nrun `vigo swarm gitmirror --help` for usage",
+            "unknown subcommand `vigo swarm gitmirror {}`. \
+             Run `vigo swarm gitmirror --help` for usage.",
             other
         ),
     }
 }
 
-fn dispatch_source(args: &[String]) -> Result<()> {
+fn dispatch_project(args: &[String]) -> Result<()> {
     let sub = args.first().map(String::as_str).unwrap_or("");
     match sub {
-        "list" => cmd_source_list(&args[1..]),
-        _ => super::source_cli::dispatch(args),
+        "" | "--help" | "-h" | "help" => {
+            print_project_usage();
+            Ok(())
+        }
+        "init" => cmd_init(&args[1..]),
+        "invite" => cmd_invite(&args[1..]),
+        "join" => cmd_join(&args[1..]),
+        "leave" => cmd_leave(&args[1..]),
+        "list" => cmd_list(&args[1..]),
+        "status" => cmd_status(&args[1..]),
+        "revoke" => cmd_revoke(&args[1..]),
+        "reanchor" => cmd_reanchor(&args[1..]),
+        other => bail!(
+            "unknown subcommand `vigo swarm gitmirror project {}`. \
+             Run `vigo swarm gitmirror project --help` for usage.",
+            other
+        ),
     }
 }
 
 fn print_usage() {
     eprintln!(
-        "vigo swarm gitmirror — inspect and recover personal-DR git mirrors
+        "vigo swarm gitmirror — ADR-015 unified-substrate gitmirror CLI
 
 USAGE:
-    vigo swarm gitmirror <command> [args]
+    vigo swarm gitmirror project <verb> [args]
 
-COMMANDS:
-    list                             list mirrors materialized on this envoy
-    show <project>                   details on one mirror
-    log <project> [-n N]             show last N commits (default 20)
-    branches <project>               list refs and tags in the mirror
-    peers <project>                  swarm peers holding this mirror's blob
-    recover <project> [opts]         clone a mirror to a user-owned path
-    recover-all [--dest <dir>]       clone every mirror owned by the caller
-    prune [opts]                     manually remove stale mirrors (requires root)
-    leave [--pause|--purge] [--yes]  remove or pause all this user's sidecars on this envoy
-    source <subcommand>              manage .gitmirror.yaml sidecars
-                                     (add, remove, pause, resume, show, validate, list)
-                                     run `vigo swarm gitmirror source --help` for detail
+Run `vigo swarm gitmirror project --help` to see the project verb tree.
+"
+    );
+}
 
-OPTIONS for recover:
-    --dest <path>                    override the default destination
-    --branch <name>                  rename 'main' to <name> after clone
-    --force                          overwrite an existing destination
-    --dry-run                        show what would happen without cloning
+fn print_project_usage() {
+    eprintln!(
+        "vigo swarm gitmirror project — manage gitmirror projects
 
-OPTIONS for prune:
-    --older-than <duration>          staleness threshold (default 30d)
-    --yes                            actually remove (default is dry-run)
-    --dry-run                        explicitly dry-run (same as no --yes)
-    <label>                          prune one specific mirror by label/project
+USAGE:
+    vigo swarm gitmirror project <verb> [args]
 
-Defaults: destination is ~/gitmirror/<project>/ for the calling user.
-         The caller sees only their own mirrors unless running as root.
-         All commands are local — they do not contact the server.
+VERBS:
+    init <handle> [--fanout fleet-wide|members-only]
+        Found a new project. Self-fleet must be unlocked. Prints the
+        canonical project URL `vigo://<project_id>/<handle>`.
+
+    invite <project_id> --fleet <fp> --role admin|member [--expires <Nd>]
+        Mint a child token for another fleet. Prints an invitation
+        artifact (JSON) the recipient pipes into `project join`.
+        Requires the local fleet to hold an admin token on the project.
+
+    join <project_id> [--invitation <file|->]
+        Adopt an invitation issued by an admin. Verifies the chain,
+        persists local project state. Self-fleet must be initialized.
+
+    leave <project_id> [--purge] [--yes]
+        Drop local membership. Writes a leave.pending sentinel the
+        helper daemon (step 4) picks up to sign the LEAVE envelope.
+        --purge also wipes the bare repo bytes on this envoy.
+
+    list [--json]
+        List every project this user has joined locally.
+
+    status <project_id>
+        Show one project's local state.
+
+    revoke <project_id> --token-id <hex> [--reason <text>]
+        Queue a revocation for a previously-issued token. Writes a
+        revoke.pending sentinel the helper daemon (step 4) signs and
+        gossips. Requires an admin token on the project.
+
+    reanchor <project_id>
+        Hard-fork the project under a new founder. Interactive — must
+        type the project handle to confirm. Old URL becomes dead.
 "
     );
 }
 
 // ============================================================
-// Helpers
+// Caller identity helpers
 // ============================================================
 
-/// Resolved identity of the caller. `username` is used to filter
-/// mirror listings; `home` is used as the default recovery dest;
-/// `is_root` is used to bypass the owner filter.
+/// Resolved identity of the calling user. CLI verbs run as the user
+/// (not root), so we trust `getuid()` for username + home.
 struct CallerIdentity {
-    username: String,
     home: PathBuf,
     is_root: bool,
 }
@@ -149,1126 +168,911 @@ fn resolve_caller() -> Result<CallerIdentity> {
             .flatten()
             .context("cannot resolve current Unix user")?;
         Ok(CallerIdentity {
-            username: user.name,
             home: user.dir,
             is_root: uid.is_root(),
         })
     }
     #[cfg(not(unix))]
     {
-        // Windows / non-Unix — gitmirror is Unix-first; bail early.
         bail!("gitmirror CLI is Unix-only")
     }
 }
 
-fn load_receiver_state() -> Result<ReceiverState> {
-    let base = platform::paths::default_gitmirror_dir();
-    let path = receiver_state_path(&base);
-    if !path.exists() {
-        // Fresh-state case: no mirrors yet. Return empty state so
-        // commands like `repo list` print "no mirrors" rather than
-        // erroring out.
-        return Ok(ReceiverState::default());
+/// Read the local fleet pubkey as raw 32 bytes. Errors when self-fleet
+/// has not been initialized for this user — the verbs that call this
+/// can't proceed without an identity.
+fn local_fleet_pubkey_bytes(home: &Path) -> Result<[u8; ID_LEN]> {
+    let text = self_fleet::local_fleet_pubkey(home)?
+        .ok_or_else(|| anyhow!(
+            "self-fleet is not initialized for this user. \
+             Run `vigo swarm self-fleet init` (or `join --from <host>`) first."
+        ))?;
+    let hexpart = text
+        .strip_prefix("ed25519:")
+        .ok_or_else(|| anyhow!("malformed self-fleet pubkey '{}': missing ed25519: prefix", text))?;
+    if hexpart.len() != ID_LEN * 2 {
+        bail!("self-fleet pubkey is wrong length: {}", hexpart);
     }
-    Ok(ReceiverState::load(&base))
+    let bytes = hex::decode(hexpart).context("decode self-fleet pubkey hex")?;
+    let mut out = [0u8; ID_LEN];
+    out.copy_from_slice(&bytes);
+    Ok(out)
 }
 
-/// Filter the mirror set for the caller. Root sees everything;
-/// unprivileged users see only mirrors they own.
-fn caller_visible_mirrors<'a>(
-    state: &'a ReceiverState,
-    caller: &CallerIdentity,
-) -> Vec<&'a MirrorState> {
-    state
-        .mirrors
-        .values()
-        .filter(|m| caller.is_root || m.user == caller.username)
-        .collect()
-}
-
-/// Resolve a label-or-project argument to a single mirror. Matching
-/// is tried in this order:
+/// Sign `payload` with the user's fleet key via the session helper.
+/// Returns the raw 64-byte Ed25519 signature.
 ///
-/// 1. Exact label match (`gitmirror:<seeder>:<user>:<project>`)
-/// 2. Exact project name match
-/// 3. Unique project-name prefix match
-///
-/// Errors if nothing matches, or if a prefix matches multiple
-/// mirrors. Respects the caller's visibility scope.
-fn resolve_mirror<'a>(
-    state: &'a ReceiverState,
-    caller: &CallerIdentity,
-    arg: &str,
-) -> Result<&'a MirrorState> {
-    let visible = caller_visible_mirrors(state, caller);
-    if visible.is_empty() {
+/// Errors with a clear message when the helper isn't running — the
+/// user needs to `self-fleet unlock` first.
+fn sign_with_session(payload: &[u8]) -> Result<[u8; SIG_LEN]> {
+    let sig_vec = self_fleet::session::request_sign(payload).map_err(|e| {
+        anyhow!(
+            "could not sign with self-fleet identity: {}\n\
+             Run `vigo swarm self-fleet unlock` to start the session helper.",
+            e
+        )
+    })?;
+    if sig_vec.len() != SIG_LEN {
         bail!(
-            "no gitmirror mirrors found on this envoy (owned by {})",
-            if caller.is_root {
-                "anyone (running as root)".to_string()
-            } else {
-                caller.username.clone()
-            }
+            "session helper returned a {}-byte signature, expected {}",
+            sig_vec.len(),
+            SIG_LEN
         );
     }
+    let mut out = [0u8; SIG_LEN];
+    out.copy_from_slice(&sig_vec);
+    Ok(out)
+}
 
-    // 1. Exact label match.
-    if let Some(m) = visible.iter().find(|m| m.label == arg) {
-        return Ok(*m);
+fn now_secs() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// Resolve a project_id given a hex id or a unique handle prefix
+/// among this user's joined projects. Used by every verb that takes
+/// a project identifier.
+fn resolve_project_id(home: &Path, arg: &str) -> Result<[u8; ID_LEN]> {
+    // Try parsing as raw hex first.
+    if let Ok(id) = parse_hex_id(arg) {
+        return Ok(id);
     }
-    // 2. Exact project match.
-    let exact: Vec<&MirrorState> = visible
+    // Otherwise look up by handle prefix.
+    let projects = project_state::list_projects(home)?;
+    let matches: Vec<&ProjectConfig> = projects
         .iter()
-        .copied()
-        .filter(|m| m.project == arg)
+        .filter(|p| p.handle == arg || p.handle.starts_with(arg))
         .collect();
-    if exact.len() == 1 {
-        return Ok(exact[0]);
-    }
-    if exact.len() > 1 {
-        let labels: Vec<String> = exact.iter().map(|m| m.label.clone()).collect();
-        bail!(
-            "project '{}' is ambiguous (multiple seeders): {}",
+    match matches.len() {
+        0 => bail!(
+            "no project matches '{}' on this envoy (joined projects: {})",
             arg,
-            labels.join(", ")
-        );
-    }
-    // 3. Unique project prefix.
-    let prefix: Vec<&MirrorState> = visible
-        .iter()
-        .copied()
-        .filter(|m| m.project.starts_with(arg))
-        .collect();
-    match prefix.len() {
-        1 => Ok(prefix[0]),
-        0 => bail!("no mirror matches '{}'", arg),
-        _ => {
-            let names: Vec<String> = prefix.iter().map(|m| m.project.clone()).collect();
-            bail!(
-                "prefix '{}' is ambiguous; candidates: {}",
-                arg,
-                names.join(", ")
-            )
-        }
+            projects
+                .iter()
+                .map(|p| p.handle.clone())
+                .collect::<Vec<_>>()
+                .join(", "),
+        ),
+        1 => parse_hex_id(&matches[0].project_id),
+        _ => bail!(
+            "handle prefix '{}' is ambiguous: {}",
+            arg,
+            matches
+                .iter()
+                .map(|p| p.handle.clone())
+                .collect::<Vec<_>>()
+                .join(", "),
+        ),
     }
 }
 
-/// Run a git command against a bare repo and return trimmed stdout.
-fn git_readonly(bare_repo: &Path, args: &[&str]) -> Result<String> {
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(bare_repo)
-        .args(args)
-        .output()
-        .with_context(|| format!("spawn git {:?}", args))?;
-    if !out.status.success() {
-        bail!(
-            "git {:?} failed ({}): {}",
-            args,
-            out.status,
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-}
-
-/// Best-effort size computation: sum of file sizes under `path`.
-/// Errors fall through to `0`; sizing is cosmetic, not load-bearing.
-fn dir_size_bytes(path: &Path) -> u64 {
-    let mut total: u64 = 0;
-    let walk = |p: &Path, total: &mut u64| -> std::io::Result<()> {
-        for entry in std::fs::read_dir(p)? {
-            let entry = entry?;
-            let ft = entry.file_type()?;
-            if ft.is_dir() {
-                // Manual recursion; avoids walkdir dep just for this.
-                // Depth is bounded by git's own layout.
-            } else if let Ok(md) = entry.metadata() {
-                *total = total.saturating_add(md.len());
-            }
-        }
-        Ok(())
-    };
-    fn recurse(p: &Path, acc: &mut u64) {
-        if let Ok(rd) = std::fs::read_dir(p) {
-            for entry in rd.flatten() {
-                let path = entry.path();
-                match entry.file_type() {
-                    Ok(ft) if ft.is_dir() => recurse(&path, acc),
-                    Ok(_) => {
-                        if let Ok(md) = entry.metadata() {
-                            *acc = acc.saturating_add(md.len());
-                        }
-                    }
-                    Err(_) => {}
-                }
-            }
-        }
-    }
-    recurse(path, &mut total);
-    let _ = walk; // keep the closure to silence warnings
-    total
-}
-
-fn format_size(bytes: u64) -> String {
-    const K: u64 = 1024;
-    const M: u64 = K * 1024;
-    const G: u64 = M * 1024;
-    if bytes >= G {
-        format!("{:.1} GiB", bytes as f64 / G as f64)
-    } else if bytes >= M {
-        format!("{:.1} MiB", bytes as f64 / M as f64)
-    } else if bytes >= K {
-        format!("{:.1} KiB", bytes as f64 / K as f64)
-    } else {
-        format!("{} B", bytes)
-    }
-}
-
-fn format_age(unix_seconds: u64) -> String {
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let age = now.saturating_sub(unix_seconds);
-    if age < 60 {
-        format!("{}s ago", age)
-    } else if age < 3600 {
-        format!("{}m ago", age / 60)
-    } else if age < 86400 {
-        format!("{}h ago", age / 3600)
-    } else {
-        format!("{}d ago", age / 86400)
-    }
+/// Strip an optional `ed25519:` prefix from a fleet pubkey argument
+/// and parse it as 64-char lowercase hex. Accepts either
+/// `<64 hex chars>` or `ed25519:<64 hex chars>` for ergonomics — the
+/// `ed25519:` form is what `self-fleet pubkey` prints.
+fn parse_fleet_pubkey_arg(s: &str) -> Result<[u8; ID_LEN]> {
+    let hexpart = s.strip_prefix("ed25519:").unwrap_or(s);
+    parse_hex_id(hexpart)
 }
 
 // ============================================================
-// repo list
+// Invitation artifact (issued by `invite`, consumed by `join`)
 // ============================================================
 
-fn cmd_repo_list(args: &[String]) -> Result<()> {
-    let mut owner_filter: Option<String> = None;
-    let mut seeder_filter: Option<String> = None;
-    let mut json = false;
+/// Self-contained artifact a recipient pipes into `project join`. The
+/// recipient verifies the chain offline, then persists `project` and
+/// `chain` to their per-user state. Versioned so the on-the-wire form
+/// can evolve without breaking older agents — though per zero-users
+/// doctrine, mismatched versions reject rather than migrate.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Invitation {
+    pub version: u32,
+    pub project: ProjectConfig,
+    pub chain: TokenChain,
+}
+
+const INVITATION_VERSION: u32 = 1;
+
+// ============================================================
+// project init
+// ============================================================
+
+fn cmd_init(args: &[String]) -> Result<()> {
+    let mut handle: Option<String> = None;
+    let mut fanout = DrFanout::FleetWide;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
-            "--owner" => {
+            "--fanout" => {
                 i += 1;
-                owner_filter = Some(
-                    args.get(i)
-                        .cloned()
-                        .context("--owner requires a value")?,
-                );
+                let v = args.get(i).context("--fanout requires a value")?;
+                fanout = v.parse()?;
             }
-            "--seeder" => {
-                i += 1;
-                seeder_filter = Some(
-                    args.get(i)
-                        .cloned()
-                        .context("--seeder requires a value")?,
-                );
+            other if !other.starts_with('-') && handle.is_none() => {
+                handle = Some(other.to_string());
             }
-            "--json" => json = true,
-            other => bail!("unknown repo list flag: {}", other),
+            other => bail!("unknown init flag: {}", other),
         }
         i += 1;
     }
+    let handle = handle.context("usage: vigo swarm gitmirror project init <handle> [--fanout …]")?;
+    validate_handle(&handle)?;
 
     let caller = resolve_caller()?;
-    let state = load_receiver_state()?;
-    let visible = caller_visible_mirrors(&state, &caller);
+    let founder_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    let project_id = project_id_for(&founder_pub);
 
-    let filtered: Vec<&MirrorState> = visible
-        .into_iter()
-        .filter(|m| owner_filter.as_ref().map(|o| &m.user == o).unwrap_or(true))
-        .filter(|m| {
-            seeder_filter
-                .as_ref()
-                .map(|s| &m.seeder == s)
-                .unwrap_or(true)
-        })
-        .collect();
+    // Refuse to overwrite an existing project — the founder's
+    // bootstrap is a one-shot artifact; re-running init would mint a
+    // second bootstrap with a different `issued_at` and silently
+    // change every member's authorization context.
+    if project_state::ProjectConfig::load(&caller.home, &project_id)?.is_some() {
+        bail!(
+            "project {} already exists at {}. Run `project status {}` to inspect, \
+             `project leave` to abandon, or `project reanchor` to hard-fork.",
+            hex_id(&project_id),
+            project_state::user_project_dir(&caller.home, &project_id).display(),
+            hex_id(&project_id),
+        );
+    }
 
+    // Build the founder bootstrap body (admin role, no parent, no
+    // expiry) and ask the session helper to sign the canonical bytes.
+    let now = now_secs();
+    let body = TokenBody {
+        project_id,
+        subject_fleet_pubkey: founder_pub,
+        role: Role::Admin,
+        issued_at: now,
+        expires_at: None,
+        signer_fleet_pubkey: founder_pub,
+        parent_token_id: None,
+    };
+    let bytes = canonical_bytes(&body);
+    let signature = sign_with_session(&bytes)?;
+    let bootstrap = Token { body, signature };
+    bootstrap
+        .verify_signature()
+        .context("bootstrap token failed self-verification (session helper malfunction?)")?;
+
+    // Persist project config + token chain.
+    let cfg = ProjectConfig {
+        version: project_state::PROJECT_STATE_VERSION,
+        project_id: hex_id(&project_id),
+        handle: handle.clone(),
+        founder_fleet_pubkey: hex_id(&founder_pub),
+        members: vec![hex_id(&founder_pub)],
+        dr_fanout: fanout,
+        cross_subnet_members: vec![],
+        updated_at: now,
+    };
+    cfg.save(&caller.home)?;
+    let chain = TokenChain {
+        version: project_state::PROJECT_STATE_VERSION,
+        chain: vec![bootstrap],
+    };
+    chain.save(&caller.home, &project_id)?;
+
+    println!("✓ Founded project {}", handle);
+    println!("  URL:        vigo://{}/{}", hex_id(&project_id), handle);
+    println!("  Project ID: {}", hex_id(&project_id));
+    println!("  Founder:    ed25519:{}", hex_id(&founder_pub));
+    println!("  Fan-out:    {}", fanout.as_str());
+    println!();
+    println!("State written to {}", project_state::user_project_dir(&caller.home, &project_id).display());
+    println!();
+    println!("Note: the bare repo and helper-daemon-mediated transport land in step 4");
+    println!("of the ADR-015 arc; for now this verb only persists the local auth surface.");
+    Ok(())
+}
+
+/// Validate a project handle. Free-form-but-sane: 1-64 chars, ASCII
+/// alnum + `-` + `_` + `.`, no leading dot, no whitespace. Tighter
+/// than the ADR strictly requires, but matches the existing
+/// `path_guard::validate_project_name` posture for filesystem safety.
+fn validate_handle(handle: &str) -> Result<()> {
+    if handle.is_empty() || handle.len() > 64 {
+        bail!("handle must be 1-64 characters");
+    }
+    if handle.starts_with('.') {
+        bail!("handle must not start with '.'");
+    }
+    for c in handle.chars() {
+        if !(c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.') {
+            bail!(
+                "handle '{}' contains invalid character '{}'; \
+                 use ASCII alphanumeric + '-' '_' '.'",
+                handle,
+                c
+            );
+        }
+    }
+    Ok(())
+}
+
+// ============================================================
+// project invite
+// ============================================================
+
+fn cmd_invite(args: &[String]) -> Result<()> {
+    let mut project_arg: Option<String> = None;
+    let mut fleet_arg: Option<String> = None;
+    let mut role_arg: Option<String> = None;
+    let mut expires_days: Option<u64> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--fleet" => {
+                i += 1;
+                fleet_arg = Some(args.get(i).context("--fleet requires a value")?.to_string());
+            }
+            "--role" => {
+                i += 1;
+                role_arg = Some(args.get(i).context("--role requires a value")?.to_string());
+            }
+            "--expires" => {
+                i += 1;
+                let v = args.get(i).context("--expires requires a value")?;
+                expires_days = Some(parse_days(v)?);
+            }
+            other if !other.starts_with('-') && project_arg.is_none() => {
+                project_arg = Some(other.to_string());
+            }
+            other => bail!("unknown invite flag: {}", other),
+        }
+        i += 1;
+    }
+    let project_arg = project_arg.context(
+        "usage: vigo swarm gitmirror project invite <project_id> --fleet <fp> --role admin|member [--expires <Nd>]",
+    )?;
+    let fleet = parse_fleet_pubkey_arg(
+        &fleet_arg.context("--fleet is required")?,
+    )?;
+    let role = match role_arg.as_deref() {
+        Some("admin") => Role::Admin,
+        Some("member") => Role::Member,
+        Some(other) => bail!("--role must be 'admin' or 'member', got '{}'", other),
+        None => bail!("--role is required"),
+    };
+
+    let caller = resolve_caller()?;
+    let project_id = resolve_project_id(&caller.home, &project_arg)?;
+    let cfg = ProjectConfig::load(&caller.home, &project_id)?
+        .ok_or_else(|| anyhow!("not a member of project {}", hex_id(&project_id)))?;
+
+    // Caller's leaf token must be Admin to mint a child.
+    let chain = TokenChain::load(&caller.home, &project_id)?
+        .ok_or_else(|| anyhow!("token chain missing for {}", hex_id(&project_id)))?;
+    let parent = chain
+        .chain
+        .last()
+        .ok_or_else(|| anyhow!("token chain is empty"))?
+        .clone();
+    if parent.body.role != Role::Admin {
+        bail!(
+            "this fleet holds a {:?} token on project {}; only admins can invite",
+            parent.body.role,
+            cfg.handle
+        );
+    }
+
+    // The leaf's subject must equal our local fleet pubkey — sanity
+    // check that the chain on disk really authorizes us.
+    let local_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    if parent.body.subject_fleet_pubkey != local_pub {
+        bail!(
+            "leaf token subject does not match local fleet pubkey \
+             (chain expects ed25519:{:.16}…, local is ed25519:{:.16}…)",
+            hex_id(&parent.body.subject_fleet_pubkey),
+            hex_id(&local_pub)
+        );
+    }
+
+    // Build child body, sign via session helper.
+    let now = now_secs();
+    let expires_at = expires_days.map(|d| now + (d as i64) * 86400);
+    let body = TokenBody {
+        project_id,
+        subject_fleet_pubkey: fleet,
+        role,
+        issued_at: now,
+        expires_at,
+        signer_fleet_pubkey: local_pub,
+        parent_token_id: Some(parent.id()),
+    };
+    let bytes = canonical_bytes(&body);
+    let signature = sign_with_session(&bytes)?;
+    let child = Token { body, signature };
+    child.verify_signature().context("child token failed self-verification")?;
+
+    // Build the invitation artifact: chain = parent chain + child;
+    // project = our local view, with the recipient added to members.
+    let mut full_chain: Vec<Token> = chain.chain.clone();
+    full_chain.push(child);
+    let mut new_members = cfg.members.clone();
+    let recipient_hex = hex_id(&fleet);
+    if !new_members.iter().any(|m| m == &recipient_hex) {
+        new_members.push(recipient_hex);
+    }
+    let invitation = Invitation {
+        version: INVITATION_VERSION,
+        project: ProjectConfig {
+            members: new_members,
+            updated_at: now,
+            ..cfg.clone()
+        },
+        chain: TokenChain {
+            version: project_state::PROJECT_STATE_VERSION,
+            chain: full_chain,
+        },
+    };
+
+    let json = serde_json::to_string_pretty(&invitation)?;
+    println!("{}", json);
+    eprintln!();
+    eprintln!("Invitation for project '{}'.", cfg.handle);
+    eprintln!("Pipe the JSON above to the recipient and have them run:");
+    eprintln!("  vigo swarm gitmirror project join {} --invitation -", hex_id(&project_id));
+    Ok(())
+}
+
+/// Parse `--expires` value: either `Nd` or a bare integer (days).
+/// Same shape as the old prune `--older-than` parser.
+fn parse_days(s: &str) -> Result<u64> {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        bail!("duration is empty");
+    }
+    let num = trimmed.strip_suffix('d').unwrap_or(trimmed);
+    let days: u64 = num
+        .parse()
+        .with_context(|| format!("invalid duration '{}': expected '<N>d' or bare integer", s))?;
+    if days == 0 {
+        bail!("duration must be at least 1 day");
+    }
+    Ok(days)
+}
+
+// ============================================================
+// project join
+// ============================================================
+
+fn cmd_join(args: &[String]) -> Result<()> {
+    let mut project_arg: Option<String> = None;
+    let mut invitation_src: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--invitation" => {
+                i += 1;
+                invitation_src = Some(
+                    args.get(i)
+                        .context("--invitation requires a path or '-'")?
+                        .to_string(),
+                );
+            }
+            other if !other.starts_with('-') && project_arg.is_none() => {
+                project_arg = Some(other.to_string());
+            }
+            other => bail!("unknown join flag: {}", other),
+        }
+        i += 1;
+    }
+    let project_arg = project_arg
+        .context("usage: vigo swarm gitmirror project join <project_id> [--invitation <file|->]")?;
+    let invitation_src = invitation_src.unwrap_or_else(|| "-".to_string());
+
+    // Read invitation JSON from file or stdin.
+    let invitation_json = if invitation_src == "-" {
+        let mut buf = String::new();
+        std::io::stdin()
+            .read_to_string(&mut buf)
+            .context("read invitation from stdin")?;
+        buf
+    } else {
+        fs::read_to_string(&invitation_src)
+            .with_context(|| format!("read invitation from {}", invitation_src))?
+    };
+    let invitation: Invitation = serde_json::from_str(&invitation_json)
+        .context("parse invitation JSON")?;
+    if invitation.version != INVITATION_VERSION {
+        bail!(
+            "invitation version {} not supported (expected {})",
+            invitation.version,
+            INVITATION_VERSION
+        );
+    }
+
+    let caller = resolve_caller()?;
+    let local_pub = local_fleet_pubkey_bytes(&caller.home)?;
+
+    // Sanity-check that the project_id positional matches the
+    // invitation's anchor — catches "wrong invitation pasted."
+    let claimed_id = parse_hex_id(&invitation.project.project_id)?;
+    let arg_id = match parse_hex_id(&project_arg) {
+        Ok(id) => id,
+        Err(_) => {
+            bail!(
+                "project_id '{}' is not valid hex. Pass the same project_id as in the invitation: {}",
+                project_arg,
+                invitation.project.project_id
+            );
+        }
+    };
+    if arg_id != claimed_id {
+        bail!(
+            "project_id mismatch: argument is {} but invitation declares {}",
+            project_arg,
+            invitation.project.project_id
+        );
+    }
+
+    // Verify the chain back to the founder pubkey embedded in the
+    // invitation's project config. `verify_chain` re-derives
+    // project_id from founder and rejects the chain if it doesn't
+    // match — defense against a malicious invitation that swaps the
+    // founder pubkey to a key the attacker controls.
+    let founder = parse_hex_id(&invitation.project.founder_fleet_pubkey)?;
+    verify_chain(&claimed_id, &founder, &invitation.chain.chain, now_secs())
+        .map_err(|e| anyhow!("invitation chain failed verification: {}", e))?;
+
+    // Leaf must be granting access to *our* fleet pubkey.
+    let leaf = invitation.chain.chain.last().ok_or_else(|| anyhow!("empty chain"))?;
+    if leaf.body.subject_fleet_pubkey != local_pub {
+        bail!(
+            "this invitation grants access to ed25519:{:.16}…, but our local fleet is ed25519:{:.16}…",
+            hex_id(&leaf.body.subject_fleet_pubkey),
+            hex_id(&local_pub)
+        );
+    }
+
+    // Refuse to overwrite an existing membership: forces an explicit
+    // `leave` first. Stops "joining" silently from clobbering a chain
+    // the local user already holds (which would be how a leak/replay
+    // scenario downgrades an admin to a member).
+    if ProjectConfig::load(&caller.home, &claimed_id)?.is_some() {
+        bail!(
+            "already a member of project {} — run `project leave {}` first if you want to re-join",
+            invitation.project.handle,
+            invitation.project.project_id
+        );
+    }
+
+    invitation.project.save(&caller.home)?;
+    invitation.chain.save(&caller.home, &claimed_id)?;
+
+    println!("✓ Joined project {}", invitation.project.handle);
+    println!("  URL:        vigo://{}/{}", invitation.project.project_id, invitation.project.handle);
+    println!("  Role:       {:?}", leaf.body.role);
+    println!("  Members:    {}", invitation.project.members.len());
+    println!("  Fan-out:    {}", invitation.project.dr_fanout.as_str());
+    println!();
+    println!("State written to {}", project_state::user_project_dir(&caller.home, &claimed_id).display());
+    println!();
+    println!("Note: actual `git fetch` / `git push` against this remote requires the helper");
+    println!("daemon, which lands in step 4 of the ADR-015 arc.");
+    Ok(())
+}
+
+// ============================================================
+// project leave
+// ============================================================
+
+fn cmd_leave(args: &[String]) -> Result<()> {
+    let mut project_arg: Option<String> = None;
+    let mut purge = false;
+    let mut yes = false;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--purge" => purge = true,
+            "--yes" | "-y" => yes = true,
+            other if !other.starts_with('-') && project_arg.is_none() => {
+                project_arg = Some(other.to_string());
+            }
+            other => bail!("unknown leave flag: {}", other),
+        }
+        i += 1;
+    }
+    let project_arg = project_arg
+        .context("usage: vigo swarm gitmirror project leave <project_id> [--purge] [--yes]")?;
+
+    let caller = resolve_caller()?;
+    let project_id = resolve_project_id(&caller.home, &project_arg)?;
+    let cfg = ProjectConfig::load(&caller.home, &project_id)?
+        .ok_or_else(|| anyhow!("not a member of project {}", hex_id(&project_id)))?;
+
+    if !yes {
+        eprintln!("About to leave project '{}' ({}).", cfg.handle, cfg.project_id);
+        if purge {
+            eprintln!("  --purge: bare repo bytes on this envoy will be removed.");
+        } else {
+            eprintln!("  Local user state will be dropped; the bare repo on this envoy survives.");
+        }
+        eprintln!("  A LEAVE envelope will be queued for the helper daemon to gossip in step 4.");
+        eprintln!();
+        eprintln!("Re-run with --yes to confirm.");
+        return Ok(());
+    }
+
+    // Queue the LEAVE sentinel — the helper daemon (step 4) will sign
+    // and gossip the envelope. Sentinel is named after the same
+    // pattern cryptsync uses (`leave.pending`).
+    write_sentinel(
+        &caller.home,
+        &project_id,
+        "leave.pending",
+        &SentinelLeave {
+            project_id: hex_id(&project_id),
+            handle: cfg.handle.clone(),
+            purge,
+            queued_at: now_secs(),
+        },
+    )?;
+    println!("queued LEAVE for project '{}'", cfg.handle);
+
+    if purge && caller.is_root {
+        // Wipe the bare repo — only meaningful when run as root since
+        // /var/lib/vigo/swarm/gitmirror/projects/ is 0700 root:root.
+        let base = crate::platform::paths::default_gitmirror_dir();
+        let repo = project_repo_path(&base, &project_id);
+        if repo.exists() {
+            fs::remove_dir_all(&repo)
+                .with_context(|| format!("remove bare repo at {}", repo.display()))?;
+            println!("removed bare repo {}", repo.display());
+        }
+    } else if purge {
+        eprintln!(
+            "warning: --purge requested but caller is not root; the bare repo at \
+             {} survives. Re-run as root to wipe.",
+            project_repo_path(&crate::platform::paths::default_gitmirror_dir(), &project_id).display()
+        );
+    }
+
+    purge_user_state(&caller.home, &project_id)?;
+    println!("dropped local state at {}", project_state::user_project_dir(&caller.home, &project_id).display());
+    Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SentinelLeave {
+    project_id: String,
+    handle: String,
+    purge: bool,
+    queued_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SentinelRevoke {
+    project_id: String,
+    token_id: String,
+    reason: String,
+    queued_at: i64,
+}
+
+fn write_sentinel<T: Serialize>(
+    home: &Path,
+    project_id: &[u8; ID_LEN],
+    name: &str,
+    payload: &T,
+) -> Result<()> {
+    let dir = project_state::user_project_dir(home, project_id);
+    fs::create_dir_all(&dir)
+        .with_context(|| format!("create {}", dir.display()))?;
+    let path = dir.join(name);
+    let json = serde_json::to_vec_pretty(payload)?;
+    let tmp = dir.join(format!("{}.tmp", name));
+    {
+        #[cfg(unix)]
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut opts = fs::OpenOptions::new();
+        opts.create(true).write(true).truncate(true);
+        #[cfg(unix)]
+        opts.mode(0o600);
+        let mut f = opts.open(&tmp).with_context(|| format!("create {}", tmp.display()))?;
+        f.write_all(&json)?;
+        f.sync_all()?;
+    }
+    fs::rename(&tmp, &path).with_context(|| format!("rename to {}", path.display()))?;
+    Ok(())
+}
+
+// ============================================================
+// project list
+// ============================================================
+
+fn cmd_list(args: &[String]) -> Result<()> {
+    let json = args.iter().any(|a| a == "--json");
+    let caller = resolve_caller()?;
+    let projects = project_state::list_projects(&caller.home)?;
     if json {
-        println!("{}", serde_json::to_string_pretty(&filtered)?);
+        println!("{}", serde_json::to_string_pretty(&projects)?);
         return Ok(());
     }
-
-    if filtered.is_empty() {
-        println!("no gitmirror mirrors on this envoy");
+    if projects.is_empty() {
+        println!("no gitmirror projects on this envoy (for {})", caller.home.display());
         return Ok(());
     }
-
     println!(
-        "{:<45} {:<8} {:<12} {:<10} {:<10} {}",
-        "LABEL", "BRANCH", "LAST COMMIT", "AGE", "SIZE", "OWNER"
+        "{:<24} {:<14} {:<14} {:<8} {}",
+        "HANDLE", "FAN-OUT", "MEMBERS", "TOKENS", "PROJECT_ID"
     );
-    for m in &filtered {
-        let branch = "main".to_string();
-        let short_sha = m.git_sha.get(..12).unwrap_or(&m.git_sha).to_string();
-        let age = format_age(m.last_refreshed);
-        let size = format_size(dir_size_bytes(&m.bare_repo_path));
+    for p in &projects {
+        let pid = parse_hex_id(&p.project_id).unwrap_or([0u8; ID_LEN]);
+        let token_len = TokenChain::load(&caller.home, &pid)
+            .ok()
+            .flatten()
+            .map(|c| c.chain.len())
+            .unwrap_or(0);
         println!(
-            "{:<45} {:<8} {:<12} {:<10} {:<10} {}",
-            truncate(&m.label, 45),
-            branch,
-            short_sha,
-            age,
-            size,
-            m.user
+            "{:<24} {:<14} {:<14} {:<8} {}",
+            truncate(&p.handle, 24),
+            p.dr_fanout.as_str(),
+            p.members.len(),
+            token_len,
+            short_id(&p.project_id),
         );
     }
     Ok(())
 }
 
 fn truncate(s: &str, max: usize) -> String {
-    if s.len() <= max {
+    if s.chars().count() <= max {
         s.to_string()
     } else {
-        format!("{}…", &s[..max.saturating_sub(1)])
+        let prefix: String = s.chars().take(max.saturating_sub(1)).collect();
+        format!("{}…", prefix)
+    }
+}
+
+fn short_id(hex_str: &str) -> String {
+    if hex_str.len() <= 16 {
+        hex_str.to_string()
+    } else {
+        format!("{}…", &hex_str[..16])
     }
 }
 
 // ============================================================
-// repo show
+// project status
 // ============================================================
 
-fn cmd_repo_show(args: &[String]) -> Result<()> {
-    let project = args
+fn cmd_status(args: &[String]) -> Result<()> {
+    let project_arg = args
         .first()
-        .context("usage: vigo swarm gitmirror show <project>")?;
+        .context("usage: vigo swarm gitmirror project status <project_id>")?;
     let caller = resolve_caller()?;
-    let state = load_receiver_state()?;
-    let m = resolve_mirror(&state, &caller, project)?;
+    let project_id = resolve_project_id(&caller.home, project_arg)?;
+    let cfg = ProjectConfig::load(&caller.home, &project_id)?
+        .ok_or_else(|| anyhow!("not a member of project {}", hex_id(&project_id)))?;
+    let chain = TokenChain::load(&caller.home, &project_id)?;
 
-    let head_sha = git_readonly(&m.bare_repo_path, &["rev-parse", "HEAD"])
-        .unwrap_or_else(|_| m.git_sha.clone());
-    let head_msg = git_readonly(
-        &m.bare_repo_path,
-        &["log", "-1", "--format=%s"],
-    )
-    .unwrap_or_default();
-    let head_date = git_readonly(
-        &m.bare_repo_path,
-        &["log", "-1", "--format=%ci"],
-    )
-    .unwrap_or_default();
-    let commit_count = git_readonly(&m.bare_repo_path, &["rev-list", "--count", "HEAD"])
-        .unwrap_or_default();
-    let tags = git_readonly(&m.bare_repo_path, &["tag", "-l"]).unwrap_or_default();
-    let first_commit = git_readonly(
-        &m.bare_repo_path,
-        &["log", "--reverse", "--format=%ci", "HEAD", "--max-count=1"],
-    )
-    .unwrap_or_default();
-
-    let size = format_size(dir_size_bytes(&m.bare_repo_path));
-
-    println!("Label:         {}", m.label);
-    println!("Seeder:        {}", m.seeder);
-    println!("Owner:         {}", m.user);
-    println!("Project:       {}", m.project);
-    println!("Bare repo:     {}", m.bare_repo_path.display());
-    println!("Size:          {}", size);
-    println!("Branch:        main");
-    println!("HEAD:          {}", head_sha);
-    if !head_msg.is_empty() {
-        println!("HEAD message:  {}", head_msg);
+    println!("Project:           {}", cfg.handle);
+    println!("URL:               vigo://{}/{}", cfg.project_id, cfg.handle);
+    println!("Project ID:        {}", cfg.project_id);
+    println!("Founder:           ed25519:{}", cfg.founder_fleet_pubkey);
+    println!("Fan-out:           {}", cfg.dr_fanout.as_str());
+    println!("Members:           {}", cfg.members.len());
+    for m in &cfg.members {
+        println!("  ed25519:{}", m);
     }
-    if !head_date.is_empty() {
-        println!("HEAD date:     {}", head_date);
+    if !cfg.cross_subnet_members.is_empty() {
+        println!("Cross-subnet hosts:");
+        for h in &cfg.cross_subnet_members {
+            println!("  {}", h);
+        }
     }
-    if !commit_count.is_empty() {
-        println!("Commits:       {}", commit_count);
+    if let Some(ch) = chain {
+        println!("Token chain depth: {}", ch.chain.len());
+        if let Some(leaf) = ch.chain.last() {
+            println!("Leaf role:         {:?}", leaf.body.role);
+            println!("Leaf subject:      ed25519:{}", hex_id(&leaf.body.subject_fleet_pubkey));
+            println!("Leaf issued_at:    {}", leaf.body.issued_at);
+            match leaf.body.expires_at {
+                None => println!("Leaf expires_at:   never"),
+                Some(NEVER_EXPIRES) => println!("Leaf expires_at:   never"),
+                Some(t) => println!("Leaf expires_at:   {}", t),
+            }
+        }
+    } else {
+        println!("Token chain:       (missing — re-run join)");
     }
-    if !tags.is_empty() {
-        let tag_list: Vec<&str> = tags.lines().collect();
-        println!("Tags:          {}", tag_list.join(", "));
+    let state_dir = project_state::user_project_dir(&caller.home, &project_id);
+    println!("State dir:         {}", state_dir.display());
+    let leave_pending = state_dir.join("leave.pending").exists();
+    let revoke_pending = state_dir.join("revoke.pending").exists();
+    if leave_pending {
+        println!("LEAVE pending:     yes (helper daemon will process in step 4)");
     }
-    if !first_commit.is_empty() {
-        println!("First commit:  {}", first_commit);
+    if revoke_pending {
+        println!("REVOKE pending:    yes (helper daemon will process in step 4)");
     }
-    println!(
-        "Last refreshed: {}",
-        format_unix_seconds(m.last_refreshed)
-    );
-    println!("Blob sha:       {}", m.blob_sha);
     Ok(())
 }
 
-fn format_unix_seconds(unix: u64) -> String {
-    // Best-effort local timestamp. Falls back to raw seconds if
-    // chrono isn't available (it isn't — keep the dep list minimal).
-    // Output format matches git's %ci roughly.
-    use std::time::{Duration, SystemTime};
-    let t = SystemTime::UNIX_EPOCH + Duration::from_secs(unix);
-    match t.duration_since(SystemTime::UNIX_EPOCH) {
-        Ok(_) => format!("{} (unix seconds)", unix),
-        Err(_) => format!("{}", unix),
-    }
-}
-
 // ============================================================
-// repo log
+// project revoke
 // ============================================================
 
-fn cmd_repo_log(args: &[String]) -> Result<()> {
-    let mut n: u32 = 20;
-    let mut project: Option<String> = None;
+fn cmd_revoke(args: &[String]) -> Result<()> {
+    let mut project_arg: Option<String> = None;
+    let mut token_id_hex: Option<String> = None;
+    let mut reason = String::new();
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
-            "-n" | "--max-count" => {
+            "--token-id" => {
                 i += 1;
-                n = args
-                    .get(i)
-                    .context("-n requires a value")?
-                    .parse()
-                    .context("-n must be a number")?;
+                token_id_hex = Some(args.get(i).context("--token-id requires a value")?.to_string());
             }
-            other if !other.starts_with('-') && project.is_none() => {
-                project = Some(other.to_string());
+            "--reason" => {
+                i += 1;
+                reason = args.get(i).context("--reason requires a value")?.to_string();
             }
-            other => bail!("unknown repo log flag: {}", other),
+            other if !other.starts_with('-') && project_arg.is_none() => {
+                project_arg = Some(other.to_string());
+            }
+            other => bail!("unknown revoke flag: {}", other),
         }
         i += 1;
     }
-    let project = project.context("usage: vigo swarm gitmirror log <project> [-n N]")?;
-    let caller = resolve_caller()?;
-    let state = load_receiver_state()?;
-    let m = resolve_mirror(&state, &caller, &project)?;
-
-    let out = git_readonly(
-        &m.bare_repo_path,
-        &["log", &format!("-{}", n), "--oneline"],
+    let project_arg = project_arg.context(
+        "usage: vigo swarm gitmirror project revoke <project_id> --token-id <hex> [--reason <text>]",
     )?;
-    println!("{}", out);
+    let token_id_hex = token_id_hex.context("--token-id is required")?;
+    let token_id = parse_hex_id(&token_id_hex).context("invalid --token-id hex")?;
+
+    let caller = resolve_caller()?;
+    let project_id = resolve_project_id(&caller.home, &project_arg)?;
+    let cfg = ProjectConfig::load(&caller.home, &project_id)?
+        .ok_or_else(|| anyhow!("not a member of project {}", hex_id(&project_id)))?;
+
+    // Caller's leaf must be Admin to revoke.
+    let chain = TokenChain::load(&caller.home, &project_id)?
+        .ok_or_else(|| anyhow!("token chain missing for {}", hex_id(&project_id)))?;
+    let leaf = chain
+        .chain
+        .last()
+        .ok_or_else(|| anyhow!("token chain is empty"))?;
+    if leaf.body.role != Role::Admin {
+        bail!("this fleet holds a {:?} token on '{}'; only admins can revoke", leaf.body.role, cfg.handle);
+    }
+
+    write_sentinel(
+        &caller.home,
+        &project_id,
+        "revoke.pending",
+        &SentinelRevoke {
+            project_id: cfg.project_id.clone(),
+            token_id: hex_id(&token_id),
+            reason,
+            queued_at: now_secs(),
+        },
+    )?;
+    println!("queued REVOKE of token {} on project '{}'", hex_id(&token_id), cfg.handle);
+    println!();
+    println!("The helper daemon (step 4) will sign + gossip the revocation envelope.");
     Ok(())
 }
 
+// Compile-time hygiene: keep `token_issue_child` imported so future
+// CLI work (re-issuance, rotation) can use it without re-importing.
+#[allow(dead_code)]
+fn _ensure_issue_child_in_scope(
+    signing_key: &ed25519_dalek::SigningKey,
+    parent: &Token,
+    subject: &[u8; ID_LEN],
+) -> Result<Token> {
+    token_issue_child(signing_key, parent, subject, Role::Member, 0, None)
+}
+
 // ============================================================
-// repo branches
+// project reanchor
 // ============================================================
 
-fn cmd_repo_branches(args: &[String]) -> Result<()> {
-    let project = args
+fn cmd_reanchor(args: &[String]) -> Result<()> {
+    let project_arg = args
         .first()
-        .context("usage: vigo swarm gitmirror branches <project>")?;
+        .context("usage: vigo swarm gitmirror project reanchor <project_id>")?;
+
     let caller = resolve_caller()?;
-    let state = load_receiver_state()?;
-    let m = resolve_mirror(&state, &caller, project)?;
+    let project_id = resolve_project_id(&caller.home, project_arg)?;
+    let cfg = ProjectConfig::load(&caller.home, &project_id)?
+        .ok_or_else(|| anyhow!("not a member of project {}", hex_id(&project_id)))?;
 
-    let branches = git_readonly(&m.bare_repo_path, &["branch", "-a"])?;
-    let tags = git_readonly(&m.bare_repo_path, &["tag", "-l"])?;
-    println!("Branches:");
-    if branches.is_empty() {
-        println!("  (none)");
-    } else {
-        for line in branches.lines() {
-            println!("  {}", line.trim());
-        }
-    }
-    println!("Tags:");
-    if tags.is_empty() {
-        println!("  (none)");
-    } else {
-        for line in tags.lines() {
-            println!("  {}", line);
-        }
-    }
-    Ok(())
-}
+    eprintln!(
+        "Reanchor — hard-fork project '{}' under a new founder.
 
-// ============================================================
-// repo peers
-// ============================================================
+  • The current URL `vigo://{}/{}` becomes permanently dead.
+  • Every existing member must re-add the new remote URL by hand.
+  • Existing tokens (admin or member) are NOT portable to the new project.
+  • Repo content is preserved (it imports wholesale into the new project),
+    but the helper daemon must mediate the import — that lands in step 4.
 
-fn cmd_repo_peers(args: &[String]) -> Result<()> {
-    let project = args
-        .first()
-        .context("usage: vigo swarm gitmirror peers <project>")?;
-    let caller = resolve_caller()?;
-    let state = load_receiver_state()?;
-    let m = resolve_mirror(&state, &caller, project)?;
-
-    let swarm_base = platform::paths::default_blobs_dir()
-        .parent()
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| PathBuf::from("/var/lib/vigo/swarm"));
-    let peers_json_path = swarm_base.join("peers.json");
-    let manifest_path = swarm_base.join("manifest.json");
-
-    let peers_data = std::fs::read_to_string(&peers_json_path)
-        .unwrap_or_else(|_| "{}".to_string());
-    let manifest_data = std::fs::read_to_string(&manifest_path)
-        .unwrap_or_else(|_| "{}".to_string());
-
-    println!("Label:  {}", m.label);
-    println!("Blob:   {}", m.blob_sha);
-    println!();
-    println!("Peers tracked by local agent:");
-    println!("  (this envoy holds the mirror)");
-
-    // Pure best-effort JSON read: extract peer hostnames/addresses
-    // without pulling in a full dep on the manifest schema. The
-    // manifest format is documented in `server/swarm` but also lives
-    // in the agent's `swarm::manifest` module. Full parsing would
-    // duplicate that model; for a user-facing quick answer the JSON
-    // structure is stable enough to eyeball. If parsing fails we
-    // dump the raw peers.json so the user still gets something.
-    if peers_data == "{}" {
-        println!("  (no peers.json found at {})", peers_json_path.display());
-    } else {
-        // Try to deserialize as a generic JSON object and print the
-        // top-level hostname→addr pairs. Tolerate any shape.
-        match serde_json::from_str::<serde_json::Value>(&peers_data) {
-            Ok(v) => print_peer_summary(&v),
-            Err(_) => println!("  (peers.json present but could not parse)"),
-        }
-    }
-
-    println!();
-    println!(
-        "Note: this listing is what the local agent has gossipped to itself.\n\
-         It does NOT probe peers for liveness — if a peer is listed but\n\
-         offline, you won't know until you try to reach it."
+To proceed, type the project handle exactly: {}",
+        cfg.handle, cfg.project_id, cfg.handle, cfg.handle
     );
-    let _ = manifest_data; // manifest would add per-blob source counts; deferred
-    Ok(())
-}
-
-fn print_peer_summary(v: &serde_json::Value) {
-    if let Some(obj) = v.as_object() {
-        if obj.is_empty() {
-            println!("  (no other peers known)");
-            return;
-        }
-        for (hostname, info) in obj {
-            let addr = info
-                .get("addr")
-                .and_then(|a| a.as_str())
-                .unwrap_or("?");
-            println!("  {} {}", hostname, addr);
-        }
-    } else if let Some(arr) = v.as_array() {
-        if arr.is_empty() {
-            println!("  (no other peers known)");
-            return;
-        }
-        for entry in arr {
-            println!("  {}", entry);
-        }
-    } else {
-        println!("  (unexpected peers.json shape)");
-    }
-}
-
-// ============================================================
-// recover
-// ============================================================
-
-fn cmd_recover(args: &[String]) -> Result<()> {
-    let mut project: Option<String> = None;
-    let mut dest: Option<PathBuf> = None;
-    let mut branch: Option<String> = None;
-    let mut force = false;
-    let mut dry_run = false;
-    let mut i = 0;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--dest" => {
-                i += 1;
-                dest = Some(PathBuf::from(
-                    args.get(i).context("--dest requires a value")?,
-                ));
-            }
-            "--branch" => {
-                i += 1;
-                branch = Some(args.get(i).cloned().context("--branch requires a value")?);
-            }
-            "--force" => force = true,
-            "--dry-run" => dry_run = true,
-            other if !other.starts_with('-') && project.is_none() => {
-                project = Some(other.to_string());
-            }
-            other => bail!("unknown recover flag: {}", other),
-        }
-        i += 1;
-    }
-    let project = project.context("usage: vigo swarm gitmirror recover <project> [opts]")?;
-
-    let caller = resolve_caller()?;
-    let state = load_receiver_state()?;
-    let m = resolve_mirror(&state, &caller, &project)?;
-
-    let dest = dest.unwrap_or_else(|| caller.home.join("gitmirror").join(&m.project));
-    perform_recover(m, &dest, branch.as_deref(), force, dry_run)
-}
-
-/// Core recovery logic — shared by `recover` and `recover-all`.
-fn perform_recover(
-    m: &MirrorState,
-    dest: &Path,
-    branch: Option<&str>,
-    force: bool,
-    dry_run: bool,
-) -> Result<()> {
-    // Collision guard per decision 2 (option B): detect active
-    // source repos and refuse with a specific error.
-    if dest.exists() {
-        let has_git = dest.join(".git").exists();
-        let has_sidecar = dest.join(".gitmirror.yaml").exists();
-        if has_git && has_sidecar {
-            if !force {
-                bail!(
-                    "{} exists and looks like an active source repo (has .git/ and .gitmirror.yaml). \
-                     Recovering here would overwrite it — and the mirror is older than your source, \
-                     so uncommitted work would be lost.\n\n\
-                     To recover to a different path:\n  \
-                     vigo swarm gitmirror recover {} --dest ~/{}-rescue\n\n\
-                     To overwrite anyway (only if the source is already broken):\n  \
-                     vigo swarm gitmirror recover {} --force",
-                    dest.display(),
-                    m.project,
-                    m.project,
-                    m.project,
-                );
-            }
-            eprintln!(
-                "warning: --force overwriting an active source repo at {}. \
-                 Any uncommitted work there will be lost.",
-                dest.display()
-            );
-        } else if !force {
-            bail!(
-                "{} exists and is not empty. Use --dest <path> to clone elsewhere, \
-                 or --force to overwrite.",
-                dest.display()
-            );
-        }
+    eprint!("> ");
+    let _ = std::io::stderr().flush();
+    let mut input = String::new();
+    std::io::stdin()
+        .read_line(&mut input)
+        .context("read confirmation")?;
+    let typed = input.trim();
+    if typed != cfg.handle {
+        bail!("typed value '{}' did not match project handle '{}'; reanchor aborted", typed, cfg.handle);
     }
 
-    if dry_run {
-        println!("DRY RUN: would clone");
-        println!("  from: {}", m.bare_repo_path.display());
-        println!("  to:   {}", dest.display());
-        if let Some(b) = branch {
-            println!("  branch: main → {}", b);
-        }
-        println!("  {} commits, HEAD={}", "unknown", m.git_sha);
-        return Ok(());
-    }
-
-    // Ensure parent dir exists (as the caller, naturally).
-    if let Some(parent) = dest.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("create parent {}", parent.display()))?;
-    }
-    if dest.exists() && force {
-        std::fs::remove_dir_all(dest)
-            .with_context(|| format!("remove existing {}", dest.display()))?;
-    }
-
-    // git clone — runs as the current user, so the resulting clone
-    // is owned by them. Bare repo is mode 0755 root-owned, readable.
-    let out = Command::new("git")
-        .arg("clone")
-        .arg(&m.bare_repo_path)
-        .arg(dest)
-        .output()
-        .context("spawn git clone")?;
-    if !out.status.success() {
-        bail!(
-            "git clone failed ({}): {}",
-            out.status,
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-
-    if let Some(new_branch) = branch {
-        let rename = Command::new("git")
-            .arg("-C")
-            .arg(dest)
-            .arg("branch")
-            .arg("-m")
-            .arg("main")
-            .arg(new_branch)
-            .output()
-            .context("spawn git branch -m")?;
-        if !rename.status.success() {
-            eprintln!(
-                "warning: failed to rename main → {}: {}",
-                new_branch,
-                String::from_utf8_lossy(&rename.stderr).trim()
-            );
-        }
-    }
-
-    println!("✓ Recovered {} to {}", m.project, dest.display());
-    println!("  cd {}", dest.display());
-    Ok(())
-}
-
-// ============================================================
-// recover-all
-// ============================================================
-
-fn cmd_recover_all(args: &[String]) -> Result<()> {
-    let mut dest_root: Option<PathBuf> = None;
-    let mut force = false;
-    let mut dry_run = false;
-    let mut i = 0;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--dest" => {
-                i += 1;
-                dest_root = Some(PathBuf::from(
-                    args.get(i).context("--dest requires a value")?,
-                ));
-            }
-            "--force" => force = true,
-            "--dry-run" => dry_run = true,
-            other => bail!("unknown recover-all flag: {}", other),
-        }
-        i += 1;
-    }
-
-    let caller = resolve_caller()?;
-    let state = load_receiver_state()?;
-    let mirrors: Vec<&MirrorState> = state
-        .mirrors
-        .values()
-        .filter(|m| m.user == caller.username)
-        .collect();
-
-    if mirrors.is_empty() {
-        println!("no gitmirror mirrors owned by {} on this envoy", caller.username);
-        return Ok(());
-    }
-
-    let dest_root = dest_root.unwrap_or_else(|| caller.home.join("gitmirror"));
-
-    let mut outcomes: BTreeMap<String, Result<PathBuf>> = BTreeMap::new();
-    for m in &mirrors {
-        let dest = dest_root.join(&m.project);
-        // Continue past failures per decision 4.
-        let result = perform_recover(m, &dest, None, force, dry_run)
-            .map(|_| dest.clone());
-        outcomes.insert(m.project.clone(), result);
-    }
-
-    // Summary.
-    println!();
-    println!("Summary:");
-    let mut ok = 0;
-    let mut failed = 0;
-    for (project, outcome) in &outcomes {
-        match outcome {
-            Ok(path) => {
-                ok += 1;
-                println!("  ✓ {} → {}", project, path.display());
-            }
-            Err(e) => {
-                failed += 1;
-                println!("  ✗ {}: {}", project, e);
-            }
-        }
-    }
-    println!("{} recovered, {} failed", ok, failed);
-    if failed > 0 {
-        // Non-zero exit without bailing (we still printed results).
-        std::process::exit(1);
-    }
-    Ok(())
-}
-
-// ============================================================
-// source list
-// ============================================================
-
-fn cmd_source_list(_args: &[String]) -> Result<()> {
-    let base = platform::paths::default_gitmirror_dir();
-    let traits_path = base.join("traits.json");
-    if !traits_path.exists() {
-        println!(
-            "no source traits file at {} — either gitmirror has not \
-             scanned yet, or this envoy is not running the reactor",
-            traits_path.display()
-        );
-        return Ok(());
-    }
-    let data = std::fs::read_to_string(&traits_path)
-        .with_context(|| format!("read {}", traits_path.display()))?;
-    let v: serde_json::Value = serde_json::from_str(&data)
-        .with_context(|| format!("parse {}", traits_path.display()))?;
-
-    let sources = v
-        .get("sources")
-        .and_then(|s| s.as_array())
-        .ok_or_else(|| anyhow!("traits.json missing 'sources' array"))?;
-
-    if sources.is_empty() {
-        println!("no gitmirror sources on this envoy");
-        return Ok(());
-    }
-
-    println!(
-        "{:<15} {:<10} {:<8} {:<8} {:<30} {}",
-        "PROJECT", "OWNER", "MIRRORS", "PAUSED", "FILTERS", "STATUS"
+    // Step 3 stops here: the actual reanchor flow needs the helper
+    // daemon to import bare repo bytes into the new project_id, which
+    // lands in step 4. Bail with a clear pointer so users on the
+    // bleeding edge know what's expected.
+    bail!(
+        "reanchor confirmed but transport is not yet implemented (ADR-015 step 4). \
+         The new founder bootstrap + bare-repo migration land alongside the helper daemon."
     );
-    for src in sources {
-        // The trait carries the canonical label
-        // (`gitmirror:<hostname>:<user>:<project>`), not separate
-        // project/owner fields. Parse the label to surface them in
-        // the table; fall back to "?" only if the label is malformed.
-        let label = src.get("label").and_then(|s| s.as_str()).unwrap_or("");
-        let label_parts: Vec<&str> = label.splitn(4, ':').collect();
-        let owner = if label_parts.len() == 4 { label_parts[1] } else { "?" };
-        let project = if label_parts.len() == 4 { label_parts[3] } else { "?" };
-        let max_mirrors = src.get("max_mirrors").and_then(|s| s.as_u64()).unwrap_or(0);
-        let paused = src.get("paused").and_then(|b| b.as_bool()).unwrap_or(false);
-        let include = src
-            .get("include_envoys")
-            .and_then(|a| a.as_array())
-            .map(|a| a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
-            .unwrap_or_default();
-        let exclude = src
-            .get("exclude_envoys")
-            .and_then(|a| a.as_array())
-            .map(|a| a.iter().filter_map(|v| v.as_str()).collect::<Vec<_>>())
-            .unwrap_or_default();
-
-        let mut filter_parts = Vec::new();
-        if !include.is_empty() {
-            filter_parts.push(format!("include={}", include.join(",")));
-        }
-        if !exclude.is_empty() {
-            filter_parts.push(format!("exclude={}", exclude.join(",")));
-        }
-        let filters = if filter_parts.is_empty() {
-            "(none)".to_string()
-        } else {
-            filter_parts.join(" ")
-        };
-
-        let error = src.get("error").and_then(|s| s.as_str());
-        let status = if let Some(e) = error {
-            format!("error: {}", e)
-        } else if paused {
-            "paused".to_string()
-        } else {
-            "publishing".to_string()
-        };
-
-        println!(
-            "{:<15} {:<10} {:<8} {:<8} {:<30} {}",
-            truncate(project, 15),
-            truncate(owner, 10),
-            max_mirrors,
-            if paused { "yes" } else { "no" },
-            truncate(&filters, 30),
-            status
-        );
-    }
-    Ok(())
 }
 
 // ============================================================
-// vigo swarm gitmirror prune
+// _apply-blacklist (hidden agent verb)
 // ============================================================
 
-/// Parsed flags and positional for `vigo swarm gitmirror prune`.
-#[derive(Debug, Default, PartialEq, Eq)]
-struct PruneOpts {
-    /// Staleness threshold in seconds. Default: STALE_THRESHOLD_SECS.
-    /// Mirrors with `now - last_refreshed > older_than_secs` are
-    /// considered candidates.
-    older_than_secs: u64,
-    /// True if the caller passed `--yes`: actually remove candidates.
-    /// Default (false) is list-and-exit.
-    yes: bool,
-    /// Optional positional: prune one specific mirror by full label,
-    /// exact project name, or unique project-name prefix. When set,
-    /// the staleness filter is BYPASSED — the operator is explicitly
-    /// targeting a mirror regardless of age.
-    target: Option<String>,
-    /// Optional `--seeder <hostname>`. When set, candidates are every
-    /// mirror whose seeder hostname matches (case-insensitive), regardless
-    /// of age. Used by admin eviction to prune all mirrors originating
-    /// from a specific host. Combines with `--user` as AND.
-    seeder: Option<String>,
-    /// Optional `--user <username>`. When set, candidates are scoped to
-    /// mirrors owned by this user. Combines with `--seeder` as AND.
-    user: Option<String>,
-}
-
-fn parse_prune_args(args: &[String]) -> Result<PruneOpts> {
-    let mut opts = PruneOpts {
-        older_than_secs: crate::swarm::gitmirror::STALE_THRESHOLD_SECS,
-        yes: false,
-        target: None,
-        seeder: None,
-        user: None,
-    };
-    let mut saw_dry_run = false;
-    let mut i = 0;
-    while i < args.len() {
-        match args[i].as_str() {
-            "--yes" => {
-                opts.yes = true;
-                i += 1;
-            }
-            "--dry-run" => {
-                saw_dry_run = true;
-                i += 1;
-            }
-            "--older-than" => {
-                i += 1;
-                let v = args
-                    .get(i)
-                    .ok_or_else(|| anyhow!("--older-than requires a duration (e.g. 60d)"))?;
-                opts.older_than_secs = parse_prune_duration(v)?;
-                i += 1;
-            }
-            "--seeder" => {
-                i += 1;
-                let v = args
-                    .get(i)
-                    .ok_or_else(|| anyhow!("--seeder requires a hostname"))?;
-                opts.seeder = Some(v.trim().to_ascii_lowercase());
-                i += 1;
-            }
-            "--user" => {
-                i += 1;
-                let v = args
-                    .get(i)
-                    .ok_or_else(|| anyhow!("--user requires a username"))?;
-                opts.user = Some(v.trim().to_string());
-                i += 1;
-            }
-            flag if flag.starts_with("--") => {
-                bail!("unknown flag for prune: {}", flag);
-            }
-            positional => {
-                if opts.target.is_some() {
-                    bail!("prune accepts at most one target label/project (got both '{}' and '{}')", opts.target.as_ref().unwrap(), positional);
-                }
-                opts.target = Some(positional.to_string());
-                i += 1;
-            }
-        }
-    }
-    if opts.yes && saw_dry_run {
-        bail!("--yes and --dry-run are mutually exclusive");
-    }
-    Ok(opts)
-}
-
-/// Parse a duration string for `--older-than`. Accepts days only
-/// (e.g. `30d`, `60d`) or a bare integer interpreted as days. v1
-/// intentionally skips hours/weeks/months — the staleness use case
-/// is "how long has it been gone, in days" and nothing finer than a
-/// day matters.
-fn parse_prune_duration(s: &str) -> Result<u64> {
-    let s = s.trim();
-    if s.is_empty() {
-        bail!("duration is empty");
-    }
-    let num_str = s.strip_suffix('d').unwrap_or(s);
-    let days: u64 = num_str.parse().with_context(|| {
-        format!(
-            "invalid duration '{}' — must be a number of days, e.g. '30d' or '60d'",
-            s
-        )
-    })?;
-    if days == 0 {
-        bail!("duration must be at least 1 day");
-    }
-    Ok(days * 86400)
-}
-
-/// Build the candidate list for a prune run. With `target` set,
-/// resolve the single named mirror and return it regardless of
-/// staleness (operator explicitly named it). Otherwise return every
-/// caller-visible mirror whose `last_refreshed` is older than the
-/// threshold.
-fn select_prune_candidates(
-    state: &ReceiverState,
-    caller: &CallerIdentity,
-    opts: &PruneOpts,
-    now: u64,
-) -> Result<Vec<MirrorState>> {
-    if let Some(target) = &opts.target {
-        let m = resolve_mirror(state, caller, target)?;
-        return Ok(vec![m.clone()]);
-    }
-    // --seeder / --user scoping: when either is set, bypass the age
-    // filter (this is the admin-eviction or self-leave-purge path —
-    // operator is explicitly targeting a scope, not a stale sweep).
-    if opts.seeder.is_some() || opts.user.is_some() {
-        return Ok(caller_visible_mirrors(state, caller)
-            .into_iter()
-            .filter(|m| {
-                opts.seeder
-                    .as_deref()
-                    .map(|h| m.seeder.eq_ignore_ascii_case(h))
-                    .unwrap_or(true)
-                    && opts
-                        .user
-                        .as_deref()
-                        .map(|u| m.user == u)
-                        .unwrap_or(true)
-            })
-            .cloned()
-            .collect());
-    }
-    Ok(caller_visible_mirrors(state, caller)
-        .into_iter()
-        .filter(|m| now.saturating_sub(m.last_refreshed) > opts.older_than_secs)
-        .cloned()
-        .collect())
-}
-
-fn cmd_prune(args: &[String]) -> Result<()> {
-    let opts = parse_prune_args(args)?;
-    let caller = resolve_caller()?;
-    let mut state = load_receiver_state()?;
-    let now = super::state::unix_seconds_now();
-
-    let candidates = select_prune_candidates(&state, &caller, &opts, now)?;
-
-    if candidates.is_empty() {
-        let days = opts.older_than_secs / 86400;
-        println!("no stale mirrors older than {} days", days);
-        return Ok(());
-    }
-
-    // Always print the candidate list first. The list is the same
-    // output whether this is a dry-run or a real removal run.
-    println!(
-        "{:<55} {:<12} {:<12} {:<10}",
-        "LABEL", "AGE", "SIZE", "OWNER"
-    );
-    for m in &candidates {
-        let age = format_age(m.last_refreshed);
-        let size = format_size(dir_size_bytes(&m.bare_repo_path));
-        println!(
-            "{:<55} {:<12} {:<12} {:<10}",
-            m.label, age, size, m.user
-        );
-    }
-
-    if !opts.yes {
-        println!();
-        println!(
-            "dry run — {} mirror(s) would be removed. re-invoke with --yes to apply.",
-            candidates.len()
-        );
-        return Ok(());
-    }
-
-    // Real removal: requires root because the bare repos at
-    // /var/lib/vigo/swarm/gitmirror/mirrors/<seeder>/<user>/<project>.git
-    // are root-owned. Unprivileged callers can list but not delete.
-    if !caller.is_root {
-        bail!(
-            "vigo swarm gitmirror prune --yes requires root — bare repos are root-owned. \
-             Re-run with sudo."
-        );
-    }
-
-    let base = platform::paths::default_gitmirror_dir();
-    let mut removed = 0usize;
-    let mut failed = 0usize;
-    for m in &candidates {
-        match remove_mirror_on_disk(m) {
-            Ok(()) => {
-                state.mirrors.remove(&m.label);
-                state.pending_wipes.remove(&m.label);
-                println!("removed {}", m.label);
-                removed += 1;
-            }
-            Err(e) => {
-                eprintln!("failed to remove {}: {}", m.label, e);
-                failed += 1;
-            }
-        }
-    }
-
-    // Persist the mutated state even if some removals failed — the
-    // ones that succeeded are already gone from disk, so not saving
-    // would leave the state file pointing at nonexistent bare repos.
-    if let Err(e) = state.save(&base) {
-        bail!("failed to save receiver_state.json after prune: {}", e);
-    }
-
-    println!();
-    println!("{} removed, {} failed", removed, failed);
-    if failed > 0 {
-        std::process::exit(1);
-    }
-    Ok(())
-}
-
-/// Hidden agent verb invoked by the server via TaskDispatch when an
-/// envoy newly matches `swarm.gitmirror.blacklist`. Wipes ALL locally-
-/// held mirrors regardless of seeder, then persists `receiver_state.json`.
-/// The corresponding gate flip happens automatically when the next
-/// CheckInResponse delivers `gitmirror_blacklisted: true`; this verb
-/// only handles the destructive eviction half.
-///
-/// Symmetric in shape with cryptsync's `_apply-evict`. Idempotent —
-/// re-running on an envoy whose mirrors are already wiped is a no-op.
 fn cmd_apply_blacklist(_args: &[String]) -> Result<()> {
-    let mut state = load_receiver_state()?;
-    if state.mirrors.is_empty() {
-        println!("gitmirror: no mirrors to evict (already clean)");
+    // Wipe every locally-held bare repo. In step 3 the helper daemon
+    // hasn't shipped yet, so projects/<project_id>.git directories
+    // typically do not exist — the verb is a no-op in practice but
+    // the framework needs to be in place for the server's TaskDispatch
+    // path to keep working without errors.
+    let base = crate::platform::paths::default_gitmirror_dir();
+    let projects = projects_dir(&base);
+    if !projects.exists() {
+        println!("gitmirror: no projects directory; nothing to evict");
         return Ok(());
     }
-
-    let base = platform::paths::default_gitmirror_dir();
     let mut removed = 0usize;
     let mut failed = 0usize;
-    let labels: Vec<String> = state.mirrors.keys().cloned().collect();
-
-    for label in &labels {
-        let Some(m) = state.mirrors.get(label) else { continue };
-        match remove_mirror_on_disk(m) {
-            Ok(()) => {
-                state.mirrors.remove(label);
-                state.pending_wipes.remove(label);
-                removed += 1;
-            }
+    let entries = match fs::read_dir(&projects) {
+        Ok(e) => e,
+        Err(e) => bail!("read {}: {}", projects.display(), e),
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        match fs::remove_dir_all(&path) {
+            Ok(()) => removed += 1,
             Err(e) => {
-                eprintln!("failed to remove {}: {}", label, e);
+                eprintln!("failed to remove {}: {}", path.display(), e);
                 failed += 1;
             }
         }
     }
-
-    if let Err(e) = state.save(&base) {
-        bail!("failed to save receiver_state.json after blacklist evict: {}", e);
-    }
-
     println!(
-        "gitmirror: blacklist eviction complete — {} mirror(s) removed, {} failed",
+        "gitmirror: blacklist eviction complete — {} project(s) removed, {} failed",
         removed, failed
     );
     if failed > 0 {
         std::process::exit(1);
-    }
-    Ok(())
-}
-
-/// Remove one mirror's bare repo directory from disk. Does not touch
-/// the in-memory `ReceiverState` — the caller mutates state after a
-/// successful removal so a single transaction saves the delta.
-fn remove_mirror_on_disk(m: &MirrorState) -> Result<()> {
-    if m.bare_repo_path.exists() {
-        std::fs::remove_dir_all(&m.bare_repo_path).with_context(|| {
-            format!("remove bare repo at {}", m.bare_repo_path.display())
-        })?;
     }
     Ok(())
 }
@@ -1280,419 +1084,128 @@ fn remove_mirror_on_disk(m: &MirrorState) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
 
-    fn make_mirror(seeder: &str, user: &str, project: &str) -> MirrorState {
-        MirrorState {
-            label: format!("gitmirror:{}:{}:{}", seeder, user, project),
-            seeder: seeder.to_string(),
-            user: user.to_string(),
-            project: project.to_string(),
-            bare_repo_path: PathBuf::from(format!(
-                "/var/lib/vigo/swarm/gitmirror/mirrors/{}/{}/{}.git",
-                seeder, user, project
-            )),
-            blob_sha: "deadbeef".to_string(),
-            git_sha: "f43f6ef3eea29e3780d73aa2cee4a78193419a69".to_string(),
-            last_refreshed: 1_744_560_000,
-            next_gc_at: 1_744_582_000,
-        }
+    #[test]
+    fn validate_handle_accepts_normal_names() {
+        assert!(validate_handle("vigo-web").is_ok());
+        assert!(validate_handle("dotfiles").is_ok());
+        assert!(validate_handle("notes_2026").is_ok());
+        assert!(validate_handle("v1.0").is_ok());
     }
 
-    fn state_with(mirrors: &[MirrorState]) -> ReceiverState {
-        let mut s = ReceiverState::default();
-        for m in mirrors {
-            s.mirrors.insert(m.label.clone(), m.clone());
-        }
-        s
+    #[test]
+    fn validate_handle_rejects_empty_and_long() {
+        assert!(validate_handle("").is_err());
+        assert!(validate_handle(&"x".repeat(65)).is_err());
     }
 
-    fn caller(username: &str, is_root: bool) -> CallerIdentity {
-        CallerIdentity {
-            username: username.to_string(),
-            home: PathBuf::from(format!("/home/{}", username)),
-            is_root,
+    #[test]
+    fn validate_handle_rejects_leading_dot() {
+        assert!(validate_handle(".hidden").is_err());
+    }
+
+    #[test]
+    fn validate_handle_rejects_unsafe_chars() {
+        for bad in ["foo/bar", "foo bar", "foo:bar", "foo$bar", "foo\nbar", "foo\0bar"] {
+            assert!(validate_handle(bad).is_err(), "should reject: {:?}", bad);
         }
     }
 
     #[test]
-    fn caller_visibility_scopes_unprivileged_to_own_mirrors() {
-        let s = state_with(&[
-            make_mirror("h", "alice", "notes"),
-            make_mirror("h", "bob", "dotfiles"),
-        ]);
-        let c = caller("alice", false);
-        let visible = caller_visible_mirrors(&s, &c);
-        assert_eq!(visible.len(), 1);
-        assert_eq!(visible[0].user, "alice");
+    fn parse_days_accepts_d_suffix_and_bare() {
+        assert_eq!(parse_days("30d").unwrap(), 30);
+        assert_eq!(parse_days("60").unwrap(), 60);
+        assert_eq!(parse_days("1d").unwrap(), 1);
     }
 
     #[test]
-    fn caller_visibility_root_sees_everything() {
-        let s = state_with(&[
-            make_mirror("h", "alice", "notes"),
-            make_mirror("h", "bob", "dotfiles"),
-        ]);
-        let c = caller("root", true);
-        let visible = caller_visible_mirrors(&s, &c);
-        assert_eq!(visible.len(), 2);
+    fn parse_days_rejects_zero_and_garbage() {
+        assert!(parse_days("0").is_err());
+        assert!(parse_days("0d").is_err());
+        assert!(parse_days("abc").is_err());
+        assert!(parse_days("").is_err());
+        assert!(parse_days("1w").is_err());
     }
 
     #[test]
-    fn resolve_mirror_by_exact_project() {
-        let s = state_with(&[make_mirror("h", "dan", "vigo-web")]);
-        let c = caller("dan", false);
-        let m = resolve_mirror(&s, &c, "vigo-web").unwrap();
-        assert_eq!(m.project, "vigo-web");
+    fn parse_fleet_pubkey_arg_accepts_with_and_without_prefix() {
+        let raw = "ab".repeat(32);
+        let with_prefix = format!("ed25519:{}", raw);
+        assert_eq!(parse_fleet_pubkey_arg(&raw).unwrap(), [0xABu8; 32]);
+        assert_eq!(parse_fleet_pubkey_arg(&with_prefix).unwrap(), [0xABu8; 32]);
     }
 
     #[test]
-    fn resolve_mirror_by_unique_prefix() {
-        let s = state_with(&[make_mirror("h", "dan", "vigo-web")]);
-        let c = caller("dan", false);
-        let m = resolve_mirror(&s, &c, "vigo-").unwrap();
-        assert_eq!(m.project, "vigo-web");
+    fn parse_fleet_pubkey_arg_rejects_short() {
+        assert!(parse_fleet_pubkey_arg("deadbeef").is_err());
+        assert!(parse_fleet_pubkey_arg("ed25519:deadbeef").is_err());
     }
 
     #[test]
-    fn resolve_mirror_ambiguous_prefix_errors() {
-        let s = state_with(&[
-            make_mirror("h", "dan", "vigo-web"),
-            make_mirror("h", "dan", "vigo-docs"),
-        ]);
-        let c = caller("dan", false);
-        let err = resolve_mirror(&s, &c, "vigo-").unwrap_err();
-        assert!(err.to_string().contains("ambiguous"));
-    }
-
-    #[test]
-    fn resolve_mirror_by_exact_label() {
-        let s = state_with(&[make_mirror("h", "dan", "vigo-web")]);
-        let c = caller("dan", false);
-        let m = resolve_mirror(&s, &c, "gitmirror:h:dan:vigo-web").unwrap();
-        assert_eq!(m.project, "vigo-web");
-    }
-
-    #[test]
-    fn resolve_mirror_unprivileged_cannot_see_other_users() {
-        let s = state_with(&[make_mirror("h", "bob", "secret")]);
-        let c = caller("alice", false);
-        let err = resolve_mirror(&s, &c, "secret").unwrap_err();
-        // Either "no mirrors found" (empty visibility) or
-        // "no mirror matches" — both are acceptable; what matters
-        // is that alice doesn't see bob's mirror.
-        let msg = err.to_string();
-        assert!(
-            msg.contains("no gitmirror mirrors") || msg.contains("no mirror matches"),
-            "unexpected error: {}",
-            msg
-        );
-    }
-
-    #[test]
-    fn resolve_mirror_root_sees_all() {
-        let s = state_with(&[make_mirror("h", "bob", "secret")]);
-        let c = caller("root", true);
-        let m = resolve_mirror(&s, &c, "secret").unwrap();
-        assert_eq!(m.user, "bob");
-    }
-
-    #[test]
-    fn recover_refuses_existing_active_source_repo_without_force() {
-        let dir = tempdir().unwrap();
-        let dest = dir.path().join("vigo-web");
-        std::fs::create_dir_all(dest.join(".git")).unwrap();
-        std::fs::write(dest.join(".gitmirror.yaml"), b"owner: dan\n").unwrap();
-        let m = make_mirror("host", "dan", "vigo-web");
-        let err = perform_recover(&m, &dest, None, false, false).unwrap_err();
-        let msg = err.to_string();
-        assert!(
-            msg.contains("active source repo"),
-            "expected active-source error, got: {}",
-            msg
-        );
-        assert!(msg.contains("uncommitted work"), "error should name the risk");
-    }
-
-    #[test]
-    fn recover_refuses_existing_nonempty_dest_without_force_generic_message() {
-        let dir = tempdir().unwrap();
-        let dest = dir.path().join("existing");
-        std::fs::create_dir_all(&dest).unwrap();
-        std::fs::write(dest.join("some-file"), b"data").unwrap();
-        let m = make_mirror("host", "dan", "proj");
-        let err = perform_recover(&m, &dest, None, false, true).unwrap_err();
-        let msg = err.to_string();
-        // Generic "not empty" error — NOT the active-source one.
-        assert!(
-            msg.contains("not empty") || msg.contains("exists"),
-            "expected generic exists error, got: {}",
-            msg
-        );
-        assert!(
-            !msg.contains("active source repo"),
-            "should not misclassify a plain non-empty dir as a source repo"
-        );
-    }
-
-    #[test]
-    fn recover_allows_missing_dest() {
-        let dir = tempdir().unwrap();
-        let dest = dir.path().join("fresh").join("vigo-web");
-        let m = make_mirror("host", "dan", "vigo-web");
-        // dry_run=true skips the actual git clone; we just want to
-        // verify the collision guard lets a missing dest through.
-        perform_recover(&m, &dest, None, false, true).unwrap();
-    }
-
-    #[test]
-    fn format_size_units() {
-        assert_eq!(format_size(500), "500 B");
-        assert_eq!(format_size(2048), "2.0 KiB");
-        assert_eq!(format_size(5 * 1024 * 1024), "5.0 MiB");
-    }
-
-    #[test]
-    fn truncate_short_string_unchanged() {
+    fn truncate_short_unchanged() {
         assert_eq!(truncate("short", 10), "short");
     }
 
     #[test]
-    fn truncate_long_string_gets_ellipsis() {
-        let s = truncate("this is a very long string", 10);
+    fn truncate_long_gets_ellipsis() {
+        let s = truncate("this is a long string", 10);
         assert!(s.ends_with('…'));
         assert_eq!(s.chars().count(), 10);
     }
 
-    // ========================================================
-    // prune
-    // ========================================================
-
     #[test]
-    fn parse_prune_duration_accepts_days_suffix() {
-        assert_eq!(parse_prune_duration("30d").unwrap(), 30 * 86400);
-        assert_eq!(parse_prune_duration("60d").unwrap(), 60 * 86400);
-        assert_eq!(parse_prune_duration("1d").unwrap(), 86400);
+    fn short_id_truncates_long_hex() {
+        let long = "a".repeat(64);
+        let s = short_id(&long);
+        assert!(s.ends_with('…'));
+        assert_eq!(s.len(), "a".repeat(16).len() + '…'.len_utf8());
     }
 
     #[test]
-    fn parse_prune_duration_accepts_bare_number_as_days() {
-        assert_eq!(parse_prune_duration("30").unwrap(), 30 * 86400);
+    fn short_id_passes_through_short_strings() {
+        assert_eq!(short_id("abc"), "abc");
     }
 
     #[test]
-    fn parse_prune_duration_rejects_zero() {
-        assert!(parse_prune_duration("0d").is_err());
-        assert!(parse_prune_duration("0").is_err());
-    }
+    fn invitation_roundtrips_through_json() {
+        // The shape that flows over `invite | join`. Build a synthetic
+        // chain (uses real Ed25519) and verify deserialization +
+        // chain re-verification both succeed end-to-end.
+        use crate::swarm::gitmirror::tokens::{issue_bootstrap, issue_child, project_id_for, Role};
+        use ed25519_dalek::SigningKey;
+        use rand::rngs::OsRng;
 
-    #[test]
-    fn parse_prune_duration_rejects_garbage() {
-        assert!(parse_prune_duration("abc").is_err());
-        assert!(parse_prune_duration("").is_err());
-        assert!(parse_prune_duration("30h").is_err());
-        assert!(parse_prune_duration("1w").is_err());
-    }
+        let founder = SigningKey::generate(&mut OsRng);
+        let team = SigningKey::generate(&mut OsRng);
+        let founder_pub = founder.verifying_key().to_bytes();
+        let team_pub = team.verifying_key().to_bytes();
+        let pid = project_id_for(&founder_pub);
 
-    #[test]
-    fn parse_prune_args_defaults_match_plan() {
-        let opts = parse_prune_args(&[]).unwrap();
-        assert_eq!(opts.older_than_secs, crate::swarm::gitmirror::STALE_THRESHOLD_SECS);
-        assert!(!opts.yes);
-        assert!(opts.target.is_none());
-    }
+        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let member = issue_child(&founder, &bootstrap, &team_pub, Role::Member, 150, None).unwrap();
 
-    #[test]
-    fn parse_prune_args_yes_and_older_than() {
-        let opts = parse_prune_args(&[
-            "--yes".to_string(),
-            "--older-than".to_string(),
-            "60d".to_string(),
-        ])
-        .unwrap();
-        assert!(opts.yes);
-        assert_eq!(opts.older_than_secs, 60 * 86400);
-    }
-
-    #[test]
-    fn parse_prune_args_positional_target() {
-        let opts = parse_prune_args(&["vigo-web".to_string()]).unwrap();
-        assert_eq!(opts.target.as_deref(), Some("vigo-web"));
-        assert!(!opts.yes);
-    }
-
-    #[test]
-    fn parse_prune_args_yes_plus_dry_run_rejected() {
-        let err = parse_prune_args(&["--yes".to_string(), "--dry-run".to_string()]);
-        assert!(err.is_err());
-    }
-
-    #[test]
-    fn parse_prune_args_two_positionals_rejected() {
-        let err = parse_prune_args(&["a".to_string(), "b".to_string()]);
-        assert!(err.is_err());
-    }
-
-    #[test]
-    fn parse_prune_args_unknown_flag_rejected() {
-        let err = parse_prune_args(&["--wat".to_string()]);
-        assert!(err.is_err());
-    }
-
-    #[test]
-    fn parse_prune_args_older_than_missing_value_rejected() {
-        let err = parse_prune_args(&["--older-than".to_string()]);
-        assert!(err.is_err());
-    }
-
-    #[test]
-    fn select_prune_candidates_filters_by_threshold() {
-        // Use wall-clock now() to match how cmd_prune calls the
-        // function. Build three mirrors with explicit ages.
-        let now = super::super::state::unix_seconds_now();
-        let old = make_mirror_at("h", "dan", "old", now - 60 * 86400);
-        let fresh = make_mirror_at("h", "dan", "fresh", now - 5 * 86400);
-        let border = make_mirror_at(
-            "h",
-            "dan",
-            "border",
-            now - crate::swarm::gitmirror::STALE_THRESHOLD_SECS,
-        );
-        let state = state_with(&[old.clone(), fresh.clone(), border.clone()]);
-        let c = caller("dan", false);
-        let opts = PruneOpts {
-            older_than_secs: crate::swarm::gitmirror::STALE_THRESHOLD_SECS,
-            yes: false,
-            target: None,
-            ..Default::default()
+        let invitation = Invitation {
+            version: INVITATION_VERSION,
+            project: ProjectConfig {
+                version: project_state::PROJECT_STATE_VERSION,
+                project_id: hex_id(&pid),
+                handle: "vigo-web".to_string(),
+                founder_fleet_pubkey: hex_id(&founder_pub),
+                members: vec![hex_id(&founder_pub), hex_id(&team_pub)],
+                dr_fanout: DrFanout::FleetWide,
+                cross_subnet_members: vec![],
+                updated_at: 1_744_560_000,
+            },
+            chain: TokenChain {
+                version: project_state::PROJECT_STATE_VERSION,
+                chain: vec![bootstrap, member],
+            },
         };
-        let candidates = select_prune_candidates(&state, &c, &opts, now).unwrap();
-        let labels: Vec<&str> = candidates.iter().map(|m| m.label.as_str()).collect();
-        assert_eq!(labels, vec!["gitmirror:h:dan:old"]);
-    }
 
-    #[test]
-    fn select_prune_candidates_honors_older_than_override() {
-        let now = super::super::state::unix_seconds_now();
-        let ten_days = make_mirror_at("h", "dan", "ten", now - 10 * 86400);
-        let sixty_days = make_mirror_at("h", "dan", "sixty", now - 60 * 86400);
-        let state = state_with(&[ten_days, sixty_days]);
-        let c = caller("dan", false);
-
-        // 7d threshold: both are stale.
-        let opts_7 = PruneOpts {
-            older_than_secs: 7 * 86400,
-            yes: false,
-            target: None,
-            ..Default::default()
-        };
-        let cands = select_prune_candidates(&state, &c, &opts_7, now).unwrap();
-        assert_eq!(cands.len(), 2);
-
-        // 30d threshold: only 60-day one is stale.
-        let opts_30 = PruneOpts {
-            older_than_secs: 30 * 86400,
-            yes: false,
-            target: None,
-            ..Default::default()
-        };
-        let cands = select_prune_candidates(&state, &c, &opts_30, now).unwrap();
-        assert_eq!(cands.len(), 1);
-        assert_eq!(cands[0].project, "sixty");
-
-        // 90d threshold: neither.
-        let opts_90 = PruneOpts {
-            older_than_secs: 90 * 86400,
-            yes: false,
-            target: None,
-            ..Default::default()
-        };
-        let cands = select_prune_candidates(&state, &c, &opts_90, now).unwrap();
-        assert!(cands.is_empty());
-    }
-
-    #[test]
-    fn select_prune_candidates_with_target_bypasses_staleness() {
-        // A freshly-refreshed mirror named explicitly should be a
-        // candidate even though it's not stale — the operator knows
-        // what they're doing.
-        let now = super::super::state::unix_seconds_now();
-        let fresh = make_mirror_at("h", "dan", "fresh", now - 86400);
-        let state = state_with(&[fresh]);
-        let c = caller("dan", false);
-        let opts = PruneOpts {
-            older_than_secs: crate::swarm::gitmirror::STALE_THRESHOLD_SECS,
-            yes: true,
-            target: Some("fresh".to_string()),
-            ..Default::default()
-        };
-        let cands = select_prune_candidates(&state, &c, &opts, now).unwrap();
-        assert_eq!(cands.len(), 1);
-        assert_eq!(cands[0].project, "fresh");
-    }
-
-    #[test]
-    fn select_prune_candidates_target_not_found_errors() {
-        let now = super::super::state::unix_seconds_now();
-        let fresh = make_mirror_at("h", "dan", "fresh", now - 86400);
-        let state = state_with(&[fresh]);
-        let c = caller("dan", false);
-        let opts = PruneOpts {
-            older_than_secs: crate::swarm::gitmirror::STALE_THRESHOLD_SECS,
-            yes: true,
-            target: Some("nonexistent".to_string()),
-            ..Default::default()
-        };
-        let err = select_prune_candidates(&state, &c, &opts, now);
-        assert!(err.is_err());
-    }
-
-    #[test]
-    fn select_prune_candidates_respects_caller_scope() {
-        // An unprivileged user cannot prune another user's stale
-        // mirrors — they aren't in caller_visible_mirrors.
-        let now = super::super::state::unix_seconds_now();
-        let alice_old = make_mirror_at("h", "alice", "old", now - 60 * 86400);
-        let bob_old = make_mirror_at("h", "bob", "old", now - 60 * 86400);
-        let state = state_with(&[alice_old, bob_old]);
-        let c = caller("alice", false);
-        let opts = PruneOpts {
-            older_than_secs: 30 * 86400,
-            yes: false,
-            target: None,
-            ..Default::default()
-        };
-        let cands = select_prune_candidates(&state, &c, &opts, now).unwrap();
-        assert_eq!(cands.len(), 1);
-        assert_eq!(cands[0].user, "alice");
-    }
-
-    #[test]
-    fn remove_mirror_on_disk_removes_existing_bare_repo() {
-        let base = tempdir().unwrap();
-        let bare = base.path().join("mirrors/host/dan/proj.git");
-        std::fs::create_dir_all(&bare).unwrap();
-        std::fs::write(bare.join("HEAD"), "ref: refs/heads/main\n").unwrap();
-        let mut m = make_mirror("host", "dan", "proj");
-        m.bare_repo_path = bare.clone();
-        remove_mirror_on_disk(&m).unwrap();
-        assert!(!bare.exists());
-    }
-
-    #[test]
-    fn remove_mirror_on_disk_is_noop_when_path_missing() {
-        let base = tempdir().unwrap();
-        let mut m = make_mirror("host", "dan", "proj");
-        m.bare_repo_path = base.path().join("does/not/exist.git");
-        // Should not error if the path doesn't exist — the state
-        // file might have an entry whose backing dir was already
-        // wiped by something else.
-        remove_mirror_on_disk(&m).unwrap();
-    }
-
-    fn make_mirror_at(seeder: &str, user: &str, project: &str, last_refreshed: u64) -> MirrorState {
-        let mut m = make_mirror(seeder, user, project);
-        m.last_refreshed = last_refreshed;
-        m
+        let json = serde_json::to_string(&invitation).unwrap();
+        let parsed: Invitation = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.project.handle, "vigo-web");
+        assert_eq!(parsed.chain.chain.len(), 2);
+        verify_chain(&pid, &founder_pub, &parsed.chain.chain, 200).unwrap();
     }
 }

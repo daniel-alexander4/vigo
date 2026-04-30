@@ -4,6 +4,8 @@ title: gitmirror
 
 # gitmirror
 
+> **ADR-015 cutover, step 3.** Step 3 retired the publish-and-claim reactor that wrote this trait's underlying snapshot, so in production the trait is currently `null` on every envoy. The helper-daemon-driven snapshot writer lands in step 4 and re-emits the trait against the unified-substrate `~/.vigo-gitmirror/<project_id>/` state surface — the field shape will change to project-id / fleet-membership / token-chain summaries. The schema below describes the legacy form for compatibility with consumers written before the cutover.
+
 Reports gitmirror publishing and receiver state: active and paused source counts, per-source swarm labels with current git/blob hashes, discovery errors, publish errors, and stale receiver-side mirrors.
 
 As of **0.23.0** (Phase 8 of the P2P-first rearchitecture), the server **no longer consumes this trait** for mirror selection or delivery — gitmirror is fully peer-to-peer, with LAN multicast discovery and explicit cross-subnet `cross_subnet_mirrors:` push doing all the work. The trait is still emitted by every gitmirror-enabled envoy for operator observability: you can look at it via `vigocli traits` or the web UI to see what a given envoy is publishing and whether it has any stale mirrors, but nothing on the server side acts on the values.

@@ -1,23 +1,22 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Reports gitmirror source-side publishing state.
+//! Reports gitmirror state for the `gitmirror` trait namespace.
 //!
-//! The gitmirror reactor (`agent/src/gitmirror/reactor.rs`) writes a
-//! [`TraitsSnapshot`] at the end of every pass. This collector reads
-//! that snapshot on each check-in cycle and ships its contents as the
-//! `gitmirror` trait so operators can see:
+//! **Transitional during the ADR-015 cutover.** Pre-ADR-015 the
+//! gitmirror reactor wrote a [`TraitsSnapshot`] at the end of every
+//! pass and this collector shipped its contents on each check-in.
+//! Step 3 of the ADR-015 arc removed the publish-and-claim reactor;
+//! the new helper-daemon-driven snapshot writer lands in step 4.
+//! Until then, the legacy snapshot file is never written, so this
+//! collector returns `Value::Null` in production — same fail-soft
+//! behaviour as `swarm_seeds::collect` on an empty state.
 //!
-//! - How many sources are actively publishing (and how many are paused)
-//! - Per-source label, current `git_sha`, and `blob_sha`
-//! - Discovery errors (invalid sidecars, missing `.git/`, etc.)
-//! - Publish errors (bundle creation failures, oversize, etc.)
-//!
-//! If the reactor has never ticked (cold start before the first
-//! interval fires, or git version check failed so the reactor never
-//! started), the snapshot file does not exist and this collector
-//! returns `Value::Null`, matching the pattern used by
-//! `swarm_seeds::collect` for an empty state.
+//! The fixture-driven tests below still exercise the legacy schema so
+//! consumers that still consume `gitmirror.sources[]` /
+//! `gitmirror.mirrors[]` keep passing through the cutover. Step 4
+//! re-emits the trait against the unified-substrate
+//! `~/.vigo-gitmirror/<project_id>/` state surface.
 //!
 //! Trait namespace: `gitmirror`.
 

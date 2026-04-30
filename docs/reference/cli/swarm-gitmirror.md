@@ -1,6 +1,8 @@
 
 # vigocli gitmirror
 
+> **ADR-015 cutover, step 3.** The agent-side reactor that publishes the trait this command consumes was retired in step 3; the helper-daemon-driven replacement lands in step 4. Until then `status` / `list` / `show` see empty fleet data and `evict` is the only verb that produces an effect (it dispatches `_apply-blacklist` to wipe locally-held bare repos under the new `projects/<project_id>.git` layout). Output shape below describes the legacy form and will change to a project-id / fleet-membership view in step 4.
+
 Admin-side, fleet-wide view of the [gitmirror](../../engineering/subsystems/gitmirror.md) personal-DR mesh. Every envoy's publisher-side source list and receiver-side mirror holdings are joined server-side by `server/gitmirrormesh` and surfaced through `GET /api/v1/swarm/gitmirror/fleet`; this command is the CLI consumer of that endpoint.
 
 `vigocli swarm gitmirror` is mostly **read-only**. Recovery runs on the envoy holding the mirror, not from the admin host — use the envoy-local [`vigo swarm gitmirror`](agent-swarm-gitmirror.md) CLI for that. Publish, revoke, and seed distribution for admin-pushed payloads live in [`vigocli swarm payload`](swarm-payload.md) (payload rides the same swarm substrate).

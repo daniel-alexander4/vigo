@@ -1,27 +1,39 @@
 
-# Gitmirror — Personal-DR Git Mirroring
+# Gitmirror — Unified Git Substrate (ADR-015)
 
-Gitmirror auto-mirrors a small number of a user's personal git repos from one **source** envoy to a bounded handful of **receiver** envoys where the same user has an account. The trigger is `git commit`, not `git push`. Receivers are read-only mirrors that hold a checked-out working tree plus a separate bare repo, so a user who loses their primary machine can `git clone` off any mirror to recover their work.
+> **ADR-015 cutover in progress.** This page describes the legacy personal-DR-only subsystem; the new model is documented inline in [ADR-015](../../adr/015-unified-gitmirror-substrate.md) until the doc rewrite settles. Steps 1–3 of the arc have shipped (multi-call dispatch, capability-token primitives, storage + CLI cutover); the helper daemon, transport, and gossip land in step 4. While the cutover is ongoing the publish-and-claim reactor is dormant — the new `vigo swarm gitmirror project {init,invite,join,leave,list,status,revoke,reanchor}` verb tree manages local state, but `git push vigo://…` does not yet work end-to-end.
 
-Gitmirror is a personal-disaster-recovery tool, not a fleet content distribution mechanism. Fleet-wide content distribution is what modules and `file:` resources are for. Gitmirror carries history.
+Gitmirror is the P2P git substrate underlying both personal disaster-recovery (today's primary use case) and multi-member collaboration (an axis introduced by ADR-015). Each project is identified by `project_id = sha256(founder_fleet_pubkey)`; project shape is described by two orthogonal axes:
 
-Gitmirror is one of four content subsystems that ride the [swarm](swarm.md) substrate. The server plays no role in selection or delivery — gitmirror reuses swarm's mTLS peer channel (port 1531) for bundle pushes and swarm's multicast group (`224.0.0.42:1531`) for LAN discovery via `GITMIRROR:` announcement lines.
+| `members:`           | `dr_fanout:`   | Use case                      |
+|----------------------|----------------|-------------------------------|
+| `{my-fleet}`         | `fleet-wide`   | Personal-DR (today's default) |
+| `{my-fleet}`         | `members-only` | Single-user, single-fleet     |
+| `{team1, team2, …}`  | `members-only` | Multi-member collaboration    |
+| `{team1, team2, …}`  | `fleet-wide`   | Team repo + fleet-wide DR     |
 
-## Status
+Per-fleet identity (per [ADR-014](../../adr/014-self-fleet-primitive.md)) gives multi-envoy users a stable trust unit; the substrate sees fleets, not envoys.
 
-As of **0.23.0**, gitmirror is a fully peer-to-peer subsystem. The server plays no role in selection, delivery, or acceptance — the `server/gitmirror/` package and the `CheckInResponse.gitmirror_claims` proto field were deleted in Phase 8 of the P2P-first rearchitecture. All mirror discovery, selection, and transport runs directly between envoys.
+Gitmirror is one of four content subsystems that ride the [swarm](swarm.md) substrate. The server plays no role in membership decisions — it provides three thin services (gitmirrormesh aggregator, cross-subnet address resolution, audit-log entries). Membership is fleet-anchored capability tokens, verified offline against the URL's project_id.
+
+## Status (ADR-015 arc)
 
 | Piece | Status |
 |-------|--------|
-| Source-side reactor + bundle publish | ✅ |
-| LAN peer discovery (swarm multicast `GITMIRROR:` line) | ✅ Phase 5 |
-| LAN deterministic selector + `GITMIRRORCLAIM:` announcements | ✅ Phase 6 |
-| Cross-subnet `cross_subnet_mirrors:` direct push (`POST /gitmirror/push/<label>`) | ✅ Phase 7 |
-| `gitmirror` trait collector (operator visibility) | ✅ |
-| Receiver-side materialization (`agent/src/gitmirror/receiver.rs`) | ✅ |
-| `vigo swarm gitmirror <verb>` recovery CLI | ✅ |
-| `vigo swarm gitmirror prune` manual stale-cleanup | ✅ |
-| Home-lab e2e verification | ⏳ (requires `git >= 2.35` on source host) |
+| Multi-call binary dispatch (`git-remote-vigo`) | ✅ 0.34.9 (step 1) |
+| Capability-token primitives (`tokens.rs`) | ✅ 0.34.10 (step 2) |
+| `~/.vigo-gitmirror/<project_id>/` per-user state + `projects/<project_id>.git` storage | ✅ step 3 |
+| `vigo swarm gitmirror project {init,invite,join,leave,list,status}` local verbs | ✅ step 3 |
+| `vigo swarm gitmirror project {revoke,leave}` envelope queueing (sentinel files) | ✅ step 3 (signing + gossip in step 4) |
+| Helper daemon + SO_PEERCRED socket + receive-pack proxy | ⏳ step 4 |
+| Push-driven fan-out (cycle prevention via delta check) | ⏳ step 4 |
+| Revocation gossip + 90-day reap (mirroring `cryptsync/leaves.rs`) | ⏳ step 4 |
+| Server-side gitmirrormesh schema + REST member-roster endpoint | ⏳ step 4 |
+| `/gitmirror` UI page rewrite for project-id view | ⏳ step 4 |
+| Re-emit `gitmirror` trait from new state surface | ⏳ step 4 |
+| Home-lab e2e verification | ⏳ step 4+ |
+
+Below describes the legacy publish-and-claim model retained as historical context. The corresponding agent code (`reactor.rs`, `publisher.rs`, `source.rs`, `sidecar.rs`, `lan_selector.rs`, `pending_claims.rs`, `cross_subnet_mirrors.rs`, `path_guard.rs`) was deleted in step 3.
 
 ## How It Works
 
