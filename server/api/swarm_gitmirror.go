@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/swarm/gitmirrormesh"
@@ -31,9 +32,11 @@ func NewGitmirrorHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries) *Git
 	}
 }
 
-// RegisterRoutes mounts gitmirror endpoints.
+// RegisterRoutes mounts gitmirror endpoints. Fleet view is
+// aggregated mirror state across the swarm — fleet.read.
 func (h *GitmirrorHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/swarm/gitmirror/fleet", h.handleFleet)
+	read := auth.RequirePermission(auth.PermFleetRead)
+	mux.Handle("GET /api/v1/swarm/gitmirror/fleet", read(http.HandlerFunc(h.handleFleet)))
 }
 
 // FleetSnapshot returns the cached aggregated view. The UI handler

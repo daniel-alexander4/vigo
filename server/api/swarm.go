@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/swarmview"
@@ -48,9 +49,11 @@ func NewSwarmHandler(tracker *swarm.PeerTracker, manifest *swarm.ManifestStore, 
 }
 
 // RegisterRoutes registers `/api/v1/swarm/*` substrate endpoints.
+// Status and peers are aggregated fleet observability — fleet.read.
 func (h *SwarmHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/swarm/status", h.Status)
-	mux.HandleFunc("GET /api/v1/swarm/peers", h.Peers)
+	read := auth.RequirePermission(auth.PermFleetRead)
+	mux.Handle("GET /api/v1/swarm/status", read(http.HandlerFunc(h.Status)))
+	mux.Handle("GET /api/v1/swarm/peers", read(http.HandlerFunc(h.Peers)))
 }
 
 // Status returns the fleet-wide substrate overview.

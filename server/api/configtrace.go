@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/fleet"
 )
@@ -25,11 +26,16 @@ func NewConfigTraceHandler(configStore *config.ConfigStore, fleetIndex *fleet.Fl
 }
 
 // RegisterRoutes registers config trace, tree, and search endpoints.
+// All four are read-only views of the loaded configuration tree
+// (per-envoy resolution, directory inheritance, search across
+// modules, and module-deduplication preview) — fleet.read is the
+// right gate.
 func (h *ConfigTraceHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/config/trace", h.HandleTrace)
-	mux.HandleFunc("GET /api/v1/config/tree", h.HandleTree)
-	mux.HandleFunc("GET /api/v1/config/search", h.HandleSearch)
-	mux.HandleFunc("GET /api/v1/config/dedup", h.HandleDedup)
+	read := auth.RequirePermission(auth.PermFleetRead)
+	mux.Handle("GET /api/v1/config/trace", read(http.HandlerFunc(h.HandleTrace)))
+	mux.Handle("GET /api/v1/config/tree", read(http.HandlerFunc(h.HandleTree)))
+	mux.Handle("GET /api/v1/config/search", read(http.HandlerFunc(h.HandleSearch)))
+	mux.Handle("GET /api/v1/config/dedup", read(http.HandlerFunc(h.HandleDedup)))
 }
 
 // HandleTree returns the directory inheritance structure.

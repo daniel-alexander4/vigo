@@ -435,25 +435,25 @@ Query envoys by trait values.
 
 ### GET /api/v1/spanner/status
 
-**Permission:** Authenticated (route-level gate pending — admin recommended in production)
+**Permission:** `fleet.read`
 
 Returns spanner role and spoke statuses (hub mode only).
 
 ### GET /api/v1/spanner/spokes/{id}
 
-**Permission:** Authenticated (route-level gate pending)
+**Permission:** `fleet.read`
 
 Returns detailed status for a single spoke.
 
 ### GET /api/v1/spanner/spokes/{id}/envoys
 
-**Permission:** Authenticated (route-level gate pending)
+**Permission:** `fleet.read`
 
 List envoys on a specific spoke.
 
 ### GET /api/v1/spanner/spokes/{id}/runs
 
-**Permission:** Authenticated (route-level gate pending)
+**Permission:** `fleet.read`
 
 List recent runs on a specific spoke.
 
@@ -492,7 +492,7 @@ Drain all envoys from a spoke (move to target spoke or auto-route by patterns).
 
 ### GET /api/v1/config/trace
 
-**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+**Permission:** `fleet.read`
 
 Trace config resolution for a hostname. Shows the full directory inheritance chain with vars and override markers at each level, which modules came from which files or roles, how roles expanded, and where each variable's final value originated.
 
@@ -558,7 +558,7 @@ If no entry matches, `matched` is `false` and other fields are omitted.
 
 ### GET /api/v1/config/tree
 
-**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+**Permission:** `fleet.read`
 
 Returns the directory inheritance structure for visualization. Shows `common.vgo` files at each level, leaf entries with their match patterns, and accumulated module totals.
 
@@ -566,7 +566,7 @@ Returns the directory inheritance structure for visualization. Shows `common.vgo
 
 ### GET /api/v1/config/search
 
-**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+**Permission:** `fleet.read`
 
 Search envoy entries by match pattern, module name, or var name. Returns matching entries with their full inheritance chain and accumulated modules.
 
@@ -1386,7 +1386,7 @@ Revoke an API token.
 
 ### GET /api/v1/preview
 
-**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+**Permission:** `fleet.read`
 
 Multi-node impact analysis showing which envoys would be affected by changes to a module.
 
@@ -1415,7 +1415,7 @@ Multi-node impact analysis showing which envoys would be affected by changes to 
 
 ### GET /api/v1/openapi.json
 
-**Permission:** Authenticated (route-level gate pending)
+**Permission:** Authenticated (any role)
 
 Returns the OpenAPI specification as JSON.
 
@@ -1765,7 +1765,7 @@ Per-envoy and fleet-wide risk scores computed from security scan traits, converg
 
 ### GET /api/v1/risk
 
-**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+**Permission:** `fleet.read`
 
 Return the fleet-wide risk summary with distribution and top riskiest envoys.
 
@@ -1800,7 +1800,7 @@ Return the fleet-wide risk summary with distribution and top riskiest envoys.
 
 ### GET /api/v1/risk/{envoyID}
 
-**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+**Permission:** `fleet.read`
 
 Return the risk score breakdown for a single envoy.
 
@@ -1825,7 +1825,7 @@ Return the risk score breakdown for a single envoy.
 
 ### GET /api/v1/risk/history
 
-**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+**Permission:** `fleet.read`
 
 Daily risk posture snapshots for trend analysis.
 
@@ -1872,7 +1872,7 @@ Daily risk posture snapshots for trend analysis.
 
 ### GET /api/v1/risk/insurance
 
-**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+**Permission:** `fleet.read`
 
 Cyber insurance attestation report in JSON format. Includes a per-report identifier, organization name (from `branding.org_name`), the authenticated user who prepared it, the 90-day attestation period, current fleet risk posture, a daily trend series, and fleet composition.
 
@@ -1914,7 +1914,7 @@ The `report_id` field is a unique identifier per download (format `VIGO-INS-<YYY
 
 ### GET /api/v1/risk/insurance.html
 
-**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+**Permission:** `fleet.read`
 
 Formal HTML cyber insurance attestation. Self-contained, suitable for direct viewing, emailing as an attachment, or printing. The document has a cover block with the organization name, a meta-data block (report ID, attestation period, preparer), an executive statement, five numbered sections (current posture, highest-risk assets, 90-day trend, fleet composition, methodology), and an attestation signatory block with four blank signature lines.
 
@@ -1930,7 +1930,7 @@ Formal HTML cyber insurance attestation. Self-contained, suitable for direct vie
 
 ### GET /api/v1/risk/insurance.pdf
 
-**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+**Permission:** `fleet.read`
 
 Native PDF version of the cyber insurance attestation, rendered server-side via WeasyPrint. Use this endpoint when emailing the attestation to an underwriter or attaching it to a case file — delivers a real `.pdf` with consistent cross-client rendering, no "save as PDF" dance.
 
@@ -2081,23 +2081,23 @@ Same shape as the existing framework report endpoints: JSON at the bare path, HT
 
 Substrate-level overview of the envoy P2P network. Content-subsystem operations live under their own prefixes; these endpoints describe the transport layer those subsystems ride on.
 
-- **GET /api/v1/swarm/status** — fleet-wide totals (envoys online, substrate-active, seeders, manifest counts, footprint).
-- **GET /api/v1/swarm/peers** — per-envoy rollup with `?sort=footprint|blobs|hostname` and `?limit=N` (0 for unbounded).
+- **GET /api/v1/swarm/status** — fleet-wide totals (envoys online, substrate-active, seeders, manifest counts, footprint). _(fleet.read)_
+- **GET /api/v1/swarm/peers** — per-envoy rollup with `?sort=footprint|blobs|hostname` and `?limit=N` (0 for unbounded). _(fleet.read)_
 
 ### Payload
 
 Administrator-pushed file distribution on the swarm substrate. These endpoints power `vigocli swarm payload`.
 
-- **GET /api/v1/swarm/payload/list** — list all active payload payloads.
-- **GET /api/v1/swarm/payload/match** — preview which envoys match a given target expression.
-- **GET /api/v1/swarm/payload/status/{sha256}** — per-envoy distribution status for one payload.
-- **GET /api/v1/swarm/payload/broken** — payloads with unreachable peers or failed distributions.
+- **GET /api/v1/swarm/payload/list** — list all active payload payloads. _(fleet.read)_
+- **GET /api/v1/swarm/payload/match** — preview which envoys match a given target expression. _(fleet.read)_
+- **GET /api/v1/swarm/payload/status/{sha256}** — per-envoy distribution status for one payload. _(fleet.read)_
+- **GET /api/v1/swarm/payload/broken** — payloads with unreachable peers or failed distributions. _(fleet.read)_
 - **POST /api/v1/swarm/payload/distribute** — seed a new payload into the swarm for distribution. _(admin)_
 - **DELETE /api/v1/swarm/payload/{sha256}** — revoke a payload; agents evict on next check-in. _(admin)_
 
 ### Gitmirror
 
-- **GET /api/v1/swarm/gitmirror/fleet** — fleet-wide gitmirror mirror view (aggregated from per-envoy traits).
+- **GET /api/v1/swarm/gitmirror/fleet** — fleet-wide gitmirror mirror view (aggregated from per-envoy traits). _(fleet.read)_
 
 ### Filesync
 
@@ -2118,25 +2118,25 @@ Administrator-pushed file distribution on the swarm substrate. These endpoints p
 
 Server-side counterparts to `vigocli sandgorgon` — see the [CLI reference](../cli/sandgorgon.md) for verb-level docs.
 
-- **GET /api/v1/sandgorgon/assets** — list all managed hardware assets.
-- **GET /api/v1/sandgorgon/assets/search** — search assets by substring / tag / state.
-- **GET /api/v1/sandgorgon/assets/{id}** — one asset's full record.
-- **GET /api/v1/sandgorgon/boot/{id}** — PXE boot payload for one asset.
-- **GET /api/v1/sandgorgon/preseed/{id}** — preseed file served to installer.
-- **GET /api/v1/sandgorgon/dhcp-config** — DHCP snippet for PXE routing.
-- **GET /api/v1/sandgorgon/events/{assetID}** — lifecycle-event stream for one asset.
-- **GET /api/v1/sandgorgon/images** — list registered OS images.
+- **GET /api/v1/sandgorgon/assets** — list all managed hardware assets. _(fleet.read)_
+- **GET /api/v1/sandgorgon/assets/search** — search assets by substring / tag / state. _(fleet.read)_
+- **GET /api/v1/sandgorgon/assets/{id}** — one asset's full record. _(fleet.read)_
+- **GET /api/v1/sandgorgon/boot/{id}** — PXE boot payload for one asset. _(fleet.read)_
+- **GET /api/v1/sandgorgon/preseed/{id}** — preseed file served to installer. _(fleet.read)_
+- **GET /api/v1/sandgorgon/dhcp-config** — DHCP snippet for PXE routing. _(fleet.read)_
+- **GET /api/v1/sandgorgon/events/{assetID}** — lifecycle-event stream for one asset. _(fleet.read)_
+- **GET /api/v1/sandgorgon/images** — list registered OS images. _(fleet.read)_
 - **POST /api/v1/sandgorgon/images** — register a new OS image. _(admin)_
 - **DELETE /api/v1/sandgorgon/images/{id}** — deregister an OS image (file not deleted). _(admin)_
-- **GET /api/v1/sandgorgon/report/{id}** / **/api/v1/sandgorgon/report/{id}/html** — full lifecycle report.
-- **GET /api/v1/sandgorgon/certificates** — list all NIST 800-88 sanitization certificates.
-- **GET /api/v1/sandgorgon/certificates/{id}** / **/api/v1/sandgorgon/certificates/{id}/html** — one certificate (JSON or printable HTML).
+- **GET /api/v1/sandgorgon/report/{id}** / **/api/v1/sandgorgon/report/{id}/html** — full lifecycle report. _(fleet.read)_
+- **GET /api/v1/sandgorgon/certificates** — list all NIST 800-88 sanitization certificates. _(fleet.read)_
+- **GET /api/v1/sandgorgon/certificates/{id}** / **/api/v1/sandgorgon/certificates/{id}/html** — one certificate (JSON or printable HTML). _(fleet.read)_
 - **POST /api/v1/sandgorgon/commission** — register a new asset for lifecycle management. _(admin)_
 - **POST /api/v1/sandgorgon/decommission/{id}** — decommission: revoke cert, sanitize disks, generate NIST 800-88 certificate. _(admin)_
 - **POST /api/v1/sandgorgon/provision/{id}** — PXE boot the asset with a registered OS image. _(admin)_
 - **POST /api/v1/sandgorgon/import** — import assets from CSV / NetBox / Snipe-IT. _(admin)_
 - **POST /api/v1/sandgorgon/return-to-available/{id}** — return a retired asset to the available pool. _(admin)_
 
-Mutations gate on the admin role; read-only endpoints (asset / certificate / image / event listings, boot scripts, preseed configs, lifecycle reports) keep the route-level gate pending and currently require any authenticated user — the Tier 2 audit pass will move them to `fleet.read`.
+PXE-serving GETs (boot, preseed, dhcp-config) gate on `fleet.read` even though a PXE-booting machine itself can't satisfy any web-auth — those endpoints either ride a separate delivery path or hold operator-side state used to write the actual PXE config off-box. The fleet.read gate tightens authenticated-user access without changing PXE flow; revisit when the delivery path is finalized.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

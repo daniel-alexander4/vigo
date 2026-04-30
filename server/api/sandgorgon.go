@@ -55,32 +55,38 @@ func (h *SandgorgonHandler) SetLifecycleDataSource(ds sandgorgon.LifecycleDataSo
 // to-available / provision, image register / remove) are admin-only
 // — they touch BMC state, NIST 800-88 sanitization records, and PXE
 // boot configuration. Read endpoints (asset/certificate/image/event
-// listings, boot scripts, preseed configs, lifecycle reports) keep
-// the route-level gate pending — they're consumed by the
-// /sandgorgon/ web UI which is currently admin-rendered, but
-// gating them as fleet.read is queued for the Tier 2 audit pass.
+// listings, lifecycle reports, search) gate on fleet.read.
+//
+// PXE-serving routes (boot/{id}, preseed/{id}, dhcp-config) are
+// also fleet.read for now — the booting machine itself can't satisfy
+// any web auth, so PXE delivery either rides a separate path or is
+// operator-side state used to write the actual PXE config off-box.
+// Gating as fleet.read tightens the access of authenticated users
+// without changing PXE flow (which never had auth credentials to
+// begin with). Revisit when the PXE delivery path is finalized.
 func (h *SandgorgonHandler) RegisterRoutes(mux *http.ServeMux) {
+	read := auth.RequirePermission(auth.PermFleetRead)
 	admin := auth.RequireAdmin("")
-	mux.HandleFunc("GET /api/v1/sandgorgon/assets", h.listAssets)
-	mux.HandleFunc("GET /api/v1/sandgorgon/assets/{id}", h.getAsset)
+	mux.Handle("GET /api/v1/sandgorgon/assets", read(http.HandlerFunc(h.listAssets)))
+	mux.Handle("GET /api/v1/sandgorgon/assets/{id}", read(http.HandlerFunc(h.getAsset)))
 	mux.Handle("POST /api/v1/sandgorgon/commission", admin(http.HandlerFunc(h.commission)))
 	mux.Handle("POST /api/v1/sandgorgon/decommission/{id}", admin(http.HandlerFunc(h.decommission)))
-	mux.HandleFunc("GET /api/v1/sandgorgon/certificates", h.listCertificates)
-	mux.HandleFunc("GET /api/v1/sandgorgon/certificates/{id}", h.getCertificate)
-	mux.HandleFunc("GET /api/v1/sandgorgon/certificates/{id}/html", h.getCertificateHTML)
+	mux.Handle("GET /api/v1/sandgorgon/certificates", read(http.HandlerFunc(h.listCertificates)))
+	mux.Handle("GET /api/v1/sandgorgon/certificates/{id}", read(http.HandlerFunc(h.getCertificate)))
+	mux.Handle("GET /api/v1/sandgorgon/certificates/{id}/html", read(http.HandlerFunc(h.getCertificateHTML)))
 	mux.Handle("POST /api/v1/sandgorgon/import", admin(http.HandlerFunc(h.importCSV)))
 	mux.Handle("POST /api/v1/sandgorgon/return-to-available/{id}", admin(http.HandlerFunc(h.returnToAvailable)))
 	mux.Handle("POST /api/v1/sandgorgon/provision/{id}", admin(http.HandlerFunc(h.provision)))
-	mux.HandleFunc("GET /api/v1/sandgorgon/images", h.listImages)
+	mux.Handle("GET /api/v1/sandgorgon/images", read(http.HandlerFunc(h.listImages)))
 	mux.Handle("POST /api/v1/sandgorgon/images", admin(http.HandlerFunc(h.registerImage)))
 	mux.Handle("DELETE /api/v1/sandgorgon/images/{id}", admin(http.HandlerFunc(h.removeImage)))
-	mux.HandleFunc("GET /api/v1/sandgorgon/dhcp-config", h.dhcpConfig)
-	mux.HandleFunc("GET /api/v1/sandgorgon/boot/{id}", h.bootScript)
-	mux.HandleFunc("GET /api/v1/sandgorgon/preseed/{id}", h.preseedConfig)
-	mux.HandleFunc("GET /api/v1/sandgorgon/report/{id}", h.lifecycleReport)
-	mux.HandleFunc("GET /api/v1/sandgorgon/report/{id}/html", h.lifecycleReportHTML)
-	mux.HandleFunc("GET /api/v1/sandgorgon/events/{assetID}", h.listEvents)
-	mux.HandleFunc("GET /api/v1/sandgorgon/assets/search", h.searchAssets)
+	mux.Handle("GET /api/v1/sandgorgon/dhcp-config", read(http.HandlerFunc(h.dhcpConfig)))
+	mux.Handle("GET /api/v1/sandgorgon/boot/{id}", read(http.HandlerFunc(h.bootScript)))
+	mux.Handle("GET /api/v1/sandgorgon/preseed/{id}", read(http.HandlerFunc(h.preseedConfig)))
+	mux.Handle("GET /api/v1/sandgorgon/report/{id}", read(http.HandlerFunc(h.lifecycleReport)))
+	mux.Handle("GET /api/v1/sandgorgon/report/{id}/html", read(http.HandlerFunc(h.lifecycleReportHTML)))
+	mux.Handle("GET /api/v1/sandgorgon/events/{assetID}", read(http.HandlerFunc(h.listEvents)))
+	mux.Handle("GET /api/v1/sandgorgon/assets/search", read(http.HandlerFunc(h.searchAssets)))
 }
 
 func (h *SandgorgonHandler) listAssets(w http.ResponseWriter, r *http.Request) {

@@ -58,14 +58,20 @@ func (h *RiskHandler) SetBranding(cfg config.BrandingSection) {
 	h.logoPath = cfg.LogoPath
 }
 
-// RegisterRoutes mounts risk endpoints.
+// RegisterRoutes mounts risk endpoints. Fleet + per-envoy risk
+// scores and the cyber-insurance attestation export are all
+// fleet-shaped data — fleet.read is the right gate. The
+// insurance.{html,pdf} variants are operator-facing artifacts that
+// derive from the same per-envoy scoring; keeping them on
+// fleet.read avoids forking the gate by output format.
 func (h *RiskHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/risk", h.handleFleetRisk)
-	mux.HandleFunc("GET /api/v1/risk/history", h.handleRiskHistory)
-	mux.HandleFunc("GET /api/v1/risk/insurance", h.handleInsuranceExport)
-	mux.HandleFunc("GET /api/v1/risk/insurance.html", h.handleInsuranceExportHTML)
-	mux.HandleFunc("GET /api/v1/risk/insurance.pdf", h.handleInsuranceExportPDF)
-	mux.HandleFunc("GET /api/v1/risk/{envoyID}", h.handleEnvoyRisk)
+	read := vigoauth.RequirePermission(vigoauth.PermFleetRead)
+	mux.Handle("GET /api/v1/risk", read(http.HandlerFunc(h.handleFleetRisk)))
+	mux.Handle("GET /api/v1/risk/history", read(http.HandlerFunc(h.handleRiskHistory)))
+	mux.Handle("GET /api/v1/risk/insurance", read(http.HandlerFunc(h.handleInsuranceExport)))
+	mux.Handle("GET /api/v1/risk/insurance.html", read(http.HandlerFunc(h.handleInsuranceExportHTML)))
+	mux.Handle("GET /api/v1/risk/insurance.pdf", read(http.HandlerFunc(h.handleInsuranceExportPDF)))
+	mux.Handle("GET /api/v1/risk/{envoyID}", read(http.HandlerFunc(h.handleEnvoyRisk)))
 }
 
 // handleFleetRisk returns the fleet-wide risk summary.

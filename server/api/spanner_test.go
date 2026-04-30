@@ -20,7 +20,7 @@ func TestSpannerStatusStandalone(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/spanner/status", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -49,7 +49,7 @@ func TestSpannerStatusWithSpokeRole(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/spanner/status", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -76,7 +76,7 @@ func TestSpannerStatusHubNilSpokes(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/spanner/status", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -103,7 +103,7 @@ func TestSpannerStatusResponseFormat(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/spanner/status", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	ct := rec.Header().Get("Content-Type")
 	if ct != "application/json" {
@@ -133,7 +133,7 @@ func TestSpokeDrilldownRoutesNotRegisteredWithoutHub(t *testing.T) {
 		t.Run(ep.method+" "+ep.path, func(t *testing.T) {
 			req := httptest.NewRequest(ep.method, ep.path, nil)
 			rec := httptest.NewRecorder()
-			mux.ServeHTTP(rec, req)
+			mux.ServeHTTP(rec, adminReq(req))
 
 			// Without a hub, these routes are not registered, so the mux
 			// returns 404 or 405.
@@ -152,7 +152,7 @@ func TestSpannerStatusJSON(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/spanner/status", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	var raw map[string]any
 	if err := json.NewDecoder(rec.Body).Decode(&raw); err != nil {

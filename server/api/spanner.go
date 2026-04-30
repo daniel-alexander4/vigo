@@ -34,17 +34,17 @@ func NewSpannerHandler(role config.SpannerRole, spokeID string, hub *spanner.Hub
 // RegisterRoutes mounts spanner endpoints on the given mux. Hub-
 // mode mutations (push / reassign / drain) are admin-only — they
 // flip envoy-spoke assignments and force fan-out to spokes. Read
-// endpoints (status + spoke drill-downs) keep the route-level gate
-// pending; they expose hub-aggregated fleet state and the Tier 2
-// audit pass will gate them as fleet.read.
+// endpoints (status + spoke drill-downs) gate on fleet.read;
+// they expose hub-aggregated fleet state.
 func (h *SpannerHandler) RegisterRoutes(mux *http.ServeMux) {
+	read := auth.RequirePermission(auth.PermFleetRead)
 	admin := auth.RequireAdmin("")
-	mux.HandleFunc("GET /api/v1/spanner/status", h.handleStatus)
+	mux.Handle("GET /api/v1/spanner/status", read(http.HandlerFunc(h.handleStatus)))
 	// Spoke drill-down (Phase 2)
 	if h.hub != nil {
-		mux.HandleFunc("GET /api/v1/spanner/spokes/{id}", h.handleSpokeDetail)
-		mux.HandleFunc("GET /api/v1/spanner/spokes/{id}/envoys", h.handleSpokeEnvoys)
-		mux.HandleFunc("GET /api/v1/spanner/spokes/{id}/runs", h.handleSpokeRuns)
+		mux.Handle("GET /api/v1/spanner/spokes/{id}", read(http.HandlerFunc(h.handleSpokeDetail)))
+		mux.Handle("GET /api/v1/spanner/spokes/{id}/envoys", read(http.HandlerFunc(h.handleSpokeEnvoys)))
+		mux.Handle("GET /api/v1/spanner/spokes/{id}/runs", read(http.HandlerFunc(h.handleSpokeRuns)))
 		mux.Handle("POST /api/v1/spanner/spokes/{id}/push", admin(http.HandlerFunc(h.handleSpokePush)))
 		// Reassignment + drain (Phase 3)
 		mux.Handle("POST /api/v1/spanner/reassign", admin(http.HandlerFunc(h.handleReassign)))

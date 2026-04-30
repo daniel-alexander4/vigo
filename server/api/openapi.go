@@ -6,6 +6,8 @@ package api
 import (
 	"net/http"
 	"os"
+
+	"git.alexander4.io/vigo/server/auth"
 )
 
 // OpenAPIHandler serves the OpenAPI specification.
@@ -18,9 +20,13 @@ func NewOpenAPIHandler(specPath string) *OpenAPIHandler {
 	return &OpenAPIHandler{specPath: specPath}
 }
 
-// RegisterRoutes registers the OpenAPI endpoint.
+// RegisterRoutes registers the OpenAPI endpoint. The spec itself is
+// non-sensitive (just the API surface description) but shouldn't
+// leak to unauthenticated callers — RequireAuth is the right gate,
+// any role can fetch it for tooling.
 func (h *OpenAPIHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/openapi.json", h.ServeSpec)
+	authed := auth.RequireAuth("")
+	mux.Handle("GET /api/v1/openapi.json", authed(http.HandlerFunc(h.ServeSpec)))
 }
 
 // ServeSpec serves the OpenAPI JSON spec.

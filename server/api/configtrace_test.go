@@ -77,7 +77,7 @@ func TestConfigTrace_Tree(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/config/tree", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -103,7 +103,7 @@ func TestConfigTrace_SearchByMatch(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/config/search?match=web01", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -126,7 +126,7 @@ func TestConfigTrace_SearchByModule(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/config/search?module=nginx", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -149,7 +149,7 @@ func TestConfigTrace_SearchRequiresParameter(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/config/search", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for empty search, got %d", rec.Code)
@@ -165,7 +165,7 @@ func TestConfigTrace_Trace(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/config/trace?hostname=web01.prod", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -191,7 +191,7 @@ func TestConfigTrace_TraceNoMatch(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/config/trace?hostname=unknown.host", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -214,7 +214,7 @@ func TestConfigTrace_TraceMissingHostname(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/config/trace", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for missing hostname, got %d", rec.Code)

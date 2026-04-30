@@ -94,7 +94,7 @@ func TestPreview_AffectedEnvoys(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/preview?module=nginx", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -127,7 +127,7 @@ func TestPreview_NoAffectedEnvoys(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/preview?module=nonexistent", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -152,7 +152,7 @@ func TestPreview_MissingModuleParameter(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/preview", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for missing module, got %d", rec.Code)
@@ -168,7 +168,7 @@ func TestPreview_NilFleetIndex(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/preview?module=nginx", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusNotImplemented {
 		t.Fatalf("expected 501 without FleetIndex, got %d", rec.Code)

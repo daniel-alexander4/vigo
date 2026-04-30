@@ -6,6 +6,7 @@ package api
 import (
 	"net/http"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/fleet"
 )
@@ -21,9 +22,12 @@ func NewPreviewHandler(cs *config.ConfigStore, fi *fleet.FleetIndex) *PreviewHan
 	return &PreviewHandler{configStore: cs, fleetIndex: fi}
 }
 
-// RegisterRoutes registers preview endpoints.
+// RegisterRoutes registers preview endpoints. Preview surfaces the
+// per-envoy impact of a module change (which envoys would be
+// affected) — fleet.read is the right gate.
 func (h *PreviewHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/preview", h.Preview)
+	read := auth.RequirePermission(auth.PermFleetRead)
+	mux.Handle("GET /api/v1/preview", read(http.HandlerFunc(h.Preview)))
 }
 
 // Preview returns the list of envoys that would be affected by changes to a module.
