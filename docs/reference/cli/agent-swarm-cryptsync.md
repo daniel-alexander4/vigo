@@ -27,14 +27,14 @@ Every verb runs under the invoking user's uid. No root. The agent daemon does no
 |---|---|
 | `init` | First-time setup on the primary envoy. Prompts for password (with confirm), generates wrapped identity, creates `~/cryptsync/`. |
 | `enroll` | Per-envoy setup. Normally triggered by the `enroll.pending` sentinel on first `vigo swarm cryptsync *` invocation; can be run manually for recovery. Idempotent. |
-| `unlock` | Prompt password, spawn session helper that holds the unwrapped identity. |
+| `unlock` | Prompt password, spawn session helper that holds the unwrapped identity. After the helper is up, walks `~/cryptsync/` and encrypts any plaintext that landed while locked (the **unlock sweep**, ADR-012). |
 | `lock` | Scrub the held key. Auto-fires on logout and idle timeout. |
-| `encrypt <file> [--as <name>]` | Encrypt a plaintext file into `~/cryptsync/` to every current recipient. |
+| `encrypt <file> [--as <name>]` | Encrypt a plaintext file into `~/cryptsync/` to every current recipient. (Equivalent to dropping the file directly into `~/cryptsync/` while unlocked — the watcher auto-encrypts new plaintext per ADR-012.) |
 | `decrypt <file> -o <path>` | Decrypt from `~/cryptsync/` to a user-chosen path. Requires `unlock`. `-o` is mandatory. |
 | `forget <hostname>` | Revoke an envoy from the recipient set; triggers a local `recipients.txt` regeneration. Follow with `reencrypt` to re-key existing files. |
 | `leave [--purge] [--keep-identity] [--yes]` | Unenroll this user's cryptsync on this envoy. Drops a `~/.cryptsync/leave.pending` sentinel that the daemon picks up, signs + fans out to live peers, then scrubs local state per the flags. |
 | `reencrypt` | Force re-encrypt of every file in `~/cryptsync/` to the current recipient set. Requires `unlock`. |
-| `status` | Show local state: enrolled, recipient count, file count, session helper status. |
+| `status` | Show local state: enrolled, recipient count, file-count breakdown (ciphertext / plaintext / failed), session helper status. |
 
 ### `vigo swarm cryptsync leave`
 
@@ -65,10 +65,20 @@ Self-unenrollment. Three-stage handoff:
                    # within one reactor tick (≤30 s). Removed by the daemon.
   tombstones.json  # daemon-written user-readable mirror of the tombstone table
   leaves.json      # daemon-written user-readable mirror of the LEAVE record table
+  session.unlocked # sentinel containing the session helper's PID; written on
+                   # unlock, removed on lock/idle/parent-gone. Watcher reads
+                   # this to gate auto-encrypt-on-write (ADR-012).
+  staging/         # transient ciphertext stagers used by the auto-encrypt
+                   # path. Empty under normal operation; orphaned files from
+                   # a crash are 0600 user-owned and safe to delete.
 
 ~/cryptsync/
   foo.pdf          # age ciphertext at rest
   notes.md         # age ciphertext at rest
+  big.bin.20260429194712.failed
+                   # auto-encrypt failed unrecoverably for big.bin; rename
+                   # back to big.bin to retry. The watcher's resolve_event
+                   # filter ignores the .<ts>.failed shape so it doesn't loop.
 ```
 
 Plus agent-owned state at `/var/lib/vigo/swarm/cryptsync/<user>/{peers,tombstones,leaves}.json` (root-owned, 0600) — the canonical tables the daemon maintains. `tombstones.json` and `leaves.json` are mirrored to `~/.cryptsync/` (user-owned, 0600) on every save so `vigo swarm cryptsync list` and `status` can read them without sudo. `peers.json` has no user-side mirror today; the user CLI doesn't display peer state.
@@ -98,12 +108,17 @@ cryptsync password: ****
 
 **Daily use:**
 ```
+# Either explicit:
 $ vigo swarm cryptsync encrypt ~/Downloads/tax.pdf
 ✓ Encrypted to 3 recipient(s); wrote ~/cryptsync/tax.pdf
+
+# Or drop-and-forget (watcher auto-encrypts in place while unlocked):
+$ cp ~/Downloads/tax.pdf ~/cryptsync/
 
 $ vigo swarm cryptsync unlock
 cryptsync password: ****
 ✓ Unlocked. Session helper running until logout, lock, or 60 min idle.
+cryptsync sweep: 1 file(s) encrypted, 0 failed for dan
 
 $ vigo swarm cryptsync decrypt tax.pdf -o /tmp/tax.pdf
 ✓ Wrote 847293 bytes to /tmp/tax.pdf
@@ -111,6 +126,8 @@ $ vigo swarm cryptsync decrypt tax.pdf -o /tmp/tax.pdf
 $ vigo swarm cryptsync lock
 ✓ Locked. Key scrubbed.
 ```
+
+The sweep line after `unlock` reports any plaintext files encrypted on the way in — files that were dropped while the session was locked. While unlocked, the watcher auto-encrypts new plaintext immediately; the sweep only has work when something landed during the locked window. See [Auto-Encrypt-on-Write](../../engineering/subsystems/cryptsync.md#auto-encrypt-on-write) for the full rules (1 GiB cap, three-class failure handling, `<orig>.<ts>.failed` recovery).
 
 **Listing files:**
 ```

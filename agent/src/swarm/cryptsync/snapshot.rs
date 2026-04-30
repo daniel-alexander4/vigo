@@ -147,6 +147,16 @@ pub fn build_user_snapshot(user: &str, home: &Path) -> Result<UserSnapshot> {
             if !path.is_file() {
                 continue;
             }
+            // Skip ADR-012 `.failed` artifacts. These are permanent
+            // local-only files (the watcher's resolve_event filter
+            // also drops them, so they never push). Including them
+            // in the trait would inflate file_count / total_bytes /
+            // files_digest on the producing envoy and present as a
+            // fleet-wide divergence on the mesh page when in fact
+            // the file is not part of the synced corpus.
+            if super::auto_encrypt::is_failed_artifact_name(&name) {
+                continue;
+            }
             let meta = match entry.metadata() {
                 Ok(m) => m,
                 Err(_) => continue,
