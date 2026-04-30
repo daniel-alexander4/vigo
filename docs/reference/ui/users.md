@@ -1,18 +1,13 @@
 
 # Users
 
-The Users page (`/admin/users`) provides admin-only user account management for the Vigo web UI and API.
+User account management for the Vigo web UI and REST API. Vigo does not ship a dedicated `/admin/users` web page — user CRUD is CLI-only via `vigocli webusers`, which talks to the `/api/v1/users` REST endpoint. The role-aware nav in the web UI hides surfaces a user lacks permission for, but the user list itself is administered from the server host.
 
-## Overview
+## Where to manage users
 
-This page is only visible when authentication is enabled (basic, OIDC, or isowebauth mode). It lists all registered user accounts and allows admins to create, edit, and delete users.
-
-## Features
-
-- **User list** — table of all accounts with username, role (admin/viewer/compliance), authentication method, and creation date
-- **Create user** — add new user accounts with username, password, and role assignment
-- **Delete user** — remove user accounts (cannot delete the last admin)
-- **Set password** — reset a user's password (basic auth only)
+- **CLI** — `vigocli webusers list / create / delete` from the server host (or any host with `vigocli` and a configured server URL + admin token). See [`vigocli webusers`](../cli/webusers.md).
+- **REST** — `GET / POST / PUT / DELETE /api/v1/users`. The list and mutation endpoints require admin role; the bootstrap `POST /api/v1/users` is open until the first admin exists, then admin-gated.
+- **Setup page** (`/setup`) — first-run only. The web UI redirects here when the seeded admin account has no password set; the operator submits a password and the page disappears once setup is complete.
 
 ## Roles
 
@@ -26,6 +21,6 @@ The first user created during initial setup automatically receives the admin rol
 
 ## API Tokens
 
-Users can create API tokens for programmatic access. Tokens use the `vgot_` prefix and are stored as bcrypt hashes. See [Authentication](../../operations/authentication.md) for details.
+Users can create API tokens for programmatic access. Tokens use the `vgot_` prefix and are stored as bcrypt hashes. Token creation, listing, and deletion ride the `tokens.manage` permission and are scoped to the calling user — every authenticated role can manage its own tokens. See [Authentication](../../operations/authentication.md) for details.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

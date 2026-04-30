@@ -15,6 +15,8 @@ Ad-hoc command dispatch to connected agents.
 
 ### POST /api/v1/task
 
+**Permission:** `push.execute`
+
 Dispatch a command to matching envoys.
 
 **Request body:**
@@ -65,6 +67,8 @@ Dispatch a command to matching envoys.
 
 ### GET /api/v1/task
 
+**Permission:** `fleet.read`
+
 List recent task runs.
 
 **Query parameters:**
@@ -93,6 +97,8 @@ List recent task runs.
 ```
 
 ### GET /api/v1/task/{id}
+
+**Permission:** `fleet.read`
 
 Get a task run with per-target results.
 
@@ -127,6 +133,8 @@ Get a task run with per-target results.
 
 ### POST /api/v1/task/{id}/cancel
 
+**Permission:** `push.execute`
+
 Cancel a specific task run. Sets the task and its pending/dispatched targets to `cancelled` status.
 
 **Response:**
@@ -136,6 +144,8 @@ Cancel a specific task run. Sets the task and its pending/dispatched targets to 
 ```
 
 ### POST /api/v1/task/cancel-running
+
+**Permission:** `push.execute`
 
 Cancel all tasks stuck in `running` or `pending` state. Also cancels their pending/dispatched targets.
 
@@ -152,6 +162,8 @@ Cancel all tasks stuck in `running` or `pending` state. Also cancels their pendi
 Multi-step task orchestration with conditional branching.
 
 ### POST /api/v1/workflows
+
+**Permission:** `workflow.execute`
 
 Start a workflow execution.
 
@@ -174,6 +186,8 @@ Start a workflow execution.
 ```
 
 ### GET /api/v1/workflows
+
+**Permission:** `fleet.read`
 
 List recent workflow runs.
 
@@ -199,9 +213,13 @@ List recent workflow runs.
 
 ### GET /api/v1/workflows/{id}
 
+**Permission:** `fleet.read`
+
 Get a workflow run with per-step results.
 
 ### POST /api/v1/workflows/{id}/abort
+
+**Permission:** `workflow.execute`
 
 Abort a running workflow. Returns `{"status": "aborting"}`.
 
@@ -210,6 +228,8 @@ Abort a running workflow. Returns `{"status": "aborting"}`.
 ## Live Query
 
 ### POST /api/v1/query
+
+**Permission:** `query.execute`
 
 Query trait values from connected agents in real time.
 
@@ -252,6 +272,8 @@ Query trait values from connected agents in real time.
 
 ### POST /api/v1/ask
 
+**Permission:** `query.execute`
+
 Ask the AI assistant a question about your fleet.
 
 **Request body:**
@@ -293,6 +315,8 @@ Events are sent as server-sent events with JSON payloads:
 
 ### GET /api/v1/doctor
 
+**Permission:** `fleet.read`
+
 Health check endpoint that validates server subsystems.
 
 **Response:**
@@ -320,6 +344,8 @@ Check statuses: `pass`, `warn`, `fail`, `skip`. Check scope: `server` (Vigo itse
 ## License
 
 ### GET /api/v1/license
+
+**Permission:** `fleet.read`
 
 Returns current license status including stage, tier, envoy counts, and expiration.
 
@@ -353,6 +379,8 @@ The `tier` field is `"free"`, `"standard"`, `"growth"`, or `"enterprise"`. Omitt
 
 ### GET /api/v1/envoys/{hostname}/traits
 
+**Permission:** `fleet.read`
+
 Returns the latest collected traits for a envoy by hostname.
 
 **Response:**
@@ -373,6 +401,8 @@ Returns the latest collected traits for a envoy by hostname.
 ## Inventory
 
 ### GET /api/v1/inventory
+
+**Permission:** `fleet.read`
 
 Query envoys by trait values.
 
@@ -405,25 +435,37 @@ Query envoys by trait values.
 
 ### GET /api/v1/spanner/status
 
+**Permission:** Authenticated (route-level gate pending — admin recommended in production)
+
 Returns spanner role and spoke statuses (hub mode only).
 
 ### GET /api/v1/spanner/spokes/{id}
+
+**Permission:** Authenticated (route-level gate pending)
 
 Returns detailed status for a single spoke.
 
 ### GET /api/v1/spanner/spokes/{id}/envoys
 
+**Permission:** Authenticated (route-level gate pending)
+
 List envoys on a specific spoke.
 
 ### GET /api/v1/spanner/spokes/{id}/runs
+
+**Permission:** Authenticated (route-level gate pending)
 
 List recent runs on a specific spoke.
 
 ### POST /api/v1/spanner/spokes/{id}/push
 
+**Permission:** Authenticated (route-level gate pending — admin recommended)
+
 Force-push to envoys on a specific spoke.
 
 ### POST /api/v1/spanner/reassign
+
+**Permission:** Authenticated (route-level gate pending — admin recommended)
 
 
 Reassign a envoy from one spoke to another.
@@ -440,6 +482,8 @@ Reassign a envoy from one spoke to another.
 
 ### POST /api/v1/spanner/spokes/{id}/drain
 
+**Permission:** Authenticated (route-level gate pending — admin recommended)
+
 Drain all envoys from a spoke (move to target spoke or auto-route by patterns).
 
 ---
@@ -447,6 +491,8 @@ Drain all envoys from a spoke (move to target spoke or auto-route by patterns).
 ## Config
 
 ### GET /api/v1/config/trace
+
+**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
 
 Trace config resolution for a hostname. Shows the full directory inheritance chain with vars and override markers at each level, which modules came from which files or roles, how roles expanded, and where each variable's final value originated.
 
@@ -512,11 +558,15 @@ If no entry matches, `matched` is `false` and other fields are omitted.
 
 ### GET /api/v1/config/tree
 
+**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+
 Returns the directory inheritance structure for visualization. Shows `common.vgo` files at each level, leaf entries with their match patterns, and accumulated module totals.
 
 **Response:** A tree of nodes with `dir`, `file`, `modules`, `roles`, `match`, `total`, `excluded`, and `children` fields.
 
 ### GET /api/v1/config/search
+
+**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
 
 Search envoy entries by match pattern, module name, or var name. Returns matching entries with their full inheritance chain and accumulated modules.
 
@@ -556,6 +606,8 @@ At least one parameter is required.
 
 ### GET /api/v1/audit
 
+**Permission:** `audit.read`
+
 Unified audit log across config publishes, task runs, and workflows.
 
 **Query parameters:**
@@ -585,6 +637,8 @@ Unified audit log across config publishes, task runs, and workflows.
 
 ### GET /api/v1/audit/verify
 
+**Permission:** `audit.read`
+
 Verifies the SHA-256 hash chain integrity of the audit log.
 
 **Response:**
@@ -610,6 +664,8 @@ If the chain is broken:
 ```
 
 ### POST /api/v1/emergency-access
+
+**Permission:** Admin role
 
 Record an emergency access event in the tamper-evident audit chain (HIPAA 164.312(a)(2)(ii)). Used by `vigocli auth emergency-access` for break-glass scenarios.
 
@@ -639,6 +695,8 @@ Record an emergency access event in the tamper-evident audit chain (HIPAA 164.31
 
 ### GET /api/v1/config/publishes
 
+**Permission:** `fleet.read`
+
 List recent config publish records.
 
 **Query parameters:**
@@ -648,6 +706,8 @@ List recent config publish records.
 | `limit` | `20` | Maximum records (max 100) |
 
 ### POST /api/v1/config/publishes
+
+**Permission:** `config.publish`
 
 Record a config publish for audit trail.
 
@@ -664,6 +724,8 @@ Record a config publish for audit trail.
 
 ### GET /api/v1/config/publishes/{id}
 
+**Permission:** `fleet.read`
+
 
 Get details for a specific config publish, including the diff summary.
 
@@ -672,6 +734,8 @@ Get details for a specific config publish, including the diff summary.
 ## Config Versions and Rollback
 
 ### GET /api/v1/config/versions
+
+**Permission:** `fleet.read`
 
 List available config snapshots for rollback.
 
@@ -685,6 +749,8 @@ List available config snapshots for rollback.
 
 ### POST /api/v1/config/rollback/{version}
 
+**Permission:** `config.rollback`
+
 Rollback to a previous config snapshot.
 
 ---
@@ -692,6 +758,8 @@ Rollback to a previous config snapshot.
 ## Config Freeze
 
 ### POST /api/v1/config/freeze
+
+**Permission:** `config.publish`
 
 Set a global config publish freeze.
 
@@ -705,13 +773,19 @@ Set a global config publish freeze.
 
 ### POST /api/v1/config/unfreeze
 
+**Permission:** `config.publish`
+
 Remove the config publish freeze.
 
 ### POST /api/v1/config/reload
 
+**Permission:** `config.publish`
+
 Re-read all config files from disk. Called automatically by `vigocli config publish`.
 
 ### POST /api/v1/config/retract
+
+**Permission:** `config.publish`
 
 Generate retract modules for removed modules. Called automatically by `vigocli config publish` when `publish.retraction.enabled` and `ai.enabled` are both true. Can also be called directly.
 
@@ -751,6 +825,8 @@ These endpoints are only active when `publish.approval_required: true` in `serve
 
 ### POST /api/v1/config/changes
 
+**Permission:** `config.publish`
+
 Create a pending config change. The change must be approved by a different admin before it takes effect.
 
 **Request body:**
@@ -776,6 +852,8 @@ Create a pending config change. The change must be approved by a different admin
 
 ### GET /api/v1/config/changes
 
+**Permission:** `fleet.read`
+
 List pending config changes.
 
 **Response:**
@@ -796,9 +874,13 @@ List pending config changes.
 
 ### GET /api/v1/config/changes/{id}
 
+**Permission:** `fleet.read`
+
 Get a single config change, including the full diff summary.
 
 ### POST /api/v1/config/changes/{id}/approve
+
+**Permission:** `config.publish`
 
 Approve and activate a pending config change. Returns 403 if the approver is the same user who requested the change.
 
@@ -814,6 +896,8 @@ Approve and activate a pending config change. Returns 403 if the approver is the
 ```
 
 ### POST /api/v1/config/changes/{id}/reject
+
+**Permission:** `config.publish`
 
 Reject a pending config change.
 
@@ -842,6 +926,8 @@ Reject a pending config change.
 
 ### POST /api/v1/secrets/rotated
 
+**Permission:** Admin role (internal — called by the watcher subsystem)
+
 Notify the server that a secret has been changed. Triggers `watch_secret` resources on affected envoys at their next check-in. Called automatically by `vigocli secrets set`.
 
 **Request body:**
@@ -862,6 +948,8 @@ Notify the server that a secret has been changed. Triggers `watch_secret` resour
 ```
 
 ### POST /api/v1/secrets/accessed
+
+**Permission:** Admin role (internal — called by the watcher subsystem)
 
 Record an audit trail entry when a secret is revealed via CLI. Called automatically by `vigocli secrets reveal`.
 
@@ -889,6 +977,8 @@ The event is recorded in the tamper-evident audit chain as type `secret_accessed
 
 ### PUT /api/v1/envoys/{id}/tags
 
+**Permission:** `fleet.write` (rides the gRPC gateway; gate enforced by the gRPC interceptor)
+
 Set tags on a envoy.
 
 **Request body:**
@@ -901,6 +991,8 @@ Set tags on a envoy.
 
 ### GET /api/v1/envoys/{id}/tags
 
+**Permission:** `fleet.read`
+
 Get tags for a envoy.
 
 ---
@@ -908,6 +1000,8 @@ Get tags for a envoy.
 ## Envoy Maintenance
 
 ### PUT /api/v1/envoys/{id}/maintenance
+
+**Permission:** `fleet.write`
 
 Set a maintenance window for a envoy.
 
@@ -921,6 +1015,8 @@ Set a maintenance window for a envoy.
 
 ### DELETE /api/v1/envoys/{id}/maintenance
 
+**Permission:** `fleet.write`
+
 Clear the maintenance window.
 
 ---
@@ -928,6 +1024,8 @@ Clear the maintenance window.
 ## Envoy Compliance
 
 ### GET /api/v1/envoys/{id}/compliance
+
+**Permission:** Authenticated (route-level gate pending — `compliance.read` recommended)
 
 Returns the current compliance status for a envoy.
 
@@ -953,6 +1051,8 @@ Available only when the deployment uses the `local` secrets backend — under an
 Every mutation records an entry in the [tamper-evident audit chain](../../compliance/tamper-evident-audit.md) with the doc's SHA-256.
 
 ### POST /api/v1/compliance/docs
+
+**Permission:** `compliance.docs.write`
 
 Upload a new artifact.
 
@@ -985,31 +1085,45 @@ Size caps come from `compliance.docs.{max_doc_bytes, max_per_framework_bytes, ma
 
 ### GET /api/v1/compliance/docs
 
+**Permission:** `compliance.read`
+
 List active (non-soft-deleted) doc metadata. Optional filter by `?framework=&control_id=` to narrow to docs attached to a specific control.
 
 **Response:** `{"docs": [{...}, {...}]}`
 
 ### GET /api/v1/compliance/docs/{id}
 
+**Permission:** `compliance.read`
+
 Single-doc metadata. Soft-deleted docs are still readable here so audit history remains queryable.
 
 ### GET /api/v1/compliance/docs/{id}/download
+
+**Permission:** `compliance.read`
 
 Stream the decrypted doc. Sets `Content-Type` from the stored `mime_type`, `Content-Disposition: attachment; filename=...`, and `X-Compliance-Doc-Sha256` for integrity verification at the client.
 
 ### PUT /api/v1/compliance/docs/{id}
 
+**Permission:** `compliance.docs.write`
+
 Replace an existing doc. Same multipart shape as `POST`. The new doc inherits the predecessor's `(framework, control_id)` link set unless `links` is provided. The predecessor stays in place with `replaced_at` + `replaced_by_id` populated so audit history points to the new revision.
 
 ### DELETE /api/v1/compliance/docs/{id}
+
+**Permission:** `compliance.docs.write`
 
 Soft-delete: hides the doc from list/by-control views but keeps the row + ciphertext on disk so historical audit bundles can still verify it. Returns `409 Conflict` if already soft-deleted.
 
 ### POST /api/v1/compliance/docs/{id}/purge
 
+**Permission:** `compliance.docs.purge`
+
 Physical purge: removes ciphertext from disk and the metadata row from the database. Cascades through `compliance_doc_links`. Reserved for the `compliance.docs.purge` permission.
 
 ### GET /api/v1/compliance/docs/{id}/links
+
+**Permission:** `compliance.read`
 
 List every `(framework, control_id)` pair the doc is attached to.
 
@@ -1027,6 +1141,8 @@ List every `(framework, control_id)` pair the doc is attached to.
 
 ### POST /api/v1/compliance/docs/{id}/links
 
+**Permission:** `compliance.docs.write`
+
 Attach an existing doc to an additional `(framework, control_id)`. Idempotent — duplicate links are no-ops.
 
 **Request body:**
@@ -1036,6 +1152,8 @@ Attach an existing doc to an additional `(framework, control_id)`. Idempotent �
 ```
 
 ### DELETE /api/v1/compliance/docs/{id}/links/{framework}/{controlID}
+
+**Permission:** `compliance.docs.write`
 
 Detach a doc from a single `(framework, control_id)` without touching the underlying file. The doc may still be linked to other controls.
 
@@ -1050,6 +1168,8 @@ Permission gate: `audit.read` is mandatory; `compliance.read` is checked separat
 The download itself records a tamper-evident audit-chain entry (`compliance.bundle.download`).
 
 ### GET /api/v1/report/audit-bundle/{slug}
+
+**Permission:** `compliance.read`
 
 Stream the zip.
 
@@ -1087,9 +1207,13 @@ Every line should print `<path>: OK`. A mismatch indicates the bundle was tamper
 
 ### POST /api/v1/envoys/{id}/update
 
+**Permission:** `fleet.write`
+
 Force an immediate check-in for a specific envoy. The envoy will receive the update at its next poll cycle.
 
 ### POST /api/v1/envoys/update
+
+**Permission:** `fleet.write`
 
 Force an immediate check-in for all envoys.
 
@@ -1100,6 +1224,8 @@ Force an immediate check-in for all envoys.
 User account management. Requires admin authentication (except first-user bootstrap).
 
 ### GET /api/v1/users
+
+**Permission:** Admin role
 
 List all user accounts. Admin only.
 
@@ -1121,6 +1247,8 @@ List all user accounts. Admin only.
 
 ### POST /api/v1/users
 
+**Permission:** Admin role (open until the first admin exists, then admin-gated)
+
 Create a new user account. The first user created is automatically assigned the admin role regardless of the request.
 
 **Request body:**
@@ -1135,14 +1263,20 @@ Create a new user account. The first user created is automatically assigned the 
 
 ### PUT /api/v1/users/{id}
 
+**Permission:** Admin role
+
 Update a user account (role, password). Admin only.
 
 
 ### DELETE /api/v1/users/{id}
 
+**Permission:** Admin role
+
 Delete a user account. Admin only. Cannot delete the last admin.
 
 ### POST /api/v1/users/totp/setup
+
+**Permission:** Authenticated (own account)
 
 Generate a TOTP secret for the authenticated user. Returns the `otpauth://` URL for QR code scanning. TOTP is not yet enabled until confirmed via `/totp/confirm`.
 
@@ -1155,6 +1289,8 @@ Generate a TOTP secret for the authenticated user. Returns the `otpauth://` URL 
 ```
 
 ### POST /api/v1/users/totp/confirm
+
+**Permission:** Authenticated (own account)
 
 Confirm TOTP setup by providing a valid 6-digit code from the authenticator app. This enables TOTP for the user and returns one-time recovery codes.
 
@@ -1176,6 +1312,8 @@ Confirm TOTP setup by providing a valid 6-digit code from the authenticator app.
 ```
 
 ### POST /api/v1/users/totp/disable
+
+**Permission:** Authenticated (own account)
 
 Disable TOTP for the authenticated user. Requires a valid TOTP code or recovery code.
 
@@ -1204,6 +1342,8 @@ Create and manage API tokens for programmatic access. Tokens use the `vgot_` pre
 
 ### POST /api/v1/auth/tokens
 
+**Permission:** Authenticated (own account)
+
 Create a new API token. Requires authentication.
 
 **Request body:**
@@ -1230,9 +1370,13 @@ The plaintext token is only returned once at creation time.
 
 ### GET /api/v1/auth/tokens
 
+**Permission:** Authenticated (own account)
+
 List API tokens for the authenticated user. Token values are not returned.
 
 ### DELETE /api/v1/auth/tokens/{id}
+
+**Permission:** Authenticated (own account)
 
 Revoke an API token.
 
@@ -1241,6 +1385,8 @@ Revoke an API token.
 ## Preview
 
 ### GET /api/v1/preview
+
+**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
 
 Multi-node impact analysis showing which envoys would be affected by changes to a module.
 
@@ -1269,6 +1415,8 @@ Multi-node impact analysis showing which envoys would be affected by changes to 
 
 ### GET /api/v1/openapi.json
 
+**Permission:** Authenticated (route-level gate pending)
+
 Returns the OpenAPI specification as JSON.
 
 ---
@@ -1276,6 +1424,8 @@ Returns the OpenAPI specification as JSON.
 ## Health Check
 
 ### GET /healthz
+
+**Permission:** Public (no authentication)
 
 Returns a simple health status. Useful for load balancer probes and monitoring.
 
@@ -1294,6 +1444,8 @@ The `spoke_id` field is populated when the server runs in spoke mode.
 These endpoints provide direct database inspection and maintenance. All endpoints require admin authentication.
 
 ### GET /api/v1/db/stats
+
+**Permission:** Admin role
 
 Returns database statistics including file size, WAL size, page count, page size, and per-table row counts.
 
@@ -1316,6 +1468,8 @@ Returns database statistics including file size, WAL size, page count, page size
 
 ### GET /api/v1/db/tables
 
+**Permission:** Admin role
+
 Returns all tables with their row counts.
 
 **Response:**
@@ -1330,6 +1484,8 @@ Returns all tables with their row counts.
 ```
 
 ### GET /api/v1/db/integrity
+
+**Permission:** Admin role
 
 Runs `PRAGMA integrity_check` and `PRAGMA foreign_key_check` (SQLite) or a connection ping (other drivers).
 
@@ -1348,6 +1504,8 @@ If foreign key violations are found, a `foreign_key_details` array is included.
 
 ### POST /api/v1/db/vacuum
 
+**Permission:** Admin role
+
 Runs `VACUUM` to reclaim unused space. SQLite only. Returns the database file size before and after.
 
 **Response:**
@@ -1363,6 +1521,8 @@ Runs `VACUUM` to reclaim unused space. SQLite only. Returns the database file si
 
 ### POST /api/v1/db/checkpoint
 
+**Permission:** Admin role
+
 Forces a WAL checkpoint with `TRUNCATE` mode. SQLite only.
 
 **Response:**
@@ -1376,6 +1536,8 @@ Forces a WAL checkpoint with `TRUNCATE` mode. SQLite only.
 ```
 
 ### POST /api/v1/db/query
+
+**Permission:** Admin role
 
 Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `CREATE`, `ATTACH`, `DETACH`, `REINDEX`, `VACUUM`, `PRAGMA`) are rejected with 403.
 
@@ -1423,6 +1585,8 @@ Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `
 Compliance evidence endpoints for integration with SIEM, CMDB, and OSCAL tools. Each endpoint must be individually enabled in `server.yaml` under the `export:` section. Disabled endpoints return 404.
 
 ### GET /api/v1/export/siem
+
+**Permission:** `fleet.read`
 
 Returns a JSON array of SIEM events derived from run results.
 
@@ -1472,6 +1636,8 @@ Returns a JSON array of SIEM events derived from run results.
 | `source` | string | Always `"vigo"` |
 
 ### GET /api/v1/export/cmdb
+
+**Permission:** `fleet.read`
 
 Returns a JSON array of CMDB records from the FleetIndex (zero DB queries).
 
@@ -1528,6 +1694,8 @@ Returns a JSON array of CMDB records from the FleetIndex (zero DB queries).
 
 ### POST /api/v1/backup/snapshot
 
+**Permission:** `backup.manage` (rides the gRPC gateway; gate enforced by the gRPC interceptor)
+
 Create an on-demand backup snapshot. Requires admin authentication.
 
 **Response (201 Created):**
@@ -1541,6 +1709,8 @@ Create an on-demand backup snapshot. Requires admin authentication.
 ```
 
 ### GET /api/v1/backup/download
+
+**Permission:** `backup.manage` (rides the gRPC gateway; gate enforced by the gRPC interceptor)
 
 Download the latest backup archive as a `.tar.gz` file. Requires admin authentication.
 
@@ -1558,6 +1728,8 @@ Download the latest backup archive as a `.tar.gz` file. Requires admin authentic
 ---
 
 ### GET /api/v1/export/oscal
+
+**Permission:** `compliance.read`
 
 Returns a minimal valid OSCAL Assessment Results JSON envelope (v1.1.2). The `findings` array is currently empty; future versions will map Vigo compliance data to OSCAL control findings.
 
@@ -1593,6 +1765,8 @@ Per-envoy and fleet-wide risk scores computed from security scan traits, converg
 
 ### GET /api/v1/risk
 
+**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+
 Return the fleet-wide risk summary with distribution and top riskiest envoys.
 
 **Response (200 OK):**
@@ -1626,6 +1800,8 @@ Return the fleet-wide risk summary with distribution and top riskiest envoys.
 
 ### GET /api/v1/risk/{envoyID}
 
+**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+
 Return the risk score breakdown for a single envoy.
 
 **Response (200 OK):**
@@ -1648,6 +1824,8 @@ Return the risk score breakdown for a single envoy.
 **Error (404):** `{"error": "envoy not found"}`
 
 ### GET /api/v1/risk/history
+
+**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
 
 Daily risk posture snapshots for trend analysis.
 
@@ -1694,6 +1872,8 @@ Daily risk posture snapshots for trend analysis.
 
 ### GET /api/v1/risk/insurance
 
+**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+
 Cyber insurance attestation report in JSON format. Includes a per-report identifier, organization name (from `branding.org_name`), the authenticated user who prepared it, the 90-day attestation period, current fleet risk posture, a daily trend series, and fleet composition.
 
 **Query parameters:**
@@ -1734,6 +1914,8 @@ The `report_id` field is a unique identifier per download (format `VIGO-INS-<YYY
 
 ### GET /api/v1/risk/insurance.html
 
+**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
+
 Formal HTML cyber insurance attestation. Self-contained, suitable for direct viewing, emailing as an attachment, or printing. The document has a cover block with the organization name, a meta-data block (report ID, attestation period, preparer), an executive statement, five numbered sections (current posture, highest-risk assets, 90-day trend, fleet composition, methodology), and an attestation signatory block with four blank signature lines.
 
 **Theme behavior:** the page follows the viewer's `prefers-color-scheme` on screen (dark background in dark browser sessions, light background in light sessions), and forces black-on-white when printed or saved as PDF via `@media print` — so the attachment-delivered version always looks like a formal black-ink document regardless of viewer preference.
@@ -1747,6 +1929,8 @@ Formal HTML cyber insurance attestation. Self-contained, suitable for direct vie
 **Response:** HTML page with `Content-Type: text/html`.
 
 ### GET /api/v1/risk/insurance.pdf
+
+**Permission:** Authenticated (route-level gate pending — `fleet.read` recommended)
 
 Native PDF version of the cyber insurance attestation, rendered server-side via WeasyPrint. Use this endpoint when emailing the attestation to an underwriter or attaching it to a case file — delivers a real `.pdf` with consistent cross-client rendering, no "save as PDF" dance.
 
@@ -1777,6 +1961,8 @@ The PDF uses the same underlying HTML + print CSS as the `.html` endpoint, so co
 ## CVE Impact Search
 
 ### GET /api/v1/cve/{cveID}
+
+**Permission:** `fleet.read`
 
 Search for a specific CVE across the fleet. Returns all affected hosts with package details from security scan traits.
 
