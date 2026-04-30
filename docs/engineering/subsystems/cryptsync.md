@@ -216,7 +216,7 @@ Lose the password on every envoy and the data is unrecoverable. Phase 1 has no k
 
 Every enrolled envoy ships a `cryptsync` trait on each check-in carrying per-user state: file count, `recent_files: [last 20 by mtime]`, ciphertext SHA-256 digest, tombstone count + recent deletions, known peers (hostname + pubkey + sign_pubkey), and the current session-helper-unlocked signal. The server-side aggregator (`server/cryptsyncmesh/`) joins these across the fleet to power the `/cryptsync` page.
 
-The `/filesync`, `/cryptsync`, `/gitmirror` pages and every mesh endpoint (`/api/v1/swarm/filesync/*`, `/api/v1/swarm/cryptsync/*`, `/api/v1/swarm/gitmirror/fleet`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't viewer-appropriate. Viewers get a 403 on direct access and don't see the nav links. The legacy `/mesh` URL 301-redirects to `/filesync` (or `/cryptsync` with `?tab=crypt`) for one release while muscle memory migrates.
+The `/filesync`, `/cryptsync`, `/gitmirror` pages and every mesh endpoint (`/api/v1/swarm/filesync/*`, `/api/v1/swarm/cryptsync/*`, `/api/v1/swarm/gitmirror/fleet`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't appropriate for non-admin roles. Viewer and compliance-role users get a 403 on direct access and don't see the nav links. The legacy `/mesh` URL 301-redirects to `/filesync` (or `/cryptsync` with `?tab=crypt`) for one release while muscle memory migrates.
 
 Operator-facing signals surfaced on that page:
 

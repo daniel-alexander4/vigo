@@ -90,7 +90,7 @@ Then publish and verify: `vigocli config publish && vigocli report soc2`
 |-----------|-------|--------|----------|
 | CC6.1 | Logical Access Security | Satisfied | Authentication required (basic/OIDC/isowebauth), TOTP MFA, 15-min idle timeout |
 | CC6.2 | User Registration and Authorization | Satisfied | Per-user accounts with unique UUIDs, role-based defaults, admin approval required |
-| CC6.3 | Role-Based Access and Least Privilege | Satisfied | 13 permissions: fleet.read, config.publish, users.manage, etc. |
+| CC6.3 | Role-Based Access and Least Privilege | Satisfied | 16 permissions: fleet.read, config.publish, users.manage, compliance.read, compliance.docs.write, etc. |
 | CC6.6 | Restriction of Access to System Assets | Satisfied | File executor enforces permissions/ownership; firewall executor enforces network access |
 | CC6.7 | Management of Credentials | Satisfied | 12-char complexity, bcrypt hashing, AES-256-GCM storage, API tokens (vgot_ prefix) |
 | CC6.8 | Prevention of Unauthorized Software | Satisfied | Package pinning, repository enforcement prevents unauthorized changes |

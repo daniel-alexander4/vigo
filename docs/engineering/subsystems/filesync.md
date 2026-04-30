@@ -113,7 +113,7 @@ Unreachable cross_subnet_peers log a debug-level error and retry next cycle; tra
 
 Every envoy with per-user filesync state on disk ships a `filesync` trait containing the file set (sha + size + mtime), tombstones, and a stable 16-byte digest over the full-file-set. The server-side aggregator (`server/swarm/filesyncmesh/`) joins these across the fleet for the `/filesync` page.
 
-The `/filesync`, `/cryptsync`, `/gitmirror` pages and every mesh endpoint (`/api/v1/swarm/filesync/*`, `/api/v1/swarm/cryptsync/*`, `/api/v1/swarm/gitmirror/fleet`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't viewer-appropriate. Viewers get a 403 on direct access and don't see the nav links. The legacy `/mesh` URL 301-redirects to `/filesync` (or `/cryptsync` with `?tab=crypt`) for one release while muscle memory migrates.
+The `/filesync`, `/cryptsync`, `/gitmirror` pages and every mesh endpoint (`/api/v1/swarm/filesync/*`, `/api/v1/swarm/cryptsync/*`, `/api/v1/swarm/gitmirror/fleet`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't appropriate for non-admin roles. Viewer and compliance-role users get a 403 on direct access and don't see the nav links. The legacy `/mesh` URL 301-redirects to `/filesync` (or `/cryptsync` with `?tab=crypt`) for one release while muscle memory migrates.
 
 Surfaces:
 

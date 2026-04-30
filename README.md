@@ -443,7 +443,7 @@ Three pluggable methods:
 - **oidc** — OpenID Connect SSO
 - **isowebauth** — SSH key signing via desktop app
 
-API tokens (`vgot_` prefix) for programmatic access. Two roles: admin and viewer. SCS sessions backed by SQLite.
+API tokens (`vgot_` prefix) for programmatic access. Three roles: admin, viewer, and compliance. SCS sessions backed by SQLite.
 
 ## Secrets
 

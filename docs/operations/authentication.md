@@ -242,7 +242,7 @@ Beyond the role labels, each user has a permission set stored as a JSON array. A
 
 The `audit.read` exclusion on the compliance role is deliberate: the raw hash-chained audit log is admin-and-viewer-only, while the audit-bundle export (a per-framework compliance evidence artifact built from the same data) rides `compliance.read` so the role can download what an auditor asks for without being handed the entire audit stream.
 
-Custom permission sets can be assigned per-user via the REST API to create roles between viewer and admin (e.g., an operator who can dispatch tasks but not manage users).
+Custom permission sets can be assigned per-user via the REST API to tailor access outside the three named roles (e.g., an operator who can dispatch tasks but not manage users, or a viewer who can also publish config).
 
 ## Two-Factor Authentication (TOTP)
 

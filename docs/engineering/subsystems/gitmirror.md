@@ -441,7 +441,7 @@ Manual cleanup is available via `vigo swarm gitmirror prune` (added in Phase 4 o
 
 ## Observability (`/gitmirror` UI)
 
-Every envoy's `gitmirror` trait (publisher sources + receiver mirrors) is joined across the fleet by `server/gitmirrormesh/` and surfaced at `/gitmirror` (list of labels) and `/gitmirror/{label}` (per-label mirror table, sidecar config, publisher metadata). The page is admin-only — fleet-wide per-user repo inventory exposes project names and filesystem paths that aren't viewer-appropriate.
+Every envoy's `gitmirror` trait (publisher sources + receiver mirrors) is joined across the fleet by `server/gitmirrormesh/` and surfaced at `/gitmirror` (list of labels) and `/gitmirror/{label}` (per-label mirror table, sidecar config, publisher metadata). The page is admin-only — fleet-wide per-user repo inventory exposes project names and filesystem paths that aren't appropriate for non-admin roles. Viewer and compliance-role users get a 403 on direct access.
 
 The page opens with a health banner + problems list covering orphan mirrors (peer holds a mirror the publisher no longer selects), stale mirrors (not refreshed in >30 days), and pending mirrors (selected but not yet materialized). The JSON shape is available at `GET /api/v1/swarm/gitmirror/fleet`.
 

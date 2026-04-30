@@ -32,7 +32,7 @@ The registry lives in [`server/compliance/appcontrols.go`](https://github.com/ex
 
 ## Permissions
 
-Reading the page requires `compliance.read`, which is granted to both `admin` and `viewer` roles by default. There are no mutating endpoints on this surface.
+Reading the page requires `compliance.read`, which is granted to all three roles (`admin`, `viewer`, `compliance`) by default. There are no mutating endpoints on this surface.
 
 ## What this page is *not*
 

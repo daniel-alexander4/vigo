@@ -53,7 +53,7 @@ vigocli report gdpr --format html --output gdpr-report.html
 |---------|----------------|
 | Encryption at rest | AES-256-GCM for secrets and backups |
 | Encryption in transit | mTLS (TLS 1.3) on all traffic |
-| Access control | RBAC with 13 permissions, TOTP MFA |
+| Access control | RBAC with 16 permissions, TOTP MFA |
 | Audit trail | Tamper-evident SHA-256 hash chain |
 | Backup and recovery | Litestream continuous replication, encrypted snapshots |
 | Integrity verification | ED25519 signatures, hash chain verification |
