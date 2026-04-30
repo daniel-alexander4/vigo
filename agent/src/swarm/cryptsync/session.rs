@@ -168,12 +168,23 @@ fn parse_ok_or_err(line: &str) -> Result<Vec<u8>> {
 /// Spawn the session helper daemon from the `unlock` CLI path.
 ///
 /// The helper runs as `vigo swarm cryptsync-session-daemon --parent-pid X
-/// --idle-mins M` with `setsid()` so it outlives the shell's
-/// `vigo swarm cryptsync unlock` child. The unwrapped identity is piped in via
-/// stdin as the bech32 `AGE-SECRET-KEY-1...` string followed by a
-/// newline, then stdin is closed. The daemon reads once and zeroizes
-/// its buffer.
-pub fn spawn_helper(identity: &Identity, parent_pid: u32, idle_mins: u32) -> Result<()> {
+/// --idle-mins M --home <path>` with `setsid()` so it outlives the
+/// shell's `vigo swarm cryptsync unlock` child. The unwrapped identity is
+/// piped in via stdin as the bech32 `AGE-SECRET-KEY-1...` string
+/// followed by a newline, then stdin is closed. The daemon reads
+/// once and zeroizes its buffer.
+///
+/// `home` is the user's home directory — passed in so the helper can
+/// drop a session-unlocked sentinel under `<home>/.cryptsync/` for
+/// the root-context watcher to consult (ADR-012). Resolving home from
+/// the helper's own getuid would also work but introduces an
+/// unnecessary passwd-lookup step in the daemon path.
+pub fn spawn_helper(
+    identity: &Identity,
+    parent_pid: u32,
+    idle_mins: u32,
+    home: &std::path::Path,
+) -> Result<()> {
     use std::os::unix::process::CommandExt;
     use std::process::{Command, Stdio};
 
@@ -204,6 +215,8 @@ pub fn spawn_helper(identity: &Identity, parent_pid: u32, idle_mins: u32) -> Res
         .arg(parent_pid.to_string())
         .arg("--idle-mins")
         .arg(idle_mins.to_string())
+        .arg("--home")
+        .arg(home.as_os_str())
         .stdin(Stdio::piped())
         .stdout(Stdio::from(log_file))
         .stderr(Stdio::from(log_stderr));
@@ -261,6 +274,11 @@ pub async fn daemon_main(args: Vec<String>) -> Result<()> {
     let idle_mins = arg_value(&args, "--idle-mins")
         .unwrap_or_else(|_| "60".into())
         .parse::<u32>()?;
+    // --home is optional only for forward-compat with older spawn paths
+    // (none in current codebase). When present, the session-unlocked
+    // sentinel is written/cleaned at <home>/.cryptsync/session.unlocked
+    // so the watcher can detect lock state.
+    let home_arg = arg_value(&args, "--home").ok().map(PathBuf::from);
 
     // Read the identity from stdin. Expect one line, bech32-format
     // "AGE-SECRET-KEY-1..." followed by newline then EOF.
@@ -298,6 +316,30 @@ pub async fn daemon_main(args: Vec<String>) -> Result<()> {
     // Write PID file.
     std::fs::write(&pid_path, format!("{}\n", process::id())).ok();
 
+    // Drop the session-unlocked sentinel under the user's home so the
+    // root-context watcher can detect lock state. Best-effort: a
+    // failure here just means auto-encrypt-on-write stays off until
+    // the next unlock, which is the same posture as a session never
+    // having been unlocked. Caller's lifecycle invariant is "if the
+    // sentinel exists with a live PID, the helper is up."
+    let unlocked_sentinel = home_arg
+        .as_ref()
+        .map(|h| super::config::session_unlocked_path(h));
+    if let Some(path) = unlocked_sentinel.as_ref() {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let _ = std::fs::write(path, format!("{}\n", process::id()));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(
+                path,
+                std::fs::Permissions::from_mode(0o600),
+            );
+        }
+    }
+
     let listener = tokio::net::UnixListener::from_std(listener)
         .context("tokio UnixListener")?;
     let result = run_server(listener, identity, parent_pid, idle_mins).await;
@@ -305,6 +347,9 @@ pub async fn daemon_main(args: Vec<String>) -> Result<()> {
     // Cleanup regardless of exit reason.
     let _ = std::fs::remove_file(&sock_path);
     let _ = std::fs::remove_file(&pid_path);
+    if let Some(path) = unlocked_sentinel.as_ref() {
+        let _ = std::fs::remove_file(path);
+    }
     result
 }
 

@@ -23,8 +23,8 @@ Cryptsync is a **pure peer-to-peer** feature. The Vigo server plays no role in c
 
 1. **Enroll.** On each envoy that should hold the user's encrypted files, the user's usercrate applies `cryptsync: true`. The user executor drops `~/.cryptsync/enroll.pending`. The next time the user runs any `vigo swarm cryptsync *` verb, the CLI prompts for the cryptsync password and generates a fresh age identity on that envoy. The identity is wrapped with the password (Argon2id + XChaCha20-Poly1305) and stored at `~/.cryptsync/identity.age` with mode 0600. The public key is written to `~/.cryptsync/recipients.txt` and begins appearing in UDP announcements.
 2. **Discover.** Every 30 seconds, each enrolled envoy multicasts a compact announcement on `224.0.0.44:1533` — `{machine, user, pubkey, emitted_at, port}`. Other envoys running cryptsync for the same user receive the announcement and add the peer to `/var/lib/vigo/swarm/cryptsync/<user>/peers.json`. `~/.cryptsync/recipients.txt` is regenerated from the peer table so future encrypts reach the new peer automatically.
-3. **Encrypt.** The user runs `vigo swarm cryptsync encrypt ~/Downloads/foo.pdf`. The CLI reads `recipients.txt`, age-encrypts the plaintext to every listed public key, and writes the ciphertext atomically to `~/cryptsync/foo.pdf`. The output lands as **mode 0600 owned by the invoking user** even though the binary runs in a root context — `chmod 0600` + `chown` to the user (resolved via `SUDO_USER` or `getuid()`) happens before the atomic rename exposes the final name. No password prompt — encryption uses public keys only.
-4. **Fan out.** The agent daemon watches `~/cryptsync/` via inotify (Linux) / kqueue (macOS). On a new or modified file, the pusher POSTs the ciphertext to every live peer on `https://<peer>:1531/cryptsync/push/<user>/<filename>`, plus every host listed in the user's `cross_subnet_peers:` config. Pushes run in parallel with bounded concurrency (4 at a time).
+3. **Encrypt.** Two equivalent paths: explicit (`vigo swarm cryptsync encrypt ~/Downloads/foo.pdf`) or **drop-and-forget** — copy a plaintext file into `~/cryptsync/` and the watcher auto-encrypts it in place. Either way the CLI/daemon reads `recipients.txt`, age-encrypts the plaintext to every listed public key, and writes the ciphertext atomically to `~/cryptsync/foo.pdf`. The output lands as **mode 0600 owned by the invoking user** even though the binary runs in a root context — `chmod 0600` + `chown` to the user (resolved via `SUDO_USER` or `getuid()`) happens before the atomic rename exposes the final name. No password prompt — encryption uses public keys only. See **Auto-encrypt-on-write** below for the drop-and-forget rules.
+4. **Fan out.** The agent daemon watches `~/cryptsync/` via inotify (Linux) / kqueue (macOS). On a new or modified ciphertext file, the pusher POSTs the ciphertext to every live peer on `https://<peer>:1531/cryptsync/push/<user>/<filename>`, plus every host listed in the user's `cross_subnet_peers:` config. Pushes run in parallel with bounded concurrency (4 at a time).
 5. **Receive.** On the peer side, the `/cryptsync/push/...` HTTPS handler writes the ciphertext atomically into the target user's `~/cryptsync/<filename>` as **mode 0600 owned by the destination user**. The handler runs in the agent daemon's root context but the same temp + `chmod 0600` + `chown` + rename sequence used by `encrypt` drops ownership to the destination user before exposure, so every envoy ends up with identical bytes on disk under identical perms.
 6. **Decrypt.** On any enrolled envoy, `vigo swarm cryptsync unlock` prompts for the password, unwraps the age identity into a per-user session helper daemon, and holds the key in RAM until the session ends or the idle timer fires. `vigo swarm cryptsync decrypt <name> -o <path>` streams the ciphertext through the helper's DECRYPT socket and writes plaintext to a user-chosen path.
 7. **Revoke.** `vigo swarm cryptsync forget <hostname>` removes the peer's pubkey from `recipients.txt` so future encrypts exclude it. `vigo swarm cryptsync reencrypt` re-encrypts every existing file in `~/cryptsync/` to the reduced recipient set, cutting off access to any ciphertext the revoked envoy will cache afterward.
@@ -41,7 +41,45 @@ Cryptsync is a **pure peer-to-peer** feature. The Vigo server plays no role in c
 | `vigo swarm cryptsync decrypt <file> -o <path>` | Decrypt from `~/cryptsync/` to a user-chosen path. Requires `unlock`. `-o` is mandatory — no default destination. |
 | `vigo swarm cryptsync forget <hostname>` | Revoke an envoy from the recipient set. |
 | `vigo swarm cryptsync reencrypt` | Force re-encrypt of every file in `~/cryptsync/` to the current recipient set. Requires `unlock`. |
-| `vigo swarm cryptsync status` | Show local state: enrolled, recipients, file count, session helper status. |
+| `vigo swarm cryptsync status` | Show local state: enrolled, recipients, file count breakdown (ciphertext/plaintext/failed), session helper status. |
+
+## Auto-Encrypt-on-Write
+
+The watcher daemon auto-encrypts plaintext files that land in `~/cryptsync/`. Every drop produces ciphertext-at-rest under correct operation; the user does not need to remember to call `vigo swarm cryptsync encrypt` first. ADR-012 captures the design.
+
+**When the session is unlocked and the file is at most 1 GiB:** the watcher stages the plaintext to `~/.cryptsync/staging/<uuid>`, encrypts to the current recipient set, and atomically renames the result back over the original path. The natural inotify event from the rename then fires the normal push fan-out. No persistent queue — the directory itself is the queue.
+
+**When the session is locked:** the watcher emits a single actionable WARN naming the file and the recovery action (`vigo swarm cryptsync unlock`), leaves the plaintext in place, and adds nothing to disk. The next `vigo swarm cryptsync unlock` walks `~/cryptsync/` once and encrypts every file failing the age-magic check (the **unlock sweep**). Already-ciphertext files no-op naturally.
+
+**When the file is over 1 GiB:** the watcher emits one WARN noting the size cap and leaves the plaintext alone. The 1 GiB ceiling matches `MAX_PUSH_BYTES` so a file that can't be transmitted never burns CPU on encryption.
+
+**Failure handling** classifies any encrypt error into three buckets:
+
+| Class | Examples | Behavior |
+|---|---|---|
+| Terminal-actionable | `recipients.txt` empty, disk full, permission denied, source vanished mid-read | One specific WARN, leave plaintext, no retry. The next watcher event after the user fixes the cause retries naturally. |
+| Terminal-unrecoverable | age library refuses input, key corrupt | One ERROR, rename source to `<filename>.<unix_ts>.failed`, no retry. |
+| Transient | I/O error, signal-interrupted | Retry 3× in-thread (100 ms / 500 ms / 2 s). On exhaustion, treat as unrecoverable and rename. |
+
+Recovery from a `.failed` artifact: rename it back to its original name. The watcher sees a fresh event and the encrypt fires from clean state. The watcher's `resolve_event` filter ignores `<orig>.<unix_ts>.failed` artifacts (numeric timestamp segment required) so a permanent failure never loops back into the pipeline. User-named `*.failed` files (no timestamp segment) still sync as normal content.
+
+**Liveness gating** uses `~/.cryptsync/session.unlocked` — a sentinel written by the session helper at startup with its PID, removed on shutdown. The watcher (root context) reads the file and verifies the PID is alive to decide "session unlocked." Stale sentinels (helper crashed without cleanup) read as locked, which matches the user-visible reality.
+
+**Status output** breaks the file count into subcounts so the user can see at a glance what the watcher did:
+
+```
+files:            5
+  ciphertext:     3
+  plaintext:      1   (run 'vigo swarm cryptsync unlock' to encrypt and sync)
+  failed:         1
+                  vigo-lic-backup.tar.gz.20260429.failed
+```
+
+Counts derive from a single `read_dir` scan + a one-line magic peek per file at status-call time. No persistent state.
+
+**Default-on, no flag.** Auto-encrypt-on-write is the default behavior. There is no `auto_encrypt:` toggle in `~/.cryptsync/config.yaml` or `server.yaml` — a flag would re-create the original UX trap (operator forgets to flip it; user sees broken behavior).
+
+**Plaintext never crosses the wire.** The watcher's age-magic gate is the transmission boundary. Auto-encrypt produces ciphertext locally before any push fires; the pusher reads only ciphertext-magic-verified bytes.
 
 ## Usercrate Integration
 

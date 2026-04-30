@@ -33,15 +33,19 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use anyhow::{Context, Result};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
+use super::auto_encrypt::{
+    self, AutoEncryptError, MAX_AUTO_ENCRYPT_BYTES, RETRY_BACKOFFS,
+};
 use super::config;
+use super::crypt;
 use super::enrolled_users;
 use super::home_for_user;
+use super::is_session_unlocked_for_home;
 
 /// A ciphertext file ready to fan out.
 ///
@@ -156,6 +160,15 @@ async fn run(
     let mut last_emit: HashMap<(String, String, EventAction), std::time::Instant> =
         HashMap::new();
 
+    // One-shot WARN dedupe for plaintext-not-encrypted reasons
+    // (session locked or oversized). Keyed by (user, filename,
+    // mtime_secs) per ADR-012 §5 — re-WARN fires when the user
+    // re-writes the file (mtime changes). Pruned alongside last_emit
+    // on the reconcile cadence so a steady stream of unique files
+    // doesn't grow this map without bound.
+    let mut plaintext_warns: HashMap<(String, String, i64), std::time::Instant> =
+        HashMap::new();
+
     loop {
         tokio::select! {
             _ = cancel.cancelled() => {
@@ -172,6 +185,12 @@ async fn run(
                 let cutoff = DEBOUNCE * 4;
                 let now = std::time::Instant::now();
                 last_emit.retain(|_, prev| now.duration_since(*prev) < cutoff);
+                // plaintext_warns is keyed by (user, filename, mtime),
+                // so a fresh user write naturally rotates the key. We
+                // still prune by age to bound memory under a stream
+                // of one-shot writes that never repeat.
+                let warn_cutoff = Duration::from_secs(60 * 60);
+                plaintext_warns.retain(|_, prev| now.duration_since(*prev) < warn_cutoff);
             }
             maybe = raw_rx.recv() => {
                 match maybe {
@@ -193,37 +212,12 @@ async fn run(
 
                             match action {
                                 EventAction::Push => {
-                                    match load_and_verify(&user, &filename) {
-                                        Ok(bytes) => {
-                                            let size = bytes.len();
-                                            let job = PushJob {
-                                                user: user.clone(),
-                                                filename: filename.clone(),
-                                                bytes: Arc::new(bytes),
-                                            };
-                                            if let Err(e) = out_tx.try_send(job) {
-                                                warn!(
-                                                    error = %e,
-                                                    "cryptsync watcher: pusher channel full or closed, dropping push event"
-                                                );
-                                            } else {
-                                                info!(
-                                                    user = %user,
-                                                    filename = %filename,
-                                                    size_bytes = size,
-                                                    "cryptsync watcher: PushJob enqueued"
-                                                );
-                                            }
-                                        }
-                                        Err(e) => {
-                                            warn!(
-                                                user = %user,
-                                                filename = %filename,
-                                                error = %e,
-                                                "cryptsync watcher: skipping non-pushable event"
-                                            );
-                                        }
-                                    }
+                                    handle_push_event(
+                                        &user,
+                                        &filename,
+                                        &out_tx,
+                                        &mut plaintext_warns,
+                                    );
                                 }
                                 EventAction::Delete => {
                                     let deletion_time = crate::swarm::cryptsync::now_secs_pub();
@@ -260,6 +254,306 @@ async fn run(
 enum RawEvent {
     Reconcile,
     Notify(Event),
+}
+
+/// Dispatch one resolved push-class event. Cheap age-magic peek
+/// decides between the ciphertext fast path (full read + emit
+/// PushJob, unchanged behavior) and the plaintext branch (ADR-012:
+/// auto-encrypt-on-write or one-shot WARN).
+///
+/// `plaintext_warns` is the watcher loop's WARN-dedupe map keyed on
+/// `(user, filename, mtime_secs)`. Re-WARN fires on each real
+/// rewrite (mtime change) but rapid duplicate inotify events for the
+/// same plaintext don't flood the journal.
+fn handle_push_event(
+    user: &str,
+    filename: &str,
+    out_tx: &mpsc::Sender<PushJob>,
+    plaintext_warns: &mut HashMap<(String, String, i64), std::time::Instant>,
+) {
+    let home = match home_for_user(user) {
+        Some(h) => h,
+        None => {
+            warn!(user = %user, "cryptsync watcher: cannot resolve home, dropping event");
+            return;
+        }
+    };
+    let path = config::content_dir(&home).join(filename);
+
+    // Fast peek: is this already age ciphertext?
+    match crypt::is_age_encrypted(&path) {
+        Ok(true) => emit_push_for_ciphertext(user, filename, &path, out_tx),
+        Ok(false) => handle_plaintext_event(user, filename, &home, &path, plaintext_warns),
+        Err(e) => {
+            // Open/read-magic failed — likely a transient race
+            // (file removed between event and stat). Don't loop on
+            // it; debug-level is enough.
+            debug!(
+                user = %user,
+                filename = %filename,
+                error = %e,
+                "cryptsync watcher: cannot read header for classification"
+            );
+        }
+    }
+}
+
+/// Push the unchanged-since-0.34 path: full read + magic verify +
+/// emit PushJob.
+fn emit_push_for_ciphertext(
+    user: &str,
+    filename: &str,
+    path: &Path,
+    out_tx: &mpsc::Sender<PushJob>,
+) {
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(e) => {
+            warn!(
+                user = %user,
+                filename = %filename,
+                error = %e,
+                "cryptsync watcher: cannot read ciphertext for push"
+            );
+            return;
+        }
+    };
+    const AGE_MAGIC: &[u8] = b"age-encryption.org/v1\n";
+    if bytes.len() < AGE_MAGIC.len() || &bytes[..AGE_MAGIC.len()] != AGE_MAGIC {
+        // Lost the race — peek said ciphertext, full read disagrees.
+        debug!(
+            user = %user,
+            filename = %filename,
+            "cryptsync watcher: file no longer ciphertext, skipping push"
+        );
+        return;
+    }
+    let size = bytes.len();
+    let job = PushJob {
+        user: user.to_string(),
+        filename: filename.to_string(),
+        bytes: Arc::new(bytes),
+    };
+    if let Err(e) = out_tx.try_send(job) {
+        warn!(
+            error = %e,
+            "cryptsync watcher: pusher channel full or closed, dropping push event"
+        );
+    } else {
+        info!(
+            user = %user,
+            filename = %filename,
+            size_bytes = size,
+            "cryptsync watcher: PushJob enqueued"
+        );
+    }
+}
+
+/// ADR-012 plaintext classifier. Three exits:
+///
+/// - Over-cap → one-shot WARN, leave the file alone.
+/// - Session locked → one-shot WARN, sweep on next unlock will pick it up.
+/// - Unlocked + ≤cap → spawn a blocking encrypt task with the 3×
+///   transient retry schedule. On success the rename fires a fresh
+///   inotify event that lands on the ciphertext path naturally.
+fn handle_plaintext_event(
+    user: &str,
+    filename: &str,
+    home: &Path,
+    path: &Path,
+    plaintext_warns: &mut HashMap<(String, String, i64), std::time::Instant>,
+) {
+    let (size, mtime) = match plaintext_size_and_mtime(path) {
+        Some(t) => t,
+        None => {
+            // File gone between event and stat — common with quick
+            // editors; just drop.
+            debug!(
+                user = %user,
+                filename = %filename,
+                "cryptsync watcher: plaintext vanished before classification"
+            );
+            return;
+        }
+    };
+
+    // 1. Over-cap WARN takes precedence — the file can't be encrypted
+    //    or transmitted regardless of session state.
+    if size > MAX_AUTO_ENCRYPT_BYTES {
+        warn_once(
+            plaintext_warns,
+            user,
+            filename,
+            mtime,
+            format!(
+                "cryptsync watcher: {}/{} size={} exceeds {} push cap; not auto-encrypting",
+                user, filename, size, MAX_AUTO_ENCRYPT_BYTES
+            ),
+        );
+        return;
+    }
+
+    // 2. Session-locked WARN — leave the plaintext for the unlock sweep.
+    if !is_session_unlocked_for_home(home) {
+        warn_once(
+            plaintext_warns,
+            user,
+            filename,
+            mtime,
+            format!(
+                "cryptsync watcher: {}/{} is plaintext; session locked — will encrypt on next 'vigo swarm cryptsync unlock'",
+                user, filename
+            ),
+        );
+        return;
+    }
+
+    // 3. Encrypt path. Spawn into a blocking pool so a 1 GiB encrypt
+    //    doesn't pin the watcher loop.
+    info!(
+        user = %user,
+        filename = %filename,
+        size_bytes = size,
+        "cryptsync watcher: auto-encrypting"
+    );
+    let user_owned = user.to_string();
+    let filename_owned = filename.to_string();
+    let home_owned = home.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        run_auto_encrypt_with_retry(&user_owned, &filename_owned, &home_owned);
+    });
+}
+
+fn plaintext_size_and_mtime(path: &Path) -> Option<(u64, i64)> {
+    let meta = std::fs::metadata(path).ok()?;
+    let size = meta.len();
+    let mtime = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    Some((size, mtime))
+}
+
+/// Emit a WARN once per (user, filename, mtime) tuple. A subsequent
+/// rewrite of the same file changes mtime and so re-WARNs.
+fn warn_once(
+    map: &mut HashMap<(String, String, i64), std::time::Instant>,
+    user: &str,
+    filename: &str,
+    mtime: i64,
+    line: String,
+) {
+    let key = (user.to_string(), filename.to_string(), mtime);
+    if map.contains_key(&key) {
+        debug!(
+            user = %user,
+            filename = %filename,
+            "cryptsync watcher: warn dedupe — already logged for this mtime"
+        );
+        return;
+    }
+    map.insert(key, std::time::Instant::now());
+    warn!("{}", line);
+}
+
+/// Blocking-context wrapper that runs `auto_encrypt::encrypt_in_place`
+/// with the ADR-012 retry schedule for transient errors. Resolves
+/// recipients here rather than passing them in so a fresh encrypt
+/// always uses the latest `recipients.txt` (the watcher loop may
+/// have raced an admin evict / leave; one-tick-stale recipients are
+/// not what we want).
+fn run_auto_encrypt_with_retry(user: &str, filename: &str, home: &Path) {
+    let recipients = match config::load_recipients(home) {
+        Ok(r) => r,
+        Err(e) => {
+            warn!(
+                user = %user,
+                filename = %filename,
+                "cryptsync watcher: cannot encrypt {}/{}: {}; left plaintext",
+                user, filename, e
+            );
+            return;
+        }
+    };
+
+    let mut last_err: Option<AutoEncryptError> = None;
+    for attempt in 0..=RETRY_BACKOFFS.len() {
+        match auto_encrypt::encrypt_in_place(home, user, filename, &recipients) {
+            Ok(size) => {
+                info!(
+                    user = %user,
+                    filename = %filename,
+                    size_bytes = size,
+                    "cryptsync watcher: auto-encrypt complete"
+                );
+                return;
+            }
+            Err(AutoEncryptError::Terminal(msg)) => {
+                warn!(
+                    "cryptsync watcher: cannot encrypt {}/{}: {}; left plaintext",
+                    user, filename, msg
+                );
+                return;
+            }
+            Err(AutoEncryptError::Unrecoverable(msg)) => {
+                let ts = super::now_secs_pub();
+                match auto_encrypt::rename_to_failed(home, filename, ts) {
+                    Ok(dst) => {
+                        error!(
+                            "cryptsync watcher: encrypt of {}/{} failed permanently: {}; renamed to {}",
+                            user, filename, msg, dst.display()
+                        );
+                    }
+                    Err(rename_err) => {
+                        error!(
+                            "cryptsync watcher: encrypt of {}/{} failed permanently: {}; rename also failed: {}",
+                            user, filename, msg, rename_err
+                        );
+                    }
+                }
+                return;
+            }
+            Err(AutoEncryptError::Transient(msg)) => {
+                if attempt < RETRY_BACKOFFS.len() {
+                    warn!(
+                        "cryptsync watcher: encrypt attempt {}/3 failed for {}/{}: {}",
+                        attempt + 1,
+                        user,
+                        filename,
+                        msg
+                    );
+                    std::thread::sleep(RETRY_BACKOFFS[attempt]);
+                    last_err = Some(AutoEncryptError::Transient(msg));
+                } else {
+                    last_err = Some(AutoEncryptError::Transient(msg));
+                }
+            }
+        }
+    }
+
+    // Exhausted retries — convert the final transient error into an
+    // unrecoverable rename per ADR-012 §2.
+    let ts = super::now_secs_pub();
+    let final_msg = match last_err {
+        Some(AutoEncryptError::Transient(m)) => m,
+        _ => "transient encrypt error (cause lost)".to_string(),
+    };
+    match auto_encrypt::rename_to_failed(home, filename, ts) {
+        Ok(dst) => {
+            error!(
+                "cryptsync watcher: encrypt of {}/{} failed permanently after retries: {}; renamed to {}",
+                user, filename, final_msg, dst.display()
+            );
+        }
+        Err(rename_err) => {
+            error!(
+                "cryptsync watcher: encrypt of {}/{} failed permanently after retries: {}; rename also failed: {}",
+                user, filename, final_msg, rename_err
+            );
+        }
+    }
 }
 
 /// Reconcile the watcher's active watches against the current set of
@@ -406,6 +700,13 @@ fn resolve_event(
     if name.starts_with('.') {
         return None;
     }
+    // ADR-012: filter the auto-encrypt-failed artifacts so a permanent
+    // rename doesn't loop back into the encrypt pipeline. The shape is
+    // `<orig>.<unix_ts>.failed`; bare user-named `*.failed` files
+    // (without a numeric timestamp segment) still sync normally.
+    if auto_encrypt::is_failed_artifact_name(name) {
+        return None;
+    }
     let parent = p.parent()?;
 
     // Which user owns this watched dir?
@@ -415,21 +716,6 @@ fn resolve_event(
         }
     }
     None
-}
-
-/// Read the file and verify age magic. Emits `Err` if the file
-/// isn't age ciphertext (someone dropped plaintext by hand — log
-/// and skip; don't push plaintext anywhere).
-fn load_and_verify(user: &str, filename: &str) -> Result<Vec<u8>> {
-    let home = home_for_user(user).context("home for user")?;
-    let path = config::content_dir(&home).join(filename);
-    let bytes = std::fs::read(&path)
-        .with_context(|| format!("reading {}", path.display()))?;
-    const AGE_MAGIC: &[u8] = b"age-encryption.org/v1\n";
-    if bytes.len() < AGE_MAGIC.len() || &bytes[..AGE_MAGIC.len()] != AGE_MAGIC {
-        anyhow::bail!("not age ciphertext (user-dropped plaintext?)");
-    }
-    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -477,6 +763,58 @@ mod tests {
             attrs: Default::default(),
         };
         assert!(resolve_event(&ev, &watches).is_none());
+    }
+
+    #[test]
+    fn resolve_event_ignores_failed_artifact() {
+        // ADR-012: `<orig>.<unix_ts>.failed` files (created when
+        // auto-encrypt fails unrecoverably) must not re-enter the
+        // pipeline. The watcher's resolve_event filter is the
+        // single chokepoint.
+        let watches = one_watch("dan", "/home/dan/cryptsync");
+        let ev = Event {
+            kind: EventKind::Create(notify::event::CreateKind::File),
+            paths: vec![PathBuf::from(
+                "/home/dan/cryptsync/big.tar.gz.20260429.failed",
+            )],
+            attrs: Default::default(),
+        };
+        assert!(resolve_event(&ev, &watches).is_none());
+    }
+
+    #[test]
+    fn resolve_event_allows_user_named_failed_file() {
+        // User-named files like `report.failed` (without a numeric
+        // timestamp segment) are not the watcher's failure artifact
+        // and must sync normally.
+        let watches = one_watch("dan", "/home/dan/cryptsync");
+        let ev = Event {
+            kind: EventKind::Create(notify::event::CreateKind::File),
+            paths: vec![PathBuf::from("/home/dan/cryptsync/report.failed")],
+            attrs: Default::default(),
+        };
+        assert_eq!(
+            resolve_event(&ev, &watches),
+            Some((
+                "dan".to_string(),
+                "report.failed".to_string(),
+                EventAction::Push,
+            ))
+        );
+    }
+
+    #[test]
+    fn warn_once_dedupes_same_mtime_rewrites_on_new_mtime() {
+        // ADR-012 §5: WARN keyed on (user, filename, mtime). Same
+        // mtime → suppress. New mtime → fire again.
+        let mut map: HashMap<(String, String, i64), std::time::Instant> =
+            HashMap::new();
+        warn_once(&mut map, "dan", "f.bin", 100, "first".into());
+        assert_eq!(map.len(), 1);
+        warn_once(&mut map, "dan", "f.bin", 100, "duplicate".into());
+        assert_eq!(map.len(), 1, "same mtime should not insert again");
+        warn_once(&mut map, "dan", "f.bin", 200, "new mtime".into());
+        assert_eq!(map.len(), 2, "new mtime should re-fire");
     }
 
     #[test]

@@ -107,6 +107,19 @@ pub fn reencrypt_pending_path(home: &Path) -> PathBuf {
     dot_dir(home).join("reencrypt.pending")
 }
 
+/// Liveness sentinel written by the session helper (`daemon_main`)
+/// at startup and removed at shutdown. Content: the helper's PID, one
+/// line, `0600` user-owned. Lives under the user's home so the
+/// root-context watcher can read it without having to discover a
+/// per-platform runtime dir (`/run/user/<uid>/vigo/` on Linux,
+/// `$TMPDIR/cryptsync-<uid>/` on macOS — opaque to root). The watcher
+/// uses this to gate auto-encrypt-on-write per ADR-012: file present
+/// + PID alive ⇒ session unlocked ⇒ encrypt; otherwise leave the
+/// plaintext in place for the unlock sweep to pick up.
+pub fn session_unlocked_path(home: &Path) -> PathBuf {
+    dot_dir(home).join("session.unlocked")
+}
+
 /// Sentinel file that tells the daemon reactor to regenerate
 /// `recipients.txt` from the daemon-side `peers.json` immediately.
 /// Dropped by `vigo swarm cryptsync enroll` after seeding the user-side files

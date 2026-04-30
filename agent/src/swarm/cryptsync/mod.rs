@@ -25,6 +25,7 @@
 //! `recipients.txt` regeneration, HTTPS routes (push/pull/announce),
 //! daemon lifecycle. Session helper + remaining verbs follow in week 3.
 
+pub mod auto_encrypt;
 pub mod cli;
 pub mod config;
 pub mod crypt;
@@ -878,6 +879,190 @@ fn prune_all() {
 /// Public re-export for sibling modules (watcher.rs).
 pub fn now_secs_pub() -> i64 {
     now_secs()
+}
+
+/// True iff the user's cryptsync session helper is currently running
+/// (file `<home>/.cryptsync/session.unlocked` exists and the PID
+/// inside is alive). Used by the watcher (ADR-012) to gate
+/// auto-encrypt-on-write — encryption only fires when the user has
+/// the session unlocked.
+///
+/// Stale sentinels (helper crashed without cleanup) read as locked,
+/// matching the "no live helper" reality. The watcher's natural retry
+/// on the next plaintext write event recovers once the user unlocks
+/// again.
+pub fn is_session_unlocked_for_home(home: &Path) -> bool {
+    let path = config::session_unlocked_path(home);
+    let raw = match fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let pid: u32 = match raw.trim().parse() {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+    pid_alive(pid)
+}
+
+/// Best-effort process-liveness check. Linux uses `/proc/<pid>`;
+/// other Unixes fall back to `kill(pid, 0)` (returns 0 when the
+/// process exists; ESRCH means gone). Mirrors session.rs's private
+/// `pid_alive` so we don't bloat session.rs's public surface.
+fn pid_alive(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        return std::path::Path::new(&format!("/proc/{}", pid)).exists();
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let rc = unsafe { libc::kill(pid as libc::pid_t, 0) };
+        if rc == 0 {
+            return true;
+        }
+        let err = std::io::Error::last_os_error();
+        err.raw_os_error() != Some(libc::ESRCH)
+    }
+}
+
+/// Walk `~<user>/cryptsync/`, encrypting every plaintext file in
+/// place per ADR-012's unlock-sweep. Called from `cmd_unlock` after
+/// the session helper is up. Already-ciphertext files are skipped
+/// naturally via the age-magic check; `.failed` artifacts are skipped
+/// so a permanently-broken file doesn't loop on every unlock. Each
+/// per-file outcome is logged + counted; the final summary line
+/// matches ADR-012 §5.
+pub fn sweep_plaintext_on_unlock(home: &Path, username: &str) {
+    let content = config::content_dir(home);
+    if !content.is_dir() {
+        return;
+    }
+    let recipients = match config::load_recipients(home) {
+        Ok(r) => r,
+        Err(e) => {
+            warn!(
+                error = %e,
+                "cryptsync sweep: cannot load recipients; skipping plaintext drain"
+            );
+            return;
+        }
+    };
+
+    let entries = match fs::read_dir(&content) {
+        Ok(rd) => rd,
+        Err(e) => {
+            warn!(path = %content.display(), error = %e, "cryptsync sweep: read_dir failed");
+            return;
+        }
+    };
+
+    let mut encrypted = 0usize;
+    let mut failed = 0usize;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+        if name.starts_with('.') {
+            continue;
+        }
+        if auto_encrypt::is_failed_artifact_name(&name) {
+            continue;
+        }
+        // Skip already-ciphertext files via the same magic check the
+        // watcher uses. Keep the read window small (just enough for
+        // the magic line) so we don't pull a 500 MiB ciphertext into
+        // memory just to decide it's already done.
+        match crypt::is_age_encrypted(&path) {
+            Ok(true) => continue,
+            Ok(false) => {}
+            Err(e) => {
+                warn!(
+                    path = %path.display(),
+                    error = %e,
+                    "cryptsync sweep: cannot read magic, skipping"
+                );
+                continue;
+            }
+        }
+
+        match auto_encrypt::encrypt_in_place(home, username, &name, &recipients) {
+            Ok(size) => {
+                info!(
+                    user = %username,
+                    filename = %name,
+                    size_bytes = size,
+                    "cryptsync sweep: encrypted"
+                );
+                encrypted += 1;
+            }
+            Err(auto_encrypt::AutoEncryptError::Terminal(msg)) => {
+                warn!(
+                    user = %username,
+                    filename = %name,
+                    "cryptsync sweep: cannot encrypt: {}; left plaintext",
+                    msg
+                );
+                failed += 1;
+            }
+            Err(auto_encrypt::AutoEncryptError::Unrecoverable(msg)) => {
+                let ts = now_secs();
+                match auto_encrypt::rename_to_failed(home, &name, ts) {
+                    Ok(dst) => {
+                        warn!(
+                            user = %username,
+                            filename = %name,
+                            renamed = %dst.display(),
+                            "cryptsync sweep: encrypt failed permanently: {}; renamed",
+                            msg
+                        );
+                    }
+                    Err(rename_err) => {
+                        warn!(
+                            user = %username,
+                            filename = %name,
+                            error = %rename_err,
+                            "cryptsync sweep: encrypt failed permanently: {}; rename also failed",
+                            msg
+                        );
+                    }
+                }
+                failed += 1;
+            }
+            Err(auto_encrypt::AutoEncryptError::Transient(msg)) => {
+                // Sweep is single-shot per file — the user just unlocked
+                // and we don't want to stall the CLI for retries. Treat
+                // as actionable: leave plaintext, log, move on. The next
+                // watcher event picks it up and the watcher's own retry
+                // schedule applies.
+                warn!(
+                    user = %username,
+                    filename = %name,
+                    "cryptsync sweep: transient error: {}; left plaintext, watcher will retry",
+                    msg
+                );
+                failed += 1;
+            }
+        }
+    }
+    if encrypted > 0 || failed > 0 {
+        info!(
+            user = %username,
+            encrypted = encrypted,
+            failed = failed,
+            "cryptsync sweep: complete"
+        );
+        println!(
+            "cryptsync sweep: {} file(s) encrypted, {} failed for {}",
+            encrypted, failed, username
+        );
+    }
 }
 
 /// Public helper so the pusher can stamp tombstones with this host's

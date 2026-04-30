@@ -268,20 +268,25 @@ fn cmd_status(_args: &[String]) -> Result<()> {
     }
 
     if content.is_dir() {
-        let file_count = fs::read_dir(&content)
-            .map(|rd| {
-                rd.filter_map(|e| e.ok())
-                    .filter(|e| e.path().is_file())
-                    .filter(|e| {
-                        e.file_name()
-                            .to_str()
-                            .map(|n| !n.starts_with('.'))
-                            .unwrap_or(false)
-                    })
-                    .count()
-            })
-            .unwrap_or(0);
-        println!("  files:            {}", file_count);
+        let counts = scan_content_subcounts(&content);
+        println!("  files:            {}", counts.total());
+        println!("    ciphertext:     {}", counts.ciphertext);
+        if counts.plaintext > 0 {
+            println!(
+                "    plaintext:      {}   (run 'vigo swarm cryptsync unlock' to encrypt and sync)",
+                counts.plaintext
+            );
+        } else {
+            println!("    plaintext:      0");
+        }
+        if counts.failed.is_empty() {
+            println!("    failed:         0");
+        } else {
+            println!("    failed:         {}", counts.failed.len());
+            for name in &counts.failed {
+                println!("                    {}", name);
+            }
+        }
     } else {
         println!("  files:            (content dir missing)");
     }
@@ -350,10 +355,16 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     let parent_pid = resolve_shell_pid()
         .unwrap_or_else(|| unsafe { libc::getppid() } as u32);
     let cfg = config::load_config(&home);
-    session::spawn_helper(&identity, parent_pid, cfg.idle_timeout_minutes)?;
+    session::spawn_helper(&identity, parent_pid, cfg.idle_timeout_minutes, &home)?;
 
     println!("✓ Unlocked. Session helper running until logout, lock, or {} min idle.",
         cfg.idle_timeout_minutes);
+
+    // Drain any plaintext that landed in ~/cryptsync/ while locked
+    // (ADR-012 unlock-sweep). Best-effort: each per-file failure is
+    // surfaced inline; a partial sweep doesn't fail the unlock.
+    let username = user_for_invocation()?;
+    super::sweep_plaintext_on_unlock(&home, &username);
     Ok(())
 }
 
@@ -1313,6 +1324,53 @@ fn reencrypt_one(
 fn is_age_ciphertext(bytes: &[u8]) -> bool {
     const MAGIC: &[u8] = b"age-encryption.org/v1\n";
     bytes.len() >= MAGIC.len() && &bytes[..MAGIC.len()] == MAGIC
+}
+
+/// Per-status-call breakdown of `~<user>/cryptsync/` contents.
+/// Computed via a single `read_dir` scan and a one-line magic peek
+/// per file — no persistent state, no quadratic work.
+#[derive(Default)]
+struct ContentSubcounts {
+    ciphertext: usize,
+    plaintext: usize,
+    failed: Vec<String>,
+}
+
+impl ContentSubcounts {
+    fn total(&self) -> usize {
+        self.ciphertext + self.plaintext + self.failed.len()
+    }
+}
+
+fn scan_content_subcounts(content: &Path) -> ContentSubcounts {
+    let mut out = ContentSubcounts::default();
+    let entries = match fs::read_dir(content) {
+        Ok(rd) => rd,
+        Err(_) => return out,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+        if name.starts_with('.') {
+            continue;
+        }
+        if super::auto_encrypt::is_failed_artifact_name(&name) {
+            out.failed.push(name);
+            continue;
+        }
+        match crypt::is_age_encrypted(&path) {
+            Ok(true) => out.ciphertext += 1,
+            Ok(false) => out.plaintext += 1,
+            Err(_) => out.plaintext += 1, // unreadable counts as not-yet-encrypted
+        }
+    }
+    out
 }
 
 fn valid_content_name(name: &str) -> bool {
