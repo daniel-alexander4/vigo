@@ -16,7 +16,7 @@ Where capacity and performance are compared, all tools are evaluated against the
 | Transport security | gRPC over mTLS + ED25519 signatures | HTTPS + client certs | HTTPS + API tokens | SSH | ZeroMQ + AES | Custom TLS |
 | State store (server) | SQLite | PostgreSQL (PuppetDB) | PostgreSQL | None | SQLite/MySQL/PostgreSQL | None |
 | State store (agent) | LMDB | YAML cache | JSON cache | None | Msgpack cache | BerkeleyDB |
-| Agent binary size | ~5 MB (static musl) | ~200 MB (Ruby + gems) | ~100 MB (omnibus) | 0 (agentless) | ~50 MB (Python + deps) | ~3 MB |
+| Agent binary size | ~7 MB x86_64 / ~6 MB arm64 (static musl) | ~200 MB (Ruby + gems) | ~100 MB (omnibus) | 0 (agentless) | ~50 MB (Python + deps) | ~3 MB |
 
 ## Transport and Security
 
@@ -63,7 +63,7 @@ CFEngine's agent evaluates promises locally from cached policy — the server in
 
 | | Memory (idle) | CPU (convergence) | Disk |
 |---|---|---|---|
-| Vigo | ~8 MB RSS | Minimal (compiled Rust) | ~5 MB binary + LMDB state |
+| Vigo | ~8 MB RSS | Minimal (compiled Rust) | ~7 MB binary (x86_64) / ~6 MB (arm64) + LMDB state |
 | Puppet | ~200 MB RSS (Ruby VM) | High (Ruby interpretation) | ~200 MB + YAML cache |
 | Chef | ~150 MB RSS (Ruby VM) | High (Ruby interpretation) | ~100 MB + cookbook cache |
 | Salt | ~80 MB RSS (Python) | Moderate | ~50 MB + state cache |
@@ -248,7 +248,7 @@ The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no 
 - When you value **performance** — ~300 µs check-ins, zero database queries on the hot path, 3,300 check-ins per second on a single core. Check-in intervals scale down to 15 seconds on commodity hardware
 - When you need **continuous enforcement** — every resource is idempotent and re-evaluated every check-in. At 15-second intervals, drift is corrected before anyone notices it happened. This enables provable continuous compliance, self-healing infrastructure, and sub-minute incident response — capabilities that require 5-30 minute intervals with any other tool
 - When you need **scalability** — 50,000+ nodes on a single server, no compile masters, no database clusters, no worker pools
-- When **agent footprint** matters — 5 MB static binary vs 50–200 MB for Ruby/Python-based agents. Deploys anywhere — edge, IoT, containers, resource-constrained hosts
+- When **agent footprint** matters — ~7 MB static musl binary (x86_64; ~6 MB on arm64) vs 50–200 MB for Ruby/Python-based agents. Deploys anywhere — edge, IoT, containers, resource-constrained hosts
 - When you need **offline resilience** — signed policy bundles with local convergence and results queuing for air-gapped, shipboard, or unreliable network environments. Most complete offline story of any agent-based CM tool
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

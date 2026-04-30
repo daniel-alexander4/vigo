@@ -36,7 +36,7 @@ Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed over SSH via a gate
 ## Key Technical Properties
 
 - One server process handles the entire fleet. No compile masters, worker pools, or database clusters at any scale.
-- Agent binary is ~5 MB, statically compiled, with zero runtime dependencies.
+- Agent binary is ~7 MB on x86_64 (~6 MB on arm64), statically compiled, with zero runtime dependencies.
 - Check-in operations execute entirely in memory (FleetIndex). Zero database queries on the hot path.
 - Every resource executor is enforced-idempotent: check current state, act only on drift, verify after. The agent runs a full convergence pass every check-in — not just once at deploy time. Drift from manual changes, package upgrades, or external automation is corrected within one interval.
 - Check-in intervals scale down to **15 seconds** on modest hardware (4 vCPU / 8 GB), enabling continuous enforcement rather than periodic auditing. At 15-second convergence, drift correction is near-instantaneous, stale detection fires within 45 seconds, and config publishes propagate fleet-wide in under 15 seconds. See [Performance Analysis (15s)](performance-15s.md) for capacity projections and use cases this enables — from real-time compliance enforcement to self-healing infrastructure to sub-minute incident response.
@@ -179,7 +179,7 @@ Hub-spoke topology for multi-site deployments. The hub routes enrollment to the 
 ## Requirements
 
 - **Server**: Linux host with Docker, or Go 1.25+ for source builds. Ports 1530 (gRPC) and 8443 (REST/UI).
-- **Agent**: no runtime dependencies. ~5 MB static binary. Bootstrap: `curl -sSfk https://server:8443/bootstrap | sudo sh`
+- **Agent**: no runtime dependencies. ~7 MB static binary on x86_64 (~6 MB on arm64). Bootstrap: `curl -sSfk https://server:8443/bootstrap | sudo sh`
 - **Database**: SQLite (embedded, zero admin). Optional PostgreSQL support.
 
 ## Contact

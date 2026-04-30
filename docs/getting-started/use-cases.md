@@ -26,7 +26,7 @@ Rollouts are inherently paced — health checks between batches take longer than
 
 - **Retail / POS terminals** — Thousands of kiosks, ATMs, or point-of-sale systems across locations. Push config, enforce PCI compliance, collect hardware health traits, dispatch firmware updates. Offline convergence means a store with flaky internet still enforces policy from cache.
 - **Digital signage** — Desired state includes content playlists, display schedules, and network config. Traits report screen resolution, uptime, and temperature.
-- **Industrial sensors / PLCs** — The agent is 5 MB and runs on ARM. Configuration of thresholds, collection intervals, and alert rules. Traits report sensor readings. Hub-spoke sharding maps naturally to plant, floor, and line hierarchies.
+- **Industrial sensors / PLCs** — The agent is ~6 MB on arm64 (~7 MB on x86_64) and runs on ARM. Configuration of thresholds, collection intervals, and alert rules. Traits report sensor readings. Hub-spoke sharding maps naturally to plant, floor, and line hierarchies.
 
 These devices are deployed and mostly left alone. Configuration changes are infrequent. The value is in enforcement and trait collection, not speed.
 
