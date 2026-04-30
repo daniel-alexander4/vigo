@@ -4,7 +4,7 @@ title: "ADR-013: Multi-member gitmirror"
 
 # ADR-013: Multi-member gitmirror
 
-**Status:** Accepted (pending implementation)
+**Status:** Superseded by ADR-015 (2026-04-29) before implementation. Decision content preserved below for historical reasoning; the unified design that absorbs and extends this ADR is in `015-unified-gitmirror-substrate.md`.
 **Date:** 2026-04-29
 
 ## Context
