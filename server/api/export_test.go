@@ -81,7 +81,7 @@ func TestExportSIEMBasic(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/export/siem", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -153,7 +153,7 @@ func TestExportSIEMSinceFilter(t *testing.T) {
 	since := time.Now().UTC().Add(-1 * time.Hour).Format(time.RFC3339)
 	req := httptest.NewRequest("GET", "/api/v1/export/siem?since="+since, nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -184,7 +184,7 @@ func TestExportSIEMEnvoyFilter(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/export/siem?envoy=web01", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -214,7 +214,7 @@ func TestExportSIEMLimit(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/export/siem?limit=1", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -254,7 +254,7 @@ func TestExportCMDBBasic(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/export/cmdb", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -309,7 +309,7 @@ func TestExportCMDBStatusFilter(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/export/cmdb?status=relapsed", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -351,7 +351,7 @@ func TestExportCMDBEnvironmentFilter(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/export/cmdb?environment=prod", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -378,7 +378,7 @@ func TestExportOSCALStub(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/export/oscal", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -472,7 +472,7 @@ func TestExportDisabledEndpoints(t *testing.T) {
 	} {
 		req := httptest.NewRequest("GET", path, nil)
 		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, req)
+		mux.ServeHTTP(rec, adminReq(req))
 
 		// Unregistered routes on a bare ServeMux return 404.
 		if rec.Code != http.StatusNotFound {

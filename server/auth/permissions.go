@@ -43,12 +43,40 @@ var ViewerPermissions = []string{
 	PermFleetRead, PermAuditRead, PermComplianceRead,
 }
 
+// CompliancePermissions is the default set for the compliance role —
+// GRC staff and compliance-document uploaders. Deliberately excludes
+// PermAuditRead (the raw audit-log chain stays admin-only); the
+// compliance role reaches audit evidence only through the audit-bundle
+// endpoint, which is gated on PermComplianceRead.
+var CompliancePermissions = []string{
+	PermComplianceRead, PermComplianceDocsWrite,
+}
+
+// ValidRoles enumerates every role string the system accepts. Used by
+// CLI / API input validation; the DB CHECK in migrations/000001_*.sql
+// must agree.
+var ValidRoles = []string{"admin", "viewer", "compliance"}
+
+// IsValidRole reports whether role is in ValidRoles.
+func IsValidRole(role string) bool {
+	for _, r := range ValidRoles {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}
+
 // DefaultPermissions returns the default permission set for a role.
 func DefaultPermissions(role string) []string {
-	if role == "admin" {
+	switch role {
+	case "admin":
 		return AllPermissions
+	case "compliance":
+		return CompliancePermissions
+	default:
+		return ViewerPermissions
 	}
-	return ViewerPermissions
 }
 
 // PermissionsJSON returns the JSON-encoded permissions for a role.

@@ -1,4 +1,11 @@
 name: ntp
+
+compliance:
+  cis-ubuntu: [2.1.1.1, 2.1.1.2]
+  cis-rhel: [2.1.1.1, 2.1.1.2]
+  nist-800-53: [AU-8]
+  pci-dss: [10.6.1, 10.6.2, 10.6.3]
+  iso-27001: [A.12.4.4]
 # Prefer: cis-ubuntu-services or cis-rhel-services (CIS benchmarks require
 # chrony, not ntpd). Only use this module on systems that cannot run chrony.
 

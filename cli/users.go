@@ -11,9 +11,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// validRoles enumerates every role string the server accepts. Kept in
+// sync with server/auth.ValidRoles and the CHECK constraint in
+// migrations/000001_initial_schema.up.sql; the CLI validates client-
+// side so a typo at the prompt fails before the round-trip.
+var validRoles = []string{"admin", "viewer", "compliance"}
+
+func isValidRole(role string) bool {
+	for _, r := range validRoles {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}
+
 var webusersCmd = &cobra.Command{
 	Use:   "webusers",
-	Short: "Manage web UI and API user accounts (admin/viewer roles)",
+	Short: "Manage web UI and API user accounts (admin/viewer/compliance roles)",
 }
 
 var webusersListCmd = &cobra.Command{
@@ -58,6 +73,9 @@ var webusersCreateCmd = &cobra.Command{
 		}
 		if userRole == "" {
 			userRole = "viewer"
+		}
+		if !isValidRole(userRole) {
+			return fmt.Errorf("invalid --role %q (valid: %v)", userRole, validRoles)
 		}
 
 		body := map[string]string{
@@ -138,7 +156,7 @@ func init() {
 	webusersCreateCmd.Flags().StringVar(&userUsername, "username", "", "Username (required)")
 	webusersCreateCmd.Flags().StringVar(&userDisplayName, "display-name", "", "Display name")
 	webusersCreateCmd.Flags().StringVar(&userEmail, "email", "", "Email address")
-	webusersCreateCmd.Flags().StringVar(&userRole, "role", "viewer", "Role (admin or viewer)")
+	webusersCreateCmd.Flags().StringVar(&userRole, "role", "viewer", "Role (admin, viewer, or compliance)")
 	webusersCreateCmd.Flags().StringVar(&userSSHKeyFile, "ssh-key-file", "", "Path to SSH public key file")
 
 	webusersDeleteCmd.Flags().StringVar(&userUsername, "username", "", "Username (required)")

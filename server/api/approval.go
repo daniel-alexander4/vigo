@@ -50,13 +50,18 @@ func (h *ApprovalHandler) SetAuditWriter(w auditRecorder) {
 	h.auditWriter = w
 }
 
-// RegisterRoutes registers the change approval endpoints.
+// RegisterRoutes registers the change approval endpoints. Listing /
+// reading pending changes is fleet.read; create/approve/reject all
+// require config.publish (the same permission that gates direct
+// publish — approval is a workflow over the same authority).
 func (h *ApprovalHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/config/changes", h.CreateChange)
-	mux.HandleFunc("GET /api/v1/config/changes", h.ListChanges)
-	mux.HandleFunc("GET /api/v1/config/changes/{id}", h.GetChange)
-	mux.HandleFunc("POST /api/v1/config/changes/{id}/approve", h.ApproveChange)
-	mux.HandleFunc("POST /api/v1/config/changes/{id}/reject", h.RejectChange)
+	read := vigoauth.RequirePermission(vigoauth.PermFleetRead)
+	publishMW := vigoauth.RequirePermission(vigoauth.PermConfigPublish)
+	mux.Handle("POST /api/v1/config/changes", publishMW(http.HandlerFunc(h.CreateChange)))
+	mux.Handle("GET /api/v1/config/changes", read(http.HandlerFunc(h.ListChanges)))
+	mux.Handle("GET /api/v1/config/changes/{id}", read(http.HandlerFunc(h.GetChange)))
+	mux.Handle("POST /api/v1/config/changes/{id}/approve", publishMW(http.HandlerFunc(h.ApproveChange)))
+	mux.Handle("POST /api/v1/config/changes/{id}/reject", publishMW(http.HandlerFunc(h.RejectChange)))
 }
 
 // CreateChange creates a pending config change request. Any existing pending

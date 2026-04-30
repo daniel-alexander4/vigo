@@ -743,11 +743,38 @@ type AuthUser struct {
 	Username    string
 	DisplayName string
 	Role        string
+	Permissions []string
 }
 
 // IsAdmin returns true if the user has the admin role.
 func (u *AuthUser) IsAdmin() bool {
 	return u != nil && u.Role == "admin"
+}
+
+// IsCompliance returns true if the user has the compliance role —
+// GRC staff and compliance-document uploaders. Parallels IsAdmin /
+// IsViewer semantics for nav-side role labelling; authorization
+// itself goes through HasPermission.
+func (u *AuthUser) IsCompliance() bool {
+	return u != nil && u.Role == "compliance"
+}
+
+// HasPermission returns true if the user has the given permission.
+// Admins always have all permissions regardless of the stored slice
+// — same fast-path as auth.User.HasPermission.
+func (u *AuthUser) HasPermission(perm string) bool {
+	if u == nil {
+		return false
+	}
+	if u.Role == "admin" {
+		return true
+	}
+	for _, p := range u.Permissions {
+		if p == perm {
+			return true
+		}
+	}
+	return false
 }
 
 // AgentPlatform represents an available agent binary (OS/architecture pair).
@@ -1880,6 +1907,7 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 				Username:    u.Username,
 				DisplayName: u.DisplayName,
 				Role:        u.Role,
+				Permissions: u.Permissions,
 			}
 		}
 	}
@@ -1887,8 +1915,17 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 
 // --- Handlers ---
 
-// Dashboard renders the main dashboard page.
+// Dashboard renders the main dashboard page. Users without
+// fleet.read (i.e., the compliance role) get redirected to
+// /compliance instead — the dashboard is a fleet-state surface and
+// has no compliance-shaped fallback worth rendering.
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
+	if h.authEnabled {
+		if u := auth.UserFromContext(r.Context()); u != nil && !u.HasPermission(auth.PermFleetRead) {
+			http.Redirect(w, r, "/compliance", http.StatusFound)
+			return
+		}
+	}
 	data := h.dashboardData()
 
 	// Enrich with version and platform data.

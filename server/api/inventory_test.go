@@ -65,7 +65,7 @@ func TestInventory_NoFilter(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/inventory", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -87,7 +87,7 @@ func TestInventory_WhereFilter(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/inventory?where=os.distro%3Dubuntu", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	var resp struct {
 		Count   int `json:"count"`
@@ -112,7 +112,7 @@ func TestInventory_MultipleWhere(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/inventory?where=os.distro%3Dubuntu&where=os.version%3D24.04", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	var resp struct {
 		Count   int `json:"count"`
@@ -135,7 +135,7 @@ func TestInventory_ShowFields(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/inventory?where=os.family%3Drhel&show=os.distro,network.ip", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	var resp struct {
 		Count   int `json:"count"`
@@ -168,7 +168,7 @@ func TestInventory_NoMatch(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/inventory?where=os.distro%3Dwindows", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	var resp struct {
 		Count int `json:"count"`
@@ -186,7 +186,7 @@ func TestInventory_RevokedExcluded(t *testing.T) {
 	// Query all — revoked envoy should not appear.
 	req := httptest.NewRequest("GET", "/api/v1/inventory", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	var resp struct {
 		Count   int `json:"count"`
@@ -208,7 +208,7 @@ func TestInventory_InvalidWhere(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/inventory?where=invalid", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)

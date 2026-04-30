@@ -6,6 +6,12 @@
 #~ hardlinks effectively, unlike raw DB files which change every transaction.
 name: directory-backup
 
+compliance:
+  nist-800-53: [CP-9]
+  hipaa: [164.308(a)(7)(ii)(A)]
+  iso-27001: [A.12.3.1]
+  soc2: [A1.2]
+
 vars:
   backup_src: "/srv/myapp"
   backup_dest: "/srv/backups/myapp"

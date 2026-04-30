@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/workflows"
 )
@@ -27,11 +28,15 @@ func NewWorkflowHandler(queries *db.Queries, engine *workflows.Engine) *Workflow
 }
 
 // RegisterRoutes registers workflow endpoints on the given mux.
+// Run + abort require workflow.execute (admin-only by default);
+// list / get are fleet.read.
 func (h *WorkflowHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/workflows", h.HandleRun)
-	mux.HandleFunc("GET /api/v1/workflows", h.HandleList)
-	mux.HandleFunc("GET /api/v1/workflows/{id}", h.HandleGet)
-	mux.HandleFunc("POST /api/v1/workflows/{id}/abort", h.HandleAbort)
+	read := auth.RequirePermission(auth.PermFleetRead)
+	exec := auth.RequirePermission(auth.PermWorkflowExecute)
+	mux.Handle("POST /api/v1/workflows", exec(http.HandlerFunc(h.HandleRun)))
+	mux.Handle("GET /api/v1/workflows", read(http.HandlerFunc(h.HandleList)))
+	mux.Handle("GET /api/v1/workflows/{id}", read(http.HandlerFunc(h.HandleGet)))
+	mux.Handle("POST /api/v1/workflows/{id}/abort", exec(http.HandlerFunc(h.HandleAbort)))
 }
 
 type workflowRunRequest struct {

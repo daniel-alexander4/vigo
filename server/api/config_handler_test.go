@@ -30,7 +30,7 @@ func TestConfig_RecordPublish(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/config/publishes", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
@@ -64,7 +64,7 @@ func TestConfig_ListPublishes(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/config/publishes?limit=2", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -98,7 +98,7 @@ func TestConfig_GetPublish(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/config/publishes/"+publishID, nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -125,7 +125,7 @@ func TestConfig_GetPublishNotFound(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/config/publishes/nonexistent", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
@@ -144,7 +144,7 @@ func TestConfig_Freeze(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/config/freeze", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -176,7 +176,7 @@ func TestConfig_FreezeInvalidTimestamp(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/config/freeze", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
@@ -196,7 +196,7 @@ func TestConfig_Unfreeze(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/v1/config/unfreeze", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -217,7 +217,7 @@ func TestConfig_ReloadBlockedByApproval(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/v1/config/reload", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 when approval required, got %d: %s", rec.Code, rec.Body.String())

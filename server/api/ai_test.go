@@ -21,7 +21,7 @@ func TestAI_MissingQuestion(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/ask", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for empty question, got %d: %s", rec.Code, rec.Body.String())
@@ -37,7 +37,7 @@ func TestAI_InvalidRequestBody(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/ask", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for invalid body, got %d", rec.Code)

@@ -46,7 +46,7 @@ func TestTraitsHandler_Success(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/envoys/web01/traits", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -97,7 +97,7 @@ func TestTraitsHandler_NodeNotFound(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/envoys/nonexistent/traits", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
@@ -129,7 +129,7 @@ func TestTraitsHandler_NoFacts(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/envoys/web01/traits", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())

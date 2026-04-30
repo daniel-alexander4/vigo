@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 )
 
@@ -25,9 +26,12 @@ func NewInventoryHandler(queries *db.Queries) *InventoryHandler {
 }
 
 // RegisterRoutes registers the inventory endpoint on the given mux.
+// Inventory exposes per-envoy hostnames + trait values, so it
+// requires fleet.read.
 func (h *InventoryHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/inventory", h.HandleInventory)
-	mux.HandleFunc("GET /api/v1/inventory/keys", h.HandleInventoryKeys)
+	read := auth.RequirePermission(auth.PermFleetRead)
+	mux.Handle("GET /api/v1/inventory", read(http.HandlerFunc(h.HandleInventory)))
+	mux.Handle("GET /api/v1/inventory/keys", read(http.HandlerFunc(h.HandleInventoryKeys)))
 }
 
 // inventoryEntry is a single envoy in the inventory response.

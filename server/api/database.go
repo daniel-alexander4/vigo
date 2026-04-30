@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 )
 
@@ -28,14 +29,19 @@ func NewDatabaseHandler(sqlDB *sql.DB, queries *db.Queries, driver, dsn string) 
 	return &DatabaseHandler{sqlDB: sqlDB, queries: queries, driver: driver, dsn: dsn}
 }
 
-// RegisterRoutes mounts the database endpoints.
+// RegisterRoutes mounts the database endpoints. All DB-admin verbs
+// require admin role — vacuum/checkpoint mutate WAL state, /db/query
+// runs arbitrary SQL. Read-only stats are gated on admin too because
+// the table-row counts surface internal record counts (envoys,
+// secrets, audit chain entries) that aren't on any public surface.
 func (h *DatabaseHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/db/stats", h.handleStats)
-	mux.HandleFunc("GET /api/v1/db/tables", h.handleTables)
-	mux.HandleFunc("GET /api/v1/db/integrity", h.handleIntegrity)
-	mux.HandleFunc("POST /api/v1/db/vacuum", h.handleVacuum)
-	mux.HandleFunc("POST /api/v1/db/checkpoint", h.handleCheckpoint)
-	mux.HandleFunc("POST /api/v1/db/query", h.handleQuery)
+	admin := auth.RequireAdmin("")
+	mux.Handle("GET /api/v1/db/stats", admin(http.HandlerFunc(h.handleStats)))
+	mux.Handle("GET /api/v1/db/tables", admin(http.HandlerFunc(h.handleTables)))
+	mux.Handle("GET /api/v1/db/integrity", admin(http.HandlerFunc(h.handleIntegrity)))
+	mux.Handle("POST /api/v1/db/vacuum", admin(http.HandlerFunc(h.handleVacuum)))
+	mux.Handle("POST /api/v1/db/checkpoint", admin(http.HandlerFunc(h.handleCheckpoint)))
+	mux.Handle("POST /api/v1/db/query", admin(http.HandlerFunc(h.handleQuery)))
 }
 
 // handleStats returns database size, WAL size, page count, and table row counts.

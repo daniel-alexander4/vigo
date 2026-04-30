@@ -63,7 +63,7 @@ func TestAudit_ListEvents(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/audit", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -105,7 +105,7 @@ func TestAudit_ListEventsWithTypeFilter(t *testing.T) {
 	// Filter by push_run type only.
 	req := httptest.NewRequest("GET", "/api/v1/audit?type=push_run", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -133,7 +133,7 @@ func TestAudit_ListEventsEmpty(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/audit", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -166,7 +166,7 @@ func TestAudit_ListEventsWithLimit(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/audit?limit=2", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -190,7 +190,7 @@ func TestAudit_VerifyChainEmpty(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/audit/verify", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -216,7 +216,7 @@ func TestAudit_VerifyChainValid(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/audit/verify", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())

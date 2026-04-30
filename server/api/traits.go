@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"time"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 )
 
@@ -25,8 +26,10 @@ func NewTraitsHandler(queries *db.Queries) *TraitsHandler {
 }
 
 // RegisterRoutes registers the traits endpoint on the given mux.
+// Trait blob is per-envoy state — fleet.read.
 func (h *TraitsHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/envoys/{hostname}/traits", h.HandleGetTraits)
+	read := auth.RequirePermission(auth.PermFleetRead)
+	mux.Handle("GET /api/v1/envoys/{hostname}/traits", read(http.HandlerFunc(h.HandleGetTraits)))
 }
 
 // traitsResponse is the JSON envelope returned by the traits endpoint.

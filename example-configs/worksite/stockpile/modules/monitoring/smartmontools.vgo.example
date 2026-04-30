@@ -1,5 +1,9 @@
 name: smartmontools
 
+compliance:
+  nist-800-53: [SI-4, CP-2]
+  iso-27001: [A.17.1.2]
+
 vars:
   # Short self-test daily at 02:00, long self-test Saturdays at 03:00
   smartd_schedule: "-s (S/../.././02|L/../../6/03)"

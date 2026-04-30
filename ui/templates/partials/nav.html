@@ -20,10 +20,13 @@
         </button>
     </div>
     <nav class="sidebar__nav">
+        {{if .CurrentUser.HasPermission "fleet.read"}}
         <a href="/" class="nav-link{{if eq .ActiveNav "dashboard"}} nav-link--active{{end}}">
             Dashboard
         </a>
+        {{end}}
 
+        {{if .CurrentUser.HasPermission "fleet.read"}}
         <div class="nav-group__label">Fleet</div>
         <a href="/envoys" class="nav-link{{if eq .ActiveNav "envoys"}} nav-link--active{{end}}">
             Envoys
@@ -41,7 +44,7 @@
         <a href="/swarm/payload" class="nav-link{{if eq .ActiveNav "payload"}} nav-link--active{{end}}" title="P2P Administrator Pushed File Distribution">
             Payload
         </a>
-        {{if .CurrentUser.IsAdmin}}
+        {{if .CurrentUser.HasPermission "fleet.write"}}
         <a href="/swarm/filesync" class="nav-link{{if eq .ActiveNav "filesync"}} nav-link--active{{end}}" title="P2P Synchronized User Directory">
             Filesync
         </a>
@@ -53,7 +56,9 @@
         </a>
         {{end}}
         {{end}}
+        {{end}}
 
+        {{if .CurrentUser.HasPermission "fleet.read"}}
         <div class="nav-group__label">Operations</div>
         <a href="/task" class="nav-link{{if eq .ActiveNav "task"}} nav-link--active{{end}}">
             Tasks
@@ -66,49 +71,66 @@
             Config Approvals
         </a>
         {{end}}
+        {{end}}
 
+        {{if .CurrentUser.HasPermission "compliance.read"}}
         <div class="nav-group__label">Security &amp; Compliance</div>
+        {{if .CurrentUser.HasPermission "fleet.read"}}
         <a href="/security" class="nav-link{{if eq .ActiveNav "security"}} nav-link--active{{end}}">
             Security
         </a>
+        {{end}}
         <a href="/compliance" class="nav-link{{if eq .ActiveNav "compliance"}} nav-link--active{{end}}">
             Compliance
         </a>
+        {{if .CurrentUser.HasPermission "fleet.read"}}
         <a href="/risk" class="nav-link{{if eq .ActiveNav "risk"}} nav-link--active{{end}}">
             Risk Posture
         </a>
+        {{end}}
         <div class="nav-group__divider"></div>
+        {{end}}
 
         <div class="nav-group__header">Platform</div>
 
         <div class="nav-group__label nav-group__label--sub">Config</div>
-        {{if .CurrentUser.IsAdmin}}
+        {{if .CurrentUser.HasPermission "config.publish"}}
         <a href="/server/config" class="nav-link{{if eq .ActiveNav "server-config"}} nav-link--active{{end}}">
             Server Config
         </a>
         {{end}}
+        {{if .CurrentUser.HasPermission "fleet.read"}}
         <a href="/integrations" class="nav-link{{if eq .ActiveNav "integrations"}} nav-link--active{{end}}">
             Integrations
         </a>
+        {{end}}
 
         <div class="nav-group__label nav-group__label--sub">Data</div>
+        {{if .CurrentUser.HasPermission "fleet.read"}}
         <a href="/health" class="nav-link{{if eq .ActiveNav "health"}} nav-link--active{{end}}">
             Vigo Health
         </a>
+        {{end}}
+        {{if .CurrentUser.HasPermission "audit.read"}}
         <a href="/audit" class="nav-link{{if eq .ActiveNav "audit"}} nav-link--active{{end}}">
             Audit Log
         </a>
+        {{end}}
+        {{if .CurrentUser.HasPermission "compliance.read"}}
         <a href="/platform/compliance" class="nav-link{{if eq .ActiveNav "platform-compliance"}} nav-link--active{{end}}" title="Vigo product-level compliance posture">
             Platform Compliance
         </a>
+        {{end}}
         {{if .DocsEnabled}}
         <a href="/docs" class="nav-link{{if eq .ActiveNav "docs"}} nav-link--active{{end}}">
             Documentation
         </a>
         {{end}}
+        {{if .CurrentUser.HasPermission "fleet.read"}}
         <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}">
             License
         </a>
+        {{end}}
         <a href="/support" class="nav-link{{if eq .ActiveNav "support"}} nav-link--active{{end}}">
             Support
         </a>

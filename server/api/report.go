@@ -184,14 +184,101 @@ func (h *ReportHandler) frameworkDef(_ AuditChainStatus, slug string) (framework
 	return fw, ok
 }
 
-// buildFrameworkFindings constructs the finding set for a framework and
-// applies fleet-wide waivers in place. Waivers come from two sources —
-// envoys-tree compliance.vgo (via ConfigStore) and API-created waivers in
-// the DB. A waiver promotes a not-satisfied finding to "waived" but never
-// overrides a "satisfied" status (already-passing controls keep passing;
-// the waiver badge still surfaces in the evidence string).
+// connwaerCapabilityByControl maps (framework slug, control ID) →
+// Connwaer capability name. When a control appears here and any envoy
+// reports the matching `connwaer.<capability>.status` trait, the
+// finding's Status is escalated to "satisfied" or "partial" via
+// connwaerControlStatus before waivers run. Module-tag coverage still
+// takes priority in partitionEnvoyFindings — this map only fires when a
+// control would otherwise be missing.
+//
+// Mappings derive from connwaer/src/capability/*.rs `controls()`
+// declarations, adjusted to the framework builder's actual control IDs
+// (some Connwaer-declared IDs predate PCI DSS v4.0 / NIST 800-53 Rev 5
+// numbering; this map carries the v4.0 / Rev 5 forms used here).
+var connwaerCapabilityByControl = map[string]map[string]string{
+	"compliance": { // HIPAA
+		"164.312(a)(2)(iii)": "session_timeout",
+		"164.312(a)(2)(iv)":  "encryption_at_rest",
+	},
+	"pci": {
+		"3.5.1":  "encryption_at_rest",
+		"8.2.8":  "session_timeout",
+		"8.3.6":  "password_policy",
+		"1.4.1":  "network_segmentation",
+		"11.5.2": "integrity_monitoring",
+		"10.6.1": "time_sync",
+		"10.4.1": "log_review",
+	},
+	"nist": {
+		"AC-4": "network_segmentation",
+		"AC-6": "privilege_escalation",
+		"AU-8": "time_sync",
+		"SI-7": "integrity_monitoring",
+		"IA-5": "password_policy",
+	},
+	"ccss": {
+		"CCSS-9.1": "hsm_lifecycle",
+	},
+	"cyberessentials": {
+		"CE-MW-4": "app_allowlisting",
+		"CE-MW-5": "sandboxing",
+	},
+	"finra": {
+		"BCP-1":      "backup_restore",
+		"BCP-2":      "backup_restore",
+		"BCP-3":      "bcp_test",
+		"SEC-17a4-1": "worm_verify",
+		"SEC-17a4-2": "worm_verify",
+	},
+	"mifid2": {
+		"RTS7-Art11-1": "capacity_monitor",
+		"RTS7-Art11-2": "capacity_monitor",
+		"RTS7-Art14-1": "kill_switch",
+	},
+	"gaming": {
+		"NGC-TS-4.2":  "rng_validation",
+		"MGA-RGR-5.2": "bcp_test",
+		"MGA-RGR-6.1": "rng_validation",
+		"UKGC-RTS-5B": "bcp_test",
+	},
+}
+
+// applyConnwaerEscalations walks findings for the given framework and
+// overrides Status + Evidence on any control that has a Connwaer
+// capability mapping with a fleet status worth reporting. Runs before
+// waivers so a "satisfied"/"partial" Connwaer escalation is preserved
+// through the waiver pass; "not_satisfied" is left as-is so Vigo's
+// upsell text doesn't drown out genuine "missing" rendering downstream.
+func (h *ReportHandler) applyConnwaerEscalations(slug string, findings []ControlFinding) {
+	caps, ok := connwaerCapabilityByControl[slug]
+	if !ok {
+		return
+	}
+	for i := range findings {
+		capability, mapped := caps[findings[i].ControlID]
+		if !mapped {
+			continue
+		}
+		status, evidence := h.connwaerControlStatus(capability, findings[i].Title)
+		if status == "not_satisfied" {
+			continue
+		}
+		findings[i].Status = status
+		findings[i].Evidence = evidence
+	}
+}
+
+// buildFrameworkFindings constructs the finding set for a framework,
+// applies Connwaer trait-driven escalations, then applies fleet-wide
+// waivers in place. Waivers come from two sources — envoys-tree
+// compliance.vgo (via ConfigStore) and API-created waivers in the DB.
+// A waiver promotes a not-satisfied finding to "waived" but never
+// overrides a "satisfied" status (already-passing controls keep
+// passing; the waiver badge still surfaces in the evidence string).
 func (h *ReportHandler) buildFrameworkFindings(ctx context.Context, slug string, fw frameworkDef) []ControlFinding {
 	findings := fw.controls()
+	h.applyConnwaerEscalations(slug, findings)
 	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
 		if fileWaivers := h.configStore.Waivers(standardKey); len(fileWaivers) > 0 {
 			for i := range findings {

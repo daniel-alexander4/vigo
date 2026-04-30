@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"git.alexander4.io/vigo/server/ai"
+	"git.alexander4.io/vigo/server/auth"
 )
 
 // AIHandler serves the /api/v1/ask endpoint.
@@ -22,9 +23,13 @@ func NewAIHandler(assistant *ai.Assistant) *AIHandler {
 	return &AIHandler{assistant: assistant}
 }
 
-// RegisterRoutes mounts the AI endpoint on the given mux.
+// RegisterRoutes mounts the AI endpoint on the given mux. The
+// assistant has tool access to live fleet data and can dispatch
+// queries, so the endpoint requires query.execute (admin-only by
+// default).
 func (h *AIHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/ask", h.handleAsk)
+	exec := auth.RequirePermission(auth.PermQueryExecute)
+	mux.Handle("POST /api/v1/ask", exec(http.HandlerFunc(h.handleAsk)))
 }
 
 func (h *AIHandler) handleAsk(w http.ResponseWriter, r *http.Request) {

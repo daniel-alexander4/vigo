@@ -19,7 +19,7 @@ func TestPeerStatusNotConfigured(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/peer/status", nil)
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
+	mux.ServeHTTP(w, adminReq(req))
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status code = %d, want %d", w.Code, http.StatusNotFound)
@@ -33,7 +33,7 @@ func TestPeerPromoteNotConfigured(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/peer/promote", nil)
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
+	mux.ServeHTTP(w, adminReq(req))
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status code = %d, want %d", w.Code, http.StatusNotFound)
@@ -51,7 +51,7 @@ func TestPeerStatusConfigured(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/peer/status", nil)
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
+	mux.ServeHTTP(w, adminReq(req))
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status code = %d, want %d", w.Code, http.StatusOK)
@@ -81,7 +81,7 @@ func TestPeerPromoteConfigured(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/peer/promote", nil)
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
+	mux.ServeHTTP(w, adminReq(req))
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("status code = %d, want %d", w.Code, http.StatusOK)

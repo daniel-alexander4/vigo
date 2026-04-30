@@ -1,5 +1,10 @@
 name: elastic-stack
 
+compliance:
+  nist-800-53: [AU-2, AU-6, AU-9]
+  pci-dss: [10.2.1, 10.3.3]
+  iso-27001: [A.12.4.1]
+
 vars:
   es_cluster_name: "vigo-cluster"
   es_http_port: "9200"

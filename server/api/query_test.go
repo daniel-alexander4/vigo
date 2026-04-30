@@ -53,7 +53,7 @@ func TestQueryHandler_Success(t *testing.T) {
 	body := `{"traitPath":"os.distro","target":"*.web.*"}`
 	req := httptest.NewRequest("POST", "/api/v1/query", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -87,7 +87,7 @@ func TestQueryHandler_MissingTraitPath(t *testing.T) {
 	body := `{"target":"*.web.*"}`
 	req := httptest.NewRequest("POST", "/api/v1/query", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
@@ -102,7 +102,7 @@ func TestQueryHandler_MissingTarget(t *testing.T) {
 	body := `{"traitPath":"os.distro"}`
 	req := httptest.NewRequest("POST", "/api/v1/query", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
@@ -118,7 +118,7 @@ func TestQueryHandler_DispatchError(t *testing.T) {
 	body := `{"traitPath":"os.distro","target":"nonexistent"}`
 	req := httptest.NewRequest("POST", "/api/v1/query", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rec.Code)

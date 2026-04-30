@@ -31,11 +31,17 @@ func NewAuditHandler(queries *db.Queries) *AuditHandler {
 // SetAuditWriter sets the audit writer for recording emergency access events.
 func (h *AuditHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 
-// RegisterRoutes registers audit endpoints.
+// RegisterRoutes registers audit endpoints. List + verify require
+// audit.read (admin and viewer have it; the compliance role
+// deliberately does not — see scrutinize note in
+// server/auth/permissions.go). Emergency-access recording is admin-
+// only because it asserts identity bypass.
 func (h *AuditHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/audit", h.ListAuditEvents)
-	mux.HandleFunc("GET /api/v1/audit/verify", h.VerifyChain)
-	mux.HandleFunc("POST /api/v1/emergency-access", h.RecordEmergencyAccess)
+	read := vigoauth.RequirePermission(vigoauth.PermAuditRead)
+	admin := vigoauth.RequireAdmin("")
+	mux.Handle("GET /api/v1/audit", read(http.HandlerFunc(h.ListAuditEvents)))
+	mux.Handle("GET /api/v1/audit/verify", read(http.HandlerFunc(h.VerifyChain)))
+	mux.Handle("POST /api/v1/emergency-access", admin(http.HandlerFunc(h.RecordEmergencyAccess)))
 }
 
 type auditEvent struct {

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"git.alexander4.io/vigo/server/auth"
 	isgrpc "git.alexander4.io/vigo/server/grpc"
 )
 
@@ -28,8 +29,12 @@ func NewQueryHandler(dispatcher QueryDispatcher) *QueryHandler {
 }
 
 // RegisterRoutes registers the query endpoint on the given mux.
+// Live queries dispatch to all connected agents and surface trait
+// values, so the route requires query.execute (which only admins
+// hold by default).
 func (h *QueryHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/query", h.HandleQuery)
+	exec := auth.RequirePermission(auth.PermQueryExecute)
+	mux.Handle("POST /api/v1/query", exec(http.HandlerFunc(h.HandleQuery)))
 }
 
 type queryRequest struct {

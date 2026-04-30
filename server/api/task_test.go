@@ -54,7 +54,7 @@ func TestTaskHandler_Dispatch(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/task", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
@@ -90,7 +90,7 @@ func TestTaskHandler_DispatchDryRun(t *testing.T) {
 	body := `{"command":"uptime","target":"*.web.*","batchSize":"2","dryRun":true}`
 	req := httptest.NewRequest("POST", "/api/v1/task", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 for dry_run, got %d: %s", rec.Code, rec.Body.String())
@@ -124,7 +124,7 @@ func TestTaskHandler_DispatchMissingCommand(t *testing.T) {
 	body := `{"target":"*.web.*"}`
 	req := httptest.NewRequest("POST", "/api/v1/task", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
@@ -140,7 +140,7 @@ func TestTaskHandler_DispatchMissingTarget(t *testing.T) {
 	body := `{"command":"uptime"}`
 	req := httptest.NewRequest("POST", "/api/v1/task", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
@@ -157,7 +157,7 @@ func TestTaskHandler_DispatchError(t *testing.T) {
 	body := `{"command":"uptime","target":"nonexistent"}`
 	req := httptest.NewRequest("POST", "/api/v1/task", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rec.Code)
@@ -184,7 +184,7 @@ func TestTaskHandler_List(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/task?limit=2", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -207,7 +207,7 @@ func TestTaskHandler_ListEmpty(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/task", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -259,7 +259,7 @@ func TestTaskHandler_Get(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/task/"+taskRunID, nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -302,7 +302,7 @@ func TestTaskHandler_GetNotFound(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/task/nonexistent", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
@@ -319,7 +319,7 @@ func TestTaskHandler_RequireDefinitionBlocksAdHoc(t *testing.T) {
 	body := `{"command":"filesync hello","target":"*"}`
 	req := httptest.NewRequest("POST", "/api/v1/task", strings.NewReader(body))
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403 for ad-hoc command, got %d: %s", rec.Code, rec.Body.String())
@@ -337,7 +337,7 @@ func TestTaskHandler_RequireDefinitionAllowsNamed(t *testing.T) {
 	body := `{"taskName":"restart-service","target":"*","params":{"service":"nginx"}}`
 	req := httptest.NewRequest("POST", "/api/v1/task", strings.NewReader(body))
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusCreated && rec.Code != http.StatusOK {
 		t.Fatalf("expected 200/201 for named task, got %d: %s", rec.Code, rec.Body.String())

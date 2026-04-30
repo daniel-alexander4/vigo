@@ -47,7 +47,7 @@ func TestWorkflowHandler_List(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/workflows?limit=2", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -71,7 +71,7 @@ func TestWorkflowHandler_ListEmpty(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/workflows", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
@@ -107,7 +107,7 @@ func TestWorkflowHandler_Get(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/workflows/"+runID, nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -142,7 +142,7 @@ func TestWorkflowHandler_GetNotFound(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/workflows/nonexistent", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
@@ -159,7 +159,7 @@ func TestWorkflowHandler_RunMissingName(t *testing.T) {
 	body := `{"operator":"admin"}`
 	req := httptest.NewRequest("POST", "/api/v1/workflows", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
@@ -176,7 +176,7 @@ func TestWorkflowHandler_RunUnknownWorkflow(t *testing.T) {
 	body := `{"name":"nonexistent","operator":"admin"}`
 	req := httptest.NewRequest("POST", "/api/v1/workflows", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
@@ -192,7 +192,7 @@ func TestWorkflowHandler_AbortNotFound(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/v1/workflows/nonexistent/abort", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
@@ -215,7 +215,7 @@ func TestWorkflowHandler_AbortNotRunning(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/v1/workflows/"+runID+"/abort", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("expected 409, got %d", rec.Code)

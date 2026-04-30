@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 )
@@ -24,14 +25,18 @@ func NewEnvoysHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex) *Envoys
 	return &EnvoysHandler{queries: queries, fleetIndex: fleetIndex}
 }
 
-// RegisterRoutes registers envoy management endpoints.
+// RegisterRoutes registers envoy management endpoints. Reads
+// (tags/convergence) require fleet.read; writes (maintenance
+// toggle, force update) require fleet.write.
 func (h *EnvoysHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/envoys/{id}/tags", h.GetTags)
-	mux.HandleFunc("PUT /api/v1/envoys/{id}/maintenance", h.SetMaintenance)
-	mux.HandleFunc("DELETE /api/v1/envoys/{id}/maintenance", h.ClearMaintenance)
-	mux.HandleFunc("GET /api/v1/envoys/{id}/convergence", h.GetConvergence)
-	mux.HandleFunc("POST /api/v1/envoys/{id}/update", h.ForceUpdate)
-	mux.HandleFunc("POST /api/v1/envoys/update", h.ForceUpdateAll)
+	read := auth.RequirePermission(auth.PermFleetRead)
+	write := auth.RequirePermission(auth.PermFleetWrite)
+	mux.Handle("GET /api/v1/envoys/{id}/tags", read(http.HandlerFunc(h.GetTags)))
+	mux.Handle("PUT /api/v1/envoys/{id}/maintenance", write(http.HandlerFunc(h.SetMaintenance)))
+	mux.Handle("DELETE /api/v1/envoys/{id}/maintenance", write(http.HandlerFunc(h.ClearMaintenance)))
+	mux.Handle("GET /api/v1/envoys/{id}/convergence", read(http.HandlerFunc(h.GetConvergence)))
+	mux.Handle("POST /api/v1/envoys/{id}/update", write(http.HandlerFunc(h.ForceUpdate)))
+	mux.Handle("POST /api/v1/envoys/update", write(http.HandlerFunc(h.ForceUpdateAll)))
 }
 
 // GetTags returns the tags for a envoy. Read-only — tags are derived from

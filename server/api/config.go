@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/ai"
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
@@ -90,20 +91,31 @@ func (h *ConfigHandler) SetAI(assistant *ai.Assistant, cfg config.AISection) {
 	h.aiCfg = cfg
 }
 
-// RegisterRoutes registers config management endpoints.
+// RegisterRoutes registers config management endpoints. Mutating
+// verbs (publish/rollback/freeze/reload/retract) require
+// config.publish; rollback uses its own permission so it can be
+// granted independently. Read endpoints (list publishes/versions,
+// unused) require fleet.read — config history is fleet metadata, not
+// publish-author state. Secret rotation/access callbacks require
+// admin (called by the watcher subsystem; CLI/UI never hit these).
 func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/config/publishes", h.ListPublishes)
-	mux.HandleFunc("POST /api/v1/config/publishes", h.RecordPublish)
-	mux.HandleFunc("GET /api/v1/config/publishes/{id}", h.GetPublish)
-	mux.HandleFunc("GET /api/v1/config/versions", h.ListVersions)
-	mux.HandleFunc("POST /api/v1/config/rollback/{version}", h.Rollback)
-	mux.HandleFunc("POST /api/v1/config/freeze", h.Freeze)
-	mux.HandleFunc("POST /api/v1/config/unfreeze", h.Unfreeze)
-	mux.HandleFunc("POST /api/v1/config/reload", h.ReloadConfig)
-	mux.HandleFunc("POST /api/v1/config/retract", h.Retract)
-	mux.HandleFunc("GET /api/v1/config/unused", h.HandleUnused)
-	mux.HandleFunc("POST /api/v1/secrets/rotated", h.SecretRotated)
-	mux.HandleFunc("POST /api/v1/secrets/accessed", h.SecretAccessed)
+	read := auth.RequirePermission(auth.PermFleetRead)
+	publish := auth.RequirePermission(auth.PermConfigPublish)
+	rollback := auth.RequirePermission(auth.PermConfigRollback)
+	admin := auth.RequireAdmin("")
+
+	mux.Handle("GET /api/v1/config/publishes", read(http.HandlerFunc(h.ListPublishes)))
+	mux.Handle("POST /api/v1/config/publishes", publish(http.HandlerFunc(h.RecordPublish)))
+	mux.Handle("GET /api/v1/config/publishes/{id}", read(http.HandlerFunc(h.GetPublish)))
+	mux.Handle("GET /api/v1/config/versions", read(http.HandlerFunc(h.ListVersions)))
+	mux.Handle("POST /api/v1/config/rollback/{version}", rollback(http.HandlerFunc(h.Rollback)))
+	mux.Handle("POST /api/v1/config/freeze", publish(http.HandlerFunc(h.Freeze)))
+	mux.Handle("POST /api/v1/config/unfreeze", publish(http.HandlerFunc(h.Unfreeze)))
+	mux.Handle("POST /api/v1/config/reload", publish(http.HandlerFunc(h.ReloadConfig)))
+	mux.Handle("POST /api/v1/config/retract", publish(http.HandlerFunc(h.Retract)))
+	mux.Handle("GET /api/v1/config/unused", read(http.HandlerFunc(h.HandleUnused)))
+	mux.Handle("POST /api/v1/secrets/rotated", admin(http.HandlerFunc(h.SecretRotated)))
+	mux.Handle("POST /api/v1/secrets/accessed", admin(http.HandlerFunc(h.SecretAccessed)))
 }
 
 // ReloadConfig re-reads all config files from disk. Called by vigocli

@@ -34,7 +34,7 @@ func TestEnvoys_GetTags(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/envoys/"+envoyID+"/tags", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -58,7 +58,7 @@ func TestEnvoys_GetTagsNotFound(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/envoys/nonexistent/tags", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
@@ -84,7 +84,7 @@ func TestEnvoys_SetMaintenance(t *testing.T) {
 	req := httptest.NewRequest("PUT", "/api/v1/envoys/"+envoyID+"/maintenance", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -109,7 +109,7 @@ func TestEnvoys_SetMaintenanceInvalidTimestamp(t *testing.T) {
 	req := httptest.NewRequest("PUT", "/api/v1/envoys/t-001/maintenance", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
@@ -134,7 +134,7 @@ func TestEnvoys_ClearMaintenance(t *testing.T) {
 
 	req := httptest.NewRequest("DELETE", "/api/v1/envoys/"+envoyID+"/maintenance", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -164,7 +164,7 @@ func TestEnvoys_GetConvergence(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/envoys/"+envoyID+"/convergence", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -187,7 +187,7 @@ func TestEnvoys_GetConvergenceNotFound(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/envoys/nonexistent/convergence", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)
@@ -210,7 +210,7 @@ func TestEnvoys_ForceUpdate(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/v1/envoys/"+envoyID+"/update", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -233,7 +233,7 @@ func TestEnvoys_ForceUpdateNotFound(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/v1/envoys/nonexistent/update", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", rec.Code)

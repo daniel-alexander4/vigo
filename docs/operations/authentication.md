@@ -56,6 +56,9 @@ Until a password is set, all web UI requests redirect to the setup page. Passwor
 # Create a viewer account
 vigocli webusers create --username alice --role viewer --email alice@example.com
 
+# Create a compliance-staff account (compliance.read + compliance.docs.write only)
+vigocli webusers create --username carol --role compliance --email carol@example.com
+
 # Set their password
 vigocli secrets set web vigo/web/auth/alice
 ```
@@ -192,42 +195,52 @@ The following paths are accessible without authentication regardless of the conf
 
 ## Roles and Permissions
 
-Two roles are supported:
+Three roles are supported:
 
-| Action | Admin | Viewer |
-|--------|-------|--------|
-| View dashboards, envoys, runs, compliance | Yes | Yes |
-| View tasks, workflows, query results | Yes | Yes |
-| View docs, spanner status | Yes | Yes |
-| Dispatch tasks | Yes | No |
-| Run workflows | Yes | No |
-| Execute queries | Yes | No |
-| Manage enrollment patterns | Yes | No |
-| Manage webhooks | Yes | No |
-| Manage users | Yes | No |
-| Run health checks | Yes | No |
-| Create/download backups | Yes | No |
-| Create/revoke API tokens | Yes | Yes (own only) |
+| Action | Admin | Viewer | Compliance |
+|--------|-------|--------|------------|
+| View dashboards, envoys, runs | Yes | Yes | No |
+| View compliance pages, framework reports | Yes | Yes | Yes |
+| Upload supporting compliance documentation | Yes | No | Yes |
+| Download audit-bundle exports | Yes | Yes | Yes |
+| View raw audit log (`/audit`) | Yes | Yes | **No** |
+| View tasks, workflows, query results | Yes | Yes | No |
+| Dispatch tasks | Yes | No | No |
+| Run workflows | Yes | No | No |
+| Execute queries | Yes | No | No |
+| Manage enrollment patterns | Yes | No | No |
+| Manage webhooks | Yes | No | No |
+| Manage users | Yes | No | No |
+| Run health checks | Yes | No | No |
+| Create/download backups | Yes | No | No |
+| Create/revoke API tokens | Yes | Yes (own only) | Yes (own only) |
+
+The `compliance` role is for GRC staff and compliance-document uploaders. It is **not for auditors** — auditors should be assigned `admin` or `viewer` depending on the depth of access required. The role exists so compliance staff can do their job (upload BAA, IR plans, training records; view framework reports; download audit-bundle evidence) without being granted broader fleet, query, or audit-log access.
 
 ### Fine-Grained Permissions
 
-Beyond the admin/viewer roles, each user has a set of permissions stored as a JSON array. Admins always have all permissions regardless of stored values. Viewer permissions default to `fleet.read` and `audit.read`.
+Beyond the role labels, each user has a permission set stored as a JSON array. Admins always have all permissions regardless of the stored slice. Viewer defaults: `fleet.read`, `audit.read`, `compliance.read`. Compliance defaults: `compliance.read`, `compliance.docs.write` (no `audit.read`).
 
-| Permission | Description | Admin | Viewer |
-|------------|-------------|-------|--------|
-| `fleet.read` | View envoys, runs, compliance | Yes | Yes |
-| `fleet.write` | Modify envoy tags, maintenance | Yes | No |
-| `config.publish` | Publish configuration | Yes | No |
-| `config.rollback` | Rollback configuration | Yes | No |
-| `task.execute` | Dispatch ad-hoc tasks | Yes | No |
-| `query.execute` | Execute live queries | Yes | No |
-| `workflow.execute` | Run workflows | Yes | No |
-| `users.manage` | Create/delete/modify users | Yes | No |
-| `tokens.manage` | Manage API tokens | Yes | No |
-| `webhooks.manage` | Manage webhooks | Yes | No |
-| `backup.manage` | Create/download backups | Yes | No |
-| `enrollment.manage` | Manage enrollment patterns | Yes | No |
-| `audit.read` | View audit trail | Yes | Yes |
+| Permission | Description | Admin | Viewer | Compliance |
+|------------|-------------|-------|--------|------------|
+| `fleet.read` | View envoys, runs, inventory | Yes | Yes | No |
+| `fleet.write` | Modify envoy tags, maintenance, force update | Yes | No | No |
+| `config.publish` | Publish / freeze / reload configuration | Yes | No | No |
+| `config.rollback` | Roll back to a prior config version | Yes | No | No |
+| `push.execute` | Dispatch ad-hoc tasks | Yes | No | No |
+| `query.execute` | Execute live trait queries (incl. AI ask) | Yes | No | No |
+| `workflow.execute` | Run / abort workflows | Yes | No | No |
+| `users.manage` | Create/delete/modify users | Yes | No | No |
+| `tokens.manage` | Manage API tokens | Yes | No | No |
+| `webhooks.manage` | Manage webhooks | Yes | No | No |
+| `backup.manage` | Create/download backups | Yes | No | No |
+| `enrollment.manage` | Manage enrollment patterns | Yes | No | No |
+| `audit.read` | View raw audit-log chain | Yes | Yes | **No** |
+| `compliance.read` | View framework reports + audit bundle | Yes | Yes | Yes |
+| `compliance.docs.write` | Upload supporting compliance documentation | Yes | No | Yes |
+| `compliance.docs.purge` | Hard-delete soft-deleted compliance docs | Yes | No | No |
+
+The `audit.read` exclusion on the compliance role is deliberate: the raw hash-chained audit log is admin-and-viewer-only, while the audit-bundle export (a per-framework compliance evidence artifact built from the same data) rides `compliance.read` so the role can download what an auditor asks for without being handed the entire audit stream.
 
 Custom permission sets can be assigned per-user via the REST API to create roles between viewer and admin (e.g., an operator who can dispatch tasks but not manage users).
 

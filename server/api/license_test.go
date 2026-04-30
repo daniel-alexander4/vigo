@@ -31,7 +31,7 @@ func TestLicense_Status(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/license", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -69,7 +69,7 @@ func TestLicense_StatusOverLimit(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/license", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())

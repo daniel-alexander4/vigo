@@ -11,6 +11,11 @@
 #~ Scan output: C:\ProgramData\Vigo\security\
 name: security-scanning-windows
 
+compliance:
+  nist-800-53: [RA-5, SI-2]
+  pci-dss: [5.2.1, 6.3.3, 11.3.1]
+  iso-27001: [A.12.6.1]
+
 vars:
   scan_dir: "C:\\ProgramData\\Vigo\\security"
   trivy_severity: "CRITICAL,HIGH,MEDIUM,LOW"

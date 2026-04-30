@@ -1,5 +1,9 @@
 name: nrpe
 
+compliance:
+  nist-800-53: [SI-4]
+  iso-27001: [A.12.4.1]
+
 vars:
   nagios_server: "127.0.0.1"
   disk_warn: "20%"

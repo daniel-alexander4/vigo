@@ -303,7 +303,7 @@ CREATE TABLE IF NOT EXISTS users (
     username        TEXT NOT NULL UNIQUE,
     display_name    TEXT NOT NULL DEFAULT '',
     email           TEXT NOT NULL DEFAULT '',
-    role            TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'viewer')),
+    role            TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'viewer', 'compliance')),
     permissions     TEXT NOT NULL DEFAULT '',
     ssh_public_key  TEXT NOT NULL DEFAULT '',
     scrier_username TEXT NOT NULL DEFAULT '',

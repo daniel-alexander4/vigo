@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
@@ -33,16 +34,21 @@ func NewExportHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex, configS
 	}
 }
 
-// RegisterRoutes registers only the enabled export endpoints on the given mux.
+// RegisterRoutes registers only the enabled export endpoints on the
+// given mux. SIEM/CMDB are fleet exports (per-envoy run results,
+// inventory) so they require fleet.read; OSCAL is a compliance
+// artifact and rides compliance.read.
 func (h *ExportHandler) RegisterRoutes(mux *http.ServeMux) {
+	read := auth.RequirePermission(auth.PermFleetRead)
+	complianceRead := auth.RequirePermission(auth.PermComplianceRead)
 	if h.exportCfg.SIEM {
-		mux.HandleFunc("GET /api/v1/export/siem", h.handleSIEM)
+		mux.Handle("GET /api/v1/export/siem", read(http.HandlerFunc(h.handleSIEM)))
 	}
 	if h.exportCfg.CMDB {
-		mux.HandleFunc("GET /api/v1/export/cmdb", h.handleCMDB)
+		mux.Handle("GET /api/v1/export/cmdb", read(http.HandlerFunc(h.handleCMDB)))
 	}
 	if h.exportCfg.OSCAL {
-		mux.HandleFunc("GET /api/v1/export/oscal", h.handleOSCAL)
+		mux.Handle("GET /api/v1/export/oscal", complianceRead(http.HandlerFunc(h.handleOSCAL)))
 	}
 }
 

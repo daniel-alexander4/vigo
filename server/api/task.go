@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 	isgrpc "git.alexander4.io/vigo/server/grpc"
 )
@@ -39,13 +40,18 @@ func NewTaskHandler(queries *db.Queries, dispatcher TaskDispatcher, requireDefin
 	return &TaskHandler{queries: queries, dispatcher: dispatcher, requireDefinition: requireDefinition}
 }
 
-// RegisterRoutes registers task dispatch endpoints on the given mux.
+// RegisterRoutes registers task dispatch endpoints on the given
+// mux. Dispatch + cancel require push.execute (admin-only by
+// default — tasks run arbitrary commands on managed envoys); list /
+// get are fleet.read.
 func (h *TaskHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/task", h.HandleDispatch)
-	mux.HandleFunc("GET /api/v1/task", h.HandleList)
-	mux.HandleFunc("GET /api/v1/task/{id}", h.HandleGet)
-	mux.HandleFunc("POST /api/v1/task/{id}/cancel", h.HandleCancel)
-	mux.HandleFunc("POST /api/v1/task/cancel-running", h.HandleCancelRunning)
+	read := auth.RequirePermission(auth.PermFleetRead)
+	exec := auth.RequirePermission(auth.PermPushExecute)
+	mux.Handle("POST /api/v1/task", exec(http.HandlerFunc(h.HandleDispatch)))
+	mux.Handle("GET /api/v1/task", read(http.HandlerFunc(h.HandleList)))
+	mux.Handle("GET /api/v1/task/{id}", read(http.HandlerFunc(h.HandleGet)))
+	mux.Handle("POST /api/v1/task/{id}/cancel", exec(http.HandlerFunc(h.HandleCancel)))
+	mux.Handle("POST /api/v1/task/cancel-running", exec(http.HandlerFunc(h.HandleCancelRunning)))
 }
 
 type dispatchRequest struct {

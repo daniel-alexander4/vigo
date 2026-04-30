@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"time"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/spanner"
@@ -103,8 +104,12 @@ func NewDoctorHandler(cfg DoctorConfig) *DoctorHandler {
 }
 
 // RegisterRoutes mounts the doctor endpoint on the given mux.
+// Doctor surfaces server health (cert validity, DB stats, peer
+// status, secrets backend reachability) — fleet.read is the right
+// gate.
 func (h *DoctorHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/doctor", h.handleDoctor)
+	read := auth.RequirePermission(auth.PermFleetRead)
+	mux.Handle("GET /api/v1/doctor", read(http.HandlerFunc(h.handleDoctor)))
 }
 
 // RunChecks executes all health checks and returns the overall status and results.

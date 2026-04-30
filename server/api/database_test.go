@@ -50,7 +50,7 @@ func TestDatabase_Stats(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/db/stats", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -79,7 +79,7 @@ func TestDatabase_Tables(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/db/tables", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -101,7 +101,7 @@ func TestDatabase_Integrity(t *testing.T) {
 
 	req := httptest.NewRequest("GET", "/api/v1/db/integrity", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -129,7 +129,7 @@ func TestDatabase_Checkpoint(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/v1/db/checkpoint", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -153,7 +153,7 @@ func TestDatabase_QueryReadOnly(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/db/query", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
@@ -193,7 +193,7 @@ func TestDatabase_QueryBlocksWrites(t *testing.T) {
 		req := httptest.NewRequest("POST", "/api/v1/db/query", bytes.NewBufferString(body))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, req)
+		mux.ServeHTTP(rec, adminReq(req))
 
 		if rec.Code != http.StatusForbidden {
 			t.Errorf("expected 403 for %q, got %d", stmt, rec.Code)
@@ -212,7 +212,7 @@ func TestDatabase_QueryMissingSQL(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/v1/db/query", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
@@ -228,7 +228,7 @@ func TestDatabase_CheckpointNonSQLite(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/v1/db/checkpoint", nil)
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for non-SQLite checkpoint, got %d", rec.Code)

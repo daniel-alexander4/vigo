@@ -29,8 +29,15 @@ import (
 // route lives outside RegisterRoutes() so it can be wired explicitly
 // alongside the other report endpoints — keeps the per-framework
 // handler list in RegisterRoutes free of one-off wiring.
+//
+// Gated on PermComplianceRead, not PermAuditRead: the bundle is a
+// compliance-evidence artifact (framework report + attached docs +
+// per-control evidence), not the raw audit-log stream. The narrower
+// classification lets the compliance role download bundles without
+// being granted the broader audit.read capability that exposes the
+// hash-chained audit log.
 func (h *ReportHandler) registerAuditBundleRoute(mux *http.ServeMux) {
-	read := auth.RequirePermission(auth.PermAuditRead)
+	read := auth.RequirePermission(auth.PermComplianceRead)
 	mux.Handle("GET /api/v1/report/audit-bundle/{slug}", read(http.HandlerFunc(h.handleAuditBundle)))
 }
 

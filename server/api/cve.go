@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/traits"
 )
@@ -24,9 +25,12 @@ func NewCVEHandler(fleetIndex *fleet.FleetIndex) *CVEHandler {
 	return &CVEHandler{fleetIndex: fleetIndex}
 }
 
-// RegisterRoutes mounts CVE routes on the given mux.
+// RegisterRoutes mounts CVE routes on the given mux. CVE search
+// returns per-envoy package versions and detected exposures, so it
+// requires fleet.read.
 func (h *CVEHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/cve/{cveID}", h.handleCVESearch)
+	read := auth.RequirePermission(auth.PermFleetRead)
+	mux.Handle("GET /api/v1/cve/{cveID}", read(http.HandlerFunc(h.handleCVESearch)))
 }
 
 // CVESearchResult is the response for a CVE impact search.

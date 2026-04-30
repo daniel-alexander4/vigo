@@ -1,4 +1,12 @@
 name: openssh
+
+compliance:
+  cis-ubuntu: [5.2.1, 5.2.4, 5.2.6, 5.2.7, 5.2.10, 5.2.13, 5.2.14, 5.2.15, 5.2.20]
+  cis-rhel: [5.2.1, 5.2.4, 5.2.6, 5.2.7, 5.2.10, 5.2.13, 5.2.14, 5.2.15, 5.2.20]
+  nist-800-53: [AC-17, IA-2]
+  pci-dss: [2.2.7, 8.3.1]
+  hipaa: [164.312(a)(1), 164.312(d), 164.312(e)(1)]
+  iso-27001: [A.9.4.2, A.13.2.1]
 # Prefer: cis-ubuntu-access or cis-rhel-access (compliance roles include SSH
 # hardening with stronger crypto, compliance tags, and more settings).
 # Only use this module if you are NOT using CIS compliance roles — both manage

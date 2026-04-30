@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/license"
 )
 
@@ -21,8 +22,11 @@ func NewLicenseHandler(enforcer *license.Enforcer) *LicenseHandler {
 }
 
 // RegisterRoutes mounts the license endpoints on the given mux.
+// License status is fleet metadata — node count, watermark, expiry —
+// so fleet.read is the right gate.
 func (h *LicenseHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/license", h.handleStatus)
+	read := auth.RequirePermission(auth.PermFleetRead)
+	mux.Handle("GET /api/v1/license", read(http.HandlerFunc(h.handleStatus)))
 }
 
 func (h *LicenseHandler) handleStatus(w http.ResponseWriter, r *http.Request) {

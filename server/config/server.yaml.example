@@ -323,24 +323,11 @@ watcher:
 #   # training records, signed contracts). Files land envelope-encrypted
 #   # at <docs_dir>/<id>; metadata in compliance_docs / compliance_doc_links.
 #   #
-#   # Defaults are sensible for a single-deployment small fleet. Raise
-#   # the caps for larger orgs, lower max_doc_bytes for thin clients.
-#   #
 #   docs:
 #     docs_dir: "/srv/vigo/compliance-docs"
 #     max_doc_bytes: 52428800             # 50 MiB per uploaded doc
 #     max_per_framework_bytes: 5368709120 # 5 GiB total per framework
 #     max_total_bytes: 53687091200        # 50 GiB total across all frameworks
-#     mime_allowlist:                     # empty = built-in default
-#       - "application/pdf"
-#       - "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-#       - "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-#       - "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-#       - "text/plain"
-#       - "text/markdown"
-#       - "image/png"
-#       - "image/jpeg"
-#       - "image/svg+xml"
 
 
 # ── Publish / Blast Radius ────────────────────────────────────────────────

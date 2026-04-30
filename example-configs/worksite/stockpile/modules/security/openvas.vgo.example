@@ -9,6 +9,11 @@
 #~ source-based installation.
 name: openvas
 
+compliance:
+  nist-800-53: [RA-5]
+  pci-dss: [11.2.1, 11.3.1]
+  iso-27001: [A.12.6.1]
+
 vars:
   gvm_admin_user: "admin"
   gvm_admin_pass: "secret:vigo/openvas/admin_password"

@@ -78,8 +78,8 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	if req.Role == "" {
 		req.Role = "viewer"
 	}
-	if req.Role != "admin" && req.Role != "viewer" {
-		writeJSONError(w, http.StatusBadRequest, "role must be admin or viewer")
+	if !auth.IsValidRole(req.Role) {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("role must be one of %v", auth.ValidRoles))
 		return
 	}
 
@@ -125,8 +125,8 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if req.Role != "" && req.Role != "admin" && req.Role != "viewer" {
-		writeJSONError(w, http.StatusBadRequest, "role must be admin or viewer")
+	if req.Role != "" && !auth.IsValidRole(req.Role) {
+		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("role must be one of %v", auth.ValidRoles))
 		return
 	}
 

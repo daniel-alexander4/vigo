@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/peer"
 )
 
@@ -23,10 +24,14 @@ func NewPeerHandler(peerSvc *peer.Service) *PeerHandler {
 	return &PeerHandler{peerSvc: peerSvc}
 }
 
-// RegisterRoutes mounts the peer endpoints on the given mux.
+// RegisterRoutes mounts the peer endpoints on the given mux. Status
+// is fleet-read; promote (which flips a spoke to primary and
+// reshapes replication) is admin-only.
 func (h *PeerHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/peer/status", h.handleStatus)
-	mux.HandleFunc("POST /api/v1/peer/promote", h.handlePromote)
+	read := auth.RequirePermission(auth.PermFleetRead)
+	admin := auth.RequireAdmin("")
+	mux.Handle("GET /api/v1/peer/status", read(http.HandlerFunc(h.handleStatus)))
+	mux.Handle("POST /api/v1/peer/promote", admin(http.HandlerFunc(h.handlePromote)))
 }
 
 // peerStatusResponse is the JSON shape returned by GET /api/v1/peer/status.

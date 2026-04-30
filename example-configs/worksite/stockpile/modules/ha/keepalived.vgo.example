@@ -1,5 +1,9 @@
 name: keepalived
 
+compliance:
+  nist-800-53: [CP-7]
+  iso-27001: [A.17.2.1]
+
 vars:
   vrrp_interface: "eth0"
   virtual_ip: "10.0.0.100"

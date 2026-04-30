@@ -1,4 +1,10 @@
 name: firewall-rules
+
+compliance:
+  cis-ubuntu: [3.4.1.1, 3.4.1.2]
+  nist-800-53: [SC-7, AC-4]
+  pci-dss: [1.2.1, 1.2.5, 1.3.1, 1.4.1]
+  iso-27001: [A.13.1.1]
 # Prefer: cis-ubuntu-network (installs UFW with default-deny and compliance tags).
 # Safe to use alongside CIS if you only add allow rules here — but avoid
 # duplicating the default-deny and UFW enable logic.

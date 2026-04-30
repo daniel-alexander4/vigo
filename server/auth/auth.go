@@ -46,6 +46,14 @@ func (u *User) IsAdmin() bool {
 	return u != nil && u.Role == "admin"
 }
 
+// IsCompliance returns true if the user has the compliance role —
+// GRC staff and compliance-document uploaders. Used for nav gating
+// where role-label parity with admin/viewer is the cleanest check;
+// authorization itself runs through HasPermission.
+func (u *User) IsCompliance() bool {
+	return u != nil && u.Role == "compliance"
+}
+
 type contextKey int
 
 const userContextKey contextKey = iota

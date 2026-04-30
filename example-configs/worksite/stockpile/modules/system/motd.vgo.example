@@ -1,5 +1,11 @@
 name: motd
 
+compliance:
+  cis-ubuntu: [1.7.1, 1.7.2, 1.7.3]
+  cis-rhel: [1.7.1, 1.7.2, 1.7.3]
+  nist-800-53: [AC-8]
+  iso-27001: [A.9.1.2]
+
 vars:
   org_name: "ACME Corp"
   contact_email: "ops@example.com"
