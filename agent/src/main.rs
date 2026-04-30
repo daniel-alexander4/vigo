@@ -6,6 +6,7 @@ use vigo::bootstrap;
 use vigo::checkin;
 use vigo::config;
 use vigo::executors;
+use vigo::multicall;
 use vigo::platform;
 use vigo::policy;
 use vigo::update;
@@ -1516,6 +1517,24 @@ async fn main() -> Result<()> {
     // Force the build-version marker to be observably live so LTO can't
     // prove it dead and the linker can't gc-section it. Zero runtime cost.
     std::hint::black_box(&VIGO_BUILD_VERSION);
+
+    // ADR-015 multi-call binary dispatch: when invoked under a
+    // recognized non-default argv[0] (e.g., as `git-remote-vigo` via
+    // a symlink), branch to the corresponding mode without going
+    // through clap. The check has to be before any arg parsing
+    // because git invokes us with `<remote-name> <url>` positionals
+    // that the regular CLI parser would reject. Lives behind argv[0]
+    // canonicalization (strip dirs, strip `.exe`, lowercase) so a
+    // package recipe symlink anywhere on PATH lands in the right
+    // mode regardless of OS.
+    if let Some(arg0) = std::env::args_os().next() {
+        match multicall::classify_argv0(&arg0) {
+            Some(multicall::MulticallMode::GitRemoteVigo) => {
+                multicall::run_git_remote_vigo_stub();
+            }
+            None => {}
+        }
+    }
 
     // Install the default TLS crypto provider before any TLS operations.
     rustls::crypto::ring::default_provider()

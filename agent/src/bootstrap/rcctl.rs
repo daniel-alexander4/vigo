@@ -57,6 +57,16 @@ pub async fn install_service(
         info!(path = INSTALL_PATH, "installed vigo binary");
     }
 
+    // ADR-015: install the git-remote-vigo symlink. Best-effort.
+    if let Err(e) = super::ensure_git_remote_vigo_symlink(INSTALL_PATH) {
+        tracing::warn!(
+            error = %e,
+            link = super::GIT_REMOTE_VIGO_SYMLINK,
+            target = INSTALL_PATH,
+            "could not install git-remote-vigo symlink; vigo:// git URLs unavailable until fixed"
+        );
+    }
+
     // Write rc.d script.
     let script = rc_script();
     std::fs::write(RC_D_PATH, &script).context("write rc.d script")?;

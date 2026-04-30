@@ -69,6 +69,20 @@ pub async fn install_service(
         info!(path = INSTALL_PATH, "installed vigo binary");
     }
 
+    // ADR-015: install the git-remote-vigo symlink so the agent's
+    // multi-call dispatch is reachable from git's `git-remote-<scheme>`
+    // PATH lookup. Best-effort — a failure here doesn't block agent
+    // install; the user just won't be able to `git push vigo://...`
+    // until the link is in place.
+    if let Err(e) = super::ensure_git_remote_vigo_symlink(INSTALL_PATH) {
+        tracing::warn!(
+            error = %e,
+            link = super::GIT_REMOTE_VIGO_SYMLINK,
+            target = INSTALL_PATH,
+            "could not install git-remote-vigo symlink; vigo:// git URLs unavailable until fixed"
+        );
+    }
+
     // Write unit file.
     let unit = unit_file();
     std::fs::write(UNIT_PATH, &unit).context("write systemd unit file")?;

@@ -11,6 +11,7 @@ pub mod config;
 pub mod customtraits;
 pub mod executors;
 pub mod guardrails;
+pub mod multicall;
 pub mod platform;
 pub mod policy;
 pub mod runner;

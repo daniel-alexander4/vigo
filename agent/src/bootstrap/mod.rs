@@ -15,6 +15,55 @@ pub mod smf;
 #[cfg(windows)]
 pub mod windows_service;
 
+/// Standard install location for the `git-remote-vigo` multi-call
+/// symlink (ADR-015). The symlink target is the agent binary
+/// (`/usr/local/sbin/vigo`); git looks up `git-remote-<scheme>` on
+/// PATH at push/pull time, so the symlink has to live on a directory
+/// in user PATH (`/usr/local/bin/`) rather than the sbin dir where
+/// the binary itself lives.
+#[cfg(unix)]
+pub const GIT_REMOTE_VIGO_SYMLINK: &str = "/usr/local/bin/git-remote-vigo";
+
+/// Create or refresh the `git-remote-vigo` symlink so plain
+/// `git push vigo://...` finds the agent binary's multi-call
+/// dispatch entry point (ADR-015). Idempotent: if the link already
+/// points at `target`, no-op; if it exists pointing somewhere else
+/// (or as a regular file), it's removed and recreated.
+///
+/// Best-effort — a symlink failure does not block agent install.
+/// The agent functions normally without `git-remote-vigo` available;
+/// the user just can't `git push vigo://` until the link is in place.
+#[cfg(unix)]
+pub fn ensure_git_remote_vigo_symlink(target: &str) -> std::io::Result<()> {
+    use std::os::unix::fs::symlink;
+    use std::path::PathBuf;
+    let link = PathBuf::from(GIT_REMOTE_VIGO_SYMLINK);
+    if let Some(parent) = link.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    match std::fs::read_link(&link) {
+        Ok(existing) if existing == std::path::Path::new(target) => {
+            return Ok(());
+        }
+        Ok(_) | Err(_) => {
+            // Either points elsewhere, is a regular file, or doesn't
+            // exist. Remove + recreate.
+            let _ = std::fs::remove_file(&link);
+        }
+    }
+    symlink(target, &link)
+}
+
+#[cfg(not(unix))]
+pub fn ensure_git_remote_vigo_symlink(_target: &str) -> std::io::Result<()> {
+    // Windows multi-call dispatch is deferred per ADR-015's
+    // Linux-first doctrine. When the Windows port lands, this is
+    // where the equivalent shim (a tiny `.exe` wrapper, since NTFS
+    // junctions don't get inherited by argv[0] in a usefully
+    // observable way) will install.
+    Ok(())
+}
+
 /// Derive the gRPC address from a bootstrap server URL and gRPC port.
 ///
 /// "http://vigosrv.example.com:8443" + "1530" → "vigosrv.example.com:1530"
