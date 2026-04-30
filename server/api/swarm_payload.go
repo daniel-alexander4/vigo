@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/swarm"
@@ -59,12 +60,17 @@ func (h *LodeHandler) SetForcePusher(fp LodeForcePusher) {
 	h.forcePusher = fp
 }
 
-// RegisterRoutes registers payload endpoints.
+// RegisterRoutes registers payload endpoints. Distribute and revoke
+// are admin-only — they place and remove blobs on the swarm seed
+// directory and trigger force-pushes to streaming agents. Read
+// endpoints (list / status / broken / match) keep the route-level
+// gate pending; the Tier 2 audit pass will gate them as fleet.read.
 func (h *LodeHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/swarm/payload/distribute", h.Distribute)
+	admin := auth.RequireAdmin("")
+	mux.Handle("POST /api/v1/swarm/payload/distribute", admin(http.HandlerFunc(h.Distribute)))
 	mux.HandleFunc("GET /api/v1/swarm/payload/list", h.List)
 	mux.HandleFunc("GET /api/v1/swarm/payload/status/{sha256}", h.Status)
-	mux.HandleFunc("DELETE /api/v1/swarm/payload/{sha256}", h.Revoke)
+	mux.Handle("DELETE /api/v1/swarm/payload/{sha256}", admin(http.HandlerFunc(h.Revoke)))
 	mux.HandleFunc("GET /api/v1/swarm/payload/broken", h.BrokenSeeds)
 	mux.HandleFunc("GET /api/v1/swarm/payload/match", h.Match)
 }

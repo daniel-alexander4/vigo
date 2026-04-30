@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/sandgorgon"
@@ -49,21 +50,30 @@ func (h *SandgorgonHandler) SetLifecycleDataSource(ds sandgorgon.LifecycleDataSo
 	h.mgr.SetLifecycleDataSource(ds)
 }
 
-// RegisterRoutes mounts sandgorgon endpoints on the mux.
+// RegisterRoutes mounts sandgorgon endpoints on the mux. Bare-metal
+// lifecycle mutations (commission / decommission / import / return-
+// to-available / provision, image register / remove) are admin-only
+// — they touch BMC state, NIST 800-88 sanitization records, and PXE
+// boot configuration. Read endpoints (asset/certificate/image/event
+// listings, boot scripts, preseed configs, lifecycle reports) keep
+// the route-level gate pending — they're consumed by the
+// /sandgorgon/ web UI which is currently admin-rendered, but
+// gating them as fleet.read is queued for the Tier 2 audit pass.
 func (h *SandgorgonHandler) RegisterRoutes(mux *http.ServeMux) {
+	admin := auth.RequireAdmin("")
 	mux.HandleFunc("GET /api/v1/sandgorgon/assets", h.listAssets)
 	mux.HandleFunc("GET /api/v1/sandgorgon/assets/{id}", h.getAsset)
-	mux.HandleFunc("POST /api/v1/sandgorgon/commission", h.commission)
-	mux.HandleFunc("POST /api/v1/sandgorgon/decommission/{id}", h.decommission)
+	mux.Handle("POST /api/v1/sandgorgon/commission", admin(http.HandlerFunc(h.commission)))
+	mux.Handle("POST /api/v1/sandgorgon/decommission/{id}", admin(http.HandlerFunc(h.decommission)))
 	mux.HandleFunc("GET /api/v1/sandgorgon/certificates", h.listCertificates)
 	mux.HandleFunc("GET /api/v1/sandgorgon/certificates/{id}", h.getCertificate)
 	mux.HandleFunc("GET /api/v1/sandgorgon/certificates/{id}/html", h.getCertificateHTML)
-	mux.HandleFunc("POST /api/v1/sandgorgon/import", h.importCSV)
-	mux.HandleFunc("POST /api/v1/sandgorgon/return-to-available/{id}", h.returnToAvailable)
-	mux.HandleFunc("POST /api/v1/sandgorgon/provision/{id}", h.provision)
+	mux.Handle("POST /api/v1/sandgorgon/import", admin(http.HandlerFunc(h.importCSV)))
+	mux.Handle("POST /api/v1/sandgorgon/return-to-available/{id}", admin(http.HandlerFunc(h.returnToAvailable)))
+	mux.Handle("POST /api/v1/sandgorgon/provision/{id}", admin(http.HandlerFunc(h.provision)))
 	mux.HandleFunc("GET /api/v1/sandgorgon/images", h.listImages)
-	mux.HandleFunc("POST /api/v1/sandgorgon/images", h.registerImage)
-	mux.HandleFunc("DELETE /api/v1/sandgorgon/images/{id}", h.removeImage)
+	mux.Handle("POST /api/v1/sandgorgon/images", admin(http.HandlerFunc(h.registerImage)))
+	mux.Handle("DELETE /api/v1/sandgorgon/images/{id}", admin(http.HandlerFunc(h.removeImage)))
 	mux.HandleFunc("GET /api/v1/sandgorgon/dhcp-config", h.dhcpConfig)
 	mux.HandleFunc("GET /api/v1/sandgorgon/boot/{id}", h.bootScript)
 	mux.HandleFunc("GET /api/v1/sandgorgon/preseed/{id}", h.preseedConfig)

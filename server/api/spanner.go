@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/spanner"
 )
@@ -30,18 +31,24 @@ func NewSpannerHandler(role config.SpannerRole, spokeID string, hub *spanner.Hub
 	return &SpannerHandler{role: role, spokeID: spokeID, hub: hub}
 }
 
-// RegisterRoutes mounts spanner endpoints on the given mux.
+// RegisterRoutes mounts spanner endpoints on the given mux. Hub-
+// mode mutations (push / reassign / drain) are admin-only — they
+// flip envoy-spoke assignments and force fan-out to spokes. Read
+// endpoints (status + spoke drill-downs) keep the route-level gate
+// pending; they expose hub-aggregated fleet state and the Tier 2
+// audit pass will gate them as fleet.read.
 func (h *SpannerHandler) RegisterRoutes(mux *http.ServeMux) {
+	admin := auth.RequireAdmin("")
 	mux.HandleFunc("GET /api/v1/spanner/status", h.handleStatus)
 	// Spoke drill-down (Phase 2)
 	if h.hub != nil {
 		mux.HandleFunc("GET /api/v1/spanner/spokes/{id}", h.handleSpokeDetail)
 		mux.HandleFunc("GET /api/v1/spanner/spokes/{id}/envoys", h.handleSpokeEnvoys)
 		mux.HandleFunc("GET /api/v1/spanner/spokes/{id}/runs", h.handleSpokeRuns)
-		mux.HandleFunc("POST /api/v1/spanner/spokes/{id}/push", h.handleSpokePush)
+		mux.Handle("POST /api/v1/spanner/spokes/{id}/push", admin(http.HandlerFunc(h.handleSpokePush)))
 		// Reassignment + drain (Phase 3)
-		mux.HandleFunc("POST /api/v1/spanner/reassign", h.handleReassign)
-		mux.HandleFunc("POST /api/v1/spanner/spokes/{id}/drain", h.handleDrain)
+		mux.Handle("POST /api/v1/spanner/reassign", admin(http.HandlerFunc(h.handleReassign)))
+		mux.Handle("POST /api/v1/spanner/spokes/{id}/drain", admin(http.HandlerFunc(h.handleDrain)))
 	}
 }
 

@@ -459,13 +459,13 @@ List recent runs on a specific spoke.
 
 ### POST /api/v1/spanner/spokes/{id}/push
 
-**Permission:** Authenticated (route-level gate pending — admin recommended)
+**Permission:** Admin role
 
 Force-push to envoys on a specific spoke.
 
 ### POST /api/v1/spanner/reassign
 
-**Permission:** Authenticated (route-level gate pending — admin recommended)
+**Permission:** Admin role
 
 
 Reassign a envoy from one spoke to another.
@@ -482,7 +482,7 @@ Reassign a envoy from one spoke to another.
 
 ### POST /api/v1/spanner/spokes/{id}/drain
 
-**Permission:** Authenticated (route-level gate pending — admin recommended)
+**Permission:** Admin role
 
 Drain all envoys from a spoke (move to target spoke or auto-route by patterns).
 
@@ -2092,8 +2092,8 @@ Administrator-pushed file distribution on the swarm substrate. These endpoints p
 - **GET /api/v1/swarm/payload/match** — preview which envoys match a given target expression.
 - **GET /api/v1/swarm/payload/status/{sha256}** — per-envoy distribution status for one payload.
 - **GET /api/v1/swarm/payload/broken** — payloads with unreachable peers or failed distributions.
-- **POST /api/v1/swarm/payload/distribute** — seed a new payload into the swarm for distribution.
-- **DELETE /api/v1/swarm/payload/{sha256}** — revoke a payload; agents evict on next check-in.
+- **POST /api/v1/swarm/payload/distribute** — seed a new payload into the swarm for distribution. _(admin)_
+- **DELETE /api/v1/swarm/payload/{sha256}** — revoke a payload; agents evict on next check-in. _(admin)_
 
 ### Gitmirror
 
@@ -2126,15 +2126,17 @@ Server-side counterparts to `vigocli sandgorgon` — see the [CLI reference](../
 - **GET /api/v1/sandgorgon/dhcp-config** — DHCP snippet for PXE routing.
 - **GET /api/v1/sandgorgon/events/{assetID}** — lifecycle-event stream for one asset.
 - **GET /api/v1/sandgorgon/images** — list registered OS images.
-- **POST /api/v1/sandgorgon/images** — register a new OS image.
-- **DELETE /api/v1/sandgorgon/images/{id}** — deregister an OS image (file not deleted).
+- **POST /api/v1/sandgorgon/images** — register a new OS image. _(admin)_
+- **DELETE /api/v1/sandgorgon/images/{id}** — deregister an OS image (file not deleted). _(admin)_
 - **GET /api/v1/sandgorgon/report/{id}** / **/api/v1/sandgorgon/report/{id}/html** — full lifecycle report.
 - **GET /api/v1/sandgorgon/certificates** — list all NIST 800-88 sanitization certificates.
 - **GET /api/v1/sandgorgon/certificates/{id}** / **/api/v1/sandgorgon/certificates/{id}/html** — one certificate (JSON or printable HTML).
-- **POST /api/v1/sandgorgon/commission** — register a new asset for lifecycle management.
-- **POST /api/v1/sandgorgon/decommission/{id}** — decommission: revoke cert, sanitize disks, generate NIST 800-88 certificate.
-- **POST /api/v1/sandgorgon/provision/{id}** — PXE boot the asset with a registered OS image.
-- **POST /api/v1/sandgorgon/import** — import assets from CSV / NetBox / Snipe-IT.
-- **POST /api/v1/sandgorgon/return-to-available/{id}** — return a retired asset to the available pool.
+- **POST /api/v1/sandgorgon/commission** — register a new asset for lifecycle management. _(admin)_
+- **POST /api/v1/sandgorgon/decommission/{id}** — decommission: revoke cert, sanitize disks, generate NIST 800-88 certificate. _(admin)_
+- **POST /api/v1/sandgorgon/provision/{id}** — PXE boot the asset with a registered OS image. _(admin)_
+- **POST /api/v1/sandgorgon/import** — import assets from CSV / NetBox / Snipe-IT. _(admin)_
+- **POST /api/v1/sandgorgon/return-to-available/{id}** — return a retired asset to the available pool. _(admin)_
+
+Mutations gate on the admin role; read-only endpoints (asset / certificate / image / event listings, boot scripts, preseed configs, lifecycle reports) keep the route-level gate pending and currently require any authenticated user — the Tier 2 audit pass will move them to `fleet.read`.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
