@@ -6,6 +6,7 @@ title: "ADR-014: Self-fleet primitive"
 
 **Status:** Accepted (pending implementation)
 **Date:** 2026-04-29
+**Updated 2026-04-29:** Distribution section restructured to put peer-pair as the primary onboarding path (manual scp survives as air-gapped fallback). CLI verbs renamed for clarity (`activate` split into `unlock` + `join`; `deactivate` → `lock`; `show` → `pubkey`; new `pair` verb). Resolved scope gates recorded in the Decision section: single fleet per user (multi-fleet deferred to v2), three sequential releases (014 → 015 → 016), re-init from scratch on passphrase loss (no Shamir/escrow in v1).
 
 ## Context
 
@@ -27,9 +28,18 @@ Membership of an envoy in a self-fleet is decided locally on that envoy: if `~/.
 
 ### Distribution
 
-The wrapped key is **never transmitted by Vigo on first bootstrap**. The user manually copies `identity.wrapped` to each envoy they want in their fleet (`scp`, USB, etc.) and runs `self-fleet activate` on the destination, which prompts for the passphrase and unwraps into the agent's session-helper memory.
+Two onboarding paths. **Peer-pair is the primary path; manual scp is the air-gapped fallback.**
 
-After cryptsync is enrolled (which itself uses self-fleet for membership per ADR-016), subsequent fleet-key updates can ride cryptsync. First-time bootstrap is unavoidably manual — it is the chicken-and-egg break.
+**Peer-pair (primary).** A new envoy joins by pairing with an already-active fleet envoy over the existing swarm mTLS substrate (port 1531):
+
+1. On the active envoy: `vigo swarm self-fleet pair` — prints a 5-minute single-use pairing code, listens for one incoming pair request from a peer.
+2. On the new envoy: `vigo swarm self-fleet join --from <active-host>` — opens an mTLS connection to the active envoy (both endpoints already mutually authenticated by the Vigo CA), presents the pairing code, receives the **wrapped** `identity.wrapped` blob, prompts for the passphrase locally, unwraps, hands the key to the session helper.
+
+The wrapped blob on the wire is the same opaque ciphertext that sits on disk; the security boundary is the Argon2id+XChaCha20 wrapping with the user's passphrase, not the transport. The passphrase **never leaves the destination envoy**. The pairing code is the human-explicit authorization preventing any other envoy in the swarm from silently requesting the wrapped blob (same model as Signal/Bluetooth pairing).
+
+Optional audit-log entries flow through the existing audit hash chain on next check-in: `self-fleet.pair-issued` (with destination envoy fingerprint) on the source side, `self-fleet.pair-completed` on the destination side. The server never sees the blob — it learns the pair *happened*, consistent with Vigo's audit posture for envoy-side operations.
+
+**Manual scp (air-gapped fallback).** For envoys with no swarm connectivity to any existing fleet member, the user copies `~/.vigo-fleet/identity.wrapped` out of band (`scp`, USB, etc.) and runs `vigo swarm self-fleet unlock` on the destination, which prompts for the passphrase and unwraps locally. No `--from` flag in this path.
 
 ### Session helper
 
@@ -37,18 +47,36 @@ Like cryptsync's session helper, an unlocked self-fleet identity lives in proces
 
 ### CLI verbs
 
-- `vigo swarm self-fleet init` — generate keypair, prompt for passphrase, wrap, store at `~/.vigo-fleet/identity.wrapped`. Fails if file already exists.
-- `vigo swarm self-fleet activate` — prompt for passphrase, unwrap, hand to session helper. Idempotent if already unlocked.
-- `vigo swarm self-fleet deactivate` — zero in-memory key, kill session helper.
+Lifecycle:
+
+- `vigo swarm self-fleet init` — generate keypair, prompt for passphrase, wrap, store at `~/.vigo-fleet/identity.wrapped`. Fails if file already exists. **Once per fleet, ever.** (Founder envoy only.)
+- `vigo swarm self-fleet pair` — on an already-unlocked envoy: print a 5-minute single-use pairing code, listen for one incoming pair request. Used to onboard a new envoy into an existing fleet.
+- `vigo swarm self-fleet join --from <host>` — on a new envoy: connect to `<host>` over swarm mTLS, present the pairing code, receive the wrapped blob, prompt for passphrase, unwrap, populate session helper. **Once per envoy, ever.** Auto-runs `cryptsync fleet init` on success (per ADR-016).
+
+Daily:
+
+- `vigo swarm self-fleet unlock` — unwrap local `identity.wrapped`, hand key to session helper. Prompts for passphrase. Idempotent if already unlocked. Auto-runs `cryptsync fleet init` if cryptsync state is absent (per ADR-016).
+- `vigo swarm self-fleet lock` — zero in-memory key, kill session helper. Wrapped blob on disk untouched.
+
+Informational / maintenance:
+
+- `vigo swarm self-fleet pubkey` — print this envoy's active fleet pubkey fingerprint for use in invites / membership lists.
 - `vigo swarm self-fleet members` — list fleet pubkeys advertised by peers in the swarm gossip (informational; not authoritative).
 - `vigo swarm self-fleet rotate-passphrase` — re-wrap the key under a new passphrase. Same key material; subsystem trust anchors unchanged.
-- `vigo swarm self-fleet show` — print fleet pubkey fingerprint for use in invites / membership lists.
 
 ### Failure modes
 
 - **Passphrase forgotten.** No recovery in v1. Re-init creates a new fleet (different pubkey); existing project tokens / cryptsync recipients become orphaned. Documented loudly. Status output surfaces "fleet locked, recovery requires passphrase or re-init."
 - **All wrapped key copies lost across all envoys.** Same as passphrase forgotten — re-init from scratch. Disaster recovery for the user, not silent data loss.
-- **Single envoy compromised.** Wrapped blob + passphrase = attacker has the fleet key. Mitigation: short Argon2id verification time on activate (cost factor matched to cryptsync), session-helper idle lock, system-level disk encryption recommended.
+- **Single envoy compromised.** Wrapped blob + passphrase = attacker has the fleet key. Mitigation: short Argon2id verification time on unlock (cost factor matched to cryptsync), session-helper idle lock, system-level disk encryption recommended.
+
+### Resolved scope gates
+
+The following defaults from the original draft were ratified before implementation:
+
+- **Single fleet per user in v1.** Multi-fleet (separate "personal" and "work" identities, fleet selection at every CLI verb) is deferred to v2 unless a real user surfaces the need.
+- **Three sequential releases.** ADR-014, then ADR-015, then ADR-016. Each shippable independently; each later one depends on the previous. Bounded blast radius per release.
+- **Re-init from scratch on passphrase loss.** No Shamir secret sharing, no escrow, no quorum recovery in v1. Documented loudly; deferred unless real demand surfaces.
 
 ## Alternatives Considered
 
@@ -58,7 +86,7 @@ Like cryptsync's session helper, an unlocked self-fleet identity lives in proces
 
 **Reuse the agent's mTLS keypair.** Rejected — the mTLS key is per-envoy, not per-user, and is already bound to TLS handshake usage. Conflating it with user-fleet identity creates confusing trust semantics.
 
-**Server-distributed fleet keys.** Server holds wrapped keys, agents fetch on enrollment. Rejected because it puts the wrapped private key briefly in vigosrv memory and on the wire; even encrypted at rest, this weakens "purely user-held" guarantee. Manual scp on first bootstrap is friction but preserves the property.
+**Server-distributed fleet keys.** Server holds wrapped keys, agents fetch on enrollment. Rejected because it puts the wrapped private key briefly in vigosrv memory and on the wire; even encrypted at rest, this weakens "purely user-held" guarantee. The peer-pair flow (added in the 2026-04-29 amendment) keeps the blob entirely peer-to-peer over agent-to-agent mTLS — server is never in the path — and preserves the property without the manual-scp friction.
 
 **Shamir secret sharing of the wrapped key for passphrase-loss recovery.** Considered. Worth doing eventually but adds substantial UX surface (split into K-of-N, distribute shares, recombine ceremony). Defer to v2 unless real users surface the need.
 
@@ -68,13 +96,14 @@ Like cryptsync's session helper, an unlocked self-fleet identity lives in proces
 - `agent/src/swarm/self_fleet/` — new subsystem directory, mirroring `agent/src/swarm/cryptsync/` shape.
   - `crypt.rs` — wrap / unwrap (reuse cryptsync's Argon2id + XChaCha20 primitive verbatim).
   - `session.rs` — session helper daemon + Unix socket + SO_PEERCRED + idle timeout (mirror cryptsync's `session.rs`).
-  - `cli.rs` — verbs `init|activate|deactivate|members|rotate-passphrase|show`.
+  - `pair.rs` — pairing-code issuance + peer-pair handshake over swarm mTLS (port 1531). Pairing code: 8-character format (e.g., `4827-9163`), constant-time compare, single-use, 5-minute TTL.
+  - `cli.rs` — verbs `init|pair|join|unlock|lock|pubkey|members|rotate-passphrase`.
   - `mod.rs` — public API surface that other subsystems (gitmirror, cryptsync) call to: get fleet pubkey, sign blob, query "is this fleet pubkey known to local agent."
 - `agent/src/main.rs` — wire `swarm self-fleet *` verbs into argv dispatch.
 
-**No server-side changes.** Self-fleet is purely an agent-side primitive in v1.
+**Server-side changes:** none in the data path. Optional audit-log entry types `self-fleet.pair-issued` and `self-fleet.pair-completed` flow through the existing audit hash chain on next check-in; server learns the pair *happened* but never sees the wrapped blob.
 
-**No protobuf changes.** Self-fleet doesn't ride gRPC.
+**No protobuf changes.** Self-fleet doesn't ride gRPC; the pair handshake rides the existing swarm peer-port HTTPS surface.
 
 **Documentation:**
 - `docs/concepts/self-fleet.md` — the model, the bootstrap flow, the recovery posture.
@@ -85,9 +114,10 @@ Like cryptsync's session helper, an unlocked self-fleet identity lives in proces
 - Z-level version bump.
 - No new dependencies — `ed25519-dalek` and the Argon2id/XChaCha20 stack are already linked for cryptsync.
 
-**Estimated weight:** ~40–80 KiB on the agent binary. Heavy reuse of cryptsync's wrapping code.
+**Estimated weight:** ~50–100 KiB on the agent binary (peer-pair adds a small handshake module on top of the original ~40–80 KiB estimate). Heavy reuse of cryptsync's wrapping code.
 
 **Behavioral consequences:**
-- Self-fleet is opt-in. An envoy that never runs `self-fleet init|activate` works exactly as today; only subsystems that consume self-fleet (gitmirror per ADR-015, cryptsync membership per ADR-016) gain new behavior.
+- Self-fleet is opt-in. An envoy that never runs `self-fleet init|join` works exactly as today; only subsystems that consume self-fleet (gitmirror per ADR-015, cryptsync membership per ADR-016) gain new behavior.
 - Passphrase forgetting is real disaster recovery for the user. v1 is honest about that — no silent data loss, but no quorum / escrow either.
 - Single-fleet-per-user in v1. Multi-fleet (e.g., separate "personal" and "work" identities) is deferred until a real user asks for it.
+- Peer-pair is the primary onboarding path. Air-gapped envoys still have `unlock` after manual scp as the fallback, but the typical flow is two commands and a passphrase, no scp.

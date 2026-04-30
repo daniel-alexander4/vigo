@@ -6,6 +6,7 @@ title: "ADR-015: Unified gitmirror substrate"
 
 **Status:** Accepted (pending implementation). Supersedes ADR-013.
 **Date:** 2026-04-29
+**Updated 2026-04-29:** Access-control story reframed — `0700 root:root` perms + the SO_PEERCRED helper exist for **(a) access control for non-root local users** and **(b) identity binding for multi-member push**, not for bytes-on-disk confidentiality. Root retains direct filesystem access by design (matches Vigo's overall posture). Encryption-at-rest for non-member fleet-wide receivers dropped from the roadmap entirely (gitmirror is for *availability*; use cryptsync for *confidentiality*). Multi-call binary dispatch (`git-remote-vigo`) sequenced as the first commit of the implementation arc. `reanchor` gains an interactive-confirmation requirement at run time. Self-fleet verb references updated to the renamed surface from ADR-014's amendment (`unlock`/`join` instead of `activate`).
 
 ## Context
 
@@ -13,7 +14,7 @@ ADR-013 designed multi-member gitmirror as a separate subsystem layered alongsid
 
 Two further observations made unification the correct call:
 
-1. **Single-user gitmirror's permission posture is a security gap.** Bare repos at `mirrors/<seeder>/<user>/<project>.git` are `0755 root:root`, world-readable; any user on any receiver can `git clone` them via plain git. The per-user CLI filter is cosmetic. Multi-member gitmirror was going to need helper-enforced access control; rolling that into single-user simultaneously fixes the gap.
+1. **Single-user gitmirror's permission posture is an access-control gap.** Bare repos at `mirrors/<seeder>/<user>/<project>.git` are `0755 root:root`; any **non-root** user on any receiver can `git clone` them via plain git. The per-user CLI filter is cosmetic. Multi-member gitmirror was going to need helper-enforced access control for identity-bound push; rolling that into single-user simultaneously fixes the gap. (This is access control for non-root local users, not bytes-on-disk confidentiality — root retains direct filesystem access by design.)
 
 2. **A genuinely new use case falls out naturally.** With single-user and multi-member sharing one substrate plus a `dr_fanout` axis, "team repo with fleet-wide DR" — currently inexpressible — becomes free.
 
@@ -38,7 +39,7 @@ Project shape is described by two orthogonal axes:
 
 ### Identity & membership
 
-Membership is a stack of capability tokens, anchored to the founder's fleet pubkey. `vigo swarm gitmirror multi init <handle>` requires self-fleet to be active (per ADR-014); the founder fleet pubkey signs the initial admin token. Admins (any fleet holding an admin-role token) can mint further tokens for other fleets.
+Membership is a stack of capability tokens, anchored to the founder's fleet pubkey. `vigo swarm gitmirror project init <handle>` requires self-fleet to be unlocked (per ADR-014); the founder fleet pubkey signs the initial admin token. Admins (any fleet holding an admin-role token) can mint further tokens for other fleets.
 
 When envoy X (which is part of fleet F) wants to push:
 1. The agent on X presents a token signed by some admin-token chain back to founder fleet F0.
@@ -46,7 +47,7 @@ When envoy X (which is part of fleet F) wants to push:
 3. The receiving envoy checks the local revocation list for any envelope naming this token's id.
 4. Both pass → push proceeds; either fails → reject.
 
-Envoys-within-a-fleet trust is implicit: any envoy holding fleet F's wrapped key (via self-fleet activate) can sign on behalf of fleet F. Subsystems see the fleet, not its envoys.
+Envoys-within-a-fleet trust is implicit: any envoy holding fleet F's wrapped key (via `self-fleet unlock` or post-`join`) can sign on behalf of fleet F. Subsystems see the fleet, not its envoys.
 
 ### Revocation
 
@@ -64,7 +65,9 @@ The helper:
 
 ### Storage
 
-**One layout for everything:** `/var/lib/vigo/swarm/gitmirror/projects/<project_id>.git`. Root-owned, **`0700 root:root`** (tightened from today's 0755) — the helper-enforced access path is the only way for non-root users to read the repo.
+**One layout for everything:** `/var/lib/vigo/swarm/gitmirror/projects/<project_id>.git`. Root-owned, **`0700 root:root`** (tightened from today's 0755).
+
+The 0700 perms exist to gate **non-root local users** — without the helper, any user on a receiver could `git clone` bare repos that aren't theirs. After the tightening, non-root users go through the SO_PEERCRED helper, which checks fleet membership against the project's `members:` list before allowing fetch/push. **Root retains direct filesystem access** by design, matching Vigo's overall posture (audit log, secrets master key, agent runtime — root is privileged on the box).
 
 The legacy single-user layout `mirrors/<seeder>/<user>/<project>.git` is fully replaced. Per zero-users doctrine, no migration shim — the old code path is removed.
 
@@ -72,9 +75,11 @@ The legacy single-user layout `mirrors/<seeder>/<user>/<project>.git` is fully r
 
 Determined by `dr_fanout`:
 - `members-only` — bare repo lands only on envoys whose fleet is in `members:`.
-- `fleet-wide` — bare repo lands on every (non-blacklisted) envoy in the fleet for DR purposes; non-member envoys hold the bytes but cannot read or push (helper rejects).
+- `fleet-wide` — bare repo lands on every (non-blacklisted) envoy in the fleet for DR purposes; non-member envoys hold the bytes but cannot read or push (helper rejects non-root callers; root can read but is trusted).
 
-Non-member fleet-wide receivers store the bare repo with the same `0700 root:root` perms; the helper checks token presence before allowing fetch/push. There is no encryption-at-rest for non-members in v1 — they hold plaintext git objects but the helper gates access. Encryption for non-member receivers is a deferred enhancement (would couple to cryptsync's age recipient model).
+Non-member fleet-wide receivers store the bare repo with the same `0700 root:root` perms; the helper checks token presence before allowing non-root fetch/push.
+
+**Bytes-on-disk confidentiality is explicitly not a goal for gitmirror.** `dr_fanout=fleet-wide` distributes plaintext git objects to every (non-blacklisted) fleet envoy, where root can read them directly. If you want confidentiality, use cryptsync — gitmirror is for *availability*, cryptsync is for *confidentiality*. The two subsystems are deliberately complementary; no encryption-at-rest layer is added to gitmirror in v1, v2, or any future version of the design.
 
 ### Conflict policy
 
@@ -108,7 +113,7 @@ Single namespace: `vigo swarm gitmirror project *` (replaces both today's `multi
 - `vigo swarm gitmirror project leave <project_id>` — self-leave; emits self-revoke envelope.
 - `vigo swarm gitmirror project list` — fleet-wide via gitmirrormesh.
 - `vigo swarm gitmirror project revoke <project_id> --token-id <id>` — admin only.
-- `vigo swarm gitmirror project reanchor <project_id>` — surviving member, hard-fork ceremony if all admins are lost.
+- `vigo swarm gitmirror project reanchor <project_id>` — surviving member, hard-fork ceremony if all admins are lost. **Interactive confirmation required at run time:** the verb prints the consequences (old URL becomes permanently dead, all members must re-add the new remote, existing tokens are not portable) and refuses to proceed unless the user types the project handle to confirm intent. Same anti-footgun pattern as `git push --force-with-lease`.
 - `vigo swarm gitmirror project status <project_id>` — local state.
 
 ### Founder-loss recovery
@@ -121,15 +126,28 @@ Repo content is recoverable as long as one fleet holds it. If the founder fleet 
 
 **Per-envoy identity (no self-fleet) for multi-member.** Was the original ADR-013 model. Rejected: forces O(N²) per-pair declarations for personal multi-envoy use, makes "dan-on-laptop and dan-on-desktop are the same person" require explicit per-pair invites for every project. Self-fleet collapses this to O(N) (one wrapped key per envoy).
 
-**Encryption-at-rest for non-member fleet-wide DR receivers.** Considered. Would require encrypting bundles to each member fleet's pubkey and storing ciphertext on non-member receivers. Real engineering surface (age-encrypted git objects, on-demand decrypt during recover). Deferred — v1 ships with helper-enforced access only; non-member receivers hold plaintext bytes that they can't access via the helper but could theoretically be read with root + manual git invocation. Acceptable for personal/small-team trust models.
+**Encryption-at-rest for non-member fleet-wide DR receivers.** Considered and **rejected outright** (not just deferred). Would require encrypting bundles to each member fleet's pubkey and storing ciphertext on non-member receivers, with on-demand decrypt during recover. Real engineering surface, and the wrong abstraction layer: gitmirror is for *availability* (fleet-wide replicas, fast recovery, fast clones); cryptsync is for *confidentiality* (encryption-at-rest, age recipients, controlled access). Coupling encryption into gitmirror would blur the boundary between two subsystems whose value lies in being orthogonal. Users wanting confidential storage of git content should put `~/cryptsync/<repo>/` instead; gitmirror is plaintext by design.
 
 **Single-user as a degenerate `members={}` case (no fleet at all).** Rejected: makes the trust model inconsistent (some projects authenticated, some not) and re-creates the "any local user can clone" gap. Unifying everything under self-fleet ensures one trust model fleet-wide.
 
 ## Consequences
 
-**Files to modify (agent — Rust):**
+### Implementation sequencing
+
+**Multi-call binary dispatch lands as the first commit of the implementation arc.** The `vigo` agent binary becomes a multi-call binary that dispatches as `git-remote-vigo` when invoked under that argv[0]. This is a structural change to the agent's entry point and is too easy to bolt on poorly at the end of a large diff; landing it first gives every subsequent commit a working transport to test against.
+
+Three failure modes to handle up front:
+
+1. **Argv[0] dispatch in `agent/src/main.rs`** — first thing in `main()`, before any clap parsing. Strip directory prefix and `.exe` suffix. Match against an explicit table: `git-remote-vigo` → git remote helper mode; anything else → normal `vigo` CLI parsing.
+2. **Install the symlink in package recipes.** Update `scripts/upgrade.sh`, `Dockerfile.server` (where applicable), and any deb/rpm packaging so install creates `/usr/local/bin/git-remote-vigo` → `/usr/local/sbin/vigo` (or wherever `vigo` lives on the platform). Document the symlink path in `docs/getting-started/`.
+3. **Integration test exercising the dispatch.** A test that runs the binary with argv[0] set to `git-remote-vigo` (using `Command::new(...).arg0(...)` on Unix) and confirms it enters remote-helper mode. Catches regressions if anyone refactors `main()`.
+
+Linux + macOS at launch per CLAUDE.md's Linux-first doctrine; Windows multi-call dispatch is a follow-up ticket against the rest of the Windows backlog.
+
+### Files to modify (agent — Rust):
+- `agent/src/main.rs` — argv[0] dispatch as the first thing in `main()` (see above).
 - `agent/src/swarm/gitmirror/` — substantial rework. Token issuance/parse/verify (new module mirroring `cryptsync/leaves.rs`); the multi-call helper dispatch (new argv[0] check on `vigo` binary); receive-pack proxy with ref-policy enforcement (new); fan-out-on-push trigger (replaces today's working-tree-watcher trigger for projects); revocation list (new, gossip + persist + 90-day reap); SO_PEERCRED-gated Unix socket daemon.
-- `agent/src/swarm/gitmirror/cli.rs` — replaced with `project {init,invite,join,leave,list,revoke,reanchor,status}` verbs. Today's `recover`, `source {add,remove,…}` verbs go away (replaced by project-level operations).
+- `agent/src/swarm/gitmirror/cli.rs` — replaced with `project {init,invite,join,leave,list,revoke,reanchor,status}` verbs. Today's `recover`, `source {add,remove,…}` verbs go away (replaced by project-level operations). `reanchor` gets an interactive confirmation prompt requiring the user to type the project handle.
 - `agent/src/swarm/gitmirror/sidecar.rs` — sidecar concept replaced. Project state lives at `~/.vigo-gitmirror/<project_id>/` (token, project_pubkey for TOFU, local config). The repo's working tree no longer carries a `.gitmirror.yaml`.
 - `agent/src/swarm/gitmirror/receiver.rs` / `publisher.rs` — heavy rewrite. Single fan-out path keyed by project_id; no more per-seeder hierarchy.
 
@@ -155,8 +173,8 @@ Repo content is recoverable as long as one fleet holds it. If the founder fleet 
 
 **Behavioral consequences:**
 - Existing gitmirror users (zero) would re-init projects under the new model. No migration shim.
-- `git clone /var/lib/vigo/swarm/gitmirror/...` from arbitrary user accounts no longer works — perms tightened to 0700, helper-enforced. This closes the world-readable bare-repo gap from today's single-user mode.
-- "Dan can recover his own repo on his other envoy" requires self-fleet to be active on both envoys. One-time setup per envoy, persists across all projects.
+- `git clone /var/lib/vigo/swarm/gitmirror/...` from non-root user accounts no longer works — perms tightened to 0700, helper-enforced. Root retains direct filesystem access by design. This closes the non-root-readable bare-repo gap from today's single-user mode.
+- "Dan can recover his own repo on his other envoy" requires self-fleet to be unlocked on both envoys (per-envoy setup is `init` once on the first envoy and `join --from <host>` once per additional envoy, then `unlock` daily). Persists across all projects.
 - "Team repo + fleet-wide DR" becomes expressible — set `members={team-fleets}, dr_fanout=fleet-wide`.
 
 **Estimated weight:** ~80–200 KiB on the agent (combined token machinery + helper proxy + revocation + storage rework, partially offset by removal of sidecar/recover code paths). ~100–200 KiB on the server. No new dependencies.
