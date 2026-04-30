@@ -1079,6 +1079,20 @@ pub fn home_for_user_pub(username: &str) -> Option<PathBuf> {
     home_for_user(username)
 }
 
+/// Public re-export for sibling subsystems that need to chown files
+/// they drop into a user's home (currently `self_fleet`'s CLI verbs).
+/// Idempotent under self-target — safe in user context as well as
+/// root.
+#[cfg(unix)]
+pub fn chown_to_user_pub(path: &Path, username: &str) -> Result<()> {
+    chown_to_user(path, username)
+}
+
+#[cfg(not(unix))]
+pub fn chown_to_user_pub(_path: &Path, _username: &str) -> Result<()> {
+    Ok(())
+}
+
 /// Best-effort writer for user-side state mirrors (tombstones.json,
 /// leaves.json — daemon-owned tables that the CLI needs to read as
 /// the unprivileged user). Looks up the user's home, writes JSON via

@@ -3,7 +3,7 @@
 
 Vigo has two CLI binaries:
 
-- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the [`vigo swarm gitmirror` recovery CLI](agent-swarm-gitmirror.md) for inspecting and recovering personal-DR git mirrors, and the [`vigo swarm cryptsync` CLI](agent-swarm-cryptsync.md) for managing [cryptsync](../../engineering/subsystems/cryptsync.md) — the per-user encrypted P2P directory.
+- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the [`vigo swarm gitmirror` recovery CLI](agent-swarm-gitmirror.md) for inspecting and recovering personal-DR git mirrors, the [`vigo swarm cryptsync` CLI](agent-swarm-cryptsync.md) for managing [cryptsync](../../engineering/subsystems/cryptsync.md) — the per-user encrypted P2P directory, and the [`vigo swarm self-fleet` CLI](agent-swarm-self-fleet.md) for managing [self-fleet](../../engineering/subsystems/self-fleet.md) — the per-user fleet identity primitive.
 - **`vigocli`** -- the admin CLI that talks to the server's REST API (documented below).
 
 ---

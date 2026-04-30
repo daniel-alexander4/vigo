@@ -329,6 +329,21 @@ async fn handle_request(
             tokio::task::block_in_place(|| crate::swarm::cryptsync::server::handle_leaves_list(p))
         }
 
+        // Self-fleet: receive a pair-claim from a peer envoy that ran
+        // `vigo swarm self-fleet join --from <this-host>`. Validates
+        // the incoming code against the ~/.vigo-fleet/pair.pending
+        // sentinel for the target user and returns the wrapped
+        // identity blob on match. ADR-014 §Distribution.
+        (&Method::POST, p) if p.starts_with(crate::swarm::self_fleet::pair::PAIR_CLAIM_PREFIX) => {
+            match crate::swarm::self_fleet::pair::handle_pair_claim(p, req).await {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::warn!(error = %e, "self-fleet pair-claim handler error");
+                    not_found()
+                }
+            }
+        }
+
         _ => not_found(),
     };
 

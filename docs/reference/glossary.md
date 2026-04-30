@@ -108,6 +108,14 @@ A config module scoped to one or more users' environments (account creation, hom
 
 Per-user always-encrypted home-directory sync on the [swarm](#swarm) substrate. Files dropped into `~/cryptsync/` are age-encrypted to every enrolled envoy in the user's mesh and synced as ciphertext — every envoy holds the same encrypted bytes, only mesh members can decrypt. Requires the user's cryptsync password for decryption. The encryption-first sibling of [filesync](#filesync): same transport, different content rules. See [Cryptsync](../engineering/subsystems/cryptsync.md).
 
+## self-fleet
+
+Per-user fleet identity primitive (ADR-014). A single Ed25519 keypair representing "this user's collection of envoys, treated as one trust unit," wrapped under the user's passphrase using cryptsync's Argon2id+XChaCha20 envelope. Sibling subsystems ([gitmirror](#gitmirror) under ADR-015, cryptsync membership under ADR-016) consume it as a trust anchor — "envoys in fleet X" expressed as a single pubkey rather than a per-pair invite ceremony. Onboarding via [peer-pair](#peer-pair); manual scp survives as the air-gapped fallback. State at `~/.vigo-fleet/`. CLI: `vigo swarm self-fleet {init,pair,join,unlock,lock,pubkey,members,rotate-passphrase,status}`. See [Self-Fleet](../engineering/subsystems/self-fleet.md).
+
+## peer-pair
+
+The primary onboarding flow for [self-fleet](#self-fleet) and (by ADR-015) the unified gitmirror substrate. The active envoy issues a 5-minute single-use 8-character pairing code (`NNNN-NNNN`); the joining envoy POSTs the code over swarm mTLS (port 1531) to receive the wrapped identity blob. The user's passphrase never leaves the destination envoy. Same human-explicit-authorization model as Signal/Bluetooth pairing; the dual gate of mTLS-trusted-CA + dictated code prevents any other fleet-CA peer from silently requesting the blob.
+
 ## gitmirror
 
 Personal disaster-recovery source-control distribution on the [swarm](#swarm) substrate. The agent scans `~/gitmirror/<project>/` for repositories with a `.gitmirror.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P on top of swarm — no server involvement in selection or delivery. Default-on per-envoy; operators deny specific hosts via hostname globs in `swarm.gitmirror.blacklist` in server.yaml. See [Gitmirror](../engineering/subsystems/gitmirror.md).
