@@ -93,6 +93,15 @@ dist-agent:
 	cp agent/.build/x86_64-unknown-linux-musl/release/vigo dist/agent/linux/amd64/vigo
 	cd agent && CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
 	cp agent/.build/aarch64-unknown-linux-musl/release/vigo dist/agent/linux/arm64/vigo
+	@# Write per-binary .version sidecar files. The server reads these at
+	@# startup to learn each cross-arch binary's version (it can't run a
+	@# foreign-arch binary itself). Without these, cross-arch envoys land
+	@# in an update loop because the server advertises the wrong version
+	@# for their arch — see tshoot/log-archive-rpi-update-loop-*.md.
+	@AGENT_VER=$$(grep -m1 '^version' agent/Cargo.toml | sed 's/.*"\(.*\)".*/\1/') ; \
+		echo "$$AGENT_VER" > dist/agent/linux/amd64/vigo.version ; \
+		echo "$$AGENT_VER" > dist/agent/linux/arm64/vigo.version ; \
+		echo "wrote vigo.version=$$AGENT_VER for linux/amd64 + linux/arm64"
 
 # Cross-compile Rust agent for Windows.
 # Prerequisites:
@@ -102,6 +111,9 @@ dist-agent-windows:
 	mkdir -p dist/agent/windows/amd64
 	cd agent && cross build --release --target x86_64-pc-windows-msvc
 	cp agent/.build/x86_64-pc-windows-msvc/release/vigo.exe dist/agent/windows/amd64/vigo.exe
+	@AGENT_VER=$$(grep -m1 '^version' agent/Cargo.toml | sed 's/.*"\(.*\)".*/\1/') ; \
+		echo "$$AGENT_VER" > dist/agent/windows/amd64/vigo.exe.version ; \
+		echo "wrote vigo.exe.version=$$AGENT_VER for windows/amd64"
 
 # Cross-compile Rust agent for macOS.
 # Prerequisites (from Linux):

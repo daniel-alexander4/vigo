@@ -131,13 +131,20 @@ func TestBootstrapScript_WorksWithoutToken(t *testing.T) {
 
 func TestAgentLatest_ReturnsVersionJSON(t *testing.T) {
 	dir := t.TempDir()
-	// Create a fake agent binary.
+	// Create a fake agent binary plus its sidecar version file. The handler
+	// reads the version from the sidecar (build pipeline writes it) — this
+	// is the same path used in production and is the only way to advertise
+	// a version for a binary that can't be executed (cross-arch case).
 	agentDir := filepath.Join(dir, "agents")
 	osDir := filepath.Join(agentDir, "linux", "amd64")
 	if err := os.MkdirAll(osDir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(osDir, "vigo"), []byte("binary-content"), 0755); err != nil {
+	binPath := filepath.Join(osDir, "vigo")
+	if err := os.WriteFile(binPath, []byte("binary-content"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(binPath+".version", []byte("1.2.3\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -169,6 +176,109 @@ func TestAgentLatest_ReturnsVersionJSON(t *testing.T) {
 	}
 	if body.DownloadURL != "/api/v1/agent/download/linux/amd64" {
 		t.Errorf("unexpected download_url: %s", body.DownloadURL)
+	}
+}
+
+// TestAgentLatest_PerArchVersions proves that AgentLatest returns the version
+// of the binary actually being served (per requested arch), not a single
+// server-arch version regardless of the request. This is the regression
+// guard for the raspberrypi update loop: amd64 server with amd64=v1 binary
+// and arm64=v2 binary must report v1 to amd64 clients and v2 to arm64
+// clients — not v1 to both.
+func TestAgentLatest_PerArchVersions(t *testing.T) {
+	dir := t.TempDir()
+	agentDir := filepath.Join(dir, "agents")
+
+	for _, c := range []struct{ arch, version string }{
+		{"amd64", "0.34.1"},
+		{"arm64", "0.33.10"}, // the stale one that triggered the loop
+	} {
+		archDir := filepath.Join(agentDir, "linux", c.arch)
+		if err := os.MkdirAll(archDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		bin := filepath.Join(archDir, "vigo")
+		if err := os.WriteFile(bin, []byte("fake-"+c.arch), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(bin+".version", []byte(c.version+"\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	h := NewHandler("https://server:8443", "", agentDir, "irrelevant-server-version")
+
+	for _, want := range []struct {
+		arch    string
+		version string
+	}{
+		{"amd64", "0.34.1"},
+		{"x86_64", "0.34.1"}, // alias normalized to amd64
+		{"arm64", "0.33.10"},
+		{"aarch64", "0.33.10"}, // alias normalized to arm64
+	} {
+		t.Run(want.arch, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet,
+				"/api/v1/agent/latest?os=linux&arch="+want.arch, nil)
+			w := httptest.NewRecorder()
+			h.AgentLatest(w, req)
+
+			var body struct {
+				Version string `json:"version"`
+				SHA256  string `json:"sha256"`
+			}
+			if err := json.NewDecoder(w.Result().Body).Decode(&body); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			if body.Version != want.version {
+				t.Errorf("arch=%s: expected version %q, got %q",
+					want.arch, want.version, body.Version)
+			}
+			if body.SHA256 == "" {
+				t.Errorf("arch=%s: sha256 should not be empty", want.arch)
+			}
+		})
+	}
+}
+
+// TestAgentLatest_UnknownVersionReturnsEmpty confirms that when a binary is
+// available but its version is unknown (no sidecar, can't be probed because
+// it's a foreign arch), the handler returns Version="" rather than guessing.
+// Empty version signals the agent NOT to attempt an update — the safe
+// behavior that prevents cross-arch loops.
+func TestAgentLatest_UnknownVersionReturnsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	agentDir := filepath.Join(dir, "agents")
+	// Put a binary at a path that won't be the test runner's arch+os and
+	// has no sidecar. Use freebsd to dodge any risk of the test host's
+	// runtime probe succeeding.
+	archDir := filepath.Join(agentDir, "freebsd", "arm64")
+	if err := os.MkdirAll(archDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(archDir, "vigo"), []byte("opaque"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	h := NewHandler("https://server:8443", "", agentDir, "fallback-version")
+
+	req := httptest.NewRequest(http.MethodGet,
+		"/api/v1/agent/latest?os=freebsd&arch=arm64", nil)
+	w := httptest.NewRecorder()
+	h.AgentLatest(w, req)
+
+	var body struct {
+		Version string `json:"version"`
+		SHA256  string `json:"sha256"`
+	}
+	if err := json.NewDecoder(w.Result().Body).Decode(&body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if body.Version != "" {
+		t.Errorf("expected empty version for unknown-version binary, got %q", body.Version)
+	}
+	if body.SHA256 == "" {
+		t.Error("sha256 should still be present (binary exists, just version unknown)")
 	}
 }
 

@@ -317,14 +317,28 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	}
 
 	// Auto-update: if the agent reports a version that doesn't match the
-	// server's version AND a binary is available to serve, tell it to
-	// download the latest binary and restart.
-	if !forceUpdate && agentVersion != "" && s.serverVersion != "" && agentVersion != s.serverVersion {
-		binReady := s.agentBinAvailable == nil || s.agentBinAvailable()
-		if binReady {
-			slog.Info("agent version mismatch, requesting update",
-				"envoy", envoyID, "agent", agentVersion, "server", s.serverVersion)
-			forceUpdate = true
+	// version of the binary we'd serve to ITS arch (not the server's own
+	// arch), AND a binary is available, tell it to download and restart.
+	//
+	// Comparing against the server-arch version regardless of the agent's
+	// arch caused an infinite update loop on cross-arch envoys (e.g. an
+	// arm64 raspberry pi facing an amd64 server) — see tshoot/log.md.
+	// We resolve the agent's goos/goarch from its reported traits and look
+	// up the matching version. Unknown arch → no auto-update (safe default).
+	if !forceUpdate && agentVersion != "" && len(s.serverVersions) > 0 {
+		agentGoos, agentGoarch := goosGoarchFromTraits(inlineTraits)
+		var serverVer string
+		if agentGoos != "" && agentGoarch != "" {
+			serverVer = s.serverVersions[agentGoos+"/"+agentGoarch]
+		}
+		if serverVer != "" && agentVersion != serverVer {
+			binReady := s.agentBinAvailable == nil || s.agentBinAvailable()
+			if binReady {
+				slog.Info("agent version mismatch, requesting update",
+					"envoy", envoyID, "agent", agentVersion, "server", serverVer,
+					"os", agentGoos, "arch", agentGoarch)
+				forceUpdate = true
+			}
 		}
 	}
 	// Clear the ephemeral flag so it's only sent once.
@@ -941,6 +955,51 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 
 // Filesync is an agent-side LAN-only P2P feature — the server has no role.
 // No server-side ingest function lives here. See agent/src/filesync/.
+
+// goosGoarchFromTraits extracts the agent's Go-style goos/goarch pair from
+// its reported traits JSON. Returns ("", "") if either field is missing or
+// unparseable — callers must treat the empty result as "unknown arch, do
+// not auto-update."
+//
+// The agent's os.arch is already normalized to Go style ("amd64", "arm64")
+// at collection time (see agent/src/traits/os.rs). The os.family is
+// distro-style on Linux ("debian", "rhel", etc.) and platform-style
+// elsewhere ("darwin", "windows", "freebsd"). We map family → goos by
+// recognizing the BSDs/illumos/macOS/Windows explicitly and treating
+// everything else as Linux (matching the convention used by the conditional
+// evaluator in server/config/template.go).
+func goosGoarchFromTraits(traitsJSON []byte) (goos string, goarch string) {
+	if len(traitsJSON) == 0 {
+		return "", ""
+	}
+	var t struct {
+		OS struct {
+			Family string `json:"family"`
+			Arch   string `json:"arch"`
+		} `json:"os"`
+	}
+	if err := json.Unmarshal(traitsJSON, &t); err != nil {
+		return "", ""
+	}
+	if t.OS.Arch == "" {
+		return "", ""
+	}
+	switch strings.ToLower(t.OS.Family) {
+	case "darwin":
+		goos = "darwin"
+	case "windows":
+		goos = "windows"
+	case "freebsd", "openbsd", "netbsd", "illumos":
+		goos = strings.ToLower(t.OS.Family)
+	case "":
+		// Family unset — can't safely guess.
+		return "", ""
+	default:
+		// Linux distros report family="debian"/"rhel"/"suse"/etc.
+		goos = "linux"
+	}
+	return goos, t.OS.Arch
+}
 
 func parseRetentionDuration(s string) time.Duration {
 	if len(s) > 1 && s[len(s)-1] == 'd' {

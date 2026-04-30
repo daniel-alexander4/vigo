@@ -51,7 +51,14 @@ type Handler struct {
 	caFile          string
 	agentDir        string
 	version         string // server version (fallback)
-	agentVersion    string // actual agent binary version (from running the binary)
+	// agentVersions maps "<goos>/<goarch>" → version string for every agent
+	// binary present in agentDir. Populated at startup by scanning the dist
+	// tree. Each binary's version is read from its sidecar `<binary>.version`
+	// file written by the build pipeline; the server's own arch falls back to
+	// running the binary directly if no sidecar exists. An entry is only
+	// present if the version is known; absent entries disable auto-update for
+	// that arch (safer than mis-claiming a version and causing update loops).
+	agentVersions   map[string]string
 	cache           *checksumCache
 	ca              *ca.CA
 	registry        *registry.Registry
@@ -65,17 +72,13 @@ type Handler struct {
 // NewHandler creates a Handler for serving bootstrap and agent distribution endpoints.
 func NewHandler(serverAddr, caFile, agentDir, version string) *Handler {
 	h := &Handler{
-		serverAddr:   serverAddr,
-		caFile:       caFile,
-		agentDir:     agentDir,
-		version:      version,
-		cache:        newChecksumCache(),
-		certValidity: 365 * 24 * time.Hour, // default 1 year
-	}
-	// Probe the agent binary for its actual version.
-	h.agentVersion = probeAgentVersion(agentDir)
-	if h.agentVersion != "" {
-		slog.Info("agent binary version detected", "agent_version", h.agentVersion)
+		serverAddr:    serverAddr,
+		caFile:        caFile,
+		agentDir:      agentDir,
+		version:       version,
+		agentVersions: detectAgentVersions(agentDir),
+		cache:         newChecksumCache(),
+		certValidity:  365 * 24 * time.Hour, // default 1 year
 	}
 	return h
 }
@@ -93,20 +96,99 @@ func normalizeArch(arch string) string {
 	}
 }
 
-// AgentVersion returns the detected agent binary version, or empty string
-// if no agent binary was found.
+// AgentVersion returns the detected agent binary version for the server's
+// own architecture, or empty string if no agent binary was found. Used for
+// dashboard display and as a backward-compatible accessor; per-arch lookups
+// should use AgentVersionForArch.
 func (h *Handler) AgentVersion() string {
-	return h.agentVersion
+	return h.agentVersions[runtime.GOOS+"/"+runtime.GOARCH]
 }
 
-// ProbeAgentVersion runs the agent binary with "version" to get its actual
-// version string. Returns empty string if the binary doesn't exist or fails.
-func ProbeAgentVersion(agentDir string) string {
-	return probeAgentVersion(agentDir)
+// AgentVersionForArch returns the detected version of the agent binary for
+// the given OS/arch, or empty string if unknown. Empty string signals "do
+// not auto-update for this arch" — callers must respect this to avoid
+// cross-arch version mismatch update loops.
+func (h *Handler) AgentVersionForArch(goos, goarch string) string {
+	return h.agentVersions[goos+"/"+goarch]
 }
 
-func probeAgentVersion(agentDir string) string {
-	binPath := BinaryPath(agentDir, runtime.GOOS, runtime.GOARCH)
+// AgentVersions returns a snapshot of the detected per-arch versions.
+// Used by main.go to seed the gRPC server's version map.
+func (h *Handler) AgentVersions() map[string]string {
+	out := make(map[string]string, len(h.agentVersions))
+	for k, v := range h.agentVersions {
+		out[k] = v
+	}
+	return out
+}
+
+// DetectAgentVersions scans the dist tree at agentDir and returns a map of
+// "<goos>/<goarch>" → version for every agent binary whose version can be
+// determined. See detectAgentVersions for the resolution policy.
+func DetectAgentVersions(agentDir string) map[string]string {
+	return detectAgentVersions(agentDir)
+}
+
+// detectAgentVersions walks the supported OS/arch matrix under agentDir and
+// resolves each binary's version. Resolution order, per arch:
+//
+//  1. Read sidecar `<binary>.version` file written by the build pipeline.
+//     Works for any arch — no execution required.
+//  2. If no sidecar AND the binary is for the server's own arch, run it
+//     with `version` (the legacy probe path).
+//  3. Otherwise leave the entry absent. Callers treat absent entries as
+//     "version unknown — do not advertise updates for this arch."
+//
+// Logging the per-arch result at startup makes cross-arch version drift
+// (the kind that caused the raspberrypi update loop) obvious in the first
+// few lines of the server log instead of from a stuck client's perspective.
+func detectAgentVersions(agentDir string) map[string]string {
+	versions := make(map[string]string)
+	matrix := []struct{ goos, goarch string }{
+		{"linux", "amd64"}, {"linux", "arm64"},
+		{"darwin", "amd64"}, {"darwin", "arm64"},
+		{"windows", "amd64"}, {"windows", "arm64"},
+		{"freebsd", "amd64"}, {"freebsd", "arm64"},
+		{"openbsd", "amd64"}, {"openbsd", "arm64"},
+		{"netbsd", "amd64"}, {"netbsd", "arm64"},
+		{"illumos", "amd64"},
+	}
+	for _, m := range matrix {
+		binPath := BinaryPath(agentDir, m.goos, m.goarch)
+		if _, err := os.Stat(binPath); err != nil {
+			continue
+		}
+		v := readVersionSidecar(binPath)
+		if v == "" && m.goos == runtime.GOOS && m.goarch == runtime.GOARCH {
+			v = probeBinaryVersion(binPath)
+		}
+		if v != "" {
+			versions[m.goos+"/"+m.goarch] = v
+			slog.Info("agent binary version detected",
+				"os", m.goos, "arch", m.goarch, "version", v)
+		} else {
+			slog.Warn("agent binary present but version unknown — auto-update disabled for this arch",
+				"os", m.goos, "arch", m.goarch, "binary", binPath,
+				"hint", "build pipeline should write '<binary>.version' next to each cross-compiled binary")
+		}
+	}
+	return versions
+}
+
+// readVersionSidecar reads `<binPath>.version` and returns its trimmed
+// contents. Empty string if the file is missing or unreadable.
+func readVersionSidecar(binPath string) string {
+	data, err := os.ReadFile(binPath + ".version")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// probeBinaryVersion runs `<binPath> version` and returns stdout trimmed.
+// Only safe to call for the server's own arch — cross-arch invocation
+// requires qemu-user-static which we don't depend on.
+func probeBinaryVersion(binPath string) string {
 	out, err := exec.Command(binPath, "version").Output()
 	if err != nil {
 		return ""
@@ -606,6 +688,14 @@ type latestResponse struct {
 
 // AgentLatest returns JSON with the current agent version, SHA256 checksum,
 // ED25519 signature (if available), and download URL for the specified OS and architecture.
+//
+// The advertised Version MUST match the compiled-in version of the binary
+// served at the matching DownloadURL — otherwise an agent that downloads the
+// binary, execs into it, and reports its compiled-in version on the next
+// check-in will look "out of date" again, triggering an infinite update loop.
+// We resolve Version per-arch from the agentVersions map populated at startup.
+// If the version is unknown for this arch, we return Version="" which the
+// client treats as "no update available" — safer than guessing.
 func (h *Handler) AgentLatest(w http.ResponseWriter, r *http.Request) {
 	goos := r.URL.Query().Get("os")
 	goarch := normalizeArch(r.URL.Query().Get("arch"))
@@ -616,28 +706,41 @@ func (h *Handler) AgentLatest(w http.ResponseWriter, r *http.Request) {
 		goarch = "amd64"
 	}
 
-	agentVer := h.agentVersion
-	if agentVer == "" {
-		agentVer = h.version // fallback to server version if probe failed
-	}
 	resp := latestResponse{
-		Version:     agentVer,
 		DownloadURL: fmt.Sprintf("/api/v1/agent/download/%s/%s", goos, goarch),
 	}
 
 	// Try to compute checksum for the requested binary.
 	binPath := BinaryPath(h.agentDir, goos, goarch)
-	if sum, err := h.cache.Get(binPath); err == nil {
-		resp.SHA256 = sum
-	} else {
-		// Binary not available -- return empty version to signal no update.
-		resp.Version = ""
+	sum, err := h.cache.Get(binPath)
+	if err != nil {
+		// Binary not available — Version stays empty, signaling no update.
+		slog.Info("agent_latest: binary not available",
+			"os", goos, "arch", goarch, "binary", binPath, "error", err)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+		return
+	}
+	resp.SHA256 = sum
+
+	// Resolve Version PER-ARCH so we never advertise a version that doesn't
+	// match the binary we're about to serve.
+	resp.Version = h.agentVersions[goos+"/"+goarch]
+	if resp.Version == "" {
+		// Binary present but version unknown. Don't claim a version we
+		// can't verify — the client will see Version="" and skip the update.
+		slog.Warn("agent_latest: binary available but version unknown — skipping update advertisement",
+			"os", goos, "arch", goarch, "binary", binPath, "sha256", sum,
+			"hint", "build pipeline should write '<binary>.version' next to each cross-compiled binary")
 	}
 
 	// Read ED25519 signature from adjacent .sig file (if present).
 	if sig, _, err := ReadSigFile(binPath + ".sig"); err == nil {
 		resp.Signature = sig
 	}
+
+	slog.Info("agent_latest: served",
+		"os", goos, "arch", goarch, "version", resp.Version, "sha256", sum)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)

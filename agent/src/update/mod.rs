@@ -282,6 +282,42 @@ pub async fn apply(
         "binary updated successfully"
     );
 
+    // Self-verify: run the just-renamed binary with `version` and confirm
+    // its compiled-in version matches what the server advertised. This is
+    // the agent-side guard against the cross-arch update loop bug — if the
+    // server's dist tree has a binary labeled X but the binary itself was
+    // built at version Y, our next check-in would still report Y, the
+    // server would still want X, and we'd loop forever on every iteration.
+    // Catching the mismatch HERE (before exec) lets us abort the update
+    // and surface a single decisive WARN instead of an unbounded log
+    // flood from the loop.
+    if !info.version.is_empty() {
+        match std::process::Command::new(current_binary).arg("version").output() {
+            Ok(out) if out.status.success() => {
+                let on_disk = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !on_disk.is_empty() && on_disk != info.version {
+                    warn!(
+                        advertised = %info.version,
+                        actual = %on_disk,
+                        sha256 = %info.sha256,
+                        binary = %current_binary,
+                        "version mismatch on downloaded binary — server advertised one version, the binary's compiled-in version is another. Aborting update to prevent an infinite loop. Likely cause: cross-arch labeling bug in the server's dist tree (each arch's vigo.version sidecar must match its binary)."
+                    );
+                    return Ok(());
+                }
+            }
+            Ok(out) => {
+                debug!(
+                    status = ?out.status,
+                    "post-rename version probe exited non-zero — proceeding with exec (binary may need first-run init)"
+                );
+            }
+            Err(e) => {
+                debug!(error = %e, "post-rename version probe failed — proceeding with exec");
+            }
+        }
+    }
+
     // Refresh the systemd unit file if the bootstrap template has
     // changed since this envoy was first installed. Without this,
     // envoys bootstrapped on older agent versions never pick up new

@@ -18,6 +18,7 @@ import (
 	"strings"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"syscall"
 	"time"
@@ -490,13 +491,17 @@ func run() error {
 	// Initialize bundle signer for compiled promises.
 	bundleSigner, bundleMaxAge := initBundleSigner(cfg)
 
-	// Probe the agent binary version for auto-update comparison.
-	// This is the actual version baked into the agent binary, not the server version.
-	agentVersion := bootstrap.ProbeAgentVersion(agentDir)
+	// Detect the agent binary version PER-ARCH for auto-update comparison.
+	// Resolution order per arch: sidecar `<binary>.version` file → server-arch
+	// runtime probe. Cross-arch binaries without sidecars yield empty entries,
+	// which disable auto-update for that arch (safer than guessing the wrong
+	// version and causing cross-arch update loops — see tshoot/log.md).
+	agentVersions := bootstrap.DetectAgentVersions(agentDir)
+	agentVersion := agentVersions[runtime.GOOS+"/"+runtime.GOARCH]
 	if agentVersion == "" {
-		agentVersion = version // fallback to server version if no agent binary found
+		agentVersion = version // fallback to server version for UI display only
 	}
-	slog.Info("agent version for auto-update", "agent_version", agentVersion)
+	slog.Info("agent version for auto-update (server arch)", "agent_version", agentVersion)
 
 	// Build fallback server addresses from peer config (returned to agents on registration).
 	var fallbackServers []string
@@ -537,7 +542,7 @@ func run() error {
 		BundleMaxAge:        bundleMaxAge,
 		FallbackServers:     fallbackServers,
 		AuditWriter:         auditWriter,
-		ServerVersion:       agentVersion,
+		ServerVersions:      agentVersions,
 		GlobalObserveOnly:   cfg.CheckIn.ObserveOnly,
 		AgentBinAvailable: func() bool {
 			for _, goos := range []string{"linux", "darwin", "freebsd", "openbsd", "netbsd", "illumos", "windows"} {

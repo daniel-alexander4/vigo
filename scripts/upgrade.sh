@@ -420,34 +420,51 @@ fi
 # Inject cross-compiled agent binaries into the running container so the
 # bootstrap endpoint serves the freshly built binaries (not stale ones baked
 # into the image). Must happen after the container starts.
+#
+# The .version sidecar files MUST be copied alongside each binary — the
+# server reads them at startup to learn the binary's compiled-in version
+# (it can't run a foreign-arch binary itself). Without the sidecar, the
+# server disables auto-update for that arch (safe), but envoys never get
+# new binaries. With a stale-or-missing sidecar, cross-arch envoys can
+# get stuck in update loops — see tshoot/log-archive-rpi-update-loop-*.md.
+inject_with_sidecar() {
+    # $1 = host path to binary, $2 = container path
+    local src="$1"
+    local dst="$2"
+    docker cp "$src" "vigo:$dst"
+    if [ -f "$src.version" ]; then
+        docker cp "$src.version" "vigo:$dst.version"
+    fi
+}
+
 if [ ${#CROSS_TARGETS[@]} -gt 0 ] && docker ps -q -f name=vigo | grep -q .; then
     echo "Injecting cross-compiled agent binaries into container..."
     for t in "${CROSS_TARGETS[@]}"; do
         case "$t" in
             amd64)
                 if [ -f "$REPO_DIR/dist/agent/linux/amd64/vigo" ]; then
-                    docker cp "$REPO_DIR/dist/agent/linux/amd64/vigo" vigo:/dist/agent/linux/amd64/vigo
+                    inject_with_sidecar "$REPO_DIR/dist/agent/linux/amd64/vigo" /dist/agent/linux/amd64/vigo
                     echo "  linux/amd64 → container"
                 fi
                 ;;
             arm64)
                 if [ -f "$REPO_DIR/dist/agent/linux/arm64/vigo" ]; then
                     docker exec vigo mkdir -p /dist/agent/linux/arm64
-                    docker cp "$REPO_DIR/dist/agent/linux/arm64/vigo" vigo:/dist/agent/linux/arm64/vigo
+                    inject_with_sidecar "$REPO_DIR/dist/agent/linux/arm64/vigo" /dist/agent/linux/arm64/vigo
                     echo "  linux/arm64 → container"
                 fi
                 ;;
             freebsd)
                 if [ -f "$REPO_DIR/dist/agent/freebsd/amd64/vigo" ]; then
                     docker exec vigo mkdir -p /dist/agent/freebsd/amd64
-                    docker cp "$REPO_DIR/dist/agent/freebsd/amd64/vigo" vigo:/dist/agent/freebsd/amd64/vigo
+                    inject_with_sidecar "$REPO_DIR/dist/agent/freebsd/amd64/vigo" /dist/agent/freebsd/amd64/vigo
                     echo "  freebsd/amd64 → container"
                 fi
                 ;;
             windows)
                 if [ -f "$REPO_DIR/dist/agent/windows/amd64/vigo.exe" ]; then
                     docker exec vigo mkdir -p /dist/agent/windows/amd64
-                    docker cp "$REPO_DIR/dist/agent/windows/amd64/vigo.exe" vigo:/dist/agent/windows/amd64/vigo.exe
+                    inject_with_sidecar "$REPO_DIR/dist/agent/windows/amd64/vigo.exe" /dist/agent/windows/amd64/vigo.exe
                     echo "  windows/amd64 → container"
                 fi
                 ;;
@@ -455,7 +472,7 @@ if [ ${#CROSS_TARGETS[@]} -gt 0 ] && docker ps -q -f name=vigo | grep -q .; then
                 for arch in amd64 arm64; do
                     if [ -f "$REPO_DIR/dist/agent/darwin/$arch/vigo" ]; then
                         docker exec vigo mkdir -p /dist/agent/darwin/$arch
-                        docker cp "$REPO_DIR/dist/agent/darwin/$arch/vigo" vigo:/dist/agent/darwin/$arch/vigo
+                        inject_with_sidecar "$REPO_DIR/dist/agent/darwin/$arch/vigo" /dist/agent/darwin/$arch/vigo
                         echo "  darwin/$arch → container"
                     fi
                 done

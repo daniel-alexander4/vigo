@@ -13,10 +13,15 @@ RUN mkdir -p agent/src && echo "fn main() {}" > agent/src/main.rs \
     && cd agent && cargo build --release --target x86_64-unknown-linux-musl \
     && rm -rf src
 
-# Now build real source (dependencies already compiled).
+# Now build real source (dependencies already compiled). Also extract the
+# agent's compiled-in version into a sidecar file so the runtime stage can
+# advertise it via /api/v1/agent/latest. Without this, cross-arch envoys can
+# end up in update loops — the server can't run a foreign-arch binary to
+# probe its version, so it relies on this sidecar.
 COPY agent/src/ agent/src/
 RUN cd agent && touch src/main.rs \
-    && cargo build --release --target x86_64-unknown-linux-musl
+    && cargo build --release --target x86_64-unknown-linux-musl \
+    && grep -m1 '^version' Cargo.toml | sed 's/.*"\(.*\)".*/\1/' > /build/agent/vigo.version
 
 FROM golang:1.25-alpine AS go-builder
 
@@ -84,6 +89,7 @@ COPY --from=go-builder /build/migrations /migrations
 RUN mkdir -p /dist/agent/linux/amd64
 COPY dist/agent/ /dist/agent/
 COPY --from=rust-builder /build/agent/target/x86_64-unknown-linux-musl/release/vigo /dist/agent/linux/amd64/vigo
+COPY --from=rust-builder /build/agent/vigo.version /dist/agent/linux/amd64/vigo.version
 
 # License and commercial terms — seeded into /srv/vigo/ and served to agents.
 COPY LICENSE /seed/LICENSE

@@ -85,7 +85,14 @@ type ServerConfig struct {
 	RateLimit        config.RateLimitSection // rate limiting config
 	FallbackServers  []string          // peer server addresses returned to agents on registration
 	AuditWriter        auditRecorder     // tamper-evident audit writer (nil-safe)
-	ServerVersion      string            // agent binary version — agents reporting a different version get force_update
+	// ServerVersions is a per-arch map ("<goos>/<goarch>" → version) of the
+	// agent binary versions available for distribution. Auto-update is
+	// triggered only when an agent reports a version that differs from the
+	// version known for THAT agent's arch. Cross-arch comparison (the bug
+	// that caused the raspberrypi update loop) is no longer possible — an
+	// arm64 agent is now compared against the arm64 binary's version, not
+	// the server-arch binary's version.
+	ServerVersions     map[string]string
 	AgentBinAvailable  func() bool // if set, version-mismatch auto-update only fires when at least one binary exists
 	GlobalObserveOnly  bool              // global observe-only mode from server.yaml checkin.observe_only
 }
@@ -206,7 +213,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		jitterPercent:    cfg.JitterPercent,
 		fallbackServers:  cfg.FallbackServers,
 		auditWriter:        cfg.AuditWriter,
-		serverVersion:      cfg.ServerVersion,
+		serverVersions:     cfg.ServerVersions,
 		agentBinAvailable:  cfg.AgentBinAvailable,
 		globalObserveOnly:  cfg.GlobalObserveOnly,
 	}

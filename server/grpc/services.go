@@ -53,7 +53,11 @@ type AgentService struct {
 	baseInterval     time.Duration     // base check-in interval (used for stale threshold)
 	jitterPercent    int32             // jitter percentage sent to agents
 	fallbackServers  []string          // peer server addresses returned to agents on registration
-	serverVersion      string            // server/agent binary version — agents reporting a different version get force_update
+	// serverVersions is a per-arch ("<goos>/<goarch>" → version) map of the
+	// agent binary versions available for distribution. Auto-update fires only
+	// when an agent reports a version that differs from the version known for
+	// THAT agent's arch. See bootstrap.detectAgentVersions for population.
+	serverVersions     map[string]string
 	agentBinAvailable  func() bool // checks whether at least one agent binary exists for distribution
 	auditWriter        auditRecorder     // tamper-evident audit writer (nil-safe)
 	workflowTrigger    workflowTriggerer // auto-trigger workflows on trait changes (nil-safe)
