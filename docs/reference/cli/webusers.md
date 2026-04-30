@@ -34,12 +34,16 @@ vigocli webusers create --username alice --role viewer \
 # Create a user with an SSH key (for isowebauth)
 vigocli webusers create --username bob --role viewer \
   --ssh-key-file ~/.ssh/id_ed25519.pub
+
+# Create a compliance-staff account (compliance.read + compliance.docs.write only)
+vigocli webusers create --username carol --role compliance \
+  --display-name "Carol Compliance" --email carol@example.com
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--username` | — | Username (required) |
-| `--role` | `viewer` | Role: `admin` or `viewer` |
+| `--role` | `viewer` | Role: `admin`, `viewer`, or `compliance` |
 | `--display-name` | — | Display name |
 | `--email` | — | Email address |
 | `--ssh-key-file` | — | Path to SSH public key file (isowebauth) |

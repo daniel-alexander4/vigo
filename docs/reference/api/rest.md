@@ -5,6 +5,10 @@ In addition to the grpc-gateway proxy (which exposes all `VigoAdmin` RPCs under 
 
 All endpoints return JSON and accept JSON request bodies. Errors use the format `{"message": "..."}`.
 
+## Authorization
+
+Every endpoint requires both authentication (session cookie or `vgot_*` API token) and a specific permission. Read endpoints (status, list, get) require `fleet.read`; mutation endpoints require a permission matched to the action — `config.publish` for publish/freeze/reload/retract, `config.rollback` for rollback, `push.execute` for task dispatch, `workflow.execute` for workflow run/abort, `query.execute` for live queries and the AI assistant, `fleet.write` for envoy maintenance and force-update, `audit.read` for the raw audit log. Database administration, peer promotion, secret-rotation callbacks, and emergency-access recording require the admin role. The compliance framework reports + audit-bundle download ride `compliance.read`; supporting-doc upload requires `compliance.docs.write`. See the [Authentication doc](../../operations/authentication.md#roles-and-permissions) for the full role/permission matrix.
+
 ## Tasks
 
 Ad-hoc command dispatch to connected agents.

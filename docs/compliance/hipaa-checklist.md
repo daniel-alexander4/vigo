@@ -16,7 +16,7 @@ This checklist maps HIPAA Security Rule requirements (45 CFR 164.312) to Vigo's 
 | 3 | Risk management | 164.308(a)(1)(ii)(B) | Built-in | Drift detection, automatic remediation, compliance thresholds |
 | 4 | Sanction policy | 164.308(a)(1)(ii)(C) | Manual | Organizational policy (not a technical control) |
 | 5 | Information system activity review | 164.308(a)(1)(ii)(D) | Built-in | `vigocli audit list`, audit chain verification |
-| 6 | Workforce security | 164.308(a)(3) | Built-in | RBAC (admin/viewer), user management |
+| 6 | Workforce security | 164.308(a)(3) | Built-in | RBAC (admin / viewer / compliance), user management |
 | 7 | Security awareness training | 164.308(a)(5) | Manual | Organizational responsibility |
 | 8 | Password management | 164.308(a)(5)(ii)(D) | Built-in | 12-char minimum, complexity rules, bcrypt hashing |
 | 9 | Security incident procedures | 164.308(a)(6) | Documented | See [Incident Response Plan](incident-response.md) |

@@ -131,6 +131,10 @@ A per-control classification on every framework catalog entry that captures who 
 
 Surfaced as the Scope column on per-envoy compliance detail pages so a "missing" control tells the operator whether to assign a module or upload a document. See [Compliance](../compliance/_index.md).
 
+## compliance role
+
+The third web-UI role added 0.34.2, sitting between admin and viewer. Default permissions: `compliance.read` + `compliance.docs.write` only — every framework page is visible, supporting documentation can be uploaded, and the per-framework audit-bundle export downloads (it's classified as `compliance.read` because the bundle is an evidence artifact, not the raw audit-log stream). The role deliberately excludes `audit.read`, `fleet.read`, and every mutation permission, so a holder can't see envoys/modules/config/secrets/scrier/payload, can't publish or dispatch tasks, and can't read the hash-chained audit log directly. Intended for GRC staff and compliance-document uploaders, **not** auditors — auditors should be assigned `admin` or `viewer` depending on the depth of evidence access required. Stored as `role: 'compliance'` in `users.role`; the DB CHECK constraint enumerates the three valid values. See [Authentication](../operations/authentication.md#roles-and-permissions).
+
 ## compliance docs
 
 The operator-uploaded artifact store that backs `documented`-scope framework controls — BAAs, incident response plans, risk assessments, training records, signed third-party contracts, etc. Shipped 0.32.4. Files land envelope-encrypted at rest under `compliance.docs.docs_dir` (default `/srv/vigo/compliance-docs/`), wrapped with the same AES-256-GCM master key the secrets provider uses. Metadata lives in the `compliance_docs` table; per-control attachments live in `compliance_doc_links` so a single uploaded BAA can satisfy HIPAA 164.308(b), HITRUST 09.f, SOC 2 CC9.2 with one upload.

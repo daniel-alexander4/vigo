@@ -57,7 +57,7 @@ Vigo satisfies or provides evidence for **31 HITRUST CSF control references** ac
 |-----|---------|----------------------|
 | 09.a | Documented Operating Procedures | Config-as-code: YAML modules define desired state, version-controlled |
 | 09.b | Change Management | Stage → publish workflow, git history, modlint validation, audit trail |
-| 09.c | Segregation of Duties | RBAC with admin/viewer + fine-grained permissions, change approval (two-person rule) |
+| 09.c | Segregation of Duties | RBAC with admin / viewer / compliance roles + fine-grained permissions, change approval (two-person rule) |
 
 | 09.d | Separation of Environments | `environments.vgo` + environment roles for per-env module and variable separation |
 | 09.i | Protection Against Malicious Code | Package executor enforces AV/EDR, service executor ensures running |

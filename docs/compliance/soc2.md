@@ -51,7 +51,7 @@ Then publish and verify: `vigocli config publish && vigocli report soc2`
 |-----------|-------|--------|----------|
 | CC1.1 | Integrity and Ethics | Partial | Tamper-evident audit trail enforces accountability; organizational ethics policy required |
 | CC1.2 | Board Oversight | Partial | Compliance dashboards provide oversight visibility; board governance is organizational |
-| CC1.3 | Management Structure | Satisfied | RBAC with 13 fine-grained permissions, admin/viewer roles, segregation of duties |
+| CC1.3 | Management Structure | Satisfied | RBAC with 16 fine-grained permissions, admin / viewer / compliance roles, segregation of duties |
 
 ### CC2 — Communication and Information
 

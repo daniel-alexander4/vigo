@@ -54,7 +54,7 @@ Cyber Essentials is a UK Government-backed cybersecurity certification scheme. C
 
 | Control | Title | Vigo Implementation | Status |
 |---------|-------|---------------------|--------|
-| CE-AC-1 | User Account Management | RBAC with admin/viewer + 13 permissions; per-user accounts with UUIDs | Satisfied |
+| CE-AC-1 | User Account Management | RBAC with admin / viewer / compliance roles + 16 permissions; per-user accounts with UUIDs | Satisfied |
 | CE-AC-2 | Least Privilege | Fine-grained RBAC; viewer role read-only; no shared accounts | Satisfied |
 | CE-AC-3 | Authentication Requirements | Password complexity via bcrypt; session timeout; TOTP MFA; OIDC/SSO | Satisfied |
 | CE-AC-4 | Multi-Factor Authentication | TOTP MFA for web UI; OIDC with MFA delegation; isowebauth SSH key signing | Satisfied |

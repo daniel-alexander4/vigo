@@ -70,7 +70,7 @@ Business Associate shall not use or disclose PHI in a manner that would violate 
 
 | HIPAA Requirement | Implementation |
 |-------------------|----------------|
-| 164.312(a)(1) Access control | Role-based access (admin/viewer), authentication required |
+| 164.312(a)(1) Access control | Role-based access (admin / viewer / compliance), authentication required |
 | 164.312(a)(2)(i) Unique user identification | Per-user accounts with unique IDs |
 | 164.312(a)(2)(ii) Emergency access | Localhost trust with audited emergency access procedure |
 | 164.312(a)(2)(iii) Automatic logoff | 15-minute idle session timeout |
