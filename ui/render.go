@@ -329,7 +329,8 @@ func funcMap() template.FuncMap {
 		},
 		// deref unwraps a *bool into a bool so templates can branch on
 		// the value without Go template's nil-is-not-false quirk.
-		// Used for `gitmirrormesh.LabelSummary.LastPublishFull`.
+		// Generic helper for any `*bool` JSON field where `nil` should
+		// render as `false`.
 		"deref": func(b *bool) bool {
 			if b == nil {
 				return false

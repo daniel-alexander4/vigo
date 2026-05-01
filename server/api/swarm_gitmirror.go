@@ -46,12 +46,15 @@ func (h *GitmirrorHandler) FleetSnapshot(ctx context.Context) (*gitmirrormesh.Fl
 	return h.agg.Snapshot(ctx, h.envoyInputs())
 }
 
-// EnvoyMirrors returns this envoy's receiver-side mirrors with
-// sizes for the per-envoy Swarm Load page. Passthrough to the
-// aggregator — the UI handler uses this via the GitmirrorFleetSource
-// interface so ui/ doesn't need to import gitmirrormesh.
-func (h *GitmirrorHandler) EnvoyMirrors(ctx context.Context, envoyID string) []gitmirrormesh.EnvoyMirror {
-	return h.agg.EnvoyMirrors(ctx, envoyID)
+// EnvoyProjects returns this envoy's local-state view of every
+// project it holds (handle, project_id, bare-repo size, head refs,
+// users with state) for the per-envoy Swarm Load page. Passthrough
+// to the aggregator — the UI handler uses this via the
+// GitmirrorFleetSource interface so ui/ doesn't need to import
+// gitmirrormesh directly. Replaces the legacy EnvoyMirrors shape
+// from the pre-ADR-015 publisher/receiver model.
+func (h *GitmirrorHandler) EnvoyProjects(ctx context.Context, envoyID string) []gitmirrormesh.EnvoyProject {
+	return h.agg.EnvoyProjects(ctx, envoyID)
 }
 
 // envoyInputs converts the fleet index's envoy list into the

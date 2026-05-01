@@ -3,163 +3,460 @@
 
 //! Reports gitmirror state for the `gitmirror` trait namespace.
 //!
-//! **Transitional during the ADR-015 cutover.** Pre-ADR-015 the
-//! gitmirror reactor wrote a [`TraitsSnapshot`] at the end of every
-//! pass and this collector shipped its contents on each check-in.
-//! Step 3 of the ADR-015 arc removed the publish-and-claim reactor;
-//! the new helper-daemon-driven snapshot writer lands in step 4.
-//! Until then, the legacy snapshot file is never written, so this
-//! collector returns `Value::Null` in production — same fail-soft
-//! behaviour as `swarm_seeds::collect` on an empty state.
+//! Re-emitted against the unified-substrate state surface (ADR-015
+//! step 4). The collector walks every user's `~/.vigo-gitmirror/<pid>/`
+//! and joins per-user state with the per-envoy bare repo + envelopes
+//! store. Multiple users on the same envoy that hold the same project
+//! collapse to one entry; user names land in `users_with_state` so
+//! the server-side mesh can attribute things back.
 //!
-//! The fixture-driven tests below still exercise the legacy schema so
-//! consumers that still consume `gitmirror.sources[]` /
-//! `gitmirror.mirrors[]` keep passing through the cutover. Step 4
-//! re-emits the trait against the unified-substrate
-//! `~/.vigo-gitmirror/<project_id>/` state surface.
+//! Trait namespace: `gitmirror`. Schema is keyed on `project_id`
+//! (`sha256(founder_fleet_pubkey)`); legacy publisher/receiver
+//! distinction is gone.
 //!
-//! Trait namespace: `gitmirror`.
+//! ### Per-project payload
+//!
+//! ```jsonc
+//! {
+//!   "project_id":           "<64-hex>",
+//!   "handle":               "vigo-web",
+//!   "founder_fleet_pubkey": "<64-hex>",
+//!   "members":              ["<64-hex>", ...],
+//!   "dr_fanout":            "fleet-wide" | "members-only",
+//!   "users_with_state":     ["dan", "alice"],
+//!   "has_bare_repo":        true,
+//!   "bare_repo_size_bytes": 4096,
+//!   "head_refs":            { "refs/heads/main": "<40-hex>" },
+//!   "envelopes": {
+//!       "revokes":     0,
+//!       "leaves":      0,
+//!       "digest_hex":  "<32-hex>"
+//!   },
+//!   "leaf_role":            "admin" | "member",
+//!   "token_chain_depth":    1,
+//!   "token_expires_at":     null  // or unix-seconds
+//! }
+//! ```
+//!
+//! Top-level shape:
+//!
+//! ```jsonc
+//! {
+//!   "updated_at":    <unix-seconds>,
+//!   "project_count": 3,
+//!   "projects":     [ ... ]
+//! }
+//! ```
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
+use serde::Serialize;
 use serde_json::{json, Value};
 
 use crate::platform::paths::default_gitmirror_dir;
-use crate::swarm::gitmirror::state::TraitsSnapshot;
+use crate::swarm::gitmirror::envelopes;
+use crate::swarm::gitmirror::fan_out;
+use crate::swarm::gitmirror::project_state::{
+    parse_hex_id, project_repo_path, ProjectConfig, TokenChain, PROJECT_STATE_VERSION,
+};
+#[allow(unused_imports)]
+use crate::swarm::gitmirror::tokens::{Role, ID_LEN, NEVER_EXPIRES};
+
+/// One project's view for the trait. Sorted by `project_id` in the
+/// emitted array for deterministic output.
+#[derive(Debug, Serialize)]
+pub struct ProjectEntry {
+    pub project_id: String,
+    pub handle: String,
+    pub founder_fleet_pubkey: String,
+    pub members: Vec<String>,
+    pub dr_fanout: String,
+    pub users_with_state: Vec<String>,
+    pub has_bare_repo: bool,
+    pub bare_repo_size_bytes: u64,
+    pub head_refs: BTreeMap<String, String>,
+    pub envelopes: EnvelopeSummary,
+    pub leaf_role: Option<String>,
+    pub token_chain_depth: usize,
+    pub token_expires_at: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct EnvelopeSummary {
+    pub revokes: usize,
+    pub leaves: usize,
+    pub digest_hex: String,
+}
 
 pub fn collect() -> Result<Value> {
-    let snapshot = match TraitsSnapshot::load(&default_gitmirror_dir())? {
-        Some(s) => s,
-        None => return Ok(Value::Null),
+    let gitmirror_base = default_gitmirror_dir();
+    let passwd_body = match std::fs::read_to_string(passwd_path()) {
+        Ok(s) => s,
+        Err(_) => return Ok(Value::Null),
     };
 
-    // Build the trait payload from the snapshot. Every field is
-    // passed through as-is; the reactor is the only writer so the
-    // schema here matches `TraitsSnapshot` exactly.
+    let projects = collect_projects(&passwd_body, &gitmirror_base);
+    if projects.is_empty() {
+        return Ok(Value::Null);
+    }
+
     Ok(json!({
-        "updated_at": snapshot.updated_at,
-        "active_sources": snapshot.active_sources,
-        "paused_sources": snapshot.paused_sources,
-        "sources": snapshot.sources,
-        "source_errors": snapshot.source_errors,
-        "publish_errors": snapshot.publish_errors,
-        "stale_mirrors": snapshot.stale_mirrors,
-        "mirrors": snapshot.mirrors,
+        "updated_at": unix_seconds_now(),
+        "project_count": projects.len(),
+        "projects": projects,
     }))
+}
+
+/// Walk the passwd file and for each user with a `~/.vigo-gitmirror/`
+/// dir, collapse their per-project state into the cross-user view.
+/// Pulled out for testability; the env-var override on the gitmirror
+/// base lets tests redirect onto a tempdir.
+pub(crate) fn collect_projects(passwd_body: &str, gitmirror_base: &Path) -> Vec<ProjectEntry> {
+    let user_homes = walk_passwd(passwd_body);
+
+    // For each project_id, gather the set of (user, home) pairs that
+    // hold local state.
+    let mut by_project: BTreeMap<String, ProjectAccumulator> = BTreeMap::new();
+    for (user, home) in &user_homes {
+        let dot_dir = home.join(".vigo-gitmirror");
+        let entries = match std::fs::read_dir(&dot_dir) {
+            Ok(it) => it,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if !p.is_dir() {
+                continue;
+            }
+            let name = match p.file_name().and_then(|n| n.to_str()) {
+                Some(n) => n.to_string(),
+                None => continue,
+            };
+            let pid = match parse_hex_id(&name) {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+            // Verify schema version + load.
+            let cfg = match ProjectConfig::load(home, &pid) {
+                Ok(Some(c)) => c,
+                _ => continue,
+            };
+            if cfg.version != PROJECT_STATE_VERSION {
+                continue;
+            }
+            let chain = TokenChain::load(home, &pid).ok().flatten();
+            let acc = by_project
+                .entry(name.clone())
+                .or_insert_with(|| ProjectAccumulator::from_config(cfg.clone()));
+            acc.users.insert(user.clone());
+            // Capture chain depth + leaf role from the first user we see;
+            // multiple users on the same envoy holding the same project
+            // typically have identical chains (each holds their own under
+            // the same fleet identity), but if they differ we keep the
+            // first as the displayed snapshot.
+            if acc.token_chain_depth == 0 {
+                if let Some(c) = chain.as_ref() {
+                    acc.token_chain_depth = c.chain.len();
+                    if let Some(leaf) = c.chain.last() {
+                        acc.leaf_role = Some(format!("{:?}", leaf.body.role));
+                        acc.token_expires_at = match leaf.body.expires_at {
+                            None => None,
+                            Some(NEVER_EXPIRES) => None,
+                            Some(t) => Some(t),
+                        };
+                        let _ = leaf.body.role; // shut up dead-code lint
+                        let _ = Role::Member;
+                    }
+                }
+            }
+        }
+    }
+
+    let mut out = Vec::with_capacity(by_project.len());
+    for (pid_hex, mut acc) in by_project {
+        let pid = match parse_hex_id(&pid_hex) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        // Bare repo + head refs + envelopes are per-envoy (not per-user).
+        let repo = project_repo_path(gitmirror_base, &pid);
+        let has_bare_repo = repo.exists();
+        let bare_repo_size_bytes = if has_bare_repo {
+            dir_size_bytes(&repo).unwrap_or(0)
+        } else {
+            0
+        };
+        let head_refs = if has_bare_repo {
+            fan_out::snapshot_refs(&repo).unwrap_or_default()
+        } else {
+            BTreeMap::new()
+        };
+        let revokes = envelopes::load_revokes(gitmirror_base, &pid)
+            .map(|v| v.len())
+            .unwrap_or(0);
+        let leaves = envelopes::load_leaves(gitmirror_base, &pid)
+            .map(|v| v.len())
+            .unwrap_or(0);
+        let digest_hex = envelopes::project_digest(gitmirror_base, &pid)
+            .map(|d| hex::encode(d))
+            .unwrap_or_default();
+
+        let users_with_state: Vec<String> = acc.users.into_iter().collect();
+        out.push(ProjectEntry {
+            project_id: pid_hex,
+            handle: std::mem::take(&mut acc.handle),
+            founder_fleet_pubkey: std::mem::take(&mut acc.founder_fleet_pubkey),
+            members: std::mem::take(&mut acc.members),
+            dr_fanout: std::mem::take(&mut acc.dr_fanout),
+            users_with_state,
+            has_bare_repo,
+            bare_repo_size_bytes,
+            head_refs,
+            envelopes: EnvelopeSummary {
+                revokes,
+                leaves,
+                digest_hex,
+            },
+            leaf_role: acc.leaf_role,
+            token_chain_depth: acc.token_chain_depth,
+            token_expires_at: acc.token_expires_at,
+        });
+    }
+    out
+}
+
+struct ProjectAccumulator {
+    handle: String,
+    founder_fleet_pubkey: String,
+    members: Vec<String>,
+    dr_fanout: String,
+    users: BTreeSet<String>,
+    leaf_role: Option<String>,
+    token_chain_depth: usize,
+    token_expires_at: Option<i64>,
+}
+
+impl ProjectAccumulator {
+    fn from_config(cfg: ProjectConfig) -> Self {
+        Self {
+            handle: cfg.handle,
+            founder_fleet_pubkey: cfg.founder_fleet_pubkey,
+            members: cfg.members,
+            dr_fanout: cfg.dr_fanout.as_str().to_string(),
+            users: BTreeSet::new(),
+            leaf_role: None,
+            token_chain_depth: 0,
+            token_expires_at: None,
+        }
+    }
+}
+
+/// Production passwd path, env-overridable for tests.
+fn passwd_path() -> PathBuf {
+    if let Some(p) = std::env::var_os("VIGO_GITMIRROR_PASSWD_FILE") {
+        return PathBuf::from(p);
+    }
+    PathBuf::from("/etc/passwd")
+}
+
+fn walk_passwd(body: &str) -> Vec<(String, PathBuf)> {
+    let mut out = Vec::new();
+    for line in body.lines() {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let fields: Vec<&str> = line.split(':').collect();
+        if fields.len() < 7 {
+            continue;
+        }
+        let name = fields[0].to_string();
+        let home = PathBuf::from(fields[5]);
+        out.push((name, home));
+    }
+    out
+}
+
+/// Sum of every regular file under `dir`. Errors collapse to 0 — the
+/// trait shouldn't fail an entire envoy's check-in over a bare repo
+/// permissions blip; the operator notices missing data instead.
+fn dir_size_bytes(dir: &Path) -> Result<u64> {
+    let mut total: u64 = 0;
+    for entry in walkdir(dir) {
+        if let Ok(meta) = std::fs::metadata(&entry) {
+            if meta.is_file() {
+                total = total.saturating_add(meta.len());
+            }
+        }
+    }
+    Ok(total)
+}
+
+fn walkdir(dir: &Path) -> Vec<PathBuf> {
+    let mut stack = vec![dir.to_path_buf()];
+    let mut out = Vec::new();
+    while let Some(p) = stack.pop() {
+        let entries = match std::fs::read_dir(&p) {
+            Ok(it) => it,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                out.push(path);
+            }
+        }
+    }
+    out
+}
+
+fn unix_seconds_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::swarm::gitmirror::state::{
-        MirrorTraitEntry, PublishErrorEntry, SourceErrorEntry, SourceTraitEntry, TraitsSnapshot,
-        TRAITS_SNAPSHOT_VERSION,
-    };
+    use crate::swarm::gitmirror::project_state::DrFanout;
+    use ed25519_dalek::SigningKey;
+    use rand::rngs::OsRng;
     use tempfile::tempdir;
 
-    /// Test helper: write a snapshot to the given base dir and invoke
-    /// the collector with the `VIGO_GITMIRROR_DIR` env override. Tests
-    /// using this must be annotated `#[serial]` — no, the agent's
-    /// test suite does not use `serial_test`. Instead we make each
-    /// test self-contained and only inspect the returned `Value`,
-    /// not the env var itself.
-    fn with_snapshot_dir<F: FnOnce() -> R, R>(dir: &std::path::Path, f: F) -> R {
-        // SAFETY: setting env vars is process-wide and races with
-        // parallel tests. We unset immediately after the closure,
-        // and the collector reads the var only at the top of
-        // `collect()`. Parallel runs of other gitmirror tests don't
-        // read this var, so the race window is self-contained.
-        std::env::set_var("VIGO_GITMIRROR_DIR", dir);
-        let result = f();
-        std::env::remove_var("VIGO_GITMIRROR_DIR");
-        result
+    fn fresh_key() -> SigningKey {
+        SigningKey::generate(&mut OsRng)
     }
 
-    #[test]
-    fn collect_returns_null_when_no_snapshot() {
-        let dir = tempdir().unwrap();
-        let v = with_snapshot_dir(dir.path(), collect).unwrap();
-        assert!(v.is_null());
+    fn pub_bytes(k: &SigningKey) -> [u8; ID_LEN] {
+        k.verifying_key().to_bytes()
     }
 
-    #[test]
-    fn collect_returns_snapshot_contents() {
-        let dir = tempdir().unwrap();
-
-        let snapshot = TraitsSnapshot {
-            version: TRAITS_SNAPSHOT_VERSION,
-            updated_at: 1_744_560_000,
-            sources: vec![SourceTraitEntry {
-                label: "gitmirror:host:user:proj".to_string(),
-                paused: false,
-                max_mirrors: 5,
-                tags: vec!["personal".to_string(), "notes".to_string()],
-                description: "test".to_string(),
-                include_envoys: vec![],
-                exclude_envoys: vec![],
-                when: String::new(),
-                cross_subnet_mirrors: vec![],
-                git_sha: Some("deadbeef".to_string()),
-                blob_sha: Some("cafef00d".to_string()),
-                last_publish_full: Some(true),
-                last_bundle_size: Some(8192),
-                selected_mirrors: vec![],
-            }],
-            active_sources: 1,
-            paused_sources: 0,
-            source_errors: vec![SourceErrorEntry {
-                path: "/home/dan/gitmirror/bad".to_string(),
-                reason: "invalid sidecar".to_string(),
-            }],
-            publish_errors: vec![PublishErrorEntry {
-                label: "gitmirror:h:u:broken".to_string(),
-                reason: "bundle exceeds cap".to_string(),
-            }],
-            stale_mirrors: vec!["gitmirror:host:user:stale".to_string()],
-            mirrors: vec![MirrorTraitEntry {
-                label: "gitmirror:host:user:proj".to_string(),
-                seeder: "host".to_string(),
-                user: "user".to_string(),
-                project: "proj".to_string(),
-                git_sha: "deadbeef".to_string(),
-                blob_sha: "cafef00d".to_string(),
-                last_refreshed: 1_744_560_000,
-                stale: false,
-                next_gc_at: 1_744_600_000,
-                size_bytes: 4_096,
-            }],
+    /// Build a ProjectConfig for a freshly-generated founder, write
+    /// it under `<home>/.vigo-gitmirror/<pid>/project.json`. Returns
+    /// the project_id.
+    fn seed_project(home: &Path, handle: &str) -> [u8; ID_LEN] {
+        use crate::swarm::gitmirror::tokens::project_id_for;
+        let founder = fresh_key();
+        let pid = project_id_for(&pub_bytes(&founder));
+        let cfg = ProjectConfig {
+            version: PROJECT_STATE_VERSION,
+            project_id: hex::encode(pid),
+            handle: handle.to_string(),
+            founder_fleet_pubkey: hex::encode(pub_bytes(&founder)),
+            members: vec![hex::encode(pub_bytes(&founder))],
+            dr_fanout: DrFanout::FleetWide,
+            cross_subnet_members: vec![],
+            updated_at: 1_700_000_000,
         };
-        snapshot.save(dir.path()).unwrap();
-
-        let v = with_snapshot_dir(dir.path(), collect).unwrap();
-        assert_eq!(v["active_sources"], 1);
-        assert_eq!(v["paused_sources"], 0);
-        assert_eq!(v["updated_at"], 1_744_560_000u64);
-        assert_eq!(v["sources"][0]["label"], "gitmirror:host:user:proj");
-        assert_eq!(v["sources"][0]["git_sha"], "deadbeef");
-        // Sidecar fields flow through to the trait payload so the
-        // server-side ClaimTable builder can read them directly.
-        assert_eq!(v["sources"][0]["max_mirrors"], 5);
-        assert_eq!(v["sources"][0]["tags"][0], "personal");
-        assert_eq!(v["sources"][0]["tags"][1], "notes");
-        assert_eq!(v["sources"][0]["description"], "test");
-        assert_eq!(v["source_errors"][0]["path"], "/home/dan/gitmirror/bad");
-        assert_eq!(v["publish_errors"][0]["label"], "gitmirror:h:u:broken");
-        // Receiver-side mirrors must flow through — regression guard
-        // for the missing-field bug where `mirrors` was populated in
-        // the on-disk snapshot but dropped from the wire payload.
-        assert_eq!(v["mirrors"][0]["label"], "gitmirror:host:user:proj");
-        assert_eq!(v["mirrors"][0]["seeder"], "host");
-        assert_eq!(v["mirrors"][0]["git_sha"], "deadbeef");
-        assert_eq!(v["mirrors"][0]["last_refreshed"], 1_744_560_000u64);
-        assert_eq!(v["mirrors"][0]["size_bytes"], 4_096u64);
+        cfg.save(home).unwrap();
+        pid
     }
 
     #[test]
-    fn collect_handles_corrupt_snapshot_as_null() {
-        let dir = tempdir().unwrap();
-        // Write garbage where the snapshot file would go.
-        std::fs::write(dir.path().join("traits.json"), b"not json").unwrap();
-        let v = with_snapshot_dir(dir.path(), collect).unwrap();
+    fn collect_returns_null_when_no_passwd() {
+        // Point passwd at a missing file.
+        let body_path = tempdir().unwrap();
+        let missing = body_path.path().join("nonexistent");
+        std::env::set_var("VIGO_GITMIRROR_PASSWD_FILE", &missing);
+        let v = collect().unwrap();
+        std::env::remove_var("VIGO_GITMIRROR_PASSWD_FILE");
         assert!(v.is_null());
+    }
+
+    #[test]
+    fn collect_returns_null_when_no_users_have_state() {
+        let dir = tempdir().unwrap();
+        let body = format!("nobody:x:99:99::{}:/bin/sh\n", dir.path().display());
+        let projects = collect_projects(&body, dir.path());
+        assert!(projects.is_empty());
+    }
+
+    #[test]
+    fn collect_collapses_multi_user_holders() {
+        let base = tempdir().unwrap();
+        let dan_home = base.path().join("home/dan");
+        let alice_home = base.path().join("home/alice");
+        std::fs::create_dir_all(&dan_home).unwrap();
+        std::fs::create_dir_all(&alice_home).unwrap();
+
+        // Same project_id from a single founder, persisted under both
+        // users' dot-dirs (e.g., they were both invited as members).
+        use crate::swarm::gitmirror::tokens::project_id_for;
+        let founder = fresh_key();
+        let pid = project_id_for(&pub_bytes(&founder));
+        let cfg = ProjectConfig {
+            version: PROJECT_STATE_VERSION,
+            project_id: hex::encode(pid),
+            handle: "team-notes".to_string(),
+            founder_fleet_pubkey: hex::encode(pub_bytes(&founder)),
+            members: vec![hex::encode(pub_bytes(&founder))],
+            dr_fanout: DrFanout::MembersOnly,
+            cross_subnet_members: vec![],
+            updated_at: 1_700_000_000,
+        };
+        cfg.save(&dan_home).unwrap();
+        cfg.save(&alice_home).unwrap();
+
+        let body = format!(
+            "dan:x:1000:1000::{}:/bin/sh\nalice:x:1001:1001::{}:/bin/sh\n",
+            dan_home.display(),
+            alice_home.display()
+        );
+        let projects = collect_projects(&body, base.path());
+        assert_eq!(projects.len(), 1);
+        let p = &projects[0];
+        assert_eq!(p.handle, "team-notes");
+        assert_eq!(p.users_with_state, vec!["alice", "dan"]);
+        assert_eq!(p.dr_fanout, "members-only");
+        assert!(!p.has_bare_repo); // no bare repo seeded in this test
+        assert_eq!(p.envelopes.revokes, 0);
+    }
+
+    #[test]
+    fn collect_picks_up_envelope_counts_and_digest() {
+        let base = tempdir().unwrap();
+        let dan_home = base.path().join("home/dan");
+        std::fs::create_dir_all(&dan_home).unwrap();
+        let pid = seed_project(&dan_home, "vigo-web");
+
+        // Drop in a revoke envelope.
+        let admin = fresh_key();
+        let env = envelopes::RevokeEnvelope::build(&admin, &pid, &[0x01u8; ID_LEN], 100, "");
+        envelopes::save_revoke(base.path(), &env).unwrap();
+
+        let body = format!("dan:x:1000:1000::{}:/bin/sh\n", dan_home.display());
+        let projects = collect_projects(&body, base.path());
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].envelopes.revokes, 1);
+        assert_eq!(projects[0].envelopes.leaves, 0);
+        assert!(!projects[0].envelopes.digest_hex.is_empty());
+    }
+
+    #[test]
+    fn collect_skips_pid_dirs_with_invalid_names() {
+        let base = tempdir().unwrap();
+        let dan_home = base.path().join("home/dan");
+        std::fs::create_dir_all(&dan_home).unwrap();
+        // Valid pid + a junk dirname should appear once.
+        seed_project(&dan_home, "good");
+        std::fs::create_dir_all(dan_home.join(".vigo-gitmirror").join("not-a-pid")).unwrap();
+
+        let body = format!("dan:x:1000:1000::{}:/bin/sh\n", dan_home.display());
+        let projects = collect_projects(&body, base.path());
+        assert_eq!(projects.len(), 1);
+    }
+
+    #[test]
+    fn dir_size_bytes_sums_files_recursively() {
+        let dir = tempdir().unwrap();
+        std::fs::write(dir.path().join("a"), b"hello").unwrap(); // 5
+        std::fs::create_dir_all(dir.path().join("sub")).unwrap();
+        std::fs::write(dir.path().join("sub/b"), b"world!").unwrap(); // 6
+        assert_eq!(dir_size_bytes(dir.path()).unwrap(), 11);
     }
 }

@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package gitmirrormesh builds the fleet-wide gitmirror observability
-// view by joining publisher-side `gitmirror.sources[].selected_mirrors`
-// against receiver-side `gitmirror.mirrors[]` across every envoy's
-// latest trait payload.
+// view by aggregating per-envoy `gitmirror` trait payloads keyed on
+// project_id (ADR-015).
 //
-// Post-0.23.0 gitmirror is pure P2P: there is no server-side
-// coordination state. This package is the sole place the server
-// reconstructs per-label mesh state, and it does so entirely from
-// reports that already flow up via the standard trait pipeline — no
-// new RPC.
+// Post-ADR-015 there is no publisher/receiver distinction: every
+// envoy holding a project announces it via the swarm, the helper
+// daemon mediates push/fetch over a system Unix socket, and the
+// server has zero coordination state. This package is the sole
+// place the server reconstructs per-project mesh state, and it does
+// so entirely from reports that already flow up via the standard
+// trait pipeline — no new RPC.
 //
 // Lives in its own package so both `server/api` (REST) and `ui`
 // (web) can consume it without creating an import cycle through
@@ -43,100 +44,93 @@ type EnvoyInput struct {
 
 // Fleet is the top-level aggregated view.
 type Fleet struct {
-	GeneratedAt  time.Time      `json:"generated_at"`
-	Labels       []LabelSummary `json:"labels"`
-	Participants []string       `json:"participants"`
-	Totals       Totals         `json:"totals"`
+	GeneratedAt  time.Time        `json:"generated_at"`
+	Projects     []ProjectSummary `json:"projects"`
+	Participants []string         `json:"participants"`
+	Totals       Totals           `json:"totals"`
 }
 
 // Totals carries pre-computed counts the UI can render without
-// re-walking the labels slice.
+// re-walking the projects slice.
 type Totals struct {
-	Sources       int `json:"sources"`
-	Labels        int `json:"labels"`
-	Mirrors       int `json:"mirrors"`
-	OrphanMirrors int `json:"orphan_mirrors"`
-	StaleMirrors  int `json:"stale_mirrors"`
+	Projects      int `json:"projects"`
+	Hosts         int `json:"hosts"`
+	DivergentRefs int `json:"divergent_refs"`
+	TotalRevokes  int `json:"total_revokes"`
+	TotalLeaves   int `json:"total_leaves"`
 }
 
-// LabelSummary aggregates one gitmirror label across the fleet.
-type LabelSummary struct {
-	Label             string           `json:"label"`
-	Publisher         string           `json:"publisher"`
-	User              string           `json:"user"`
-	Project           string           `json:"project"`
-	Paused            bool             `json:"paused"`
-	MaxMirrors        int              `json:"max_mirrors"`
-	CrossSubnetMirrors      []string         `json:"cross_subnet_mirrors,omitempty"`
-	Tags              []string         `json:"tags,omitempty"`
-	Description       string           `json:"description,omitempty"`
-	PublisherSeen     int64            `json:"publisher_seen"`
-	// BlobSha is the swarm content seed sha256 of the publisher's
-	// most recent bundle. Empty if the publisher hasn't succeeded
-	// yet, or if the label is receiver-only (orphan). Lets the UI
-	// link a label directly to its `/swarm/<sha256>` detail page.
-	BlobSha           string           `json:"blob_sha,omitempty"`
-	GitSha            string           `json:"git_sha,omitempty"`
-	// LastPublishFull reports whether the publisher's most recent
-	// bundle was a full (`true`) or incremental (`false`) bundle.
-	// Nil when the publisher has never succeeded, or when reported
-	// by a pre-0.24.1 agent that doesn't carry the field. Consumed
-	// by `/swarm` UI and `vigocli repo` to explain why a gitmirror
-	// seed is only a few KB — an incremental is expected to be
-	// small; a full bundle should be repo-sized.
-	LastPublishFull   *bool            `json:"last_publish_full,omitempty"`
-	// LastBundleSize is the size in bytes of the most recent
-	// bundle. Zero when unknown. Paired with LastPublishFull.
-	LastBundleSize    int64            `json:"last_bundle_size,omitempty"`
-	Mirrors           []MirrorPresence `json:"mirrors"`
-	CountSelected     int              `json:"count_selected"`
-	CountMaterialized int              `json:"count_materialized"`
-	CountOrphan       int              `json:"count_orphan"`
-	CountStale        int              `json:"count_stale"`
+// ProjectSummary aggregates one project across the fleet.
+type ProjectSummary struct {
+	ProjectID          string               `json:"project_id"`
+	Handle             string               `json:"handle"`
+	FounderFleetPubkey string               `json:"founder_fleet_pubkey"`
+	Members            []string             `json:"members"`
+	DrFanout           string               `json:"dr_fanout"`
+
+	Hosts            []HostPresence       `json:"hosts"`
+	HeadRefs         map[string]RefStatus `json:"head_refs"`
+
+	MemberFleetCount int      `json:"member_fleet_count"`
+	HostCount        int      `json:"host_count"`
+	LastUpdated      int64    `json:"last_updated"`
+	DivergentRefs    []string `json:"divergent_refs,omitempty"`
+	RevokesCount     int      `json:"revokes_count"`
+	LeavesCount      int      `json:"leaves_count"`
+	DigestUnanimous  bool     `json:"digest_unanimous"`
 }
 
-// LookupLabel returns the summary for a specific label, or nil if
+// LookupProject returns the summary for a project_id_hex, or nil if
 // the fleet snapshot doesn't carry it. Used by the swarm detail
-// page to attach gitmirror-specific context when a blob's label is
-// gitmirror-shaped.
-func (f *Fleet) LookupLabel(label string) *LabelSummary {
+// page to attach gitmirror-specific context.
+func (f *Fleet) LookupProject(projectID string) *ProjectSummary {
 	if f == nil {
 		return nil
 	}
-	for i := range f.Labels {
-		if f.Labels[i].Label == label {
-			return &f.Labels[i]
+	for i := range f.Projects {
+		if f.Projects[i].ProjectID == projectID {
+			return &f.Projects[i]
 		}
 	}
 	return nil
 }
 
-// LookupBlobSha returns the summary for a label identified by the
-// publisher's current bundle sha256. Lets the swarm detail page
-// (which is keyed on sha256, not label) recover gitmirror context
-// without a full fleet scan on every render.
-func (f *Fleet) LookupBlobSha(sha string) *LabelSummary {
-	if f == nil || sha == "" {
+// LookupByHandle returns the first project with a matching handle.
+// Handles are NOT cryptographically authoritative — two projects
+// can share a handle — so this is a UX convenience only. Use
+// LookupProject when uniqueness matters.
+func (f *Fleet) LookupByHandle(handle string) *ProjectSummary {
+	if f == nil || handle == "" {
 		return nil
 	}
-	for i := range f.Labels {
-		if f.Labels[i].BlobSha == sha {
-			return &f.Labels[i]
+	for i := range f.Projects {
+		if f.Projects[i].Handle == handle {
+			return &f.Projects[i]
 		}
 	}
 	return nil
 }
 
-// MirrorPresence describes one (label × host) cell of the join.
-type MirrorPresence struct {
-	Host          string `json:"host"`
-	Status        string `json:"status"` // active | pending | orphan
-	Materialized  bool   `json:"materialized"`
-	Selected      bool   `json:"selected"`
-	Stale         bool   `json:"stale,omitempty"`
-	GitSha        string `json:"git_sha,omitempty"`
-	BlobSha       string `json:"blob_sha,omitempty"`
-	LastRefreshed int64  `json:"last_refreshed,omitempty"`
+// HostPresence describes one envoy's view of a project.
+type HostPresence struct {
+	Host            string            `json:"host"`
+	UpdatedAt       int64             `json:"updated_at"`
+	HasBareRepo     bool              `json:"has_bare_repo"`
+	SizeBytes       uint64            `json:"size_bytes,omitempty"`
+	HeadRefs        map[string]string `json:"head_refs,omitempty"`
+	EnvelopesDigest string            `json:"envelopes_digest,omitempty"`
+	UsersWithState  []string          `json:"users_with_state,omitempty"`
+	LeafRole        string            `json:"leaf_role,omitempty"`
+}
+
+// RefStatus carries the consensus view of one ref across hosts.
+// Sha is non-empty when every host holding the project agrees;
+// when hosts disagree, Sha is empty and the ref is added to
+// ProjectSummary.DivergentRefs.
+type RefStatus struct {
+	Sha           string   `json:"sha,omitempty"`
+	HostsAgreeing []string `json:"hosts_agreeing,omitempty"`
+	HostsLagging  []string `json:"hosts_lagging,omitempty"`
 }
 
 // Aggregator holds the 30-second in-memory TTL cache so repeated
@@ -177,9 +171,8 @@ func (a *Aggregator) Snapshot(ctx context.Context, envoys []EnvoyInput) (*Fleet,
 	return fleet, nil
 }
 
-// build fetches every envoy's `gitmirror` trait, joins publisher
-// sources against receiver mirrors by label, and computes per-cell
-// status.
+// build fetches every envoy's `gitmirror` trait, joins per-envoy
+// project entries by project_id, and computes per-ref consensus.
 func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, error) {
 	type envelopeRow struct {
 		hostname string
@@ -197,44 +190,39 @@ func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, er
 		rows = append(rows, envelopeRow{hostname: e.Hostname, envelope: env})
 	}
 
-	// Receiver-side index: label → host → mirror trait entry.
-	labelHolders := make(map[string]map[string]mirrorTrait)
-	for _, row := range rows {
-		for _, m := range row.envelope.Mirrors {
-			hosts := labelHolders[m.Label]
-			if hosts == nil {
-				hosts = make(map[string]mirrorTrait)
-				labelHolders[m.Label] = hosts
-			}
-			hosts[row.hostname] = m
-		}
+	// Group per-envoy project entries by project_id.
+	type projectSlot struct {
+		entries []projectTrait
+		hosts   []string // parallel to entries
+		updated []int64
 	}
-
+	by := make(map[string]*projectSlot)
 	participants := make(map[string]struct{})
-	summaries := make([]LabelSummary, 0)
-	seenLabels := make(map[string]struct{})
 	for _, row := range rows {
 		participants[row.hostname] = struct{}{}
-		for _, src := range row.envelope.Sources {
-			summaries = append(summaries, summaryFromSource(
-				row.hostname, src, row.envelope.UpdatedAt, labelHolders[src.Label]))
-			seenLabels[src.Label] = struct{}{}
+		for _, p := range row.envelope.Projects {
+			slot := by[p.ProjectID]
+			if slot == nil {
+				slot = &projectSlot{}
+				by[p.ProjectID] = slot
+			}
+			slot.entries = append(slot.entries, p)
+			slot.hosts = append(slot.hosts, row.hostname)
+			slot.updated = append(slot.updated, row.envelope.UpdatedAt)
 		}
 	}
 
-	// Receiver-only labels (publisher offline or disabled).
-	for label, holders := range labelHolders {
-		if _, seen := seenLabels[label]; seen {
-			continue
-		}
-		summaries = append(summaries, orphanSummary(label, holders))
-		for host := range holders {
-			participants[host] = struct{}{}
-		}
+	summaries := make([]ProjectSummary, 0, len(by))
+	for projectID, slot := range by {
+		summaries = append(summaries, summarizeProject(projectID, slot.entries, slot.hosts, slot.updated))
 	}
 
 	sort.Slice(summaries, func(i, j int) bool {
-		return summaries[i].Label < summaries[j].Label
+		// Sort by handle for human-readable output, ties broken by project_id.
+		if summaries[i].Handle != summaries[j].Handle {
+			return summaries[i].Handle < summaries[j].Handle
+		}
+		return summaries[i].ProjectID < summaries[j].ProjectID
 	})
 
 	partList := make([]string, 0, len(participants))
@@ -245,63 +233,197 @@ func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, er
 
 	fleet := &Fleet{
 		GeneratedAt:  time.Now().UTC(),
-		Labels:       summaries,
+		Projects:     summaries,
 		Participants: partList,
 	}
-	fleet.Totals.Labels = len(summaries)
+	fleet.Totals.Projects = len(summaries)
+	hostsHoldingAny := make(map[string]struct{})
 	for _, s := range summaries {
-		fleet.Totals.Mirrors += s.CountMaterialized
-		fleet.Totals.OrphanMirrors += s.CountOrphan
-		fleet.Totals.StaleMirrors += s.CountStale
+		for _, h := range s.Hosts {
+			hostsHoldingAny[h.Host] = struct{}{}
+		}
+		fleet.Totals.DivergentRefs += len(s.DivergentRefs)
+		fleet.Totals.TotalRevokes += s.RevokesCount
+		fleet.Totals.TotalLeaves += s.LeavesCount
 	}
-	for _, row := range rows {
-		fleet.Totals.Sources += len(row.envelope.Sources)
-	}
+	fleet.Totals.Hosts = len(hostsHoldingAny)
 	return fleet, nil
 }
 
-// EnvoyMirror is one receiver-side gitmirror mirror held by one envoy,
-// projected out of the gitmirror trait for the per-envoy Swarm Load
-// page. Fields mirror the wire schema but are exported for cross-
-// package consumption (the handler at server/api formats them for
-// display). `BareRepoPath` is the on-disk location the agent would
-// walk to compute `SizeBytes` — surfaced so the UI can show a
-// recognizable filesystem path instead of the internal label.
-type EnvoyMirror struct {
-	Label         string
-	Seeder        string
-	User          string
-	Project       string
-	GitSha        string
-	BlobSha       string
-	LastRefreshed int64
-	Stale         bool
-	SizeBytes     uint64
-	BareRepoPath  string
+// summarizeProject collapses one project's per-host trait entries
+// into a ProjectSummary. The project_id, handle, founder, members,
+// and dr_fanout fields are taken from the most-recently-updated
+// host's report (gossip should have converged identical values
+// across the fleet, but if any field disagrees we surface the
+// freshest as the canonical view).
+func summarizeProject(projectID string, entries []projectTrait, hosts []string, updated []int64) ProjectSummary {
+	if len(entries) == 0 {
+		return ProjectSummary{ProjectID: projectID}
+	}
+
+	// Pick the freshest host's view for the static project metadata.
+	freshIdx := 0
+	for i := 1; i < len(updated); i++ {
+		if updated[i] > updated[freshIdx] {
+			freshIdx = i
+		}
+	}
+	canonical := entries[freshIdx]
+
+	// Build per-host presence + ref union.
+	refToShas := make(map[string]map[string][]string) // ref → sha → hosts
+	hostsList := make([]HostPresence, 0, len(entries))
+	for i, e := range entries {
+		hp := HostPresence{
+			Host:            hosts[i],
+			UpdatedAt:       updated[i],
+			HasBareRepo:     e.HasBareRepo,
+			SizeBytes:       e.BareRepoSizeBytes,
+			HeadRefs:        e.HeadRefs,
+			EnvelopesDigest: e.envelopesDigestHex(),
+			UsersWithState:  append([]string(nil), e.UsersWithState...),
+			LeafRole:        e.LeafRole,
+		}
+		hostsList = append(hostsList, hp)
+		for ref, sha := range e.HeadRefs {
+			byRef := refToShas[ref]
+			if byRef == nil {
+				byRef = make(map[string][]string)
+				refToShas[ref] = byRef
+			}
+			byRef[sha] = append(byRef[sha], hosts[i])
+		}
+	}
+	sort.Slice(hostsList, func(i, j int) bool {
+		return hostsList[i].Host < hostsList[j].Host
+	})
+
+	// Collapse into RefStatus + DivergentRefs.
+	headRefs := make(map[string]RefStatus, len(refToShas))
+	divergent := make([]string, 0)
+	for ref, byRef := range refToShas {
+		switch len(byRef) {
+		case 1:
+			// All hosts agree on this ref.
+			for sha, agreeing := range byRef {
+				sort.Strings(agreeing)
+				headRefs[ref] = RefStatus{
+					Sha:           sha,
+					HostsAgreeing: agreeing,
+				}
+			}
+		default:
+			// Two or more distinct shas — pick the majority as
+			// the consensus, list the others as lagging.
+			var majoritySha string
+			var majorityHosts []string
+			lagging := make([]string, 0)
+			for sha, hostsHere := range byRef {
+				if len(hostsHere) > len(majorityHosts) {
+					if majoritySha != "" {
+						lagging = append(lagging, majorityHosts...)
+					}
+					majoritySha = sha
+					majorityHosts = hostsHere
+				} else {
+					lagging = append(lagging, hostsHere...)
+				}
+			}
+			sort.Strings(majorityHosts)
+			sort.Strings(lagging)
+			headRefs[ref] = RefStatus{
+				Sha:           "", // empty signals divergence
+				HostsAgreeing: majorityHosts,
+				HostsLagging:  lagging,
+			}
+			divergent = append(divergent, ref)
+		}
+	}
+	sort.Strings(divergent)
+
+	// Digest unanimity: every host's envelopes_digest matches.
+	digestUnanimous := true
+	if len(hostsList) > 0 {
+		first := hostsList[0].EnvelopesDigest
+		for _, h := range hostsList[1:] {
+			if h.EnvelopesDigest != first {
+				digestUnanimous = false
+				break
+			}
+		}
+	}
+
+	// Envelope counts: take the canonical (freshest) host's report.
+	revokes := canonical.Envelopes.Revokes
+	leaves := canonical.Envelopes.Leaves
+
+	// Last updated: max across hosts.
+	var lastUpdated int64
+	for _, ts := range updated {
+		if ts > lastUpdated {
+			lastUpdated = ts
+		}
+	}
+
+	return ProjectSummary{
+		ProjectID:          projectID,
+		Handle:             canonical.Handle,
+		FounderFleetPubkey: canonical.FounderFleetPubkey,
+		Members:            append([]string(nil), canonical.Members...),
+		DrFanout:           canonical.DrFanout,
+		Hosts:              hostsList,
+		HeadRefs:           headRefs,
+		MemberFleetCount:   len(canonical.Members),
+		HostCount:          len(hostsList),
+		LastUpdated:        lastUpdated,
+		DivergentRefs:      divergent,
+		RevokesCount:       revokes,
+		LeavesCount:        leaves,
+		DigestUnanimous:    digestUnanimous,
+	}
 }
 
-// EnvoyMirrors returns the receiver-side mirrors held by one envoy
-// with sizes, in manifest order. Returns nil when the envoy has not
-// reported a gitmirror trait (or the trait has no `mirrors[]` field,
-// which is normal for publish-only envoys).
-func (a *Aggregator) EnvoyMirrors(ctx context.Context, envoyID string) []EnvoyMirror {
+// EnvoyProject is one envoy's local-state view of a project,
+// projected out of the gitmirror trait for the per-envoy Swarm Load
+// page. Replaces the legacy `EnvoyMirror` shape.
+type EnvoyProject struct {
+	ProjectID         string
+	Handle            string
+	HasBareRepo       bool
+	SizeBytes         uint64
+	BareRepoPath      string
+	HeadRefs          map[string]string
+	UsersWithState    []string
+	LeafRole          string
+	TokenChainDepth   int
+	RevokesCount      int
+	LeavesCount       int
+	DrFanout          string
+}
+
+// EnvoyProjects returns the project entries the envoy reported in
+// its most recent `gitmirror` trait. Returns nil when the envoy
+// hasn't reported yet (or has no projects).
+func (a *Aggregator) EnvoyProjects(ctx context.Context, envoyID string) []EnvoyProject {
 	env, ok := a.loadTrait(ctx, envoyID)
 	if !ok {
 		return nil
 	}
-	out := make([]EnvoyMirror, 0, len(env.Mirrors))
-	for _, m := range env.Mirrors {
-		out = append(out, EnvoyMirror{
-			Label:         m.Label,
-			Seeder:        m.Seeder,
-			User:          m.User,
-			Project:       m.Project,
-			GitSha:        m.GitSha,
-			BlobSha:       m.BlobSha,
-			LastRefreshed: m.LastRefreshed,
-			Stale:         m.Stale,
-			SizeBytes:     m.SizeBytes,
-			BareRepoPath:  fmt.Sprintf("/var/lib/vigo/gitmirror/mirrors/%s/%s/%s.git", m.Seeder, m.User, m.Project),
+	out := make([]EnvoyProject, 0, len(env.Projects))
+	for _, p := range env.Projects {
+		out = append(out, EnvoyProject{
+			ProjectID:       p.ProjectID,
+			Handle:          p.Handle,
+			HasBareRepo:     p.HasBareRepo,
+			SizeBytes:       p.BareRepoSizeBytes,
+			BareRepoPath:    fmt.Sprintf("/var/lib/vigo/swarm/gitmirror/projects/%s.git", p.ProjectID),
+			HeadRefs:        p.HeadRefs,
+			UsersWithState:  p.UsersWithState,
+			LeafRole:        p.LeafRole,
+			TokenChainDepth: p.TokenChainDepth,
+			RevokesCount:    p.Envelopes.Revokes,
+			LeavesCount:     p.Envelopes.Leaves,
+			DrFanout:        p.DrFanout,
 		})
 	}
 	return out
@@ -333,186 +455,34 @@ func (a *Aggregator) loadTrait(ctx context.Context, envoyID string) (*traitEnvel
 
 // --- trait payload shapes (deserialized from agent JSON) ---
 
-type sourceTrait struct {
-	Label           string   `json:"label"`
-	Paused          bool     `json:"paused"`
-	MaxMirrors      int      `json:"max_mirrors"`
-	Tags            []string `json:"tags,omitempty"`
-	Description     string   `json:"description,omitempty"`
-	IncludeEnvoys   []string `json:"include_envoys,omitempty"`
-	ExcludeEnvoys   []string `json:"exclude_envoys,omitempty"`
-	When            string   `json:"when,omitempty"`
-	CrossSubnetMirrors    []string `json:"cross_subnet_mirrors,omitempty"`
-	GitSha          string   `json:"git_sha,omitempty"`
-	BlobSha         string   `json:"blob_sha,omitempty"`
-	LastPublishFull *bool    `json:"last_publish_full,omitempty"`
-	LastBundleSize  int64    `json:"last_bundle_size,omitempty"`
-	SelectedMirrors []string `json:"selected_mirrors,omitempty"`
-}
-
-type mirrorTrait struct {
-	Label         string `json:"label"`
-	Seeder        string `json:"seeder"`
-	User          string `json:"user"`
-	Project       string `json:"project"`
-	GitSha        string `json:"git_sha"`
-	BlobSha       string `json:"blob_sha"`
-	LastRefreshed int64  `json:"last_refreshed"`
-	Stale         bool   `json:"stale"`
-	NextGcAt      int64  `json:"next_gc_at"`
-	SizeBytes     uint64 `json:"size_bytes,omitempty"`
-}
-
 type traitEnvelope struct {
-	UpdatedAt     int64         `json:"updated_at"`
-	ActiveSources int           `json:"active_sources"`
-	PausedSources int           `json:"paused_sources"`
-	Sources       []sourceTrait `json:"sources"`
-	Mirrors       []mirrorTrait `json:"mirrors"`
-	StaleMirrors  []string      `json:"stale_mirrors"`
+	UpdatedAt    int64          `json:"updated_at"`
+	ProjectCount int            `json:"project_count"`
+	Projects     []projectTrait `json:"projects"`
 }
 
-// --- summary builders ---
-
-func summaryFromSource(publisher string, src sourceTrait, publisherSeen int64, holders map[string]mirrorTrait) LabelSummary {
-	_, user, project := ParseLabel(src.Label)
-	selected := make(map[string]struct{}, len(src.SelectedMirrors))
-	for _, h := range src.SelectedMirrors {
-		selected[h] = struct{}{}
-	}
-	hosts := unionHosts(selected, holders)
-
-	sum := LabelSummary{
-		Label:           src.Label,
-		Publisher:       publisher,
-		User:            user,
-		Project:         project,
-		Paused:          src.Paused,
-		MaxMirrors:      src.MaxMirrors,
-		CrossSubnetMirrors:    src.CrossSubnetMirrors,
-		Tags:            src.Tags,
-		Description:     src.Description,
-		PublisherSeen:   publisherSeen,
-		BlobSha:         src.BlobSha,
-		GitSha:          src.GitSha,
-		LastPublishFull: src.LastPublishFull,
-		LastBundleSize:  src.LastBundleSize,
-	}
-	for _, host := range hosts {
-		mirror, hasMirror := holders[host]
-		_, isSelected := selected[host]
-		status := ""
-		switch {
-		case isSelected && hasMirror:
-			status = "active"
-		case isSelected && !hasMirror:
-			status = "pending"
-		case !isSelected && hasMirror:
-			status = "orphan"
-		}
-		presence := MirrorPresence{
-			Host:         host,
-			Status:       status,
-			Materialized: hasMirror,
-			Selected:     isSelected,
-		}
-		if hasMirror {
-			presence.Stale = mirror.Stale
-			presence.GitSha = mirror.GitSha
-			presence.BlobSha = mirror.BlobSha
-			presence.LastRefreshed = mirror.LastRefreshed
-		}
-		sum.Mirrors = append(sum.Mirrors, presence)
-		if presence.Selected {
-			sum.CountSelected++
-		}
-		if presence.Materialized {
-			sum.CountMaterialized++
-		}
-		if presence.Status == "orphan" {
-			sum.CountOrphan++
-		}
-		if presence.Stale {
-			sum.CountStale++
-		}
-	}
-	return sum
+type projectTrait struct {
+	ProjectID          string                 `json:"project_id"`
+	Handle             string                 `json:"handle"`
+	FounderFleetPubkey string                 `json:"founder_fleet_pubkey"`
+	Members            []string               `json:"members"`
+	DrFanout           string                 `json:"dr_fanout"`
+	UsersWithState     []string               `json:"users_with_state"`
+	HasBareRepo        bool                   `json:"has_bare_repo"`
+	BareRepoSizeBytes  uint64                 `json:"bare_repo_size_bytes"`
+	HeadRefs           map[string]string      `json:"head_refs"`
+	Envelopes          envelopeCountsTrait    `json:"envelopes"`
+	LeafRole           string                 `json:"leaf_role,omitempty"`
+	TokenChainDepth    int                    `json:"token_chain_depth"`
+	TokenExpiresAt     *int64                 `json:"token_expires_at"`
 }
 
-func orphanSummary(label string, holders map[string]mirrorTrait) LabelSummary {
-	seeder, user, project := ParseLabel(label)
-	sum := LabelSummary{
-		Label:     label,
-		Publisher: seeder,
-		User:      user,
-		Project:   project,
-	}
-	hosts := make([]string, 0, len(holders))
-	for h := range holders {
-		hosts = append(hosts, h)
-	}
-	sort.Strings(hosts)
-	for _, host := range hosts {
-		mirror := holders[host]
-		presence := MirrorPresence{
-			Host:          host,
-			Status:        "orphan",
-			Materialized:  true,
-			Selected:      false,
-			Stale:         mirror.Stale,
-			GitSha:        mirror.GitSha,
-			BlobSha:       mirror.BlobSha,
-			LastRefreshed: mirror.LastRefreshed,
-		}
-		sum.Mirrors = append(sum.Mirrors, presence)
-		sum.CountMaterialized++
-		sum.CountOrphan++
-		if presence.Stale {
-			sum.CountStale++
-		}
-	}
-	return sum
+type envelopeCountsTrait struct {
+	Revokes   int    `json:"revokes"`
+	Leaves    int    `json:"leaves"`
+	DigestHex string `json:"digest_hex"`
 }
 
-func unionHosts(selected map[string]struct{}, holders map[string]mirrorTrait) []string {
-	all := make(map[string]struct{}, len(selected)+len(holders))
-	for h := range selected {
-		all[h] = struct{}{}
-	}
-	for h := range holders {
-		all[h] = struct{}{}
-	}
-	hosts := make([]string, 0, len(all))
-	for h := range all {
-		hosts = append(hosts, h)
-	}
-	sort.Strings(hosts)
-	return hosts
-}
-
-// ParseLabel splits a gitmirror label of shape
-// `gitmirror:<seeder>:<user>:<project>` into its segments.
-// Malformed labels return empty strings.
-func ParseLabel(label string) (seeder, user, project string) {
-	const prefix = "gitmirror:"
-	if len(label) <= len(prefix) || label[:len(prefix)] != prefix {
-		return "", "", ""
-	}
-	rest := label[len(prefix):]
-	a := -1
-	b := -1
-	for i := 0; i < len(rest); i++ {
-		if rest[i] == ':' {
-			if a == -1 {
-				a = i
-			} else if b == -1 {
-				b = i
-				break
-			}
-		}
-	}
-	if a == -1 || b == -1 {
-		return "", "", ""
-	}
-	return rest[:a], rest[a+1 : b], rest[b+1:]
+func (p projectTrait) envelopesDigestHex() string {
+	return p.Envelopes.DigestHex
 }

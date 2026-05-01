@@ -1,7 +1,7 @@
 
 # Gitmirror — Unified Git Substrate (ADR-015)
 
-> **ADR-015 cutover in progress.** This page describes the legacy personal-DR-only subsystem; the new model is documented inline in [ADR-015](../../adr/015-unified-gitmirror-substrate.md) until the doc rewrite settles. Steps 1–3 of the arc have shipped (multi-call dispatch, capability-token primitives, storage + CLI cutover); step 4's first four slices shipped 2026-04-30 — the helper daemon, the `git-remote-vigo` body, revoke / leave envelope persistence, push-driven fan-out, the receive-side `POST /swarm/gitmirror/push/<project_id_hex>` endpoint, LAN auto-discovery via `GITMIRRORPROJECT:` announce lines, and cross-envoy envelope gossip with digest-based catch-up. `git push vigo://…` and `git fetch vigo://…` work end-to-end, pushes auto-fan-out to every envoy that has announced holding the project on the LAN (deduplicated against `project.json::cross_subnet_members`), and revoke / leave envelopes propagate to peers and reconcile via `/digest` ↔ `/all` polling. Remaining step-4 pieces: server-side gitmirrormesh schema rewrite, REST member-roster endpoint, `gitmirror` trait re-emit, `/gitmirror` UI rewrite, `reanchor` byte migration.
+> **ADR-015 cutover in progress.** This page describes the legacy personal-DR-only subsystem; the new model is documented inline in [ADR-015](../../adr/015-unified-gitmirror-substrate.md) until the doc rewrite settles. Steps 1–3 of the arc have shipped (multi-call dispatch, capability-token primitives, storage + CLI cutover); step 4's first five slices shipped 2026-04-30 — the helper daemon, the `git-remote-vigo` body, revoke / leave envelope persistence, push-driven fan-out, the receive-side `POST /swarm/gitmirror/push/<project_id_hex>` endpoint, LAN auto-discovery via `GITMIRRORPROJECT:` announce lines, cross-envoy envelope gossip with digest-based catch-up, the re-emitted `gitmirror` trait against the unified-substrate state surface, the server-side `gitmirrormesh` aggregator rewrite for project-id-keyed observability, and the `/gitmirror` UI + `vigocli swarm gitmirror` CLI rewrites that consume the new shape. `git push vigo://…` / `git fetch vigo://…` work end-to-end with auto-fan-out + envelope gossip; the admin observability surface (UI, REST, CLI) shows project-id, member fleets, host count, ref consensus, divergent refs, and envelope-digest unanimity per project. Remaining step-4 pieces: REST member-roster endpoint and the `reanchor` byte-level migration.
 
 Gitmirror is the P2P git substrate underlying both personal disaster-recovery (today's primary use case) and multi-member collaboration (an axis introduced by ADR-015). Each project is identified by `project_id = sha256(founder_fleet_pubkey)`; project shape is described by two orthogonal axes:
 
@@ -32,6 +32,12 @@ Gitmirror is one of four content subsystems that ride the [swarm](swarm.md) subs
 | Receive-side `POST /swarm/gitmirror/push/<project_id_hex>` endpoint | ✅ step 4 second slice |
 | LAN auto-discovery via announce extension (`GITMIRRORPROJECT:` lines + project-peer index) | ✅ step 4 third slice |
 | Cross-envoy envelope gossip (digest-based catch-up) | ✅ step 4 fourth slice |
+| Re-emit `gitmirror` trait from new state surface | ✅ step 4 fifth slice |
+| Server-side gitmirrormesh schema rewrite (project-id-keyed) | ✅ step 4 fifth slice |
+| `/gitmirror` UI page rewrite for project-id view | ✅ step 4 fifth slice |
+| `vigocli swarm gitmirror` CLI rewrite for project-id view | ✅ step 4 fifth slice |
+| REST member-roster endpoint | ⏳ step 4 follow-up |
+| `reanchor` byte-level migration | ⏳ step 4 follow-up |
 | Server-side gitmirrormesh schema + REST member-roster endpoint | ⏳ step 4 follow-up |
 | `/gitmirror` UI page rewrite for project-id view | ⏳ step 4 follow-up |
 | Re-emit `gitmirror` trait from new state surface | ⏳ step 4 follow-up |

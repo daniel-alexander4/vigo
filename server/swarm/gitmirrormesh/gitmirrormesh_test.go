@@ -3,170 +3,189 @@
 
 package gitmirrormesh
 
-import "testing"
+import (
+	"reflect"
+	"sort"
+	"testing"
+)
 
-func TestParseLabel(t *testing.T) {
-	tests := []struct {
-		in                       string
-		seeder, user, project    string
-	}{
-		{"gitmirror:danlap:dan:vigo", "danlap", "dan", "vigo"},
-		{"gitmirror:h:u:p", "h", "u", "p"},
-		{"gitmirror:", "", "", ""},
-		{"not-a-label", "", "", ""},
-		{"gitmirror:only-two", "", "", ""},
-	}
-	for _, tc := range tests {
-		s, u, p := ParseLabel(tc.in)
-		if s != tc.seeder || u != tc.user || p != tc.project {
-			t.Errorf("ParseLabel(%q) = (%q,%q,%q); want (%q,%q,%q)",
-				tc.in, s, u, p, tc.seeder, tc.user, tc.project)
-		}
-	}
-}
-
-// TestSummaryFromSource_ActivePendingOrphan pins the per-cell
-// status derivation that powers the UI mesh view.
-func TestSummaryFromSource_ActivePendingOrphan(t *testing.T) {
-	src := sourceTrait{
-		Label:           "gitmirror:danlap:dan:vigo",
-		MaxMirrors:      3,
-		SelectedMirrors: []string{"host-a", "host-b"}, // publisher picked these two
-	}
-	// host-a has materialized; host-b hasn't yet; host-c holds an
-	// old copy the publisher no longer selects.
-	holders := map[string]mirrorTrait{
-		"host-a": {Label: src.Label, GitSha: "a", BlobSha: "aa", LastRefreshed: 100},
-		"host-c": {Label: src.Label, GitSha: "c", BlobSha: "cc", LastRefreshed: 50, Stale: true},
-	}
-	sum := summaryFromSource("publisher", src, 1000, holders)
-
-	if got, want := sum.CountSelected, 2; got != want {
-		t.Errorf("CountSelected = %d; want %d", got, want)
-	}
-	if got, want := sum.CountMaterialized, 2; got != want {
-		t.Errorf("CountMaterialized = %d; want %d", got, want)
-	}
-	if got, want := sum.CountOrphan, 1; got != want {
-		t.Errorf("CountOrphan = %d; want %d", got, want)
-	}
-	if got, want := sum.CountStale, 1; got != want {
-		t.Errorf("CountStale = %d; want %d", got, want)
-	}
-
-	byHost := map[string]MirrorPresence{}
-	for _, m := range sum.Mirrors {
-		byHost[m.Host] = m
-	}
-	if byHost["host-a"].Status != "active" {
-		t.Errorf("host-a status = %q; want active", byHost["host-a"].Status)
-	}
-	if byHost["host-b"].Status != "pending" {
-		t.Errorf("host-b status = %q; want pending", byHost["host-b"].Status)
-	}
-	if byHost["host-c"].Status != "orphan" {
-		t.Errorf("host-c status = %q; want orphan", byHost["host-c"].Status)
-	}
-}
-
-// TestSummaryCarriesBlobSha pins the contract the swarm detail
-// page relies on: LabelSummary.BlobSha mirrors the publisher's
-// source trait so `/gitmirror` can link each label to `/swarm/<sha>`.
-func TestSummaryCarriesBlobSha(t *testing.T) {
-	src := sourceTrait{
-		Label:   "gitmirror:danlap:dan:vigo",
-		BlobSha: "abc123",
-		GitSha:  "deadbeef",
-	}
-	sum := summaryFromSource("danlap", src, 0, nil)
-	if sum.BlobSha != "abc123" {
-		t.Errorf("BlobSha = %q; want abc123", sum.BlobSha)
-	}
-	if sum.GitSha != "deadbeef" {
-		t.Errorf("GitSha = %q; want deadbeef", sum.GitSha)
-	}
-}
-
-// TestSummaryCarriesBundleMetadata pins the 0.24.1 contract: the
-// publisher's last_publish_full / last_bundle_size fields flow
-// through summaryFromSource into LabelSummary so the swarm detail
-// page can explain why a gitmirror seed is only a few KB ("last bundle
-// was incremental") instead of leaving operators guessing.
-func TestSummaryCarriesBundleMetadata(t *testing.T) {
-	full := false
-	src := sourceTrait{
-		Label:           "gitmirror:danlap:dan:vigo",
-		LastPublishFull: &full,
-		LastBundleSize:  1653,
-	}
-	sum := summaryFromSource("danlap", src, 0, nil)
-	if sum.LastPublishFull == nil || *sum.LastPublishFull != false {
-		t.Fatalf("LastPublishFull = %+v; want Some(false)", sum.LastPublishFull)
-	}
-	if sum.LastBundleSize != 1653 {
-		t.Errorf("LastBundleSize = %d; want 1653", sum.LastBundleSize)
-	}
-}
-
-// TestSummaryTolerantOfLegacyAgents confirms a report from an older
-// agent (no bundle metadata fields) produces a LabelSummary with
-// LastPublishFull == nil — the UI/CLI then correctly render a dash
-// instead of a false "full" or "incremental" claim.
-func TestSummaryTolerantOfLegacyAgents(t *testing.T) {
-	src := sourceTrait{Label: "gitmirror:h:u:p"}
-	sum := summaryFromSource("h", src, 0, nil)
-	if sum.LastPublishFull != nil {
-		t.Errorf("LastPublishFull = %+v; want nil for pre-0.24.1 agent", sum.LastPublishFull)
-	}
-	if sum.LastBundleSize != 0 {
-		t.Errorf("LastBundleSize = %d; want 0", sum.LastBundleSize)
-	}
-}
-
-// TestFleetLookups verifies both lookup helpers used by the swarm
-// detail page enrichment path.
-func TestFleetLookups(t *testing.T) {
-	f := &Fleet{
-		Labels: []LabelSummary{
-			{Label: "gitmirror:h:u:a", BlobSha: "aaa"},
-			{Label: "gitmirror:h:u:b", BlobSha: "bbb"},
+func TestSummarizeProjectAllAgree(t *testing.T) {
+	pid := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	founder := "f00dface" + "00000000000000000000000000000000000000000000000000000000"
+	entries := []projectTrait{
+		{
+			ProjectID:          pid,
+			Handle:             "vigo-web",
+			FounderFleetPubkey: founder,
+			Members:            []string{founder},
+			DrFanout:           "fleet-wide",
+			HasBareRepo:        true,
+			BareRepoSizeBytes:  4096,
+			HeadRefs:           map[string]string{"refs/heads/main": "abc123"},
+			Envelopes:          envelopeCountsTrait{Revokes: 0, Leaves: 0, DigestHex: "00"},
+			LeafRole:           "Admin",
+			TokenChainDepth:    1,
+		},
+		{
+			ProjectID:          pid,
+			Handle:             "vigo-web",
+			FounderFleetPubkey: founder,
+			Members:            []string{founder},
+			DrFanout:           "fleet-wide",
+			HasBareRepo:        true,
+			BareRepoSizeBytes:  4096,
+			HeadRefs:           map[string]string{"refs/heads/main": "abc123"},
+			Envelopes:          envelopeCountsTrait{Revokes: 0, Leaves: 0, DigestHex: "00"},
+			LeafRole:           "Admin",
+			TokenChainDepth:    1,
 		},
 	}
-	if got := f.LookupLabel("gitmirror:h:u:a"); got == nil || got.BlobSha != "aaa" {
-		t.Errorf("LookupLabel miss")
+	hosts := []string{"plex", "danlap"}
+	updated := []int64{100, 200}
+
+	got := summarizeProject(pid, entries, hosts, updated)
+	if got.ProjectID != pid {
+		t.Errorf("project_id = %q, want %q", got.ProjectID, pid)
 	}
-	if got := f.LookupBlobSha("bbb"); got == nil || got.Label != "gitmirror:h:u:b" {
-		t.Errorf("LookupBlobSha miss")
+	if got.Handle != "vigo-web" {
+		t.Errorf("handle = %q", got.Handle)
 	}
-	if got := f.LookupLabel("not-present"); got != nil {
-		t.Error("LookupLabel should return nil for unknown")
+	if got.HostCount != 2 {
+		t.Errorf("host_count = %d, want 2", got.HostCount)
 	}
-	if got := f.LookupBlobSha(""); got != nil {
-		t.Error("LookupBlobSha should return nil for empty sha")
+	if got.LastUpdated != 200 {
+		t.Errorf("last_updated = %d, want 200", got.LastUpdated)
 	}
-	var nilFleet *Fleet
-	if got := nilFleet.LookupLabel("x"); got != nil {
-		t.Error("nil receiver must return nil")
+	if !got.DigestUnanimous {
+		t.Error("digest_unanimous should be true when all hosts have the same digest")
+	}
+	if len(got.DivergentRefs) != 0 {
+		t.Errorf("expected zero divergent refs, got %v", got.DivergentRefs)
+	}
+	rs, ok := got.HeadRefs["refs/heads/main"]
+	if !ok {
+		t.Fatal("missing main ref status")
+	}
+	if rs.Sha != "abc123" {
+		t.Errorf("ref sha = %q, want abc123", rs.Sha)
+	}
+	if !sliceContainsAll(rs.HostsAgreeing, []string{"plex", "danlap"}) {
+		t.Errorf("agreeing hosts = %v", rs.HostsAgreeing)
 	}
 }
 
-// TestOrphanSummary handles the receiver-only case: publisher
-// offline so the label only appears in receiver mirrors.
-func TestOrphanSummary(t *testing.T) {
-	holders := map[string]mirrorTrait{
-		"host-x": {Label: "gitmirror:gone:dan:vigo", GitSha: "x", BlobSha: "xx", Stale: true},
+func TestSummarizeProjectDivergent(t *testing.T) {
+	pid := "11" + "00112233445566778899aabbccddeeff00112233445566778899aabbccddee"
+	entries := []projectTrait{
+		{
+			ProjectID:   pid,
+			Handle:      "team-notes",
+			HasBareRepo: true,
+			HeadRefs:    map[string]string{"refs/heads/main": "old"},
+			Envelopes:   envelopeCountsTrait{DigestHex: "aa"},
+		},
+		{
+			ProjectID:   pid,
+			Handle:      "team-notes",
+			HasBareRepo: true,
+			HeadRefs:    map[string]string{"refs/heads/main": "new"},
+			Envelopes:   envelopeCountsTrait{DigestHex: "aa"},
+		},
+		{
+			ProjectID:   pid,
+			Handle:      "team-notes",
+			HasBareRepo: true,
+			HeadRefs:    map[string]string{"refs/heads/main": "new"},
+			Envelopes:   envelopeCountsTrait{DigestHex: "aa"},
+		},
 	}
-	sum := orphanSummary("gitmirror:gone:dan:vigo", holders)
-	if sum.Publisher != "gone" {
-		t.Errorf("Publisher = %q; want gone (derived from label)", sum.Publisher)
+	hosts := []string{"old-host", "fresh-1", "fresh-2"}
+	updated := []int64{100, 200, 250}
+
+	got := summarizeProject(pid, entries, hosts, updated)
+	if len(got.DivergentRefs) != 1 || got.DivergentRefs[0] != "refs/heads/main" {
+		t.Errorf("divergent_refs = %v, want [refs/heads/main]", got.DivergentRefs)
 	}
-	if sum.CountOrphan != 1 {
-		t.Errorf("CountOrphan = %d; want 1", sum.CountOrphan)
+	rs := got.HeadRefs["refs/heads/main"]
+	if rs.Sha != "" {
+		t.Errorf("divergent ref Sha must be empty, got %q", rs.Sha)
 	}
-	if sum.CountStale != 1 {
-		t.Errorf("CountStale = %d; want 1", sum.CountStale)
+	if !sliceContainsAll(rs.HostsAgreeing, []string{"fresh-1", "fresh-2"}) {
+		t.Errorf("majority agreeing = %v", rs.HostsAgreeing)
 	}
-	if sum.CountSelected != 0 {
-		t.Errorf("CountSelected = %d; want 0 (no publisher)", sum.CountSelected)
+	if len(rs.HostsLagging) != 1 || rs.HostsLagging[0] != "old-host" {
+		t.Errorf("lagging = %v, want [old-host]", rs.HostsLagging)
 	}
+}
+
+func TestSummarizeProjectDigestUnanimousFlagsMismatch(t *testing.T) {
+	pid := "22" + "00112233445566778899aabbccddeeff00112233445566778899aabbccddee"
+	entries := []projectTrait{
+		{ProjectID: pid, Envelopes: envelopeCountsTrait{DigestHex: "aaaa"}},
+		{ProjectID: pid, Envelopes: envelopeCountsTrait{DigestHex: "bbbb"}},
+	}
+	got := summarizeProject(pid, entries, []string{"a", "b"}, []int64{1, 2})
+	if got.DigestUnanimous {
+		t.Error("digest_unanimous should be false when hosts disagree")
+	}
+}
+
+func TestSummarizeProjectFreshestHostWinsCanonicalFields(t *testing.T) {
+	pid := "55" + "00112233445566778899aabbccddeeff00112233445566778899aabbccddee"
+	// Older host claims one set of members; fresher host claims another.
+	// The fresher one should win.
+	entries := []projectTrait{
+		{ProjectID: pid, Handle: "old-name", Members: []string{"old"}, DrFanout: "members-only"},
+		{ProjectID: pid, Handle: "new-name", Members: []string{"new"}, DrFanout: "fleet-wide"},
+	}
+	got := summarizeProject(pid, entries, []string{"a", "b"}, []int64{100, 200})
+	if got.Handle != "new-name" {
+		t.Errorf("handle = %q, want new-name (freshest host wins)", got.Handle)
+	}
+	if got.DrFanout != "fleet-wide" {
+		t.Errorf("dr_fanout = %q", got.DrFanout)
+	}
+	if !sliceContainsAll(got.Members, []string{"new"}) {
+		t.Errorf("members = %v", got.Members)
+	}
+}
+
+func TestLookupHelpers(t *testing.T) {
+	pid := "33" + "00112233445566778899aabbccddeeff00112233445566778899aabbccddee"
+	f := &Fleet{
+		Projects: []ProjectSummary{
+			{ProjectID: pid, Handle: "alpha"},
+			{ProjectID: "44ff", Handle: "beta"},
+		},
+	}
+	if got := f.LookupProject(pid); got == nil || got.Handle != "alpha" {
+		t.Errorf("LookupProject(%q) = %v", pid, got)
+	}
+	if got := f.LookupProject("nonexistent"); got != nil {
+		t.Errorf("LookupProject('nonexistent') = %v, want nil", got)
+	}
+	if got := f.LookupByHandle("beta"); got == nil || got.ProjectID != "44ff" {
+		t.Errorf("LookupByHandle('beta') = %v", got)
+	}
+	if got := f.LookupByHandle(""); got != nil {
+		t.Error("LookupByHandle('') should be nil")
+	}
+}
+
+func TestNilFleetSafe(t *testing.T) {
+	var f *Fleet
+	if f.LookupProject("anything") != nil {
+		t.Error("nil receiver should return nil from LookupProject")
+	}
+	if f.LookupByHandle("x") != nil {
+		t.Error("nil receiver should return nil from LookupByHandle")
+	}
+}
+
+func sliceContainsAll(have, want []string) bool {
+	a := append([]string(nil), have...)
+	b := append([]string(nil), want...)
+	sort.Strings(a)
+	sort.Strings(b)
+	return reflect.DeepEqual(a, b)
 }

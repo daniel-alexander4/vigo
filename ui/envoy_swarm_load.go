@@ -120,21 +120,35 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 
 	// --- Gitmirror (materialized bare git repos) ---
 	if h.gitmirrorFleet != nil {
-		mirrors := h.gitmirrorFleet.EnvoyMirrors(r.Context(), idStr)
-		for _, m := range mirrors {
-			status := "live"
-			if m.Stale {
-				status = "stale"
+		projects := h.gitmirrorFleet.EnvoyProjects(r.Context(), idStr)
+		for _, p := range projects {
+			if !p.HasBareRepo {
+				continue
 			}
-			size := int64(m.SizeBytes)
+			size := int64(p.SizeBytes)
+			// Surface the head sha of refs/heads/main when present;
+			// otherwise pick any deterministic ref. Empty when the
+			// repo has been initialized but holds no refs yet.
+			headSha := ""
+			if sha, ok := p.HeadRefs["refs/heads/main"]; ok {
+				headSha = sha
+			} else if len(p.HeadRefs) > 0 {
+				// Stable pick: alphabetical first ref name.
+				keys := make([]string, 0, len(p.HeadRefs))
+				for k := range p.HeadRefs {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				headSha = p.HeadRefs[keys[0]]
+			}
 			data.Gitmirror = append(data.Gitmirror, SwarmLoadRow{
-				Name:      m.BareRepoPath,
-				Detail:    fmt.Sprintf("%s/%s — from %s · git %s", m.User, m.Project, m.Seeder, shortSha(m.GitSha)),
+				Name:      p.BareRepoPath,
+				Detail:    fmt.Sprintf("%s · %s · git %s", p.Handle, p.DrFanout, shortSha(headSha)),
 				Size:      size,
 				SizeHuman: humanSize(size),
-				Status:    status,
-				When:      formatRelative(time.Unix(m.LastRefreshed, 0)),
-				Link:      "/swarm/gitmirror/" + m.Label,
+				Status:    "live",
+				When:      "",
+				Link:      "/swarm/gitmirror/" + p.ProjectID,
 			})
 			data.GitmirrorTotal += size
 		}

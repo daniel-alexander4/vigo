@@ -46,7 +46,7 @@ func (m *mockGitmirror) FleetSnapshot(ctx context.Context) (*gitmirrormesh.Fleet
 	return m.fleet, nil
 }
 
-func (m *mockGitmirror) EnvoyMirrors(_ context.Context, _ string) []gitmirrormesh.EnvoyMirror {
+func (m *mockGitmirror) EnvoyProjects(_ context.Context, _ string) []gitmirrormesh.EnvoyProject {
 	return nil
 }
 
@@ -157,24 +157,36 @@ func TestGitmirror_EmptyRendersHealthy(t *testing.T) {
 	}
 }
 
-// TestGitmirror_OrphanPromotesBannerErr — when an aggregator surfaces
-// orphan mirrors, the banner must be err-level and list the problem.
-func TestGitmirror_OrphanPromotesBannerErr(t *testing.T) {
+// TestGitmirror_DivergentRefsPromotesBannerWarn — when an aggregator
+// surfaces a project where hosts disagree on a head sha, the banner
+// must be warn-level and list the problem. (Post-ADR-015 the
+// orphan/pending/stale signals from the legacy publisher-receiver
+// model are gone; the new conditions are ref divergence and
+// envelope-digest skew across hosts.)
+func TestGitmirror_DivergentRefsPromotesBannerWarn(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
+	pid := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
 	h.gitmirrorFleet = &mockGitmirror{fleet: &gitmirrormesh.Fleet{
-		Labels: []gitmirrormesh.LabelSummary{
-			{Label: "gitmirror:plex:dan:notes", Publisher: "plex",
-				CountOrphan: 2, CountMaterialized: 3, CountSelected: 3, MaxMirrors: 5},
+		Projects: []gitmirrormesh.ProjectSummary{
+			{
+				ProjectID:        pid,
+				Handle:           "team-notes",
+				DrFanout:         "members-only",
+				HostCount:        2,
+				MemberFleetCount: 1,
+				DivergentRefs:    []string{"refs/heads/main"},
+				DigestUnanimous:  true,
+			},
 		},
-		Totals: gitmirrormesh.Totals{Labels: 1, Mirrors: 3, OrphanMirrors: 2},
+		Totals: gitmirrormesh.Totals{Projects: 1, Hosts: 2, DivergentRefs: 1},
 	}}
 
 	rec := httptest.NewRecorder()
 	h.Gitmirror(rec, adminRequest(http.MethodGet, "/swarm/gitmirror"))
 	body := rec.Body.String()
-	if !containsAll(body, "health-banner--err", "orphan", "gitmirror:plex:dan:notes") {
-		t.Errorf("orphan mirrors should surface in err-level banner; body sample:\n%s", snippet(body, 1500))
+	if !containsAll(body, "health-banner--warn", "divergent", "team-notes") {
+		t.Errorf("divergent refs should surface in warn-level banner; body sample:\n%s", snippet(body, 1500))
 	}
 }
 

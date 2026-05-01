@@ -4,149 +4,95 @@ title: gitmirror
 
 # gitmirror
 
-> **ADR-015 cutover, step 3.** Step 3 retired the publish-and-claim reactor that wrote this trait's underlying snapshot, so in production the trait is currently `null` on every envoy. The helper-daemon-driven snapshot writer lands in step 4 and re-emits the trait against the unified-substrate `~/.vigo-gitmirror/<project_id>/` state surface — the field shape will change to project-id / fleet-membership / token-chain summaries. The schema below describes the legacy form for compatibility with consumers written before the cutover.
+Reports each envoy's local view of the unified-substrate gitmirror subsystem (ADR-015): which projects this envoy holds local state for, the bare-repo / head-ref state per project, and counts of revoke / leave envelopes that have propagated.
 
-Reports gitmirror publishing and receiver state: active and paused source counts, per-source swarm labels with current git/blob hashes, discovery errors, publish errors, and stale receiver-side mirrors.
+The agent walks every user's `~/.vigo-gitmirror/<project_id>/` and joins per-user state with the per-envoy bare repo at `/var/lib/vigo/swarm/gitmirror/projects/<project_id>.git` and the per-envoy envelopes store at `/var/lib/vigo/swarm/gitmirror/envelopes/<project_id>/`. Multiple users on the same envoy holding the same project collapse to one entry.
 
-As of **0.23.0** (Phase 8 of the P2P-first rearchitecture), the server **no longer consumes this trait** for mirror selection or delivery — gitmirror is fully peer-to-peer, with LAN multicast discovery and explicit cross-subnet `cross_subnet_mirrors:` push doing all the work. The trait is still emitted by every gitmirror-enabled envoy for operator observability: you can look at it via `vigocli traits` or the web UI to see what a given envoy is publishing and whether it has any stale mirrors, but nothing on the server side acts on the values.
+The server's `gitmirrormesh` aggregator joins these per-envoy reports across the fleet and renders the join at `/swarm/gitmirror` (UI) and `GET /api/v1/swarm/gitmirror/fleet` (REST).
 
 ## Fields
 
 | Field | Type | Description |
 |---|---|---|
-| `updated_at` | int | Unix seconds when the gitmirror reactor wrote the most recent snapshot. Use this to detect a stuck reactor. |
-| `active_sources` | int | Number of non-paused gitmirror sources discovered on this envoy. |
-| `paused_sources` | int | Number of sources whose sidecar has `paused: true`. Paused sources are not re-bundled. |
-| `sources` | object[] | One entry per validated discovered source. See below. |
-| `source_errors` | object[] | Discovery errors — a `~/gitmirror/<project>/` directory that has a sidecar but failed validation. See below. |
-| `publish_errors` | object[] | Publish errors — a source that validated but whose most recent bundle attempt failed. See below. |
-| `stale_mirrors` | string[] | Receiver-side mirrors whose `last_refreshed` timestamp is more than 30 days old. List of full labels (`gitmirror:<seeder>:<user>:<project>`), not a count. Empty on publish-only envoys. Stale mirrors are NEVER auto-evicted — removal is strictly manual via `vigo swarm gitmirror prune`. See the concepts doc for the rationale. |
-| `mirrors` | object[] | Receiver-side materialized mirrors held by this envoy. One entry per bare git repo at `/var/lib/vigo/swarm/gitmirror/mirrors/<seeder>/<user>/<project>.git`. The server joins this against each publisher's `sources[].selected_mirrors` to render the fleet-wide Mirror Status table on `/gitmirror/{label}`. Empty on publish-only envoys. See below. |
+| `updated_at` | int | Unix seconds when the trait was collected. |
+| `project_count` | int | Number of distinct projects this envoy holds local state for. |
+| `projects` | object[] | One entry per project. See below. |
 
-### `sources[]`
+### `projects[]`
 
 | Field | Type | Description |
 |---|---|---|
-| `label` | string | Swarm label: `gitmirror:<hostname>:<user>:<project>`. Matches the seed filename the agent writes into `default_seeds_dir()`. |
-| `paused` | bool | `true` if the sidecar has `paused: true`. |
-| `max_mirrors` | int | `max_mirrors` from the validated sidecar, already clamped into `[3, 10]`. |
-| `tags` | string[] | `tags` from the validated sidecar (may be empty). |
-| `description` | string | `description` from the validated sidecar (may be empty). |
-| `include_envoys` | string[] | Optional `include_envoys` hostname-glob whitelist. Omitted from the trait payload when empty. |
-| `exclude_envoys` | string[] | Optional `exclude_envoys` hostname-glob blacklist. Omitted when empty. |
-| `when` | string | Optional `when:` expression string. Omitted when empty. |
-| `git_sha` | string | HEAD sha at the time of the most recent successful bundle. Absent if the source has never successfully published (e.g. first-tick failure on a new source). |
-| `blob_sha` | string | SHA256 of the most recent successful bundle file. Absent in the same never-published case. |
+| `project_id` | string | 64-char lowercase hex `sha256(founder_fleet_pubkey)`. Stable cryptographic identity baked into the URL `vigo://<project_id>/<handle>`. |
+| `handle` | string | Human-readable handle from `project.json`. Display only — not authoritative; two projects can share a handle. |
+| `founder_fleet_pubkey` | string | 64-char lowercase hex of the founder fleet's Ed25519 pubkey. The TOFU anchor: `sha256(founder_fleet_pubkey) == project_id`. |
+| `members` | string[] | Hex Ed25519 fleet pubkeys of every member fleet, in `project.json` order (founder first). |
+| `dr_fanout` | string | `"fleet-wide"` (replicas land on every fleet envoy) or `"members-only"` (replicas only on member-fleet envoys). |
+| `users_with_state` | string[] | Local Unix usernames whose `~/.vigo-gitmirror/<project_id>/` directory holds a `project.json` for this project. Multiple users on the same envoy collapse into one entry; this list names them. |
+| `has_bare_repo` | bool | `true` when `/var/lib/vigo/swarm/gitmirror/projects/<project_id>.git` exists on this envoy. |
+| `bare_repo_size_bytes` | int | Total bytes occupied by the bare repo (sum of every regular file under it). Zero when `has_bare_repo` is false. |
+| `head_refs` | object | Map of `ref` → `sha`. Output of `git for-each-ref` against the bare repo. Empty when the bare repo is missing or contains no refs (initialized but no pushes yet). |
+| `envelopes` | object | Aggregate state of revoke / leave envelopes for this project on this envoy. See below. |
+| `leaf_role` | string | `"Admin"` or `"Member"` — the role granted by the leaf token in this user's chain. Helpful for operator triage when multiple users hold the same project at different roles. Picked from the first user observed; absent when no chain is loaded. |
+| `token_chain_depth` | int | Length of the user's `tokens.json` chain (1 for a founder, ≥2 for invitees). |
+| `token_expires_at` | int / null | Unix seconds when the leaf token expires, or `null` when the leaf has no expiry. |
 
-All sidecar fields (`max_mirrors`, `tags`, `description`, and the optional filter fields) are surfaced here so operators can see each source envoy's publishing config without reading the `.gitmirror.yaml` on disk. As of 0.23.0 these fields are purely observational — selection happens peer-to-peer on the source envoy itself, not on the server. The agent is the only component that parses and validates sidecars; the trait payload is a read-only snapshot of that validation output.
-
-### `source_errors[]`
-
-| Field | Type | Description |
-|---|---|---|
-| `path` | string | Absolute path of the directory that was rejected. |
-| `reason` | string | Human-readable reason (e.g. `"invalid sidecar: missing field 'owner'"`, `"sidecar owner matches self but .git/ is missing"`). |
-
-### `publish_errors[]`
+### `projects[].envelopes`
 
 | Field | Type | Description |
 |---|---|---|
-| `label` | string | Swarm label of the source whose publish attempt failed. |
-| `reason` | string | Human-readable reason — path re-check failure, `git rev-parse HEAD` failure, bundle-create failure, oversize bundle (> 20 GiB), or I/O error. |
-
-### `mirrors[]`
-
-| Field | Type | Description |
-|---|---|---|
-| `label` | string | Swarm label this mirror materializes (`gitmirror:<seeder>:<user>:<project>`). |
-| `seeder` | string | Hostname of the publisher that owns this repo. |
-| `user` | string | Unix user on the seeder whose home holds the source. |
-| `project` | string | Repo directory basename. |
-| `git_sha` | string | Git HEAD sha currently materialized (populated from the most recently applied bundle). |
-| `blob_sha` | string | SHA256 of the bundle that last refreshed this mirror. Matches the publisher's `blob_sha` when fully synced. |
-| `last_refreshed` | int | Unix seconds of the most recent successful bundle apply. Used by the server to detect drift and by the agent to compute the `stale` flag. |
-| `stale` | bool | Precomputed: `now - last_refreshed > 30 days`. Redundant with the label appearing in `stale_mirrors` but cheaper to render in per-row UI. |
-| `next_gc_at` | int | Unix seconds when the mirror becomes eligible for `vigo swarm gitmirror prune` based on retention rules. Advisory only — GC is operator-triggered. |
-| `size_bytes` | int | Sum of file bytes under the bare repo path at trait-write time. Walked by the receiver's trait projection with a 50,000-entry cap so pathological loose-object counts don't stall the check-in. Surfaced on the envoy detail page's **Swarm** tab so operators can rank disk consumers. `0` means either the repo is empty (never-materialized) or the walk failed (permission/IO). |
+| `revokes` | int | Count of revoke envelopes persisted under `<gitmirror_base>/envelopes/<project_id>/revokes/`. |
+| `leaves` | int | Count of leave envelopes persisted under `<gitmirror_base>/envelopes/<project_id>/leaves/`. |
+| `digest_hex` | string | Hex-encoded 16-byte digest of the project's full envelope set. Used by the server-side mesh aggregator to flag projects where the envelope state has diverged across hosts (gossip in flight). |
 
 ## Example
 
-```json
+```jsonc
 {
-  "updated_at": 1744560000,
-  "active_sources": 2,
-  "paused_sources": 1,
-  "sources": [
+  "updated_at": 1777520400,
+  "project_count": 1,
+  "projects": [
     {
-      "label": "gitmirror:danlap:dan:dotfiles",
-      "paused": false,
-      "max_mirrors": 5,
-      "tags": ["personal", "dotfiles"],
-      "description": "shell config + editor setup",
-      "git_sha": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
-      "blob_sha": "deadbeefcafef00d1122334455667788aabbccddeeff00112233445566778899"
-    },
-    {
-      "label": "gitmirror:danlap:dan:notes",
-      "paused": false,
-      "max_mirrors": 3,
-      "tags": [],
-      "description": "",
-      "git_sha": "11223344556677889900aabbccddeeff00112233",
-      "blob_sha": "99887766554433221100ffeeddccbbaa998877665544332211009988776655"
-    },
-    {
-      "label": "gitmirror:danlap:dan:archive",
-      "paused": true,
-      "max_mirrors": 3,
-      "tags": ["cold"],
-      "description": "old projects"
-    }
-  ],
-  "source_errors": [
-    {
-      "path": "/home/dan/gitmirror/broken/.gitmirror.yaml",
-      "reason": "invalid sidecar: unknown field `retention_days`"
-    }
-  ],
-  "publish_errors": [
-    {
-      "label": "gitmirror:danlap:dan:huge-repo",
-      "reason": "bundle for gitmirror:danlap:dan:huge-repo is 23622320128 bytes, exceeds 21474836480 byte cap"
-    }
-  ],
-  "stale_mirrors": [
-    "gitmirror:decommissioned-laptop:dan:old-project"
-  ],
-  "mirrors": [
-    {
-      "label": "gitmirror:danlap:dan:dotfiles",
-      "seeder": "danlap",
-      "user": "dan",
-      "project": "dotfiles",
-      "git_sha": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
-      "blob_sha": "deadbeefcafef00d1122334455667788aabbccddeeff00112233445566778899",
-      "last_refreshed": 1744559481,
-      "stale": false,
-      "next_gc_at": 1747151481,
-      "size_bytes": 4096
+      "project_id": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "handle": "vigo-web",
+      "founder_fleet_pubkey": "8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8",
+      "members": ["8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8"],
+      "dr_fanout": "fleet-wide",
+      "users_with_state": ["dan"],
+      "has_bare_repo": true,
+      "bare_repo_size_bytes": 4096,
+      "head_refs": {
+        "refs/heads/main": "97debaead89e5f3a1c6b4e2e7cc7a9b3"
+      },
+      "envelopes": {
+        "revokes": 0,
+        "leaves": 0,
+        "digest_hex": "f5b3a1c6b4e2e7cc7a9b3deafbeefcafe"
+      },
+      "leaf_role": "Admin",
+      "token_chain_depth": 1,
+      "token_expires_at": null
     }
   ]
 }
 ```
 
-## Collection
+## Empty state
 
-Unlike most trait collectors, this one does not do filesystem scanning at collect time. Instead it reads a snapshot file (`/var/lib/vigo/swarm/gitmirror/traits.json`) that the gitmirror reactor writes at the end of every 5-second pass. This keeps the check-in hot path cheap and ensures trait data reflects an entire consistent reactor tick rather than an in-progress one.
+The trait is `null` (not an object with empty `projects: []`) when:
 
-If the reactor has never ticked — for example, because `git --version` on the host is below the MVP floor of 2.35 and the reactor refused to start, or because the agent is still in its first 5-second window — the snapshot file does not exist and the collector returns `null`, matching the pattern used by `swarm_seeds` on empty state.
+- `/etc/passwd` cannot be read.
+- No user has any `~/.vigo-gitmirror/<pid>/` state on this envoy.
 
-Corrupt snapshots (mismatched JSON, wrong schema) are treated the same as a missing file: the collector logs a warning and returns `null`, so a bad snapshot cannot block trait reporting.
+The server-side aggregator treats a `null` trait the same as "no participation reported" — the envoy contributes nothing to the fleet view.
 
-## Notes
+## Consumers
 
-- **Snapshot version is 1.** Schema changes will bump `TRAITS_SNAPSHOT_VERSION` in `agent/src/gitmirror/state.rs`. Because Vigo has zero users (see `CLAUDE.md`), versioning exists only as an early warning — there are no backward-compatibility shims.
-- **Snapshot file permissions are `0600`.** The reactor runs as root and the trait collector also runs as root, so no world/group access is needed.
-- **The collector is classified volatile** (runs every check-in cycle) because source state can change as fast as operators commit to their repos. The snapshot read is cheap — a single file read plus JSON parse — so the volatile classification is essentially free.
-- **Edge-triggered logging in the reactor** means a persistent publish failure logs once, not every 5 seconds. The trait payload still shows the current failure on every check-in until it clears, so server-side alerting does not miss anything even though the agent log is quiet.
-- **Staleness warnings are rate-limited** to once per 24 hours per label on the agent side, but the `stale_mirrors` trait payload reflects the current state on every check-in — server-side alerting sees stale mirrors as soon as they cross the 30-day threshold.
+- `server/swarm/gitmirrormesh` — aggregates per-envoy reports into the fleet-wide `Fleet` shape (head-ref consensus, divergent-ref detection, envelope-digest unanimity).
+- `GET /api/v1/swarm/gitmirror/fleet` — serves the aggregated view to admins and the `vigocli swarm gitmirror` CLI.
+- `/swarm/gitmirror` UI page — renders the fleet view + per-project drill-down.
+
+## See also
+
+- [ADR-015 — Unified gitmirror substrate](../../adr/015-unified-gitmirror-substrate.md)
+- [`vigo swarm gitmirror project ...`](../cli/agent-swarm-gitmirror.md) — envoy-side verb tree that mutates the state this trait reports.
+- [`vigocli swarm gitmirror`](swarm-gitmirror.md) — admin-side CLI that consumes the aggregated trait.

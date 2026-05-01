@@ -11,26 +11,31 @@ import (
 )
 
 // GitmirrorPageData drives `ui/templates/pages/gitmirror.html`. Carries
-// both the list view (Fleet.Labels) and detail view (Label) — the
-// template picks which to render based on whether Label is non-nil.
+// both the list view (Fleet.Projects) and detail view (Project) — the
+// template picks which to render based on whether Project is non-nil.
 type GitmirrorPageData struct {
 	PageData
-	Health HealthBanner
-	Fleet  *gitmirrormesh.Fleet
-	Label  *gitmirrormesh.LabelSummary
-	Error  string
+	Health  HealthBanner
+	Fleet   *gitmirrormesh.Fleet
+	Project *gitmirrormesh.ProjectSummary
+	Error   string
 }
 
-// Gitmirror serves `GET /gitmirror` (list) and `GET /gitmirror/{label}`
-// (detail). Admin-only — fleet-wide per-user repo inventory exposes
-// project names and paths that aren't viewer-appropriate.
+// Gitmirror serves `GET /gitmirror` (list) and
+// `GET /gitmirror/{project_id}` (detail). Admin-only — fleet-wide
+// per-user repo inventory exposes project IDs and member fleet
+// pubkeys that aren't viewer-appropriate.
+//
+// `{project_id}` accepts the canonical 64-char-lowercase-hex form OR
+// a unique handle prefix (UX convenience for typing — the
+// cryptographic identity remains the project_id).
 func (h *Handler) Gitmirror(w http.ResponseWriter, r *http.Request) {
 	if !h.adminOnly(w, r) {
 		return
 	}
-	label := r.PathValue("label")
-	if label != "" {
-		h.gitmirrorDetail(w, r, label)
+	id := r.PathValue("project_id")
+	if id != "" {
+		h.gitmirrorDetail(w, r, id)
 		return
 	}
 	h.gitmirrorList(w, r)
@@ -63,7 +68,7 @@ func (h *Handler) gitmirrorList(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "gitmirror", data)
 }
 
-func (h *Handler) gitmirrorDetail(w http.ResponseWriter, r *http.Request, label string) {
+func (h *Handler) gitmirrorDetail(w http.ResponseWriter, r *http.Request, id string) {
 	data := GitmirrorPageData{
 		PageData: PageData{Title: "Gitmirror", ActiveNav: "gitmirror"},
 	}
@@ -78,81 +83,85 @@ func (h *Handler) gitmirrorDetail(w http.ResponseWriter, r *http.Request, label 
 		http.Error(w, "snapshot failed", http.StatusInternalServerError)
 		return
 	}
-	summary := fleet.LookupLabel(label)
+	// Try project_id (canonical) first, then unique-handle-prefix
+	// fallback — either lookup is read-only so falling through is
+	// safe even if the operator typed the handle by accident.
+	summary := fleet.LookupProject(id)
+	if summary == nil {
+		summary = fleet.LookupByHandle(id)
+	}
 	if summary == nil {
 		http.NotFound(w, r)
 		return
 	}
-	data.Label = summary
-	// Detail view uses a condensed health banner reflecting only this
-	// label's state — the list-view health is not relevant here.
-	data.Health = buildGitmirrorLabelHealth(summary)
+	data.Project = summary
+	data.Health = buildGitmirrorProjectHealth(summary)
 	h.renderer.Render(w, "gitmirror", data)
 }
 
-// buildGitmirrorHealth — any pending/orphan/stale mirror is a problem.
-// Orphan = mirror held by a peer that's no longer selected (wasted
-// disk and a potential privacy leak once the publisher rotates keys).
-// Pending = selected but not yet materialized (in-flight, usually
-// resolves on the next check-in). Stale = mirror not refreshed in
-// >30 days; either the peer is dead or the publisher stopped
-// producing.
+// buildGitmirrorHealth — divergent refs and unanimity-violating
+// envelope state are the two flag conditions in the unified-substrate
+// model. Divergent refs mean some host fell behind and hasn't caught
+// up via fan-out; non-unanimous envelope digests mean revoke / leave
+// gossip hasn't fully propagated.
 func buildGitmirrorHealth(f *gitmirrormesh.Fleet) HealthBanner {
 	if f == nil {
 		return finalizeHealthBanner("Gitmirror", nil, "No data")
 	}
 	var problems []HealthProblem
-	for i := range f.Labels {
-		lbl := &f.Labels[i]
-		link := "/swarm/gitmirror/" + lbl.Label
-		if lbl.CountOrphan > 0 {
+	nonUnanimousProjects := 0
+	for i := range f.Projects {
+		p := &f.Projects[i]
+		link := "/swarm/gitmirror/" + p.ProjectID
+		if len(p.DivergentRefs) > 0 {
 			problems = append(problems, HealthProblem{
-				Kind:     "orphan",
-				Subject:  lbl.Label,
-				Detail:   fmt.Sprintf("%d peer(s) holding a mirror no longer selected by the publisher", lbl.CountOrphan),
-				Link:     link,
-				Severity: "err",
-			})
-		}
-		if lbl.CountStale > 0 {
-			problems = append(problems, HealthProblem{
-				Kind:     "stale",
-				Subject:  lbl.Label,
-				Detail:   fmt.Sprintf("%d mirror(s) not refreshed in >30 days", lbl.CountStale),
+				Kind:     "divergent",
+				Subject:  p.Handle,
+				Detail:   fmt.Sprintf("%d ref(s) where hosts disagree on the head sha", len(p.DivergentRefs)),
 				Link:     link,
 				Severity: "warn",
 			})
 		}
-		if pending := lbl.CountSelected - lbl.CountMaterialized; pending > 0 {
+		if !p.DigestUnanimous && p.HostCount > 1 {
+			nonUnanimousProjects++
 			problems = append(problems, HealthProblem{
-				Kind:     "pending",
-				Subject:  lbl.Label,
-				Detail:   fmt.Sprintf("%d mirror(s) selected but not yet materialized", pending),
+				Kind:     "envelope-divergent",
+				Subject:  p.Handle,
+				Detail:   "envelope digests differ — revoke / leave gossip hasn't propagated to all hosts",
 				Link:     link,
 				Severity: "warn",
 			})
 		}
 	}
-	headline := fmt.Sprintf("%d label(s), %d mirror(s), %d publisher(s). No orphans, no stale, no pending.",
-		f.Totals.Labels, f.Totals.Mirrors, f.Totals.Sources)
+	headline := fmt.Sprintf(
+		"%d project(s) across %d host(s); %d divergent ref(s); %d project(s) with envelope-digest skew.",
+		f.Totals.Projects,
+		f.Totals.Hosts,
+		f.Totals.DivergentRefs,
+		nonUnanimousProjects,
+	)
 	return finalizeHealthBanner("Gitmirror", problems, headline)
 }
 
-func buildGitmirrorLabelHealth(lbl *gitmirrormesh.LabelSummary) HealthBanner {
+func buildGitmirrorProjectHealth(p *gitmirrormesh.ProjectSummary) HealthBanner {
 	var problems []HealthProblem
-	if lbl.CountOrphan > 0 {
-		problems = append(problems, HealthProblem{Kind: "orphan", Subject: lbl.Label,
-			Detail: fmt.Sprintf("%d peer(s) hold this mirror but aren't selected", lbl.CountOrphan), Severity: "err"})
+	if len(p.DivergentRefs) > 0 {
+		problems = append(problems, HealthProblem{
+			Kind:     "divergent",
+			Subject:  p.Handle,
+			Detail:   fmt.Sprintf("%d ref(s) divergent across hosts", len(p.DivergentRefs)),
+			Severity: "warn",
+		})
 	}
-	if lbl.CountStale > 0 {
-		problems = append(problems, HealthProblem{Kind: "stale", Subject: lbl.Label,
-			Detail: fmt.Sprintf("%d mirror(s) not refreshed in >30 days", lbl.CountStale), Severity: "warn"})
+	if !p.DigestUnanimous && p.HostCount > 1 {
+		problems = append(problems, HealthProblem{
+			Kind:     "envelope-divergent",
+			Subject:  p.Handle,
+			Detail:   "envelope digests differ across hosts",
+			Severity: "warn",
+		})
 	}
-	if pending := lbl.CountSelected - lbl.CountMaterialized; pending > 0 {
-		problems = append(problems, HealthProblem{Kind: "pending", Subject: lbl.Label,
-			Detail: fmt.Sprintf("%d mirror(s) selected but not yet materialized", pending), Severity: "warn"})
-	}
-	headline := fmt.Sprintf("%s: %d materialized / %d selected. Healthy.",
-		lbl.Label, lbl.CountMaterialized, lbl.CountSelected)
-	return finalizeHealthBanner(lbl.Label, problems, headline)
+	headline := fmt.Sprintf("%s: %d host(s), %d member fleet(s).",
+		p.Handle, p.HostCount, p.MemberFleetCount)
+	return finalizeHealthBanner(p.Handle, problems, headline)
 }

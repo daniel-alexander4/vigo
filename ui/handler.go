@@ -261,7 +261,7 @@ func (h *Handler) SetTraitQueryDispatcher(d TraitQueryDispatcher) {
 // depend on the full aggregator handler type.
 type GitmirrorFleetSource interface {
 	FleetSnapshot(ctx context.Context) (*gitmirrormesh.Fleet, error)
-	EnvoyMirrors(ctx context.Context, envoyID string) []gitmirrormesh.EnvoyMirror
+	EnvoyProjects(ctx context.Context, envoyID string) []gitmirrormesh.EnvoyProject
 }
 
 // SetGitmirrorFleet wires the fleet aggregator into the UI handler.
@@ -575,7 +575,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /swarm/cryptsync", h.Cryptsync)
 	mux.HandleFunc("GET /ui/fragments/swarm-cryptsync-user/{user}", h.CryptsyncUserDrilldown)
 	mux.HandleFunc("GET /swarm/gitmirror", h.Gitmirror)
-	mux.HandleFunc("GET /swarm/gitmirror/{label}", h.Gitmirror)
+	mux.HandleFunc("GET /swarm/gitmirror/{project_id}", h.Gitmirror)
 	// Backwards-compat: /mesh → /filesync (or /cryptsync when ?tab=crypt).
 	// Keep for one minor release so muscle-memory URLs don't 404.
 	mux.HandleFunc("GET /mesh", h.MeshRedirect)

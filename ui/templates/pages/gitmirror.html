@@ -1,139 +1,161 @@
 {{define "page-content"}}
-{{if .Label}}
-{{/* ── Detail view ── */}}
+{{if .Project}}
+{{/* ── Detail view (single project) ── */}}
 <div class="breadcrumb mb-1">
-    <a href="/swarm/gitmirror">Gitmirror</a> &rsaquo; {{.Label.Project}}
+    <a href="/swarm/gitmirror">Gitmirror</a> &rsaquo; {{.Project.Handle}}
 </div>
 
 {{template "health-banner" .Health}}
 
 <div class="card">
     <div class="card-heading-row">
-        <h2 style="margin:0;">{{.Label.Project}}</h2>
+        <h2 style="margin:0;">{{.Project.Handle}}</h2>
         <a href="/swarm/gitmirror" class="btn btn--sm">Back to list</a>
     </div>
 
     <div class="table-container" style="margin-bottom:24px;">
         <table class="table">
             <tbody>
-                <tr><td style="font-weight:600;width:180px;">Publisher</td><td>{{.Label.Publisher}}</td></tr>
-                <tr><td style="font-weight:600;">User</td><td>{{.Label.User}}</td></tr>
-                <tr><td style="font-weight:600;">Max mirrors</td><td>{{.Label.MaxMirrors}}</td></tr>
-                {{if .Label.Paused}}<tr><td style="font-weight:600;">Paused</td><td><span class="badge badge--warn">paused</span></td></tr>{{end}}
-                {{if .Label.GitSha}}<tr><td style="font-weight:600;">Git HEAD</td><td><code>{{.Label.GitSha}}</code></td></tr>{{end}}
-                {{if .Label.LastPublishFull}}
+                <tr><td style="font-weight:600;width:200px;">URL</td><td><code>vigo://{{.Project.ProjectID}}/{{.Project.Handle}}</code></td></tr>
+                <tr><td style="font-weight:600;">Project ID</td><td><code>{{.Project.ProjectID}}</code></td></tr>
+                <tr><td style="font-weight:600;">Founder fleet</td><td><code>ed25519:{{.Project.FounderFleetPubkey}}</code></td></tr>
+                <tr><td style="font-weight:600;">Fan-out</td><td>{{.Project.DrFanout}}</td></tr>
+                <tr><td style="font-weight:600;">Member fleets</td><td>{{.Project.MemberFleetCount}}{{range .Project.Members}}<br><code>ed25519:{{.}}</code>{{end}}</td></tr>
+                <tr><td style="font-weight:600;">Hosts holding repo</td><td>{{.Project.HostCount}}</td></tr>
+                <tr><td style="font-weight:600;">Last updated</td><td>{{if gt .Project.LastUpdated 0}}{{formatUnixTime .Project.LastUpdated}}{{else}}&mdash;{{end}}</td></tr>
                 <tr>
-                    <td style="font-weight:600;">Last bundle</td>
+                    <td style="font-weight:600;">Envelope digest</td>
                     <td>
-                        {{if deref .Label.LastPublishFull}}
-                        <span class="badge badge--ok" title="full repository bundle">full</span>
+                        {{if .Project.DigestUnanimous}}
+                            <span class="badge badge--ok">unanimous</span>
                         {{else}}
-                        <span class="badge badge--neutral" title="incremental delta from the prior commit; full history lives on receivers in their bare repos">incremental</span>
+                            <span class="badge badge--warn">divergent</span> &middot; revoke / leave gossip hasn't propagated to every host yet
                         {{end}}
-                        {{if gt .Label.LastBundleSize 0}} &middot; {{humanBytes .Label.LastBundleSize}}{{end}}
+                        {{if gt .Project.RevokesCount 0}} &middot; {{.Project.RevokesCount}} revoke(s){{end}}
+                        {{if gt .Project.LeavesCount 0}} &middot; {{.Project.LeavesCount}} leave(s){{end}}
                     </td>
                 </tr>
-                {{end}}
-                {{if .Label.Description}}<tr><td style="font-weight:600;">Description</td><td>{{.Label.Description}}</td></tr>{{end}}
-                {{if .Label.Tags}}<tr><td style="font-weight:600;">Tags</td><td>{{range .Label.Tags}}<span class="badge badge--neutral">{{.}}</span> {{end}}</td></tr>{{end}}
-                {{if .Label.CrossSubnetMirrors}}<tr><td style="font-weight:600;">Cross-subnet mirrors</td><td>{{range .Label.CrossSubnetMirrors}}<code>{{.}}</code> {{end}}</td></tr>{{end}}
-                <tr><td style="font-weight:600;">Publisher seen</td><td>{{if gt .Label.PublisherSeen 0}}{{formatUnixTime .Label.PublisherSeen}}{{else}}&mdash;{{end}}</td></tr>
             </tbody>
         </table>
     </div>
 
-    <h3 style="margin:0 0 12px;">Mirror status</h3>
-    {{if .Label.Mirrors}}
+    <h3 style="margin:0 0 12px;">Refs</h3>
+    {{if .Project.HeadRefs}}
     <table class="table">
         <thead>
             <tr>
-                <th>Host</th>
-                <th>Status</th>
-                <th>Selected</th>
-                <th>Materialized</th>
-                <th>Last refreshed</th>
-                <th>Git HEAD</th>
+                <th>Ref</th>
+                <th>Consensus SHA</th>
+                <th>Hosts agreeing</th>
+                <th>Hosts lagging</th>
             </tr>
         </thead>
         <tbody>
-            {{range .Label.Mirrors}}
+            {{range $ref, $st := .Project.HeadRefs}}
             <tr>
-                <td>{{.Host}}</td>
-                <td>
-                    {{if eq .Status "active"}}<span class="badge badge--ok">active{{if .Stale}} (stale){{end}}</span>
-                    {{else if eq .Status "pending"}}<span class="badge badge--warn">pending</span>
-                    {{else if eq .Status "orphan"}}<span class="badge badge--err">orphan</span>
-                    {{else}}<span class="badge">{{.Status}}</span>{{end}}
-                </td>
-                <td>{{if .Selected}}&check;{{else}}&mdash;{{end}}</td>
-                <td>{{if .Materialized}}&check;{{else}}&mdash;{{end}}</td>
-                <td>{{if gt .LastRefreshed 0}}{{formatUnixTime .LastRefreshed}}{{else}}&mdash;{{end}}</td>
-                <td>{{if .GitSha}}<code title="{{.GitSha}}">{{truncGitSha .GitSha}}</code>{{else}}&mdash;{{end}}</td>
+                <td><code>{{$ref}}</code></td>
+                <td>{{if $st.Sha}}<code title="{{$st.Sha}}">{{truncGitSha $st.Sha}}</code>{{else}}<span class="badge badge--warn">divergent</span>{{end}}</td>
+                <td>{{range $st.HostsAgreeing}}<code>{{.}}</code> {{end}}</td>
+                <td>{{if $st.HostsLagging}}{{range $st.HostsLagging}}<code>{{.}}</code> {{end}}{{else}}&mdash;{{end}}</td>
             </tr>
             {{end}}
         </tbody>
     </table>
     {{else}}
-    <p><em>No peers selected or materialized yet.</em></p>
+    <p><em>No refs reported &mdash; bare repos may be empty (initialized but no pushes yet).</em></p>
+    {{end}}
+
+    <h3 style="margin:24px 0 12px;">Hosts</h3>
+    {{if .Project.Hosts}}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Host</th>
+                <th>Bare repo</th>
+                <th>Size</th>
+                <th>Users with state</th>
+                <th>Leaf role</th>
+                <th>Last seen</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Project.Hosts}}
+            <tr>
+                <td>{{.Host}}</td>
+                <td>{{if .HasBareRepo}}<span class="badge badge--ok">yes</span>{{else}}&mdash;{{end}}</td>
+                <td>{{if .HasBareRepo}}{{humanBytes .SizeBytes}}{{else}}&mdash;{{end}}</td>
+                <td>{{range .UsersWithState}}<code>{{.}}</code> {{end}}</td>
+                <td>{{if .LeafRole}}{{.LeafRole}}{{else}}&mdash;{{end}}</td>
+                <td>{{if gt .UpdatedAt 0}}{{formatUnixTime .UpdatedAt}}{{else}}&mdash;{{end}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p><em>No hosts have reported this project yet.</em></p>
     {{end}}
 </div>
 {{else}}
 {{/* ── List view ── */}}
 <div class="page-header">
     <h1>Gitmirror</h1>
-    <p>Fleet-wide personal-DR repo mirror view. <a href="/docs/engineering/subsystems/swarm/gitmirror">What is this?</a></p>
+    <p>Fleet-wide unified-substrate gitmirror view. Projects are keyed by <code>project_id = sha256(founder_fleet_pubkey)</code>.</p>
 </div>
 
 {{template "health-banner" .Health}}
 
 {{if .Error}}
     <div class="alert alert--warn">Gitmirror aggregator: {{.Error}}</div>
-{{else if or (not .Fleet) (eq (len .Fleet.Labels) 0)}}
-    {{template "empty-state" dict "Message" "No gitmirror repos observed across the fleet." "Hint" "Add a .gitmirror.yaml sidecar to a ~<user>/gitmirror/<project>/ directory on any envoy to publish."}}
+{{else if or (not .Fleet) (eq (len .Fleet.Projects) 0)}}
+    {{template "empty-state" dict "Message" "No gitmirror projects observed across the fleet." "Hint" "Run `vigo swarm gitmirror project init <handle>` on any envoy to found a project, or `project join` to adopt an invitation."}}
 {{else}}
     <div class="stat-cards mb-2">
-        <div class="stat-card" title="Distinct repos being mirrored across the fleet. Click a repo in the table below to see which envoys hold it.">
-            <div class="stat-card__label">Mirrors</div>
-            <div class="stat-card__value">{{.Fleet.Totals.Labels}}</div>
+        <div class="stat-card" title="Distinct projects observed across the fleet.">
+            <div class="stat-card__label">Projects</div>
+            <div class="stat-card__value">{{.Fleet.Totals.Projects}}</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-card__label">Publishers</div>
-            <div class="stat-card__value">{{.Fleet.Totals.Sources}}</div>
+        <div class="stat-card" title="Distinct hosts holding any project locally.">
+            <div class="stat-card__label">Hosts</div>
+            <div class="stat-card__value">{{.Fleet.Totals.Hosts}}</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-card__label">Orphan mirrors</div>
-            <div class="stat-card__value {{if gt .Fleet.Totals.OrphanMirrors 0}}text-warn{{end}}">{{.Fleet.Totals.OrphanMirrors}}</div>
+        <div class="stat-card" title="Refs where hosts disagree on the head sha. Resolves on the next successful fan-out.">
+            <div class="stat-card__label">Divergent refs</div>
+            <div class="stat-card__value {{if gt .Fleet.Totals.DivergentRefs 0}}text-warn{{end}}">{{.Fleet.Totals.DivergentRefs}}</div>
         </div>
-        <div class="stat-card">
-            <div class="stat-card__label">Stale mirrors</div>
-            <div class="stat-card__value {{if gt .Fleet.Totals.StaleMirrors 0}}text-warn{{end}}">{{.Fleet.Totals.StaleMirrors}}</div>
+        <div class="stat-card" title="Total revocation envelopes across all projects.">
+            <div class="stat-card__label">Revokes</div>
+            <div class="stat-card__value">{{.Fleet.Totals.TotalRevokes}}</div>
+        </div>
+        <div class="stat-card" title="Total leave envelopes across all projects.">
+            <div class="stat-card__label">Leaves</div>
+            <div class="stat-card__value">{{.Fleet.Totals.TotalLeaves}}</div>
         </div>
     </div>
 
     <div class="card">
-        <h3 style="margin:0 0 12px;">Repos</h3>
+        <h3 style="margin:0 0 12px;">Projects</h3>
         <table class="table">
             <thead>
                 <tr>
-                    <th>Name</th>
-                    <th>Publisher</th>
-                    <th>Materialized</th>
-                    <th>Selected</th>
-                    <th>Orphan</th>
-                    <th>Stale</th>
-                    <th>Last seen</th>
+                    <th>Handle</th>
+                    <th>Fan-out</th>
+                    <th>Members</th>
+                    <th>Hosts</th>
+                    <th>Divergent refs</th>
+                    <th>Envelopes</th>
+                    <th>Project ID</th>
                 </tr>
             </thead>
             <tbody>
-                {{range .Fleet.Labels}}
-                <tr onclick="location.href='/swarm/gitmirror/{{.Label}}'" style="cursor:pointer;">
-                    <td><strong>{{.Project}}</strong></td>
-                    <td>{{.Publisher}}</td>
-                    <td>{{.CountMaterialized}}</td>
-                    <td>{{.CountSelected}} / {{.MaxMirrors}}</td>
-                    <td>{{if gt .CountOrphan 0}}<span class="badge badge--err">{{.CountOrphan}}</span>{{else}}&mdash;{{end}}</td>
-                    <td>{{if gt .CountStale 0}}<span class="badge badge--warn">{{.CountStale}}</span>{{else}}&mdash;{{end}}</td>
-                    <td style="white-space:nowrap;">{{if gt .PublisherSeen 0}}{{formatUnixTime .PublisherSeen}}{{else}}&mdash;{{end}}</td>
+                {{range .Fleet.Projects}}
+                <tr onclick="location.href='/swarm/gitmirror/{{.ProjectID}}'" style="cursor:pointer;">
+                    <td><strong>{{.Handle}}</strong></td>
+                    <td>{{.DrFanout}}</td>
+                    <td>{{.MemberFleetCount}}</td>
+                    <td>{{.HostCount}}</td>
+                    <td>{{if gt (len .DivergentRefs) 0}}<span class="badge badge--warn">{{len .DivergentRefs}}</span>{{else}}&mdash;{{end}}</td>
+                    <td>{{.RevokesCount}} R / {{.LeavesCount}} L{{if not .DigestUnanimous}} <span class="badge badge--warn">skew</span>{{end}}</td>
+                    <td><code title="{{.ProjectID}}">{{truncGitSha .ProjectID}}</code></td>
                 </tr>
                 {{end}}
             </tbody>

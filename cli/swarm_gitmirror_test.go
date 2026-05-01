@@ -11,8 +11,8 @@ import (
 )
 
 // fleetFixture spins up a httptest server that serves a canned
-// /api/v1/swarm/gitmirror/fleet response, points serverURL at it, and
-// returns a cleanup.
+// /api/v1/swarm/gitmirror/fleet response, points serverURL at it,
+// and returns a cleanup.
 func fleetFixture(t *testing.T, fleet fleetResponse) func() {
 	t.Helper()
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -30,102 +30,92 @@ func fleetFixture(t *testing.T, fleet fleetResponse) func() {
 	}
 }
 
-func fullFlag(b bool) *bool { return &b }
-
 func sampleFleet() fleetResponse {
+	pidA := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	pidB := "11223344556677889900aabbccddeeff11223344556677889900aabbccddeeff"
 	return fleetResponse{
 		Totals: fleetTotals{
-			Sources:       2,
-			Labels:        2,
-			Mirrors:       3,
-			OrphanMirrors: 1,
-			StaleMirrors:  0,
+			Projects:      2,
+			Hosts:         3,
+			DivergentRefs: 0,
+			TotalRevokes:  0,
+			TotalLeaves:   0,
 		},
 		Participants: []string{"envoy-a", "envoy-b", "envoy-c"},
-		Labels: []fleetLabelSummary{
+		Projects: []fleetProjectSummary{
 			{
-				Label:             "gitmirror:src:dan:vigo",
-				Publisher:         "src",
-				User:              "dan",
-				Project:           "vigo",
-				MaxMirrors:        5,
-				GitSha:            "97debaead89e",
-				LastPublishFull:   fullFlag(false),
-				LastBundleSize:    1653,
-				CountSelected:     2,
-				CountMaterialized: 2,
+				ProjectID:        pidA,
+				Handle:           "vigo",
+				DrFanout:         "fleet-wide",
+				MemberFleetCount: 1,
+				HostCount:        2,
+				DigestUnanimous:  true,
 			},
 			{
-				Label:             "gitmirror:src:dan:notes",
-				Publisher:         "src",
-				User:              "dan",
-				Project:           "notes",
-				MaxMirrors:        3,
-				LastPublishFull:   fullFlag(true),
-				LastBundleSize:    204_800,
-				CountSelected:     1,
-				CountMaterialized: 1,
+				ProjectID:        pidB,
+				Handle:           "notes",
+				DrFanout:         "members-only",
+				MemberFleetCount: 1,
+				HostCount:        1,
+				DigestUnanimous:  true,
 			},
 		},
 	}
 }
 
-func TestResolveFleetLabelExactLabel(t *testing.T) {
+func TestResolveFleetProjectExactProjectID(t *testing.T) {
 	fleet := sampleFleet()
-	m, err := resolveFleetLabel(fleet.Labels, "gitmirror:src:dan:vigo")
+	m, err := resolveFleetProject(fleet.Projects, fleet.Projects[0].ProjectID)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if m.Project != "vigo" {
-		t.Fatalf("expected project vigo, got %s", m.Project)
+	if m.Handle != "vigo" {
+		t.Fatalf("expected handle vigo, got %s", m.Handle)
 	}
 }
 
-func TestResolveFleetLabelExactProject(t *testing.T) {
+func TestResolveFleetProjectExactHandle(t *testing.T) {
 	fleet := sampleFleet()
-	m, err := resolveFleetLabel(fleet.Labels, "notes")
+	m, err := resolveFleetProject(fleet.Projects, "notes")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if m.Label != "gitmirror:src:dan:notes" {
-		t.Fatalf("expected notes label, got %s", m.Label)
+	if m.Handle != "notes" {
+		t.Fatalf("expected handle notes, got %s", m.Handle)
 	}
 }
 
-func TestResolveFleetLabelUniquePrefix(t *testing.T) {
+func TestResolveFleetProjectUniquePrefix(t *testing.T) {
 	fleet := sampleFleet()
-	m, err := resolveFleetLabel(fleet.Labels, "not")
+	m, err := resolveFleetProject(fleet.Projects, "not")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if m.Project != "notes" {
-		t.Fatalf("expected notes, got %s", m.Project)
+	if m.Handle != "notes" {
+		t.Fatalf("expected notes, got %s", m.Handle)
 	}
 }
 
-func TestResolveFleetLabelAmbiguousProjectAcrossPublishers(t *testing.T) {
+func TestResolveFleetProjectAmbiguousHandle(t *testing.T) {
 	fleet := sampleFleet()
-	fleet.Labels = append(fleet.Labels, fleetLabelSummary{
-		Label:     "gitmirror:src2:dan:vigo",
-		Publisher: "src2",
-		User:      "dan",
-		Project:   "vigo",
-	})
-	_, err := resolveFleetLabel(fleet.Labels, "vigo")
+	dup := fleet.Projects[0]
+	dup.ProjectID = "ff" + dup.ProjectID[2:]
+	fleet.Projects = append(fleet.Projects, dup)
+	_, err := resolveFleetProject(fleet.Projects, "vigo")
 	if err == nil {
-		t.Fatal("expected ambiguity error")
+		t.Fatal("expected ambiguity error when two projects share a handle")
 	}
 }
 
-func TestResolveFleetLabelNoMatch(t *testing.T) {
-	_, err := resolveFleetLabel(sampleFleet().Labels, "does-not-exist")
+func TestResolveFleetProjectNoMatch(t *testing.T) {
+	_, err := resolveFleetProject(sampleFleet().Projects, "does-not-exist")
 	if err == nil {
 		t.Fatal("expected no-match error")
 	}
 }
 
-func TestResolveFleetLabelEmptyFleet(t *testing.T) {
-	_, err := resolveFleetLabel(nil, "anything")
+func TestResolveFleetProjectEmptyFleet(t *testing.T) {
+	_, err := resolveFleetProject(nil, "anything")
 	if err == nil {
 		t.Fatal("expected error on empty fleet")
 	}
@@ -141,17 +131,13 @@ func TestFetchFleetHitsAggregatorEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if got.Totals.Sources != fleet.Totals.Sources {
-		t.Errorf("expected %d sources, got %d", fleet.Totals.Sources, got.Totals.Sources)
+	if got.Totals.Projects != fleet.Totals.Projects {
+		t.Errorf("expected %d projects, got %d", fleet.Totals.Projects, got.Totals.Projects)
 	}
-	if len(got.Labels) != len(fleet.Labels) {
-		t.Errorf("expected %d labels, got %d", len(fleet.Labels), len(got.Labels))
+	if len(got.Projects) != len(fleet.Projects) {
+		t.Errorf("expected %d projects, got %d", len(fleet.Projects), len(got.Projects))
 	}
-	// Spot-check bundle metadata passes through intact.
-	if got.Labels[0].LastBundleSize != 1653 {
-		t.Errorf("expected bundle size 1653, got %d", got.Labels[0].LastBundleSize)
-	}
-	if got.Labels[0].LastPublishFull == nil || *got.Labels[0].LastPublishFull {
-		t.Errorf("expected first label to be incremental, got %+v", got.Labels[0].LastPublishFull)
+	if got.Projects[0].Handle != "vigo" {
+		t.Errorf("expected first handle vigo, got %s", got.Projects[0].Handle)
 	}
 }
