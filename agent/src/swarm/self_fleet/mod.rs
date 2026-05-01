@@ -38,6 +38,7 @@
 //!   holding the unwrapped Ed25519 SigningKey in memory.
 
 pub mod cli;
+pub mod codes;
 pub mod config;
 pub mod pair;
 pub mod session;
