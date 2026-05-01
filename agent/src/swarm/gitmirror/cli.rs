@@ -992,17 +992,43 @@ fn cmd_reanchor(args: &[String]) -> Result<()> {
     let cfg = ProjectConfig::load(&caller.home, &project_id)?
         .ok_or_else(|| anyhow!("not a member of project {}", hex_id(&project_id)))?;
 
+    // The new founder is the calling user's self-fleet identity. If
+    // that's the same as the existing founder, reanchor is a no-op
+    // (and would overwrite local state under the same dir) — refuse.
+    let new_founder_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    let new_project_id = project_id_for(&new_founder_pub);
+    if new_project_id == project_id {
+        bail!(
+            "this user is already the founder of project '{}' — reanchor is meant for \
+             surviving members to take over after the original founder fleet is lost. \
+             Nothing to do.",
+            cfg.handle
+        );
+    }
+    if project_state::ProjectConfig::load(&caller.home, &new_project_id)?.is_some() {
+        bail!(
+            "a project already exists under the proposed new project_id ({}). \
+             Either you already reanchored (run `project status {}`) or you have a \
+             different project under that anchor — abort.",
+            hex_id(&new_project_id),
+            hex_id(&new_project_id),
+        );
+    }
+
     eprintln!(
         "Reanchor — hard-fork project '{}' under a new founder.
 
   • The current URL `vigo://{}/{}` becomes permanently dead.
+  • New URL will be `vigo://{}/{}`.
   • Every existing member must re-add the new remote URL by hand.
   • Existing tokens (admin or member) are NOT portable to the new project.
-  • Repo content is preserved (it imports wholesale into the new project),
-    but the helper daemon must mediate the import — that lands in step 4.
+  • Refs + objects from the old bare repo are imported wholesale into the
+    new bare repo when this command runs as root (otherwise the local
+    auth surface is rebuilt and a member with root can re-run later).
 
 To proceed, type the project handle exactly: {}",
-        cfg.handle, cfg.project_id, cfg.handle, cfg.handle
+        cfg.handle, cfg.project_id, cfg.handle,
+        hex_id(&new_project_id), cfg.handle, cfg.handle
     );
     eprint!("> ");
     let _ = std::io::stderr().flush();
@@ -1015,14 +1041,123 @@ To proceed, type the project handle exactly: {}",
         bail!("typed value '{}' did not match project handle '{}'; reanchor aborted", typed, cfg.handle);
     }
 
-    // Step 3 stops here: the actual reanchor flow needs the helper
-    // daemon to import bare repo bytes into the new project_id, which
-    // lands in step 4. Bail with a clear pointer so users on the
-    // bleeding edge know what's expected.
-    bail!(
-        "reanchor confirmed but transport is not yet implemented (ADR-015 step 4). \
-         The new founder bootstrap + bare-repo migration land alongside the helper daemon."
-    );
+    // Mint the new founder bootstrap admin token under the caller's
+    // fleet. Same shape `cmd_init` produces — admin role, no parent,
+    // no expiry — but with the new founder pubkey + new project_id.
+    let now = now_secs();
+    let body = TokenBody {
+        project_id: new_project_id,
+        subject_fleet_pubkey: new_founder_pub,
+        role: Role::Admin,
+        issued_at: now,
+        expires_at: None,
+        signer_fleet_pubkey: new_founder_pub,
+        parent_token_id: None,
+    };
+    let bytes = canonical_bytes(&body);
+    let signature = sign_with_session(&bytes)?;
+    let bootstrap = Token { body, signature };
+    bootstrap
+        .verify_signature()
+        .context("bootstrap token failed self-verification (session helper malfunction?)")?;
+
+    // Persist new project.json + tokens.json under the caller's home,
+    // anchored on the new founder. Members list starts as just this
+    // fleet — surviving members from the old project must be invited
+    // back via fresh `project invite` calls.
+    let new_cfg = ProjectConfig {
+        version: project_state::PROJECT_STATE_VERSION,
+        project_id: hex_id(&new_project_id),
+        handle: cfg.handle.clone(),
+        founder_fleet_pubkey: hex_id(&new_founder_pub),
+        members: vec![hex_id(&new_founder_pub)],
+        dr_fanout: cfg.dr_fanout,
+        cross_subnet_members: cfg.cross_subnet_members.clone(),
+        updated_at: now,
+    };
+    new_cfg.save(&caller.home)?;
+    let new_chain = TokenChain {
+        version: project_state::PROJECT_STATE_VERSION,
+        chain: vec![bootstrap],
+    };
+    new_chain.save(&caller.home, &new_project_id)?;
+
+    // Byte migration of the bare repo (root-only). The old repo at
+    // /var/lib/vigo/swarm/gitmirror/projects/<old_pid>.git is read
+    // into the new repo at projects/<new_pid>.git via
+    // `git -C <new> fetch <old> +refs/*:refs/*`. Skip cleanly when the
+    // old repo doesn't exist locally (this envoy was a non-fanout
+    // member that never received the bytes) or when the caller isn't
+    // root (the bare repos are 0700 root:root).
+    let base = crate::platform::paths::default_gitmirror_dir();
+    let old_repo = project_repo_path(&base, &project_id);
+    let new_repo = project_repo_path(&base, &new_project_id);
+    let mut migrated_refs = 0usize;
+    if !caller.is_root {
+        eprintln!(
+            "warning: caller is not root, skipping bare-repo byte migration. Re-run as root \
+             on this envoy (or any other member envoy) to import the old bare repo into \
+             {}.",
+            new_repo.display()
+        );
+    } else if !old_repo.exists() {
+        eprintln!(
+            "note: no bare repo at {} on this envoy — local auth surface rebuilt only. \
+             Run `reanchor` as root on an envoy that holds the old bare repo to perform \
+             the byte migration.",
+            old_repo.display()
+        );
+    } else {
+        super::fan_out::ensure_bare_repo(&new_repo)?;
+        let pre = super::fan_out::snapshot_refs(&new_repo).unwrap_or_default();
+        // Use git fetch <bundle-or-repo> +refs/*:refs/* to copy refs
+        // + the objects backing them. The old repo is a local path,
+        // git speaks file-protocol against it.
+        use super::git_ops::{build_command, RunAs};
+        let mut cmd = build_command(RunAs::Root);
+        cmd.arg("-C")
+            .arg(&new_repo)
+            .arg("fetch")
+            .arg(&old_repo)
+            .arg("+refs/*:refs/*")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped());
+        let out = cmd.output().context("git fetch <old_repo>")?;
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            bail!(
+                "git fetch into new bare repo failed: {}",
+                stderr.trim()
+            );
+        }
+        let post = super::fan_out::snapshot_refs(&new_repo).unwrap_or_default();
+        for (ref_name, sha) in &post {
+            if pre.get(ref_name) != Some(sha) {
+                migrated_refs += 1;
+            }
+        }
+    }
+
+    println!("✓ Reanchored project '{}'", cfg.handle);
+    println!("  Old URL:    vigo://{}/{}", cfg.project_id, cfg.handle);
+    println!("  New URL:    vigo://{}/{}", hex_id(&new_project_id), cfg.handle);
+    println!("  New founder: ed25519:{}", hex_id(&new_founder_pub));
+    if migrated_refs > 0 {
+        println!("  Migrated {} ref(s) from old bare repo into new bare repo", migrated_refs);
+    } else if caller.is_root && old_repo.exists() {
+        println!("  Old bare repo had no refs to migrate (empty repo).");
+    }
+    println!();
+    println!("Next steps:");
+    println!("  • Re-invite each surviving member fleet via");
+    println!("    `vigo swarm gitmirror project invite {} --fleet <fp> --role <r>`",
+             hex_id(&new_project_id));
+    println!("  • Each invitee runs `project join {}` and re-adds the remote.",
+             hex_id(&new_project_id));
+    println!("  • The old project state at {} is left in place — drop it via `project leave {}` once you confirm the new project is healthy.",
+             cfg.project_id, cfg.project_id);
+    Ok(())
 }
 
 // ============================================================

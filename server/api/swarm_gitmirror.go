@@ -37,6 +37,8 @@ func NewGitmirrorHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries) *Git
 func (h *GitmirrorHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := auth.RequirePermission(auth.PermFleetRead)
 	mux.Handle("GET /api/v1/swarm/gitmirror/fleet", read(http.HandlerFunc(h.handleFleet)))
+	mux.Handle("GET /api/v1/swarm/gitmirror/projects/{project_id}/roster",
+		read(http.HandlerFunc(h.handleRoster)))
 }
 
 // FleetSnapshot returns the cached aggregated view. The UI handler
@@ -86,4 +88,81 @@ func (h *GitmirrorHandler) handleFleet(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(fleet); err != nil {
 		slog.Debug("gitmirror fleet response encode failed", "error", err)
 	}
+}
+
+// RosterResponse is the JSON shape returned by
+// `GET /api/v1/swarm/gitmirror/projects/<pid>/roster`. It carries the
+// canonical member-fleet list for a project plus the metadata helpers
+// pull at push time:
+//
+//   - `members[]` — every authorized member fleet's Ed25519 pubkey
+//     (hex). The first entry is always the founder fleet; the helper
+//     daemon walks the token chain it received against this list.
+//   - `dr_fanout` — `"fleet-wide"` or `"members-only"`. Hints to
+//     the caller's fan-out logic which envoys to push to.
+//
+// Roster is **derived from the gitmirrormesh aggregator** — the
+// freshest report wins when hosts disagree, identical to the
+// `ProjectSummary` canonical-field rule. Projects no envoy in the
+// fleet has reported on yet return 404.
+type RosterResponse struct {
+	ProjectID          string   `json:"project_id"`
+	Handle             string   `json:"handle"`
+	FounderFleetPubkey string   `json:"founder_fleet_pubkey"`
+	Members            []string `json:"members"`
+	DrFanout           string   `json:"dr_fanout"`
+	MemberFleetCount   int      `json:"member_fleet_count"`
+}
+
+func (h *GitmirrorHandler) handleRoster(w http.ResponseWriter, r *http.Request) {
+	if h.fleetIndex == nil {
+		http.Error(w, `{"error":"fleet index not available"}`, http.StatusServiceUnavailable)
+		return
+	}
+	pidHex := r.PathValue("project_id")
+	if !validProjectIDHex(pidHex) {
+		writeJSONError(w, http.StatusBadRequest,
+			"project_id must be 64-char lowercase hex")
+		return
+	}
+	fleet, err := h.FleetSnapshot(r.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "gitmirror fleet query failed")
+		return
+	}
+	summary := fleet.LookupProject(pidHex)
+	if summary == nil {
+		writeJSONError(w, http.StatusNotFound,
+			"no envoy in the fleet has reported this project")
+		return
+	}
+	resp := RosterResponse{
+		ProjectID:          summary.ProjectID,
+		Handle:             summary.Handle,
+		FounderFleetPubkey: summary.FounderFleetPubkey,
+		Members:            summary.Members,
+		DrFanout:           summary.DrFanout,
+		MemberFleetCount:   summary.MemberFleetCount,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		slog.Debug("gitmirror roster response encode failed", "error", err)
+	}
+}
+
+// validProjectIDHex enforces the URL-segment shape: exactly 64
+// lowercase hex chars. Identical predicate to
+// `swarm.is_project_id_path_segment` on the swarm peer-port; both
+// share the same hex form because the same project_id rides over
+// both surfaces.
+func validProjectIDHex(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if !(c >= '0' && c <= '9') && !(c >= 'a' && c <= 'f') {
+			return false
+		}
+	}
+	return true
 }

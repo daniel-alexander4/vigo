@@ -5,7 +5,7 @@
 
 ## Status: ADR-015 cutover in progress
 
-Steps 1–3 (multi-call dispatch, capability tokens, per-user state + CLI) and the first two slices of step 4 (helper daemon + `git-remote-vigo` + revoke / leave envelopes; push-driven fan-out + receive-side `POST /swarm/gitmirror/push/<project_id_hex>` endpoint) have shipped. Verbs that mint or sign envelopes (`init`, `invite`, `revoke`, `leave`, `reanchor`) require self-fleet to be unlocked — see [`vigo swarm self-fleet`](agent-swarm-self-fleet.md).
+Steps 1–3 (multi-call dispatch, capability tokens, per-user state + CLI) and step 4's first six slices (helper daemon + `git-remote-vigo`; push-driven fan-out + receive-side endpoint; LAN auto-discovery; envelope gossip with digest catch-up; trait re-emit + mesh schema + UI/CLI rewrite; REST member-roster + reanchor byte migration) have shipped. Verbs that mint or sign envelopes (`init`, `invite`, `revoke`, `leave`, `reanchor`) require self-fleet to be unlocked — see [`vigo swarm self-fleet`](agent-swarm-self-fleet.md).
 
 What works end-to-end today:
 
@@ -17,7 +17,7 @@ What works end-to-end today:
 
 What's still pending (follow-up slices of step 4):
 
-- `reanchor` accepts the type-the-handle confirmation but bails before the byte-level migration.
+All step-4 follow-up work has shipped. Cross-envoy push, fetch, envelope gossip, fleet observability, REST member-roster, and `reanchor` byte migration are all in tree.
 
 ## Invocation
 
@@ -195,7 +195,13 @@ vigo swarm gitmirror project reanchor <project_id>
 
 **Interactive:** prints the consequences (old URL becomes dead, members must re-add the new remote, tokens not portable) and refuses to proceed unless the user types the project handle to confirm. Same anti-footgun pattern as `git push --force-with-lease`.
 
-**Status:** the confirmation is wired in step 3, but the actual byte-level migration of refs and objects into the new project_id is the last item of step 4 (after fan-out, gossip, and the server-mesh rewrite). Today the verb bails after the type-the-handle check with a pointer to that follow-up slice.
+**Effects:**
+
+- Refuses if `sha256(this_user_fleet_pubkey) == old_project_id` (the calling user is already the founder, so reanchor is a no-op).
+- Refuses if a project already exists locally under the proposed new project_id.
+- Mints a fresh founder bootstrap admin token under this user's self-fleet and persists `project.json` + `tokens.json` under `~/.vigo-gitmirror/<new_project_id>/`. The new members list starts as `[this_fleet]`; surviving members from the old project must be re-invited via `project invite <new_project_id> --fleet <fp> --role <r>`.
+- When run as root **and** the old bare repo exists at `/var/lib/vigo/swarm/gitmirror/projects/<old_project_id>.git`, runs `git -C <new_repo> fetch <old_repo> +refs/*:refs/*` to copy every ref + the objects backing them into the new bare repo. Non-root invocations (or envoys that don't hold the old bare repo) print a note and rebuild only the local auth surface; another member with root + the old bare repo can complete the migration later.
+- The old project state is left in place — drop it via `project leave <old_project_id>` once the new project is healthy.
 
 ## Hidden verbs
 

@@ -2097,7 +2097,8 @@ Administrator-pushed file distribution on the swarm substrate. These endpoints p
 
 ### Gitmirror
 
-- **GET /api/v1/swarm/gitmirror/fleet** — fleet-wide gitmirror mirror view (aggregated from per-envoy traits). _(fleet.read)_
+- **GET /api/v1/swarm/gitmirror/fleet** — fleet-wide gitmirror project view (aggregated from per-envoy traits). _(fleet.read)_
+- **GET /api/v1/swarm/gitmirror/projects/{project_id}/roster** — canonical member fleet list for one project. Returns `{project_id, handle, founder_fleet_pubkey, members[], dr_fanout, member_fleet_count}`. The helper daemon's lazy-fetch target at push time. 404 if no envoy in the fleet has reported the project. _(fleet.read)_
 
 ### Filesync
 
