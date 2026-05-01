@@ -4,7 +4,7 @@ title: "ADR-012: Cryptsync auto-encrypt-on-write"
 
 # ADR-012: Cryptsync auto-encrypt-on-write
 
-**Status:** Accepted (pending implementation)
+**Status:** Complete (shipped 0.34.7).
 **Date:** 2026-04-29
 
 ## Context

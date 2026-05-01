@@ -4,7 +4,7 @@ title: "ADR-017: No fleet-level revoke"
 
 # ADR-017: No fleet-level revoke
 
-**Status:** Accepted
+**Status:** Accepted (no implementation; documents a decision to **not** build a verb).
 **Date:** 2026-04-30
 
 ## Context

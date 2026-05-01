@@ -4,7 +4,7 @@ title: "ADR-018: Self-fleet rekey"
 
 # ADR-018: Self-fleet rekey
 
-**Status:** Accepted
+**Status:** Complete. Shipped across two slices: rekey verbs + orchestration (0.35.14) and status surface + ADR-018 + docs (0.35.15). Prereqs landed at 0.35.12 (cryptsync `identity_rewrap` primitive) and 0.35.13 (claim-code refactor). Gitmirror founder-rekey and cryptsync recipient-set widening during the rotation rollout are explicitly deferred to future ADRs.
 **Date:** 2026-04-30
 
 ## Context

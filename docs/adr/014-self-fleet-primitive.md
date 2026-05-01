@@ -4,7 +4,7 @@ title: "ADR-014: Self-fleet primitive"
 
 # ADR-014: Self-fleet primitive
 
-**Status:** Accepted (pending implementation)
+**Status:** Complete (shipped 0.34.8). Multi-fleet per user, Shamir/escrow recovery, and cross-envoy gossip of fleet membership remain explicitly deferred per the Decision section's scope gates. Fleet keypair rotation, originally implied as "re-init from scratch," is now addressed by [ADR-018](018-self-fleet-rekey.md) (rekey verbs preserve cryptsync state across rotation; gitmirror founder-rekey still pending its own ADR).
 **Date:** 2026-04-29
 **Updated 2026-04-29:** Distribution section restructured to put peer-pair as the primary onboarding path (manual scp survives as air-gapped fallback). CLI verbs renamed for clarity (`activate` split into `unlock` + `join`; `deactivate` → `lock`; `show` → `pubkey`; new `pair` verb). Resolved scope gates recorded in the Decision section: single fleet per user (multi-fleet deferred to v2), three sequential releases (014 → 015 → 016), re-init from scratch on passphrase loss (no Shamir/escrow in v1).
 
