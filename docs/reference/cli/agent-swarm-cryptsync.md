@@ -48,6 +48,18 @@ The verb tree splits into **mode-agnostic** verbs (the daily ones — they don't
 
 Mode is determined automatically at runtime: when self-fleet is initialized for the user, the announce loop scopes recipient resolution to fleet members; without it, the legacy gossip-only path stays in effect. The `fleet init` and `standalone init` verbs produce the same on-disk wrapped age identity — the difference is intent (and the help text). Per-envoy age keys are deliberately preserved across both modes — see ADR-016 for the rationale.
 
+### Trust-on-first-use fleet-pubkey pinning
+
+A peer's `fleet_pubkey` is pinned the first time it's seen. Subsequent announces from the same hostname under a different fleet pubkey are dropped at upsert time (the daemon warn-logs the rejection with both the pinned and announced values). This guards against same-LAN spoofing — once `host-X` is observed claiming `fleet-pk-1`, a different envoy claiming to be `host-X` under `fleet-pk-2` is silently ignored.
+
+Operator recovery for a legitimate self-fleet rotation (rare):
+
+```
+$ vigo swarm cryptsync forget <hostname>
+```
+
+clears the pinned entry. The next announce from that hostname re-pins under the new fleet pubkey.
+
 ### `vigo swarm cryptsync leave`
 
 Self-unenrollment. Three-stage handoff:

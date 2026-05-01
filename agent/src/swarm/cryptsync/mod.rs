@@ -543,20 +543,62 @@ fn handle_incoming(inc: IncomingAnnouncement) {
         // Empty when the peer is running standalone or the announce
         // predates the fleet-pubkey field.
         fleet_pubkey: announcement.fleet_pubkey.clone(),
+        // ADR-016 follow-up: TOFU pinning. Left empty here; upsert()
+        // pins on first sighting and enforces match on subsequent
+        // announces — see PeerTable::upsert and the rejection log
+        // emitted via the post-upsert helper below.
+        pinned_fleet_pubkey: String::new(),
     };
+
+    // Capture the pre-upsert pin so we can detect when upsert
+    // rejected the announce on TOFU mismatch and warn-log with full
+    // context. PeerTable::modify takes an FnOnce closure; the pre-pin
+    // lookup needs an extra acquire of the load path, but it's cheap
+    // (peers.json is small + cached by the OS).
+    let prior_pin: Option<String> = PeerTable::load(&announcement.user)
+        .peers
+        .get(&announcement.machine)
+        .map(|p| p.pinned_fleet_pubkey.clone());
 
     // Lock-protected upsert. Capture a post-update snapshot so we can
     // call regenerate_recipients outside the lock without re-reading
     // the table — and only when upsert reported a real_change.
+    let incoming_fleet = announcement.fleet_pubkey.clone();
     let mut snapshot: Option<PeerTable> = None;
+    let mut tofu_rejected = false;
     if let Err(e) = PeerTable::modify(&announcement.user, |table| {
         let real_change = table.upsert(entry);
+        // Detect TOFU mismatch — `upsert` returns false on both
+        // legitimate heartbeats and TOFU rejections; disambiguate by
+        // checking whether the pin we observed pre-upsert disagrees
+        // with the incoming fleet_pubkey.
+        if let Some(pin) = &prior_pin {
+            if !pin.is_empty() && pin != &incoming_fleet {
+                tofu_rejected = true;
+            }
+        }
         if real_change {
             snapshot = Some(table.clone());
         }
         real_change
     }) {
         warn!(error = %e, user = %announcement.user, "cryptsync: peer table save failed");
+    }
+    if tofu_rejected {
+        // Drop the announce — peer is announcing a fleet pubkey
+        // different from the one we pinned on first sighting. Either
+        // a same-LAN spoof, or a legitimate self-fleet rotation that
+        // requires admin intervention (clear with
+        // `vigo swarm cryptsync forget <host>` then let TOFU re-pin).
+        warn!(
+            user = %announcement.user,
+            host = %announcement.machine,
+            pinned = %prior_pin.as_deref().unwrap_or(""),
+            announced = %incoming_fleet,
+            "cryptsync: TOFU rejected announce — fleet pubkey changed for known host. \
+             Clear with `vigo swarm cryptsync forget <host>` if this is a legitimate rotation."
+        );
+        return;
     }
 
     if let Some(table) = snapshot {

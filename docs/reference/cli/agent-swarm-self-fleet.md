@@ -83,6 +83,8 @@ Run `vigo swarm self-fleet unlock` (no sudo) to activate the session on this env
 [desktop] $ vigo swarm self-fleet unlock
 self-fleet passphrase: ****
 ✓ Unlocked. Self-fleet session helper running until logout, lock, or 60 min idle.
+
+tip: encrypted P2P sync is available — run `vigo swarm cryptsync fleet init` to enable it on this envoy.
 ```
 
 **Manual scp fallback (air-gapped envoy):**
@@ -94,6 +96,8 @@ self-fleet passphrase: ****
 self-fleet passphrase: ****
 ✓ Unlocked. Self-fleet session helper running until logout, lock, or 60 min idle.
 ```
+
+The cryptsync tip is suppressed once `~/.cryptsync/identity.age` exists — once enabled, the helper just prints the unlock confirmation. Both `unlock` and `join` print the tip when cryptsync is missing, surfacing the option without auto-prompting (cryptsync needs its own passphrase ceremony — per-envoy or fleet-shared, the operator's choice — that the unlock flow can't sensibly drive).
 
 ## File layout
 

@@ -155,6 +155,21 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
         "✓ Unlocked. Self-fleet session helper running until logout, lock, or {} min idle.",
         DEFAULT_IDLE_MINUTES
     );
+
+    // ADR-016: nudge users toward enabling cryptsync once self-fleet
+    // is unlocked. Discoverability only — we don't auto-prompt for a
+    // cryptsync passphrase here because the design question of
+    // per-envoy vs fleet-passphrase wrapping is unresolved (the ADR
+    // leaves both options open as a CLI flag at init time).
+    let cs_dot = home.join(".cryptsync");
+    let cs_identity = cs_dot.join("identity.age");
+    if !cs_identity.exists() {
+        println!();
+        println!(
+            "tip: encrypted P2P sync is available — run `vigo swarm cryptsync fleet init` \
+             to enable it on this envoy."
+        );
+    }
     Ok(())
 }
 
@@ -303,6 +318,19 @@ fn cmd_join(args: &[String]) -> Result<()> {
     println!(
         "Run `vigo swarm self-fleet unlock` (no sudo) to activate the session on this envoy."
     );
+
+    // ADR-016: hint the user toward enabling cryptsync on this envoy
+    // once their fleet identity is in place. Mirrors the unlock-time
+    // tip; same discoverability-only posture (no auto-prompt for a
+    // cryptsync passphrase).
+    let cs_identity = home.join(".cryptsync").join("identity.age");
+    if !cs_identity.exists() {
+        println!();
+        println!(
+            "tip: encrypted P2P sync is available — after `unlock`, run \
+             `vigo swarm cryptsync fleet init` to enable it on this envoy."
+        );
+    }
     Ok(())
 }
 

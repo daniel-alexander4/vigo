@@ -64,6 +64,17 @@ pub struct PeerEntry {
     /// is fleet-aware while age keys stay per-envoy.
     #[serde(default)]
     pub fleet_pubkey: String,
+    /// Trust-on-first-use pinned fleet pubkey (ADR-016 follow-up).
+    /// Set on first sighting from `fleet_pubkey`; subsequent
+    /// announces under a different fleet_pubkey are rejected at
+    /// upsert time. Empty when the peer was first seen running
+    /// standalone — once a fleet pubkey is pinned, we never let the
+    /// peer "revert" without an admin clearing the entry. Mirrors
+    /// `gitmirror::peer_pubkey_cache`'s TOFU shape, embedded
+    /// per-peer here because cryptsync's PeerTable is already
+    /// per-user and that's the right scope for cryptsync TOFU.
+    #[serde(default)]
+    pub pinned_fleet_pubkey: String,
 }
 
 /// Per-user peer table. Persisted at
@@ -160,23 +171,61 @@ impl PeerTable {
     /// (new peer, pubkey rotation, or last_seen advanced meaningfully)
     /// — the caller can skip `save()` + `regenerate_recipients()` when
     /// the update is a plain heartbeat.
-    pub fn upsert(&mut self, entry: PeerEntry) -> bool {
+    ///
+    /// ADR-016 follow-up: rejects announcements whose `fleet_pubkey`
+    /// disagrees with the previously-pinned value for the same
+    /// hostname. Returns `false` (no mutation) and the receive-side
+    /// caller logs the rejection. Operator recovery is to clear the
+    /// peer entry — `vigo swarm cryptsync forget <host>` does the
+    /// trick. First sighting under a non-empty fleet_pubkey pins it
+    /// to `pinned_fleet_pubkey` for future TOFU checks.
+    pub fn upsert(&mut self, mut entry: PeerEntry) -> bool {
         match self.peers.get(&entry.hostname) {
             Some(existing) => {
+                // TOFU check — once we've pinned a non-empty fleet
+                // pubkey, the peer must keep announcing the same one.
+                // An empty incoming under a non-empty pin is rejected
+                // (peer "reverted to standalone" looks identical on
+                // the wire to a same-LAN spoofer, so be strict).
+                if !existing.pinned_fleet_pubkey.is_empty()
+                    && existing.pinned_fleet_pubkey != entry.fleet_pubkey
+                {
+                    // Mismatch — drop the announce. Receive-side
+                    // caller logs the warn message with full detail.
+                    return false;
+                }
                 if existing.pubkey != entry.pubkey || existing.sign_pubkey != entry.sign_pubkey {
-                    // Pubkey rotation (age or sign) — real change; future
-                    // work adds rotation validation. Accept silently.
+                    // Pubkey rotation (age or sign) — real change.
+                    // Carry the pin forward: it's already empty (and
+                    // entry.fleet_pubkey may legitimately set it for
+                    // the first time) or it's non-empty and matches
+                    // entry.fleet_pubkey (verified above).
+                    entry.pinned_fleet_pubkey = if entry.fleet_pubkey.is_empty() {
+                        existing.pinned_fleet_pubkey.clone()
+                    } else {
+                        entry.fleet_pubkey.clone()
+                    };
                     self.peers.insert(entry.hostname.clone(), entry);
                     true
                 } else if entry.last_seen > existing.last_seen {
                     // Heartbeat update — we want this persisted so
                     // stale-peer age-out works, but it's not a
                     // recipient-set change. Also refresh addr so the
-                    // pusher has current routing info.
+                    // pusher has current routing info. Preserve the
+                    // existing pin; refresh fleet_pubkey only if the
+                    // pin was already empty (legitimate first-set).
                     let mut updated = existing.clone();
                     updated.last_seen = entry.last_seen;
                     if entry.last_seen_addr.is_some() {
                         updated.last_seen_addr = entry.last_seen_addr;
+                    }
+                    if updated.pinned_fleet_pubkey.is_empty()
+                        && !entry.fleet_pubkey.is_empty()
+                    {
+                        // First-sighting fleet pubkey pin (peer just
+                        // adopted self-fleet between heartbeats).
+                        updated.fleet_pubkey = entry.fleet_pubkey;
+                        updated.pinned_fleet_pubkey = updated.fleet_pubkey.clone();
                     }
                     self.peers.insert(entry.hostname.clone(), updated);
                     false
@@ -185,6 +234,12 @@ impl PeerTable {
                 }
             }
             None => {
+                // First sighting of this hostname. TOFU-pin whatever
+                // fleet_pubkey the announce carried (empty stays
+                // empty — peer is running standalone).
+                if entry.pinned_fleet_pubkey.is_empty() {
+                    entry.pinned_fleet_pubkey = entry.fleet_pubkey.clone();
+                }
                 self.peers.insert(entry.hostname.clone(), entry);
                 true
             }
@@ -348,6 +403,7 @@ mod tests {
             last_seen: ts,
             last_seen_addr: None,
             fleet_pubkey: String::new(),
+            pinned_fleet_pubkey: String::new(),
         }
     }
 
@@ -359,6 +415,8 @@ mod tests {
             last_seen: ts,
             last_seen_addr: None,
             fleet_pubkey: fleet.to_string(),
+            // Pin starts empty — upsert pins on first sighting.
+            pinned_fleet_pubkey: String::new(),
         }
     }
 
@@ -388,6 +446,7 @@ mod tests {
             last_seen: 150,
             last_seen_addr: None,
             fleet_pubkey: String::new(),
+            pinned_fleet_pubkey: String::new(),
         };
         assert!(t.upsert(rotated));
     }
@@ -432,6 +491,7 @@ mod tests {
             last_seen: 100,
             last_seen_addr: None,
             fleet_pubkey: String::new(),
+            pinned_fleet_pubkey: String::new(),
         });
         t.upsert(PeerEntry {
             hostname: "a".into(),
@@ -440,6 +500,7 @@ mod tests {
             last_seen: 200,
             last_seen_addr: None,
             fleet_pubkey: String::new(),
+            pinned_fleet_pubkey: String::new(),
         });
         t.upsert(PeerEntry {
             hostname: "stale".into(),
@@ -448,6 +509,7 @@ mod tests {
             last_seen: 10,
             last_seen_addr: None,
             fleet_pubkey: String::new(),
+            pinned_fleet_pubkey: String::new(),
         });
         let keys = t.live_pubkeys(200);
         // "c" has last_seen=100; now-last_seen=100 > STALE_SECS=90 → stale.
@@ -589,5 +651,108 @@ mod tests {
         let keys = t.live_pubkeys_for_fleet(200, Some(fleet));
         assert_eq!(keys.len(), 1);
         assert!(keys[0].contains("member"));
+    }
+
+    // ---- ADR-016 follow-up: TOFU pinning ----
+
+    /// First-sighting fleet pubkey gets pinned for future enforcement.
+    #[test]
+    fn upsert_pins_fleet_pubkey_on_first_sighting() {
+        let mut t = PeerTable::empty("dan");
+        t.upsert(sample_peer_in_fleet("alpha", 100, "fleet-pk-1"));
+        let stored = t.peers.get("alpha").unwrap();
+        assert_eq!(stored.pinned_fleet_pubkey, "fleet-pk-1");
+    }
+
+    /// First sighting with empty fleet_pubkey leaves the pin empty —
+    /// the peer is running standalone and we don't want to pre-pin
+    /// anything. They can later announce a fleet pubkey and have it
+    /// TOFU-pinned at that point.
+    #[test]
+    fn upsert_first_sighting_standalone_keeps_pin_empty() {
+        let mut t = PeerTable::empty("dan");
+        t.upsert(sample_peer("alpha", 100));
+        let stored = t.peers.get("alpha").unwrap();
+        assert_eq!(stored.pinned_fleet_pubkey, "");
+    }
+
+    /// A peer that started standalone and later adopts self-fleet has
+    /// its pin set on the next non-stale heartbeat. Mirrors the
+    /// real-world flow: user runs `self-fleet init` after cryptsync
+    /// was already running.
+    #[test]
+    fn upsert_pins_when_peer_adopts_fleet_mid_session() {
+        let mut t = PeerTable::empty("dan");
+        t.upsert(sample_peer("alpha", 100));
+        // Same hostname/pubkey, later heartbeat, now carrying a
+        // fleet_pubkey for the first time.
+        let mut later = sample_peer_in_fleet("alpha", 150, "fleet-pk-X");
+        // Match existing pubkey/sign_pubkey so the rotation branch
+        // doesn't fire — this is a heartbeat-shaped update.
+        later.pubkey = t.peers.get("alpha").unwrap().pubkey.clone();
+        t.upsert(later);
+        let stored = t.peers.get("alpha").unwrap();
+        assert_eq!(stored.pinned_fleet_pubkey, "fleet-pk-X");
+        assert_eq!(stored.fleet_pubkey, "fleet-pk-X");
+    }
+
+    /// Once pinned, an announce under a different fleet_pubkey is
+    /// rejected — upsert returns false (no mutation), the existing
+    /// entry stays unchanged.
+    #[test]
+    fn upsert_rejects_mismatched_fleet_pubkey_after_pinning() {
+        let mut t = PeerTable::empty("dan");
+        t.upsert(sample_peer_in_fleet("alpha", 100, "fleet-pk-1"));
+        // Attacker (or rotated peer) announces a different fleet pubkey.
+        let spoofed = sample_peer_in_fleet("alpha", 200, "fleet-pk-2");
+        let changed = t.upsert(spoofed);
+        assert!(!changed, "upsert must reject TOFU mismatch");
+        let stored = t.peers.get("alpha").unwrap();
+        assert_eq!(stored.fleet_pubkey, "fleet-pk-1", "original fleet_pubkey unchanged");
+        assert_eq!(stored.pinned_fleet_pubkey, "fleet-pk-1", "pin stays pinned");
+        assert_eq!(stored.last_seen, 100, "last_seen must not advance on rejection");
+    }
+
+    /// A pinned peer announcing standalone (empty fleet_pubkey) is
+    /// rejected — same protection as a different-fleet announce. If
+    /// the operator legitimately wants to demote the peer to
+    /// standalone they must clear with `forget`.
+    #[test]
+    fn upsert_rejects_pinned_peer_reverting_to_standalone() {
+        let mut t = PeerTable::empty("dan");
+        t.upsert(sample_peer_in_fleet("alpha", 100, "fleet-pk-1"));
+        let reverted = sample_peer("alpha", 200); // empty fleet_pubkey
+        let changed = t.upsert(reverted);
+        assert!(!changed);
+        assert_eq!(t.peers.get("alpha").unwrap().pinned_fleet_pubkey, "fleet-pk-1");
+    }
+
+    /// Matching fleet pubkey on subsequent heartbeats is fine and
+    /// advances last_seen as usual.
+    #[test]
+    fn upsert_accepts_matching_fleet_pubkey_heartbeat() {
+        let mut t = PeerTable::empty("dan");
+        t.upsert(sample_peer_in_fleet("alpha", 100, "fleet-pk-1"));
+        let mut hb = sample_peer_in_fleet("alpha", 200, "fleet-pk-1");
+        hb.pubkey = t.peers.get("alpha").unwrap().pubkey.clone();
+        // Heartbeat returns false (not a recipient-set change) but
+        // last_seen advances and the pin stays put.
+        assert!(!t.upsert(hb));
+        assert_eq!(t.peers.get("alpha").unwrap().last_seen, 200);
+        assert_eq!(t.peers.get("alpha").unwrap().pinned_fleet_pubkey, "fleet-pk-1");
+    }
+
+    /// Operator recovery: clearing the peer with `forget` lets the
+    /// next announce TOFU-pin a fresh fleet_pubkey. Documented admin
+    /// flow when an envoy legitimately rotates self-fleet.
+    #[test]
+    fn upsert_after_forget_repins_with_new_fleet_pubkey() {
+        let mut t = PeerTable::empty("dan");
+        t.upsert(sample_peer_in_fleet("alpha", 100, "fleet-pk-1"));
+        assert!(t.forget("alpha"));
+        // Fresh announce after operator-cleared state — TOFU re-pins.
+        let changed = t.upsert(sample_peer_in_fleet("alpha", 200, "fleet-pk-2"));
+        assert!(changed);
+        assert_eq!(t.peers.get("alpha").unwrap().pinned_fleet_pubkey, "fleet-pk-2");
     }
 }
