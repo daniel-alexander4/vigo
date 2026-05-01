@@ -174,9 +174,9 @@ async fn run(
                 // a fresh leave lands on peers in the same cycle.
                 process_pending_leaves(&machine).await;
                 // Process any post-reenroll regen requests so a
-                // fresh `vigo swarm cryptsync enroll` picks up live peers
-                // within one tick instead of waiting for the next
-                // peer pubkey rotation.
+                // fresh `vigo swarm cryptsync {fleet init, standalone enroll}`
+                // picks up live peers within one tick instead of
+                // waiting for the next peer pubkey rotation.
                 process_pending_regens();
                 if let Err(e) = announce_all(&machine, &out_tx).await {
                     warn!(error = %e, "cryptsync: announce cycle error");
@@ -316,7 +316,7 @@ async fn process_one_leave(
 }
 
 /// Poll every enrolled user for a `~/.cryptsync/regen.pending` sentinel
-/// dropped by `vigo swarm cryptsync enroll` after a fresh enrollment. For each
+/// dropped by `vigo swarm cryptsync {fleet init, standalone enroll}` after a fresh enrollment. For each
 /// sentinel present: regenerate `recipients.txt` from the current
 /// daemon-side peer table (folding in every live peer the daemon
 /// already knows about) and remove the sentinel. Idempotent; if the
@@ -424,6 +424,11 @@ async fn announce_all(
             hex::encode(TombstoneTable::load(&user).digest());
         let leaves_digest =
             hex::encode(leaves::LeavesTable::load(&user).digest());
+        // ADR-016: include the user's self-fleet pubkey when present
+        // so peers can scope recipient resolution to the same fleet.
+        // Empty when self-fleet isn't initialized for this user (the
+        // standalone mode the legacy gossip pattern serves).
+        let fleet_pubkey = local_self_fleet_pubkey_hex(&home);
         let ann = Announcement {
             machine: machine.to_string(),
             user: user.clone(),
@@ -434,6 +439,7 @@ async fn announce_all(
             generation: 0,
             tombstones_digest,
             leaves_digest,
+            fleet_pubkey,
         };
         if let Err(e) = out_tx.send(ann).await {
             warn!(error = %e, user = %user, "cryptsync: announce channel send failed");
@@ -532,6 +538,11 @@ fn handle_incoming(inc: IncomingAnnouncement) {
         sign_pubkey: announcement.sign_pubkey.clone(),
         last_seen: announcement.emitted_at,
         last_seen_addr: Some(from.to_string()),
+        // ADR-016: capture the announcer's self-fleet pubkey so the
+        // recipient-resolution path can later filter by fleet match.
+        // Empty when the peer is running standalone or the announce
+        // predates the fleet-pubkey field.
+        fleet_pubkey: announcement.fleet_pubkey.clone(),
     };
 
     // Lock-protected upsert. Capture a post-update snapshot so we can
@@ -1291,6 +1302,26 @@ pub fn load_local_signing_key(user: &str) -> Result<ed25519_dalek::SigningKey> {
     Ok(ed25519_dalek::SigningKey::from_bytes(&arr))
 }
 
+/// Read the user's self-fleet pubkey from `~/.vigo-fleet/identity.pub`,
+/// stripped of the `ed25519:` prefix and lowercased. Returns an empty
+/// string when self-fleet is not initialized for this user (the
+/// "standalone" path of ADR-016) or when the file is unreadable.
+///
+/// Cheap (one filesystem read) and called every announce tick, so
+/// no caching — late `self-fleet init` flips the user into fleet
+/// mode within one tick without an agent restart.
+fn local_self_fleet_pubkey_hex(home: &Path) -> String {
+    match crate::swarm::self_fleet::local_fleet_pubkey(home) {
+        Ok(Some(text)) => text
+            .strip_prefix("ed25519:")
+            .map(|s| s.to_string())
+            .unwrap_or(text)
+            .trim()
+            .to_ascii_lowercase(),
+        _ => String::new(),
+    }
+}
+
 /// Read the local envoy's own pubkey — this is the first line in
 /// `recipients.txt` that was written by `init`/`enroll`. Using the
 /// recipients file instead of re-deriving from the wrapped identity
@@ -1321,9 +1352,19 @@ fn regenerate_recipients(user: &str, home: &Path, table: &PeerTable) -> Result<(
     let self_pubkey = load_local_pubkey(home)?;
     let leaves = leaves::LeavesTable::load(user);
     let now = now_secs();
+
+    // Recipients are per-envoy age pubkeys, not the fleet pubkey.
+    // ADR-016 keeps per-envoy keys deliberately: single-envoy
+    // compromise must not decrypt the whole fleet's corpus. The
+    // fleet pubkey only scopes which peers we accept as recipient
+    // candidates — each peer still contributes its own age x25519
+    // pubkey to the resulting recipients.txt.
+    let local_fleet = local_self_fleet_pubkey_hex(home);
+    let fleet_filter = if local_fleet.is_empty() { None } else { Some(local_fleet.as_str()) };
+
     let mut all: Vec<String> = Vec::new();
     all.push(self_pubkey);
-    for pk in table.live_pubkeys(now) {
+    for pk in table.live_pubkeys_for_fleet(now, fleet_filter) {
         if leaves.leave_time_for(&pk).is_some() {
             // Defense in depth: handle_incoming should already have
             // pre-emptively forgotten this peer, but skip here too in
@@ -1530,6 +1571,11 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
             hex::encode(TombstoneTable::load(&user).digest());
         let leaves_digest =
             hex::encode(leaves::LeavesTable::load(&user).digest());
+        // ADR-016: include the user's self-fleet pubkey when present
+        // so peers can scope recipient resolution to the same fleet.
+        // Empty when self-fleet isn't initialized for this user (the
+        // standalone mode the legacy gossip pattern serves).
+        let fleet_pubkey = local_self_fleet_pubkey_hex(&home);
         let ann = Announcement {
             machine: machine.to_string(),
             user: user.clone(),
@@ -1540,6 +1586,7 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
             generation: 0,
             tombstones_digest,
             leaves_digest,
+            fleet_pubkey,
         };
         let body = serde_json::to_vec(&ann).context("serializing announcement")?;
         for host in &cfg.cross_subnet_peers {

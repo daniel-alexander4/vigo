@@ -122,7 +122,7 @@ pub fn session_unlocked_path(home: &Path) -> PathBuf {
 
 /// Sentinel file that tells the daemon reactor to regenerate
 /// `recipients.txt` from the daemon-side `peers.json` immediately.
-/// Dropped by `vigo swarm cryptsync enroll` after seeding the user-side files
+/// Dropped by `vigo swarm cryptsync {fleet init, standalone enroll}` after seeding the user-side files
 /// — the daemon picks it up on the next reactor tick (≤30 s) and
 /// folds existing live peers into the freshly-seeded recipients.
 /// Without this, post-reenroll recipients.txt would stay at "self

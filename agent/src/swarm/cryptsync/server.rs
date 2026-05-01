@@ -220,7 +220,7 @@ pub async fn handle_push(
     };
     let content_dir = home.join("cryptsync");
     // Create the content dir if missing — pushing to a freshly-enrolled
-    // envoy may arrive before the user runs `vigo swarm cryptsync init/enroll`
+    // envoy may arrive before the user runs `vigo swarm cryptsync {fleet,standalone} init`
     // locally (rare race but valid; the envoy can't decrypt without the
     // identity but the ciphertext is still legal to store).
     if let Err(e) = fs::create_dir_all(&content_dir) {

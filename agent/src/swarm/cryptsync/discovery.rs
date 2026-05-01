@@ -222,6 +222,7 @@ mod tests {
             generation: 1,
             tombstones_digest: String::new(),
             leaves_digest: String::new(),
+            fleet_pubkey: String::new(),
         };
         let bytes = serialize(&ann).unwrap();
         let parsed = parse(&bytes).unwrap();

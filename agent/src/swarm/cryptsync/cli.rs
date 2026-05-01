@@ -9,8 +9,9 @@
 //! server or the agent daemon for Week 1 verbs.
 //!
 //! ```text
-//! vigo swarm cryptsync init                          # primary envoy, first time
-//! vigo swarm cryptsync enroll                        # per-envoy, one-time
+//! vigo swarm cryptsync fleet init                    # under self-fleet membership (ADR-016)
+//! vigo swarm cryptsync standalone init               # opt out of fleet mode (legacy gossip)
+//! vigo swarm cryptsync standalone enroll             # per-envoy, one-time
 //! vigo swarm cryptsync status                        # show local state
 //! vigo swarm cryptsync unlock                        # (week 3) hold key in session helper
 //! vigo swarm cryptsync lock                          # (week 3) scrub held key
@@ -45,8 +46,16 @@ pub fn run(args: Vec<String>) -> Result<()> {
             print_usage();
             Ok(())
         }
-        "init" => cmd_init(&args[1..]),
-        "enroll" => cmd_enroll(&args[1..]),
+        // Mode-specific lifecycle subtrees (ADR-016). `fleet *` is the
+        // path of least resistance once self-fleet is set up;
+        // `standalone *` is the explicit opt-out for users who don't
+        // want fleet membership wiring.
+        "fleet" => dispatch_fleet(&args[1..]),
+        "standalone" => dispatch_standalone(&args[1..]),
+        // Mode-agnostic verbs — these don't care which mode is active.
+        // Recipient resolution, session helper, encryption, decryption,
+        // and lifecycle ops all read whatever local state exists and
+        // do the right thing regardless of how it got there.
         "status" => cmd_status(&args[1..]),
         "unlock" => cmd_unlock(&args[1..]),
         "lock" => cmd_lock(&args[1..]),
@@ -71,6 +80,77 @@ pub fn run(args: Vec<String>) -> Result<()> {
     }
 }
 
+fn dispatch_fleet(args: &[String]) -> Result<()> {
+    let sub = args.first().map(String::as_str).unwrap_or("");
+    match sub {
+        "" | "help" | "--help" | "-h" => {
+            print_fleet_usage();
+            Ok(())
+        }
+        "init" => cmd_fleet_init(&args[1..]),
+        other => bail!(
+            "unknown `vigo swarm cryptsync fleet` subcommand: {}\n\
+             run `vigo swarm cryptsync fleet --help` for usage",
+            other
+        ),
+    }
+}
+
+fn dispatch_standalone(args: &[String]) -> Result<()> {
+    let sub = args.first().map(String::as_str).unwrap_or("");
+    match sub {
+        "" | "help" | "--help" | "-h" => {
+            print_standalone_usage();
+            Ok(())
+        }
+        "init" => cmd_standalone_init(&args[1..]),
+        "enroll" => cmd_standalone_enroll(&args[1..]),
+        other => bail!(
+            "unknown `vigo swarm cryptsync standalone` subcommand: {}\n\
+             run `vigo swarm cryptsync standalone --help` for usage",
+            other
+        ),
+    }
+}
+
+fn print_fleet_usage() {
+    eprintln!(
+        "vigo swarm cryptsync fleet — fleet-mode lifecycle (ADR-016)
+
+USAGE:
+    vigo swarm cryptsync fleet <SUBCOMMAND>
+
+SUBCOMMANDS:
+    init    First-time setup of this user's per-envoy age key under fleet membership.
+            Auto-run by `vigo swarm self-fleet unlock` / `self-fleet join`; the
+            manual form exists for repair after a partial bootstrap. Requires
+            self-fleet to be initialized for this user (run `vigo swarm self-fleet init`
+            first if it isn't).
+
+Daily verbs (unlock / encrypt / decrypt / status / leave / …) live at the top
+level — they don't care which mode is active. See `vigo swarm cryptsync --help`."
+    );
+}
+
+fn print_standalone_usage() {
+    eprintln!(
+        "vigo swarm cryptsync standalone — standalone-mode lifecycle (ADR-016)
+
+USAGE:
+    vigo swarm cryptsync standalone <SUBCOMMAND>
+
+SUBCOMMANDS:
+    init     First-time setup of this user's per-envoy age key without registering
+             with a self-fleet. Recipients are discovered via pairwise gossip; this
+             is the legacy path that pre-dates self-fleet.
+    enroll   Per-envoy bootstrap when joining an existing standalone mesh (typically
+             triggered by an `enroll.pending` sentinel left by the user executor).
+
+Daily verbs (unlock / encrypt / decrypt / status / leave / …) live at the top
+level — they don't care which mode is active. See `vigo swarm cryptsync --help`."
+    );
+}
+
 fn print_usage() {
     eprintln!(
         "vigo swarm cryptsync — per-user encrypted P2P directory
@@ -78,9 +158,7 @@ fn print_usage() {
 USAGE:
     vigo swarm cryptsync <SUBCOMMAND>
 
-SUBCOMMANDS:
-    init                           Primary envoy setup (first time for this user)
-    enroll                         Per-envoy setup (normally triggered by enroll.pending)
+DAILY (mode-agnostic):
     unlock                         Prompt password, start session helper
     lock                           Scrub held key and stop session helper
     encrypt <file> [--as <name>]   Encrypt a plaintext file into ~/cryptsync/
@@ -92,6 +170,13 @@ SUBCOMMANDS:
     reencrypt                      Force re-encrypt of ~/cryptsync/ to current recipients
     status                         Show local cryptsync state
 
+LIFECYCLE (mode-specific subtrees, ADR-016):
+    fleet init                     Set up per-envoy age key under self-fleet membership
+                                   (usually auto-run by `self-fleet unlock` / `join`)
+    standalone init                Set up per-envoy age key without fleet membership
+                                   (legacy pairwise-gossip path)
+    standalone enroll              Per-envoy bootstrap into an existing standalone mesh
+
 All subcommands operate on the invoking user's home:
     ~/.cryptsync/    wrapped identity, salt, recipients, config
     ~/cryptsync/     ciphertext-at-rest content directory
@@ -100,17 +185,44 @@ No root required. Does not contact the Vigo server."
     );
 }
 
-// ---------- init ----------
+// ---------- fleet init ----------
+//
+// Generates a per-envoy age identity wrapped under the cryptsync
+// password and seeds recipients.txt. Functionally identical to
+// `standalone init`; the difference is operator intent (and the
+// help text). Once self-fleet is initialized for this user, the
+// announce loop automatically scopes recipient resolution to the
+// fleet — no flag is needed at this command level.
+//
+// Refuses if self-fleet has not been initialized for this user.
+// Pointing the user at `vigo swarm self-fleet init` first is the
+// correct path: cryptsync fleet mode is meaningless without a fleet
+// identity to scope membership to.
+fn cmd_fleet_init(_args: &[String]) -> Result<()> {
+    let home = user_home_for_invocation()?;
+    let username = user_for_invocation()?;
+    if !crate::swarm::self_fleet::is_initialized(&home) {
+        bail!(
+            "self-fleet is not initialized for this user; fleet-mode cryptsync requires \
+             a fleet identity to scope recipient resolution.\n\
+             Run `vigo swarm self-fleet init` first, then re-run this command. \
+             (Or use `vigo swarm cryptsync standalone init` to opt out of fleet mode.)"
+        );
+    }
+    bootstrap_identity(&home, &username, /* is_init */ true)
+}
 
-fn cmd_init(_args: &[String]) -> Result<()> {
+// ---------- standalone init ----------
+
+fn cmd_standalone_init(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     let username = user_for_invocation()?;
     bootstrap_identity(&home, &username, /* is_init */ true)
 }
 
-// ---------- enroll ----------
+// ---------- standalone enroll ----------
 
-fn cmd_enroll(_args: &[String]) -> Result<()> {
+fn cmd_standalone_enroll(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     let username = user_for_invocation()?;
     bootstrap_identity(&home, &username, /* is_init */ false)
@@ -229,7 +341,7 @@ fn bootstrap_identity(home: &Path, username: &str, is_init: bool) -> Result<()> 
     println!("public key: {}", public);
     println!();
     if is_init {
-        println!("This envoy is now the primary. Add more envoys with `vigo swarm cryptsync enroll`");
+        println!("This envoy is now the primary. Add more envoys with `vigo swarm cryptsync standalone enroll` (or `fleet init` on each envoy if you use self-fleet)");
         println!("after provisioning them via the user's usercrate with `cryptsync: true`.");
     } else {
         println!("This envoy is now enrolled. The primary envoy's reactor will pick up");
@@ -324,8 +436,9 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo swarm cryptsync init` (primary) or \
-             `vigo swarm cryptsync enroll` (secondary) first"
+            "not enrolled on this envoy — run `vigo swarm cryptsync fleet init` if you \
+             use self-fleet, or `vigo swarm cryptsync standalone init` to opt out of \
+             fleet mode (run `vigo swarm cryptsync --help` for the full setup tree)"
         );
     }
     let id_path = config::identity_path(&home);
@@ -411,8 +524,9 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo swarm cryptsync init` (primary) or \
-             `vigo swarm cryptsync enroll` (secondary) first"
+            "not enrolled on this envoy — run `vigo swarm cryptsync fleet init` if you \
+             use self-fleet, or `vigo swarm cryptsync standalone init` to opt out of \
+             fleet mode (run `vigo swarm cryptsync --help` for the full setup tree)"
         );
     }
     let recipients = config::load_recipients(&home)?;
@@ -433,7 +547,7 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
     let content_dir = config::content_dir(&home);
     if !content_dir.is_dir() {
         bail!(
-            "{} does not exist — run `vigo swarm cryptsync enroll` first",
+            "{} does not exist — run `vigo swarm cryptsync standalone enroll` (or `fleet init` if you use self-fleet) first",
             content_dir.display()
         );
     }
@@ -490,8 +604,9 @@ fn cmd_decrypt(args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo swarm cryptsync init` (primary) or \
-             `vigo swarm cryptsync enroll` (secondary) first"
+            "not enrolled on this envoy — run `vigo swarm cryptsync fleet init` if you \
+             use self-fleet, or `vigo swarm cryptsync standalone init` to opt out of \
+             fleet mode (run `vigo swarm cryptsync --help` for the full setup tree)"
         );
     }
     let content_dir = config::content_dir(&home);
@@ -540,8 +655,9 @@ fn cmd_delete(args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo swarm cryptsync init` (primary) or \
-             `vigo swarm cryptsync enroll` (secondary) first"
+            "not enrolled on this envoy — run `vigo swarm cryptsync fleet init` if you \
+             use self-fleet, or `vigo swarm cryptsync standalone init` to opt out of \
+             fleet mode (run `vigo swarm cryptsync --help` for the full setup tree)"
         );
     }
     let content_dir = config::content_dir(&home);
@@ -584,8 +700,9 @@ fn cmd_list(args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo swarm cryptsync init` (primary) or \
-             `vigo swarm cryptsync enroll` (secondary) first"
+            "not enrolled on this envoy — run `vigo swarm cryptsync fleet init` if you \
+             use self-fleet, or `vigo swarm cryptsync standalone init` to opt out of \
+             fleet mode (run `vigo swarm cryptsync --help` for the full setup tree)"
         );
     }
     let content_dir = config::content_dir(&home);
@@ -1072,7 +1189,7 @@ fn cmd_apply_evict(args: &[String]) -> Result<()> {
         }
         println!(
             "\u{2713} self-evict on {}: scrubbed cryptsync identity for user {}; \
-             re-enroll with `vigo swarm cryptsync enroll` to rejoin",
+             re-enroll with `vigo swarm cryptsync standalone enroll` (or `fleet init` if you use self-fleet) to rejoin",
             hostname, user
         );
         return Ok(());
@@ -1206,7 +1323,7 @@ fn cmd_apply_blacklist(args: &[String]) -> Result<()> {
         println!(
             "\u{2713} self-evict on {}: scrubbed cryptsync identity for {} user(s); \
              re-enroll with `vigocli swarm cryptsync enroll-fleet --user <u>` or \
-             `vigo swarm cryptsync enroll` to rejoin",
+             `vigo swarm cryptsync standalone enroll` (or `fleet init` if you use self-fleet) to rejoin",
             hostname, acted
         );
     } else {

@@ -23,10 +23,12 @@ Every verb runs under the invoking user's uid. No root. The agent daemon does no
 
 ## Commands
 
+The verb tree splits into **mode-agnostic** verbs (the daily ones — they don't care which mode is active) and **mode-specific lifecycle** verbs under `fleet *` and `standalone *` subtrees per ADR-016.
+
+### Mode-agnostic (top-level)
+
 | Verb | Purpose |
 |---|---|
-| `init` | First-time setup on the primary envoy. Prompts for password (with confirm), generates wrapped identity, creates `~/cryptsync/`. |
-| `enroll` | Per-envoy setup. Normally triggered by the `enroll.pending` sentinel on first `vigo swarm cryptsync *` invocation; can be run manually for recovery. Idempotent. |
 | `unlock` | Prompt password, spawn session helper that holds the unwrapped identity. After the helper is up, walks `~/cryptsync/` and encrypts any plaintext that landed while locked (the **unlock sweep**, ADR-012). |
 | `lock` | Scrub the held key. Auto-fires on logout and idle timeout. |
 | `encrypt <file> [--as <name>]` | Encrypt a plaintext file into `~/cryptsync/` to every current recipient. (Equivalent to dropping the file directly into `~/cryptsync/` while unlocked — the watcher auto-encrypts new plaintext per ADR-012.) |
@@ -35,6 +37,16 @@ Every verb runs under the invoking user's uid. No root. The agent daemon does no
 | `leave [--purge] [--keep-identity] [--yes]` | Unenroll this user's cryptsync on this envoy. Drops a `~/.cryptsync/leave.pending` sentinel that the daemon picks up, signs + fans out to live peers, then scrubs local state per the flags. |
 | `reencrypt` | Force re-encrypt of every file in `~/cryptsync/` to the current recipient set. Requires `unlock`. |
 | `status` | Show local state: enrolled, recipient count, file-count breakdown (ciphertext / plaintext / failed), session helper status. |
+
+### Lifecycle (mode-specific subtrees)
+
+| Verb | Purpose |
+|---|---|
+| `fleet init` | First-time setup of this user's per-envoy age key under self-fleet membership (ADR-016). Refuses if `vigo swarm self-fleet init` hasn't been run for this user. Usually auto-run by `self-fleet unlock` / `self-fleet join`; the manual form exists for repair after a partial bootstrap. |
+| `standalone init` | First-time setup of this user's per-envoy age key without registering with a self-fleet. Recipients are discovered via pairwise gossip (the legacy path that pre-dates self-fleet). |
+| `standalone enroll` | Per-envoy setup when joining an existing standalone mesh. Normally triggered by the `enroll.pending` sentinel on first `vigo swarm cryptsync *` invocation; can be run manually for recovery. Idempotent. |
+
+Mode is determined automatically at runtime: when self-fleet is initialized for the user, the announce loop scopes recipient resolution to fleet members; without it, the legacy gossip-only path stays in effect. The `fleet init` and `standalone init` verbs produce the same on-disk wrapped age identity — the difference is intent (and the help text). Per-envoy age keys are deliberately preserved across both modes — see ADR-016 for the rationale.
 
 ### `vigo swarm cryptsync leave`
 

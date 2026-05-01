@@ -56,6 +56,14 @@ pub struct PeerEntry {
     /// through recipients.txt (e.g. pre-populated manually).
     #[serde(default)]
     pub last_seen_addr: Option<String>,
+    /// Hex-encoded self-fleet pubkey the peer announced (ADR-016).
+    /// Empty when the peer is running standalone (self-fleet not
+    /// initialized) or the announcement predates 0.35.x. Recipient
+    /// resolution under fleet mode filters peers whose `fleet_pubkey`
+    /// doesn't match the local user's self-fleet — the gossip layer
+    /// is fleet-aware while age keys stay per-envoy.
+    #[serde(default)]
+    pub fleet_pubkey: String,
 }
 
 /// Per-user peer table. Persisted at
@@ -241,6 +249,38 @@ impl PeerTable {
         keys.dedup();
         keys
     }
+
+    /// Fleet-aware variant of [`live_pubkeys`] (ADR-016). When
+    /// `local_fleet_pubkey` is `Some`, only peers whose announce
+    /// carried a matching `fleet_pubkey` are returned — the gossip
+    /// layer becomes fleet-scoped. When `None`, behavior is identical
+    /// to [`live_pubkeys`] (standalone mode / pre-self-fleet path).
+    ///
+    /// Per-envoy age keys stay deliberately preserved: even when
+    /// filtering by fleet membership, the per-peer pubkeys this
+    /// returns are each peer's individual age x25519 pubkey, not a
+    /// shared fleet decryption key. ADR-016 calls this out as
+    /// load-bearing — see `mod.rs::regenerate_recipients` for the
+    /// invariant comment.
+    pub fn live_pubkeys_for_fleet(
+        &self,
+        now: i64,
+        local_fleet_pubkey: Option<&str>,
+    ) -> Vec<String> {
+        let mut keys: Vec<String> = self
+            .peers
+            .values()
+            .filter(|p| now - p.last_seen <= STALE_SECS)
+            .filter(|p| match local_fleet_pubkey {
+                None => true,
+                Some(fp) => p.fleet_pubkey == fp,
+            })
+            .map(|p| p.pubkey.clone())
+            .collect();
+        keys.sort();
+        keys.dedup();
+        keys
+    }
 }
 
 /// UDP announcement payload. Line-delimited wire format:
@@ -287,6 +327,13 @@ pub struct Announcement {
     /// catch-up for this peer."
     #[serde(default)]
     pub leaves_digest: String,
+    /// Hex-encoded self-fleet Ed25519 pubkey for the announcing user
+    /// (ADR-016). Empty string when the user is running standalone
+    /// or the announce predates 0.35.x. Receivers under fleet mode
+    /// filter peers whose pubkey here doesn't match the local
+    /// user's self-fleet — see `state::PeerTable::live_pubkeys_for_fleet`.
+    #[serde(default)]
+    pub fleet_pubkey: String,
 }
 
 #[cfg(test)]
@@ -300,6 +347,18 @@ mod tests {
             sign_pubkey: String::new(),
             last_seen: ts,
             last_seen_addr: None,
+            fleet_pubkey: String::new(),
+        }
+    }
+
+    fn sample_peer_in_fleet(name: &str, ts: i64, fleet: &str) -> PeerEntry {
+        PeerEntry {
+            hostname: name.to_string(),
+            pubkey: format!("age1{:0>52}", name),
+            sign_pubkey: String::new(),
+            last_seen: ts,
+            last_seen_addr: None,
+            fleet_pubkey: fleet.to_string(),
         }
     }
 
@@ -328,6 +387,7 @@ mod tests {
             sign_pubkey: String::new(),
             last_seen: 150,
             last_seen_addr: None,
+            fleet_pubkey: String::new(),
         };
         assert!(t.upsert(rotated));
     }
@@ -371,6 +431,7 @@ mod tests {
             sign_pubkey: String::new(),
             last_seen: 100,
             last_seen_addr: None,
+            fleet_pubkey: String::new(),
         });
         t.upsert(PeerEntry {
             hostname: "a".into(),
@@ -378,6 +439,7 @@ mod tests {
             sign_pubkey: String::new(),
             last_seen: 200,
             last_seen_addr: None,
+            fleet_pubkey: String::new(),
         });
         t.upsert(PeerEntry {
             hostname: "stale".into(),
@@ -385,6 +447,7 @@ mod tests {
             sign_pubkey: String::new(),
             last_seen: 10,
             last_seen_addr: None,
+            fleet_pubkey: String::new(),
         });
         let keys = t.live_pubkeys(200);
         // "c" has last_seen=100; now-last_seen=100 > STALE_SECS=90 → stale.
@@ -412,9 +475,119 @@ mod tests {
             generation: 7,
             tombstones_digest: String::new(),
             leaves_digest: String::new(),
+            fleet_pubkey: String::new(),
         };
         let bytes = serde_json::to_vec(&a).unwrap();
         let parsed: Announcement = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(a, parsed);
+    }
+
+    /// Pre-0.35.x announcements arrive without `fleet_pubkey`. Receivers
+    /// must accept the JSON and treat the field as empty (standalone
+    /// peer). Regression guard against the serde-default tag drifting
+    /// out of sync with the wire schema.
+    #[test]
+    fn announcement_json_accepts_pre_fleet_payload() {
+        let json = br#"{
+            "machine": "old",
+            "user": "dan",
+            "pubkey": "age1abc",
+            "emitted_at": 1700000000,
+            "port": 1531
+        }"#;
+        let parsed: Announcement = serde_json::from_slice(json).unwrap();
+        assert_eq!(parsed.machine, "old");
+        assert_eq!(parsed.fleet_pubkey, "");
+    }
+
+    // ---- ADR-016 fleet-aware recipient resolution ----
+
+    /// Two envoys in the same fleet must each contribute a *distinct*
+    /// per-envoy age pubkey to the recipient set. ADR-016 deliberately
+    /// preserves per-envoy keys: anyone refactoring fleet resolution
+    /// to "use one fleet decryption key" hits this test failing with
+    /// a name that documents why.
+    #[test]
+    fn recipients_are_per_envoy_not_per_fleet() {
+        let fleet = "ed25519:8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8";
+        let mut t = PeerTable::empty("dan");
+        t.upsert(sample_peer_in_fleet("alpha", 200, fleet));
+        t.upsert(sample_peer_in_fleet("beta", 200, fleet));
+
+        let keys = t.live_pubkeys_for_fleet(200, Some(fleet));
+
+        // Two envoys → two distinct age pubkeys, NOT one fleet key.
+        assert_eq!(keys.len(), 2, "expected one age pubkey per envoy");
+        assert!(
+            keys.iter().all(|k| k.starts_with("age1")),
+            "every recipient must be a per-envoy age pubkey, not the fleet pubkey"
+        );
+        assert!(keys.iter().all(|k| !k.contains(fleet)),
+            "the fleet ed25519 pubkey must never appear as an age recipient");
+        assert_ne!(keys[0], keys[1], "the two envoys must contribute distinct keys");
+    }
+
+    /// Cross-fleet contamination: a peer announcing under a different
+    /// fleet pubkey is filtered out. Without this, every envoy on the
+    /// LAN would land in everyone else's recipients regardless of
+    /// trust scope.
+    #[test]
+    fn live_pubkeys_for_fleet_filters_other_fleets() {
+        let fleet_dan = "fleet-pk-dan";
+        let fleet_alice = "fleet-pk-alice";
+        let mut t = PeerTable::empty("multi");
+        t.upsert(sample_peer_in_fleet("dan-laptop", 200, fleet_dan));
+        t.upsert(sample_peer_in_fleet("dan-desktop", 200, fleet_dan));
+        t.upsert(sample_peer_in_fleet("alice-laptop", 200, fleet_alice));
+
+        let dan_recipients = t.live_pubkeys_for_fleet(200, Some(fleet_dan));
+        assert_eq!(dan_recipients.len(), 2);
+        assert!(dan_recipients.iter().any(|k| k.contains("dan-laptop")));
+        assert!(dan_recipients.iter().any(|k| k.contains("dan-desktop")));
+        assert!(
+            !dan_recipients.iter().any(|k| k.contains("alice")),
+            "alice's envoys must not be recipients of dan's content"
+        );
+    }
+
+    /// Standalone mode (None filter) returns every live peer regardless
+    /// of `fleet_pubkey` — preserves the legacy gossip-only behavior
+    /// for users who haven't opted into self-fleet.
+    #[test]
+    fn live_pubkeys_for_fleet_none_filter_returns_all() {
+        let mut t = PeerTable::empty("dan");
+        t.upsert(sample_peer_in_fleet("with-fleet", 200, "some-fleet"));
+        t.upsert(sample_peer("standalone", 200));
+
+        let keys = t.live_pubkeys_for_fleet(200, None);
+        assert_eq!(keys.len(), 2);
+    }
+
+    /// Fleet filter still respects staleness — an old peer in the
+    /// right fleet is still excluded.
+    #[test]
+    fn live_pubkeys_for_fleet_excludes_stale_match() {
+        let fleet = "f-pk";
+        let mut t = PeerTable::empty("dan");
+        t.upsert(sample_peer_in_fleet("fresh", 200, fleet));
+        t.upsert(sample_peer_in_fleet("stale", 10, fleet));
+
+        let keys = t.live_pubkeys_for_fleet(200, Some(fleet));
+        assert_eq!(keys.len(), 1);
+        assert!(keys[0].contains("fresh"));
+    }
+
+    /// A standalone peer (empty `fleet_pubkey`) is excluded under fleet
+    /// mode — they aren't a member of the local user's fleet.
+    #[test]
+    fn live_pubkeys_for_fleet_excludes_standalone_peer_under_fleet_filter() {
+        let fleet = "f-pk";
+        let mut t = PeerTable::empty("dan");
+        t.upsert(sample_peer_in_fleet("member", 200, fleet));
+        t.upsert(sample_peer("rogue-standalone", 200)); // empty fleet_pubkey
+
+        let keys = t.live_pubkeys_for_fleet(200, Some(fleet));
+        assert_eq!(keys.len(), 1);
+        assert!(keys[0].contains("member"));
     }
 }
