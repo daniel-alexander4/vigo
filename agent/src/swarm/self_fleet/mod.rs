@@ -41,6 +41,7 @@ pub mod cli;
 pub mod codes;
 pub mod config;
 pub mod pair;
+pub mod rekey;
 pub mod session;
 
 use std::path::Path;

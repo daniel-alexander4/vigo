@@ -262,6 +262,27 @@ impl PeerTable {
         self.peers.remove(hostname).is_some()
     }
 
+    /// Clear `pinned_fleet_pubkey` on every peer whose recorded
+    /// `fleet_pubkey` matches `retired`. Returns the number of
+    /// entries adjusted. Used by self-fleet rekey (ADR-018) so peers
+    /// announcing under the post-rotation fleet pubkey don't trip
+    /// the TOFU mismatch check at upsert time. The `fleet_pubkey`
+    /// field itself is left alone — `live_pubkeys_for_fleet` will
+    /// filter the entry out until the peer's next announce updates
+    /// it, which is the correct behavior during a rotation rollout.
+    pub fn clear_pins_for_fleet(&mut self, retired: &str) -> usize {
+        let mut adjusted = 0usize;
+        for entry in self.peers.values_mut() {
+            if entry.fleet_pubkey == retired
+                && !entry.pinned_fleet_pubkey.is_empty()
+            {
+                entry.pinned_fleet_pubkey.clear();
+                adjusted += 1;
+            }
+        }
+        adjusted
+    }
+
     /// Remove a peer by age pubkey. Used when applying a LEAVE envelope,
     /// where the authoritative key is the subject's age pubkey (a
     /// re-enrolled host under the same hostname has a different pubkey,
@@ -468,6 +489,40 @@ mod tests {
         // Older announcement — reordering on the wire; don't regress.
         assert!(!t.upsert(sample_peer("host-a", 100)));
         assert_eq!(t.peers.get("host-a").unwrap().last_seen, 200);
+    }
+
+    #[test]
+    fn clear_pins_for_fleet_only_touches_matching_peers() {
+        let mut t = PeerTable::empty("dan");
+        t.upsert(sample_peer_in_fleet("rotating", 100, "fleet-a"));
+        t.upsert(sample_peer_in_fleet("other", 100, "fleet-b"));
+        t.upsert(sample_peer("standalone", 100));
+        // Sanity: TOFU pinned each fleet peer on first sighting.
+        assert_eq!(
+            t.peers.get("rotating").unwrap().pinned_fleet_pubkey,
+            "fleet-a"
+        );
+        assert_eq!(t.peers.get("other").unwrap().pinned_fleet_pubkey, "fleet-b");
+        assert_eq!(t.peers.get("standalone").unwrap().pinned_fleet_pubkey, "");
+
+        let cleared = t.clear_pins_for_fleet("fleet-a");
+        assert_eq!(cleared, 1);
+        // Only "rotating" lost its pin; the others are untouched.
+        assert_eq!(t.peers.get("rotating").unwrap().pinned_fleet_pubkey, "");
+        assert_eq!(t.peers.get("other").unwrap().pinned_fleet_pubkey, "fleet-b");
+        assert_eq!(t.peers.get("standalone").unwrap().pinned_fleet_pubkey, "");
+        // The fleet_pubkey field itself is left alone — recipient
+        // resolution will re-pin via the next announce.
+        assert_eq!(t.peers.get("rotating").unwrap().fleet_pubkey, "fleet-a");
+    }
+
+    #[test]
+    fn clear_pins_for_fleet_returns_zero_when_no_match() {
+        let mut t = PeerTable::empty("dan");
+        t.upsert(sample_peer_in_fleet("a", 100, "fleet-a"));
+        let cleared = t.clear_pins_for_fleet("fleet-z");
+        assert_eq!(cleared, 0);
+        assert_eq!(t.peers.get("a").unwrap().pinned_fleet_pubkey, "fleet-a");
     }
 
     #[test]

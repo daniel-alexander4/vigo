@@ -47,6 +47,20 @@ pub fn pair_pending_path(home: &Path) -> PathBuf {
     dot_dir(home).join("pair.pending")
 }
 
+/// Single-use sentinel for the rekey claim code (ADR-018). Same shape
+/// as `pair.pending` but lives at a separate path so a rekey-in-progress
+/// session and an initial-pair session don't trample each other.
+pub fn rekey_pending_path(home: &Path) -> PathBuf {
+    dot_dir(home).join("rekey.pending")
+}
+
+/// Local log of fleet keypairs this envoy has retired, including the
+/// active rekey session's 24h graceful window (ADR-018). JSON list
+/// of `RetiredFleetEntry` records. 0600 user-owned.
+pub fn retired_fleets_path(home: &Path) -> PathBuf {
+    dot_dir(home).join("retired_fleets.json")
+}
+
 pub fn session_unlocked_path(home: &Path) -> PathBuf {
     dot_dir(home).join("session.unlocked")
 }

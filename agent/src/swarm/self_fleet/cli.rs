@@ -10,8 +10,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, bail, Context, Result};
 use ed25519_dalek::SigningKey;
 
+use super::codes;
 use super::config;
 use super::pair;
+use super::rekey;
 use super::session;
 use crate::swarm::cryptsync::crypt::{
     encode_sign_pubkey, generate_signing_keypair, unwrap_signing_key, wrap_signing_key,
@@ -33,6 +35,8 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "lock" => cmd_lock(&args[1..]),
         "pair" => cmd_pair(&args[1..]),
         "join" => cmd_join(&args[1..]),
+        "rekey-pair" => cmd_rekey_pair(&args[1..]),
+        "rekey" => cmd_rekey(&args[1..]),
         "members" => cmd_members(&args[1..]),
         "rotate-passphrase" => cmd_rotate_passphrase(&args[1..]),
         "status" => cmd_status(&args[1..]),
@@ -54,6 +58,11 @@ LIFECYCLE:
     init                       Generate a new fleet keypair on the founder envoy.
     pair                       Issue a 5-minute pairing code so a peer envoy can join.
     join --from <host>         Receive the wrapped key from <host> using the pairing code.
+
+REKEY (ADR-018, fleet keypair rotation):
+    rekey-pair                 Rotate the fleet keypair and issue a 5-minute claim code.
+    rekey-pair --close         Close the active 24h rekey window early.
+    rekey --from <host>        Migrate this envoy to the founder's new fleet keypair.
 
 DAILY:
     unlock                     Unwrap the key and start the session helper.
@@ -346,6 +355,449 @@ fn cmd_join(args: &[String]) -> Result<()> {
              (encrypted P2P sync), wrapped under your fleet identity — no extra passphrase."
         );
     }
+    Ok(())
+}
+
+// ---------- rekey-pair ----------
+
+/// Founder-side: rotate the fleet keypair and issue a 5-minute claim
+/// code. On the first call inside the 24h graceful window, generates
+/// a new keypair, atomic-swaps the local identity files, runs the
+/// cryptsync rewrap, and records the retirement entry. On subsequent
+/// calls inside the same window, only a fresh claim code is issued —
+/// the keypair and cryptsync state are not rotated again.
+///
+/// Flags:
+///   --close             Close the active rekey window immediately. No
+///                       new claim code is issued; existing rekey.pending
+///                       sentinel is cleared.
+///   --window-secs <N>   Override the default 24h graceful window.
+fn cmd_rekey_pair(args: &[String]) -> Result<()> {
+    let mut close = false;
+    let mut window_secs: i64 = rekey::REKEY_GRACEFUL_SECS;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--close" => close = true,
+            "--window-secs" => {
+                i += 1;
+                let val = args
+                    .get(i)
+                    .context("--window-secs requires an integer (seconds)")?;
+                window_secs = val
+                    .parse::<i64>()
+                    .with_context(|| format!("parsing --window-secs={}", val))?;
+                if window_secs < 60 {
+                    bail!("--window-secs must be at least 60");
+                }
+            }
+            s if s.starts_with("--") => bail!("unknown flag: {}", s),
+            s => bail!("unexpected positional argument: {}", s),
+        }
+        i += 1;
+    }
+
+    let home = user_home_for_invocation()?;
+    let username = user_for_invocation()?;
+    if !super::is_initialized(&home) {
+        bail!("self-fleet not initialized on this envoy — run `init` or `join` first");
+    }
+
+    if close {
+        let now = now_secs();
+        let adjusted = rekey::close_active_session(&home, &username, now)?;
+        rekey::clear_pending(&home);
+        if adjusted == 0 {
+            println!("No active rekey window — nothing to close.");
+        } else {
+            println!("✓ Rekey window closed. Surviving envoys can no longer claim under the");
+            println!(
+                "  retired fleet identity. Run `rekey-pair` again to start a new rotation."
+            );
+        }
+        return Ok(());
+    }
+
+    let entries = rekey::load_retired(&home)?;
+    let now = now_secs();
+    let active = rekey::active_session(&entries, now);
+
+    if let Some(active_entry) = active {
+        // In-flight rotation — reissue a fresh claim code without
+        // rotating the keypair again. Surviving envoys that haven't
+        // claimed yet need a new short-lived code.
+        let code = codes::generate_code();
+        rekey::write_pending(&home, &code, &username)?;
+        let remaining = (active_entry.expires_at - now).max(0);
+        let hours = remaining / 3600;
+        let mins = (remaining % 3600) / 60;
+        println!();
+        println!("Reissued rekey claim code (rotation already in progress)");
+        println!("  Claim code:      {}", code);
+        println!(
+            "  Code valid for:  5 minutes ({} seconds)",
+            codes::CLAIM_TTL_SECS
+        );
+        println!(
+            "  Window remaining: {}h {}m before founder closes the rekey session",
+            hours, mins
+        );
+        println!();
+        println!("On the surviving envoy, run:");
+        println!(
+            "    sudo vigo swarm self-fleet rekey --from {}",
+            local_hostname_or("<this-host>")
+        );
+        println!("then enter the claim code when prompted, then enter your fleet passphrase.");
+        return Ok(());
+    }
+
+    // Fresh rotation. Verify passphrase first by unwrapping the
+    // existing identity — fail loudly before any on-disk mutation.
+    println!(
+        "Rotating self-fleet keypair. The fleet passphrase is required to authorize this."
+    );
+    let passphrase = prompt_password(false)?;
+    if passphrase.is_empty() {
+        bail!("passphrase must not be empty");
+    }
+    let old_blob = fs::read(config::wrapped_path(&home))
+        .with_context(|| format!("reading {}", config::wrapped_path(&home).display()))?;
+    let old_salt = fs::read(config::salt_path(&home))
+        .with_context(|| format!("reading {}", config::salt_path(&home).display()))?;
+    let old_key = unwrap_signing_key(&old_blob, passphrase.as_bytes(), &old_salt)
+        .context("unwrap with provided passphrase — passphrase rejected")?;
+    let old_pubkey_text = encode_sign_pubkey(&old_key.verifying_key());
+
+    // Generate the new keypair + fresh salt; wrap under the same
+    // passphrase so surviving envoys keep the single-passphrase UX.
+    let new_key = generate_signing_keypair();
+    let new_pubkey_text = encode_sign_pubkey(&new_key.verifying_key());
+    let new_salt = crate::swarm::cryptsync::crypt::fresh_salt();
+    let new_blob = wrap_signing_key(&new_key, passphrase.as_bytes(), &new_salt)
+        .context("wrapping new fleet identity")?;
+
+    // Atomic swap: rename current files to `.pre-rekey-<ts>` backups,
+    // then write the new envelopes. If the writes fail we restore
+    // from backup so the user is never left without a working
+    // identity.wrapped/.salt/.pub trio.
+    let now = now_secs();
+    let backup = |p: &Path| -> PathBuf {
+        let stem = p.file_name().and_then(|s| s.to_str()).unwrap_or("file");
+        p.with_file_name(format!("{}.pre-rekey-{}", stem, now))
+    };
+    let wp = config::wrapped_path(&home);
+    let sp = config::salt_path(&home);
+    let pp = config::pubkey_path(&home);
+    let wp_bak = backup(&wp);
+    let sp_bak = backup(&sp);
+    let pp_bak = backup(&pp);
+    fs::rename(&wp, &wp_bak)
+        .with_context(|| format!("backup {} → {}", wp.display(), wp_bak.display()))?;
+    fs::rename(&sp, &sp_bak)
+        .with_context(|| format!("backup {} → {}", sp.display(), sp_bak.display()))?;
+    fs::rename(&pp, &pp_bak)
+        .with_context(|| format!("backup {} → {}", pp.display(), pp_bak.display()))?;
+    let restore = || {
+        let _ = fs::rename(&wp_bak, &wp);
+        let _ = fs::rename(&sp_bak, &sp);
+        let _ = fs::rename(&pp_bak, &pp);
+    };
+    if let Err(e) = write_private(&wp, &new_blob, &username)
+        .and_then(|()| write_private(&sp, &new_salt, &username))
+        .and_then(|()| write_pubkey(&pp, &new_pubkey_text, &username))
+    {
+        restore();
+        return Err(e.context("writing new fleet identity — restored from backup"));
+    }
+
+    // Persist retirement entry before the cryptsync sync. If the
+    // rewrap fails the founder still has a record of "we rotated to
+    // X at T" which the operator can reconcile manually.
+    rekey::record_retirement(
+        &home,
+        &username,
+        &old_pubkey_text,
+        &new_pubkey_text,
+        now,
+        window_secs,
+    )?;
+
+    // Cryptsync rewrap + TOFU pin clear + recipients regen. Logged
+    // outcome — not fatal for the rotation if the user has no
+    // cryptsync state.
+    let outcome = rekey::apply_post_rotation_cryptsync_sync(
+        &home,
+        &username,
+        &old_key,
+        &new_key,
+        &old_pubkey_text,
+    )
+    .context("cryptsync sync after rotation")?;
+
+    // Restart the session helper with the new key so sibling
+    // subsystems pick up the rotation immediately. Lock first
+    // (idempotent), then spawn a fresh helper — same shape `unlock`
+    // uses.
+    let _ = session::request_lock();
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    let parent_pid =
+        resolve_shell_pid().unwrap_or_else(|| unsafe { libc::getppid() } as u32);
+    if let Err(e) =
+        session::spawn_helper(&new_key, parent_pid, DEFAULT_IDLE_MINUTES, &home)
+    {
+        eprintln!("warning: failed to restart self-fleet session helper: {:#}", e);
+        eprintln!(
+            "         the rotation succeeded on disk; run `vigo swarm self-fleet unlock` manually."
+        );
+    }
+
+    // Issue the first claim code for surviving envoys.
+    let code = codes::generate_code();
+    rekey::write_pending(&home, &code, &username)?;
+
+    println!();
+    println!("✓ Fleet keypair rotated.");
+    println!("  Old fleet pubkey: {}", old_pubkey_text);
+    println!("  New fleet pubkey: {}", new_pubkey_text);
+    println!(
+        "  Backups (30d):    {}, {}, {}",
+        wp_bak.display(),
+        sp_bak.display(),
+        pp_bak.display()
+    );
+    print_rewrap_outcome(outcome);
+    println!();
+    println!(
+        "  Rekey window:     {}h ({}s) before founder closes the session",
+        window_secs / 3600,
+        window_secs
+    );
+    println!("  Claim code:       {}", code);
+    println!(
+        "  Code valid for:   5 minutes ({} seconds)",
+        codes::CLAIM_TTL_SECS
+    );
+    println!();
+    println!("On each surviving envoy, run:");
+    println!(
+        "    sudo vigo swarm self-fleet rekey --from {}",
+        local_hostname_or("<this-host>")
+    );
+    println!("then enter the claim code when prompted, then enter your fleet passphrase.");
+    println!();
+    println!(
+        "Re-run `rekey-pair` (no flags) inside the {}h window to issue another code without",
+        window_secs / 3600
+    );
+    println!("re-rotating the keypair. Run `rekey-pair --close` to close the window early.");
+    println!();
+    println!(
+        "Note: gitmirror projects you founded are anchored to the OLD fleet pubkey. They will"
+    );
+    println!("need re-invites to collaborators under the new identity (deferred — see ADR-018).");
+    Ok(())
+}
+
+fn print_rewrap_outcome(outcome: crate::swarm::cryptsync::identity_rewrap::RewrapOutcome) {
+    use crate::swarm::cryptsync::identity_rewrap::RewrapOutcome;
+    match outcome {
+        RewrapOutcome::NotEnrolled => {
+            println!("  Cryptsync rewrap: skipped (not enrolled on this envoy)");
+        }
+        RewrapOutcome::StandaloneSkipped => {
+            println!("  Cryptsync rewrap: skipped (standalone wrap-mode)");
+        }
+        RewrapOutcome::Rewrapped { backup_path } => {
+            println!(
+                "  Cryptsync rewrap: ok (backup at {})",
+                backup_path.display()
+            );
+        }
+    }
+}
+
+// ---------- rekey ----------
+
+/// Joiner-side: claim a new wrapped fleet blob from the founder and
+/// migrate this envoy onto it.
+///
+/// Flags:
+///   --from <host>       Hostname of the founder envoy that ran rekey-pair.
+fn cmd_rekey(args: &[String]) -> Result<()> {
+    let mut from: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--from" => {
+                i += 1;
+                from = Some(args.get(i).context("--from requires a hostname")?.clone());
+            }
+            s if s.starts_with("--") => bail!("unknown flag: {}", s),
+            s => bail!("unexpected positional argument: {}", s),
+        }
+        i += 1;
+    }
+    let from = from.context("--from <host> is required")?;
+    let home = user_home_for_invocation()?;
+    let username = user_for_invocation()?;
+
+    if !super::is_initialized(&home) {
+        bail!(
+            "self-fleet not initialized on this envoy — run `join --from <host>` first \
+             (rekey is for envoys already in the fleet)"
+        );
+    }
+
+    println!(
+        "Rekeying with {} for user {}.",
+        from, username
+    );
+    println!(
+        "This requires the OLD fleet passphrase to unwrap the current key, then the SAME"
+    );
+    println!("passphrase to unwrap the new key the founder issued.");
+
+    // Unwrap the OLD fleet key locally first — required input for
+    // the cryptsync rewrap. The founder uses the same passphrase
+    // (rekey-pair preserves it), so we ask once and use it twice.
+    let passphrase = prompt_password(false)?;
+    if passphrase.is_empty() {
+        bail!("passphrase must not be empty");
+    }
+    let old_blob = fs::read(config::wrapped_path(&home))
+        .with_context(|| format!("reading {}", config::wrapped_path(&home).display()))?;
+    let old_salt = fs::read(config::salt_path(&home))
+        .with_context(|| format!("reading {}", config::salt_path(&home).display()))?;
+    let old_key = unwrap_signing_key(&old_blob, passphrase.as_bytes(), &old_salt)
+        .context("unwrap of OLD identity with provided passphrase failed")?;
+    let old_pubkey_text = encode_sign_pubkey(&old_key.verifying_key());
+
+    let code = prompt_line("rekey claim code (NNNN-NNNN): ")?;
+    if code.trim().is_empty() {
+        bail!("claim code must not be empty");
+    }
+
+    let tls = load_envoy_tls().context(
+        "self-fleet rekey needs the agent's mTLS key (0600 root-owned). \
+         Run via sudo: `sudo vigo swarm self-fleet rekey --from <host>`",
+    )?;
+    let agent = build_mtls_agent(&tls)?;
+    let url = format!(
+        "https://{}:{}{}{}",
+        from,
+        crate::swarm::server::DEFAULT_PORT,
+        rekey::REKEY_CLAIM_PREFIX,
+        username
+    );
+    let body = serde_json::json!({ "code": code.trim() });
+    let body = serde_json::to_vec(&body).context("serializing claim body")?;
+
+    let resp = agent
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .send(body)
+        .with_context(|| format!("POST {}", url))?;
+    let status = resp.status();
+    if !status.is_success() {
+        let code = status.as_u16();
+        let mut resp = resp;
+        let msg = resp.body_mut().read_to_string().unwrap_or_default();
+        bail!("rekey-claim failed (HTTP {}): {}", code, msg.trim());
+    }
+    let mut resp = resp;
+    let bytes = resp.body_mut().read_to_vec().context("reading response body")?;
+    let (new_salt, new_blob) = codes::parse_response(&bytes)?;
+
+    let new_key = unwrap_signing_key(&new_blob, passphrase.as_bytes(), &new_salt).context(
+        "unwrap of NEW wrapped blob failed — the founder may have rekeyed with a different \
+         passphrase. Reissue rekey-pair on the founder using the OLD passphrase, or \
+         rotate-passphrase on the founder before retrying.",
+    )?;
+    let new_pubkey_text = encode_sign_pubkey(&new_key.verifying_key());
+
+    if new_pubkey_text == old_pubkey_text {
+        bail!(
+            "the founder's wrapped blob unwraps to the SAME fleet pubkey we already have — \
+             nothing to rotate. The founder hasn't run `rekey-pair` since last we rotated."
+        );
+    }
+
+    // Atomic swap of local files: backup OLD as `.pre-rekey-<ts>`,
+    // write new envelopes. Restore on failure.
+    let now = now_secs();
+    let backup = |p: &Path| -> PathBuf {
+        let stem = p.file_name().and_then(|s| s.to_str()).unwrap_or("file");
+        p.with_file_name(format!("{}.pre-rekey-{}", stem, now))
+    };
+    let wp = config::wrapped_path(&home);
+    let sp = config::salt_path(&home);
+    let pp = config::pubkey_path(&home);
+    let wp_bak = backup(&wp);
+    let sp_bak = backup(&sp);
+    let pp_bak = backup(&pp);
+    fs::rename(&wp, &wp_bak)
+        .with_context(|| format!("backup {} → {}", wp.display(), wp_bak.display()))?;
+    fs::rename(&sp, &sp_bak)
+        .with_context(|| format!("backup {} → {}", sp.display(), sp_bak.display()))?;
+    fs::rename(&pp, &pp_bak)
+        .with_context(|| format!("backup {} → {}", pp.display(), pp_bak.display()))?;
+    let restore = || {
+        let _ = fs::rename(&wp_bak, &wp);
+        let _ = fs::rename(&sp_bak, &sp);
+        let _ = fs::rename(&pp_bak, &pp);
+    };
+    if let Err(e) = write_private(&wp, &new_blob, &username)
+        .and_then(|()| write_private(&sp, &new_salt, &username))
+        .and_then(|()| write_pubkey(&pp, &new_pubkey_text, &username))
+    {
+        restore();
+        return Err(e.context("writing new fleet identity — restored from backup"));
+    }
+
+    // Local retirement log entry — useful for status output and
+    // historical audit. Use the same window as the founder so a
+    // future `rekey-pair --close` event on the founder doesn't make
+    // the joiner's view inconsistent. The joiner's local entry is
+    // primarily informational.
+    rekey::record_retirement(
+        &home,
+        &username,
+        &old_pubkey_text,
+        &new_pubkey_text,
+        now,
+        rekey::REKEY_GRACEFUL_SECS,
+    )?;
+
+    let outcome = rekey::apply_post_rotation_cryptsync_sync(
+        &home,
+        &username,
+        &old_key,
+        &new_key,
+        &old_pubkey_text,
+    )
+    .context("cryptsync sync after rotation")?;
+
+    // Lock any stale session helper; the user runs `unlock` in their
+    // own (non-sudo) shell to start the new helper.
+    let _ = session::request_lock();
+
+    println!();
+    println!("✓ Migrated to new fleet keypair.");
+    println!("  Old fleet pubkey: {}", old_pubkey_text);
+    println!("  New fleet pubkey: {}", new_pubkey_text);
+    println!(
+        "  Backups (30d):    {}, {}, {}",
+        wp_bak.display(),
+        sp_bak.display(),
+        pp_bak.display()
+    );
+    print_rewrap_outcome(outcome);
+    println!();
+    println!(
+        "Run `vigo swarm self-fleet unlock` (no sudo) to start the session helper under the"
+    );
+    println!("new fleet identity.");
     Ok(())
 }
 

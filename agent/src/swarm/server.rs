@@ -372,6 +372,19 @@ async fn handle_request(
             }
         }
 
+        // Self-fleet rekey-claim: surviving envoys POST a 5-min code
+        // here during the founder's 24h rekey window to receive the
+        // post-rotation wrapped fleet blob. ADR-018.
+        (&Method::POST, p) if p.starts_with(crate::swarm::self_fleet::rekey::REKEY_CLAIM_PREFIX) => {
+            match crate::swarm::self_fleet::rekey::handle_rekey_claim(p, req).await {
+                Ok(r) => r,
+                Err(e) => {
+                    tracing::warn!(error = %e, "self-fleet rekey-claim handler error");
+                    not_found()
+                }
+            }
+        }
+
         _ => not_found(),
     };
 
