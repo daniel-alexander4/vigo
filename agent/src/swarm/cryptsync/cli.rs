@@ -88,6 +88,7 @@ fn dispatch_fleet(args: &[String]) -> Result<()> {
             Ok(())
         }
         "init" => cmd_fleet_init(&args[1..]),
+        "renew-cert" => cmd_fleet_renew_cert(&args[1..]),
         other => bail!(
             "unknown `vigo swarm cryptsync fleet` subcommand: {}\n\
              run `vigo swarm cryptsync fleet --help` for usage",
@@ -121,11 +122,16 @@ USAGE:
     vigo swarm cryptsync fleet <SUBCOMMAND>
 
 SUBCOMMANDS:
-    init    First-time setup of this user's per-envoy age key under fleet membership.
-            Auto-run by `vigo swarm self-fleet unlock` / `self-fleet join`; the
-            manual form exists for repair after a partial bootstrap. Requires
-            self-fleet to be initialized for this user (run `vigo swarm self-fleet init`
-            first if it isn't).
+    init          First-time setup of this user's per-envoy age key under fleet
+                  membership. Issues a fleet-membership certificate (ADR-016 follow-up)
+                  and persists it at ~/.cryptsync/fleet_cert.json. Requires self-fleet
+                  to be initialized AND unlocked for this user (the cert is signed by
+                  the self-fleet session helper).
+    renew-cert    Re-issue the fleet-membership certificate. Default lifetime 30 days;
+                  certs expire and need renewal. Run from any envoy where self-fleet
+                  is unlocked — the renewed cert ships in the next announce tick. Use
+                  this after a self-fleet rotation, or when peers warn-log a cert
+                  expiry against this envoy.
 
 Daily verbs (unlock / encrypt / decrypt / status / leave / …) live at the top
 level — they don't care which mode is active. See `vigo swarm cryptsync --help`."
@@ -209,7 +215,120 @@ fn cmd_fleet_init(_args: &[String]) -> Result<()> {
              (Or use `vigo swarm cryptsync standalone init` to opt out of fleet mode.)"
         );
     }
-    bootstrap_identity(&home, &username, /* is_init */ true)
+    bootstrap_identity(&home, &username, /* is_init */ true)?;
+    // Auto-issue the fleet membership certificate so receivers can
+    // cryptographically verify our fleet claim from the very first
+    // announce. Fails noisily but doesn't undo the bootstrap — the
+    // user can re-run `cryptsync fleet renew-cert` separately.
+    if let Err(e) = issue_fleet_cert(&home, &username) {
+        eprintln!(
+            "warning: cryptsync fleet identity is set up but the fleet-membership cert \
+             could not be issued: {:#}\n\
+             Re-run `vigo swarm cryptsync fleet renew-cert` once self-fleet is unlocked.",
+            e
+        );
+    }
+    Ok(())
+}
+
+fn cmd_fleet_renew_cert(_args: &[String]) -> Result<()> {
+    let home = user_home_for_invocation()?;
+    let username = user_for_invocation()?;
+    if !crate::swarm::self_fleet::is_initialized(&home) {
+        bail!(
+            "self-fleet is not initialized for this user; cannot issue fleet cert.\n\
+             Run `vigo swarm self-fleet init` first."
+        );
+    }
+    let cs_identity = crate::swarm::cryptsync::config::identity_path(&home);
+    if !cs_identity.exists() {
+        bail!(
+            "cryptsync identity is missing at {} — run `vigo swarm cryptsync fleet init` first.",
+            cs_identity.display()
+        );
+    }
+    issue_fleet_cert(&home, &username)
+}
+
+/// Build, sign, and persist a fresh fleet-membership cert.
+/// Reads:
+///   * the local age pubkey from `~/.cryptsync/recipients.txt` (first line)
+///   * the local self-fleet pubkey from `~/.vigo-fleet/identity.pub`
+/// Signs via the self-fleet session helper (so the user's session
+/// must be unlocked when this runs). On success, writes the cert
+/// to `~/.cryptsync/fleet_cert.json` and chowns it to the user.
+fn issue_fleet_cert(home: &Path, username: &str) -> Result<()> {
+    use crate::swarm::cryptsync::fleet_cert::{FleetCert, DEFAULT_LIFETIME_SECS, SIG_LEN};
+
+    let age_pubkey = read_local_age_pubkey(home)?;
+    let fleet_pubkey = match crate::swarm::self_fleet::local_fleet_pubkey(home)? {
+        Some(s) => s
+            .strip_prefix("ed25519:")
+            .map(|s| s.to_ascii_lowercase())
+            .unwrap_or_else(|| s.to_ascii_lowercase()),
+        None => bail!("self-fleet pubkey not readable; run `self-fleet init` first"),
+    };
+    let issued_at = now_secs();
+    let cert = FleetCert::issue(
+        &age_pubkey,
+        &fleet_pubkey,
+        issued_at,
+        DEFAULT_LIFETIME_SECS,
+        |bytes| {
+            let sig = crate::swarm::self_fleet::session::request_sign(bytes).map_err(|e| {
+                anyhow!(
+                    "self-fleet session helper unavailable: {}\n\
+                     run `vigo swarm self-fleet unlock` first",
+                    e
+                )
+            })?;
+            if sig.len() != SIG_LEN {
+                bail!(
+                    "session helper returned a {}-byte signature, expected {}",
+                    sig.len(),
+                    SIG_LEN
+                );
+            }
+            let mut out = [0u8; SIG_LEN];
+            out.copy_from_slice(&sig);
+            Ok(out)
+        },
+    )?;
+    cert.save(home)?;
+    // chown the cert file to the user — bootstrap_identity uses
+    // create_user_dir with the same posture; mirror it here.
+    #[cfg(unix)]
+    {
+        let path = crate::swarm::cryptsync::fleet_cert::cert_path(home);
+        let _ = crate::swarm::cryptsync::chown_to_user_pub(&path, username);
+    }
+    let _ = username; // keep parameter live on non-unix platforms
+    println!(
+        "✓ Issued fleet-membership cert (expires in {} days)",
+        cert.days_until_expiry(issued_at)
+    );
+    println!(
+        "  wrote {}",
+        crate::swarm::cryptsync::fleet_cert::cert_path(home).display()
+    );
+    Ok(())
+}
+
+/// Pull the first non-comment line out of recipients.txt — that's
+/// always this envoy's own age pubkey because `bootstrap_identity`
+/// seeds it as the first entry.
+fn read_local_age_pubkey(home: &Path) -> Result<String> {
+    let path = crate::swarm::cryptsync::config::recipients_path(home);
+    let body = std::fs::read_to_string(&path)
+        .with_context(|| format!("read {}", path.display()))?;
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        return Ok(trimmed.to_string());
+    }
+    bail!("no age pubkey found in {}", path.display())
 }
 
 // ---------- standalone init ----------
@@ -421,6 +540,34 @@ fn cmd_status(_args: &[String]) -> Result<()> {
     let cfg = config::load_config(&home);
     println!("  cross_subnet_peers:      {}", cfg.cross_subnet_peers.len());
     println!("  idle_timeout:     {} min", cfg.idle_timeout_minutes);
+
+    // ADR-016 follow-up: fleet membership cert state. Surface this
+    // when self-fleet is initialized for the user (otherwise it's
+    // not relevant — they're running standalone).
+    if crate::swarm::self_fleet::is_initialized(&home) {
+        match crate::swarm::cryptsync::fleet_cert::FleetCert::load(&home) {
+            None => println!(
+                "  fleet cert:       (not issued — run `vigo swarm cryptsync fleet renew-cert`)"
+            ),
+            Some(cert) => {
+                let now = now_secs();
+                let days = cert.days_until_expiry(now);
+                if days < 0 {
+                    println!(
+                        "  fleet cert:       EXPIRED {} day(s) ago — run `vigo swarm cryptsync fleet renew-cert`",
+                        -days
+                    );
+                } else if days < 7 {
+                    println!(
+                        "  fleet cert:       expires in {} day(s) — consider running `vigo swarm cryptsync fleet renew-cert`",
+                        days
+                    );
+                } else {
+                    println!("  fleet cert:       valid (expires in {} day(s))", days);
+                }
+            }
+        }
+    }
 
     // Session helper state.
     match session::request_status() {

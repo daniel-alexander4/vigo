@@ -389,6 +389,16 @@ pub struct Announcement {
     /// user's self-fleet — see `state::PeerTable::live_pubkeys_for_fleet`.
     #[serde(default)]
     pub fleet_pubkey: String,
+    /// Optional fleet certificate (ADR-016 follow-up). Closes the
+    /// same-LAN first-contact race that TOFU pinning has on its own:
+    /// receivers verify the cert's signature against `fleet_pubkey`
+    /// before accepting the fleet claim. `None` when the announcer
+    /// hasn't issued a cert yet (slice 1 / slice 2 peers, or
+    /// `cryptsync fleet renew-cert` not run); the announce still
+    /// passes through to receivers under TOFU rules but receivers
+    /// will warn-log the absence so operators can tell.
+    #[serde(default)]
+    pub fleet_cert: Option<super::fleet_cert::FleetCert>,
 }
 
 #[cfg(test)]
@@ -538,6 +548,7 @@ mod tests {
             tombstones_digest: String::new(),
             leaves_digest: String::new(),
             fleet_pubkey: String::new(),
+            fleet_cert: None,
         };
         let bytes = serde_json::to_vec(&a).unwrap();
         let parsed: Announcement = serde_json::from_slice(&bytes).unwrap();

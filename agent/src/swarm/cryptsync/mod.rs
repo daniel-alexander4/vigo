@@ -30,6 +30,7 @@ pub mod cli;
 pub mod config;
 pub mod crypt;
 pub mod discovery;
+pub mod fleet_cert;
 pub mod gate;
 pub mod leaves;
 pub mod locks;
@@ -429,6 +430,13 @@ async fn announce_all(
         // Empty when self-fleet isn't initialized for this user (the
         // standalone mode the legacy gossip pattern serves).
         let fleet_pubkey = local_self_fleet_pubkey_hex(&home);
+        // ADR-016 follow-up: embed the fleet membership certificate
+        // when one's on disk and matches our age + fleet pubkeys.
+        // Receivers verify the signature, closing the same-LAN
+        // first-contact race that TOFU has on its own. None when the
+        // user hasn't run `cryptsync fleet renew-cert` (or when the
+        // on-disk cert is stale and they need to renew).
+        let fleet_cert = load_announce_fleet_cert(&home, &pubkey, &fleet_pubkey);
         let ann = Announcement {
             machine: machine.to_string(),
             user: user.clone(),
@@ -440,6 +448,7 @@ async fn announce_all(
             tombstones_digest,
             leaves_digest,
             fleet_pubkey,
+            fleet_cert,
         };
         if let Err(e) = out_tx.send(ann).await {
             warn!(error = %e, user = %user, "cryptsync: announce channel send failed");
@@ -532,6 +541,46 @@ fn handle_incoming(inc: IncomingAnnouncement) {
         return;
     }
 
+    // ADR-016 follow-up: cryptographic fleet-cert check. When the
+    // announce claims a fleet_pubkey AND carries a cert, verify it
+    // against the claim before we let the fleet_pubkey reach the
+    // peer table. On verification failure, drop the fleet claim
+    // entirely (treat as if the announce had empty fleet_pubkey) —
+    // the peer is still reachable for standalone purposes, but our
+    // recipient resolution won't include them in the fleet's set.
+    let mut effective_fleet_pubkey = announcement.fleet_pubkey.clone();
+    if !announcement.fleet_pubkey.is_empty() {
+        match announcement.fleet_cert.as_ref() {
+            Some(cert) => {
+                let now = now_secs();
+                if let Err(reason) = cert.verify_for_announce(
+                    &announcement.pubkey,
+                    &announcement.fleet_pubkey,
+                    now,
+                ) {
+                    warn!(
+                        user = %announcement.user,
+                        host = %announcement.machine,
+                        fleet_pubkey = %announcement.fleet_pubkey,
+                        reason = %reason,
+                        "cryptsync: fleet cert rejected — dropping fleet claim from announce"
+                    );
+                    effective_fleet_pubkey = String::new();
+                }
+            }
+            None => {
+                // No cert present. Slice 1/slice 2 peers are valid
+                // here — accept under TOFU rules but log at debug so
+                // operators can spot the upgrade gap during rollout.
+                tracing::debug!(
+                    user = %announcement.user,
+                    host = %announcement.machine,
+                    "cryptsync: announce carries fleet_pubkey but no cert — falling back to TOFU"
+                );
+            }
+        }
+    }
+
     let entry = PeerEntry {
         hostname: announcement.machine.clone(),
         pubkey: announcement.pubkey.clone(),
@@ -540,9 +589,10 @@ fn handle_incoming(inc: IncomingAnnouncement) {
         last_seen_addr: Some(from.to_string()),
         // ADR-016: capture the announcer's self-fleet pubkey so the
         // recipient-resolution path can later filter by fleet match.
-        // Empty when the peer is running standalone or the announce
-        // predates the fleet-pubkey field.
-        fleet_pubkey: announcement.fleet_pubkey.clone(),
+        // Empty when the peer is running standalone, the announce
+        // predates the fleet-pubkey field, OR the cert verification
+        // above stripped it because the cert didn't validate.
+        fleet_pubkey: effective_fleet_pubkey.clone(),
         // ADR-016 follow-up: TOFU pinning. Left empty here; upsert()
         // pins on first sighting and enforces match on subsequent
         // announces — see PeerTable::upsert and the rejection log
@@ -563,7 +613,11 @@ fn handle_incoming(inc: IncomingAnnouncement) {
     // Lock-protected upsert. Capture a post-update snapshot so we can
     // call regenerate_recipients outside the lock without re-reading
     // the table — and only when upsert reported a real_change.
-    let incoming_fleet = announcement.fleet_pubkey.clone();
+    // The TOFU comparison uses `effective_fleet_pubkey` (post-cert
+    // verification), not `announcement.fleet_pubkey` — a peer whose
+    // cert just lapsed becomes "standalone" from our perspective,
+    // and we don't want to TOFU-reject them when their cert returns.
+    let incoming_fleet = effective_fleet_pubkey.clone();
     let mut snapshot: Option<PeerTable> = None;
     let mut tofu_rejected = false;
     if let Err(e) = PeerTable::modify(&announcement.user, |table| {
@@ -1344,6 +1398,49 @@ pub fn load_local_signing_key(user: &str) -> Result<ed25519_dalek::SigningKey> {
     Ok(ed25519_dalek::SigningKey::from_bytes(&arr))
 }
 
+/// Load the fleet membership cert for an outgoing announce. Returns
+/// `None` when the cert is missing on disk, doesn't match the
+/// announcer's age + fleet pubkeys (stale after a rotation), or has
+/// already expired — receivers would reject any of those, so it's
+/// cheaper to omit than to ship and let them warn-log. The user's
+/// recovery is to run `vigo swarm cryptsync fleet renew-cert`.
+fn load_announce_fleet_cert(
+    home: &Path,
+    age_pubkey: &str,
+    fleet_pubkey: &str,
+) -> Option<fleet_cert::FleetCert> {
+    if fleet_pubkey.is_empty() {
+        return None;
+    }
+    let cert = fleet_cert::FleetCert::load(home)?;
+    let now = now_secs();
+    if cert.envoy_age_pubkey != age_pubkey {
+        tracing::debug!(
+            age_in_cert = %cert.envoy_age_pubkey,
+            announce_age = %age_pubkey,
+            "cryptsync: fleet_cert.json doesn't match local age pubkey; not embedding"
+        );
+        return None;
+    }
+    if cert.fleet_pubkey != fleet_pubkey {
+        tracing::debug!(
+            fleet_in_cert = %cert.fleet_pubkey,
+            announce_fleet = %fleet_pubkey,
+            "cryptsync: fleet_cert.json doesn't match local fleet pubkey; not embedding"
+        );
+        return None;
+    }
+    if now > cert.expires_at {
+        tracing::debug!(
+            expires_at = cert.expires_at,
+            now,
+            "cryptsync: fleet_cert.json expired; run `cryptsync fleet renew-cert`"
+        );
+        return None;
+    }
+    Some(cert)
+}
+
 /// Read the user's self-fleet pubkey from `~/.vigo-fleet/identity.pub`,
 /// stripped of the `ed25519:` prefix and lowercased. Returns an empty
 /// string when self-fleet is not initialized for this user (the
@@ -1618,6 +1715,13 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
         // Empty when self-fleet isn't initialized for this user (the
         // standalone mode the legacy gossip pattern serves).
         let fleet_pubkey = local_self_fleet_pubkey_hex(&home);
+        // ADR-016 follow-up: embed the fleet membership certificate
+        // when one's on disk and matches our age + fleet pubkeys.
+        // Receivers verify the signature, closing the same-LAN
+        // first-contact race that TOFU has on its own. None when the
+        // user hasn't run `cryptsync fleet renew-cert` (or when the
+        // on-disk cert is stale and they need to renew).
+        let fleet_cert = load_announce_fleet_cert(&home, &pubkey, &fleet_pubkey);
         let ann = Announcement {
             machine: machine.to_string(),
             user: user.clone(),
@@ -1629,6 +1733,7 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
             tombstones_digest,
             leaves_digest,
             fleet_pubkey,
+            fleet_cert,
         };
         let body = serde_json::to_vec(&ann).context("serializing announcement")?;
         for host in &cfg.cross_subnet_peers {

@@ -223,6 +223,7 @@ mod tests {
             tombstones_digest: String::new(),
             leaves_digest: String::new(),
             fleet_pubkey: String::new(),
+            fleet_cert: None,
         };
         let bytes = serialize(&ann).unwrap();
         let parsed = parse(&bytes).unwrap();

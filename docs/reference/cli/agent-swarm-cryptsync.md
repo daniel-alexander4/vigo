@@ -42,7 +42,8 @@ The verb tree splits into **mode-agnostic** verbs (the daily ones — they don't
 
 | Verb | Purpose |
 |---|---|
-| `fleet init` | First-time setup of this user's per-envoy age key under self-fleet membership (ADR-016). Refuses if `vigo swarm self-fleet init` hasn't been run for this user. Usually auto-run by `self-fleet unlock` / `self-fleet join`; the manual form exists for repair after a partial bootstrap. |
+| `fleet init` | First-time setup of this user's per-envoy age key under self-fleet membership (ADR-016). Refuses if `vigo swarm self-fleet init` hasn't been run for this user. Auto-issues a fleet-membership certificate (see below) so the very first announce carries cryptographic proof of fleet membership. |
+| `fleet renew-cert` | Re-issue the fleet-membership certificate. Default lifetime 30 days; certs expire and need renewal. Run from any envoy where self-fleet is unlocked — the renewed cert ships in the next announce tick. |
 | `standalone init` | First-time setup of this user's per-envoy age key without registering with a self-fleet. Recipients are discovered via pairwise gossip (the legacy path that pre-dates self-fleet). |
 | `standalone enroll` | Per-envoy setup when joining an existing standalone mesh. Normally triggered by the `enroll.pending` sentinel on first `vigo swarm cryptsync *` invocation; can be run manually for recovery. Idempotent. |
 
@@ -59,6 +60,29 @@ $ vigo swarm cryptsync forget <hostname>
 ```
 
 clears the pinned entry. The next announce from that hostname re-pins under the new fleet pubkey.
+
+### Fleet membership certificate
+
+Each fleet-mode envoy holds a fleet-membership certificate at `~/.cryptsync/fleet_cert.json`. The cert binds the envoy's age pubkey to the user's self-fleet pubkey via an Ed25519 signature; receivers verify the signature against the announce's claimed `fleet_pubkey` before accepting the fleet claim. This closes the same-LAN first-contact race that TOFU pinning has on its own — only the holder of the fleet's private key can mint a verifiable claim.
+
+Cert shape:
+
+```json
+{
+  "version":           1,
+  "envoy_age_pubkey":  "age1...",
+  "fleet_pubkey":      "<64-hex>",
+  "issued_at":         <unix-seconds>,
+  "expires_at":        <unix-seconds>,
+  "signature":         "<128-hex>"
+}
+```
+
+**Lifetime.** 30 days by default. The cert is auto-issued by `cryptsync fleet init`; renew with `cryptsync fleet renew-cert` whenever self-fleet is unlocked. `cryptsync status` prints "expires in N days" / "EXPIRED N days ago" so a renewal coming up is visible.
+
+**Verification on the receive side.** Every cert claim is checked against the announce: `envoy_age_pubkey` must match `Announcement.pubkey`, `fleet_pubkey` must match `Announcement.fleet_pubkey`, the signature must verify against `fleet_pubkey`, and `expires_at` must be in the future. Any failure → the daemon warn-logs and drops the fleet claim entirely (peer slots into standalone filtering — still reachable, just not in the fleet's recipient set).
+
+**Operator triage.** When peers warn-log a cert expiry against this envoy: run `cryptsync fleet renew-cert` (requires `self-fleet unlock` first). When peers warn-log a cert mismatch (rare): the user rotated self-fleet on this envoy — clear the pin on each peer with `vigo swarm cryptsync forget <hostname>`, run `cryptsync fleet renew-cert`, and let TOFU re-pin under the new fleet pubkey.
 
 ### `vigo swarm cryptsync leave`
 
