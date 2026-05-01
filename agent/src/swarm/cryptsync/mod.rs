@@ -32,6 +32,7 @@ pub mod crypt;
 pub mod discovery;
 pub mod fleet_cert;
 pub mod gate;
+pub mod identity_rewrap;
 pub mod leaves;
 pub mod locks;
 pub mod pusher;
