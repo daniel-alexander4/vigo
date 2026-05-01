@@ -291,10 +291,20 @@ pub fn ingest_bundle(
     result
 }
 
-/// Fan out a bundle to every cross-subnet member listed in the
-/// project's local `project.json`. Returns counts of `(attempted,
-/// succeeded)`. Errors talking to a single peer don't abort the sweep
-/// — fan-out is best-effort, gossip / catch-up will reconcile.
+/// Fan out a bundle to every peer that has advertised holding this
+/// project. Targets come from two sources, deduplicated:
+///
+/// 1. **LAN auto-discovery** — peers that emitted
+///    `GITMIRRORPROJECT:<host>:<pid_hex>` lines on the swarm
+///    multicast within the [`super::project_peers::STALE_SECS`]
+///    window, indexed by [`super::project_peers::ProjectPeers`].
+/// 2. **`cross_subnet_members:`** — explicit hostnames listed in the
+///    user's local `project.json`. Useful for peers that aren't on
+///    the same LAN as the originator (no multicast reachability).
+///
+/// Returns `(attempted, succeeded)`. Errors talking to a single peer
+/// don't abort the sweep — fan-out is best-effort, gossip / catch-up
+/// will reconcile.
 pub fn fan_out_bundle(
     home: &Path,
     project_id: &[u8; ID_LEN],
@@ -321,10 +331,51 @@ pub fn fan_out_bundle(
             return (0, 0);
         }
     };
-    if cfg.cross_subnet_members.is_empty() {
+
+    let pid_hex = hex_id(project_id);
+    let local_hostname = local_hostname();
+
+    // Build the deduplicated target list. LAN-auto-discovered hosts
+    // are addressed by IP (we have the source addr from the announce
+    // datagram); cross_subnet_members are addressed by hostname (DNS
+    // resolves at connect time). De-dupe by string identity of the
+    // URL hostpart so the same host listed in both buckets only
+    // receives one push.
+    use std::collections::BTreeMap;
+    let mut targets: BTreeMap<String, String> = BTreeMap::new(); // url-host → display-host
+    if let Some(g) = super::project_peers::global() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        for entry in g.peers_for(&pid_hex, now) {
+            // Don't push to ourselves.
+            if let Some(my) = local_hostname.as_deref() {
+                if entry.host.eq_ignore_ascii_case(my) {
+                    continue;
+                }
+            }
+            let url_host = match entry.addr {
+                Some(std::net::IpAddr::V4(v4)) => v4.to_string(),
+                Some(std::net::IpAddr::V6(v6)) => format!("[{}]", v6),
+                None => entry.host.clone(),
+            };
+            targets.insert(url_host, entry.host);
+        }
+    }
+    for hostname in &cfg.cross_subnet_members {
+        if let Some(my) = local_hostname.as_deref() {
+            if hostname.eq_ignore_ascii_case(my) {
+                continue;
+            }
+        }
+        targets.entry(hostname.clone()).or_insert_with(|| hostname.clone());
+    }
+
+    if targets.is_empty() {
         tracing::debug!(
-            project_id = %hex_id(project_id),
-            "fan-out: no cross_subnet_members; nothing to push to (LAN auto-discovery is a follow-up slice)"
+            project_id = %pid_hex,
+            "fan-out: no peers known (no LAN announces seen, no cross_subnet_members configured)"
         );
         return (0, 0);
     }
@@ -345,7 +396,6 @@ pub fn fan_out_bundle(
         }
     };
 
-    let pid_hex = hex_id(project_id);
     let mut attempted = 0;
     let mut succeeded = 0;
     let bundle_bytes = match std::fs::read(bundle_path) {
@@ -360,11 +410,11 @@ pub fn fan_out_bundle(
         }
     };
 
-    for hostname in &cfg.cross_subnet_members {
+    for (url_host, display_host) in &targets {
         attempted += 1;
         let url = format!(
             "https://{}:{}/swarm/gitmirror/push/{}",
-            hostname,
+            url_host,
             crate::swarm::server::DEFAULT_PORT,
             pid_hex
         );
@@ -372,7 +422,8 @@ pub fn fan_out_bundle(
             Ok(refs_changed) => {
                 tracing::info!(
                     project_id = %pid_hex,
-                    peer = %hostname,
+                    peer = %display_host,
+                    via = %url_host,
                     refs_changed,
                     "fan-out: peer accepted bundle"
                 );
@@ -381,7 +432,8 @@ pub fn fan_out_bundle(
             Err(e) => {
                 tracing::warn!(
                     project_id = %pid_hex,
-                    peer = %hostname,
+                    peer = %display_host,
+                    via = %url_host,
                     error = %e,
                     "fan-out: peer push failed"
                 );
@@ -389,6 +441,13 @@ pub fn fan_out_bundle(
         }
     }
     (attempted, succeeded)
+}
+
+fn local_hostname() -> Option<String> {
+    std::fs::read_to_string("/etc/hostname")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 fn push_to_peer(

@@ -55,6 +55,7 @@ pub mod helper;
 pub mod peer_pubkey_cache;
 pub mod peer_table;
 pub mod pending_claims;
+pub mod project_peers;
 pub mod project_state;
 pub mod receiver;
 pub mod remote_helper;
@@ -137,6 +138,11 @@ pub fn spawn(
         tls_available = tls.is_some(),
         "gitmirror: spawning helper daemon + sentinel reactor (ADR-015 step 4)"
     );
+
+    // Initialize the process-wide ProjectPeers index. Discovery's
+    // listener populates it from GITMIRRORPROJECT lines; the helper
+    // daemon fan-out hook consults it for LAN auto-discovered targets.
+    let _ = project_peers::init_global();
 
     // Helper daemon — runs forever until cancellation. TLS certs are
     // threaded through so the post-receive fan-out hook can build an

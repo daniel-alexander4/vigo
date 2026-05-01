@@ -252,6 +252,7 @@ async fn listen_loop(
                                 if !verify_gitmirror_authenticity(msg, &result, cache) {
                                     result.gitmirror_peer = None;
                                     result.gitmirror_claims.clear();
+                                    result.gitmirror_projects.clear();
                                 }
                             }
                             // Ingest any gitmirror peer info into the
@@ -285,6 +286,22 @@ async fn listen_loop(
                                         let in_list = hosts.iter().any(|h| h == my_host);
                                         ch.ingest_lan_claim(label, sender, in_list, now);
                                     }
+                                }
+                            }
+                            // Ingest any GITMIRRORPROJECT entries —
+                            // record (host, pid_hex, src_addr, now)
+                            // into the global ProjectPeers index for
+                            // the helper-daemon fan-out hook.
+                            if gate_on && !result.gitmirror_projects.is_empty() {
+                                let now = now_unix_seconds();
+                                let src_ip = src.ip();
+                                for (host, pid_hex) in &result.gitmirror_projects {
+                                    crate::swarm::gitmirror::project_peers::record_global(
+                                        pid_hex,
+                                        host,
+                                        Some(src_ip),
+                                        now,
+                                    );
                                 }
                             }
                             // Trigger manifest sync if a version mismatch was detected.
@@ -461,6 +478,16 @@ async fn announce_loop(
         } else {
             None
         };
+        // Enumerate locally-held projects under every user's
+        // ~/.vigo-gitmirror/. Cheap (filesystem stat per user); read
+        // once per announce tick. Empty when the gate is off so a
+        // dormant gitmirror subsystem advertises no projects.
+        let project_snapshot: Vec<String> = if gate_on {
+            crate::swarm::gitmirror::project_peers::enumerate_local_projects()
+        } else {
+            Vec::new()
+        };
+
         let packets = build_announcement(
             &complete,
             &partials,
@@ -470,6 +497,7 @@ async fn announce_loop(
             swarm_port,
             announce_local_info,
             &claim_snapshot,
+            &project_snapshot,
             sign_for_this_tick,
             now_unix_seconds(),
         );
@@ -629,6 +657,7 @@ fn now_unix_seconds() -> i64 {
 /// push GITMIRROR+GITMIRRORCLAIM past MTU on its own. Split into a second
 /// packet in that case — receivers tolerate either packet shape
 /// (every section is optional past HEADER+MANIFEST+ADDR).
+#[allow(clippy::too_many_arguments)]
 fn build_announcement(
     complete: &[String],
     partials: &[String],
@@ -638,6 +667,11 @@ fn build_announcement(
     port: u16,
     gitmirror_local_info: Option<&GitmirrorLocalInfo>,
     gitmirror_claims: &[(String, Vec<String>)],
+    // Project ids this envoy currently holds local state for. One
+    // GITMIRRORPROJECT:<host>:<pid_hex> line emitted per id; receivers
+    // populate ProjectPeers from these. Empty slice in test fixtures
+    // + envoys with the gate off.
+    gitmirror_projects: &[String],
     signing_key: Option<&ed25519_dalek::SigningKey>,
     timestamp_secs: i64,
 ) -> Vec<String> {
@@ -669,6 +703,26 @@ fn build_announcement(
             continue;
         }
         msg.push_str(&line);
+    }
+
+    // GITMIRRORPROJECT lines (ADR-015 step 4 LAN auto-discovery).
+    // One line per locally-held project. Same overflow pattern as
+    // GITMIRRORCLAIM — anything that doesn't fit gets bumped into a
+    // spillover packet so a many-project envoy still announces every
+    // project within the same 30 s tick.
+    let mut overflow_projects: Vec<String> = Vec::new();
+    if let Some(li) = gitmirror_local_info {
+        for pid_hex in gitmirror_projects {
+            let line = format!(
+                "{}\n",
+                crate::swarm::gitmirror::project_peers::format_project_line(&li.hostname, pid_hex)
+            );
+            if msg.len() + line.len() > gitmirror_budget_limit {
+                overflow_projects.push(pid_hex.clone());
+                continue;
+            }
+            msg.push_str(&line);
+        }
     }
 
     // Swarm blob lines, appended after gitmirror. Same overflow break pattern
@@ -732,38 +786,63 @@ fn build_announcement(
     }
     let mut packets = vec![msg];
 
-    // Spillover packet for the rare case where GITMIRROR+GITMIRRORCLAIM alone
-    // exceed the gitmirror budget. Carries only the lines that didn't fit,
-    // plus the minimum envelope (HEADER + MANIFEST + GITMIRROR + ADDR) so
-    // the receiver can identify the sender and ingest claims.
-    if !overflow_claims.is_empty() {
+    // Spillover packet for the rare case where GITMIRROR+GITMIRRORCLAIM
+    // / GITMIRRORPROJECT alone exceed the gitmirror budget. Carries
+    // only the lines that didn't fit, plus the minimum envelope
+    // (HEADER + MANIFEST + GITMIRROR + ADDR) so the receiver can
+    // identify the sender and ingest claims/projects.
+    if !overflow_claims.is_empty() || !overflow_projects.is_empty() {
         let mut spill = String::from(HEADER);
         spill.push('\n');
         spill.push_str(&manifest_line);
         if let Some(li) = gitmirror_local_info {
             spill.push_str(&format!("{}\n", li.format_announce_line()));
         }
-        let mut hard_overflow = 0usize;
+        let mut hard_overflow_claims = 0usize;
         for (label, hosts) in &overflow_claims {
             let line = format!("{}\n", format_claim_line(label, hosts));
             // Reserve room for ADDR at the tail. MAX_CONTENT_SIZE leaves
             // room for the SIG footer that will be appended below.
             if spill.len() + line.len() + addr_line.len() > MAX_CONTENT_SIZE {
-                hard_overflow += 1;
+                hard_overflow_claims += 1;
                 continue;
             }
             spill.push_str(&line);
+        }
+        let mut hard_overflow_projects = 0usize;
+        if let Some(li) = gitmirror_local_info {
+            for pid_hex in &overflow_projects {
+                let line = format!(
+                    "{}\n",
+                    crate::swarm::gitmirror::project_peers::format_project_line(
+                        &li.hostname,
+                        pid_hex
+                    )
+                );
+                if spill.len() + line.len() + addr_line.len() > MAX_CONTENT_SIZE {
+                    hard_overflow_projects += 1;
+                    continue;
+                }
+                spill.push_str(&line);
+            }
         }
         spill.push_str(&addr_line);
         if let Some(key) = signing_key {
             sign_and_append(&mut spill, key, timestamp_secs);
         }
         packets.push(spill);
-        if hard_overflow > 0 {
+        if hard_overflow_claims > 0 {
             warn!(
-                overflow_labels = hard_overflow,
+                overflow_labels = hard_overflow_claims,
                 total_labels = gitmirror_claims.len(),
                 "gitmirror claim list exceeds two-packet capacity — some labels deferred to next cycle"
+            );
+        }
+        if hard_overflow_projects > 0 {
+            warn!(
+                overflow_projects = hard_overflow_projects,
+                total_projects = gitmirror_projects.len(),
+                "gitmirror project list exceeds two-packet capacity — some projects deferred to next cycle"
             );
         }
     }
@@ -793,6 +872,11 @@ struct AnnouncementResult {
     /// field above) and calls `ClaimsHandle::ingest_lan_claim`.
     /// Malformed lines are dropped silently.
     gitmirror_claims: Vec<(String, Vec<String>)>,
+    /// Parsed `GITMIRRORPROJECT:` lines. Each entry is a (host,
+    /// project_id_hex) pair. The listener calls
+    /// [`crate::swarm::gitmirror::project_peers::record_global`]
+    /// per entry to populate the project-keyed peer index.
+    gitmirror_projects: Vec<(String, String)>,
 }
 
 /// Parse a received multicast announcement and update the peer map.
@@ -871,6 +955,16 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
             // GITMIRROR: because both share the GITMIRROR prefix.
             if let Some((label, hosts)) = parse_claim_line(line) {
                 result.gitmirror_claims.push((label, hosts));
+            }
+        } else if line.starts_with("GITMIRRORPROJECT:") {
+            // ADR-015 step 4 LAN auto-discovery — record the
+            // (host, pid_hex) pair into the global ProjectPeers
+            // index so the helper-daemon fan-out hook can find
+            // peers without explicit cross_subnet_members config.
+            // Order matters: must be tried before plain GITMIRROR:
+            // because both share the GITMIRROR prefix.
+            if let Some((host, pid_hex)) = crate::swarm::gitmirror::project_peers::parse_project_line(line) {
+                result.gitmirror_projects.push((host, pid_hex));
             }
         } else if line.starts_with("GITMIRROR:") {
             // Parse and stash for listener ingest. Malformed lines
@@ -1147,7 +1241,7 @@ mod tests {
         cache.write_chunk(&sha, 0, data).unwrap();
         cache.assemble(&sha, data.len() as u64, 1).unwrap();
 
-        let packets = build_announcement(&cache.list_blobs(), &cache.list_partials(), &cache, &manifest, Ipv4Addr::new(10, 0, 0, 1), 1531, None, &[], None, 0);
+        let packets = build_announcement(&cache.list_blobs(), &cache.list_partials(), &cache, &manifest, Ipv4Addr::new(10, 0, 0, 1), 1531, None, &[], &[], None, 0);
         let msg = &packets[0];
         assert!(msg.starts_with("VIGO-SWARM\n"));
         assert!(msg.contains("MANIFEST:"));
@@ -1367,6 +1461,7 @@ mod tests {
             1531,
             None,
             &[],
+            &[],
             None,
             0,
         );
@@ -1421,6 +1516,7 @@ mod tests {
             1531,
             Some(&li),
             &[],
+            &[],
             None,
             0,
         );
@@ -1441,6 +1537,7 @@ mod tests {
             Ipv4Addr::new(10, 0, 0, 1),
             1531,
             None,
+            &[],
             &[],
             None,
             0,
@@ -1533,12 +1630,88 @@ mod tests {
             1531,
             None,
             &claims,
+            &[],
             None,
             0,
         );
         let msg = &packets[0];
         assert!(msg.contains("GITMIRRORCLAIM:gitmirror:danlap:dan:vigo-web:plex,annlap"));
         assert!(msg.contains("GITMIRRORCLAIM:gitmirror:danlap:dan:dotfiles:plex"));
+    }
+
+    #[test]
+    fn build_announcement_emits_gitmirrorproject_lines_when_provided() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
+        let manifest = test_manifest();
+        let li = GitmirrorLocalInfo {
+            hostname: "danlap".to_string(),
+            users: vec!["dan".to_string()],
+            tags: vec![],
+            pubkey_hex: "a".repeat(64),
+        };
+        let pid_a = "a".repeat(64);
+        let pid_b = "b".repeat(64);
+        let projects = vec![pid_a.clone(), pid_b.clone()];
+        let packets = build_announcement(
+            &[],
+            &[],
+            &cache,
+            &manifest,
+            Ipv4Addr::new(10, 0, 0, 1),
+            1531,
+            Some(&li),
+            &[],
+            &projects,
+            None,
+            0,
+        );
+        let msg = &packets[0];
+        assert!(msg.contains(&format!("GITMIRRORPROJECT:danlap:{}", pid_a)));
+        assert!(msg.contains(&format!("GITMIRRORPROJECT:danlap:{}", pid_b)));
+    }
+
+    #[test]
+    fn parse_announcement_recovers_gitmirrorproject_lines() {
+        let pubkey_hex = "a".repeat(64);
+        let pid_hex = "c".repeat(64);
+        let msg = format!(
+            "VIGO-SWARM\n\
+             MANIFEST:1\n\
+             ADDR:10.0.0.1:1531\n\
+             GITMIRROR:danlap:dan:workstation:{}\n\
+             GITMIRRORPROJECT:danlap:{}\n",
+            pubkey_hex, pid_hex,
+        );
+        let pm = PeerMap::new();
+        let manifest = test_manifest();
+        let result = parse_announcement(
+            &msg,
+            "10.0.0.1:1531".parse().unwrap(),
+            &pm,
+            &manifest,
+        );
+        assert_eq!(result.gitmirror_projects.len(), 1);
+        assert_eq!(result.gitmirror_projects[0].0, "danlap");
+        assert_eq!(result.gitmirror_projects[0].1, pid_hex);
+    }
+
+    #[test]
+    fn parse_announcement_drops_malformed_gitmirrorproject() {
+        // wrong prefix → ignored entirely
+        let msg = "VIGO-SWARM\n\
+                   MANIFEST:1\n\
+                   ADDR:10.0.0.1:1531\n\
+                   GITMIRRORPROJECT:host:not-a-pid\n";
+        let pm = PeerMap::new();
+        let manifest = test_manifest();
+        let result = parse_announcement(
+            msg,
+            "10.0.0.1:1531".parse().unwrap(),
+            &pm,
+            &manifest,
+        );
+        assert!(result.gitmirror_projects.is_empty());
     }
 
     #[test]
@@ -1660,6 +1833,7 @@ mod tests {
             1531,
             Some(&li),
             &claims,
+            &[],
             Some(&key),
             1_700_000_000,
         );
@@ -1698,6 +1872,7 @@ mod tests {
             1531,
             None,
             &claims,
+            &[],
             None,
             0,
         );
@@ -1749,6 +1924,7 @@ mod tests {
             1531,
             Some(&li),
             &claims,
+            &[],
             None,
             0,
         );
@@ -1794,6 +1970,7 @@ mod tests {
             1531,
             Some(&li),
             &claims,
+            &[],
             None,
             0,
         );
@@ -1838,6 +2015,7 @@ mod tests {
             1531,
             Some(&li),
             &claims,
+            &[],
             None,
             0,
         );
@@ -1889,6 +2067,7 @@ mod tests {
             1531,
             None,
             &claims,
+            &[],
             None,
             0,
         );
@@ -1922,6 +2101,7 @@ mod tests {
             1531,
             Some(&li),
             &claims,
+            &[],
             Some(&sign),
             1_700_000_000,
         );
@@ -1960,6 +2140,7 @@ mod tests {
             1531,
             Some(&li),
             &[],
+            &[],
             Some(&sign),
             1_700_000_000,
         );
@@ -1985,6 +2166,7 @@ mod tests {
             Ipv4Addr::new(10, 0, 0, 1),
             1531,
             None,
+            &[],
             &[],
             None,
             0,

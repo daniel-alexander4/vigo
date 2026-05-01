@@ -12,11 +12,10 @@ What works end-to-end today:
 - `init` / `invite` / `join` / `list` / `status` are fully functional locally.
 - `leave` and `revoke` sign envelopes inline via the user's self-fleet session helper, write the signed envelope as a `*.pending` sentinel; the agent's root reactor sweeps every 60 s and persists them to `/var/lib/vigo/swarm/gitmirror/envelopes/<project_id>/{revokes,leaves}/`.
 - `git clone vigo://<project_id>/<handle>` and `git push vigo://…` against the local envoy: the user-side `git-remote-vigo` binary opens `/var/run/vigo/gitmirror.sock` (SO_PEERCRED-gated), the agent verifies the user's token chain, and proxies to `git upload-pack` / `git receive-pack` against the bare repo.
-- Cross-envoy push: after a successful local `git-receive-pack`, the helper daemon snapshots refs pre/post and (on delta) builds a `git bundle --all` and POSTs it to every hostname in `project.json::cross_subnet_members` over swarm mTLS (port 1531). Receivers verify the X-Vigo-Chain header against the URL's project_id, ingest via `git bundle verify` + `git fetch`, and return `{accepted, refs_changed}`.
+- Cross-envoy push: after a successful local `git-receive-pack`, the helper daemon snapshots refs pre/post and (on delta) builds a `git bundle --all` and POSTs it to every known peer for the project over swarm mTLS (port 1531). Targets come from two deduplicated sources: peers that have advertised holding the project on the LAN multicast (`GITMIRRORPROJECT:<host>:<pid_hex>` announce lines, indexed by `ProjectPeers`), and explicit hostnames listed in `project.json::cross_subnet_members`. Receivers verify the X-Vigo-Chain header against the URL's project_id, ingest via `git bundle verify` + `git fetch`, and return `{accepted, refs_changed}`.
 
 What's still pending (follow-up slices of step 4):
 
-- LAN auto-discovery via the swarm announce extension — today fan-out targets only hosts in `project.json::cross_subnet_members`. Multi-host fleets without explicit cross-subnet entries don't yet auto-replicate.
 - Cross-envoy envelope gossip — revoke / leave envelopes persist locally but don't yet replicate to peers.
 - `reanchor` accepts the type-the-handle confirmation but bails before the byte-level migration.
 

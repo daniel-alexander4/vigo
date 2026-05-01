@@ -1,7 +1,7 @@
 
 # Gitmirror — Unified Git Substrate (ADR-015)
 
-> **ADR-015 cutover in progress.** This page describes the legacy personal-DR-only subsystem; the new model is documented inline in [ADR-015](../../adr/015-unified-gitmirror-substrate.md) until the doc rewrite settles. Steps 1–3 of the arc have shipped (multi-call dispatch, capability-token primitives, storage + CLI cutover); step 4's first two slices shipped 2026-04-30 — the helper daemon, the `git-remote-vigo` body, revoke / leave envelope persistence, push-driven fan-out, and the receive-side `POST /swarm/gitmirror/push/<project_id_hex>` endpoint. `git push vigo://…` and `git fetch vigo://…` work end-to-end, and pushes auto-fan-out to envoys listed in `project.json::cross_subnet_members`. LAN auto-discovery (announce extension) and cross-envoy envelope gossip are the remaining step-4 pieces.
+> **ADR-015 cutover in progress.** This page describes the legacy personal-DR-only subsystem; the new model is documented inline in [ADR-015](../../adr/015-unified-gitmirror-substrate.md) until the doc rewrite settles. Steps 1–3 of the arc have shipped (multi-call dispatch, capability-token primitives, storage + CLI cutover); step 4's first three slices shipped 2026-04-30 — the helper daemon, the `git-remote-vigo` body, revoke / leave envelope persistence, push-driven fan-out, the receive-side `POST /swarm/gitmirror/push/<project_id_hex>` endpoint, and LAN auto-discovery via `GITMIRRORPROJECT:` announce lines + a project-peer index. `git push vigo://…` and `git fetch vigo://…` work end-to-end, and pushes auto-fan-out to every envoy that has announced holding the project on the LAN, deduplicated against `project.json::cross_subnet_members`. Cross-envoy envelope gossip is the remaining step-4 piece.
 
 Gitmirror is the P2P git substrate underlying both personal disaster-recovery (today's primary use case) and multi-member collaboration (an axis introduced by ADR-015). Each project is identified by `project_id = sha256(founder_fleet_pubkey)`; project shape is described by two orthogonal axes:
 
@@ -28,10 +28,10 @@ Gitmirror is one of four content subsystems that ride the [swarm](swarm.md) subs
 | Helper daemon + SO_PEERCRED socket + receive-pack / upload-pack proxy | ✅ step 4 first slice (`/var/run/vigo/gitmirror.sock`) |
 | `git-remote-vigo` body — `connect` capability + transparent splice | ✅ step 4 first slice |
 | Revoke / leave envelope persistence + 90-day reap | ✅ step 4 first slice (`/var/lib/vigo/swarm/gitmirror/envelopes/<project_id>/`) |
-| Push-driven fan-out (cycle prevention via delta check) | ✅ step 4 second slice (cross-subnet member targets only — LAN auto-discovery follow-up) |
+| Push-driven fan-out (cycle prevention via delta check) | ✅ step 4 second slice |
 | Receive-side `POST /swarm/gitmirror/push/<project_id_hex>` endpoint | ✅ step 4 second slice |
+| LAN auto-discovery via announce extension (`GITMIRRORPROJECT:` lines + project-peer index) | ✅ step 4 third slice |
 | Cross-envoy envelope gossip (digest-based catch-up) | ⏳ step 4 follow-up |
-| LAN auto-discovery via announce extension (`GITMIRRORPROJECT:` lines) | ⏳ step 4 follow-up |
 | Server-side gitmirrormesh schema + REST member-roster endpoint | ⏳ step 4 follow-up |
 | `/gitmirror` UI page rewrite for project-id view | ⏳ step 4 follow-up |
 | Re-emit `gitmirror` trait from new state surface | ⏳ step 4 follow-up |
