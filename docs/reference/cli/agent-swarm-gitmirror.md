@@ -5,17 +5,18 @@
 
 ## Status: ADR-015 cutover in progress
 
-Steps 1–3 (multi-call dispatch, capability tokens, per-user state + CLI) and the first slice of step 4 (helper daemon + `git-remote-vigo` body + revoke / leave envelopes) have shipped. Verbs that mint or sign envelopes (`init`, `invite`, `revoke`, `leave`, `reanchor`) require self-fleet to be unlocked — see [`vigo swarm self-fleet`](agent-swarm-self-fleet.md).
+Steps 1–3 (multi-call dispatch, capability tokens, per-user state + CLI) and the first two slices of step 4 (helper daemon + `git-remote-vigo` + revoke / leave envelopes; push-driven fan-out + receive-side `POST /swarm/gitmirror/push/<project_id_hex>` endpoint) have shipped. Verbs that mint or sign envelopes (`init`, `invite`, `revoke`, `leave`, `reanchor`) require self-fleet to be unlocked — see [`vigo swarm self-fleet`](agent-swarm-self-fleet.md).
 
 What works end-to-end today:
 
 - `init` / `invite` / `join` / `list` / `status` are fully functional locally.
 - `leave` and `revoke` sign envelopes inline via the user's self-fleet session helper, write the signed envelope as a `*.pending` sentinel; the agent's root reactor sweeps every 60 s and persists them to `/var/lib/vigo/swarm/gitmirror/envelopes/<project_id>/{revokes,leaves}/`.
 - `git clone vigo://<project_id>/<handle>` and `git push vigo://…` against the local envoy: the user-side `git-remote-vigo` binary opens `/var/run/vigo/gitmirror.sock` (SO_PEERCRED-gated), the agent verifies the user's token chain, and proxies to `git upload-pack` / `git receive-pack` against the bare repo.
+- Cross-envoy push: after a successful local `git-receive-pack`, the helper daemon snapshots refs pre/post and (on delta) builds a `git bundle --all` and POSTs it to every hostname in `project.json::cross_subnet_members` over swarm mTLS (port 1531). Receivers verify the X-Vigo-Chain header against the URL's project_id, ingest via `git bundle verify` + `git fetch`, and return `{accepted, refs_changed}`.
 
-What's still pending (the next slice of step 4):
+What's still pending (follow-up slices of step 4):
 
-- Cross-envoy push fan-out — pushes are accepted locally but don't yet propagate to other member envoys.
+- LAN auto-discovery via the swarm announce extension — today fan-out targets only hosts in `project.json::cross_subnet_members`. Multi-host fleets without explicit cross-subnet entries don't yet auto-replicate.
 - Cross-envoy envelope gossip — revoke / leave envelopes persist locally but don't yet replicate to peers.
 - `reanchor` accepts the type-the-handle confirmation but bails before the byte-level migration.
 

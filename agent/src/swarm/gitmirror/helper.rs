@@ -72,8 +72,10 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio_util::sync::CancellationToken;
 
 use super::envelopes::is_token_revoked;
+use super::fan_out;
 use super::project_state::{parse_hex_id, project_repo_path, ProjectConfig, TokenChain};
 use super::tokens::{verify_chain, ID_LEN};
+use crate::update::TlsCerts;
 
 /// System-wide socket path the daemon binds and `git-remote-vigo`
 /// connects to. `/var/run` is portable across Linux (where it's a
@@ -130,9 +132,15 @@ pub fn socket_path() -> PathBuf {
 /// Run the helper daemon until `cancel` fires. Binds the socket,
 /// accepts connections forever, and serves each in a detached task.
 /// Returns when the cancellation token is triggered.
-pub async fn run(cancel: CancellationToken) -> Result<()> {
+///
+/// `tls` is threaded through so the post-receive-pack fan-out hook
+/// can build an mTLS HTTP client to push bundles to peers. When
+/// `None`, fan-out is silently skipped — local push still works,
+/// just no replication. (Pre-enrollment fixtures hit this path.)
+pub async fn run(cancel: CancellationToken, tls: Option<TlsCerts>) -> Result<()> {
     let listener = bind_listener()?;
     tracing::info!(path = %socket_path().display(), "gitmirror helper daemon listening");
+    let tls = std::sync::Arc::new(tls);
     loop {
         tokio::select! {
             _ = cancel.cancelled() => {
@@ -148,8 +156,9 @@ pub async fn run(cancel: CancellationToken) -> Result<()> {
                         continue;
                     }
                 };
+                let tls = tls.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = handle_client(stream).await {
+                    if let Err(e) = handle_client(stream, tls).await {
                         tracing::warn!(error = %e, "gitmirror helper client error");
                     }
                 });
@@ -190,7 +199,10 @@ fn bind_listener() -> Result<UnixListener> {
     UnixListener::from_std(std_listener).context("tokio UnixListener")
 }
 
-async fn handle_client(stream: UnixStream) -> Result<()> {
+async fn handle_client(
+    stream: UnixStream,
+    tls: std::sync::Arc<Option<TlsCerts>>,
+) -> Result<()> {
     let uid = peer_uid(&stream)
         .ok_or_else(|| anyhow!("could not determine peer UID via SO_PEERCRED"))?;
 
@@ -230,10 +242,13 @@ async fn handle_client(stream: UnixStream) -> Result<()> {
         }
     };
 
-    if let Err(e) = authorize(&home, &project_id) {
-        let _ = write_half.write_all(format!("ERR {}\n", sanitize_err(&e.to_string())).as_bytes()).await;
-        return Err(e);
-    }
+    let chain = match authorize(&home, &project_id) {
+        Ok(c) => c,
+        Err(e) => {
+            let _ = write_half.write_all(format!("ERR {}\n", sanitize_err(&e.to_string())).as_bytes()).await;
+            return Err(e);
+        }
+    };
 
     let gitmirror_base = crate::platform::paths::default_gitmirror_dir();
     let repo = project_repo_path(&gitmirror_base, &project_id);
@@ -300,6 +315,15 @@ async fn handle_client(stream: UnixStream) -> Result<()> {
         )
     })?;
 
+    // Snapshot refs before so we can compute a delta after a push.
+    // Capturing here lets us avoid keeping a copy of the bare repo's
+    // ref state across the (potentially long) receive-pack run.
+    let pre_refs = if matches!(service, Service::ReceivePack) {
+        fan_out::snapshot_refs(&repo).ok()
+    } else {
+        None
+    };
+
     let status = child.wait().await.context("awaiting git child")?;
     if !status.success() {
         tracing::warn!(
@@ -308,6 +332,78 @@ async fn handle_client(stream: UnixStream) -> Result<()> {
             exit_code = status.code(),
             "gitmirror helper: git child exited non-zero"
         );
+        return Ok(());
+    }
+
+    // After a successful receive-pack, fan out to cross-subnet
+    // members listed in this user's project.json. LAN auto-discovery
+    // is a follow-up slice — for now, only explicitly-named hosts
+    // receive pushes. No-op on idempotent push (no ref delta).
+    if matches!(service, Service::ReceivePack) {
+        if let Some(before) = pre_refs {
+            let after = match fan_out::snapshot_refs(&repo) {
+                Ok(a) => a,
+                Err(e) => {
+                    tracing::warn!(
+                        project_id = %super::project_state::hex_id(&project_id),
+                        error = %e,
+                        "gitmirror helper: post-receive ref snapshot failed; skipping fan-out"
+                    );
+                    return Ok(());
+                }
+            };
+            if before == after {
+                return Ok(());
+            }
+            let tls_for_fanout = match tls.as_ref() {
+                Some(t) => t.clone(),
+                None => {
+                    tracing::debug!(
+                        project_id = %super::project_state::hex_id(&project_id),
+                        "gitmirror helper: no TLS certs available, fan-out skipped"
+                    );
+                    return Ok(());
+                }
+            };
+            // Build the bundle + push outside the tokio worker thread —
+            // git is synchronous and we don't want to starve the runtime.
+            let project_id_owned = project_id;
+            let home_owned = home.clone();
+            let chain_owned = chain;
+            let gitmirror_base = crate::platform::paths::default_gitmirror_dir();
+            tokio::task::spawn_blocking(move || {
+                let bundle_path = gitmirror_base
+                    .join("incoming")
+                    .join(format!(
+                        "{}-fanout-{:032x}.bundle",
+                        super::project_state::hex_id(&project_id_owned),
+                        rand::random::<u128>(),
+                    ));
+                let repo_path = project_repo_path(&gitmirror_base, &project_id_owned);
+                if let Err(e) = fan_out::build_bundle(&repo_path, &bundle_path) {
+                    tracing::warn!(
+                        project_id = %super::project_state::hex_id(&project_id_owned),
+                        error = %e,
+                        "gitmirror helper: build_bundle for fan-out failed"
+                    );
+                    return;
+                }
+                let (attempted, succeeded) = fan_out::fan_out_bundle(
+                    &home_owned,
+                    &project_id_owned,
+                    &chain_owned,
+                    &bundle_path,
+                    &tls_for_fanout,
+                );
+                let _ = std::fs::remove_file(&bundle_path);
+                tracing::info!(
+                    project_id = %super::project_state::hex_id(&project_id_owned),
+                    attempted,
+                    succeeded,
+                    "gitmirror helper: fan-out swept cross-subnet members"
+                );
+            });
+        }
     }
     Ok(())
 }
@@ -351,7 +447,7 @@ fn parse_header(line: &str) -> Result<([u8; ID_LEN], Service)> {
     Ok((project_id, service))
 }
 
-fn authorize(home: &Path, project_id: &[u8; ID_LEN]) -> Result<()> {
+fn authorize(home: &Path, project_id: &[u8; ID_LEN]) -> Result<TokenChain> {
     // Project must exist locally (founder issued / joined).
     let cfg = ProjectConfig::load(home, project_id)
         .with_context(|| format!("loading project.json for {}", super::project_state::hex_id(project_id)))?
@@ -387,7 +483,7 @@ fn authorize(home: &Path, project_id: &[u8; ID_LEN]) -> Result<()> {
             bail!("this fleet has issued a LEAVE envelope for the project");
         }
     }
-    Ok(())
+    Ok(chain)
 }
 
 fn has_left(
@@ -689,7 +785,7 @@ dan:x:1000:1000:Dan:/home/dan:/bin/zsh
 
         let cancel = CancellationToken::new();
         let cancel_for_daemon = cancel.clone();
-        let daemon = tokio::spawn(async move { run(cancel_for_daemon).await });
+        let daemon = tokio::spawn(async move { run(cancel_for_daemon, None).await });
 
         // Wait for the daemon to bind. We poll by attempting to
         // connect; the socket appears as soon as bind() returns.

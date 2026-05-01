@@ -278,7 +278,19 @@ async fn handle_request(
         // claim so the gitmirror receiver picks it up on the next
         // tick — same path as a LAN-discovered mirror.
         (&Method::POST, p) if p.starts_with("/swarm/gitmirror/push/") => {
-            handle_gitmirror_push(p, req, state).await
+            // Two cohabiting flavors:
+            //  - Unified-substrate (ADR-015 step 4): tail is 64-char
+            //    lowercase hex `<project_id>`. Handled inline below.
+            //  - Legacy claim-based (pre-ADR-015): tail is the
+            //    url-encoded label `gitmirror:<host>:<user>:<project>`.
+            //    Handled by the original receiver path while the
+            //    legacy code is still in tree.
+            let tail = p.trim_start_matches("/swarm/gitmirror/push/");
+            if is_project_id_path_segment(tail) {
+                handle_gitmirror_push_v2(tail, req).await
+            } else {
+                handle_gitmirror_push(p, req, state).await
+            }
         }
 
         // Cryptsync: pull ciphertext from a user's ~/cryptsync/.
@@ -507,6 +519,183 @@ fn handle_chunk(sha256: &str, index: u32, state: &ServerState) -> Response<Full<
 /// Validate a SHA256 hex string.
 fn validate_sha256(s: &str) -> bool {
     s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// True when `seg` looks like a unified-substrate gitmirror project_id:
+/// 64 lowercase hex chars and nothing else. Used to disambiguate the
+/// new POST `/swarm/gitmirror/push/<project_id_hex>` route from the
+/// legacy label-based POST `/swarm/gitmirror/push/<gitmirror:...>`
+/// handler that still ships while the legacy receiver is in tree.
+fn is_project_id_path_segment(seg: &str) -> bool {
+    seg.len() == 64
+        && seg
+            .chars()
+            .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
+}
+
+/// Handle `POST /swarm/gitmirror/push/<project_id_hex>` — the
+/// unified-substrate (ADR-015 step 4) fan-out endpoint.
+///
+/// Required headers:
+/// - `X-Vigo-Chain` — base64 of the JSON-encoded
+///   [`crate::swarm::gitmirror::project_state::TokenChain`] proving
+///   the pushing fleet is an authorized member.
+///
+/// Body: a `git bundle create --all` blob, capped at
+/// [`crate::swarm::gitmirror::MAX_BUNDLE_SIZE`] (20 GiB).
+///
+/// Validation:
+/// 1. project_id_hex parses as a 32-byte project_id.
+/// 2. X-Vigo-Chain decodes + verifies via
+///    [`crate::swarm::gitmirror::fan_out::verify_chain_for_push`]
+///    (chain anchors to `sha256(founder_pubkey) == project_id`,
+///    no link is in the local revocation set).
+/// 3. Body size ≤ MAX_BUNDLE_SIZE; streamed to a temp file to bound
+///    transient memory.
+/// 4. Bundle ingests cleanly via
+///    [`crate::swarm::gitmirror::fan_out::ingest_bundle`] (which
+///    runs `git bundle verify` before `git fetch`).
+///
+/// On success returns `200 OK` with JSON body
+/// `{"accepted": true, "refs_changed": <bool>}`. The `refs_changed`
+/// flag is the cycle-prevention signal — receivers chain-fan-out
+/// only when refs actually advanced (chain-fan-out itself is not
+/// implemented in this slice; see `fan_out.rs` module docs).
+async fn handle_gitmirror_push_v2(
+    pid_hex: &str,
+    req: Request<hyper::body::Incoming>,
+) -> Response<Full<Bytes>> {
+    use http_body_util::BodyExt;
+
+    let project_id = match crate::swarm::gitmirror::project_state::parse_hex_id(pid_hex) {
+        Ok(p) => p,
+        Err(e) => return bad_request(&format!("invalid project_id: {}", e)),
+    };
+
+    let chain_header = match header_string(&req, crate::swarm::gitmirror::fan_out::CHAIN_HEADER) {
+        Some(s) => s,
+        None => {
+            return bad_request(&format!(
+                "missing {} header",
+                crate::swarm::gitmirror::fan_out::CHAIN_HEADER
+            ));
+        }
+    };
+
+    let chain = match crate::swarm::gitmirror::fan_out::decode_chain_header(&chain_header) {
+        Ok(c) => c,
+        Err(e) => return bad_request(&format!("decode chain header: {:#}", e)),
+    };
+
+    let gitmirror_base = crate::platform::paths::default_gitmirror_dir();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    if let Err(e) = crate::swarm::gitmirror::fan_out::verify_chain_for_push(
+        &chain,
+        &project_id,
+        &gitmirror_base,
+        now,
+    ) {
+        return forbidden(&format!("chain rejected: {:#}", e));
+    }
+
+    // Stream the body into a temp file under incoming/ so we never
+    // hold a multi-GiB bundle in process memory. Body size capped at
+    // MAX_BUNDLE_SIZE.
+    let staging = gitmirror_base.join("incoming");
+    if let Err(e) = std::fs::create_dir_all(&staging) {
+        return service_unavailable(&format!("create incoming dir: {}", e));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o700));
+    }
+    let nonce: u128 = rand::random();
+    let bundle_path = staging.join(format!("{}-{:032x}.bundle", pid_hex, nonce));
+
+    let total = {
+        use std::io::Write;
+        let mut body = req.into_body();
+        let mut tmp = match std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&bundle_path)
+        {
+            Ok(f) => f,
+            Err(e) => return service_unavailable(&format!("open temp bundle: {}", e)),
+        };
+        let mut total: u64 = 0;
+        loop {
+            let frame = match body.frame().await {
+                Some(Ok(f)) => f,
+                Some(Err(e)) => {
+                    let _ = std::fs::remove_file(&bundle_path);
+                    return bad_request(&format!("body read error: {}", e));
+                }
+                None => break,
+            };
+            if let Ok(data) = frame.into_data() {
+                let chunk: &[u8] = &data;
+                total = total.saturating_add(chunk.len() as u64);
+                if total > crate::swarm::gitmirror::MAX_BUNDLE_SIZE {
+                    let _ = std::fs::remove_file(&bundle_path);
+                    return payload_too_large(&format!(
+                        "bundle size exceeds MAX_BUNDLE_SIZE ({} GiB)",
+                        crate::swarm::gitmirror::MAX_BUNDLE_SIZE / (1024 * 1024 * 1024),
+                    ));
+                }
+                if let Err(e) = tmp.write_all(chunk) {
+                    let _ = std::fs::remove_file(&bundle_path);
+                    return service_unavailable(&format!("write temp bundle: {}", e));
+                }
+            }
+        }
+        if let Err(e) = tmp.sync_all() {
+            let _ = std::fs::remove_file(&bundle_path);
+            return service_unavailable(&format!("sync temp bundle: {}", e));
+        }
+        drop(tmp);
+        total
+    };
+
+    let refs_changed_result = tokio::task::block_in_place(|| {
+        let body_bytes = std::fs::read(&bundle_path)?;
+        crate::swarm::gitmirror::fan_out::ingest_bundle(
+            &gitmirror_base,
+            &project_id,
+            &body_bytes,
+        )
+    });
+    let _ = std::fs::remove_file(&bundle_path);
+
+    let refs_changed = match refs_changed_result {
+        Ok(b) => b,
+        Err(e) => {
+            warn!(
+                project_id = %pid_hex,
+                error = %e,
+                "gitmirror push: ingest failed"
+            );
+            return bad_request(&format!("ingest failed: {:#}", e));
+        }
+    };
+
+    info!(
+        project_id = %pid_hex,
+        bytes = total,
+        refs_changed,
+        "gitmirror push: accepted"
+    );
+
+    let body = format!(
+        "{{\"accepted\":true,\"refs_changed\":{}}}",
+        refs_changed
+    );
+    ok_json(&body)
 }
 
 // ── Response helpers ──────────────────────────────────────────────────────
@@ -1072,6 +1261,39 @@ mod tests {
             url_decode("gitmirror:danlap:dan:vigo-web").unwrap(),
             "gitmirror:danlap:dan:vigo-web",
         );
+    }
+
+    #[test]
+    fn is_project_id_path_segment_accepts_64_lowercase_hex() {
+        assert!(is_project_id_path_segment(&"0".repeat(64)));
+        assert!(is_project_id_path_segment(&"a".repeat(64)));
+        assert!(is_project_id_path_segment(&"abcdef0123456789".repeat(4)));
+    }
+
+    #[test]
+    fn is_project_id_path_segment_rejects_wrong_length() {
+        assert!(!is_project_id_path_segment(&"a".repeat(63)));
+        assert!(!is_project_id_path_segment(&"a".repeat(65)));
+        assert!(!is_project_id_path_segment(""));
+    }
+
+    #[test]
+    fn is_project_id_path_segment_rejects_uppercase() {
+        // Canonical form is lowercase hex; rejecting uppercase keeps
+        // the route disambiguator unambiguous (legacy labels can also
+        // contain ASCII letters, but neither flavor uses uppercase
+        // ASCII alphabetics in the project_id position).
+        assert!(!is_project_id_path_segment(&"A".repeat(64)));
+    }
+
+    #[test]
+    fn is_project_id_path_segment_rejects_legacy_label() {
+        // Legacy "gitmirror:host:user:project" labels never match —
+        // colons are not hex and the length almost never aligns to 64.
+        assert!(!is_project_id_path_segment("gitmirror:danlap:dan:vigo-web"));
+        // Even a 64-char string with non-hex chars must be rejected.
+        let mostly_hex = format!("{}!", "a".repeat(63));
+        assert!(!is_project_id_path_segment(&mostly_hex));
     }
 
     #[test]

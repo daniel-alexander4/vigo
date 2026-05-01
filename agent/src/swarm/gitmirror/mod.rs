@@ -48,6 +48,7 @@
 
 pub mod cli;
 pub mod envelopes;
+pub mod fan_out;
 pub mod gate;
 pub mod git_ops;
 pub mod helper;
@@ -121,7 +122,7 @@ pub const CONTENT_LABEL_PREFIX: &str = "gitmirror";
 /// removed the signature can shrink.
 #[allow(clippy::too_many_arguments)]
 pub fn spawn(
-    _tls: Option<crate::update::TlsCerts>,
+    tls: Option<crate::update::TlsCerts>,
     cancel: CancellationToken,
     _claims: Option<receiver::ClaimsHandle>,
     _manifest: Option<std::sync::Arc<crate::swarm::manifest::Manifest>>,
@@ -133,13 +134,17 @@ pub fn spawn(
     info!(
         initial_gate = gate.enabled(),
         socket = %helper::socket_path().display(),
+        tls_available = tls.is_some(),
         "gitmirror: spawning helper daemon + sentinel reactor (ADR-015 step 4)"
     );
 
-    // Helper daemon — runs forever until cancellation.
+    // Helper daemon — runs forever until cancellation. TLS certs are
+    // threaded through so the post-receive fan-out hook can build an
+    // mTLS HTTP client to push bundles to peers.
     let helper_cancel = cancel.clone();
+    let helper_tls = tls;
     tokio::spawn(async move {
-        if let Err(e) = helper::run(helper_cancel).await {
+        if let Err(e) = helper::run(helper_cancel, helper_tls).await {
             tracing::error!(error = %e, "gitmirror helper daemon exited with error");
         }
     });
