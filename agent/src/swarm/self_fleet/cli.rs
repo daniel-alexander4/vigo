@@ -880,17 +880,26 @@ fn cmd_rotate_passphrase(_args: &[String]) -> Result<()> {
 
 fn cmd_status(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
+    let username = user_for_invocation().ok();
     let dot = config::dot_dir(&home);
     println!("self-fleet status");
     println!("  home:             {}", home.display());
     println!("  dot_dir:          {}", dot.display());
     println!("  initialized:      {}", super::is_initialized(&home));
-    if super::is_initialized(&home) {
+    let local_pubkey_text = if super::is_initialized(&home) {
         match super::local_fleet_pubkey(&home)? {
-            Some(pk) => println!("  fleet pubkey:     {}", pk),
-            None => println!("  fleet pubkey:     (identity.pub missing)"),
+            Some(pk) => {
+                println!("  fleet pubkey:     {}", pk);
+                Some(pk)
+            }
+            None => {
+                println!("  fleet pubkey:     (identity.pub missing)");
+                None
+            }
         }
-    }
+    } else {
+        None
+    };
     let pair_pending = config::pair_pending_path(&home);
     if pair_pending.exists() {
         match pair::read_pending(&home) {
@@ -911,7 +920,159 @@ fn cmd_status(_args: &[String]) -> Result<()> {
         Ok(msg) => println!("  session helper:   {}", msg),
         Err(_) => println!("  session helper:   not running (locked)"),
     }
+    print_rekey_status(&home);
+    if let (Some(local_pk), Some(user)) = (local_pubkey_text, username) {
+        print_offline_envoy_hint(&local_pk, &user);
+    }
     Ok(())
+}
+
+fn print_rekey_status(home: &Path) {
+    let entries = match rekey::load_retired(home) {
+        Ok(e) => e,
+        Err(e) => {
+            println!("  rekey state:      (unreadable: {})", e);
+            return;
+        }
+    };
+    let now = now_secs();
+    let active = rekey::active_session(&entries, now);
+    if let Some(active_entry) = active {
+        let remaining = (active_entry.expires_at - now).max(0);
+        let hours = remaining / 3600;
+        let mins = (remaining % 3600) / 60;
+        println!(
+            "  rekey window:     active ({}h {}m remaining)",
+            hours, mins
+        );
+        println!(
+            "  retired pubkey:   {}",
+            short_pubkey(&active_entry.old_fleet_pubkey)
+        );
+        let rekey_pending = config::rekey_pending_path(home);
+        if rekey_pending.exists() {
+            match rekey::read_pending(home) {
+                Ok(Some(spec)) => {
+                    let claim_remaining = (spec.expires_at - now).max(0);
+                    println!(
+                        "  rekey claim code: pending (expires in {}s)",
+                        claim_remaining
+                    );
+                }
+                _ => println!("  rekey claim code: pending (sentinel unparseable)"),
+            }
+        } else {
+            println!("  rekey claim code: none (run `rekey-pair` to issue one)");
+        }
+    } else {
+        println!("  rekey window:     none active");
+    }
+    let historical: Vec<&_> = entries
+        .iter()
+        .filter(|e| e.expires_at <= now)
+        .collect();
+    if !historical.is_empty() {
+        let shown = historical.iter().rev().take(3);
+        let total = historical.len();
+        let suffix = if total > 3 {
+            format!(" (+{} older in retired_fleets.json)", total - 3)
+        } else {
+            String::new()
+        };
+        println!("  retired fleets:   {} historical entry/entries{}", total, suffix);
+        for entry in shown {
+            let age_secs = now.saturating_sub(entry.retired_at);
+            let age = humanize_duration(age_secs);
+            println!(
+                "                    - {} (rotated {} ago)",
+                short_pubkey(&entry.old_fleet_pubkey),
+                age
+            );
+        }
+    }
+}
+
+/// Shorten a `ed25519:<hex>` form to first/last segments for readable
+/// `status` output. Full value remains in the JSON file for matching.
+fn short_pubkey(full: &str) -> String {
+    if let Some(rest) = full.strip_prefix("ed25519:") {
+        if rest.len() > 16 {
+            return format!("ed25519:{}…{}", &rest[..8], &rest[rest.len() - 8..]);
+        }
+    }
+    full.to_string()
+}
+
+fn humanize_duration(seconds: i64) -> String {
+    let days = seconds / 86400;
+    if days >= 1 {
+        return format!("{}d", days);
+    }
+    let hours = seconds / 3600;
+    if hours >= 1 {
+        return format!("{}h", hours);
+    }
+    let mins = seconds / 60;
+    if mins >= 1 {
+        return format!("{}m", mins);
+    }
+    format!("{}s", seconds.max(0))
+}
+
+/// If any peer in the local cryptsync peer table is announcing under
+/// a fleet pubkey that doesn't match this envoy's local fleet pubkey,
+/// this envoy was probably offline during a rekey on the founder.
+/// Print a one-shot hint so the operator knows where to migrate from.
+///
+/// Comparison is on the bare hex (after stripping the `ed25519:`
+/// prefix and lowercasing). cryptsync state stores fleet_pubkey
+/// without the prefix; self-fleet stores with the prefix in
+/// identity.pub.
+fn print_offline_envoy_hint(local_fleet_pubkey: &str, username: &str) {
+    let local_hex = local_fleet_pubkey
+        .strip_prefix("ed25519:")
+        .unwrap_or(local_fleet_pubkey)
+        .trim()
+        .to_ascii_lowercase();
+    if local_hex.is_empty() {
+        return;
+    }
+    let table = crate::swarm::cryptsync::state::PeerTable::load(username);
+    let mut divergent: Vec<(String, String)> = Vec::new();
+    for entry in table.peers.values() {
+        if entry.fleet_pubkey.is_empty() {
+            continue;
+        }
+        if entry.fleet_pubkey != local_hex {
+            divergent.push((entry.hostname.clone(), entry.fleet_pubkey.clone()));
+        }
+    }
+    if divergent.is_empty() {
+        return;
+    }
+    divergent.sort();
+    println!();
+    println!("Note: peer(s) advertising a different fleet pubkey than this envoy:");
+    for (host, pk) in &divergent {
+        println!(
+            "  {} → ed25519:{}",
+            host,
+            if pk.len() > 16 {
+                format!("{}…{}", &pk[..8], &pk[pk.len() - 8..])
+            } else {
+                pk.clone()
+            }
+        );
+    }
+    println!(
+        "If you rekeyed on {}, this envoy was offline at the time. Run:",
+        divergent[0].0
+    );
+    println!("    sudo vigo swarm self-fleet rekey --from {}", divergent[0].0);
+    println!(
+        "to migrate. Otherwise the peer(s) may be on a fleet identity that's not yours — \
+         investigate before rekeying."
+    );
 }
 
 // ---------- helpers ----------

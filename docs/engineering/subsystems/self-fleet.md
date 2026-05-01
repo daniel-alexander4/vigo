@@ -145,12 +145,15 @@ Daemon-side state: none today. The pair-claim handler is stateless — it reads 
 vigo swarm self-fleet init                  # founder; once per fleet ever
 vigo swarm self-fleet pair                  # issue 8-char code (5-min TTL)
 sudo vigo swarm self-fleet join --from <h>  # consume code; persist wrapped blob
+vigo swarm self-fleet rekey-pair [--close]  # ADR-018: rotate fleet keypair, issue claim code
+                                            #         (24h graceful retirement window)
+sudo vigo swarm self-fleet rekey --from <h> # ADR-018: claim new wrapped blob, migrate this envoy
 vigo swarm self-fleet unlock                # start session
 vigo swarm self-fleet lock                  # scrub key
 vigo swarm self-fleet pubkey                # print fleet pubkey
 vigo swarm self-fleet members               # show this envoy's view
-vigo swarm self-fleet rotate-passphrase     # re-wrap locally
-vigo swarm self-fleet status                # init / unlock / pair-pending state
+vigo swarm self-fleet rotate-passphrase     # re-wrap locally (does not change fleet pubkey)
+vigo swarm self-fleet status                # init / unlock / pair-pending / rekey state
 ```
 
 See [agent-swarm-self-fleet](../../reference/cli/agent-swarm-self-fleet.md) for the full reference.
@@ -166,10 +169,13 @@ See [agent-swarm-self-fleet](../../reference/cli/agent-swarm-self-fleet.md) for 
 
 - `agent/src/swarm/self_fleet/mod.rs` — public API (`local_fleet_pubkey`, `is_initialized`).
 - `agent/src/swarm/self_fleet/config.rs` — paths under `~/.vigo-fleet/`.
-- `agent/src/swarm/self_fleet/cli.rs` — verb dispatcher.
-- `agent/src/swarm/self_fleet/pair.rs` — pairing-code generation, sentinel I/O, HTTP claim handler.
+- `agent/src/swarm/self_fleet/cli.rs` — verb dispatcher; status surface enrichment for retired-fleets and offline-envoy hint.
+- `agent/src/swarm/self_fleet/codes.rs` — generic 8-digit claim-code primitives (shared by pair + rekey).
+- `agent/src/swarm/self_fleet/pair.rs` — pair-specific path bindings + HTTP claim handler.
+- `agent/src/swarm/self_fleet/rekey.rs` — `RetiredFleetEntry` log + active-session predicate + post-rotation cryptsync sync + rekey-claim HTTP handler (ADR-018).
 - `agent/src/swarm/self_fleet/session.rs` — session helper daemon.
-- `agent/src/swarm/server.rs` — wires `POST /swarm/self-fleet/pair-claim/<user>` to the claim handler.
+- `agent/src/swarm/cryptsync/identity_rewrap.rs` — atomic re-wrap of the per-envoy age key from one fleet keypair's wrap-key to another (ADR-018 prereq).
+- `agent/src/swarm/server.rs` — wires `POST /swarm/self-fleet/pair-claim/<user>` and `POST /swarm/self-fleet/rekey-claim/<user>` to the respective handlers.
 - `agent/src/main.rs` — argv dispatch for `swarm self-fleet *` and the hidden `self-fleet-session-daemon` verb.
 
 ## See also
@@ -177,4 +183,6 @@ See [agent-swarm-self-fleet](../../reference/cli/agent-swarm-self-fleet.md) for 
 - [ADR-014](../../adr/014-self-fleet-primitive.md) — the design.
 - [ADR-015](../../adr/015-unified-gitmirror-substrate.md) — unified gitmirror substrate built on self-fleet (next).
 - [ADR-016](../../adr/016-cryptsync-membership-on-self-fleet.md) — cryptsync membership on self-fleet (after 015).
+- [ADR-017](../../adr/017-no-fleet-level-revoke.md) — why there is no fleet-level revoke.
+- [ADR-018](../../adr/018-self-fleet-rekey.md) — design of the rekey flow.
 - [Cryptsync](cryptsync.md) — shares the wrap envelope and the session-helper shape.

@@ -24,12 +24,14 @@ Most verbs run as the invoking user against `~/.vigo-fleet/`. The one exception 
 | `init` | Founder envoy, once per fleet ever. Generates a fresh Ed25519 keypair, prompts (with confirm) for the fleet passphrase, wraps the private half via Argon2id + XChaCha20-Poly1305 with a fresh 16-byte salt, writes `identity.wrapped` / `identity.salt` / `identity.pub`. Refuses to overwrite an existing fleet on this envoy. |
 | `pair` | On a fleet member, issue a 5-minute single-use 8-character pairing code (`NNNN-NNNN`). Drops `~/.vigo-fleet/pair.pending` (storing the SHA-256 of the code, never plaintext) so the daemon-side pair-claim handler can validate the joining envoy's request. Re-running overwrites any existing pending session. |
 | `join --from <host>` | **Requires sudo.** New envoy, once per envoy ever. Prompts for the pairing code, POSTs it to `https://<host>:1531/swarm/self-fleet/pair-claim/<user>` over mTLS, receives the wrapped blob and salt, prompts for the fleet passphrase, verifies the unwrap, persists `~/.vigo-fleet/` files. Tells the user to run `unlock` next (no helper spawn — runs in user context). |
+| `rekey-pair [--close] [--window-secs <N>]` | (ADR-018) On a current fleet member, rotate the fleet keypair and issue a 5-minute claim code so surviving envoys can migrate. Re-prompts for the fleet passphrase. Atomic-renames `identity.{wrapped,salt,pub}` to `.pre-rekey-<ts>` backups, runs cryptsync identity-rewrap, clears stale TOFU pins on local cryptsync state, restarts the session helper, records a 24h graceful retirement entry in `retired_fleets.json`. Re-running inside the active window only reissues a fresh claim code — keypair and on-disk state untouched. `--close` ends the active window; `--window-secs <N>` overrides the 24h default. |
+| `rekey --from <host>` | **Requires sudo.** (ADR-018) On a surviving envoy, claim the new wrapped fleet blob from `<host>`, migrate this envoy onto it. Asks for the fleet passphrase (used both to unwrap the OLD local key for cryptsync rewrap and to unwrap the NEW wrapped blob the founder issued under the same passphrase). Atomic-renames identity files, calls cryptsync identity-rewrap, clears local TOFU pins, locks the session helper. Refuses if the unwrapped blob carries the same fleet pubkey already held locally. |
 | `unlock` | Read the wrapped blob, prompt for the passphrase, unwrap, hand the key to the session helper. Helper holds the key in RAM until logout, lock, or idle timeout (60 min default). |
 | `lock` | Scrub the held key and stop the session helper. Idempotent (no-op if no helper is running). Auto-fires on parent-shell exit and idle timeout. |
 | `pubkey` | Print the local fleet pubkey in `ed25519:<hex>` form. Used for invites, capability lists, dictation between envoys. |
 | `members` | Show this envoy's view of fleet membership. Phase 1 surfaces only the local envoy's pubkey; cross-envoy gossip lands with ADR-015 / ADR-016. |
 | `rotate-passphrase` | Prompt the current passphrase, then a new one (with confirm), re-wrap the local copy of the key under the new passphrase. **This envoy only** — every other fleet envoy retains the old passphrase until rotated separately. The fleet pubkey is unchanged; downstream subsystem trust anchors are unaffected. |
-| `status` | Show local self-fleet state: initialized? fleet pubkey? pair pending? session helper running? |
+| `status` | Show local self-fleet state: initialized, fleet pubkey, pair pending, session helper, active rekey window (if any), retired-fleets history, hint when peers are announcing under a different fleet pubkey. |
 
 ## Bootstrap walkthrough
 
@@ -91,6 +93,84 @@ wrote /home/dan/.cryptsync/identity.salt (0600)
 ✓ Issued fleet-membership cert (expires in 30 days)
 ```
 
+## Rekey walkthrough (ADR-018)
+
+When the operator needs to rotate the fleet keypair — stolen-laptop response, hygiene rotation, founder envoy decommissioning — `rekey-pair` rotates the keypair on a trusted founder envoy and `rekey` migrates each surviving envoy. The 5-min claim code per envoy is the trust anchor; the 24h graceful retirement window only governs how long the founder will keep issuing fresh claim codes without re-rotating the keypair.
+
+**Founder envoy:**
+
+```
+[laptop] $ vigo swarm self-fleet rekey-pair
+Rotating self-fleet keypair. The fleet passphrase is required to authorize this.
+self-fleet passphrase: ****
+
+✓ Fleet keypair rotated.
+  Old fleet pubkey: ed25519:9f3a…c1d8
+  New fleet pubkey: ed25519:7a2b…f04e
+  Backups (30d):    /home/dan/.vigo-fleet/identity.wrapped.pre-rekey-1730000000, …
+  Cryptsync rewrap: ok (backup at /home/dan/.cryptsync/identity.age.pre-rekey-1730000000)
+
+  Rekey window:     24h (86400s) before founder closes the session
+  Claim code:       4827-9163
+  Code valid for:   5 minutes (300 seconds)
+
+On each surviving envoy, run:
+    sudo vigo swarm self-fleet rekey --from laptop
+then enter the claim code when prompted, then enter your fleet passphrase.
+```
+
+**Surviving envoy:**
+
+```
+[desktop] $ sudo vigo swarm self-fleet rekey --from laptop
+Rekeying with laptop for user dan.
+This requires the OLD fleet passphrase to unwrap the current key, then the SAME
+passphrase to unwrap the new key the founder issued.
+self-fleet passphrase: ****
+rekey claim code (NNNN-NNNN): 4827-9163
+
+✓ Migrated to new fleet keypair.
+  Old fleet pubkey: ed25519:9f3a…c1d8
+  New fleet pubkey: ed25519:7a2b…f04e
+  Backups (30d):    /home/dan/.vigo-fleet/identity.wrapped.pre-rekey-1730000060, …
+  Cryptsync rewrap: ok (backup at /home/dan/.cryptsync/identity.age.pre-rekey-1730000060)
+
+Run `vigo swarm self-fleet unlock` (no sudo) to start the session helper under the new fleet identity.
+```
+
+**Issuing additional claim codes within the 24h window:**
+
+Re-running `rekey-pair` on the founder inside an active rotation window reissues only the claim code. The keypair, identity files, cryptsync state, and retirement entry are untouched.
+
+```
+[laptop] $ vigo swarm self-fleet rekey-pair
+Reissued rekey claim code (rotation already in progress)
+  Claim code:      6231-7720
+  Code valid for:  5 minutes (300 seconds)
+  Window remaining: 23h 47m before founder closes the rekey session
+```
+
+**Closing the window early:**
+
+```
+[laptop] $ vigo swarm self-fleet rekey-pair --close
+✓ Rekey window closed. Surviving envoys can no longer claim under the
+  retired fleet identity. Run `rekey-pair` again to start a new rotation.
+```
+
+**What gets preserved across a rekey:**
+
+- Each envoy's per-envoy cryptsync `identity.age` (re-wrapped under the new fleet-derived key, with a 30-day backup retained at `.pre-rekey-<ts>`).
+- Cryptsync ciphertext under `~/cryptsync/` (untouched on disk; recipients get re-evaluated on the next encrypt).
+
+**What does NOT survive a rekey:**
+
+- Gitmirror project IDs the user founded (they were `sha256(founder_fleet_pubkey)` of the OLD pubkey). Collaborators need re-invites under the new project_id; deferred to its own ADR.
+- Envoys offline during the rotation window — they keep the OLD fleet identity. `self-fleet status` on those envoys surfaces a hint when peers' announces show a divergent fleet pubkey; operator runs `rekey --from <peer>` to migrate.
+- During the rotation rollout (between founder rekey and last surviving-envoy rekey), the founder's cryptsync recipient set excludes unrekeyed peers. Files written during this window land at a smaller recipient set than steady state.
+
+**Why the friction is intentional.** Each surviving envoy still needs a fresh out-of-band 5-min claim code from the trusted founder. There is no chain-of-trust shortcut from the OLD fleet key — the threat model includes a stolen device that holds the old key and could otherwise sign a forged "rekey to my pubkey instead" envelope. Pairing-code dictation over voice / SMS / in-person is the same security posture as the original `pair` flow.
+
 **Manual scp fallback (air-gapped envoy):**
 
 ```
@@ -112,6 +192,15 @@ self-fleet passphrase: ****
   identity.pub         # ed25519:<hex> pubkey, one line + newline. 0644.
   pair.pending         # active pairing-code session (JSON: code_hash + expires_at).
                        # written by `pair`, read+cleared by the daemon's pair-claim handler.
+  rekey.pending        # active rekey-claim session (same JSON shape as pair.pending).
+                       # written by `rekey-pair`, read+cleared by the rekey-claim handler.
+  retired_fleets.json  # historical log of rotations (active + closed). 0600.
+                       # consumed by `status` for visibility; not gossiped between envoys.
+  identity.wrapped.pre-rekey-<unix_ts>
+  identity.salt.pre-rekey-<unix_ts>
+  identity.pub.pre-rekey-<unix_ts>
+                       # 30-day backups left after `rekey-pair` / `rekey`. Same retention
+                       # as cryptsync's identity.age.pre-rekey-<ts>.
   session.unlocked     # session helper PID, present only while unlocked. Siblings probe this.
 ```
 
@@ -119,18 +208,21 @@ Mode 0700 on `~/.vigo-fleet/` itself, owned by the invoking user.
 
 ## Wire interaction
 
-The only over-the-wire surface is the `join` verb, which talks to one route on the swarm peer port:
+Two routes on the swarm peer port. Both use mTLS (Vigo CA), the same JSON request body shape, and the same response packing:
 
 ```
 POST https://<host>:1531/swarm/self-fleet/pair-claim/<user>
+POST https://<host>:1531/swarm/self-fleet/rekey-claim/<user>
 Content-Type: application/json
 { "code": "4827-9163" }
 ```
 
-mTLS-required (Vigo CA). Server-side validation:
+Server-side validation, identical for both:
 
-1. The user `<user>` exists, has a `~/.vigo-fleet/pair.pending` sentinel, and the sentinel hasn't expired.
+1. The user `<user>` exists, has the appropriate sentinel (`pair.pending` or `rekey.pending`), and the sentinel hasn't expired.
 2. SHA-256 of the canonicalized incoming code (whitespace + dashes stripped, uppercased) matches the stored hash, constant-time compare.
+
+`rekey-claim` additionally rejects with 410 Gone when no active rekey session exists in `retired_fleets.json`, even when a stale `rekey.pending` survives.
 
 On success: 200 with body `[1 byte salt-len][salt bytes][wrapped blob]`. The sentinel is cleared **before** the response is returned, so the code is single-use even if the response is interrupted and the peer retries.
 
@@ -140,8 +232,8 @@ Failure status codes:
 |---|---|
 | 400 | Malformed path or claim body |
 | 401 | Code mismatch (don't clear — let the user retry within the TTL) |
-| 404 | No active pair session for that user |
-| 410 | Pair session expired (sentinel cleared) |
+| 404 | No active pair / rekey session for that user |
+| 410 | Pair session expired, or rekey session past the 24h graceful window |
 | 500 | Local read or filesystem issue |
 
 ## Configuration
@@ -161,4 +253,6 @@ No `~/.vigo-fleet/config.yaml` today. The session helper's idle timeout is hard-
 - [ADR-014](../../adr/014-self-fleet-primitive.md) — design of record.
 - [ADR-015](../../adr/015-unified-gitmirror-substrate.md) — first consumer of self-fleet.
 - [ADR-016](../../adr/016-cryptsync-membership-on-self-fleet.md) — second consumer.
+- [ADR-017](../../adr/017-no-fleet-level-revoke.md) — why there is no `revoke` verb.
+- [ADR-018](../../adr/018-self-fleet-rekey.md) — design of the `rekey-pair` / `rekey` verbs.
 - [`vigo swarm cryptsync`](agent-swarm-cryptsync.md) — shares the wrap envelope + session-helper pattern.
