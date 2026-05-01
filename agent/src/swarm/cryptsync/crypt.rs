@@ -82,6 +82,45 @@ fn derive_wrap_key(password: &[u8], salt: &[u8]) -> Result<Zeroizing<[u8; ARGON_
     Ok(out)
 }
 
+// ---------- fleet-mode wrap-key derivation ----------
+
+/// Domain-separated challenge signed via the self-fleet session
+/// helper to derive cryptsync's wrap-key material in fleet mode
+/// (ADR-016). Must not collide with any other self-fleet signing
+/// context (announcement, fleet-cert, pair-claim, etc.) — this prefix
+/// version-locks the binding between the self-fleet identity and a
+/// cryptsync wrap key.
+pub const FLEET_WRAP_CHALLENGE: &[u8] = b"vigo-cryptsync-wrap-v1";
+
+/// Derive cryptsync wrap-key material from the user's self-fleet
+/// identity by asking the session helper to sign a fixed
+/// domain-separated challenge. Ed25519 signatures over a fixed
+/// message are deterministic (RFC 8032), so the same fleet identity
+/// always produces the same 64 bytes here.
+///
+/// Returned bytes are passed as the `password` argument to
+/// `wrap_identity` / `unwrap_identity` in fleet mode — Argon2id then
+/// stretches them into the 32-byte AEAD key the same way it does in
+/// standalone mode. The stretch is redundant against already
+/// high-entropy input, but it keeps the on-disk wrap envelope
+/// identical across modes so the format version doesn't have to fork.
+///
+/// Requires the self-fleet session helper to be running. Returns a
+/// pointed error message when it isn't, so the operator knows what
+/// to fix.
+pub fn derive_fleet_wrap_password() -> Result<Zeroizing<Vec<u8>>> {
+    let sig = crate::swarm::self_fleet::session::request_sign(FLEET_WRAP_CHALLENGE).context(
+        "self-fleet session helper unavailable; run `vigo swarm self-fleet unlock` first",
+    )?;
+    if sig.len() != 64 {
+        bail!(
+            "self-fleet session helper returned a {}-byte signature, expected 64",
+            sig.len()
+        );
+    }
+    Ok(Zeroizing::new(sig))
+}
+
 // ---------- wrap / unwrap ----------
 
 /// Wrap an age identity with a password-derived key. Returns the
@@ -417,6 +456,20 @@ mod tests {
         let a = wrap_identity(&id, pw, &salt).unwrap();
         let b = wrap_identity(&id, pw, &salt).unwrap();
         assert_ne!(a, b, "fresh nonce per wrap should make blobs differ");
+    }
+
+    #[test]
+    fn fleet_wrap_challenge_is_domain_separated() {
+        // The challenge prefix must not collide with any other
+        // self-fleet signing context (announcements, fleet certs,
+        // pair-claim tokens). A collision would let a signature
+        // produced for one purpose be reused as a wrap key — same
+        // identity, same key derivation, different intent. The
+        // version suffix locks us into v1 so a future re-keying flow
+        // can rotate to v2 without ambiguity.
+        assert_eq!(FLEET_WRAP_CHALLENGE, b"vigo-cryptsync-wrap-v1");
+        // Sanity-check it isn't an empty / sub-byte challenge.
+        assert!(FLEET_WRAP_CHALLENGE.len() >= 8);
     }
 
     #[test]

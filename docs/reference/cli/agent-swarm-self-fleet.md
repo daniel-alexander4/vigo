@@ -84,7 +84,11 @@ Run `vigo swarm self-fleet unlock` (no sudo) to activate the session on this env
 self-fleet passphrase: ****
 ✓ Unlocked. Self-fleet session helper running until logout, lock, or 60 min idle.
 
-tip: encrypted P2P sync is available — run `vigo swarm cryptsync fleet init` to enable it on this envoy.
+Bootstrapping cryptsync (fleet-mode wrap, no extra passphrase)...
+wrote /home/dan/.cryptsync/identity.age (0600, wrapped)
+wrote /home/dan/.cryptsync/identity.salt (0600)
+…
+✓ Issued fleet-membership cert (expires in 30 days)
 ```
 
 **Manual scp fallback (air-gapped envoy):**
@@ -97,7 +101,7 @@ self-fleet passphrase: ****
 ✓ Unlocked. Self-fleet session helper running until logout, lock, or 60 min idle.
 ```
 
-The cryptsync tip is suppressed once `~/.cryptsync/identity.age` exists — once enabled, the helper just prints the unlock confirmation. Both `unlock` and `join` print the tip when cryptsync is missing, surfacing the option without auto-prompting (cryptsync needs its own passphrase ceremony — per-envoy or fleet-shared, the operator's choice — that the unlock flow can't sensibly drive).
+**Cryptsync auto-bootstrap (ADR-016 slice 4).** When `unlock` runs and `~/.cryptsync/identity.age` is absent, the verb auto-runs `cryptsync fleet init` inline using the just-spawned session helper to derive the wrap key (no second passphrase prompt — the same fleet identity that protects self-fleet protects cryptsync). Suppressed once cryptsync is already enrolled. Failure to bootstrap is non-fatal: a warning surfaces and the operator can re-run `vigo swarm cryptsync fleet init` manually. `join` does not auto-run cryptsync (the session helper isn't running yet at that point); the next `unlock` after `join` handles it instead.
 
 ## File layout
 

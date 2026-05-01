@@ -164,8 +164,38 @@ pub fn signing_pubkey_path(username: &str) -> PathBuf {
     agent_state_dir(username).join("signing.pub")
 }
 
+/// How the per-envoy age identity's wrapping key is sourced
+/// (ADR-016 follow-up). Persisted in `config.yaml` at init time so
+/// the daily `unlock` verb routes to the correct path without
+/// re-asking the operator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WrapMode {
+    /// Today's path: prompt for a per-envoy passphrase, derive via
+    /// Argon2id. Independent of self-fleet — a user without a fleet
+    /// identity stays here. Loss of this passphrase loses the
+    /// envoy's cryptsync corpus, separately from any fleet
+    /// passphrase.
+    Standalone,
+    /// ADR-016 fleet mode: derive the wrapping key by asking the
+    /// self-fleet session helper to sign a fixed domain-separated
+    /// challenge. No password prompt at unlock — the self-fleet
+    /// session helper must be running. Same blast radius as
+    /// self-fleet itself (lose fleet passphrase → lose cryptsync).
+    Fleet,
+}
+
+impl Default for WrapMode {
+    fn default() -> Self {
+        // Default to Standalone for back-compat with pre-0.36.x
+        // config.yaml files that don't carry the field — those
+        // envoys were enrolled under the legacy passphrase path.
+        WrapMode::Standalone
+    }
+}
+
 /// Per-user cryptsync settings. Default (missing file) = LAN-only,
-/// 60 m idle timeout.
+/// 60 m idle timeout, standalone wrap mode.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserConfig {
     /// Hostnames of cross-subnet receivers unreachable via multicast.
@@ -178,6 +208,14 @@ pub struct UserConfig {
     /// Resets on every `decrypt` call. Default 60.
     #[serde(default = "default_idle_minutes")]
     pub idle_timeout_minutes: u32,
+
+    /// ADR-016: how the wrapping key for `identity.age` is sourced.
+    /// Written by `cryptsync fleet init` (Fleet) or `cryptsync
+    /// standalone init / enroll` (Standalone). Pre-0.36.x configs
+    /// without the field default to Standalone — those envoys were
+    /// already enrolled under that path.
+    #[serde(default)]
+    pub wrap_mode: WrapMode,
 }
 
 fn default_idle_minutes() -> u32 {
@@ -189,8 +227,43 @@ impl Default for UserConfig {
         Self {
             cross_subnet_peers: Vec::new(),
             idle_timeout_minutes: default_idle_minutes(),
+            wrap_mode: WrapMode::default(),
         }
     }
+}
+
+/// Atomic save of the user config back to `config.yaml`. Writes
+/// mode 0600, owned by the calling user (when `chown_to_user_pub`
+/// can resolve the username; non-fatal on failure — the operator
+/// can chown manually). Used by the bootstrap flow to record
+/// `wrap_mode` at init time.
+pub fn save_config(home: &Path, cfg: &UserConfig, username: &str) -> Result<()> {
+    use std::io::Write;
+    let path = config_path(home);
+    let dot = dot_dir(home);
+    fs::create_dir_all(&dot).with_context(|| format!("create {}", dot.display()))?;
+    let yaml = serde_yaml::to_string(cfg).context("serialize cryptsync config")?;
+    let tmp = path.with_extension("yaml.tmp");
+    {
+        #[cfg(unix)]
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut opts = fs::OpenOptions::new();
+        opts.create(true).write(true).truncate(true);
+        #[cfg(unix)]
+        opts.mode(0o600);
+        let mut f = opts
+            .open(&tmp)
+            .with_context(|| format!("create {}", tmp.display()))?;
+        f.write_all(yaml.as_bytes())?;
+        f.sync_all().ok();
+    }
+    fs::rename(&tmp, &path).with_context(|| format!("rename to {}", path.display()))?;
+    #[cfg(unix)]
+    {
+        let _ = super::chown_to_user_pub(&path, username);
+    }
+    let _ = username;
+    Ok(())
 }
 
 /// Load the user's config file. Missing or malformed = defaults +
@@ -303,5 +376,52 @@ mod tests {
     fn is_enrolled_false_on_empty_home() {
         let dir = tempfile::tempdir().unwrap();
         assert!(!is_enrolled(dir.path()));
+    }
+
+    #[test]
+    fn wrap_mode_defaults_to_standalone() {
+        let dir = tempfile::tempdir().unwrap();
+        let cfg = load_config(dir.path());
+        assert_eq!(cfg.wrap_mode, WrapMode::Standalone);
+    }
+
+    #[test]
+    fn wrap_mode_back_compat_when_field_missing() {
+        // Pre-0.36.x configs don't carry wrap_mode — those envoys
+        // were enrolled under the legacy passphrase path. Loader
+        // must default to Standalone, never Fleet (would break
+        // unlock by trying to talk to a non-existent session helper).
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dot_dir(dir.path())).unwrap();
+        let yaml = "cross_subnet_peers: []\nidle_timeout_minutes: 60\n";
+        fs::write(config_path(dir.path()), yaml).unwrap();
+        let cfg = load_config(dir.path());
+        assert_eq!(cfg.wrap_mode, WrapMode::Standalone);
+    }
+
+    #[test]
+    fn wrap_mode_round_trips_through_save_load() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dot_dir(dir.path())).unwrap();
+        let mut cfg = UserConfig::default();
+        cfg.wrap_mode = WrapMode::Fleet;
+        cfg.idle_timeout_minutes = 30;
+        cfg.cross_subnet_peers = vec!["host-a".to_string()];
+        save_config(dir.path(), &cfg, "tester").unwrap();
+        let reloaded = load_config(dir.path());
+        assert_eq!(reloaded.wrap_mode, WrapMode::Fleet);
+        assert_eq!(reloaded.idle_timeout_minutes, 30);
+        assert_eq!(reloaded.cross_subnet_peers, vec!["host-a".to_string()]);
+    }
+
+    #[test]
+    fn wrap_mode_serializes_lowercase() {
+        // The on-disk YAML must use lowercase tags so operators
+        // don't have to type `WrapMode: Fleet`. Belt-and-braces
+        // assertion in case someone strips the serde attribute.
+        let mut cfg = UserConfig::default();
+        cfg.wrap_mode = WrapMode::Fleet;
+        let yaml = serde_yaml::to_string(&cfg).unwrap();
+        assert!(yaml.contains("wrap_mode: fleet"), "got: {}", yaml);
     }
 }

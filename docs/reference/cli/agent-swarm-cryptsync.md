@@ -47,7 +47,18 @@ The verb tree splits into **mode-agnostic** verbs (the daily ones — they don't
 | `standalone init` | First-time setup of this user's per-envoy age key without registering with a self-fleet. Recipients are discovered via pairwise gossip (the legacy path that pre-dates self-fleet). |
 | `standalone enroll` | Per-envoy setup when joining an existing standalone mesh. Normally triggered by the `enroll.pending` sentinel on first `vigo swarm cryptsync *` invocation; can be run manually for recovery. Idempotent. |
 
-Mode is determined automatically at runtime: when self-fleet is initialized for the user, the announce loop scopes recipient resolution to fleet members; without it, the legacy gossip-only path stays in effect. The `fleet init` and `standalone init` verbs produce the same on-disk wrapped age identity — the difference is intent (and the help text). Per-envoy age keys are deliberately preserved across both modes — see ADR-016 for the rationale.
+Mode is determined automatically at runtime: when self-fleet is initialized for the user, the announce loop scopes recipient resolution to fleet members; without it, the legacy gossip-only path stays in effect. The `fleet init` and `standalone init` verbs both produce a wrapped age identity at `~/.cryptsync/identity.age`, but the **wrap key** differs:
+
+| Mode | Wrap-key source | `unlock` prompt | Loss blast radius |
+|---|---|---|---|
+| `standalone` | per-envoy passphrase you type at `init` / `enroll` | yes — typed every `unlock` | losing this passphrase loses this envoy's cryptsync corpus, independent of any other envoy or fleet |
+| `fleet` | derived from self-fleet identity via `session::request_sign(b"vigo-cryptsync-wrap-v1")` → SHA-256 challenge stretching | no — the running self-fleet session helper provides it silently | already inside the self-fleet trust unit; losing the fleet passphrase loses cryptsync along with everything else self-fleet protects |
+
+The chosen mode is recorded in `~/.cryptsync/config.yaml` as `wrap_mode: standalone` or `wrap_mode: fleet`. `cryptsync unlock` reads the field and routes accordingly — fleet mode skips the password prompt entirely and asks the self-fleet session helper to sign the domain-separated challenge. If the session helper isn't running in fleet mode, `unlock` fails with `run vigo swarm self-fleet unlock first` rather than silently falling back to a prompt (the wrong mode would just produce an AEAD tag mismatch downstream and a worse error).
+
+**Auto-bootstrap on `self-fleet unlock`.** When `vigo swarm self-fleet unlock` runs and `~/.cryptsync/identity.age` is absent, the verb auto-runs `cryptsync fleet init` inline using the just-unlocked session helper to derive the wrap key. The user gets a working encrypted-sync surface as a single side effect of unlocking — no second passphrase prompt. Failure to bootstrap (e.g. self-fleet not initialized, or `cryptsync fleet init` errors) doesn't undo the unlock; the warning surfaces and the operator can re-run `cryptsync fleet init` manually.
+
+Per-envoy age keys are deliberately preserved across both modes — see ADR-016 for the rationale (per-envoy compartmentalization stays intact at the age-key level even though the wrap key in fleet mode is shared).
 
 ### Trust-on-first-use fleet-pubkey pinning
 

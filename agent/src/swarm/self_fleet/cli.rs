@@ -156,19 +156,32 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
         DEFAULT_IDLE_MINUTES
     );
 
-    // ADR-016: nudge users toward enabling cryptsync once self-fleet
-    // is unlocked. Discoverability only — we don't auto-prompt for a
-    // cryptsync passphrase here because the design question of
-    // per-envoy vs fleet-passphrase wrapping is unresolved (the ADR
-    // leaves both options open as a CLI flag at init time).
+    // ADR-016 slice 4: now that the self-fleet session helper is
+    // running, this is the one moment at which a fresh envoy can
+    // bootstrap cryptsync without the user having to type a second
+    // passphrase — fleet-mode wrap-key derivation goes through the
+    // helper we just spawned. If `~/.cryptsync/identity.age` is
+    // missing, run `cryptsync fleet init` inline so the user ends up
+    // with a usable encrypted-sync surface as a single side effect of
+    // unlocking. Failure here doesn't undo the unlock — we surface
+    // the error and keep going so the operator can re-run manually.
     let cs_dot = home.join(".cryptsync");
     let cs_identity = cs_dot.join("identity.age");
     if !cs_identity.exists() {
         println!();
-        println!(
-            "tip: encrypted P2P sync is available — run `vigo swarm cryptsync fleet init` \
-             to enable it on this envoy."
-        );
+        println!("Bootstrapping cryptsync (fleet-mode wrap, no extra passphrase)...");
+        match crate::swarm::cryptsync::cli::run(vec![
+            "fleet".to_string(),
+            "init".to_string(),
+        ]) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("warning: cryptsync auto-init failed: {:#}", e);
+                eprintln!(
+                    "         re-run manually: `vigo swarm cryptsync fleet init`"
+                );
+            }
+        }
     }
     Ok(())
 }
@@ -319,16 +332,18 @@ fn cmd_join(args: &[String]) -> Result<()> {
         "Run `vigo swarm self-fleet unlock` (no sudo) to activate the session on this envoy."
     );
 
-    // ADR-016: hint the user toward enabling cryptsync on this envoy
-    // once their fleet identity is in place. Mirrors the unlock-time
-    // tip; same discoverability-only posture (no auto-prompt for a
-    // cryptsync passphrase).
+    // ADR-016 slice 4: the next `self-fleet unlock` will auto-bootstrap
+    // cryptsync on this envoy if its identity.age is still missing.
+    // The session helper isn't running yet (`join` only persists the
+    // wrapped blob; the user activates it on their own login), so we
+    // don't run cryptsync init inline here — surface the side effect
+    // the operator should expect from the unlock that follows.
     let cs_identity = home.join(".cryptsync").join("identity.age");
     if !cs_identity.exists() {
         println!();
         println!(
-            "tip: encrypted P2P sync is available — after `unlock`, run \
-             `vigo swarm cryptsync fleet init` to enable it on this envoy."
+            "note: the next `self-fleet unlock` on this envoy will also bootstrap cryptsync \
+             (encrypted P2P sync), wrapped under your fleet identity — no extra passphrase."
         );
     }
     Ok(())

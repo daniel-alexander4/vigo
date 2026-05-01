@@ -31,6 +31,7 @@ use std::path::{Path, PathBuf};
 
 use age::x25519::Identity;
 use anyhow::{anyhow, bail, Context, Result};
+use zeroize::Zeroizing;
 
 use super::config;
 use super::crypt;
@@ -215,7 +216,7 @@ fn cmd_fleet_init(_args: &[String]) -> Result<()> {
              (Or use `vigo swarm cryptsync standalone init` to opt out of fleet mode.)"
         );
     }
-    bootstrap_identity(&home, &username, /* is_init */ true)?;
+    bootstrap_identity(&home, &username, /* is_init */ true, config::WrapMode::Fleet)?;
     // Auto-issue the fleet membership certificate so receivers can
     // cryptographically verify our fleet claim from the very first
     // announce. Fails noisily but doesn't undo the bootstrap — the
@@ -336,7 +337,7 @@ fn read_local_age_pubkey(home: &Path) -> Result<String> {
 fn cmd_standalone_init(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     let username = user_for_invocation()?;
-    bootstrap_identity(&home, &username, /* is_init */ true)
+    bootstrap_identity(&home, &username, /* is_init */ true, config::WrapMode::Standalone)
 }
 
 // ---------- standalone enroll ----------
@@ -344,7 +345,7 @@ fn cmd_standalone_init(_args: &[String]) -> Result<()> {
 fn cmd_standalone_enroll(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     let username = user_for_invocation()?;
-    bootstrap_identity(&home, &username, /* is_init */ false)
+    bootstrap_identity(&home, &username, /* is_init */ false, config::WrapMode::Standalone)
 }
 
 /// Generate a fresh wrapped identity, seed `recipients.txt` with the
@@ -355,7 +356,12 @@ fn cmd_standalone_enroll(_args: &[String]) -> Result<()> {
 /// file we drop under `~/.cryptsync/` and `~/cryptsync/` so the elevated
 /// (sudo'd) process doesn't leave root-owned state in the user's
 /// home.
-fn bootstrap_identity(home: &Path, username: &str, is_init: bool) -> Result<()> {
+fn bootstrap_identity(
+    home: &Path,
+    username: &str,
+    is_init: bool,
+    wrap_mode: config::WrapMode,
+) -> Result<()> {
     let dot = config::dot_dir(home);
     create_user_dir(&dot, username, 0o700)
         .with_context(|| format!("creating {}", dot.display()))?;
@@ -374,13 +380,30 @@ fn bootstrap_identity(home: &Path, username: &str, is_init: bool) -> Result<()> 
         );
     }
 
-    // Prompt for the cryptsync password. `init` confirms; `enroll`
-    // accepts a single entry (the user may be typing a password they
-    // established on init).
-    let password = prompt_password(is_init)?;
-    if password.is_empty() {
-        bail!("password must not be empty");
-    }
+    // Source the wrap-key material per ADR-016. Standalone prompts
+    // for a per-envoy passphrase; fleet derives from the self-fleet
+    // identity via the running session helper. Either way, we end up
+    // with a byte string we can hand to `wrap_identity` as the
+    // `password` argument — Argon2id stretches it into the AEAD key
+    // identically in both modes, so the on-disk envelope shape stays
+    // version-stable.
+    let wrap_password: Zeroizing<Vec<u8>> = match wrap_mode {
+        config::WrapMode::Standalone => {
+            let password = prompt_password(is_init)?;
+            if password.is_empty() {
+                bail!("password must not be empty");
+            }
+            Zeroizing::new(password.into_bytes())
+        }
+        config::WrapMode::Fleet => {
+            // Fleet mode: passphrase is derived from the self-fleet
+            // identity. The self-fleet session helper must be running.
+            // No prompt — that's the whole point of fleet mode.
+            crypt::derive_fleet_wrap_password().context(
+                "fleet-mode wrap-key derivation failed; ensure self-fleet is unlocked"
+            )?
+        }
+    };
 
     // Generate identity + salt + wrap.
     //
@@ -396,7 +419,7 @@ fn bootstrap_identity(home: &Path, username: &str, is_init: bool) -> Result<()> 
     let identity = Identity::generate();
     let public = identity.to_public();
     let salt = crypt::fresh_salt();
-    let blob = crypt::wrap_identity(&identity, password.as_bytes(), &salt)
+    let blob = crypt::wrap_identity(&identity, wrap_password.as_slice(), &salt)
         .context("wrapping identity")?;
 
     // Write wrapped identity + salt (0600, owned by the user).
@@ -415,11 +438,25 @@ fn bootstrap_identity(home: &Path, username: &str, is_init: bool) -> Result<()> 
     // operator edits).
     let cfg_path = config::config_path(home);
     if !cfg_path.exists() {
-        if let Err(e) = write_config_template(&cfg_path, username) {
+        if let Err(e) = write_config_template(&cfg_path, username, wrap_mode) {
             tracing::warn!(
                 path = %cfg_path.display(),
                 error = %e,
                 "cryptsync: failed to seed config.yaml template (not fatal)"
+            );
+        }
+    } else {
+        // Config exists — likely from a stale partial enroll or
+        // operator pre-edit. Atomically rewrite just the wrap_mode
+        // line so daily `unlock` routes correctly. Other fields are
+        // left intact via `save_config` over a freshly-loaded view.
+        let mut existing = config::load_config(home);
+        existing.wrap_mode = wrap_mode;
+        if let Err(e) = config::save_config(home, &existing, username) {
+            tracing::warn!(
+                path = %cfg_path.display(),
+                error = %e,
+                "cryptsync: failed to record wrap_mode in existing config.yaml"
             );
         }
     }
@@ -595,11 +632,27 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     let salt = fs::read(&salt_path)
         .with_context(|| format!("reading {}", salt_path.display()))?;
 
-    let password = prompt_password(false)?;
-    if password.is_empty() {
-        bail!("password must not be empty");
-    }
-    let identity = crypt::unwrap_identity(&blob, password.as_bytes(), &salt)?;
+    // Route the wrap-key source by the mode persisted at init time.
+    // Standalone: prompt the operator. Fleet: ask the self-fleet
+    // session helper (no prompt). Failure to source the key in either
+    // case is fatal — we don't fall back across modes since the wrong
+    // mode would just produce an AEAD tag mismatch downstream and a
+    // less useful error.
+    let cfg = config::load_config(&home);
+    let wrap_password: Zeroizing<Vec<u8>> = match cfg.wrap_mode {
+        config::WrapMode::Standalone => {
+            let password = prompt_password(false)?;
+            if password.is_empty() {
+                bail!("password must not be empty");
+            }
+            Zeroizing::new(password.into_bytes())
+        }
+        config::WrapMode::Fleet => crypt::derive_fleet_wrap_password().context(
+            "fleet-mode unlock requires the self-fleet session helper to be running; \
+             run `vigo swarm self-fleet unlock` first",
+        )?,
+    };
+    let identity = crypt::unwrap_identity(&blob, wrap_password.as_slice(), &salt)?;
 
     // Parent shell PID — so the session helper can self-terminate
     // when the shell exits. Naive `getppid()` returns the immediate
@@ -614,7 +667,6 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     // ppid chain past known intermediates to find the actual shell.
     let parent_pid = resolve_shell_pid()
         .unwrap_or_else(|| unsafe { libc::getppid() } as u32);
-    let cfg = config::load_config(&home);
     session::spawn_helper(&identity, parent_pid, cfg.idle_timeout_minutes, &home)?;
 
     println!("✓ Unlocked. Session helper running until logout, lock, or {} min idle.",
@@ -1924,10 +1976,28 @@ fn append_recipient(path: &Path, pubkey: &str, username: &str) -> Result<()> {
     Ok(())
 }
 
-/// Self-documenting config.yaml template. Written on first enrollment so
-/// the operator opening ~/.cryptsync/config.yaml doesn't need to consult
-/// external docs to understand what the file is for.
-const CONFIG_TEMPLATE: &str = "\
+/// Build the self-documenting config.yaml template with the chosen
+/// `wrap_mode` baked in. Written on first enrollment so the operator
+/// opening ~/.cryptsync/config.yaml doesn't need to consult external
+/// docs to understand what the file is for.
+fn config_template(wrap_mode: config::WrapMode) -> String {
+    let (mode_value, mode_blurb) = match wrap_mode {
+        config::WrapMode::Standalone => (
+            "standalone",
+            "# wrap_mode: standalone — identity.age is wrapped under a per-envoy\n\
+             # passphrase you typed at `cryptsync standalone init / enroll`. `unlock`\n\
+             # prompts for it. Independent of self-fleet.",
+        ),
+        config::WrapMode::Fleet => (
+            "fleet",
+            "# wrap_mode: fleet — identity.age is wrapped under a key derived from\n\
+             # this user's self-fleet identity (ADR-016). `unlock` succeeds without a\n\
+             # prompt as long as the self-fleet session helper is running. Run\n\
+             # `vigo swarm self-fleet unlock` first if it isn't.",
+        ),
+    };
+    format!(
+        "\
 # cryptsync per-user config
 #
 # Lives at ~/.cryptsync/config.yaml. Read by the cryptsync daemon on
@@ -1950,9 +2020,19 @@ cross_subnet_peers: []
 # Minutes of idle time before the session helper auto-locks and scrubs
 # the unwrapped identity from memory. Resets on every decrypt call.
 idle_timeout_minutes: 60
-";
 
-fn write_config_template(path: &Path, username: &str) -> Result<()> {
+# How identity.age is wrapped (set by init; do not edit by hand —
+# changing this without re-enrolling will break unlock).
+{mode_blurb}
+wrap_mode: {mode_value}
+",
+        mode_blurb = mode_blurb,
+        mode_value = mode_value,
+    )
+}
+
+fn write_config_template(path: &Path, username: &str, wrap_mode: config::WrapMode) -> Result<()> {
+    let body = config_template(wrap_mode);
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
@@ -1962,7 +2042,7 @@ fn write_config_template(path: &Path, username: &str) -> Result<()> {
             .mode(0o600)
             .open(path)
             .with_context(|| format!("creating {}", path.display()))?;
-        f.write_all(CONFIG_TEMPLATE.as_bytes())?;
+        f.write_all(body.as_bytes())?;
         f.sync_all().ok();
         drop(f);
         super::chown_to_user(path, username)
@@ -1970,7 +2050,7 @@ fn write_config_template(path: &Path, username: &str) -> Result<()> {
     }
     #[cfg(not(unix))]
     {
-        fs::write(path, CONFIG_TEMPLATE)
+        fs::write(path, &body)
             .with_context(|| format!("writing {}", path.display()))?;
         let _ = username;
     }
