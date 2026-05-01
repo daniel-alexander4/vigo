@@ -1530,7 +1530,8 @@ async fn main() -> Result<()> {
     if let Some(arg0) = std::env::args_os().next() {
         match multicall::classify_argv0(&arg0) {
             Some(multicall::MulticallMode::GitRemoteVigo) => {
-                multicall::run_git_remote_vigo_stub();
+                let args: Vec<String> = std::env::args().collect();
+                multicall::run_git_remote_vigo(args);
             }
             None => {}
         }

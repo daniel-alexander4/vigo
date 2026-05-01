@@ -23,12 +23,19 @@
 //!    match against an explicit table. A blanket `contains("git-remote-vigo")`
 //!    would be both too permissive and too brittle.
 //!
-//! Phase 1 (this commit) wires the dispatch and ships a stub that
-//! exits with a distinctive code so an integration test can verify
-//! the path is wired without depending on the full helper protocol.
-//! The real `git-remote-vigo` body lands later in the ADR-015 arc
-//! alongside the helper daemon and `git-receive-pack` / `git-upload-pack`
-//! proxy.
+//! ADR-015 step 4 wired the real body in
+//! [`crate::swarm::gitmirror::remote_helper::run`]: speak the git
+//! remote-helper protocol on stdin/stdout, declare the `connect`
+//! capability, and on `connect <service>` open
+//! `/var/run/vigo/gitmirror.sock`, send the
+//! `HELLO <project_id_hex> <service>` handshake, and splice the
+//! socket transparently to git's stdio. The agent on the other end
+//! verifies the user's token chain and proxies to
+//! `git-upload-pack` / `git-receive-pack`.
+//!
+//! The phase-1 stub at [`run_git_remote_vigo_stub`] is retained as
+//! [`STUB_EXIT_CODE`]'s anchor for the integration test that proved
+//! the dispatch was wired before the protocol landed.
 
 use std::ffi::OsStr;
 use std::path::Path;
@@ -90,19 +97,24 @@ fn classify_basename(basename: &str) -> Option<MulticallMode> {
     }
 }
 
-/// Phase 1 stub for the `git-remote-vigo` mode. Emits a clear "this
-/// is wired but not implemented" message on stderr and exits with
-/// `STUB_EXIT_CODE`. Once ADR-015's helper daemon and receive-pack
-/// proxy land, this body is replaced with the real remote-helper
-/// protocol loop (capabilities, list, fetch, push) talking to the
-/// agent over the `$XDG_RUNTIME_DIR/vigo/gitmirror.sock` socket.
+/// Phase 1 stub retained for the dispatch test fixture. The real
+/// `git-remote-vigo` body lives in
+/// [`crate::swarm::gitmirror::remote_helper::run`] and is invoked
+/// directly from `main()`.
+#[allow(dead_code)]
 pub fn run_git_remote_vigo_stub() -> ! {
     eprintln!(
-        "git-remote-vigo: ADR-015 phase 1 — multi-call dispatch is wired, \
-         the remote-helper transport is not implemented yet. \
-         Until then, vigo:// URLs cannot be cloned, fetched, or pushed."
+        "git-remote-vigo: stub path — caller should dispatch to \
+         crate::swarm::gitmirror::remote_helper::run."
     );
     std::process::exit(STUB_EXIT_CODE);
+}
+
+/// Real dispatch entry point. Runs the git remote-helper protocol
+/// loop and exits when the splice closes (or the daemon refuses).
+/// Always terminates the process — never returns.
+pub fn run_git_remote_vigo(args: Vec<String>) -> ! {
+    crate::swarm::gitmirror::remote_helper::run(args);
 }
 
 #[cfg(test)]

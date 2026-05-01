@@ -717,20 +717,21 @@ fn cmd_leave(args: &[String]) -> Result<()> {
         return Ok(());
     }
 
-    // Queue the LEAVE sentinel — the helper daemon (step 4) will sign
-    // and gossip the envelope. Sentinel is named after the same
-    // pattern cryptsync uses (`leave.pending`).
-    write_sentinel(
-        &caller.home,
+    // Sign the LEAVE envelope inline via the user's self-fleet
+    // session helper (CLI runs as the user; root-side reactor cannot
+    // reach a user's session helper). Sentinel content IS the signed
+    // envelope — the helper daemon's reactor moves it to
+    // /var/lib/vigo/swarm/gitmirror/envelopes/<pid>/leaves/ verbatim,
+    // re-verifying on the way in.
+    let leaver_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    let leave_time = now_secs();
+    let leave_envelope = super::envelopes::LeaveEnvelope::build_with(
         &project_id,
-        "leave.pending",
-        &SentinelLeave {
-            project_id: hex_id(&project_id),
-            handle: cfg.handle.clone(),
-            purge,
-            queued_at: now_secs(),
-        },
+        &leaver_pub,
+        leave_time,
+        |bytes| sign_with_session(bytes),
     )?;
+    write_sentinel(&caller.home, &project_id, "leave.pending", &leave_envelope)?;
     println!("queued LEAVE for project '{}'", cfg.handle);
 
     if purge && caller.is_root {
@@ -754,22 +755,6 @@ fn cmd_leave(args: &[String]) -> Result<()> {
     purge_user_state(&caller.home, &project_id)?;
     println!("dropped local state at {}", project_state::user_project_dir(&caller.home, &project_id).display());
     Ok(())
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct SentinelLeave {
-    project_id: String,
-    handle: String,
-    purge: bool,
-    queued_at: i64,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct SentinelRevoke {
-    project_id: String,
-    token_id: String,
-    reason: String,
-    queued_at: i64,
 }
 
 fn write_sentinel<T: Serialize>(
@@ -960,20 +945,25 @@ fn cmd_revoke(args: &[String]) -> Result<()> {
         bail!("this fleet holds a {:?} token on '{}'; only admins can revoke", leaf.body.role, cfg.handle);
     }
 
-    write_sentinel(
-        &caller.home,
+    // Sign the REVOKE envelope inline via the user's self-fleet
+    // session helper. The leaf admin token's subject_fleet_pubkey IS
+    // this user's fleet pubkey (verified above by the role check) —
+    // signing with that key produces an envelope the receiving side
+    // can authorize against the project's token tree.
+    let admin_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    let revoked_at = now_secs();
+    let envelope = super::envelopes::RevokeEnvelope::build_with(
         &project_id,
-        "revoke.pending",
-        &SentinelRevoke {
-            project_id: cfg.project_id.clone(),
-            token_id: hex_id(&token_id),
-            reason,
-            queued_at: now_secs(),
-        },
+        &token_id,
+        revoked_at,
+        &reason,
+        &admin_pub,
+        |bytes| sign_with_session(bytes),
     )?;
+    write_sentinel(&caller.home, &project_id, "revoke.pending", &envelope)?;
     println!("queued REVOKE of token {} on project '{}'", hex_id(&token_id), cfg.handle);
     println!();
-    println!("The helper daemon (step 4) will sign + gossip the revocation envelope.");
+    println!("The helper daemon will persist + gossip the revocation envelope on its next sweep.");
     Ok(())
 }
 

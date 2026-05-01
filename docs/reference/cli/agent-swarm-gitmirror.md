@@ -5,13 +5,19 @@
 
 ## Status: ADR-015 cutover in progress
 
-Step 3 of the ADR-015 arc lands the local-state surface only. Verbs that mint or sign envelopes (`init`, `invite`, `revoke`, `leave`, `reanchor`) require self-fleet to be unlocked — see [`vigo swarm self-fleet`](agent-swarm-self-fleet.md).
+Steps 1–3 (multi-call dispatch, capability tokens, per-user state + CLI) and the first slice of step 4 (helper daemon + `git-remote-vigo` body + revoke / leave envelopes) have shipped. Verbs that mint or sign envelopes (`init`, `invite`, `revoke`, `leave`, `reanchor`) require self-fleet to be unlocked — see [`vigo swarm self-fleet`](agent-swarm-self-fleet.md).
 
-The helper-daemon-mediated transport (push, fetch, fan-out, gossip) lands in step 4. Until then:
+What works end-to-end today:
 
 - `init` / `invite` / `join` / `list` / `status` are fully functional locally.
-- `leave` and `revoke` write a `*.pending` sentinel under `~/.vigo-gitmirror/<project_id>/` that the helper daemon will pick up in step 4.
-- `reanchor` accepts the type-the-handle confirmation but bails before the byte-level migration, which requires the helper daemon.
+- `leave` and `revoke` sign envelopes inline via the user's self-fleet session helper, write the signed envelope as a `*.pending` sentinel; the agent's root reactor sweeps every 60 s and persists them to `/var/lib/vigo/swarm/gitmirror/envelopes/<project_id>/{revokes,leaves}/`.
+- `git clone vigo://<project_id>/<handle>` and `git push vigo://…` against the local envoy: the user-side `git-remote-vigo` binary opens `/var/run/vigo/gitmirror.sock` (SO_PEERCRED-gated), the agent verifies the user's token chain, and proxies to `git upload-pack` / `git receive-pack` against the bare repo.
+
+What's still pending (the next slice of step 4):
+
+- Cross-envoy push fan-out — pushes are accepted locally but don't yet propagate to other member envoys.
+- Cross-envoy envelope gossip — revoke / leave envelopes persist locally but don't yet replicate to peers.
+- `reanchor` accepts the type-the-handle confirmation but bails before the byte-level migration.
 
 ## Invocation
 
@@ -140,11 +146,9 @@ vigo swarm gitmirror project leave <project_id> [--purge] [--yes]
 
 **Effects:**
 
-- Writes a `leave.pending` sentinel under `~/.vigo-gitmirror/<project_id>/` for the helper daemon to sign + gossip.
+- Signs a LEAVE envelope inline via the user's self-fleet session helper and writes it as a `leave.pending` sentinel under `~/.vigo-gitmirror/<project_id>/`. The agent's root reactor sweeps every 60 s and moves the signed envelope into `/var/lib/vigo/swarm/gitmirror/envelopes/<project_id>/leaves/`. After the next slice of step 4 lands, the same envelope will gossip to peers; today it persists locally only.
 - Removes the per-user state directory (`project.json` + `tokens.json` + sentinels).
 - With `--purge` and root, removes `/var/lib/vigo/swarm/gitmirror/projects/<project_id>.git`.
-
-The LEAVE envelope is signed in step 4 alongside the helper daemon — until then, the sentinel sits on disk waiting.
 
 ## `project list`
 
@@ -179,7 +183,7 @@ vigo swarm gitmirror project revoke <project_id> --token-id <hex> [--reason <tex
 - `--token-id <hex>` — 64-char hex token ID. Tokens are content-addressed (`token_id = sha256(canonical_bytes)`), surfaced via `project status` (chain depth) and the audit log.
 - `--reason <text>` — optional human-readable reason captured in the envelope.
 
-**Effects:** writes a `revoke.pending` sentinel under `~/.vigo-gitmirror/<project_id>/`. The helper daemon (step 4) signs and gossips the envelope per the existing 90-day reap pattern from cryptsync.
+**Effects:** signs a REVOKE envelope inline via the user's self-fleet session helper (the leaf admin token's subject == this user's fleet pubkey, so the user holds an authorized signing key) and writes it as a `revoke.pending` sentinel under `~/.vigo-gitmirror/<project_id>/`. The agent's root reactor sweeps every 60 s and moves the signed envelope into `/var/lib/vigo/swarm/gitmirror/envelopes/<project_id>/revokes/<token_id_hex>.json`. From that point any push presenting a chain that includes the revoked token id is rejected by the helper daemon on this envoy. Cross-envoy gossip lands in the next slice of step 4. 90-day retention before reap, matching cryptsync.
 
 ## `project reanchor`
 
@@ -191,7 +195,7 @@ vigo swarm gitmirror project reanchor <project_id>
 
 **Interactive:** prints the consequences (old URL becomes dead, members must re-add the new remote, tokens not portable) and refuses to proceed unless the user types the project handle to confirm. Same anti-footgun pattern as `git push --force-with-lease`.
 
-**Status:** the confirmation is wired in step 3, but the actual byte-level migration into the new project_id happens in the helper daemon (step 4). Today the verb bails after the type-the-handle check with a pointer to step 4.
+**Status:** the confirmation is wired in step 3, but the actual byte-level migration of refs and objects into the new project_id is the last item of step 4 (after fan-out, gossip, and the server-mesh rewrite). Today the verb bails after the type-the-handle check with a pointer to that follow-up slice.
 
 ## Hidden verbs
 
