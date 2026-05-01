@@ -6,7 +6,7 @@ package license
 // Canonical Vigo pricing and support schedule. Sourced from
 // COMMERCIAL-TERMS.md — update this table whenever the pricing sheet
 // moves and the web UI picks it up on the next build. The on-wire
-// license format in git.alexander4.io/vigo-lic intentionally carries
+// license format in git.alexander4.io/tessera intentionally carries
 // only max_envoys; the matching commercial terms live with the
 // product that sells them, not the cryptographic format.
 

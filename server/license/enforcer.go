@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	licfmt "git.alexander4.io/vigo-lic/license"
+	licfmt "git.alexander4.io/tessera/license"
 	"git.alexander4.io/vigo/server/metrics"
 )
 

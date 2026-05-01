@@ -323,24 +323,24 @@ if $NEED_IMAGE_REBUILD; then
     # Bust all caches to ensure fresh binaries in the runtime image.
     touch "$REPO_DIR/protobuf/vigo.proto" "$REPO_DIR/agent/src/main.rs" 2>/dev/null || true
 
-    # vigo's go.mod uses `replace git.alexander4.io/vigo-lic => ../vigo-lic`
-    # so building needs the sibling vigo-lic repo visible inside the Docker
+    # vigo's go.mod uses `replace git.alexander4.io/tessera => ../tessera`
+    # so building needs the sibling tessera repo visible inside the Docker
     # build context. Docker build contexts can't reach outside their root,
     # so stage a combined tree in a tempdir: vigo as the context root,
-    # vigo-lic copied to `.build-deps/vigo-lic/`, and rewrite the replace
+    # tessera copied to `.build-deps/tessera/`, and rewrite the replace
     # directive in the staged go.mod to point at the in-context path. The
     # real repo's go.mod is untouched.
-    VIGO_LIC_DIR="$(dirname "$REPO_DIR")/vigo-lic"
-    if [ ! -d "$VIGO_LIC_DIR" ]; then
-        echo "ERROR: sibling vigo-lic repo not found at $VIGO_LIC_DIR" >&2
-        echo "       vigo's go.mod requires it (replace => ../vigo-lic)." >&2
-        echo "       Clone it next to vigo: cd $(dirname "$REPO_DIR") && git clone <vigo-lic-url>" >&2
+    TESSERA_DIR="$(dirname "$REPO_DIR")/tessera"
+    if [ ! -d "$TESSERA_DIR" ]; then
+        echo "ERROR: sibling tessera repo not found at $TESSERA_DIR" >&2
+        echo "       vigo's go.mod requires it (replace => ../tessera)." >&2
+        echo "       Clone it next to vigo: cd $(dirname "$REPO_DIR") && git clone <tessera-url>" >&2
         exit 1
     fi
 
     STAGE_DIR="$(mktemp -d -t vigo-build-XXXXXX)"
     trap 'rm -rf "$STAGE_DIR"' EXIT
-    echo "Staging Docker build context at $STAGE_DIR (includes vigo-lic)..."
+    echo "Staging Docker build context at $STAGE_DIR (includes tessera)..."
     # Mirror the repo's .dockerignore exclusions: skip the Rust target dirs
     # (54+ GiB), host build outputs, git history, TLS certs, IDE state,
     # Claude scratch, and test/coverage artifacts.
@@ -361,11 +361,11 @@ if $NEED_IMAGE_REBUILD; then
         "$REPO_DIR/" "$STAGE_DIR/"
     mkdir -p "$STAGE_DIR/.build-deps"
     rsync -a --exclude='.git/' --exclude='bin/' \
-        "$VIGO_LIC_DIR/" "$STAGE_DIR/.build-deps/vigo-lic/"
+        "$TESSERA_DIR/" "$STAGE_DIR/.build-deps/tessera/"
     # Rewrite the replace directive to target the in-context path so
-    # `go mod download` inside the builder resolves vigo-lic without
+    # `go mod download` inside the builder resolves tessera without
     # needing to reach outside the Docker context.
-    sed -i 's|=> \.\./vigo-lic|=> ./.build-deps/vigo-lic|' "$STAGE_DIR/go.mod"
+    sed -i 's|=> \.\./tessera|=> ./.build-deps/tessera|' "$STAGE_DIR/go.mod"
 
     echo "Building Docker image from source..."
     DOCKER_BUILDKIT=1 docker build \

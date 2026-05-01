@@ -91,7 +91,7 @@ Two new REST endpoints: `POST /api/v1/backup/snapshot` (create archive) and `GET
 
 ### Additional Improvements
 
-- **FHS compliance**: daemon binaries moved from `/usr/local/bin` to `/usr/local/sbin` (vigo, vigosrv, vigo-license-manager). CLI stays at `/usr/local/bin/vigocli`.
+- **FHS compliance**: daemon binaries moved from `/usr/local/bin` to `/usr/local/sbin` (vigo, vigosrv, tessera — formerly `vigo-license-manager`). CLI stays at `/usr/local/bin/vigocli`.
 - **Package timeout**: default increased from 60s to 300s for package and repository executors (arm64/low-powered hardware was timing out during apt installs).
 - **P2P spanner architecture document**: design doc for future peer-to-peer spanner eliminating hub as SPOF. Covers git-based config, peer discovery, leader election. Not implemented — hub-spoke sufficient for current use.
 

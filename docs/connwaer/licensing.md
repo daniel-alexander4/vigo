@@ -10,7 +10,7 @@ Connwaer reads the same license file as Vigo, from the configured `license_dir` 
 Generate a license with the Connwaer feature:
 
 ```bash
-vigo-license-manager license create \
+tessera license create \
   --customer "Acme Corp" \
   --customer-id "acme" \
   --tier "growth" \

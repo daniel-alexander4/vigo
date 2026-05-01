@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"git.alexander4.io/vigo-lic/license"
+	"git.alexander4.io/tessera/license"
 	"github.com/spf13/cobra"
 )
 

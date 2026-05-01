@@ -30,10 +30,10 @@ RUN apk add --no-cache gcc musl-dev git
 WORKDIR /build
 
 COPY go.mod go.sum ./
-# vigo-lic is a sibling Go module (`git.alexander4.io/vigo-lic`) wired
+# tessera is a sibling Go module (`git.alexander4.io/tessera`) wired
 # in via a `replace` directive in go.mod. The Docker build context
-# can't reach outside its root, so `scripts/upgrade.sh` stages vigo-lic
-# into `.build-deps/vigo-lic/` and rewrites the replace to point there.
+# can't reach outside its root, so `scripts/upgrade.sh` stages tessera
+# into `.build-deps/tessera/` and rewrites the replace to point there.
 # Copy it in *before* `go mod download` so resolution succeeds at this
 # step instead of much later at `go build`.
 COPY .build-deps/ .build-deps/
@@ -60,8 +60,9 @@ RUN CGO_ENABLED=1 go build \
     -ldflags="-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
     -o vigocli ./cli
 
-# vigo-license-manager is an internal vendor-side tool and lives in the
-# separate vigo-lic repo (git.alexander4.io/vigo-lic) — never shipped here.
+# The license-manager binary (`tessera`) is an internal vendor-side tool
+# and lives in the separate tessera repo (git.alexander4.io/tessera) —
+# never shipped here.
 
 # --- Runtime image ---
 

@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	licfmt "git.alexander4.io/vigo-lic/license"
+	licfmt "git.alexander4.io/tessera/license"
 )
 
 func TestEnforcerCompliant(t *testing.T) {

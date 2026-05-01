@@ -2,10 +2,10 @@ module git.alexander4.io/vigo
 
 go 1.25.0
 
-replace git.alexander4.io/vigo-lic => ../vigo-lic
+replace git.alexander4.io/tessera => ../tessera
 
 require (
-	git.alexander4.io/vigo-lic v0.1.0
+	git.alexander4.io/tessera v0.1.0
 	github.com/alecthomas/chroma/v2 v2.23.1
 	github.com/alexedwards/scs/sqlite3store v0.0.0-20251002162104-209de6e426de
 	github.com/alexedwards/scs/v2 v2.9.0
