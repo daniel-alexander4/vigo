@@ -671,12 +671,13 @@ func truncGitSha(sha string) string {
 }
 
 // labelDisplayName returns the rightmost colon-delimited segment of a
-// swarm blob label — the file name as the user thinks of it.
-// Gitmirror labels look like `cairn:<seeder>:<user>:<repo>`; the repo
-// at the tail is what gets shown. Labels without a colon (e.g. admin
-// payload labels like `pc-payload-1777298130`) pass through unchanged.
-// The full routing label is intentionally not surfaced anywhere user
-// visible — seeder/user are in the row subtitle when relevant.
+// swarm blob label — the file name as the user thinks of it. Legacy
+// gitmirror labels take the form `gitmirror:<host>:<user>:<project>`
+// and this helper surfaces just the project tail. Labels without a
+// colon (e.g. admin payload labels like `pc-payload-1777298130`)
+// pass through unchanged. The full routing label is intentionally
+// not surfaced anywhere user visible — host/user are in the row
+// subtitle when relevant.
 func labelDisplayName(label string) string {
 	if i := strings.LastIndex(label, ":"); i >= 0 && i < len(label)-1 {
 		return label[i+1:]

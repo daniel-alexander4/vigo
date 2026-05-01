@@ -19,6 +19,13 @@ import (
 	licfmt "git.alexander4.io/tessera/license"
 )
 
+// realPublicKey captures `licfmt.PublicKeyHex` at package-init time —
+// before any test mutates the global via `SetPublicKeyForTest`. Tests
+// that need to assert against the embedded free license (which was
+// signed at compile time with the real production key) use this
+// instead of hardcoding a literal that goes stale on key rotations.
+var realPublicKey = licfmt.PublicKeyHex
+
 func TestEnforcerCompliant(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 
@@ -105,7 +112,7 @@ func TestEnforcerExpired(t *testing.T) {
 	writeLic(t, dir, payload, priv)
 
 	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 
@@ -141,7 +148,7 @@ func TestEnforcerOverLimit(t *testing.T) {
 	writeLic(t, dir, payload, priv)
 
 	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil } // 10 > 5
 
@@ -160,9 +167,10 @@ func TestEnforcerNoLicenseFileFallsBackToFree(t *testing.T) {
 	dir := t.TempDir()
 
 	// Restore the real public key so the embedded free license verifies.
-	origKey := licfmt.PublicKeyHex
-	licfmt.SetPublicKeyForTest("616d6b3f669392ffd165100387d799a429cec74c09f4da153a7543bce578d8d3")
-	t.Cleanup(func() { licfmt.SetPublicKeyForTest(origKey) })
+	// `realPublicKey` is captured at package init before any other test
+	// can mutate the global, so this is robust against test ordering.
+	licfmt.SetPublicKeyForTest(realPublicKey)
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 5, nil }
 
@@ -186,9 +194,8 @@ func TestEnforcerNoLicenseFileFallsBackToFree(t *testing.T) {
 func TestEnforcerNoLicenseAndNoKey(t *testing.T) {
 	dir := t.TempDir()
 
-	origKey := licfmt.PublicKeyHex
 	licfmt.SetPublicKeyForTest("")
-	t.Cleanup(func() { licfmt.SetPublicKeyForTest(origKey) })
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 0, nil }
 
@@ -217,7 +224,7 @@ func TestEnforcerReload(t *testing.T) {
 	writeLic(t, dir, payload, priv)
 
 	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 
@@ -294,7 +301,7 @@ func TestEnforcerTimeline(t *testing.T) {
 	writeLic(t, dir, payload, priv)
 
 	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 
@@ -368,7 +375,7 @@ func TestCheckInWarning(t *testing.T) {
 	writeLic(t, dir, payload, priv)
 
 	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
 
 	// Compliant — no warning.
 	compliantCounter := func(ctx context.Context) (int, error) { return 3, nil }
@@ -394,11 +401,13 @@ func TestCheckInWarning(t *testing.T) {
 }
 
 func TestIsFreeLicense(t *testing.T) {
-	// With the built-in free license (no .lic on disk).
+	// With the built-in free license (no .lic on disk). Defend against
+	// prior-test pollution by explicitly restoring the real production
+	// pubkey (captured at package init) — the embedded free license
+	// was signed with this key at compile time.
 	dir := t.TempDir()
-	origKey := licfmt.PublicKeyHex
-	licfmt.SetPublicKeyForTest("616d6b3f669392ffd165100387d799a429cec74c09f4da153a7543bce578d8d3")
-	t.Cleanup(func() { licfmt.SetPublicKeyForTest(origKey) })
+	licfmt.SetPublicKeyForTest(realPublicKey)
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 5, nil }
 	e, err := NewEnforcer(dir, dir, "", counter, func() {})
@@ -454,7 +463,7 @@ func TestRegistrationAllowedAt_HardNodeLimit(t *testing.T) {
 	writeLic(t, dir, payload, priv)
 
 	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 	e, err := NewEnforcer(dir, dir, "", counter, func() {})
@@ -515,7 +524,7 @@ func TestRegistrationAllowedAt_DowngradeGraceStillBlocksHardLimit(t *testing.T) 
 	writeLic(t, dir, payload, priv)
 
 	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 	e, err := NewEnforcer(dir, dir, "", counter, func() {})
@@ -560,7 +569,7 @@ func TestRegistrationAllowedAt_StageServiceStopAlwaysBlocks(t *testing.T) {
 	writeLic(t, dir, payload, priv)
 
 	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(realPublicKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 	e, err := NewEnforcer(dir, graceDir, "", counter, func() {})

@@ -217,11 +217,10 @@ fi
 # Both trees are read-only reference templates — operators copy *from*
 # them via `vigocli config examples copy` / `config anti-examples copy`,
 # never edit them in place. Rebuilding from /seed/ on every startup
-# guarantees the tree matches the running image and prevents the four-
+# guarantees the tree matches the running image and prevents the
 # overlaid-layouts accumulation that prior in-place migrations produced
-# (post-0.33.0 stockpile/ flat layout overlaid on legacy
-# worksite/{stockpile,scaffolding}/... and worksite/stockpile/stones/...
-# from earlier renames).
+# (each rename of the on-disk substrate vocabulary historically left
+# behind a layer that the next rename had to step over).
 #
 # Anything custom that an operator dropped under examples/ or
 # anti-examples/ will be removed; this is by design — those trees are
