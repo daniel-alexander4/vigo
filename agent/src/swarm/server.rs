@@ -293,6 +293,22 @@ async fn handle_request(
             }
         }
 
+        // Envelope gossip endpoints (ADR-015 step 4 fourth slice).
+        // Receivers persist signed envelopes idempotently (save_*
+        // returns false on no-op) so re-arrival is cheap.
+        (&Method::POST, p) if p.starts_with("/swarm/gitmirror/envelopes/") && p.ends_with("/revokes") => {
+            handle_envelope_post(p, req, EnvelopeKind::Revoke).await
+        }
+        (&Method::POST, p) if p.starts_with("/swarm/gitmirror/envelopes/") && p.ends_with("/leaves") => {
+            handle_envelope_post(p, req, EnvelopeKind::Leave).await
+        }
+        (&Method::GET, p) if p.starts_with("/swarm/gitmirror/envelopes/") && p.ends_with("/digest") => {
+            tokio::task::block_in_place(|| handle_envelope_digest(p))
+        }
+        (&Method::GET, p) if p.starts_with("/swarm/gitmirror/envelopes/") && p.ends_with("/all") => {
+            tokio::task::block_in_place(|| handle_envelope_all(p))
+        }
+
         // Cryptsync: pull ciphertext from a user's ~/cryptsync/.
         // Symmetric with filesync's pull but under /cryptsync/pull/.
         (&Method::GET, p) if p.starts_with("/swarm/cryptsync/pull/") => {
@@ -696,6 +712,151 @@ async fn handle_gitmirror_push_v2(
         refs_changed
     );
     ok_json(&body)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum EnvelopeKind {
+    Revoke,
+    Leave,
+}
+
+/// Extract the `<pid_hex>` segment from a path of shape
+/// `/swarm/gitmirror/envelopes/<pid_hex>/<suffix>`. Returns `None`
+/// if the shape is wrong or `<pid_hex>` isn't valid.
+fn parse_envelope_path(path: &str) -> Option<[u8; crate::swarm::gitmirror::tokens::ID_LEN]> {
+    let stripped = path.strip_prefix("/swarm/gitmirror/envelopes/")?;
+    let (pid_hex, _suffix) = stripped.split_once('/')?;
+    if !is_project_id_path_segment(pid_hex) {
+        return None;
+    }
+    crate::swarm::gitmirror::project_state::parse_hex_id(pid_hex).ok()
+}
+
+/// Cap on accepted envelope JSON body size. Envelopes are tiny
+/// (~600B for a leave, ~700B for a revoke); a kilobyte ceiling
+/// rejects abuse without rejecting legitimate input.
+const MAX_ENVELOPE_BODY: u64 = 16 * 1024;
+
+async fn handle_envelope_post(
+    path: &str,
+    req: Request<hyper::body::Incoming>,
+    kind: EnvelopeKind,
+) -> Response<Full<Bytes>> {
+    use http_body_util::BodyExt;
+
+    let project_id = match parse_envelope_path(path) {
+        Some(p) => p,
+        None => return bad_request("malformed envelope path"),
+    };
+
+    // Read the body with a tight cap.
+    let mut body = req.into_body();
+    let mut buf = Vec::with_capacity(1024);
+    let mut total: u64 = 0;
+    loop {
+        let frame = match body.frame().await {
+            Some(Ok(f)) => f,
+            Some(Err(e)) => return bad_request(&format!("body read error: {}", e)),
+            None => break,
+        };
+        if let Ok(data) = frame.into_data() {
+            let chunk: &[u8] = &data;
+            total = total.saturating_add(chunk.len() as u64);
+            if total > MAX_ENVELOPE_BODY {
+                return payload_too_large("envelope body exceeds 16KiB");
+            }
+            buf.extend_from_slice(chunk);
+        }
+    }
+
+    let gitmirror_base = crate::platform::paths::default_gitmirror_dir();
+    let result = tokio::task::block_in_place(|| -> Result<bool, anyhow::Error> {
+        match kind {
+            EnvelopeKind::Revoke => {
+                let env: crate::swarm::gitmirror::envelopes::RevokeEnvelope =
+                    serde_json::from_slice(&buf)
+                        .map_err(|e| anyhow::anyhow!("parse revoke envelope: {}", e))?;
+                let raw = env
+                    .verify_signature()
+                    .map_err(|e| anyhow::anyhow!("verify_signature: {}", e))?;
+                if raw.project_id != project_id {
+                    return Err(anyhow::anyhow!(
+                        "envelope project_id does not match URL"
+                    ));
+                }
+                let changed =
+                    crate::swarm::gitmirror::envelopes::save_revoke(&gitmirror_base, &env)?;
+                Ok(changed)
+            }
+            EnvelopeKind::Leave => {
+                let env: crate::swarm::gitmirror::envelopes::LeaveEnvelope =
+                    serde_json::from_slice(&buf)
+                        .map_err(|e| anyhow::anyhow!("parse leave envelope: {}", e))?;
+                let raw = env
+                    .verify_signature()
+                    .map_err(|e| anyhow::anyhow!("verify_signature: {}", e))?;
+                if raw.project_id != project_id {
+                    return Err(anyhow::anyhow!(
+                        "envelope project_id does not match URL"
+                    ));
+                }
+                let changed =
+                    crate::swarm::gitmirror::envelopes::save_leave(&gitmirror_base, &env)?;
+                Ok(changed)
+            }
+        }
+    });
+
+    match result {
+        Ok(changed) => {
+            let body = format!("{{\"accepted\":true,\"changed\":{}}}", changed);
+            ok_json(&body)
+        }
+        Err(e) => {
+            warn!(
+                kind = ?kind,
+                error = %e,
+                "envelope POST: rejected"
+            );
+            bad_request(&format!("rejected: {:#}", e))
+        }
+    }
+}
+
+fn handle_envelope_digest(path: &str) -> Response<Full<Bytes>> {
+    let project_id = match parse_envelope_path(path) {
+        Some(p) => p,
+        None => return bad_request("malformed envelope path"),
+    };
+    let gitmirror_base = crate::platform::paths::default_gitmirror_dir();
+    match crate::swarm::gitmirror::fan_out::DigestResponse::for_project(
+        &gitmirror_base,
+        &project_id,
+    ) {
+        Ok(d) => match serde_json::to_string(&d) {
+            Ok(s) => ok_json(&s),
+            Err(e) => service_unavailable(&format!("serialize digest: {}", e)),
+        },
+        Err(e) => service_unavailable(&format!("compute digest: {:#}", e)),
+    }
+}
+
+fn handle_envelope_all(path: &str) -> Response<Full<Bytes>> {
+    let project_id = match parse_envelope_path(path) {
+        Some(p) => p,
+        None => return bad_request("malformed envelope path"),
+    };
+    let gitmirror_base = crate::platform::paths::default_gitmirror_dir();
+    match crate::swarm::gitmirror::fan_out::EnvelopesBundle::for_project(
+        &gitmirror_base,
+        &project_id,
+    ) {
+        Ok(b) => match serde_json::to_string(&b) {
+            Ok(s) => ok_json(&s),
+            Err(e) => service_unavailable(&format!("serialize bundle: {}", e)),
+        },
+        Err(e) => service_unavailable(&format!("load bundle: {:#}", e)),
+    }
 }
 
 // ── Response helpers ──────────────────────────────────────────────────────
@@ -1294,6 +1455,45 @@ mod tests {
         // Even a 64-char string with non-hex chars must be rejected.
         let mostly_hex = format!("{}!", "a".repeat(63));
         assert!(!is_project_id_path_segment(&mostly_hex));
+    }
+
+    #[test]
+    fn parse_envelope_path_extracts_canonical_pid() {
+        let pid = "0".repeat(64);
+        let parsed = parse_envelope_path(&format!(
+            "/swarm/gitmirror/envelopes/{}/digest",
+            pid
+        ))
+        .unwrap();
+        assert_eq!(parsed, [0u8; 32]);
+    }
+
+    #[test]
+    fn parse_envelope_path_handles_revokes_suffix() {
+        let pid = "f".repeat(64);
+        let parsed = parse_envelope_path(&format!(
+            "/swarm/gitmirror/envelopes/{}/revokes",
+            pid
+        ))
+        .unwrap();
+        assert_eq!(parsed, [0xFFu8; 32]);
+    }
+
+    #[test]
+    fn parse_envelope_path_rejects_short_pid() {
+        assert!(parse_envelope_path("/swarm/gitmirror/envelopes/abc/digest").is_none());
+    }
+
+    #[test]
+    fn parse_envelope_path_rejects_missing_suffix() {
+        let pid = "a".repeat(64);
+        assert!(parse_envelope_path(&format!("/swarm/gitmirror/envelopes/{}", pid)).is_none());
+    }
+
+    #[test]
+    fn parse_envelope_path_rejects_uppercase_pid() {
+        let pid = "A".repeat(64);
+        assert!(parse_envelope_path(&format!("/swarm/gitmirror/envelopes/{}/digest", pid)).is_none());
     }
 
     #[test]

@@ -450,6 +450,358 @@ fn local_hostname() -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+// ============================================================
+// Envelope gossip (ADR-015 step 4 fourth slice)
+//
+// After save_revoke / save_leave persists an envelope locally, the
+// reactor fans the envelope out to every known peer for the project
+// so a token revoked on one envoy is refused on every envoy within
+// one gossip cycle. Simple POST + on-receive idempotent save.
+//
+// For peers that were offline during gossip, periodic
+// digest-reconciliation closes the gap: once per reactor sweep we
+// fetch each peer's /digest and pull /all on mismatch. The local
+// `save_*` calls are idempotent so a re-merge of overlapping data
+// is cheap.
+// ============================================================
+
+/// Gossip a revocation envelope to every known peer for the project.
+/// Best-effort — errors per peer are logged at warn but never abort
+/// the sweep.
+pub fn gossip_revoke_to_peers(
+    home: &Path,
+    project_id: &[u8; ID_LEN],
+    envelope: &super::envelopes::RevokeEnvelope,
+    tls: &crate::update::TlsCerts,
+) -> (usize, usize) {
+    gossip_envelope_inner(home, project_id, "revokes", envelope, tls)
+}
+
+/// Gossip a leave envelope to every known peer for the project.
+pub fn gossip_leave_to_peers(
+    home: &Path,
+    project_id: &[u8; ID_LEN],
+    envelope: &super::envelopes::LeaveEnvelope,
+    tls: &crate::update::TlsCerts,
+) -> (usize, usize) {
+    gossip_envelope_inner(home, project_id, "leaves", envelope, tls)
+}
+
+fn gossip_envelope_inner<T: serde::Serialize>(
+    home: &Path,
+    project_id: &[u8; ID_LEN],
+    kind: &str,
+    envelope: &T,
+    tls: &crate::update::TlsCerts,
+) -> (usize, usize) {
+    let cfg = match ProjectConfig::load(home, project_id) {
+        Ok(Some(c)) => c,
+        _ => return (0, 0),
+    };
+    let pid_hex = hex_id(project_id);
+    let local = local_hostname();
+    let mut targets: std::collections::BTreeMap<String, String> =
+        std::collections::BTreeMap::new();
+    if let Some(g) = super::project_peers::global() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        for entry in g.peers_for(&pid_hex, now) {
+            if let Some(my) = local.as_deref() {
+                if entry.host.eq_ignore_ascii_case(my) {
+                    continue;
+                }
+            }
+            let url_host = match entry.addr {
+                Some(std::net::IpAddr::V4(v4)) => v4.to_string(),
+                Some(std::net::IpAddr::V6(v6)) => format!("[{}]", v6),
+                None => entry.host.clone(),
+            };
+            targets.insert(url_host, entry.host);
+        }
+    }
+    for hostname in &cfg.cross_subnet_members {
+        if let Some(my) = local.as_deref() {
+            if hostname.eq_ignore_ascii_case(my) {
+                continue;
+            }
+        }
+        targets
+            .entry(hostname.clone())
+            .or_insert_with(|| hostname.clone());
+    }
+    if targets.is_empty() {
+        return (0, 0);
+    }
+
+    let agent = match build_push_agent(tls) {
+        Ok(a) => a,
+        Err(e) => {
+            tracing::warn!(error = %e, "envelope gossip: cannot build mTLS HTTP agent");
+            return (0, 0);
+        }
+    };
+    let body = match serde_json::to_vec(envelope) {
+        Ok(b) => b,
+        Err(e) => {
+            tracing::warn!(error = %e, "envelope gossip: serialize failed");
+            return (0, 0);
+        }
+    };
+
+    let mut attempted = 0;
+    let mut succeeded = 0;
+    for (url_host, display_host) in &targets {
+        attempted += 1;
+        let url = format!(
+            "https://{}:{}/swarm/gitmirror/envelopes/{}/{}",
+            url_host,
+            crate::swarm::server::DEFAULT_PORT,
+            pid_hex,
+            kind,
+        );
+        match agent
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .send(&body[..])
+        {
+            Ok(resp) if resp.status().is_success() => {
+                succeeded += 1;
+                tracing::debug!(
+                    project_id = %pid_hex,
+                    peer = %display_host,
+                    kind,
+                    "envelope gossip: peer accepted"
+                );
+            }
+            Ok(resp) => {
+                tracing::warn!(
+                    project_id = %pid_hex,
+                    peer = %display_host,
+                    kind,
+                    status = %resp.status(),
+                    "envelope gossip: peer rejected"
+                );
+            }
+            Err(e) => {
+                tracing::debug!(
+                    project_id = %pid_hex,
+                    peer = %display_host,
+                    kind,
+                    error = %e,
+                    "envelope gossip: peer push failed (offline / unreachable)"
+                );
+            }
+        }
+    }
+    (attempted, succeeded)
+}
+
+/// JSON shape of `GET /swarm/gitmirror/envelopes/<pid>/digest`.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct DigestResponse {
+    pub digest_hex: String,
+    pub revokes: usize,
+    pub leaves: usize,
+}
+
+impl DigestResponse {
+    pub fn for_project(gitmirror_base: &Path, project_id: &[u8; ID_LEN]) -> Result<Self> {
+        let digest = super::envelopes::project_digest(gitmirror_base, project_id)?;
+        let revokes = super::envelopes::load_revokes(gitmirror_base, project_id)?.len();
+        let leaves = super::envelopes::load_leaves(gitmirror_base, project_id)?.len();
+        Ok(Self {
+            digest_hex: hex::encode(digest),
+            revokes,
+            leaves,
+        })
+    }
+}
+
+/// JSON shape of `GET /swarm/gitmirror/envelopes/<pid>/all`.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct EnvelopesBundle {
+    pub revokes: Vec<super::envelopes::RevokeEnvelope>,
+    pub leaves: Vec<super::envelopes::LeaveEnvelope>,
+}
+
+impl EnvelopesBundle {
+    pub fn for_project(gitmirror_base: &Path, project_id: &[u8; ID_LEN]) -> Result<Self> {
+        Ok(Self {
+            revokes: super::envelopes::load_revokes(gitmirror_base, project_id)?,
+            leaves: super::envelopes::load_leaves(gitmirror_base, project_id)?,
+        })
+    }
+
+    /// Merge into the local envelopes store. Returns
+    /// `(revokes_applied, leaves_applied)`. Idempotent — counts only
+    /// envelopes that actually changed disk state. Skips any
+    /// envelope whose signature fails verification.
+    pub fn merge_into(
+        &self,
+        gitmirror_base: &Path,
+    ) -> (usize, usize) {
+        let mut revokes_applied = 0;
+        let mut leaves_applied = 0;
+        for r in &self.revokes {
+            match super::envelopes::save_revoke(gitmirror_base, r) {
+                Ok(true) => revokes_applied += 1,
+                Ok(false) => {}
+                Err(e) => {
+                    tracing::warn!(
+                        token_id = %r.token_id,
+                        error = %e,
+                        "envelope merge: save_revoke failed"
+                    );
+                }
+            }
+        }
+        for l in &self.leaves {
+            match super::envelopes::save_leave(gitmirror_base, l) {
+                Ok(true) => leaves_applied += 1,
+                Ok(false) => {}
+                Err(e) => {
+                    tracing::warn!(
+                        leaving = %l.leaving_fleet_pubkey,
+                        error = %e,
+                        "envelope merge: save_leave failed"
+                    );
+                }
+            }
+        }
+        (revokes_applied, leaves_applied)
+    }
+}
+
+/// Reconcile envelopes for a single project against every known
+/// peer: hit `GET /digest`, compare, pull `GET /all` on mismatch,
+/// merge. Returns total `(revokes_applied, leaves_applied)` across
+/// all peers. Best-effort.
+pub fn reconcile_envelopes(
+    gitmirror_base: &Path,
+    home: &Path,
+    project_id: &[u8; ID_LEN],
+    tls: &crate::update::TlsCerts,
+) -> (usize, usize) {
+    let pid_hex = hex_id(project_id);
+    let local_digest = match DigestResponse::for_project(gitmirror_base, project_id) {
+        Ok(d) => d,
+        Err(_) => return (0, 0),
+    };
+
+    let cfg = match ProjectConfig::load(home, project_id) {
+        Ok(Some(c)) => c,
+        _ => return (0, 0),
+    };
+    let local = local_hostname();
+    let mut targets: std::collections::BTreeMap<String, String> =
+        std::collections::BTreeMap::new();
+    if let Some(g) = super::project_peers::global() {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        for entry in g.peers_for(&pid_hex, now) {
+            if let Some(my) = local.as_deref() {
+                if entry.host.eq_ignore_ascii_case(my) {
+                    continue;
+                }
+            }
+            let url_host = match entry.addr {
+                Some(std::net::IpAddr::V4(v4)) => v4.to_string(),
+                Some(std::net::IpAddr::V6(v6)) => format!("[{}]", v6),
+                None => entry.host.clone(),
+            };
+            targets.insert(url_host, entry.host);
+        }
+    }
+    for hostname in &cfg.cross_subnet_members {
+        if let Some(my) = local.as_deref() {
+            if hostname.eq_ignore_ascii_case(my) {
+                continue;
+            }
+        }
+        targets
+            .entry(hostname.clone())
+            .or_insert_with(|| hostname.clone());
+    }
+    if targets.is_empty() {
+        return (0, 0);
+    }
+
+    let agent = match build_push_agent(tls) {
+        Ok(a) => a,
+        Err(e) => {
+            tracing::debug!(error = %e, "reconcile: cannot build mTLS HTTP agent");
+            return (0, 0);
+        }
+    };
+    let mut total_revokes = 0;
+    let mut total_leaves = 0;
+    for (url_host, display_host) in &targets {
+        let digest_url = format!(
+            "https://{}:{}/swarm/gitmirror/envelopes/{}/digest",
+            url_host,
+            crate::swarm::server::DEFAULT_PORT,
+            pid_hex,
+        );
+        let peer_digest: DigestResponse = match agent.get(&digest_url).call() {
+            Ok(resp) if resp.status().is_success() => {
+                let mut body = resp.into_body();
+                let bytes = match body.read_to_vec() {
+                    Ok(b) => b,
+                    Err(_) => continue,
+                };
+                match serde_json::from_slice(&bytes) {
+                    Ok(d) => d,
+                    Err(_) => continue,
+                }
+            }
+            _ => continue,
+        };
+        if peer_digest.digest_hex == local_digest.digest_hex {
+            continue;
+        }
+        // Mismatch — pull /all and merge. Symmetric: peer also sees a
+        // mismatch and will pull from us next cycle, so missing-on-our-
+        // side records get filled in too.
+        let all_url = format!(
+            "https://{}:{}/swarm/gitmirror/envelopes/{}/all",
+            url_host,
+            crate::swarm::server::DEFAULT_PORT,
+            pid_hex,
+        );
+        let bundle: EnvelopesBundle = match agent.get(&all_url).call() {
+            Ok(resp) if resp.status().is_success() => {
+                let mut body = resp.into_body();
+                let bytes = match body.read_to_vec() {
+                    Ok(b) => b,
+                    Err(_) => continue,
+                };
+                match serde_json::from_slice(&bytes) {
+                    Ok(b) => b,
+                    Err(_) => continue,
+                }
+            }
+            _ => continue,
+        };
+        let (rev, lev) = bundle.merge_into(gitmirror_base);
+        if rev > 0 || lev > 0 {
+            tracing::info!(
+                project_id = %pid_hex,
+                peer = %display_host,
+                revokes_applied = rev,
+                leaves_applied = lev,
+                "envelope reconcile: merged peer state"
+            );
+        }
+        total_revokes += rev;
+        total_leaves += lev;
+    }
+    (total_revokes, total_leaves)
+}
+
 fn push_to_peer(
     agent: &ureq::Agent,
     url: &str,
@@ -701,6 +1053,103 @@ mod tests {
         let wrong_pid = project_id_for(&pub_bytes(&other));
         let err = verify_chain_for_push(&chain, &wrong_pid, dir.path(), 200).unwrap_err();
         assert!(err.to_string().contains("chain verification"));
+    }
+
+    #[test]
+    fn digest_response_for_project_returns_zero_counts_when_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let pid = [0x55u8; ID_LEN];
+        let d = DigestResponse::for_project(dir.path(), &pid).unwrap();
+        assert_eq!(d.revokes, 0);
+        assert_eq!(d.leaves, 0);
+        // digest is sha256 over an empty hash chain — fixed-shape, but
+        // we just assert it's valid hex of the expected width.
+        assert_eq!(d.digest_hex.len(), super::super::envelopes::DIGEST_LEN * 2);
+    }
+
+    #[test]
+    fn digest_response_changes_when_envelope_added() {
+        let dir = tempfile::tempdir().unwrap();
+        let pid = [0x55u8; ID_LEN];
+        let admin = fresh_key();
+        let d_before = DigestResponse::for_project(dir.path(), &pid).unwrap();
+        let env = super::super::envelopes::RevokeEnvelope::build(
+            &admin,
+            &pid,
+            &[0x42u8; ID_LEN],
+            100,
+            "",
+        );
+        super::super::envelopes::save_revoke(dir.path(), &env).unwrap();
+        let d_after = DigestResponse::for_project(dir.path(), &pid).unwrap();
+        assert_ne!(d_before.digest_hex, d_after.digest_hex);
+        assert_eq!(d_after.revokes, 1);
+    }
+
+    #[test]
+    fn envelopes_bundle_merge_is_idempotent() {
+        let src = tempfile::tempdir().unwrap();
+        let dst = tempfile::tempdir().unwrap();
+        let admin = fresh_key();
+        let leaver = fresh_key();
+        let pid = [0x99u8; ID_LEN];
+
+        let r1 = super::super::envelopes::RevokeEnvelope::build(
+            &admin,
+            &pid,
+            &[0x01u8; ID_LEN],
+            100,
+            "",
+        );
+        let l1 = super::super::envelopes::LeaveEnvelope::build(&leaver, &pid, 200);
+        super::super::envelopes::save_revoke(src.path(), &r1).unwrap();
+        super::super::envelopes::save_leave(src.path(), &l1).unwrap();
+
+        let bundle = EnvelopesBundle::for_project(src.path(), &pid).unwrap();
+        let (r, l) = bundle.merge_into(dst.path());
+        assert_eq!(r, 1);
+        assert_eq!(l, 1);
+
+        // Second merge of the same bundle: idempotent — counts zero.
+        let (r, l) = bundle.merge_into(dst.path());
+        assert_eq!(r, 0);
+        assert_eq!(l, 0);
+    }
+
+    #[test]
+    fn envelopes_bundle_merge_skips_invalid_signatures() {
+        let dst = tempfile::tempdir().unwrap();
+        let admin = fresh_key();
+        let pid = [0xAAu8; ID_LEN];
+        let mut r = super::super::envelopes::RevokeEnvelope::build(
+            &admin,
+            &pid,
+            &[0x01u8; ID_LEN],
+            100,
+            "",
+        );
+        // Tamper with the signature so verify_signature fails.
+        r.signature = "00".repeat(super::super::tokens::SIG_LEN);
+        let bundle = EnvelopesBundle {
+            revokes: vec![r],
+            leaves: vec![],
+        };
+        let (applied, _) = bundle.merge_into(dst.path());
+        assert_eq!(applied, 0, "tampered envelope must not be persisted");
+        let stored = super::super::envelopes::load_revokes(dst.path(), &pid).unwrap();
+        assert!(stored.is_empty());
+    }
+
+    #[test]
+    fn digest_response_json_round_trips() {
+        let d = DigestResponse {
+            digest_hex: "abcd".to_string(),
+            revokes: 3,
+            leaves: 1,
+        };
+        let json = serde_json::to_string(&d).unwrap();
+        let parsed: DigestResponse = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, d);
     }
 
     #[test]

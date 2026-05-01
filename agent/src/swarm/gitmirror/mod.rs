@@ -148,15 +148,17 @@ pub fn spawn(
     // threaded through so the post-receive fan-out hook can build an
     // mTLS HTTP client to push bundles to peers.
     let helper_cancel = cancel.clone();
-    let helper_tls = tls;
+    let helper_tls = tls.clone();
     tokio::spawn(async move {
         if let Err(e) = helper::run(helper_cancel, helper_tls).await {
             tracing::error!(error = %e, "gitmirror helper daemon exited with error");
         }
     });
 
-    // Sentinel reactor — drains *.pending files into canonical envelopes/.
-    tokio::spawn(run_sentinel_reactor(cancel.clone()));
+    // Sentinel reactor — drains *.pending files into canonical
+    // envelopes/, gossips signed envelopes to known peers, and
+    // periodically reconciles via /digest comparisons.
+    tokio::spawn(run_sentinel_reactor(cancel.clone(), tls));
 
     // 90-day reap.
     tokio::spawn(run_reap_reactor(cancel));
@@ -176,19 +178,43 @@ const SENTINEL_SCAN_INTERVAL: std::time::Duration = std::time::Duration::from_se
 /// back up.
 const REAP_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60 * 60);
 
-async fn run_sentinel_reactor(cancel: CancellationToken) {
+/// How often the reactor walks every locally-held project and
+/// reconciles envelopes against each peer's `GET /digest` (pulling
+/// `GET /all` on mismatch). 5 minutes covers offline peers without
+/// flooding the network on a steady-state cluster — the cheap path
+/// is the digest GET, which is just a sha256 + counts.
+const RECONCILE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
+async fn run_sentinel_reactor(
+    cancel: CancellationToken,
+    tls: Option<crate::update::TlsCerts>,
+) {
     let mut tick = tokio::time::interval(SENTINEL_SCAN_INTERVAL);
-    // Skip the immediate first tick — gives the rest of the agent a
-    // moment to come up before we start hitting /etc/passwd.
+    let mut reconcile_tick = tokio::time::interval(RECONCILE_INTERVAL);
+    // Skip the immediate first ticks — gives the rest of the agent a
+    // moment to come up before we start hitting /etc/passwd / network.
     tick.tick().await;
+    reconcile_tick.tick().await;
     loop {
         tokio::select! {
             _ = cancel.cancelled() => return,
             _ = tick.tick() => {
                 let base = crate::platform::paths::default_gitmirror_dir();
-                if let Err(e) = scan_all_users(&base) {
+                if let Err(e) = scan_all_users(&base, tls.as_ref()) {
                     tracing::warn!(error = %e, "gitmirror sentinel reactor: scan error");
                 }
+            }
+            _ = reconcile_tick.tick() => {
+                let base = crate::platform::paths::default_gitmirror_dir();
+                let tls_ref = match tls.as_ref() {
+                    Some(t) => t.clone(),
+                    None => continue,
+                };
+                tokio::task::spawn_blocking(move || {
+                    if let Err(e) = reconcile_all_users(&base, &tls_ref) {
+                        tracing::warn!(error = %e, "gitmirror reconcile reactor: error");
+                    }
+                });
             }
         }
     }
@@ -213,7 +239,10 @@ async fn run_reap_reactor(cancel: CancellationToken) {
     }
 }
 
-fn scan_all_users(gitmirror_base: &std::path::Path) -> anyhow::Result<()> {
+fn scan_all_users(
+    gitmirror_base: &std::path::Path,
+    tls: Option<&crate::update::TlsCerts>,
+) -> anyhow::Result<()> {
     let body = std::fs::read_to_string("/etc/passwd")?;
     for line in body.lines() {
         if line.is_empty() || line.starts_with('#') {
@@ -228,12 +257,54 @@ fn scan_all_users(gitmirror_base: &std::path::Path) -> anyhow::Result<()> {
         if !dot_dir.exists() {
             continue;
         }
-        scan_user_dir(gitmirror_base, &dot_dir);
+        scan_user_dir(gitmirror_base, &home, &dot_dir, tls);
     }
     Ok(())
 }
 
-fn scan_user_dir(gitmirror_base: &std::path::Path, dot_dir: &std::path::Path) {
+/// Walk every user's `~/.vigo-gitmirror/<pid>/` and reconcile each
+/// project's envelopes against known peers via the `/digest` ↔
+/// `/all` flow. Best-effort; per-peer errors stay local.
+fn reconcile_all_users(
+    gitmirror_base: &std::path::Path,
+    tls: &crate::update::TlsCerts,
+) -> anyhow::Result<()> {
+    let body = std::fs::read_to_string("/etc/passwd")?;
+    for line in body.lines() {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let fields: Vec<&str> = line.split(':').collect();
+        if fields.len() < 7 {
+            continue;
+        }
+        let home = std::path::PathBuf::from(fields[5]);
+        let dot_dir = home.join(".vigo-gitmirror");
+        let entries = match std::fs::read_dir(&dot_dir) {
+            Ok(it) => it,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if !p.is_dir() {
+                continue;
+            }
+            if let Some(name) = p.file_name().and_then(|n| n.to_str()) {
+                if let Ok(pid) = project_state::parse_hex_id(name) {
+                    fan_out::reconcile_envelopes(gitmirror_base, &home, &pid, tls);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn scan_user_dir(
+    gitmirror_base: &std::path::Path,
+    home: &std::path::Path,
+    dot_dir: &std::path::Path,
+    tls: Option<&crate::update::TlsCerts>,
+) {
     let entries = match std::fs::read_dir(dot_dir) {
         Ok(it) => it,
         Err(_) => return,
@@ -245,7 +316,7 @@ fn scan_user_dir(gitmirror_base: &std::path::Path, dot_dir: &std::path::Path) {
         }
         let leave = project_dir.join("leave.pending");
         if leave.exists() {
-            if let Err(e) = process_leave_sentinel(gitmirror_base, &leave) {
+            if let Err(e) = process_leave_sentinel(gitmirror_base, home, &leave, tls) {
                 tracing::warn!(
                     path = %leave.display(),
                     error = %e,
@@ -255,7 +326,7 @@ fn scan_user_dir(gitmirror_base: &std::path::Path, dot_dir: &std::path::Path) {
         }
         let revoke = project_dir.join("revoke.pending");
         if revoke.exists() {
-            if let Err(e) = process_revoke_sentinel(gitmirror_base, &revoke) {
+            if let Err(e) = process_revoke_sentinel(gitmirror_base, home, &revoke, tls) {
                 tracing::warn!(
                     path = %revoke.display(),
                     error = %e,
@@ -268,7 +339,9 @@ fn scan_user_dir(gitmirror_base: &std::path::Path, dot_dir: &std::path::Path) {
 
 fn process_leave_sentinel(
     gitmirror_base: &std::path::Path,
+    home: &std::path::Path,
     path: &std::path::Path,
+    tls: Option<&crate::update::TlsCerts>,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
     let bytes = std::fs::read(path)
@@ -283,12 +356,28 @@ fn process_leave_sentinel(
         project_id = %envelope.project_id,
         "gitmirror: persisted LEAVE envelope from sentinel"
     );
+    if let Some(tls) = tls {
+        if let Ok(pid) = project_state::parse_hex_id(&envelope.project_id) {
+            let (attempted, succeeded) =
+                fan_out::gossip_leave_to_peers(home, &pid, &envelope, tls);
+            if attempted > 0 {
+                tracing::info!(
+                    project_id = %envelope.project_id,
+                    attempted,
+                    succeeded,
+                    "gitmirror: gossiped LEAVE envelope"
+                );
+            }
+        }
+    }
     Ok(())
 }
 
 fn process_revoke_sentinel(
     gitmirror_base: &std::path::Path,
+    home: &std::path::Path,
     path: &std::path::Path,
+    tls: Option<&crate::update::TlsCerts>,
 ) -> anyhow::Result<()> {
     use anyhow::Context;
     let bytes = std::fs::read(path)
@@ -304,6 +393,20 @@ fn process_revoke_sentinel(
         token_id = %envelope.token_id,
         "gitmirror: persisted REVOKE envelope from sentinel"
     );
+    if let Some(tls) = tls {
+        if let Ok(pid) = project_state::parse_hex_id(&envelope.project_id) {
+            let (attempted, succeeded) =
+                fan_out::gossip_revoke_to_peers(home, &pid, &envelope, tls);
+            if attempted > 0 {
+                tracing::info!(
+                    project_id = %envelope.project_id,
+                    attempted,
+                    succeeded,
+                    "gitmirror: gossiped REVOKE envelope"
+                );
+            }
+        }
+    }
     Ok(())
 }
 
@@ -337,7 +440,11 @@ mod tests {
         let env = envelopes::LeaveEnvelope::build(&leaver, &project_id, 1_700_000_000);
         std::fs::write(&sentinel, serde_json::to_vec(&env).unwrap()).unwrap();
 
-        process_leave_sentinel(base.path(), &sentinel).expect("process leave");
+        // Pass home=user_dir.path() — the sentinel's per-user dot-dir
+        // root. tls=None so gossip is a no-op (we're testing only
+        // the persist + unlink path).
+        process_leave_sentinel(base.path(), user_dir.path(), &sentinel, None)
+            .expect("process leave");
         assert!(!sentinel.exists(), "sentinel should be unlinked");
         let stored = envelopes::load_leaves(base.path(), &project_id).unwrap();
         assert_eq!(stored.len(), 1);
@@ -364,7 +471,8 @@ mod tests {
         );
         std::fs::write(&sentinel, serde_json::to_vec(&env).unwrap()).unwrap();
 
-        process_revoke_sentinel(base.path(), &sentinel).expect("process revoke");
+        process_revoke_sentinel(base.path(), user_dir.path(), &sentinel, None)
+            .expect("process revoke");
         assert!(!sentinel.exists(), "sentinel should be unlinked");
         let stored = envelopes::load_revokes(base.path(), &project_id).unwrap();
         assert_eq!(stored.len(), 1);
@@ -382,7 +490,7 @@ mod tests {
         let sentinel = project_dir.join("leave.pending");
         std::fs::write(&sentinel, b"not valid json").unwrap();
 
-        let result = process_leave_sentinel(base.path(), &sentinel);
+        let result = process_leave_sentinel(base.path(), user_dir.path(), &sentinel, None);
         assert!(result.is_err(), "malformed sentinel should bubble error");
         assert!(
             sentinel.exists(),
@@ -422,7 +530,10 @@ mod tests {
         )
         .unwrap();
 
-        scan_user_dir(base.path(), user_dir.path());
+        // home=user_dir.path() so gossip lookups (tls=None → no-op
+        // path) load the right project.json fixture; we don't have
+        // one, so gossip silently aborts at "no project.json".
+        scan_user_dir(base.path(), user_dir.path(), user_dir.path(), None);
 
         assert!(!dir_a.join("leave.pending").exists());
         assert!(!dir_b.join("revoke.pending").exists());
