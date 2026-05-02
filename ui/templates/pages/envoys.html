@@ -9,11 +9,25 @@
     <p>Managed nodes reporting to this server{{if or .StatusFilter .Search}} &mdash; {{.EnvoyCount}} shown of {{.TotalEnvoys}}{{end}}</p>
 </div>
 
-<div class="stat-cards mb-2">
+<div id="envoys-stats-container"
+     hx-get="/ui/fragments/envoys-stats"
+     hx-trigger="every {{.PollInterval}}"
+     hx-swap="innerHTML"
+     hx-include="#envoy-search"
+     hx-vals='{"status": "{{.StatusFilter}}"}'
+     aria-live="polite">
+    {{template "envoys-stats" .}}
+</div>
+
+<div class="table-container" id="envoys-table-container">
+    {{template "envoys-table" .}}
+</div>
+{{end}}
+
+{{define "envoys-stats"}}
+<div class="stat-cards stat-cards--two-up mb-2">
     {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
-    {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Active (1h)" "Color" "success"}}
-    {{template "stat-card" dict "Value" .CountFailed "Label" "Recent Failures" "Color" "danger"}}
-    {{template "stat-card" dict "Value" (printf "%.0f%%" .DriftRate) "Label" "Drift Rate" "Color" "warning"}}
+    {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Reachable" "Color" "success" "Tooltip" (printf "Envoys that checked in within the last %s (2× the agent check-in interval)" .PollInterval)}}
 </div>
 
 <div class="filter-bar mb-2 flex items-center gap-1 flex-wrap">
@@ -29,21 +43,11 @@
     <form action="/envoys" method="get" hx-boost="false" class="ml-auto flex items-center gap-1">
         <input type="text" id="envoy-search" name="search" placeholder="Search hostnames..."
                value="{{.Search}}"
-               class="input input--sm envoy-search-input">
+               class="input input--sm envoy-search-input"
+               hx-preserve="true">
         {{if .StatusFilter}}<input type="hidden" name="status" value="{{.StatusFilter}}">{{end}}
         <button type="submit" class="btn btn--sm">Search</button>
     </form>
-</div>
-
-<div class="table-container"
-     id="envoys-table-container"
-     hx-get="/ui/fragments/envoys-table"
-     hx-trigger="every {{.PollInterval}}"
-     hx-swap="innerHTML"
-     hx-include="#envoy-search"
-     hx-vals='{"status": "{{.StatusFilter}}"}'
-     aria-live="polite">
-    {{template "envoys-table" .}}
 </div>
 {{end}}
 
@@ -101,13 +105,13 @@
         {{end}}
         {{if not .Envoys}}
         <tr>
-            <td colspan="9" class="table__empty-cell">No envoys found{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.</td>
+            <td colspan="9" class="table__empty-cell">No envoys{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.{{if or $.StatusFilter $.Search}} <a href="/envoys">Clear filter</a>.{{end}}</td>
         </tr>
         {{end}}
     </tbody>
 </table>
 {{if .NextCursor}}
-<div hx-get="/ui/fragments/envoys-table?cursor={{.NextCursor}}{{if .StatusFilter}}&status={{.StatusFilter}}{{end}}{{if .Search}}&search={{.Search}}{{end}}"
+<div hx-get="/ui/fragments/envoys-table?after={{.NextCursor}}{{if .StatusFilter}}&status={{.StatusFilter}}{{end}}{{if .Search}}&search={{.Search}}{{end}}"
      hx-trigger="revealed"
      hx-swap="afterend"
      hx-select="tbody > tr"

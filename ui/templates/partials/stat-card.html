@@ -1,5 +1,5 @@
 {{define "stat-card"}}
-<div class="stat-card stat-card--{{.Color}}">
+<div class="stat-card stat-card--{{.Color}}"{{if .Tooltip}} title="{{.Tooltip}}"{{end}}>
     <div class="stat-card__value">{{.Value}}</div>
     <div class="stat-card__label">{{.Label}}</div>
 </div>

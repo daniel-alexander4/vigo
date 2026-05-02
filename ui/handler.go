@@ -606,6 +606,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/security-status", h.SecurityStatus)
 	mux.HandleFunc("GET /ui/fragments/cve-search", h.CVESearchFragment)
 	mux.HandleFunc("GET /ui/fragments/envoys-table", h.EnvoysTable)
+	mux.HandleFunc("GET /ui/fragments/envoys-stats", h.EnvoysStats)
 	mux.HandleFunc("GET /ui/fragments/envoy-drift/{id}", h.EnvoyDriftFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-runs/{id}", h.EnvoyRunsFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-traits/{id}", h.EnvoyTraitsFragment)
@@ -4852,7 +4853,10 @@ func (h *Handler) Plans(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "plans", data)
 }
 
-// EnvoysTable renders the envoys table fragment for HTMX polling.
+// EnvoysTable renders the envoys table fragment. Used for cursor-based
+// pagination (the `revealed` sentinel that loads the next page) — no
+// longer auto-polled, since polling at the table boundary wipes any
+// rows the user has already scrolled into.
 func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	after := r.URL.Query().Get("after")
@@ -4860,6 +4864,18 @@ func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 	data := h.envoysPageData(statusFilter, after, search)
 	h.enrichEnvoyRows(data.Envoys)
 	h.renderer.RenderFragment(w, "envoys", "envoys-table", data)
+}
+
+// EnvoysStats renders the stat-cards + filter-pills fragment that lives
+// above the envoys table. Polled on the page's standard interval. Kept
+// strictly above the table boundary so cursor-loaded rows are not wiped
+// when the fragment refreshes.
+func (h *Handler) EnvoysStats(w http.ResponseWriter, r *http.Request) {
+	statusFilter := r.URL.Query().Get("status")
+	search := r.URL.Query().Get("search")
+	data := h.envoysPageData(statusFilter, "", search)
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.RenderFragment(w, "envoys", "envoys-stats", data)
 }
 
 // --- Production data source ---
@@ -6809,14 +6825,23 @@ func (h *Handler) License(w http.ResponseWriter, r *http.Request) {
 		s := h.enforcer.GetStatus()
 		data.StageNum = int(s.Stage)
 		data.Stage = s.Stage.String()
-		data.ActiveEnvoys = s.ActiveEnvoys
+		// Source ActiveEnvoys from the FleetCache when available so
+		// this page agrees with the dashboard's License Capacity
+		// banner frame-for-frame. The enforcer's own counter runs an
+		// independent CountActiveEnvoys query which can lag the
+		// cache by a few seconds after enrollment events.
+		if h.fleetCache != nil {
+			data.ActiveEnvoys = h.fleetCache.Counts().Total
+		} else {
+			data.ActiveEnvoys = s.ActiveEnvoys
+		}
 		data.MaxEnvoys = s.MaxEnvoys
 		data.ExpiresAt = s.ExpiresAt
 		data.DaysRemaining = s.DaysRemaining
 		data.Violation = s.Violation
 		data.IsFreeTier = h.enforcer.IsFreeLicense()
 		if s.MaxEnvoys > 0 {
-			data.UsagePct = float64(s.ActiveEnvoys) / float64(s.MaxEnvoys) * 100
+			data.UsagePct = float64(data.ActiveEnvoys) / float64(s.MaxEnvoys) * 100
 		}
 		if s.License != nil {
 			data.Tier = s.License.TierDisplayName()

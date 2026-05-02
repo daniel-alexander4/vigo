@@ -596,6 +596,9 @@ html.theme-dark .topbar__theme-icon--moon { display: none; }
     gap: 20px;
     margin-bottom: 28px;
 }
+.stat-cards--two-up {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 
 /* Dashboard card grid — auto-fit so 1-N columns reflow cleanly at any width */
 .dash-columns {
