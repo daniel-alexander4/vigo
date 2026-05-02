@@ -56,6 +56,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, Context, Result};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
+use serde::{Deserialize, Serialize};
 
 use super::envelopes::is_token_revoked;
 use super::git_ops::{build_command, RunAs};
@@ -210,44 +211,103 @@ pub fn ensure_bare_repo(repo: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Encode a chain for the `X-Vigo-Chain` header.
-pub fn encode_chain_header(chain: &TokenChain) -> Result<String> {
-    let json = serde_json::to_vec(chain).context("serialize chain")?;
+/// Wire-only envelope for the `X-Vigo-Chain` header. Wraps the
+/// authority chain plus the founder's delegation chain (ADR-019)
+/// so receive-side verification can walk a post-rekey leaf back to
+/// the genesis founder pubkey baked into `project_id`.
+///
+/// Distinct from on-disk `TokenChain` and `DelegationChain` so the
+/// wire format can evolve independently of the persistent files.
+/// Pre-ADR-019 senders that emit just the bare `TokenChain` JSON
+/// are still accepted via the `serde(default)` on `delegations` and
+/// `version` — same backwards-compat shape as the pre-ADR-019
+/// `Invitation` struct.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PushChain {
+    #[serde(default = "default_push_chain_version")]
+    pub version: u32,
+    /// On-the-wire serialization of the user's `tokens.json`
+    /// chain. Must verify against the project_id baked into the URL
+    /// once `delegations` are walked.
+    pub chain: Vec<super::tokens::Token>,
+    /// Optional founder rekey delegation chain (ADR-019). Empty for
+    /// senders who haven't rekeyed; capped at `DELEGATION_MAX_LEN`
+    /// by the verifier even when the sender presents more.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub delegations: Vec<super::envelopes::DelegationEnvelope>,
+}
+
+fn default_push_chain_version() -> u32 {
+    1
+}
+
+const PUSH_CHAIN_VERSION: u32 = 1;
+
+/// Encode the authority chain + founder delegations for the
+/// `X-Vigo-Chain` header. Sender side.
+pub fn encode_chain_header(
+    chain: &TokenChain,
+    delegations: &[super::envelopes::DelegationEnvelope],
+) -> Result<String> {
+    let envelope = PushChain {
+        version: PUSH_CHAIN_VERSION,
+        chain: chain.chain.clone(),
+        delegations: delegations.to_vec(),
+    };
+    let json = serde_json::to_vec(&envelope).context("serialize push chain")?;
     Ok(B64.encode(&json))
 }
 
-/// Decode a chain from the `X-Vigo-Chain` header value.
-pub fn decode_chain_header(value: &str) -> Result<TokenChain> {
+/// Decode the chain + delegations from the `X-Vigo-Chain` header.
+/// Tolerates pre-ADR-019 callers that emitted a bare `TokenChain`
+/// JSON: when the top-level shape doesn't deserialize as `PushChain`,
+/// fall back to parsing as `TokenChain` and synthesize an empty
+/// delegation list.
+pub fn decode_chain_header(value: &str) -> Result<PushChain> {
     let bytes = B64.decode(value.trim()).context("base64-decode chain header")?;
-    let chain: TokenChain =
-        serde_json::from_slice(&bytes).context("parse chain JSON from header")?;
-    Ok(chain)
+    if let Ok(envelope) = serde_json::from_slice::<PushChain>(&bytes) {
+        return Ok(envelope);
+    }
+    // Backwards compat: bare TokenChain JSON.
+    let legacy: TokenChain = serde_json::from_slice(&bytes)
+        .context("parse chain JSON from header (legacy or PushChain shape)")?;
+    Ok(PushChain {
+        version: PUSH_CHAIN_VERSION,
+        chain: legacy.chain,
+        delegations: Vec::new(),
+    })
 }
 
 /// Verify a chain server-side against a project_id from the URL.
 /// Computes `founder = chain[0].signer_fleet_pubkey`; verify_chain
 /// checks `sha256(founder) == project_id` and rejects mismatches.
 /// Also rejects any chain whose tokens have been revoked.
+///
+/// **ADR-019:** the `delegations` parameter (lifted from the wire
+/// PushChain envelope) is threaded into `verify_chain` so a
+/// post-rekey founder's leaf chains back to the genesis founder
+/// pubkey baked into `project_id`. Empty list = pre-rekey,
+/// behaviorally identical to pre-ADR-019. The receive side here
+/// trusts sender-presented delegations to verify the chain
+/// mathematically; this is acceptable because gitmirror is for
+/// *availability*, not confidentiality (an attacker who has
+/// compromised a retired founder key could push junk to bare
+/// repos but cannot exfiltrate user-readable bytes — cryptsync
+/// owns confidentiality).
 pub fn verify_chain_for_push(
-    chain: &TokenChain,
+    push: &PushChain,
     project_id: &[u8; ID_LEN],
     gitmirror_base: &Path,
     now: i64,
 ) -> Result<()> {
-    let root = chain
+    let root = push
         .chain
         .first()
         .ok_or_else(|| anyhow!("chain is empty"))?;
     let founder = root.body.signer_fleet_pubkey;
-    // ADR-019: receive-side push verification uses an empty
-    // delegation chain in slice 2. Slice 4 wires up either
-    // sender-presented delegations (with OOB-confirmed pin) or
-    // receiver-side delegation tracking; until then, post-rekey
-    // pushes from peers fail verification at this site, which
-    // surfaces in `gitmirror status` so the operator runs `rejoin`.
-    verify_chain(project_id, &founder, &[], &chain.chain, now)
+    verify_chain(project_id, &founder, &push.delegations, &push.chain, now)
         .map_err(|e| anyhow!("chain verification: {}", e))?;
-    for (i, token) in chain.chain.iter().enumerate() {
+    for (i, token) in push.chain.iter().enumerate() {
         let tid = token.id();
         if is_token_revoked(gitmirror_base, project_id, &tid) {
             bail!(
@@ -315,6 +375,7 @@ pub fn fan_out_bundle(
     home: &Path,
     project_id: &[u8; ID_LEN],
     chain: &TokenChain,
+    delegations: &[super::envelopes::DelegationEnvelope],
     bundle_path: &Path,
     tls: &crate::update::TlsCerts,
 ) -> (usize, usize) {
@@ -386,7 +447,7 @@ pub fn fan_out_bundle(
         return (0, 0);
     }
 
-    let chain_header = match encode_chain_header(chain) {
+    let chain_header = match encode_chain_header(chain, delegations) {
         Ok(s) => s,
         Err(e) => {
             tracing::warn!(error = %e, "fan-out: encode chain header failed");
@@ -1027,10 +1088,11 @@ mod tests {
             version: super::super::project_state::PROJECT_STATE_VERSION,
             chain: vec![bootstrap],
         };
-        let header = encode_chain_header(&chain).unwrap();
+        let header = encode_chain_header(&chain, &[]).unwrap();
         let parsed = decode_chain_header(&header).unwrap();
         assert_eq!(parsed.chain.len(), 1);
-        assert_eq!(parsed, chain);
+        assert_eq!(parsed.chain, chain.chain);
+        assert!(parsed.delegations.is_empty());
     }
 
     #[test]
@@ -1039,11 +1101,12 @@ mod tests {
         let founder = fresh_key();
         let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
         let pid = project_id_for(&pub_bytes(&founder));
-        let chain = TokenChain {
-            version: super::super::project_state::PROJECT_STATE_VERSION,
+        let push = PushChain {
+            version: PUSH_CHAIN_VERSION,
             chain: vec![bootstrap],
+            delegations: Vec::new(),
         };
-        verify_chain_for_push(&chain, &pid, dir.path(), 200).unwrap();
+        verify_chain_for_push(&push, &pid, dir.path(), 200).unwrap();
     }
 
     #[test]
@@ -1052,12 +1115,13 @@ mod tests {
         let founder = fresh_key();
         let other = fresh_key();
         let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
-        let chain = TokenChain {
-            version: super::super::project_state::PROJECT_STATE_VERSION,
+        let push = PushChain {
+            version: PUSH_CHAIN_VERSION,
             chain: vec![bootstrap],
+            delegations: Vec::new(),
         };
         let wrong_pid = project_id_for(&pub_bytes(&other));
-        let err = verify_chain_for_push(&chain, &wrong_pid, dir.path(), 200).unwrap_err();
+        let err = verify_chain_for_push(&push, &wrong_pid, dir.path(), 200).unwrap_err();
         assert!(err.to_string().contains("chain verification"));
     }
 
@@ -1167,9 +1231,10 @@ mod tests {
         let member =
             issue_child(&founder, &bootstrap, &pub_bytes(&team), Role::Member, 150, None).unwrap();
         let pid = project_id_for(&pub_bytes(&founder));
-        let chain = TokenChain {
-            version: super::super::project_state::PROJECT_STATE_VERSION,
+        let push = PushChain {
+            version: PUSH_CHAIN_VERSION,
             chain: vec![bootstrap, member.clone()],
+            delegations: Vec::new(),
         };
 
         // Drop a revocation envelope for the member token.
@@ -1182,7 +1247,85 @@ mod tests {
         );
         super::super::envelopes::save_revoke(dir.path(), &revoke).unwrap();
 
-        let err = verify_chain_for_push(&chain, &pid, dir.path(), 250).unwrap_err();
+        let err = verify_chain_for_push(&push, &pid, dir.path(), 250).unwrap_err();
         assert!(err.to_string().contains("revoked"));
+    }
+
+    // ADR-019 slice 4: PushChain wire format with delegations.
+
+    #[test]
+    fn push_chain_header_roundtrip_with_delegations() {
+        let founder = fresh_key();
+        let new_founder = fresh_key();
+        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&founder));
+        let chain = TokenChain {
+            version: super::super::project_state::PROJECT_STATE_VERSION,
+            chain: vec![bootstrap],
+        };
+        let delegation = super::super::envelopes::DelegationEnvelope::build(
+            &founder,
+            &pid,
+            &pub_bytes(&new_founder),
+            200,
+        );
+        let header = encode_chain_header(&chain, &[delegation.clone()]).unwrap();
+        let parsed = decode_chain_header(&header).unwrap();
+        assert_eq!(parsed.chain.len(), 1);
+        assert_eq!(parsed.delegations.len(), 1);
+        assert_eq!(parsed.delegations[0], delegation);
+    }
+
+    #[test]
+    fn decode_chain_header_accepts_legacy_bare_token_chain() {
+        // Pre-ADR-019 senders emitted bare TokenChain JSON. Decoder
+        // must still accept those and synthesize empty delegations.
+        let founder = fresh_key();
+        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let chain = TokenChain {
+            version: super::super::project_state::PROJECT_STATE_VERSION,
+            chain: vec![bootstrap],
+        };
+        let json = serde_json::to_vec(&chain).unwrap();
+        let header = B64.encode(&json);
+        let parsed = decode_chain_header(&header).unwrap();
+        assert_eq!(parsed.chain.len(), 1);
+        assert!(parsed.delegations.is_empty());
+    }
+
+    #[test]
+    fn verify_chain_for_push_accepts_post_rekey_chain_via_delegations() {
+        // Receive-side accepts a post-rekey founder's leaf when the
+        // chain header carries the corresponding delegation chain.
+        let dir = tempfile::tempdir().unwrap();
+        let genesis = fresh_key();
+        let new_founder = fresh_key();
+        let new_admin_subject = fresh_key();
+        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis));
+        let delegation = super::super::envelopes::DelegationEnvelope::build(
+            &genesis,
+            &pid,
+            &pub_bytes(&new_founder),
+            200,
+        );
+        // Mint a fresh admin under NEW chained off bootstrap.
+        let body = super::super::tokens::TokenBody {
+            project_id: pid,
+            subject_fleet_pubkey: pub_bytes(&new_admin_subject),
+            role: super::super::tokens::Role::Admin,
+            issued_at: 250,
+            expires_at: None,
+            signer_fleet_pubkey: pub_bytes(&new_founder),
+            parent_token_id: Some(bootstrap.id()),
+        };
+        let admin = super::super::tokens::Token::issue(&new_founder, body).unwrap();
+        let push = PushChain {
+            version: PUSH_CHAIN_VERSION,
+            chain: vec![bootstrap, admin],
+            delegations: vec![delegation],
+        };
+        verify_chain_for_push(&push, &pid, dir.path(), 300)
+            .expect("post-rekey chain with delegation should verify");
     }
 }

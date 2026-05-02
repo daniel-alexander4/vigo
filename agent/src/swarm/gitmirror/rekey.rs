@@ -58,9 +58,9 @@ use ed25519_dalek::SigningKey;
 
 use super::envelopes::{DelegationEnvelope, DELEGATION_MAX_LEN};
 use super::project_state::{
-    list_projects, parse_hex_id, DelegationChain, ProjectConfig, PROJECT_STATE_VERSION,
+    list_projects, parse_hex_id, DelegationChain, ProjectConfig, TokenChain, PROJECT_STATE_VERSION,
 };
-use super::tokens::ID_LEN;
+use super::tokens::{Role, Token, TokenBody, ID_LEN};
 
 /// Outcome of [`apply_post_rotation_gitmirror_sync`]. Surfaced to
 /// stdout in the rekey verb so the operator can see exactly what
@@ -83,6 +83,12 @@ pub struct GitmirrorRekeyOutcome {
     /// `~/.vigo-gitmirror/<pid>/` state). These are stale or
     /// pre-leave residues; not failures.
     pub members_unchanged: Vec<String>,
+    /// Projects where the local user is the founder and `tokens.json`
+    /// was rebuilt with `[bootstrap, fresh_admin_under_NEW]` — keeps
+    /// the user's authority leaf current under the new signing
+    /// identity so `cmd_invite` / `cmd_re_invite_all` can mint
+    /// further tokens. Always a subset of `delegations_signed`.
+    pub tokens_rebuilt: Vec<String>,
     /// Projects where appending a delegation failed and the operator
     /// will need to investigate (chain at cap and `--force-orphan-projects`
     /// was passed; signature failure; disk write error). Each entry
@@ -145,6 +151,7 @@ pub fn pre_flight_check_caps(home: &Path, old_pubkey_text: &str) -> Result<PreFl
 pub fn apply_post_rotation_gitmirror_sync(
     home: &Path,
     old_signing_key: &SigningKey,
+    new_signing_key: &SigningKey,
     old_pubkey_text: &str,
     new_pubkey_text: &str,
     delegated_at: i64,
@@ -157,15 +164,22 @@ pub fn apply_post_rotation_gitmirror_sync(
         .context("decoding OLD self-fleet pubkey for delegation signing")?;
     let new_raw = decode_pubkey_text(new_pubkey_text)
         .context("decoding NEW self-fleet pubkey for delegation signing")?;
-    // Sanity: caller's signing_key public half must match old_pubkey_text
-    // — otherwise we'd produce delegations whose signature doesn't
-    // match the embedded old_founder_pubkey, failing self-verification
-    // immediately.
-    let signer_pub_bytes: [u8; ID_LEN] = old_signing_key.verifying_key().to_bytes();
-    if signer_pub_bytes != old_raw {
+    // Sanity: caller's signing_key public halves must match the
+    // pubkey-text inputs — otherwise we'd produce envelopes whose
+    // signature doesn't match the embedded pubkey, failing
+    // self-verification immediately.
+    let old_signer_pub_bytes: [u8; ID_LEN] = old_signing_key.verifying_key().to_bytes();
+    if old_signer_pub_bytes != old_raw {
         anyhow::bail!(
             "OLD signing key public half doesn't match old_pubkey_text — \
              refusing to sign delegations under a key/text mismatch"
+        );
+    }
+    let new_signer_pub_bytes: [u8; ID_LEN] = new_signing_key.verifying_key().to_bytes();
+    if new_signer_pub_bytes != new_raw {
+        anyhow::bail!(
+            "NEW signing key public half doesn't match new_pubkey_text — \
+             refusing to mint a fresh admin token under a key/text mismatch"
         );
     }
 
@@ -193,14 +207,16 @@ pub fn apply_post_rotation_gitmirror_sync(
             }
         };
 
-        // 1. Founded-by-me: sign + append delegation.
+        // 1. Founded-by-me: sign + append delegation, rebuild tokens.json.
         if founded_set.contains(&cfg.founder_fleet_pubkey) {
+            let mut delegation_signed = false;
             match append_delegation(home, &pid, &cfg, old_signing_key, &old_raw, &new_raw, delegated_at, force_orphan_projects) {
                 Ok(SignResult::Signed { in_warn_band }) => {
                     outcome.delegations_signed.push(cfg.handle.clone());
                     if in_warn_band {
                         outcome.in_warn_band.push(cfg.handle.clone());
                     }
+                    delegation_signed = true;
                 }
                 Ok(SignResult::ForceOrphaned) => {
                     // chain at cap, force_orphan_projects honored —
@@ -218,6 +234,32 @@ pub fn apply_post_rotation_gitmirror_sync(
                 Err(e) => {
                     outcome.failures.push((cfg.handle.clone(), format!("{:#}", e)));
                     continue;
+                }
+            }
+
+            // Rebuild tokens.json so the founder's leaf authority is
+            // a fresh admin token signed under NEW. Without this,
+            // post-rekey `cmd_invite` / `cmd_re_invite_all` would
+            // fail at the `parent.subject == local_pub` check (their
+            // existing leaf was signed by genesis under the old
+            // identity). Skipped when the delegation didn't actually
+            // sign (force_orphan_projects branch above) — rebuilding
+            // tokens.json against an unsigned delegation chain would
+            // produce a leaf that fails verify_chain.
+            if delegation_signed {
+                if let Err(e) = rebuild_tokens_json(
+                    home,
+                    &pid,
+                    &cfg,
+                    new_signing_key,
+                    &new_raw,
+                    delegated_at,
+                ) {
+                    outcome
+                        .failures
+                        .push((cfg.handle.clone(), format!("tokens.json rebuild: {:#}", e)));
+                } else {
+                    outcome.tokens_rebuilt.push(cfg.handle.clone());
                 }
             }
         }
@@ -433,6 +475,68 @@ pub fn is_founded_by_local_user(
 // printing.
 pub use super::project_state::hex_id as project_id_hex;
 
+/// Replace `~/.vigo-gitmirror/<pid>/tokens.json` with `[bootstrap,
+/// fresh_admin_under_NEW]`. Called after a successful delegation
+/// append so the founder's local authority leaf reflects their NEW
+/// signing identity. The bootstrap is loaded from the *existing*
+/// tokens.json (it's content-addressed, so the bootstrap is
+/// identical across rekeys; loading rather than synthesizing keeps
+/// us tied to the actual on-disk state).
+fn rebuild_tokens_json(
+    home: &Path,
+    project_id: &[u8; ID_LEN],
+    cfg: &ProjectConfig,
+    new_signing_key: &SigningKey,
+    new_pubkey: &[u8; ID_LEN],
+    issued_at: i64,
+) -> Result<()> {
+    let existing = TokenChain::load(home, project_id)
+        .with_context(|| format!("loading tokens.json for {}", cfg.handle))?
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "tokens.json missing for {} — founded-by-me predicate matched but no chain on disk",
+                cfg.handle
+            )
+        })?;
+    let bootstrap = existing
+        .chain
+        .first()
+        .cloned()
+        .ok_or_else(|| anyhow::anyhow!("tokens.json for {} has empty chain", cfg.handle))?;
+
+    // Sanity: bootstrap.parent_token_id must be None and signer must
+    // be the genesis founder pubkey baked into project_id. We're
+    // about to extend the chain off this bootstrap; if it's malformed,
+    // refuse rather than write a chain that won't verify.
+    if bootstrap.body.parent_token_id.is_some() {
+        anyhow::bail!(
+            "tokens.json for {}: chain[0] has parent_token_id set; not a bootstrap",
+            cfg.handle
+        );
+    }
+
+    let body = TokenBody {
+        project_id: *project_id,
+        subject_fleet_pubkey: *new_pubkey,
+        role: Role::Admin,
+        issued_at,
+        expires_at: None,
+        signer_fleet_pubkey: *new_pubkey,
+        parent_token_id: Some(bootstrap.id()),
+    };
+    let admin = Token::issue(new_signing_key, body)
+        .with_context(|| format!("minting fresh admin under NEW for {}", cfg.handle))?;
+
+    let rebuilt = TokenChain {
+        version: PROJECT_STATE_VERSION,
+        chain: vec![bootstrap, admin],
+    };
+    rebuilt
+        .save(home, project_id)
+        .with_context(|| format!("saving rebuilt tokens.json for {}", cfg.handle))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -474,10 +578,16 @@ mod tests {
             updated_at: 1_700_000_000,
         };
         cfg.save(home).unwrap();
-        // A bootstrap token must exist for the project to be "real" but
-        // we don't need to write tokens.json for the rekey.rs unit tests
-        // — apply_post_rotation_gitmirror_sync doesn't read tokens.
-        let _ = issue_bootstrap(founder, 100, None).unwrap();
+        // Persist a real bootstrap token chain so rebuild_tokens_json
+        // (slice 4) can load chain[0] back. The rebuild path is part
+        // of apply_post_rotation_gitmirror_sync's contract for
+        // founded projects.
+        let bootstrap = issue_bootstrap(founder, 100, None).unwrap();
+        let chain = TokenChain {
+            version: PROJECT_STATE_VERSION,
+            chain: vec![bootstrap],
+        };
+        chain.save(home, &pid).unwrap();
         cfg
     }
 
@@ -543,6 +653,7 @@ mod tests {
         let outcome = apply_post_rotation_gitmirror_sync(
             home.path(),
             &old,
+            &new,
             &pub_text(&old),
             &pub_text(&new),
             1_700_000_500,
@@ -552,6 +663,7 @@ mod tests {
 
         assert_eq!(outcome.delegations_signed, vec!["alpha".to_string()]);
         assert_eq!(outcome.members_updated, vec!["alpha".to_string()]);
+        assert_eq!(outcome.tokens_rebuilt, vec!["alpha".to_string()]);
         assert!(outcome.failures.is_empty());
 
         // On-disk: delegation chain length 1, signed by old, names new.
@@ -571,6 +683,12 @@ mod tests {
         assert_eq!(reloaded.members, vec![hex::encode(pub_bytes(&new))]);
         // founder_fleet_pubkey untouched (genesis stays).
         assert_eq!(reloaded.founder_fleet_pubkey, hex::encode(pub_bytes(&old)));
+        // tokens.json rebuilt: chain length 2, leaf signed by NEW.
+        let rebuilt = TokenChain::load(home.path(), &pid).unwrap().unwrap();
+        assert_eq!(rebuilt.chain.len(), 2);
+        assert_eq!(rebuilt.chain[1].body.signer_fleet_pubkey, pub_bytes(&new));
+        assert_eq!(rebuilt.chain[1].body.subject_fleet_pubkey, pub_bytes(&new));
+        assert_eq!(rebuilt.chain[1].body.role, Role::Admin);
     }
 
     #[test]
@@ -597,6 +715,7 @@ mod tests {
         let outcome = apply_post_rotation_gitmirror_sync(
             home.path(),
             &old,
+            &new,
             &pub_text(&old),
             &pub_text(&new),
             1_700_000_500,
@@ -641,6 +760,7 @@ mod tests {
         let outcome = apply_post_rotation_gitmirror_sync(
             home.path(),
             &old,
+            &new,
             &pub_text(&old),
             &pub_text(&new),
             1_700_000_500,
@@ -688,6 +808,7 @@ mod tests {
         apply_post_rotation_gitmirror_sync(
             home.path(),
             &genesis,
+            &r1,
             &pub_text(&genesis),
             &pub_text(&r1),
             1_700_000_100,
@@ -710,6 +831,7 @@ mod tests {
         let outcome = apply_post_rotation_gitmirror_sync(
             home.path(),
             &r1,
+            &r2,
             &pub_text(&r1),
             &pub_text(&r2),
             1_700_000_200,
@@ -796,6 +918,7 @@ mod tests {
         let outcome = apply_post_rotation_gitmirror_sync(
             home.path(),
             &last_signing_key,
+            &new,
             &pub_text(&last_signing_key),
             &pub_text(&new),
             1_700_000_999,
@@ -816,6 +939,7 @@ mod tests {
         let outcome = apply_post_rotation_gitmirror_sync(
             home.path(),
             &last_signing_key,
+            &new,
             &pub_text(&last_signing_key),
             &pub_text(&new),
             1_700_000_999,
@@ -861,6 +985,7 @@ mod tests {
         let result = apply_post_rotation_gitmirror_sync(
             home.path(),
             &other,
+            &new,
             &pub_text(&founder),
             &pub_text(&new),
             1_700_000_500,

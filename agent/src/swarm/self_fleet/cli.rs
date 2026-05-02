@@ -565,13 +565,15 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     .context("cryptsync sync after rotation")?;
 
     // ADR-019: gitmirror rekey sync — sign + append delegations under
-    // OLD for every project the user founded, rewrite member entries
-    // OLD → NEW. Best-effort with per-project failure tracking; the
-    // rotation itself has already committed.
+    // OLD for every project the user founded, rebuild tokens.json
+    // (chain[0] bootstrap + fresh admin under NEW), rewrite member
+    // entries OLD → NEW. Best-effort with per-project failure
+    // tracking; the rotation itself has already committed.
     let gm_outcome =
         crate::swarm::gitmirror::rekey::apply_post_rotation_gitmirror_sync(
             &home,
             &old_key,
+            &new_key,
             &old_pubkey_text,
             &new_pubkey_text,
             now,
@@ -644,6 +646,7 @@ fn print_gitmirror_rekey_outcome(
 ) {
     if outcome.delegations_signed.is_empty()
         && outcome.members_updated.is_empty()
+        && outcome.tokens_rebuilt.is_empty()
         && outcome.failures.is_empty()
         && outcome.in_warn_band.is_empty()
     {
@@ -655,6 +658,13 @@ fn print_gitmirror_rekey_outcome(
             "  Gitmirror sync:   delegated {} project(s): {}",
             outcome.delegations_signed.len(),
             outcome.delegations_signed.join(", ")
+        );
+    }
+    if !outcome.tokens_rebuilt.is_empty() {
+        println!(
+            "                    tokens.json rebuilt on {} founded project(s): {}",
+            outcome.tokens_rebuilt.len(),
+            outcome.tokens_rebuilt.join(", ")
         );
     }
     if !outcome.members_updated.is_empty() {
@@ -895,13 +905,14 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
     // ADR-019: gitmirror sync — same as the founder side. Each envoy
     // in the fleet signs its OWN delegation locally using its copy
     // of the OLD fleet key (which is the same shared keypair, so the
-    // canonical signed bytes are identical modulo `delegated_at`).
-    // Slice 4 will reconcile per-envoy chains across peers; for now
-    // each envoy maintains a self-consistent local view.
+    // canonical signed bytes are identical modulo `delegated_at`)
+    // and rebuilds tokens.json with the fresh admin under NEW. Each
+    // envoy maintains a self-consistent local view.
     let gm_outcome =
         crate::swarm::gitmirror::rekey::apply_post_rotation_gitmirror_sync(
             &home,
             &old_key,
+            &new_key,
             &old_pubkey_text,
             &new_pubkey_text,
             now,

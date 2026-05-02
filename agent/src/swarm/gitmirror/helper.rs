@@ -372,6 +372,15 @@ async fn handle_client(
             let project_id_owned = project_id;
             let home_owned = home.clone();
             let chain_owned = chain;
+            // ADR-019: load the per-user delegation chain alongside
+            // tokens.json so the X-Vigo-Chain header carries both
+            // and receivers can verify a post-rekey leaf back to
+            // genesis.
+            let delegations_owned = DelegationChain::load(&home_owned, &project_id_owned)
+                .ok()
+                .flatten()
+                .map(|c| c.delegations)
+                .unwrap_or_default();
             let gitmirror_base = crate::platform::paths::default_gitmirror_dir();
             tokio::task::spawn_blocking(move || {
                 let bundle_path = gitmirror_base
@@ -394,6 +403,7 @@ async fn handle_client(
                     &home_owned,
                     &project_id_owned,
                     &chain_owned,
+                    &delegations_owned,
                     &bundle_path,
                     &tls_for_fanout,
                 );

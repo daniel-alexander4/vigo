@@ -34,9 +34,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
+use super::envelopes::DelegationEnvelope;
 use super::project_state::{
     self, hex_id, parse_hex_id, project_repo_path, projects_dir, purge_user_state,
-    DrFanout, ProjectConfig, TokenChain,
+    DelegationChain, DrFanout, ProjectConfig, TokenChain,
 };
 use super::tokens::{
     canonical_bytes, issue_child as token_issue_child, project_id_for, verify_chain,
@@ -83,6 +84,9 @@ fn dispatch_project(args: &[String]) -> Result<()> {
         "status" => cmd_status(&args[1..]),
         "revoke" => cmd_revoke(&args[1..]),
         "reanchor" => cmd_reanchor(&args[1..]),
+        // ADR-019 slice 4 — multi-fleet rejoin support after a founder rekey.
+        "re-invite-all" => cmd_re_invite_all(&args[1..]),
+        "rejoin" => cmd_rejoin(&args[1..]),
         other => bail!(
             "unknown subcommand `vigo swarm gitmirror project {}`. \
              Run `vigo swarm gitmirror project --help` for usage.",
@@ -143,6 +147,21 @@ VERBS:
     reanchor <project_id>
         Hard-fork the project under a new founder. Interactive — must
         type the project handle to confirm. Old URL becomes dead.
+
+    re-invite-all [<project_id>]
+        ADR-019. Founder side, post-rekey. Walks every multi-fleet
+        project the local fleet founded; mints fresh invitations for
+        every cross-fleet member with the current delegation chain
+        attached. Prints (member fleet, project handle, invitation)
+        triples for OOB delivery — same trust hop as the original
+        `invite` flow. Optional <project_id> restricts to one project.
+
+    rejoin <project_id> [--invitation <file|->]
+        ADR-019. Member side, after the founder rekeyed. Idempotent
+        extension of `join` that updates the local token chain and
+        delegation chain in place without bailing on existing
+        membership. Required when the founder of a multi-fleet
+        project you are a member of has rekeyed and re-invited you.
 "
     );
 }
@@ -286,11 +305,23 @@ fn parse_fleet_pubkey_arg(s: &str) -> Result<[u8; ID_LEN]> {
 /// `chain` to their per-user state. Versioned so the on-the-wire form
 /// can evolve without breaking older agents — though per zero-users
 /// doctrine, mismatched versions reject rather than migrate.
+///
+/// **ADR-019 (slice 4):** the optional `delegations` field carries
+/// the founder's local delegation chain so the recipient's verifier
+/// can chain a post-rekey leaf back to the genesis founder pubkey
+/// baked into `project_id`. Pre-rekey founders send an empty list
+/// (default for backwards compat with `INVITATION_VERSION = 1` JSON
+/// that didn't have the field). Post-rekey founders send their
+/// current chain. Recipients persist them on `rejoin` so subsequent
+/// helper-daemon verifies use the same delegations the invitation
+/// was anchored against.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct Invitation {
     pub version: u32,
     pub project: ProjectConfig,
     pub chain: TokenChain,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub delegations: Vec<DelegationEnvelope>,
 }
 
 const INVITATION_VERSION: u32 = 1;
@@ -516,6 +547,14 @@ fn cmd_invite(args: &[String]) -> Result<()> {
     if !new_members.iter().any(|m| m == &recipient_hex) {
         new_members.push(recipient_hex);
     }
+    // ADR-019: include the local delegation chain so the recipient's
+    // verifier can walk a post-rekey founder identity back to the
+    // genesis founder pubkey baked into project_id. Pre-rekey
+    // founders have no delegations on disk and send an empty list.
+    let delegations = DelegationChain::load(&caller.home, &project_id)?
+        .map(|c| c.delegations)
+        .unwrap_or_default();
+
     let invitation = Invitation {
         version: INVITATION_VERSION,
         project: ProjectConfig {
@@ -527,6 +566,7 @@ fn cmd_invite(args: &[String]) -> Result<()> {
             version: project_state::PROJECT_STATE_VERSION,
             chain: full_chain,
         },
+        delegations,
     };
 
     let json = serde_json::to_string_pretty(&invitation)?;
@@ -634,12 +674,21 @@ fn cmd_join(args: &[String]) -> Result<()> {
     // project_id from founder and rejects the chain if it doesn't
     // match — defense against a malicious invitation that swaps the
     // founder pubkey to a key the attacker controls.
+    //
+    // ADR-019: pass the invitation's delegation chain through to the
+    // verifier so a post-rekey founder's leaf chains correctly back
+    // to the genesis founder pubkey. Empty list when the founder
+    // hasn't rekeyed yet — verifier behaves identically to
+    // pre-ADR-019 in that case.
     let founder = parse_hex_id(&invitation.project.founder_fleet_pubkey)?;
-    // ADR-019: project join flows always start with an empty
-    // delegation chain. Subsequent founder rekeys append to the
-    // member's local `delegations.json` via the rejoin verb (slice 4).
-    verify_chain(&claimed_id, &founder, &[], &invitation.chain.chain, now_secs())
-        .map_err(|e| anyhow!("invitation chain failed verification: {}", e))?;
+    verify_chain(
+        &claimed_id,
+        &founder,
+        &invitation.delegations,
+        &invitation.chain.chain,
+        now_secs(),
+    )
+    .map_err(|e| anyhow!("invitation chain failed verification: {}", e))?;
 
     // Leaf must be granting access to *our* fleet pubkey.
     let leaf = invitation.chain.chain.last().ok_or_else(|| anyhow!("empty chain"))?;
@@ -665,17 +714,382 @@ fn cmd_join(args: &[String]) -> Result<()> {
 
     invitation.project.save(&caller.home)?;
     invitation.chain.save(&caller.home, &claimed_id)?;
+    // ADR-019: persist the founder's delegation chain so the helper
+    // daemon (per-user verify path) and any future re-invite from
+    // this member walk the same authority path the invitation
+    // anchored against. Empty list = no file written.
+    if !invitation.delegations.is_empty() {
+        let chain = DelegationChain {
+            version: project_state::PROJECT_STATE_VERSION,
+            delegations: invitation.delegations.clone(),
+        };
+        chain.save(&caller.home, &claimed_id).context(
+            "saving founder delegation chain that came with the invitation",
+        )?;
+    }
 
     println!("✓ Joined project {}", invitation.project.handle);
     println!("  URL:        vigo://{}/{}", invitation.project.project_id, invitation.project.handle);
     println!("  Role:       {:?}", leaf.body.role);
     println!("  Members:    {}", invitation.project.members.len());
     println!("  Fan-out:    {}", invitation.project.dr_fanout.as_str());
+    if !invitation.delegations.is_empty() {
+        println!(
+            "  Delegations: {} hop(s) (founder has rekeyed since project init)",
+            invitation.delegations.len()
+        );
+    }
     println!();
     println!("State written to {}", project_state::user_project_dir(&caller.home, &claimed_id).display());
+    Ok(())
+}
+
+// ============================================================
+// project re-invite-all (ADR-019 slice 4)
+// ============================================================
+
+/// Walk every multi-fleet project the local fleet founded, mint a
+/// fresh invitation for every cross-fleet member, print the
+/// invitations as `(member_fleet_pubkey, handle, JSON)` triples for
+/// out-of-band delivery. Optional `<project_id>` restricts to a
+/// single project.
+///
+/// "Multi-fleet" = `members[]` contains a fleet pubkey other than
+/// the local user's. Single-fleet personal-DR projects (founder is
+/// the only member) are skipped; their members are sibling envoys
+/// in the user's own self-fleet which already inherit trust via
+/// ADR-018's pair-claim ceremony.
+fn cmd_re_invite_all(args: &[String]) -> Result<()> {
+    let mut project_arg: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            other if !other.starts_with('-') && project_arg.is_none() => {
+                project_arg = Some(other.to_string());
+            }
+            other => bail!("unknown re-invite-all flag: {}", other),
+        }
+        i += 1;
+    }
+
+    let caller = resolve_caller()?;
+    let local_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    let local_pub_hex = hex_id(&local_pub);
+
+    // Resolve scope: one project or all founded multi-fleet projects.
+    let projects: Vec<ProjectConfig> = if let Some(arg) = project_arg.as_deref() {
+        let pid = resolve_project_id(&caller.home, arg)?;
+        match ProjectConfig::load(&caller.home, &pid)? {
+            Some(c) => vec![c],
+            None => bail!("not a member of project {}", arg),
+        }
+    } else {
+        project_state::list_projects(&caller.home)?
+    };
+
+    let mut printed = 0usize;
+    let mut skipped_single_fleet = Vec::new();
+    let mut skipped_not_founded = Vec::new();
+
+    for cfg in projects {
+        let pid = parse_hex_id(&cfg.project_id)
+            .with_context(|| format!("project_id hex for {}", cfg.handle))?;
+
+        // Founded by us? The founder predicate uses the same logic
+        // as rekey.rs: project.founder_fleet_pubkey is in our
+        // historical pubkey set. For re-invite-all post-rekey, the
+        // local user's CURRENT pubkey is the leaf of the delegation
+        // chain — but we just need the predicate to recognize our
+        // OWN founded projects, so check against the chain.last().new
+        // (or the genesis if no delegations).
+        let delegations = DelegationChain::load(&caller.home, &pid)?
+            .map(|c| c.delegations)
+            .unwrap_or_default();
+        let current_founder_hex: String = if let Some(last) = delegations.last() {
+            last.new_founder_pubkey.to_ascii_lowercase()
+        } else {
+            cfg.founder_fleet_pubkey.to_ascii_lowercase()
+        };
+        if current_founder_hex != local_pub_hex.to_ascii_lowercase() {
+            skipped_not_founded.push(cfg.handle.clone());
+            continue;
+        }
+
+        // Multi-fleet check: members[] minus the local fleet must be
+        // non-empty. Members are stored as bare hex (no prefix).
+        let cross_fleet_members: Vec<String> = cfg
+            .members
+            .iter()
+            .filter(|m| m.to_ascii_lowercase() != local_pub_hex.to_ascii_lowercase())
+            .cloned()
+            .collect();
+        if cross_fleet_members.is_empty() {
+            skipped_single_fleet.push(cfg.handle.clone());
+            continue;
+        }
+
+        // Load our authority chain (its leaf must be Admin under our
+        // current pubkey; rekey-time hooks guarantee this for founded
+        // projects).
+        let chain = TokenChain::load(&caller.home, &pid)?
+            .ok_or_else(|| anyhow!("token chain missing for {}", cfg.handle))?;
+        let parent = chain
+            .chain
+            .last()
+            .ok_or_else(|| anyhow!("token chain is empty for {}", cfg.handle))?
+            .clone();
+        if parent.body.role != Role::Admin {
+            bail!(
+                "this fleet holds a {:?} token on {}; only admins can re-invite",
+                parent.body.role,
+                cfg.handle
+            );
+        }
+        if parent.body.subject_fleet_pubkey != local_pub {
+            bail!(
+                "leaf token subject does not match local fleet pubkey on {}: \
+                 chain expects ed25519:{:.16}…, local is ed25519:{:.16}… — \
+                 did `self-fleet rekey-pair` complete successfully?",
+                cfg.handle,
+                hex_id(&parent.body.subject_fleet_pubkey),
+                hex_id(&local_pub)
+            );
+        }
+
+        // Mint a fresh leaf for each cross-fleet member.
+        for recipient_hex in &cross_fleet_members {
+            let recipient = parse_hex_id(recipient_hex)
+                .with_context(|| format!("members[] entry hex on {}", cfg.handle))?;
+            let now = now_secs();
+            let body = TokenBody {
+                project_id: pid,
+                subject_fleet_pubkey: recipient,
+                role: Role::Member,
+                issued_at: now,
+                expires_at: None,
+                signer_fleet_pubkey: local_pub,
+                parent_token_id: Some(parent.id()),
+            };
+            let bytes = canonical_bytes(&body);
+            let signature = sign_with_session(&bytes)?;
+            let child = Token { body, signature };
+            child
+                .verify_signature()
+                .context("re-invite child token failed self-verification")?;
+
+            let mut full_chain: Vec<Token> = chain.chain.clone();
+            full_chain.push(child);
+            let invitation = Invitation {
+                version: INVITATION_VERSION,
+                project: ProjectConfig {
+                    members: cfg.members.clone(),
+                    updated_at: now,
+                    ..cfg.clone()
+                },
+                chain: TokenChain {
+                    version: project_state::PROJECT_STATE_VERSION,
+                    chain: full_chain,
+                },
+                delegations: delegations.clone(),
+            };
+            let json = serde_json::to_string_pretty(&invitation)?;
+            // Each invitation is preceded by a stderr header so a
+            // tee-style operator can split them into per-recipient
+            // files; stdout stays clean JSON.
+            eprintln!(
+                "─── re-invite for project '{}' → ed25519:{} ───",
+                cfg.handle, recipient_hex
+            );
+            println!("{}", json);
+            eprintln!();
+            printed += 1;
+        }
+    }
+
+    eprintln!(
+        "✓ {} re-invite invitation(s) printed across founded multi-fleet project(s).",
+        printed
+    );
+    if !skipped_single_fleet.is_empty() {
+        eprintln!(
+            "  Skipped {} single-fleet project(s) (no cross-fleet members): {}",
+            skipped_single_fleet.len(),
+            skipped_single_fleet.join(", ")
+        );
+    }
+    if !skipped_not_founded.is_empty() {
+        eprintln!(
+            "  Skipped {} project(s) we don't own (not founder): {}",
+            skipped_not_founded.len(),
+            skipped_not_founded.join(", ")
+        );
+    }
+    if printed > 0 {
+        eprintln!();
+        eprintln!("Communicate each JSON block out-of-band to the matching member fleet,");
+        eprintln!("then have them run:");
+        eprintln!("    vigo swarm gitmirror project rejoin <project_id> --invitation -");
+    }
+    Ok(())
+}
+
+// ============================================================
+// project rejoin (ADR-019 slice 4)
+// ============================================================
+
+/// Idempotent extension of `cmd_join`. Required when a project's
+/// founder has rekeyed: the original tokens.json is still valid for
+/// the user's local helper daemon (the chain anchors to genesis), but
+/// the founder cannot mint *new* tokens against the old chain shape.
+/// `rejoin` adopts a fresh invitation issued against the founder's
+/// new identity, including the founder's current delegation chain.
+///
+/// Differences from `cmd_join`:
+/// - Does NOT bail when the project already exists locally — the
+///   whole point is to update the chain in place.
+/// - Updates `tokens.json` + `delegations.json` + `project.json` from
+///   the invitation; preserves any unrelated local state (revoke /
+///   leave pending sentinels).
+fn cmd_rejoin(args: &[String]) -> Result<()> {
+    let mut project_arg: Option<String> = None;
+    let mut invitation_src: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--invitation" => {
+                i += 1;
+                invitation_src = Some(
+                    args.get(i)
+                        .context("--invitation requires a path or '-'")?
+                        .to_string(),
+                );
+            }
+            other if !other.starts_with('-') && project_arg.is_none() => {
+                project_arg = Some(other.to_string());
+            }
+            other => bail!("unknown rejoin flag: {}", other),
+        }
+        i += 1;
+    }
+    let project_arg = project_arg.context(
+        "usage: vigo swarm gitmirror project rejoin <project_id> [--invitation <file|->]",
+    )?;
+    let invitation_src = invitation_src.unwrap_or_else(|| "-".to_string());
+
+    let invitation_json = if invitation_src == "-" {
+        let mut buf = String::new();
+        std::io::stdin()
+            .read_to_string(&mut buf)
+            .context("read invitation from stdin")?;
+        buf
+    } else {
+        fs::read_to_string(&invitation_src)
+            .with_context(|| format!("read invitation from {}", invitation_src))?
+    };
+    let invitation: Invitation = serde_json::from_str(&invitation_json)
+        .context("parse invitation JSON")?;
+    if invitation.version != INVITATION_VERSION {
+        bail!(
+            "invitation version {} not supported (expected {})",
+            invitation.version,
+            INVITATION_VERSION
+        );
+    }
+
+    let caller = resolve_caller()?;
+    let local_pub = local_fleet_pubkey_bytes(&caller.home)?;
+
+    let claimed_id = parse_hex_id(&invitation.project.project_id)?;
+    let arg_id = match parse_hex_id(&project_arg) {
+        Ok(id) => id,
+        Err(_) => bail!(
+            "project_id '{}' is not valid hex. Pass the same project_id as in the invitation: {}",
+            project_arg,
+            invitation.project.project_id
+        ),
+    };
+    if arg_id != claimed_id {
+        bail!(
+            "project_id mismatch: argument is {} but invitation declares {}",
+            project_arg,
+            invitation.project.project_id
+        );
+    }
+
+    let founder = parse_hex_id(&invitation.project.founder_fleet_pubkey)?;
+    verify_chain(
+        &claimed_id,
+        &founder,
+        &invitation.delegations,
+        &invitation.chain.chain,
+        now_secs(),
+    )
+    .map_err(|e| anyhow!("invitation chain failed verification: {}", e))?;
+
+    let leaf = invitation
+        .chain
+        .chain
+        .last()
+        .ok_or_else(|| anyhow!("empty chain"))?;
+    if leaf.body.subject_fleet_pubkey != local_pub {
+        bail!(
+            "this invitation grants access to ed25519:{:.16}…, but our local fleet is ed25519:{:.16}…",
+            hex_id(&leaf.body.subject_fleet_pubkey),
+            hex_id(&local_pub)
+        );
+    }
+
+    // Sanity: rejoin expects an existing local project state. If
+    // there's no `project.json` on disk, the operator should run
+    // `project join` instead — same trust hop, idempotent semantics
+    // not needed.
+    let pre_existing = ProjectConfig::load(&caller.home, &claimed_id)?;
+    let was_member = pre_existing.is_some();
+
+    invitation.project.save(&caller.home)?;
+    invitation.chain.save(&caller.home, &claimed_id)?;
+    if !invitation.delegations.is_empty() {
+        let chain = DelegationChain {
+            version: project_state::PROJECT_STATE_VERSION,
+            delegations: invitation.delegations.clone(),
+        };
+        chain
+            .save(&caller.home, &claimed_id)
+            .context("saving founder delegation chain from rejoin invitation")?;
+    } else {
+        // Founder rolled back / re-founded under genesis — clear any
+        // stale local delegation chain so verifier doesn't apply
+        // bogus authority windows.
+        let path = project_state::delegations_path(&caller.home, &claimed_id);
+        if path.exists() {
+            let _ = fs::remove_file(&path);
+        }
+    }
+
+    if was_member {
+        println!("✓ Re-joined project {} (chain refreshed)", invitation.project.handle);
+    } else {
+        println!("✓ Joined project {}", invitation.project.handle);
+        println!(
+            "  (note: rejoin called on a project we'd never joined — `join` would also have worked)"
+        );
+    }
+    println!("  URL:        vigo://{}/{}", invitation.project.project_id, invitation.project.handle);
+    println!("  Role:       {:?}", leaf.body.role);
+    println!("  Members:    {}", invitation.project.members.len());
+    println!("  Fan-out:    {}", invitation.project.dr_fanout.as_str());
+    if !invitation.delegations.is_empty() {
+        println!(
+            "  Delegations: {} hop(s) (chain anchors to genesis founder ed25519:{:.16}…)",
+            invitation.delegations.len(),
+            invitation.project.founder_fleet_pubkey
+        );
+    }
     println!();
-    println!("Note: actual `git fetch` / `git push` against this remote requires the helper");
-    println!("daemon, which lands in step 4 of the ADR-015 arc.");
+    println!(
+        "State updated under {}",
+        project_state::user_project_dir(&caller.home, &claimed_id).display()
+    );
     Ok(())
 }
 
@@ -1356,6 +1770,7 @@ mod tests {
                 version: project_state::PROJECT_STATE_VERSION,
                 chain: vec![bootstrap, member],
             },
+            delegations: Vec::new(),
         };
 
         let json = serde_json::to_string(&invitation).unwrap();
