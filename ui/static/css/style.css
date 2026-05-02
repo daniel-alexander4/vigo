@@ -3896,6 +3896,21 @@ a:focus-visible {
     border-bottom: 1px dotted var(--color-border);
 }
 
+/* When the relative-time element is itself a link (e.g. the Last Run
+   cell on /envoys), match the convergence column's link affordance —
+   pointer cursor, dotted underline that goes solid on hover — instead
+   of the help cursor used for plain tooltip spans. */
+a.time-relative {
+    cursor: pointer;
+    border-bottom: 0;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+}
+a.time-relative:hover {
+    text-decoration-style: solid;
+}
+
 /* === Page Subtitle === */
 .page-header p {
     color: var(--color-text-muted);
