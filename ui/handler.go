@@ -3899,7 +3899,7 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 		sortDir = "asc"
 	}
 
-	data := h.dataSource.EnvoysData(h.baseInterval, statusFilter, after, 100, search)
+	data := h.envoysPageData(statusFilter, after, search)
 	h.enrichEnvoyRows(data.Envoys)
 
 	// Apply client-requested sort (in-memory over the page of 100 rows).
@@ -3907,34 +3907,75 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 	data.SortColumn = sortCol
 	data.SortDir = sortDir
 
-	// Populate status counts from fleet cache (single precomputed query)
-	// instead of loading all envoys + N+1 run queries via ConvergenceData.
-	if h.fleetCache != nil {
-		counts := h.fleetCache.Counts()
-		data.CountConverged = counts.Converged
-		data.CountRelapsed = counts.Relapsed
-		data.CountDiverged = counts.Diverged
-		data.CountDegraded = counts.Degraded
-		data.CountFailed = counts.Failed
-		data.CountOffline = counts.Offline
-		data.CountNoData = counts.NoData
-		data.TotalEnvoys = counts.Total
-	} else {
-		conv := h.dataSource.ConvergenceData(h.baseInterval)
-		data.CountConverged = int(conv.Converged)
-		data.CountRelapsed = int(conv.Relapsed)
-		data.CountDiverged = int(conv.Diverged)
-		data.CountFailed = int(conv.Failed)
-		data.CountOffline = int(conv.Offline)
-		data.CountNoData = int(conv.NoData)
-		data.TotalEnvoys = int(conv.Total)
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "envoys", data)
+}
+
+// envoysPageData builds EnvoysPageData from the fleet cache — single
+// source of truth for both the rows in the table AND the counts in
+// the pills above it. Falls back to dbDataSource.EnvoysData when the
+// cache isn't initialized (very early startup); in that fallback the
+// pill counts will be unavailable but the table renders.
+func (h *Handler) envoysPageData(statusFilter, after, search string) EnvoysPageData {
+	if h.fleetCache == nil {
+		// Fallback: use the DB path. Pills will be empty since we
+		// can't compute fleet-wide convergence without trailing-run
+		// history. This branch is hit briefly during boot before
+		// SetFleetCache is called, then never again.
+		data := h.dataSource.EnvoysData(h.baseInterval, statusFilter, after, 100, search)
+		return data
+	}
+
+	entries, hasMore := h.fleetCache.PaginatedEntries(after, 100, statusFilter, search)
+	rows := make([]EnvoyRow, 0, len(entries))
+	for _, e := range entries {
+		rows = append(rows, EnvoyRow{
+			ID:           e.ID,
+			Hostname:     e.Hostname,
+			IPAddress:    e.IPAddress,
+			LastSeen:     e.LastSeen,
+			LastRunAt:    e.LastRunAt,
+			LastRunID:    e.LastRunID,
+			Status:       e.Status,
+			FailurePct:   e.FailurePct,
+			ModuleCount:  e.ModuleCount,
+			FailedCount:  e.FailedCount,
+			Offline:      e.Offline,
+			ObserveOnly:  e.ObserveOnly,
+			AgentVersion: e.AgentVersion,
+		})
+	}
+
+	counts := h.fleetCache.Counts()
+	nextCursor := ""
+	if hasMore && len(rows) > 0 {
+		nextCursor = rows[len(rows)-1].Hostname
+	}
+
+	data := EnvoysPageData{
+		PageData:     PageData{Title: "Envoys", ActiveNav: "envoys"},
+		Envoys:       rows,
+		StatusFilter: statusFilter,
+		Search:       search,
+		EnvoyCount:   len(rows),
+		HasMore:      hasMore,
+		NextCursor:   nextCursor,
+
+		TotalEnvoys:    counts.Total,
+		CountConverged: counts.Converged,
+		CountRelapsed:  counts.Relapsed,
+		CountDiverged:  counts.Diverged,
+		CountDegraded:  counts.Degraded,
+		CountFailed:    counts.Failed,
+		CountOffline:   counts.Offline,
+		CountNoData:    counts.NoData,
+		CountObserving: counts.Observing,
 	}
 	data.ActiveEnvoys = data.TotalEnvoys - data.CountOffline
 	if data.TotalEnvoys > 0 {
 		data.DriftRate = float64(data.CountRelapsed+data.CountDiverged) / float64(data.TotalEnvoys) * 100
 	}
-	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "envoys", data)
+	return data
 }
 
 // sortEnvoyRows sorts envoy rows in-memory by the requested column.
@@ -4816,7 +4857,7 @@ func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	after := r.URL.Query().Get("after")
 	search := r.URL.Query().Get("search")
-	data := h.dataSource.EnvoysData(h.baseInterval, statusFilter, after, 100, search)
+	data := h.envoysPageData(statusFilter, after, search)
 	h.enrichEnvoyRows(data.Envoys)
 	h.renderer.RenderFragment(w, "envoys", "envoys-table", data)
 }
@@ -5108,14 +5149,14 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 		}
 
 		// Check if this envoy is in observe-only mode: global (server.yaml) OR per-entry.
+		// Surfaced as a separate ObserveOnly flag on the row — orthogonal to
+		// convergence status, since an observe-only envoy can be converged,
+		// relapsed, etc. (the flag governs enforcement, not convergence).
 		observeOnly := ds.globalObserveOnly
 		if ds.configStore != nil {
 			if _, cfg := ds.configStore.Match(n.Hostname); cfg != nil {
 				observeOnly = observeOnly || cfg.ObserveOnly
 			}
-		}
-		if observeOnly {
-			status = "observing"
 		}
 
 		var failurePct float64

@@ -9,7 +9,7 @@
     <p>Managed nodes reporting to this server{{if or .StatusFilter .Search}} &mdash; {{.EnvoyCount}} shown of {{.TotalEnvoys}}{{end}}</p>
 </div>
 
-<div class="stat-cards" style="margin-bottom:16px;">
+<div class="stat-cards mb-2">
     {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
     {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Active (1h)" "Color" "success"}}
     {{template "stat-card" dict "Value" .CountFailed "Label" "Recent Failures" "Color" "danger"}}
@@ -25,10 +25,11 @@
     <a href="/envoys?status=failed" class="btn btn--sm{{if eq .StatusFilter "failed"}} btn--primary{{end}}">Failed <span class="filter-count filter-count--danger">{{.CountFailed}}</span></a>
     <a href="/envoys?status=offline" class="btn btn--sm{{if eq .StatusFilter "offline"}} btn--primary{{end}}">Offline <span class="filter-count filter-count--muted">{{.CountOffline}}</span></a>
     <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data <span class="filter-count filter-count--muted">{{.CountNoData}}</span></a>
+    {{if gt .CountObserving 0}}<a href="/envoys?status=observing" class="btn btn--sm{{if eq .StatusFilter "observing"}} btn--primary{{end}}" title="Envoys in observe-only mode (drift reported, no enforcement)">Observing <span class="filter-count filter-count--info">{{.CountObserving}}</span></a>{{end}}
     <form action="/envoys" method="get" hx-boost="false" class="ml-auto flex items-center gap-1">
         <input type="text" id="envoy-search" name="search" placeholder="Search hostnames..."
                value="{{.Search}}"
-               class="input input--sm" style="max-width:250px;">
+               class="input input--sm envoy-search-input">
         {{if .StatusFilter}}<input type="hidden" name="status" value="{{.StatusFilter}}">{{end}}
         <button type="submit" class="btn btn--sm">Search</button>
     </form>
@@ -65,7 +66,7 @@
     <tbody id="envoys-table-body">
         {{range .Envoys}}
         <tr>
-            <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
+            <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a>{{if .ObserveOnly}} <span class="badge badge--info" title="Observe-only mode — drift reported, no enforcement">obs</span>{{end}}</td>
             <td class="mono">{{.IPAddress}}</td>
             <td class="mono text-muted">{{if .AgentVersion}}{{.AgentVersion}}{{else}}-{{end}}</td>
             <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}">{{timeAgo .LastSeen}}</span></td>
@@ -89,7 +90,7 @@
             </td>
             <td>
                 {{if gt .ModuleCount 0}}
-                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span></a>
+                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge {{failureBadgeClass .FailedCount .ModuleCount}}">{{.FailedCount}}/{{.ModuleCount}}</span></a>
                 {{else if and .LastRunID (ne .Status "converged")}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
                 {{else}}
@@ -100,7 +101,7 @@
         {{end}}
         {{if not .Envoys}}
         <tr>
-            <td colspan="9" class="text-muted" style="text-align:center; padding:40px;">No envoys found{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.</td>
+            <td colspan="9" class="table__empty-cell">No envoys found{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.</td>
         </tr>
         {{end}}
     </tbody>

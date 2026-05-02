@@ -1384,6 +1384,13 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     flex-wrap: wrap;
 }
 
+/* Inline search input alongside the filter pills on the envoys page —
+   bounded width keeps it from stealing horizontal space from the
+   pill row at narrow viewports. */
+.envoy-search-input {
+    max-width: 250px;
+}
+
 /* === Breadcrumb === */
 .breadcrumb {
     font-size: 13px;
@@ -3536,6 +3543,7 @@ html.theme-dark input, html.theme-dark select, html.theme-dark textarea { backgr
 .filter-count--warning { background: var(--color-warning-bg); color: var(--color-warning); }
 .filter-count--danger { background: var(--color-danger-bg); color: var(--color-danger); }
 .filter-count--muted { background: var(--color-muted-bg); color: var(--color-text-muted); }
+.filter-count--info { background: var(--color-primary-bg); color: var(--color-brand); }
 .btn--primary .filter-count { background: rgba(255,255,255,0.25); color: #fff; }
 
 /* === Sortable Column Headers === */

@@ -1073,7 +1073,7 @@ func run() error {
 		})
 		uiHandler.SetIntegrationsConfig(cfg.Integrations, cfg.GRC)
 		uiHandler.SetTraitLookup(&traitLookupAdapter{fleetIndex: fleetIndex})
-		uiHandler.SetFleetCache(ui.NewFleetCache(queries, baseInterval))
+		uiHandler.SetFleetCache(ui.NewFleetCache(queries, configStore, cfg.CheckIn.ObserveOnly, baseInterval))
 		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
 		spannerHandler.RegisterRoutes(gwMux)
