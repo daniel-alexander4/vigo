@@ -8,9 +8,9 @@ All Vigo components — agent (`vigo`), server (`vigosrv`), and CLI (`vigocli`) 
 
 ## Pricing
 
-Pricing is per managed node, per year. Your node count determines your tier, and that tier's per-node rate applies to all your nodes.
+Pricing is per managed node, per year, in graduated brackets: each bracket's per-node rate applies only to the nodes within that bracket. The first 100 nodes are always free.
 
-| Tier        | Nodes            | Per Node / Year | Support Level |
+| Tier        | Bracket          | Per Node / Year | Support Level |
 |-------------|------------------|-----------------|---------------|
 | Community   | 1 – 100          | Free            | None (AS IS)  |
 | Starter     | 101 – 250        | $144            | Standard      |
@@ -18,6 +18,8 @@ Pricing is per managed node, per year. Your node count determines your tier, and
 | Business    | 1,001 – 5,000    | $120            | Priority      |
 | Enterprise  | 5,001 – 25,000   | $108            | Dedicated     |
 | Scale       | 25,001 – 100,000 | $96             | Dedicated     |
+
+Worked example: a 500-node fleet pays 0 + 150 × $144 + 250 × $132 = **$54,600/year**.
 
 All features are included at every tier — there are no enterprise-only features.
 

@@ -131,14 +131,16 @@ and templates — no additional server configuration required.
 ## Combined Pricing Examples
 
 Connwaer is licensed separately from Vigo. Both licenses are required.
+Vigo uses graduated brackets (first 100 nodes free, then per-bracket
+rates summed); Connwaer uses flat-tier pricing per the table above.
 
-| Customer Profile | Nodes | Vigo License | Connwaer License | Combined Annual |
+| Customer Profile | Nodes | Vigo License (graduated) | Connwaer License (flat-tier) | Combined Annual |
 |---|---|---|---|---|
-| Gaming operator | 100 | $14,400 (Starter) | $9,600 (Starter) | $24,000 |
-| MSP (compliance) | 250 | $36,000 (Starter) | $24,000 (Starter) | $60,000 |
-| Regional bank | 500 | $66,000 (Growth) | $42,000 (Growth) | $108,000 |
-| Brokerage (FINRA) | 2,000 | $264,000 (Business) | $144,000 (Business) | $408,000 |
-| Crypto exchange | 200 | $28,800 (Starter) | $19,200 (Starter) | $48,000 |
+| Gaming operator | 100 | Free (Community) | $9,600 (Starter) | $9,600 |
+| MSP (compliance) | 250 | $21,600 (Starter) | $24,000 (Starter) | $45,600 |
+| Regional bank | 500 | $54,600 (Growth) | $42,000 (Growth) | $96,600 |
+| Brokerage (FINRA) | 2,000 | $240,600 (Business) | $144,000 (Business) | $384,600 |
+| Crypto exchange | 200 | $14,400 (Starter) | $19,200 (Starter) | $33,600 |
 
 ## Loyalty Discount
 

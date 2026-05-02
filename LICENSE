@@ -30,7 +30,17 @@ servers used to operate the Software do not count as managed nodes.
 Subject to the terms of a valid commercial license agreement or the
 Community tier (up to 100 managed nodes), you are granted a limited,
 non-exclusive, non-transferable, non-sublicensable license to use the
-Software in compiled binary form for your internal business purposes.
+Software in compiled binary form for your internal business purposes,
+and, where expressly permitted under this license, for the provision
+of managed services to third parties.
+
+## Confidentiality
+
+The Software and its underlying structure, organization, and code
+constitute the confidential and proprietary information of
+Alexander4, LLC. You agree not to disclose, publish, or make available
+any non-public aspects of the Software to any third party, except as
+necessary for your permitted use under this license.
 
 ## Compliance Attestation
 
@@ -59,7 +69,7 @@ You may not, without prior written consent from the licensor:
 4. Remove or alter any proprietary notices, labels, or marks on the
    Software.
 5. Use the Software to provide a hosted, managed, or SaaS offering to
-   third parties.
+   third parties, except as expressly permitted under this license.
 6. Move, change, disable, or circumvent the license key functionality
    in the Software.
 7. Embed, bundle, or pre-install the Software (including the agent
@@ -76,16 +86,34 @@ clients. The provider remains responsible for compliance with all other
 terms of this license, including Use Prohibitions, on behalf of its
 clients.
 
+## Indemnification
+
+You agree to defend, indemnify, and hold harmless Alexander4, LLC,
+its officers, directors, employees, and agents from and against any
+claims, damages, liabilities, costs, and expenses (including
+reasonable attorneys' fees) arising out of or related to (i) your
+use of the Software in violation of this license, (ii) your breach
+of the Use Prohibitions, (iii) your use of the Software in
+combination with other systems, data, or environments not provided
+by Alexander4, LLC, or (iv) your violation of applicable law in
+connection with your use of the Software. Alexander4, LLC shall
+have the right to participate in the defense of any such claim with
+counsel of its choosing at its own expense.
+
 ## Audit
 
 Alexander4, LLC may audit your use of the Software to verify compliance
 with the licensed node count. Audits may be conducted no more than once
 per twelve (12) month period, upon thirty (30) days' prior written
 notice. You agree to provide reasonable cooperation, including access
-to enrollment records and server configuration, during any such audit.
-If an audit reveals a material discrepancy (exceeding the licensed node
-count by more than 5%), you agree to pay the underpaid license fees
-plus the reasonable cost of the audit.
+to enrollment records and relevant server configuration information,
+during any such audit. If an audit reveals a material discrepancy
+(exceeding the licensed node count by more than 5%), you agree to pay
+the underpaid license fees for the period of noncompliance, plus the
+reasonable cost of the audit. Any information obtained in connection
+with an audit shall be used solely for purposes of verifying compliance
+with this license and shall be subject to reasonable confidentiality
+obligations.
 
 ## OEM and Embedded Use
 
@@ -100,9 +128,9 @@ standard license or Community tier.
 This license may not be assigned or transferred, whether voluntarily,
 by operation of law, merger, acquisition, change of control, or
 otherwise, without the prior written consent of Alexander4, LLC. Such
-consent shall not be unreasonably withheld. Any attempted assignment
-without consent is void. Alexander4, LLC may assign this license
-without restriction.
+consent shall not be unreasonably withheld, conditioned, or delayed.
+Any attempted assignment without consent is void. Alexander4, LLC may
+assign this license without restriction.
 
 ## Use Prohibitions
 
@@ -201,7 +229,11 @@ POSSIBILITY OF SUCH DAMAGES.
 
 THE TOTAL AGGREGATE LIABILITY OF ALEXANDER4, LLC UNDER THIS LICENSE SHALL
 NOT EXCEED THE AMOUNTS PAID BY YOU FOR THE SOFTWARE DURING THE TWELVE (12)
-MONTHS PRECEDING THE CLAIM. FOR COMMUNITY TIER USERS WHO HAVE PAID
+MONTHS PRECEDING THE CLAIM. THE FOREGOING LIMITATIONS SHALL NOT APPLY TO
+(I) YOUR BREACH OF THE USE PROHIBITIONS, (II) YOUR VIOLATION OF THE
+RESTRICTIONS, (III) YOUR INFRINGEMENT OR MISAPPROPRIATION OF
+ALEXANDER4, LLC'S INTELLECTUAL PROPERTY RIGHTS, OR (IV) YOUR OBLIGATIONS
+UNDER THE INDEMNIFICATION SECTION. FOR COMMUNITY TIER USERS WHO HAVE PAID
 NOTHING, THE TOTAL AGGREGATE LIABILITY SHALL NOT EXCEED FIFTY U.S. DOLLARS
 ($50).
 
@@ -218,16 +250,17 @@ and use reasonable efforts to mitigate the impact.
 
 ## Termination
 
-Violations of the Use Prohibitions section result in immediate and
-automatic termination with no cure period. For all other violations,
+Violations of the Use Prohibitions section result in immediate
+termination with no cure period. For all other violations,
 Alexander4, LLC will provide written notice describing the violation.
 You have thirty (30) days from receipt of notice to cure the violation.
 If the violation is not cured within the cure period, the license
-terminates automatically.
+terminates.
 
-Upon termination, you must cease all active use of the Software. You
-may retain copies solely for regulatory record-keeping and disaster
-recovery archives, provided such copies are not actively used.
+Upon termination, you must immediately cease all active use of the
+Software. You may retain copies solely for regulatory record-keeping
+and disaster recovery archives, provided such copies are not actively
+used.
 
 ## Governing Law and Jurisdiction
 
@@ -240,17 +273,18 @@ jurisdiction and venue therein.
 
 ## Dispute Resolution
 
-Before initiating any legal action, the parties agree to attempt in good
-faith to resolve any dispute through informal negotiation for a period of
-thirty (30) days following written notice of the dispute. If the dispute
-is not resolved through negotiation, either party may pursue binding
-arbitration administered by JAMS under its Streamlined Arbitration Rules
-and Procedures, with the arbitration conducted in Jackson County, Oregon.
-The arbitrator's decision shall be final and binding and may be entered as
-a judgment in any court of competent jurisdiction. Notwithstanding the
-foregoing, either party may seek injunctive or other equitable relief in
-any court of competent jurisdiction to protect its intellectual property
-rights or confidential information.
+Before initiating any legal action or arbitration, the parties agree to
+attempt in good faith to resolve any dispute through informal negotiation
+for a period of thirty (30) days following written notice of the dispute.
+If the dispute is not resolved through negotiation, either party may
+pursue binding arbitration administered by JAMS under its Streamlined
+Arbitration Rules and Procedures, with the arbitration conducted in
+Jackson County, Oregon. The arbitrator's decision shall be final and
+binding and may be entered as a judgment in any court of competent
+jurisdiction. Notwithstanding the foregoing, Alexander4, LLC may seek
+injunctive or other equitable relief in any court of competent
+jurisdiction to protect its intellectual property rights or enforce the
+Use Prohibitions or Restrictions.
 
 For licensees located in jurisdictions where mandatory pre-dispute
 arbitration clauses are unenforceable by law, any dispute not resolved
@@ -267,12 +301,13 @@ license. All remaining provisions shall continue in full force and effect.
 
 ## Entire Agreement
 
-This license, together with the COMMERCIAL-TERMS.md,
-CONNWAER-COMMERCIAL-TERMS.md, any signed commercial license agreement,
-and any signed Vigo Design Partner Agreement or Connwaer Design Partner
-Agreement, constitutes the entire agreement between the parties with
-respect to the Software and supersedes all prior or contemporaneous
-understandings, agreements, or representations.
+This license, together with the Vigo Commercial Terms
+(COMMERCIAL-TERMS.md), the Connwaer Commercial Terms
+(CONNWAER-COMMERCIAL-TERMS.md), any signed commercial license
+agreement, and any signed Vigo Design Partner Agreement or Connwaer
+Design Partner Agreement, constitutes the entire agreement between
+the parties with respect to the Software and supersedes all prior
+or contemporaneous understandings, agreements, or representations.
 
 ## Contact
 

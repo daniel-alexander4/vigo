@@ -3,16 +3,20 @@
 
 Vigo uses a built-in licensing system. All features are included at every tier — the license controls node count only, nothing else.
 
-## Tiers
+## Brackets
 
-| Tier | Nodes | Per Node/Year | Support |
-|------|-------|---------------|---------|
+Pricing is graduated: each bracket's per-node rate applies only to the nodes within that bracket. The first 100 nodes are always free.
+
+| Tier | Bracket | Per Node/Year | Support |
+|------|---------|---------------|---------|
 | Community | 1 – 100 | Free | None (AS IS) |
 | Starter | 101 – 250 | $144 | Standard (2 business days) |
 | Growth | 251 – 1,000 | $132 | Standard (2 business days) |
 | Business | 1,001 – 5,000 | $120 | Priority (1 business day) |
 | Enterprise | 5,001 – 25,000 | $108 | Dedicated (4 business hours) |
 | Scale | 25,001 – 100,000 | $96 | Dedicated (4 business hours) |
+
+Worked example: a 500-node fleet pays 0 (1–100) + 150 × $144 (101–250) + 250 × $132 (251–500) = **$54,600/year**. Your support level is set by the highest bracket your fleet straddles.
 
 See `COMMERCIAL-TERMS.md` for full pricing details including loyalty discounts, multi-year commitments, and enterprise agreements.
 

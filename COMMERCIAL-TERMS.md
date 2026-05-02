@@ -42,10 +42,11 @@ Alexander4, LLC for a re-issued license file at no charge.
 ## Pricing
 
 All amounts are in United States Dollars (USD). Pricing is per managed
-node, per year. Your node count determines your tier, and that tier's
-per-node rate applies to all your nodes.
+node, per year, in graduated brackets: each bracket's per-node rate
+applies only to the nodes that fall within that bracket. The first 100
+nodes are always free, no matter how large the fleet grows.
 
-| Tier        | Nodes            | Per Node / Year | Support Level |
+| Tier        | Bracket          | Per Node / Year | Support Level |
 |-------------|------------------|-----------------|---------------|
 | Community   | 1 – 100          | Free            | Community     |
 | Starter     | 101 – 250        | $144            | Standard      |
@@ -54,7 +55,15 @@ per-node rate applies to all your nodes.
 | Enterprise  | 5,001 – 25,000   | $108            | Dedicated     |
 | Scale       | 25,001 – 100,000 | $96             | Dedicated     |
 
-Example: a 500-node fleet pays 500 × $132 = **$66,000/year**.
+Your support level is set by the highest bracket your fleet straddles —
+a 500-node fleet has Standard support (Growth bracket), regardless of
+how many nodes are in the Community and Starter brackets below.
+
+Worked examples:
+
+- **500 nodes:** 0 (1–100) + 150 × $144 (101–250) + 250 × $132 (251–500) = **$54,600/year**, Standard support.
+- **3,000 nodes:** 0 + 150 × $144 + 750 × $132 + 2,000 × $120 = **$360,600/year**, Priority support.
+- **25,000 nodes:** 0 + 150 × $144 + 750 × $132 + 4,000 × $120 + 20,000 × $108 = **$2,760,600/year**, Dedicated support.
 
 For fleets exceeding 100,000 nodes, contact vigo.licensing@alexander4.io
 for custom pricing.
@@ -64,66 +73,72 @@ date (Net 30). Custom payment terms may be negotiated as part of an
 enterprise agreement.
 
 **Scale-down:** You may request a reduced node count at any time. An
-updated license file will be issued for the lower count. No refund is
-issued for the current term — the reduced rate takes effect at the next
-billing cycle. Multi-year agreements with a node floor cannot be
-reduced below the committed floor.
+updated license file will be issued for the lower count. Reductions
+apply prospectively only — no refund is issued for the current term,
+and the reduced rate takes effect at the next billing cycle.
+Multi-year agreements with a node floor cannot be reduced below the
+committed floor.
 
 Refund policy: if you are unsatisfied within the first
 thirty (30) days of a new license term, you may request a full refund.
 After thirty days, licenses are non-refundable for the remainder of the
 term, except where required by applicable law (including EU consumer
-protection regulations) or as described in the Right to Refuse section
-below.
+protection regulations) or as expressly provided in the Right to Refuse
+section below. Any refund applies only to the license fee and excludes
+taxes, third-party costs, and separately negotiated services.
 
 ## Loyalty Discount
 
 Long-term customers pay less every year. Starting in year 3, your rate
-decreases by 3% per year from 100% down to a 75% floor in year 12:
+decreases by 3% per year from 100% down to a 75% floor in year 12. The
+discount is a multiplier on the graduated bill — the bracket math
+underneath does not change, the total is just scaled down.
 
 | Year   | You Pay | 1K-node Growth customer pays |
 |--------|---------|------------------------------|
-| 1 – 2  | 100%   | $132,000                     |
-| 3      | 97%    | $128,040                     |
-| 4      | 94%    | $124,080                     |
-| 5      | 91%    | $120,120                     |
-| 6      | 88%    | $116,160                     |
-| 7      | 85%    | $112,200                     |
-| 8      | 82%    | $108,240                     |
-| 9      | 79%    | $104,280                     |
-| 10     | 76%    | $100,320                     |
-| 11     | 75%    | $99,000                      |
-| 12+    | 75%    | $99,000                      |
+| 1 – 2  | 100%   | $120,600                     |
+| 3      | 97%    | $116,982                     |
+| 4      | 94%    | $113,364                     |
+| 5      | 91%    | $109,746                     |
+| 6      | 88%    | $106,128                     |
+| 7      | 85%    | $102,510                     |
+| 8      | 82%    | $98,892                      |
+| 9      | 79%    | $95,274                      |
+| 10     | 76%    | $91,656                      |
+| 11     | 75%    | $90,450                      |
+| 12+    | 75%    | $90,450                      |
 
-The discount applies to the per-node rate at every tier. The loyalty
-floor is 75% — your loyalty rate will never drop below three-quarters
-of the list price. Multi-year rates lock independently of the loyalty
-curve and may go further during the term (see Multi-Year Commitments).
-The loyalty clock starts from the date of your first paid license and is
-tied to your organization, not a specific license term. Continuous
-renewal is required; a lapse of more than 90 days resets the loyalty clock.
+The loyalty floor is 75% — your loyalty rate will never drop below
+three-quarters of the list price. Multi-year rates lock independently
+of the loyalty curve and may go further during the term (see Multi-Year
+Commitments). The loyalty clock starts from the date of your first paid
+license and is tied to your organization, not a specific license term.
+Continuous renewal is required; a lapse of more than 90 days resets the
+loyalty clock.
 
 ## Multi-Year Commitments
 
 Customers may commit to a multi-year term in exchange for a discounted
-per-node rate locked for the duration of the agreement.
+list-price bill locked for the duration of the agreement. The discount
+is a multiplier on the graduated bracket total.
 
-| Term    | Discount | Example: 3,000 nodes at Business ($120) |
-|---------|----------|-----------------------------------------|
-| 1 year  | 0%       | $360,000/yr                             |
-| 3 years | 15%      | $306,000/yr ($918,000 total)            |
-| 5 years | 22%      | $280,800/yr ($1,404,000 total)          |
-| 7 years | 27%      | $262,800/yr ($1,839,600 total)          |
+| Term    | Discount | Example: 3,000 nodes (graduated list = $360,600) |
+|---------|----------|--------------------------------------------------|
+| 1 year  | 0%       | $360,600/yr                                      |
+| 3 years | 15%      | $306,510/yr ($919,530 total)                     |
+| 5 years | 22%      | $281,268/yr ($1,406,340 total)                   |
+| 7 years | 27%      | $263,238/yr ($1,842,666 total)                   |
 
 **Payment:** Billed annually at the start of each contract year at the
 locked discounted rate.
 
-**Rate lock:** The per-node rate is fixed for the full term, regardless
-of any list price changes during the commitment period.
+**Rate lock:** The discounted bracket schedule is fixed for the full
+term, regardless of any list price changes during the commitment period.
 
 **Node floor:** Multi-year agreements include a minimum node commitment.
-You are billed for the committed node count even if actual usage is
-lower. Nodes above the floor are billed at the same locked rate.
+You are billed at the locked discounted graduated total for the
+committed node count even if actual usage is lower. Nodes above the
+floor are added to the graduated total at the same locked discount.
 
 **Early termination:** You may terminate a multi-year agreement before
 the end of the term. Upon early termination, you owe the difference
@@ -144,12 +159,12 @@ accumulates across consecutive multi-year commitments, and is tied to
 your organization. Committed customers therefore reach the 75% loyalty
 floor years earlier than annual-renewing customers.
 
-Example: a 1,000-node Growth customer ($132/node) signs a 5-year deal.
-For years 1–5 they pay the locked 22%-off rate — $102.96/node,
-$102,960/year. At the first annual renewal (year 6), their loyalty
+Example: a 1,000-node Growth customer (graduated list = $120,600/year)
+signs a 5-year deal. For years 1–5 they pay the locked 22%-off rate —
+**$94,068/year**. At the first annual renewal (year 6), their loyalty
 clock reads year 10 (5 elapsed + 5 credit), so their rate is 24% off —
-$100.32/node, $100,320/year. From year 7 onward they are at the 75%
-loyalty floor — $99/node, $99,000/year.
+**$91,656/year**. From year 7 onward they are at the 75% loyalty floor
+— **$90,450/year**.
 
 ## Enterprise Agreements
 
@@ -157,11 +172,12 @@ Enterprise agreements are available for organizations managing nodes
 across multiple sites, networks, or spanner instances under a single
 contract.
 
-**Aggregate node counting:** Your tier and per-node rate are determined
-by the total number of managed nodes across all sites. A single license
-file is issued with the aggregate node count and deployed to the
-spanner hub, which enforces the limit across all connected spokes.
-Individual spokes do not require separate license files.
+**Aggregate node counting:** Your tier and graduated bracket total are
+determined by the total number of managed nodes across all sites. A
+single license file is issued with the aggregate node count and
+deployed to the spanner hub, which enforces the limit across all
+connected spokes. Individual spokes do not require separate license
+files.
 
 **Node floor:** Enterprise agreements include a minimum node commitment
 across all sites. You are billed for the committed floor even if actual
@@ -171,13 +187,16 @@ aggregate usage is lower.
 with multi-year commitments for both aggregate pricing and term
 discounts.
 
-Example: 15 plants, 200 nodes each = 3,000 aggregate nodes. Business
-tier at $120/node = $360,000/year. With a 3-year multi-year commitment:
-$306,000/year.
+Example: 15 plants, 200 nodes each = 3,000 aggregate nodes. Graduated
+total: 0 + 150 × $144 + 750 × $132 + 2,000 × $120 = **$360,600/year**
+at Priority support. With a 3-year multi-year commitment (15% off):
+**$306,510/year**.
 
 **Organizational changes:** Changes to organizational structure,
 including acquisitions, mergers, or divestitures, require a license
-amendment. Contact Alexander4, LLC to adjust your node count and issue
+amendment, and continued use of the Software following such changes
+without an updated license constitutes use outside the scope of the
+license. Contact Alexander4, LLC to adjust your node count and issue
 an updated license file.
 
 To discuss an enterprise agreement, contact vigo.licensing@alexander4.io.
@@ -232,9 +251,11 @@ configuration assistance, upgrade to a paid tier.
 | Dedicated   | Enterprise+      | 4 business hours | Email + direct + scheduled calls |
 | Critical    | Add-on (Growth+) | 4 hours, 7 days/week, 7am–7pm Pacific | Email + direct + phone |
 
-Response times are service targets and not guaranteed SLAs. Guaranteed
-SLAs with service credits are available as part of custom enterprise
-agreements.
+Response times are service targets only and do not create any
+warranty, guarantee, or service level commitment unless expressly set
+forth in a separate written agreement. Guaranteed SLAs with service
+credits are available only if expressly set forth in a separate
+written enterprise agreement.
 
 Support covers configuration guidance, bug triage, and upgrade assistance.
 It does not cover writing your modules, managing your infrastructure, or
@@ -251,8 +272,9 @@ extended-hours coverage on top of your included support level.
 - **Scope:** Production-down and service-degraded issues only — not
   configuration questions or feature requests
 
-24/7 support with guaranteed SLAs is available as a custom engagement
-for Enterprise and Scale tier customers. Contact us for pricing.
+24/7 support with guaranteed SLAs is available only if expressly set
+forth in a separate written enterprise agreement for Enterprise and
+Scale tier customers. Contact us for pricing.
 
 ## Feature Requests
 
@@ -290,15 +312,17 @@ prohibitions are absolute and non-negotiable.
 ## Right to Refuse
 
 Alexander4, LLC reserves the right to decline or terminate any commercial
-license for any reason, at its sole discretion, including but not limited to:
+license for any reason, at its sole discretion, subject to applicable
+law, including but not limited to:
 
 - Use cases that conflict with the values or reputation of the project
 - Organizations that have previously violated the license terms
 - Requests that we determine we cannot adequately support
 
-If a license is declined, no payment is collected.
+If a license is declined before issuance of the license, no payment
+is collected.
 
-If a license is terminated by Alexander4, LLC due to a violation of
+If a license is terminated by Alexander4, LLC due to your violation of
 the license terms (including Use Prohibitions), no refund is issued
 and any applicable multi-year early termination clawback applies.
 
@@ -343,8 +367,12 @@ overdue balance. If the balance is not paid within fifteen (15) days
 of notice, the license is suspended — new enrollments are blocked and
 server access to the management UI is disabled. If payment remains
 outstanding for sixty (60) days past the due date, the license
-terminates. Agents continue to enforce their last-known policy during
-suspension and after termination.
+terminates, and you remain responsible for all amounts due for the
+applicable license term. Agents continue to enforce their last-known
+policy during suspension and after termination, but Alexander4, LLC
+has no obligation to provide updates, support, or continued access to
+the management UI during any period of suspension or following
+termination.
 
 **Agent continuity:** If the server shuts down due to license
 enforcement, all managed nodes continue to operate normally. Agents
@@ -353,6 +381,10 @@ connectivity. Server shutdown only affects the ability to update
 modules, enroll new nodes, and view the management UI. In spanner
 deployments, spokes continue independent agent management if the hub
 shuts down.
+
+**Technical enforcement:** License enforcement actions described in
+this section are implemented through the Software's technical controls
+and are not intended as a penalty or liquidated damages.
 
 ## Data Processing
 
@@ -373,7 +405,9 @@ If you are subject to GDPR, CCPA, or similar data protection regulations,
 your use of Vigo does not require a Data Processing Agreement (DPA) with
 Alexander4, LLC because no personal data flows to us. You remain the sole
 data controller for any personal data processed by the Software within
-your environment.
+your environment, and you are solely responsible for determining whether
+your use of the Software complies with applicable data protection,
+security, and regulatory requirements.
 
 ## Governing Law
 
