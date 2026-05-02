@@ -375,6 +375,7 @@ fn cmd_join(args: &[String]) -> Result<()> {
 fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     let mut close = false;
     let mut window_secs: i64 = rekey::REKEY_GRACEFUL_SECS;
+    let mut force_orphan_projects = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -391,6 +392,12 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
                     bail!("--window-secs must be at least 60");
                 }
             }
+            // ADR-019: when a gitmirror project's delegation chain has
+            // hit DELEGATION_MAX_LEN, the pre-flight check refuses to
+            // proceed. This flag opts into "rekey anyway, mark those
+            // projects frozen-at-rekey" — operator's escape hatch for
+            // when they don't care about the project.
+            "--force-orphan-projects" => force_orphan_projects = true,
             s if s.starts_with("--") => bail!("unknown flag: {}", s),
             s => bail!("unexpected positional argument: {}", s),
         }
@@ -477,6 +484,28 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     let new_blob = wrap_signing_key(&new_key, passphrase.as_bytes(), &new_salt)
         .context("wrapping new fleet identity")?;
 
+    // ADR-019 pre-flight: check every gitmirror project the user
+    // founded against the delegation cap. Aborts here BEFORE any
+    // keypair mutation when a project would push past the cap and
+    // the operator hasn't passed --force-orphan-projects.
+    let pre_flight = crate::swarm::gitmirror::rekey::pre_flight_check_caps(
+        &home,
+        &old_pubkey_text,
+    )
+    .context("gitmirror pre-flight cap check")?;
+    if !pre_flight.at_cap.is_empty() && !force_orphan_projects {
+        bail!(
+            "{} gitmirror project(s) at delegation cap ({}/{}): {}\n  \
+             Run `vigo swarm gitmirror project re-found <handle>` per project to \
+             mint a fresh project_id, or pass --force-orphan-projects to proceed \
+             and mark these projects frozen-at-rekey.",
+            pre_flight.at_cap.len(),
+            crate::swarm::gitmirror::envelopes::DELEGATION_MAX_LEN,
+            crate::swarm::gitmirror::envelopes::DELEGATION_MAX_LEN,
+            pre_flight.at_cap.join(", ")
+        );
+    }
+
     // Atomic swap: rename current files to `.pre-rekey-<ts>` backups,
     // then write the new envelopes. If the writes fail we restore
     // from backup so the user is never left without a working
@@ -535,6 +564,21 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     )
     .context("cryptsync sync after rotation")?;
 
+    // ADR-019: gitmirror rekey sync — sign + append delegations under
+    // OLD for every project the user founded, rewrite member entries
+    // OLD → NEW. Best-effort with per-project failure tracking; the
+    // rotation itself has already committed.
+    let gm_outcome =
+        crate::swarm::gitmirror::rekey::apply_post_rotation_gitmirror_sync(
+            &home,
+            &old_key,
+            &old_pubkey_text,
+            &new_pubkey_text,
+            now,
+            force_orphan_projects,
+        )
+        .context("gitmirror sync after rotation")?;
+
     // Restart the session helper with the new key so sibling
     // subsystems pick up the rotation immediately. Lock first
     // (idempotent), then spawn a fresh helper — same shape `unlock`
@@ -567,6 +611,7 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
         pp_bak.display()
     );
     print_rewrap_outcome(outcome);
+    print_gitmirror_rekey_outcome(&gm_outcome);
     println!();
     println!(
         "  Rekey window:     {}h ({}s) before founder closes the session",
@@ -591,12 +636,54 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
         window_secs / 3600
     );
     println!("re-rotating the keypair. Run `rekey-pair --close` to close the window early.");
-    println!();
-    println!(
-        "Note: gitmirror projects you founded are anchored to the OLD fleet pubkey. They will"
-    );
-    println!("need re-invites to collaborators under the new identity (deferred — see ADR-018).");
     Ok(())
+}
+
+fn print_gitmirror_rekey_outcome(
+    outcome: &crate::swarm::gitmirror::rekey::GitmirrorRekeyOutcome,
+) {
+    if outcome.delegations_signed.is_empty()
+        && outcome.members_updated.is_empty()
+        && outcome.failures.is_empty()
+        && outcome.in_warn_band.is_empty()
+    {
+        println!("  Gitmirror sync:   skipped (no projects under ~/.vigo-gitmirror)");
+        return;
+    }
+    if !outcome.delegations_signed.is_empty() {
+        println!(
+            "  Gitmirror sync:   delegated {} project(s): {}",
+            outcome.delegations_signed.len(),
+            outcome.delegations_signed.join(", ")
+        );
+    }
+    if !outcome.members_updated.is_empty() {
+        println!(
+            "                    member entry rewritten on {} project(s): {}",
+            outcome.members_updated.len(),
+            outcome.members_updated.join(", ")
+        );
+    }
+    if !outcome.in_warn_band.is_empty() {
+        println!(
+            "                    ⚠ {} project(s) at chain length ≥ {}: {}",
+            outcome.in_warn_band.len(),
+            crate::swarm::gitmirror::envelopes::DELEGATION_WARN_LEN,
+            outcome.in_warn_band.join(", ")
+        );
+        println!(
+            "                       consider `vigo swarm gitmirror project re-found <handle>` for hygiene"
+        );
+    }
+    if !outcome.failures.is_empty() {
+        println!(
+            "                    ✗ {} project(s) had issues:",
+            outcome.failures.len()
+        );
+        for (handle, err) in &outcome.failures {
+            println!("                       - {}: {}", handle, err);
+        }
+    }
 }
 
 fn print_rewrap_outcome(outcome: crate::swarm::cryptsync::identity_rewrap::RewrapOutcome) {
@@ -623,9 +710,13 @@ fn print_rewrap_outcome(outcome: crate::swarm::cryptsync::identity_rewrap::Rewra
 /// migrate this envoy onto it.
 ///
 /// Flags:
-///   --from <host>       Hostname of the founder envoy that ran rekey-pair.
+///   --from <host>                Hostname of the founder envoy that ran rekey-pair.
+///   --force-orphan-projects      ADR-019 escape hatch — proceed even if any
+///                                gitmirror project is at the delegation cap;
+///                                affected projects are marked frozen-at-rekey.
 fn cmd_rekey(args: &[String]) -> Result<()> {
     let mut from: Option<String> = None;
+    let mut force_orphan_projects = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -633,6 +724,7 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
                 i += 1;
                 from = Some(args.get(i).context("--from requires a hostname")?.clone());
             }
+            "--force-orphan-projects" => force_orphan_projects = true,
             s if s.starts_with("--") => bail!("unknown flag: {}", s),
             s => bail!("unexpected positional argument: {}", s),
         }
@@ -723,6 +815,28 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
         );
     }
 
+    // ADR-019 pre-flight: same shape as cmd_rekey_pair. Founder's
+    // rekey-pair already cleared the cap on their envoy; this
+    // envoy's local state should match unless this envoy has been
+    // offline long enough to fall behind on prior rekeys.
+    let pre_flight = crate::swarm::gitmirror::rekey::pre_flight_check_caps(
+        &home,
+        &old_pubkey_text,
+    )
+    .context("gitmirror pre-flight cap check")?;
+    if !pre_flight.at_cap.is_empty() && !force_orphan_projects {
+        bail!(
+            "{} gitmirror project(s) at delegation cap ({}/{}): {}\n  \
+             Run `vigo swarm gitmirror project re-found <handle>` per project to \
+             mint a fresh project_id, or pass --force-orphan-projects to proceed \
+             and mark these projects frozen-at-rekey.",
+            pre_flight.at_cap.len(),
+            crate::swarm::gitmirror::envelopes::DELEGATION_MAX_LEN,
+            crate::swarm::gitmirror::envelopes::DELEGATION_MAX_LEN,
+            pre_flight.at_cap.join(", ")
+        );
+    }
+
     // Atomic swap of local files: backup OLD as `.pre-rekey-<ts>`,
     // write new envelopes. Restore on failure.
     let now = now_secs();
@@ -778,6 +892,23 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
     )
     .context("cryptsync sync after rotation")?;
 
+    // ADR-019: gitmirror sync — same as the founder side. Each envoy
+    // in the fleet signs its OWN delegation locally using its copy
+    // of the OLD fleet key (which is the same shared keypair, so the
+    // canonical signed bytes are identical modulo `delegated_at`).
+    // Slice 4 will reconcile per-envoy chains across peers; for now
+    // each envoy maintains a self-consistent local view.
+    let gm_outcome =
+        crate::swarm::gitmirror::rekey::apply_post_rotation_gitmirror_sync(
+            &home,
+            &old_key,
+            &old_pubkey_text,
+            &new_pubkey_text,
+            now,
+            force_orphan_projects,
+        )
+        .context("gitmirror sync after rotation")?;
+
     // Lock any stale session helper; the user runs `unlock` in their
     // own (non-sudo) shell to start the new helper.
     let _ = session::request_lock();
@@ -793,6 +924,7 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
         pp_bak.display()
     );
     print_rewrap_outcome(outcome);
+    print_gitmirror_rekey_outcome(&gm_outcome);
     println!();
     println!(
         "Run `vigo swarm self-fleet unlock` (no sudo) to start the session helper under the"

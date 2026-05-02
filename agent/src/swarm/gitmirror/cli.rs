@@ -887,6 +887,34 @@ fn cmd_status(args: &[String]) -> Result<()> {
     } else {
         println!("Token chain:       (missing — re-run join)");
     }
+    // ADR-019: founder-rekey delegation chain.
+    let delegations = project_state::DelegationChain::load(&caller.home, &project_id)?
+        .map(|c| c.delegations)
+        .unwrap_or_default();
+    let dlen = delegations.len();
+    let cap = super::envelopes::DELEGATION_MAX_LEN;
+    let warn = super::envelopes::DELEGATION_WARN_LEN;
+    if dlen == 0 {
+        println!("Delegation chain:  none (founder hasn't rekeyed since project init)");
+    } else {
+        let suffix = if dlen >= warn {
+            "  ⚠ consider `gitmirror project re-found` for hygiene"
+        } else {
+            ""
+        };
+        println!("Delegation chain:  {}/{} hops{}", dlen, cap, suffix);
+        if let Some(last) = delegations.last() {
+            println!(
+                "Current founder:   ed25519:{} (since unix-ts {})",
+                last.new_founder_pubkey, last.delegated_at
+            );
+        }
+        if dlen >= cap {
+            println!(
+                "                   AT CAP — next rekey will be refused unless --force-orphan-projects"
+            );
+        }
+    }
     let state_dir = project_state::user_project_dir(&caller.home, &project_id);
     println!("State dir:         {}", state_dir.display());
     let leave_pending = state_dir.join("leave.pending").exists();

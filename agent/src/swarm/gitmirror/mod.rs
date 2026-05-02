@@ -58,6 +58,7 @@ pub mod pending_claims;
 pub mod project_peers;
 pub mod project_state;
 pub mod receiver;
+pub mod rekey;
 pub mod remote_helper;
 pub mod state;
 pub mod tokens;
