@@ -61,10 +61,10 @@
         {{end}}
     </div>
     <div class="gauge-legend">
-        <div class="gauge-legend__item"><div class="gauge-legend__swatch" style="background:var(--color-success);"></div> Satisfied</div>
-        {{if gt .WaivedControls 0}}<div class="gauge-legend__item"><div class="gauge-legend__swatch" style="background:var(--color-brand);"></div> Waived</div>{{end}}
-        <div class="gauge-legend__item"><div class="gauge-legend__swatch" style="background:var(--color-warning);"></div> Partial</div>
-        <div class="gauge-legend__item"><div class="gauge-legend__swatch" style="background:var(--color-danger);"></div> Not Met</div>
+        <div class="gauge-legend__item"><div class="gauge-legend__swatch gauge-legend__swatch--success"></div> Satisfied</div>
+        {{if gt .WaivedControls 0}}<div class="gauge-legend__item"><div class="gauge-legend__swatch gauge-legend__swatch--info"></div> Waived</div>{{end}}
+        <div class="gauge-legend__item"><div class="gauge-legend__swatch gauge-legend__swatch--warning"></div> Partial</div>
+        <div class="gauge-legend__item"><div class="gauge-legend__swatch gauge-legend__swatch--danger"></div> Not Met</div>
     </div>
 </div>
 <div class="breakdown">

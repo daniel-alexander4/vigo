@@ -3674,6 +3674,14 @@ a:focus-visible {
 }
 .gauge-legend__item { display: flex; align-items: center; gap: 4px; }
 .gauge-legend__swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+/* Compliance-state swatches for the standards gauge legend. Mirrors
+   the `.swarm-legend__swatch--*` action variants — both legend systems
+   use the same Catppuccin tokens, so promoting to class modifiers
+   keeps the pattern symmetric and the inline-styled callsites gone. */
+.gauge-legend__swatch--success { background: var(--color-success); }
+.gauge-legend__swatch--info { background: var(--color-brand); }
+.gauge-legend__swatch--warning { background: var(--color-warning); }
+.gauge-legend__swatch--danger { background: var(--color-danger); }
 
 /* === License Capacity Banner ===
  * Rendered at the top of the dashboard when the fleet is at or near the
