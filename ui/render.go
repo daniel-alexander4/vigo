@@ -42,10 +42,13 @@ func funcMap() template.FuncMap {
 		"truncGitSha":    truncGitSha,
 		"timeAgo":        timeAgo,
 		"sortHeader":     sortHeader,
-		"pctColor":       pctColor,
-		"pctColorInv":    pctColorInv,
-		"pctColorBg":     pctColorBg,
-		"pctColorBgInv":  pctColorBgInv,
+		"pctColor":          pctColor,
+		"pctColorInv":       pctColorInv,
+		"pctColorBg":        pctColorBg,
+		"pctColorBgInv":     pctColorBgInv,
+		"pctAccent":         pctAccent,
+		"pctAccentInv":      pctAccentInv,
+		"failureBadgeClass": failureBadgeClass,
 		"highlightYAML":  highlightYAML,
 		"truncUUID":      truncUUID,
 		"labelDisplayName": labelDisplayName,
@@ -546,45 +549,100 @@ func toFloat64(v any) float64 {
 	}
 }
 
-// pctColor returns an HSL color string for a 0-100 percentage where 0% = green
-// and 100% = red. Used for failure ratios, risk scores, and drift rates.
-// Hue interpolates linearly: 120° (green) at 0% → 0° (red) at 100%.
-// Accepts int, int64, float64, or any numeric type.
+// pctBand maps a 0-100 percentage to a Catppuccin-token band ("success" /
+// "warning" / "danger") under the "higher is worse" semantic — used for
+// failure ratios, risk scores, and drift rates. Cutoffs:
+//   - >50% → danger
+//   - >20% → warning
+//   - else → success
+// (The percentage scale matches what the original HSL gradient encoded
+// as a smooth red-yellow-green ramp; the band classification is the
+// honest 3-state approximation.)
+func pctBand(v any) string {
+	pct := toFloat64(v)
+	switch {
+	case pct > 50:
+		return "danger"
+	case pct > 20:
+		return "warning"
+	default:
+		return "success"
+	}
+}
+
+// pctBandInv is the inverse: "higher is better" semantic — convergence %,
+// compliance coverage, etc. Cutoffs:
+//   - <50% → danger
+//   - <80% → warning
+//   - else → success
+func pctBandInv(v any) string {
+	pct := toFloat64(v)
+	switch {
+	case pct < 50:
+		return "danger"
+	case pct < 80:
+		return "warning"
+	default:
+		return "success"
+	}
+}
+
+// pctAccent returns the band string ("success" / "warning" / "danger")
+// for use in CSS class names like `stat-card--{{pctAccent .X}}`.
+// "Higher is worse" semantic.
+func pctAccent(v any) string { return pctBand(v) }
+
+// pctAccentInv is the inverse band — "higher is better" semantic.
+func pctAccentInv(v any) string { return pctBandInv(v) }
+
+// pctColor returns a Catppuccin-token CSS reference for inline-style
+// usage like `style="color: {{pctColor .X}}"`. "Higher is worse" — high
+// percentages map to `var(--color-danger)`. Replaces the legacy HSL
+// gradient with a 3-band token classification (per the project's
+// Catppuccin Mocha palette doctrine; raw HSL/hex literals are banned).
+// Existing inline-styled callsites continue to work without template
+// changes; new code should prefer `pctAccent` + class-based styling.
 func pctColor(v any) template.CSS {
-	pct := toFloat64(v)
-	if pct < 0 {
-		pct = 0
-	}
-	if pct > 100 {
-		pct = 100
-	}
-	hue := 120.0 * (1.0 - pct/100.0)
-	return template.CSS(fmt.Sprintf("hsl(%.0f, 72%%, 40%%)", hue))
+	return template.CSS("var(--color-" + pctBand(v) + ")")
 }
 
-// pctColorInv is the inverse: 0% = red, 100% = green. Used for convergence
-// percentage, compliance coverage, and other "higher is better" metrics.
+// pctColorInv is the inverse: "higher is better" — high percentages
+// (e.g., convergence %) map to `var(--color-success)`.
 func pctColorInv(v any) template.CSS {
-	return pctColor(100.0 - toFloat64(v))
+	return template.CSS("var(--color-" + pctBandInv(v) + ")")
 }
 
-// pctColorBg returns a light HSL background color for a 0-100 percentage.
-// Same hue mapping as pctColor but with high lightness for table row tinting.
+// pctColorBg returns the `-bg` token variant for tinted backgrounds
+// (e.g., badge fills). "Higher is worse" semantic — same band mapping
+// as pctColor, but resolves to the lighter `--color-{band}-bg` variant.
 func pctColorBg(v any) template.CSS {
-	pct := toFloat64(v)
-	if pct < 0 {
-		pct = 0
-	}
-	if pct > 100 {
-		pct = 100
-	}
-	hue := 120.0 * (1.0 - pct/100.0)
-	return template.CSS(fmt.Sprintf("hsl(%.0f, 60%%, 95%%)", hue))
+	return template.CSS("var(--color-" + pctBand(v) + "-bg)")
 }
 
-// pctColorBgInv returns a light background: 0% = red bg, 100% = green bg.
+// pctColorBgInv is the inverse `-bg` variant.
 func pctColorBgInv(v any) template.CSS {
-	return pctColorBg(100.0 - toFloat64(v))
+	return template.CSS("var(--color-" + pctBandInv(v) + "-bg)")
+}
+
+// failureBadgeClass returns the badge class modifier ("badge--compliant"
+// / "badge--warning" / "badge--failed") for a `failedCount / totalCount`
+// pair. Used by dashboard fleet + activity tables in place of inline
+// background/color styling. Token-driven; matches the existing
+// `.badge--*` rules in the stylesheet.
+func failureBadgeClass(failed, total any) string {
+	t := toFloat64(total)
+	if t <= 0 {
+		return "badge--compliant"
+	}
+	pct := (toFloat64(failed) / t) * 100.0
+	switch {
+	case pct == 0:
+		return "badge--compliant"
+	case pct > 25:
+		return "badge--failed"
+	default:
+		return "badge--warning"
+	}
 }
 
 // sortHeader renders a sortable <th> element. label is the display text, col is

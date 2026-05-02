@@ -538,6 +538,53 @@ html.theme-dark .topbar__theme-icon--moon { display: none; }
     margin-top: 4px;
 }
 
+/* Compact metadata strip beside the page title — used on the dashboard
+   to surface server / agent versions, check-in interval, and supported
+   platforms in a single line under the H1 instead of a heavy card. */
+.page-header__meta {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 4px;
+    color: var(--color-text-muted);
+    font-size: 13px;
+}
+
+.page-header__meta-item {
+    white-space: nowrap;
+}
+
+.page-header__meta-label {
+    color: var(--color-text-muted);
+    font-weight: 500;
+    margin-right: 4px;
+    opacity: 0.85;
+}
+
+.page-header__meta-sep {
+    color: var(--color-text-muted);
+    opacity: 0.6;
+}
+
+/* Dashboard fleet table — caption note for capped-row state, and the
+   "View all N envoys" CTA below the table. */
+.dashboard-fleet__cap-note {
+    color: var(--color-text-muted);
+    font-weight: 400;
+    font-size: 13px;
+}
+
+.dashboard-fleet__view-all {
+    text-align: center;
+    margin-top: 8px;
+}
+
+.welcome-card__cta {
+    margin-top: 16px;
+}
+
 /* === Stat Cards === */
 .stat-cards {
     display: grid;
@@ -727,99 +774,6 @@ a.dash-column--link:hover {
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-top: 4px;
-}
-
-/* === Version Card === */
-.version-card {
-    background: var(--color-card-bg);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
-    margin-bottom: 24px;
-    border: 1px solid var(--color-border);
-    /* Left accent strip in brand blue — matches the info-card idiom used
-       elsewhere on the site (stat cards, license banner) and makes this
-       row pop without competing with the stat-card grid below it. */
-    border-left: 3px solid var(--color-brand);
-    overflow: hidden;
-}
-.version-card__header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 20px;
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-primary-tint-soft);
-}
-.version-card__icon {
-    width: 16px;
-    height: 16px;
-    color: var(--color-brand);
-    flex-shrink: 0;
-}
-.version-card__title {
-    font-size: 13px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-brand);
-}
-.version-card__body {
-    display: flex;
-    align-items: center;
-    padding: 16px 20px;
-    gap: 24px;
-    flex-wrap: wrap;
-}
-.version-card__item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.version-card__label {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--color-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.version-card__version {
-    font-size: 15px;
-    font-weight: 700;
-    font-family: var(--font-mono);
-    color: var(--color-brand);
-    background: var(--color-primary-bg);
-    padding: 2px 10px;
-    border-radius: 12px;
-}
-.version-card__divider {
-    width: 1px;
-    height: 28px;
-    background: var(--color-border);
-}
-.version-card__platforms {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.version-card__platform-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-.version-card__platform {
-    display: inline-block;
-    font-size: 12px;
-    font-weight: 600;
-    font-family: var(--font-mono);
-    color: var(--color-text);
-    background: var(--color-bg);
-    padding: 2px 10px;
-    border-radius: 12px;
-    border: 1px solid var(--color-border);
-}
-.version-card__arch {
-    color: var(--color-text-muted);
-    font-weight: 400;
 }
 
 /* === Badges === */

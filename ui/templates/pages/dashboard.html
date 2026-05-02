@@ -2,8 +2,21 @@
 <span data-ai-page="dashboard" hidden></span>
 <div class="page-header">
     <h1>Dashboard</h1>
-    <div class="page-header__actions">
-        <a href="/viz" class="btn btn--sm">Viz View</a>
+    <div class="page-header__meta">
+        <span class="page-header__meta-item"><span class="page-header__meta-label">Server</span> v{{.Version}}</span>
+        <span class="page-header__meta-sep">·</span>
+        <span class="page-header__meta-item"><span class="page-header__meta-label">Agent</span> v{{.AgentVersion}}</span>
+        {{if .CheckInInterval}}
+        <span class="page-header__meta-sep">·</span>
+        <span class="page-header__meta-item"><span class="page-header__meta-label">Check-in</span> {{.CheckInInterval}}</span>
+        {{end}}
+        {{if .AgentPlatforms}}
+        <span class="page-header__meta-sep">·</span>
+        <span class="page-header__meta-item">
+            <span class="page-header__meta-label">Platforms</span>
+            {{range $i, $p := .AgentPlatforms}}{{if $i}}, {{end}}{{osLabel $p.OS}}/{{$p.Arch}}{{end}}
+        </span>
+        {{end}}
     </div>
 </div>
 
@@ -26,42 +39,6 @@
 </div>
 {{end}}
 
-<div class="version-card">
-    <div class="version-card__header">
-        <svg class="version-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg>
-        <span class="version-card__title">Version Info</span>
-    </div>
-    <div class="version-card__body">
-        <div class="version-card__item">
-            <span class="version-card__label">Server</span>
-            <span class="version-card__version">v{{.Version}}</span>
-        </div>
-        <div class="version-card__divider"></div>
-        <div class="version-card__item">
-            <span class="version-card__label">Agent</span>
-            <span class="version-card__version">v{{.AgentVersion}}</span>
-        </div>
-        {{if .AgentPlatforms}}
-        <div class="version-card__divider"></div>
-        <div class="version-card__platforms">
-            <span class="version-card__label">Platforms</span>
-            <div class="version-card__platform-list">
-                {{range .AgentPlatforms}}
-                <span class="version-card__platform">{{osLabel .OS}}<span class="version-card__arch">/{{.Arch}}</span></span>
-                {{end}}
-            </div>
-        </div>
-        {{end}}
-        {{if .CheckInInterval}}
-        <div class="version-card__divider"></div>
-        <div class="version-card__item">
-            <span class="version-card__label">Check-in</span>
-            <span class="version-card__version">{{.CheckInInterval}}</span>
-        </div>
-        {{end}}
-    </div>
-</div>
-
 {{if eq .TotalEnvoys 0}}
 <div class="welcome-card">
     <h2>Welcome to Vigo</h2>
@@ -72,7 +49,7 @@
         <li>Write your first module in <code>/srv/vigo/stockpile/modules/</code></li>
         <li>Publish config: <code>vigocli config publish</code></li>
     </ol>
-    <p style="margin-top:16px;"><a href="/docs" class="btn btn--primary btn--sm">Read the docs</a></p>
+    <p class="welcome-card__cta"><a href="/docs" class="btn btn--primary btn--sm">Read the docs</a></p>
 </div>
 {{else}}
 <div id="stats"
@@ -82,6 +59,9 @@
      aria-live="polite">
     {{template "dashboard-stats" .}}
 </div>
+
+{{template "dashboard-fleet" .}}
+{{template "dashboard-activity" .}}
 {{end}}
 
 {{end}}
@@ -108,7 +88,7 @@
             <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
             <td>
                 {{if and (gt .FailedCount 0) (gt .ModuleCount 0)}}
-                <span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>
+                <span class="badge {{failureBadgeClass .FailedCount .ModuleCount}}">{{.FailedCount}}/{{.ModuleCount}}</span>
                 {{else}}
                 {{template "status-badge" dict "Status" .Status}}
                 {{end}}
@@ -125,7 +105,7 @@
 {{end}}
 
 {{define "dashboard-fleet"}}
-<h3>Fleet Status{{if .FleetRowsCapped}} <span class="text-muted" style="font-weight:400;font-size:13px;">(worst {{len .FleetRows}} of {{.TotalEnvoys}})</span>{{end}}</h3>
+<h3>Fleet Status{{if .FleetRowsCapped}} <span class="dashboard-fleet__cap-note">(worst {{len .FleetRows}} of {{.TotalEnvoys}})</span>{{end}}</h3>
 <table class="table">
     <thead>
         <tr>
@@ -143,7 +123,7 @@
             <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}">{{timeAgo .LastSeen}}</span></td>
             <td>
                 {{if gt .ModuleCount 0}}
-                <span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>
+                <span class="badge {{failureBadgeClass .FailedCount .ModuleCount}}">{{.FailedCount}}/{{.ModuleCount}}</span>
                 {{else if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged"))}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
                 {{else}}
@@ -155,64 +135,6 @@
     </tbody>
 </table>
 {{if .FleetRowsCapped}}
-<p style="text-align:center;margin-top:8px;"><a href="/envoys" class="btn btn--sm">View all {{.TotalEnvoys}} envoys</a></p>
-{{end}}
-{{end}}
-
-{{define "dashboard-risk"}}
-{{if .RiskTopEnvoys}}
-<h3>Highest Risk Envoys</h3>
-<table class="table">
-    <thead>
-        <tr>
-            <th>Hostname</th>
-            <th>Score</th>
-            <th>Level</th>
-        </tr>
-    </thead>
-    <tbody>
-        {{range .RiskTopEnvoys}}
-        <tr>
-            <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
-            <td class="mono">{{.Score}}</td>
-            <td>{{template "status-badge" dict "Status" .Level}}</td>
-        </tr>
-        {{end}}
-    </tbody>
-</table>
-{{end}}
-{{end}}
-
-{{define "dashboard-integrations"}}
-{{if .Integrations}}
-<div class="table-container">
-    <h3>Integrations <span class="text-muted" style="font-weight:400;font-size:12px;">{{.TotalEnabled}} active</span></h3>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Integration</th>
-                <th>Category</th>
-                <th>Status</th>
-                <th>Events</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .Integrations}}
-            <tr>
-                <td>{{.Name}}</td>
-                <td><span class="badge badge--info">{{.Category}}</span></td>
-                <td>
-                    {{if .Enabled}}
-                    <span class="badge badge--compliant">active</span>
-                    {{else}}
-                    <span class="badge badge--unknown">disabled</span>
-                    {{end}}
-                </td>
-                <td>{{if .Events}}{{.Events}} events{{else}}all events{{end}}</td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
-</div>
+<p class="dashboard-fleet__view-all"><a href="/envoys" class="btn btn--sm">View all {{.TotalEnvoys}} envoys</a></p>
 {{end}}
 {{end}}

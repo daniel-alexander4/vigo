@@ -590,10 +590,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
-	mux.HandleFunc("GET /viz", h.DashboardViz)
 	mux.HandleFunc("GET /ui/fragments/dashboard-fleet", h.DashboardFleet)
-	mux.HandleFunc("GET /ui/fragments/dashboard-viz-fleet", h.DashboardVizFleetFragment)
-	mux.HandleFunc("GET /ui/fragments/dashboard-risk", h.DashboardRisk)
 	mux.HandleFunc("GET /ui/fragments/dashboard-activity", h.DashboardActivity)
 	mux.HandleFunc("GET /ui/fragments/compliance-status", h.ComplianceStatus)
 	mux.HandleFunc("GET /ui/fragments/compliance-frameworks", h.ComplianceFrameworksFragment)
@@ -841,8 +838,8 @@ type DashboardPageData struct {
 	ComplianceSparklineData []float64
 	ComplianceSparklineMin  int
 	ComplianceSparklineMax  int
-	// Swarm distribution (used by /viz and /fleet; no longer rendered on
-	// the dashboard landing page).
+	// Swarm distribution (used by /fleet; no longer rendered on the
+	// dashboard landing page).
 	SwarmFiles []SwarmFileRow
 	// Certificate lifecycle — fleet-wide expiry counts.
 	CertsExpiringSoon  int
@@ -1963,9 +1960,9 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.RiskLow = rsk.Low
 	data.RiskTopEnvoys = rsk.TopRisks
 
-	// Enrich with swarm distribution data (still populated for /viz and
-	// /fleet which share this data type; the dashboard page no longer
-	// renders the swarm table itself).
+	// Enrich with swarm distribution data (still populated for /fleet
+	// which shares this data type; the dashboard page no longer renders
+	// the swarm table itself).
 	if h.swarmTracker != nil {
 		data.SwarmFiles = h.swarmFiles()
 	}
@@ -2281,14 +2278,6 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DashboardFleet(w http.ResponseWriter, r *http.Request) {
 	data := h.dashboardData()
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-fleet", data)
-}
-
-// DashboardRisk renders the top-risks table fragment for HTMX polling.
-func (h *Handler) DashboardRisk(w http.ResponseWriter, r *http.Request) {
-	data := h.dataSource.DashboardData(h.baseInterval)
-	rsk := h.dataSource.RiskData(h.baseInterval)
-	data.RiskTopEnvoys = rsk.TopRisks
-	h.renderer.RenderFragment(w, "dashboard", "dashboard-risk", data)
 }
 
 // DashboardActivity renders the recent activity table fragment for HTMX polling.

@@ -5,23 +5,11 @@
         <div class="stat-cards">
             {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
             {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Active (1h)" "Color" "success"}}
-            <div class="stat-card" style="border-left-color:{{pctColorInv .ConvergencePct}};">
-                <div class="stat-card__value" style="color:{{pctColorInv .ConvergencePct}};">{{printf "%.0f%%" .ConvergencePct}}</div>
+            <div class="stat-card stat-card--{{pctAccentInv .ConvergencePct}}">
+                <div class="stat-card__value">{{printf "%.0f%%" .ConvergencePct}}</div>
                 <div class="stat-card__label">{{.Converged}} of {{.TotalEnvoys}} converged</div>
             </div>
         </div>
-        {{if .ConvergenceSparklineData}}
-        <div class="dash-column__spark">
-            <div class="dash-column__spark-label">30-day convergence %</div>
-            <div class="dash-column__spark-body">
-                <div class="dash-column__spark-axis">
-                    <span>100%</span>
-                    <span>0%</span>
-                </div>
-                <div class="dash-column__spark-graph">{{sparklineSVGBounded .ConvergenceSparklineData 400 60 "var(--color-success)" 0 100}}</div>
-            </div>
-        </div>
-        {{end}}
     </a>
     <a class="dash-column dash-column--link" href="/security" aria-label="Security posture — CVEs and hardening">
         <h3 class="dash-column__title">Security Posture</h3>
@@ -51,24 +39,12 @@
             {{template "stat-card" dict "Value" .NotSatisfiedControls "Label" "Not Met" "Color" "danger"}}
             {{template "stat-card" dict "Value" (printf "%.0f%%" .StandardsPct) "Label" (printf "%d of %d covered" (add .SatisfiedControls .WaivedControls) .TotalControls) "Color" "success"}}
         </div>
-        {{if .ComplianceSparklineData}}
-        <div class="dash-column__spark">
-            <div class="dash-column__spark-label">30-day coverage %</div>
-            <div class="dash-column__spark-body">
-                <div class="dash-column__spark-axis">
-                    <span>100%</span>
-                    <span>0%</span>
-                </div>
-                <div class="dash-column__spark-graph">{{sparklineSVGBounded .ComplianceSparklineData 400 60 "var(--color-success)" 0 100}}</div>
-            </div>
-        </div>
-        {{end}}
     </a>
     <a class="dash-column dash-column--link" href="/risk" aria-label="Risk posture — fleet-wide risk scores">
         <h3 class="dash-column__title">Risk Posture</h3>
         <div class="stat-cards">
-            <div class="stat-card" style="border-left-color:{{pctColor .RiskAvgScore}};">
-                <div class="stat-card__value" style="color:{{pctColor .RiskAvgScore}};">{{.RiskAvgScore}}</div>
+            <div class="stat-card stat-card--{{pctAccent .RiskAvgScore}}">
+                <div class="stat-card__value">{{.RiskAvgScore}}</div>
                 <div class="stat-card__label">Avg Risk Score</div>
             </div>
             {{template "stat-card" dict "Value" .RiskCritical "Label" "Critical" "Color" "danger"}}
