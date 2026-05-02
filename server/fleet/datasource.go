@@ -5,7 +5,6 @@ package fleet
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"sort"
 	"strconv"
@@ -239,11 +238,6 @@ func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string
 		})
 	}
 
-	nextCursor := ""
-	if hasMore && len(rows) > 0 {
-		nextCursor = rows[len(rows)-1].Hostname
-	}
-
 	// Populate filter-bar counts from the FleetIndex's precomputed
 	// counters — the same source feeding the row statuses above, so
 	// the buttons can never disagree with what's rendered below them.
@@ -255,7 +249,8 @@ func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string
 		Search:         search,
 		EnvoyCount:     len(rows),
 		HasMore:        hasMore,
-		NextCursor:     nextCursor,
+		Limit:          limit,
+		NextOffset:     len(rows),
 		TotalEnvoys:    counts.Total,
 		CountConverged: counts.Converged,
 		CountRelapsed:  counts.Relapsed,
@@ -355,7 +350,6 @@ func (ds *DataSource) EnvoyRunsData(envoyID string) (ui.EnvoyRunsFragmentData, e
 	}
 
 	var runs []ui.EnvoyDetailRunRow
-	var driftHistory []ui.DriftPoint
 	for _, r := range dbRuns {
 		runs = append(runs, ui.EnvoyDetailRunRow{
 			RunRow: ui.RunRow{
@@ -369,43 +363,18 @@ func (ds *DataSource) EnvoyRunsData(envoyID string) (ui.EnvoyRunsFragmentData, e
 			},
 			Results: resultsByRun[r.ID],
 		})
-		driftHistory = append(driftHistory, ui.DriftPoint{
-			StartedAt:    r.StartedAt,
-			Status:       r.Status,
-			ChangedCount: r.ChangedCount,
-			FailedCount:  r.FailedCount,
-		})
 	}
 
-	return ui.EnvoyRunsFragmentData{Runs: runs, DriftHistory: driftHistory}, nil
+	return ui.EnvoyRunsFragmentData{Runs: runs}, nil
 }
 
 func (ds *DataSource) EnvoyTraitsData(envoyID string) (ui.EnvoyTraitsFragmentData, error) {
-	ts := ds.fleet.GetEnvoy(envoyID)
-	traits := make(map[string]any)
-	if ts != nil && ts.Traits != nil {
-		for k, v := range ts.Traits {
-			traits[k] = v
-		}
-	} else {
-		// DB fallback: unmarshal nested JSON then flatten to dot-separated
-		// string values so the template can safely render every value.
-		ctx := context.Background()
-		cf, err := ds.queries.GetLatestEnvoyTraits(ctx, envoyID)
-		if err == nil {
-			var nested map[string]any
-			if err := json.Unmarshal([]byte(cf.Traits), &nested); err != nil {
-				slog.Warn("malformed traits JSON", "envoy_id", envoyID, "error", err)
-			} else {
-				flat := make(map[string]string)
-				FlattenJSON("", nested, flat)
-				for k, v := range flat {
-					traits[k] = v
-				}
-			}
-		}
+	ctx := context.Background()
+	cf, err := ds.queries.GetLatestEnvoyTraits(ctx, envoyID)
+	if err != nil {
+		return ui.EnvoyTraitsFragmentData{}, nil
 	}
-	return ui.EnvoyTraitsFragmentData{Traits: traits}, nil
+	return ui.BuildTraitsFragment(cf.Traits, cf.CollectedAt), nil
 }
 
 func (ds *DataSource) RunsData(statusFilter string) ui.RunsPageData {
@@ -429,12 +398,14 @@ func (ds *DataSource) RunsData(statusFilter string) ui.RunsPageData {
 		}
 		rows = append(rows, ui.RunRow{
 			ID:           r.ID,
+			EnvoyID:      r.EnvoyID,
 			Hostname:     hostname,
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
 			ModuleCount:  r.ModuleCount,
 			ChangedCount: r.ChangedCount,
 			FailedCount:  r.FailedCount,
+			FailurePct:   convergence.FailurePct(r.FailedCount, r.ModuleCount),
 		})
 	}
 

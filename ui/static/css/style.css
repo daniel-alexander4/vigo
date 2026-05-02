@@ -540,32 +540,43 @@ html.theme-dark .topbar__theme-icon--moon { display: none; }
 
 /* Compact metadata strip beside the page title — used on the dashboard
    to surface server / agent versions, check-in interval, and supported
-   platforms in a single line under the H1 instead of a heavy card. */
+   platforms as a row of small chips. Each chip is borderless with a
+   subtle tinted background so the strip stays minimal but reads as
+   structured data, not a sentence. */
 .page-header__meta {
     grid-column: 1 / -1;
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
-    gap: 8px;
-    margin-top: 4px;
-    color: var(--color-text-muted);
-    font-size: 13px;
+    align-items: center;
+    gap: 6px 8px;
+    margin-top: 8px;
 }
 
-.page-header__meta-item {
+.meta-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 3px 10px;
+    background: var(--color-surface-tint-faint);
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 1.6;
     white-space: nowrap;
 }
 
-.page-header__meta-label {
+.meta-chip__label {
     color: var(--color-text-muted);
-    font-weight: 500;
-    margin-right: 4px;
-    opacity: 0.85;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 10.5px;
+    font-weight: 600;
 }
 
-.page-header__meta-sep {
-    color: var(--color-text-muted);
-    opacity: 0.6;
+.meta-chip__value {
+    color: var(--color-text);
+    font-weight: 500;
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
 }
 
 /* Dashboard fleet table — caption note for capped-row state, and the
@@ -1394,6 +1405,77 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     max-width: 250px;
 }
 
+/* Envoys-page toolbar: search + sort selector flow together on the
+   left. Outside the polling region so the operator's typed query and
+   chosen sort survive every refresh tick. */
+.envoys-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 12px;
+}
+.envoys-toolbar__form,
+.envoys-toolbar__sort {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.envoys-toolbar__search {
+    max-width: 280px;
+}
+.envoys-toolbar__label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--color-text-muted);
+    font-weight: 600;
+}
+
+/* Sticky table header for the envoys list. At 10k envoys the operator
+   scrolls deep — column meanings have to stay visible. Scoped to the
+   envoys table only so other tables (which fit on a single screen) keep
+   their unstyled headers and don't pay for the stacking-context cost. */
+.envoys-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--color-card-bg);
+    box-shadow: 0 1px 0 var(--color-border);
+}
+
+/* Last-seen freshness indicator. The cell carries a unix timestamp on a
+   data attribute and a small script flips this class when (now - lastSeen)
+   crosses 2× the agent check-in interval. Computed client-side so the
+   color stays accurate even when the table data is from page-load. */
+.envoys-lastseen--stale {
+    color: var(--color-danger);
+}
+.envoys-lastseen--stale .time-relative {
+    color: var(--color-danger);
+}
+
+/* Hard-cap sentinel: replaces the "load more" trigger past the rendered
+   cap (default 1,000 rows). Sits as a TR inside the tbody so outerHTML
+   replacement during incremental load is well-defined. */
+.envoys-table__cap-sentinel td {
+    padding: 16px 20px;
+    background: var(--color-surface-tint-faint);
+    border-top: 2px dashed var(--color-border);
+    color: var(--color-text-muted);
+    font-size: 13px;
+    text-align: center;
+}
+.envoys-table__cap-sentinel strong {
+    color: var(--color-text);
+}
+.envoys-table__loadmore-cell {
+    padding: 12px 16px;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    text-align: center;
+    font-style: italic;
+}
+
 /* === Breadcrumb === */
 .breadcrumb {
     font-size: 13px;
@@ -1422,42 +1504,189 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     gap: 12px;
 }
 
-/* === Traits Panel === */
-.traits-panel {
-    background: var(--color-card-bg);
-    border-radius: var(--radius-lg);
-    padding: 20px 24px;
-    box-shadow: var(--shadow-sm);
+/* === Traits tab — host-summary strip + filterable tree ===
+   The fragment renders a four-card host summary, a sticky filter input,
+   and a recursive tree of <details> groups. Goal: an SRE answers
+   "what kernel?" / "how much RAM?" in <3 seconds without scrolling
+   through hundreds of randomly-ordered dotted keys. */
+.stat-cards--compact {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 240px));
+    gap: 12px;
+    margin-bottom: 12px;
+    justify-content: start;
 }
-
-.traits-panel h3 {
-    font-size: 14px;
+.stat-cards--compact .stat-card {
+    padding: 12px 16px;
+}
+.stat-cards--compact .stat-card__value {
+    font-size: 18px;
     font-weight: 600;
-    color: var(--color-text);
-    margin-bottom: 16px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
 }
-
-.traits-list {
-    display: grid;
-    gap: 8px;
+.stat-cards--compact .stat-card__label {
+    font-size: 11px;
+    margin-top: 0;
+    margin-bottom: 4px;
 }
-
-.traits-key {
+.stat-card__sub {
     font-size: 12px;
-    font-weight: 600;
     color: var(--color-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
+    margin-top: 4px;
+    /* Long CPU model strings should ellipsize, not wrap and break the
+       compact card's vertical rhythm. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.traits-val {
+.traits-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.traits-filter {
+    flex: 1;
+    max-width: 480px;
+    padding: 6px 10px;
     font-size: 13px;
+    font-family: var(--font-mono);
     color: var(--color-text);
-    margin-left: 0;
-    margin-bottom: 8px;
-    word-break: break-all;
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+}
+.traits-filter:focus {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 1px;
+    border-color: var(--color-brand);
+}
+.traits-toolbar__count {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.traits-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.trait-group {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+}
+.trait-group--nested {
+    background: transparent;
+    border: none;
+    border-left: 2px solid var(--color-border);
+    border-radius: 0;
+    margin-left: 8px;
+}
+.trait-group__summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 8px 12px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    user-select: none;
+    border-radius: 4px;
+}
+.trait-group__summary::-webkit-details-marker { display: none; }
+/* Caret rendered via ::before so we control its width and rotation
+   without depending on the UA's default disclosure marker. */
+.trait-group__summary::before {
+    content: "▸";
+    display: inline-block;
+    width: 12px;
+    color: var(--color-text-muted);
+    font-size: 10px;
+    transition: transform 0.12s ease;
+}
+.trait-group[open] > .trait-group__summary::before {
+    transform: rotate(90deg);
+}
+.trait-group__summary:hover {
+    background: var(--color-primary-tint-faint);
+}
+.trait-group__summary:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: -2px;
+}
+.trait-group__key {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+}
+.trait-group__count {
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+.trait-group__body {
+    padding: 4px 12px 8px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.trait-group--array-overflow {
+    margin: 4px 0;
+    background: transparent;
+    border: 1px dashed var(--color-border);
+    border-radius: 4px;
+}
+
+.trait-leaf {
+    display: grid;
+    grid-template-columns: minmax(180px, 22ch) 1fr;
+    gap: 16px;
+    padding: 3px 4px;
+    align-items: baseline;
+    border-radius: 3px;
+}
+.trait-leaf:hover {
+    background: var(--color-primary-tint-faint);
+}
+.trait-leaf__key {
+    font-size: 12.5px;
+    color: var(--color-text-muted);
+    /* Long dotted paths shouldn't blow out the column. break-all is too
+       aggressive for identifiers; anywhere only breaks when there's no
+       choice. */
+    overflow-wrap: anywhere;
+}
+.trait-leaf__val {
+    font-size: 12.5px;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+.traits-raw {
+    margin-top: 16px;
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+}
+.traits-raw > summary {
+    cursor: pointer;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: var(--color-text-muted);
+    user-select: none;
+}
+.traits-raw > summary:hover { color: var(--color-text); }
+.traits-raw__pre {
+    margin: 0;
+    padding: 12px 16px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--color-text);
+    background: var(--color-bg);
+    border-top: 1px solid var(--color-border);
+    overflow: auto;
+    max-height: 480px;
 }
 
 /* === Badge info color === */

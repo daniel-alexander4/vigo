@@ -607,7 +607,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/cve-search", h.CVESearchFragment)
 	mux.HandleFunc("GET /ui/fragments/envoys-table", h.EnvoysTable)
 	mux.HandleFunc("GET /ui/fragments/envoys-stats", h.EnvoysStats)
-	mux.HandleFunc("GET /ui/fragments/envoy-drift/{id}", h.EnvoyDriftFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-runs/{id}", h.EnvoyRunsFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-traits/{id}", h.EnvoyTraitsFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-config/{id}", h.EnvoyConfigFragment)
@@ -1083,14 +1082,22 @@ type EnvoyRow struct {
 type EnvoysPageData struct {
 	PageData
 	Envoys       []EnvoyRow
-	StatusFilter  string
-	Search        string
-	SortColumn    string // active sort column (hostname, last_seen, status)
-	SortDir       string // "asc" or "desc"
-	EnvoyCount   int
-	TotalEnvoys  int
-	HasMore       bool
-	NextCursor    string // hostname of last row (cursor for next page)
+	StatusFilter string
+	Search       string
+	SortColumn   string // active sort column (status, hostname, last_seen, last_run, ip)
+	SortDir      string // "asc" or "desc"
+	EnvoyCount   int    // rows on this page after filter+offset
+	MatchingTotal int   // total entries matching filter (across all pages)
+	TotalEnvoys  int    // fleet-wide total, regardless of filter
+	HasMore      bool
+	Offset       int
+	Limit        int
+	NextOffset   int
+	// RenderedCap is true when the operator has paged to the hard DOM cap;
+	// the table footer renders a "refine your filter" sentinel instead of
+	// another load-more trigger so the DOM cannot grow unbounded.
+	RenderedCap    bool
+	RenderedCapMax int
 	// Top-of-page summary stats. ActiveEnvoys = TotalEnvoys - CountOffline;
 	// DriftRate = 100 * (Relapsed + Diverged) / Total. Aggregates here rather
 	// than on the dashboard avoid a round-trip for operators who live on
@@ -1098,14 +1105,14 @@ type EnvoysPageData struct {
 	ActiveEnvoys int
 	DriftRate    float64
 	// Status counts for filter buttons.
-	CountConverged    int
-	CountRelapsed     int
-	CountDiverged     int
-	CountDegraded     int
-	CountFailed       int
-	CountOffline  int
-	CountNoData       int
-	CountObserving    int
+	CountConverged int
+	CountRelapsed  int
+	CountDiverged  int
+	CountDegraded  int
+	CountFailed    int
+	CountOffline   int
+	CountNoData    int
+	CountObserving int
 }
 
 // EnvoyDetailRunRow is a run with its per-module results for the envoy detail page.
@@ -1131,7 +1138,6 @@ type EnvoyDetailPageData struct {
 	Envoy          EnvoyRow
 	Runs           []EnvoyDetailRunRow
 	Traits         map[string]any
-	DriftHistory   []DriftPoint
 	ScrierEnabled  bool
 	// Cloud metadata (populated from traits if available).
 	CloudProvider     string // "aws", "gcp", "azure", etc. or "" if not cloud
@@ -1150,25 +1156,47 @@ type EnvoyTracePageData struct {
 	Trace    *config.ConfigTrace
 }
 
-// DriftPoint represents a single data point in the drift history timeline.
-type DriftPoint struct {
-	StartedAt    time.Time
-	Status       string
-	ChangedCount int64
-	FailedCount  int64
-	ModuleCount  int64
-	FailurePct   float64
-}
-
 // EnvoyRunsFragmentData holds data for the lazy-loaded runs fragment.
 type EnvoyRunsFragmentData struct {
-	Runs         []EnvoyDetailRunRow
-	DriftHistory []DriftPoint
+	Runs []EnvoyDetailRunRow
 }
 
 // EnvoyTraitsFragmentData holds data for the lazy-loaded traits fragment.
+// Tree carries the original nested trait structure for grouped rendering;
+// Summary surfaces the most-asked host facts as stat-cards; RawJSON gives
+// power users a copy-paste escape hatch.
 type EnvoyTraitsFragmentData struct {
-	Traits map[string]any
+	Tree        []TraitNode
+	LeafCount   int
+	CollectedAt time.Time
+	Summary     TraitSummary
+	RawJSON     string
+	HasData     bool
+}
+
+// TraitNode is one node in the rendered trait tree. A node is either a
+// scalar leaf (Children == nil, Value populated) or a group of children.
+// Path is the full dotted key path used by the client-side filter.
+type TraitNode struct {
+	Key       string
+	Path      string
+	Value     string
+	Children  []TraitNode
+	LeafCount int
+	IsArray   bool
+}
+
+// TraitSummary is the host-facts strip rendered above the trait tree.
+// Empty fields render as "—" so the strip width stays stable across envoys
+// with different collector coverage.
+type TraitSummary struct {
+	OS           string // e.g. "ubuntu 22.04"
+	Kernel       string
+	Arch         string
+	CPUCores     string // logical cores; "physical / logical" when both known
+	CPUModel     string
+	MemoryHuman  string
+	AgentVersion string
 }
 
 // RunsPageData holds data for the runs list page.
@@ -3889,27 +3917,52 @@ func (h *Handler) ComplianceExecutiveFragment(w http.ResponseWriter, r *http.Req
 	h.renderer.RenderFragment(w, "compliance-executive", "compliance-executive-content", data)
 }
 
+// envoysPageLimit is the page size for the envoys list "load more"
+// trigger. envoysRenderedCap is the hard cap on visible rows — past
+// this, growth is taxed without value, and the operator should refine
+// the filter instead. See SME-#1 scale-resilience checklist.
+const (
+	envoysPageLimit   = 100
+	envoysRenderedCap = 1000
+)
+
 // Envoys renders the envoys list page with optional status filter and pagination.
 func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
-	after := r.URL.Query().Get("after")
 	search := r.URL.Query().Get("search")
-	sortCol := r.URL.Query().Get("sort")
-	sortDir := r.URL.Query().Get("dir")
-	if sortDir != "asc" && sortDir != "desc" {
-		sortDir = "asc"
+	sortCol, sortDir := normalizeEnvoySort(r.URL.Query().Get("sort"), r.URL.Query().Get("dir"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if offset < 0 {
+		offset = 0
 	}
 
-	data := h.envoysPageData(statusFilter, after, search)
+	data := h.envoysPageData(statusFilter, search, sortCol, sortDir, offset)
 	h.enrichEnvoyRows(data.Envoys)
-
-	// Apply client-requested sort (in-memory over the page of 100 rows).
-	sortEnvoyRows(data.Envoys, sortCol, sortDir)
-	data.SortColumn = sortCol
-	data.SortDir = sortDir
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "envoys", data)
+}
+
+// normalizeEnvoySort canonicalizes the sort URL params. Empty / unknown
+// columns default to "status" — the triage-first lens that surfaces the
+// rows the operator actually came to look at on a 10k-envoy fleet.
+// Direction defaults: "status" / "ip" / "hostname" → asc; temporal
+// columns → desc (newest-first).
+func normalizeEnvoySort(col, dir string) (string, string) {
+	switch col {
+	case "status", "hostname", "ip", "last_seen", "last_run":
+	default:
+		col = "status"
+	}
+	if dir != "asc" && dir != "desc" {
+		switch col {
+		case "last_run", "last_seen":
+			dir = "desc"
+		default:
+			dir = "asc"
+		}
+	}
+	return col, dir
 }
 
 // envoysPageData builds EnvoysPageData from the fleet cache — single
@@ -3917,17 +3970,31 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 // the pills above it. Falls back to dbDataSource.EnvoysData when the
 // cache isn't initialized (very early startup); in that fallback the
 // pill counts will be unavailable but the table renders.
-func (h *Handler) envoysPageData(statusFilter, after, search string) EnvoysPageData {
+func (h *Handler) envoysPageData(statusFilter, search, sortCol, sortDir string, offset int) EnvoysPageData {
 	if h.fleetCache == nil {
 		// Fallback: use the DB path. Pills will be empty since we
 		// can't compute fleet-wide convergence without trailing-run
 		// history. This branch is hit briefly during boot before
 		// SetFleetCache is called, then never again.
-		data := h.dataSource.EnvoysData(h.baseInterval, statusFilter, after, 100, search)
+		data := h.dataSource.EnvoysData(h.baseInterval, statusFilter, "", envoysPageLimit, search)
+		data.SortColumn = sortCol
+		data.SortDir = sortDir
+		data.Offset = offset
+		data.Limit = envoysPageLimit
 		return data
 	}
 
-	entries, hasMore := h.fleetCache.PaginatedEntries(after, 100, statusFilter, search)
+	// Cap the request at the hard render limit. Past envoysRenderedCap
+	// rows we stop emitting load-more triggers and surface a sentinel.
+	limit := envoysPageLimit
+	if offset+limit > envoysRenderedCap {
+		limit = envoysRenderedCap - offset
+		if limit < 0 {
+			limit = 0
+		}
+	}
+
+	entries, total, hasMore := h.fleetCache.PaginatedEntries(offset, limit, statusFilter, search, sortCol, sortDir)
 	rows := make([]EnvoyRow, 0, len(entries))
 	for _, e := range entries {
 		rows = append(rows, EnvoyRow{
@@ -3948,19 +4015,24 @@ func (h *Handler) envoysPageData(statusFilter, after, search string) EnvoysPageD
 	}
 
 	counts := h.fleetCache.Counts()
-	nextCursor := ""
-	if hasMore && len(rows) > 0 {
-		nextCursor = rows[len(rows)-1].Hostname
-	}
+	nextOffset := offset + len(rows)
+	renderedCap := nextOffset >= envoysRenderedCap && nextOffset < total
 
 	data := EnvoysPageData{
-		PageData:     PageData{Title: "Envoys", ActiveNav: "envoys"},
-		Envoys:       rows,
-		StatusFilter: statusFilter,
-		Search:       search,
-		EnvoyCount:   len(rows),
-		HasMore:      hasMore,
-		NextCursor:   nextCursor,
+		PageData:                PageData{Title: "Envoys", ActiveNav: "envoys"},
+		Envoys:                  rows,
+		StatusFilter:            statusFilter,
+		Search:                  search,
+		SortColumn:              sortCol,
+		SortDir:                 sortDir,
+		EnvoyCount:              len(rows),
+		MatchingTotal:           total,
+		HasMore:                 hasMore && !renderedCap,
+		Offset:                  offset,
+		Limit:                   envoysPageLimit,
+		NextOffset:              nextOffset,
+		RenderedCap:             renderedCap,
+		RenderedCapMax:          envoysRenderedCap,
 
 		TotalEnvoys:    counts.Total,
 		CountConverged: counts.Converged,
@@ -3977,34 +4049,6 @@ func (h *Handler) envoysPageData(statusFilter, after, search string) EnvoysPageD
 		data.DriftRate = float64(data.CountRelapsed+data.CountDiverged) / float64(data.TotalEnvoys) * 100
 	}
 	return data
-}
-
-// sortEnvoyRows sorts envoy rows in-memory by the requested column.
-func sortEnvoyRows(rows []EnvoyRow, col, dir string) {
-	if col == "" || len(rows) < 2 {
-		return
-	}
-	sort.SliceStable(rows, func(i, j int) bool {
-		var less bool
-		switch col {
-		case "hostname":
-			less = rows[i].Hostname < rows[j].Hostname
-		case "last_seen":
-			less = rows[i].LastSeen.Before(rows[j].LastSeen)
-		case "last_run":
-			less = rows[i].LastRunAt.Before(rows[j].LastRunAt)
-		case "status":
-			less = rows[i].Status < rows[j].Status
-		case "ip":
-			less = rows[i].IPAddress < rows[j].IPAddress
-		default:
-			return false
-		}
-		if dir == "desc" {
-			return !less
-		}
-		return less
-	})
 }
 
 // EnvoyDetail renders the envoy detail page shell. Runs and traits are loaded
@@ -4064,21 +4108,6 @@ func (h *Handler) EnvoySecurityTraits(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(traits)
-}
-
-// EnvoyDriftFragment renders only the drift history table for an envoy.
-func (h *Handler) EnvoyDriftFragment(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	if _, err := uuid.Parse(idStr); err != nil {
-		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
-		return
-	}
-	data, err := h.dataSource.EnvoyRunsData(idStr)
-	if err != nil {
-		http.Error(w, "envoy not found", http.StatusNotFound)
-		return
-	}
-	h.renderer.RenderFragment(w, "envoy-detail", "envoy-drift-fragment", data)
 }
 
 // EnvoyRunsFragment renders the recent runs table for an envoy (HTMX lazy load).
@@ -4289,40 +4318,47 @@ func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Extract security traits.
-	traits, _ := h.dataSource.EnvoyTraitsData(idStr)
+	// Extract security traits from the latest trait snapshot. Reads the
+	// JSON directly + flattens locally; the traits fragment now renders
+	// from a tree, but this page still needs a flat key→string lookup.
 	data := AttackSurfaceData{Hostname: detail.Envoy.Hostname}
-
-	if traits.Traits != nil {
-		traitStr := func(key string) string {
-			if v, ok := traits.Traits[key]; ok {
-				return fmt.Sprintf("%v", v)
+	flat := make(map[string]any)
+	if h.queries != nil {
+		if cf, qErr := h.queries.GetLatestEnvoyTraits(r.Context(), idStr); qErr == nil {
+			var raw map[string]any
+			if json.Unmarshal([]byte(cf.Traits), &raw) == nil {
+				flattenTraits("", raw, flat)
 			}
-			return ""
 		}
-		for k := range traits.Traits {
-			vs := traitStr(k)
-			switch k {
-			case "security_scan.trivy.critical":
-				fmt.Sscanf(vs, "%d", &data.CVECritical)
-			case "security_scan.trivy.high":
-				fmt.Sscanf(vs, "%d", &data.CVEHigh)
-			case "security_scan.trivy.medium":
-				fmt.Sscanf(vs, "%d", &data.CVEMedium)
-			case "security_scan.trivy.low":
-				fmt.Sscanf(vs, "%d", &data.CVELow)
-			case "security_scan.lynis.score":
-				fmt.Sscanf(vs, "%d", &data.HardeningScore)
-			}
-			// Collect listening ports.
-			if strings.HasPrefix(k, "network.listening.") && strings.HasSuffix(k, ".port") {
-				prefix := strings.TrimSuffix(k, ".port")
-				data.Ports = append(data.Ports, PortEntry{
-					Port:     vs,
-					Protocol: traitStr(prefix + ".protocol"),
-					Process:  traitStr(prefix + ".process"),
-				})
-			}
+	}
+	traitStr := func(key string) string {
+		if v, ok := flat[key]; ok {
+			return fmt.Sprintf("%v", v)
+		}
+		return ""
+	}
+	for k := range flat {
+		vs := traitStr(k)
+		switch k {
+		case "security_scan.trivy.critical":
+			fmt.Sscanf(vs, "%d", &data.CVECritical)
+		case "security_scan.trivy.high":
+			fmt.Sscanf(vs, "%d", &data.CVEHigh)
+		case "security_scan.trivy.medium":
+			fmt.Sscanf(vs, "%d", &data.CVEMedium)
+		case "security_scan.trivy.low":
+			fmt.Sscanf(vs, "%d", &data.CVELow)
+		case "security_scan.lynis.score":
+			fmt.Sscanf(vs, "%d", &data.HardeningScore)
+		}
+		// Collect listening ports.
+		if strings.HasPrefix(k, "network.listening.") && strings.HasSuffix(k, ".port") {
+			prefix := strings.TrimSuffix(k, ".port")
+			data.Ports = append(data.Ports, PortEntry{
+				Port:     vs,
+				Protocol: traitStr(prefix + ".protocol"),
+				Process:  traitStr(prefix + ".process"),
+			})
 		}
 	}
 
@@ -4859,21 +4895,27 @@ func (h *Handler) Plans(w http.ResponseWriter, r *http.Request) {
 // rows the user has already scrolled into.
 func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
-	after := r.URL.Query().Get("after")
 	search := r.URL.Query().Get("search")
-	data := h.envoysPageData(statusFilter, after, search)
+	sortCol, sortDir := normalizeEnvoySort(r.URL.Query().Get("sort"), r.URL.Query().Get("dir"))
+	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if offset < 0 {
+		offset = 0
+	}
+	data := h.envoysPageData(statusFilter, search, sortCol, sortDir, offset)
 	h.enrichEnvoyRows(data.Envoys)
 	h.renderer.RenderFragment(w, "envoys", "envoys-table", data)
 }
 
-// EnvoysStats renders the stat-cards + filter-pills fragment that lives
-// above the envoys table. Polled on the page's standard interval. Kept
-// strictly above the table boundary so cursor-loaded rows are not wiped
-// when the fragment refreshes.
+// EnvoysStats renders the live stat-cards (Total + Reachable) plus the
+// filter-pill counts. Polled at the page's standard interval so all the
+// fleet-wide totals stay accurate; the search/sort toolbar and the
+// table itself are outside this region so the operator's typed query
+// and scrolled position survive every refresh tick.
 func (h *Handler) EnvoysStats(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	search := r.URL.Query().Get("search")
-	data := h.envoysPageData(statusFilter, "", search)
+	sortCol, sortDir := normalizeEnvoySort(r.URL.Query().Get("sort"), r.URL.Query().Get("dir"))
+	data := h.envoysPageData(statusFilter, search, sortCol, sortDir, 0)
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.RenderFragment(w, "envoys", "envoys-stats", data)
 }
@@ -5202,10 +5244,6 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 	}
 
 	hasMore := len(envoys) > limit && limit > 0
-	nextCursor := ""
-	if hasMore && len(rows) > 0 {
-		nextCursor = rows[len(rows)-1].Hostname
-	}
 
 	return EnvoysPageData{
 		PageData:     PageData{Title: "Envoys", ActiveNav: "envoys"},
@@ -5214,7 +5252,8 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 		Search:       search,
 		EnvoyCount:   len(rows),
 		HasMore:      hasMore,
-		NextCursor:   nextCursor,
+		Limit:        limit,
+		NextOffset:   len(rows),
 	}
 }
 
@@ -5327,7 +5366,6 @@ func (ds *dbDataSource) EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, er
 	}
 
 	var runs []EnvoyDetailRunRow
-	var driftHistory []DriftPoint
 	for _, r := range dbRuns {
 		var runPct float64
 		if r.ModuleCount > 0 {
@@ -5346,34 +5384,180 @@ func (ds *dbDataSource) EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, er
 			},
 			Results: resultsByRun[r.ID],
 		})
-		var driftPct float64
-		if r.ModuleCount > 0 {
-			driftPct = float64(r.FailedCount) / float64(r.ModuleCount) * 100
-		}
-		driftHistory = append(driftHistory, DriftPoint{
-			StartedAt:    r.StartedAt,
-			Status:       r.Status,
-			ChangedCount: r.ChangedCount,
-			FailedCount:  r.FailedCount,
-			ModuleCount:  r.ModuleCount,
-			FailurePct:   driftPct,
-		})
 	}
 
-	return EnvoyRunsFragmentData{Runs: runs, DriftHistory: driftHistory}, nil
+	return EnvoyRunsFragmentData{Runs: runs}, nil
 }
 
 func (ds *dbDataSource) EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData, error) {
 	ctx := context.Background()
-	traits := make(map[string]any)
 	cf, err := ds.queries.GetLatestEnvoyTraits(ctx, envoyID)
-	if err == nil {
-		var raw map[string]any
-		if json.Unmarshal([]byte(cf.Traits), &raw) == nil {
-			flattenTraits("", raw, traits)
+	if err != nil {
+		return EnvoyTraitsFragmentData{}, nil
+	}
+	return BuildTraitsFragment(cf.Traits, cf.CollectedAt), nil
+}
+
+// BuildTraitsFragment turns a raw traits JSON payload into the data shape the
+// envoy-traits-fragment template renders. Returns a zero-value fragment with
+// HasData=false when the JSON is empty or malformed so the empty state can
+// distinguish "no check-in" from "checked-in but no payload."
+func BuildTraitsFragment(rawJSON string, collectedAt time.Time) EnvoyTraitsFragmentData {
+	if strings.TrimSpace(rawJSON) == "" || rawJSON == "{}" {
+		return EnvoyTraitsFragmentData{CollectedAt: collectedAt}
+	}
+	var nested map[string]any
+	if err := json.Unmarshal([]byte(rawJSON), &nested); err != nil || len(nested) == 0 {
+		return EnvoyTraitsFragmentData{CollectedAt: collectedAt}
+	}
+	tree, leafCount := buildTraitTree("", nested)
+	pretty := rawJSON
+	if buf, err := json.MarshalIndent(nested, "", "  "); err == nil {
+		pretty = string(buf)
+	}
+	return EnvoyTraitsFragmentData{
+		Tree:        tree,
+		LeafCount:   leafCount,
+		CollectedAt: collectedAt,
+		Summary:     extractTraitSummary(nested),
+		RawJSON:     pretty,
+		HasData:     true,
+	}
+}
+
+// buildTraitTree walks a nested traits map and returns its sorted, render-
+// ready tree along with the total leaf count under it. Map keys are sorted
+// alphabetically; array indices preserve insertion order. Each node carries
+// its full dotted Path so the client-side filter can match on it.
+func buildTraitTree(prefix string, data map[string]any) ([]TraitNode, int) {
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	nodes := make([]TraitNode, 0, len(keys))
+	total := 0
+	for _, k := range keys {
+		path := k
+		if prefix != "" {
+			path = prefix + "." + k
+		}
+		node, leaves := traitNodeFromValue(k, path, data[k])
+		nodes = append(nodes, node)
+		total += leaves
+	}
+	return nodes, total
+}
+
+func traitNodeFromValue(key, path string, val any) (TraitNode, int) {
+	switch v := val.(type) {
+	case map[string]any:
+		children, leaves := buildTraitTree(path, v)
+		return TraitNode{Key: key, Path: path, Children: children, LeafCount: leaves}, leaves
+	case []any:
+		children := make([]TraitNode, 0, len(v))
+		total := 0
+		for i, elem := range v {
+			idx := strconv.Itoa(i)
+			childPath := path + "." + idx
+			child, leaves := traitNodeFromValue(idx, childPath, elem)
+			children = append(children, child)
+			total += leaves
+		}
+		if total == 0 {
+			total = 1
+		}
+		return TraitNode{Key: key, Path: path, Children: children, LeafCount: total, IsArray: true}, total
+	default:
+		return TraitNode{Key: key, Path: path, Value: formatTraitValue(v), LeafCount: 1}, 1
+	}
+}
+
+// formatTraitValue renders a scalar trait value as the operator-facing
+// string. Strings pass through untouched; everything else is JSON-encoded
+// so booleans, numbers, and null read predictably.
+func formatTraitValue(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return string(b)
+}
+
+// extractTraitSummary pulls the most-asked host facts out of the nested
+// trait tree for the stat-cards strip. Missing collectors leave fields
+// empty; the template renders empty fields as an em-dash so the strip
+// width stays consistent across envoys.
+func extractTraitSummary(data map[string]any) TraitSummary {
+	var s TraitSummary
+	if osMap, ok := data["os"].(map[string]any); ok {
+		distro := lookupTraitString(osMap, "distro")
+		if distro == "" {
+			distro = lookupTraitString(osMap, "family")
+		}
+		if v := lookupTraitString(osMap, "version"); v != "" {
+			s.OS = strings.TrimSpace(distro + " " + v)
+		} else {
+			s.OS = distro
+		}
+		s.Kernel = lookupTraitString(osMap, "kernel")
+		s.Arch = lookupTraitString(osMap, "arch")
+	}
+	if procMap, ok := data["processors"].(map[string]any); ok {
+		phys := lookupTraitInt(procMap, "physical_cores")
+		log := lookupTraitInt(procMap, "logical_cores")
+		switch {
+		case phys > 0 && log > 0 && phys != log:
+			s.CPUCores = fmt.Sprintf("%d / %d", phys, log)
+		case log > 0:
+			s.CPUCores = strconv.FormatInt(log, 10)
+		case phys > 0:
+			s.CPUCores = strconv.FormatInt(phys, 10)
+		}
+		s.CPUModel = lookupTraitString(procMap, "model")
+	}
+	if memMap, ok := data["memory"].(map[string]any); ok {
+		if total := lookupTraitInt(memMap, "total"); total > 0 {
+			s.MemoryHuman = humanSize(total)
 		}
 	}
-	return EnvoyTraitsFragmentData{Traits: traits}, nil
+	return s
+}
+
+func lookupTraitString(m map[string]any, key string) string {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return ""
+	}
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return ""
+}
+
+func lookupTraitInt(m map[string]any, key string) int64 {
+	v, ok := m[key]
+	if !ok || v == nil {
+		return 0
+	}
+	switch n := v.(type) {
+	case float64:
+		return int64(n)
+	case int64:
+		return n
+	case int:
+		return int64(n)
+	case json.Number:
+		i, _ := n.Int64()
+		return i
+	case string:
+		i, _ := strconv.ParseInt(n, 10, 64)
+		return i
+	}
+	return 0
 }
 
 // flattenTraits recursively flattens nested JSON into dot-separated string

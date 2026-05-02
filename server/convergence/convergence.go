@@ -55,7 +55,19 @@ func ComputeConvergence(recentRuns []RunInfo) string {
 
 	last := recentRuns[0]
 
-	// Check failure percentage first (takes priority over drift detection).
+	// If the agent reports the run as an outright failure, trust that —
+	// the agent's overall-status flag is authoritative even when the
+	// per-module failure percentage is small. Without this short-circuit,
+	// a run with status="failure" but only one failed module out of
+	// hundreds (failure_pct below DegradedMinPct) would fall through every
+	// branch and land in "no data", which then propagates to the dashboard
+	// and the envoys-page pills as a misclassification.
+	if last.Status == "failure" {
+		return "failed"
+	}
+
+	// Check failure percentage next (takes priority over drift detection
+	// for runs the agent reports as success/partial).
 	if last.FailedCount > 0 && last.ModuleCount > 0 {
 		pct := float64(last.FailedCount) / float64(last.ModuleCount) * 100
 		if pct >= DegradedMaxPct {
@@ -64,9 +76,6 @@ func ComputeConvergence(recentRuns []RunInfo) string {
 		if pct >= DegradedMinPct {
 			return "degraded"
 		}
-	} else if last.Status == "failure" {
-		// Fallback for runs without module counts (legacy or 0-module runs).
-		return "failed"
 	}
 
 	switch last.Status {

@@ -16,12 +16,7 @@
 </div>
 
 <div class="filter-bar mb-2">
-    <button class="btn btn--sm btn--primary" id="tab-drift"
-            hx-get="/ui/fragments/envoy-drift/{{.Envoy.ID}}"
-            hx-target="#envoy-content"
-            hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Drift History</button>
-    <button class="btn btn--sm" id="tab-runs"
+    <button class="btn btn--sm btn--primary" id="tab-runs"
             hx-get="/ui/fragments/envoy-runs/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
@@ -66,42 +61,12 @@
 </div>
 
 <div id="envoy-content"
-     hx-get="/ui/fragments/envoy-drift/{{.Envoy.ID}}"
+     hx-get="/ui/fragments/envoy-runs/{{.Envoy.ID}}"
      hx-trigger="load"
      hx-swap="innerHTML">
-    <div class="loading-skeleton">Loading drift history...</div>
+    <div class="loading-skeleton">Loading runs...</div>
 </div>
 
-{{end}}
-
-{{define "envoy-drift-fragment"}}
-{{if .DriftHistory}}
-<div class="table-container">
-    <h3>Drift History</h3>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Time</th>
-                <th>Status</th>
-                <th>Changed</th>
-                <th>Failed</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .DriftHistory}}
-            <tr>
-                <td class="text-muted">{{formatTime .StartedAt}}</td>
-                <td>{{if gt .ModuleCount 0}}<span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>{{else}}{{template "status-badge" dict "Status" .Status}}{{end}}</td>
-                <td>{{.ChangedCount}}</td>
-                <td>{{.FailedCount}}</td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
-</div>
-{{else}}
-<p class="text-muted" style="padding:20px;">No drift history recorded for this envoy.</p>
-{{end}}
 {{end}}
 
 {{define "envoy-runs-fragment"}}
@@ -126,7 +91,7 @@
             {{range .Runs}}
             <tr>
                 <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
-                <td>{{if gt .ModuleCount 0}}<span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>{{else}}{{template "status-badge" dict "Status" .Status}}{{end}}</td>
+                <td>{{if eq .ModuleCount 0}}<span class="badge badge--unknown">0/0</span>{{else}}<span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>{{end}}</td>
                 <td>{{.ModuleCount}}</td>
                 <td>{{.ChangedCount}}</td>
                 <td>{{.FailedCount}}</td>
@@ -151,18 +116,136 @@
 {{end}}
 
 {{define "envoy-traits-fragment"}}
-{{if .Traits}}
-<div class="traits-panel">
-    <h3>Traits</h3>
-    <dl class="traits-list">
-        {{range $key, $val := .Traits}}
-        <dt class="traits-key">{{$key}}</dt>
-        <dd class="traits-val mono">{{$val}}</dd>
-        {{end}}
-    </dl>
-</div>
+{{if not .HasData}}
+<p class="text-muted" style="padding:20px;">No traits collected yet — the agent has not reported a trait payload.</p>
 {{else}}
-<p class="text-muted" style="padding:20px;">No traits collected yet.</p>
+{{$s := .Summary}}
+<div class="stat-cards stat-cards--compact mb-2 traits-summary">
+    <div class="stat-card">
+        <div class="stat-card__label">OS</div>
+        <div class="stat-card__value">{{if $s.OS}}{{$s.OS}}{{else}}&mdash;{{end}}</div>
+        {{if $s.Kernel}}<div class="stat-card__sub mono">{{$s.Kernel}}{{if $s.Arch}} &middot; {{$s.Arch}}{{end}}</div>{{end}}
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">CPU</div>
+        <div class="stat-card__value">{{if $s.CPUCores}}{{$s.CPUCores}} cores{{else}}&mdash;{{end}}</div>
+        {{if $s.CPUModel}}<div class="stat-card__sub mono" title="{{$s.CPUModel}}">{{$s.CPUModel}}</div>{{end}}
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Memory</div>
+        <div class="stat-card__value">{{if $s.MemoryHuman}}{{$s.MemoryHuman}}{{else}}&mdash;{{end}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Leaves</div>
+        <div class="stat-card__value">{{.LeafCount}}</div>
+        <div class="stat-card__sub">collected <span class="time-relative" title="{{formatTime .CollectedAt}}">{{timeAgo .CollectedAt}}</span></div>
+    </div>
+</div>
+
+<div class="traits-toolbar">
+    <input type="search" class="traits-filter" id="traits-filter" placeholder="Filter by key (e.g. cpu.model, network)" autocomplete="off" spellcheck="false" oninput="filterTraits(this.value)">
+    <span class="traits-toolbar__count text-muted" id="traits-filter-count"></span>
+</div>
+
+<div class="traits-tree" id="traits-tree">
+    {{range .Tree}}
+        {{template "trait-group" .}}
+    {{end}}
+</div>
+
+<details class="traits-raw">
+    <summary>Raw JSON</summary>
+    <pre class="traits-raw__pre mono">{{.RawJSON}}</pre>
+</details>
+
+<script>
+(function(){
+    var rows = document.querySelectorAll('#traits-tree [data-trait-leaf]');
+    var groups = document.querySelectorAll('#traits-tree [data-trait-group]');
+    var countEl = document.getElementById('traits-filter-count');
+    var totalLeaves = rows.length;
+    window.filterTraits = function(q){
+        q = (q || '').toLowerCase().trim();
+        var visible = 0;
+        rows.forEach(function(r){
+            var match = !q || r.getAttribute('data-trait-path').toLowerCase().indexOf(q) !== -1;
+            r.style.display = match ? '' : 'none';
+            if (match) visible++;
+        });
+        groups.forEach(function(g){
+            var visibleChild = g.querySelector('[data-trait-leaf]:not([style*="display: none"])');
+            g.style.display = visibleChild ? '' : 'none';
+            if (q && visibleChild) g.setAttribute('open', '');
+        });
+        if (q) {
+            countEl.textContent = visible + ' / ' + totalLeaves + ' leaves';
+        } else {
+            countEl.textContent = '';
+            groups.forEach(function(g){ g.removeAttribute('open'); });
+        }
+    };
+})();
+</script>
+{{end}}
+{{end}}
+
+{{define "trait-group"}}
+{{if .Children}}
+<details class="trait-group" data-trait-group data-trait-path="{{.Path}}">
+    <summary class="trait-group__summary">
+        <span class="trait-group__key mono">{{.Key}}</span>
+        <span class="trait-group__count text-muted">{{.LeafCount}}{{if .IsArray}} entries{{else}} leaves{{end}}</span>
+    </summary>
+    <div class="trait-group__body">
+    {{if and .IsArray (gt (len .Children) 50)}}
+        <details class="trait-group trait-group--array-overflow">
+            <summary class="trait-group__summary">
+                <span class="text-muted">Show all {{len .Children}} entries</span>
+            </summary>
+            <div class="trait-group__body">
+            {{range .Children}}{{template "trait-node" .}}{{end}}
+            </div>
+        </details>
+    {{else}}
+        {{range .Children}}{{template "trait-node" .}}{{end}}
+    {{end}}
+    </div>
+</details>
+{{else}}
+<div class="trait-leaf" data-trait-leaf data-trait-path="{{.Path}}">
+    <span class="trait-leaf__key mono">{{.Key}}</span>
+    <span class="trait-leaf__val mono">{{.Value}}</span>
+</div>
+{{end}}
+{{end}}
+
+{{define "trait-node"}}
+{{if .Children}}
+<details class="trait-group trait-group--nested" data-trait-group data-trait-path="{{.Path}}">
+    <summary class="trait-group__summary">
+        <span class="trait-group__key mono">{{.Key}}</span>
+        <span class="trait-group__count text-muted">{{.LeafCount}}{{if .IsArray}} entries{{else}} leaves{{end}}</span>
+    </summary>
+    <div class="trait-group__body">
+    {{if and .IsArray (gt (len .Children) 50)}}
+        <details class="trait-group trait-group--array-overflow">
+            <summary class="trait-group__summary">
+                <span class="text-muted">Show all {{len .Children}} entries</span>
+            </summary>
+            <div class="trait-group__body">
+            {{range .Children}}{{template "trait-node" .}}{{end}}
+            </div>
+        </details>
+    {{else}}
+        {{range .Children}}{{template "trait-node" .}}{{end}}
+    {{end}}
+    </div>
+</details>
+{{else}}
+<div class="trait-leaf" data-trait-leaf data-trait-path="{{.Path}}">
+    <span class="trait-leaf__key mono">{{.Key}}</span>
+    <span class="trait-leaf__val mono">{{.Value}}</span>
+</div>
 {{end}}
 {{end}}
 

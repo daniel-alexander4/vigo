@@ -31,8 +31,11 @@ func TestUpdateRunStatus_MatchesComputeConvergence(t *testing.T) {
 		{"partial run with some failures is degraded", "partial", 0, 1, 5, "degraded"},
 		{"failure run with full failure ratio", "failure", 0, 5, 5, "failed"},
 		{"failure run with high failure ratio", "failure", 0, 4, 5, "failed"},
-		{"failure run with moderate failure ratio is degraded", "failure", 0, 2, 5, "degraded"},
-		{"legacy failure with no module counts", "failure", 0, 0, 0, "failed"},
+		// Agent-reported status="failure" is authoritative even when the
+		// per-module failure ratio is small — without this the run lands
+		// in "no data" on the dashboard and envoys-page pills.
+		{"failure run with moderate failure ratio still failed", "failure", 0, 2, 5, "failed"},
+		{"failure run with no module counts", "failure", 0, 0, 0, "failed"},
 		{"blocked run", "blocked", 0, 0, 5, "diverged"},
 	}
 

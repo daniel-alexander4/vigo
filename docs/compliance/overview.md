@@ -60,7 +60,7 @@ Stale envoys trigger `envoy.stale` SMTP notifications on the first transition to
 
 ## Compliance History
 
-The web UI shows convergence trends over time via sparkline charts and the drift history timeline on the envoy detail page.
+The web UI shows convergence trends over time via sparkline charts on the dashboard, and the per-envoy run history on the envoy detail page.
 
 ## CLI
 

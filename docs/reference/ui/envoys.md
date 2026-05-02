@@ -22,25 +22,31 @@ Each button shows a colored count badge (green for converged, red for failed, am
 
 Hostname search with server-side filtering is available on the right side of the filter bar.
 
+### Toolbar
+
+Sits between the filter pills and the table. Outside the polling region so the operator's typed query and chosen sort survive every refresh tick.
+
+- **Search** — case-insensitive substring match on hostname.
+- **Sort** — dropdown with: Worst first (status), Last run (newest), Last seen (newest), Hostname (A→Z), IP address. Direction is set automatically per column (temporal columns default to descending; alphabetic columns to ascending).
+
 ### Envoys Table
 
-Auto-refreshes every 30 seconds via HTMX. Supports cursor-based pagination with infinite scroll.
+Auto-refreshes every 30 seconds via HTMX. Pagination is offset-based — a hidden `revealed`-triggered row at the end of the tbody loads the next page of 100 rows when scrolled into view, until either all matching rows are shown or the **1,000-row hard cap** is hit. Past the cap the trigger is replaced by a sentinel row that tells the operator to refine the filter — the DOM never grows unbounded.
 
 | Column | Description |
 |--------|-------------|
 | Hostname | Clickable link to envoy detail page (`/envoys/{id}`) |
 | IP Address | Monospaced IP address |
 | Agent | Agent binary version reported on last check-in (or `-` if not yet reported) |
-| Last Seen | Relative time ("2m ago") with absolute timestamp on hover |
+| Last Seen | Relative time ("2m ago") with absolute timestamp on hover. Cell turns red when the envoy is offline (last check-in > 2× the agent check-in interval) — folds the old "Reachable" column into a single freshness signal. |
 | Last Run | Relative time with absolute timestamp on hover |
 | Root FS | Available disk percentage on `/` — green >20%, yellow <=20%, red <=10% |
 | Repos | Package repository health — green when all repos are healthy, red with broken count |
-| Reachable | Network reachability status from the server's perspective |
-| Convergence | Spectrum-colored ratio pill showing `failed/total` (e.g., `0/59` green, `3/59` yellow-green, `47/59` amber, `55/59` red). Color interpolates via HSL from green (0% failures) to red (100% failures). When module count data is unavailable, falls back to a categorical status badge. Clickable link to run detail. |
+| Convergence | Spectrum-colored ratio pill showing `failed/total` (e.g., `0/59` green, `3/59` yellow-green, `47/59` amber, `55/59` red). Color interpolates via HSL from green (0% failures) to red (100% failures). Envoys with no module count yet render `0/0` in muted gray. Clickable link to run detail. |
 
 ### Envoy Count
 
-Displayed in the page header: "{N} enrolled envoys". When filters or search are active, shows "{shown} shown of {total}".
+Displayed in the page header: "{N} enrolled envoys". When filters or search are active, shows "{matching} match(es) of {total}" — the matching count is fleet-wide across every page, not just the current 100-row slice.
 
 ## Key Actions
 
@@ -50,7 +56,7 @@ Displayed in the page header: "{N} enrolled envoys". When filters or search are 
 
 ### Column Sorting
 
-Column headers for Hostname, IP Address, Last Seen, Last Run, and Convergence are clickable to sort ascending or descending. Sorting is applied server-side. Sort state is preserved in URL parameters (`?sort=last_seen&dir=desc`).
+Column headers for Hostname, IP Address, Last Seen, Last Run, and Convergence are clickable to flip direction. The dropdown above the table is the canonical surface — column-header clicks just write into the same `?sort=&dir=` URL parameters. Default landing sort is **Worst first** (`?sort=status`), which lifts failed/relapsed/diverged envoys to the top of the list — at scale, the alphabetically-first envoy is rarely the one the operator came to fix. Sort and pagination are both applied server-side against the FleetCache.
 
 ### Convergence Thresholds
 
@@ -64,8 +70,8 @@ never disagree.
 | converged | Latest run succeeded with no failures and no drift |
 | relapsed | 2 consecutive runs with changes (early drift signal) |
 | diverged | 3+ consecutive runs with changes (persistent conflict) |
-| degraded | Latest run has 1–79% failed modules |
-| failed | Latest run has 80–100% failed modules, or any legacy run marked `failure` with no module counts |
+| degraded | Latest run reported `success` or `partial` and has 1–79% failed modules |
+| failed | Agent reported the latest run as `failure` (authoritative regardless of failed-module ratio), or a `success`/`partial` run has 80–100% failed modules |
 | no data | Envoy has never reported a run |
 
 Offline is an orthogonal reachability dimension — every envoy is in exactly

@@ -4,6 +4,7 @@
 package ui
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -812,7 +813,6 @@ func (m *mockDataSource) EnvoyDetailData(envoyID string, baseInterval time.Durat
 
 func (m *mockDataSource) EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, error) {
 	var runs []EnvoyDetailRunRow
-	var driftHistory []DriftPoint
 	for _, r := range m.data.runs {
 		if r.envoyID.String() == envoyID {
 			var results []RunResultRow
@@ -839,24 +839,22 @@ func (m *mockDataSource) EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, e
 				},
 				Results: results,
 			})
-			driftHistory = append(driftHistory, DriftPoint{
-				StartedAt:    r.startedAt,
-				Status:       r.status,
-				ChangedCount: r.changedCount,
-				FailedCount:  r.failedCount,
-			})
 		}
 	}
-	return EnvoyRunsFragmentData{Runs: runs, DriftHistory: driftHistory}, nil
+	return EnvoyRunsFragmentData{Runs: runs}, nil
 }
 
 func (m *mockDataSource) EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData, error) {
 	parsedID, _ := uuid.Parse(envoyID)
 	traits := m.data.traits[parsedID]
-	if traits == nil {
-		traits = map[string]any{}
+	if len(traits) == 0 {
+		return EnvoyTraitsFragmentData{}, nil
 	}
-	return EnvoyTraitsFragmentData{Traits: traits}, nil
+	buf, err := json.Marshal(traits)
+	if err != nil {
+		return EnvoyTraitsFragmentData{}, nil
+	}
+	return BuildTraitsFragment(string(buf), time.Now()), nil
 }
 
 func (m *mockDataSource) RunsData(statusFilter string) RunsPageData {

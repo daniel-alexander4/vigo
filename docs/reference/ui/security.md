@@ -13,11 +13,10 @@ The envoy detail page at `/envoys/{id}` serves as the security information view 
 
 ### Tabs
 
-Content is loaded via HTMX fragments. Seven tabs:
+Content is loaded via HTMX fragments. Six tabs:
 
-- **Drift History** (default) — convergence status timeline with changed/failed counts per run
-- **Recent Runs** — last 20 runs with expandable per-module results
-- **Traits** — flattened key-value pairs from the most recent trait collection (OS, hardware, packages, etc.)
+- **Recent Runs** (default) — last 20 runs with expandable per-module results; each run shows a spectrum-colored failure-ratio badge
+- **Traits** — host-summary stat cards (OS, CPU, Memory, leaf count + collected timestamp) plus a filterable, recursive `<details>` tree of the full nested trait payload, with a Raw JSON escape hatch at the bottom. The filter input matches against the dotted key path and auto-expands matching groups.
 - **View Config** — effective resolved configuration (matched pattern, roles, modules, merged vars with secrets redacted)
 - **Config Trace** — inheritance chain showing how config was assembled from common.vgo, match blocks, and module defaults
 - **Standards Compliance** — per-framework compliance cards with coverage percentages

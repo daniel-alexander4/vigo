@@ -3,18 +3,24 @@
 <div class="page-header">
     <h1>Dashboard</h1>
     <div class="page-header__meta">
-        <span class="page-header__meta-item"><span class="page-header__meta-label">Server</span> v{{.Version}}</span>
-        <span class="page-header__meta-sep">·</span>
-        <span class="page-header__meta-item"><span class="page-header__meta-label">Agent</span> v{{.AgentVersion}}</span>
+        <span class="meta-chip">
+            <span class="meta-chip__label">Server</span>
+            <span class="meta-chip__value mono">v{{.Version}}</span>
+        </span>
+        <span class="meta-chip">
+            <span class="meta-chip__label">Agent</span>
+            <span class="meta-chip__value mono">v{{.AgentVersion}}</span>
+        </span>
         {{if .CheckInInterval}}
-        <span class="page-header__meta-sep">·</span>
-        <span class="page-header__meta-item"><span class="page-header__meta-label">Check-in</span> {{.CheckInInterval}}</span>
+        <span class="meta-chip">
+            <span class="meta-chip__label">Check-in</span>
+            <span class="meta-chip__value mono">{{.CheckInInterval}}</span>
+        </span>
         {{end}}
         {{if .AgentPlatforms}}
-        <span class="page-header__meta-sep">·</span>
-        <span class="page-header__meta-item">
-            <span class="page-header__meta-label">Platforms</span>
-            {{range $i, $p := .AgentPlatforms}}{{if $i}}, {{end}}{{osLabel $p.OS}}/{{$p.Arch}}{{end}}
+        <span class="meta-chip">
+            <span class="meta-chip__label">Platforms</span>
+            <span class="meta-chip__value mono">{{range $i, $p := .AgentPlatforms}}{{if $i}}, {{end}}{{osLabel $p.OS}}/{{$p.Arch}}{{end}}</span>
         </span>
         {{end}}
     </div>
@@ -86,13 +92,7 @@
         <tr>
             <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
             <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
-            <td>
-                {{if and (gt .FailedCount 0) (gt .ModuleCount 0)}}
-                <span class="badge {{failureBadgeClass .FailedCount .ModuleCount}}">{{.FailedCount}}/{{.ModuleCount}}</span>
-                {{else}}
-                {{template "status-badge" dict "Status" .Status}}
-                {{end}}
-            </td>
+            <td>{{if eq .ModuleCount 0}}<span class="badge badge--unknown">0/0</span>{{else}}<span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>{{end}}</td>
             <td>{{.ModuleCount}}</td>
             <td>{{.ChangedCount}}</td>
             <td>{{.FailedCount}}</td>
@@ -122,12 +122,12 @@
             <td class="mono">{{.IP}}</td>
             <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}">{{timeAgo .LastSeen}}</span></td>
             <td>
-                {{if gt .ModuleCount 0}}
-                <span class="badge {{failureBadgeClass .FailedCount .ModuleCount}}">{{.FailedCount}}/{{.ModuleCount}}</span>
-                {{else if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged"))}}
-                <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
+                {{if eq .ModuleCount 0}}
+                <span class="badge badge--unknown">0/0</span>
+                {{else if .LastRunID}}
+                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span></a>
                 {{else}}
-                {{template "status-badge" dict "Status" .Status}}
+                <span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>
                 {{end}}
             </td>
         </tr>

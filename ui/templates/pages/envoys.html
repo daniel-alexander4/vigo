@@ -6,31 +6,59 @@
         <a href="/runs" class="btn btn--sm">Fleet-wide Runs</a>
         <a href="/api/v1/export/cmdb" class="btn btn--sm" target="_blank" rel="noopener">CMDB Export</a>
     </div>
-    <p>Managed nodes reporting to this server{{if or .StatusFilter .Search}} &mdash; {{.EnvoyCount}} shown of {{.TotalEnvoys}}{{end}}</p>
+    <p>Managed nodes reporting to this server{{if or .StatusFilter .Search}} &mdash; {{.MatchingTotal}} match{{if ne .MatchingTotal 1}}es{{end}} of {{.TotalEnvoys}}{{end}}</p>
 </div>
 
 <div id="envoys-stats-container"
-     hx-get="/ui/fragments/envoys-stats"
+     hx-get="/ui/fragments/envoys-stats{{if .StatusFilter}}?status={{.StatusFilter}}{{end}}"
      hx-trigger="every {{.PollInterval}}"
      hx-swap="innerHTML"
-     hx-include="#envoy-search"
-     hx-vals='{"status": "{{.StatusFilter}}"}'
      aria-live="polite">
     {{template "envoys-stats" .}}
 </div>
 
-<div class="table-container" id="envoys-table-container">
+<div class="envoys-toolbar mt-2 mb-2">
+    <form action="/envoys" method="get" hx-boost="false" class="envoys-toolbar__form">
+        {{if .StatusFilter}}<input type="hidden" name="status" value="{{.StatusFilter}}">{{end}}
+        <input type="hidden" name="sort" value="{{.SortColumn}}">
+        <input type="hidden" name="dir" value="{{.SortDir}}">
+        <input type="text" id="envoy-search" name="search" placeholder="Search hostnames..."
+               value="{{.Search}}"
+               class="input input--sm envoys-toolbar__search"
+               hx-preserve="true">
+        <button type="submit" class="btn btn--sm">Search</button>
+    </form>
+    <form action="/envoys" method="get" hx-boost="false" class="envoys-toolbar__sort">
+        {{if .StatusFilter}}<input type="hidden" name="status" value="{{.StatusFilter}}">{{end}}
+        {{if .Search}}<input type="hidden" name="search" value="{{.Search}}">{{end}}
+        <label class="envoys-toolbar__label" for="envoys-sort">Sort</label>
+        <select id="envoys-sort" name="sort" onchange="this.form.dir.value=(this.value==='last_run'||this.value==='last_seen')?'desc':'asc'; this.form.submit();" class="input input--sm">
+            <option value="status"{{if eq .SortColumn "status"}} selected{{end}}>Worst first</option>
+            <option value="last_run"{{if eq .SortColumn "last_run"}} selected{{end}}>Last run (newest)</option>
+            <option value="last_seen"{{if eq .SortColumn "last_seen"}} selected{{end}}>Last seen (newest)</option>
+            <option value="hostname"{{if eq .SortColumn "hostname"}} selected{{end}}>Hostname (A→Z)</option>
+            <option value="ip"{{if eq .SortColumn "ip"}} selected{{end}}>IP address</option>
+        </select>
+        <input type="hidden" name="dir" value="{{.SortDir}}">
+    </form>
+</div>
+
+<div class="table-container envoys-table-container"
+     id="envoys-table-container"
+     hx-get="/ui/fragments/envoys-table?{{if .StatusFilter}}status={{.StatusFilter}}&{{end}}{{if .Search}}search={{.Search}}&{{end}}{{if .SortColumn}}sort={{.SortColumn}}&{{end}}{{if .SortDir}}dir={{.SortDir}}{{end}}"
+     hx-trigger="every {{.PollInterval}}"
+     hx-swap="innerHTML">
     {{template "envoys-table" .}}
 </div>
+
 {{end}}
 
 {{define "envoys-stats"}}
-<div class="stat-cards stat-cards--two-up mb-2">
+<div class="stat-cards stat-cards--compact mb-2">
     {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
     {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Reachable" "Color" "success" "Tooltip" (printf "Envoys that checked in within the last %s (2× the agent check-in interval)" .PollInterval)}}
 </div>
-
-<div class="filter-bar mb-2 flex items-center gap-1 flex-wrap">
+<div class="filter-bar flex items-center gap-1 flex-wrap">
     <a href="/envoys" class="btn btn--sm{{if and (eq .StatusFilter "") (eq .Search "")}} btn--primary{{end}}">All <span class="filter-count">{{.TotalEnvoys}}</span></a>
     <a href="/envoys?status=converged" class="btn btn--sm{{if eq .StatusFilter "converged"}} btn--primary{{end}}">Converged <span class="filter-count filter-count--success">{{.CountConverged}}</span></a>
     <a href="/envoys?status=relapsed" class="btn btn--sm{{if eq .StatusFilter "relapsed"}} btn--primary{{end}}">Relapsed <span class="filter-count filter-count--warning">{{.CountRelapsed}}</span></a>
@@ -40,20 +68,12 @@
     <a href="/envoys?status=offline" class="btn btn--sm{{if eq .StatusFilter "offline"}} btn--primary{{end}}">Offline <span class="filter-count filter-count--muted">{{.CountOffline}}</span></a>
     <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data <span class="filter-count filter-count--muted">{{.CountNoData}}</span></a>
     {{if gt .CountObserving 0}}<a href="/envoys?status=observing" class="btn btn--sm{{if eq .StatusFilter "observing"}} btn--primary{{end}}" title="Envoys in observe-only mode (drift reported, no enforcement)">Observing <span class="filter-count filter-count--info">{{.CountObserving}}</span></a>{{end}}
-    <form action="/envoys" method="get" hx-boost="false" class="ml-auto flex items-center gap-1">
-        <input type="text" id="envoy-search" name="search" placeholder="Search hostnames..."
-               value="{{.Search}}"
-               class="input input--sm envoy-search-input"
-               hx-preserve="true">
-        {{if .StatusFilter}}<input type="hidden" name="status" value="{{.StatusFilter}}">{{end}}
-        <button type="submit" class="btn btn--sm">Search</button>
-    </form>
 </div>
 {{end}}
 
 {{define "envoys-table"}}
 {{$base := "/envoys?"}}{{if .StatusFilter}}{{$base = printf "%sstatus=%s&" $base .StatusFilter}}{{end}}{{if .Search}}{{$base = printf "%ssearch=%s&" $base .Search}}{{end}}
-<table class="table">
+<table class="table envoys-table" aria-rowcount="{{.MatchingTotal}}">
     <thead>
         <tr>
             {{sortHeader "Hostname" "hostname" .SortColumn .SortDir $base}}
@@ -63,17 +83,18 @@
             {{sortHeader "Last Run" "last_run" .SortColumn .SortDir $base}}
             <th title="Root filesystem usage">Root FS</th>
             <th>Repos</th>
-            <th>Reachable</th>
             {{sortHeader "Convergence" "status" .SortColumn .SortDir $base}}
         </tr>
     </thead>
     <tbody id="envoys-table-body">
+        {{$rowIndex := .Offset}}
         {{range .Envoys}}
-        <tr>
+        {{$rowIndex = add $rowIndex 1}}
+        <tr aria-rowindex="{{$rowIndex}}">
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a>{{if .ObserveOnly}} <span class="badge badge--info" title="Observe-only mode — drift reported, no enforcement">obs</span>{{end}}</td>
             <td class="mono">{{.IPAddress}}</td>
             <td class="mono text-muted">{{if .AgentVersion}}{{.AgentVersion}}{{else}}-{{end}}</td>
-            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}">{{timeAgo .LastSeen}}</span></td>
+            <td class="text-muted table-time{{if .Offline}} envoys-lastseen--stale{{end}}"><span class="time-relative" title="{{formatTime .LastSeen}}">{{timeAgo .LastSeen}}</span></td>
             <td class="text-muted table-time">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}" class="time-relative" title="{{formatTime .LastRunAt}}">{{timeAgo .LastRunAt}}</a>{{end}}</td>
             <td>
                 {{if .DiskStatus}}
@@ -86,36 +107,36 @@
                 {{else}}-{{end}}
             </td>
             <td>
-                {{if .Offline}}
-                <span class="badge badge--offline">offline</span>
+                {{if eq .ModuleCount 0}}
+                <span class="badge badge--unknown">0/0</span>
+                {{else if .LastRunID}}
+                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span></a>
                 {{else}}
-                <span class="badge badge--compliant">online</span>
-                {{end}}
-            </td>
-            <td>
-                {{if gt .ModuleCount 0}}
-                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge {{failureBadgeClass .FailedCount .ModuleCount}}">{{.FailedCount}}/{{.ModuleCount}}</span></a>
-                {{else if and .LastRunID (ne .Status "converged")}}
-                <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
-                {{else}}
-                {{template "status-badge" dict "Status" .Status}}
+                <span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>
                 {{end}}
             </td>
         </tr>
         {{end}}
         {{if not .Envoys}}
         <tr>
-            <td colspan="9" class="table__empty-cell">No envoys{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.{{if or $.StatusFilter $.Search}} <a href="/envoys">Clear filter</a>.{{end}}</td>
+            <td colspan="8" class="table__empty-cell">No envoys{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.{{if or $.StatusFilter $.Search}} <a href="/envoys">Clear filter</a>.{{end}}</td>
+        </tr>
+        {{end}}
+        {{if .RenderedCap}}
+        <tr class="envoys-table__cap-sentinel">
+            <td colspan="8">
+                <strong>Showing {{.RenderedCapMax}} of {{.MatchingTotal}}.</strong> The list stops growing here so the page stays responsive — refine your filter or search to see the rest.
+            </td>
+        </tr>
+        {{else if .HasMore}}
+        <tr class="envoys-table__loadmore-trigger"
+            hx-get="/ui/fragments/envoys-table?offset={{.NextOffset}}{{if .StatusFilter}}&status={{.StatusFilter}}{{end}}{{if .Search}}&search={{.Search}}{{end}}{{if .SortColumn}}&sort={{.SortColumn}}{{end}}{{if .SortDir}}&dir={{.SortDir}}{{end}}"
+            hx-trigger="revealed"
+            hx-swap="outerHTML"
+            hx-select="tbody > tr">
+            <td colspan="8" class="envoys-table__loadmore-cell">Loading more…</td>
         </tr>
         {{end}}
     </tbody>
 </table>
-{{if .NextCursor}}
-<div hx-get="/ui/fragments/envoys-table?after={{.NextCursor}}{{if .StatusFilter}}&status={{.StatusFilter}}{{end}}{{if .Search}}&search={{.Search}}{{end}}"
-     hx-trigger="revealed"
-     hx-swap="afterend"
-     hx-select="tbody > tr"
-     hx-target="#envoys-table-body"
-     style="height:1px;"></div>
-{{end}}
 {{end}}

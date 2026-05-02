@@ -15,11 +15,11 @@ button.
 
 ## Layout
 
-### Version Info Card
+### Version Strip
 
-A card at the top of the dashboard showing the current server version,
-agent version, and available agent platforms (OS/architecture combinations).
-Static — does not auto-refresh.
+A row of small chip-style badges sits inline with the page H1 — Server
+version, Agent version, Check-in interval, and the supported agent
+platforms (OS/architecture combinations). Static — does not auto-refresh.
 
 ### License Capacity Banner
 

@@ -118,6 +118,8 @@ func funcMap() template.FuncMap {
 			return strings.Join(ss, sep)
 		},
 		"groupWaiversByFile": groupWaiversByFile,
+		"traceUsercrates":    traceUsercrates,
+		"traceModuleLevels":  traceModuleLevels,
 		"filterConds": func(conds []config.ConditionalTraceEntry, side string) []config.ConditionalTraceEntry {
 			var out []config.ConditionalTraceEntry
 			for _, c := range conds {
@@ -814,6 +816,55 @@ func traceGreenText(depth, total int) template.CSS {
 type waiverFileGroup struct {
 	File    string
 	Entries []config.WaiverTraceEntry
+}
+
+// usercrateScope is one usercrates/ folder in the inheritance chain along with
+// every auto-applied usercrate it contributed. Mirrors the CLI's per-scope
+// grouping but shaped for trace-card rendering — one box per scope.
+type usercrateScope struct {
+	Scope string   // display label, e.g. "production/web" or "(fleet-wide)"
+	Path  string   // header path, e.g. "production/web/usercrates/" or "usercrates/"
+	Names []string // usercrate names contributed by this scope
+}
+
+// traceUsercrates extracts auto-applied usercrate scopes from inheritance
+// levels (those tagged File == "usercrates/"), preserving parent→child order.
+// Each scope becomes one trace-card so the section visually mirrors the
+// other inheritance sections.
+func traceUsercrates(levels []config.InheritanceLevel) []usercrateScope {
+	var scopes []usercrateScope
+	for _, lvl := range levels {
+		if lvl.File != "usercrates/" || len(lvl.Modules) == 0 {
+			continue
+		}
+		scope := lvl.Dir
+		path := "usercrates/"
+		if scope == "" {
+			scope = "(fleet-wide)"
+		} else {
+			path = scope + "/usercrates/"
+		}
+		scopes = append(scopes, usercrateScope{
+			Scope: scope,
+			Path:  path,
+			Names: append([]string(nil), lvl.Modules...),
+		})
+	}
+	return scopes
+}
+
+// traceModuleLevels filters out usercrate entries from inheritance levels.
+// The dedicated Usercrates section renders those separately; without this
+// filter the Module Inheritance cards would show duplicate entries.
+func traceModuleLevels(levels []config.InheritanceLevel) []config.InheritanceLevel {
+	out := make([]config.InheritanceLevel, 0, len(levels))
+	for _, lvl := range levels {
+		if lvl.File == "usercrates/" {
+			continue
+		}
+		out = append(out, lvl)
+	}
+	return out
 }
 
 // groupWaiversByFile groups waiver trace entries by source file for rendering.

@@ -6,6 +6,7 @@ package ui
 import (
 	"context"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -272,18 +273,77 @@ func statusPriority(s string) int {
 }
 
 func sortByWorstStatus(entries []FleetStatusEntry) {
-	for i := 1; i < len(entries); i++ {
-		for j := i; j > 0 && statusPriority(entries[j].Status) < statusPriority(entries[j-1].Status); j-- {
-			entries[j], entries[j-1] = entries[j-1], entries[j]
+	sort.SliceStable(entries, func(i, j int) bool {
+		return worstStatusLess(entries[i], entries[j])
+	})
+}
+
+// worstStatusLess orders entries by triage priority: worst convergence
+// status first, then highest failure percentage, then hostname for stable
+// tiebreaking. Used both by WorstEntries (dashboard) and by the envoys
+// list when the operator picks "Worst first" — the same comparator
+// keeps the two surfaces consistent.
+func worstStatusLess(a, b FleetStatusEntry) bool {
+	pa, pb := statusPriority(a.Status), statusPriority(b.Status)
+	if pa != pb {
+		return pa < pb
+	}
+	if a.FailurePct != b.FailurePct {
+		return a.FailurePct > b.FailurePct
+	}
+	return a.Hostname < b.Hostname
+}
+
+// sortFleetEntries reorders entries in place per the operator's sort
+// choice. The "status" column means triage-first when ascending — that
+// is the default landing experience for /envoys at scale, where the
+// alphabetically-first envoy is rarely the one the operator came to fix.
+// "last_run" defaults to newest-first when descending; "hostname" /
+// "ip" / "last_seen" follow the obvious lexicographic / temporal order.
+func sortFleetEntries(entries []FleetStatusEntry, col, dir string) {
+	switch col {
+	case "", "status":
+		sortByWorstStatus(entries)
+		if dir == "desc" {
+			reverseEntries(entries)
 		}
+	case "hostname":
+		sort.SliceStable(entries, func(i, j int) bool { return entries[i].Hostname < entries[j].Hostname })
+		if dir == "desc" {
+			reverseEntries(entries)
+		}
+	case "ip":
+		sort.SliceStable(entries, func(i, j int) bool { return entries[i].IPAddress < entries[j].IPAddress })
+		if dir == "desc" {
+			reverseEntries(entries)
+		}
+	case "last_seen":
+		sort.SliceStable(entries, func(i, j int) bool { return entries[i].LastSeen.Before(entries[j].LastSeen) })
+		if dir != "asc" {
+			reverseEntries(entries)
+		}
+	case "last_run":
+		sort.SliceStable(entries, func(i, j int) bool { return entries[i].LastRunAt.Before(entries[j].LastRunAt) })
+		if dir != "asc" {
+			reverseEntries(entries)
+		}
+	default:
+		sortByWorstStatus(entries)
 	}
 }
 
-// PaginatedEntries returns a hostname-sorted page of entries matching the
-// given filter, plus a hasMore flag for cursor-based pagination. This is
-// the source of truth for the envoys list table — the same entries that
-// power FleetCache.Counts(), so the pills above the list and the list
-// itself can never disagree.
+func reverseEntries(entries []FleetStatusEntry) {
+	for i, j := 0, len(entries)-1; i < j; i, j = i+1, j-1 {
+		entries[i], entries[j] = entries[j], entries[i]
+	}
+}
+
+// PaginatedEntries returns a sorted, filtered, offset-paginated page of
+// entries matching the given filter and sort, the total number of
+// matching entries (for "1000 of 12,847" footers), and a hasMore flag
+// for the "load more" trigger. This is the source of truth for the
+// envoys list table — the same entries that power FleetCache.Counts(),
+// so the pills above the list and the list itself can never disagree.
 //
 // Filter semantics:
 //   - statusFilter == "" — match all entries
@@ -297,12 +357,14 @@ func sortByWorstStatus(entries []FleetStatusEntry) {
 // search is a case-insensitive substring match on hostname. Empty matches
 // everything.
 //
-// afterHostname is the cursor: return entries strictly after this hostname
-// in the sort order. Empty string yields the first page.
+// sortCol + sortDir control the order. Empty sortCol means triage-first
+// (worst-status, highest failure%, hostname tiebreak) — the default
+// landing experience for /envoys at scale.
 //
-// limit caps the returned slice. limit <= 0 disables the cap.
-func (fc *FleetCache) PaginatedEntries(afterHostname string, limit int, statusFilter, search string) (entries []FleetStatusEntry, hasMore bool) {
-	all := fc.Entries() // already hostname-sorted by ListFleetConvergence ORDER BY
+// offset is the row index to start at after sorting + filtering. limit
+// caps the returned slice. limit <= 0 disables the cap.
+func (fc *FleetCache) PaginatedEntries(offset, limit int, statusFilter, search, sortCol, sortDir string) (entries []FleetStatusEntry, total int, hasMore bool) {
+	all := fc.Entries()
 	searchLower := strings.ToLower(search)
 
 	filtered := make([]FleetStatusEntry, 0, len(all))
@@ -313,31 +375,21 @@ func (fc *FleetCache) PaginatedEntries(afterHostname string, limit int, statusFi
 		filtered = append(filtered, e)
 	}
 
-	start := 0
-	if afterHostname != "" {
-		for i, e := range filtered {
-			if e.Hostname > afterHostname {
-				start = i
-				break
-			}
-			// If afterHostname is the last entry's hostname (or beyond),
-			// start stays at 0 and we'll advance past the end below;
-			// reset to len(filtered) so the slice is empty.
-			if i == len(filtered)-1 {
-				start = len(filtered)
-			}
-		}
-	}
+	sortFleetEntries(filtered, sortCol, sortDir)
 
-	end := len(filtered)
-	if limit > 0 && start+limit < end {
-		end = start + limit
+	total = len(filtered)
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= total {
+		return nil, total, false
+	}
+	end := total
+	if limit > 0 && offset+limit < total {
+		end = offset + limit
 		hasMore = true
 	}
-	if start > end {
-		start = end
-	}
-	return filtered[start:end], hasMore
+	return filtered[offset:end], total, hasMore
 }
 
 func matchesEnvoyFilter(e FleetStatusEntry, statusFilter, searchLower string) bool {
