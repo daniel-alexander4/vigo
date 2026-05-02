@@ -239,7 +239,13 @@ pub fn verify_chain_for_push(
         .first()
         .ok_or_else(|| anyhow!("chain is empty"))?;
     let founder = root.body.signer_fleet_pubkey;
-    verify_chain(project_id, &founder, &chain.chain, now)
+    // ADR-019: receive-side push verification uses an empty
+    // delegation chain in slice 2. Slice 4 wires up either
+    // sender-presented delegations (with OOB-confirmed pin) or
+    // receiver-side delegation tracking; until then, post-rekey
+    // pushes from peers fail verification at this site, which
+    // surfaces in `gitmirror status` so the operator runs `rejoin`.
+    verify_chain(project_id, &founder, &[], &chain.chain, now)
         .map_err(|e| anyhow!("chain verification: {}", e))?;
     for (i, token) in chain.chain.iter().enumerate() {
         let tid = token.id();

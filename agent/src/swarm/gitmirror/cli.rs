@@ -635,7 +635,10 @@ fn cmd_join(args: &[String]) -> Result<()> {
     // match — defense against a malicious invitation that swaps the
     // founder pubkey to a key the attacker controls.
     let founder = parse_hex_id(&invitation.project.founder_fleet_pubkey)?;
-    verify_chain(&claimed_id, &founder, &invitation.chain.chain, now_secs())
+    // ADR-019: project join flows always start with an empty
+    // delegation chain. Subsequent founder rekeys append to the
+    // member's local `delegations.json` via the rejoin verb (slice 4).
+    verify_chain(&claimed_id, &founder, &[], &invitation.chain.chain, now_secs())
         .map_err(|e| anyhow!("invitation chain failed verification: {}", e))?;
 
     // Leaf must be granting access to *our* fleet pubkey.
@@ -1331,6 +1334,6 @@ mod tests {
         let parsed: Invitation = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.project.handle, "vigo-web");
         assert_eq!(parsed.chain.chain.len(), 2);
-        verify_chain(&pid, &founder_pub, &parsed.chain.chain, 200).unwrap();
+        verify_chain(&pid, &founder_pub, &[], &parsed.chain.chain, 200).unwrap();
     }
 }

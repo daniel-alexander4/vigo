@@ -255,6 +255,35 @@ pub enum ChainError {
     /// as long as signatures hold. Reserved for future.
     #[allow(dead_code)]
     IssuanceOrder { index: usize },
+    // ----- ADR-019 founder-rekey delegation chain -----
+    /// Delegation list exceeds [`super::envelopes::DELEGATION_MAX_LEN`].
+    /// Pre-rotation hook in `cmd_rekey_pair` should have aborted the
+    /// rekey before reaching this state; encountering it at verify
+    /// time means a peer presented a chain we'd never have signed.
+    DelegationCapExceeded { len: usize },
+    /// Delegation envelope failed to decode at `index` (bad hex,
+    /// wrong-length signature, etc.).
+    DelegationDecode { index: usize, msg: String },
+    /// Delegation's `project_id` doesn't match the chain anchor.
+    DelegationProjectIdMismatch { index: usize },
+    /// Delegation's `old_founder_pubkey` doesn't equal the previous
+    /// link's `new_founder_pubkey` (or, for the first delegation,
+    /// the genesis founder pubkey baked into `project_id`).
+    DelegationLinkBroken { index: usize },
+    /// Delegation timestamps must be strictly increasing — `delegated_at`
+    /// at `index` is `<=` the previous link's. A reordered or
+    /// duplicate-timestamp chain is rejected to close a subtle attack
+    /// where an attacker swaps in their own envelope at the same
+    /// instant as a legitimate rotation.
+    DelegationOrderBroken { index: usize },
+    /// Delegation Ed25519 signature verification failed.
+    DelegationBadSignature { index: usize, msg: String },
+    /// Token at `index` was signed by a pubkey that wasn't the
+    /// authoritative founder identity for the token's `issued_at`.
+    /// Closes the deposed-founder attack (a retired founder's
+    /// compromised key signs new tokens with `issued_at` past their
+    /// authority window).
+    SignerOutsideFounderWindow { index: usize, signer_prefix: String },
 }
 
 impl std::fmt::Display for ChainError {
@@ -299,28 +328,97 @@ impl std::fmt::Display for ChainError {
             ChainError::IssuanceOrder { index } => {
                 write!(f, "token {} issued before its parent", index)
             }
+            ChainError::DelegationCapExceeded { len } => write!(
+                f,
+                "delegation chain length {} exceeds cap {}",
+                len,
+                super::envelopes::DELEGATION_MAX_LEN
+            ),
+            ChainError::DelegationDecode { index, msg } => write!(
+                f,
+                "delegation {} decode failed: {}",
+                index, msg
+            ),
+            ChainError::DelegationProjectIdMismatch { index } => write!(
+                f,
+                "delegation {} has project_id != chain anchor",
+                index
+            ),
+            ChainError::DelegationLinkBroken { index } => write!(
+                f,
+                "delegation {}'s old_founder_pubkey doesn't match the previous link",
+                index
+            ),
+            ChainError::DelegationOrderBroken { index } => write!(
+                f,
+                "delegation {}'s delegated_at is not strictly increasing",
+                index
+            ),
+            ChainError::DelegationBadSignature { index, msg } => write!(
+                f,
+                "delegation {} signature: {}",
+                index, msg
+            ),
+            ChainError::SignerOutsideFounderWindow { index, signer_prefix } => write!(
+                f,
+                "token {} signed by {} outside its authority window for the token's issued_at",
+                index, signer_prefix
+            ),
         }
     }
 }
 
 impl std::error::Error for ChainError {}
 
-/// Verify a token chain against the project's founder pubkey at a
-/// given `now` (unix seconds — pass `now_secs()` in production; tests
-/// inject a fixed value).
+/// Verify a token chain against the project's genesis founder pubkey
+/// at a given `now` (unix seconds — pass `now_secs()` in production;
+/// tests inject a fixed value).
 ///
-/// Chain layout: `chain[0]` is the founder's bootstrap token (parent
-/// = None, signer = founder_fleet_pubkey). Each subsequent
-/// `chain[i]` was signed by `chain[i-1]` (whose role MUST be Admin
-/// for it to have minted children). `chain[chain.len()-1]` is the
-/// "leaf" — the token actually presented by the caller for
-/// authorization.
+/// **Chain layout:**
+/// - `chain[0]` is the founder's bootstrap token (parent = None,
+///   signer = `founder_fleet_pubkey` — the GENESIS founder, baked into
+///   `project_id`). Always.
+/// - Each subsequent `chain[i]` was signed by `chain[i-1]` (whose
+///   role MUST be Admin for it to have minted children), with one
+///   exception: when `chain[i-1]` IS the bootstrap, `chain[i]`'s
+///   signer may be ANY founder pubkey whose authority window covers
+///   `chain[i].issued_at` — that includes the genesis pubkey directly,
+///   AND every `new_founder_pubkey` named by a delegation in
+///   `delegations`. This is what lets post-rekey admin tokens
+///   chain back through a `bootstrap (signed by genesis) → admin
+///   (signed by current founder)` link without re-minting the
+///   bootstrap (which would change `project_id` and break URLs).
+/// - `chain[chain.len()-1]` is the "leaf" — the token presented by
+///   the caller for authorization.
+///
+/// **Delegation chain (ADR-019):**
+///
+/// `delegations` is the project's append-only list of founder rekeys
+/// (`DelegationChain::delegations`). Empty = the founder hasn't
+/// rekeyed; verifier behaves identically to pre-ADR-019. Non-empty
+/// = each entry signed by the previous founder, naming the next.
+/// Cap is [`super::envelopes::DELEGATION_MAX_LEN`]; warn band starts
+/// at [`super::envelopes::DELEGATION_WARN_LEN`].
+///
+/// **Authority windows.** Each founder pubkey is authoritative over
+/// a half-open interval `[start, end)`:
+/// - genesis: `[i64::MIN, delegations[0].delegated_at)` (or `[i64::MIN,
+///   i64::MAX)` if `delegations` is empty).
+/// - `delegations[i].new_founder_pubkey`: `[delegations[i].delegated_at,
+///   delegations[i+1].delegated_at)` (or `[delegations[i].delegated_at,
+///   i64::MAX)` if it's the last delegation).
+///
+/// Tokens whose parent is the bootstrap MUST have `issued_at` falling
+/// inside the window of their declared signer. This closes the
+/// deposed-founder attack: an attacker holding a retired founder's
+/// key cannot sign new tokens dated past that founder's window.
 ///
 /// On Ok, the leaf's role + subject_fleet_pubkey are the
 /// authorization context the caller is asserting.
 pub fn verify_chain(
     project_id: &[u8; ID_LEN],
     founder_fleet_pubkey: &[u8; ID_LEN],
+    delegations: &[super::envelopes::DelegationEnvelope],
     chain: &[Token],
     now: i64,
 ) -> std::result::Result<(), ChainError> {
@@ -335,11 +433,65 @@ pub fn verify_chain(
         return Err(ChainError::RootNotFounder);
     }
 
-    // Root token must be the founder's bootstrap token.
+    // ---- Pre-walk: validate the delegation chain itself. ----
+    if delegations.len() > super::envelopes::DELEGATION_MAX_LEN {
+        return Err(ChainError::DelegationCapExceeded { len: delegations.len() });
+    }
+    // Window starts indexed by founder pubkey, in genesis-first order.
+    // Each entry is `(founder_pubkey, window_start)`. window_end is
+    // implied by the *next* entry's window_start (or i64::MAX for the
+    // tail).
+    let mut founder_windows: Vec<([u8; ID_LEN], i64)> = Vec::with_capacity(delegations.len() + 1);
+    founder_windows.push((*founder_fleet_pubkey, i64::MIN));
+    let mut prev_new_founder: [u8; ID_LEN] = *founder_fleet_pubkey;
+    let mut prev_delegated_at: i64 = i64::MIN;
+    for (i, env) in delegations.iter().enumerate() {
+        let raw = env.raw().map_err(|e| ChainError::DelegationDecode {
+            index: i,
+            msg: e.to_string(),
+        })?;
+        if raw.project_id != *project_id {
+            return Err(ChainError::DelegationProjectIdMismatch { index: i });
+        }
+        if raw.old_founder_pubkey != prev_new_founder {
+            return Err(ChainError::DelegationLinkBroken { index: i });
+        }
+        if env.delegated_at <= prev_delegated_at {
+            return Err(ChainError::DelegationOrderBroken { index: i });
+        }
+        env.verify_signature()
+            .map_err(|e| ChainError::DelegationBadSignature {
+                index: i,
+                msg: e.to_string(),
+            })?;
+        founder_windows.push((raw.new_founder_pubkey, env.delegated_at));
+        prev_new_founder = raw.new_founder_pubkey;
+        prev_delegated_at = env.delegated_at;
+    }
+
+    // Helper: look up the founder pubkey authoritative at `at`.
+    // Returns the LAST entry whose `window_start <= at`. Stable: a
+    // token issued exactly at delegated_at falls under the new founder
+    // (the boundary is half-open `[start, end)`).
+    let founder_at = |at: i64| -> [u8; ID_LEN] {
+        let mut authoritative = founder_windows[0].0;
+        for (pk, start) in &founder_windows {
+            if *start <= at {
+                authoritative = *pk;
+            } else {
+                break;
+            }
+        }
+        authoritative
+    };
+
+    // ---- Bootstrap (chain[0]) checks. ----
     let root = &chain[0];
     if root.body.parent_token_id.is_some() {
         return Err(ChainError::RootHasParent);
     }
+    // Bootstrap is ALWAYS signed by genesis — never by a post-rekey
+    // founder. The bootstrap is immutable; rekey doesn't re-mint it.
     if &root.body.signer_fleet_pubkey != founder_fleet_pubkey {
         return Err(ChainError::RootNotFounder);
     }
@@ -353,7 +505,7 @@ pub fn verify_chain(
         })?;
     expiry_check(root, 0, now)?;
 
-    // Walk the rest of the chain.
+    // ---- Walk the rest of the chain. ----
     for i in 1..chain.len() {
         let parent = &chain[i - 1];
         let cur = &chain[i];
@@ -369,9 +521,27 @@ pub fn verify_chain(
             Some(p) if p == parent_id => {}
             _ => return Err(ChainError::ParentMismatch { index: i }),
         }
-        if cur.body.signer_fleet_pubkey != parent.body.subject_fleet_pubkey {
+
+        // ADR-019: extended signer rule when the parent is the
+        // bootstrap. Allow any founder pubkey whose authority window
+        // covers cur.issued_at; otherwise the standard parent.subject
+        // rule applies.
+        if i == 1 {
+            let authoritative = founder_at(cur.body.issued_at);
+            if cur.body.signer_fleet_pubkey != authoritative {
+                // For helpful diagnostics, surface the rejected signer
+                // prefix. Don't leak the full pubkey to error logs —
+                // 8 hex chars is enough to grep for in audit trails.
+                let signer_hex = hex::encode(cur.body.signer_fleet_pubkey);
+                return Err(ChainError::SignerOutsideFounderWindow {
+                    index: i,
+                    signer_prefix: signer_hex[..16.min(signer_hex.len())].to_string(),
+                });
+            }
+        } else if cur.body.signer_fleet_pubkey != parent.body.subject_fleet_pubkey {
             return Err(ChainError::SignerNotParentSubject { index: i });
         }
+
         cur.verify_signature()
             .map_err(|e| ChainError::BadSignature {
                 index: i,
@@ -564,14 +734,14 @@ mod tests {
         let founder = fresh_key();
         let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
         let pid = project_id_for(&pub_bytes(&founder));
-        verify_chain(&pid, &pub_bytes(&founder), &[bootstrap], 200).unwrap();
+        verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap], 200).unwrap();
     }
 
     #[test]
     fn verify_chain_rejects_empty() {
         let founder = fresh_key();
         let pid = project_id_for(&pub_bytes(&founder));
-        let r = verify_chain(&pid, &pub_bytes(&founder), &[], 200);
+        let r = verify_chain(&pid, &pub_bytes(&founder), &[], &[], 200);
         assert_eq!(r.unwrap_err(), ChainError::Empty);
     }
 
@@ -585,7 +755,7 @@ mod tests {
         let bytes = canonical_bytes(&bootstrap.body);
         bootstrap.signature = founder.sign(&bytes).to_bytes();
         let pid = project_id_for(&pub_bytes(&founder));
-        let r = verify_chain(&pid, &pub_bytes(&founder), &[bootstrap], 200);
+        let r = verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap], 200);
         assert_eq!(r.unwrap_err(), ChainError::RootHasParent);
     }
 
@@ -605,7 +775,7 @@ mod tests {
         };
         let bootstrap = Token::issue(&imposter, body).unwrap();
         let pid = project_id_for(&pub_bytes(&founder));
-        let r = verify_chain(&pid, &pub_bytes(&founder), &[bootstrap], 200);
+        let r = verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap], 200);
         assert_eq!(r.unwrap_err(), ChainError::RootNotFounder);
     }
 
@@ -626,7 +796,7 @@ mod tests {
         )
         .unwrap();
         let pid = project_id_for(&pub_bytes(&founder));
-        verify_chain(&pid, &pub_bytes(&founder), &[bootstrap, member], 200).unwrap();
+        verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap, member], 200).unwrap();
     }
 
     #[test]
@@ -657,6 +827,7 @@ mod tests {
         verify_chain(
             &pid,
             &pub_bytes(&founder),
+            &[],
             &[bootstrap, lieutenant_admin, team_member],
             200,
         )
@@ -696,6 +867,7 @@ mod tests {
         let err = verify_chain(
             &pid,
             &pub_bytes(&founder),
+            &[],
             &[bootstrap, team_member, bogus_child],
             200,
         )
@@ -724,21 +896,21 @@ mod tests {
         let bytes = canonical_bytes(&child.body);
         child.signature = founder.sign(&bytes).to_bytes();
         let pid = project_id_for(&pub_bytes(&founder));
-        let err = verify_chain(&pid, &pub_bytes(&founder), &[bootstrap, child], 200)
+        let err = verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap, child], 200)
             .unwrap_err();
         assert_eq!(err, ChainError::ParentMismatch { index: 1 });
     }
 
     #[test]
-    fn verify_chain_rejects_signer_not_parent_subject() {
+    fn verify_chain_rejects_imposter_signing_child_of_bootstrap() {
+        // ADR-019: at chain[1], the signer rule is "must be the
+        // authoritative founder for this token's issued_at." With no
+        // delegations, that's the genesis founder pubkey. An imposter
+        // is rejected via SignerOutsideFounderWindow.
         let founder = fresh_key();
         let team = fresh_key();
         let imposter = fresh_key();
         let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
-        // `team_member` was signed by founder. If we replace its
-        // signer_fleet_pubkey with imposter's and re-sign with imposter,
-        // the chain check should reject because imposter isn't the
-        // parent's subject (parent is bootstrap, subject = founder).
         let team_member = issue_child(
             &founder,
             &bootstrap,
@@ -753,9 +925,60 @@ mod tests {
         let bytes = canonical_bytes(&bogus.body);
         bogus.signature = imposter.sign(&bytes).to_bytes();
         let pid = project_id_for(&pub_bytes(&founder));
-        let err = verify_chain(&pid, &pub_bytes(&founder), &[bootstrap, bogus], 200)
+        let err = verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap, bogus], 200)
             .unwrap_err();
-        assert_eq!(err, ChainError::SignerNotParentSubject { index: 1 });
+        assert!(
+            matches!(err, ChainError::SignerOutsideFounderWindow { index: 1, .. }),
+            "expected SignerOutsideFounderWindow, got {:?}",
+            err
+        );
+    }
+
+    #[test]
+    fn verify_chain_rejects_signer_not_parent_subject_below_bootstrap() {
+        // SignerNotParentSubject still applies at chain depth >= 2
+        // (where the parent is an admin token, not the bootstrap).
+        // ADR-019's authority-window relaxation is scoped to the
+        // bootstrap-to-child link only.
+        let founder = fresh_key();
+        let lieutenant = fresh_key();
+        let team = fresh_key();
+        let imposter = fresh_key();
+        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let lieutenant_admin = issue_child(
+            &founder,
+            &bootstrap,
+            &pub_bytes(&lieutenant),
+            Role::Admin,
+            120,
+            None,
+        )
+        .unwrap();
+        // team_member should be signed by lieutenant; instead make it
+        // signed by imposter, who isn't lieutenant_admin.subject.
+        let team_member = issue_child(
+            &lieutenant,
+            &lieutenant_admin,
+            &pub_bytes(&team),
+            Role::Member,
+            150,
+            None,
+        )
+        .unwrap();
+        let mut bogus = team_member.clone();
+        bogus.body.signer_fleet_pubkey = pub_bytes(&imposter);
+        let bytes = canonical_bytes(&bogus.body);
+        bogus.signature = imposter.sign(&bytes).to_bytes();
+        let pid = project_id_for(&pub_bytes(&founder));
+        let err = verify_chain(
+            &pid,
+            &pub_bytes(&founder),
+            &[],
+            &[bootstrap, lieutenant_admin, bogus],
+            200,
+        )
+        .unwrap_err();
+        assert_eq!(err, ChainError::SignerNotParentSubject { index: 2 });
     }
 
     #[test]
@@ -764,7 +987,7 @@ mod tests {
         let bootstrap = issue_bootstrap(&founder, 100, Some(150)).unwrap();
         let pid = project_id_for(&pub_bytes(&founder));
         // now=200, expiry=150 → expired
-        let err = verify_chain(&pid, &pub_bytes(&founder), &[bootstrap.clone()], 200)
+        let err = verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap.clone()], 200)
             .unwrap_err();
         assert_eq!(
             err,
@@ -774,7 +997,7 @@ mod tests {
             }
         );
         // now=120, still valid
-        verify_chain(&pid, &pub_bytes(&founder), &[bootstrap], 120).unwrap();
+        verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap], 120).unwrap();
     }
 
     #[test]
@@ -798,7 +1021,7 @@ mod tests {
         child.signature = founder.sign(&bytes).to_bytes();
         let pid = project_id_for(&pub_bytes(&founder));
         let err =
-            verify_chain(&pid, &pub_bytes(&founder), &[bootstrap, child], 200).unwrap_err();
+            verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap, child], 200).unwrap_err();
         assert_eq!(err, ChainError::ProjectIdMismatch { index: 1 });
     }
 
@@ -858,5 +1081,346 @@ mod tests {
         // Sentinel encoding: None and Some(0) both render as 8 zero
         // bytes in the canonical form.
         assert_eq!(canonical_bytes(&body_none), canonical_bytes(&body_zero));
+    }
+
+    // ---- ADR-019 chained verification ----
+
+    use super::super::envelopes::{DelegationEnvelope, DELEGATION_MAX_LEN};
+    use super::super::project_state::hex_id;
+
+    /// Issue a fresh admin token at chain[1] signed by `signer_key`,
+    /// parented to `bootstrap`. Used to simulate post-rekey admin
+    /// minting for the chained-verification tests.
+    fn issue_admin_under_signer(
+        signer_key: &SigningKey,
+        bootstrap: &Token,
+        subject: &[u8; ID_LEN],
+        issued_at: i64,
+    ) -> Token {
+        let body = TokenBody {
+            project_id: bootstrap.body.project_id,
+            subject_fleet_pubkey: *subject,
+            role: Role::Admin,
+            issued_at,
+            expires_at: None,
+            signer_fleet_pubkey: pub_bytes(signer_key),
+            parent_token_id: Some(bootstrap.id()),
+        };
+        Token::issue(signer_key, body).expect("issue admin under signer")
+    }
+
+    #[test]
+    fn verify_chain_accepts_post_rekey_admin_via_single_delegation() {
+        // Personal-DR / single-rekey scenario: founder rekeys, mints
+        // a fresh admin token under the new key. Chain is bootstrap
+        // (signed by genesis) → admin (signed by NEW). Delegation
+        // chain bridges genesis → NEW.
+        let genesis = fresh_key();
+        let new_founder = fresh_key();
+        let new_admin = fresh_key(); // any subject, distinct from signer
+
+        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
+        // Delegation: signed by genesis, names new_founder, dated AFTER bootstrap.
+        let d0 = DelegationEnvelope::build(
+            &genesis,
+            &project_id_for(&pub_bytes(&genesis)),
+            &pub_bytes(&new_founder),
+            200,
+        );
+        // Admin minted POST-delegation (issued_at >= delegated_at = 200).
+        let admin = issue_admin_under_signer(
+            &new_founder,
+            &bootstrap,
+            &pub_bytes(&new_admin),
+            300,
+        );
+        let pid = project_id_for(&pub_bytes(&genesis));
+        verify_chain(&pid, &pub_bytes(&genesis), &[d0], &[bootstrap, admin], 400)
+            .expect("post-rekey admin should verify via delegation");
+    }
+
+    #[test]
+    fn verify_chain_accepts_pre_rekey_admin_after_delegation_appended() {
+        // Tokens issued BEFORE the rekey must still verify after the
+        // delegation appears on disk. The genesis founder's window
+        // covers any timestamp before delegations[0].delegated_at.
+        let genesis = fresh_key();
+        let new_founder = fresh_key();
+        let team = fresh_key();
+        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
+        let pre_rekey_admin = issue_child(
+            &genesis,
+            &bootstrap,
+            &pub_bytes(&team),
+            Role::Admin,
+            150, // before delegation at 200
+            None,
+        )
+        .unwrap();
+        let d0 = DelegationEnvelope::build(
+            &genesis,
+            &project_id_for(&pub_bytes(&genesis)),
+            &pub_bytes(&new_founder),
+            200,
+        );
+        let pid = project_id_for(&pub_bytes(&genesis));
+        verify_chain(
+            &pid,
+            &pub_bytes(&genesis),
+            &[d0],
+            &[bootstrap, pre_rekey_admin],
+            400,
+        )
+        .expect("pre-rekey admin should still verify after delegation appended");
+    }
+
+    #[test]
+    fn verify_chain_accepts_three_chained_delegations() {
+        // Three sequential rekeys: genesis → r1 → r2 → r3. Admin
+        // minted under r3 verifies through the chained delegations.
+        let genesis = fresh_key();
+        let r1 = fresh_key();
+        let r2 = fresh_key();
+        let r3 = fresh_key();
+        let admin_subject = fresh_key();
+        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis));
+        let d0 = DelegationEnvelope::build(&genesis, &pid, &pub_bytes(&r1), 200);
+        let d1 = DelegationEnvelope::build(&r1, &pid, &pub_bytes(&r2), 300);
+        let d2 = DelegationEnvelope::build(&r2, &pid, &pub_bytes(&r3), 400);
+        let admin = issue_admin_under_signer(&r3, &bootstrap, &pub_bytes(&admin_subject), 500);
+        verify_chain(
+            &pid,
+            &pub_bytes(&genesis),
+            &[d0, d1, d2],
+            &[bootstrap, admin],
+            600,
+        )
+        .expect("three-rekey chain should verify");
+    }
+
+    #[test]
+    fn verify_chain_rejects_deposed_founder_signing_outside_window() {
+        // ADR-019 deposed-founder attack: r1 was a legitimate founder,
+        // then was retired by d_1 in favor of r2. r1's compromised
+        // key is used to sign a fresh admin token dated AFTER d_1.
+        // Verification rejects because r1's window closed at d_1.
+        let genesis = fresh_key();
+        let r1 = fresh_key();
+        let r2 = fresh_key();
+        let admin_subject = fresh_key();
+        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis));
+        let d0 = DelegationEnvelope::build(&genesis, &pid, &pub_bytes(&r1), 200);
+        let d1 = DelegationEnvelope::build(&r1, &pid, &pub_bytes(&r2), 300);
+        // Attacker signs a fresh admin under r1 with issued_at past d_1.
+        let attacker_admin =
+            issue_admin_under_signer(&r1, &bootstrap, &pub_bytes(&admin_subject), 500);
+        let err = verify_chain(
+            &pid,
+            &pub_bytes(&genesis),
+            &[d0, d1],
+            &[bootstrap, attacker_admin],
+            600,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, ChainError::SignerOutsideFounderWindow { index: 1, .. }),
+            "expected SignerOutsideFounderWindow, got {:?}",
+            err
+        );
+    }
+
+    #[test]
+    fn verify_chain_rejects_token_predating_its_signer_window() {
+        // Inverse of the deposed-founder case: r1 cannot sign tokens
+        // dated BEFORE d_0 (which is when r1's window opens).
+        let genesis = fresh_key();
+        let r1 = fresh_key();
+        let admin_subject = fresh_key();
+        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis));
+        let d0 = DelegationEnvelope::build(&genesis, &pid, &pub_bytes(&r1), 200);
+        // r1 attempts to sign a token at issued_at=150 (before d_0
+        // at 200). Outside r1's window, inside genesis's.
+        let antedated =
+            issue_admin_under_signer(&r1, &bootstrap, &pub_bytes(&admin_subject), 150);
+        let err = verify_chain(
+            &pid,
+            &pub_bytes(&genesis),
+            &[d0],
+            &[bootstrap, antedated],
+            300,
+        )
+        .unwrap_err();
+        assert!(
+            matches!(err, ChainError::SignerOutsideFounderWindow { index: 1, .. }),
+            "expected SignerOutsideFounderWindow for pre-window token, got {:?}",
+            err
+        );
+    }
+
+    #[test]
+    fn verify_chain_rejects_forged_delegation_signed_by_attacker() {
+        // Attacker forges a delegation envelope claiming OLD signed
+        // it, but actually signs with their own key. Signature
+        // verification on the delegation rejects.
+        let genesis = fresh_key();
+        let attacker = fresh_key();
+        let attacker_pubkey = pub_bytes(&attacker);
+        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis));
+        // Attacker signs the delegation with their own key but claims
+        // genesis is the signer.
+        let mut forged = DelegationEnvelope::build(&attacker, &pid, &attacker_pubkey, 200);
+        forged.old_founder_pubkey = hex_id(&pub_bytes(&genesis));
+        // Don't re-sign — the signature is over the original
+        // (attacker, attacker) bytes; substituting old_founder_pubkey
+        // will fail verification.
+        let pid_for_verify = pid;
+        let err = verify_chain(
+            &pid_for_verify,
+            &pub_bytes(&genesis),
+            &[forged],
+            &[bootstrap],
+            400,
+        )
+        .unwrap_err();
+        // Will surface as either DelegationBadSignature (signature
+        // doesn't verify against the claimed pubkey) or
+        // DelegationLinkBroken (depending on which check fires
+        // first); both are correct rejections.
+        assert!(
+            matches!(
+                err,
+                ChainError::DelegationBadSignature { index: 0, .. }
+                    | ChainError::DelegationLinkBroken { index: 0 }
+            ),
+            "expected delegation-rejection variant, got {:?}",
+            err
+        );
+    }
+
+    #[test]
+    fn verify_chain_rejects_broken_delegation_link() {
+        // delegations[1].old_founder_pubkey doesn't equal
+        // delegations[0].new_founder_pubkey — chain integrity broken.
+        let genesis = fresh_key();
+        let r1 = fresh_key();
+        let imposter = fresh_key();
+        let r2 = fresh_key();
+        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis));
+        let d0 = DelegationEnvelope::build(&genesis, &pid, &pub_bytes(&r1), 200);
+        // d_1 is signed by `imposter`, not r1 — link is broken.
+        let d1_bad = DelegationEnvelope::build(&imposter, &pid, &pub_bytes(&r2), 300);
+        let err =
+            verify_chain(&pid, &pub_bytes(&genesis), &[d0, d1_bad], &[bootstrap], 400)
+                .unwrap_err();
+        assert_eq!(err, ChainError::DelegationLinkBroken { index: 1 });
+    }
+
+    #[test]
+    fn verify_chain_rejects_out_of_order_delegations() {
+        // delegated_at must be strictly increasing — closes a subtle
+        // attack where a forged envelope is squeezed in at the same
+        // instant as a legitimate one.
+        let genesis = fresh_key();
+        let r1 = fresh_key();
+        let r2 = fresh_key();
+        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis));
+        // Identical delegated_at on both → ordering violated.
+        let d0 = DelegationEnvelope::build(&genesis, &pid, &pub_bytes(&r1), 200);
+        let d1 = DelegationEnvelope::build(&r1, &pid, &pub_bytes(&r2), 200);
+        let err =
+            verify_chain(&pid, &pub_bytes(&genesis), &[d0, d1], &[bootstrap], 400)
+                .unwrap_err();
+        assert_eq!(err, ChainError::DelegationOrderBroken { index: 1 });
+    }
+
+    #[test]
+    fn verify_chain_rejects_delegation_with_wrong_project_id() {
+        // A delegation crafted for a *different* project must be
+        // rejected — closes a "cross-project replay" path.
+        let genesis = fresh_key();
+        let other_genesis = fresh_key();
+        let r1 = fresh_key();
+        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
+        let our_pid = project_id_for(&pub_bytes(&genesis));
+        let other_pid = project_id_for(&pub_bytes(&other_genesis));
+        // Delegation signed by genesis but pointed at some other
+        // project. Signature verifies against the canonical bytes
+        // including the other_pid; we need to manually construct it
+        // so the project_id field disagrees with the chain anchor.
+        let d_wrong_pid =
+            DelegationEnvelope::build(&genesis, &other_pid, &pub_bytes(&r1), 200);
+        let err = verify_chain(
+            &our_pid,
+            &pub_bytes(&genesis),
+            &[d_wrong_pid],
+            &[bootstrap],
+            400,
+        )
+        .unwrap_err();
+        assert_eq!(err, ChainError::DelegationProjectIdMismatch { index: 0 });
+    }
+
+    #[test]
+    fn verify_chain_rejects_delegation_chain_over_cap() {
+        // Hard cap belt + braces: even if a peer presents a chain
+        // longer than DELEGATION_MAX_LEN, the verifier rejects it
+        // before walking signatures.
+        let genesis = fresh_key();
+        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis));
+        let mut delegations = Vec::with_capacity(DELEGATION_MAX_LEN + 1);
+        let mut prev_signer = genesis.clone();
+        for i in 0..(DELEGATION_MAX_LEN + 1) {
+            let next = fresh_key();
+            delegations.push(DelegationEnvelope::build(
+                &prev_signer,
+                &pid,
+                &pub_bytes(&next),
+                200 + i as i64,
+            ));
+            prev_signer = next;
+        }
+        let err = verify_chain(
+            &pid,
+            &pub_bytes(&genesis),
+            &delegations,
+            &[bootstrap],
+            1000,
+        )
+        .unwrap_err();
+        assert_eq!(
+            err,
+            ChainError::DelegationCapExceeded {
+                len: DELEGATION_MAX_LEN + 1,
+            }
+        );
+    }
+
+    #[test]
+    fn verify_chain_pre_rekey_chain_unaffected_by_empty_delegation_list() {
+        // Identity check: passing an empty delegation list reproduces
+        // the pre-ADR-019 behavior exactly. No regression for projects
+        // that haven't yet seen a founder rekey.
+        let founder = fresh_key();
+        let team = fresh_key();
+        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let member = issue_child(
+            &founder,
+            &bootstrap,
+            &pub_bytes(&team),
+            Role::Member,
+            150,
+            None,
+        )
+        .unwrap();
+        let pid = project_id_for(&pub_bytes(&founder));
+        verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap, member], 200)
+            .expect("empty delegations must reproduce pre-ADR-019 behavior");
     }
 }

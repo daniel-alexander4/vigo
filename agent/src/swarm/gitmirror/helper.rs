@@ -73,7 +73,9 @@ use tokio_util::sync::CancellationToken;
 
 use super::envelopes::is_token_revoked;
 use super::fan_out;
-use super::project_state::{parse_hex_id, project_repo_path, ProjectConfig, TokenChain};
+use super::project_state::{
+    parse_hex_id, project_repo_path, DelegationChain, ProjectConfig, TokenChain,
+};
 use super::tokens::{verify_chain, ID_LEN};
 use crate::update::TlsCerts;
 
@@ -459,8 +461,17 @@ fn authorize(home: &Path, project_id: &[u8; ID_LEN]) -> Result<TokenChain> {
         .with_context(|| format!("loading tokens.json for {}", super::project_state::hex_id(project_id)))?
         .ok_or_else(|| anyhow!("no tokens.json — re-run `vigo swarm gitmirror project join`"))?;
 
+    // ADR-019: load the per-user delegation chain. Missing file =
+    // empty list = pre-rekey steady state, verifier behaves identically
+    // to pre-ADR-019. Non-empty = founder has rekeyed; the chain
+    // bridges genesis founder pubkey to the current signing identity.
+    let delegations = DelegationChain::load(home, project_id)
+        .with_context(|| format!("loading delegations.json for {}", super::project_state::hex_id(project_id)))?
+        .map(|c| c.delegations)
+        .unwrap_or_default();
+
     let now = chrono_now_secs();
-    verify_chain(project_id, &founder, &chain.chain, now)
+    verify_chain(project_id, &founder, &delegations, &chain.chain, now)
         .map_err(|e| anyhow!("token chain rejected: {}", e))?;
 
     // Reject any chain whose tokens have an active revocation. Match
