@@ -44,6 +44,42 @@ Gitmirror is one of four content subsystems that ride the [swarm](swarm.md) subs
 | `reanchor` byte-level migration | ⏳ step 4 follow-up |
 | Home-lab e2e verification | ⏳ step 4+ |
 
+## ADR-019: Founder-rekey delegation chains (in progress)
+
+ADR-018 rotates the self-fleet keypair but explicitly defers gitmirror. Project IDs are anchored to `sha256(founder_fleet_pubkey)`, so a founder rekey would naively orphan every founded project — dead URLs, stranded bare repos, capability tokens that no longer chain to the founder's current signing identity. ADR-019 closes this by introducing a per-project **delegation chain**: an Ed25519-signed bridge from each retired founder pubkey to its successor, persisted alongside `tokens.json` and `project.json`. Project_id stays anchored to the genesis founder pubkey forever — URLs survive, bare repos don't move, pre-rekey tokens still verify.
+
+**On-disk shape** (`~/.vigo-gitmirror/<project_id>/delegations.json`):
+
+```json
+{
+  "version": 1,
+  "delegations": [
+    {
+      "project_id":           "<hex>",
+      "old_founder_pubkey":   "<hex>",   // signer of THIS envelope
+      "new_founder_pubkey":   "<hex>",   // delegated-to key
+      "delegated_at":         <unix-ts>,
+      "signature":            "<hex 64-byte ed25519 sig>"
+    }
+  ]
+}
+```
+
+Append-only ordered list. Each entry is signed by the *previous* link's `new_founder_pubkey` (or, for the first entry, the genesis pubkey baked into `project_id`). Verifier walks the list before the token chain; any link's signature failure, broken pubkey linkage, or non-strict-increasing `delegated_at` aborts. Hard cap at `DELEGATION_MAX_LEN = 5`; warn band starts at `DELEGATION_WARN_LEN = 3`.
+
+**Authority windows.** Each founder pubkey owns a half-open `[delegated_at, next_delegated_at)` interval. Genesis covers `(-∞, d_0.delegated_at)`; the most-recent delegation covers `[d_N.delegated_at, ∞)`. At chain[1] (token whose parent is the bootstrap), the verifier requires `signer_fleet_pubkey == founder_at(token.issued_at)`. This closes both the **deposed-founder attack** (a retired founder's compromised key signs fresh tokens dated past their window) and the **antedated-token attack** (a new founder backdates tokens to before their window opened).
+
+**Rekey-time hooks.** `self-fleet rekey-pair` and `rekey --from` automatically run two integration steps via `agent/src/swarm/gitmirror/rekey.rs`:
+
+- **Pre-flight** (`pre_flight_check_caps`) — walks every founded project; aborts the rekey before any keypair mutation if any chain is at cap, unless `--force-orphan-projects` is passed.
+- **Post-rotation** (`apply_post_rotation_gitmirror_sync`) — for every founded project, signs + appends a delegation envelope under OLD; for every project the user is a member of, rewrites `project.json::members[]` OLD → NEW. Each envoy in a self-fleet maintains its own self-consistent local chain (signatures byte-identical modulo `delegated_at`).
+
+**Founded-by-me predicate.** `project.founder_fleet_pubkey ∈ {current self-fleet pubkey} ∪ {old_fleet_pubkey for every entry in retired_fleets.json}`. Recovers the full `genesis → r_1 → … → current` history without a new state file. A project founded at any past identity counts as "mine" for delegation purposes.
+
+**Threat-model wrinkle.** An attacker holding a retired founder key can forge a delegation envelope pointing at their own pubkey — the signature mathematically verifies. ADR-019 therefore requires that delegations only become *authoritative* on a member envoy via a fresh out-of-band capability code from a trusted founder (the `re-invite-all` + `rejoin` flow planned for slice 4). Until that ships, multi-fleet members must be manually re-invited under the new founder identity. Single-fleet personal-DR is unaffected — every envoy in the user's own self-fleet inherits trust via ADR-018's pair-claim ceremony.
+
+**Shipping cadence.** Slices 1–3 in tree at 0.35.18–0.35.20 (data layer; chained verifier with authority windows; rekey-time hooks + status surface + `--force-orphan-projects` flag). Slices 4 (multi-fleet `re-invite-all` + `rejoin` + delegation gossip rail) and 5 (`project re-found` escape hatch + the formal ADR document) pending.
+
 Below describes the legacy publish-and-claim model retained as historical context. The corresponding agent code (`reactor.rs`, `publisher.rs`, `source.rs`, `sidecar.rs`, `lan_selector.rs`, `pending_claims.rs`, `cross_subnet_mirrors.rs`, `path_guard.rs`) was deleted in step 3.
 
 ## How It Works

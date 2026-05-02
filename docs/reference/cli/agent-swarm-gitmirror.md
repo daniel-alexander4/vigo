@@ -19,6 +19,21 @@ What's still pending (follow-up slices of step 4):
 
 All step-4 follow-up work has shipped. Cross-envoy push, fetch, envelope gossip, fleet observability, REST member-roster, and `reanchor` byte migration are all in tree.
 
+### ADR-019 (founder-rekey delegations) — slices 1–3 shipped
+
+Founder rekey support is being added in five slices. As of 0.35.20, slices 1–3 are in:
+
+- **Slice 1 (0.35.18)** — `DelegationEnvelope` data layer: Ed25519-signed bridge from a retired founder pubkey to a new one, persisted at `~/.vigo-gitmirror/<pid>/delegations.json`. Hard cap at `DELEGATION_MAX_LEN = 5`, soft warn at `DELEGATION_WARN_LEN = 3`.
+- **Slice 2 (0.35.19)** — chained verification: `tokens::verify_chain` walks the delegation list before the token chain, applying authority windows so retired founders can't sign post-window tokens (the deposed-founder attack). The helper daemon's per-user verify already loads the local delegation chain.
+- **Slice 3 (0.35.20)** — rekey-time hooks: `self-fleet rekey-pair` and `rekey --from` automatically sign + append delegations on every founded project and rewrite member entries OLD → NEW. `--force-orphan-projects` flag covers the cap case. `project status` now displays delegation chain length, current founder pubkey, and warn-band / at-cap banners.
+
+What still ships in slices 4–5:
+
+- **Slice 4** — multi-fleet `re-invite-all` (founder side) + `rejoin` (member side) verbs, plus the delegation gossip rail (informational hint only, never authority).
+- **Slice 5** — `project re-found` verb (escape hatch when chain is at cap; mints a fresh `project_id`), the formal ADR-019 document, and any docs cleanup.
+
+Until slice 4 ships, multi-fleet projects (cross-fleet members) need manual re-invitation under the new founder identity after a rekey. Single-fleet personal-DR projects work transparently.
+
 ## Invocation
 
 ```
@@ -163,7 +178,7 @@ team-notes               members-only   3              2        a891c4b27e3431af
 
 ## `project status`
 
-Multi-line detail block: handle, URL, project_id, founder, fan-out, member list, token chain depth, leaf role + subject + issued / expires timestamps, state-dir path, pending-sentinel flags.
+Multi-line detail block: handle, URL, project_id, founder, fan-out, member list, token chain depth, leaf role + subject + issued / expires timestamps, ADR-019 delegation chain length and current founder pubkey (with warn-band yellow flag at length ≥ `DELEGATION_WARN_LEN` and a hard "AT CAP" banner at `DELEGATION_MAX_LEN`), state-dir path, pending-sentinel flags.
 
 ```
 vigo swarm gitmirror project status <project_id>
@@ -211,5 +226,6 @@ vigo swarm gitmirror project reanchor <project_id>
 
 - [ADR-015 — Unified gitmirror substrate](../../adr/015-unified-gitmirror-substrate.md)
 - [ADR-014 — Self-fleet primitive](../../adr/014-self-fleet-primitive.md)
+- [ADR-018 — Self-fleet rekey](../../adr/018-self-fleet-rekey.md) — the founder-rekey delegation flow ships incrementally as ADR-019 (slices 1–3 in tree at 0.35.18–0.35.20)
 - [vigo swarm self-fleet CLI reference](agent-swarm-self-fleet.md)
 - [Capability-token primitives — `tokens.rs`](../../engineering/subsystems/gitmirror.md)
