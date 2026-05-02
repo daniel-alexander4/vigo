@@ -20,7 +20,7 @@ Content is loaded via HTMX fragments. Six tabs:
 - **View Config** — effective resolved configuration (matched pattern, roles, modules, merged vars with secrets redacted)
 - **Config Trace** — inheritance chain showing how config was assembled from common.vgo, match blocks, and module defaults
 - **Standards Compliance** — per-framework compliance cards with coverage percentages
-- **Attack Surface** — risk score, CVE summary, listening ports
+- **Attack Surface** — risk score, level, factor breakdown, deduped CVE summary, listening ports. Score, level, and factors are computed by `risk.ScoreEnvoy` (the same scorer that powers `/risk` and `/api/v1/risk/{envoyID}`), so this tab and the risk page never disagree on a single envoy's numbers.
 
 ## Key Actions
 

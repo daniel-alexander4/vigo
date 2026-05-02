@@ -35,6 +35,7 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/license"
+	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/peer"
 	"git.alexander4.io/vigo/server/spanner"
@@ -4236,26 +4237,26 @@ type EnvoyStandardCoverageData struct {
 }
 
 // AttackSurfaceData holds data for the envoy attack surface tab.
+//
+// RiskScore / RiskLevel / Factors come from [risk.ScoreEnvoy], the same
+// canonical scorer that powers /risk and /api/v1/risk/{envoyID}. Display
+// counts (CVECritical etc.) come from the same flat trait map the scorer
+// reads, so the headline numbers and the underlying factor breakdown
+// always tell the same story.
 type AttackSurfaceData struct {
-	Hostname       string
-	RiskLevel      string
-	RiskScore      int
-	CVECritical    int
-	CVEHigh        int
-	CVEMedium      int
-	CVELow         int
-	HardeningScore int
-	ListeningPorts int
-	Ports          []PortEntry
+	Hostname        string
+	RiskLevel       string
+	RiskScore       int
+	Factors         []risk.Factor
+	CVECritical     int
+	CVEHigh         int
+	CVEMedium       int
+	CVELow          int
+	HardeningScore  int
+	ListeningPorts  int
+	Ports           []string
 	Vulnerabilities bool
-	HasData        bool
-}
-
-// PortEntry is a listening port on an envoy.
-type PortEntry struct {
-	Port     string
-	Protocol string
-	Process  string
+	HasData         bool
 }
 
 // EnvoyAttackSurfaceFragment renders the attack surface tab for an envoy.
@@ -4318,73 +4319,95 @@ func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Extract security traits from the latest trait snapshot. Reads the
-	// JSON directly + flattens locally; the traits fragment now renders
-	// from a tree, but this page still needs a flat key→string lookup.
-	data := AttackSurfaceData{Hostname: detail.Envoy.Hostname}
-	flat := make(map[string]any)
+	// Build the flat trait map, then route Score/Level/Factors through
+	// risk.ScoreEnvoy — the same canonical scorer that drives /risk and
+	// /api/v1/risk/{envoyID}. The two surfaces must never disagree on a
+	// single envoy's risk numbers; any divergence is a SoT bug.
+	flat := buildFlatTraits(r.Context(), h.queries, idStr)
+
+	revoked := false
 	if h.queries != nil {
-		if cf, qErr := h.queries.GetLatestEnvoyTraits(r.Context(), idStr); qErr == nil {
-			var raw map[string]any
-			if json.Unmarshal([]byte(cf.Traits), &raw) == nil {
-				flattenTraits("", raw, flat)
-			}
-		}
-	}
-	traitStr := func(key string) string {
-		if v, ok := flat[key]; ok {
-			return fmt.Sprintf("%v", v)
-		}
-		return ""
-	}
-	for k := range flat {
-		vs := traitStr(k)
-		switch k {
-		case "security_scan.trivy.critical":
-			fmt.Sscanf(vs, "%d", &data.CVECritical)
-		case "security_scan.trivy.high":
-			fmt.Sscanf(vs, "%d", &data.CVEHigh)
-		case "security_scan.trivy.medium":
-			fmt.Sscanf(vs, "%d", &data.CVEMedium)
-		case "security_scan.trivy.low":
-			fmt.Sscanf(vs, "%d", &data.CVELow)
-		case "security_scan.lynis.score":
-			fmt.Sscanf(vs, "%d", &data.HardeningScore)
-		}
-		// Collect listening ports.
-		if strings.HasPrefix(k, "network.listening.") && strings.HasSuffix(k, ".port") {
-			prefix := strings.TrimSuffix(k, ".port")
-			data.Ports = append(data.Ports, PortEntry{
-				Port:     vs,
-				Protocol: traitStr(prefix + ".protocol"),
-				Process:  traitStr(prefix + ".process"),
-			})
+		if envoy, qErr := h.queries.GetEnvoyByID(r.Context(), idStr); qErr == nil {
+			revoked = envoy.Revoked != 0
 		}
 	}
 
+	er := risk.ScoreEnvoy(risk.EnvoyInput{
+		ID:                idStr,
+		Hostname:          detail.Envoy.Hostname,
+		Revoked:           revoked,
+		LastSeen:          detail.Envoy.LastSeen,
+		ConvergenceStatus: detail.Envoy.Status,
+		Traits:            flat,
+	}, h.baseInterval)
+
+	data := AttackSurfaceData{
+		Hostname:  detail.Envoy.Hostname,
+		RiskScore: er.Score,
+		RiskLevel: string(er.Level),
+		Factors:   er.Factors,
+	}
+
+	// Headline counts read the same deduped trait keys the scorer reads,
+	// so the per-severity badges agree with the points contributed by
+	// the "Critical CVEs" / "High CVEs" / "Medium CVEs" risk factors.
+	data.CVECritical = atoiTrait(flat, "security_scan.unique_critical")
+	data.CVEHigh = atoiTrait(flat, "security_scan.unique_high")
+	data.CVEMedium = atoiTrait(flat, "security_scan.unique_medium")
+	data.CVELow = atoiTrait(flat, "security_scan.unique_low")
+	data.HardeningScore = atoiTrait(flat, "security_scan.lynis.score")
+
+	for k, v := range flat {
+		if strings.HasPrefix(k, "ports.listening.") {
+			data.Ports = append(data.Ports, v)
+		}
+	}
+	sort.Slice(data.Ports, func(i, j int) bool {
+		// Numeric sort so 22, 80, 443, 8080 read in order rather than
+		// lexicographically (which would put 8080 before 80).
+		ai, _ := strconv.Atoi(data.Ports[i])
+		bi, _ := strconv.Atoi(data.Ports[j])
+		return ai < bi
+	})
 	data.ListeningPorts = len(data.Ports)
+
 	data.Vulnerabilities = data.CVECritical+data.CVEHigh+data.CVEMedium+data.CVELow > 0
-	data.HasData = data.Vulnerabilities || data.HardeningScore > 0 || len(data.Ports) > 0
-
-	// Compute risk score: weighted sum.
-	data.RiskScore = data.CVECritical*10 + data.CVEHigh*5 + data.CVEMedium*2 + data.CVELow
-	if data.HardeningScore > 0 && data.HardeningScore < 50 {
-		data.RiskScore += 20
-	}
-	data.RiskScore += len(data.Ports) // each open port adds 1
-
-	switch {
-	case data.RiskScore >= 50:
-		data.RiskLevel = "critical"
-	case data.RiskScore >= 20:
-		data.RiskLevel = "high"
-	case data.RiskScore >= 5:
-		data.RiskLevel = "medium"
-	default:
-		data.RiskLevel = "low"
-	}
+	data.HasData = data.RiskScore > 0 || data.Vulnerabilities || data.HardeningScore > 0 || len(data.Ports) > 0
 
 	h.renderer.RenderFragment(w, "envoy-detail", "envoy-attack-surface-fragment", data)
+}
+
+// buildFlatTraits loads the latest trait snapshot for an envoy and
+// flattens it into the map[string]string shape risk.ScoreEnvoy consumes.
+// Returns an empty (non-nil) map on any error so callers can index it
+// without nil-checks.
+func buildFlatTraits(ctx context.Context, q *db.Queries, envoyID string) map[string]string {
+	out := make(map[string]string)
+	if q == nil {
+		return out
+	}
+	cf, err := q.GetLatestEnvoyTraits(ctx, envoyID)
+	if err != nil {
+		return out
+	}
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(cf.Traits), &raw); err != nil {
+		return out
+	}
+	tmp := make(map[string]any)
+	flattenTraits("", raw, tmp)
+	for k, v := range tmp {
+		out[k] = fmt.Sprintf("%v", v)
+	}
+	return out
+}
+
+func atoiTrait(traits map[string]string, key string) int {
+	if v, ok := traits[key]; ok {
+		n, _ := strconv.Atoi(v)
+		return n
+	}
+	return 0
 }
 
 // EnvoyComplianceFragment renders the compliance frameworks tab for an envoy.

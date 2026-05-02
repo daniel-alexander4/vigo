@@ -320,17 +320,35 @@
     </div>
 </div>
 
-{{if .Ports}}
-<h3 class="section-heading">Listening Ports</h3>
+{{if .Factors}}
+<h3 class="section-heading">Risk Factors</h3>
+<p class="text-muted" style="font-size:12px;margin-bottom:8px;">Same breakdown that drives this envoy's row on <a href="/risk">/risk</a>. Points sum to the score above.</p>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Port</th><th>Protocol</th><th>Process</th></tr></thead>
+        <thead><tr><th>Factor</th><th>Points</th><th>Detail</th></tr></thead>
+        <tbody>
+            {{range .Factors}}
+            <tr>
+                <td>{{.Name}}</td>
+                <td class="mono">{{.Points}}</td>
+                <td class="text-muted">{{.Detail}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+{{if .Ports}}
+<h3 class="section-heading">Listening Ports</h3>
+<p class="text-muted" style="font-size:12px;margin-bottom:8px;">From the agent's <code>ports.listening</code> trait — same source counted by the Open Ports risk factor.</p>
+<div class="table-container">
+    <table class="table">
+        <thead><tr><th>Port</th></tr></thead>
         <tbody>
             {{range .Ports}}
             <tr>
-                <td class="mono">{{.Port}}</td>
-                <td>{{.Protocol}}</td>
-                <td>{{.Process}}</td>
+                <td class="mono">{{.}}</td>
             </tr>
             {{end}}
         </tbody>
@@ -340,10 +358,10 @@
 
 {{if .Vulnerabilities}}
 <h3 class="section-heading">Vulnerability Summary</h3>
-<p class="text-muted" style="font-size:12px;margin-bottom:8px;">Raw scanner findings — the same CVE may appear multiple times if it affects more than one package.</p>
+<p class="text-muted" style="font-size:12px;margin-bottom:8px;">Unique CVE counts after cross-scanner dedup — the same numbers consumed by the Critical / High / Medium CVE risk factors above.</p>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Severity</th><th>Findings</th></tr></thead>
+        <thead><tr><th>Severity</th><th>Unique CVEs</th></tr></thead>
         <tbody>
             {{if .CVECritical}}<tr><td class="text-danger">Critical</td><td>{{.CVECritical}}</td></tr>{{end}}
             {{if .CVEHigh}}<tr><td class="text-warning">High</td><td>{{.CVEHigh}}</td></tr>{{end}}
