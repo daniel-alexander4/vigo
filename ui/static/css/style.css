@@ -786,6 +786,25 @@ a.dash-column--link:focus-visible {
     border-left-color: var(--color-brand);
 }
 
+/* Linkable stat-cards (envoy attack-surface tab). The card is rendered
+   as an <a>; strip the default underline, keep the text colors from the
+   children, and lift on hover so the affordance matches a card. The
+   subtle border-color shift on hover signals the card is interactive
+   without screaming about it. */
+.stat-card--link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+    cursor: pointer;
+}
+.stat-card--link:hover {
+    border-left-color: var(--color-brand);
+}
+.stat-card--link:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+}
+
 .stat-card__value {
     font-size: 32px;
     font-weight: 700;

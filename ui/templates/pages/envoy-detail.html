@@ -293,43 +293,43 @@
 {{end}}
 
 {{define "envoy-attack-surface-fragment"}}
-<div class="stat-cards" style="margin-bottom:20px;">
-    <div class="stat-card">
+<div class="stat-cards stat-cards--linkable" style="margin-bottom:20px;">
+    <a href="{{.RiskURL}}" class="stat-card stat-card--link" title="See other envoys at this risk level">
         <div class="stat-card__value {{if eq .RiskLevel "critical"}}text-danger{{else if eq .RiskLevel "high"}}text-warning{{else}}text-success{{end}}">{{.RiskLevel}}</div>
         <div class="stat-card__label">Risk Level</div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a href="{{.RiskURL}}" class="stat-card stat-card--link" title="See other envoys at this risk level">
         <div class="stat-card__value">{{.RiskScore}}</div>
         <div class="stat-card__label">Risk Score</div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a href="{{.CVECriticalURL}}" class="stat-card stat-card--link" title="Critical CVEs across the fleet">
         <div class="stat-card__value text-danger">{{.CVECritical}}</div>
         <div class="stat-card__label">Critical CVEs</div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a href="{{.CVEHighURL}}" class="stat-card stat-card--link" title="High CVEs across the fleet">
         <div class="stat-card__value text-warning">{{.CVEHigh}}</div>
         <div class="stat-card__label">High CVEs</div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a href="{{.HardeningURL}}" class="stat-card stat-card--link" title="Hardening scores across the fleet">
         <div class="stat-card__value">{{.HardeningScore}}</div>
         <div class="stat-card__label">Hardening</div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a href="#attack-surface-ports" class="stat-card stat-card--link" title="Jump to the listening ports table">
         <div class="stat-card__value">{{.ListeningPorts}}</div>
         <div class="stat-card__label">Open Ports</div>
-    </div>
+    </a>
 </div>
 
 {{if .Factors}}
 <h3 class="section-heading">Risk Factors</h3>
-<p class="text-muted" style="font-size:12px;margin-bottom:8px;">Same breakdown that drives this envoy's row on <a href="/risk">/risk</a>. Points sum to the score above.</p>
+<p class="text-muted" style="font-size:12px;margin-bottom:8px;">Same breakdown that drives this envoy's row on <a href="/risk">/risk</a>. Points sum to the score above. Each factor links to the page where the supporting evidence lives.</p>
 <div class="table-container">
     <table class="table">
         <thead><tr><th>Factor</th><th>Points</th><th>Detail</th></tr></thead>
         <tbody>
             {{range .Factors}}
             <tr>
-                <td>{{.Name}}</td>
+                <td>{{if .URL}}<a href="{{.URL}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</td>
                 <td class="mono">{{.Points}}</td>
                 <td class="text-muted">{{.Detail}}</td>
             </tr>
@@ -340,7 +340,7 @@
 {{end}}
 
 {{if .Ports}}
-<h3 class="section-heading">Listening Ports</h3>
+<h3 class="section-heading" id="attack-surface-ports">Listening Ports</h3>
 <p class="text-muted" style="font-size:12px;margin-bottom:8px;">From the agent's <code>ports.listening</code> trait — same source counted by the Open Ports risk factor.</p>
 <div class="table-container">
     <table class="table">
@@ -358,13 +358,13 @@
 
 {{if .Vulnerabilities}}
 <h3 class="section-heading">Vulnerability Summary</h3>
-<p class="text-muted" style="font-size:12px;margin-bottom:8px;">Unique CVE counts after cross-scanner dedup — the same numbers consumed by the Critical / High / Medium CVE risk factors above.</p>
+<p class="text-muted" style="font-size:12px;margin-bottom:8px;">Unique CVE counts after cross-scanner dedup — the same numbers consumed by the Critical / High / Medium CVE risk factors above. Severities with a fleet-wide drill-down on <a href="/security">/security</a> are linked.</p>
 <div class="table-container">
     <table class="table">
         <thead><tr><th>Severity</th><th>Unique CVEs</th></tr></thead>
         <tbody>
-            {{if .CVECritical}}<tr><td class="text-danger">Critical</td><td>{{.CVECritical}}</td></tr>{{end}}
-            {{if .CVEHigh}}<tr><td class="text-warning">High</td><td>{{.CVEHigh}}</td></tr>{{end}}
+            {{if .CVECritical}}<tr><td class="text-danger"><a href="{{.CVECriticalURL}}">Critical</a></td><td>{{.CVECritical}}</td></tr>{{end}}
+            {{if .CVEHigh}}<tr><td class="text-warning"><a href="{{.CVEHighURL}}">High</a></td><td>{{.CVEHigh}}</td></tr>{{end}}
             {{if .CVEMedium}}<tr><td>Medium</td><td>{{.CVEMedium}}</td></tr>{{end}}
             {{if .CVELow}}<tr><td class="text-muted">Low</td><td>{{.CVELow}}</td></tr>{{end}}
         </tbody>

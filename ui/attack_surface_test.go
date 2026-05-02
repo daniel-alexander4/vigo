@@ -113,3 +113,51 @@ func formatFlat(v any) string {
 		return string(b)
 	}
 }
+
+// TestFactorDrillURL_CoversEveryRiskFactorName pins that every factor
+// name authored in server/risk/score.go has a drill-down URL mapped in
+// factorDrillURL. When a new factor is added to the canonical scorer,
+// this test fails until the UI map is updated, which keeps the
+// attack-surface tab from silently shipping plain-text rows where a
+// link should be.
+//
+// Open Ports and Offline are deliberately mapped to "" — the on-page
+// Listening Ports table and the Last Seen badge serve as the
+// destinations, so empty is correct.
+func TestFactorDrillURL_CoversEveryRiskFactorName(t *testing.T) {
+	const envoyID = "abc-123"
+
+	// Canonical list of factor names that risk.ScoreEnvoy can emit.
+	// Update this when adding a new factor in server/risk/score.go.
+	factorNames := []string{
+		"Critical CVEs",
+		"High CVEs",
+		"Medium CVEs",
+		"Hardening Gap",
+		"Rootkit (chkrootkit)",
+		"Rootkit (rkhunter)",
+		"Malware (ClamAV)",
+		"Integrity Breach (AIDE)",
+		"Open Ports",
+		"Expiring Certificates",
+		"Running CVEs",
+		"Relapsed",
+		"Diverged",
+		"Convergence Failed",
+		"Offline",
+	}
+	expectedEmpty := map[string]bool{"Open Ports": true, "Offline": true}
+
+	for _, name := range factorNames {
+		got := factorDrillURL(name, envoyID)
+		if expectedEmpty[name] {
+			if got != "" {
+				t.Errorf("factorDrillURL(%q) = %q, want empty (no canonical drill-down)", name, got)
+			}
+			continue
+		}
+		if got == "" {
+			t.Errorf("factorDrillURL(%q) = empty, want a drill-down URL", name)
+		}
+	}
+}

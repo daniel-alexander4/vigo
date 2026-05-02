@@ -4242,21 +4242,42 @@ type EnvoyStandardCoverageData struct {
 // canonical scorer that powers /risk and /api/v1/risk/{envoyID}. Display
 // counts (CVECritical etc.) come from the same flat trait map the scorer
 // reads, so the headline numbers and the underlying factor breakdown
-// always tell the same story.
+// always tell the same story. Each headline stat and factor row carries
+// a drill-down URL pointing at the page where an operator can see the
+// supporting evidence — fleet-wide /risk and /security panels for the
+// CVE / hardening / rootkit / malware / cert factors, /envoys/{id}/trace
+// for convergence factors.
 type AttackSurfaceData struct {
-	Hostname        string
-	RiskLevel       string
-	RiskScore       int
-	Factors         []risk.Factor
-	CVECritical     int
-	CVEHigh         int
-	CVEMedium       int
-	CVELow          int
-	HardeningScore  int
-	ListeningPorts  int
-	Ports           []string
-	Vulnerabilities bool
-	HasData         bool
+	Hostname           string
+	EnvoyID            string
+	RiskLevel          string
+	RiskScore          int
+	RiskURL            string
+	Factors            []AttackFactor
+	CVECritical        int
+	CVECriticalURL     string
+	CVEHigh            int
+	CVEHighURL         string
+	CVEMedium          int
+	CVEMediumURL       string
+	CVELow             int
+	CVELowURL          string
+	HardeningScore     int
+	HardeningURL       string
+	ListeningPorts     int
+	Ports              []string
+	Vulnerabilities    bool
+	HasData            bool
+}
+
+// AttackFactor wraps a [risk.Factor] with a drill-down URL pointing at
+// the fleet-wide page that lists the supporting evidence for the factor
+// name (e.g. Critical CVEs → /security#sec-panel-critical). URL is
+// empty for factor types with no canonical drill-down today (Offline,
+// Open Ports — the on-page Listening Ports table is the destination).
+type AttackFactor struct {
+	risk.Factor
+	URL string
 }
 
 // EnvoyAttackSurfaceFragment renders the attack surface tab for an envoy.
@@ -4342,10 +4363,19 @@ func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Requ
 	}, h.baseInterval)
 
 	data := AttackSurfaceData{
-		Hostname:  detail.Envoy.Hostname,
-		RiskScore: er.Score,
-		RiskLevel: string(er.Level),
-		Factors:   er.Factors,
+		Hostname:       detail.Envoy.Hostname,
+		EnvoyID:        idStr,
+		RiskScore:      er.Score,
+		RiskLevel:      string(er.Level),
+		RiskURL:        "/risk?level=" + string(er.Level),
+		Factors:        attackFactorsWithLinks(er.Factors, idStr),
+		CVECriticalURL: "/security#sec-panel-critical",
+		CVEHighURL:     "/security#sec-panel-high",
+		// /security only surfaces dedicated panels for critical and
+		// high CVEs — medium/low aren't broken out, so we leave the
+		// drill-down URL empty for those and the template renders a
+		// plain count.
+		HardeningURL: "/security#sec-panel-lynis",
 	}
 
 	// Headline counts read the same deduped trait keys the scorer reads,
@@ -4408,6 +4438,49 @@ func atoiTrait(traits map[string]string, key string) int {
 		return n
 	}
 	return 0
+}
+
+// attackFactorsWithLinks decorates each [risk.Factor] with the URL where
+// an operator can drill into the supporting evidence. Factor names are
+// authored in server/risk/score.go — keep this map in sync when new
+// factor types are added there. Empty URL means "no canonical
+// drill-down" and the template renders the factor name as plain text.
+func attackFactorsWithLinks(factors []risk.Factor, envoyID string) []AttackFactor {
+	out := make([]AttackFactor, len(factors))
+	for i, f := range factors {
+		out[i] = AttackFactor{Factor: f, URL: factorDrillURL(f.Name, envoyID)}
+	}
+	return out
+}
+
+func factorDrillURL(name, envoyID string) string {
+	switch name {
+	case "Critical CVEs":
+		return "/security#sec-panel-critical"
+	case "High CVEs":
+		return "/security#sec-panel-high"
+	case "Medium CVEs":
+		// /security has no dedicated medium panel; send operators to
+		// the top of the page for fleet-wide context.
+		return "/security"
+	case "Hardening Gap":
+		return "/security#sec-panel-lynis"
+	case "Rootkit (chkrootkit)", "Rootkit (rkhunter)":
+		return "/security#sec-panel-rootkit"
+	case "Malware (ClamAV)":
+		return "/security#sec-panel-malware"
+	case "Integrity Breach (AIDE)":
+		return "/security#sec-panel-integrity"
+	case "Expiring Certificates":
+		return "/security/certs/" + envoyID
+	case "Running CVEs":
+		return "/security#sec-panel-critical"
+	case "Relapsed", "Diverged", "Convergence Failed":
+		return "/envoys/" + envoyID + "/trace"
+	}
+	// Open Ports, Offline — no canonical drill-down, on-page detail
+	// (Listening Ports table, Last Seen badge) is the destination.
+	return ""
 }
 
 // EnvoyComplianceFragment renders the compliance frameworks tab for an envoy.
