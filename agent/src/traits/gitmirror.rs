@@ -352,6 +352,7 @@ mod tests {
             dr_fanout: DrFanout::FleetWide,
             cross_subnet_members: vec![],
             updated_at: 1_700_000_000,
+            tombstoned_at: None,
         };
         cfg.save(home).unwrap();
         pid
@@ -398,6 +399,7 @@ mod tests {
             dr_fanout: DrFanout::MembersOnly,
             cross_subnet_members: vec![],
             updated_at: 1_700_000_000,
+            tombstoned_at: None,
         };
         cfg.save(&dan_home).unwrap();
         cfg.save(&alice_home).unwrap();

@@ -464,6 +464,20 @@ fn authorize(home: &Path, project_id: &[u8; ID_LEN]) -> Result<TokenChain> {
     let cfg = ProjectConfig::load(home, project_id)
         .with_context(|| format!("loading project.json for {}", super::project_state::hex_id(project_id)))?
         .ok_or_else(|| anyhow!("no project.json — has this user joined the project?"))?;
+    // ADR-019 slice 5: tombstoned projects are archive-only. Refuse
+    // both fetch and push at the helper-daemon authorization gate.
+    // Operator's path forward is `gitmirror project re-found <handle>`
+    // (mints a fresh project_id and byte-migrates) or `project leave`.
+    if let Some(when) = cfg.tombstoned_at {
+        bail!(
+            "project '{}' is tombstoned (since unix-ts {}); helper daemon refuses git \
+             operations. Run `vigo swarm gitmirror project re-found {}` to mint a fresh \
+             project_id and migrate.",
+            cfg.handle,
+            when,
+            cfg.handle
+        );
+    }
     let founder = parse_hex_id(&cfg.founder_fleet_pubkey)
         .context("project.json founder_fleet_pubkey is not valid hex")?;
 

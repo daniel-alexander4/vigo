@@ -223,6 +223,21 @@ pub struct ProjectConfig {
     /// reconciling concurrent membership edits.
     #[serde(default)]
     pub updated_at: i64,
+    /// ADR-019 slice 5: unix seconds when this project was tombstoned.
+    /// Set by:
+    /// - `--force-orphan-projects` on `self-fleet rekey-pair` / `rekey`
+    ///   when a founded project's delegation chain is at cap and the
+    ///   operator chose to proceed with the rotation rather than
+    ///   re-found beforehand.
+    /// - `vigo swarm gitmirror project re-found <handle>` on the OLD
+    ///   project after a fresh project_id has been minted.
+    ///
+    /// Tombstoned projects keep their bare repo + URL on disk (the
+    /// data is still valuable as an archive), but the helper daemon
+    /// refuses new admin operations and `cmd_invite` /
+    /// `cmd_re_invite_all` skip them. Absent / null = active project.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tombstoned_at: Option<i64>,
 }
 
 fn default_version() -> u32 {
@@ -598,6 +613,7 @@ mod tests {
             dr_fanout: DrFanout::FleetWide,
             cross_subnet_members: vec![],
             updated_at: 1_744_560_000,
+            tombstoned_at: None,
         }
     }
 

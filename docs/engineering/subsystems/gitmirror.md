@@ -96,7 +96,18 @@ struct PushChain {
 
 `encode_chain_header(chain, delegations)` and `decode_chain_header()` round-trip this shape; the decoder also tolerates pre-ADR-019 senders that emitted bare `TokenChain` JSON via a fallback path. `verify_chain_for_push` threads sender-presented delegations into `verify_chain`. Acceptable because gitmirror's threat model is *availability*, not confidentiality — an attacker who has compromised a retired founder key could push junk to bare repos but cannot exfiltrate user-readable bytes (cryptsync owns confidentiality). Authoritative trust still flows through OOB cap codes at rejoin time.
 
-**Shipping cadence.** Slices 1–4 in tree at 0.35.18–0.35.21 (data layer; chained verifier with authority windows; rekey-time hooks + status surface + `--force-orphan-projects`; multi-fleet `re-invite-all` + `rejoin` + `PushChain` wire format). Slice 5 (`project re-found` escape hatch when the chain hits cap + the formal ADR document) pending.
+**Re-found escape hatch (slice 5).** Once a project's delegation chain hits `DELEGATION_MAX_LEN`, the founder runs `vigo swarm gitmirror project re-found <handle>`. This:
+
+1. Refuses unless the calling user IS the current founder (predicate matches `re-invite-all`'s).
+2. Refuses unless chain is at cap, project is tombstoned, or `--force` is passed.
+3. Refuses if the founder hasn't rekeyed since founding (new `project_id = sha256(current_fleet_pubkey)` would collide with the old).
+4. Mints a fresh founder bootstrap admin token under the current fleet identity, persists `project.json` + `tokens.json` under the new project_id with `members: [this_fleet]`.
+5. Byte-migrates from the old bare repo via `git -C <new_repo> fetch <old_repo> +refs/*:refs/*` (root-only; non-root prints a note).
+6. Tombstones the old project on disk: `project.json::tombstoned_at = unix_ts`. Tombstoned projects keep their bare repo + URL on disk as an archive — helper daemon refuses git operations against them, CLI verbs (`invite`, `revoke`, `re-invite-all`) skip them, `project status` flags them with a warning banner. `--force-orphan-projects` on `rekey-pair` also writes the tombstone marker, so projects past the cap can be left behind during a rekey rather than blocking it.
+
+URLs change at re-found (this is the one place in the design where they do). Cross-fleet members must update their remotes to the new project_id and run a fresh `rejoin` ceremony — the founder typically runs `re-invite-all <new_pid>` immediately after re-found to mint the invitations.
+
+**Shipping cadence.** Five slices in tree at 0.35.18–0.35.22: data layer; chained verifier with authority windows; rekey-time hooks + `--force-orphan-projects`; multi-fleet `re-invite-all` + `rejoin` + `PushChain` wire format; `re-found` escape hatch + tombstone marker + the formal [ADR-019 document](../../adr/019-gitmirror-founder-rekey.md).
 
 Below describes the legacy publish-and-claim model retained as historical context. The corresponding agent code (`reactor.rs`, `publisher.rs`, `source.rs`, `sidecar.rs`, `lan_selector.rs`, `pending_claims.rs`, `cross_subnet_mirrors.rs`, `path_guard.rs`) was deleted in step 3.
 

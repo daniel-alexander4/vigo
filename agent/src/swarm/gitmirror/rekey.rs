@@ -220,16 +220,26 @@ pub fn apply_post_rotation_gitmirror_sync(
                 }
                 Ok(SignResult::ForceOrphaned) => {
                     // chain at cap, force_orphan_projects honored —
-                    // record as a failure for visibility but don't
-                    // propagate as Err so the rest of the sweep
-                    // continues.
-                    outcome.failures.push((
-                        cfg.handle.clone(),
-                        format!(
-                            "project at delegation cap ({}/{}); marked orphaned by --force-orphan-projects",
-                            DELEGATION_MAX_LEN, DELEGATION_MAX_LEN
-                        ),
-                    ));
+                    // mark the project tombstoned on disk and record
+                    // as a failure for visibility (doesn't propagate
+                    // as Err so the rest of the sweep continues).
+                    if let Err(e) = mark_tombstoned(home, &cfg, delegated_at) {
+                        outcome.failures.push((
+                            cfg.handle.clone(),
+                            format!(
+                                "project at delegation cap ({}/{}); failed to mark tombstoned: {:#}",
+                                DELEGATION_MAX_LEN, DELEGATION_MAX_LEN, e
+                            ),
+                        ));
+                    } else {
+                        outcome.failures.push((
+                            cfg.handle.clone(),
+                            format!(
+                                "project at delegation cap ({}/{}); marked tombstoned by --force-orphan-projects (run `gitmirror project re-found {}` to mint a fresh project_id and migrate)",
+                                DELEGATION_MAX_LEN, DELEGATION_MAX_LEN, cfg.handle
+                            ),
+                        ));
+                    }
                 }
                 Err(e) => {
                     outcome.failures.push((cfg.handle.clone(), format!("{:#}", e)));
@@ -266,12 +276,23 @@ pub fn apply_post_rotation_gitmirror_sync(
 
         // 2. Member-of: rewrite project.json members entry OLD → NEW.
         // Applies to founded projects too (founder appears in members).
-        match update_member_entry(home, &cfg, &old_pubkey_hex, &new_pubkey_hex) {
-            Ok(true) => outcome.members_updated.push(cfg.handle.clone()),
-            Ok(false) => outcome.members_unchanged.push(cfg.handle.clone()),
-            Err(e) => outcome
-                .failures
-                .push((cfg.handle.clone(), format!("members[] rewrite: {:#}", e))),
+        // ADR-019 slice 5: tombstoned projects are frozen archives —
+        // skip the member rewrite so we don't clobber the tombstone
+        // marker mark_tombstoned just wrote (the in-memory `cfg` is
+        // stale at this point).
+        let still_active = ProjectConfig::load(home, &pid)
+            .ok()
+            .flatten()
+            .map(|c| c.tombstoned_at.is_none())
+            .unwrap_or(true);
+        if still_active {
+            match update_member_entry(home, &cfg, &old_pubkey_hex, &new_pubkey_hex) {
+                Ok(true) => outcome.members_updated.push(cfg.handle.clone()),
+                Ok(false) => outcome.members_unchanged.push(cfg.handle.clone()),
+                Err(e) => outcome
+                    .failures
+                    .push((cfg.handle.clone(), format!("members[] rewrite: {:#}", e))),
+            }
         }
     }
 
@@ -347,6 +368,22 @@ fn append_delegation(
         .with_context(|| format!("appending delegation for {}", cfg.handle))?;
     let in_warn_band = chain.is_in_warn_band();
     Ok(SignResult::Signed { in_warn_band })
+}
+
+/// Set `project.json::tombstoned_at` on a project that the rekey
+/// flow has decided to leave behind (chain-at-cap +
+/// `--force-orphan-projects`). The bare repo + URL stay on disk; the
+/// helper daemon and CLI verbs honor the tombstone marker by
+/// refusing new admin operations until the operator runs
+/// `gitmirror project re-found <handle>`.
+fn mark_tombstoned(home: &Path, cfg: &ProjectConfig, when: i64) -> Result<()> {
+    let mut updated = cfg.clone();
+    updated.tombstoned_at = Some(when);
+    updated.updated_at = when;
+    updated
+        .save(home)
+        .with_context(|| format!("saving tombstoned project.json for {}", cfg.handle))?;
+    Ok(())
 }
 
 fn update_member_entry(
@@ -576,6 +613,7 @@ mod tests {
             dr_fanout: super::super::project_state::DrFanout::FleetWide,
             cross_subnet_members: vec![],
             updated_at: 1_700_000_000,
+            tombstoned_at: None,
         };
         cfg.save(home).unwrap();
         // Persist a real bootstrap token chain so rebuild_tokens_json
@@ -708,6 +746,7 @@ mod tests {
             dr_fanout: super::super::project_state::DrFanout::MembersOnly,
             cross_subnet_members: vec![],
             updated_at: 1_700_000_000,
+            tombstoned_at: None,
         };
         cfg.save(home.path()).unwrap();
         write_identity_pub(home.path(), &old);
@@ -753,6 +792,7 @@ mod tests {
             dr_fanout: super::super::project_state::DrFanout::MembersOnly,
             cross_subnet_members: vec![],
             updated_at: 1_700_000_000,
+            tombstoned_at: None,
         };
         cfg.save(home.path()).unwrap();
         write_identity_pub(home.path(), &old);
@@ -931,7 +971,7 @@ mod tests {
     }
 
     #[test]
-    fn apply_post_rotation_at_cap_with_force_orphan_records_orphan_failure() {
+    fn apply_post_rotation_at_cap_with_force_orphan_marks_tombstoned() {
         let home = tempdir().unwrap();
         let (_founder, last_signing_key, pid) =
             setup_chain_at_cap(home.path(), "alpha");
@@ -946,17 +986,26 @@ mod tests {
             true, // force_orphan_projects
         )
         .unwrap();
-        // Orphaned: appears in failures with the "marked orphaned"
-        // message but doesn't propagate as Err.
+        // ADR-019 slice 5: --force-orphan-projects now writes the
+        // tombstone marker to project.json. Failure message points
+        // the operator at `re-found` as the next step.
         assert_eq!(outcome.failures.len(), 1);
         assert!(
-            outcome.failures[0].1.contains("orphaned"),
-            "expected 'orphaned' in failure msg, got: {}",
+            outcome.failures[0].1.contains("tombstoned"),
+            "expected 'tombstoned' in failure msg, got: {}",
+            outcome.failures[0].1
+        );
+        assert!(
+            outcome.failures[0].1.contains("re-found"),
+            "expected 're-found' hint in failure msg, got: {}",
             outcome.failures[0].1
         );
         // Chain unchanged on disk.
         let chain_now = DelegationChain::load(home.path(), &pid).unwrap().unwrap();
         assert_eq!(chain_now.delegations.len(), DELEGATION_MAX_LEN);
+        // project.json now carries the tombstone marker.
+        let cfg = ProjectConfig::load(home.path(), &pid).unwrap().unwrap();
+        assert_eq!(cfg.tombstoned_at, Some(1_700_000_999));
     }
 
     #[test]

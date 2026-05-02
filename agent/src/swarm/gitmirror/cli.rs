@@ -87,6 +87,10 @@ fn dispatch_project(args: &[String]) -> Result<()> {
         // ADR-019 slice 4 — multi-fleet rejoin support after a founder rekey.
         "re-invite-all" => cmd_re_invite_all(&args[1..]),
         "rejoin" => cmd_rejoin(&args[1..]),
+        // ADR-019 slice 5 — escape hatch when a project's delegation
+        // chain is at cap. Mints a fresh project_id from the current
+        // fleet pubkey, byte-migrates, tombstones the old one.
+        "re-found" => cmd_re_found(&args[1..]),
         other => bail!(
             "unknown subcommand `vigo swarm gitmirror project {}`. \
              Run `vigo swarm gitmirror project --help` for usage.",
@@ -162,6 +166,18 @@ VERBS:
         delegation chain in place without bailing on existing
         membership. Required when the founder of a multi-fleet
         project you are a member of has rekeyed and re-invited you.
+
+    re-found <project_id> [--force]
+        ADR-019. Escape hatch when a founded project's delegation
+        chain is at the cap (DELEGATION_MAX_LEN = 5) or has been
+        tombstoned by a --force-orphan-projects rekey. Mints a fresh
+        project_id from the current fleet pubkey, byte-migrates
+        from the at-cap bare repo via the same logic `reanchor`
+        uses, and tombstones the old project. URL changes — every
+        member must update their remote and rejoin under the new
+        project_id (founder runs `re-invite-all <new_pid>` next).
+        Pass --force to re-found a project below cap (manual
+        chain-hygiene reset).
 "
     );
 }
@@ -326,6 +342,28 @@ struct Invitation {
 
 const INVITATION_VERSION: u32 = 1;
 
+/// Refuse a mutating verb on a tombstoned project. Tombstoned
+/// projects (`project.json::tombstoned_at` set, by either
+/// `--force-orphan-projects` rekey or `re-found`) keep their bare
+/// repo + URL on disk as an archive but reject new admin operations.
+/// Operator's path forward is `re-found` (mints a fresh project_id
+/// and migrates) or `project leave` (drops the archive).
+fn refuse_if_tombstoned(cfg: &ProjectConfig, verb: &str) -> Result<()> {
+    if let Some(when) = cfg.tombstoned_at {
+        bail!(
+            "project '{}' is tombstoned (since unix-ts {}); refusing `{}`. \
+             Run `vigo swarm gitmirror project re-found {}` to mint a fresh \
+             project_id and migrate, or `project leave {}` to drop the archive.",
+            cfg.handle,
+            when,
+            verb,
+            cfg.handle,
+            cfg.project_id
+        );
+    }
+    Ok(())
+}
+
 // ============================================================
 // project init
 // ============================================================
@@ -398,6 +436,7 @@ fn cmd_init(args: &[String]) -> Result<()> {
         dr_fanout: fanout,
         cross_subnet_members: vec![],
         updated_at: now,
+        tombstoned_at: None,
     };
     cfg.save(&caller.home)?;
     let chain = TokenChain {
@@ -492,6 +531,7 @@ fn cmd_invite(args: &[String]) -> Result<()> {
     let project_id = resolve_project_id(&caller.home, &project_arg)?;
     let cfg = ProjectConfig::load(&caller.home, &project_id)?
         .ok_or_else(|| anyhow!("not a member of project {}", hex_id(&project_id)))?;
+    refuse_if_tombstoned(&cfg, "invite")?;
 
     // Caller's leaf token must be Admin to mint a child.
     let chain = TokenChain::load(&caller.home, &project_id)?
@@ -794,6 +834,14 @@ fn cmd_re_invite_all(args: &[String]) -> Result<()> {
     for cfg in projects {
         let pid = parse_hex_id(&cfg.project_id)
             .with_context(|| format!("project_id hex for {}", cfg.handle))?;
+
+        // Skip tombstoned projects — they're frozen archives; the
+        // founder needs to re-found them (mints a new project_id)
+        // before issuing fresh invitations. `re-invite-all` against
+        // the new project_id is the right next step.
+        if cfg.tombstoned_at.is_some() {
+            continue;
+        }
 
         // Founded by us? The founder predicate uses the same logic
         // as rekey.rs: project.founder_fleet_pubkey is in our
@@ -1276,6 +1324,17 @@ fn cmd_status(args: &[String]) -> Result<()> {
     println!("Project ID:        {}", cfg.project_id);
     println!("Founder:           ed25519:{}", cfg.founder_fleet_pubkey);
     println!("Fan-out:           {}", cfg.dr_fanout.as_str());
+    if let Some(when) = cfg.tombstoned_at {
+        println!("⚠ TOMBSTONED:      since unix-ts {}", when);
+        println!(
+            "                   Run `gitmirror project re-found {}` to mint a fresh project_id, or",
+            cfg.handle
+        );
+        println!(
+            "                   `project leave {}` to drop the archive.",
+            cfg.project_id
+        );
+    }
     println!("Members:           {}", cfg.members.len());
     for m in &cfg.members {
         println!("  ed25519:{}", m);
@@ -1378,6 +1437,7 @@ fn cmd_revoke(args: &[String]) -> Result<()> {
     let project_id = resolve_project_id(&caller.home, &project_arg)?;
     let cfg = ProjectConfig::load(&caller.home, &project_id)?
         .ok_or_else(|| anyhow!("not a member of project {}", hex_id(&project_id)))?;
+    refuse_if_tombstoned(&cfg, "revoke")?;
 
     // Caller's leaf must be Admin to revoke.
     let chain = TokenChain::load(&caller.home, &project_id)?
@@ -1519,6 +1579,7 @@ To proceed, type the project handle exactly: {}",
         dr_fanout: cfg.dr_fanout,
         cross_subnet_members: cfg.cross_subnet_members.clone(),
         updated_at: now,
+        tombstoned_at: None,
     };
     new_cfg.save(&caller.home)?;
     let new_chain = TokenChain {
@@ -1602,6 +1663,257 @@ To proceed, type the project handle exactly: {}",
              hex_id(&new_project_id));
     println!("  • The old project state at {} is left in place — drop it via `project leave {}` once you confirm the new project is healthy.",
              cfg.project_id, cfg.project_id);
+    Ok(())
+}
+
+// ============================================================
+// project re-found (ADR-019 slice 5)
+// ============================================================
+
+/// Escape hatch when a founded project's delegation chain is at
+/// `DELEGATION_MAX_LEN` (or has been tombstoned by a
+/// `--force-orphan-projects` rekey). Mints a fresh project_id from
+/// the current fleet pubkey, byte-migrates from the at-cap bare repo
+/// via the same `git fetch +refs/*:refs/*` path `reanchor` uses, and
+/// tombstones the old project_id.
+///
+/// Differs from `reanchor`:
+/// - `reanchor` is for surviving members taking over after the
+///   original founder fleet is *gone*. Refuses if the calling user
+///   IS the current founder.
+/// - `re-found` is for the founder themselves resetting their own
+///   project chain. REQUIRES that the calling user is the current
+///   founder (chain.last().new_founder_pubkey or
+///   founder_fleet_pubkey, depending on whether the founder has
+///   rekeyed).
+fn cmd_re_found(args: &[String]) -> Result<()> {
+    let mut project_arg: Option<String> = None;
+    let mut force = false;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--force" => force = true,
+            other if !other.starts_with('-') && project_arg.is_none() => {
+                project_arg = Some(other.to_string());
+            }
+            other => bail!("unknown re-found flag: {}", other),
+        }
+        i += 1;
+    }
+    let project_arg = project_arg
+        .context("usage: vigo swarm gitmirror project re-found <project_id> [--force]")?;
+
+    let caller = resolve_caller()?;
+    let local_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    let project_id = resolve_project_id(&caller.home, &project_arg)?;
+    let cfg = ProjectConfig::load(&caller.home, &project_id)?
+        .ok_or_else(|| anyhow!("not a member of project {}", hex_id(&project_id)))?;
+
+    // Caller must be the project's current founder. Predicate matches
+    // re-invite-all's: chain.last().new_founder_pubkey if there are
+    // delegations, else founder_fleet_pubkey.
+    let delegations = DelegationChain::load(&caller.home, &project_id)?
+        .map(|c| c.delegations)
+        .unwrap_or_default();
+    let current_founder_hex: String = if let Some(last) = delegations.last() {
+        last.new_founder_pubkey.to_ascii_lowercase()
+    } else {
+        cfg.founder_fleet_pubkey.to_ascii_lowercase()
+    };
+    if current_founder_hex != hex_id(&local_pub).to_ascii_lowercase() {
+        bail!(
+            "this user is not the current founder of project '{}' — re-found is for founders \
+             resetting their own project chain. Use `reanchor` if the original founder fleet \
+             is gone and you're a surviving member taking over.",
+            cfg.handle
+        );
+    }
+
+    // Precondition: chain at cap, project tombstoned, or --force.
+    let at_cap = delegations.len() >= super::envelopes::DELEGATION_MAX_LEN;
+    let tombstoned = cfg.tombstoned_at.is_some();
+    if !at_cap && !tombstoned && !force {
+        bail!(
+            "project '{}' is not at the delegation cap ({}/{}); re-found is normally only \
+             needed when the chain has hit cap or the project has been tombstoned by \
+             --force-orphan-projects. Pass --force to re-found anyway (manual \
+             chain-hygiene reset).",
+            cfg.handle,
+            delegations.len(),
+            super::envelopes::DELEGATION_MAX_LEN
+        );
+    }
+
+    // The new project_id is sha256(current_fleet_pubkey). If the
+    // founder hasn't rekeyed since founding (current_pubkey ==
+    // genesis_pubkey), the new project_id collides with the old —
+    // re-found is impossible without first rekeying the self-fleet.
+    let new_project_id = project_id_for(&local_pub);
+    if new_project_id == project_id {
+        bail!(
+            "the founder hasn't rekeyed since founding project '{}'; the new project_id would \
+             collide with the existing one ({}). Run `vigo swarm self-fleet rekey-pair` first, \
+             or use `reanchor` if you intended to hard-fork.",
+            cfg.handle,
+            cfg.project_id
+        );
+    }
+    if ProjectConfig::load(&caller.home, &new_project_id)?.is_some() {
+        bail!(
+            "a project already exists under the proposed new project_id ({}). \
+             Either you already re-founded (run `project status {}`) or you have a \
+             different project under the current fleet identity — abort.",
+            hex_id(&new_project_id),
+            hex_id(&new_project_id),
+        );
+    }
+
+    eprintln!(
+        "Re-found — mint a fresh project_id for '{}' under your current fleet identity.
+
+  • The current URL `vigo://{}/{}` becomes permanently dead.
+  • New URL will be `vigo://{}/{}`.
+  • Every existing member must update their remote URL and rejoin under
+    the new project_id. Run `re-invite-all {}` after this completes.
+  • Existing tokens (admin or member) are NOT portable to the new project.
+  • Refs + objects from the old bare repo are imported wholesale into the
+    new bare repo when this command runs as root (otherwise the local
+    auth surface is rebuilt and root can re-run later).
+  • The old project_id will be tombstoned: bare repo + URL stay on disk
+    as an archive, but new admin operations against it are refused.
+
+To proceed, type the project handle exactly: {}",
+        cfg.handle, cfg.project_id, cfg.handle,
+        hex_id(&new_project_id), cfg.handle, hex_id(&new_project_id), cfg.handle
+    );
+    eprint!("> ");
+    let _ = std::io::stderr().flush();
+    let mut input = String::new();
+    std::io::stdin()
+        .read_line(&mut input)
+        .context("read confirmation")?;
+    let typed = input.trim();
+    if typed != cfg.handle {
+        bail!("typed value '{}' did not match project handle '{}'; re-found aborted", typed, cfg.handle);
+    }
+
+    let now = now_secs();
+
+    // Mint the new founder bootstrap admin token under the caller's
+    // CURRENT fleet (which is the freshly-rekeyed identity). Same
+    // shape `cmd_init` produces.
+    let body = TokenBody {
+        project_id: new_project_id,
+        subject_fleet_pubkey: local_pub,
+        role: Role::Admin,
+        issued_at: now,
+        expires_at: None,
+        signer_fleet_pubkey: local_pub,
+        parent_token_id: None,
+    };
+    let bytes = canonical_bytes(&body);
+    let signature = sign_with_session(&bytes)?;
+    let bootstrap = Token { body, signature };
+    bootstrap
+        .verify_signature()
+        .context("bootstrap token failed self-verification (session helper malfunction?)")?;
+
+    // Persist new project.json + tokens.json under the new project_id.
+    // Members list starts as `[this_fleet]`; founder must run
+    // `re-invite-all <new_pid>` to bring cross-fleet members along.
+    let new_cfg = ProjectConfig {
+        version: project_state::PROJECT_STATE_VERSION,
+        project_id: hex_id(&new_project_id),
+        handle: cfg.handle.clone(),
+        founder_fleet_pubkey: hex_id(&local_pub),
+        members: vec![hex_id(&local_pub)],
+        dr_fanout: cfg.dr_fanout,
+        cross_subnet_members: cfg.cross_subnet_members.clone(),
+        updated_at: now,
+        tombstoned_at: None,
+    };
+    new_cfg.save(&caller.home)?;
+    let new_chain = TokenChain {
+        version: project_state::PROJECT_STATE_VERSION,
+        chain: vec![bootstrap],
+    };
+    new_chain.save(&caller.home, &new_project_id)?;
+
+    // Byte migration: copy refs from the at-cap bare repo into the
+    // new bare repo. Same path as `reanchor`. Root-only; non-root
+    // callers see a note and the migration must be re-run by root
+    // separately.
+    let base = crate::platform::paths::default_gitmirror_dir();
+    let old_repo = project_repo_path(&base, &project_id);
+    let new_repo = project_repo_path(&base, &new_project_id);
+    let mut migrated_refs = 0usize;
+    if !caller.is_root {
+        eprintln!(
+            "warning: caller is not root, skipping bare-repo byte migration. Re-run as root \
+             on this envoy to import the old bare repo into {}.",
+            new_repo.display()
+        );
+    } else if !old_repo.exists() {
+        eprintln!(
+            "note: no bare repo at {} on this envoy — local auth surface rebuilt only. \
+             Run `re-found` as root on an envoy that holds the old bare repo to perform \
+             the byte migration.",
+            old_repo.display()
+        );
+    } else {
+        super::fan_out::ensure_bare_repo(&new_repo)?;
+        let pre = super::fan_out::snapshot_refs(&new_repo).unwrap_or_default();
+        use super::git_ops::{build_command, RunAs};
+        let mut cmd = build_command(RunAs::Root);
+        cmd.arg("-C")
+            .arg(&new_repo)
+            .arg("fetch")
+            .arg(&old_repo)
+            .arg("+refs/*:refs/*")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped());
+        let out = cmd.output().context("git fetch <old_repo>")?;
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            bail!("git fetch into new bare repo failed: {}", stderr.trim());
+        }
+        let post = super::fan_out::snapshot_refs(&new_repo).unwrap_or_default();
+        for (ref_name, sha) in &post {
+            if pre.get(ref_name) != Some(sha) {
+                migrated_refs += 1;
+            }
+        }
+    }
+
+    // Tombstone the old project on disk. The bare repo + URL stay
+    // (data archive); helper daemon and CLI verbs honor the
+    // tombstone marker. Survives a follow-up `project leave` if the
+    // operator decides to drop the archive entirely.
+    let mut old_cfg = cfg.clone();
+    old_cfg.tombstoned_at = Some(now);
+    old_cfg.updated_at = now;
+    old_cfg
+        .save(&caller.home)
+        .context("tombstoning old project.json")?;
+
+    println!("✓ Re-founded project '{}'", cfg.handle);
+    println!("  Old URL:    vigo://{}/{}", cfg.project_id, cfg.handle);
+    println!("  New URL:    vigo://{}/{}", hex_id(&new_project_id), cfg.handle);
+    println!("  New founder: ed25519:{}", hex_id(&local_pub));
+    if migrated_refs > 0 {
+        println!("  Migrated {} ref(s) from old bare repo into new bare repo", migrated_refs);
+    } else if caller.is_root && old_repo.exists() {
+        println!("  Old bare repo had no refs to migrate (empty repo).");
+    }
+    println!();
+    println!("Next steps:");
+    println!("  • Run `vigo swarm gitmirror project re-invite-all {}` to mint fresh", hex_id(&new_project_id));
+    println!("    invitations for every cross-fleet member of the old project.");
+    println!("  • Each member updates their remote URL to `vigo://{}/{}` and runs", hex_id(&new_project_id), cfg.handle);
+    println!("    `project rejoin {} --invitation -` with the new invitation.", hex_id(&new_project_id));
+    println!("  • The old project state at {} is tombstoned but kept on disk as an", cfg.project_id);
+    println!("    archive. Drop it via `project leave {}` once the new project is healthy.", cfg.project_id);
     Ok(())
 }
 
@@ -1765,6 +2077,7 @@ mod tests {
                 dr_fanout: DrFanout::FleetWide,
                 cross_subnet_members: vec![],
                 updated_at: 1_744_560_000,
+                tombstoned_at: None,
             },
             chain: TokenChain {
                 version: project_state::PROJECT_STATE_VERSION,
