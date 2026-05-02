@@ -64,6 +64,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
+use super::envelopes::{DelegationEnvelope, DELEGATION_MAX_LEN};
 use super::tokens::{Token, ID_LEN};
 
 /// Schema version for `project.json` and `tokens.json` files. Bump on
@@ -95,6 +96,13 @@ pub fn project_config_path(home: &Path, project_id: &[u8; ID_LEN]) -> PathBuf {
 /// `tokens.json` path under the per-user project dir.
 pub fn token_chain_path(home: &Path, project_id: &[u8; ID_LEN]) -> PathBuf {
     user_project_dir(home, project_id).join("tokens.json")
+}
+
+/// `delegations.json` path under the per-user project dir (ADR-019).
+/// Holds the ordered list of founder-rekey delegations bridging the
+/// project's genesis pubkey to the founder's current signing key.
+pub fn delegations_path(home: &Path, project_id: &[u8; ID_LEN]) -> PathBuf {
+    user_project_dir(home, project_id).join("delegations.json")
 }
 
 /// `<gitmirror_dir>/projects/` — root-owned dir holding every bare
@@ -338,6 +346,132 @@ impl TokenChain {
         fs::rename(&tmp_path, &final_path)
             .with_context(|| format!("rename to {}", final_path.display()))?;
         Ok(())
+    }
+}
+
+/// Ordered append-only list of founder-rekey delegations for a
+/// project (ADR-019). Persisted at
+/// `~/.vigo-gitmirror/<project_id_hex>/delegations.json`.
+///
+/// Empty (or missing file) is the steady-state for projects that
+/// have not yet seen a founder rekey — `verify_chain` walks zero
+/// delegations and the bootstrap token chains directly. A non-empty
+/// list bridges the founder's genesis pubkey (anchored in
+/// `project_id`) through one or more rekey hops to the
+/// currently-active founder pubkey.
+///
+/// Each entry is signed by the previous link's `new_founder_pubkey`
+/// (or, for the first entry, by the genesis pubkey baked into
+/// `project_id`). `verify_chain` enforces this linkage and the
+/// [`DELEGATION_MAX_LEN`] hard cap.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct DelegationChain {
+    /// Schema version.
+    #[serde(default = "default_version")]
+    pub version: u32,
+    /// Delegations in chain order: first entry signed by the genesis
+    /// founder pubkey, last entry's `new_founder_pubkey` is the
+    /// currently-active founder signing identity.
+    #[serde(default)]
+    pub delegations: Vec<DelegationEnvelope>,
+}
+
+impl DelegationChain {
+    /// Load the user's delegation chain for `project_id`. Returns
+    /// `Ok(None)` on missing file, version mismatch, or unparseable
+    /// JSON — same graceful-degradation rule as [`ProjectConfig::load`]
+    /// and [`TokenChain::load`]. Missing file is the steady state for
+    /// any project whose founder hasn't yet rekeyed.
+    pub fn load(home: &Path, project_id: &[u8; ID_LEN]) -> Result<Option<Self>> {
+        let path = delegations_path(home, project_id);
+        let bytes = match fs::read(&path) {
+            Ok(b) => b,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e).with_context(|| format!("read {}", path.display())),
+        };
+        let chain: DelegationChain = match serde_json::from_slice(&bytes) {
+            Ok(c) => c,
+            Err(_) => return Ok(None),
+        };
+        if chain.version != PROJECT_STATE_VERSION {
+            return Ok(None);
+        }
+        Ok(Some(chain))
+    }
+
+    /// Persist the chain via tmpfile + rename. Mode `0600`. Refuses
+    /// to write a chain whose length exceeds [`DELEGATION_MAX_LEN`]
+    /// — past the cap the operator must `gitmirror project re-found`
+    /// the project (which mints a fresh project_id) rather than
+    /// extend the chain further.
+    pub fn save(&self, home: &Path, project_id: &[u8; ID_LEN]) -> Result<()> {
+        if self.delegations.len() > DELEGATION_MAX_LEN {
+            bail!(
+                "refusing to save delegation chain of length {} > cap {}; \
+                 run `gitmirror project re-found <handle>` to mint a fresh \
+                 project_id, or pass --force-orphan-projects on `rekey-pair`",
+                self.delegations.len(),
+                DELEGATION_MAX_LEN
+            );
+        }
+        let dir = user_project_dir(home, project_id);
+        ensure_user_dir(home, &dir)?;
+        let final_path = delegations_path(home, project_id);
+        let tmp_path = dir.join("delegations.json.tmp");
+
+        let json = serde_json::to_vec_pretty(self)
+            .context("encode delegation chain")?;
+        write_user_file(&tmp_path, &json, 0o600)
+            .with_context(|| format!("write tmp {}", tmp_path.display()))?;
+        fs::rename(&tmp_path, &final_path)
+            .with_context(|| format!("rename to {}", final_path.display()))?;
+        Ok(())
+    }
+
+    /// Append a new delegation to the chain and persist. Refuses if
+    /// the post-append length would exceed [`DELEGATION_MAX_LEN`] —
+    /// the pre-rotation hook in `cmd_rekey_pair` should check
+    /// [`Self::is_at_cap`] before signing so the failure surfaces
+    /// before the rekey commits, not at save-time after the
+    /// signature has been generated.
+    pub fn append(
+        &mut self,
+        home: &Path,
+        project_id: &[u8; ID_LEN],
+        delegation: DelegationEnvelope,
+    ) -> Result<()> {
+        if self.delegations.len() >= DELEGATION_MAX_LEN {
+            bail!(
+                "delegation chain at cap ({}/{}); cannot append further",
+                self.delegations.len(),
+                DELEGATION_MAX_LEN
+            );
+        }
+        self.delegations.push(delegation);
+        self.save(home, project_id)
+    }
+
+    /// Length of the chain. `0` for projects that haven't yet seen a
+    /// founder rekey. Equal to [`DELEGATION_MAX_LEN`] means one
+    /// further rekey will be rejected.
+    pub fn len(&self) -> usize {
+        self.delegations.len()
+    }
+
+    /// True iff a further rekey would push the chain past
+    /// [`DELEGATION_MAX_LEN`]. Pre-rotation hook checks this before
+    /// signing.
+    pub fn is_at_cap(&self) -> bool {
+        self.delegations.len() >= DELEGATION_MAX_LEN
+    }
+
+    /// True iff the chain is in the warning band ([`DELEGATION_WARN_LEN`]
+    /// and above, but still below [`DELEGATION_MAX_LEN`]). Status
+    /// surface flags affected projects. See
+    /// [`super::envelopes::DELEGATION_WARN_LEN`].
+    pub fn is_in_warn_band(&self) -> bool {
+        self.delegations.len() >= super::envelopes::DELEGATION_WARN_LEN
+            && self.delegations.len() <= DELEGATION_MAX_LEN
     }
 }
 
@@ -792,5 +926,255 @@ mod tests {
         let p = user_project_dir(home, &id);
         assert!(p.starts_with("/home/dan/.vigo-gitmirror"));
         assert!(p.to_string_lossy().ends_with(&hex_id(&id)));
+    }
+
+    // ---- delegation chain (ADR-019 slice 1) ----
+
+    fn sample_delegation(
+        old_key: &SigningKey,
+        new_pubkey: &[u8; ID_LEN],
+        project_id: &[u8; ID_LEN],
+        delegated_at: i64,
+    ) -> DelegationEnvelope {
+        DelegationEnvelope::build(old_key, project_id, new_pubkey, delegated_at)
+    }
+
+    #[test]
+    fn delegation_chain_load_missing_returns_none() {
+        let home = tempdir().unwrap();
+        let pid = [0u8; ID_LEN];
+        // No founder rekey has happened — file simply doesn't exist;
+        // verify_chain (slice 2) treats `None` as "zero delegations,
+        // bootstrap chains directly to founder."
+        let got = DelegationChain::load(home.path(), &pid).unwrap();
+        assert!(got.is_none());
+    }
+
+    #[test]
+    fn delegation_chain_save_then_load_roundtrip() {
+        let home = tempdir().unwrap();
+        let founder = fresh_key();
+        let rekey1 = fresh_key();
+        let pid = project_id_for(&pub_bytes(&founder));
+        let chain = DelegationChain {
+            version: PROJECT_STATE_VERSION,
+            delegations: vec![sample_delegation(
+                &founder,
+                &pub_bytes(&rekey1),
+                &pid,
+                1_700_000_000,
+            )],
+        };
+        chain.save(home.path(), &pid).unwrap();
+        let loaded = DelegationChain::load(home.path(), &pid).unwrap().unwrap();
+        assert_eq!(loaded, chain);
+    }
+
+    #[test]
+    fn delegation_chain_append_grows_in_order() {
+        let home = tempdir().unwrap();
+        let founder = fresh_key();
+        let rekey1 = fresh_key();
+        let rekey2 = fresh_key();
+        let pid = project_id_for(&pub_bytes(&founder));
+
+        let mut chain = DelegationChain::default();
+        chain.version = PROJECT_STATE_VERSION;
+
+        chain
+            .append(
+                home.path(),
+                &pid,
+                sample_delegation(&founder, &pub_bytes(&rekey1), &pid, 1_700_000_000),
+            )
+            .unwrap();
+        chain
+            .append(
+                home.path(),
+                &pid,
+                sample_delegation(&rekey1, &pub_bytes(&rekey2), &pid, 1_700_000_001),
+            )
+            .unwrap();
+
+        let loaded = DelegationChain::load(home.path(), &pid).unwrap().unwrap();
+        assert_eq!(loaded.delegations.len(), 2);
+        assert_eq!(loaded.delegations[0].new_founder_pubkey, hex_id(&pub_bytes(&rekey1)));
+        assert_eq!(loaded.delegations[1].new_founder_pubkey, hex_id(&pub_bytes(&rekey2)));
+    }
+
+    #[test]
+    fn delegation_chain_append_refuses_at_cap() {
+        // Build a chain at exactly DELEGATION_MAX_LEN, attempt one more
+        // append — pre-rotation hook in slice 3 surfaces this as
+        // "project at delegation cap; run re-found." Bypass the in-memory
+        // cap check would just mean save() refuses on disk.
+        let home = tempdir().unwrap();
+        let founder = fresh_key();
+        let pid = project_id_for(&pub_bytes(&founder));
+        let mut chain = DelegationChain::default();
+        chain.version = PROJECT_STATE_VERSION;
+
+        let mut prev_signer = founder.clone();
+        for i in 0..DELEGATION_MAX_LEN {
+            let next = fresh_key();
+            chain
+                .append(
+                    home.path(),
+                    &pid,
+                    sample_delegation(
+                        &prev_signer,
+                        &pub_bytes(&next),
+                        &pid,
+                        1_700_000_000 + i as i64,
+                    ),
+                )
+                .unwrap();
+            prev_signer = next;
+        }
+        assert!(chain.is_at_cap());
+        let next = fresh_key();
+        let err = chain
+            .append(
+                home.path(),
+                &pid,
+                sample_delegation(
+                    &prev_signer,
+                    &pub_bytes(&next),
+                    &pid,
+                    1_700_000_999,
+                ),
+            )
+            .unwrap_err();
+        assert!(
+            err.to_string().contains("at cap"),
+            "unexpected error message: {}",
+            err
+        );
+        // On-disk state must still reflect the pre-attempted-append
+        // chain — failed append must not corrupt persisted state.
+        let loaded = DelegationChain::load(home.path(), &pid).unwrap().unwrap();
+        assert_eq!(loaded.delegations.len(), DELEGATION_MAX_LEN);
+    }
+
+    #[test]
+    fn delegation_chain_save_refuses_oversized_chain() {
+        // Direct save() of an over-cap chain (e.g. constructed in
+        // memory without going through append) must still refuse.
+        let home = tempdir().unwrap();
+        let founder = fresh_key();
+        let pid = project_id_for(&pub_bytes(&founder));
+        let mut delegations = Vec::new();
+        let mut prev_signer = founder.clone();
+        for i in 0..(DELEGATION_MAX_LEN + 1) {
+            let next = fresh_key();
+            delegations.push(sample_delegation(
+                &prev_signer,
+                &pub_bytes(&next),
+                &pid,
+                1_700_000_000 + i as i64,
+            ));
+            prev_signer = next;
+        }
+        let chain = DelegationChain {
+            version: PROJECT_STATE_VERSION,
+            delegations,
+        };
+        let err = chain.save(home.path(), &pid).unwrap_err();
+        assert!(err.to_string().contains("cap"));
+    }
+
+    #[test]
+    fn delegation_chain_warn_band_predicates() {
+        let mut chain = DelegationChain::default();
+        chain.version = PROJECT_STATE_VERSION;
+        // Empty chain → not in warn band.
+        assert!(!chain.is_in_warn_band());
+        // Synthesize entries by pushing zero-data delegations — we're
+        // exercising length predicates only, not signatures.
+        let founder = fresh_key();
+        let pid = project_id_for(&pub_bytes(&founder));
+        for _ in 0..2 {
+            chain.delegations.push(sample_delegation(
+                &founder,
+                &pub_bytes(&fresh_key()),
+                &pid,
+                0,
+            ));
+        }
+        // Length 2 < DELEGATION_WARN_LEN (3) → not yet warning.
+        assert!(!chain.is_in_warn_band());
+        chain.delegations.push(sample_delegation(
+            &founder,
+            &pub_bytes(&fresh_key()),
+            &pid,
+            0,
+        ));
+        // Length 3 == DELEGATION_WARN_LEN → in warn band.
+        assert!(chain.is_in_warn_band());
+        assert!(!chain.is_at_cap());
+    }
+
+    #[test]
+    fn delegation_chain_load_corrupt_returns_none() {
+        let home = tempdir().unwrap();
+        let pid = [0u8; ID_LEN];
+        let dir = user_project_dir(home.path(), &pid);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(delegations_path(home.path(), &pid), b"not json").unwrap();
+        let got = DelegationChain::load(home.path(), &pid).unwrap();
+        assert!(got.is_none());
+    }
+
+    #[test]
+    fn delegation_chain_load_version_mismatch_returns_none() {
+        let home = tempdir().unwrap();
+        let founder = fresh_key();
+        let pid = project_id_for(&pub_bytes(&founder));
+        let chain = DelegationChain {
+            version: 99,
+            delegations: vec![sample_delegation(&founder, &pub_bytes(&fresh_key()), &pid, 0)],
+        };
+        let dir = user_project_dir(home.path(), &pid);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            delegations_path(home.path(), &pid),
+            serde_json::to_vec(&chain).unwrap(),
+        )
+        .unwrap();
+        let got = DelegationChain::load(home.path(), &pid).unwrap();
+        assert!(got.is_none());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn delegation_chain_save_writes_mode_0600() {
+        use std::os::unix::fs::PermissionsExt;
+        let home = tempdir().unwrap();
+        let founder = fresh_key();
+        let pid = project_id_for(&pub_bytes(&founder));
+        let chain = DelegationChain {
+            version: PROJECT_STATE_VERSION,
+            delegations: vec![sample_delegation(
+                &founder,
+                &pub_bytes(&fresh_key()),
+                &pid,
+                1_700_000_000,
+            )],
+        };
+        chain.save(home.path(), &pid).unwrap();
+        let mode = fs::metadata(delegations_path(home.path(), &pid))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+
+    #[test]
+    fn delegations_path_is_under_user_project_dir() {
+        let home = Path::new("/home/dan");
+        let pid = [0xAAu8; ID_LEN];
+        let p = delegations_path(home, &pid);
+        assert!(p.starts_with("/home/dan/.vigo-gitmirror"));
+        assert!(p.to_string_lossy().ends_with("/delegations.json"));
     }
 }
