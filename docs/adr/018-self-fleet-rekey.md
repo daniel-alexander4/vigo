@@ -4,7 +4,7 @@ title: "ADR-018: Self-fleet rekey"
 
 # ADR-018: Self-fleet rekey
 
-**Status:** Complete. Shipped across two slices: rekey verbs + orchestration (0.35.14) and status surface + ADR-018 + docs (0.35.15). Prereqs landed at 0.35.12 (cryptsync `identity_rewrap` primitive) and 0.35.13 (claim-code refactor). Gitmirror founder-rekey and cryptsync recipient-set widening during the rotation rollout are explicitly deferred to future ADRs.
+**Status:** Complete. Shipped across two slices: rekey verbs + orchestration (0.35.14) and status surface + ADR-018 + docs (0.35.15). Prereqs landed at 0.35.12 (cryptsync `identity_rewrap` primitive) and 0.35.13 (claim-code refactor). The originally-deferred cryptsync recipient-set widening shipped as a follow-up at 0.35.17 — the founder's `live_pubkeys_for_fleets` filter now accepts both the current fleet pubkey and every unexpired retired fleet pubkey, so mid-window writes on the founder reach unrekeyed peers. Gitmirror founder-rekey is still explicitly deferred to a future ADR.
 **Date:** 2026-04-30
 
 ## Context
@@ -47,7 +47,7 @@ Re-running `rekey-pair` inside the active 24h window only reissues a fresh claim
 ### What stays out of scope
 
 - **Gitmirror founder rotation.** Project IDs are anchored to the founder's fleet pubkey. After a rekey, every gitmirror project the user founded has a dead URL. Re-anchoring requires capability-token chain edits and re-invites to collaborators. This is its own ADR, not a slice of rekey.
-- **Cryptsync recipient resolution during the rotation rollout.** Between founder rotation and surviving-envoy rotation, the founder's `live_pubkeys_for_fleet` filter excludes peers whose stored `fleet_pubkey` is the OLD value. Files written during the gap are encrypted to a smaller recipient set. This is the honest cost of the rotation rollout; the user accepts it and moves through the migration. A future change could thread retired-fleet entries into the filter to widen the recipient set during the graceful window, but it's a separable optimization and currently out of scope.
+- **Cryptsync recipient resolution during the rotation rollout (originally deferred; shipped at 0.35.17).** Between founder rotation and surviving-envoy rotation, the founder's filter previously excluded peers whose stored `fleet_pubkey` was the OLD value, so files written on the founder during the gap encrypted to a smaller recipient set. The follow-up renamed `live_pubkeys_for_fleet` to `live_pubkeys_for_fleets` (taking a slice of accepted fleet pubkeys) and threaded `~/.vigo-fleet/retired_fleets.json` into the call site in `regenerate_recipients`. The founder now accepts both its current fleet pubkey and every unexpired retired fleet pubkey, so mid-window writes on the founder reach unrekeyed peers. The inverse direction (writes from a not-yet-rekeyed envoy reaching the rekeyed founder) still drops because the unrekeyed envoy's TOFU pin rejects the founder's NEW announce until that envoy itself rekeys; that asymmetry is the honest residual cost of the rollout.
 - **Multi-founder rekey.** "What if two founders both have the old fleet key and both run `rekey-pair`?" — undefined; both produce different new keypairs; the user would have to pick one and re-rekey the other envoys to reconcile. The flat-trust design of self-fleet (every member is equal) makes this a self-imposed problem the operator avoids by convention.
 
 ## Alternatives Considered
@@ -69,7 +69,8 @@ Re-running `rekey-pair` inside the active 24h window only reissues a fresh claim
 - `agent/src/swarm/self_fleet/config.rs` — `rekey_pending_path` + `retired_fleets_path`.
 - `agent/src/swarm/server.rs` — dispatch `REKEY_CLAIM_PREFIX` to the rekey handler.
 - `agent/src/swarm/cryptsync/identity_rewrap.rs` — atomic re-wrap primitive (shipped in 0.35.12 as the slice-1 foundation for this ADR).
-- `agent/src/swarm/cryptsync/state.rs` — `clear_pins_for_fleet` for post-rotation TOFU re-pin.
+- `agent/src/swarm/cryptsync/state.rs` — `clear_pins_for_fleet` for post-rotation TOFU re-pin; `live_pubkeys_for_fleets` accepts a slice of acceptable fleet pubkeys (0.35.17 follow-up — replaces single-fleet `live_pubkeys_for_fleet`, widening the founder's recipient filter during the rekey rollout).
+- `agent/src/swarm/cryptsync/mod.rs` — `regenerate_recipients` reads `~/.vigo-fleet/retired_fleets.json` and includes every unexpired retired fleet pubkey in the accepted set (0.35.17 follow-up).
 
 **Documentation:**
 - This ADR.
@@ -77,11 +78,11 @@ Re-running `rekey-pair` inside the active 24h window only reissues a fresh claim
 - `docs/adr/_index.md` — entry added.
 
 **Operational:**
-- Z-bumps for the implementation slices: 0.35.11 (ADR-017 docs), 0.35.12 (rewrap primitive), 0.35.13 (codes refactor), 0.35.14 (rekey verbs + orchestration), this slice for status / docs / ADR-018.
+- Z-bumps for the implementation slices: 0.35.11 (ADR-017 docs), 0.35.12 (rewrap primitive), 0.35.13 (codes refactor), 0.35.14 (rekey verbs + orchestration), 0.35.15 for status / docs / ADR-018, 0.35.17 for the recipient-widening follow-up.
 - Agent rebuild + cross-compile + redeploy to envoys that should support the new verbs. Envoys without the new agent build refuse the new verb at the CLI; the daemon's swarm-server endpoint is forward-compatible for older agent CLIs (older agents simply don't know to call `/swarm/self-fleet/rekey-claim/`).
 - No server change. No DB migration. No proto change.
 
 **Behavioral consequences:**
 - The "blow it all away" runbook for compromise scenarios is replaced with: `rekey-pair` on a trusted founder envoy → `rekey --from <host>` on each surviving envoy → re-invite collaborators on any gitmirror projects. Cryptsync state and per-envoy age keys are preserved.
 - Any envoy offline during the rotation is genuinely orphaned. `self-fleet status` on the orphaned envoy surfaces a hint pointing at the divergent peer; the operator runs `rekey --from <peer>` to migrate. Without operator action the envoy stays on the retired fleet identity and is silently excluded from the new fleet's recipient sets.
-- Operators must accept that during the 24h graceful window, cryptsync recipient sets temporarily exclude unrekeyed peers from the founder's view (and vice versa). Files encrypted during this window land at a smaller recipient set than the steady state; the user observes "this file appeared on desk and homeserver but not laptop until laptop also rekeyed." This is the honest cost of rotation, called out in the verb's output and in the CLI reference.
+- Operators must accept that during the 24h graceful window, cryptsync recipient sets are asymmetric. As of 0.35.17 the founder includes unrekeyed peers in its recipient set (because retired fleet pubkeys are threaded into the filter), so mid-window writes on the founder propagate normally. The inverse direction stays broken: an unrekeyed envoy's TOFU pin rejects the founder's new-fleet announce, so the unrekeyed envoy's writes during the window still encrypt to a smaller recipient set than steady state until that envoy itself rekeys. This residual is called out in the verb's output and the CLI reference.

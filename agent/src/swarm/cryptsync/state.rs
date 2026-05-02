@@ -267,7 +267,7 @@ impl PeerTable {
     /// entries adjusted. Used by self-fleet rekey (ADR-018) so peers
     /// announcing under the post-rotation fleet pubkey don't trip
     /// the TOFU mismatch check at upsert time. The `fleet_pubkey`
-    /// field itself is left alone — `live_pubkeys_for_fleet` will
+    /// field itself is left alone — `live_pubkeys_for_fleets` will
     /// filter the entry out until the peer's next announce updates
     /// it, which is the correct behavior during a rotation rollout.
     pub fn clear_pins_for_fleet(&mut self, retired: &str) -> usize {
@@ -326,11 +326,18 @@ impl PeerTable {
         keys
     }
 
-    /// Fleet-aware variant of [`live_pubkeys`] (ADR-016). When
-    /// `local_fleet_pubkey` is `Some`, only peers whose announce
-    /// carried a matching `fleet_pubkey` are returned — the gossip
-    /// layer becomes fleet-scoped. When `None`, behavior is identical
-    /// to [`live_pubkeys`] (standalone mode / pre-self-fleet path).
+    /// Fleet-aware variant of [`live_pubkeys`] (ADR-016). The caller
+    /// passes the set of fleet pubkeys whose peers count as recipient
+    /// candidates. An empty slice means "no fleet filter" — standalone
+    /// mode, identical to [`live_pubkeys`].
+    ///
+    /// Steady state passes a one-element slice (the local user's
+    /// self-fleet pubkey). During an ADR-018 rekey rollout, the founder
+    /// passes the new fleet pubkey *and* every unexpired retired fleet
+    /// pubkey from `~/.vigo-fleet/retired_fleets.json`, so peers still
+    /// announcing under the old fleet during the 24h graceful window
+    /// stay in the recipient set rather than silently disappearing
+    /// until they finish their own rekey.
     ///
     /// Per-envoy age keys stay deliberately preserved: even when
     /// filtering by fleet membership, the per-peer pubkeys this
@@ -338,18 +345,22 @@ impl PeerTable {
     /// shared fleet decryption key. ADR-016 calls this out as
     /// load-bearing — see `mod.rs::regenerate_recipients` for the
     /// invariant comment.
-    pub fn live_pubkeys_for_fleet(
+    pub fn live_pubkeys_for_fleets(
         &self,
         now: i64,
-        local_fleet_pubkey: Option<&str>,
+        accepted_fleet_pubkeys: &[String],
     ) -> Vec<String> {
         let mut keys: Vec<String> = self
             .peers
             .values()
             .filter(|p| now - p.last_seen <= STALE_SECS)
-            .filter(|p| match local_fleet_pubkey {
-                None => true,
-                Some(fp) => p.fleet_pubkey == fp,
+            .filter(|p| {
+                if accepted_fleet_pubkeys.is_empty() {
+                    return true;
+                }
+                accepted_fleet_pubkeys
+                    .iter()
+                    .any(|fp| p.fleet_pubkey == *fp)
             })
             .map(|p| p.pubkey.clone())
             .collect();
@@ -407,7 +418,7 @@ pub struct Announcement {
     /// (ADR-016). Empty string when the user is running standalone
     /// or the announce predates 0.35.x. Receivers under fleet mode
     /// filter peers whose pubkey here doesn't match the local
-    /// user's self-fleet — see `state::PeerTable::live_pubkeys_for_fleet`.
+    /// user's self-fleet — see `state::PeerTable::live_pubkeys_for_fleets`.
     #[serde(default)]
     pub fleet_pubkey: String,
     /// Optional fleet certificate (ADR-016 follow-up). Closes the
@@ -642,7 +653,7 @@ mod tests {
         t.upsert(sample_peer_in_fleet("alpha", 200, fleet));
         t.upsert(sample_peer_in_fleet("beta", 200, fleet));
 
-        let keys = t.live_pubkeys_for_fleet(200, Some(fleet));
+        let keys = t.live_pubkeys_for_fleets(200, &[fleet.to_string()]);
 
         // Two envoys → two distinct age pubkeys, NOT one fleet key.
         assert_eq!(keys.len(), 2, "expected one age pubkey per envoy");
@@ -660,7 +671,7 @@ mod tests {
     /// LAN would land in everyone else's recipients regardless of
     /// trust scope.
     #[test]
-    fn live_pubkeys_for_fleet_filters_other_fleets() {
+    fn live_pubkeys_for_fleets_filters_other_fleets() {
         let fleet_dan = "fleet-pk-dan";
         let fleet_alice = "fleet-pk-alice";
         let mut t = PeerTable::empty("multi");
@@ -668,7 +679,7 @@ mod tests {
         t.upsert(sample_peer_in_fleet("dan-desktop", 200, fleet_dan));
         t.upsert(sample_peer_in_fleet("alice-laptop", 200, fleet_alice));
 
-        let dan_recipients = t.live_pubkeys_for_fleet(200, Some(fleet_dan));
+        let dan_recipients = t.live_pubkeys_for_fleets(200, &[fleet_dan.to_string()]);
         assert_eq!(dan_recipients.len(), 2);
         assert!(dan_recipients.iter().any(|k| k.contains("dan-laptop")));
         assert!(dan_recipients.iter().any(|k| k.contains("dan-desktop")));
@@ -678,29 +689,29 @@ mod tests {
         );
     }
 
-    /// Standalone mode (None filter) returns every live peer regardless
+    /// Standalone mode (empty slice) returns every live peer regardless
     /// of `fleet_pubkey` — preserves the legacy gossip-only behavior
     /// for users who haven't opted into self-fleet.
     #[test]
-    fn live_pubkeys_for_fleet_none_filter_returns_all() {
+    fn live_pubkeys_for_fleets_empty_slice_returns_all() {
         let mut t = PeerTable::empty("dan");
         t.upsert(sample_peer_in_fleet("with-fleet", 200, "some-fleet"));
         t.upsert(sample_peer("standalone", 200));
 
-        let keys = t.live_pubkeys_for_fleet(200, None);
+        let keys = t.live_pubkeys_for_fleets(200, &[]);
         assert_eq!(keys.len(), 2);
     }
 
     /// Fleet filter still respects staleness — an old peer in the
     /// right fleet is still excluded.
     #[test]
-    fn live_pubkeys_for_fleet_excludes_stale_match() {
+    fn live_pubkeys_for_fleets_excludes_stale_match() {
         let fleet = "f-pk";
         let mut t = PeerTable::empty("dan");
         t.upsert(sample_peer_in_fleet("fresh", 200, fleet));
         t.upsert(sample_peer_in_fleet("stale", 10, fleet));
 
-        let keys = t.live_pubkeys_for_fleet(200, Some(fleet));
+        let keys = t.live_pubkeys_for_fleets(200, &[fleet.to_string()]);
         assert_eq!(keys.len(), 1);
         assert!(keys[0].contains("fresh"));
     }
@@ -708,15 +719,48 @@ mod tests {
     /// A standalone peer (empty `fleet_pubkey`) is excluded under fleet
     /// mode — they aren't a member of the local user's fleet.
     #[test]
-    fn live_pubkeys_for_fleet_excludes_standalone_peer_under_fleet_filter() {
+    fn live_pubkeys_for_fleets_excludes_standalone_peer_under_fleet_filter() {
         let fleet = "f-pk";
         let mut t = PeerTable::empty("dan");
         t.upsert(sample_peer_in_fleet("member", 200, fleet));
         t.upsert(sample_peer("rogue-standalone", 200)); // empty fleet_pubkey
 
-        let keys = t.live_pubkeys_for_fleet(200, Some(fleet));
+        let keys = t.live_pubkeys_for_fleets(200, &[fleet.to_string()]);
         assert_eq!(keys.len(), 1);
         assert!(keys[0].contains("member"));
+    }
+
+    /// ADR-018 rekey window: the founder accepts both the new fleet
+    /// pubkey (its own steady-state identity) and every unexpired
+    /// retired fleet pubkey. Surviving envoys still announcing under
+    /// the old fleet during the 24h graceful window stay in the
+    /// recipient set. Without this, mid-window writes on the founder
+    /// encrypt to a smaller recipient set than steady state — the
+    /// "file appeared on desk + homeserver but not laptop" failure
+    /// mode pending #2 was opened against.
+    #[test]
+    fn live_pubkeys_for_fleets_widens_during_rekey_window() {
+        let new_fleet = "fleet-pk-new";
+        let old_fleet = "fleet-pk-old";
+        let mut t = PeerTable::empty("dan");
+        // Founder has rekeyed and re-pinned to new_fleet. A laptop
+        // that has also rekeyed announces under new_fleet.
+        t.upsert(sample_peer_in_fleet("rekeyed-laptop", 200, new_fleet));
+        // A desktop that hasn't rekeyed yet still announces under
+        // the old fleet pubkey.
+        t.upsert(sample_peer_in_fleet("not-yet-rekeyed-desktop", 200, old_fleet));
+        // Some unrelated peer in a different fleet must stay out.
+        t.upsert(sample_peer_in_fleet("alice-host", 200, "fleet-pk-alice"));
+
+        let accepted = vec![new_fleet.to_string(), old_fleet.to_string()];
+        let keys = t.live_pubkeys_for_fleets(200, &accepted);
+        assert_eq!(keys.len(), 2, "both rekeyed and not-yet-rekeyed peers count");
+        assert!(keys.iter().any(|k| k.contains("rekeyed-laptop")));
+        assert!(keys.iter().any(|k| k.contains("not-yet-rekeyed-desktop")));
+        assert!(
+            !keys.iter().any(|k| k.contains("alice-host")),
+            "unrelated fleets stay filtered out even with multiple accepted pubkeys"
+        );
     }
 
     // ---- ADR-016 follow-up: TOFU pinning ----

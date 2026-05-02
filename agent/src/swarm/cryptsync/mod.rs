@@ -1499,12 +1499,47 @@ fn regenerate_recipients(user: &str, home: &Path, table: &PeerTable) -> Result<(
     // fleet pubkey only scopes which peers we accept as recipient
     // candidates — each peer still contributes its own age x25519
     // pubkey to the resulting recipients.txt.
+    //
+    // ADR-018 rekey window: during the 24h graceful retirement
+    // window after a self-fleet rekey, surviving envoys still
+    // announce under the old fleet pubkey until they finish their
+    // own rekey. Without widening the filter the founder's
+    // mid-window writes encrypt to a smaller recipient set than
+    // steady state. So the accepted list is (local fleet) ∪ (every
+    // unexpired entry in `~/.vigo-fleet/retired_fleets.json`).
     let local_fleet = local_self_fleet_pubkey_hex(home);
-    let fleet_filter = if local_fleet.is_empty() { None } else { Some(local_fleet.as_str()) };
+    let mut accepted: Vec<String> = Vec::new();
+    if !local_fleet.is_empty() {
+        accepted.push(local_fleet);
+        match crate::swarm::self_fleet::rekey::load_retired(home) {
+            Ok(entries) => {
+                for e in entries {
+                    if e.expires_at <= now {
+                        continue;
+                    }
+                    let bare = e
+                        .old_fleet_pubkey
+                        .strip_prefix("ed25519:")
+                        .unwrap_or(&e.old_fleet_pubkey)
+                        .trim()
+                        .to_ascii_lowercase();
+                    if !bare.is_empty() && !accepted.contains(&bare) {
+                        accepted.push(bare);
+                    }
+                }
+            }
+            Err(e) => {
+                debug!(
+                    error = %e,
+                    "cryptsync: retired_fleets.json unreadable — proceeding without rekey-window widening"
+                );
+            }
+        }
+    }
 
     let mut all: Vec<String> = Vec::new();
     all.push(self_pubkey);
-    for pk in table.live_pubkeys_for_fleet(now, fleet_filter) {
+    for pk in table.live_pubkeys_for_fleets(now, &accepted) {
         if leaves.leave_time_for(&pk).is_some() {
             // Defense in depth: handle_incoming should already have
             // pre-emptively forgotten this peer, but skip here too in
