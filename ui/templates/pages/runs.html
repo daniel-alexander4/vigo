@@ -33,7 +33,7 @@
                 <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
                 <td>
                     {{if and (gt .FailedCount 0) (gt .ModuleCount 0)}}
-                    <span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>
+                    <span class="badge {{failureBadgeClass .FailedCount .ModuleCount}}">{{.FailedCount}}/{{.ModuleCount}}</span>
                     {{else}}
                     {{template "status-badge" dict "Status" .Status}}
                     {{end}}
@@ -46,7 +46,7 @@
             {{end}}
             {{if not .Runs}}
             <tr>
-                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No runs found{{if .StatusFilter}} with status "{{.StatusFilter}}"{{end}}.</td>
+                <td colspan="7" class="table__empty-cell">No runs found{{if .StatusFilter}} with status "{{.StatusFilter}}"{{end}}.</td>
             </tr>
             {{end}}
         </tbody>

@@ -1,6 +1,6 @@
 {{define "dashboard-stats"}}
 <div class="dash-columns">
-    <a class="dash-column dash-column--link" href="/envoys" aria-label="Fleet health — convergence and activity">
+    <a class="dash-column dash-column--link" href="/envoys" aria-label="Fleet health summary — open envoys list">
         <h3 class="dash-column__title">Fleet Health</h3>
         <div class="stat-cards">
             {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
@@ -11,7 +11,7 @@
             </div>
         </div>
     </a>
-    <a class="dash-column dash-column--link" href="/security" aria-label="Security posture — CVEs and hardening">
+    <a class="dash-column dash-column--link" href="/security" aria-label="Security posture summary — open security drawer">
         <h3 class="dash-column__title">Security Posture</h3>
         <div class="stat-cards">
             {{template "stat-card" dict "Value" .UniqueCVEs "Label" "Unique CVEs" "Color" "danger"}}
@@ -32,7 +32,7 @@
             {{end}}
         </div>
     </a>
-    <a class="dash-column dash-column--link" href="/compliance" aria-label="Standards compliance — coverage and controls">
+    <a class="dash-column dash-column--link" href="/compliance" aria-label="Standards compliance summary — open compliance page">
         <h3 class="dash-column__title">Standards Compliance</h3>
         <div class="stat-cards">
             {{template "stat-card" dict "Value" .PartialControls "Label" "Partial" "Color" "warning"}}
@@ -40,7 +40,7 @@
             {{template "stat-card" dict "Value" (printf "%.0f%%" .StandardsPct) "Label" (printf "%d of %d covered" (add .SatisfiedControls .WaivedControls) .TotalControls) "Color" "success"}}
         </div>
     </a>
-    <a class="dash-column dash-column--link" href="/risk" aria-label="Risk posture — fleet-wide risk scores">
+    <a class="dash-column dash-column--link" href="/risk" aria-label="Risk posture summary — open risk page">
         <h3 class="dash-column__title">Risk Posture</h3>
         <div class="stat-cards">
             <div class="stat-card stat-card--{{pctAccent .RiskAvgScore}}">

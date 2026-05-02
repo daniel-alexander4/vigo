@@ -7,7 +7,7 @@
     <h1>Run {{truncUUID .Run.ID}}</h1>
     <p>
         Envoy: <a href="/envoys/{{.EnvoyID}}">{{.Run.Hostname}}</a>
-        &middot; {{if gt .Run.ModuleCount 0}}<span class="badge" style="background:{{pctColorBg .Run.FailurePct}};color:{{pctColor .Run.FailurePct}};">{{.Run.FailedCount}}/{{.Run.ModuleCount}}</span>{{else}}{{template "status-badge" dict "Status" .Run.Status}}{{end}}
+        &middot; {{if gt .Run.ModuleCount 0}}<span class="badge {{failureBadgeClass .Run.FailedCount .Run.ModuleCount}}">{{.Run.FailedCount}}/{{.Run.ModuleCount}}</span>{{else}}{{template "status-badge" dict "Status" .Run.Status}}{{end}}
         &middot; {{formatTime .Run.StartedAt}}
     </p>
     <div class="page-header__actions">
@@ -62,7 +62,7 @@
             {{end}}
             {{if not .Results}}
             <tr>
-                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No module results recorded.</td>
+                <td colspan="7" class="table__empty-cell">No module results recorded.</td>
             </tr>
             {{end}}
         </tbody>
@@ -101,7 +101,7 @@
         {{end}}
         {{if not .Results}}
         <tr>
-            <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No module results recorded.</td>
+            <td colspan="7" class="table__empty-cell">No module results recorded.</td>
         </tr>
         {{end}}
     </tbody>

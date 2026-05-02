@@ -628,6 +628,18 @@ a.dash-column--link:hover {
     transform: translateY(-1px);
     color: var(--color-text);
 }
+/* Keyboard-only users get one tab stop per column (each column links to
+   its detail page). The default 2px outline from the global a:focus-visible
+   rule is hard to spot on a card-sized target, so override with a thicker
+   brand-colored ring + the same lift hover applies — symmetric feedback
+   between mouse hover and keyboard focus. */
+a.dash-column--link:focus-visible {
+    outline: 3px solid var(--color-brand);
+    outline-offset: 3px;
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+    color: var(--color-text);
+}
 .dash-column__title {
     font-size: 13px;
     font-weight: 600;
@@ -913,6 +925,10 @@ a.dash-column--link:hover {
     color: var(--color-danger);
 }
 
+.compliance-gauge__pct--muted {
+    color: var(--color-text-muted);
+}
+
 .compliance-gauge__label {
     font-size: 16px;
     color: var(--color-text-muted);
@@ -1018,6 +1034,16 @@ a.dash-column--link:hover {
 
 .table tbody tr:last-child td {
     border-bottom: none;
+}
+
+/* Centered, padded "no rows" placeholder used inside an otherwise-empty
+   tbody (`<td colspan="N" class="table__empty-cell">` pattern). Same
+   shape works on a stand-alone <p> inside a card when a non-table page
+   has nothing to render. */
+.table__empty-cell {
+    text-align: center;
+    padding: 40px;
+    color: var(--color-text-muted);
 }
 
 /* Highlight a tier row when it matches the customer's current plan on
@@ -3403,6 +3429,14 @@ html.theme-dark input, html.theme-dark select, html.theme-dark textarea { backgr
 .swarm-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 0.85em; color: var(--color-text-muted); flex-wrap: wrap; }
 .swarm-legend__item { display: flex; align-items: center; gap: 4px; }
 .swarm-legend__swatch { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+/* Action-state swatches for the run-viz waterfall legend. Tokens
+   resolve to Latte hues on the light theme and Mocha hues on dark —
+   previous inline hex literals were Mocha-only and rendered wrong on
+   light. */
+.swarm-legend__swatch--create { background: var(--color-success); }
+.swarm-legend__swatch--update { background: var(--color-brand); }
+.swarm-legend__swatch--delete { background: var(--color-danger); }
+.swarm-legend__swatch--noop { background: var(--color-border); }
 .swarm-matrix-wrap { overflow-x: auto; }
 .swarm-matrix { border-collapse: separate; border-spacing: 2px; font-family: monospace; }
 .swarm-matrix th { padding: 4px 8px; font-weight: 600; white-space: nowrap; text-align: center; }

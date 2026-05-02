@@ -45,7 +45,7 @@
 {{if .HasStandards}}
 <div class="compliance-gauge">
     <div class="compliance-gauge__header">
-        <span class="compliance-gauge__pct" style="color:{{pctColorInv .StandardsPct}}">
+        <span class="compliance-gauge__pct compliance-gauge__pct--{{pctAccentInv .StandardsPct}}">
             {{printf "%.0f" .StandardsPct}}%
         </span>
         <span class="compliance-gauge__label">compliance score &middot; mean of active framework scores &middot; {{.TotalControls}} controls across frameworks</span>
@@ -92,7 +92,7 @@
     </div>
 </div>
 {{if gt .TotalActiveWaivers 0}}
-<div class="waiver-banner" style="margin-top:12px;">
+<div class="waiver-banner mt-1">
     <div class="waiver-banner__title">{{.TotalActiveWaivers}} active waiver{{if ne .TotalActiveWaivers 1}}s{{end}}{{if gt .ExpiringWaivers 0}} &middot; <span class="text-warning">{{.ExpiringWaivers}} expiring within 30 days</span>{{end}}</div>
     <div class="waiver-banner__detail"><a href="/compliance/waivers">View all waivers &rarr;</a></div>
 </div>
@@ -100,10 +100,10 @@
 {{else}}
 <div class="compliance-gauge">
     <div class="compliance-gauge__header">
-        <span class="compliance-gauge__pct" style="color:var(--color-text-muted);">&mdash;</span>
+        <span class="compliance-gauge__pct compliance-gauge__pct--muted">&mdash;</span>
         <span class="compliance-gauge__label">standards compliance</span>
     </div>
-    <p class="text-muted" style="margin-top:8px;">No compliance frameworks configured. Add compliance tags to your modules to enable standards tracking.</p>
+    <p class="text-muted mt-1">No compliance frameworks configured. Add compliance tags to your modules to enable standards tracking.</p>
 </div>
 {{end}}
 {{end}}
@@ -119,7 +119,7 @@
 {{$rPct := fwPct .NotSatisfied $total}}
 <a href="/compliance/{{$slug}}" class="fw-card">
     <div class="fw-card__name">{{.Name}}</div>
-    <div class="fw-card__score" style="color:{{pctColorInv .ScorePercent}};">{{printf "%.1f" .ScorePercent}}%</div>
+    <div class="fw-card__score fw-card__score--{{pctAccentInv .ScorePercent}}">{{printf "%.1f" .ScorePercent}}%</div>
     <div class="fw-card__bar">
         {{if gt $gPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green" style="width:{{printf "%.1f" $gPct}}%"></div>{{end}}
         {{if gt $bPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--blue" style="width:{{printf "%.1f" $bPct}}%"></div>{{end}}
