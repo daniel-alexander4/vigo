@@ -76,9 +76,27 @@ Append-only ordered list. Each entry is signed by the *previous* link's `new_fou
 
 **Founded-by-me predicate.** `project.founder_fleet_pubkey ∈ {current self-fleet pubkey} ∪ {old_fleet_pubkey for every entry in retired_fleets.json}`. Recovers the full `genesis → r_1 → … → current` history without a new state file. A project founded at any past identity counts as "mine" for delegation purposes.
 
-**Threat-model wrinkle.** An attacker holding a retired founder key can forge a delegation envelope pointing at their own pubkey — the signature mathematically verifies. ADR-019 therefore requires that delegations only become *authoritative* on a member envoy via a fresh out-of-band capability code from a trusted founder (the `re-invite-all` + `rejoin` flow planned for slice 4). Until that ships, multi-fleet members must be manually re-invited under the new founder identity. Single-fleet personal-DR is unaffected — every envoy in the user's own self-fleet inherits trust via ADR-018's pair-claim ceremony.
+**Threat-model wrinkle.** An attacker holding a retired founder key can forge a delegation envelope pointing at their own pubkey — the signature mathematically verifies. ADR-019 therefore requires that delegations only become *authoritative* on a member envoy via a fresh out-of-band capability code from a trusted founder. The `vigo swarm gitmirror project re-invite-all` (founder) + `rejoin` (member) flow shipped at 0.35.21 mediates this trust hop, same shape as the original `project invite` / `join` flow. Single-fleet personal-DR is unaffected — every envoy in the user's own self-fleet inherits trust via ADR-018's pair-claim ceremony.
 
-**Shipping cadence.** Slices 1–3 in tree at 0.35.18–0.35.20 (data layer; chained verifier with authority windows; rekey-time hooks + status surface + `--force-orphan-projects` flag). Slices 4 (multi-fleet `re-invite-all` + `rejoin` + delegation gossip rail) and 5 (`project re-found` escape hatch + the formal ADR document) pending.
+**Multi-fleet rejoin flow (slice 4).** After a founder rekey:
+
+1. Founder runs `vigo swarm gitmirror project re-invite-all`. The verb walks every founded project where `members[]` minus the local fleet is non-empty, mints a fresh `Member` token chained off the local user's current admin leaf (which slice 3's rekey hook rebuilt with `[bootstrap, fresh_admin_under_NEW]`), and embeds the project's full delegation chain in each `Invitation` so the recipient's verifier can walk back to the genesis founder pubkey baked into `project_id`.
+2. Founder communicates each invitation JSON block OOB to the matching member fleet (per-recipient stderr separators make this scriptable).
+3. Each cross-fleet member runs `vigo swarm gitmirror project rejoin <pid> --invitation -`. The verb is idempotent — does NOT bail when the project already exists locally — and updates `project.json` + `tokens.json` + `delegations.json` from the invitation. When the invitation has empty delegations (founder rolled back or re-founded under genesis), `delegations.json` is removed so the verifier doesn't apply bogus authority windows.
+
+**Wire chain header (`X-Vigo-Chain`).** Slice 4 also gained a `PushChain` envelope so the receive-side push verifier can chain a post-rekey leaf back to genesis without consulting per-user state:
+
+```rust
+struct PushChain {
+    version: u32,
+    chain: Vec<Token>,
+    delegations: Vec<DelegationEnvelope>,
+}
+```
+
+`encode_chain_header(chain, delegations)` and `decode_chain_header()` round-trip this shape; the decoder also tolerates pre-ADR-019 senders that emitted bare `TokenChain` JSON via a fallback path. `verify_chain_for_push` threads sender-presented delegations into `verify_chain`. Acceptable because gitmirror's threat model is *availability*, not confidentiality — an attacker who has compromised a retired founder key could push junk to bare repos but cannot exfiltrate user-readable bytes (cryptsync owns confidentiality). Authoritative trust still flows through OOB cap codes at rejoin time.
+
+**Shipping cadence.** Slices 1–4 in tree at 0.35.18–0.35.21 (data layer; chained verifier with authority windows; rekey-time hooks + status surface + `--force-orphan-projects`; multi-fleet `re-invite-all` + `rejoin` + `PushChain` wire format). Slice 5 (`project re-found` escape hatch when the chain hits cap + the formal ADR document) pending.
 
 Below describes the legacy publish-and-claim model retained as historical context. The corresponding agent code (`reactor.rs`, `publisher.rs`, `source.rs`, `sidecar.rs`, `lan_selector.rs`, `pending_claims.rs`, `cross_subnet_mirrors.rs`, `path_guard.rs`) was deleted in step 3.
 

@@ -19,20 +19,20 @@ What's still pending (follow-up slices of step 4):
 
 All step-4 follow-up work has shipped. Cross-envoy push, fetch, envelope gossip, fleet observability, REST member-roster, and `reanchor` byte migration are all in tree.
 
-### ADR-019 (founder-rekey delegations) — slices 1–3 shipped
+### ADR-019 (founder-rekey delegations) — slices 1–4 shipped
 
-Founder rekey support is being added in five slices. As of 0.35.20, slices 1–3 are in:
+Founder rekey support is being added in five slices. As of 0.35.21, slices 1–4 are in:
 
 - **Slice 1 (0.35.18)** — `DelegationEnvelope` data layer: Ed25519-signed bridge from a retired founder pubkey to a new one, persisted at `~/.vigo-gitmirror/<pid>/delegations.json`. Hard cap at `DELEGATION_MAX_LEN = 5`, soft warn at `DELEGATION_WARN_LEN = 3`.
 - **Slice 2 (0.35.19)** — chained verification: `tokens::verify_chain` walks the delegation list before the token chain, applying authority windows so retired founders can't sign post-window tokens (the deposed-founder attack). The helper daemon's per-user verify already loads the local delegation chain.
 - **Slice 3 (0.35.20)** — rekey-time hooks: `self-fleet rekey-pair` and `rekey --from` automatically sign + append delegations on every founded project and rewrite member entries OLD → NEW. `--force-orphan-projects` flag covers the cap case. `project status` now displays delegation chain length, current founder pubkey, and warn-band / at-cap banners.
+- **Slice 4 (0.35.21)** — multi-fleet rejoin: new `re-invite-all` (founder side) and `rejoin` (member side) verbs handle cross-fleet members after a founder rekey via fresh out-of-band capability codes, same trust hop as the original `invite` / `join` flow. The post-rotation hook now also rebuilds the founder's `tokens.json` with `[bootstrap, fresh_admin_under_NEW]` so subsequent re-invites work without manual intervention. The wire chain header (`X-Vigo-Chain`) gained a `PushChain` envelope that carries both the token chain and the founder's delegation list, with backwards-compat fallback for pre-ADR-019 senders that emitted bare `TokenChain` JSON.
 
-What still ships in slices 4–5:
+What still ships in slice 5:
 
-- **Slice 4** — multi-fleet `re-invite-all` (founder side) + `rejoin` (member side) verbs, plus the delegation gossip rail (informational hint only, never authority).
 - **Slice 5** — `project re-found` verb (escape hatch when chain is at cap; mints a fresh `project_id`), the formal ADR-019 document, and any docs cleanup.
 
-Until slice 4 ships, multi-fleet projects (cross-fleet members) need manual re-invitation under the new founder identity after a rekey. Single-fleet personal-DR projects work transparently.
+Single-fleet personal-DR survives a founder rekey transparently. Multi-fleet projects need a one-time `re-invite-all` (founder) + `rejoin` (each cross-fleet member) ceremony after the rekey.
 
 ## Invocation
 
@@ -66,6 +66,8 @@ Verbs that take a `<project_id>` argument also accept a unique handle prefix amo
 | `project status <project_id>` | Show one project's local state |
 | `project revoke <project_id> --token-id <hex> [--reason <text>]` | Queue a revocation for a previously-issued token |
 | `project reanchor <project_id>` | Hard-fork the project under a new founder (interactive confirm) |
+| `project re-invite-all [<project_id>]` | (ADR-019) Founder side, post-rekey: mint fresh invitations for every cross-fleet member |
+| `project rejoin <project_id> [--invitation <file\|->]` | (ADR-019) Member side: idempotently update local chain in place after a founder rekey |
 
 ## `project init`
 
@@ -218,6 +220,79 @@ vigo swarm gitmirror project reanchor <project_id>
 - When run as root **and** the old bare repo exists at `/var/lib/vigo/swarm/gitmirror/projects/<old_project_id>.git`, runs `git -C <new_repo> fetch <old_repo> +refs/*:refs/*` to copy every ref + the objects backing them into the new bare repo. Non-root invocations (or envoys that don't hold the old bare repo) print a note and rebuild only the local auth surface; another member with root + the old bare repo can complete the migration later.
 - The old project state is left in place — drop it via `project leave <old_project_id>` once the new project is healthy.
 
+## `project re-invite-all`
+
+(ADR-019) Founder-side flow run after `self-fleet rekey-pair`. Walks every multi-fleet project the local fleet founded, mints a fresh invitation for every cross-fleet member, prints the JSON to stdout with stderr separators per recipient. Single-fleet personal-DR projects are skipped (their members are sibling envoys in the user's own self-fleet, already inheriting trust via ADR-018's pair-claim ceremony).
+
+```
+vigo swarm gitmirror project re-invite-all [<project_id>]
+```
+
+**Arguments:**
+
+- Optional positional `<project_id>` (or unique handle prefix) — restricts to a single project. Without an argument, walks every founded multi-fleet project.
+
+**Preconditions:** self-fleet must be unlocked (the verb signs new leaf tokens via the session helper). The local user must be the founder of at least one multi-fleet project — the founder predicate uses `chain.last().new_founder_pubkey` (or `founder_fleet_pubkey` if no delegations) compared against the local fleet pubkey.
+
+**Effects:**
+
+- For every founded project where `members[]` minus the local fleet is non-empty, mints a fresh `Member` token chained off the local user's current admin leaf (which slice 3's rekey hook rebuilt under the new identity).
+- Embeds the project's full delegation chain in each invitation so the recipient's verifier can walk the post-rekey leaf back to the genesis founder pubkey baked into `project_id`.
+- Prints `(member fleet, project handle, invitation JSON)` triples to stdout; per-recipient header lines go to stderr so the operator can split the JSON blocks into per-recipient files via simple shell tooling. Pipe each JSON block out-of-band to the matching member fleet — same trust hop as the original `invite` flow.
+
+**Threat model:** an attacker who has compromised a retired founder key could forge their own delegation envelope and present a chain that mathematically verifies. The OOB capability code (the `re-invite-all` JSON block being communicated through a trusted channel from a trusted founder) is the trust gate; receivers do not auto-accept gossiped delegations.
+
+```
+$ vigo swarm gitmirror project re-invite-all
+─── re-invite for project 'team-repo' → ed25519:ab12… ───
+{
+  "version": 1,
+  "project": { … },
+  "chain": [ … ],
+  "delegations": [ … ]
+}
+
+✓ 1 re-invite invitation(s) printed across founded multi-fleet project(s).
+  Skipped 2 single-fleet project(s) (no cross-fleet members): vigo-web, dotfiles
+
+Communicate each JSON block out-of-band to the matching member fleet,
+then have them run:
+    vigo swarm gitmirror project rejoin <project_id> --invitation -
+```
+
+## `project rejoin`
+
+(ADR-019) Member-side flow run after the founder of a multi-fleet project has rekeyed and run `re-invite-all`. Idempotent extension of `project join` — does NOT bail when the project already exists locally.
+
+```
+vigo swarm gitmirror project rejoin <project_id> [--invitation <file|->]
+```
+
+**Arguments:**
+
+- `<project_id>` (or unique handle prefix) — must match the project_id baked into the invitation JSON.
+- `--invitation <file|->` — path to the invitation JSON, or `-` for stdin (default).
+
+**Preconditions:** local fleet identity must be initialized. Unlike `join`, `rejoin` does NOT require the absence of an existing project state.
+
+**Effects:**
+
+- Verifies the invitation chain via `verify_chain` with the embedded delegations as the authority bridge. Rejects if the chain doesn't anchor to the genesis founder pubkey baked into `project_id`, if the leaf doesn't grant access to the local fleet, or if any delegation signature fails.
+- Updates `project.json`, `tokens.json`, and `delegations.json` from the invitation. When the invitation has empty delegations (founder rolled back or re-founded under genesis), removes any stale local `delegations.json` so the verifier doesn't apply bogus authority windows.
+- Preserves any unrelated local state (revoke / leave pending sentinels). The bare repo bytes on this envoy are untouched — `project_id` is stable across the founder's rekey, so no data migration is needed.
+
+```
+$ vigo swarm gitmirror project rejoin team-repo --invitation re-invite.json
+✓ Re-joined project team-repo (chain refreshed)
+  URL:        vigo://e3b0…/team-repo
+  Role:       Member
+  Members:    3
+  Fan-out:    members-only
+  Delegations: 1 hop(s) (chain anchors to genesis founder ed25519:ab12345…)
+
+State updated under /home/dan/.vigo-gitmirror/e3b0…
+```
+
 ## Hidden verbs
 
 `_apply-blacklist` is dispatched by the server via TaskDispatch when an envoy newly matches `swarm.gitmirror.blacklist`. It wipes every locally-held bare repo under `/var/lib/vigo/swarm/gitmirror/projects/`. Idempotent. Not advertised in `--help`.
@@ -226,6 +301,6 @@ vigo swarm gitmirror project reanchor <project_id>
 
 - [ADR-015 — Unified gitmirror substrate](../../adr/015-unified-gitmirror-substrate.md)
 - [ADR-014 — Self-fleet primitive](../../adr/014-self-fleet-primitive.md)
-- [ADR-018 — Self-fleet rekey](../../adr/018-self-fleet-rekey.md) — the founder-rekey delegation flow ships incrementally as ADR-019 (slices 1–3 in tree at 0.35.18–0.35.20)
+- [ADR-018 — Self-fleet rekey](../../adr/018-self-fleet-rekey.md) — the founder-rekey delegation flow ships incrementally as ADR-019 (slices 1–4 in tree at 0.35.18–0.35.21; slice 5 pending)
 - [vigo swarm self-fleet CLI reference](agent-swarm-self-fleet.md)
 - [Capability-token primitives — `tokens.rs`](../../engineering/subsystems/gitmirror.md)
