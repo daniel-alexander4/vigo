@@ -373,6 +373,20 @@ func partitionEnvoyFindings(findings []ControlFinding, coverage *config.Standard
 	return
 }
 
+// partitionFindingsForEnvoy is the canonical per-envoy partition entry
+// point. It resolves the envoy's module coverage from the config store
+// and delegates to partitionEnvoyFindings. docCovered is taken from
+// the caller because fleet-wide loops hoist that lookup once outside
+// the per-envoy iteration; supplying nil is safe when the documented
+// bucket isn't relevant.
+func (h *ReportHandler) partitionFindingsForEnvoy(slug, hostname string, findings []ControlFinding, docCovered map[string]bool) (covered, waived, partial, missing int) {
+	var coverage *config.StandardCoverage
+	if standardKey, keyOK := config.StandardKeyForSlug[slug]; keyOK {
+		coverage = h.configStore.EnvoyStandardCoverage(hostname, standardKey)
+	}
+	return partitionEnvoyFindings(findings, coverage, docCovered)
+}
+
 // collectDocCoverage queries the docs resolver for every documented-
 // scope control in findings and returns the set of control IDs that
 // have at least one active document attached. Returns nil when the
@@ -420,12 +434,8 @@ func (h *ReportHandler) ComputeEnvoyFrameworkStatus(r *http.Request, hostname, s
 	// whatever coverage the config store has. Keeps the drilldown and
 	// envoy-detail usable for envoys that are enrolled but have no
 	// recent activity.
-	var coverage *config.StandardCoverage
-	if standardKey, keyOK := config.StandardKeyForSlug[slug]; keyOK {
-		coverage = h.configStore.EnvoyStandardCoverage(hostname, standardKey)
-	}
 	docCovered := collectDocCoverage(r.Context(), h.docsResolver, slug, score.Controls)
-	covered, waived, partial, missing := partitionEnvoyFindings(score.Controls, coverage, docCovered)
+	covered, waived, partial, missing := h.partitionFindingsForEnvoy(slug, hostname, score.Controls, docCovered)
 	pct := 0.0
 	if score.Total > 0 {
 		pct = float64(covered) / float64(score.Total) * 100
@@ -611,11 +621,7 @@ func (h *ReportHandler) computeFrameworkScore(ctx context.Context, as AuditChain
 
 	docCovered := collectDocCoverage(ctx, h.docsResolver, slug, findings)
 	for _, hostname := range activeHostnames {
-		var coverage *config.StandardCoverage
-		if hasKey {
-			coverage = h.configStore.EnvoyStandardCoverage(hostname, standardKey)
-		}
-		covered, waived, partial, missing := partitionEnvoyFindings(findings, coverage, docCovered)
+		covered, waived, partial, missing := h.partitionFindingsForEnvoy(slug, hostname, findings, docCovered)
 		pct := 0.0
 		if total > 0 {
 			pct = float64(covered) / float64(total) * 100
