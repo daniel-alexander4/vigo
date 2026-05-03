@@ -130,7 +130,12 @@ resources:
     type: exec
     command: "shutdown -r +1 'Rebooting after package upgrade'"
     when: changed
-    onlyif: "test -f /var/run/reboot-required || needs-restarting -r 2>/dev/null; test $? -eq 1"
+    # Reboot if either signal is present:
+    #   Debian/Ubuntu — /var/run/reboot-required flag file
+    #   RHEL/Fedora   — needs-restarting -r exits 1
+    # Each branch is parenthesised so the success of one short-circuits
+    # the other without leaking $? from a partial command.
+    onlyif: "(test -f /var/run/reboot-required) || (needs-restarting -r 2>/dev/null; test $? -eq 1)"
 
   - name: reboot-if-needed-windows
     type: exec

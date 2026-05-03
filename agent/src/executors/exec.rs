@@ -244,6 +244,19 @@ fn execute_exec(
         .get("sensitive")
         .map(|s| s == "true")
         .unwrap_or(false);
+
+    // report_settled: when true and the command runs successfully, report
+    // Action::None instead of Action::Created and set changed=false. The
+    // operator's escape hatch for exec resources whose successful execution
+    // is maintenance / cache-warming rather than a real state change —
+    // keeps daily refreshers (apt-get update, etc.) from contaminating
+    // ChangedCount and tripping drift detection. Failure path is unaffected:
+    // a non-zero exit still produces a normal failure with error_message
+    // and FailedCount > 0.
+    let report_settled = params
+        .get("report_settled")
+        .map(|s| s == "true")
+        .unwrap_or(false);
     if sensitive {
         result.resource_name = "[sensitive]".to_string();
     }
@@ -572,6 +585,13 @@ fn execute_exec(
         match run_result {
             Ok(output) => {
                 if exit_code_acceptable(&output, &acceptable_codes) {
+                    if report_settled {
+                        // Operator-declared no-op: command ran cleanly but
+                        // its side effects don't constitute a state change
+                        // for the dashboard's purposes.
+                        result.action = Action::None;
+                        result.changed = false;
+                    }
                     return Ok(());
                 }
                 last_error = Some(format_exec_error(&output));
@@ -728,6 +748,41 @@ mod tests {
 
         assert_eq!(result.action, Action::Skipped);
         assert!(!result.changed);
+    }
+
+    #[test]
+    fn report_settled_suppresses_change_on_success() {
+        // A command that exits 0 with report_settled: true must report
+        // Action::None and changed=false — operator-declared no-op for
+        // dashboard purposes (e.g., apt-get update cache refresh).
+        let exec = ExecExecutor::new();
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "echo hello"),
+                ("report_settled", "true"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+    }
+
+    #[test]
+    fn report_settled_does_not_suppress_failure() {
+        // report_settled only affects the success path. A non-zero exit
+        // still surfaces as a real failure; the flag must NOT swallow it.
+        let exec = ExecExecutor::new();
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "false"),
+                ("report_settled", "true"),
+            ]),
+            false,
+        );
+        // Failure path: error populated, action stays Created (the
+        // pre-run default), changed stays true. The dashboard reports
+        // this as failed via failed_count from the result envelope.
+        assert!(result.error.is_some(), "expected error on failure");
     }
 
     #[test]

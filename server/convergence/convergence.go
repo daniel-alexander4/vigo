@@ -39,12 +39,11 @@ const (
 	// DegradedMaxPct is the upper bound (exclusive) for Degraded on the
 	// failure axis. Failure pct below this is Degraded; at or above is
 	// Failed. Matches uifmt.FailureGradient's saturation point so the
-	// red badge color and the bucket boundary line up exactly.
+	// red badge color and the bucket boundary line up exactly. There is
+	// no minimum — any FailedCount > 0 lands in Degraded (or Failed if
+	// the percentage clears the upper bound). A single failed module of
+	// 172 is still a failure on the dashboard.
 	DegradedMaxPct = 80
-
-	// DegradedMinPct is the lower bound (inclusive) for Degraded.
-	// Failure pct below this is Converged — too few failures to flag.
-	DegradedMinPct = 1
 )
 
 // ComputeConvergence returns the failure-axis bucket for a single
@@ -60,8 +59,7 @@ const (
 //  2. last.Status == "blocked"             → "failed"  (no resources applied)
 //  3. last.FailedCount == 0 with recognized status → "converged"
 //  4. failure pct >= DegradedMaxPct        → "failed"
-//  5. failure pct >= DegradedMinPct        → "degraded"
-//  6. otherwise                            → "converged"
+//  5. otherwise (any FailedCount > 0)      → "degraded"
 func ComputeConvergence(recentRuns []RunInfo) string {
 	if len(recentRuns) == 0 {
 		return "no data"
@@ -89,16 +87,14 @@ func ComputeConvergence(recentRuns []RunInfo) string {
 		return "no data"
 	}
 
-	// Failure percentage classification.
+	// Failure percentage classification. Any FailedCount > 0 is at
+	// least Degraded; >= DegradedMaxPct upgrades to Failed.
 	if last.ModuleCount > 0 {
 		pct := float64(last.FailedCount) / float64(last.ModuleCount) * 100
 		if pct >= DegradedMaxPct {
 			return "failed"
 		}
-		if pct >= DegradedMinPct {
-			return "degraded"
-		}
-		return "converged"
+		return "degraded"
 	}
 
 	// FailedCount > 0 but ModuleCount == 0 — degenerate input; treat

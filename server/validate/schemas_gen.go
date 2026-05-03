@@ -8,7 +8,6 @@ package validate
 // generatedSchemas maps resource type names to attribute names extracted
 // from executor source code. Merged into TypeSchemas at init time.
 var generatedSchemas = map[string][]string{
-	"acl": {"identity","inheritance","path","rights","state","type"},
 	"alternatives": {"link","name","path","priority","state"},
 	"backup": {"cross_fs","exclude","min_free_space","post_command","pre_command","retain","schedule","source_dir","target_path"},
 	"blockinfile": {"block_content","create","label","marker_begin","marker_end","mode","state","target_path"},
@@ -23,7 +22,7 @@ var generatedSchemas = map[string][]string{
 	"docker_container": {"command","container","env","image","network","ports","pull","restart","state","volumes"},
 	"docker_image": {"force","image","state","tag"},
 	"domain_membership": {"domain","ou_path","password","restart_after_join","state","username"},
-	"exec": {"background","command","cwd","environment","logoutput","name","nice","onlyif","retries","retry_delay","returns","secret_file","sensitive","shell","stdin","unless","user"},
+	"exec": {"background","command","cwd","environment","logoutput","name","nice","onlyif","report_settled","retries","retry_delay","returns","secret_file","sensitive","shell","stdin","timeout","unless","user"},
 	"field_edit": {"extend_fields","field_operation","field_separator","field_value","line_match","path","select_field","state","value_separator"},
 	"file": {"backup","baseindent","content","group","mode","owner","secontext","source","state","stream_edit","target_path","validate"},
 	"file_line": {"line","match_pattern","position","region_end","region_start","state","target_path"},
@@ -74,7 +73,7 @@ var generatedSchemas = map[string][]string{
 	"systemd_dropin": {"content","dropin","state","unit"},
 	"timezone": {"timezone"},
 	"tmpfile": {"age","entry_type","group","mode","name","path","state","user"},
-	"user": {"authorized_keys","comment","expiredate","gid","group","groups","home","manage_home","password","password_max_age","purge_groups","shell","state","sudo_nopasswd","sudo_passwd","system","uid","username","cryptsync"},
+	"user": {"authorized_keys","comment","cryptsync","expiredate","gid","group","groups","home","manage_home","password","password_max_age","purge_groups","shell","state","sudo_nopasswd","sudo_passwd","system","uid","username"},
 	"windows_defender": {"DisableRealtimeMonitoring","ExclusionExtension","ExclusionPath","ExclusionProcess","ScanScheduleDay","ScanScheduleQuickScanTime","exclusion_extension","exclusion_path","exclusion_process","real_time_protection","scan_schedule_day","scan_schedule_time","state"},
 	"windows_env": {"state","target","value","variable"},
 	"windows_update": {"auto_update_enabled","scheduled_day","scheduled_time","state","wsus_server"},

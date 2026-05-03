@@ -24,6 +24,7 @@ func TestComputeConvergence(t *testing.T) {
 			{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 1},
 			{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 1},
 		}, "converged"},
+		{"degraded 1/172 (0.58%) — any failure is at least degraded", []RunInfo{{Status: "partial", FailedCount: 1, ModuleCount: 172}}, "degraded"},
 		{"degraded 1/59 (1.7%)", []RunInfo{{Status: "partial", FailedCount: 1, ModuleCount: 59}}, "degraded"},
 		{"degraded 47/59 (79.7%)", []RunInfo{{Status: "partial", FailedCount: 47, ModuleCount: 59}}, "degraded"},
 		{"failed 48/59 (81.4%)", []RunInfo{{Status: "partial", FailedCount: 48, ModuleCount: 59}}, "failed"},
