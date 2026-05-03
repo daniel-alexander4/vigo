@@ -16,6 +16,7 @@ import (
 
 	"git.alexander4.io/tessera/license"
 	vigolic "git.alexander4.io/tessera/license/products/vigo"
+	srvlicense "git.alexander4.io/vigo/server/license"
 	"github.com/spf13/cobra"
 )
 
@@ -155,19 +156,7 @@ func runLicenseStatus(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	stageName := "Unknown"
-	switch status.Stage {
-	case 0:
-		stageName = "Compliant"
-	case 1:
-		stageName = "Grace Period"
-	case 2:
-		stageName = "Enrollment Block"
-	case 3:
-		stageName = "Service Stop"
-	}
-
-	fmt.Printf("Enforcement Stage: %s\n", stageName)
+	fmt.Printf("Enforcement Stage: %s\n", srvlicense.Stage(status.Stage).String())
 
 	if status.License != nil {
 		fmt.Printf("\nLicense:\n")
