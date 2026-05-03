@@ -136,7 +136,7 @@ Returns a list of `PlannedAction`:
 | `relapsed` | int32 | 2 consecutive runs with changes |
 | `diverged` | int32 | 3+ consecutive runs with changes |
 | `failed` | int32 | Last run failed |
-| `offline` | int32 | Not seen within 2.5× interval |
+| `offline` | int32 | Not seen within the per-envoy stale threshold (2.5 × max(configured interval, agent's observed inter-CheckIn cadence); operator override via `checkin.offline_threshold`) |
 | `no_data` | int32 | No run data |
 | `convergence_pct` | float | Percentage converged |
 
