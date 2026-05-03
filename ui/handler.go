@@ -538,7 +538,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/security-envoy/{id}", h.SecurityEnvoyFragment)
 	mux.HandleFunc("GET /runs", h.Runs)
 	mux.HandleFunc("GET /runs/{id}", h.RunDetail)
-	mux.HandleFunc("GET /runs/{id}/viz", h.RunDetailViz)
 	mux.HandleFunc("GET /config/{hostname}", h.Config)
 	mux.HandleFunc("GET /server/config", h.ServerConfig)
 	mux.HandleFunc("GET /server/config/{section}", h.ServerConfigSection)

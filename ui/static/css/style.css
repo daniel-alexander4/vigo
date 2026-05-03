@@ -3688,14 +3688,6 @@ html.theme-dark input, html.theme-dark select, html.theme-dark textarea { backgr
 .swarm-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 0.85em; color: var(--color-text-muted); flex-wrap: wrap; }
 .swarm-legend__item { display: flex; align-items: center; gap: 4px; }
 .swarm-legend__swatch { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
-/* Action-state swatches for the run-viz waterfall legend. Tokens
-   resolve to Latte hues on the light theme and Mocha hues on dark —
-   previous inline hex literals were Mocha-only and rendered wrong on
-   light. */
-.swarm-legend__swatch--create { background: var(--color-success); }
-.swarm-legend__swatch--update { background: var(--color-brand); }
-.swarm-legend__swatch--delete { background: var(--color-danger); }
-.swarm-legend__swatch--noop { background: var(--color-border); }
 .swarm-matrix-wrap { overflow-x: auto; }
 .swarm-matrix { border-collapse: separate; border-spacing: 2px; font-family: monospace; }
 .swarm-matrix th { padding: 4px 8px; font-weight: 600; white-space: nowrap; text-align: center; }

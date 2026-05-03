@@ -35,7 +35,6 @@ Column headers for Hostname, Status, Changed, Failed, and Time are clickable to 
 - **Filter by status**: Click a status button to narrow the list
 - **Sort by column**: Click column headers to sort (e.g., sort by Failed descending to find the worst runs)
 - **View run detail**: Click a run ID to see per-resource results including action taken, failed, and duration for each resource
-- **Viz view**: On the run detail page, click **Viz View** (`/runs/{id}/viz`) to see an execution waterfall (horizontal bars per resource, width = duration, color = action) and a changed/noop/failed donut chart
 
 ## Data Sources
 
