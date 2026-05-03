@@ -109,14 +109,15 @@ func funcMap() template.FuncMap {
 		},
 		// convergenceRatio renders the canonical badge text used on every
 		// run/envoy convergence indicator across the UI:
-		//   "<changed>c · <failed>f / <total>"
-		// e.g. "3c · 1f / 172". The marker letters are part of the badge so
-		// the bare numbers stay self-explanatory without depending on a
-		// column header. Color of the badge comes from failureGradient
+		//   "<changed>/<failed>/<total>"
+		// e.g. "3/1/172". The bare slash form keeps the badge compact;
+		// the title attribute (convergenceHover) carries the labeled
+		// "X changed · Y failed of Z modules" form for operators who
+		// need the legend. Color of the badge comes from failureGradient
 		// against failed/total — drift / change count contributes to the
 		// numerator only, never the color.
 		"convergenceRatio": func(changed, failed, total int64) string {
-			return fmt.Sprintf("%dc · %df / %d", changed, failed, total)
+			return fmt.Sprintf("%d/%d/%d", changed, failed, total)
 		},
 		// convergenceHover renders the verbose labeled form for the title
 		// attribute on the badge — operator hovers and gets a sentence

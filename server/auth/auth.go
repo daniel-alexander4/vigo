@@ -90,9 +90,15 @@ var publicPaths = map[string]bool{
 	"/login":              true,
 	"/totp":               true,
 	"/setup":              true,
-	"/api/v1/bootstrap":   true,
-	"/api/v1/config/reload":  true,
+	"/api/v1/bootstrap":       true,
 	"/api/v1/secrets/rotated": true,
+	// /api/v1/config/reload is INTENTIONALLY NOT public. The route's own
+	// RequirePermission(PermConfigPublish) wrapper handles auth — adding
+	// it here bypassed the auth middleware entirely (no user injected
+	// into context), then the per-route permission check rejected the
+	// missing-user request with 401 even for vigocli running on the
+	// server host. TryPeerAuth handles the localhost case correctly:
+	// loopback admin gets injected and clears the permission gate.
 }
 
 // IsPublicPath returns true if the given URL path should be accessible

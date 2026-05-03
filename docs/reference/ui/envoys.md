@@ -60,7 +60,7 @@ Auto-refreshes every 30 seconds via HTMX. Pagination is offset-based — a hidde
 | Last Convergence | Relative time with absolute timestamp on hover. Clickable link to the run detail page. |
 | Root FS | Available disk percentage on `/` — green >20%, yellow ≤20%, red ≤10% |
 | Repos | Package repository health — green when all repos are healthy, red with broken count |
-| Convergence | Gradient-coloured badge with text `<changed>c · <failed>f / <total>` (e.g. `3c · 1f / 172`). Color interpolates green→yellow→red over `failed/total` 0%→40%→80% via `uifmt.FailureGradient` — the changed count enters the numerator only, never the colour. Hover reveals `"X changed · Y failed of Z modules"`. Envoys with no module count yet render `0c · 0f / 0` in muted gray. Clickable link to run detail. |
+| Convergence | Gradient-coloured badge with text `<changed>/<failed>/<total>` (e.g. `3/1/172`). Color interpolates green→yellow→red over `failed/total` 0%→40%→80% via `uifmt.FailureGradient` — the changed count enters the numerator only, never the colour. Hover reveals `"X changed · Y failed of Z modules"` so the bare numbers don't have to self-label. Envoys with no module count yet render `0/0/0` in muted gray. Clickable link to run detail. |
 
 ### Envoy Count
 

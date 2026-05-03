@@ -29,6 +29,14 @@ func TestIsPublicPath(t *testing.T) {
 		{"/api/v1/agent/download/linux/arm64", true},
 		{"/api/v1/agent/latest", true},
 		{"/api/v1/bootstrap/register", true},
+		// /api/v1/config/reload must NOT be public — the route guards it
+		// with RequirePermission(PermConfigPublish). Marking the path
+		// public bypassed the auth middleware (no user in context), then
+		// the per-route permission check rejected the user-less request
+		// with 401, breaking vigocli config publish from the server host.
+		// Localhost callers get peer-auth → loopback admin → permission
+		// passes; remote callers without a token correctly get 401.
+		{"/api/v1/config/reload", false},
 		{"/", false},
 		{"/envoys", false},
 		{"/api/v1/users", false},
