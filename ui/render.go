@@ -125,13 +125,30 @@ func funcMap() template.FuncMap {
 		"convergenceHover": func(changed, failed, total int64) string {
 			return fmt.Sprintf("%d changed · %d failed of %d modules", changed, failed, total)
 		},
+		// actionCSSClass maps the richer per-resource action_taken
+		// vocabulary the agent emits (create/update/delete plus
+		// skipped/settled/"already in desired state"/blocked/failed)
+		// to badge variants, so each row's Action column carries a
+		// distinct color. We deliberately don't route through
+		// convergence.ClassifyAction here — that function collapses
+		// every non-CRUD outcome to noop for drift-counting, which
+		// erases the visual distinction between "skipped because
+		// when:false" and "settled because state already matched."
 		"actionCSSClass": func(action string) string {
-			switch convergence.ClassifyAction(action) {
-			case convergence.ActionCreate:
+			switch strings.ToLower(strings.TrimSpace(action)) {
+			case "create", "created":
 				return "success"
-			case convergence.ActionUpdate:
+			case "update", "updated":
 				return "info"
-			case convergence.ActionDelete:
+			case "delete", "deleted":
+				return "danger"
+			case "settled", "already in desired state", "ok", "noop", "none":
+				return "mauve"
+			case "skipped":
+				return "muted"
+			case "blocked":
+				return "warning"
+			case "failed":
 				return "danger"
 			default:
 				return "muted"

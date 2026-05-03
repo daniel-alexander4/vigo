@@ -2511,6 +2511,16 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 .badge--err, .badge--divergent { background: var(--color-badge-danger-bg); color: var(--color-badge-danger-text); }
 .badge--neutral, .badge--tombstoned { background: var(--color-badge-neutral-bg); color: var(--color-badge-neutral-text); }
 
+/* Generic-name aliases used by the run-detail Action column. The
+   `actionCSSClass` template helper returns these names so each
+   per-resource action_taken value renders in its own color:
+   created → success (defined earlier with .badge--converged),
+   updated → info, deleted/failed → danger, skipped → muted (defined
+   earlier), settled/already-in-desired-state → mauve, blocked →
+   warning. */
+.badge--warning { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
+.badge--mauve { background: var(--color-badge-mauve-bg); color: var(--color-badge-mauve-text); }
+
 /* === Health banner — top-of-page status strip ===
    Rendered first on /swarm/payload, /swarm/filesync, /swarm/gitmirror, /swarm/cryptsync so an on-call
    operator sees "is anything broken" inside the first viewport. The severity
