@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"git.alexander4.io/tessera/license"
+	vigolic "git.alexander4.io/tessera/license/products/vigo"
 	"github.com/spf13/cobra"
 )
 
@@ -66,7 +67,7 @@ The fingerprint is SHA256(machine-id + primary-MAC + CA-cert-fingerprint).
 It changes on OS reinstall, primary NIC replacement, or CA cert regeneration.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		caFile, _ := cmd.Flags().GetString("ca-file")
-		fp, err := license.MachineFingerprint(caFile)
+		fp, err := vigolic.MachineFingerprint(caFile)
 		if err != nil {
 			return fmt.Errorf("computing fingerprint: %w", err)
 		}
@@ -82,13 +83,14 @@ func runLicenseInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid license file: %w", err)
 	}
 
-	if err := lic.Verify(); err != nil {
+	p, err := vigolic.Decode(lic)
+	if err != nil {
 		return fmt.Errorf("license verification failed: %w", err)
 	}
 
 	// Check expiry.
-	if exp, err := lic.ExpiresTime(); err == nil && time.Now().After(exp) {
-		return fmt.Errorf("license has already expired (%s)", lic.Payload.ExpiresAt)
+	if exp, err := p.ExpiresTime(); err == nil && time.Now().After(exp) {
+		return fmt.Errorf("license has already expired (%s)", p.ExpiresAt)
 	}
 
 	// Read the file content and write to the install path.
@@ -97,7 +99,7 @@ func runLicenseInstall(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("reading license file: %w", err)
 	}
 
-	destDir := license.DefaultLicenseDir
+	destDir := vigolic.DefaultLicenseDir
 	if err := os.MkdirAll(destDir, 0700); err != nil {
 		return fmt.Errorf("creating license directory: %w", err)
 	}
@@ -108,11 +110,11 @@ func runLicenseInstall(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("License installed: %s\n", destPath)
-	fmt.Printf("  License ID:  %s\n", lic.Payload.LicenseID)
-	fmt.Printf("  Customer:    %s\n", lic.Payload.CustomerName)
-	fmt.Printf("  Tier:        %s\n", lic.Payload.TierDisplayName())
-	fmt.Printf("  Max envoys: %d\n", lic.Payload.MaxEnvoys)
-	fmt.Printf("  Expires:     %s\n", lic.Payload.ExpiresAt)
+	fmt.Printf("  License ID:  %s\n", p.LicenseID)
+	fmt.Printf("  Customer:    %s\n", p.CustomerName)
+	fmt.Printf("  Tier:        %s\n", p.TierDisplayName())
+	fmt.Printf("  Max envoys: %d\n", p.MaxEnvoys)
+	fmt.Printf("  Expires:     %s\n", p.ExpiresAt)
 
 	// Send SIGHUP to the running vigosrv process for live reload.
 	if err := signalVigosrv(); err != nil {
@@ -198,25 +200,29 @@ func runLicenseStatus(cmd *cobra.Command, args []string) error {
 
 func runLicenseInspect(cmd *cobra.Command, args []string) error {
 	var lic *license.License
+	var p *vigolic.Payload
 	var err error
 	if len(args) > 0 {
 		lic, err = license.LoadFile(args[0])
+		if err == nil {
+			p, err = vigolic.Decode(lic)
+		}
 	} else {
-		lic, _, err = license.LoadDir(license.DefaultLicenseDir)
+		lic, p, _, err = vigolic.LoadDir(vigolic.DefaultLicenseDir)
 	}
 	if err != nil {
 		return err
 	}
 
-	// Try to verify, but don't fail — this is an offline inspect.
-	if verr := lic.Verify(); verr != nil {
+	// Verify is already done by Decode/LoadDir. Re-running it here gives
+	// the operator an explicit signature line in the output.
+	if verr := lic.Verify(vigolic.PublicKeyHex); verr != nil {
 		fmt.Println("SIGNATURE: COULD NOT VERIFY (public key may not be configured)")
 	} else {
 		fmt.Println("SIGNATURE: VALID")
 	}
 
 	fmt.Println()
-	p := lic.Payload
 	fmt.Printf("License ID:    %s\n", p.LicenseID)
 	fmt.Printf("Customer:      %s (%s)\n", p.CustomerName, p.CustomerID)
 	fmt.Printf("Tier:          %s\n", p.TierDisplayName())
@@ -225,7 +231,7 @@ func runLicenseInspect(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Expires:       %s\n", p.ExpiresAt)
 	fmt.Printf("Version:       %d\n", p.Version)
 
-	if exp, err := lic.ExpiresTime(); err == nil {
+	if exp, err := p.ExpiresTime(); err == nil {
 		days := int(time.Until(exp).Hours() / 24)
 		if days < 0 {
 			fmt.Printf("Status:        EXPIRED (%d days ago)\n", -days)
@@ -234,9 +240,9 @@ func runLicenseInspect(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Also print raw JSON.
+	// Also print raw JSON of the typed payload.
 	fmt.Println("\nRaw payload:")
-	raw, _ := json.MarshalIndent(lic.Payload, "  ", "  ")
+	raw, _ := json.MarshalIndent(p, "  ", "  ")
 	fmt.Printf("  %s\n", string(raw))
 
 	return nil

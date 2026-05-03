@@ -52,7 +52,7 @@ import (
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/freshness"
 	isgrpc "git.alexander4.io/vigo/server/grpc"
-	licfmt "git.alexander4.io/tessera/license"
+	licfmt "git.alexander4.io/tessera/license/products/vigo"
 	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/registry"

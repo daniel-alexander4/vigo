@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	licfmt "git.alexander4.io/tessera/license"
+	vigolic "git.alexander4.io/tessera/license/products/vigo"
 	"git.alexander4.io/vigo/server/metrics"
 )
 
@@ -80,7 +80,7 @@ type ShutdownFunc func()
 // Status holds the current license enforcement state.
 type Status struct {
 	Stage          Stage     `json:"stage"`
-	License        *licfmt.Payload `json:"license,omitempty"`
+	License        *vigolic.Payload `json:"license,omitempty"`
 	ActiveEnvoys  int       `json:"active_envoys"`
 	MaxEnvoys     int       `json:"max_envoys"`
 	ExpiresAt      string    `json:"expires_at,omitempty"`
@@ -93,7 +93,7 @@ type Status struct {
 // Enforcer manages license validation and enforcement at runtime.
 type Enforcer struct {
 	mu           sync.RWMutex
-	license      *licfmt.License
+	license      *vigolic.Payload
 	licenseDir   string
 	graceDir     string
 	caFile       string // TLS CA cert path for fingerprint computation
@@ -167,10 +167,10 @@ func (e *Enforcer) RegistrationAllowedAt(currentCount int) error {
 
 	// Hard node-count gate. count >= max means the next insert would push
 	// the fleet over the limit. Rejects with no grace period.
-	if e.license != nil && e.license.Payload.MaxEnvoys > 0 {
-		if currentCount >= e.license.Payload.MaxEnvoys {
+	if e.license != nil && e.license.MaxEnvoys > 0 {
+		if currentCount >= e.license.MaxEnvoys {
 			return fmt.Errorf("%w: %d/%d active envoys — upgrade your license or decommission nodes before enrolling more",
-				ErrNodeLimitReached, currentCount, e.license.Payload.MaxEnvoys)
+				ErrNodeLimitReached, currentCount, e.license.MaxEnvoys)
 		}
 	}
 	return nil
@@ -201,10 +201,9 @@ func (e *Enforcer) GetStatus() Status {
 	}
 
 	if e.license != nil {
-		p := e.license.Payload
-		s.License = &p
-		s.MaxEnvoys = p.MaxEnvoys
-		s.ExpiresAt = p.ExpiresAt
+		s.License = e.license
+		s.MaxEnvoys = e.license.MaxEnvoys
+		s.ExpiresAt = e.license.ExpiresAt
 
 		if exp, err := e.license.ExpiresTime(); err == nil {
 			days := int(time.Until(exp).Hours() / 24)
@@ -246,7 +245,7 @@ func (e *Enforcer) Run(ctx context.Context) {
 			if e.stage == StageServiceStop && e.shutdownFn != nil {
 				e.mu.Unlock()
 				slog.Error("license enforcement: stage 3 reached — initiating server shutdown",
-					"license_id", e.license.Payload.LicenseID,
+					"license_id", e.license.LicenseID,
 					"violation", e.violation)
 				e.shutdownFn()
 				return
@@ -265,23 +264,23 @@ func (e *Enforcer) loadAndCheck() error {
 
 // loadAndCheckLocked does the work without acquiring the lock.
 func (e *Enforcer) loadAndCheckLocked() error {
-	lic, path, err := licfmt.LoadDir(e.licenseDir)
+	_, payload, path, err := vigolic.LoadDir(e.licenseDir)
 	if err != nil {
 		return fmt.Errorf("%w\nPlace a .lic file in %s or install with: vigocli license install --file=<path>", err, e.licenseDir)
 	}
 
 	slog.Info("license loaded", "path", path)
-	e.license = lic
+	e.license = payload
 
 	// Validate machine fingerprint for paid licenses.
 	// Free tier (no fingerprint) is always accepted.
-	if lic.Payload.Fingerprint != "" {
-		actual, fpErr := licfmt.MachineFingerprint(e.caFile)
+	if payload.Fingerprint != "" {
+		actual, fpErr := vigolic.MachineFingerprint(e.caFile)
 		if fpErr != nil {
 			slog.Warn("license fingerprint check: could not compute machine fingerprint", "error", fpErr)
-		} else if actual != lic.Payload.Fingerprint {
+		} else if actual != payload.Fingerprint {
 			slog.Warn("license fingerprint mismatch — license is bound to a different machine",
-				"expected", lic.Payload.Fingerprint[:12]+"...",
+				"expected", payload.Fingerprint[:12]+"...",
 				"actual", actual[:12]+"...",
 			)
 			e.violation = "license fingerprint mismatch — this license is bound to a different machine. Contact support for a new license."
@@ -322,7 +321,7 @@ func (e *Enforcer) evaluateLocked() error {
 
 	overLimit := false
 	if count, err := e.counter(context.Background()); err == nil {
-		overLimit = count > e.license.Payload.MaxEnvoys
+		overLimit = count > e.license.MaxEnvoys
 	}
 
 	if !expired && !overLimit {
@@ -341,7 +340,7 @@ func (e *Enforcer) evaluateLocked() error {
 	} else if expired {
 		e.violation = "license expired"
 	} else {
-		e.violation = fmt.Sprintf("active envoys exceed license limit (%d)", e.license.Payload.MaxEnvoys)
+		e.violation = fmt.Sprintf("active envoys exceed license limit (%d)", e.license.MaxEnvoys)
 	}
 
 	// Load or create grace start timestamp.
@@ -377,7 +376,7 @@ func (e *Enforcer) evaluateLocked() error {
 func (e *Enforcer) updateMetrics() {
 	metrics.LicenseStage.Set(float64(e.stage))
 	if e.license != nil {
-		metrics.LicenseEnvoysMax.Set(float64(e.license.Payload.MaxEnvoys))
+		metrics.LicenseEnvoysMax.Set(float64(e.license.MaxEnvoys))
 		if exp, err := e.license.ExpiresTime(); err == nil {
 			days := int(time.Until(exp).Hours() / 24)
 			metrics.LicenseDaysRemaining.Set(float64(days))
@@ -396,7 +395,7 @@ const FreeLicenseID = "free-100"
 func (e *Enforcer) IsFreeLicense() bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return e.license != nil && e.license.Payload.LicenseID == FreeLicenseID
+	return e.license != nil && e.license.LicenseID == FreeLicenseID
 }
 
 // CheckInWarning returns a non-empty warning message if the license is in
@@ -414,9 +413,9 @@ func (e *Enforcer) CheckInWarning() string {
 	// Capacity warnings (independent of stage) — compliant fleets that
 	// are at or near the cap still need operator attention because the
 	// hard gate will start rejecting enrollments at count == max.
-	if e.stage == StageCompliant && e.license != nil && e.license.Payload.MaxEnvoys > 0 {
+	if e.stage == StageCompliant && e.license != nil && e.license.MaxEnvoys > 0 {
 		if count, err := e.counter(context.Background()); err == nil {
-			max := e.license.Payload.MaxEnvoys
+			max := e.license.MaxEnvoys
 			if count >= max {
 				return fmt.Sprintf("license at capacity: %d/%d — new enrollments will be rejected", count, max)
 			}
@@ -448,7 +447,7 @@ func (e *Enforcer) HasFeature(name string) bool {
 	if e.license == nil {
 		return false
 	}
-	for _, f := range e.license.Payload.Features {
+	for _, f := range e.license.Features {
 		if f == name {
 			return true
 		}
@@ -466,14 +465,14 @@ func (e *Enforcer) logIfNeeded() {
 
 	// Capacity logging for compliant fleets: hourly when at or near cap.
 	if e.stage == StageCompliant {
-		if e.license == nil || e.license.Payload.MaxEnvoys == 0 {
+		if e.license == nil || e.license.MaxEnvoys == 0 {
 			return
 		}
 		count, err := e.counter(context.Background())
 		if err != nil {
 			return
 		}
-		max := e.license.Payload.MaxEnvoys
+		max := e.license.MaxEnvoys
 		if count < (max*9)/10 { // below 90% — no log
 			return
 		}
@@ -485,13 +484,13 @@ func (e *Enforcer) logIfNeeded() {
 			slog.Error("license at capacity",
 				"active_envoys", count,
 				"max_envoys", max,
-				"license_id", e.license.Payload.LicenseID)
+				"license_id", e.license.LicenseID)
 		} else {
 			slog.Warn("license nearing capacity",
 				"active_envoys", count,
 				"max_envoys", max,
 				"slots_remaining", max-count,
-				"license_id", e.license.Payload.LicenseID)
+				"license_id", e.license.LicenseID)
 		}
 		return
 	}
@@ -517,13 +516,13 @@ func (e *Enforcer) logIfNeeded() {
 	case StageGrace:
 		slog.Warn("license violation: grace period active",
 			"violation", e.violation,
-			"license_id", e.license.Payload.LicenseID,
+			"license_id", e.license.LicenseID,
 			"day", elapsed,
 			"grace_days_remaining", graceDays-elapsed)
 	case StageEnrollBlock:
 		slog.Error("license violation: new enrollments blocked",
 			"violation", e.violation,
-			"license_id", e.license.Payload.LicenseID,
+			"license_id", e.license.LicenseID,
 			"day", elapsed,
 			"days_until_service_stop", totalDaysToStop-elapsed)
 	}

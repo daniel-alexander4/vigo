@@ -25,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	licfmt "git.alexander4.io/tessera/license"
+	licfmt "git.alexander4.io/tessera/license/products/vigo"
 	"github.com/google/uuid"
 	"git.alexander4.io/vigo/server/ai"
 	"git.alexander4.io/vigo/server/audit"

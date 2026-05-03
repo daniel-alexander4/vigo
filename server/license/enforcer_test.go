@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -16,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	licfmt "git.alexander4.io/tessera/license"
+	licfmt "git.alexander4.io/tessera/license/products/vigo"
 )
 
 // realPublicKey captures `licfmt.PublicKeyHex` at package-init time —
@@ -598,11 +597,9 @@ func TestRegistrationAllowedAt_StageServiceStopAlwaysBlocks(t *testing.T) {
 // writeLic writes a signed license to dir/vigo.lic.
 func writeLic(t *testing.T, dir string, payload licfmt.Payload, priv ed25519.PrivateKey) {
 	t.Helper()
-	canonical, _ := licfmt.CanonicalJSON(payload)
-	sig := ed25519.Sign(priv, canonical)
-	lic := &licfmt.License{
-		Payload:   payload,
-		Signature: base64.StdEncoding.EncodeToString(sig),
+	lic, err := licfmt.Sign(payload, priv)
+	if err != nil {
+		t.Fatalf("signing license: %v", err)
 	}
 	data, _ := json.MarshalIndent(lic, "", "  ")
 	os.WriteFile(filepath.Join(dir, "vigo.lic"), data, 0644)
