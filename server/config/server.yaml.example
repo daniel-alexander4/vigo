@@ -76,9 +76,10 @@ secrets:
 # ── Check-in ──────────────────────────────────────────────────────────────
 
 checkin:
-  interval: "5m"                               # agent poll frequency (stale = 2x this)
+  interval: "5m"                               # agent poll frequency
   jitter_percent: 20                           # randomize timing by 0-N%
   bundle_max_age: "24h"                        # signed bundle TTL on agents (0 = forever)
+  # offline_threshold: "15m"                   # override staleness boundary (default: 2.5 × interval)
   # observe_only: false                        # global observe-only: all envoys report drift only, no changes applied
 
 

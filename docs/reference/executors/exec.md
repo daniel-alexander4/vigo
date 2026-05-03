@@ -24,6 +24,7 @@ Runs arbitrary commands with optional guard conditions. Supports piping secrets 
 | `retry_delay` | No | `5` | Seconds to wait between retry attempts. |
 | `sensitive` | No | `false` | When `true`, suppress the command string from result names, logs, and error messages. Distinct from `logoutput: false` which only suppresses stdout/stderr. |
 | `shell` | No | `sh` | Shell to use for command execution (e.g., `bash`, `zsh`, `fish`). Default is `sh` on Unix, `cmd` on Windows. Guards also use the specified shell. |
+| `report_settled` | No | `false` | When `true` and the command exits with an acceptable code, the agent reports `Action::None` (Settled) and `changed=false` instead of `Action::Created`. Operator's escape hatch for exec resources whose successful execution is maintenance / cache-warming rather than a real state change — keeps daily refreshers (e.g., `apt-get update`) from inflating `ChangedCount` and tripping drift detection. Failures are unaffected: a non-zero exit still surfaces normally with the error populated. |
 
 ## States
 
@@ -107,6 +108,32 @@ resources:
     unless: "test -f /var/lib/myapp/initialized"
     depends_on: Install myapp
 ```
+
+### Cache refresh / maintenance steps
+
+`report_settled` exists for exec resources whose *successful execution
+is the work* but doesn't change persistent state in a way the dashboard
+should care about — package-cache refreshes, `daemon-reload` after a
+config write, the second half of a notify chain. The command runs as
+normal and its `onlyif` / `unless` gates still apply; only the per-run
+result label changes from `Created` to `Settled` on success. A failed
+exec still surfaces as a real failure regardless of the flag.
+
+```yaml
+resources:
+  - name: apt-update
+    type: exec
+    command: apt-get update -qq
+    onlyif: find /var/lib/apt/lists -maxdepth 0 -mmin +1440 2>/dev/null | grep -q . || ! test -d /var/lib/apt/lists
+    report_settled: true   # daily cache warmer; not a state change
+```
+
+Without `report_settled` the resource above would emit a `Created`
+result every day the gate fired, contributing to the envoy's
+`ChangedCount` and eventually classifying it as `Diverged` on the drift
+axis after `convergence.DivergedThreshold` consecutive runs. With the
+flag set, the run is reported as Settled (grey muted badge), drift
+detection sees no change, the dashboard stays clean.
 
 ### Background execution
 

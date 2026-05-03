@@ -28,7 +28,16 @@ A standalone Rust agent for active compliance verification — checking things V
 
 ## convergence
 
-Module-convergence status — whether an envoy's assigned modules have been applied successfully. Statuses: `converged`, `relapsed`, `diverged`, `degraded`, `failed`, `no_data`. "Degraded" means some modules failed but not all. Reachability (online/offline) is tracked separately. See the [Convergence Walkthrough](../engineering/architecture/convergence-walkthrough.md).
+Module-convergence state for an envoy, evaluated on two orthogonal axes:
+
+- **Failure axis** — `converged`, `degraded`, `failed`, `no_data`. Mutually exclusive; sums to fleet total. Any non-zero failure clears the threshold; zero failures is `converged` regardless of how many modules made changes.
+- **Drift axis** — `none`, `changed`, `diverged`. `changed` fires when the latest run has `ChangedCount > 0`; `diverged` fires after `DivergedThreshold` consecutive runs with changes (default 5). Diverged is a strict subset of changed. Independent of the failure axis — an envoy can be `converged` AND `diverged` simultaneously (zero failures, but persistent module churn).
+
+Reachability (online / offline) is a third orthogonal axis tracked by `server/freshness`. See the [Convergence Walkthrough](../engineering/architecture/convergence-walkthrough.md).
+
+## drift
+
+The drift axis of convergence (above). Computed by `convergence.ComputeDrift` over an envoy's recent run history, expressed as a `DriftLevel` (`none` / `changed` / `diverged`). Drift is purely about *whether modules keep mutating* — it says nothing about whether mutations succeed. A non-idempotent module that recreates the same file every run produces persistent `Created` results and lands the envoy in `diverged` even though every run technically succeeds.
 
 ## envoy
 

@@ -98,14 +98,16 @@ checkin:
   interval: "5m"
   jitter_percent: 20
   bundle_max_age: "24h"
+  offline_threshold: ""    # default: 2.5 × interval
   observe_only: false
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `interval` | `5m` | Agent check-in frequency. Stale threshold = 2x this value |
+| `interval` | `5m` | Agent check-in frequency |
 | `jitter_percent` | `20` | Randomize check-in timing by 0–N% to avoid thundering herd |
 | `bundle_max_age` | `24h` | How long signed policy bundles remain valid on agents. `0` = forever |
+| `offline_threshold` | empty (= `2.5 × interval`) | Override the staleness boundary used by every reachability surface (Offline pill, risk scorer, doctor API, stale-envoy notifier, fleet rehydrator). Accepts a Go duration string (`15m`, `1h`). Empty preserves the default |
 | `observe_only` | `false` | Global observe-only mode. All envoys report drift only — no changes applied. ORed with per-entry `observe_only` in envoys.vgo match blocks |
 
 ### bootstrap
