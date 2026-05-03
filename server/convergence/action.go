@@ -31,14 +31,19 @@ func (a Action) String() string {
 }
 
 // ClassifyAction parses an action string into the canonical bucket.
-// Whitespace and case tolerant. Unknown vocabularies land in ActionNoop.
+// Accepts both present-tense ("create") and past-tense ("created")
+// forms because the Rust agent emits past-tense via its Display impl
+// (Action::Created -> "created") while UI/CLI plan-preview surfaces
+// emit present-tense. Whitespace and case tolerant. Unknown vocabularies
+// — including the agent's "settled", "skipped", and "blocked" outcomes
+// — land in ActionNoop.
 func ClassifyAction(s string) Action {
 	switch strings.TrimSpace(strings.ToLower(s)) {
-	case "create":
+	case "create", "created":
 		return ActionCreate
-	case "update":
+	case "update", "updated":
 		return ActionUpdate
-	case "delete":
+	case "delete", "deleted":
 		return ActionDelete
 	default:
 		return ActionNoop

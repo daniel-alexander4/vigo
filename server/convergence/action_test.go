@@ -29,12 +29,18 @@ func TestClassifyAction(t *testing.T) {
 	}{
 		{"create", ActionCreate},
 		{"  CREATE ", ActionCreate},
+		{"created", ActionCreate}, // agent past-tense vocab
+		{"Created", ActionCreate},
 		{"update", ActionUpdate},
+		{"updated", ActionUpdate}, // agent past-tense vocab
 		{"delete", ActionDelete},
+		{"deleted", ActionDelete}, // agent past-tense vocab
 		{"", ActionNoop},
 		{"noop", ActionNoop},
 		{"settled", ActionNoop},
 		{"none", ActionNoop},
+		{"skipped", ActionNoop},
+		{"blocked", ActionNoop},
 		{"unknown", ActionNoop},
 	}
 	for _, tc := range cases {
