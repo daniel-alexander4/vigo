@@ -3303,6 +3303,15 @@ envoys:
 	if len(cov3.CoveredControls) != 0 {
 		t.Errorf("unknown host should have 0 covered, got %d", len(cov3.CoveredControls))
 	}
+
+	// Memoization contract: two consecutive lookups for the same
+	// (hostname, standard) must return the same pointer. EnvoyStandardCoverage
+	// is now an O(1) cache hit, not a fresh allocation per call.
+	a := store.EnvoyStandardCoverage("web01", "pci-dss")
+	b := store.EnvoyStandardCoverage("web01", "pci-dss")
+	if a != b {
+		t.Errorf("expected memoized pointer equality, got %p vs %p", a, b)
+	}
 }
 
 

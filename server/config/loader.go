@@ -194,6 +194,13 @@ type ConfigStore struct {
 	roleDefs      map[string]*RoleDefinition   // loaded roles for tracing
 	moduleDefs      map[string]*ModuleDefinition       // loaded modules for tracing
 	complianceIndex map[string]map[string][]string    // standard → control_id → []module_name
+	// coverageCache memoizes EnvoyStandardCoverage results at publish
+	// time keyed by (matchfile entry index, standard). Each entry's
+	// module set is fixed by the publish-time matchfile resolution, so
+	// per-envoy coverage is purely a function of (entry, standard) and
+	// can be precomputed once. Eliminates the per-call walk previously
+	// done by EnvoyStandardCoverage. Built alongside complianceIndex.
+	coverageCache   map[int]map[string]*StandardCoverage
 	commonConfigs    map[string]*CommonConfig                    // dir path → common.vgo inheritance config
 	perEnvOverrides  map[string]map[string]*PerEnvOverrideBlock // dir path → env name → override block
 	usercratesByDir  map[string][]ModuleRef                      // scope dir (parent of usercrates/) → usercrate names auto-applied at that scope
@@ -1531,27 +1538,45 @@ func buildComplianceIndex(moduleDefs map[string]*ModuleDefinition) map[string]ma
 	return idx
 }
 
-// EnvoyStandardCoverage resolves which controls of a given compliance standard
-// an envoy covers through its assigned modules. The standard parameter is a
-// compliance tag key (e.g. "pci-dss"), not a URL slug.
+// EnvoyStandardCoverage resolves which controls of a given compliance
+// standard an envoy covers through its assigned modules. The standard
+// parameter is a compliance tag key (e.g. "pci-dss"), not a URL slug.
+//
+// The result is precomputed at publish time keyed by (matchfile entry,
+// standard); this method is now an O(1) cache lookup. An envoy whose
+// hostname matches no entry returns nil — same as before. A standard
+// with no entries in complianceIndex also returns nil.
 func (cs *ConfigStore) EnvoyStandardCoverage(hostname, standard string) *StandardCoverage {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 
 	controlIndex, ok := cs.complianceIndex[standard]
-	if !ok || len(controlIndex) == 0 {
+	if !ok {
 		return nil
 	}
-
-	// Resolve which modules this envoy has assigned.
-	envoyModules := make(map[string]bool)
-	if i := cs.index.Lookup(hostname); i >= 0 {
-		cfg := cs.entries[i].config
-		for _, mod := range cfg.Modules {
-			envoyModules[mod.Name] = true
-		}
+	i := cs.index.Lookup(hostname)
+	if i < 0 {
+		// No matchfile entry — return an empty-modules coverage so the
+		// caller sees every control as missing rather than nil. Matches
+		// pre-cache behavior used by surfaces that need to render
+		// drilldowns for envoys that haven't been mapped yet.
+		return computeStandardCoverage(nil, standard, controlIndex)
 	}
+	if perStandard, ok := cs.coverageCache[i]; ok {
+		return perStandard[standard]
+	}
+	return nil
+}
 
+// computeStandardCoverage walks (entryModules × controlIndex) once to
+// produce a single StandardCoverage. Pure function — used by
+// buildCoverageCache at publish time. Kept exported-ish (lowercase but
+// in the same package) so tests can re-derive coverage independently
+// and assert that the cache matches.
+func computeStandardCoverage(entryModules map[string]bool, standard string, controlIndex map[string][]string) *StandardCoverage {
+	if len(controlIndex) == 0 {
+		return nil
+	}
 	sc := &StandardCoverage{Standard: standard}
 
 	controlIDs := make([]string, 0, len(controlIndex))
@@ -1561,10 +1586,9 @@ func (cs *ConfigStore) EnvoyStandardCoverage(hostname, standard string) *Standar
 	sort.Strings(controlIDs)
 
 	for _, cid := range controlIDs {
-		modulesForControl := controlIndex[cid]
 		var assigned []string
-		for _, mod := range modulesForControl {
-			if envoyModules[mod] {
+		for _, mod := range controlIndex[cid] {
+			if entryModules[mod] {
 				assigned = append(assigned, mod)
 			}
 		}
@@ -1582,8 +1606,34 @@ func (cs *ConfigStore) EnvoyStandardCoverage(hostname, standard string) *Standar
 	if sc.TotalControls > 0 {
 		sc.CoveragePercent = float64(len(sc.CoveredControls)) / float64(sc.TotalControls) * 100
 	}
-
 	return sc
+}
+
+// buildCoverageCache precomputes per-entry coverage for every standard
+// in complianceIndex. Called at publish time alongside
+// buildComplianceIndex; the result is keyed by entry index so per-call
+// EnvoyStandardCoverage lookups are O(1).
+func buildCoverageCache(entries []resolvedEntry, complianceIndex map[string]map[string][]string) map[int]map[string]*StandardCoverage {
+	if len(entries) == 0 || len(complianceIndex) == 0 {
+		return nil
+	}
+	out := make(map[int]map[string]*StandardCoverage, len(entries))
+	for i := range entries {
+		cfg := entries[i].config
+		if cfg == nil {
+			continue
+		}
+		entryModules := make(map[string]bool, len(cfg.Modules))
+		for _, mod := range cfg.Modules {
+			entryModules[mod.Name] = true
+		}
+		perStandard := make(map[string]*StandardCoverage, len(complianceIndex))
+		for standard, controlIndex := range complianceIndex {
+			perStandard[standard] = computeStandardCoverage(entryModules, standard, controlIndex)
+		}
+		out[i] = perStandard
+	}
+	return out
 }
 
 // envoysDir returns the path to the envoys subdirectory.
@@ -1996,6 +2046,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	cs.roleDefs = roleDefs
 	cs.moduleDefs = moduleDefs
 	cs.complianceIndex = buildComplianceIndex(moduleDefs)
+	cs.coverageCache = buildCoverageCache(entries, cs.complianceIndex)
 	cs.commonConfigs = commonConfigs
 	cs.perEnvOverrides = perEnvOverrides
 	cs.usercratesByDir = usercratesByDir
