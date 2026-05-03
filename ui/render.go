@@ -15,7 +15,9 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/freshness"
+	"git.alexander4.io/vigo/server/risk"
 
 	"github.com/alecthomas/chroma/v2"
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
@@ -62,14 +64,14 @@ func funcMap() template.FuncMap {
 		"lynisControlURL": lynisControlURL,
 		"secAIQuestion":  securityAIQuestion,
 		"secSeverityClass": func(sev string) string {
-			switch strings.ToLower(sev) {
-			case "critical":
+			switch cve.Classify(sev) {
+			case cve.SevCritical:
 				return "sec-card--critical"
-			case "high":
+			case cve.SevHigh:
 				return "sec-card--high"
-			case "medium":
+			case cve.SevMedium:
 				return "sec-card--medium"
-			case "low":
+			case cve.SevLow:
 				return "sec-card--low"
 			default:
 				return "sec-card--info"
@@ -82,10 +84,7 @@ func funcMap() template.FuncMap {
 			return strings.ToUpper(sev[:1]) + strings.ToLower(sev[1:])
 		},
 		"secSeverityNorm": func(sev string) string {
-			if sev == "" {
-				return "unassigned"
-			}
-			return strings.ToLower(sev)
+			return cve.Norm(sev)
 		},
 		"tracePathTree":  tracePathTree,
 		"traceGreenBg":   traceGreenBg,
@@ -179,12 +178,12 @@ func funcMap() template.FuncMap {
 			return r.Replace(strings.ToLower(s))
 		},
 		"riskColor": func(score int) string {
-			switch {
-			case score >= 70:
+			switch risk.Classify(score) {
+			case risk.LevelCritical:
 				return "danger"
-			case score >= 40:
+			case risk.LevelHigh:
 				return "warning"
-			case score >= 20:
+			case risk.LevelMedium:
 				return "brand"
 			default:
 				return "success"

@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"git.alexander4.io/vigo/server/risk"
 )
 
 var riskCmd = &cobra.Command{
@@ -268,29 +270,32 @@ func runRiskExport() error {
 	return nil
 }
 
-// colorRiskScore formats a score with color based on severity.
+// colorRiskScore formats a score with color based on severity. Score → level
+// classification is delegated to risk.Classify; this function owns only the
+// per-surface ANSI rendering of the resulting Level.
 func colorRiskScore(score int) string {
 	s := fmt.Sprintf("%d", score)
-	switch {
-	case score >= 70:
+	switch risk.Classify(score) {
+	case risk.LevelCritical:
 		return red(s)
-	case score >= 40:
+	case risk.LevelHigh:
 		return yellow(s)
-	case score >= 20:
+	case risk.LevelMedium:
 		return cyan(s)
 	default:
 		return green(s)
 	}
 }
 
-// colorRiskLevel formats a risk level with color.
+// colorRiskLevel formats a risk level with color. The string vocabulary
+// must match risk.Level constants ("critical", "high", "medium", "low").
 func colorRiskLevel(level string) string {
-	switch level {
-	case "critical":
+	switch risk.Level(level) {
+	case risk.LevelCritical:
 		return red(level)
-	case "high":
+	case risk.LevelHigh:
 		return yellow(level)
-	case "medium":
+	case risk.LevelMedium:
 		return cyan(level)
 	default:
 		return green(level)

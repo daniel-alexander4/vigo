@@ -11,6 +11,8 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+
+	"git.alexander4.io/vigo/server/cve"
 )
 
 var cveCmd = &cobra.Command{
@@ -61,12 +63,12 @@ Example:
 				fixed = "-"
 			}
 			sev := h.Severity
-			switch strings.ToLower(sev) {
-			case "critical":
+			switch cve.Classify(sev) {
+			case cve.SevCritical:
 				sev = red(sev)
-			case "high":
+			case cve.SevHigh:
 				sev = amber(sev)
-			case "medium":
+			case cve.SevMedium:
 				sev = yellow(sev)
 			}
 			fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n",

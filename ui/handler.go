@@ -33,6 +33,7 @@ import (
 	"git.alexander4.io/vigo/server/compliance"
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/license"
@@ -6951,10 +6952,10 @@ func (h *Handler) CVESearchFragment(w http.ResponseWriter, r *http.Request) {
 			fixed = "-"
 		}
 		sevClass := ""
-		switch strings.ToLower(m.Severity) {
-		case "critical":
+		switch cve.Classify(m.Severity) {
+		case cve.SevCritical:
 			sevClass = "text-danger"
-		case "high":
+		case cve.SevHigh:
 			sevClass = "text-warning"
 		}
 		running := renderRunningBinariesCell(m.RunningBinaries)

@@ -13,6 +13,7 @@ import (
 
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/traits"
@@ -689,14 +690,14 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 			if !cveSet[entry.CVEID] {
 				cveSet[entry.CVEID] = true
 				data.CVEs = append(data.CVEs, entry)
-				switch strings.ToLower(entry.Severity) {
-				case "critical":
+				switch cve.Classify(entry.Severity) {
+				case cve.SevCritical:
 					data.UniqueCritical++
-				case "high":
+				case cve.SevHigh:
 					data.UniqueHigh++
-				case "medium":
+				case cve.SevMedium:
 					data.UniqueMedium++
-				case "low":
+				case cve.SevLow:
 					data.UniqueLow++
 				}
 			}

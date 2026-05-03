@@ -283,9 +283,9 @@ func TestClassify(t *testing.T) {
 		{100, LevelCritical},
 	}
 	for _, tc := range cases {
-		got := classify(tc.score)
+		got := Classify(tc.score)
 		if got != tc.want {
-			t.Errorf("classify(%d) = %s, want %s", tc.score, got, tc.want)
+			t.Errorf("Classify(%d) = %s, want %s", tc.score, got, tc.want)
 		}
 	}
 }
