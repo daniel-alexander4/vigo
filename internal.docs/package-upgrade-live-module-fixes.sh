@@ -44,16 +44,19 @@ else
 fi
 
 # 2. reboot-if-needed onlyif — rewrite the inverted shell expression.
-sed -i 's|onlyif: test -f /var/run/reboot-required || needs-restarting -r 2>/dev/null; test \$? -eq 1|onlyif: (test -f /var/run/reboot-required) || (needs-restarting -r 2>/dev/null; test $? -eq 1)|' "$TARGET"
-if grep -q 'onlyif: (test -f /var/run/reboot-required)' "$TARGET"; then
+#    Use ~ as the s-delimiter because the pattern itself contains || which
+#    collides with the more common | delimiter.
+sed -i 's~onlyif: test -f /var/run/reboot-required || needs-restarting -r 2>/dev/null; test \$? -eq 1~onlyif: (test -f /var/run/reboot-required) || (needs-restarting -r 2>/dev/null; test $? -eq 1)~' "$TARGET"
+if grep -qF 'onlyif: (test -f /var/run/reboot-required)' "$TARGET"; then
     echo "2/3 reboot-if-needed: onlyif rewritten"
 else
     echo "2/3 reboot-if-needed: NOT rewritten (manual review needed — the live file may differ from the version this patch was built against)"
 fi
 
-# 3. pkgin-upgrade unless — switch to dry-run.
-sed -i "s|unless: pkgin upgrade 2>/dev/null | grep -q 'nothing to do'|unless: pkgin -n upgrade 2>/dev/null | grep -q 'nothing to do'|" "$TARGET"
-if grep -q "unless: pkgin -n upgrade" "$TARGET"; then
+# 3. pkgin-upgrade unless — switch to dry-run. Same | -> ~ delimiter swap
+#    since the pattern contains the bash | pipe.
+sed -i "s~unless: pkgin upgrade 2>/dev/null | grep -q 'nothing to do'~unless: pkgin -n upgrade 2>/dev/null | grep -q 'nothing to do'~" "$TARGET"
+if grep -qF "unless: pkgin -n upgrade" "$TARGET"; then
     echo "3/3 pkgin-upgrade: unless switched to dry-run (-n)"
 else
     echo "3/3 pkgin-upgrade: NOT updated (manual review needed)"
