@@ -1046,7 +1046,7 @@ Returns the current compliance status for a envoy.
 
 Operator-uploaded artifacts (BAA, IR plan, risk assessment, training records, signed contracts, etc.) that satisfy `documented`-scope framework controls. Files are envelope-encrypted at rest with the secrets master key under `compliance.docs.docs_dir` (default `/srv/vigo/compliance-docs/`); metadata is in `compliance_docs` and link rows in `compliance_doc_links`.
 
-Available only when the deployment uses the `local` secrets backend — under any other backend the routes return `503 Service Unavailable`. Uploaded by [permission](authentication.md): `compliance.docs.write` to upload/replace/soft-delete and to manage links; `compliance.read` to list/download; `compliance.docs.purge` to physically remove a soft-deleted doc and its ciphertext.
+Available only when the deployment uses the `local` secrets backend — under any other backend the routes return `503 Service Unavailable`. Uploaded by [permission](../../operations/authentication.md): `compliance.docs.write` to upload/replace/soft-delete and to manage links; `compliance.read` to list/download; `compliance.docs.purge` to physically remove a soft-deleted doc and its ciphertext.
 
 Every mutation records an entry in the [tamper-evident audit chain](../../compliance/tamper-evident-audit.md) with the doc's SHA-256.
 

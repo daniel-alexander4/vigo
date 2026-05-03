@@ -17,7 +17,7 @@ The 0.32.0 split keeps each surface honest. Envoy reports score envoy state only
 
 ## What is on the page
 
-Each card on `/platform/compliance` is one [`AppControl`](../engineering/architecture.md) entry. Cards carry:
+Each card on `/platform/compliance` is one [`AppControl`](../engineering/architecture/overview.md) entry. Cards carry:
 
 - **Title** — the capability (e.g., "All transport encrypted with mTLS").
 - **Description** — one or two sentences explaining what Vigo does.

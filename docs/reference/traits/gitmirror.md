@@ -95,4 +95,4 @@ The server-side aggregator treats a `null` trait the same as "no participation r
 
 - [ADR-015 — Unified gitmirror substrate](../../adr/015-unified-gitmirror-substrate.md)
 - [`vigo swarm gitmirror project ...`](../cli/agent-swarm-gitmirror.md) — envoy-side verb tree that mutates the state this trait reports.
-- [`vigocli swarm gitmirror`](swarm-gitmirror.md) — admin-side CLI that consumes the aggregated trait.
+- [`vigocli swarm gitmirror`](../cli/swarm-gitmirror.md) — admin-side CLI that consumes the aggregated trait.

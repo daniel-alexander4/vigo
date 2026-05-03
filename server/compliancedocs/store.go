@@ -210,7 +210,10 @@ func (s *Store) Put(ctx context.Context, in PutInput) (db.ComplianceDoc, error) 
 		UploadedBy: in.UploadedBy,
 	})
 	if err != nil {
-		// Roll back the orphaned ciphertext.
+		// Roll back the orphaned ciphertext. The row insert already
+		// failed; a stale file is the smaller problem and doesn't
+		// change the caller's outcome.
+		// best-effort
 		_ = os.Remove(path)
 		return db.ComplianceDoc{}, fmt.Errorf("inserting doc row: %w", err)
 	}
@@ -494,7 +497,9 @@ func writeFileAtomic(path string, data []byte) error {
 	}
 	tmpName := tmp.Name()
 	defer func() {
-		// Cleanup if rename fails or panic intervenes.
+		// Cleanup if rename fails or a panic intervenes; nothing to
+		// recover with a non-nil error from a deferred Remove.
+		// best-effort
 		_ = os.Remove(tmpName)
 	}()
 	if err := tmp.Chmod(0o600); err != nil {

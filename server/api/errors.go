@@ -24,5 +24,8 @@ type APIError struct {
 func writeError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
+	// Status + headers are already committed; if the connection died
+	// mid-encode there is nothing meaningful to surface to the caller.
+	// best-effort
 	_ = json.NewEncoder(w).Encode(APIError{Message: message})
 }
