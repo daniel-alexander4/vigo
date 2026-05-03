@@ -26,6 +26,14 @@ type FleetStatusEntry struct {
 	Hostname     string
 	IPAddress    string
 	LastSeen     time.Time
+	// LastSeenLabel is the human-readable rendering of LastSeen produced
+	// by envoyFreshness — "just now" / "Ns ago" / "Nm ago" / etc. — and
+	// is precomputed alongside Offline so the freshness color and the
+	// freshness text can never disagree on the same row. Templates render
+	// this string directly instead of calling timeAgo on LastSeen, since
+	// timeAgo uses a fixed 30 s "just now" bucket that overlaps the
+	// offline threshold at fast check-in intervals.
+	LastSeenLabel string
 	AgentVersion string
 	Status       string  // convergence status: converged, relapsed, diverged, degraded, failed, no data
 	FailurePct   float64 // 0-100: failed_count / module_count * 100 (from latest run)
@@ -33,8 +41,11 @@ type FleetStatusEntry struct {
 	ModuleCount  int64
 	LastRunID    string
 	LastRunAt    time.Time
-	// Offline iff lastSeen is older than 2*baseInterval. Stamped at refresh
-	// time so paginated queries don't recompute per page-load.
+	// Offline iff lastSeen is older than freshness.StaleThreshold.
+	// Stamped at refresh time so paginated queries don't recompute per
+	// page-load. Derived by envoyFreshness in render.go, which routes
+	// through freshness.IsStale — single source of truth shared with
+	// LastSeenLabel above and with every server-side stale check.
 	Offline bool
 	// ObserveOnly iff the global checkin.observe_only flag is set OR the
 	// matching envoys.vgo block has observe_only: true. Orthogonal to
@@ -159,8 +170,6 @@ func (fc *FleetCache) refresh() {
 	entries := make([]FleetStatusEntry, 0, len(fleet))
 	var counts FleetStatusCounts
 
-	offlineThreshold := 2 * fc.baseInterval
-
 	for _, e := range fleet {
 		runs := make([]convergence.RunInfo, 0, len(e.Runs))
 		for _, r := range e.Runs {
@@ -179,7 +188,7 @@ func (fc *FleetCache) refresh() {
 			lastSeen = e.LastSeen.Time
 		}
 
-		offline := !lastSeen.IsZero() && time.Since(lastSeen) > offlineThreshold
+		lastSeenLabel, offline := envoyFreshness(lastSeen, fc.baseInterval)
 
 		// Per-envoy observe-only: global flag OR matching envoys.vgo
 		// block. Orthogonal to convergence status — the cache reports
@@ -208,19 +217,20 @@ func (fc *FleetCache) refresh() {
 		}
 
 		entry := FleetStatusEntry{
-			ID:           e.ID,
-			Hostname:     e.Hostname,
-			IPAddress:    e.IPAddress,
-			LastSeen:     lastSeen,
-			AgentVersion: e.AgentVersion,
-			Status:       status,
-			FailurePct:   failurePct,
-			FailedCount:  failedCount,
-			ModuleCount:  moduleCount,
-			LastRunID:    lastRunID,
-			LastRunAt:    lastRunAt,
-			Offline:      offline,
-			ObserveOnly:  observeOnly,
+			ID:            e.ID,
+			Hostname:      e.Hostname,
+			IPAddress:     e.IPAddress,
+			LastSeen:      lastSeen,
+			LastSeenLabel: lastSeenLabel,
+			AgentVersion:  e.AgentVersion,
+			Status:        status,
+			FailurePct:    failurePct,
+			FailedCount:   failedCount,
+			ModuleCount:   moduleCount,
+			LastRunID:     lastRunID,
+			LastRunAt:     lastRunAt,
+			Offline:       offline,
+			ObserveOnly:   observeOnly,
 		}
 		entries = append(entries, entry)
 

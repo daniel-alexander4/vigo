@@ -49,7 +49,7 @@ A envoy is compliant only when all resources report "ok" — meaning the system 
 
 ## Stale Detection
 
-A envoy is stale when it hasn't checked in within a configurable threshold relative to the check-in interval:
+A envoy is stale when it hasn't checked in within 2.5× the configured check-in interval:
 
 ```yaml
 checkin:

@@ -226,10 +226,10 @@ If you're completely locked out (can't sudo, can't push), you'll need console or
 
 **Diagnosis:**
 
-1. Check the stale threshold. A envoy is stale if it has not checked in within `2 * checkin.interval`:
+1. Check the stale threshold. A envoy is stale if it has not checked in within `2.5 × checkin.interval`:
    ```yaml
    checkin:
-     interval: "5m"   # stale after 10 minutes
+     interval: "5m"   # stale after 12 minutes 30 seconds
    ```
 
 2. On the envoy, verify the agent is running:

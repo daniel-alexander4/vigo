@@ -1462,10 +1462,11 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     box-shadow: 0 1px 0 var(--color-border);
 }
 
-/* Last-seen freshness indicator. The cell carries a unix timestamp on a
-   data attribute and a small script flips this class when (now - lastSeen)
-   crosses 2× the agent check-in interval. Computed client-side so the
-   color stays accurate even when the table data is from page-load. */
+/* Last-seen freshness indicator. The cell turns red when the envoy is
+   past the offline threshold (2.5 × the agent check-in interval). The
+   threshold and the cell label are both produced server-side by
+   envoyFreshness in ui/render.go — see FleetStatusEntry.LastSeenLabel —
+   so the color and the text always agree on the same threshold. */
 .envoys-lastseen--stale {
     color: var(--color-danger);
 }

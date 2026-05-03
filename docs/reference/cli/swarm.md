@@ -70,7 +70,7 @@ annlap          offline  idle       0        0       0            0 B        202
 | Column | Description |
 |--------|-------------|
 | HOSTNAME | Envoy hostname (links to the envoy detail page in the web UI) |
-| STATUS | `online` (within 2× check-in interval) or `offline` |
+| STATUS | `online` (within 2.5× check-in interval) or `offline` |
 | SUBSTRATE | `active` (has peer records or is seeding) or `idle` |
 | SEEDING | Number of payloads this envoy is originating |
 | CACHED | Count of complete blobs the envoy holds |

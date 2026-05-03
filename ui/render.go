@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/freshness"
 
 	"github.com/alecthomas/chroma/v2"
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
@@ -531,6 +532,35 @@ func timeAgo(t time.Time) string {
 	default:
 		return t.Local().Format("2006-01-02")
 	}
+}
+
+// envoyFreshness pairs the canonical freshness.IsStale predicate with
+// the matching human-readable last-seen label. The threshold itself
+// lives in freshness.StaleThreshold (2.5 × the agent check-in
+// interval) — every surface that classifies an envoy as stale routes
+// through it, so the label, the cell color, the pill count, the
+// doctor check, the risk "Lost contact" factor, and the stale-notifier
+// always agree.
+//
+// The label override below exists because timeAgo's "just now" bucket
+// is fixed at 30 s. At fast check-in intervals (e.g. 5 s →
+// StaleThreshold 12.5 s) an envoy that's already stale would otherwise
+// render as "just now" in the staleness color. Printing precise
+// seconds in that window keeps the label and the color consistent.
+func envoyFreshness(lastSeen time.Time, baseInterval time.Duration) (label string, stale bool) {
+	if lastSeen.IsZero() {
+		return "-", false
+	}
+	stale = freshness.IsStale(lastSeen, baseInterval)
+	age := time.Since(lastSeen)
+	if stale && age < 30*time.Second {
+		secs := int(age.Seconds())
+		if secs < 1 {
+			secs = 1
+		}
+		return fmt.Sprintf("%ds ago", secs), true
+	}
+	return timeAgo(lastSeen), stale
 }
 
 // toFloat64 converts any numeric type to float64 for template functions.

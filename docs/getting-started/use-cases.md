@@ -46,7 +46,7 @@ At 5-minute intervals, a compromised machine could run unauthorized binaries for
 
 With 16 built-in network device executors, Vigo is a full network automation platform. Switch configs, firewall rules, VLAN assignments, and ACLs defined as desired state.
 
-At 30-second intervals, a switch going dark is detected within 90 seconds (3x interval stale threshold). At 5 minutes, a dead switch goes unnoticed for 15 minutes. For network operations teams watching a dashboard, 90-second stale detection is the difference between "we caught it" and "a user called to tell us."
+At 30-second intervals, a switch going dark is detected within 75 seconds (2.5× interval stale threshold). At 5 minutes, a dead switch goes unnoticed for over 12 minutes. For network operations teams watching a dashboard, sub-90-second stale detection is the difference between "we caught it" and "a user called to tell us."
 
 ### Observability & Inventory
 

@@ -11,7 +11,7 @@ The nav group label "Swarm" is itself the link to this page; the four child link
 
 ### Fleet Status (stat cards)
 
-- **Envoys Online** — reachable within 2× check-in interval, over total enrolled
+- **Envoys Online** — reachable within 2.5× check-in interval, over total enrolled
 - **Substrate Active** — envoys with at least one peer record or acting as a seeder
 - **Seeding Envoys** — distinct envoys originating at least one payload
 - **Fleet Footprint** — sum of cached blob sizes across the fleet

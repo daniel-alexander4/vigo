@@ -34,6 +34,7 @@ import (
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/swarm"
@@ -1064,6 +1065,12 @@ type EnvoyRow struct {
 	IPAddress    string
 	EnrolledAt   time.Time
 	LastSeen     time.Time
+	// LastSeenLabel is the precomputed "just now" / "Ns ago" / "Nm ago"
+	// rendering keyed off the same threshold that drives Offline below.
+	// Templates render this directly so the label and the staleness
+	// color can't disagree. Source of truth is envoyFreshness in
+	// render.go.
+	LastSeenLabel string
 	LastRunAt    time.Time
 	LastRunID    string
 	Status       string
@@ -3999,19 +4006,20 @@ func (h *Handler) envoysPageData(statusFilter, search, sortCol, sortDir string, 
 	rows := make([]EnvoyRow, 0, len(entries))
 	for _, e := range entries {
 		rows = append(rows, EnvoyRow{
-			ID:           e.ID,
-			Hostname:     e.Hostname,
-			IPAddress:    e.IPAddress,
-			LastSeen:     e.LastSeen,
-			LastRunAt:    e.LastRunAt,
-			LastRunID:    e.LastRunID,
-			Status:       e.Status,
-			FailurePct:   e.FailurePct,
-			ModuleCount:  e.ModuleCount,
-			FailedCount:  e.FailedCount,
-			Offline:      e.Offline,
-			ObserveOnly:  e.ObserveOnly,
-			AgentVersion: e.AgentVersion,
+			ID:            e.ID,
+			Hostname:      e.Hostname,
+			IPAddress:     e.IPAddress,
+			LastSeen:      e.LastSeen,
+			LastSeenLabel: e.LastSeenLabel,
+			LastRunAt:     e.LastRunAt,
+			LastRunID:     e.LastRunID,
+			Status:        e.Status,
+			FailurePct:    e.FailurePct,
+			ModuleCount:   e.ModuleCount,
+			FailedCount:   e.FailedCount,
+			Offline:       e.Offline,
+			ObserveOnly:   e.ObserveOnly,
+			AgentVersion:  e.AgentVersion,
 		})
 	}
 
@@ -5284,7 +5292,7 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 			lastSeen = n.LastSeen.Time
 		}
 
-		offline := !lastSeen.IsZero() && time.Since(lastSeen) > 2*baseInterval
+		lastSeenLabel, offline := envoyFreshness(lastSeen, baseInterval)
 
 		// Filter: "offline" matches reachability, everything else matches convergence status.
 		if statusFilter == "offline" && !offline {
@@ -5322,20 +5330,21 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 		}
 
 		rows = append(rows, EnvoyRow{
-			ID:           n.ID,
-			Hostname:     n.Hostname,
-			IPAddress:    n.IPAddress,
-			EnrolledAt:   n.EnrolledAt,
-			LastSeen:     lastSeen,
-			LastRunAt:    lastRunAt,
-			LastRunID:    lastRunID,
-			Status:       status,
-			FailurePct:   failurePct,
-			ModuleCount:  moduleCount,
-			FailedCount:  failedCount,
-			Offline:      offline,
-			ObserveOnly:  observeOnly,
-			AgentVersion: n.AgentVersion,
+			ID:            n.ID,
+			Hostname:      n.Hostname,
+			IPAddress:     n.IPAddress,
+			EnrolledAt:    n.EnrolledAt,
+			LastSeen:      lastSeen,
+			LastSeenLabel: lastSeenLabel,
+			LastRunAt:     lastRunAt,
+			LastRunID:     lastRunID,
+			Status:        status,
+			FailurePct:    failurePct,
+			ModuleCount:   moduleCount,
+			FailedCount:   failedCount,
+			Offline:       offline,
+			ObserveOnly:   observeOnly,
+			AgentVersion:  n.AgentVersion,
 		})
 	}
 
@@ -5405,7 +5414,7 @@ func (ds *dbDataSource) EnvoyDetailData(envoyID string, baseInterval time.Durati
 			EnrolledAt:   envoy.EnrolledAt,
 			LastSeen:     lastSeen,
 			Status:       status,
-			Offline:      !lastSeen.IsZero() && time.Since(lastSeen) > 2*baseInterval,
+			Offline:      freshness.IsStale(lastSeen, baseInterval),
 			AgentVersion: envoy.AgentVersion,
 		},
 		CloudProvider:     cloudProvider,

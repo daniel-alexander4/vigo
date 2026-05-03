@@ -76,6 +76,95 @@ func TestStatusColor(t *testing.T) {
 	}
 }
 
+func TestEnvoyFreshness(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name         string
+		lastSeen     time.Time
+		baseInterval time.Duration
+		wantLabel    string
+		wantStale    bool
+	}{
+		{
+			name:         "zero time renders dash, not stale",
+			lastSeen:     time.Time{},
+			baseInterval: 5 * time.Minute,
+			wantLabel:    "-",
+			wantStale:    false,
+		},
+		{
+			name:         "default interval, recent: just now + fresh",
+			lastSeen:     now.Add(-5 * time.Second),
+			baseInterval: 5 * time.Minute,
+			wantLabel:    "just now",
+			wantStale:    false,
+		},
+		{
+			name:         "default interval, mid-window: minute label + fresh",
+			lastSeen:     now.Add(-5 * time.Minute),
+			baseInterval: 5 * time.Minute,
+			wantLabel:    "5m ago",
+			wantStale:    false,
+		},
+		{
+			name:         "default interval, well past threshold: stale",
+			lastSeen:     now.Add(-15 * time.Minute),
+			baseInterval: 5 * time.Minute,
+			wantLabel:    "15m ago",
+			wantStale:    true,
+		},
+		{
+			name:         "5s interval, fresh well below threshold: just now",
+			lastSeen:     now.Add(-5 * time.Second),
+			baseInterval: 5 * time.Second,
+			wantLabel:    "just now",
+			wantStale:    false,
+		},
+		{
+			name:         "5s interval, stale-but-under-30s: precise seconds (the bug case)",
+			lastSeen:     now.Add(-15 * time.Second),
+			baseInterval: 5 * time.Second,
+			wantLabel:    "15s ago",
+			wantStale:    true,
+		},
+		{
+			name:         "5s interval, stale past 30s: minute label",
+			lastSeen:     now.Add(-45 * time.Second),
+			baseInterval: 5 * time.Second,
+			wantLabel:    "1m ago",
+			wantStale:    true,
+		},
+		{
+			// 11 s is well below the 12.5 s threshold but well above
+			// any plausible test-execution wobble — robust under load.
+			name:         "5s interval, just below threshold: still fresh",
+			lastSeen:     now.Add(-11 * time.Second),
+			baseInterval: 5 * time.Second,
+			wantLabel:    "just now",
+			wantStale:    false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			label, stale := envoyFreshness(tt.lastSeen, tt.baseInterval)
+			if label != tt.wantLabel {
+				t.Errorf("label = %q, want %q", label, tt.wantLabel)
+			}
+			if stale != tt.wantStale {
+				t.Errorf("stale = %v, want %v", stale, tt.wantStale)
+			}
+			// Invariant: a fresh envoy never carries a stale label, a
+			// stale envoy never reads "just now". This is the property
+			// the bug violated.
+			if !stale && label == "just now" {
+				// fine
+			} else if stale && label == "just now" {
+				t.Errorf("invariant violated: stale=true with label %q", label)
+			}
+		})
+	}
+}
+
 func TestFormatTime(t *testing.T) {
 	tm := time.Date(2025, 3, 15, 14, 30, 0, 0, time.Local)
 	got := formatTime(tm)

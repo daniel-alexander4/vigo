@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/traits"
 )
 
@@ -73,7 +74,7 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 
 	if es.Revoked {
 		r.Score = 0
-		r.Level = classify(0)
+		r.Level = Classify(0)
 		return r
 	}
 
@@ -192,9 +193,9 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 	}
 
 	// --- Stale check-in: +20 if offline ---
-	if !es.LastSeen.IsZero() && time.Since(es.LastSeen) > 2*baseInterval {
+	if freshness.IsStale(es.LastSeen, baseInterval) {
 		score += 20
-		r.Factors = append(r.Factors, Factor{"Offline", 20, "no check-in within 2× interval"})
+		r.Factors = append(r.Factors, Factor{"Offline", 20, "no check-in within 2.5× interval"})
 	}
 
 	// Note: Windows/debsecan CVEs are now included in the unique_* counts above
@@ -206,7 +207,7 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 	}
 
 	r.Score = score
-	r.Level = classify(score)
+	r.Level = Classify(score)
 	return r
 }
 
@@ -255,8 +256,10 @@ func ScoreFleet(envoys []EnvoyInput, baseInterval time.Duration, topN int) Fleet
 	return fr
 }
 
-// classify maps a 0-100 score to a risk level.
-func classify(score int) Level {
+// Classify maps a 0-100 score to a risk level. Single source of truth
+// for the score → level threshold mapping; CLI and UI both consume this
+// rather than re-implementing the thresholds locally.
+func Classify(score int) Level {
 	switch {
 	case score >= 70:
 		return LevelCritical

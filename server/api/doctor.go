@@ -16,6 +16,7 @@ import (
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/spanner"
 	"git.alexander4.io/vigo/server/license"
 )
@@ -266,7 +267,6 @@ func (h *DoctorHandler) checkStaleEnvoys(ctx context.Context) DoctorCheck {
 		return DoctorCheck{Name: "stale_envoys", Scope: ScopeFleet, Status: StatusFail, Message: err.Error()}
 	}
 
-	staleThreshold := 2 * h.baseInterval
 	var stale []string
 	for _, t := range envoys {
 		if t.Revoked != 0 {
@@ -275,7 +275,7 @@ func (h *DoctorHandler) checkStaleEnvoys(ctx context.Context) DoctorCheck {
 		if !t.LastSeen.Valid {
 			continue
 		}
-		if time.Since(t.LastSeen.Time) > staleThreshold {
+		if freshness.IsStale(t.LastSeen.Time, h.baseInterval) {
 			stale = append(stale, t.Hostname)
 		}
 	}

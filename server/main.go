@@ -50,6 +50,7 @@ import (
 	"git.alexander4.io/vigo/server/spanner"
 	"git.alexander4.io/vigo/server/hardening"
 	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/freshness"
 	isgrpc "git.alexander4.io/vigo/server/grpc"
 	licfmt "git.alexander4.io/tessera/license"
 	"git.alexander4.io/vigo/server/license"
@@ -1682,12 +1683,12 @@ func runFrameworkDriftAlerter(ctx context.Context, queries *db.Queries, configSt
 	}
 }
 
-// notification when a envoy transitions from non-stale to stale. A envoy
-// is stale if it hasn't checked in within 2x the base interval. The checker
-// runs at the base interval frequency. It always updates the FleetIndex
-// offline flag; SMTP notifications are optional.
+// notification when a envoy transitions from non-stale to stale. The
+// "is stale" predicate lives in package freshness (2.5× the base
+// interval) and is shared with the UI, doctor, and risk scorer. The
+// checker runs at the base interval frequency. It always updates the
+// FleetIndex offline flag; SMTP notifications are optional.
 func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex, integ *integrations.Dispatcher, baseInterval time.Duration) {
-	staleThreshold := 2 * baseInterval
 	wasStale := make(map[string]bool) // envoy ID → was stale last tick
 	canNotify := integ != nil
 
@@ -1707,7 +1708,7 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 					if ts.Revoked || ts.LastSeen.IsZero() {
 						continue
 					}
-					stale := time.Since(ts.LastSeen) > staleThreshold
+					stale := freshness.IsStale(ts.LastSeen, baseInterval)
 					fleetIdx.SetOffline(ts.ID, stale)
 					if !stale {
 						continue
@@ -1769,7 +1770,7 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 				if !t.LastSeen.Valid {
 					continue
 				}
-				if time.Since(t.LastSeen.Time) <= staleThreshold {
+				if !freshness.IsStale(t.LastSeen.Time, baseInterval) {
 					continue
 				}
 

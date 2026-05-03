@@ -136,7 +136,7 @@ Returns a list of `PlannedAction`:
 | `relapsed` | int32 | 2 consecutive runs with changes |
 | `diverged` | int32 | 3+ consecutive runs with changes |
 | `failed` | int32 | Last run failed |
-| `offline` | int32 | Not seen within 2x interval |
+| `offline` | int32 | Not seen within 2.5× interval |
 | `no_data` | int32 | No run data |
 | `convergence_pct` | float | Percentage converged |
 

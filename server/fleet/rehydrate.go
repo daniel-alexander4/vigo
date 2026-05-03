@@ -12,6 +12,7 @@ import (
 
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/freshness"
 )
 
 // Rehydrate loads the FleetIndex from SQLite on startup. It populates all maps,
@@ -67,8 +68,6 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		}
 		runsByEnvoy[fr.ID] = runs
 	}
-
-	staleThreshold := 2 * baseInterval
 
 	for _, twr := range envoysWithRuns {
 		t := twr.Envoy
@@ -169,8 +168,8 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 
 		fi.AddEnvoy(ts, pubKey)
 
-		// Mark offline if last seen exceeds stale threshold.
-		if !ts.Revoked && !ts.LastSeen.IsZero() && time.Since(ts.LastSeen) > staleThreshold {
+		// Mark offline if last seen exceeds the canonical stale threshold.
+		if !ts.Revoked && freshness.IsStale(ts.LastSeen, baseInterval) {
 			fi.SetOffline(ts.ID, true)
 		}
 	}

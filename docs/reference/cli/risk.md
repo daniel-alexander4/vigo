@@ -125,7 +125,7 @@ Risk scores range from 0 (lowest risk) to 100 (highest risk), capped at 100.
 | Relapsed | +10 | convergence status |
 | Diverged | +15 | convergence status |
 | Convergence errors | +15 | convergence status |
-| Lost contact | +20 | last seen > 2× check-in interval |
+| Lost contact | +20 | last seen > 2.5× check-in interval |
 | Windows update CVEs | +5 per CVE | `security_scan.windows_updates.cves` |
 | Debian CVEs (debsecan) | +3 per CVE | `security_scan.debsecan.cves` |
 

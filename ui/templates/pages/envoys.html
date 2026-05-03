@@ -56,7 +56,7 @@
 {{define "envoys-stats"}}
 <div class="stat-cards stat-cards--compact mb-2">
     {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
-    {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Reachable" "Color" "success" "Tooltip" (printf "Envoys that checked in within the last %s (2× the agent check-in interval)" .PollInterval)}}
+    {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Reachable" "Color" "success" "Tooltip" "Envoys that checked in within 2.5× the agent check-in interval (set in server.yaml as checkin.interval)."}}
 </div>
 <div class="filter-bar flex items-center gap-1 flex-wrap">
     <a href="/envoys" class="btn btn--sm{{if and (eq .StatusFilter "") (eq .Search "")}} btn--primary{{end}}">All <span class="filter-count">{{.TotalEnvoys}}</span></a>
@@ -94,7 +94,7 @@
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a>{{if .ObserveOnly}} <span class="badge badge--info" title="Observe-only mode — drift reported, no enforcement">obs</span>{{end}}</td>
             <td class="mono">{{.IPAddress}}</td>
             <td class="mono text-muted">{{if .AgentVersion}}{{.AgentVersion}}{{else}}-{{end}}</td>
-            <td class="text-muted table-time{{if .Offline}} envoys-lastseen--stale{{end}}"><span class="time-relative" title="{{formatTime .LastSeen}}">{{timeAgo .LastSeen}}</span></td>
+            <td class="text-muted table-time{{if .Offline}} envoys-lastseen--stale{{end}}"><span class="time-relative" title="{{formatTime .LastSeen}}">{{.LastSeenLabel}}</span></td>
             <td class="text-muted table-time">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}" class="time-relative" title="{{formatTime .LastRunAt}}">{{timeAgo .LastRunAt}}</a>{{end}}</td>
             <td>
                 {{if .DiskStatus}}

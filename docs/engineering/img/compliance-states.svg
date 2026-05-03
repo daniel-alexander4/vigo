@@ -44,7 +44,7 @@
 
   <!-- Decision 1: stale check -->
   <polygon points="250,92 330,122 250,152 170,122" fill="#fff" stroke="#718096" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="250" y="119" text-anchor="middle" font-size="9" font-weight="500" fill="#2d3748">&gt; 2x interval</text>
+  <text x="250" y="119" text-anchor="middle" font-size="9" font-weight="500" fill="#2d3748">&gt; 2.5x interval</text>
   <text x="250" y="131" text-anchor="middle" font-size="9" font-weight="500" fill="#2d3748">ago?</text>
 
   <!-- Yes arrow right to STALE -->
