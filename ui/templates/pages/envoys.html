@@ -88,7 +88,7 @@
     <div class="filter-bar-axis">
         <span class="filter-bar-axis__label">Reach</span>
         <div class="filter-bar flex items-center gap-1 flex-wrap">
-            <a href="/envoys?reach=offline" class="btn btn--sm{{if eq .ReachFilter "offline"}} btn--primary{{end}}">Offline <span class="filter-count filter-count--muted">{{.CountOffline}}</span></a>
+            <a href="/envoys?reach=offline" class="btn btn--sm{{if eq .ReachFilter "offline"}} btn--primary{{end}}" title="Envoys silent for more than {{.OfflineThresholdLabel}}. Tunable via checkin.offline_threshold in server.yaml; default is 2.5× the check-in interval.">Offline <span class="filter-count filter-count--muted">{{.CountOffline}}</span></a>
             {{if gt .CountObserving 0}}<a href="/envoys?reach=observing" class="btn btn--sm{{if eq .ReachFilter "observing"}} btn--primary{{end}}" title="Envoys in observe-only mode (drift reported, no enforcement)">Observing <span class="filter-count filter-count--info">{{.CountObserving}}</span></a>{{end}}
         </div>
     </div>
@@ -132,11 +132,11 @@
             </td>
             <td>
                 {{if eq .ModuleCount 0}}
-                <span class="badge badge--unknown">0/0</span>
+                <span class="badge badge--unknown" title="No run data yet">0c · 0f / 0</span>
                 {{else if .LastRunID}}
-                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge" style="background:{{failureGradient .FailedCount .ModuleCount}};color:#1e1e2e;">{{.FailedCount}}/{{.ModuleCount}}</span></a>
+                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge" style="background:{{failureGradient .FailedCount .ModuleCount}};color:#1e1e2e;" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span></a>
                 {{else}}
-                <span class="badge" style="background:{{failureGradient .FailedCount .ModuleCount}};color:#1e1e2e;">{{.FailedCount}}/{{.ModuleCount}}</span>
+                <span class="badge" style="background:{{failureGradient .FailedCount .ModuleCount}};color:#1e1e2e;" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span>
                 {{end}}
             </td>
         </tr>

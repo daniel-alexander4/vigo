@@ -861,6 +861,7 @@ type CheckInSection struct {
 	Interval            string `yaml:"interval" doc:"Nominal agent check-in interval as a Go duration string." example:"15s (responsive), 30s (default), 5m (conservative); minimum 5s"`
 	JitterPercent       int    `yaml:"jitter_percent" doc:"Random ± jitter applied to the check-in interval (percent)." example:"0-50; 10 (default) spreads load across a ±10% window"`
 	BundleMaxAge        string `yaml:"bundle_max_age" doc:"Signed-bundle TTL on agents (e.g. 24h). \"0\" means bundles never expire." default:"24h" example:"1h, 24h, 168h (accepts s, m, h); 0 to disable"`
+	OfflineThreshold    string `yaml:"offline_threshold" doc:"Override the staleness threshold used by the Offline pill, risk scorer, and stale-envoy notifier. Empty preserves the default 2.5× check-in interval." example:"empty (use 2.5× interval), 5m, 15m (accepts s, m, h)"`
 	ObserveOnly         bool   `yaml:"observe_only" doc:"Fleet-wide observe-only mode — all envoys report drift but never apply changes." default:"false" example:"true during Salt/Puppet migration"`
 	ComplianceThreshold int    `yaml:"compliance_threshold" doc:"Convergence percentage below which the convergence.threshold event fires. 0 disables." example:"0-100; 90 for prod alerting, 95 for tight SLOs"`
 }

@@ -390,6 +390,20 @@ func run() error {
 		}
 	}
 
+	// Optional staleness threshold override. When empty, freshness.IsStale
+	// defaults to 2.5× the check-in interval; when set, this literal
+	// duration takes effect across every reachability surface (Offline
+	// pill, risk scorer, doctor API, stale-envoy notifier, fleet
+	// rehydrator). Single SoT, single override.
+	if cfg.CheckIn.OfflineThreshold != "" {
+		if parsed, err := time.ParseDuration(cfg.CheckIn.OfflineThreshold); err == nil && parsed > 0 {
+			freshness.SetOverride(parsed)
+		} else if err != nil {
+			slog.Warn("invalid checkin.offline_threshold; falling back to default 2.5× interval",
+				"value", cfg.CheckIn.OfflineThreshold, "error", err)
+		}
+	}
+
 	// Parse tuning parameters (all optional, zero values use defaults).
 	sigWindow := parseDuration(cfg.Tuning.SignatureWindow, 0)
 	lastSeenFlush := parseDuration(cfg.Tuning.LastSeenFlush, 10*time.Second)

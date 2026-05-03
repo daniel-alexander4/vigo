@@ -948,11 +948,25 @@ type RunRow struct {
 	EnvoyID      string
 	Hostname     string
 	StartedAt    time.Time
+	FinishedAt   time.Time // zero when still running; powers DurationLabel
 	Status       string
 	ModuleCount  int64
 	ChangedCount int64
 	FailedCount  int64
 	FailurePct   float64 // 0-100: failed_count / module_count * 100
+	// Outcome is the per-run failure-axis bucket — "converged",
+	// "degraded", "failed", or "no data" — derived once at row build
+	// time via convergence.ComputeStatus so the dashboard can show the
+	// verdict next to the ratio without each surface re-deriving it.
+	Outcome string
+	// TopFailedModule is the first module that produced a non-empty
+	// error in this run, or empty when nothing failed. Populated by
+	// db.ListRunsWithHostname's subquery; lets operators triage from
+	// the dashboard without clicking into run-detail.
+	TopFailedModule string
+	// DurationLabel is StartedAt → FinishedAt rendered as a compact
+	// human-readable string ("47s", "2m13s"); empty when still running.
+	DurationLabel string
 }
 
 // ConvergencePageData holds module convergence data (envoy enforcement status).
@@ -1077,6 +1091,7 @@ type EnvoyRow struct {
 	FailurePct   float64 // 0-100: failed_count / module_count * 100
 	ModuleCount  int64
 	FailedCount  int64
+	ChangedCount int64 // changes in the latest run; drives the drift-axis pill counts and the convergence-ratio badge text
 	Offline      bool
 	ObserveOnly  bool // observe-only mode: drift reporting only
 	AgentVersion string
@@ -1138,6 +1153,12 @@ type EnvoysPageData struct {
 	FleetFailedModules int64
 	FleetTotalModules  int64
 	ModuleHealthPct    float64
+	// OfflineThresholdLabel is the resolved staleness threshold
+	// rendered as a human-friendly duration ("75s", "15m"). Drives the
+	// Offline pill's title so operators can see how long an envoy must
+	// have been silent to land in that bucket without consulting
+	// server.yaml.
+	OfflineThresholdLabel string
 }
 
 // EnvoyDetailRunRow is a run with its per-module results for the envoy detail page.
@@ -2213,16 +2234,34 @@ func (h *Handler) dashboardData() DashboardPageData {
 		if r.ModuleCount > 0 {
 			failPct = float64(r.FailedCount) / float64(r.ModuleCount) * 100
 		}
-		data.RecentRuns = append(data.RecentRuns, RunRow{
-			ID:           r.ID,
-			EnvoyID:      r.EnvoyID,
-			Hostname:     r.Hostname,
-			StartedAt:    r.StartedAt,
+		var finished time.Time
+		if r.FinishedAt.Valid {
+			finished = r.FinishedAt.Time
+		}
+		var dur string
+		if !finished.IsZero() && !r.StartedAt.IsZero() {
+			dur = friendlyDurationLabel(finished.Sub(r.StartedAt))
+		}
+		outcome := convergence.ComputeStatus(convergence.RunInfo{
 			Status:       r.Status,
-			ModuleCount:  r.ModuleCount,
 			ChangedCount: r.ChangedCount,
 			FailedCount:  r.FailedCount,
-			FailurePct:   failPct,
+			ModuleCount:  r.ModuleCount,
+		}).String()
+		data.RecentRuns = append(data.RecentRuns, RunRow{
+			ID:              r.ID,
+			EnvoyID:         r.EnvoyID,
+			Hostname:        r.Hostname,
+			StartedAt:       r.StartedAt,
+			FinishedAt:      finished,
+			Status:          r.Status,
+			ModuleCount:     r.ModuleCount,
+			ChangedCount:    r.ChangedCount,
+			FailedCount:     r.FailedCount,
+			FailurePct:      failPct,
+			Outcome:         outcome,
+			TopFailedModule: r.TopFailedModule,
+			DurationLabel:   dur,
 		})
 	}
 
@@ -4043,6 +4082,7 @@ func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, s
 			FailurePct:    e.FailurePct,
 			ModuleCount:   e.ModuleCount,
 			FailedCount:   e.FailedCount,
+			ChangedCount:  e.ChangedCount,
 			Offline:       e.Offline,
 			ObserveOnly:   e.ObserveOnly,
 			AgentVersion:  e.AgentVersion,
@@ -4096,7 +4136,34 @@ func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, s
 	if data.FleetTotalModules > 0 {
 		data.ModuleHealthPct = float64(data.FleetFailedModules) / float64(data.FleetTotalModules) * 100
 	}
+	data.OfflineThresholdLabel = friendlyDurationLabel(freshness.StaleThreshold(h.baseInterval))
 	return data
+}
+
+// friendlyDurationLabel renders a Duration in the most compact form
+// that's still operator-readable. Bare seconds for sub-minute values,
+// bare minutes for round minutes, "MmSs" for the awkward middle, hours
+// where appropriate. Used by the Offline pill title and any other
+// surface that needs a short threshold display.
+func friendlyDurationLabel(d time.Duration) string {
+	d = d.Round(time.Second)
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		if d%time.Minute == 0 {
+			return fmt.Sprintf("%dm", int(d.Minutes()))
+		}
+		m := int(d / time.Minute)
+		s := int((d % time.Minute) / time.Second)
+		return fmt.Sprintf("%dm%ds", m, s)
+	}
+	if d%time.Hour == 0 {
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
+	h := int(d / time.Hour)
+	m := int((d % time.Hour) / time.Minute)
+	return fmt.Sprintf("%dh%dm", h, m)
 }
 
 // EnvoyDetail renders the envoy detail page shell. Runs and traits are loaded

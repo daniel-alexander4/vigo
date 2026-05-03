@@ -107,6 +107,23 @@ func funcMap() template.FuncMap {
 		"failureGradientPct": func(pct float64) template.CSS {
 			return template.CSS(uifmt.FailureGradient(pct))
 		},
+		// convergenceRatio renders the canonical badge text used on every
+		// run/envoy convergence indicator across the UI:
+		//   "<changed>c · <failed>f / <total>"
+		// e.g. "3c · 1f / 172". The marker letters are part of the badge so
+		// the bare numbers stay self-explanatory without depending on a
+		// column header. Color of the badge comes from failureGradient
+		// against failed/total — drift / change count contributes to the
+		// numerator only, never the color.
+		"convergenceRatio": func(changed, failed, total int64) string {
+			return fmt.Sprintf("%dc · %df / %d", changed, failed, total)
+		},
+		// convergenceHover renders the verbose labeled form for the title
+		// attribute on the badge — operator hovers and gets a sentence
+		// instead of a numeric trio.
+		"convergenceHover": func(changed, failed, total int64) string {
+			return fmt.Sprintf("%d changed · %d failed of %d modules", changed, failed, total)
+		},
 		"actionCSSClass": func(action string) string {
 			switch convergence.ClassifyAction(action) {
 			case convergence.ActionCreate:

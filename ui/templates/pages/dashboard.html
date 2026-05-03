@@ -80,10 +80,10 @@
         <tr>
             <th>Run</th>
             <th>Host</th>
-            <th>Status</th>
-            <th>Modules</th>
-            <th>Changed</th>
-            <th>Failed</th>
+            <th>Outcome</th>
+            <th title="changed · failed / total — color reflects failed/total">Convergence</th>
+            <th>Top failure</th>
+            <th>Duration</th>
             <th>Time</th>
         </tr>
     </thead>
@@ -92,10 +92,10 @@
         <tr>
             <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
             <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
-            <td>{{if eq .ModuleCount 0}}<span class="badge badge--unknown">0/0</span>{{else}}<span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>{{end}}</td>
-            <td>{{.ModuleCount}}</td>
-            <td>{{.ChangedCount}}</td>
-            <td>{{.FailedCount}}</td>
+            <td><span class="status-pill status-pill--{{statusColor .Outcome}}">{{.Outcome}}</span></td>
+            <td>{{if eq .ModuleCount 0}}<span class="badge badge--unknown" title="No run data yet">0c · 0f / 0</span>{{else}}<a href="/runs/{{.ID}}" class="badge-link"><span class="badge" style="background:{{failureGradient .FailedCount .ModuleCount}};color:#1e1e2e;" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span></a>{{end}}</td>
+            <td class="mono text-muted">{{if .TopFailedModule}}{{.TopFailedModule}}{{else}}-{{end}}</td>
+            <td class="mono text-muted">{{if .DurationLabel}}{{.DurationLabel}}{{else}}-{{end}}</td>
             <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .StartedAt}}">{{timeAgo .StartedAt}}</span></td>
         </tr>
         {{end}}

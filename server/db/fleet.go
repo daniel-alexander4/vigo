@@ -164,30 +164,44 @@ func (q *Queries) ListEnvoysPagedWithRun(ctx context.Context, afterHostname, sea
 	return result, rows.Err()
 }
 
-// RunWithHostname is a run joined with its envoy hostname.
+// RunWithHostname is a run joined with its envoy hostname plus a
+// dashboard-flavoured "top failed module" hint sourced from run_results.
+// The hint is the first per-module row whose error_message is non-empty,
+// ordered by created_at; empty when nothing failed in this run. Used to
+// cut down the click-to-triage path on the dashboard recent-activity list.
 type RunWithHostname struct {
-	ID           string
-	EnvoyID      string
-	Hostname     string
-	StartedAt    time.Time
-	FinishedAt   sql.NullTime
-	Status       string
-	ModuleCount  int64
-	ChangedCount int64
-	FailedCount  int64
-	SkippedCount int64
+	ID              string
+	EnvoyID         string
+	Hostname        string
+	StartedAt       time.Time
+	FinishedAt      sql.NullTime
+	Status          string
+	ModuleCount     int64
+	ChangedCount    int64
+	FailedCount     int64
+	SkippedCount    int64
+	TopFailedModule string
 }
 
 const listRunsWithHostname = `
 SELECT r.id, r.envoy_id, e.hostname, r.started_at, r.finished_at,
-       r.status, r.module_count, r.changed_count, r.failed_count, r.skipped_count
+       r.status, r.module_count, r.changed_count, r.failed_count, r.skipped_count,
+       COALESCE((
+         SELECT rr.module_name FROM run_results rr
+         WHERE rr.run_id = r.id
+           AND rr.error_message IS NOT NULL
+           AND rr.error_message <> ''
+         ORDER BY rr.created_at
+         LIMIT 1
+       ), '') AS top_failed_module
 FROM runs r
 JOIN envoys e ON e.id = r.envoy_id
 ORDER BY r.started_at DESC
 LIMIT ?
 `
 
-// ListRunsWithHostname returns recent runs with the envoy hostname joined in.
+// ListRunsWithHostname returns recent runs with the envoy hostname joined in
+// plus the first failing module's name (empty when the run had no failures).
 // Replaces ListAllRuns + a separate ListEnvoys call for hostname lookup.
 func (q *Queries) ListRunsWithHostname(ctx context.Context, limit int64) ([]RunWithHostname, error) {
 	rows, err := q.db.QueryContext(ctx, listRunsWithHostname, limit)
@@ -200,7 +214,8 @@ func (q *Queries) ListRunsWithHostname(ctx context.Context, limit int64) ([]RunW
 	for rows.Next() {
 		var r RunWithHostname
 		if err := rows.Scan(&r.ID, &r.EnvoyID, &r.Hostname, &r.StartedAt, &r.FinishedAt,
-			&r.Status, &r.ModuleCount, &r.ChangedCount, &r.FailedCount, &r.SkippedCount); err != nil {
+			&r.Status, &r.ModuleCount, &r.ChangedCount, &r.FailedCount, &r.SkippedCount,
+			&r.TopFailedModule); err != nil {
 			return nil, err
 		}
 		result = append(result, r)
