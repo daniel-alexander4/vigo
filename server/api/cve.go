@@ -150,7 +150,7 @@ type CVEFleetRunningBinary struct {
 func (h *CVEHandler) handleCVESearch(w http.ResponseWriter, r *http.Request) {
 	cveID := strings.ToUpper(r.PathValue("cveID"))
 	if cveID == "" {
-		http.Error(w, "cve ID required", http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "cve ID required")
 		return
 	}
 

@@ -96,12 +96,12 @@ func (h *MeshHandler) envoyInputsCrypt() []cryptsyncmesh.EnvoyInput {
 
 func (h *MeshHandler) handleFilesyncFleet(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
-		http.Error(w, `{"error":"fleet index not available"}`, http.StatusServiceUnavailable)
+		writeError(w, http.StatusServiceUnavailable, "fleet index not available")
 		return
 	}
 	fleet, err := h.SyncSnapshot(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "filesync fleet query failed")
+		writeError(w, http.StatusInternalServerError, "filesync fleet query failed")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -112,12 +112,12 @@ func (h *MeshHandler) handleFilesyncFleet(w http.ResponseWriter, r *http.Request
 
 func (h *MeshHandler) handleCryptsyncFleet(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
-		http.Error(w, `{"error":"fleet index not available"}`, http.StatusServiceUnavailable)
+		writeError(w, http.StatusServiceUnavailable, "fleet index not available")
 		return
 	}
 	fleet, err := h.CryptSnapshot(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "cryptsync fleet query failed")
+		writeError(w, http.StatusInternalServerError, "cryptsync fleet query failed")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -130,12 +130,12 @@ func (h *MeshHandler) handleFilesyncDrilldown(w http.ResponseWriter, r *http.Req
 	envoyID := r.PathValue("id")
 	user := r.PathValue("user")
 	if envoyID == "" || user == "" {
-		writeJSONError(w, http.StatusBadRequest, "envoy id and user required")
+		writeError(w, http.StatusBadRequest, "envoy id and user required")
 		return
 	}
 	files, err := h.sync.FullFileList(r.Context(), envoyID, user)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "filesync drilldown failed")
+		writeError(w, http.StatusInternalServerError, "filesync drilldown failed")
 		return
 	}
 	if files == nil {
@@ -153,12 +153,12 @@ func (h *MeshHandler) handleCryptsyncDrilldown(w http.ResponseWriter, r *http.Re
 	envoyID := r.PathValue("id")
 	user := r.PathValue("user")
 	if envoyID == "" || user == "" {
-		writeJSONError(w, http.StatusBadRequest, "envoy id and user required")
+		writeError(w, http.StatusBadRequest, "envoy id and user required")
 		return
 	}
 	files, err := h.crypt.FullFileList(r.Context(), envoyID, user)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "cryptsync drilldown failed")
+		writeError(w, http.StatusInternalServerError, "cryptsync drilldown failed")
 		return
 	}
 	if files == nil {

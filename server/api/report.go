@@ -1473,9 +1473,9 @@ func (h *ReportHandler) serveFrameworkReport(w http.ResponseWriter, r *http.Requ
 		if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
 			if !h.configStore.IsStandardEnabled(standardKey) {
 				if asHTML {
-					http.Error(w, "This compliance framework is not enabled.", http.StatusNotFound)
+					writeError(w, http.StatusNotFound, "This compliance framework is not enabled.")
 				} else {
-					writeJSONError(w, http.StatusNotFound, "framework not enabled")
+					writeError(w, http.StatusNotFound, "framework not enabled")
 				}
 				return
 			}
@@ -1485,9 +1485,9 @@ func (h *ReportHandler) serveFrameworkReport(w http.ResponseWriter, r *http.Requ
 	report, err := h.BuildReport(r, title, controls)
 	if err != nil {
 		if asHTML {
-			http.Error(w, "failed to build report: "+err.Error(), http.StatusInternalServerError)
+			writeError(w, http.StatusInternalServerError, "failed to build report: "+err.Error())
 		} else {
-			writeJSONError(w, http.StatusInternalServerError, "failed to build report: "+err.Error())
+			writeError(w, http.StatusInternalServerError, "failed to build report: "+err.Error())
 		}
 		return
 	}
@@ -4229,7 +4229,7 @@ func (h *ReportHandler) buildTopIssues(summary fleet.ConvergenceCounters, auditS
 func (h *ReportHandler) handleExecutiveReport(w http.ResponseWriter, r *http.Request) {
 	report, err := h.BuildExecutiveReport(r)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to build executive report: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "failed to build executive report: "+err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -4245,7 +4245,7 @@ func (h *ReportHandler) handleExecutiveReport(w http.ResponseWriter, r *http.Req
 func (h *ReportHandler) handleExecutiveReportHTML(w http.ResponseWriter, r *http.Request) {
 	report, err := h.BuildExecutiveReport(r)
 	if err != nil {
-		http.Error(w, "failed to build executive report: "+err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "failed to build executive report: "+err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

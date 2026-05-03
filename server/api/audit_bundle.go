@@ -71,7 +71,7 @@ func (h *ReportHandler) handleAuditBundle(w http.ResponseWriter, r *http.Request
 	slug := r.PathValue("slug")
 	period, err := parseAuditBundlePeriod(r.URL.Query().Get("period"))
 	if err != nil {
-		http.Error(w, jsonErr("invalid period: "+err.Error()), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid period: "+err.Error())
 		return
 	}
 	now := time.Now().UTC()
@@ -79,7 +79,7 @@ func (h *ReportHandler) handleAuditBundle(w http.ResponseWriter, r *http.Request
 
 	report, err := h.BuildFrameworkReport(r, slug)
 	if err != nil {
-		http.Error(w, jsonErr("building framework report: "+err.Error()), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "building framework report: "+err.Error())
 		return
 	}
 

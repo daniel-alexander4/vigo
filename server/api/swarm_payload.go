@@ -81,7 +81,7 @@ func (h *LodeHandler) RegisterRoutes(mux *http.ServeMux) {
 // check-in via the swarm_seeds trait collector and auto-distributes to targets.
 func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 	if h.seedDir == "" {
-		writeJSONError(w, http.StatusServiceUnavailable, "swarm substrate not enabled — payload requires swarm")
+		writeError(w, http.StatusServiceUnavailable, "swarm substrate not enabled — payload requires swarm")
 		return
 	}
 
@@ -90,7 +90,7 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 	retention := r.Header.Get("X-Payload-Retention")
 
 	if label == "" {
-		writeJSONError(w, http.StatusBadRequest, "X-Payload-Label header required")
+		writeError(w, http.StatusBadRequest, "X-Payload-Label header required")
 		return
 	}
 	if target == "" {
@@ -110,7 +110,7 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 	manifestPath := filepath.Join(h.seedDir, label+".swarm")
 	manifest := fmt.Sprintf(`{"target":%q,"retention":%q}`, target, retention)
 	if err := os.WriteFile(manifestPath, []byte(manifest), 0644); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "writing manifest: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "writing manifest: "+err.Error())
 		return
 	}
 
@@ -118,7 +118,7 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 	tmp, err := os.CreateTemp(h.seedDir, ".upload-*")
 	if err != nil {
 		os.Remove(manifestPath)
-		writeJSONError(w, http.StatusInternalServerError, "creating temp file: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "creating temp file: "+err.Error())
 		return
 	}
 	tmpPath := tmp.Name()
@@ -133,12 +133,12 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 	size, err := io.CopyBuffer(mw, r.Body, buf)
 	if err != nil {
 		os.Remove(manifestPath)
-		writeJSONError(w, http.StatusInternalServerError, "writing file: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "writing file: "+err.Error())
 		return
 	}
 	if err := tmp.Close(); err != nil {
 		os.Remove(manifestPath)
-		writeJSONError(w, http.StatusInternalServerError, "closing temp file: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "closing temp file: "+err.Error())
 		return
 	}
 
@@ -150,7 +150,7 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 		// Cross-device: copy + delete.
 		if copyErr := copyFile(tmpPath, destPath); copyErr != nil {
 			os.Remove(manifestPath)
-			writeJSONError(w, http.StatusInternalServerError, "moving file: "+copyErr.Error())
+			writeError(w, http.StatusInternalServerError, "moving file: "+copyErr.Error())
 			return
 		}
 	}
@@ -220,7 +220,7 @@ type lodeEntry struct {
 // List returns all payload payloads with status summaries.
 func (h *LodeHandler) List(w http.ResponseWriter, r *http.Request) {
 	if h.tracker == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "swarm substrate not enabled — payload requires swarm")
+		writeError(w, http.StatusServiceUnavailable, "swarm substrate not enabled — payload requires swarm")
 		return
 	}
 
@@ -290,7 +290,7 @@ func seedToLodeEntry(sha256 string, seed swarm.SeedState, tracker *swarm.PeerTra
 // it. Bound to HTTP DELETE /api/v1/swarm/payload/{sha256}.
 func (h *LodeHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 	if h.tracker == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "swarm substrate not enabled — payload requires swarm")
+		writeError(w, http.StatusServiceUnavailable, "swarm substrate not enabled — payload requires swarm")
 		return
 	}
 
@@ -303,11 +303,11 @@ func (h *LodeHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 			if full, ok := h.manifestStore.ResolvePrefix(hash); ok {
 				hash = full
 			} else {
-				writeJSONError(w, http.StatusNotFound, "payload not found")
+				writeError(w, http.StatusNotFound, "payload not found")
 				return
 			}
 		} else {
-			writeJSONError(w, http.StatusNotFound, "payload not found")
+			writeError(w, http.StatusNotFound, "payload not found")
 			return
 		}
 	}
@@ -348,7 +348,7 @@ func (h *LodeHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 // Status returns per-envoy distribution progress for a payload.
 func (h *LodeHandler) Status(w http.ResponseWriter, r *http.Request) {
 	if h.tracker == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "swarm substrate not enabled — payload requires swarm")
+		writeError(w, http.StatusServiceUnavailable, "swarm substrate not enabled — payload requires swarm")
 		return
 	}
 
@@ -358,9 +358,9 @@ func (h *LodeHandler) Status(w http.ResponseWriter, r *http.Request) {
 			hash = full
 		} else {
 			if swarm.IsValidHashPrefix(hash) {
-				writeJSONError(w, http.StatusNotFound, "no payload matches prefix")
+				writeError(w, http.StatusNotFound, "no payload matches prefix")
 			} else {
-				writeJSONError(w, http.StatusBadRequest, "invalid sha256")
+				writeError(w, http.StatusBadRequest, "invalid sha256")
 			}
 			return
 		}
@@ -540,7 +540,7 @@ func matchLodeTarget(envoy fleet.EnvoyState, spec string) bool {
 // BrokenSeeds returns broken seed manifests across all envoys.
 func (h *LodeHandler) BrokenSeeds(w http.ResponseWriter, r *http.Request) {
 	if h.tracker == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "swarm substrate not enabled — payload requires swarm")
+		writeError(w, http.StatusServiceUnavailable, "swarm substrate not enabled — payload requires swarm")
 		return
 	}
 

@@ -72,19 +72,19 @@ type dispatchRequest struct {
 func (h *TaskHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 	var req dispatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.Command == "" && req.TaskName == "" {
-		writeJSONError(w, http.StatusBadRequest, "command or taskName is required")
+		writeError(w, http.StatusBadRequest, "command or taskName is required")
 		return
 	}
 	if req.Target == "" && req.TaskName == "" {
-		writeJSONError(w, http.StatusBadRequest, "target is required")
+		writeError(w, http.StatusBadRequest, "target is required")
 		return
 	}
 	if h.requireDefinition && req.TaskName == "" {
-		writeJSONError(w, http.StatusForbidden, "ad-hoc commands are disabled; use a named task definition (task.require_definition is enabled)")
+		writeError(w, http.StatusForbidden, "ad-hoc commands are disabled; use a named task definition (task.require_definition is enabled)")
 		return
 	}
 	if req.Operator == "" {
@@ -105,7 +105,7 @@ func (h *TaskHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 		Params:      req.Params,
 	})
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -146,7 +146,7 @@ func (h *TaskHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 
 	taskRuns, err := h.queries.ListPushRuns(r.Context(), limit)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -206,16 +206,16 @@ func (h *TaskHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 	taskRun, err := h.queries.GetPushRun(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONError(w, http.StatusNotFound, "task run not found")
+			writeError(w, http.StatusNotFound, "task run not found")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	targets, err := h.queries.ListPushRunTargets(ctx, id)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -283,13 +283,13 @@ func (h *TaskHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 func (h *TaskHandler) HandleCancel(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
-		writeJSONError(w, http.StatusBadRequest, "task id is required")
+		writeError(w, http.StatusBadRequest, "task id is required")
 		return
 	}
 
 	ctx := r.Context()
 	if err := h.queries.CancelPushRun(ctx, id); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to cancel task: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "failed to cancel task: "+err.Error())
 		return
 	}
 	_ = h.queries.CancelPushRunTargets(ctx, id)
@@ -304,7 +304,7 @@ func (h *TaskHandler) HandleCancelRunning(w http.ResponseWriter, r *http.Request
 	// Get IDs of running tasks so we can cancel their targets too.
 	ids, err := h.queries.ListRunningPushRunIDs(ctx)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to list running tasks: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "failed to list running tasks: "+err.Error())
 		return
 	}
 
@@ -313,7 +313,7 @@ func (h *TaskHandler) HandleCancelRunning(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := h.queries.CancelAllRunningPushRuns(ctx); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to cancel running tasks: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "failed to cancel running tasks: "+err.Error())
 		return
 	}
 

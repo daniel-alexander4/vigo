@@ -77,7 +77,7 @@ func (h *RiskHandler) RegisterRoutes(mux *http.ServeMux) {
 // handleFleetRisk returns the fleet-wide risk summary.
 func (h *RiskHandler) handleFleetRisk(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
-		http.Error(w, `{"error":"fleet index not available"}`, http.StatusServiceUnavailable)
+		writeError(w, http.StatusServiceUnavailable, "fleet index not available")
 		return
 	}
 
@@ -92,14 +92,14 @@ func (h *RiskHandler) handleFleetRisk(w http.ResponseWriter, r *http.Request) {
 // handleEnvoyRisk returns the risk score breakdown for a single envoy.
 func (h *RiskHandler) handleEnvoyRisk(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
-		http.Error(w, `{"error":"fleet index not available"}`, http.StatusServiceUnavailable)
+		writeError(w, http.StatusServiceUnavailable, "fleet index not available")
 		return
 	}
 
 	envoyID := r.PathValue("envoyID")
 	es := h.fleetIndex.GetEnvoy(envoyID)
 	if es == nil {
-		http.Error(w, `{"error":"envoy not found"}`, http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "envoy not found")
 		return
 	}
 
@@ -120,7 +120,7 @@ func (h *RiskHandler) handleRiskHistory(w http.ResponseWriter, r *http.Request) 
 
 	rows, err := h.queries.ListRiskPostureHistory(context.Background(), days)
 	if err != nil {
-		http.Error(w, `{"error":"failed to query risk history"}`, http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "failed to query risk history")
 		return
 	}
 
@@ -389,7 +389,7 @@ func currentUsername(r *http.Request) string {
 func (h *RiskHandler) handleInsuranceExport(w http.ResponseWriter, r *http.Request) {
 	report, err := h.buildInsuranceReport(currentUsername(r))
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -405,7 +405,7 @@ func (h *RiskHandler) handleInsuranceExport(w http.ResponseWriter, r *http.Reque
 func (h *RiskHandler) handleInsuranceExportHTML(w http.ResponseWriter, r *http.Request) {
 	report, err := h.buildInsuranceReport(currentUsername(r))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -425,7 +425,7 @@ func (h *RiskHandler) handleInsuranceExportHTML(w http.ResponseWriter, r *http.R
 func (h *RiskHandler) handleInsuranceExportPDF(w http.ResponseWriter, r *http.Request) {
 	report, err := h.buildInsuranceReport(currentUsername(r))
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -446,7 +446,7 @@ func (h *RiskHandler) handleInsuranceExportPDF(w http.ResponseWriter, r *http.Re
 			}
 			return
 		}
-		http.Error(w, "failed to render PDF", http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "failed to render PDF")
 		return
 	}
 

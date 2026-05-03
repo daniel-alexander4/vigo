@@ -48,11 +48,11 @@ type workflowRunRequest struct {
 func (h *WorkflowHandler) HandleRun(w http.ResponseWriter, r *http.Request) {
 	var req workflowRunRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.Name == "" {
-		writeJSONError(w, http.StatusBadRequest, "name is required")
+		writeError(w, http.StatusBadRequest, "name is required")
 		return
 	}
 	if req.Operator == "" {
@@ -61,7 +61,7 @@ func (h *WorkflowHandler) HandleRun(w http.ResponseWriter, r *http.Request) {
 
 	runID, err := h.engine.RunWorkflow(r.Context(), req.Name, req.Operator)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -92,7 +92,7 @@ func (h *WorkflowHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 
 	runs, err := h.queries.ListWorkflowRuns(r.Context(), limit)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -148,16 +148,16 @@ func (h *WorkflowHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 	run, err := h.queries.GetWorkflowRun(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONError(w, http.StatusNotFound, "workflow not found")
+			writeError(w, http.StatusNotFound, "workflow not found")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	steps, err := h.queries.ListWorkflowStepResults(ctx, id)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -215,15 +215,15 @@ func (h *WorkflowHandler) HandleAbort(w http.ResponseWriter, r *http.Request) {
 	run, err := h.queries.GetWorkflowRun(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONError(w, http.StatusNotFound, "workflow not found")
+			writeError(w, http.StatusNotFound, "workflow not found")
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	if run.Status != "running" && run.Status != "pending" {
-		writeJSONError(w, http.StatusConflict, "workflow is not running")
+		writeError(w, http.StatusConflict, "workflow is not running")
 		return
 	}
 

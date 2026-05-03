@@ -183,7 +183,7 @@ func (h *AuditHandler) ListAuditEvents(w http.ResponseWriter, r *http.Request) {
 func (h *AuditHandler) VerifyChain(w http.ResponseWriter, r *http.Request) {
 	result, err := audit.Verify(r.Context(), h.queries)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "verification failed: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "verification failed: "+err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -198,11 +198,11 @@ func (h *AuditHandler) RecordEmergencyAccess(w http.ResponseWriter, r *http.Requ
 		Reason string `json:"reason"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.Reason == "" {
-		writeJSONError(w, http.StatusBadRequest, "reason is required")
+		writeError(w, http.StatusBadRequest, "reason is required")
 		return
 	}
 

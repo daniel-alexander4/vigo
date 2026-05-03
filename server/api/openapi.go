@@ -33,7 +33,7 @@ func (h *OpenAPIHandler) RegisterRoutes(mux *http.ServeMux) {
 func (h *OpenAPIHandler) ServeSpec(w http.ResponseWriter, r *http.Request) {
 	data, err := os.ReadFile(h.specPath)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "OpenAPI spec not found")
+		writeError(w, http.StatusNotFound, "OpenAPI spec not found")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")

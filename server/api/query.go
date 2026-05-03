@@ -47,15 +47,15 @@ type queryRequest struct {
 func (h *QueryHandler) HandleQuery(w http.ResponseWriter, r *http.Request) {
 	var req queryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.TraitPath == "" {
-		writeJSONError(w, http.StatusBadRequest, "traitPath is required")
+		writeError(w, http.StatusBadRequest, "traitPath is required")
 		return
 	}
 	if req.Target == "" {
-		writeJSONError(w, http.StatusBadRequest, "target is required")
+		writeError(w, http.StatusBadRequest, "target is required")
 		return
 	}
 
@@ -66,7 +66,7 @@ func (h *QueryHandler) HandleQuery(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.dispatcher.DispatchQuery(r.Context(), req.TraitPath, req.Target, timeout)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 

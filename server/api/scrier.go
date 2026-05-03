@@ -40,7 +40,7 @@ func (h *ScrierHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.queries.ListScrierUsers(r.Context())
 	if err != nil {
 		slog.Error("listing scrier users", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -69,13 +69,13 @@ func (h *ScrierHandler) handleSetOSUser(w http.ResponseWriter, r *http.Request) 
 
 	var req setOSUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	osUser := strings.TrimSpace(req.OSUser)
 	if osUser == "" {
-		writeJSONError(w, http.StatusBadRequest, "os_user is required")
+		writeError(w, http.StatusBadRequest, "os_user is required")
 		return
 	}
 
@@ -84,7 +84,7 @@ func (h *ScrierHandler) handleSetOSUser(w http.ResponseWriter, r *http.Request) 
 		Username:       username,
 	}); err != nil {
 		slog.Error("setting scrier OS user", "user", username, "os_user", osUser, "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to set OS user")
+		writeError(w, http.StatusInternalServerError, "failed to set OS user")
 		return
 	}
 

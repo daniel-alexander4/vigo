@@ -35,12 +35,12 @@ func (h *AIHandler) RegisterRoutes(mux *http.ServeMux) {
 func (h *AIHandler) handleAsk(w http.ResponseWriter, r *http.Request) {
 	var req ai.AskRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	if req.Question == "" {
-		writeJSONError(w, http.StatusBadRequest, "question is required")
+		writeError(w, http.StatusBadRequest, "question is required")
 		return
 	}
 
@@ -53,7 +53,7 @@ func (h *AIHandler) handleAsk(w http.ResponseWriter, r *http.Request) {
 	resp, err := h.assistant.Ask(r.Context(), req)
 	if err != nil {
 		slog.Error("ai ask failed", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -64,7 +64,7 @@ func (h *AIHandler) handleAsk(w http.ResponseWriter, r *http.Request) {
 func (h *AIHandler) handleAskStream(w http.ResponseWriter, r *http.Request, req ai.AskRequest) {
 	sse := ai.NewSSEWriter(w)
 	if sse == nil {
-		writeJSONError(w, http.StatusInternalServerError, "streaming not supported")
+		writeError(w, http.StatusInternalServerError, "streaming not supported")
 		return
 	}
 

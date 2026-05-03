@@ -50,7 +50,7 @@ func (h *UsersHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	users, err := h.store.List(r.Context())
 	if err != nil {
 		slog.Error("listing users", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -68,25 +68,25 @@ type createUserRequest struct {
 func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	var req createUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.Username == "" {
-		writeJSONError(w, http.StatusBadRequest, "username is required")
+		writeError(w, http.StatusBadRequest, "username is required")
 		return
 	}
 	if req.Role == "" {
 		req.Role = "viewer"
 	}
 	if !auth.IsValidRole(req.Role) {
-		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("role must be one of %v", auth.ValidRoles))
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("role must be one of %v", auth.ValidRoles))
 		return
 	}
 
 	// Require admin role for user creation.
 	u := auth.UserFromContext(r.Context())
 	if u == nil || !u.IsAdmin() {
-		writeJSONError(w, http.StatusForbidden, "admin role required")
+		writeError(w, http.StatusForbidden, "admin role required")
 		return
 	}
 
@@ -99,7 +99,7 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("creating user", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to create user")
+		writeError(w, http.StatusInternalServerError, "failed to create user")
 		return
 	}
 
@@ -122,11 +122,11 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 
 	var req updateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.Role != "" && !auth.IsValidRole(req.Role) {
-		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("role must be one of %v", auth.ValidRoles))
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("role must be one of %v", auth.ValidRoles))
 		return
 	}
 
@@ -134,11 +134,11 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	existing, err := h.store.GetByID(r.Context(), id)
 	if err != nil {
 		slog.Error("fetching user", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 	if existing == nil {
-		writeJSONError(w, http.StatusNotFound, "user not found")
+		writeError(w, http.StatusNotFound, "user not found")
 		return
 	}
 
@@ -166,7 +166,7 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		SshPublicKey: req.SSHPublicKey,
 	}); err != nil {
 		slog.Error("updating user", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to update user")
+		writeError(w, http.StatusInternalServerError, "failed to update user")
 		return
 	}
 
@@ -188,7 +188,7 @@ func (h *UsersHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	// Cannot delete yourself.
 	u := auth.UserFromContext(r.Context())
 	if u != nil && u.ID == id {
-		writeJSONError(w, http.StatusBadRequest, "cannot delete yourself")
+		writeError(w, http.StatusBadRequest, "cannot delete yourself")
 		return
 	}
 
@@ -197,7 +197,7 @@ func (h *UsersHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.store.Delete(r.Context(), id); err != nil {
 		slog.Error("deleting user", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to delete user")
+		writeError(w, http.StatusInternalServerError, "failed to delete user")
 		return
 	}
 
@@ -220,18 +220,18 @@ func (h *UsersHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 func (h *UsersHandler) handleTOTPSetup(w http.ResponseWriter, r *http.Request) {
 	u := auth.UserFromContext(r.Context())
 	if u == nil {
-		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 	if h.secrets == nil {
-		writeJSONError(w, http.StatusInternalServerError, "secrets provider not configured")
+		writeError(w, http.StatusInternalServerError, "secrets provider not configured")
 		return
 	}
 
 	secret, url, err := auth.GenerateTOTPSecret(u.Username)
 	if err != nil {
 		slog.Error("generating totp secret", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to generate TOTP secret")
+		writeError(w, http.StatusInternalServerError, "failed to generate TOTP secret")
 		return
 	}
 
@@ -239,7 +239,7 @@ func (h *UsersHandler) handleTOTPSetup(w http.ResponseWriter, r *http.Request) {
 	secretKey := fmt.Sprintf("vigo/web/auth/totp/%s", u.Username)
 	if err := h.secrets.(interface{ Set(string, string) error }).Set(secretKey, secret); err != nil {
 		slog.Error("storing totp secret", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to store TOTP secret")
+		writeError(w, http.StatusInternalServerError, "failed to store TOTP secret")
 		return
 	}
 
@@ -256,7 +256,7 @@ func (h *UsersHandler) handleTOTPSetup(w http.ResponseWriter, r *http.Request) {
 func (h *UsersHandler) handleTOTPConfirm(w http.ResponseWriter, r *http.Request) {
 	u := auth.UserFromContext(r.Context())
 	if u == nil {
-		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
@@ -264,7 +264,7 @@ func (h *UsersHandler) handleTOTPConfirm(w http.ResponseWriter, r *http.Request)
 		Code string `json:"code"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -272,13 +272,13 @@ func (h *UsersHandler) handleTOTPConfirm(w http.ResponseWriter, r *http.Request)
 	secretKey := fmt.Sprintf("vigo/web/auth/totp/%s", u.Username)
 	secret, err := h.secrets.Get(r.Context(), secretKey)
 	if err != nil || secret == "" {
-		writeJSONError(w, http.StatusBadRequest, "no TOTP setup pending — call /totp/setup first")
+		writeError(w, http.StatusBadRequest, "no TOTP setup pending — call /totp/setup first")
 		return
 	}
 
 	// Validate the code.
 	if !auth.ValidateTOTPCode(req.Code, secret) {
-		writeJSONError(w, http.StatusBadRequest, "invalid code — check your authenticator app")
+		writeError(w, http.StatusBadRequest, "invalid code — check your authenticator app")
 		return
 	}
 
@@ -286,14 +286,14 @@ func (h *UsersHandler) handleTOTPConfirm(w http.ResponseWriter, r *http.Request)
 	plainCodes, hashedJSON, err := auth.GenerateRecoveryCodes()
 	if err != nil {
 		slog.Error("generating recovery codes", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to generate recovery codes")
+		writeError(w, http.StatusInternalServerError, "failed to generate recovery codes")
 		return
 	}
 
 	// Enable TOTP in DB.
 	if err := h.store.EnableTOTP(r.Context(), u.ID, hashedJSON); err != nil {
 		slog.Error("enabling totp", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to enable TOTP")
+		writeError(w, http.StatusInternalServerError, "failed to enable TOTP")
 		return
 	}
 
@@ -310,13 +310,13 @@ func (h *UsersHandler) handleTOTPConfirm(w http.ResponseWriter, r *http.Request)
 func (h *UsersHandler) handleTOTPDisable(w http.ResponseWriter, r *http.Request) {
 	u := auth.UserFromContext(r.Context())
 	if u == nil {
-		writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
 
 	if err := h.store.DisableTOTP(r.Context(), u.ID); err != nil {
 		slog.Error("disabling totp", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to disable TOTP")
+		writeError(w, http.StatusInternalServerError, "failed to disable TOTP")
 		return
 	}
 

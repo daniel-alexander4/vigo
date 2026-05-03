@@ -45,13 +45,13 @@ type peerStatusResponse struct {
 
 func (h *PeerHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if h.peerSvc == nil {
-		http.Error(w, `{"error":"peer replication not configured"}`, http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "peer replication not configured")
 		return
 	}
 
 	resp, err := h.peerSvc.Status(r.Context(), nil)
 	if err != nil {
-		http.Error(w, `{"error":"`+err.Error()+`"}`, http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -77,7 +77,7 @@ type peerPromoteResponse struct {
 
 func (h *PeerHandler) handlePromote(w http.ResponseWriter, r *http.Request) {
 	if h.peerSvc == nil {
-		http.Error(w, `{"error":"peer replication not configured"}`, http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "peer replication not configured")
 		return
 	}
 

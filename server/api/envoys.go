@@ -45,12 +45,12 @@ func (h *EnvoysHandler) GetTags(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if h.fleetIndex == nil {
-		writeJSONError(w, http.StatusNotImplemented, "requires FleetIndex")
+		writeError(w, http.StatusNotImplemented, "requires FleetIndex")
 		return
 	}
 	ts := h.fleetIndex.GetEnvoy(id)
 	if ts == nil {
-		writeJSONError(w, http.StatusNotFound, "envoy not found")
+		writeError(w, http.StatusNotFound, "envoy not found")
 		return
 	}
 	tags := ts.Tags
@@ -68,13 +68,13 @@ func (h *EnvoysHandler) SetMaintenance(w http.ResponseWriter, r *http.Request) {
 		Until string `json:"until"` // RFC3339
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	until, err := time.Parse(time.RFC3339, req.Until)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid 'until' timestamp (must be RFC3339)")
+		writeError(w, http.StatusBadRequest, "invalid 'until' timestamp (must be RFC3339)")
 		return
 	}
 
@@ -105,27 +105,27 @@ func (h *EnvoysHandler) GetConvergence(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex != nil {
 		ts := h.fleetIndex.GetEnvoy(id)
 		if ts == nil {
-			writeJSONError(w, http.StatusNotFound, "envoy not found")
+			writeError(w, http.StatusNotFound, "envoy not found")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"status": ts.ConvergenceStatus})
 		return
 	}
 
-	writeJSONError(w, http.StatusNotImplemented, "convergence requires FleetIndex")
+	writeError(w, http.StatusNotImplemented, "convergence requires FleetIndex")
 }
 
 // ForceUpdate sets the force_update flag on a single envoy so it downloads
 // the latest binary on its next check-in.
 func (h *EnvoysHandler) ForceUpdate(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
-		writeJSONError(w, http.StatusNotImplemented, "requires FleetIndex")
+		writeError(w, http.StatusNotImplemented, "requires FleetIndex")
 		return
 	}
 
 	id := r.PathValue("id")
 	if _, ok, _ := h.fleetIndex.GetEnvoyLite(id); !ok {
-		writeJSONError(w, http.StatusNotFound, "envoy not found")
+		writeError(w, http.StatusNotFound, "envoy not found")
 		return
 	}
 
@@ -136,7 +136,7 @@ func (h *EnvoysHandler) ForceUpdate(w http.ResponseWriter, r *http.Request) {
 // ForceUpdateAll sets the force_update flag on all active envoys.
 func (h *EnvoysHandler) ForceUpdateAll(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
-		writeJSONError(w, http.StatusNotImplemented, "requires FleetIndex")
+		writeError(w, http.StatusNotImplemented, "requires FleetIndex")
 		return
 	}
 

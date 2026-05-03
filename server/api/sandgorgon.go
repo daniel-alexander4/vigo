@@ -100,7 +100,7 @@ func (h *SandgorgonHandler) listAssets(w http.ResponseWriter, r *http.Request) {
 		assets, err = h.queries.ListSandgorgonAssets(r.Context())
 	}
 	if err != nil {
-		http.Error(w, jsonErr("listing assets: "+err.Error()), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "listing assets: "+err.Error())
 		return
 	}
 
@@ -112,7 +112,7 @@ func (h *SandgorgonHandler) getAsset(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	asset, err := h.queries.GetSandgorgonAsset(r.Context(), id)
 	if err != nil {
-		http.Error(w, jsonErr("asset not found"), http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "asset not found")
 		return
 	}
 
@@ -134,11 +134,11 @@ func (h *SandgorgonHandler) commission(w http.ResponseWriter, r *http.Request) {
 		RackLocation string `json:"rack_location"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, jsonErr("invalid JSON: "+err.Error()), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
 	if req.Hostname == "" && req.BMCAddress == "" {
-		http.Error(w, jsonErr("hostname or bmc_address is required"), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "hostname or bmc_address is required")
 		return
 	}
 
@@ -202,7 +202,7 @@ func (h *SandgorgonHandler) commission(w http.ResponseWriter, r *http.Request) {
 		EnvoyID:        toNullString(envoyID),
 	})
 	if err != nil {
-		http.Error(w, jsonErr("creating asset: "+err.Error()), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "creating asset: "+err.Error())
 		return
 	}
 
@@ -219,7 +219,7 @@ func (h *SandgorgonHandler) decommission(w http.ResponseWriter, r *http.Request)
 		Method     string `json:"method"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, jsonErr("invalid JSON: "+err.Error()), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
 	if req.Technician == "" {
@@ -235,7 +235,7 @@ func (h *SandgorgonHandler) decommission(w http.ResponseWriter, r *http.Request)
 		Method:     req.Method,
 	})
 	if err != nil {
-		http.Error(w, jsonErr(err.Error()), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -246,7 +246,7 @@ func (h *SandgorgonHandler) decommission(w http.ResponseWriter, r *http.Request)
 func (h *SandgorgonHandler) listCertificates(w http.ResponseWriter, r *http.Request) {
 	certs, err := h.queries.ListSandgorgonCertificates(r.Context())
 	if err != nil {
-		http.Error(w, jsonErr(err.Error()), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -257,7 +257,7 @@ func (h *SandgorgonHandler) getCertificate(w http.ResponseWriter, r *http.Reques
 	id := r.PathValue("id")
 	cert, err := h.queries.GetSandgorgonCertificate(r.Context(), id)
 	if err != nil {
-		http.Error(w, jsonErr("certificate not found"), http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "certificate not found")
 		return
 	}
 	data := sandgorgon.CertificateFromDB(cert, h.orgName)
@@ -269,32 +269,32 @@ func (h *SandgorgonHandler) getCertificateHTML(w http.ResponseWriter, r *http.Re
 	id := r.PathValue("id")
 	cert, err := h.queries.GetSandgorgonCertificate(r.Context(), id)
 	if err != nil {
-		http.Error(w, "certificate not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "certificate not found")
 		return
 	}
 	data := sandgorgon.CertificateFromDB(cert, h.orgName)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := sandgorgon.RenderCertificateHTML(w, data); err != nil {
-		http.Error(w, "rendering certificate: "+err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "rendering certificate: "+err.Error())
 	}
 }
 
 func (h *SandgorgonHandler) importCSV(w http.ResponseWriter, r *http.Request) {
 	// Accept multipart file upload.
 	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10 MB max
-		http.Error(w, jsonErr("parsing form: "+err.Error()), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "parsing form: "+err.Error())
 		return
 	}
 	file, _, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, jsonErr("missing 'file' form field"), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "missing 'file' form field")
 		return
 	}
 	defer file.Close()
 
 	result, err := h.mgr.ImportCSVReader(r.Context(), file, h.fleetIndex)
 	if err != nil {
-		http.Error(w, jsonErr(err.Error()), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -309,7 +309,7 @@ func (h *SandgorgonHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 		Limit:   int64(100),
 	})
 	if err != nil {
-		http.Error(w, jsonErr(err.Error()), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -319,7 +319,7 @@ func (h *SandgorgonHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 func (h *SandgorgonHandler) returnToAvailable(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := h.mgr.ReturnToAvailable(r.Context(), id); err != nil {
-		http.Error(w, jsonErr(err.Error()), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -335,7 +335,7 @@ func (h *SandgorgonHandler) searchAssets(w http.ResponseWriter, r *http.Request)
 	pattern := "%" + q + "%"
 	assets, err := h.queries.SearchSandgorgonAssets(r.Context(), pattern)
 	if err != nil {
-		http.Error(w, jsonErr(err.Error()), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -350,11 +350,11 @@ func (h *SandgorgonHandler) provision(w http.ResponseWriter, r *http.Request) {
 		EnrollToken string `json:"enroll_token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, jsonErr("invalid JSON: "+err.Error()), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
 	if req.ImageName == "" {
-		http.Error(w, jsonErr("image_name is required"), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "image_name is required")
 		return
 	}
 
@@ -365,7 +365,7 @@ func (h *SandgorgonHandler) provision(w http.ResponseWriter, r *http.Request) {
 		EnrollToken: req.EnrollToken,
 	}, h.serverAddr)
 	if err != nil {
-		http.Error(w, jsonErr(err.Error()), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -376,7 +376,7 @@ func (h *SandgorgonHandler) provision(w http.ResponseWriter, r *http.Request) {
 func (h *SandgorgonHandler) listImages(w http.ResponseWriter, r *http.Request) {
 	images, err := h.queries.ListSandgorgonImages(r.Context())
 	if err != nil {
-		http.Error(w, jsonErr(err.Error()), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -397,7 +397,7 @@ func (h *SandgorgonHandler) registerImage(w http.ResponseWriter, r *http.Request
 		PreseedType string `json:"preseed_type"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, jsonErr("invalid JSON: "+err.Error()), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
 
@@ -414,7 +414,7 @@ func (h *SandgorgonHandler) registerImage(w http.ResponseWriter, r *http.Request
 		PreseedType: req.PreseedType,
 	})
 	if err != nil {
-		http.Error(w, jsonErr(err.Error()), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -426,7 +426,7 @@ func (h *SandgorgonHandler) registerImage(w http.ResponseWriter, r *http.Request
 func (h *SandgorgonHandler) removeImage(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if err := h.mgr.RemoveImage(r.Context(), id); err != nil {
-		http.Error(w, jsonErr(err.Error()), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -440,7 +440,7 @@ func (h *SandgorgonHandler) dhcpConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	config, err := sandgorgon.GenerateDHCPConfig(h.serverAddr, dhcpType)
 	if err != nil {
-		http.Error(w, jsonErr(err.Error()), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain")
@@ -451,7 +451,7 @@ func (h *SandgorgonHandler) bootScript(w http.ResponseWriter, r *http.Request) {
 	assetID := r.PathValue("id")
 	asset, err := h.queries.GetSandgorgonAsset(r.Context(), assetID)
 	if err != nil {
-		http.Error(w, "asset not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "asset not found")
 		return
 	}
 
@@ -484,19 +484,19 @@ func (h *SandgorgonHandler) bootScript(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if imageName == "" {
-		http.Error(w, "no provisioning in progress for this asset", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "no provisioning in progress for this asset")
 		return
 	}
 
 	image, err := h.queries.GetSandgorgonImageByName(r.Context(), imageName)
 	if err != nil {
-		http.Error(w, "image not found: "+imageName, http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "image not found: "+imageName)
 		return
 	}
 
 	script, err := sandgorgon.GenerateIPXEScript(image, h.serverAddr, asset.Hostname, "")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -508,7 +508,7 @@ func (h *SandgorgonHandler) lifecycleReport(w http.ResponseWriter, r *http.Reque
 	id := r.PathValue("id")
 	report, err := h.mgr.BuildLifecycleReport(r.Context(), id, h.orgName)
 	if err != nil {
-		http.Error(w, jsonErr(err.Error()), http.StatusNotFound)
+		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -519,12 +519,12 @@ func (h *SandgorgonHandler) lifecycleReportHTML(w http.ResponseWriter, r *http.R
 	id := r.PathValue("id")
 	report, err := h.mgr.BuildLifecycleReport(r.Context(), id, h.orgName)
 	if err != nil {
-		http.Error(w, "asset not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "asset not found")
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := sandgorgon.RenderLifecycleReportHTML(w, report); err != nil {
-		http.Error(w, "rendering report: "+err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "rendering report: "+err.Error())
 	}
 }
 
@@ -535,13 +535,13 @@ func (h *SandgorgonHandler) preseedConfig(w http.ResponseWriter, r *http.Request
 
 	image, err := h.queries.GetSandgorgonImage(r.Context(), imageID)
 	if err != nil {
-		http.Error(w, "image not found", http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "image not found")
 		return
 	}
 
 	config, err := sandgorgon.GeneratePreseedConfig(image, h.serverAddr, hostname, token)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -549,7 +549,3 @@ func (h *SandgorgonHandler) preseedConfig(w http.ResponseWriter, r *http.Request
 	w.Write([]byte(config))
 }
 
-func jsonErr(msg string) string {
-	b, _ := json.Marshal(map[string]string{"error": msg})
-	return string(b)
-}

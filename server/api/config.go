@@ -130,12 +130,12 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 	// When approval is required, block direct reload — callers must use
 	// the change approval flow (POST /api/v1/config/changes → approve).
 	if h.publishCfg.ApprovalRequired {
-		writeJSONError(w, http.StatusForbidden, "approval required: submit a change via POST /api/v1/config/changes and have a second user approve it")
+		writeError(w, http.StatusForbidden, "approval required: submit a change via POST /api/v1/config/changes and have a second user approve it")
 		return
 	}
 
 	if err := h.configStore.Reload(); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "config reload failed: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "config reload failed: "+err.Error())
 		return
 	}
 
@@ -172,7 +172,7 @@ func (h *ConfigHandler) SecretRotated(w http.ResponseWriter, r *http.Request) {
 		Path string `json:"path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
-		writeJSONError(w, http.StatusBadRequest, "path is required")
+		writeError(w, http.StatusBadRequest, "path is required")
 		return
 	}
 
@@ -215,7 +215,7 @@ func (h *ConfigHandler) SecretAccessed(w http.ResponseWriter, r *http.Request) {
 		Path string `json:"path"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
-		writeJSONError(w, http.StatusBadRequest, "path is required")
+		writeError(w, http.StatusBadRequest, "path is required")
 		return
 	}
 
@@ -244,7 +244,7 @@ func (h *ConfigHandler) ListPublishes(w http.ResponseWriter, r *http.Request) {
 
 	publishes, err := h.queries.ListConfigPublishes(r.Context(), int64(limit))
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to list publishes")
+		writeError(w, http.StatusInternalServerError, "failed to list publishes")
 		return
 	}
 
@@ -282,7 +282,7 @@ func (h *ConfigHandler) GetPublish(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	p, err := h.queries.GetConfigPublish(r.Context(), id)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "publish not found")
+		writeError(w, http.StatusNotFound, "publish not found")
 		return
 	}
 
@@ -310,7 +310,7 @@ func (h *ConfigHandler) GetPublish(w http.ResponseWriter, r *http.Request) {
 func (h *ConfigHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
 	versions, err := publish.ListVersions(publish.HistoryDir)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to list versions")
+		writeError(w, http.StatusInternalServerError, "failed to list versions")
 		return
 	}
 	if versions == nil {
@@ -328,7 +328,7 @@ func (h *ConfigHandler) RecordPublish(w http.ResponseWriter, r *http.Request) {
 		DiffSummary  string   `json:"diff_summary"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -342,7 +342,7 @@ func (h *ConfigHandler) RecordPublish(w http.ResponseWriter, r *http.Request) {
 		DiffSummary:  req.DiffSummary,
 	})
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to record publish")
+		writeError(w, http.StatusInternalServerError, "failed to record publish")
 		return
 	}
 
@@ -355,13 +355,13 @@ func (h *ConfigHandler) Freeze(w http.ResponseWriter, r *http.Request) {
 		FreezeUntil string `json:"freeze_until"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	t, err := time.Parse(time.RFC3339, req.FreezeUntil)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid freeze_until timestamp")
+		writeError(w, http.StatusBadRequest, "invalid freeze_until timestamp")
 		return
 	}
 
@@ -380,12 +380,12 @@ func (h *ConfigHandler) Rollback(w http.ResponseWriter, r *http.Request) {
 	version := r.PathValue("version")
 	version = strings.TrimSpace(version)
 	if version == "" {
-		writeJSONError(w, http.StatusBadRequest, "version is required")
+		writeError(w, http.StatusBadRequest, "version is required")
 		return
 	}
 
 	if err := publish.RollbackToVersion(publish.HistoryDir, version, publish.LiveDir); err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -427,7 +427,7 @@ type retractEnvoyInfo struct {
 func (h *ConfigHandler) HandleUnused(w http.ResponseWriter, r *http.Request) {
 	envoys, err := h.queries.ListActiveEnvoys(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "querying envoys: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "querying envoys: "+err.Error())
 		return
 	}
 	hostnames := make([]string, len(envoys))
@@ -460,7 +460,7 @@ func (h *ConfigHandler) Retract(w http.ResponseWriter, r *http.Request) {
 
 	var req retractRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if len(req.Modules) == 0 {

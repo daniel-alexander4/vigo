@@ -53,7 +53,7 @@ func (h *InventoryHandler) HandleInventory(w http.ResponseWriter, r *http.Reques
 	// Parse filters from ?where= params.
 	filters, err := parseFilters(r.URL.Query()["where"])
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -65,7 +65,7 @@ func (h *InventoryHandler) HandleInventory(w http.ResponseWriter, r *http.Reques
 
 	all, err := h.queries.GetAllLatestTraits(ctx)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -166,7 +166,7 @@ func (h *InventoryHandler) HandleInventoryKeys(w http.ResponseWriter, r *http.Re
 
 	all, err := h.queries.GetAllLatestTraits(ctx)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 

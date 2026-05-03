@@ -71,7 +71,7 @@ func (h *ApprovalHandler) CreateChange(w http.ResponseWriter, r *http.Request) {
 		DiffSummary string `json:"diff_summary"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -97,7 +97,7 @@ func (h *ApprovalHandler) CreateChange(w http.ResponseWriter, r *http.Request) {
 		DiffSummary: req.DiffSummary,
 	})
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to create change request")
+		writeError(w, http.StatusInternalServerError, "failed to create change request")
 		return
 	}
 
@@ -109,18 +109,18 @@ func (h *ApprovalHandler) CreateChange(w http.ResponseWriter, r *http.Request) {
 func (h *ApprovalHandler) ApproveChange(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid change id")
+		writeError(w, http.StatusBadRequest, "invalid change id")
 		return
 	}
 
 	change, err := h.queries.GetConfigChange(r.Context(), id)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "change not found")
+		writeError(w, http.StatusNotFound, "change not found")
 		return
 	}
 
 	if change.Status != "pending" {
-		writeJSONError(w, http.StatusConflict, "change is not pending (status: "+change.Status+")")
+		writeError(w, http.StatusConflict, "change is not pending (status: "+change.Status+")")
 		return
 	}
 
@@ -128,7 +128,7 @@ func (h *ApprovalHandler) ApproveChange(w http.ResponseWriter, r *http.Request) 
 
 	// Two-person rule: approver must differ from requester.
 	if approvedBy == change.RequestedBy {
-		writeJSONError(w, http.StatusForbidden, "approver must be a different user than the requester")
+		writeError(w, http.StatusForbidden, "approver must be a different user than the requester")
 		return
 	}
 
@@ -136,13 +136,13 @@ func (h *ApprovalHandler) ApproveChange(w http.ResponseWriter, r *http.Request) 
 		ApprovedBy: sql.NullString{String: approvedBy, Valid: true},
 		ID:         id,
 	}); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to approve change")
+		writeError(w, http.StatusInternalServerError, "failed to approve change")
 		return
 	}
 
 	// Perform the config reload.
 	if err := h.configStore.Reload(); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "config reload failed after approval: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "config reload failed after approval: "+err.Error())
 		return
 	}
 
@@ -187,18 +187,18 @@ func (h *ApprovalHandler) ApproveChange(w http.ResponseWriter, r *http.Request) 
 func (h *ApprovalHandler) RejectChange(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid change id")
+		writeError(w, http.StatusBadRequest, "invalid change id")
 		return
 	}
 
 	change, err := h.queries.GetConfigChange(r.Context(), id)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "change not found")
+		writeError(w, http.StatusNotFound, "change not found")
 		return
 	}
 
 	if change.Status != "pending" {
-		writeJSONError(w, http.StatusConflict, "change is not pending (status: "+change.Status+")")
+		writeError(w, http.StatusConflict, "change is not pending (status: "+change.Status+")")
 		return
 	}
 
@@ -214,7 +214,7 @@ func (h *ApprovalHandler) RejectChange(w http.ResponseWriter, r *http.Request) {
 		RejectReason: sql.NullString{String: req.Reason, Valid: req.Reason != ""},
 		ID:           id,
 	}); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to reject change")
+		writeError(w, http.StatusInternalServerError, "failed to reject change")
 		return
 	}
 
@@ -243,7 +243,7 @@ func (h *ApprovalHandler) RejectChange(w http.ResponseWriter, r *http.Request) {
 func (h *ApprovalHandler) ListChanges(w http.ResponseWriter, r *http.Request) {
 	changes, err := h.queries.ListPendingConfigChanges(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to list changes")
+		writeError(w, http.StatusInternalServerError, "failed to list changes")
 		return
 	}
 
@@ -259,13 +259,13 @@ func (h *ApprovalHandler) ListChanges(w http.ResponseWriter, r *http.Request) {
 func (h *ApprovalHandler) GetChange(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid change id")
+		writeError(w, http.StatusBadRequest, "invalid change id")
 		return
 	}
 
 	change, err := h.queries.GetConfigChange(r.Context(), id)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "change not found")
+		writeError(w, http.StatusNotFound, "change not found")
 		return
 	}
 

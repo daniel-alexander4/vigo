@@ -80,7 +80,7 @@ func (h *DatabaseHandler) handleStats(w http.ResponseWriter, r *http.Request) {
 func (h *DatabaseHandler) handleTables(w http.ResponseWriter, r *http.Request) {
 	tables, err := h.tableRowCounts()
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -136,7 +136,7 @@ func (h *DatabaseHandler) handleIntegrity(w http.ResponseWriter, r *http.Request
 // handleVacuum runs VACUUM to reclaim space. SQLite only.
 func (h *DatabaseHandler) handleVacuum(w http.ResponseWriter, r *http.Request) {
 	if h.driver != "sqlite" {
-		writeJSONError(w, http.StatusBadRequest, "VACUUM is only available for SQLite")
+		writeError(w, http.StatusBadRequest, "VACUUM is only available for SQLite")
 		return
 	}
 
@@ -149,7 +149,7 @@ func (h *DatabaseHandler) handleVacuum(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := h.sqlDB.Exec("VACUUM"); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("VACUUM failed: %v", err))
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("VACUUM failed: %v", err))
 		return
 	}
 
@@ -173,14 +173,14 @@ func (h *DatabaseHandler) handleVacuum(w http.ResponseWriter, r *http.Request) {
 // handleCheckpoint forces a WAL checkpoint. SQLite only.
 func (h *DatabaseHandler) handleCheckpoint(w http.ResponseWriter, r *http.Request) {
 	if h.driver != "sqlite" {
-		writeJSONError(w, http.StatusBadRequest, "checkpoint is only available for SQLite")
+		writeError(w, http.StatusBadRequest, "checkpoint is only available for SQLite")
 		return
 	}
 
 	var pagesWritten, pagesTotal int
 	err := h.sqlDB.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(new(int), &pagesTotal, &pagesWritten)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("checkpoint failed: %v", err))
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("checkpoint failed: %v", err))
 		return
 	}
 
@@ -200,11 +200,11 @@ func (h *DatabaseHandler) handleQuery(w http.ResponseWriter, r *http.Request) {
 		SQL string `json:"sql"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.SQL == "" {
-		writeJSONError(w, http.StatusBadRequest, "sql is required")
+		writeError(w, http.StatusBadRequest, "sql is required")
 		return
 	}
 
@@ -212,14 +212,14 @@ func (h *DatabaseHandler) handleQuery(w http.ResponseWriter, r *http.Request) {
 	upper := strings.ToUpper(strings.TrimSpace(req.SQL))
 	for _, prefix := range []string{"INSERT", "UPDATE", "DELETE", "DROP", "ALTER", "CREATE", "ATTACH", "DETACH", "REINDEX", "VACUUM", "PRAGMA"} {
 		if strings.HasPrefix(upper, prefix) {
-			writeJSONError(w, http.StatusForbidden, "write operations are not allowed — use read-only SELECT queries")
+			writeError(w, http.StatusForbidden, "write operations are not allowed — use read-only SELECT queries")
 			return
 		}
 	}
 
 	rows, err := h.sqlDB.Query(req.SQL)
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("query failed: %v", err))
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("query failed: %v", err))
 		return
 	}
 	defer rows.Close()
@@ -234,7 +234,7 @@ func (h *DatabaseHandler) handleQuery(w http.ResponseWriter, r *http.Request) {
 			ptrs[i] = &values[i]
 		}
 		if err := rows.Scan(ptrs...); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("scan failed: %v", err))
+			writeError(w, http.StatusInternalServerError, fmt.Sprintf("scan failed: %v", err))
 			return
 		}
 		row := make(map[string]any, len(cols))

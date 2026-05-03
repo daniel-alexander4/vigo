@@ -81,14 +81,14 @@ func (h *SpannerHandler) handleSpokeDetail(w http.ResponseWriter, r *http.Reques
 			return
 		}
 	}
-	writeJSONError(w, http.StatusNotFound, "spoke not found")
+	writeError(w, http.StatusNotFound, "spoke not found")
 }
 
 func (h *SpannerHandler) handleSpokeEnvoys(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	envoys, err := h.hub.SpokeListEnvoys(r.Context(), id)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -100,7 +100,7 @@ func (h *SpannerHandler) handleSpokeRuns(w http.ResponseWriter, r *http.Request)
 	limit := int32(50)
 	runs, err := h.hub.SpokeListRuns(r.Context(), id, limit)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -115,7 +115,7 @@ func (h *SpannerHandler) handleSpokePush(w http.ResponseWriter, r *http.Request)
 	json.NewDecoder(r.Body).Decode(&req)
 	count, err := h.hub.SpokeForcePush(r.Context(), id, req.EnvoyID)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, err.Error())
+		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -129,17 +129,17 @@ func (h *SpannerHandler) handleReassign(w http.ResponseWriter, r *http.Request) 
 		ToSpokeID   string `json:"to_spoke_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.EnvoyID == "" || req.FromSpokeID == "" || req.ToSpokeID == "" {
-		writeJSONError(w, http.StatusBadRequest, "envoy_id, from_spoke_id, and to_spoke_id are required")
+		writeError(w, http.StatusBadRequest, "envoy_id, from_spoke_id, and to_spoke_id are required")
 		return
 	}
 
 	result, err := h.hub.ReassignEnvoy(r.Context(), req.EnvoyID, req.FromSpokeID, req.ToSpokeID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
@@ -156,7 +156,7 @@ func (h *SpannerHandler) handleDrain(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.hub.DrainSpoke(r.Context(), spokeID, req.TargetSpokeID)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 

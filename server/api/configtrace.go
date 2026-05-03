@@ -52,7 +52,7 @@ func (h *ConfigTraceHandler) HandleSearch(w http.ResponseWriter, r *http.Request
 	varName := r.URL.Query().Get("var")
 
 	if query == "" && module == "" && varName == "" {
-		writeJSONError(w, http.StatusBadRequest, "at least one of ?match=, ?module=, or ?var= is required")
+		writeError(w, http.StatusBadRequest, "at least one of ?match=, ?module=, or ?var= is required")
 		return
 	}
 
@@ -67,7 +67,7 @@ func (h *ConfigTraceHandler) HandleSearch(w http.ResponseWriter, r *http.Request
 func (h *ConfigTraceHandler) HandleTrace(w http.ResponseWriter, r *http.Request) {
 	hostname := r.URL.Query().Get("hostname")
 	if hostname == "" {
-		writeJSONError(w, http.StatusBadRequest, "missing required ?hostname= parameter")
+		writeError(w, http.StatusBadRequest, "missing required ?hostname= parameter")
 		return
 	}
 

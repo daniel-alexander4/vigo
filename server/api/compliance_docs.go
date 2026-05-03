@@ -71,7 +71,7 @@ func (h *ComplianceDocsHandler) RegisterRoutes(mux *http.ServeMux) {
 
 func (h *ComplianceDocsHandler) requireStore(w http.ResponseWriter) bool {
 	if h.store == nil {
-		http.Error(w, jsonErr("compliance docs store is not configured"), http.StatusServiceUnavailable)
+		writeError(w, http.StatusServiceUnavailable, "compliance docs store is not configured")
 		return false
 	}
 	return true
@@ -133,7 +133,7 @@ func (h *ComplianceDocsHandler) list(w http.ResponseWriter, r *http.Request) {
 		rows, err = h.store.List(r.Context())
 	}
 	if err != nil {
-		http.Error(w, jsonErr("listing compliance docs: "+err.Error()), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "listing compliance docs: "+err.Error())
 		return
 	}
 	out := make([]docMetaJSON, 0, len(rows))
@@ -150,7 +150,7 @@ func (h *ComplianceDocsHandler) get(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	row, err := h.store.GetMeta(r.Context(), id)
 	if err != nil {
-		http.Error(w, jsonErr("compliance doc not found"), http.StatusNotFound)
+		writeError(w, http.StatusNotFound, "compliance doc not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, toDocMetaJSON(row))
@@ -164,10 +164,10 @@ func (h *ComplianceDocsHandler) download(w http.ResponseWriter, r *http.Request)
 	plaintext, row, err := h.store.Get(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, compliancedocs.ErrNotFound) {
-			http.Error(w, jsonErr("compliance doc not found"), http.StatusNotFound)
+			writeError(w, http.StatusNotFound, "compliance doc not found")
 			return
 		}
-		http.Error(w, jsonErr("downloading compliance doc: "+err.Error()), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "downloading compliance doc: "+err.Error())
 		return
 	}
 	recordAudit(r.Context(), h.auditWriter, "compliance.docs.download", actorFromRequest(r), "compliance_docs",
@@ -254,7 +254,7 @@ func (h *ComplianceDocsHandler) upload(w http.ResponseWriter, r *http.Request) {
 	}
 	in, err := parseUploadForm(r, 50<<20)
 	if err != nil {
-		http.Error(w, jsonErr(err.Error()), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	row, err := h.store.Put(r.Context(), compliancedocs.PutInput{
@@ -267,7 +267,7 @@ func (h *ComplianceDocsHandler) upload(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		statusCode := classifyStoreError(err)
-		http.Error(w, jsonErr(err.Error()), statusCode)
+		writeError(w, statusCode, err.Error())
 		return
 	}
 	recordAudit(r.Context(), h.auditWriter, "compliance.docs.upload", actorFromRequest(r), "compliance_docs",
@@ -283,7 +283,7 @@ func (h *ComplianceDocsHandler) replace(w http.ResponseWriter, r *http.Request) 
 	id := r.PathValue("id")
 	in, err := parseUploadForm(r, 50<<20)
 	if err != nil {
-		http.Error(w, jsonErr(err.Error()), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	row, err := h.store.Replace(r.Context(), id, compliancedocs.PutInput{
@@ -296,7 +296,7 @@ func (h *ComplianceDocsHandler) replace(w http.ResponseWriter, r *http.Request) 
 	})
 	if err != nil {
 		statusCode := classifyStoreError(err)
-		http.Error(w, jsonErr(err.Error()), statusCode)
+		writeError(w, statusCode, err.Error())
 		return
 	}
 	recordAudit(r.Context(), h.auditWriter, "compliance.docs.replace", actorFromRequest(r), "compliance_docs",
@@ -311,7 +311,7 @@ func (h *ComplianceDocsHandler) softDelete(w http.ResponseWriter, r *http.Reques
 	}
 	id := r.PathValue("id")
 	if err := h.store.SoftDelete(r.Context(), id, actorFromRequest(r)); err != nil {
-		http.Error(w, jsonErr(err.Error()), classifyStoreError(err))
+		writeError(w, classifyStoreError(err), err.Error())
 		return
 	}
 	recordAudit(r.Context(), h.auditWriter, "compliance.docs.delete", actorFromRequest(r), "compliance_docs",
@@ -326,7 +326,7 @@ func (h *ComplianceDocsHandler) purge(w http.ResponseWriter, r *http.Request) {
 	}
 	id := r.PathValue("id")
 	if err := h.store.Purge(r.Context(), id); err != nil {
-		http.Error(w, jsonErr(err.Error()), classifyStoreError(err))
+		writeError(w, classifyStoreError(err), err.Error())
 		return
 	}
 	recordAudit(r.Context(), h.auditWriter, "compliance.docs.purge", actorFromRequest(r), "compliance_docs",
@@ -345,15 +345,15 @@ func (h *ComplianceDocsHandler) addLink(w http.ResponseWriter, r *http.Request) 
 		ControlID string `json:"control_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, jsonErr("invalid JSON: "+err.Error()), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
 		return
 	}
 	if req.Framework == "" || req.ControlID == "" {
-		http.Error(w, jsonErr("framework and control_id are required"), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "framework and control_id are required")
 		return
 	}
 	if err := h.store.AddLink(r.Context(), id, req.Framework, req.ControlID, actorFromRequest(r)); err != nil {
-		http.Error(w, jsonErr(err.Error()), classifyStoreError(err))
+		writeError(w, classifyStoreError(err), err.Error())
 		return
 	}
 	recordAudit(r.Context(), h.auditWriter, "compliance.docs.link.add", actorFromRequest(r), "compliance_docs",
@@ -370,11 +370,11 @@ func (h *ComplianceDocsHandler) removeLink(w http.ResponseWriter, r *http.Reques
 	framework := r.PathValue("framework")
 	controlID := r.PathValue("controlID")
 	if framework == "" || controlID == "" {
-		http.Error(w, jsonErr("framework and controlID required"), http.StatusBadRequest)
+		writeError(w, http.StatusBadRequest, "framework and controlID required")
 		return
 	}
 	if err := h.store.RemoveLink(r.Context(), id, framework, controlID); err != nil {
-		http.Error(w, jsonErr(err.Error()), classifyStoreError(err))
+		writeError(w, classifyStoreError(err), err.Error())
 		return
 	}
 	recordAudit(r.Context(), h.auditWriter, "compliance.docs.link.remove", actorFromRequest(r), "compliance_docs",
@@ -390,7 +390,7 @@ func (h *ComplianceDocsHandler) listLinks(w http.ResponseWriter, r *http.Request
 	id := r.PathValue("id")
 	links, err := h.store.ListLinks(r.Context(), id)
 	if err != nil {
-		http.Error(w, jsonErr("listing links: "+err.Error()), http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "listing links: "+err.Error())
 		return
 	}
 	out := make([]map[string]any, 0, len(links))

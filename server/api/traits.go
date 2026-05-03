@@ -49,21 +49,21 @@ func (h *TraitsHandler) HandleGetTraits(w http.ResponseWriter, r *http.Request) 
 	envoy, err := h.queries.GetEnvoyByHostname(ctx, hostname)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONError(w, http.StatusNotFound, fmt.Sprintf("envoy '%s' not found", hostname))
+			writeError(w, http.StatusNotFound, fmt.Sprintf("envoy '%s' not found", hostname))
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	traits, err := h.queries.GetLatestEnvoyTraits(ctx, envoy.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONError(w, http.StatusNotFound,
+			writeError(w, http.StatusNotFound,
 				fmt.Sprintf("no traits available for '%s' -- envoy has not reported traits yet", hostname))
 			return
 		}
-		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
@@ -77,10 +77,3 @@ func (h *TraitsHandler) HandleGetTraits(w http.ResponseWriter, r *http.Request) 
 	json.NewEncoder(w).Encode(resp)
 }
 
-// writeJSONError writes a JSON error response with the given status code.
-// Uses {"message": "..."} to match grpc-gateway's error format.
-func writeJSONError(w http.ResponseWriter, code int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]string{"message": message})
-}

@@ -76,12 +76,12 @@ func (h *GitmirrorHandler) envoyInputs() []gitmirrormesh.EnvoyInput {
 
 func (h *GitmirrorHandler) handleFleet(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
-		http.Error(w, `{"error":"fleet index not available"}`, http.StatusServiceUnavailable)
+		writeError(w, http.StatusServiceUnavailable, "fleet index not available")
 		return
 	}
 	fleet, err := h.FleetSnapshot(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "gitmirror fleet query failed")
+		writeError(w, http.StatusInternalServerError, "gitmirror fleet query failed")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -116,23 +116,23 @@ type RosterResponse struct {
 
 func (h *GitmirrorHandler) handleRoster(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
-		http.Error(w, `{"error":"fleet index not available"}`, http.StatusServiceUnavailable)
+		writeError(w, http.StatusServiceUnavailable, "fleet index not available")
 		return
 	}
 	pidHex := r.PathValue("project_id")
 	if !validProjectIDHex(pidHex) {
-		writeJSONError(w, http.StatusBadRequest,
+		writeError(w, http.StatusBadRequest,
 			"project_id must be 64-char lowercase hex")
 		return
 	}
 	fleet, err := h.FleetSnapshot(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "gitmirror fleet query failed")
+		writeError(w, http.StatusInternalServerError, "gitmirror fleet query failed")
 		return
 	}
 	summary := fleet.LookupProject(pidHex)
 	if summary == nil {
-		writeJSONError(w, http.StatusNotFound,
+		writeError(w, http.StatusNotFound,
 			"no envoy in the fleet has reported this project")
 		return
 	}

@@ -34,12 +34,12 @@ func (h *PreviewHandler) RegisterRoutes(mux *http.ServeMux) {
 func (h *PreviewHandler) Preview(w http.ResponseWriter, r *http.Request) {
 	moduleName := r.URL.Query().Get("module")
 	if moduleName == "" {
-		writeJSONError(w, http.StatusBadRequest, "module parameter is required")
+		writeError(w, http.StatusBadRequest, "module parameter is required")
 		return
 	}
 
 	if h.fleetIndex == nil {
-		writeJSONError(w, http.StatusNotImplemented, "multi-node preview requires FleetIndex")
+		writeError(w, http.StatusNotImplemented, "multi-node preview requires FleetIndex")
 		return
 	}
 

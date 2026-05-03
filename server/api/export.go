@@ -101,7 +101,7 @@ func (h *ExportHandler) handleSIEM(w http.ResponseWriter, r *http.Request) {
 	if s := r.URL.Query().Get("since"); s != "" {
 		parsed, err := time.Parse(time.RFC3339, s)
 		if err != nil {
-			writeJSONError(w, http.StatusBadRequest, "invalid 'since' parameter: expected RFC3339 format")
+			writeError(w, http.StatusBadRequest, "invalid 'since' parameter: expected RFC3339 format")
 			return
 		}
 		since = parsed
@@ -112,7 +112,7 @@ func (h *ExportHandler) handleSIEM(w http.ResponseWriter, r *http.Request) {
 	if l := r.URL.Query().Get("limit"); l != "" {
 		parsed, err := strconv.ParseInt(l, 10, 64)
 		if err != nil || parsed < 1 {
-			writeJSONError(w, http.StatusBadRequest, "invalid 'limit' parameter: expected positive integer")
+			writeError(w, http.StatusBadRequest, "invalid 'limit' parameter: expected positive integer")
 			return
 		}
 		limit = parsed
@@ -132,7 +132,7 @@ func (h *ExportHandler) handleSIEM(w http.ResponseWriter, r *http.Request) {
 			Limit:     limit,
 		})
 		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "query failed")
+			writeError(w, http.StatusInternalServerError, "query failed")
 			return
 		}
 		events = make([]SIEMEvent, 0, len(rows))
@@ -145,7 +145,7 @@ func (h *ExportHandler) handleSIEM(w http.ResponseWriter, r *http.Request) {
 			Limit:     limit,
 		})
 		if err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "query failed")
+			writeError(w, http.StatusInternalServerError, "query failed")
 			return
 		}
 		events = make([]SIEMEvent, 0, len(rows))
