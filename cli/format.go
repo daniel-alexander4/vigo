@@ -7,10 +7,12 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
+
+	"git.alexander4.io/vigo/server/uifmt"
 )
 
 // ---------------------------------------------------------------------------
@@ -30,33 +32,52 @@ var useColor = func() bool {
 	return fi.Mode()&os.ModeCharDevice != 0
 }()
 
-// Catppuccin Mocha RGB escape sequences.
+// Catppuccin Mocha 24-bit ANSI escape sequences, built from the canonical
+// hex constants in server/uifmt. uifmt owns the color values (data); this
+// file owns the terminal rendering of those values (CLI-specific).
 const (
 	catReset  = "\033[0m"
 	catBold   = "\033[1m"
 	catStrike = "\033[9m"
+)
 
-	// Core palette — 24-bit RGB, not affected by terminal color schemes.
-	catRed       = "\033[38;2;243;139;168m" // #f38ba8  Red
-	catMaroon    = "\033[38;2;235;160;172m" // #eba0ac  Maroon
-	catPeach     = "\033[38;2;250;179;135m" // #fab387  Peach
-	catYellow    = "\033[38;2;249;226;175m" // #f9e2af  Yellow
-	catGreen     = "\033[38;2;166;227;161m" // #a6e3a1  Green
-	catTeal      = "\033[38;2;148;226;213m" // #94e2d5  Teal
-	catSky       = "\033[38;2;137;220;235m" // #89dceb  Sky
-	catSapphire  = "\033[38;2;116;199;236m" // #74c7ec  Sapphire
-	catBlue      = "\033[38;2;137;180;250m" // #89b4fa  Blue
-	catLavender  = "\033[38;2;180;190;254m" // #b4befe  Lavender
-	catMauve     = "\033[38;2;203;166;247m" // #cba6f7  Mauve
-	catPink      = "\033[38;2;245;194;231m" // #f5c2e7  Pink
-	catFlamingo  = "\033[38;2;242;205;205m" // #f2cdcd  Flamingo
-	catRosewater = "\033[38;2;245;224;220m" // #f5e0dc  Rosewater
-	catText      = "\033[38;2;205;214;244m" // #cdd6f4  Text
-	catSubtext1  = "\033[38;2;186;194;222m" // #bac2de  Subtext1
-	catSubtext0  = "\033[38;2;166;173;200m" // #a6adc8  Subtext0
-	catOverlay2  = "\033[38;2;147;153;178m" // #9399b2  Overlay2
-	catOverlay1  = "\033[38;2;127;132;156m" // #7f849c  Overlay1
-	catOverlay0  = "\033[38;2;108;112;134m" // #6c7086  Overlay0
+// ansi converts a "#rrggbb" hex string into a 24-bit ANSI foreground
+// escape sequence. Panics on malformed hex — input is always a uifmt
+// constant, so a panic at init time is the right failure mode.
+func ansi(hex string) string {
+	if len(hex) != 7 || hex[0] != '#' {
+		panic("uifmt hex must be #rrggbb: " + hex)
+	}
+	r, err1 := strconv.ParseUint(hex[1:3], 16, 8)
+	g, err2 := strconv.ParseUint(hex[3:5], 16, 8)
+	b, err3 := strconv.ParseUint(hex[5:7], 16, 8)
+	if err1 != nil || err2 != nil || err3 != nil {
+		panic("uifmt hex parse failed: " + hex)
+	}
+	return fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b)
+}
+
+var (
+	catRed       = ansi(uifmt.HexRed)
+	catMaroon    = ansi(uifmt.HexMaroon)
+	catPeach     = ansi(uifmt.HexPeach)
+	catYellow    = ansi(uifmt.HexYellow)
+	catGreen     = ansi(uifmt.HexGreen)
+	catTeal      = ansi(uifmt.HexTeal)
+	catSky       = ansi(uifmt.HexSky)
+	catSapphire  = ansi(uifmt.HexSapphire)
+	catBlue      = ansi(uifmt.HexBlue)
+	catLavender  = ansi(uifmt.HexLavender)
+	catMauve     = ansi(uifmt.HexMauve)
+	catPink      = ansi(uifmt.HexPink)
+	catFlamingo  = ansi(uifmt.HexFlamingo)
+	catRosewater = ansi(uifmt.HexRosewater)
+	catText      = ansi(uifmt.HexText)
+	catSubtext1  = ansi(uifmt.HexSubtext1)
+	catSubtext0  = ansi(uifmt.HexSubtext0)
+	catOverlay2  = ansi(uifmt.HexOverlay2)
+	catOverlay1  = ansi(uifmt.HexOverlay1)
+	catOverlay0  = ansi(uifmt.HexOverlay0)
 )
 
 func cReset() string {
@@ -212,22 +233,15 @@ func colorStatus(s string) string {
 }
 
 // formatTimestamp formats an RFC3339 or ISO8601 timestamp to short form.
+// Parsing is shared via uifmt.ParseTimestamp; the output layout is
+// CLI-specific.
 func formatTimestamp(ts string) string {
 	if ts == "" {
 		return "-"
 	}
-	// Try parsing various timestamp formats from grpc-gateway JSON
-	for _, layout := range []string{
-		time.RFC3339Nano,
-		time.RFC3339,
-		"2006-01-02T15:04:05Z",
-		"2006-01-02T15:04:05.000Z",
-	} {
-		if t, err := time.Parse(layout, ts); err == nil {
-			return t.Format("2006-01-02 15:04")
-		}
+	if t, err := uifmt.ParseTimestamp(ts); err == nil {
+		return t.Format("2006-01-02 15:04")
 	}
-	// Return raw if unparseable, trimming any trailing Zs
 	return strings.TrimSpace(ts)
 }
 

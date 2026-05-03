@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"math"
 	"sort"
+
+	"git.alexander4.io/vigo/server/uifmt"
 )
 
 // Maximum envoys/items shown in viz visualizations for performance.
@@ -17,20 +19,20 @@ const maxVizItems = 50
 // matters for the hash-based peer-visual assignment in swarm_viz.go
 // (two envoys that hash to adjacent slots should still look different).
 var VizColorPalette = []string{
-	"#89b4fa", // Blue
-	"#a6e3a1", // Green
-	"#f38ba8", // Red
-	"#f9e2af", // Yellow
-	"#cba6f7", // Mauve
-	"#fab387", // Peach
-	"#94e2d5", // Teal
-	"#f5c2e7", // Pink
-	"#74c7ec", // Sapphire
-	"#eba0ac", // Maroon
-	"#b4befe", // Lavender
-	"#89dceb", // Sky
-	"#f5e0dc", // Rosewater
-	"#f2cdcd", // Flamingo
+	uifmt.HexBlue,
+	uifmt.HexGreen,
+	uifmt.HexRed,
+	uifmt.HexYellow,
+	uifmt.HexMauve,
+	uifmt.HexPeach,
+	uifmt.HexTeal,
+	uifmt.HexPink,
+	uifmt.HexSapphire,
+	uifmt.HexMaroon,
+	uifmt.HexLavender,
+	uifmt.HexSky,
+	uifmt.HexRosewater,
+	uifmt.HexFlamingo,
 }
 
 // VizShapePalette — 5 SVG symbol names for peer shape assignment.
@@ -59,17 +61,17 @@ var VizDashPalette = []string{
 func VizStatusColor(status string) string {
 	switch status {
 	case "converged", "complete", "success":
-		return "#a6e3a1" // Green
+		return uifmt.HexGreen
 	case "relapsed", "degraded", "downloading":
-		return "#f9e2af" // Yellow
+		return uifmt.HexYellow
 	case "diverged":
-		return "#fab387" // Peach
+		return uifmt.HexPeach
 	case "failed":
-		return "#f38ba8" // Red
+		return uifmt.HexRed
 	case "offline", "skipped":
-		return "#6c7086" // Overlay0
+		return uifmt.HexOverlay0
 	default: // pending, no data
-		return "#45475a" // Surface1
+		return uifmt.HexSurface1
 	}
 }
 
@@ -77,13 +79,13 @@ func VizStatusColor(status string) string {
 func VizActionColor(action string) string {
 	switch action {
 	case "create":
-		return "#a6e3a1" // Green
+		return uifmt.HexGreen
 	case "update":
-		return "#89b4fa" // Blue
+		return uifmt.HexBlue
 	case "delete":
-		return "#f38ba8" // Red
+		return uifmt.HexRed
 	default: // noop, skip
-		return "#45475a" // Surface1
+		return uifmt.HexSurface1
 	}
 }
 
@@ -91,13 +93,13 @@ func VizActionColor(action string) string {
 func VizComplianceColor(status string) string {
 	switch status {
 	case "satisfied":
-		return "#a6e3a1" // Green
+		return uifmt.HexGreen
 	case "partial":
-		return "#f9e2af" // Yellow
+		return uifmt.HexYellow
 	case "not_satisfied":
-		return "#f38ba8" // Red
+		return uifmt.HexRed
 	default: // not applicable
-		return "#45475a" // Surface1
+		return uifmt.HexSurface1
 	}
 }
 

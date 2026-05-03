@@ -8,6 +8,8 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+
+	"git.alexander4.io/vigo/server/uifmt"
 )
 
 // RunVizPageData extends RunDetailPageData with waterfall visualization data.
@@ -92,7 +94,7 @@ func (vizData *RunVizPageData) buildWaterfall() {
 
 		color := VizActionColor(r.ActionTaken)
 		if r.ErrorMessage != "" {
-			color = "#f38ba8" // Red for errors
+			color = uifmt.HexRed
 		}
 
 		bars[i] = WaterfallBar{
@@ -134,8 +136,8 @@ func (vizData *RunVizPageData) buildDonut() {
 	}
 
 	vizData.DonutSegments = BuildDonutSegments([]DonutSegment{
-		{Label: "Changed", Count: changed, Color: "#a6e3a1"},
-		{Label: "No-op", Count: noop, Color: "#45475a"},
-		{Label: "Failed", Count: failed, Color: "#f38ba8"},
+		{Label: "Changed", Count: changed, Color: uifmt.HexGreen},
+		{Label: "No-op", Count: noop, Color: uifmt.HexSurface1},
+		{Label: "Failed", Count: failed, Color: uifmt.HexRed},
 	})
 }

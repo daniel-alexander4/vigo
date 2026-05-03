@@ -10,6 +10,7 @@ import (
 	"sort"
 
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/uifmt"
 )
 
 // ComplianceVizPageData extends the base report page with visualization data.
@@ -145,9 +146,9 @@ func (data *ComplianceVizPageData) buildFromReport(report any) {
 
 	// Donut: satisfied / partial / not_satisfied.
 	data.DonutSegments = BuildDonutSegments([]DonutSegment{
-		{Label: "Satisfied", Count: parsed.Summary.Satisfied, Color: "#a6e3a1"},
-		{Label: "Partial", Count: parsed.Summary.Partial, Color: "#f9e2af"},
-		{Label: "Not Satisfied", Count: parsed.Summary.NotSatisfied, Color: "#f38ba8"},
+		{Label: "Satisfied", Count: parsed.Summary.Satisfied, Color: uifmt.HexGreen},
+		{Label: "Partial", Count: parsed.Summary.Partial, Color: uifmt.HexYellow},
+		{Label: "Not Satisfied", Count: parsed.Summary.NotSatisfied, Color: uifmt.HexRed},
 	})
 
 	// Heatmap: envoys (rows) × controls (columns).
@@ -219,13 +220,13 @@ func (data *ComplianceVizPageData) buildFromReport(report any) {
 			envoyScale := node.CoveragePercent / 100.0
 			effectivePct := avgPct * envoyScale
 
-			color := "#45475a" // Surface1 (not covered)
+			color := uifmt.HexSurface1 // not covered
 			if effectivePct >= 95 {
-				color = "#a6e3a1" // Green (satisfied)
+				color = uifmt.HexGreen // satisfied
 			} else if effectivePct >= 50 {
-				color = "#f9e2af" // Yellow (partial)
+				color = uifmt.HexYellow // partial
 			} else if effectivePct > 0 {
-				color = "#f38ba8" // Red (not satisfied)
+				color = uifmt.HexRed // not satisfied
 			}
 
 			row.Cells = append(row.Cells, ComplianceHeatmapCell{Color: color})
