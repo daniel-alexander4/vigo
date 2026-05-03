@@ -196,6 +196,7 @@ type CheckInRequest struct {
 	Capabilities       *StreamCapabilities    `protobuf:"bytes,9,opt,name=capabilities,proto3" json:"capabilities,omitempty"`                                                                                                                   // agent protocol capabilities (delta streaming)
 	AgentVersion       string                 `protobuf:"bytes,10,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`                                                                                              // agent binary version (e.g. "1.2.0" or "dev")
 	IpAddress          string                 `protobuf:"bytes,11,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`                                                                                                       // agent's preferred outbound IP (refreshed each check-in)
+	LastCheckinDeltaMs uint32                 `protobuf:"varint,12,opt,name=last_checkin_delta_ms,json=lastCheckinDeltaMs,proto3" json:"last_checkin_delta_ms,omitempty"`                                                                       // agent-measured ms since previous CheckIn; 0 = first contact (server falls back to configured interval)
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -305,6 +306,13 @@ func (x *CheckInRequest) GetIpAddress() string {
 		return x.IpAddress
 	}
 	return ""
+}
+
+func (x *CheckInRequest) GetLastCheckinDeltaMs() uint32 {
+	if x != nil {
+		return x.LastCheckinDeltaMs
+	}
+	return 0
 }
 
 type CheckInResponse struct {
@@ -7371,7 +7379,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\n" +
 	"spoke_addr\x18\x04 \x01(\tR\tspokeAddr\x12*\n" +
 	"\x11server_pubkey_pem\x18\x05 \x01(\tR\x0fserverPubkeyPem\x12)\n" +
-	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\xc8\x04\n" +
+	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\xfb\x04\n" +
 	"\x0eCheckInRequest\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12+\n" +
 	"\x11state_fingerprint\x18\x02 \x01(\tR\x10stateFingerprint\x12\x1c\n" +
@@ -7387,7 +7395,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\ragent_version\x18\n" +
 	" \x01(\tR\fagentVersion\x12\x1d\n" +
 	"\n" +
-	"ip_address\x18\v \x01(\tR\tipAddress\x1aE\n" +
+	"ip_address\x18\v \x01(\tR\tipAddress\x121\n" +
+	"\x15last_checkin_delta_ms\x18\f \x01(\rR\x12lastCheckinDeltaMs\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xcf\x06\n" +

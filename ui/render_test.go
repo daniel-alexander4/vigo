@@ -149,7 +149,9 @@ func TestEnvoyFreshness(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			label, stale := envoyFreshness(tt.lastSeen, tt.baseInterval)
+			// observedCycle=0 (bootstrap): preserves existing
+			// configured-only threshold semantics for these test cases.
+			label, stale := envoyFreshness(tt.lastSeen, tt.baseInterval, 0)
 			if label != tt.wantLabel {
 				t.Errorf("label = %q, want %q", label, tt.wantLabel)
 			}

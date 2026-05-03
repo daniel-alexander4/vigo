@@ -826,6 +826,7 @@ func envoyToInput(es fleet.EnvoyState) risk.EnvoyInput {
 		LastSeen:          es.LastSeen,
 		ConvergenceStatus: es.ConvergenceStatus,
 		Traits:            es.Traits,
+		ObservedCycle:     es.ObservedCycle(),
 	}
 }
 

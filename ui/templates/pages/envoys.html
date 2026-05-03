@@ -88,7 +88,7 @@
     <div class="filter-bar-axis">
         <span class="filter-bar-axis__label">Reach</span>
         <div class="filter-bar flex items-center gap-1 flex-wrap">
-            <a href="/envoys?reach=offline" class="btn btn--sm{{if eq .ReachFilter "offline"}} btn--primary{{end}}" title="Envoys silent for more than {{.OfflineThresholdLabel}}. Tunable via checkin.offline_threshold in server.yaml; default is 2.5× the check-in interval.">Offline <span class="filter-count filter-count--muted">{{.CountOffline}}</span></a>
+            <a href="/envoys?reach=offline" class="btn btn--sm{{if eq .ReachFilter "offline"}} btn--primary{{end}}" title="Envoys silent past their per-envoy stale threshold (2.5× the agent's observed inter-CheckIn cadence; floor of {{.OfflineThresholdLabel}} when no cadence has been reported yet). Tunable via checkin.offline_threshold in server.yaml.">Offline <span class="filter-count filter-count--muted">{{.CountOffline}}</span></a>
             {{if gt .CountObserving 0}}<a href="/envoys?reach=observing" class="btn btn--sm{{if eq .ReachFilter "observing"}} btn--primary{{end}}" title="Envoys in observe-only mode (drift reported, no enforcement)">Observing <span class="filter-count filter-count--info">{{.CountObserving}}</span></a>{{end}}
         </div>
     </div>
@@ -118,7 +118,7 @@
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a>{{if .ObserveOnly}} <span class="badge badge--info" title="Observe-only mode — drift reported, no enforcement">obs</span>{{end}}</td>
             <td class="mono">{{.IPAddress}}</td>
             <td class="mono text-muted">{{if .AgentVersion}}{{.AgentVersion}}{{else}}-{{end}}</td>
-            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}">{{.LastSeenLabel}}</span></td>
+            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}{{if .StaleThresholdLabel}} &middot; stale threshold: {{.StaleThresholdLabel}}{{end}}">{{.LastSeenLabel}}</span></td>
             <td class="text-muted table-time">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}" class="time-relative" title="{{formatTime .LastRunAt}}">{{timeAgo .LastRunAt}}</a>{{end}}</td>
             <td>
                 {{if .DiskStatus}}

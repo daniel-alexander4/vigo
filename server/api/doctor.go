@@ -57,6 +57,11 @@ type DoctorResponse struct {
 	Checks []DoctorCheck `json:"checks"`
 }
 
+// CycleLookup resolves an envoy's smoothed observed inter-CheckIn
+// cadence from a live FleetIndex. Implementations return 0 when the
+// envoy has no agent-reported cadence yet (bootstrap).
+type CycleLookup func(envoyID string) time.Duration
+
 // DoctorConfig holds the dependencies for the doctor handler.
 type DoctorConfig struct {
 	SQLDB          *sql.DB
@@ -70,6 +75,10 @@ type DoctorConfig struct {
 	Integrations   bool
 	Role           config.SpannerRole
 	SecretsBackend string
+	// CycleLookup, when set, supplies the per-envoy observed cycle so
+	// the stale-envoys check uses the same per-envoy threshold the UI
+	// envoys page uses. nil → bootstrap (configured interval only).
+	CycleLookup    CycleLookup
 }
 
 // DoctorHandler serves the /api/v1/doctor health check endpoint.
@@ -85,6 +94,7 @@ type DoctorHandler struct {
 	integrations   bool
 	role           config.SpannerRole
 	secretsBackend string
+	cycleLookup    CycleLookup
 }
 
 // NewDoctorHandler creates a doctor handler with the given dependencies.
@@ -101,6 +111,7 @@ func NewDoctorHandler(cfg DoctorConfig) *DoctorHandler {
 		integrations:   cfg.Integrations,
 		role:           cfg.Role,
 		secretsBackend: cfg.SecretsBackend,
+		cycleLookup:    cfg.CycleLookup,
 	}
 }
 
@@ -275,7 +286,11 @@ func (h *DoctorHandler) checkStaleEnvoys(ctx context.Context) DoctorCheck {
 		if !t.LastSeen.Valid {
 			continue
 		}
-		if freshness.IsStale(t.LastSeen.Time, h.baseInterval) {
+		var observed time.Duration
+		if h.cycleLookup != nil {
+			observed = h.cycleLookup(t.ID)
+		}
+		if freshness.IsStaleFromCycle(t.LastSeen.Time, h.baseInterval, observed) {
 			stale = append(stale, t.Hostname)
 		}
 	}

@@ -1094,6 +1094,12 @@ type EnvoyRow struct {
 	ChangedCount int64 // changes in the latest run; drives the drift-axis pill counts and the convergence-ratio badge text
 	Offline      bool
 	ObserveOnly  bool // observe-only mode: drift reporting only
+	// StaleThresholdLabel is the resolved per-envoy stale threshold
+	// (2.5× max(configured_interval, observed_cycle)) rendered in
+	// short form for tooltips. Empty when bootstrap (no observed
+	// cadence yet) — the table renders the page-level
+	// OfflineThresholdLabel in that case.
+	StaleThresholdLabel string
 	AgentVersion string
 	DiskPercent  int    // root filesystem available percentage
 	DiskStatus   string // "ok", "warn", "critical"
@@ -4071,21 +4077,22 @@ func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, s
 	rows := make([]EnvoyRow, 0, len(entries))
 	for _, e := range entries {
 		rows = append(rows, EnvoyRow{
-			ID:            e.ID,
-			Hostname:      e.Hostname,
-			IPAddress:     e.IPAddress,
-			LastSeen:      e.LastSeen,
-			LastSeenLabel: e.LastSeenLabel,
-			LastRunAt:     e.LastRunAt,
-			LastRunID:     e.LastRunID,
-			Status:        e.Status,
-			FailurePct:    e.FailurePct,
-			ModuleCount:   e.ModuleCount,
-			FailedCount:   e.FailedCount,
-			ChangedCount:  e.ChangedCount,
-			Offline:       e.Offline,
-			ObserveOnly:   e.ObserveOnly,
-			AgentVersion:  e.AgentVersion,
+			ID:                  e.ID,
+			Hostname:            e.Hostname,
+			IPAddress:           e.IPAddress,
+			LastSeen:            e.LastSeen,
+			LastSeenLabel:       e.LastSeenLabel,
+			LastRunAt:           e.LastRunAt,
+			LastRunID:           e.LastRunID,
+			Status:              e.Status,
+			FailurePct:          e.FailurePct,
+			ModuleCount:         e.ModuleCount,
+			FailedCount:         e.FailedCount,
+			ChangedCount:        e.ChangedCount,
+			Offline:             e.Offline,
+			ObserveOnly:         e.ObserveOnly,
+			StaleThresholdLabel: friendlyDurationLabel(freshness.StaleThresholdFromCycle(h.baseInterval, e.ObservedCycle)),
+			AgentVersion:        e.AgentVersion,
 		})
 	}
 
@@ -4136,7 +4143,12 @@ func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, s
 	if data.FleetTotalModules > 0 {
 		data.ModuleHealthPct = float64(data.FleetFailedModules) / float64(data.FleetTotalModules) * 100
 	}
-	data.OfflineThresholdLabel = friendlyDurationLabel(freshness.StaleThreshold(h.baseInterval))
+	// Per-envoy threshold (2.5× max(configured, observed_cycle)) means
+	// the page header shows the bootstrap value (configured-only, no
+	// agent cadence yet); per-row values may differ. The table tooltip
+	// on each row's Last Seen cell shows the resolved threshold for
+	// that envoy.
+	data.OfflineThresholdLabel = friendlyDurationLabel(freshness.StaleThresholdFromCycle(h.baseInterval, 0))
 	return data
 }
 
@@ -4467,6 +4479,10 @@ func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Requ
 		}
 	}
 
+	var observedCycle time.Duration
+	if h.fleetCache != nil {
+		observedCycle = h.fleetCache.EnvoyCycle(idStr)
+	}
 	er := risk.ScoreEnvoy(risk.EnvoyInput{
 		ID:                idStr,
 		Hostname:          detail.Envoy.Hostname,
@@ -4474,6 +4490,7 @@ func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Requ
 		LastSeen:          detail.Envoy.LastSeen,
 		ConvergenceStatus: detail.Envoy.Status,
 		Traits:            flat,
+		ObservedCycle:     observedCycle,
 	}, h.baseInterval)
 
 	data := AttackSurfaceData{
@@ -5137,10 +5154,36 @@ func (h *Handler) EnvoysStats(w http.ResponseWriter, r *http.Request) {
 
 // --- Production data source ---
 
+// cycleLookup resolves an envoy's smoothed observed inter-CheckIn
+// cadence. Both *FleetCache and FleetSource adapters satisfy it; the
+// smaller interface lets dbDataSource consume cycle data without
+// pulling in ConvergenceSummary.
+type cycleLookup interface {
+	EnvoyCycle(id string) time.Duration
+}
+
 type dbDataSource struct {
 	queries           *db.Queries
 	configStore       *config.ConfigStore
 	globalObserveOnly bool
+	// cycleLookup, when wired, supplies the agent's smoothed
+	// inter-CheckIn cadence used by per-envoy freshness checks.
+	// Wired by the Handler at SetFleetCache so envoy-detail handlers
+	// inherit the same per-envoy threshold the envoys-page table
+	// uses. nil → bootstrap fallback (configured interval only).
+	cycleLookup cycleLookup
+}
+
+// envoyCycle returns the agent's smoothed observed inter-CheckIn
+// cadence for one envoy via the wired cycle lookup, or 0 (bootstrap)
+// when none is wired. Used by envoy-detail data assembly so the
+// Offline flag uses the same per-envoy threshold the envoys-page
+// table uses.
+func (ds *dbDataSource) envoyCycle(envoyID string) time.Duration {
+	if ds.cycleLookup == nil {
+		return 0
+	}
+	return ds.cycleLookup.EnvoyCycle(envoyID)
 }
 
 // envoyComplianceInfo computes convergence status for an envoy using recent runs.
@@ -5407,7 +5450,7 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 			lastSeen = n.LastSeen.Time
 		}
 
-		lastSeenLabel, offline := envoyFreshness(lastSeen, baseInterval)
+		lastSeenLabel, offline := envoyFreshness(lastSeen, baseInterval, ds.envoyCycle(n.ID))
 
 		// Filter: "offline" matches reachability, everything else matches convergence status.
 		if statusFilter == "offline" && !offline {
@@ -5529,7 +5572,7 @@ func (ds *dbDataSource) EnvoyDetailData(envoyID string, baseInterval time.Durati
 			EnrolledAt:   envoy.EnrolledAt,
 			LastSeen:     lastSeen,
 			Status:       status,
-			Offline:      freshness.IsStale(lastSeen, baseInterval),
+			Offline:      freshness.IsStaleFromCycle(lastSeen, baseInterval, ds.envoyCycle(envoyID)),
 			AgentVersion: envoy.AgentVersion,
 		},
 		CloudProvider:     cloudProvider,
@@ -8129,8 +8172,14 @@ func (h *Handler) SetTraitLookup(tl TraitLookup) {
 
 // SetFleetCache attaches the precomputed fleet status cache.
 // Call after NewHandler — required for efficient dashboard/envoys rendering.
+// Also wires the cache as the dbDataSource's fleet source so envoy-detail
+// handlers consume the same per-envoy cycle data the envoys-page table
+// uses.
 func (h *Handler) SetFleetCache(fc *FleetCache) {
 	h.fleetCache = fc
+	if ds, ok := h.dataSource.(*dbDataSource); ok {
+		ds.cycleLookup = fc
+	}
 }
 
 // enrichEnvoyRows populates disk and repo health fields from traits.

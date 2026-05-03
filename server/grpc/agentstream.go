@@ -244,6 +244,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		} else {
 			s.fleetIndex.MarkSeen(envoyID, time.Now())
 		}
+		s.fleetIndex.MarkCycleDuration(envoyID, clampReportedCycle(req.GetLastCheckinDeltaMs()))
 	}
 	// Batch inline traits for periodic flush (hash-deduplicated).
 	inlineTraits := req.GetTraitsJson()

@@ -250,6 +250,7 @@ message CheckInRequest {
   StreamCapabilities capabilities = 9;  // agent protocol capabilities (delta streaming)
   string agent_version = 10;             // agent binary version (e.g. "1.2.0" or "dev")
   string ip_address = 11;                // agent's preferred outbound IP (refreshed each check-in)
+  uint32 last_checkin_delta_ms = 12;     // agent-measured ms since previous CheckIn; 0 = first contact (server falls back to configured interval)
 }
 
 message CheckInResponse {

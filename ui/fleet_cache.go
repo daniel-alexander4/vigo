@@ -33,6 +33,11 @@ const fleetCacheTTL = 10 * time.Second
 // counter the FleetIndex tracks.
 type FleetSource interface {
 	ConvergenceSummary() FleetSummary
+	// EnvoyCycle returns the agent's smoothed inter-CheckIn cadence for
+	// one envoy (max-of-3 of recent reported deltas, in nanoseconds).
+	// Returns 0 when no agent has reported yet (bootstrap), in which
+	// case freshness predicates fall back to the configured interval.
+	EnvoyCycle(id string) time.Duration
 }
 
 // FleetSummary mirrors the three-axis breakdown of
@@ -60,6 +65,13 @@ type FleetStatusEntry struct {
 	Hostname     string
 	IPAddress    string
 	LastSeen     time.Time
+	// ObservedCycle is the agent's smoothed inter-CheckIn cadence
+	// (max-of-3 of recent agent-reported deltas) pulled from FleetIndex
+	// at refresh time. Drives the per-envoy staleness threshold via
+	// freshness.IsStaleFromCycle. Zero when no cadence has been
+	// reported yet (bootstrap) — predicate falls back to configured
+	// interval.
+	ObservedCycle time.Duration
 	// LastSeenLabel is the human-readable rendering of LastSeen produced
 	// by envoyFreshness — "just now" / "Ns ago" / "Nm ago" / etc. — and
 	// is precomputed alongside Offline so the freshness color and the
@@ -77,10 +89,11 @@ type FleetStatusEntry struct {
 	ChangedCount int64                  // changed_count from the latest run; used to drive the drift signal
 	LastRunID    string
 	LastRunAt    time.Time
-	// Offline iff lastSeen is older than freshness.StaleThreshold.
-	// Stamped at refresh time so paginated queries don't recompute per
-	// page-load. Derived by envoyFreshness in render.go, which routes
-	// through freshness.IsStale — single source of truth shared with
+	// Offline iff lastSeen is older than the per-envoy stale
+	// threshold (2.5 × max(configured, observed_cycle)). Stamped at
+	// refresh time so paginated queries don't recompute per page-load.
+	// Derived by envoyFreshness in render.go, which routes through
+	// freshness.IsStaleFromCycle — single source of truth shared with
 	// LastSeenLabel above and with every server-side stale check.
 	Offline bool
 	// ObserveOnly iff the global checkin.observe_only flag is set OR the
@@ -209,6 +222,22 @@ func (fc *FleetCache) WorstEntries(n int) []FleetStatusEntry {
 	return all
 }
 
+// EnvoyCycle returns the smoothed observed inter-CheckIn cadence for
+// one envoy via the wired FleetSource. Returns 0 when no source is
+// wired or the envoy has no reported cadence yet — both signal the
+// freshness predicate to fall back to configured interval. Callers
+// outside the cache refresh loop (e.g. envoy-detail handlers, attack
+// surface scoring) use this to populate per-envoy thresholds without
+// re-reading every entry.
+func (fc *FleetCache) EnvoyCycle(id string) time.Duration {
+	fc.mu.RLock()
+	defer fc.mu.RUnlock()
+	if fc.fleetSource == nil {
+		return 0
+	}
+	return fc.fleetSource.EnvoyCycle(id)
+}
+
 // Invalidate forces the next call to recompute.
 func (fc *FleetCache) Invalidate() {
 	fc.mu.Lock()
@@ -261,7 +290,11 @@ func (fc *FleetCache) refresh() {
 			lastSeen = e.LastSeen.Time
 		}
 
-		lastSeenLabel, offline := envoyFreshness(lastSeen, fc.baseInterval)
+		var observedCycle time.Duration
+		if fc.fleetSource != nil {
+			observedCycle = fc.fleetSource.EnvoyCycle(e.ID)
+		}
+		lastSeenLabel, offline := envoyFreshness(lastSeen, fc.baseInterval, observedCycle)
 
 		// Per-envoy observe-only: global flag OR matching envoys.vgo
 		// block. Orthogonal to convergence status — the cache reports
@@ -295,6 +328,7 @@ func (fc *FleetCache) refresh() {
 			Hostname:      e.Hostname,
 			IPAddress:     e.IPAddress,
 			LastSeen:      lastSeen,
+			ObservedCycle: observedCycle,
 			LastSeenLabel: lastSeenLabel,
 			AgentVersion:  e.AgentVersion,
 			Status:        status,

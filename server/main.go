@@ -390,16 +390,17 @@ func run() error {
 		}
 	}
 
-	// Optional staleness threshold override. When empty, freshness.IsStale
-	// defaults to 2.5× the check-in interval; when set, this literal
-	// duration takes effect across every reachability surface (Offline
-	// pill, risk scorer, doctor API, stale-envoy notifier, fleet
-	// rehydrator). Single SoT, single override.
+	// Optional staleness threshold override. When empty, the per-envoy
+	// threshold defaults to 2.5 × max(configured_interval, observed_cycle)
+	// where observed_cycle is the agent's smoothed inter-CheckIn cadence.
+	// When set, this literal duration takes effect across every
+	// reachability surface (Offline pill, risk scorer, doctor API,
+	// stale-envoy notifier, fleet rehydrator). Single SoT, single override.
 	if cfg.CheckIn.OfflineThreshold != "" {
 		if parsed, err := time.ParseDuration(cfg.CheckIn.OfflineThreshold); err == nil && parsed > 0 {
 			freshness.SetOverride(parsed)
 		} else if err != nil {
-			slog.Warn("invalid checkin.offline_threshold; falling back to default 2.5× interval",
+			slog.Warn("invalid checkin.offline_threshold; falling back to per-envoy 2.5× cadence",
 				"value", cfg.CheckIn.OfflineThreshold, "error", err)
 		}
 	}
@@ -408,6 +409,20 @@ func run() error {
 	sigWindow := parseDuration(cfg.Tuning.SignatureWindow, 0)
 	lastSeenFlush := parseDuration(cfg.Tuning.LastSeenFlush, 10*time.Second)
 	traitsPruneInterval := parseDuration(cfg.Tuning.TraitsPruneInterval, 5*time.Minute)
+
+	// One-shot summary of the cadence + staleness wiring so future
+	// "why does the envoys page disagree with reality?" investigations
+	// are one journal grep away. Threshold is per-envoy at runtime
+	// (2.5 × max(configured_interval, observed_cycle)); the value
+	// logged here is the bootstrap floor when no agent has reported a
+	// cadence yet.
+	slog.Info("freshness wiring",
+		"checkin.interval", baseInterval,
+		"checkin.offline_threshold_override", cfg.CheckIn.OfflineThreshold,
+		"freshness.bootstrap_threshold", freshness.StaleThresholdFromCycle(baseInterval, 0),
+		"freshness.max_reported_cycle", freshness.MaxReportedCycle,
+		"tuning.last_seen_flush", lastSeenFlush,
+	)
 	metricsInterval := parseDuration(cfg.Tuning.MetricsInterval, 30*time.Second)
 	traitsScannerTTL := parseDuration(cfg.Tuning.TraitsScannerTTL, 0)
 	maxConnAge := parseDuration(cfg.Tuning.MaxConnectionAge, 0)
@@ -842,6 +857,12 @@ func run() error {
 		Integrations:   integ.Enabled(),
 		Role:           role,
 		SecretsBackend: secretsCfg.Backend,
+		CycleLookup: func(envoyID string) time.Duration {
+			if fleetIndex == nil {
+				return 0
+			}
+			return fleetIndex.EnvoyCycle(envoyID)
+		},
 	})
 
 	spannerHandler := api.NewSpannerHandler(role, cfg.Spanner.SpokeID, hub)
@@ -1441,6 +1462,7 @@ func persistRiskSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fle
 			LastSeen:          es.LastSeen,
 			ConvergenceStatus: es.ConvergenceStatus,
 			Traits:            es.Traits,
+			ObservedCycle:     fleetIdx.EnvoyCycle(es.ID),
 		}
 	}
 	fr := risk.ScoreFleet(inputs, baseInterval, 0)
@@ -1488,6 +1510,7 @@ func (a *metricsFleetAdapter) AllEnvoySnapshots() []metrics.EnvoySnapshot {
 			LastSeen:          es.LastSeen,
 			ConvergenceStatus: es.ConvergenceStatus,
 			Traits:            es.Traits,
+			ObservedCycle:     a.fleetIndex.EnvoyCycle(es.ID),
 		}
 	}
 	return snapshots
@@ -1513,6 +1536,14 @@ func (a *uiFleetSourceAdapter) ConvergenceSummary() ui.FleetSummary {
 		Diverged:  c.Diverged,
 		Offline:   c.Offline,
 	}
+}
+
+// EnvoyCycle resolves an envoy's smoothed observed inter-CheckIn
+// cadence from the live FleetIndex. Used by the FleetCache so per-envoy
+// staleness thresholds reflect agent-reported cadence rather than
+// configured interval alone.
+func (a *uiFleetSourceAdapter) EnvoyCycle(id string) time.Duration {
+	return a.fleetIndex.EnvoyCycle(id)
 }
 
 // nvdCacheAdapter adapts db.Queries to the risk.CVSSCache interface.
@@ -1748,7 +1779,7 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 					if ts.Revoked || ts.LastSeen.IsZero() {
 						continue
 					}
-					stale := freshness.IsStale(ts.LastSeen, baseInterval)
+					stale := freshness.IsStaleFromCycle(ts.LastSeen, baseInterval, fleetIdx.EnvoyCycle(ts.ID))
 					fleetIdx.SetOffline(ts.ID, stale)
 					if !stale {
 						continue
@@ -1810,7 +1841,9 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 				if !t.LastSeen.Valid {
 					continue
 				}
-				if !freshness.IsStale(t.LastSeen.Time, baseInterval) {
+				// DB-only fallback path (fleetIdx unavailable): no observed cycle
+				// data, so the threshold is derived from configured interval alone.
+				if !freshness.IsStaleFromCycle(t.LastSeen.Time, baseInterval, 0) {
 					continue
 				}
 

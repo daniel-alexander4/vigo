@@ -12,11 +12,25 @@ import (
 	"github.com/google/uuid"
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/registry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// clampReportedCycle bounds the agent-reported inter-CheckIn delta to
+// freshness.MaxReportedCycle. Defends against a compromised or buggy
+// agent inflating the value to hide itself from offline detection.
+// Operators with genuinely longer cycles should raise checkin.interval
+// to match.
+func clampReportedCycle(deltaMs uint32) uint32 {
+	maxMs := uint32(freshness.MaxReportedCycle / time.Millisecond)
+	if deltaMs > maxMs {
+		return maxMs
+	}
+	return deltaMs
+}
 
 // CheckIn handles the VigoAgent.CheckIn RPC. It validates the client,
 // stores inline traits for admin queries, and returns a policy bundle for
@@ -68,6 +82,7 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 	// Record liveness — the envoy just contacted us.
 	if s.fleetIndex != nil {
 		s.fleetIndex.MarkSeen(envoyID, time.Now())
+		s.fleetIndex.MarkCycleDuration(envoyID, clampReportedCycle(req.GetLastCheckinDeltaMs()))
 	}
 
 	// Record agent version if reported.

@@ -771,6 +771,7 @@ func (ds *DataSource) RiskData(baseInterval time.Duration) ui.RiskSummaryData {
 			LastSeen:          es.LastSeen,
 			ConvergenceStatus: es.ConvergenceStatus,
 			Traits:            es.Traits,
+			ObservedCycle:     ds.fleet.EnvoyCycle(es.ID),
 		}
 	}
 	fr := risk.ScoreFleet(inputs, baseInterval, 5)
@@ -829,6 +830,7 @@ func (ds *DataSource) RiskPostureData(baseInterval time.Duration) ui.RiskPosture
 			LastSeen:          es.LastSeen,
 			ConvergenceStatus: es.ConvergenceStatus,
 			Traits:            es.Traits,
+			ObservedCycle:     ds.fleet.EnvoyCycle(es.ID),
 		}
 	}
 	fr := risk.ScoreFleet(inputs, baseInterval, len(inputs))

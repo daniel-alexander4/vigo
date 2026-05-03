@@ -47,6 +47,16 @@ pub struct Client {
 
     /// Agent binary version string (sent on every check-in).
     agent_version: String,
+
+    /// Instant of the previous CheckIn request, used to compute the
+    /// inter-CheckIn delta the server needs to size each envoy's
+    /// staleness threshold (2.5 × max(configured_interval,
+    /// observed_cycle)). None on first contact — server falls back to
+    /// configured interval until the second CheckIn arrives.
+    /// `Mutex` gives interior mutability so request builders can stay
+    /// `&self` (some are reached through immutable borrows in the
+    /// stream loop). Lock is held for nanoseconds and uncontended.
+    last_checkin_instant: std::sync::Mutex<Option<std::time::Instant>>,
 }
 
 impl Client {
@@ -96,6 +106,7 @@ impl Client {
             tls_ca_pem: ca_pem,
             tls_identity: identity_pem,
             agent_version: String::new(),
+            last_checkin_instant: std::sync::Mutex::new(None),
         })
     }
 
@@ -276,6 +287,11 @@ impl Client {
                 let mut probe_client = VigoAgentClient::new(channel.clone());
                 let ts = Self::timestamp_str();
                 let sig = crate::auth::signer::sign_payload(b"", &ts, &self.signing_key);
+                // Probe doesn't advance the inter-CheckIn cursor: it
+                // reaches a different (primary) server than the active
+                // server's recurring CheckIn loop, and stamping a delta
+                // here would reset the cadence the server sees on the
+                // failover channel. Send 0 (server treats as bootstrap).
                 let req = CheckInRequest {
                     envoy_id: self.envoy_id.clone(),
                     state_fingerprint: String::new(),
@@ -288,6 +304,7 @@ impl Client {
                     capabilities: None,
                     agent_version: self.agent_version.clone(),
                     ip_address: crate::platform::net::get_outbound_ip(),
+                    last_checkin_delta_ms: 0,
                 };
 
                 match probe_client.check_in(tonic::Request::new(req)).await {
@@ -311,6 +328,23 @@ impl Client {
     /// Get the envoy ID this client authenticates as.
     pub fn envoy_id(&self) -> &str {
         &self.envoy_id
+    }
+
+    /// Compute the inter-CheckIn delta and advance the cursor. Returns
+    /// 0 on first contact (server treats as bootstrap and falls back
+    /// to configured interval). Saturates to u32::MAX ms; the server
+    /// re-clamps to freshness.MaxReportedCycle. Uses interior
+    /// mutability so the request builders that this drives can stay
+    /// `&self` for the immutable-borrow paths in the stream loop.
+    fn next_checkin_delta_ms(&self) -> u32 {
+        let now = std::time::Instant::now();
+        let mut guard = self.last_checkin_instant.lock().unwrap();
+        let delta = match *guard {
+            Some(prev) => now.saturating_duration_since(prev).as_millis().min(u32::MAX as u128) as u32,
+            None => 0,
+        };
+        *guard = Some(now);
+        delta
     }
 
     /// Get current Unix timestamp as decimal string (matches Go's strconv.FormatInt).
@@ -356,6 +390,7 @@ impl Client {
             capabilities: None,
             agent_version: self.agent_version.clone(),
             ip_address: crate::platform::net::get_outbound_ip(),
+            last_checkin_delta_ms: self.next_checkin_delta_ms(),
         };
 
         let resp = self
@@ -527,6 +562,7 @@ impl Client {
     }
 
     /// Build a signed CheckInRequest without sending it (for stream mode).
+    /// Advances the inter-CheckIn cursor via interior mutability.
     pub fn build_check_in_request(
         &self,
         state_fingerprint: &str,
@@ -544,6 +580,9 @@ impl Client {
     }
 
     /// Build a signed CheckInRequest with optional StreamCapabilities.
+    /// Advances the inter-CheckIn cursor used for the
+    /// `last_checkin_delta_ms` field — the server uses that delta to
+    /// size the per-envoy staleness threshold.
     pub fn build_check_in_request_with_caps(
         &self,
         state_fingerprint: &str,
@@ -567,6 +606,7 @@ impl Client {
             capabilities,
             agent_version: self.agent_version.clone(),
             ip_address: crate::platform::net::get_outbound_ip(),
+            last_checkin_delta_ms: self.next_checkin_delta_ms(),
         }
     }
 
@@ -625,6 +665,7 @@ impl Client {
             tls_ca_pem: None,
             tls_identity: None,
             agent_version: String::new(),
+            last_checkin_instant: std::sync::Mutex::new(None),
         }
     }
 }

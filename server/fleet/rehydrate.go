@@ -169,7 +169,11 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		fi.AddEnvoy(ts, pubKey)
 
 		// Mark offline if last seen exceeds the canonical stale threshold.
-		if !ts.Revoked && freshness.IsStale(ts.LastSeen, baseInterval) {
+		// At rehydrate time the in-memory cycle ring is empty, so observed=0
+		// (bootstrap) and the threshold is derived from configured interval
+		// alone. The threshold widens automatically once each envoy reports
+		// its first inter-CheckIn delta.
+		if !ts.Revoked && freshness.IsStaleFromCycle(ts.LastSeen, baseInterval, 0) {
 			fi.SetOffline(ts.ID, true)
 		}
 	}

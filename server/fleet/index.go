@@ -69,6 +69,12 @@ type EnvoyState struct {
 	MaintenanceUntil      time.Time  // zero = not in maintenance
 	ObserveOnly           bool       // observe-only mode: report drift only
 	Offline               bool       // true when envoy hasn't checked in within 2×base interval
+	// recentCheckinDeltasMs is a 3-slot ring of agent-reported
+	// inter-CheckIn deltas (ms). Smoothing prevents a single bouncy
+	// cycle from flapping the staleness threshold by orders of
+	// magnitude. Zero entries are skipped by the EnvoyCycle resolver.
+	recentCheckinDeltasMs [3]uint32
+	recentCheckinDeltasIdx int8 // next slot to write
 }
 
 // ConvergenceCounters holds pre-computed totals across three axes.
@@ -530,6 +536,66 @@ func (f *FleetIndex) MarkSeen(id string, t time.Time) {
 		ts.Offline = false
 		f.convergence.Offline--
 	}
+}
+
+// MarkCycleDuration records an agent-reported inter-CheckIn delta in
+// the rolling 3-slot ring. Zero values are silently ignored
+// (bootstrap: agent has no prior CheckIn yet). Values are clamped to
+// freshness.MaxReportedCycle by the caller before reaching here.
+// In-memory only — cycle data is rebuilt within one CheckIn per envoy
+// after a server restart.
+func (f *FleetIndex) MarkCycleDuration(id string, deltaMs uint32) {
+	if deltaMs == 0 {
+		return
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	ts, ok := f.envoys[id]
+	if !ok {
+		return
+	}
+	idx := ts.recentCheckinDeltasIdx
+	if idx < 0 || idx >= int8(len(ts.recentCheckinDeltasMs)) {
+		idx = 0
+	}
+	ts.recentCheckinDeltasMs[idx] = deltaMs
+	idx++
+	if int(idx) >= len(ts.recentCheckinDeltasMs) {
+		idx = 0
+	}
+	ts.recentCheckinDeltasIdx = idx
+}
+
+// EnvoyCycle returns the smoothed observed inter-CheckIn cadence for
+// one envoy — the max across the rolling 3-slot ring of agent-reported
+// deltas. Returns 0 when no data has been recorded yet (bootstrap),
+// signalling the freshness predicate to fall back to the configured
+// interval.
+func (f *FleetIndex) EnvoyCycle(id string) time.Duration {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	ts, ok := f.envoys[id]
+	if !ok {
+		return 0
+	}
+	return ts.ObservedCycle()
+}
+
+// ObservedCycle returns the smoothed observed inter-CheckIn cadence
+// for this envoy state — same shape as FleetIndex.EnvoyCycle but
+// callable on a snapshot (e.g. one returned by AllEnvoys) without
+// re-locking. Returns 0 when no agent-reported delta has been recorded
+// yet (bootstrap).
+func (es *EnvoyState) ObservedCycle() time.Duration {
+	var maxMs uint32
+	for _, ms := range es.recentCheckinDeltasMs {
+		if ms > maxMs {
+			maxMs = ms
+		}
+	}
+	return time.Duration(maxMs) * time.Millisecond
 }
 
 // MarkSeenInMemory updates the LastSeen timestamp in-memory without marking

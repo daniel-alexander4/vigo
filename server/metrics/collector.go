@@ -25,6 +25,7 @@ type EnvoySnapshot struct {
 	Traits            map[string]string
 	ID                string
 	Hostname          string
+	ObservedCycle     time.Duration
 }
 
 // ConvergenceSnapshot holds pre-computed counters across the failure
@@ -211,6 +212,7 @@ func updateRiskMetrics(envoys []EnvoySnapshot, baseInterval time.Duration) {
 			LastSeen:          es.LastSeen,
 			ConvergenceStatus: es.ConvergenceStatus,
 			Traits:            es.Traits,
+			ObservedCycle:     es.ObservedCycle,
 		})
 	}
 

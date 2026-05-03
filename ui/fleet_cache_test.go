@@ -18,6 +18,8 @@ type stubFleetSource struct {
 
 func (s *stubFleetSource) ConvergenceSummary() FleetSummary { return s.s }
 
+func (s *stubFleetSource) EnvoyCycle(string) time.Duration { return 0 }
+
 func TestFleetCacheCountsPrefersFleetSource(t *testing.T) {
 	fc := &FleetCache{updatedAt: time.Now()}
 	// Simulate a refresh having seeded FleetCache's internal

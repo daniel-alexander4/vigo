@@ -37,6 +37,11 @@ type EnvoyInput struct {
 	ConvergenceStatus string
 	Drift             convergence.DriftLevel
 	Traits            map[string]string
+	// ObservedCycle is the agent's smoothed inter-CheckIn cadence
+	// (max-of-3 of recent agent-reported deltas), supplied by the
+	// caller from FleetIndex. Zero means bootstrap — the staleness
+	// predicate falls back to configured interval alone.
+	ObservedCycle time.Duration
 }
 
 // Factor is a single contributing factor to an envoy's risk score.
@@ -198,9 +203,9 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 	}
 
 	// --- Stale check-in: +20 if offline ---
-	if freshness.IsStale(es.LastSeen, baseInterval) {
+	if freshness.IsStaleFromCycle(es.LastSeen, baseInterval, es.ObservedCycle) {
 		score += 20
-		r.Factors = append(r.Factors, Factor{"Offline", 20, "no check-in within 2.5× interval"})
+		r.Factors = append(r.Factors, Factor{"Offline", 20, "no check-in within 2.5× cadence"})
 	}
 
 	// Note: Windows/debsecan CVEs are now included in the unique_* counts above

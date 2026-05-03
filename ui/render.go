@@ -585,24 +585,29 @@ func timeAgo(t time.Time) string {
 	}
 }
 
-// envoyFreshness pairs the canonical freshness.IsStale predicate with
-// the matching human-readable last-seen label. The threshold itself
-// lives in freshness.StaleThreshold (2.5 × the agent check-in
-// interval) — every surface that classifies an envoy as stale routes
-// through it, so the label, the cell color, the pill count, the
-// doctor check, the risk "Lost contact" factor, and the stale-notifier
+// envoyFreshness pairs the canonical freshness predicate with the
+// matching human-readable last-seen label. The threshold derives
+// per-envoy from freshness.IsStaleFromCycle: 2.5 × max(configured,
+// observed) where observed is the agent's smoothed inter-CheckIn
+// cadence pulled from FleetIndex. Every surface that classifies an
+// envoy as stale routes through this so the label, cell color, pill
+// count, doctor check, risk "Lost contact" factor, and stale-notifier
 // always agree.
 //
+// observedCycle = 0 means bootstrap (no agent-reported cadence yet) —
+// predicate falls back to configured interval alone.
+//
 // The label override below exists because timeAgo's "just now" bucket
-// is fixed at 30 s. At fast check-in intervals (e.g. 5 s →
-// StaleThreshold 12.5 s) an envoy that's already stale would otherwise
-// render as "just now" in the staleness color. Printing precise
-// seconds in that window keeps the label and the color consistent.
-func envoyFreshness(lastSeen time.Time, baseInterval time.Duration) (label string, stale bool) {
+// is fixed at 30 s. At fast check-in intervals (e.g. 5 s configured →
+// 12.5 s threshold under bootstrap) an envoy that's already stale
+// would otherwise render as "just now" in the staleness color.
+// Printing precise seconds in that window keeps label and color
+// consistent.
+func envoyFreshness(lastSeen time.Time, baseInterval, observedCycle time.Duration) (label string, stale bool) {
 	if lastSeen.IsZero() {
 		return "-", false
 	}
-	stale = freshness.IsStale(lastSeen, baseInterval)
+	stale = freshness.IsStaleFromCycle(lastSeen, baseInterval, observedCycle)
 	age := time.Since(lastSeen)
 	if stale && age < 30*time.Second {
 		secs := int(age.Seconds())
