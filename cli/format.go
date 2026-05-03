@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/uifmt"
 )
 
@@ -217,13 +218,25 @@ func header(s string) string {
 }
 
 // colorStatus applies Catppuccin colors to compliance/run status strings.
+// Convergence buckets dispatch through convergence.ClassifyStatus so the
+// vocabulary stays consistent with the SoT; non-convergence status strings
+// (run lifecycle, generic ANSI vocab, reachability) keep their local
+// fallthroughs since they are not owned by server/convergence.
 func colorStatus(s string) string {
-	switch strings.ToLower(s) {
-	case "converged", "ok", "success", "complete", "healthy", "present", "running":
+	switch convergence.ClassifyStatus(s) {
+	case convergence.StatusConverged:
 		return green(s)
-	case "relapsed", "offline", "warn", "warning", "degraded", "pending", "dispatched":
+	case convergence.StatusRelapsed, convergence.StatusDegraded:
 		return yellow(s)
-	case "diverged", "fail", "failed", "error", "unreachable", "timeout", "rejected":
+	case convergence.StatusDiverged, convergence.StatusFailed:
+		return red(s)
+	}
+	switch strings.ToLower(s) {
+	case "ok", "success", "complete", "healthy", "present", "running":
+		return green(s)
+	case "offline", "warn", "warning", "pending", "dispatched":
+		return yellow(s)
+	case "fail", "error", "unreachable", "timeout", "rejected":
 		return red(s)
 	case "no data", "skipped", "skip":
 		return dim(s)

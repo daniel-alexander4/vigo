@@ -955,43 +955,37 @@ func (f *FleetIndex) removeFromTags(id string, tags []string) {
 }
 
 // incrementCounter bumps the bucket matching the given convergence
-// status. All six convergence states plus the empty-string legacy
-// value are handled explicitly; any other value is a bug — logging
-// it loudly would be ideal, but we silently bucket into NoData to
-// avoid a data-dependent panic in the hot path.
+// status. Unknown vocabularies fall through ClassifyStatus into
+// StatusNoData rather than panicking on the hot path.
 func (f *FleetIndex) incrementCounter(status string) {
-	switch status {
-	case "converged":
+	switch convergence.ClassifyStatus(status) {
+	case convergence.StatusConverged:
 		f.convergence.Converged++
-	case "relapsed":
+	case convergence.StatusRelapsed:
 		f.convergence.Relapsed++
-	case "diverged":
+	case convergence.StatusDiverged:
 		f.convergence.Diverged++
-	case "degraded":
+	case convergence.StatusDegraded:
 		f.convergence.Degraded++
-	case "failed":
+	case convergence.StatusFailed:
 		f.convergence.Failed++
-	case "no data", "":
-		f.convergence.NoData++
 	default:
 		f.convergence.NoData++
 	}
 }
 
 func (f *FleetIndex) decrementCounter(status string) {
-	switch status {
-	case "converged":
+	switch convergence.ClassifyStatus(status) {
+	case convergence.StatusConverged:
 		f.convergence.Converged--
-	case "relapsed":
+	case convergence.StatusRelapsed:
 		f.convergence.Relapsed--
-	case "diverged":
+	case convergence.StatusDiverged:
 		f.convergence.Diverged--
-	case "degraded":
+	case convergence.StatusDegraded:
 		f.convergence.Degraded--
-	case "failed":
+	case convergence.StatusFailed:
 		f.convergence.Failed--
-	case "no data", "":
-		f.convergence.NoData--
 	default:
 		f.convergence.NoData--
 	}

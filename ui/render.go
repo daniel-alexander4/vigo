@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/risk"
@@ -85,6 +86,18 @@ func funcMap() template.FuncMap {
 		},
 		"secSeverityNorm": func(sev string) string {
 			return cve.Norm(sev)
+		},
+		"actionCSSClass": func(action string) string {
+			switch convergence.ClassifyAction(action) {
+			case convergence.ActionCreate:
+				return "success"
+			case convergence.ActionUpdate:
+				return "info"
+			case convergence.ActionDelete:
+				return "danger"
+			default:
+				return "muted"
+			}
 		},
 		"tracePathTree":  tracePathTree,
 		"traceGreenBg":   traceGreenBg,
@@ -463,21 +476,21 @@ func (r *Renderer) RenderFragment(w http.ResponseWriter, page, fragment string, 
 }
 
 // statusColor maps a convergence status string to a CSS color class name.
+// "stale" is reachability rather than convergence and falls through to the
+// freshness-derived warning bucket.
 func statusColor(status string) string {
-	switch status {
-	case "converged":
+	switch convergence.ClassifyStatus(status) {
+	case convergence.StatusConverged:
 		return "success"
-	case "relapsed", "stale":
+	case convergence.StatusRelapsed, convergence.StatusDegraded:
 		return "warning"
-	case "degraded":
-		return "warning"
-	case "diverged":
+	case convergence.StatusDiverged, convergence.StatusFailed:
 		return "danger"
-	case "failed":
-		return "danger"
-	default:
-		return "muted"
 	}
+	if status == "stale" {
+		return "warning"
+	}
+	return "muted"
 }
 
 // formatTime renders a time.Time as "2006-01-02 15:04" in the server's local timezone.

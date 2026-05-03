@@ -1,0 +1,45 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: LicenseRef-Proprietary
+
+package convergence
+
+import "testing"
+
+func TestActionString(t *testing.T) {
+	cases := []struct {
+		a    Action
+		want string
+	}{
+		{ActionCreate, "create"},
+		{ActionUpdate, "update"},
+		{ActionDelete, "delete"},
+		{ActionNoop, "noop"},
+	}
+	for _, tc := range cases {
+		if got := tc.a.String(); got != tc.want {
+			t.Errorf("Action(%d).String() = %q, want %q", tc.a, got, tc.want)
+		}
+	}
+}
+
+func TestClassifyAction(t *testing.T) {
+	cases := []struct {
+		in   string
+		want Action
+	}{
+		{"create", ActionCreate},
+		{"  CREATE ", ActionCreate},
+		{"update", ActionUpdate},
+		{"delete", ActionDelete},
+		{"", ActionNoop},
+		{"noop", ActionNoop},
+		{"settled", ActionNoop},
+		{"none", ActionNoop},
+		{"unknown", ActionNoop},
+	}
+	for _, tc := range cases {
+		if got := ClassifyAction(tc.in); got != tc.want {
+			t.Errorf("ClassifyAction(%q) = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+}

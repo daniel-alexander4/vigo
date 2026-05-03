@@ -51,7 +51,7 @@
                 <td class="mono">{{.ResourceType}}</td>
                 <td class="mono">{{.ResourceName}}</td>
                 <td>
-                    <span class="badge badge--{{if eq .ActionTaken "create"}}success{{else if eq .ActionTaken "update"}}info{{else if eq .ActionTaken "delete"}}danger{{else}}muted{{end}}">
+                    <span class="badge badge--{{actionCSSClass .ActionTaken}}">
                         {{.ActionTaken}}
                     </span>
                 </td>
@@ -90,7 +90,7 @@
             <td class="mono">{{.ResourceType}}</td>
             <td class="mono">{{.ResourceName}}</td>
             <td>
-                <span class="badge badge--{{if eq .ActionTaken "create"}}success{{else if eq .ActionTaken "update"}}info{{else if eq .ActionTaken "delete"}}danger{{else}}muted{{end}}">
+                <span class="badge badge--{{actionCSSClass .ActionTaken}}">
                     {{.ActionTaken}}
                 </span>
             </td>

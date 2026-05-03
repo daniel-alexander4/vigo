@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/traits"
 )
@@ -180,14 +181,14 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 	}
 
 	// --- Convergence drift ---
-	switch es.ConvergenceStatus {
-	case "relapsed":
+	switch convergence.ClassifyStatus(es.ConvergenceStatus) {
+	case convergence.StatusRelapsed:
 		score += 10
 		r.Factors = append(r.Factors, Factor{"Relapsed", 10, "convergence failing to hold"})
-	case "diverged":
+	case convergence.StatusDiverged:
 		score += 15
 		r.Factors = append(r.Factors, Factor{"Diverged", 15, "persistent configuration conflict"})
-	case "failed":
+	case convergence.StatusFailed:
 		score += 15
 		r.Factors = append(r.Factors, Factor{"Convergence Failed", 15, "last run had failures"})
 	}

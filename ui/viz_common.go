@@ -8,6 +8,7 @@ import (
 	"math"
 	"sort"
 
+	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/uifmt"
 )
 
@@ -58,16 +59,25 @@ var VizDashPalette = []string{
 }
 
 // VizStatusColor maps convergence/envoy status to Catppuccin Mocha colors.
+// Convergence buckets dispatch through convergence.ClassifyStatus; the
+// remaining lifecycle / reachability vocabulary stays local since it lives
+// outside the convergence SoT (see CLAUDE.md "Convergence vs Compliance").
 func VizStatusColor(status string) string {
-	switch status {
-	case "converged", "complete", "success":
+	switch convergence.ClassifyStatus(status) {
+	case convergence.StatusConverged:
 		return uifmt.HexGreen
-	case "relapsed", "degraded", "downloading":
+	case convergence.StatusRelapsed, convergence.StatusDegraded:
 		return uifmt.HexYellow
-	case "diverged":
+	case convergence.StatusDiverged:
 		return uifmt.HexPeach
-	case "failed":
+	case convergence.StatusFailed:
 		return uifmt.HexRed
+	}
+	switch status {
+	case "complete", "success":
+		return uifmt.HexGreen
+	case "downloading":
+		return uifmt.HexYellow
 	case "offline", "skipped":
 		return uifmt.HexOverlay0
 	default: // pending, no data
@@ -77,12 +87,12 @@ func VizStatusColor(status string) string {
 
 // VizActionColor maps run result actions to Catppuccin Mocha colors.
 func VizActionColor(action string) string {
-	switch action {
-	case "create":
+	switch convergence.ClassifyAction(action) {
+	case convergence.ActionCreate:
 		return uifmt.HexGreen
-	case "update":
+	case convergence.ActionUpdate:
 		return uifmt.HexBlue
-	case "delete":
+	case convergence.ActionDelete:
 		return uifmt.HexRed
 	default: // noop, skip
 		return uifmt.HexSurface1

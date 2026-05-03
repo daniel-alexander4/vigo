@@ -4614,14 +4614,14 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 
 	// Module convergence: 100% if converged, 0% if errors/no data.
 	modPct := float64(0)
-	switch detail.Envoy.Status {
-	case "converged":
+	switch convergence.ClassifyStatus(detail.Envoy.Status) {
+	case convergence.StatusConverged:
 		modPct = 100
-	case "relapsed":
+	case convergence.StatusRelapsed:
 		modPct = 75
-	case "diverged":
+	case convergence.StatusDiverged:
 		modPct = 50
-	case "failed":
+	case convergence.StatusFailed:
 		modPct = 25
 	}
 
@@ -5080,10 +5080,10 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 		}
 
 		status, _ := ds.envoyComplianceInfo(ctx, n, baseInterval)
-		switch status {
-		case "relapsed", "diverged":
+		switch convergence.ClassifyStatus(status) {
+		case convergence.StatusRelapsed, convergence.StatusDiverged:
 			driftCount++
-		case "failed":
+		case convergence.StatusFailed:
 			failureCount++
 		}
 	}
@@ -5834,12 +5834,12 @@ func (ds *dbDataSource) PlanDetailData(planID string) (PlanDetailPageData, error
 			PlannedAction: r.PlannedAction,
 			ActionColor:   color,
 		})
-		switch r.PlannedAction {
-		case "create":
+		switch convergence.ClassifyAction(r.PlannedAction) {
+		case convergence.ActionCreate:
 			createCount++
-		case "update":
+		case convergence.ActionUpdate:
 			updateCount++
-		case "delete":
+		case convergence.ActionDelete:
 			deleteCount++
 		default:
 			skipCount++
@@ -7090,12 +7090,12 @@ func (h *Handler) AskStream(w http.ResponseWriter, r *http.Request) {
 
 // planActionColor maps a plan action to a badge CSS class.
 func planActionColor(action string) string {
-	switch action {
-	case "create":
+	switch convergence.ClassifyAction(action) {
+	case convergence.ActionCreate:
 		return "success"
-	case "update":
+	case convergence.ActionUpdate:
 		return "info"
-	case "delete":
+	case convergence.ActionDelete:
 		return "danger"
 	default:
 		return "muted"
@@ -8060,21 +8060,22 @@ func (h *Handler) enrichEnvoyRows(rows []EnvoyRow) {
 }
 
 // statusBadgeCSS converts a status string to a CSS class suffix.
+// "offline" is reachability rather than convergence and is handled
+// alongside the danger bucket because it warrants the same operator
+// attention as a hard failure.
 func statusBadgeCSS(status string) string {
-	switch strings.ToLower(status) {
-	case "converged":
+	switch convergence.ClassifyStatus(status) {
+	case convergence.StatusConverged:
 		return "success"
-	case "relapsed":
+	case convergence.StatusRelapsed, convergence.StatusDegraded:
 		return "warning"
-	case "diverged":
+	case convergence.StatusDiverged, convergence.StatusFailed:
 		return "danger"
-	case "failed", "offline":
-		return "danger"
-	case "no data":
-		return "info"
-	default:
-		return "info"
 	}
+	if strings.ToLower(status) == "offline" {
+		return "danger"
+	}
+	return "info"
 }
 
 // InventoryFragment returns the fleet inventory table via HTMX, with trait

@@ -9,16 +9,20 @@ import (
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
+
+	"git.alexander4.io/vigo/server/convergence"
 )
 
 func colorAction(action string) string {
-	switch action {
-	case "create":
+	switch convergence.ClassifyAction(action) {
+	case convergence.ActionCreate:
 		return green(action)
-	case "update":
+	case convergence.ActionUpdate:
 		return yellow(action)
-	case "delete":
+	case convergence.ActionDelete:
 		return red(action)
+	}
+	switch action {
 	case "ok", "none", "noop", "settled":
 		return dim(action)
 	default:

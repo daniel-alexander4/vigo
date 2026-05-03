@@ -54,10 +54,10 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 		if !ts.LastSeen.IsZero() && time.Since(ts.LastSeen) < time.Hour {
 			activeCount++
 		}
-		switch ts.ConvergenceStatus {
-		case "relapsed", "diverged":
+		switch convergence.ClassifyStatus(ts.ConvergenceStatus) {
+		case convergence.StatusRelapsed, convergence.StatusDiverged:
 			driftCount++
-		case "failed", "degraded":
+		case convergence.StatusFailed, convergence.StatusDegraded:
 			failureCount++
 		}
 	}
@@ -528,12 +528,12 @@ func (ds *DataSource) PlanDetailData(planID string) (ui.PlanDetailPageData, erro
 			PlannedAction: r.PlannedAction,
 			ActionColor:   color,
 		})
-		switch r.PlannedAction {
-		case "create":
+		switch convergence.ClassifyAction(r.PlannedAction) {
+		case convergence.ActionCreate:
 			createCount++
-		case "update":
+		case convergence.ActionUpdate:
 			updateCount++
-		case "delete":
+		case convergence.ActionDelete:
 			deleteCount++
 		default:
 			skipCount++
@@ -556,12 +556,12 @@ func (ds *DataSource) PlanDetailData(planID string) (ui.PlanDetailPageData, erro
 }
 
 func planActionColor(action string) string {
-	switch action {
-	case "create":
+	switch convergence.ClassifyAction(action) {
+	case convergence.ActionCreate:
 		return "success"
-	case "update":
+	case convergence.ActionUpdate:
 		return "info"
-	case "delete":
+	case convergence.ActionDelete:
 		return "danger"
 	default:
 		return "muted"

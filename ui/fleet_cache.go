@@ -241,18 +241,18 @@ func (fc *FleetCache) refresh() {
 		if observeOnly {
 			counts.Observing++
 		}
-		switch status {
-		case "converged":
+		switch convergence.ClassifyStatus(status) {
+		case convergence.StatusConverged:
 			counts.Converged++
-		case "relapsed":
+		case convergence.StatusRelapsed:
 			counts.Relapsed++
-		case "diverged":
+		case convergence.StatusDiverged:
 			counts.Diverged++
-		case "degraded":
+		case convergence.StatusDegraded:
 			counts.Degraded++
-		case "failed":
+		case convergence.StatusFailed:
 			counts.Failed++
-		case "no data":
+		case convergence.StatusNoData:
 			counts.NoData++
 		}
 	}
@@ -264,18 +264,18 @@ func (fc *FleetCache) refresh() {
 
 // statusPriority returns a sort key: lower = worse.
 func statusPriority(s string) int {
-	switch s {
-	case "failed":
+	switch convergence.ClassifyStatus(s) {
+	case convergence.StatusFailed:
 		return 0
-	case "degraded":
+	case convergence.StatusDegraded:
 		return 1
-	case "diverged":
+	case convergence.StatusDiverged:
 		return 2
-	case "relapsed":
+	case convergence.StatusRelapsed:
 		return 3
-	case "no data":
+	case convergence.StatusNoData:
 		return 4
-	case "converged":
+	case convergence.StatusConverged:
 		return 5
 	default:
 		return 6
