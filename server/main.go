@@ -1074,7 +1074,9 @@ func run() error {
 		})
 		uiHandler.SetIntegrationsConfig(cfg.Integrations, cfg.GRC)
 		uiHandler.SetTraitLookup(&traitLookupAdapter{fleetIndex: fleetIndex})
-		uiHandler.SetFleetCache(ui.NewFleetCache(queries, configStore, cfg.CheckIn.ObserveOnly, baseInterval))
+		fleetCache := ui.NewFleetCache(queries, configStore, cfg.CheckIn.ObserveOnly, baseInterval)
+		fleetCache.SetFleetSource(&uiFleetSourceAdapter{fleetIndex: fleetIndex})
+		uiHandler.SetFleetCache(fleetCache)
 		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
 		spannerHandler.RegisterRoutes(gwMux)
@@ -1473,6 +1475,28 @@ func (a *metricsFleetAdapter) AllEnvoySnapshots() []metrics.EnvoySnapshot {
 		}
 	}
 	return snapshots
+}
+
+// uiFleetSourceAdapter adapts *fleet.FleetIndex to ui.FleetSource so
+// the dashboard convergence pills go through the same in-memory
+// counters as the metrics collector — eliminating the previous drift
+// between FleetCache (rebuilt every ~10s from the DB) and FleetIndex.
+type uiFleetSourceAdapter struct {
+	fleetIndex *fleet.FleetIndex
+}
+
+func (a *uiFleetSourceAdapter) ConvergenceSummary() ui.FleetSummary {
+	c := a.fleetIndex.ConvergenceSummary()
+	return ui.FleetSummary{
+		Total:     c.Total,
+		Converged: c.Converged,
+		Relapsed:  c.Relapsed,
+		Diverged:  c.Diverged,
+		Degraded:  c.Degraded,
+		Failed:    c.Failed,
+		Offline:   c.Offline,
+		NoData:    c.NoData,
+	}
 }
 
 // nvdCacheAdapter adapts db.Queries to the risk.CVSSCache interface.

@@ -20,6 +20,35 @@ import (
 // Multiple HTMX fragments polling in the same cycle share one computation.
 const fleetCacheTTL = 10 * time.Second
 
+// FleetSource exposes pre-computed convergence counters from the live
+// in-memory fleet index. When wired, FleetCache.Counts() returns these
+// counts for the convergence and reachability buckets directly,
+// eliminating the drift that previously existed between the dashboard
+// pills (FleetCache, rebuilt every ~10s from the DB) and the metrics
+// collector (which already consumed fleet.FleetIndex.ConvergenceSummary).
+//
+// Implemented in main.go via a tiny adapter around *fleet.FleetIndex.
+// Observing is intentionally absent from the interface: it is per-envoy
+// state derived by iterating FleetCache's enriched entry set, not a
+// counter the FleetIndex tracks.
+type FleetSource interface {
+	ConvergenceSummary() FleetSummary
+}
+
+// FleetSummary mirrors the convergence-related fields of
+// fleet.ConvergenceCounters. Redefined in the ui package so FleetCache
+// can take a FleetSource without importing server/fleet.
+type FleetSummary struct {
+	Total     int
+	Converged int
+	Relapsed  int
+	Diverged  int
+	Degraded  int
+	Failed    int
+	Offline   int
+	NoData    int
+}
+
 // FleetStatusEntry holds precomputed convergence status for a single envoy.
 type FleetStatusEntry struct {
 	ID           string
@@ -86,6 +115,11 @@ type FleetCache struct {
 	configStore       *config.ConfigStore
 	globalObserveOnly bool
 	baseInterval      time.Duration
+	// fleetSource, when set, supplies the live in-memory convergence
+	// counts so the dashboard pills do not drift from FleetIndex.
+	// Wired via SetFleetSource at server startup. Observing still
+	// comes from per-entry iteration of the cached entries.
+	fleetSource FleetSource
 
 	// Cached data.
 	entries   []FleetStatusEntry
@@ -108,11 +142,38 @@ func NewFleetCache(queries *db.Queries, configStore *config.ConfigStore, globalO
 	}
 }
 
-// Counts returns cached fleet status counts, refreshing if stale.
+// SetFleetSource wires the live convergence counter source. Pass an
+// adapter around *fleet.FleetIndex at server startup so the dashboard
+// pills consume the same in-memory counters as the metrics collector.
+// Safe to call before or after the cache is populated.
+func (fc *FleetCache) SetFleetSource(fs FleetSource) {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	fc.fleetSource = fs
+}
+
+// Counts returns cached fleet status counts, refreshing if stale. When
+// a FleetSource is wired, the convergence and reachability buckets are
+// served from live in-memory counters; Observing comes from per-entry
+// iteration in the cache (FleetIndex does not track it).
 func (fc *FleetCache) Counts() FleetStatusCounts {
 	fc.refresh()
 	fc.mu.RLock()
 	defer fc.mu.RUnlock()
+	if fc.fleetSource != nil {
+		s := fc.fleetSource.ConvergenceSummary()
+		return FleetStatusCounts{
+			Total:     s.Total,
+			Converged: s.Converged,
+			Relapsed:  s.Relapsed,
+			Diverged:  s.Diverged,
+			Degraded:  s.Degraded,
+			Failed:    s.Failed,
+			Offline:   s.Offline,
+			NoData:    s.NoData,
+			Observing: fc.counts.Observing,
+		}
+	}
 	return fc.counts
 }
 
