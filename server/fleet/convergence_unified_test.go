@@ -31,11 +31,12 @@ func TestUpdateRunStatus_MatchesComputeConvergence(t *testing.T) {
 		{"partial run with some failures is degraded", "partial", 0, 1, 5, "degraded"},
 		{"failure run with full failure ratio", "failure", 0, 5, 5, "failed"},
 		{"failure run with high failure ratio", "failure", 0, 4, 5, "failed"},
-		// Agent-reported status="failure" is authoritative even when the
-		// per-module failure ratio is small — without this the run lands
-		// in "no data" on the dashboard and envoys-page pills.
-		{"failure run with moderate failure ratio still failed", "failure", 0, 2, 5, "failed"},
-		{"failure run with no module counts", "failure", 0, 0, 0, "failed"},
+		// Per-module counts are the truth, not the agent's overall flag.
+		// failure with 2/5 (40%) lands in degraded; failure with zero
+		// counts is the bookkeeping anomaly we deliberately classify as
+		// converged so it doesn't taint the dashboard.
+		{"failure run with moderate failure ratio is degraded", "failure", 0, 2, 5, "degraded"},
+		{"failure run with no module counts is converged", "failure", 0, 0, 0, "converged"},
 		{"blocked run", "blocked", 0, 0, 5, "diverged"},
 	}
 

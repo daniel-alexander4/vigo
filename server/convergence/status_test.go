@@ -64,7 +64,7 @@ func TestComputeStatus(t *testing.T) {
 		want Status
 	}{
 		{"clean success", RunInfo{Status: "success", ChangedCount: 0, FailedCount: 0, ModuleCount: 10}, StatusConverged},
-		{"agent failure short-circuit", RunInfo{Status: "failure", FailedCount: 1, ModuleCount: 100}, StatusFailed},
+		{"agent failure with low fail pct -> degraded by counts", RunInfo{Status: "failure", FailedCount: 1, ModuleCount: 100}, StatusDegraded},
 		{"degraded", RunInfo{Status: "success", FailedCount: 5, ModuleCount: 10}, StatusDegraded},
 		{"empty", RunInfo{}, StatusNoData},
 	}

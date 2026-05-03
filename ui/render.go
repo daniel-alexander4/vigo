@@ -19,6 +19,7 @@ import (
 	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/risk"
+	"git.alexander4.io/vigo/server/uifmt"
 
 	"github.com/alecthomas/chroma/v2"
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
@@ -86,6 +87,25 @@ func funcMap() template.FuncMap {
 		},
 		"secSeverityNorm": func(sev string) string {
 			return cve.Norm(sev)
+		},
+		// failureGradient returns a hex color along the green→yellow→red
+		// FailureGradient ramp for a (failed, total) module-count pair.
+		// Saturates green at 0%, yellow at 40%, red at 80%+ — matches
+		// convergence.DegradedMaxPct so the gradient maxes out exactly
+		// at the bucket boundary. total<=0 falls back to a muted surface
+		// color so "no module data yet" cells stay visually quiet.
+		"failureGradient": func(failed, total int64) template.CSS {
+			if total <= 0 {
+				return template.CSS(uifmt.HexSurface1)
+			}
+			pct := float64(failed) / float64(total) * 100
+			return template.CSS(uifmt.FailureGradient(pct))
+		},
+		// failureGradientPct is the same gradient consumed directly by a
+		// percentage (0..100). Used by stat cards that already track a
+		// percent (Module Health card; risk score; coverage; root-fs).
+		"failureGradientPct": func(pct float64) template.CSS {
+			return template.CSS(uifmt.FailureGradient(pct))
 		},
 		"actionCSSClass": func(action string) string {
 			switch convergence.ClassifyAction(action) {

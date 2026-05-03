@@ -189,7 +189,7 @@ func TestEnvoysHandler(t *testing.T) {
 	body := rec.Body.String()
 
 	// Table should have expected column headers
-	for _, col := range []string{"Hostname", "IP Address", "Last Seen", "Last Run", "Convergence"} {
+	for _, col := range []string{"Hostname", "IP Address", "Last Check-in", "Last Convergence", "Convergence"} {
 		if !strings.Contains(body, col) {
 			t.Errorf("Envoys page missing column header %q", col)
 		}

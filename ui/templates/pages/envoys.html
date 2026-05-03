@@ -57,6 +57,10 @@
 <div class="stat-cards stat-cards--compact mb-2">
     {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
     {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Reachable" "Color" "success" "Tooltip" "Envoys that checked in within 2.5× the agent check-in interval (set in server.yaml as checkin.interval)."}}
+    <div class="stat-card" style="border-color:{{failureGradientPct .ModuleHealthPct}};" title="Sum across every envoy's most-recent run. Goes red as the share of failing modules climbs — saturates at 80%.">
+        <div class="stat-card__value" style="color:{{failureGradientPct .ModuleHealthPct}};">{{.FleetFailedModules}}<span class="stat-card__total"> / {{.FleetTotalModules}}</span></div>
+        <div class="stat-card__label">Modules Failing</div>
+    </div>
 </div>
 <div class="filter-bar flex items-center gap-1 flex-wrap">
     <a href="/envoys" class="btn btn--sm{{if and (eq .StatusFilter "") (eq .Search "")}} btn--primary{{end}}">All <span class="filter-count">{{.TotalEnvoys}}</span></a>
@@ -64,7 +68,6 @@
     <a href="/envoys?status=relapsed" class="btn btn--sm{{if eq .StatusFilter "relapsed"}} btn--primary{{end}}">Relapsed <span class="filter-count filter-count--warning">{{.CountRelapsed}}</span></a>
     <a href="/envoys?status=diverged" class="btn btn--sm{{if eq .StatusFilter "diverged"}} btn--primary{{end}}">Diverged <span class="filter-count filter-count--warning">{{.CountDiverged}}</span></a>
     <a href="/envoys?status=degraded" class="btn btn--sm{{if eq .StatusFilter "degraded"}} btn--primary{{end}}">Degraded <span class="filter-count filter-count--warning">{{.CountDegraded}}</span></a>
-    <a href="/envoys?status=failed" class="btn btn--sm{{if eq .StatusFilter "failed"}} btn--primary{{end}}">Failed <span class="filter-count filter-count--danger">{{.CountFailed}}</span></a>
     <a href="/envoys?status=offline" class="btn btn--sm{{if eq .StatusFilter "offline"}} btn--primary{{end}}">Offline <span class="filter-count filter-count--muted">{{.CountOffline}}</span></a>
     <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data <span class="filter-count filter-count--muted">{{.CountNoData}}</span></a>
     {{if gt .CountObserving 0}}<a href="/envoys?status=observing" class="btn btn--sm{{if eq .StatusFilter "observing"}} btn--primary{{end}}" title="Envoys in observe-only mode (drift reported, no enforcement)">Observing <span class="filter-count filter-count--info">{{.CountObserving}}</span></a>{{end}}
@@ -79,8 +82,8 @@
             {{sortHeader "Hostname" "hostname" .SortColumn .SortDir $base}}
             {{sortHeader "IP Address" "ip" .SortColumn .SortDir $base}}
             <th>Agent</th>
-            {{sortHeader "Last Seen" "last_seen" .SortColumn .SortDir $base}}
-            {{sortHeader "Last Run" "last_run" .SortColumn .SortDir $base}}
+            {{sortHeader "Last Check-in" "last_seen" .SortColumn .SortDir $base}}
+            {{sortHeader "Last Convergence" "last_run" .SortColumn .SortDir $base}}
             <th title="Root filesystem usage">Root FS</th>
             <th>Repos</th>
             {{sortHeader "Convergence" "status" .SortColumn .SortDir $base}}
@@ -94,7 +97,7 @@
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a>{{if .ObserveOnly}} <span class="badge badge--info" title="Observe-only mode — drift reported, no enforcement">obs</span>{{end}}</td>
             <td class="mono">{{.IPAddress}}</td>
             <td class="mono text-muted">{{if .AgentVersion}}{{.AgentVersion}}{{else}}-{{end}}</td>
-            <td class="text-muted table-time{{if .Offline}} envoys-lastseen--stale{{end}}"><span class="time-relative" title="{{formatTime .LastSeen}}">{{.LastSeenLabel}}</span></td>
+            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}">{{.LastSeenLabel}}</span></td>
             <td class="text-muted table-time">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}" class="time-relative" title="{{formatTime .LastRunAt}}">{{timeAgo .LastRunAt}}</a>{{end}}</td>
             <td>
                 {{if .DiskStatus}}
@@ -110,9 +113,9 @@
                 {{if eq .ModuleCount 0}}
                 <span class="badge badge--unknown">0/0</span>
                 {{else if .LastRunID}}
-                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span></a>
+                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge" style="background:{{failureGradient .FailedCount .ModuleCount}};color:#1e1e2e;">{{.FailedCount}}/{{.ModuleCount}}</span></a>
                 {{else}}
-                <span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>
+                <span class="badge" style="background:{{failureGradient .FailedCount .ModuleCount}};color:#1e1e2e;">{{.FailedCount}}/{{.ModuleCount}}</span>
                 {{end}}
             </td>
         </tr>

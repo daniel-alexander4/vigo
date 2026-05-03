@@ -55,19 +55,29 @@ func ComputeConvergence(recentRuns []RunInfo) string {
 
 	last := recentRuns[0]
 
-	// If the agent reports the run as an outright failure, trust that —
-	// the agent's overall-status flag is authoritative even when the
-	// per-module failure percentage is small. Without this short-circuit,
-	// a run with status="failure" but only one failed module out of
-	// hundreds (failure_pct below DegradedMinPct) would fall through every
-	// branch and land in "no data", which then propagates to the dashboard
-	// and the envoys-page pills as a misclassification.
-	if last.Status == "failure" {
-		return "failed"
+	// Trust per-module counts over the agent's overall-status flag when
+	// the agent actually reported a recognized run status. A run with
+	// zero failed modules and zero changes is converged even if
+	// last.Status == "failure" — the overall flag is a coarser signal
+	// that occasionally lies (executor exits non-zero without populating
+	// per-module results, producing a status="failure" run with
+	// FailedCount=0). The dashboard treats module counts as the truth so
+	// those bookkeeping anomalies don't contaminate the rollup.
+	//
+	// Empty / unknown status with zero counts still falls through to
+	// "no data" — that's not "converged at zero," it's "we don't know."
+	if last.FailedCount == 0 && last.ChangedCount == 0 {
+		switch last.Status {
+		case "success", "partial", "failure":
+			return "converged"
+		}
+		// "blocked" is intentionally absent: an infrastructure block is
+		// a real divergence even when the run produced zero counts,
+		// because no resources got applied. Falls through to the switch
+		// below which maps blocked → diverged.
 	}
 
-	// Check failure percentage next (takes priority over drift detection
-	// for runs the agent reports as success/partial).
+	// Check failure percentage next.
 	if last.FailedCount > 0 && last.ModuleCount > 0 {
 		pct := float64(last.FailedCount) / float64(last.ModuleCount) * 100
 		if pct >= DegradedMaxPct {
@@ -81,15 +91,15 @@ func ComputeConvergence(recentRuns []RunInfo) string {
 	switch last.Status {
 	case "blocked":
 		return "diverged"
-	case "success", "partial":
-		if last.ChangedCount == 0 && last.FailedCount == 0 {
-			return "converged"
-		}
-		// Count consecutive runs with changes for drift detection.
+	case "success", "partial", "failure":
+		// Drift detection for runs with changes below the degraded
+		// threshold. "failure" lands here too when FailedCount is small
+		// — module counts already determined we aren't in failed/degraded,
+		// so we look at change history just like a success/partial run.
 		consecutive := 0
 		for i := 0; i < len(recentRuns); i++ {
 			r := recentRuns[i]
-			if (r.Status != "success" && r.Status != "partial") || (r.ChangedCount == 0 && r.FailedCount == 0) {
+			if r.ChangedCount == 0 && r.FailedCount == 0 {
 				break
 			}
 			consecutive++

@@ -1121,6 +1121,14 @@ type EnvoysPageData struct {
 	CountOffline   int
 	CountNoData    int
 	CountObserving int
+	// Module Health: fleet-wide failed/total module sums from every
+	// envoy's most-recent run. Drives the "MODULES FAILING" stat card
+	// at the top of the page — gives the operator the absolute "is
+	// anything actually broken" reading independent of how envoys
+	// bucket. ModuleHealthPct = 100 * Failed / Total (0 when Total==0).
+	FleetFailedModules int64
+	FleetTotalModules  int64
+	ModuleHealthPct    float64
 }
 
 // EnvoyDetailRunRow is a run with its per-module results for the envoy detail page.
@@ -4056,6 +4064,17 @@ func (h *Handler) envoysPageData(statusFilter, search, sortCol, sortDir string, 
 	data.ActiveEnvoys = data.TotalEnvoys - data.CountOffline
 	if data.TotalEnvoys > 0 {
 		data.DriftRate = float64(data.CountRelapsed+data.CountDiverged) / float64(data.TotalEnvoys) * 100
+	}
+	// Fleet-wide Module Health: sum across every cached entry's last
+	// run. Cheap (single pass over a typically-small in-memory slice)
+	// and means the card stays consistent with the table on the same
+	// refresh cycle.
+	for _, e := range h.fleetCache.Entries() {
+		data.FleetFailedModules += e.FailedCount
+		data.FleetTotalModules += e.ModuleCount
+	}
+	if data.FleetTotalModules > 0 {
+		data.ModuleHealthPct = float64(data.FleetFailedModules) / float64(data.FleetTotalModules) * 100
 	}
 	return data
 }

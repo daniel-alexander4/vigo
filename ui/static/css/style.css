@@ -812,6 +812,15 @@ a.dash-column--link:focus-visible {
     color: var(--color-text);
 }
 
+/* Secondary number inside a stat-card value, rendered slightly smaller
+   and dimmer than the headline number. Used by "Modules Failing" to
+   show "<failed> / <total>" with the total visibly subordinate. */
+.stat-card__total {
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--color-text-muted);
+}
+
 .stat-card__label {
     font-size: 13px;
     font-weight: 500;
@@ -1460,18 +1469,6 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     z-index: 1;
     background: var(--color-card-bg);
     box-shadow: 0 1px 0 var(--color-border);
-}
-
-/* Last-seen freshness indicator. The cell turns red when the envoy is
-   past the offline threshold (2.5 × the agent check-in interval). The
-   threshold and the cell label are both produced server-side by
-   envoyFreshness in ui/render.go — see FleetStatusEntry.LastSeenLabel —
-   so the color and the text always agree on the same threshold. */
-.envoys-lastseen--stale {
-    color: var(--color-danger);
-}
-.envoys-lastseen--stale .time-relative {
-    color: var(--color-danger);
 }
 
 /* Hard-cap sentinel: replaces the "load more" trigger past the rendered

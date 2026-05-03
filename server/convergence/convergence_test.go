@@ -29,8 +29,10 @@ func TestComputeConvergence(t *testing.T) {
 		{"degraded 3/5 (60%)", []RunInfo{{Status: "partial", FailedCount: 3, ModuleCount: 5}}, "degraded"},
 		{"converged 0/59", []RunInfo{{Status: "success", FailedCount: 0, ModuleCount: 59}}, "converged"},
 
-		// Legacy: failure status without module counts falls back to "failed".
-		{"failed on failure without counts", []RunInfo{{Status: "failure"}}, "failed"},
+		// Module counts are the truth: status="failure" with zero failed
+		// and zero changed is a bookkeeping anomaly, classified as
+		// converged so it doesn't taint the dashboard.
+		{"converged on failure with zero counts", []RunInfo{{Status: "failure"}}, "converged"},
 	}
 
 	for _, tt := range tests {
