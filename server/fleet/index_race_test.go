@@ -102,10 +102,13 @@ func TestConcurrentUpdateRunStatus(t *testing.T) {
 	// convergence-status sum — every envoy is in exactly one
 	// convergence bucket regardless of whether it's offline.
 	c := fi.ConvergenceSummary()
-	sum := c.Converged + c.Relapsed + c.Diverged + c.Degraded + c.Failed + c.NoData
+	// Failure-axis buckets sum to Total. Drift counters (Changed,
+	// Diverged) are orthogonal and overlap; they do not contribute to
+	// this invariant.
+	sum := c.Converged + c.Degraded + c.Failed + c.NoData
 	if sum != c.Total {
-		t.Errorf("counter inconsistency: %d+%d+%d+%d+%d+%d = %d, Total = %d",
-			c.Converged, c.Relapsed, c.Diverged, c.Degraded, c.Failed, c.NoData, sum, c.Total)
+		t.Errorf("counter inconsistency: %d+%d+%d+%d = %d, Total = %d",
+			c.Converged, c.Degraded, c.Failed, c.NoData, sum, c.Total)
 	}
 }
 

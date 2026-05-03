@@ -899,12 +899,16 @@ type ComplianceReportSummary struct {
 	CoveragePercent    float64 `json:"coverage_percent"` // fleet macro-average
 	ConvergencePercent float64 `json:"convergence_percent"`
 	// Convergence breakdown (kept for JSON API consumers).
-	Converged   int `json:"converged"`
-	Relapsed    int `json:"relapsed"`
-	Diverged    int `json:"diverged"`
-	Failed      int `json:"failed"`
+	// Failure axis (sums to TotalNodes):
+	Converged int `json:"converged"`
+	Degraded  int `json:"degraded"`
+	Failed    int `json:"failed"`
+	NoData    int `json:"no_data"`
+	// Drift axis (overlapping; Diverged ⊆ Changed):
+	Changed  int `json:"changed"`
+	Diverged int `json:"diverged"`
+	// Reachability:
 	Offline int `json:"offline"`
-	NoData      int `json:"no_data"`
 }
 
 // ControlFinding maps a compliance control to its implementation status.
@@ -1082,12 +1086,13 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 			NotSatisfied:       notSatisfied,
 			TotalControls:      totalControls,
 			CoveragePercent:    fleetCoveragePct,
-			Converged:          int(summary.Converged),
-			Relapsed:           int(summary.Relapsed),
-			Diverged:           int(summary.Diverged),
-			Failed:             int(summary.Failed),
-			Offline:        int(summary.Offline),
-			NoData:             int(summary.NoData),
+			Converged: int(summary.Converged),
+			Degraded:  int(summary.Degraded),
+			Failed:    int(summary.Failed),
+			NoData:    int(summary.NoData),
+			Changed:   int(summary.Changed),
+			Diverged:  int(summary.Diverged),
+			Offline:   int(summary.Offline),
 			ConvergencePercent: pct,
 		},
 		Controls:   controls,
@@ -1338,12 +1343,12 @@ func renderComplianceHTML(w http.ResponseWriter, r *ComplianceReport) {
   <div class="summary-card"><div class="value" style="color:%s">%.0f%%</div><div class="label">Compliance</div></div>
   <div class="summary-card"><div class="value">%d</div><div class="label">Total Nodes</div></div>
   <div class="summary-card"><div class="value" style="color:#27ae60">%d</div><div class="label">Converged</div></div>
+  <div class="summary-card"><div class="value" style="color:#f39c12">%d</div><div class="label">Degraded</div></div>
   <div class="summary-card"><div class="value" style="color:#e74c3c">%d</div><div class="label">Failed</div></div>
-  <div class="summary-card"><div class="value" style="color:#f39c12">%d</div><div class="label">Relapsed</div></div>
   <div class="summary-card"><div class="value" style="color:#e74c3c">%d</div><div class="label">Diverged</div></div>
   <div class="summary-card"><div class="value" style="color:#6c757d">%d</div><div class="label">Offline</div></div>
 </div>
-`, gaugeColor, r.Summary.ConvergencePercent, r.Summary.TotalNodes, r.Summary.Converged, r.Summary.Failed, r.Summary.Relapsed, r.Summary.Diverged, r.Summary.Offline)
+`, gaugeColor, r.Summary.ConvergencePercent, r.Summary.TotalNodes, r.Summary.Converged, r.Summary.Degraded, r.Summary.Failed, r.Summary.Diverged, r.Summary.Offline)
 
 	// Audit chain status.
 	auditClass := "audit-valid"
@@ -4140,7 +4145,7 @@ func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport,
 		Fleet: ExecutiveFleet{
 			Total:          summary.Total,
 			FullyConverged: summary.Converged,
-			ConfigChanges:  summary.Relapsed + summary.Diverged,
+			ConfigChanges:  summary.Changed,
 			Failed:         summary.Failed,
 			Unreachable:    summary.Offline,
 			PendingData:    summary.NoData,
@@ -4177,11 +4182,11 @@ func (h *ReportHandler) buildTopIssues(summary fleet.ConvergenceCounters, auditS
 		})
 	}
 
-	// Priority 4: Relapsed/diverged drift (warning).
-	if summary.Relapsed+summary.Diverged > 0 {
+	// Priority 4: Persistent drift (warning).
+	if summary.Diverged > 0 {
 		issues = append(issues, ExecutiveIssue{
 			Severity:    "warning",
-			Description: fmt.Sprintf("%d node(s) are experiencing persistent configuration drift (relapsed or diverged). Changes are being reverted repeatedly, indicating an external process may be conflicting.", summary.Relapsed+summary.Diverged),
+			Description: fmt.Sprintf("%d node(s) are experiencing persistent configuration drift. Modules keep applying changes across many consecutive runs, indicating an external process may be conflicting or a module may be non-idempotent.", summary.Diverged),
 		})
 	}
 

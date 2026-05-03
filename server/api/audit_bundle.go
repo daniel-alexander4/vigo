@@ -196,17 +196,18 @@ func (h *ReportHandler) handleAuditBundle(w http.ResponseWriter, r *http.Request
 	}); err == nil {
 		csvBuf := &bytes.Buffer{}
 		cw := csv.NewWriter(csvBuf)
-		_ = cw.Write([]string{"recorded_at", "total", "converged", "relapsed", "diverged", "failed", "offline", "no_data"})
+		_ = cw.Write([]string{"recorded_at", "total", "converged", "degraded", "failed", "no_data", "changed", "diverged", "offline"})
 		for _, row := range rows {
 			_ = cw.Write([]string{
 				row.RecordedAt,
 				strconv.FormatInt(row.Total, 10),
 				strconv.FormatInt(row.Converged, 10),
-				strconv.FormatInt(row.Relapsed, 10),
-				strconv.FormatInt(row.Diverged, 10),
+				strconv.FormatInt(row.Degraded, 10),
 				strconv.FormatInt(row.Failed, 10),
-				strconv.FormatInt(row.Offline, 10),
 				strconv.FormatInt(row.NoData, 10),
+				strconv.FormatInt(row.Changed, 10),
+				strconv.FormatInt(row.Diverged, 10),
+				strconv.FormatInt(row.Offline, 10),
 			})
 		}
 		cw.Flush()

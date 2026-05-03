@@ -30,17 +30,17 @@ func TestFleetCacheCountsPrefersFleetSource(t *testing.T) {
 	}
 
 	// Wire a FleetSource with different live values. Counts() must
-	// return the FleetSource numbers for every convergence/reachability
-	// bucket, and keep Observing from the cached entries.
+	// return the FleetSource numbers for every failure / drift /
+	// reachability bucket, and keep Observing from the cached entries.
 	fc.SetFleetSource(&stubFleetSource{s: FleetSummary{
 		Total:     10,
-		Converged: 7,
-		Relapsed:  1,
-		Diverged:  1,
-		Degraded:  0,
+		Converged: 8,
+		Degraded:  1,
 		Failed:    1,
-		Offline:   2,
 		NoData:    0,
+		Changed:   3,
+		Diverged:  1,
+		Offline:   2,
 	}})
 
 	got := fc.Counts()
@@ -48,11 +48,17 @@ func TestFleetCacheCountsPrefersFleetSource(t *testing.T) {
 	if got.Total != 10 {
 		t.Errorf("Total: got %d, want 10 (live)", got.Total)
 	}
-	if got.Converged != 7 {
-		t.Errorf("Converged: got %d, want 7 (live)", got.Converged)
+	if got.Converged != 8 {
+		t.Errorf("Converged: got %d, want 8 (live)", got.Converged)
 	}
 	if got.Failed != 1 {
 		t.Errorf("Failed: got %d, want 1 (live)", got.Failed)
+	}
+	if got.Changed != 3 {
+		t.Errorf("Changed: got %d, want 3 (live)", got.Changed)
+	}
+	if got.Diverged != 1 {
+		t.Errorf("Diverged: got %d, want 1 (live)", got.Diverged)
 	}
 	if got.Observing != 2 {
 		t.Errorf("Observing: got %d, want 2 (cached)", got.Observing)

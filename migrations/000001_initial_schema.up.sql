@@ -122,12 +122,16 @@ CREATE TABLE IF NOT EXISTS convergence_history (
     id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
     recorded_at TEXT NOT NULL DEFAULT (date('now')),
     total       INTEGER NOT NULL DEFAULT 0,
+    -- Failure axis (mutually exclusive; sums to total).
     converged   INTEGER NOT NULL DEFAULT 0,
-    relapsed         INTEGER NOT NULL DEFAULT 0,
-    diverged         INTEGER NOT NULL DEFAULT 0,
-    failed           INTEGER NOT NULL DEFAULT 0,
+    degraded    INTEGER NOT NULL DEFAULT 0,
+    failed      INTEGER NOT NULL DEFAULT 0,
+    no_data     INTEGER NOT NULL DEFAULT 0,
+    -- Drift axis (overlapping; diverged ⊆ changed).
+    changed     INTEGER NOT NULL DEFAULT 0,
+    diverged    INTEGER NOT NULL DEFAULT 0,
+    -- Reachability axis.
     offline     INTEGER NOT NULL DEFAULT 0,
-    no_data          INTEGER NOT NULL DEFAULT 0,
     UNIQUE(recorded_at)
 );
 

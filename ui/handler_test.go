@@ -209,7 +209,9 @@ func TestEnvoysHandler(t *testing.T) {
 func TestEnvoysHandlerStatusFilter(t *testing.T) {
 	h := newTestHandler(t)
 
-	req := httptest.NewRequest(http.MethodGet, "/envoys?status=stale", nil)
+	// Failure-axis filter; the test fixture has web-02 in "failed" and
+	// web-01 in "converged".
+	req := httptest.NewRequest(http.MethodGet, "/envoys?conv=failed", nil)
 	rec := httptest.NewRecorder()
 
 	h.Envoys(rec, req)
@@ -220,14 +222,14 @@ func TestEnvoysHandlerStatusFilter(t *testing.T) {
 
 	body := rec.Body.String()
 
-	// stale envoy should be present
+	// failed envoy should be present
 	if !strings.Contains(body, "web-02.example.com") {
-		t.Error("Filtered envoys page should show stale envoy web-02.example.com")
+		t.Error("Filtered envoys page should show failed envoy web-02.example.com")
 	}
 
-	// compliant envoy should NOT be present
+	// converged envoy should NOT be present
 	if strings.Contains(body, "web-01.example.com") {
-		t.Error("Filtered envoys page should NOT show compliant envoy when filtering for stale")
+		t.Error("Filtered envoys page should NOT show converged envoy when filtering for failed")
 	}
 }
 
@@ -553,7 +555,7 @@ func defaultTestData() *testData {
 				ipAddress: "10.0.0.2",
 				enrolled:  now.Add(-48 * time.Hour),
 				lastSeen:  now.Add(-2 * time.Hour),
-				status:    "stale",
+				status:    "failed",
 			},
 		},
 		runs: []testRun{
@@ -732,15 +734,16 @@ func (m *mockDataSource) ConvergenceData(baseInterval time.Duration) Convergence
 
 	return ConvergencePageData{
 		ConvergencePct: pct,
-		Total:         int64(total),
-		Converged:     counts["converged"],
-		Relapsed:             counts["relapsed"],
-		Diverged:             counts["diverged"],
-		Failed:       counts["failed"],
-		Offline:         counts["stale"],
-		NoData:       counts["unknown"],
-		SparklineData: sparkData,
-		NonConverged:  nonConverged,
+		Total:          int64(total),
+		Converged:      counts["converged"],
+		Degraded:       counts["degraded"],
+		Failed:         counts["failed"],
+		NoData:         counts["unknown"],
+		Changed:        counts["changed"],
+		Diverged:       counts["diverged"],
+		Offline:        counts["stale"],
+		SparklineData:  sparkData,
+		NonConverged:   nonConverged,
 	}
 }
 
@@ -776,9 +779,9 @@ func (m *mockDataSource) EnvoysData(baseInterval time.Duration, statusFilter str
 			ActiveNav: "envoys",
 			Version:   "test",
 		},
-		Envoys:        rows,
-		StatusFilter: statusFilter,
-		EnvoyCount:    len(rows),
+		Envoys:     rows,
+		ConvFilter: statusFilter,
+		EnvoyCount: len(rows),
 	}
 }
 

@@ -1471,6 +1471,26 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     box-shadow: 0 1px 0 var(--color-border);
 }
 
+/* Filter bar axis grouping: each axis (Failure / Drift / Reach) renders
+   as a labeled cluster with the pills inside. Visual gap between
+   clusters signals that the axes are independent — pill counts within
+   one axis sum to the total; counts across axes overlap. */
+.filter-bar-group {
+    margin-top: 4px;
+}
+.filter-bar-axis {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.filter-bar-axis__label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--color-text-muted);
+}
+
 /* Hard-cap sentinel: replaces the "load more" trigger past the rendered
    cap (default 1,000 rows). Sits as a TR inside the tbody so outerHTML
    replacement during incremental load is well-defined. */

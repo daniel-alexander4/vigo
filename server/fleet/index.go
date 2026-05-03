@@ -39,6 +39,10 @@ type EnvoyState struct {
 	LastSeen              time.Time
 	Revoked               bool
 	ConvergenceStatus      string
+	// Drift is the drift-axis bucket for this envoy — orthogonal to
+	// ConvergenceStatus. None / Changed / Diverged. Recomputed on every
+	// UpdateRunStatus from the trailing run history. See server/convergence.
+	Drift                  convergence.DriftLevel
 	LastRunStatus         string
 	LastRunID             string
 	LastRunChangedCount   int64
@@ -67,19 +71,28 @@ type EnvoyState struct {
 	Offline               bool       // true when envoy hasn't checked in within 2×base interval
 }
 
-// ConvergenceCounters holds pre-computed convergence totals.
-// Every status returned by [convergence.ComputeConvergence] has a
-// dedicated bucket — the six convergence states plus Offline
-// (orthogonal reachability dimension).
+// ConvergenceCounters holds pre-computed totals across three axes.
+// Each axis is independent — an envoy is counted in exactly one
+// failure bucket, in zero or one drift bucket (Diverged is a strict
+// subset of Changed; an envoy in Diverged is counted in both), and
+// in Offline if reachability has lapsed. Total counts every envoy
+// once.
 type ConvergenceCounters struct {
-	Total     int
+	Total int
+
+	// Failure axis (mutually exclusive). Sums to Total.
 	Converged int
-	Relapsed  int
-	Diverged  int
 	Degraded  int
 	Failed    int
-	Offline   int
 	NoData    int
+
+	// Drift axis (orthogonal to failure). Diverged ⊆ Changed: an envoy
+	// with 5+ consecutive runs of changes counts toward both.
+	Changed  int
+	Diverged int
+
+	// Reachability axis (orthogonal to both).
+	Offline int
 }
 
 // RunSummary is a brief record of a completed run for the recent-runs ring buffer.
@@ -259,11 +272,12 @@ func (f *FleetIndex) ConvergenceSummary() ConvergenceCounters {
 	return f.convergence
 }
 
-// ConvergenceCounts returns the convergence breakdown as flat values.
+// ConvergenceCounts returns the convergence breakdown as flat values
+// across the failure axis plus the drift axis plus reachability.
 // Satisfies the spanner.ConvergenceSource interface.
-func (f *FleetIndex) ConvergenceCounts() (total, converged, relapsed, diverged, degraded, failed, offline, noData int) {
+func (f *FleetIndex) ConvergenceCounts() (total, converged, degraded, failed, noData, changed, diverged, offline int) {
 	c := f.ConvergenceSummary()
-	return c.Total, c.Converged, c.Relapsed, c.Diverged, c.Degraded, c.Failed, c.Offline, c.NoData
+	return c.Total, c.Converged, c.Degraded, c.Failed, c.NoData, c.Changed, c.Diverged, c.Offline
 }
 
 // SnapshotConvergence records a convergence snapshot for the sparkline.
@@ -852,6 +866,13 @@ func (f *FleetIndex) UpdateRunStatus(id, runID, runStatus string, changedCount, 
 			f.addToStatus(id, newStatus)
 			f.incrementCounter(newStatus)
 		}
+
+		oldDrift := ts.Drift
+		newDrift := convergence.ComputeDrift(ts.RecentRuns)
+		if newDrift != oldDrift {
+			f.bumpDriftCounters(oldDrift, newDrift)
+			ts.Drift = newDrift
+		}
 	}
 }
 
@@ -954,17 +975,14 @@ func (f *FleetIndex) removeFromTags(id string, tags []string) {
 	}
 }
 
-// incrementCounter bumps the bucket matching the given convergence
-// status. Unknown vocabularies fall through ClassifyStatus into
-// StatusNoData rather than panicking on the hot path.
+// incrementCounter bumps the failure-axis bucket matching the given
+// status string. Unknown vocabularies fall through ClassifyStatus into
+// StatusNoData rather than panicking on the hot path. Drift counters
+// move via bumpDriftCounters; this function is failure-axis only.
 func (f *FleetIndex) incrementCounter(status string) {
 	switch convergence.ClassifyStatus(status) {
 	case convergence.StatusConverged:
 		f.convergence.Converged++
-	case convergence.StatusRelapsed:
-		f.convergence.Relapsed++
-	case convergence.StatusDiverged:
-		f.convergence.Diverged++
 	case convergence.StatusDegraded:
 		f.convergence.Degraded++
 	case convergence.StatusFailed:
@@ -978,16 +996,31 @@ func (f *FleetIndex) decrementCounter(status string) {
 	switch convergence.ClassifyStatus(status) {
 	case convergence.StatusConverged:
 		f.convergence.Converged--
-	case convergence.StatusRelapsed:
-		f.convergence.Relapsed--
-	case convergence.StatusDiverged:
-		f.convergence.Diverged--
 	case convergence.StatusDegraded:
 		f.convergence.Degraded--
 	case convergence.StatusFailed:
 		f.convergence.Failed--
 	default:
 		f.convergence.NoData--
+	}
+}
+
+// bumpDriftCounters moves the drift-axis counters when an envoy
+// transitions between drift levels. Diverged is a strict subset of
+// Changed, so an envoy in DriftDiverged contributes to both buckets;
+// transitions touch the right combination.
+func (f *FleetIndex) bumpDriftCounters(old, new convergence.DriftLevel) {
+	if old == convergence.DriftChanged || old == convergence.DriftDiverged {
+		f.convergence.Changed--
+	}
+	if old == convergence.DriftDiverged {
+		f.convergence.Diverged--
+	}
+	if new == convergence.DriftChanged || new == convergence.DriftDiverged {
+		f.convergence.Changed++
+	}
+	if new == convergence.DriftDiverged {
+		f.convergence.Diverged++
 	}
 }
 

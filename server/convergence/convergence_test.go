@@ -11,28 +11,34 @@ func TestComputeConvergence(t *testing.T) {
 		runs []RunInfo
 		want string
 	}{
+		// Edge cases.
 		{"no data when no runs", nil, "no data"},
-		{"converged zero changes", []RunInfo{{Status: "success", ChangedCount: 0}}, "converged"},
-		{"converged single run with changes", []RunInfo{{Status: "success", ChangedCount: 3}}, "converged"},
-		{"relapsed two runs with changes", []RunInfo{{Status: "success", ChangedCount: 2}, {Status: "success", ChangedCount: 1}}, "relapsed"},
-		{"diverged 3 consecutive", []RunInfo{{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 2}, {Status: "success", ChangedCount: 1}}, "diverged"},
-		{"relapsed if first 2 had changes but 3rd zero", []RunInfo{{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 2}, {Status: "success", ChangedCount: 0}}, "relapsed"},
-		{"blocked maps to diverged", []RunInfo{{Status: "blocked"}}, "diverged"},
-		{"no data for unknown status", []RunInfo{{Status: "running"}}, "no data"},
+		{"unknown status with zero counts", []RunInfo{{Status: ""}}, "no data"},
+		{"unknown status with zero counts (running)", []RunInfo{{Status: "running"}}, "no data"},
 
-		// Percentage-based degraded/failed thresholds.
+		// Failure-axis buckets — module counts decide, not the agent flag.
+		{"clean success", []RunInfo{{Status: "success", ChangedCount: 0, FailedCount: 0, ModuleCount: 5}}, "converged"},
+		{"converged with changes — drift axis catches this, not failure", []RunInfo{{Status: "success", ChangedCount: 3, FailedCount: 0, ModuleCount: 5}}, "converged"},
+		{"converged with changes across many runs", []RunInfo{
+			{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 2},
+			{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 1},
+			{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 1},
+		}, "converged"},
 		{"degraded 1/59 (1.7%)", []RunInfo{{Status: "partial", FailedCount: 1, ModuleCount: 59}}, "degraded"},
 		{"degraded 47/59 (79.7%)", []RunInfo{{Status: "partial", FailedCount: 47, ModuleCount: 59}}, "degraded"},
 		{"failed 48/59 (81.4%)", []RunInfo{{Status: "partial", FailedCount: 48, ModuleCount: 59}}, "failed"},
 		{"failed 59/59 (100%)", []RunInfo{{Status: "failure", FailedCount: 59, ModuleCount: 59}}, "failed"},
-		{"failed 4/5 (80%)", []RunInfo{{Status: "partial", FailedCount: 4, ModuleCount: 5}}, "failed"},
-		{"degraded 3/5 (60%)", []RunInfo{{Status: "partial", FailedCount: 3, ModuleCount: 5}}, "degraded"},
-		{"converged 0/59", []RunInfo{{Status: "success", FailedCount: 0, ModuleCount: 59}}, "converged"},
 
-		// Module counts are the truth: status="failure" with zero failed
-		// and zero changed is a bookkeeping anomaly, classified as
-		// converged so it doesn't taint the dashboard.
-		{"converged on failure with zero counts", []RunInfo{{Status: "failure"}}, "converged"},
+		// Bookkeeping anomalies — module counts override the agent flag.
+		{"failure status with zero counts is converged", []RunInfo{{Status: "failure"}}, "converged"},
+		{"failure status with low fail pct is degraded by counts", []RunInfo{{Status: "failure", FailedCount: 1, ModuleCount: 100}}, "degraded"},
+
+		// Blocked is its own special case — modules didn't apply, treat
+		// as Failed on the failure axis regardless of counts.
+		{"blocked maps to failed", []RunInfo{{Status: "blocked"}}, "failed"},
+
+		// Degenerate: failed > 0 but no module count → failed (don't lose the failure signal).
+		{"failed > 0 with zero modules", []RunInfo{{Status: "partial", FailedCount: 3}}, "failed"},
 	}
 
 	for _, tt := range tests {
@@ -40,6 +46,44 @@ func TestComputeConvergence(t *testing.T) {
 			got := ComputeConvergence(tt.runs)
 			if got != tt.want {
 				t.Errorf("ComputeConvergence() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestComputeDrift(t *testing.T) {
+	tests := []struct {
+		name string
+		runs []RunInfo
+		want DriftLevel
+	}{
+		{"no runs", nil, DriftNone},
+		{"latest run no changes", []RunInfo{{Status: "success", ChangedCount: 0}}, DriftNone},
+		{"single changed run", []RunInfo{{Status: "success", ChangedCount: 1}}, DriftChanged},
+		{"two consecutive changes — still Changed (under threshold)", []RunInfo{
+			{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 1},
+		}, DriftChanged},
+		{"four consecutive changes — still Changed", []RunInfo{
+			{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 1},
+			{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 1},
+		}, DriftChanged},
+		{"five consecutive changes — Diverged", []RunInfo{
+			{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 1},
+			{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 1},
+			{Status: "success", ChangedCount: 1},
+		}, DriftDiverged},
+		{"changes broken by clean run — back to Changed", []RunInfo{
+			{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 1},
+			{Status: "success", ChangedCount: 0}, {Status: "success", ChangedCount: 1},
+			{Status: "success", ChangedCount: 1},
+		}, DriftChanged},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ComputeDrift(tt.runs)
+			if got != tt.want {
+				t.Errorf("ComputeDrift() = %d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -70,19 +114,12 @@ func TestFailurePct(t *testing.T) {
 }
 
 func TestSummary(t *testing.T) {
-	statuses := []string{"converged", "converged", "relapsed", "diverged", "failed", "no data", "converged", "degraded"}
+	statuses := []string{"converged", "converged", "failed", "no data", "converged", "degraded"}
 	got := Summary(statuses)
-	want := map[string]int32{"converged": 3, "relapsed": 1, "diverged": 1, "failed": 1, "no data": 1, "degraded": 1}
+	want := map[string]int32{"converged": 3, "failed": 1, "no data": 1, "degraded": 1}
 	for k, v := range want {
 		if got[k] != v {
 			t.Errorf("Summary()[%q] = %d, want %d", k, got[k], v)
 		}
-	}
-}
-
-func TestComputeConvergenceEmptyStatus(t *testing.T) {
-	got := ComputeConvergence([]RunInfo{{Status: ""}})
-	if got != "no data" {
-		t.Errorf("empty status: got %q, want no data", got)
 	}
 }

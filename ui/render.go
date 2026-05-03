@@ -495,16 +495,17 @@ func (r *Renderer) RenderFragment(w http.ResponseWriter, page, fragment string, 
 	}
 }
 
-// statusColor maps a convergence status string to a CSS color class name.
-// "stale" is reachability rather than convergence and falls through to the
+// statusColor maps a failure-axis status string to a CSS color class
+// name. Drift is on a separate axis and not consulted here. "stale" is
+// reachability rather than convergence and falls through to the
 // freshness-derived warning bucket.
 func statusColor(status string) string {
 	switch convergence.ClassifyStatus(status) {
 	case convergence.StatusConverged:
 		return "success"
-	case convergence.StatusRelapsed, convergence.StatusDegraded:
+	case convergence.StatusDegraded:
 		return "warning"
-	case convergence.StatusDiverged, convergence.StatusFailed:
+	case convergence.StatusFailed:
 		return "danger"
 	}
 	if status == "stale" {

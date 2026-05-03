@@ -1,53 +1,67 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package convergence computes convergence status for managed envoys based on
-// their last run results. Reachability (online/offline) is tracked separately.
+// Package convergence computes module-convergence state for managed
+// envoys. Two orthogonal axes:
+//
+//   - Failure axis: the agent's last run produced no failures
+//     (Converged), some failures (Degraded), or many (Failed). Computed
+//     by ComputeConvergence; typed as FailureLevel.
+//
+//   - Drift axis: the envoy's modules keep mutating across recent runs.
+//     A single run with changes is Changed; DivergedThreshold or more
+//     consecutive runs with changes is Diverged. Computed by
+//     ComputeDrift; typed as DriftLevel.
+//
+// An envoy occupies one bucket on each axis simultaneously — Converged
+// + Diverged is a clean envoy whose modules keep churning anyway,
+// signalling non-idempotent config. Reachability (online/offline) is
+// tracked separately by server/freshness.
 package convergence
 
-
-// RunInfo holds the minimal information needed to compute convergence status.
-// Decoupled from db.Run to avoid package coupling.
+// RunInfo holds the minimal information needed to compute convergence
+// state. Decoupled from db.Run to avoid package coupling.
 type RunInfo struct {
-	Status       string
+	Status       string // agent's overall flag: "success" / "partial" / "failure" / "blocked" / ""
 	ChangedCount int64
 	FailedCount  int64
 	ModuleCount  int64
 }
 
 const (
-	// RelapsedThreshold is the number of consecutive runs with changes
-	// before an envoy is flagged as "relapsed" (drifted back and fixed again).
-	RelapsedThreshold = 2
-
 	// DivergedThreshold is the number of consecutive runs with changes
-	// before an envoy is flagged as "diverged" (persistent conflict).
-	DivergedThreshold = 3
+	// before an envoy is flagged Diverged on the drift axis. 5 leaves
+	// enough headroom that a single bad config push doesn't immediately
+	// flip operators to "drift" while still surfacing genuine
+	// non-idempotent loops.
+	DivergedThreshold = 5
 
-	// DegradedMaxPct is the upper bound (exclusive) for "degraded" status.
-	// Failure percentage below this = degraded, at or above = failed.
+	// DegradedMaxPct is the upper bound (exclusive) for Degraded on the
+	// failure axis. Failure pct below this is Degraded; at or above is
+	// Failed. Matches uifmt.FailureGradient's saturation point so the
+	// red badge color and the bucket boundary line up exactly.
 	DegradedMaxPct = 80
 
-	// DegradedMinPct is the lower bound (inclusive) for "degraded" status.
-	// Failure percentage below this = converged (too few failures to flag).
+	// DegradedMinPct is the lower bound (inclusive) for Degraded.
+	// Failure pct below this is Converged — too few failures to flag.
 	DegradedMinPct = 1
 )
 
-// ComputeConvergence determines the convergence status for a single envoy.
-// Returns one of: "converged", "relapsed", "diverged", "degraded", "failed", "no data".
+// ComputeConvergence returns the failure-axis bucket for a single
+// envoy as a canonical lowercase string. One of: "converged",
+// "degraded", "failed", "no data".
 //
-// recentRuns should be the last N runs in reverse chronological order (newest first).
-// Only the first DivergedThreshold entries are examined for drift detection.
-// Reachability (online/offline) is tracked separately by the fleet index.
+// recentRuns must be in reverse chronological order (newest first); only
+// the first entry is consulted — drift across history is the drift
+// axis's job, not this function's.
 //
-// Priority order:
-//  1. No Data — no run data available
-//  2. Failed — >=80% of modules failed in the last run
-//  3. Degraded — 1-79% of modules failed in the last run
-//  4. Blocked — resources blocked by infrastructure issues
-//  5. Diverged — last 3+ consecutive runs all had changes
-//  6. Relapsed — last 2 consecutive runs had changes
-//  7. Converged — last run succeeded with 0% failures
+// Rules, first match wins:
+//  1. No runs                              → "no data"
+//  2. last.Status == "blocked"             → "failed"  (no resources applied)
+//  3. last.FailedCount == 0 with recognized status → "converged"
+//  4. failure pct >= DegradedMaxPct        → "failed"
+//  5. failure pct >= DegradedMinPct        → "degraded"
+//  6. otherwise                            → "converged"
 func ComputeConvergence(recentRuns []RunInfo) string {
 	if len(recentRuns) == 0 {
 		return "no data"
@@ -55,30 +69,28 @@ func ComputeConvergence(recentRuns []RunInfo) string {
 
 	last := recentRuns[0]
 
-	// Trust per-module counts over the agent's overall-status flag when
-	// the agent actually reported a recognized run status. A run with
-	// zero failed modules and zero changes is converged even if
-	// last.Status == "failure" — the overall flag is a coarser signal
-	// that occasionally lies (executor exits non-zero without populating
-	// per-module results, producing a status="failure" run with
-	// FailedCount=0). The dashboard treats module counts as the truth so
-	// those bookkeeping anomalies don't contaminate the rollup.
-	//
-	// Empty / unknown status with zero counts still falls through to
-	// "no data" — that's not "converged at zero," it's "we don't know."
-	if last.FailedCount == 0 && last.ChangedCount == 0 {
+	// Blocked = infrastructure problem prevented application. Even with
+	// zero counts the envoy is not in its desired state, so this is a
+	// real failure on the failure axis. Operator drills into the run
+	// detail page for specifics.
+	if last.Status == "blocked" {
+		return "failed"
+	}
+
+	// Zero failures is converged regardless of changes. Drift is
+	// tracked separately on the drift axis (see ComputeDrift).
+	if last.FailedCount == 0 {
 		switch last.Status {
 		case "success", "partial", "failure":
 			return "converged"
 		}
-		// "blocked" is intentionally absent: an infrastructure block is
-		// a real divergence even when the run produced zero counts,
-		// because no resources got applied. Falls through to the switch
-		// below which maps blocked → diverged.
+		// Empty / unknown status with zero counts → "no data"; this is
+		// not "converged at zero," it's "we don't know."
+		return "no data"
 	}
 
-	// Check failure percentage next.
-	if last.FailedCount > 0 && last.ModuleCount > 0 {
+	// Failure percentage classification.
+	if last.ModuleCount > 0 {
 		pct := float64(last.FailedCount) / float64(last.ModuleCount) * 100
 		if pct >= DegradedMaxPct {
 			return "failed"
@@ -86,34 +98,37 @@ func ComputeConvergence(recentRuns []RunInfo) string {
 		if pct >= DegradedMinPct {
 			return "degraded"
 		}
+		return "converged"
 	}
 
-	switch last.Status {
-	case "blocked":
-		return "diverged"
-	case "success", "partial", "failure":
-		// Drift detection for runs with changes below the degraded
-		// threshold. "failure" lands here too when FailedCount is small
-		// — module counts already determined we aren't in failed/degraded,
-		// so we look at change history just like a success/partial run.
-		consecutive := 0
-		for i := 0; i < len(recentRuns); i++ {
-			r := recentRuns[i]
-			if r.ChangedCount == 0 && r.FailedCount == 0 {
-				break
-			}
-			consecutive++
-		}
-		if consecutive >= DivergedThreshold {
-			return "diverged"
-		}
-		if consecutive >= RelapsedThreshold {
-			return "relapsed"
-		}
-		return "converged"
-	default:
-		return "no data"
+	// FailedCount > 0 but ModuleCount == 0 — degenerate input; treat
+	// as a real failure rather than ignoring the non-zero failure count.
+	return "failed"
+}
+
+// ComputeDrift returns the drift-axis bucket for a single envoy. One of
+// DriftNone (last run made no changes) / DriftChanged (last run made
+// changes; fewer than DivergedThreshold consecutive) / DriftDiverged
+// (DivergedThreshold or more consecutive runs with changes).
+//
+// recentRuns must be in reverse chronological order (newest first).
+// Counts purely on ChangedCount > 0; failure counts are the failure
+// axis's job, not this function's.
+func ComputeDrift(recentRuns []RunInfo) DriftLevel {
+	if len(recentRuns) == 0 || recentRuns[0].ChangedCount == 0 {
+		return DriftNone
 	}
+	consecutive := 0
+	for _, r := range recentRuns {
+		if r.ChangedCount == 0 {
+			break
+		}
+		consecutive++
+	}
+	if consecutive >= DivergedThreshold {
+		return DriftDiverged
+	}
+	return DriftChanged
 }
 
 // FailurePct computes the failure percentage for a run (0-100).

@@ -41,9 +41,10 @@ func TestRetentionPruner_PrunesOldRows(t *testing.T) {
 	sqlDB.Exec(`INSERT INTO workflow_runs (workflow_name, status, total_steps, created_at) VALUES ('w1', 'complete', 1, ?)`, old)
 	sqlDB.Exec(`INSERT INTO workflow_runs (workflow_name, status, total_steps, created_at) VALUES ('w1', 'complete', 1, ?)`, recent)
 
-	// Old and recent convergence history (migration uses 'failed' not 'errors').
-	sqlDB.Exec(`INSERT INTO convergence_history (id, recorded_at, total, converged, relapsed, diverged, failed, offline, no_data) VALUES ('ch1', '2024-01-01', 10, 8, 1, 0, 0, 1, 0)`)
-	sqlDB.Exec(`INSERT INTO convergence_history (id, recorded_at, total, converged, relapsed, diverged, failed, offline, no_data) VALUES ('ch2', '2026-03-01', 10, 9, 0, 0, 0, 1, 0)`)
+	// Old and recent convergence history (post axis-split: failure axis
+	// columns + drift axis columns + offline).
+	sqlDB.Exec(`INSERT INTO convergence_history (id, recorded_at, total, converged, degraded, failed, no_data, changed, diverged, offline) VALUES ('ch1', '2024-01-01', 10, 8, 1, 0, 0, 2, 0, 1)`)
+	sqlDB.Exec(`INSERT INTO convergence_history (id, recorded_at, total, converged, degraded, failed, no_data, changed, diverged, offline) VALUES ('ch2', '2026-03-01', 10, 9, 0, 0, 0, 1, 0, 1)`)
 
 	// Old and recent compliance history.
 	sqlDB.Exec(`INSERT INTO compliance_history (id, snapshot_date, framework, score_percent, satisfied, partial, not_satisfied, total_controls) VALUES ('co1', '2024-01-01', 'cis', 80.0, 8, 1, 1, 10)`)

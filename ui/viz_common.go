@@ -58,18 +58,17 @@ var VizDashPalette = []string{
 	"8,3,2,3",  // dash-dot
 }
 
-// VizStatusColor maps convergence/envoy status to Catppuccin Mocha colors.
-// Convergence buckets dispatch through convergence.ClassifyStatus; the
-// remaining lifecycle / reachability vocabulary stays local since it lives
-// outside the convergence SoT (see CLAUDE.md "Convergence vs Compliance").
+// VizStatusColor maps a failure-axis status string to Catppuccin Mocha
+// colors. Drift is on a separate axis and is reflected via dedicated
+// pills, not the row color. Run-lifecycle / reachability vocabulary
+// keeps a local fallthrough since it lives outside the convergence SoT
+// (see CLAUDE.md "Convergence vs Compliance").
 func VizStatusColor(status string) string {
 	switch convergence.ClassifyStatus(status) {
 	case convergence.StatusConverged:
 		return uifmt.HexGreen
-	case convergence.StatusRelapsed, convergence.StatusDegraded:
+	case convergence.StatusDegraded:
 		return uifmt.HexYellow
-	case convergence.StatusDiverged:
-		return uifmt.HexPeach
 	case convergence.StatusFailed:
 		return uifmt.HexRed
 	}

@@ -88,9 +88,9 @@ type EvidencePayload struct {
 type FleetSummary struct {
 	Total     int `json:"total"`
 	Converged int `json:"converged"`
-	Relapsed  int `json:"relapsed"`
-	Diverged  int `json:"diverged"`
+	Degraded  int `json:"degraded"`
 	Failed    int `json:"failed"`
+	Diverged  int `json:"diverged"` // drift axis: 5+ consecutive runs with changes
 }
 
 type AuditStatus struct {
@@ -141,12 +141,13 @@ func (p *Pusher) pushEvidence(ctx context.Context, intg config.GRCIntegration) {
 		},
 	}
 
-	// Count converged/relapsed/diverged/errors from fleet index.
+	// Counts split by axis: failure (Converged/Degraded/Failed) plus
+	// drift (Diverged subset of envoys with persistent change loops).
 	summary := p.fleetIndex.ConvergenceSummary()
 	payload.Fleet.Converged = summary.Converged
-	payload.Fleet.Relapsed = summary.Relapsed
-	payload.Fleet.Diverged = summary.Diverged
+	payload.Fleet.Degraded = summary.Degraded
 	payload.Fleet.Failed = summary.Failed
+	payload.Fleet.Diverged = summary.Diverged
 
 	// Compute per-standard coverage with control detail.
 	for vigoKey, grcID := range intg.Frameworks {

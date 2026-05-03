@@ -90,11 +90,12 @@ func (m *ConvergenceMonitor) fireAlert(pct float64) {
 				"threshold":  m.threshold,
 				"total":      summary.Total,
 				"converged":  summary.Converged,
-				"relapsed":   summary.Relapsed,
-				"diverged":   summary.Diverged,
+				"degraded":   summary.Degraded,
 				"failed":     summary.Failed,
-				"offline":    summary.Offline,
 				"no_data":    summary.NoData,
+				"changed":    summary.Changed,
+				"diverged":   summary.Diverged,
+				"offline":    summary.Offline,
 			},
 		})
 	}

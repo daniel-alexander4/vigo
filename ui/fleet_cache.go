@@ -35,18 +35,23 @@ type FleetSource interface {
 	ConvergenceSummary() FleetSummary
 }
 
-// FleetSummary mirrors the convergence-related fields of
+// FleetSummary mirrors the three-axis breakdown of
 // fleet.ConvergenceCounters. Redefined in the ui package so FleetCache
-// can take a FleetSource without importing server/fleet.
+// can take a FleetSource without importing server/fleet. Diverged ⊆
+// Changed on the drift axis: an envoy in DriftDiverged is counted in
+// both fields.
 type FleetSummary struct {
-	Total     int
+	Total int
+	// Failure axis (mutually exclusive). Sums to Total.
 	Converged int
-	Relapsed  int
-	Diverged  int
 	Degraded  int
 	Failed    int
-	Offline   int
 	NoData    int
+	// Drift axis (Diverged ⊆ Changed).
+	Changed  int
+	Diverged int
+	// Reachability.
+	Offline int
 }
 
 // FleetStatusEntry holds precomputed convergence status for a single envoy.
@@ -64,10 +69,12 @@ type FleetStatusEntry struct {
 	// offline threshold at fast check-in intervals.
 	LastSeenLabel string
 	AgentVersion string
-	Status       string  // convergence status: converged, relapsed, diverged, degraded, failed, no data
-	FailurePct   float64 // 0-100: failed_count / module_count * 100 (from latest run)
+	Status       string                 // failure-axis status: converged, degraded, failed, no data
+	Drift        convergence.DriftLevel // drift-axis bucket: none, changed, diverged
+	FailurePct   float64                // 0-100: failed_count / module_count * 100 (from latest run)
 	FailedCount  int64
 	ModuleCount  int64
+	ChangedCount int64                  // changed_count from the latest run; used to drive the drift signal
 	LastRunID    string
 	LastRunAt    time.Time
 	// Offline iff lastSeen is older than freshness.StaleThreshold.
@@ -83,20 +90,24 @@ type FleetStatusEntry struct {
 	ObserveOnly bool
 }
 
-// FleetStatusCounts holds aggregate counts by convergence status.
-// Observing is orthogonal to the convergence breakdown — an envoy in
-// observe-only mode is also counted under its Status (Converged, Relapsed,
-// etc.). Observing is the count of envoys with the observe-only flag set,
-// reported alongside the convergence buckets, not summed into Total.
+// FleetStatusCounts holds aggregate counts across three orthogonal
+// axes plus observe-only. Failure-axis buckets (Converged, Degraded,
+// Failed, NoData) are mutually exclusive and sum to Total. Drift-axis
+// buckets (Changed, Diverged) overlap each other (Diverged ⊆ Changed)
+// and are independent of the failure axis. Observing and Offline are
+// each their own orthogonal flags counted alongside.
 type FleetStatusCounts struct {
-	Total     int
+	Total int
+	// Failure axis (sums to Total).
 	Converged int
-	Relapsed  int
-	Diverged  int
 	Degraded  int
 	Failed    int
-	Offline   int
 	NoData    int
+	// Drift axis (overlapping; Diverged ⊆ Changed).
+	Changed  int
+	Diverged int
+	// Reachability + observability.
+	Offline   int
 	Observing int
 }
 
@@ -165,12 +176,12 @@ func (fc *FleetCache) Counts() FleetStatusCounts {
 		return FleetStatusCounts{
 			Total:     s.Total,
 			Converged: s.Converged,
-			Relapsed:  s.Relapsed,
-			Diverged:  s.Diverged,
 			Degraded:  s.Degraded,
 			Failed:    s.Failed,
-			Offline:   s.Offline,
 			NoData:    s.NoData,
+			Changed:   s.Changed,
+			Diverged:  s.Diverged,
+			Offline:   s.Offline,
 			Observing: fc.counts.Observing,
 		}
 	}
@@ -243,6 +254,7 @@ func (fc *FleetCache) refresh() {
 		}
 
 		status := convergence.ComputeConvergence(runs)
+		drift := convergence.ComputeDrift(runs)
 
 		var lastSeen time.Time
 		if e.LastSeen.Valid {
@@ -266,12 +278,13 @@ func (fc *FleetCache) refresh() {
 		var lastRunID string
 		var lastRunAt time.Time
 		var failurePct float64
-		var failedCount, moduleCount int64
+		var failedCount, moduleCount, changedCount int64
 		if len(e.Runs) > 0 {
 			lastRunID = e.Runs[0].ID
 			lastRunAt = e.Runs[0].StartedAt
 			failedCount = e.Runs[0].FailedCount
 			moduleCount = e.Runs[0].ModuleCount
+			changedCount = e.Runs[0].ChangedCount
 			if moduleCount > 0 {
 				failurePct = float64(failedCount) / float64(moduleCount) * 100
 			}
@@ -285,9 +298,11 @@ func (fc *FleetCache) refresh() {
 			LastSeenLabel: lastSeenLabel,
 			AgentVersion:  e.AgentVersion,
 			Status:        status,
+			Drift:         drift,
 			FailurePct:    failurePct,
 			FailedCount:   failedCount,
 			ModuleCount:   moduleCount,
+			ChangedCount:  changedCount,
 			LastRunID:     lastRunID,
 			LastRunAt:     lastRunAt,
 			Offline:       offline,
@@ -302,19 +317,23 @@ func (fc *FleetCache) refresh() {
 		if observeOnly {
 			counts.Observing++
 		}
+		// Failure axis (mutually exclusive).
 		switch convergence.ClassifyStatus(status) {
 		case convergence.StatusConverged:
 			counts.Converged++
-		case convergence.StatusRelapsed:
-			counts.Relapsed++
-		case convergence.StatusDiverged:
-			counts.Diverged++
 		case convergence.StatusDegraded:
 			counts.Degraded++
 		case convergence.StatusFailed:
 			counts.Failed++
 		case convergence.StatusNoData:
 			counts.NoData++
+		}
+		// Drift axis (overlapping). Diverged ⊆ Changed.
+		if drift == convergence.DriftChanged || drift == convergence.DriftDiverged {
+			counts.Changed++
+		}
+		if drift == convergence.DriftDiverged {
+			counts.Diverged++
 		}
 	}
 
@@ -323,23 +342,23 @@ func (fc *FleetCache) refresh() {
 	fc.updatedAt = time.Now()
 }
 
-// statusPriority returns a sort key: lower = worse.
+// statusPriority returns a sort key: lower = worse. Sorts on the
+// failure axis only — drift is reflected in the dedicated drift pills,
+// not in row sort order. Diverged envoys with zero failures still sort
+// near the bottom because they're functionally healthy from the
+// "is anything broken right now" perspective.
 func statusPriority(s string) int {
 	switch convergence.ClassifyStatus(s) {
 	case convergence.StatusFailed:
 		return 0
 	case convergence.StatusDegraded:
 		return 1
-	case convergence.StatusDiverged:
-		return 2
-	case convergence.StatusRelapsed:
-		return 3
 	case convergence.StatusNoData:
-		return 4
+		return 2
 	case convergence.StatusConverged:
-		return 5
+		return 3
 	default:
-		return 6
+		return 4
 	}
 }
 
@@ -410,37 +429,32 @@ func reverseEntries(entries []FleetStatusEntry) {
 }
 
 // PaginatedEntries returns a sorted, filtered, offset-paginated page of
-// entries matching the given filter and sort, the total number of
+// entries matching the given filters and sort, the total number of
 // matching entries (for "1000 of 12,847" footers), and a hasMore flag
-// for the "load more" trigger. This is the source of truth for the
-// envoys list table — the same entries that power FleetCache.Counts(),
-// so the pills above the list and the list itself can never disagree.
+// for the "load more" trigger. Source of truth for the envoys list
+// table — the same entries that power FleetCache.Counts(), so the pills
+// above the list and the list itself can never disagree.
 //
-// Filter semantics:
-//   - statusFilter == "" — match all entries
-//   - statusFilter == "offline" — match entries with Offline == true
-//     (orthogonal to convergence status; an offline envoy keeps its
-//     last-known convergence status)
-//   - statusFilter == "observing" — match entries with ObserveOnly == true
-//   - statusFilter == anything else — match entries whose Status equals it
-//     exactly (converged, relapsed, diverged, degraded, failed, no data)
+// Filter semantics (combined with AND across axes; empty = match all):
+//   - convFilter: "" / "converged" / "degraded" / "failed" / "no data"
+//   - driftFilter: "" / "changed" / "diverged" (Diverged is a subset of
+//     Changed; clicking Changed includes Diverged envoys)
+//   - reachFilter: "" / "offline" / "observing"
 //
-// search is a case-insensitive substring match on hostname. Empty matches
-// everything.
+// search is a case-insensitive substring match on hostname.
 //
 // sortCol + sortDir control the order. Empty sortCol means triage-first
-// (worst-status, highest failure%, hostname tiebreak) — the default
-// landing experience for /envoys at scale.
+// (failure-axis worst, highest failure%, hostname tiebreak).
 //
 // offset is the row index to start at after sorting + filtering. limit
 // caps the returned slice. limit <= 0 disables the cap.
-func (fc *FleetCache) PaginatedEntries(offset, limit int, statusFilter, search, sortCol, sortDir string) (entries []FleetStatusEntry, total int, hasMore bool) {
+func (fc *FleetCache) PaginatedEntries(offset, limit int, convFilter, driftFilter, reachFilter, search, sortCol, sortDir string) (entries []FleetStatusEntry, total int, hasMore bool) {
 	all := fc.Entries()
 	searchLower := strings.ToLower(search)
 
 	filtered := make([]FleetStatusEntry, 0, len(all))
 	for _, e := range all {
-		if !matchesEnvoyFilter(e, statusFilter, searchLower) {
+		if !matchesEnvoyFilter(e, convFilter, driftFilter, reachFilter, searchLower) {
 			continue
 		}
 		filtered = append(filtered, e)
@@ -463,20 +477,35 @@ func (fc *FleetCache) PaginatedEntries(offset, limit int, statusFilter, search, 
 	return filtered[offset:end], total, hasMore
 }
 
-func matchesEnvoyFilter(e FleetStatusEntry, statusFilter, searchLower string) bool {
-	switch statusFilter {
+func matchesEnvoyFilter(e FleetStatusEntry, convFilter, driftFilter, reachFilter, searchLower string) bool {
+	if convFilter != "" && e.Status != convFilter {
+		return false
+	}
+	switch driftFilter {
 	case "":
-		// no status filter
+		// no drift filter
+	case "changed":
+		// Diverged ⊆ Changed; both buckets satisfy the Changed filter.
+		if e.Drift != convergence.DriftChanged && e.Drift != convergence.DriftDiverged {
+			return false
+		}
+	case "diverged":
+		if e.Drift != convergence.DriftDiverged {
+			return false
+		}
+	default:
+		// unknown drift filter — fall through, match nothing safely
+		return false
+	}
+	switch reachFilter {
+	case "":
+		// no reach filter
 	case "offline":
 		if !e.Offline {
 			return false
 		}
 	case "observing":
 		if !e.ObserveOnly {
-			return false
-		}
-	default:
-		if e.Status != statusFilter {
 			return false
 		}
 	}

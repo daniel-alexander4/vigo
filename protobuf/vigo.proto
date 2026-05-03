@@ -778,12 +778,18 @@ message GetEnvoyConvergenceResponse {
 message ConvergenceSnapshot {
   string date = 1;
   int32 total = 2;
+  // Failure axis (mutually exclusive; sums to total).
   int32 converged = 3;
-  int32 relapsed = 4;
+  int32 degraded = 9;
   int32 failed = 5;
-  int32 offline = 6;
   int32 no_data = 7;
+  // Drift axis (overlapping; diverged ⊆ changed).
+  int32 changed = 10;
   int32 diverged = 8;
+  // Reachability axis.
+  int32 offline = 6;
+  reserved 4;            // formerly "relapsed"; dropped in the axis split.
+  reserved "relapsed";
 }
 
 // =============================================================================

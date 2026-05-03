@@ -6,6 +6,8 @@ package risk
 import (
 	"testing"
 	"time"
+
+	"git.alexander4.io/vigo/server/convergence"
 )
 
 func TestScoreEnvoy_Clean(t *testing.T) {
@@ -111,17 +113,18 @@ func TestScoreEnvoy_Hardening(t *testing.T) {
 	}
 }
 
-func TestScoreEnvoy_Relapsed(t *testing.T) {
+func TestScoreEnvoy_Diverged(t *testing.T) {
 	es := EnvoyInput{
 		ID:                "test-7",
 		Hostname:          "drift.example.com",
 		LastSeen:          time.Now(),
-		ConvergenceStatus: "relapsed",
+		ConvergenceStatus: "converged",
+		Drift:             convergence.DriftDiverged,
 		Traits:            map[string]string{},
 	}
 	r := ScoreEnvoy(es, 30*time.Second)
-	if r.Score != 10 {
-		t.Errorf("relapsed envoy score = %d, want 10", r.Score)
+	if r.Score != 15 {
+		t.Errorf("diverged envoy score = %d, want 15", r.Score)
 	}
 }
 

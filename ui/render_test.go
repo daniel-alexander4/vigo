@@ -61,12 +61,15 @@ func TestStatusColor(t *testing.T) {
 		want   string
 	}{
 		{"converged", "success"},
-		{"relapsed", "warning"},
-		{"diverged", "danger"},
+		{"degraded", "warning"},
 		{"failed", "danger"},
 		{"stale", "warning"},
 		{"unknown", "muted"},
 		{"", "muted"},
+		// Drift-axis vocabulary is no longer recognized by the
+		// failure-axis statusColor — it returns muted for these.
+		{"relapsed", "muted"},
+		{"diverged", "muted"},
 	}
 	for _, tt := range tests {
 		got := statusColor(tt.status)

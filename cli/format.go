@@ -226,9 +226,9 @@ func colorStatus(s string) string {
 	switch convergence.ClassifyStatus(s) {
 	case convergence.StatusConverged:
 		return green(s)
-	case convergence.StatusRelapsed, convergence.StatusDegraded:
+	case convergence.StatusDegraded:
 		return yellow(s)
-	case convergence.StatusDiverged, convergence.StatusFailed:
+	case convergence.StatusFailed:
 		return red(s)
 	}
 	switch strings.ToLower(s) {
@@ -236,8 +236,10 @@ func colorStatus(s string) string {
 		return green(s)
 	case "offline", "warn", "warning", "pending", "dispatched":
 		return yellow(s)
-	case "fail", "error", "unreachable", "timeout", "rejected":
+	case "fail", "error", "unreachable", "timeout", "rejected", "diverged":
 		return red(s)
+	case "changed":
+		return yellow(s)
 	case "no data", "skipped", "skip":
 		return dim(s)
 	default:

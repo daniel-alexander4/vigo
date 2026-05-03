@@ -531,14 +531,15 @@ func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoy
 	var snapshots []*pb.ConvergenceSnapshot
 	for _, h := range history {
 		snapshots = append(snapshots, &pb.ConvergenceSnapshot{
-			Date:           h.RecordedAt, // already a date string from SQLite
-			Total:          int32(h.Total),
-			Converged:      int32(h.Converged),
-			Relapsed:       int32(h.Relapsed),
-			Diverged:       int32(h.Diverged),
-			Failed:         int32(h.Failed),
-			Offline:    int32(h.Offline),
-			NoData:         int32(h.NoData),
+			Date:      h.RecordedAt, // already a date string from SQLite
+			Total:     int32(h.Total),
+			Converged: int32(h.Converged),
+			Degraded:  int32(h.Degraded),
+			Failed:    int32(h.Failed),
+			NoData:    int32(h.NoData),
+			Changed:   int32(h.Changed),
+			Diverged:  int32(h.Diverged),
+			Offline:   int32(h.Offline),
 		})
 	}
 

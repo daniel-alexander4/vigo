@@ -611,27 +611,29 @@ func (d *toolDeps) getConvergenceHistory(ctx context.Context, args map[string]an
 	}
 
 	type snapshot struct {
-		RecordedAt  string `json:"recorded_at"`
-		Converged   int64  `json:"converged"`
-		Relapsed    int64  `json:"relapsed"`
-		Diverged    int64  `json:"diverged"`
-		Failed      int64  `json:"failed"`
-		Offline int64  `json:"offline"`
-		NoData      int64  `json:"no_data"`
-		Total       int64  `json:"total"`
+		RecordedAt string `json:"recorded_at"`
+		Total      int64  `json:"total"`
+		Converged  int64  `json:"converged"`
+		Degraded   int64  `json:"degraded"`
+		Failed     int64  `json:"failed"`
+		NoData     int64  `json:"no_data"`
+		Changed    int64  `json:"changed"`
+		Diverged   int64  `json:"diverged"`
+		Offline    int64  `json:"offline"`
 	}
 
 	results := make([]snapshot, 0, len(history))
 	for _, h := range history {
 		results = append(results, snapshot{
-			RecordedAt:  h.RecordedAt,
-			Converged:   h.Converged,
-			Relapsed:    h.Relapsed,
-			Diverged:    h.Diverged,
-			Failed:      h.Failed,
-			Offline: h.Offline,
-			NoData:      h.NoData,
-			Total:       h.Total,
+			RecordedAt: h.RecordedAt,
+			Total:      h.Total,
+			Converged:  h.Converged,
+			Degraded:   h.Degraded,
+			Failed:     h.Failed,
+			NoData:     h.NoData,
+			Changed:    h.Changed,
+			Diverged:   h.Diverged,
+			Offline:    h.Offline,
 		})
 	}
 

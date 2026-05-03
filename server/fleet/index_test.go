@@ -130,7 +130,7 @@ func TestConvergenceCounterConsistency(t *testing.T) {
 	fi := NewFleetIndex()
 
 	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "converged"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ConvergenceStatus: "relapsed"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ConvergenceStatus: "degraded"}, nil)
 	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ConvergenceStatus: "failed"}, nil)
 	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "h4", Revoked: true, ConvergenceStatus: "no data"}, nil)
 
@@ -141,21 +141,21 @@ func TestConvergenceCounterConsistency(t *testing.T) {
 	if c.Converged != 1 {
 		t.Errorf("Converged = %d, want 1", c.Converged)
 	}
-	if c.Relapsed != 1 {
-		t.Errorf("Relapsed = %d, want 1", c.Relapsed)
+	if c.Degraded != 1 {
+		t.Errorf("Degraded = %d, want 1", c.Degraded)
 	}
 	if c.Failed != 1 {
-		t.Errorf("Errors = %d, want 1", c.Failed)
+		t.Errorf("Failed = %d, want 1", c.Failed)
 	}
 
-	// Update run status → convergence changes.
+	// Update run status → convergence changes (degraded → converged).
 	fi.UpdateRunStatus("t2", "run-1", "success", 0, 0, 1, time.Now())
 	c = fi.ConvergenceSummary()
 	if c.Converged != 2 {
 		t.Errorf("after update: Converged = %d, want 2", c.Converged)
 	}
-	if c.Relapsed != 0 {
-		t.Errorf("after update: Relapsed = %d, want 0", c.Relapsed)
+	if c.Degraded != 0 {
+		t.Errorf("after update: Degraded = %d, want 0", c.Degraded)
 	}
 
 	// Remove a envoy.

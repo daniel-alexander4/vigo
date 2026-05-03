@@ -37,7 +37,7 @@ func TestUpdateRunStatus_MatchesComputeConvergence(t *testing.T) {
 		// converged so it doesn't taint the dashboard.
 		{"failure run with moderate failure ratio is degraded", "failure", 0, 2, 5, "degraded"},
 		{"failure run with no module counts is converged", "failure", 0, 0, 0, "converged"},
-		{"blocked run", "blocked", 0, 0, 5, "diverged"},
+		{"blocked run is failed (no resources applied)", "blocked", 0, 0, 5, "failed"},
 	}
 
 	for _, tc := range cases {
@@ -70,10 +70,10 @@ func TestUpdateRunStatus_MatchesComputeConvergence(t *testing.T) {
 	}
 }
 
-// TestUpdateRunStatus_DetectsDrift walks three consecutive changing
-// runs and checks that the transition converged → relapsed → diverged
-// happens inline, matching the multi-run algorithm rather than the old
-// 4-state computeInlineStatus which couldn't see history at all.
+// TestUpdateRunStatus_DetectsDrift walks several consecutive changing
+// runs and checks that the drift-axis classification transitions
+// None → Changed → Diverged inline. Failure-axis status stays
+// Converged throughout (zero failed modules) — drift is its own axis.
 func TestUpdateRunStatus_DetectsDrift(t *testing.T) {
 	fi := NewFleetIndex()
 	fi.AddEnvoy(EnvoyState{
@@ -84,29 +84,37 @@ func TestUpdateRunStatus_DetectsDrift(t *testing.T) {
 
 	now := time.Now()
 
-	// Run 1: success with drift → single run is still "converged"
-	// (the threshold needs multiple consecutive runs).
+	// Run 1: success with changes → Changed (less than DivergedThreshold).
 	fi.UpdateRunStatus("e1", "r1", "success", 1, 0, 5, now)
-	if got := fi.GetEnvoy("e1").ConvergenceStatus; got != "converged" {
-		t.Errorf("after run 1: status = %q, want converged", got)
+	if got := fi.GetEnvoy("e1"); got.ConvergenceStatus != "converged" {
+		t.Errorf("after run 1: ConvergenceStatus = %q, want converged", got.ConvergenceStatus)
+	}
+	if got := fi.GetEnvoy("e1"); got.Drift != convergence.DriftChanged {
+		t.Errorf("after run 1: Drift = %d, want DriftChanged", got.Drift)
 	}
 
-	// Run 2: another success with drift → RelapsedThreshold (2) reached.
-	fi.UpdateRunStatus("e1", "r2", "success", 2, 0, 5, now.Add(time.Minute))
-	if got := fi.GetEnvoy("e1").ConvergenceStatus; got != "relapsed" {
-		t.Errorf("after run 2: status = %q, want relapsed", got)
+	// Runs 2-4: still under threshold (need 5 consecutive).
+	for i, ts := range []time.Time{now.Add(time.Minute), now.Add(2 * time.Minute), now.Add(3 * time.Minute)} {
+		runID := []string{"r2", "r3", "r4"}[i]
+		fi.UpdateRunStatus("e1", runID, "success", 1, 0, 5, ts)
+	}
+	if got := fi.GetEnvoy("e1"); got.Drift != convergence.DriftChanged {
+		t.Errorf("after 4 consecutive: Drift = %d, want DriftChanged (still under threshold)", got.Drift)
 	}
 
-	// Run 3: third consecutive success with drift → DivergedThreshold (3) reached.
-	fi.UpdateRunStatus("e1", "r3", "success", 1, 0, 5, now.Add(2*time.Minute))
-	if got := fi.GetEnvoy("e1").ConvergenceStatus; got != "diverged" {
-		t.Errorf("after run 3: status = %q, want diverged", got)
+	// Run 5: hits DivergedThreshold — flips to Diverged.
+	fi.UpdateRunStatus("e1", "r5", "success", 1, 0, 5, now.Add(4*time.Minute))
+	if got := fi.GetEnvoy("e1"); got.Drift != convergence.DriftDiverged {
+		t.Errorf("after run 5: Drift = %d, want DriftDiverged", got.Drift)
+	}
+	if got := fi.GetEnvoy("e1"); got.ConvergenceStatus != "converged" {
+		t.Errorf("after run 5: ConvergenceStatus = %q, want converged (drift is orthogonal)", got.ConvergenceStatus)
 	}
 
-	// Run 4: clean run with no changes → back to converged.
-	fi.UpdateRunStatus("e1", "r4", "success", 0, 0, 5, now.Add(3*time.Minute))
-	if got := fi.GetEnvoy("e1").ConvergenceStatus; got != "converged" {
-		t.Errorf("after run 4: status = %q, want converged", got)
+	// Run 6: clean run resets the drift counter back to None.
+	fi.UpdateRunStatus("e1", "r6", "success", 0, 0, 5, now.Add(5*time.Minute))
+	if got := fi.GetEnvoy("e1"); got.Drift != convergence.DriftNone {
+		t.Errorf("after run 6: Drift = %d, want DriftNone", got.Drift)
 	}
 }
 

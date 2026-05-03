@@ -1398,13 +1398,14 @@ func persistConvergenceSnapshot(ctx context.Context, queries *db.Queries, fleetI
 		return
 	}
 	if err := queries.UpsertConvergenceSnapshot(ctx, db.UpsertConvergenceSnapshotParams{
-		Total:          int64(summary.Total),
-		Converged:      int64(summary.Converged),
-		Relapsed:       int64(summary.Relapsed),
-		Diverged:       int64(summary.Diverged),
-		Failed:         int64(summary.Failed),
-		Offline:    int64(summary.Offline),
-		NoData:         int64(summary.NoData),
+		Total:     int64(summary.Total),
+		Converged: int64(summary.Converged),
+		Degraded:  int64(summary.Degraded),
+		Failed:    int64(summary.Failed),
+		NoData:    int64(summary.NoData),
+		Changed:   int64(summary.Changed),
+		Diverged:  int64(summary.Diverged),
+		Offline:   int64(summary.Offline),
 	}); err != nil {
 		slog.Error("failed to persist compliance snapshot", "error", err)
 	}
@@ -1452,12 +1453,13 @@ type metricsFleetAdapter struct {
 func (a *metricsFleetAdapter) ConvergenceSummary() metrics.ConvergenceSnapshot {
 	s := a.fleetIndex.ConvergenceSummary()
 	return metrics.ConvergenceSnapshot{
-		Converged:   s.Converged,
-		Relapsed:    s.Relapsed,
-		Diverged:    s.Diverged,
-		Failed:      s.Failed,
-		Offline: s.Offline,
-		NoData:      s.NoData,
+		Converged: s.Converged,
+		Degraded:  s.Degraded,
+		Failed:    s.Failed,
+		NoData:    s.NoData,
+		Changed:   s.Changed,
+		Diverged:  s.Diverged,
+		Offline:   s.Offline,
 	}
 }
 
@@ -1490,12 +1492,12 @@ func (a *uiFleetSourceAdapter) ConvergenceSummary() ui.FleetSummary {
 	return ui.FleetSummary{
 		Total:     c.Total,
 		Converged: c.Converged,
-		Relapsed:  c.Relapsed,
-		Diverged:  c.Diverged,
 		Degraded:  c.Degraded,
 		Failed:    c.Failed,
-		Offline:   c.Offline,
 		NoData:    c.NoData,
+		Changed:   c.Changed,
+		Diverged:  c.Diverged,
+		Offline:   c.Offline,
 	}
 }
 

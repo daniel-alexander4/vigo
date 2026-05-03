@@ -6,11 +6,13 @@
         <a href="/runs" class="btn btn--sm">Fleet-wide Runs</a>
         <a href="/api/v1/export/cmdb" class="btn btn--sm" target="_blank" rel="noopener">CMDB Export</a>
     </div>
-    <p>Managed nodes reporting to this server{{if or .StatusFilter .Search}} &mdash; {{.MatchingTotal}} match{{if ne .MatchingTotal 1}}es{{end}} of {{.TotalEnvoys}}{{end}}</p>
+    <p>Managed nodes reporting to this server{{if or .ConvFilter .DriftFilter .ReachFilter .Search}} &mdash; {{.MatchingTotal}} match{{if ne .MatchingTotal 1}}es{{end}} of {{.TotalEnvoys}}{{end}}</p>
 </div>
 
+{{$qs := ""}}{{if .ConvFilter}}{{$qs = printf "%s&conv=%s" $qs .ConvFilter}}{{end}}{{if .DriftFilter}}{{$qs = printf "%s&drift=%s" $qs .DriftFilter}}{{end}}{{if .ReachFilter}}{{$qs = printf "%s&reach=%s" $qs .ReachFilter}}{{end}}
+
 <div id="envoys-stats-container"
-     hx-get="/ui/fragments/envoys-stats{{if .StatusFilter}}?status={{.StatusFilter}}{{end}}"
+     hx-get="/ui/fragments/envoys-stats?{{$qs}}"
      hx-trigger="every {{.PollInterval}}"
      hx-swap="innerHTML"
      aria-live="polite">
@@ -19,7 +21,9 @@
 
 <div class="envoys-toolbar mt-2 mb-2">
     <form action="/envoys" method="get" hx-boost="false" class="envoys-toolbar__form">
-        {{if .StatusFilter}}<input type="hidden" name="status" value="{{.StatusFilter}}">{{end}}
+        {{if .ConvFilter}}<input type="hidden" name="conv" value="{{.ConvFilter}}">{{end}}
+        {{if .DriftFilter}}<input type="hidden" name="drift" value="{{.DriftFilter}}">{{end}}
+        {{if .ReachFilter}}<input type="hidden" name="reach" value="{{.ReachFilter}}">{{end}}
         <input type="hidden" name="sort" value="{{.SortColumn}}">
         <input type="hidden" name="dir" value="{{.SortDir}}">
         <input type="text" id="envoy-search" name="search" placeholder="Search hostnames..."
@@ -29,7 +33,9 @@
         <button type="submit" class="btn btn--sm">Search</button>
     </form>
     <form action="/envoys" method="get" hx-boost="false" class="envoys-toolbar__sort">
-        {{if .StatusFilter}}<input type="hidden" name="status" value="{{.StatusFilter}}">{{end}}
+        {{if .ConvFilter}}<input type="hidden" name="conv" value="{{.ConvFilter}}">{{end}}
+        {{if .DriftFilter}}<input type="hidden" name="drift" value="{{.DriftFilter}}">{{end}}
+        {{if .ReachFilter}}<input type="hidden" name="reach" value="{{.ReachFilter}}">{{end}}
         {{if .Search}}<input type="hidden" name="search" value="{{.Search}}">{{end}}
         <label class="envoys-toolbar__label" for="envoys-sort">Sort</label>
         <select id="envoys-sort" name="sort" onchange="this.form.dir.value=(this.value==='last_run'||this.value==='last_seen')?'desc':'asc'; this.form.submit();" class="input input--sm">
@@ -45,7 +51,7 @@
 
 <div class="table-container envoys-table-container"
      id="envoys-table-container"
-     hx-get="/ui/fragments/envoys-table?{{if .StatusFilter}}status={{.StatusFilter}}&{{end}}{{if .Search}}search={{.Search}}&{{end}}{{if .SortColumn}}sort={{.SortColumn}}&{{end}}{{if .SortDir}}dir={{.SortDir}}{{end}}"
+     hx-get="/ui/fragments/envoys-table?{{$qs}}{{if .Search}}&search={{.Search}}{{end}}{{if .SortColumn}}&sort={{.SortColumn}}{{end}}{{if .SortDir}}&dir={{.SortDir}}{{end}}"
      hx-trigger="every {{.PollInterval}}"
      hx-swap="innerHTML">
     {{template "envoys-table" .}}
@@ -62,20 +68,35 @@
         <div class="stat-card__label">Modules Failing</div>
     </div>
 </div>
-<div class="filter-bar flex items-center gap-1 flex-wrap">
-    <a href="/envoys" class="btn btn--sm{{if and (eq .StatusFilter "") (eq .Search "")}} btn--primary{{end}}">All <span class="filter-count">{{.TotalEnvoys}}</span></a>
-    <a href="/envoys?status=converged" class="btn btn--sm{{if eq .StatusFilter "converged"}} btn--primary{{end}}">Converged <span class="filter-count filter-count--success">{{.CountConverged}}</span></a>
-    <a href="/envoys?status=relapsed" class="btn btn--sm{{if eq .StatusFilter "relapsed"}} btn--primary{{end}}">Relapsed <span class="filter-count filter-count--warning">{{.CountRelapsed}}</span></a>
-    <a href="/envoys?status=diverged" class="btn btn--sm{{if eq .StatusFilter "diverged"}} btn--primary{{end}}">Diverged <span class="filter-count filter-count--warning">{{.CountDiverged}}</span></a>
-    <a href="/envoys?status=degraded" class="btn btn--sm{{if eq .StatusFilter "degraded"}} btn--primary{{end}}">Degraded <span class="filter-count filter-count--warning">{{.CountDegraded}}</span></a>
-    <a href="/envoys?status=offline" class="btn btn--sm{{if eq .StatusFilter "offline"}} btn--primary{{end}}">Offline <span class="filter-count filter-count--muted">{{.CountOffline}}</span></a>
-    <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data <span class="filter-count filter-count--muted">{{.CountNoData}}</span></a>
-    {{if gt .CountObserving 0}}<a href="/envoys?status=observing" class="btn btn--sm{{if eq .StatusFilter "observing"}} btn--primary{{end}}" title="Envoys in observe-only mode (drift reported, no enforcement)">Observing <span class="filter-count filter-count--info">{{.CountObserving}}</span></a>{{end}}
+<div class="filter-bar-group flex flex-wrap items-end gap-2">
+    <div class="filter-bar-axis">
+        <span class="filter-bar-axis__label">Failure</span>
+        <div class="filter-bar flex items-center gap-1 flex-wrap">
+            <a href="/envoys" class="btn btn--sm{{if and (eq .ConvFilter "") (eq .DriftFilter "") (eq .ReachFilter "") (eq .Search "")}} btn--primary{{end}}">All <span class="filter-count">{{.TotalEnvoys}}</span></a>
+            <a href="/envoys?conv=converged" class="btn btn--sm{{if eq .ConvFilter "converged"}} btn--primary{{end}}">Converged <span class="filter-count filter-count--success">{{.CountConverged}}</span></a>
+            <a href="/envoys?conv=degraded" class="btn btn--sm{{if eq .ConvFilter "degraded"}} btn--primary{{end}}">Degraded <span class="filter-count filter-count--warning">{{.CountDegraded}}</span></a>
+            <a href="/envoys?conv=no+data" class="btn btn--sm{{if eq .ConvFilter "no data"}} btn--primary{{end}}">No Data <span class="filter-count filter-count--muted">{{.CountNoData}}</span></a>
+        </div>
+    </div>
+    <div class="filter-bar-axis">
+        <span class="filter-bar-axis__label" title="Modules that change across recent runs. Diverged ⊆ Changed.">Drift</span>
+        <div class="filter-bar flex items-center gap-1 flex-wrap">
+            <a href="/envoys?drift=changed" class="btn btn--sm{{if eq .DriftFilter "changed"}} btn--primary{{end}}" title="Last run made changes">Changed <span class="filter-count filter-count--info">{{.CountChanged}}</span></a>
+            <a href="/envoys?drift=diverged" class="btn btn--sm{{if eq .DriftFilter "diverged"}} btn--primary{{end}}" title="5+ consecutive runs with changes">Diverged <span class="filter-count filter-count--warning">{{.CountDiverged}}</span></a>
+        </div>
+    </div>
+    <div class="filter-bar-axis">
+        <span class="filter-bar-axis__label">Reach</span>
+        <div class="filter-bar flex items-center gap-1 flex-wrap">
+            <a href="/envoys?reach=offline" class="btn btn--sm{{if eq .ReachFilter "offline"}} btn--primary{{end}}">Offline <span class="filter-count filter-count--muted">{{.CountOffline}}</span></a>
+            {{if gt .CountObserving 0}}<a href="/envoys?reach=observing" class="btn btn--sm{{if eq .ReachFilter "observing"}} btn--primary{{end}}" title="Envoys in observe-only mode (drift reported, no enforcement)">Observing <span class="filter-count filter-count--info">{{.CountObserving}}</span></a>{{end}}
+        </div>
+    </div>
 </div>
 {{end}}
 
 {{define "envoys-table"}}
-{{$base := "/envoys?"}}{{if .StatusFilter}}{{$base = printf "%sstatus=%s&" $base .StatusFilter}}{{end}}{{if .Search}}{{$base = printf "%ssearch=%s&" $base .Search}}{{end}}
+{{$base := "/envoys?"}}{{if .ConvFilter}}{{$base = printf "%sconv=%s&" $base .ConvFilter}}{{end}}{{if .DriftFilter}}{{$base = printf "%sdrift=%s&" $base .DriftFilter}}{{end}}{{if .ReachFilter}}{{$base = printf "%sreach=%s&" $base .ReachFilter}}{{end}}{{if .Search}}{{$base = printf "%ssearch=%s&" $base .Search}}{{end}}
 <table class="table envoys-table" aria-rowcount="{{.MatchingTotal}}">
     <thead>
         <tr>
@@ -101,7 +122,7 @@
             <td class="text-muted table-time">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}" class="time-relative" title="{{formatTime .LastRunAt}}">{{timeAgo .LastRunAt}}</a>{{end}}</td>
             <td>
                 {{if .DiskStatus}}
-                <span class="status-pill status-pill--{{if eq .DiskStatus "ok"}}converged{{else if eq .DiskStatus "warn"}}relapsed{{else}}failed{{end}}" title="{{.DiskPercent}}% available">{{.DiskPercent}}%</span>
+                <span class="status-pill status-pill--{{if eq .DiskStatus "ok"}}converged{{else if eq .DiskStatus "warn"}}degraded{{else}}failed{{end}}" title="{{.DiskPercent}}% available">{{.DiskPercent}}%</span>
                 {{else}}-{{end}}
             </td>
             <td>
@@ -122,7 +143,7 @@
         {{end}}
         {{if not .Envoys}}
         <tr>
-            <td colspan="8" class="table__empty-cell">No envoys{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.{{if or $.StatusFilter $.Search}} <a href="/envoys">Clear filter</a>.{{end}}</td>
+            <td colspan="8" class="table__empty-cell">No envoys{{if or $.ConvFilter $.DriftFilter $.ReachFilter}} matching the active filter{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.{{if or $.ConvFilter $.DriftFilter $.ReachFilter $.Search}} <a href="/envoys">Clear filter</a>.{{end}}</td>
         </tr>
         {{end}}
         {{if .RenderedCap}}
@@ -133,7 +154,7 @@
         </tr>
         {{else if .HasMore}}
         <tr class="envoys-table__loadmore-trigger"
-            hx-get="/ui/fragments/envoys-table?offset={{.NextOffset}}{{if .StatusFilter}}&status={{.StatusFilter}}{{end}}{{if .Search}}&search={{.Search}}{{end}}{{if .SortColumn}}&sort={{.SortColumn}}{{end}}{{if .SortDir}}&dir={{.SortDir}}{{end}}"
+            hx-get="/ui/fragments/envoys-table?offset={{.NextOffset}}{{if .ConvFilter}}&conv={{.ConvFilter}}{{end}}{{if .DriftFilter}}&drift={{.DriftFilter}}{{end}}{{if .ReachFilter}}&reach={{.ReachFilter}}{{end}}{{if .Search}}&search={{.Search}}{{end}}{{if .SortColumn}}&sort={{.SortColumn}}{{end}}{{if .SortDir}}&dir={{.SortDir}}{{end}}"
             hx-trigger="revealed"
             hx-swap="outerHTML"
             hx-select="tbody > tr">

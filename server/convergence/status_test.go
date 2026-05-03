@@ -11,8 +11,6 @@ func TestStatusString(t *testing.T) {
 		want string
 	}{
 		{StatusConverged, "converged"},
-		{StatusRelapsed, "relapsed"},
-		{StatusDiverged, "diverged"},
 		{StatusDegraded, "degraded"},
 		{StatusFailed, "failed"},
 		{StatusNoData, "no data"},
@@ -31,15 +29,15 @@ func TestClassifyStatus(t *testing.T) {
 	}{
 		{"converged", StatusConverged},
 		{"  CONVERGED  ", StatusConverged},
-		{"relapsed", StatusRelapsed},
-		{"diverged", StatusDiverged},
 		{"degraded", StatusDegraded},
 		{"failed", StatusFailed},
 		{"", StatusNoData},
 		{"no data", StatusNoData},
 		{"unknown", StatusNoData},
-		{"online", StatusNoData},  // reachability vocabulary stays out
-		{"offline", StatusNoData}, // reachability vocabulary stays out
+		{"online", StatusNoData},
+		{"offline", StatusNoData},
+		{"relapsed", StatusNoData},  // legacy vocabulary, dropped
+		{"diverged", StatusNoData},  // belongs to drift axis now
 	}
 	for _, tc := range cases {
 		if got := ClassifyStatus(tc.in); got != tc.want {
@@ -49,8 +47,7 @@ func TestClassifyStatus(t *testing.T) {
 }
 
 func TestClassifyStatusRoundTrip(t *testing.T) {
-	// Every Status value's String() must round-trip back through ClassifyStatus.
-	for _, s := range []Status{StatusConverged, StatusRelapsed, StatusDiverged, StatusDegraded, StatusFailed} {
+	for _, s := range []Status{StatusConverged, StatusDegraded, StatusFailed} {
 		if got := ClassifyStatus(s.String()); got != s {
 			t.Errorf("round-trip broken: %d -> %q -> %d", s, s.String(), got)
 		}
@@ -67,10 +64,46 @@ func TestComputeStatus(t *testing.T) {
 		{"agent failure with low fail pct -> degraded by counts", RunInfo{Status: "failure", FailedCount: 1, ModuleCount: 100}, StatusDegraded},
 		{"degraded", RunInfo{Status: "success", FailedCount: 5, ModuleCount: 10}, StatusDegraded},
 		{"empty", RunInfo{}, StatusNoData},
+		{"blocked is failed", RunInfo{Status: "blocked"}, StatusFailed},
 	}
 	for _, tc := range cases {
 		if got := ComputeStatus(tc.ri); got != tc.want {
 			t.Errorf("%s: ComputeStatus = %d, want %d", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestDriftLevelString(t *testing.T) {
+	cases := []struct {
+		d    DriftLevel
+		want string
+	}{
+		{DriftNone, "none"},
+		{DriftChanged, "changed"},
+		{DriftDiverged, "diverged"},
+	}
+	for _, tc := range cases {
+		if got := tc.d.String(); got != tc.want {
+			t.Errorf("DriftLevel(%d).String() = %q, want %q", tc.d, got, tc.want)
+		}
+	}
+}
+
+func TestClassifyDrift(t *testing.T) {
+	cases := []struct {
+		in   string
+		want DriftLevel
+	}{
+		{"none", DriftNone},
+		{"changed", DriftChanged},
+		{"  CHANGED  ", DriftChanged},
+		{"diverged", DriftDiverged},
+		{"", DriftNone},
+		{"unknown", DriftNone},
+	}
+	for _, tc := range cases {
+		if got := ClassifyDrift(tc.in); got != tc.want {
+			t.Errorf("ClassifyDrift(%q) = %d, want %d", tc.in, got, tc.want)
 		}
 	}
 }

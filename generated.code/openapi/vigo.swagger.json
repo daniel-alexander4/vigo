@@ -782,9 +782,10 @@
         },
         "converged": {
           "type": "integer",
-          "format": "int32"
+          "format": "int32",
+          "description": "Failure axis (mutually exclusive; sums to total)."
         },
-        "relapsed": {
+        "degraded": {
           "type": "integer",
           "format": "int32"
         },
@@ -792,17 +793,23 @@
           "type": "integer",
           "format": "int32"
         },
-        "offline": {
-          "type": "integer",
-          "format": "int32"
-        },
         "noData": {
           "type": "integer",
           "format": "int32"
         },
+        "changed": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Drift axis (overlapping; diverged ⊆ changed)."
+        },
         "diverged": {
           "type": "integer",
           "format": "int32"
+        },
+        "offline": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Reachability axis."
         }
       }
     },

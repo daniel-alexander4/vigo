@@ -27,14 +27,17 @@ type EnvoySnapshot struct {
 	Hostname          string
 }
 
-// ConvergenceSnapshot holds pre-computed convergence counters.
+// ConvergenceSnapshot holds pre-computed counters across the failure
+// axis (Converged/Degraded/Failed/NoData), drift axis
+// (Changed/Diverged), and reachability (Offline). Diverged ⊆ Changed.
 type ConvergenceSnapshot struct {
-	Converged   int
-	Relapsed    int
-	Diverged    int
-	Failed      int
-	Offline int
-	NoData      int
+	Converged int
+	Degraded  int
+	Failed    int
+	NoData    int
+	Changed   int
+	Diverged  int
+	Offline   int
 }
 
 // FleetSource provides fleet data for the metrics collector.
@@ -112,11 +115,12 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 		// Convergence breakdown — O(1) from pre-computed counters.
 		summary := c.fleetSource.ConvergenceSummary()
 		ConvergenceConverged.Set(float64(summary.Converged))
-		ConvergenceRelapsed.Set(float64(summary.Relapsed))
-		ConvergenceDiverged.Set(float64(summary.Diverged))
+		ConvergenceDegraded.Set(float64(summary.Degraded))
 		ConvergenceFailed.Set(float64(summary.Failed))
-		ConvergenceOffline.Set(float64(summary.Offline))
 		ConvergenceNoData.Set(float64(summary.NoData))
+		ConvergenceChanged.Set(float64(summary.Changed))
+		ConvergenceDiverged.Set(float64(summary.Diverged))
+		ConvergenceOffline.Set(float64(summary.Offline))
 
 		// Single snapshot — one RLock, reused for security + risk.
 		allEnvoys := c.fleetSource.AllEnvoySnapshots()

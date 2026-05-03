@@ -111,11 +111,12 @@ type ConvergenceHistory struct {
 	RecordedAt string `json:"recorded_at"`
 	Total      int64  `json:"total"`
 	Converged  int64  `json:"converged"`
-	Relapsed   int64  `json:"relapsed"`
-	Diverged   int64  `json:"diverged"`
+	Degraded   int64  `json:"degraded"`
 	Failed     int64  `json:"failed"`
-	Offline    int64  `json:"offline"`
 	NoData     int64  `json:"no_data"`
+	Changed    int64  `json:"changed"`
+	Diverged   int64  `json:"diverged"`
+	Offline    int64  `json:"offline"`
 }
 
 type CveCvssCache struct {

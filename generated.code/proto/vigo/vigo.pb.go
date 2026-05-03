@@ -4986,15 +4986,19 @@ func (x *GetEnvoyConvergenceResponse) GetHistory() []*ConvergenceSnapshot {
 }
 
 type ConvergenceSnapshot struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Date          string                 `protobuf:"bytes,1,opt,name=date,proto3" json:"date,omitempty"`
-	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
-	Converged     int32                  `protobuf:"varint,3,opt,name=converged,proto3" json:"converged,omitempty"`
-	Relapsed      int32                  `protobuf:"varint,4,opt,name=relapsed,proto3" json:"relapsed,omitempty"`
-	Failed        int32                  `protobuf:"varint,5,opt,name=failed,proto3" json:"failed,omitempty"`
-	Offline       int32                  `protobuf:"varint,6,opt,name=offline,proto3" json:"offline,omitempty"`
-	NoData        int32                  `protobuf:"varint,7,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
-	Diverged      int32                  `protobuf:"varint,8,opt,name=diverged,proto3" json:"diverged,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Date  string                 `protobuf:"bytes,1,opt,name=date,proto3" json:"date,omitempty"`
+	Total int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	// Failure axis (mutually exclusive; sums to total).
+	Converged int32 `protobuf:"varint,3,opt,name=converged,proto3" json:"converged,omitempty"`
+	Degraded  int32 `protobuf:"varint,9,opt,name=degraded,proto3" json:"degraded,omitempty"`
+	Failed    int32 `protobuf:"varint,5,opt,name=failed,proto3" json:"failed,omitempty"`
+	NoData    int32 `protobuf:"varint,7,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
+	// Drift axis (overlapping; diverged ⊆ changed).
+	Changed  int32 `protobuf:"varint,10,opt,name=changed,proto3" json:"changed,omitempty"`
+	Diverged int32 `protobuf:"varint,8,opt,name=diverged,proto3" json:"diverged,omitempty"`
+	// Reachability axis.
+	Offline       int32 `protobuf:"varint,6,opt,name=offline,proto3" json:"offline,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5050,9 +5054,9 @@ func (x *ConvergenceSnapshot) GetConverged() int32 {
 	return 0
 }
 
-func (x *ConvergenceSnapshot) GetRelapsed() int32 {
+func (x *ConvergenceSnapshot) GetDegraded() int32 {
 	if x != nil {
-		return x.Relapsed
+		return x.Degraded
 	}
 	return 0
 }
@@ -5064,13 +5068,6 @@ func (x *ConvergenceSnapshot) GetFailed() int32 {
 	return 0
 }
 
-func (x *ConvergenceSnapshot) GetOffline() int32 {
-	if x != nil {
-		return x.Offline
-	}
-	return 0
-}
-
 func (x *ConvergenceSnapshot) GetNoData() int32 {
 	if x != nil {
 		return x.NoData
@@ -5078,9 +5075,23 @@ func (x *ConvergenceSnapshot) GetNoData() int32 {
 	return 0
 }
 
+func (x *ConvergenceSnapshot) GetChanged() int32 {
+	if x != nil {
+		return x.Changed
+	}
+	return 0
+}
+
 func (x *ConvergenceSnapshot) GetDiverged() int32 {
 	if x != nil {
 		return x.Diverged
+	}
+	return 0
+}
+
+func (x *ConvergenceSnapshot) GetOffline() int32 {
+	if x != nil {
+		return x.Offline
 	}
 	return 0
 }
@@ -7738,16 +7749,18 @@ const file_vigo_proto_rawDesc = "" +
 	"\x1bGetEnvoyConvergenceResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12'\n" +
 	"\blast_run\x18\x02 \x01(\v2\f.vigo.v1.RunR\alastRun\x126\n" +
-	"\ahistory\x18\x03 \x03(\v2\x1c.vigo.v1.ConvergenceSnapshotR\ahistory\"\xe0\x01\n" +
+	"\ahistory\x18\x03 \x03(\v2\x1c.vigo.v1.ConvergenceSnapshotR\ahistory\"\x8a\x02\n" +
 	"\x13ConvergenceSnapshot\x12\x12\n" +
 	"\x04date\x18\x01 \x01(\tR\x04date\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x1c\n" +
 	"\tconverged\x18\x03 \x01(\x05R\tconverged\x12\x1a\n" +
-	"\brelapsed\x18\x04 \x01(\x05R\brelapsed\x12\x16\n" +
-	"\x06failed\x18\x05 \x01(\x05R\x06failed\x12\x18\n" +
-	"\aoffline\x18\x06 \x01(\x05R\aoffline\x12\x17\n" +
-	"\ano_data\x18\a \x01(\x05R\x06noData\x12\x1a\n" +
-	"\bdiverged\x18\b \x01(\x05R\bdiverged\"`\n" +
+	"\bdegraded\x18\t \x01(\x05R\bdegraded\x12\x16\n" +
+	"\x06failed\x18\x05 \x01(\x05R\x06failed\x12\x17\n" +
+	"\ano_data\x18\a \x01(\x05R\x06noData\x12\x18\n" +
+	"\achanged\x18\n" +
+	" \x01(\x05R\achanged\x12\x1a\n" +
+	"\bdiverged\x18\b \x01(\x05R\bdiverged\x12\x18\n" +
+	"\aoffline\x18\x06 \x01(\x05R\aofflineJ\x04\b\x04\x10\x05R\brelapsed\"`\n" +
 	"\x0fRollbackRequest\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1b\n" +

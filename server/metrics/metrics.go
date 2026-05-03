@@ -343,41 +343,56 @@ var (
 		Help: "Number of envoys per risk level.",
 	}, []string{"level"})
 
-	// --- Convergence Breakdown ---
+	// --- Convergence Breakdown — failure axis ---
 
-	// ConvergenceConverged is the number of converged envoys.
+	// ConvergenceConverged is the number of envoys with zero failed
+	// modules in their last run.
 	ConvergenceConverged = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "vigo_convergence_converged",
-		Help: "Number of envoys in converged state.",
+		Help: "Number of envoys in converged state (0 failed modules in last run).",
 	})
 
-	// ConvergenceRelapsed is the number of envoys in relapsed state.
-	ConvergenceRelapsed = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "vigo_convergence_relapsed",
-		Help: "Number of envoys in relapsed state.",
+	// ConvergenceDegraded is the number of envoys with 1-79% module failures.
+	ConvergenceDegraded = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_convergence_degraded",
+		Help: "Number of envoys with 1-79% of modules failing in last run.",
 	})
 
-	// ConvergenceDiverged is the number of envoys in diverged state.
-	ConvergenceDiverged = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "vigo_convergence_diverged",
-		Help: "Number of envoys in diverged state.",
-	})
-
-	// ConvergenceFailed is the number of envoys with failed convergence.
+	// ConvergenceFailed is the number of envoys with >=80% failures or
+	// status=blocked.
 	ConvergenceFailed = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "vigo_convergence_failed",
-		Help: "Number of envoys with failed convergence.",
-	})
-
-	// ConvergenceOffline is the number of envoys that have offline.
-	ConvergenceOffline = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "vigo_convergence_offline",
-		Help: "Number of envoys that have offline.",
+		Help: "Number of envoys with >=80% modules failing or status=blocked.",
 	})
 
 	// ConvergenceNoData is the number of envoys with no run data.
 	ConvergenceNoData = promauto.NewGauge(prometheus.GaugeOpts{
 		Name: "vigo_convergence_no_data",
-		Help: "Number of envoys with no convergence data.",
+		Help: "Number of envoys with no convergence data yet.",
+	})
+
+	// --- Drift axis (orthogonal to failure axis) ---
+
+	// ConvergenceChanged is the number of envoys whose latest run had
+	// any module changes. Diverged is a strict subset.
+	ConvergenceChanged = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_convergence_changed",
+		Help: "Number of envoys whose latest run made changes.",
+	})
+
+	// ConvergenceDiverged is the number of envoys with persistent drift
+	// (5+ consecutive runs with changes).
+	ConvergenceDiverged = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_convergence_diverged",
+		Help: "Number of envoys with 5+ consecutive runs of module changes (persistent drift).",
+	})
+
+	// --- Reachability ---
+
+	// ConvergenceOffline is the number of envoys past the staleness
+	// threshold (2.5x the agent check-in interval).
+	ConvergenceOffline = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_convergence_offline",
+		Help: "Number of envoys past the staleness threshold.",
 	})
 )

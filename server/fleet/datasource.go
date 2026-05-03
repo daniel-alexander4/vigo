@@ -54,11 +54,15 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 		if !ts.LastSeen.IsZero() && time.Since(ts.LastSeen) < time.Hour {
 			activeCount++
 		}
+		// Failure axis: contributes to failureCount.
 		switch convergence.ClassifyStatus(ts.ConvergenceStatus) {
-		case convergence.StatusRelapsed, convergence.StatusDiverged:
-			driftCount++
 		case convergence.StatusFailed, convergence.StatusDegraded:
 			failureCount++
+		}
+		// Drift axis: contributes to driftCount when modules keep
+		// mutating across recent runs (subset of Changed).
+		if ts.Drift == convergence.DriftDiverged {
+			driftCount++
 		}
 	}
 
@@ -190,16 +194,16 @@ func (ds *DataSource) ConvergenceData(baseInterval time.Duration) ui.Convergence
 
 	return ui.ConvergencePageData{
 		ConvergencePct: convPct,
-		Total:         total,
-		Converged:     int64(summary.Converged),
-		Relapsed:       int64(summary.Relapsed),
-		Diverged:       int64(summary.Diverged),
+		Total:          total,
+		Converged:      int64(summary.Converged),
 		Degraded:       int64(summary.Degraded),
 		Failed:         int64(summary.Failed),
-		Offline:    int64(summary.Offline),
 		NoData:         int64(summary.NoData),
-		SparklineData: sparkData,
-		NonConverged:  notConverged,
+		Changed:        int64(summary.Changed),
+		Diverged:       int64(summary.Diverged),
+		Offline:        int64(summary.Offline),
+		SparklineData:  sparkData,
+		NonConverged:   notConverged,
 	}
 }
 
@@ -246,7 +250,7 @@ func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string
 	return ui.EnvoysPageData{
 		PageData:       ui.PageData{Title: "Envoys", ActiveNav: "envoys"},
 		Envoys:         rows,
-		StatusFilter:   statusFilter,
+		ConvFilter:     statusFilter,
 		Search:         search,
 		EnvoyCount:     len(rows),
 		HasMore:        hasMore,
@@ -254,12 +258,12 @@ func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string
 		NextOffset:     len(rows),
 		TotalEnvoys:    counts.Total,
 		CountConverged: counts.Converged,
-		CountRelapsed:  counts.Relapsed,
-		CountDiverged:  counts.Diverged,
 		CountDegraded:  counts.Degraded,
 		CountFailed:    counts.Failed,
-		CountOffline:   counts.Offline,
 		CountNoData:    counts.NoData,
+		CountChanged:   counts.Changed,
+		CountDiverged:  counts.Diverged,
+		CountOffline:   counts.Offline,
 	}
 }
 

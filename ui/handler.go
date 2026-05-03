@@ -812,16 +812,16 @@ type DashboardPageData struct {
 	MalwareDetected int64
 	IntegrityIssues int64
 	// Module convergence
-	ConvergencePct   float64
-	Converged       int
-	Relapsed        int
-	Diverged        int
-	CompFailed      int
-	Offline     int
+	ConvergencePct float64
+	Converged      int
+	Degraded       int
+	Diverged       int // drift-axis: persistent change loops
+	CompFailed     int
+	Offline        int
 	// Standards compliance
-	StandardsPct         float64
-	SatisfiedControls    int
-	WaivedControls       int
+	StandardsPct      float64
+	SatisfiedControls int
+	WaivedControls    int
 	PartialControls      int
 	NotSatisfiedControls int
 	TotalControls        int
@@ -959,12 +959,12 @@ type RunRow struct {
 type ConvergencePageData struct {
 	Total          int64
 	Converged      int64
-	Relapsed       int64
-	Diverged       int64
 	Degraded       int64
 	Failed         int64
-	Offline    int64
 	NoData         int64
+	Changed        int64 // drift axis: last run had changes
+	Diverged       int64 // drift axis: 5+ consecutive runs with changes
+	Offline        int64
 	ConvergencePct float64 // converged / (total - offline) * 100
 	SparklineData  []float64
 	NonConverged   []ConvergenceRow
@@ -1013,15 +1013,15 @@ type DashboardStatsFragmentData struct {
 	UniqueCVEs      int64
 	HardeningScore  int64
 	RootkitWarnings int64
-	ConvergencePct   float64
-	Converged       int
-	Relapsed        int
-	Diverged        int
-	CompFailed      int
-	Offline     int
+	ConvergencePct float64
+	Converged      int
+	Degraded       int
+	Diverged       int // drift-axis bucket
+	CompFailed     int
+	Offline        int
 	// Standards compliance
-	StandardsPct         float64
-	SatisfiedControls    int
+	StandardsPct      float64
+	SatisfiedControls int
 	WaivedControls       int
 	PartialControls      int
 	NotSatisfiedControls int
@@ -1090,7 +1090,13 @@ type EnvoyRow struct {
 type EnvoysPageData struct {
 	PageData
 	Envoys       []EnvoyRow
-	StatusFilter string
+	// Filter state — independent across the three axes. ConvFilter
+	// matches FleetStatusEntry.Status (failure axis); DriftFilter
+	// matches the drift bucket; ReachFilter matches reachability /
+	// observability flags. All three combine with AND.
+	ConvFilter   string
+	DriftFilter  string
+	ReachFilter  string
 	Search       string
 	SortColumn   string // active sort column (status, hostname, last_seen, last_run, ip)
 	SortDir      string // "asc" or "desc"
@@ -1107,19 +1113,22 @@ type EnvoysPageData struct {
 	RenderedCap    bool
 	RenderedCapMax int
 	// Top-of-page summary stats. ActiveEnvoys = TotalEnvoys - CountOffline;
-	// DriftRate = 100 * (Relapsed + Diverged) / Total. Aggregates here rather
-	// than on the dashboard avoid a round-trip for operators who live on
+	// DriftRate = 100 * Diverged / Total. Aggregates here rather than on
+	// the dashboard avoids a round-trip for operators who live on
 	// /envoys; they're cheap to compute from the counts we already have.
 	ActiveEnvoys int
 	DriftRate    float64
-	// Status counts for filter buttons.
+	// Status counts for the three pill rows.
+	// Failure axis (sums to TotalEnvoys):
 	CountConverged int
-	CountRelapsed  int
-	CountDiverged  int
 	CountDegraded  int
 	CountFailed    int
-	CountOffline   int
 	CountNoData    int
+	// Drift axis (overlapping; CountDiverged ⊆ CountChanged):
+	CountChanged  int
+	CountDiverged int
+	// Reachability + observability:
+	CountOffline   int
 	CountObserving int
 	// Module Health: fleet-wide failed/total module sums from every
 	// envoy's most-recent run. Drives the "MODULES FAILING" stat card
@@ -2135,14 +2144,14 @@ func (h *Handler) dashboardData() DashboardPageData {
 		data.ActiveEnvoys = counts.Total - counts.Offline
 		data.RecentFailures = counts.Failed
 		if counts.Total > 0 {
-			data.DriftRate = float64(counts.Relapsed+counts.Diverged) / float64(counts.Total) * 100
+			data.DriftRate = float64(counts.Diverged) / float64(counts.Total) * 100
 		}
 		data.ConvergencePct = 0
 		if counts.Total > 0 {
 			data.ConvergencePct = float64(counts.Converged) / float64(counts.Total) * 100
 		}
 		data.Converged = counts.Converged
-		data.Relapsed = counts.Relapsed
+		data.Degraded = counts.Degraded
 		data.Diverged = counts.Diverged
 		data.CompFailed = counts.Failed
 		data.Offline = counts.Offline
@@ -2256,11 +2265,11 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 		data.ActiveEnvoys = counts.Total - counts.Offline
 		data.RecentFailures = counts.Failed
 		if counts.Total > 0 {
-			data.DriftRate = float64(counts.Relapsed+counts.Diverged) / float64(counts.Total) * 100
+			data.DriftRate = float64(counts.Diverged) / float64(counts.Total) * 100
 			data.ConvergencePct = float64(counts.Converged) / float64(counts.Total) * 100
 		}
 		data.Converged = counts.Converged
-		data.Relapsed = counts.Relapsed
+		data.Degraded = counts.Degraded
 		data.Diverged = counts.Diverged
 		data.CompFailed = counts.Failed
 		data.Offline = counts.Offline
@@ -2269,7 +2278,7 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 		conv := h.dataSource.ConvergenceData(h.baseInterval)
 		d.ConvergencePct = conv.ConvergencePct
 		d.Converged = int(conv.Converged)
-		d.Relapsed = int(conv.Relapsed)
+		d.Degraded = int(conv.Degraded)
 		d.Diverged = int(conv.Diverged)
 		d.CompFailed = int(conv.Failed)
 		d.Offline = int(conv.Offline)
@@ -3253,13 +3262,14 @@ type EvidenceCenterPageData struct {
 // EvidenceSnapshotData holds data for the compliance snapshot fragment.
 type EvidenceSnapshotData struct {
 	SnapshotDate   string
-	ConvergencePct  float64
+	ConvergencePct float64
 	Converged      int64
-	Relapsed       int64
-	Diverged       int64
+	Degraded       int64
 	Failed         int64
-	Offline    int64
 	NoData         int64
+	Changed        int64 // drift axis
+	Diverged       int64 // drift axis: persistent
+	Offline        int64
 }
 
 // EvidenceMTTRData holds data for the MTTR metrics fragment.
@@ -3392,20 +3402,21 @@ func (h *Handler) EvidenceSnapshotFragment(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		// Fall back to live data
 		summary := h.dataSource.ConvergenceData(h.baseInterval)
-		total := summary.Converged + summary.Relapsed + summary.Diverged + summary.Failed + summary.Offline + summary.NoData
+		total := summary.Converged + summary.Degraded + summary.Failed + summary.NoData
 		pct := float64(0)
 		if total > 0 {
 			pct = float64(summary.Converged) / float64(total) * 100
 		}
 		data := EvidenceSnapshotData{
 			SnapshotDate:   dateStr + " (live)",
-			ConvergencePct:  pct,
+			ConvergencePct: pct,
 			Converged:      summary.Converged,
-			Relapsed:       summary.Relapsed,
-			Diverged:       summary.Diverged,
+			Degraded:       summary.Degraded,
 			Failed:         summary.Failed,
-			Offline:    summary.Offline,
 			NoData:         summary.NoData,
+			Changed:        summary.Changed,
+			Diverged:       summary.Diverged,
+			Offline:        summary.Offline,
 		}
 		h.renderer.RenderFragment(w, "compliance-evidence", "evidence-snapshot", data)
 		return
@@ -3418,13 +3429,14 @@ func (h *Handler) EvidenceSnapshotFragment(w http.ResponseWriter, r *http.Reques
 	}
 	data := EvidenceSnapshotData{
 		SnapshotDate:   snapshot.RecordedAt,
-		ConvergencePct:  pct,
+		ConvergencePct: pct,
 		Converged:      snapshot.Converged,
-		Relapsed:       snapshot.Relapsed,
-		Diverged:       snapshot.Diverged,
+		Degraded:       snapshot.Degraded,
 		Failed:         snapshot.Failed,
-		Offline:    snapshot.Offline,
 		NoData:         snapshot.NoData,
+		Changed:        snapshot.Changed,
+		Diverged:       snapshot.Diverged,
+		Offline:        snapshot.Offline,
 	}
 	h.renderer.RenderFragment(w, "compliance-evidence", "evidence-snapshot", data)
 }
@@ -3794,10 +3806,10 @@ func (h *Handler) EvidenceBundleDownload(w http.ResponseWriter, r *http.Request)
 		ToRecordedAt:   to,
 	}); err == nil && len(history) > 0 {
 		if f, err := zw.Create("compliance-history.csv"); err == nil {
-			fmt.Fprintln(f, "date,total,converged,relapsed,diverged,errors,offline,no_data")
+			fmt.Fprintln(f, "date,total,converged,degraded,failed,no_data,changed,diverged,offline")
 			for _, h := range history {
-				fmt.Fprintf(f, "%s,%d,%d,%d,%d,%d,%d,%d\n",
-					h.RecordedAt, h.Total, h.Converged, h.Relapsed, h.Diverged, h.Failed, h.Offline, h.NoData)
+				fmt.Fprintf(f, "%s,%d,%d,%d,%d,%d,%d,%d,%d\n",
+					h.RecordedAt, h.Total, h.Converged, h.Degraded, h.Failed, h.NoData, h.Changed, h.Diverged, h.Offline)
 			}
 		}
 	}
@@ -3942,9 +3954,12 @@ const (
 	envoysRenderedCap = 1000
 )
 
-// Envoys renders the envoys list page with optional status filter and pagination.
+// Envoys renders the envoys list page with optional axis filters
+// (?conv=, ?drift=, ?reach=) and pagination.
 func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
-	statusFilter := r.URL.Query().Get("status")
+	convFilter := r.URL.Query().Get("conv")
+	driftFilter := r.URL.Query().Get("drift")
+	reachFilter := r.URL.Query().Get("reach")
 	search := r.URL.Query().Get("search")
 	sortCol, sortDir := normalizeEnvoySort(r.URL.Query().Get("sort"), r.URL.Query().Get("dir"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
@@ -3952,7 +3967,7 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
-	data := h.envoysPageData(statusFilter, search, sortCol, sortDir, offset)
+	data := h.envoysPageData(convFilter, driftFilter, reachFilter, search, sortCol, sortDir, offset)
 	h.enrichEnvoyRows(data.Envoys)
 
 	h.setCommonWithRequest(&data.PageData, r)
@@ -3986,13 +4001,16 @@ func normalizeEnvoySort(col, dir string) (string, string) {
 // the pills above it. Falls back to dbDataSource.EnvoysData when the
 // cache isn't initialized (very early startup); in that fallback the
 // pill counts will be unavailable but the table renders.
-func (h *Handler) envoysPageData(statusFilter, search, sortCol, sortDir string, offset int) EnvoysPageData {
+func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, sortCol, sortDir string, offset int) EnvoysPageData {
 	if h.fleetCache == nil {
 		// Fallback: use the DB path. Pills will be empty since we
 		// can't compute fleet-wide convergence without trailing-run
 		// history. This branch is hit briefly during boot before
 		// SetFleetCache is called, then never again.
-		data := h.dataSource.EnvoysData(h.baseInterval, statusFilter, "", envoysPageLimit, search)
+		data := h.dataSource.EnvoysData(h.baseInterval, convFilter, "", envoysPageLimit, search)
+		data.ConvFilter = convFilter
+		data.DriftFilter = driftFilter
+		data.ReachFilter = reachFilter
 		data.SortColumn = sortCol
 		data.SortDir = sortDir
 		data.Offset = offset
@@ -4010,7 +4028,7 @@ func (h *Handler) envoysPageData(statusFilter, search, sortCol, sortDir string, 
 		}
 	}
 
-	entries, total, hasMore := h.fleetCache.PaginatedEntries(offset, limit, statusFilter, search, sortCol, sortDir)
+	entries, total, hasMore := h.fleetCache.PaginatedEntries(offset, limit, convFilter, driftFilter, reachFilter, search, sortCol, sortDir)
 	rows := make([]EnvoyRow, 0, len(entries))
 	for _, e := range entries {
 		rows = append(rows, EnvoyRow{
@@ -4036,34 +4054,36 @@ func (h *Handler) envoysPageData(statusFilter, search, sortCol, sortDir string, 
 	renderedCap := nextOffset >= envoysRenderedCap && nextOffset < total
 
 	data := EnvoysPageData{
-		PageData:                PageData{Title: "Envoys", ActiveNav: "envoys"},
-		Envoys:                  rows,
-		StatusFilter:            statusFilter,
-		Search:                  search,
-		SortColumn:              sortCol,
-		SortDir:                 sortDir,
-		EnvoyCount:              len(rows),
-		MatchingTotal:           total,
-		HasMore:                 hasMore && !renderedCap,
-		Offset:                  offset,
-		Limit:                   envoysPageLimit,
-		NextOffset:              nextOffset,
-		RenderedCap:             renderedCap,
-		RenderedCapMax:          envoysRenderedCap,
+		PageData:       PageData{Title: "Envoys", ActiveNav: "envoys"},
+		Envoys:         rows,
+		ConvFilter:     convFilter,
+		DriftFilter:    driftFilter,
+		ReachFilter:    reachFilter,
+		Search:         search,
+		SortColumn:     sortCol,
+		SortDir:        sortDir,
+		EnvoyCount:     len(rows),
+		MatchingTotal:  total,
+		HasMore:        hasMore && !renderedCap,
+		Offset:         offset,
+		Limit:          envoysPageLimit,
+		NextOffset:     nextOffset,
+		RenderedCap:    renderedCap,
+		RenderedCapMax: envoysRenderedCap,
 
 		TotalEnvoys:    counts.Total,
 		CountConverged: counts.Converged,
-		CountRelapsed:  counts.Relapsed,
-		CountDiverged:  counts.Diverged,
 		CountDegraded:  counts.Degraded,
 		CountFailed:    counts.Failed,
-		CountOffline:   counts.Offline,
 		CountNoData:    counts.NoData,
+		CountChanged:   counts.Changed,
+		CountDiverged:  counts.Diverged,
+		CountOffline:   counts.Offline,
 		CountObserving: counts.Observing,
 	}
 	data.ActiveEnvoys = data.TotalEnvoys - data.CountOffline
 	if data.TotalEnvoys > 0 {
-		data.DriftRate = float64(data.CountRelapsed+data.CountDiverged) / float64(data.TotalEnvoys) * 100
+		data.DriftRate = float64(data.CountDiverged) / float64(data.TotalEnvoys) * 100
 	}
 	// Fleet-wide Module Health: sum across every cached entry's last
 	// run. Cheap (single pass over a typically-small in-memory slice)
@@ -4630,14 +4650,15 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Module convergence: 100% if converged, 0% if errors/no data.
+	// Module convergence: 100% if converged, scales down with the
+	// failure-axis bucket. Drift no longer enters this number — an
+	// envoy whose modules keep changing but pass cleanly is at 100%
+	// here, and drift is surfaced separately as a pill.
 	modPct := float64(0)
 	switch convergence.ClassifyStatus(detail.Envoy.Status) {
 	case convergence.StatusConverged:
 		modPct = 100
-	case convergence.StatusRelapsed:
-		modPct = 75
-	case convergence.StatusDiverged:
+	case convergence.StatusDegraded:
 		modPct = 50
 	case convergence.StatusFailed:
 		modPct = 25
@@ -5017,14 +5038,16 @@ func (h *Handler) Plans(w http.ResponseWriter, r *http.Request) {
 // longer auto-polled, since polling at the table boundary wipes any
 // rows the user has already scrolled into.
 func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
-	statusFilter := r.URL.Query().Get("status")
+	convFilter := r.URL.Query().Get("conv")
+	driftFilter := r.URL.Query().Get("drift")
+	reachFilter := r.URL.Query().Get("reach")
 	search := r.URL.Query().Get("search")
 	sortCol, sortDir := normalizeEnvoySort(r.URL.Query().Get("sort"), r.URL.Query().Get("dir"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
 	if offset < 0 {
 		offset = 0
 	}
-	data := h.envoysPageData(statusFilter, search, sortCol, sortDir, offset)
+	data := h.envoysPageData(convFilter, driftFilter, reachFilter, search, sortCol, sortDir, offset)
 	h.enrichEnvoyRows(data.Envoys)
 	h.renderer.RenderFragment(w, "envoys", "envoys-table", data)
 }
@@ -5035,10 +5058,12 @@ func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 // table itself are outside this region so the operator's typed query
 // and scrolled position survive every refresh tick.
 func (h *Handler) EnvoysStats(w http.ResponseWriter, r *http.Request) {
-	statusFilter := r.URL.Query().Get("status")
+	convFilter := r.URL.Query().Get("conv")
+	driftFilter := r.URL.Query().Get("drift")
+	reachFilter := r.URL.Query().Get("reach")
 	search := r.URL.Query().Get("search")
 	sortCol, sortDir := normalizeEnvoySort(r.URL.Query().Get("sort"), r.URL.Query().Get("dir"))
-	data := h.envoysPageData(statusFilter, search, sortCol, sortDir, 0)
+	data := h.envoysPageData(convFilter, driftFilter, reachFilter, search, sortCol, sortDir, 0)
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.RenderFragment(w, "envoys", "envoys-stats", data)
 }
@@ -5098,12 +5123,12 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 		}
 
 		status, _ := ds.envoyComplianceInfo(ctx, n, baseInterval)
-		switch convergence.ClassifyStatus(status) {
-		case convergence.StatusRelapsed, convergence.StatusDiverged:
-			driftCount++
-		case convergence.StatusFailed:
+		if convergence.ClassifyStatus(status) == convergence.StatusFailed {
 			failureCount++
 		}
+		// driftCount stays 0 in this fallback path — drift requires a
+		// trailing-run history we don't load here. The primary path goes
+		// through fleetCache which does compute drift via ComputeDrift.
 	}
 
 	driftRate := float64(0)
@@ -5229,13 +5254,17 @@ func (ds *dbDataSource) ConvergenceData(baseInterval time.Duration) ConvergenceP
 
 	return ConvergencePageData{
 		ConvergencePct: convPct,
-		Total:         total,
-		Converged:     int64(summary["converged"]),
-		Relapsed:       int64(summary["relapsed"]),
-		Diverged:       int64(summary["diverged"]),
+		Total:          total,
+		Converged:      int64(summary["converged"]),
+		Degraded:       int64(summary["degraded"]),
 		Failed:         int64(summary["failed"]),
-		Offline:    int64(summary["offline"]),
 		NoData:         int64(summary["no data"]),
+		// Drift-axis counts are not available in the DB-fallback path
+		// (no trailing-run history); set 0. The fleetCache primary
+		// path computes them via ComputeDrift.
+		Changed:       0,
+		Diverged:      0,
+		Offline:       int64(summary["offline"]),
 		SparklineData: sparkData,
 		NonConverged:  notConverged,
 	}
@@ -5370,14 +5399,14 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 	hasMore := len(envoys) > limit && limit > 0
 
 	return EnvoysPageData{
-		PageData:     PageData{Title: "Envoys", ActiveNav: "envoys"},
-		Envoys:       rows,
-		StatusFilter: statusFilter,
-		Search:       search,
-		EnvoyCount:   len(rows),
-		HasMore:      hasMore,
-		Limit:        limit,
-		NextOffset:   len(rows),
+		PageData:   PageData{Title: "Envoys", ActiveNav: "envoys"},
+		Envoys:     rows,
+		ConvFilter: statusFilter,
+		Search:     search,
+		EnvoyCount: len(rows),
+		HasMore:    hasMore,
+		Limit:      limit,
+		NextOffset: len(rows),
 	}
 }
 
@@ -6814,31 +6843,33 @@ func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 
 	data := struct {
 		PageData
-		ConvergencePct    float64
-		Total            int64
-		Converged        int64
-		Relapsed         int64
-		Diverged         int64
-		Failed           int64
-		Offline      int64
-		NoData           int64
-		DriftCount       int
-		DriftRows        []SecurityDriftRow
-		Security         SecurityScanPageData
-		Certs            CertExpirySummary
-		QueryTimeoutSec  int
-		CVETrend         []float64
-		HardeningTrend   []float64
+		ConvergencePct  float64
+		Total           int64
+		Converged       int64
+		Degraded        int64
+		Failed          int64
+		NoData          int64
+		Changed         int64
+		Diverged        int64
+		Offline         int64
+		DriftCount      int
+		DriftRows       []SecurityDriftRow
+		Security        SecurityScanPageData
+		Certs           CertExpirySummary
+		QueryTimeoutSec int
+		CVETrend        []float64
+		HardeningTrend  []float64
 	}{
 		PageData:        PageData{Title: "Security", ActiveNav: "security"},
-		ConvergencePct:   convData.ConvergencePct,
+		ConvergencePct:  convData.ConvergencePct,
 		Total:           convData.Total,
 		Converged:       convData.Converged,
-		Relapsed:        convData.Relapsed,
-		Diverged:        convData.Diverged,
+		Degraded:        convData.Degraded,
 		Failed:          convData.Failed,
-		Offline:     convData.Offline,
 		NoData:          convData.NoData,
+		Changed:         convData.Changed,
+		Diverged:        convData.Diverged,
+		Offline:         convData.Offline,
 		DriftCount:      len(driftRows),
 		DriftRows:       driftRows,
 		Security:        secData,
@@ -6896,30 +6927,32 @@ func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		ConvergencePct    float64
-		Total            int64
-		Converged        int64
-		Relapsed         int64
-		Diverged         int64
-		Failed           int64
-		Offline      int64
-		NoData           int64
-		DriftCount       int
-		DriftRows        []SecurityDriftRow
-		Security         SecurityScanPageData
-		Certs            CertExpirySummary
-		CVETrend         []float64
-		HardeningTrend   []float64
+		ConvergencePct float64
+		Total          int64
+		Converged      int64
+		Degraded       int64
+		Failed         int64
+		NoData         int64
+		Changed        int64
+		Diverged       int64
+		Offline        int64
+		DriftCount     int
+		DriftRows      []SecurityDriftRow
+		Security       SecurityScanPageData
+		Certs          CertExpirySummary
+		CVETrend       []float64
+		HardeningTrend []float64
 	}{
-		ConvergencePct:   convData.ConvergencePct,
-		Total:           convData.Total,
-		Converged:       convData.Converged,
-		Relapsed:        convData.Relapsed,
-		Diverged:        convData.Diverged,
-		Failed:          convData.Failed,
-		Offline:     convData.Offline,
-		NoData:          convData.NoData,
-		DriftCount:      len(driftRows),
+		ConvergencePct: convData.ConvergencePct,
+		Total:          convData.Total,
+		Converged:      convData.Converged,
+		Degraded:       convData.Degraded,
+		Failed:         convData.Failed,
+		NoData:         convData.NoData,
+		Changed:        convData.Changed,
+		Diverged:       convData.Diverged,
+		Offline:        convData.Offline,
+		DriftCount:     len(driftRows),
 		DriftRows:       driftRows,
 		Security:        secData,
 		Certs:           certData,
@@ -8077,17 +8110,17 @@ func (h *Handler) enrichEnvoyRows(rows []EnvoyRow) {
 	}
 }
 
-// statusBadgeCSS converts a status string to a CSS class suffix.
-// "offline" is reachability rather than convergence and is handled
-// alongside the danger bucket because it warrants the same operator
-// attention as a hard failure.
+// statusBadgeCSS converts a failure-axis status string to a CSS class
+// suffix. "offline" is reachability rather than convergence and is
+// handled alongside the danger bucket because it warrants the same
+// operator attention as a hard failure.
 func statusBadgeCSS(status string) string {
 	switch convergence.ClassifyStatus(status) {
 	case convergence.StatusConverged:
 		return "success"
-	case convergence.StatusRelapsed, convergence.StatusDegraded:
+	case convergence.StatusDegraded:
 		return "warning"
-	case convergence.StatusDiverged, convergence.StatusFailed:
+	case convergence.StatusFailed:
 		return "danger"
 	}
 	if strings.ToLower(status) == "offline" {

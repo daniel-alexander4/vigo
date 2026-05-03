@@ -35,6 +35,7 @@ type EnvoyInput struct {
 	Revoked           bool
 	LastSeen          time.Time
 	ConvergenceStatus string
+	Drift             convergence.DriftLevel
 	Traits            map[string]string
 }
 
@@ -180,17 +181,20 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 		}
 	}
 
-	// --- Convergence drift ---
+	// --- Failure axis: Failed/Degraded contribute points. ---
 	switch convergence.ClassifyStatus(es.ConvergenceStatus) {
-	case convergence.StatusRelapsed:
-		score += 10
-		r.Factors = append(r.Factors, Factor{"Relapsed", 10, "convergence failing to hold"})
-	case convergence.StatusDiverged:
-		score += 15
-		r.Factors = append(r.Factors, Factor{"Diverged", 15, "persistent configuration conflict"})
 	case convergence.StatusFailed:
 		score += 15
 		r.Factors = append(r.Factors, Factor{"Convergence Failed", 15, "last run had failures"})
+	case convergence.StatusDegraded:
+		score += 10
+		r.Factors = append(r.Factors, Factor{"Degraded", 10, "1-79% of modules failed in the last run"})
+	}
+
+	// --- Drift axis: persistent mutation across many recent runs ---
+	if es.Drift == convergence.DriftDiverged {
+		score += 15
+		r.Factors = append(r.Factors, Factor{"Diverged", 15, "modules keep mutating across recent runs"})
 	}
 
 	// --- Stale check-in: +20 if offline ---
