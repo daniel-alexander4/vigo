@@ -157,6 +157,52 @@ func (c *apiClient) postNoTimeout(path string, body, result any) error {
 	return c.decodeResponse(resp, result)
 }
 
+// postStream POSTs and reads the response body as newline-delimited JSON,
+// invoking onMessage for each parsed object. Use for endpoints that emit
+// progress ticks during a long-running operation. No client-side timeout.
+// Returns when the server closes the body or onMessage returns an error.
+func (c *apiClient) postStream(path string, body any, onMessage func(map[string]any) error) error {
+	var bodyReader io.Reader
+	if body != nil {
+		data, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("failed to marshal request body: %w", err)
+		}
+		bodyReader = bytes.NewReader(data)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+path, bodyReader)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.setAuthHeader(req)
+
+	streamClient := *c.httpClient
+	streamClient.Timeout = 0
+	resp, err := streamClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return c.decodeResponse(resp, nil)
+	}
+
+	dec := json.NewDecoder(resp.Body)
+	for dec.More() {
+		var msg map[string]any
+		if err := dec.Decode(&msg); err != nil {
+			return fmt.Errorf("decode stream message: %w", err)
+		}
+		if err := onMessage(msg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // postRaw sends a raw body (e.g., a file) as a POST request with optional headers.
 // Uses no timeout — uploads can be arbitrarily large and should not be cut short.
 func (c *apiClient) postRaw(path string, body io.Reader, headers map[string]string, result any) error {

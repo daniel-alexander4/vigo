@@ -113,15 +113,44 @@ on large databases. The server remains available during VACUUM.`,
 		}
 
 		client := newAPIClient()
-		var result map[string]any
-		fmt.Println("Running VACUUM. This rewrites the database file and may take many minutes on a multi-GB DB.")
-		if err := client.postNoTimeout("/api/v1/db/vacuum", nil, &result); err != nil {
+		fmt.Println("Running VACUUM. This rewrites the database file; expect many minutes on a multi-GB DB.")
+		var finalErr error
+		err := client.postStream("/api/v1/db/vacuum", nil, func(msg map[string]any) error {
+			switch msg["status"] {
+			case "running":
+				elapsed := toInt64(msg["elapsed_ms"])
+				written := toInt64(msg["written_bytes"])
+				expected := toInt64(msg["expected_bytes"])
+				pct := toInt64(msg["estimated_pct"])
+				if expected > 0 {
+					fmt.Printf("\r  [%6s] %s of ~%s (~%2d%%)            ",
+						formatElapsed(elapsed), formatBytes(written), formatBytes(expected), pct)
+				} else {
+					fmt.Printf("\r  [%6s] %s written            ",
+						formatElapsed(elapsed), formatBytes(written))
+				}
+			case "done":
+				fmt.Println()
+				fmt.Printf("Before:    %s\n", formatBytes(toInt64(msg["before"])))
+				fmt.Printf("After:     %s\n", formatBytes(toInt64(msg["after"])))
+				fmt.Printf("Reclaimed: %s\n", formatBytes(toInt64(msg["reclaimed"])))
+				fmt.Printf("Elapsed:   %s\n", formatElapsed(toInt64(msg["elapsed_ms"])))
+			case "error":
+				fmt.Println()
+				if e, ok := msg["error"].(string); ok {
+					finalErr = fmt.Errorf("VACUUM failed after %s: %s",
+						formatElapsed(toInt64(msg["elapsed_ms"])), e)
+				} else {
+					finalErr = fmt.Errorf("VACUUM failed")
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			fmt.Println()
 			return err
 		}
-		fmt.Printf("Before:    %s\n", formatBytes(toInt64(result["before"])))
-		fmt.Printf("After:     %s\n", formatBytes(toInt64(result["after"])))
-		fmt.Printf("Reclaimed: %s\n", formatBytes(toInt64(result["reclaimed"])))
-		return nil
+		return finalErr
 	},
 }
 
@@ -348,6 +377,20 @@ func formatBytes(b int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+// formatElapsed turns ms into a compact human-readable duration like
+// "12s", "5m08s", or "1h13m".
+func formatElapsed(ms int64) string {
+	s := ms / 1000
+	if s < 60 {
+		return fmt.Sprintf("%ds", s)
+	}
+	m := s / 60
+	if m < 60 {
+		return fmt.Sprintf("%dm%02ds", m, s%60)
+	}
+	return fmt.Sprintf("%dh%02dm", m/60, m%60)
 }
 
 // formatInt formats an integer with thousands separators (e.g. 1_234_567 → "1,234,567").

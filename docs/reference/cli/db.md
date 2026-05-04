@@ -31,7 +31,7 @@ vigocli db integrity
 
 ### vacuum
 
-Rewrite the database file to reclaim unused space. Prompts for confirmation (use `--force` to skip).
+Rewrite the database file to reclaim unused space freed by `db prune` or normal deletes. Streams progress every 5 seconds (`elapsed time | bytes written / estimated total | pct estimate`); the percentage is approximated from the process's write counter against an expected ~2× DB-size budget. On a multi-GB DB this can take many minutes — the streaming heartbeat lets you see it isn't stuck. Prompts for confirmation (use `--force` to skip).
 
 ```bash
 vigocli db vacuum

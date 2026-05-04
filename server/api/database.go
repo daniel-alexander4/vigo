@@ -136,41 +136,126 @@ func (h *DatabaseHandler) handleIntegrity(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(result)
 }
 
-// handleVacuum runs VACUUM to reclaim space. SQLite only.
+// handleVacuum runs VACUUM to reclaim space and streams progress as
+// newline-delimited JSON so the operator can see the operation isn't
+// stuck. SQLite VACUUM doesn't expose a callback, so progress is
+// approximated from the process's write_bytes counter against an
+// expected ~2× DB-size budget (VACUUM reads the whole DB, then writes
+// the whole DB). SQLite only.
 func (h *DatabaseHandler) handleVacuum(w http.ResponseWriter, r *http.Request) {
 	if h.driver != "sqlite" {
 		writeError(w, http.StatusBadRequest, "VACUUM is only available for SQLite")
 		return
 	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "streaming response not supported")
+		return
+	}
 
 	slog.Info("database VACUUM requested")
+	startTime := time.Now()
+	startWrite := readProcWriteBytes()
 
-	// Get size before.
 	var sizeBefore int64
 	if info, err := os.Stat(h.dsn); err == nil {
 		sizeBefore = info.Size()
 	}
+	expectedBytes := sizeBefore * 2 // VACUUM reads + writes the full DB
 
-	if _, err := h.sqlDB.Exec("VACUUM"); err != nil {
-		writeError(w, http.StatusInternalServerError, fmt.Sprintf("VACUUM failed: %v", err))
-		return
+	w.Header().Set("Content-Type", "application/x-ndjson")
+	w.Header().Set("X-Accel-Buffering", "no") // disable nginx-style proxy buffering
+	enc := json.NewEncoder(w)
+
+	tick := func() {
+		elapsed := time.Since(startTime)
+		written := readProcWriteBytes() - startWrite
+		var pct int64
+		if expectedBytes > 0 {
+			pct = written * 100 / expectedBytes
+			if pct > 99 {
+				pct = 99 // never claim 100% before the operation actually returns
+			}
+		}
+		_ = enc.Encode(map[string]any{
+			"status":         "running",
+			"elapsed_ms":     elapsed.Milliseconds(),
+			"written_bytes":  written,
+			"expected_bytes": expectedBytes,
+			"estimated_pct":  pct,
+		})
+		flusher.Flush()
 	}
 
-	// Get size after.
-	var sizeAfter int64
-	if info, err := os.Stat(h.dsn); err == nil {
-		sizeAfter = info.Size()
+	// Send an immediate tick so the client sees something within milliseconds.
+	tick()
+
+	// Run VACUUM in a goroutine; main goroutine ticks until it returns.
+	done := make(chan error, 1)
+	go func() {
+		_, err := h.sqlDB.Exec("VACUUM")
+		done <- err
+	}()
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case err := <-done:
+			var sizeAfter int64
+			if info, statErr := os.Stat(h.dsn); statErr == nil {
+				sizeAfter = info.Size()
+			}
+			if err != nil {
+				slog.Error("database VACUUM failed", "error", err, "elapsed", time.Since(startTime))
+				_ = enc.Encode(map[string]any{
+					"status":     "error",
+					"error":      err.Error(),
+					"elapsed_ms": time.Since(startTime).Milliseconds(),
+				})
+				flusher.Flush()
+				return
+			}
+			slog.Info("database VACUUM complete",
+				"before", sizeBefore, "after", sizeAfter, "reclaimed", sizeBefore-sizeAfter,
+				"elapsed", time.Since(startTime))
+			_ = enc.Encode(map[string]any{
+				"status":     "done",
+				"before":     sizeBefore,
+				"after":      sizeAfter,
+				"reclaimed":  sizeBefore - sizeAfter,
+				"elapsed_ms": time.Since(startTime).Milliseconds(),
+			})
+			flusher.Flush()
+			return
+		case <-ticker.C:
+			tick()
+		case <-r.Context().Done():
+			// Client gave up. VACUUM keeps running on the goroutine — we
+			// can't cancel it cleanly. Just stop streaming.
+			slog.Warn("database VACUUM client disconnected, server-side VACUUM continues")
+			return
+		}
 	}
+}
 
-	slog.Info("database VACUUM complete", "before", sizeBefore, "after", sizeAfter, "reclaimed", sizeBefore-sizeAfter)
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"status":    "ok",
-		"before":    sizeBefore,
-		"after":     sizeAfter,
-		"reclaimed": sizeBefore - sizeAfter,
-	})
+// readProcWriteBytes reports vigosrv's lifetime write bytes from
+// /proc/self/io. Returns 0 on non-Linux or read errors; the caller
+// uses deltas so absolute correctness doesn't matter.
+func readProcWriteBytes() int64 {
+	data, err := os.ReadFile("/proc/self/io")
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "write_bytes:") {
+			var n int64
+			fmt.Sscanf(strings.TrimPrefix(line, "write_bytes:"), "%d", &n)
+			return n
+		}
+	}
+	return 0
 }
 
 // handleCheckpoint forces a WAL checkpoint. SQLite only.
