@@ -21,6 +21,6 @@ FROM compliance_history
 ORDER BY snapshot_date DESC, framework
 LIMIT ?;
 
--- name: PruneComplianceHistoryByAge :exec
+-- name: PruneComplianceHistoryByAge :execrows
 DELETE FROM compliance_history
 WHERE snapshot_date < ?;

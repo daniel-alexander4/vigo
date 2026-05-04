@@ -238,23 +238,20 @@ func (h *DatabaseHandler) handlePrune(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sizeBefore, _ := db.DatabaseSizeBytes(h.sqlDB)
 	slog.Info("database prune requested", "older_than", req.OlderThan, "duration", dur)
+	start := time.Now()
 
 	pruner := db.NewRetentionPruner(h.queries, h.sqlDB, dur)
 	pruner.SetPostgres(h.driver == "postgres")
-	pruner.Prune(r.Context())
-
-	sizeAfter, _ := db.DatabaseSizeBytes(h.sqlDB)
-	slog.Info("database prune complete", "before", sizeBefore, "after", sizeAfter, "reclaimed", sizeBefore-sizeAfter)
+	res := pruner.Prune(r.Context())
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"status":     "ok",
 		"older_than": req.OlderThan,
-		"before":     sizeBefore,
-		"after":      sizeAfter,
-		"reclaimed":  sizeBefore - sizeAfter,
+		"deleted":    res.Deleted,
+		"total":      res.Total(),
+		"elapsed_ms": time.Since(start).Milliseconds(),
 	})
 }
 

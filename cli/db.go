@@ -114,7 +114,8 @@ on large databases. The server remains available during VACUUM.`,
 
 		client := newAPIClient()
 		var result map[string]any
-		if err := client.post("/api/v1/db/vacuum", nil, &result); err != nil {
+		fmt.Println("Running VACUUM. This rewrites the database file and may take many minutes on a multi-GB DB.")
+		if err := client.postNoTimeout("/api/v1/db/vacuum", nil, &result); err != nil {
 			return err
 		}
 		fmt.Printf("Before:    %s\n", formatBytes(toInt64(result["before"])))
@@ -155,15 +156,25 @@ Examples:
 
 		client := newAPIClient()
 		var result map[string]any
-		if err := client.post("/api/v1/db/prune", map[string]string{"older_than": olderThan}, &result); err != nil {
+		if err := client.postNoTimeout("/api/v1/db/prune", map[string]string{"older_than": olderThan}, &result); err != nil {
 			return err
 		}
-		fmt.Printf("Older than: %v\n", result["older_than"])
-		fmt.Printf("Before:     %s\n", formatBytes(toInt64(result["before"])))
-		fmt.Printf("After:      %s\n", formatBytes(toInt64(result["after"])))
-		fmt.Printf("Reclaimed:  %s\n", formatBytes(toInt64(result["reclaimed"])))
-		fmt.Println("\nNote: VACUUM is needed to return reclaimed pages to the OS.")
-		fmt.Println("Run: vigocli db vacuum")
+		fmt.Printf("Pruned rows older than %v (elapsed %vms):\n", result["older_than"], result["elapsed_ms"])
+		if deleted, ok := result["deleted"].(map[string]any); ok {
+			// Stable ordering: largest tables first, then alpha for the rest.
+			ordered := []string{"runs", "push_runs", "workflow_runs", "file_snapshots", "convergence_history", "compliance_history"}
+			for _, name := range ordered {
+				if v, ok := deleted[name]; ok {
+					note := ""
+					if name == "runs" {
+						note = "  (cascades to run_results)"
+					}
+					fmt.Printf("  %-22s %12s%s\n", name, formatInt(toInt64(v)), note)
+				}
+			}
+		}
+		fmt.Printf("  %-22s %12s\n", "TOTAL", formatInt(toInt64(result["total"])))
+		fmt.Println("\nDeleted rows are now in the freelist. Run `vigocli db vacuum` to return that space to the filesystem.")
 		return nil
 	},
 }
@@ -337,6 +348,33 @@ func formatBytes(b int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %ciB", float64(b)/float64(div), "KMGTPE"[exp])
+}
+
+// formatInt formats an integer with thousands separators (e.g. 1_234_567 → "1,234,567").
+// 116M run_results rows are unreadable without grouping.
+func formatInt(n int64) string {
+	s := fmt.Sprintf("%d", n)
+	if len(s) <= 3 {
+		return s
+	}
+	// Walk from the right, inserting a comma every three digits (skip the
+	// optional leading minus sign).
+	start := 0
+	if s[0] == '-' {
+		start = 1
+	}
+	digits := len(s) - start
+	out := make([]byte, 0, len(s)+digits/3)
+	if start == 1 {
+		out = append(out, '-')
+	}
+	for i, c := range s[start:] {
+		if i > 0 && (digits-i)%3 == 0 {
+			out = append(out, ',')
+		}
+		out = append(out, byte(c))
+	}
+	return string(out)
 }
 
 // toInt64 converts a JSON number to int64.

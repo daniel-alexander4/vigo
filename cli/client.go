@@ -126,6 +126,37 @@ func (c *apiClient) put(path string, body, result any) error {
 	return c.decodeResponse(resp, result)
 }
 
+// postNoTimeout is post() with the client timeout disabled. Use for endpoints
+// that can legitimately run for many minutes — VACUUM on a multi-GB DB,
+// large db prune cascades, etc. The default 30s timeout would otherwise
+// cancel the client side while the server keeps grinding.
+func (c *apiClient) postNoTimeout(path string, body, result any) error {
+	var bodyReader io.Reader
+	if body != nil {
+		data, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("failed to marshal request body: %w", err)
+		}
+		bodyReader = bytes.NewReader(data)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+path, bodyReader)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	c.setAuthHeader(req)
+
+	longClient := *c.httpClient
+	longClient.Timeout = 0
+	resp, err := longClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	return c.decodeResponse(resp, result)
+}
+
 // postRaw sends a raw body (e.g., a file) as a POST request with optional headers.
 // Uses no timeout — uploads can be arbitrarily large and should not be cut short.
 func (c *apiClient) postRaw(path string, body io.Reader, headers map[string]string, result any) error {

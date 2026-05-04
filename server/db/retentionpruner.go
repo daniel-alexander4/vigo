@@ -56,14 +56,33 @@ func (p *RetentionPruner) Start(ctx context.Context, interval time.Duration) {
 	}
 }
 
+// PruneResult reports how many rows the latest prune deleted per table.
+// Cascaded rows (e.g., run_results dropped via runs FK) are not counted —
+// only the directly-targeted DELETEs.
+type PruneResult struct {
+	Deleted map[string]int64
+}
+
+// Total returns the sum of directly-deleted rows across all tables.
+func (r PruneResult) Total() int64 {
+	var n int64
+	for _, v := range r.Deleted {
+		n += v
+	}
+	return n
+}
+
 // Prune deletes old rows from all history tables and runs incremental VACUUM.
-func (p *RetentionPruner) Prune(ctx context.Context) {
+// Returns per-table delete counts so callers can surface progress.
+func (p *RetentionPruner) Prune(ctx context.Context) PruneResult {
 	cutoff := time.Now().Add(-p.retention)
 	slog.Info("retention pruner running", "cutoff", cutoff.Format(time.RFC3339), "retention", p.retention)
 
+	res := PruneResult{Deleted: make(map[string]int64)}
+
 	tables := []struct {
 		name  string
-		prune func(context.Context, time.Time) error
+		prune func(context.Context, time.Time) (int64, error)
 	}{
 		{"runs", p.queries.PruneRunsByAge},
 		{"push_runs", p.queries.PrunePushRunsByAge},
@@ -72,18 +91,25 @@ func (p *RetentionPruner) Prune(ctx context.Context) {
 	}
 
 	for _, t := range tables {
-		if err := t.prune(ctx, cutoff); err != nil {
+		n, err := t.prune(ctx, cutoff)
+		if err != nil {
 			slog.Error("retention pruner failed", "table", t.name, "error", err)
+			continue
 		}
+		res.Deleted[t.name] = n
 	}
 
 	// History tables use a string date, not time.Time.
 	cutoffDate := cutoff.Format("2006-01-02")
-	if err := p.queries.PruneConvergenceHistoryByAge(ctx, cutoffDate); err != nil {
+	if n, err := p.queries.PruneConvergenceHistoryByAge(ctx, cutoffDate); err != nil {
 		slog.Error("retention pruner failed", "table", "convergence_history", "error", err)
+	} else {
+		res.Deleted["convergence_history"] = n
 	}
-	if err := p.queries.PruneComplianceHistoryByAge(ctx, cutoffDate); err != nil {
+	if n, err := p.queries.PruneComplianceHistoryByAge(ctx, cutoffDate); err != nil {
 		slog.Error("retention pruner failed", "table", "compliance_history", "error", err)
+	} else {
+		res.Deleted["compliance_history"] = n
 	}
 
 	// Reclaim space from deleted rows.
@@ -95,7 +121,8 @@ func (p *RetentionPruner) Prune(ctx context.Context) {
 		}
 	}
 
-	slog.Info("retention pruner complete")
+	slog.Info("retention pruner complete", "deleted_total", res.Total())
+	return res
 }
 
 // DatabaseSizeBytes returns the current database file size in bytes.

@@ -10,55 +10,70 @@ import (
 	"time"
 )
 
-const pruneConvergenceHistoryByAge = `-- name: PruneConvergenceHistoryByAge :exec
+const pruneConvergenceHistoryByAge = `-- name: PruneConvergenceHistoryByAge :execrows
 DELETE FROM convergence_history
 WHERE recorded_at < ?
 `
 
-func (q *Queries) PruneConvergenceHistoryByAge(ctx context.Context, recordedAt string) error {
-	_, err := q.db.ExecContext(ctx, pruneConvergenceHistoryByAge, recordedAt)
-	return err
+func (q *Queries) PruneConvergenceHistoryByAge(ctx context.Context, recordedAt string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneConvergenceHistoryByAge, recordedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
-const pruneFileSnapshotsByAge = `-- name: PruneFileSnapshotsByAge :exec
+const pruneFileSnapshotsByAge = `-- name: PruneFileSnapshotsByAge :execrows
 DELETE FROM file_snapshots
 WHERE created_at < ?
 `
 
-func (q *Queries) PruneFileSnapshotsByAge(ctx context.Context, createdAt time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneFileSnapshotsByAge, createdAt)
-	return err
+func (q *Queries) PruneFileSnapshotsByAge(ctx context.Context, createdAt time.Time) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneFileSnapshotsByAge, createdAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
-const prunePushRunsByAge = `-- name: PrunePushRunsByAge :exec
+const prunePushRunsByAge = `-- name: PrunePushRunsByAge :execrows
 DELETE FROM push_runs
 WHERE created_at < ?
   AND status NOT IN ('running', 'pending')
 `
 
-func (q *Queries) PrunePushRunsByAge(ctx context.Context, createdAt time.Time) error {
-	_, err := q.db.ExecContext(ctx, prunePushRunsByAge, createdAt)
-	return err
+func (q *Queries) PrunePushRunsByAge(ctx context.Context, createdAt time.Time) (int64, error) {
+	result, err := q.db.ExecContext(ctx, prunePushRunsByAge, createdAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
-const pruneRunsByAge = `-- name: PruneRunsByAge :exec
+const pruneRunsByAge = `-- name: PruneRunsByAge :execrows
 DELETE FROM runs
 WHERE started_at < ?
   AND status NOT IN ('running', 'pending')
 `
 
-func (q *Queries) PruneRunsByAge(ctx context.Context, startedAt time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneRunsByAge, startedAt)
-	return err
+func (q *Queries) PruneRunsByAge(ctx context.Context, startedAt time.Time) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneRunsByAge, startedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
-const pruneWorkflowRunsByAge = `-- name: PruneWorkflowRunsByAge :exec
+const pruneWorkflowRunsByAge = `-- name: PruneWorkflowRunsByAge :execrows
 DELETE FROM workflow_runs
 WHERE created_at < ?
   AND status NOT IN ('running', 'pending')
 `
 
-func (q *Queries) PruneWorkflowRunsByAge(ctx context.Context, createdAt time.Time) error {
-	_, err := q.db.ExecContext(ctx, pruneWorkflowRunsByAge, createdAt)
-	return err
+func (q *Queries) PruneWorkflowRunsByAge(ctx context.Context, createdAt time.Time) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneWorkflowRunsByAge, createdAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

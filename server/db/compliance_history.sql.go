@@ -93,14 +93,17 @@ func (q *Queries) ListComplianceHistoryAllFrameworks(ctx context.Context, limit 
 	return items, nil
 }
 
-const pruneComplianceHistoryByAge = `-- name: PruneComplianceHistoryByAge :exec
+const pruneComplianceHistoryByAge = `-- name: PruneComplianceHistoryByAge :execrows
 DELETE FROM compliance_history
 WHERE snapshot_date < ?
 `
 
-func (q *Queries) PruneComplianceHistoryByAge(ctx context.Context, snapshotDate string) error {
-	_, err := q.db.ExecContext(ctx, pruneComplianceHistoryByAge, snapshotDate)
-	return err
+func (q *Queries) PruneComplianceHistoryByAge(ctx context.Context, snapshotDate string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pruneComplianceHistoryByAge, snapshotDate)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const upsertComplianceSnapshot = `-- name: UpsertComplianceSnapshot :exec
