@@ -168,6 +168,27 @@ Examples:
 	},
 }
 
+var dbAnalyzeCmd = &cobra.Command{
+	Use:   "analyze",
+	Short: "Refresh the query planner's table statistics (runs ANALYZE)",
+	Long: `Runs ANALYZE so SQLite's query planner refreshes the sqlite_stat1
+statistics it uses to pick query plans. Worth running once after adding
+or dropping an index, after a large 'db prune', or whenever EXPLAIN
+QUERY PLAN seems to ignore an index that should be used.
+
+Cheap — typically seconds even on multi-GB databases. The server stays
+available throughout.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client := newAPIClient()
+		var result map[string]any
+		if err := client.post("/api/v1/db/analyze", nil, &result); err != nil {
+			return err
+		}
+		fmt.Printf("ANALYZE complete in %vms\n", result["elapsed_ms"])
+		return nil
+	},
+}
+
 var dbCheckpointCmd = &cobra.Command{
 	Use:   "checkpoint",
 	Short: "Force a WAL checkpoint to flush pending writes to the main database file",
@@ -297,6 +318,7 @@ func init() {
 		dbIntegrityCmd,
 		dbVacuumCmd,
 		dbPruneCmd,
+		dbAnalyzeCmd,
 		dbCheckpointCmd,
 		dbQueryCmd,
 		dbResetCmd,

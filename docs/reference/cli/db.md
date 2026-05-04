@@ -47,6 +47,14 @@ vigocli db prune --older-than 30d
 vigocli db prune --older-than 720h --force
 ```
 
+### analyze
+
+Refresh the query planner's table statistics. Runs `ANALYZE`, which updates `sqlite_stat1` so SQLite's planner picks the best query plan. Worth running once after adding or dropping an index, after a large `db prune`, or whenever `EXPLAIN QUERY PLAN` seems to ignore an index that should be used. Typically seconds even on multi-GB databases.
+
+```bash
+vigocli db analyze
+```
+
 ### checkpoint
 
 Force a WAL checkpoint to flush pending writes to the main database file.

@@ -931,15 +931,16 @@ type RiskFactorSummary struct {
 
 // FleetRow is a envoy row for the dashboard fleet status table.
 type FleetRow struct {
-	ID          string
-	Hostname    string
-	IP          string
-	LastSeen    time.Time
-	Status      string
-	LastRunID   string
-	FailurePct  float64
-	FailedCount int64
-	ModuleCount int64
+	ID           string
+	Hostname     string
+	IP           string
+	LastSeen     time.Time
+	Status       string
+	LastRunID    string
+	FailurePct   float64
+	ChangedCount int64
+	FailedCount  int64
+	ModuleCount  int64
 }
 
 // RunRow is a single run displayed in a table.
@@ -2188,15 +2189,16 @@ func (h *Handler) dashboardData() DashboardPageData {
 		data.FleetRows = make([]FleetRow, 0, len(worst))
 		for _, e := range worst {
 			data.FleetRows = append(data.FleetRows, FleetRow{
-				ID:         e.ID,
-				Hostname:    e.Hostname,
-				IP:          e.IPAddress,
-				LastSeen:    e.LastSeen,
-				Status:      e.Status,
-				LastRunID:   e.LastRunID,
-				FailurePct:  e.FailurePct,
-				FailedCount: e.FailedCount,
-				ModuleCount: e.ModuleCount,
+				ID:           e.ID,
+				Hostname:     e.Hostname,
+				IP:           e.IPAddress,
+				LastSeen:     e.LastSeen,
+				Status:       e.Status,
+				LastRunID:    e.LastRunID,
+				FailurePct:   e.FailurePct,
+				ChangedCount: e.ChangedCount,
+				FailedCount:  e.FailedCount,
+				ModuleCount:  e.ModuleCount,
 			})
 		}
 		data.FleetRowsCapped = len(worst) < counts.Total

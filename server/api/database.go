@@ -44,6 +44,7 @@ func (h *DatabaseHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/db/checkpoint", admin(http.HandlerFunc(h.handleCheckpoint)))
 	mux.Handle("POST /api/v1/db/query", admin(http.HandlerFunc(h.handleQuery)))
 	mux.Handle("POST /api/v1/db/prune", admin(http.HandlerFunc(h.handlePrune)))
+	mux.Handle("POST /api/v1/db/analyze", admin(http.HandlerFunc(h.handleAnalyze)))
 }
 
 // handleStats returns database size, WAL size, page count, and table row counts.
@@ -193,6 +194,26 @@ func (h *DatabaseHandler) handleCheckpoint(w http.ResponseWriter, r *http.Reques
 		"status":        "ok",
 		"pages_total":   pagesTotal,
 		"pages_written": pagesWritten,
+	})
+}
+
+// handleAnalyze runs ANALYZE so the query planner refreshes its statistics.
+// Cheap (seconds), worth running once after schema/index changes or after a
+// bulk prune so the planner picks the right plan on the new shape.
+func (h *DatabaseHandler) handleAnalyze(w http.ResponseWriter, r *http.Request) {
+	slog.Info("database ANALYZE requested")
+	start := time.Now()
+	if _, err := h.sqlDB.ExecContext(r.Context(), "ANALYZE"); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("ANALYZE failed: %v", err))
+		return
+	}
+	elapsed := time.Since(start)
+	slog.Info("database ANALYZE complete", "elapsed", elapsed)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":     "ok",
+		"elapsed_ms": elapsed.Milliseconds(),
 	})
 }
 
