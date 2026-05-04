@@ -236,11 +236,6 @@ func run() error {
 	}
 	slog.Info("migrations complete")
 
-	// One-time fixup: rename compliance_history → convergence_history if the
-	// DB was created before the convergence rename. Safe to run on fresh DBs
-	// (compliance_history won't exist, so the rename is a no-op).
-	migrateConvergenceHistory(sqlDB)
-
 	// Initialize query layer early — needed for license envoy count.
 	// For Postgres, wrap DB with placeholder rewriter so sqlc-generated
 	// queries (which use ?) work with Postgres ($1, $2, ...).
@@ -2319,41 +2314,6 @@ func runSecurityPostureSnapshot(ctx context.Context, queries *db.Queries, fleetI
 			takeSnapshot()
 		}
 	}
-}
-
-// migrateConvergenceHistory renames the old compliance_history table (created
-// before the convergence rename) to convergence_history with updated column
-// names. No-op if compliance_history doesn't exist (fresh DB).
-func migrateConvergenceHistory(sqlDB *sql.DB) {
-	// Check if the old table exists.
-	var count int
-	err := sqlDB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='compliance_history'").Scan(&count)
-	if err != nil || count == 0 {
-		return
-	}
-	// Check if convergence_history already exists (shouldn't on old DBs).
-	var convCount int
-	sqlDB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='convergence_history'").Scan(&convCount)
-	if convCount > 0 {
-		sqlDB.Exec("DROP TABLE compliance_history")
-		return
-	}
-	stmts := []string{
-		"ALTER TABLE compliance_history RENAME TO convergence_history",
-		"ALTER TABLE convergence_history RENAME COLUMN compliant TO converged",
-		"ALTER TABLE convergence_history RENAME COLUMN drifted TO relapsed",
-		"ALTER TABLE convergence_history ADD COLUMN diverged INTEGER NOT NULL DEFAULT 0",
-		"ALTER TABLE convergence_history RENAME COLUMN failing TO errors",
-		"ALTER TABLE convergence_history RENAME COLUMN stale TO offline",
-		"ALTER TABLE convergence_history RENAME COLUMN unknown TO no_data",
-	}
-	for _, stmt := range stmts {
-		if _, err := sqlDB.Exec(stmt); err != nil {
-			slog.Warn("convergence history migration step failed", "stmt", stmt, "error", err)
-			return
-		}
-	}
-	slog.Info("migrated compliance_history → convergence_history")
 }
 
 // persistComplianceSnapshot writes per-framework standards compliance
