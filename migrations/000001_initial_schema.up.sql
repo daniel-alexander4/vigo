@@ -394,6 +394,10 @@ CREATE TABLE IF NOT EXISTS mttr_stats (
 );
 
 CREATE INDEX IF NOT EXISTS idx_runs_envoy_started_status ON runs (envoy_id, started_at, status);
+-- Recent-activity queries (dashboard, /runs) order by started_at globally.
+-- The composite index above leads with envoy_id so it can't satisfy
+-- ORDER BY started_at without a temp B-tree sort over the entire table.
+CREATE INDEX IF NOT EXISTS idx_runs_started_at ON runs (started_at DESC);
 
 CREATE TABLE IF NOT EXISTS compliance_waivers (
     id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
