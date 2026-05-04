@@ -43,22 +43,41 @@ The database schema is defined in `migrations/000001_initial_schema.up.sql`. Tab
 
 ## Retention Pruning
 
+Vigo accumulates history aggressively — every check-in produces a `runs` row plus one `run_results` row per applied module. Without retention, the SQLite DB grows without bound and queries that order by `started_at` start to dominate the dashboard render budget.
+
 Configure automatic pruning of old run/task/workflow records:
 
 ```yaml
 database:
-  retention: "90d"    # prune records older than 90 days
+  retention: "30d"    # prune records older than 30 days
 ```
 
-Accepted formats: `90d` (days), `2160h` (hours). When empty, no pruning occurs.
+Accepted formats: `30d` (days shorthand) or Go duration strings like `720h`. When empty, no pruning occurs and the server logs `WARN database retention pruning is disabled and DB is large` at startup once the DB exceeds 1 GiB.
 
-Pruning removes:
-- Old runs and their results
-- Old task runs and their target results
-- Old workflow runs and their step results
-- Old compliance history snapshots
+When set, vigosrv runs a background pruner every 24 hours that deletes from:
 
-Envoy records, approved patterns, and webhooks are never pruned automatically.
+- `runs` (cascades to `run_results` via `ON DELETE CASCADE`)
+- `push_runs`
+- `workflow_runs`
+- `file_snapshots`
+- `convergence_history`
+- `compliance_history`
+
+Envoy records, approved patterns, webhooks, and `audit_entries` (the integrity-load-bearing hash chain) are never pruned automatically.
+
+### One-shot cleanup of accumulated history
+
+The daily pruner only catches up gradually. For a server that ran without retention and now has weeks/months of accumulated runs, do the cleanup in one pass:
+
+```bash
+# 1. Delete history rows older than the new retention window.
+vigocli db prune --older-than 30d
+
+# 2. Reclaim freed pages back to the filesystem.
+vigocli db vacuum
+```
+
+`db prune` reuses the same query path as the periodic pruner. `db vacuum` rewrites the database file; on a multi-GB DB this can take a few minutes. The server stays available throughout — both operations run while vigosrv keeps serving requests.
 
 ## Connection Tuning
 

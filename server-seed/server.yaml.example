@@ -32,7 +32,7 @@ server:
 database:
   dsn: "secret:vigo/db/dsn"
   # driver: postgres
-  # retention: "90d"                           # auto-prune old runs/tasks/workflows
+  retention: "30d"                             # auto-prune runs/tasks/workflows older than this; daily background pruner. Empty disables.
 
 
 # ── Secrets ───────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
@@ -42,6 +43,7 @@ func (h *DatabaseHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/db/vacuum", admin(http.HandlerFunc(h.handleVacuum)))
 	mux.Handle("POST /api/v1/db/checkpoint", admin(http.HandlerFunc(h.handleCheckpoint)))
 	mux.Handle("POST /api/v1/db/query", admin(http.HandlerFunc(h.handleQuery)))
+	mux.Handle("POST /api/v1/db/prune", admin(http.HandlerFunc(h.handlePrune)))
 }
 
 // handleStats returns database size, WAL size, page count, and table row counts.
@@ -192,6 +194,59 @@ func (h *DatabaseHandler) handleCheckpoint(w http.ResponseWriter, r *http.Reques
 		"pages_total":   pagesTotal,
 		"pages_written": pagesWritten,
 	})
+}
+
+// handlePrune runs a one-shot retention prune at the requested age. Reuses
+// the same query path as the periodic pruner so the cleanup matches the
+// steady-state cadence.
+func (h *DatabaseHandler) handlePrune(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		OlderThan string `json:"older_than"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.OlderThan == "" {
+		writeError(w, http.StatusBadRequest, "older_than is required (e.g. \"30d\", \"720h\")")
+		return
+	}
+	dur, err := parsePruneDuration(req.OlderThan)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("invalid older_than: %v", err))
+		return
+	}
+
+	sizeBefore, _ := db.DatabaseSizeBytes(h.sqlDB)
+	slog.Info("database prune requested", "older_than", req.OlderThan, "duration", dur)
+
+	pruner := db.NewRetentionPruner(h.queries, h.sqlDB, dur)
+	pruner.SetPostgres(h.driver == "postgres")
+	pruner.Prune(r.Context())
+
+	sizeAfter, _ := db.DatabaseSizeBytes(h.sqlDB)
+	slog.Info("database prune complete", "before", sizeBefore, "after", sizeAfter, "reclaimed", sizeBefore-sizeAfter)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":     "ok",
+		"older_than": req.OlderThan,
+		"before":     sizeBefore,
+		"after":      sizeAfter,
+		"reclaimed":  sizeBefore - sizeAfter,
+	})
+}
+
+// parsePruneDuration accepts Go duration strings (e.g. "720h") plus the
+// "Nd" shorthand that the periodic pruner already accepts.
+func parsePruneDuration(s string) (time.Duration, error) {
+	if len(s) > 1 && s[len(s)-1] == 'd' {
+		var days int
+		if _, err := fmt.Sscanf(s, "%dd", &days); err == nil && days > 0 {
+			return time.Duration(days) * 24 * time.Hour, nil
+		}
+	}
+	return time.ParseDuration(s)
 }
 
 // handleQuery executes a read-only SQL query. Rejects writes.

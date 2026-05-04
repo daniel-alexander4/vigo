@@ -124,6 +124,50 @@ on large databases. The server remains available during VACUUM.`,
 	},
 }
 
+var dbPruneCmd = &cobra.Command{
+	Use:   "prune",
+	Short: "Delete runs/tasks/workflows/history older than --older-than (one-shot)",
+	Long: `Run a one-shot retention prune. Deletes from runs, push_runs,
+workflow_runs, file_snapshots, convergence_history, and compliance_history
+where the row is older than the given age. Same query path as the daily
+background pruner.
+
+Use this once after enabling 'database.retention' in server.yaml on a DB
+that has accumulated more history than the new retention window allows —
+the daily pruner only catches up gradually. Pair with 'vigocli db vacuum'
+to reclaim disk space after the delete.
+
+Examples:
+  vigocli db prune --older-than 30d
+  vigocli db prune --older-than 720h`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		olderThan, _ := cmd.Flags().GetString("older-than")
+		if olderThan == "" {
+			return fmt.Errorf("--older-than is required (e.g. 30d, 720h)")
+		}
+		force, _ := cmd.Flags().GetBool("force")
+		if !force {
+			if !confirmAction(fmt.Sprintf("Delete history rows older than %s. Continue?", olderThan)) {
+				fmt.Println("Cancelled.")
+				return nil
+			}
+		}
+
+		client := newAPIClient()
+		var result map[string]any
+		if err := client.post("/api/v1/db/prune", map[string]string{"older_than": olderThan}, &result); err != nil {
+			return err
+		}
+		fmt.Printf("Older than: %v\n", result["older_than"])
+		fmt.Printf("Before:     %s\n", formatBytes(toInt64(result["before"])))
+		fmt.Printf("After:      %s\n", formatBytes(toInt64(result["after"])))
+		fmt.Printf("Reclaimed:  %s\n", formatBytes(toInt64(result["reclaimed"])))
+		fmt.Println("\nNote: VACUUM is needed to return reclaimed pages to the OS.")
+		fmt.Println("Run: vigocli db vacuum")
+		return nil
+	},
+}
+
 var dbCheckpointCmd = &cobra.Command{
 	Use:   "checkpoint",
 	Short: "Force a WAL checkpoint to flush pending writes to the main database file",
@@ -244,12 +288,15 @@ tokens, users, audit history. This action cannot be undone.`,
 func init() {
 	dbVacuumCmd.Flags().Bool("force", false, "skip confirmation prompt")
 	dbResetCmd.Flags().Bool("force", false, "skip confirmation prompt")
+	dbPruneCmd.Flags().String("older-than", "", "age cutoff (e.g. 30d, 720h); rows older than this are deleted")
+	dbPruneCmd.Flags().Bool("force", false, "skip confirmation prompt")
 
 	dbCmd.AddCommand(
 		dbStatsCmd,
 		dbTablesCmd,
 		dbIntegrityCmd,
 		dbVacuumCmd,
+		dbPruneCmd,
 		dbCheckpointCmd,
 		dbQueryCmd,
 		dbResetCmd,
