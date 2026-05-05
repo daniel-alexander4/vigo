@@ -73,7 +73,7 @@ Verbs that take a `<project_id>` argument also accept a unique handle prefix amo
 
 ## `status`
 
-Envoy-wide gitmirror posture, parallel to [`vigo swarm cryptsync status`](agent-swarm-cryptsync.md#status). Reads `state.json` and `traits.json` under `/var/lib/vigo/swarm/gitmirror/` and surfaces the helper-daemon socket. Distinct from `project status <id>`, which shows a single ADR-015 project's local state.
+Envoy-wide gitmirror posture, parallel to [`vigo swarm cryptsync status`](agent-swarm-cryptsync.md#status). Reads `traits.json` under `/var/lib/vigo/swarm/gitmirror/` and surfaces the helper-daemon socket. Distinct from `project status <id>`, which shows a single ADR-015 project's local state.
 
 ```
 vigo swarm gitmirror status
@@ -89,7 +89,6 @@ vigo swarm gitmirror status
 $ vigo swarm gitmirror status
 gitmirror status
   base:                /var/lib/vigo/swarm/gitmirror
-  state.json:          present (3 source label(s) tracked)
   traits.json:         present (last tick: 12s ago)
   sources:             2 active, 1 paused
   source errors:       0
@@ -99,7 +98,7 @@ gitmirror status
   helper daemon:       socket present (/var/run/vigo/gitmirror.sock)
 ```
 
-A fresh envoy that hasn't run the gitmirror reactor yet shows `(not yet written — reactor has not ticked on this envoy)` for `state.json` and `traits.json`. The socket line shows `socket absent` when the daemon isn't running.
+A fresh envoy that hasn't run the gitmirror reactor yet shows `(not yet written — reactor has not ticked on this envoy)` for `traits.json`. The socket line shows `socket absent` when the daemon isn't running.
 
 ## `purge`
 
@@ -112,7 +111,7 @@ vigo swarm gitmirror purge --yes
 **Mode-aware behaviour:**
 
 - **As a non-root user:** wipes `~/.vigo-gitmirror/` for the calling user (every joined project's per-user state — `project.json`, `tokens.json`, `delegations.json`, any pending sentinels). Root-owned bare repos under `/var/lib/vigo/swarm/gitmirror/projects/` survive; rerun under `sudo` to scrub those too.
-- **As root:** wipes the envoy-wide root-owned state — `projects/`, `state.json`, `receiver_state.json`, `traits.json`, and `tmp/` — under `/var/lib/vigo/swarm/gitmirror/`. The user-side `~/.vigo-gitmirror/` of the invoking user is also cleared if it exists; per-user dot-dirs of OTHER users are not touched (each user's home is theirs).
+- **As root:** wipes the envoy-wide root-owned state — `projects/` and `traits.json` — under `/var/lib/vigo/swarm/gitmirror/`. The user-side `~/.vigo-gitmirror/` of the invoking user is also cleared if it exists; per-user dot-dirs of OTHER users are not touched (each user's home is theirs).
 
 **Flags:**
 
