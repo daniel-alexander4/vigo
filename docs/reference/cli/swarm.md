@@ -11,8 +11,9 @@ Read-only admin view of the [swarm substrate](../../engineering/subsystems/swarm
 |------------|-------------|
 | `status` | Fleet-wide substrate totals — envoys online, substrate-active, seeders, manifest counts, total footprint |
 | `peers` | One row per envoy with substrate-participation counts |
+| `cleanup` | Fleet-wide blob-cache hygiene sweep — removes dangling `files/<label>` symlinks and `.partial/` dirs whose final blob is already assembled |
 
-Both subcommands support `--json` for machine-readable output.
+`status` and `peers` support `--json` for machine-readable output.
 
 ## status
 
@@ -77,6 +78,38 @@ annlap          offline  idle       0        0       0            0 B        202
 | DOWNLOADING | Count of partial blobs in progress |
 | FOOTPRINT | Sum of cached blob sizes |
 | LAST SEEN | Last successful check-in |
+
+## cleanup
+
+```bash
+vigocli swarm cleanup [--target <pat>]
+```
+
+Dispatches the hidden `vigo swarm _apply-cleanup` verb to every targeted envoy via task dispatch. Each envoy walks its own blob cache and removes:
+
+- **dangling `files/<label>` symlinks** — pointers whose target blob has been removed (e.g. an interrupted revoke or a label collision left the symlink behind).
+- **stale `.partial/` directories** — in-progress download dirs whose corresponding final blob has already been assembled (download completed but the assemble step skipped the cleanup, e.g. on a pre-0.34 assembler or after a crash).
+
+Idempotent — re-running yields zero changes. The agent prints a one-line summary on stdout (`swarm cleanup: dangling_symlinks=N stale_partials=N errors=N`) which lands in the per-envoy task-run record.
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--target` | `*` | Hostname pattern (`filepath.Match` glob) scoping the sweep. Default `*` = whole fleet. |
+
+The CLI returns a one-line dispatch summary; per-envoy detail lives in the task-run audit log:
+
+```
+$ vigocli swarm cleanup
+Dispatched 'vigo swarm _apply-cleanup' to 5 envoy(s) matching "*".
+Per-envoy results land in the task-run audit log; tail it with:
+  vigocli runs tail --task swarm.cleanup
+```
+
+**Out of scope.** This verb does **not** clean revoked-blob eviction (the manifest-gossip path on the agent already handles that), retention-expired blobs (`RetentionPruner` server-side), or graveyard entries (age-based, separately).
+
+### Tag-pinned colors in the swarm visualization
+
+Adjacent operator knob from the same release: a `viz.color=<name|hex>` tag on an envoy pins it to a fixed hue in the `/swarm` and `/swarm/payload/<sha>` visualizations regardless of fleet churn. Set via `vigocli envoys tag <hostname> viz.color=green`. Recognized names: `yellow`, `red`, `green`, `blue`, `peach`, `mauve`, `teal`, `pink`. A literal hex code (`#rrggbb` or `#rgb`) is accepted as a passthrough. Bad values fall through to the default hash-based slot assignment.
 
 ## Related
 
