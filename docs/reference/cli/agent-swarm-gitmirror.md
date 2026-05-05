@@ -34,6 +34,7 @@ Single-fleet personal-DR survives a founder rekey transparently. Multi-fleet pro
 ## Invocation
 
 ```
+vigo swarm gitmirror status
 vigo swarm gitmirror project <verb> [args]
 ```
 
@@ -55,6 +56,7 @@ Verbs that take a `<project_id>` argument also accept a unique handle prefix amo
 
 | Verb | Purpose |
 |------|---------|
+| `status` | Show envoy-wide gitmirror posture (publisher + receiver state, helper-daemon socket) |
 | `project init <handle> [--fanout <kind>]` | Found a new project as the local fleet |
 | `project invite <project_id> --fleet <fp> --role <role> [--expires <Nd>]` | Mint a child token for another fleet |
 | `project join <project_id> [--invitation <file\|->]` | Adopt an invitation issued by an admin |
@@ -66,6 +68,36 @@ Verbs that take a `<project_id>` argument also accept a unique handle prefix amo
 | `project re-invite-all [<project_id>]` | (ADR-019) Founder side, post-rekey: mint fresh invitations for every cross-fleet member |
 | `project rejoin <project_id> [--invitation <file\|->]` | (ADR-019) Member side: idempotently update local chain in place after a founder rekey |
 | `project re-found <project_id> [--force]` | (ADR-019) Escape hatch when chain is at cap: mint fresh project_id, byte-migrate, tombstone old |
+
+## `status`
+
+Envoy-wide gitmirror posture, parallel to [`vigo swarm cryptsync status`](agent-swarm-cryptsync.md#status). Reads `state.json` and `traits.json` under `/var/lib/vigo/swarm/gitmirror/` and surfaces the helper-daemon socket. Distinct from `project status <id>`, which shows a single ADR-015 project's local state.
+
+```
+vigo swarm gitmirror status
+```
+
+**Arguments:** none.
+
+**Preconditions:** none. Read-only; safe for any user; does not require self-fleet to be unlocked.
+
+**Output:**
+
+```
+$ vigo swarm gitmirror status
+gitmirror status
+  base:                /var/lib/vigo/swarm/gitmirror
+  state.json:          present (3 source label(s) tracked)
+  traits.json:         present (last tick: 12s ago)
+  sources:             2 active, 1 paused
+  source errors:       0
+  publish errors:      0
+  mirrors:             5
+  stale mirrors:       0
+  helper daemon:       socket present (/var/run/vigo/gitmirror.sock)
+```
+
+A fresh envoy that hasn't run the gitmirror reactor yet shows `(not yet written — reactor has not ticked on this envoy)` for `state.json` and `traits.json`. The socket line shows `socket absent` when the daemon isn't running.
 
 ## `project init`
 

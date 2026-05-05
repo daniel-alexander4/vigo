@@ -35,10 +35,12 @@ use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
 use super::envelopes::DelegationEnvelope;
+use super::helper::socket_path as helper_socket_path;
 use super::project_state::{
     self, hex_id, parse_hex_id, project_repo_path, projects_dir, purge_user_state,
     DelegationChain, DrFanout, ProjectConfig, TokenChain,
 };
+use super::state::{state_path, traits_snapshot_path, unix_seconds_now, State, TraitsSnapshot};
 use super::tokens::{
     canonical_bytes, issue_child as token_issue_child, project_id_for, verify_chain,
     Role, Token, TokenBody, ID_LEN, NEVER_EXPIRES, SIG_LEN,
@@ -56,6 +58,12 @@ pub fn run(args: Vec<String>) -> Result<()> {
             Ok(())
         }
         "project" => dispatch_project(&args[1..]),
+        // Top-level envoy posture — parallel to `vigo swarm cryptsync
+        // status`. Reads `<gitmirror_dir>/state.json` + `traits.json`
+        // and surfaces the helper-daemon socket path. Distinct from
+        // `vigo swarm gitmirror project status <id>`, which shows one
+        // project's local state.
+        "status" => cmd_status_top(&args[1..]),
         // Hidden verb invoked by the server via TaskDispatch when an
         // envoy newly matches `swarm.gitmirror.blacklist`. Wipes every
         // locally-held project bare repo and the `projects/` directory.
@@ -104,9 +112,14 @@ fn print_usage() {
         "vigo swarm gitmirror — ADR-015 unified-substrate gitmirror CLI
 
 USAGE:
-    vigo swarm gitmirror project <verb> [args]
+    vigo swarm gitmirror <verb> [args]
 
-Run `vigo swarm gitmirror project --help` to see the project verb tree.
+VERBS:
+    status              Show envoy-wide gitmirror posture (publisher +
+                        receiver state, helper-daemon socket).
+    project <verb>      Manage gitmirror projects. Run
+                        `vigo swarm gitmirror project --help` for the
+                        project verb tree.
 "
     );
 }
@@ -1918,6 +1931,132 @@ To proceed, type the project handle exactly: {}",
 }
 
 // ============================================================
+// status (envoy-wide)
+// ============================================================
+
+/// Envoy-wide gitmirror posture, parallel to `vigo swarm cryptsync
+/// status`. Reads root-owned `state.json` + `traits.json` under the
+/// gitmirror base dir and surfaces the helper-daemon socket. Distinct
+/// from `project status <id>`, which shows a single ADR-015 project's
+/// local view from per-user state.
+///
+/// Read-only. Safe for any user; does not require self-fleet to be
+/// unlocked.
+fn cmd_status_top(_args: &[String]) -> Result<()> {
+    let base = crate::platform::paths::default_gitmirror_dir();
+    let socket = helper_socket_path();
+    print_status_top(&base, &socket, &mut std::io::stdout())
+}
+
+fn print_status_top<W: std::io::Write>(
+    base: &Path,
+    socket: &Path,
+    out: &mut W,
+) -> Result<()> {
+    writeln!(out, "gitmirror status")?;
+    writeln!(out, "  base:                {}", base.display())?;
+
+    // state.json — publisher source state. The reactor writes it after
+    // each pass; absence means the reactor has never ticked on this
+    // envoy (typical on a fresh install before the user creates any
+    // gitmirror sources).
+    let state_file = state_path(base);
+    if state_file.exists() {
+        let state = State::load(base);
+        writeln!(
+            out,
+            "  state.json:          present ({} source label(s) tracked)",
+            state.labels.len()
+        )?;
+    } else {
+        writeln!(
+            out,
+            "  state.json:          (not yet written — reactor has not ticked on this envoy)"
+        )?;
+    }
+
+    // traits.json — combined publisher + receiver projection. Shows
+    // the most recent reactor activity plus any errors operators
+    // should know about.
+    let traits_file = traits_snapshot_path(base);
+    match TraitsSnapshot::load(base) {
+        Ok(Some(snap)) => {
+            let now = unix_seconds_now();
+            let last = if snap.updated_at == 0 {
+                "(unknown)".to_string()
+            } else {
+                format_age_seconds(now.saturating_sub(snap.updated_at))
+            };
+            writeln!(
+                out,
+                "  traits.json:         present (last tick: {})",
+                last
+            )?;
+            writeln!(
+                out,
+                "  sources:             {} active, {} paused",
+                snap.active_sources, snap.paused_sources
+            )?;
+            writeln!(out, "  source errors:       {}", snap.source_errors.len())?;
+            for err in &snap.source_errors {
+                writeln!(out, "                       {} — {}", err.path, err.reason)?;
+            }
+            writeln!(out, "  publish errors:      {}", snap.publish_errors.len())?;
+            for err in &snap.publish_errors {
+                writeln!(out, "                       {} — {}", err.label, err.reason)?;
+            }
+            writeln!(out, "  mirrors:             {}", snap.mirrors.len())?;
+            writeln!(out, "  stale mirrors:       {}", snap.stale_mirrors.len())?;
+            for label in &snap.stale_mirrors {
+                writeln!(out, "                       {}", label)?;
+            }
+        }
+        Ok(None) if traits_file.exists() => {
+            writeln!(
+                out,
+                "  traits.json:         (corrupt — treated as empty; next reactor tick will overwrite)"
+            )?;
+        }
+        Ok(None) => {
+            writeln!(
+                out,
+                "  traits.json:         (not yet written — reactor has not ticked on this envoy)"
+            )?;
+        }
+        Err(e) => {
+            writeln!(out, "  traits.json:         ERROR reading: {}", e)?;
+        }
+    }
+
+    // Helper daemon socket — the ADR-015 helper-daemon transport for
+    // git push/fetch over swarm. Existence of the socket file is the
+    // cheapest "is the daemon up?" signal we can give without a
+    // round-trip.
+    if socket.exists() {
+        writeln!(out, "  helper daemon:       socket present ({})", socket.display())?;
+    } else {
+        writeln!(
+            out,
+            "  helper daemon:       socket absent ({}) — daemon not running or not yet bound",
+            socket.display()
+        )?;
+    }
+    Ok(())
+}
+
+fn format_age_seconds(secs: u64) -> String {
+    if secs < 60 {
+        format!("{}s ago", secs)
+    } else if secs < 3600 {
+        format!("{}m ago", secs / 60)
+    } else if secs < 86400 {
+        format!("{}h{:02}m ago", secs / 3600, (secs % 3600) / 60)
+    } else {
+        format!("{}d{}h ago", secs / 86400, (secs % 86400) / 3600)
+    }
+}
+
+// ============================================================
 // _apply-blacklist (hidden agent verb)
 // ============================================================
 
@@ -2091,5 +2230,116 @@ mod tests {
         assert_eq!(parsed.project.handle, "vigo-web");
         assert_eq!(parsed.chain.chain.len(), 2);
         verify_chain(&pid, &founder_pub, &[], &parsed.chain.chain, 200).unwrap();
+    }
+
+    // --- top-level status -----------------------------------------
+
+    #[test]
+    fn format_age_seconds_buckets() {
+        assert_eq!(format_age_seconds(0), "0s ago");
+        assert_eq!(format_age_seconds(45), "45s ago");
+        assert_eq!(format_age_seconds(60), "1m ago");
+        assert_eq!(format_age_seconds(125), "2m ago");
+        assert_eq!(format_age_seconds(3_600), "1h00m ago");
+        assert_eq!(format_age_seconds(3_725), "1h02m ago");
+        assert_eq!(format_age_seconds(86_400), "1d0h ago");
+        assert_eq!(format_age_seconds(90_061), "1d1h ago");
+    }
+
+    #[test]
+    fn print_status_top_on_empty_envoy_does_not_error() {
+        // Fresh envoy: no state.json, no traits.json, no socket.
+        let base = tempfile::tempdir().unwrap();
+        let socket = base.path().join("absent.sock");
+        let mut buf: Vec<u8> = Vec::new();
+        print_status_top(base.path(), &socket, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("gitmirror status"));
+        assert!(out.contains("not yet written"));
+        assert!(out.contains("socket absent"));
+    }
+
+    #[test]
+    fn print_status_top_renders_state_and_traits_summaries() {
+        use crate::swarm::gitmirror::state::{
+            PublishErrorEntry, SourceErrorEntry, SourceTraitEntry, TraitsSnapshot,
+            TRAITS_SNAPSHOT_VERSION,
+        };
+
+        let base = tempfile::tempdir().unwrap();
+        // Lay down a state.json with two source labels.
+        let mut s = State::default();
+        s.record("gitmirror:h:u:p1", "deadbeef", "cafef00d", true, 1024);
+        s.record("gitmirror:h:u:p2", "11111111", "22222222", false, 256);
+        s.save(base.path()).unwrap();
+
+        // Lay down a traits.json with one source-error and one
+        // publish-error so the status output exercises the loops.
+        let snap = TraitsSnapshot {
+            version: TRAITS_SNAPSHOT_VERSION,
+            updated_at: unix_seconds_now().saturating_sub(120),
+            sources: vec![SourceTraitEntry {
+                label: "gitmirror:h:u:p1".to_string(),
+                paused: false,
+                max_mirrors: 5,
+                tags: vec![],
+                description: String::new(),
+                include_envoys: vec![],
+                exclude_envoys: vec![],
+                when: String::new(),
+                cross_subnet_mirrors: vec![],
+                git_sha: Some("deadbeef".to_string()),
+                blob_sha: Some("cafef00d".to_string()),
+                last_publish_full: Some(true),
+                last_bundle_size: Some(1024),
+                selected_mirrors: vec![],
+            }],
+            active_sources: 1,
+            paused_sources: 0,
+            source_errors: vec![SourceErrorEntry {
+                path: "/home/dan/gitmirror/bad".to_string(),
+                reason: "invalid sidecar".to_string(),
+            }],
+            publish_errors: vec![PublishErrorEntry {
+                label: "gitmirror:h:u:broken".to_string(),
+                reason: "bundle exceeds cap".to_string(),
+            }],
+            stale_mirrors: vec!["gitmirror:h:u:abandoned".to_string()],
+            mirrors: vec![],
+        };
+        snap.save(base.path()).unwrap();
+
+        // Plant a fake socket file so the helper-daemon line takes
+        // the "present" branch.
+        let socket = base.path().join("gitmirror.sock");
+        fs::write(&socket, b"").unwrap();
+
+        let mut buf: Vec<u8> = Vec::new();
+        print_status_top(base.path(), &socket, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+
+        assert!(out.contains("2 source label(s) tracked"));
+        assert!(out.contains("1 active, 0 paused"));
+        assert!(out.contains("source errors:       1"));
+        assert!(out.contains("invalid sidecar"));
+        assert!(out.contains("publish errors:      1"));
+        assert!(out.contains("bundle exceeds cap"));
+        assert!(out.contains("stale mirrors:       1"));
+        assert!(out.contains("gitmirror:h:u:abandoned"));
+        assert!(out.contains("socket present"));
+    }
+
+    #[test]
+    fn print_status_top_corrupt_traits_is_treated_as_empty() {
+        let base = tempfile::tempdir().unwrap();
+        // Write garbage where traits.json should be — TraitsSnapshot::load
+        // returns Ok(None) on parse failure (logged as warn). The status
+        // output should explain rather than error.
+        fs::write(traits_snapshot_path(base.path()), b"not json").unwrap();
+        let socket = base.path().join("absent.sock");
+        let mut buf: Vec<u8> = Vec::new();
+        print_status_top(base.path(), &socket, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("corrupt"));
     }
 }
