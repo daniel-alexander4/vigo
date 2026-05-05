@@ -362,7 +362,7 @@ func reverseExecResource(res retractResource) (*retractResource, *RetractWarning
 		Type: "exec",
 		When: res.When,
 		Attrs: map[string]any{
-			"command": fmt.Sprintf("filesync 'TODO: reverse of: %s'", sanitizeForShell(cmd)),
+			"command": fmt.Sprintf("echo 'TODO: reverse of: %s'", sanitizeForShell(cmd)),
 			"onlyif":  "false",
 		},
 	}, &RetractWarning{

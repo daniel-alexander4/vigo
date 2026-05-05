@@ -19,7 +19,6 @@ import (
 	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/risk"
-	"git.alexander4.io/vigo/server/uifmt"
 
 	"github.com/alecthomas/chroma/v2"
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
@@ -88,24 +87,24 @@ func funcMap() template.FuncMap {
 		"secSeverityNorm": func(sev string) string {
 			return cve.Norm(sev)
 		},
-		// failureGradient returns a hex color along the green→yellow→red
-		// FailureGradient ramp for a (failed, total) module-count pair.
-		// Saturates green at 0%, yellow at 40%, red at 80%+ — matches
-		// convergence.DegradedMaxPct so the gradient maxes out exactly
-		// at the bucket boundary. total<=0 falls back to a muted surface
-		// color so "no module data yet" cells stay visually quiet.
-		"failureGradient": func(failed, total int64) template.CSS {
-			if total <= 0 {
-				return template.CSS(uifmt.HexSurface1)
+		// convergenceBadgeClass maps a failure-axis status string to the
+		// `.badge--*` variant that paints the convergence ratio cell. By
+		// routing every per-row badge through the same classification
+		// the pill counts above the table use (convergence.Status), the
+		// row colors and the pill counts can never disagree about which
+		// envoys are Failed vs Degraded vs Converged. Empty / unknown
+		// status renders as `badge--unknown` so "no run data yet" cells
+		// stay visually quiet.
+		"convergenceBadgeClass": func(status string) string {
+			switch convergence.ClassifyStatus(status) {
+			case convergence.StatusConverged:
+				return "badge--converged"
+			case convergence.StatusDegraded:
+				return "badge--degraded"
+			case convergence.StatusFailed:
+				return "badge--failed"
 			}
-			pct := float64(failed) / float64(total) * 100
-			return template.CSS(uifmt.FailureGradient(pct))
-		},
-		// failureGradientPct is the same gradient consumed directly by a
-		// percentage (0..100). Used by stat cards that already track a
-		// percent (Module Health card; risk score; coverage; root-fs).
-		"failureGradientPct": func(pct float64) template.CSS {
-			return template.CSS(uifmt.FailureGradient(pct))
+			return "badge--unknown"
 		},
 		// convergenceRatio renders the canonical badge text used on every
 		// run/envoy convergence indicator across the UI:
@@ -113,9 +112,9 @@ func funcMap() template.FuncMap {
 		// e.g. "3/1/172". The bare slash form keeps the badge compact;
 		// the title attribute (convergenceHover) carries the labeled
 		// "X changed · Y failed of Z modules" form for operators who
-		// need the legend. Color of the badge comes from failureGradient
-		// against failed/total — drift / change count contributes to the
-		// numerator only, never the color.
+		// need the legend. Badge color comes from convergenceBadgeClass
+		// against the envoy/run's bucket — never the raw failed/total
+		// ratio, so the table colors agree with the pill counts.
 		"convergenceRatio": func(changed, failed, total int64) string {
 			return fmt.Sprintf("%d/%d/%d", changed, failed, total)
 		},

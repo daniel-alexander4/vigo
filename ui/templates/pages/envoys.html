@@ -63,10 +63,6 @@
 <div class="stat-cards stat-cards--compact mb-2">
     {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
     {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Reachable" "Color" "success" "Tooltip" "Envoys that checked in within 2.5× the agent check-in interval (set in server.yaml as checkin.interval)."}}
-    <div class="stat-card" style="border-color:{{failureGradientPct .ModuleHealthPct}};" title="Sum across every envoy's most-recent run. Goes red as the share of failing modules climbs — saturates at 80%.">
-        <div class="stat-card__value" style="color:{{failureGradientPct .ModuleHealthPct}};">{{.FleetFailedModules}}<span class="stat-card__total"> / {{.FleetTotalModules}}</span></div>
-        <div class="stat-card__label">Modules Failing</div>
-    </div>
 </div>
 <div class="filter-bar-group flex flex-wrap items-end gap-2">
     <div class="filter-bar-axis">
@@ -83,6 +79,7 @@
         <div class="filter-bar flex items-center gap-1 flex-wrap">
             <a href="/envoys?drift=changed" class="btn btn--sm{{if eq .DriftFilter "changed"}} btn--primary{{end}}" title="Last run made changes">Changed <span class="filter-count filter-count--info">{{.CountChanged}}</span></a>
             <a href="/envoys?drift=diverged" class="btn btn--sm{{if eq .DriftFilter "diverged"}} btn--primary{{end}}" title="5+ consecutive runs with changes">Diverged <span class="filter-count filter-count--warning">{{.CountDiverged}}</span></a>
+            <a href="/envoys?conv=failed" class="btn btn--sm{{if eq .ConvFilter "failed"}} btn--primary{{end}}" title="Latest run failed (≥80% module failures or agent blocked)">Failed <span class="filter-count filter-count--danger">{{.CountFailed}}</span></a>
         </div>
     </div>
     <div class="filter-bar-axis">
@@ -134,9 +131,9 @@
                 {{if eq .ModuleCount 0}}
                 <span class="badge badge--unknown" title="No run data yet">0/0/0</span>
                 {{else if .LastRunID}}
-                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge" style="background:{{failureGradient .FailedCount .ModuleCount}};color:#1e1e2e;" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span></a>
+                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Status}}" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span></a>
                 {{else}}
-                <span class="badge" style="background:{{failureGradient .FailedCount .ModuleCount}};color:#1e1e2e;" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span>
+                <span class="badge {{convergenceBadgeClass .Status}}" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span>
                 {{end}}
             </td>
         </tr>

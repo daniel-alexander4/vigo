@@ -260,11 +260,11 @@ ARCH="$(uname -m)"
 case "$ARCH" in
     x86_64) ARCH="amd64" ;;
     aarch64|arm64) ARCH="arm64" ;;
-    *) filesync "Unsupported architecture: $ARCH"; exit 1 ;;
+    *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
 esac
 
-filesync "Detected platform: ${OS}/${ARCH}"
-filesync "Server: ${SERVER_ADDR}"
+echo "Detected platform: ${OS}/${ARCH}"
+echo "Server: ${SERVER_ADDR}"
 
 # Directories.
 INSTALL_DIR="/usr/local/sbin"
@@ -272,25 +272,25 @@ DATA_DIR="/etc/vigo-envoy"
 
 # Stop existing service and clean up stale state for a fresh bootstrap.
 if command -v systemctl > /dev/null 2>&1 && systemctl is-active --quiet vigo-envoy 2>/dev/null; then
-    filesync "Stopping existing vigo-envoy service..."
+    echo "Stopping existing vigo-envoy service..."
     systemctl stop vigo-envoy
 elif command -v launchctl > /dev/null 2>&1 && launchctl list com.vigo.envoy > /dev/null 2>&1; then
-    filesync "Stopping existing vigo-envoy service..."
+    echo "Stopping existing vigo-envoy service..."
     launchctl unload /Library/LaunchDaemons/com.vigo.envoy.plist 2>/dev/null || true
 elif command -v rcctl > /dev/null 2>&1 && rcctl get vigo_envoy status > /dev/null 2>&1; then
-    filesync "Stopping existing vigo-envoy service..."
+    echo "Stopping existing vigo-envoy service..."
     rcctl stop vigo_envoy 2>/dev/null || true
 elif command -v svcadm > /dev/null 2>&1 && svcs -H vigo-envoy > /dev/null 2>&1; then
-    filesync "Stopping existing vigo-envoy service..."
+    echo "Stopping existing vigo-envoy service..."
     svcadm disable -s svc:/system/vigo-envoy:default 2>/dev/null || true
 elif [ -x /usr/local/etc/rc.d/vigo_envoy ]; then
-    filesync "Stopping existing vigo-envoy service..."
+    echo "Stopping existing vigo-envoy service..."
     /usr/local/etc/rc.d/vigo_envoy stop 2>/dev/null || true
 fi
 
 # Remove old data directory for a clean enrollment.
 if [ -d "$DATA_DIR" ]; then
-    filesync "Removing previous enrollment data..."
+    echo "Removing previous enrollment data..."
     rm -rf "$DATA_DIR"
 fi
 mkdir -p "$DATA_DIR"
@@ -301,12 +301,12 @@ rm -f /usr/local/bin/vigo
 hash -r 2>/dev/null || true
 
 # Download agent binary (always replaces existing).
-filesync "Downloading agent binary..."
+echo "Downloading agent binary..."
 curl -sSfk "${SERVER_ADDR}/api/v1/agent/download/${OS}/${ARCH}" -o "${INSTALL_DIR}/vigo"
 chmod +x "${INSTALL_DIR}/vigo"
 
 # Verify binary integrity via SHA256 checksum.
-filesync "Verifying binary checksum..."
+echo "Verifying binary checksum..."
 EXPECTED=$(curl -sSfk "${SERVER_ADDR}/api/v1/agent/latest?os=${OS}&arch=${ARCH}" | \
     sed -n 's/.*"sha256" *: *"\([a-f0-9]*\)".*/\1/p')
 if [ -n "$EXPECTED" ]; then
@@ -317,29 +317,29 @@ if [ -n "$EXPECTED" ]; then
     elif command -v digest > /dev/null 2>&1; then
         ACTUAL=$(digest -a sha256 "${INSTALL_DIR}/vigo")
     else
-        filesync "WARNING: no SHA256 tool found, skipping checksum verification"
+        echo "WARNING: no SHA256 tool found, skipping checksum verification"
         ACTUAL="$EXPECTED"
     fi
     if [ "$ACTUAL" != "$EXPECTED" ]; then
-        filesync "FATAL: checksum mismatch — binary may be corrupted or tampered with"
-        filesync "  expected: ${EXPECTED}"
-        filesync "  actual:   ${ACTUAL}"
+        echo "FATAL: checksum mismatch — binary may be corrupted or tampered with"
+        echo "  expected: ${EXPECTED}"
+        echo "  actual:   ${ACTUAL}"
         rm -f "${INSTALL_DIR}/vigo"
         exit 1
     fi
-    filesync "Checksum verified."
+    echo "Checksum verified."
 else
-    filesync "WARNING: server did not return a checksum, skipping verification"
+    echo "WARNING: server did not return a checksum, skipping verification"
 fi
 
 # Download license and commercial terms into the agent data directory.
-filesync "Downloading license terms..."
+echo "Downloading license terms..."
 curl -sSfk "${SERVER_ADDR}/license/LICENSE" -o "${DATA_DIR}/LICENSE" 2>/dev/null || true
 curl -sSfk "${SERVER_ADDR}/license/COMMERCIAL-TERMS.md" -o "${DATA_DIR}/COMMERCIAL-TERMS.md" 2>/dev/null || true
 
 # Bootstrap the agent (generates keys, CSR, registers with server, receives certs).
 # Always pass --force: this script cleans local state above, so re-enrollment is expected.
-filesync "Bootstrapping agent..."
+echo "Bootstrapping agent..."
 BOOTSTRAP_ARGS="--server ${SERVER_ADDR} --force"
 if [ -n "$TOKEN" ]; then
     BOOTSTRAP_ARGS="${BOOTSTRAP_ARGS} --token ${TOKEN}"
@@ -369,7 +369,7 @@ SYSTEMD
     systemctl daemon-reload
     systemctl enable vigo-envoy
     systemctl start vigo-envoy
-    filesync "Vigo agent service installed and started (systemd)."
+    echo "Vigo agent service installed and started (systemd)."
 elif command -v launchctl > /dev/null 2>&1; then
     # macOS (launchd) — uses /usr/local/etc/vigo-envoy as data dir.
     DATA_DIR="/usr/local/etc/vigo-envoy"
@@ -390,7 +390,7 @@ elif command -v launchctl > /dev/null 2>&1; then
 </plist>
 PLIST
     launchctl load -w /Library/LaunchDaemons/com.vigo.envoy.plist
-    filesync "Vigo agent service installed and started (launchd)."
+    echo "Vigo agent service installed and started (launchd)."
 elif command -v rcctl > /dev/null 2>&1; then
     # OpenBSD (rcctl)
     cat > /etc/rc.d/vigo_envoy << 'RCSCRIPT'
@@ -403,7 +403,7 @@ RCSCRIPT
     chmod 755 /etc/rc.d/vigo_envoy
     rcctl enable vigo_envoy
     rcctl start vigo_envoy
-    filesync "Vigo agent service installed and started (rcctl)."
+    echo "Vigo agent service installed and started (rcctl)."
 elif command -v svccfg > /dev/null 2>&1 && command -v svcadm > /dev/null 2>&1; then
     # illumos (SMF)
     cat > /var/svc/manifest/system/vigo-envoy.xml << SMFMANIFEST
@@ -433,7 +433,7 @@ elif command -v svccfg > /dev/null 2>&1 && command -v svcadm > /dev/null 2>&1; t
 SMFMANIFEST
     svccfg import /var/svc/manifest/system/vigo-envoy.xml
     svcadm enable svc:/system/vigo-envoy:default
-    filesync "Vigo agent service installed and started (SMF)."
+    echo "Vigo agent service installed and started (SMF)."
 elif [ -d /etc/rc.d ] && [ -f /etc/rc.subr ]; then
     # FreeBSD / NetBSD (rc.d)
     RCDIR="/usr/local/etc/rc.d"
@@ -460,16 +460,16 @@ RCSCRIPT
     if command -v sysrc > /dev/null 2>&1; then
         sysrc vigo_envoy_enable=YES
     else
-        grep -q 'vigo_envoy=YES' /etc/rc.conf 2>/dev/null || filesync 'vigo_envoy=YES' >> /etc/rc.conf
+        grep -q 'vigo_envoy=YES' /etc/rc.conf 2>/dev/null || echo 'vigo_envoy=YES' >> /etc/rc.conf
     fi
     service vigo_envoy start 2>/dev/null || "${RCDIR}/vigo_envoy" start
-    filesync "Vigo agent service installed and started (rc.d)."
+    echo "Vigo agent service installed and started (rc.d)."
 else
-    filesync "No supported init system found. Start the agent manually:"
-    filesync "  vigo"
+    echo "No supported init system found. Start the agent manually:"
+    echo "  vigo"
 fi
 
-filesync "Bootstrap complete."
+echo "Bootstrap complete."
 `))
 
 // windowsBootstrapTmpl is the PowerShell script served at GET /bootstrap?os=windows.

@@ -129,6 +129,42 @@ func TestBootstrapScript_WorksWithoutToken(t *testing.T) {
 	}
 }
 
+// TestBootstrapScript_NoSubstrateNamesAsShellCommands guards against the
+// 0.31.0 substrate rename's collateral damage: a blind `echo → filesync`
+// substitution swept every shell `echo` in the bootstrap template, leaving
+// new agent installs failing with `sh: filesync: not found`. None of the
+// renamed substrate vocabulary is a real shell command, so any line that
+// invokes them as commands (`^…$name `) means the substitution slipped
+// back in.
+func TestBootstrapScript_NoSubstrateNamesAsShellCommands(t *testing.T) {
+	dir := t.TempDir()
+	caFile := filepath.Join(dir, "ca.crt")
+	if err := os.WriteFile(caFile, []byte("FAKE"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	h := NewHandler("https://server:8443", caFile, filepath.Join(dir, "agents"), "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/bootstrap", nil)
+	w := httptest.NewRecorder()
+	h.BootstrapScript(w, req)
+	body, _ := io.ReadAll(w.Result().Body)
+	script := string(body)
+
+	for _, name := range []string{"filesync", "cryptsync", "gitmirror", "payload"} {
+		// Match the name as a shell command at the start of a line
+		// (optionally indented). Doc lines and quoted-arg uses are fine.
+		for _, prefix := range []string{name + " ", name + "\t", name + "\n"} {
+			for _, lead := range []string{"", "    ", "\t"} {
+				needle := lead + prefix
+				if strings.Contains(script, "\n"+needle) || strings.HasPrefix(script, needle) {
+					t.Errorf("bootstrap script invokes %q as a shell command — substrate-name rename collateral?", name)
+				}
+			}
+		}
+	}
+}
+
 func TestAgentLatest_ReturnsVersionJSON(t *testing.T) {
 	dir := t.TempDir()
 	// Create a fake agent binary plus its sidecar version file. The handler

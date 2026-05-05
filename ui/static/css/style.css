@@ -846,7 +846,7 @@ a.dash-column--link:focus-visible {
     color: var(--color-success);
 }
 
-.badge--relapsed {
+.badge--degraded, .badge--relapsed {
     background: var(--color-warning-bg);
     color: var(--color-warning);
 }
@@ -1482,6 +1482,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     display: flex;
     flex-direction: column;
     gap: 4px;
+    flex-shrink: 0;
 }
 .filter-bar-axis__label {
     font-size: 11px;
@@ -2495,7 +2496,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 .badge--dispatched { background: var(--color-badge-info-bg); color: var(--color-badge-info-text); }
 .badge--aborting { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
 .badge--healthy, .badge--pass, .badge--active, .badge--satisfied, .badge--available { background: var(--color-badge-success-bg); color: var(--color-badge-success-text); }
-.badge--degraded, .badge--warn, .badge--relapsed, .badge--used { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
+.badge--warn, .badge--used { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
 .badge--diverged { background: var(--color-badge-danger-bg); color: var(--color-badge-danger-text); }
 .badge--unhealthy, .badge--fail, .badge--not_satisfied, .badge--inactive { background: var(--color-badge-danger-bg); color: var(--color-badge-danger-text); }
 .badge--no-data { background: var(--color-badge-neutral-bg); color: var(--color-badge-neutral-text); }

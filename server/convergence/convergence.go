@@ -38,11 +38,9 @@ const (
 
 	// DegradedMaxPct is the upper bound (exclusive) for Degraded on the
 	// failure axis. Failure pct below this is Degraded; at or above is
-	// Failed. Matches uifmt.FailureGradient's saturation point so the
-	// red badge color and the bucket boundary line up exactly. There is
-	// no minimum — any FailedCount > 0 lands in Degraded (or Failed if
-	// the percentage clears the upper bound). A single failed module of
-	// 172 is still a failure on the dashboard.
+	// Failed. There is no minimum — any FailedCount > 0 lands in Degraded
+	// (or Failed if the percentage clears the upper bound). A single
+	// failed module of 172 is still a failure on the dashboard.
 	DegradedMaxPct = 80
 )
 
