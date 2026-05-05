@@ -40,6 +40,8 @@ Cryptsync is a **pure peer-to-peer** feature. The Vigo server plays no role in c
 | `vigo swarm cryptsync encrypt <file> [--as <name>]` | Encrypt a plaintext file into `~/cryptsync/`. Does not require `unlock`. |
 | `vigo swarm cryptsync decrypt <file> -o <path>` | Decrypt from `~/cryptsync/` to a user-chosen path. Requires `unlock`. `-o` is mandatory — no default destination. |
 | `vigo swarm cryptsync forget <hostname>` | Revoke an envoy from the recipient set. |
+| `vigo swarm cryptsync leave [--purge] [--keep-identity] [--yes]` | Self-unenroll: drop a `leave.pending` sentinel; the daemon signs + fans out a LEAVE envelope, then scrubs local state per the flags. |
+| `vigo swarm cryptsync purge --yes` | Power-user wipe of `~/.cryptsync/` + `~/cryptsync/` for the calling user. Distinct from `leave --purge` — does NOT gossip; peers age this envoy out via the staleness rule. |
 | `vigo swarm cryptsync reencrypt` | Force re-encrypt of every file in `~/cryptsync/` to the current recipient set. Requires `unlock`. |
 | `vigo swarm cryptsync status` | Show local state: enrolled, recipients, file count breakdown (ciphertext/plaintext/failed), session helper status. |
 

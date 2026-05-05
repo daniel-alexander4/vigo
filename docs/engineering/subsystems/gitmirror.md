@@ -24,6 +24,8 @@ Gitmirror is one of four content subsystems that ride the [swarm](swarm.md) subs
 | Capability-token primitives (`tokens.rs`) | ✅ 0.34.10 (step 2) |
 | `~/.vigo-gitmirror/<project_id>/` per-user state + `projects/<project_id>.git` storage | ✅ step 3 |
 | `vigo swarm gitmirror project {init,invite,join,leave,list,status}` local verbs | ✅ step 3 |
+| `vigo swarm gitmirror {status,purge}` top-level verbs (Phase C) | ✅ 0.38.8–0.38.9 |
+| `vigocli swarm gitmirror members` admin verb (Phase C) | ✅ 0.38.10 |
 | `vigo swarm gitmirror project {revoke,leave}` envelope **signing** + sentinel queueing | ✅ step 4 first slice (CLI signs inline via self-fleet session helper) |
 | Helper daemon + SO_PEERCRED socket + receive-pack / upload-pack proxy | ✅ step 4 first slice (`/var/run/vigo/gitmirror.sock`) |
 | `git-remote-vigo` body — `connect` capability + transparent splice | ✅ step 4 first slice |

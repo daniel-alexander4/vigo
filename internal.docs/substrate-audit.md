@@ -2,6 +2,22 @@
 
 *Locked in 2026-04-24. Basis for unifying lifecycle + authoring operations across Vigo's user-scoped P2P substrates before any one-off feature lands.*
 
+## 2026-05-04 — Phase C status update
+
+The substrates have since been renamed: **cairn → gitmirror, sigil → cryptsync** (refactor at 0.31.0). The matrix below uses the original names; substitute as you read.
+
+Phase C closed gaps #3, #4, and #5 from "Gaps prioritized" below:
+
+- **#3 Cairn local `status`** → shipped 0.38.8 as `vigo swarm gitmirror status` (top-level, parallel to `vigo swarm cryptsync status`). Reads `state.json` + `traits.json` and surfaces helper-daemon socket presence.
+- **#5 Full-wipe purge for both** → shipped 0.38.9 as `vigo swarm gitmirror purge --yes` (mode-aware: user-only vs. root-also-envoy-wide) and `vigo swarm cryptsync purge --yes` (per-user). Distinct from `leave --purge` — purge is the no-gossip path.
+- **#4 Members view for both** → shipped 0.38.10. Cryptsync's `vigocli swarm cryptsync members` already printed a tabwriter table; gitmirror gained a parallel `vigocli swarm gitmirror members [project|handle]`.
+
+**Web UI buttons for leave/evict** (originally a fourth Phase C bullet in `pending.md`) was descoped per Dan's "swarm UI is observability-only — action verbs stay CLI" direction. The capability gaps it would have closed remain CLI-only by design.
+
+Phase D (retire-hook) is still blocked on `vigocli envoys retire` not existing — gap #6 below.
+
+---
+
 ## Scope
 
 Vigo has four P2P substrates on the swarm transport. Only two are in scope for this audit:
