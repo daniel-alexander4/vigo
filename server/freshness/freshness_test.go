@@ -75,3 +75,87 @@ func TestMaxReportedCycle(t *testing.T) {
 		t.Errorf("StaleThresholdFromCycle at MaxReportedCycle = %v, want %v", got, want)
 	}
 }
+
+func TestResponsiveThreshold(t *testing.T) {
+	tests := []struct {
+		name       string
+		configured time.Duration
+		observed   time.Duration
+		want       time.Duration
+	}{
+		// 1.2× the stale threshold = 3× effective interval.
+		{"bootstrap: 1.2× of 2.5× = 3× configured", 5 * time.Second, 0, 15 * time.Second},
+		{"observed widens window proportionally", 5 * time.Second, 60 * time.Second, 180 * time.Second},
+		{"5m interval, no observation", 5 * time.Minute, 0, 15 * time.Minute},
+		// configured=0 + observed=0 + no override hits the
+		// fallback branch — preserve the pre-0.38.13 behavior.
+		{"zero-config fallback", 0, 0, 15 * time.Minute},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ResponsiveThreshold(tt.configured, tt.observed); got != tt.want {
+				t.Errorf("ResponsiveThreshold(%v, %v) = %v, want %v", tt.configured, tt.observed, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestResponsiveThreshold_OverrideWins(t *testing.T) {
+	SetOverride(20 * time.Second)
+	defer SetOverride(0)
+
+	// Override flows through StaleThresholdFromCycle, so the
+	// responsive boundary is 1.2× of the override (24s).
+	got := ResponsiveThreshold(5*time.Second, 60*time.Second)
+	if got != 24*time.Second {
+		t.Errorf("with override, ResponsiveThreshold should be 1.2× override: got %v, want 24s", got)
+	}
+}
+
+func TestIsResponsive(t *testing.T) {
+	now := time.Now()
+	tests := []struct {
+		name       string
+		lastSeen   time.Time
+		configured time.Duration
+		observed   time.Duration
+		want       bool
+	}{
+		{"zero time is not responsive", time.Time{}, 5 * time.Second, 0, false},
+		{"fresh, well inside window", now.Add(-3 * time.Second), 5 * time.Second, 0, true},
+		{"at 2.5× configured, stale but still responsive (window is 3×)", now.Add(-13 * time.Second), 5 * time.Second, 0, true},
+		{"past 3× configured, no longer responsive", now.Add(-16 * time.Second), 5 * time.Second, 0, false},
+		// Per-envoy cycle awareness: a slow envoy (observed=60s)
+		// stays responsive far longer than a 3×configured rule
+		// would allow.
+		{"slow cycle widens window, still responsive", now.Add(-2 * time.Minute), 5 * time.Second, 60 * time.Second, true},
+		{"slow cycle, past widened window", now.Add(-4 * time.Minute), 5 * time.Second, 60 * time.Second, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsResponsive(tt.lastSeen, tt.configured, tt.observed); got != tt.want {
+				t.Errorf("IsResponsive = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestIsResponsive_LooserThanIsStale pins the central design
+// invariant: an envoy that's *just barely* stale by the UI rule must
+// still be considered responsive enough for one round of best-effort
+// admin dispatch. Without this margin, a freshly-stale envoy would
+// drop off the dispatch routing table the same instant it falls off
+// the UI online list — too tight, given clock skew + jitter.
+func TestIsResponsive_LooserThanIsStale(t *testing.T) {
+	now := time.Now()
+	configured := 5 * time.Second
+	// 13s ago is past 2.5×5 = 12.5s (stale) but inside 3×5 = 15s
+	// (responsive).
+	lastSeen := now.Add(-13 * time.Second)
+	if !IsStaleFromCycle(lastSeen, configured, 0) {
+		t.Fatal("test premise broken: 13s ago should be stale at 5s configured")
+	}
+	if !IsResponsive(lastSeen, configured, 0) {
+		t.Error("an envoy that's just barely stale must still be responsive")
+	}
+}

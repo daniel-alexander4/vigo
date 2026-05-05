@@ -79,3 +79,52 @@ func IsStaleFromCycle(lastSeen time.Time, configured, observed time.Duration) bo
 	}
 	return time.Since(lastSeen) > StaleThresholdFromCycle(configured, observed)
 }
+
+// responsiveZeroConfigFallback is the threshold used when the caller
+// has no configured interval to base a per-envoy window on (e.g. the
+// admin-query routing path before the server has loaded its config).
+// Matches the pre-0.38.13 hardcoded fallback in
+// `(*AgentService).isRecentlyActive` so callers see no behavior
+// change in that path.
+const responsiveZeroConfigFallback = 15 * time.Minute
+
+// ResponsiveThreshold returns the per-envoy "is this envoy responsive
+// enough that admin operations should bother dispatching to it?"
+// boundary. Slightly looser than the staleness threshold (1.2×) — an
+// envoy that's strictly *stale* by the UI rule may still be worth a
+// best-effort dispatch attempt during the brief window before it
+// falls off the responsive list. Honors the same `SetOverride` knob
+// as the stale path; an operator who has tightened that to a literal
+// value gets the same value here too.
+//
+// When configured is zero (boot-order edge cases, tests), returns
+// `responsiveZeroConfigFallback` (15m) so the caller doesn't get a
+// degenerate zero-window predicate.
+func ResponsiveThreshold(configured, observed time.Duration) time.Duration {
+	if configured == 0 && observed == 0 && override == 0 {
+		return responsiveZeroConfigFallback
+	}
+	stale := StaleThresholdFromCycle(configured, observed)
+	// 1.2× the stale threshold. Multiply first to keep integer-safe
+	// when stale is small; division by 5 instead of float math to
+	// avoid bringing in math.Round behavior.
+	return stale * 6 / 5
+}
+
+// IsResponsive reports whether an envoy's last check-in is recent
+// enough that it's worth dispatching admin work to it. Distinct from
+// IsStaleFromCycle: the staleness predicate answers "should the UI
+// show this envoy as offline?", IsResponsive answers "should I bother
+// trying to reach this envoy right now?" Mostly identical, slightly
+// looser margin so a freshly-stale envoy still gets one round of
+// best-effort dispatch attempts before the routing layer skips it.
+//
+// Same zero-lastSeen rule as IsStaleFromCycle: never-reported envoys
+// (zero LastSeen) are not responsive — fresh enrollments live in a
+// separate code path.
+func IsResponsive(lastSeen time.Time, configured, observed time.Duration) bool {
+	if lastSeen.IsZero() {
+		return false
+	}
+	return time.Since(lastSeen) <= ResponsiveThreshold(configured, observed)
+}

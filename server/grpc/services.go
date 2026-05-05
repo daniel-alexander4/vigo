@@ -12,6 +12,7 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/integrations"
 	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/registry"
@@ -127,10 +128,13 @@ func (s *AgentService) SetSwarmConfig(sc config.SwarmSection) {
 	s.swarmCfg = sc
 }
 
-// isRecentlyActive returns true if the envoy has checked in within 3× the check-in interval.
-// Used to distinguish promotable (recently polling) from truly stale agents.
-// The 3× margin covers one full interval + jitter + clock skew, ensuring an
-// actively polling agent isn't misclassified as offline between check-ins.
+// isRecentlyActive returns true if the envoy has checked in recently
+// enough that admin work (task / query dispatch) is worth trying.
+// Delegates to `freshness.IsResponsive`, which threads the per-envoy
+// observed CheckIn cadence (introduced in 0.38.0) through the same
+// override + clamp rules the stale predicate uses, so admin-query
+// routing and the UI's offline classification share one source of
+// truth.
 func (s *AgentService) isRecentlyActive(envoyID string) bool {
 	if s.fleetIndex == nil {
 		return false
@@ -139,11 +143,7 @@ func (s *AgentService) isRecentlyActive(envoyID string) bool {
 	if !ok {
 		return false
 	}
-	staleThreshold := 3 * s.baseInterval
-	if staleThreshold == 0 {
-		staleThreshold = 15 * time.Minute // fallback
-	}
-	return time.Since(ts.LastSeen) <= staleThreshold
+	return freshness.IsResponsive(ts.LastSeen, s.baseInterval, ts.ObservedCycle())
 }
 
 // recordAudit is a nil-safe helper that records an audit event.
