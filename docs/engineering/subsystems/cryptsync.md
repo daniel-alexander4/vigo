@@ -247,6 +247,15 @@ When a LEAVE lands on a peer, the agent drops `~<user>/.cryptsync/reencrypt.pend
 
 `agent/src/cryptsync/locks.rs` exposes a `user_lock(table, user)` helper backed by three per-user lock maps (one per table type). Each table type has a `modify(user, |&mut Self| -> bool)` constructor that holds the per-user lock for the entire load+mutate+save+mirror sequence. Granularity is per-user so user A's tombstone activity doesn't block user B's, and per-table-type so a tombstone modify on user dan doesn't block a peer-table modify on user dan. Save still calls `write_user_mirror_json` inside the lock so canonical and user-side mirror stay in lockstep. Holding the lock across local file I/O is intentional — saves are rare and brief (milliseconds on local disk), and a copy-then-CAS shape would add code without a real win.
 
+## Operability
+
+Cryptsync's kill switches are defined fleet-wide in `swarm.cryptsync:` (server.yaml). The two knobs:
+
+- **`enabled: false`** halts the cryptsync announcer, listener, and push handler on every envoy (gates wired through `Substrate::Cryptsync` in `agent/src/swarm/gates.rs`). Already-wrapped identity material under `~user/.cryptsync/` and ciphertext under `~user/cryptsync/` are preserved — re-enabling resumes operation without re-enrollment.
+- **`blacklist: [pat, …]`** is destructive. Adding a host pattern dispatches `vigo swarm cryptsync _apply-blacklist --hostname <h>` to the entire fleet: the blacklisted host scrubs its `~user/.cryptsync/{identity.age,identity.salt,recipients.txt,config.yaml}` for every locally-enrolled user, and every other envoy drops the blacklisted host's pubkey from each user's peer table + recipient list. The destructive semantic mirrors a forced LEAVE — peers cannot fan out a signed envelope on the gone host's behalf, so admin authority via the mTLS control plane substitutes.
+
+Both changes record tamper-evident audit-chain entries (`swarm.cryptsync.enabled`, `swarm.cryptsync.blacklist`) under `actor=config.reload` at publish time. See [swarm Operability](swarm.md#operability--kill-switches) for the full kill-switch table.
+
 ## Threat Model
 
 **Cryptsync protects against:**

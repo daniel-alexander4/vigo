@@ -99,3 +99,92 @@ func TestDiffNewlyMatched(t *testing.T) {
 		})
 	}
 }
+
+func TestSubstrateEnabled(t *testing.T) {
+	if !substrateEnabled(nil) {
+		t.Error("nil pointer must default to enabled (operator did not set the flag)")
+	}
+	tr := true
+	fa := false
+	if !substrateEnabled(&tr) {
+		t.Error("explicit true must be enabled")
+	}
+	if substrateEnabled(&fa) {
+		t.Error("explicit false must be disabled")
+	}
+}
+
+func TestSameStringSet(t *testing.T) {
+	cases := []struct {
+		name   string
+		a, b   []string
+		expect bool
+	}{
+		{"both empty", nil, nil, true},
+		{"a empty, b populated", nil, []string{"x"}, false},
+		{"identical order", []string{"a", "b"}, []string{"a", "b"}, true},
+		{"reordered", []string{"a", "b"}, []string{"b", "a"}, true},
+		{"single mismatch", []string{"a", "b"}, []string{"a", "c"}, false},
+		{"length mismatch", []string{"a", "b"}, []string{"a"}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := sameStringSet(c.a, c.b); got != c.expect {
+				t.Errorf("sameStringSet(%v, %v) = %v, want %v", c.a, c.b, got, c.expect)
+			}
+		})
+	}
+}
+
+func TestDiffStringSets(t *testing.T) {
+	added, removed := diffStringSets([]string{"a", "b"}, []string{"b", "c"})
+	if !reflect.DeepEqual(added, []string{"c"}) {
+		t.Errorf("added = %v, want [c]", added)
+	}
+	if !reflect.DeepEqual(removed, []string{"a"}) {
+		t.Errorf("removed = %v, want [a]", removed)
+	}
+
+	added, removed = diffStringSets(nil, []string{"x"})
+	if !reflect.DeepEqual(added, []string{"x"}) || removed != nil {
+		t.Errorf("nil → [x]: added=%v removed=%v", added, removed)
+	}
+
+	added, removed = diffStringSets([]string{"x"}, nil)
+	if added != nil || !reflect.DeepEqual(removed, []string{"x"}) {
+		t.Errorf("[x] → nil: added=%v removed=%v", added, removed)
+	}
+
+	added, removed = diffStringSets([]string{"a", "b"}, []string{"a", "b"})
+	if added != nil || removed != nil {
+		t.Errorf("identical: added=%v removed=%v", added, removed)
+	}
+}
+
+func TestBlacklistChangeSummary(t *testing.T) {
+	if got := blacklistChangeSummary([]string{"x"}, nil); got != "added: x" {
+		t.Errorf("added-only: got %q", got)
+	}
+	if got := blacklistChangeSummary(nil, []string{"y"}); got != "removed: y" {
+		t.Errorf("removed-only: got %q", got)
+	}
+	if got := blacklistChangeSummary([]string{"a"}, []string{"b"}); got != "added: a; removed: b" {
+		t.Errorf("both: got %q", got)
+	}
+	if got := blacklistChangeSummary(nil, nil); got != "no change" {
+		t.Errorf("neither: got %q", got)
+	}
+}
+
+func TestJSONStringArray(t *testing.T) {
+	if got := jsonStringArray(nil); got != "[]" {
+		t.Errorf("nil: got %s", got)
+	}
+	if got := jsonStringArray([]string{}); got != "[]" {
+		t.Errorf("empty: got %s", got)
+	}
+	got := jsonStringArray([]string{"raspberrypi", "*.test.example.com"})
+	if got != `["raspberrypi","*.test.example.com"]` {
+		t.Errorf("normal: got %s", got)
+	}
+}

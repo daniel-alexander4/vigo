@@ -106,6 +106,15 @@ URLs change at re-found (this is the one place in the design where they do). Cro
 
 **Shipping cadence.** Five slices in tree at 0.35.18–0.35.22: data layer; chained verifier with authority windows; rekey-time hooks + `--force-orphan-projects`; multi-fleet `re-invite-all` + `rejoin` + `PushChain` wire format; `re-found` escape hatch + tombstone marker + the formal [ADR-019 document](../../adr/019-gitmirror-founder-rekey.md).
 
+## Operability
+
+Gitmirror's kill switches are defined fleet-wide in `swarm.gitmirror:` (server.yaml). The two knobs:
+
+- **`enabled: false`** halts the gitmirror reactor on every envoy (publisher and receiver idle, helper-daemon socket stays bound but refuses new pushes/fetches). Already-held bare repos under `/var/lib/vigo/swarm/gitmirror/{projects,mirrors}/` are preserved — re-enabling resumes operation untouched.
+- **`blacklist: [pat, …]`** is destructive. Adding a host pattern triggers `vigo swarm gitmirror _apply-blacklist` via TaskDispatch on the matching envoys: every locally-held bare repo is removed. Removing a host re-allows participation but does **not** re-replicate previously-evicted bundles automatically. The destructive semantic exists because gitmirror's blast radius is bounded (just bare-repo bytes; the corresponding `~user/gitmirror/` working trees on member envoys are user-owned and untouched).
+
+Both changes record tamper-evident audit-chain entries (`swarm.gitmirror.enabled`, `swarm.gitmirror.blacklist`) under `actor=config.reload` at publish time. See [swarm Operability](swarm.md#operability--kill-switches) for the full kill-switch table.
+
 ## Related
 
 - [ADR-015 — Unified gitmirror substrate](../../adr/015-unified-gitmirror-substrate.md) — the foundational design (project shape, capability tokens, helper daemon, fan-out, gossip)

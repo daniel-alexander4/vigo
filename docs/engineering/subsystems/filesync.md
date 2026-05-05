@@ -134,6 +134,15 @@ If files aren't syncing between two machines:
 5. **mTLS healthy?** Filesync uses the same enrollment certs as the swarm peer server. If `curl https://<peer>:1531/health` fails from one machine to another, so does filesync.
 6. **Check `/var/lib/vigo/swarm/filesync/<user>.json`** for the current snapshot and tombstone log.
 
+## Operability
+
+Filesync's kill switches are defined fleet-wide in `swarm.filesync:` (server.yaml). The two knobs:
+
+- **`enabled: false`** halts the filesync announcer (multicast `224.0.0.43:1532`), the peer listener, and the push handler on every envoy (gate wired through `Substrate::Filesync` in `agent/src/swarm/gates.rs`). User content under `~user/filesync/` is preserved — re-enabling resumes operation untouched.
+- **`blacklist: [pat, …]`** is **gate-only by design**. A blacklisted host stops announcing and stops responding to peer requests, but its `~user/filesync/` directory is **not** scrubbed. Filesync content is plaintext user data, and a config typo wiping someone's home directory is a far bigger blast radius than the cryptsync / gitmirror destructive-blacklist semantic. Operators who want to wipe a blacklisted host's filesync content do so manually.
+
+Both changes record tamper-evident audit-chain entries (`swarm.filesync.enabled`, `swarm.filesync.blacklist`) under `actor=config.reload` at publish time. See [swarm Operability](swarm.md#operability--kill-switches) for the full kill-switch table.
+
 ## Related
 
 - [Swarm](swarm.md) — Infrastructure-level P2P blob distribution (operator-controlled, server-orchestrated)

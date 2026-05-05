@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -13,9 +14,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
+	"git.alexander4.io/vigo/server/audit"
 	"git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/swarm"
@@ -41,6 +45,10 @@ type LodeHandler struct {
 	forcePusher   LodeForcePusher
 	manifestStore *swarm.ManifestStore
 	queries       *db.Queries
+
+	swarmCfgMu  sync.RWMutex
+	swarmCfg    config.SwarmSection
+	auditWriter *audit.Writer
 }
 
 // NewLodeHandler creates a new payload handler.
@@ -58,6 +66,51 @@ func NewLodeHandler(seedDir string, tracker *swarm.PeerTracker, fleetIndex *flee
 // distribute triggers a fresh check-in from streaming agents.
 func (h *LodeHandler) SetForcePusher(fp LodeForcePusher) {
 	h.forcePusher = fp
+}
+
+// SetSwarmConfig captures the current swarm config so the Distribute
+// handler can gate-check `swarm.enabled` and `swarm.payload.enabled`
+// before accepting an upload. Called from main.go at startup and from
+// the config-publish hook on every reload.
+func (h *LodeHandler) SetSwarmConfig(cfg config.SwarmSection) {
+	h.swarmCfgMu.Lock()
+	h.swarmCfg = cfg
+	h.swarmCfgMu.Unlock()
+}
+
+// SetAuditWriter wires the tamper-evident audit-chain writer so denial
+// events from gated admin operations land in the same chain as every
+// other admin action.
+func (h *LodeHandler) SetAuditWriter(w *audit.Writer) {
+	h.auditWriter = w
+}
+
+// payloadGate reports whether `vigocli swarm payload distribute` should
+// be allowed right now. Returns (allowed, reason) — when false, reason
+// is the operator-facing explanation surfaced in the 403 body and the
+// audit-chain summary. Mirrors the agent's `substrate_active` rule:
+// fleet-wide swarm.enabled AND swarm.payload.enabled (default true if
+// the *bool is nil).
+func (h *LodeHandler) payloadGate() (bool, string) {
+	h.swarmCfgMu.RLock()
+	defer h.swarmCfgMu.RUnlock()
+	if !h.swarmCfg.Enabled {
+		return false, "swarm is disabled fleet-wide (swarm.enabled: false)"
+	}
+	if h.swarmCfg.Payload.Enabled != nil && !*h.swarmCfg.Payload.Enabled {
+		return false, "payload substrate is disabled (swarm.payload.enabled: false)"
+	}
+	return true, ""
+}
+
+func (h *LodeHandler) recordPayloadDenial(ctx context.Context, actor, reason string) {
+	if h.auditWriter == nil {
+		return
+	}
+	payload := fmt.Sprintf(`{"endpoint":"/api/v1/swarm/payload/distribute","reason":%q}`, reason)
+	if err := h.auditWriter.Record(ctx, "swarm.payload.denied", actor, "api", reason, payload); err != nil {
+		slog.Warn("audit: failed to record payload denial", "error", err)
+	}
 }
 
 // RegisterRoutes registers payload endpoints. Distribute and revoke
@@ -82,6 +135,22 @@ func (h *LodeHandler) RegisterRoutes(mux *http.ServeMux) {
 func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 	if h.seedDir == "" {
 		writeError(w, http.StatusServiceUnavailable, "swarm substrate not enabled — payload requires swarm")
+		return
+	}
+
+	// Substrate operability gate. When the operator has flipped
+	// `swarm.enabled: false` or `swarm.payload.enabled: false` in
+	// server.yaml and republished, refuse new admin pushes — existing
+	// payloads keep flowing on agents that hold them, but no new
+	// admin-initiated work lands. Audit the denial so an operator can
+	// see who hit the gate.
+	if allowed, reason := h.payloadGate(); !allowed {
+		actor := "anonymous"
+		if u := auth.UserFromContext(r.Context()); u != nil {
+			actor = u.Username
+		}
+		h.recordPayloadDenial(r.Context(), actor, reason)
+		writeError(w, http.StatusForbidden, reason)
 		return
 	}
 

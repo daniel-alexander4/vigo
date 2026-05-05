@@ -166,6 +166,25 @@ All peer-to-peer traffic uses the same mTLS certificates as gRPC communication. 
 
 Blob integrity is verified by SHA256 hash after download — if the hash doesn't match, the blob is discarded and re-downloaded.
 
+## Operability — kill switches
+
+Five operator-facing knobs in `swarm:` (server.yaml) gate the substrate end-to-end. All flow to agents via `injectServerVars` on every check-in, so a `vigocli config publish` propagates within one cycle without restarting anything.
+
+| Knob | Effect | Audit event |
+|------|--------|-------------|
+| `swarm.enabled: false` | Fleet-wide kill switch. Agents stop announcing, stop serving, stop fetching. The peer server stays bound on port 1531 (soft-skip pattern) but every handler refuses work; flipping back to true resumes immediately. | `swarm.enabled` |
+| `swarm.payload.enabled: false` | Halts payload reception and blocks new admin pushes. `POST /api/v1/swarm/payload/distribute` returns **403** with `audit_event=swarm.payload.denied`. Existing payloads on agents that hold them keep flowing. | `swarm.payload.enabled` (flip), `swarm.payload.denied` (per blocked admin push) |
+| `swarm.gitmirror.enabled: false` | Halts gitmirror publisher and receiver. Already-held mirrors preserved. | `swarm.gitmirror.enabled` |
+| `swarm.cryptsync.enabled: false` | Halts cryptsync announcer / listener / push handler. Identity material preserved. | `swarm.cryptsync.enabled` |
+| `swarm.filesync.enabled: false` | Halts filesync announcer / listener / push handler. `~user/filesync/` content preserved. | `swarm.filesync.enabled` |
+| `swarm.<sub>.blacklist: [pat, …]` | Per-host denylist (filepath.Match globs). Gitmirror and cryptsync trigger destructive eviction on add (host's mirrors / identity scrubbed). Payload and filesync are gate-only — already-held content preserved. | `swarm.<sub>.blacklist` (with added/removed pattern lists) |
+
+**Audit-chain coverage.** Every gate flip and every per-host blacklist change at config-publish time records a tamper-evident entry under `actor=config.reload` / `source=config`. Admin-push denials record under `actor=<authenticated user>` / `source=api`. Inspect via `/api/v1/audit?event_type=swarm.*`.
+
+**Soft-skip vs hard-stop.** Vigo uses soft-skip: data structures stay resident, the listener stays bound, but emit/serve paths consult an `Arc<AtomicBool>` and return early when the gate is off. Re-enabling resumes work without process restart and without losing in-flight transfers. The tradeoff is small memory cost while disabled in exchange for instant reversibility. Hard-stop semantics (kill listener, drop in-flight) are not implemented.
+
+**Payload note.** Payload rides this generic transport rather than having its own per-substrate listener, so the agent-side gate for payload is currently **forward-compat only** — the `swarm_payload_enabled` flag flows to agents but no agent code branches on it. The operator-meaningful enforcement for payload is server-side: the gate guard at `POST /api/v1/swarm/payload/distribute`. Existing in-flight payloads continue propagating across the fleet via the shared swarm transport regardless.
+
 ## Related
 
 - [Swarm Operations](../../operations/swarm.md) — Configuration, monitoring, troubleshooting
