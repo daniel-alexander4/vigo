@@ -2083,7 +2083,7 @@ Substrate-level overview of the envoy P2P network. Content-subsystem operations 
 
 - **GET /api/v1/swarm/status** — fleet-wide totals (envoys online, substrate-active, seeders, manifest counts, footprint). _(fleet.read)_
 - **GET /api/v1/swarm/peers** — per-envoy rollup with `?sort=footprint|blobs|hostname` and `?limit=N` (0 for unbounded). _(fleet.read)_
-- **POST /api/v1/swarm/cleanup** — dispatch the hidden `vigo swarm _apply-cleanup` verb to envoys matching `?target=<pat>` (default `*`). Each envoy removes dangling `files/<label>` symlinks and `.partial/` dirs whose final blob has been assembled. Idempotent. Returns `{target, dispatched}`. _(admin)_
+- **POST /api/v1/swarm/cleanup** — dispatch the hidden `vigo swarm _apply-cleanup` verb to envoys matching `?target=<pat>` (default `*`). Each envoy removes dangling `files/<label>` symlinks and `.partial/` dirs whose final blob has been assembled. Idempotent. Returns `{target, dispatched, task_run_id}` — pass `task_run_id` to `vigocli task status` for per-envoy detail. _(admin)_
 
 ### Payload
 

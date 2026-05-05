@@ -96,14 +96,16 @@ Idempotent — re-running yields zero changes. The agent prints a one-line summa
 |------|---------|-------------|
 | `--target` | `*` | Hostname pattern (`filepath.Match` glob) scoping the sweep. Default `*` = whole fleet. |
 
-The CLI returns a one-line dispatch summary; per-envoy detail lives in the task-run audit log:
+The CLI returns a one-line dispatch summary plus the task-run ID for the cleanup dispatch — per-envoy results live under `vigocli task` (push runs are separate from convergence runs in `vigocli runs`):
 
 ```
 $ vigocli swarm cleanup
 Dispatched 'vigo swarm _apply-cleanup' to 5 envoy(s) matching "*".
-Per-envoy results land in the task-run audit log; tail it with:
-  vigocli runs tail --task swarm.cleanup
+Per-envoy results:
+  vigocli task status <id>
 ```
+
+`vigocli task list` shows recent cleanup dispatches across runs.
 
 **Out of scope.** This verb does **not** clean revoked-blob eviction (the manifest-gossip path on the agent already handles that), retention-expired blobs (`RetentionPruner` server-side), or graveyard entries (age-based, separately).
 
