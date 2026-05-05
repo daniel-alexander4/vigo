@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"strconv"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -191,19 +191,51 @@ var taskListCmd = &cobra.Command{
 			return nil
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("COMMAND"), header("TARGET"), header("STATUS"), header("TARGETS"), header("CREATED"))
+		// Manual fixed-width formatting — text/tabwriter counts bytes,
+		// not visible chars, so it misaligns when ANSI-wrapped cells
+		// share a column with plain ones. `padR` runs on plain text
+		// before color is applied; visible widths then match.
+		const (
+			idW     = 36 // UUID
+			cmdW    = 42 // truncated to 40 + 2 sep
+			statusW = 8  // "complete"
+			countW  = 7  // "TARGETS" header
+			cmdMax  = 40 // truncation cap
+		)
+		// Target width: max of header + actual data values (hostnames
+		// or the literal "*"). Computed up front so every row aligns.
+		targetW := len("TARGET")
 		for _, t := range resp.TaskRuns {
-			// Truncate long commands for display.
-			command := t.Command
-			if len(command) > 40 {
-				command = command[:37] + "..."
+			if len(t.Target) > targetW {
+				targetW = len(t.Target)
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%s\n",
-				dim(t.ID), command, t.Target, colorStatus(t.Status),
-				t.TotalTargets, dim(formatTimestamp(t.CreatedAt)))
 		}
-		return w.Flush()
+
+		fmt.Println(strings.Join([]string{
+			header(padR("ID", idW)),
+			header(padR("COMMAND", cmdW)),
+			header(padR("TARGET", targetW)),
+			header(padR("STATUS", statusW)),
+			header(padR("TARGETS", countW)),
+			header("CREATED"),
+		}, "  "))
+
+		for _, t := range resp.TaskRuns {
+			command := t.Command
+			if len(command) > cmdMax {
+				command = command[:cmdMax-3] + "..."
+			}
+			count := strconv.FormatInt(t.TotalTargets, 10)
+			fmt.Println(strings.Join([]string{
+				dim(padR(t.ID, idW)),
+				padR(command, cmdW),
+				padR(t.Target, targetW),
+				colorStatus(padR(t.Status, statusW)),
+				padR(count, countW),
+				dim(formatTimestamp(t.CreatedAt)),
+			}, "  "))
+		}
+		return nil
 	},
 }
 
