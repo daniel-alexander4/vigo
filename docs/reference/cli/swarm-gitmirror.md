@@ -12,6 +12,7 @@ Admin-side, fleet-wide view of the [gitmirror](../../engineering/subsystems/gitm
 | `status` | Fleet-wide totals (projects, hosts, divergent refs, envelope counts) |
 | `list` | One row per project with handle, fan-out, member fleets, host count, divergence, envelopes |
 | `show <project_id\|handle>` | Detailed view of one project with refs and per-host breakdown |
+| `members [project_id\|handle]` | Per-project membership (founder + member fleet pubkeys) as a table; mirrors `vigocli swarm cryptsync members` |
 
 Every subcommand accepts `--json` to emit machine-readable output.
 
@@ -105,6 +106,29 @@ The positional argument accepts, in order:
 1. The full 64-char-lowercase-hex `project_id` (canonical, always wins)
 2. An exact handle match (errors if two projects share the handle — pass the project_id instead)
 3. A unique handle prefix
+
+## `vigocli swarm gitmirror members [project_id|handle]`
+
+Per-project membership table mirroring [`vigocli swarm cryptsync members`](swarm-cryptsync.md). Without an argument, prints every project; with one, scopes to a single project (same resolution rules as `show`).
+
+```
+$ vigocli swarm gitmirror members
+PROJECT: notes  (project_id 8e23bc5491cf)
+ROLE      FLEET-PUBKEY
+founder   ed25519:8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8
+
+PROJECT: vigo-web  (project_id e3b0c44298fc)
+ROLE      FLEET-PUBKEY
+founder   ed25519:8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8
+member    ed25519:f43f6ef3eea29e3780d73aa2cee4a78193419a69f43f6ef3eea29e3780d73aa2
+```
+
+| Column | Meaning |
+|--------|---------|
+| `ROLE` | `founder` for the project's anchor fleet (always the first member); `member` for every additional fleet. |
+| `FLEET-PUBKEY` | The fleet's Ed25519 pubkey, prefixed with `ed25519:` for symmetry with `vigo swarm self-fleet pubkey` output. |
+
+For host-presence detail (which envoys hold the bare repo, sizes, last-seen times) use `vigocli swarm gitmirror show <project>` instead — `members` is intentionally cryptographic-membership only, mirroring how `cryptsync members` is per-user-circle only.
 
 ## JSON output
 

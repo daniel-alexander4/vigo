@@ -6,6 +6,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -113,6 +114,20 @@ var gitmirrorShowCmd = &cobra.Command{
 	Short: "Detailed view of one project with per-host breakdown",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runGitmirrorShow,
+}
+
+var gitmirrorMembersCmd = &cobra.Command{
+	Use:   "members [project_id|handle]",
+	Short: "Print member fleets per gitmirror project, formatted as a table",
+	Long: `Print the cryptographic membership of every gitmirror project
+across the fleet, sourced from the 'gitmirror' trait projection.
+Pass [project_id|handle] to scope to one project; omit to list every
+project's members.
+
+Read-only. Mirrors the shape of 'vigocli swarm cryptsync members'.
+For host-presence detail use 'vigocli swarm gitmirror show <project>'.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runGitmirrorMembers,
 }
 
 func fetchFleet() (*fleetResponse, error) {
@@ -294,6 +309,62 @@ func runGitmirrorShow(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func runGitmirrorMembers(cmd *cobra.Command, args []string) error {
+	asJSON, _ := cmd.Flags().GetBool("json")
+	fleet, err := fetchFleet()
+	if err != nil {
+		return err
+	}
+
+	var selected []fleetProjectSummary
+	if len(args) == 1 {
+		match, err := resolveFleetProject(fleet.Projects, args[0])
+		if err != nil {
+			return err
+		}
+		selected = []fleetProjectSummary{*match}
+	} else {
+		selected = append([]fleetProjectSummary(nil), fleet.Projects...)
+	}
+	return renderGitmirrorMembers(selected, asJSON, os.Stdout)
+}
+
+func renderGitmirrorMembers(selected []fleetProjectSummary, asJSON bool, out io.Writer) error {
+	if len(selected) == 0 {
+		fmt.Fprintln(out, "No gitmirror projects reported by the fleet.")
+		return nil
+	}
+
+	sort.Slice(selected, func(i, j int) bool {
+		if selected[i].Handle != selected[j].Handle {
+			return selected[i].Handle < selected[j].Handle
+		}
+		return selected[i].ProjectID < selected[j].ProjectID
+	})
+
+	if asJSON {
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "  ")
+		return enc.Encode(selected)
+	}
+
+	for _, p := range selected {
+		fmt.Fprintf(out, "PROJECT: %s  (project_id %s)\n", p.Handle, shortSha(p.ProjectID))
+		w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+		fmt.Fprintf(w, "%s\t%s\n", bold("ROLE"), bold("FLEET-PUBKEY"))
+		for i, fp := range p.Members {
+			role := "member"
+			if i == 0 || fp == p.FounderFleetPubkey {
+				role = "founder"
+			}
+			fmt.Fprintf(w, "%s\ted25519:%s\n", role, fp)
+		}
+		w.Flush()
+		fmt.Fprintln(out)
+	}
+	return nil
+}
+
 // resolveFleetProject matches `target` against the fleet's projects:
 // exact project_id, exact handle, then unique handle prefix. An
 // ambiguous match is an error (caller must pass the full project_id).
@@ -370,6 +441,7 @@ func init() {
 	gitmirrorStatusCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
 	gitmirrorListCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
 	gitmirrorShowCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
+	gitmirrorMembersCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
 
-	gitmirrorCmd.AddCommand(gitmirrorStatusCmd, gitmirrorListCmd, gitmirrorShowCmd)
+	gitmirrorCmd.AddCommand(gitmirrorStatusCmd, gitmirrorListCmd, gitmirrorShowCmd, gitmirrorMembersCmd)
 }

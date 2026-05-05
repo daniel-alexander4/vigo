@@ -4,9 +4,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -118,6 +120,105 @@ func TestResolveFleetProjectEmptyFleet(t *testing.T) {
 	_, err := resolveFleetProject(nil, "anything")
 	if err == nil {
 		t.Fatal("expected error on empty fleet")
+	}
+}
+
+func TestRenderGitmirrorMembersEmpty(t *testing.T) {
+	var buf bytes.Buffer
+	if err := renderGitmirrorMembers(nil, false, &buf); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "No gitmirror projects") {
+		t.Fatalf("expected empty-fleet message, got: %s", buf.String())
+	}
+}
+
+func TestRenderGitmirrorMembersTable(t *testing.T) {
+	pid := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+	founder := strings.Repeat("aa", 32)
+	mem := strings.Repeat("bb", 32)
+	projects := []fleetProjectSummary{
+		{
+			ProjectID:          pid,
+			Handle:             "vigo",
+			FounderFleetPubkey: founder,
+			Members:            []string{founder, mem},
+			MemberFleetCount:   2,
+			DrFanout:           "fleet-wide",
+		},
+	}
+	var buf bytes.Buffer
+	if err := renderGitmirrorMembers(projects, false, &buf); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "PROJECT: vigo") {
+		t.Errorf("expected project header, got: %s", out)
+	}
+	if !strings.Contains(out, "founder") {
+		t.Errorf("expected role 'founder' in output, got: %s", out)
+	}
+	if !strings.Contains(out, "member") {
+		t.Errorf("expected role 'member' in output, got: %s", out)
+	}
+	if !strings.Contains(out, "ed25519:"+founder) {
+		t.Errorf("expected founder pubkey in output, got: %s", out)
+	}
+	if !strings.Contains(out, "ed25519:"+mem) {
+		t.Errorf("expected member pubkey in output, got: %s", out)
+	}
+}
+
+func TestRenderGitmirrorMembersSortsByHandle(t *testing.T) {
+	founder := strings.Repeat("aa", 32)
+	projects := []fleetProjectSummary{
+		{
+			ProjectID:          "ff" + strings.Repeat("ff", 31),
+			Handle:             "zeta",
+			FounderFleetPubkey: founder,
+			Members:            []string{founder},
+		},
+		{
+			ProjectID:          "11" + strings.Repeat("11", 31),
+			Handle:             "alpha",
+			FounderFleetPubkey: founder,
+			Members:            []string{founder},
+		},
+	}
+	var buf bytes.Buffer
+	if err := renderGitmirrorMembers(projects, false, &buf); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	out := buf.String()
+	alpha := strings.Index(out, "PROJECT: alpha")
+	zeta := strings.Index(out, "PROJECT: zeta")
+	if alpha < 0 || zeta < 0 {
+		t.Fatalf("missing one of the project headers: alpha=%d zeta=%d in:\n%s", alpha, zeta, out)
+	}
+	if alpha > zeta {
+		t.Errorf("expected alpha before zeta in handle-sorted output, got alpha=%d zeta=%d", alpha, zeta)
+	}
+}
+
+func TestRenderGitmirrorMembersJSON(t *testing.T) {
+	founder := strings.Repeat("aa", 32)
+	projects := []fleetProjectSummary{{
+		ProjectID:          "0a" + strings.Repeat("0a", 31),
+		Handle:             "vigo",
+		FounderFleetPubkey: founder,
+		Members:            []string{founder},
+		MemberFleetCount:   1,
+	}}
+	var buf bytes.Buffer
+	if err := renderGitmirrorMembers(projects, true, &buf); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var got []fleetProjectSummary
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("expected valid JSON output, got error %v and body: %s", err, buf.String())
+	}
+	if len(got) != 1 || got[0].Handle != "vigo" {
+		t.Fatalf("unexpected JSON payload: %+v", got)
 	}
 }
 
