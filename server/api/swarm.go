@@ -4,6 +4,8 @@
 package api
 
 import (
+	"context"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -17,8 +19,16 @@ import (
 // rollup logic lives in server/swarmview so both this handler and
 // the UI page can consume the same snapshot without an import cycle.
 
+// CleanupDispatcher is the small slice of AgentService the cleanup
+// route needs — keeps the API package decoupled from the gRPC layer
+// (no import cycle, easy to fake in tests).
+type CleanupDispatcher interface {
+	DispatchCleanup(ctx context.Context, target string) (int, error)
+}
+
 type SwarmHandler struct {
-	src swarmview.Sources
+	src        swarmview.Sources
+	dispatcher CleanupDispatcher
 }
 
 // NewSwarmHandler creates a substrate-overview handler.
@@ -48,12 +58,22 @@ func NewSwarmHandler(tracker *swarm.PeerTracker, manifest *swarm.ManifestStore, 
 	}
 }
 
+// SetCleanupDispatcher wires the agent-service dispatcher so the
+// cleanup endpoint can fan `vigo swarm _apply-cleanup` out to envoys.
+func (h *SwarmHandler) SetCleanupDispatcher(d CleanupDispatcher) {
+	h.dispatcher = d
+}
+
 // RegisterRoutes registers `/api/v1/swarm/*` substrate endpoints.
 // Status and peers are aggregated fleet observability — fleet.read.
+// Cleanup is admin-only — it dispatches a destructive (idempotent)
+// agent verb to every targeted envoy.
 func (h *SwarmHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := auth.RequirePermission(auth.PermFleetRead)
+	admin := auth.RequireAdmin("")
 	mux.Handle("GET /api/v1/swarm/status", read(http.HandlerFunc(h.Status)))
 	mux.Handle("GET /api/v1/swarm/peers", read(http.HandlerFunc(h.Peers)))
+	mux.Handle("POST /api/v1/swarm/cleanup", admin(http.HandlerFunc(h.Cleanup)))
 }
 
 // Status returns the fleet-wide substrate overview.
@@ -74,6 +94,31 @@ func (h *SwarmHandler) Peers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, swarmview.SnapshotPeers(h.src, sortKey, limit))
+}
+
+// Cleanup dispatches the hidden `vigo swarm _apply-cleanup` verb to
+// every targeted envoy via TaskDispatch. Optional `?target=<spec>`
+// query param scopes the sweep to a hostname pattern; default is `*`
+// (full fleet). Returns the number of envoys the dispatch reached.
+func (h *SwarmHandler) Cleanup(w http.ResponseWriter, r *http.Request) {
+	if h.dispatcher == nil {
+		writeError(w, http.StatusServiceUnavailable, "swarm cleanup dispatcher not wired")
+		return
+	}
+	target := r.URL.Query().Get("target")
+	if target == "" {
+		target = "*"
+	}
+	dispatched, err := h.dispatcher.DispatchCleanup(r.Context(), target)
+	if err != nil {
+		slog.Warn("swarm cleanup dispatch failed", "target", target, "error", err)
+		writeError(w, http.StatusInternalServerError, "cleanup dispatch failed: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{
+		"target":     target,
+		"dispatched": dispatched,
+	})
 }
 
 // SnapshotStatus exposes the same rollup the REST handler returns.

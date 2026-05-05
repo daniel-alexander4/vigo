@@ -93,6 +93,46 @@ var swarmPeersCmd = &cobra.Command{
 	RunE:  runSwarmPeers,
 }
 
+var swarmCleanupCmd = &cobra.Command{
+	Use:   "cleanup",
+	Short: "Fleet-wide swarm-cache hygiene sweep (dangling symlinks, stale .partial dirs)",
+	Long: `Dispatch the hidden 'vigo swarm _apply-cleanup' verb to every targeted
+envoy. The agent walks its blob cache and removes:
+
+  - dangling files/<label> symlinks (target file gone)
+  - .partial/ dirs whose final blob has already been assembled
+
+Idempotent — safe to re-run; reports zero changes when nothing's
+stale. Does NOT touch revoked-blob eviction (that's the manifest
+gossip path) or retention-expired blobs (that's the RetentionPruner).
+
+Defaults to fleet-wide; pass --target to scope to a hostname pattern.`,
+	Args: cobra.NoArgs,
+	RunE: runSwarmCleanup,
+}
+
+type swarmCleanupResp struct {
+	Target     string `json:"target"`
+	Dispatched int    `json:"dispatched"`
+}
+
+func runSwarmCleanup(cmd *cobra.Command, _ []string) error {
+	target, _ := cmd.Flags().GetString("target")
+	if target == "" {
+		target = "*"
+	}
+	client := newAPIClient()
+	var resp swarmCleanupResp
+	path := fmt.Sprintf("/api/v1/swarm/cleanup?target=%s", url.QueryEscape(target))
+	if err := client.post(path, nil, &resp); err != nil {
+		return fmt.Errorf("dispatch swarm cleanup: %w", err)
+	}
+	fmt.Printf("Dispatched 'vigo swarm _apply-cleanup' to %d envoy(s) matching %q.\n", resp.Dispatched, resp.Target)
+	fmt.Println("Per-envoy results land in the task-run audit log; tail it with:")
+	fmt.Println("  vigocli runs tail --task swarm.cleanup")
+	return nil
+}
+
 func runSwarmStatus(cmd *cobra.Command, _ []string) error {
 	asJSON, _ := cmd.Flags().GetBool("json")
 	client := newAPIClient()
@@ -209,6 +249,7 @@ func init() {
 		}
 		return nil
 	}
-	swarmCmd.AddCommand(swarmStatusCmd, swarmPeersCmd)
+	swarmCleanupCmd.Flags().String("target", "*", "Hostname pattern (filepath.Match glob) to scope the sweep; default '*' = whole fleet")
+	swarmCmd.AddCommand(swarmStatusCmd, swarmPeersCmd, swarmCleanupCmd)
 	swarmCmd.AddCommand(payloadCmd, gitmirrorCmd, filesyncCmd, cryptsyncCmd)
 }

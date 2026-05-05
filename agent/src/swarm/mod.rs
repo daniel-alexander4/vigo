@@ -494,6 +494,229 @@ pub fn merge_manifest_entries(
     }
 }
 
+/// Hidden agent verb: full sweep of the substrate-shared blob cache,
+/// invoked via TaskDispatch when an admin runs `vigocli swarm cleanup`.
+/// Idempotent — safe to re-run; reports zero changes when nothing's
+/// stale. Touches only filesystem state; does not contact peers.
+///
+/// Two passes:
+///
+/// 1. **`files/<label>` symlinks** — readdir + readlink. Any symlink
+///    whose target doesn't exist (target file removed but symlink
+///    survived an interrupted revoke / rename) is unlinked.
+/// 2. **`.partial/` dirs** — any directory whose final blob (`<sha>`)
+///    has been assembled is `rm -rf`'d. The download completed but
+///    the assemble step skipped the cleanup (interrupted, crash, or
+///    a pre-0.34 version of the assembler that didn't sweep).
+///
+/// What this does **not** clean: revoked blobs that still have a
+/// manifest entry (that's `evict_revoked_blobs` on the merge path),
+/// retention-expired blobs (RetentionPruner's job server-side), or
+/// graveyard entries (those expire on age, separately).
+pub fn apply_cleanup() -> anyhow::Result<()> {
+    let blobs_dir = crate::platform::paths::default_blobs_dir();
+    let files_dir = blobs_dir.parent().unwrap_or(&blobs_dir).join("files");
+    let result = run_cleanup(&blobs_dir, &files_dir);
+    println!(
+        "swarm cleanup: dangling_symlinks={} stale_partials={} errors={}",
+        result.dangling_symlinks, result.stale_partials, result.errors
+    );
+    if result.errors > 0 {
+        anyhow::bail!("swarm cleanup completed with {} errors", result.errors);
+    }
+    Ok(())
+}
+
+/// Result of one cleanup pass. Public so tests can inspect counts
+/// without parsing stdout.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct CleanupResult {
+    pub dangling_symlinks: usize,
+    pub stale_partials: usize,
+    pub errors: usize,
+}
+
+/// Testable inner of `apply_cleanup` — takes explicit blob/file dirs
+/// so tests can drive the sweep against a tempdir layout.
+pub fn run_cleanup(blobs_dir: &std::path::Path, files_dir: &std::path::Path) -> CleanupResult {
+    let mut result = CleanupResult::default();
+
+    // Pass 1: dangling files/<label> symlinks.
+    if files_dir.is_dir() {
+        match std::fs::read_dir(files_dir) {
+            Ok(entries) => {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    let meta = match path.symlink_metadata() {
+                        Ok(m) => m,
+                        Err(_) => continue,
+                    };
+                    if !meta.file_type().is_symlink() {
+                        continue;
+                    }
+                    // exists() follows symlinks — false means the
+                    // target is gone, so the symlink is dangling.
+                    if !path.exists() {
+                        match std::fs::remove_file(&path) {
+                            Ok(()) => {
+                                result.dangling_symlinks += 1;
+                                info!(path = %path.display(), "removed dangling files/ symlink");
+                            }
+                            Err(e) => {
+                                result.errors += 1;
+                                warn!(path = %path.display(), error = %e, "failed to remove dangling symlink");
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                warn!(dir = %files_dir.display(), error = %e, "cannot read files dir");
+            }
+        }
+    }
+
+    // Pass 2: .partial/ dirs whose final blob has been assembled.
+    if blobs_dir.is_dir() {
+        match std::fs::read_dir(blobs_dir) {
+            Ok(entries) => {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    let name = match path.file_name().and_then(|s| s.to_str()) {
+                        Some(n) => n,
+                        None => continue,
+                    };
+                    let sha = match name.strip_suffix(".partial") {
+                        Some(s) => s,
+                        None => continue,
+                    };
+                    if !path.is_dir() {
+                        continue;
+                    }
+                    // The final blob lives at `<blobs_dir>/<sha>`. If
+                    // it exists, the download is done — the partial
+                    // is leftover from an unclean assemble.
+                    if blobs_dir.join(sha).is_file() {
+                        match std::fs::remove_dir_all(&path) {
+                            Ok(()) => {
+                                result.stale_partials += 1;
+                                info!(sha256 = &sha[..12.min(sha.len())], "removed stale .partial/ dir");
+                            }
+                            Err(e) => {
+                                result.errors += 1;
+                                warn!(path = %path.display(), error = %e, "failed to remove stale .partial");
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                warn!(dir = %blobs_dir.display(), error = %e, "cannot read blobs dir");
+            }
+        }
+    }
+
+    result
+}
+
+#[cfg(test)]
+mod cleanup_tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn cleanup_empty_dirs_returns_zero() {
+        let dir = tempfile::tempdir().unwrap();
+        let blobs = dir.path().join(".blobs");
+        let files = dir.path().join("files");
+        fs::create_dir_all(&blobs).unwrap();
+        fs::create_dir_all(&files).unwrap();
+        let r = run_cleanup(&blobs, &files);
+        assert_eq!(r, CleanupResult::default());
+    }
+
+    #[test]
+    fn cleanup_removes_dangling_symlink() {
+        let dir = tempfile::tempdir().unwrap();
+        let blobs = dir.path().join(".blobs");
+        let files = dir.path().join("files");
+        fs::create_dir_all(&blobs).unwrap();
+        fs::create_dir_all(&files).unwrap();
+
+        // Symlink pointing at a non-existent target.
+        let dangling = files.join("missing.bin");
+        std::os::unix::fs::symlink(blobs.join("nonexistent"), &dangling).unwrap();
+
+        // Symlink with a live target — must be left alone.
+        let live_target = blobs.join("present");
+        fs::write(&live_target, b"data").unwrap();
+        let live_link = files.join("present.bin");
+        std::os::unix::fs::symlink(&live_target, &live_link).unwrap();
+
+        let r = run_cleanup(&blobs, &files);
+        assert_eq!(r.dangling_symlinks, 1, "exactly one dangling link should be removed");
+        assert_eq!(r.stale_partials, 0);
+        assert!(!dangling.exists() && dangling.symlink_metadata().is_err(), "dangling link gone");
+        assert!(live_link.symlink_metadata().is_ok(), "live link preserved");
+    }
+
+    #[test]
+    fn cleanup_removes_partial_when_final_blob_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let blobs = dir.path().join(".blobs");
+        let files = dir.path().join("files");
+        fs::create_dir_all(&blobs).unwrap();
+        fs::create_dir_all(&files).unwrap();
+
+        let sha = "a".repeat(64);
+        // Final blob present + stale partial dir alongside it.
+        fs::write(blobs.join(&sha), b"complete").unwrap();
+        let stale_partial = blobs.join(format!("{}.partial", sha));
+        fs::create_dir_all(&stale_partial).unwrap();
+        fs::write(stale_partial.join("chunk_0000"), b"x").unwrap();
+
+        // Active partial (no final blob) — must be left alone.
+        let active_sha = "b".repeat(64);
+        let active_partial = blobs.join(format!("{}.partial", active_sha));
+        fs::create_dir_all(&active_partial).unwrap();
+        fs::write(active_partial.join("chunk_0000"), b"y").unwrap();
+
+        let r = run_cleanup(&blobs, &files);
+        assert_eq!(r.stale_partials, 1, "exactly the completed-blob's partial should be removed");
+        assert_eq!(r.dangling_symlinks, 0);
+        assert!(!stale_partial.exists(), "stale partial gone");
+        assert!(active_partial.is_dir(), "active partial preserved");
+    }
+
+    #[test]
+    fn cleanup_idempotent_second_run_zero_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let blobs = dir.path().join(".blobs");
+        let files = dir.path().join("files");
+        fs::create_dir_all(&blobs).unwrap();
+        fs::create_dir_all(&files).unwrap();
+
+        // Lay down both kinds of stale state.
+        let dangling = files.join("missing.bin");
+        std::os::unix::fs::symlink(blobs.join("gone"), &dangling).unwrap();
+        let sha = "c".repeat(64);
+        fs::write(blobs.join(&sha), b"complete").unwrap();
+        fs::create_dir_all(blobs.join(format!("{}.partial", sha))).unwrap();
+
+        let first = run_cleanup(&blobs, &files);
+        assert_eq!((first.dangling_symlinks, first.stale_partials), (1, 1));
+        let second = run_cleanup(&blobs, &files);
+        assert_eq!(second, CleanupResult::default(), "second run finds nothing to do");
+    }
+
+    #[test]
+    fn cleanup_skips_missing_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+        let r = run_cleanup(&dir.path().join("missing-blobs"), &dir.path().join("missing-files"));
+        assert_eq!(r, CleanupResult::default());
+    }
+}
+
 /// Compute a deterministic download jitter for a blob on this machine.
 /// Returns 0..MAX_DOWNLOAD_JITTER_MS milliseconds based on hashing hostname + SHA256.
 /// Each machine gets a different delay for the same blob, spreading starts.

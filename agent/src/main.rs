@@ -129,6 +129,12 @@ enum Commands {
     SelfFleetSessionDaemon {
         args: Vec<String>,
     },
+    /// Hidden: fleet-wide swarm-cache cleanup. Dispatched by the
+    /// server when an admin runs `vigocli swarm cleanup`. Walks the
+    /// blob cache, removes dangling `files/<label>` symlinks (target
+    /// missing), removes `.partial/` dirs whose final blob has
+    /// already been assembled. Idempotent; safe to re-run.
+    SwarmApplyCleanup,
 }
 
 fn parse_args() -> Result<Cli> {
@@ -290,6 +296,11 @@ fn parse_args() -> Result<Cli> {
                 Some("gitmirror") => Commands::Gitmirror { args: positional[2..].to_vec() },
                 Some("cryptsync") => Commands::Cryptsync { args: positional[2..].to_vec() },
                 Some("self-fleet") => Commands::SelfFleet { args: positional[2..].to_vec() },
+                // Hidden: server-dispatched cleanup verb. Mirrors the
+                // `_apply-blacklist` pattern (gitmirror/cryptsync), but
+                // operates on the substrate-shared blob cache rather
+                // than per-substrate state. Not advertised in --help.
+                Some("_apply-cleanup") => Commands::SwarmApplyCleanup,
                 Some(other) => bail!(
                     "unknown swarm subcommand: {}\nExpected one of: gitmirror | cryptsync | self-fleet",
                     other
@@ -1662,6 +1673,13 @@ async fn main() -> Result<()> {
             // Hidden: self-fleet session helper daemon entry point.
             // Spawned by `vigo swarm self-fleet unlock`.
             vigo::swarm::self_fleet::session::daemon_main(args.clone()).await
+        }
+
+        Some(Commands::SwarmApplyCleanup) => {
+            // Hidden: server-dispatched swarm-cache hygiene sweep.
+            // Returns a one-line operator summary on stdout so the
+            // dispatching side has audit-friendly output.
+            vigo::swarm::apply_cleanup()
         }
 
         Some(Commands::Traits { collectors: args }) => {

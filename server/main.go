@@ -1150,12 +1150,17 @@ func run() error {
 			// agents are allowed to refresh via gossip). Without
 			// this, an empty post-restart manifest gets re-poisoned
 			// by stale `swarm_seeds` traits within seconds (root
-			// cause of the 2026-04-24 incident).
-			manifestPath := filepath.Join(filepath.Dir(seedDir), "manifest.json")
+			// cause of the 2026-04-24 incident). Filename is
+			// `server-manifest.json` to stay clear of the local
+			// agent's own `manifest.json` at the same path — the
+			// two share the dir via the swarm bind-mount but use
+			// independent on-disk schemas.
+			manifestPath := filepath.Join(filepath.Dir(seedDir), "server-manifest.json")
 			manifestStore, err := swarm.NewPersistentManifestStore(manifestPath, time.Second)
 			if err != nil {
 				return fmt.Errorf("loading swarm manifest: %w", err)
 			}
+			slog.Info("swarm manifest persistence enabled", "path", manifestPath)
 			defer manifestStore.Stop()
 			lodeHandler := api.NewLodeHandler(seedDir, peerTracker, fleetIndex, manifestStore, queries)
 			lodeHandler.SetForcePusher(agentSvc)
@@ -1163,6 +1168,7 @@ func run() error {
 			lodeHandler.SetAuditWriter(auditWriter)
 			lodeHandler.RegisterRoutes(gwMux)
 			swarmAPIHandler := api.NewSwarmHandler(peerTracker, manifestStore, fleetIndex)
+			swarmAPIHandler.SetCleanupDispatcher(agentSvc)
 			swarmAPIHandler.RegisterRoutes(gwMux)
 			uiHandler.SetSwarmAPI(swarmAPIHandler)
 			agentSvc.SetSwarm(peerTracker, manifestStore)
