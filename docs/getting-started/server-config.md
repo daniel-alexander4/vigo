@@ -587,6 +587,7 @@ swarm:
   seed_dir: "/var/lib/vigo/swarm/seed"
   port: 1531
   max_bandwidth_percent: 50
+  manifest_liveness_ttl: 24h
   payload:
     enabled: true
     blacklist:
@@ -615,6 +616,7 @@ swarm:
 | `seed_dir` | `/var/lib/vigo/swarm/seed` | Directory where `vigocli swarm distribute` writes seed files |
 | `port` | `1531` | Agent peer server listen port (mTLS HTTPS) |
 | `max_bandwidth_percent` | `50` | Maximum network bandwidth agents will use for swarm transfers (percentage of interface capacity) |
+| `manifest_liveness_ttl` | `24h` | Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Combined with the `RecordSeedFromAgent` gossip gate (agents can only refresh entries the server has authoritatively seen — they cannot create new ones via gossip), this guards against stale agents repopulating a freshly-restarted server's manifest. Set to `0` or empty to disable the sweep on tiny static fleets where no entry should ever expire. |
 | `payload.enabled` | `true` | Whether payload reception runs fleet-wide. Set `false` to halt agents accepting new payload assignments; already-cached blobs are preserved so re-enabling resumes operation untouched. |
 | `payload.blacklist` | `[]` | Hostname patterns (filepath.Match globs) of envoys denied from receiving payload distributions. Gate-only — already-cached blobs on a newly-blacklisted host are not evicted automatically. |
 | `gitmirror.enabled` | `true` | Whether gitmirror runs fleet-wide. Set `false` to halt gitmirror (publisher and receiver idle); already-held mirrors at `/var/lib/vigo/swarm/gitmirror/mirrors/` are preserved so re-enabling resumes operation untouched. |

@@ -151,6 +151,14 @@ The server also ships its manifest CRDT with every check-in response. This is th
 - **Only the seeder** or the **server** can revoke a blob
 - A compromised envoy cannot revoke another envoy's blobs
 
+### Server-side persistence + agent-gossip gate
+
+The server's `ManifestStore` persists to `<dir(seed_dir)>/manifest.json` (mode `0600`, atomic temp+rename via a 1-second debounced background flusher). Without persistence, a server restart wipes the in-RAM manifest and agents reporting their cached `swarm_seeds` traits re-create every entry — including ones the operator just revoked — within seconds. This was the root cause of the 2026-04-24 cairn/gitmirror reset incident; persistence + the gate below close the footgun structurally.
+
+The agent-driven `RecordSeedFromAgent` path is gated: agents can only refresh entries the server has already seen via the authoritative admin-distribute path. Unknown or revoked SHAs reported via gossip are dropped (logged at INFO, no entry created). The admin path (`POST /api/v1/swarm/payload/distribute` → `RecordSeed`) remains the only way to introduce new entries.
+
+A liveness sweep in `RetentionPruner` revokes active entries whose `LastReSeededAt` (a per-entry timestamp parallel to LWW's `UpdatedAt`, bumped on every Record\* call) has aged past `swarm.manifest_liveness_ttl` (default `24h`). Combined with the gossip gate, this keeps the manifest from accumulating orphans when a publisher permanently disappears. Set `manifest_liveness_ttl: 0` to disable the sweep on tiny static fleets where no entry should ever expire.
+
 ### Manifest Endpoints
 
 Each envoy's peer server (port 1531) exposes:
