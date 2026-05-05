@@ -526,5 +526,9 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		"rolling", rolling,
 	)
 
-	return &DispatchResult{ID: taskRun.ID, Status: "running"}, nil
+	return &DispatchResult{
+		ID:         taskRun.ID,
+		Status:     "running",
+		Dispatched: len(onlineTargets) + len(promotableTargets),
+	}, nil
 }

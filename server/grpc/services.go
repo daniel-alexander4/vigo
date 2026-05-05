@@ -146,11 +146,7 @@ func (s *AgentService) DispatchCleanup(ctx context.Context, target string) (int,
 	if err != nil {
 		return 0, err
 	}
-	dispatched := 0
-	for _, b := range res.Batches {
-		dispatched += len(b.Hostnames)
-	}
-	return dispatched, nil
+	return res.Dispatched, nil
 }
 
 // isRecentlyActive returns true if the envoy has checked in recently

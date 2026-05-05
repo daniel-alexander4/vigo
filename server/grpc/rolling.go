@@ -39,6 +39,10 @@ type DispatchResult struct {
 	Status  string         `json:"status"`
 	Batches []DryRunBatch  `json:"batches,omitempty"`
 	Offline []string       `json:"offline,omitempty"`
+	// Dispatched is the count of envoys the task was actually sent to
+	// (online + promotable). Populated on real dispatches; zero on
+	// dry-runs (use Batches for the planned-batch breakdown there).
+	Dispatched int `json:"dispatched,omitempty"`
 }
 
 // DryRunBatch describes a planned batch for dry-run output.
