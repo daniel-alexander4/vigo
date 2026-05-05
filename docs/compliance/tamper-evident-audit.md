@@ -41,6 +41,10 @@ Because each hash incorporates the previous entry's hash, modifying or deleting 
 | `envoy.revoke` | Admin revokes an agent | "web1.example.com revoked" |
 | `task.dispatch` | Ad-hoc task dispatched | "uptime on *.web.*" |
 | `peer.promote` | Peer promoted to primary | "peer2 promoted" |
+| `swarm.enabled` | Fleet-wide swarm kill switch flipped at config publish | "true → false" |
+| `swarm.<sub>.enabled` | Per-substrate (`payload`/`gitmirror`/`cryptsync`/`filesync`) `enabled` flipped at config publish | "true → false" |
+| `swarm.<sub>.blacklist` | Per-substrate blacklist patterns added or removed at config publish | "added: raspberrypi; removed: \*.test.example.com" |
+| `swarm.payload.denied` | Admin attempted `POST /api/v1/swarm/payload/distribute` while substrate disabled | "payload substrate is disabled (swarm.payload.enabled: false)" |
 
 The audit trail is always on. There is no configuration to disable it.
 

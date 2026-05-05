@@ -72,6 +72,12 @@ If the target spec matches zero envoys, a warning is printed:
   Warning: target "nonexistent*" matched 0 envoys — no distribution will occur.
 ```
 
+### Operability
+
+`distribute` is the lone admin-write that rides the payload substrate, so it is gated by the substrate's [kill switches](../../engineering/subsystems/swarm.md#operability--kill-switches). When the operator has set `swarm.enabled: false` or `swarm.payload.enabled: false` in `server.yaml` and republished, the server responds with HTTP **403** and a message naming the offending knob. The denial is recorded as a `swarm.payload.denied` entry in the [tamper-evident audit chain](../../compliance/tamper-evident-audit.md) under the calling user's identity.
+
+`status`, `list`, `match`, and `broken` (read-only views) are not gated — operators can still inspect the substrate's state while it's halted. `revoke` is also allowed when disabled, since cleanup needs to work on a halted substrate.
+
 ## status
 
 Show per-envoy distribution progress. Accepts a full SHA256 hash or a unique prefix (minimum 6 characters).

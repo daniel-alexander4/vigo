@@ -2092,8 +2092,8 @@ Administrator-pushed file distribution on the swarm substrate. These endpoints p
 - **GET /api/v1/swarm/payload/match** — preview which envoys match a given target expression. _(fleet.read)_
 - **GET /api/v1/swarm/payload/status/{sha256}** — per-envoy distribution status for one payload. _(fleet.read)_
 - **GET /api/v1/swarm/payload/broken** — payloads with unreachable peers or failed distributions. _(fleet.read)_
-- **POST /api/v1/swarm/payload/distribute** — seed a new payload into the swarm for distribution. _(admin)_
-- **DELETE /api/v1/swarm/payload/{sha256}** — revoke a payload; agents evict on next check-in. _(admin)_
+- **POST /api/v1/swarm/payload/distribute** — seed a new payload into the swarm for distribution. _(admin)_ Returns **403** when `swarm.enabled: false` or `swarm.payload.enabled: false`; denials are recorded as `swarm.payload.denied` in the [tamper-evident audit chain](../../compliance/tamper-evident-audit.md).
+- **DELETE /api/v1/swarm/payload/{sha256}** — revoke a payload; agents evict on next check-in. _(admin)_ Allowed when the substrate is disabled (cleanup must work on a halted substrate).
 
 ### Gitmirror
 
