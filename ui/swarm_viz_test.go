@@ -19,8 +19,8 @@ func TestBuildPeerVisualMap_Deterministic(t *testing.T) {
 		{Hostname: "danlap"},
 	}
 
-	colors1, tiers1 := buildPeerVisualMap(envoys)
-	colors2, tiers2 := buildPeerVisualMap(envoys)
+	colors1, tiers1 := buildPeerVisualMap(envoys, nil)
+	colors2, tiers2 := buildPeerVisualMap(envoys, nil)
 
 	for _, peer := range []string{"plex", "annlap", "danlap"} {
 		if colors1[peer] != colors2[peer] {
@@ -41,7 +41,7 @@ func TestBuildPeerVisualMap_AlphabeticSlots(t *testing.T) {
 		{Hostname: "annlap"},
 		{Hostname: "danlap"},
 	}
-	colors, tiers := buildPeerVisualMap(envoys)
+	colors, tiers := buildPeerVisualMap(envoys, nil)
 
 	cases := []struct {
 		hostname string
@@ -74,7 +74,7 @@ func TestBuildPeerVisualMap_TierBoundaries(t *testing.T) {
 	for i := range envoys {
 		envoys[i].Hostname = fmt.Sprintf("envoy-%02d", i)
 	}
-	_, tiers := buildPeerVisualMap(envoys)
+	_, tiers := buildPeerVisualMap(envoys, nil)
 
 	cases := []struct {
 		slot int
@@ -98,7 +98,7 @@ func TestBuildPeerVisualMap_CapAt24(t *testing.T) {
 	for i := range envoys {
 		envoys[i].Hostname = fmt.Sprintf("envoy-%02d", i)
 	}
-	colors, tiers := buildPeerVisualMap(envoys)
+	colors, tiers := buildPeerVisualMap(envoys, nil)
 
 	if len(colors) != 24 {
 		t.Errorf("colors map has %d entries, want 24", len(colors))
@@ -128,7 +128,7 @@ func TestBuildPeerVisualMap_ColorsFromPalette(t *testing.T) {
 	envoys := []swarm.EnvoySwarmStatus{
 		{Hostname: "web01"}, {Hostname: "web02"}, {Hostname: "db01"},
 	}
-	colors, _ := buildPeerVisualMap(envoys)
+	colors, _ := buildPeerVisualMap(envoys, nil)
 
 	paletteSet := make(map[string]bool, len(swarmVizColors))
 	for _, c := range swarmVizColors {
@@ -143,9 +143,104 @@ func TestBuildPeerVisualMap_ColorsFromPalette(t *testing.T) {
 
 // TestBuildPeerVisualMap_EmptyInput verifies the empty case.
 func TestBuildPeerVisualMap_EmptyInput(t *testing.T) {
-	colors, tiers := buildPeerVisualMap(nil)
+	colors, tiers := buildPeerVisualMap(nil, nil)
 	if len(colors) != 0 || len(tiers) != 0 {
 		t.Errorf("empty input should yield empty maps; got %d/%d", len(colors), len(tiers))
+	}
+}
+
+// TestBuildPeerVisualMap_TagOverride_NamedColor verifies that a
+// `viz.color=<name>` tag pins the envoy to the named hue regardless
+// of its hash-based slot. Operator can keep "plex is always blue"
+// across redeploys.
+func TestBuildPeerVisualMap_TagOverride_NamedColor(t *testing.T) {
+	envoys := []swarm.EnvoySwarmStatus{
+		{Hostname: "plex"},
+		{Hostname: "annlap"},
+		{Hostname: "danlap"},
+	}
+	tagLookup := func(host string) []string {
+		switch host {
+		case "plex":
+			return []string{"site:home", "viz.color=blue"}
+		case "annlap":
+			return []string{"viz.color=mauve"}
+		}
+		return nil
+	}
+	colors, tiers := buildPeerVisualMap(envoys, tagLookup)
+
+	if got, want := colors["plex"], vizNamedColors["blue"]; got != want {
+		t.Errorf("plex: got %q, want %q (viz.color=blue override)", got, want)
+	}
+	if got, want := colors["annlap"], vizNamedColors["mauve"]; got != want {
+		t.Errorf("annlap: got %q, want %q (viz.color=mauve override)", got, want)
+	}
+	// Untagged envoy keeps its hash-assigned slot color.
+	if got, want := colors["danlap"], swarmVizColors[1]; got != want {
+		t.Errorf("danlap (untagged): got %q, want %q (slot 1 color)", got, want)
+	}
+	// Tier left at slot's natural value — color override doesn't move
+	// the envoy off its slot index.
+	if tiers["plex"] != 0 || tiers["annlap"] != 0 || tiers["danlap"] != 0 {
+		t.Errorf("tiers should be unchanged by color override: %+v", tiers)
+	}
+}
+
+// TestBuildPeerVisualMap_TagOverride_HexPassthrough verifies a
+// `viz.color=#rrggbb` tag is accepted as a literal hex code so an
+// operator can pin to a custom hue without waiting for it to land
+// in the named-color table.
+func TestBuildPeerVisualMap_TagOverride_HexPassthrough(t *testing.T) {
+	envoys := []swarm.EnvoySwarmStatus{{Hostname: "plex"}}
+	tagLookup := func(host string) []string {
+		return []string{"viz.color=#abcdef"}
+	}
+	colors, _ := buildPeerVisualMap(envoys, tagLookup)
+	if colors["plex"] != "#abcdef" {
+		t.Errorf("hex-code override: got %q, want #abcdef", colors["plex"])
+	}
+}
+
+// TestBuildPeerVisualMap_TagOverride_BadValueIgnored verifies that
+// garbage `viz.color=…` values silently fall through to the default
+// slot assignment rather than producing a broken color string in
+// the rendered viz.
+func TestBuildPeerVisualMap_TagOverride_BadValueIgnored(t *testing.T) {
+	envoys := []swarm.EnvoySwarmStatus{{Hostname: "plex"}}
+	cases := []string{
+		"viz.color=",
+		"viz.color=invalid",
+		"viz.color=red ish",
+		"viz.color=12345",
+		"viz.color=#zz",
+		"VIZ.COLOR=  ",
+	}
+	for _, tag := range cases {
+		t.Run(tag, func(t *testing.T) {
+			tagLookup := func(host string) []string { return []string{tag} }
+			colors, _ := buildPeerVisualMap(envoys, tagLookup)
+			if colors["plex"] != swarmVizColors[0] {
+				t.Errorf("bad tag %q: got %q, want default slot 0 color %q",
+					tag, colors["plex"], swarmVizColors[0])
+			}
+		})
+	}
+}
+
+// TestBuildPeerVisualMap_NilTagLookup verifies the legacy hash-only
+// behavior is preserved when no tag lookup is wired (test path or
+// pre-tag-pinning callers).
+func TestBuildPeerVisualMap_NilTagLookup(t *testing.T) {
+	envoys := []swarm.EnvoySwarmStatus{
+		{Hostname: "plex"}, {Hostname: "annlap"},
+	}
+	colors, _ := buildPeerVisualMap(envoys, nil)
+	if colors["annlap"] != swarmVizColors[0] {
+		t.Errorf("annlap: got %q, want slot 0 color", colors["annlap"])
+	}
+	if colors["plex"] != swarmVizColors[1] {
+		t.Errorf("plex: got %q, want slot 1 color", colors["plex"])
 	}
 }
 

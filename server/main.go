@@ -2255,6 +2255,23 @@ func (a *traitLookupAdapter) EnvoyTrait(envoyID, key string) string {
 	return ""
 }
 
+func (a *traitLookupAdapter) EnvoyTagsByHostname(hostname string) []string {
+	if a.fleetIndex == nil || hostname == "" {
+		return nil
+	}
+	for _, e := range a.fleetIndex.AllEnvoys() {
+		if e.Hostname == hostname {
+			if len(e.Tags) == 0 {
+				return nil
+			}
+			out := make([]string, len(e.Tags))
+			copy(out, e.Tags)
+			return out
+		}
+	}
+	return nil
+}
+
 // swarmHostnameAdapter wraps fleet.FleetIndex to satisfy ui.SwarmHostnameResolver.
 type swarmHostnameAdapter struct {
 	fleetIndex *fleet.FleetIndex

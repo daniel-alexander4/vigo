@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 
 	"git.alexander4.io/vigo/server/swarm"
 )
@@ -254,6 +255,56 @@ func rgbaFromHex(hex string, alpha float64) string {
 	return fmt.Sprintf("rgba(%d,%d,%d,%.3f)", r, g, b, alpha)
 }
 
+// vizNamedColors maps human-readable color names to the eight base
+// hues in the swarm viz palette (Mocha tier). An operator who tags
+// `plex` with `viz.color=green` can pin plex to that hue across
+// redeploys; the tag value is matched case-insensitively.
+var vizNamedColors = map[string]string{
+	"yellow": "#f9e2af",
+	"red":    "#f38ba8",
+	"green":  "#a6e3a1",
+	"blue":   "#89b4fa",
+	"peach":  "#fab387",
+	"mauve":  "#cba6f7",
+	"teal":   "#94e2d5",
+	"pink":   "#f5c2e7",
+}
+
+// vizColorTagOverride scans `tags` for a `viz.color=<name>` entry and
+// returns the matching hex code if the value resolves to a known
+// named color or already looks like a hex code (#rrggbb / #rgb).
+// Empty string when no override applies. Other `viz.*` tags
+// (`viz.shape`, `viz.dash`) are accepted by the parser but ignored
+// today — the swarm viz expresses variation via tier (palette slot
+// 0-7 vs 8-15 vs 16-23), not separate shape/dash channels.
+func vizColorTagOverride(tags []string) string {
+	for _, t := range tags {
+		eq := strings.IndexByte(t, '=')
+		if eq <= 0 {
+			continue
+		}
+		key := strings.TrimSpace(t[:eq])
+		if !strings.EqualFold(key, "viz.color") {
+			continue
+		}
+		val := strings.TrimSpace(t[eq+1:])
+		if val == "" {
+			continue
+		}
+		if hex, ok := vizNamedColors[strings.ToLower(val)]; ok {
+			return hex
+		}
+		// Pass-through hex codes (`#rrggbb` or `#rgb`) — operators who
+		// want a custom hue don't need to wait for it to land in the
+		// named palette. Validate length + leading `#`; reject
+		// everything else so a typo doesn't silently apply garbage.
+		if (len(val) == 7 || len(val) == 4) && val[0] == '#' {
+			return val
+		}
+	}
+	return ""
+}
+
 // buildPeerVisualMap assigns a (color, tier) pair to each envoy deterministically
 // by alphabetic order. Slot N → swarmVizColors[N]; tier = N/8 (0, 1, or 2).
 //
@@ -268,7 +319,14 @@ func rgbaFromHex(hex string, alpha float64) string {
 // envoy list) don't get slots either — their ribbons are dropped by
 // buildTopologyJSON's lookup rather than being rendered in a fallback color.
 // This keeps the legend honest: if it's in the viz, it has a slot.
-func buildPeerVisualMap(envoys []swarm.EnvoySwarmStatus) (colors map[string]string, tiers map[string]int) {
+//
+// Operator pinning: if `tagLookup` is non-nil and an envoy has a
+// `viz.color=<name|hex>` tag, that hue replaces the auto-assigned
+// slot color. The tier is left at the slot's natural value so the
+// legend keeps its (color, tier) pairing intact for the host.
+// `tagLookup` may be nil; in that case the function falls back to
+// the previous hash-only behavior (test path).
+func buildPeerVisualMap(envoys []swarm.EnvoySwarmStatus, tagLookup func(string) []string) (colors map[string]string, tiers map[string]int) {
 	colors = make(map[string]string, len(envoys))
 	tiers = make(map[string]int, len(envoys))
 
@@ -290,6 +348,12 @@ func buildPeerVisualMap(envoys []swarm.EnvoySwarmStatus) (colors map[string]stri
 		}
 		colors[name] = swarmVizColors[i]
 		tiers[name] = i / 8
+		// Operator override via `viz.color=<name|hex>` tag.
+		if tagLookup != nil {
+			if hex := vizColorTagOverride(tagLookup(name)); hex != "" {
+				colors[name] = hex
+			}
+		}
 	}
 	return colors, tiers
 }

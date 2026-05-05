@@ -361,6 +361,11 @@ type HealthChecker interface {
 type TraitLookup interface {
 	// EnvoyTrait returns the value of a flattened trait key for an envoy, or "".
 	EnvoyTrait(envoyID, key string) string
+	// EnvoyTagsByHostname returns the operator-assigned tags for the
+	// envoy with the given hostname, or nil if the hostname is unknown
+	// or has no tags. Used by `buildPeerVisualMap` to honor
+	// `viz.color=<name|hex>` overrides.
+	EnvoyTagsByHostname(hostname string) []string
 }
 
 // CVEMatch is a single host affected by a CVE.

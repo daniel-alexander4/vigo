@@ -241,7 +241,7 @@ func (h *Handler) lodeDetail(w http.ResponseWriter, r *http.Request, sha string)
 		detail.Summary = summarizeSwarmStatuses(statuses)
 		detail.Envoys = statuses
 
-		populateVizData(&data, detail.Envoys, detail.Chunks)
+		h.populateVizData(&data, detail.Envoys, detail.Chunks)
 	}
 
 	data.BlobDetail = detail
@@ -252,13 +252,17 @@ func (h *Handler) lodeDetail(w http.ResponseWriter, r *http.Request, sha string)
 
 // populateVizData computes the matrix + palette for the detail view.
 // Extracted so the full-page render and the HTMX fragment stay in lockstep.
-func populateVizData(data *LodePageData, envoys []swarm.EnvoySwarmStatus, chunks int) {
+func (h *Handler) populateVizData(data *LodePageData, envoys []swarm.EnvoySwarmStatus, chunks int) {
 	vizEnvoys := topVizEnvoys(envoys, maxVizEnvoys)
 	if len(envoys) > maxVizEnvoys {
 		data.VizCapped = true
 		data.VizTotal = len(envoys)
 	}
-	data.PeerColors, data.PeerTiers = buildPeerVisualMap(vizEnvoys)
+	var tagLookup func(string) []string
+	if h.traitLookup != nil {
+		tagLookup = h.traitLookup.EnvoyTagsByHostname
+	}
+	data.PeerColors, data.PeerTiers = buildPeerVisualMap(vizEnvoys, tagLookup)
 	data.Matrix = buildChunkMatrix(vizEnvoys, data.PeerColors)
 }
 
@@ -308,7 +312,7 @@ func (h *Handler) LodeEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 	// The fragment template expects the full LodePageData shape so its viz
 	// sub-sections can render. Build one populated with the detail + viz data.
 	data := LodePageData{BlobDetail: detail}
-	populateVizData(&data, statuses, chunks)
+	h.populateVizData(&data, statuses, chunks)
 
 	h.renderer.RenderFragment(w, "payload", "payload-envoys-fragment", data)
 }
