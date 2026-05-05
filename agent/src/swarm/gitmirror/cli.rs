@@ -40,7 +40,7 @@ use super::project_state::{
     self, hex_id, parse_hex_id, project_repo_path, projects_dir, purge_user_state,
     DelegationChain, DrFanout, ProjectConfig, TokenChain,
 };
-use super::state::{state_path, traits_snapshot_path, unix_seconds_now, State, TraitsSnapshot};
+use super::state::{traits_snapshot_path, unix_seconds_now, TraitsSnapshot};
 use super::tokens::{
     canonical_bytes, issue_child as token_issue_child, project_id_for, verify_chain,
     Role, Token, TokenBody, ID_LEN, NEVER_EXPIRES, SIG_LEN,
@@ -1966,25 +1966,6 @@ fn print_status_top<W: std::io::Write>(
     writeln!(out, "gitmirror status")?;
     writeln!(out, "  base:                {}", base.display())?;
 
-    // state.json — publisher source state. The reactor writes it after
-    // each pass; absence means the reactor has never ticked on this
-    // envoy (typical on a fresh install before the user creates any
-    // gitmirror sources).
-    let state_file = state_path(base);
-    if state_file.exists() {
-        let state = State::load(base);
-        writeln!(
-            out,
-            "  state.json:          present ({} source label(s) tracked)",
-            state.labels.len()
-        )?;
-    } else {
-        writeln!(
-            out,
-            "  state.json:          (not yet written — reactor has not ticked on this envoy)"
-        )?;
-    }
-
     // traits.json — combined publisher + receiver projection. Shows
     // the most recent reactor activity plus any errors operators
     // should know about.
@@ -2083,10 +2064,9 @@ fn format_age_seconds(secs: u64) -> String {
 /// command under sudo to wipe those too.
 ///
 /// **As root** ALSO wipes envoy-wide root-owned state: every bare repo
-/// under `projects/`, the publisher `state.json`, the receiver
-/// `receiver_state.json`, the trait projection `traits.json`, and the
-/// `tmp/` scratch dir. The user-side dot-dirs are not touched in root
-/// mode (each user's home is theirs to manage).
+/// under `projects/` and the trait projection `traits.json`. The
+/// user-side dot-dirs are not touched in root mode (each user's home
+/// is theirs to manage).
 ///
 /// Refuses without `--yes`. Does not gossip — peers age this envoy
 /// out via the swarm staleness window unless the operator runs
@@ -2104,8 +2084,7 @@ fn cmd_purge(args: &[String]) -> Result<()> {
                      project's per-user state for this user). Root-owned bare repos\n\
                      under /var/lib/vigo/swarm/gitmirror/projects/ survive — rerun\n\
                      under sudo to scrub those too.\n\n\
-                     As root: also scrubs the envoy-wide state.json, traits.json,\n\
-                     receiver_state.json, projects/, and tmp/.\n\n\
+                     As root: also scrubs the envoy-wide projects/ + traits.json.\n\n\
                      Refuses without --yes. Does NOT gossip — run `project leave`\n\
                      per project first if you want peers to learn of the departure."
                 );
@@ -2139,13 +2118,10 @@ fn do_purge<W: std::io::Write>(
     let root_list: Vec<PathBuf> = if is_root {
         [
             projects_dir(base),
-            state_path(base),
             traits_snapshot_path(base),
-            base.join("receiver_state.json"),
-            base.join("tmp"),
         ]
         .into_iter()
-        .filter(|p| p.exists())
+        .filter(|p: &PathBuf| p.exists())
         .collect()
     } else {
         Vec::new()
@@ -2479,11 +2455,6 @@ mod tests {
         };
 
         let base = tempfile::tempdir().unwrap();
-        // Lay down a state.json with two source labels.
-        let mut s = State::default();
-        s.record("gitmirror:h:u:p1", "deadbeef", "cafef00d", true, 1024);
-        s.record("gitmirror:h:u:p2", "11111111", "22222222", false, 256);
-        s.save(base.path()).unwrap();
 
         // Lay down a traits.json with one source-error and one
         // publish-error so the status output exercises the loops.
@@ -2530,7 +2501,6 @@ mod tests {
         print_status_top(base.path(), &socket, &mut buf).unwrap();
         let out = String::from_utf8(buf).unwrap();
 
-        assert!(out.contains("2 source label(s) tracked"));
         assert!(out.contains("1 active, 0 paused"));
         assert!(out.contains("source errors:       1"));
         assert!(out.contains("invalid sidecar"));
@@ -2612,17 +2582,15 @@ mod tests {
         let base = tempfile::tempdir().unwrap();
         let dot = project_state::user_dot_dir(home.path());
         fs::create_dir_all(dot.join("aa".repeat(32))).unwrap();
-        // Lay down a fake root-owned bare repo + state files. Non-root
-        // mode must NOT touch them.
+        // Lay down a fake root-owned bare repo. Non-root mode must
+        // NOT touch it.
         fs::create_dir_all(projects_dir(base.path())).unwrap();
-        State::default().save(base.path()).unwrap();
 
         let mut buf: Vec<u8> = Vec::new();
         do_purge(home.path(), base.path(), false, true, &mut buf).unwrap();
 
         assert!(!dot.exists(), "user dot dir must be wiped");
         assert!(projects_dir(base.path()).exists(), "root-owned projects/ must survive non-root purge");
-        assert!(state_path(base.path()).exists(), "root-owned state.json must survive non-root purge");
     }
 
     #[test]
@@ -2632,22 +2600,16 @@ mod tests {
         let dot = project_state::user_dot_dir(home.path());
         fs::create_dir_all(&dot).unwrap();
         fs::create_dir_all(projects_dir(base.path())).unwrap();
-        fs::create_dir_all(base.path().join("tmp")).unwrap();
-        State::default().save(base.path()).unwrap();
         // Plant a bogus traits.json so traits_snapshot_path resolves to
         // an existing file that purge will remove.
         fs::write(traits_snapshot_path(base.path()), b"{}").unwrap();
-        fs::write(base.path().join("receiver_state.json"), b"{}").unwrap();
 
         let mut buf: Vec<u8> = Vec::new();
         do_purge(home.path(), base.path(), true, true, &mut buf).unwrap();
 
         assert!(!dot.exists(), "user dot dir must be wiped");
         assert!(!projects_dir(base.path()).exists(), "projects/ must be wiped under root");
-        assert!(!state_path(base.path()).exists(), "state.json must be wiped under root");
         assert!(!traits_snapshot_path(base.path()).exists(), "traits.json must be wiped under root");
-        assert!(!base.path().join("receiver_state.json").exists());
-        assert!(!base.path().join("tmp").exists());
     }
 
     #[test]

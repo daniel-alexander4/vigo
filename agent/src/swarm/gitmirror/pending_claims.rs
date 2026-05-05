@@ -16,80 +16,9 @@
 //! a direct call (cross-module dep), they share this little
 //! in-memory map: the reactor publishes the "current claim list
 //! per label" and the announcer reads a snapshot on every emit.
-//!
-//! ### Rate limiting
-//!
-//! The reactor decides when to update [`PendingClaims`]. Per the
-//! P2P-first plan the claim announcement is rate-limited to
-//! *changes* (re-emit on every tick would produce roughly one
-//! GITMIRRORCLAIM per source per second during active periods),
-//! plus a safety-net re-broadcast every
-//! [`RE_ANNOUNCE_INTERVAL_SECS`] so a late-joining receiver
-//! doesn't wait out the LAN claim TTL to see the current list.
-//!
-//! Rate limiting lives in the reactor (which owns the "last
-//! announced claim list per label" dedup state), not in this
-//! module — [`PendingClaims`] is a pure shared cache.
 
 use std::collections::HashMap;
 use std::sync::RwLock;
-
-/// Safety-net re-broadcast window for GITMIRRORCLAIM announcements.
-/// Even with no change to the selected peer list, the reactor
-/// forces a re-emit after this many seconds so a receiver that
-/// joined the LAN mid-stream or missed an earlier multicast
-/// catches up before its ingested LAN claim TTL expires.
-///
-/// Set to **60 seconds** — shorter than `LAN_CLAIM_TTL_SECS = 90`
-/// so there's one refresh cycle of headroom before a stale entry
-/// would age out on the receiver.
-pub const RE_ANNOUNCE_INTERVAL_SECS: u64 = 60;
-
-/// One-shot decision produced by the reactor's rate-limit check.
-/// Tells the caller whether a given label's claim list should be
-/// published this tick, and if so what the current list is.
-#[derive(Debug, PartialEq, Eq)]
-pub enum EmitDecision {
-    /// Don't emit this tick — nothing changed and the safety
-    /// re-broadcast window hasn't elapsed.
-    Skip,
-    /// Emit the given claim list. The reactor should also update
-    /// its `last_announced` bookkeeping with `now` so the next
-    /// tick's rate-limit check is correct.
-    Emit(Vec<String>),
-}
-
-/// Rate-limit decision logic, pulled out of the reactor tick so
-/// it's easy to unit-test.
-///
-/// Returns [`EmitDecision::Emit`] if either:
-/// - `new_list` differs from `prev_list` (content change), OR
-/// - `now - last_announced_at >= RE_ANNOUNCE_INTERVAL_SECS` (safety net).
-///
-/// Otherwise returns [`EmitDecision::Skip`].
-pub fn decide_emit(
-    prev_list: Option<&[String]>,
-    new_list: &[String],
-    last_announced_at: Option<u64>,
-    now: u64,
-) -> EmitDecision {
-    let changed = match prev_list {
-        None => true,
-        Some(p) => p != new_list,
-    };
-    if changed {
-        return EmitDecision::Emit(new_list.to_vec());
-    }
-    let should_re_announce = match last_announced_at {
-        None => true,
-        Some(t) => now.saturating_sub(t) >= RE_ANNOUNCE_INTERVAL_SECS,
-    };
-    if should_re_announce {
-        EmitDecision::Emit(new_list.to_vec())
-    } else {
-        EmitDecision::Skip
-    }
-}
 
 /// Shared claim map. Reactor writes per-label, announcer reads a
 /// snapshot. Cheap to clone (Arc internally).
@@ -104,9 +33,7 @@ impl PendingClaims {
     }
 
     /// Overwrite the pending claim list for a single label. The
-    /// reactor calls this after running the LAN selector and
-    /// consulting [`decide_emit`] — only when the decision was
-    /// `Emit`.
+    /// reactor calls this after running the LAN selector.
     pub fn publish(&self, label: &str, hosts: Vec<String>) {
         let mut w = self.inner.write().unwrap_or_else(|e| e.into_inner());
         w.insert(label.to_string(), hosts);
@@ -194,8 +121,6 @@ pub fn parse_claim_line(line: &str) -> Option<(String, Vec<String>)> {
 mod tests {
     use super::*;
 
-    // --- decide_emit ---
-
     // --- clear (gate off→on/off state management) ---
 
     #[test]
@@ -212,75 +137,6 @@ mod tests {
         assert!(pc.is_empty());
         pc.publish("gitmirror:danlap:dan:vigo", vec!["x".into()]);
         assert_eq!(pc.len(), 1);
-    }
-
-    // --- decide_emit ---
-
-    #[test]
-    fn decide_emit_fires_on_first_run() {
-        let d = decide_emit(None, &["a".into()], None, 1000);
-        assert_eq!(d, EmitDecision::Emit(vec!["a".into()]));
-    }
-
-    #[test]
-    fn decide_emit_skips_when_unchanged_and_within_interval() {
-        let prev = vec!["a".to_string(), "b".to_string()];
-        let new = vec!["a".to_string(), "b".to_string()];
-        let d = decide_emit(Some(&prev), &new, Some(1000), 1001);
-        assert_eq!(d, EmitDecision::Skip);
-    }
-
-    #[test]
-    fn decide_emit_fires_on_list_change() {
-        let prev = vec!["a".to_string()];
-        let new = vec!["a".to_string(), "b".to_string()];
-        let d = decide_emit(Some(&prev), &new, Some(1000), 1001);
-        assert_eq!(d, EmitDecision::Emit(new));
-    }
-
-    #[test]
-    fn decide_emit_fires_on_order_change() {
-        // Order matters: the selector produces a stable sort, so
-        // a different order is a different fact about the
-        // selection outcome.
-        let prev = vec!["a".to_string(), "b".to_string()];
-        let new = vec!["b".to_string(), "a".to_string()];
-        let d = decide_emit(Some(&prev), &new, Some(1000), 1001);
-        assert!(matches!(d, EmitDecision::Emit(_)));
-    }
-
-    #[test]
-    fn decide_emit_fires_after_safety_interval() {
-        let prev = vec!["a".to_string()];
-        let new = vec!["a".to_string()];
-        let d = decide_emit(
-            Some(&prev),
-            &new,
-            Some(1000),
-            1000 + RE_ANNOUNCE_INTERVAL_SECS,
-        );
-        assert_eq!(d, EmitDecision::Emit(new));
-    }
-
-    #[test]
-    fn decide_emit_skips_just_before_safety_interval() {
-        let prev = vec!["a".to_string()];
-        let new = vec!["a".to_string()];
-        let d = decide_emit(
-            Some(&prev),
-            &new,
-            Some(1000),
-            1000 + RE_ANNOUNCE_INTERVAL_SECS - 1,
-        );
-        assert_eq!(d, EmitDecision::Skip);
-    }
-
-    #[test]
-    fn decide_emit_fires_on_empty_list_after_non_empty() {
-        let prev = vec!["a".to_string()];
-        let new: Vec<String> = Vec::new();
-        let d = decide_emit(Some(&prev), &new, Some(1000), 1001);
-        assert!(matches!(d, EmitDecision::Emit(_)));
     }
 
     // --- PendingClaims ---

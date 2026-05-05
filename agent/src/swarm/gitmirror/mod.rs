@@ -40,11 +40,14 @@
 //! - [`peer_table`], [`peer_pubkey_cache`] — swarm peer infrastructure
 //!   shared with the rest of the gitmirror substrate.
 //!
-//! [`receiver`], [`pending_claims`], and [`state`] survive as
-//! transitional dependencies of the discovery / swarm-server transport
-//! code in `crate::swarm::{discovery, server}`. They no longer drive
-//! any reactor work — `spawn()` is a no-op pending the helper-daemon
-//! rewrite (ADR-015 step 4).
+//! [`receiver`], [`pending_claims`], and [`state`] kept as live
+//! support for the discovery / swarm-server transport code in
+//! `crate::swarm::{discovery, server}`: `ClaimsHandle` ingests
+//! LAN claim announcements; `PendingClaims` + `format_claim_line` /
+//! `parse_claim_line` shape the multicast wire format; `TraitsSnapshot`
+//! is the schema the trait collector reads. The legacy bundle-based
+//! receiver/publisher pipeline they originally served was removed in
+//! 0.38.16 alongside ADR-015 step 4's complete rollout.
 
 pub mod cli;
 pub mod envelopes;
@@ -78,29 +81,6 @@ use tracing::info;
 /// swarm peer-port HTTP server on inbound bundle PUTs.
 pub const MAX_BUNDLE_SIZE: u64 = 20 * 1024 * 1024 * 1024;
 
-/// Maximum total distinct mirrors a single receiver will hold across
-/// every source on the legacy claim-based receiver path. Retained as
-/// a transitional constant while [`receiver`] still serves the swarm
-/// peer-port handler; the new helper-daemon-driven path lands in
-/// ADR-015 step 4.
-pub const MAX_MIRRORS_PER_RECEIVER: usize = 50;
-
-/// Maximum mirrors one source envoy can register on a single receiver
-/// (transitional, see [`MAX_MIRRORS_PER_RECEIVER`]).
-pub const MAX_PER_SOURCE_MIRRORS: usize = 20;
-
-/// Staleness threshold for a materialized mirror, in seconds (30 days).
-/// Transitional — used by the legacy receiver-side state surface.
-pub const STALE_THRESHOLD_SECS: u64 = 30 * 24 * 60 * 60;
-
-/// Separator character between segments of a legacy gitmirror swarm
-/// label. Pre-ADR-015 labels were `gitmirror:<host>:<user>:<project>`;
-/// retained while the swarm peer-port handler still parses them.
-pub const LABEL_SEP: char = ':';
-
-/// Label namespace for legacy gitmirror content (bundle) seeds.
-pub const CONTENT_LABEL_PREFIX: &str = "gitmirror";
-
 /// Spawn the gitmirror subsystem.
 ///
 /// Three concurrent tasks run under the cancellation token:
@@ -117,20 +97,9 @@ pub const CONTENT_LABEL_PREFIX: &str = "gitmirror";
 /// 3. **Reap reactor** ([`run_reap_reactor`]) — hourly GC of envelopes
 ///    older than 90 days.
 ///
-/// `_claims`, `_manifest`, `_peer_table`, `_pending_claims` are
-/// transitional plumbing kept for the legacy claim-based receiver
-/// path that the swarm peer-port handler still references. They're
-/// unused by the new reactor wiring; once the legacy receiver is
-/// removed the signature can shrink.
-#[allow(clippy::too_many_arguments)]
 pub fn spawn(
     tls: Option<crate::update::TlsCerts>,
     cancel: CancellationToken,
-    _claims: Option<receiver::ClaimsHandle>,
-    _manifest: Option<std::sync::Arc<crate::swarm::manifest::Manifest>>,
-    _state_store: Option<std::sync::Arc<crate::state::StateStore>>,
-    _peer_table: Option<std::sync::Arc<peer_table::PeerTable>>,
-    _pending_claims: Option<std::sync::Arc<pending_claims::PendingClaims>>,
     gate: Gate,
 ) {
     info!(

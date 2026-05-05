@@ -1260,11 +1260,6 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     vigo::swarm::gitmirror::spawn(
         swarm_tls.clone(),
         cancel.clone(),
-        Some(gitmirror_claims.clone()),
-        Some(shared_manifest.clone()),
-        state_store.clone(),
-        Some(gitmirror_peer_table.clone()),
-        Some(gitmirror_pending_claims.clone()),
         gitmirror_gate.clone(),
     );
 
