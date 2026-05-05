@@ -66,6 +66,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "list" | "ls" => cmd_list(&args[1..]),
         "forget" => cmd_forget(&args[1..]),
         "leave" => cmd_leave(&args[1..]),
+        "purge" => cmd_purge(&args[1..]),
         "reencrypt" => cmd_reencrypt(&args[1..]),
         // Hidden verb — invoked by the server via TaskDispatch when an
         // admin runs `vigocli cryptsync evict`. Not advertised in --help.
@@ -174,6 +175,7 @@ DAILY (mode-agnostic):
     list [--long] [--tombstones]   List ciphertext files + tombstones in ~/cryptsync/
     forget <hostname>              Revoke an envoy from the recipient set (local only)
     leave [--purge] [--keep-identity] [--yes]  Unenroll this user from cryptsync on this envoy
+    purge --yes                    Wipe ALL local cryptsync state for this user (no gossip)
     reencrypt                      Force re-encrypt of ~/cryptsync/ to current recipients
     status                         Show local cryptsync state
 
@@ -1311,6 +1313,133 @@ fn now_secs_signed() -> i64 {
         .unwrap_or(0)
 }
 
+// ---------- purge ----------
+//
+// Power-user verb: wipe ALL local cryptsync state for this user on
+// this envoy. Distinct from `leave --purge`:
+//
+//   `leave --purge`  queues a signed LEAVE envelope for the daemon to
+//                    fan out to peers, then drops identity + ciphertext
+//                    after the daemon processes the sentinel.
+//
+//   `purge`          immediate filesystem wipe with no gossip. Peers
+//                    age this envoy out via STALE_SECS unless the
+//                    operator runs `leave` first or announces OOB.
+//
+// Use case: "this envoy is being decommissioned, I want every byte
+// gone right now." Refuses without `--yes`. If pending gossip
+// sentinels exist (`leave.pending`, `reencrypt.pending`), the
+// command notes that peers will not learn of the departure unless
+// the operator follows up out-of-band.
+fn cmd_purge(args: &[String]) -> Result<()> {
+    let mut yes = false;
+    for a in args {
+        match a.as_str() {
+            "--yes" | "-y" => yes = true,
+            "--help" | "-h" => {
+                eprintln!(
+                    "vigo swarm cryptsync purge — wipe ALL local cryptsync state for this user\n\n\
+                     USAGE:\n    vigo swarm cryptsync purge --yes\n\n\
+                     Removes ~/.cryptsync/ (wrapped identity, recipients, certs, sentinels)\n\
+                     and ~/cryptsync/ (ciphertext at rest). Does NOT signal peers — run\n\
+                     `leave` first if you want them to learn of the departure.\n\n\
+                     Refuses without --yes. The root-owned per-user mirror at\n\
+                     /var/lib/vigo/swarm/cryptsync/<user>/ survives a user-mode purge;\n\
+                     it ages out as the daemon stops seeing this envoy."
+                );
+                return Ok(());
+            }
+            other if other.starts_with("--") => bail!("unknown flag: {}", other),
+            _ => bail!("vigo swarm cryptsync purge takes no positional arguments; got {}", a),
+        }
+    }
+
+    let home = user_home_for_invocation()?;
+    do_purge(&home, yes, &mut std::io::stdout())
+}
+
+fn do_purge<W: Write>(home: &Path, yes: bool, out: &mut W) -> Result<()> {
+    let dot = config::dot_dir(home);
+    let content = config::content_dir(home);
+
+    if !dot.exists() && !content.exists() {
+        writeln!(
+            out,
+            "nothing to purge — neither {} nor {} exists.",
+            dot.display(),
+            content.display()
+        )?;
+        return Ok(());
+    }
+
+    if !yes {
+        writeln!(
+            out,
+            "This will WIPE all local cryptsync state for this user on this envoy:"
+        )?;
+        if dot.exists() {
+            writeln!(
+                out,
+                "  {}  (wrapped identity, recipients, certs, sentinels)",
+                dot.display()
+            )?;
+        }
+        if content.exists() {
+            writeln!(out, "  {}  (ciphertext at rest)", content.display())?;
+        }
+        writeln!(out)?;
+        writeln!(
+            out,
+            "Re-run with --yes to proceed. Peers will NOT learn of the departure unless"
+        )?;
+        writeln!(
+            out,
+            "you also run `vigo swarm cryptsync leave [--yes]` first or announce OOB."
+        )?;
+        return Ok(());
+    }
+
+    let leave_pending = config::leave_pending_path(home).exists();
+    let reencrypt_pending = config::reencrypt_pending_path(home).exists();
+
+    let mut wiped: Vec<PathBuf> = Vec::new();
+    let mut failed: Vec<(PathBuf, String)> = Vec::new();
+
+    for target in [dot.clone(), content.clone()] {
+        if !target.exists() {
+            continue;
+        }
+        match fs::remove_dir_all(&target) {
+            Ok(()) => wiped.push(target),
+            Err(e) => failed.push((target, e.to_string())),
+        }
+    }
+
+    for target in &wiped {
+        writeln!(out, "wiped {}", target.display())?;
+    }
+    for (target, err) in &failed {
+        writeln!(out, "failed to wipe {}: {}", target.display(), err)?;
+    }
+
+    if leave_pending || reencrypt_pending {
+        writeln!(out)?;
+        writeln!(
+            out,
+            "note: pending gossip sentinels existed at purge time — peers will not learn"
+        )?;
+        writeln!(
+            out,
+            "      of this envoy's departure unless you announced it out-of-band."
+        )?;
+    }
+
+    if !failed.is_empty() {
+        bail!("purge incomplete — {} target(s) failed", failed.len());
+    }
+    Ok(())
+}
+
 // ---------- _apply-evict (hidden, server-dispatched) ----------
 
 /// Server-invoked hidden verb. Runs as root via TaskDispatch when an
@@ -2055,4 +2184,70 @@ fn write_config_template(path: &Path, username: &str, wrap_mode: config::WrapMod
         let _ = username;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn do_purge_no_state_exits_clean() {
+        let home = tempdir().unwrap();
+        let mut buf: Vec<u8> = Vec::new();
+        do_purge(home.path(), true, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("nothing to purge"));
+    }
+
+    #[test]
+    fn do_purge_without_yes_lists_targets_and_does_not_wipe() {
+        let home = tempdir().unwrap();
+        let dot = config::dot_dir(home.path());
+        let content = config::content_dir(home.path());
+        fs::create_dir_all(&dot).unwrap();
+        fs::create_dir_all(&content).unwrap();
+
+        let mut buf: Vec<u8> = Vec::new();
+        do_purge(home.path(), false, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("This will WIPE"));
+        assert!(out.contains(&dot.display().to_string()));
+        assert!(out.contains(&content.display().to_string()));
+        assert!(out.contains("Re-run with --yes"));
+        // Nothing wiped.
+        assert!(dot.exists());
+        assert!(content.exists());
+    }
+
+    #[test]
+    fn do_purge_with_yes_wipes_dot_and_content() {
+        let home = tempdir().unwrap();
+        let dot = config::dot_dir(home.path());
+        let content = config::content_dir(home.path());
+        fs::create_dir_all(&dot).unwrap();
+        fs::write(dot.join("identity.age"), b"wrapped").unwrap();
+        fs::create_dir_all(&content).unwrap();
+        fs::write(content.join("ciphertext.age"), b"x").unwrap();
+
+        let mut buf: Vec<u8> = Vec::new();
+        do_purge(home.path(), true, &mut buf).unwrap();
+
+        assert!(!dot.exists(), "~/.cryptsync/ must be wiped");
+        assert!(!content.exists(), "~/cryptsync/ must be wiped");
+    }
+
+    #[test]
+    fn do_purge_warns_when_leave_pending_present() {
+        let home = tempdir().unwrap();
+        let dot = config::dot_dir(home.path());
+        fs::create_dir_all(&dot).unwrap();
+        fs::write(config::leave_pending_path(home.path()), b"").unwrap();
+
+        let mut buf: Vec<u8> = Vec::new();
+        do_purge(home.path(), true, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("pending gossip sentinels"));
+        assert!(out.contains("out-of-band"));
+    }
 }

@@ -35,6 +35,7 @@ Single-fleet personal-DR survives a founder rekey transparently. Multi-fleet pro
 
 ```
 vigo swarm gitmirror status
+vigo swarm gitmirror purge --yes
 vigo swarm gitmirror project <verb> [args]
 ```
 
@@ -57,6 +58,7 @@ Verbs that take a `<project_id>` argument also accept a unique handle prefix amo
 | Verb | Purpose |
 |------|---------|
 | `status` | Show envoy-wide gitmirror posture (publisher + receiver state, helper-daemon socket) |
+| `purge --yes` | Power-user wipe of local gitmirror state. As a non-root user: `~/.vigo-gitmirror/`. As root: also envoy-wide root-owned state. Distinct from per-project `leave --purge`; does not gossip. |
 | `project init <handle> [--fanout <kind>]` | Found a new project as the local fleet |
 | `project invite <project_id> --fleet <fp> --role <role> [--expires <Nd>]` | Mint a child token for another fleet |
 | `project join <project_id> [--invitation <file\|->]` | Adopt an invitation issued by an admin |
@@ -98,6 +100,30 @@ gitmirror status
 ```
 
 A fresh envoy that hasn't run the gitmirror reactor yet shows `(not yet written — reactor has not ticked on this envoy)` for `state.json` and `traits.json`. The socket line shows `socket absent` when the daemon isn't running.
+
+## `purge`
+
+Power-user wipe of local gitmirror state on this envoy. Symmetric with [`vigo swarm cryptsync purge`](agent-swarm-cryptsync.md#vigo-swarm-cryptsync-purge). Distinct from `project leave --purge` (one project's bare repo) and from the server-driven `_apply-blacklist` (envoy-wide bare repos via TaskDispatch).
+
+```
+vigo swarm gitmirror purge --yes
+```
+
+**Mode-aware behaviour:**
+
+- **As a non-root user:** wipes `~/.vigo-gitmirror/` for the calling user (every joined project's per-user state — `project.json`, `tokens.json`, `delegations.json`, any pending sentinels). Root-owned bare repos under `/var/lib/vigo/swarm/gitmirror/projects/` survive; rerun under `sudo` to scrub those too.
+- **As root:** wipes the envoy-wide root-owned state — `projects/`, `state.json`, `receiver_state.json`, `traits.json`, and `tmp/` — under `/var/lib/vigo/swarm/gitmirror/`. The user-side `~/.vigo-gitmirror/` of the invoking user is also cleared if it exists; per-user dot-dirs of OTHER users are not touched (each user's home is theirs).
+
+**Flags:**
+
+- `--yes` — required. Without it the verb prints what would be wiped and exits.
+
+**Effects:**
+
+- Files are removed via `fs::remove_dir_all` / `fs::remove_file`. No envelope is signed and no gossip is fanned out — peers age this envoy out via the swarm staleness window unless the operator runs `project leave [--yes]` per project first or announces out-of-band.
+- If any `leave.pending` / `revoke.pending` sentinels existed at purge time, the verb prints a follow-up note so the operator knows that gossip never reached peers.
+
+**When to use it.** Decommissioning an envoy where you want every gitmirror byte gone immediately. For a graceful departure where peers learn of it, use `project leave` per project first.
 
 ## `project init`
 

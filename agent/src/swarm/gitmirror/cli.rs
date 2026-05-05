@@ -64,6 +64,12 @@ pub fn run(args: Vec<String>) -> Result<()> {
         // `vigo swarm gitmirror project status <id>`, which shows one
         // project's local state.
         "status" => cmd_status_top(&args[1..]),
+        // Power-user wipe of local gitmirror state on this envoy.
+        // Distinct from per-project `leave --purge` (one project's
+        // bare repo) and `_apply-blacklist` (server-driven). User
+        // mode wipes `~/.vigo-gitmirror/` for the caller; root mode
+        // also wipes the envoy-wide root-owned state.
+        "purge" => cmd_purge(&args[1..]),
         // Hidden verb invoked by the server via TaskDispatch when an
         // envoy newly matches `swarm.gitmirror.blacklist`. Wipes every
         // locally-held project bare repo and the `projects/` directory.
@@ -117,6 +123,10 @@ USAGE:
 VERBS:
     status              Show envoy-wide gitmirror posture (publisher +
                         receiver state, helper-daemon socket).
+    purge --yes         Wipe ALL local gitmirror state (no gossip). As a
+                        non-root user, scrubs ~/.vigo-gitmirror/ for the
+                        calling user. As root, also scrubs the envoy-wide
+                        root-owned state under /var/lib/vigo/swarm/gitmirror/.
     project <verb>      Manage gitmirror projects. Run
                         `vigo swarm gitmirror project --help` for the
                         project verb tree.
@@ -2057,6 +2067,208 @@ fn format_age_seconds(secs: u64) -> String {
 }
 
 // ============================================================
+// purge — full local-state wipe, parallel to cryptsync purge
+// ============================================================
+
+/// Power-user verb. Wipes ALL local gitmirror state on this envoy.
+/// Symmetric with `vigo swarm cryptsync purge`. Distinct from
+/// `project leave --purge` (one project's bare repo) and from the
+/// hidden `_apply-blacklist` (server-driven, all projects but root-
+/// owned only).
+///
+/// **As a non-root caller** wipes `~/.vigo-gitmirror/` for the
+/// invoking user — every joined project's `project.json`, `tokens.json`,
+/// `delegations.json`, and any pending sentinels. Root-owned bare repos
+/// under `/var/lib/vigo/swarm/gitmirror/projects/` survive; rerun this
+/// command under sudo to wipe those too.
+///
+/// **As root** ALSO wipes envoy-wide root-owned state: every bare repo
+/// under `projects/`, the publisher `state.json`, the receiver
+/// `receiver_state.json`, the trait projection `traits.json`, and the
+/// `tmp/` scratch dir. The user-side dot-dirs are not touched in root
+/// mode (each user's home is theirs to manage).
+///
+/// Refuses without `--yes`. Does not gossip — peers age this envoy
+/// out via the swarm staleness window unless the operator runs
+/// `project leave [--yes]` per project first.
+fn cmd_purge(args: &[String]) -> Result<()> {
+    let mut yes = false;
+    for a in args {
+        match a.as_str() {
+            "--yes" | "-y" => yes = true,
+            "--help" | "-h" => {
+                eprintln!(
+                    "vigo swarm gitmirror purge — wipe ALL local gitmirror state\n\n\
+                     USAGE:\n    vigo swarm gitmirror purge --yes\n\n\
+                     As a non-root user: scrubs ~/.vigo-gitmirror/ (every joined\n\
+                     project's per-user state for this user). Root-owned bare repos\n\
+                     under /var/lib/vigo/swarm/gitmirror/projects/ survive — rerun\n\
+                     under sudo to scrub those too.\n\n\
+                     As root: also scrubs the envoy-wide state.json, traits.json,\n\
+                     receiver_state.json, projects/, and tmp/.\n\n\
+                     Refuses without --yes. Does NOT gossip — run `project leave`\n\
+                     per project first if you want peers to learn of the departure."
+                );
+                return Ok(());
+            }
+            other if other.starts_with("--") => bail!("unknown flag: {}", other),
+            _ => bail!("vigo swarm gitmirror purge takes no positional arguments; got {}", a),
+        }
+    }
+
+    let caller = resolve_caller()?;
+    let base = crate::platform::paths::default_gitmirror_dir();
+    do_purge(&caller.home, &base, caller.is_root, yes, &mut std::io::stdout())
+}
+
+fn do_purge<W: std::io::Write>(
+    home: &Path,
+    base: &Path,
+    is_root: bool,
+    yes: bool,
+    out: &mut W,
+) -> Result<()> {
+    let user_dot = project_state::user_dot_dir(home);
+
+    let user_list: Vec<PathBuf> = if user_dot.exists() {
+        vec![user_dot.clone()]
+    } else {
+        Vec::new()
+    };
+
+    let root_list: Vec<PathBuf> = if is_root {
+        [
+            projects_dir(base),
+            state_path(base),
+            traits_snapshot_path(base),
+            base.join("receiver_state.json"),
+            base.join("tmp"),
+        ]
+        .into_iter()
+        .filter(|p| p.exists())
+        .collect()
+    } else {
+        Vec::new()
+    };
+
+    if user_list.is_empty() && root_list.is_empty() {
+        if is_root {
+            writeln!(
+                out,
+                "nothing to purge — neither {} nor any state under {} exists.",
+                user_dot.display(),
+                base.display()
+            )?;
+        } else {
+            writeln!(
+                out,
+                "nothing to purge — {} does not exist for this user.",
+                user_dot.display()
+            )?;
+        }
+        return Ok(());
+    }
+
+    if !yes {
+        writeln!(out, "This will WIPE local gitmirror state on this envoy:")?;
+        for p in &user_list {
+            writeln!(out, "  {}  (per-user project state)", p.display())?;
+        }
+        for p in &root_list {
+            writeln!(out, "  {}  (envoy-wide, root-owned)", p.display())?;
+        }
+        if !is_root {
+            writeln!(out)?;
+            writeln!(
+                out,
+                "Note: running as a non-root user. Root-owned envoy-wide state under"
+            )?;
+            writeln!(
+                out,
+                "      {} is NOT included — rerun under sudo to scrub it too.",
+                base.display()
+            )?;
+        }
+        writeln!(out)?;
+        writeln!(
+            out,
+            "Re-run with --yes to proceed. Peers will NOT learn of the departure unless"
+        )?;
+        writeln!(
+            out,
+            "you also run `vigo swarm gitmirror project leave [--yes]` per project first."
+        )?;
+        return Ok(());
+    }
+
+    let pending = scan_pending_sentinels(&user_dot);
+
+    let mut wiped: Vec<PathBuf> = Vec::new();
+    let mut failed: Vec<(PathBuf, String)> = Vec::new();
+
+    for target in user_list.iter().chain(root_list.iter()) {
+        let res = if target.is_dir() {
+            fs::remove_dir_all(target)
+        } else {
+            fs::remove_file(target)
+        };
+        match res {
+            Ok(()) => wiped.push(target.clone()),
+            Err(e) => failed.push((target.clone(), e.to_string())),
+        }
+    }
+
+    for target in &wiped {
+        writeln!(out, "wiped {}", target.display())?;
+    }
+    for (target, err) in &failed {
+        writeln!(out, "failed to wipe {}: {}", target.display(), err)?;
+    }
+
+    if pending > 0 {
+        writeln!(out)?;
+        writeln!(
+            out,
+            "note: {} pending gossip sentinel(s) existed at purge time — peers will not learn",
+            pending
+        )?;
+        writeln!(
+            out,
+            "      of this envoy's departure unless you announced it out-of-band."
+        )?;
+    }
+
+    if !failed.is_empty() {
+        bail!("purge incomplete — {} target(s) failed", failed.len());
+    }
+    Ok(())
+}
+
+/// Count `leave.pending` and `revoke.pending` sentinels under
+/// `~/.vigo-gitmirror/<project_id>/`. Used by `purge` to warn the
+/// operator that running purge instead of `project leave` skips
+/// the gossip step.
+fn scan_pending_sentinels(user_dot: &Path) -> usize {
+    let mut count = 0usize;
+    let entries = match fs::read_dir(user_dot) {
+        Ok(e) => e,
+        Err(_) => return 0,
+    };
+    for entry in entries.flatten() {
+        let dir = entry.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        for name in ["leave.pending", "revoke.pending"] {
+            if dir.join(name).exists() {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
+// ============================================================
 // _apply-blacklist (hidden agent verb)
 // ============================================================
 
@@ -2341,5 +2553,126 @@ mod tests {
         print_status_top(base.path(), &socket, &mut buf).unwrap();
         let out = String::from_utf8(buf).unwrap();
         assert!(out.contains("corrupt"));
+    }
+
+    // --- purge ----------------------------------------------------
+
+    #[test]
+    fn scan_pending_sentinels_counts_leave_and_revoke() {
+        let home = tempfile::tempdir().unwrap();
+        let dot = project_state::user_dot_dir(home.path());
+        // Project A — leave.pending only.
+        let a = dot.join("aa".repeat(32));
+        fs::create_dir_all(&a).unwrap();
+        fs::write(a.join("leave.pending"), b"").unwrap();
+        // Project B — revoke.pending only.
+        let b = dot.join("bb".repeat(32));
+        fs::create_dir_all(&b).unwrap();
+        fs::write(b.join("revoke.pending"), b"").unwrap();
+        // Project C — both.
+        let c = dot.join("cc".repeat(32));
+        fs::create_dir_all(&c).unwrap();
+        fs::write(c.join("leave.pending"), b"").unwrap();
+        fs::write(c.join("revoke.pending"), b"").unwrap();
+        // Project D — neither (clean).
+        let d = dot.join("dd".repeat(32));
+        fs::create_dir_all(&d).unwrap();
+
+        assert_eq!(scan_pending_sentinels(&dot), 4);
+    }
+
+    #[test]
+    fn scan_pending_sentinels_handles_missing_dot_dir() {
+        let home = tempfile::tempdir().unwrap();
+        let dot = project_state::user_dot_dir(home.path());
+        // dot dir was never created.
+        assert_eq!(scan_pending_sentinels(&dot), 0);
+    }
+
+    #[test]
+    fn do_purge_without_yes_lists_targets_and_does_not_wipe() {
+        let home = tempfile::tempdir().unwrap();
+        let base = tempfile::tempdir().unwrap();
+        let dot = project_state::user_dot_dir(home.path());
+        fs::create_dir_all(dot.join("aa".repeat(32))).unwrap();
+
+        let mut buf: Vec<u8> = Vec::new();
+        do_purge(home.path(), base.path(), false, false, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("This will WIPE"));
+        assert!(out.contains(&dot.display().to_string()));
+        assert!(out.contains("Re-run with --yes"));
+        // Nothing wiped.
+        assert!(dot.exists());
+    }
+
+    #[test]
+    fn do_purge_user_mode_wipes_only_user_dot_dir() {
+        let home = tempfile::tempdir().unwrap();
+        let base = tempfile::tempdir().unwrap();
+        let dot = project_state::user_dot_dir(home.path());
+        fs::create_dir_all(dot.join("aa".repeat(32))).unwrap();
+        // Lay down a fake root-owned bare repo + state files. Non-root
+        // mode must NOT touch them.
+        fs::create_dir_all(projects_dir(base.path())).unwrap();
+        State::default().save(base.path()).unwrap();
+
+        let mut buf: Vec<u8> = Vec::new();
+        do_purge(home.path(), base.path(), false, true, &mut buf).unwrap();
+
+        assert!(!dot.exists(), "user dot dir must be wiped");
+        assert!(projects_dir(base.path()).exists(), "root-owned projects/ must survive non-root purge");
+        assert!(state_path(base.path()).exists(), "root-owned state.json must survive non-root purge");
+    }
+
+    #[test]
+    fn do_purge_root_mode_wipes_envoy_state_too() {
+        let home = tempfile::tempdir().unwrap();
+        let base = tempfile::tempdir().unwrap();
+        let dot = project_state::user_dot_dir(home.path());
+        fs::create_dir_all(&dot).unwrap();
+        fs::create_dir_all(projects_dir(base.path())).unwrap();
+        fs::create_dir_all(base.path().join("tmp")).unwrap();
+        State::default().save(base.path()).unwrap();
+        // Plant a bogus traits.json so traits_snapshot_path resolves to
+        // an existing file that purge will remove.
+        fs::write(traits_snapshot_path(base.path()), b"{}").unwrap();
+        fs::write(base.path().join("receiver_state.json"), b"{}").unwrap();
+
+        let mut buf: Vec<u8> = Vec::new();
+        do_purge(home.path(), base.path(), true, true, &mut buf).unwrap();
+
+        assert!(!dot.exists(), "user dot dir must be wiped");
+        assert!(!projects_dir(base.path()).exists(), "projects/ must be wiped under root");
+        assert!(!state_path(base.path()).exists(), "state.json must be wiped under root");
+        assert!(!traits_snapshot_path(base.path()).exists(), "traits.json must be wiped under root");
+        assert!(!base.path().join("receiver_state.json").exists());
+        assert!(!base.path().join("tmp").exists());
+    }
+
+    #[test]
+    fn do_purge_no_state_anywhere_exits_clean() {
+        let home = tempfile::tempdir().unwrap();
+        let base = tempfile::tempdir().unwrap();
+        let mut buf: Vec<u8> = Vec::new();
+        do_purge(home.path(), base.path(), false, true, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("nothing to purge"));
+    }
+
+    #[test]
+    fn do_purge_warns_when_pending_sentinels_present() {
+        let home = tempfile::tempdir().unwrap();
+        let base = tempfile::tempdir().unwrap();
+        let dot = project_state::user_dot_dir(home.path());
+        let proj = dot.join("ee".repeat(32));
+        fs::create_dir_all(&proj).unwrap();
+        fs::write(proj.join("leave.pending"), b"").unwrap();
+
+        let mut buf: Vec<u8> = Vec::new();
+        do_purge(home.path(), base.path(), false, true, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("pending gossip sentinel"));
+        assert!(out.contains("out-of-band"));
     }
 }

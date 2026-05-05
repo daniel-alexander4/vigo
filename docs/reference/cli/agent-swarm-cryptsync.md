@@ -35,6 +35,7 @@ The verb tree splits into **mode-agnostic** verbs (the daily ones — they don't
 | `decrypt <file> -o <path>` | Decrypt from `~/cryptsync/` to a user-chosen path. Requires `unlock`. `-o` is mandatory. |
 | `forget <hostname>` | Revoke an envoy from the recipient set; triggers a local `recipients.txt` regeneration. Follow with `reencrypt` to re-key existing files. |
 | `leave [--purge] [--keep-identity] [--yes]` | Unenroll this user's cryptsync on this envoy. Drops a `~/.cryptsync/leave.pending` sentinel that the daemon picks up, signs + fans out to live peers, then scrubs local state per the flags. |
+| `purge --yes` | Power-user wipe of ALL local cryptsync state for this user (`~/.cryptsync/` + `~/cryptsync/`). Distinct from `leave --purge` — this verb does NOT gossip; peers age the envoy out via the staleness rule. Use when decommissioning. |
 | `reencrypt` | Force re-encrypt of every file in `~/cryptsync/` to the current recipient set. Requires `unlock`. |
 | `status` | Show local state: enrolled, recipient count, file-count breakdown (ciphertext / plaintext / failed), session helper status. |
 
@@ -109,6 +110,21 @@ Self-unenrollment. Three-stage handoff:
 - `--yes` — skip confirmation.
 
 **Offline peers:** a peer that was offline during the fan-out misses the envelope but naturally drops the leaving envoy within 90 s via the peer-staleness rule in `state::prune_stale`. The admin path [`vigocli swarm cryptsync evict`](swarm-cryptsync.md) is the tool for forcing eviction when a host is already gone and the user can't run `leave` from it.
+
+### `vigo swarm cryptsync purge`
+
+Power-user counterpart to `leave`. Wipes `~/.cryptsync/` and `~/cryptsync/` for the calling user immediately and unconditionally (after `--yes`). Does **not** drop a sentinel; the daemon never sees the departure, so peers do not get a signed LEAVE envelope — they age the envoy out via the staleness rule (~90 s) instead.
+
+```
+vigo swarm cryptsync purge --yes
+```
+
+**When to use it.** Decommissioning an envoy where you don't care about clean gossip and want every cryptsync byte gone right now. For a graceful departure where peers should learn of it, run `leave` first.
+
+**Behaviour.**
+- Without `--yes`: prints what would be wiped and exits without touching anything.
+- With `--yes`: removes both `~/.cryptsync/` and `~/cryptsync/`. If `leave.pending` or `reencrypt.pending` existed at purge time, prints a follow-up note that peers will not learn of the departure unless announced out-of-band.
+- The root-owned per-user mirror under `/var/lib/vigo/swarm/cryptsync/<user>/` is **not** touched (the calling user can't write there); it ages out as the daemon stops seeing this envoy.
 
 ## File layout
 
