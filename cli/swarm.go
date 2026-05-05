@@ -114,6 +114,7 @@ Defaults to fleet-wide; pass --target to scope to a hostname pattern.`,
 type swarmCleanupResp struct {
 	Target     string `json:"target"`
 	Dispatched int    `json:"dispatched"`
+	TaskRunID  string `json:"task_run_id,omitempty"`
 }
 
 func runSwarmCleanup(cmd *cobra.Command, _ []string) error {
@@ -128,8 +129,12 @@ func runSwarmCleanup(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("dispatch swarm cleanup: %w", err)
 	}
 	fmt.Printf("Dispatched 'vigo swarm _apply-cleanup' to %d envoy(s) matching %q.\n", resp.Dispatched, resp.Target)
-	fmt.Println("Per-envoy results land in the task-run audit log; tail it with:")
-	fmt.Println("  vigocli runs tail --task swarm.cleanup")
+	if resp.TaskRunID != "" {
+		fmt.Printf("Per-envoy results:\n  vigocli task status %s\n", resp.TaskRunID)
+	} else {
+		fmt.Println("Per-envoy results in the task-run log:")
+		fmt.Println("  vigocli task list")
+	}
 	return nil
 }
 

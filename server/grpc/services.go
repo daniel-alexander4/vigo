@@ -130,10 +130,10 @@ func (s *AgentService) SetSwarmConfig(sc config.SwarmSection) {
 
 // DispatchCleanup fans `vigo swarm _apply-cleanup` out to every envoy
 // matching `target` (filepath.Match-style hostname pattern; "*" for
-// the whole fleet). Returns the number of envoys the dispatch
-// reached. Implements api.CleanupDispatcher so the REST handler can
-// consume it without importing the grpc package.
-func (s *AgentService) DispatchCleanup(ctx context.Context, target string) (int, error) {
+// the whole fleet). Returns the task-run ID and the number of envoys
+// the dispatch reached. Implements api.CleanupDispatcher so the REST
+// handler can consume it without importing the grpc package.
+func (s *AgentService) DispatchCleanup(ctx context.Context, target string) (string, int, error) {
 	if target == "" {
 		target = "*"
 	}
@@ -144,9 +144,9 @@ func (s *AgentService) DispatchCleanup(ctx context.Context, target string) (int,
 		TimeoutSecs: 120,
 	})
 	if err != nil {
-		return 0, err
+		return "", 0, err
 	}
-	return res.Dispatched, nil
+	return res.ID, res.Dispatched, nil
 }
 
 // isRecentlyActive returns true if the envoy has checked in recently

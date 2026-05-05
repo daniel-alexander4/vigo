@@ -21,9 +21,10 @@ import (
 
 // CleanupDispatcher is the small slice of AgentService the cleanup
 // route needs — keeps the API package decoupled from the gRPC layer
-// (no import cycle, easy to fake in tests).
+// (no import cycle, easy to fake in tests). Returns (task-run ID,
+// envoy count, err).
 type CleanupDispatcher interface {
-	DispatchCleanup(ctx context.Context, target string) (int, error)
+	DispatchCleanup(ctx context.Context, target string) (string, int, error)
 }
 
 type SwarmHandler struct {
@@ -109,15 +110,16 @@ func (h *SwarmHandler) Cleanup(w http.ResponseWriter, r *http.Request) {
 	if target == "" {
 		target = "*"
 	}
-	dispatched, err := h.dispatcher.DispatchCleanup(r.Context(), target)
+	taskRunID, dispatched, err := h.dispatcher.DispatchCleanup(r.Context(), target)
 	if err != nil {
 		slog.Warn("swarm cleanup dispatch failed", "target", target, "error", err)
 		writeError(w, http.StatusInternalServerError, "cleanup dispatch failed: "+err.Error())
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{
-		"target":     target,
-		"dispatched": dispatched,
+		"target":       target,
+		"dispatched":   dispatched,
+		"task_run_id":  taskRunID,
 	})
 }
 
