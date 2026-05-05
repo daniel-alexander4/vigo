@@ -111,3 +111,62 @@ func TestRetentionPruner_SkipsActiveSeeds(t *testing.T) {
 		t.Error("active seed should not be revoked in manifest")
 	}
 }
+
+// TestRetentionPruner_LivenessSweepRevokesStale verifies the 0.38.12
+// liveness guard: an active manifest entry whose LastReSeededAt has
+// aged past livenessTTL is revoked + gossiped on the next prune tick.
+// This is the safety net for entries whose last seeder permanently
+// disappears — combined with RecordSeedFromAgent's gating, it keeps
+// the manifest from accumulating orphaned entries forever.
+func TestRetentionPruner_LivenessSweepRevokesStale(t *testing.T) {
+	tracker := NewPeerTracker(60 * time.Second)
+	store := NewManifestStore()
+	freshSHA := pruneTestSHA("fff111")
+	staleSHA := pruneTestSHA("fff222")
+
+	store.RecordSeed(freshSHA, "fresh.bin", "*", "7d", "server", 1)
+	store.RecordSeed(staleSHA, "stale.bin", "*", "7d", "server", 1)
+
+	// Backdate the stale entry's LastReSeededAt.
+	store.mu.Lock()
+	e := store.entries[staleSHA]
+	e.LastReSeededAt = uint64(time.Now().Add(-48 * time.Hour).UnixMilli())
+	store.entries[staleSHA] = e
+	store.mu.Unlock()
+
+	pruner := NewRetentionPruner(7 * 24 * time.Hour)
+	pruner.SetTracker(tracker)
+	pruner.SetManifestStore(store)
+	pruner.SetLivenessTTL(24 * time.Hour)
+	pruner.Prune(context.Background())
+
+	if !store.IsRevoked(staleSHA) {
+		t.Error("expected stale entry to be revoked by liveness sweep")
+	}
+	if store.IsRevoked(freshSHA) {
+		t.Error("fresh entry must not be revoked")
+	}
+}
+
+// TestRetentionPruner_LivenessTTLZeroDisablesSweep verifies operators
+// who explicitly opt out (manifest_liveness_ttl: 0) don't get
+// surprised by background revocations.
+func TestRetentionPruner_LivenessTTLZeroDisablesSweep(t *testing.T) {
+	store := NewManifestStore()
+	sha := pruneTestSHA("000abc")
+	store.RecordSeed(sha, "x.bin", "*", "7d", "server", 1)
+	store.mu.Lock()
+	e := store.entries[sha]
+	e.LastReSeededAt = uint64(time.Now().Add(-48 * time.Hour).UnixMilli())
+	store.entries[sha] = e
+	store.mu.Unlock()
+
+	pruner := NewRetentionPruner(7 * 24 * time.Hour)
+	pruner.SetManifestStore(store)
+	// SetLivenessTTL deliberately omitted (zero default).
+	pruner.Prune(context.Background())
+
+	if store.IsRevoked(sha) {
+		t.Error("liveness TTL=0 must skip the sweep entirely")
+	}
+}

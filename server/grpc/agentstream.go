@@ -872,10 +872,25 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 		s.peerTracker.ReportComplete(envoyID, seed.SHA256, peerAddr)
 
 		// Record active entry in manifest CRDT so agents learn about the
-		// blob via gossip. This also overrides stale revocations when a
-		// previously-deleted blob is re-distributed (fresh timestamp wins).
+		// blob via gossip. Use the gated `RecordSeedFromAgent` path:
+		// agents may only refresh entries the server already knows about
+		// (introduced via the authoritative admin-push API). This guards
+		// against the re-poisoning footgun where a freshly-restarted
+		// server's empty manifest gets re-populated from agents' cached
+		// `swarm_seeds` traits within seconds (see
+		// tshoot/log-archive-cairn-resolved-20260424-124050.md, fixed
+		// 0.38.12). ErrUnknownSeed is logged at INFO and the report is
+		// silently skipped — the agent will eventually GC the cached
+		// blob via its own staleness rules.
 		if s.manifestStore != nil {
-			s.manifestStore.RecordSeed(seed.SHA256, seed.Label, seed.Target, seed.Retention, envoyID, seed.Size)
+			if err := s.manifestStore.RecordSeedFromAgent(seed.SHA256, seed.Label, seed.Target, seed.Retention, envoyID, seed.Size); err != nil {
+				slog.Info("swarm: dropping unknown seed reported by agent",
+					"envoy_id", envoyID,
+					"sha256", seed.SHA256[:12],
+					"label", seed.Label,
+					"reason", err.Error(),
+				)
+			}
 		}
 
 		// Parse retention duration.

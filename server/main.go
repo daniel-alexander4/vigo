@@ -1145,7 +1145,18 @@ func run() error {
 				staleThreshold = 60 * time.Second
 			}
 			peerTracker := swarm.NewPeerTracker(staleThreshold)
-			manifestStore := swarm.NewManifestStore()
+			// Manifest persistence sits next to seed/, so a server
+			// restart preserves intent (revocations + the active set
+			// agents are allowed to refresh via gossip). Without
+			// this, an empty post-restart manifest gets re-poisoned
+			// by stale `swarm_seeds` traits within seconds (root
+			// cause of the 2026-04-24 incident).
+			manifestPath := filepath.Join(filepath.Dir(seedDir), "manifest.json")
+			manifestStore, err := swarm.NewPersistentManifestStore(manifestPath, time.Second)
+			if err != nil {
+				return fmt.Errorf("loading swarm manifest: %w", err)
+			}
+			defer manifestStore.Stop()
 			lodeHandler := api.NewLodeHandler(seedDir, peerTracker, fleetIndex, manifestStore, queries)
 			lodeHandler.SetForcePusher(agentSvc)
 			lodeHandler.SetSwarmConfig(cfg.Swarm)
@@ -1284,6 +1295,7 @@ func run() error {
 			swarmPruner := swarm.NewRetentionPruner(7 * 24 * time.Hour)
 			swarmPruner.SetTracker(peerTracker)
 			swarmPruner.SetManifestStore(manifestStore)
+			swarmPruner.SetLivenessTTL(parseLivenessTTL(cfg.Swarm.ManifestLivenessTTL))
 			go swarmPruner.Start(ctx, 24*time.Hour)
 		}
 
@@ -2298,6 +2310,26 @@ func diffNewlyMatched(prev, next, hostnames []string) []string {
 		}
 	}
 	return out
+}
+
+// parseLivenessTTL parses the `swarm.manifest_liveness_ttl` config knob
+// into a time.Duration. Empty / zero / negative input disables the
+// liveness sweep (the pruner skips it). Default 24h matches the
+// documented behavior on operators who omit the knob.
+func parseLivenessTTL(s string) time.Duration {
+	if s == "" {
+		return 24 * time.Hour
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		slog.Warn("swarm: invalid manifest_liveness_ttl, defaulting to 24h",
+			"value", s, "error", err)
+		return 24 * time.Hour
+	}
+	if d < 0 {
+		return 0
+	}
+	return d
 }
 
 // substrateEnabled collapses a per-substrate `*bool` Enabled field into a

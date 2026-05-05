@@ -360,6 +360,11 @@ watcher:
 #   seed_dir: "/var/lib/vigo/swarm/seed"        # where vigocli distribute writes seeds (default)
 #   port: 1531                                  # agent swarm listen port
 #   max_bandwidth_percent: 50                   # max % of link speed agents use for swarm
+#   manifest_liveness_ttl: 24h                  # active manifest entries unrefreshed for this
+#                                               # duration are revoked by the retention pruner.
+#                                               # Guards against orphaned entries when a
+#                                               # publisher disappears. Empty / zero disables
+#                                               # the sweep.
 #
 #   # Payload runs by default on every enrolled envoy. Setting
 #   # `enabled: false` halts payload reception fleet-wide (agents stop
