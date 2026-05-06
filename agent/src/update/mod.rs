@@ -9,7 +9,57 @@ use anyhow::{bail, Context, Result};
 use ed25519_dalek::{Signature, VerifyingKey};
 use sha2::{Digest, Sha256};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tracing::{debug, info, warn};
+
+/// Suffix the Linux kernel appends to /proc/PID/exe symlink targets when the
+/// originally-loaded inode has been unlinked from the filesystem. See
+/// proc(5): "If the pathname has been unlinked, the symlink will contain the
+/// string '(deleted)' appended to the original pathname."
+const DELETED_SUFFIX: &str = " (deleted)";
+
+/// Track whether we've already logged a `(deleted)` recovery for this
+/// process. The condition is sticky for the life of the process — every
+/// `current_exe()` call returns the same value — so logging on every
+/// update attempt would flood the journal. Reset implicitly on execv.
+static DELETED_SUFFIX_LOGGED: AtomicBool = AtomicBool::new(false);
+
+/// Resolve the path to the running agent binary, defending against the
+/// case where the running process's exec inode has been unlinked from its
+/// original path. Returns the canonical (suffix-stripped) path.
+///
+/// Without this, `std::env::current_exe()` returns a literal string with
+/// the kernel's `(deleted)` suffix, which then gets used as a destination
+/// path for the next update — writing the new binary to a phantom file
+/// while leaving the real `/usr/local/sbin/vigo` (or wherever) untouched
+/// indefinitely. We hit this on danlap pre-0.39.3 when the agent's own
+/// startup self-update wrote a new binary on top of itself before its
+/// version probe could reject the update; the rejection path returned
+/// early after the rename was already committed, so the running process's
+/// exec inode was orphaned for the rest of the process's lifetime.
+///
+/// The 0.39.3 rendering of `apply()` probes the temp file BEFORE renaming,
+/// so new occurrences should not happen. This helper handles legacy state
+/// from already-affected hosts so they recover automatically on the next
+/// update attempt without an operator restart.
+fn resolve_current_binary() -> Result<String> {
+    let raw = std::env::current_exe()
+        .context("std::env::current_exe()")?
+        .to_string_lossy()
+        .to_string();
+    if let Some(stripped) = raw.strip_suffix(DELETED_SUFFIX) {
+        if !DELETED_SUFFIX_LOGGED.swap(true, Ordering::Relaxed) {
+            info!(
+                raw_exe = %raw,
+                stripped = %stripped,
+                "agent exec inode is unlinked from filesystem (kernel-rendered ' (deleted)' suffix on /proc/PID/exe). Stripping suffix; the upcoming update will replace the on-disk binary at the canonical path and execv into it cleanly. Subsequent occurrences in this process lifetime will be silent."
+            );
+        }
+        Ok(stripped.to_string())
+    } else {
+        Ok(raw)
+    }
+}
 
 /// Server response describing the latest agent version.
 #[derive(Debug, serde::Deserialize)]
@@ -273,35 +323,32 @@ pub async fn apply(
     crate::platform::permissions::set_executable(&tmp_path)
         .context("chmod temp binary")?;
 
-    // Atomic rename.
-    std::fs::rename(&tmp_path, current_binary).context("atomic rename")?;
-
-    info!(
-        version = %info.version,
-        sha256 = %info.sha256,
-        "binary updated successfully"
-    );
-
-    // Self-verify: run the just-renamed binary with `version` and confirm
+    // Pre-rename version probe. Run the TMP file with `version` and confirm
     // its compiled-in version matches what the server advertised. This is
     // the agent-side guard against the cross-arch update loop bug — if the
     // server's dist tree has a binary labeled X but the binary itself was
     // built at version Y, our next check-in would still report Y, the
     // server would still want X, and we'd loop forever on every iteration.
-    // Catching the mismatch HERE (before exec) lets us abort the update
-    // and surface a single decisive WARN instead of an unbounded log
-    // flood from the loop.
+    //
+    // This MUST run before the atomic rename (pre-0.39.3 it ran after, which
+    // meant a mismatch left the on-disk binary already replaced. The running
+    // process didn't execv, so its loaded inode was orphaned from the
+    // filesystem — `/proc/PID/exe` then rendered with the kernel's
+    // `(deleted)` suffix, and `current_exe()` returned that suffixed string,
+    // poisoning every subsequent update target until process restart). With
+    // the probe before rename, an aborted update leaves on-disk state
+    // completely untouched (TempFileGuard cleans up the tmp file).
     if !info.version.is_empty() {
-        match std::process::Command::new(current_binary).arg("version").output() {
+        match std::process::Command::new(&tmp_path).arg("version").output() {
             Ok(out) if out.status.success() => {
-                let on_disk = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if !on_disk.is_empty() && on_disk != info.version {
+                let probed = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !probed.is_empty() && probed != info.version {
                     warn!(
                         advertised = %info.version,
-                        actual = %on_disk,
+                        actual = %probed,
                         sha256 = %info.sha256,
-                        binary = %current_binary,
-                        "version mismatch on downloaded binary — server advertised one version, the binary's compiled-in version is another. Aborting update to prevent an infinite loop. Likely cause: cross-arch labeling bug in the server's dist tree (each arch's vigo.version sidecar must match its binary)."
+                        tmp_path = %tmp_path.display(),
+                        "version mismatch on downloaded binary — server advertised one version, the binary's compiled-in version is another. Aborting update before rename so the on-disk binary is untouched. Likely cause: cross-arch labeling bug in the server's dist tree (each arch's vigo.version sidecar must match its binary)."
                     );
                     return Ok(());
                 }
@@ -309,14 +356,24 @@ pub async fn apply(
             Ok(out) => {
                 debug!(
                     status = ?out.status,
-                    "post-rename version probe exited non-zero — proceeding with exec (binary may need first-run init)"
+                    "pre-rename version probe exited non-zero — proceeding with rename + exec (binary may need first-run init)"
                 );
             }
             Err(e) => {
-                debug!(error = %e, "post-rename version probe failed — proceeding with exec");
+                debug!(error = %e, "pre-rename version probe failed — proceeding with rename + exec");
             }
         }
     }
+
+    // Atomic rename — only fires after the probe passes (or no info.version
+    // was provided), so an aborted update never replaces the on-disk binary.
+    std::fs::rename(&tmp_path, current_binary).context("atomic rename")?;
+
+    info!(
+        version = %info.version,
+        sha256 = %info.sha256,
+        "binary updated successfully"
+    );
 
     // Refresh the systemd unit file if the bootstrap template has
     // changed since this envoy was first installed. Without this,
@@ -372,8 +429,8 @@ pub async fn check_self_update(api_addr: &str, current_version: &str, tls: Optio
 
     match check_for_update(api_addr, current_version, os, arch, tls).await {
         Ok(Some(info)) => {
-            let current_binary = match std::env::current_exe() {
-                Ok(p) => p.to_string_lossy().to_string(),
+            let current_binary = match resolve_current_binary() {
+                Ok(p) => p,
                 Err(e) => {
                     warn!(error = %e, "cannot determine current binary path");
                     return;
@@ -430,8 +487,8 @@ pub async fn force_self_update(api_addr: &str, current_version: &str, tls: Optio
 
     match check_for_update(api_addr, "force", os, arch, tls).await {
         Ok(Some(info)) => {
-            let current_binary = match std::env::current_exe() {
-                Ok(p) => p.to_string_lossy().to_string(),
+            let current_binary = match resolve_current_binary() {
+                Ok(p) => p,
                 Err(e) => {
                     warn!(error = %e, "cannot determine current binary path");
                     return;
@@ -528,6 +585,26 @@ mod tests {
             .await
             .unwrap();
         assert!(info.is_none());
+    }
+
+    #[test]
+    fn deleted_suffix_strips_only_at_end() {
+        // Direct strip-suffix semantics — proves we won't accidentally
+        // chop a path whose middle happens to contain " (deleted)".
+        let canonical = "/usr/local/sbin/vigo";
+        let suffixed = format!("{}{}", canonical, super::DELETED_SUFFIX);
+        assert_eq!(
+            suffixed.strip_suffix(super::DELETED_SUFFIX),
+            Some(canonical)
+        );
+
+        // Path ending in a different suffix → no strip.
+        let unrelated = "/usr/local/sbin/vigo (whatever)";
+        assert_eq!(unrelated.strip_suffix(super::DELETED_SUFFIX), None);
+
+        // Path containing " (deleted)" mid-string → no strip (only end matches).
+        let middle = "/some (deleted) path/vigo";
+        assert_eq!(middle.strip_suffix(super::DELETED_SUFFIX), None);
     }
 
     #[test]
