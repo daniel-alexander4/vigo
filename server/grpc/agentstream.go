@@ -914,13 +914,33 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 		}
 
 		// Register seed — returns true for new seeds and re-activated revoked seeds.
+		//
+		// DistributedAt source matters here. The order in this CheckIn
+		// handler is `ingestSwarmTraits` → `ingestSwarmSeeds`, so non-
+		// seeder envoys' `PeerState.FirstSeen` is created BEFORE this
+		// RegisterSeed runs. If we use `time.Now()` for DistributedAt,
+		// post-server-restart re-registration creates seeds whose
+		// DistributedAt > every receiving envoy's FirstSeen, and
+		// `tracker.Status` flips them to "cached" (Complete &&
+		// FirstSeen.Before(DistributedAt)) indefinitely. Reuse the
+		// persisted manifest's UpdatedAt where available so the
+		// timestamp matches the original distribute event, not the
+		// post-restart rehydration moment.
+		distributedAt := time.Now()
+		distributedSource := "now"
+		if s.manifestStore != nil {
+			if entry, ok := s.manifestStore.Get(seed.SHA256); ok && entry.UpdatedAt > 0 {
+				distributedAt = time.UnixMilli(int64(entry.UpdatedAt))
+				distributedSource = "manifest"
+			}
+		}
 		isNew := s.peerTracker.RegisterSeed(seed.SHA256, swarm.SeedState{
 			Label:         seed.Label,
 			Size:          seed.Size,
 			Target:        seed.Target,
 			Retention:     retention,
 			SeederID:      envoyID,
-			DistributedAt: time.Now(),
+			DistributedAt: distributedAt,
 		})
 		if isNew {
 			slog.Info("new swarm seed detected",
@@ -928,6 +948,7 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 				"label", seed.Label,
 				"seeder", envoyID,
 				"target", seed.Target,
+				"distributed_at_source", distributedSource,
 			)
 		}
 

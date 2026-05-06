@@ -316,6 +316,20 @@ func (m *ManifestStore) IsRevoked(sha256 string) bool {
 }
 
 // Entries returns all manifest entries (snapshot).
+// Get returns the manifest entry for a sha256 if present, plus a bool
+// indicating whether the entry was found. Used by the agent-trait
+// re-registration path so post-restart `tracker.seeds` rehydration can
+// reuse the manifest's persisted timestamps instead of `time.Now()` —
+// otherwise non-seeder envoys' PeerState.FirstSeen (set earlier in the
+// same CheckIn handler by `ingestSwarmTraits`) lands before the seed's
+// fresh DistributedAt and flips the envoys to "cached" indefinitely.
+func (m *ManifestStore) Get(sha256 string) (ManifestEntry, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	e, ok := m.entries[sha256]
+	return e, ok
+}
+
 func (m *ManifestStore) Entries() []ManifestEntry {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

@@ -10,8 +10,9 @@
 //! per blob, ever. Partial chunks on disk survive process restarts; the
 //! scheduler resumes from them automatically.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 
 use tokio::sync::{mpsc, Semaphore};
 use tracing::{debug, info, warn};
@@ -30,6 +31,26 @@ const MAX_CONCURRENT_DOWNLOADS: usize = 4;
 
 /// Channel buffer size.
 const CHANNEL_BUFFER: usize = 64;
+
+/// How long a stuck-state entry suppresses spawns + WARN logs before the
+/// loop retries (in case the underlying condition has cleared, e.g. the
+/// operator freed disk space). Long enough to avoid journal flood,
+/// short enough that recovery doesn't require an agent restart.
+const STUCK_RETRY_INTERVAL: Duration = Duration::from_secs(30 * 60);
+
+/// Per-sha record of "we've already logged this failure, don't re-spam."
+/// Tracks the last error reason and when it was first/last logged so the
+/// loop can suppress identical retry failures while still surfacing
+/// state changes (different error, recovery).
+#[derive(Debug)]
+struct StuckEntry {
+    reason: String,
+    /// First time we saw this reason for this sha (for retry-interval gating).
+    first_seen: Instant,
+    /// Total identical failures observed since `first_seen` — surfaced in
+    /// the recovery log line so operators know how long it was stuck.
+    repeats: u32,
+}
 
 /// Handle for signaling the SwarmManager. Cheap to clone.
 #[derive(Clone)]
@@ -109,6 +130,17 @@ async fn run(
     // Blobs completed in this process lifetime (avoids re-downloading after
     // a manifest update re-issues the same entry).
     let mut completed: HashSet<String> = HashSet::new();
+    // Stuck-state gate: blobs whose last download attempt returned an
+    // error string we've seen before. Suppresses spawn AND the WARN
+    // "swarm blob download failed" log line on repeats — without this
+    // gate, a permanently-failing condition (e.g. insufficient disk
+    // for the blob on this envoy) emits 3 log lines every ~12 s
+    // forever, flooding the journal and the disk it sits on. The
+    // entry is cleared on (a) successful download for this sha,
+    // (b) a different error, (c) a manifest update for this sha, or
+    // (d) STUCK_RETRY_INTERVAL elapsing (so transient conditions like
+    // "no peers known" eventually re-attempt without manual nudging).
+    let mut stuck: HashMap<String, StuckEntry> = HashMap::new();
     // Limits concurrent blob downloads.
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_DOWNLOADS));
     // Channel for download tasks to report completion/failure back.
@@ -143,6 +175,19 @@ async fn run(
                             super::record_retention(&done.sha256, done.retention_seconds, s);
                         }
                         completed.insert(done.sha256.clone());
+                        // State transition: if we were stuck, surface the
+                        // recovery so a journal scrape can find both ends
+                        // of the stuck window without grepping for absent
+                        // log lines.
+                        if let Some(prev) = stuck.remove(&done.sha256) {
+                            info!(
+                                sha256 = sha_short,
+                                label = %done.label,
+                                previous_error = %prev.reason,
+                                repeats = prev.repeats,
+                                "swarm blob recovered after stuck-state"
+                            );
+                        }
                         info!(
                             sha256 = sha_short,
                             label = %done.label,
@@ -152,12 +197,47 @@ async fn run(
                     }
                     Err(e) => {
                         // Don't add to completed — allows retry on next manifest update.
-                        warn!(
-                            sha256 = sha_short,
-                            label = %done.label,
-                            error = %e,
-                            "swarm blob download failed"
-                        );
+                        // Anti-flood: if we've already logged this exact
+                        // error for this sha, suppress the WARN. The
+                        // spawn-side gate further upstream stops re-issuing
+                        // the download until the entry expires or the
+                        // manifest changes — so this branch only fires on
+                        // first-occurrence, error-string changes, or
+                        // post-retry-interval re-attempts.
+                        let reason = format!("{:#}", e);
+                        let entry = stuck.entry(done.sha256.clone()).or_insert_with(|| StuckEntry {
+                            reason: reason.clone(),
+                            first_seen: Instant::now(),
+                            repeats: 0,
+                        });
+                        if entry.reason == reason {
+                            // Same error as before — silent increment.
+                            entry.repeats = entry.repeats.saturating_add(1);
+                        } else {
+                            // Different error — log the transition AND the
+                            // count of the previous error so an operator
+                            // grepping the journal can correlate.
+                            warn!(
+                                sha256 = sha_short,
+                                label = %done.label,
+                                previous_error = %entry.reason,
+                                previous_repeats = entry.repeats,
+                                new_error = %reason,
+                                "swarm blob download failure changed"
+                            );
+                            entry.reason = reason;
+                            entry.first_seen = Instant::now();
+                            entry.repeats = 0;
+                        }
+                        if entry.repeats == 0 {
+                            // First time seeing this (sha, reason) combo.
+                            warn!(
+                                sha256 = sha_short,
+                                label = %done.label,
+                                error = %entry.reason,
+                                "swarm blob download failed (entered stuck state; further identical failures suppressed)"
+                            );
+                        }
                     }
                 }
             }
@@ -245,6 +325,35 @@ async fn run(
                         }
                         debug!(sha256 = sha_short, "blob already cached");
                         continue;
+                    }
+
+                    // Stuck-state gate: if the last download attempt
+                    // failed with a reason we've already logged, skip the
+                    // spawn until STUCK_RETRY_INTERVAL elapses (operators
+                    // may have freed disk space, brought peers online,
+                    // etc.) or the manifest update cycle clears the entry.
+                    // Without this gate the manager would re-spawn every
+                    // ~12 s on permanently-failing conditions, flooding
+                    // the journal with identical insufficient_disk lines.
+                    if let Some(prev) = stuck.get(&entry.sha256) {
+                        if prev.first_seen.elapsed() < STUCK_RETRY_INTERVAL {
+                            debug!(
+                                sha256 = sha_short,
+                                error = %prev.reason,
+                                repeats = prev.repeats,
+                                "skipping stuck blob (suppressed by anti-flood gate)"
+                            );
+                            continue;
+                        }
+                        // Retry interval elapsed — clear so the warn fires
+                        // again if the same condition still holds.
+                        info!(
+                            sha256 = sha_short,
+                            error = %prev.reason,
+                            repeats = prev.repeats,
+                            "stuck-state retry interval elapsed; re-attempting download"
+                        );
+                        stuck.remove(&entry.sha256);
                     }
 
                     // Previously completed but no longer in cache (revoked then

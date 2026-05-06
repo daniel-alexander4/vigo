@@ -148,8 +148,43 @@ pub async fn download_from_swarm(
         return Ok(cache.dir().join(&meta.sha256));
     }
 
-    // Check disk space.
-    cache.check_disk_space(meta.size)?;
+    // Assembly-only short-circuit: if every chunk is already on disk
+    // in `.partial/`, skip the disk-pressure gate and call assemble
+    // directly. The check at `check_disk_space` is appropriate for
+    // *fresh* downloads (where blob.size of net new bytes will land
+    // on disk); for assembly the net delta is zero (peak +blob.size
+    // for the temp file, then -blob.size when the partial dir is
+    // removed by `assemble`). Without this branch a near-full disk
+    // with all chunks already received would reject every retry
+    // forever and the partial dir would never assemble.
+    let chunks_on_disk = cache.chunk_bitmap(&meta.sha256, meta.chunk_count);
+    if chunks_on_disk.len() as u32 == meta.chunk_count {
+        info!(
+            sha256 = &meta.sha256[..12],
+            chunks = meta.chunk_count,
+            "all chunks already on disk; assembling directly (skipping fresh-download disk gate)"
+        );
+        return cache.assemble(&meta.sha256, meta.size, meta.chunk_count);
+    }
+
+    // Fresh-download path. Apply the disk-pressure check; on failure
+    // with a non-empty partial dir, purge the partial chunks so the
+    // retry loop doesn't accumulate garbage on a disk that can't fit
+    // the blob. Exit with the original error so the manager surfaces
+    // "insufficient_disk" rather than swallowing it.
+    if let Err(e) = cache.check_disk_space(meta.size) {
+        let partial_chunks = chunks_on_disk.len();
+        if partial_chunks > 0 {
+            warn!(
+                sha256 = &meta.sha256[..12],
+                partial_chunks,
+                error = %e,
+                "purging partial chunks: insufficient disk for fresh download (would otherwise accumulate)"
+            );
+            cache.delete_partial(&meta.sha256);
+        }
+        return Err(e);
+    }
 
     // Mark this download as active so the announcer switches to its 1-second
     // interval while we're running. Guard decrements on any exit path.

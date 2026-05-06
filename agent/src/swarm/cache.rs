@@ -172,6 +172,20 @@ impl BlobCache {
         }
 
         let tmp = self.dir.join(format!(".assembling-{}", &sha256[..16]));
+
+        // Drop guard — removes the temp file on ANY early return
+        // (ENOSPC mid-write, missing chunk file, hash/size mismatch,
+        // panic). Without this, an interrupted assembly leaves a
+        // half-written `.assembling-*` file on disk that nothing else
+        // cleans up. Forgotten only after the successful atomic rename.
+        struct TempGuard<'a>(&'a std::path::Path);
+        impl Drop for TempGuard<'_> {
+            fn drop(&mut self) {
+                let _ = fs::remove_file(self.0);
+            }
+        }
+        let guard = TempGuard(&tmp);
+
         {
             use std::io::Write;
             let mut out = fs::File::create(&tmp).context("creating assembly temp file")?;
@@ -179,15 +193,15 @@ impl BlobCache {
                 let chunk_path = self.chunk_path(sha256, i);
                 let data = fs::read(&chunk_path)
                     .with_context(|| format!("reading chunk {} during assembly", i))?;
-                out.write_all(&data)?;
+                out.write_all(&data)
+                    .with_context(|| format!("writing chunk {} during assembly", i))?;
             }
-            out.flush()?;
+            out.flush().context("flushing assembly temp file")?;
         }
 
         // Verify SHA256.
         let computed = hash_file(&tmp)?;
         if computed != sha256 {
-            fs::remove_file(&tmp).ok();
             bail!(
                 "SHA256 mismatch after assembly: expected {}, got {}",
                 &sha256[..16],
@@ -198,7 +212,6 @@ impl BlobCache {
         // Verify size.
         let actual_size = fs::metadata(&tmp)?.len();
         if actual_size != expected_size {
-            fs::remove_file(&tmp).ok();
             bail!(
                 "size mismatch after assembly: expected {}, got {}",
                 expected_size,
@@ -206,8 +219,10 @@ impl BlobCache {
             );
         }
 
-        // Atomic rename.
+        // Atomic rename into the final blob path. Forget the guard so
+        // its Drop doesn't try to remove the now-renamed file.
         fs::rename(&tmp, &dest).context("renaming assembled blob")?;
+        std::mem::forget(guard);
 
         // Clean up partial directory.
         if partial.is_dir() {
