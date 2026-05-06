@@ -1,22 +1,22 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Self-fleet session helper daemon.
+//! Puddle session helper daemon.
 //!
 //! Mirrors `crate::swarm::cryptsync::session` in shape but holds an
 //! Ed25519 [`SigningKey`](ed25519_dalek::SigningKey) instead of an
-//! age identity. Spawned by `vigo swarm self-fleet unlock` and the
+//! age identity. Spawned by `vigo swarm puddle unlock` and the
 //! `join` flow; serves SIGN / STATUS / LOCK over a per-user Unix
-//! socket (`$XDG_RUNTIME_DIR/vigo/self-fleet.sock` on Linux,
-//! `$TMPDIR/cryptsync-<UID>/self-fleet.sock` on macOS), 0600,
+//! socket (`$XDG_RUNTIME_DIR/vigo/puddle.sock` on Linux,
+//! `$TMPDIR/cryptsync-<UID>/puddle.sock` on macOS), 0600,
 //! `SO_PEERCRED`-gated.
 //!
 //! The unwrapped key is held in process memory only. Three
 //! independent shutdown triggers — explicit LOCK, parent-PID
 //! disappearance, idle timeout (default 60 m) — each scrub the key
-//! and exit. The same `~/.vigo-fleet/session.unlocked` sentinel
+//! and exit. The same `~/.vigo-puddle/session.unlocked` sentinel
 //! cryptsync uses for ADR-012 is mirrored here so sibling
-//! subsystems can ask "is this user's fleet identity unlocked?"
+//! subsystems can ask "is this user's puddle identity unlocked?"
 //! without speaking the SIGN protocol.
 
 use std::io::{BufRead, BufReader, Read, Write};
@@ -57,11 +57,11 @@ pub fn runtime_dir() -> Result<PathBuf> {
 }
 
 pub fn socket_path() -> Result<PathBuf> {
-    Ok(runtime_dir()?.join("self-fleet.sock"))
+    Ok(runtime_dir()?.join("puddle.sock"))
 }
 
 pub fn pidfile_path() -> Result<PathBuf> {
-    Ok(runtime_dir()?.join("self-fleet.pid"))
+    Ok(runtime_dir()?.join("puddle.pid"))
 }
 
 // ---------- client side ----------
@@ -69,7 +69,7 @@ pub fn pidfile_path() -> Result<PathBuf> {
 pub fn connect() -> Result<UnixStream> {
     let path = socket_path()?;
     UnixStream::connect(&path)
-        .with_context(|| format!("connecting to self-fleet helper at {}", path.display()))
+        .with_context(|| format!("connecting to puddle helper at {}", path.display()))
 }
 
 /// Ask the running helper to sign `payload`. Returns the raw 64-byte
@@ -139,7 +139,7 @@ fn parse_ok_or_err(line: &str) -> Result<Vec<u8>> {
 
 // ---------- spawn the helper ----------
 
-/// Spawn the self-fleet session helper from the `unlock` / `join`
+/// Spawn the puddle session helper from the `unlock` / `join`
 /// CLI path. Same `setsid` + stdin-piped-secret pattern cryptsync
 /// uses so the helper outlives its launching shell and the wire
 /// secret never lands in argv or env.
@@ -159,7 +159,7 @@ pub fn spawn_helper(
 
     // Stderr → log file in the runtime dir; same convention as
     // cryptsync. Avoids holding the parent shell's stderr open.
-    let log_path = runtime_dir()?.join("self-fleet.log");
+    let log_path = runtime_dir()?.join("puddle.log");
     let log_file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -169,7 +169,7 @@ pub fn spawn_helper(
 
     let current_exe = std::env::current_exe().context("resolving current exe")?;
     let mut cmd = Command::new(&current_exe);
-    cmd.arg("self-fleet-session-daemon")
+    cmd.arg("puddle-session-daemon")
         .arg("--parent-pid")
         .arg(parent_pid.to_string())
         .arg("--idle-mins")
@@ -187,11 +187,11 @@ pub fn spawn_helper(
         });
     }
 
-    let mut child = cmd.spawn().context("spawning self-fleet session helper")?;
+    let mut child = cmd.spawn().context("spawning puddle session helper")?;
     let mut stdin = child
         .stdin
         .take()
-        .context("self-fleet helper stdin not piped")?;
+        .context("puddle helper stdin not piped")?;
     // Wire format: `<32 bytes key><newline>`. Bytes go through
     // Zeroizing so we don't leave a lingering plaintext copy in our
     // own process heap after stdin closes.
@@ -301,7 +301,7 @@ async fn run_server(
     tracing::info!(
         parent_pid,
         idle_mins,
-        "self-fleet session helper started"
+        "puddle session helper started"
     );
 
     // Parent-PID watchdog.
@@ -355,7 +355,7 @@ async fn run_server(
                     }
                 };
                 if !peer_uid_matches(&stream, my_uid) {
-                    tracing::warn!("rejecting self-fleet client with mismatched UID");
+                    tracing::warn!("rejecting puddle client with mismatched UID");
                     drop(stream);
                     continue;
                 }

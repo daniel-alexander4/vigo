@@ -56,10 +56,10 @@
 //! project's chain is sufficient — admin role is enforced only on
 //! mint / revoke (CLI verbs), not on git operations. The chain's
 //! root must verify against the URL's project_id; the helper does
-//! not consult external state to "decide" which fleet a caller
+//! not consult external state to "decide" which puddle a caller
 //! belongs to. Whoever has read access to
 //! `~/.vigo-gitmirror/<pid>/tokens.json` and SO_PEERCRED-matches
-//! that user's UID can fetch and push under that fleet's identity.
+//! that user's UID can fetch and push under that puddle's identity.
 
 use std::os::fd::{AsRawFd, FromRawFd};
 use std::path::{Path, PathBuf};
@@ -478,8 +478,8 @@ fn authorize(home: &Path, project_id: &[u8; ID_LEN]) -> Result<TokenChain> {
             cfg.handle
         );
     }
-    let founder = parse_hex_id(&cfg.founder_fleet_pubkey)
-        .context("project.json founder_fleet_pubkey is not valid hex")?;
+    let founder = parse_hex_id(&cfg.founder_puddle_pubkey)
+        .context("project.json founder_puddle_pubkey is not valid hex")?;
 
     let chain = TokenChain::load(home, project_id)
         .with_context(|| format!("loading tokens.json for {}", super::project_state::hex_id(project_id)))?
@@ -511,11 +511,11 @@ fn authorize(home: &Path, project_id: &[u8; ID_LEN]) -> Result<TokenChain> {
             );
         }
     }
-    // Also reject if this fleet has self-leaved (the leaf's subject
+    // Also reject if this puddle has self-leaved (the leaf's subject
     // pubkey is in the project's leave envelopes).
     if let Some(leaf) = chain.chain.last() {
-        if has_left(&gitmirror_base, project_id, &leaf.body.subject_fleet_pubkey)? {
-            bail!("this fleet has issued a LEAVE envelope for the project");
+        if has_left(&gitmirror_base, project_id, &leaf.body.subject_puddle_pubkey)? {
+            bail!("this puddle has issued a LEAVE envelope for the project");
         }
     }
     Ok(chain)
@@ -524,9 +524,9 @@ fn authorize(home: &Path, project_id: &[u8; ID_LEN]) -> Result<TokenChain> {
 fn has_left(
     gitmirror_base: &Path,
     project_id: &[u8; ID_LEN],
-    fleet_pubkey: &[u8; ID_LEN],
+    puddle_pubkey: &[u8; ID_LEN],
 ) -> Result<bool> {
-    let p = super::envelopes::leave_path(gitmirror_base, project_id, fleet_pubkey);
+    let p = super::envelopes::leave_path(gitmirror_base, project_id, puddle_pubkey);
     Ok(p.exists())
 }
 

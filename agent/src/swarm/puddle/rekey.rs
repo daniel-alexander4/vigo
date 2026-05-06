@@ -1,25 +1,25 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Self-fleet keypair rotation (ADR-018).
+//! Puddle keypair rotation (ADR-018).
 //!
-//! Rekey is the recovery path for a compromised or lost fleet
+//! Rekey is the recovery path for a compromised or lost puddle
 //! keypair, and the maintenance path for hygiene rotation. The
-//! founder runs `vigo swarm self-fleet rekey-pair` to generate a new
-//! fleet keypair and issue a single-use claim code; surviving envoys
-//! run `vigo swarm self-fleet rekey --from <host>` to claim the new
+//! founder runs `vigo swarm puddle rekey-pair` to generate a new
+//! puddle keypair and issue a single-use claim code; surviving envoys
+//! run `vigo swarm puddle rekey --from <host>` to claim the new
 //! wrapped blob, migrate their cryptsync wrap envelope, and join the
-//! new fleet identity. ADR-017 explicitly chose this over a fleet
+//! new puddle identity. ADR-017 explicitly chose this over a puddle
 //! "evict" verb — rotating the shared keypair is the only response
 //! that addresses the underlying compromise.
 //!
 //! This module owns the parts that don't fit naturally in either
 //! `cli.rs` (CLI verbs) or `pair.rs` (pair-specific HTTP handler):
 //!
-//! - the `RetiredFleetEntry` log persisted at
-//!   `~/.vigo-fleet/retired_fleets.json`, including the active rekey
+//! - the `RetiredPuddleEntry` log persisted at
+//!   `~/.vigo-puddle/retired_puddles.json`, including the active rekey
 //!   session's 24h graceful window;
-//! - the `POST /swarm/self-fleet/rekey-claim/<user>` HTTP handler;
+//! - the `POST /swarm/puddle/rekey-claim/<user>` HTTP handler;
 //! - the post-rotation cryptsync sync (rewrap `identity.age`, clear
 //!   stale TOFU pins, regenerate `recipients.txt`).
 //!
@@ -41,40 +41,40 @@ use super::config;
 
 /// HTTP route prefix for the rekey claim endpoint. Sister of
 /// `pair::PAIR_CLAIM_PREFIX`; both must stay distinct.
-pub const REKEY_CLAIM_PREFIX: &str = "/swarm/self-fleet/rekey-claim/";
+pub const REKEY_CLAIM_PREFIX: &str = "/swarm/puddle/rekey-claim/";
 
 /// 24-hour graceful retirement window. After this, the founder
 /// considers the rekey session closed and refuses to issue new claim
-/// codes for the rotated-out fleet pubkey. Configurable per-call via
+/// codes for the rotated-out puddle pubkey. Configurable per-call via
 /// `--window-secs <N>` on `rekey-pair`; this is the default.
 pub const REKEY_GRACEFUL_SECS: i64 = 24 * 3600;
 
-/// One historical entry in `~/.vigo-fleet/retired_fleets.json`. The
+/// One historical entry in `~/.vigo-puddle/retired_puddles.json`. The
 /// active rekey session is the most-recent entry whose `expires_at`
 /// is in the future. Older entries are kept for audit / status
 /// display so the operator can see "we rotated on these dates."
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RetiredFleetEntry {
-    /// The fleet pubkey we rotated away from, in `ed25519:<hex>`
-    /// form (matches `~/.vigo-fleet/identity.pub`).
-    pub old_fleet_pubkey: String,
-    /// The fleet pubkey we rotated to. Denormalized into the entry
+pub struct RetiredPuddleEntry {
+    /// The puddle pubkey we rotated away from, in `ed25519:<hex>`
+    /// form (matches `~/.vigo-puddle/identity.pub`).
+    pub old_puddle_pubkey: String,
+    /// The puddle pubkey we rotated to. Denormalized into the entry
     /// so a single file read suffices for `status` output.
-    pub new_fleet_pubkey: String,
+    pub new_puddle_pubkey: String,
     /// Unix seconds when the rotation happened.
     pub retired_at: i64,
     /// Unix seconds after which the founder stops issuing new claim
-    /// codes for surviving envoys still on the old fleet. Set to
+    /// codes for surviving envoys still on the old puddle. Set to
     /// `retired_at + REKEY_GRACEFUL_SECS` at rotation time; can be
     /// pulled forward to `now` by `rekey-pair --close`.
     pub expires_at: i64,
 }
 
-/// Load the retired-fleets log. Missing file = empty list. Malformed
+/// Load the retired-puddles log. Missing file = empty list. Malformed
 /// file = error (caller fails the rekey rather than risk silent
 /// corruption of the audit trail).
-pub fn load_retired(home: &Path) -> Result<Vec<RetiredFleetEntry>> {
-    let path = config::retired_fleets_path(home);
+pub fn load_retired(home: &Path) -> Result<Vec<RetiredPuddleEntry>> {
+    let path = config::retired_puddles_path(home);
     match fs::read_to_string(&path) {
         Ok(s) if s.trim().is_empty() => Ok(Vec::new()),
         Ok(s) => serde_json::from_str(&s)
@@ -84,20 +84,20 @@ pub fn load_retired(home: &Path) -> Result<Vec<RetiredFleetEntry>> {
     }
 }
 
-/// Atomic write of the retired-fleets log. 0600 user-owned. The file
+/// Atomic write of the retired-puddles log. 0600 user-owned. The file
 /// is small (one entry per rotation event), so no compaction logic.
 pub fn save_retired(
     home: &Path,
-    entries: &[RetiredFleetEntry],
+    entries: &[RetiredPuddleEntry],
     username: &str,
 ) -> Result<()> {
-    let path = config::retired_fleets_path(home);
+    let path = config::retired_puddles_path(home);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("create {}", parent.display()))?;
     }
     let json = serde_json::to_string_pretty(entries)
-        .context("serializing retired-fleets")?;
+        .context("serializing retired-puddles")?;
     let tmp = path.with_extension("json.tmp");
     {
         use std::io::Write;
@@ -127,9 +127,9 @@ pub fn save_retired(
 /// retirement whose `expires_at` is still in the future) or `None`
 /// when no rekey session is currently live.
 pub fn active_session<'a>(
-    entries: &'a [RetiredFleetEntry],
+    entries: &'a [RetiredPuddleEntry],
     now: i64,
-) -> Option<&'a RetiredFleetEntry> {
+) -> Option<&'a RetiredPuddleEntry> {
     entries
         .iter()
         .filter(|e| e.expires_at > now)
@@ -140,15 +140,15 @@ pub fn active_session<'a>(
 pub fn record_retirement(
     home: &Path,
     username: &str,
-    old_fleet_pubkey: &str,
-    new_fleet_pubkey: &str,
+    old_puddle_pubkey: &str,
+    new_puddle_pubkey: &str,
     retired_at: i64,
     window_secs: i64,
 ) -> Result<()> {
     let mut entries = load_retired(home)?;
-    entries.push(RetiredFleetEntry {
-        old_fleet_pubkey: old_fleet_pubkey.to_string(),
-        new_fleet_pubkey: new_fleet_pubkey.to_string(),
+    entries.push(RetiredPuddleEntry {
+        old_puddle_pubkey: old_puddle_pubkey.to_string(),
+        new_puddle_pubkey: new_puddle_pubkey.to_string(),
         retired_at,
         expires_at: retired_at + window_secs,
     });
@@ -194,16 +194,16 @@ pub fn clear_pending(home: &Path) {
 }
 
 /// Post-rotation cryptsync sync. Runs on every envoy that has
-/// rotated its self-fleet keypair (founder during `rekey-pair`,
+/// rotated its puddle keypair (founder during `rekey-pair`,
 /// surviving envoys during `rekey`). Three steps, all best-effort
-/// after the fleet rotation has already committed to disk:
+/// after the puddle rotation has already committed to disk:
 ///
-/// 1. Re-wrap `~/.cryptsync/identity.age` from the old fleet-derived
+/// 1. Re-wrap `~/.cryptsync/identity.age` from the old puddle-derived
 ///    wrap key to the new one. Skipped when cryptsync isn't enrolled
 ///    or runs in standalone wrap-mode.
-/// 2. Clear local cryptsync TOFU pins for the retired fleet pubkey
+/// 2. Clear local cryptsync TOFU pins for the retired puddle pubkey
 ///    so the next announce from a peer that has also rekeyed re-pins
-///    cleanly under the new fleet pubkey.
+///    cleanly under the new puddle pubkey.
 /// 3. Regenerate `recipients.txt` so post-rotation writes go to the
 ///    correct recipient set immediately, instead of waiting for the
 ///    next announce tick.
@@ -214,46 +214,46 @@ pub fn apply_post_rotation_cryptsync_sync(
     username: &str,
     old: &SigningKey,
     new: &SigningKey,
-    old_fleet_pubkey_hex: &str,
+    old_puddle_pubkey_hex: &str,
 ) -> Result<crate::swarm::cryptsync::identity_rewrap::RewrapOutcome> {
-    let outcome = crate::swarm::cryptsync::identity_rewrap::rewrap_identity_for_new_fleet_key(
+    let outcome = crate::swarm::cryptsync::identity_rewrap::rewrap_identity_for_new_puddle_key(
         home, username, old, new,
     )
-    .context("rewrap cryptsync identity for new fleet keypair")?;
+    .context("rewrap cryptsync identity for new puddle keypair")?;
 
     // Clear stale TOFU pins so post-rotation peer announces re-pin.
     // Best-effort: if the peer table doesn't exist yet (cryptsync not
     // enrolled), this is a no-op. The hex form lives in peer
-    // entries' `fleet_pubkey` field, so strip the `ed25519:` prefix.
-    let retired_hex = old_fleet_pubkey_hex
+    // entries' `puddle_pubkey` field, so strip the `ed25519:` prefix.
+    let retired_hex = old_puddle_pubkey_hex
         .strip_prefix("ed25519:")
-        .unwrap_or(old_fleet_pubkey_hex)
+        .unwrap_or(old_puddle_pubkey_hex)
         .to_ascii_lowercase();
     let _ = crate::swarm::cryptsync::state::PeerTable::modify(username, |table| {
-        table.clear_pins_for_fleet(&retired_hex) > 0
+        table.clear_pins_for_puddle(&retired_hex) > 0
     });
 
     // Regenerate recipients.txt so the next encrypt sees the new
-    // fleet filter. Best-effort — when cryptsync isn't enrolled the
+    // puddle filter. Best-effort — when cryptsync isn't enrolled the
     // recipients.txt path doesn't exist and the call no-ops at the
     // load_local_pubkey step. Don't propagate errors here; the
     // rotation itself has already succeeded on disk.
     if let Err(e) = crate::swarm::cryptsync::regenerate_recipients_now(username, home) {
         tracing::debug!(
             error = %e,
-            "self-fleet rekey: regenerate_recipients_now skipped (cryptsync not enrolled?)"
+            "puddle rekey: regenerate_recipients_now skipped (cryptsync not enrolled?)"
         );
     }
 
     Ok(outcome)
 }
 
-/// HTTP handler for `POST /swarm/self-fleet/rekey-claim/<user>`.
+/// HTTP handler for `POST /swarm/puddle/rekey-claim/<user>`.
 /// Mirrors `pair::handle_pair_claim` with two differences:
 ///
-/// - reads `~/.vigo-fleet/rekey.pending` instead of `pair.pending`;
+/// - reads `~/.vigo-puddle/rekey.pending` instead of `pair.pending`;
 /// - additionally rejects (410 Gone) if no active rekey session
-///   exists in `retired_fleets.json` for this user, even when a
+///   exists in `retired_puddles.json` for this user, even when a
 ///   `rekey.pending` sentinel survives — covers the case where the
 ///   24h window has elapsed but the sentinel hasn't been GC'd yet.
 pub async fn handle_rekey_claim(
@@ -296,7 +296,7 @@ pub async fn handle_rekey_claim(
     let entries = match load_retired(&home) {
         Ok(e) => e,
         Err(e) => {
-            tracing::warn!(error = %e, "self-fleet rekey: cannot read retired_fleets");
+            tracing::warn!(error = %e, "puddle rekey: cannot read retired_puddles");
             return Ok(codes::plain(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "rekey state read failed",
@@ -320,7 +320,7 @@ pub async fn handle_rekey_claim(
             ))
         }
         Err(e) => {
-            tracing::warn!(error = %e, "self-fleet rekey: cannot read pending");
+            tracing::warn!(error = %e, "puddle rekey: cannot read pending");
             return Ok(codes::plain(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "rekey state read failed",
@@ -342,7 +342,7 @@ pub async fn handle_rekey_claim(
             tracing::warn!(
                 path = %wrapped_path.display(),
                 error = %e,
-                "self-fleet rekey: cannot read wrapped blob"
+                "puddle rekey: cannot read wrapped blob"
             );
             return Ok(codes::plain(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -357,7 +357,7 @@ pub async fn handle_rekey_claim(
             tracing::warn!(
                 path = %salt_path.display(),
                 error = %e,
-                "self-fleet rekey: cannot read salt"
+                "puddle rekey: cannot read salt"
             );
             return Ok(codes::plain(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -370,7 +370,7 @@ pub async fn handle_rekey_claim(
     let body = match codes::pack_response(&salt, &wrapped) {
         Ok(b) => b,
         Err(e) => {
-            tracing::warn!(error = %e, "self-fleet rekey: pack_response failed");
+            tracing::warn!(error = %e, "puddle rekey: pack_response failed");
             return Ok(codes::plain(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "response pack failed",
@@ -380,7 +380,7 @@ pub async fn handle_rekey_claim(
 
     tracing::info!(
         user = %user,
-        "self-fleet rekey: served new wrapped identity to claimant"
+        "puddle rekey: served new wrapped identity to claimant"
     );
     Response::builder()
         .status(StatusCode::OK)
@@ -390,7 +390,7 @@ pub async fn handle_rekey_claim(
 }
 
 /// Sibling of `super::config::session_unlocked_path` — the rekey
-/// flow checks for a running self-fleet session helper to decide
+/// flow checks for a running puddle session helper to decide
 /// whether it can derive the old wrap password locally without
 /// re-prompting. Exposed as a public helper so `cli.rs` can use the
 /// same predicate without re-implementing the path resolution.
@@ -400,20 +400,20 @@ pub fn session_helper_running(home: &Path) -> bool {
 }
 
 /// Local convenience for sibling subsystems / status output. Returns
-/// the path to the retired-fleets log even if the file doesn't yet
+/// the path to the retired-puddles log even if the file doesn't yet
 /// exist.
-pub fn retired_fleets_path_for(home: &Path) -> PathBuf {
-    config::retired_fleets_path(home)
+pub fn retired_puddles_path_for(home: &Path) -> PathBuf {
+    config::retired_puddles_path(home)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn entry(old: &str, new: &str, retired_at: i64, expires_at: i64) -> RetiredFleetEntry {
-        RetiredFleetEntry {
-            old_fleet_pubkey: old.to_string(),
-            new_fleet_pubkey: new.to_string(),
+    fn entry(old: &str, new: &str, retired_at: i64, expires_at: i64) -> RetiredPuddleEntry {
+        RetiredPuddleEntry {
+            old_puddle_pubkey: old.to_string(),
+            new_puddle_pubkey: new.to_string(),
             retired_at,
             expires_at,
         }
@@ -445,7 +445,7 @@ mod tests {
         ];
         let now = 300;
         let active = active_session(&entries, now).unwrap();
-        assert_eq!(active.old_fleet_pubkey, "c");
+        assert_eq!(active.old_puddle_pubkey, "c");
         assert_eq!(active.retired_at, 500);
     }
 
@@ -462,8 +462,8 @@ mod tests {
         record_retirement(dir.path(), "tester", "old2", "new2", 2000, 86400).unwrap();
         let entries = load_retired(dir.path()).unwrap();
         assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0].old_fleet_pubkey, "old1");
-        assert_eq!(entries[1].old_fleet_pubkey, "old2");
+        assert_eq!(entries[0].old_puddle_pubkey, "old1");
+        assert_eq!(entries[1].old_puddle_pubkey, "old2");
         assert_eq!(entries[1].expires_at, 2000 + 86400);
     }
 
@@ -521,8 +521,8 @@ mod tests {
     #[test]
     fn rekey_claim_prefix_is_distinct_from_pair() {
         // Sister-route lockdown — both must share the
-        // `/swarm/self-fleet/` namespace without colliding.
+        // `/swarm/puddle/` namespace without colliding.
         assert_ne!(REKEY_CLAIM_PREFIX, super::super::pair::PAIR_CLAIM_PREFIX);
-        assert!(REKEY_CLAIM_PREFIX.starts_with("/swarm/self-fleet/"));
+        assert!(REKEY_CLAIM_PREFIX.starts_with("/swarm/puddle/"));
     }
 }

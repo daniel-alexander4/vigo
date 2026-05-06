@@ -357,29 +357,29 @@ async fn handle_request(
             tokio::task::block_in_place(|| crate::swarm::cryptsync::server::handle_leaves_list(p))
         }
 
-        // Self-fleet: receive a pair-claim from a peer envoy that ran
-        // `vigo swarm self-fleet join --from <this-host>`. Validates
-        // the incoming code against the ~/.vigo-fleet/pair.pending
+        // Puddle: receive a pair-claim from a peer envoy that ran
+        // `vigo swarm puddle join --from <this-host>`. Validates
+        // the incoming code against the ~/.vigo-puddle/pair.pending
         // sentinel for the target user and returns the wrapped
         // identity blob on match. ADR-014 §Distribution.
-        (&Method::POST, p) if p.starts_with(crate::swarm::self_fleet::pair::PAIR_CLAIM_PREFIX) => {
-            match crate::swarm::self_fleet::pair::handle_pair_claim(p, req).await {
+        (&Method::POST, p) if p.starts_with(crate::swarm::puddle::pair::PAIR_CLAIM_PREFIX) => {
+            match crate::swarm::puddle::pair::handle_pair_claim(p, req).await {
                 Ok(r) => r,
                 Err(e) => {
-                    tracing::warn!(error = %e, "self-fleet pair-claim handler error");
+                    tracing::warn!(error = %e, "puddle pair-claim handler error");
                     not_found()
                 }
             }
         }
 
-        // Self-fleet rekey-claim: surviving envoys POST a 5-min code
+        // Puddle rekey-claim: surviving envoys POST a 5-min code
         // here during the founder's 24h rekey window to receive the
-        // post-rotation wrapped fleet blob. ADR-018.
-        (&Method::POST, p) if p.starts_with(crate::swarm::self_fleet::rekey::REKEY_CLAIM_PREFIX) => {
-            match crate::swarm::self_fleet::rekey::handle_rekey_claim(p, req).await {
+        // post-rotation wrapped puddle blob. ADR-018.
+        (&Method::POST, p) if p.starts_with(crate::swarm::puddle::rekey::REKEY_CLAIM_PREFIX) => {
+            match crate::swarm::puddle::rekey::handle_rekey_claim(p, req).await {
                 Ok(r) => r,
                 Err(e) => {
-                    tracing::warn!(error = %e, "self-fleet rekey-claim handler error");
+                    tracing::warn!(error = %e, "puddle rekey-claim handler error");
                     not_found()
                 }
             }
@@ -568,7 +568,7 @@ fn is_project_id_path_segment(seg: &str) -> bool {
 /// Required headers:
 /// - `X-Vigo-Chain` — base64 of the JSON-encoded
 ///   [`crate::swarm::gitmirror::project_state::TokenChain`] proving
-///   the pushing fleet is an authorized member.
+///   the pushing puddle is an authorized member.
 ///
 /// Body: a `git bundle create --all` blob, capped at
 /// [`crate::swarm::gitmirror::MAX_BUNDLE_SIZE`] (20 GiB).

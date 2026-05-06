@@ -115,13 +115,13 @@ enum Commands {
         args: Vec<String>,
     },
     /// Per-user fleet-identity verbs (ADR-014). Dispatched from
-    /// `vigo swarm self-fleet ...`. State lives at ~/.vigo-fleet/.
+    /// `vigo swarm puddle ...`. State lives at ~/.vigo-puddle/.
     /// Verbs: init / pair / join / unlock / lock / pubkey / members /
     /// rotate-passphrase / status.
     SelfFleet {
         args: Vec<String>,
     },
-    /// Hidden: self-fleet session helper daemon. Invoked by `unlock`
+    /// Hidden: puddle session helper daemon. Invoked by `unlock`
     /// (and the join flow) via `current_exe()` + `setsid()`; never
     /// by a human. Reads the 32-byte Ed25519 key from stdin, binds
     /// its Unix socket, serves SIGN / STATUS / PUBKEY / LOCK until
@@ -295,24 +295,24 @@ fn parse_args() -> Result<Cli> {
             "swarm" => match positional.get(1).map(|s| s.as_str()) {
                 Some("gitmirror") => Commands::Gitmirror { args: positional[2..].to_vec() },
                 Some("cryptsync") => Commands::Cryptsync { args: positional[2..].to_vec() },
-                Some("self-fleet") => Commands::SelfFleet { args: positional[2..].to_vec() },
+                Some("puddle") => Commands::SelfFleet { args: positional[2..].to_vec() },
                 // Hidden: server-dispatched cleanup verb. Mirrors the
                 // `_apply-blacklist` pattern (gitmirror/cryptsync), but
                 // operates on the substrate-shared blob cache rather
                 // than per-substrate state. Not advertised in --help.
                 Some("_apply-cleanup") => Commands::SwarmApplyCleanup,
                 Some(other) => bail!(
-                    "unknown swarm subcommand: {}\nExpected one of: gitmirror | cryptsync | self-fleet",
+                    "unknown swarm subcommand: {}\nExpected one of: gitmirror | cryptsync | puddle",
                     other
                 ),
                 None => bail!(
-                    "vigo swarm requires a subcommand: gitmirror | cryptsync | self-fleet"
+                    "vigo swarm requires a subcommand: gitmirror | cryptsync | puddle"
                 ),
             },
             "cryptsync-session-daemon" => {
                 Commands::CryptsyncSessionDaemon { args: positional[1..].to_vec() }
             }
-            "self-fleet-session-daemon" => {
+            "puddle-session-daemon" => {
                 Commands::SelfFleetSessionDaemon { args: positional[1..].to_vec() }
             }
             other => bail!("unknown command: {}\nRun with --help for usage", other),
@@ -1657,17 +1657,17 @@ async fn main() -> Result<()> {
         }
 
         Some(Commands::SelfFleet { args }) => {
-            // Per-user fleet identity (ADR-014). Local-only verbs
+            // Per-user puddle identity (ADR-014). Local-only verbs
             // (init / pubkey / unlock / lock / pair / status) plus
             // `join --from <host>` which talks mTLS over the swarm
             // peer port to retrieve the wrapped blob.
-            vigo::swarm::self_fleet::cli::run(args.clone())
+            vigo::swarm::puddle::cli::run(args.clone())
         }
 
         Some(Commands::SelfFleetSessionDaemon { args }) => {
-            // Hidden: self-fleet session helper daemon entry point.
-            // Spawned by `vigo swarm self-fleet unlock`.
-            vigo::swarm::self_fleet::session::daemon_main(args.clone()).await
+            // Hidden: puddle session helper daemon entry point.
+            // Spawned by `vigo swarm puddle unlock`.
+            vigo::swarm::puddle::session::daemon_main(args.clone()).await
         }
 
         Some(Commands::SwarmApplyCleanup) => {

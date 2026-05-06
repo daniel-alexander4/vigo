@@ -1,18 +1,18 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Per-user self-fleet paths.
+//! Per-user puddle paths.
 //!
-//! All user-side state lives under `~/.vigo-fleet/`:
+//! All user-side state lives under `~/.vigo-puddle/`:
 //!
 //! - `identity.wrapped` — Ed25519 private key wrapped under the
 //!   user's passphrase. Same envelope as cryptsync's `identity.age`
 //!   (1 byte version + 24 byte XChaCha20-Poly1305 nonce + ciphertext
 //!   + 16 byte auth tag). 0600 user-owned. Portable across envoys.
 //! - `identity.salt` — 16 random bytes, Argon2id input. 0600.
-//! - `identity.pub` — the fleet pubkey in `ed25519:<hex>` form, one
+//! - `identity.pub` — the puddle pubkey in `ed25519:<hex>` form, one
 //!   line. 0644 (already public). Sibling subsystems read this to
-//!   query "is this envoy in dan's fleet, and what's the pubkey?"
+//!   query "is this envoy in dan's puddle, and what's the pubkey?"
 //! - `pair.pending` — sentinel dropped by the `pair` CLI verb when
 //!   a pairing code has been issued. Picked up by the daemon's
 //!   swarm-server pair-claim handler. JSON shape: see
@@ -20,15 +20,15 @@
 //!   claim or after the 5 min TTL elapses.
 //! - `session.unlocked` — sentinel containing the session helper's
 //!   PID, written by the helper at startup, removed at shutdown.
-//!   Used by sibling subsystems to detect "is the fleet identity
+//!   Used by sibling subsystems to detect "is the puddle identity
 //!   currently unlocked on this envoy?" without having to talk to
 //!   the helper. Same pattern cryptsync uses (ADR-012).
 
 use std::path::{Path, PathBuf};
 
-/// `~/.vigo-fleet/` — the per-user self-fleet state dir.
+/// `~/.vigo-puddle/` — the per-user puddle state dir.
 pub fn dot_dir(home: &Path) -> PathBuf {
-    home.join(".vigo-fleet")
+    home.join(".vigo-puddle")
 }
 
 pub fn wrapped_path(home: &Path) -> PathBuf {
@@ -54,11 +54,11 @@ pub fn rekey_pending_path(home: &Path) -> PathBuf {
     dot_dir(home).join("rekey.pending")
 }
 
-/// Local log of fleet keypairs this envoy has retired, including the
+/// Local log of puddle keypairs this envoy has retired, including the
 /// active rekey session's 24h graceful window (ADR-018). JSON list
-/// of `RetiredFleetEntry` records. 0600 user-owned.
-pub fn retired_fleets_path(home: &Path) -> PathBuf {
-    dot_dir(home).join("retired_fleets.json")
+/// of `RetiredPuddleEntry` records. 0600 user-owned.
+pub fn retired_puddles_path(home: &Path) -> PathBuf {
+    dot_dir(home).join("retired_puddles.json")
 }
 
 pub fn session_unlocked_path(home: &Path) -> PathBuf {
@@ -73,18 +73,18 @@ mod tests {
     #[test]
     fn paths_are_under_dot_vigo_fleet() {
         let home = PathBuf::from("/home/alice");
-        assert_eq!(dot_dir(&home), PathBuf::from("/home/alice/.vigo-fleet"));
+        assert_eq!(dot_dir(&home), PathBuf::from("/home/alice/.vigo-puddle"));
         assert_eq!(
             wrapped_path(&home),
-            PathBuf::from("/home/alice/.vigo-fleet/identity.wrapped")
+            PathBuf::from("/home/alice/.vigo-puddle/identity.wrapped")
         );
         assert_eq!(
             pubkey_path(&home),
-            PathBuf::from("/home/alice/.vigo-fleet/identity.pub")
+            PathBuf::from("/home/alice/.vigo-puddle/identity.pub")
         );
         assert_eq!(
             pair_pending_path(&home),
-            PathBuf::from("/home/alice/.vigo-fleet/pair.pending")
+            PathBuf::from("/home/alice/.vigo-puddle/pair.pending")
         );
     }
 }

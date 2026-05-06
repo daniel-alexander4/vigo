@@ -141,7 +141,7 @@ func TestRenderGitmirrorMembersTable(t *testing.T) {
 		{
 			ProjectID:          pid,
 			Handle:             "vigo",
-			FounderFleetPubkey: founder,
+			FounderPuddlePubkey: founder,
 			Members:            []string{founder, mem},
 			MemberFleetCount:   2,
 			DrFanout:           "fleet-wide",
@@ -175,13 +175,13 @@ func TestRenderGitmirrorMembersSortsByHandle(t *testing.T) {
 		{
 			ProjectID:          "ff" + strings.Repeat("ff", 31),
 			Handle:             "zeta",
-			FounderFleetPubkey: founder,
+			FounderPuddlePubkey: founder,
 			Members:            []string{founder},
 		},
 		{
 			ProjectID:          "11" + strings.Repeat("11", 31),
 			Handle:             "alpha",
-			FounderFleetPubkey: founder,
+			FounderPuddlePubkey: founder,
 			Members:            []string{founder},
 		},
 	}
@@ -205,7 +205,7 @@ func TestRenderGitmirrorMembersJSON(t *testing.T) {
 	projects := []fleetProjectSummary{{
 		ProjectID:          "0a" + strings.Repeat("0a", 31),
 		Handle:             "vigo",
-		FounderFleetPubkey: founder,
+		FounderPuddlePubkey: founder,
 		Members:            []string{founder},
 		MemberFleetCount:   1,
 	}}

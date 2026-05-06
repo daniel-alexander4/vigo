@@ -18,7 +18,7 @@
             <tbody>
                 <tr><td style="font-weight:600;width:200px;">URL</td><td><code>vigo://{{.Project.ProjectID}}/{{.Project.Handle}}</code></td></tr>
                 <tr><td style="font-weight:600;">Project ID</td><td><code>{{.Project.ProjectID}}</code></td></tr>
-                <tr><td style="font-weight:600;">Founder fleet</td><td><code>ed25519:{{.Project.FounderFleetPubkey}}</code></td></tr>
+                <tr><td style="font-weight:600;">Founder puddle</td><td><code>ed25519:{{.Project.FounderPuddlePubkey}}</code></td></tr>
                 <tr><td style="font-weight:600;">Fan-out</td><td>{{.Project.DrFanout}}</td></tr>
                 <tr><td style="font-weight:600;">Member fleets</td><td>{{.Project.MemberFleetCount}}{{range .Project.Members}}<br><code>ed25519:{{.}}</code>{{end}}</td></tr>
                 <tr><td style="font-weight:600;">Hosts holding repo</td><td>{{.Project.HostCount}}</td></tr>
@@ -99,7 +99,7 @@
 {{/* ── List view ── */}}
 <div class="page-header">
     <h1>Gitmirror</h1>
-    <p>Fleet-wide unified-substrate gitmirror view. Projects are keyed by <code>project_id = sha256(founder_fleet_pubkey)</code>.</p>
+    <p>Fleet-wide unified-substrate gitmirror view. Projects are keyed by <code>project_id = sha256(founder_puddle_pubkey)</code>.</p>
 </div>
 
 {{template "health-banner" .Health}}

@@ -99,7 +99,7 @@ pub fn spawn(
 
 /// A live watch on `~user/cryptsync/`. Tracks `(dev, inode)` so the
 /// reconciler can detect a delete-and-recreate (e.g.,
-/// `vigo swarm cryptsync leave --purge` followed by `vigo swarm cryptsync {fleet init, standalone enroll}`) and
+/// `vigo swarm cryptsync leave --purge` followed by `vigo swarm cryptsync {puddle init, standalone enroll}`) and
 /// re-arm the inotify watch on the new directory inode. Without
 /// this, the kernel auto-removes the watch on dir-deletion (IN_IGNORED)
 /// but the reconciler's "user is enrolled and a watch exists" check

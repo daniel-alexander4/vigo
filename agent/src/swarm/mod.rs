@@ -31,7 +31,7 @@ pub mod peer_health;
 pub mod peermap;
 pub mod prober;
 pub mod scheduler;
-pub mod self_fleet;
+pub mod puddle;
 pub mod server;
 pub mod target;
 

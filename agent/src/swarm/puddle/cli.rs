@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! `vigo swarm self-fleet *` verb tree (ADR-014).
+//! `vigo swarm puddle *` verb tree (ADR-014).
 
 use std::fs;
 use std::io::Write;
@@ -41,7 +41,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "rotate-passphrase" => cmd_rotate_passphrase(&args[1..]),
         "status" => cmd_status(&args[1..]),
         other => bail!(
-            "unknown `vigo swarm self-fleet` subcommand: {}\nrun `vigo swarm self-fleet --help` for usage",
+            "unknown `vigo swarm puddle` subcommand: {}\nrun `vigo swarm puddle --help` for usage",
             other
         ),
     }
@@ -49,32 +49,32 @@ pub fn run(args: Vec<String>) -> Result<()> {
 
 fn print_usage() {
     eprintln!(
-        "vigo swarm self-fleet — per-user fleet identity (ADR-014)
+        "vigo swarm puddle — per-user puddle identity (ADR-014)
 
 USAGE:
-    vigo swarm self-fleet <SUBCOMMAND>
+    vigo swarm puddle <SUBCOMMAND>
 
 LIFECYCLE:
-    init                       Generate a new fleet keypair on the founder envoy.
+    init                       Generate a new puddle keypair on the founder envoy.
     pair                       Issue a 5-minute pairing code so a peer envoy can join.
     join --from <host>         Receive the wrapped key from <host> using the pairing code.
 
-REKEY (ADR-018, fleet keypair rotation):
-    rekey-pair                 Rotate the fleet keypair and issue a 5-minute claim code.
+REKEY (ADR-018, puddle keypair rotation):
+    rekey-pair                 Rotate the puddle keypair and issue a 5-minute claim code.
     rekey-pair --close         Close the active 24h rekey window early.
-    rekey --from <host>        Migrate this envoy to the founder's new fleet keypair.
+    rekey --from <host>        Migrate this envoy to the founder's new puddle keypair.
 
 DAILY:
     unlock                     Unwrap the key and start the session helper.
     lock                       Scrub the held key and stop the session helper.
 
 INFO / MAINTENANCE:
-    pubkey                     Print the local fleet pubkey fingerprint.
-    members                    Show fleet identity state on this envoy.
+    pubkey                     Print the local puddle pubkey fingerprint.
+    members                    Show puddle identity state on this envoy.
     rotate-passphrase          Re-wrap the key under a new passphrase (this envoy only).
-    status                     Show local self-fleet state.
+    status                     Show local puddle state.
 
-State lives at ~/.vigo-fleet/. No root required. Does not contact the Vigo server."
+State lives at ~/.vigo-puddle/. No root required. Does not contact the Vigo server."
     );
 }
 
@@ -85,8 +85,8 @@ fn cmd_init(_args: &[String]) -> Result<()> {
     let username = user_for_invocation()?;
     if super::is_initialized(&home) {
         bail!(
-            "self-fleet already initialized at {} — to re-init, delete the directory first \
-             (this orphans every other envoy in the fleet; usually you want `pair` instead).",
+            "puddle already initialized at {} — to re-init, delete the directory first \
+             (this orphans every other envoy in the puddle; usually you want `pair` instead).",
             config::dot_dir(&home).display()
         );
     }
@@ -103,7 +103,7 @@ fn cmd_init(_args: &[String]) -> Result<()> {
     let pubkey_text = encode_sign_pubkey(&keypair.verifying_key());
     let salt = crate::swarm::cryptsync::crypt::fresh_salt();
     let blob = wrap_signing_key(&keypair, password.as_bytes(), &salt)
-        .context("wrapping fleet identity")?;
+        .context("wrapping puddle identity")?;
 
     write_private(&config::wrapped_path(&home), &blob, &username)?;
     write_private(&config::salt_path(&home), &salt, &username)?;
@@ -113,11 +113,11 @@ fn cmd_init(_args: &[String]) -> Result<()> {
     println!("wrote {} (0600)", config::salt_path(&home).display());
     println!("wrote {} (0644)", config::pubkey_path(&home).display());
     println!();
-    println!("fleet pubkey: {}", pubkey_text);
+    println!("puddle pubkey: {}", pubkey_text);
     println!();
-    println!("This envoy is now the founder of your self-fleet. To add more envoys:");
-    println!("  1) on this envoy:        `vigo swarm self-fleet pair`");
-    println!("  2) on the joining envoy: `vigo swarm self-fleet join --from {}`",
+    println!("This envoy is now the founder of your puddle. To add more envoys:");
+    println!("  1) on this envoy:        `vigo swarm puddle pair`");
+    println!("  2) on the joining envoy: `vigo swarm puddle join --from {}`",
         local_hostname_or("<this-host>"));
     Ok(())
 }
@@ -126,12 +126,12 @@ fn cmd_init(_args: &[String]) -> Result<()> {
 
 fn cmd_pubkey(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
-    match super::local_fleet_pubkey(&home)? {
+    match super::local_puddle_pubkey(&home)? {
         Some(pk) => {
             println!("{}", pk);
             Ok(())
         }
-        None => bail!("self-fleet not initialized — run `vigo swarm self-fleet init`"),
+        None => bail!("puddle not initialized — run `vigo swarm puddle init`"),
     }
 }
 
@@ -141,8 +141,8 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !super::is_initialized(&home) {
         bail!(
-            "self-fleet not initialized on this envoy — run `vigo swarm self-fleet init` \
-             (founder) or `vigo swarm self-fleet join --from <host>` (peer envoy) first"
+            "puddle not initialized on this envoy — run `vigo swarm puddle init` \
+             (founder) or `vigo swarm puddle join --from <host>` (peer envoy) first"
         );
     }
     let blob = fs::read(config::wrapped_path(&home))
@@ -161,16 +161,16 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     session::spawn_helper(&key, parent_pid, DEFAULT_IDLE_MINUTES, &home)?;
 
     println!(
-        "✓ Unlocked. Self-fleet session helper running until logout, lock, or {} min idle.",
+        "✓ Unlocked. Puddle session helper running until logout, lock, or {} min idle.",
         DEFAULT_IDLE_MINUTES
     );
 
-    // ADR-016 slice 4: now that the self-fleet session helper is
+    // ADR-016 slice 4: now that the puddle session helper is
     // running, this is the one moment at which a fresh envoy can
     // bootstrap cryptsync without the user having to type a second
-    // passphrase — fleet-mode wrap-key derivation goes through the
+    // passphrase — puddle-mode wrap-key derivation goes through the
     // helper we just spawned. If `~/.cryptsync/identity.age` is
-    // missing, run `cryptsync fleet init` inline so the user ends up
+    // missing, run `cryptsync puddle init` inline so the user ends up
     // with a usable encrypted-sync surface as a single side effect of
     // unlocking. Failure here doesn't undo the unlock — we surface
     // the error and keep going so the operator can re-run manually.
@@ -178,16 +178,16 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     let cs_identity = cs_dot.join("identity.age");
     if !cs_identity.exists() {
         println!();
-        println!("Bootstrapping cryptsync (fleet-mode wrap, no extra passphrase)...");
+        println!("Bootstrapping cryptsync (puddle-mode wrap, no extra passphrase)...");
         match crate::swarm::cryptsync::cli::run(vec![
-            "fleet".to_string(),
+            "puddle".to_string(),
             "init".to_string(),
         ]) {
             Ok(()) => {}
             Err(e) => {
                 eprintln!("warning: cryptsync auto-init failed: {:#}", e);
                 eprintln!(
-                    "         re-run manually: `vigo swarm cryptsync fleet init`"
+                    "         re-run manually: `vigo swarm cryptsync puddle init`"
                 );
             }
         }
@@ -199,7 +199,7 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
 
 fn cmd_lock(_args: &[String]) -> Result<()> {
     session::request_lock()?;
-    println!("✓ Locked. Fleet key scrubbed.");
+    println!("✓ Locked. Puddle key scrubbed.");
     Ok(())
 }
 
@@ -209,7 +209,7 @@ fn cmd_pair(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     let username = user_for_invocation()?;
     if !super::is_initialized(&home) {
-        bail!("self-fleet not initialized on this envoy — `init` first");
+        bail!("puddle not initialized on this envoy — `init` first");
     }
 
     // Reissue: a previous pair sentinel may exist with a different
@@ -223,8 +223,8 @@ fn cmd_pair(_args: &[String]) -> Result<()> {
     println!("Valid for:     5 minutes ({} seconds)", pair::PAIR_TTL_SECS);
     println!();
     println!("On the joining envoy, run:");
-    println!("    vigo swarm self-fleet join --from {}", local_hostname_or("<this-host>"));
-    println!("then enter this code when prompted, then enter your fleet passphrase.");
+    println!("    vigo swarm puddle join --from {}", local_hostname_or("<this-host>"));
+    println!("then enter this code when prompted, then enter your puddle passphrase.");
     println!();
     println!("The code is single-use; re-run `pair` to issue another.");
     Ok(())
@@ -252,7 +252,7 @@ fn cmd_join(args: &[String]) -> Result<()> {
 
     if super::is_initialized(&home) {
         bail!(
-            "self-fleet is already initialized at {} — `join` would overwrite local state. \
+            "puddle is already initialized at {} — `join` would overwrite local state. \
              To re-pair, delete the directory first.",
             config::dot_dir(&home).display()
         );
@@ -269,8 +269,8 @@ fn cmd_join(args: &[String]) -> Result<()> {
     // file is 0600 root-owned, so this verb requires root — tell
     // the user to retry via sudo if we can't read it.
     let tls = load_envoy_tls().context(
-        "self-fleet join needs the agent's mTLS key (0600 root-owned). \
-         Run via sudo: `sudo vigo swarm self-fleet join --from <host>`",
+        "puddle join needs the agent's mTLS key (0600 root-owned). \
+         Run via sudo: `sudo vigo swarm puddle join --from <host>`",
     )?;
     let agent = build_mtls_agent(&tls)?;
     let url = format!(
@@ -323,7 +323,7 @@ fn cmd_join(args: &[String]) -> Result<()> {
     write_pubkey(&config::pubkey_path(&home), &pubkey_text, &username)?;
 
     println!();
-    println!("✓ Joined fleet {}.", &pubkey_text);
+    println!("✓ Joined puddle {}.", &pubkey_text);
     println!(
         "  wrote {} (0600, wrapped)",
         config::wrapped_path(&home).display()
@@ -338,10 +338,10 @@ fn cmd_join(args: &[String]) -> Result<()> {
     );
     println!();
     println!(
-        "Run `vigo swarm self-fleet unlock` (no sudo) to activate the session on this envoy."
+        "Run `vigo swarm puddle unlock` (no sudo) to activate the session on this envoy."
     );
 
-    // ADR-016 slice 4: the next `self-fleet unlock` will auto-bootstrap
+    // ADR-016 slice 4: the next `puddle unlock` will auto-bootstrap
     // cryptsync on this envoy if its identity.age is still missing.
     // The session helper isn't running yet (`join` only persists the
     // wrapped blob; the user activates it on their own login), so we
@@ -351,8 +351,8 @@ fn cmd_join(args: &[String]) -> Result<()> {
     if !cs_identity.exists() {
         println!();
         println!(
-            "note: the next `self-fleet unlock` on this envoy will also bootstrap cryptsync \
-             (encrypted P2P sync), wrapped under your fleet identity — no extra passphrase."
+            "note: the next `puddle unlock` on this envoy will also bootstrap cryptsync \
+             (encrypted P2P sync), wrapped under your puddle identity — no extra passphrase."
         );
     }
     Ok(())
@@ -360,7 +360,7 @@ fn cmd_join(args: &[String]) -> Result<()> {
 
 // ---------- rekey-pair ----------
 
-/// Founder-side: rotate the fleet keypair and issue a 5-minute claim
+/// Founder-side: rotate the puddle keypair and issue a 5-minute claim
 /// code. On the first call inside the 24h graceful window, generates
 /// a new keypair, atomic-swaps the local identity files, runs the
 /// cryptsync rewrap, and records the retirement entry. On subsequent
@@ -407,7 +407,7 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     let username = user_for_invocation()?;
     if !super::is_initialized(&home) {
-        bail!("self-fleet not initialized on this envoy — run `init` or `join` first");
+        bail!("puddle not initialized on this envoy — run `init` or `join` first");
     }
 
     if close {
@@ -419,7 +419,7 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
         } else {
             println!("✓ Rekey window closed. Surviving envoys can no longer claim under the");
             println!(
-                "  retired fleet identity. Run `rekey-pair` again to start a new rotation."
+                "  retired puddle identity. Run `rekey-pair` again to start a new rotation."
             );
         }
         return Ok(());
@@ -452,17 +452,17 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
         println!();
         println!("On the surviving envoy, run:");
         println!(
-            "    sudo vigo swarm self-fleet rekey --from {}",
+            "    sudo vigo swarm puddle rekey --from {}",
             local_hostname_or("<this-host>")
         );
-        println!("then enter the claim code when prompted, then enter your fleet passphrase.");
+        println!("then enter the claim code when prompted, then enter your puddle passphrase.");
         return Ok(());
     }
 
     // Fresh rotation. Verify passphrase first by unwrapping the
     // existing identity — fail loudly before any on-disk mutation.
     println!(
-        "Rotating self-fleet keypair. The fleet passphrase is required to authorize this."
+        "Rotating puddle keypair. The puddle passphrase is required to authorize this."
     );
     let passphrase = prompt_password(false)?;
     if passphrase.is_empty() {
@@ -482,7 +482,7 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     let new_pubkey_text = encode_sign_pubkey(&new_key.verifying_key());
     let new_salt = crate::swarm::cryptsync::crypt::fresh_salt();
     let new_blob = wrap_signing_key(&new_key, passphrase.as_bytes(), &new_salt)
-        .context("wrapping new fleet identity")?;
+        .context("wrapping new puddle identity")?;
 
     // ADR-019 pre-flight: check every gitmirror project the user
     // founded against the delegation cap. Aborts here BEFORE any
@@ -537,7 +537,7 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
         .and_then(|()| write_pubkey(&pp, &new_pubkey_text, &username))
     {
         restore();
-        return Err(e.context("writing new fleet identity — restored from backup"));
+        return Err(e.context("writing new puddle identity — restored from backup"));
     }
 
     // Persist retirement entry before the cryptsync sync. If the
@@ -592,9 +592,9 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     if let Err(e) =
         session::spawn_helper(&new_key, parent_pid, DEFAULT_IDLE_MINUTES, &home)
     {
-        eprintln!("warning: failed to restart self-fleet session helper: {:#}", e);
+        eprintln!("warning: failed to restart puddle session helper: {:#}", e);
         eprintln!(
-            "         the rotation succeeded on disk; run `vigo swarm self-fleet unlock` manually."
+            "         the rotation succeeded on disk; run `vigo swarm puddle unlock` manually."
         );
     }
 
@@ -603,9 +603,9 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     rekey::write_pending(&home, &code, &username)?;
 
     println!();
-    println!("✓ Fleet keypair rotated.");
-    println!("  Old fleet pubkey: {}", old_pubkey_text);
-    println!("  New fleet pubkey: {}", new_pubkey_text);
+    println!("✓ Puddle keypair rotated.");
+    println!("  Old puddle pubkey: {}", old_pubkey_text);
+    println!("  New puddle pubkey: {}", new_pubkey_text);
     println!(
         "  Backups (30d):    {}, {}, {}",
         wp_bak.display(),
@@ -628,10 +628,10 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     println!();
     println!("On each surviving envoy, run:");
     println!(
-        "    sudo vigo swarm self-fleet rekey --from {}",
+        "    sudo vigo swarm puddle rekey --from {}",
         local_hostname_or("<this-host>")
     );
-    println!("then enter the claim code when prompted, then enter your fleet passphrase.");
+    println!("then enter the claim code when prompted, then enter your puddle passphrase.");
     println!();
     println!(
         "Re-run `rekey-pair` (no flags) inside the {}h window to issue another code without",
@@ -716,7 +716,7 @@ fn print_rewrap_outcome(outcome: crate::swarm::cryptsync::identity_rewrap::Rewra
 
 // ---------- rekey ----------
 
-/// Joiner-side: claim a new wrapped fleet blob from the founder and
+/// Joiner-side: claim a new wrapped puddle blob from the founder and
 /// migrate this envoy onto it.
 ///
 /// Flags:
@@ -746,8 +746,8 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
 
     if !super::is_initialized(&home) {
         bail!(
-            "self-fleet not initialized on this envoy — run `join --from <host>` first \
-             (rekey is for envoys already in the fleet)"
+            "puddle not initialized on this envoy — run `join --from <host>` first \
+             (rekey is for envoys already in the puddle)"
         );
     }
 
@@ -756,11 +756,11 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
         from, username
     );
     println!(
-        "This requires the OLD fleet passphrase to unwrap the current key, then the SAME"
+        "This requires the OLD puddle passphrase to unwrap the current key, then the SAME"
     );
     println!("passphrase to unwrap the new key the founder issued.");
 
-    // Unwrap the OLD fleet key locally first — required input for
+    // Unwrap the OLD puddle key locally first — required input for
     // the cryptsync rewrap. The founder uses the same passphrase
     // (rekey-pair preserves it), so we ask once and use it twice.
     let passphrase = prompt_password(false)?;
@@ -781,8 +781,8 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
     }
 
     let tls = load_envoy_tls().context(
-        "self-fleet rekey needs the agent's mTLS key (0600 root-owned). \
-         Run via sudo: `sudo vigo swarm self-fleet rekey --from <host>`",
+        "puddle rekey needs the agent's mTLS key (0600 root-owned). \
+         Run via sudo: `sudo vigo swarm puddle rekey --from <host>`",
     )?;
     let agent = build_mtls_agent(&tls)?;
     let url = format!(
@@ -820,7 +820,7 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
 
     if new_pubkey_text == old_pubkey_text {
         bail!(
-            "the founder's wrapped blob unwraps to the SAME fleet pubkey we already have — \
+            "the founder's wrapped blob unwraps to the SAME puddle pubkey we already have — \
              nothing to rotate. The founder hasn't run `rekey-pair` since last we rotated."
         );
     }
@@ -876,7 +876,7 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
         .and_then(|()| write_pubkey(&pp, &new_pubkey_text, &username))
     {
         restore();
-        return Err(e.context("writing new fleet identity — restored from backup"));
+        return Err(e.context("writing new puddle identity — restored from backup"));
     }
 
     // Local retirement log entry — useful for status output and
@@ -903,8 +903,8 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
     .context("cryptsync sync after rotation")?;
 
     // ADR-019: gitmirror sync — same as the founder side. Each envoy
-    // in the fleet signs its OWN delegation locally using its copy
-    // of the OLD fleet key (which is the same shared keypair, so the
+    // in the puddle signs its OWN delegation locally using its copy
+    // of the OLD puddle key (which is the same shared keypair, so the
     // canonical signed bytes are identical modulo `delegated_at`)
     // and rebuilds tokens.json with the fresh admin under NEW. Each
     // envoy maintains a self-consistent local view.
@@ -925,9 +925,9 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
     let _ = session::request_lock();
 
     println!();
-    println!("✓ Migrated to new fleet keypair.");
-    println!("  Old fleet pubkey: {}", old_pubkey_text);
-    println!("  New fleet pubkey: {}", new_pubkey_text);
+    println!("✓ Migrated to new puddle keypair.");
+    println!("  Old puddle pubkey: {}", old_pubkey_text);
+    println!("  New puddle pubkey: {}", new_pubkey_text);
     println!(
         "  Backups (30d):    {}, {}, {}",
         wp_bak.display(),
@@ -938,29 +938,29 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
     print_gitmirror_rekey_outcome(&gm_outcome);
     println!();
     println!(
-        "Run `vigo swarm self-fleet unlock` (no sudo) to start the session helper under the"
+        "Run `vigo swarm puddle unlock` (no sudo) to start the session helper under the"
     );
-    println!("new fleet identity.");
+    println!("new puddle identity.");
     Ok(())
 }
 
 // ---------- members ----------
 
 fn cmd_members(_args: &[String]) -> Result<()> {
-    // ADR-014 frames `members` as "list fleet pubkeys advertised by
+    // ADR-014 frames `members` as "list puddle pubkeys advertised by
     // peers in the swarm gossip (informational; not authoritative)."
     // Phase 1 surfaces only the local view: this envoy's pubkey +
     // initialization status. Cross-envoy discovery rides ADR-015 /
-    // ADR-016, which extend swarm announcements to carry fleet
+    // ADR-016, which extend swarm announcements to carry puddle
     // pubkeys; until then `members` is honest about scope.
     let home = user_home_for_invocation()?;
     if !super::is_initialized(&home) {
-        bail!("self-fleet not initialized on this envoy");
+        bail!("puddle not initialized on this envoy");
     }
-    let pubkey = super::local_fleet_pubkey(&home)?
+    let pubkey = super::local_puddle_pubkey(&home)?
         .ok_or_else(|| anyhow!("identity.pub missing despite is_initialized"))?;
     let host = local_hostname_or("<this-host>");
-    println!("self-fleet members (this envoy's view):");
+    println!("puddle members (this envoy's view):");
     println!("  {} (this envoy)  {}", host, pubkey);
     println!();
     println!(
@@ -976,12 +976,12 @@ fn cmd_rotate_passphrase(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     let username = user_for_invocation()?;
     if !super::is_initialized(&home) {
-        bail!("self-fleet not initialized on this envoy");
+        bail!("puddle not initialized on this envoy");
     }
     let blob = fs::read(config::wrapped_path(&home))?;
     let salt = fs::read(config::salt_path(&home))?;
 
-    println!("Re-wrapping the local fleet key under a new passphrase.");
+    println!("Re-wrapping the local puddle key under a new passphrase.");
     println!("Other envoys retain the old passphrase until rotated separately.");
     println!();
     let old = prompt_password_labeled("current passphrase: ")?;
@@ -1013,9 +1013,9 @@ fn cmd_rotate_passphrase(_args: &[String]) -> Result<()> {
         .with_context(|| format!("rename → {}", salt_path.display()))?;
 
     println!();
-    println!("✓ Local fleet key re-wrapped. Pubkey unchanged: {}",
+    println!("✓ Local puddle key re-wrapped. Pubkey unchanged: {}",
         encode_sign_pubkey(&key.verifying_key()));
-    println!("  Run `rotate-passphrase` on each other fleet envoy to rotate them too.");
+    println!("  Run `rotate-passphrase` on each other puddle envoy to rotate them too.");
     Ok(())
 }
 
@@ -1025,18 +1025,18 @@ fn cmd_status(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     let username = user_for_invocation().ok();
     let dot = config::dot_dir(&home);
-    println!("self-fleet status");
+    println!("puddle status");
     println!("  home:             {}", home.display());
     println!("  dot_dir:          {}", dot.display());
     println!("  initialized:      {}", super::is_initialized(&home));
     let local_pubkey_text = if super::is_initialized(&home) {
-        match super::local_fleet_pubkey(&home)? {
+        match super::local_puddle_pubkey(&home)? {
             Some(pk) => {
-                println!("  fleet pubkey:     {}", pk);
+                println!("  puddle pubkey:     {}", pk);
                 Some(pk)
             }
             None => {
-                println!("  fleet pubkey:     (identity.pub missing)");
+                println!("  puddle pubkey:     (identity.pub missing)");
                 None
             }
         }
@@ -1090,7 +1090,7 @@ fn print_rekey_status(home: &Path) {
         );
         println!(
             "  retired pubkey:   {}",
-            short_pubkey(&active_entry.old_fleet_pubkey)
+            short_pubkey(&active_entry.old_puddle_pubkey)
         );
         let rekey_pending = config::rekey_pending_path(home);
         if rekey_pending.exists() {
@@ -1118,17 +1118,17 @@ fn print_rekey_status(home: &Path) {
         let shown = historical.iter().rev().take(3);
         let total = historical.len();
         let suffix = if total > 3 {
-            format!(" (+{} older in retired_fleets.json)", total - 3)
+            format!(" (+{} older in retired_puddles.json)", total - 3)
         } else {
             String::new()
         };
-        println!("  retired fleets:   {} historical entry/entries{}", total, suffix);
+        println!("  retired puddles:   {} historical entry/entries{}", total, suffix);
         for entry in shown {
             let age_secs = now.saturating_sub(entry.retired_at);
             let age = humanize_duration(age_secs);
             println!(
                 "                    - {} (rotated {} ago)",
-                short_pubkey(&entry.old_fleet_pubkey),
+                short_pubkey(&entry.old_puddle_pubkey),
                 age
             );
         }
@@ -1163,18 +1163,18 @@ fn humanize_duration(seconds: i64) -> String {
 }
 
 /// If any peer in the local cryptsync peer table is announcing under
-/// a fleet pubkey that doesn't match this envoy's local fleet pubkey,
+/// a puddle pubkey that doesn't match this envoy's local puddle pubkey,
 /// this envoy was probably offline during a rekey on the founder.
 /// Print a one-shot hint so the operator knows where to migrate from.
 ///
 /// Comparison is on the bare hex (after stripping the `ed25519:`
-/// prefix and lowercasing). cryptsync state stores fleet_pubkey
-/// without the prefix; self-fleet stores with the prefix in
+/// prefix and lowercasing). cryptsync state stores puddle_pubkey
+/// without the prefix; puddle stores with the prefix in
 /// identity.pub.
-fn print_offline_envoy_hint(local_fleet_pubkey: &str, username: &str) {
-    let local_hex = local_fleet_pubkey
+fn print_offline_envoy_hint(local_puddle_pubkey: &str, username: &str) {
+    let local_hex = local_puddle_pubkey
         .strip_prefix("ed25519:")
-        .unwrap_or(local_fleet_pubkey)
+        .unwrap_or(local_puddle_pubkey)
         .trim()
         .to_ascii_lowercase();
     if local_hex.is_empty() {
@@ -1183,11 +1183,11 @@ fn print_offline_envoy_hint(local_fleet_pubkey: &str, username: &str) {
     let table = crate::swarm::cryptsync::state::PeerTable::load(username);
     let mut divergent: Vec<(String, String)> = Vec::new();
     for entry in table.peers.values() {
-        if entry.fleet_pubkey.is_empty() {
+        if entry.puddle_pubkey.is_empty() {
             continue;
         }
-        if entry.fleet_pubkey != local_hex {
-            divergent.push((entry.hostname.clone(), entry.fleet_pubkey.clone()));
+        if entry.puddle_pubkey != local_hex {
+            divergent.push((entry.hostname.clone(), entry.puddle_pubkey.clone()));
         }
     }
     if divergent.is_empty() {
@@ -1195,7 +1195,7 @@ fn print_offline_envoy_hint(local_fleet_pubkey: &str, username: &str) {
     }
     divergent.sort();
     println!();
-    println!("Note: peer(s) advertising a different fleet pubkey than this envoy:");
+    println!("Note: peer(s) advertising a different puddle pubkey than this envoy:");
     for (host, pk) in &divergent {
         println!(
             "  {} → ed25519:{}",
@@ -1211,9 +1211,9 @@ fn print_offline_envoy_hint(local_fleet_pubkey: &str, username: &str) {
         "If you rekeyed on {}, this envoy was offline at the time. Run:",
         divergent[0].0
     );
-    println!("    sudo vigo swarm self-fleet rekey --from {}", divergent[0].0);
+    println!("    sudo vigo swarm puddle rekey --from {}", divergent[0].0);
     println!(
-        "to migrate. Otherwise the peer(s) may be on a fleet identity that's not yours — \
+        "to migrate. Otherwise the peer(s) may be on a puddle identity that's not yours — \
          investigate before rekeying."
     );
 }
@@ -1307,7 +1307,7 @@ fn resolve_shell_pid() -> Option<u32> {
 }
 
 fn prompt_password(confirm: bool) -> Result<String> {
-    let pw = read_one_password("self-fleet passphrase: ")?;
+    let pw = read_one_password("puddle passphrase: ")?;
     if confirm {
         let pw2 = read_one_password("confirm passphrase: ")?;
         if pw != pw2 {

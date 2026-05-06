@@ -4,7 +4,7 @@
 //! Gitmirror — ADR-015 unified-substrate git over swarm.
 //!
 //! Each project has a stable, content-addressed identity:
-//! `project_id = sha256(founder_fleet_pubkey)`. Projects are accessed
+//! `project_id = sha256(founder_puddle_pubkey)`. Projects are accessed
 //! over a `vigo://<project_id>/<handle>` URL via the multi-call
 //! `git-remote-vigo` helper (ADR-015 step 1, shipped 0.34.9). The
 //! `vigo` agent verifies a stack of capability tokens (step 2, shipped
@@ -17,8 +17,8 @@
 //!
 //! | `members:`           | `dr_fanout:`   | Use case                      |
 //! |----------------------|----------------|-------------------------------|
-//! | `{my-fleet}`         | `fleet-wide`   | Personal-DR (today's default) |
-//! | `{my-fleet}`         | `members-only` | Single-user, single-fleet     |
+//! | `{my-puddle}`         | `fleet-wide`   | Personal-DR (today's default) |
+//! | `{my-puddle}`         | `members-only` | Single-user, single-puddle     |
 //! | `{team1, team2, …}`  | `members-only` | Multi-member collaboration    |
 //! | `{team1, team2, …}`  | `fleet-wide`   | Team repo + fleet-wide DR     |
 //!

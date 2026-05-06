@@ -22,10 +22,10 @@ The server's `gitmirrormesh` aggregator joins these per-envoy reports across the
 
 | Field | Type | Description |
 |---|---|---|
-| `project_id` | string | 64-char lowercase hex `sha256(founder_fleet_pubkey)`. Stable cryptographic identity baked into the URL `vigo://<project_id>/<handle>`. |
+| `project_id` | string | 64-char lowercase hex `sha256(founder_puddle_pubkey)`. Stable cryptographic identity baked into the URL `vigo://<project_id>/<handle>`. |
 | `handle` | string | Human-readable handle from `project.json`. Display only — not authoritative; two projects can share a handle. |
-| `founder_fleet_pubkey` | string | 64-char lowercase hex of the founder fleet's Ed25519 pubkey. The TOFU anchor: `sha256(founder_fleet_pubkey) == project_id`. |
-| `members` | string[] | Hex Ed25519 fleet pubkeys of every member fleet, in `project.json` order (founder first). |
+| `founder_puddle_pubkey` | string | 64-char lowercase hex of the founder puddle's Ed25519 pubkey. The TOFU anchor: `sha256(founder_puddle_pubkey) == project_id`. |
+| `members` | string[] | Hex Ed25519 puddle pubkeys of every member puddle, in `project.json` order (founder first). |
 | `dr_fanout` | string | `"fleet-wide"` (replicas land on every fleet envoy) or `"members-only"` (replicas only on member-fleet envoys). |
 | `users_with_state` | string[] | Local Unix usernames whose `~/.vigo-gitmirror/<project_id>/` directory holds a `project.json` for this project. Multiple users on the same envoy collapse into one entry; this list names them. |
 | `has_bare_repo` | bool | `true` when `/var/lib/vigo/swarm/gitmirror/projects/<project_id>.git` exists on this envoy. |
@@ -54,7 +54,7 @@ The server's `gitmirrormesh` aggregator joins these per-envoy reports across the
     {
       "project_id": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "handle": "vigo-web",
-      "founder_fleet_pubkey": "8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8",
+      "founder_puddle_pubkey": "8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8",
       "members": ["8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8"],
       "dr_fanout": "fleet-wide",
       "users_with_state": ["dan"],

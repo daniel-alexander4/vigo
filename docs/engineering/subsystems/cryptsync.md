@@ -95,7 +95,7 @@ Counts derive from a single `read_dir` scan + a one-line magic peek per file at 
 
 `cryptsync: true` tells the user executor to drop `~/.cryptsync/enroll.pending` after user creation. On first login the user runs any `vigo swarm cryptsync *` verb and completes enrollment interactively (one password prompt). The field is idempotent — flipping it true on an already-enrolled user is a no-op.
 
-The cryptsync password is **not** the login password. Phase 1 has no PAM integration. In **standalone mode** the user sets a separate cryptsync password at enrollment and types it again at each `unlock`. In **fleet mode** (ADR-016 slice 4) the wrap key is derived from the user's self-fleet identity instead — the cryptsync password ceremony is collapsed into the self-fleet one and `unlock` requires no extra prompt.
+The cryptsync password is **not** the login password. Phase 1 has no PAM integration. In **standalone mode** the user sets a separate cryptsync password at enrollment and types it again at each `unlock`. In **puddle mode** (ADR-016 slice 4) the wrap key is derived from the user's puddle identity instead — the cryptsync password ceremony is collapsed into the puddle one and `unlock` requires no extra prompt.
 
 ## Key Wrapping
 
@@ -106,16 +106,16 @@ The cryptsync password is **not** the login password. Phase 1 has no PAM integra
 
 ### Wrap modes (`wrap_mode` in `~/.cryptsync/config.yaml`)
 
-- **`standalone`** — wrap-key input is the per-envoy passphrase you typed at `cryptsync standalone init / enroll`. `unlock` prompts for it. Independent of self-fleet.
-- **`fleet`** — wrap-key input is the 64-byte Ed25519 signature returned by `self_fleet::session::request_sign(b"vigo-cryptsync-wrap-v1")` (deterministic per RFC 8032), passed through Argon2id at the same parameters as standalone. `unlock` calls the running self-fleet session helper instead of prompting. If the helper isn't running, `unlock` fails clean with `run vigo swarm self-fleet unlock first` rather than silently falling back to a prompt.
+- **`standalone`** — wrap-key input is the per-envoy passphrase you typed at `cryptsync standalone init / enroll`. `unlock` prompts for it. Independent of puddle.
+- **`puddle`** — wrap-key input is the 64-byte Ed25519 signature returned by `puddle::session::request_sign(b"vigo-cryptsync-wrap-v1")` (deterministic per RFC 8032), passed through Argon2id at the same parameters as standalone. `unlock` calls the running puddle session helper instead of prompting. If the helper isn't running, `unlock` fails clean with `run vigo swarm puddle unlock first` rather than silently falling back to a prompt.
 
-`fleet init` writes `wrap_mode: fleet` and `standalone init` / `standalone enroll` write `wrap_mode: standalone` into the seeded `config.yaml` template. Pre-0.36.x configs without the field load as `standalone` for back-compat. Both modes share the same on-disk blob format and the same Argon2id stretch — switching modes requires re-enrolling (`leave` then `init` again under the desired mode), since the wrap key changes.
+`puddle init` writes `wrap_mode: puddle` and `standalone init` / `standalone enroll` write `wrap_mode: standalone` into the seeded `config.yaml` template. Pre-0.36.x configs without the field load as `standalone` for back-compat. Both modes share the same on-disk blob format and the same Argon2id stretch — switching modes requires re-enrolling (`leave` then `init` again under the desired mode), since the wrap key changes.
 
 The agent daemon (running as root) never holds the unwrapped identity. Only the per-user session helper does, only while unlocked, only in RAM.
 
-## Auto-bootstrap from self-fleet
+## Auto-bootstrap from puddle
 
-`vigo swarm self-fleet unlock` checks `~/.cryptsync/identity.age` after spawning its own session helper. If absent, it auto-runs `cryptsync fleet init` inline — the just-spawned self-fleet helper provides the wrap key, no second passphrase. Failure is non-fatal; the operator can re-run `cryptsync fleet init` manually. `self-fleet join` only persists the wrapped fleet blob; the auto-bootstrap fires on the next `unlock` (when the session helper actually starts).
+`vigo swarm puddle unlock` checks `~/.cryptsync/identity.age` after spawning its own session helper. If absent, it auto-runs `cryptsync puddle init` inline — the just-spawned puddle helper provides the wrap key, no second passphrase. Failure is non-fatal; the operator can re-run `cryptsync puddle init` manually. `puddle join` only persists the wrapped puddle blob; the auto-bootstrap fires on the next `unlock` (when the session helper actually starts).
 
 ## Session Helper
 

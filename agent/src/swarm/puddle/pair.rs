@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Peer-pair onboarding for self-fleet (ADR-014).
+//! Peer-pair onboarding for puddle (ADR-014).
 //!
 //! The active envoy issues an 8-character single-use pairing code
 //! with a 5-minute TTL. The new envoy presents the code over swarm
@@ -36,7 +36,7 @@ pub use super::codes::PendingSpec as PairPendingSpec;
 
 /// HTTP route prefix this handler answers on. Used by
 /// `agent/src/swarm/server.rs` to dispatch claim requests.
-pub const PAIR_CLAIM_PREFIX: &str = "/swarm/self-fleet/pair-claim/";
+pub const PAIR_CLAIM_PREFIX: &str = "/swarm/puddle/pair-claim/";
 
 /// Generate a fresh 8-digit pairing code in `NNNN-NNNN` form.
 pub fn generate_pair_code() -> String {
@@ -53,8 +53,8 @@ pub fn hashes_equal(a: &str, b: &str) -> bool {
     codes::hashes_equal(a, b)
 }
 
-/// Drop the pair.pending sentinel under `~/.vigo-fleet/`. Called by
-/// `vigo swarm self-fleet pair` after generating the code.
+/// Drop the pair.pending sentinel under `~/.vigo-puddle/`. Called by
+/// `vigo swarm puddle pair` after generating the code.
 pub fn write_pending(home: &std::path::Path, code: &str, username: &str) -> Result<()> {
     codes::write_pending(&config::pair_pending_path(home), code, username)
 }
@@ -77,9 +77,9 @@ pub fn parse_pair_response(body: &[u8]) -> Result<(Vec<u8>, Vec<u8>)> {
 
 // ---------- HTTP handler ----------
 
-/// HTTP handler for `POST /swarm/self-fleet/pair-claim/<user>`.
+/// HTTP handler for `POST /swarm/puddle/pair-claim/<user>`.
 /// Wired from the daemon's swarm peer server. Runs in a root context
-/// (the daemon user); reads the target user's `~/.vigo-fleet/`
+/// (the daemon user); reads the target user's `~/.vigo-puddle/`
 /// state, validates the incoming code against the stored hash, and
 /// serves the wrapped identity blob on match.
 ///
@@ -135,7 +135,7 @@ pub async fn handle_pair_claim(
             ))
         }
         Err(e) => {
-            tracing::warn!(error = %e, "self-fleet pair: cannot read pending");
+            tracing::warn!(error = %e, "puddle pair: cannot read pending");
             return Ok(codes::plain(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "pair state read failed",
@@ -161,7 +161,7 @@ pub async fn handle_pair_claim(
             tracing::warn!(
                 path = %wrapped_path.display(),
                 error = %e,
-                "self-fleet pair: cannot read wrapped blob"
+                "puddle pair: cannot read wrapped blob"
             );
             return Ok(codes::plain(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -176,7 +176,7 @@ pub async fn handle_pair_claim(
             tracing::warn!(
                 path = %salt_path.display(),
                 error = %e,
-                "self-fleet pair: cannot read salt"
+                "puddle pair: cannot read salt"
             );
             return Ok(codes::plain(
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -190,7 +190,7 @@ pub async fn handle_pair_claim(
     let body = match codes::pack_response(&salt, &wrapped) {
         Ok(b) => b,
         Err(e) => {
-            tracing::warn!(error = %e, "self-fleet pair: pack_response failed");
+            tracing::warn!(error = %e, "puddle pair: pack_response failed");
             return Ok(codes::plain(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "response pack failed",
@@ -200,7 +200,7 @@ pub async fn handle_pair_claim(
 
     tracing::info!(
         user = %user,
-        "self-fleet pair: served wrapped identity to claimant"
+        "puddle pair: served wrapped identity to claimant"
     );
     Response::builder()
         .status(StatusCode::OK)
@@ -227,8 +227,8 @@ mod tests {
     #[test]
     fn pair_claim_prefix_is_unique() {
         // Sanity-check no other route owns this prefix; pair-claim
-        // and rekey-claim share the `/swarm/self-fleet/` namespace
+        // and rekey-claim share the `/swarm/puddle/` namespace
         // and must not collide.
-        assert_eq!(PAIR_CLAIM_PREFIX, "/swarm/self-fleet/pair-claim/");
+        assert_eq!(PAIR_CLAIM_PREFIX, "/swarm/puddle/pair-claim/");
     }
 }

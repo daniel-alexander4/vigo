@@ -9,19 +9,19 @@
 //!
 //! **Per-user, under `~<user>/.vigo-gitmirror/<project_id_hex>/`:**
 //!
-//! - `project.json` — local view of the project: handle, founder fleet
-//!   pubkey (TOFU anchor), member fleet pubkeys, dr_fanout policy,
+//! - `project.json` — local view of the project: handle, founder puddle
+//!   pubkey (TOFU anchor), member puddle pubkeys, dr_fanout policy,
 //!   optional explicit cross-subnet member hostnames. Founder writes
 //!   it at `project init`; joiner writes it at `project join`. In step 4
 //!   gossip-driven membership changes refresh this file.
 //! - `tokens.json` — the operator's authorization chain. The leaf token
-//!   names this user's fleet pubkey as subject; ancestors walk back to
+//!   names this user's puddle pubkey as subject; ancestors walk back to
 //!   the founder's bootstrap token. Loaded by the helper daemon (step 4)
 //!   when proxying pushes.
 //!
 //! Both are mode `0600`, owned by the calling user. The dot-dir itself
 //! is `0700`. The token chain is sensitive (acts as a bearer credential
-//! in combination with the fleet key); the project config is not, but
+//! in combination with the puddle key); the project config is not, but
 //! lives next to it for symmetry.
 //!
 //! **Per-envoy, root-owned, at
@@ -29,7 +29,7 @@
 //!
 //! The bare repo. Created by the helper daemon (step 4) on the first
 //! `git-receive-pack` for the project. Permissions `0700 root:root` —
-//! non-root local users go through the helper, which checks fleet
+//! non-root local users go through the helper, which checks puddle
 //! membership against `project.json::members` before allowing fetch or
 //! push. Root retains direct filesystem access by design (matches
 //! Vigo's overall posture: root is privileged on the box).
@@ -41,19 +41,19 @@
 //! ### What lives where, and why
 //!
 //! - **Token chain is per-user**, not per-envoy: each user on an envoy
-//!   pushes under their own fleet identity (`self-fleet` is per-user,
+//!   pushes under their own puddle identity (`puddle` is per-user,
 //!   per ADR-014). Two users on the same host with separate fleets see
 //!   independent gitmirror surfaces.
 //! - **Project config is per-user**, not per-envoy: the canonical
 //!   answer to "who is a member of project X" is what gossip says, and
-//!   gossip arrives via the per-user fleet membership signal. Each user
-//!   carrying their own copy keeps the fleet abstraction clean.
+//!   gossip arrives via the per-user puddle membership signal. Each user
+//!   carrying their own copy keeps the puddle abstraction clean.
 //! - **Bare repo is per-envoy**: storage scales O(1) per project on the
 //!   envoy, not O(users-on-envoy). The helper daemon mediates access.
 //!
 //! ### Hex encoding
 //!
-//! `project_id` and fleet pubkeys serialize as 64-character lowercase
+//! `project_id` and puddle pubkeys serialize as 64-character lowercase
 //! hex in JSON for human readability. Helpers
 //! ([`hex_id`], [`parse_hex_id`]) convert to/from raw `[u8; 32]`.
 
@@ -141,7 +141,7 @@ pub fn parse_hex_id(s: &str) -> Result<[u8; ID_LEN]> {
 /// DR fan-out scope for a project.
 ///
 /// `MembersOnly` keeps the bare repo on member envoys only — the
-/// project is invisible to other fleet members.
+/// project is invisible to other puddle members.
 ///
 /// `FleetWide` distributes the bare repo to every (non-blacklisted)
 /// fleet envoy as a backup. Non-member receivers hold the bytes; the
@@ -151,7 +151,7 @@ pub fn parse_hex_id(s: &str) -> Result<[u8; ID_LEN]> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum DrFanout {
-    /// Replica only on envoys whose fleet is in `members:`.
+    /// Replica only on envoys whose puddle is in `members:`.
     MembersOnly,
     /// Replica on every fleet envoy for DR purposes.
     FleetWide,
@@ -196,19 +196,19 @@ pub struct ProjectConfig {
     /// Schema version. Bump on incompatible changes.
     #[serde(default = "default_version")]
     pub version: u32,
-    /// Hex-encoded `sha256(founder_fleet_pubkey)`. Matches the parent
+    /// Hex-encoded `sha256(founder_puddle_pubkey)`. Matches the parent
     /// directory name and the URL: `vigo://<project_id>/<handle>`.
     pub project_id: String,
     /// Human-readable project handle, operator-chosen at `project init`.
     /// Free-form (no uniqueness guarantee — the cryptographic identity
     /// is `project_id`); used for display and as the URL handle suffix.
     pub handle: String,
-    /// Hex-encoded founder fleet pubkey. The TOFU anchor for the
-    /// project: `project_id == sha256(founder_fleet_pubkey)`.
-    pub founder_fleet_pubkey: String,
-    /// Hex-encoded fleet pubkeys of every member fleet, including the
+    /// Hex-encoded founder puddle pubkey. The TOFU anchor for the
+    /// project: `project_id == sha256(founder_puddle_pubkey)`.
+    pub founder_puddle_pubkey: String,
+    /// Hex-encoded puddle pubkeys of every member puddle, including the
     /// founder. Stable order — first entry is always the founder. For
-    /// single-user projects (`{my-fleet}`) the list has one entry.
+    /// single-user projects (`{my-puddle}`) the list has one entry.
     pub members: Vec<String>,
     /// Distribution scope.
     pub dr_fanout: DrFanout,
@@ -225,7 +225,7 @@ pub struct ProjectConfig {
     pub updated_at: i64,
     /// ADR-019 slice 5: unix seconds when this project was tombstoned.
     /// Set by:
-    /// - `--force-orphan-projects` on `self-fleet rekey-pair` / `rekey`
+    /// - `--force-orphan-projects` on `puddle rekey-pair` / `rekey`
     ///   when a founded project's delegation chain is at cap and the
     ///   operator chose to proceed with the rotation rather than
     ///   re-found beforehand.
@@ -302,7 +302,7 @@ impl ProjectConfig {
 
 /// Operator's authorization chain for a project. Persisted at
 /// `~/.vigo-gitmirror/<project_id_hex>/tokens.json`. The leaf
-/// (`chain[chain.len()-1]`) names the local user's fleet pubkey as
+/// (`chain[chain.len()-1]`) names the local user's puddle pubkey as
 /// subject; ancestors walk back to the founder's bootstrap token. The
 /// helper daemon (step 4) loads + verifies this chain before
 /// authorizing a push.
@@ -315,7 +315,7 @@ pub struct TokenChain {
     #[serde(default = "default_version")]
     pub version: u32,
     /// Tokens in chain order: root (founder bootstrap) first, leaf
-    /// (this user's fleet) last. Empty in transient pre-init states is
+    /// (this user's puddle) last. Empty in transient pre-init states is
     /// rejected by `save()`.
     pub chain: Vec<Token>,
 }
@@ -608,7 +608,7 @@ mod tests {
             version: PROJECT_STATE_VERSION,
             project_id: hex_id(&pid),
             handle: "vigo-web".to_string(),
-            founder_fleet_pubkey: hex_id(&pub_bytes(&founder)),
+            founder_puddle_pubkey: hex_id(&pub_bytes(&founder)),
             members: vec![hex_id(&pub_bytes(&founder))],
             dr_fanout: DrFanout::FleetWide,
             cross_subnet_members: vec![],
@@ -864,7 +864,7 @@ mod tests {
         let other_founder = fresh_key();
         let other_pid = project_id_for(&pub_bytes(&other_founder));
         b.project_id = hex_id(&other_pid);
-        b.founder_fleet_pubkey = hex_id(&pub_bytes(&other_founder));
+        b.founder_puddle_pubkey = hex_id(&pub_bytes(&other_founder));
         b.handle = "alpha".to_string();
         b.members = vec![hex_id(&pub_bytes(&other_founder))];
         b.save(home.path()).unwrap();

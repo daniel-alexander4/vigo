@@ -30,7 +30,7 @@ pub mod cli;
 pub mod config;
 pub mod crypt;
 pub mod discovery;
-pub mod fleet_cert;
+pub mod puddle_cert;
 pub mod gate;
 pub mod identity_rewrap;
 pub mod leaves;
@@ -176,7 +176,7 @@ async fn run(
                 // a fresh leave lands on peers in the same cycle.
                 process_pending_leaves(&machine).await;
                 // Process any post-reenroll regen requests so a
-                // fresh `vigo swarm cryptsync {fleet init, standalone enroll}`
+                // fresh `vigo swarm cryptsync {puddle init, standalone enroll}`
                 // picks up live peers within one tick instead of
                 // waiting for the next peer pubkey rotation.
                 process_pending_regens();
@@ -318,7 +318,7 @@ async fn process_one_leave(
 }
 
 /// Poll every enrolled user for a `~/.cryptsync/regen.pending` sentinel
-/// dropped by `vigo swarm cryptsync {fleet init, standalone enroll}` after a fresh enrollment. For each
+/// dropped by `vigo swarm cryptsync {puddle init, standalone enroll}` after a fresh enrollment. For each
 /// sentinel present: regenerate `recipients.txt` from the current
 /// daemon-side peer table (folding in every live peer the daemon
 /// already knows about) and remove the sentinel. Idempotent; if the
@@ -426,18 +426,18 @@ async fn announce_all(
             hex::encode(TombstoneTable::load(&user).digest());
         let leaves_digest =
             hex::encode(leaves::LeavesTable::load(&user).digest());
-        // ADR-016: include the user's self-fleet pubkey when present
+        // ADR-016: include the user's puddle pubkey when present
         // so peers can scope recipient resolution to the same fleet.
-        // Empty when self-fleet isn't initialized for this user (the
+        // Empty when puddle isn't initialized for this user (the
         // standalone mode the legacy gossip pattern serves).
-        let fleet_pubkey = local_self_fleet_pubkey_hex(&home);
-        // ADR-016 follow-up: embed the fleet membership certificate
-        // when one's on disk and matches our age + fleet pubkeys.
+        let puddle_pubkey = local_puddle_pubkey_hex(&home);
+        // ADR-016 follow-up: embed the puddle membership certificate
+        // when one's on disk and matches our age + puddle pubkeys.
         // Receivers verify the signature, closing the same-LAN
         // first-contact race that TOFU has on its own. None when the
-        // user hasn't run `cryptsync fleet renew-cert` (or when the
+        // user hasn't run `cryptsync puddle renew-cert` (or when the
         // on-disk cert is stale and they need to renew).
-        let fleet_cert = load_announce_fleet_cert(&home, &pubkey, &fleet_pubkey);
+        let puddle_cert = load_announce_puddle_cert(&home, &pubkey, &puddle_pubkey);
         let ann = Announcement {
             machine: machine.to_string(),
             user: user.clone(),
@@ -448,8 +448,8 @@ async fn announce_all(
             generation: 0,
             tombstones_digest,
             leaves_digest,
-            fleet_pubkey,
-            fleet_cert,
+            puddle_pubkey,
+            puddle_cert,
         };
         if let Err(e) = out_tx.send(ann).await {
             warn!(error = %e, user = %user, "cryptsync: announce channel send failed");
@@ -542,31 +542,31 @@ fn handle_incoming(inc: IncomingAnnouncement) {
         return;
     }
 
-    // ADR-016 follow-up: cryptographic fleet-cert check. When the
-    // announce claims a fleet_pubkey AND carries a cert, verify it
-    // against the claim before we let the fleet_pubkey reach the
+    // ADR-016 follow-up: cryptographic puddle-cert check. When the
+    // announce claims a puddle_pubkey AND carries a cert, verify it
+    // against the claim before we let the puddle_pubkey reach the
     // peer table. On verification failure, drop the fleet claim
-    // entirely (treat as if the announce had empty fleet_pubkey) —
+    // entirely (treat as if the announce had empty puddle_pubkey) —
     // the peer is still reachable for standalone purposes, but our
     // recipient resolution won't include them in the fleet's set.
-    let mut effective_fleet_pubkey = announcement.fleet_pubkey.clone();
-    if !announcement.fleet_pubkey.is_empty() {
-        match announcement.fleet_cert.as_ref() {
+    let mut effective_puddle_pubkey = announcement.puddle_pubkey.clone();
+    if !announcement.puddle_pubkey.is_empty() {
+        match announcement.puddle_cert.as_ref() {
             Some(cert) => {
                 let now = now_secs();
                 if let Err(reason) = cert.verify_for_announce(
                     &announcement.pubkey,
-                    &announcement.fleet_pubkey,
+                    &announcement.puddle_pubkey,
                     now,
                 ) {
                     warn!(
                         user = %announcement.user,
                         host = %announcement.machine,
-                        fleet_pubkey = %announcement.fleet_pubkey,
+                        puddle_pubkey = %announcement.puddle_pubkey,
                         reason = %reason,
-                        "cryptsync: fleet cert rejected — dropping fleet claim from announce"
+                        "cryptsync: puddle cert rejected — dropping fleet claim from announce"
                     );
-                    effective_fleet_pubkey = String::new();
+                    effective_puddle_pubkey = String::new();
                 }
             }
             None => {
@@ -576,7 +576,7 @@ fn handle_incoming(inc: IncomingAnnouncement) {
                 tracing::debug!(
                     user = %announcement.user,
                     host = %announcement.machine,
-                    "cryptsync: announce carries fleet_pubkey but no cert — falling back to TOFU"
+                    "cryptsync: announce carries puddle_pubkey but no cert — falling back to TOFU"
                 );
             }
         }
@@ -588,17 +588,17 @@ fn handle_incoming(inc: IncomingAnnouncement) {
         sign_pubkey: announcement.sign_pubkey.clone(),
         last_seen: announcement.emitted_at,
         last_seen_addr: Some(from.to_string()),
-        // ADR-016: capture the announcer's self-fleet pubkey so the
+        // ADR-016: capture the announcer's puddle pubkey so the
         // recipient-resolution path can later filter by fleet match.
         // Empty when the peer is running standalone, the announce
         // predates the fleet-pubkey field, OR the cert verification
         // above stripped it because the cert didn't validate.
-        fleet_pubkey: effective_fleet_pubkey.clone(),
+        puddle_pubkey: effective_puddle_pubkey.clone(),
         // ADR-016 follow-up: TOFU pinning. Left empty here; upsert()
         // pins on first sighting and enforces match on subsequent
         // announces — see PeerTable::upsert and the rejection log
         // emitted via the post-upsert helper below.
-        pinned_fleet_pubkey: String::new(),
+        pinned_puddle_pubkey: String::new(),
     };
 
     // Capture the pre-upsert pin so we can detect when upsert
@@ -609,16 +609,16 @@ fn handle_incoming(inc: IncomingAnnouncement) {
     let prior_pin: Option<String> = PeerTable::load(&announcement.user)
         .peers
         .get(&announcement.machine)
-        .map(|p| p.pinned_fleet_pubkey.clone());
+        .map(|p| p.pinned_puddle_pubkey.clone());
 
     // Lock-protected upsert. Capture a post-update snapshot so we can
     // call regenerate_recipients outside the lock without re-reading
     // the table — and only when upsert reported a real_change.
-    // The TOFU comparison uses `effective_fleet_pubkey` (post-cert
-    // verification), not `announcement.fleet_pubkey` — a peer whose
+    // The TOFU comparison uses `effective_puddle_pubkey` (post-cert
+    // verification), not `announcement.puddle_pubkey` — a peer whose
     // cert just lapsed becomes "standalone" from our perspective,
     // and we don't want to TOFU-reject them when their cert returns.
-    let incoming_fleet = effective_fleet_pubkey.clone();
+    let incoming_fleet = effective_puddle_pubkey.clone();
     let mut snapshot: Option<PeerTable> = None;
     let mut tofu_rejected = false;
     if let Err(e) = PeerTable::modify(&announcement.user, |table| {
@@ -626,7 +626,7 @@ fn handle_incoming(inc: IncomingAnnouncement) {
         // Detect TOFU mismatch — `upsert` returns false on both
         // legitimate heartbeats and TOFU rejections; disambiguate by
         // checking whether the pin we observed pre-upsert disagrees
-        // with the incoming fleet_pubkey.
+        // with the incoming puddle_pubkey.
         if let Some(pin) = &prior_pin {
             if !pin.is_empty() && pin != &incoming_fleet {
                 tofu_rejected = true;
@@ -640,9 +640,9 @@ fn handle_incoming(inc: IncomingAnnouncement) {
         warn!(error = %e, user = %announcement.user, "cryptsync: peer table save failed");
     }
     if tofu_rejected {
-        // Drop the announce — peer is announcing a fleet pubkey
+        // Drop the announce — peer is announcing a puddle pubkey
         // different from the one we pinned on first sighting. Either
-        // a same-LAN spoof, or a legitimate self-fleet rotation that
+        // a same-LAN spoof, or a legitimate puddle rotation that
         // requires admin intervention (clear with
         // `vigo swarm cryptsync forget <host>` then let TOFU re-pin).
         warn!(
@@ -650,7 +650,7 @@ fn handle_incoming(inc: IncomingAnnouncement) {
             host = %announcement.machine,
             pinned = %prior_pin.as_deref().unwrap_or(""),
             announced = %incoming_fleet,
-            "cryptsync: TOFU rejected announce — fleet pubkey changed for known host. \
+            "cryptsync: TOFU rejected announce — puddle pubkey changed for known host. \
              Clear with `vigo swarm cryptsync forget <host>` if this is a legitimate rotation."
         );
         return;
@@ -1188,7 +1188,7 @@ pub fn home_for_user_pub(username: &str) -> Option<PathBuf> {
 }
 
 /// Public re-export for sibling subsystems that need to chown files
-/// they drop into a user's home (currently `self_fleet`'s CLI verbs).
+/// they drop into a user's home (currently `puddle`'s CLI verbs).
 /// Idempotent under self-target — safe in user context as well as
 /// root.
 #[cfg(unix)]
@@ -1399,35 +1399,35 @@ pub fn load_local_signing_key(user: &str) -> Result<ed25519_dalek::SigningKey> {
     Ok(ed25519_dalek::SigningKey::from_bytes(&arr))
 }
 
-/// Load the fleet membership cert for an outgoing announce. Returns
+/// Load the puddle membership cert for an outgoing announce. Returns
 /// `None` when the cert is missing on disk, doesn't match the
-/// announcer's age + fleet pubkeys (stale after a rotation), or has
+/// announcer's age + puddle pubkeys (stale after a rotation), or has
 /// already expired — receivers would reject any of those, so it's
 /// cheaper to omit than to ship and let them warn-log. The user's
-/// recovery is to run `vigo swarm cryptsync fleet renew-cert`.
-fn load_announce_fleet_cert(
+/// recovery is to run `vigo swarm cryptsync puddle renew-cert`.
+fn load_announce_puddle_cert(
     home: &Path,
     age_pubkey: &str,
-    fleet_pubkey: &str,
-) -> Option<fleet_cert::FleetCert> {
-    if fleet_pubkey.is_empty() {
+    puddle_pubkey: &str,
+) -> Option<puddle_cert::PuddleCert> {
+    if puddle_pubkey.is_empty() {
         return None;
     }
-    let cert = fleet_cert::FleetCert::load(home)?;
+    let cert = puddle_cert::PuddleCert::load(home)?;
     let now = now_secs();
     if cert.envoy_age_pubkey != age_pubkey {
         tracing::debug!(
             age_in_cert = %cert.envoy_age_pubkey,
             announce_age = %age_pubkey,
-            "cryptsync: fleet_cert.json doesn't match local age pubkey; not embedding"
+            "cryptsync: puddle_cert.json doesn't match local age pubkey; not embedding"
         );
         return None;
     }
-    if cert.fleet_pubkey != fleet_pubkey {
+    if cert.puddle_pubkey != puddle_pubkey {
         tracing::debug!(
-            fleet_in_cert = %cert.fleet_pubkey,
-            announce_fleet = %fleet_pubkey,
-            "cryptsync: fleet_cert.json doesn't match local fleet pubkey; not embedding"
+            fleet_in_cert = %cert.puddle_pubkey,
+            announce_fleet = %puddle_pubkey,
+            "cryptsync: puddle_cert.json doesn't match local puddle pubkey; not embedding"
         );
         return None;
     }
@@ -1435,23 +1435,23 @@ fn load_announce_fleet_cert(
         tracing::debug!(
             expires_at = cert.expires_at,
             now,
-            "cryptsync: fleet_cert.json expired; run `cryptsync fleet renew-cert`"
+            "cryptsync: puddle_cert.json expired; run `cryptsync puddle renew-cert`"
         );
         return None;
     }
     Some(cert)
 }
 
-/// Read the user's self-fleet pubkey from `~/.vigo-fleet/identity.pub`,
+/// Read the user's puddle pubkey from `~/.vigo-puddle/identity.pub`,
 /// stripped of the `ed25519:` prefix and lowercased. Returns an empty
-/// string when self-fleet is not initialized for this user (the
+/// string when puddle is not initialized for this user (the
 /// "standalone" path of ADR-016) or when the file is unreadable.
 ///
 /// Cheap (one filesystem read) and called every announce tick, so
-/// no caching — late `self-fleet init` flips the user into fleet
+/// no caching — late `puddle init` flips the user into fleet
 /// mode within one tick without an agent restart.
-fn local_self_fleet_pubkey_hex(home: &Path) -> String {
-    match crate::swarm::self_fleet::local_fleet_pubkey(home) {
+fn local_puddle_pubkey_hex(home: &Path) -> String {
+    match crate::swarm::puddle::local_puddle_pubkey(home) {
         Ok(Some(text)) => text
             .strip_prefix("ed25519:")
             .map(|s| s.to_string())
@@ -1493,34 +1493,34 @@ fn regenerate_recipients(user: &str, home: &Path, table: &PeerTable) -> Result<(
     let leaves = leaves::LeavesTable::load(user);
     let now = now_secs();
 
-    // Recipients are per-envoy age pubkeys, not the fleet pubkey.
+    // Recipients are per-envoy age pubkeys, not the puddle pubkey.
     // ADR-016 keeps per-envoy keys deliberately: single-envoy
     // compromise must not decrypt the whole fleet's corpus. The
-    // fleet pubkey only scopes which peers we accept as recipient
+    // puddle pubkey only scopes which peers we accept as recipient
     // candidates — each peer still contributes its own age x25519
     // pubkey to the resulting recipients.txt.
     //
     // ADR-018 rekey window: during the 24h graceful retirement
-    // window after a self-fleet rekey, surviving envoys still
-    // announce under the old fleet pubkey until they finish their
+    // window after a puddle rekey, surviving envoys still
+    // announce under the old puddle pubkey until they finish their
     // own rekey. Without widening the filter the founder's
     // mid-window writes encrypt to a smaller recipient set than
     // steady state. So the accepted list is (local fleet) ∪ (every
-    // unexpired entry in `~/.vigo-fleet/retired_fleets.json`).
-    let local_fleet = local_self_fleet_pubkey_hex(home);
+    // unexpired entry in `~/.vigo-puddle/retired_puddles.json`).
+    let local_fleet = local_puddle_pubkey_hex(home);
     let mut accepted: Vec<String> = Vec::new();
     if !local_fleet.is_empty() {
         accepted.push(local_fleet);
-        match crate::swarm::self_fleet::rekey::load_retired(home) {
+        match crate::swarm::puddle::rekey::load_retired(home) {
             Ok(entries) => {
                 for e in entries {
                     if e.expires_at <= now {
                         continue;
                     }
                     let bare = e
-                        .old_fleet_pubkey
+                        .old_puddle_pubkey
                         .strip_prefix("ed25519:")
-                        .unwrap_or(&e.old_fleet_pubkey)
+                        .unwrap_or(&e.old_puddle_pubkey)
                         .trim()
                         .to_ascii_lowercase();
                     if !bare.is_empty() && !accepted.contains(&bare) {
@@ -1531,7 +1531,7 @@ fn regenerate_recipients(user: &str, home: &Path, table: &PeerTable) -> Result<(
             Err(e) => {
                 debug!(
                     error = %e,
-                    "cryptsync: retired_fleets.json unreadable — proceeding without rekey-window widening"
+                    "cryptsync: retired_puddles.json unreadable — proceeding without rekey-window widening"
                 );
             }
         }
@@ -1539,7 +1539,7 @@ fn regenerate_recipients(user: &str, home: &Path, table: &PeerTable) -> Result<(
 
     let mut all: Vec<String> = Vec::new();
     all.push(self_pubkey);
-    for pk in table.live_pubkeys_for_fleets(now, &accepted) {
+    for pk in table.live_pubkeys_for_puddles(now, &accepted) {
         if leaves.leave_time_for(&pk).is_some() {
             // Defense in depth: handle_incoming should already have
             // pre-emptively forgotten this peer, but skip here too in
@@ -1746,18 +1746,18 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
             hex::encode(TombstoneTable::load(&user).digest());
         let leaves_digest =
             hex::encode(leaves::LeavesTable::load(&user).digest());
-        // ADR-016: include the user's self-fleet pubkey when present
+        // ADR-016: include the user's puddle pubkey when present
         // so peers can scope recipient resolution to the same fleet.
-        // Empty when self-fleet isn't initialized for this user (the
+        // Empty when puddle isn't initialized for this user (the
         // standalone mode the legacy gossip pattern serves).
-        let fleet_pubkey = local_self_fleet_pubkey_hex(&home);
-        // ADR-016 follow-up: embed the fleet membership certificate
-        // when one's on disk and matches our age + fleet pubkeys.
+        let puddle_pubkey = local_puddle_pubkey_hex(&home);
+        // ADR-016 follow-up: embed the puddle membership certificate
+        // when one's on disk and matches our age + puddle pubkeys.
         // Receivers verify the signature, closing the same-LAN
         // first-contact race that TOFU has on its own. None when the
-        // user hasn't run `cryptsync fleet renew-cert` (or when the
+        // user hasn't run `cryptsync puddle renew-cert` (or when the
         // on-disk cert is stale and they need to renew).
-        let fleet_cert = load_announce_fleet_cert(&home, &pubkey, &fleet_pubkey);
+        let puddle_cert = load_announce_puddle_cert(&home, &pubkey, &puddle_pubkey);
         let ann = Announcement {
             machine: machine.to_string(),
             user: user.clone(),
@@ -1768,8 +1768,8 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
             generation: 0,
             tombstones_digest,
             leaves_digest,
-            fleet_pubkey,
-            fleet_cert,
+            puddle_pubkey,
+            puddle_cert,
         };
         let body = serde_json::to_vec(&ann).context("serializing announcement")?;
         for host in &cfg.cross_subnet_peers {

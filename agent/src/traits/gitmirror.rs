@@ -11,7 +11,7 @@
 //! the server-side mesh can attribute things back.
 //!
 //! Trait namespace: `gitmirror`. Schema is keyed on `project_id`
-//! (`sha256(founder_fleet_pubkey)`); legacy publisher/receiver
+//! (`sha256(founder_puddle_pubkey)`); legacy publisher/receiver
 //! distinction is gone.
 //!
 //! ### Per-project payload
@@ -20,7 +20,7 @@
 //! {
 //!   "project_id":           "<64-hex>",
 //!   "handle":               "vigo-web",
-//!   "founder_fleet_pubkey": "<64-hex>",
+//!   "founder_puddle_pubkey": "<64-hex>",
 //!   "members":              ["<64-hex>", ...],
 //!   "dr_fanout":            "fleet-wide" | "members-only",
 //!   "users_with_state":     ["dan", "alice"],
@@ -70,7 +70,7 @@ use crate::swarm::gitmirror::tokens::{Role, ID_LEN, NEVER_EXPIRES};
 pub struct ProjectEntry {
     pub project_id: String,
     pub handle: String,
-    pub founder_fleet_pubkey: String,
+    pub founder_puddle_pubkey: String,
     pub members: Vec<String>,
     pub dr_fanout: String,
     pub users_with_state: Vec<String>,
@@ -154,7 +154,7 @@ pub(crate) fn collect_projects(passwd_body: &str, gitmirror_base: &Path) -> Vec<
             // Capture chain depth + leaf role from the first user we see;
             // multiple users on the same envoy holding the same project
             // typically have identical chains (each holds their own under
-            // the same fleet identity), but if they differ we keep the
+            // the same puddle identity), but if they differ we keep the
             // first as the displayed snapshot.
             if acc.token_chain_depth == 0 {
                 if let Some(c) = chain.as_ref() {
@@ -207,7 +207,7 @@ pub(crate) fn collect_projects(passwd_body: &str, gitmirror_base: &Path) -> Vec<
         out.push(ProjectEntry {
             project_id: pid_hex,
             handle: std::mem::take(&mut acc.handle),
-            founder_fleet_pubkey: std::mem::take(&mut acc.founder_fleet_pubkey),
+            founder_puddle_pubkey: std::mem::take(&mut acc.founder_puddle_pubkey),
             members: std::mem::take(&mut acc.members),
             dr_fanout: std::mem::take(&mut acc.dr_fanout),
             users_with_state,
@@ -229,7 +229,7 @@ pub(crate) fn collect_projects(passwd_body: &str, gitmirror_base: &Path) -> Vec<
 
 struct ProjectAccumulator {
     handle: String,
-    founder_fleet_pubkey: String,
+    founder_puddle_pubkey: String,
     members: Vec<String>,
     dr_fanout: String,
     users: BTreeSet<String>,
@@ -242,7 +242,7 @@ impl ProjectAccumulator {
     fn from_config(cfg: ProjectConfig) -> Self {
         Self {
             handle: cfg.handle,
-            founder_fleet_pubkey: cfg.founder_fleet_pubkey,
+            founder_puddle_pubkey: cfg.founder_puddle_pubkey,
             members: cfg.members,
             dr_fanout: cfg.dr_fanout.as_str().to_string(),
             users: BTreeSet::new(),
@@ -347,7 +347,7 @@ mod tests {
             version: PROJECT_STATE_VERSION,
             project_id: hex::encode(pid),
             handle: handle.to_string(),
-            founder_fleet_pubkey: hex::encode(pub_bytes(&founder)),
+            founder_puddle_pubkey: hex::encode(pub_bytes(&founder)),
             members: vec![hex::encode(pub_bytes(&founder))],
             dr_fanout: DrFanout::FleetWide,
             cross_subnet_members: vec![],
@@ -394,7 +394,7 @@ mod tests {
             version: PROJECT_STATE_VERSION,
             project_id: hex::encode(pid),
             handle: "team-notes".to_string(),
-            founder_fleet_pubkey: hex::encode(pub_bytes(&founder)),
+            founder_puddle_pubkey: hex::encode(pub_bytes(&founder)),
             members: vec![hex::encode(pub_bytes(&founder))],
             dr_fanout: DrFanout::MembersOnly,
             cross_subnet_members: vec![],

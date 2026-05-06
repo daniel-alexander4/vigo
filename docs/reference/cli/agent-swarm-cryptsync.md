@@ -43,39 +43,39 @@ The verb tree splits into **mode-agnostic** verbs (the daily ones — they don't
 
 | Verb | Purpose |
 |---|---|
-| `fleet init` | First-time setup of this user's per-envoy age key under self-fleet membership (ADR-016). Refuses if `vigo swarm self-fleet init` hasn't been run for this user. Auto-issues a fleet-membership certificate (see below) so the very first announce carries cryptographic proof of fleet membership. |
-| `fleet renew-cert` | Re-issue the fleet-membership certificate. Default lifetime 30 days; certs expire and need renewal. Run from any envoy where self-fleet is unlocked — the renewed cert ships in the next announce tick. |
-| `standalone init` | First-time setup of this user's per-envoy age key without registering with a self-fleet. Recipients are discovered via pairwise gossip (the legacy path that pre-dates self-fleet). |
+| `fleet init` | First-time setup of this user's per-envoy age key under puddle membership (ADR-016). Refuses if `vigo swarm puddle init` hasn't been run for this user. Auto-issues a puddle-membership certificate (see below) so the very first announce carries cryptographic proof of puddle membership. |
+| `fleet renew-cert` | Re-issue the puddle-membership certificate. Default lifetime 30 days; certs expire and need renewal. Run from any envoy where puddle is unlocked — the renewed cert ships in the next announce tick. |
+| `standalone init` | First-time setup of this user's per-envoy age key without registering with a puddle. Recipients are discovered via pairwise gossip (the legacy path that pre-dates puddle). |
 | `standalone enroll` | Per-envoy setup when joining an existing standalone mesh. Normally triggered by the `enroll.pending` sentinel on first `vigo swarm cryptsync *` invocation; can be run manually for recovery. Idempotent. |
 
-Mode is determined automatically at runtime: when self-fleet is initialized for the user, the announce loop scopes recipient resolution to fleet members; without it, the legacy gossip-only path stays in effect. The `fleet init` and `standalone init` verbs both produce a wrapped age identity at `~/.cryptsync/identity.age`, but the **wrap key** differs:
+Mode is determined automatically at runtime: when puddle is initialized for the user, the announce loop scopes recipient resolution to puddle members; without it, the legacy gossip-only path stays in effect. The `fleet init` and `standalone init` verbs both produce a wrapped age identity at `~/.cryptsync/identity.age`, but the **wrap key** differs:
 
 | Mode | Wrap-key source | `unlock` prompt | Loss blast radius |
 |---|---|---|---|
 | `standalone` | per-envoy passphrase you type at `init` / `enroll` | yes — typed every `unlock` | losing this passphrase loses this envoy's cryptsync corpus, independent of any other envoy or fleet |
-| `fleet` | derived from self-fleet identity via `session::request_sign(b"vigo-cryptsync-wrap-v1")` → SHA-256 challenge stretching | no — the running self-fleet session helper provides it silently | already inside the self-fleet trust unit; losing the fleet passphrase loses cryptsync along with everything else self-fleet protects |
+| `puddle` | derived from puddle identity via `session::request_sign(b"vigo-cryptsync-wrap-v1")` → SHA-256 challenge stretching | no — the running puddle session helper provides it silently | already inside the puddle trust unit; losing the puddle passphrase loses cryptsync along with everything else puddle protects |
 
-The chosen mode is recorded in `~/.cryptsync/config.yaml` as `wrap_mode: standalone` or `wrap_mode: fleet`. `cryptsync unlock` reads the field and routes accordingly — fleet mode skips the password prompt entirely and asks the self-fleet session helper to sign the domain-separated challenge. If the session helper isn't running in fleet mode, `unlock` fails with `run vigo swarm self-fleet unlock first` rather than silently falling back to a prompt (the wrong mode would just produce an AEAD tag mismatch downstream and a worse error).
+The chosen mode is recorded in `~/.cryptsync/config.yaml` as `wrap_mode: standalone` or `wrap_mode: puddle`. `cryptsync unlock` reads the field and routes accordingly — puddle mode skips the password prompt entirely and asks the puddle session helper to sign the domain-separated challenge. If the session helper isn't running in puddle mode, `unlock` fails with `run vigo swarm puddle unlock first` rather than silently falling back to a prompt (the wrong mode would just produce an AEAD tag mismatch downstream and a worse error).
 
-**Auto-bootstrap on `self-fleet unlock`.** When `vigo swarm self-fleet unlock` runs and `~/.cryptsync/identity.age` is absent, the verb auto-runs `cryptsync fleet init` inline using the just-unlocked session helper to derive the wrap key. The user gets a working encrypted-sync surface as a single side effect of unlocking — no second passphrase prompt. Failure to bootstrap (e.g. self-fleet not initialized, or `cryptsync fleet init` errors) doesn't undo the unlock; the warning surfaces and the operator can re-run `cryptsync fleet init` manually.
+**Auto-bootstrap on `puddle unlock`.** When `vigo swarm puddle unlock` runs and `~/.cryptsync/identity.age` is absent, the verb auto-runs `cryptsync puddle init` inline using the just-unlocked session helper to derive the wrap key. The user gets a working encrypted-sync surface as a single side effect of unlocking — no second passphrase prompt. Failure to bootstrap (e.g. puddle not initialized, or `cryptsync puddle init` errors) doesn't undo the unlock; the warning surfaces and the operator can re-run `cryptsync puddle init` manually.
 
-Per-envoy age keys are deliberately preserved across both modes — see ADR-016 for the rationale (per-envoy compartmentalization stays intact at the age-key level even though the wrap key in fleet mode is shared).
+Per-envoy age keys are deliberately preserved across both modes — see ADR-016 for the rationale (per-envoy compartmentalization stays intact at the age-key level even though the wrap key in puddle mode is shared).
 
-### Trust-on-first-use fleet-pubkey pinning
+### Trust-on-first-use puddle-pubkey pinning
 
-A peer's `fleet_pubkey` is pinned the first time it's seen. Subsequent announces from the same hostname under a different fleet pubkey are dropped at upsert time (the daemon warn-logs the rejection with both the pinned and announced values). This guards against same-LAN spoofing — once `host-X` is observed claiming `fleet-pk-1`, a different envoy claiming to be `host-X` under `fleet-pk-2` is silently ignored.
+A peer's `puddle_pubkey` is pinned the first time it's seen. Subsequent announces from the same hostname under a different puddle pubkey are dropped at upsert time (the daemon warn-logs the rejection with both the pinned and announced values). This guards against same-LAN spoofing — once `host-X` is observed claiming `fleet-pk-1`, a different envoy claiming to be `host-X` under `fleet-pk-2` is silently ignored.
 
-Operator recovery for a legitimate self-fleet rotation (rare):
+Operator recovery for a legitimate puddle rotation (rare):
 
 ```
 $ vigo swarm cryptsync forget <hostname>
 ```
 
-clears the pinned entry. The next announce from that hostname re-pins under the new fleet pubkey.
+clears the pinned entry. The next announce from that hostname re-pins under the new puddle pubkey.
 
 ### Fleet membership certificate
 
-Each fleet-mode envoy holds a fleet-membership certificate at `~/.cryptsync/fleet_cert.json`. The cert binds the envoy's age pubkey to the user's self-fleet pubkey via an Ed25519 signature; receivers verify the signature against the announce's claimed `fleet_pubkey` before accepting the fleet claim. This closes the same-LAN first-contact race that TOFU pinning has on its own — only the holder of the fleet's private key can mint a verifiable claim.
+Each puddle-mode envoy holds a puddle-membership certificate at `~/.cryptsync/puddle_cert.json`. The cert binds the envoy's age pubkey to the user's puddle pubkey via an Ed25519 signature; receivers verify the signature against the announce's claimed `puddle_pubkey` before accepting the fleet claim. This closes the same-LAN first-contact race that TOFU pinning has on its own — only the holder of the fleet's private key can mint a verifiable claim.
 
 Cert shape:
 
@@ -83,18 +83,18 @@ Cert shape:
 {
   "version":           1,
   "envoy_age_pubkey":  "age1...",
-  "fleet_pubkey":      "<64-hex>",
+  "puddle_pubkey":      "<64-hex>",
   "issued_at":         <unix-seconds>,
   "expires_at":        <unix-seconds>,
   "signature":         "<128-hex>"
 }
 ```
 
-**Lifetime.** 30 days by default. The cert is auto-issued by `cryptsync fleet init`; renew with `cryptsync fleet renew-cert` whenever self-fleet is unlocked. `cryptsync status` prints "expires in N days" / "EXPIRED N days ago" so a renewal coming up is visible.
+**Lifetime.** 30 days by default. The cert is auto-issued by `cryptsync puddle init`; renew with `cryptsync puddle renew-cert` whenever puddle is unlocked. `cryptsync status` prints "expires in N days" / "EXPIRED N days ago" so a renewal coming up is visible.
 
-**Verification on the receive side.** Every cert claim is checked against the announce: `envoy_age_pubkey` must match `Announcement.pubkey`, `fleet_pubkey` must match `Announcement.fleet_pubkey`, the signature must verify against `fleet_pubkey`, and `expires_at` must be in the future. Any failure → the daemon warn-logs and drops the fleet claim entirely (peer slots into standalone filtering — still reachable, just not in the fleet's recipient set).
+**Verification on the receive side.** Every cert claim is checked against the announce: `envoy_age_pubkey` must match `Announcement.pubkey`, `puddle_pubkey` must match `Announcement.puddle_pubkey`, the signature must verify against `puddle_pubkey`, and `expires_at` must be in the future. Any failure → the daemon warn-logs and drops the fleet claim entirely (peer slots into standalone filtering — still reachable, just not in the fleet's recipient set).
 
-**Operator triage.** When peers warn-log a cert expiry against this envoy: run `cryptsync fleet renew-cert` (requires `self-fleet unlock` first). When peers warn-log a cert mismatch (rare): the user rotated self-fleet on this envoy — clear the pin on each peer with `vigo swarm cryptsync forget <hostname>`, run `cryptsync fleet renew-cert`, and let TOFU re-pin under the new fleet pubkey.
+**Operator triage.** When peers warn-log a cert expiry against this envoy: run `cryptsync puddle renew-cert` (requires `puddle unlock` first). When peers warn-log a cert mismatch (rare): the user rotated puddle on this envoy — clear the pin on each peer with `vigo swarm cryptsync forget <hostname>`, run `cryptsync puddle renew-cert`, and let TOFU re-pin under the new puddle pubkey.
 
 ### `vigo swarm cryptsync leave`
 

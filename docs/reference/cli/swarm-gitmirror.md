@@ -12,13 +12,13 @@ Admin-side, fleet-wide view of the [gitmirror](../../engineering/subsystems/gitm
 | `status` | Fleet-wide totals (projects, hosts, divergent refs, envelope counts) |
 | `list` | One row per project with handle, fan-out, member fleets, host count, divergence, envelopes |
 | `show <project_id\|handle>` | Detailed view of one project with refs and per-host breakdown |
-| `members [project_id\|handle]` | Per-project membership (founder + member fleet pubkeys) as a table; mirrors `vigocli swarm cryptsync members` |
+| `members [project_id\|handle]` | Per-project membership (founder + member puddle pubkeys) as a table; mirrors `vigocli swarm cryptsync members` |
 
 Every subcommand accepts `--json` to emit machine-readable output.
 
 ## Project identity
 
-Every project is identified by `project_id = sha256(founder_fleet_pubkey)` rendered as 64-character lowercase hex. URLs:
+Every project is identified by `project_id = sha256(founder_puddle_pubkey)` rendered as 64-character lowercase hex. URLs:
 
 ```
 vigo://<project_id>/<handle>
@@ -81,7 +81,7 @@ $ vigocli swarm gitmirror show vigo-web
 Project:        vigo-web
 URL:            vigo://e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/vigo-web
 Project ID:     e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-Founder fleet:  ed25519:8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8
+Founder puddle:  ed25519:8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8
 Fan-out:        fleet-wide
 Members (1):
   ed25519:8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8
@@ -126,7 +126,7 @@ member    ed25519:f43f6ef3eea29e3780d73aa2cee4a78193419a69f43f6ef3eea29e3780d73a
 | Column | Meaning |
 |--------|---------|
 | `ROLE` | `founder` for the project's anchor fleet (always the first member); `member` for every additional fleet. |
-| `FLEET-PUBKEY` | The fleet's Ed25519 pubkey, prefixed with `ed25519:` for symmetry with `vigo swarm self-fleet pubkey` output. |
+| `FLEET-PUBKEY` | The fleet's Ed25519 pubkey, prefixed with `ed25519:` for symmetry with `vigo swarm puddle pubkey` output. |
 
 For host-presence detail (which envoys hold the bare repo, sizes, last-seen times) use `vigocli swarm gitmirror show <project>` instead — `members` is intentionally cryptographic-membership only, mirroring how `cryptsync members` is per-user-circle only.
 

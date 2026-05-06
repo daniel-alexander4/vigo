@@ -1,18 +1,18 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Atomic re-wrap of `~/.cryptsync/identity.age` across a self-fleet
+//! Atomic re-wrap of `~/.cryptsync/identity.age` across a puddle
 //! key rotation.
 //!
 //! Fleet-mode cryptsync wraps the per-envoy age identity under a key
-//! derived from the user's self-fleet keypair (see
-//! [`super::crypt::derive_fleet_wrap_password`]). When the fleet
+//! derived from the user's puddle keypair (see
+//! [`super::crypt::derive_puddle_wrap_password`]). When the fleet
 //! keypair rotates (ADR-018 rekey flow), surviving envoys would lose
 //! access to their per-envoy age key unless the wrap envelope is
 //! re-derived under the new keypair before the old keypair is
 //! discarded.
 //!
-//! [`rewrap_identity_for_new_fleet_key`] performs the migration in
+//! [`rewrap_identity_for_new_puddle_key`] performs the migration in
 //! one atomic step, leaving the old envelope at
 //! `identity.age.pre-rekey-<unix_ts>` for 30 days as a recovery
 //! anchor. The salt is intentionally not refreshed — the wrap key
@@ -51,7 +51,7 @@ pub enum RewrapOutcome {
     NotEnrolled,
     /// Cryptsync is in standalone wrap-mode; rewrap doesn't apply.
     /// The per-envoy age identity is wrapped under an operator-typed
-    /// passphrase, not the fleet keypair, so a fleet rotation is a
+    /// passphrase, not the puddle keypair, so a puddle rotation is a
     /// no-op for it.
     StandaloneSkipped,
     /// Rewrap succeeded; the original envelope is at `backup_path`
@@ -64,12 +64,12 @@ pub enum RewrapOutcome {
 /// envelope changes. Atomic on success.
 ///
 /// Caller invariant: this function only makes sense when the rewrap
-/// is happening as part of a coordinated fleet rotation where both
+/// is happening as part of a coordinated puddle rotation where both
 /// keypairs are simultaneously in process memory. The signing API
 /// is local — no session helper round-trip — because going through
 /// the helper at this point would require swapping the helper's
 /// loaded key mid-flight, which is exactly what we're avoiding.
-pub fn rewrap_identity_for_new_fleet_key(
+pub fn rewrap_identity_for_new_puddle_key(
     home: &Path,
     username: &str,
     old: &SigningKey,
@@ -79,7 +79,7 @@ pub fn rewrap_identity_for_new_fleet_key(
         return Ok(RewrapOutcome::NotEnrolled);
     }
     let cfg = load_config(home);
-    if cfg.wrap_mode != WrapMode::Fleet {
+    if cfg.wrap_mode != WrapMode::Puddle {
         return Ok(RewrapOutcome::StandaloneSkipped);
     }
 
@@ -90,15 +90,15 @@ pub fn rewrap_identity_for_new_fleet_key(
     let salt = fs::read(&salt_file)
         .with_context(|| format!("reading {}", salt_file.display()))?;
 
-    let old_pw = derive_fleet_wrap_password_for(old);
-    let new_pw = derive_fleet_wrap_password_for(new);
+    let old_pw = derive_puddle_wrap_password_for(old);
+    let new_pw = derive_puddle_wrap_password_for(new);
 
     let identity = unwrap_identity(&blob, old_pw.as_slice(), &salt).context(
-        "unwrap with old fleet keypair failed — caller passed the wrong old key, \
+        "unwrap with old puddle keypair failed — caller passed the wrong old key, \
          or identity.age is corrupted",
     )?;
     let new_blob = wrap_identity(&identity, new_pw.as_slice(), &salt)
-        .context("wrapping identity under new fleet keypair")?;
+        .context("wrapping identity under new puddle keypair")?;
 
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -168,11 +168,11 @@ pub fn gc_old_backups(home: &Path) -> Result<usize> {
     Ok(removed)
 }
 
-/// Mirror of `super::crypt::derive_fleet_wrap_password` but signing
+/// Mirror of `super::crypt::derive_puddle_wrap_password` but signing
 /// locally with a caller-supplied keypair. Ed25519 over a fixed
 /// message is deterministic, so this produces the same 64 bytes the
 /// session helper would produce when loaded with the same key.
-fn derive_fleet_wrap_password_for(key: &SigningKey) -> Zeroizing<Vec<u8>> {
+fn derive_puddle_wrap_password_for(key: &SigningKey) -> Zeroizing<Vec<u8>> {
     let sig = key.sign(FLEET_WRAP_CHALLENGE);
     Zeroizing::new(sig.to_bytes().to_vec())
 }
@@ -230,18 +230,18 @@ mod tests {
         SigningKey::generate(&mut OsRng)
     }
 
-    fn enroll_fleet_mode(home: &Path, fleet_key: &SigningKey) -> Identity {
-        // Mirror what `cryptsync fleet init` does on disk: write
-        // identity.age + identity.salt + config.yaml{wrap_mode: fleet}.
+    fn enroll_puddle_mode(home: &Path, fleet_key: &SigningKey) -> Identity {
+        // Mirror what `cryptsync puddle init` does on disk: write
+        // identity.age + identity.salt + config.yaml{wrap_mode: puddle}.
         std::fs::create_dir_all(dot_dir(home)).unwrap();
         let id = Identity::generate();
         let salt = fresh_salt();
-        let pw = derive_fleet_wrap_password_for(fleet_key);
+        let pw = derive_puddle_wrap_password_for(fleet_key);
         let blob = wrap_identity(&id, pw.as_slice(), &salt).unwrap();
         std::fs::write(identity_path(home), &blob).unwrap();
         std::fs::write(salt_path(home), &salt).unwrap();
         let mut cfg = UserConfig::default();
-        cfg.wrap_mode = WrapMode::Fleet;
+        cfg.wrap_mode = WrapMode::Puddle;
         save_config(home, &cfg, "tester").unwrap();
         id
     }
@@ -251,9 +251,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let old = fresh_signing_key();
         let new = fresh_signing_key();
-        let original = enroll_fleet_mode(dir.path(), &old);
+        let original = enroll_puddle_mode(dir.path(), &old);
 
-        let outcome = rewrap_identity_for_new_fleet_key(
+        let outcome = rewrap_identity_for_new_puddle_key(
             dir.path(),
             "tester",
             &old,
@@ -266,7 +266,7 @@ mod tests {
         // produce the same age identity.
         let blob = std::fs::read(identity_path(dir.path())).unwrap();
         let salt = std::fs::read(salt_path(dir.path())).unwrap();
-        let new_pw = derive_fleet_wrap_password_for(&new);
+        let new_pw = derive_puddle_wrap_password_for(&new);
         let recovered = unwrap_identity(&blob, new_pw.as_slice(), &salt).unwrap();
         assert_eq!(
             recovered.to_public().to_string(),
@@ -274,7 +274,7 @@ mod tests {
         );
 
         // The new envelope MUST NOT unwrap under the old keypair.
-        let old_pw = derive_fleet_wrap_password_for(&old);
+        let old_pw = derive_puddle_wrap_password_for(&old);
         assert!(unwrap_identity(&blob, old_pw.as_slice(), &salt).is_err());
     }
 
@@ -283,10 +283,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let old = fresh_signing_key();
         let new = fresh_signing_key();
-        enroll_fleet_mode(dir.path(), &old);
+        enroll_puddle_mode(dir.path(), &old);
         let original_blob = std::fs::read(identity_path(dir.path())).unwrap();
 
-        let outcome = rewrap_identity_for_new_fleet_key(
+        let outcome = rewrap_identity_for_new_puddle_key(
             dir.path(),
             "tester",
             &old,
@@ -317,7 +317,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let old = fresh_signing_key();
         let new = fresh_signing_key();
-        let outcome = rewrap_identity_for_new_fleet_key(
+        let outcome = rewrap_identity_for_new_puddle_key(
             dir.path(),
             "tester",
             &old,
@@ -341,7 +341,7 @@ mod tests {
 
         let old = fresh_signing_key();
         let new = fresh_signing_key();
-        let outcome = rewrap_identity_for_new_fleet_key(
+        let outcome = rewrap_identity_for_new_puddle_key(
             dir.path(),
             "tester",
             &old,
@@ -361,10 +361,10 @@ mod tests {
         let real_old = fresh_signing_key();
         let bogus_old = fresh_signing_key();
         let new = fresh_signing_key();
-        enroll_fleet_mode(dir.path(), &real_old);
+        enroll_puddle_mode(dir.path(), &real_old);
         let original_blob = std::fs::read(identity_path(dir.path())).unwrap();
 
-        let result = rewrap_identity_for_new_fleet_key(
+        let result = rewrap_identity_for_new_puddle_key(
             dir.path(),
             "tester",
             &bogus_old,
@@ -469,16 +469,16 @@ mod tests {
     }
 
     #[test]
-    fn derive_fleet_wrap_password_is_deterministic_for_same_key() {
+    fn derive_puddle_wrap_password_is_deterministic_for_same_key() {
         // Locks in the invariant that the rewrap password derivation
         // matches the session-helper-driven path: signing the same
         // fixed challenge with the same Ed25519 key produces the
         // same 64 bytes (RFC 8032 makes Ed25519 sigs deterministic).
-        // If a future refactor breaks this, fleet-mode unlock breaks
+        // If a future refactor breaks this, puddle-mode unlock breaks
         // simultaneously — catch it here.
         let key = fresh_signing_key();
-        let a = derive_fleet_wrap_password_for(&key);
-        let b = derive_fleet_wrap_password_for(&key);
+        let a = derive_puddle_wrap_password_for(&key);
+        let b = derive_puddle_wrap_password_for(&key);
         assert_eq!(a.as_slice(), b.as_slice());
         assert_eq!(a.len(), 64);
     }

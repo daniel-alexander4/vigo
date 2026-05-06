@@ -1,11 +1,11 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Per-envoy gitmirror sync triggered by self-fleet rekey (ADR-019).
+//! Per-envoy gitmirror sync triggered by puddle rekey (ADR-019).
 //!
 //! Sibling of [`crate::swarm::cryptsync::identity_rewrap`] in shape and
 //! intent: a localized state migration that runs during the
-//! self-fleet `rekey-pair` / `rekey` ceremony, while the OLD signing
+//! puddle `rekey-pair` / `rekey` ceremony, while the OLD signing
 //! key is still unwrapped in process memory.
 //!
 //! ### Two halves
@@ -26,27 +26,27 @@
 //!    `~/.vigo-gitmirror/<project_id>/delegations.json`. For every
 //!    project where the user is a member (founder OR not), rewrites
 //!    `project.json::members[]` to swap OLD → NEW so the user's
-//!    current fleet identity tracks across rotations.
+//!    current puddle identity tracks across rotations.
 //!
 //! ### Founder predicate (ADR-019 cross-rekey membership)
 //!
-//! "Founded by me" means `project.founder_fleet_pubkey` is in the set
-//! `{my current self-fleet pubkey} ∪ {old_fleet_pubkey for every entry
-//! in retired_fleets.json}`. This recovers the full history
+//! "Founded by me" means `project.founder_puddle_pubkey` is in the set
+//! `{my current puddle pubkey} ∪ {old_puddle_pubkey for every entry
+//! in retired_puddles.json}`. This recovers the full history
 //! `genesis → rekey_1 → rekey_2 → … → current` from
-//! `~/.vigo-fleet/retired_fleets.json` plus `identity.pub`. A project
+//! `~/.vigo-puddle/retired_puddles.json` plus `identity.pub`. A project
 //! founded at any past identity counts as "mine" for delegation
 //! purposes.
 //!
 //! ### What this module does NOT do
 //!
-//! - Does not touch `project.json::founder_fleet_pubkey`. That field
+//! - Does not touch `project.json::founder_puddle_pubkey`. That field
 //!   is the genesis pubkey baked into `project_id` via sha256 — it
 //!   stays immutable across all rekeys. ADR-019's whole point is
 //!   keeping `project_id` stable so URLs survive.
 //! - Does not gossip delegations to peers. That's slice 4 — and even
 //!   then the gossip is a status hint, never authority.
-//! - Does not handle multi-fleet member re-invitation. Foreign-fleet
+//! - Does not handle multi-puddle member re-invitation. Foreign-puddle
 //!   members need a fresh OOB capability code (slice 4's `re-invite-all`
 //!   + `rejoin` flow); this module only updates the local user's own
 //!   member entry across all projects.
@@ -76,7 +76,7 @@ pub struct GitmirrorRekeyOutcome {
     /// Projects where the local user appeared in `members[]` and the
     /// entry was rewritten from OLD → NEW. Includes founded projects
     /// (the founder is a member of their own project) plus any
-    /// projects the user joined as a foreign-fleet member.
+    /// projects the user joined as a foreign-puddle member.
     pub members_updated: Vec<String>,
     /// Projects skipped because the local user wasn't a member (the
     /// OLD pubkey wasn't in `members[]`, even though they may have
@@ -161,9 +161,9 @@ pub fn apply_post_rotation_gitmirror_sync(
 
     // Decode the wire forms once.
     let old_raw = decode_pubkey_text(old_pubkey_text)
-        .context("decoding OLD self-fleet pubkey for delegation signing")?;
+        .context("decoding OLD puddle pubkey for delegation signing")?;
     let new_raw = decode_pubkey_text(new_pubkey_text)
-        .context("decoding NEW self-fleet pubkey for delegation signing")?;
+        .context("decoding NEW puddle pubkey for delegation signing")?;
     // Sanity: caller's signing_key public halves must match the
     // pubkey-text inputs — otherwise we'd produce envelopes whose
     // signature doesn't match the embedded pubkey, failing
@@ -208,7 +208,7 @@ pub fn apply_post_rotation_gitmirror_sync(
         };
 
         // 1. Founded-by-me: sign + append delegation, rebuild tokens.json.
-        if founded_set.contains(&cfg.founder_fleet_pubkey) {
+        if founded_set.contains(&cfg.founder_puddle_pubkey) {
             let mut delegation_signed = false;
             match append_delegation(home, &pid, &cfg, old_signing_key, &old_raw, &new_raw, delegated_at, force_orphan_projects) {
                 Ok(SignResult::Signed { in_warn_band }) => {
@@ -334,7 +334,7 @@ fn append_delegation(
 
     // Sanity: the predecessor of the new delegation must equal the OLD
     // pubkey we're retiring. If chain is empty, predecessor =
-    // project.founder_fleet_pubkey. If non-empty, predecessor =
+    // project.founder_puddle_pubkey. If non-empty, predecessor =
     // chain.last().new_founder_pubkey. Either way it MUST equal old_raw.
     let expected_predecessor: [u8; ID_LEN] = if let Some(last) = chain.delegations.last() {
         parse_hex_id(&last.new_founder_pubkey).with_context(|| {
@@ -344,8 +344,8 @@ fn append_delegation(
             )
         })?
     } else {
-        parse_hex_id(&cfg.founder_fleet_pubkey).with_context(|| {
-            format!("decoding founder_fleet_pubkey for {}", cfg.handle)
+        parse_hex_id(&cfg.founder_puddle_pubkey).with_context(|| {
+            format!("decoding founder_puddle_pubkey for {}", cfg.handle)
         })?
     };
     if &expected_predecessor != old_raw {
@@ -413,13 +413,13 @@ fn update_member_entry(
     Ok(true)
 }
 
-/// Build the set of historical fleet pubkeys for the local user
+/// Build the set of historical puddle pubkeys for the local user
 /// (genesis through current). Reads `identity.pub` for current and
-/// `retired_fleets.json` for the chain of retired keys. Pubkeys are
+/// `retired_puddles.json` for the chain of retired keys. Pubkeys are
 /// returned in `ed25519:<hex>` lowercase form so they compare directly
-/// against `project.json::founder_fleet_pubkey` (also stored as hex
+/// against `project.json::founder_puddle_pubkey` (also stored as hex
 /// without the prefix in current code) — wait, ProjectConfig stores
-/// `founder_fleet_pubkey` as bare hex, no `ed25519:` prefix. Caller
+/// `founder_puddle_pubkey` as bare hex, no `ed25519:` prefix. Caller
 /// must compare appropriately.
 fn founded_pubkey_set(
     home: &Path,
@@ -440,20 +440,20 @@ fn founded_pubkey_set(
     // historical pubkey and each new appearing as the next entry's old
     // (or as `current`, which we already inserted). Adding every old +
     // every new covers the full history defensively.
-    let retired_path = crate::swarm::self_fleet::rekey::retired_fleets_path_for(home);
+    let retired_path = crate::swarm::puddle::rekey::retired_puddles_path_for(home);
     if let Ok(s) = std::fs::read_to_string(&retired_path) {
-        if let Ok(entries) = serde_json::from_str::<Vec<crate::swarm::self_fleet::rekey::RetiredFleetEntry>>(&s) {
+        if let Ok(entries) = serde_json::from_str::<Vec<crate::swarm::puddle::rekey::RetiredPuddleEntry>>(&s) {
             for e in entries {
                 let old_bare = e
-                    .old_fleet_pubkey
+                    .old_puddle_pubkey
                     .strip_prefix("ed25519:")
-                    .unwrap_or(&e.old_fleet_pubkey)
+                    .unwrap_or(&e.old_puddle_pubkey)
                     .trim()
                     .to_ascii_lowercase();
                 let new_bare = e
-                    .new_fleet_pubkey
+                    .new_puddle_pubkey
                     .strip_prefix("ed25519:")
-                    .unwrap_or(&e.new_fleet_pubkey)
+                    .unwrap_or(&e.new_puddle_pubkey)
                     .trim()
                     .to_ascii_lowercase();
                 set.insert(old_bare);
@@ -464,21 +464,21 @@ fn founded_pubkey_set(
     Ok(set)
 }
 
-/// List every project whose `project.json::founder_fleet_pubkey` is
+/// List every project whose `project.json::founder_puddle_pubkey` is
 /// in the local user's historical pubkey set. Includes both
 /// just-founded and previously-rotated projects.
 fn founded_projects_for(home: &Path, old_pubkey_text: &str) -> Result<Vec<ProjectConfig>> {
     let founded_set = founded_pubkey_set(home, old_pubkey_text)?;
     let mut out = Vec::new();
     for cfg in list_projects(home)? {
-        if founded_set.contains(&cfg.founder_fleet_pubkey.to_ascii_lowercase()) {
+        if founded_set.contains(&cfg.founder_puddle_pubkey.to_ascii_lowercase()) {
             out.push(cfg);
         }
     }
     Ok(out)
 }
 
-/// Decode a `ed25519:<hex>` self-fleet pubkey text into raw bytes.
+/// Decode a `ed25519:<hex>` puddle pubkey text into raw bytes.
 fn decode_pubkey_text(text: &str) -> Result<[u8; ID_LEN]> {
     let bare = text
         .strip_prefix("ed25519:")
@@ -504,7 +504,7 @@ pub fn is_founded_by_local_user(
     cfg: &ProjectConfig,
 ) -> Result<bool> {
     let set = founded_pubkey_set(home, old_pubkey_text)?;
-    Ok(set.contains(&cfg.founder_fleet_pubkey.to_ascii_lowercase()))
+    Ok(set.contains(&cfg.founder_puddle_pubkey.to_ascii_lowercase()))
 }
 
 // Re-export for convenience — callers don't need to reach into the
@@ -554,11 +554,11 @@ fn rebuild_tokens_json(
 
     let body = TokenBody {
         project_id: *project_id,
-        subject_fleet_pubkey: *new_pubkey,
+        subject_puddle_pubkey: *new_pubkey,
         role: Role::Admin,
         issued_at,
         expires_at: None,
-        signer_fleet_pubkey: *new_pubkey,
+        signer_puddle_pubkey: *new_pubkey,
         parent_token_id: Some(bootstrap.id()),
     };
     let admin = Token::issue(new_signing_key, body)
@@ -579,7 +579,7 @@ mod tests {
     use super::*;
     use crate::swarm::gitmirror::project_state::hex_id;
     use crate::swarm::gitmirror::tokens::{issue_bootstrap, project_id_for};
-    use crate::swarm::self_fleet::rekey::{record_retirement, REKEY_GRACEFUL_SECS};
+    use crate::swarm::puddle::rekey::{record_retirement, REKEY_GRACEFUL_SECS};
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
     use std::fs;
@@ -608,7 +608,7 @@ mod tests {
             version: PROJECT_STATE_VERSION,
             project_id: hex_id(&pid),
             handle: handle.to_string(),
-            founder_fleet_pubkey: founder_hex.clone(),
+            founder_puddle_pubkey: founder_hex.clone(),
             members: vec![founder_hex],
             dr_fanout: super::super::project_state::DrFanout::FleetWide,
             cross_subnet_members: vec![],
@@ -630,7 +630,7 @@ mod tests {
     }
 
     fn write_identity_pub(home: &std::path::Path, key: &SigningKey) {
-        let dot = home.join(".vigo-fleet");
+        let dot = home.join(".vigo-puddle");
         fs::create_dir_all(&dot).unwrap();
         fs::write(dot.join("identity.pub"), pub_text(key)).unwrap();
     }
@@ -719,13 +719,13 @@ mod tests {
         // members[] entry rewritten OLD → NEW.
         let reloaded = ProjectConfig::load(home.path(), &pid).unwrap().unwrap();
         assert_eq!(reloaded.members, vec![hex::encode(pub_bytes(&new))]);
-        // founder_fleet_pubkey untouched (genesis stays).
-        assert_eq!(reloaded.founder_fleet_pubkey, hex::encode(pub_bytes(&old)));
+        // founder_puddle_pubkey untouched (genesis stays).
+        assert_eq!(reloaded.founder_puddle_pubkey, hex::encode(pub_bytes(&old)));
         // tokens.json rebuilt: chain length 2, leaf signed by NEW.
         let rebuilt = TokenChain::load(home.path(), &pid).unwrap().unwrap();
         assert_eq!(rebuilt.chain.len(), 2);
-        assert_eq!(rebuilt.chain[1].body.signer_fleet_pubkey, pub_bytes(&new));
-        assert_eq!(rebuilt.chain[1].body.subject_fleet_pubkey, pub_bytes(&new));
+        assert_eq!(rebuilt.chain[1].body.signer_puddle_pubkey, pub_bytes(&new));
+        assert_eq!(rebuilt.chain[1].body.subject_puddle_pubkey, pub_bytes(&new));
         assert_eq!(rebuilt.chain[1].body.role, Role::Admin);
     }
 
@@ -741,7 +741,7 @@ mod tests {
             version: PROJECT_STATE_VERSION,
             project_id: hex_id(&pid),
             handle: "other".to_string(),
-            founder_fleet_pubkey: hex::encode(pub_bytes(&other_user)),
+            founder_puddle_pubkey: hex::encode(pub_bytes(&other_user)),
             members: vec![hex::encode(pub_bytes(&other_user))],
             dr_fanout: super::super::project_state::DrFanout::MembersOnly,
             cross_subnet_members: vec![],
@@ -784,7 +784,7 @@ mod tests {
             version: PROJECT_STATE_VERSION,
             project_id: hex_id(&pid),
             handle: "shared".to_string(),
-            founder_fleet_pubkey: hex::encode(pub_bytes(&other_founder)),
+            founder_puddle_pubkey: hex::encode(pub_bytes(&other_founder)),
             members: vec![
                 hex::encode(pub_bytes(&other_founder)),
                 hex::encode(pub_bytes(&old)),
@@ -899,7 +899,7 @@ mod tests {
     }
 
     /// Simulate a user who has rekeyed `DELEGATION_MAX_LEN` times in a
-    /// row: builds a project chain at cap, populates retired_fleets.json
+    /// row: builds a project chain at cap, populates retired_puddles.json
     /// to match (so the founder predicate recognizes every historical
     /// pubkey as "mine"), and updates project.json::members[] to track
     /// the most recent identity. Returns (founder_initial_key,
@@ -926,7 +926,7 @@ mod tests {
                 &pub_bytes(&next),
                 1_700_000_000 + i as i64,
             ));
-            // Record this rekey hop in the founder's retired_fleets log.
+            // Record this rekey hop in the founder's retired_puddles log.
             record_retirement(
                 home,
                 "tester",
@@ -1010,7 +1010,7 @@ mod tests {
 
     #[test]
     fn pre_flight_check_flags_at_cap_after_real_rekey_history() {
-        // Sanity check: the predicate-with-retired-fleets path also
+        // Sanity check: the predicate-with-retired-puddles path also
         // surfaces at-cap projects in pre-flight. Mirrors the
         // structure of the post-rotation tests above.
         let home = tempdir().unwrap();

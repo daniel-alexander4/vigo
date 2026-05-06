@@ -5,7 +5,7 @@
 //!
 //! ```text
 //! vigo swarm gitmirror project init <handle> [--fanout fleet-wide|members-only]
-//! vigo swarm gitmirror project invite <project_id> --fleet <fp> --role <r> [--expires <Nd>]
+//! vigo swarm gitmirror project invite <project_id> --puddle <fp> --role <r> [--expires <Nd>]
 //! vigo swarm gitmirror project join <project_id> [--invitation <file|->]
 //! vigo swarm gitmirror project leave <project_id> [--purge] [--yes]
 //! vigo swarm gitmirror project list [--json]
@@ -15,9 +15,9 @@
 //! ```
 //!
 //! The verbs that mint or sign envelopes (`init`, `invite`,
-//! `revoke`, `leave`, `reanchor`) require the user's self-fleet
+//! `revoke`, `leave`, `reanchor`) require the user's puddle
 //! identity to be unlocked — the session helper at
-//! `$XDG_RUNTIME_DIR/vigo/self-fleet.sock` is the only place the
+//! `$XDG_RUNTIME_DIR/vigo/puddle.sock` is the only place the
 //! Ed25519 private key lives; CLI doesn't unwrap directly.
 //!
 //! Step 3 of the ADR-015 arc lands the local-state surface only.
@@ -45,7 +45,7 @@ use super::tokens::{
     canonical_bytes, issue_child as token_issue_child, project_id_for, verify_chain,
     Role, Token, TokenBody, ID_LEN, NEVER_EXPIRES, SIG_LEN,
 };
-use crate::swarm::self_fleet;
+use crate::swarm::puddle;
 
 /// Top-level dispatch for `vigo swarm gitmirror …`. Called from
 /// `agent/src/main.rs`. Argument shape is `[verb, …]`; an empty or
@@ -98,12 +98,12 @@ fn dispatch_project(args: &[String]) -> Result<()> {
         "status" => cmd_status(&args[1..]),
         "revoke" => cmd_revoke(&args[1..]),
         "reanchor" => cmd_reanchor(&args[1..]),
-        // ADR-019 slice 4 — multi-fleet rejoin support after a founder rekey.
+        // ADR-019 slice 4 — multi-puddle rejoin support after a founder rekey.
         "re-invite-all" => cmd_re_invite_all(&args[1..]),
         "rejoin" => cmd_rejoin(&args[1..]),
         // ADR-019 slice 5 — escape hatch when a project's delegation
         // chain is at cap. Mints a fresh project_id from the current
-        // fleet pubkey, byte-migrates, tombstones the old one.
+        // puddle pubkey, byte-migrates, tombstones the old one.
         "re-found" => cmd_re_found(&args[1..]),
         other => bail!(
             "unknown subcommand `vigo swarm gitmirror project {}`. \
@@ -143,17 +143,17 @@ USAGE:
 
 VERBS:
     init <handle> [--fanout fleet-wide|members-only]
-        Found a new project. Self-fleet must be unlocked. Prints the
+        Found a new project. Puddle must be unlocked. Prints the
         canonical project URL `vigo://<project_id>/<handle>`.
 
-    invite <project_id> --fleet <fp> --role admin|member [--expires <Nd>]
+    invite <project_id> --puddle <fp> --role admin|member [--expires <Nd>]
         Mint a child token for another fleet. Prints an invitation
         artifact (JSON) the recipient pipes into `project join`.
         Requires the local fleet to hold an admin token on the project.
 
     join <project_id> [--invitation <file|->]
         Adopt an invitation issued by an admin. Verifies the chain,
-        persists local project state. Self-fleet must be initialized.
+        persists local project state. Puddle must be initialized.
 
     leave <project_id> [--purge] [--yes]
         Drop local membership. Writes a leave.pending sentinel the
@@ -176,9 +176,9 @@ VERBS:
         type the project handle to confirm. Old URL becomes dead.
 
     re-invite-all [<project_id>]
-        ADR-019. Founder side, post-rekey. Walks every multi-fleet
+        ADR-019. Founder side, post-rekey. Walks every multi-puddle
         project the local fleet founded; mints fresh invitations for
-        every cross-fleet member with the current delegation chain
+        every cross-puddle member with the current delegation chain
         attached. Prints (member fleet, project handle, invitation)
         triples for OOB delivery — same trust hop as the original
         `invite` flow. Optional <project_id> restricts to one project.
@@ -187,14 +187,14 @@ VERBS:
         ADR-019. Member side, after the founder rekeyed. Idempotent
         extension of `join` that updates the local token chain and
         delegation chain in place without bailing on existing
-        membership. Required when the founder of a multi-fleet
+        membership. Required when the founder of a multi-puddle
         project you are a member of has rekeyed and re-invited you.
 
     re-found <project_id> [--force]
         ADR-019. Escape hatch when a founded project's delegation
         chain is at the cap (DELEGATION_MAX_LEN = 5) or has been
         tombstoned by a --force-orphan-projects rekey. Mints a fresh
-        project_id from the current fleet pubkey, byte-migrates
+        project_id from the current puddle pubkey, byte-migrates
         from the at-cap bare repo via the same logic `reanchor`
         uses, and tombstones the old project. URL changes — every
         member must update their remote and rejoin under the new
@@ -236,22 +236,22 @@ fn resolve_caller() -> Result<CallerIdentity> {
     }
 }
 
-/// Read the local fleet pubkey as raw 32 bytes. Errors when self-fleet
+/// Read the local puddle pubkey as raw 32 bytes. Errors when puddle
 /// has not been initialized for this user — the verbs that call this
 /// can't proceed without an identity.
-fn local_fleet_pubkey_bytes(home: &Path) -> Result<[u8; ID_LEN]> {
-    let text = self_fleet::local_fleet_pubkey(home)?
+fn local_puddle_pubkey_bytes(home: &Path) -> Result<[u8; ID_LEN]> {
+    let text = puddle::local_puddle_pubkey(home)?
         .ok_or_else(|| anyhow!(
-            "self-fleet is not initialized for this user. \
-             Run `vigo swarm self-fleet init` (or `join --from <host>`) first."
+            "puddle is not initialized for this user. \
+             Run `vigo swarm puddle init` (or `join --from <host>`) first."
         ))?;
     let hexpart = text
         .strip_prefix("ed25519:")
-        .ok_or_else(|| anyhow!("malformed self-fleet pubkey '{}': missing ed25519: prefix", text))?;
+        .ok_or_else(|| anyhow!("malformed puddle pubkey '{}': missing ed25519: prefix", text))?;
     if hexpart.len() != ID_LEN * 2 {
-        bail!("self-fleet pubkey is wrong length: {}", hexpart);
+        bail!("puddle pubkey is wrong length: {}", hexpart);
     }
-    let bytes = hex::decode(hexpart).context("decode self-fleet pubkey hex")?;
+    let bytes = hex::decode(hexpart).context("decode puddle pubkey hex")?;
     let mut out = [0u8; ID_LEN];
     out.copy_from_slice(&bytes);
     Ok(out)
@@ -261,12 +261,12 @@ fn local_fleet_pubkey_bytes(home: &Path) -> Result<[u8; ID_LEN]> {
 /// Returns the raw 64-byte Ed25519 signature.
 ///
 /// Errors with a clear message when the helper isn't running — the
-/// user needs to `self-fleet unlock` first.
+/// user needs to `puddle unlock` first.
 fn sign_with_session(payload: &[u8]) -> Result<[u8; SIG_LEN]> {
-    let sig_vec = self_fleet::session::request_sign(payload).map_err(|e| {
+    let sig_vec = puddle::session::request_sign(payload).map_err(|e| {
         anyhow!(
-            "could not sign with self-fleet identity: {}\n\
-             Run `vigo swarm self-fleet unlock` to start the session helper.",
+            "could not sign with puddle identity: {}\n\
+             Run `vigo swarm puddle unlock` to start the session helper.",
             e
         )
     })?;
@@ -326,11 +326,11 @@ fn resolve_project_id(home: &Path, arg: &str) -> Result<[u8; ID_LEN]> {
     }
 }
 
-/// Strip an optional `ed25519:` prefix from a fleet pubkey argument
+/// Strip an optional `ed25519:` prefix from a puddle pubkey argument
 /// and parse it as 64-char lowercase hex. Accepts either
 /// `<64 hex chars>` or `ed25519:<64 hex chars>` for ergonomics — the
-/// `ed25519:` form is what `self-fleet pubkey` prints.
-fn parse_fleet_pubkey_arg(s: &str) -> Result<[u8; ID_LEN]> {
+/// `ed25519:` form is what `puddle pubkey` prints.
+fn parse_puddle_pubkey_arg(s: &str) -> Result<[u8; ID_LEN]> {
     let hexpart = s.strip_prefix("ed25519:").unwrap_or(s);
     parse_hex_id(hexpart)
 }
@@ -413,7 +413,7 @@ fn cmd_init(args: &[String]) -> Result<()> {
     validate_handle(&handle)?;
 
     let caller = resolve_caller()?;
-    let founder_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    let founder_pub = local_puddle_pubkey_bytes(&caller.home)?;
     let project_id = project_id_for(&founder_pub);
 
     // Refuse to overwrite an existing project — the founder's
@@ -435,11 +435,11 @@ fn cmd_init(args: &[String]) -> Result<()> {
     let now = now_secs();
     let body = TokenBody {
         project_id,
-        subject_fleet_pubkey: founder_pub,
+        subject_puddle_pubkey: founder_pub,
         role: Role::Admin,
         issued_at: now,
         expires_at: None,
-        signer_fleet_pubkey: founder_pub,
+        signer_puddle_pubkey: founder_pub,
         parent_token_id: None,
     };
     let bytes = canonical_bytes(&body);
@@ -454,7 +454,7 @@ fn cmd_init(args: &[String]) -> Result<()> {
         version: project_state::PROJECT_STATE_VERSION,
         project_id: hex_id(&project_id),
         handle: handle.clone(),
-        founder_fleet_pubkey: hex_id(&founder_pub),
+        founder_puddle_pubkey: hex_id(&founder_pub),
         members: vec![hex_id(&founder_pub)],
         dr_fanout: fanout,
         cross_subnet_members: vec![],
@@ -511,15 +511,15 @@ fn validate_handle(handle: &str) -> Result<()> {
 
 fn cmd_invite(args: &[String]) -> Result<()> {
     let mut project_arg: Option<String> = None;
-    let mut fleet_arg: Option<String> = None;
+    let mut puddle_arg: Option<String> = None;
     let mut role_arg: Option<String> = None;
     let mut expires_days: Option<u64> = None;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
-            "--fleet" => {
+            "--puddle" => {
                 i += 1;
-                fleet_arg = Some(args.get(i).context("--fleet requires a value")?.to_string());
+                puddle_arg = Some(args.get(i).context("--puddle requires a value")?.to_string());
             }
             "--role" => {
                 i += 1;
@@ -538,10 +538,10 @@ fn cmd_invite(args: &[String]) -> Result<()> {
         i += 1;
     }
     let project_arg = project_arg.context(
-        "usage: vigo swarm gitmirror project invite <project_id> --fleet <fp> --role admin|member [--expires <Nd>]",
+        "usage: vigo swarm gitmirror project invite <project_id> --puddle <fp> --role admin|member [--expires <Nd>]",
     )?;
-    let fleet = parse_fleet_pubkey_arg(
-        &fleet_arg.context("--fleet is required")?,
+    let fleet = parse_puddle_pubkey_arg(
+        &puddle_arg.context("--puddle is required")?,
     )?;
     let role = match role_arg.as_deref() {
         Some("admin") => Role::Admin,
@@ -572,14 +572,14 @@ fn cmd_invite(args: &[String]) -> Result<()> {
         );
     }
 
-    // The leaf's subject must equal our local fleet pubkey — sanity
+    // The leaf's subject must equal our local puddle pubkey — sanity
     // check that the chain on disk really authorizes us.
-    let local_pub = local_fleet_pubkey_bytes(&caller.home)?;
-    if parent.body.subject_fleet_pubkey != local_pub {
+    let local_pub = local_puddle_pubkey_bytes(&caller.home)?;
+    if parent.body.subject_puddle_pubkey != local_pub {
         bail!(
-            "leaf token subject does not match local fleet pubkey \
+            "leaf token subject does not match local puddle pubkey \
              (chain expects ed25519:{:.16}…, local is ed25519:{:.16}…)",
-            hex_id(&parent.body.subject_fleet_pubkey),
+            hex_id(&parent.body.subject_puddle_pubkey),
             hex_id(&local_pub)
         );
     }
@@ -589,11 +589,11 @@ fn cmd_invite(args: &[String]) -> Result<()> {
     let expires_at = expires_days.map(|d| now + (d as i64) * 86400);
     let body = TokenBody {
         project_id,
-        subject_fleet_pubkey: fleet,
+        subject_puddle_pubkey: fleet,
         role,
         issued_at: now,
         expires_at,
-        signer_fleet_pubkey: local_pub,
+        signer_puddle_pubkey: local_pub,
         parent_token_id: Some(parent.id()),
     };
     let bytes = canonical_bytes(&body);
@@ -709,7 +709,7 @@ fn cmd_join(args: &[String]) -> Result<()> {
     }
 
     let caller = resolve_caller()?;
-    let local_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    let local_pub = local_puddle_pubkey_bytes(&caller.home)?;
 
     // Sanity-check that the project_id positional matches the
     // invitation's anchor — catches "wrong invitation pasted."
@@ -743,7 +743,7 @@ fn cmd_join(args: &[String]) -> Result<()> {
     // to the genesis founder pubkey. Empty list when the founder
     // hasn't rekeyed yet — verifier behaves identically to
     // pre-ADR-019 in that case.
-    let founder = parse_hex_id(&invitation.project.founder_fleet_pubkey)?;
+    let founder = parse_hex_id(&invitation.project.founder_puddle_pubkey)?;
     verify_chain(
         &claimed_id,
         &founder,
@@ -753,12 +753,12 @@ fn cmd_join(args: &[String]) -> Result<()> {
     )
     .map_err(|e| anyhow!("invitation chain failed verification: {}", e))?;
 
-    // Leaf must be granting access to *our* fleet pubkey.
+    // Leaf must be granting access to *our* puddle pubkey.
     let leaf = invitation.chain.chain.last().ok_or_else(|| anyhow!("empty chain"))?;
-    if leaf.body.subject_fleet_pubkey != local_pub {
+    if leaf.body.subject_puddle_pubkey != local_pub {
         bail!(
-            "this invitation grants access to ed25519:{:.16}…, but our local fleet is ed25519:{:.16}…",
-            hex_id(&leaf.body.subject_fleet_pubkey),
+            "this invitation grants access to ed25519:{:.16}…, but our local puddle is ed25519:{:.16}…",
+            hex_id(&leaf.body.subject_puddle_pubkey),
             hex_id(&local_pub)
         );
     }
@@ -811,16 +811,16 @@ fn cmd_join(args: &[String]) -> Result<()> {
 // project re-invite-all (ADR-019 slice 4)
 // ============================================================
 
-/// Walk every multi-fleet project the local fleet founded, mint a
-/// fresh invitation for every cross-fleet member, print the
-/// invitations as `(member_fleet_pubkey, handle, JSON)` triples for
+/// Walk every multi-puddle project the local fleet founded, mint a
+/// fresh invitation for every cross-puddle member, print the
+/// invitations as `(member_puddle_pubkey, handle, JSON)` triples for
 /// out-of-band delivery. Optional `<project_id>` restricts to a
 /// single project.
 ///
-/// "Multi-fleet" = `members[]` contains a fleet pubkey other than
+/// "Multi-fleet" = `members[]` contains a puddle pubkey other than
 /// the local user's. Single-fleet personal-DR projects (founder is
 /// the only member) are skipped; their members are sibling envoys
-/// in the user's own self-fleet which already inherit trust via
+/// in the user's own puddle which already inherit trust via
 /// ADR-018's pair-claim ceremony.
 fn cmd_re_invite_all(args: &[String]) -> Result<()> {
     let mut project_arg: Option<String> = None;
@@ -836,10 +836,10 @@ fn cmd_re_invite_all(args: &[String]) -> Result<()> {
     }
 
     let caller = resolve_caller()?;
-    let local_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    let local_pub = local_puddle_pubkey_bytes(&caller.home)?;
     let local_pub_hex = hex_id(&local_pub);
 
-    // Resolve scope: one project or all founded multi-fleet projects.
+    // Resolve scope: one project or all founded multi-puddle projects.
     let projects: Vec<ProjectConfig> = if let Some(arg) = project_arg.as_deref() {
         let pid = resolve_project_id(&caller.home, arg)?;
         match ProjectConfig::load(&caller.home, &pid)? {
@@ -867,7 +867,7 @@ fn cmd_re_invite_all(args: &[String]) -> Result<()> {
         }
 
         // Founded by us? The founder predicate uses the same logic
-        // as rekey.rs: project.founder_fleet_pubkey is in our
+        // as rekey.rs: project.founder_puddle_pubkey is in our
         // historical pubkey set. For re-invite-all post-rekey, the
         // local user's CURRENT pubkey is the leaf of the delegation
         // chain — but we just need the predicate to recognize our
@@ -879,7 +879,7 @@ fn cmd_re_invite_all(args: &[String]) -> Result<()> {
         let current_founder_hex: String = if let Some(last) = delegations.last() {
             last.new_founder_pubkey.to_ascii_lowercase()
         } else {
-            cfg.founder_fleet_pubkey.to_ascii_lowercase()
+            cfg.founder_puddle_pubkey.to_ascii_lowercase()
         };
         if current_founder_hex != local_pub_hex.to_ascii_lowercase() {
             skipped_not_founded.push(cfg.handle.clone());
@@ -916,29 +916,29 @@ fn cmd_re_invite_all(args: &[String]) -> Result<()> {
                 cfg.handle
             );
         }
-        if parent.body.subject_fleet_pubkey != local_pub {
+        if parent.body.subject_puddle_pubkey != local_pub {
             bail!(
-                "leaf token subject does not match local fleet pubkey on {}: \
+                "leaf token subject does not match local puddle pubkey on {}: \
                  chain expects ed25519:{:.16}…, local is ed25519:{:.16}… — \
-                 did `self-fleet rekey-pair` complete successfully?",
+                 did `puddle rekey-pair` complete successfully?",
                 cfg.handle,
-                hex_id(&parent.body.subject_fleet_pubkey),
+                hex_id(&parent.body.subject_puddle_pubkey),
                 hex_id(&local_pub)
             );
         }
 
-        // Mint a fresh leaf for each cross-fleet member.
+        // Mint a fresh leaf for each cross-puddle member.
         for recipient_hex in &cross_fleet_members {
             let recipient = parse_hex_id(recipient_hex)
                 .with_context(|| format!("members[] entry hex on {}", cfg.handle))?;
             let now = now_secs();
             let body = TokenBody {
                 project_id: pid,
-                subject_fleet_pubkey: recipient,
+                subject_puddle_pubkey: recipient,
                 role: Role::Member,
                 issued_at: now,
                 expires_at: None,
-                signer_fleet_pubkey: local_pub,
+                signer_puddle_pubkey: local_pub,
                 parent_token_id: Some(parent.id()),
             };
             let bytes = canonical_bytes(&body);
@@ -978,12 +978,12 @@ fn cmd_re_invite_all(args: &[String]) -> Result<()> {
     }
 
     eprintln!(
-        "✓ {} re-invite invitation(s) printed across founded multi-fleet project(s).",
+        "✓ {} re-invite invitation(s) printed across founded multi-puddle project(s).",
         printed
     );
     if !skipped_single_fleet.is_empty() {
         eprintln!(
-            "  Skipped {} single-fleet project(s) (no cross-fleet members): {}",
+            "  Skipped {} single-fleet project(s) (no cross-puddle members): {}",
             skipped_single_fleet.len(),
             skipped_single_fleet.join(", ")
         );
@@ -1068,7 +1068,7 @@ fn cmd_rejoin(args: &[String]) -> Result<()> {
     }
 
     let caller = resolve_caller()?;
-    let local_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    let local_pub = local_puddle_pubkey_bytes(&caller.home)?;
 
     let claimed_id = parse_hex_id(&invitation.project.project_id)?;
     let arg_id = match parse_hex_id(&project_arg) {
@@ -1087,7 +1087,7 @@ fn cmd_rejoin(args: &[String]) -> Result<()> {
         );
     }
 
-    let founder = parse_hex_id(&invitation.project.founder_fleet_pubkey)?;
+    let founder = parse_hex_id(&invitation.project.founder_puddle_pubkey)?;
     verify_chain(
         &claimed_id,
         &founder,
@@ -1102,10 +1102,10 @@ fn cmd_rejoin(args: &[String]) -> Result<()> {
         .chain
         .last()
         .ok_or_else(|| anyhow!("empty chain"))?;
-    if leaf.body.subject_fleet_pubkey != local_pub {
+    if leaf.body.subject_puddle_pubkey != local_pub {
         bail!(
-            "this invitation grants access to ed25519:{:.16}…, but our local fleet is ed25519:{:.16}…",
-            hex_id(&leaf.body.subject_fleet_pubkey),
+            "this invitation grants access to ed25519:{:.16}…, but our local puddle is ed25519:{:.16}…",
+            hex_id(&leaf.body.subject_puddle_pubkey),
             hex_id(&local_pub)
         );
     }
@@ -1153,7 +1153,7 @@ fn cmd_rejoin(args: &[String]) -> Result<()> {
         println!(
             "  Delegations: {} hop(s) (chain anchors to genesis founder ed25519:{:.16}…)",
             invitation.delegations.len(),
-            invitation.project.founder_fleet_pubkey
+            invitation.project.founder_puddle_pubkey
         );
     }
     println!();
@@ -1205,13 +1205,13 @@ fn cmd_leave(args: &[String]) -> Result<()> {
         return Ok(());
     }
 
-    // Sign the LEAVE envelope inline via the user's self-fleet
+    // Sign the LEAVE envelope inline via the user's puddle
     // session helper (CLI runs as the user; root-side reactor cannot
     // reach a user's session helper). Sentinel content IS the signed
     // envelope — the helper daemon's reactor moves it to
     // /var/lib/vigo/swarm/gitmirror/envelopes/<pid>/leaves/ verbatim,
     // re-verifying on the way in.
-    let leaver_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    let leaver_pub = local_puddle_pubkey_bytes(&caller.home)?;
     let leave_time = now_secs();
     let leave_envelope = super::envelopes::LeaveEnvelope::build_with(
         &project_id,
@@ -1345,7 +1345,7 @@ fn cmd_status(args: &[String]) -> Result<()> {
     println!("Project:           {}", cfg.handle);
     println!("URL:               vigo://{}/{}", cfg.project_id, cfg.handle);
     println!("Project ID:        {}", cfg.project_id);
-    println!("Founder:           ed25519:{}", cfg.founder_fleet_pubkey);
+    println!("Founder:           ed25519:{}", cfg.founder_puddle_pubkey);
     println!("Fan-out:           {}", cfg.dr_fanout.as_str());
     if let Some(when) = cfg.tombstoned_at {
         println!("⚠ TOMBSTONED:      since unix-ts {}", when);
@@ -1372,7 +1372,7 @@ fn cmd_status(args: &[String]) -> Result<()> {
         println!("Token chain depth: {}", ch.chain.len());
         if let Some(leaf) = ch.chain.last() {
             println!("Leaf role:         {:?}", leaf.body.role);
-            println!("Leaf subject:      ed25519:{}", hex_id(&leaf.body.subject_fleet_pubkey));
+            println!("Leaf subject:      ed25519:{}", hex_id(&leaf.body.subject_puddle_pubkey));
             println!("Leaf issued_at:    {}", leaf.body.issued_at);
             match leaf.body.expires_at {
                 None => println!("Leaf expires_at:   never"),
@@ -1473,12 +1473,12 @@ fn cmd_revoke(args: &[String]) -> Result<()> {
         bail!("this fleet holds a {:?} token on '{}'; only admins can revoke", leaf.body.role, cfg.handle);
     }
 
-    // Sign the REVOKE envelope inline via the user's self-fleet
-    // session helper. The leaf admin token's subject_fleet_pubkey IS
-    // this user's fleet pubkey (verified above by the role check) —
+    // Sign the REVOKE envelope inline via the user's puddle
+    // session helper. The leaf admin token's subject_puddle_pubkey IS
+    // this user's puddle pubkey (verified above by the role check) —
     // signing with that key produces an envelope the receiving side
     // can authorize against the project's token tree.
-    let admin_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    let admin_pub = local_puddle_pubkey_bytes(&caller.home)?;
     let revoked_at = now_secs();
     let envelope = super::envelopes::RevokeEnvelope::build_with(
         &project_id,
@@ -1520,15 +1520,15 @@ fn cmd_reanchor(args: &[String]) -> Result<()> {
     let cfg = ProjectConfig::load(&caller.home, &project_id)?
         .ok_or_else(|| anyhow!("not a member of project {}", hex_id(&project_id)))?;
 
-    // The new founder is the calling user's self-fleet identity. If
+    // The new founder is the calling user's puddle identity. If
     // that's the same as the existing founder, reanchor is a no-op
     // (and would overwrite local state under the same dir) — refuse.
-    let new_founder_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    let new_founder_pub = local_puddle_pubkey_bytes(&caller.home)?;
     let new_project_id = project_id_for(&new_founder_pub);
     if new_project_id == project_id {
         bail!(
             "this user is already the founder of project '{}' — reanchor is meant for \
-             surviving members to take over after the original founder fleet is lost. \
+             surviving members to take over after the original founder puddle is lost. \
              Nothing to do.",
             cfg.handle
         );
@@ -1575,11 +1575,11 @@ To proceed, type the project handle exactly: {}",
     let now = now_secs();
     let body = TokenBody {
         project_id: new_project_id,
-        subject_fleet_pubkey: new_founder_pub,
+        subject_puddle_pubkey: new_founder_pub,
         role: Role::Admin,
         issued_at: now,
         expires_at: None,
-        signer_fleet_pubkey: new_founder_pub,
+        signer_puddle_pubkey: new_founder_pub,
         parent_token_id: None,
     };
     let bytes = canonical_bytes(&body);
@@ -1591,13 +1591,13 @@ To proceed, type the project handle exactly: {}",
 
     // Persist new project.json + tokens.json under the caller's home,
     // anchored on the new founder. Members list starts as just this
-    // fleet — surviving members from the old project must be invited
+    // puddle — surviving members from the old project must be invited
     // back via fresh `project invite` calls.
     let new_cfg = ProjectConfig {
         version: project_state::PROJECT_STATE_VERSION,
         project_id: hex_id(&new_project_id),
         handle: cfg.handle.clone(),
-        founder_fleet_pubkey: hex_id(&new_founder_pub),
+        founder_puddle_pubkey: hex_id(&new_founder_pub),
         members: vec![hex_id(&new_founder_pub)],
         dr_fanout: cfg.dr_fanout,
         cross_subnet_members: cfg.cross_subnet_members.clone(),
@@ -1680,7 +1680,7 @@ To proceed, type the project handle exactly: {}",
     println!();
     println!("Next steps:");
     println!("  • Re-invite each surviving member fleet via");
-    println!("    `vigo swarm gitmirror project invite {} --fleet <fp> --role <r>`",
+    println!("    `vigo swarm gitmirror project invite {} --puddle <fp> --role <r>`",
              hex_id(&new_project_id));
     println!("  • Each invitee runs `project join {}` and re-adds the remote.",
              hex_id(&new_project_id));
@@ -1696,18 +1696,18 @@ To proceed, type the project handle exactly: {}",
 /// Escape hatch when a founded project's delegation chain is at
 /// `DELEGATION_MAX_LEN` (or has been tombstoned by a
 /// `--force-orphan-projects` rekey). Mints a fresh project_id from
-/// the current fleet pubkey, byte-migrates from the at-cap bare repo
+/// the current puddle pubkey, byte-migrates from the at-cap bare repo
 /// via the same `git fetch +refs/*:refs/*` path `reanchor` uses, and
 /// tombstones the old project_id.
 ///
 /// Differs from `reanchor`:
 /// - `reanchor` is for surviving members taking over after the
-///   original founder fleet is *gone*. Refuses if the calling user
+///   original founder puddle is *gone*. Refuses if the calling user
 ///   IS the current founder.
 /// - `re-found` is for the founder themselves resetting their own
 ///   project chain. REQUIRES that the calling user is the current
 ///   founder (chain.last().new_founder_pubkey or
-///   founder_fleet_pubkey, depending on whether the founder has
+///   founder_puddle_pubkey, depending on whether the founder has
 ///   rekeyed).
 fn cmd_re_found(args: &[String]) -> Result<()> {
     let mut project_arg: Option<String> = None;
@@ -1727,26 +1727,26 @@ fn cmd_re_found(args: &[String]) -> Result<()> {
         .context("usage: vigo swarm gitmirror project re-found <project_id> [--force]")?;
 
     let caller = resolve_caller()?;
-    let local_pub = local_fleet_pubkey_bytes(&caller.home)?;
+    let local_pub = local_puddle_pubkey_bytes(&caller.home)?;
     let project_id = resolve_project_id(&caller.home, &project_arg)?;
     let cfg = ProjectConfig::load(&caller.home, &project_id)?
         .ok_or_else(|| anyhow!("not a member of project {}", hex_id(&project_id)))?;
 
     // Caller must be the project's current founder. Predicate matches
     // re-invite-all's: chain.last().new_founder_pubkey if there are
-    // delegations, else founder_fleet_pubkey.
+    // delegations, else founder_puddle_pubkey.
     let delegations = DelegationChain::load(&caller.home, &project_id)?
         .map(|c| c.delegations)
         .unwrap_or_default();
     let current_founder_hex: String = if let Some(last) = delegations.last() {
         last.new_founder_pubkey.to_ascii_lowercase()
     } else {
-        cfg.founder_fleet_pubkey.to_ascii_lowercase()
+        cfg.founder_puddle_pubkey.to_ascii_lowercase()
     };
     if current_founder_hex != hex_id(&local_pub).to_ascii_lowercase() {
         bail!(
             "this user is not the current founder of project '{}' — re-found is for founders \
-             resetting their own project chain. Use `reanchor` if the original founder fleet \
+             resetting their own project chain. Use `reanchor` if the original founder puddle \
              is gone and you're a surviving member taking over.",
             cfg.handle
         );
@@ -1767,15 +1767,15 @@ fn cmd_re_found(args: &[String]) -> Result<()> {
         );
     }
 
-    // The new project_id is sha256(current_fleet_pubkey). If the
+    // The new project_id is sha256(current_puddle_pubkey). If the
     // founder hasn't rekeyed since founding (current_pubkey ==
     // genesis_pubkey), the new project_id collides with the old —
-    // re-found is impossible without first rekeying the self-fleet.
+    // re-found is impossible without first rekeying the puddle.
     let new_project_id = project_id_for(&local_pub);
     if new_project_id == project_id {
         bail!(
             "the founder hasn't rekeyed since founding project '{}'; the new project_id would \
-             collide with the existing one ({}). Run `vigo swarm self-fleet rekey-pair` first, \
+             collide with the existing one ({}). Run `vigo swarm puddle rekey-pair` first, \
              or use `reanchor` if you intended to hard-fork.",
             cfg.handle,
             cfg.project_id
@@ -1785,14 +1785,14 @@ fn cmd_re_found(args: &[String]) -> Result<()> {
         bail!(
             "a project already exists under the proposed new project_id ({}). \
              Either you already re-founded (run `project status {}`) or you have a \
-             different project under the current fleet identity — abort.",
+             different project under the current puddle identity — abort.",
             hex_id(&new_project_id),
             hex_id(&new_project_id),
         );
     }
 
     eprintln!(
-        "Re-found — mint a fresh project_id for '{}' under your current fleet identity.
+        "Re-found — mint a fresh project_id for '{}' under your current puddle identity.
 
   • The current URL `vigo://{}/{}` becomes permanently dead.
   • New URL will be `vigo://{}/{}`.
@@ -1827,11 +1827,11 @@ To proceed, type the project handle exactly: {}",
     // shape `cmd_init` produces.
     let body = TokenBody {
         project_id: new_project_id,
-        subject_fleet_pubkey: local_pub,
+        subject_puddle_pubkey: local_pub,
         role: Role::Admin,
         issued_at: now,
         expires_at: None,
-        signer_fleet_pubkey: local_pub,
+        signer_puddle_pubkey: local_pub,
         parent_token_id: None,
     };
     let bytes = canonical_bytes(&body);
@@ -1843,12 +1843,12 @@ To proceed, type the project handle exactly: {}",
 
     // Persist new project.json + tokens.json under the new project_id.
     // Members list starts as `[this_fleet]`; founder must run
-    // `re-invite-all <new_pid>` to bring cross-fleet members along.
+    // `re-invite-all <new_pid>` to bring cross-puddle members along.
     let new_cfg = ProjectConfig {
         version: project_state::PROJECT_STATE_VERSION,
         project_id: hex_id(&new_project_id),
         handle: cfg.handle.clone(),
-        founder_fleet_pubkey: hex_id(&local_pub),
+        founder_puddle_pubkey: hex_id(&local_pub),
         members: vec![hex_id(&local_pub)],
         dr_fanout: cfg.dr_fanout,
         cross_subnet_members: cfg.cross_subnet_members.clone(),
@@ -1932,7 +1932,7 @@ To proceed, type the project handle exactly: {}",
     println!();
     println!("Next steps:");
     println!("  • Run `vigo swarm gitmirror project re-invite-all {}` to mint fresh", hex_id(&new_project_id));
-    println!("    invitations for every cross-fleet member of the old project.");
+    println!("    invitations for every cross-puddle member of the old project.");
     println!("  • Each member updates their remote URL to `vigo://{}/{}` and runs", hex_id(&new_project_id), cfg.handle);
     println!("    `project rejoin {} --invitation -` with the new invitation.", hex_id(&new_project_id));
     println!("  • The old project state at {} is tombstoned but kept on disk as an", cfg.project_id);
@@ -1950,7 +1950,7 @@ To proceed, type the project handle exactly: {}",
 /// from `project status <id>`, which shows a single ADR-015 project's
 /// local view from per-user state.
 ///
-/// Read-only. Safe for any user; does not require self-fleet to be
+/// Read-only. Safe for any user; does not require puddle to be
 /// unlocked.
 fn cmd_status_top(_args: &[String]) -> Result<()> {
     let base = crate::platform::paths::default_gitmirror_dir();
@@ -2337,17 +2337,17 @@ mod tests {
     }
 
     #[test]
-    fn parse_fleet_pubkey_arg_accepts_with_and_without_prefix() {
+    fn parse_puddle_pubkey_arg_accepts_with_and_without_prefix() {
         let raw = "ab".repeat(32);
         let with_prefix = format!("ed25519:{}", raw);
-        assert_eq!(parse_fleet_pubkey_arg(&raw).unwrap(), [0xABu8; 32]);
-        assert_eq!(parse_fleet_pubkey_arg(&with_prefix).unwrap(), [0xABu8; 32]);
+        assert_eq!(parse_puddle_pubkey_arg(&raw).unwrap(), [0xABu8; 32]);
+        assert_eq!(parse_puddle_pubkey_arg(&with_prefix).unwrap(), [0xABu8; 32]);
     }
 
     #[test]
-    fn parse_fleet_pubkey_arg_rejects_short() {
-        assert!(parse_fleet_pubkey_arg("deadbeef").is_err());
-        assert!(parse_fleet_pubkey_arg("ed25519:deadbeef").is_err());
+    fn parse_puddle_pubkey_arg_rejects_short() {
+        assert!(parse_puddle_pubkey_arg("deadbeef").is_err());
+        assert!(parse_puddle_pubkey_arg("ed25519:deadbeef").is_err());
     }
 
     #[test]
@@ -2399,7 +2399,7 @@ mod tests {
                 version: project_state::PROJECT_STATE_VERSION,
                 project_id: hex_id(&pid),
                 handle: "vigo-web".to_string(),
-                founder_fleet_pubkey: hex_id(&founder_pub),
+                founder_puddle_pubkey: hex_id(&founder_pub),
                 members: vec![hex_id(&founder_pub), hex_id(&team_pub)],
                 dr_fanout: DrFanout::FleetWide,
                 cross_subnet_members: vec![],

@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! Generic 8-digit claim-code primitives shared by `pair` (initial
-//! join, ADR-014) and `rekey` (fleet keypair rotation, ADR-018).
+//! join, ADR-014) and `rekey` (puddle keypair rotation, ADR-018).
 //!
 //! Both flows follow the same pattern:
 //!
 //! 1. The active envoy generates a single-use 8-character code with a
 //!    5-minute TTL.
 //! 2. The code's SHA-256 hash + issuance/expiry timestamps are written
-//!    to a sentinel file under `~/.vigo-fleet/`. The plaintext code is
+//!    to a sentinel file under `~/.vigo-puddle/`. The plaintext code is
 //!    only ever in the operator's head and on the receiving envoy's
 //!    stdin.
 //! 3. The receiving envoy POSTs the code to a swarm-mTLS endpoint on
@@ -141,7 +141,7 @@ pub fn write_pending(path: &Path, code: &str, username: &str) -> Result<()> {
     }
     #[cfg(unix)]
     if let Err(e) = crate::swarm::cryptsync::chown_to_user_pub(path, username) {
-        tracing::debug!(path = %path.display(), error = %e, "self-fleet claim: chown failed");
+        tracing::debug!(path = %path.display(), error = %e, "puddle claim: chown failed");
     }
     #[cfg(not(unix))]
     let _ = username;
@@ -172,7 +172,7 @@ pub fn clear_pending(path: &Path) {
             tracing::debug!(
                 path = %path.display(),
                 error = %e,
-                "self-fleet claim: failed to clear pending sentinel"
+                "puddle claim: failed to clear pending sentinel"
             );
         }
     }
@@ -313,13 +313,13 @@ mod tests {
 
     #[test]
     fn parse_claim_path_rejects_extras() {
-        let prefix = "/swarm/self-fleet/pair-claim/";
+        let prefix = "/swarm/puddle/pair-claim/";
         assert_eq!(
-            parse_claim_path("/swarm/self-fleet/pair-claim/dan", prefix),
+            parse_claim_path("/swarm/puddle/pair-claim/dan", prefix),
             Some("dan".to_string())
         );
-        assert!(parse_claim_path("/swarm/self-fleet/pair-claim/", prefix).is_none());
-        assert!(parse_claim_path("/swarm/self-fleet/pair-claim/dan/x", prefix).is_none());
+        assert!(parse_claim_path("/swarm/puddle/pair-claim/", prefix).is_none());
+        assert!(parse_claim_path("/swarm/puddle/pair-claim/dan/x", prefix).is_none());
         assert!(parse_claim_path("/other/path", prefix).is_none());
     }
 

@@ -56,25 +56,25 @@ pub struct PeerEntry {
     /// through recipients.txt (e.g. pre-populated manually).
     #[serde(default)]
     pub last_seen_addr: Option<String>,
-    /// Hex-encoded self-fleet pubkey the peer announced (ADR-016).
-    /// Empty when the peer is running standalone (self-fleet not
+    /// Hex-encoded puddle pubkey the peer announced (ADR-016).
+    /// Empty when the peer is running standalone (puddle not
     /// initialized) or the announcement predates 0.35.x. Recipient
-    /// resolution under fleet mode filters peers whose `fleet_pubkey`
-    /// doesn't match the local user's self-fleet — the gossip layer
-    /// is fleet-aware while age keys stay per-envoy.
+    /// resolution under puddle mode filters peers whose `puddle_pubkey`
+    /// doesn't match the local user's puddle — the gossip layer
+    /// is puddle-aware while age keys stay per-envoy.
     #[serde(default)]
-    pub fleet_pubkey: String,
-    /// Trust-on-first-use pinned fleet pubkey (ADR-016 follow-up).
-    /// Set on first sighting from `fleet_pubkey`; subsequent
-    /// announces under a different fleet_pubkey are rejected at
+    pub puddle_pubkey: String,
+    /// Trust-on-first-use pinned puddle pubkey (ADR-016 follow-up).
+    /// Set on first sighting from `puddle_pubkey`; subsequent
+    /// announces under a different puddle_pubkey are rejected at
     /// upsert time. Empty when the peer was first seen running
-    /// standalone — once a fleet pubkey is pinned, we never let the
+    /// standalone — once a puddle pubkey is pinned, we never let the
     /// peer "revert" without an admin clearing the entry. Mirrors
     /// `gitmirror::peer_pubkey_cache`'s TOFU shape, embedded
     /// per-peer here because cryptsync's PeerTable is already
     /// per-user and that's the right scope for cryptsync TOFU.
     #[serde(default)]
-    pub pinned_fleet_pubkey: String,
+    pub pinned_puddle_pubkey: String,
 }
 
 /// Per-user peer table. Persisted at
@@ -172,23 +172,23 @@ impl PeerTable {
     /// — the caller can skip `save()` + `regenerate_recipients()` when
     /// the update is a plain heartbeat.
     ///
-    /// ADR-016 follow-up: rejects announcements whose `fleet_pubkey`
+    /// ADR-016 follow-up: rejects announcements whose `puddle_pubkey`
     /// disagrees with the previously-pinned value for the same
     /// hostname. Returns `false` (no mutation) and the receive-side
     /// caller logs the rejection. Operator recovery is to clear the
     /// peer entry — `vigo swarm cryptsync forget <host>` does the
-    /// trick. First sighting under a non-empty fleet_pubkey pins it
-    /// to `pinned_fleet_pubkey` for future TOFU checks.
+    /// trick. First sighting under a non-empty puddle_pubkey pins it
+    /// to `pinned_puddle_pubkey` for future TOFU checks.
     pub fn upsert(&mut self, mut entry: PeerEntry) -> bool {
         match self.peers.get(&entry.hostname) {
             Some(existing) => {
-                // TOFU check — once we've pinned a non-empty fleet
+                // TOFU check — once we've pinned a non-empty puddle
                 // pubkey, the peer must keep announcing the same one.
                 // An empty incoming under a non-empty pin is rejected
                 // (peer "reverted to standalone" looks identical on
                 // the wire to a same-LAN spoofer, so be strict).
-                if !existing.pinned_fleet_pubkey.is_empty()
-                    && existing.pinned_fleet_pubkey != entry.fleet_pubkey
+                if !existing.pinned_puddle_pubkey.is_empty()
+                    && existing.pinned_puddle_pubkey != entry.puddle_pubkey
                 {
                     // Mismatch — drop the announce. Receive-side
                     // caller logs the warn message with full detail.
@@ -197,13 +197,13 @@ impl PeerTable {
                 if existing.pubkey != entry.pubkey || existing.sign_pubkey != entry.sign_pubkey {
                     // Pubkey rotation (age or sign) — real change.
                     // Carry the pin forward: it's already empty (and
-                    // entry.fleet_pubkey may legitimately set it for
+                    // entry.puddle_pubkey may legitimately set it for
                     // the first time) or it's non-empty and matches
-                    // entry.fleet_pubkey (verified above).
-                    entry.pinned_fleet_pubkey = if entry.fleet_pubkey.is_empty() {
-                        existing.pinned_fleet_pubkey.clone()
+                    // entry.puddle_pubkey (verified above).
+                    entry.pinned_puddle_pubkey = if entry.puddle_pubkey.is_empty() {
+                        existing.pinned_puddle_pubkey.clone()
                     } else {
-                        entry.fleet_pubkey.clone()
+                        entry.puddle_pubkey.clone()
                     };
                     self.peers.insert(entry.hostname.clone(), entry);
                     true
@@ -212,20 +212,20 @@ impl PeerTable {
                     // stale-peer age-out works, but it's not a
                     // recipient-set change. Also refresh addr so the
                     // pusher has current routing info. Preserve the
-                    // existing pin; refresh fleet_pubkey only if the
+                    // existing pin; refresh puddle_pubkey only if the
                     // pin was already empty (legitimate first-set).
                     let mut updated = existing.clone();
                     updated.last_seen = entry.last_seen;
                     if entry.last_seen_addr.is_some() {
                         updated.last_seen_addr = entry.last_seen_addr;
                     }
-                    if updated.pinned_fleet_pubkey.is_empty()
-                        && !entry.fleet_pubkey.is_empty()
+                    if updated.pinned_puddle_pubkey.is_empty()
+                        && !entry.puddle_pubkey.is_empty()
                     {
-                        // First-sighting fleet pubkey pin (peer just
-                        // adopted self-fleet between heartbeats).
-                        updated.fleet_pubkey = entry.fleet_pubkey;
-                        updated.pinned_fleet_pubkey = updated.fleet_pubkey.clone();
+                        // First-sighting puddle pubkey pin (peer just
+                        // adopted puddle between heartbeats).
+                        updated.puddle_pubkey = entry.puddle_pubkey;
+                        updated.pinned_puddle_pubkey = updated.puddle_pubkey.clone();
                     }
                     self.peers.insert(entry.hostname.clone(), updated);
                     false
@@ -235,10 +235,10 @@ impl PeerTable {
             }
             None => {
                 // First sighting of this hostname. TOFU-pin whatever
-                // fleet_pubkey the announce carried (empty stays
+                // puddle_pubkey the announce carried (empty stays
                 // empty — peer is running standalone).
-                if entry.pinned_fleet_pubkey.is_empty() {
-                    entry.pinned_fleet_pubkey = entry.fleet_pubkey.clone();
+                if entry.pinned_puddle_pubkey.is_empty() {
+                    entry.pinned_puddle_pubkey = entry.puddle_pubkey.clone();
                 }
                 self.peers.insert(entry.hostname.clone(), entry);
                 true
@@ -262,21 +262,21 @@ impl PeerTable {
         self.peers.remove(hostname).is_some()
     }
 
-    /// Clear `pinned_fleet_pubkey` on every peer whose recorded
-    /// `fleet_pubkey` matches `retired`. Returns the number of
-    /// entries adjusted. Used by self-fleet rekey (ADR-018) so peers
-    /// announcing under the post-rotation fleet pubkey don't trip
-    /// the TOFU mismatch check at upsert time. The `fleet_pubkey`
-    /// field itself is left alone — `live_pubkeys_for_fleets` will
+    /// Clear `pinned_puddle_pubkey` on every peer whose recorded
+    /// `puddle_pubkey` matches `retired`. Returns the number of
+    /// entries adjusted. Used by puddle rekey (ADR-018) so peers
+    /// announcing under the post-rotation puddle pubkey don't trip
+    /// the TOFU mismatch check at upsert time. The `puddle_pubkey`
+    /// field itself is left alone — `live_pubkeys_for_puddles` will
     /// filter the entry out until the peer's next announce updates
     /// it, which is the correct behavior during a rotation rollout.
-    pub fn clear_pins_for_fleet(&mut self, retired: &str) -> usize {
+    pub fn clear_pins_for_puddle(&mut self, retired: &str) -> usize {
         let mut adjusted = 0usize;
         for entry in self.peers.values_mut() {
-            if entry.fleet_pubkey == retired
-                && !entry.pinned_fleet_pubkey.is_empty()
+            if entry.puddle_pubkey == retired
+                && !entry.pinned_puddle_pubkey.is_empty()
             {
-                entry.pinned_fleet_pubkey.clear();
+                entry.pinned_puddle_pubkey.clear();
                 adjusted += 1;
             }
         }
@@ -326,41 +326,41 @@ impl PeerTable {
         keys
     }
 
-    /// Fleet-aware variant of [`live_pubkeys`] (ADR-016). The caller
-    /// passes the set of fleet pubkeys whose peers count as recipient
-    /// candidates. An empty slice means "no fleet filter" — standalone
+    /// Puddle-aware variant of [`live_pubkeys`] (ADR-016). The caller
+    /// passes the set of puddle pubkeys whose peers count as recipient
+    /// candidates. An empty slice means "no puddle filter" — standalone
     /// mode, identical to [`live_pubkeys`].
     ///
     /// Steady state passes a one-element slice (the local user's
-    /// self-fleet pubkey). During an ADR-018 rekey rollout, the founder
-    /// passes the new fleet pubkey *and* every unexpired retired fleet
-    /// pubkey from `~/.vigo-fleet/retired_fleets.json`, so peers still
-    /// announcing under the old fleet during the 24h graceful window
+    /// puddle pubkey). During an ADR-018 rekey rollout, the founder
+    /// passes the new puddle pubkey *and* every unexpired retired puddle
+    /// pubkey from `~/.vigo-puddle/retired_puddles.json`, so peers still
+    /// announcing under the old puddle during the 24h graceful window
     /// stay in the recipient set rather than silently disappearing
     /// until they finish their own rekey.
     ///
     /// Per-envoy age keys stay deliberately preserved: even when
-    /// filtering by fleet membership, the per-peer pubkeys this
+    /// filtering by puddle membership, the per-peer pubkeys this
     /// returns are each peer's individual age x25519 pubkey, not a
-    /// shared fleet decryption key. ADR-016 calls this out as
+    /// shared puddle decryption key. ADR-016 calls this out as
     /// load-bearing — see `mod.rs::regenerate_recipients` for the
     /// invariant comment.
-    pub fn live_pubkeys_for_fleets(
+    pub fn live_pubkeys_for_puddles(
         &self,
         now: i64,
-        accepted_fleet_pubkeys: &[String],
+        accepted_puddle_pubkeys: &[String],
     ) -> Vec<String> {
         let mut keys: Vec<String> = self
             .peers
             .values()
             .filter(|p| now - p.last_seen <= STALE_SECS)
             .filter(|p| {
-                if accepted_fleet_pubkeys.is_empty() {
+                if accepted_puddle_pubkeys.is_empty() {
                     return true;
                 }
-                accepted_fleet_pubkeys
+                accepted_puddle_pubkeys
                     .iter()
-                    .any(|fp| p.fleet_pubkey == *fp)
+                    .any(|fp| p.puddle_pubkey == *fp)
             })
             .map(|p| p.pubkey.clone())
             .collect();
@@ -414,23 +414,23 @@ pub struct Announcement {
     /// catch-up for this peer."
     #[serde(default)]
     pub leaves_digest: String,
-    /// Hex-encoded self-fleet Ed25519 pubkey for the announcing user
+    /// Hex-encoded puddle Ed25519 pubkey for the announcing user
     /// (ADR-016). Empty string when the user is running standalone
-    /// or the announce predates 0.35.x. Receivers under fleet mode
+    /// or the announce predates 0.35.x. Receivers under puddle mode
     /// filter peers whose pubkey here doesn't match the local
-    /// user's self-fleet — see `state::PeerTable::live_pubkeys_for_fleets`.
+    /// user's puddle — see `state::PeerTable::live_pubkeys_for_puddles`.
     #[serde(default)]
-    pub fleet_pubkey: String,
-    /// Optional fleet certificate (ADR-016 follow-up). Closes the
+    pub puddle_pubkey: String,
+    /// Optional puddle certificate (ADR-016 follow-up). Closes the
     /// same-LAN first-contact race that TOFU pinning has on its own:
-    /// receivers verify the cert's signature against `fleet_pubkey`
-    /// before accepting the fleet claim. `None` when the announcer
+    /// receivers verify the cert's signature against `puddle_pubkey`
+    /// before accepting the puddle claim. `None` when the announcer
     /// hasn't issued a cert yet (slice 1 / slice 2 peers, or
-    /// `cryptsync fleet renew-cert` not run); the announce still
+    /// `cryptsync puddle renew-cert` not run); the announce still
     /// passes through to receivers under TOFU rules but receivers
     /// will warn-log the absence so operators can tell.
     #[serde(default)]
-    pub fleet_cert: Option<super::fleet_cert::FleetCert>,
+    pub puddle_cert: Option<super::puddle_cert::PuddleCert>,
 }
 
 #[cfg(test)]
@@ -444,21 +444,21 @@ mod tests {
             sign_pubkey: String::new(),
             last_seen: ts,
             last_seen_addr: None,
-            fleet_pubkey: String::new(),
-            pinned_fleet_pubkey: String::new(),
+            puddle_pubkey: String::new(),
+            pinned_puddle_pubkey: String::new(),
         }
     }
 
-    fn sample_peer_in_fleet(name: &str, ts: i64, fleet: &str) -> PeerEntry {
+    fn sample_peer_in_puddle(name: &str, ts: i64, puddle: &str) -> PeerEntry {
         PeerEntry {
             hostname: name.to_string(),
             pubkey: format!("age1{:0>52}", name),
             sign_pubkey: String::new(),
             last_seen: ts,
             last_seen_addr: None,
-            fleet_pubkey: fleet.to_string(),
+            puddle_pubkey: puddle.to_string(),
             // Pin starts empty — upsert pins on first sighting.
-            pinned_fleet_pubkey: String::new(),
+            pinned_puddle_pubkey: String::new(),
         }
     }
 
@@ -487,8 +487,8 @@ mod tests {
             sign_pubkey: String::new(),
             last_seen: 150,
             last_seen_addr: None,
-            fleet_pubkey: String::new(),
-            pinned_fleet_pubkey: String::new(),
+            puddle_pubkey: String::new(),
+            pinned_puddle_pubkey: String::new(),
         };
         assert!(t.upsert(rotated));
     }
@@ -503,37 +503,37 @@ mod tests {
     }
 
     #[test]
-    fn clear_pins_for_fleet_only_touches_matching_peers() {
+    fn clear_pins_for_puddle_only_touches_matching_peers() {
         let mut t = PeerTable::empty("dan");
-        t.upsert(sample_peer_in_fleet("rotating", 100, "fleet-a"));
-        t.upsert(sample_peer_in_fleet("other", 100, "fleet-b"));
+        t.upsert(sample_peer_in_puddle("rotating", 100, "fleet-a"));
+        t.upsert(sample_peer_in_puddle("other", 100, "fleet-b"));
         t.upsert(sample_peer("standalone", 100));
         // Sanity: TOFU pinned each fleet peer on first sighting.
         assert_eq!(
-            t.peers.get("rotating").unwrap().pinned_fleet_pubkey,
+            t.peers.get("rotating").unwrap().pinned_puddle_pubkey,
             "fleet-a"
         );
-        assert_eq!(t.peers.get("other").unwrap().pinned_fleet_pubkey, "fleet-b");
-        assert_eq!(t.peers.get("standalone").unwrap().pinned_fleet_pubkey, "");
+        assert_eq!(t.peers.get("other").unwrap().pinned_puddle_pubkey, "fleet-b");
+        assert_eq!(t.peers.get("standalone").unwrap().pinned_puddle_pubkey, "");
 
-        let cleared = t.clear_pins_for_fleet("fleet-a");
+        let cleared = t.clear_pins_for_puddle("fleet-a");
         assert_eq!(cleared, 1);
         // Only "rotating" lost its pin; the others are untouched.
-        assert_eq!(t.peers.get("rotating").unwrap().pinned_fleet_pubkey, "");
-        assert_eq!(t.peers.get("other").unwrap().pinned_fleet_pubkey, "fleet-b");
-        assert_eq!(t.peers.get("standalone").unwrap().pinned_fleet_pubkey, "");
-        // The fleet_pubkey field itself is left alone — recipient
+        assert_eq!(t.peers.get("rotating").unwrap().pinned_puddle_pubkey, "");
+        assert_eq!(t.peers.get("other").unwrap().pinned_puddle_pubkey, "fleet-b");
+        assert_eq!(t.peers.get("standalone").unwrap().pinned_puddle_pubkey, "");
+        // The puddle_pubkey field itself is left alone — recipient
         // resolution will re-pin via the next announce.
-        assert_eq!(t.peers.get("rotating").unwrap().fleet_pubkey, "fleet-a");
+        assert_eq!(t.peers.get("rotating").unwrap().puddle_pubkey, "fleet-a");
     }
 
     #[test]
-    fn clear_pins_for_fleet_returns_zero_when_no_match() {
+    fn clear_pins_for_puddle_returns_zero_when_no_match() {
         let mut t = PeerTable::empty("dan");
-        t.upsert(sample_peer_in_fleet("a", 100, "fleet-a"));
-        let cleared = t.clear_pins_for_fleet("fleet-z");
+        t.upsert(sample_peer_in_puddle("a", 100, "fleet-a"));
+        let cleared = t.clear_pins_for_puddle("fleet-z");
         assert_eq!(cleared, 0);
-        assert_eq!(t.peers.get("a").unwrap().pinned_fleet_pubkey, "fleet-a");
+        assert_eq!(t.peers.get("a").unwrap().pinned_puddle_pubkey, "fleet-a");
     }
 
     #[test]
@@ -566,8 +566,8 @@ mod tests {
             sign_pubkey: String::new(),
             last_seen: 100,
             last_seen_addr: None,
-            fleet_pubkey: String::new(),
-            pinned_fleet_pubkey: String::new(),
+            puddle_pubkey: String::new(),
+            pinned_puddle_pubkey: String::new(),
         });
         t.upsert(PeerEntry {
             hostname: "a".into(),
@@ -575,8 +575,8 @@ mod tests {
             sign_pubkey: String::new(),
             last_seen: 200,
             last_seen_addr: None,
-            fleet_pubkey: String::new(),
-            pinned_fleet_pubkey: String::new(),
+            puddle_pubkey: String::new(),
+            pinned_puddle_pubkey: String::new(),
         });
         t.upsert(PeerEntry {
             hostname: "stale".into(),
@@ -584,8 +584,8 @@ mod tests {
             sign_pubkey: String::new(),
             last_seen: 10,
             last_seen_addr: None,
-            fleet_pubkey: String::new(),
-            pinned_fleet_pubkey: String::new(),
+            puddle_pubkey: String::new(),
+            pinned_puddle_pubkey: String::new(),
         });
         let keys = t.live_pubkeys(200);
         // "c" has last_seen=100; now-last_seen=100 > STALE_SECS=90 → stale.
@@ -613,15 +613,15 @@ mod tests {
             generation: 7,
             tombstones_digest: String::new(),
             leaves_digest: String::new(),
-            fleet_pubkey: String::new(),
-            fleet_cert: None,
+            puddle_pubkey: String::new(),
+            puddle_cert: None,
         };
         let bytes = serde_json::to_vec(&a).unwrap();
         let parsed: Announcement = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(a, parsed);
     }
 
-    /// Pre-0.35.x announcements arrive without `fleet_pubkey`. Receivers
+    /// Pre-0.35.x announcements arrive without `puddle_pubkey`. Receivers
     /// must accept the JSON and treat the field as empty (standalone
     /// peer). Regression guard against the serde-default tag drifting
     /// out of sync with the wire schema.
@@ -636,7 +636,7 @@ mod tests {
         }"#;
         let parsed: Announcement = serde_json::from_slice(json).unwrap();
         assert_eq!(parsed.machine, "old");
-        assert_eq!(parsed.fleet_pubkey, "");
+        assert_eq!(parsed.puddle_pubkey, "");
     }
 
     // ---- ADR-016 fleet-aware recipient resolution ----
@@ -650,16 +650,16 @@ mod tests {
     fn recipients_are_per_envoy_not_per_fleet() {
         let fleet = "ed25519:8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8";
         let mut t = PeerTable::empty("dan");
-        t.upsert(sample_peer_in_fleet("alpha", 200, fleet));
-        t.upsert(sample_peer_in_fleet("beta", 200, fleet));
+        t.upsert(sample_peer_in_puddle("alpha", 200, fleet));
+        t.upsert(sample_peer_in_puddle("beta", 200, fleet));
 
-        let keys = t.live_pubkeys_for_fleets(200, &[fleet.to_string()]);
+        let keys = t.live_pubkeys_for_puddles(200, &[fleet.to_string()]);
 
         // Two envoys → two distinct age pubkeys, NOT one fleet key.
         assert_eq!(keys.len(), 2, "expected one age pubkey per envoy");
         assert!(
             keys.iter().all(|k| k.starts_with("age1")),
-            "every recipient must be a per-envoy age pubkey, not the fleet pubkey"
+            "every recipient must be a per-envoy age pubkey, not the puddle pubkey"
         );
         assert!(keys.iter().all(|k| !k.contains(fleet)),
             "the fleet ed25519 pubkey must never appear as an age recipient");
@@ -667,19 +667,19 @@ mod tests {
     }
 
     /// Cross-fleet contamination: a peer announcing under a different
-    /// fleet pubkey is filtered out. Without this, every envoy on the
+    /// puddle pubkey is filtered out. Without this, every envoy on the
     /// LAN would land in everyone else's recipients regardless of
     /// trust scope.
     #[test]
-    fn live_pubkeys_for_fleets_filters_other_fleets() {
+    fn live_pubkeys_for_puddles_filters_other_fleets() {
         let fleet_dan = "fleet-pk-dan";
         let fleet_alice = "fleet-pk-alice";
         let mut t = PeerTable::empty("multi");
-        t.upsert(sample_peer_in_fleet("dan-laptop", 200, fleet_dan));
-        t.upsert(sample_peer_in_fleet("dan-desktop", 200, fleet_dan));
-        t.upsert(sample_peer_in_fleet("alice-laptop", 200, fleet_alice));
+        t.upsert(sample_peer_in_puddle("dan-laptop", 200, fleet_dan));
+        t.upsert(sample_peer_in_puddle("dan-desktop", 200, fleet_dan));
+        t.upsert(sample_peer_in_puddle("alice-laptop", 200, fleet_alice));
 
-        let dan_recipients = t.live_pubkeys_for_fleets(200, &[fleet_dan.to_string()]);
+        let dan_recipients = t.live_pubkeys_for_puddles(200, &[fleet_dan.to_string()]);
         assert_eq!(dan_recipients.len(), 2);
         assert!(dan_recipients.iter().any(|k| k.contains("dan-laptop")));
         assert!(dan_recipients.iter().any(|k| k.contains("dan-desktop")));
@@ -690,70 +690,70 @@ mod tests {
     }
 
     /// Standalone mode (empty slice) returns every live peer regardless
-    /// of `fleet_pubkey` — preserves the legacy gossip-only behavior
-    /// for users who haven't opted into self-fleet.
+    /// of `puddle_pubkey` — preserves the legacy gossip-only behavior
+    /// for users who haven't opted into puddle.
     #[test]
-    fn live_pubkeys_for_fleets_empty_slice_returns_all() {
+    fn live_pubkeys_for_puddles_empty_slice_returns_all() {
         let mut t = PeerTable::empty("dan");
-        t.upsert(sample_peer_in_fleet("with-fleet", 200, "some-fleet"));
+        t.upsert(sample_peer_in_puddle("with-fleet", 200, "some-fleet"));
         t.upsert(sample_peer("standalone", 200));
 
-        let keys = t.live_pubkeys_for_fleets(200, &[]);
+        let keys = t.live_pubkeys_for_puddles(200, &[]);
         assert_eq!(keys.len(), 2);
     }
 
     /// Fleet filter still respects staleness — an old peer in the
     /// right fleet is still excluded.
     #[test]
-    fn live_pubkeys_for_fleets_excludes_stale_match() {
+    fn live_pubkeys_for_puddles_excludes_stale_match() {
         let fleet = "f-pk";
         let mut t = PeerTable::empty("dan");
-        t.upsert(sample_peer_in_fleet("fresh", 200, fleet));
-        t.upsert(sample_peer_in_fleet("stale", 10, fleet));
+        t.upsert(sample_peer_in_puddle("fresh", 200, fleet));
+        t.upsert(sample_peer_in_puddle("stale", 10, fleet));
 
-        let keys = t.live_pubkeys_for_fleets(200, &[fleet.to_string()]);
+        let keys = t.live_pubkeys_for_puddles(200, &[fleet.to_string()]);
         assert_eq!(keys.len(), 1);
         assert!(keys[0].contains("fresh"));
     }
 
-    /// A standalone peer (empty `fleet_pubkey`) is excluded under fleet
+    /// A standalone peer (empty `puddle_pubkey`) is excluded under fleet
     /// mode — they aren't a member of the local user's fleet.
     #[test]
-    fn live_pubkeys_for_fleets_excludes_standalone_peer_under_fleet_filter() {
+    fn live_pubkeys_for_puddles_excludes_standalone_peer_under_fleet_filter() {
         let fleet = "f-pk";
         let mut t = PeerTable::empty("dan");
-        t.upsert(sample_peer_in_fleet("member", 200, fleet));
-        t.upsert(sample_peer("rogue-standalone", 200)); // empty fleet_pubkey
+        t.upsert(sample_peer_in_puddle("member", 200, fleet));
+        t.upsert(sample_peer("rogue-standalone", 200)); // empty puddle_pubkey
 
-        let keys = t.live_pubkeys_for_fleets(200, &[fleet.to_string()]);
+        let keys = t.live_pubkeys_for_puddles(200, &[fleet.to_string()]);
         assert_eq!(keys.len(), 1);
         assert!(keys[0].contains("member"));
     }
 
     /// ADR-018 rekey window: the founder accepts both the new fleet
     /// pubkey (its own steady-state identity) and every unexpired
-    /// retired fleet pubkey. Surviving envoys still announcing under
-    /// the old fleet during the 24h graceful window stay in the
+    /// retired puddle pubkey. Surviving envoys still announcing under
+    /// the old puddle during the 24h graceful window stay in the
     /// recipient set. Without this, mid-window writes on the founder
     /// encrypt to a smaller recipient set than steady state — the
     /// "file appeared on desk + homeserver but not laptop" failure
     /// mode pending #2 was opened against.
     #[test]
-    fn live_pubkeys_for_fleets_widens_during_rekey_window() {
+    fn live_pubkeys_for_puddles_widens_during_rekey_window() {
         let new_fleet = "fleet-pk-new";
         let old_fleet = "fleet-pk-old";
         let mut t = PeerTable::empty("dan");
         // Founder has rekeyed and re-pinned to new_fleet. A laptop
         // that has also rekeyed announces under new_fleet.
-        t.upsert(sample_peer_in_fleet("rekeyed-laptop", 200, new_fleet));
+        t.upsert(sample_peer_in_puddle("rekeyed-laptop", 200, new_fleet));
         // A desktop that hasn't rekeyed yet still announces under
-        // the old fleet pubkey.
-        t.upsert(sample_peer_in_fleet("not-yet-rekeyed-desktop", 200, old_fleet));
+        // the old puddle pubkey.
+        t.upsert(sample_peer_in_puddle("not-yet-rekeyed-desktop", 200, old_fleet));
         // Some unrelated peer in a different fleet must stay out.
-        t.upsert(sample_peer_in_fleet("alice-host", 200, "fleet-pk-alice"));
+        t.upsert(sample_peer_in_puddle("alice-host", 200, "fleet-pk-alice"));
 
         let accepted = vec![new_fleet.to_string(), old_fleet.to_string()];
-        let keys = t.live_pubkeys_for_fleets(200, &accepted);
+        let keys = t.live_pubkeys_for_puddles(200, &accepted);
         assert_eq!(keys.len(), 2, "both rekeyed and not-yet-rekeyed peers count");
         assert!(keys.iter().any(|k| k.contains("rekeyed-laptop")));
         assert!(keys.iter().any(|k| k.contains("not-yet-rekeyed-desktop")));
@@ -765,104 +765,104 @@ mod tests {
 
     // ---- ADR-016 follow-up: TOFU pinning ----
 
-    /// First-sighting fleet pubkey gets pinned for future enforcement.
+    /// First-sighting puddle pubkey gets pinned for future enforcement.
     #[test]
-    fn upsert_pins_fleet_pubkey_on_first_sighting() {
+    fn upsert_pins_puddle_pubkey_on_first_sighting() {
         let mut t = PeerTable::empty("dan");
-        t.upsert(sample_peer_in_fleet("alpha", 100, "fleet-pk-1"));
+        t.upsert(sample_peer_in_puddle("alpha", 100, "fleet-pk-1"));
         let stored = t.peers.get("alpha").unwrap();
-        assert_eq!(stored.pinned_fleet_pubkey, "fleet-pk-1");
+        assert_eq!(stored.pinned_puddle_pubkey, "fleet-pk-1");
     }
 
-    /// First sighting with empty fleet_pubkey leaves the pin empty —
+    /// First sighting with empty puddle_pubkey leaves the pin empty —
     /// the peer is running standalone and we don't want to pre-pin
-    /// anything. They can later announce a fleet pubkey and have it
+    /// anything. They can later announce a puddle pubkey and have it
     /// TOFU-pinned at that point.
     #[test]
     fn upsert_first_sighting_standalone_keeps_pin_empty() {
         let mut t = PeerTable::empty("dan");
         t.upsert(sample_peer("alpha", 100));
         let stored = t.peers.get("alpha").unwrap();
-        assert_eq!(stored.pinned_fleet_pubkey, "");
+        assert_eq!(stored.pinned_puddle_pubkey, "");
     }
 
-    /// A peer that started standalone and later adopts self-fleet has
+    /// A peer that started standalone and later adopts puddle has
     /// its pin set on the next non-stale heartbeat. Mirrors the
-    /// real-world flow: user runs `self-fleet init` after cryptsync
+    /// real-world flow: user runs `puddle init` after cryptsync
     /// was already running.
     #[test]
     fn upsert_pins_when_peer_adopts_fleet_mid_session() {
         let mut t = PeerTable::empty("dan");
         t.upsert(sample_peer("alpha", 100));
         // Same hostname/pubkey, later heartbeat, now carrying a
-        // fleet_pubkey for the first time.
-        let mut later = sample_peer_in_fleet("alpha", 150, "fleet-pk-X");
+        // puddle_pubkey for the first time.
+        let mut later = sample_peer_in_puddle("alpha", 150, "fleet-pk-X");
         // Match existing pubkey/sign_pubkey so the rotation branch
         // doesn't fire — this is a heartbeat-shaped update.
         later.pubkey = t.peers.get("alpha").unwrap().pubkey.clone();
         t.upsert(later);
         let stored = t.peers.get("alpha").unwrap();
-        assert_eq!(stored.pinned_fleet_pubkey, "fleet-pk-X");
-        assert_eq!(stored.fleet_pubkey, "fleet-pk-X");
+        assert_eq!(stored.pinned_puddle_pubkey, "fleet-pk-X");
+        assert_eq!(stored.puddle_pubkey, "fleet-pk-X");
     }
 
-    /// Once pinned, an announce under a different fleet_pubkey is
+    /// Once pinned, an announce under a different puddle_pubkey is
     /// rejected — upsert returns false (no mutation), the existing
     /// entry stays unchanged.
     #[test]
-    fn upsert_rejects_mismatched_fleet_pubkey_after_pinning() {
+    fn upsert_rejects_mismatched_puddle_pubkey_after_pinning() {
         let mut t = PeerTable::empty("dan");
-        t.upsert(sample_peer_in_fleet("alpha", 100, "fleet-pk-1"));
-        // Attacker (or rotated peer) announces a different fleet pubkey.
-        let spoofed = sample_peer_in_fleet("alpha", 200, "fleet-pk-2");
+        t.upsert(sample_peer_in_puddle("alpha", 100, "fleet-pk-1"));
+        // Attacker (or rotated peer) announces a different puddle pubkey.
+        let spoofed = sample_peer_in_puddle("alpha", 200, "fleet-pk-2");
         let changed = t.upsert(spoofed);
         assert!(!changed, "upsert must reject TOFU mismatch");
         let stored = t.peers.get("alpha").unwrap();
-        assert_eq!(stored.fleet_pubkey, "fleet-pk-1", "original fleet_pubkey unchanged");
-        assert_eq!(stored.pinned_fleet_pubkey, "fleet-pk-1", "pin stays pinned");
+        assert_eq!(stored.puddle_pubkey, "fleet-pk-1", "original puddle_pubkey unchanged");
+        assert_eq!(stored.pinned_puddle_pubkey, "fleet-pk-1", "pin stays pinned");
         assert_eq!(stored.last_seen, 100, "last_seen must not advance on rejection");
     }
 
-    /// A pinned peer announcing standalone (empty fleet_pubkey) is
+    /// A pinned peer announcing standalone (empty puddle_pubkey) is
     /// rejected — same protection as a different-fleet announce. If
     /// the operator legitimately wants to demote the peer to
     /// standalone they must clear with `forget`.
     #[test]
     fn upsert_rejects_pinned_peer_reverting_to_standalone() {
         let mut t = PeerTable::empty("dan");
-        t.upsert(sample_peer_in_fleet("alpha", 100, "fleet-pk-1"));
-        let reverted = sample_peer("alpha", 200); // empty fleet_pubkey
+        t.upsert(sample_peer_in_puddle("alpha", 100, "fleet-pk-1"));
+        let reverted = sample_peer("alpha", 200); // empty puddle_pubkey
         let changed = t.upsert(reverted);
         assert!(!changed);
-        assert_eq!(t.peers.get("alpha").unwrap().pinned_fleet_pubkey, "fleet-pk-1");
+        assert_eq!(t.peers.get("alpha").unwrap().pinned_puddle_pubkey, "fleet-pk-1");
     }
 
-    /// Matching fleet pubkey on subsequent heartbeats is fine and
+    /// Matching puddle pubkey on subsequent heartbeats is fine and
     /// advances last_seen as usual.
     #[test]
-    fn upsert_accepts_matching_fleet_pubkey_heartbeat() {
+    fn upsert_accepts_matching_puddle_pubkey_heartbeat() {
         let mut t = PeerTable::empty("dan");
-        t.upsert(sample_peer_in_fleet("alpha", 100, "fleet-pk-1"));
-        let mut hb = sample_peer_in_fleet("alpha", 200, "fleet-pk-1");
+        t.upsert(sample_peer_in_puddle("alpha", 100, "fleet-pk-1"));
+        let mut hb = sample_peer_in_puddle("alpha", 200, "fleet-pk-1");
         hb.pubkey = t.peers.get("alpha").unwrap().pubkey.clone();
         // Heartbeat returns false (not a recipient-set change) but
         // last_seen advances and the pin stays put.
         assert!(!t.upsert(hb));
         assert_eq!(t.peers.get("alpha").unwrap().last_seen, 200);
-        assert_eq!(t.peers.get("alpha").unwrap().pinned_fleet_pubkey, "fleet-pk-1");
+        assert_eq!(t.peers.get("alpha").unwrap().pinned_puddle_pubkey, "fleet-pk-1");
     }
 
     /// Operator recovery: clearing the peer with `forget` lets the
-    /// next announce TOFU-pin a fresh fleet_pubkey. Documented admin
-    /// flow when an envoy legitimately rotates self-fleet.
+    /// next announce TOFU-pin a fresh puddle_pubkey. Documented admin
+    /// flow when an envoy legitimately rotates puddle.
     #[test]
-    fn upsert_after_forget_repins_with_new_fleet_pubkey() {
+    fn upsert_after_forget_repins_with_new_puddle_pubkey() {
         let mut t = PeerTable::empty("dan");
-        t.upsert(sample_peer_in_fleet("alpha", 100, "fleet-pk-1"));
+        t.upsert(sample_peer_in_puddle("alpha", 100, "fleet-pk-1"));
         assert!(t.forget("alpha"));
         // Fresh announce after operator-cleared state — TOFU re-pins.
-        let changed = t.upsert(sample_peer_in_fleet("alpha", 200, "fleet-pk-2"));
+        let changed = t.upsert(sample_peer_in_puddle("alpha", 200, "fleet-pk-2"));
         assert!(changed);
-        assert_eq!(t.peers.get("alpha").unwrap().pinned_fleet_pubkey, "fleet-pk-2");
+        assert_eq!(t.peers.get("alpha").unwrap().pinned_puddle_pubkey, "fleet-pk-2");
     }
 }

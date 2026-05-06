@@ -4,12 +4,12 @@
 //! Capability tokens for unified-substrate gitmirror (ADR-015).
 //!
 //! Membership in a project is a stack of Ed25519-signed capability
-//! tokens, anchored to the founder's fleet pubkey. The receiving
+//! tokens, anchored to the founder's puddle pubkey. The receiving
 //! envoy verifies an incoming push by walking the chain of tokens
 //! the caller presents back to the project's anchor:
 //!
 //! ```text
-//!  founder fleet F0  ──signs──▶  bootstrap admin token T0 (subject = F0)
+//!  founder puddle P0  ──signs──▶  bootstrap admin token T0 (subject = F0)
 //!                                             │
 //!                                             │ admin T0 signs ▼
 //!                                  member token T1 (subject = F1, role = member)
@@ -40,7 +40,7 @@ use sha2::{Digest, Sha256};
 /// envelopes.
 pub const TOKEN_DOMAIN: &[u8] = b"vigo-gitmirror-token-v1\0";
 
-/// Length of fleet pubkeys + token IDs (raw Ed25519 pubkey + sha256).
+/// Length of puddle pubkeys + token IDs (raw Ed25519 pubkey + sha256).
 pub const ID_LEN: usize = 32;
 
 /// Length of an Ed25519 signature.
@@ -97,23 +97,23 @@ impl Role {
 /// Field order in the canonical bytes (1 byte version-prefix-included
 /// via TOKEN_DOMAIN, then):
 /// 1. project_id (32B)
-/// 2. subject_fleet_pubkey (32B)
+/// 2. subject_puddle_pubkey (32B)
 /// 3. role (1B)
 /// 4. issued_at (8B BE i64)
 /// 5. expires_at (8B BE i64, 0 = NEVER_EXPIRES)
-/// 6. signer_fleet_pubkey (32B)
+/// 6. signer_puddle_pubkey (32B)
 /// 7. parent_token_id (32B, NO_PARENT when None)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenBody {
-    /// Project anchor. `project_id = sha256(founder_fleet_pubkey)`
+    /// Project anchor. `project_id = sha256(founder_puddle_pubkey)`
     /// — content-addressed so the URL `vigo://<project_id>/<handle>`
     /// can't be squatted.
     pub project_id: [u8; ID_LEN],
-    /// Fleet pubkey this token grants access to. Holders of fleet
-    /// F's wrapped key (any envoy that ran `self-fleet unlock` /
+    /// Puddle pubkey this token grants access to. Holders of puddle
+    /// F's wrapped key (any envoy that ran `puddle unlock` /
     /// `join`) can push under a token whose subject is F.
-    pub subject_fleet_pubkey: [u8; ID_LEN],
-    /// Role granted to the subject fleet.
+    pub subject_puddle_pubkey: [u8; ID_LEN],
+    /// Role granted to the subject puddle.
     pub role: Role,
     /// Unix seconds when this token was issued.
     pub issued_at: i64,
@@ -121,11 +121,11 @@ pub struct TokenBody {
     /// (encoded as `0`) means no expiry — the founder's bootstrap
     /// token typically has no expiry; member tokens often do.
     pub expires_at: Option<i64>,
-    /// Pubkey of the fleet that signed this token. For the
+    /// Pubkey of the puddle that signed this token. For the
     /// founder's bootstrap token, this equals the founder pubkey
     /// (= sha256-input of project_id). For derived tokens, this
-    /// is the admin's subject_fleet_pubkey.
-    pub signer_fleet_pubkey: [u8; ID_LEN],
+    /// is the admin's subject_puddle_pubkey.
+    pub signer_puddle_pubkey: [u8; ID_LEN],
     /// ID of the admin token used to sign this one. `None` for the
     /// founder's bootstrap token (signed directly by the project's
     /// anchor pubkey).
@@ -150,20 +150,20 @@ pub fn canonical_bytes(body: &TokenBody) -> Vec<u8> {
     let mut out = Vec::with_capacity(TOKEN_DOMAIN.len() + 32 + 32 + 1 + 8 + 8 + 32 + 32);
     out.extend_from_slice(TOKEN_DOMAIN);
     out.extend_from_slice(&body.project_id);
-    out.extend_from_slice(&body.subject_fleet_pubkey);
+    out.extend_from_slice(&body.subject_puddle_pubkey);
     out.push(body.role.as_byte());
     out.extend_from_slice(&body.issued_at.to_be_bytes());
     out.extend_from_slice(&body.expires_at.unwrap_or(NEVER_EXPIRES).to_be_bytes());
-    out.extend_from_slice(&body.signer_fleet_pubkey);
+    out.extend_from_slice(&body.signer_puddle_pubkey);
     out.extend_from_slice(&body.parent_token_id.unwrap_or(NO_PARENT));
     out
 }
 
-/// `project_id = sha256(founder_fleet_pubkey)`. Stable across all
+/// `project_id = sha256(founder_puddle_pubkey)`. Stable across all
 /// envoys; baked into the URL.
-pub fn project_id_for(founder_fleet_pubkey: &[u8; ID_LEN]) -> [u8; ID_LEN] {
+pub fn project_id_for(founder_puddle_pubkey: &[u8; ID_LEN]) -> [u8; ID_LEN] {
     let mut hasher = Sha256::new();
-    hasher.update(founder_fleet_pubkey);
+    hasher.update(founder_puddle_pubkey);
     let digest = hasher.finalize();
     let mut out = [0u8; ID_LEN];
     out.copy_from_slice(&digest);
@@ -185,18 +185,18 @@ impl Token {
     }
 
     /// Issue + sign a token. The caller supplies the signing key (an
-    /// Ed25519 private key the issuing fleet holds) and the body.
-    /// The body's `signer_fleet_pubkey` MUST equal the public half of
+    /// Ed25519 private key the issuing puddle holds) and the body.
+    /// The body's `signer_puddle_pubkey` MUST equal the public half of
     /// `signing_key`; we re-check here so a misuse fails loudly
     /// instead of producing a body that won't verify.
     pub fn issue(signing_key: &SigningKey, body: TokenBody) -> Result<Token> {
         let derived_pub = signing_key.verifying_key().to_bytes();
-        if derived_pub != body.signer_fleet_pubkey {
+        if derived_pub != body.signer_puddle_pubkey {
             bail!(
-                "signing key does not match body.signer_fleet_pubkey \
+                "signing key does not match body.signer_puddle_pubkey \
                  (key {:x?}, body {:x?})",
                 &derived_pub[..4],
-                &body.signer_fleet_pubkey[..4]
+                &body.signer_puddle_pubkey[..4]
             );
         }
         let bytes = canonical_bytes(&body);
@@ -208,11 +208,11 @@ impl Token {
     }
 
     /// Verify the signature on this token against the embedded
-    /// `signer_fleet_pubkey`. Does NOT verify the chain — call
+    /// `signer_puddle_pubkey`. Does NOT verify the chain — call
     /// [`verify_chain`] for full anchor-rooted verification.
     pub fn verify_signature(&self) -> Result<()> {
         let bytes = canonical_bytes(&self.body);
-        let vk = VerifyingKey::from_bytes(&self.body.signer_fleet_pubkey)
+        let vk = VerifyingKey::from_bytes(&self.body.signer_puddle_pubkey)
             .map_err(|e| anyhow!("invalid signer pubkey: {}", e))?;
         let sig = ed25519_dalek::Signature::from_bytes(&self.signature);
         vk.verify(&bytes, &sig)
@@ -229,7 +229,7 @@ pub enum ChainError {
     /// The first (deepest) token's parent_token_id was set; the root
     /// of a chain MUST be a founder bootstrap token with no parent.
     RootHasParent,
-    /// The first token's signer_fleet_pubkey didn't match the project's
+    /// The first token's signer_puddle_pubkey didn't match the project's
     /// founder pubkey (project_id mismatch caught earlier; this catches
     /// a token signed by someone other than the founder claiming to be
     /// a root).
@@ -237,8 +237,8 @@ pub enum ChainError {
     /// A non-root token had its parent_token_id set to a value that
     /// didn't match the previous token in the chain.
     ParentMismatch { index: usize },
-    /// A non-root token's signer_fleet_pubkey didn't match the
-    /// subject_fleet_pubkey of the parent token (whoever signed this
+    /// A non-root token's signer_puddle_pubkey didn't match the
+    /// subject_puddle_pubkey of the parent token (whoever signed this
     /// link wasn't the parent's grantee).
     SignerNotParentSubject { index: usize },
     /// A non-root token was signed by a parent whose role wasn't
@@ -295,7 +295,7 @@ impl std::fmt::Display for ChainError {
             }
             ChainError::RootNotFounder => write!(
                 f,
-                "root token's signer is not the project's founder fleet pubkey"
+                "root token's signer is not the project's founder puddle pubkey"
             ),
             ChainError::ParentMismatch { index } => write!(
                 f,
@@ -376,7 +376,7 @@ impl std::error::Error for ChainError {}
 ///
 /// **Chain layout:**
 /// - `chain[0]` is the founder's bootstrap token (parent = None,
-///   signer = `founder_fleet_pubkey` — the GENESIS founder, baked into
+///   signer = `founder_puddle_pubkey` — the GENESIS founder, baked into
 ///   `project_id`). Always.
 /// - Each subsequent `chain[i]` was signed by `chain[i-1]` (whose
 ///   role MUST be Admin for it to have minted children), with one
@@ -413,11 +413,11 @@ impl std::error::Error for ChainError {}
 /// deposed-founder attack: an attacker holding a retired founder's
 /// key cannot sign new tokens dated past that founder's window.
 ///
-/// On Ok, the leaf's role + subject_fleet_pubkey are the
+/// On Ok, the leaf's role + subject_puddle_pubkey are the
 /// authorization context the caller is asserting.
 pub fn verify_chain(
     project_id: &[u8; ID_LEN],
-    founder_fleet_pubkey: &[u8; ID_LEN],
+    founder_puddle_pubkey: &[u8; ID_LEN],
     delegations: &[super::envelopes::DelegationEnvelope],
     chain: &[Token],
     now: i64,
@@ -428,7 +428,7 @@ pub fn verify_chain(
 
     // Check the project_id is consistent with the founder pubkey
     // (catches "different project entirely" before signature work).
-    let expected_project_id = project_id_for(founder_fleet_pubkey);
+    let expected_project_id = project_id_for(founder_puddle_pubkey);
     if &expected_project_id != project_id {
         return Err(ChainError::RootNotFounder);
     }
@@ -442,8 +442,8 @@ pub fn verify_chain(
     // implied by the *next* entry's window_start (or i64::MAX for the
     // tail).
     let mut founder_windows: Vec<([u8; ID_LEN], i64)> = Vec::with_capacity(delegations.len() + 1);
-    founder_windows.push((*founder_fleet_pubkey, i64::MIN));
-    let mut prev_new_founder: [u8; ID_LEN] = *founder_fleet_pubkey;
+    founder_windows.push((*founder_puddle_pubkey, i64::MIN));
+    let mut prev_new_founder: [u8; ID_LEN] = *founder_puddle_pubkey;
     let mut prev_delegated_at: i64 = i64::MIN;
     for (i, env) in delegations.iter().enumerate() {
         let raw = env.raw().map_err(|e| ChainError::DelegationDecode {
@@ -492,7 +492,7 @@ pub fn verify_chain(
     }
     // Bootstrap is ALWAYS signed by genesis — never by a post-rekey
     // founder. The bootstrap is immutable; rekey doesn't re-mint it.
-    if &root.body.signer_fleet_pubkey != founder_fleet_pubkey {
+    if &root.body.signer_puddle_pubkey != founder_puddle_pubkey {
         return Err(ChainError::RootNotFounder);
     }
     if &root.body.project_id != project_id {
@@ -528,17 +528,17 @@ pub fn verify_chain(
         // rule applies.
         if i == 1 {
             let authoritative = founder_at(cur.body.issued_at);
-            if cur.body.signer_fleet_pubkey != authoritative {
+            if cur.body.signer_puddle_pubkey != authoritative {
                 // For helpful diagnostics, surface the rejected signer
                 // prefix. Don't leak the full pubkey to error logs —
                 // 8 hex chars is enough to grep for in audit trails.
-                let signer_hex = hex::encode(cur.body.signer_fleet_pubkey);
+                let signer_hex = hex::encode(cur.body.signer_puddle_pubkey);
                 return Err(ChainError::SignerOutsideFounderWindow {
                     index: i,
                     signer_prefix: signer_hex[..16.min(signer_hex.len())].to_string(),
                 });
             }
-        } else if cur.body.signer_fleet_pubkey != parent.body.subject_fleet_pubkey {
+        } else if cur.body.signer_puddle_pubkey != parent.body.subject_puddle_pubkey {
             return Err(ChainError::SignerNotParentSubject { index: i });
         }
 
@@ -593,7 +593,7 @@ mod serde_signature {
 /// Convenience: build the founder's bootstrap admin token. Equivalent
 /// to constructing the body by hand and calling `Token::issue`, but
 /// catches the common foot-shape "I forgot to set parent_token_id =
-/// None and signer_fleet_pubkey = founder pubkey."
+/// None and signer_puddle_pubkey = founder pubkey."
 pub fn issue_bootstrap(
     founder_signing_key: &SigningKey,
     issued_at: i64,
@@ -603,11 +603,11 @@ pub fn issue_bootstrap(
     let project_id = project_id_for(&founder_pub);
     let body = TokenBody {
         project_id,
-        subject_fleet_pubkey: founder_pub,
+        subject_puddle_pubkey: founder_pub,
         role: Role::Admin,
         issued_at,
         expires_at,
-        signer_fleet_pubkey: founder_pub,
+        signer_puddle_pubkey: founder_pub,
         parent_token_id: None,
     };
     Token::issue(founder_signing_key, body)
@@ -616,9 +616,9 @@ pub fn issue_bootstrap(
 
 /// Convenience: an admin issues a child token granting `subject_role`
 /// to `subject_fleet`. Computes the parent_token_id from `parent` and
-/// fills in `signer_fleet_pubkey` from `signing_key`. Returns an error
+/// fills in `signer_puddle_pubkey` from `signing_key`. Returns an error
 /// if `parent.body.role != Admin` (only admins can mint children) or
-/// if `signing_key` doesn't match `parent.body.subject_fleet_pubkey`
+/// if `signing_key` doesn't match `parent.body.subject_puddle_pubkey`
 /// (only the parent's grantee can act as the parent).
 pub fn issue_child(
     signing_key: &SigningKey,
@@ -632,20 +632,20 @@ pub fn issue_child(
         bail!("parent token is not Admin; only admins can mint children");
     }
     let signer_pub = signing_key.verifying_key().to_bytes();
-    if signer_pub != parent.body.subject_fleet_pubkey {
+    if signer_pub != parent.body.subject_puddle_pubkey {
         bail!(
             "signing key {:x?} is not the parent token's subject {:x?}",
             &signer_pub[..4],
-            &parent.body.subject_fleet_pubkey[..4]
+            &parent.body.subject_puddle_pubkey[..4]
         );
     }
     let body = TokenBody {
         project_id: parent.body.project_id,
-        subject_fleet_pubkey: *subject_fleet,
+        subject_puddle_pubkey: *subject_fleet,
         role: subject_role,
         issued_at,
         expires_at,
-        signer_fleet_pubkey: signer_pub,
+        signer_puddle_pubkey: signer_pub,
         parent_token_id: Some(parent.id()),
     };
     Token::issue(signing_key, body).context("issuing child token")
@@ -705,8 +705,8 @@ mod tests {
     fn tampered_body_fails_verification() {
         let k = fresh_key();
         let mut token = issue_bootstrap(&k, 100, None).unwrap();
-        // Flip a byte in subject_fleet_pubkey.
-        token.body.subject_fleet_pubkey[0] ^= 0x01;
+        // Flip a byte in subject_puddle_pubkey.
+        token.body.subject_puddle_pubkey[0] ^= 0x01;
         let err = token.verify_signature().unwrap_err();
         assert!(err.to_string().contains("signature verification failed"));
     }
@@ -717,11 +717,11 @@ mod tests {
         let other = fresh_key();
         let body = TokenBody {
             project_id: project_id_for(&pub_bytes(&founder)),
-            subject_fleet_pubkey: pub_bytes(&founder),
+            subject_puddle_pubkey: pub_bytes(&founder),
             role: Role::Admin,
             issued_at: 100,
             expires_at: None,
-            signer_fleet_pubkey: pub_bytes(&founder), // claims founder...
+            signer_puddle_pubkey: pub_bytes(&founder), // claims founder...
             parent_token_id: None,
         };
         // ...but signing with `other` — must reject.
@@ -766,11 +766,11 @@ mod tests {
         // Imposter issues a bootstrap claiming founder's project_id.
         let body = TokenBody {
             project_id: project_id_for(&pub_bytes(&founder)),
-            subject_fleet_pubkey: pub_bytes(&imposter),
+            subject_puddle_pubkey: pub_bytes(&imposter),
             role: Role::Admin,
             issued_at: 100,
             expires_at: None,
-            signer_fleet_pubkey: pub_bytes(&imposter),
+            signer_puddle_pubkey: pub_bytes(&imposter),
             parent_token_id: None,
         };
         let bootstrap = Token::issue(&imposter, body).unwrap();
@@ -855,11 +855,11 @@ mod tests {
         // refuse — we want to test the *verify* path.
         let body = TokenBody {
             project_id: project_id_for(&pub_bytes(&founder)),
-            subject_fleet_pubkey: pub_bytes(&other),
+            subject_puddle_pubkey: pub_bytes(&other),
             role: Role::Member,
             issued_at: 160,
             expires_at: None,
-            signer_fleet_pubkey: pub_bytes(&team),
+            signer_puddle_pubkey: pub_bytes(&team),
             parent_token_id: Some(team_member.id()),
         };
         let bogus_child = Token::issue(&team, body).unwrap();
@@ -921,7 +921,7 @@ mod tests {
         )
         .unwrap();
         let mut bogus = team_member.clone();
-        bogus.body.signer_fleet_pubkey = pub_bytes(&imposter);
+        bogus.body.signer_puddle_pubkey = pub_bytes(&imposter);
         let bytes = canonical_bytes(&bogus.body);
         bogus.signature = imposter.sign(&bytes).to_bytes();
         let pid = project_id_for(&pub_bytes(&founder));
@@ -966,7 +966,7 @@ mod tests {
         )
         .unwrap();
         let mut bogus = team_member.clone();
-        bogus.body.signer_fleet_pubkey = pub_bytes(&imposter);
+        bogus.body.signer_puddle_pubkey = pub_bytes(&imposter);
         let bytes = canonical_bytes(&bogus.body);
         bogus.signature = imposter.sign(&bytes).to_bytes();
         let pid = project_id_for(&pub_bytes(&founder));
@@ -1067,11 +1067,11 @@ mod tests {
         let pid = project_id_for(&pub_bytes(&founder));
         let body_none = TokenBody {
             project_id: pid,
-            subject_fleet_pubkey: pub_bytes(&founder),
+            subject_puddle_pubkey: pub_bytes(&founder),
             role: Role::Admin,
             issued_at: 100,
             expires_at: None,
-            signer_fleet_pubkey: pub_bytes(&founder),
+            signer_puddle_pubkey: pub_bytes(&founder),
             parent_token_id: None,
         };
         let body_zero = TokenBody {
@@ -1099,11 +1099,11 @@ mod tests {
     ) -> Token {
         let body = TokenBody {
             project_id: bootstrap.body.project_id,
-            subject_fleet_pubkey: *subject,
+            subject_puddle_pubkey: *subject,
             role: Role::Admin,
             issued_at,
             expires_at: None,
-            signer_fleet_pubkey: pub_bytes(signer_key),
+            signer_puddle_pubkey: pub_bytes(signer_key),
             parent_token_id: Some(bootstrap.id()),
         };
         Token::issue(signer_key, body).expect("issue admin under signer")

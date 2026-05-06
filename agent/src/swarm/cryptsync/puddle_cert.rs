@@ -1,20 +1,20 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Fleet membership certificate for cryptsync (ADR-016 follow-up).
+//! Puddle membership certificate for cryptsync (ADR-016 follow-up).
 //!
 //! Closes the same-LAN first-contact race that the slice-2 TOFU pin
 //! has on its own: an attacker who beats the real envoy to the first
 //! announce wins the pin without a cert; with a cert, only the
-//! holder of the fleet's private key can mint a verifiable claim.
+//! holder of the puddle's private key can mint a verifiable claim.
 //!
 //! ### Shape
 //!
 //! ```text
-//! FleetCert {
+//! PuddleCert {
 //!     version:           1
 //!     envoy_age_pubkey:  "age1..."          (the cryptsync identity for this envoy)
-//!     fleet_pubkey:      "<64-hex>"          (the user's self-fleet Ed25519 pubkey)
+//!     puddle_pubkey:      "<64-hex>"          (the user's puddle Ed25519 pubkey)
 //!     issued_at:         <unix seconds>
 //!     expires_at:        <unix seconds>
 //!     signature:         "<128-hex>"         (Ed25519 over canonical bytes)
@@ -23,31 +23,31 @@
 //!
 //! ### Issuance
 //!
-//! Issued by the user's `cryptsync fleet init` (or `renew-cert`)
-//! verb. Signing happens via the self-fleet session helper —
+//! Issued by the user's `cryptsync puddle init` (or `renew-cert`)
+//! verb. Signing happens via the puddle session helper —
 //! `request_sign(canonical_bytes)` — which holds the unwrapped
 //! Ed25519 key in RAM. The cert lands at
-//! `~<user>/.cryptsync/fleet_cert.json`, owned by the user, mode 0600.
+//! `~<user>/.cryptsync/puddle_cert.json`, owned by the user, mode 0600.
 //!
 //! ### Lifetime
 //!
 //! Default 30 days. The user re-issues at `unlock` time (or any
-//! `cryptsync fleet renew-cert` call). Expired certs are rejected by
+//! `cryptsync puddle renew-cert` call). Expired certs are rejected by
 //! receivers — an offline envoy whose cert lapses needs an unlock
-//! pass before peers will accept its fleet claim again. The
+//! pass before peers will accept its puddle claim again. The
 //! tradeoff: stricter cryptographic posture vs. a periodic ceremony.
 //! 30 days is generous enough for normal operation; tunable later if
 //! needed.
 //!
 //! ### Verification (receive-side)
 //!
-//! 1. `signature` verifies against `fleet_pubkey` over canonical bytes.
+//! 1. `signature` verifies against `puddle_pubkey` over canonical bytes.
 //! 2. `envoy_age_pubkey` matches the `Announcement.pubkey`.
-//! 3. `fleet_pubkey` matches the `Announcement.fleet_pubkey`.
+//! 3. `puddle_pubkey` matches the `Announcement.puddle_pubkey`.
 //! 4. `expires_at >= now`.
 //!
-//! Any check failure → the fleet claim is dropped (announce treated
-//! as if `fleet_pubkey` were empty — peer slots into standalone
+//! Any check failure → the puddle claim is dropped (announce treated
+//! as if `puddle_pubkey` were empty — peer slots into standalone
 //! filtering). The daemon warn-logs the rejection so operators can
 //! detect a stale cert before it confuses recipient resolution.
 
@@ -58,7 +58,7 @@ use serde::{Deserialize, Serialize};
 /// Domain-separator prefix for canonical signed bytes. Distinct from
 /// every other Ed25519 envelope shape vigo signs (gitmirror tokens,
 /// gitmirror revoke / leave envelopes, cryptsync DELETE / LEAVE).
-pub const CERT_DOMAIN: &[u8] = b"vigo-cryptsync-fleet-cert-v1\0";
+pub const CERT_DOMAIN: &[u8] = b"vigo-cryptsync-puddle-cert-v1\0";
 
 /// On-disk schema version. Bumps when the canonical bytes change.
 pub const CERT_VERSION: u32 = 1;
@@ -70,13 +70,13 @@ pub const DEFAULT_LIFETIME_SECS: i64 = 30 * 24 * 60 * 60;
 /// constant; redeclared here to avoid the cross-subsystem dep.
 pub const SIG_LEN: usize = 64;
 
-/// Fleet certificate as stored on disk and embedded in announces.
+/// Puddle certificate as stored on disk and embedded in announces.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct FleetCert {
+pub struct PuddleCert {
     #[serde(default = "default_version")]
     pub version: u32,
     pub envoy_age_pubkey: String,
-    pub fleet_pubkey: String,
+    pub puddle_pubkey: String,
     pub issued_at: i64,
     pub expires_at: i64,
     pub signature: String,
@@ -92,27 +92,27 @@ fn default_version() -> u32 {
 /// to prevent boundary-drift forgery.
 pub fn canonical_sign_bytes(
     envoy_age_pubkey: &str,
-    fleet_pubkey: &str,
+    puddle_pubkey: &str,
     issued_at: i64,
     expires_at: i64,
 ) -> Vec<u8> {
     let age = envoy_age_pubkey.as_bytes();
-    let fleet = fleet_pubkey.as_bytes();
+    let puddle_bytes = puddle_pubkey.as_bytes();
     let mut out =
-        Vec::with_capacity(CERT_DOMAIN.len() + 4 + age.len() + 4 + fleet.len() + 8 + 8);
+        Vec::with_capacity(CERT_DOMAIN.len() + 4 + age.len() + 4 + puddle_bytes.len() + 8 + 8);
     out.extend_from_slice(CERT_DOMAIN);
     out.extend_from_slice(&(age.len() as u32).to_be_bytes());
     out.extend_from_slice(age);
-    out.extend_from_slice(&(fleet.len() as u32).to_be_bytes());
-    out.extend_from_slice(fleet);
+    out.extend_from_slice(&(puddle_bytes.len() as u32).to_be_bytes());
+    out.extend_from_slice(puddle_bytes);
     out.extend_from_slice(&issued_at.to_be_bytes());
     out.extend_from_slice(&expires_at.to_be_bytes());
     out
 }
 
-impl FleetCert {
+impl PuddleCert {
     /// Build + sign a cert. The signing happens through a closure so
-    /// the caller can route to the self-fleet session helper without
+    /// the caller can route to the puddle session helper without
     /// pulling that dependency into this module.
     ///
     /// Returns an Err if the resulting cert fails self-verification —
@@ -120,7 +120,7 @@ impl FleetCert {
     /// pubkey paired with right key).
     pub fn issue<F>(
         envoy_age_pubkey: &str,
-        fleet_pubkey: &str,
+        puddle_pubkey: &str,
         issued_at: i64,
         lifetime_secs: i64,
         sign: F,
@@ -131,19 +131,19 @@ impl FleetCert {
         if envoy_age_pubkey.is_empty() {
             bail!("envoy_age_pubkey must not be empty");
         }
-        if fleet_pubkey.is_empty() {
-            bail!("fleet_pubkey must not be empty");
+        if puddle_pubkey.is_empty() {
+            bail!("puddle_pubkey must not be empty");
         }
         if lifetime_secs <= 0 {
             bail!("lifetime_secs must be positive, got {}", lifetime_secs);
         }
         let expires_at = issued_at.saturating_add(lifetime_secs);
-        let msg = canonical_sign_bytes(envoy_age_pubkey, fleet_pubkey, issued_at, expires_at);
+        let msg = canonical_sign_bytes(envoy_age_pubkey, puddle_pubkey, issued_at, expires_at);
         let sig = sign(&msg)?;
         let cert = Self {
             version: CERT_VERSION,
             envoy_age_pubkey: envoy_age_pubkey.to_string(),
-            fleet_pubkey: fleet_pubkey.to_string(),
+            puddle_pubkey: puddle_pubkey.to_string(),
             issued_at,
             expires_at,
             signature: hex::encode(sig),
@@ -154,13 +154,13 @@ impl FleetCert {
     }
 
     /// Verify the Ed25519 signature on this cert against
-    /// `self.fleet_pubkey`. Does NOT check expiry (callers do that
+    /// `self.puddle_pubkey`. Does NOT check expiry (callers do that
     /// separately so they can distinguish "tampered" from "stale" in
     /// log messages).
     pub fn verify_signature(&self) -> Result<()> {
-        let fleet_bytes = decode_fleet_pubkey(&self.fleet_pubkey)?;
+        let fleet_bytes = decode_puddle_pubkey(&self.puddle_pubkey)?;
         let vk = VerifyingKey::from_bytes(&fleet_bytes)
-            .map_err(|e| anyhow!("malformed fleet pubkey: {}", e))?;
+            .map_err(|e| anyhow!("malformed puddle pubkey: {}", e))?;
         let sig_bytes = hex::decode(&self.signature).context("hex-decode signature")?;
         if sig_bytes.len() != SIG_LEN {
             bail!(
@@ -174,7 +174,7 @@ impl FleetCert {
         let sig = Signature::from_bytes(&sig_arr);
         let msg = canonical_sign_bytes(
             &self.envoy_age_pubkey,
-            &self.fleet_pubkey,
+            &self.puddle_pubkey,
             self.issued_at,
             self.expires_at,
         );
@@ -183,20 +183,20 @@ impl FleetCert {
     }
 
     /// Combined verify-and-validate against a target context: the
-    /// cert was signed by the fleet, hasn't expired, and matches the
-    /// envoy_age_pubkey + fleet_pubkey the announce claimed. Returns
+    /// cert was signed by the puddle_bytes, hasn't expired, and matches the
+    /// envoy_age_pubkey + puddle_pubkey the announce claimed. Returns
     /// the specific [`CertCheck`] reason on failure so callers can
     /// log meaningful details.
     pub fn verify_for_announce(
         &self,
         expected_age_pubkey: &str,
-        expected_fleet_pubkey: &str,
+        expected_puddle_pubkey: &str,
         now_secs: i64,
     ) -> std::result::Result<(), CertCheck> {
         if self.envoy_age_pubkey != expected_age_pubkey {
             return Err(CertCheck::AgePubkeyMismatch);
         }
-        if self.fleet_pubkey != expected_fleet_pubkey {
+        if self.puddle_pubkey != expected_puddle_pubkey {
             return Err(CertCheck::FleetPubkeyMismatch);
         }
         if now_secs > self.expires_at {
@@ -243,11 +243,11 @@ impl std::fmt::Display for CertCheck {
             ),
             CertCheck::FleetPubkeyMismatch => write!(
                 f,
-                "cert fleet_pubkey does not match the announce's fleet_pubkey"
+                "cert puddle_pubkey does not match the announce's puddle_pubkey"
             ),
             CertCheck::Expired { expires_at, now } => write!(
                 f,
-                "cert expired at {} (now={}); peer must re-issue via `cryptsync fleet renew-cert`",
+                "cert expired at {} (now={}); peer must re-issue via `cryptsync puddle renew-cert`",
                 expires_at, now
             ),
             CertCheck::NotYetValid { issued_at, now } => write!(
@@ -262,18 +262,18 @@ impl std::fmt::Display for CertCheck {
 
 /// Strip the `ed25519:` prefix (if present) and decode the 64-hex
 /// pubkey to raw 32 bytes.
-fn decode_fleet_pubkey(text: &str) -> Result<[u8; 32]> {
+fn decode_puddle_pubkey(text: &str) -> Result<[u8; 32]> {
     let hex_part = text.strip_prefix("ed25519:").unwrap_or(text);
     if hex_part.len() != 64 {
         bail!(
-            "fleet pubkey is {} hex chars, expected 64",
+            "puddle pubkey is {} hex chars, expected 64",
             hex_part.len()
         );
     }
     if hex_part.chars().any(|c| c.is_ascii_uppercase()) {
-        bail!("fleet pubkey must be lowercase hex");
+        bail!("puddle pubkey must be lowercase hex");
     }
-    let bytes = hex::decode(hex_part).context("decoding fleet pubkey hex")?;
+    let bytes = hex::decode(hex_part).context("decoding puddle pubkey hex")?;
     let mut out = [0u8; 32];
     out.copy_from_slice(&bytes);
     Ok(out)
@@ -281,27 +281,27 @@ fn decode_fleet_pubkey(text: &str) -> Result<[u8; 32]> {
 
 // ---------- on-disk persistence ----------
 
-/// Path where the cert is persisted: `~<user>/.cryptsync/fleet_cert.json`.
+/// Path where the cert is persisted: `~<user>/.cryptsync/puddle_cert.json`.
 pub fn cert_path(home: &std::path::Path) -> std::path::PathBuf {
-    super::config::dot_dir(home).join("fleet_cert.json")
+    super::config::dot_dir(home).join("puddle_cert.json")
 }
 
-impl FleetCert {
+impl PuddleCert {
     /// Read the cert from disk. Returns `None` when the file doesn't
-    /// exist (peer hasn't run `cryptsync fleet init` / `renew-cert`)
+    /// exist (peer hasn't run `cryptsync puddle init` / `renew-cert`)
     /// or is unreadable. JSON parse errors are warn-logged + return
     /// `None` so a corrupt cert doesn't crash the announce loop —
     /// the user re-issues via `renew-cert`.
     pub fn load(home: &std::path::Path) -> Option<Self> {
         let path = cert_path(home);
         match std::fs::read_to_string(&path) {
-            Ok(s) => match serde_json::from_str::<FleetCert>(&s) {
+            Ok(s) => match serde_json::from_str::<PuddleCert>(&s) {
                 Ok(c) if c.version == CERT_VERSION => Some(c),
                 Ok(c) => {
                     tracing::warn!(
                         path = %path.display(),
                         version = c.version,
-                        "cryptsync: fleet_cert.json schema version != current; re-run `cryptsync fleet renew-cert`"
+                        "cryptsync: puddle_cert.json schema version != current; re-run `cryptsync puddle renew-cert`"
                     );
                     None
                 }
@@ -309,7 +309,7 @@ impl FleetCert {
                     tracing::warn!(
                         path = %path.display(),
                         error = %e,
-                        "cryptsync: malformed fleet_cert.json; re-run `cryptsync fleet renew-cert`"
+                        "cryptsync: malformed puddle_cert.json; re-run `cryptsync puddle renew-cert`"
                     );
                     None
                 }
@@ -371,13 +371,13 @@ mod tests {
 
     #[test]
     fn issue_signs_and_self_verifies() {
-        let fleet = fresh_key();
-        let cert = FleetCert::issue(
+        let puddle_bytes = fresh_key();
+        let cert = PuddleCert::issue(
             "age1abc",
-            &pub_hex(&fleet),
+            &pub_hex(&puddle_bytes),
             1_700_000_000,
             DEFAULT_LIFETIME_SECS,
-            sign_with(&fleet),
+            sign_with(&puddle_bytes),
         )
         .unwrap();
         cert.verify_signature().unwrap();
@@ -390,7 +390,7 @@ mod tests {
         let real = fresh_key();
         let imposter = fresh_key();
         // Build a cert claiming `real`'s pubkey but signed by `imposter`.
-        let result = FleetCert::issue(
+        let result = PuddleCert::issue(
             "age1abc",
             &pub_hex(&real),
             1_700_000_000,
@@ -399,81 +399,81 @@ mod tests {
         );
         assert!(
             result.is_err(),
-            "issue must reject when signing key doesn't match the claimed fleet pubkey"
+            "issue must reject when signing key doesn't match the claimed puddle pubkey"
         );
     }
 
     #[test]
     fn issue_rejects_empty_inputs() {
-        let fleet = fresh_key();
-        assert!(FleetCert::issue(
+        let puddle_bytes = fresh_key();
+        assert!(PuddleCert::issue(
             "",
-            &pub_hex(&fleet),
+            &pub_hex(&puddle_bytes),
             100,
             3600,
-            sign_with(&fleet)
+            sign_with(&puddle_bytes)
         )
         .is_err());
-        assert!(FleetCert::issue(
+        assert!(PuddleCert::issue(
             "age1abc",
             "",
             100,
             3600,
-            sign_with(&fleet)
+            sign_with(&puddle_bytes)
         )
         .is_err());
-        assert!(FleetCert::issue(
+        assert!(PuddleCert::issue(
             "age1abc",
-            &pub_hex(&fleet),
+            &pub_hex(&puddle_bytes),
             100,
             0,
-            sign_with(&fleet)
+            sign_with(&puddle_bytes)
         )
         .is_err());
     }
 
     #[test]
     fn verify_for_announce_accepts_matching() {
-        let fleet = fresh_key();
-        let cert = FleetCert::issue(
+        let puddle_bytes = fresh_key();
+        let cert = PuddleCert::issue(
             "age1abc",
-            &pub_hex(&fleet),
+            &pub_hex(&puddle_bytes),
             100,
             3600,
-            sign_with(&fleet),
+            sign_with(&puddle_bytes),
         )
         .unwrap();
-        cert.verify_for_announce("age1abc", &pub_hex(&fleet), 200)
+        cert.verify_for_announce("age1abc", &pub_hex(&puddle_bytes), 200)
             .unwrap();
     }
 
     #[test]
     fn verify_for_announce_rejects_age_mismatch() {
-        let fleet = fresh_key();
-        let cert = FleetCert::issue(
+        let puddle_bytes = fresh_key();
+        let cert = PuddleCert::issue(
             "age1abc",
-            &pub_hex(&fleet),
+            &pub_hex(&puddle_bytes),
             100,
             3600,
-            sign_with(&fleet),
+            sign_with(&puddle_bytes),
         )
         .unwrap();
         let err = cert
-            .verify_for_announce("age1WRONG", &pub_hex(&fleet), 200)
+            .verify_for_announce("age1WRONG", &pub_hex(&puddle_bytes), 200)
             .unwrap_err();
         assert!(matches!(err, CertCheck::AgePubkeyMismatch));
     }
 
     #[test]
     fn verify_for_announce_rejects_fleet_mismatch() {
-        let fleet = fresh_key();
+        let puddle_bytes = fresh_key();
         let other = fresh_key();
-        let cert = FleetCert::issue(
+        let cert = PuddleCert::issue(
             "age1abc",
-            &pub_hex(&fleet),
+            &pub_hex(&puddle_bytes),
             100,
             3600,
-            sign_with(&fleet),
+            sign_with(&puddle_bytes),
         )
         .unwrap();
         let err = cert
@@ -484,51 +484,51 @@ mod tests {
 
     #[test]
     fn verify_for_announce_rejects_expired() {
-        let fleet = fresh_key();
-        let cert = FleetCert::issue(
+        let puddle_bytes = fresh_key();
+        let cert = PuddleCert::issue(
             "age1abc",
-            &pub_hex(&fleet),
+            &pub_hex(&puddle_bytes),
             100,
             3600,
-            sign_with(&fleet),
+            sign_with(&puddle_bytes),
         )
         .unwrap();
         let err = cert
-            .verify_for_announce("age1abc", &pub_hex(&fleet), 100 + 3600 + 1)
+            .verify_for_announce("age1abc", &pub_hex(&puddle_bytes), 100 + 3600 + 1)
             .unwrap_err();
         assert!(matches!(err, CertCheck::Expired { .. }));
     }
 
     #[test]
     fn verify_for_announce_tolerates_60s_skew_on_not_yet_valid_edge() {
-        let fleet = fresh_key();
-        let cert = FleetCert::issue(
+        let puddle_bytes = fresh_key();
+        let cert = PuddleCert::issue(
             "age1abc",
-            &pub_hex(&fleet),
+            &pub_hex(&puddle_bytes),
             100,
             3600,
-            sign_with(&fleet),
+            sign_with(&puddle_bytes),
         )
         .unwrap();
         // 30 s before issued_at — within tolerance.
-        cert.verify_for_announce("age1abc", &pub_hex(&fleet), 70)
+        cert.verify_for_announce("age1abc", &pub_hex(&puddle_bytes), 70)
             .unwrap();
         // 120 s before issued_at — outside tolerance.
         let err = cert
-            .verify_for_announce("age1abc", &pub_hex(&fleet), -20)
+            .verify_for_announce("age1abc", &pub_hex(&puddle_bytes), -20)
             .unwrap_err();
         assert!(matches!(err, CertCheck::NotYetValid { .. }));
     }
 
     #[test]
     fn verify_for_announce_rejects_tampered_signature() {
-        let fleet = fresh_key();
-        let mut cert = FleetCert::issue(
+        let puddle_bytes = fresh_key();
+        let mut cert = PuddleCert::issue(
             "age1abc",
-            &pub_hex(&fleet),
+            &pub_hex(&puddle_bytes),
             100,
             3600,
-            sign_with(&fleet),
+            sign_with(&puddle_bytes),
         )
         .unwrap();
         // Flip a hex char in the signature.
@@ -536,41 +536,41 @@ mod tests {
         bytes[0] = if bytes[0] == b'a' { b'b' } else { b'a' };
         cert.signature = String::from_utf8(bytes).unwrap();
         let err = cert
-            .verify_for_announce("age1abc", &pub_hex(&fleet), 200)
+            .verify_for_announce("age1abc", &pub_hex(&puddle_bytes), 200)
             .unwrap_err();
         assert!(matches!(err, CertCheck::BadSignature(_)));
     }
 
     #[test]
     fn verify_for_announce_rejects_tampered_expiry() {
-        let fleet = fresh_key();
-        let mut cert = FleetCert::issue(
+        let puddle_bytes = fresh_key();
+        let mut cert = PuddleCert::issue(
             "age1abc",
-            &pub_hex(&fleet),
+            &pub_hex(&puddle_bytes),
             100,
             3600,
-            sign_with(&fleet),
+            sign_with(&puddle_bytes),
         )
         .unwrap();
         // Push expiry forward — would extend cert if accepted.
         cert.expires_at += 1_000_000;
         let err = cert
-            .verify_for_announce("age1abc", &pub_hex(&fleet), 200)
+            .verify_for_announce("age1abc", &pub_hex(&puddle_bytes), 200)
             .unwrap_err();
         // Signature covers expiry; tamper invalidates.
         assert!(matches!(err, CertCheck::BadSignature(_)));
     }
 
     #[test]
-    fn fleet_pubkey_strips_ed25519_prefix() {
-        let fleet = fresh_key();
-        let prefixed = format!("ed25519:{}", pub_hex(&fleet));
-        let cert = FleetCert::issue(
+    fn puddle_pubkey_strips_ed25519_prefix() {
+        let puddle_bytes = fresh_key();
+        let prefixed = format!("ed25519:{}", pub_hex(&puddle_bytes));
+        let cert = PuddleCert::issue(
             "age1abc",
             &prefixed,
             100,
             3600,
-            sign_with(&fleet),
+            sign_with(&puddle_bytes),
         )
         .unwrap();
         // Verifies with the prefixed form (canonical form ignores the prefix).
@@ -580,13 +580,13 @@ mod tests {
 
     #[test]
     fn days_until_expiry_arithmetic() {
-        let fleet = fresh_key();
-        let cert = FleetCert::issue(
+        let puddle_bytes = fresh_key();
+        let cert = PuddleCert::issue(
             "age1abc",
-            &pub_hex(&fleet),
+            &pub_hex(&puddle_bytes),
             0,
             DEFAULT_LIFETIME_SECS,
-            sign_with(&fleet),
+            sign_with(&puddle_bytes),
         )
         .unwrap();
         assert_eq!(cert.days_until_expiry(0), 30);
@@ -597,17 +597,17 @@ mod tests {
 
     #[test]
     fn json_round_trips() {
-        let fleet = fresh_key();
-        let cert = FleetCert::issue(
+        let puddle_bytes = fresh_key();
+        let cert = PuddleCert::issue(
             "age1abc",
-            &pub_hex(&fleet),
+            &pub_hex(&puddle_bytes),
             100,
             3600,
-            sign_with(&fleet),
+            sign_with(&puddle_bytes),
         )
         .unwrap();
         let json = serde_json::to_string(&cert).unwrap();
-        let parsed: FleetCert = serde_json::from_str(&json).unwrap();
+        let parsed: PuddleCert = serde_json::from_str(&json).unwrap();
         assert_eq!(cert, parsed);
         parsed.verify_signature().unwrap();
     }
@@ -617,17 +617,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         // Need a `.cryptsync/` subdir so cert_path resolves correctly.
         std::fs::create_dir_all(dir.path().join(".cryptsync")).unwrap();
-        let fleet = fresh_key();
-        let cert = FleetCert::issue(
+        let puddle_bytes = fresh_key();
+        let cert = PuddleCert::issue(
             "age1abc",
-            &pub_hex(&fleet),
+            &pub_hex(&puddle_bytes),
             100,
             3600,
-            sign_with(&fleet),
+            sign_with(&puddle_bytes),
         )
         .unwrap();
         cert.save(dir.path()).unwrap();
-        let loaded = FleetCert::load(dir.path()).unwrap();
+        let loaded = PuddleCert::load(dir.path()).unwrap();
         assert_eq!(loaded, cert);
     }
 
@@ -635,7 +635,7 @@ mod tests {
     fn load_returns_none_when_missing() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join(".cryptsync")).unwrap();
-        assert!(FleetCert::load(dir.path()).is_none());
+        assert!(PuddleCert::load(dir.path()).is_none());
     }
 
     #[test]
@@ -643,19 +643,19 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir_all(dir.path().join(".cryptsync")).unwrap();
         std::fs::write(cert_path(dir.path()), b"not json").unwrap();
-        assert!(FleetCert::load(dir.path()).is_none());
+        assert!(PuddleCert::load(dir.path()).is_none());
     }
 
     #[test]
     fn canonical_bytes_stable_across_calls() {
-        let a = canonical_sign_bytes("age1abc", "fleet-pk", 100, 200);
-        let b = canonical_sign_bytes("age1abc", "fleet-pk", 100, 200);
+        let a = canonical_sign_bytes("age1abc", "puddle_bytes-pk", 100, 200);
+        let b = canonical_sign_bytes("age1abc", "puddle_bytes-pk", 100, 200);
         assert_eq!(a, b);
     }
 
     #[test]
     fn canonical_bytes_carry_domain_separator() {
-        let bytes = canonical_sign_bytes("age1abc", "fleet-pk", 100, 200);
+        let bytes = canonical_sign_bytes("age1abc", "puddle_bytes-pk", 100, 200);
         assert!(bytes.starts_with(CERT_DOMAIN));
     }
 }

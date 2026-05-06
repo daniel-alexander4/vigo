@@ -82,39 +82,39 @@ fn derive_wrap_key(password: &[u8], salt: &[u8]) -> Result<Zeroizing<[u8; ARGON_
     Ok(out)
 }
 
-// ---------- fleet-mode wrap-key derivation ----------
+// ---------- puddle-mode wrap-key derivation ----------
 
-/// Domain-separated challenge signed via the self-fleet session
-/// helper to derive cryptsync's wrap-key material in fleet mode
-/// (ADR-016). Must not collide with any other self-fleet signing
-/// context (announcement, fleet-cert, pair-claim, etc.) — this prefix
-/// version-locks the binding between the self-fleet identity and a
+/// Domain-separated challenge signed via the puddle session
+/// helper to derive cryptsync's wrap-key material in puddle mode
+/// (ADR-016). Must not collide with any other puddle signing
+/// context (announcement, puddle-cert, pair-claim, etc.) — this prefix
+/// version-locks the binding between the puddle identity and a
 /// cryptsync wrap key.
 pub const FLEET_WRAP_CHALLENGE: &[u8] = b"vigo-cryptsync-wrap-v1";
 
-/// Derive cryptsync wrap-key material from the user's self-fleet
+/// Derive cryptsync wrap-key material from the user's puddle
 /// identity by asking the session helper to sign a fixed
 /// domain-separated challenge. Ed25519 signatures over a fixed
-/// message are deterministic (RFC 8032), so the same fleet identity
+/// message are deterministic (RFC 8032), so the same puddle identity
 /// always produces the same 64 bytes here.
 ///
 /// Returned bytes are passed as the `password` argument to
-/// `wrap_identity` / `unwrap_identity` in fleet mode — Argon2id then
+/// `wrap_identity` / `unwrap_identity` in puddle mode — Argon2id then
 /// stretches them into the 32-byte AEAD key the same way it does in
 /// standalone mode. The stretch is redundant against already
 /// high-entropy input, but it keeps the on-disk wrap envelope
 /// identical across modes so the format version doesn't have to fork.
 ///
-/// Requires the self-fleet session helper to be running. Returns a
+/// Requires the puddle session helper to be running. Returns a
 /// pointed error message when it isn't, so the operator knows what
 /// to fix.
-pub fn derive_fleet_wrap_password() -> Result<Zeroizing<Vec<u8>>> {
-    let sig = crate::swarm::self_fleet::session::request_sign(FLEET_WRAP_CHALLENGE).context(
-        "self-fleet session helper unavailable; run `vigo swarm self-fleet unlock` first",
+pub fn derive_puddle_wrap_password() -> Result<Zeroizing<Vec<u8>>> {
+    let sig = crate::swarm::puddle::session::request_sign(FLEET_WRAP_CHALLENGE).context(
+        "puddle session helper unavailable; run `vigo swarm puddle unlock` first",
     )?;
     if sig.len() != 64 {
         bail!(
-            "self-fleet session helper returned a {}-byte signature, expected 64",
+            "puddle session helper returned a {}-byte signature, expected 64",
             sig.len()
         );
     }
@@ -459,9 +459,9 @@ mod tests {
     }
 
     #[test]
-    fn fleet_wrap_challenge_is_domain_separated() {
+    fn puddle_wrap_challenge_is_domain_separated() {
         // The challenge prefix must not collide with any other
-        // self-fleet signing context (announcements, fleet certs,
+        // puddle signing context (announcements, puddle certs,
         // pair-claim tokens). A collision would let a signature
         // produced for one purpose be reused as a wrap key — same
         // identity, same key derivation, different intent. The

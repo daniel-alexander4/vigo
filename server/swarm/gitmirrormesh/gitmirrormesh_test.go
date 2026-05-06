@@ -16,7 +16,7 @@ func TestSummarizeProjectAllAgree(t *testing.T) {
 		{
 			ProjectID:          pid,
 			Handle:             "vigo-web",
-			FounderFleetPubkey: founder,
+			FounderPuddlePubkey: founder,
 			Members:            []string{founder},
 			DrFanout:           "fleet-wide",
 			HasBareRepo:        true,
@@ -29,7 +29,7 @@ func TestSummarizeProjectAllAgree(t *testing.T) {
 		{
 			ProjectID:          pid,
 			Handle:             "vigo-web",
-			FounderFleetPubkey: founder,
+			FounderPuddlePubkey: founder,
 			Members:            []string{founder},
 			DrFanout:           "fleet-wide",
 			HasBareRepo:        true,

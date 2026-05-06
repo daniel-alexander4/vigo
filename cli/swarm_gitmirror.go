@@ -22,7 +22,7 @@ import (
 //
 // Post-ADR-015 the model is project-id-keyed (every project is
 // `vigo://<project_id>/<handle>` with `project_id =
-// sha256(founder_fleet_pubkey)`). Membership is a stack of capability
+// sha256(founder_puddle_pubkey)`). Membership is a stack of capability
 // tokens; the legacy publisher/receiver distinction is gone.
 //
 // All subcommands are read-only. Recovery, push, and revoke
@@ -50,7 +50,7 @@ type fleetTotals struct {
 type fleetProjectSummary struct {
 	ProjectID          string                  `json:"project_id"`
 	Handle             string                  `json:"handle"`
-	FounderFleetPubkey string                  `json:"founder_fleet_pubkey"`
+	FounderPuddlePubkey string                  `json:"founder_puddle_pubkey"`
 	Members            []string                `json:"members"`
 	DrFanout           string                  `json:"dr_fanout"`
 	Hosts              []fleetHostPresence     `json:"hosts"`
@@ -86,7 +86,7 @@ var gitmirrorCmd = &cobra.Command{
 	Short: "Fleet-wide view of gitmirror projects",
 	Long: `Read-only admin view of the unified-substrate gitmirror mesh
 (ADR-015). Each project is identified by
-project_id = sha256(founder_fleet_pubkey) and accessed via
+project_id = sha256(founder_puddle_pubkey) and accessed via
 vigo://<project_id>/<handle>. Membership is a stack of Ed25519
 capability tokens.
 
@@ -226,7 +226,7 @@ func runGitmirrorShow(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Project:        %s\n", bold(match.Handle))
 	fmt.Printf("URL:            vigo://%s/%s\n", match.ProjectID, match.Handle)
 	fmt.Printf("Project ID:     %s\n", match.ProjectID)
-	fmt.Printf("Founder fleet:  ed25519:%s\n", match.FounderFleetPubkey)
+	fmt.Printf("Founder puddle: ed25519:%s\n", match.FounderPuddlePubkey)
 	fmt.Printf("Fan-out:        %s\n", match.DrFanout)
 	fmt.Printf("Members (%d):\n", match.MemberFleetCount)
 	for _, m := range match.Members {
@@ -354,7 +354,7 @@ func renderGitmirrorMembers(selected []fleetProjectSummary, asJSON bool, out io.
 		fmt.Fprintf(w, "%s\t%s\n", bold("ROLE"), bold("FLEET-PUBKEY"))
 		for i, fp := range p.Members {
 			role := "member"
-			if i == 0 || fp == p.FounderFleetPubkey {
+			if i == 0 || fp == p.FounderPuddlePubkey {
 				role = "founder"
 			}
 			fmt.Fprintf(w, "%s\ted25519:%s\n", role, fp)

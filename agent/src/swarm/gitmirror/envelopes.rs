@@ -5,9 +5,9 @@
 //! unified-substrate gitmirror.
 //!
 //! A REVOKE envelope retracts a capability token; a LEAVE envelope
-//! announces a fleet stepping out of a project; a DELEGATION envelope
-//! (ADR-019) is the bridge a founder signs at self-fleet rekey time so
-//! that admin tokens minted under the new fleet keypair still chain
+//! announces a puddle stepping out of a project; a DELEGATION envelope
+//! (ADR-019) is the bridge a founder signs at puddle rekey time so
+//! that admin tokens minted under the new puddle keypair still chain
 //! back to the founder pubkey baked into `project_id`. All three are
 //! signed Ed25519 blobs that gossip across the swarm and persist on
 //! every envoy that holds the project — except DELEGATION envelopes
@@ -22,15 +22,15 @@
 //! ### Trust model
 //!
 //! - **REVOKE** must be signed by an authorized admin in the project's
-//!   token tree. The envelope carries `signer_fleet_pubkey`; the
+//!   token tree. The envelope carries `signer_puddle_pubkey`; the
 //!   verifier checks the signature against that pubkey, then separately
-//!   asks "is this fleet a current admin in the project?" by looking
+//!   asks "is this puddle a current admin in the project?" by looking
 //!   up an admin token whose subject == signer in the local
 //!   `tokens.json`. (The lookup is the caller's responsibility; this
 //!   module only verifies signatures and structure.)
 //! - **LEAVE** is self-leave only: the signer must be the leaving
-//!   fleet itself. The envelope carries `leaving_fleet_pubkey`; the
-//!   signature is verified against that same pubkey. Cross-fleet
+//!   fleet itself. The envelope carries `leaving_puddle_pubkey`; the
+//!   signature is verified against that same pubkey. Cross-puddle
 //!   eviction is cryptographically impossible — admin removal is a
 //!   REVOKE, not a LEAVE.
 //!
@@ -39,7 +39,7 @@
 //! `<gitmirror_base>/envelopes/<project_id_hex>/{revokes,leaves}/<id>.json`
 //! - `revokes/` keyed by `token_id_hex` (stable per token; one
 //!   revocation per token).
-//! - `leaves/` keyed by `leaving_fleet_pubkey_hex`.
+//! - `leaves/` keyed by `leaving_puddle_pubkey_hex`.
 //!
 //! Files are root-owned 0600. Idempotent upsert: re-arrival of the
 //! same envelope is a no-op; arrival of an envelope with a strictly
@@ -110,13 +110,13 @@ pub const DIGEST_LEN: usize = 16;
 /// 3. `token_id` (32B)
 /// 4. `revoked_at` (8B BE i64)
 /// 5. `reason_len` (4B BE u32) + `reason` (varlen UTF-8)
-/// 6. `signer_fleet_pubkey` (32B)
+/// 6. `signer_puddle_pubkey` (32B)
 pub fn canonical_revoke_bytes(
     project_id: &[u8; ID_LEN],
     token_id: &[u8; ID_LEN],
     revoked_at: i64,
     reason: &str,
-    signer_fleet_pubkey: &[u8; ID_LEN],
+    signer_puddle_pubkey: &[u8; ID_LEN],
 ) -> Vec<u8> {
     let mut out = Vec::with_capacity(REVOKE_DOMAIN.len() + 32 + 32 + 8 + 4 + reason.len() + 32);
     out.extend_from_slice(REVOKE_DOMAIN);
@@ -126,28 +126,28 @@ pub fn canonical_revoke_bytes(
     let reason_bytes = reason.as_bytes();
     out.extend_from_slice(&(reason_bytes.len() as u32).to_be_bytes());
     out.extend_from_slice(reason_bytes);
-    out.extend_from_slice(signer_fleet_pubkey);
+    out.extend_from_slice(signer_puddle_pubkey);
     out
 }
 
 /// Canonical bytes signed when issuing a LEAVE. Layout:
 /// 1. `LEAVE_DOMAIN` (23B)
 /// 2. `project_id` (32B)
-/// 3. `leaving_fleet_pubkey` (32B)
+/// 3. `leaving_puddle_pubkey` (32B)
 /// 4. `leave_time` (8B BE i64)
 ///
-/// `signer_fleet_pubkey` is intentionally absent — self-leave invariant
-/// pins it to `leaving_fleet_pubkey`, so re-including it would just
+/// `signer_puddle_pubkey` is intentionally absent — self-leave invariant
+/// pins it to `leaving_puddle_pubkey`, so re-including it would just
 /// be redundant. Verifier asserts the pin during signature check.
 pub fn canonical_leave_bytes(
     project_id: &[u8; ID_LEN],
-    leaving_fleet_pubkey: &[u8; ID_LEN],
+    leaving_puddle_pubkey: &[u8; ID_LEN],
     leave_time: i64,
 ) -> Vec<u8> {
     let mut out = Vec::with_capacity(LEAVE_DOMAIN.len() + 32 + 32 + 8);
     out.extend_from_slice(LEAVE_DOMAIN);
     out.extend_from_slice(project_id);
-    out.extend_from_slice(leaving_fleet_pubkey);
+    out.extend_from_slice(leaving_puddle_pubkey);
     out.extend_from_slice(&leave_time.to_be_bytes());
     out
 }
@@ -167,7 +167,7 @@ pub fn canonical_leave_bytes(
 ///    the next rekey appends another delegation.
 /// 5. `delegated_at` (8B BE i64).
 ///
-/// `signer_fleet_pubkey` is intentionally absent — `old_founder_pubkey`
+/// `signer_puddle_pubkey` is intentionally absent — `old_founder_pubkey`
 /// IS the signer, so re-including it would be redundant. The verifier
 /// asserts the binding during signature check.
 pub fn canonical_delegation_bytes(
@@ -192,7 +192,7 @@ pub fn canonical_delegation_bytes(
 /// fields convert via [`Self::raw`] for verification.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RevokeEnvelope {
-    /// Hex-encoded `sha256(founder_fleet_pubkey)` — the project ID
+    /// Hex-encoded `sha256(founder_puddle_pubkey)` — the project ID
     /// baked into the URL.
     pub project_id: String,
     /// Hex-encoded ID of the token being revoked.
@@ -203,10 +203,10 @@ pub struct RevokeEnvelope {
     /// it can't bleed into the next field).
     #[serde(default)]
     pub reason: String,
-    /// Hex-encoded fleet pubkey that signed this envelope. Must be an
+    /// Hex-encoded puddle pubkey that signed this envelope. Must be an
     /// authorized admin in the project's token tree (caller verifies
     /// after signature passes — see module docs).
-    pub signer_fleet_pubkey: String,
+    pub signer_puddle_pubkey: String,
     /// Hex-encoded 64-byte Ed25519 signature.
     pub signature: String,
 }
@@ -216,13 +216,13 @@ pub struct RevokeEnvelope {
 pub struct RawRevoke {
     pub project_id: [u8; ID_LEN],
     pub token_id: [u8; ID_LEN],
-    pub signer_fleet_pubkey: [u8; ID_LEN],
+    pub signer_puddle_pubkey: [u8; ID_LEN],
     pub signature: [u8; SIG_LEN],
 }
 
 impl RevokeEnvelope {
     /// Build + sign a revocation. Caller supplies the admin's signing
-    /// key; the envelope's `signer_fleet_pubkey` is derived from the
+    /// key; the envelope's `signer_puddle_pubkey` is derived from the
     /// public half so a key/pubkey mismatch fails loudly.
     pub fn build(
         signing_key: &SigningKey,
@@ -239,13 +239,13 @@ impl RevokeEnvelope {
             token_id: hex_id(token_id),
             revoked_at,
             reason: reason.to_string(),
-            signer_fleet_pubkey: hex_id(&signer_pub),
+            signer_puddle_pubkey: hex_id(&signer_pub),
             signature: hex::encode(sig.to_bytes()),
         }
     }
 
     /// Build a REVOKE where signing is delegated to a closure (e.g.
-    /// the self-fleet session helper, which holds the unwrapped
+    /// the puddle session helper, which holds the unwrapped
     /// signing key in a separate process). Returns an envelope that
     /// has been self-verified — bad caller-supplied signatures fail
     /// loudly here rather than at gossip time.
@@ -254,7 +254,7 @@ impl RevokeEnvelope {
         token_id: &[u8; ID_LEN],
         revoked_at: i64,
         reason: &str,
-        signer_fleet_pubkey: &[u8; ID_LEN],
+        signer_puddle_pubkey: &[u8; ID_LEN],
         sign: F,
     ) -> Result<Self>
     where
@@ -265,7 +265,7 @@ impl RevokeEnvelope {
             token_id,
             revoked_at,
             reason,
-            signer_fleet_pubkey,
+            signer_puddle_pubkey,
         );
         let sig = sign(&msg)?;
         let env = Self {
@@ -273,7 +273,7 @@ impl RevokeEnvelope {
             token_id: hex_id(token_id),
             revoked_at,
             reason: reason.to_string(),
-            signer_fleet_pubkey: hex_id(signer_fleet_pubkey),
+            signer_puddle_pubkey: hex_id(signer_puddle_pubkey),
             signature: hex::encode(sig),
         };
         env.verify_signature()
@@ -285,8 +285,8 @@ impl RevokeEnvelope {
     pub fn raw(&self) -> Result<RawRevoke> {
         let project_id = parse_hex_id(&self.project_id).context("project_id hex")?;
         let token_id = parse_hex_id(&self.token_id).context("token_id hex")?;
-        let signer_fleet_pubkey =
-            parse_hex_id(&self.signer_fleet_pubkey).context("signer_fleet_pubkey hex")?;
+        let signer_puddle_pubkey =
+            parse_hex_id(&self.signer_puddle_pubkey).context("signer_puddle_pubkey hex")?;
         let sig_bytes = hex::decode(&self.signature).context("signature hex")?;
         if sig_bytes.len() != SIG_LEN {
             bail!("signature is {} bytes, expected {}", sig_bytes.len(), SIG_LEN);
@@ -296,18 +296,18 @@ impl RevokeEnvelope {
         Ok(RawRevoke {
             project_id,
             token_id,
-            signer_fleet_pubkey,
+            signer_puddle_pubkey,
             signature,
         })
     }
 
     /// Verify the Ed25519 signature on this envelope against
-    /// `signer_fleet_pubkey`. Does NOT verify that the signer is an
+    /// `signer_puddle_pubkey`. Does NOT verify that the signer is an
     /// authorized admin — the caller must check that against the
     /// project's token tree.
     pub fn verify_signature(&self) -> Result<RawRevoke> {
         let raw = self.raw()?;
-        let vk = VerifyingKey::from_bytes(&raw.signer_fleet_pubkey)
+        let vk = VerifyingKey::from_bytes(&raw.signer_puddle_pubkey)
             .map_err(|e| anyhow!("invalid signer pubkey: {}", e))?;
         let sig = Signature::from_bytes(&raw.signature);
         let msg = canonical_revoke_bytes(
@@ -315,7 +315,7 @@ impl RevokeEnvelope {
             &raw.token_id,
             self.revoked_at,
             &self.reason,
-            &raw.signer_fleet_pubkey,
+            &raw.signer_puddle_pubkey,
         );
         vk.verify(&msg, &sig)
             .map_err(|e| anyhow!("signature verification failed: {}", e))?;
@@ -327,15 +327,15 @@ impl RevokeEnvelope {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LeaveEnvelope {
     pub project_id: String,
-    /// Hex-encoded fleet pubkey that is leaving (also the signer).
-    pub leaving_fleet_pubkey: String,
+    /// Hex-encoded puddle pubkey that is leaving (also the signer).
+    pub leaving_puddle_pubkey: String,
     pub leave_time: i64,
     pub signature: String,
 }
 
 pub struct RawLeave {
     pub project_id: [u8; ID_LEN],
-    pub leaving_fleet_pubkey: [u8; ID_LEN],
+    pub leaving_puddle_pubkey: [u8; ID_LEN],
     pub signature: [u8; SIG_LEN],
 }
 
@@ -350,7 +350,7 @@ impl LeaveEnvelope {
         let sig = signing_key.sign(&msg);
         Self {
             project_id: hex_id(project_id),
-            leaving_fleet_pubkey: hex_id(&leaving_pub),
+            leaving_puddle_pubkey: hex_id(&leaving_pub),
             leave_time,
             signature: hex::encode(sig.to_bytes()),
         }
@@ -360,18 +360,18 @@ impl LeaveEnvelope {
     /// [`RevokeEnvelope::build_with`] for the rationale.
     pub fn build_with<F>(
         project_id: &[u8; ID_LEN],
-        leaving_fleet_pubkey: &[u8; ID_LEN],
+        leaving_puddle_pubkey: &[u8; ID_LEN],
         leave_time: i64,
         sign: F,
     ) -> Result<Self>
     where
         F: FnOnce(&[u8]) -> Result<[u8; SIG_LEN]>,
     {
-        let msg = canonical_leave_bytes(project_id, leaving_fleet_pubkey, leave_time);
+        let msg = canonical_leave_bytes(project_id, leaving_puddle_pubkey, leave_time);
         let sig = sign(&msg)?;
         let env = Self {
             project_id: hex_id(project_id),
-            leaving_fleet_pubkey: hex_id(leaving_fleet_pubkey),
+            leaving_puddle_pubkey: hex_id(leaving_puddle_pubkey),
             leave_time,
             signature: hex::encode(sig),
         };
@@ -382,8 +382,8 @@ impl LeaveEnvelope {
 
     pub fn raw(&self) -> Result<RawLeave> {
         let project_id = parse_hex_id(&self.project_id).context("project_id hex")?;
-        let leaving_fleet_pubkey =
-            parse_hex_id(&self.leaving_fleet_pubkey).context("leaving_fleet_pubkey hex")?;
+        let leaving_puddle_pubkey =
+            parse_hex_id(&self.leaving_puddle_pubkey).context("leaving_puddle_pubkey hex")?;
         let sig_bytes = hex::decode(&self.signature).context("signature hex")?;
         if sig_bytes.len() != SIG_LEN {
             bail!("signature is {} bytes, expected {}", sig_bytes.len(), SIG_LEN);
@@ -392,20 +392,20 @@ impl LeaveEnvelope {
         signature.copy_from_slice(&sig_bytes);
         Ok(RawLeave {
             project_id,
-            leaving_fleet_pubkey,
+            leaving_puddle_pubkey,
             signature,
         })
     }
 
     /// Verify the Ed25519 signature on this envelope against
-    /// `leaving_fleet_pubkey` (self-leave: signer == leaver).
+    /// `leaving_puddle_pubkey` (self-leave: signer == leaver).
     pub fn verify_signature(&self) -> Result<RawLeave> {
         let raw = self.raw()?;
-        let vk = VerifyingKey::from_bytes(&raw.leaving_fleet_pubkey)
+        let vk = VerifyingKey::from_bytes(&raw.leaving_puddle_pubkey)
             .map_err(|e| anyhow!("invalid leaver pubkey: {}", e))?;
         let sig = Signature::from_bytes(&raw.signature);
         let msg =
-            canonical_leave_bytes(&raw.project_id, &raw.leaving_fleet_pubkey, self.leave_time);
+            canonical_leave_bytes(&raw.project_id, &raw.leaving_puddle_pubkey, self.leave_time);
         vk.verify(&msg, &sig)
             .map_err(|e| anyhow!("signature verification failed: {}", e))?;
         Ok(raw)
@@ -416,7 +416,7 @@ impl LeaveEnvelope {
 ///
 /// Bridges the gap between `project_id`'s frozen anchor (the genesis
 /// founder pubkey) and the founder's *current* signing key after one
-/// or more self-fleet rekeys. The chain stack `bootstrap (anchored to
+/// or more puddle rekeys. The chain stack `bootstrap (anchored to
 /// genesis) → delegation_0 (genesis signs rekey_1) → delegation_1
 /// (rekey_1 signs rekey_2) → … → admin_token (rekey_N signs)` is
 /// what `tokens::verify_chain` walks at request time.
@@ -426,14 +426,14 @@ impl LeaveEnvelope {
 /// `rekey-pair` requires the OLD passphrase, so the founder can sign
 /// this envelope inline. But that same property means an attacker who
 /// has compromised the OLD key can also sign a forged delegation
-/// pointing at *their* fleet pubkey. A delegation envelope on its
+/// pointing at *their* puddle pubkey. A delegation envelope on its
 /// own therefore is **not authoritative**:
 ///
-/// - **Single-fleet case** (founder = sole member of all members'
-///   self-fleet): delegations are local-only artifacts, never
+/// - **Single-puddle case** (founder = sole member of all members'
+///   puddle): delegations are local-only artifacts, never
 ///   gossiped as authority. ADR-018's pair-claim out-of-band code
-///   already gates fleet membership; gitmirror inherits that trust.
-/// - **Multi-fleet case** (project members in foreign fleets): a
+///   already gates puddle membership; gitmirror inherits that trust.
+/// - **Multi-puddle case** (project members in foreign puddles): a
 ///   delegation becomes authoritative for member F only after F runs
 ///   `gitmirror project rejoin <vigo://...> <code>` with a fresh
 ///   capability code from the founder over an out-of-band channel
@@ -443,15 +443,15 @@ impl LeaveEnvelope {
 /// surfaced in `gitmirror status`, not a state change.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DelegationEnvelope {
-    /// Hex-encoded `sha256(genesis_founder_fleet_pubkey)` — frozen
+    /// Hex-encoded `sha256(genesis_founder_puddle_pubkey)` — frozen
     /// across all rekeys for this project.
     pub project_id: String,
-    /// Hex-encoded fleet pubkey that signed THIS delegation. For the
+    /// Hex-encoded puddle pubkey that signed THIS delegation. For the
     /// first delegation in a project's chain, equals the genesis
     /// founder pubkey baked into `project_id`. For subsequent
     /// delegations, equals the previous link's `new_founder_pubkey`.
     pub old_founder_pubkey: String,
-    /// Hex-encoded fleet pubkey that this delegation grants founder
+    /// Hex-encoded puddle pubkey that this delegation grants founder
     /// authority to. Future tokens / further delegations chain
     /// through this pubkey until the next rekey.
     pub new_founder_pubkey: String,
@@ -499,7 +499,7 @@ impl DelegationEnvelope {
         }
     }
 
-    /// Build with a delegated signer (e.g. the self-fleet session
+    /// Build with a delegated signer (e.g. the puddle session
     /// helper). Returns an envelope that has self-verified — bad
     /// caller-supplied signatures fail loudly here rather than at
     /// chain-walk time. See [`RevokeEnvelope::build_with`] for the
@@ -603,10 +603,10 @@ pub fn revoke_path(
 pub fn leave_path(
     gitmirror_base: &Path,
     project_id: &[u8; ID_LEN],
-    leaving_fleet_pubkey: &[u8; ID_LEN],
+    leaving_puddle_pubkey: &[u8; ID_LEN],
 ) -> PathBuf {
     leaves_dir(gitmirror_base, project_id)
-        .join(format!("{}.json", hex_id(leaving_fleet_pubkey)))
+        .join(format!("{}.json", hex_id(leaving_puddle_pubkey)))
 }
 
 /// Persist a REVOKE envelope. Idempotent: re-arrival of the same
@@ -628,7 +628,7 @@ pub fn save_revoke(gitmirror_base: &Path, e: &RevokeEnvelope) -> Result<bool> {
 /// [`save_revoke`].
 pub fn save_leave(gitmirror_base: &Path, e: &LeaveEnvelope) -> Result<bool> {
     let raw = e.verify_signature().context("verify_signature before save")?;
-    let path = leave_path(gitmirror_base, &raw.project_id, &raw.leaving_fleet_pubkey);
+    let path = leave_path(gitmirror_base, &raw.project_id, &raw.leaving_puddle_pubkey);
     if let Some(existing) = load_leave_at(&path)? {
         if existing.leave_time >= e.leave_time {
             return Ok(false);
@@ -822,10 +822,10 @@ pub fn project_digest(
         hasher.update(b"\n");
     }
     let mut leaves = load_leaves(gitmirror_base, project_id)?;
-    leaves.sort_by(|a, b| a.leaving_fleet_pubkey.cmp(&b.leaving_fleet_pubkey));
+    leaves.sort_by(|a, b| a.leaving_puddle_pubkey.cmp(&b.leaving_puddle_pubkey));
     for l in &leaves {
         hasher.update(b"L|");
-        hasher.update(l.leaving_fleet_pubkey.as_bytes());
+        hasher.update(l.leaving_puddle_pubkey.as_bytes());
         hasher.update(b"|");
         hasher.update(l.leave_time.to_be_bytes());
         hasher.update(b"|");
@@ -869,7 +869,7 @@ mod tests {
         let raw = env.verify_signature().expect("signature should verify");
         assert_eq!(raw.project_id, sample_pid());
         assert_eq!(raw.token_id, sample_tid());
-        assert_eq!(raw.signer_fleet_pubkey, pub_bytes(&admin));
+        assert_eq!(raw.signer_puddle_pubkey, pub_bytes(&admin));
     }
 
     #[test]
@@ -893,7 +893,7 @@ mod tests {
         let admin = fresh_key();
         let other = fresh_key();
         let mut env = RevokeEnvelope::build(&admin, &sample_pid(), &sample_tid(), 1_700_000_000, "");
-        env.signer_fleet_pubkey = hex_id(&pub_bytes(&other));
+        env.signer_puddle_pubkey = hex_id(&pub_bytes(&other));
         assert!(env.verify_signature().is_err());
     }
 
@@ -951,7 +951,7 @@ mod tests {
         let env = LeaveEnvelope::build(&leaver, &sample_pid(), 1_700_000_000);
         let raw = env.verify_signature().expect("signature should verify");
         assert_eq!(raw.project_id, sample_pid());
-        assert_eq!(raw.leaving_fleet_pubkey, pub_bytes(&leaver));
+        assert_eq!(raw.leaving_puddle_pubkey, pub_bytes(&leaver));
     }
 
     #[test]
@@ -959,7 +959,7 @@ mod tests {
         let leaver = fresh_key();
         let other = fresh_key();
         let mut env = LeaveEnvelope::build(&leaver, &sample_pid(), 1_700_000_000);
-        env.leaving_fleet_pubkey = hex_id(&pub_bytes(&other));
+        env.leaving_puddle_pubkey = hex_id(&pub_bytes(&other));
         assert!(env.verify_signature().is_err());
     }
 

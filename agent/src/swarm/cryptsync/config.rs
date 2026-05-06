@@ -122,7 +122,7 @@ pub fn session_unlocked_path(home: &Path) -> PathBuf {
 
 /// Sentinel file that tells the daemon reactor to regenerate
 /// `recipients.txt` from the daemon-side `peers.json` immediately.
-/// Dropped by `vigo swarm cryptsync {fleet init, standalone enroll}` after seeding the user-side files
+/// Dropped by `vigo swarm cryptsync {puddle init, standalone enroll}` after seeding the user-side files
 /// — the daemon picks it up on the next reactor tick (≤30 s) and
 /// folds existing live peers into the freshly-seeded recipients.
 /// Without this, post-reenroll recipients.txt would stay at "self
@@ -172,17 +172,17 @@ pub fn signing_pubkey_path(username: &str) -> PathBuf {
 #[serde(rename_all = "lowercase")]
 pub enum WrapMode {
     /// Today's path: prompt for a per-envoy passphrase, derive via
-    /// Argon2id. Independent of self-fleet — a user without a fleet
+    /// Argon2id. Independent of puddle — a user without a fleet
     /// identity stays here. Loss of this passphrase loses the
     /// envoy's cryptsync corpus, separately from any fleet
     /// passphrase.
     Standalone,
-    /// ADR-016 fleet mode: derive the wrapping key by asking the
-    /// self-fleet session helper to sign a fixed domain-separated
-    /// challenge. No password prompt at unlock — the self-fleet
+    /// ADR-016 puddle mode: derive the wrapping key by asking the
+    /// puddle session helper to sign a fixed domain-separated
+    /// challenge. No password prompt at unlock — the puddle
     /// session helper must be running. Same blast radius as
-    /// self-fleet itself (lose fleet passphrase → lose cryptsync).
-    Fleet,
+    /// puddle itself (lose puddle passphrase → lose cryptsync).
+    Puddle,
 }
 
 impl Default for WrapMode {
@@ -210,7 +210,7 @@ pub struct UserConfig {
     pub idle_timeout_minutes: u32,
 
     /// ADR-016: how the wrapping key for `identity.age` is sourced.
-    /// Written by `cryptsync fleet init` (Fleet) or `cryptsync
+    /// Written by `cryptsync puddle init` (Puddle) or `cryptsync
     /// standalone init / enroll` (Standalone). Pre-0.36.x configs
     /// without the field default to Standalone — those envoys were
     /// already enrolled under that path.
@@ -386,10 +386,10 @@ mod tests {
     }
 
     #[test]
-    fn wrap_mode_back_compat_when_field_missing() {
+    fn wrap_mode_back_compat_when_field_missing_legacy_unused() {
         // Pre-0.36.x configs don't carry wrap_mode — those envoys
         // were enrolled under the legacy passphrase path. Loader
-        // must default to Standalone, never Fleet (would break
+        // must default to Standalone, never Puddle (would break
         // unlock by trying to talk to a non-existent session helper).
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir_all(dot_dir(dir.path())).unwrap();
@@ -404,12 +404,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir_all(dot_dir(dir.path())).unwrap();
         let mut cfg = UserConfig::default();
-        cfg.wrap_mode = WrapMode::Fleet;
+        cfg.wrap_mode = WrapMode::Puddle;
         cfg.idle_timeout_minutes = 30;
         cfg.cross_subnet_peers = vec!["host-a".to_string()];
         save_config(dir.path(), &cfg, "tester").unwrap();
         let reloaded = load_config(dir.path());
-        assert_eq!(reloaded.wrap_mode, WrapMode::Fleet);
+        assert_eq!(reloaded.wrap_mode, WrapMode::Puddle);
         assert_eq!(reloaded.idle_timeout_minutes, 30);
         assert_eq!(reloaded.cross_subnet_peers, vec!["host-a".to_string()]);
     }
@@ -417,11 +417,11 @@ mod tests {
     #[test]
     fn wrap_mode_serializes_lowercase() {
         // The on-disk YAML must use lowercase tags so operators
-        // don't have to type `WrapMode: Fleet`. Belt-and-braces
+        // don't have to type `WrapMode: Puddle`. Belt-and-braces
         // assertion in case someone strips the serde attribute.
         let mut cfg = UserConfig::default();
-        cfg.wrap_mode = WrapMode::Fleet;
+        cfg.wrap_mode = WrapMode::Puddle;
         let yaml = serde_yaml::to_string(&cfg).unwrap();
-        assert!(yaml.contains("wrap_mode: fleet"), "got: {}", yaml);
+        assert!(yaml.contains("wrap_mode: puddle"), "got: {}", yaml);
     }
 }

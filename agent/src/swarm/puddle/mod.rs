@@ -1,21 +1,21 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Self-fleet — per-user fleet identity primitive (ADR-014).
+//! Puddle — per-user puddle identity primitive (ADR-014).
 //!
-//! A "self-fleet" is one user's collection of envoys, treated as a
-//! single trust unit by subsystems that consume it. The fleet is
+//! A "puddle" is one user's collection of envoys, treated as a
+//! single trust unit by subsystems that consume it. The puddle is
 //! identified by a single Ed25519 keypair generated locally on the
-//! first envoy where the user runs `vigo swarm self-fleet init`. The
+//! first envoy where the user runs `vigo swarm puddle init`. The
 //! private half is wrapped under the user's passphrase using the
 //! same Argon2id + XChaCha20-Poly1305 envelope cryptsync uses for
 //! its age identity (see [`super::cryptsync::crypt::wrap_signing_key`]).
 //!
-//! Membership of an envoy in a self-fleet is local: the wrapped
-//! private blob lives at `~/.vigo-fleet/identity.wrapped`, the
-//! per-envoy salt at `~/.vigo-fleet/identity.salt`. The agent
-//! advertises the fleet pubkey to peers as part of swarm gossip;
-//! there is no central fleet-membership registry.
+//! Membership of an envoy in a puddle is local: the wrapped
+//! private blob lives at `~/.vigo-puddle/identity.wrapped`, the
+//! per-envoy salt at `~/.vigo-puddle/identity.salt`. The agent
+//! advertises the puddle pubkey to peers as part of swarm gossip;
+//! there is no central puddle-membership registry.
 //!
 //! Distribution between envoys uses **peer-pair**: an already-active
 //! envoy issues a 5-minute single-use pairing code; a new envoy
@@ -23,14 +23,14 @@
 //! wrapped blob. The passphrase never leaves the destination envoy.
 //! Manual scp survives as the air-gapped fallback.
 //!
-//! Phase 1 scope: Linux + macOS. No multi-fleet (one fleet per
+//! Phase 1 scope: Linux + macOS. No multi-puddle (one puddle per
 //! user). No Shamir / escrow recovery (re-init from scratch on
 //! passphrase loss). See ADR-014 for the resolved scope gates.
 //!
 //! Module shape:
-//! - `config.rs` — paths under `~/.vigo-fleet/` and the daemon-owned
+//! - `config.rs` — paths under `~/.vigo-puddle/` and the daemon-owned
 //!   per-user state dir.
-//! - `cli.rs` — `vigo swarm self-fleet {init,pair,join,unlock,lock,
+//! - `cli.rs` — `vigo swarm puddle {init,pair,join,unlock,lock,
 //!   pubkey,members,rotate-passphrase}`.
 //! - `pair.rs` — pairing-code generation + the HTTP claim handler
 //!   that runs in the daemon's swarm-server context.
@@ -48,15 +48,15 @@ use std::path::Path;
 
 use anyhow::Result;
 
-/// Read the local envoy's fleet pubkey if it has been initialized
+/// Read the local envoy's puddle pubkey if it has been initialized
 /// for this user. Returns `Ok(Some(pubkey_hex))` when an
 /// `identity.pub` is present, `Ok(None)` when the user hasn't
-/// initialized self-fleet yet, `Err(_)` on read failure.
+/// initialized puddle yet, `Err(_)` on read failure.
 ///
 /// Used by sibling subsystems (gitmirror under ADR-015, cryptsync
-/// membership under ADR-016) to query "is this user fleet-enabled
+/// membership under ADR-016) to query "is this user puddle-enabled
 /// here?" without having to touch the wrapped blob.
-pub fn local_fleet_pubkey(home: &Path) -> Result<Option<String>> {
+pub fn local_puddle_pubkey(home: &Path) -> Result<Option<String>> {
     let path = config::pubkey_path(home);
     match std::fs::read_to_string(&path) {
         Ok(s) => {
@@ -72,7 +72,7 @@ pub fn local_fleet_pubkey(home: &Path) -> Result<Option<String>> {
 }
 
 /// Convenience predicate: true iff the user has initialized
-/// self-fleet on this envoy (wrapped blob + salt + pubkey present).
+/// puddle on this envoy (wrapped blob + salt + pubkey present).
 pub fn is_initialized(home: &Path) -> bool {
     config::wrapped_path(home).exists()
         && config::salt_path(home).exists()

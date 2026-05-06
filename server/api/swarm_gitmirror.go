@@ -96,7 +96,7 @@ func (h *GitmirrorHandler) handleFleet(w http.ResponseWriter, r *http.Request) {
 // pull at push time:
 //
 //   - `members[]` — every authorized member fleet's Ed25519 pubkey
-//     (hex). The first entry is always the founder fleet; the helper
+//     (hex). The first entry is always the founder puddle; the helper
 //     daemon walks the token chain it received against this list.
 //   - `dr_fanout` — `"fleet-wide"` or `"members-only"`. Hints to
 //     the caller's fan-out logic which envoys to push to.
@@ -108,7 +108,7 @@ func (h *GitmirrorHandler) handleFleet(w http.ResponseWriter, r *http.Request) {
 type RosterResponse struct {
 	ProjectID          string   `json:"project_id"`
 	Handle             string   `json:"handle"`
-	FounderFleetPubkey string   `json:"founder_fleet_pubkey"`
+	FounderPuddlePubkey string   `json:"founder_puddle_pubkey"`
 	Members            []string `json:"members"`
 	DrFanout           string   `json:"dr_fanout"`
 	MemberFleetCount   int      `json:"member_fleet_count"`
@@ -139,7 +139,7 @@ func (h *GitmirrorHandler) handleRoster(w http.ResponseWriter, r *http.Request) 
 	resp := RosterResponse{
 		ProjectID:          summary.ProjectID,
 		Handle:             summary.Handle,
-		FounderFleetPubkey: summary.FounderFleetPubkey,
+		FounderPuddlePubkey: summary.FounderPuddlePubkey,
 		Members:            summary.Members,
 		DrFanout:           summary.DrFanout,
 		MemberFleetCount:   summary.MemberFleetCount,

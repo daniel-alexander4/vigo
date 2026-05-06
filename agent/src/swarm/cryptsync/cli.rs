@@ -9,8 +9,8 @@
 //! server or the agent daemon for Week 1 verbs.
 //!
 //! ```text
-//! vigo swarm cryptsync fleet init                    # under self-fleet membership (ADR-016)
-//! vigo swarm cryptsync standalone init               # opt out of fleet mode (legacy gossip)
+//! vigo swarm cryptsync puddle init                    # under puddle membership (ADR-016)
+//! vigo swarm cryptsync standalone init               # opt out of puddle mode (legacy gossip)
 //! vigo swarm cryptsync standalone enroll             # per-envoy, one-time
 //! vigo swarm cryptsync status                        # show local state
 //! vigo swarm cryptsync unlock                        # (week 3) hold key in session helper
@@ -47,11 +47,11 @@ pub fn run(args: Vec<String>) -> Result<()> {
             print_usage();
             Ok(())
         }
-        // Mode-specific lifecycle subtrees (ADR-016). `fleet *` is the
-        // path of least resistance once self-fleet is set up;
+        // Mode-specific lifecycle subtrees (ADR-016). `puddle *` is the
+        // path of least resistance once puddle is set up;
         // `standalone *` is the explicit opt-out for users who don't
-        // want fleet membership wiring.
-        "fleet" => dispatch_fleet(&args[1..]),
+        // want puddle membership wiring.
+        "puddle" => dispatch_puddle(&args[1..]),
         "standalone" => dispatch_standalone(&args[1..]),
         // Mode-agnostic verbs — these don't care which mode is active.
         // Recipient resolution, session helper, encryption, decryption,
@@ -82,18 +82,18 @@ pub fn run(args: Vec<String>) -> Result<()> {
     }
 }
 
-fn dispatch_fleet(args: &[String]) -> Result<()> {
+fn dispatch_puddle(args: &[String]) -> Result<()> {
     let sub = args.first().map(String::as_str).unwrap_or("");
     match sub {
         "" | "help" | "--help" | "-h" => {
-            print_fleet_usage();
+            print_puddle_usage();
             Ok(())
         }
-        "init" => cmd_fleet_init(&args[1..]),
-        "renew-cert" => cmd_fleet_renew_cert(&args[1..]),
+        "init" => cmd_puddle_init(&args[1..]),
+        "renew-cert" => cmd_puddle_renew_cert(&args[1..]),
         other => bail!(
-            "unknown `vigo swarm cryptsync fleet` subcommand: {}\n\
-             run `vigo swarm cryptsync fleet --help` for usage",
+            "unknown `vigo swarm cryptsync puddle` subcommand: {}\n\
+             run `vigo swarm cryptsync puddle --help` for usage",
             other
         ),
     }
@@ -116,23 +116,23 @@ fn dispatch_standalone(args: &[String]) -> Result<()> {
     }
 }
 
-fn print_fleet_usage() {
+fn print_puddle_usage() {
     eprintln!(
-        "vigo swarm cryptsync fleet — fleet-mode lifecycle (ADR-016)
+        "vigo swarm cryptsync puddle — puddle-mode lifecycle (ADR-016)
 
 USAGE:
-    vigo swarm cryptsync fleet <SUBCOMMAND>
+    vigo swarm cryptsync puddle <SUBCOMMAND>
 
 SUBCOMMANDS:
     init          First-time setup of this user's per-envoy age key under fleet
-                  membership. Issues a fleet-membership certificate (ADR-016 follow-up)
-                  and persists it at ~/.cryptsync/fleet_cert.json. Requires self-fleet
+                  membership. Issues a puddle-membership certificate (ADR-016 follow-up)
+                  and persists it at ~/.cryptsync/puddle_cert.json. Requires puddle
                   to be initialized AND unlocked for this user (the cert is signed by
-                  the self-fleet session helper).
-    renew-cert    Re-issue the fleet-membership certificate. Default lifetime 30 days;
-                  certs expire and need renewal. Run from any envoy where self-fleet
+                  the puddle session helper).
+    renew-cert    Re-issue the puddle-membership certificate. Default lifetime 30 days;
+                  certs expire and need renewal. Run from any envoy where puddle
                   is unlocked — the renewed cert ships in the next announce tick. Use
-                  this after a self-fleet rotation, or when peers warn-log a cert
+                  this after a puddle rotation, or when peers warn-log a cert
                   expiry against this envoy.
 
 Daily verbs (unlock / encrypt / decrypt / status / leave / …) live at the top
@@ -149,8 +149,8 @@ USAGE:
 
 SUBCOMMANDS:
     init     First-time setup of this user's per-envoy age key without registering
-             with a self-fleet. Recipients are discovered via pairwise gossip; this
-             is the legacy path that pre-dates self-fleet.
+             with a puddle. Recipients are discovered via pairwise gossip; this
+             is the legacy path that pre-dates puddle.
     enroll   Per-envoy bootstrap when joining an existing standalone mesh (typically
              triggered by an `enroll.pending` sentinel left by the user executor).
 
@@ -180,9 +180,9 @@ DAILY (mode-agnostic):
     status                         Show local cryptsync state
 
 LIFECYCLE (mode-specific subtrees, ADR-016):
-    fleet init                     Set up per-envoy age key under self-fleet membership
-                                   (usually auto-run by `self-fleet unlock` / `join`)
-    standalone init                Set up per-envoy age key without fleet membership
+    puddle init                     Set up per-envoy age key under puddle membership
+                                   (usually auto-run by `puddle unlock` / `join`)
+    standalone init                Set up per-envoy age key without puddle membership
                                    (legacy pairwise-gossip path)
     standalone enroll              Per-envoy bootstrap into an existing standalone mesh
 
@@ -194,94 +194,94 @@ No root required. Does not contact the Vigo server."
     );
 }
 
-// ---------- fleet init ----------
+// ---------- puddle init ----------
 //
 // Generates a per-envoy age identity wrapped under the cryptsync
 // password and seeds recipients.txt. Functionally identical to
 // `standalone init`; the difference is operator intent (and the
-// help text). Once self-fleet is initialized for this user, the
+// help text). Once puddle is initialized for this user, the
 // announce loop automatically scopes recipient resolution to the
-// fleet — no flag is needed at this command level.
+// puddle — no flag is needed at this command level.
 //
-// Refuses if self-fleet has not been initialized for this user.
-// Pointing the user at `vigo swarm self-fleet init` first is the
-// correct path: cryptsync fleet mode is meaningless without a fleet
+// Refuses if puddle has not been initialized for this user.
+// Pointing the user at `vigo swarm puddle init` first is the
+// correct path: cryptsync puddle mode is meaningless without a fleet
 // identity to scope membership to.
-fn cmd_fleet_init(_args: &[String]) -> Result<()> {
+fn cmd_puddle_init(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     let username = user_for_invocation()?;
-    if !crate::swarm::self_fleet::is_initialized(&home) {
+    if !crate::swarm::puddle::is_initialized(&home) {
         bail!(
-            "self-fleet is not initialized for this user; fleet-mode cryptsync requires \
-             a fleet identity to scope recipient resolution.\n\
-             Run `vigo swarm self-fleet init` first, then re-run this command. \
-             (Or use `vigo swarm cryptsync standalone init` to opt out of fleet mode.)"
+            "puddle is not initialized for this user; puddle-mode cryptsync requires \
+             a puddle identity to scope recipient resolution.\n\
+             Run `vigo swarm puddle init` first, then re-run this command. \
+             (Or use `vigo swarm cryptsync standalone init` to opt out of puddle mode.)"
         );
     }
-    bootstrap_identity(&home, &username, /* is_init */ true, config::WrapMode::Fleet)?;
-    // Auto-issue the fleet membership certificate so receivers can
+    bootstrap_identity(&home, &username, /* is_init */ true, config::WrapMode::Puddle)?;
+    // Auto-issue the puddle membership certificate so receivers can
     // cryptographically verify our fleet claim from the very first
     // announce. Fails noisily but doesn't undo the bootstrap — the
-    // user can re-run `cryptsync fleet renew-cert` separately.
-    if let Err(e) = issue_fleet_cert(&home, &username) {
+    // user can re-run `cryptsync puddle renew-cert` separately.
+    if let Err(e) = issue_puddle_cert(&home, &username) {
         eprintln!(
-            "warning: cryptsync fleet identity is set up but the fleet-membership cert \
+            "warning: cryptsync puddle identity is set up but the puddle-membership cert \
              could not be issued: {:#}\n\
-             Re-run `vigo swarm cryptsync fleet renew-cert` once self-fleet is unlocked.",
+             Re-run `vigo swarm cryptsync puddle renew-cert` once puddle is unlocked.",
             e
         );
     }
     Ok(())
 }
 
-fn cmd_fleet_renew_cert(_args: &[String]) -> Result<()> {
+fn cmd_puddle_renew_cert(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     let username = user_for_invocation()?;
-    if !crate::swarm::self_fleet::is_initialized(&home) {
+    if !crate::swarm::puddle::is_initialized(&home) {
         bail!(
-            "self-fleet is not initialized for this user; cannot issue fleet cert.\n\
-             Run `vigo swarm self-fleet init` first."
+            "puddle is not initialized for this user; cannot issue puddle cert.\n\
+             Run `vigo swarm puddle init` first."
         );
     }
     let cs_identity = crate::swarm::cryptsync::config::identity_path(&home);
     if !cs_identity.exists() {
         bail!(
-            "cryptsync identity is missing at {} — run `vigo swarm cryptsync fleet init` first.",
+            "cryptsync identity is missing at {} — run `vigo swarm cryptsync puddle init` first.",
             cs_identity.display()
         );
     }
-    issue_fleet_cert(&home, &username)
+    issue_puddle_cert(&home, &username)
 }
 
-/// Build, sign, and persist a fresh fleet-membership cert.
+/// Build, sign, and persist a fresh puddle-membership cert.
 /// Reads:
 ///   * the local age pubkey from `~/.cryptsync/recipients.txt` (first line)
-///   * the local self-fleet pubkey from `~/.vigo-fleet/identity.pub`
-/// Signs via the self-fleet session helper (so the user's session
+///   * the local puddle pubkey from `~/.vigo-puddle/identity.pub`
+/// Signs via the puddle session helper (so the user's session
 /// must be unlocked when this runs). On success, writes the cert
-/// to `~/.cryptsync/fleet_cert.json` and chowns it to the user.
-fn issue_fleet_cert(home: &Path, username: &str) -> Result<()> {
-    use crate::swarm::cryptsync::fleet_cert::{FleetCert, DEFAULT_LIFETIME_SECS, SIG_LEN};
+/// to `~/.cryptsync/puddle_cert.json` and chowns it to the user.
+fn issue_puddle_cert(home: &Path, username: &str) -> Result<()> {
+    use crate::swarm::cryptsync::puddle_cert::{PuddleCert, DEFAULT_LIFETIME_SECS, SIG_LEN};
 
     let age_pubkey = read_local_age_pubkey(home)?;
-    let fleet_pubkey = match crate::swarm::self_fleet::local_fleet_pubkey(home)? {
+    let puddle_pubkey = match crate::swarm::puddle::local_puddle_pubkey(home)? {
         Some(s) => s
             .strip_prefix("ed25519:")
             .map(|s| s.to_ascii_lowercase())
             .unwrap_or_else(|| s.to_ascii_lowercase()),
-        None => bail!("self-fleet pubkey not readable; run `self-fleet init` first"),
+        None => bail!("puddle pubkey not readable; run `puddle init` first"),
     };
     let issued_at = now_secs();
-    let cert = FleetCert::issue(
+    let cert = PuddleCert::issue(
         &age_pubkey,
-        &fleet_pubkey,
+        &puddle_pubkey,
         issued_at,
         DEFAULT_LIFETIME_SECS,
         |bytes| {
-            let sig = crate::swarm::self_fleet::session::request_sign(bytes).map_err(|e| {
+            let sig = crate::swarm::puddle::session::request_sign(bytes).map_err(|e| {
                 anyhow!(
-                    "self-fleet session helper unavailable: {}\n\
-                     run `vigo swarm self-fleet unlock` first",
+                    "puddle session helper unavailable: {}\n\
+                     run `vigo swarm puddle unlock` first",
                     e
                 )
             })?;
@@ -302,17 +302,17 @@ fn issue_fleet_cert(home: &Path, username: &str) -> Result<()> {
     // create_user_dir with the same posture; mirror it here.
     #[cfg(unix)]
     {
-        let path = crate::swarm::cryptsync::fleet_cert::cert_path(home);
+        let path = crate::swarm::cryptsync::puddle_cert::cert_path(home);
         let _ = crate::swarm::cryptsync::chown_to_user_pub(&path, username);
     }
     let _ = username; // keep parameter live on non-unix platforms
     println!(
-        "✓ Issued fleet-membership cert (expires in {} days)",
+        "✓ Issued puddle-membership cert (expires in {} days)",
         cert.days_until_expiry(issued_at)
     );
     println!(
         "  wrote {}",
-        crate::swarm::cryptsync::fleet_cert::cert_path(home).display()
+        crate::swarm::cryptsync::puddle_cert::cert_path(home).display()
     );
     Ok(())
 }
@@ -383,7 +383,7 @@ fn bootstrap_identity(
     }
 
     // Source the wrap-key material per ADR-016. Standalone prompts
-    // for a per-envoy passphrase; fleet derives from the self-fleet
+    // for a per-envoy passphrase; fleet derives from the puddle
     // identity via the running session helper. Either way, we end up
     // with a byte string we can hand to `wrap_identity` as the
     // `password` argument — Argon2id stretches it into the AEAD key
@@ -397,12 +397,12 @@ fn bootstrap_identity(
             }
             Zeroizing::new(password.into_bytes())
         }
-        config::WrapMode::Fleet => {
-            // Fleet mode: passphrase is derived from the self-fleet
-            // identity. The self-fleet session helper must be running.
-            // No prompt — that's the whole point of fleet mode.
-            crypt::derive_fleet_wrap_password().context(
-                "fleet-mode wrap-key derivation failed; ensure self-fleet is unlocked"
+        config::WrapMode::Puddle => {
+            // Fleet mode: passphrase is derived from the puddle
+            // identity. The puddle session helper must be running.
+            // No prompt — that's the whole point of puddle mode.
+            crypt::derive_puddle_wrap_password().context(
+                "puddle-mode wrap-key derivation failed; ensure puddle is unlocked"
             )?
         }
     };
@@ -499,7 +499,7 @@ fn bootstrap_identity(
     println!("public key: {}", public);
     println!();
     if is_init {
-        println!("This envoy is now the primary. Add more envoys with `vigo swarm cryptsync standalone enroll` (or `fleet init` on each envoy if you use self-fleet)");
+        println!("This envoy is now the primary. Add more envoys with `vigo swarm cryptsync standalone enroll` (or `puddle init` on each envoy if you use puddle)");
         println!("after provisioning them via the user's usercrate with `cryptsync: true`.");
     } else {
         println!("This envoy is now enrolled. The primary envoy's reactor will pick up");
@@ -580,29 +580,29 @@ fn cmd_status(_args: &[String]) -> Result<()> {
     println!("  cross_subnet_peers:      {}", cfg.cross_subnet_peers.len());
     println!("  idle_timeout:     {} min", cfg.idle_timeout_minutes);
 
-    // ADR-016 follow-up: fleet membership cert state. Surface this
-    // when self-fleet is initialized for the user (otherwise it's
+    // ADR-016 follow-up: puddle membership cert state. Surface this
+    // when puddle is initialized for the user (otherwise it's
     // not relevant — they're running standalone).
-    if crate::swarm::self_fleet::is_initialized(&home) {
-        match crate::swarm::cryptsync::fleet_cert::FleetCert::load(&home) {
+    if crate::swarm::puddle::is_initialized(&home) {
+        match crate::swarm::cryptsync::puddle_cert::PuddleCert::load(&home) {
             None => println!(
-                "  fleet cert:       (not issued — run `vigo swarm cryptsync fleet renew-cert`)"
+                "  puddle cert:       (not issued — run `vigo swarm cryptsync puddle renew-cert`)"
             ),
             Some(cert) => {
                 let now = now_secs();
                 let days = cert.days_until_expiry(now);
                 if days < 0 {
                     println!(
-                        "  fleet cert:       EXPIRED {} day(s) ago — run `vigo swarm cryptsync fleet renew-cert`",
+                        "  puddle cert:       EXPIRED {} day(s) ago — run `vigo swarm cryptsync puddle renew-cert`",
                         -days
                     );
                 } else if days < 7 {
                     println!(
-                        "  fleet cert:       expires in {} day(s) — consider running `vigo swarm cryptsync fleet renew-cert`",
+                        "  puddle cert:       expires in {} day(s) — consider running `vigo swarm cryptsync puddle renew-cert`",
                         days
                     );
                 } else {
-                    println!("  fleet cert:       valid (expires in {} day(s))", days);
+                    println!("  puddle cert:       valid (expires in {} day(s))", days);
                 }
             }
         }
@@ -622,9 +622,9 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo swarm cryptsync fleet init` if you \
-             use self-fleet, or `vigo swarm cryptsync standalone init` to opt out of \
-             fleet mode (run `vigo swarm cryptsync --help` for the full setup tree)"
+            "not enrolled on this envoy — run `vigo swarm cryptsync puddle init` if you \
+             use puddle, or `vigo swarm cryptsync standalone init` to opt out of \
+             puddle mode (run `vigo swarm cryptsync --help` for the full setup tree)"
         );
     }
     let id_path = config::identity_path(&home);
@@ -635,7 +635,7 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
         .with_context(|| format!("reading {}", salt_path.display()))?;
 
     // Route the wrap-key source by the mode persisted at init time.
-    // Standalone: prompt the operator. Fleet: ask the self-fleet
+    // Standalone: prompt the operator. Fleet: ask the puddle
     // session helper (no prompt). Failure to source the key in either
     // case is fatal — we don't fall back across modes since the wrong
     // mode would just produce an AEAD tag mismatch downstream and a
@@ -649,9 +649,9 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
             }
             Zeroizing::new(password.into_bytes())
         }
-        config::WrapMode::Fleet => crypt::derive_fleet_wrap_password().context(
-            "fleet-mode unlock requires the self-fleet session helper to be running; \
-             run `vigo swarm self-fleet unlock` first",
+        config::WrapMode::Puddle => crypt::derive_puddle_wrap_password().context(
+            "puddle-mode unlock requires the puddle session helper to be running; \
+             run `vigo swarm puddle unlock` first",
         )?,
     };
     let identity = crypt::unwrap_identity(&blob, wrap_password.as_slice(), &salt)?;
@@ -725,9 +725,9 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo swarm cryptsync fleet init` if you \
-             use self-fleet, or `vigo swarm cryptsync standalone init` to opt out of \
-             fleet mode (run `vigo swarm cryptsync --help` for the full setup tree)"
+            "not enrolled on this envoy — run `vigo swarm cryptsync puddle init` if you \
+             use puddle, or `vigo swarm cryptsync standalone init` to opt out of \
+             puddle mode (run `vigo swarm cryptsync --help` for the full setup tree)"
         );
     }
     let recipients = config::load_recipients(&home)?;
@@ -748,7 +748,7 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
     let content_dir = config::content_dir(&home);
     if !content_dir.is_dir() {
         bail!(
-            "{} does not exist — run `vigo swarm cryptsync standalone enroll` (or `fleet init` if you use self-fleet) first",
+            "{} does not exist — run `vigo swarm cryptsync standalone enroll` (or `puddle init` if you use puddle) first",
             content_dir.display()
         );
     }
@@ -805,9 +805,9 @@ fn cmd_decrypt(args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo swarm cryptsync fleet init` if you \
-             use self-fleet, or `vigo swarm cryptsync standalone init` to opt out of \
-             fleet mode (run `vigo swarm cryptsync --help` for the full setup tree)"
+            "not enrolled on this envoy — run `vigo swarm cryptsync puddle init` if you \
+             use puddle, or `vigo swarm cryptsync standalone init` to opt out of \
+             puddle mode (run `vigo swarm cryptsync --help` for the full setup tree)"
         );
     }
     let content_dir = config::content_dir(&home);
@@ -856,9 +856,9 @@ fn cmd_delete(args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo swarm cryptsync fleet init` if you \
-             use self-fleet, or `vigo swarm cryptsync standalone init` to opt out of \
-             fleet mode (run `vigo swarm cryptsync --help` for the full setup tree)"
+            "not enrolled on this envoy — run `vigo swarm cryptsync puddle init` if you \
+             use puddle, or `vigo swarm cryptsync standalone init` to opt out of \
+             puddle mode (run `vigo swarm cryptsync --help` for the full setup tree)"
         );
     }
     let content_dir = config::content_dir(&home);
@@ -901,9 +901,9 @@ fn cmd_list(args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     if !config::is_enrolled(&home) {
         bail!(
-            "not enrolled on this envoy — run `vigo swarm cryptsync fleet init` if you \
-             use self-fleet, or `vigo swarm cryptsync standalone init` to opt out of \
-             fleet mode (run `vigo swarm cryptsync --help` for the full setup tree)"
+            "not enrolled on this envoy — run `vigo swarm cryptsync puddle init` if you \
+             use puddle, or `vigo swarm cryptsync standalone init` to opt out of \
+             puddle mode (run `vigo swarm cryptsync --help` for the full setup tree)"
         );
     }
     let content_dir = config::content_dir(&home);
@@ -1517,7 +1517,7 @@ fn cmd_apply_evict(args: &[String]) -> Result<()> {
         }
         println!(
             "\u{2713} self-evict on {}: scrubbed cryptsync identity for user {}; \
-             re-enroll with `vigo swarm cryptsync standalone enroll` (or `fleet init` if you use self-fleet) to rejoin",
+             re-enroll with `vigo swarm cryptsync standalone enroll` (or `puddle init` if you use puddle) to rejoin",
             hostname, user
         );
         return Ok(());
@@ -1651,7 +1651,7 @@ fn cmd_apply_blacklist(args: &[String]) -> Result<()> {
         println!(
             "\u{2713} self-evict on {}: scrubbed cryptsync identity for {} user(s); \
              re-enroll with `vigocli swarm cryptsync enroll-fleet --user <u>` or \
-             `vigo swarm cryptsync standalone enroll` (or `fleet init` if you use self-fleet) to rejoin",
+             `vigo swarm cryptsync standalone enroll` (or `puddle init` if you use puddle) to rejoin",
             hostname, acted
         );
     } else {
@@ -2115,14 +2115,14 @@ fn config_template(wrap_mode: config::WrapMode) -> String {
             "standalone",
             "# wrap_mode: standalone — identity.age is wrapped under a per-envoy\n\
              # passphrase you typed at `cryptsync standalone init / enroll`. `unlock`\n\
-             # prompts for it. Independent of self-fleet.",
+             # prompts for it. Independent of puddle.",
         ),
-        config::WrapMode::Fleet => (
-            "fleet",
-            "# wrap_mode: fleet — identity.age is wrapped under a key derived from\n\
-             # this user's self-fleet identity (ADR-016). `unlock` succeeds without a\n\
-             # prompt as long as the self-fleet session helper is running. Run\n\
-             # `vigo swarm self-fleet unlock` first if it isn't.",
+        config::WrapMode::Puddle => (
+            "puddle",
+            "# wrap_mode: puddle — identity.age is wrapped under a key derived from\n\
+             # this user's puddle identity (ADR-016). `unlock` succeeds without a\n\
+             # prompt as long as the puddle session helper is running. Run\n\
+             # `vigo swarm puddle unlock` first if it isn't.",
         ),
     };
     format!(

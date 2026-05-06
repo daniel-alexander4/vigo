@@ -64,7 +64,7 @@ type Totals struct {
 type ProjectSummary struct {
 	ProjectID          string               `json:"project_id"`
 	Handle             string               `json:"handle"`
-	FounderFleetPubkey string               `json:"founder_fleet_pubkey"`
+	FounderPuddlePubkey string               `json:"founder_puddle_pubkey"`
 	Members            []string             `json:"members"`
 	DrFanout           string               `json:"dr_fanout"`
 
@@ -368,7 +368,7 @@ func summarizeProject(projectID string, entries []projectTrait, hosts []string, 
 	return ProjectSummary{
 		ProjectID:          projectID,
 		Handle:             canonical.Handle,
-		FounderFleetPubkey: canonical.FounderFleetPubkey,
+		FounderPuddlePubkey: canonical.FounderPuddlePubkey,
 		Members:            append([]string(nil), canonical.Members...),
 		DrFanout:           canonical.DrFanout,
 		Hosts:              hostsList,
@@ -464,7 +464,7 @@ type traitEnvelope struct {
 type projectTrait struct {
 	ProjectID          string                 `json:"project_id"`
 	Handle             string                 `json:"handle"`
-	FounderFleetPubkey string                 `json:"founder_fleet_pubkey"`
+	FounderPuddlePubkey string                 `json:"founder_puddle_pubkey"`
 	Members            []string               `json:"members"`
 	DrFanout           string                 `json:"dr_fanout"`
 	UsersWithState     []string               `json:"users_with_state"`

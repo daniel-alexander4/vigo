@@ -43,7 +43,7 @@
 //! ```
 //!
 //! Receiver verifies the chain against the URL's `project_id`
-//! (re-deriving the founder pubkey from `chain[0].signer_fleet_pubkey`
+//! (re-deriving the founder pubkey from `chain[0].signer_puddle_pubkey`
 //! and confirming `sha256(founder) == project_id`). Revocation lookup
 //! via [`super::envelopes::is_token_revoked`] rejects any chain whose
 //! tokens have been revoked.
@@ -279,7 +279,7 @@ pub fn decode_chain_header(value: &str) -> Result<PushChain> {
 }
 
 /// Verify a chain server-side against a project_id from the URL.
-/// Computes `founder = chain[0].signer_fleet_pubkey`; verify_chain
+/// Computes `founder = chain[0].signer_puddle_pubkey`; verify_chain
 /// checks `sha256(founder) == project_id` and rejects mismatches.
 /// Also rejects any chain whose tokens have been revoked.
 ///
@@ -304,7 +304,7 @@ pub fn verify_chain_for_push(
         .chain
         .first()
         .ok_or_else(|| anyhow!("chain is empty"))?;
-    let founder = root.body.signer_fleet_pubkey;
+    let founder = root.body.signer_puddle_pubkey;
     verify_chain(project_id, &founder, &push.delegations, &push.chain, now)
         .map_err(|e| anyhow!("chain verification: {}", e))?;
     for (i, token) in push.chain.iter().enumerate() {
@@ -730,7 +730,7 @@ impl EnvelopesBundle {
                 Ok(false) => {}
                 Err(e) => {
                     tracing::warn!(
-                        leaving = %l.leaving_fleet_pubkey,
+                        leaving = %l.leaving_puddle_pubkey,
                         error = %e,
                         "envelope merge: save_leave failed"
                     );
@@ -1312,11 +1312,11 @@ mod tests {
         // Mint a fresh admin under NEW chained off bootstrap.
         let body = super::super::tokens::TokenBody {
             project_id: pid,
-            subject_fleet_pubkey: pub_bytes(&new_admin_subject),
+            subject_puddle_pubkey: pub_bytes(&new_admin_subject),
             role: super::super::tokens::Role::Admin,
             issued_at: 250,
             expires_at: None,
-            signer_fleet_pubkey: pub_bytes(&new_founder),
+            signer_puddle_pubkey: pub_bytes(&new_founder),
             parent_token_id: Some(bootstrap.id()),
         };
         let admin = super::super::tokens::Token::issue(&new_founder, body).unwrap();
