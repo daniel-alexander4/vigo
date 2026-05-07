@@ -317,6 +317,51 @@ fn issue_puddle_cert(home: &Path, username: &str) -> Result<()> {
     Ok(())
 }
 
+/// Auto-refresh threshold for the puddle membership cert. If the
+/// existing cert has fewer than this many days until expiry (or is
+/// missing entirely), `cmd_unlock` re-issues it as a side effect of
+/// the unlock. Matches the warning threshold in `cmd_status` so the
+/// "expires in N day(s)" warning never fires under normal use.
+const PUDDLE_CERT_REFRESH_THRESHOLD_DAYS: i64 = 7;
+
+/// Pure predicate: true if the cert is missing OR within the refresh
+/// window. Extracted so the threshold edges are unit-testable
+/// independent of the puddle session helper.
+fn cert_needs_refresh(
+    cert: Option<&crate::swarm::cryptsync::puddle_cert::PuddleCert>,
+    now: i64,
+) -> bool {
+    match cert {
+        None => true,
+        Some(c) => c.days_until_expiry(now) < PUDDLE_CERT_REFRESH_THRESHOLD_DAYS,
+    }
+}
+
+/// Best-effort puddle-cert refresh on `cmd_unlock`. Called only when
+/// cryptsync is in puddle mode and only after the puddle session
+/// helper is known running (cryptsync's puddle-mode unlock fails
+/// earlier otherwise — see `crypt::derive_puddle_wrap_password`).
+/// Surfaces failure via stderr but does not propagate; unlock has
+/// already succeeded by the time we get here, and an unmintable cert
+/// just means the user keeps whatever cert state they had until they
+/// run `cryptsync puddle renew-cert` manually.
+fn refresh_puddle_cert_if_needed(home: &Path, username: &str) {
+    use crate::swarm::cryptsync::puddle_cert::PuddleCert;
+    let now = now_secs();
+    if !cert_needs_refresh(PuddleCert::load(home).as_ref(), now) {
+        return;
+    }
+    if let Err(e) = issue_puddle_cert(home, username) {
+        eprintln!(
+            "warning: puddle-membership cert auto-refresh failed: {:#}",
+            e
+        );
+        eprintln!(
+            "         run `vigo swarm cryptsync puddle renew-cert` to retry."
+        );
+    }
+}
+
 /// Pull the first non-comment line out of recipients.txt — that's
 /// always this envoy's own age pubkey because `bootstrap_identity`
 /// seeds it as the first entry.
@@ -791,6 +836,16 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     // surfaced inline; a partial sweep doesn't fail the unlock.
     let username = user_for_invocation()?;
     super::sweep_plaintext_on_unlock(&home, &username);
+
+    // In puddle mode the puddle session helper is by construction
+    // running here (we just derived the wrap-password through it).
+    // Use the open signing channel to keep the puddle membership
+    // cert fresh — without this, a user who only ever unlocks would
+    // slide past the 30-day boundary and silently degrade to
+    // TOFU-only puddle membership.
+    if matches!(cfg.wrap_mode, config::WrapMode::Puddle) {
+        refresh_puddle_cert_if_needed(&home, &username);
+    }
     Ok(())
 }
 
@@ -2362,5 +2417,54 @@ mod tests {
         let out = String::from_utf8(buf).unwrap();
         assert!(out.contains("pending gossip sentinels"));
         assert!(out.contains("out-of-band"));
+    }
+
+    // -----------------------------------------------------------------
+    // Puddle-cert auto-refresh threshold (cmd_unlock side-effect path)
+    // -----------------------------------------------------------------
+
+    fn test_cert(expires_at: i64) -> crate::swarm::cryptsync::puddle_cert::PuddleCert {
+        crate::swarm::cryptsync::puddle_cert::PuddleCert {
+            version: 1,
+            envoy_age_pubkey: "age1test".into(),
+            puddle_pubkey: "0".repeat(64),
+            issued_at: 0,
+            expires_at,
+            signature: String::new(),
+        }
+    }
+
+    const TEST_NOW: i64 = 1_700_000_000;
+    const ONE_DAY: i64 = 86_400;
+
+    #[test]
+    fn cert_refresh_fires_when_cert_missing() {
+        assert!(cert_needs_refresh(None, TEST_NOW));
+    }
+
+    #[test]
+    fn cert_refresh_fires_when_expired() {
+        let cert = test_cert(TEST_NOW - ONE_DAY);
+        assert!(cert_needs_refresh(Some(&cert), TEST_NOW));
+    }
+
+    #[test]
+    fn cert_refresh_fires_within_window() {
+        // 6 days remaining: under the 7-day threshold → refresh.
+        let cert = test_cert(TEST_NOW + 6 * ONE_DAY);
+        assert!(cert_needs_refresh(Some(&cert), TEST_NOW));
+    }
+
+    #[test]
+    fn cert_refresh_skips_at_threshold_boundary() {
+        // Exactly 7 days remaining: NOT under the threshold → keep.
+        let cert = test_cert(TEST_NOW + 7 * ONE_DAY);
+        assert!(!cert_needs_refresh(Some(&cert), TEST_NOW));
+    }
+
+    #[test]
+    fn cert_refresh_skips_when_fresh() {
+        let cert = test_cert(TEST_NOW + 30 * ONE_DAY);
+        assert!(!cert_needs_refresh(Some(&cert), TEST_NOW));
     }
 }
