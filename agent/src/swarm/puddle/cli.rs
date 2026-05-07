@@ -169,11 +169,23 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     // running, this is the one moment at which a fresh envoy can
     // bootstrap cryptsync without the user having to type a second
     // passphrase — puddle-mode wrap-key derivation goes through the
-    // helper we just spawned. If `~/.cryptsync/identity.age` is
-    // missing, run `cryptsync puddle init` inline so the user ends up
-    // with a usable encrypted-sync surface as a single side effect of
-    // unlocking. Failure here doesn't undo the unlock — we surface
-    // the error and keep going so the operator can re-run manually.
+    // helper we just spawned. Two paths:
+    //
+    //   - Identity missing → run `cryptsync puddle init` to create the
+    //     per-envoy age key, recipients, and puddle-membership cert.
+    //   - Identity present + wrap_mode=Puddle → run `cryptsync unlock`
+    //     to start the cryptsync session helper. Without this step,
+    //     the auto-encrypt watcher queues plaintext drops indefinitely
+    //     because it can't derive the wrap key without the cryptsync
+    //     helper running, even though the puddle helper has the
+    //     material. Operator hit this on every `puddle unlock` after
+    //     the first one until 0.39.6.
+    //   - Identity present + wrap_mode=Standalone → skip. Standalone
+    //     mode expects an interactive passphrase prompt that the
+    //     puddle-unlock flow shouldn't surprise the user with.
+    //
+    // Failures don't undo the unlock — we surface the error and keep
+    // going so the operator can re-run manually.
     let cs_dot = home.join(".cryptsync");
     let cs_identity = cs_dot.join("identity.age");
     if !cs_identity.exists() {
@@ -189,6 +201,21 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
                 eprintln!(
                     "         re-run manually: `vigo swarm cryptsync puddle init`"
                 );
+            }
+        }
+    } else {
+        let cs_cfg = crate::swarm::cryptsync::config::load_config(&home);
+        if cs_cfg.wrap_mode == crate::swarm::cryptsync::config::WrapMode::Puddle {
+            println!();
+            println!("Starting cryptsync session helper (puddle-mode, no extra passphrase)...");
+            match crate::swarm::cryptsync::cli::run(vec!["unlock".to_string()]) {
+                Ok(()) => {}
+                Err(e) => {
+                    eprintln!("warning: cryptsync unlock failed: {:#}", e);
+                    eprintln!(
+                        "         re-run manually: `vigo swarm cryptsync unlock`"
+                    );
+                }
             }
         }
     }
