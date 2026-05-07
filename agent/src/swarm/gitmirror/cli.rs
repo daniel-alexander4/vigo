@@ -1348,14 +1348,31 @@ fn cmd_status(args: &[String]) -> Result<()> {
     println!("Founder:           ed25519:{}", cfg.founder_puddle_pubkey);
     println!("Fan-out:           {}", cfg.dr_fanout.as_str());
     if let Some(when) = cfg.tombstoned_at {
-        println!("⚠ TOMBSTONED:      since unix-ts {}", when);
         println!(
-            "                   Run `gitmirror project re-found {}` to mint a fresh project_id, or",
+            "TOMBSTONED:        since unix-ts {} — this project_id has been", when
+        );
+        println!(
+            "                   retired by the founder. Existing content stays"
+        );
+        println!(
+            "                   accessible locally; no new pushes will fan out"
+        );
+        println!(
+            "                   to peers."
+        );
+        println!(
+            "                   Run `vigo swarm gitmirror project re-found {}`",
             cfg.handle
         );
         println!(
-            "                   `project leave {}` to drop the archive.",
+            "                   to mint a fresh project_id, or"
+        );
+        println!(
+            "                   `vigo swarm gitmirror project leave {}` to",
             cfg.project_id
+        );
+        println!(
+            "                   drop the local archive."
         );
     }
     println!("Members:           {}", cfg.members.len());
@@ -1381,7 +1398,19 @@ fn cmd_status(args: &[String]) -> Result<()> {
             }
         }
     } else {
-        println!("Token chain:       (missing — re-run join)");
+        println!(
+            "Token chain:       (missing) — local membership token is gone,"
+        );
+        println!(
+            "                   so this envoy can't push or fetch the project"
+        );
+        println!(
+            "                   until you re-join. Run"
+        );
+        println!(
+            "                   `vigo swarm gitmirror project join {}`.",
+            cfg.project_id
+        );
     }
     // ADR-019: founder-rekey delegation chain.
     let delegations = project_state::DelegationChain::load(&caller.home, &project_id)?
@@ -1392,13 +1421,22 @@ fn cmd_status(args: &[String]) -> Result<()> {
     let warn = super::envelopes::DELEGATION_WARN_LEN;
     if dlen == 0 {
         println!("Delegation chain:  none (founder hasn't rekeyed since project init)");
-    } else {
-        let suffix = if dlen >= warn {
-            "  ⚠ consider `gitmirror project re-found` for hygiene"
-        } else {
-            ""
-        };
-        println!("Delegation chain:  {}/{} hops{}", dlen, cap, suffix);
+    } else if dlen >= warn {
+        println!(
+            "Delegation chain:  {}/{} hops — chain is approaching the cap.", dlen, cap
+        );
+        println!(
+            "                   Each rekey appends a hop; once at the cap"
+        );
+        println!(
+            "                   (currently {}), the next rekey will be refused.", cap
+        );
+        println!(
+            "                   Consider `vigo swarm gitmirror project re-found`"
+        );
+        println!(
+            "                   to mint a fresh project_id and reset the chain."
+        );
         if let Some(last) = delegations.last() {
             println!(
                 "Current founder:   ed25519:{} (since unix-ts {})",
@@ -1407,7 +1445,18 @@ fn cmd_status(args: &[String]) -> Result<()> {
         }
         if dlen >= cap {
             println!(
-                "                   AT CAP — next rekey will be refused unless --force-orphan-projects"
+                "                   AT CAP — the next rekey will be refused"
+            );
+            println!(
+                "                   unless --force-orphan-projects is passed."
+            );
+        }
+    } else {
+        println!("Delegation chain:  {}/{} hops", dlen, cap);
+        if let Some(last) = delegations.last() {
+            println!(
+                "Current founder:   ed25519:{} (since unix-ts {})",
+                last.new_founder_pubkey, last.delegated_at
             );
         }
     }
@@ -1988,34 +2037,141 @@ fn print_status_top<W: std::io::Write>(
                 "  sources:             {} active, {} paused",
                 snap.active_sources, snap.paused_sources
             )?;
-            writeln!(out, "  source errors:       {}", snap.source_errors.len())?;
-            for err in &snap.source_errors {
-                writeln!(out, "                       {} — {}", err.path, err.reason)?;
+            if snap.source_errors.is_empty() {
+                writeln!(out, "  source errors:       0")?;
+            } else {
+                writeln!(
+                    out,
+                    "  source errors:       {} — these paths could not be loaded",
+                    snap.source_errors.len()
+                )?;
+                writeln!(
+                    out,
+                    "                       as gitmirror sources, so their"
+                )?;
+                writeln!(
+                    out,
+                    "                       contents won't reach peers. Fix the"
+                )?;
+                writeln!(
+                    out,
+                    "                       underlying issue (missing repo, bad"
+                )?;
+                writeln!(
+                    out,
+                    "                       permissions, broken remote)."
+                )?;
+                for err in &snap.source_errors {
+                    writeln!(out, "                         {} — {}", err.path, err.reason)?;
+                }
             }
-            writeln!(out, "  publish errors:      {}", snap.publish_errors.len())?;
-            for err in &snap.publish_errors {
-                writeln!(out, "                       {} — {}", err.label, err.reason)?;
+            if snap.publish_errors.is_empty() {
+                writeln!(out, "  publish errors:      0")?;
+            } else {
+                writeln!(
+                    out,
+                    "  publish errors:      {} — these labels failed to publish",
+                    snap.publish_errors.len()
+                )?;
+                writeln!(
+                    out,
+                    "                       to the swarm. Peers won't see the"
+                )?;
+                writeln!(
+                    out,
+                    "                       latest content for the listed labels"
+                )?;
+                writeln!(
+                    out,
+                    "                       until the underlying error clears."
+                )?;
+                for err in &snap.publish_errors {
+                    writeln!(out, "                         {} — {}", err.label, err.reason)?;
+                }
             }
             writeln!(out, "  mirrors:             {}", snap.mirrors.len())?;
-            writeln!(out, "  stale mirrors:       {}", snap.stale_mirrors.len())?;
-            for label in &snap.stale_mirrors {
-                writeln!(out, "                       {}", label)?;
+            if snap.stale_mirrors.is_empty() {
+                writeln!(out, "  stale mirrors:       0")?;
+            } else {
+                writeln!(
+                    out,
+                    "  stale mirrors:       {} — these mirrors haven't advanced",
+                    snap.stale_mirrors.len()
+                )?;
+                writeln!(
+                    out,
+                    "                       past the staleness threshold. Either"
+                )?;
+                writeln!(
+                    out,
+                    "                       the project has no recent pushes, or"
+                )?;
+                writeln!(
+                    out,
+                    "                       the local mirror is stuck. Run"
+                )?;
+                writeln!(
+                    out,
+                    "                       `vigo swarm gitmirror project status"
+                )?;
+                writeln!(
+                    out,
+                    "                       <handle>` per label to investigate."
+                )?;
+                for label in &snap.stale_mirrors {
+                    writeln!(out, "                         {}", label)?;
+                }
             }
         }
         Ok(None) if traits_file.exists() => {
             writeln!(
                 out,
-                "  traits.json:         (corrupt — treated as empty; next reactor tick will overwrite)"
+                "  traits.json:         (corrupt — treated as empty;"
+            )?;
+            writeln!(
+                out,
+                "                       the next reactor tick will overwrite"
+            )?;
+            writeln!(
+                out,
+                "                       it. No action needed.)"
             )?;
         }
         Ok(None) => {
             writeln!(
                 out,
-                "  traits.json:         (not yet written — reactor has not ticked on this envoy)"
+                "  traits.json:         (not yet written — reactor has not"
+            )?;
+            writeln!(
+                out,
+                "                       ticked on this envoy. Wait for the next"
+            )?;
+            writeln!(
+                out,
+                "                       check-in cycle, or run `vigo run`"
+            )?;
+            writeln!(
+                out,
+                "                       interactively to force one.)"
             )?;
         }
         Err(e) => {
-            writeln!(out, "  traits.json:         ERROR reading: {}", e)?;
+            writeln!(
+                out,
+                "  traits.json:         ERROR reading: {} — local state is", e
+            )?;
+            writeln!(
+                out,
+                "                       unreadable. Restart the agent"
+            )?;
+            writeln!(
+                out,
+                "                       (`sudo systemctl restart vigo-envoy`);"
+            )?;
+            writeln!(
+                out,
+                "                       if the error persists, file an issue."
+            )?;
         }
     }
 
@@ -2028,8 +2184,24 @@ fn print_status_top<W: std::io::Write>(
     } else {
         writeln!(
             out,
-            "  helper daemon:       socket absent ({}) — daemon not running or not yet bound",
+            "  helper daemon:       socket absent ({}) — daemon not running",
             socket.display()
+        )?;
+        writeln!(
+            out,
+            "                       or not yet bound. Non-root git operations"
+        )?;
+        writeln!(
+            out,
+            "                       against `vigo://` URLs will fail until the"
+        )?;
+        writeln!(
+            out,
+            "                       agent restarts and binds the socket. Run"
+        )?;
+        writeln!(
+            out,
+            "                       `sudo systemctl restart vigo-envoy`."
         )?;
     }
     Ok(())

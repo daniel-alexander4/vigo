@@ -1065,7 +1065,27 @@ fn cmd_status(_args: &[String]) -> Result<()> {
                 Some(pk)
             }
             None => {
-                println!("  puddle pubkey:     (identity.pub missing)");
+                println!(
+                    "  puddle pubkey:    (identity.pub missing) — local puddle state"
+                );
+                println!(
+                    "                    is corrupt, so this envoy can't prove its"
+                );
+                println!(
+                    "                    puddle membership to peers. Confirm the"
+                );
+                println!(
+                    "                    expected pubkey on another puddle member"
+                );
+                println!(
+                    "                    via `vigo swarm puddle status`, then"
+                );
+                println!(
+                    "                    re-pair this envoy with"
+                );
+                println!(
+                    "                    `vigo swarm puddle pair` / `join`."
+                );
                 None
             }
         }
@@ -1083,7 +1103,17 @@ fn cmd_status(_args: &[String]) -> Result<()> {
                     remaining
                 );
             }
-            _ => println!("  pair pending:     yes (sentinel unparseable)"),
+            _ => {
+                println!(
+                    "  pair pending:     yes (sentinel unparseable) — the pair-state"
+                );
+                println!(
+                    "                    file is corrupt; cancel and re-issue with"
+                );
+                println!(
+                    "                    `vigo swarm puddle pair`."
+                );
+            }
         }
     } else {
         println!("  pair pending:     no");
@@ -1103,7 +1133,24 @@ fn print_rekey_status(home: &Path) {
     let entries = match rekey::load_retired(home) {
         Ok(e) => e,
         Err(e) => {
-            println!("  rekey state:      (unreadable: {})", e);
+            println!(
+                "  rekey state:      (unreadable: {}) — the retired-puddles", e
+            );
+            println!(
+                "                    record is unparseable, so rekey history"
+            );
+            println!(
+                "                    is unknown. Inspect"
+            );
+            println!(
+                "                    `~/.vigo-puddle/retired_puddles.json`; if"
+            );
+            println!(
+                "                    you can't repair it, file an issue —"
+            );
+            println!(
+                "                    rekey state should never become invalid."
+            );
             return;
         }
     };
@@ -1131,10 +1178,34 @@ fn print_rekey_status(home: &Path) {
                         claim_remaining
                     );
                 }
-                _ => println!("  rekey claim code: pending (sentinel unparseable)"),
+                _ => {
+                    println!(
+                        "  rekey claim code: pending (sentinel unparseable) — the"
+                    );
+                    println!(
+                        "                    claim-code file is corrupt; cancel"
+                    );
+                    println!(
+                        "                    and re-issue with"
+                    );
+                    println!(
+                        "                    `vigo swarm puddle rekey-pair`."
+                    );
+                }
             }
         } else {
-            println!("  rekey claim code: none (run `rekey-pair` to issue one)");
+            println!(
+                "  rekey claim code: none — issue one with"
+            );
+            println!(
+                "                    `vigo swarm puddle rekey-pair` if you want"
+            );
+            println!(
+                "                    another envoy to claim the new puddle"
+            );
+            println!(
+                "                    identity within the active rekey window."
+            );
         }
     } else {
         println!("  rekey window:     none active");

@@ -556,7 +556,29 @@ fn cmd_status(_args: &[String]) -> Result<()> {
                     .count();
                 println!("  recipients:       {}", count);
             }
-            Err(_) => println!("  recipients:       (recipients.txt missing)"),
+            Err(_) => {
+                if crate::swarm::puddle::is_initialized(&home) {
+                    println!(
+                        "  recipients:       (recipients.txt missing) — encryption can't"
+                    );
+                    println!(
+                        "                    proceed without a recipient set. Re-run"
+                    );
+                    println!(
+                        "                    `vigo swarm cryptsync puddle init` to repair."
+                    );
+                } else {
+                    println!(
+                        "  recipients:       (recipients.txt missing) — encryption can't"
+                    );
+                    println!(
+                        "                    proceed without a recipient set. Re-run"
+                    );
+                    println!(
+                        "                    `vigo swarm cryptsync standalone init` to repair."
+                    );
+                }
+            }
         }
     }
 
@@ -566,8 +588,14 @@ fn cmd_status(_args: &[String]) -> Result<()> {
         println!("    ciphertext:     {}", counts.ciphertext);
         if counts.plaintext > 0 {
             println!(
-                "    plaintext:      {}   (run 'vigo swarm cryptsync unlock' to encrypt and sync)",
+                "    plaintext:      {} — still in the clear on disk. Run",
                 counts.plaintext
+            );
+            println!(
+                "                    `vigo swarm cryptsync unlock` to encrypt"
+            );
+            println!(
+                "                    them in place and propagate to puddle members."
             );
         } else {
             println!("    plaintext:      0");
@@ -575,13 +603,33 @@ fn cmd_status(_args: &[String]) -> Result<()> {
         if counts.failed.is_empty() {
             println!("    failed:         0");
         } else {
-            println!("    failed:         {}", counts.failed.len());
+            println!(
+                "    failed:         {} — the watcher couldn't process these",
+                counts.failed.len()
+            );
+            println!(
+                "                    files. Inspect each path and remove or"
+            );
+            println!(
+                "                    correct it; the watcher will retry on the"
+            );
+            println!(
+                "                    next write or unlock."
+            );
             for name in &counts.failed {
-                println!("                    {}", name);
+                println!("                      {}", name);
             }
         }
     } else {
-        println!("  files:            (content dir missing)");
+        println!(
+            "  files:            (content dir missing) — `~/cryptsync/` has been"
+        );
+        println!(
+            "                    deleted; nothing will sync until you recreate"
+        );
+        println!(
+            "                    it. Run `mkdir ~/cryptsync` to restore."
+        );
     }
 
     // Tombstone count. The canonical table lives in
@@ -608,24 +656,65 @@ fn cmd_status(_args: &[String]) -> Result<()> {
     // not relevant — they're running standalone).
     if crate::swarm::puddle::is_initialized(&home) {
         match crate::swarm::cryptsync::puddle_cert::PuddleCert::load(&home) {
-            None => println!(
-                "  puddle cert:       (not issued — run `vigo swarm cryptsync puddle renew-cert`)"
-            ),
+            None => {
+                println!(
+                    "  puddle cert:      (not issued) — current members keep syncing"
+                );
+                println!(
+                    "                    fine, but no new envoys can join the puddle"
+                );
+                println!(
+                    "                    until a cert is issued. Run"
+                );
+                println!(
+                    "                    `vigo swarm cryptsync puddle renew-cert`."
+                );
+            }
             Some(cert) => {
                 let now = now_secs();
                 let days = cert.days_until_expiry(now);
                 if days < 0 {
                     println!(
-                        "  puddle cert:       EXPIRED {} day(s) ago — run `vigo swarm cryptsync puddle renew-cert`",
+                        "  puddle cert:      EXPIRED {} day(s) ago — current members",
                         -days
+                    );
+                    println!(
+                        "                    still recognize this envoy from before"
+                    );
+                    println!(
+                        "                    expiry, but new puddle members can't"
+                    );
+                    println!(
+                        "                    verify it and fresh recipient sets won't"
+                    );
+                    println!(
+                        "                    include it. Run"
+                    );
+                    println!(
+                        "                    `vigo swarm cryptsync puddle renew-cert` to restore."
                     );
                 } else if days < 7 {
                     println!(
-                        "  puddle cert:       expires in {} day(s) — consider running `vigo swarm cryptsync puddle renew-cert`",
+                        "  puddle cert:      expires in {} day(s) — peers will stop",
                         days
                     );
+                    println!(
+                        "                    accepting this envoy as a new puddle"
+                    );
+                    println!(
+                        "                    recipient when it lapses; new envoys"
+                    );
+                    println!(
+                        "                    joining will be unable to verify it."
+                    );
+                    println!(
+                        "                    Run"
+                    );
+                    println!(
+                        "                    `vigo swarm cryptsync puddle renew-cert` to extend."
+                    );
                 } else {
-                    println!("  puddle cert:       valid (expires in {} day(s))", days);
+                    println!("  puddle cert:      valid (expires in {} day(s))", days);
                 }
             }
         }
