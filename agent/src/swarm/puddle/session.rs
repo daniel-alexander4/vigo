@@ -206,7 +206,46 @@ pub fn spawn_helper(
     // Detach — daemon reaps via parent-PID watchdog after the user's
     // shell exits.
     std::mem::forget(child);
-    Ok(())
+
+    // Wait for the helper to bind its socket before returning. Without
+    // this, callers who immediately try to talk to the helper (notably
+    // the cryptsync auto-bootstrap inside `cmd_unlock`) race the
+    // helper's stdin-read + bind sequence and hit ENOENT on
+    // UnixStream::connect. The bind in `daemon_main` is the last
+    // synchronous step before the accept loop, so a successful
+    // connect() means the helper is ready to handle requests.
+    //
+    // 5 s budget is generous on every platform we run; the typical
+    // wait is one or two 50 ms ticks. If we exceed it the helper
+    // either crashed during stdin-read or got stuck pre-bind — either
+    // way the operator wants to know rather than have callers fail
+    // with the cryptic "No such file or directory" they'd get from a
+    // bare connect() against the missing socket.
+    let ready_deadline = Instant::now() + Duration::from_secs(5);
+    let poll_interval = Duration::from_millis(50);
+    let mut attempts: u32 = 0;
+    loop {
+        attempts += 1;
+        if connect().is_ok() {
+            if attempts > 1 {
+                tracing::debug!(
+                    attempts,
+                    "puddle helper ready after socket-bind wait"
+                );
+            }
+            return Ok(());
+        }
+        if Instant::now() >= ready_deadline {
+            let log_path = runtime_dir()?.join("puddle.log");
+            bail!(
+                "puddle helper failed to bind socket within 5s after spawn ({} polls); \
+                 helper likely crashed during stdin-read or pre-bind. Check {} for details.",
+                attempts,
+                log_path.display()
+            );
+        }
+        std::thread::sleep(poll_interval);
+    }
 }
 
 // ---------- daemon side ----------
