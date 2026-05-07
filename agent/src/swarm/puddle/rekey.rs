@@ -230,7 +230,11 @@ pub fn apply_post_rotation_cryptsync_sync(
         .unwrap_or(old_puddle_pubkey_hex)
         .to_ascii_lowercase();
     let _ = crate::swarm::cryptsync::state::PeerTable::modify(username, |table| {
-        table.clear_pins_for_puddle(&retired_hex) > 0
+        if table.clear_pins_for_puddle(&retired_hex) > 0 {
+            Some("puddle-rekey")
+        } else {
+            None
+        }
     });
 
     // Regenerate recipients.txt so the next encrypt sees the new

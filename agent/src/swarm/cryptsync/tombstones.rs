@@ -284,6 +284,36 @@ pub fn tombstones_path(username: &str) -> PathBuf {
     config::agent_state_dir(username).join("tombstones.json")
 }
 
+/// The push/pull gate: returns the tombstone for `name` ONLY IF it
+/// isn't superseded by a later resurrect record. A resurrect with
+/// `resurrect_time >= deletion_time` overrides the tombstone (operator
+/// has explicitly chosen to recreate the filename within retention).
+///
+/// `None` means the filename is freely usable: either no tombstone
+/// exists, or a resurrect supersedes the existing one. Callers in
+/// `server.rs` (push, pull) check this and emit 410 Gone iff
+/// `Some(t)` is returned. The encrypt-time preflight (`cli.rs`,
+/// `auto_encrypt.rs`) refuses iff `Some(t)`.
+///
+/// Tie-breaker: resurrect_time *equal* to deletion_time supersedes,
+/// so an operator-driven resurrect always wins over a tombstone that
+/// landed at the same instant. Per-filename last-write-wins —
+/// subsequent re-DELETEs on the same name simply land a new tombstone
+/// with `deletion_time > resurrect_time` and the gate flips back.
+pub fn effective_tombstone(
+    name: &str,
+    tombstones: &TombstoneTable,
+    resurrects: &super::resurrects::ResurrectsTable,
+) -> Option<Tombstone> {
+    let tombstone = tombstones.tombstones.get(name)?;
+    if let Some(resurrect) = resurrects.active(name) {
+        if resurrect.resurrect_time >= tombstone.deletion_time {
+            return None;
+        }
+    }
+    Some(tombstone.clone())
+}
+
 // ---------- signed DELETE envelope ----------
 
 /// The authenticated body of a DELETE request. Sent as JSON in the
@@ -517,5 +547,78 @@ mod tests {
         let mut env = build_envelope(&key, "host-a", "dan", "foo.pdf", 12345);
         env.deletion_time = 99999;
         assert!(verify_envelope(&env, &pubkey_text).is_err());
+    }
+
+    // ---- effective_tombstone gate ----
+
+    use super::super::resurrects::{ResurrectRecord, ResurrectsTable};
+
+    fn r(rt: i64) -> ResurrectRecord {
+        ResurrectRecord {
+            resurrect_time: rt,
+            source_hostname: "host-a".to_string(),
+        }
+    }
+
+    #[test]
+    fn effective_tombstone_returns_tombstone_when_no_resurrect() {
+        let mut tomb = TombstoneTable::empty("dan");
+        tomb.upsert("foo.pdf", t(1000));
+        let res = ResurrectsTable::empty("dan");
+        let got = effective_tombstone("foo.pdf", &tomb, &res);
+        assert!(got.is_some());
+        assert_eq!(got.unwrap().deletion_time, 1000);
+    }
+
+    #[test]
+    fn effective_tombstone_returns_none_when_no_tombstone() {
+        let tomb = TombstoneTable::empty("dan");
+        let mut res = ResurrectsTable::empty("dan");
+        res.upsert("foo.pdf", r(500));
+        // No tombstone → nothing to gate against; filename is free.
+        assert!(effective_tombstone("foo.pdf", &tomb, &res).is_none());
+    }
+
+    #[test]
+    fn effective_tombstone_resurrect_supersedes_older_tombstone() {
+        // Tombstone at T=1000, resurrect at T=2000 → operator override
+        // wins, gate returns None (filename freely usable).
+        let mut tomb = TombstoneTable::empty("dan");
+        tomb.upsert("foo.pdf", t(1000));
+        let mut res = ResurrectsTable::empty("dan");
+        res.upsert("foo.pdf", r(2000));
+        assert!(effective_tombstone("foo.pdf", &tomb, &res).is_none());
+    }
+
+    #[test]
+    fn effective_tombstone_newer_tombstone_wins_over_old_resurrect() {
+        // Resurrect at T=1500, then re-DELETE at T=2000 → tombstone
+        // wins again. Gate blocks.
+        let mut tomb = TombstoneTable::empty("dan");
+        tomb.upsert("foo.pdf", t(2000));
+        let mut res = ResurrectsTable::empty("dan");
+        res.upsert("foo.pdf", r(1500));
+        let got = effective_tombstone("foo.pdf", &tomb, &res);
+        assert!(got.is_some());
+        assert_eq!(got.unwrap().deletion_time, 2000);
+    }
+
+    #[test]
+    fn effective_tombstone_resurrect_at_same_time_supersedes() {
+        // Tie-break: resurrect_time == deletion_time → resurrect wins.
+        // Operator intent dominates simultaneous-delete races.
+        let mut tomb = TombstoneTable::empty("dan");
+        tomb.upsert("foo.pdf", t(1000));
+        let mut res = ResurrectsTable::empty("dan");
+        res.upsert("foo.pdf", r(1000));
+        assert!(effective_tombstone("foo.pdf", &tomb, &res).is_none());
+    }
+
+    #[test]
+    fn effective_tombstone_returns_none_for_unknown_filename() {
+        let mut tomb = TombstoneTable::empty("dan");
+        tomb.upsert("other.pdf", t(1000));
+        let res = ResurrectsTable::empty("dan");
+        assert!(effective_tombstone("unrelated.pdf", &tomb, &res).is_none());
     }
 }

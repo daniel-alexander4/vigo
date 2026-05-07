@@ -87,6 +87,28 @@ pub fn leaves_user_path(home: &Path) -> PathBuf {
     dot_dir(home).join("leaves.json")
 }
 
+/// User-side mirror of the daemon's resurrects table. Mirrors
+/// `tombstones_user_path` in shape and ACL — canonical file is
+/// root-owned at `agent_state_dir/<user>/resurrects.json`, mirror
+/// is chown'd to the user 0600 so `vigo swarm cryptsync resurrect`
+/// and other user-context CLI verbs can read it without sudo.
+pub fn resurrects_user_path(home: &Path) -> PathBuf {
+    dot_dir(home).join("resurrects.json")
+}
+
+/// Sentinel file that tells the daemon reactor to process a
+/// resurrect — clear an active tombstone for a filename so the
+/// caller can re-encrypt that name within retention. Dropped by
+/// `vigo swarm cryptsync resurrect <file>` (running as the user);
+/// consumed by the daemon on its dedicated 1s pending-tick — the
+/// daemon signs the RESURRECT envelope, persists the local
+/// resurrect record, and fans out to live peers. Removed on
+/// successful processing. Body: JSON `{filename, src_path,
+/// as_name}` (as_name optional).
+pub fn resurrect_pending_path(home: &Path) -> PathBuf {
+    dot_dir(home).join("resurrect.pending")
+}
+
 pub fn enroll_pending_path(home: &Path) -> PathBuf {
     dot_dir(home).join("enroll.pending")
 }

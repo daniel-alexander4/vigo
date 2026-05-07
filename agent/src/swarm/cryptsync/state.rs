@@ -77,6 +77,52 @@ pub struct PeerEntry {
     pub pinned_puddle_pubkey: String,
 }
 
+/// Outcome of a `PeerTable::upsert` call. Distinguishes the three
+/// persistence-relevant cases so callers can drive both the
+/// "should-save" decision and the "real-change for recipients" decision
+/// from a single match. Heartbeats advance `last_seen` in memory and
+/// MUST be persisted so `prune_stale` doesn't churn entries every
+/// 90s — see `needs_save`. Only `RealChange` regenerates
+/// `recipients.txt` (recipient set actually shifted).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpsertOutcome {
+    /// Identical announce or older-heartbeat / TOFU rejection — no
+    /// in-memory mutation worth persisting.
+    Unchanged,
+    /// Same pubkey + sign_pubkey, advancing `last_seen` (or first-set
+    /// of `puddle_pubkey` between heartbeats). Disk save required so
+    /// the prune cycle sees current liveness; recipients unchanged.
+    Heartbeat,
+    /// New peer (first sighting) or pubkey/sign_pubkey rotation —
+    /// recipient set may have shifted. Disk save + recipients regen.
+    RealChange,
+}
+
+impl UpsertOutcome {
+    /// True when the in-memory mutation needs to land on disk. Both
+    /// `Heartbeat` and `RealChange` mutate; only `Unchanged` skips.
+    pub fn needs_save(&self) -> bool {
+        matches!(self, UpsertOutcome::Heartbeat | UpsertOutcome::RealChange)
+    }
+
+    /// True only for changes that affect the recipient set. Callers
+    /// gate `regenerate_recipients` on this — heartbeats keep the
+    /// existing recipients.txt valid.
+    pub fn is_real_change(&self) -> bool {
+        matches!(self, UpsertOutcome::RealChange)
+    }
+
+    /// Save-log reason corresponding to this outcome. `None` when
+    /// no save is needed.
+    pub fn save_reason(&self) -> Option<&'static str> {
+        match self {
+            UpsertOutcome::RealChange => Some("real-change"),
+            UpsertOutcome::Heartbeat => Some("heartbeat"),
+            UpsertOutcome::Unchanged => None,
+        }
+    }
+}
+
 /// Per-user peer table. Persisted at
 /// `/var/lib/vigo/swarm/cryptsync/<user>/peers.json`.
 ///
@@ -117,7 +163,14 @@ impl PeerTable {
     }
 
     /// Atomic save via temp + rename. Root-owned, 0600.
-    pub fn save(&self) -> Result<()> {
+    ///
+    /// `reason` names the path that triggered the save — one of
+    /// `first-sighting | rotation | heartbeat | prune | leave`. INFO
+    /// logged so journal readers can tell heartbeat churn from genuine
+    /// recipient-set changes without re-reading the diff. Added in the
+    /// 0.39.x heartbeat-persistence fix; before that there was zero
+    /// log on save, which is what hid the prune→first-sight cycle bug.
+    pub fn save(&self, reason: &'static str) -> Result<()> {
         let dir = config::agent_state_dir(&self.user);
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
         let path = config::peers_path(&self.user);
@@ -144,6 +197,12 @@ impl PeerTable {
         }
 
         fs::rename(&tmp, &path).with_context(|| format!("renaming to {}", path.display()))?;
+        tracing::info!(
+            user = %self.user,
+            peer_count = self.peers.len(),
+            reason = reason,
+            "cryptsync: peer table saved"
+        );
         Ok(())
     }
 
@@ -151,35 +210,47 @@ impl PeerTable {
     /// Use this for any read-modify-write (upsert from announce,
     /// forget, prune_stale) — it prevents the lost-update race
     /// where two concurrent callers both load the same starting
-    /// state and the second save() overwrites the first. Closure
-    /// returns `true` if it mutated the table; the helper only
-    /// saves when so.
+    /// state and the second save() overwrites the first.
+    ///
+    /// Closure returns `Some(reason)` to save with that reason
+    /// stamped into the save log line, or `None` to skip the save.
+    /// For announce upserts, `UpsertOutcome::save_reason()` produces
+    /// the right value directly.
     pub fn modify<F>(user: &str, f: F) -> Result<()>
     where
-        F: FnOnce(&mut Self) -> bool,
+        F: FnOnce(&mut Self) -> Option<&'static str>,
     {
         let lock = super::locks::user_lock("peers", user);
         let _guard = lock.lock().unwrap_or_else(|p| p.into_inner());
         let mut table = Self::load(user);
-        if f(&mut table) {
-            table.save()?;
+        if let Some(reason) = f(&mut table) {
+            table.save(reason)?;
         }
         Ok(())
     }
 
-    /// Insert-or-update. Returns true if this produced a real change
-    /// (new peer, pubkey rotation, or last_seen advanced meaningfully)
-    /// — the caller can skip `save()` + `regenerate_recipients()` when
-    /// the update is a plain heartbeat.
+    /// Insert-or-update. Returns one of:
     ///
-    /// ADR-016 follow-up: rejects announcements whose `puddle_pubkey`
-    /// disagrees with the previously-pinned value for the same
-    /// hostname. Returns `false` (no mutation) and the receive-side
-    /// caller logs the rejection. Operator recovery is to clear the
-    /// peer entry — `vigo swarm cryptsync forget <host>` does the
-    /// trick. First sighting under a non-empty puddle_pubkey pins it
-    /// to `pinned_puddle_pubkey` for future TOFU checks.
-    pub fn upsert(&mut self, mut entry: PeerEntry) -> bool {
+    /// - `UpsertOutcome::RealChange` — first sighting, or
+    ///   pubkey/sign_pubkey rotation. Caller persists + regenerates
+    ///   `recipients.txt`.
+    /// - `UpsertOutcome::Heartbeat` — same pubkey + sign_pubkey but
+    ///   advancing `last_seen`, or first-set of `puddle_pubkey`
+    ///   between heartbeats. Caller persists (so prune cycle sees
+    ///   current liveness) but does NOT regenerate recipients.
+    /// - `UpsertOutcome::Unchanged` — identical announce, older-
+    ///   heartbeat reorder, or TOFU rejection. Caller skips save.
+    ///
+    /// ADR-016 follow-up: TOFU rejects announcements whose
+    /// `puddle_pubkey` disagrees with the previously-pinned value for
+    /// the same hostname — returns `Unchanged` with no mutation. The
+    /// receive-side caller detects TOFU separately (via the pre-upsert
+    /// pin snapshot) and logs the rejection. Operator recovery is to
+    /// clear the peer entry — `vigo swarm cryptsync forget <host>`
+    /// does the trick. First sighting under a non-empty
+    /// `puddle_pubkey` pins it to `pinned_puddle_pubkey` for future
+    /// TOFU checks.
+    pub fn upsert(&mut self, mut entry: PeerEntry) -> UpsertOutcome {
         match self.peers.get(&entry.hostname) {
             Some(existing) => {
                 // TOFU check — once we've pinned a non-empty puddle
@@ -192,7 +263,7 @@ impl PeerTable {
                 {
                     // Mismatch — drop the announce. Receive-side
                     // caller logs the warn message with full detail.
-                    return false;
+                    return UpsertOutcome::Unchanged;
                 }
                 if existing.pubkey != entry.pubkey || existing.sign_pubkey != entry.sign_pubkey {
                     // Pubkey rotation (age or sign) — real change.
@@ -206,11 +277,11 @@ impl PeerTable {
                         entry.puddle_pubkey.clone()
                     };
                     self.peers.insert(entry.hostname.clone(), entry);
-                    true
+                    UpsertOutcome::RealChange
                 } else if entry.last_seen > existing.last_seen {
-                    // Heartbeat update — we want this persisted so
-                    // stale-peer age-out works, but it's not a
-                    // recipient-set change. Also refresh addr so the
+                    // Heartbeat update — persisted so prune cycle
+                    // doesn't drop fresh peers every 90s. Not a
+                    // recipient-set change. Refresh addr so the
                     // pusher has current routing info. Preserve the
                     // existing pin; refresh puddle_pubkey only if the
                     // pin was already empty (legitimate first-set).
@@ -228,9 +299,9 @@ impl PeerTable {
                         updated.pinned_puddle_pubkey = updated.puddle_pubkey.clone();
                     }
                     self.peers.insert(entry.hostname.clone(), updated);
-                    false
+                    UpsertOutcome::Heartbeat
                 } else {
-                    false
+                    UpsertOutcome::Unchanged
                 }
             }
             None => {
@@ -241,7 +312,7 @@ impl PeerTable {
                     entry.pinned_puddle_pubkey = entry.puddle_pubkey.clone();
                 }
                 self.peers.insert(entry.hostname.clone(), entry);
-                true
+                UpsertOutcome::RealChange
             }
         }
     }
@@ -414,6 +485,15 @@ pub struct Announcement {
     /// catch-up for this peer."
     #[serde(default)]
     pub leaves_digest: String,
+    /// Hex-encoded 16-byte digest of the per-user `ResurrectsTable`
+    /// (`(filename, resurrect_time)` pairs). Mirrors
+    /// `tombstones_digest` shape — receivers compare against their
+    /// local digest and pull the announcer's full resurrects table on
+    /// mismatch via `GET /swarm/cryptsync/resurrects/<user>`. Empty
+    /// string from pre-0.39.x peers; receivers treat empty as "skip
+    /// resurrects catch-up for this peer."
+    #[serde(default)]
+    pub resurrects_digest: String,
     /// Hex-encoded puddle Ed25519 pubkey for the announcing user
     /// (ADR-016). Empty string when the user is running standalone
     /// or the announce predates 0.35.x. Receivers under puddle mode
@@ -465,15 +545,23 @@ mod tests {
     #[test]
     fn upsert_new_peer_is_a_real_change() {
         let mut t = PeerTable::empty("dan");
-        assert!(t.upsert(sample_peer("host-a", 100)));
+        let outcome = t.upsert(sample_peer("host-a", 100));
+        assert_eq!(outcome, UpsertOutcome::RealChange);
+        assert!(outcome.is_real_change());
+        assert!(outcome.needs_save());
     }
 
     #[test]
-    fn upsert_heartbeat_is_not_a_real_change() {
+    fn upsert_heartbeat_persists_but_isnt_a_real_change() {
         let mut t = PeerTable::empty("dan");
         t.upsert(sample_peer("host-a", 100));
-        // Same pubkey, newer last_seen — heartbeat only.
-        assert!(!t.upsert(sample_peer("host-a", 130)));
+        // Same pubkey, newer last_seen — heartbeat. Must persist (so
+        // prune doesn't churn), but recipients don't change.
+        let outcome = t.upsert(sample_peer("host-a", 130));
+        assert_eq!(outcome, UpsertOutcome::Heartbeat);
+        assert!(!outcome.is_real_change());
+        assert!(outcome.needs_save());
+        assert_eq!(outcome.save_reason(), Some("heartbeat"));
         assert_eq!(t.peers.get("host-a").unwrap().last_seen, 130);
     }
 
@@ -490,16 +578,36 @@ mod tests {
             puddle_pubkey: String::new(),
             pinned_puddle_pubkey: String::new(),
         };
-        assert!(t.upsert(rotated));
+        assert_eq!(t.upsert(rotated), UpsertOutcome::RealChange);
     }
 
     #[test]
-    fn upsert_older_heartbeat_is_ignored() {
+    fn upsert_older_heartbeat_is_unchanged() {
         let mut t = PeerTable::empty("dan");
         t.upsert(sample_peer("host-a", 200));
         // Older announcement — reordering on the wire; don't regress.
-        assert!(!t.upsert(sample_peer("host-a", 100)));
+        let outcome = t.upsert(sample_peer("host-a", 100));
+        assert_eq!(outcome, UpsertOutcome::Unchanged);
+        assert!(!outcome.needs_save());
         assert_eq!(t.peers.get("host-a").unwrap().last_seen, 200);
+    }
+
+    #[test]
+    fn upsert_tofu_rejection_is_unchanged() {
+        // Existing entry pinned to fleet-a; incoming announces fleet-b
+        // → TOFU mismatch → rejected with no mutation.
+        let mut t = PeerTable::empty("dan");
+        let mut e = sample_peer_in_puddle("host-a", 100, "fleet-a");
+        // Force the pin (upsert would do this on first sighting; do
+        // it explicitly so the test reads top-down).
+        e.pinned_puddle_pubkey = "fleet-a".to_string();
+        t.peers.insert("host-a".into(), e);
+        let incoming = sample_peer_in_puddle("host-a", 200, "fleet-b");
+        let outcome = t.upsert(incoming);
+        assert_eq!(outcome, UpsertOutcome::Unchanged);
+        // Existing entry untouched.
+        assert_eq!(t.peers.get("host-a").unwrap().puddle_pubkey, "fleet-a");
+        assert_eq!(t.peers.get("host-a").unwrap().last_seen, 100);
     }
 
     #[test]
@@ -613,6 +721,7 @@ mod tests {
             generation: 7,
             tombstones_digest: String::new(),
             leaves_digest: String::new(),
+            resurrects_digest: String::new(),
             puddle_pubkey: String::new(),
             puddle_cert: None,
         };
@@ -815,8 +924,8 @@ mod tests {
         t.upsert(sample_peer_in_puddle("alpha", 100, "fleet-pk-1"));
         // Attacker (or rotated peer) announces a different puddle pubkey.
         let spoofed = sample_peer_in_puddle("alpha", 200, "fleet-pk-2");
-        let changed = t.upsert(spoofed);
-        assert!(!changed, "upsert must reject TOFU mismatch");
+        let outcome = t.upsert(spoofed);
+        assert_eq!(outcome, UpsertOutcome::Unchanged, "upsert must reject TOFU mismatch");
         let stored = t.peers.get("alpha").unwrap();
         assert_eq!(stored.puddle_pubkey, "fleet-pk-1", "original puddle_pubkey unchanged");
         assert_eq!(stored.pinned_puddle_pubkey, "fleet-pk-1", "pin stays pinned");
@@ -832,8 +941,8 @@ mod tests {
         let mut t = PeerTable::empty("dan");
         t.upsert(sample_peer_in_puddle("alpha", 100, "fleet-pk-1"));
         let reverted = sample_peer("alpha", 200); // empty puddle_pubkey
-        let changed = t.upsert(reverted);
-        assert!(!changed);
+        let outcome = t.upsert(reverted);
+        assert_eq!(outcome, UpsertOutcome::Unchanged);
         assert_eq!(t.peers.get("alpha").unwrap().pinned_puddle_pubkey, "fleet-pk-1");
     }
 
@@ -845,9 +954,12 @@ mod tests {
         t.upsert(sample_peer_in_puddle("alpha", 100, "fleet-pk-1"));
         let mut hb = sample_peer_in_puddle("alpha", 200, "fleet-pk-1");
         hb.pubkey = t.peers.get("alpha").unwrap().pubkey.clone();
-        // Heartbeat returns false (not a recipient-set change) but
-        // last_seen advances and the pin stays put.
-        assert!(!t.upsert(hb));
+        // Heartbeat persists last_seen but isn't a recipient-set
+        // change. The pin stays put across the heartbeat.
+        let outcome = t.upsert(hb);
+        assert_eq!(outcome, UpsertOutcome::Heartbeat);
+        assert!(outcome.needs_save());
+        assert!(!outcome.is_real_change());
         assert_eq!(t.peers.get("alpha").unwrap().last_seen, 200);
         assert_eq!(t.peers.get("alpha").unwrap().pinned_puddle_pubkey, "fleet-pk-1");
     }
@@ -861,8 +973,8 @@ mod tests {
         t.upsert(sample_peer_in_puddle("alpha", 100, "fleet-pk-1"));
         assert!(t.forget("alpha"));
         // Fresh announce after operator-cleared state — TOFU re-pins.
-        let changed = t.upsert(sample_peer_in_puddle("alpha", 200, "fleet-pk-2"));
-        assert!(changed);
+        let outcome = t.upsert(sample_peer_in_puddle("alpha", 200, "fleet-pk-2"));
+        assert_eq!(outcome, UpsertOutcome::RealChange);
         assert_eq!(t.peers.get("alpha").unwrap().pinned_puddle_pubkey, "fleet-pk-2");
     }
 }

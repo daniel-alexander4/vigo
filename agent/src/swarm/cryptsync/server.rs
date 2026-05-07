@@ -39,8 +39,11 @@ use hyper::{Request, Response, StatusCode};
 use crate::platform::users::user_home;
 
 use super::leaves::{self, LeaveEnvelope};
+use super::resurrects::{self, ResurrectEnvelope, ResurrectRecord, ResurrectsTable};
 use super::state::PeerTable;
-use super::tombstones::{self, DeleteEnvelope, Tombstone, TombstoneTable};
+use super::tombstones::{
+    self, effective_tombstone, DeleteEnvelope, Tombstone, TombstoneTable,
+};
 
 /// Max size of a single pushed ciphertext blob.
 pub const MAX_PUSH_BYTES: usize = 1024 * 1024 * 1024; // 1 GiB
@@ -81,13 +84,17 @@ pub fn handle_pull(path: &str) -> Response<Full<Bytes>> {
         None => return not_found(),
     };
 
-    // Anti-resurrection — if this filename is currently tombstoned,
-    // return 410 Gone instead of serving bytes. The puller interprets
-    // 410 as "learn about this delete" and records the tombstone
-    // locally; see `agent/src/swarm/cryptsync/server.rs` docs.
-    let table = TombstoneTable::load(&user);
-    if let Some(dt) = table.active_deletion_time(&name) {
-        return gone_with_tombstone(&name, dt);
+    // Anti-resurrection — if this filename is effectively tombstoned
+    // (tombstone exists AND no later resurrect supersedes it), return
+    // 410 Gone instead of serving bytes. The puller interprets 410 as
+    // "learn about this delete" and records the tombstone locally.
+    // Operator override via `vigo swarm cryptsync resurrect <file>`
+    // lifts the gate by recording a resurrect with `resurrect_time >=
+    // deletion_time` — see `tombstones::effective_tombstone`.
+    let tombstones = TombstoneTable::load(&user);
+    let resurrects = ResurrectsTable::load(&user);
+    if let Some(t) = effective_tombstone(&name, &tombstones, &resurrects) {
+        return gone_with_tombstone(&name, t.deletion_time);
     }
 
     let target = home.join("cryptsync").join(&name);
@@ -199,18 +206,20 @@ pub async fn handle_push(
         return bad_request("pushed body is not age-encrypted");
     }
 
-    // Anti-resurrection — if this filename is currently tombstoned,
-    // accept only if the caller is asserting a post-tombstone
-    // republish. We don't have a sender-provided mtime here (the
-    // pusher doesn't send one in v1), so the simpler rule is: reject
-    // any push of a tombstoned filename with 410, and require the
-    // operator to explicitly `vigo swarm cryptsync reencrypt` or to encrypt
-    // a new file (which clears the tombstone at the source on the
-    // next watcher event). See `docs/engineering/subsystems/cryptsync.md`.
+    // Anti-resurrection — if this filename is effectively tombstoned
+    // (tombstone exists AND no later resurrect supersedes it), reject
+    // the push with 410 Gone. The pusher doesn't carry an mtime in
+    // v1, so we don't try to compare ages — a tombstone wins until
+    // the operator explicitly resurrects via
+    // `vigo swarm cryptsync resurrect <file>`, which records a
+    // resurrect (`resurrect_time >= deletion_time`) and lifts the
+    // gate. See `tombstones::effective_tombstone` and the resurrect
+    // verb in `cli.rs`.
     {
-        let table = TombstoneTable::load(&user);
-        if let Some(dt) = table.active_deletion_time(&name) {
-            return gone_with_tombstone(&name, dt);
+        let tombstones = TombstoneTable::load(&user);
+        let resurrects = ResurrectsTable::load(&user);
+        if let Some(t) = effective_tombstone(&name, &tombstones, &resurrects) {
+            return gone_with_tombstone(&name, t.deletion_time);
         }
     }
 
@@ -590,6 +599,143 @@ pub async fn handle_leave(
         .header("Content-Type", "application/json")
         .body(Full::new(Bytes::from(r#"{"status":"accepted"}"#)))
         .unwrap()
+}
+
+// ---------- RESURRECT (POST /swarm/cryptsync/resurrects/{user}/{filename}) ----------
+
+/// Handle a signed RESURRECT envelope from a peer.
+///
+/// Mirrors `handle_tombstone_delete` in shape — same path validation,
+/// same peer-table sign_pubkey lookup, same Ed25519 verify, same
+/// per-user lock around the modify-save pair. On success, the local
+/// `ResurrectsTable` is updated and the next push of this filename is
+/// allowed by the gate (`effective_tombstone` returns None).
+///
+/// Returns 200 on success, 400 on malformed input, 403 on auth
+/// failure (sender unknown to peer table or signature verification
+/// failed).
+pub async fn handle_resurrect(
+    path: &str,
+    req: Request<hyper::body::Incoming>,
+    _peer_addr: SocketAddr,
+) -> Response<Full<Bytes>> {
+    let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    let (user, name) = match segments.as_slice() {
+        ["swarm", "cryptsync", "resurrects", user, name] => (*user, *name),
+        _ => return not_found(),
+    };
+    let user = match percent_decode(user) {
+        Some(s) => s,
+        None => return bad_request("invalid user encoding"),
+    };
+    let name = match percent_decode(name) {
+        Some(s) => s,
+        None => return bad_request("invalid filename encoding"),
+    };
+    if !valid_username(&user) {
+        return bad_request("invalid user");
+    }
+    if !valid_filename(&name) {
+        return bad_request("invalid filename");
+    }
+
+    let collected = match req.into_body().collect().await {
+        Ok(c) => c,
+        Err(_) => return bad_request("read body"),
+    };
+    let body_bytes = collected.to_bytes();
+    if body_bytes.len() > MAX_ANNOUNCE_BYTES {
+        return payload_too_large();
+    }
+
+    let envelope: ResurrectEnvelope = match serde_json::from_slice(&body_bytes) {
+        Ok(e) => e,
+        Err(e) => return bad_request(&format!("malformed envelope: {}", e)),
+    };
+
+    // URL path must match the envelope body — no smuggling.
+    if envelope.user != user || envelope.filename != name {
+        return bad_request("path / envelope mismatch");
+    }
+
+    let table = PeerTable::load(&user);
+    let expected_pubkey = match table.sign_pubkey_for(&envelope.source_hostname) {
+        Some(s) if !s.is_empty() => s.to_string(),
+        _ => {
+            tracing::warn!(
+                user = %user,
+                filename = %name,
+                sender = %envelope.source_hostname,
+                "cryptsync: RESURRECT rejected — sender unknown to peer table or has no signing pubkey"
+            );
+            return forbidden("unknown sender or no signing pubkey");
+        }
+    };
+
+    if let Err(e) = resurrects::verify_envelope(&envelope, &expected_pubkey) {
+        tracing::warn!(
+            user = %user,
+            filename = %name,
+            sender = %envelope.source_hostname,
+            error = %e,
+            "cryptsync: RESURRECT rejected — signature verification failed"
+        );
+        return forbidden("signature verification failed");
+    }
+
+    if let Err(e) = ResurrectsTable::modify(&user, |table| {
+        table.upsert(
+            &name,
+            ResurrectRecord {
+                resurrect_time: envelope.resurrect_time,
+                source_hostname: envelope.source_hostname.clone(),
+            },
+        )
+    }) {
+        tracing::warn!(error = %e, "cryptsync RESURRECT: resurrect save failed");
+    }
+
+    tracing::info!(
+        user = %user,
+        filename = %name,
+        sender = %envelope.source_hostname,
+        resurrect_time = envelope.resurrect_time,
+        "cryptsync: RESURRECT accepted"
+    );
+
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .body(Full::new(Bytes::from(r#"{"status":"accepted"}"#)))
+        .unwrap()
+}
+
+/// Return the full resurrects table for `user` as JSON. Mirror of
+/// `handle_tombstones_list` — peers that observe a `resurrects_digest`
+/// mismatch on an announcement pull the full list and merge.
+pub fn handle_resurrects_list(path: &str) -> Response<Full<Bytes>> {
+    let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    let user = match segments.as_slice() {
+        ["swarm", "cryptsync", "resurrects", user] => *user,
+        _ => return not_found(),
+    };
+    let user = match percent_decode(user) {
+        Some(s) => s,
+        None => return bad_request("invalid user encoding"),
+    };
+    if !valid_username(&user) {
+        return bad_request("invalid user");
+    }
+
+    let table = ResurrectsTable::load(&user);
+    match serde_json::to_vec(&table) {
+        Ok(body) => Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/json")
+            .body(Full::new(Bytes::from(body)))
+            .unwrap(),
+        Err(_) => internal_error("serialize resurrect table"),
+    }
 }
 
 // ---------- announce (POST /swarm/cryptsync/announce) ----------

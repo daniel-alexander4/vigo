@@ -43,6 +43,8 @@ use thiserror::Error;
 
 use super::config;
 use super::crypt;
+use super::resurrects;
+use super::tombstones;
 
 /// Size cap on auto-encrypt. Matches `server::MAX_PUSH_BYTES` so the
 /// "can encrypt" and "can transmit" boundaries coincide — never burn
@@ -109,6 +111,33 @@ pub fn encrypt_in_place(
         return Err(AutoEncryptError::Terminal(
             "recipients.txt is empty (no peers known to encrypt to)".into(),
         ));
+    }
+
+    // Tombstone preflight — refuse before any encryption work when
+    // the filename has an effective tombstone (tombstone exists AND
+    // no later resurrect supersedes it). Without this, auto-encrypt
+    // would silently produce ciphertext that every peer rejects with
+    // 410 Gone — wasted CPU, destroyed plaintext, no operator-visible
+    // signal until they grep the journal. Watcher's `plaintext_warns`
+    // dedup map throttles the WARN spam if the same plaintext keeps
+    // re-appearing.
+    let preflight_tombs = tombstones::TombstoneTable::load_user(username, home);
+    let preflight_res = resurrects::ResurrectsTable::load_user(username, home);
+    if let Some(t) =
+        tombstones::effective_tombstone(filename, &preflight_tombs, &preflight_res)
+    {
+        let now_secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        let retention_remaining_secs =
+            tombstones::DEFAULT_RETENTION_SECS - (now_secs - t.deletion_time);
+        let days_remaining = (retention_remaining_secs / (24 * 60 * 60)).max(0);
+        return Err(AutoEncryptError::Terminal(format!(
+            "filename `{}` is tombstoned ({}d remaining in retention); \
+             run `vigo swarm cryptsync resurrect <file>` to override and re-encrypt",
+            filename, days_remaining,
+        )));
     }
 
     let content_dir = config::content_dir(home);
@@ -406,6 +435,133 @@ mod tests {
             Err(AutoEncryptError::Terminal(m)) => assert!(m.contains("recipients")),
             other => panic!("expected Terminal, got {:?}", other),
         }
+    }
+
+    /// Tombstone preflight: a filename with an active effective
+    /// tombstone (no resurrect) must be refused before any
+    /// encryption work. The plaintext sits untouched on disk; the
+    /// caller (watcher / unlock sweep) sees a Terminal error and
+    /// logs once via `plaintext_warns` dedup.
+    #[test]
+    fn encrypt_in_place_terminal_on_active_tombstone() {
+        use age::x25519::Identity;
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path();
+        std::fs::create_dir_all(config::content_dir(home)).unwrap();
+        std::fs::create_dir_all(config::dot_dir(home)).unwrap();
+
+        let id = Identity::generate();
+        let recipients = vec![id.to_public()];
+
+        let plaintext = b"would be encrypted but for the tombstone";
+        let plain_path = config::content_dir(home).join("locked-test.txt");
+        std::fs::write(&plain_path, plaintext).unwrap();
+
+        // Seed the user-mirror tombstones table with an active
+        // entry for `locked-test.txt`. resurrects.json absent →
+        // ResurrectsTable::load_user returns empty → no supersede.
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let table = serde_json::json!({
+            "user": "nobody",
+            "tombstones": {
+                "locked-test.txt": {
+                    "deletion_time": now - 60,
+                    "source_hostname": "host-a"
+                }
+            }
+        });
+        std::fs::write(
+            config::tombstones_user_path(home),
+            serde_json::to_string(&table).unwrap(),
+        )
+        .unwrap();
+
+        let r = encrypt_in_place(home, "nobody", "locked-test.txt", &recipients);
+        match r {
+            Err(AutoEncryptError::Terminal(m)) => {
+                assert!(
+                    m.contains("tombstoned"),
+                    "expected tombstoned-message, got: {}",
+                    m
+                );
+                assert!(
+                    m.contains("resurrect"),
+                    "expected verb pointer, got: {}",
+                    m
+                );
+            }
+            other => panic!("expected Terminal, got {:?}", other),
+        }
+
+        // Plaintext must still be on disk, unmodified.
+        let after = std::fs::read(&plain_path).unwrap();
+        assert_eq!(
+            after, plaintext,
+            "preflight must not touch plaintext on refusal"
+        );
+    }
+
+    /// Tombstone with a later resurrect_time → supersede → encrypt
+    /// proceeds normally. Verifies `effective_tombstone` is the gate
+    /// the preflight uses, not just the bare tombstones table.
+    #[test]
+    fn encrypt_in_place_proceeds_when_resurrect_supersedes_tombstone() {
+        use age::x25519::Identity;
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path();
+        std::fs::create_dir_all(config::content_dir(home)).unwrap();
+        std::fs::create_dir_all(config::dot_dir(home)).unwrap();
+
+        let id = Identity::generate();
+        let recipients = vec![id.to_public()];
+
+        let plaintext = b"resurrected content";
+        let plain_path = config::content_dir(home).join("locked-test.txt");
+        std::fs::write(&plain_path, plaintext).unwrap();
+
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+        let tombs = serde_json::json!({
+            "user": "nobody",
+            "tombstones": {
+                "locked-test.txt": {
+                    "deletion_time": now - 120,
+                    "source_hostname": "host-a"
+                }
+            }
+        });
+        std::fs::write(
+            config::tombstones_user_path(home),
+            serde_json::to_string(&tombs).unwrap(),
+        )
+        .unwrap();
+        let res = serde_json::json!({
+            "user": "nobody",
+            "resurrects": {
+                "locked-test.txt": {
+                    "resurrect_time": now - 60,
+                    "source_hostname": "host-a"
+                }
+            }
+        });
+        std::fs::write(
+            config::resurrects_user_path(home),
+            serde_json::to_string(&res).unwrap(),
+        )
+        .unwrap();
+
+        let username = std::env::var("USER").unwrap_or_else(|_| "nobody".into());
+        let size = encrypt_in_place(home, &username, "locked-test.txt", &recipients)
+            .expect("resurrect supersedes; encrypt must succeed");
+        assert_eq!(size, plaintext.len() as u64);
+
+        let after = std::fs::read(&plain_path).unwrap();
+        assert!(after.starts_with(b"age-encryption.org/v1\n"));
     }
 
     #[test]

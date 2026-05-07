@@ -166,7 +166,7 @@ Deletion is a first-class mesh operation, not a local-only `rm`. When the operat
 3. Pusher loads A's Ed25519 signing key (`/var/lib/vigo/swarm/cryptsync/<user>/signing.key`, root-owned), builds a signed `DeleteEnvelope`, and POSTs it to every live LAN peer at `https://<peer>:1531/cryptsync/tombstones/<user>/<filename>` plus every `cross_subnet_peers:` host.
 4. Receiver validates the envelope against the sender's known signing pubkey from its local `peers.json`. Unknown sender or mismatched signature → 403 Forbidden.
 5. On valid envelope: receiver records a tombstone in `/var/lib/vigo/swarm/cryptsync/<user>/tombstones.json` (root-owned canonical) and mirrors the table to `~<user>/.cryptsync/tombstones.json` (user-owned 0600) so `vigo swarm cryptsync list` / `status` running as the unprivileged user can see it. Removes the local ciphertext file if present, returns 200 OK. The same daemon-side-canonical + user-side-mirror pattern applies to `leaves.json`.
-6. Any future PUSH of the same filename from any peer → 410 Gone (anti-resurrection) unless the tombstone is cleared by a newer-mtime republish.
+6. Any future PUSH of the same filename from any peer → 410 Gone (anti-resurrection) until either a `cryptsync resurrect` envelope supersedes the tombstone or the tombstone ages past retention.
 7. Any future PULL of the tombstoned filename → 410 Gone. The puller records the tombstone locally on receiving this response — lazy catch-up for the rare code path that reaches pull.
 
 **Catch-up after partition:** every announcement carries a 16-byte `tombstones_digest` (truncated SHA-256 over sorted `filename|deletion_time` entries) **and** a 16-byte `leaves_digest` (the analogous digest over `(age_pubkey, leave_time)` pairs from `LeavesTable`). A peer that observes a digest mismatch on either pulls the full table via `GET /cryptsync/tombstones/<user>` or `GET /cryptsync/leaves/<user>` and merges it. This is the common-case recovery path for "envoy was offline during a delete or LEAVE, comes back up with stale state." For tombstone catch-up the receiver also drops any local files newly covered by tombstones; for leaves catch-up it runs `apply_leave` on each newly-merged entry so the peer table prune + recipients regen + reencrypt sentinel fire just as they would have on the original LEAVE envelope. No peer-initiated work is required to converge.
@@ -177,15 +177,26 @@ Each envoy generates an Ed25519 keypair *the first time the cryptsync daemon obs
 
 The signing key is **daemon-owned, not password-wrapped**. Unlike the age identity (which gates content decryption — losing it is catastrophic and permanent), the signing key only authorizes destructive operations on behalf of this envoy. Recovery from a compromised signing key is fast: peers run `vigo swarm cryptsync forget <stolen-host>` on every other envoy, which removes the compromised pubkey from their `peers.json`, and subsequent DELETE envelopes from the compromised host fail validation. This tradeoff is deliberate — wrapping the signing key would force the user to be unlocked for deletions to propagate, which breaks the pusher's reactive model.
 
-### What happens when you re-create a deleted filename
+### Resurrecting a deleted filename
 
-While a tombstone is active, re-pushing that filename is rejected with 410 Gone on every receiver. The tombstone is a strict block, not an mtime-compared guard — cryptsync's wire format doesn't currently carry a push-time mtime, so the receiver has no way to distinguish "legitimate re-publish" from "stale peer resurrecting old bytes." To re-create a deleted filename while its tombstone is still active, pick one of:
+While a tombstone is active, re-pushing that filename is rejected with 410 Gone on every receiver. The tombstone is a strict block, not an mtime-compared guard — cryptsync's wire format doesn't currently carry a push-time mtime, so the receiver has no way to distinguish "legitimate re-publish" from "stale peer resurrecting old bytes."
 
-- **Rename** the new file (`vigo swarm cryptsync encrypt foo-v2.pdf`) — different filename, no tombstone, no rejection.
-- **Wait out the tombstone.** Default retention is 90 days; after that the tombstone is GC'd and the original filename is usable again.
-- **Manually clear the tombstone** on each envoy: `sudo vigocli swarm cleanup cryptsync --user <user> --filename <name>` (planned — not shipped in the initial tombstone feature).
+The encrypt-time preflight (`cmd_encrypt`, `auto_encrypt`) refuses **before** doing any encryption work when the target name is effectively tombstoned. Without this, `cryptsync encrypt` would silently produce ciphertext that every peer rejects with 410 — wasted CPU, destroyed plaintext, no operator-visible signal. The preflight fails with a message naming the override path:
 
-Filename reuse with a fresh name is the recommended pattern.
+```
+filename `foo.pdf` is tombstoned (87d remaining in retention).
+Run `vigo swarm cryptsync resurrect <file> [--as <name>]` to override and re-encrypt.
+```
+
+The override paths, in order of preference:
+
+- **`vigo swarm cryptsync resurrect <file> [--as <name>]`** — operator override. Drops a `~/.cryptsync/resurrect.pending` sentinel; the daemon picks it up on its dedicated 1s tick, signs a `ResurrectEnvelope` with the local Ed25519 signing key, persists a `ResurrectRecord` in the per-user resurrects store, and fans the envelope out to every live peer. The CLI awaits the daemon's sentinel removal (60s ceiling) before invoking the encrypt path, so by the time the watcher fires the PushJob, every reachable peer holds the resurrect record and the `effective_tombstone` gate returns None — the push lands instead of 410'ing. Offline peers catch up via `resurrects_digest` mismatch on their next announce-receive.
+- **Rename** the new file (`vigo swarm cryptsync encrypt foo-v2.pdf`) — different filename, no tombstone, no gate. Trivially works.
+- **Wait out the tombstone.** Default retention is 90 days; after that, GC drops the tombstone and the resurrect record together (both age out at the same `tombstone_retention_days` window) and the original filename is freely usable again.
+
+Mechanism: the gate is `tombstones::effective_tombstone(name, &tombstones, &resurrects)` — the tombstone for `name` is "effective" iff `tombstone.deletion_time > resurrect.resurrect_time` (or no resurrect exists). Tie-breaker: equal times go to the resurrect, so an operator-driven override always wins simultaneity. Subsequent re-DELETE on the same name simply lands a new tombstone with `deletion_time > resurrect_time` and the gate flips back. Per-filename last-write-wins.
+
+Catch-up: announcements carry a third 16-byte digest, `resurrects_digest`, alongside `tombstones_digest` and `leaves_digest`. Receivers with a digest mismatch pull the full resurrects table via `GET /swarm/cryptsync/resurrects/<user>` and merge — same shape as tombstone catch-up. The `RESURRECT` POST handler, the resurrects table type, and the GC tick all mirror their tombstone equivalents.
 
 ## Leaving cryptsync
 

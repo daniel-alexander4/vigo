@@ -35,6 +35,7 @@ use zeroize::Zeroizing;
 
 use super::config;
 use super::crypt;
+use super::resurrects;
 use super::session;
 use super::state::PeerTable;
 use super::tombstones;
@@ -61,6 +62,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "unlock" => cmd_unlock(&args[1..]),
         "lock" => cmd_lock(&args[1..]),
         "encrypt" => cmd_encrypt(&args[1..]),
+        "resurrect" => cmd_resurrect(&args[1..]),
         "decrypt" => cmd_decrypt(&args[1..]),
         "delete" => cmd_delete(&args[1..]),
         "list" | "ls" => cmd_list(&args[1..]),
@@ -170,6 +172,7 @@ DAILY (mode-agnostic):
     unlock                         Prompt password, start session helper
     lock                           Scrub held key and stop session helper
     encrypt <file> [--as <name>]   Encrypt a plaintext file into ~/cryptsync/
+    resurrect <file> [--as <name>] Override an active tombstone and re-encrypt in one step
     decrypt <file> -o <path>       Decrypt from ~/cryptsync/ to a user-chosen path
     delete <name>                  Remove a file from ~/cryptsync/; tombstone propagates to peers
     list [--long] [--tombstones]   List ciphertext files + tombstones in ~/cryptsync/
@@ -912,6 +915,39 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
             target_name
         );
     }
+
+    // Tombstone preflight — refuse before doing any encryption work
+    // when the target name has an effective tombstone (tombstone
+    // exists AND no later resurrect supersedes it). Without this
+    // check the encrypt would silently produce ciphertext that every
+    // peer rejects with HTTP 410 Gone, leaving an orphaned local
+    // ciphertext and destroyed plaintext. Override path is the
+    // `resurrect` verb; the error message names it explicitly.
+    let username = user_for_invocation()?;
+    let preflight_tombs = tombstones::TombstoneTable::load_user(&username, &home);
+    let preflight_res = resurrects::ResurrectsTable::load_user(&username, &home);
+    if let Some(t) =
+        tombstones::effective_tombstone(&target_name, &preflight_tombs, &preflight_res)
+    {
+        let now = now_secs();
+        let retention_remaining_secs =
+            tombstones::DEFAULT_RETENTION_SECS - (now - t.deletion_time);
+        let days_remaining = (retention_remaining_secs / (24 * 60 * 60)).max(0);
+        tracing::warn!(
+            user = %username,
+            filename = %target_name,
+            deletion_time = t.deletion_time,
+            days_remaining = days_remaining,
+            "cryptsync: encrypt refused — filename is tombstoned"
+        );
+        bail!(
+            "filename `{name}` is tombstoned ({days}d remaining in retention).\n\
+             Run `vigo swarm cryptsync resurrect <file> [--as <name>]` to override and re-encrypt.",
+            name = target_name,
+            days = days_remaining,
+        );
+    }
+
     let content_dir = config::content_dir(&home);
     if !content_dir.is_dir() {
         bail!(
@@ -920,7 +956,6 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
         );
     }
     let dst = content_dir.join(&target_name);
-    let username = user_for_invocation()?;
 
     // Atomic write via temp file, so a crash mid-encrypt doesn't
     // leave a half-written ciphertext in ~/cryptsync/.
@@ -936,6 +971,212 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
 
     println!(
         "✓ Encrypted to {} recipient(s); wrote {}",
+        recipients.len(),
+        dst.display()
+    );
+    Ok(())
+}
+
+// ---------- resurrect ----------
+
+/// Override an active tombstone for a filename and re-encrypt the
+/// file in one step. The verb exists because cryptsync tombstones
+/// are filename-keyed and live for `tombstone_retention_days`
+/// (default 90d): without an explicit override, peers reject any
+/// re-encrypt of a deleted name with HTTP 410 Gone, and the source
+/// would silently produce orphaned ciphertext that never propagates.
+///
+/// Pipeline:
+/// 1. Validate args, resolve target_name, verify enrollment, verify
+///    src exists and is a regular file. (All of this BEFORE dropping
+///    the sentinel — we don't want to trigger fleet fanout for a
+///    resurrect that the local encrypt would then fail.)
+/// 2. Load tombstones + resurrects, check `effective_tombstone`.
+///    Bail if nothing to resurrect (caller should just use `encrypt`).
+/// 3. Drop `~/.cryptsync/resurrect.pending` with the spec.
+/// 4. Poll for the daemon to remove the sentinel — up to 60s. The
+///    daemon's dedicated 1s polling tick handles the load + sign +
+///    fan-out + persist within ~1-2s under steady-state load.
+/// 5. Verify the local resurrect record landed in the user mirror.
+/// 6. Run the encrypt path identically to `cmd_encrypt`. The
+///    daemon's local resurrect record means the encrypt-time
+///    preflight passes; the watcher-fired PushJob lands on every
+///    peer that received the resurrect (which is "every reachable
+///    peer" by the time the CLI gets here).
+fn cmd_resurrect(args: &[String]) -> Result<()> {
+    let mut file: Option<PathBuf> = None;
+    let mut as_name: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--as" => {
+                i += 1;
+                as_name = Some(
+                    args.get(i)
+                        .context("--as requires a filename")?
+                        .clone(),
+                );
+            }
+            "--help" | "-h" => {
+                eprintln!(
+                    "vigo swarm cryptsync resurrect — override a tombstone and re-encrypt\n\n\
+                     USAGE:\n    vigo swarm cryptsync resurrect <file> [--as <name>]\n\n\
+                     Cryptsync tombstones live for `tombstone_retention_days` (default 90d) \n\
+                     after a delete. Within that window, encrypting a file with a tombstoned\n\
+                     name silently produces ciphertext that no peer will accept (HTTP 410\n\
+                     Gone). This verb persists a signed resurrect record locally, gossips it\n\
+                     to every live peer, and then runs the encrypt — the file lands cleanly\n\
+                     across the mesh.\n\n\
+                     Refuses if the target name has no active tombstone (use `encrypt` directly)."
+                );
+                return Ok(());
+            }
+            s if s.starts_with("--") => bail!("unknown flag: {}", s),
+            s => {
+                if file.is_some() {
+                    bail!("only one source file accepted");
+                }
+                file = Some(PathBuf::from(s));
+            }
+        }
+        i += 1;
+    }
+
+    let src = file.context(
+        "usage: vigo swarm cryptsync resurrect <file> [--as <name>]",
+    )?;
+    let src_meta = fs::metadata(&src)
+        .with_context(|| format!("stat {}", src.display()))?;
+    if !src_meta.is_file() {
+        bail!("{} is not a regular file", src.display());
+    }
+    let home = user_home_for_invocation()?;
+    if !config::is_enrolled(&home) {
+        bail!(
+            "not enrolled on this envoy — run `vigo swarm cryptsync puddle init` if you \
+             use puddle, or `vigo swarm cryptsync standalone init` to opt out of \
+             puddle mode"
+        );
+    }
+
+    let target_name = match as_name.clone() {
+        Some(n) => n,
+        None => src
+            .file_name()
+            .and_then(|n| n.to_str())
+            .context("source has no basename")?
+            .to_string(),
+    };
+    if !valid_content_name(&target_name) {
+        bail!(
+            "invalid target name `{}` — no path separators, no dotfiles, no nulls",
+            target_name
+        );
+    }
+
+    let username = user_for_invocation()?;
+
+    // Refuse if there's no active effective tombstone — operator
+    // would be using the wrong verb. `encrypt` covers the no-tombstone
+    // case; `resurrect` is specifically for the override.
+    let tombstones = tombstones::TombstoneTable::load_user(&username, &home);
+    let resurrects_pre = resurrects::ResurrectsTable::load_user(&username, &home);
+    if tombstones::effective_tombstone(&target_name, &tombstones, &resurrects_pre).is_none() {
+        bail!(
+            "no active tombstone for `{}` — use `vigo swarm cryptsync encrypt` instead",
+            target_name
+        );
+    }
+
+    // Drop the sentinel for the daemon to pick up on its next 1s tick.
+    let pending = config::resurrect_pending_path(&home);
+    let spec = ResurrectPendingSpec {
+        filename: target_name.clone(),
+        src_path: src.to_string_lossy().to_string(),
+    };
+    let raw = serde_json::to_vec_pretty(&spec)
+        .context("serializing resurrect.pending")?;
+    if let Some(parent) = pending.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&pending)
+            .with_context(|| format!("creating {}", pending.display()))?;
+        f.write_all(&raw)?;
+        f.sync_all().ok();
+    }
+    #[cfg(not(unix))]
+    {
+        fs::write(&pending, &raw)
+            .with_context(|| format!("writing {}", pending.display()))?;
+    }
+
+    // Poll for daemon-side processing. The dedicated 1s tick should
+    // pick this up within 1-2s; budget 60s before bailing in case the
+    // daemon is stopped or wedged.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    loop {
+        if !pending.exists() {
+            break;
+        }
+        if std::time::Instant::now() > deadline {
+            let _ = fs::remove_file(&pending);
+            bail!(
+                "daemon did not process resurrect within 60s — \
+                 check `systemctl status vigo-envoy` and try again"
+            );
+        }
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
+
+    // Verify the daemon actually persisted the resurrect record. If
+    // the sentinel disappeared but the record didn't land (daemon
+    // raced a crash, malformed sentinel, etc.), bail before encrypt
+    // — the encrypt would silently produce orphaned ciphertext again.
+    let resurrects_post = resurrects::ResurrectsTable::load_user(&username, &home);
+    if resurrects_post.active(&target_name).is_none() {
+        bail!(
+            "daemon cleared the sentinel but no resurrect record landed for `{}` — \
+             check the journal for `cryptsync: resurrect processing failed`",
+            target_name
+        );
+    }
+
+    // Encrypt — same path as `cmd_encrypt`. The local resurrect
+    // record means the encrypt-time preflight (loaded fresh) passes;
+    // the watcher-fired PushJob fans out to peers that just received
+    // the resurrect over the mesh.
+    let recipients = config::load_recipients(&home)?;
+    let content_dir = config::content_dir(&home);
+    if !content_dir.is_dir() {
+        bail!(
+            "{} does not exist — re-run `vigo swarm cryptsync standalone enroll` \
+             (or `puddle init` if you use puddle)",
+            content_dir.display()
+        );
+    }
+    let dst = content_dir.join(&target_name);
+    let tmp = content_dir.join(format!(".{}.cryptsync.enc.tmp", target_name));
+    if let Err(e) = crypt::encrypt_file(&src, &tmp, &recipients) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
+    if let Err(e) = super::finalize_user_ciphertext(&tmp, &dst, &username) {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
+
+    println!(
+        "✓ Resurrected {}; encrypted to {} recipient(s); wrote {}",
+        target_name,
         recipients.len(),
         dst.display()
     );
@@ -1322,7 +1563,7 @@ fn cmd_forget(args: &[String]) -> Result<()> {
     if !table.forget(&hostname) {
         bail!("{} is not in the peer table for {}", hostname, username);
     }
-    table.save()?;
+    table.save("forget")?;
 
     // Regenerate recipients.txt immediately so new encrypts exclude
     // the revoked pubkey on the very next call.
@@ -1363,6 +1604,26 @@ pub struct LeavePendingSpec {
     pub leave_time: i64,
     pub keep_identity: bool,
     pub purge_content: bool,
+}
+
+/// Body of `~/.cryptsync/resurrect.pending`. Dropped by user-context
+/// `cmd_resurrect`; consumed by the daemon's
+/// `process_pending_resurrects` on its 1s polling tick. The daemon
+/// loads its root-owned signing key, persists a local resurrect
+/// record, fans out a signed RESURRECT envelope to live peers, and
+/// removes the sentinel. The CLI awaits the removal before invoking
+/// the encrypt path so the file lands on peers that have already
+/// received the resurrect.
+///
+/// `as_name` is the target filename in `~/cryptsync/` — the sentinel
+/// stores it explicitly (rather than re-deriving from `src_path`)
+/// so the daemon's persist + fanout uses the exact same name the
+/// CLI's encrypt step will. `src_path` is informational; the CLI
+/// owns the encrypt.
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct ResurrectPendingSpec {
+    pub filename: String,
+    pub src_path: String,
 }
 
 fn cmd_leave(args: &[String]) -> Result<()> {

@@ -36,6 +36,7 @@ pub mod identity_rewrap;
 pub mod leaves;
 pub mod locks;
 pub mod pusher;
+pub mod resurrects;
 pub mod server;
 pub mod session;
 pub mod snapshot;
@@ -73,6 +74,15 @@ const PRUNE_INTERVAL: Duration = Duration::from_secs(60);
 /// removed from disk" is one tick. Bounded storage cost at personal
 /// file scale makes this cheap.
 const TOMBSTONE_GC_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// How often the daemon checks each enrolled user for a
+/// `~/.cryptsync/resurrect.pending` sentinel. Tight cadence because
+/// `cmd_resurrect` is interactive — the operator is waiting at a
+/// prompt for the daemon to sign + fan out the envelope. The
+/// alternative (announce_timer at 30s) is unacceptable UX.
+/// Cost is one filesystem stat per second per enrolled user;
+/// negligible at personal-fleet scale.
+const RESURRECT_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 /// The swarm peer server port — cryptsync push/pull rides here.
 const PEER_PORT: u16 = crate::swarm::server::DEFAULT_PORT;
@@ -158,12 +168,16 @@ async fn run(
     let mut announce_timer = tokio::time::interval(ANNOUNCE_INTERVAL);
     let mut prune_timer = tokio::time::interval(PRUNE_INTERVAL);
     let mut tombstone_gc_timer = tokio::time::interval(TOMBSTONE_GC_INTERVAL);
+    let mut resurrect_poll_timer = tokio::time::interval(RESURRECT_POLL_INTERVAL);
     // Fire one announce immediately on startup rather than waiting a
     // full interval — fresh envoys should appear on the mesh promptly.
     announce_timer.tick().await;
     // Skip the first prune / gc tick — nothing to prune yet.
     prune_timer.tick().await;
     tombstone_gc_timer.tick().await;
+    // Skip the first resurrect-poll tick — sentinel can only land
+    // after the daemon is up and accepting them.
+    resurrect_poll_timer.tick().await;
 
     loop {
         tokio::select! {
@@ -189,6 +203,10 @@ async fn run(
             }
             _ = tombstone_gc_timer.tick() => {
                 gc_tombstones_all();
+                gc_resurrects_all();
+            }
+            _ = resurrect_poll_timer.tick() => {
+                process_pending_resurrects(&machine).await;
             }
             maybe = in_rx.recv() => {
                 match maybe {
@@ -317,6 +335,114 @@ async fn process_one_leave(
     Ok(())
 }
 
+/// Poll every enrolled user for a `~/.cryptsync/resurrect.pending`
+/// sentinel dropped by `vigo swarm cryptsync resurrect`. For each
+/// sentinel present: load the daemon signing key, persist a local
+/// resurrect record (under the resurrects modify lock), build + sign
+/// a RESURRECT envelope, fan it out to live peers + cross-subnet
+/// peers, and remove the sentinel.
+///
+/// Runs on its own 1s tick (`RESURRECT_POLL_INTERVAL`) — the announce
+/// timer (30s) is too slow for an interactive verb that the operator
+/// is waiting at a prompt for. CLI polls for sentinel removal up to
+/// 60s before timing out.
+///
+/// Best-effort on network push — individual peer failures are logged,
+/// not escalated. Peers that miss the live fan-out catch up via the
+/// `resurrects_digest` mismatch path on their next announce-receive.
+async fn process_pending_resurrects(machine: &str) {
+    let enrolled = match enrolled_users() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    for user in enrolled {
+        let home = match home_for_user(&user) {
+            Some(h) => h,
+            None => continue,
+        };
+        let pending = config::resurrect_pending_path(&home);
+        if !pending.exists() {
+            continue;
+        }
+        match process_one_resurrect(machine, &user, &pending).await {
+            Ok(()) => {
+                info!(user = %user, "cryptsync: resurrect processed, sentinel cleared");
+            }
+            Err(e) => {
+                warn!(user = %user, error = %e, "cryptsync: resurrect processing failed");
+            }
+        }
+    }
+}
+
+async fn process_one_resurrect(
+    machine: &str,
+    user: &str,
+    pending: &Path,
+) -> Result<()> {
+    let raw = fs::read_to_string(pending)
+        .with_context(|| format!("reading {}", pending.display()))?;
+    let spec: super::cryptsync::cli::ResurrectPendingSpec =
+        serde_json::from_str(&raw).context("parsing resurrect.pending")?;
+
+    if spec.filename.is_empty() {
+        anyhow::bail!("resurrect.pending: filename is empty");
+    }
+
+    let signing_key = load_local_signing_key(user)
+        .context("cannot load daemon signing key")?;
+
+    let resurrect_time = now_secs();
+
+    // Persist local resurrect record FIRST so the encrypt-time
+    // preflight (run by the CLI right after sentinel removal) sees
+    // the supersede on its `effective_tombstone` check. Doing this
+    // before fan-out keeps THIS envoy in a coherent state even if
+    // every peer push fails.
+    if let Err(e) = resurrects::ResurrectsTable::modify(user, |table| {
+        table.upsert(
+            &spec.filename,
+            resurrects::ResurrectRecord {
+                resurrect_time,
+                source_hostname: machine.to_string(),
+            },
+        )
+    }) {
+        warn!(
+            user = %user,
+            filename = %spec.filename,
+            error = %e,
+            "cryptsync: resurrect record save failed"
+        );
+    }
+
+    let envelope = resurrects::build_envelope(
+        &signing_key,
+        machine,
+        user,
+        &spec.filename,
+        resurrect_time,
+    );
+
+    if let Some(tls) = DAEMON_TLS.get() {
+        // Spawn into the runtime so the blocking pushes don't pin
+        // the polling tick.
+        let tls = tls.clone();
+        let envelope_clone = envelope.clone();
+        tokio::spawn(async move {
+            if let Err(e) = pusher::fan_out_resurrect(&tls, envelope_clone).await {
+                warn!(error = %e, "cryptsync: RESURRECT fan-out error");
+            }
+        });
+    } else {
+        warn!("cryptsync: DAEMON_TLS not initialised, skipping RESURRECT fan-out (peers catch up via resurrects_digest mismatch)");
+    }
+
+    fs::remove_file(pending)
+        .with_context(|| format!("removing {}", pending.display()))?;
+    Ok(())
+}
+
 /// Poll every enrolled user for a `~/.cryptsync/regen.pending` sentinel
 /// dropped by `vigo swarm cryptsync {puddle init, standalone enroll}` after a fresh enrollment. For each
 /// sentinel present: regenerate `recipients.txt` from the current
@@ -400,6 +526,40 @@ fn gc_tombstones_all() {
     }
 }
 
+/// Prune expired resurrects for every enrolled user. Same retention
+/// as tombstones (`tombstones::DEFAULT_RETENTION_SECS`) so the two
+/// tables age out together — once both have aged past retention,
+/// `effective_tombstone` returns None and the filename is freely
+/// reusable.
+fn gc_resurrects_all() {
+    let enrolled = match enrolled_users() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let now = now_secs();
+    for user in enrolled {
+        let mut dropped: usize = 0;
+        if let Err(e) = resurrects::ResurrectsTable::modify(&user, |table| {
+            dropped = table.gc(now, tombstones::DEFAULT_RETENTION_SECS);
+            dropped > 0
+        }) {
+            warn!(
+                user = %user,
+                error = %e,
+                "cryptsync: resurrect save after gc failed"
+            );
+            continue;
+        }
+        if dropped > 0 {
+            info!(
+                user = %user,
+                dropped = dropped,
+                "cryptsync: resurrect gc complete"
+            );
+        }
+    }
+}
+
 // ---------- announce ----------
 
 async fn announce_all(
@@ -426,6 +586,8 @@ async fn announce_all(
             hex::encode(TombstoneTable::load(&user).digest());
         let leaves_digest =
             hex::encode(leaves::LeavesTable::load(&user).digest());
+        let resurrects_digest =
+            hex::encode(resurrects::ResurrectsTable::load(&user).digest());
         // ADR-016: include the user's puddle pubkey when present
         // so peers can scope recipient resolution to the same fleet.
         // Empty when puddle isn't initialized for this user (the
@@ -448,6 +610,7 @@ async fn announce_all(
             generation: 0,
             tombstones_digest,
             leaves_digest,
+            resurrects_digest,
             puddle_pubkey,
             puddle_cert,
         };
@@ -513,8 +676,10 @@ fn handle_incoming(inc: IncomingAnnouncement) {
             let dropped = table.forget_by_pubkey(&announcement.pubkey);
             if dropped {
                 snapshot = Some(table.clone());
+                Some("leave-preemptive-forget")
+            } else {
+                None
             }
-            dropped
         }) {
             warn!(
                 error = %e,
@@ -613,7 +778,11 @@ fn handle_incoming(inc: IncomingAnnouncement) {
 
     // Lock-protected upsert. Capture a post-update snapshot so we can
     // call regenerate_recipients outside the lock without re-reading
-    // the table — and only when upsert reported a real_change.
+    // the table — only when upsert reported a real_change. Heartbeats
+    // also persist (so prune_stale doesn't churn fresh peers every
+    // ~120s), but they don't shift the recipient set so we skip the
+    // regen.
+    //
     // The TOFU comparison uses `effective_puddle_pubkey` (post-cert
     // verification), not `announcement.puddle_pubkey` — a peer whose
     // cert just lapsed becomes "standalone" from our perspective,
@@ -622,20 +791,20 @@ fn handle_incoming(inc: IncomingAnnouncement) {
     let mut snapshot: Option<PeerTable> = None;
     let mut tofu_rejected = false;
     if let Err(e) = PeerTable::modify(&announcement.user, |table| {
-        let real_change = table.upsert(entry);
-        // Detect TOFU mismatch — `upsert` returns false on both
-        // legitimate heartbeats and TOFU rejections; disambiguate by
-        // checking whether the pin we observed pre-upsert disagrees
-        // with the incoming puddle_pubkey.
+        let outcome = table.upsert(entry);
+        // Detect TOFU mismatch — `upsert` returns Unchanged on both
+        // legitimate identical announces and TOFU rejections;
+        // disambiguate by checking whether the pin we observed
+        // pre-upsert disagrees with the incoming puddle_pubkey.
         if let Some(pin) = &prior_pin {
             if !pin.is_empty() && pin != &incoming_fleet {
                 tofu_rejected = true;
             }
         }
-        if real_change {
+        if outcome.is_real_change() {
             snapshot = Some(table.clone());
         }
-        real_change
+        outcome.save_reason()
     }) {
         warn!(error = %e, user = %announcement.user, "cryptsync: peer table save failed");
     }
@@ -686,6 +855,18 @@ fn handle_incoming(inc: IncomingAnnouncement) {
     if !announcement.leaves_digest.is_empty() {
         maybe_catchup_leaves(&announcement.user, &announcement.machine, from,
             &announcement.leaves_digest);
+    }
+
+    // Resurrects catch-up: identical pattern, distinct table. Lets
+    // an envoy that was offline during a `cryptsync resurrect`
+    // observe the operator override when it rejoins. Without this,
+    // a peer would still hold the un-superseded tombstone and 410
+    // any subsequent push of the resurrected filename. Empty
+    // announcer digest skips (pre-0.39.x peer that doesn't
+    // advertise one).
+    if !announcement.resurrects_digest.is_empty() {
+        maybe_catchup_resurrects(&announcement.user, &announcement.machine, from,
+            &announcement.resurrects_digest);
     }
 }
 
@@ -921,6 +1102,112 @@ async fn catchup_leaves_from(user: &str, source_hostname: &str, url: &str) -> Re
     Ok(())
 }
 
+/// Sibling of `maybe_catchup_tombstones` for the per-user
+/// `ResurrectsTable`. Triggered when an announcer's
+/// `resurrects_digest` disagrees with this envoy's local digest.
+/// Background pull + merge — for each newly-merged resurrect, the
+/// effective_tombstone gate flips so subsequent pushes of that
+/// filename land instead of 410'ing.
+fn maybe_catchup_resurrects(
+    user: &str,
+    source_hostname: &str,
+    source_addr: std::net::SocketAddr,
+    remote_digest_hex: &str,
+) {
+    let local = resurrects::ResurrectsTable::load(user);
+    let local_digest_hex = hex::encode(local.digest());
+    if local_digest_hex == remote_digest_hex {
+        return;
+    }
+    debug!(
+        user = %user,
+        source = %source_hostname,
+        local = %local_digest_hex,
+        remote = %remote_digest_hex,
+        "cryptsync: resurrects digest mismatch, triggering catch-up"
+    );
+
+    let user = user.to_string();
+    let source_hostname = source_hostname.to_string();
+    let url = format!(
+        "https://{}/swarm/cryptsync/resurrects/{}",
+        source_addr,
+        url_encode_seg(&user)
+    );
+    tokio::spawn(async move {
+        if let Err(e) = catchup_resurrects_from(&user, &source_hostname, &url).await {
+            debug!(
+                user = %user,
+                source = %source_hostname,
+                error = %e,
+                "cryptsync: resurrects catch-up failed"
+            );
+        }
+    });
+}
+
+async fn catchup_resurrects_from(user: &str, source_hostname: &str, url: &str) -> Result<()> {
+    let tls = match DAEMON_TLS.get() {
+        Some(t) => t.clone(),
+        None => anyhow::bail!("no TLS certs available for catch-up"),
+    };
+    let agent = pusher::build_agent_for_mod(&tls)?;
+    let url = url.to_string();
+
+    let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+        let mut resp = agent
+            .get(&url)
+            .call()
+            .with_context(|| format!("GET {}", url))?;
+        let status = resp.status();
+        if !status.is_success() {
+            anyhow::bail!("peer returned HTTP {}", status.as_u16());
+        }
+        let body = resp
+            .body_mut()
+            .read_to_vec()
+            .context("reading resurrects response body")?;
+        Ok(body)
+    })
+    .await
+    .context("catch-up join")??;
+
+    let remote: resurrects::ResurrectsTable =
+        serde_json::from_slice(&body).context("parsing resurrects response")?;
+    let mut merged_count = 0usize;
+    resurrects::ResurrectsTable::modify(user, |local| {
+        if local.merge(&remote) {
+            // Count merged-or-advanced entries. merge() returns true
+            // if anything changed; use a quick second pass to count
+            // for the log line.
+            merged_count = remote
+                .resurrects
+                .iter()
+                .filter(|(name, r)| {
+                    local
+                        .active(name)
+                        .map(|cur| cur.resurrect_time == r.resurrect_time)
+                        .unwrap_or(false)
+                })
+                .count();
+            true
+        } else {
+            false
+        }
+    })
+    .context("saving merged resurrects")?;
+
+    if merged_count > 0 {
+        tracing::info!(
+            user = %user,
+            source = %source_hostname,
+            merged = merged_count,
+            "cryptsync: resurrects catch-up merged"
+        );
+    }
+    Ok(())
+}
+
 fn remove_files_for_active_tombstones(user: &str, table: &TombstoneTable) {
     let home = match home_for_user(user) {
         Some(h) => h,
@@ -962,8 +1249,10 @@ fn prune_all() {
             let pruned = table.prune_stale(now);
             if pruned {
                 snapshot = Some(table.clone());
+                Some("prune")
+            } else {
+                None
             }
-            pruned
         }) {
             warn!(error = %e, user = %user, "cryptsync: peer table save after prune failed");
             continue;
@@ -1622,8 +1911,10 @@ pub fn apply_leave(
         let dropped = table.forget_by_pubkey(age_pubkey_leaving);
         if dropped {
             peer_table_after = Some(table.clone());
+            Some("leave")
+        } else {
+            None
         }
-        dropped
     })?;
     let peer_was_present = peer_table_after.is_some();
 
@@ -1746,6 +2037,8 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
             hex::encode(TombstoneTable::load(&user).digest());
         let leaves_digest =
             hex::encode(leaves::LeavesTable::load(&user).digest());
+        let resurrects_digest =
+            hex::encode(resurrects::ResurrectsTable::load(&user).digest());
         // ADR-016: include the user's puddle pubkey when present
         // so peers can scope recipient resolution to the same fleet.
         // Empty when puddle isn't initialized for this user (the
@@ -1768,6 +2061,7 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
             generation: 0,
             tombstones_digest,
             leaves_digest,
+            resurrects_digest,
             puddle_pubkey,
             puddle_cert,
         };

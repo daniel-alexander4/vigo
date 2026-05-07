@@ -558,6 +558,100 @@ fn push_leave_one(
     Ok(())
 }
 
+/// Fan a signed RESURRECT envelope out to every live peer +
+/// cross-subnet peer for `envelope.user`. Mirror of
+/// `fan_out_leave`. Called from `mod.rs::process_pending_resurrects`
+/// when the daemon picks up a `~/.cryptsync/resurrect.pending`
+/// sentinel.
+///
+/// The CLI awaits sentinel removal before invoking the encrypt
+/// path, so by the time the operator's encrypt fans out, every
+/// reachable peer has the resurrect record and the
+/// `effective_tombstone` gate returns None — the push lands
+/// instead of 410'ing. Offline peers catch up via
+/// `resurrects_digest` mismatch on their next announce-receive.
+///
+/// Best-effort: per-peer failures are logged but don't fail the
+/// overall call. The local resurrect record has already been
+/// persisted by the caller, so even total fanout failure leaves
+/// THIS envoy in a coherent state — peers just learn via
+/// digest catch-up instead.
+pub async fn fan_out_resurrect(
+    tls: &TlsCerts,
+    envelope: super::resurrects::ResurrectEnvelope,
+) -> Result<()> {
+    let agent = build_agent(tls)?;
+    let (lan_targets, stats) = lan_targets_for(&envelope.user);
+    let extra_targets = extra_targets_for(&envelope.user);
+    let total = lan_targets.len() + extra_targets.len();
+    if total == 0 {
+        warn!(
+            user = %envelope.user,
+            filename = %envelope.filename,
+            peers_total = stats.peers_total,
+            stale = stats.stale,
+            no_addr = stats.no_addr,
+            "pusher: no RESURRECT targets; envelope recorded locally only"
+        );
+        return Ok(());
+    }
+    info!(
+        user = %envelope.user,
+        filename = %envelope.filename,
+        resurrect_time = envelope.resurrect_time,
+        lan = lan_targets.len(),
+        extra = extra_targets.len(),
+        "pusher: fanning out RESURRECT",
+    );
+    let mut handles = Vec::with_capacity(total);
+    for target in lan_targets.into_iter().chain(extra_targets) {
+        let agent = agent.clone();
+        let envelope = envelope.clone();
+        handles.push(tokio::task::spawn_blocking(move || {
+            push_resurrect_one(&agent, &target, &envelope)
+        }));
+    }
+    for h in handles {
+        match h.await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => warn!(error = %format!("{e:#}"), "pusher: peer RESURRECT failed"),
+            Err(e) => warn!(error = %e, "pusher: RESURRECT spawn_blocking join failed"),
+        }
+    }
+    Ok(())
+}
+
+/// One RESURRECT attempt. Blocking; runs inside `spawn_blocking`.
+fn push_resurrect_one(
+    agent: &ureq::Agent,
+    target: &PushTarget,
+    envelope: &super::resurrects::ResurrectEnvelope,
+) -> Result<()> {
+    let url = format!(
+        "https://{}/swarm/cryptsync/resurrects/{}/{}",
+        target.addr,
+        urlencode(&envelope.user),
+        urlencode(&envelope.filename),
+    );
+    let body = serde_json::to_vec(envelope).context("serializing RESURRECT envelope")?;
+    let resp = agent
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .send(body)
+        .with_context(|| format!("POST {}", url))?;
+    let status = resp.status();
+    if !status.is_success() {
+        anyhow::bail!("peer {} returned HTTP {}", target.label, status.as_u16());
+    }
+    debug!(
+        target = %target.label,
+        user = %envelope.user,
+        filename = %envelope.filename,
+        "pusher: RESURRECT accepted"
+    );
+    Ok(())
+}
+
 /// Build the mTLS-configured ureq agent used for cryptsync pushes.
 /// Separate from swarm::peer_client's agent because we need a
 /// longer timeout (5 min vs. 30 s) to accommodate 1 GiB blobs.

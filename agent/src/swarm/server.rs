@@ -357,6 +357,23 @@ async fn handle_request(
             tokio::task::block_in_place(|| crate::swarm::cryptsync::server::handle_leaves_list(p))
         }
 
+        // Cryptsync: receive a signed RESURRECT envelope from a peer.
+        // Mirror of the tombstone DELETE handler — verifies sender +
+        // signature, then records the resurrect locally so subsequent
+        // pushes of the same filename pass the effective_tombstone gate.
+        (&Method::POST, p) if p.starts_with("/swarm/cryptsync/resurrects/") => {
+            crate::swarm::cryptsync::server::handle_resurrect(p, req, peer_addr).await
+        }
+
+        // Cryptsync: catch-up pull of the full resurrects table for a
+        // user. Mirror of handle_tombstones_list — pulled when an
+        // announcement's resurrects_digest disagrees with the local
+        // digest, used by `merge` to converge state across peers that
+        // were offline during a resurrect.
+        (&Method::GET, p) if p.starts_with("/swarm/cryptsync/resurrects/") => {
+            tokio::task::block_in_place(|| crate::swarm::cryptsync::server::handle_resurrects_list(p))
+        }
+
         // Puddle: receive a pair-claim from a peer envoy that ran
         // `vigo swarm puddle join --from <this-host>`. Validates
         // the incoming code against the ~/.vigo-puddle/pair.pending
