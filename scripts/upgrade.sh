@@ -175,6 +175,18 @@ if [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
 
     echo "Cross-compiling agent for: ${CROSS_TARGETS[*]}"
 
+    # Read the agent's compiled-in version once, here in the host shell, and
+    # interpolate it into every cross-compile's vigo.version sidecar. The
+    # server's bootstrap handler reads these sidecars at startup to learn each
+    # arch's binary version (it can't probe a foreign-arch binary). A missing
+    # or stale sidecar makes the server advertise the wrong version, which
+    # the agent's compiled-in safety check catches as a "version mismatch on
+    # downloaded binary" and aborts the update — that's the rpi update-loop
+    # symptom. The Makefile's `dist-agent` target writes these sidecars too;
+    # this path used to skip them, so a `--cross arm64` rebuild wrote a fresh
+    # binary on top of a stale sidecar.
+    AGENT_VERSION=$(grep -m1 '^version' "$REPO_DIR/agent/Cargo.toml" | sed 's/.*"\(.*\)".*/\1/')
+
     RUST_TARGETS=""
     APT_PACKAGES="musl-tools protobuf-compiler"
     BUILD_SCRIPT=""
@@ -187,7 +199,8 @@ if [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
 echo 'Building linux/amd64...'
 CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
 mkdir -p /build/dist/agent/linux/amd64
-cp .build/x86_64-unknown-linux-musl/release/vigo /build/dist/agent/linux/amd64/vigo"
+cp .build/x86_64-unknown-linux-musl/release/vigo /build/dist/agent/linux/amd64/vigo
+echo '$AGENT_VERSION' > /build/dist/agent/linux/amd64/vigo.version"
                 ;;
             arm64)
                 RUST_TARGETS="$RUST_TARGETS aarch64-unknown-linux-musl"
@@ -198,26 +211,31 @@ CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc \
 CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc \
     cargo build --release --target aarch64-unknown-linux-musl
 mkdir -p /build/dist/agent/linux/arm64
-cp .build/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/vigo"
+cp .build/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/vigo
+echo '$AGENT_VERSION' > /build/dist/agent/linux/arm64/vigo.version"
                 ;;
             freebsd)
                 echo "  freebsd: using cargo-cross container"
                 (cd "$REPO_DIR" && \
                     docker run --rm --dns 1.1.1.1 --dns 8.8.8.8 -v "$REPO_DIR/agent:/build/agent" -v "$REPO_DIR/protobuf:/build/protobuf" -v "$REPO_DIR/dist:/build/dist" -w /build/agent \
+                    -e AGENT_VERSION="$AGENT_VERSION" \
                     ghcr.io/cross-rs/x86_64-unknown-freebsd:main sh -c '
                         cargo build --release --target x86_64-unknown-freebsd 2>&1
                         mkdir -p /build/dist/agent/freebsd/amd64
                         cp .build/x86_64-unknown-freebsd/release/vigo /build/dist/agent/freebsd/amd64/vigo
+                        echo "$AGENT_VERSION" > /build/dist/agent/freebsd/amd64/vigo.version
                     ') || echo "  WARN: freebsd cross-compile failed"
                 ;;
             windows)
                 echo "  windows: using cargo-cross container"
                 (cd "$REPO_DIR" && \
                     docker run --rm --dns 1.1.1.1 --dns 8.8.8.8 -v "$REPO_DIR/agent:/build/agent" -v "$REPO_DIR/protobuf:/build/protobuf" -v "$REPO_DIR/dist:/build/dist" -w /build/agent \
+                    -e AGENT_VERSION="$AGENT_VERSION" \
                     ghcr.io/cross-rs/x86_64-pc-windows-msvc:main sh -c '
                         cargo build --release --target x86_64-pc-windows-msvc 2>&1
                         mkdir -p /build/dist/agent/windows/amd64
                         cp .build/x86_64-pc-windows-msvc/release/vigo.exe /build/dist/agent/windows/amd64/vigo.exe
+                        echo "$AGENT_VERSION" > /build/dist/agent/windows/amd64/vigo.exe.version
                     ') || echo "  WARN: windows cross-compile failed"
                 ;;
             darwin)
@@ -514,7 +532,7 @@ docker compose ps
 if $NEED_CONTAINER_RESTART && docker ps -q -f name=vigo | grep -q .; then
     echo ""
     echo "Checking config health..."
-    LIVE_DIR="/srv/vigo/worksite/structure"
+    LIVE_DIR="/srv/vigo/stacks/.live"
     if [ -d "$LIVE_DIR" ]; then
         # Ask the server if config loaded successfully.
         RELOAD_ERR=$(docker exec vigo vigocli config trace __health_check__ 2>&1 || true)
@@ -579,8 +597,9 @@ if [ -f /usr/local/bin/vigocli ]; then
     fi
 fi
 
-# Compare container binaries against repo source (build modes only).
-if ($BUILD_SERVER || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
+# Compare container vigosrv against repo source. Runs regardless of build
+# mode — freshness is informational, not gated on rebuild intent.
+if [ -d "$REPO_DIR" ]; then
     SRV_VER=$(docker exec vigo vigosrv --version 2>/dev/null | awk '{print $NF}' || echo "unknown")
     NEWEST_GO=$(find "$REPO_DIR/server" "$REPO_DIR/ui" "$REPO_DIR/cli" -name '*.go' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
     NEWEST_GO=${NEWEST_GO%.*}
@@ -593,8 +612,8 @@ if ($BUILD_SERVER || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
     fi
 fi
 
-# Agent freshness.
-if ($BUILD_AGENT || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
+# Agent freshness — per arch shipped in the dist tree.
+if [ -d "$REPO_DIR" ]; then
     NEWEST_RS=$(find "$REPO_DIR/agent/src" -name '*.rs' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
     NEWEST_RS=${NEWEST_RS%.*}
     AGENT_PLATFORMS=$(docker exec vigo find /dist/agent \( -name 'vigo' -o -name 'vigo.exe' \) 2>/dev/null || true)
@@ -623,8 +642,8 @@ if ($BUILD_AGENT || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
     fi
 fi
 
-# Check entrypoint.sh and Dockerfile.
-if ($BUILD_ALL) && [ -d "$REPO_DIR" ]; then
+# Check entrypoint.sh against the copy baked into the container.
+if [ -d "$REPO_DIR" ]; then
     REPO_EP_MD5=$(md5sum "$REPO_DIR/entrypoint.sh" 2>/dev/null | awk '{print $1}')
     CTR_EP_MD5=$(docker exec vigo md5sum /entrypoint.sh 2>/dev/null | awk '{print $1}')
     if [ "$REPO_EP_MD5" != "$CTR_EP_MD5" ]; then

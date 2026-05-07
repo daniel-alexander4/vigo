@@ -506,6 +506,11 @@ html.theme-dark .topbar__theme-icon--moon { display: none; }
     grid-column: 2;
     padding: 32px 40px;
     min-height: 100vh;
+    /* Grid tracks default to min-content minimum, so a wide descendant
+       (a many-column table, a long pre block, etc.) would push the 1fr
+       column past viewport width and drag right-aligned chrome off-screen.
+       min-width: 0 lets inner overflow-x:auto containers actually clip. */
+    min-width: 0;
 }
 
 .page-header {
@@ -3198,8 +3203,146 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 }
 
 .trait-explore {
+    margin-top: 12px;
+    /* min-width: 0 lets the column form and table wrap actually clip
+       inside this container; without it, a wide table can push the
+       trait-explore (and its parent) past viewport width. */
+    min-width: 0;
+}
+
+.trait-explore__header {
     border-top: 1px solid var(--color-border);
-    padding-top: 12px;
+    border-bottom: 1px solid var(--color-border);
+    padding: 12px 0;
+    margin-bottom: 12px;
+}
+
+.trait-explore__header h3 {
+    font-size: 16px;
+    margin: 0;
+    /* Long trait keys (e.g. blockdevices.nvme0n1.firmware_rev) shouldn't
+       force the header row wider than its container. */
+    overflow-wrap: anywhere;
+}
+
+.trait-explore__header-actions {
+    margin-left: auto;
+    display: inline-flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.trait-explore__description {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin: 8px 0 0;
+}
+
+.trait-explore__cols {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin: 0 0 12px;
+    padding: 8px 12px;
+    background: var(--color-surface-tint-faint);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+}
+
+.trait-explore__cols-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 4px;
+}
+
+.trait-explore__col-toggle {
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+}
+
+.trait-explore__cols-actions {
+    margin-left: auto;
+    display: inline-flex;
+    gap: 6px;
+}
+
+.trait-explore__wrap {
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    max-height: 70vh;
+}
+
+.trait-explore__table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.trait-explore__table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.trait-explore__table td.trait-explore__val {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.table tbody tr.trait-explore__group-row,
+.table tbody tr.trait-explore__group-row:nth-child(even),
+.table tbody tr.trait-explore__group-row:hover {
+    background: var(--color-surface0);
+}
+
+.table tbody tr.trait-explore__group-row td {
+    padding: 10px 20px;
+    font-size: 13px;
+    border-top: 2px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.trait-explore__group-key {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-text-muted);
+}
+
+.trait-explore__group-eq {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    margin: 0 4px;
+}
+
+.trait-explore__group-value {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.trait-explore__group-value--missing {
+    font-style: italic;
+    font-family: inherit;
+    font-weight: 500;
+    color: var(--color-text-muted);
+}
+
+.trait-explore__group-count {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    margin-left: 8px;
+    background: var(--color-bg);
+    padding: 1px 8px;
+    border-radius: 10px;
 }
 
 .docs-confidential {

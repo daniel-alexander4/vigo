@@ -8664,28 +8664,44 @@ func (h *Handler) InventoryExploreFragment(w http.ResponseWriter, r *http.Reques
 	escapedKey := template.HTMLEscapeString(key)
 	escapedNS := template.HTMLEscapeString(namespace)
 
-	fmt.Fprintf(w, `<div class="trait-explore" style="margin-top:12px;">`)
-	fmt.Fprintf(w, `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">`)
-	fmt.Fprintf(w, `<h3 style="margin:0;">Exploring: <code>%s</code></h3>`, escapedKey)
-	fmt.Fprintf(w, `<button type="submit" form="trait-explore-form" formaction="/ui/export/inventory-explore.ods" class="btn btn--sm btn--primary" style="margin-right:6px;" hx-disable>Export ODS</button>`)
-	fmt.Fprintf(w, `<button class="btn btn--sm" onclick="document.getElementById('trait-explore-panel').innerHTML='';document.getElementById('trait-search-results').innerHTML='';">Close</button>`)
-	fmt.Fprintf(w, `</div>`)
-	fmt.Fprintf(w, `<p class="text-muted" style="font-size:12px; margin-bottom:8px;">Group by <strong>%s</strong>. Select columns from the <code>%s</code> namespace:</p>`, escapedKey, escapedNS)
+	// Siblings sharing the prefix-up-to-last-dot of the clicked key are
+	// pre-checked by default. For flat namespaces (e.g. os.distro) this
+	// degenerates to "all siblings"; for sub-namespaced ones (e.g.
+	// blockdevices.nvme0n1.firmware_rev) it scopes to the same instance,
+	// so unrelated devices' columns don't fill the table with dashes.
+	parentPrefix := key
+	if idx := strings.LastIndexByte(key, '.'); idx >= 0 {
+		parentPrefix = key[:idx]
+	}
+	checkPrefix := parentPrefix + "."
 
-	// Checkboxes form — triggers table reload on change.
-	fmt.Fprintf(w, `<form id="trait-explore-form" method="get" style="display:flex; flex-wrap:wrap; gap:6px 16px; margin-bottom:12px;">`)
+	fmt.Fprint(w, `<div class="trait-explore">`)
+	fmt.Fprint(w, `<div class="trait-explore__header">`)
+	fmt.Fprint(w, `<div class="card-heading-row">`)
+	fmt.Fprintf(w, `<h3>Exploring: <code>%s</code></h3>`, escapedKey)
+	fmt.Fprint(w, `<div class="trait-explore__header-actions">`)
+	fmt.Fprint(w, `<button type="submit" form="trait-explore-form" formaction="/ui/export/inventory-explore.ods" class="btn btn--sm btn--primary" hx-disable>Export ODS</button>`)
+	fmt.Fprint(w, `<button class="btn btn--sm" onclick="document.getElementById('trait-explore-panel').innerHTML='';document.getElementById('trait-search-results').innerHTML='';">Close</button>`)
+	fmt.Fprint(w, `</div></div>`)
+	fmt.Fprintf(w, `<p class="trait-explore__description">Grouped by <code>%s</code> &middot; columns from the <code>%s</code> namespace.</p>`, escapedKey, escapedNS)
+	fmt.Fprint(w, `</div>`)
+
+	// Checkbox cluster — labelled "Columns:" with a Reset button. Each
+	// checkbox triggers a table reload on change; Reset reverts the form
+	// to its initial pre-checked state then re-runs the table fetch.
+	fmt.Fprintf(w, `<form id="trait-explore-form" method="get" class="trait-explore__cols">`)
 	fmt.Fprintf(w, `<input type="hidden" name="key" value="%s">`, template.HTMLEscapeString(key))
+	fmt.Fprintf(w, `<span class="trait-explore__cols-label">Columns</span>`)
 	for _, sib := range siblings {
 		checked := ""
-		if sib == key || sib != key {
-			// Pre-check all siblings by default.
+		if strings.HasPrefix(sib, checkPrefix) {
 			checked = " checked"
 		}
 		shortName := sib
 		if strings.HasPrefix(sib, namespace+".") {
 			shortName = sib[len(namespace)+1:]
 		}
-		fmt.Fprintf(w, `<label style="font-size:12px; display:flex; align-items:center; gap:3px; cursor:pointer;">`+
+		fmt.Fprintf(w, `<label class="trait-explore__col-toggle">`+
 			`<input type="checkbox" name="col" value="%s"%s `+
 			`hx-get="/ui/fragments/inventory-explore-table" `+
 			`hx-include="#trait-explore-form" `+
@@ -8696,6 +8712,17 @@ func (h *Handler) InventoryExploreFragment(w http.ResponseWriter, r *http.Reques
 			template.HTMLEscapeString(sib), checked,
 			template.HTMLEscapeString(shortName))
 	}
+	// Reset reverts checkboxes to the smart-pre-checked default. type="reset"
+	// fires the browser's form-reset *after* click handlers run, so htmx
+	// must wait a tick before reading the post-reset form state.
+	fmt.Fprintf(w, `<span class="trait-explore__cols-actions">`+
+		`<button type="reset" form="trait-explore-form" class="btn btn--sm" `+
+		`hx-get="/ui/fragments/inventory-explore-table" `+
+		`hx-include="#trait-explore-form" `+
+		`hx-target="#trait-explore-table" `+
+		`hx-swap="innerHTML" `+
+		`hx-trigger="click delay:50ms">Reset</button>`+
+		`</span>`)
 	fmt.Fprintf(w, `</form>`)
 
 	// Table placeholder — loaded immediately.
@@ -8710,6 +8737,15 @@ func (h *Handler) InventoryExploreFragment(w http.ResponseWriter, r *http.Reques
 
 // InventoryExploreTableFragment renders the grouped results table for the trait
 // explore panel. Groups envoys by the selected key and shows checked columns.
+//
+// Display rules:
+//   - The grouped-by `key` is omitted from the on-screen column set; its value
+//     is already the group section row, so showing it as a column duplicates
+//     information. The ODS export keeps it (denormalized for spreadsheet pivots).
+//   - Columns ending in `.size_bytes` render as humanized sizes with the raw
+//     byte count in the `title` attribute for audit precision.
+//   - Group order: row count desc, then label asc; envoys missing the trait
+//     ("not reported") render last under a pseudo-label.
 func (h *Handler) InventoryExploreTableFragment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
@@ -8731,18 +8767,29 @@ func (h *Handler) InventoryExploreTableFragment(w http.ResponseWriter, r *http.R
 		namespace = key[:idx]
 	}
 
-	// Group envoys by the key value.
+	// Filter cols to drop the grouped-by key from the on-screen render.
+	displayCols := make([]string, 0, len(cols))
+	for _, c := range cols {
+		if c == key {
+			continue
+		}
+		displayCols = append(displayCols, c)
+	}
+
+	// Sentinel label for envoys missing the trait — sorts last via pre-pended
+	// high-codepoint marker, swapped out at render time.
+	const missingLabel = "￿not reported"
+
 	type envoyRow struct {
 		ID       string
 		Hostname string
-		Fields   []string
+		Fields   []string // values for displayCols, in order
 	}
 	type groupEntry struct {
-		Label string
+		Label string // raw value (or missingLabel sentinel)
 		Rows  []envoyRow
 	}
 	groupMap := map[string]*groupEntry{}
-	var groupOrder []string
 
 	for _, t := range all {
 		var traits map[string]any
@@ -8752,78 +8799,69 @@ func (h *Handler) InventoryExploreTableFragment(w http.ResponseWriter, r *http.R
 		flat := map[string]any{}
 		flattenTraits("", traits, flat)
 
-		val := "-"
+		label := missingLabel
 		if v, ok := flat[key]; ok {
 			s := fmt.Sprint(v)
 			if s != "" && s != "<nil>" {
-				val = s
+				label = s
 			}
 		}
 
-		var fields []string
-		for _, col := range cols {
+		fields := make([]string, len(displayCols))
+		for i, col := range displayCols {
 			if v, ok := flat[col]; ok {
 				s := fmt.Sprint(v)
 				if s == "<nil>" || s == "" {
 					s = "-"
 				}
-				fields = append(fields, s)
+				fields[i] = s
 			} else {
-				fields = append(fields, "-")
+				fields[i] = "-"
 			}
 		}
 
-		if _, exists := groupMap[val]; !exists {
-			groupMap[val] = &groupEntry{Label: val}
-			groupOrder = append(groupOrder, val)
+		g, exists := groupMap[label]
+		if !exists {
+			g = &groupEntry{Label: label}
+			groupMap[label] = g
 		}
-		groupMap[val].Rows = append(groupMap[val].Rows, envoyRow{
-			ID: t.ID, Hostname: t.Hostname, Fields: fields,
-		})
+		g.Rows = append(g.Rows, envoyRow{ID: t.ID, Hostname: t.Hostname, Fields: fields})
 	}
 
-	sort.Strings(groupOrder)
-
-	if len(groupOrder) == 0 {
+	if len(groupMap) == 0 {
 		fmt.Fprint(w, `<p class="text-muted">No envoys with this trait.</p>`)
 		return
 	}
 
-	// Short column names (strip namespace prefix).
-	shortCols := make([]string, len(cols))
-	for i, c := range cols {
-		if strings.HasPrefix(c, namespace+".") {
-			shortCols[i] = c[len(namespace)+1:]
-		} else {
-			shortCols[i] = c
+	// Sort: row count desc, then label asc; missing-trait sentinel last (its
+	// label sorts highest via the ￿ prefix).
+	groups := make([]*groupEntry, 0, len(groupMap))
+	for _, g := range groupMap {
+		groups = append(groups, g)
+	}
+	sort.Slice(groups, func(i, j int) bool {
+		iMissing := groups[i].Label == missingLabel
+		jMissing := groups[j].Label == missingLabel
+		if iMissing != jMissing {
+			return jMissing // missing goes last
 		}
+		if len(groups[i].Rows) != len(groups[j].Rows) {
+			return len(groups[i].Rows) > len(groups[j].Rows)
+		}
+		return groups[i].Label < groups[j].Label
+	})
+	// Hostnames within each group: alphabetic for stability.
+	for _, g := range groups {
+		sort.Slice(g.Rows, func(i, j int) bool { return g.Rows[i].Hostname < g.Rows[j].Hostname })
 	}
 
-	// Render one table per group value.
-	for _, label := range groupOrder {
-		g := groupMap[label]
-		fmt.Fprintf(w, `<div style="margin-bottom:16px;">`)
-		fmt.Fprintf(w, `<h4 style="margin:0 0 4px;">%s <span class="text-muted" style="font-weight:400; font-size:12px;">(%d)</span></h4>`,
-			template.HTMLEscapeString(label), len(g.Rows))
-		if len(cols) > 0 {
-			fmt.Fprint(w, `<table class="table"><thead><tr><th>Hostname</th>`)
-			for _, sc := range shortCols {
-				fmt.Fprintf(w, `<th>%s</th>`, template.HTMLEscapeString(sc))
-			}
-			fmt.Fprint(w, `</tr></thead><tbody>`)
-			for _, row := range g.Rows {
-				fmt.Fprintf(w, `<tr><td><a href="/inventory/%s">%s</a></td>`,
-					template.HTMLEscapeString(row.ID),
-					template.HTMLEscapeString(row.Hostname))
-				for _, f := range row.Fields {
-					fmt.Fprintf(w, `<td class="mono" style="font-size:12px;">%s</td>`,
-						template.HTMLEscapeString(f))
-				}
-				fmt.Fprint(w, `</tr>`)
-			}
-			fmt.Fprint(w, `</tbody></table>`)
-		} else {
-			// No columns selected — just show hostnames.
+	// Empty-cols path: just hostname lists per group (no table chrome needed).
+	if len(displayCols) == 0 {
+		for _, g := range groups {
+			fmt.Fprint(w, `<div style="margin-bottom:12px;">`)
+			fmt.Fprint(w, `<div style="font-size:13px; margin-bottom:4px;">`)
+			fmt.Fprint(w, renderGroupHeading(key, g.Label, len(g.Rows), missingLabel))
+			fmt.Fprint(w, `</div>`)
 			fmt.Fprint(w, `<div style="font-size:13px; color:var(--color-muted);">`)
 			for i, row := range g.Rows {
 				if i > 0 {
@@ -8833,10 +8871,81 @@ func (h *Handler) InventoryExploreTableFragment(w http.ResponseWriter, r *http.R
 					template.HTMLEscapeString(row.ID),
 					template.HTMLEscapeString(row.Hostname))
 			}
-			fmt.Fprint(w, `</div>`)
+			fmt.Fprint(w, `</div></div>`)
 		}
-		fmt.Fprint(w, `</div>`)
+		return
 	}
+
+	// Short column names (strip namespace prefix).
+	shortCols := make([]string, len(displayCols))
+	for i, c := range displayCols {
+		if strings.HasPrefix(c, namespace+".") {
+			shortCols[i] = c[len(namespace)+1:]
+		} else {
+			shortCols[i] = c
+		}
+	}
+
+	// Single table: sticky thead, group section rows interleave with envoy rows.
+	colspan := len(displayCols) + 1
+	fmt.Fprint(w, `<div class="trait-explore__wrap">`)
+	fmt.Fprint(w, `<table class="table trait-explore__table"><thead><tr><th>Hostname</th>`)
+	for _, sc := range shortCols {
+		fmt.Fprintf(w, `<th>%s</th>`, template.HTMLEscapeString(sc))
+	}
+	fmt.Fprint(w, `</tr></thead><tbody>`)
+	for _, g := range groups {
+		fmt.Fprintf(w, `<tr class="trait-explore__group-row"><td colspan="%d">%s</td></tr>`,
+			colspan, renderGroupHeading(key, g.Label, len(g.Rows), missingLabel))
+		for _, row := range g.Rows {
+			fmt.Fprintf(w, `<tr><td><a href="/inventory/%s">%s</a></td>`,
+				template.HTMLEscapeString(row.ID),
+				template.HTMLEscapeString(row.Hostname))
+			for i, f := range row.Fields {
+				fmt.Fprintf(w, `<td class="trait-explore__val">%s</td>`,
+					formatTraitCell(displayCols[i], f))
+			}
+			fmt.Fprint(w, `</tr>`)
+		}
+	}
+	fmt.Fprint(w, `</tbody></table></div>`)
+}
+
+// renderGroupHeading produces the "<key> = <value>  (n)" line for a group
+// section row. The missingLabel sentinel renders as italicized "not reported".
+func renderGroupHeading(key, label string, count int, missingLabel string) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, `<span class="trait-explore__group-key">%s</span>`,
+		template.HTMLEscapeString(key))
+	if label == missingLabel {
+		sb.WriteString(`<span class="trait-explore__group-eq">&middot;</span>`)
+		sb.WriteString(`<span class="trait-explore__group-value trait-explore__group-value--missing">not reported</span>`)
+	} else {
+		sb.WriteString(`<span class="trait-explore__group-eq">=</span>`)
+		fmt.Fprintf(&sb, `<span class="trait-explore__group-value">%s</span>`,
+			template.HTMLEscapeString(label))
+	}
+	fmt.Fprintf(&sb, `<span class="trait-explore__group-count">%d</span>`, count)
+	return sb.String()
+}
+
+// formatTraitCell renders a flattened trait value for the explore table.
+// Columns ending in `.size_bytes` get humanized with raw bytes preserved in
+// the `title` attribute so audit precision survives.
+func formatTraitCell(col, val string) string {
+	if val == "-" {
+		return template.HTMLEscapeString(val)
+	}
+	if strings.HasSuffix(col, ".size_bytes") {
+		// Trait values flatten through fmt.Sprint, so float64 (JSON number)
+		// arrives as "1.234e+09" or a plain decimal. ParseFloat handles both.
+		if n, err := strconv.ParseFloat(val, 64); err == nil && n >= 0 {
+			return fmt.Sprintf(`<span title="%s bytes">%s</span>`,
+				template.HTMLEscapeString(val),
+				template.HTMLEscapeString(humanSize(int64(n))))
+		}
+	}
+	return template.HTMLEscapeString(val)
 }
 
 // InventoryExploreODSExport generates an ODS spreadsheet from the current
