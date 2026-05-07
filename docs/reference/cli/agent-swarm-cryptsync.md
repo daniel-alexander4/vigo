@@ -38,7 +38,7 @@ The verb tree splits into **mode-agnostic** verbs (the daily ones — they don't
 | `leave [--purge] [--keep-identity] [--yes]` | Unenroll this user's cryptsync on this envoy. Drops a `~/.cryptsync/leave.pending` sentinel that the daemon picks up, signs + fans out to live peers, then scrubs local state per the flags. |
 | `purge --yes` | Power-user wipe of ALL local cryptsync state for this user (`~/.cryptsync/` + `~/cryptsync/`). Distinct from `leave --purge` — this verb does NOT gossip; peers age the envoy out via the staleness rule. Use when decommissioning. |
 | `reencrypt` | Force re-encrypt of every file in `~/cryptsync/` to the current recipient set. Requires `unlock`. |
-| `status` | Show local state: enrolled, recipient count, file-count breakdown (ciphertext / plaintext / failed), session helper status. |
+| `status` | Show local state: enrolled, recipient count, file-count breakdown (ciphertext / plaintext / failed), session helper status. Under puddle membership, the `recipients:` line expands to `N of M puddle members — …` with a gap explanation when one or more peers have been silent for >90s, distinguishing transient liveness gaps from permanent absence (ADR-016 follow-up, 0.39.11). |
 
 ### Lifecycle (mode-specific subtrees)
 

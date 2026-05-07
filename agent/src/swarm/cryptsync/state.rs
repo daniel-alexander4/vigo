@@ -197,6 +197,13 @@ impl PeerTable {
         }
 
         fs::rename(&tmp, &path).with_context(|| format!("renaming to {}", path.display()))?;
+
+        // User-side mirror — best-effort. Lets user-context CLI
+        // verbs read the table without sudo (e.g. `cryptsync status`'s
+        // recipients-vs-members gap line). Same pattern as
+        // tombstones / leaves / resurrects.
+        super::write_user_mirror_json(&self.user, "peers.json", &json);
+
         tracing::info!(
             user = %self.user,
             peer_count = self.peers.len(),
@@ -204,6 +211,27 @@ impl PeerTable {
             "cryptsync: peer table saved"
         );
         Ok(())
+    }
+
+    /// CLI-facing load that reads the user-side mirror at
+    /// `~/.cryptsync/peers.json` instead of the daemon-only
+    /// canonical path. Used by user-context verbs that need to
+    /// inspect peer-table state — `cryptsync status`'s
+    /// recipients-vs-members comparison is the first consumer.
+    /// Same fall-through-to-empty semantics as `load`.
+    pub fn load_user(user: &str, home: &std::path::Path) -> Self {
+        let path = config::peers_user_path(home);
+        match fs::read_to_string(&path) {
+            Ok(s) => serde_json::from_str(&s).unwrap_or_else(|e| {
+                tracing::warn!(
+                    path = %path.display(),
+                    error = %e,
+                    "cryptsync: malformed user-mirror peers.json, starting fresh"
+                );
+                Self::empty(user)
+            }),
+            Err(_) => Self::empty(user),
+        }
     }
 
     /// Atomic load → mutate → save under the per-user peers lock.
@@ -976,5 +1004,43 @@ mod tests {
         let outcome = t.upsert(sample_peer_in_puddle("alpha", 200, "fleet-pk-2"));
         assert_eq!(outcome, UpsertOutcome::RealChange);
         assert_eq!(t.peers.get("alpha").unwrap().pinned_puddle_pubkey, "fleet-pk-2");
+    }
+
+    /// User-mirror round-trip: a peer table serialized to the
+    /// user-mirror path is read back identically by `load_user`.
+    /// Exercises the format used by `~/.cryptsync/peers.json` so
+    /// the user-context status path can rely on the schema.
+    #[test]
+    fn load_user_round_trips_through_mirror_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path();
+        std::fs::create_dir_all(super::config::dot_dir(home)).unwrap();
+
+        // Build a table with two peers — one in a puddle, one
+        // standalone — so the round-trip covers both shapes.
+        let mut original = PeerTable::empty("dan");
+        original.upsert(sample_peer_in_puddle("alpha", 100, "fleet-pk-1"));
+        original.upsert(sample_peer("standalone", 100));
+        let json = serde_json::to_string_pretty(&original).unwrap();
+        std::fs::write(super::config::peers_user_path(home), &json).unwrap();
+
+        let loaded = PeerTable::load_user("dan", home);
+        assert_eq!(loaded.user, original.user);
+        assert_eq!(loaded.peers.len(), 2);
+        assert_eq!(
+            loaded.peers.get("alpha").unwrap().puddle_pubkey,
+            "fleet-pk-1"
+        );
+        assert_eq!(loaded.peers.get("standalone").unwrap().puddle_pubkey, "");
+    }
+
+    /// Missing mirror file → empty table, never errors. Matches
+    /// `TombstoneTable::load_user` semantics.
+    #[test]
+    fn load_user_returns_empty_when_mirror_absent() {
+        let dir = tempfile::tempdir().unwrap();
+        let loaded = PeerTable::load_user("dan", dir.path());
+        assert_eq!(loaded.user, "dan");
+        assert!(loaded.peers.is_empty());
     }
 }

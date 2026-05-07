@@ -1739,7 +1739,7 @@ fn load_announce_puddle_cert(
 /// Cheap (one filesystem read) and called every announce tick, so
 /// no caching — late `puddle init` flips the user into fleet
 /// mode within one tick without an agent restart.
-fn local_puddle_pubkey_hex(home: &Path) -> String {
+pub(crate) fn local_puddle_pubkey_hex(home: &Path) -> String {
     match crate::swarm::puddle::local_puddle_pubkey(home) {
         Ok(Some(text)) => text
             .strip_prefix("ed25519:")

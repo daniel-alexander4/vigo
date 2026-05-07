@@ -96,6 +96,17 @@ pub fn resurrects_user_path(home: &Path) -> PathBuf {
     dot_dir(home).join("resurrects.json")
 }
 
+/// User-side mirror of the daemon's peer table. Same rationale as
+/// `tombstones_user_path` — canonical at
+/// `agent_state_dir/<user>/peers.json` (root-owned 0600), mirror
+/// at `~/.cryptsync/peers.json` (user-owned 0600) so user-context
+/// CLI verbs (e.g. `cryptsync status`'s recipients-vs-members
+/// gap line) can inspect the peer table without sudo. Written by
+/// `PeerTable::save` after every canonical write.
+pub fn peers_user_path(home: &Path) -> PathBuf {
+    dot_dir(home).join("peers.json")
+}
+
 /// Sentinel file that tells the daemon reactor to process a
 /// resurrect — clear an active tombstone for a filename so the
 /// caller can re-encrypt that name within retention. Dropped by

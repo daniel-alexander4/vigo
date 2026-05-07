@@ -582,6 +582,84 @@ fn bootstrap_identity(
 
 // ---------- status ----------
 
+/// Render the `recipients:` line block for `cryptsync status`.
+///
+/// `recipients_count` is the live recipient count from
+/// `~/.cryptsync/recipients.txt` — self plus peers whose last
+/// announce landed in the 90s STALE_SECS window. `members_count`
+/// is `Some(N)` when the user has a puddle on this envoy
+/// (count of self plus all peers TOFU-pinned to the local
+/// puddle pubkey, regardless of liveness), or `None` when no
+/// puddle anchor exists (standalone mode → no comparison
+/// possible). Returns one or more lines ready to print.
+///
+/// Output by case:
+/// - No puddle (`None`) → bare `recipients: N`. Pre-0.39.11
+///   behavior; standalone mode has no membership concept to
+///   compare against.
+/// - Puddle, all live (`recipients == members`) → bare
+///   `recipients: N`. Default-healthy stays terse so operators
+///   only see the expanded form when there's something to
+///   notice.
+/// - Puddle, gap (`recipients < members`) → multi-line
+///   "X of M puddle members — N peer(s) silent for >90s" with
+///   the consequence-clarity continuation describing exclusion
+///   from new encryptions and what persistence implies.
+/// - Puddle, more recipients than known members
+///   (`recipients > members`) → bare count + WARN log.
+///   Defensive; shouldn't happen in pure puddle mode but is
+///   possible in mid-mode-transition states.
+fn format_recipients_line(
+    recipients_count: usize,
+    members_count: Option<usize>,
+) -> Vec<String> {
+    match members_count {
+        None => vec![format!("  recipients:       {}", recipients_count)],
+        Some(m) if recipients_count == m => {
+            vec![format!("  recipients:       {}", recipients_count)]
+        }
+        Some(m) if recipients_count > m => {
+            tracing::warn!(
+                recipients = recipients_count,
+                members = m,
+                "cryptsync: recipients exceeds known puddle members; \
+                 mid-mode-transition or stale state"
+            );
+            vec![format!("  recipients:       {}", recipients_count)]
+        }
+        Some(m) => {
+            // recipients < members — the gap case. Pluralize
+            // explicitly rather than hand-wave "(s)" suffixes.
+            let missing = m - recipients_count;
+            if missing == 1 {
+                vec![
+                    format!(
+                        "  recipients:       {} of {} puddle members — 1 peer silent for",
+                        recipients_count, m
+                    ),
+                    "                    >90s, excluded from new encryptions until it"
+                        .to_string(),
+                    "                    announces again. If persistent, the envoy is"
+                        .to_string(),
+                    "                    offline or unreachable.".to_string(),
+                ]
+            } else {
+                vec![
+                    format!(
+                        "  recipients:       {} of {} puddle members — {} peers silent",
+                        recipients_count, m, missing
+                    ),
+                    "                    for >90s, excluded from new encryptions until"
+                        .to_string(),
+                    "                    they announce again. If persistent, those envoys"
+                        .to_string(),
+                    "                    are offline or unreachable.".to_string(),
+                ]
+            }
+        }
+    }
+}
+
 fn cmd_status(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
     let dot = config::dot_dir(&home);
@@ -597,12 +675,42 @@ fn cmd_status(_args: &[String]) -> Result<()> {
     if config::is_enrolled(&home) {
         match fs::read_to_string(config::recipients_path(&home)) {
             Ok(text) => {
-                let count = text
+                let recipients_count = text
                     .lines()
                     .map(str::trim)
                     .filter(|l| !l.is_empty() && !l.starts_with('#'))
                     .count();
-                println!("  recipients:       {}", count);
+
+                // Compute puddle-members count when the user has a
+                // puddle on this envoy. The peer table records every
+                // peer's announced puddle_pubkey via TOFU pinning;
+                // count entries that match this user's local puddle
+                // pubkey, plus 1 for self. Standalone mode (no local
+                // puddle pubkey) → None → bare `recipients: N` line
+                // unchanged from pre-0.39.11.
+                let members_count: Option<usize> =
+                    if crate::swarm::puddle::is_initialized(&home) {
+                        let local_pubkey =
+                            crate::swarm::cryptsync::local_puddle_pubkey_hex(&home);
+                        if local_pubkey.is_empty() {
+                            None
+                        } else {
+                            let username = user_for_invocation()?;
+                            let table = PeerTable::load_user(&username, &home);
+                            let peer_members = table
+                                .peers
+                                .values()
+                                .filter(|p| p.puddle_pubkey == local_pubkey)
+                                .count();
+                            Some(1 + peer_members)
+                        }
+                    } else {
+                        None
+                    };
+
+                for line in format_recipients_line(recipients_count, members_count) {
+                    println!("{}", line);
+                }
             }
             Err(_) => {
                 if crate::swarm::puddle::is_initialized(&home) {
@@ -2727,5 +2835,85 @@ mod tests {
     fn cert_refresh_skips_when_fresh() {
         let cert = test_cert(TEST_NOW + 30 * ONE_DAY);
         assert!(!cert_needs_refresh(Some(&cert), TEST_NOW));
+    }
+
+    // -----------------------------------------------------------------
+    // format_recipients_line — recipients-vs-puddle-members gap render
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn recipients_line_standalone_renders_bare_count() {
+        // No puddle anchor → no comparison possible; bare line.
+        let out = format_recipients_line(3, None);
+        assert_eq!(out, vec!["  recipients:       3".to_string()]);
+    }
+
+    #[test]
+    fn recipients_line_puddle_all_live_renders_bare_count() {
+        // Default-healthy: recipients == members → keep the line
+        // unchanged so operators only see the expanded form when
+        // there's something to notice.
+        let out = format_recipients_line(3, Some(3));
+        assert_eq!(out, vec!["  recipients:       3".to_string()]);
+    }
+
+    #[test]
+    fn recipients_line_puddle_single_envoy_renders_bare_one() {
+        let out = format_recipients_line(1, Some(1));
+        assert_eq!(out, vec!["  recipients:       1".to_string()]);
+    }
+
+    #[test]
+    fn recipients_line_puddle_one_peer_silent_renders_singular_gap() {
+        let out = format_recipients_line(2, Some(3));
+        assert_eq!(out.len(), 4);
+        assert!(out[0].contains("2 of 3 puddle members"));
+        assert!(out[0].contains("1 peer silent"));
+        // Singular pronouns + verb conjugation, joined for resilience
+        // against the line where each phrase lands.
+        let joined = out.join("\n");
+        assert!(
+            joined.contains("until it"),
+            "expected singular pronoun, got:\n{}",
+            joined
+        );
+        assert!(
+            joined.contains("the envoy is"),
+            "expected singular envoy reference, got:\n{}",
+            joined
+        );
+        assert!(joined.contains("offline or unreachable"));
+    }
+
+    #[test]
+    fn recipients_line_puddle_multiple_peers_silent_renders_plural_gap() {
+        let out = format_recipients_line(1, Some(4));
+        assert_eq!(out.len(), 4);
+        assert!(out[0].contains("1 of 4 puddle members"));
+        assert!(out[0].contains("3 peers silent"));
+        // Plural pronouns + verb conjugation.
+        assert!(out[1].contains("until"));
+        let joined = out.join("\n");
+        assert!(
+            joined.contains("they announce again"),
+            "expected plural-verb continuation, got:\n{}",
+            joined
+        );
+        assert!(
+            joined.contains("those envoys"),
+            "expected plural-noun closer, got:\n{}",
+            joined
+        );
+        assert!(joined.contains("offline or unreachable"));
+    }
+
+    #[test]
+    fn recipients_line_recipients_exceeds_members_renders_bare_count() {
+        // Defensive edge — shouldn't happen in steady-state puddle
+        // mode. Render bare count; the WARN log surfaces the
+        // anomaly without scrambling the operator with a
+        // negative-gap message.
+        let out = format_recipients_line(5, Some(3));
+        assert_eq!(out, vec!["  recipients:       5".to_string()]);
     }
 }
