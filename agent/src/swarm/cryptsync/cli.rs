@@ -124,7 +124,7 @@ USAGE:
     vigo swarm cryptsync puddle <SUBCOMMAND>
 
 SUBCOMMANDS:
-    init          First-time setup of this user's per-envoy age key under fleet
+    init          First-time setup of this user's per-envoy age key under puddle
                   membership. Issues a puddle-membership certificate (ADR-016 follow-up)
                   and persists it at ~/.cryptsync/puddle_cert.json. Requires puddle
                   to be initialized AND unlocked for this user (the cert is signed by
@@ -205,7 +205,7 @@ No root required. Does not contact the Vigo server."
 //
 // Refuses if puddle has not been initialized for this user.
 // Pointing the user at `vigo swarm puddle init` first is the
-// correct path: cryptsync puddle mode is meaningless without a fleet
+// correct path: cryptsync puddle mode is meaningless without a puddle
 // identity to scope membership to.
 fn cmd_puddle_init(_args: &[String]) -> Result<()> {
     let home = user_home_for_invocation()?;
@@ -220,7 +220,7 @@ fn cmd_puddle_init(_args: &[String]) -> Result<()> {
     }
     bootstrap_identity(&home, &username, /* is_init */ true, config::WrapMode::Puddle)?;
     // Auto-issue the puddle membership certificate so receivers can
-    // cryptographically verify our fleet claim from the very first
+    // cryptographically verify our puddle claim from the very first
     // announce. Fails noisily but doesn't undo the bootstrap — the
     // user can re-run `cryptsync puddle renew-cert` separately.
     if let Err(e) = issue_puddle_cert(&home, &username) {
@@ -383,8 +383,8 @@ fn bootstrap_identity(
     }
 
     // Source the wrap-key material per ADR-016. Standalone prompts
-    // for a per-envoy passphrase; fleet derives from the puddle
-    // identity via the running session helper. Either way, we end up
+    // for a per-envoy passphrase; puddle mode derives the wrap key
+    // from the puddle identity via the running session helper. Either way, we end up
     // with a byte string we can hand to `wrap_identity` as the
     // `password` argument — Argon2id stretches it into the AEAD key
     // identically in both modes, so the on-disk envelope shape stays
@@ -499,12 +499,35 @@ fn bootstrap_identity(
     println!("public key: {}", public);
     println!();
     if is_init {
-        println!("This envoy is now the primary. Add more envoys with `vigo swarm cryptsync standalone enroll` (or `puddle init` on each envoy if you use puddle)");
-        println!("after provisioning them via the user's usercrate with `cryptsync: true`.");
+        match wrap_mode {
+            config::WrapMode::Puddle => {
+                // ADR-016: each puddle member generates its own age key
+                // for compartmentalization. There is no "primary" — every
+                // envoy is a peer. Other puddle envoys discover this
+                // pubkey via swarm announce + the puddle-membership cert.
+                println!("Per-envoy cryptsync identity created. Each puddle member holds its own age");
+                println!("key (ADR-016: per-envoy keys preserve compartmentalization). Other envoys");
+                println!("in your puddle pick up this pubkey via swarm announce + the puddle-");
+                println!("membership cert — no manual enrollment.");
+                println!();
+                println!("To add a new envoy to the puddle:");
+                println!("  1) on a current puddle envoy: `vigo swarm puddle pair`");
+                println!("  2) on the new envoy:          `sudo vigo swarm puddle join --from <host>`");
+                println!("  3) on the new envoy:          `vigo swarm puddle unlock` (auto-runs `cryptsync puddle init`)");
+            }
+            config::WrapMode::Standalone => {
+                println!("This envoy is now the primary in your standalone cryptsync mesh. Add more");
+                println!("envoys with `vigo swarm cryptsync standalone enroll` after provisioning");
+                println!("them via the user's usercrate with `cryptsync: true`.");
+            }
+        }
     } else {
-        println!("This envoy is now enrolled. The primary envoy's reactor will pick up");
-        println!("this pubkey on the next announcement cycle and re-encrypt existing");
-        println!("files to include it (coming in Phase 1 Week 2).");
+        // Standalone-only path (`standalone enroll`). Puddle never
+        // takes the !is_init branch — every envoy runs `init` for its
+        // own per-envoy age key.
+        println!("This envoy is now enrolled in the standalone cryptsync mesh. Live peers will");
+        println!("pick up this pubkey on the next announcement cycle and merge it into the");
+        println!("recipients set.");
     }
     Ok(())
 }
@@ -1650,8 +1673,9 @@ fn cmd_apply_blacklist(args: &[String]) -> Result<()> {
     if is_self {
         println!(
             "\u{2713} self-evict on {}: scrubbed cryptsync identity for {} user(s); \
-             re-enroll with `vigocli swarm cryptsync enroll-fleet --user <u>` or \
-             `vigo swarm cryptsync standalone enroll` (or `puddle init` if you use puddle) to rejoin",
+             re-enroll on this envoy via `vigo swarm puddle unlock` (auto-runs cryptsync \
+             puddle init) for puddle users, or `vigo swarm cryptsync standalone enroll` \
+             for standalone users",
             hostname, acted
         );
     } else {

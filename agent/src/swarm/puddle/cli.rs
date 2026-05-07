@@ -947,12 +947,12 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
 // ---------- members ----------
 
 fn cmd_members(_args: &[String]) -> Result<()> {
-    // ADR-014 frames `members` as "list puddle pubkeys advertised by
-    // peers in the swarm gossip (informational; not authoritative)."
-    // Phase 1 surfaces only the local view: this envoy's pubkey +
-    // initialization status. Cross-envoy discovery rides ADR-015 /
-    // ADR-016, which extend swarm announcements to carry puddle
-    // pubkeys; until then `members` is honest about scope.
+    // Local-only view: this envoy's pubkey + initialization status.
+    // ADR-015 (gitmirror substrate) and ADR-016 (cryptsync membership
+    // on puddle) shipped, so peer puddle pubkeys ARE observable —
+    // but via the cryptsync peer table, not the puddle module's own
+    // state. Surface that path so an operator looking at the local
+    // puddle view knows where to find the cross-envoy aggregate.
     let home = user_home_for_invocation()?;
     if !super::is_initialized(&home) {
         bail!("puddle not initialized on this envoy");
@@ -964,8 +964,10 @@ fn cmd_members(_args: &[String]) -> Result<()> {
     println!("  {} (this envoy)  {}", host, pubkey);
     println!();
     println!(
-        "Cross-envoy discovery via swarm gossip lands with ADR-015 / ADR-016. Until then \
-         `members` only shows the local envoy."
+        "This is the local view. For the cross-envoy puddle pubkey aggregate (which peers\n\
+         this envoy has discovered via swarm announces), inspect `~/.cryptsync/recipients.txt`\n\
+         or run `vigocli swarm cryptsync show <user>` from an admin shell for the server-\n\
+         side fleet rollup."
     );
     Ok(())
 }
