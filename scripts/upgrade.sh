@@ -537,6 +537,26 @@ if $NEED_CONTAINER_RESTART && docker ps -q -f name=vigo | grep -q .; then
 fi
 
 # ---------------------------------------------------------------------------
+# Re-touch in-container agent binaries
+# ---------------------------------------------------------------------------
+#
+# The server-image rebuild above touches `agent/src/main.rs` (around
+# line 342) to bust Docker layer caches. When --cross also fired,
+# the cross-compile produced its dist binaries BEFORE that main.rs
+# touch, then `docker cp` injected them into the container preserving
+# their pre-touch mtime. Net result: in-container binary mtime <
+# main.rs mtime, and the freshness check below fires a false-positive
+# "source is newer than binary" even though the binary version stamps
+# match the source.
+#
+# Re-touch the in-container agent binaries after every other phase
+# has settled so the freshness check's mtime comparison reflects the
+# real build state. Gated on having actually built them this run.
+if [ ${#CROSS_TARGETS[@]} -gt 0 ] && docker ps -q -f name=vigo | grep -q .; then
+    docker exec vigo find /dist/agent \( -name 'vigo' -o -name 'vigo.exe' \) -exec touch {} + 2>/dev/null || true
+fi
+
+# ---------------------------------------------------------------------------
 # Freshness check
 # ---------------------------------------------------------------------------
 
