@@ -278,14 +278,17 @@ async fn handle_client(
     // Strategy: dup the socket FD twice (one for stdin, one for
     // stdout), drop our halves, let the child's process inherit the
     // duplicates as its stdio.
+    //
+    // Ordering matters: `into_split()` transferred ownership of the
+    // underlying fd to the read+write halves, so dropping both halves
+    // closes the original fd. Dup BEFORE the drop so the dup'd
+    // descriptors come from a still-valid source. After the drop,
+    // raw_fd is closed — the dup'd fds (different fd numbers) hold
+    // independent references to the same kernel socket and remain
+    // valid for the child's stdio.
     write_half.write_all(b"OK\n").await.context("writing OK")?;
     write_half.flush().await.ok();
 
-    drop(br);
-    drop(write_half);
-    // At this point our halves are dropped; the underlying FD is
-    // still alive because the kernel ref-counts it. Dup it to feed
-    // the child.
     let stdin_fd = unsafe { libc::dup(raw_fd) };
     let stdout_fd = unsafe { libc::dup(raw_fd) };
     if stdin_fd < 0 || stdout_fd < 0 {
@@ -294,11 +297,13 @@ async fn handle_client(
             std::io::Error::last_os_error()
         );
     }
-    // Close the original — we've duped twice; the child holds the
-    // only references that matter from here on.
-    unsafe {
-        libc::close(raw_fd);
-    }
+
+    drop(br);
+    drop(write_half);
+    // The original fd is closed here when the halves drop. Our
+    // duped stdin_fd / stdout_fd remain valid (separate fd numbers
+    // in the process's table; the kernel keeps the socket open as
+    // long as any reference exists).
     let stdin = unsafe { Stdio::from_raw_fd(stdin_fd) };
     let stdout = unsafe { Stdio::from_raw_fd(stdout_fd) };
 
