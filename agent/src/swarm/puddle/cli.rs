@@ -35,6 +35,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "lock" => cmd_lock(&args[1..]),
         "pair" => cmd_pair(&args[1..]),
         "join" => cmd_join(&args[1..]),
+        "leave" => cmd_leave(&args[1..]),
         "rekey-pair" => cmd_rekey_pair(&args[1..]),
         "rekey" => cmd_rekey(&args[1..]),
         "members" => cmd_members(&args[1..]),
@@ -58,6 +59,9 @@ LIFECYCLE:
     init                       Generate a new puddle keypair on the founder envoy.
     pair                       Issue a 5-minute pairing code so a peer envoy can join.
     join --from <host>         Receive the wrapped key from <host> using the pairing code.
+    leave [--yes]              Leave the puddle on this envoy: sign LEAVE for cryptsync
+                               peers, scrub ~/.vigo-puddle/, ~/.cryptsync/, ~/cryptsync/,
+                               and ~/.vigo-gitmirror/.
 
 REKEY (ADR-018, puddle keypair rotation):
     rekey-pair                 Rotate the puddle keypair and issue a 5-minute claim code.
@@ -382,6 +386,141 @@ fn cmd_join(args: &[String]) -> Result<()> {
              (encrypted P2P sync), wrapped under your puddle identity — no extra passphrase."
         );
     }
+    Ok(())
+}
+
+// ---------- leave ----------
+
+/// Leave the puddle on this envoy. Per ADR-021 (0.40.0), this is the
+/// canonical lifecycle exit verb covering puddle + cryptsync +
+/// gitmirror cleanup.
+///
+/// Steps:
+///   1. If cryptsync is enrolled: invoke `cryptsync leave --purge
+///      --yes` internally — the cryptsync daemon picks up the
+///      `leave.pending` sentinel and fans out a signed LEAVE envelope
+///      to live peers, then scrubs `~/.cryptsync/` + `~/cryptsync/`.
+///   2. Lock the puddle session helper (best-effort).
+///   3. Scrub `~/.vigo-puddle/` (the wrapped keypair, salt, pubkey).
+///   4. Scrub `~/.vigo-gitmirror/` if present (per-project state for
+///      every gitmirror project this user was in).
+///
+/// Idempotent on the dir-removal side. The cryptsync LEAVE fanout is
+/// asynchronous — peers may take up to one announce tick (~30s) to
+/// observe the departure, but the local scrub returns immediately.
+///
+/// Flags:
+///   --yes    Skip the confirmation prompt.
+fn cmd_leave(args: &[String]) -> Result<()> {
+    let mut yes = false;
+    for a in args {
+        match a.as_str() {
+            "--yes" | "-y" => yes = true,
+            "--help" | "-h" => {
+                eprintln!(
+                    "vigo swarm puddle leave — leave the puddle on this envoy\n\n\
+                     USAGE:\n    vigo swarm puddle leave [--yes]\n\n\
+                     Signs a LEAVE envelope for cryptsync peers, locks the puddle\n\
+                     session helper, and wipes ~/.vigo-puddle/, ~/.cryptsync/,\n\
+                     ~/cryptsync/, and ~/.vigo-gitmirror/. Refuses without --yes."
+                );
+                return Ok(());
+            }
+            other if other.starts_with("--") => bail!("unknown flag: {}", other),
+            _ => bail!("vigo swarm puddle leave takes no positional arguments; got {}", a),
+        }
+    }
+
+    let home = user_home_for_invocation()?;
+    if !super::is_initialized(&home) {
+        bail!(
+            "puddle is not initialized for this user — nothing to leave. \
+             (Was this user ever a puddle member on this envoy?)"
+        );
+    }
+
+    if !yes {
+        let pubkey = super::local_puddle_pubkey(&home)?
+            .unwrap_or_else(|| "(unreadable)".to_string());
+        eprintln!();
+        eprintln!("This will leave the puddle on this envoy and wipe local state:");
+        eprintln!("  puddle pubkey:    {}", pubkey);
+        eprintln!("  ~/.vigo-puddle/   keypair, salt, pubkey, retired-puddles log");
+        eprintln!("  ~/.cryptsync/     wrapped age identity + recipients + cert");
+        eprintln!("  ~/cryptsync/      ciphertext at rest (recoverable from peers)");
+        eprintln!("  ~/.vigo-gitmirror/ per-project state for any gitmirror projects");
+        eprintln!();
+        eprintln!("Cryptsync peers receive a signed LEAVE envelope on the next");
+        eprintln!("announce tick (~30s). Gitmirror projects are not gossiped — admin");
+        eprintln!("`gitmirror project revoke` is a separate cleanup step if needed.");
+        eprintln!();
+        eprintln!("Pass --yes to confirm.");
+        return Ok(());
+    }
+
+    // 1. Cryptsync leave (signs envelope, fans out, scrubs cryptsync
+    //    state). Best-effort: a failure here doesn't stop the puddle
+    //    cleanup — the operator can always run `cryptsync purge` later
+    //    to finish the local wipe.
+    let cs_identity = home.join(".cryptsync").join("identity.age");
+    if cs_identity.exists() {
+        println!("Signing cryptsync LEAVE envelope and scrubbing ciphertext...");
+        match crate::swarm::cryptsync::cli::run(vec![
+            "leave".to_string(),
+            "--purge".to_string(),
+            "--yes".to_string(),
+        ]) {
+            Ok(()) => {
+                println!("✓ cryptsync leave queued (peers learn within ~30s)");
+            }
+            Err(e) => {
+                eprintln!("warning: cryptsync leave failed: {:#}", e);
+                eprintln!("         continuing with puddle cleanup anyway");
+            }
+        }
+    }
+
+    // 2. Lock the puddle session helper. Best-effort — already-locked
+    //    is fine.
+    let _ = session::request_lock();
+
+    // 3. Scrub ~/.vigo-puddle/.
+    let puddle_dot = config::dot_dir(&home);
+    if puddle_dot.exists() {
+        match fs::remove_dir_all(&puddle_dot) {
+            Ok(()) => println!("✓ scrubbed {}", puddle_dot.display()),
+            Err(e) => {
+                eprintln!(
+                    "warning: failed to remove {}: {} (manual cleanup needed)",
+                    puddle_dot.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    // 4. Scrub ~/.vigo-gitmirror/ — per-project state for every
+    //    gitmirror project this user was a member of. Bare repos
+    //    under /var/lib/vigo/swarm/gitmirror/ are root-owned and
+    //    survive — admin cleanup is a separate path.
+    let gm_user_dir = home.join(".vigo-gitmirror");
+    if gm_user_dir.exists() {
+        match fs::remove_dir_all(&gm_user_dir) {
+            Ok(()) => println!("✓ scrubbed {}", gm_user_dir.display()),
+            Err(e) => {
+                eprintln!(
+                    "warning: failed to remove {}: {} (manual cleanup needed)",
+                    gm_user_dir.display(),
+                    e
+                );
+            }
+        }
+    }
+
+    println!();
+    println!("Puddle membership ended on this envoy. To re-join later:");
+    println!("  on a current puddle member: vigo swarm puddle pair");
+    println!("  on this envoy:              sudo vigo swarm puddle join --from <host>");
     Ok(())
 }
 
