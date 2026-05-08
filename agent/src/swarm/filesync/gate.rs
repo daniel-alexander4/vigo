@@ -3,24 +3,22 @@
 
 //! Runtime on/off switch for the filesync subsystem.
 //!
-//! Filesync is **default-on per-envoy**: every enrolled envoy
-//! participates unless one of three signals from server.yaml flips it
-//! off — `swarm.enabled: false`, `swarm.filesync.enabled: false`, or
-//! the envoy's hostname matches a glob in `swarm.filesync.blacklist`.
-//! All three arrive on every check-in inside `PolicyBundle.vars_json`
-//! (`swarm_enabled`, `swarm_filesync_enabled`, `filesync_blacklisted`).
-//! The agent re-reads the cached bundle and drives this gate.
+//! Filesync is gated per-envoy via two server.yaml pattern lists
+//! (0.41.0+): the substrate-level `swarm.enabled` AND the per-subsystem
+//! `swarm.filesync.enabled`. Both arrive on every check-in inside
+//! `PolicyBundle.vars_json` as `swarm_enabled` and
+//! `swarm_filesync_enabled`; the agent re-reads the cached bundle
+//! and drives this gate.
 //! [`crate::swarm::gates::substrate_active`] computes the
-//! global-AND-per-substrate-AND-NOT-blacklisted product.
+//! global-AND-per-substrate product.
 //!
 //! Every subsystem consumer (multicast announcer, peer push handler,
 //! reconciler) consults [`Gate::enabled`] at its own natural sample
 //! point. When the gate is off the announcer stops broadcasting, the
 //! push handler returns 403, and the reconciler skips its work on
 //! every tick. Content under `~user/filesync/` is left in place — the
-//! gate is a pause, not an evict. Filesync's blacklist is gate-only
-//! by design (filesync content is plaintext user data; destructive
-//! removal is a manual operator action, never automated).
+//! gate is a pause, not an evict. Filesync content is plaintext user
+//! data; destructive removal is always a manual operator action.
 //!
 //! A `set` call returns the previous value so callers can detect
 //! OFF→ON and ON→OFF transitions for transition-only logging.

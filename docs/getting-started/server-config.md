@@ -579,54 +579,49 @@ smtp:
 
 ### swarm
 
-Enables the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **payload** (admin-pushed file distribution), **gitmirror** (user source-control mirroring), **cryptsync** (encrypted user directory sync), and **filesync** (user directory sync). When enabled, agents open their peer server on port 1531 and participate in multicast discovery. All four content subsystems run on every enrolled envoy by default; halt any one fleet-wide via its `enabled: false`, or deny specific hosts via its `blacklist`.
+Configures the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **payload** (admin-pushed file distribution), **gitmirror** (user source-control mirroring), **puddle/cryptsync** (encrypted user directory sync), and **filesync** (LAN plaintext user directory sync). Each subsystem is gated per-envoy by a hostname pattern list (0.41.0+); both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for any subsystem to be active there.
+
+Pattern lists are first-match-wins, `-` prefix denies, default-deny on no match — same semantics as Vigo's matchfile patterns (ADR-002). Examples:
+
+- `[]` — off everywhere (default)
+- `["*"]` — fleet-wide on
+- `["-rasp1", "*"]` — everywhere except `rasp1`
+- `["annlap", "plex"]` — only those two; everything else denied
 
 ```yaml
 swarm:
-  enabled: true
+  enabled: ["*"]                                  # which envoys run the substrate
   seed_dir: "/var/lib/vigo/swarm/seed"
   port: 1531
   max_bandwidth_percent: 50
   manifest_liveness_ttl: 24h
-  payload:
-    enabled: true
-    blacklist:
-      - "raspberrypi"
-      - "*.test.example.com"
+  puddle:
+    enabled: ["annlap", "plex", "girlslaptop"]    # cryptsync follows
   gitmirror:
-    enabled: true
-    blacklist:
-      - "raspberrypi"
-      - "*.test.example.com"
-  cryptsync:
-    enabled: true
-    blacklist:
-      - "raspberrypi"
-      - "*.test.example.com"
+    enabled: ["*"]
   filesync:
-    enabled: true
-    blacklist:
-      - "raspberrypi"
-      - "*.test.example.com"
+    enabled: ["*"]
+  payload:
+    enabled: ["*"]
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `enabled` | `false` | Enable swarm P2P distribution |
-| `seed_dir` | `/var/lib/vigo/swarm/seed` | Directory where `vigocli swarm distribute` writes seed files |
+| `enabled` | `[]` | Hostname pattern list controlling which envoys run the swarm substrate. Empty list disables it everywhere. |
+| `seed_dir` | `/var/lib/vigo/swarm/seed` | Directory where `vigocli swarm payload distribute` writes seed files |
 | `port` | `1531` | Agent peer server listen port (mTLS HTTPS) |
 | `max_bandwidth_percent` | `50` | Maximum network bandwidth agents will use for swarm transfers (percentage of interface capacity) |
-| `manifest_liveness_ttl` | `24h` | Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Combined with the `RecordSeedFromAgent` gossip gate (agents can only refresh entries the server has authoritatively seen — they cannot create new ones via gossip), this guards against stale agents repopulating a freshly-restarted server's manifest. Set to `0` or empty to disable the sweep on tiny static fleets where no entry should ever expire. |
-| `payload.enabled` | `true` | Whether payload reception runs fleet-wide. Set `false` to halt agents accepting new payload assignments; already-cached blobs are preserved so re-enabling resumes operation untouched. |
-| `payload.blacklist` | `[]` | Hostname patterns (filepath.Match globs) of envoys denied from receiving payload distributions. Gate-only — already-cached blobs on a newly-blacklisted host are not evicted automatically. |
-| `gitmirror.enabled` | `true` | Whether gitmirror runs fleet-wide. Set `false` to halt gitmirror (publisher and receiver idle); already-held mirrors at `/var/lib/vigo/swarm/gitmirror/mirrors/` are preserved so re-enabling resumes operation untouched. |
-| `gitmirror.blacklist` | `[]` | Hostname patterns (filepath.Match globs) of envoys denied from receiving gitmirror bundles. Adding a host evicts its existing mirrors fleet-wide on the next config reload (`vigocli config publish`); removing it re-allows participation but does not re-replicate previous bundles automatically. Default-allow: an empty list means every enrolled envoy participates. |
-| `cryptsync.enabled` | `true` | Whether cryptsync runs fleet-wide. Set `false` to halt cryptsync (announcer, listener, push handler all idle); identity material under `~user/.cryptsync/` is preserved so re-enabling resumes operation without re-enrollment. |
-| `cryptsync.blacklist` | `[]` | Hostname patterns (filepath.Match globs) of envoys denied from holding cryptsync content. Adding a host scrubs its identity material fleet-wide and removes its pubkey from peer recipient lists on the next config reload (`vigocli config publish`). |
-| `filesync.enabled` | `true` | Whether filesync runs fleet-wide. Set `false` to halt filesync (multicast announcer, listener, push handler all idle); content under `~user/filesync/` is preserved so re-enabling resumes operation untouched. |
-| `filesync.blacklist` | `[]` | Hostname patterns (filepath.Match globs) of envoys denied from participating in filesync. Gate-only — content under `~user/filesync/` is **not** scrubbed on add (filesync content is plaintext user data; destructive removal is a manual operator action). |
+| `manifest_liveness_ttl` | `24h` | Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Set to `0` or empty to disable the sweep on tiny static fleets. |
+| `puddle.enabled` | `[]` | Hostname pattern list of envoys allowed to run puddle. **Cryptsync derives from this list** — there is no `swarm.cryptsync` section (ADR-020). A host allowed here can hold puddle identity material and cryptsync ciphertext for its locally-enrolled members. |
+| `gitmirror.enabled` | `[]` | Hostname pattern list of envoys allowed to run gitmirror — publisher and receiver. |
+| `filesync.enabled` | `[]` | Hostname pattern list of envoys allowed to run filesync. Per-user opt-in still requires the user creating `~/filesync/`. |
+| `payload.enabled` | `[]` | Hostname pattern list of envoys allowed to receive admin-pushed payloads. The admin distribute endpoint refuses when this list is empty (no envoy could possibly receive). |
+
+**Per-user authorization.** The envoy-level pattern lists answer "is this subsystem available on this envoy?" The user-level usercrate flags answer "which Unix users on this envoy can use it?" Both must say yes for a user to use a subsystem; default-deny on both. See the user-resource `puddle: bool` and `gitmirror: bool` flags in your usercrate. Filesync gates by Unix file ownership (no usercrate flag); payload by admin call site.
 
 Agents listen on the configured port for peer chunk requests using the same mTLS certificates as gRPC communication. Multicast discovery uses UDP on `224.0.0.42` at the same port.
+
+**0.41.0 migration.** Pre-0.41.0 configs used a fleet-wide `enabled: bool` plus per-substrate `blacklist: [...]`. Both retired in 0.41.0 in favor of the pattern-list shape above. The loader rejects retired field names with a single error pointing at this section. Cryptsync's separate section was retired entirely (cryptsync now derives from puddle).
 
 See [Swarm Concepts](../engineering/subsystems/swarm.md) and [Swarm Operations](../operations/swarm.md) for details.
 ---

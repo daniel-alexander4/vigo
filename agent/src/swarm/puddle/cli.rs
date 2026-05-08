@@ -29,23 +29,37 @@ pub fn run(args: Vec<String>) -> Result<()> {
             print_usage();
             Ok(())
         }
-        "init" => cmd_init(&args[1..]),
-        "pubkey" => cmd_pubkey(&args[1..]),
-        "unlock" => cmd_unlock(&args[1..]),
-        "lock" => cmd_lock(&args[1..]),
-        "pair" => cmd_pair(&args[1..]),
-        "join" => cmd_join(&args[1..]),
-        "leave" => cmd_leave(&args[1..]),
-        "rekey-pair" => cmd_rekey_pair(&args[1..]),
-        "rekey" => cmd_rekey(&args[1..]),
-        "members" => cmd_members(&args[1..]),
-        "rotate-passphrase" => cmd_rotate_passphrase(&args[1..]),
-        "status" => cmd_status(&args[1..]),
+        "init" => with_puddle_authz(|| cmd_init(&args[1..])),
+        "pubkey" => with_puddle_authz(|| cmd_pubkey(&args[1..])),
+        "unlock" => with_puddle_authz(|| cmd_unlock(&args[1..])),
+        "lock" => with_puddle_authz(|| cmd_lock(&args[1..])),
+        "pair" => with_puddle_authz(|| cmd_pair(&args[1..])),
+        "join" => with_puddle_authz(|| cmd_join(&args[1..])),
+        "leave" => with_puddle_authz(|| cmd_leave(&args[1..])),
+        "rekey-pair" => with_puddle_authz(|| cmd_rekey_pair(&args[1..])),
+        "rekey" => with_puddle_authz(|| cmd_rekey(&args[1..])),
+        "members" => with_puddle_authz(|| cmd_members(&args[1..])),
+        "rotate-passphrase" => with_puddle_authz(|| cmd_rotate_passphrase(&args[1..])),
+        "status" => with_puddle_authz(|| cmd_status(&args[1..])),
         other => bail!(
             "unknown `vigo swarm puddle` subcommand: {}\nrun `vigo swarm puddle --help` for usage",
             other
         ),
     }
+}
+
+/// Refuse early if the invoking user lacks `puddle: true` in their
+/// usercrate (0.41.0+). The gate consults the daemon-canonical cache
+/// at `/var/lib/vigo/usercrate-policy/<user>.json` written by the
+/// user executor on each reconcile pass — no server round-trip
+/// required.
+fn with_puddle_authz<F, T>(f: F) -> Result<T>
+where
+    F: FnOnce() -> Result<T>,
+{
+    let user = user_for_invocation()?;
+    crate::swarm::policy::require_puddle(&user)?;
+    f()
 }
 
 fn print_usage() {

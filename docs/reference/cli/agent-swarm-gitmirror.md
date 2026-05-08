@@ -41,6 +41,8 @@ vigo swarm gitmirror project <verb> [args]
 
 The command lives inside the `vigo` agent binary. CLI verbs run as the calling user — root is not required and would discard the user's per-puddle identity. Every verb reads from `~/.vigo-gitmirror/<project_id>/` (per-user) and the bare-repo dir at `/var/lib/vigo/swarm/gitmirror/projects/` (per-envoy, root-owned, mode `0700` — only the helper daemon proxies non-root reads).
 
+**Usercrate authorization (0.41.0+).** Every verb on this page (except when invoked as root) refuses unless the invoking user has `gitmirror: true` set on the user resource in their usercrate. The agent's user executor writes the resolved flags to `/var/lib/vigo/usercrate-policy/<user>.json` on each reconcile pass; the CLI reads it as a precondition. Both layers — envoy-level (`swarm.gitmirror.enabled` pattern list in server.yaml) and user-level (this flag) — must say yes.
+
 ## Project identity
 
 Every project is identified by `project_id = sha256(founder_puddle_pubkey)` rendered as 64-character lowercase hex. Project URLs take the form:
@@ -378,10 +380,6 @@ vigo swarm gitmirror project re-found <project_id> [--force]
 - Persists `project.json` + `tokens.json` under `~/.vigo-gitmirror/<new_project_id>/`. The new members list starts as `[this_fleet]`; surviving members from the old project must be re-invited via a follow-up `project re-invite-all <new_project_id>`.
 - When run as root **and** the old bare repo exists at `/var/lib/vigo/swarm/gitmirror/projects/<old_project_id>.git`, runs `git -C <new_repo> fetch <old_repo> +refs/*:refs/*` to copy every ref + the objects backing them into the new bare repo. Non-root invocations (or envoys that don't hold the old bare repo) print a note and rebuild only the local auth surface; another root member with the old bare repo can complete the migration later.
 - Sets `project.json::tombstoned_at` on the OLD project. The bare repo + URL stay on disk as an archive, but the helper daemon refuses git operations and CLI verbs (`invite`, `revoke`, `re-invite-all`) skip the project. Drop the archive entirely via `project leave <old_project_id>` once the new project is healthy.
-
-## Hidden verbs
-
-`_apply-blacklist` is dispatched by the server via TaskDispatch when an envoy newly matches `swarm.gitmirror.blacklist`. It wipes every locally-held bare repo under `/var/lib/vigo/swarm/gitmirror/projects/`. Idempotent. Not advertised in `--help`.
 
 ## See also
 

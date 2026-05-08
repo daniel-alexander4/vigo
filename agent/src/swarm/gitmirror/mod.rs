@@ -516,9 +516,11 @@ mod tests {
 ///
 /// Thin wrapper over [`crate::swarm::gates::substrate_active`] —
 /// applies the global `swarm_enabled` AND `swarm_gitmirror_enabled`
-/// AND NOT `gitmirror_blacklisted` rule from the cached
-/// `PolicyBundle.vars_json`. See `crate::swarm::gates` for the
-/// fail-open semantics and recognised value shapes.
+/// rule from the cached `PolicyBundle.vars_json`. The server has
+/// already resolved `swarm.gitmirror.enabled` pattern matching for
+/// this envoy's hostname; the agent only sees the resolved bools.
+/// See `crate::swarm::gates` for the fail-open semantics and
+/// recognised value shapes.
 pub fn gitmirror_enabled_for_envoy(state_store: Option<&crate::state::StateStore>) -> bool {
     crate::swarm::gates::substrate_active(
         crate::swarm::gates::Substrate::Gitmirror,

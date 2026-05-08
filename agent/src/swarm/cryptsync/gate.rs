@@ -3,25 +3,25 @@
 
 //! Runtime on/off switch for the cryptsync subsystem.
 //!
-//! Cryptsync is **default-on per-envoy**: every enrolled envoy
-//! participates unless one of three signals from server.yaml flips it
-//! off — `swarm.enabled: false`, `swarm.cryptsync.enabled: false`, or
-//! the envoy's hostname matches a glob in `swarm.cryptsync.blacklist`.
-//! All three arrive on every check-in inside `PolicyBundle.vars_json`
-//! (`swarm_enabled`, `swarm_cryptsync_enabled`, `cryptsync_blacklisted`).
-//! The agent re-reads the cached bundle and drives this gate.
+//! Cryptsync is gated per-envoy via two server.yaml pattern lists
+//! (0.41.0+, ADR-020): the substrate-level `swarm.enabled` AND the
+//! per-subsystem `swarm.puddle.enabled` (cryptsync derives from
+//! puddle — single source of truth, no separate cryptsync section).
+//! Both arrive on every check-in inside `PolicyBundle.vars_json`
+//! as `swarm_enabled` and `swarm_puddle_enabled`; the agent re-reads
+//! the cached bundle and drives this gate.
 //! [`crate::swarm::gates::substrate_active`] computes the
-//! global-AND-per-substrate-AND-NOT-blacklisted product.
+//! global-AND-per-substrate product.
 //!
 //! Every subsystem consumer (multicast announcer, peer push/pull
 //! handlers, reactor, leaves replier) consults [`Gate::enabled`] at
 //! its own natural sample point. When the gate is off the announcer
 //! stops broadcasting, the push handler returns 403, and the reactor
 //! skips its work on every tick. Identity material under
-//! `~user/.cryptsync/` is left in place — `enabled: false` is a
-//! pause, not an evict. The destructive path is server-dispatched
-//! `_apply-blacklist` triggered by adding a hostname to the
-//! blacklist (handled separately).
+//! `~user/.cryptsync/` is left in place — gate flips are pause/resume,
+//! not evict. The destructive path moved to the usercrate `puddle`
+//! flag in 0.41.0 (commit 3); removing the flag scrubs the user's
+//! cryptsync state via the user executor.
 //!
 //! A `set` call returns the previous value so callers can detect
 //! OFF→ON and ON→OFF transitions for transition-only logging.

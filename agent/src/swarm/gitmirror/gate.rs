@@ -3,13 +3,15 @@
 
 //! Runtime on/off switch for the gitmirror subsystem.
 //!
-//! Gitmirror is **default-on per-envoy**: every enrolled envoy participates
-//! unless its hostname matches a glob in `swarm.gitmirror.blacklist` in
-//! server.yaml. The server emits `gitmirror_blacklisted: true|false` in
-//! `PolicyBundle.vars_json` on every check-in; the agent re-reads the
-//! cached bundle and drives this gate. Every subsystem component that
-//! cares about the flag (discovery announcer, peer push handler,
-//! reactor) consults [`Gate::enabled`] at its own natural sample point.
+//! Gitmirror is gated per-envoy via two server.yaml pattern lists
+//! (0.41.0+): the substrate-level `swarm.enabled` AND the per-subsystem
+//! `swarm.gitmirror.enabled`. The server evaluates the patterns against
+//! this envoy's hostname and emits `swarm_enabled` and
+//! `swarm_gitmirror_enabled` in `PolicyBundle.vars_json` on every
+//! check-in; the agent re-reads the cached bundle and drives this gate.
+//! Every subsystem component that cares about the flag (discovery
+//! announcer, peer push handler, reactor) consults [`Gate::enabled`]
+//! at its own natural sample point.
 //!
 //! All the gitmirror data structures (`PeerTable`, `PendingClaims`,
 //! `ClaimsHandle`, `GitmirrorServerCtx`) are constructed unconditionally

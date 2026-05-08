@@ -136,12 +136,18 @@ If files aren't syncing between two machines:
 
 ## Operability
 
-Filesync's kill switches are defined fleet-wide in `swarm.filesync:` (server.yaml). The two knobs:
+Filesync is gated per-envoy via the `swarm.filesync.enabled` pattern list in server.yaml (0.41.0+). Both `swarm.enabled` AND `swarm.filesync.enabled` must allow the host. There is no usercrate flag — per-user opt-in is via the user creating `~/filesync/` on their own machine.
 
-- **`enabled: false`** halts the filesync announcer (multicast `224.0.0.43:1532`), the peer listener, and the push handler on every envoy (gate wired through `Substrate::Filesync` in `agent/src/swarm/gates.rs`). User content under `~user/filesync/` is preserved — re-enabling resumes operation untouched.
-- **`blacklist: [pat, …]`** is **gate-only by design**. A blacklisted host stops announcing and stops responding to peer requests, but its `~user/filesync/` directory is **not** scrubbed. Filesync content is plaintext user data, and a config typo wiping someone's home directory is a far bigger blast radius than the cryptsync / gitmirror destructive-blacklist semantic. Operators who want to wipe a blacklisted host's filesync content do so manually.
+```yaml
+swarm:
+  enabled: ["*"]
+  filesync:
+    enabled: ["-rasp1", "*"]   # everything except rasp1
+```
 
-Both changes record tamper-evident audit-chain entries (`swarm.filesync.enabled`, `swarm.filesync.blacklist`) under `actor=config.reload` at publish time. See [swarm Operability](swarm.md#operability--kill-switches) for the full kill-switch table.
+A host that doesn't match the pattern list stops announcing on multicast (`224.0.0.43:1532`), stops responding to peer requests, and idles its push handler — gate wired through `Substrate::Filesync` in `agent/src/swarm/gates.rs`. User content under `~user/filesync/` is preserved across pattern flips (gate-only by design — filesync content is plaintext user data; destructive removal is always a manual operator action).
+
+Pattern-list changes record tamper-evident audit-chain entries (`swarm.filesync.enabled`) under `actor=config.reload` at publish time. See [swarm Operability](swarm.md#operability--pattern-list-authorization) for the full picture.
 
 ## Related
 

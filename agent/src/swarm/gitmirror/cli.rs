@@ -57,29 +57,62 @@ pub fn run(args: Vec<String>) -> Result<()> {
             print_usage();
             Ok(())
         }
-        "project" => dispatch_project(&args[1..]),
+        "project" => with_gitmirror_authz(|| dispatch_project(&args[1..])),
         // Top-level envoy posture — parallel to `vigo swarm cryptsync
         // status`. Reads `<gitmirror_dir>/state.json` + `traits.json`
         // and surfaces the helper-daemon socket path. Distinct from
         // `vigo swarm gitmirror project status <id>`, which shows one
         // project's local state.
-        "status" => cmd_status_top(&args[1..]),
+        "status" => with_gitmirror_authz(|| cmd_status_top(&args[1..])),
         // Power-user wipe of local gitmirror state on this envoy.
         // Distinct from per-project `leave --purge` (one project's
         // bare repo) and `_apply-blacklist` (server-driven). User
         // mode wipes `~/.vigo-gitmirror/` for the caller; root mode
         // also wipes the envoy-wide root-owned state.
-        "purge" => cmd_purge(&args[1..]),
-        // Hidden verb invoked by the server via TaskDispatch when an
-        // envoy newly matches `swarm.gitmirror.blacklist`. Wipes every
-        // locally-held project bare repo and the `projects/` directory.
-        // Idempotent — re-runs are no-ops.
-        "_apply-blacklist" => cmd_apply_blacklist(&args[1..]),
+        "purge" => with_gitmirror_authz(|| cmd_purge(&args[1..])),
         other => bail!(
             "unknown subcommand `vigo swarm gitmirror {}`. \
              Run `vigo swarm gitmirror --help` for usage.",
             other
         ),
+    }
+}
+
+/// Refuse early if the invoking user lacks `gitmirror: true` in their
+/// usercrate (0.41.0+). The gate consults the daemon-canonical cache
+/// at `/var/lib/vigo/usercrate-policy/<user>.json` written by the
+/// user executor on each reconcile pass — no server round-trip
+/// required. Skipped for root: an admin running gitmirror verbs
+/// against the envoy-wide root-owned state isn't acting as a
+/// usercrate-managed user.
+fn with_gitmirror_authz<F, T>(f: F) -> Result<T>
+where
+    F: FnOnce() -> Result<T>,
+{
+    let caller = resolve_caller()?;
+    if !caller.is_root {
+        let username = invoking_username()?;
+        crate::swarm::policy::require_gitmirror(&username)?;
+    }
+    f()
+}
+
+/// Resolve the invoking user's name. Used only for the authorization
+/// gate; the rest of the gitmirror CLI works in terms of the caller's
+/// home dir resolved from `getuid()`.
+fn invoking_username() -> Result<String> {
+    #[cfg(unix)]
+    {
+        use nix::unistd::{Uid, User};
+        let user = User::from_uid(Uid::current())
+            .ok()
+            .flatten()
+            .context("cannot resolve current Unix user")?;
+        Ok(user.name)
+    }
+    #[cfg(not(unix))]
+    {
+        bail!("gitmirror CLI is Unix-only")
     }
 }
 
@@ -2414,48 +2447,6 @@ fn scan_pending_sentinels(user_dot: &Path) -> usize {
         }
     }
     count
-}
-
-// ============================================================
-// _apply-blacklist (hidden agent verb)
-// ============================================================
-
-fn cmd_apply_blacklist(_args: &[String]) -> Result<()> {
-    // Wipe every locally-held bare repo. In step 3 the helper daemon
-    // hasn't shipped yet, so projects/<project_id>.git directories
-    // typically do not exist — the verb is a no-op in practice but
-    // the framework needs to be in place for the server's TaskDispatch
-    // path to keep working without errors.
-    let base = crate::platform::paths::default_gitmirror_dir();
-    let projects = projects_dir(&base);
-    if !projects.exists() {
-        println!("gitmirror: no projects directory; nothing to evict");
-        return Ok(());
-    }
-    let mut removed = 0usize;
-    let mut failed = 0usize;
-    let entries = match fs::read_dir(&projects) {
-        Ok(e) => e,
-        Err(e) => bail!("read {}: {}", projects.display(), e),
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        match fs::remove_dir_all(&path) {
-            Ok(()) => removed += 1,
-            Err(e) => {
-                eprintln!("failed to remove {}: {}", path.display(), e);
-                failed += 1;
-            }
-        }
-    }
-    println!(
-        "gitmirror: blacklist eviction complete — {} project(s) removed, {} failed",
-        removed, failed
-    );
-    if failed > 0 {
-        std::process::exit(1);
-    }
-    Ok(())
 }
 
 // ============================================================

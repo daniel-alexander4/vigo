@@ -13,6 +13,7 @@ Most verbs run as the invoking user against `~/.vigo-puddle/`. The one exception
 
 ## Permission model
 
+- **Usercrate authorization (0.41.0+).** Every verb on this page refuses unless the invoking user has `puddle: true` set on the user resource in their usercrate. The agent's user executor writes the resolved flags to `/var/lib/vigo/usercrate-policy/<user>.json` on each reconcile pass; the CLI reads it as a precondition. Refusal points at the cache path so the operator knows whether to enroll the user in a usercrate or wait for the next check-in. Both layers — envoy-level (`swarm.puddle.enabled` pattern list in server.yaml) and user-level (this flag) — must say yes.
 - All state is the user's. Identity material (`identity.wrapped`, `identity.salt`) is `0600`; the public key (`identity.pub`) is `0644`. The dot dir itself is `0700`.
 - The session helper enforces `SO_PEERCRED` (Linux) / `LOCAL_PEEREID` (macOS) on its socket so only the same uid can issue SIGN / STATUS / LOCK.
 - The pair-claim HTTP handler trusts callers reaching the swarm peer port (mTLS — same Vigo CA every agent already trusts) **and** requires a matching pairing code that the user just dictated. Either alone is insufficient.

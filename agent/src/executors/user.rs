@@ -14,6 +14,10 @@ pub struct UserExecutor {
     pub passwd_path: String,
     pub shadow_path: String,
     pub sudoers_dir: String,
+    /// Directory for the per-user usercrate-policy cache (0.41.0+).
+    /// Defaults to [`crate::swarm::policy::POLICY_DIR`]; tests
+    /// override to a tempdir.
+    pub policy_dir: String,
 }
 
 struct PasswdEntry {
@@ -31,6 +35,7 @@ impl UserExecutor {
             sudoers_dir: "/etc/sudoers.d".into(),
             passwd_path: "/etc/passwd".into(),
             shadow_path: "/etc/shadow".into(),
+            policy_dir: crate::swarm::policy::POLICY_DIR.into(),
         }
     }
 
@@ -369,10 +374,188 @@ impl UserExecutor {
         }
         Err("no available system UID in range 100-999".into())
     }
+
+    /// Reconcile the per-user usercrate-policy cache (0.41.0+) and
+    /// drive the destructive scrub when an authorization flag flips
+    /// from true → false. Called at the end of `execute` for every
+    /// reconcile pass.
+    ///
+    /// Returns a list of operator-facing error strings; the caller
+    /// folds them into `ResourceResult.error` so a scrub failure
+    /// surfaces in the run report. The reconcile itself is best-effort
+    /// — a failure here never blocks the user-resource result, so a
+    /// transient issue (root-owned dir already half-scrubbed, missing
+    /// home for a partly-deprovisioned user, etc.) doesn't poison
+    /// the rest of the convergence pass.
+    fn reconcile_swarm_policy(
+        &self,
+        username: &str,
+        state: &str,
+        params: &HashMap<String, String>,
+    ) -> Vec<String> {
+        let mut errors = Vec::new();
+        let policy_dir = std::path::Path::new(&self.policy_dir);
+        if state == "absent" {
+            // The user is going away; drop the policy cache entry. The
+            // `userdel -r` above already nuked the user's home, so
+            // there's nothing left to scrub.
+            if let Err(e) = crate::swarm::policy::remove_user_policy_at(policy_dir, username) {
+                errors.push(format!("usercrate-policy remove: {e:#}"));
+            }
+            return errors;
+        }
+        if state != "present" {
+            return errors;
+        }
+
+        let new_policy = crate::swarm::policy::UserPolicy {
+            puddle: parse_bool_flag(params.get("puddle")),
+            gitmirror: parse_bool_flag(params.get("gitmirror")),
+        };
+        // Read the previously-cached policy so we can detect flag
+        // flips. Missing-or-unreadable cache is treated as both-false:
+        // a fresh user gets no scrub on first reconcile, regardless
+        // of which flags they currently carry.
+        let old_policy = crate::swarm::policy::read_user_policy_at(policy_dir, username)
+            .unwrap_or_default();
+
+        if old_policy.puddle && !new_policy.puddle {
+            errors.extend(self.scrub_swarm_state(username, ScrubScope::PuddleAndCryptsync));
+        }
+        if old_policy.gitmirror && !new_policy.gitmirror {
+            errors.extend(self.scrub_swarm_state(username, ScrubScope::Gitmirror));
+        }
+
+        if let Err(e) =
+            crate::swarm::policy::write_user_policy_at(policy_dir, username, &new_policy)
+        {
+            errors.push(format!("usercrate-policy write: {e:#}"));
+        }
+        errors
+    }
+
+    /// Run the destructive scrub triggered by a usercrate flag going
+    /// from true → false. Best-effort: every step is wrapped so a
+    /// single failure doesn't abort the rest. Failures collect into
+    /// the returned vec and surface in the run report.
+    ///
+    /// Cryptsync LEAVE: queues a `~/.cryptsync/leave.pending` sentinel
+    /// for the daemon's reactor to pick up on its next tick. The
+    /// daemon signs the envelope under the user's identity and fans
+    /// it out to live peers — root-here doesn't have to know the key.
+    /// Offline peers age the envoy out via heartbeat absence
+    /// (puddle_members + per-peer silent-for, 0.39.12).
+    fn scrub_swarm_state(&self, username: &str, scope: ScrubScope) -> Vec<String> {
+        let mut errors = Vec::new();
+        let home = match crate::swarm::cryptsync::home_for_user_pub(username) {
+            Some(h) => h,
+            None => {
+                errors.push(format!(
+                    "swarm scrub: cannot resolve home for user {username} \
+                     (skipping puddle/gitmirror cleanup)"
+                ));
+                return errors;
+            }
+        };
+
+        let scrub_puddle = matches!(scope, ScrubScope::PuddleAndCryptsync);
+        let scrub_gitmirror = matches!(scope, ScrubScope::Gitmirror);
+
+        if scrub_puddle {
+            // Queue cryptsync LEAVE for live peers. Skip if the user
+            // never enrolled (no identity.age means no LEAVE to sign).
+            let cs_identity = home.join(".cryptsync").join("identity.age");
+            if cs_identity.exists() {
+                if let Err(e) = crate::swarm::cryptsync::cli::enqueue_leave(
+                    &home,
+                    username,
+                    /* keep_identity */ false,
+                    /* purge_content */ true,
+                ) {
+                    errors.push(format!(
+                        "cryptsync LEAVE enqueue for {username}: {e:#}"
+                    ));
+                }
+            }
+            for dir in [".vigo-puddle", ".cryptsync", "cryptsync", ".vigo-gitmirror"] {
+                let path = home.join(dir);
+                if path.exists() {
+                    if let Err(e) = std::fs::remove_dir_all(&path) {
+                        errors.push(format!(
+                            "removing {} for {username}: {e}",
+                            path.display()
+                        ));
+                    }
+                }
+            }
+        }
+
+        if scrub_gitmirror {
+            let gm = home.join(".vigo-gitmirror");
+            if gm.exists() {
+                if let Err(e) = std::fs::remove_dir_all(&gm) {
+                    errors.push(format!(
+                        "removing {} for {username}: {e}",
+                        gm.display()
+                    ));
+                }
+            }
+        }
+
+        errors
+    }
+}
+
+/// Scope of a swarm-state scrub triggered by a usercrate flag flip.
+///
+/// `PuddleAndCryptsync` covers the heavier removal: puddle keypair,
+/// cryptsync identity + ciphertext, and the per-user gitmirror state
+/// dir (gitmirror projects are puddle-anchored — losing puddle means
+/// losing every project this user was a member of).
+///
+/// `Gitmirror` covers only `~/.vigo-gitmirror/`. A user who keeps
+/// `puddle: true` but loses `gitmirror: true` retains their cryptsync
+/// state and puddle identity.
+enum ScrubScope {
+    PuddleAndCryptsync,
+    Gitmirror,
+}
+
+/// Parse a boolean usercrate flag. Accepts `"true"` / `"false"`;
+/// missing or any other shape decodes to `false` (default-deny).
+fn parse_bool_flag(v: Option<&String>) -> bool {
+    matches!(v.map(String::as_str), Some("true"))
 }
 
 impl Executor for UserExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
+        let mut result = self.execute_inner(params, dry_run);
+        // 0.41.0 usercrate-policy reconcile. Always runs after the
+        // user-resource pass, including the no-change and dry-run
+        // early-returns inside `execute_inner` (so the cache stays
+        // current even when the user reconciles to "no diff").
+        // dry_run still skips the destructive scrub + on-disk write
+        // — there's nothing to flip if we're not changing state.
+        if !dry_run {
+            let name = params.get("username").map(|s| s.as_str()).unwrap_or("");
+            let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
+            if !name.is_empty() {
+                let scrub_errors = self.reconcile_swarm_policy(name, state, params);
+                if !scrub_errors.is_empty() {
+                    let joined = scrub_errors.join("; ");
+                    result.error = Some(match result.error.take() {
+                        Some(prev) => format!("{prev}; {joined}"),
+                        None => joined,
+                    });
+                }
+            }
+        }
+        result
+    }
+}
+
+impl UserExecutor {
+    fn execute_inner(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
         let name = params
             .get("username")
@@ -979,6 +1162,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(&make_params(&[]), false);
@@ -1006,6 +1190,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1058,6 +1243,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1104,6 +1290,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1142,6 +1329,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1179,6 +1367,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1212,6 +1401,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1243,6 +1433,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1290,6 +1481,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         // Explicit manage_home: "true" (also the default).
@@ -1334,6 +1526,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1370,6 +1563,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1415,6 +1609,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1451,6 +1646,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1509,6 +1705,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         // Desired groups: docker only. wheel should be purged.
@@ -1589,6 +1786,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: sudoers_dir.to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1673,6 +1871,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: sudoers_dir.to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1740,6 +1939,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: sudoers_dir.to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1792,6 +1992,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1823,6 +2024,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: sudoers.to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1852,6 +2054,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: sudoers.to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1879,6 +2082,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: dir.path().join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1908,6 +2112,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: sudoers.to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1937,6 +2142,7 @@ mod tests {
             passwd_path: passwd.to_str().unwrap().to_string(),
             shadow_path: shadow.to_str().unwrap().to_string(),
             sudoers_dir: sudoers.to_str().unwrap().to_string(),
+            policy_dir: dir.path().join("policy").to_str().unwrap().to_string(),
         };
 
         let result = exec.execute(
@@ -1947,5 +2153,121 @@ mod tests {
         assert!(result.changed);
         assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
         assert!(!sudoers.join("deploy").exists());
+    }
+
+    // ---- 0.41.0 usercrate-policy reconcile -----------------------
+
+    /// Build a UserExecutor whose passwd/shadow/sudoers/policy paths
+    /// all live inside `dir`. Tests of the policy reconcile use this
+    /// to keep `policy_dir` under tempdir control.
+    fn user_exec_with_policy_dir(
+        runner: MockRunner,
+        dir: &std::path::Path,
+    ) -> (UserExecutor, std::path::PathBuf) {
+        let passwd = dir.join("passwd");
+        let shadow = dir.join("shadow");
+        std::fs::write(&passwd, "root:x:0:0:root:/root:/bin/bash\ndan:x:1001:1001:Dan:/home/dan:/bin/bash\n").unwrap();
+        std::fs::write(&shadow, "root:*:19000:0:99999:7:::\ndan:!:19000:0:99999:7:::\n").unwrap();
+        let policy_dir = dir.join("policy");
+        let exec = UserExecutor {
+            runner: Box::new(runner),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: dir.join("sudoers.d").to_str().unwrap().to_string(),
+            policy_dir: policy_dir.to_str().unwrap().to_string(),
+        };
+        (exec, policy_dir)
+    }
+
+    #[test]
+    fn reconcile_writes_policy_cache_for_present_user() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mock = MockRunner::new(vec![
+            ok_output("dan"),
+            ok_output("root:x:0:\ndan:x:1001:\n"),
+        ]);
+        let (exec, policy_dir) = user_exec_with_policy_dir(mock, dir.path());
+        let result = exec.execute(
+            &make_params(&[
+                ("username", "dan"),
+                ("state", "present"),
+                ("home", "/home/dan"),
+                ("puddle", "true"),
+                ("gitmirror", "false"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        let cached = crate::swarm::policy::read_user_policy_at(&policy_dir, "dan").unwrap();
+        assert!(cached.puddle);
+        assert!(!cached.gitmirror);
+    }
+
+    #[test]
+    fn reconcile_omits_unset_flags_as_false() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mock = MockRunner::new(vec![
+            ok_output("dan"),
+            ok_output("root:x:0:\ndan:x:1001:\n"),
+        ]);
+        let (exec, policy_dir) = user_exec_with_policy_dir(mock, dir.path());
+        // No `puddle:` or `gitmirror:` keys → both default false.
+        exec.execute(
+            &make_params(&[
+                ("username", "dan"),
+                ("state", "present"),
+                ("home", "/home/dan"),
+            ]),
+            false,
+        );
+        let cached = crate::swarm::policy::read_user_policy_at(&policy_dir, "dan").unwrap();
+        assert!(!cached.puddle);
+        assert!(!cached.gitmirror);
+    }
+
+    #[test]
+    fn reconcile_absent_state_removes_cache() {
+        let dir = tempfile::TempDir::new().unwrap();
+        // Pre-seed a cache file.
+        let policy_dir = dir.path().join("policy");
+        crate::swarm::policy::write_user_policy_at(
+            &policy_dir,
+            "ghost",
+            &crate::swarm::policy::UserPolicy { puddle: true, gitmirror: true },
+        )
+        .unwrap();
+        assert!(policy_dir.join("ghost.json").exists());
+
+        let mock = MockRunner::new(vec![ok_output("")]);
+        let (exec, _) = user_exec_with_policy_dir(mock, dir.path());
+        // ghost doesn't exist in passwd → state: absent is a no-op
+        // for userdel, but the policy reconcile still scrubs the
+        // orphaned cache (the wrapper runs after the inner whether
+        // or not anything changed).
+        exec.execute(
+            &make_params(&[("username", "ghost"), ("state", "absent")]),
+            false,
+        );
+        assert!(
+            !policy_dir.join("ghost.json").exists(),
+            "absent state must drop the policy cache file"
+        );
+    }
+
+    #[test]
+    fn reconcile_dry_run_does_not_write_cache() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let mock = MockRunner::empty();
+        let (exec, policy_dir) = user_exec_with_policy_dir(mock, dir.path());
+        exec.execute(
+            &make_params(&[
+                ("username", "dan"),
+                ("state", "present"),
+                ("home", "/home/dan"),
+                ("puddle", "true"),
+            ]),
+            true, // dry_run
+        );
+        assert!(!policy_dir.join("dan.json").exists());
     }
 }

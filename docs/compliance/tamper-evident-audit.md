@@ -41,10 +41,9 @@ Because each hash incorporates the previous entry's hash, modifying or deleting 
 | `envoy.revoke` | Admin revokes an agent | "web1.example.com revoked" |
 | `task.dispatch` | Ad-hoc task dispatched | "uptime on *.web.*" |
 | `peer.promote` | Peer promoted to primary | "peer2 promoted" |
-| `swarm.enabled` | Fleet-wide swarm kill switch flipped at config publish | "true → false" |
-| `swarm.<sub>.enabled` | Per-substrate (`payload`/`gitmirror`/`cryptsync`/`filesync`) `enabled` flipped at config publish | "true → false" |
-| `swarm.<sub>.blacklist` | Per-substrate blacklist patterns added or removed at config publish | "added: raspberrypi; removed: \*.test.example.com" |
-| `swarm.payload.denied` | Admin attempted `POST /api/v1/swarm/payload/distribute` while substrate disabled | "payload substrate is disabled (swarm.payload.enabled: false)" |
+| `swarm.enabled` | Substrate-level pattern list changed at config publish | "added: \*; removed: -rasp1" |
+| `swarm.<sub>.enabled` | Per-subsystem (`puddle`/`gitmirror`/`filesync`/`payload`) pattern list changed at config publish | "added: annlap, plex; removed: \*" |
+| `swarm.payload.denied` | Admin attempted `POST /api/v1/swarm/payload/distribute` while subsystem disabled | "payload subsystem is disabled (swarm.payload.enabled: \[\])" |
 
 The audit trail is always on. There is no configuration to disable it.
 

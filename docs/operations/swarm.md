@@ -5,14 +5,20 @@ How to configure, monitor, and troubleshoot the envoy P2P substrate and the four
 
 ## Enabling Swarm
 
-Add the `swarm:` section to `server.yaml`:
+Add the `swarm:` section to `server.yaml`. Each subsystem is gated per-envoy by a hostname pattern list (0.41.0+):
 
 ```yaml
 swarm:
-  enabled: true
+  enabled: ["*"]                     # which envoys run the substrate
   port: 1531                         # agent peer server port (default)
   max_bandwidth_percent: 50          # agent download throttle (default)
+  puddle:    { enabled: ["*"] }      # cryptsync derives from this
+  gitmirror: { enabled: ["*"] }
+  filesync:  { enabled: ["*"] }
+  payload:   { enabled: ["*"] }
 ```
+
+Pattern semantics: first-match-wins, `-` prefix denies, default-deny on no match. Empty list disables a subsystem fleet-wide. See [Server Configuration](../getting-started/server-config.md#swarm) for the full table.
 
 Restart the server. Agents automatically start their HTTPS peer server on port 1531 when they receive swarm assignments.
 

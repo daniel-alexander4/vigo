@@ -256,12 +256,22 @@ When a LEAVE lands on a peer, the agent drops `~<user>/.cryptsync/reencrypt.pend
 
 ## Operability
 
-Cryptsync's kill switches are defined fleet-wide in `swarm.cryptsync:` (server.yaml). The two knobs:
+Cryptsync derives its envoy-level authorization from `swarm.puddle.enabled` (ADR-020 + 0.41.0). There is no `swarm.cryptsync` section. A host allowed by the puddle pattern list can hold cryptsync ciphertext for its locally-enrolled members; a host denied there cannot use cryptsync at all.
 
-- **`enabled: false`** halts the cryptsync announcer, listener, and push handler on every envoy (gates wired through `Substrate::Cryptsync` in `agent/src/swarm/gates.rs`). Already-wrapped identity material under `~user/.cryptsync/` and ciphertext under `~user/cryptsync/` are preserved — re-enabling resumes operation without re-enrollment.
-- **`blacklist: [pat, …]`** is destructive. Adding a host pattern dispatches `vigo swarm cryptsync _apply-blacklist --hostname <h>` to the entire fleet: the blacklisted host scrubs its `~user/.cryptsync/{identity.age,identity.salt,recipients.txt,config.yaml}` for every locally-enrolled user, and every other envoy drops the blacklisted host's pubkey from each user's peer table + recipient list. The destructive semantic mirrors a forced LEAVE — peers cannot fan out a signed envelope on the gone host's behalf, so admin authority via the mTLS control plane substitutes.
+```yaml
+swarm:
+  enabled: ["*"]
+  puddle:
+    enabled: ["annlap", "plex", "girlslaptop"]   # cryptsync follows
+```
 
-Both changes record tamper-evident audit-chain entries (`swarm.cryptsync.enabled`, `swarm.cryptsync.blacklist`) under `actor=config.reload` at publish time. See [swarm Operability](swarm.md#operability--kill-switches) for the full kill-switch table.
+Both `swarm.enabled` AND `swarm.puddle.enabled` must allow the host. The agent's `Substrate::Cryptsync` gate (in `agent/src/swarm/gates.rs`) consults the resolved `swarm_puddle_enabled` bool from `PolicyBundle.vars_json` — single source of truth, no separate cryptsync key.
+
+When a host falls out of the pattern list, the announcer / listener / push handler all idle on the next check-in. Already-wrapped identity material under `~user/.cryptsync/` and ciphertext under `~user/cryptsync/` are preserved — gate flips are pause/resume, not evict.
+
+The destructive lever moved to the **usercrate `puddle: bool` flag** (0.41.0). Removing `puddle: true` from a usercrate triggers a scrub on the next reconcile pass: queue a cryptsync LEAVE sentinel for fan-out, then wipe `~/.vigo-puddle/`, `~/.cryptsync/`, `~/cryptsync/`, and `~/.vigo-gitmirror/` for that user. See [swarm Operability](swarm.md#operability--pattern-list-authorization) for the full picture.
+
+Pattern-list changes record tamper-evident audit-chain entries (`swarm.puddle.enabled`) under `actor=config.reload` at publish time.
 
 ## Threat Model
 

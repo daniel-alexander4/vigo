@@ -716,8 +716,8 @@ async fn deliver_pending(client: &mut Client, store: &StateStore) {
     }
 }
 
-/// Re-read the gitmirror matchfile var from the freshly-accepted bundle
-/// and propagate the result to the shared gate. Logs only on
+/// Re-read the gitmirror authorization vars from the freshly-accepted
+/// bundle and propagate the result to the shared gate. Logs only on
 /// transitions so the steady state is quiet.
 fn sync_gitmirror_gate(
     gate: Option<&crate::swarm::gitmirror::Gate>,
@@ -728,9 +728,9 @@ fn sync_gitmirror_gate(
     let prev = gate.set(new_state);
     if prev != new_state {
         if new_state {
-            info!("gitmirror: enabled (envoy removed from swarm.gitmirror.blacklist; live flip, no restart required)");
+            info!("gitmirror: enabled (this envoy now matches swarm.gitmirror.enabled; live flip, no restart required)");
         } else {
-            info!("gitmirror: disabled (envoy added to swarm.gitmirror.blacklist; live flip, reactor will idle)");
+            info!("gitmirror: disabled (this envoy no longer matches swarm.gitmirror.enabled; live flip, reactor will idle)");
         }
     }
 }

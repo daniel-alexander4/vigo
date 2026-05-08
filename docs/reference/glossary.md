@@ -127,7 +127,7 @@ The primary onboarding flow for [puddle](#puddle) and (by ADR-015) the unified g
 
 ## gitmirror
 
-Personal disaster-recovery source-control distribution on the [swarm](#swarm) substrate. The agent scans `~/gitmirror/<project>/` for repositories with a `.gitmirror.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P on top of swarm — no server involvement in selection or delivery. Default-on per-envoy; operators deny specific hosts via hostname globs in `swarm.gitmirror.blacklist` in server.yaml. See [Gitmirror](../engineering/subsystems/gitmirror.md).
+Personal disaster-recovery source-control distribution on the [swarm](#swarm) substrate. The agent scans `~/gitmirror/<project>/` for repositories with a `.gitmirror.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P on top of swarm — no server involvement in selection or delivery. Default-deny per-envoy in 0.41.0+; operators authorize hosts via the `swarm.gitmirror.enabled` pattern list in server.yaml (first-match-wins, `-` prefix denies). Per-user opt-in is gated by the `gitmirror: true` flag on the user resource in the usercrate. See [Gitmirror](../engineering/subsystems/gitmirror.md).
 
 ## filesync
 

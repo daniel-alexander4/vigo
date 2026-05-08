@@ -174,24 +174,60 @@ All peer-to-peer traffic uses the same mTLS certificates as gRPC communication. 
 
 Blob integrity is verified by SHA256 hash after download — if the hash doesn't match, the blob is discarded and re-downloaded.
 
-## Operability — kill switches
+## Operability — pattern-list authorization
 
-Five operator-facing knobs in `swarm:` (server.yaml) gate the substrate end-to-end. All flow to agents via `injectServerVars` on every check-in, so a `vigocli config publish` propagates within one cycle without restarting anything.
+In 0.41.0 the substrate switched from a fleet-wide enabled-bool plus per-substrate blacklists to a **two-layer hostname pattern list per subsystem**. Every entry in `swarm:` (server.yaml) is a list with first-match-wins, `-` prefix denies, default-deny on no match — same semantics as Vigo's existing matchfile patterns (ADR-002).
+
+```yaml
+swarm:
+  enabled: ["*"]                          # substrate runs on these hosts
+  puddle:    { enabled: ["*"] }           # cryptsync derives from this list
+  gitmirror: { enabled: ["annlap", "plex", "girlslaptop"] }
+  filesync:  { enabled: ["*"] }
+  payload:   { enabled: ["*"] }
+```
+
+The server evaluates patterns against each agent's hostname and emits the resolved bools in `PolicyBundle.vars_json` on every check-in (`swarm_enabled`, `swarm_puddle_enabled`, `swarm_gitmirror_enabled`, `swarm_filesync_enabled`, `swarm_payload_enabled`). Agents never see the patterns — they only see their own resolved gate. A `vigocli config publish` propagates within one check-in cycle without restarting anything.
+
+**Two layers.** Both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for the subsystem to be active there. Empty list at either layer disables the subsystem on that host.
+
+**Cryptsync derives from puddle.** ADR-020. There is no `swarm.cryptsync` section. A host allowed in `swarm.puddle.enabled` can hold cryptsync ciphertext for its locally-enrolled members; a host denied there cannot use cryptsync at all. Single source of truth.
+
+**No more blacklists.** The destructive-blacklist semantic retired in 0.41.0 (one-tiny-typo-wipes-fleet-state was a footgun). Negative patterns subsume the gate-only use case (`["-rasp1", "*"]` excludes a single host; the rest of the fleet is allowed). Destructive scrub of per-user state moved to the usercrate `puddle: bool` and `gitmirror: bool` flags — see [Usercrate authorization](#usercrate-authorization) below.
 
 | Knob | Effect | Audit event |
 |------|--------|-------------|
-| `swarm.enabled: false` | Fleet-wide kill switch. Agents stop announcing, stop serving, stop fetching. The peer server stays bound on port 1531 (soft-skip pattern) but every handler refuses work; flipping back to true resumes immediately. | `swarm.enabled` |
-| `swarm.payload.enabled: false` | Halts payload reception and blocks new admin pushes. `POST /api/v1/swarm/payload/distribute` returns **403** with `audit_event=swarm.payload.denied`. Existing payloads on agents that hold them keep flowing. | `swarm.payload.enabled` (flip), `swarm.payload.denied` (per blocked admin push) |
-| `swarm.gitmirror.enabled: false` | Halts gitmirror publisher and receiver. Already-held mirrors preserved. | `swarm.gitmirror.enabled` |
-| `swarm.cryptsync.enabled: false` | Halts cryptsync announcer / listener / push handler. Identity material preserved. | `swarm.cryptsync.enabled` |
-| `swarm.filesync.enabled: false` | Halts filesync announcer / listener / push handler. `~user/filesync/` content preserved. | `swarm.filesync.enabled` |
-| `swarm.<sub>.blacklist: [pat, …]` | Per-host denylist (filepath.Match globs). Gitmirror and cryptsync trigger destructive eviction on add (host's mirrors / identity scrubbed). Payload and filesync are gate-only — already-held content preserved. | `swarm.<sub>.blacklist` (with added/removed pattern lists) |
+| `swarm.enabled: []` | Substrate-level kill switch. Agents whose hostname doesn't match stop announcing, stop serving, stop fetching across every subsystem. | `swarm.enabled` (with added/removed patterns) |
+| `swarm.puddle.enabled: []` | Halts puddle and cryptsync on hosts that don't match. Identity material under `~user/.vigo-puddle/` and `~user/.cryptsync/` is preserved (gate-only). | `swarm.puddle.enabled` |
+| `swarm.gitmirror.enabled: []` | Halts gitmirror publisher and receiver on hosts that don't match. Already-held mirrors preserved. | `swarm.gitmirror.enabled` |
+| `swarm.filesync.enabled: []` | Halts filesync announcer / listener / push handler on hosts that don't match. `~user/filesync/` content preserved. | `swarm.filesync.enabled` |
+| `swarm.payload.enabled: []` | Halts payload reception. `POST /api/v1/swarm/payload/distribute` returns **403** with `audit_event=swarm.payload.denied` when the list is empty (no envoy could possibly receive). | `swarm.payload.enabled` (flip), `swarm.payload.denied` (per blocked admin push) |
 
-**Audit-chain coverage.** Every gate flip and every per-host blacklist change at config-publish time records a tamper-evident entry under `actor=config.reload` / `source=config`. Admin-push denials record under `actor=<authenticated user>` / `source=api`. Inspect via `/api/v1/audit?event_type=swarm.*`.
+**Audit-chain coverage.** Every pattern-list change at config-publish time records a tamper-evident entry under `actor=config.reload` / `source=config`. Admin-push denials record under `actor=<authenticated user>` / `source=api`. Inspect via `/api/v1/audit?event_type=swarm.*`.
 
-**Soft-skip vs hard-stop.** Vigo uses soft-skip: data structures stay resident, the listener stays bound, but emit/serve paths consult an `Arc<AtomicBool>` and return early when the gate is off. Re-enabling resumes work without process restart and without losing in-flight transfers. The tradeoff is small memory cost while disabled in exchange for instant reversibility. Hard-stop semantics (kill listener, drop in-flight) are not implemented.
+**Soft-skip vs hard-stop.** Vigo uses soft-skip: data structures stay resident, the listener stays bound, but emit/serve paths consult an `Arc<AtomicBool>` and return early when the gate is off. Re-enabling resumes work without process restart and without losing in-flight transfers. Hard-stop semantics (kill listener, drop in-flight) are not implemented.
 
 **Payload note.** Payload rides this generic transport rather than having its own per-substrate listener, so the agent-side gate for payload is currently **forward-compat only** — the `swarm_payload_enabled` flag flows to agents but no agent code branches on it. The operator-meaningful enforcement for payload is server-side: the gate guard at `POST /api/v1/swarm/payload/distribute`. Existing in-flight payloads continue propagating across the fleet via the shared swarm transport regardless.
+
+## Usercrate authorization
+
+The envoy-level pattern lists answer "is this subsystem available on this envoy?" The user-level usercrate flags answer "which Unix users on this envoy can use it?" Both must say yes for a user to use a subsystem; default-deny on both.
+
+```yaml
+# usercrate
+resources:
+  - type: user
+    name: dan
+    home: /home/dan
+    puddle: true       # authorizes dan to run `vigo swarm puddle *`
+    gitmirror: true    # authorizes dan to run `vigo swarm gitmirror project *`
+```
+
+Both flags default to `false`. Filesync and payload have no usercrate flag — filesync gates by Unix file ownership (the user creates `~/filesync/`), payload by admin call site.
+
+**Cache.** The user executor writes the resolved flags to `/var/lib/vigo/usercrate-policy/<username>.json` on every reconcile pass (root-owned, mode 0644). Per-user CLI verbs read this cache as a precondition — no server round-trip, works offline.
+
+**Scrub-on-transition.** Removing `puddle: true` from a usercrate triggers destructive cleanup on the next reconcile: cryptsync LEAVE sentinel, then wipe of `~/.vigo-puddle/`, `~/.cryptsync/`, `~/cryptsync/`, and `~/.vigo-gitmirror/`. Removing `gitmirror: true` scrubs only `~/.vigo-gitmirror/`. The flags' removal is the destructive lever in 0.41.0 — envoy-level pattern flips are gate-only.
 
 ## Related
 

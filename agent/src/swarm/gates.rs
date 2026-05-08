@@ -4,18 +4,28 @@
 //! Shared gate-evaluation helper for the four swarm content subsystems
 //! (payload, gitmirror, cryptsync, filesync).
 //!
-//! Every subsystem reads three bits from `PolicyBundle.vars_json`,
+//! Every subsystem reads two bits from `PolicyBundle.vars_json`,
 //! cached in the LMDB state store on each accepted check-in:
 //!
 //! - `swarm_enabled` — global kill switch. False dominates everything.
 //! - `swarm_<substrate>_enabled` — per-substrate kill switch.
-//! - `<substrate>_blacklisted` — per-envoy denylist hit.
 //!
-//! "Active" means: `swarm_enabled` AND `<substrate>_enabled` AND NOT
-//! `<substrate>_blacklisted`. All three default-on (a missing or
-//! ambiguous bit is treated as "not setting OFF") so a fresh-enrolled
-//! envoy with no policy bundle yet runs every subsystem until the
-//! server says otherwise.
+//! "Active" means: `swarm_enabled` AND `swarm_<substrate>_enabled`.
+//! Both default-on (a missing or ambiguous bit is treated as "not
+//! setting OFF") so a fresh-enrolled envoy with no policy bundle yet
+//! runs every subsystem until the server says otherwise.
+//!
+//! Cryptsync's per-substrate key is `swarm_puddle_enabled` (ADR-020 +
+//! 0.41.0): cryptsync's authorization derives from puddle, single
+//! source of truth. There is no `swarm_cryptsync_enabled` key in
+//! 0.41.0+; the server emits only `swarm_puddle_enabled`, and a host
+//! denied puddle authorization cannot use cryptsync.
+//!
+//! Per-host blacklists were retired in 0.41.0 in favor of negative
+//! patterns inside the per-subsystem allow list (e.g.
+//! `swarm.gitmirror.enabled: ["-rasp1", "*"]`). The server evaluates
+//! the pattern list per envoy hostname and emits a single bool — the
+//! agent never sees the patterns themselves.
 //!
 //! Centralizing the AND here means every consumer (multicast
 //! announcer, peer-server route handler, reactor tick) goes through
@@ -46,20 +56,11 @@ impl Substrate {
         match self {
             Substrate::Payload => "swarm_payload_enabled",
             Substrate::Gitmirror => "swarm_gitmirror_enabled",
-            Substrate::Cryptsync => "swarm_cryptsync_enabled",
+            // Cryptsync derives from puddle — single source of truth
+            // per ADR-020. The server emits only `swarm_puddle_enabled`;
+            // there is no `swarm_cryptsync_enabled` in 0.41.0+.
+            Substrate::Cryptsync => "swarm_puddle_enabled",
             Substrate::Filesync => "swarm_filesync_enabled",
-        }
-    }
-
-    fn blacklist_key(self) -> Option<&'static str> {
-        match self {
-            Substrate::Payload => Some("payload_blacklisted"),
-            Substrate::Gitmirror => Some("gitmirror_blacklisted"),
-            Substrate::Cryptsync => Some("cryptsync_blacklisted"),
-            // Filesync's blacklist is gate-only — a blacklisted host
-            // stops announcing and stops responding to peer requests,
-            // but ~user/filesync/ is left alone (plaintext user data).
-            Substrate::Filesync => Some("filesync_blacklisted"),
         }
     }
 
@@ -108,35 +109,14 @@ pub fn substrate_active(substrate: Substrate, state_store: Option<&StateStore>) 
     if !is_truthy_or_absent(val.get(substrate.enabled_key())) {
         return false;
     }
-    if let Some(key) = substrate.blacklist_key() {
-        if is_truthy(val.get(key)) {
-            return false;
-        }
-    }
     true
-}
-
-/// Strict truthy check used for the `*_blacklisted` keys. Only an
-/// explicit `true`/`"true"`/`"yes"`/`"1"`/non-zero number counts as
-/// blacklisted; absence or unknown shapes are NOT blacklisted.
-fn is_truthy(v: Option<&serde_json::Value>) -> bool {
-    match v {
-        Some(serde_json::Value::Bool(b)) => *b,
-        Some(serde_json::Value::String(s)) => matches!(
-            s.to_ascii_lowercase().as_str(),
-            "true" | "yes" | "1"
-        ),
-        Some(serde_json::Value::Number(n)) => n.as_i64().map_or(false, |i| i != 0),
-        _ => false,
-    }
 }
 
 /// Permissive truthy check used for the `*_enabled` keys. Returns true
 /// for an explicit truthy value AND for absence. Returns false ONLY
 /// for an explicit falsy value (`false`, `"false"`, `"no"`, `"0"`,
-/// number zero). This is the inverse of [`is_truthy`] for the
-/// fail-open default — operators who don't set the flag get the
-/// historical "subsystem on" behavior.
+/// number zero). The fail-open default — operators who don't set
+/// the flag get the historical "subsystem on" behavior.
 fn is_truthy_or_absent(v: Option<&serde_json::Value>) -> bool {
     match v {
         None | Some(serde_json::Value::Null) => true,
@@ -159,26 +139,6 @@ mod tests {
     }
 
     #[test]
-    fn truthy_recognizes_canonical_shapes() {
-        assert!(is_truthy(Some(&val("true"))));
-        assert!(is_truthy(Some(&val("\"true\""))));
-        assert!(is_truthy(Some(&val("\"YES\""))));
-        assert!(is_truthy(Some(&val("\"1\""))));
-        assert!(is_truthy(Some(&val("1"))));
-        assert!(is_truthy(Some(&val("42"))));
-    }
-
-    #[test]
-    fn truthy_rejects_falsy_and_absent() {
-        assert!(!is_truthy(None));
-        assert!(!is_truthy(Some(&val("null"))));
-        assert!(!is_truthy(Some(&val("false"))));
-        assert!(!is_truthy(Some(&val("0"))));
-        assert!(!is_truthy(Some(&val("\"no\""))));
-        assert!(!is_truthy(Some(&val("\"\""))));
-    }
-
-    #[test]
     fn truthy_or_absent_treats_missing_as_on() {
         assert!(is_truthy_or_absent(None));
         assert!(is_truthy_or_absent(Some(&val("null"))));
@@ -196,7 +156,33 @@ mod tests {
     }
 
     #[test]
-    fn substrate_keys_are_distinct() {
+    fn cryptsync_derives_from_puddle() {
+        // The whole point of ADR-020: cryptsync's gate must consult
+        // swarm_puddle_enabled, not a separate cryptsync key.
+        assert_eq!(Substrate::Cryptsync.enabled_key(), "swarm_puddle_enabled");
+    }
+
+    #[test]
+    fn enabled_keys_are_distinct_except_cryptsync_aliases_puddle() {
+        // Payload, Gitmirror, Filesync each have their own key.
+        // Cryptsync intentionally aliases the puddle key — single
+        // source of truth.
+        assert_ne!(
+            Substrate::Payload.enabled_key(),
+            Substrate::Gitmirror.enabled_key()
+        );
+        assert_ne!(
+            Substrate::Payload.enabled_key(),
+            Substrate::Filesync.enabled_key()
+        );
+        assert_ne!(
+            Substrate::Gitmirror.enabled_key(),
+            Substrate::Filesync.enabled_key()
+        );
+    }
+
+    #[test]
+    fn substrate_names_are_distinct() {
         let subs = [
             Substrate::Payload,
             Substrate::Gitmirror,
@@ -205,25 +191,8 @@ mod tests {
         ];
         for (i, a) in subs.iter().enumerate() {
             for b in &subs[i + 1..] {
-                assert_ne!(a.enabled_key(), b.enabled_key());
                 assert_ne!(a.name(), b.name());
             }
-        }
-    }
-
-    #[test]
-    fn every_substrate_has_a_blacklist_key() {
-        for sub in [
-            Substrate::Payload,
-            Substrate::Gitmirror,
-            Substrate::Cryptsync,
-            Substrate::Filesync,
-        ] {
-            assert!(
-                sub.blacklist_key().is_some(),
-                "{} must have a blacklist key",
-                sub.name()
-            );
         }
     }
 }
