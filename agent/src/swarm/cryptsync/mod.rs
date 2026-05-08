@@ -2170,69 +2170,6 @@ fn pusher_agent(tls: &TlsCerts) -> Result<ureq::Agent> {
     pusher::build_agent_for_mod(tls)
 }
 
-/// Mark a user for cryptsync enrollment.
-///
-/// Called by the user executor (`agent/src/executors/user.rs`) after
-/// successful user creation when the user resource has
-/// `cryptsync: true`. Drops the `~<home>/.cryptsync/enroll.pending`
-/// sentinel so the first interactive `vigo swarm cryptsync *` invocation by
-/// that user runs enrollment.
-///
-/// Idempotent:
-/// - If the user is already enrolled (identity.age exists), no-op.
-/// - If the sentinel already exists, no-op.
-/// - Otherwise creates `~/.cryptsync/` (0700, user-owned) and the
-///   empty sentinel (0600, user-owned).
-pub fn mark_for_enroll(username: &str, home: &Path) -> Result<()> {
-    if config::is_enrolled(home) {
-        tracing::debug!(user = %username, "cryptsync: already enrolled, skipping marker");
-        return Ok(());
-    }
-    if config::has_pending_enroll(home) {
-        tracing::debug!(user = %username, "cryptsync: enrollment already pending, skipping marker");
-        return Ok(());
-    }
-
-    let dot = config::dot_dir(home);
-    fs::create_dir_all(&dot)
-        .with_context(|| format!("creating {}", dot.display()))?;
-
-    let marker = config::enroll_pending_path(home);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&marker)
-            .with_context(|| format!("creating {}", marker.display()))?;
-    }
-    #[cfg(not(unix))]
-    {
-        fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&marker)
-            .with_context(|| format!("creating {}", marker.display()))?;
-    }
-
-    // Chown dot dir + sentinel to the user so it's owned by them,
-    // not root. The user executor runs as root (agent daemon); the
-    // user needs to be able to delete these files and write siblings.
-    #[cfg(unix)]
-    chown_to_user(&dot, username)?;
-    #[cfg(unix)]
-    chown_to_user(&marker, username)?;
-
-    tracing::info!(
-        user = %username,
-        marker = %marker.display(),
-        "cryptsync: marked for enrollment"
-    );
-    Ok(())
-}
-
 /// Finalize a freshly-written ciphertext temp file: enforce mode
 /// 0600 on the temp, atomically rename to `dst`, then chown `dst`
 /// to `username`. Both write paths into `~<user>/cryptsync/` — the
@@ -2308,22 +2245,3 @@ pub(crate) fn chown_to_user(path: &Path, username: &str) -> Result<()> {
     anyhow::bail!("user {} not found in /etc/passwd", username)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn mark_for_enroll_noop_when_identity_exists() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::create_dir_all(config::dot_dir(dir.path())).unwrap();
-        // Fake a present identity + salt — full content doesn't matter.
-        fs::write(config::identity_path(dir.path()), b"fake").unwrap();
-        fs::write(config::salt_path(dir.path()), b"fake").unwrap();
-
-        // Call mark_for_enroll; should no-op (not create the sentinel).
-        // NOTE: we skip the chown step by using a fake username that's
-        // unlikely to exist; the early return on is_enrolled fires first.
-        let _ = mark_for_enroll("nonexistent-test-user-xyzzy", dir.path());
-        assert!(!config::has_pending_enroll(dir.path()));
-    }
-}

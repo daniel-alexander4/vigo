@@ -520,19 +520,17 @@ impl Executor for UserExecutor {
                         partial_errors.push(e);
                     }
 
-                    // Cryptsync enrollment marker. `cryptsync: true` drops
-                    // ~/.cryptsync/enroll.pending so the user's first
-                    // `vigo swarm cryptsync *` invocation runs interactive enrollment.
-                    // Idempotent; never blocks user creation.
-                    if params.get("cryptsync").map(|s| s == "true").unwrap_or(false) {
-                        let home = Self::resolve_home(&name, params, None);
-                        if let Err(e) = crate::swarm::cryptsync::mark_for_enroll(
-                            &name,
-                            std::path::Path::new(&home),
-                        ) {
-                            partial_errors.push(format!("cryptsync mark_for_enroll: {}", e));
-                        }
-                    }
+                    // Cryptsync enrollment used to be opt-in via
+                    // `cryptsync: true` on the user resource (dropped
+                    // a `~/.cryptsync/enroll.pending` sentinel). Per
+                    // ADR-020 + ADR-021 (0.40.0), cryptsync is a
+                    // mandatory capability of puddle membership: it
+                    // bootstraps automatically on `puddle unlock` for
+                    // any puddle-enrolled user. The flag and its
+                    // sentinel-drop logic are retired; existing
+                    // usercrates carrying `cryptsync: true` continue
+                    // to load (serde silently ignores the unknown
+                    // field) but the flag has no effect.
 
                     if !partial_errors.is_empty() {
                         result.error = Some(partial_errors.join("; "));
@@ -876,19 +874,10 @@ impl Executor for UserExecutor {
                         }
                     }
 
-                    // Cryptsync enrollment marker (idempotent — no-op if
-                    // already enrolled or already marked). Runs on every
-                    // convergence so flipping `cryptsync: true` on an
-                    // existing user triggers enrollment on next login.
-                    if params.get("cryptsync").map(|s| s == "true").unwrap_or(false) {
-                        let home = Self::resolve_home(&name, params, Some(entry));
-                        if let Err(e) = crate::swarm::cryptsync::mark_for_enroll(
-                            &name,
-                            std::path::Path::new(&home),
-                        ) {
-                            partial_errors.push(format!("cryptsync mark_for_enroll: {}", e));
-                        }
-                    }
+                    // Cryptsync enrollment (ADR-020 + ADR-021): no
+                    // longer driven by a `cryptsync:` flag; bootstraps
+                    // automatically on the user's first `puddle
+                    // unlock`. See the present-block comment above.
 
                     if !partial_errors.is_empty() {
                         result.error = Some(partial_errors.join("; "));

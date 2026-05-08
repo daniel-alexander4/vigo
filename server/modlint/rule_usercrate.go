@@ -87,51 +87,6 @@ func hasAnyPrefix(s string, prefixes []string) bool {
 
 func init() { register(passwordHashOrSecretRule{}) }
 
-// --- cryptsync-without-home ---
-
-// cryptsyncWithoutHomeRule warns when a user has cryptsync enabled
-// but no `home:` set. The cryptsync subsystem drops its enroll
-// sentinel at `~user/.cryptsync/enroll.pending`; without a home dir,
-// the sentinel has nowhere to land and enrollment silently never
-// fires. The operator's typical expectation is that `cryptsync: true`
-// "just works."
-type cryptsyncWithoutHomeRule struct{}
-
-func (cryptsyncWithoutHomeRule) id() string { return "usercrate-cryptsync-without-home" }
-
-func (cryptsyncWithoutHomeRule) apply(mod *module, opts Options) []Finding {
-	if !opts.IsUsercrate {
-		return nil
-	}
-	var out []Finding
-	for _, res := range mod.Resources {
-		if res.Type != "user" {
-			continue
-		}
-		cryptsync, _ := res.Attrs["cryptsync"].(bool)
-		if !cryptsync {
-			continue
-		}
-		home, _ := res.Attrs["home"].(string)
-		if home != "" {
-			continue
-		}
-		out = append(out, Finding{
-			Severity: Warning,
-			Line:     res.Line,
-			Column:   res.Column,
-			RuleID:   "usercrate-cryptsync-without-home",
-			Message: fmt.Sprintf(
-				"resource %q: cryptsync: true but no home set — the enroll sentinel has nowhere to land and cryptsync silently won't activate",
-				res.Name,
-			),
-		})
-	}
-	return out
-}
-
-func init() { register(cryptsyncWithoutHomeRule{}) }
-
 // --- absent-with-unused-attrs ---
 
 // absentWithUnusedAttrsRule flags user resources where state: absent

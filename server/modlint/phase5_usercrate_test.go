@@ -74,39 +74,6 @@ resources:
 	}
 }
 
-// --- usercrate-cryptsync-without-home ---
-
-func TestLint_UsercrateCryptsyncWithoutHome(t *testing.T) {
-	input := `resources:
-  - name: dan
-    type: user
-    username: dan
-    cryptsync: true
-`
-	r := Lint([]byte(input), Options{IsUsercrate: true})
-	f := findFinding(r, "usercrate-cryptsync-without-home")
-	if f == nil {
-		t.Fatalf("expected cryptsync-without-home finding, got %v", r.Findings)
-	}
-	if f.Severity != Warning {
-		t.Errorf("severity=%q, want warning", f.Severity)
-	}
-}
-
-func TestLint_UsercrateCryptsyncWithHome_OK(t *testing.T) {
-	input := `resources:
-  - name: dan
-    type: user
-    username: dan
-    home: /home/dan
-    cryptsync: true
-`
-	r := Lint([]byte(input), Options{IsUsercrate: true})
-	if findFinding(r, "usercrate-cryptsync-without-home") != nil {
-		t.Error("home set; rule must not fire")
-	}
-}
-
 // --- usercrate-absent-with-unused-attrs ---
 
 func TestLint_UsercrateAbsentWithUnusedAttrs(t *testing.T) {
