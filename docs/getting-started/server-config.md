@@ -595,13 +595,13 @@ swarm:
   port: 1531
   max_bandwidth_percent: 50
   manifest_liveness_ttl: 24h
-  puddle:
-    enabled: ["annlap", "plex", "girlslaptop"]    # cryptsync follows
-  gitmirror:
+  payload:
     enabled: ["*"]
   filesync:
     enabled: ["*"]
-  payload:
+  puddle:
+    enabled: ["annlap", "plex", "girlslaptop"]    # cryptsync follows
+  gitmirror:
     enabled: ["*"]
 ```
 
@@ -612,10 +612,10 @@ swarm:
 | `port` | `1531` | Agent peer server listen port (mTLS HTTPS) |
 | `max_bandwidth_percent` | `50` | Maximum network bandwidth agents will use for swarm transfers (percentage of interface capacity) |
 | `manifest_liveness_ttl` | `24h` | Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Set to `0` or empty to disable the sweep on tiny static fleets. |
+| `payload.enabled` | `[]` | Hostname pattern list of envoys allowed to receive admin-pushed payloads. The admin distribute endpoint refuses when this list is empty (no envoy could possibly receive). |
+| `filesync.enabled` | `[]` | Hostname pattern list of envoys allowed to run filesync. Per-user opt-in still requires the user creating `~/filesync/`. |
 | `puddle.enabled` | `[]` | Hostname pattern list of envoys allowed to run puddle. **Cryptsync derives from this list** — there is no `swarm.cryptsync` section (ADR-020). A host allowed here can hold puddle identity material and cryptsync ciphertext for its locally-enrolled members. |
 | `gitmirror.enabled` | `[]` | Hostname pattern list of envoys allowed to run gitmirror — publisher and receiver. |
-| `filesync.enabled` | `[]` | Hostname pattern list of envoys allowed to run filesync. Per-user opt-in still requires the user creating `~/filesync/`. |
-| `payload.enabled` | `[]` | Hostname pattern list of envoys allowed to receive admin-pushed payloads. The admin distribute endpoint refuses when this list is empty (no envoy could possibly receive). |
 
 **Per-user authorization.** The envoy-level pattern lists answer "is this subsystem available on this envoy?" The user-level usercrate flags answer "which Unix users on this envoy can use it?" Both must say yes for a user to use a subsystem; default-deny on both. See the user-resource `puddle: bool` and `gitmirror: bool` flags in your usercrate. Filesync gates by Unix file ownership (no usercrate flag); payload by admin call site.
 

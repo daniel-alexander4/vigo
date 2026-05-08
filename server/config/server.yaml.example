@@ -377,6 +377,16 @@ watcher:
 #                                               # publisher disappears. Empty / zero disables
 #                                               # the sweep.
 #
+#   # Payload (admin-pushed fleet file distribution) authorization.
+#   # The admin distribute endpoint refuses when this list is empty.
+#   payload:
+#     enabled: ["*"]
+#
+#   # Filesync (LAN plaintext directory mirror) daemon authorization.
+#   # Per-user opt-in still requires the user creating ~/filesync/.
+#   filesync:
+#     enabled: ["*"]
+#
 #   # Puddle (per-user identity) authorization. Cryptsync derives its
 #   # authorization from this list — there is no separate cryptsync
 #   # section. A host allowed here can hold puddle identity material
@@ -388,16 +398,6 @@ watcher:
 #   # Gitmirror (git-over-swarm) authorization — publisher and
 #   # bundle-holder gate.
 #   gitmirror:
-#     enabled: ["*"]
-#
-#   # Filesync (LAN plaintext directory mirror) daemon authorization.
-#   # Per-user opt-in still requires the user creating ~/filesync/.
-#   filesync:
-#     enabled: ["*"]
-#
-#   # Payload (admin-pushed fleet file distribution) authorization.
-#   # The admin distribute endpoint refuses when this list is empty.
-#   payload:
 #     enabled: ["*"]
 
 
