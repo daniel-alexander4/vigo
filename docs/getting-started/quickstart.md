@@ -26,21 +26,28 @@ docker run -d --name vigo \
 
 The server starts on `localhost:8443` (REST/UI) and `localhost:1530` (gRPC). TLS certificates, `server.yaml`, `.env`, and example configs are auto-generated on first start. Open `https://localhost:8443` to see the dashboard.
 
-## 2. Enroll a Envoy
+## 2. Enroll Envoys
 
-On the machine you want to manage:
+**First, the server's own host.** Vigo assumes every server runs a co-hosted `vigo` agent — it's how the server participates in swarm operations alongside its managed nodes. From the server host itself:
 
 ```bash
+curl -sSfk https://localhost:8443/bootstrap | sudo sh
+```
+
+Then enroll any other machines you want to manage:
+
+```bash
+# On the managed node:
 curl -sSfk https://<server-ip>:8443/bootstrap | sudo sh
 ```
 
 The bootstrap script:
 1. Downloads the `vigo` agent binary
 2. Generates an ED25519 keypair
-3. Registers with the server (token-free if the server has trusted enrollment configured)
+3. Registers with the server (token-free if the server has trusted enrollment configured — loopback is covered by default)
 4. Installs and starts the `vigo-envoy` systemd service
 
-After enrollment, the envoy appears in the dashboard and begins checking in every 5 minutes.
+After enrollment, each envoy appears in the dashboard and begins checking in every 5 minutes.
 
 ## 3. Write a Module
 

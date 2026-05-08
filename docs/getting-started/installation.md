@@ -64,6 +64,27 @@ curl -sk https://localhost:8443/healthz # health check
 vigocli doctor                     # full diagnostic
 ```
 
+### 4. Enroll the server's own envoy (do this first)
+
+Vigo assumes every server runs a co-hosted `vigo` agent on the same host as the vigosrv container. The server's own envoy is what makes the server visible in `vigocli swarm status`, lets it participate in puddle / cryptsync / gitmirror, and seeds payloads to peers via the swarm substrate. This step is the canonical first thing to do after the container is up.
+
+From the server host itself:
+
+```bash
+curl -sSfk https://localhost:8443/bootstrap | sudo sh
+```
+
+The bootstrap script downloads the agent binary, generates a CSR, registers via the trusted-enrollment path (loopback is in the default `trusted_enrollment` CIDR list — no token needed), and installs `vigo-envoy.service` under systemd. After it finishes:
+
+```bash
+systemctl is-active vigo-envoy       # → active
+vigocli envoys list                  # the server should appear under its host's hostname
+```
+
+The agent's enrolled hostname is whatever `hostname` returns on the host. Match this with `server.hostname` in `server.yaml` (used for compliance display) so the two views agree.
+
+If you skip this step, swarm features that route through the server envoy will silently no-op for the server's own hostname. `vigocli swarm payload distribute` still works (writes directly to the bind-mounted seed dir), but most other swarm operations don't involve the server in the peer set.
+
 ### Optional services
 
 Edit `VIGO_SERVICES` in `/srv/vigo/.env` to enable optional containers:

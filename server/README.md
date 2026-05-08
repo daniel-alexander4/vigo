@@ -20,7 +20,14 @@ The `vigosrv` server daemon is the central control plane for Vigo. It serves gRP
 # Start server (uses embedded SQLite)
 docker compose up -d
 
-# Bootstrap a node (trusted enrollment configured in server.yaml)
+# First post-install step: enroll the server's own host as an envoy.
+# Vigo assumes every server runs a co-hosted agent — this is how the
+# server participates in swarm / puddle / cryptsync alongside its
+# managed nodes. Run from the server host itself; loopback is covered
+# by the default trusted_enrollment CIDR list (no token required).
+curl -sSfk https://localhost:8443/bootstrap | sudo sh
+
+# Then bootstrap any other managed nodes:
 curl -sSfk https://vigosrv.example.com:8443/bootstrap | sudo sh
 ```
 
