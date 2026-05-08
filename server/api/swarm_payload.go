@@ -88,17 +88,19 @@ func (h *LodeHandler) SetAuditWriter(w *audit.Writer) {
 // payloadGate reports whether `vigocli swarm payload distribute` should
 // be allowed right now. Returns (allowed, reason) — when false, reason
 // is the operator-facing explanation surfaced in the 403 body and the
-// audit-chain summary. Mirrors the agent's `substrate_active` rule:
-// fleet-wide swarm.enabled AND swarm.payload.enabled (default true if
-// the *bool is nil).
+// audit-chain summary. Refuses when neither layer would let any envoy
+// receive a payload — i.e. swarm.enabled is empty (substrate off
+// fleet-wide) or swarm.payload.enabled is empty (subsystem off
+// fleet-wide). Per-host gating is enforced agent-side; this check is
+// just the floor.
 func (h *LodeHandler) payloadGate() (bool, string) {
 	h.swarmCfgMu.RLock()
 	defer h.swarmCfgMu.RUnlock()
-	if !h.swarmCfg.Enabled {
-		return false, "swarm is disabled fleet-wide (swarm.enabled: false)"
+	if len(h.swarmCfg.Enabled) == 0 {
+		return false, "swarm is disabled fleet-wide (swarm.enabled: [])"
 	}
-	if h.swarmCfg.Payload.Enabled != nil && !*h.swarmCfg.Payload.Enabled {
-		return false, "payload substrate is disabled (swarm.payload.enabled: false)"
+	if len(h.swarmCfg.Payload.Enabled) == 0 {
+		return false, "payload subsystem is disabled (swarm.payload.enabled: [])"
 	}
 	return true, ""
 }

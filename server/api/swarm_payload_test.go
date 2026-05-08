@@ -14,8 +14,6 @@ import (
 	"git.alexander4.io/vigo/server/db"
 )
 
-func boolp(v bool) *bool { return &v }
-
 // newGatedHandler builds a LodeHandler with just enough plumbing to
 // exercise the gate. seedDir is set non-empty so the existing 503 guard
 // doesn't short-circuit before the gate check.
@@ -33,14 +31,17 @@ func TestPayloadGate_AllowsWhenAllEnabled(t *testing.T) {
 		cfg  config.SwarmSection
 	}{
 		{
-			name: "payload.enabled nil (operator default)",
-			cfg:  config.SwarmSection{Enabled: true},
+			name: "wildcard fleet-wide on",
+			cfg: config.SwarmSection{
+				Enabled: []string{"*"},
+				Payload: config.SwarmPayloadSection{Enabled: []string{"*"}},
+			},
 		},
 		{
-			name: "payload.enabled explicit true",
+			name: "explicit allow set with hosts",
 			cfg: config.SwarmSection{
-				Enabled: true,
-				Payload: config.SwarmPayloadSection{Enabled: boolp(true)},
+				Enabled: []string{"annlap", "plex"},
+				Payload: config.SwarmPayloadSection{Enabled: []string{"annlap", "plex"}},
 			},
 		},
 	}
@@ -58,10 +59,10 @@ func TestPayloadGate_AllowsWhenAllEnabled(t *testing.T) {
 
 func TestPayloadGate_DeniesWhenFleetDisabled(t *testing.T) {
 	h := &LodeHandler{}
-	h.SetSwarmConfig(config.SwarmSection{Enabled: false})
+	h.SetSwarmConfig(config.SwarmSection{Enabled: nil})
 	ok, reason := h.payloadGate()
 	if ok {
-		t.Fatal("expected denial when swarm.enabled is false")
+		t.Fatal("expected denial when swarm.enabled is empty")
 	}
 	if !strings.Contains(reason, "fleet-wide") {
 		t.Errorf("reason should call out fleet-wide kill switch, got %q", reason)
@@ -71,15 +72,15 @@ func TestPayloadGate_DeniesWhenFleetDisabled(t *testing.T) {
 func TestPayloadGate_DeniesWhenPayloadDisabled(t *testing.T) {
 	h := &LodeHandler{}
 	h.SetSwarmConfig(config.SwarmSection{
-		Enabled: true,
-		Payload: config.SwarmPayloadSection{Enabled: boolp(false)},
+		Enabled: []string{"*"},
+		Payload: config.SwarmPayloadSection{Enabled: nil},
 	})
 	ok, reason := h.payloadGate()
 	if ok {
-		t.Fatal("expected denial when swarm.payload.enabled is false")
+		t.Fatal("expected denial when swarm.payload.enabled is empty")
 	}
-	if !strings.Contains(reason, "payload substrate") {
-		t.Errorf("reason should call out payload substrate, got %q", reason)
+	if !strings.Contains(reason, "payload subsystem") {
+		t.Errorf("reason should call out payload subsystem, got %q", reason)
 	}
 }
 
@@ -88,8 +89,8 @@ func TestDistribute_GatedReturns403AndAudits(t *testing.T) {
 	defer sqlDB.Close()
 
 	cfg := config.SwarmSection{
-		Enabled: true,
-		Payload: config.SwarmPayloadSection{Enabled: boolp(false)},
+		Enabled: []string{"*"},
+		Payload: config.SwarmPayloadSection{Enabled: nil},
 	}
 	h := newGatedHandler(t, cfg, queries)
 
@@ -102,7 +103,7 @@ func TestDistribute_GatedReturns403AndAudits(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d (body: %s)", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "payload substrate") {
+	if !strings.Contains(rec.Body.String(), "payload subsystem") {
 		t.Errorf("body should explain the gate, got: %s", rec.Body.String())
 	}
 
@@ -112,7 +113,7 @@ func TestDistribute_GatedReturns403AndAudits(t *testing.T) {
 	if err := row.Scan(&eventType, &summary); err != nil {
 		t.Fatalf("expected swarm.payload.denied audit row, got error: %v", err)
 	}
-	if !strings.Contains(summary, "payload substrate") {
+	if !strings.Contains(summary, "payload subsystem") {
 		t.Errorf("audit summary should explain the gate, got %q", summary)
 	}
 }
@@ -125,7 +126,10 @@ func TestDistribute_AllowedWhenNotGated_StillGuardsOnSeedDir(t *testing.T) {
 	sqlDB, queries := openAuditTestDB(t)
 	defer sqlDB.Close()
 	h := NewLodeHandler("", nil, nil, nil, queries)
-	h.SetSwarmConfig(config.SwarmSection{Enabled: true})
+	h.SetSwarmConfig(config.SwarmSection{
+		Enabled: []string{"*"},
+		Payload: config.SwarmPayloadSection{Enabled: []string{"*"}},
+	})
 	h.SetAuditWriter(audit.NewWriter(queries))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/swarm/payload/distribute", strings.NewReader(""))

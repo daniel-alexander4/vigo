@@ -116,94 +116,56 @@ type ServerConfig struct {
 	Swarm        SwarmSection        `yaml:"swarm" docs:"concepts/swarm" doc:"Peer-to-peer content distribution — seed directory, port, bandwidth cap." long:"Peer-to-peer content distribution between envoys over mTLS on port 1531 (agent-to-agent, not server-to-agent). Configures the seed directory the server writes into and the bandwidth cap as a percentage of detected link speed (so swarm transfers don't starve real workloads). Essential for fleets large enough that pulling every blob from the server would saturate its uplink."`
 }
 
-// SwarmSection configures peer-to-peer content distribution. When enabled,
-// the server stores content-addressed blobs and coordinates distribution
-// to agents via the swarm protocol on port 1531.
+// SwarmSection configures peer-to-peer content distribution. The four
+// content subsystems (puddle/cryptsync, gitmirror, filesync, payload)
+// are gated per-envoy by hostname pattern lists. The top-level Enabled
+// list controls whether the swarm substrate runs on a host at all;
+// each sub-section's Enabled list further restricts that subsystem.
+// Both layers must allow a host for the subsystem to be active there
+// — default-deny across the board.
+//
+// See server/config/host_match.go for pattern semantics: empty list
+// denies all, "*" allows all, "-rasp1" denies a specific host, first
+// match wins, default-deny on no match.
 type SwarmSection struct {
-	Enabled             bool                   `yaml:"enabled" doc:"Enable peer-to-peer content distribution." default:"false" example:"true"`
-	SeedDir             string                 `yaml:"seed_dir" doc:"Directory where server-distributed seeds are written (bind-mounted to agents)." default:"/var/lib/vigo/swarm/seed" example:"/var/lib/vigo/swarm/seed"`
-	Port                int                    `yaml:"port" doc:"TCP port on which agents serve blobs to each other over mTLS." default:"1531" example:"1-65535; must be open between envoys"`
-	MaxBandwidthPercent int                    `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
-	ManifestLivenessTTL string                 `yaml:"manifest_liveness_ttl" doc:"Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Guards against orphaned entries when a publisher disappears. Empty / zero disables the sweep." default:"24h" example:"24h, 12h, 0 (disable)"`
-	Payload             SwarmPayloadSection    `yaml:"payload" doc:"Payload subsystem (admin-pushed file distribution) operability gates." long:"Payload runs by default on every enrolled envoy. Use enabled:false to halt fleet-wide, or blacklist to deny specific envoys from receiving payloads."`
-	Gitmirror           SwarmGitmirrorSection  `yaml:"gitmirror" doc:"Gitmirror subsystem (personal-DR repo backup) operability gates." long:"Gitmirror runs by default on every enrolled envoy. Use enabled:false to halt fleet-wide, or blacklist to deny specific envoys."`
-	Cryptsync           SwarmCryptsyncSection  `yaml:"cryptsync" doc:"Cryptsync subsystem (per-user encrypted P2P sync) operability gates." long:"Cryptsync runs by default on every enrolled envoy. Use enabled:false to halt fleet-wide, or blacklist to deny specific envoys from holding cryptsync content."`
-	Filesync            SwarmFilesyncSection   `yaml:"filesync" doc:"Filesync subsystem (per-user plaintext LAN P2P sync) operability gates." long:"Filesync runs by default on every enrolled envoy. Use enabled:false to halt fleet-wide, or blacklist to deny specific envoys from participating."`
+	Enabled             []string              `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) controlling which envoys run the swarm substrate. Both this and the per-subsystem list must allow a host for any subsystem to be active." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\"]"`
+	SeedDir             string                `yaml:"seed_dir" doc:"Directory where server-distributed seeds are written (bind-mounted to agents)." default:"/var/lib/vigo/swarm/seed" example:"/var/lib/vigo/swarm/seed"`
+	Port                int                   `yaml:"port" doc:"TCP port on which agents serve blobs to each other over mTLS." default:"1531" example:"1-65535; must be open between envoys"`
+	MaxBandwidthPercent int                   `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
+	ManifestLivenessTTL string                `yaml:"manifest_liveness_ttl" doc:"Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Guards against orphaned entries when a publisher disappears. Empty / zero disables the sweep." default:"24h" example:"24h, 12h, 0 (disable)"`
+	Puddle              SwarmPuddleSection    `yaml:"puddle" doc:"Puddle (per-user identity) authorization. Cryptsync derives from this — there is no separate cryptsync section." long:"Hostname pattern list controlling which envoys can host puddle identity material. Cryptsync's authorization derives from this list — a host allowed here can hold cryptsync ciphertext for its locally-enrolled puddle members; a host denied here cannot use cryptsync at all."`
+	Gitmirror           SwarmGitmirrorSection `yaml:"gitmirror" doc:"Gitmirror (git-over-swarm) authorization." long:"Hostname pattern list controlling which envoys participate in gitmirror — both as publishers and as bundle holders."`
+	Filesync            SwarmFilesyncSection  `yaml:"filesync" doc:"Filesync (LAN plaintext directory mirror) authorization." long:"Hostname pattern list controlling which envoys run the filesync daemon. Per-user opt-in still requires the user creating ~/filesync/."`
+	Payload             SwarmPayloadSection   `yaml:"payload" doc:"Payload (admin-pushed fleet file distribution) authorization." long:"Hostname pattern list controlling which envoys receive admin-pushed payloads. Distribution requests are refused at the API layer when the list is empty."`
 }
 
-// SwarmPayloadSection configures per-subsystem gates for the payload
-// substrate (admin-pushed file distribution via vigocli swarm payload
-// distribute). Payload is default-on across the fleet — every enrolled
-// envoy accepts payload assignments by default. Setting Enabled=false
-// halts payload reception fleet-wide (agents stop applying new payload
-// manifest entries); already-cached blobs under /var/lib/vigo/swarm/
-// are preserved so re-enabling resumes operation untouched. The
-// blacklist denies specific hostnames from receiving payloads —
-// gate-only, never destructive.
-//
-// Enabled is a *bool so YAML can distinguish "operator did not set it"
-// (default true) from "operator set it to false" (halt payload).
-type SwarmPayloadSection struct {
-	Enabled   *bool    `yaml:"enabled" doc:"Whether payload reception runs fleet-wide. Default true. Set false to halt agents accepting new payload assignments; already-cached blobs preserved." default:"true" example:"true"`
-	Blacklist []string `yaml:"blacklist" doc:"Hostname patterns (filepath.Match globs) of envoys denied from receiving payload distributions. Gate-only — already-cached blobs on a newly-blacklisted host are not evicted automatically." example:"[raspberrypi, *.test.example.com]"`
+// SwarmPuddleSection authorizes the puddle (per-user identity) subsystem
+// per envoy. Cryptsync derives its authorization from this section —
+// there is no separate cryptsync section. A host listed here can hold
+// puddle identity material and cryptsync ciphertext for its locally-
+// enrolled members; a host denied here cannot do either.
+type SwarmPuddleSection struct {
+	Enabled []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run puddle. Cryptsync follows the same gate." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
 }
 
-// SwarmGitmirrorSection configures per-subsystem gates for gitmirror.
-// Gitmirror is default-on across the fleet — every enrolled envoy
-// receives bundles by default. Setting Enabled=false halts gitmirror
-// fleet-wide (publisher and receiver idle); already-held mirrors at
-// /var/lib/vigo/swarm/gitmirror/mirrors/ are preserved so re-enabling
-// resumes operation untouched. The blacklist denies specific
-// hostnames (filepath.Match globs); a blacklist add triggers
-// automatic fleet-wide eviction of the matching envoys' held mirrors.
-//
-// Enabled is a *bool so YAML can distinguish "operator did not set it"
-// (default true) from "operator set it to false" (halt gitmirror).
-// Setting Enabled=false is non-destructive — locally-held mirrors are
-// preserved. The destructive path is the blacklist.
+// SwarmGitmirrorSection authorizes the gitmirror subsystem per envoy.
 type SwarmGitmirrorSection struct {
-	Enabled   *bool    `yaml:"enabled" doc:"Whether gitmirror runs fleet-wide. Default true. Set false to halt gitmirror (publisher and receiver idle); already-held mirrors preserved." default:"true" example:"true"`
-	Blacklist []string `yaml:"blacklist" doc:"Hostname patterns (filepath.Match globs) of envoys denied from receiving gitmirror bundles. Adding a host evicts its existing mirrors fleet-wide; removing a host re-allows it but does not re-replicate previous bundles." example:"[raspberrypi, *.test.example.com]"`
+	Enabled []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run gitmirror — publisher and receiver." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
 }
 
-// SwarmCryptsyncSection configures per-subsystem gates for cryptsync.
-// Cryptsync is default-on across the fleet — every enrolled envoy can
-// hold ciphertext for any enrolled user. The blacklist denies specific
-// hostnames; a blacklist add triggers automatic fleet-wide eviction:
-// the blacklisted host scrubs its identity material for every locally-
-// enrolled user, and every other envoy drops the blacklisted host's
-// pubkey from each user's peer table + recipient list.
-//
-// Enabled is a *bool so YAML can distinguish "operator did not set it"
-// (default true) from "operator set it to false" (halt cryptsync).
-// Setting Enabled=false is non-destructive — identity material under
-// ~user/.cryptsync/ is preserved so re-enabling resumes operation
-// without re-enrollment. The destructive path is the blacklist.
-type SwarmCryptsyncSection struct {
-	Enabled   *bool    `yaml:"enabled" doc:"Whether cryptsync runs fleet-wide. Default true. Set false to halt cryptsync (announcer, listener, push handler all idle); identity material preserved." default:"true" example:"true"`
-	Blacklist []string `yaml:"blacklist" doc:"Hostname patterns (filepath.Match globs) of envoys denied from holding cryptsync content. Adding a host scrubs its identity material fleet-wide and removes its pubkey from peer recipient lists." example:"[raspberrypi, *.test.example.com]"`
-}
-
-// SwarmFilesyncSection configures per-subsystem gates for filesync.
-// Filesync is default-on across the fleet — every enrolled envoy
-// participates by default. Setting Enabled=false halts filesync
-// fleet-wide (multicast announcer, listener, and push handler all
-// idle); user content under ~user/filesync/ is preserved so re-
-// enabling resumes operation untouched.
-//
-// The Blacklist is gate-only by design: a blacklisted host stops
-// announcing and stops responding to peer requests, but its
-// ~user/filesync/ directory is NOT scrubbed. Filesync content is
-// plaintext user data, and a config typo wiping someone's home
-// directory is a far bigger blast radius than the cryptsync /
-// gitmirror destructive-blacklist semantic. Operators who want
-// to wipe blacklisted-host content do so manually.
-//
-// Enabled is a *bool so YAML can distinguish "operator did not set
-// it" (default true) from "operator set it to false" (halt filesync).
+// SwarmFilesyncSection authorizes the filesync subsystem per envoy.
+// Per-user opt-in is still gated by the user creating ~/filesync/ —
+// this list only controls whether the envoy's filesync daemon runs
+// at all.
 type SwarmFilesyncSection struct {
-	Enabled   *bool    `yaml:"enabled" doc:"Whether filesync runs fleet-wide. Default true. Set false to halt filesync (announcer, listener, push handler all idle); ~user/filesync/ content preserved." default:"true" example:"true"`
-	Blacklist []string `yaml:"blacklist" doc:"Hostname patterns (filepath.Match globs) of envoys denied from participating in filesync. Gate-only — content under ~user/filesync/ is NOT scrubbed on add (filesync content is plaintext user data; destructive removal is a manual operator action)." example:"[raspberrypi, *.test.example.com]"`
+	Enabled []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run filesync. Per-user participation still requires the user creating ~/filesync/." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"]"`
+}
+
+// SwarmPayloadSection authorizes the payload (admin-pushed fleet file
+// distribution) subsystem per envoy. The admin distribute endpoint
+// refuses when the list is empty (no envoy could possibly receive).
+type SwarmPayloadSection struct {
+	Enabled []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to receive admin-pushed payloads." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"]"`
 }
 
 // ScrierSection configures the Scrier remote access feature.

@@ -512,43 +512,36 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	}
 
 	// Inject server-derived per-envoy gates into vars_json. The agent's
-	// `swarm/gates.rs::substrate_active` helper ANDs `swarm_enabled`,
-	// `swarm_<sub>_enabled`, and NOT `<sub>_blacklisted` — the keys we
-	// emit here. Cached bundles share vars_json across patterns;
-	// injectServerVars allocates a fresh slice so the per-envoy state
-	// never leaks into the cache.
+	// `swarm/gates.rs::substrate_active` helper ANDs `swarm_enabled` with
+	// the per-subsystem `swarm_<sub>_enabled` keys emitted here. Cached
+	// bundles share vars_json across patterns; injectServerVars allocates
+	// a fresh slice so the per-envoy state never leaks into the cache.
 	//
-	// Fail-open semantics on the agent: missing keys are treated as
-	// "enabled / not blacklisted". We only set keys when their value
-	// would change behavior — that keeps vars_json small and makes
-	// `vigo swarm cryptsync show` etc. read cleaner during debugging.
+	// Pattern-list semantics (see config.HostMatchesPatterns): both the
+	// top-level swarm.enabled and the per-subsystem enabled list must
+	// allow this envoy's hostname for the subsystem to be active. We
+	// only emit a key when its value would gate the subsystem off,
+	// keeping vars_json small.
+	//
+	// Cryptsync is intentionally absent — its authorization derives from
+	// puddle (single source of truth, ADR-020). The agent's cryptsync
+	// gate consults swarm_puddle_enabled instead.
 	gates := map[string]any{}
-	if !s.swarmCfg.Enabled {
+	swarmAllowed := config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Enabled)
+	if !swarmAllowed {
 		gates["swarm_enabled"] = false
 	}
-	if s.swarmCfg.Payload.Enabled != nil && !*s.swarmCfg.Payload.Enabled {
-		gates["swarm_payload_enabled"] = false
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Puddle.Enabled) {
+		gates["swarm_puddle_enabled"] = false
 	}
-	if hostnameMatchesAny(s.swarmCfg.Payload.Blacklist, envoy.Hostname) {
-		gates["payload_blacklisted"] = true
-	}
-	if s.swarmCfg.Gitmirror.Enabled != nil && !*s.swarmCfg.Gitmirror.Enabled {
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Gitmirror.Enabled) {
 		gates["swarm_gitmirror_enabled"] = false
 	}
-	if hostnameMatchesAny(s.swarmCfg.Gitmirror.Blacklist, envoy.Hostname) {
-		gates["gitmirror_blacklisted"] = true
-	}
-	if s.swarmCfg.Cryptsync.Enabled != nil && !*s.swarmCfg.Cryptsync.Enabled {
-		gates["swarm_cryptsync_enabled"] = false
-	}
-	if hostnameMatchesAny(s.swarmCfg.Cryptsync.Blacklist, envoy.Hostname) {
-		gates["cryptsync_blacklisted"] = true
-	}
-	if s.swarmCfg.Filesync.Enabled != nil && !*s.swarmCfg.Filesync.Enabled {
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Filesync.Enabled) {
 		gates["swarm_filesync_enabled"] = false
 	}
-	if hostnameMatchesAny(s.swarmCfg.Filesync.Blacklist, envoy.Hostname) {
-		gates["filesync_blacklisted"] = true
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Payload.Enabled) {
+		gates["swarm_payload_enabled"] = false
 	}
 	if err := injectServerVars(bundle, gates); err != nil {
 		slog.Warn("failed to inject server vars into policy bundle",

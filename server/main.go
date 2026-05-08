@@ -1131,8 +1131,12 @@ func run() error {
 		tokensHandler.RegisterRoutes(gwMux)
 		scrierAPIHandler.RegisterRoutes(gwMux)
 
-		// Swarm: peer-to-peer content distribution.
-		if cfg.Swarm.Enabled {
+		// Swarm: peer-to-peer content distribution. The substrate runs on
+		// this server iff the server-as-envoy hostname matches the swarm
+		// pattern list — the canonical assumption is the server hosts a
+		// local agent under cfg.Server.Hostname (CLAUDE.md). An empty
+		// pattern list disables the substrate entirely.
+		if config.HostMatchesPatterns(cfg.Server.Hostname, cfg.Swarm.Enabled) {
 			seedDir := cfg.Swarm.SeedDir
 			if seedDir == "" {
 				seedDir = "/var/lib/vigo/swarm/seed"
@@ -1176,20 +1180,18 @@ func run() error {
 			uiHandler.SetSwarm(peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex}, cfg.Swarm)
 			slog.Info("swarm enabled", "seed_dir", seedDir, "port", cfg.Swarm.Port)
 
-			// Track blacklist + enabled state across reloads so we can
-			// diff (a) hostnames newly matching a blacklist (drives
-			// eviction dispatch) and (b) every gate flip / blacklist
-			// change (drives audit-log entries — operability gate
-			// changes are tamper-evident).
-			lastGitmirrorBlacklist := append([]string(nil), cfg.Swarm.Gitmirror.Blacklist...)
-			lastCryptsyncBlacklist := append([]string(nil), cfg.Swarm.Cryptsync.Blacklist...)
-			lastPayloadBlacklist := append([]string(nil), cfg.Swarm.Payload.Blacklist...)
-			lastFilesyncBlacklist := append([]string(nil), cfg.Swarm.Filesync.Blacklist...)
-			lastFleetEnabled := cfg.Swarm.Enabled
-			lastPayloadEnabled := substrateEnabled(cfg.Swarm.Payload.Enabled)
-			lastGitmirrorEnabled := substrateEnabled(cfg.Swarm.Gitmirror.Enabled)
-			lastCryptsyncEnabled := substrateEnabled(cfg.Swarm.Cryptsync.Enabled)
-			lastFilesyncEnabled := substrateEnabled(cfg.Swarm.Filesync.Enabled)
+			// Track pattern lists across reloads so we can audit operator
+			// edits to each subsystem's authorization. Patterns are what
+			// the operator actually edited in YAML — per-host transition
+			// detection is unnecessary because pattern flips are gate-only
+			// in 0.41.0+ (the destructive blacklist dispatch path was
+			// retired with the cryptsync rework — destructive scrub is
+			// now usercrate-flag-driven, not envoy-pattern-driven).
+			lastSwarmPatterns := append([]string(nil), cfg.Swarm.Enabled...)
+			lastPuddlePatterns := append([]string(nil), cfg.Swarm.Puddle.Enabled...)
+			lastGitmirrorPatterns := append([]string(nil), cfg.Swarm.Gitmirror.Enabled...)
+			lastFilesyncPatterns := append([]string(nil), cfg.Swarm.Filesync.Enabled...)
+			lastPayloadPatterns := append([]string(nil), cfg.Swarm.Payload.Enabled...)
 
 			configStore.SetOnReloadSuccess(func() {
 				// Re-read server.yaml directly — ConfigStore.Reload() only
@@ -1204,98 +1206,26 @@ func run() error {
 				uiHandler.SetSwarm(peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex}, newCfg.Swarm)
 				lodeHandler.SetSwarmConfig(newCfg.Swarm)
 
-				// Audit gate flips before dispatching eviction tasks so the
-				// chain reflects the operator action that drove the
-				// dispatch. Gate-flip events are non-destructive even on
-				// retry, so a partial-failure mid-loop doesn't poison the
-				// chain.
-				if lastFleetEnabled != newCfg.Swarm.Enabled {
-					recordSwarmEnabledFlip(ctx, auditWriter, "swarm", lastFleetEnabled, newCfg.Swarm.Enabled)
-					lastFleetEnabled = newCfg.Swarm.Enabled
+				if !sameStringSet(lastSwarmPatterns, newCfg.Swarm.Enabled) {
+					recordSwarmPatternsChange(ctx, auditWriter, "swarm", lastSwarmPatterns, newCfg.Swarm.Enabled)
+					lastSwarmPatterns = append([]string(nil), newCfg.Swarm.Enabled...)
 				}
-				newPayloadEnabled := substrateEnabled(newCfg.Swarm.Payload.Enabled)
-				if lastPayloadEnabled != newPayloadEnabled {
-					recordSwarmEnabledFlip(ctx, auditWriter, "payload", lastPayloadEnabled, newPayloadEnabled)
-					lastPayloadEnabled = newPayloadEnabled
+				if !sameStringSet(lastPuddlePatterns, newCfg.Swarm.Puddle.Enabled) {
+					recordSwarmPatternsChange(ctx, auditWriter, "puddle", lastPuddlePatterns, newCfg.Swarm.Puddle.Enabled)
+					lastPuddlePatterns = append([]string(nil), newCfg.Swarm.Puddle.Enabled...)
 				}
-				newGitEnabled := substrateEnabled(newCfg.Swarm.Gitmirror.Enabled)
-				if lastGitmirrorEnabled != newGitEnabled {
-					recordSwarmEnabledFlip(ctx, auditWriter, "gitmirror", lastGitmirrorEnabled, newGitEnabled)
-					lastGitmirrorEnabled = newGitEnabled
+				if !sameStringSet(lastGitmirrorPatterns, newCfg.Swarm.Gitmirror.Enabled) {
+					recordSwarmPatternsChange(ctx, auditWriter, "gitmirror", lastGitmirrorPatterns, newCfg.Swarm.Gitmirror.Enabled)
+					lastGitmirrorPatterns = append([]string(nil), newCfg.Swarm.Gitmirror.Enabled...)
 				}
-				newCryptEnabled := substrateEnabled(newCfg.Swarm.Cryptsync.Enabled)
-				if lastCryptsyncEnabled != newCryptEnabled {
-					recordSwarmEnabledFlip(ctx, auditWriter, "cryptsync", lastCryptsyncEnabled, newCryptEnabled)
-					lastCryptsyncEnabled = newCryptEnabled
+				if !sameStringSet(lastFilesyncPatterns, newCfg.Swarm.Filesync.Enabled) {
+					recordSwarmPatternsChange(ctx, auditWriter, "filesync", lastFilesyncPatterns, newCfg.Swarm.Filesync.Enabled)
+					lastFilesyncPatterns = append([]string(nil), newCfg.Swarm.Filesync.Enabled...)
 				}
-				newFsEnabled := substrateEnabled(newCfg.Swarm.Filesync.Enabled)
-				if lastFilesyncEnabled != newFsEnabled {
-					recordSwarmEnabledFlip(ctx, auditWriter, "filesync", lastFilesyncEnabled, newFsEnabled)
-					lastFilesyncEnabled = newFsEnabled
+				if !sameStringSet(lastPayloadPatterns, newCfg.Swarm.Payload.Enabled) {
+					recordSwarmPatternsChange(ctx, auditWriter, "payload", lastPayloadPatterns, newCfg.Swarm.Payload.Enabled)
+					lastPayloadPatterns = append([]string(nil), newCfg.Swarm.Payload.Enabled...)
 				}
-
-				envoyInputs := fleetIndex.AllEnvoys()
-				hostnames := make([]string, 0, len(envoyInputs))
-				for _, e := range envoyInputs {
-					hostnames = append(hostnames, e.Hostname)
-				}
-
-				newGitBL := newCfg.Swarm.Gitmirror.Blacklist
-				if !sameStringSet(lastGitmirrorBlacklist, newGitBL) {
-					recordSwarmBlacklistChange(ctx, auditWriter, "gitmirror", lastGitmirrorBlacklist, newGitBL)
-				}
-				for _, hostname := range diffNewlyMatched(lastGitmirrorBlacklist, newGitBL, hostnames) {
-					slog.Info("gitmirror: dispatching blacklist eviction", "hostname", hostname)
-					if _, err := agentSvc.DispatchPush(ctx, isgrpc.DispatchParams{
-						Command:     "vigo swarm gitmirror _apply-blacklist",
-						TargetSpec:  hostname,
-						Operator:    "config.reload",
-						TimeoutSecs: 120,
-					}); err != nil {
-						slog.Warn("gitmirror: blacklist eviction dispatch failed", "hostname", hostname, "error", err)
-					}
-				}
-				lastGitmirrorBlacklist = append([]string(nil), newGitBL...)
-
-				// Cryptsync `_apply-blacklist` is host-level and dispatched
-				// to ALL envoys with the target host as the argument: the
-				// blacklisted host self-evicts identity material for every
-				// locally-enrolled user, and every other envoy drops the
-				// blacklisted host's pubkey from each user's peer table +
-				// recipient list. One dispatch per newly-matching host.
-				newCryptBL := newCfg.Swarm.Cryptsync.Blacklist
-				if !sameStringSet(lastCryptsyncBlacklist, newCryptBL) {
-					recordSwarmBlacklistChange(ctx, auditWriter, "cryptsync", lastCryptsyncBlacklist, newCryptBL)
-				}
-				for _, hostname := range diffNewlyMatched(lastCryptsyncBlacklist, newCryptBL, hostnames) {
-					slog.Info("cryptsync: dispatching blacklist eviction", "hostname", hostname)
-					cmd := fmt.Sprintf("vigo swarm cryptsync _apply-blacklist --hostname %s", hostname)
-					if _, err := agentSvc.DispatchPush(ctx, isgrpc.DispatchParams{
-						Command:     cmd,
-						TargetSpec:  "*",
-						Operator:    "config.reload",
-						TimeoutSecs: 120,
-					}); err != nil {
-						slog.Warn("cryptsync: blacklist eviction dispatch failed", "hostname", hostname, "error", err)
-					}
-				}
-				lastCryptsyncBlacklist = append([]string(nil), newCryptBL...)
-
-				// Payload + filesync blacklists are gate-only: agent-side
-				// enforcement is the soft-skip pattern, no destructive
-				// dispatch. Audit the change so an operator can see who
-				// flipped it and when.
-				newPayloadBL := newCfg.Swarm.Payload.Blacklist
-				if !sameStringSet(lastPayloadBlacklist, newPayloadBL) {
-					recordSwarmBlacklistChange(ctx, auditWriter, "payload", lastPayloadBlacklist, newPayloadBL)
-				}
-				lastPayloadBlacklist = append([]string(nil), newPayloadBL...)
-
-				newFsBL := newCfg.Swarm.Filesync.Blacklist
-				if !sameStringSet(lastFilesyncBlacklist, newFsBL) {
-					recordSwarmBlacklistChange(ctx, auditWriter, "filesync", lastFilesyncBlacklist, newFsBL)
-				}
-				lastFilesyncBlacklist = append([]string(nil), newFsBL...)
 			})
 
 			swarmPruner := swarm.NewRetentionPruner(7 * 24 * time.Hour)
@@ -2303,38 +2233,6 @@ func (a *swarmHostnameAdapter) MatchingEnvoys(target string) []string {
 	return names
 }
 
-// diffNewlyMatched returns hostnames that match any pattern in `next` but
-// none in `prev`. Used by the swarm blacklist reload hook to compute the
-// set of envoys that should receive a `_apply-blacklist` dispatch when
-// the operator publishes a config that adds them to a denylist. Patterns
-// are filepath.Match globs.
-func diffNewlyMatched(prev, next, hostnames []string) []string {
-	var out []string
-	for _, h := range hostnames {
-		nowMatches := false
-		for _, pat := range next {
-			if m, _ := filepath.Match(pat, h); m {
-				nowMatches = true
-				break
-			}
-		}
-		if !nowMatches {
-			continue
-		}
-		previouslyMatched := false
-		for _, pat := range prev {
-			if m, _ := filepath.Match(pat, h); m {
-				previouslyMatched = true
-				break
-			}
-		}
-		if !previouslyMatched {
-			out = append(out, h)
-		}
-	}
-	return out
-}
-
 // parseLivenessTTL parses the `swarm.manifest_liveness_ttl` config knob
 // into a time.Duration. Empty / zero / negative input disables the
 // liveness sweep (the pruner skips it). Default 24h matches the
@@ -2355,21 +2253,10 @@ func parseLivenessTTL(s string) time.Duration {
 	return d
 }
 
-// substrateEnabled collapses a per-substrate `*bool` Enabled field into a
-// plain bool. nil means "operator did not set it" → default-on. The same
-// rule lives at every reader of `cfg.Swarm.<sub>.Enabled` (see the
-// `injectServerVars` propagation in server/grpc/agentstream.go); centralizing
-// the rule here keeps the publish-hook diff logic readable.
-func substrateEnabled(p *bool) bool {
-	if p == nil {
-		return true
-	}
-	return *p
-}
-
 // sameStringSet reports whether `a` and `b` contain the same elements
 // regardless of order or duplicates. Used by the publish hook to decide
-// whether a substrate's blacklist materially changed across a reload.
+// whether a subsystem's authorization patterns materially changed across
+// a reload.
 func sameStringSet(a, b []string) bool {
 	if len(a) != len(b) {
 		// Length mismatch is sufficient when callers don't pass dups —
@@ -2398,13 +2285,17 @@ func sameStringSet(a, b []string) bool {
 	return true
 }
 
-// recordSwarmEnabledFlip emits a tamper-evident audit-chain entry whenever
-// a swarm gate flips. `substrate` is "swarm" for the fleet-wide kill
-// switch, or one of "payload"/"gitmirror"/"cryptsync"/"filesync" for the
-// per-substrate gates. Failures are logged at WARN — the audit chain is
-// best-effort from the publish hook (the server can't roll back a config
-// publish that already landed on disk just because a chain insert failed).
-func recordSwarmEnabledFlip(ctx context.Context, w *audit.Writer, substrate string, oldVal, newVal bool) {
+// recordSwarmPatternsChange emits a tamper-evident audit-chain entry
+// whenever a swarm authorization pattern list changes. `substrate` is
+// "swarm" for the top-level pattern, or one of
+// "puddle"/"gitmirror"/"filesync"/"payload" for the per-subsystem
+// patterns. The summary states the pattern delta; the payload carries
+// the full new list so a reviewer can reconstruct post-change state
+// without joining log streams. Failures are logged at WARN — the audit
+// chain is best-effort from the publish hook (the server can't roll
+// back a config publish that already landed on disk just because a
+// chain insert failed).
+func recordSwarmPatternsChange(ctx context.Context, w *audit.Writer, substrate string, oldList, newList []string) {
 	if w == nil {
 		return
 	}
@@ -2412,31 +2303,12 @@ func recordSwarmEnabledFlip(ctx context.Context, w *audit.Writer, substrate stri
 	if substrate != "swarm" {
 		eventType = fmt.Sprintf("swarm.%s.enabled", substrate)
 	}
-	summary := fmt.Sprintf("%t → %t", oldVal, newVal)
-	payload := fmt.Sprintf(`{"substrate":%q,"from":%t,"to":%t}`, substrate, oldVal, newVal)
-	if err := w.Record(ctx, eventType, "config.reload", "config", summary, payload); err != nil {
-		slog.Warn("audit: failed to record swarm enabled flip",
-			"substrate", substrate, "from", oldVal, "to", newVal, "error", err)
-	}
-}
-
-// recordSwarmBlacklistChange emits an audit-chain entry whenever a
-// substrate's blacklist patterns change (added or removed). The summary
-// states the pattern delta; the payload carries the full new list so a
-// reviewer can reconstruct the post-change state without joining log
-// streams. Pattern-level (not per-resolved-hostname) — the patterns are
-// what the operator actually edited in YAML.
-func recordSwarmBlacklistChange(ctx context.Context, w *audit.Writer, substrate string, oldList, newList []string) {
-	if w == nil {
-		return
-	}
-	eventType := fmt.Sprintf("swarm.%s.blacklist", substrate)
 	added, removed := diffStringSets(oldList, newList)
 	summary := blacklistChangeSummary(added, removed)
 	payload := fmt.Sprintf(`{"substrate":%q,"added":%s,"removed":%s,"new_list":%s}`,
 		substrate, jsonStringArray(added), jsonStringArray(removed), jsonStringArray(newList))
 	if err := w.Record(ctx, eventType, "config.reload", "config", summary, payload); err != nil {
-		slog.Warn("audit: failed to record swarm blacklist change",
+		slog.Warn("audit: failed to record swarm patterns change",
 			"substrate", substrate, "added", added, "removed", removed, "error", err)
 	}
 }

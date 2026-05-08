@@ -355,9 +355,20 @@ watcher:
 # multicast discovery. Four-layer discovery: local multicast → peer exchange
 # → server peer list → direct from seeder.
 
+# Pattern lists are first-match-wins, "-" prefix denies, default-deny on no
+# match (same semantics as matchfile patterns). Examples:
+#   []                          → off everywhere (default)
+#   ["*"]                       → fleet-wide on
+#   ["-rasp1", "*"]             → everywhere except rasp1
+#   ["annlap", "plex"]          → only those two; everything else denied
+#
+# Two layers gate every subsystem. Both `swarm.enabled` (substrate-level)
+# AND the per-subsystem list must allow a host for the subsystem to be
+# active there.
+
 # swarm:
-#   enabled: false                              # default false
-#   seed_dir: "/var/lib/vigo/swarm/seed"        # where vigocli distribute writes seeds (default)
+#   enabled: ["*"]                              # which envoys run the swarm substrate
+#   seed_dir: "/var/lib/vigo/swarm/seed"        # where vigocli distribute writes seeds
 #   port: 1531                                  # agent swarm listen port
 #   max_bandwidth_percent: 50                   # max % of link speed agents use for swarm
 #   manifest_liveness_ttl: 24h                  # active manifest entries unrefreshed for this
@@ -366,60 +377,28 @@ watcher:
 #                                               # publisher disappears. Empty / zero disables
 #                                               # the sweep.
 #
-#   # Payload runs by default on every enrolled envoy. Setting
-#   # `enabled: false` halts payload reception fleet-wide (agents stop
-#   # applying new payload manifest entries); already-cached blobs
-#   # under /var/lib/vigo/swarm/ are preserved so re-enabling resumes
-#   # operation untouched. The blacklist denies specific hostnames —
-#   # gate-only, never destructive (already-cached blobs on a newly-
-#   # blacklisted host are not evicted automatically).
-#   payload:
-#     enabled: true
-#     blacklist:
-#       - "raspberrypi"
-#       - "*.test.example.com"
+#   # Puddle (per-user identity) authorization. Cryptsync derives its
+#   # authorization from this list — there is no separate cryptsync
+#   # section. A host allowed here can hold puddle identity material
+#   # and cryptsync ciphertext for its locally-enrolled members; a
+#   # host denied here cannot use either subsystem.
+#   puddle:
+#     enabled: ["annlap", "plex", "girlslaptop"]
 #
-#   # Gitmirror runs by default on every enrolled envoy. Setting
-#   # `enabled: false` halts gitmirror fleet-wide (publisher and
-#   # receiver idle); already-held mirrors at
-#   # /var/lib/vigo/swarm/gitmirror/mirrors/ are preserved so re-
-#   # enabling resumes operation untouched. Adding a host to
-#   # `blacklist` triggers fleet-wide eviction of its existing
-#   # mirrors on the next `vigocli config publish`. Default-allow:
-#   # empty blacklist means every enrolled envoy participates.
+#   # Gitmirror (git-over-swarm) authorization — publisher and
+#   # bundle-holder gate.
 #   gitmirror:
-#     enabled: true
-#     blacklist:
-#       - "raspberrypi"
-#       - "*.test.example.com"
+#     enabled: ["*"]
 #
-#   # Cryptsync runs by default on every enrolled envoy. Setting
-#   # `enabled: false` halts cryptsync fleet-wide (announcer, listener,
-#   # push handler all idle); identity material under ~user/.cryptsync/
-#   # is preserved so re-enabling resumes operation without
-#   # re-enrollment. Adding a host to `blacklist` scrubs its identity
-#   # material fleet-wide and removes its pubkey from peer recipient
-#   # lists on the next `vigocli config publish`.
-#   cryptsync:
-#     enabled: true
-#     blacklist:
-#       - "raspberrypi"
-#       - "*.test.example.com"
-#
-#   # Filesync runs by default on every enrolled envoy. Setting
-#   # `enabled: false` halts filesync fleet-wide (multicast announcer,
-#   # listener, push handler all idle); user content under
-#   # ~user/filesync/ is preserved so re-enabling resumes operation
-#   # untouched. Adding a host to `blacklist` stops it announcing /
-#   # responding to peer requests but does NOT scrub its
-#   # ~user/filesync/ — filesync content is plaintext user data, so
-#   # the blacklist is gate-only by design. Operators who want
-#   # destructive removal do it manually.
+#   # Filesync (LAN plaintext directory mirror) daemon authorization.
+#   # Per-user opt-in still requires the user creating ~/filesync/.
 #   filesync:
-#     enabled: true
-#     blacklist:
-#       - "raspberrypi"
-#       - "*.test.example.com"
+#     enabled: ["*"]
+#
+#   # Payload (admin-pushed fleet file distribution) authorization.
+#   # The admin distribute endpoint refuses when this list is empty.
+#   payload:
+#     enabled: ["*"]
 
 
 # ── Gossip & Fleet Primitives ────────────────────────────────────────────

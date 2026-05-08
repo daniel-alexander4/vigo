@@ -197,17 +197,6 @@ func injectServerVars(bundle *pb.PolicyBundle, server map[string]any) error {
 	return nil
 }
 
-// hostnameMatchesAny returns true iff hostname matches any filepath.Match
-// glob in the patterns slice. Used by per-envoy blacklist checks.
-func hostnameMatchesAny(patterns []string, hostname string) bool {
-	for _, pat := range patterns {
-		if matched, _ := filepath.Match(pat, hostname); matched {
-			return true
-		}
-	}
-	return false
-}
-
 func filterBundleByTraits(bundle *pb.PolicyBundle, traits map[string]any) *pb.PolicyBundle {
 	if traits == nil || bundle == nil {
 		return bundle

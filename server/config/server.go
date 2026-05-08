@@ -59,6 +59,10 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 		return nil, fmt.Errorf("reading server config %s: %w", path, err)
 	}
 
+	if err := detectRetiredSwarmShape(data); err != nil {
+		return nil, err
+	}
+
 	var cfg ServerConfig
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing server config: %w", err)
@@ -70,6 +74,90 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 	}
 
 	return &cfg, nil
+}
+
+// detectRetiredSwarmShape inspects raw server.yaml for swarm fields that
+// were valid pre-0.41.0 and now produce a hard error. Catches:
+//
+//   - swarm.cryptsync.* — entire section retired (cryptsync derives from
+//     swarm.puddle.enabled).
+//   - swarm.<sub>.blacklist — retired across all sub-subsections (subsumed
+//     by negative patterns in the new pattern-list shape).
+//   - swarm.enabled / swarm.<sub>.enabled as a bool — retired (now a
+//     pattern list of hostname globs).
+//
+// Without this, yaml.v3 would silently drop unknown fields (cryptsync,
+// blacklist) and surface the bool→list mismatch as an opaque type
+// error. This pre-parse pass produces a single error pointing at the
+// migration doc so the operator can fix everything in one pass.
+func detectRetiredSwarmShape(data []byte) error {
+	var raw struct {
+		Swarm struct {
+			Enabled   any `yaml:"enabled"`
+			Cryptsync any `yaml:"cryptsync"`
+			Puddle    struct {
+				Enabled any `yaml:"enabled"`
+			} `yaml:"puddle"`
+			Gitmirror struct {
+				Enabled   any `yaml:"enabled"`
+				Blacklist any `yaml:"blacklist"`
+			} `yaml:"gitmirror"`
+			Filesync struct {
+				Enabled   any `yaml:"enabled"`
+				Blacklist any `yaml:"blacklist"`
+			} `yaml:"filesync"`
+			Payload struct {
+				Enabled   any `yaml:"enabled"`
+				Blacklist any `yaml:"blacklist"`
+			} `yaml:"payload"`
+		} `yaml:"swarm"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		// Permissive parse can't fail on its own — if it does, fall through
+		// to the typed parse and let that surface the underlying issue.
+		return nil
+	}
+	var retired []string
+	if isBoolScalar(raw.Swarm.Enabled) {
+		retired = append(retired, "swarm.enabled is a bool but must be a pattern list (e.g. [\"*\"] for fleet-wide on, [] for off)")
+	}
+	if raw.Swarm.Cryptsync != nil {
+		retired = append(retired, "swarm.cryptsync.* — entire section retired in 0.41.0; cryptsync now derives from swarm.puddle.enabled")
+	}
+	if isBoolScalar(raw.Swarm.Puddle.Enabled) {
+		retired = append(retired, "swarm.puddle.enabled is a bool but must be a pattern list")
+	}
+	if isBoolScalar(raw.Swarm.Gitmirror.Enabled) {
+		retired = append(retired, "swarm.gitmirror.enabled is a bool but must be a pattern list")
+	}
+	if raw.Swarm.Gitmirror.Blacklist != nil {
+		retired = append(retired, "swarm.gitmirror.blacklist — retired; use a deny pattern in swarm.gitmirror.enabled (e.g. [\"-rasp1\", \"*\"])")
+	}
+	if isBoolScalar(raw.Swarm.Filesync.Enabled) {
+		retired = append(retired, "swarm.filesync.enabled is a bool but must be a pattern list")
+	}
+	if raw.Swarm.Filesync.Blacklist != nil {
+		retired = append(retired, "swarm.filesync.blacklist — retired; use a deny pattern in swarm.filesync.enabled")
+	}
+	if isBoolScalar(raw.Swarm.Payload.Enabled) {
+		retired = append(retired, "swarm.payload.enabled is a bool but must be a pattern list")
+	}
+	if raw.Swarm.Payload.Blacklist != nil {
+		retired = append(retired, "swarm.payload.blacklist — retired; use a deny pattern in swarm.payload.enabled")
+	}
+	if len(retired) == 0 {
+		return nil
+	}
+	return fmt.Errorf("server.yaml uses retired swarm shape (pre-0.41.0):\n  - %s\n\nsee docs/reference/server-yaml.md#0.41.0-migration",
+		strings.Join(retired, "\n  - "))
+}
+
+// isBoolScalar reports whether v is a YAML scalar that decoded to a bool.
+// Used by detectRetiredSwarmShape to distinguish the retired bool form
+// from the new pattern-list form (a YAML sequence decodes to []any).
+func isBoolScalar(v any) bool {
+	_, ok := v.(bool)
+	return ok
 }
 
 // resolveServerSecrets resolves secret: prefixed values in the server config.
