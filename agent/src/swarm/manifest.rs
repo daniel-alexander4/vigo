@@ -330,12 +330,19 @@ impl Manifest {
         }
     }
 
-    /// Persist to disk (caller holds write lock).
+    /// Persist to disk (caller holds write lock). Mode 0644 so user-mode
+    /// CLI verbs can read without sudo (0.41.1+); the file is non-secret
+    /// — its contents are gossiped to peers in the clear over swarm mTLS.
     fn persist_locked(&self, data: &ManifestData) {
         if let Ok(json) = serde_json::to_string_pretty(data) {
             // Atomic write: write to temp file, then rename.
             let tmp = self.path.with_extension("json.tmp");
             if std::fs::write(&tmp, &json).is_ok() {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o644));
+                }
                 std::fs::rename(&tmp, &self.path).ok();
             }
         }

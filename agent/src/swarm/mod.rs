@@ -16,6 +16,7 @@
 pub mod bandwidth;
 pub mod bitmap;
 pub mod cache;
+pub mod cli;
 pub mod cryptsync;
 pub mod discovery;
 pub mod download;
@@ -34,6 +35,7 @@ pub mod prober;
 pub mod scheduler;
 pub mod puddle;
 pub mod server;
+pub mod state_mirror;
 pub mod target;
 
 use std::collections::hash_map::DefaultHasher;

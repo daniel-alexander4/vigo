@@ -3,7 +3,7 @@
 
 Vigo has two CLI binaries:
 
-- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the [`vigo swarm gitmirror` recovery CLI](agent-swarm-gitmirror.md) for inspecting and recovering personal-DR git mirrors, the [`vigo swarm cryptsync` CLI](agent-swarm-cryptsync.md) for managing [cryptsync](../../engineering/subsystems/cryptsync.md) — the per-user encrypted P2P directory, and the [`vigo swarm puddle` CLI](agent-swarm-puddle.md) for managing [puddle](../../engineering/subsystems/puddle.md) — the per-user puddle identity primitive.
+- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the read-only [`vigo swarm` diagnostic verbs](agent-swarm.md) (`status` / `seeds {list,show}` / `peers list`) for envoy-side substrate inspection, the [`vigo swarm gitmirror` recovery CLI](agent-swarm-gitmirror.md) for inspecting and recovering personal-DR git mirrors, the [`vigo swarm cryptsync` CLI](agent-swarm-cryptsync.md) for managing [cryptsync](../../engineering/subsystems/cryptsync.md) — the per-user encrypted P2P directory, and the [`vigo swarm puddle` CLI](agent-swarm-puddle.md) for managing [puddle](../../engineering/subsystems/puddle.md) — the per-user puddle identity primitive.
 - **`vigocli`** -- the admin CLI that talks to the server's REST API (documented below).
 
 ---

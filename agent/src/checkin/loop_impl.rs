@@ -757,6 +757,19 @@ fn accept_bundle(store: &StateStore, policy_state: &PolicyState, traits_json: Op
             }
             let _ = wtxn.commit();
         }
+        // Mirror the resolved swarm gate state to the user-readable
+        // /var/lib/vigo/swarm/state.json (0.41.1+) so `vigo swarm
+        // status` works without sudo. Best-effort — a failure here
+        // never blocks bundle acceptance.
+        let path = crate::swarm::state_mirror::default_path();
+        if let Err(e) = crate::swarm::state_mirror::write(
+            &path,
+            env!("CARGO_PKG_VERSION"),
+            policy_state.version,
+            &bundle.vars_json,
+        ) {
+            warn!(error = %format!("{e:#}"), path = %path.display(), "failed to write swarm state mirror");
+        }
     }
 }
 

@@ -135,6 +135,13 @@ enum Commands {
     /// missing), removes `.partial/` dirs whose final blob has
     /// already been assembled. Idempotent; safe to re-run.
     SwarmApplyCleanup,
+    /// Read-only diagnostic verbs for the swarm substrate (0.41.1+):
+    /// `vigo swarm status`, `vigo swarm seeds {list,show}`,
+    /// `vigo swarm peers list`. Reads /var/lib/vigo/swarm/{state,
+    /// manifest,peers}.json (mode 0644). No sudo required.
+    SwarmDiag {
+        args: Vec<String>,
+    },
 }
 
 fn parse_args() -> Result<Cli> {
@@ -296,17 +303,25 @@ fn parse_args() -> Result<Cli> {
                 Some("gitmirror") => Commands::Gitmirror { args: positional[2..].to_vec() },
                 Some("cryptsync") => Commands::Cryptsync { args: positional[2..].to_vec() },
                 Some("puddle") => Commands::SelfFleet { args: positional[2..].to_vec() },
+                // Read-only diagnostic verbs (0.41.1+): substrate
+                // status, seed inventory, peer table. Read against
+                // /var/lib/vigo/swarm/{state,manifest,peers}.json.
+                Some("status") | Some("seeds") | Some("peers") => {
+                    Commands::SwarmDiag { args: positional[1..].to_vec() }
+                }
+                // Help routes through the diag dispatcher so the
+                // user sees the full envoy-side verb tree.
+                Some("--help") | Some("-h") | Some("help") | None => {
+                    Commands::SwarmDiag { args: positional[1..].to_vec() }
+                }
                 // Hidden: server-dispatched cleanup verb. Mirrors the
                 // `_apply-blacklist` pattern (gitmirror/cryptsync), but
                 // operates on the substrate-shared blob cache rather
                 // than per-substrate state. Not advertised in --help.
                 Some("_apply-cleanup") => Commands::SwarmApplyCleanup,
                 Some(other) => bail!(
-                    "unknown swarm subcommand: {}\nExpected one of: gitmirror | cryptsync | puddle",
-                    other
-                ),
-                None => bail!(
-                    "vigo swarm requires a subcommand: gitmirror | cryptsync | puddle"
+                    "unknown swarm subcommand: {other}\n\
+                     run `vigo swarm --help` for usage"
                 ),
             },
             "cryptsync-session-daemon" => {
@@ -1675,6 +1690,14 @@ async fn main() -> Result<()> {
             // Returns a one-line operator summary on stdout so the
             // dispatching side has audit-friendly output.
             vigo::swarm::apply_cleanup()
+        }
+
+        Some(Commands::SwarmDiag { args }) => {
+            // Read-only envoy-wide diagnostic verbs (0.41.1+):
+            // status / seeds {list,show} / peers list. Reads the
+            // mode-0644 daemon-canonical mirrors under
+            // /var/lib/vigo/swarm/. No sudo required.
+            vigo::swarm::cli::run(args.clone())
         }
 
         Some(Commands::Traits { collectors: args }) => {

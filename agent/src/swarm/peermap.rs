@@ -346,6 +346,14 @@ impl PeerMap {
         if let Ok(json) = serde_json::to_string(&entries) {
             let tmp = path.with_extension("json.tmp");
             if std::fs::write(&tmp, &json).is_ok() {
+                // Mode 0644 so user-mode CLI verbs can read without
+                // sudo (0.41.1+). Peer addresses are non-secret —
+                // they're announced on multicast in the clear.
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o644));
+                }
                 std::fs::rename(&tmp, path).ok();
             }
         }
