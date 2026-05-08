@@ -28,9 +28,7 @@ use anyhow::{Context, Result};
 use ed25519_dalek::{Signer, SigningKey};
 use zeroize::Zeroizing;
 
-use super::config::{
-    identity_path, is_enrolled, load_config, salt_path, WrapMode,
-};
+use super::config::{identity_path, is_enrolled, salt_path};
 use super::crypt::{unwrap_identity, wrap_identity, FLEET_WRAP_CHALLENGE};
 
 /// Suffix segment for the backup file. Final shape:
@@ -49,11 +47,6 @@ pub const BACKUP_RETENTION_SECS: u64 = 30 * 24 * 60 * 60;
 pub enum RewrapOutcome {
     /// Cryptsync isn't enrolled on this envoy; nothing to do.
     NotEnrolled,
-    /// Cryptsync is in standalone wrap-mode; rewrap doesn't apply.
-    /// The per-envoy age identity is wrapped under an operator-typed
-    /// passphrase, not the puddle keypair, so a puddle rotation is a
-    /// no-op for it.
-    StandaloneSkipped,
     /// Rewrap succeeded; the original envelope is at `backup_path`
     /// for `BACKUP_RETENTION_SECS` seconds.
     Rewrapped { backup_path: PathBuf },
@@ -77,10 +70,6 @@ pub fn rewrap_identity_for_new_puddle_key(
 ) -> Result<RewrapOutcome> {
     if !is_enrolled(home) {
         return Ok(RewrapOutcome::NotEnrolled);
-    }
-    let cfg = load_config(home);
-    if cfg.wrap_mode != WrapMode::Puddle {
-        return Ok(RewrapOutcome::StandaloneSkipped);
     }
 
     let id_path = identity_path(home);
@@ -221,9 +210,7 @@ mod tests {
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 
-    use crate::swarm::cryptsync::config::{
-        config_path, dot_dir, salt_path, save_config, UserConfig,
-    };
+    use crate::swarm::cryptsync::config::{dot_dir, salt_path};
     use crate::swarm::cryptsync::crypt::{fresh_salt, wrap_identity};
 
     fn fresh_signing_key() -> SigningKey {
@@ -232,7 +219,7 @@ mod tests {
 
     fn enroll_puddle_mode(home: &Path, fleet_key: &SigningKey) -> Identity {
         // Mirror what `cryptsync puddle init` does on disk: write
-        // identity.age + identity.salt + config.yaml{wrap_mode: puddle}.
+        // identity.age + identity.salt.
         std::fs::create_dir_all(dot_dir(home)).unwrap();
         let id = Identity::generate();
         let salt = fresh_salt();
@@ -240,9 +227,6 @@ mod tests {
         let blob = wrap_identity(&id, pw.as_slice(), &salt).unwrap();
         std::fs::write(identity_path(home), &blob).unwrap();
         std::fs::write(salt_path(home), &salt).unwrap();
-        let mut cfg = UserConfig::default();
-        cfg.wrap_mode = WrapMode::Puddle;
-        save_config(home, &cfg, "tester").unwrap();
         id
     }
 
@@ -328,34 +312,6 @@ mod tests {
     }
 
     #[test]
-    fn rewrap_skips_standalone_mode() {
-        let dir = tempfile::tempdir().unwrap();
-        // Enroll under standalone (passphrase-derived) wrap.
-        std::fs::create_dir_all(dot_dir(dir.path())).unwrap();
-        let id = Identity::generate();
-        let salt = fresh_salt();
-        let blob = wrap_identity(&id, b"per-envoy-passphrase", &salt).unwrap();
-        std::fs::write(identity_path(dir.path()), &blob).unwrap();
-        std::fs::write(salt_path(dir.path()), &salt).unwrap();
-        // No config.yaml = default = standalone.
-
-        let old = fresh_signing_key();
-        let new = fresh_signing_key();
-        let outcome = rewrap_identity_for_new_puddle_key(
-            dir.path(),
-            "tester",
-            &old,
-            &new,
-        )
-        .unwrap();
-        assert!(matches!(outcome, RewrapOutcome::StandaloneSkipped));
-
-        // identity.age must be untouched.
-        let after = std::fs::read(identity_path(dir.path())).unwrap();
-        assert_eq!(after, blob);
-    }
-
-    #[test]
     fn rewrap_fails_when_old_keypair_is_wrong() {
         let dir = tempfile::tempdir().unwrap();
         let real_old = fresh_signing_key();
@@ -390,9 +346,6 @@ mod tests {
         // the order, this test catches the leak.
         assert!(!leftover_backup, "no backup file should be left behind on unwrap failure");
 
-        // config.yaml is irrelevant for this assertion but include
-        // for read-coverage of the path.
-        assert!(config_path(dir.path()).exists());
     }
 
     #[test]

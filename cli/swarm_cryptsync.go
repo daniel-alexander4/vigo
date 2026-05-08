@@ -21,10 +21,10 @@ import (
 // recipient drift and active unlock sessions.
 //
 // Mirrors the shape of `vigocli swarm gitmirror` + `vigocli swarm filesync`. No write
-// verbs — cryptsync enrollment is per-user on the envoy. Under puddle
-// mode (ADR-016) it auto-runs on `vigo swarm puddle unlock` (which
-// invokes `vigo swarm cryptsync puddle init` inline). Standalone mode
-// uses `vigo swarm cryptsync standalone init` / `enroll` directly.
+// verbs — cryptsync enrollment is per-user on the envoy. Per ADR-020,
+// cryptsync is puddle-only: bootstrap auto-runs on `vigo swarm puddle
+// unlock` (which invokes `vigo swarm cryptsync puddle init` inline).
+// Single-envoy puddles cover the no-peers encryption-at-rest case.
 
 // cryptsyncFleet mirrors `server/cryptsyncmesh.Fleet`. Duplicated rather than
 // imported so the CLI stays decoupled from the server package
@@ -77,12 +77,12 @@ recipients digest, and session unlock status — through the 'cryptsync'
 trait on every check-in. The server joins every envoy's report into a
 fleet view; this command renders it. One row per user.
 
-Cryptsync enrollment is per-user on the envoy. Under puddle mode it
-auto-runs on 'vigo swarm puddle unlock' (which invokes 'cryptsync puddle
-init' inline). Standalone mode uses 'vigo swarm cryptsync standalone
-init' / 'enroll'. No admin write path — this command never decrypts
-content, never touches keys, and never forces unlock. It only shows
-what each envoy is reporting.`,
+Cryptsync enrollment is per-user on the envoy. Per ADR-020, cryptsync
+is puddle-only: bootstrap auto-runs on 'vigo swarm puddle unlock'
+(which invokes 'cryptsync puddle init' inline). Single-envoy puddles
+cover the no-peers encryption-at-rest case. No admin write path —
+this command never decrypts content, never touches keys, and never
+forces unlock. It only shows what each envoy is reporting.`,
 }
 
 var cryptsyncStatusCmd = &cobra.Command{

@@ -748,6 +748,22 @@ fn handle_incoming(inc: IncomingAnnouncement) {
         }
     }
 
+    // ADR-020: announces without a puddle_pubkey are dropped at the
+    // front door. Pre-0.40.0 standalone-mode peers announced with an
+    // empty puddle_pubkey; that path is gone. The cert-verification
+    // branch above can also strip the puddle pubkey when the cert
+    // doesn't validate — those announces fall through here and are
+    // logged once at info before being dropped.
+    if effective_puddle_pubkey.is_empty() {
+        tracing::info!(
+            user = %announcement.user,
+            host = %announcement.machine,
+            "cryptsync: dropping announce with empty puddle_pubkey \
+             (pre-ADR-020 standalone peer or cert-rejected)"
+        );
+        return;
+    }
+
     let entry = PeerEntry {
         hostname: announcement.machine.clone(),
         pubkey: announcement.pubkey.clone(),
@@ -755,10 +771,7 @@ fn handle_incoming(inc: IncomingAnnouncement) {
         last_seen: announcement.emitted_at,
         last_seen_addr: Some(from.to_string()),
         // ADR-016: capture the announcer's puddle pubkey so the
-        // recipient-resolution path can later filter by fleet match.
-        // Empty when the peer is running standalone, the announce
-        // predates the fleet-pubkey field, OR the cert verification
-        // above stripped it because the cert didn't validate.
+        // recipient-resolution path can filter by puddle match.
         puddle_pubkey: effective_puddle_pubkey.clone(),
         // ADR-016 follow-up: TOFU pinning. Left empty here; upsert()
         // pins on first sighting and enforces match on subsequent

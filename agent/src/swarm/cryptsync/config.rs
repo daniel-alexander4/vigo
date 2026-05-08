@@ -167,7 +167,7 @@ pub fn session_unlocked_path(home: &Path) -> PathBuf {
 
 /// Sentinel file that tells the daemon reactor to regenerate
 /// `recipients.txt` from the daemon-side `peers.json` immediately.
-/// Dropped by `vigo swarm cryptsync {puddle init, standalone enroll}` after seeding the user-side files
+/// Dropped by `vigo swarm cryptsync puddle init` after seeding the user-side files
 /// — the daemon picks it up on the next reactor tick (≤30 s) and
 /// folds existing live peers into the freshly-seeded recipients.
 /// Without this, post-reenroll recipients.txt would stay at "self
@@ -209,38 +209,9 @@ pub fn signing_pubkey_path(username: &str) -> PathBuf {
     agent_state_dir(username).join("signing.pub")
 }
 
-/// How the per-envoy age identity's wrapping key is sourced
-/// (ADR-016 follow-up). Persisted in `config.yaml` at init time so
-/// the daily `unlock` verb routes to the correct path without
-/// re-asking the operator.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum WrapMode {
-    /// Today's path: prompt for a per-envoy passphrase, derive via
-    /// Argon2id. Independent of puddle — a user without a fleet
-    /// identity stays here. Loss of this passphrase loses the
-    /// envoy's cryptsync corpus, separately from any fleet
-    /// passphrase.
-    Standalone,
-    /// ADR-016 puddle mode: derive the wrapping key by asking the
-    /// puddle session helper to sign a fixed domain-separated
-    /// challenge. No password prompt at unlock — the puddle
-    /// session helper must be running. Same blast radius as
-    /// puddle itself (lose puddle passphrase → lose cryptsync).
-    Puddle,
-}
-
-impl Default for WrapMode {
-    fn default() -> Self {
-        // Default to Standalone for back-compat with pre-0.36.x
-        // config.yaml files that don't carry the field — those
-        // envoys were enrolled under the legacy passphrase path.
-        WrapMode::Standalone
-    }
-}
-
 /// Per-user cryptsync settings. Default (missing file) = LAN-only,
-/// 60 m idle timeout, standalone wrap mode.
+/// 60 m idle timeout. The wrapping-key source is fixed at "puddle
+/// session helper" per ADR-020; no per-config mode field.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserConfig {
     /// Hostnames of cross-subnet receivers unreachable via multicast.
@@ -253,14 +224,6 @@ pub struct UserConfig {
     /// Resets on every `decrypt` call. Default 60.
     #[serde(default = "default_idle_minutes")]
     pub idle_timeout_minutes: u32,
-
-    /// ADR-016: how the wrapping key for `identity.age` is sourced.
-    /// Written by `cryptsync puddle init` (Puddle) or `cryptsync
-    /// standalone init / enroll` (Standalone). Pre-0.36.x configs
-    /// without the field default to Standalone — those envoys were
-    /// already enrolled under that path.
-    #[serde(default)]
-    pub wrap_mode: WrapMode,
 }
 
 fn default_idle_minutes() -> u32 {
@@ -272,7 +235,6 @@ impl Default for UserConfig {
         Self {
             cross_subnet_peers: Vec::new(),
             idle_timeout_minutes: default_idle_minutes(),
-            wrap_mode: WrapMode::default(),
         }
     }
 }
@@ -280,8 +242,7 @@ impl Default for UserConfig {
 /// Atomic save of the user config back to `config.yaml`. Writes
 /// mode 0600, owned by the calling user (when `chown_to_user_pub`
 /// can resolve the username; non-fatal on failure — the operator
-/// can chown manually). Used by the bootstrap flow to record
-/// `wrap_mode` at init time.
+/// can chown manually).
 pub fn save_config(home: &Path, cfg: &UserConfig, username: &str) -> Result<()> {
     use std::io::Write;
     let path = config_path(home);
@@ -424,49 +385,28 @@ mod tests {
     }
 
     #[test]
-    fn wrap_mode_defaults_to_standalone() {
-        let dir = tempfile::tempdir().unwrap();
-        let cfg = load_config(dir.path());
-        assert_eq!(cfg.wrap_mode, WrapMode::Standalone);
-    }
-
-    #[test]
-    fn wrap_mode_back_compat_when_field_missing_legacy_unused() {
-        // Pre-0.36.x configs don't carry wrap_mode — those envoys
-        // were enrolled under the legacy passphrase path. Loader
-        // must default to Standalone, never Puddle (would break
-        // unlock by trying to talk to a non-existent session helper).
-        let dir = tempfile::tempdir().unwrap();
-        fs::create_dir_all(dot_dir(dir.path())).unwrap();
-        let yaml = "cross_subnet_peers: []\nidle_timeout_minutes: 60\n";
-        fs::write(config_path(dir.path()), yaml).unwrap();
-        let cfg = load_config(dir.path());
-        assert_eq!(cfg.wrap_mode, WrapMode::Standalone);
-    }
-
-    #[test]
-    fn wrap_mode_round_trips_through_save_load() {
+    fn config_round_trips_through_save_load() {
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir_all(dot_dir(dir.path())).unwrap();
         let mut cfg = UserConfig::default();
-        cfg.wrap_mode = WrapMode::Puddle;
         cfg.idle_timeout_minutes = 30;
         cfg.cross_subnet_peers = vec!["host-a".to_string()];
         save_config(dir.path(), &cfg, "tester").unwrap();
         let reloaded = load_config(dir.path());
-        assert_eq!(reloaded.wrap_mode, WrapMode::Puddle);
         assert_eq!(reloaded.idle_timeout_minutes, 30);
         assert_eq!(reloaded.cross_subnet_peers, vec!["host-a".to_string()]);
     }
 
     #[test]
-    fn wrap_mode_serializes_lowercase() {
-        // The on-disk YAML must use lowercase tags so operators
-        // don't have to type `WrapMode: Puddle`. Belt-and-braces
-        // assertion in case someone strips the serde attribute.
-        let mut cfg = UserConfig::default();
-        cfg.wrap_mode = WrapMode::Puddle;
-        let yaml = serde_yaml::to_string(&cfg).unwrap();
-        assert!(yaml.contains("wrap_mode: puddle"), "got: {}", yaml);
+    fn legacy_wrap_mode_field_is_ignored() {
+        // Pre-0.40.0 configs may carry a `wrap_mode:` field. With
+        // the field gone from UserConfig, serde silently ignores
+        // unknown fields and the load succeeds with defaults.
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dot_dir(dir.path())).unwrap();
+        let yaml = "cross_subnet_peers: []\nidle_timeout_minutes: 60\nwrap_mode: standalone\n";
+        fs::write(config_path(dir.path()), yaml).unwrap();
+        let cfg = load_config(dir.path());
+        assert_eq!(cfg.idle_timeout_minutes, 60);
     }
 }

@@ -853,14 +853,18 @@ mod tests {
         assert!(keys[0].contains("fresh"));
     }
 
-    /// A standalone peer (empty `puddle_pubkey`) is excluded under fleet
-    /// mode — they aren't a member of the local user's fleet.
+    /// A peer in a different puddle is excluded — they aren't a
+    /// member of the local user's puddle. Post-ADR-020 announces with
+    /// empty `puddle_pubkey` are dropped at the front door before
+    /// reaching the peer table at all; this test guards the residual
+    /// "wrong puddle pubkey" case (which is still possible from an
+    /// announce-receive that bypasses the front-door drop).
     #[test]
-    fn live_pubkeys_for_puddles_excludes_standalone_peer_under_fleet_filter() {
+    fn live_pubkeys_for_puddles_excludes_peer_under_different_puddle() {
         let fleet = "f-pk";
         let mut t = PeerTable::empty("dan");
         t.upsert(sample_peer_in_puddle("member", 200, fleet));
-        t.upsert(sample_peer("rogue-standalone", 200)); // empty puddle_pubkey
+        t.upsert(sample_peer_in_puddle("other-puddle", 200, "other-pk"));
 
         let keys = t.live_pubkeys_for_puddles(200, &[fleet.to_string()]);
         assert_eq!(keys.len(), 1);
@@ -911,22 +915,24 @@ mod tests {
         assert_eq!(stored.pinned_puddle_pubkey, "fleet-pk-1");
     }
 
-    /// First sighting with empty puddle_pubkey leaves the pin empty —
-    /// the peer is running standalone and we don't want to pre-pin
-    /// anything. They can later announce a puddle pubkey and have it
-    /// TOFU-pinned at that point.
+    /// First sighting with empty puddle_pubkey leaves the pin empty.
+    /// Post-ADR-020 the announce-receive path drops empty-puddle
+    /// announces at the front door before reaching upsert, but the
+    /// upsert-level invariant (no auto-pin without explicit
+    /// puddle_pubkey on the entry) is preserved as a defensive
+    /// guard for direct test-driven inserts and any future code path
+    /// that reaches upsert without going through receive.
     #[test]
-    fn upsert_first_sighting_standalone_keeps_pin_empty() {
+    fn upsert_first_sighting_no_puddle_keeps_pin_empty() {
         let mut t = PeerTable::empty("dan");
         t.upsert(sample_peer("alpha", 100));
         let stored = t.peers.get("alpha").unwrap();
         assert_eq!(stored.pinned_puddle_pubkey, "");
     }
 
-    /// A peer that started standalone and later adopts puddle has
-    /// its pin set on the next non-stale heartbeat. Mirrors the
-    /// real-world flow: user runs `puddle init` after cryptsync
-    /// was already running.
+    /// A peer that adopts a puddle pubkey on a later heartbeat has
+    /// its pin set at that point. Mirrors the real-world flow: user
+    /// runs `puddle init` after cryptsync was already running.
     #[test]
     fn upsert_pins_when_peer_adopts_fleet_mid_session() {
         let mut t = PeerTable::empty("dan");
@@ -960,12 +966,12 @@ mod tests {
         assert_eq!(stored.last_seen, 100, "last_seen must not advance on rejection");
     }
 
-    /// A pinned peer announcing standalone (empty puddle_pubkey) is
-    /// rejected — same protection as a different-fleet announce. If
-    /// the operator legitimately wants to demote the peer to
-    /// standalone they must clear with `forget`.
+    /// A pinned peer announcing under a different puddle pubkey
+    /// (including empty, in the unlikely case it bypasses the front
+    /// door) is rejected — TOFU mismatch protection. Operator must
+    /// clear with `forget` if the peer is legitimately moving.
     #[test]
-    fn upsert_rejects_pinned_peer_reverting_to_standalone() {
+    fn upsert_rejects_pinned_peer_under_different_puddle_pubkey() {
         let mut t = PeerTable::empty("dan");
         t.upsert(sample_peer_in_puddle("alpha", 100, "fleet-pk-1"));
         let reverted = sample_peer("alpha", 200); // empty puddle_pubkey

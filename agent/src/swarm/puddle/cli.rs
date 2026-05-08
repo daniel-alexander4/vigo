@@ -204,18 +204,18 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
             }
         }
     } else {
-        let cs_cfg = crate::swarm::cryptsync::config::load_config(&home);
-        if cs_cfg.wrap_mode == crate::swarm::cryptsync::config::WrapMode::Puddle {
-            println!();
-            println!("Starting cryptsync session helper (puddle-mode, no extra passphrase)...");
-            match crate::swarm::cryptsync::cli::run(vec!["unlock".to_string()]) {
-                Ok(()) => {}
-                Err(e) => {
-                    eprintln!("warning: cryptsync unlock failed: {:#}", e);
-                    eprintln!(
-                        "         re-run manually: `vigo swarm cryptsync unlock`"
-                    );
-                }
+        // Cryptsync is enrolled. Start its session helper using the
+        // puddle helper we just spawned (ADR-016, ADR-020 — wrap-key
+        // is always puddle-derived now).
+        println!();
+        println!("Starting cryptsync session helper (puddle-derived wrap, no extra passphrase)...");
+        match crate::swarm::cryptsync::cli::run(vec!["unlock".to_string()]) {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("warning: cryptsync unlock failed: {:#}", e);
+                eprintln!(
+                    "         re-run manually: `vigo swarm cryptsync unlock`"
+                );
             }
         }
     }
@@ -728,9 +728,6 @@ fn print_rewrap_outcome(outcome: crate::swarm::cryptsync::identity_rewrap::Rewra
     match outcome {
         RewrapOutcome::NotEnrolled => {
             println!("  Cryptsync rewrap: skipped (not enrolled on this envoy)");
-        }
-        RewrapOutcome::StandaloneSkipped => {
-            println!("  Cryptsync rewrap: skipped (standalone wrap-mode)");
         }
         RewrapOutcome::Rewrapped { backup_path } => {
             println!(
