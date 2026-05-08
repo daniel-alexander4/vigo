@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"git.alexander4.io/vigo/server/auth"
@@ -95,6 +97,17 @@ type DoctorHandler struct {
 	role           config.SpannerRole
 	secretsBackend string
 	cycleLookup    CycleLookup
+	swarmCfgMu     sync.RWMutex
+	swarmCfg       config.SwarmSection
+}
+
+// SetSwarmConfig is called from main.go on startup and on every
+// successful config reload so the swarm-pattern-order doctor check
+// always sees the live config.
+func (h *DoctorHandler) SetSwarmConfig(s config.SwarmSection) {
+	h.swarmCfgMu.Lock()
+	h.swarmCfg = s
+	h.swarmCfgMu.Unlock()
 }
 
 // NewDoctorHandler creates a doctor handler with the given dependencies.
@@ -136,6 +149,7 @@ func (h *DoctorHandler) RunChecks() (string, []DoctorCheck) {
 		h.checkSpanner(),
 		h.checkIntegrations(),
 		h.checkConfig(),
+		h.checkSwarmPatterns(),
 		h.checkStaleEnvoys(ctx),
 	}
 	overall := "healthy"
@@ -162,6 +176,7 @@ func (h *DoctorHandler) handleDoctor(w http.ResponseWriter, r *http.Request) {
 		h.checkSpanner(),
 		h.checkIntegrations(),
 		h.checkConfig(),
+		h.checkSwarmPatterns(),
 		h.checkStaleEnvoys(ctx),
 	}
 
@@ -270,6 +285,37 @@ func (h *DoctorHandler) checkConfig() DoctorCheck {
 		return DoctorCheck{Name: "config", Scope: ScopeServer, Status: StatusWarn, Message: "no modules loaded"}
 	}
 	return DoctorCheck{Name: "config", Scope: ScopeServer, Status: StatusPass, Message: msg}
+}
+
+// checkSwarmPatterns surfaces unreachable deny entries in the
+// `swarm.*.enabled` pattern lists — the silent-fail case the
+// `["*", "-rasp1"]` doc warning is meant to catch. Server logs the
+// same findings at startup and on reload; this check makes the same
+// signal available via `vigocli doctor` so operators can spot the
+// problem without grepping logs.
+func (h *DoctorHandler) checkSwarmPatterns() DoctorCheck {
+	h.swarmCfgMu.RLock()
+	swarm := h.swarmCfg
+	h.swarmCfgMu.RUnlock()
+	findings := config.ValidateSwarmPatternOrder(swarm)
+	if len(findings) == 0 {
+		return DoctorCheck{
+			Name:    "swarm_pattern_order",
+			Scope:   ScopeServer,
+			Status:  StatusPass,
+			Message: "all swarm.*.enabled pattern lists well-ordered",
+		}
+	}
+	lines := make([]string, 0, len(findings))
+	for _, f := range findings {
+		lines = append(lines, f.String())
+	}
+	return DoctorCheck{
+		Name:    "swarm_pattern_order",
+		Scope:   ScopeServer,
+		Status:  StatusWarn,
+		Message: strings.Join(lines, "; "),
+	}
 }
 
 func (h *DoctorHandler) checkStaleEnvoys(ctx context.Context) DoctorCheck {

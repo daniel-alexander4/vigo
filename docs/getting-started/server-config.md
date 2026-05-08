@@ -583,7 +583,7 @@ Configures the envoy P2P substrate. Swarm is the transport layer four content su
 
 Pattern lists are first-match-wins, `-` prefix denies, default-deny on no match — same semantics as Vigo's matchfile patterns (ADR-002).
 
-> **⚠ Order matters.** Put specific deny patterns BEFORE any catch-all `*`, or the catch-all silently swallows them. There is no warning at load time — modlint can't tell intent from a syntactically valid list.
+> **⚠ Order matters.** Put specific deny patterns BEFORE any catch-all `*`, or the catch-all silently swallows them. The loader detects the most common shadowing cases (`["*", "-rasp1"]`, `["a*", "-annlap"]`, etc.) and logs a `swarm: shadowed deny pattern` warning at startup + on every reload. The same finding is surfaced via `vigocli doctor` under the `swarm_pattern_order` check, so you can spot the problem without grepping logs.
 
 Examples:
 

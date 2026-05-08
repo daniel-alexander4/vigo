@@ -869,6 +869,11 @@ func run() error {
 			return fleetIndex.EnvoyCycle(envoyID)
 		},
 	})
+	// Seed the doctor handler's swarm-config view so the
+	// swarm_pattern_order check has data on the first /doctor call.
+	// Refreshed on every reload below alongside the agentSvc / lode /
+	// uiHandler swarm-config setters.
+	doctorHandler.SetSwarmConfig(cfg.Swarm)
 
 	spannerHandler := api.NewSpannerHandler(role, cfg.Spanner.SpokeID, hub)
 	taskHandler := api.NewTaskHandler(queries, agentSvc, cfg.Task.RequireDefinition)
@@ -1222,6 +1227,7 @@ func run() error {
 				agentSvc.SetSwarmConfig(newCfg.Swarm)
 				uiHandler.SetSwarm(peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex}, newCfg.Swarm)
 				lodeHandler.SetSwarmConfig(newCfg.Swarm)
+				doctorHandler.SetSwarmConfig(newCfg.Swarm)
 
 				if !sameStringSet(lastSwarmPatterns, newCfg.Swarm.Enabled) {
 					recordSwarmPatternsChange(ctx, auditWriter, "swarm", lastSwarmPatterns, newCfg.Swarm.Enabled)

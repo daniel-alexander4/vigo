@@ -225,14 +225,15 @@ func TestDoctor_CheckScopes(t *testing.T) {
 	_, checks := handler.RunChecks()
 
 	wantScope := map[string]CheckScope{
-		"database":     ScopeServer,
-		"tls":          ScopeServer,
-		"secrets":      ScopeServer,
-		"license":      ScopeServer,
-		"spanner":      ScopeServer,
-		"integrations": ScopeServer,
-		"config":       ScopeServer,
-		"stale_envoys": ScopeFleet,
+		"database":            ScopeServer,
+		"tls":                 ScopeServer,
+		"secrets":             ScopeServer,
+		"license":             ScopeServer,
+		"spanner":             ScopeServer,
+		"integrations":        ScopeServer,
+		"config":              ScopeServer,
+		"swarm_pattern_order": ScopeServer,
+		"stale_envoys":        ScopeFleet,
 	}
 	for _, c := range checks {
 		want, ok := wantScope[c.Name]

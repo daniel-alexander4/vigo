@@ -359,8 +359,10 @@ watcher:
 # match (same semantics as matchfile patterns).
 #
 # ⚠ ORDER MATTERS. Put specific deny patterns BEFORE any catch-all "*",
-# or the catch-all silently swallows them. There is no warning at load
-# time — modlint can't tell intent from a syntactically valid list.
+# or the catch-all silently swallows them. The loader detects the most
+# common shadowing cases and logs a warning at startup + on every
+# reload (also surfaced via `vigocli doctor`); fix any "shadowed deny
+# pattern" warnings the loader emits.
 #
 # Examples:
 #   []                          → off everywhere (default)

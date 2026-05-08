@@ -6,6 +6,7 @@ package config
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -71,6 +72,15 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 	// Resolve secret: prefixes in config values.
 	if err := resolveServerSecrets(&cfg, provider, backend); err != nil {
 		return nil, fmt.Errorf("resolving server config secrets: %w", err)
+	}
+
+	// Validate swarm pattern-list ordering and warn (never error) on
+	// shadowed deny entries — the silent-fail case `["*", "-rasp1"]`
+	// plus glob-shadow `["a*", "-annlap"]`. Findings are also surfaced
+	// via the doctor endpoint; logging here catches them at startup
+	// and on every reload.
+	for _, f := range ValidateSwarmPatternOrder(cfg.Swarm) {
+		slog.Warn("swarm: shadowed deny pattern in server.yaml", "finding", f.String())
 	}
 
 	return &cfg, nil
