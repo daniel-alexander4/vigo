@@ -1566,6 +1566,16 @@ pub(crate) fn write_user_mirror_json(user: &str, filename: &str, json: &str) {
         debug!(path = %dot.display(), error = %e, "cryptsync: mkdir for user mirror");
         return;
     }
+    // Chown the dir to the user when the daemon (root) creates it.
+    // Without this, a post-scrub recreate ends up root-owned and the
+    // next user-mode `cryptsync unlock` fails to bootstrap because
+    // chowning files into a root-owned dir from user context errors
+    // with EPERM. chown_to_user is idempotent — no-op when already
+    // user-owned. Best-effort like the rest of this writer.
+    #[cfg(unix)]
+    if let Err(e) = chown_to_user(&dot, user) {
+        debug!(path = %dot.display(), error = %e, "cryptsync: chown user-mirror dir");
+    }
     let path = dot.join(filename);
     let tmp = path.with_extension("json.tmp");
     #[cfg(unix)]

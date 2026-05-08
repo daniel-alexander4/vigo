@@ -206,6 +206,7 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     // going so the operator can re-run manually.
     let cs_dot = home.join(".cryptsync");
     let cs_identity = cs_dot.join("identity.age");
+    let mut bootstrap_ok = true;
     if !cs_identity.exists() {
         println!();
         println!("Bootstrapping cryptsync (puddle-mode wrap, no extra passphrase)...");
@@ -219,12 +220,19 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
                 eprintln!(
                     "         re-run manually: `vigo swarm cryptsync puddle init`"
                 );
+                bootstrap_ok = false;
             }
         }
-    } else {
-        // Cryptsync is enrolled. Start its session helper using the
-        // puddle helper we just spawned (ADR-016, ADR-020 — wrap-key
-        // is always puddle-derived now).
+    }
+    // Whether cryptsync was already enrolled or we just bootstrapped
+    // it, start its session helper so encrypt / decrypt / list verbs
+    // work immediately. Pre-0.41.2 only auto-started in the
+    // already-enrolled branch, leaving freshly-bootstrapped envoys
+    // half-ready (operator could encrypt but not decrypt until they
+    // ran `cryptsync unlock` manually). Skip when bootstrap failed —
+    // there's no identity to unlock and the operator needs to fix
+    // the bootstrap first.
+    if bootstrap_ok {
         println!();
         println!("Starting cryptsync session helper (puddle-derived wrap, no extra passphrase)...");
         match crate::swarm::cryptsync::cli::run(vec!["unlock".to_string()]) {

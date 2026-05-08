@@ -141,8 +141,18 @@ pub fn remove_user_policy(username: &str) -> Result<()> {
 }
 
 /// Refuse early in a CLI verb if the invoking user lacks the puddle
-/// authorization flag. Returns an operator-facing error pointing at
-/// the cache path and the usercrate field that controls it.
+/// authorization flag, OR if the envoy itself is denied by the
+/// substrate-level pattern list. Both layers must say yes — matching
+/// the runtime gate in [`crate::swarm::gates::substrate_active`].
+///
+/// Layer 1 (user): reads `/var/lib/vigo/usercrate-policy/<user>.json`,
+/// written by the user executor on every reconcile pass.
+///
+/// Layer 2 (envoy): reads `/var/lib/vigo/swarm/state.json` (0.41.1+),
+/// written by `accept_bundle` on every successful policy commit.
+/// A missing state.json is treated as "no recent check-in" and the
+/// envoy check is skipped — refusing on absence would block legitimate
+/// bootstrap on a freshly-enrolled envoy.
 pub fn require_puddle(username: &str) -> Result<()> {
     let policy = read_user_policy(username)?;
     if !policy.puddle {
@@ -152,12 +162,20 @@ pub fn require_puddle(username: &str) -> Result<()> {
              publish the config, and wait for the agent to reconcile."
         );
     }
+    if !envoy_layer_allows("puddle") {
+        bail!(
+            "user {username} is authorized but this envoy is not in the \
+             puddle pattern list. Add this hostname to `swarm.puddle.enabled` \
+             in server.yaml, publish, and wait for the agent to check in."
+        );
+    }
     Ok(())
 }
 
 /// Refuse early in a CLI verb if the invoking user lacks the gitmirror
-/// authorization flag. Returns an operator-facing error pointing at
-/// the cache path and the usercrate field that controls it.
+/// authorization flag, OR if the envoy itself is denied by the
+/// substrate-level pattern list. See [`require_puddle`] for the
+/// two-layer rationale.
 pub fn require_gitmirror(username: &str) -> Result<()> {
     let policy = read_user_policy(username)?;
     if !policy.gitmirror {
@@ -167,7 +185,36 @@ pub fn require_gitmirror(username: &str) -> Result<()> {
              publish the config, and wait for the agent to reconcile."
         );
     }
+    if !envoy_layer_allows("gitmirror") {
+        bail!(
+            "user {username} is authorized but this envoy is not in the \
+             gitmirror pattern list. Add this hostname to \
+             `swarm.gitmirror.enabled` in server.yaml, publish, and wait \
+             for the agent to check in."
+        );
+    }
     Ok(())
+}
+
+/// Read `state.json` and report whether the named subsystem gate is on.
+/// A missing or unreadable state.json returns `true` (skip the envoy
+/// check) — the file is written by the daemon after every accepted
+/// bundle, so absence means either a freshly-enrolled envoy that hasn't
+/// completed a check-in yet OR the daemon is on a pre-0.41.1 binary.
+/// In both cases, refusing here would block the user from doing any
+/// puddle/gitmirror setup, so we fail open.
+fn envoy_layer_allows(subsystem: &str) -> bool {
+    let state = match crate::swarm::state_mirror::read(
+        &crate::swarm::state_mirror::default_path(),
+    ) {
+        Ok(s) => s,
+        Err(_) => return true,
+    };
+    match subsystem {
+        "puddle" => state.gates.puddle,
+        "gitmirror" => state.gates.gitmirror,
+        _ => true,
+    }
 }
 
 #[cfg(test)]
@@ -210,5 +257,25 @@ mod tests {
             PathBuf::from("/var/lib/vigo/usercrate-policy/dan.json")
         );
         assert_ne!(policy_path("dan"), policy_path("alice"));
+    }
+
+    // The two-layer envoy_layer_allows helper isn't directly testable
+    // without a global state.json fixture (default_path() reads
+    // /var/lib/vigo/swarm/state.json). The semantics it implements
+    // are exercised end-to-end by the home-lab smoke runs and indirectly
+    // by state_mirror::tests::round_trips_through_disk which proves
+    // the gate fields decode correctly. The fail-open-on-missing
+    // semantic is the load-bearing one — verified here by the absence
+    // of state.json on a fresh test environment causing no panic /
+    // refusal.
+    #[test]
+    fn envoy_layer_fails_open_when_state_json_missing() {
+        // /var/lib/vigo/swarm/state.json doesn't exist in the test
+        // sandbox; helper must return true so a freshly-enrolled envoy
+        // isn't blocked from running puddle/gitmirror init verbs.
+        assert!(envoy_layer_allows("puddle"));
+        assert!(envoy_layer_allows("gitmirror"));
+        // Unknown subsystem name — defensive default-true.
+        assert!(envoy_layer_allows("payload"));
     }
 }
