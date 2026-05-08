@@ -23,9 +23,9 @@ Every verb runs under the invoking user's uid. No root. The agent daemon does no
 
 ## Commands
 
-The verb tree splits into **mode-agnostic** verbs (the daily ones — they don't care which mode is active) and **mode-specific lifecycle** verbs under `fleet *` and `standalone *` subtrees per ADR-016.
+Per [ADR-020](../../adr/020-cryptsync-puddle-only.md) (0.39.13), cryptsync is puddle-only: the parallel `standalone` subtree retired. Mode 1 (encryption-at-rest, no peers) is now a single-envoy puddle. Round 2b of the consolidation will absorb cryptsync's lifecycle (`init`, `leave`, `forget`) into puddle (see [ADR-021](../../adr/021-cryptsync-lifecycle-on-puddle.md)) — the verb tree below reflects the post-0.39.13 state pre-round-2b.
 
-### Mode-agnostic (top-level)
+### Top-level verbs
 
 | Verb | Purpose |
 |---|---|
@@ -40,27 +40,18 @@ The verb tree splits into **mode-agnostic** verbs (the daily ones — they don't
 | `reencrypt` | Force re-encrypt of every file in `~/cryptsync/` to the current recipient set. Requires `unlock`. |
 | `status` | Show local state: enrolled, recipient count, file-count breakdown (ciphertext / plaintext / failed), session helper status. Under puddle membership, the `recipients:` line expands whenever an expected member is missing from the live recipient set — `N of M puddle members — <host> silent for <duration>` (singular) or `N of M puddle members — K peers silent (longest <duration>)` (plural). The `M` denominator is sourced from `puddle_members.json` (the append-only "ever-known members" table introduced in 0.39.12) and survives `prune_stale`, so the gap line keeps rendering with a real silent-for duration even after the absent envoy has been dropped from `peers.json`. Members are added on first sighting under the local user's puddle pubkey; they're removed only by an authoritative LEAVE (`vigo swarm cryptsync leave`, `vigocli swarm cryptsync evict`, or self-leave catch-up) — `forget` of a peer that has gone silent without leaving keeps the entry until an explicit LEAVE lands. |
 
-### Lifecycle (mode-specific subtrees)
+### Lifecycle (puddle subtree)
 
 | Verb | Purpose |
 |---|---|
-| `fleet init` | First-time setup of this user's per-envoy age key under puddle membership (ADR-016). Refuses if `vigo swarm puddle init` hasn't been run for this user. Auto-issues a puddle-membership certificate (see below) so the very first announce carries cryptographic proof of puddle membership. |
-| `fleet renew-cert` | Re-issue the puddle-membership certificate. Default lifetime 30 days; certs expire and need renewal. Run from any envoy where puddle is unlocked — the renewed cert ships in the next announce tick. |
-| `standalone init` | First-time setup of this user's per-envoy age key without registering with a puddle. Recipients are discovered via pairwise gossip (the legacy path that pre-dates puddle). |
-| `standalone enroll` | Per-envoy setup when joining an existing standalone mesh. Normally triggered by the `enroll.pending` sentinel on first `vigo swarm cryptsync *` invocation; can be run manually for recovery. Idempotent. |
+| `puddle init` | First-time setup of this user's per-envoy age key under puddle membership (ADR-016, ADR-020). Refuses if `vigo swarm puddle init` hasn't been run for this user. Auto-issues a puddle-membership certificate (see below) so the very first announce carries cryptographic proof of puddle membership. Usually auto-run by `puddle unlock` — manual invocation is for recovery. |
+| `puddle renew-cert` | Re-issue the puddle-membership certificate. Default lifetime 30 days; certs expire and need renewal. Run from any envoy where puddle is unlocked — the renewed cert ships in the next announce tick. |
 
-Mode is determined automatically at runtime: when puddle is initialized for the user, the announce loop scopes recipient resolution to puddle members; without it, the legacy gossip-only path stays in effect. The `fleet init` and `standalone init` verbs both produce a wrapped age identity at `~/.cryptsync/identity.age`, but the **wrap key** differs:
-
-| Mode | Wrap-key source | `unlock` prompt | Loss blast radius |
-|---|---|---|---|
-| `standalone` | per-envoy passphrase you type at `init` / `enroll` | yes — typed every `unlock` | losing this passphrase loses this envoy's cryptsync corpus, independent of any other envoy or fleet |
-| `puddle` | derived from puddle identity via `session::request_sign(b"vigo-cryptsync-wrap-v1")` → SHA-256 challenge stretching | no — the running puddle session helper provides it silently | already inside the puddle trust unit; losing the puddle passphrase loses cryptsync along with everything else puddle protects |
-
-The chosen mode is recorded in `~/.cryptsync/config.yaml` as `wrap_mode: standalone` or `wrap_mode: puddle`. `cryptsync unlock` reads the field and routes accordingly — puddle mode skips the password prompt entirely and asks the puddle session helper to sign the domain-separated challenge. If the session helper isn't running in puddle mode, `unlock` fails with `run vigo swarm puddle unlock first` rather than silently falling back to a prompt (the wrong mode would just produce an AEAD tag mismatch downstream and a worse error).
+The wrapped age identity at `~/.cryptsync/identity.age` is wrapped under a key derived from the puddle identity via `session::request_sign(b"vigo-cryptsync-wrap-v1")` (deterministic Ed25519 signature over a fixed challenge), passed through Argon2id. `unlock` requires the puddle session helper to be running — there is no per-envoy cryptsync passphrase prompt. If the session helper isn't running, `unlock` fails with `run vigo swarm puddle unlock first` rather than silently falling back to anything else.
 
 **Auto-bootstrap on `puddle unlock`.** When `vigo swarm puddle unlock` runs and `~/.cryptsync/identity.age` is absent, the verb auto-runs `cryptsync puddle init` inline using the just-unlocked session helper to derive the wrap key. The user gets a working encrypted-sync surface as a single side effect of unlocking — no second passphrase prompt. Failure to bootstrap (e.g. puddle not initialized, or `cryptsync puddle init` errors) doesn't undo the unlock; the warning surfaces and the operator can re-run `cryptsync puddle init` manually.
 
-Per-envoy age keys are deliberately preserved across both modes — see ADR-016 for the rationale (per-envoy compartmentalization stays intact at the age-key level even though the wrap key in puddle mode is shared).
+Per-envoy age keys are deliberately preserved — see ADR-016 for the rationale (per-envoy compartmentalization stays intact at the age-key level even though the wrap key in puddle mode is shared).
 
 ### Trust-on-first-use puddle-pubkey pinning
 

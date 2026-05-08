@@ -1,7 +1,7 @@
 
 # Cryptsync — Per-User Encrypted P2P Directory
 
-> **Heads up — major reshape in 0.40.0.** Standalone mode retires ([ADR-020](../../adr/020-cryptsync-puddle-only.md)) and cryptsync's lifecycle layer (`init`, `leave`, `forget`) absorbs into puddle ([ADR-021](../../adr/021-cryptsync-lifecycle-on-puddle.md)). Cryptsync becomes "a capability of puddle membership" with a content-only verb tree. The narrative below describes the pre-0.40.0 dual-mode codebase; sections will be reworked when the implementation lands. See [`swarm-puddle-architecture.svg`](../img/swarm-puddle-architecture.svg) for the post-0.40.0 hierarchy.
+> **Status:** Standalone mode retired in 0.39.13 per [ADR-020](../../adr/020-cryptsync-puddle-only.md) — body below reflects the puddle-only world. Round 2b of the consolidation (queued for 0.40.0, [ADR-021](../../adr/021-cryptsync-lifecycle-on-puddle.md)) absorbs cryptsync's lifecycle layer (`init`, `leave`, `forget`) into puddle and shrinks cryptsync to content-domain verbs only — the verb-tree section will be rewritten when that ships. See [`swarm-puddle-architecture.svg`](../img/swarm-puddle-architecture.svg) for the post-0.40.0 hierarchy.
 
 Cryptsync keeps `~/cryptsync/` in sync across every envoy where a user is enrolled, **ciphertext at rest** everywhere. Drop a plaintext file on the primary, cryptsync encrypts it to every peer's public key and fans out the ciphertext. Unlock with the user's cryptsync password on any envoy to decrypt.
 
@@ -97,7 +97,7 @@ Counts derive from a single `read_dir` scan + a one-line magic peek per file at 
 
 `cryptsync: true` tells the user executor to drop `~/.cryptsync/enroll.pending` after user creation. On first login the user runs any `vigo swarm cryptsync *` verb and completes enrollment interactively (one password prompt). The field is idempotent — flipping it true on an already-enrolled user is a no-op.
 
-The cryptsync password is **not** the login password. Phase 1 has no PAM integration. In **standalone mode** the user sets a separate cryptsync password at enrollment and types it again at each `unlock`. In **puddle mode** (ADR-016 slice 4) the wrap key is derived from the user's puddle identity instead — the cryptsync password ceremony is collapsed into the puddle one and `unlock` requires no extra prompt.
+The cryptsync password ceremony is collapsed into the puddle one (per [ADR-020](../../adr/020-cryptsync-puddle-only.md), 0.39.13): the wrap key is derived from the user's puddle identity, so `unlock` requires no extra prompt — the puddle session helper must be running.
 
 ## Key Wrapping
 
@@ -105,13 +105,7 @@ The cryptsync password is **not** the login password. Phase 1 has no PAM integra
 - **KDF**: Argon2id (memory=64 MiB, iterations=3, parallelism=1, salt=16 random bytes).
 - **AEAD**: XChaCha20-Poly1305 with a 24-byte random nonce per wrap.
 - **Blob format** at `~/.cryptsync/identity.age`: `[1 byte version = 0x01][24 byte nonce][ciphertext + 16 byte auth tag]`. Mode 0600, user-owned.
-
-### Wrap modes (`wrap_mode` in `~/.cryptsync/config.yaml`)
-
-- **`standalone`** — wrap-key input is the per-envoy passphrase you typed at `cryptsync standalone init / enroll`. `unlock` prompts for it. Independent of puddle.
-- **`puddle`** — wrap-key input is the 64-byte Ed25519 signature returned by `puddle::session::request_sign(b"vigo-cryptsync-wrap-v1")` (deterministic per RFC 8032), passed through Argon2id at the same parameters as standalone. `unlock` calls the running puddle session helper instead of prompting. If the helper isn't running, `unlock` fails clean with `run vigo swarm puddle unlock first` rather than silently falling back to a prompt.
-
-`puddle init` writes `wrap_mode: puddle` and `standalone init` / `standalone enroll` write `wrap_mode: standalone` into the seeded `config.yaml` template. Pre-0.36.x configs without the field load as `standalone` for back-compat. Both modes share the same on-disk blob format and the same Argon2id stretch — switching modes requires re-enrolling (`leave` then `init` again under the desired mode), since the wrap key changes.
+- **Wrap-key input**: the 64-byte Ed25519 signature returned by `puddle::session::request_sign(b"vigo-cryptsync-wrap-v1")` (deterministic per RFC 8032), passed through Argon2id. `unlock` calls the running puddle session helper to source it. If the helper isn't running, `unlock` fails clean with `run vigo swarm puddle unlock first` rather than silently falling back to anything else.
 
 The agent daemon (running as root) never holds the unwrapped identity. Only the per-user session helper does, only while unlocked, only in RAM.
 
