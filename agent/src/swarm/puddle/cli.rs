@@ -461,15 +461,20 @@ fn cmd_leave(args: &[String]) -> Result<()> {
     // 1. Cryptsync leave (signs envelope, fans out, scrubs cryptsync
     //    state). Best-effort: a failure here doesn't stop the puddle
     //    cleanup — the operator can always run `cryptsync purge` later
-    //    to finish the local wipe.
+    //    to finish the local wipe. Per ADR-021 (0.40.0), we drop the
+    //    leave.pending sentinel directly via the cryptsync helper
+    //    function rather than going through a public `cryptsync leave`
+    //    verb (which retired in 0.40.0).
     let cs_identity = home.join(".cryptsync").join("identity.age");
     if cs_identity.exists() {
+        let username = user_for_invocation()?;
         println!("Signing cryptsync LEAVE envelope and scrubbing ciphertext...");
-        match crate::swarm::cryptsync::cli::run(vec![
-            "leave".to_string(),
-            "--purge".to_string(),
-            "--yes".to_string(),
-        ]) {
+        match crate::swarm::cryptsync::cli::enqueue_leave(
+            &home,
+            &username,
+            /* keep_identity */ false,
+            /* purge_content */ true,
+        ) {
             Ok(()) => {
                 println!("✓ cryptsync leave queued (peers learn within ~30s)");
             }

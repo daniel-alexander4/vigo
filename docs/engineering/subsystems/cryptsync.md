@@ -1,7 +1,7 @@
 
 # Cryptsync — Per-User Encrypted P2P Directory
 
-> **Status:** Standalone mode retired in 0.39.13 per [ADR-020](../../adr/020-cryptsync-puddle-only.md) — body below reflects the puddle-only world. Round 2b of the consolidation (queued for 0.40.0, [ADR-021](../../adr/021-cryptsync-lifecycle-on-puddle.md)) absorbs cryptsync's lifecycle layer (`init`, `leave`, `forget`) into puddle and shrinks cryptsync to content-domain verbs only — the verb-tree section will be rewritten when that ships. See [`swarm-puddle-architecture.svg`](../img/swarm-puddle-architecture.svg) for the post-0.40.0 hierarchy.
+> **Status (0.40.0):** Cryptsync is puddle-only ([ADR-020](../../adr/020-cryptsync-puddle-only.md)) and its lifecycle layer has absorbed into puddle ([ADR-021](../../adr/021-cryptsync-lifecycle-on-puddle.md)). The cryptsync verb tree is content-only — `encrypt / decrypt / push / list / status / reencrypt / resurrect / purge` plus `puddle init / renew-cert` for recovery. Lifecycle verbs (`init / leave / forget`) retired in favor of `vigo swarm puddle leave` and `vigocli swarm puddle evict`. See [`swarm-puddle-architecture.svg`](../img/swarm-puddle-architecture.svg) for the hierarchy.
 
 Cryptsync keeps `~/cryptsync/` in sync across every envoy where a user is enrolled, **ciphertext at rest** everywhere. Drop a plaintext file on the primary, cryptsync encrypts it to every peer's public key and fans out the ciphertext. Unlock with the user's cryptsync password on any envoy to decrypt.
 

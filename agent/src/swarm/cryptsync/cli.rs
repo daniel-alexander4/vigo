@@ -62,8 +62,6 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "decrypt" => cmd_decrypt(&args[1..]),
         "delete" => cmd_delete(&args[1..]),
         "list" | "ls" => cmd_list(&args[1..]),
-        "forget" => cmd_forget(&args[1..]),
-        "leave" => cmd_leave(&args[1..]),
         "purge" => cmd_purge(&args[1..]),
         "reencrypt" => cmd_reencrypt(&args[1..]),
         // Hidden verb — invoked by the server via TaskDispatch when an
@@ -129,23 +127,28 @@ fn print_usage() {
 USAGE:
     vigo swarm cryptsync <SUBCOMMAND>
 
-DAILY (mode-agnostic):
-    unlock                         Prompt password, start session helper
+CONTENT-DOMAIN VERBS:
+    unlock                         Start session helper (puddle must be unlocked)
     lock                           Scrub held key and stop session helper
     encrypt <file> [--as <name>]   Encrypt a plaintext file into ~/cryptsync/
     resurrect <file> [--as <name>] Override an active tombstone and re-encrypt in one step
     decrypt <file> -o <path>       Decrypt from ~/cryptsync/ to a user-chosen path
     delete <name>                  Remove a file from ~/cryptsync/; tombstone propagates to peers
     list [--long] [--tombstones]   List ciphertext files + tombstones in ~/cryptsync/
-    forget <hostname>              Revoke an envoy from the recipient set (local only)
-    leave [--purge] [--keep-identity] [--yes]  Unenroll this user from cryptsync on this envoy
-    purge --yes                    Wipe ALL local cryptsync state for this user (no gossip)
+    purge --yes                    Wipe ALL local cryptsync state for this user (no gossip;
+                                   recovery verb)
     reencrypt                      Force re-encrypt of ~/cryptsync/ to current recipients
     status                         Show local cryptsync state
 
-LIFECYCLE (ADR-016, ADR-020 — puddle-only):
+LIFECYCLE (ADR-021, 0.40.0 — owned by puddle):
+    Lifecycle verbs migrated to the puddle subtree:
+      vigo swarm puddle leave        — leave the puddle (covers cryptsync LEAVE +
+                                       puddle scrub + gitmirror cleanup)
+      vigocli swarm puddle evict     — admin: evict a host from a user's puddle
+                                       (cross-envoy; replaces `cryptsync forget`)
+
+RECOVERY (manual, normally auto-run by `puddle unlock`):
     puddle init                     Set up per-envoy age key under puddle membership
-                                   (usually auto-run by `puddle unlock` / `join`)
 
 All subcommands operate on the invoking user's home:
     ~/.cryptsync/    wrapped identity, salt, recipients, config
@@ -1603,39 +1606,7 @@ fn now_secs() -> i64 {
 
 // ---------- forget ----------
 
-fn cmd_forget(args: &[String]) -> Result<()> {
-    let hostname = args
-        .first()
-        .context("usage: vigo swarm cryptsync forget <hostname>")?
-        .clone();
-    let home = user_home_for_invocation()?;
-    if !config::is_enrolled(&home) {
-        bail!("not enrolled on this envoy");
-    }
-    // Resolve the username from the home dir (last path segment).
-    let username = home
-        .file_name()
-        .and_then(|n| n.to_str())
-        .context("cannot resolve username from home dir")?
-        .to_string();
-
-    let mut table = PeerTable::load(&username);
-    if !table.forget(&hostname) {
-        bail!("{} is not in the peer table for {}", hostname, username);
-    }
-    table.save("forget")?;
-
-    // Regenerate recipients.txt immediately so new encrypts exclude
-    // the revoked pubkey on the very next call.
-    crate::swarm::cryptsync::regenerate_recipients_now(&username, &home)?;
-
-    println!("✓ Forgot {}. Recipients regenerated.", hostname);
-    println!("  Run `vigo swarm cryptsync reencrypt` to re-encrypt existing files");
-    println!("  so the revoked host cannot decrypt them from its cached ciphertext.");
-    Ok(())
-}
-
-// ---------- leave ----------
+// ---------- leave (internal helper for `vigo swarm puddle leave`) ----------
 //
 // Self-unenrollment. Three-stage handoff:
 //
@@ -1686,69 +1657,27 @@ pub struct ResurrectPendingSpec {
     pub src_path: String,
 }
 
-fn cmd_leave(args: &[String]) -> Result<()> {
-    let mut keep_identity = false;
-    let mut purge_content = false;
-    let mut yes = false;
-    for a in args {
-        match a.as_str() {
-            "--keep-identity" => keep_identity = true,
-            "--purge" => purge_content = true,
-            "--yes" | "-y" => yes = true,
-            "--help" | "-h" => {
-                eprintln!(
-                    "vigo swarm cryptsync leave — unenroll this user's cryptsync on this envoy\n\n\
-                     USAGE:\n    vigo swarm cryptsync leave [--purge] [--keep-identity] [--yes]\n\n\
-                     FLAGS:\n    \
-                     --purge          also delete ~/cryptsync/ ciphertext (default: keep, orphaned)\n    \
-                     --keep-identity  keep ~/.cryptsync/ so a re-enroll can reuse the wrapped\n                     \
-                     identity. Default is to scrub.\n    \
-                     --yes            skip the confirmation prompt"
-                );
-                return Ok(());
-            }
-            other if other.starts_with("--") => bail!("unknown flag: {}", other),
-            _ => bail!("vigo swarm cryptsync leave takes no positional arguments; got {}", a),
-        }
-    }
-
-    let home = user_home_for_invocation()?;
-    if !config::is_enrolled(&home) {
+/// Drop a `~/.cryptsync/leave.pending` sentinel for the daemon to
+/// pick up on its next reactor tick. The daemon signs the LEAVE
+/// envelope, fans it out to live peers, scrubs cryptsync state per
+/// the sentinel's flags, and removes the sentinel.
+///
+/// Called from `vigo swarm puddle leave` (the canonical exit verb
+/// post-ADR-021). The verb itself owns operator confirmation; this
+/// function is the mechanical sentinel-drop.
+pub(crate) fn enqueue_leave(
+    home: &Path,
+    username: &str,
+    keep_identity: bool,
+    purge_content: bool,
+) -> Result<()> {
+    if !config::is_enrolled(home) {
         bail!("not enrolled on this envoy — nothing to leave");
     }
 
-    // Read own pubkey (user-readable — first non-comment line in
-    // recipients.txt, written by init/enroll).
-    let pubkey = read_local_pubkey(&home)?;
+    let pubkey = read_local_pubkey(home)?;
     let hostname = read_local_hostname()?;
     let leave_time = now_secs_signed();
-
-    println!("This will unenroll this envoy from your cryptsync circle.");
-    println!("  pubkey:   {}", pubkey);
-    println!("  hostname: {}", hostname);
-    if purge_content {
-        println!("  ~/cryptsync/ ciphertext will be DELETED (--purge).");
-    } else {
-        println!("  ~/cryptsync/ ciphertext will be kept (orphaned — you can't decrypt here).");
-    }
-    if keep_identity {
-        println!("  ~/.cryptsync/ wrapped identity will be KEPT (--keep-identity).");
-    } else {
-        println!("  ~/.cryptsync/ wrapped identity will be scrubbed.");
-    }
-
-    if !yes {
-        use std::io::{self, BufRead, Write};
-        print!("Proceed? [y/N] ");
-        io::stdout().flush().ok();
-        let stdin = io::stdin();
-        let mut line = String::new();
-        stdin.lock().read_line(&mut line)?;
-        if !matches!(line.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
-            println!("aborted.");
-            return Ok(());
-        }
-    }
 
     let spec = LeavePendingSpec {
         age_pubkey: pubkey,
@@ -1757,15 +1686,9 @@ fn cmd_leave(args: &[String]) -> Result<()> {
         keep_identity,
         purge_content,
     };
-    let pending_path = config::leave_pending_path(&home);
+    let pending_path = config::leave_pending_path(home);
     let json = serde_json::to_string_pretty(&spec).context("serializing leave spec")?;
-    let username = user_for_invocation()?;
-    write_user_file(&pending_path, json.as_bytes(), &username)?;
-
-    println!();
-    println!("\u{2713} leave queued at {}", pending_path.display());
-    println!("  the agent will sign + propagate the LEAVE within one announce cycle (~30 s).");
-    println!("  Run `vigo swarm cryptsync status` afterwards to confirm the sentinel cleared.");
+    write_user_file(&pending_path, json.as_bytes(), username)?;
     Ok(())
 }
 
