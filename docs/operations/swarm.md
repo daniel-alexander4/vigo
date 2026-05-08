@@ -132,9 +132,10 @@ Swarm files are stored under `/var/lib/vigo/swarm/` on Linux (`/Library/Vigo/swa
 
 ```
 /var/lib/vigo/swarm/
-├── manifest.json   # LWW-CRDT manifest — blob lifecycle state (auto-managed)
-├── peers.json      # Persistent peer registry — survives restarts (auto-managed)
-├── .blobs/         # Content-addressed storage (SHA256 filenames, hidden)
+├── state.json      # Resolved subsystem gates + last check-in (mode 0644, 0.41.1+)
+├── manifest.json   # LWW-CRDT manifest — blob lifecycle state (mode 0644)
+├── peers.json      # Persistent peer registry — survives restarts (mode 0644)
+├── .blobs/         # Content-addressed storage (SHA256 filenames, root-only)
 │   └── 9faa44b9...
 ├── files/          # Symlinks with original filenames
 │   └── firmware.bin → ../.blobs/9faa44b9...
@@ -144,6 +145,17 @@ Swarm files are stored under `/var/lib/vigo/swarm/` on Linux (`/Library/Vigo/swa
 └── graveyard/      # Revoked blobs awaiting hard-delete (auto-cleaned after 7 days)
     └── a1b2c3d4...
 ```
+
+The three `.json` files at the root (`state.json`, `manifest.json`, `peers.json`) are mode 0644 since 0.41.1 so user-mode CLI verbs can read them. Inspect via the diagnostic CLI rather than parsing the JSON directly:
+
+```bash
+vigo swarm status              # gates, manifest version, peer count, last checkin
+vigo swarm seeds list          # active blobs this envoy holds
+vigo swarm seeds show <key>    # full detail (sha-prefix or label)
+vigo swarm peers list          # gossip-table snapshot
+```
+
+See [`vigo swarm` (diagnostic verbs)](../reference/cli/agent-swarm.md) for the full reference.
 
 The `.blobs/` directory holds the actual data, named by SHA256 hash. The `files/` directory contains symlinks using the blob's label (original filename):
 
@@ -238,11 +250,11 @@ The scheduler finds 0 peers and bails immediately. This is the most common swarm
    ```
    If the seeder sends `ADDR` but no `HAVE` for the blob, or sends nothing at all, the announcer task may have exited. Check for `multicast announcer exited` in the agent logs (0.19.32+). Restart the agent.
 
-3. **PeerMap empty.** On the receiving envoy, check if it has discovered any peers:
+3. **PeerMap empty.** On the receiving envoy, check if it has discovered any peers (no sudo required, 0.41.1+):
    ```bash
-   cat /var/lib/vigo/swarm/peers.json | python3 -m json.tool
+   vigo swarm peers list
    ```
-   If empty or missing the seeder's address for the target blob, multicast packets aren't reaching the agent (firewall, different subnet, or announcer dead).
+   If empty or missing the seeder's address for the target blob, multicast packets aren't reaching the agent (firewall, different subnet, or announcer dead). For the per-blob view, use `vigo swarm seeds show <sha-or-label>` — it lists the peers known to hold that specific blob.
 
 4. **Multicast leaving but not arriving.** If tcpdump on the seeder shows packets leaving but tcpdump on the receiver shows nothing from the seeder's IP, the issue is network-level:
    ```bash
