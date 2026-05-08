@@ -44,6 +44,7 @@ fn lock_map(name: &'static str) -> &'static Mutex<HashMap<String, Arc<Mutex<()>>
         "tombstones" => &TOMBSTONE_LOCKS,
         "leaves" => &LEAVES_LOCKS,
         "peers" => &PEER_LOCKS,
+        "puddle_members" => &PUDDLE_MEMBERS_LOCKS,
         _ => panic!("unknown cryptsync lock map: {}", name),
     }
 }
@@ -53,6 +54,8 @@ static TOMBSTONE_LOCKS: LazyLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
 static LEAVES_LOCKS: LazyLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 static PEER_LOCKS: LazyLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+static PUDDLE_MEMBERS_LOCKS: LazyLock<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Acquire the per-user lock for the named table. Returns an owned

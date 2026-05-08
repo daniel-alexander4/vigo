@@ -35,6 +35,7 @@ pub mod gate;
 pub mod identity_rewrap;
 pub mod leaves;
 pub mod locks;
+pub mod puddle_members;
 pub mod pusher;
 pub mod resurrects;
 pub mod server;
@@ -833,6 +834,47 @@ fn handle_incoming(inc: IncomingAnnouncement) {
                     user = %announcement.user,
                     "cryptsync: recipients.txt regeneration failed"
                 );
+            }
+        }
+    }
+
+    // Puddle-members table: append-only "ever-known members" set
+    // backing the long-term-absence gap line in `cryptsync status`.
+    // Fires for every accepted announce (RealChange OR Heartbeat —
+    // the table tracks last_seen too) whose effective puddle
+    // pubkey matches the local user's puddle. Standalone callers
+    // (no local puddle, or peer announces under a different
+    // puddle) skip — they have no membership concept to track.
+    //
+    // First-call seed: when this is the first matching upsert
+    // post-0.39.12 against an already-populated puddle, the table
+    // file doesn't yet exist on disk and `load` returns empty. The
+    // closure walks peers.json and adopts every entry whose pinned
+    // puddle pubkey matches, so the gap line works from the first
+    // tick rather than waiting on every member to re-announce.
+    if !effective_puddle_pubkey.is_empty() {
+        if let Some(home) = home_for_user(&announcement.user) {
+            let local_pp = local_puddle_pubkey_hex(&home);
+            if !local_pp.is_empty() && local_pp == effective_puddle_pubkey {
+                let peers_snapshot = PeerTable::load(&announcement.user);
+                let now = announcement.emitted_at;
+                let host = announcement.machine.clone();
+                let pubkey = announcement.pubkey.clone();
+                if let Err(e) = puddle_members::PuddleMembersTable::modify(
+                    &announcement.user,
+                    |table| {
+                        let seeded =
+                            table.seed_from_peers_if_empty(&peers_snapshot, &local_pp);
+                        let upserted = table.upsert(&pubkey, &host, now);
+                        seeded || upserted
+                    },
+                ) {
+                    warn!(
+                        error = %e,
+                        user = %announcement.user,
+                        "cryptsync: puddle_members save after announce failed"
+                    );
+                }
             }
         }
     }
@@ -1932,13 +1974,29 @@ pub fn apply_leave(
         leaves_changed
     })?;
 
-    // 3. Recipients.txt — regenerate when a peer was dropped, using
+    // 3. Puddle-members table: drop the leaving age pubkey so the
+    //    `cryptsync status` denominator shrinks. Authoritative
+    //    eviction — the membership table is otherwise append-only,
+    //    so this is the only path (alongside admin `forget`) that
+    //    removes an entry. Idempotent: repeat LEAVEs against an
+    //    already-evicted pubkey are a no-op.
+    if let Err(e) = puddle_members::PuddleMembersTable::modify(user, |table| {
+        table.forget_by_pubkey(age_pubkey_leaving)
+    }) {
+        warn!(
+            user = %user,
+            error = %e,
+            "cryptsync: puddle_members save after leave failed"
+        );
+    }
+
+    // 4. Recipients.txt — regenerate when a peer was dropped, using
     //    the post-drop snapshot we captured under the lock.
     if let Some(table) = peer_table_after.as_ref() {
         regenerate_recipients(user, home, table)?;
     }
 
-    // 4. Reencrypt sentinel — drop only when something actually
+    // 5. Reencrypt sentinel — drop only when something actually
     //    changed, else we'd churn the session helper across repeated
     //    idempotent deliveries.
     if peer_was_present || leaves_changed {

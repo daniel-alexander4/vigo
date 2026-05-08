@@ -38,7 +38,7 @@ The verb tree splits into **mode-agnostic** verbs (the daily ones — they don't
 | `leave [--purge] [--keep-identity] [--yes]` | Unenroll this user's cryptsync on this envoy. Drops a `~/.cryptsync/leave.pending` sentinel that the daemon picks up, signs + fans out to live peers, then scrubs local state per the flags. |
 | `purge --yes` | Power-user wipe of ALL local cryptsync state for this user (`~/.cryptsync/` + `~/cryptsync/`). Distinct from `leave --purge` — this verb does NOT gossip; peers age the envoy out via the staleness rule. Use when decommissioning. |
 | `reencrypt` | Force re-encrypt of every file in `~/cryptsync/` to the current recipient set. Requires `unlock`. |
-| `status` | Show local state: enrolled, recipient count, file-count breakdown (ciphertext / plaintext / failed), session helper status. Under puddle membership, the `recipients:` line expands to `N of M puddle members — …` with a gap explanation while a peer is past `STALE_SECS` (90s) but still tracked in the local peer table (0.39.11). Once the next prune (60s cadence) drops the absent peer, both numerator and denominator shrink in lockstep and the line returns to the terse `recipients: N` form — so persistent absence (laptop offline for hours) renders the same as steady-state. The line is a transient-gap surface, not a long-term membership audit. |
+| `status` | Show local state: enrolled, recipient count, file-count breakdown (ciphertext / plaintext / failed), session helper status. Under puddle membership, the `recipients:` line expands whenever an expected member is missing from the live recipient set — `N of M puddle members — <host> silent for <duration>` (singular) or `N of M puddle members — K peers silent (longest <duration>)` (plural). The `M` denominator is sourced from `puddle_members.json` (the append-only "ever-known members" table introduced in 0.39.12) and survives `prune_stale`, so the gap line keeps rendering with a real silent-for duration even after the absent envoy has been dropped from `peers.json`. Members are added on first sighting under the local user's puddle pubkey; they're removed only by an authoritative LEAVE (`vigo swarm cryptsync leave`, `vigocli swarm cryptsync evict`, or self-leave catch-up) — `forget` of a peer that has gone silent without leaving keeps the entry until an explicit LEAVE lands. |
 
 ### Lifecycle (mode-specific subtrees)
 
@@ -141,6 +141,10 @@ vigo swarm cryptsync purge --yes
                    # within one reactor tick (≤30 s). Removed by the daemon.
   tombstones.json  # daemon-written user-readable mirror of the tombstone table
   leaves.json      # daemon-written user-readable mirror of the LEAVE record table
+  peers.json       # daemon-written user-readable mirror of the live peer table
+  puddle_members.json # daemon-written user-readable mirror of the append-only
+                   # puddle-members table (drives the `recipients:` gap line in
+                   # `cryptsync status` past prune)
   session.unlocked # sentinel containing the session helper's PID; written on
                    # unlock, removed on lock/idle/parent-gone. Watcher reads
                    # this to gate auto-encrypt-on-write (ADR-012).

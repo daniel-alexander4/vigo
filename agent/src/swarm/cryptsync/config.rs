@@ -107,6 +107,18 @@ pub fn peers_user_path(home: &Path) -> PathBuf {
     dot_dir(home).join("peers.json")
 }
 
+/// User-side mirror of the daemon's append-only puddle-members
+/// table. Same rationale as `peers_user_path` — canonical at
+/// `agent_state_dir/<user>/puddle_members.json` (root-owned 0600),
+/// mirror at `~/.cryptsync/puddle_members.json` (user-owned 0600)
+/// so `cryptsync status` can compute the long-term-absence gap line
+/// (members denominator that doesn't shrink when `prune_stale`
+/// drops a peer). Written by `PuddleMembersTable::save` after
+/// every canonical write.
+pub fn puddle_members_user_path(home: &Path) -> PathBuf {
+    dot_dir(home).join("puddle_members.json")
+}
+
 /// Sentinel file that tells the daemon reactor to process a
 /// resurrect — clear an active tombstone for a filename so the
 /// caller can re-encrypt that name within retention. Dropped by

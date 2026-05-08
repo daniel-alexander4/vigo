@@ -35,6 +35,7 @@ use zeroize::Zeroizing;
 
 use super::config;
 use super::crypt;
+use super::puddle_members;
 use super::resurrects;
 use super::session;
 use super::state::PeerTable;
@@ -582,16 +583,48 @@ fn bootstrap_identity(
 
 // ---------- status ----------
 
+/// One puddle member that's expected (per `puddle_members.json`)
+/// but absent from the live `recipients.txt`. Drives the per-peer
+/// silent-for duration in the gap line.
+pub(super) struct MissingMember {
+    pub hostname: String,
+    pub silent_secs: i64,
+}
+
+/// Render a silent-for duration in human terms. Values fall in
+/// these bands so the gap line stays short:
+///
+/// - `< 120s` → seconds (`92s`)
+/// - `< 1h`   → minutes (`14m`)
+/// - `< 1d`   → hours (`6h`)
+/// - `>= 1d`  → days (`3d`)
+fn fmt_silent_for(secs: i64) -> String {
+    let s = secs.max(0);
+    if s < 120 {
+        format!("{}s", s)
+    } else if s < 3600 {
+        format!("{}m", s / 60)
+    } else if s < 86400 {
+        format!("{}h", s / 3600)
+    } else {
+        format!("{}d", s / 86400)
+    }
+}
+
 /// Render the `recipients:` line block for `cryptsync status`.
 ///
 /// `recipients_count` is the live recipient count from
 /// `~/.cryptsync/recipients.txt` — self plus peers whose last
 /// announce landed in the 90s STALE_SECS window. `members_count`
 /// is `Some(N)` when the user has a puddle on this envoy
-/// (count of self plus all peers TOFU-pinned to the local
-/// puddle pubkey, regardless of liveness), or `None` when no
-/// puddle anchor exists (standalone mode → no comparison
-/// possible). Returns one or more lines ready to print.
+/// (count of self plus every age pubkey ever observed under the
+/// local puddle pubkey, sourced from `puddle_members.json`), or
+/// `None` when no puddle anchor exists (standalone mode → no
+/// comparison possible). `missing` is the per-peer silent-for
+/// detail used to render real durations rather than a bare
+/// ">90s" — the table survives `prune_stale`, so the duration
+/// keeps advancing even after the live peer has dropped out of
+/// `peers.json`. Returns one or more lines ready to print.
 ///
 /// Output by case:
 /// - No puddle (`None`) → bare `recipients: N`. Pre-0.39.11
@@ -601,10 +634,12 @@ fn bootstrap_identity(
 ///   `recipients: N`. Default-healthy stays terse so operators
 ///   only see the expanded form when there's something to
 ///   notice.
-/// - Puddle, gap (`recipients < members`) → multi-line
-///   "X of M puddle members — N peer(s) silent for >90s" with
-///   the consequence-clarity continuation describing exclusion
-///   from new encryptions and what persistence implies.
+/// - Puddle, gap (`recipients < members`) → multi-line "X of M
+///   puddle members — 1 peer silent for 6h" (singular renders
+///   the exact silent-for) or "X of M puddle members — N peers
+///   silent (longest 3d)" (plural reports the worst-case
+///   absence). Consequence-clarity continuation describes
+///   exclusion from new encryptions and what persistence implies.
 /// - Puddle, more recipients than known members
 ///   (`recipients > members`) → bare count + WARN log.
 ///   Defensive; shouldn't happen in pure puddle mode but is
@@ -612,6 +647,7 @@ fn bootstrap_identity(
 fn format_recipients_line(
     recipients_count: usize,
     members_count: Option<usize>,
+    missing: &[MissingMember],
 ) -> Vec<String> {
     match members_count {
         None => vec![format!("  recipients:       {}", recipients_count)],
@@ -630,14 +666,32 @@ fn format_recipients_line(
         Some(m) => {
             // recipients < members — the gap case. Pluralize
             // explicitly rather than hand-wave "(s)" suffixes.
-            let missing = m - recipients_count;
-            if missing == 1 {
+            // Singular renders the exact silent-for; plural
+            // reports the longest absence (worst-case is the
+            // signal an operator wants).
+            let missing_count = m - recipients_count;
+            let longest = missing
+                .iter()
+                .map(|p| p.silent_secs)
+                .max()
+                .unwrap_or(super::state::STALE_SECS);
+            let longest_label = fmt_silent_for(longest);
+            if missing_count == 1 {
+                // Single missing peer — name them so the operator
+                // doesn't have to cross-reference puddle_members.json
+                // by hand. Falls back to "1 peer" if the missing
+                // slice doesn't carry a hostname (rare edge: count
+                // mismatch from a stale read).
+                let host_label = missing
+                    .first()
+                    .map(|p| format!("{} silent", p.hostname))
+                    .unwrap_or_else(|| "1 peer silent".to_string());
                 vec![
                     format!(
-                        "  recipients:       {} of {} puddle members — 1 peer silent for",
-                        recipients_count, m
+                        "  recipients:       {} of {} puddle members — {} for {},",
+                        recipients_count, m, host_label, longest_label
                     ),
-                    "                    >90s, excluded from new encryptions until it"
+                    "                    excluded from new encryptions until it"
                         .to_string(),
                     "                    announces again. If persistent, the envoy is"
                         .to_string(),
@@ -647,10 +701,12 @@ fn format_recipients_line(
                 vec![
                     format!(
                         "  recipients:       {} of {} puddle members — {} peers silent",
-                        recipients_count, m, missing
+                        recipients_count, m, missing_count
                     ),
-                    "                    for >90s, excluded from new encryptions until"
-                        .to_string(),
+                    format!(
+                        "                    (longest {}), excluded from new encryptions until",
+                        longest_label
+                    ),
                     "                    they announce again. If persistent, those envoys"
                         .to_string(),
                     "                    are offline or unreachable.".to_string(),
@@ -675,40 +731,59 @@ fn cmd_status(_args: &[String]) -> Result<()> {
     if config::is_enrolled(&home) {
         match fs::read_to_string(config::recipients_path(&home)) {
             Ok(text) => {
-                let recipients_count = text
+                // Build the live recipient set (skipping comments +
+                // blanks). We need both the count for display and
+                // the membership for set-difference against
+                // `puddle_members.json` below.
+                let recipient_set: std::collections::HashSet<String> = text
                     .lines()
                     .map(str::trim)
                     .filter(|l| !l.is_empty() && !l.starts_with('#'))
-                    .count();
+                    .map(str::to_string)
+                    .collect();
+                let recipients_count = recipient_set.len();
 
-                // Compute puddle-members count when the user has a
-                // puddle on this envoy. The peer table records every
-                // peer's announced puddle_pubkey via TOFU pinning;
-                // count entries that match this user's local puddle
-                // pubkey, plus 1 for self. Standalone mode (no local
-                // puddle pubkey) → None → bare `recipients: N` line
-                // unchanged from pre-0.39.11.
-                let members_count: Option<usize> =
+                // Compute puddle-members count + per-missing-peer
+                // silent-for from `puddle_members.json` — the
+                // append-only "ever-known members" table. Survives
+                // `prune_stale`, so the gap line keeps rendering
+                // (with a real duration, not bare ">90s") for
+                // long-term-absent envoys. Self is not in the
+                // table; we add 1.
+                //
+                // Standalone mode (no local puddle pubkey) →
+                // members_count=None, missing=empty → bare
+                // `recipients: N` line unchanged from pre-0.39.12.
+                let (members_count, missing) =
                     if crate::swarm::puddle::is_initialized(&home) {
                         let local_pubkey =
                             crate::swarm::cryptsync::local_puddle_pubkey_hex(&home);
                         if local_pubkey.is_empty() {
-                            None
+                            (None, Vec::new())
                         } else {
                             let username = user_for_invocation()?;
-                            let table = PeerTable::load_user(&username, &home);
-                            let peer_members = table
-                                .peers
-                                .values()
-                                .filter(|p| p.puddle_pubkey == local_pubkey)
-                                .count();
-                            Some(1 + peer_members)
+                            let table = puddle_members::PuddleMembersTable::load_user(
+                                &username, &home,
+                            );
+                            let now = crate::swarm::cryptsync::now_secs_pub();
+                            let mut missing: Vec<MissingMember> = Vec::new();
+                            for (age_pubkey, rec) in &table.members {
+                                if !recipient_set.contains(age_pubkey) {
+                                    missing.push(MissingMember {
+                                        hostname: rec.hostname.clone(),
+                                        silent_secs: (now - rec.last_seen).max(0),
+                                    });
+                                }
+                            }
+                            (Some(1 + table.members.len()), missing)
                         }
                     } else {
-                        None
+                        (None, Vec::new())
                     };
 
-                for line in format_recipients_line(recipients_count, members_count) {
+                for line in
+                    format_recipients_line(recipients_count, members_count, &missing)
+                {
                     println!("{}", line);
                 }
             }
@@ -2841,10 +2916,17 @@ mod tests {
     // format_recipients_line — recipients-vs-puddle-members gap render
     // -----------------------------------------------------------------
 
+    fn missing(host: &str, silent_secs: i64) -> MissingMember {
+        MissingMember {
+            hostname: host.to_string(),
+            silent_secs,
+        }
+    }
+
     #[test]
     fn recipients_line_standalone_renders_bare_count() {
         // No puddle anchor → no comparison possible; bare line.
-        let out = format_recipients_line(3, None);
+        let out = format_recipients_line(3, None, &[]);
         assert_eq!(out, vec!["  recipients:       3".to_string()]);
     }
 
@@ -2853,22 +2935,24 @@ mod tests {
         // Default-healthy: recipients == members → keep the line
         // unchanged so operators only see the expanded form when
         // there's something to notice.
-        let out = format_recipients_line(3, Some(3));
+        let out = format_recipients_line(3, Some(3), &[]);
         assert_eq!(out, vec!["  recipients:       3".to_string()]);
     }
 
     #[test]
     fn recipients_line_puddle_single_envoy_renders_bare_one() {
-        let out = format_recipients_line(1, Some(1));
+        let out = format_recipients_line(1, Some(1), &[]);
         assert_eq!(out, vec!["  recipients:       1".to_string()]);
     }
 
     #[test]
     fn recipients_line_puddle_one_peer_silent_renders_singular_gap() {
-        let out = format_recipients_line(2, Some(3));
+        let m = vec![missing("annlap", 6 * 3600)];
+        let out = format_recipients_line(2, Some(3), &m);
         assert_eq!(out.len(), 4);
         assert!(out[0].contains("2 of 3 puddle members"));
-        assert!(out[0].contains("1 peer silent"));
+        // Name the missing host + render the real duration.
+        assert!(out[0].contains("annlap silent for 6h"), "got: {}", out[0]);
         // Singular pronouns + verb conjugation, joined for resilience
         // against the line where each phrase lands.
         let joined = out.join("\n");
@@ -2886,12 +2970,19 @@ mod tests {
     }
 
     #[test]
-    fn recipients_line_puddle_multiple_peers_silent_renders_plural_gap() {
-        let out = format_recipients_line(1, Some(4));
+    fn recipients_line_puddle_multiple_peers_silent_renders_plural_gap_with_longest() {
+        let m = vec![
+            missing("annlap", 95),
+            missing("plex", 4 * 86400),
+            missing("girlslaptop", 2 * 3600),
+        ];
+        let out = format_recipients_line(1, Some(4), &m);
         assert_eq!(out.len(), 4);
         assert!(out[0].contains("1 of 4 puddle members"));
         assert!(out[0].contains("3 peers silent"));
-        // Plural pronouns + verb conjugation.
+        // Longest absence (4d) drives the singular duration we
+        // surface; the others are absorbed into "longest …".
+        assert!(out[1].contains("longest 4d"), "got: {}", out[1]);
         assert!(out[1].contains("until"));
         let joined = out.join("\n");
         assert!(
@@ -2913,7 +3004,22 @@ mod tests {
         // mode. Render bare count; the WARN log surfaces the
         // anomaly without scrambling the operator with a
         // negative-gap message.
-        let out = format_recipients_line(5, Some(3));
+        let out = format_recipients_line(5, Some(3), &[]);
         assert_eq!(out, vec!["  recipients:       5".to_string()]);
+    }
+
+    #[test]
+    fn fmt_silent_for_band_boundaries() {
+        assert_eq!(fmt_silent_for(0), "0s");
+        assert_eq!(fmt_silent_for(95), "95s");
+        assert_eq!(fmt_silent_for(119), "119s");
+        assert_eq!(fmt_silent_for(120), "2m");
+        assert_eq!(fmt_silent_for(3599), "59m");
+        assert_eq!(fmt_silent_for(3600), "1h");
+        assert_eq!(fmt_silent_for(86399), "23h");
+        assert_eq!(fmt_silent_for(86400), "1d");
+        assert_eq!(fmt_silent_for(7 * 86400), "7d");
+        // Negative inputs (clock skew) clamp at 0.
+        assert_eq!(fmt_silent_for(-5), "0s");
     }
 }
