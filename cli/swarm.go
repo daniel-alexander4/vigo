@@ -256,5 +256,5 @@ func init() {
 	}
 	swarmCleanupCmd.Flags().String("target", "*", "Hostname pattern (filepath.Match glob) to scope the sweep; default '*' = whole fleet")
 	swarmCmd.AddCommand(swarmStatusCmd, swarmPeersCmd, swarmCleanupCmd)
-	swarmCmd.AddCommand(payloadCmd, gitmirrorCmd, filesyncCmd, cryptsyncCmd)
+	swarmCmd.AddCommand(payloadCmd, gitmirrorCmd, filesyncCmd, cryptsyncCmd, puddleCmd)
 }
