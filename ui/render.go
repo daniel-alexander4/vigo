@@ -917,7 +917,7 @@ func traceGreenText(depth, total int) template.CSS {
 // waiverFileGroup is a waiver file with its entries, for template rendering.
 type waiverFileGroup struct {
 	File    string
-	Entries []config.WaiverTraceEntry
+	Entries []config.EnvoyWaiverTraceEntry
 }
 
 // usercrateScope is one usercrates/ folder in the inheritance chain along with
@@ -970,7 +970,7 @@ func traceModuleLevels(levels []config.InheritanceLevel) []config.InheritanceLev
 }
 
 // groupWaiversByFile groups waiver trace entries by source file for rendering.
-func groupWaiversByFile(waivers []config.WaiverTraceEntry) []waiverFileGroup {
+func groupWaiversByFile(waivers []config.EnvoyWaiverTraceEntry) []waiverFileGroup {
 	var groups []waiverFileGroup
 	idx := make(map[string]int)
 	for _, w := range waivers {
@@ -982,7 +982,7 @@ func groupWaiversByFile(waivers []config.WaiverTraceEntry) []waiverFileGroup {
 			groups[i].Entries = append(groups[i].Entries, w)
 		} else {
 			idx[src] = len(groups)
-			groups = append(groups, waiverFileGroup{File: src, Entries: []config.WaiverTraceEntry{w}})
+			groups = append(groups, waiverFileGroup{File: src, Entries: []config.EnvoyWaiverTraceEntry{w}})
 		}
 	}
 	return groups

@@ -64,7 +64,7 @@ Use --module to filter the trace to a single module's branch.`,
 		if len(trace.Inheritance) > 0 {
 			fmt.Println(bold("Path Inheritance:"))
 			fmt.Println()
-			renderInheritanceTree(trace.Inheritance, trace.WaiverFiles)
+			renderInheritanceTree(trace.Inheritance, trace.EnvoyWaiverFiles)
 			fmt.Println()
 		}
 
@@ -143,12 +143,12 @@ Use --module to filter the trace to a single module's branch.`,
 		}
 
 		// Section 7: Waivers Inheritance
-		if len(trace.Waivers) > 0 {
+		if len(trace.EnvoyWaivers) > 0 {
 			fmt.Println("  " + medGray("─────────────────────────────────────────"))
 			fmt.Println()
 			fmt.Println(bold("Waivers Inheritance:"))
 			fmt.Println()
-			renderWaiverInheritance(trace.Waivers)
+			renderWaiverInheritance(trace.EnvoyWaivers)
 		}
 
 		// Section 8: Conditional Inheritance
@@ -194,8 +194,8 @@ type traceResult struct {
 	Dependencies          []dependencyTraceEntry       `json:"dependencies"`
 	ComplianceTags        []complianceTraceEntry       `json:"compliance_tags"`
 	ModuleComplianceFiles []moduleComplianceFileEntry  `json:"module_compliance_files"`
-	WaiverFiles           []string                     `json:"waiver_files"`
-	Waivers               []waiverTraceEntry           `json:"waivers"`
+	EnvoyWaiverFiles      []string                     `json:"envoy_waiver_files"`
+	EnvoyWaivers          []envoyWaiverTraceEntry      `json:"envoy_waivers"`
 	Conditionals          []conditionalTraceEntry      `json:"conditionals"`
 }
 
@@ -224,7 +224,7 @@ type complianceTraceEntry = struct {
 	Frameworks map[string][]string `json:"frameworks"`
 }
 
-type waiverTraceEntry = struct {
+type envoyWaiverTraceEntry = struct {
 	SourceFile string `json:"source_file"`
 	Framework  string `json:"framework"`
 	Control    string `json:"control"`
@@ -681,11 +681,11 @@ func renderModuleComplianceSources(files []moduleComplianceFileEntry) {
 }
 
 // renderWaiverInheritance draws waivers grouped by source file with box cards.
-func renderWaiverInheritance(waivers []waiverTraceEntry) {
+func renderWaiverInheritance(waivers []envoyWaiverTraceEntry) {
 	// Group by source file, preserving order.
 	type fileGroup struct {
 		file    string
-		entries []waiverTraceEntry
+		entries []envoyWaiverTraceEntry
 	}
 	var groups []fileGroup
 	fileIdx := make(map[string]int)
@@ -698,7 +698,7 @@ func renderWaiverInheritance(waivers []waiverTraceEntry) {
 			groups[idx].entries = append(groups[idx].entries, w)
 		} else {
 			fileIdx[src] = len(groups)
-			groups = append(groups, fileGroup{file: src, entries: []waiverTraceEntry{w}})
+			groups = append(groups, fileGroup{file: src, entries: []envoyWaiverTraceEntry{w}})
 		}
 	}
 

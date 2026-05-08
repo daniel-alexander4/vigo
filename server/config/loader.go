@@ -205,7 +205,7 @@ type ConfigStore struct {
 	perEnvOverrides  map[string]map[string]*PerEnvOverrideBlock // dir path → env name → override block
 	usercratesByDir  map[string][]ModuleRef                      // scope dir (parent of usercrates/) → usercrate names auto-applied at that scope
 	waivers          map[string]map[string]*WaiverEntry         // standard → control_id → waiver
-	waiversByFile   []WaiverFileEntry                  // per-file waiver data for trace display
+	waiversByFile   []EnvoyWaiverFileEntry             // per-file waiver data for trace display
 	moduleComplianceSources []ModuleComplianceSource   // per-file modules-tree compliance.vgo entries for trace display
 	dir           string                       // examples directory
 	provider      secrets.Provider
@@ -614,9 +614,13 @@ type ConfigTrace struct {
 	// that attached compliance tags to the modules this envoy runs.
 	ModuleComplianceFiles []ModuleComplianceFileEntry `json:"module_compliance_files,omitempty"`
 
-	// Compliance Waivers
-	WaiverFiles     []string                `json:"waiver_files,omitempty"` // envoys-tree compliance.vgo paths in the inheritance chain
-	Waivers         []WaiverTraceEntry      `json:"waivers,omitempty"`
+	// Compliance Waivers — mirrors the ModuleCompliance* fields above
+	// (per-file paths + per-entry detail) but for the waivers half of
+	// compliance.vgo. "Envoy" prefix signals the envoy's-view-of-the-
+	// inheritance-chain semantic, parallel to "Module" on the claims
+	// side.
+	EnvoyWaiverFiles []string                  `json:"envoy_waiver_files,omitempty"` // compliance.vgo paths in the envoy's inheritance chain
+	EnvoyWaivers     []EnvoyWaiverTraceEntry   `json:"envoy_waivers,omitempty"`
 
 	// Per-Environment Overrides
 	EnvOverrideFiles []string               `json:"env_override_files,omitempty"` // environments.vgo paths in ancestry
@@ -712,10 +716,10 @@ func (t *ConfigTrace) FilterByModule(module string) *ConfigTrace {
 	}
 
 	// Filter waivers to frameworks relevant to the filtered module.
-	out.Waivers = nil
-	for _, w := range t.Waivers {
+	out.EnvoyWaivers = nil
+	for _, w := range t.EnvoyWaivers {
 		if filteredFrameworks[w.Framework] {
-			out.Waivers = append(out.Waivers, w)
+			out.EnvoyWaivers = append(out.EnvoyWaivers, w)
 		}
 	}
 
@@ -776,14 +780,18 @@ type ComplianceTraceEntry struct {
 	Frameworks map[string][]string `json:"frameworks"` // framework → control IDs
 }
 
-// WaiverFileEntry stores per-file waiver data for trace display.
-type WaiverFileEntry struct {
+// EnvoyWaiverFileEntry stores per-file waiver data for trace display.
+// Named to mirror ModuleComplianceFileEntry — the "Envoy" prefix
+// signals the envoy's-view-of-the-inheritance-chain semantic, parallel
+// to "Module" meaning modules-tree on the claims side.
+type EnvoyWaiverFileEntry struct {
 	RelPath string                      // e.g., "compliance.vgo" or "production/compliance.vgo"
 	Waivers map[string][]*WaiverEntry   // standard → entries
 }
 
-// WaiverTraceEntry tracks a compliance waiver from an envoys-tree compliance.vgo file.
-type WaiverTraceEntry struct {
+// EnvoyWaiverTraceEntry tracks a compliance waiver applied to an envoy
+// via a compliance.vgo file in the envoy's inheritance chain.
+type EnvoyWaiverTraceEntry struct {
 	SourceFile string `json:"source_file"`
 	Framework  string `json:"framework"`
 	Control    string `json:"control"`
@@ -952,7 +960,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 				wfDir = ""
 			}
 			if pathDirs[wfDir] {
-				trace.WaiverFiles = append(trace.WaiverFiles, wf.RelPath)
+				trace.EnvoyWaiverFiles = append(trace.EnvoyWaiverFiles, wf.RelPath)
 			}
 		}
 	}
@@ -1300,7 +1308,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 						continue
 					}
 					seen[key] = true
-					trace.Waivers = append(trace.Waivers, WaiverTraceEntry{
+					trace.EnvoyWaivers = append(trace.EnvoyWaivers, EnvoyWaiverTraceEntry{
 						SourceFile: wf.RelPath,
 						Framework:  framework,
 						Control:    w.Control,
@@ -1312,13 +1320,13 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 			}
 		}
 		// Sort waivers by path depth (shallowest first, root at top).
-		sort.Slice(trace.Waivers, func(i, j int) bool {
-			di := strings.Count(trace.Waivers[i].SourceFile, "/")
-			dj := strings.Count(trace.Waivers[j].SourceFile, "/")
+		sort.Slice(trace.EnvoyWaivers, func(i, j int) bool {
+			di := strings.Count(trace.EnvoyWaivers[i].SourceFile, "/")
+			dj := strings.Count(trace.EnvoyWaivers[j].SourceFile, "/")
 			if di != dj {
 				return di < dj
 			}
-			return trace.Waivers[i].SourceFile < trace.Waivers[j].SourceFile
+			return trace.EnvoyWaivers[i].SourceFile < trace.EnvoyWaivers[j].SourceFile
 		})
 	}
 
@@ -3024,9 +3032,9 @@ func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*Commo
 // block in a waivers.vgo is a fatal validator error at publish time
 // (caught by validateStockpileLayout); at load time it's ignored with a
 // slog.Warn.
-func loadStockpileWaivers(dir string) (map[string]map[string]*WaiverEntry, []WaiverFileEntry, error) {
+func loadStockpileWaivers(dir string) (map[string]map[string]*WaiverEntry, []EnvoyWaiverFileEntry, error) {
 	merged := make(map[string]map[string]*WaiverEntry)
-	var perFile []WaiverFileEntry
+	var perFile []EnvoyWaiverFileEntry
 
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return merged, perFile, nil
@@ -3072,7 +3080,7 @@ func loadStockpileWaivers(dir string) (map[string]map[string]*WaiverEntry, []Wai
 				"file", filepath.ToSlash(rel))
 		}
 
-		fe := WaiverFileEntry{
+		fe := EnvoyWaiverFileEntry{
 			RelPath: filepath.ToSlash(rel),
 			Waivers: make(map[string][]*WaiverEntry),
 		}

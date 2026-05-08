@@ -55,7 +55,7 @@
 <div class="trace-group">
     <h3 class="trace-group__title">Path Inheritance</h3>
     <div class="trace-section__body" style="line-height:1.9;font-family:var(--font-mono);font-size:13px;">
-        {{tracePathTree .Inheritance .WaiverFiles}}
+        {{tracePathTree .Inheritance .EnvoyWaiverFiles}}
     </div>
 </div>
 
@@ -280,11 +280,11 @@
 {{end}}
 
 <!-- Waivers Inheritance -->
-{{if .Waivers}}
+{{if .EnvoyWaivers}}
 <div class="trace-group">
     <h3 class="trace-group__title">Waivers Inheritance</h3>
     <div class="trace-chain">
-        {{$waiverFiles := groupWaiversByFile .Waivers}}
+        {{$waiverFiles := groupWaiversByFile .EnvoyWaivers}}
         {{$wTotal := len $waiverFiles}}
         {{range $i, $wf := $waiverFiles}}
         <div class="trace-card" style="{{traceGreenBord $i $wTotal}};">
