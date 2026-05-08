@@ -581,11 +581,17 @@ smtp:
 
 Configures the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **payload** (admin-pushed file distribution), **gitmirror** (user source-control mirroring), **puddle/cryptsync** (encrypted user directory sync), and **filesync** (LAN plaintext user directory sync). Each subsystem is gated per-envoy by a hostname pattern list (0.41.0+); both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for any subsystem to be active there.
 
-Pattern lists are first-match-wins, `-` prefix denies, default-deny on no match — same semantics as Vigo's matchfile patterns (ADR-002). Examples:
+Pattern lists are first-match-wins, `-` prefix denies, default-deny on no match — same semantics as Vigo's matchfile patterns (ADR-002).
+
+> **⚠ Order matters.** Put specific deny patterns BEFORE any catch-all `*`, or the catch-all silently swallows them. There is no warning at load time — modlint can't tell intent from a syntactically valid list.
+
+Examples:
 
 - `[]` — off everywhere (default)
 - `["*"]` — fleet-wide on
-- `["-rasp1", "*"]` — everywhere except `rasp1`
+- `["-rasp1", "*"]` — everywhere except `rasp1` ✓
+- `["*", "-rasp1"]` — fleet-wide on; the deny is dead ✗
+- `["-rasp*", "*"]` — everywhere except every `rasp*` host ✓
 - `["annlap", "plex"]` — only those two; everything else denied
 
 ```yaml
