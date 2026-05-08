@@ -28,14 +28,19 @@ vigocli doctor
 
 ```
   database ............. OK
-  grpc ................. OK
-  config ............... OK
-  secrets .............. OK
   tls .................. OK (expires 2027-01-15)
+  secrets .............. OK
   license .............. OK
+  spanner .............. OK
+  integrations ......... OK
+  config ............... OK
+  swarm_pattern_order .. OK
+  stale_envoys ......... OK
 
   Status: healthy
 ```
+
+The `swarm_pattern_order` check warns when `swarm.*.enabled` pattern lists in `server.yaml` contain deny entries shadowed by an earlier non-deny pattern (the silent-fail case `["*", "-rasp1"]` plus glob-shadow `["a*", "-annlap"]`). The same finding is logged at WARN by the server at startup and on every reload — see [Server Configuration](../../getting-started/server-config.md#swarm) for the order rules.
 
 ### Pre-start mode
 
