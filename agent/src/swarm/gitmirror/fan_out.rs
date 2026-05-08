@@ -218,10 +218,6 @@ pub fn ensure_bare_repo(repo: &Path) -> Result<()> {
 ///
 /// Distinct from on-disk `TokenChain` and `DelegationChain` so the
 /// wire format can evolve independently of the persistent files.
-/// Pre-ADR-019 senders that emit just the bare `TokenChain` JSON
-/// are still accepted via the `serde(default)` on `delegations` and
-/// `version` — same backwards-compat shape as the pre-ADR-019
-/// `Invitation` struct.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PushChain {
     #[serde(default = "default_push_chain_version")]
@@ -259,23 +255,9 @@ pub fn encode_chain_header(
 }
 
 /// Decode the chain + delegations from the `X-Vigo-Chain` header.
-/// Tolerates pre-ADR-019 callers that emitted a bare `TokenChain`
-/// JSON: when the top-level shape doesn't deserialize as `PushChain`,
-/// fall back to parsing as `TokenChain` and synthesize an empty
-/// delegation list.
 pub fn decode_chain_header(value: &str) -> Result<PushChain> {
     let bytes = B64.decode(value.trim()).context("base64-decode chain header")?;
-    if let Ok(envelope) = serde_json::from_slice::<PushChain>(&bytes) {
-        return Ok(envelope);
-    }
-    // Backwards compat: bare TokenChain JSON.
-    let legacy: TokenChain = serde_json::from_slice(&bytes)
-        .context("parse chain JSON from header (legacy or PushChain shape)")?;
-    Ok(PushChain {
-        version: PUSH_CHAIN_VERSION,
-        chain: legacy.chain,
-        delegations: Vec::new(),
-    })
+    serde_json::from_slice::<PushChain>(&bytes).context("parse PushChain JSON from chain header")
 }
 
 /// Verify a chain server-side against a project_id from the URL.
@@ -1274,23 +1256,6 @@ mod tests {
         assert_eq!(parsed.chain.len(), 1);
         assert_eq!(parsed.delegations.len(), 1);
         assert_eq!(parsed.delegations[0], delegation);
-    }
-
-    #[test]
-    fn decode_chain_header_accepts_legacy_bare_token_chain() {
-        // Pre-ADR-019 senders emitted bare TokenChain JSON. Decoder
-        // must still accept those and synthesize empty delegations.
-        let founder = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
-        let chain = TokenChain {
-            version: super::super::project_state::PROJECT_STATE_VERSION,
-            chain: vec![bootstrap],
-        };
-        let json = serde_json::to_vec(&chain).unwrap();
-        let header = B64.encode(&json);
-        let parsed = decode_chain_header(&header).unwrap();
-        assert_eq!(parsed.chain.len(), 1);
-        assert!(parsed.delegations.is_empty());
     }
 
     #[test]

@@ -1,6 +1,8 @@
 
 # Cryptsync — Per-User Encrypted P2P Directory
 
+> **Heads up — major reshape in 0.40.0.** Standalone mode retires ([ADR-020](../../adr/020-cryptsync-puddle-only.md)) and cryptsync's lifecycle layer (`init`, `leave`, `forget`) absorbs into puddle ([ADR-021](../../adr/021-cryptsync-lifecycle-on-puddle.md)). Cryptsync becomes "a capability of puddle membership" with a content-only verb tree. The narrative below describes the pre-0.40.0 dual-mode codebase; sections will be reworked when the implementation lands. See [`swarm-puddle-architecture.svg`](../img/swarm-puddle-architecture.svg) for the post-0.40.0 hierarchy.
+
 Cryptsync keeps `~/cryptsync/` in sync across every envoy where a user is enrolled, **ciphertext at rest** everywhere. Drop a plaintext file on the primary, cryptsync encrypts it to every peer's public key and fans out the ciphertext. Unlock with the user's cryptsync password on any envoy to decrypt.
 
 Cryptsync is the encryption-first sibling of [Filesync](filesync.md):
