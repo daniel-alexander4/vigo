@@ -127,6 +127,15 @@ var envoysShowCmd = &cobra.Command{
 var envoysRevokeCmd = &cobra.Command{
 	Use:               "revoke <id>",
 	Short:             "Block a envoy from checking in and receiving policy updates",
+	Long: `Revoke an enrolled envoy. Cert is marked revoked, the envoy can no
+longer check in, and re-enrollment under the same UUID is blocked.
+
+Cross-envoy cleanup runs by default: the revoked host's pubkey is
+dropped from every other envoy's per-user cryptsync recipients list
+so future re-encrypts don't target a host that can't receive. Use
+--skip-swarm-cleanup if you plan to re-bootstrap the same host
+shortly (e.g. investigating a suspected compromise) and want the
+recipient state preserved.`,
 	Example:           "  vigocli envoys revoke 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
 	Args:              requireArgs(1, "a envoy ID"),
 	ValidArgsFunction: completeEnvoyIDs,
@@ -135,9 +144,10 @@ var envoysRevokeCmd = &cobra.Command{
 			fmt.Println("Cancelled.")
 			return nil
 		}
-
+		skipCleanup, _ := cmd.Flags().GetBool("skip-swarm-cleanup")
+		body := map[string]any{"id": args[0], "skip_swarm_cleanup": skipCleanup}
 		client := newAPIClient()
-		if err := client.post("/api/v1/envoys/"+args[0]+"/revoke", nil, nil); err != nil {
+		if err := client.post("/api/v1/envoys/"+args[0]+"/revoke", body, nil); err != nil {
 			return err
 		}
 		fmt.Printf("Revoked envoy %s\n", args[0])
@@ -148,6 +158,13 @@ var envoysRevokeCmd = &cobra.Command{
 var envoysDeleteCmd = &cobra.Command{
 	Use:               "delete <id>",
 	Short:             "Permanently remove a envoy, its run history, and traits from the server",
+	Long: `Permanently delete an envoy and CASCADE its traits, runs, and
+snapshots from the database.
+
+Cross-envoy cryptsync cleanup runs by default — same semantic as
+'envoys revoke'. Pass --skip-swarm-cleanup to leave peer recipient
+state intact (rare; only useful if you intend to re-create the same
+hostname shortly under a different UUID).`,
 	Example:           "  vigocli envoys delete 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
 	Args:              requireArgs(1, "a envoy ID"),
 	ValidArgsFunction: completeEnvoyIDs,
@@ -156,9 +173,13 @@ var envoysDeleteCmd = &cobra.Command{
 			fmt.Println("Cancelled.")
 			return nil
 		}
-
+		skipCleanup, _ := cmd.Flags().GetBool("skip-swarm-cleanup")
 		client := newAPIClient()
-		if err := client.delete("/api/v1/envoys/"+args[0], nil); err != nil {
+		path := "/api/v1/envoys/" + args[0]
+		if skipCleanup {
+			path += "?skip_swarm_cleanup=true"
+		}
+		if err := client.delete(path, nil); err != nil {
 			return err
 		}
 		fmt.Printf("Deleted envoy %s\n", args[0])
@@ -464,6 +485,10 @@ func init() {
 	envoysMaintenanceCmd.Flags().String("until", "", "maintenance window end (RFC3339)")
 	envoysMaintenanceCmd.Flags().Bool("clear", false, "clear maintenance mode")
 	envoysPurgeCmd.Flags().Bool("dry-run", false, "preview duplicates without deleting")
+	envoysRevokeCmd.Flags().Bool("skip-swarm-cleanup", false,
+		"don't drop the host's pubkey from peers' cryptsync recipients (use only when re-bootstrapping the same host shortly)")
+	envoysDeleteCmd.Flags().Bool("skip-swarm-cleanup", false,
+		"don't drop the host's pubkey from peers' cryptsync recipients")
 	envoysCmd.AddCommand(envoysListCmd, envoysShowCmd, envoysRevokeCmd, envoysDeleteCmd,
 		envoysTraitsCmd, envoysMaintenanceCmd,
 		envoysPurgeCmd, envoysRebootstrapCmd, envoysPushCmd, envoysRevertCmd, previewCmd)

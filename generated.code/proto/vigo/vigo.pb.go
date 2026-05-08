@@ -3630,10 +3630,17 @@ func (x *GetEnvoyResponse) GetEnvoy() *Envoy {
 }
 
 type RevokeEnvoyRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// skip_swarm_cleanup defaults to false. When true, the server does
+	// NOT dispatch cryptsync evict for this hostname; other envoys keep
+	// the revoked host's pubkey in their cryptsync recipients lists
+	// until manually cleaned up. Use only when the operator plans to
+	// re-bootstrap the same host shortly (e.g., investigating a
+	// suspected compromise).
+	SkipSwarmCleanup bool `protobuf:"varint,2,opt,name=skip_swarm_cleanup,json=skipSwarmCleanup,proto3" json:"skip_swarm_cleanup,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *RevokeEnvoyRequest) Reset() {
@@ -3673,6 +3680,13 @@ func (x *RevokeEnvoyRequest) GetId() string {
 	return ""
 }
 
+func (x *RevokeEnvoyRequest) GetSkipSwarmCleanup() bool {
+	if x != nil {
+		return x.SkipSwarmCleanup
+	}
+	return false
+}
+
 type RevokeEnvoyResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -3710,10 +3724,13 @@ func (*RevokeEnvoyResponse) Descriptor() ([]byte, []int) {
 }
 
 type DeleteEnvoyRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// skip_swarm_cleanup defaults to false. Same semantic as
+	// RevokeEnvoyRequest.skip_swarm_cleanup.
+	SkipSwarmCleanup bool `protobuf:"varint,2,opt,name=skip_swarm_cleanup,json=skipSwarmCleanup,proto3" json:"skip_swarm_cleanup,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *DeleteEnvoyRequest) Reset() {
@@ -3751,6 +3768,13 @@ func (x *DeleteEnvoyRequest) GetId() string {
 		return x.Id
 	}
 	return ""
+}
+
+func (x *DeleteEnvoyRequest) GetSkipSwarmCleanup() bool {
+	if x != nil {
+		return x.SkipSwarmCleanup
+	}
+	return false
 }
 
 type DeleteEnvoyResponse struct {
@@ -7678,12 +7702,14 @@ const file_vigo_proto_rawDesc = "" +
 	"\x0fGetEnvoyRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"8\n" +
 	"\x10GetEnvoyResponse\x12$\n" +
-	"\x05envoy\x18\x01 \x01(\v2\x0e.vigo.v1.EnvoyR\x05envoy\"$\n" +
+	"\x05envoy\x18\x01 \x01(\v2\x0e.vigo.v1.EnvoyR\x05envoy\"R\n" +
 	"\x12RevokeEnvoyRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x15\n" +
-	"\x13RevokeEnvoyResponse\"$\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12,\n" +
+	"\x12skip_swarm_cleanup\x18\x02 \x01(\bR\x10skipSwarmCleanup\"\x15\n" +
+	"\x13RevokeEnvoyResponse\"R\n" +
 	"\x12DeleteEnvoyRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x15\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12,\n" +
+	"\x12skip_swarm_cleanup\x18\x02 \x01(\bR\x10skipSwarmCleanup\"\x15\n" +
 	"\x13DeleteEnvoyResponse\"-\n" +
 	"\x10ForcePushRequest\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\"<\n" +

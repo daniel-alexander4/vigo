@@ -293,6 +293,13 @@
             "in": "path",
             "required": true,
             "type": "string"
+          },
+          {
+            "name": "skipSwarmCleanup",
+            "description": "skip_swarm_cleanup defaults to false. Same semantic as\nRevokeEnvoyRequest.skip_swarm_cleanup.",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
           }
         ],
         "tags": [
@@ -653,7 +660,13 @@
       "type": "object"
     },
     "VigoAdminRevokeEnvoyBody": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "skipSwarmCleanup": {
+          "type": "boolean",
+          "description": "skip_swarm_cleanup defaults to false. When true, the server does\nNOT dispatch cryptsync evict for this hostname; other envoys keep\nthe revoked host's pubkey in their cryptsync recipients lists\nuntil manually cleaned up. Use only when the operator plans to\nre-bootstrap the same host shortly (e.g., investigating a\nsuspected compromise)."
+        }
+      }
     },
     "VigoAdminRollbackBody": {
       "type": "object",

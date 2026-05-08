@@ -163,6 +163,15 @@ func (s *AdminService) RevokeEnvoy(ctx context.Context, req *pb.RevokeEnvoyReque
 		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
 	}
 
+	// Look up hostname before flipping revoked-bit so the swarm cleanup
+	// hook + integrations event can use the friendly name.
+	hostname := req.Id
+	if s.fleetIndex != nil {
+		if ts, ok, _ := s.fleetIndex.GetEnvoyLite(req.Id); ok {
+			hostname = ts.Hostname
+		}
+	}
+
 	if err := s.queries.RevokeEnvoy(ctx, req.Id); err != nil {
 		return nil, status.Errorf(codes.Internal, "revoking envoy: %v", err)
 	}
@@ -172,17 +181,27 @@ func (s *AdminService) RevokeEnvoy(ctx context.Context, req *pb.RevokeEnvoyReque
 		s.fleetIndex.SetRevoked(req.Id, true)
 	}
 
-	slog.Warn("envoy revoked", "envoy_id", req.Id)
+	slog.Warn("envoy revoked", "envoy_id", req.Id, "hostname", hostname)
+
+	// Cross-envoy cryptsync cleanup: drop the revoked host's pubkey
+	// from every other envoy's per-user recipients list so future
+	// re-encrypts no longer encrypt to a host that can't check in.
+	// Skipped on operator opt-out (req.SkipSwarmCleanup) for cases
+	// where the operator plans to re-bootstrap the same host shortly.
+	// Best-effort — a dispatch failure doesn't roll back the revoke.
+	if s.swarmCleanup != nil && !req.GetSkipSwarmCleanup() && hostname != "" {
+		if err := s.swarmCleanup(ctx, hostname); err != nil {
+			slog.Warn("envoy revoke: cryptsync cleanup dispatch failed",
+				"hostname", hostname, "error", err)
+		}
+	}
 
 	// Record tamper-evident audit event.
-	recordAudit(ctx, s.auditWriter, "envoy.revoke", "localhost", "grpc", req.Id+" revoked", "")
+	summary := fmt.Sprintf("%s revoked (cleanup=%v)", hostname, !req.GetSkipSwarmCleanup())
+	recordAudit(ctx, s.auditWriter, "envoy.revoke", "localhost", "grpc", summary, "")
 
 	// Dispatch envoy.revoked event.
 	if s.integrations != nil {
-		hostname := req.Id // fallback
-		if ts, ok, _ := s.fleetIndex.GetEnvoyLite(req.Id); ok {
-			hostname = ts.Hostname
-		}
 		s.integrations.Dispatch(integrations.Event{
 			Name:     "envoy.revoked",
 			Timestamp: time.Now(),
@@ -221,8 +240,19 @@ func (s *AdminService) DeleteEnvoy(ctx context.Context, req *pb.DeleteEnvoyReque
 
 	slog.Warn("envoy deleted", "envoy_id", req.Id, "hostname", hostname)
 
+	// Same cryptsync cleanup as RevokeEnvoy. Schema-delete is even
+	// more destructive than revoke (CASCADE drops traits/runs/snapshots),
+	// so leaving stale recipient entries on peers makes no sense.
+	if s.swarmCleanup != nil && !req.GetSkipSwarmCleanup() && hostname != "" && hostname != req.Id {
+		if err := s.swarmCleanup(ctx, hostname); err != nil {
+			slog.Warn("envoy delete: cryptsync cleanup dispatch failed",
+				"hostname", hostname, "error", err)
+		}
+	}
+
 	// Record tamper-evident audit event (CASCADE deletes traits, runs, snapshots).
-	recordAudit(ctx, s.auditWriter, "envoy.delete", "localhost", "grpc", hostname+" deleted (cascade)", "")
+	summary := fmt.Sprintf("%s deleted (cascade, cleanup=%v)", hostname, !req.GetSkipSwarmCleanup())
+	recordAudit(ctx, s.auditWriter, "envoy.delete", "localhost", "grpc", summary, "")
 
 	return &pb.DeleteEnvoyResponse{}, nil
 }

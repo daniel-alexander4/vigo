@@ -1863,6 +1863,7 @@ fn do_purge<W: Write>(home: &Path, yes: bool, out: &mut W) -> Result<()> {
 /// table for that user.
 fn cmd_apply_evict(args: &[String]) -> Result<()> {
     let mut user: Option<String> = None;
+    let mut all_users = false;
     let mut pubkey: Option<String> = None;
     let mut hostname: Option<String> = None;
     let mut i = 0;
@@ -1871,6 +1872,10 @@ fn cmd_apply_evict(args: &[String]) -> Result<()> {
             "--user" => {
                 i += 1;
                 user = Some(args.get(i).context("--user requires a value")?.clone());
+                i += 1;
+            }
+            "--all-users" => {
+                all_users = true;
                 i += 1;
             }
             "--pubkey" => {
@@ -1886,8 +1891,40 @@ fn cmd_apply_evict(args: &[String]) -> Result<()> {
             other => bail!("unknown flag: {}", other),
         }
     }
-    let user = user.context("--user is required")?;
     let hostname = hostname.context("--hostname is required")?;
+
+    // --all-users: enumerate every locally-enrolled cryptsync user
+    // and apply the eviction for each. Used by the 0.41.3 admin-side
+    // envoy-revoke hook so the server dispatches one task per envoy
+    // instead of N per-user tasks. Per-user --user form is retained
+    // for the existing `vigocli swarm puddle evict --user <u>` flow.
+    if all_users {
+        if user.is_some() {
+            bail!("--user and --all-users are mutually exclusive");
+        }
+        let users = super::enrolled_users()
+            .context("enumerating locally-enrolled cryptsync users")?;
+        if users.is_empty() {
+            println!("(no-op) no cryptsync-enrolled users on this envoy");
+            return Ok(());
+        }
+        let mut errs: Vec<String> = Vec::new();
+        for u in &users {
+            if let Err(e) = apply_evict_one(u, &hostname, pubkey.as_deref()) {
+                errs.push(format!("user {u}: {e:#}"));
+            }
+        }
+        if !errs.is_empty() {
+            bail!("partial failures: {}", errs.join("; "));
+        }
+        return Ok(());
+    }
+
+    let user = user.context("--user or --all-users is required")?;
+    apply_evict_one(&user, &hostname, pubkey.as_deref())
+}
+
+fn apply_evict_one(user: &str, hostname: &str, pubkey: Option<&str>) -> Result<()> {
 
     // Self-evict path: the server dispatches `_apply-evict` to *every*
     // envoy via `target: "*"`, including the evicted host itself. The
@@ -1901,7 +1938,7 @@ fn cmd_apply_evict(args: &[String]) -> Result<()> {
         .trim()
         .to_string();
     if !local_hostname.is_empty() && local_hostname == hostname {
-        let home = resolve_user_home(&user)?;
+        let home = resolve_user_home(user)?;
         let dot = config::dot_dir(&home);
         if !config::is_enrolled(&home) {
             println!(
@@ -1932,11 +1969,11 @@ fn cmd_apply_evict(args: &[String]) -> Result<()> {
 
     // Foreign-evict path: resolve the pubkey from the local peer
     // table (or use the caller-supplied one) and apply the LEAVE.
-    let pubkey = match pubkey {
-        Some(p) if p != "LOOKUP" && !p.is_empty() => p,
+    let resolved_pubkey: String = match pubkey {
+        Some(p) if p != "LOOKUP" && !p.is_empty() => p.to_string(),
         _ => {
-            let table = PeerTable::load(&user);
-            match table.peers.get(&hostname) {
+            let table = PeerTable::load(user);
+            match table.peers.get(hostname) {
                 Some(p) => p.pubkey.clone(),
                 None => {
                     // No-op: hostname unknown to this envoy for this user.
@@ -1953,11 +1990,11 @@ fn cmd_apply_evict(args: &[String]) -> Result<()> {
     };
 
     // Resolve the user's home dir for recipients.txt regeneration.
-    let home = resolve_user_home(&user)?;
+    let home = resolve_user_home(user)?;
     let leave_time = now_secs_signed();
-    crate::swarm::cryptsync::apply_leave(&user, &pubkey, &hostname, leave_time, &home)
+    crate::swarm::cryptsync::apply_leave(user, &resolved_pubkey, hostname, leave_time, &home)
         .context("apply_leave")?;
-    let shown = &pubkey[..pubkey.len().min(12)];
+    let shown = &resolved_pubkey[..resolved_pubkey.len().min(12)];
     println!(
         "\u{2713} evicted {} (pubkey {}...) from {}'s cryptsync circle on this envoy",
         hostname, shown, user

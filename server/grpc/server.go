@@ -101,10 +101,10 @@ type ServerConfig struct {
 // TLS 1.3 minimum, client certificate required and verified against CA.
 // Returns the server, a CertCache for TLS hot reload, a TraitsBatcher,
 // and a TraitsPruner whose Start methods should be called in goroutines.
-func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *db.TraitsPruner, *AgentService, error) {
+func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *db.TraitsPruner, *AgentService, *AdminService, error) {
 	tlsCfg, certCache, err := buildTLSConfig(cfg.CertFile, cfg.KeyFile, cfg.CAFile)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("building TLS config: %w", err)
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("building TLS config: %w", err)
 	}
 
 	creds := credentials.NewTLS(tlsCfg)
@@ -238,7 +238,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 	}
 	pb.RegisterVigoAdminServer(srv, adminSvc)
 
-	return srv, certCache, traitsBatch, traitsPruner, agentSvc, nil
+	return srv, certCache, traitsBatch, traitsPruner, agentSvc, adminSvc, nil
 }
 
 // buildTLSConfig creates a tls.Config requiring client certificates verified

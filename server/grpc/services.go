@@ -190,11 +190,26 @@ type AdminService struct {
 	reassignStore *ReassignStore    // pending envoy reassignments (spoke side)
 	auditWriter   auditRecorder    // tamper-evident audit writer (nil-safe)
 	integrations  *integrations.Dispatcher
+	// swarmCleanup, when set, is invoked from RevokeEnvoy / DeleteEnvoy
+	// after the DB update lands and before the response returns. It
+	// dispatches cryptsync recipient-list cleanup to every envoy so the
+	// retired host's pubkey is dropped fleet-wide. Best-effort — failure
+	// here logs a warning but doesn't fail the revoke/delete (the audit
+	// chain has already recorded the operator action). Wired up in
+	// main.go where AgentService.DispatchPush is in scope. Nil when
+	// no agent dispatcher is available (rare; mostly tests).
+	swarmCleanup func(ctx context.Context, hostname string) error
 }
 
 // SetAuditWriter attaches the tamper-evident audit writer.
 func (s *AdminService) SetAuditWriter(w auditRecorder) {
 	s.auditWriter = w
+}
+
+// SetSwarmCleanup attaches the cross-envoy cryptsync cleanup callback
+// fired after RevokeEnvoy / DeleteEnvoy unless the request opts out.
+func (s *AdminService) SetSwarmCleanup(fn func(ctx context.Context, hostname string) error) {
+	s.swarmCleanup = fn
 }
 
 // formatDuration formats a time.Duration as a Go-style string (e.g. "5m0s").

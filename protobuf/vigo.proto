@@ -646,12 +646,22 @@ message GetEnvoyResponse {
 
 message RevokeEnvoyRequest {
   string id = 1;
+  // skip_swarm_cleanup defaults to false. When true, the server does
+  // NOT dispatch cryptsync evict for this hostname; other envoys keep
+  // the revoked host's pubkey in their cryptsync recipients lists
+  // until manually cleaned up. Use only when the operator plans to
+  // re-bootstrap the same host shortly (e.g., investigating a
+  // suspected compromise).
+  bool skip_swarm_cleanup = 2;
 }
 
 message RevokeEnvoyResponse {}
 
 message DeleteEnvoyRequest {
   string id = 1;
+  // skip_swarm_cleanup defaults to false. Same semantic as
+  // RevokeEnvoyRequest.skip_swarm_cleanup.
+  bool skip_swarm_cleanup = 2;
 }
 
 message DeleteEnvoyResponse {}

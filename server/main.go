@@ -536,7 +536,7 @@ func run() error {
 	}
 
 	// Create and start gRPC server.
-	grpcSrv, _, traitsBatch, traitsPruner, agentSvc, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	grpcSrv, _, traitsBatch, traitsPruner, agentSvc, adminSvc, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:             cfg.Server.TLS.CertFile,
 		KeyFile:              cfg.Server.TLS.KeyFile,
 		CAFile:               cfg.Server.TLS.CAFile,
@@ -934,6 +934,23 @@ func run() error {
 
 	// Wire workflow engine for auto-triggered workflows on trait changes.
 	agentSvc.SetWorkflowTrigger(workflowEngine)
+
+	// Wire the cross-envoy cryptsync cleanup callback fired by
+	// AdminService.RevokeEnvoy / DeleteEnvoy (0.41.3+). Dispatches one
+	// `_apply-evict --hostname <h> --all-users` task to every envoy,
+	// which causes each agent to drop the retired host's pubkey from
+	// every locally-enrolled user's recipients list. Idempotent;
+	// best-effort.
+	adminSvc.SetSwarmCleanup(func(ctx context.Context, hostname string) error {
+		cmd := fmt.Sprintf("vigo swarm cryptsync _apply-evict --hostname %s --all-users", hostname)
+		_, err := agentSvc.DispatchPush(ctx, isgrpc.DispatchParams{
+			Command:     cmd,
+			TargetSpec:  "*",
+			Operator:    "envoy.retire",
+			TimeoutSecs: 60,
+		})
+		return err
+	})
 
 	// Wire stream_edit guardrails.
 	agentSvc.SetStreamEditConfig(cfg.StreamEdit)

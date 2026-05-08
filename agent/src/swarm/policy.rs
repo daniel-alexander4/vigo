@@ -204,9 +204,14 @@ pub fn require_gitmirror(username: &str) -> Result<()> {
 /// In both cases, refusing here would block the user from doing any
 /// puddle/gitmirror setup, so we fail open.
 fn envoy_layer_allows(subsystem: &str) -> bool {
-    let state = match crate::swarm::state_mirror::read(
-        &crate::swarm::state_mirror::default_path(),
-    ) {
+    envoy_layer_allows_at(&crate::swarm::state_mirror::default_path(), subsystem)
+}
+
+/// Path-overridable form of [`envoy_layer_allows`]. Production callers
+/// use the default path via [`envoy_layer_allows`]; tests pass a tempdir
+/// path so the check is hermetic.
+fn envoy_layer_allows_at(path: &std::path::Path, subsystem: &str) -> bool {
+    let state = match crate::swarm::state_mirror::read(path) {
         Ok(s) => s,
         Err(_) => return true,
     };
@@ -270,12 +275,24 @@ mod tests {
     // refusal.
     #[test]
     fn envoy_layer_fails_open_when_state_json_missing() {
-        // /var/lib/vigo/swarm/state.json doesn't exist in the test
-        // sandbox; helper must return true so a freshly-enrolled envoy
-        // isn't blocked from running puddle/gitmirror init verbs.
-        assert!(envoy_layer_allows("puddle"));
-        assert!(envoy_layer_allows("gitmirror"));
+        // Hermetic — point at a path inside an empty tempdir so the test
+        // doesn't depend on whether /var/lib/vigo/swarm/state.json
+        // happens to exist on the host running the suite.
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("nope.json");
+        assert!(envoy_layer_allows_at(&path, "puddle"));
+        assert!(envoy_layer_allows_at(&path, "gitmirror"));
         // Unknown subsystem name — defensive default-true.
-        assert!(envoy_layer_allows("payload"));
+        assert!(envoy_layer_allows_at(&path, "payload"));
+    }
+
+    #[test]
+    fn envoy_layer_respects_explicit_state_json() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join("state.json");
+        crate::swarm::state_mirror::write(&path, "0.41.3", 1, br#"{"swarm_puddle_enabled": false}"#).unwrap();
+        assert!(!envoy_layer_allows_at(&path, "puddle"));
+        // Defaults to true for keys not in vars_json.
+        assert!(envoy_layer_allows_at(&path, "gitmirror"));
     }
 }
