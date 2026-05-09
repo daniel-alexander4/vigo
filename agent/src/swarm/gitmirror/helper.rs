@@ -205,6 +205,7 @@ async fn handle_client(
     stream: UnixStream,
     tls: std::sync::Arc<Option<TlsCerts>>,
 ) -> Result<()> {
+    let started = std::time::Instant::now();
     let uid = peer_uid(&stream)
         .ok_or_else(|| anyhow!("could not determine peer UID via SO_PEERCRED"))?;
 
@@ -212,6 +213,7 @@ async fn handle_client(
     // underlying socket later to attach as the child's stdio, so
     // remember it now before splitting.
     let raw_fd = stream.as_raw_fd();
+    tracing::info!(uid, raw_fd, "gitmirror helper: client accepted");
 
     let (read_half, mut write_half) = stream.into_split();
     let mut br = BufReader::with_capacity(MAX_HEADER_BYTES, read_half);
@@ -235,6 +237,14 @@ async fn handle_client(
             return Err(e);
         }
     };
+    tracing::info!(
+        uid,
+        raw_fd,
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        project_id = %super::project_state::hex_id(&project_id),
+        service = service.as_str(),
+        "gitmirror helper: HELLO parsed"
+    );
 
     let home = match home_for_uid(uid) {
         Ok(p) => p,
@@ -302,6 +312,14 @@ async fn handle_client(
             std::io::Error::last_os_error()
         );
     }
+    tracing::info!(
+        uid,
+        raw_fd,
+        stdin_fd,
+        stdout_fd,
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        "gitmirror helper: dup'd client fd, OK sent, releasing tokio halves"
+    );
 
     drop(br);
     write_half.forget();
@@ -317,7 +335,13 @@ async fn handle_client(
         .stdin(stdin)
         .stdout(stdout)
         .stderr(Stdio::piped())
+        // Surface the smart-protocol exchange in the child's stderr
+        // so 0.41.x debugging can see refs advertisement / pkt-line
+        // flow without rebuilding. Cheap (per-push only) and the
+        // text gets drained into the WARN/INFO log below.
+        .env("GIT_TRACE_PACKET", "1")
         .kill_on_drop(true);
+    let spawn_started = std::time::Instant::now();
     let mut child = cmd.spawn().with_context(|| {
         format!(
             "spawning git {} against {}",
@@ -325,6 +349,16 @@ async fn handle_client(
             repo.display()
         )
     })?;
+    let child_pid = child.id();
+    tracing::info!(
+        uid,
+        raw_fd,
+        child_pid,
+        service = service.as_str(),
+        elapsed_ms = started.elapsed().as_millis() as u64,
+        spawn_ms = spawn_started.elapsed().as_millis() as u64,
+        "gitmirror helper: git child spawned"
+    );
     // Drain git's stderr in the background so a non-zero exit
     // surfaces with diagnostic output rather than disappearing.
     let stderr_handle = child.stderr.take().map(|mut e| {
@@ -346,33 +380,43 @@ async fn handle_client(
     };
 
     let status = child.wait().await.context("awaiting git child")?;
-    if !status.success() {
-        let stderr_bytes = if let Some(h) = stderr_handle {
-            h.await.unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-        let stderr = String::from_utf8_lossy(&stderr_bytes);
-        #[cfg(unix)]
-        let signal = {
-            use std::os::unix::process::ExitStatusExt;
-            status.signal()
-        };
-        #[cfg(not(unix))]
-        let signal: Option<i32> = None;
+    let stderr_bytes = if let Some(h) = stderr_handle {
+        h.await.unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let stderr = String::from_utf8_lossy(&stderr_bytes);
+    #[cfg(unix)]
+    let signal = {
+        use std::os::unix::process::ExitStatusExt;
+        status.signal()
+    };
+    #[cfg(not(unix))]
+    let signal: Option<i32> = None;
+    if status.success() {
+        tracing::info!(
+            uid,
+            child_pid,
+            service = service.as_str(),
+            exit_code = status.code(),
+            elapsed_ms = started.elapsed().as_millis() as u64,
+            stderr_bytes = stderr_bytes.len(),
+            stderr = %stderr.trim(),
+            "gitmirror helper: git child exited cleanly"
+        );
+    } else {
         tracing::warn!(
             uid,
+            child_pid,
             service = service.as_str(),
             exit_code = status.code(),
             signal,
+            elapsed_ms = started.elapsed().as_millis() as u64,
             stderr = %stderr.trim(),
             "gitmirror helper: git child exited non-zero"
         );
         return Ok(());
     }
-    // Drop the stderr handle on success — git wrote nothing
-    // interesting if it exited cleanly.
-    drop(stderr_handle);
 
     // After a successful receive-pack, fan out to cross-subnet
     // members listed in this user's project.json. LAN auto-discovery
