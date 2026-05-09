@@ -272,20 +272,25 @@ async fn handle_client(
         }
     }
 
-    // Hand off: write OK, then re-assemble the read + write halves
-    // into the original stream (we still own `raw_fd`, but tokio's
-    // halves don't expose a `reunite` for owned stdio reasons).
-    // Strategy: dup the socket FD twice (one for stdin, one for
-    // stdout), drop our halves, let the child's process inherit the
-    // duplicates as its stdio.
+    // Hand off: write OK, then dup the socket fd twice (stdin + stdout
+    // for git's child) and release the tokio halves so the child can
+    // own the protocol from here on.
     //
-    // Ordering matters: `into_split()` transferred ownership of the
-    // underlying fd to the read+write halves, so dropping both halves
-    // closes the original fd. Dup BEFORE the drop so the dup'd
-    // descriptors come from a still-valid source. After the drop,
-    // raw_fd is closed — the dup'd fds (different fd numbers) hold
-    // independent references to the same kernel socket and remain
-    // valid for the child's stdio.
+    // Two ordering invariants matter:
+    //
+    //  1. Dup BEFORE releasing the halves. `into_split()` transferred
+    //     ownership of the underlying fd to the read+write halves; if
+    //     they drop first, raw_fd is closed and dup() returns EBADF.
+    //
+    //  2. Use `OwnedWriteHalf::forget()` instead of `drop()`. Tokio's
+    //     OwnedWriteHalf::drop issues `shutdown(SHUT_WR)` on the
+    //     kernel socket — which propagates to every fd referencing
+    //     the same socket, including our dup'd stdout_fd. That would
+    //     cause receive-pack's first write (the refs advertisement)
+    //     to SIGPIPE before any client data flows. `forget()` consumes
+    //     the write half without the shutdown side effect; the fd
+    //     refcount drops naturally when the read half is also released,
+    //     and our dup'd fds keep the socket alive for the child.
     write_half.write_all(b"OK\n").await.context("writing OK")?;
     write_half.flush().await.ok();
 
@@ -299,11 +304,10 @@ async fn handle_client(
     }
 
     drop(br);
-    drop(write_half);
-    // The original fd is closed here when the halves drop. Our
-    // duped stdin_fd / stdout_fd remain valid (separate fd numbers
-    // in the process's table; the kernel keeps the socket open as
-    // long as any reference exists).
+    write_half.forget();
+    // The owned halves are released without triggering shutdown.
+    // Our dup'd stdin_fd / stdout_fd remain valid; the kernel socket
+    // stays bidirectional until the child closes its stdio.
     let stdin = unsafe { Stdio::from_raw_fd(stdin_fd) };
     let stdout = unsafe { Stdio::from_raw_fd(stdout_fd) };
 
@@ -312,7 +316,7 @@ async fn handle_client(
         .arg(&repo)
         .stdin(stdin)
         .stdout(stdout)
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .kill_on_drop(true);
     let mut child = cmd.spawn().with_context(|| {
         format!(
@@ -321,6 +325,16 @@ async fn handle_client(
             repo.display()
         )
     })?;
+    // Drain git's stderr in the background so a non-zero exit
+    // surfaces with diagnostic output rather than disappearing.
+    let stderr_handle = child.stderr.take().map(|mut e| {
+        tokio::spawn(async move {
+            use tokio::io::AsyncReadExt;
+            let mut buf = Vec::new();
+            let _ = e.read_to_end(&mut buf).await;
+            buf
+        })
+    });
 
     // Snapshot refs before so we can compute a delta after a push.
     // Capturing here lets us avoid keeping a copy of the bare repo's
@@ -333,14 +347,32 @@ async fn handle_client(
 
     let status = child.wait().await.context("awaiting git child")?;
     if !status.success() {
+        let stderr_bytes = if let Some(h) = stderr_handle {
+            h.await.unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+        let stderr = String::from_utf8_lossy(&stderr_bytes);
+        #[cfg(unix)]
+        let signal = {
+            use std::os::unix::process::ExitStatusExt;
+            status.signal()
+        };
+        #[cfg(not(unix))]
+        let signal: Option<i32> = None;
         tracing::warn!(
             uid,
             service = service.as_str(),
             exit_code = status.code(),
+            signal,
+            stderr = %stderr.trim(),
             "gitmirror helper: git child exited non-zero"
         );
         return Ok(());
     }
+    // Drop the stderr handle on success — git wrote nothing
+    // interesting if it exited cleanly.
+    drop(stderr_handle);
 
     // After a successful receive-pack, fan out to cross-subnet
     // members listed in this user's project.json. LAN auto-discovery
