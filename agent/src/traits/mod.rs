@@ -6,6 +6,7 @@
 
 pub mod agent_self;
 pub mod cached;
+pub mod host_self;
 pub mod network_device;
 
 // Cross-platform collectors.
@@ -288,6 +289,13 @@ pub enum CollectorKind {
     /// server track per-envoy agent memory growth over time without
     /// standing up a separate scrape target on every envoy.
     AgentSelf,
+    /// Host-level resource pressure that doesn't fit elsewhere — kernel
+    /// FD usage from /proc/sys/fs/file-nr, total /proc entries, recent
+    /// OOM-killer activity. Linux only. Pairs with `agent_self` (per-
+    /// process) and `memory` / `mountpoints` (per-axis) to give the
+    /// server enough signal to flag "this host is about to fall over"
+    /// before the agent itself is killed.
+    HostSelf,
 }
 
 impl CollectorKind {
@@ -337,6 +345,7 @@ impl CollectorKind {
             Self::Filesync => "filesync",
             Self::Cryptsync => "cryptsync",
             Self::AgentSelf => "agent_self",
+            Self::HostSelf => "host_self",
         }
     }
 
@@ -372,6 +381,7 @@ impl CollectorKind {
             Self::Filesync => filesync::collect(),
             Self::Cryptsync => cryptsync::collect(),
             Self::AgentSelf => agent_self::collect(),
+            Self::HostSelf => host_self::collect(),
 
             // Unix implementations.
             #[cfg(unix)]
@@ -637,6 +647,7 @@ impl CollectorKind {
             "filesync" => Some(Self::Filesync),
             "cryptsync" => Some(Self::Cryptsync),
             "agent_self" => Some(Self::AgentSelf),
+            "host_self" => Some(Self::HostSelf),
             _ => None,
         }
     }
@@ -688,6 +699,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::Filesync,
         CollectorKind::Cryptsync,
         CollectorKind::AgentSelf,
+        CollectorKind::HostSelf,
     ]
 }
 
@@ -709,6 +721,7 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::Filesync,
         CollectorKind::Cryptsync,
         CollectorKind::AgentSelf,
+        CollectorKind::HostSelf,
     ]
 }
 
@@ -819,7 +832,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 41);
+        assert_eq!(default_collectors().len(), 44);
     }
 
     #[test]

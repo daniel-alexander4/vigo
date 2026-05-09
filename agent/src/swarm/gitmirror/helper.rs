@@ -34,10 +34,14 @@
 //!    rejects any chain that names a token id present in the local
 //!    revocation set (see [`super::envelopes::is_token_revoked`]).
 //! 4. Daemon writes `OK\n` and spawns `git <service> <repo_path>`
-//!    with the socket attached as both stdin and stdout. From this
-//!    point on the connection is a transparent tunnel speaking the
-//!    pkt-line git smart protocol.
-//! 5. When the child exits the daemon closes its end and goes back
+//!    with **piped** stdin/stdout/stderr. Two tokio tasks shovel
+//!    bytes between the unix socket and the child's pipes. The
+//!    indirection avoids a kernel-level wakeup race in AF_UNIX
+//!    where the previous "dup the socket fd as the child's stdio"
+//!    pattern lost git's refs advertisement (see commit history
+//!    around 0.41.7-0.41.12 for the long road to this layout).
+//! 5. When the child exits the daemon aborts the socket→stdin
+//!    forwarder, drains the stdout→socket forwarder, and goes back
 //!    to accept().
 //!
 //! ### Cross-platform path
@@ -61,7 +65,7 @@
 //! `~/.vigo-gitmirror/<pid>/tokens.json` and SO_PEERCRED-matches
 //! that user's UID can fetch and push under that puddle's identity.
 
-use std::os::fd::{AsRawFd, FromRawFd};
+use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
@@ -208,12 +212,7 @@ async fn handle_client(
     let started = std::time::Instant::now();
     let uid = peer_uid(&stream)
         .ok_or_else(|| anyhow!("could not determine peer UID via SO_PEERCRED"))?;
-
-    // Tokio's split moves the halves; we need the raw FD of the
-    // underlying socket later to attach as the child's stdio, so
-    // remember it now before splitting.
-    let raw_fd = stream.as_raw_fd();
-    tracing::info!(uid, raw_fd, "gitmirror helper: client accepted");
+    tracing::info!(uid, "gitmirror helper: client accepted");
 
     let (read_half, mut write_half) = stream.into_split();
     let mut br = BufReader::with_capacity(MAX_HEADER_BYTES, read_half);
@@ -239,7 +238,6 @@ async fn handle_client(
     };
     tracing::info!(
         uid,
-        raw_fd,
         elapsed_ms = started.elapsed().as_millis() as u64,
         project_id = %super::project_state::hex_id(&project_id),
         service = service.as_str(),
@@ -282,87 +280,51 @@ async fn handle_client(
         }
     }
 
-    // Hand off: write OK, then dup the socket fd twice (stdin + stdout
-    // for git's child) and release the tokio halves so the child can
-    // own the protocol from here on.
-    //
-    // Two ordering invariants matter:
-    //
-    //  1. Dup BEFORE releasing the halves. `into_split()` transferred
-    //     ownership of the underlying fd to the read+write halves; if
-    //     they drop first, raw_fd is closed and dup() returns EBADF.
-    //
-    //  2. Use `OwnedWriteHalf::forget()` instead of `drop()`. Tokio's
-    //     OwnedWriteHalf::drop issues `shutdown(SHUT_WR)` on the
-    //     kernel socket — which propagates to every fd referencing
-    //     the same socket, including our dup'd stdout_fd. That would
-    //     cause receive-pack's first write (the refs advertisement)
-    //     to SIGPIPE before any client data flows. `forget()` consumes
-    //     the write half without the shutdown side effect; the fd
-    //     refcount drops naturally when the read half is also released,
-    //     and our dup'd fds keep the socket alive for the child.
+    // Hand off via piped stdio: spawn git with pipe stdin/stdout and
+    // shovel bytes between the unix socket and the child's pipes
+    // through tokio tasks. This deliberately replaces the prior
+    // dup-and-spawn-with-socket-as-stdio pattern: that shape sat over
+    // a kernel-level wakeup race in the AF_UNIX layer where
+    // receive-pack's refs advertisement never landed in the peer's
+    // recv queue. We burned five versions (0.41.7-0.41.11) on
+    // surgical fixes to the dup chain (forget, O_NONBLOCK, parent fd
+    // close) without moving the deadlock — strace consistently masked
+    // the bug, confirming a wakeup race below sendmsg. Pipes have
+    // well-understood wakeup semantics; this also lets tokio's
+    // epoll-based reader own the socket side, which is more
+    // race-resistant than blocking read in git-receive-pack itself.
+    // Cost: pack data does an extra userspace copy each direction
+    // (no splice fast-path); for control-rate traffic this is noise,
+    // and on Linux tokio's copy can reclaim splice-into-pipe later if
+    // it becomes a hot spot.
     write_half.write_all(b"OK\n").await.context("writing OK")?;
     write_half.flush().await.ok();
 
-    let stdin_fd = unsafe { libc::dup(raw_fd) };
-    let stdout_fd = unsafe { libc::dup(raw_fd) };
-    if stdin_fd < 0 || stdout_fd < 0 {
-        bail!(
-            "dup() of client socket fd failed: {}",
-            std::io::Error::last_os_error()
+    // Reclaim the read half from the BufReader. The smart protocol
+    // doesn't pipeline past HELLO before OK, so the BufReader's
+    // internal buffer is empty here — but if a future client ever
+    // does pipeline, those bytes belong at the head of git's input
+    // stream, not in the socket recv queue (we already consumed them
+    // into userspace). Capture and re-inject.
+    let leftover = br.buffer().to_vec();
+    if !leftover.is_empty() {
+        tracing::warn!(
+            uid,
+            buffered = leftover.len(),
+            "gitmirror helper: client pipelined bytes past HELLO; routing to child stdin"
         );
     }
-    // Clear O_NONBLOCK on the dup'd fds before handing them to git's
-    // child. raw_fd inherits O_NONBLOCK from tokio's accept (the
-    // listener was set_nonblocking(true) in bind_listener), and dup
-    // produces fds sharing the same open file description, so the
-    // non-blocking flag is sticky. git's receive-pack/upload-pack
-    // expect blocking stdio — with O_NONBLOCK set, reads return
-    // EAGAIN out of order with the smart-protocol pkt-line state
-    // machine and the connection deadlocks (server has refs to
-    // advertise, client has commands to send, neither's read sees
-    // data when it should). fcntl(F_SETFL) acts on the open file
-    // description, so flipping it once on stdin_fd flips it for
-    // stdout_fd and the child's inherited copies as well — but we
-    // clear both for symmetry and to defend against future kernels
-    // that might split the descriptions.
-    unsafe {
-        let stdin_fl = libc::fcntl(stdin_fd, libc::F_GETFL);
-        if stdin_fl >= 0 {
-            let _ = libc::fcntl(stdin_fd, libc::F_SETFL, stdin_fl & !libc::O_NONBLOCK);
-        }
-        let stdout_fl = libc::fcntl(stdout_fd, libc::F_GETFL);
-        if stdout_fl >= 0 {
-            let _ = libc::fcntl(stdout_fd, libc::F_SETFL, stdout_fl & !libc::O_NONBLOCK);
-        }
-    }
-    tracing::info!(
-        uid,
-        raw_fd,
-        stdin_fd,
-        stdout_fd,
-        elapsed_ms = started.elapsed().as_millis() as u64,
-        "gitmirror helper: dup'd client fd, cleared O_NONBLOCK, OK sent, releasing tokio halves"
-    );
-
-    drop(br);
-    write_half.forget();
-    // The owned halves are released without triggering shutdown.
-    // Our dup'd stdin_fd / stdout_fd remain valid; the kernel socket
-    // stays bidirectional until the child closes its stdio.
-    let stdin = unsafe { Stdio::from_raw_fd(stdin_fd) };
-    let stdout = unsafe { Stdio::from_raw_fd(stdout_fd) };
+    let mut read_half = br.into_inner();
 
     let mut cmd = tokio::process::Command::new("git");
     cmd.arg(short_service(service))
         .arg(&repo)
-        .stdin(stdin)
-        .stdout(stdout)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        // Surface the smart-protocol exchange in the child's stderr
-        // so 0.41.x debugging can see refs advertisement / pkt-line
-        // flow without rebuilding. Cheap (per-push only) and the
-        // text gets drained into the WARN/INFO log below.
+        // Keep GIT_TRACE_PACKET on for one cycle so any residual
+        // protocol-level oddity surfaces in the WARN log on non-zero
+        // exit. Drop in a follow-up once pipe-shovel has soaked.
         .env("GIT_TRACE_PACKET", "1")
         .kill_on_drop(true);
     let spawn_started = std::time::Instant::now();
@@ -374,39 +336,111 @@ async fn handle_client(
         )
     })?;
     let child_pid = child.id();
-    // Defensively close the parent's copies of the dup'd stdio fds.
-    // tokio's spawn path leaks them — /proc/$daemon/fd shows stdin_fd
-    // and stdout_fd still open in the parent after spawn returns,
-    // alongside the child's own copies. Each leaked parent fd holds
-    // an extra reference to the kernel socket, delaying EOF detection
-    // on the client side once the child exits and contributing to the
-    // refs-advertisement deadlock observed in 0.41.7-9. Stdio took
-    // ownership but didn't release; we drop our last two references
-    // here. EBADF (-1) is fine — it just means tokio did close them
-    // and we're double-checking.
-    let close_in = unsafe { libc::close(stdin_fd) };
-    let close_out = unsafe { libc::close(stdout_fd) };
+    let mut child_stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| anyhow!("piped child stdin missing after spawn"))?;
+    let mut child_stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow!("piped child stdout missing after spawn"))?;
+    let mut child_stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow!("piped child stderr missing after spawn"))?;
     tracing::info!(
         uid,
-        raw_fd,
         child_pid,
         service = service.as_str(),
         elapsed_ms = started.elapsed().as_millis() as u64,
         spawn_ms = spawn_started.elapsed().as_millis() as u64,
-        close_stdin_fd = close_in,
-        close_stdout_fd = close_out,
-        "gitmirror helper: git child spawned, parent stdio fds released"
+        "gitmirror helper: git child spawned with piped stdio"
     );
-    // Drain git's stderr in the background so a non-zero exit
-    // surfaces with diagnostic output rather than disappearing.
-    let stderr_handle = child.stderr.take().map(|mut e| {
-        tokio::spawn(async move {
-            use tokio::io::AsyncReadExt;
-            let mut buf = Vec::new();
-            let _ = e.read_to_end(&mut buf).await;
-            buf
-        })
+
+    // Re-inject any pipelined bytes the BufReader absorbed past HELLO.
+    if !leftover.is_empty() {
+        if let Err(e) = child_stdin.write_all(&leftover).await {
+            tracing::warn!(uid, child_pid, error = %e, "gitmirror helper: writing pipelined bytes to child stdin");
+        }
+    }
+
+    // Forwarder: socket → child stdin (client commands → git).
+    // Loops until the socket reads EOF (client closed) or the child
+    // stdin pipe breaks. Dropping child_stdin closes the pipe and
+    // propagates EOF to git's read side. Manual loop so we can trace
+    // every read/write while diagnosing the 0.41.x deadlock — the
+    // tokio::io::copy version was opaque to debugging.
+    let to_child = tokio::spawn(async move {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut buf = vec![0u8; 16 * 1024];
+        let mut total: u64 = 0;
+        loop {
+            let n = match read_half.read(&mut buf).await {
+                Ok(0) => {
+                    tracing::info!(uid, child_pid, total, "gitmirror shovel: socket→stdin EOF");
+                    break;
+                }
+                Ok(n) => n,
+                Err(e) => {
+                    tracing::warn!(uid, child_pid, total, error = %e, "gitmirror shovel: socket→stdin read err");
+                    break;
+                }
+            };
+            tracing::debug!(uid, child_pid, n, total, "gitmirror shovel: socket→stdin read");
+            if let Err(e) = child_stdin.write_all(&buf[..n]).await {
+                tracing::warn!(uid, child_pid, total, error = %e, "gitmirror shovel: socket→stdin write err");
+                break;
+            }
+            total += n as u64;
+        }
+        Ok::<u64, std::io::Error>(total)
     });
+
+    // Forwarder: child stdout → socket (git output → client).
+    // When git exits, the stdout pipe EOFs and copy returns Ok.
+    // Dropping write_half issues SHUT_WR on the unix socket, so the
+    // client's next read returns 0 — git's protocol "0000" flush is
+    // already through, this just signals the connection is done.
+    // Manual loop with tracing — same reason as to_child.
+    let to_socket = tokio::spawn(async move {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut buf = vec![0u8; 16 * 1024];
+        let mut total: u64 = 0;
+        loop {
+            let n = match child_stdout.read(&mut buf).await {
+                Ok(0) => {
+                    tracing::info!(uid, child_pid, total, "gitmirror shovel: stdout→socket EOF");
+                    break;
+                }
+                Ok(n) => n,
+                Err(e) => {
+                    tracing::warn!(uid, child_pid, total, error = %e, "gitmirror shovel: stdout→socket read err");
+                    break;
+                }
+            };
+            tracing::info!(uid, child_pid, n, total, "gitmirror shovel: stdout→socket read");
+            if let Err(e) = write_half.write_all(&buf[..n]).await {
+                tracing::warn!(uid, child_pid, total, error = %e, "gitmirror shovel: stdout→socket write err");
+                break;
+            }
+            if let Err(e) = write_half.flush().await {
+                tracing::warn!(uid, child_pid, total, error = %e, "gitmirror shovel: stdout→socket flush err");
+                break;
+            }
+            total += n as u64;
+            tracing::info!(uid, child_pid, n, total, "gitmirror shovel: stdout→socket wrote+flushed");
+        }
+        Ok::<u64, std::io::Error>(total)
+    });
+
+    // stderr drainer: git's tracing output goes here; we surface it
+    // on non-zero exit.
+    let stderr_handle = Some(tokio::spawn(async move {
+        use tokio::io::AsyncReadExt;
+        let mut buf = Vec::new();
+        let _ = child_stderr.read_to_end(&mut buf).await;
+        buf
+    }));
 
     // Snapshot refs before so we can compute a delta after a push.
     // Capturing here lets us avoid keeping a copy of the bare repo's
@@ -418,6 +452,23 @@ async fn handle_client(
     };
 
     let status = child.wait().await.context("awaiting git child")?;
+
+    // Post-exit cleanup of the shovel tasks. to_socket finishes
+    // naturally once the child's stdout pipe EOFs (which it has,
+    // because the child exited). to_child may still be parked in a
+    // socket read if the client hasn't closed its end — abort
+    // unblocks it. abort() on an already-finished task is a no-op.
+    to_child.abort();
+    let to_child_result = to_child.await;
+    let to_socket_result = to_socket.await;
+    tracing::info!(
+        uid,
+        child_pid,
+        to_child_result = ?to_child_result.as_ref().map(|r| r.as_ref().map(|n| *n).map_err(|e| e.to_string())),
+        to_socket_result = ?to_socket_result.as_ref().map(|r| r.as_ref().map(|n| *n).map_err(|e| e.to_string())),
+        "gitmirror helper: shovel tasks finished"
+    );
+
     let stderr_bytes = if let Some(h) = stderr_handle {
         h.await.unwrap_or_default()
     } else {

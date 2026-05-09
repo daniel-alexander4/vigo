@@ -15,7 +15,16 @@
 //!   - vsz_bytes: virtual memory size
 //!   - threads: live thread count
 //!   - open_fds: open file descriptor count (unix only)
+//!   - descendants: live count of processes whose PPID is the agent (Linux only)
+//!   - descendant_open_fds: sum of open_fds across those descendants (Linux only)
 //!   - uptime_secs: seconds since the agent binary started
+//!
+//! Why descendants matter: the agent regularly spawns short-lived
+//! children (git-receive-pack via the gitmirror helper, package-manager
+//! probes, exec resources) and FD leaks in those children would not
+//! show up in `open_fds`. Tracking the descendant total lets the fleet
+//! detector catch leaks in child code paths that the agent's own
+//! /proc/self/fd count is blind to.
 //!
 //! Intentionally zero-cost on the hot path: on Linux the entire collect
 //! call is four short procfs reads. Classified `volatile` so it refreshes
@@ -77,14 +86,82 @@ fn collect_linux(uptime_secs: u64) -> Value {
     }
 
     let open_fds = count_fds();
+    let (descendants, descendant_open_fds) = count_descendants_and_fds(std::process::id());
 
     json!({
         "rss_bytes": rss_kb * 1024,
         "vsz_bytes": vsz_kb * 1024,
         "threads": threads,
         "open_fds": open_fds,
+        "descendants": descendants,
+        "descendant_open_fds": descendant_open_fds,
         "uptime_secs": uptime_secs,
     })
+}
+
+/// Walk /proc once and return (count, total_fd_count) for processes
+/// whose PPID is the given pid. One level deep — the agent's direct
+/// children are what we care about (gitmirror helper's git child,
+/// exec-resource subprocesses, package-manager probes). Going deeper
+/// would be more accurate for grandchildren but adds proc-walk cost
+/// on every check-in; defer until we see a real grandchild leak.
+///
+/// Returns (0, 0) if /proc isn't readable. PPID is read from
+/// /proc/<pid>/stat field 4 (after the parenthesized comm, which can
+/// itself contain spaces — we split on the rightmost ')').
+#[cfg(target_os = "linux")]
+fn count_descendants_and_fds(self_pid: u32) -> (u64, u64) {
+    let entries = match std::fs::read_dir("/proc") {
+        Ok(it) => it,
+        Err(_) => return (0, 0),
+    };
+    let mut count: u64 = 0;
+    let mut fd_total: u64 = 0;
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = match name.to_str() {
+            Some(s) => s,
+            None => continue,
+        };
+        // Skip non-numeric /proc entries (kallsyms, sys, etc.).
+        let pid: u32 = match name.parse() {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+        if pid == self_pid {
+            continue;
+        }
+        let stat = match std::fs::read_to_string(format!("/proc/{}/stat", pid)) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        // /proc/<pid>/stat shape: "PID (comm with possibly spaces) STATE PPID ...".
+        // The right-most ')' terminates comm; PPID is two fields after it.
+        let close = match stat.rfind(')') {
+            Some(i) => i,
+            None => continue,
+        };
+        let after = &stat[close + 1..];
+        let mut iter = after.split_whitespace();
+        let _state = match iter.next() { Some(s) => s, None => continue };
+        let ppid: u32 = match iter.next().and_then(|s| s.parse().ok()) {
+            Some(p) => p,
+            None => continue,
+        };
+        if ppid != self_pid {
+            continue;
+        }
+        count += 1;
+        if let Ok(fd_iter) = std::fs::read_dir(format!("/proc/{}/fd", pid)) {
+            fd_total += fd_iter.filter_map(|e| e.ok()).count() as u64;
+        }
+    }
+    (count, fd_total)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn count_descendants_and_fds(_self_pid: u32) -> (u64, u64) {
+    (0, 0)
 }
 
 #[cfg(target_os = "linux")]
@@ -127,6 +204,8 @@ fn collect_macos(uptime_secs: u64) -> Value {
         "vsz_bytes": vsz_kb * 1024,
         "threads": threads,
         "open_fds": 0,  // not exposed by ps; lsof would require a subprocess per call
+        "descendants": 0,  // /proc not available; pgrep would require a subprocess per call
+        "descendant_open_fds": 0,
         "uptime_secs": uptime_secs,
     })
 }
@@ -165,6 +244,30 @@ mod tests {
         // Our own process has nonzero RSS and at least one thread.
         assert!(rss > 0, "rss_bytes should be > 0 for self");
         assert!(threads >= 1, "threads should be >= 1 for self");
+        // descendants/descendant_open_fds are present and non-negative
+        // (test harness has no children, so they should be 0).
+        assert!(v.get("descendants").is_some(), "descendants field present");
+        assert!(v.get("descendant_open_fds").is_some(), "descendant_open_fds field present");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn count_descendants_finds_spawned_child() {
+        use std::process::{Command, Stdio};
+        let mut child = Command::new("sleep")
+            .arg("3")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn sleep");
+        // Give the kernel a moment to register the new PPID.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let (count, fds) = count_descendants_and_fds(std::process::id());
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(count >= 1, "should see at least one descendant (spawned sleep), got {}", count);
+        // sleep opens stdin/stdout/stderr at minimum.
+        assert!(fds >= 3, "sleep child should have >=3 fds open, got {}", fds);
     }
 
     #[cfg(target_os = "macos")]

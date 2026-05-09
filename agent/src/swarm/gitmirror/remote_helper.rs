@@ -41,12 +41,41 @@
 //!
 //! ### Process model
 //!
-//! Runs in a fresh process invoked by git. Synchronous std::io —
-//! we're not in the agent's tokio runtime here, this is the user-side
-//! short-lived helper. Splice is a single std::thread::spawn for
-//! stdin→socket, with the main thread carrying socket→stdout.
+//! Runs in a fresh process invoked by git. The helper-protocol
+//! handshake (`capabilities` → `connect <service>`) is synchronous
+//! std::io — line-oriented, ~3 round trips, finishes before any
+//! smart-protocol bytes flow. Once we hand over to the smart-protocol
+//! tunnel we switch to a per-invocation `current_thread` tokio runtime
+//! and run the bidirectional copy through async I/O, mirroring the
+//! daemon-side pipe-shovel pattern in [`super::helper`].
+//!
+//! ### Why tokio for the tunnel copy
+//!
+//! Earlier 0.41.x revisions ran the tunnel through synchronous
+//! `std::io::copy(socket, stdout)` (specialized to splice on Linux)
+//! and `std::io::copy(stdin, socket)` (userspace read+write through
+//! a clone of the socket). Both shapes deadlocked: kernel stacks
+//! consistently parked the helper main thread in
+//! `unix_stream_data_wait`, called from `unix_stream_recvmsg` (sync
+//! recv) and `unix_stream_splice_read` (splice) alike. Strace on
+//! either side cleared the hang via PTRACE_ATTACH→EINTR-restart,
+//! confirming the bytes were already in the recv queue when the
+//! sync wait parked. The wakeup is a real kernel race in the AF_UNIX
+//! sync wait path on 6.8.x; we burned 0.41.7-0.41.15 on surgical
+//! fixes (`forget` on tokio write half, `O_NONBLOCK` clear, parent
+//! fd close, splice fast-path bypass) without moving it.
+//!
+//! The daemon side hit the same race in 0.41.7-11 and was fixed in
+//! 0.41.12 by switching to tokio async I/O on the unix socket: epoll
+//! readiness signaling rides a different wakeup path
+//! (`sock_def_readable` → epoll_ctl/epoll_wait) that fires correctly.
+//! 0.41.16 ports the same fix to the client side. Cost: pack data
+//! does an extra userspace copy each direction (no splice fast-path);
+//! for control-rate traffic this is noise, and even for pack flows
+//! the bottleneck is git's pack delta computation, not the copy.
 
 use std::io::{Read, Write};
+use std::os::fd::AsRawFd;
 use std::os::unix::net::UnixStream;
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -183,67 +212,94 @@ fn tunnel(project_id: &[u8; ID_LEN], service: &str) -> Result<()> {
         bail!("unexpected response from helper daemon: {:?}", response);
     }
 
-    // Bidirectional copy: stdin → socket on a worker thread,
-    // socket → stdout on the main thread. When either direction
-    // hits EOF we half-close the socket; the other direction
-    // unwinds naturally on the next read.
-    //
-    // We deliberately do NOT use `std::io::copy` here. The stdlib
-    // specializes copy() into a `splice(2)` fast-path on Linux when
-    // both endpoints expose file descriptors — and `splice()` on
-    // AF_UNIX stream sockets has a kernel-side wakeup race: the
-    // splice can park itself in `unix_stream_data_wait` with bytes
-    // sitting in the recv queue and never wake up, deadlocking the
-    // protocol exchange. Strace masks the race because PTRACE
-    // attach interrupts the splice with EINTR and the restart
-    // re-checks the queue. The work-around: use plain read+write
-    // through a userspace buffer, which routes through the
-    // unix_stream_read_generic path that does wake up reliably.
-    let writer_socket = socket.try_clone().context("cloning socket for writer thread")?;
-    let stdin_handle = std::thread::spawn(move || -> std::io::Result<()> {
-        let mut socket = writer_socket;
-        let stdin = std::io::stdin();
-        let mut stdin_lock = stdin.lock();
-        copy_via_buffer(&mut stdin_lock, &mut socket)?;
-        // Half-close the write side so the daemon's child process
-        // sees EOF on its stdin (otherwise upload-pack hangs forever).
-        let _ = socket.shutdown(std::net::Shutdown::Write);
-        Ok(())
-    });
-
-    {
-        let stdout = std::io::stdout();
-        let mut out = stdout.lock();
-        copy_via_buffer(&mut socket, &mut out).context("socket → stdout")?;
-        out.flush().ok();
+    // Defense-in-depth: SO_RCVTIMEO=200ms on the underlying socket
+    // before tokio takes ownership. With tokio's non-blocking + epoll
+    // shape the kernel returns EAGAIN immediately on no-data and
+    // SO_RCVTIMEO never fires; setting it is dead code in the happy
+    // path. But if any future code path issues a synchronous read on
+    // this socket — directly or through a library that re-blocks —
+    // the timeout breaks the AF_UNIX sync-wait race that bit
+    // 0.41.7-15 instead of parking forever in
+    // `unix_stream_data_wait`. Cheap, harmless under tokio, and
+    // keeps the safety net 0.41.15 deleted. Errors here are
+    // non-fatal — if setsockopt is rejected, we proceed without
+    // the safety net.
+    let timeout = libc::timeval { tv_sec: 0, tv_usec: 200_000 };
+    unsafe {
+        libc::setsockopt(
+            socket.as_raw_fd(),
+            libc::SOL_SOCKET,
+            libc::SO_RCVTIMEO,
+            &timeout as *const libc::timeval as *const libc::c_void,
+            std::mem::size_of::<libc::timeval>() as libc::socklen_t,
+        );
     }
 
-    // Reap the writer thread. If it errored (e.g. broken pipe when
-    // the daemon shut us down early) we still want to exit cleanly —
-    // git treats remote-helper exit code as the success/failure
-    // signal, and the daemon's child already reported its own status
-    // through the smart protocol.
-    let _ = stdin_handle.join();
+    // Tokio requires non-blocking on the std socket before adoption;
+    // this is the precondition for `UnixStream::from_std` and is also
+    // what makes SO_RCVTIMEO a no-op for the async path.
+    socket
+        .set_nonblocking(true)
+        .context("marking socket non-blocking before tokio adoption")?;
+
+    // Per-invocation current_thread runtime. We deliberately don't
+    // try to reuse a process-wide runtime (the multicall startup may
+    // or may not have brought one up — depends on which entry point
+    // we were dispatched as). A fresh runtime is ~1ms and behaves
+    // identically regardless of process-level setup.
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_io()
+        .enable_time()
+        .build()
+        .context("building tokio runtime for tunnel")?;
+
+    runtime.block_on(async move {
+        let socket = tokio::net::UnixStream::from_std(socket)
+            .context("converting std UnixStream to tokio")?;
+        let (mut read_half, mut write_half) = socket.into_split();
+
+        // socket → stdout: drain bytes from the daemon to git via the
+        // helper's stdout pipe. Loop ends when the daemon closes its
+        // write side (e.g. upload-pack/receive-pack exits and the
+        // daemon's handle_client returns). After the copy we flush
+        // stdout explicitly so any trailing pkt-line bytes hit git
+        // before the helper process exits.
+        let to_stdout = tokio::spawn(async move {
+            use tokio::io::AsyncWriteExt;
+            let mut stdout = tokio::io::stdout();
+            let result = tokio::io::copy(&mut read_half, &mut stdout).await;
+            let _ = stdout.flush().await;
+            result
+        });
+
+        // stdin → socket: forward git's smart-protocol writes (want
+        // lines, pack data, etc.) to the daemon. When git closes its
+        // stdin (clone done sending negotiation, or push done sending
+        // pack data), the copy returns and we shutdown the socket's
+        // write half so the daemon's child sees EOF on its stdin and
+        // exits cleanly. Mirrors the synchronous
+        // `socket.shutdown(Shutdown::Write)` from the pre-0.41.16
+        // shape.
+        let to_socket = tokio::spawn(async move {
+            use tokio::io::AsyncWriteExt;
+            let mut stdin = tokio::io::stdin();
+            let result = tokio::io::copy(&mut stdin, &mut write_half).await;
+            let _ = write_half.shutdown().await;
+            result
+        });
+
+        // Both directions finish in the normal flow: git closes
+        // stdin once it's done sending; the daemon closes the socket
+        // once its child exits. Errors from either direction (broken
+        // pipe, daemon crash) are not fatal — git reads the helper's
+        // exit code and surfaces its own remote-end-hung-up message
+        // when appropriate.
+        let _ = to_stdout.await;
+        let _ = to_socket.await;
+        Ok::<(), anyhow::Error>(())
+    })?;
+
     Ok(())
-}
-
-/// Manual bytes copy from `r` to `w` using a fixed userspace buffer.
-/// Equivalent in semantics to `std::io::copy` but explicitly avoids
-/// the splice(2) fast-path that deadlocks on AF_UNIX stream sockets
-/// (see protocol_loop's tunnel splice comment).
-fn copy_via_buffer<R: Read, W: Write>(r: &mut R, w: &mut W) -> std::io::Result<u64> {
-    let mut buf = [0u8; 16 * 1024];
-    let mut total: u64 = 0;
-    loop {
-        let n = match r.read(&mut buf) {
-            Ok(0) => return Ok(total),
-            Ok(n) => n,
-            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
-            Err(e) => return Err(e),
-        };
-        w.write_all(&buf[..n])?;
-        total += n as u64;
-    }
 }
 
 fn read_response_line(stream: &mut UnixStream) -> Result<String> {
@@ -370,60 +426,4 @@ mod tests {
         assert!(buf.is_empty());
     }
 
-    #[test]
-    fn copy_via_buffer_empty_input() {
-        let mut src: &[u8] = b"";
-        let mut dst = Vec::new();
-        let n = copy_via_buffer(&mut src, &mut dst).unwrap();
-        assert_eq!(n, 0);
-        assert!(dst.is_empty());
-    }
-
-    #[test]
-    fn copy_via_buffer_small_payload() {
-        let mut src: &[u8] = b"hello, world";
-        let mut dst = Vec::new();
-        let n = copy_via_buffer(&mut src, &mut dst).unwrap();
-        assert_eq!(n, 12);
-        assert_eq!(&dst, b"hello, world");
-    }
-
-    #[test]
-    fn copy_via_buffer_large_payload_crosses_buffer_boundary() {
-        // 50KB payload — forces multiple read iterations through the
-        // 16KB internal buffer.
-        let payload: Vec<u8> = (0..50_000).map(|i| (i % 251) as u8).collect();
-        let mut src = payload.as_slice();
-        let mut dst = Vec::new();
-        let n = copy_via_buffer(&mut src, &mut dst).unwrap();
-        assert_eq!(n, 50_000);
-        assert_eq!(dst, payload);
-    }
-
-    #[test]
-    fn copy_via_buffer_retries_on_interrupted() {
-        // Reader that returns Interrupted on the first call, then EOF.
-        // copy_via_buffer must retry rather than propagate the error.
-        struct InterruptOnce {
-            yielded: bool,
-        }
-        impl std::io::Read for InterruptOnce {
-            fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
-                if !self.yielded {
-                    self.yielded = true;
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::Interrupted,
-                        "test",
-                    ))
-                } else {
-                    Ok(0)
-                }
-            }
-        }
-        let mut src = InterruptOnce { yielded: false };
-        let mut dst = Vec::new();
-        let n = copy_via_buffer(&mut src, &mut dst).unwrap();
-        assert_eq!(n, 0);
-        assert!(dst.is_empty());
-    }
 }

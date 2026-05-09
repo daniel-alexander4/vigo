@@ -1533,8 +1533,7 @@ fn format_duration(secs: u64) -> String {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     // Force the build-version marker to be observably live so LTO can't
     // prove it dead and the linker can't gc-section it. Zero runtime cost.
     std::hint::black_box(&VIGO_BUILD_VERSION);
@@ -1548,16 +1547,35 @@ async fn main() -> Result<()> {
     // canonicalization (strip dirs, strip `.exe`, lowercase) so a
     // package recipe symlink anywhere on PATH lands in the right
     // mode regardless of OS.
+    //
+    // Dispatch lands BEFORE we build the tokio runtime: the
+    // git-remote-vigo body uses its own `current_thread` runtime
+    // inside `tunnel()` to drive the bidirectional copy through
+    // tokio async I/O (the fix for the AF_UNIX wakeup race that
+    // hit 0.41.7-15 on the synchronous-recv path), and that nested
+    // construction would panic if we were already inside the agent
+    // multi-thread runtime.
     if let Some(arg0) = std::env::args_os().next() {
-        match multicall::classify_argv0(&arg0) {
-            Some(multicall::MulticallMode::GitRemoteVigo) => {
-                let args: Vec<String> = std::env::args().collect();
-                multicall::run_git_remote_vigo(args);
-            }
-            None => {}
+        if let Some(multicall::MulticallMode::GitRemoteVigo) = multicall::classify_argv0(&arg0) {
+            let args: Vec<String> = std::env::args().collect();
+            multicall::run_git_remote_vigo(args);
+            // multicall::run_git_remote_vigo returns `!` — execution
+            // never reaches here.
         }
     }
 
+    // Regular agent flow: build the multi-thread tokio runtime and
+    // hand off to async_main. Equivalent to what `#[tokio::main]`
+    // would have done, but explicit so the multicall fast-path above
+    // can run outside any runtime.
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("building tokio runtime")?
+        .block_on(async_main())
+}
+
+async fn async_main() -> Result<()> {
     // Install the default TLS crypto provider before any TLS operations.
     rustls::crypto::ring::default_provider()
         .install_default()
