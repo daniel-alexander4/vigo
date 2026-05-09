@@ -1,7 +1,7 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Payload</h1>
-    <p>Admin-distributed payloads. <a href="/docs/engineering/subsystems/swarm">What is this?</a></p>
+    <h1>Swarmcast</h1>
+    <p>Admin-distributed file fan-out across the fleet. <a href="/docs/engineering/subsystems/swarm">What is this?</a></p>
 </div>
 
 {{if not .BlobDetail}}
@@ -44,12 +44,12 @@
         </table>
     </div>
 
-    <div id="payload-envoys"
+    <div id="swarmcast-envoys"
          hx-get="/ui/fragments/swarm-swarmcast-envoys?sha256={{.BlobDetail.SHA256}}"
          hx-trigger="every 5s"
          hx-swap="innerHTML"
          aria-live="polite">
-    {{template "payload-envoys-fragment" .}}
+    {{template "swarmcast-envoys-fragment" .}}
     </div>
 </div>
 {{else}}
@@ -109,13 +109,13 @@
         </table>
     </div>
     {{else}}
-    {{template "empty-state" dict "Message" "No payloads." "Hint" "Use vigocli swarm distribute <file> to distribute a file, or drop a file with a .swarm manifest into any envoy's seed directory."}}
+    {{template "empty-state" dict "Message" "No swarmcasts." "Hint" "Use vigocli swarm swarmcast distribute <file> to fan a file out to the fleet, or drop a file with a .swarm manifest into any envoy's seed directory."}}
     {{end}}
 </div>
 {{end}}
 {{end}}
 
-{{define "payload-envoys-fragment"}}
+{{define "swarmcast-envoys-fragment"}}
 {{/* ── Summary Pills ── */}}
 <div class="card-heading-row">
     <h3 style="margin:0;">Distribution Status</h3>

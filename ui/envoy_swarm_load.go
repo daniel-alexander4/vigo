@@ -24,7 +24,7 @@ type EnvoySwarmLoadPageData struct {
 	Hostname string
 	EnvoyID  string
 
-	Payload  []SwarmLoadRow
+	Swarmcast []SwarmLoadRow
 	Swarmgit []SwarmLoadRow
 	Longdrawer  []SwarmLoadRow
 	Lockbox []SwarmLoadRow
@@ -33,9 +33,9 @@ type EnvoySwarmLoadPageData struct {
 	// humanBytes template func — which takes int64 — can render them
 	// without a per-section conversion. Disk-footprint values stay
 	// within int64 range indefinitely in practice.
-	LodeTotal  int64
+	SwarmcastTotal  int64
 	SwarmgitTotal int64
-	EchoTotal  int64
+	LongdrawerTotal  int64
 	LockboxTotal int64
 	GrandTotal int64
 }
@@ -113,8 +113,8 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 			if b.Status == "downloading" && b.ChunksTotal > 0 {
 				row.Progress = fmt.Sprintf("%d/%d chunks", b.ChunksHave, b.ChunksTotal)
 			}
-			data.Payload = append(data.Payload, row)
-			data.LodeTotal += size
+			data.Swarmcast = append(data.Swarmcast, row)
+			data.SwarmcastTotal += size
 		}
 	}
 
@@ -166,7 +166,7 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 				Status:    "live",
 				When:      formatRelative(time.Unix(f.Mtime, 0)),
 			})
-			data.EchoTotal += size
+			data.LongdrawerTotal += size
 		}
 
 		// --- Lockbox (per-user ciphertext) ---
@@ -184,11 +184,11 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	data.GrandTotal = data.LodeTotal + data.SwarmgitTotal + data.EchoTotal + data.LockboxTotal
+	data.GrandTotal = data.SwarmcastTotal + data.SwarmgitTotal + data.LongdrawerTotal + data.LockboxTotal
 
 	// Biggest first within each section — that's what "why is disk
 	// full?" wants to see.
-	for _, rows := range [][]SwarmLoadRow{data.Payload, data.Swarmgit, data.Longdrawer, data.Lockbox} {
+	for _, rows := range [][]SwarmLoadRow{data.Swarmcast, data.Swarmgit, data.Longdrawer, data.Lockbox} {
 		sort.SliceStable(rows, func(i, j int) bool { return rows[i].Size > rows[j].Size })
 	}
 

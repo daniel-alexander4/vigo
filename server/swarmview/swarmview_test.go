@@ -32,11 +32,11 @@ func TestSnapshotStatusSplitsByLabelPrefix(t *testing.T) {
 	}
 
 	s := SnapshotStatus(src)
-	if s.Payloads.Payload != 2 {
-		t.Errorf("expected 2 payload payloads (app-v2 + firmware), got %d", s.Payloads.Payload)
+	if s.BlobsByKind.Swarmcast != 2 {
+		t.Errorf("expected 2 swarmcast blobs (app-v2 + firmware), got %d", s.BlobsByKind.Swarmcast)
 	}
-	if s.Payloads.Swarmgit != 1 {
-		t.Errorf("expected 1 swarmgit payload, got %d", s.Payloads.Swarmgit)
+	if s.BlobsByKind.Swarmgit != 1 {
+		t.Errorf("expected 1 swarmgit blob, got %d", s.BlobsByKind.Swarmgit)
 	}
 	// Both seeders are distinct envoys.
 	if s.EnvoysSeeding != 2 {

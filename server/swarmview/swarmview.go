@@ -46,14 +46,14 @@ type Status struct {
 	EnvoysSeeding          int           `json:"envoys_seeding"`
 	ManifestEntriesActive  int           `json:"manifest_entries_active"`
 	ManifestEntriesRevoked int           `json:"manifest_entries_revoked"`
-	Payloads               PayloadCounts `json:"payloads"`
-	TotalFootprintBytes    int64         `json:"total_footprint_bytes"`
+	BlobsByKind            BlobCounts `json:"blobs_by_kind"`
+	TotalFootprintBytes    int64      `json:"total_footprint_bytes"`
 }
 
-// PayloadCounts breaks active seeds out by content subsystem.
-type PayloadCounts struct {
-	Payload  int `json:"payload"`
-	Swarmgit int `json:"swarmgit"`
+// BlobCounts breaks active seeds out by content subsystem.
+type BlobCounts struct {
+	Swarmcast int `json:"swarmcast"`
+	Swarmgit  int `json:"swarmgit"`
 }
 
 // Peers is the per-envoy rollup.
@@ -104,9 +104,9 @@ func SnapshotStatus(src Sources) Status {
 		for sha, seed := range src.Tracker.ListSeeds() {
 			seedSize[sha] = seed.Size
 			if strings.HasPrefix(seed.Label, "swarmgit:") {
-				out.Payloads.Swarmgit++
+				out.BlobsByKind.Swarmgit++
 			} else {
-				out.Payloads.Payload++
+				out.BlobsByKind.Swarmcast++
 			}
 			if seed.SeederID != "" {
 				seedingEnvoys[seed.SeederID] = true

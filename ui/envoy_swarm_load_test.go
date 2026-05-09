@@ -30,7 +30,7 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 		PageData: PageData{Title: "Swarm Load: test", ActiveNav: "envoys"},
 		Hostname: "raspberrypi",
 		EnvoyID:  "00000000-0000-0000-0000-000000000001",
-		Payload: []SwarmLoadRow{
+		Swarmcast: []SwarmLoadRow{
 			{
 				Name: "firmware.bin", Detail: "abc123 · admin",
 				Size: 1_048_576, SizeHuman: "1.0 MiB",
@@ -58,7 +58,7 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 			Size: 512, SizeHuman: "512 B",
 			Status: "live", When: "10m ago",
 		}},
-		LodeTotal: 1_056_768, SwarmgitTotal: 4_096, EchoTotal: 2_048, LockboxTotal: 512,
+		SwarmcastTotal: 1_056_768, SwarmgitTotal: 4_096, LongdrawerTotal: 2_048, LockboxTotal: 512,
 		GrandTotal: 1_063_424,
 	}
 	rec := httptest.NewRecorder()
@@ -71,7 +71,7 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 	// up at least one won't appear.
 	for _, must := range []string{
 		"Total Swarm Footprint",
-		">Payload<", ">Swarmgit<", ">Longdrawer<", ">Lockbox<",
+		">Swarmcast<", ">Swarmgit<", ">Longdrawer<", ">Lockbox<",
 		"firmware.bin",
 		"/var/lib/vigo/swarm/swarmgit/mirrors/danlap/dan/vigo.git",
 		"~dan/longdrawer/notes.md",

@@ -42,7 +42,7 @@
         {{if .SwarmEnabled}}
         <a href="/swarm" class="nav-group__label nav-group__label--link{{if eq .ActiveNav "swarm"}} nav-group__label--active{{end}}">Swarm <span class="nav-group__label-hint">Envoy P2P</span></a>
         <a href="/swarm/swarmcast" class="nav-link{{if eq .ActiveNav "swarmcast"}} nav-link--active{{end}}" title="P2P Administrator Pushed File Distribution">
-            Payload
+            Swarmcast
         </a>
         {{if .CurrentUser.HasPermission "fleet.write"}}
         <a href="/swarm/longdrawer" class="nav-link{{if eq .ActiveNav "longdrawer"}} nav-link--active{{end}}" title="P2P Synchronized User Directory">

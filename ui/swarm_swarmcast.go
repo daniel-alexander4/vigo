@@ -22,7 +22,7 @@ type SwarmHostnameResolver interface {
 	MatchingEnvoys(target string) []string
 }
 
-// LodePageData provides data for the admin-distributed-payload list and
+// SwarmcastPageData provides data for the admin-distributed-payload list and
 // detail pages. Detail renders carry visualization data alongside BlobDetail
 // so the single /payload/{sha256} page shows the heatmap + chunk-flow matrix
 // directly.
@@ -30,14 +30,14 @@ type SwarmHostnameResolver interface {
 // Swarmgit bundles (labels prefixed with `swarmgit:`) are filtered out at list
 // assembly time — personal-DR repo mirrors have their own page at /swarmgit
 // and don't belong in the admin-payload inventory.
-type LodePageData struct {
+type SwarmcastPageData struct {
 	PageData
 	Health              HealthBanner
 	TotalBlobs          int
 	TotalSizeHuman      string
 	ActiveDistributions int
-	Blobs               []LodeBlobEntry
-	BlobDetail          *LodeBlobDetail
+	Blobs               []SwarmcastBlobEntry
+	BlobDetail          *SwarmcastBlobDetail
 
 	// Visualization data — populated on the detail view.
 	Matrix     *ChunkMatrix
@@ -47,10 +47,10 @@ type LodePageData struct {
 	VizTotal   int               // total envoy count when capped
 }
 
-// LodeBlobEntry is a blob in the list view with distribution summary.
+// SwarmcastBlobEntry is a blob in the list view with distribution summary.
 // Swarmgit bundles are filtered out before this struct is built — the
 // /swarmgit page owns that surface.
-type LodeBlobEntry struct {
+type SwarmcastBlobEntry struct {
 	SHA256    string
 	Label     string
 	Size      int64
@@ -63,8 +63,8 @@ type LodeBlobEntry struct {
 	Summary   SwarmSummary
 }
 
-// LodeBlobDetail is the detail view for a single blob.
-type LodeBlobDetail struct {
+// SwarmcastBlobDetail is the detail view for a single blob.
+type SwarmcastBlobDetail struct {
 	SHA256    string
 	Label     string
 	Size      int64
@@ -107,14 +107,14 @@ func (h *Handler) SetSwarm(tracker *swarm.PeerTracker, resolver SwarmHostnameRes
 func (h *Handler) Swarmcast(w http.ResponseWriter, r *http.Request) {
 	sha := r.PathValue("sha256")
 	if sha != "" {
-		h.lodeDetail(w, r, sha)
+		h.swarmcastDetail(w, r, sha)
 		return
 	}
-	h.lodeList(w, r)
+	h.swarmcastList(w, r)
 }
 
-func (h *Handler) lodeList(w http.ResponseWriter, r *http.Request) {
-	data := LodePageData{
+func (h *Handler) swarmcastList(w http.ResponseWriter, r *http.Request) {
+	data := SwarmcastPageData{
 		PageData: PageData{Title: "Swarmcast", ActiveNav: "swarmcast"},
 	}
 
@@ -128,7 +128,7 @@ func (h *Handler) lodeList(w http.ResponseWriter, r *http.Request) {
 			size := int64(seed.Size)
 			totalSize += size
 			chunks := chunksForSize(size)
-			entry := LodeBlobEntry{
+			entry := SwarmcastBlobEntry{
 				SHA256:    sha,
 				Label:     seed.Label,
 				Size:      size,
@@ -158,7 +158,7 @@ func (h *Handler) lodeList(w http.ResponseWriter, r *http.Request) {
 			}
 			size := int64(seed.Size)
 			chunks := chunksForSize(size)
-			entry := LodeBlobEntry{
+			entry := SwarmcastBlobEntry{
 				SHA256:    sha,
 				Label:     seed.Label,
 				Size:      size,
@@ -175,7 +175,7 @@ func (h *Handler) lodeList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data.Health = buildLodeHealth(data.Blobs)
+	data.Health = buildSwarmcastHealth(data.Blobs)
 
 	data.TotalBlobs = len(data.Blobs)
 	data.TotalSizeHuman = humanSize(totalSize)
@@ -184,15 +184,15 @@ func (h *Handler) lodeList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "payload", data)
+	h.renderer.Render(w, "swarmcast", data)
 }
 
-func (h *Handler) lodeDetail(w http.ResponseWriter, r *http.Request, sha string) {
-	data := LodePageData{
+func (h *Handler) swarmcastDetail(w http.ResponseWriter, r *http.Request, sha string) {
+	data := SwarmcastPageData{
 		PageData: PageData{Title: "Swarmcast", ActiveNav: "swarmcast"},
 	}
 
-	var detail *LodeBlobDetail
+	var detail *SwarmcastBlobDetail
 
 	if h.swarmTracker != nil {
 		if seed, ok := h.swarmTracker.GetSeed(sha); ok {
@@ -204,7 +204,7 @@ func (h *Handler) lodeDetail(w http.ResponseWriter, r *http.Request, sha string)
 			}
 			size := int64(seed.Size)
 			chunks := chunksForSize(size)
-			detail = &LodeBlobDetail{
+			detail = &SwarmcastBlobDetail{
 				SHA256:    sha,
 				Label:     seed.Label,
 				Size:      size,
@@ -247,12 +247,12 @@ func (h *Handler) lodeDetail(w http.ResponseWriter, r *http.Request, sha string)
 	data.BlobDetail = detail
 
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "payload", data)
+	h.renderer.Render(w, "swarmcast", data)
 }
 
 // populateVizData computes the matrix + palette for the detail view.
 // Extracted so the full-page render and the HTMX fragment stay in lockstep.
-func (h *Handler) populateVizData(data *LodePageData, envoys []swarm.EnvoySwarmStatus, chunks int) {
+func (h *Handler) populateVizData(data *SwarmcastPageData, envoys []swarm.EnvoySwarmStatus, chunks int) {
 	vizEnvoys := topVizEnvoys(envoys, maxVizEnvoys)
 	if len(envoys) > maxVizEnvoys {
 		data.VizCapped = true
@@ -300,7 +300,7 @@ func (h *Handler) SwarmcastEnvoysFragment(w http.ResponseWriter, r *http.Request
 	}
 	sortSwarmStatuses(statuses)
 
-	detail := &LodeBlobDetail{
+	detail := &SwarmcastBlobDetail{
 		SHA256:    sha,
 		Chunks:    chunks,
 		CreatedAt: createdAt,
@@ -309,12 +309,12 @@ func (h *Handler) SwarmcastEnvoysFragment(w http.ResponseWriter, r *http.Request
 		Envoys:    statuses,
 	}
 
-	// The fragment template expects the full LodePageData shape so its viz
+	// The fragment template expects the full SwarmcastPageData shape so its viz
 	// sub-sections can render. Build one populated with the detail + viz data.
-	data := LodePageData{BlobDetail: detail}
+	data := SwarmcastPageData{BlobDetail: detail}
 	h.populateVizData(&data, statuses, chunks)
 
-	h.renderer.RenderFragment(w, "payload", "payload-envoys-fragment", data)
+	h.renderer.RenderFragment(w, "swarmcast", "swarmcast-envoys-fragment", data)
 }
 
 // chunksForSize returns the number of 1 MiB chunks for a blob.
@@ -480,13 +480,13 @@ func formatRetention(d time.Duration) string {
 	return d.String()
 }
 
-// buildLodeHealth surfaces distribution problems on the list view.
+// buildSwarmcastHealth surfaces distribution problems on the list view.
 // Skipped > 0 means the publisher matched targets that couldn't
 // receive (out of disk, unreachable); operators need to see that.
 // Pending is usually in-flight and not a problem by itself, so it's
 // left informational. Revoking/revoked counts are cleanup, not a
 // health concern.
-func buildLodeHealth(blobs []LodeBlobEntry) HealthBanner {
+func buildSwarmcastHealth(blobs []SwarmcastBlobEntry) HealthBanner {
 	var problems []HealthProblem
 	var active int
 	for _, b := range blobs {

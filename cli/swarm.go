@@ -31,13 +31,13 @@ type swarmStatusFleet struct {
 	EnvoysSeeding          int                   `json:"envoys_seeding"`
 	ManifestEntriesActive  int                   `json:"manifest_entries_active"`
 	ManifestEntriesRevoked int                   `json:"manifest_entries_revoked"`
-	Payloads               swarmStatusPayloads   `json:"payloads"`
+	BlobsByKind            swarmBlobCounts       `json:"blobs_by_kind"`
 	TotalFootprintBytes    int64                 `json:"total_footprint_bytes"`
 }
 
-type swarmStatusPayloads struct {
-	Payload  int `json:"payload"`
-	Swarmgit int `json:"swarmgit"`
+type swarmBlobCounts struct {
+	Swarmcast int `json:"swarmcast"`
+	Swarmgit  int `json:"swarmgit"`
 }
 
 type swarmPeersFleet struct {
@@ -157,7 +157,7 @@ func runSwarmStatus(cmd *cobra.Command, _ []string) error {
 	fmt.Fprintf(w, "%s\t%d\n", bold("Seeding envoys"), resp.EnvoysSeeding)
 	fmt.Fprintf(w, "%s\t%s\n", bold("Fleet footprint"), formatBytes(resp.TotalFootprintBytes))
 	fmt.Fprintf(w, "%s\t%d active · %d revoked\n", bold("Manifest entries"), resp.ManifestEntriesActive, resp.ManifestEntriesRevoked)
-	fmt.Fprintf(w, "%s\t%d payload · %d swarmgit\n", bold("Active payloads"), resp.Payloads.Payload, resp.Payloads.Swarmgit)
+	fmt.Fprintf(w, "%s\t%d swarmcast · %d swarmgit\n", bold("Active blobs"), resp.BlobsByKind.Swarmcast, resp.BlobsByKind.Swarmgit)
 	w.Flush()
 	return nil
 }

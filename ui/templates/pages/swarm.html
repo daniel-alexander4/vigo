@@ -1,7 +1,7 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Swarm</h1>
-    <p>Envoy peer-to-peer substrate. Payload, Swarmgit, Longdrawer, and Lockbox all ride on this transport. <a href="/docs/engineering/subsystems/swarm">What is this?</a></p>
+    <p>Envoy peer-to-peer substrate. Swarmcast, Swarmgit, Longdrawer, and Lockbox all ride on this transport. <a href="/docs/engineering/subsystems/swarm">What is this?</a></p>
 </div>
 
 {{if not .Status.GeneratedAt.IsZero}}
@@ -26,25 +26,25 @@
 
 <div class="card mt-2">
     <h2 style="margin:0 0 16px;">Content Subsystems</h2>
-    <p style="color:var(--subtext0);margin-bottom:12px;">Active blobs by subsystem, counted server-side from the manifest CRDT. Longdrawer and Lockbox are per-user content and don't surface as payload counts here — use their dedicated pages for user-level detail.</p>
+    <p style="color:var(--subtext0);margin-bottom:12px;">Active blobs by subsystem, counted server-side from the manifest CRDT. Longdrawer and Lockbox are per-user content and don't surface as blob counts here — use their dedicated pages for user-level detail.</p>
     <div class="table-container">
         <table class="table">
             <thead>
                 <tr>
                     <th>Subsystem</th>
-                    <th>Active Payloads</th>
+                    <th>Active Blobs</th>
                     <th>Page</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td><strong>Payload</strong> <span style="color:var(--subtext0);">— admin-pushed swarmcasts</span></td>
-                    <td>{{.Status.Payloads.Payload}}</td>
+                    <td><strong>Swarmcast</strong> <span style="color:var(--subtext0);">— admin-pushed file fan-out</span></td>
+                    <td>{{.Status.BlobsByKind.Swarmcast}}</td>
                     <td><a href="/swarm/swarmcast">/swarmcast</a></td>
                 </tr>
                 <tr>
                     <td><strong>Swarmgit</strong> <span style="color:var(--subtext0);">— personal-DR repo mirrors</span></td>
-                    <td>{{.Status.Payloads.Swarmgit}}</td>
+                    <td>{{.Status.BlobsByKind.Swarmgit}}</td>
                     <td><a href="/swarm/swarmgit">/swarmgit</a></td>
                 </tr>
                 <tr>
