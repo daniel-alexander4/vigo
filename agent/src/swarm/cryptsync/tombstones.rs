@@ -57,9 +57,17 @@ use super::crypt;
 /// Default retention window in seconds (90 days).
 ///
 /// Covers realistic "laptop parked for an extended trip" scenarios
-/// without letting tombstones pile up forever. Configurable per
-/// user via `tombstone_retention_days` in `~/.cryptsync/config.yaml`.
+/// without letting tombstones pile up forever. Compile-time fallback
+/// for [`effective_retention_secs`] when the server hasn't published
+/// `swarm.cryptsync.envelope_retention` yet.
 pub const DEFAULT_RETENTION_SECS: i64 = 90 * 24 * 60 * 60;
+
+/// Returns the operator-configured tombstone retention from the
+/// runtime-limits cache (sourced from `server.yaml swarm.cryptsync.
+/// envelope_retention`); falls back to [`DEFAULT_RETENTION_SECS`].
+pub fn effective_retention_secs() -> i64 {
+    crate::swarm::runtime_limits::cryptsync_envelope_retention_secs()
+}
 
 /// Length of the on-announcement digest. 16 bytes (128 bits) gives
 /// negligible collision probability across realistic tombstone

@@ -392,6 +392,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		// the server's in-memory store — without this push, no agent ever
 		// learns and the on-disk manifest stays at the cold-start version.
 		resp.ManifestEntries = s.collectManifestEntries()
+		resp.SwarmRuntimeLimits = s.buildSwarmRuntimeLimits()
 		return resp, nil
 	}
 
@@ -446,6 +447,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			}
 		}
 		resp.ManifestEntries = s.collectManifestEntries()
+		resp.SwarmRuntimeLimits = s.buildSwarmRuntimeLimits()
 		return resp, nil
 	}
 
@@ -651,8 +653,10 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 	}
 
-	// Swarm: ship the manifest CRDT.
+	// Swarm: ship the manifest CRDT and the operator-tunable runtime
+	// limits (max sizes + envelope retention) sourced from server.yaml.
 	resp.ManifestEntries = s.collectManifestEntries()
+	resp.SwarmRuntimeLimits = s.buildSwarmRuntimeLimits()
 
 	// Build ProxiedDevice list for gateway envoys. Network devices whose
 	// gateway field matches this envoy's hostname get their resolved config
@@ -700,6 +704,67 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	}
 
 	return resp, nil
+}
+
+// buildSwarmRuntimeLimits projects the operator's `cfg.Swarm` settings
+// into the wire-format `SwarmRuntimeLimits` carried on every CheckIn
+// response. Empty / zero fields surface to the agent as "use the
+// compile-time default" — the strict-equal version handshake guarantees
+// the field is always populated when an agent at the same version
+// receives it. Returns nil when no swarm config is set (early
+// startup); the agent falls back to compile-time defaults.
+func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
+	sc := s.swarmCfg
+	// Heuristic for "no config loaded yet": every cap zero AND every
+	// retention string empty. Cheap; matches the SwarmSection zero
+	// value.
+	if sc.Payload.MaxSizeBytes == 0 && sc.Payload.DefaultRetention == "" &&
+		sc.Cryptsync.MaxFileBytes == 0 && sc.Cryptsync.EnvelopeRetention == "" &&
+		sc.Gitmirror.MaxBundleBytes == 0 && sc.Gitmirror.EnvelopeRetention == "" &&
+		sc.Filesync.MaxFileBytes == 0 {
+		return nil
+	}
+	return &pb.SwarmRuntimeLimits{
+		PayloadMaxSizeBytes:           uint64(maxNonNeg(sc.Payload.MaxSizeBytes)),
+		PayloadDefaultRetention:       sc.Payload.DefaultRetention,
+		CryptsyncMaxFileBytes:         uint64(maxNonNeg(sc.Cryptsync.MaxFileBytes)),
+		CryptsyncEnvelopeRetentionSecs: durationSecsOrZero(sc.Cryptsync.EnvelopeRetention),
+		GitmirrorMaxBundleBytes:       uint64(maxNonNeg(sc.Gitmirror.MaxBundleBytes)),
+		GitmirrorEnvelopeRetentionSecs: durationSecsOrZero(sc.Gitmirror.EnvelopeRetention),
+		FilesyncMaxFileBytes:          uint64(maxNonNeg(sc.Filesync.MaxFileBytes)),
+	}
+}
+
+// maxNonNeg clamps negatives to zero so a misconfigured server.yaml
+// (operator typo of -1) doesn't roll over to MaxUint64 when cast to
+// the proto's uint64.
+func maxNonNeg(n int64) int64 {
+	if n < 0 {
+		return 0
+	}
+	return n
+}
+
+// durationSecsOrZero parses an optional duration string ("90d",
+// "24h", "30m") into seconds. Empty / unparseable yields zero, which
+// the agent reads as "use the compile-time default." Mirrors
+// `parseRetention` in server/main.go: supports the "Nd" suffix that
+// `time.ParseDuration` itself rejects, plus the standard Go suffixes.
+func durationSecsOrZero(s string) uint64 {
+	if s == "" {
+		return 0
+	}
+	if len(s) > 1 && s[len(s)-1] == 'd' {
+		var days int
+		if _, err := fmt.Sscanf(s, "%dd", &days); err == nil && days > 0 {
+			return uint64(days) * 24 * 60 * 60
+		}
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil || d <= 0 {
+		return 0
+	}
+	return uint64(d.Seconds())
 }
 
 // collectManifestEntries returns all manifest CRDT entries as proto messages.

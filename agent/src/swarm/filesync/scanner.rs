@@ -20,8 +20,15 @@ use super::state::{FileEntry, Tombstone, UserState};
 /// notes, scripts, small datasets, VM images up to this bound. Receivers stream
 /// content directly to disk (no full-RAM buffering), so the limit is about
 /// what's reasonable to move over a LAN on a 30-second announce cadence rather
-/// than a RAM ceiling.
+/// than a RAM ceiling. Compile-time fallback for [`effective_max_file_size`].
 pub const MAX_FILE_SIZE: u64 = 2 * 1024 * 1024 * 1024;
+
+/// Returns the effective per-file cap. Sourced from `server.yaml
+/// swarm.filesync.max_file_bytes` via the runtime-limits cache; falls
+/// back to [`MAX_FILE_SIZE`] when the operator hasn't set one.
+pub fn effective_max_file_size() -> u64 {
+    crate::swarm::runtime_limits::filesync_max_file_bytes().unwrap_or(MAX_FILE_SIZE)
+}
 
 /// List (username, home_dir) pairs for real users on this machine.
 #[cfg(unix)]
@@ -111,7 +118,7 @@ pub fn scan_user_dir(
             Ok(m) => m,
             Err(_) => continue,
         };
-        if meta.len() > MAX_FILE_SIZE {
+        if meta.len() > effective_max_file_size() {
             continue;
         }
         let mtime = meta

@@ -501,6 +501,15 @@ pub async fn run_once_with_update(
         "check-in response received"
     );
 
+    // Refresh the swarm runtime-limits cache from this response if the
+    // server populated the field. Done unconditionally on every CheckIn
+    // (not just no-change cycles) so admin tweaks to server.yaml swarm
+    // caps reach agents within one cycle. Read sites in cryptsync /
+    // gitmirror / filesync consult crate::swarm::runtime_limits.
+    if let Some(ref limits) = resp.swarm_runtime_limits {
+        crate::swarm::runtime_limits::update_from_proto(limits);
+    }
+
     // Scrier tunnel: spawn IMMEDIATELY on a separate connection/task.
     // Tunnel requests are time-sensitive (30s server timeout) and must not
     // wait for self-update or convergence. The relay runs independently.

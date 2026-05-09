@@ -104,9 +104,11 @@ func TestBuildCheckInResponse_AllPathsShipManifestEntries(t *testing.T) {
 
 	const builderLiteral = "&pb.CheckInResponse{"
 	const wireUp = "resp.ManifestEntries = s.collectManifestEntries()"
+	const limitsWireUp = "resp.SwarmRuntimeLimits = s.buildSwarmRuntimeLimits()"
 
 	builders := strings.Count(string(body), builderLiteral)
 	wireUps := strings.Count(string(body), wireUp)
+	limitsWireUps := strings.Count(string(body), limitsWireUp)
 
 	if builders == 0 {
 		t.Fatalf("found zero %q literals in agentstream.go — file structure changed; update this test", builderLiteral)
@@ -119,6 +121,15 @@ func TestBuildCheckInResponse_AllPathsShipManifestEntries(t *testing.T) {
 				"If you added a new builder, add the wire-up before the return. If you intentionally "+
 				"want a builder without manifest gossip, refactor this test to whitelist it explicitly.",
 			builders, wireUps, wireUp,
+		)
+	}
+	if builders != limitsWireUps {
+		t.Errorf(
+			"agentstream.go has %d CheckInResponse builders but only %d %q wire-ups.\n"+
+				"Every CheckInResponse return path MUST populate SwarmRuntimeLimits — without this, "+
+				"per-subsystem caps from server.yaml never reach agents and they fall back to "+
+				"compile-time defaults silently. Same wiring discipline as ManifestEntries.",
+			builders, limitsWireUps, limitsWireUp,
 		)
 	}
 }

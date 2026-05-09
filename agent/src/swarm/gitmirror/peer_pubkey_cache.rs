@@ -30,13 +30,8 @@
 //! |-------------------------------------------------|----------|
 //! | Spoof `GITMIRROR:` from untrusted hostname          | Yes — signature check fails (attacker doesn't have the real envoy's private key). |
 //! | Replay an old, valid announcement               | Yes — signature covers the emission timestamp. |
-//! | Race the real envoy to first announcement       | Partial — TOFU caches the attacker's key. Operator notices missing gitmirror flow and clears cache. |
-//! | Rotate pubkey (legitimate re-enrollment)        | Requires a cache clear — documented as an admin action. |
-//!
-//! First-contact race is acceptable for the current threat model
-//! (same-LAN attacker). If a stronger guarantee is needed, a follow-up
-//! ships server-distributed pubkeys so the cache can be bootstrapped
-//! out-of-band.
+//! | Race the real envoy to first announcement       | Blocked for envoys present in the cache by the time multicast verification runs: [`super::pubkey_bootstrap`] (default in 0.41.20+) fetches `GET /api/v1/fleet/pubkeys` on agent startup and every 15 min, pre-populating with authoritative pubkeys. The bootstrap fetch and the multicast listener spawn concurrently — there is a brief startup window (sub-second on a healthy network) during which TOFU may still admit the first announce, but the next bootstrap refresh corrects any TOFU mismatch via [`PeerPubkeyCache::bootstrap_set`] with a WARN log line. Operator gets a record either way. |
+//! | Rotate pubkey (legitimate re-enrollment)        | Server bootstrap auto-overrides the cached entry on the next 15-min refresh; emits a WARN so the operator can correlate. Manual cache clear no longer required. |
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -170,6 +165,53 @@ impl PeerPubkeyCache {
         }
     }
 
+    /// Apply a server-distributed pubkey, overriding any TOFU entry.
+    /// Server data is authoritative — `(hostname → pubkey)` came from
+    /// the registry, not from a multicast announce. If the cache
+    /// already holds a different pubkey for this hostname (TOFU'd from
+    /// a possibly-spoofed first announcement, or a stale entry from
+    /// before a re-enrollment), the entry is replaced and a WARN is
+    /// emitted so the operator can correlate. New entries pre-empt
+    /// the TOFU path entirely on the next announcement.
+    pub fn bootstrap_set(&self, hostname: &str, pubkey_hex: &str, now: i64) {
+        let mut disk = self.inner.lock().expect("pubkey cache poisoned");
+        disk.version = 1;
+        let conflict = match disk.entries.get(hostname) {
+            Some(e) if e.pubkey_hex != pubkey_hex => Some(e.pubkey_hex.clone()),
+            _ => None,
+        };
+        match disk.entries.get_mut(hostname) {
+            Some(e) => {
+                e.pubkey_hex = pubkey_hex.to_string();
+                e.last_seen_unix = now;
+            }
+            None => {
+                disk.entries.insert(
+                    hostname.to_string(),
+                    Entry {
+                        pubkey_hex: pubkey_hex.to_string(),
+                        first_seen_unix: now,
+                        last_seen_unix: now,
+                    },
+                );
+            }
+        }
+        let snapshot = disk.clone();
+        drop(disk);
+        if let Some(old) = conflict {
+            warn!(
+                hostname,
+                old_prefix = %old.chars().take(12).collect::<String>(),
+                new_prefix = %pubkey_hex.chars().take(12).collect::<String>(),
+                "gitmirror: server-distributed pubkey overrode cached TOFU entry; \
+                 prior entry was likely a TOFU race or a stale key from before re-enrollment",
+            );
+        }
+        if let Err(e) = persist(&snapshot) {
+            debug!(error = %e, "gitmirror: peer pubkey cache persist failed (continuing)");
+        }
+    }
+
     /// Remove an entry — used when the operator explicitly wants a
     /// hostname to be re-TOFU'd after a key rotation.
     #[allow(dead_code)]
@@ -234,5 +276,38 @@ mod tests {
         c.accept("danlap", "aaaa", 100);
         c.forget("danlap");
         assert_eq!(c.check("danlap", "aaaa"), CheckOutcome::FirstSighting);
+    }
+
+    #[test]
+    fn bootstrap_set_creates_new_entry() {
+        let c = PeerPubkeyCache::empty();
+        c.bootstrap_set("plex", "deadbeef", 100);
+        assert_eq!(c.check("plex", "deadbeef"), CheckOutcome::Match);
+    }
+
+    #[test]
+    fn bootstrap_set_overrides_tofu_mismatch() {
+        let c = PeerPubkeyCache::empty();
+        // TOFU'd a (possibly-spoofed) key first.
+        c.accept("plex", "aaaa", 100);
+        // Server distribution arrives later with the authoritative key.
+        c.bootstrap_set("plex", "bbbb", 200);
+        // The TOFU entry is replaced; subsequent checks must verify
+        // against the server-distributed key, not the original TOFU.
+        assert_eq!(c.check("plex", "bbbb"), CheckOutcome::Match);
+        match c.check("plex", "aaaa") {
+            CheckOutcome::Mismatch { cached_prefix } => {
+                assert_eq!(cached_prefix, "bbbb");
+            }
+            other => panic!("expected stale TOFU key to mismatch the new bootstrap, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn bootstrap_set_idempotent_on_same_key() {
+        let c = PeerPubkeyCache::empty();
+        c.bootstrap_set("plex", "deadbeef", 100);
+        c.bootstrap_set("plex", "deadbeef", 200);
+        assert_eq!(c.check("plex", "deadbeef"), CheckOutcome::Match);
     }
 }

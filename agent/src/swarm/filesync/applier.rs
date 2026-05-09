@@ -11,7 +11,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 
 use super::reconciler::Action;
-use super::scanner::MAX_FILE_SIZE;
+use super::scanner::effective_max_file_size;
 use crate::platform::users::chown_to_user;
 
 /// Chunk size for streaming reads — large enough to amortize syscall cost,
@@ -56,7 +56,7 @@ fn fetch_file(
     mtime: i64,
     sync_dir: &Path,
 ) -> Result<()> {
-    if expected_size > MAX_FILE_SIZE {
+    if expected_size > effective_max_file_size() {
         bail!("file {} exceeds max size ({} bytes)", name, expected_size);
     }
     if !valid_filename(name) {

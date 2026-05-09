@@ -459,6 +459,23 @@ pub fn fan_out_bundle(
         }
     };
 
+    // Operator-tunable bundle cap from server.yaml swarm.gitmirror.
+    // max_bundle_bytes. None = no cap (pre-0.41.21 behavior). Refusing
+    // here is a publisher-side decision — the receivers' POST handlers
+    // would also reject if their copy of the cap is smaller.
+    if let Some(cap) = crate::swarm::runtime_limits::gitmirror_max_bundle_bytes() {
+        if (bundle_bytes.len() as u64) > cap {
+            tracing::warn!(
+                project_id = %pid_hex,
+                bundle = %bundle_path.display(),
+                size = bundle_bytes.len(),
+                cap,
+                "fan-out: bundle exceeds swarm.gitmirror.max_bundle_bytes; skipping fan-out"
+            );
+            return (0, 0);
+        }
+    }
+
     for (url_host, display_host) in &targets {
         attempted += 1;
         let url = format!(

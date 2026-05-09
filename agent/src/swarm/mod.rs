@@ -32,6 +32,7 @@ pub mod peer_health;
 pub mod peermap;
 pub mod policy;
 pub mod prober;
+pub mod runtime_limits;
 pub mod scheduler;
 pub mod puddle;
 pub mod server;

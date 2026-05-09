@@ -77,9 +77,18 @@ pub const LEAVE_DOMAIN: &[u8] = b"vigo-gitmirror-leave-v1\0";
 /// signature can never be replayed as a different envelope type.
 pub const DELEGATION_DOMAIN: &[u8] = b"vigo-gitmirror-delegate-v1\0";
 
-/// Default reap window — 90 days, matching cryptsync's tombstone +
-/// leave retention.
+/// Compile-time fallback reap window — 90 days, matching cryptsync's
+/// tombstone + leave retention. Read sites should prefer
+/// [`effective_retention_secs`] which consults the server-distributed
+/// `swarm.gitmirror.envelope_retention` setting.
 pub const DEFAULT_RETENTION_SECS: i64 = 90 * 24 * 60 * 60;
+
+/// Returns the operator-configured envelope retention from
+/// `server.yaml swarm.gitmirror.envelope_retention`; falls back to
+/// [`DEFAULT_RETENTION_SECS`] when unset.
+pub fn effective_retention_secs() -> i64 {
+    crate::swarm::runtime_limits::gitmirror_envelope_retention_secs()
+}
 
 /// ADR-019 chain hygiene: warn the operator at this length. Status
 /// surfaces a yellow flag per affected project saying "consider

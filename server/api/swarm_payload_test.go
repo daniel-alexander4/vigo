@@ -6,6 +6,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -115,6 +116,84 @@ func TestDistribute_GatedReturns403AndAudits(t *testing.T) {
 	}
 	if !strings.Contains(summary, "payload subsystem") {
 		t.Errorf("audit summary should explain the gate, got %q", summary)
+	}
+}
+
+func TestDistribute_RejectsOversizeViaMaxSizeBytes(t *testing.T) {
+	// Server-side enforcement: when swarm.payload.max_size_bytes is set
+	// and the request exceeds it, distribute returns 413 before writing
+	// the payload to disk. Closes the bandwidth-glutton vector — a
+	// 5 GiB upload to a fleet that wanted 100 MiB caps should never
+	// hit the seedDir.
+	sqlDB, queries := openAuditTestDB(t)
+	defer sqlDB.Close()
+	seedDir := t.TempDir()
+	h := NewLodeHandler(seedDir, nil, nil, nil, queries)
+	h.SetSwarmConfig(config.SwarmSection{
+		Enabled: []string{"*"},
+		Payload: config.SwarmPayloadSection{
+			Enabled:      []string{"*"},
+			MaxSizeBytes: 100, // 100-byte cap for the test
+		},
+	})
+	h.SetAuditWriter(audit.NewWriter(queries))
+
+	body := strings.Repeat("x", 200) // 200 bytes — over the 100-byte cap
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/swarm/payload/distribute", strings.NewReader(body))
+	req.Header.Set("X-Payload-Label", "oversize")
+	req.ContentLength = int64(len(body))
+	rec := httptest.NewRecorder()
+
+	h.Distribute(rec, req)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413 from max_size_bytes guard, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "max_size_bytes") {
+		t.Errorf("body should reference max_size_bytes, got: %s", rec.Body.String())
+	}
+}
+
+func TestDistribute_PicksUpDefaultRetention(t *testing.T) {
+	// Server-side fallback: when --retention is omitted (no
+	// X-Payload-Retention header) and swarm.payload.default_retention
+	// is set, the manifest should record the configured default.
+	// Compile-time fallback is "7d" — this test pins a non-default to
+	// prove the config value is being read, not the constant.
+	sqlDB, queries := openAuditTestDB(t)
+	defer sqlDB.Close()
+	seedDir := t.TempDir()
+	h := NewLodeHandler(seedDir, nil, nil, nil, queries)
+	h.SetSwarmConfig(config.SwarmSection{
+		Enabled: []string{"*"},
+		Payload: config.SwarmPayloadSection{
+			Enabled:          []string{"*"},
+			DefaultRetention: "30d",
+		},
+	})
+	h.SetAuditWriter(audit.NewWriter(queries))
+
+	body := "small"
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/swarm/payload/distribute", strings.NewReader(body))
+	req.Header.Set("X-Payload-Label", "ret-test")
+	// Note: no X-Payload-Retention header — we want the default to fire.
+	req.ContentLength = int64(len(body))
+	rec := httptest.NewRecorder()
+
+	h.Distribute(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d (body: %s)", rec.Code, rec.Body.String())
+	}
+
+	// The manifest sidecar should carry the operator-configured
+	// default retention. Reading the sidecar is the most direct way
+	// to assert what was recorded — peer tracker / manifest store
+	// both consume the same string.
+	manifest, err := os.ReadFile(seedDir + "/ret-test.swarm")
+	if err != nil {
+		t.Fatalf("read manifest sidecar: %v", err)
+	}
+	if !strings.Contains(string(manifest), `"retention":"30d"`) {
+		t.Errorf("manifest sidecar should contain the configured default retention 30d, got: %s", manifest)
 	}
 }
 

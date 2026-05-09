@@ -46,10 +46,21 @@ use super::crypt;
 use super::resurrects;
 use super::tombstones;
 
-/// Size cap on auto-encrypt. Matches `server::MAX_PUSH_BYTES` so the
-/// "can encrypt" and "can transmit" boundaries coincide — never burn
-/// CPU on an encrypt that the push handler would reject anyway.
+/// Compile-time fallback for the auto-encrypt size cap. Read sites
+/// should prefer [`max_auto_encrypt_bytes`] which consults the
+/// server-distributed runtime limits cache. Kept so existing imports
+/// referencing the symbol stay stable for non-hot test fixtures.
 pub const MAX_AUTO_ENCRYPT_BYTES: u64 = super::server::MAX_PUSH_BYTES as u64;
+
+/// Effective per-file auto-encrypt cap. Mirrors `server::max_push_bytes`
+/// so the "can encrypt" and "can transmit" boundaries coincide — no CPU
+/// burnt on an encrypt that the push handler would reject anyway.
+/// Sourced from `server.yaml swarm.cryptsync.max_file_bytes` via the
+/// runtime-limits cache; falls back to the compile-time default when
+/// unset.
+pub fn max_auto_encrypt_bytes() -> u64 {
+    super::server::max_push_bytes() as u64
+}
 
 /// Suffix appended (with a unix timestamp) when a file fails
 /// unrecoverably. Filtered out by the watcher so it never re-enters
@@ -131,7 +142,7 @@ pub fn encrypt_in_place(
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
         let retention_remaining_secs =
-            tombstones::DEFAULT_RETENTION_SECS - (now_secs - t.deletion_time);
+            tombstones::effective_retention_secs() - (now_secs - t.deletion_time);
         let days_remaining = (retention_remaining_secs / (24 * 60 * 60)).max(0);
         return Err(AutoEncryptError::Terminal(format!(
             "filename `{}` is tombstoned ({}d remaining in retention); \
@@ -151,10 +162,11 @@ pub fn encrypt_in_place(
         )));
     }
     let size = meta.len();
-    if size > MAX_AUTO_ENCRYPT_BYTES {
+    let cap = max_auto_encrypt_bytes();
+    if size > cap {
         return Err(AutoEncryptError::Terminal(format!(
             "size={} exceeds {} push cap",
-            size, MAX_AUTO_ENCRYPT_BYTES
+            size, cap
         )));
     }
 

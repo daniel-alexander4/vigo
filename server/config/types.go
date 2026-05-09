@@ -134,9 +134,10 @@ type SwarmSection struct {
 	MaxBandwidthPercent int                   `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
 	ManifestLivenessTTL string                `yaml:"manifest_liveness_ttl" doc:"Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Guards against orphaned entries when a publisher disappears. Empty / zero disables the sweep." default:"24h" example:"24h, 12h, 0 (disable)"`
 	Payload             SwarmPayloadSection   `yaml:"payload" doc:"Payload (admin-pushed fleet file distribution) authorization." long:"Hostname pattern list controlling which envoys receive admin-pushed payloads. Distribution requests are refused at the API layer when the list is empty."`
-	Filesync            SwarmFilesyncSection  `yaml:"filesync" doc:"Filesync (LAN plaintext directory mirror) authorization." long:"Hostname pattern list controlling which envoys run the filesync daemon. Per-user opt-in still requires the user creating ~/filesync/."`
-	Puddle              SwarmPuddleSection    `yaml:"puddle" doc:"Puddle (per-user identity) authorization. Cryptsync derives from this — there is no separate cryptsync section." long:"Hostname pattern list controlling which envoys can host puddle identity material. Cryptsync's authorization derives from this list — a host allowed here can hold cryptsync ciphertext for its locally-enrolled puddle members; a host denied here cannot use cryptsync at all."`
-	Gitmirror           SwarmGitmirrorSection `yaml:"gitmirror" doc:"Gitmirror (git-over-swarm) authorization." long:"Hostname pattern list controlling which envoys participate in gitmirror — both as publishers and as bundle holders."`
+	Filesync            SwarmFilesyncSection  `yaml:"filesync" doc:"Filesync (LAN plaintext directory mirror) authorization + per-file size cap." long:"Hostname pattern list controlling which envoys run the filesync daemon. Per-user opt-in still requires the user creating ~/filesync/. Plus a per-file size cap on LAN sync."`
+	Puddle              SwarmPuddleSection    `yaml:"puddle" doc:"Puddle (per-user identity) authorization. Cryptsync derives ITS AUTHORIZATION from this section per ADR-020 — only operational tuning lives in cryptsync below." long:"Hostname pattern list controlling which envoys can host puddle identity material. Cryptsync's authorization (allow/deny) follows this list — a host allowed here can hold cryptsync ciphertext for its locally-enrolled puddle members; a host denied here cannot use cryptsync at all."`
+	Cryptsync           SwarmCryptsyncSection `yaml:"cryptsync" doc:"Cryptsync operational tuning (size + envelope retention). Authorization derives from puddle above; this section is size/retention only." long:"Per-file ciphertext size cap and envelope (LEAVE/RESURRECT/TOMBSTONE) retention window. Authorization gating still derives from swarm.puddle.enabled per ADR-020 — there is no enabled field here."`
+	Gitmirror           SwarmGitmirrorSection `yaml:"gitmirror" doc:"Gitmirror (git-over-swarm) authorization + bundle size + envelope retention." long:"Hostname pattern list controlling which envoys participate in gitmirror — both as publishers and as bundle holders. Plus per-bundle fan-out size cap and revoke/leave envelope retention."`
 }
 
 // SwarmPuddleSection authorizes the puddle (per-user identity) subsystem
@@ -148,24 +149,47 @@ type SwarmPuddleSection struct {
 	Enabled []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run puddle. Cryptsync follows the same gate." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
 }
 
-// SwarmGitmirrorSection authorizes the gitmirror subsystem per envoy.
+// SwarmGitmirrorSection authorizes the gitmirror subsystem per envoy
+// and tunes its operational caps. `Enabled` gates which envoys
+// participate; `MaxBundleBytes` caps per-fanout bundle size on the
+// receiver; `EnvelopeRetention` controls the retention window for
+// revoke/leave gossip envelopes before they are reaped.
 type SwarmGitmirrorSection struct {
-	Enabled []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run gitmirror — publisher and receiver." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
+	Enabled           []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run gitmirror — publisher and receiver." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
+	MaxBundleBytes    int64    `yaml:"max_bundle_bytes" doc:"Per-bundle size cap for gitmirror fan-out. 0 = no cap." default:"1073741824" example:"1073741824 (1 GiB), 5368709120 (5 GiB), 0 (uncapped)"`
+	EnvelopeRetention string   `yaml:"envelope_retention" doc:"Retention window for revoke/leave gossip envelopes before they are reaped. Empty = compile-time default (90d)." default:"90d" example:"90d, 30d, 365d"`
 }
 
-// SwarmFilesyncSection authorizes the filesync subsystem per envoy.
-// Per-user opt-in is still gated by the user creating ~/filesync/ —
-// this list only controls whether the envoy's filesync daemon runs
-// at all.
+// SwarmFilesyncSection authorizes the filesync subsystem per envoy
+// and caps per-file LAN sync size. Per-user opt-in is still gated by
+// the user creating ~/filesync/ — this list only controls whether
+// the envoy's filesync daemon runs at all.
 type SwarmFilesyncSection struct {
-	Enabled []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run filesync. Per-user participation still requires the user creating ~/filesync/." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"]"`
+	Enabled      []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run filesync. Per-user participation still requires the user creating ~/filesync/." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"]"`
+	MaxFileBytes int64    `yaml:"max_file_bytes" doc:"Per-file size cap on LAN filesync. 0 = no cap." default:"1073741824" example:"1073741824 (1 GiB), 0 (uncapped)"`
 }
 
 // SwarmPayloadSection authorizes the payload (admin-pushed fleet file
-// distribution) subsystem per envoy. The admin distribute endpoint
-// refuses when the list is empty (no envoy could possibly receive).
+// distribution) subsystem per envoy and caps admin-side distribute
+// behavior. The admin distribute endpoint refuses when the `Enabled`
+// list is empty (no envoy could possibly receive); `MaxSizeBytes`
+// caps individual blob size at the API entry; `DefaultRetention` is
+// used when `vigocli swarm payload distribute` omits `--retention`.
 type SwarmPayloadSection struct {
-	Enabled []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to receive admin-pushed payloads." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"]"`
+	Enabled          []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to receive admin-pushed payloads." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"]"`
+	MaxSizeBytes     int64    `yaml:"max_size_bytes" doc:"Per-distribute blob size cap, enforced at the admin API. 0 = no cap." default:"0" example:"5368709120 (5 GiB), 0 (uncapped)"`
+	DefaultRetention string   `yaml:"default_retention" doc:"Default retention applied when 'vigocli swarm payload distribute' omits --retention. Empty = compile-time default (7d)." default:"7d" example:"7d, 30d, 24h"`
+}
+
+// SwarmCryptsyncSection tunes cryptsync operational caps. Authorization
+// is NOT specified here — cryptsync derives its enable/deny gate from
+// `SwarmPuddleSection` per ADR-020 (cryptsync is bound to puddle
+// membership). This section exists so admins can cap per-file
+// ciphertext size and envelope retention without re-routing the
+// authorization model.
+type SwarmCryptsyncSection struct {
+	MaxFileBytes      int64  `yaml:"max_file_bytes" doc:"Per-file cap on cryptsync ciphertext (auto-encrypt + push). 0 = no cap. Authorization derives from puddle.enabled per ADR-020." default:"1073741824" example:"1073741824 (1 GiB), 0 (uncapped)"`
+	EnvelopeRetention string `yaml:"envelope_retention" doc:"Retention window for LEAVE/RESURRECT/TOMBSTONE envelopes before they are reaped. Empty = compile-time default (90d)." default:"90d" example:"90d, 30d, 365d"`
 }
 
 // ScrierSection configures the Scrier remote access feature.

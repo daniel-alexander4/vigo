@@ -45,8 +45,20 @@ use super::tombstones::{
     self, effective_tombstone, DeleteEnvelope, Tombstone, TombstoneTable,
 };
 
-/// Max size of a single pushed ciphertext blob.
+/// Compile-time fallback for the max push size. Read sites should
+/// prefer [`max_push_bytes`] which consults the server-distributed
+/// runtime limits cache (`swarm.cryptsync.max_file_bytes` in
+/// server.yaml). The constant is kept so other modules that pin
+/// against it (auto-encrypt, doc cross-refs) keep a stable name.
 pub const MAX_PUSH_BYTES: usize = 1024 * 1024 * 1024; // 1 GiB
+
+/// Effective per-push ciphertext cap. Reads from the runtime-limits
+/// cache populated on every CheckIn from `server.yaml swarm.cryptsync.
+/// max_file_bytes`; falls back to `MAX_PUSH_BYTES` when the server
+/// hasn't published a value yet.
+pub fn max_push_bytes() -> usize {
+    super::super::runtime_limits::cryptsync_max_file_bytes() as usize
+}
 
 /// Max size of an announcement body.
 pub const MAX_ANNOUNCE_BYTES: usize = 128 * 1024;
@@ -121,7 +133,7 @@ pub fn handle_pull(path: &str) -> Response<Full<Bytes>> {
     if !meta.is_file() {
         return not_found();
     }
-    if meta.len() as usize > MAX_PUSH_BYTES {
+    if meta.len() as usize > max_push_bytes() {
         return payload_too_large();
     }
     match fs::read(&canon_target) {
@@ -183,7 +195,7 @@ pub async fn handle_push(
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse::<usize>().ok())
     {
-        if cl > MAX_PUSH_BYTES {
+        if cl > max_push_bytes() {
             return payload_too_large();
         }
     }
@@ -195,7 +207,7 @@ pub async fn handle_push(
         Err(_) => return bad_request("read body"),
     };
     let bytes = collected.to_bytes();
-    if bytes.len() > MAX_PUSH_BYTES {
+    if bytes.len() > max_push_bytes() {
         return payload_too_large();
     }
 

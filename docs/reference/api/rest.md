@@ -1577,6 +1577,7 @@ Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `
 | GET | `/api/v1/agent/download/{os}/{arch}` | Agent binary download |
 | GET | `/api/v1/agent/signing-key` | ED25519 signing public key (hex) |
 | POST | `/api/v1/bootstrap/register` | Agent enrollment with CSR signing |
+| GET | `/api/v1/fleet/pubkeys` | Hostname → Ed25519 pubkey map for the (non-revoked) fleet. Used by agents to bootstrap their gitmirror peer-pubkey TOFU cache. Pubkeys are public-by-construction (broadcast on multicast); endpoint is unauthenticated. |
 
 ---
 

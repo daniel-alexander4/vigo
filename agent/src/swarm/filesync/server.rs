@@ -18,7 +18,7 @@ use hyper::{Response, StatusCode};
 use std::fs;
 
 use super::applier::valid_filename;
-use super::scanner::MAX_FILE_SIZE;
+use super::scanner::effective_max_file_size;
 use super::state::UserState;
 use crate::platform::paths::default_filesync_dir;
 use crate::platform::users::user_home;
@@ -85,7 +85,7 @@ pub fn handle(path: &str) -> Response<Full<Bytes>> {
     if !meta.is_file() {
         return not_found();
     }
-    if meta.len() > MAX_FILE_SIZE {
+    if meta.len() > effective_max_file_size() {
         return Response::builder()
             .status(StatusCode::PAYLOAD_TOO_LARGE)
             .body(Full::new(Bytes::from("file exceeds filesync size limit")))

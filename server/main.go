@@ -1152,6 +1152,14 @@ func run() error {
 		usersHandler.RegisterRoutes(gwMux)
 		tokensHandler.RegisterRoutes(gwMux)
 		scrierAPIHandler.RegisterRoutes(gwMux)
+		// Fleet pubkey distribution. Lives outside the swarm-enabled
+		// gate so agents can bootstrap their gitmirror peer-pubkey
+		// TOFU cache regardless of whether THIS server has the swarm
+		// substrate enabled — the endpoint just reads FleetIndex,
+		// which is always populated. Without this hoist, agents on
+		// swarm-disabled servers would get 404s every 15 minutes
+		// from their bootstrap loop.
+		api.NewFleetPubkeysHandler(fleetIndex).RegisterRoutes(gwMux)
 
 		// Swarm: peer-to-peer content distribution. The substrate runs on
 		// this server iff the server-as-envoy hostname matches the swarm

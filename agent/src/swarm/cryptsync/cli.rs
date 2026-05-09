@@ -991,7 +991,7 @@ fn cmd_encrypt(args: &[String]) -> Result<()> {
     {
         let now = now_secs();
         let retention_remaining_secs =
-            tombstones::DEFAULT_RETENTION_SECS - (now - t.deletion_time);
+            tombstones::effective_retention_secs() - (now - t.deletion_time);
         let days_remaining = (retention_remaining_secs / (24 * 60 * 60)).max(0);
         tracing::warn!(
             user = %username,
@@ -1436,7 +1436,7 @@ fn cmd_list(args: &[String]) -> Result<()> {
             continue;
         }
         let retention_remaining_secs =
-            tombstones::DEFAULT_RETENTION_SECS - (now - t.deletion_time);
+            tombstones::effective_retention_secs() - (now - t.deletion_time);
         let days_left = (retention_remaining_secs / (24 * 60 * 60)).max(0);
         let status = RowStatus::Tombstoned { days_left };
         rows.push(ListRow {

@@ -58,6 +58,7 @@ pub mod helper;
 pub mod peer_pubkey_cache;
 pub mod peer_table;
 pub mod pending_claims;
+pub mod pubkey_bootstrap;
 pub mod project_peers;
 pub mod project_state;
 pub mod receiver;
@@ -199,7 +200,7 @@ async fn run_reap_reactor(cancel: CancellationToken) {
             _ = tick.tick() => {
                 let base = crate::platform::paths::default_gitmirror_dir();
                 let now = unix_seconds_now();
-                match envelopes::reap_all(&base, now, envelopes::DEFAULT_RETENTION_SECS) {
+                match envelopes::reap_all(&base, now, envelopes::effective_retention_secs()) {
                     Ok(0) => {}
                     Ok(n) => tracing::info!(reaped = n, "gitmirror: reaped expired envelopes"),
                     Err(e) => tracing::warn!(error = %e, "gitmirror reap reactor: error"),

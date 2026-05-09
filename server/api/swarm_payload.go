@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -168,7 +169,26 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 		target = "*"
 	}
 	if retention == "" {
-		retention = "7d"
+		// Per swarm.payload.default_retention if set, else compile-time default.
+		h.swarmCfgMu.RLock()
+		retention = h.swarmCfg.Payload.DefaultRetention
+		h.swarmCfgMu.RUnlock()
+		if retention == "" {
+			retention = "7d"
+		}
+	}
+
+	// Per-distribute size cap (swarm.payload.max_size_bytes). Fast-path
+	// reject via Content-Length when set; the streaming copy below also
+	// checks against the cap as it writes so a chunked upload that lies
+	// in Content-Length still fails closed at the cap.
+	h.swarmCfgMu.RLock()
+	maxSize := h.swarmCfg.Payload.MaxSizeBytes
+	h.swarmCfgMu.RUnlock()
+	if maxSize > 0 && r.ContentLength > maxSize {
+		writeError(w, http.StatusRequestEntityTooLarge,
+			fmt.Sprintf("payload size %d exceeds swarm.payload.max_size_bytes (%d)", r.ContentLength, maxSize))
+		return
 	}
 
 	// Sanitize label — no path separators allowed.
@@ -201,9 +221,23 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 	hasher := sha256.New()
 	mw := io.MultiWriter(tmp, hasher)
 	buf := make([]byte, 4<<20) // 4 MiB buffer — reduces syscalls for multi-GiB uploads
-	size, err := io.CopyBuffer(mw, r.Body, buf)
+	// If a per-distribute cap is set, wrap r.Body in an io.LimitReader
+	// so a chunked upload (Content-Length unset / 0) that runs past the
+	// cap fails closed instead of consuming arbitrary disk + bandwidth.
+	bodyReader := r.Body
+	if maxSize > 0 {
+		bodyReader = http.MaxBytesReader(w, bodyReader, maxSize)
+	}
+	size, err := io.CopyBuffer(mw, bodyReader, buf)
 	if err != nil {
 		os.Remove(manifestPath)
+		// http.MaxBytesError is what MaxBytesReader returns on overflow.
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			writeError(w, http.StatusRequestEntityTooLarge,
+				fmt.Sprintf("payload exceeded swarm.payload.max_size_bytes (%d)", maxSize))
+			return
+		}
 		writeError(w, http.StatusInternalServerError, "writing file: "+err.Error())
 		return
 	}

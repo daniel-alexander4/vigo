@@ -39,7 +39,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use super::auto_encrypt::{
-    self, AutoEncryptError, MAX_AUTO_ENCRYPT_BYTES, RETRY_BACKOFFS,
+    self, max_auto_encrypt_bytes, AutoEncryptError, RETRY_BACKOFFS,
 };
 use super::config;
 use super::crypt;
@@ -379,7 +379,8 @@ fn handle_plaintext_event(
 
     // 1. Over-cap WARN takes precedence — the file can't be encrypted
     //    or transmitted regardless of session state.
-    if size > MAX_AUTO_ENCRYPT_BYTES {
+    let cap = max_auto_encrypt_bytes();
+    if size > cap {
         warn_once(
             plaintext_warns,
             user,
@@ -387,7 +388,7 @@ fn handle_plaintext_event(
             mtime,
             format!(
                 "cryptsync watcher: {}/{} size={} exceeds {} push cap; not auto-encrypting",
-                user, filename, size, MAX_AUTO_ENCRYPT_BYTES
+                user, filename, size, cap
             ),
         );
         return;

@@ -507,7 +507,7 @@ fn gc_tombstones_all() {
     for user in enrolled {
         let mut dropped: usize = 0;
         if let Err(e) = TombstoneTable::modify(&user, |table| {
-            dropped = table.gc(now, tombstones::DEFAULT_RETENTION_SECS);
+            dropped = table.gc(now, tombstones::effective_retention_secs());
             dropped > 0
         }) {
             warn!(
@@ -541,7 +541,7 @@ fn gc_resurrects_all() {
     for user in enrolled {
         let mut dropped: usize = 0;
         if let Err(e) = resurrects::ResurrectsTable::modify(&user, |table| {
-            dropped = table.gc(now, tombstones::DEFAULT_RETENTION_SECS);
+            dropped = table.gc(now, tombstones::effective_retention_secs());
             dropped > 0
         }) {
             warn!(

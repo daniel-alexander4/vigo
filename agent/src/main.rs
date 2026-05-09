@@ -1175,6 +1175,20 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         None
     };
 
+    // Bootstrap the gitmirror peer-pubkey cache from the server. Closes
+    // the TOFU first-contact race by pre-populating with authoritative
+    // pubkeys before any GITMIRROR multicast is processed. One-shot at
+    // startup + 15-min refresh; failures fall back to TOFU. Skipped if
+    // we don't have mTLS certs yet (pre-enrollment).
+    if let Some(ref tls) = swarm_tls {
+        vigo::swarm::gitmirror::pubkey_bootstrap::spawn(
+            gitmirror_pubkey_cache.clone(),
+            cli.api_addr.clone(),
+            tls.clone(),
+            cancel.clone(),
+        );
+    }
+
     if let Some(ref tls) = swarm_tls {
         match swarm::server::build_tls_acceptor(&tls.ca_cert, &tls.client_cert, &tls.client_key) {
             Ok(tls_acceptor) => {
