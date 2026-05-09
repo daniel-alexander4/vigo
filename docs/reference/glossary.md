@@ -41,7 +41,7 @@ The drift axis of convergence (above). Computed by `convergence.ComputeDrift` ov
 
 ## envoy
 
-A managed node running the `vigo` Rust agent. Each envoy enrolls once, receives a client UUID, and checks in periodically to pull desired state and report results. The central server addresses individual envoys by UUID; operators reference them by hostname.
+A managed node running the `vigo` Rust agent. Each envoy enrolls once, receives a client UUID, and checks in periodically to pull desired state and report results. The central server addresses individual envoys by UUID; operators reference them by hostname. The retire/replace/dispose path uses three different verbs (revoke, puddle evict, delete) with deliberately different scopes — see the [Envoy Lifecycle](../operations/envoy-lifecycle.md) reference.
 
 ## executor
 

@@ -191,6 +191,18 @@ func (f *FleetIndex) GetEnvoy(id string) *EnvoyState {
 	return &cp
 }
 
+// IsActive returns true when the envoy ID exists and is not revoked. Both
+// the deleted case (no row in the index) and the revoked case (row present,
+// Revoked flag set) report as inactive. Used by swarm aggregators that need
+// to drop revoked / deleted envoys from operator-facing surfaces — see
+// `server/swarm/tracker.go::SetActiveChecker` for the canonical consumer.
+func (f *FleetIndex) IsActive(id string) bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	src := f.envoys[id]
+	return src != nil && !src.Revoked
+}
+
 // GetEnvoyLite returns a shallow copy of the EnvoyState without deep-copying
 // Traits or PendingRotatedSecrets. It also returns existence and revoked status,
 // collapsing IsRevoked + GetEnvoy into one lock acquisition. The caller must

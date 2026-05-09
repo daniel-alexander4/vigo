@@ -99,6 +99,17 @@ type PeerTracker struct {
 
 	// staleThreshold is how long before a peer entry expires.
 	staleThreshold time.Duration
+
+	// activeChecker, when non-nil, gates which envoy IDs surface in the
+	// operator-facing aggregations (Status, StatusSummary). Envoys for
+	// which it returns false are skipped — covers both revoked envoys
+	// (still in DB but flagged) and deleted envoys (no longer in the
+	// fleet index). Wired up at server startup via SetActiveChecker;
+	// nil during tests so existing fixtures don't have to plumb the
+	// dependency. The in-memory `peers[sha256][envoyID]` map entries
+	// themselves are not pruned — that's a separate retention question
+	// (see pending Revoke/Delete/Purge entry).
+	activeChecker func(envoyID string) bool
 }
 
 // NewPeerTracker creates a peer tracker. staleThreshold is typically 2× the
@@ -111,6 +122,26 @@ func NewPeerTracker(staleThreshold time.Duration) *PeerTracker {
 		brokenSeeds:    make(map[string][]BrokenSeed),
 		staleThreshold: staleThreshold,
 	}
+}
+
+// SetActiveChecker installs the predicate consulted by Status and
+// StatusSummary to drop revoked / deleted envoys from the result. Pass nil
+// to disable filtering (tests). Safe to call after construction.
+func (t *PeerTracker) SetActiveChecker(fn func(envoyID string) bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.activeChecker = fn
+}
+
+// envoyActive returns true when the activeChecker is unset (no filtering)
+// or when the checker reports the envoy as active. Caller must hold the
+// tracker lock (read or write) — the checker itself does its own locking
+// against FleetIndex, but we read t.activeChecker under our lock.
+func (t *PeerTracker) envoyActive(envoyID string) bool {
+	if t.activeChecker == nil {
+		return true
+	}
+	return t.activeChecker(envoyID)
 }
 
 // ReportChunks updates the tracker with an envoy's blob availability.
@@ -232,6 +263,14 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 	// Envoys that have reported chunks.
 	if blobPeers := t.peers[sha256]; blobPeers != nil {
 		for envoyID, ps := range blobPeers {
+			// Skip revoked / deleted envoys at the fleet level — match
+			// cryptsyncmesh/filesyncmesh/gitmirrormesh, which all filter
+			// `if e.Revoked { continue }` at their build sites. The
+			// tracker's in-memory peers map can keep the entry; the
+			// filter just hides it from operator-facing surfaces.
+			if !t.envoyActive(envoyID) {
+				continue
+			}
 			seen[envoyID] = true
 			st := "downloading"
 			have := len(ps.Chunks)
@@ -291,7 +330,7 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 	// dropping it into the API handler's pending fan-out. Only done
 	// for active seeds — on revoked seeds we don't invent state the
 	// tracker hasn't observed.
-	if seederID != "" && !seedRevoked && !seen[seederID] {
+	if seederID != "" && !seedRevoked && !seen[seederID] && t.envoyActive(seederID) {
 		seen[seederID] = true
 		result = append(result, EnvoySwarmStatus{
 			Hostname:   seederID,
@@ -308,6 +347,9 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 		if blobSkipped := t.skipped[sha256]; blobSkipped != nil {
 			for envoyID, reason := range blobSkipped {
 				if seen[envoyID] {
+					continue
+				}
+				if !t.envoyActive(envoyID) {
 					continue
 				}
 				seen[envoyID] = true
@@ -559,6 +601,9 @@ func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pendi
 	seen := make(map[string]bool)
 	if blobPeers := t.peers[sha256]; blobPeers != nil {
 		for envoyID, ps := range blobPeers {
+			if !t.envoyActive(envoyID) {
+				continue
+			}
 			seen[envoyID] = true
 			switch {
 			case seederID != "" && envoyID == seederID:
@@ -575,13 +620,13 @@ func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pendi
 	// Seeder hasn't reported chunks (the common case — a seeder never
 	// downloads its own blob). Count it anyway so the total reflects
 	// reality.
-	if seederID != "" && !seen[seederID] {
+	if seederID != "" && !seen[seederID] && t.envoyActive(seederID) {
 		seen[seederID] = true
 		source++
 	}
 	if blobSkipped := t.skipped[sha256]; blobSkipped != nil {
 		for envoyID := range blobSkipped {
-			if !seen[envoyID] {
+			if !seen[envoyID] && t.envoyActive(envoyID) {
 				seen[envoyID] = true
 				skipped++
 			}

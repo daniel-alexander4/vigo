@@ -1171,6 +1171,7 @@ func run() error {
 				staleThreshold = 60 * time.Second
 			}
 			peerTracker := swarm.NewPeerTracker(staleThreshold)
+			peerTracker.SetActiveChecker(fleetIndex.IsActive)
 			// Manifest persistence sits next to seed/, so a server
 			// restart preserves intent (revocations + the active set
 			// agents are allowed to refresh via gossip). Without

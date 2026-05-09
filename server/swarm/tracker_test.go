@@ -429,3 +429,68 @@ func TestPeerTracker_MarkEvictedNoOpForUnknownEnvoy(t *testing.T) {
 		t.Errorf("expected 0 statuses (nothing reported, nothing to mark), got %d: %v", len(statuses), statuses)
 	}
 }
+
+// TestPeerTracker_StatusFiltersInactiveEnvoys checks the SetActiveChecker
+// filter that brings the payload tracker to parity with the cryptsync /
+// filesync / gitmirror mesh aggregators. Without the filter, revoked or
+// deleted envoys keep showing up on `/swarm/payload` blob-detail until
+// process restart.
+func TestPeerTracker_StatusFiltersInactiveEnvoys(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha := "fff" + pad(61)
+
+	pt.RegisterSeed(sha, SeedState{Label: "app.bin", SeederID: "envoy-active"})
+	pt.ReportComplete("envoy-active", sha, "10.0.1.1:1531")
+	pt.ReportComplete("envoy-revoked", sha, "10.0.1.2:1531")
+	pt.ReportSkipped("envoy-deleted", sha, "trait-mismatch")
+
+	// No checker installed → tracker returns everything (existing behavior).
+	all := pt.Status(sha, 10, "envoy-active")
+	if len(all) != 3 {
+		t.Fatalf("with nil checker, expected 3 statuses, got %d: %+v", len(all), all)
+	}
+
+	// Install a checker that rejects the revoked + deleted envoys.
+	pt.SetActiveChecker(func(id string) bool { return id == "envoy-active" })
+	filtered := pt.Status(sha, 10, "envoy-active")
+	if len(filtered) != 1 {
+		t.Fatalf("with checker, expected 1 status, got %d: %+v", len(filtered), filtered)
+	}
+	if filtered[0].Hostname != "envoy-active" {
+		t.Errorf("expected envoy-active to survive filter, got %q", filtered[0].Hostname)
+	}
+
+	// StatusSummary respects the same filter.
+	c, d, _, sk, src, _, total := pt.StatusSummary(sha)
+	if src != 1 || c != 0 || d != 0 || sk != 0 || total != 0 {
+		t.Errorf("summary post-filter: source=%d complete=%d downloading=%d skipped=%d total=%d, want only the 1 source",
+			src, c, d, sk, total)
+	}
+}
+
+// TestPeerTracker_StatusSynthesizedSeederFiltered guards the seeder
+// synthesis path at line ~294 of tracker.go: when the seeder has not
+// reported chunks itself (the common case) and the seeder envoy is now
+// inactive, the synthesized "source" row must also be dropped. Without
+// this, a revoked seeder still renders on the blob-detail page.
+func TestPeerTracker_StatusSynthesizedSeederFiltered(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha := "f0f" + pad(61)
+
+	pt.RegisterSeed(sha, SeedState{Label: "app.bin", SeederID: "envoy-seeder"})
+	// Seeder never reports chunks (typical — it has the blob locally
+	// and doesn't download from anyone).
+	pt.ReportComplete("envoy-receiver", sha, "10.0.1.2:1531")
+
+	// Active checker rejects the seeder; receiver remains.
+	pt.SetActiveChecker(func(id string) bool { return id != "envoy-seeder" })
+	statuses := pt.Status(sha, 10, "envoy-seeder")
+	for _, s := range statuses {
+		if s.Hostname == "envoy-seeder" {
+			t.Errorf("inactive seeder leaked through synthesis: %+v", s)
+		}
+	}
+	if len(statuses) != 1 || statuses[0].Hostname != "envoy-receiver" {
+		t.Errorf("expected exactly receiver, got %+v", statuses)
+	}
+}
