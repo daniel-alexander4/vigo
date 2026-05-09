@@ -70,4 +70,27 @@
             card.style.display = (sev === 'all' || card.getAttribute('data-sev') === sev) ? '' : 'none';
         });
     });
+
+    // Active-tab indicator. The pane visibility itself is CSS-only via
+    // :target; this just paints the matching <a class="sec-tab"> with
+    // .sec-tab--active so the highlight tracks the visible pane. Falls
+    // back to the first tab when no fragment is set, mirroring the CSS
+    // first-of-type default. Runs on hashchange and after every HTMX
+    // swap into #sec-drawer-content (which is when the tab strip
+    // appears or re-renders).
+    function updateActiveTab() {
+        var tabs = document.querySelectorAll('.sec-drawer__tabs .sec-tab');
+        if (!tabs.length) return;
+        var hash = window.location.hash;
+        var match = null;
+        tabs.forEach(function (t) {
+            if (hash && t.getAttribute('href') === hash) match = t;
+        });
+        if (!match) match = tabs[0];
+        tabs.forEach(function (t) { t.classList.toggle('sec-tab--active', t === match); });
+    }
+    window.addEventListener('hashchange', updateActiveTab);
+    document.body.addEventListener('htmx:afterSwap', function (e) {
+        if (e.target && e.target.id === 'sec-drawer-content') updateActiveTab();
+    });
 })();

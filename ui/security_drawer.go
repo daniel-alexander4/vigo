@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -584,9 +585,137 @@ func lynisControlURL(id string) string {
 	return "https://cisofy.com/lynis/controls/" + id + "/"
 }
 
-// securityAIQuestion crafts an AI-drawer question matching the phrasing used
-// by the previous client-side `aiBtn()` helper, so existing muscle memory
-// (and the AI provider's prompt-context signals) doesn't drift.
+// securityAIQuestion builds the structured finding line consumed by the
+// AI assistant. Format: `<host> · <finding>`. The system prompt at
+// server/ai/prompt.go has a "Finding Investigations" section that recognizes
+// this `<host> · <kind>` shape and replies with Risk / Remediation / Waiver /
+// Investigate sections — so the per-button prompts stay terse and the
+// response shape lives in one place.
 func securityAIQuestion(host, finding string) string {
-	return fmt.Sprintf("On host %s: %s", host, finding)
+	return fmt.Sprintf("%s · %s", host, finding)
+}
+
+// ── Per-section AI-question helpers ─────────────────────────────────────────
+// Each emits a single structured line: `<host> · <kind>[severity]: <details>`.
+// The system prompt does the heavy lifting on the response shape.
+
+func trivyAIQuestion(host string, v TrivyVuln) string {
+	pkg := v.Package
+	if v.Installed != "" {
+		pkg += " " + v.Installed
+		if v.Fixed != "" {
+			pkg += "→" + v.Fixed
+		}
+	}
+	s := fmt.Sprintf("%s · trivy %s (%s): %s", host, v.CVEID, v.Severity, pkg)
+	if v.Title != "" {
+		s += " — " + v.Title
+	}
+	return s
+}
+
+func debsecanAIQuestion(host string, v DebsecanVuln) string {
+	return fmt.Sprintf("%s · debsecan %s (%s): %s", host, v.CVEID, v.Urgency, v.Package)
+}
+
+func lynisWarningAIQuestion(host string, e LynisEntry) string {
+	return fmt.Sprintf("%s · lynis-warn %s: %s", host, e.ID, e.Text)
+}
+
+func lynisSuggestionAIQuestion(host string, e LynisEntry) string {
+	return fmt.Sprintf("%s · lynis-sug %s: %s", host, e.ID, e.Text)
+}
+
+func rkhunterAIQuestion(host, file string) string {
+	return fmt.Sprintf("%s · rkhunter: %s flagged", host, file)
+}
+
+func chkrootkitAIQuestion(host, check, files string) string {
+	if files != "" {
+		return fmt.Sprintf("%s · chkrootkit %s (suspect: %s)", host, check, files)
+	}
+	return fmt.Sprintf("%s · chkrootkit %s", host, check)
+}
+
+func clamavAIQuestion(host string, f ClamAVFinding) string {
+	return fmt.Sprintf("%s · clamav %s in %s", host, f.Signature, f.Path)
+}
+
+func aideAIQuestion(host, action, file string) string {
+	return fmt.Sprintf("%s · aide %s: %s", host, action, file)
+}
+
+func defenderAIQuestion(host string, threats int) string {
+	return fmt.Sprintf("%s · defender: %d threats", host, threats)
+}
+
+func scapAIQuestion(host string, d *SCAPDetail) string {
+	if d == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s · scap %q: %d fail (%d high)", host, d.Profile, d.Fail, d.HighFail)
+}
+
+// ddgLink builds a DuckDuckGo search URL for a free-text query — used by raw-
+// finding cards (rkhunter file, chkrootkit check, ClamAV signature, AIDE file)
+// so an operator can pivot from "is this suspicious?" to web context in one
+// click. Pre-0.30.9 affordance restored.
+func ddgLink(text string) string {
+	return "https://duckduckgo.com/?q=" + url.QueryEscape(text)
+}
+
+// SecSeverityBucket is one entry in a severity-filter bar — emitted only when
+// Count > 0 so the bar doesn't render empty buckets.
+type SecSeverityBucket struct {
+	Sev   string // "critical" / "high" / "medium" / "low" / "unassigned" — used as data-sev for the JS filter
+	Label string // capitalized form for the button label
+	Count int
+}
+
+// trivySevCounts groups vulnerabilities by Severity and returns ordered, non-
+// zero buckets (critical → high → medium → low → unassigned). Total is the
+// sum across buckets — used by the "All (N)" button.
+func trivySevCounts(vulns []TrivyVuln) []SecSeverityBucket {
+	counts := make(map[string]int)
+	for _, v := range vulns {
+		counts[normSev(v.Severity)]++
+	}
+	return rankBuckets(counts)
+}
+
+// debsecanUrgencyCounts is the debsecan analog — debsecan reports urgency
+// rather than severity, but the bucket vocabulary is the same.
+func debsecanUrgencyCounts(vulns []DebsecanVuln) []SecSeverityBucket {
+	counts := make(map[string]int)
+	for _, v := range vulns {
+		counts[normSev(v.Urgency)]++
+	}
+	return rankBuckets(counts)
+}
+
+func normSev(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	switch s {
+	case "critical", "high", "medium", "low":
+		return s
+	default:
+		return "unassigned"
+	}
+}
+
+func rankBuckets(counts map[string]int) []SecSeverityBucket {
+	order := []struct{ sev, label string }{
+		{"critical", "Critical"},
+		{"high", "High"},
+		{"medium", "Medium"},
+		{"low", "Low"},
+		{"unassigned", "Unassigned"},
+	}
+	out := make([]SecSeverityBucket, 0, len(order))
+	for _, o := range order {
+		if n := counts[o.sev]; n > 0 {
+			out = append(out, SecSeverityBucket{Sev: o.sev, Label: o.label, Count: n})
+		}
+	}
+	return out
 }

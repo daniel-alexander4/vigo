@@ -4405,7 +4405,7 @@ type AttackSurfaceData struct {
 
 // AttackFactor wraps a [risk.Factor] with a drill-down URL pointing at
 // the fleet-wide page that lists the supporting evidence for the factor
-// name (e.g. Critical CVEs → /security#sec-panel-critical). URL is
+// name (e.g. Critical CVEs → /security#sec-panel-high). URL is
 // empty for factor types with no canonical drill-down today (Offline,
 // Open Ports — the on-page Listening Ports table is the destination).
 type AttackFactor struct {
@@ -4507,7 +4507,7 @@ func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Requ
 		RiskLevel:      string(er.Level),
 		RiskURL:        "/risk?level=" + string(er.Level),
 		Factors:        attackFactorsWithLinks(er.Factors, idStr),
-		CVECriticalURL: "/security#sec-panel-critical",
+		CVECriticalURL: "/security#sec-panel-high",
 		CVEHighURL:     "/security#sec-panel-high",
 		// /security only surfaces dedicated panels for critical and
 		// high CVEs — medium/low aren't broken out, so we leave the
@@ -4594,7 +4594,7 @@ func attackFactorsWithLinks(factors []risk.Factor, envoyID string) []AttackFacto
 func factorDrillURL(name, envoyID string) string {
 	switch name {
 	case "Critical CVEs":
-		return "/security#sec-panel-critical"
+		return "/security#sec-panel-high"
 	case "High CVEs":
 		return "/security#sec-panel-high"
 	case "Medium CVEs":
@@ -4612,7 +4612,7 @@ func factorDrillURL(name, envoyID string) string {
 	case "Expiring Certificates":
 		return "/security/certs/" + envoyID
 	case "Running CVEs":
-		return "/security#sec-panel-critical"
+		return "/security#sec-panel-high"
 	case "Relapsed", "Diverged", "Convergence Failed":
 		return "/envoys/" + envoyID + "/trace"
 	}

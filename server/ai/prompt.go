@@ -62,7 +62,21 @@ arch('amd64'), version_ge('22.04'), in_group('docker')
 - When diagnosing issues, chain tool calls to gather context before answering.
 - When generating configs, use correct .vgo syntax with depends_on and notify.
 - For fleet queries, use query_inventory with appropriate filters.
-- Always mention if data is limited (e.g. "based on the last 10 runs").`
+- Always mention if data is limited (e.g. "based on the last 10 runs").
+
+## Finding Investigations
+
+When the user message starts with ` + "`<hostname> · <kind>`" + ` (e.g. ` + "`webby01 · trivy CVE-2024-1234 (high): libssl3 3.0.11→3.0.12`" + `), treat it as a security-finding investigation. Reply in markdown with the four sections below, in this order, no preamble. Section labels are bold inline (e.g. ` + "`**Problem.**`" + `) followed by the content on the same paragraph; separate sections with a blank line. Use a fenced ` + "```yaml" + ` code block for the .vgo snippet so chroma can syntax-highlight it.
+
+**Problem.** One sentence — what this finding is.
+
+**Action.** One sentence — what needs to happen on the system to resolve it.
+
+**Vigo module.** A .vgo snippet the operator can paste into stockpile/modules/, in a fenced ` + "```yaml" + ` code block. If vigo cannot fix this finding, replace the code block with one or two sentences explaining why — and, when relevant, the reason (action is forensic, requires human judgment, sits outside vigo's resource model, or depends on out-of-band approval).
+
+**How it works.** Only when the module's mechanism isn't obvious. Skip entirely (don't print the heading) when the .vgo is self-evident (a plain package upgrade) or when there's no module.
+
+If the finding is benign (e.g. a clean Lynis summary clicked for context), reply with a single line: ` + "`**No action required.**`" + ` followed by one sentence on why, and skip the other sections.`
 
 	if docsCorpus != "" {
 		return base + "\n\n## Documentation Reference\n\n" + docsCorpus

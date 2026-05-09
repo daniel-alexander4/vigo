@@ -139,6 +139,19 @@ CVEs are deduplicated at two levels:
 
 The Trivy and Debsecan detail views include a severity filter bar. Click a level (Critical, High, Medium, Low) to show only cards at that severity, or click **All** to reset. Counts per level are shown on each button.
 
+## Ask AI
+
+Every finding card in the per-host security drawer carries an **Ask AI** button. Click it to open the AI chat drawer pre-populated with a structured prompt of the form `<hostname> · <kind>: <details>` (e.g. `webby01 · trivy CVE-2024-1234 (high): libssl3 3.0.11→3.0.12 — Memory leak in TLS handshake`).
+
+The assistant replies in a fixed four-section format tailored to vigo:
+
+- **Problem.** One sentence summarizing what the finding is.
+- **Action.** One sentence on what needs to change on the host.
+- **Vigo module.** A pasteable `.vgo` snippet for `stockpile/modules/`. When vigo can't fix the finding (active malware, forensic-only investigations), this section explains why instead of providing a snippet.
+- **How it works.** Optional — only when the module's mechanism isn't obvious.
+
+Available on Trivy CVEs, Debsecan CVEs, Lynis warnings/suggestions, rkhunter warnings, chkrootkit infections, ClamAV findings, AIDE integrity changes, Windows Defender threats, and SCAP failures, plus the cached-summary cards (Lynis, Rootkit, ClamAV, AIDE) that show host-level scan state without per-finding detail.
+
 ## CVE Links
 
 The Compliance & Security dashboard links each CVE ID to the [National Vulnerability Database](https://nvd.nist.gov/):

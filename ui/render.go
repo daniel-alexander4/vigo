@@ -64,6 +64,19 @@ func funcMap() template.FuncMap {
 		"debianCVEURL":   debianCVEURL,
 		"lynisControlURL": lynisControlURL,
 		"secAIQuestion":  securityAIQuestion,
+		"trivyAIQ":       trivyAIQuestion,
+		"debsecanAIQ":    debsecanAIQuestion,
+		"lynisWarnAIQ":   lynisWarningAIQuestion,
+		"lynisSugAIQ":    lynisSuggestionAIQuestion,
+		"rkhunterAIQ":    rkhunterAIQuestion,
+		"chkrootkitAIQ":  chkrootkitAIQuestion,
+		"clamavAIQ":      clamavAIQuestion,
+		"aideAIQ":        aideAIQuestion,
+		"defenderAIQ":    defenderAIQuestion,
+		"scapAIQ":        scapAIQuestion,
+		"ddgLink":        ddgLink,
+		"trivySevCounts":      trivySevCounts,
+		"debsecanUrgencyCounts": debsecanUrgencyCounts,
 		"secSeverityClass": func(sev string) string {
 			switch cve.Classify(sev) {
 			case cve.SevCritical:

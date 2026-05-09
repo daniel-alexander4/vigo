@@ -2210,16 +2210,19 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     flex: 1; overflow-y: auto; padding: 16px;
     font-size: 13px;
 }
-/* CSS-only tab panes. The first pane renders by default; clicking a
-   tab :target-selects its matching pane. No JavaScript required. */
+/* CSS-only tab panes. Clicking a tab updates the URL fragment to
+   #sec-pane-X; that pane matches :target and renders. The first pane
+   serves as the default ONLY when no pane is targeted — :has() is
+   required because the original `:target ~ :first-of-type` override
+   could never match (~ is forward-only and :first-of-type has no
+   preceding same-type sibling). */
 .sec-tab-pane { display: none; }
-.sec-tab-pane:first-of-type { display: block; }
 .sec-tab-pane:target { display: block; }
-.sec-tab-pane:target ~ .sec-tab-pane:first-of-type { display: none; }
-.sec-drawer__tabs .sec-tab:target-within { color: var(--color-link); }
-/* Back-compat: the legacy .sec-tab-pane--active class still shows a pane
-   for any callers that set it imperatively. */
-.sec-tab-pane--active { display: block; }
+.sec-drawer__content:not(:has(.sec-tab-pane:target)) .sec-tab-pane:first-of-type {
+    display: block;
+}
+/* Active-tab indicator is set by security-drawer.js on hashchange and
+   after each HTMX swap into the drawer. */
 
 /* HTMX request spinner for the "Fetch Live Detail" button. The indicator
    element lives inside the drawer fragment; display:none by default,

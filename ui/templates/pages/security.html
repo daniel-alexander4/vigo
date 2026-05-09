@@ -106,33 +106,19 @@
                 </div>
             </div>
 
-            {{/* ── Critical CVEs panel ── */}}
-            <div class="sec-detail" id="sec-panel-critical">
-                <h4>Unique Critical CVEs by Host</h4>
-                <div class="security-drift-table-wrap">
-                    <table class="security-drift-table">
-                        <thead><tr><th>Host</th><th>Unique CVEs</th><th></th></tr></thead>
-                        <tbody>
-                            {{range .Security.PerHost}}{{if .UniqueCritical}}
-                            <tr>
-                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
-                                <td class="text-danger">{{.UniqueCritical}}</td>
-                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}">Scan Details</button></td>
-                            </tr>
-                            {{end}}{{end}}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {{/* ── High CVEs panel ── */}}
+            {{/* ── Unique CVEs by Host panel ──
+                 Single canonical "CVEs by host" panel. Targeted by the
+                 Unique CVEs stat-card click and by every cross-page
+                 drill-down URL (#sec-panel-high). Row guard ORs all four
+                 severities so the panel matches the stat-card's count —
+                 a host with only Medium/Low CVEs still appears here. */}}
             <div class="sec-detail" id="sec-panel-high">
                 <h4>Unique CVEs by Host</h4>
                 <div class="security-drift-table-wrap">
                     <table class="security-drift-table">
                         <thead><tr><th>Host</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th></th></tr></thead>
                         <tbody>
-                            {{range .Security.PerHost}}{{if or .UniqueCritical .UniqueHigh}}
+                            {{range .Security.PerHost}}{{if or .UniqueCritical .UniqueHigh .UniqueMedium .UniqueLow}}
                             <tr>
                                 <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="{{if .UniqueCritical}}text-danger{{else}}text-success{{end}}">{{.UniqueCritical}}</td>
@@ -366,6 +352,9 @@
             <span class="sec-card__sev">{{.Severity}}</span>
         </div>
         {{if gt .Packages 1}}<div class="sec-card__body"><span class="text-muted">({{.Packages}} packages)</span></div>{{end}}
+        <div class="sec-card__actions">
+            <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "trivy %s (%s)" .ID .Severity)}}">Ask AI</button>
+        </div>
     </div>
     {{end}}
     {{end}}
@@ -378,11 +367,16 @@
             <span class="sec-card__sev">Score: {{.Score}}/100</span>
         </div>
         <div class="sec-card__body">Warnings: {{.Warnings}} &middot; Suggestions: {{.Suggestions}}</div>
+        <div class="sec-card__actions">
+            <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "lynis-summary: %d/100, %d warnings, %d suggestions" .Score .Warnings .Suggestions)}}">Ask AI</button>
+        </div>
     </div>
     {{end}}
 
     {{with .Cached.Rootkit}}
     {{$clean := and .ChkrootkitClean .RkhunterClean}}
+    {{$ck := "clean"}}{{if not .ChkrootkitClean}}{{$ck = "warning"}}{{end}}
+    {{$rk := "clean"}}{{if not .RkhunterClean}}{{$rk = "warning"}}{{end}}
     <div class="sec-card {{if $clean}}sec-card--info{{else}}sec-card--critical{{end}}">
         <div class="sec-card__header">
             <span class="sec-card__cve">Rootkit Detection</span>
@@ -391,6 +385,9 @@
         <div class="sec-card__body">
             chkrootkit: {{if .ChkrootkitClean}}clean{{else}}<strong class="text-danger">infected</strong>{{end}} &middot;
             rkhunter: {{if .RkhunterClean}}clean{{else}}<strong class="text-danger">warning</strong>{{end}}
+        </div>
+        <div class="sec-card__actions">
+            <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "rootkit-summary: chkrootkit %s, rkhunter %s" $ck $rk)}}">Ask AI</button>
         </div>
     </div>
     {{end}}
@@ -402,6 +399,9 @@
             <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Infected{{end}}</span>
         </div>
         {{if not .Clean}}<div class="sec-card__body text-danger">{{.Infected}} infected file(s)</div>{{end}}
+        <div class="sec-card__actions">
+            <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "clamav-summary: %d infected" .Infected)}}">Ask AI</button>
+        </div>
     </div>
     {{end}}
 
@@ -412,6 +412,9 @@
             <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Changed{{end}}</span>
         </div>
         {{if not .Clean}}<div class="sec-card__body">Added: {{.Added}} &middot; Removed: {{.Removed}} &middot; Changed: {{.Changed}}</div>{{end}}
+        <div class="sec-card__actions">
+            <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "aide-summary: %d added, %d removed, %d changed" .Added .Removed .Changed)}}">Ask AI</button>
+        </div>
     </div>
     {{end}}
 </div>
@@ -433,15 +436,15 @@
 </nav>
 {{range .Sections}}
 <section class="sec-tab-pane" id="sec-pane-{{.Slug}}" role="tabpanel" aria-labelledby="sec-tab-{{.Slug}}">
-    {{if eq .Slug "trivy"}}{{template "sec-section-trivy" $.Detail.Trivy}}
-    {{else if eq .Slug "debsecan"}}{{template "sec-section-debsecan" $.Detail.Debsecan}}
-    {{else if eq .Slug "lynis"}}{{template "sec-section-lynis" $.Detail.Lynis}}
-    {{else if eq .Slug "rkhunter"}}{{template "sec-section-rkhunter" dict "Rows" $.RkhunterRows "LastScan" $.Detail.Rkhunter.LastScan}}
-    {{else if eq .Slug "chkrootkit"}}{{template "sec-section-chkrootkit" dict "Rows" $.ChkrootkitRows "LastScan" $.Detail.Chkrootkit.LastScan}}
-    {{else if eq .Slug "clamav"}}{{template "sec-section-clamav" $.Detail.ClamAV}}
-    {{else if eq .Slug "aide"}}{{template "sec-section-aide" $.Detail.AIDE}}
-    {{else if eq .Slug "defender"}}{{template "sec-section-defender" $.Detail.Defender}}
-    {{else if eq .Slug "scap"}}{{template "sec-section-scap" $.Detail.SCAP}}
+    {{if eq .Slug "trivy"}}{{template "sec-section-trivy" dict "Detail" $.Detail.Trivy "Hostname" $.Hostname}}
+    {{else if eq .Slug "debsecan"}}{{template "sec-section-debsecan" dict "Detail" $.Detail.Debsecan "Hostname" $.Hostname}}
+    {{else if eq .Slug "lynis"}}{{template "sec-section-lynis" dict "Detail" $.Detail.Lynis "Hostname" $.Hostname}}
+    {{else if eq .Slug "rkhunter"}}{{template "sec-section-rkhunter" dict "Rows" $.RkhunterRows "LastScan" $.Detail.Rkhunter.LastScan "Hostname" $.Hostname}}
+    {{else if eq .Slug "chkrootkit"}}{{template "sec-section-chkrootkit" dict "Rows" $.ChkrootkitRows "LastScan" $.Detail.Chkrootkit.LastScan "Hostname" $.Hostname}}
+    {{else if eq .Slug "clamav"}}{{template "sec-section-clamav" dict "Detail" $.Detail.ClamAV "Hostname" $.Hostname}}
+    {{else if eq .Slug "aide"}}{{template "sec-section-aide" dict "Detail" $.Detail.AIDE "Hostname" $.Hostname}}
+    {{else if eq .Slug "defender"}}{{template "sec-section-defender" dict "Detail" $.Detail.Defender "Hostname" $.Hostname}}
+    {{else if eq .Slug "scap"}}{{template "sec-section-scap" dict "Detail" $.Detail.SCAP "Hostname" $.Hostname}}
     {{end}}
 </section>
 {{end}}
@@ -452,12 +455,18 @@
 {{/* ── Per-scanner section templates ──────────────────────────────────── */}}
 
 {{define "sec-section-trivy"}}
-{{if or (not .) (not .Vulnerabilities)}}
+{{if or (not .Detail) (not .Detail.Vulnerabilities)}}
 <p class="text-success">No vulnerabilities found.</p>
-<p class="text-muted">Last scan: {{if .}}{{.LastScan}}{{else}}unknown{{end}}</p>
+<p class="text-muted">Last scan: {{if .Detail}}{{.Detail.LastScan}}{{else}}unknown{{end}}</p>
 {{else}}
-<p class="text-muted">{{len .Vulnerabilities}} affected packages (grouped by package){{if .Truncated}} (truncated){{end}} &middot; Last scan: {{.LastScan}}</p>
-{{range .Vulnerabilities}}
+<p class="text-muted">{{len .Detail.Vulnerabilities}} affected packages (grouped by package — the same CVE may appear once per package it affects){{if .Detail.Truncated}} (truncated){{end}} &middot; Last scan: {{.Detail.LastScan}}</p>
+<div class="sec-filter">
+    <button type="button" class="sec-filter__btn sec-filter__btn--active" data-sev="all">All ({{len .Detail.Vulnerabilities}})</button>
+    {{range trivySevCounts .Detail.Vulnerabilities}}
+    <button type="button" class="sec-filter__btn" data-sev="{{.Sev}}">{{.Label}} ({{.Count}})</button>
+    {{end}}
+</div>
+{{range .Detail.Vulnerabilities}}
 <div class="sec-card {{secSeverityClass .Severity}}" data-sev="{{secSeverityNorm .Severity}}">
     <div class="sec-card__header">
         <a href="{{cveURL .CVEID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.CVEID}}</a>
@@ -467,25 +476,38 @@
         <span class="mono">{{.Package}}</span>
         <span class="text-danger">{{.Installed}}</span>
         {{if .Fixed}}<span class="text-muted">→</span> <span class="text-success">{{.Fixed}}</span>{{end}}
+        {{if .Others}}<span class="text-muted">(+{{.Others}} lower severity)</span>{{end}}
     </div>
     {{if .Title}}<div class="sec-card__desc">{{.Title}}</div>{{end}}
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{trivyAIQ $.Hostname .}}">Ask AI</button>
+    </div>
 </div>
 {{end}}
 {{end}}
 {{end}}
 
 {{define "sec-section-debsecan"}}
-{{if or (not .) (not .Vulnerabilities)}}
+{{if or (not .Detail) (not .Detail.Vulnerabilities)}}
 <p class="text-success">No vulnerabilities found.</p>
 {{else}}
-<p class="text-muted">{{len .Vulnerabilities}} affected packages &middot; Last scan: {{.LastScan}}</p>
-{{range .Vulnerabilities}}
+<p class="text-muted">{{len .Detail.Vulnerabilities}} affected packages (grouped by package) &middot; Last scan: {{.Detail.LastScan}}</p>
+<div class="sec-filter">
+    <button type="button" class="sec-filter__btn sec-filter__btn--active" data-sev="all">All ({{len .Detail.Vulnerabilities}})</button>
+    {{range debsecanUrgencyCounts .Detail.Vulnerabilities}}
+    <button type="button" class="sec-filter__btn" data-sev="{{.Sev}}">{{.Label}} ({{.Count}})</button>
+    {{end}}
+</div>
+{{range .Detail.Vulnerabilities}}
 <div class="sec-card {{secSeverityClass .Urgency}}" data-sev="{{secSeverityNorm .Urgency}}">
     <div class="sec-card__header">
         <a href="{{debianCVEURL .CVEID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.CVEID}}</a>
         <span class="sec-card__sev">{{secSeverityLabel .Urgency}}</span>
     </div>
     <div class="sec-card__body"><span class="mono">{{.Package}}</span></div>
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{debsecanAIQ $.Hostname .}}">Ask AI</button>
+    </div>
 </div>
 {{end}}
 {{end}}
@@ -493,30 +515,36 @@
 
 {{define "sec-section-lynis"}}
 <div class="sec-card sec-card--info">
-    <div class="sec-card__header"><span class="sec-card__cve">Hardening Score</span><span class="sec-card__sev">{{.Score}}/100</span></div>
+    <div class="sec-card__header"><span class="sec-card__cve">Hardening Score</span><span class="sec-card__sev">{{.Detail.Score}}/100</span></div>
 </div>
-<p class="text-muted">Last scan: {{.LastScan}}</p>
-{{if .Warnings}}
-<h4>Warnings ({{len .Warnings}})</h4>
-{{range .Warnings}}
+<p class="text-muted">Last scan: {{.Detail.LastScan}}</p>
+{{if .Detail.Warnings}}
+<h4>Warnings ({{len .Detail.Warnings}})</h4>
+{{range .Detail.Warnings}}
 <div class="sec-card sec-card--high">
     <div class="sec-card__header">
         <a href="{{lynisControlURL .ID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.ID}}</a>
         <span class="sec-card__sev">Warning</span>
     </div>
     <div class="sec-card__desc">{{.Text}}</div>
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{lynisWarnAIQ $.Hostname .}}">Ask AI</button>
+    </div>
 </div>
 {{end}}
 {{end}}
-{{if .Suggestions}}
-<h4>Suggestions ({{len .Suggestions}})</h4>
-{{range .Suggestions}}
+{{if .Detail.Suggestions}}
+<h4>Suggestions ({{len .Detail.Suggestions}})</h4>
+{{range .Detail.Suggestions}}
 <div class="sec-card sec-card--low">
     <div class="sec-card__header">
         <a href="{{lynisControlURL .ID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.ID}}</a>
         <span class="sec-card__sev">Suggestion</span>
     </div>
     <div class="sec-card__desc">{{.Text}}</div>
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{lynisSugAIQ $.Hostname .}}">Ask AI</button>
+    </div>
 </div>
 {{end}}
 {{end}}
@@ -530,7 +558,13 @@
 <h4>Warnings ({{len .Rows}})</h4>
 {{range .Rows}}
 <div class="sec-card sec-card--high">
-    <div class="sec-card__header"><span class="sec-card__cve mono">{{.File}}</span><span class="sec-card__sev">Warning</span></div>
+    <div class="sec-card__header">
+        <a href="{{ddgLink (printf "rkhunter %s" .File)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.File}}</a>
+        <span class="sec-card__sev">Warning</span>
+    </div>
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{rkhunterAIQ $.Hostname .File}}">Ask AI</button>
+    </div>
 </div>
 {{end}}
 {{end}}
@@ -544,51 +578,63 @@
 <h4>Infected ({{len .Rows}})</h4>
 {{range .Rows}}
 <div class="sec-card sec-card--critical">
-    <div class="sec-card__header"><span class="sec-card__cve">{{.Check}}</span><span class="sec-card__sev">INFECTED</span></div>
+    <div class="sec-card__header">
+        <a href="{{ddgLink (printf "chkrootkit %s" .Check)}}" target="_blank" rel="noopener" class="sec-card__cve">{{.Check}}</a>
+        <span class="sec-card__sev">INFECTED</span>
+    </div>
     {{if .Files}}<div class="sec-card__body"><span class="text-muted">Suspect files:</span> <span class="mono">{{.Files}}</span></div>{{end}}
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{chkrootkitAIQ $.Hostname .Check .Files}}">Ask AI</button>
+    </div>
 </div>
 {{end}}
 {{end}}
 {{end}}
 
 {{define "sec-section-clamav"}}
-<p class="text-muted">Last scan: {{.LastScan}}</p>
-{{if not .Findings}}
+<p class="text-muted">Last scan: {{.Detail.LastScan}}</p>
+{{if not .Detail.Findings}}
 <p class="text-success">Clean — no malware found.</p>
 {{else}}
-{{range .Findings}}
+{{range .Detail.Findings}}
 <div class="sec-card sec-card--critical">
     <div class="sec-card__header"><span class="sec-card__cve mono">{{.Path}}</span></div>
-    <div class="sec-card__desc">Signature: <span class="mono">{{.Signature}}</span></div>
+    <div class="sec-card__desc">Signature: <a href="{{ddgLink (printf "ClamAV %s" .Signature)}}" target="_blank" rel="noopener" class="sec-card__cve">{{.Signature}}</a></div>
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{clamavAIQ $.Hostname .}}">Ask AI</button>
+    </div>
 </div>
 {{end}}
 {{end}}
 {{end}}
 
 {{define "sec-section-aide"}}
-<p class="text-muted">Last scan: {{.LastScan}}</p>
-{{if .Clean}}
+<p class="text-muted">Last scan: {{.Detail.LastScan}}</p>
+{{if .Detail.Clean}}
 <p class="text-success">Clean — no integrity changes detected.</p>
 {{else}}
-{{if .Added}}<h4>Added ({{len .Added}})</h4>{{range .Added}}<div class="sec-card sec-card--medium"><div class="sec-card__header"><span class="sec-card__cve mono">{{.}}</span></div></div>{{end}}{{end}}
-{{if .Removed}}<h4>Removed ({{len .Removed}})</h4>{{range .Removed}}<div class="sec-card sec-card--critical"><div class="sec-card__header"><span class="sec-card__cve mono">{{.}}</span></div></div>{{end}}{{end}}
-{{if .Changed}}<h4>Changed ({{len .Changed}})</h4>{{range .Changed}}<div class="sec-card sec-card--high"><div class="sec-card__header"><span class="sec-card__cve mono">{{.}}</span></div></div>{{end}}{{end}}
+{{if .Detail.Added}}<h4>Added ({{len .Detail.Added}})</h4>{{range .Detail.Added}}<div class="sec-card sec-card--medium"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{aideAIQ $.Hostname "added" .}}">Ask AI</button></div></div>{{end}}{{end}}
+{{if .Detail.Removed}}<h4>Removed ({{len .Detail.Removed}})</h4>{{range .Detail.Removed}}<div class="sec-card sec-card--critical"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{aideAIQ $.Hostname "removed" .}}">Ask AI</button></div></div>{{end}}{{end}}
+{{if .Detail.Changed}}<h4>Changed ({{len .Detail.Changed}})</h4>{{range .Detail.Changed}}<div class="sec-card sec-card--high"><div class="sec-card__header"><a href="{{ddgLink (printf "linux %s" .)}}" target="_blank" rel="noopener" class="sec-card__cve mono">{{.}}</a></div><div class="sec-card__actions"><button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{aideAIQ $.Hostname "changed" .}}">Ask AI</button></div></div>{{end}}{{end}}
 {{end}}
 {{end}}
 
 {{define "sec-section-defender"}}
-<p class="text-muted">Last scan: {{.LastScan}}</p>
+<p class="text-muted">Last scan: {{.Detail.LastScan}}</p>
 <div class="sec-card sec-card--info">
-    <div class="sec-card__header"><span class="sec-card__cve">Protection Status</span><span class="sec-card__sev">{{if .RealtimeProtection}}Active{{else}}DISABLED{{end}}</span></div>
+    <div class="sec-card__header"><span class="sec-card__cve">Protection Status</span><span class="sec-card__sev">{{if .Detail.RealtimeProtection}}Active{{else}}DISABLED{{end}}</span></div>
     <div class="sec-card__body">
-        Antivirus: {{if .Enabled}}Enabled{{else}}<span class="text-danger">Disabled</span>{{end}} &middot;
-        Real-time: {{if .RealtimeProtection}}On{{else}}<span class="text-danger">Off</span>{{end}} &middot;
-        Signatures: {{.SignatureAgeDays}} days old
+        Antivirus: {{if .Detail.Enabled}}Enabled{{else}}<span class="text-danger">Disabled</span>{{end}} &middot;
+        Real-time: {{if .Detail.RealtimeProtection}}On{{else}}<span class="text-danger">Off</span>{{end}} &middot;
+        Signatures: {{.Detail.SignatureAgeDays}} days old
     </div>
 </div>
-{{if gt .ThreatsDetected 0}}
+{{if gt .Detail.ThreatsDetected 0}}
 <div class="sec-card sec-card--critical">
-    <div class="sec-card__header"><span class="sec-card__cve">Threats Detected</span><span class="sec-card__sev">{{.ThreatsDetected}}</span></div>
+    <div class="sec-card__header"><span class="sec-card__cve">Threats Detected</span><span class="sec-card__sev">{{.Detail.ThreatsDetected}}</span></div>
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{defenderAIQ .Hostname .Detail.ThreatsDetected}}">Ask AI</button>
+    </div>
 </div>
 {{else}}
 <p class="text-success">Clean — no threats detected.</p>
@@ -596,32 +642,31 @@
 {{end}}
 
 {{define "sec-section-scap"}}
-<p class="text-muted">Profile: {{.Profile}} &middot; Last scan: {{.LastScan}}</p>
+<p class="text-muted">Profile: {{.Detail.Profile}} &middot; Last scan: {{.Detail.LastScan}}</p>
 <div class="sec-card sec-card--info">
-    <div class="sec-card__header"><span class="sec-card__cve">Compliance Score</span><span class="sec-card__sev">{{.Score}}%</span></div>
+    <div class="sec-card__header"><span class="sec-card__cve">Compliance Score</span><span class="sec-card__sev">{{.Detail.Score}}%</span></div>
     <div class="sec-card__body">
-        <span class="text-success">{{.Pass}} pass</span> &middot;
-        <span class="text-danger">{{.Fail}} fail</span> &middot;
-        {{.NotApplicable}} N/A &middot;
-        {{.TotalRules}} total rules
+        <span class="text-success">{{.Detail.Pass}} pass</span> &middot;
+        <span class="text-danger">{{.Detail.Fail}} fail</span> &middot;
+        {{.Detail.NotApplicable}} N/A &middot;
+        {{.Detail.TotalRules}} total rules
     </div>
 </div>
-{{if gt .Fail 0}}
+{{if gt .Detail.Fail 0}}
 <div class="sec-card sec-card--high">
-    <div class="sec-card__header"><span class="sec-card__cve">Failed Rules</span><span class="sec-card__sev">{{.Fail}}</span></div>
+    <div class="sec-card__header"><span class="sec-card__cve">Failed Rules</span><span class="sec-card__sev">{{.Detail.Fail}}</span></div>
     <div class="sec-card__body">
-        High: <span class="text-danger">{{.HighFail}}</span> &middot;
-        Medium: <span class="text-warning">{{.MediumFail}}</span> &middot;
-        Low: {{.LowFail}}
+        High: <span class="text-danger">{{.Detail.HighFail}}</span> &middot;
+        Medium: <span class="text-warning">{{.Detail.MediumFail}}</span> &middot;
+        Low: {{.Detail.LowFail}}
+    </div>
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{scapAIQ .Hostname .Detail}}">Ask AI</button>
     </div>
 </div>
 {{end}}
 {{end}}
 
 
-{{/* Severity filter bar intentionally omitted from this pass. Re-adding it
-     requires pre-normalising per-vuln severity in the handler (Trivy uses
-     .Severity, debsecan uses .Urgency) so a shared template can iterate.
-     Tracked in pending.md under the /security drawer follow-up. */}}
 
 
