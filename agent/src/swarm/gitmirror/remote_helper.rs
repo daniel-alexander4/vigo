@@ -183,16 +183,28 @@ fn tunnel(project_id: &[u8; ID_LEN], service: &str) -> Result<()> {
         bail!("unexpected response from helper daemon: {:?}", response);
     }
 
-    // Bidirectional splice. stdin → socket on a worker thread;
+    // Bidirectional copy: stdin → socket on a worker thread,
     // socket → stdout on the main thread. When either direction
     // hits EOF we half-close the socket; the other direction
     // unwinds naturally on the next read.
+    //
+    // We deliberately do NOT use `std::io::copy` here. The stdlib
+    // specializes copy() into a `splice(2)` fast-path on Linux when
+    // both endpoints expose file descriptors — and `splice()` on
+    // AF_UNIX stream sockets has a kernel-side wakeup race: the
+    // splice can park itself in `unix_stream_data_wait` with bytes
+    // sitting in the recv queue and never wake up, deadlocking the
+    // protocol exchange. Strace masks the race because PTRACE
+    // attach interrupts the splice with EINTR and the restart
+    // re-checks the queue. The work-around: use plain read+write
+    // through a userspace buffer, which routes through the
+    // unix_stream_read_generic path that does wake up reliably.
     let writer_socket = socket.try_clone().context("cloning socket for writer thread")?;
     let stdin_handle = std::thread::spawn(move || -> std::io::Result<()> {
         let mut socket = writer_socket;
         let stdin = std::io::stdin();
         let mut stdin_lock = stdin.lock();
-        std::io::copy(&mut stdin_lock, &mut socket)?;
+        copy_via_buffer(&mut stdin_lock, &mut socket)?;
         // Half-close the write side so the daemon's child process
         // sees EOF on its stdin (otherwise upload-pack hangs forever).
         let _ = socket.shutdown(std::net::Shutdown::Write);
@@ -202,7 +214,7 @@ fn tunnel(project_id: &[u8; ID_LEN], service: &str) -> Result<()> {
     {
         let stdout = std::io::stdout();
         let mut out = stdout.lock();
-        std::io::copy(&mut socket, &mut out).context("socket → stdout")?;
+        copy_via_buffer(&mut socket, &mut out).context("socket → stdout")?;
         out.flush().ok();
     }
 
@@ -213,6 +225,25 @@ fn tunnel(project_id: &[u8; ID_LEN], service: &str) -> Result<()> {
     // through the smart protocol.
     let _ = stdin_handle.join();
     Ok(())
+}
+
+/// Manual bytes copy from `r` to `w` using a fixed userspace buffer.
+/// Equivalent in semantics to `std::io::copy` but explicitly avoids
+/// the splice(2) fast-path that deadlocks on AF_UNIX stream sockets
+/// (see protocol_loop's tunnel splice comment).
+fn copy_via_buffer<R: Read, W: Write>(r: &mut R, w: &mut W) -> std::io::Result<u64> {
+    let mut buf = [0u8; 16 * 1024];
+    let mut total: u64 = 0;
+    loop {
+        let n = match r.read(&mut buf) {
+            Ok(0) => return Ok(total),
+            Ok(n) => n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e),
+        };
+        w.write_all(&buf[..n])?;
+        total += n as u64;
+    }
 }
 
 fn read_response_line(stream: &mut UnixStream) -> Result<String> {
