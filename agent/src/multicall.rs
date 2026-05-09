@@ -32,18 +32,9 @@
 //! socket transparently to git's stdio. The agent on the other end
 //! verifies the user's token chain and proxies to
 //! `git-upload-pack` / `git-receive-pack`.
-//!
-//! The phase-1 stub at [`run_git_remote_vigo_stub`] is retained as
-//! [`STUB_EXIT_CODE`]'s anchor for the integration test that proved
-//! the dispatch was wired before the protocol landed.
 
 use std::ffi::OsStr;
 use std::path::Path;
-
-/// Distinctive exit code used by the `git-remote-vigo` stub. EX_CONFIG
-/// from BSD sysexits — "something was unconfigured or misconfigured."
-/// Distinct enough that tests can match on it without ambiguity.
-pub const STUB_EXIT_CODE: i32 = 78;
 
 /// Modes selectable via argv[0]. Returns `None` for normal `vigo` /
 /// `vigo-*` invocations — the caller falls through to clap parsing.
@@ -97,22 +88,9 @@ fn classify_basename(basename: &str) -> Option<MulticallMode> {
     }
 }
 
-/// Phase 1 stub retained for the dispatch test fixture. The real
-/// `git-remote-vigo` body lives in
-/// [`crate::swarm::gitmirror::remote_helper::run`] and is invoked
-/// directly from `main()`.
-#[allow(dead_code)]
-pub fn run_git_remote_vigo_stub() -> ! {
-    eprintln!(
-        "git-remote-vigo: stub path — caller should dispatch to \
-         crate::swarm::gitmirror::remote_helper::run."
-    );
-    std::process::exit(STUB_EXIT_CODE);
-}
-
-/// Real dispatch entry point. Runs the git remote-helper protocol
-/// loop and exits when the splice closes (or the daemon refuses).
-/// Always terminates the process — never returns.
+/// Dispatch entry point. Runs the git remote-helper protocol loop
+/// and exits when the tunnel closes (or the daemon refuses). Always
+/// terminates the process — never returns.
 pub fn run_git_remote_vigo(args: Vec<String>) -> ! {
     crate::swarm::gitmirror::remote_helper::run(args);
 }
