@@ -2157,10 +2157,23 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     padding: 2px 8px;
 }
 
-/* Live query progress */
+/* Live query spinner — circular, animates whenever the spinner element
+   is in the DOM. Visibility is gated by .sec-live-spinner.htmx-indicator
+   rules below, so the rotation only burns CPU while HTMX has the request
+   in flight. */
 .sec-live-status { margin-top: 12px; padding: 12px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-bg-subtle, rgba(0,0,0,0.02)); }
-.sec-progress { height: 4px; background: var(--color-border); border-radius: 2px; margin-top: 8px; overflow: hidden; }
-.sec-progress__bar { height: 100%; width: 0; background: var(--color-link); border-radius: 2px; }
+.sec-spinner {
+    width: 16px;
+    height: 16px;
+    margin-top: 8px;
+    border: 2px solid var(--color-border);
+    border-top-color: var(--color-link);
+    border-radius: 50%;
+    animation: sec-spinner-rotate 0.8s linear infinite;
+}
+@keyframes sec-spinner-rotate {
+    to { transform: rotate(360deg); }
+}
 
 /* Security detail drawer */
 .sec-drawer {
@@ -3381,6 +3394,13 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
         scroll-behavior: auto !important;
+    }
+    /* Loading spinners are informational, not decorative — they convey
+       "request still in flight" which is exactly what reduced-motion
+       should preserve. Keep them spinning, slowed slightly. */
+    .sec-spinner {
+        animation-duration: 1.5s !important;
+        animation-iteration-count: infinite !important;
     }
 }
 

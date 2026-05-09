@@ -27,7 +27,13 @@ const SCAN_DIR: &str = "/var/lib/vigo/security";
 const SCAN_DIR: &str = r"C:\ProgramData\Vigo\security";
 
 /// Maximum number of CVE entries in the unified cross-scanner list.
-const MAX_CVES: usize = 50;
+/// Bumped from 50 → 200 in 0.41.21 after the fleet stat-card was found
+/// to undercount on Debian boxes carrying long low-severity tails. The
+/// per-host `unique_critical/high/medium/low` counts already use the
+/// FULL deduped set (line 110) so they're unaffected by the cap; this
+/// just lets more of the long tail ride the wire so the server-side
+/// fleet dedup sees them.
+const MAX_CVES: usize = 200;
 
 /// A raw CVE found by a scanner, keyed by CVE ID.
 struct RawCVE {

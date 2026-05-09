@@ -677,6 +677,17 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 		// Collect per-host CVEs from the unified cross-scanner list.
 		row.CVEs = collectCVEEntries(ts.Traits)
 
+		// Truncation flag: sum of agent-authoritative per-severity counts
+		// (computed from the FULL deduped set) versus the length of the
+		// truncated cves list that actually rode the wire. Mismatch means
+		// the agent's MAX_CVES cap dropped entries — fleet-wide dedup
+		// can't see those, so the fleet UniqueCVEs stat may undercount.
+		uniqueSum := row.UniqueCritical + row.UniqueHigh + row.UniqueMedium + row.UniqueLow
+		if uniqueSum > int64(len(row.CVEs)) {
+			row.Truncated = true
+			data.AnyTruncated = true
+		}
+
 		if hasScan {
 			data.ScannedHosts++
 			data.PerHost = append(data.PerHost, row)
@@ -687,24 +698,40 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 		data.LynisAvgScore = data.LynisAvgScore / data.ScannedHosts
 	}
 
-	// Deduplicate fleet-wide CVEs by CVE ID across hosts.
-	cveSet := make(map[string]bool)
+	// Deduplicate fleet-wide CVEs by CVE ID. When the same CVE is reported
+	// by multiple hosts with different severities (typical when one host's
+	// agent saw it from both trivy + debsecan and merged to the higher
+	// rank, while another host's agent only saw it from one scanner), the
+	// fleet bucket takes the highest severity across all reporting hosts.
+	// Two-pass: first build a map of CVE-ID → (max-rank, original string,
+	// packages); then emit one CVEEntry per ID with the max-severity
+	// reporter's original casing preserved.
+	type cveAgg struct {
+		level    cve.SeverityLevel
+		severity string // original casing from the host that reported the max
+		packages int64  // packages from the max-severity reporter
+	}
+	cveSet := make(map[string]*cveAgg)
 	for _, row := range data.PerHost {
 		for _, entry := range row.CVEs {
-			if !cveSet[entry.CVEID] {
-				cveSet[entry.CVEID] = true
-				data.CVEs = append(data.CVEs, entry)
-				switch cve.Classify(entry.Severity) {
-				case cve.SevCritical:
-					data.UniqueCritical++
-				case cve.SevHigh:
-					data.UniqueHigh++
-				case cve.SevMedium:
-					data.UniqueMedium++
-				case cve.SevLow:
-					data.UniqueLow++
-				}
+			lvl := cve.Classify(entry.Severity)
+			cur, ok := cveSet[entry.CVEID]
+			if !ok || lvl > cur.level {
+				cveSet[entry.CVEID] = &cveAgg{level: lvl, severity: entry.Severity, packages: entry.Packages}
 			}
+		}
+	}
+	for cveID, agg := range cveSet {
+		data.CVEs = append(data.CVEs, ui.CVEEntry{CVEID: cveID, Severity: agg.severity, Packages: agg.packages})
+		switch agg.level {
+		case cve.SevCritical:
+			data.UniqueCritical++
+		case cve.SevHigh:
+			data.UniqueHigh++
+		case cve.SevMedium:
+			data.UniqueMedium++
+		case cve.SevLow:
+			data.UniqueLow++
 		}
 	}
 	data.UniqueCVEs = int64(len(cveSet))

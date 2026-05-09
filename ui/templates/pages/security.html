@@ -114,6 +114,9 @@
                  a host with only Medium/Low CVEs still appears here. */}}
             <div class="sec-detail" id="sec-panel-high">
                 <h4>Unique CVEs by Host</h4>
+                {{if .Security.AnyTruncated}}
+                <p class="alert alert--warn" style="font-size:12px;margin-bottom:8px;">One or more hosts have more CVEs than the agent's per-host wire cap (200). Per-host columns below remain agent-authoritative full counts; only the fleet-wide "Unique CVEs" stat may undercount the long tail. Raise <code>MAX_CVES</code> in <code>agent/src/traits/security_scan.rs</code> if you need wider coverage.</p>
+                {{end}}
                 <div class="security-drift-table-wrap">
                     <table class="security-drift-table">
                         <thead><tr><th>Host</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th></th></tr></thead>
@@ -326,7 +329,7 @@
     </div>
     <div id="sec-live-spinner" class="sec-live-spinner htmx-indicator">
         <p class="text-muted" style="font-size:11px">Querying agent — streaming agents respond instantly, others respond on next check-in (up to ~{{if .Timeout}}{{.Timeout}}{{else}}90{{end}}s).</p>
-        <div class="sec-progress"><div class="sec-progress__bar"></div></div>
+        <div class="sec-spinner" aria-hidden="true"></div>
     </div>
 
     {{with .Cached.Trivy}}

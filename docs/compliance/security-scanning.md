@@ -131,9 +131,15 @@ vigocli inventory --show "security_scan.lynis.score"
 
 CVEs are deduplicated at two levels:
 
-1. **Per-host, cross-scanner**: The agent merges CVEs from all scanners (trivy, debsecan, windows_updates) into a single list keyed by CVE ID. Same CVE reported by both trivy and debsecan counts once. The `packages` field shows how many packages the CVE affects.
+1. **Per-host, cross-scanner** (agent-side): the agent merges CVEs from all scanners (trivy, debsecan, windows_updates) into a single map keyed by CVE ID. Same CVE reported by both trivy and debsecan counts once; severity = the highest rank any scanner reported; `packages` = sum across scanners. The per-host `unique_critical` / `unique_high` / `unique_medium` / `unique_low` traits are computed from this **full** deduped set, so they're always accurate for the host.
 
-2. **Fleet-wide**: The server deduplicates across hosts. Same CVE on 10 machines = 1 unique CVE on the dashboard.
+2. **Fleet-wide** (server-side): the server iterates every host's reported CVE list and dedups by CVE ID. When the same CVE appears on multiple hosts with different severities (typical when one host's agent saw it from both trivy + debsecan and another host's agent only saw one scanner), the **highest severity across all reporting hosts** wins the fleet bucket. This is deterministic across server restarts.
+
+### Wire-cap and truncation
+
+To bound trait-payload size on hosts with extremely long CVE tails, the agent caps the on-wire CVE list at **`MAX_CVES = 200`** entries (sorted by severity desc, then CVE-ID desc). Per-host `unique_*` counts use the full set and are unaffected; only the wire list is truncated. When this happens, the server detects the mismatch (`sum(unique_*) > len(cves)`) and surfaces a banner above the per-host panel on `/security`. The fleet "Unique CVEs" stat may undercount the long tail of the truncated host's CVEs in this case; per-host columns remain accurate.
+
+If you operate hosts with more than 200 unique CVEs that you want represented in the fleet stat, raise `MAX_CVES` in `agent/src/traits/security_scan.rs` and rebuild + redeploy the agent.
 
 ## Severity Filter
 

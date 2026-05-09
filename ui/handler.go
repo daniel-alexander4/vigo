@@ -6869,6 +6869,12 @@ type SecurityScanPageData struct {
 	TotalHosts     int64
 	CVEs           []CVEEntry         // deduplicated CVEs across fleet (one per CVE ID)
 	PerHost        []SecurityHostRow  // per-envoy breakdown
+	// AnyTruncated is true when at least one host's per-severity unique
+	// counts (unique_critical+high+medium+low, agent-authoritative full
+	// totals) exceed the length of the host's CVE list (capped at the
+	// agent's MAX_CVES). Surfaces as a banner above the per-host panel
+	// so operators know the fleet UniqueCVEs stat may undercount.
+	AnyTruncated bool
 }
 
 // CVEEntry is a single CVE keyed by CVE ID (deduplicated across scanners).
@@ -6904,6 +6910,11 @@ type SecurityHostRow struct {
 	AideChanged    int64
 	CVEs           []CVEEntry
 	LastScan       string
+	// Truncated is true when sum(UniqueCritical+High+Medium+Low) exceeds
+	// len(CVEs) — i.e., the agent's MAX_CVES cap dropped some entries
+	// from the wire. Per-host columns stay accurate; only the fleet
+	// dedup misses the dropped ones.
+	Truncated bool
 }
 
 // SecurityPage renders the fleet security dashboard — convergence,
