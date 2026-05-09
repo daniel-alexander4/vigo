@@ -924,6 +924,49 @@ mod tests {
         }
     }
 
+    // ---------- wire-format snapshots ----------
+    //
+    // Pin the on-wire byte sequences this transport advertises. Any
+    // intentional change here is fine — bump the snapshot. Accidental
+    // changes (rename of a service token, stray trailing space in
+    // HELLO) fail loudly here instead of confusing a remote peer at
+    // runtime. See `cryptsync_roundtrip` and `gitmirror_helper`
+    // integration tests for the higher-level round-trip assertions.
+
+    #[test]
+    fn snapshot_service_names() {
+        // Service tokens flow through git's smart-protocol service
+        // negotiation; a rename here would silently break every
+        // existing peer.
+        assert_eq!(Service::UploadPack.as_str(), "git-upload-pack");
+        assert_eq!(Service::ReceivePack.as_str(), "git-receive-pack");
+    }
+
+    #[test]
+    fn snapshot_hello_line_format() {
+        // The HELLO line shape `HELLO <pid_hex> <service>\n` is the
+        // first thing the client writes after connecting. The daemon's
+        // `parse_header` is forgiving of trailing CR but not of any
+        // other shape change; pinning the exact bytes here keeps the
+        // wire-level contract explicit alongside the parser tests.
+        let pid_hex = "0".repeat(64);
+        let hello = format!("HELLO {} git-upload-pack\n", pid_hex);
+        assert_eq!(hello.as_bytes().last(), Some(&b'\n'));
+        assert!(hello.starts_with("HELLO "));
+        assert!(hello.contains(" git-upload-pack"));
+        // Round-trip: the parser must accept what we emit.
+        let (parsed_pid, parsed_service) = parse_header(&hello).expect("parse_header");
+        assert_eq!(parsed_pid, [0u8; 32]);
+        assert_eq!(parsed_service, Service::UploadPack);
+    }
+
+    #[test]
+    fn snapshot_max_header_bytes_unchanged() {
+        // Pinned to 4 KiB. Any change here may interact with peer
+        // BufReader sizing on the client side.
+        assert_eq!(MAX_HEADER_BYTES, 4 * 1024);
+    }
+
     #[test]
     fn passwd_lookup_finds_user() {
         let body = "\

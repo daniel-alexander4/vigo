@@ -44,6 +44,18 @@ test-agent:
 test-integration: build-agent
 	go test ./test/integration/... -v -count=1 -timeout 120s
 
+# End-to-end swarm validation against a real fleet (defaults to
+# plex,girlslaptop,annlap; override via VIGO_FLEET). Destructive: wipes
+# per-user swarm state and root-owned /var/lib/vigo/swarm/{gitmirror,
+# cryptsync} on every envoy, then runs the full 5-step substrate
+# sequence (payload → filesync → puddle → cryptsync → gitmirror) from
+# a clean slate. Mirrors tshoot/log-substrate-2026-05-09.md.
+#
+# For a fleet-free quick smoke, run `make test-agent` (picks up
+# tests/gitmirror_helper.rs and tests/cryptsync_roundtrip.rs).
+test-substrate:
+	test/swarm-substrate.sh --wipe
+
 lint:
 	golangci-lint run ./...
 	buf lint

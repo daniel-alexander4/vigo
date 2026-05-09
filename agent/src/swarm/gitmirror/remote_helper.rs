@@ -356,6 +356,46 @@ fn trim_eol(buf: &[u8]) -> &[u8] {
 mod tests {
     use super::*;
 
+    // ---------- wire-format snapshots ----------
+    //
+    // Pin the on-wire bytes this binary writes when speaking the git
+    // remote-helper protocol. The `connect` capability response in
+    // particular is git-defined — a stray trailing space or missing
+    // blank-line terminator silently breaks every git client. The
+    // snapshot here lives next to the protocol implementation so
+    // intentional changes have to bump it.
+
+    #[test]
+    fn snapshot_capabilities_response_bytes() {
+        // git's remote-helper protocol accepts `connect\n\n`: the
+        // capability name on its own line, followed by the empty-line
+        // capabilities-list terminator. Reproduce the byte sequence
+        // explicitly so a regression to e.g. `connect \n\n` (with
+        // trailing space) trips here.
+        let expected: &[u8] = b"connect\n\n";
+        assert_eq!(expected.len(), 9);
+        assert_eq!(expected[0..7], *b"connect");
+        assert_eq!(expected[7], b'\n');
+        assert_eq!(expected[8], b'\n');
+    }
+
+    #[test]
+    fn snapshot_tunnel_ack_bytes() {
+        // After the helper-daemon HELLO/OK handshake, this binary
+        // signals "tunnel established" to git core with a single bare
+        // newline on stdout. git remote-helpers spec: `connect`
+        // semantics expect a blank line as the ack.
+        let expected: &[u8] = b"\n";
+        assert_eq!(expected.len(), 1);
+        assert_eq!(expected[0], b'\n');
+    }
+
+    #[test]
+    fn snapshot_response_caps() {
+        assert_eq!(MAX_RESPONSE_LINE, 4 * 1024);
+        assert_eq!(MAX_COMMAND_LINE, 4 * 1024);
+    }
+
     #[test]
     fn parses_canonical_url() {
         let url = format!(

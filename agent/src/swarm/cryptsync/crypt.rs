@@ -387,6 +387,38 @@ pub fn decode_sign_pubkey(s: &str) -> Result<ed25519_dalek::VerifyingKey> {
 mod tests {
     use super::*;
 
+    // ---------- wire-format snapshots ----------
+    //
+    // Pin the on-disk envelope shape so a future change to the wrap
+    // format or KDF parameters trips here loudly. Round-trip semantics
+    // are covered by `wrap_unwrap_roundtrips` and the integration
+    // test at `agent/tests/cryptsync_roundtrip.rs`.
+
+    #[test]
+    fn snapshot_age_magic() {
+        assert_eq!(AGE_MAGIC, b"age-encryption.org/v1\n");
+    }
+
+    #[test]
+    fn snapshot_wrap_envelope_constants() {
+        // `[1 byte version][24 byte nonce][ciphertext+tag]` — every
+        // existing identity.age on disk depends on this byte layout.
+        assert_eq!(WRAP_VERSION, 0x01);
+        assert_eq!(WRAP_NONCE_LEN, 24);
+        assert_eq!(WRAP_SALT_LEN, 16);
+    }
+
+    #[test]
+    fn snapshot_argon2_parameters() {
+        // OWASP 2024 recommendation. Cranking these down weakens the
+        // wrap; cranking them up makes `unlock` slower than the
+        // 0.5-2s target. Bump deliberately.
+        assert_eq!(ARGON_MEM_KIB, 64 * 1024);
+        assert_eq!(ARGON_T_COST, 3);
+        assert_eq!(ARGON_P_COST, 1);
+        assert_eq!(ARGON_OUTPUT_LEN, 32);
+    }
+
     #[test]
     fn wrap_unwrap_roundtrips() {
         let id = Identity::generate();
