@@ -26,13 +26,13 @@ On Linux, four short procfs reads:
 - `/proc/self/fd/` → open fd count via directory enumeration
 - `/proc/<all>/stat` → walked once to identify direct descendants (PPID matches agent's PID); for each match, `/proc/<pid>/fd/` is enumerated to sum descendant fd usage
 
-The descendant walk is one level deep. The agent's direct children (gitmirror helper's `git` child, `exec` resource subprocesses, package-manager probes) are what FD leaks would surface in. Going deeper to grandchildren would be more accurate but adds proc-walk cost on every check-in; deferred until a real grandchild leak shows up.
+The descendant walk is one level deep. The agent's direct children (swarmgit helper's `git` child, `exec` resource subprocesses, package-manager probes) are what FD leaks would surface in. Going deeper to grandchildren would be more accurate but adds proc-walk cost on every check-in; deferred until a real grandchild leak shows up.
 
 On macOS, RSS / VSZ / thread count come from `ps -o rss=,vsz=,nlwp= -p <pid>`. `open_fds` is reported as `0` because exposing it would require `lsof` (a subprocess per check-in). `descendants` and `descendant_open_fds` are also `0` for the same reason.
 
 ## Why This Matters
 
-The agent regularly spawns short-lived children (git-receive-pack via the gitmirror helper, package-manager probes, exec resources). FD leaks in those children would not surface in `open_fds` alone — the parent's count stays stable while the child accumulates. Tracking `descendant_open_fds` lets the fleet detector catch leaks in child code paths that the agent's own `/proc/self/fd` count is blind to.
+The agent regularly spawns short-lived children (git-receive-pack via the swarmgit helper, package-manager probes, exec resources). FD leaks in those children would not surface in `open_fds` alone — the parent's count stays stable while the child accumulates. Tracking `descendant_open_fds` lets the fleet detector catch leaks in child code paths that the agent's own `/proc/self/fd` count is blind to.
 
 The collector is classified `volatile` — it refreshes every cycle. The point is to catch leaks *within* a single envoy's lifetime, not to track historical trends.
 

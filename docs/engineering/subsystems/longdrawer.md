@@ -113,7 +113,7 @@ Unreachable cross_subnet_peers log a debug-level error and retry next cycle; tra
 
 Every envoy with per-user longdrawer state on disk ships a `longdrawer` trait containing the file set (sha + size + mtime), tombstones, and a stable 16-byte digest over the full-file-set. The server-side aggregator (`server/swarm/longdrawermesh/`) joins these across the fleet for the `/longdrawer` page.
 
-The `/longdrawer`, `/lockbox`, `/gitmirror` pages and every mesh endpoint (`/api/v1/swarm/longdrawer/*`, `/api/v1/swarm/lockbox/*`, `/api/v1/swarm/gitmirror/fleet`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't appropriate for non-admin roles. Viewer and compliance-role users get a 403 on direct access and don't see the nav links. The legacy `/mesh` URL 301-redirects to `/longdrawer` (or `/lockbox` with `?tab=crypt`) for one release while muscle memory migrates.
+The `/longdrawer`, `/lockbox`, `/swarmgit` pages and every mesh endpoint (`/api/v1/swarm/longdrawer/*`, `/api/v1/swarm/lockbox/*`, `/api/v1/swarm/swarmgit/fleet`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't appropriate for non-admin roles. Viewer and compliance-role users get a 403 on direct access and don't see the nav links. The legacy `/mesh` URL 301-redirects to `/longdrawer` (or `/lockbox` with `?tab=crypt`) for one release while muscle memory migrates.
 
 Surfaces:
 
@@ -153,6 +153,6 @@ Pattern-list changes record tamper-evident audit-chain entries (`swarm.longdrawe
 
 - [Swarm](swarm.md) — Infrastructure-level P2P blob distribution (operator-controlled, server-orchestrated)
 - [Swarm Operations](../../operations/swarm.md) — Swarm configuration and troubleshooting
-- [Gitmirror](gitmirror.md) — Personal-DR git mirroring (sister subsystem; pure P2P as of 0.23.0, receivers hold root-owned bare repos only)
+- [Swarmgit](swarmgit.md) — Personal-DR git mirroring (sister subsystem; pure P2P as of 0.23.0, receivers hold root-owned bare repos only)
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

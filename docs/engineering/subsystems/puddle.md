@@ -5,7 +5,7 @@ weight: 65
 
 # Puddle
 
-Puddle is a per-user puddle identity primitive: a single Ed25519 keypair representing "this user's collection of envoys, treated as one trust unit." Sibling subsystems (gitmirror under [ADR-015](../../adr/015-unified-gitmirror-substrate.md), lockbox membership under [ADR-016](../../adr/016-lockbox-membership-on-puddle.md)) consume it to express membership and drive onboarding without re-doing the per-pair-of-envoys ceremony each subsystem invented in isolation.
+Puddle is a per-user puddle identity primitive: a single Ed25519 keypair representing "this user's collection of envoys, treated as one trust unit." Sibling subsystems (swarmgit under [ADR-015](../../adr/015-unified-swarmgit-substrate.md), lockbox membership under [ADR-016](../../adr/016-lockbox-membership-on-puddle.md)) consume it to express membership and drive onboarding without re-doing the per-pair-of-envoys ceremony each subsystem invented in isolation.
 
 [ADR-014](../../adr/014-puddle-primitive.md) is the design of record. This page is a working snapshot of how it's actually built.
 
@@ -181,7 +181,7 @@ See [agent-swarm-puddle](../../reference/cli/agent-swarm-puddle.md) for the full
 ## See also
 
 - [ADR-014](../../adr/014-puddle-primitive.md) — the design.
-- [ADR-015](../../adr/015-unified-gitmirror-substrate.md) — unified gitmirror substrate built on puddle (next).
+- [ADR-015](../../adr/015-unified-swarmgit-substrate.md) — unified swarmgit substrate built on puddle (next).
 - [ADR-016](../../adr/016-lockbox-membership-on-puddle.md) — lockbox membership on puddle (after 015).
 - [ADR-017](../../adr/017-no-puddle-level-revoke.md) — why there is no puddle-level revoke.
 - [ADR-018](../../adr/018-puddle-rekey.md) — design of the rekey flow.

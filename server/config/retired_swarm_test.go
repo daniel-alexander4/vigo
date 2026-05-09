@@ -21,7 +21,7 @@ func TestDetectRetiredSwarmShape(t *testing.T) {
 swarm:
   enabled: ["*"]
   puddle: { enabled: ["annlap"] }
-  gitmirror: { enabled: ["*"] }
+  swarmgit: { enabled: ["*"] }
   longdrawer: { enabled: ["*"] }
   swarmcast: { enabled: ["*"] }
 `,
@@ -55,14 +55,24 @@ swarm:
 			wantInError: "swarm.lockbox",
 		},
 		{
-			name: "swarm.gitmirror.blacklist is retired",
+			name: "swarm.gitmirror section is retired (renamed to swarmgit)",
 			yaml: `
 swarm:
   gitmirror:
-    blacklist: ["rasp1"]
+    enabled: ["*"]
 `,
 			wantErr:     true,
-			wantInError: "swarm.gitmirror.blacklist",
+			wantInError: "swarm.gitmirror.* — retired in the swarmgit rename",
+		},
+		{
+			name: "swarm.gitmirror retired error names the new key",
+			yaml: `
+swarm:
+  gitmirror:
+    enabled: ["*"]
+`,
+			wantErr:     true,
+			wantInError: "swarm.swarmgit",
 		},
 		{
 			name: "swarm.filesync section is retired (renamed to longdrawer)",
@@ -105,14 +115,14 @@ swarm:
 			wantInError: "swarm.swarmcast",
 		},
 		{
-			name: "per-subsystem bool enabled is retired (gitmirror)",
+			name: "per-subsystem bool enabled is retired (puddle)",
 			yaml: `
 swarm:
-  gitmirror:
+  puddle:
     enabled: false
 `,
 			wantErr:     true,
-			wantInError: "swarm.gitmirror.enabled is a bool",
+			wantInError: "swarm.puddle.enabled is a bool",
 		},
 		{
 			name: "migration pointer included",

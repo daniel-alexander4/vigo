@@ -15,7 +15,7 @@ import (
 
 // EnvoySwarmLoadPageData feeds the per-envoy Swarm Load page. One
 // section per subsystem — swarmcast (admin-distributed files + the
-// cached form of gitmirror bundles), gitmirror (materialized bare repos),
+// cached form of swarmgit bundles), swarmgit (materialized bare repos),
 // longdrawer (plaintext per-user sync), lockbox (encrypted per-user sync).
 // Totals roll up across all four so the operator can spot which
 // subsystem is filling the disk before drilling into the rows.
@@ -25,7 +25,7 @@ type EnvoySwarmLoadPageData struct {
 	EnvoyID  string
 
 	Payload  []SwarmLoadRow
-	Gitmirror []SwarmLoadRow
+	Swarmgit []SwarmLoadRow
 	Longdrawer  []SwarmLoadRow
 	Lockbox []SwarmLoadRow
 
@@ -34,7 +34,7 @@ type EnvoySwarmLoadPageData struct {
 	// without a per-section conversion. Disk-footprint values stay
 	// within int64 range indefinitely in practice.
 	LodeTotal  int64
-	GitmirrorTotal int64
+	SwarmgitTotal int64
 	EchoTotal  int64
 	LockboxTotal int64
 	GrandTotal int64
@@ -47,7 +47,7 @@ type EnvoySwarmLoadPageData struct {
 type SwarmLoadRow struct {
 	// Name is the user-friendly primary identifier (filename,
 	// `~user/longdrawer/<name>`, bare-repo path). Never a sha256 or
-	// an internal label like `gitmirror:a:b:c`.
+	// an internal label like `swarmgit:a:b:c`.
 	Name string
 	// Detail is a secondary line (seeder, git sha, user, etc.) —
 	// the template renders it dim under Name.
@@ -67,7 +67,7 @@ type SwarmLoadRow struct {
 	// When is a formatted timestamp (last refresh, mtime, distributed-at).
 	When string
 	// Link is an optional deep link. Payload rows link to /payload/{sha};
-	// gitmirror rows link to /gitmirror/{label}. Longdrawer/lockbox rows leave this
+	// swarmgit rows link to /swarmgit/{label}. Longdrawer/lockbox rows leave this
 	// empty — there's no deeper page for one file.
 	Link string
 }
@@ -96,7 +96,7 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 		EnvoyID:  idStr,
 	}
 
-	// --- Payload (swarm blob cache, admin swarmcasts + gitmirror bundles) ---
+	// --- Payload (swarm blob cache, admin swarmcasts + swarmgit bundles) ---
 	if h.swarmTracker != nil {
 		blobs := h.swarmTracker.BlobsOnEnvoy(idStr)
 		for _, b := range blobs {
@@ -118,9 +118,9 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	// --- Gitmirror (materialized bare git repos) ---
-	if h.gitmirrorFleet != nil {
-		projects := h.gitmirrorFleet.EnvoyProjects(r.Context(), idStr)
+	// --- Swarmgit (materialized bare git repos) ---
+	if h.swarmgitFleet != nil {
+		projects := h.swarmgitFleet.EnvoyProjects(r.Context(), idStr)
 		for _, p := range projects {
 			if !p.HasBareRepo {
 				continue
@@ -141,16 +141,16 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 				sort.Strings(keys)
 				headSha = p.HeadRefs[keys[0]]
 			}
-			data.Gitmirror = append(data.Gitmirror, SwarmLoadRow{
+			data.Swarmgit = append(data.Swarmgit, SwarmLoadRow{
 				Name:      p.BareRepoPath,
 				Detail:    fmt.Sprintf("%s · %s · git %s", p.Handle, p.DrFanout, shortSha(headSha)),
 				Size:      size,
 				SizeHuman: humanSize(size),
 				Status:    "live",
 				When:      "",
-				Link:      "/swarm/gitmirror/" + p.ProjectID,
+				Link:      "/swarm/swarmgit/" + p.ProjectID,
 			})
-			data.GitmirrorTotal += size
+			data.SwarmgitTotal += size
 		}
 	}
 
@@ -184,11 +184,11 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	data.GrandTotal = data.LodeTotal + data.GitmirrorTotal + data.EchoTotal + data.LockboxTotal
+	data.GrandTotal = data.LodeTotal + data.SwarmgitTotal + data.EchoTotal + data.LockboxTotal
 
 	// Biggest first within each section — that's what "why is disk
 	// full?" wants to see.
-	for _, rows := range [][]SwarmLoadRow{data.Payload, data.Gitmirror, data.Longdrawer, data.Lockbox} {
+	for _, rows := range [][]SwarmLoadRow{data.Payload, data.Swarmgit, data.Longdrawer, data.Lockbox} {
 		sort.SliceStable(rows, func(i, j int) bool { return rows[i].Size > rows[j].Size })
 	}
 
@@ -196,16 +196,16 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 	h.renderer.RenderFragment(w, "envoy-detail", "envoy-swarm-load-fragment", data)
 }
 
-// userFriendlyBlobName strips the `gitmirror:` machine label into a
+// userFriendlyBlobName strips the `swarmgit:` machine label into a
 // readable identifier. Admin-distributed blobs already have a
 // filename-shaped label; those pass through unchanged. Unlabeled
 // blobs surface as their short sha so an operator has a handle to
 // paste into /payload/{sha}.
 func userFriendlyBlobName(label, sha string) string {
-	if strings.HasPrefix(label, "gitmirror:") {
-		parts := strings.SplitN(strings.TrimPrefix(label, "gitmirror:"), ":", 3)
+	if strings.HasPrefix(label, "swarmgit:") {
+		parts := strings.SplitN(strings.TrimPrefix(label, "swarmgit:"), ":", 3)
 		if len(parts) == 3 {
-			return fmt.Sprintf("gitmirror: %s/%s (from %s)", parts[1], parts[2], parts[0])
+			return fmt.Sprintf("swarmgit: %s/%s (from %s)", parts[1], parts[2], parts[0])
 		}
 		return label
 	}

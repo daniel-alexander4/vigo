@@ -17,7 +17,7 @@ import (
 // Substrate-level view of the envoy P2P network. `vigocli swarm` is
 // the substrate — the transport layer every content subsystem rides
 // on. Admin-pushed payloads are `vigocli swarm swarmcast`; personal-DR mirrors
-// are `vigocli swarm gitmirror`; per-user directory sync is `vigocli swarm longdrawer` and
+// are `vigocli swarm swarmgit`; per-user directory sync is `vigocli swarm longdrawer` and
 // `vigocli swarm lockbox`. Muscle memory from the pre-rename era points here
 // for content verbs — the command's long help leads with that
 // disambiguation so a mistyped "swarm distribute" produces an obvious
@@ -37,7 +37,7 @@ type swarmStatusFleet struct {
 
 type swarmStatusPayloads struct {
 	Payload  int `json:"payload"`
-	Gitmirror int `json:"gitmirror"`
+	Swarmgit int `json:"swarmgit"`
 }
 
 type swarmPeersFleet struct {
@@ -71,7 +71,7 @@ This command is the SUBSTRATE. For the content verbs that used to live
 under 'vigocli swarm distribute' etc., see:
 
   vigocli swarm swarmcast      — admin-pushed swarmcasts (was 'swarm distribute')
-  vigocli swarm gitmirror     — personal-DR git mirror fleet view
+  vigocli swarm swarmgit     — personal-DR git mirror fleet view
   vigocli swarm longdrawer      — per-user plaintext directory sync mesh
   vigocli swarm lockbox     — per-user encrypted directory sync mesh
 
@@ -157,7 +157,7 @@ func runSwarmStatus(cmd *cobra.Command, _ []string) error {
 	fmt.Fprintf(w, "%s\t%d\n", bold("Seeding envoys"), resp.EnvoysSeeding)
 	fmt.Fprintf(w, "%s\t%s\n", bold("Fleet footprint"), formatBytes(resp.TotalFootprintBytes))
 	fmt.Fprintf(w, "%s\t%d active · %d revoked\n", bold("Manifest entries"), resp.ManifestEntriesActive, resp.ManifestEntriesRevoked)
-	fmt.Fprintf(w, "%s\t%d payload · %d gitmirror\n", bold("Active payloads"), resp.Payloads.Payload, resp.Payloads.Gitmirror)
+	fmt.Fprintf(w, "%s\t%d payload · %d swarmgit\n", bold("Active payloads"), resp.Payloads.Payload, resp.Payloads.Swarmgit)
 	w.Flush()
 	return nil
 }
@@ -256,5 +256,5 @@ func init() {
 	}
 	swarmCleanupCmd.Flags().String("target", "*", "Hostname pattern (filepath.Match glob) to scope the sweep; default '*' = whole fleet")
 	swarmCmd.AddCommand(swarmStatusCmd, swarmPeersCmd, swarmCleanupCmd)
-	swarmCmd.AddCommand(payloadCmd, gitmirrorCmd, longdrawerCmd, lockboxCmd, puddleCmd)
+	swarmCmd.AddCommand(payloadCmd, swarmgitCmd, longdrawerCmd, lockboxCmd, puddleCmd)
 }

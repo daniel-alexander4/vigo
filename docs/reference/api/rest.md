@@ -1577,7 +1577,7 @@ Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `
 | GET | `/api/v1/agent/download/{os}/{arch}` | Agent binary download |
 | GET | `/api/v1/agent/signing-key` | ED25519 signing public key (hex) |
 | POST | `/api/v1/bootstrap/register` | Agent enrollment with CSR signing |
-| GET | `/api/v1/fleet/pubkeys` | Hostname → Ed25519 pubkey map for the (non-revoked) fleet. Used by agents to bootstrap their gitmirror peer-pubkey TOFU cache. Pubkeys are public-by-construction (broadcast on multicast); endpoint is unauthenticated. |
+| GET | `/api/v1/fleet/pubkeys` | Hostname → Ed25519 pubkey map for the (non-revoked) fleet. Used by agents to bootstrap their swarmgit peer-pubkey TOFU cache. Pubkeys are public-by-construction (broadcast on multicast); endpoint is unauthenticated. |
 
 ---
 
@@ -2097,10 +2097,10 @@ Administrator-pushed file distribution on the swarm substrate. These endpoints p
 - **POST /api/v1/swarm/swarmcast/distribute** — seed a new payload into the swarm for distribution. _(admin)_ Returns **403** when `swarm.enabled: false` or `swarm.swarmcast.enabled: false`; denials are recorded as `swarm.swarmcast.denied` in the [tamper-evident audit chain](../../compliance/tamper-evident-audit.md).
 - **DELETE /api/v1/swarm/swarmcast/{sha256}** — revoke a payload; agents evict on next check-in. _(admin)_ Allowed when the substrate is disabled (cleanup must work on a halted substrate).
 
-### Gitmirror
+### Swarmgit
 
-- **GET /api/v1/swarm/gitmirror/fleet** — fleet-wide gitmirror project view (aggregated from per-envoy traits). _(fleet.read)_
-- **GET /api/v1/swarm/gitmirror/projects/{project_id}/roster** — canonical member fleet list for one project. Returns `{project_id, handle, founder_puddle_pubkey, members[], dr_fanout, member_fleet_count}`. The helper daemon's lazy-fetch target at push time. 404 if no envoy in the fleet has reported the project. _(fleet.read)_
+- **GET /api/v1/swarm/swarmgit/fleet** — fleet-wide swarmgit project view (aggregated from per-envoy traits). _(fleet.read)_
+- **GET /api/v1/swarm/swarmgit/projects/{project_id}/roster** — canonical member fleet list for one project. Returns `{project_id, handle, founder_puddle_pubkey, members[], dr_fanout, member_fleet_count}`. The helper daemon's lazy-fetch target at push time. 404 if no envoy in the fleet has reported the project. _(fleet.read)_
 
 ### Longdrawer
 

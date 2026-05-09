@@ -93,10 +93,10 @@ enum Commands {
     Traits {
         collectors: Vec<String>,
     },
-    /// User-facing gitmirror inspection and recovery tree.
+    /// User-facing swarmgit inspection and recovery tree.
     /// Pure local state reads; does not start the daemon or touch the
-    /// network. Dispatched from `vigo swarm gitmirror ...`.
-    Gitmirror {
+    /// network. Dispatched from `vigo swarm swarmgit ...`.
+    Swarmgit {
         args: Vec<String>,
     },
     /// User-facing lockbox key management + encrypted-directory verbs.
@@ -300,7 +300,7 @@ fn parse_args() -> Result<Cli> {
                 Commands::Traits { collectors: positional[1..].to_vec() }
             }
             "swarm" => match positional.get(1).map(|s| s.as_str()) {
-                Some("gitmirror") => Commands::Gitmirror { args: positional[2..].to_vec() },
+                Some("swarmgit") => Commands::Swarmgit { args: positional[2..].to_vec() },
                 Some("lockbox") => Commands::Lockbox { args: positional[2..].to_vec() },
                 Some("puddle") => Commands::SelfFleet { args: positional[2..].to_vec() },
                 // Read-only diagnostic verbs (0.41.1+): substrate
@@ -315,7 +315,7 @@ fn parse_args() -> Result<Cli> {
                     Commands::SwarmDiag { args: positional[1..].to_vec() }
                 }
                 // Hidden: server-dispatched cleanup verb. Mirrors the
-                // `_apply-blacklist` pattern (gitmirror/lockbox), but
+                // `_apply-blacklist` pattern (swarmgit/lockbox), but
                 // operates on the substrate-shared blob cache rather
                 // than per-substrate state. Not advertised in --help.
                 Some("_apply-cleanup") => Commands::SwarmApplyCleanup,
@@ -373,7 +373,7 @@ COMMANDS:
     version     Print agent version
     status      Show agent state (config, cached policy, pending results)
     traits      Print collected traits as JSON [COLLECTORS...]
-    swarm gitmirror     Inspect + recover gitmirror mirrors on this envoy
+    swarm swarmgit     Inspect + recover swarmgit mirrors on this envoy
                           list | show | log | branches | peers | recover | recover-all
     swarm lockbox     Manage lockbox — per-user encrypted P2P directory
                           init | enroll | status | unlock | lock | encrypt | decrypt | forget | reencrypt
@@ -1112,56 +1112,56 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // Clean up any stale ephemeral SSH keys left by crashed Scrier sessions.
     vigo::tunnel::sshauth::cleanup_stale_keys();
 
-    // Gitmirror claims handle: shared between the swarm manager (reader
+    // Swarmgit claims handle: shared between the swarm manager (reader
     // via `.shared()`), the check-in handler (writer for server-
     // delivered claims), the swarm discovery listener (writer for
-    // LAN-ingested claims), and the gitmirror reactor (reader through
+    // LAN-ingested claims), and the swarmgit reactor (reader through
     // the receiver). Constructed here, before swarm discovery spawns,
     // so all of the above can share the same Arc.
-    let gitmirror_claims = vigo::swarm::gitmirror::receiver::ClaimsHandle::new();
+    let swarmgit_claims = vigo::swarm::swarmgit::receiver::ClaimsHandle::new();
 
-    // Gitmirror live on/off switch. Initial value comes from the cached
+    // Swarmgit live on/off switch. Initial value comes from the cached
     // policy bundle; the check-in loop re-reads after every accepted
     // bundle and calls `set` to propagate flips without a restart. All
-    // gitmirror consumers (discovery announcer, peer server handler,
+    // swarmgit consumers (discovery announcer, peer server handler,
     // reactor) consult this gate at their natural sample points.
-    let gitmirror_gate = vigo::swarm::gitmirror::Gate::new(
-        vigo::swarm::gitmirror::gitmirror_enabled_for_envoy(state_store.as_deref()),
+    let swarmgit_gate = vigo::swarm::swarmgit::Gate::new(
+        vigo::swarm::swarmgit::swarmgit_enabled_for_envoy(state_store.as_deref()),
     );
 
-    // Gitmirror LAN peer table + local info + pending claims. Always
+    // Swarmgit LAN peer table + local info + pending claims. Always
     // constructed so the gate can flip at runtime without restarting
     // the agent; the structures are inert while the gate is off (no
-    // writes to the peer table, no GITMIRROR / GITMIRRORCLAIM lines
-    // emitted, no `/gitmirror/push` accepted). Hostname read is a
+    // writes to the peer table, no SWARMGIT / SWARMGITCLAIM lines
+    // emitted, no `/swarmgit/push` accepted). Hostname read is a
     // single cheap syscall so we do it unconditionally.
-    let gitmirror_peer_table = std::sync::Arc::new(vigo::swarm::gitmirror::peer_table::PeerTable::new());
-    let gitmirror_pending_claims =
-        std::sync::Arc::new(vigo::swarm::gitmirror::pending_claims::PendingClaims::new());
-    // Load the envoy's Ed25519 keypair for signing gitmirror multicast
-    // announcements. The verifying key is embedded in every GITMIRROR line
+    let swarmgit_peer_table = std::sync::Arc::new(vigo::swarm::swarmgit::peer_table::PeerTable::new());
+    let swarmgit_pending_claims =
+        std::sync::Arc::new(vigo::swarm::swarmgit::pending_claims::PendingClaims::new());
+    // Load the envoy's Ed25519 keypair for signing swarmgit multicast
+    // announcements. The verifying key is embedded in every SWARMGIT line
     // so receivers can verify the trailing SIG without needing a
     // separate pubkey-distribution channel. Trust-on-first-use cache
     // guards against later pubkey swaps by the same hostname.
-    let (gitmirror_verify_key, gitmirror_signing_key) =
+    let (swarmgit_verify_key, swarmgit_signing_key) =
         vigo::auth::keypair::load_or_generate(&cli.data_dir)?;
-    let gitmirror_pubkey_hex = hex::encode(gitmirror_verify_key.to_bytes());
-    let gitmirror_pubkey_cache = std::sync::Arc::new(
-        vigo::swarm::gitmirror::peer_pubkey_cache::PeerPubkeyCache::load_or_empty(),
+    let swarmgit_pubkey_hex = hex::encode(swarmgit_verify_key.to_bytes());
+    let swarmgit_pubkey_cache = std::sync::Arc::new(
+        vigo::swarm::swarmgit::peer_pubkey_cache::PeerPubkeyCache::load_or_empty(),
     );
-    let gitmirror_local_info = {
+    let swarmgit_local_info = {
         let hostname = std::fs::read_to_string("/etc/hostname")
             .unwrap_or_else(|_| "unknown".to_string())
             .trim()
             .to_string();
-        vigo::swarm::gitmirror::peer_table::LocalInfo {
+        vigo::swarm::swarmgit::peer_table::LocalInfo {
             hostname,
-            users: vigo::swarm::gitmirror::peer_table::local_human_users(),
+            users: vigo::swarm::swarmgit::peer_table::local_human_users(),
             tags: Vec::new(),
-            pubkey_hex: gitmirror_pubkey_hex,
+            pubkey_hex: swarmgit_pubkey_hex,
         }
     };
-    let gitmirror_signing_key = std::sync::Arc::new(gitmirror_signing_key);
+    let swarmgit_signing_key = std::sync::Arc::new(swarmgit_signing_key);
 
     // Spawn swarm peer server + multicast discovery for P2P blob distribution.
     // Build TLS certs for the swarm manager (shared with peer server).
@@ -1175,14 +1175,14 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         None
     };
 
-    // Bootstrap the gitmirror peer-pubkey cache from the server. Closes
+    // Bootstrap the swarmgit peer-pubkey cache from the server. Closes
     // the TOFU first-contact race by pre-populating with authoritative
-    // pubkeys before any GITMIRROR multicast is processed. One-shot at
+    // pubkeys before any SWARMGIT multicast is processed. One-shot at
     // startup + 15-min refresh; failures fall back to TOFU. Skipped if
     // we don't have mTLS certs yet (pre-enrollment).
     if let Some(ref tls) = swarm_tls {
-        vigo::swarm::gitmirror::pubkey_bootstrap::spawn(
-            gitmirror_pubkey_cache.clone(),
+        vigo::swarm::swarmgit::pubkey_bootstrap::spawn(
+            swarmgit_pubkey_cache.clone(),
             cli.api_addr.clone(),
             tls.clone(),
             cancel.clone(),
@@ -1205,19 +1205,19 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                 let swarm_cancel = cancel.clone();
                 let pm = peer_map.clone();
                 let sm = shared_manifest.clone();
-                // Gitmirror server-side context for cross-subnet
+                // Swarmgit server-side context for cross-subnet
                 // push (Phase 7). Constructed unconditionally; the
-                // gate field is consulted by the `/gitmirror/push`
+                // gate field is consulted by the `/swarmgit/push`
                 // handler, which returns 403 while dormant.
-                let gitmirror_srv_ctx = Some(swarm::server::GitmirrorServerCtx {
-                    claims: gitmirror_claims.clone(),
+                let swarmgit_srv_ctx = Some(swarm::server::SwarmgitServerCtx {
+                    claims: swarmgit_claims.clone(),
                     manifest: shared_manifest.clone(),
-                    local_hostname: gitmirror_local_info.hostname.clone(),
-                    gate: gitmirror_gate.clone(),
+                    local_hostname: swarmgit_local_info.hostname.clone(),
+                    gate: swarmgit_gate.clone(),
                 });
                 tokio::spawn(async move {
                     if let Err(e) = swarm::server::run(
-                        swarm_port, blobs_dir.clone(), tls_acceptor, bw_monitor, pm, sm, swarm_cancel, gitmirror_srv_ctx,
+                        swarm_port, blobs_dir.clone(), tls_acceptor, bw_monitor, pm, sm, swarm_cancel, swarmgit_srv_ctx,
                     ).await {
                         warn!(error = %e, "swarm peer server exited with error");
                     }
@@ -1234,13 +1234,13 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                         swarm_port,
                         cancel.clone(),
                         announce_signal.clone(),
-                        Some(gitmirror_peer_table.clone()),
-                        Some(gitmirror_local_info.clone()),
-                        Some(gitmirror_pending_claims.clone()),
-                        Some(gitmirror_claims.clone()),
-                        gitmirror_gate.clone(),
-                        Some(gitmirror_signing_key.clone()),
-                        Some(gitmirror_pubkey_cache.clone()),
+                        Some(swarmgit_peer_table.clone()),
+                        Some(swarmgit_local_info.clone()),
+                        Some(swarmgit_pending_claims.clone()),
+                        Some(swarmgit_claims.clone()),
+                        swarmgit_gate.clone(),
+                        Some(swarmgit_signing_key.clone()),
+                        Some(swarmgit_pubkey_cache.clone()),
                     );
                 }
             }
@@ -1251,7 +1251,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     }
 
     // Swarm download manager — long-lived coordinator for all P2P downloads.
-    // `gitmirror_claims` was constructed above so swarm discovery could
+    // `swarmgit_claims` was constructed above so swarm discovery could
     // share the same Arc for LAN claim ingest.
     let swarm_manager = swarm::manager::SwarmManager::spawn(
         shared_peer_map.clone(),
@@ -1259,7 +1259,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         state_store.clone(),
         swarm_tls.clone(),
         cancel.clone(),
-        Some(gitmirror_claims.shared()),
+        Some(swarmgit_claims.shared()),
         announce_signal.clone(),
     );
 
@@ -1276,20 +1276,20 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // daemon still runs in passive mode (discovery + serves pulls).
     vigo::swarm::lockbox::spawn(swarm_tls.clone(), cancel.clone());
 
-    // Gitmirror subsystem — git-commit-triggered repo sync over swarm.
+    // Swarmgit subsystem — git-commit-triggered repo sync over swarm.
     // Pass both halves of the receiver wiring: the claims handle (for
     // the per-envoy wanted-labels set) and the in-memory swarm manifest
     // (for resolving labels to blob shas inside the receiver tick).
     //
-    // The reactor is always spawned; its tick consults `gitmirror_gate`
+    // The reactor is always spawned; its tick consults `swarmgit_gate`
     // and runs the publish/receive work only while the gate is on. The
     // check-in loop flips the gate after every accepted policy bundle
     // so operators can enable/disable the subsystem without restarting
     // the agent.
-    vigo::swarm::gitmirror::spawn(
+    vigo::swarm::swarmgit::spawn(
         swarm_tls.clone(),
         cancel.clone(),
-        gitmirror_gate.clone(),
+        swarmgit_gate.clone(),
     );
 
     let cfg = checkin::loop_impl::LoopConfig {
@@ -1307,7 +1307,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         peer_map: Some(shared_peer_map.clone()),
         manifest: Some(shared_manifest.clone()),
         swarm_manager: Some(swarm_manager),
-        gitmirror_gate: Some(gitmirror_gate.clone()),
+        swarmgit_gate: Some(swarmgit_gate.clone()),
     };
 
     checkin::loop_impl::daemon_loop(cancel, &mut client, &executors, None, cfg).await
@@ -1684,11 +1684,11 @@ async fn async_main() -> Result<()> {
             Ok(())
         }
 
-        Some(Commands::Gitmirror { args }) => {
-            // All vigo swarm gitmirror subcommands are pure local state reads
+        Some(Commands::Swarmgit { args }) => {
+            // All vigo swarm swarmgit subcommands are pure local state reads
             // and/or user-owned `git clone` spawns. Dispatcher lives
-            // in agent/src/gitmirror/cli.rs.
-            vigo::swarm::gitmirror::cli::run(args.clone())
+            // in agent/src/swarmgit/cli.rs.
+            vigo::swarm::swarmgit::cli::run(args.clone())
         }
 
         Some(Commands::Lockbox { args }) => {

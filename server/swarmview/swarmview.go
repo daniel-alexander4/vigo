@@ -10,7 +10,7 @@
 // join. Types + snapshot functions live here so `server/api` and
 // `ui/` can both consume them without creating an import cycle — the
 // same split the content-subsystem aggregators use
-// (gitmirrormesh/longdrawermesh/lockboxmesh).
+// (swarmgitmesh/longdrawermesh/lockboxmesh).
 //
 // All functions are pure reads over already-in-memory data; nothing
 // here runs on the agent check-in hot path.
@@ -26,7 +26,7 @@ import (
 
 // EnvoyInput is the minimal per-envoy shape swarmview needs from the
 // fleet index. Declared here so this package doesn't import
-// server/fleet — matches the pattern in server/gitmirrormesh and
+// server/fleet — matches the pattern in server/swarmgitmesh and
 // server/longdrawermesh. Callers convert fleet.EnvoyState → EnvoyInput
 // before calling Snapshot*.
 type EnvoyInput struct {
@@ -53,7 +53,7 @@ type Status struct {
 // PayloadCounts breaks active seeds out by content subsystem.
 type PayloadCounts struct {
 	Payload  int `json:"payload"`
-	Gitmirror int `json:"gitmirror"`
+	Swarmgit int `json:"swarmgit"`
 }
 
 // Peers is the per-envoy rollup.
@@ -103,8 +103,8 @@ func SnapshotStatus(src Sources) Status {
 	if src.Tracker != nil {
 		for sha, seed := range src.Tracker.ListSeeds() {
 			seedSize[sha] = seed.Size
-			if strings.HasPrefix(seed.Label, "gitmirror:") {
-				out.Payloads.Gitmirror++
+			if strings.HasPrefix(seed.Label, "swarmgit:") {
+				out.Payloads.Swarmgit++
 			} else {
 				out.Payloads.Payload++
 			}

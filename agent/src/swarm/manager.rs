@@ -66,21 +66,21 @@ enum ManagerMessage {
 impl SwarmManager {
     /// Spawn the manager task. Runs until the cancellation token fires.
     ///
-    /// `gitmirror_wanted`, when supplied, is a shared label set written
-    /// by the check-in handler when it processes a `gitmirror_claims`
+    /// `swarmgit_wanted`, when supplied, is a shared label set written
+    /// by the check-in handler when it processes a `swarmgit_claims`
     /// payload. On every `ManifestUpdated` evaluation the manager
     /// merges these claim-driven entries into the standard
-    /// self-assignment work set, so gitmirror content seeds — which
+    /// self-assignment work set, so swarmgit content seeds — which
     /// are flagged claim-only by [`Manifest::assignments_for`] — get
     /// downloaded only when the server-issued claim list explicitly
-    /// names them. Pass `None` to disable gitmirror integration.
+    /// names them. Pass `None` to disable swarmgit integration.
     pub fn spawn(
         peer_map: Arc<PeerMap>,
         manifest: Arc<Manifest>,
         state: Option<Arc<StateStore>>,
         tls: Option<TlsCerts>,
         cancel: tokio_util::sync::CancellationToken,
-        gitmirror_wanted: Option<Arc<RwLock<HashSet<String>>>>,
+        swarmgit_wanted: Option<Arc<RwLock<HashSet<String>>>>,
         announce: Arc<AnnounceSignal>,
     ) -> Self {
         let (tx, rx) = mpsc::channel(CHANNEL_BUFFER);
@@ -91,7 +91,7 @@ impl SwarmManager {
             state,
             tls.clone(),
             cancel.clone(),
-            gitmirror_wanted,
+            swarmgit_wanted,
             announce,
         ));
         // Background: re-probe stale peers so per-chunk scheduling keeps
@@ -114,7 +114,7 @@ async fn run(
     state: Option<Arc<StateStore>>,
     tls: Option<TlsCerts>,
     cancel: tokio_util::sync::CancellationToken,
-    gitmirror_wanted: Option<Arc<RwLock<HashSet<String>>>>,
+    swarmgit_wanted: Option<Arc<RwLock<HashSet<String>>>>,
     announce: Arc<AnnounceSignal>,
 ) {
     let cache = match BlobCache::new(crate::platform::paths::default_blobs_dir()) {
@@ -259,13 +259,13 @@ async fn run(
                         let traits = std::collections::HashMap::new(); // TODO: pass cached traits
                         let mut matched = manifest.assignments_for(&hostname, &traits);
 
-                        // Gitmirror claim-driven downloads. The gitmirror content
+                        // Swarmgit claim-driven downloads. The swarmgit content
                         // seed namespace is excluded from `assignments_for`
                         // (claim-only filter); the only path to downloading
                         // them is via the per-envoy claim list issued by the
                         // server's `ClaimTable` and shipped through the
                         // check-in handler into the shared wanted set below.
-                        if let Some(ref wanted) = gitmirror_wanted {
+                        if let Some(ref wanted) = swarmgit_wanted {
                             let snapshot = {
                                 let guard = wanted.read().unwrap_or_else(|e| e.into_inner());
                                 guard.clone()
@@ -275,7 +275,7 @@ async fn run(
                                 if !claim_entries.is_empty() {
                                     debug!(
                                         count = claim_entries.len(),
-                                        "swarm manager: merging gitmirror claim-driven entries"
+                                        "swarm manager: merging swarmgit claim-driven entries"
                                     );
                                 }
                                 matched.extend(claim_entries);

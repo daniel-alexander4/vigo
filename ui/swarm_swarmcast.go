@@ -27,8 +27,8 @@ type SwarmHostnameResolver interface {
 // so the single /payload/{sha256} page shows the heatmap + chunk-flow matrix
 // directly.
 //
-// Gitmirror bundles (labels prefixed with `gitmirror:`) are filtered out at list
-// assembly time — personal-DR repo mirrors have their own page at /gitmirror
+// Swarmgit bundles (labels prefixed with `swarmgit:`) are filtered out at list
+// assembly time — personal-DR repo mirrors have their own page at /swarmgit
 // and don't belong in the admin-payload inventory.
 type LodePageData struct {
 	PageData
@@ -48,8 +48,8 @@ type LodePageData struct {
 }
 
 // LodeBlobEntry is a blob in the list view with distribution summary.
-// Gitmirror bundles are filtered out before this struct is built — the
-// /gitmirror page owns that surface.
+// Swarmgit bundles are filtered out before this struct is built — the
+// /swarmgit page owns that surface.
 type LodeBlobEntry struct {
 	SHA256    string
 	Label     string
@@ -122,7 +122,7 @@ func (h *Handler) lodeList(w http.ResponseWriter, r *http.Request) {
 
 	if h.swarmTracker != nil {
 		for sha, seed := range h.swarmTracker.ListSeeds() {
-			if strings.HasPrefix(seed.Label, "gitmirror:") {
+			if strings.HasPrefix(seed.Label, "swarmgit:") {
 				continue
 			}
 			size := int64(seed.Size)
@@ -150,10 +150,10 @@ func (h *Handler) lodeList(w http.ResponseWriter, r *http.Request) {
 			data.Blobs = append(data.Blobs, entry)
 		}
 
-		// Revoked seeds (gitmirror bundles still skipped — rotation is a
-		// gitmirror-internal concern, not an admin-payload one).
+		// Revoked seeds (swarmgit bundles still skipped — rotation is a
+		// swarmgit-internal concern, not an admin-payload one).
 		for sha, seed := range h.swarmTracker.ListRevokedSeeds() {
-			if strings.HasPrefix(seed.Label, "gitmirror:") {
+			if strings.HasPrefix(seed.Label, "swarmgit:") {
 				continue
 			}
 			size := int64(seed.Size)
@@ -196,10 +196,10 @@ func (h *Handler) lodeDetail(w http.ResponseWriter, r *http.Request, sha string)
 
 	if h.swarmTracker != nil {
 		if seed, ok := h.swarmTracker.GetSeed(sha); ok {
-			// Gitmirror bundles belong on /gitmirror, not /payload. Redirect so
-			// admins pasting a gitmirror sha land on the right page.
-			if strings.HasPrefix(seed.Label, "gitmirror:") {
-				http.Redirect(w, r, "/swarm/gitmirror/"+seed.Label, http.StatusSeeOther)
+			// Swarmgit bundles belong on /swarmgit, not /payload. Redirect so
+			// admins pasting a swarmgit sha land on the right page.
+			if strings.HasPrefix(seed.Label, "swarmgit:") {
+				http.Redirect(w, r, "/swarm/swarmgit/"+seed.Label, http.StatusSeeOther)
 				return
 			}
 			size := int64(seed.Size)
@@ -359,11 +359,11 @@ func summarizeSwarmStatuses(statuses []swarm.EnvoySwarmStatus) SwarmSummary {
 // but haven't reported chunks yet. Fan-out uses the target pattern
 // against the full fleet.
 //
-// Claim-only labels (gitmirror) skip the fan-out entirely: as of
+// Claim-only labels (swarmgit) skip the fan-out entirely: as of
 // Phase 8 (0.23.0) the server no longer tracks which envoys hold a
-// gitmirror mirror — selection is entirely P2P. Operators view
-// gitmirror state via `vigo repo list` on individual envoys or via
-// the `gitmirror.sources[]` trait payload.
+// swarmgit mirror — selection is entirely P2P. Operators view
+// swarmgit state via `vigo repo list` on individual envoys or via
+// the `swarmgit.sources[]` trait payload.
 func addPendingEnvoys(statuses *[]swarm.EnvoySwarmStatus, label, target string, totalChunks int, resolver SwarmHostnameResolver) {
 	if resolver == nil {
 		return

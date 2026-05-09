@@ -405,9 +405,9 @@ watcher:
 #   puddle:
 #     enabled: ["annlap", "plex", "girlslaptop"]
 #
-#   # Gitmirror (git-over-swarm) authorization — publisher and
+#   # Swarmgit (git-over-swarm) authorization — publisher and
 #   # bundle-holder gate.
-#   gitmirror:
+#   swarmgit:
 #     enabled: ["*"]
 
 

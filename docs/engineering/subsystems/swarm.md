@@ -5,7 +5,7 @@ Swarm is the envoy-only peer-to-peer network that Vigo's content subsystems ride
 
 - **[Payload](../../reference/glossary.md#payload)** — administrator-pushed file distribution (`vigocli swarm distribute`). Fleet-wide, operator-scoped.
 - **[Longdrawer](longdrawer.md)** — per-user plaintext home-directory sync. User-scoped, LAN-local by default.
-- **[Gitmirror](gitmirror.md)** — per-user source-control repo mirroring for personal disaster recovery. User-scoped.
+- **[Swarmgit](swarmgit.md)** — per-user source-control repo mirroring for personal disaster recovery. User-scoped.
 - **[Lockbox](lockbox.md)** — per-user always-encrypted home-directory sync. Ciphertext at rest, password-gated decryption.
 
 Each content subsystem has its own content rules, multicast group, and sidecar format, but all four reuse swarm's mTLS trust, peer channel, and manifest gossip. This page documents the substrate. For a given content type, follow the links above.
@@ -153,7 +153,7 @@ The server also ships its manifest CRDT with every check-in response. This is th
 
 ### Server-side persistence + agent-gossip gate
 
-The server's `ManifestStore` persists to `<dir(seed_dir)>/server-manifest.json` (mode `0600`, atomic temp+rename via a 1-second debounced background flusher). Without persistence, a server restart wipes the in-RAM manifest and agents reporting their cached `swarm_seeds` traits re-create every entry — including ones the operator just revoked — within seconds. This was the root cause of the 2026-04-24 cairn/gitmirror reset incident; persistence + the gate below close the footgun structurally. The filename is deliberately distinct from the agent's `/var/lib/vigo/swarm/manifest.json` (Rust schema) since the server-as-envoy story has both processes sharing that directory via bind-mount.
+The server's `ManifestStore` persists to `<dir(seed_dir)>/server-manifest.json` (mode `0600`, atomic temp+rename via a 1-second debounced background flusher). Without persistence, a server restart wipes the in-RAM manifest and agents reporting their cached `swarm_seeds` traits re-create every entry — including ones the operator just revoked — within seconds. This was the root cause of the 2026-04-24 cairn/swarmgit reset incident; persistence + the gate below close the footgun structurally. The filename is deliberately distinct from the agent's `/var/lib/vigo/swarm/manifest.json` (Rust schema) since the server-as-envoy story has both processes sharing that directory via bind-mount.
 
 The agent-driven `RecordSeedFromAgent` path is gated: agents can only refresh entries the server has already seen via the authoritative admin-distribute path. Unknown or revoked SHAs reported via gossip are dropped (logged at INFO, no entry created). The admin path (`POST /api/v1/swarm/swarmcast/distribute` → `RecordSeed`) remains the only way to introduce new entries.
 
@@ -182,24 +182,24 @@ In 0.41.0 the substrate switched from a fleet-wide enabled-bool plus per-substra
 swarm:
   enabled: ["*"]                          # substrate runs on these hosts
   puddle:    { enabled: ["*"] }           # lockbox derives from this list
-  gitmirror: { enabled: ["annlap", "plex", "girlslaptop"] }
+  swarmgit: { enabled: ["annlap", "plex", "girlslaptop"] }
   longdrawer:  { enabled: ["*"] }
   payload:   { enabled: ["*"] }
 ```
 
-The server evaluates patterns against each agent's hostname and emits the resolved bools in `PolicyBundle.vars_json` on every check-in (`swarm_enabled`, `swarm_puddle_enabled`, `swarm_gitmirror_enabled`, `swarm_longdrawer_enabled`, `swarm_swarmcast_enabled`). Agents never see the patterns — they only see their own resolved gate. A `vigocli config publish` propagates within one check-in cycle without restarting anything.
+The server evaluates patterns against each agent's hostname and emits the resolved bools in `PolicyBundle.vars_json` on every check-in (`swarm_enabled`, `swarm_puddle_enabled`, `swarm_swarmgit_enabled`, `swarm_longdrawer_enabled`, `swarm_swarmcast_enabled`). Agents never see the patterns — they only see their own resolved gate. A `vigocli config publish` propagates within one check-in cycle without restarting anything.
 
 **Two layers.** Both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for the subsystem to be active there. Empty list at either layer disables the subsystem on that host.
 
 **Lockbox derives from puddle.** ADR-020. There is no `swarm.lockbox` section. A host allowed in `swarm.puddle.enabled` can hold lockbox ciphertext for its locally-enrolled members; a host denied there cannot use lockbox at all. Single source of truth.
 
-**No more blacklists.** The destructive-blacklist semantic retired in 0.41.0 (one-tiny-typo-wipes-fleet-state was a footgun). Negative patterns subsume the gate-only use case (`["-rasp1", "*"]` excludes a single host; the rest of the fleet is allowed). Destructive scrub of per-user state moved to the usercrate `puddle: bool` and `gitmirror: bool` flags — see [Usercrate authorization](#usercrate-authorization) below.
+**No more blacklists.** The destructive-blacklist semantic retired in 0.41.0 (one-tiny-typo-wipes-fleet-state was a footgun). Negative patterns subsume the gate-only use case (`["-rasp1", "*"]` excludes a single host; the rest of the fleet is allowed). Destructive scrub of per-user state moved to the usercrate `puddle: bool` and `swarmgit: bool` flags — see [Usercrate authorization](#usercrate-authorization) below.
 
 | Knob | Effect | Audit event |
 |------|--------|-------------|
 | `swarm.enabled: []` | Substrate-level kill switch. Agents whose hostname doesn't match stop announcing, stop serving, stop fetching across every subsystem. | `swarm.enabled` (with added/removed patterns) |
 | `swarm.puddle.enabled: []` | Halts puddle and lockbox on hosts that don't match. Identity material under `~user/.vigo-puddle/` and `~user/.lockbox/` is preserved (gate-only). | `swarm.puddle.enabled` |
-| `swarm.gitmirror.enabled: []` | Halts gitmirror publisher and receiver on hosts that don't match. Already-held mirrors preserved. | `swarm.gitmirror.enabled` |
+| `swarm.swarmgit.enabled: []` | Halts swarmgit publisher and receiver on hosts that don't match. Already-held mirrors preserved. | `swarm.swarmgit.enabled` |
 | `swarm.longdrawer.enabled: []` | Halts longdrawer announcer / listener / push handler on hosts that don't match. `~user/longdrawer/` content preserved. | `swarm.longdrawer.enabled` |
 | `swarm.swarmcast.enabled: []` | Halts payload reception. `POST /api/v1/swarm/swarmcast/distribute` returns **403** with `audit_event=swarm.swarmcast.denied` when the list is empty (no envoy could possibly receive). | `swarm.swarmcast.enabled` (flip), `swarm.swarmcast.denied` (per blocked admin push) |
 
@@ -220,14 +220,14 @@ resources:
     name: dan
     home: /home/dan
     puddle: true       # authorizes dan to run `vigo swarm puddle *`
-    gitmirror: true    # authorizes dan to run `vigo swarm gitmirror project *`
+    swarmgit: true    # authorizes dan to run `vigo swarm swarmgit project *`
 ```
 
 Both flags default to `false`. Longdrawer and payload have no usercrate flag — longdrawer gates by Unix file ownership (the user creates `~/longdrawer/`), payload by admin call site.
 
 **Cache.** The user executor writes the resolved flags to `/var/lib/vigo/usercrate-policy/<username>.json` on every reconcile pass (root-owned, mode 0644). Per-user CLI verbs read this cache as a precondition — no server round-trip, works offline.
 
-**Scrub-on-transition.** Removing `puddle: true` from a usercrate triggers destructive cleanup on the next reconcile: lockbox LEAVE sentinel, then wipe of `~/.vigo-puddle/`, `~/.lockbox/`, `~/lockbox/`, and `~/.vigo-gitmirror/`. Removing `gitmirror: true` scrubs only `~/.vigo-gitmirror/`. The flags' removal is the destructive lever in 0.41.0 — envoy-level pattern flips are gate-only.
+**Scrub-on-transition.** Removing `puddle: true` from a usercrate triggers destructive cleanup on the next reconcile: lockbox LEAVE sentinel, then wipe of `~/.vigo-puddle/`, `~/.lockbox/`, `~/lockbox/`, and `~/.vigo-swarmgit/`. Removing `swarmgit: true` scrubs only `~/.vigo-swarmgit/`. The flags' removal is the destructive lever in 0.41.0 — envoy-level pattern flips are gate-only.
 
 ## Related
 

@@ -137,7 +137,7 @@ type SwarmSection struct {
 	Longdrawer            LongdrawerSection  `yaml:"longdrawer" doc:"Longdrawer (LAN plaintext directory mirror) authorization + per-file size cap." long:"Hostname pattern list controlling which envoys run the longdrawer daemon. Per-user opt-in still requires the user creating ~/longdrawer/. Plus a per-file size cap on LAN sync."`
 	Puddle              SwarmPuddleSection    `yaml:"puddle" doc:"Puddle (per-user identity) authorization. Lockbox derives ITS AUTHORIZATION from this section per ADR-020 — only operational tuning lives in lockbox below." long:"Hostname pattern list controlling which envoys can host puddle identity material. Lockbox's authorization (allow/deny) follows this list — a host allowed here can hold lockbox ciphertext for its locally-enrolled puddle members; a host denied here cannot use lockbox at all."`
 	Lockbox           SwarmLockboxSection `yaml:"lockbox" doc:"Lockbox operational tuning (size + envelope retention). Authorization derives from puddle above; this section is size/retention only." long:"Per-file ciphertext size cap and envelope (LEAVE/RESURRECT/TOMBSTONE) retention window. Authorization gating still derives from swarm.puddle.enabled per ADR-020 — there is no enabled field here."`
-	Gitmirror           SwarmGitmirrorSection `yaml:"gitmirror" doc:"Gitmirror (git-over-swarm) authorization + bundle size + envelope retention." long:"Hostname pattern list controlling which envoys participate in gitmirror — both as publishers and as bundle holders. Plus per-bundle fan-out size cap and revoke/leave envelope retention."`
+	Swarmgit           SwarmSwarmgitSection `yaml:"swarmgit" doc:"Swarmgit (git-over-swarm) authorization + bundle size + envelope retention." long:"Hostname pattern list controlling which envoys participate in swarmgit — both as publishers and as bundle holders. Plus per-bundle fan-out size cap and revoke/leave envelope retention."`
 }
 
 // SwarmPuddleSection authorizes the puddle (per-user identity) subsystem
@@ -149,14 +149,14 @@ type SwarmPuddleSection struct {
 	Enabled []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run puddle. Lockbox follows the same gate." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
 }
 
-// SwarmGitmirrorSection authorizes the gitmirror subsystem per envoy
+// SwarmSwarmgitSection authorizes the swarmgit subsystem per envoy
 // and tunes its operational caps. `Enabled` gates which envoys
 // participate; `MaxBundleBytes` caps per-fanout bundle size on the
 // receiver; `EnvelopeRetention` controls the retention window for
 // revoke/leave gossip envelopes before they are reaped.
-type SwarmGitmirrorSection struct {
-	Enabled           []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run gitmirror — publisher and receiver." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
-	MaxBundleBytes    int64    `yaml:"max_bundle_bytes" doc:"Per-bundle size cap for gitmirror fan-out. 0 = no cap." default:"1073741824" example:"1073741824 (1 GiB), 5368709120 (5 GiB), 0 (uncapped)"`
+type SwarmSwarmgitSection struct {
+	Enabled           []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run swarmgit — publisher and receiver." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
+	MaxBundleBytes    int64    `yaml:"max_bundle_bytes" doc:"Per-bundle size cap for swarmgit fan-out. 0 = no cap." default:"1073741824" example:"1073741824 (1 GiB), 5368709120 (5 GiB), 0 (uncapped)"`
 	EnvelopeRetention string   `yaml:"envelope_retention" doc:"Retention window for revoke/leave gossip envelopes before they are reaped. Empty = compile-time default (90d)." default:"90d" example:"90d, 30d, 365d"`
 }
 

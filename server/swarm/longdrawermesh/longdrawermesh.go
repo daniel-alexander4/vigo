@@ -3,7 +3,7 @@
 
 // Package longdrawermesh builds the fleet-wide longdrawer observability
 // view by joining per-user snapshots from every envoy's latest
-// `longdrawer` trait. Mirrors the gitmirrormesh pattern — pure
+// `longdrawer` trait. Mirrors the swarmgitmesh pattern — pure
 // projection over the standard trait pipeline, no new RPC.
 //
 // Longdrawer is plaintext LAN-only peer sync. This aggregator exists
@@ -110,7 +110,7 @@ const StaleAfter = 5 * time.Minute
 
 // Aggregator carries a short cache so HTMX drill-down fragments
 // loaded off a single page render don't re-parse every envoy's
-// trait. Matches gitmirrormesh's design.
+// trait. Matches swarmgitmesh's design.
 type Aggregator struct {
 	queries *db.Queries
 

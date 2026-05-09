@@ -86,7 +86,7 @@ Users who want to run lockbox without puddle (for testing, isolated environments
 
 **Full key unification — share one age key across all the user's envoys.** Tempting and architecturally cleaner; the membership layer becomes trivial. Rejected because losing the wrapped puddle key + passphrase on all envoys becomes an absolute data-loss event for the user's encrypted content. Per-envoy keys mean a single envoy compromise (or single passphrase loss) doesn't kill the whole lockbox corpus. The marginal compartmentalization is worth keeping.
 
-**Leave lockbox entirely alone; build puddle only for gitmirror.** Rejected after consideration. Lockbox's current ceremony (per-envoy `init` + `enroll` + `unlock`) is the loudest UX pain point in the user-facing swarm subsystems, and puddle was sized partly to address it. Walking away from the lockbox win once puddle exists would be leaving real value on the table. The membership-only refactor is bounded enough to ship.
+**Leave lockbox entirely alone; build puddle only for swarmgit.** Rejected after consideration. Lockbox's current ceremony (per-envoy `init` + `enroll` + `unlock`) is the loudest UX pain point in the user-facing swarm subsystems, and puddle was sized partly to address it. Walking away from the lockbox win once puddle exists would be leaving real value on the table. The membership-only refactor is bounded enough to ship.
 
 **Migrate lockbox's per-envoy passphrases to the puddle passphrase.** Considered. Each envoy could re-wrap its existing per-envoy age identity under the puddle passphrase on first `puddle activate`. Rejected — adds a one-shot migration step, complicates the rollout, and forces users to either remember the old per-envoy passphrase to do the rewrap or accept a re-init. Cleaner: lockbox's per-envoy passphrase remains separate; users can manually rotate to the puddle passphrase via `vigo swarm lockbox rewrap` if desired.
 
@@ -122,7 +122,7 @@ This ADR deliberately preserves per-envoy age keys after introducing puddle iden
 
 **Operational:**
 - Agent rebuild + cross-compile + redeploy required.
-- Z-level version bump (smaller change than ADR-015's gitmirror rework).
+- Z-level version bump (smaller change than ADR-015's swarmgit rework).
 - No new dependencies; reuses ADR-014's puddle primitive.
 
 **Estimated weight:** ~20–50 KiB on the agent. Mostly recipient-list-resolution refactor + small additions to discovery and leaves. Smaller than ADR-014 or ADR-015.

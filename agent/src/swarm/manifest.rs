@@ -260,12 +260,12 @@ impl Manifest {
     /// Used for self-assignment: the agent evaluates manifest entries locally
     /// instead of relying on the server to assign per-envoy.
     ///
-    /// **Claim-only labels are excluded.** Gitmirror content and meta seeds
-    /// (`gitmirror:*`, `gitmirror-meta:*`) are routed through the server's
+    /// **Claim-only labels are excluded.** Swarmgit content and meta seeds
+    /// (`swarmgit:*`, `swarmgit-meta:*`) are routed through the server's
     /// in-memory `ClaimTable` rather than self-assignment — see
-    /// `agent/src/gitmirror/receiver.rs` and the `entries_for_labels` helper
+    /// `agent/src/swarmgit/receiver.rs` and the `entries_for_labels` helper
     /// below. Including them here would let every envoy in the fleet
-    /// download every gitmirror bundle (the publisher writes `target: "*"`),
+    /// download every swarmgit bundle (the publisher writes `target: "*"`),
     /// silently bypassing the per-source mirror cap. This filter is the
     /// single chokepoint that keeps cap enforcement on the server side.
     pub fn assignments_for(
@@ -287,7 +287,7 @@ impl Manifest {
 
     /// Return active blobs whose `label` is in `wanted`. Used by subsystems
     /// that have their own out-of-band notion of which blobs to download
-    /// (today: gitmirror, which receives its set from `CheckInResponse.gitmirror_claims`).
+    /// (today: swarmgit, which receives its set from `CheckInResponse.swarmgit_claims`).
     /// Empty `wanted` returns nothing.
     pub fn entries_for_labels(
         &self,
@@ -376,16 +376,16 @@ fn now_millis() -> u64 {
 /// downloading them is via [`Manifest::entries_for_labels`] from the
 /// owning subsystem.
 ///
-/// Today the only claim-only namespace is gitmirror. The publisher writes
-/// `target: "*"` for gitmirror seeds (they're conceptually open to any
+/// Today the only claim-only namespace is swarmgit. The publisher writes
+/// `target: "*"` for swarmgit seeds (they're conceptually open to any
 /// envoy), but the actual mirror set is decided server-side by the
-/// gitmirror `ClaimTable` and delivered per envoy via
-/// `CheckInResponse.gitmirror_claims`. Without this filter, every envoy
-/// in the fleet would self-assign every gitmirror bundle the moment the
+/// swarmgit `ClaimTable` and delivered per envoy via
+/// `CheckInResponse.swarmgit_claims`. Without this filter, every envoy
+/// in the fleet would self-assign every swarmgit bundle the moment the
 /// existing download loop runs, silently bypassing the per-source
 /// mirror cap.
 fn is_claim_only_label(label: &str) -> bool {
-    label.starts_with("gitmirror:") || label.starts_with("gitmirror-meta:")
+    label.starts_with("swarmgit:") || label.starts_with("swarmgit-meta:")
 }
 
 #[cfg(test)]
@@ -561,18 +561,18 @@ mod tests {
     }
 
     #[test]
-    fn is_claim_only_label_matches_gitmirror_namespaces() {
-        assert!(is_claim_only_label("gitmirror:host:user:proj"));
-        assert!(is_claim_only_label("gitmirror-meta:host:user:proj"));
+    fn is_claim_only_label_matches_swarmgit_namespaces() {
+        assert!(is_claim_only_label("swarmgit:host:user:proj"));
+        assert!(is_claim_only_label("swarmgit-meta:host:user:proj"));
     }
 
     #[test]
     fn is_claim_only_label_rejects_other_namespaces() {
         assert!(!is_claim_only_label("module-bundle"));
         assert!(!is_claim_only_label("longdrawer:user:file"));
-        assert!(!is_claim_only_label("gitmirrorfoo")); // missing colon
+        assert!(!is_claim_only_label("swarmgitfoo")); // missing colon
         assert!(!is_claim_only_label(""));
-        assert!(!is_claim_only_label("foo:gitmirror:bar")); // not at start
+        assert!(!is_claim_only_label("foo:swarmgit:bar")); // not at start
     }
 
     #[test]
@@ -586,15 +586,15 @@ mod tests {
             "aaa".to_string(),
             labelled_entry("aaa", "module-bundle"),
         );
-        // A gitmirror content seed with target "*" — must NOT match.
+        // A swarmgit content seed with target "*" — must NOT match.
         data.entries.insert(
             "bbb".to_string(),
-            labelled_entry("bbb", "gitmirror:danlap:dan:proj"),
+            labelled_entry("bbb", "swarmgit:danlap:dan:proj"),
         );
-        // A gitmirror meta seed — also must NOT match.
+        // A swarmgit meta seed — also must NOT match.
         data.entries.insert(
             "ccc".to_string(),
-            labelled_entry("ccc", "gitmirror-meta:danlap:dan:proj"),
+            labelled_entry("ccc", "swarmgit-meta:danlap:dan:proj"),
         );
         drop(data);
 
@@ -602,7 +602,7 @@ mod tests {
         let assigned = manifest.assignments_for("any-host", &traits);
         let labels: Vec<&str> = assigned.iter().map(|e| e.label.as_str()).collect();
         assert!(labels.contains(&"module-bundle"));
-        assert!(!labels.iter().any(|l| l.starts_with("gitmirror")));
+        assert!(!labels.iter().any(|l| l.starts_with("swarmgit")));
     }
 
     #[test]
@@ -613,28 +613,28 @@ mod tests {
         let mut data = manifest.data.write().unwrap();
         data.entries.insert(
             "aaa".to_string(),
-            labelled_entry("aaa", "gitmirror:danlap:dan:proj1"),
+            labelled_entry("aaa", "swarmgit:danlap:dan:proj1"),
         );
         data.entries.insert(
             "bbb".to_string(),
-            labelled_entry("bbb", "gitmirror:danlap:dan:proj2"),
+            labelled_entry("bbb", "swarmgit:danlap:dan:proj2"),
         );
         data.entries.insert(
             "ccc".to_string(),
-            labelled_entry("ccc", "gitmirror:danlap:dan:proj3"),
+            labelled_entry("ccc", "swarmgit:danlap:dan:proj3"),
         );
         drop(data);
 
         let mut wanted = std::collections::HashSet::new();
-        wanted.insert("gitmirror:danlap:dan:proj1".to_string());
-        wanted.insert("gitmirror:danlap:dan:proj3".to_string());
+        wanted.insert("swarmgit:danlap:dan:proj1".to_string());
+        wanted.insert("swarmgit:danlap:dan:proj3".to_string());
 
         let got = manifest.entries_for_labels(&wanted);
         let labels: Vec<&str> = got.iter().map(|e| e.label.as_str()).collect();
         assert_eq!(labels.len(), 2);
-        assert!(labels.contains(&"gitmirror:danlap:dan:proj1"));
-        assert!(labels.contains(&"gitmirror:danlap:dan:proj3"));
-        assert!(!labels.contains(&"gitmirror:danlap:dan:proj2"));
+        assert!(labels.contains(&"swarmgit:danlap:dan:proj1"));
+        assert!(labels.contains(&"swarmgit:danlap:dan:proj3"));
+        assert!(!labels.contains(&"swarmgit:danlap:dan:proj2"));
     }
 
     #[test]
@@ -644,7 +644,7 @@ mod tests {
         let mut data = manifest.data.write().unwrap();
         data.entries.insert(
             "aaa".to_string(),
-            labelled_entry("aaa", "gitmirror:danlap:dan:proj"),
+            labelled_entry("aaa", "swarmgit:danlap:dan:proj"),
         );
         drop(data);
 
@@ -658,13 +658,13 @@ mod tests {
         let manifest = Manifest::load(dir.path());
 
         let mut data = manifest.data.write().unwrap();
-        let mut e = labelled_entry("aaa", "gitmirror:danlap:dan:proj");
+        let mut e = labelled_entry("aaa", "swarmgit:danlap:dan:proj");
         e.status = BlobStatus::Revoked;
         data.entries.insert("aaa".to_string(), e);
         drop(data);
 
         let mut wanted = std::collections::HashSet::new();
-        wanted.insert("gitmirror:danlap:dan:proj".to_string());
+        wanted.insert("swarmgit:danlap:dan:proj".to_string());
         assert!(manifest.entries_for_labels(&wanted).is_empty());
     }
 }

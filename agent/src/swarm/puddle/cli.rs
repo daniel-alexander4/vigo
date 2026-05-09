@@ -75,7 +75,7 @@ LIFECYCLE:
     join --from <host>         Receive the wrapped key from <host> using the pairing code.
     leave [--yes]              Leave the puddle on this envoy: sign LEAVE for lockbox
                                peers, scrub ~/.vigo-puddle/, ~/.lockbox/, ~/lockbox/,
-                               and ~/.vigo-gitmirror/.
+                               and ~/.vigo-swarmgit/.
 
 REKEY (ADR-018, puddle keypair rotation):
     rekey-pair                 Rotate the puddle keypair and issue a 5-minute claim code.
@@ -415,7 +415,7 @@ fn cmd_join(args: &[String]) -> Result<()> {
 
 /// Leave the puddle on this envoy. Per ADR-021 (0.40.0), this is the
 /// canonical lifecycle exit verb covering puddle + lockbox +
-/// gitmirror cleanup.
+/// swarmgit cleanup.
 ///
 /// Steps:
 ///   1. If lockbox is enrolled: invoke `lockbox leave --purge
@@ -424,8 +424,8 @@ fn cmd_join(args: &[String]) -> Result<()> {
 ///      to live peers, then scrubs `~/.lockbox/` + `~/lockbox/`.
 ///   2. Lock the puddle session helper (best-effort).
 ///   3. Scrub `~/.vigo-puddle/` (the wrapped keypair, salt, pubkey).
-///   4. Scrub `~/.vigo-gitmirror/` if present (per-project state for
-///      every gitmirror project this user was in).
+///   4. Scrub `~/.vigo-swarmgit/` if present (per-project state for
+///      every swarmgit project this user was in).
 ///
 /// Idempotent on the dir-removal side. The lockbox LEAVE fanout is
 /// asynchronous — peers may take up to one announce tick (~30s) to
@@ -444,7 +444,7 @@ fn cmd_leave(args: &[String]) -> Result<()> {
                      USAGE:\n    vigo swarm puddle leave [--yes]\n\n\
                      Signs a LEAVE envelope for lockbox peers, locks the puddle\n\
                      session helper, and wipes ~/.vigo-puddle/, ~/.lockbox/,\n\
-                     ~/lockbox/, and ~/.vigo-gitmirror/. Refuses without --yes."
+                     ~/lockbox/, and ~/.vigo-swarmgit/. Refuses without --yes."
                 );
                 return Ok(());
             }
@@ -470,11 +470,11 @@ fn cmd_leave(args: &[String]) -> Result<()> {
         eprintln!("  ~/.vigo-puddle/   keypair, salt, pubkey, retired-puddles log");
         eprintln!("  ~/.lockbox/     wrapped age identity + recipients + cert");
         eprintln!("  ~/lockbox/      ciphertext at rest (recoverable from peers)");
-        eprintln!("  ~/.vigo-gitmirror/ per-project state for any gitmirror projects");
+        eprintln!("  ~/.vigo-swarmgit/ per-project state for any swarmgit projects");
         eprintln!();
         eprintln!("Lockbox peers receive a signed LEAVE envelope on the next");
-        eprintln!("announce tick (~30s). Gitmirror projects are not gossiped — admin");
-        eprintln!("`gitmirror project revoke` is a separate cleanup step if needed.");
+        eprintln!("announce tick (~30s). Swarmgit projects are not gossiped — admin");
+        eprintln!("`swarmgit project revoke` is a separate cleanup step if needed.");
         eprintln!();
         eprintln!("Pass --yes to confirm.");
         return Ok(());
@@ -526,11 +526,11 @@ fn cmd_leave(args: &[String]) -> Result<()> {
         }
     }
 
-    // 4. Scrub ~/.vigo-gitmirror/ — per-project state for every
-    //    gitmirror project this user was a member of. Bare repos
-    //    under /var/lib/vigo/swarm/gitmirror/ are root-owned and
+    // 4. Scrub ~/.vigo-swarmgit/ — per-project state for every
+    //    swarmgit project this user was a member of. Bare repos
+    //    under /var/lib/vigo/swarm/swarmgit/ are root-owned and
     //    survive — admin cleanup is a separate path.
-    let gm_user_dir = home.join(".vigo-gitmirror");
+    let gm_user_dir = home.join(".vigo-swarmgit");
     if gm_user_dir.exists() {
         match fs::remove_dir_all(&gm_user_dir) {
             Ok(()) => println!("✓ scrubbed {}", gm_user_dir.display()),
@@ -585,7 +585,7 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
                     bail!("--window-secs must be at least 60");
                 }
             }
-            // ADR-019: when a gitmirror project's delegation chain has
+            // ADR-019: when a swarmgit project's delegation chain has
             // hit DELEGATION_MAX_LEN, the pre-flight check refuses to
             // proceed. This flag opts into "rekey anyway, mark those
             // projects frozen-at-rekey" — operator's escape hatch for
@@ -677,24 +677,24 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     let new_blob = wrap_signing_key(&new_key, passphrase.as_bytes(), &new_salt)
         .context("wrapping new puddle identity")?;
 
-    // ADR-019 pre-flight: check every gitmirror project the user
+    // ADR-019 pre-flight: check every swarmgit project the user
     // founded against the delegation cap. Aborts here BEFORE any
     // keypair mutation when a project would push past the cap and
     // the operator hasn't passed --force-orphan-projects.
-    let pre_flight = crate::swarm::gitmirror::rekey::pre_flight_check_caps(
+    let pre_flight = crate::swarm::swarmgit::rekey::pre_flight_check_caps(
         &home,
         &old_pubkey_text,
     )
-    .context("gitmirror pre-flight cap check")?;
+    .context("swarmgit pre-flight cap check")?;
     if !pre_flight.at_cap.is_empty() && !force_orphan_projects {
         bail!(
-            "{} gitmirror project(s) at delegation cap ({}/{}): {}\n  \
-             Run `vigo swarm gitmirror project re-found <handle>` per project to \
+            "{} swarmgit project(s) at delegation cap ({}/{}): {}\n  \
+             Run `vigo swarm swarmgit project re-found <handle>` per project to \
              mint a fresh project_id, or pass --force-orphan-projects to proceed \
              and mark these projects frozen-at-rekey.",
             pre_flight.at_cap.len(),
-            crate::swarm::gitmirror::envelopes::DELEGATION_MAX_LEN,
-            crate::swarm::gitmirror::envelopes::DELEGATION_MAX_LEN,
+            crate::swarm::swarmgit::envelopes::DELEGATION_MAX_LEN,
+            crate::swarm::swarmgit::envelopes::DELEGATION_MAX_LEN,
             pre_flight.at_cap.join(", ")
         );
     }
@@ -757,13 +757,13 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     )
     .context("lockbox sync after rotation")?;
 
-    // ADR-019: gitmirror rekey sync — sign + append delegations under
+    // ADR-019: swarmgit rekey sync — sign + append delegations under
     // OLD for every project the user founded, rebuild tokens.json
     // (chain[0] bootstrap + fresh admin under NEW), rewrite member
     // entries OLD → NEW. Best-effort with per-project failure
     // tracking; the rotation itself has already committed.
     let gm_outcome =
-        crate::swarm::gitmirror::rekey::apply_post_rotation_gitmirror_sync(
+        crate::swarm::swarmgit::rekey::apply_post_rotation_swarmgit_sync(
             &home,
             &old_key,
             &new_key,
@@ -772,7 +772,7 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
             now,
             force_orphan_projects,
         )
-        .context("gitmirror sync after rotation")?;
+        .context("swarmgit sync after rotation")?;
 
     // Restart the session helper with the new key so sibling
     // subsystems pick up the rotation immediately. Lock first
@@ -806,7 +806,7 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
         pp_bak.display()
     );
     print_rewrap_outcome(outcome);
-    print_gitmirror_rekey_outcome(&gm_outcome);
+    print_swarmgit_rekey_outcome(&gm_outcome);
     println!();
     println!(
         "  Rekey window:     {}h ({}s) before founder closes the session",
@@ -834,8 +834,8 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn print_gitmirror_rekey_outcome(
-    outcome: &crate::swarm::gitmirror::rekey::GitmirrorRekeyOutcome,
+fn print_swarmgit_rekey_outcome(
+    outcome: &crate::swarm::swarmgit::rekey::SwarmgitRekeyOutcome,
 ) {
     if outcome.delegations_signed.is_empty()
         && outcome.members_updated.is_empty()
@@ -843,12 +843,12 @@ fn print_gitmirror_rekey_outcome(
         && outcome.failures.is_empty()
         && outcome.in_warn_band.is_empty()
     {
-        println!("  Gitmirror sync:   skipped (no projects under ~/.vigo-gitmirror)");
+        println!("  Swarmgit sync:   skipped (no projects under ~/.vigo-swarmgit)");
         return;
     }
     if !outcome.delegations_signed.is_empty() {
         println!(
-            "  Gitmirror sync:   delegated {} project(s): {}",
+            "  Swarmgit sync:   delegated {} project(s): {}",
             outcome.delegations_signed.len(),
             outcome.delegations_signed.join(", ")
         );
@@ -871,11 +871,11 @@ fn print_gitmirror_rekey_outcome(
         println!(
             "                    ⚠ {} project(s) at chain length ≥ {}: {}",
             outcome.in_warn_band.len(),
-            crate::swarm::gitmirror::envelopes::DELEGATION_WARN_LEN,
+            crate::swarm::swarmgit::envelopes::DELEGATION_WARN_LEN,
             outcome.in_warn_band.join(", ")
         );
         println!(
-            "                       consider `vigo swarm gitmirror project re-found <handle>` for hygiene"
+            "                       consider `vigo swarm swarmgit project re-found <handle>` for hygiene"
         );
     }
     if !outcome.failures.is_empty() {
@@ -912,7 +912,7 @@ fn print_rewrap_outcome(outcome: crate::swarm::lockbox::identity_rewrap::RewrapO
 /// Flags:
 ///   --from <host>                Hostname of the founder envoy that ran rekey-pair.
 ///   --force-orphan-projects      ADR-019 escape hatch — proceed even if any
-///                                gitmirror project is at the delegation cap;
+///                                swarmgit project is at the delegation cap;
 ///                                affected projects are marked frozen-at-rekey.
 fn cmd_rekey(args: &[String]) -> Result<()> {
     let mut from: Option<String> = None;
@@ -1019,20 +1019,20 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
     // rekey-pair already cleared the cap on their envoy; this
     // envoy's local state should match unless this envoy has been
     // offline long enough to fall behind on prior rekeys.
-    let pre_flight = crate::swarm::gitmirror::rekey::pre_flight_check_caps(
+    let pre_flight = crate::swarm::swarmgit::rekey::pre_flight_check_caps(
         &home,
         &old_pubkey_text,
     )
-    .context("gitmirror pre-flight cap check")?;
+    .context("swarmgit pre-flight cap check")?;
     if !pre_flight.at_cap.is_empty() && !force_orphan_projects {
         bail!(
-            "{} gitmirror project(s) at delegation cap ({}/{}): {}\n  \
-             Run `vigo swarm gitmirror project re-found <handle>` per project to \
+            "{} swarmgit project(s) at delegation cap ({}/{}): {}\n  \
+             Run `vigo swarm swarmgit project re-found <handle>` per project to \
              mint a fresh project_id, or pass --force-orphan-projects to proceed \
              and mark these projects frozen-at-rekey.",
             pre_flight.at_cap.len(),
-            crate::swarm::gitmirror::envelopes::DELEGATION_MAX_LEN,
-            crate::swarm::gitmirror::envelopes::DELEGATION_MAX_LEN,
+            crate::swarm::swarmgit::envelopes::DELEGATION_MAX_LEN,
+            crate::swarm::swarmgit::envelopes::DELEGATION_MAX_LEN,
             pre_flight.at_cap.join(", ")
         );
     }
@@ -1092,14 +1092,14 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
     )
     .context("lockbox sync after rotation")?;
 
-    // ADR-019: gitmirror sync — same as the founder side. Each envoy
+    // ADR-019: swarmgit sync — same as the founder side. Each envoy
     // in the puddle signs its OWN delegation locally using its copy
     // of the OLD puddle key (which is the same shared keypair, so the
     // canonical signed bytes are identical modulo `delegated_at`)
     // and rebuilds tokens.json with the fresh admin under NEW. Each
     // envoy maintains a self-consistent local view.
     let gm_outcome =
-        crate::swarm::gitmirror::rekey::apply_post_rotation_gitmirror_sync(
+        crate::swarm::swarmgit::rekey::apply_post_rotation_swarmgit_sync(
             &home,
             &old_key,
             &new_key,
@@ -1108,7 +1108,7 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
             now,
             force_orphan_projects,
         )
-        .context("gitmirror sync after rotation")?;
+        .context("swarmgit sync after rotation")?;
 
     // Lock any stale session helper; the user runs `unlock` in their
     // own (non-sudo) shell to start the new helper.
@@ -1125,7 +1125,7 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
         pp_bak.display()
     );
     print_rewrap_outcome(outcome);
-    print_gitmirror_rekey_outcome(&gm_outcome);
+    print_swarmgit_rekey_outcome(&gm_outcome);
     println!();
     println!(
         "Run `vigo swarm puddle unlock` (no sudo) to start the session helper under the"
@@ -1138,7 +1138,7 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
 
 fn cmd_members(_args: &[String]) -> Result<()> {
     // Local-only view: this envoy's pubkey + initialization status.
-    // ADR-015 (gitmirror substrate) and ADR-016 (lockbox membership
+    // ADR-015 (swarmgit substrate) and ADR-016 (lockbox membership
     // on puddle) shipped, so peer puddle pubkeys ARE observable —
     // but via the lockbox peer table, not the puddle module's own
     // state. Surface that path so an operator looking at the local

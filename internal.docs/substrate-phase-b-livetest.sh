@@ -16,11 +16,11 @@
 #                            the file is missing.
 #
 # Optional env:
-#   PRIMARY         default danlap   — gitmirror primary, lockbox recipient watcher
+#   PRIMARY         default danlap   — swarmgit primary, lockbox recipient watcher
 #   SECONDARY       default annlap   — lockbox leave/evict subject
 #   THIRD           default plex     — additional lockbox peer (evicted in §5)
 #   ABSENT          default girlslaptop — host expected to fail evict gracefully
-#   LOCKBOX_USER  default dan      — used as the gitmirror sidecar owner in §1–3
+#   LOCKBOX_USER  default dan      — used as the swarmgit sidecar owner in §1–3
 #                                       and the lockbox user in §4–7
 #   VIGOCLI_CMD     default "sudo vigocli" — vigocli is installed mode 0700
 #                                            root:root and must be invoked as
@@ -171,81 +171,81 @@ fi
 note "PRIMARY=$PRIMARY  SECONDARY=$SECONDARY  THIRD=$THIRD  ABSENT=$ABSENT"
 note "vigocli prefix: $VIGOCLI_CMD"
 
-# ───────────────────────── 1. Phase A — gitmirror source CLI ─────────────────────────
-section "1. Phase A — gitmirror source CLI (on $PRIMARY as $LOCKBOX_USER)"
+# ───────────────────────── 1. Phase A — swarmgit source CLI ─────────────────────────
+section "1. Phase A — swarmgit source CLI (on $PRIMARY as $LOCKBOX_USER)"
 
 step "preparing test repo on $PRIMARY"
 # Clean any prior-run residue so init/add/commit are deterministic —
 # without rm -rf, a repeat run finds an already-committed repo and
 # the commit step exits non-zero ("nothing to commit").
-on_host "$PRIMARY" 'rm -rf $HOME/gitmirror/sourcetest && mkdir -p $HOME/gitmirror/sourcetest && cd $HOME/gitmirror/sourcetest && git init -q && echo x > x && git add . && git commit -qm init' \
+on_host "$PRIMARY" 'rm -rf $HOME/swarmgit/sourcetest && mkdir -p $HOME/swarmgit/sourcetest && cd $HOME/swarmgit/sourcetest && git init -q && echo x > x && git add . && git commit -qm init' \
     && pass "test repo created" \
     || fail "test repo creation failed"
 
-expect_zero "vigo swarm gitmirror source add" \
-    on_host "$PRIMARY" "vigo swarm gitmirror source add \$HOME/gitmirror/sourcetest --tags smoke --description 'phase A test'"
+expect_zero "vigo swarm swarmgit source add" \
+    on_host "$PRIMARY" "vigo swarm swarmgit source add \$HOME/swarmgit/sourcetest --tags smoke --description 'phase A test'"
 
-expect_match ".gitignore contains .gitmirror.yaml" '\.gitmirror\.yaml' \
-    on_host "$PRIMARY" 'cat $HOME/gitmirror/sourcetest/.gitignore'
+expect_match ".gitignore contains .swarmgit.yaml" '\.swarmgit\.yaml' \
+    on_host "$PRIMARY" 'cat $HOME/swarmgit/sourcetest/.gitignore'
 
 expect_match "show reports owner=$PRIMARY" "owner:.*$PRIMARY" \
-    on_host "$PRIMARY" 'vigo swarm gitmirror source show sourcetest'
+    on_host "$PRIMARY" 'vigo swarm swarmgit source show sourcetest'
 
-expect_zero "source pause" on_host "$PRIMARY" 'vigo swarm gitmirror source pause sourcetest'
+expect_zero "source pause" on_host "$PRIMARY" 'vigo swarm swarmgit source pause sourcetest'
 sleep 6
 expect_match "list shows sourcetest paused (PAUSED column = yes)" 'sourcetest.*yes' \
-    on_host "$PRIMARY" 'vigo swarm gitmirror source list'
-expect_zero "source resume" on_host "$PRIMARY" 'vigo swarm gitmirror source resume sourcetest'
+    on_host "$PRIMARY" 'vigo swarm swarmgit source list'
+expect_zero "source resume" on_host "$PRIMARY" 'vigo swarm swarmgit source resume sourcetest'
 
 expect_zero "validate good yaml" \
-    on_host "$PRIMARY" 'vigo swarm gitmirror source validate $HOME/gitmirror/sourcetest/.gitmirror.yaml'
+    on_host "$PRIMARY" 'vigo swarm swarmgit source validate $HOME/swarmgit/sourcetest/.swarmgit.yaml'
 
 on_host "$PRIMARY" 'echo "garbage: yes" > /tmp/bad.yaml' >/dev/null
 expect_nonzero "validate rejects garbage yaml" \
-    on_host "$PRIMARY" 'vigo swarm gitmirror source validate /tmp/bad.yaml'
+    on_host "$PRIMARY" 'vigo swarm swarmgit source validate /tmp/bad.yaml'
 
 expect_zero "source remove --yes" \
-    on_host "$PRIMARY" 'vigo swarm gitmirror source remove sourcetest --yes'
+    on_host "$PRIMARY" 'vigo swarm swarmgit source remove sourcetest --yes'
 expect_nonzero "sidecar gone after remove" \
-    on_host "$PRIMARY" 'test -f $HOME/gitmirror/sourcetest/.gitmirror.yaml'
+    on_host "$PRIMARY" 'test -f $HOME/swarmgit/sourcetest/.swarmgit.yaml'
 
-# ───────────────────────── 2. Phase B — vigo swarm gitmirror leave ─────────────────────────
-section "2. Phase B — vigo swarm gitmirror leave (on $PRIMARY as $LOCKBOX_USER)"
+# ───────────────────────── 2. Phase B — vigo swarm swarmgit leave ─────────────────────────
+section "2. Phase B — vigo swarm swarmgit leave (on $PRIMARY as $LOCKBOX_USER)"
 
 for n in leave1 leave2; do
-    on_host "$PRIMARY" "mkdir -p \$HOME/gitmirror/$n && cd \$HOME/gitmirror/$n && git init -q && echo $n > x && git add . && git commit -qm $n" >/dev/null
+    on_host "$PRIMARY" "mkdir -p \$HOME/swarmgit/$n && cd \$HOME/swarmgit/$n && git init -q && echo $n > x && git add . && git commit -qm $n" >/dev/null
     expect_zero "add source $n" \
-        on_host "$PRIMARY" "vigo swarm gitmirror source add \$HOME/gitmirror/$n --no-gitignore"
+        on_host "$PRIMARY" "vigo swarm swarmgit source add \$HOME/swarmgit/$n --no-gitignore"
 done
 
-expect_zero "leave --pause --yes" on_host "$PRIMARY" 'vigo swarm gitmirror leave --pause --yes'
+expect_zero "leave --pause --yes" on_host "$PRIMARY" 'vigo swarm swarmgit leave --pause --yes'
 expect_match "both sidecars paused" 'paused: true' \
-    on_host "$PRIMARY" 'grep ^paused $HOME/gitmirror/leave1/.gitmirror.yaml $HOME/gitmirror/leave2/.gitmirror.yaml'
+    on_host "$PRIMARY" 'grep ^paused $HOME/swarmgit/leave1/.swarmgit.yaml $HOME/swarmgit/leave2/.swarmgit.yaml'
 
-expect_zero "resume leave1" on_host "$PRIMARY" 'vigo swarm gitmirror source resume leave1'
+expect_zero "resume leave1" on_host "$PRIMARY" 'vigo swarm swarmgit source resume leave1'
 
-expect_zero "leave --yes (delete)" on_host "$PRIMARY" 'vigo swarm gitmirror leave --yes'
-expect_nonzero "leave1 sidecar gone" on_host "$PRIMARY" 'test -f $HOME/gitmirror/leave1/.gitmirror.yaml'
-expect_nonzero "leave2 sidecar gone" on_host "$PRIMARY" 'test -f $HOME/gitmirror/leave2/.gitmirror.yaml'
+expect_zero "leave --yes (delete)" on_host "$PRIMARY" 'vigo swarm swarmgit leave --yes'
+expect_nonzero "leave1 sidecar gone" on_host "$PRIMARY" 'test -f $HOME/swarmgit/leave1/.swarmgit.yaml'
+expect_nonzero "leave2 sidecar gone" on_host "$PRIMARY" 'test -f $HOME/swarmgit/leave2/.swarmgit.yaml'
 
-on_host "$PRIMARY" 'rm -rf $HOME/gitmirror/leave1 $HOME/gitmirror/leave2' >/dev/null
+on_host "$PRIMARY" 'rm -rf $HOME/swarmgit/leave1 $HOME/swarmgit/leave2' >/dev/null
 
-# ───────────────────────── 3. Phase B — gitmirror prune + vigocli evict ─────────────────────────
-section "3. Phase B — gitmirror prune --seeder + vigocli swarm gitmirror evict"
+# ───────────────────────── 3. Phase B — swarmgit prune + vigocli evict ─────────────────────────
+section "3. Phase B — swarmgit prune --seeder + vigocli swarm swarmgit evict"
 
-expect_zero "$SECONDARY: vigo swarm gitmirror list --seeder $PRIMARY" \
-    on_host "$SECONDARY" "vigo swarm gitmirror list --seeder $PRIMARY"
+expect_zero "$SECONDARY: vigo swarm swarmgit list --seeder $PRIMARY" \
+    on_host "$SECONDARY" "vigo swarm swarmgit list --seeder $PRIMARY"
 
 expect_zero "$SECONDARY: prune --seeder (lists candidates)" \
-    on_host "$SECONDARY" "sudo vigo swarm gitmirror prune --seeder $PRIMARY"
+    on_host "$SECONDARY" "sudo vigo swarm swarmgit prune --seeder $PRIMARY"
 
 expect_zero "$SECONDARY: prune --seeder --yes" \
-    on_host "$SECONDARY" "sudo vigo swarm gitmirror prune --seeder $PRIMARY --yes"
+    on_host "$SECONDARY" "sudo vigo swarm swarmgit prune --seeder $PRIMARY --yes"
 
-expect_zero "vigocli swarm gitmirror members" vigocli swarm gitmirror members
-expect_zero "vigocli swarm gitmirror evict --host $ABSENT" vigocli swarm gitmirror evict --host "$ABSENT" --yes
+expect_zero "vigocli swarm swarmgit members" vigocli swarm swarmgit members
+expect_zero "vigocli swarm swarmgit evict --host $ABSENT" vigocli swarm swarmgit evict --host "$ABSENT" --yes
 sleep 10
-expect_zero "vigocli swarm gitmirror status" vigocli swarm gitmirror status
+expect_zero "vigocli swarm swarmgit status" vigocli swarm swarmgit status
 
 # ───────────────────────── sections 4–7 require lockbox password ─────────────────────────
 if (( HAVE_PASSWORD == 0 )); then

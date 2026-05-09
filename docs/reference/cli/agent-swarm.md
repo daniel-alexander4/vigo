@@ -47,7 +47,7 @@ Swarm posture for this envoy
     payload:      on
     longdrawer:     on
     puddle:       on  (lockbox follows)
-    gitmirror:    on
+    swarmgit:    on
 
   Manifest:
     version:      19

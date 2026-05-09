@@ -11,12 +11,12 @@ import (
 )
 
 // FleetPubkeysHandler serves the fleet-wide hostname → Ed25519 pubkey map
-// that agents use to bootstrap their gitmirror peer-pubkey TOFU cache.
+// that agents use to bootstrap their swarmgit peer-pubkey TOFU cache.
 // Pre-populating the cache from server-distributed data closes the
 // first-contact race that lets a LAN-resident attacker beat the real
 // envoy to its first announcement and hijack the cache slot.
 //
-// The pubkeys are broadcast on multicast in every `GITMIRROR:` line by
+// The pubkeys are broadcast on multicast in every `SWARMGIT:` line by
 // design — they are public-by-construction, so the endpoint is
 // deliberately unauthenticated. mTLS at the transport layer prevents
 // MITM tampering of the response, which is the only integrity
@@ -49,7 +49,7 @@ type fleetPubkeysResponse struct {
 }
 
 // Pubkeys returns the fleet's hostname → pubkey map. Used by agents on
-// startup and on a 15-minute timer to bootstrap their gitmirror peer
+// startup and on a 15-minute timer to bootstrap their swarmgit peer
 // pubkey cache. Skips revoked envoys (the cleanup pipeline already
 // evicts them from active swarm participation, and re-bootstrapping
 // their pubkeys onto every peer's cache would just race with the

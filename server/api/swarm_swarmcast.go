@@ -30,7 +30,7 @@ import (
 // the swarm substrate. This handler wires the admin-facing REST surface
 // (`/api/v1/swarm/swarmcast/*`); the substrate itself — tracker, manifest CRDT,
 // peer transfer — still lives in `server/swarm/` because it's shared
-// with gitmirror and (read-side) longdrawer/lockbox.
+// with swarmgit and (read-side) longdrawer/lockbox.
 
 // LodeForcePusher triggers a force-push to streaming agents so they
 // send a fresh CheckIn and receive pending payload assignments.
@@ -515,8 +515,8 @@ func (h *LodeHandler) Status(w http.ResponseWriter, r *http.Request) {
 	//
 	// Two fan-out modes depending on label:
 	//
-	//   1. Claim-only labels (gitmirror): authoritative source is the
-	//      gitmirror ClaimTable. Only the envoys selected as mirrors
+	//   1. Claim-only labels (swarmgit): authoritative source is the
+	//      swarmgit ClaimTable. Only the envoys selected as mirrors
 	//      show up. Envoys excluded by the sidecar's exclude_envoys /
 	//      include_envoys / when filters, or simply not picked
 	//      within max_mirrors, never appear — showing them as
@@ -524,16 +524,16 @@ func (h *LodeHandler) Status(w http.ResponseWriter, r *http.Request) {
 	//      the payload.
 	//
 	//   2. Standard labels: target pattern fan-out against the full
-	//      fleet, matching the existing pre-gitmirror behavior.
+	//      fleet, matching the existing pre-swarmgit behavior.
 	if blobStatus != "revoked" && h.fleetIndex != nil {
 		if swarm.IsClaimOnlyLabel(label) {
 			// Phase 8 (0.23.0): the server no longer tracks which
-			// envoys hold gitmirror mirrors. Selection is entirely
+			// envoys hold swarmgit mirrors. Selection is entirely
 			// LAN/cross-subnet peer-to-peer. The UI's per-payload
 			// "pending envoys" fan-out is skipped for claim-only
-			// labels; operators view gitmirror state via the
-			// receiver's `vigo swarm gitmirror list` command or the
-			// `gitmirror.sources[]` trait payload.
+			// labels; operators view swarmgit state via the
+			// receiver's `vigo swarm swarmgit list` command or the
+			// `swarmgit.sources[]` trait payload.
 		} else if target != "" {
 			for _, envoy := range h.fleetIndex.AllEnvoys() {
 				if envoy.Revoked || seen[envoy.Hostname] {

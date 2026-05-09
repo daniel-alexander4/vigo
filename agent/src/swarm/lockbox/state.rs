@@ -70,7 +70,7 @@ pub struct PeerEntry {
     /// upsert time. Empty when the peer was first seen running
     /// standalone — once a puddle pubkey is pinned, we never let the
     /// peer "revert" without an admin clearing the entry. Mirrors
-    /// `gitmirror::peer_pubkey_cache`'s TOFU shape, embedded
+    /// `swarmgit::peer_pubkey_cache`'s TOFU shape, embedded
     /// per-peer here because lockbox's PeerTable is already
     /// per-user and that's the right scope for lockbox TOFU.
     #[serde(default)]

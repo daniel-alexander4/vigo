@@ -5,7 +5,7 @@
 
 Displays all admin-distributed swarmcasts ("swarmcast") with distribution progress across the fleet. The payloads ride the [swarm](../../engineering/subsystems/swarm.md) substrate (peer-to-peer mTLS transport on port 1531); this page is the operator-facing surface for managing and observing those distributions. Auto-refreshes every 5 seconds on the detail view.
 
-**Gitmirror bundles are excluded.** Personal-DR repo mirrors (labels prefixed with `gitmirror:`) have their own page at `/gitmirror` — see the [gitmirror subsystem docs](../../engineering/subsystems/gitmirror.md) — and are filtered out of Payload. Pasting a gitmirror blob sha into `/payload/{sha}` redirects to `/gitmirror/{label}`.
+**Swarmgit bundles are excluded.** Personal-DR repo mirrors (labels prefixed with `swarmgit:`) have their own page at `/swarmgit` — see the [swarmgit subsystem docs](../../engineering/subsystems/swarmgit.md) — and are filtered out of Payload. Pasting a swarmgit blob sha into `/payload/{sha}` redirects to `/swarmgit/{label}`.
 
 ## List View
 

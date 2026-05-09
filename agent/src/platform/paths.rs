@@ -192,23 +192,23 @@ pub fn default_longdrawer_dir() -> PathBuf {
     default_data_dir().join("swarm").join("longdrawer")
 }
 
-/// Default gitmirror state directory (last_seeded_sha, bundle tmp dir).
+/// Default swarmgit state directory (last_seeded_sha, bundle tmp dir).
 #[cfg(all(unix, not(target_os = "macos")))]
-pub fn default_gitmirror_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_GITMIRROR_DIR") { return p; }
-    PathBuf::from("/var/lib/vigo/swarm/gitmirror")
+pub fn default_swarmgit_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_SWARMGIT_DIR") { return p; }
+    PathBuf::from("/var/lib/vigo/swarm/swarmgit")
 }
 
 #[cfg(target_os = "macos")]
-pub fn default_gitmirror_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_GITMIRROR_DIR") { return p; }
-    PathBuf::from("/Library/Vigo/swarm/gitmirror")
+pub fn default_swarmgit_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_SWARMGIT_DIR") { return p; }
+    PathBuf::from("/Library/Vigo/swarm/swarmgit")
 }
 
 #[cfg(windows)]
-pub fn default_gitmirror_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_GITMIRROR_DIR") { return p; }
-    default_data_dir().join("swarm").join("gitmirror")
+pub fn default_swarmgit_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_SWARMGIT_DIR") { return p; }
+    default_data_dir().join("swarm").join("swarmgit")
 }
 
 /// Default custom executors directory.

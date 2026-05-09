@@ -50,7 +50,7 @@ type ManifestEntry struct {
 // flusher (default 1s cadence) so a server restart preserves intent —
 // without persistence, an empty post-restart manifest gets re-poisoned
 // by agents reporting their cached `swarm_seeds` traits within seconds
-// (root cause of the 2026-04-24 gitmirror reset incident, see
+// (root cause of the 2026-04-24 swarmgit reset incident, see
 // `tshoot/log-archive-cairn-resolved-20260424-124050.md`). Agents can
 // only refresh existing entries (`RecordSeedFromAgent`); creating new
 // entries via gossip is rejected.

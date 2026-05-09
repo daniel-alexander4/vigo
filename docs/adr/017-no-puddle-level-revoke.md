@@ -29,7 +29,7 @@ In the stolen-laptop case, the thief gets a copy of the **puddle keypair itself*
 - Sign anything other envoys treat as puddle-attested.
 - Forge any future signing layer added on top — including revoke envelopes themselves, even with founder asymmetry, because the *membership* key is the layer being attacked.
 
-A "revoke laptop's age pubkey" command leaves the actual root compromise — the shared puddle keypair on a hostile device — entirely unaddressed. The only correct response is to retire the puddle keypair: re-init the puddle, accept the blast radius (gitmirror project_ids re-anchor, lockbox puddle-mode wrap re-derives, surviving envoys re-pair), and rotate every other credential the laptop touched. Revoke would be a placebo.
+A "revoke laptop's age pubkey" command leaves the actual root compromise — the shared puddle keypair on a hostile device — entirely unaddressed. The only correct response is to retire the puddle keypair: re-init the puddle, accept the blast radius (swarmgit project_ids re-anchor, lockbox puddle-mode wrap re-derives, surviving envoys re-pair), and rotate every other credential the laptop touched. Revoke would be a placebo.
 
 ### Cooperative removal (clean decommission)
 
@@ -58,7 +58,7 @@ The cooperative case has its mechanism. Building a second one at the puddle laye
 
 **Documentation:**
 - `docs/concepts/lockbox.md` — the eviction section, if/when written, points at `vigo swarm lockbox leave` for cooperative removal and at the lost-envoy runbook for adversarial.
-- A lost-envoy runbook in `docs/operations/` (or equivalent) is a separate follow-up: list the steps for re-initing a compromised puddle, what re-anchors (gitmirror project_ids), what gets orphaned (offline envoys can't follow the rotation), what other credentials need rotation. Out of scope for this ADR; tracked separately.
+- A lost-envoy runbook in `docs/operations/` (or equivalent) is a separate follow-up: list the steps for re-initing a compromised puddle, what re-anchors (swarmgit project_ids), what gets orphaned (offline envoys can't follow the rotation), what other credentials need rotation. Out of scope for this ADR; tracked separately.
 
 **Operational:**
 - No version bump. No code change ships with this ADR.

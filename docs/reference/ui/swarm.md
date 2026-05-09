@@ -3,9 +3,9 @@
 
 **Route:** `/swarm` · **Active nav:** `swarm`
 
-Fleet-wide view of the [swarm substrate](../../engineering/subsystems/swarm.md) — the envoy peer-to-peer network that Payload, Gitmirror, Longdrawer, and Lockbox all ride on. Admin-only.
+Fleet-wide view of the [swarm substrate](../../engineering/subsystems/swarm.md) — the envoy peer-to-peer network that Payload, Swarmgit, Longdrawer, and Lockbox all ride on. Admin-only.
 
-The nav group label "Swarm" is itself the link to this page; the four child links (Payload / Longdrawer / Gitmirror / Lockbox) remain the drill-downs into each content subsystem's state.
+The nav group label "Swarm" is itself the link to this page; the four child links (Payload / Longdrawer / Swarmgit / Lockbox) remain the drill-downs into each content subsystem's state.
 
 ## Sections
 
@@ -23,7 +23,7 @@ Active-payload count per subsystem plus a deep-link to the subsystem page:
 | Subsystem | What it is | Deep link |
 |-----------|-----------|-----------|
 | Payload | Admin-pushed payloads | `/payload` |
-| Gitmirror | Personal-DR repo mirrors | `/gitmirror` |
+| Swarmgit | Personal-DR repo mirrors | `/swarmgit` |
 | Longdrawer | Per-user plaintext sync | `/longdrawer` |
 | Lockbox | Per-user encrypted sync | `/lockbox` |
 

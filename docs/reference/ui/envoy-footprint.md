@@ -23,7 +23,7 @@ From `/proc/self/{status,fd}` on Linux; `ps` fallback on macOS. Each row is one 
 | Open FDs across descendants | `agent_self.descendant_open_fds` | warn > 200 / fail > 500 |
 | Agent uptime | `agent_self.uptime_secs` | uncolored — context only |
 
-The descendant rows matter because the agent regularly spawns short-lived children (git-receive-pack via the gitmirror helper, package-manager probes, exec resources) and FD leaks in those children would not show up in `open_fds`. Tracking the descendant total catches leaks in child code paths the agent's own /proc/self/fd count is blind to.
+The descendant rows matter because the agent regularly spawns short-lived children (git-receive-pack via the swarmgit helper, package-manager probes, exec resources) and FD leaks in those children would not show up in `open_fds`. Tracking the descendant total catches leaks in child code paths the agent's own /proc/self/fd count is blind to.
 
 ### Host Pressure
 
@@ -45,4 +45,4 @@ When the envoy has no traits yet (just enrolled, hasn't checked in once), the bo
 
 ## Source of truth
 
-Both this tab and the dashboard's Agent Pressure rollup go through `server/fleetpressure` — `Compute(EnvoySource) → EnvoyPressure` for this view, `Aggregate([]EnvoySource) → FleetSummary` for the dashboard. Same threshold consts, same severity classification. Per the [`feedback_envoy_stats_sot.md`](../../../.claude/projects/-home-dan-gitmirror-vigo/memory/feedback_envoy_stats_sot.md) rule, the dashboard "highest open_fds" cell can never disagree with the per-envoy row because both are derived from one function.
+Both this tab and the dashboard's Agent Pressure rollup go through `server/fleetpressure` — `Compute(EnvoySource) → EnvoyPressure` for this view, `Aggregate([]EnvoySource) → FleetSummary` for the dashboard. Same threshold consts, same severity classification. Per the [`feedback_envoy_stats_sot.md`](../../../.claude/projects/-home-dan-swarmgit-vigo/memory/feedback_envoy_stats_sot.md) rule, the dashboard "highest open_fds" cell can never disagree with the per-envoy row because both are derived from one function.

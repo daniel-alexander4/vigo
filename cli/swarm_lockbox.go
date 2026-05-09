@@ -20,7 +20,7 @@ import (
 // joins each envoy's `lockbox` trait into a mesh view, including
 // recipient drift and active unlock sessions.
 //
-// Mirrors the shape of `vigocli swarm gitmirror` + `vigocli swarm longdrawer`. No write
+// Mirrors the shape of `vigocli swarm swarmgit` + `vigocli swarm longdrawer`. No write
 // verbs — lockbox enrollment is per-user on the envoy. Per ADR-020,
 // lockbox is puddle-only: bootstrap auto-runs on `vigo swarm puddle
 // unlock` (which invokes `vigo swarm lockbox puddle init` inline).
@@ -28,7 +28,7 @@ import (
 
 // lockboxFleet mirrors `server/lockboxmesh.Fleet`. Duplicated rather than
 // imported so the CLI stays decoupled from the server package
-// (matches the pattern in cli/gitmirror.go, cli/longdrawer.go).
+// (matches the pattern in cli/swarmgit.go, cli/longdrawer.go).
 type lockboxFleet struct {
 	GeneratedAt  time.Time          `json:"generated_at"`
 	Users        []lockboxUserSummary `json:"users"`

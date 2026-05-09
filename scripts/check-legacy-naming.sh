@@ -4,7 +4,7 @@
 #
 # Substrate rename map (committed in 0.31.0):
 #   lode    -> payload     (admin-pushed binary distribution)
-#   cairn   -> gitmirror   (P2P git repo backup)
+#   cairn   -> swarmgit   (P2P git repo backup)
 #   echo    -> longdrawer    (LAN plaintext per-user dir sync)
 #   sigil   -> lockbox   (LAN encrypted per-user dir sync)
 #   stones  -> modules     (config primitive directory)

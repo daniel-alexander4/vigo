@@ -29,7 +29,7 @@ The verb tree should reflect this. Lifecycle belongs to puddle; the lockbox subt
 ### What moves to puddle
 
 - `lockbox init` — eliminated. Lockbox enrollment becomes an internal step of `puddle init` and `puddle join`. After puddle membership is established, the agent generates the per-envoy age key, writes `~/.lockbox/identity.age`, seeds `recipients.txt` with the local pubkey, and the envoy starts participating in lockbox. No separate verb to run.
-- `lockbox leave` — eliminated. Replaced by **`puddle leave`**: leave the puddle on this envoy, which signs a LEAVE envelope (reusing lockbox's existing apply_leave plumbing for the cross-envoy cleanup), gossips it to puddle peers, then scrubs `~/.vigo-puddle/`, `~/.lockbox/`, `~/lockbox/`, and `~/.vigo-gitmirror/`. Local-only when no peers exist (single-envoy puddle).
+- `lockbox leave` — eliminated. Replaced by **`puddle leave`**: leave the puddle on this envoy, which signs a LEAVE envelope (reusing lockbox's existing apply_leave plumbing for the cross-envoy cleanup), gossips it to puddle peers, then scrubs `~/.vigo-puddle/`, `~/.lockbox/`, `~/lockbox/`, and `~/.vigo-swarmgit/`. Local-only when no peers exist (single-envoy puddle).
 - `lockbox forget <host>` — eliminated. Replaced by **`puddle evict <host>`**: cross-envoy admin op to evict a hostname from the puddle. Triggers apply_leave on the target host (cleans up lockbox state, regenerates recipients), drops from peer tables on remaining members. The existing `vigocli swarm lockbox evict` admin path is renamed to dispatch this verb.
 
 ### What stays in lockbox
@@ -77,25 +77,25 @@ The usercrate `lockbox: true` flag is retired. Lockbox is mandatory on puddle me
 
 The cost of forced enrollment: a wrapped age key on disk (~1 KB), an empty `~/lockbox/` directory, and peer announces that fan out nothing if no files are written. Trivial.
 
-### Gitmirror lifecycle is NOT absorbed
+### Swarmgit lifecycle is NOT absorbed
 
-Gitmirror operates at a different granularity than lockbox. Lockbox is "one mesh per puddle"; gitmirror is "many projects per puddle, each with its own membership stack and fanout policy." Project lifecycle (`project init`, `project join`, `project leave`, `project invite`, etc.) lives at the project level — below puddle in the trust hierarchy but with its own scope axis. Folding `gitmirror project *` verbs under `puddle` would either misalign (puddle shouldn't own per-project state) or just rename verbs without simplifying anything.
+Swarmgit operates at a different granularity than lockbox. Lockbox is "one mesh per puddle"; swarmgit is "many projects per puddle, each with its own membership stack and fanout policy." Project lifecycle (`project init`, `project join`, `project leave`, `project invite`, etc.) lives at the project level — below puddle in the trust hierarchy but with its own scope axis. Folding `swarmgit project *` verbs under `puddle` would either misalign (puddle shouldn't own per-project state) or just rename verbs without simplifying anything.
 
-What gitmirror gets from this work: the puddle session helper (started by `puddle unlock`) becomes the canonical "am I authorized to do puddle-anchored things" gate. `git push vigo://...` rides on `puddle unlock` like lockbox does. Already true today; this ADR formalizes the coupling.
+What swarmgit gets from this work: the puddle session helper (started by `puddle unlock`) becomes the canonical "am I authorized to do puddle-anchored things" gate. `git push vigo://...` rides on `puddle unlock` like lockbox does. Already true today; this ADR formalizes the coupling.
 
 ## Consequences
 
 - **Lockbox subtree is content-only.** No more "lifecycle vs daily-use" split inside lockbox. The verbs that survive all operate on files or keys, not on membership.
-- **Puddle is the single lifecycle home for everything puddle-anchored.** Operators learning the system see a clear hierarchy: `swarm` → `puddle` → `{lockbox, gitmirror}`. Lifecycle questions go to puddle; content questions go to the relevant subsystem.
+- **Puddle is the single lifecycle home for everything puddle-anchored.** Operators learning the system see a clear hierarchy: `swarm` → `puddle` → `{lockbox, swarmgit}`. Lifecycle questions go to puddle; content questions go to the relevant subsystem.
 - **Operator UX simplification.** "How do I leave the puddle?" → `puddle leave`. "How do I evict a peer?" → `puddle evict <host>`. Single-step for either operation, with lockbox state cleanup happening as a side effect.
 - **Lockbox mesh = puddle.** No subset distinction; no "lockbox member who isn't a puddle member" case to reason about. Test surface narrows accordingly.
-- **`puddle leave` and `puddle evict` are new verb implementations**, not renames. They reuse the lockbox envelope/gossip plumbing for cross-envoy cleanup but carry additional cleanup responsibilities (puddle keypair, gitmirror project state). Estimated implementation effort: ~half-day for `puddle leave` (reuse most of `lockbox leave`'s code); ~half-day for `puddle evict` (reuse `apply_leave` chain).
+- **`puddle leave` and `puddle evict` are new verb implementations**, not renames. They reuse the lockbox envelope/gossip plumbing for cross-envoy cleanup but carry additional cleanup responsibilities (puddle keypair, swarmgit project state). Estimated implementation effort: ~half-day for `puddle leave` (reuse most of `lockbox leave`'s code); ~half-day for `puddle evict` (reuse `apply_leave` chain).
 - **No `lockbox: true` opt-in flag.** Usercrate schema simplifies; modlint's `lockboxWithoutHomeRule` retires.
-- **No partial-leave granularity.** An operator who wants to keep gitmirror but stop lockbox has no path post-0.40.0. This is a deliberate trade — the per-capability flexibility was theoretical (no operator was using it productively), and removing it earns a clean mental model.
+- **No partial-leave granularity.** An operator who wants to keep swarmgit but stop lockbox has no path post-0.40.0. This is a deliberate trade — the per-capability flexibility was theoretical (no operator was using it productively), and removing it earns a clean mental model.
 
 ## Alternatives considered
 
-- **Keep `lockbox leave` for partial-leave (gitmirror without lockbox).** Preserves the per-capability granularity but leaves the lockbox subtree with a residue that contradicts ADR-020's "lockbox is puddle-only" framing. The use case (puddle member who actively wants to drop lockbox but keep gitmirror) is hypothetical; no operator has asked for it. Rejected.
+- **Keep `lockbox leave` for partial-leave (swarmgit without lockbox).** Preserves the per-capability granularity but leaves the lockbox subtree with a residue that contradicts ADR-020's "lockbox is puddle-only" framing. The use case (puddle member who actively wants to drop lockbox but keep swarmgit) is hypothetical; no operator has asked for it. Rejected.
 - **Add scoped variants under puddle (`puddle leave-lockbox`).** Keeps lifecycle under the puddle subtree but with awkward compound verbs. No simplification — just renames. Rejected.
 - **Auto-init puddle on `lockbox init`.** A previous discussion considered making `lockbox init` auto-create a puddle when missing. Rejected because it couples two trust-anchor-affecting operations in a way that creates surprising failure modes (operator accidentally minting a new puddle pubkey). The current design is the inverse — puddle owns the trust anchor, lockbox follows.
 

@@ -963,7 +963,7 @@ func run() error {
 		slog.Warn("stream_edit globally disabled — all stream_edit attributes will be stripped from policy bundles")
 	}
 
-	// Gitmirror is fully P2P as of 0.23.0 — no server-side ClaimTable,
+	// Swarmgit is fully P2P as of 0.23.0 — no server-side ClaimTable,
 	// no trait-driven Builder, no SetCairn wiring. See
 	// `plan_cairn_p2p_first.md` for the rearchitecture history.
 
@@ -1153,7 +1153,7 @@ func run() error {
 		tokensHandler.RegisterRoutes(gwMux)
 		scrierAPIHandler.RegisterRoutes(gwMux)
 		// Fleet pubkey distribution. Lives outside the swarm-enabled
-		// gate so agents can bootstrap their gitmirror peer-pubkey
+		// gate so agents can bootstrap their swarmgit peer-pubkey
 		// TOFU cache regardless of whether THIS server has the swarm
 		// substrate enabled — the endpoint just reads FleetIndex,
 		// which is always populated. Without this hoist, agents on
@@ -1220,7 +1220,7 @@ func run() error {
 			// now usercrate-flag-driven, not envoy-pattern-driven).
 			lastSwarmPatterns := append([]string(nil), cfg.Swarm.Enabled...)
 			lastPuddlePatterns := append([]string(nil), cfg.Swarm.Puddle.Enabled...)
-			lastGitmirrorPatterns := append([]string(nil), cfg.Swarm.Gitmirror.Enabled...)
+			lastSwarmgitPatterns := append([]string(nil), cfg.Swarm.Swarmgit.Enabled...)
 			lastLongdrawerPatterns := append([]string(nil), cfg.Swarm.Longdrawer.Enabled...)
 			lastSwarmcastPatterns := append([]string(nil), cfg.Swarm.Swarmcast.Enabled...)
 
@@ -1246,9 +1246,9 @@ func run() error {
 					recordSwarmPatternsChange(ctx, auditWriter, "puddle", lastPuddlePatterns, newCfg.Swarm.Puddle.Enabled)
 					lastPuddlePatterns = append([]string(nil), newCfg.Swarm.Puddle.Enabled...)
 				}
-				if !sameStringSet(lastGitmirrorPatterns, newCfg.Swarm.Gitmirror.Enabled) {
-					recordSwarmPatternsChange(ctx, auditWriter, "gitmirror", lastGitmirrorPatterns, newCfg.Swarm.Gitmirror.Enabled)
-					lastGitmirrorPatterns = append([]string(nil), newCfg.Swarm.Gitmirror.Enabled...)
+				if !sameStringSet(lastSwarmgitPatterns, newCfg.Swarm.Swarmgit.Enabled) {
+					recordSwarmPatternsChange(ctx, auditWriter, "swarmgit", lastSwarmgitPatterns, newCfg.Swarm.Swarmgit.Enabled)
+					lastSwarmgitPatterns = append([]string(nil), newCfg.Swarm.Swarmgit.Enabled...)
 				}
 				if !sameStringSet(lastLongdrawerPatterns, newCfg.Swarm.Longdrawer.Enabled) {
 					recordSwarmPatternsChange(ctx, auditWriter, "longdrawer", lastLongdrawerPatterns, newCfg.Swarm.Longdrawer.Enabled)
@@ -2320,7 +2320,7 @@ func sameStringSet(a, b []string) bool {
 // recordSwarmPatternsChange emits a tamper-evident audit-chain entry
 // whenever a swarm authorization pattern list changes. `substrate` is
 // "swarm" for the top-level pattern, or one of
-// "puddle"/"gitmirror"/"longdrawer"/"swarmcast" for the per-subsystem
+// "puddle"/"swarmgit"/"longdrawer"/"swarmcast" for the per-subsystem
 // patterns. The summary states the pattern delta; the payload carries
 // the full new list so a reviewer can reconstruct post-change state
 // without joining log streams. Failures are logged at WARN — the audit

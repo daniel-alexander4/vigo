@@ -10,7 +10,7 @@
 // does NOT match the git-remote-vigo dispatch path. End-to-end
 // dispatch (argv[0] = "git-remote-vigo" via symlink → real handler
 // runs the protocol loop with git → push/clone succeed) is covered
-// by `agent/tests/gitmirror_helper.rs`.
+// by `agent/tests/swarmgit_helper.rs`.
 
 #![cfg(unix)]
 

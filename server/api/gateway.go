@@ -137,12 +137,12 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 		uiHandler.SetComplianceDocs(&complianceDocsListing{store: complianceDocsStore})
 	}
 
-	// Mount gitmirror fleet aggregator. Share the handler with the
-	// UI so the `/gitmirror` page reads the cached aggregation
+	// Mount swarmgit fleet aggregator. Share the handler with the
+	// UI so the `/swarmgit` page reads the cached aggregation
 	// directly rather than round-tripping through the REST endpoint.
-	gitmirrorHandler := NewGitmirrorHandler(fleetIndex, queries)
-	gitmirrorHandler.RegisterRoutes(mux)
-	uiHandler.SetGitmirrorFleet(gitmirrorHandler)
+	swarmgitHandler := NewSwarmgitHandler(fleetIndex, queries)
+	swarmgitHandler.RegisterRoutes(mux)
+	uiHandler.SetSwarmgitFleet(swarmgitHandler)
 
 	// Mount longdrawer + lockbox mesh observability endpoints. Same
 	// handler-sharing pattern — the `/mesh` UI page reads the

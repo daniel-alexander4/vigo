@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"git.alexander4.io/vigo/server/swarm/lockboxmesh"
-	"git.alexander4.io/vigo/server/swarm/gitmirrormesh"
+	"git.alexander4.io/vigo/server/swarm/swarmgitmesh"
 	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
 )
 
@@ -38,15 +38,15 @@ func (m *mockMesh) EnvoyLockboxFiles(_ context.Context, _ string) []lockboxmesh.
 	return nil
 }
 
-type mockGitmirror struct {
-	fleet *gitmirrormesh.Fleet
+type mockSwarmgit struct {
+	fleet *swarmgitmesh.Fleet
 }
 
-func (m *mockGitmirror) FleetSnapshot(ctx context.Context) (*gitmirrormesh.Fleet, error) {
+func (m *mockSwarmgit) FleetSnapshot(ctx context.Context) (*swarmgitmesh.Fleet, error) {
 	return m.fleet, nil
 }
 
-func (m *mockGitmirror) EnvoyProjects(_ context.Context, _ string) []gitmirrormesh.EnvoyProject {
+func (m *mockSwarmgit) EnvoyProjects(_ context.Context, _ string) []swarmgitmesh.EnvoyProject {
 	return nil
 }
 
@@ -56,7 +56,7 @@ func TestMeshSplit_RBAC(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
 	h.mesh = &mockMesh{}
-	h.gitmirrorFleet = &mockGitmirror{}
+	h.swarmgitFleet = &mockSwarmgit{}
 
 	cases := []struct {
 		path    string
@@ -66,7 +66,7 @@ func TestMeshSplit_RBAC(t *testing.T) {
 		{"/ui/fragments/longdrawer-user/dan", h.EchoUserDrilldown},
 		{"/swarm/lockbox", h.Lockbox},
 		{"/ui/fragments/lockbox-user/dan", h.LockboxUserDrilldown},
-		{"/swarm/gitmirror", h.Gitmirror},
+		{"/swarm/swarmgit", h.Swarmgit},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
@@ -142,33 +142,33 @@ func TestLockbox_EmptyRendersHealthy(t *testing.T) {
 	}
 }
 
-func TestGitmirror_EmptyRendersHealthy(t *testing.T) {
+func TestSwarmgit_EmptyRendersHealthy(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
-	h.gitmirrorFleet = &mockGitmirror{fleet: &gitmirrormesh.Fleet{}}
+	h.swarmgitFleet = &mockSwarmgit{fleet: &swarmgitmesh.Fleet{}}
 
 	rec := httptest.NewRecorder()
-	h.Gitmirror(rec, adminRequest(http.MethodGet, "/swarm/gitmirror"))
+	h.Swarmgit(rec, adminRequest(http.MethodGet, "/swarm/swarmgit"))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Gitmirror returned %d, want 200", rec.Code)
+		t.Fatalf("Swarmgit returned %d, want 200", rec.Code)
 	}
-	if !containsAll(rec.Body.String(), "Gitmirror", "health-banner--ok") {
-		t.Error("empty gitmirror should render healthy banner")
+	if !containsAll(rec.Body.String(), "Swarmgit", "health-banner--ok") {
+		t.Error("empty swarmgit should render healthy banner")
 	}
 }
 
-// TestGitmirror_DivergentRefsPromotesBannerWarn — when an aggregator
+// TestSwarmgit_DivergentRefsPromotesBannerWarn — when an aggregator
 // surfaces a project where hosts disagree on a head sha, the banner
 // must be warn-level and list the problem. (Post-ADR-015 the
 // orphan/pending/stale signals from the legacy publisher-receiver
 // model are gone; the new conditions are ref divergence and
 // envelope-digest skew across hosts.)
-func TestGitmirror_DivergentRefsPromotesBannerWarn(t *testing.T) {
+func TestSwarmgit_DivergentRefsPromotesBannerWarn(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
 	pid := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
-	h.gitmirrorFleet = &mockGitmirror{fleet: &gitmirrormesh.Fleet{
-		Projects: []gitmirrormesh.ProjectSummary{
+	h.swarmgitFleet = &mockSwarmgit{fleet: &swarmgitmesh.Fleet{
+		Projects: []swarmgitmesh.ProjectSummary{
 			{
 				ProjectID:        pid,
 				Handle:           "team-notes",
@@ -179,11 +179,11 @@ func TestGitmirror_DivergentRefsPromotesBannerWarn(t *testing.T) {
 				DigestUnanimous:  true,
 			},
 		},
-		Totals: gitmirrormesh.Totals{Projects: 1, Hosts: 2, DivergentRefs: 1},
+		Totals: swarmgitmesh.Totals{Projects: 1, Hosts: 2, DivergentRefs: 1},
 	}}
 
 	rec := httptest.NewRecorder()
-	h.Gitmirror(rec, adminRequest(http.MethodGet, "/swarm/gitmirror"))
+	h.Swarmgit(rec, adminRequest(http.MethodGet, "/swarm/swarmgit"))
 	body := rec.Body.String()
 	if !containsAll(body, "health-banner--warn", "divergent", "team-notes") {
 		t.Errorf("divergent refs should surface in warn-level banner; body sample:\n%s", snippet(body, 1500))

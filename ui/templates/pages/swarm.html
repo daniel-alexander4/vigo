@@ -1,7 +1,7 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Swarm</h1>
-    <p>Envoy peer-to-peer substrate. Payload, Gitmirror, Longdrawer, and Lockbox all ride on this transport. <a href="/docs/engineering/subsystems/swarm">What is this?</a></p>
+    <p>Envoy peer-to-peer substrate. Payload, Swarmgit, Longdrawer, and Lockbox all ride on this transport. <a href="/docs/engineering/subsystems/swarm">What is this?</a></p>
 </div>
 
 {{if not .Status.GeneratedAt.IsZero}}
@@ -43,9 +43,9 @@
                     <td><a href="/swarm/swarmcast">/swarmcast</a></td>
                 </tr>
                 <tr>
-                    <td><strong>Gitmirror</strong> <span style="color:var(--subtext0);">— personal-DR repo mirrors</span></td>
-                    <td>{{.Status.Payloads.Gitmirror}}</td>
-                    <td><a href="/swarm/gitmirror">/gitmirror</a></td>
+                    <td><strong>Swarmgit</strong> <span style="color:var(--subtext0);">— personal-DR repo mirrors</span></td>
+                    <td>{{.Status.Payloads.Swarmgit}}</td>
+                    <td><a href="/swarm/swarmgit">/swarmgit</a></td>
                 </tr>
                 <tr>
                     <td><strong>Longdrawer</strong> <span style="color:var(--subtext0);">— per-user plaintext sync</span></td>

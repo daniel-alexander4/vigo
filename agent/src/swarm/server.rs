@@ -35,7 +35,7 @@ use super::cache::BlobCache;
 use super::manifest::Manifest;
 use super::meta::chunks_for_size;
 use super::peermap::PeerMap;
-use crate::swarm::gitmirror::receiver::ClaimsHandle as GitmirrorClaimsHandle;
+use crate::swarm::swarmgit::receiver::ClaimsHandle as SwarmgitClaimsHandle;
 
 /// Default swarm peer port.
 pub const DEFAULT_PORT: u16 = 1531;
@@ -50,27 +50,27 @@ struct ServerState {
     bandwidth: BandwidthMonitor,
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
-    /// Gitmirror server-side context for cross-subnet `/gitmirror/push`
-    /// handling (Phase 7). `None` when gitmirror is disabled on this
-    /// envoy — in which case the `/gitmirror/push` route returns
+    /// Swarmgit server-side context for cross-subnet `/swarmgit/push`
+    /// handling (Phase 7). `None` when swarmgit is disabled on this
+    /// envoy — in which case the `/swarmgit/push` route returns
     /// 403 regardless of sender identity, which is the correct
-    /// response for a dormant gitmirror subsystem.
-    gitmirror_ctx: Option<GitmirrorServerCtx>,
+    /// response for a dormant swarmgit subsystem.
+    swarmgit_ctx: Option<SwarmgitServerCtx>,
 }
 
-/// Handles that the gitmirror push handler needs to validate and
+/// Handles that the swarmgit push handler needs to validate and
 /// accept an incoming bundle. Built once at swarm server startup and
 /// cloned into the per-request handler. The `gate` field is consulted
-/// on every `/gitmirror/push` request so enable/disable flips take
+/// on every `/swarmgit/push` request so enable/disable flips take
 /// effect without restarting the agent; when the gate is off the
 /// handler returns 403 just as it used to when this context itself
 /// was absent.
 #[derive(Clone)]
-pub struct GitmirrorServerCtx {
-    pub claims: GitmirrorClaimsHandle,
+pub struct SwarmgitServerCtx {
+    pub claims: SwarmgitClaimsHandle,
     pub manifest: Arc<Manifest>,
     pub local_hostname: String,
-    pub gate: crate::swarm::gitmirror::Gate,
+    pub gate: crate::swarm::swarmgit::Gate,
 }
 
 /// Run the swarm peer HTTPS server until cancellation.
@@ -82,7 +82,7 @@ pub async fn run(
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
     cancel: tokio_util::sync::CancellationToken,
-    gitmirror_ctx: Option<GitmirrorServerCtx>,
+    swarmgit_ctx: Option<SwarmgitServerCtx>,
 ) -> Result<()> {
     let cache = BlobCache::new(blobs_dir).context("initializing swarm server blob cache")?;
 
@@ -92,7 +92,7 @@ pub async fn run(
         bandwidth,
         peer_map,
         manifest,
-        gitmirror_ctx,
+        swarmgit_ctx,
     });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -227,7 +227,7 @@ async fn handle_request(
 
         // Pre-flight disk-pressure probe — senders ask "is the
         // filesystem where my push will land >10% free?" before
-        // committing bytes. Query: ?for=<swarm|lockbox|gitmirror|longdrawer>[&user=...].
+        // committing bytes. Query: ?for=<swarm|lockbox|swarmgit|longdrawer>[&user=...].
         (&Method::GET, "/health/storage") => {
             handle_health_storage(req.uri().query().unwrap_or(""))
         }
@@ -270,42 +270,42 @@ async fn handle_request(
             handle_echo_announce(req, peer_addr).await
         }
 
-        // Gitmirror cross-subnet push (Phase 7). Source envoys POST
-        // a bundle directly to this endpoint when a `.gitmirror.yaml`
+        // Swarmgit cross-subnet push (Phase 7). Source envoys POST
+        // a bundle directly to this endpoint when a `.swarmgit.yaml`
         // sidecar lists an explicit `cross_subnet_mirrors:` target. The
         // handler validates the sender, writes the blob to the local
         // swarm cache, injects a manifest entry, and ingests a LAN
-        // claim so the gitmirror receiver picks it up on the next
+        // claim so the swarmgit receiver picks it up on the next
         // tick — same path as a LAN-discovered mirror.
-        (&Method::POST, p) if p.starts_with("/swarm/gitmirror/push/") => {
+        (&Method::POST, p) if p.starts_with("/swarm/swarmgit/push/") => {
             // Two cohabiting flavors:
             //  - Unified-substrate (ADR-015 step 4): tail is 64-char
             //    lowercase hex `<project_id>`. Handled inline below.
             //  - Legacy claim-based (pre-ADR-015): tail is the
-            //    url-encoded label `gitmirror:<host>:<user>:<project>`.
+            //    url-encoded label `swarmgit:<host>:<user>:<project>`.
             //    Handled by the original receiver path while the
             //    legacy code is still in tree.
-            let tail = p.trim_start_matches("/swarm/gitmirror/push/");
+            let tail = p.trim_start_matches("/swarm/swarmgit/push/");
             if is_project_id_path_segment(tail) {
-                handle_gitmirror_push_v2(tail, req).await
+                handle_swarmgit_push_v2(tail, req).await
             } else {
-                handle_gitmirror_push(p, req, state).await
+                handle_swarmgit_push(p, req, state).await
             }
         }
 
         // Envelope gossip endpoints (ADR-015 step 4 fourth slice).
         // Receivers persist signed envelopes idempotently (save_*
         // returns false on no-op) so re-arrival is cheap.
-        (&Method::POST, p) if p.starts_with("/swarm/gitmirror/envelopes/") && p.ends_with("/revokes") => {
+        (&Method::POST, p) if p.starts_with("/swarm/swarmgit/envelopes/") && p.ends_with("/revokes") => {
             handle_envelope_post(p, req, EnvelopeKind::Revoke).await
         }
-        (&Method::POST, p) if p.starts_with("/swarm/gitmirror/envelopes/") && p.ends_with("/leaves") => {
+        (&Method::POST, p) if p.starts_with("/swarm/swarmgit/envelopes/") && p.ends_with("/leaves") => {
             handle_envelope_post(p, req, EnvelopeKind::Leave).await
         }
-        (&Method::GET, p) if p.starts_with("/swarm/gitmirror/envelopes/") && p.ends_with("/digest") => {
+        (&Method::GET, p) if p.starts_with("/swarm/swarmgit/envelopes/") && p.ends_with("/digest") => {
             tokio::task::block_in_place(|| handle_envelope_digest(p))
         }
-        (&Method::GET, p) if p.starts_with("/swarm/gitmirror/envelopes/") && p.ends_with("/all") => {
+        (&Method::GET, p) if p.starts_with("/swarm/swarmgit/envelopes/") && p.ends_with("/all") => {
             tokio::task::block_in_place(|| handle_envelope_all(p))
         }
 
@@ -567,10 +567,10 @@ fn validate_sha256(s: &str) -> bool {
     s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-/// True when `seg` looks like a unified-substrate gitmirror project_id:
+/// True when `seg` looks like a unified-substrate swarmgit project_id:
 /// 64 lowercase hex chars and nothing else. Used to disambiguate the
-/// new POST `/swarm/gitmirror/push/<project_id_hex>` route from the
-/// legacy label-based POST `/swarm/gitmirror/push/<gitmirror:...>`
+/// new POST `/swarm/swarmgit/push/<project_id_hex>` route from the
+/// legacy label-based POST `/swarm/swarmgit/push/<swarmgit:...>`
 /// handler that still ships while the legacy receiver is in tree.
 fn is_project_id_path_segment(seg: &str) -> bool {
     seg.len() == 64
@@ -579,27 +579,27 @@ fn is_project_id_path_segment(seg: &str) -> bool {
             .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
 }
 
-/// Handle `POST /swarm/gitmirror/push/<project_id_hex>` — the
+/// Handle `POST /swarm/swarmgit/push/<project_id_hex>` — the
 /// unified-substrate (ADR-015 step 4) fan-out endpoint.
 ///
 /// Required headers:
 /// - `X-Vigo-Chain` — base64 of the JSON-encoded
-///   [`crate::swarm::gitmirror::project_state::TokenChain`] proving
+///   [`crate::swarm::swarmgit::project_state::TokenChain`] proving
 ///   the pushing puddle is an authorized member.
 ///
 /// Body: a `git bundle create --all` blob, capped at
-/// [`crate::swarm::gitmirror::MAX_BUNDLE_SIZE`] (20 GiB).
+/// [`crate::swarm::swarmgit::MAX_BUNDLE_SIZE`] (20 GiB).
 ///
 /// Validation:
 /// 1. project_id_hex parses as a 32-byte project_id.
 /// 2. X-Vigo-Chain decodes + verifies via
-///    [`crate::swarm::gitmirror::fan_out::verify_chain_for_push`]
+///    [`crate::swarm::swarmgit::fan_out::verify_chain_for_push`]
 ///    (chain anchors to `sha256(founder_pubkey) == project_id`,
 ///    no link is in the local revocation set).
 /// 3. Body size ≤ MAX_BUNDLE_SIZE; streamed to a temp file to bound
 ///    transient memory.
 /// 4. Bundle ingests cleanly via
-///    [`crate::swarm::gitmirror::fan_out::ingest_bundle`] (which
+///    [`crate::swarm::swarmgit::fan_out::ingest_bundle`] (which
 ///    runs `git bundle verify` before `git fetch`).
 ///
 /// On success returns `200 OK` with JSON body
@@ -607,41 +607,41 @@ fn is_project_id_path_segment(seg: &str) -> bool {
 /// flag is the cycle-prevention signal — receivers chain-fan-out
 /// only when refs actually advanced (chain-fan-out itself is not
 /// implemented in this slice; see `fan_out.rs` module docs).
-async fn handle_gitmirror_push_v2(
+async fn handle_swarmgit_push_v2(
     pid_hex: &str,
     req: Request<hyper::body::Incoming>,
 ) -> Response<Full<Bytes>> {
     use http_body_util::BodyExt;
 
-    let project_id = match crate::swarm::gitmirror::project_state::parse_hex_id(pid_hex) {
+    let project_id = match crate::swarm::swarmgit::project_state::parse_hex_id(pid_hex) {
         Ok(p) => p,
         Err(e) => return bad_request(&format!("invalid project_id: {}", e)),
     };
 
-    let chain_header = match header_string(&req, crate::swarm::gitmirror::fan_out::CHAIN_HEADER) {
+    let chain_header = match header_string(&req, crate::swarm::swarmgit::fan_out::CHAIN_HEADER) {
         Some(s) => s,
         None => {
             return bad_request(&format!(
                 "missing {} header",
-                crate::swarm::gitmirror::fan_out::CHAIN_HEADER
+                crate::swarm::swarmgit::fan_out::CHAIN_HEADER
             ));
         }
     };
 
-    let chain = match crate::swarm::gitmirror::fan_out::decode_chain_header(&chain_header) {
+    let chain = match crate::swarm::swarmgit::fan_out::decode_chain_header(&chain_header) {
         Ok(c) => c,
         Err(e) => return bad_request(&format!("decode chain header: {:#}", e)),
     };
 
-    let gitmirror_base = crate::platform::paths::default_gitmirror_dir();
+    let swarmgit_base = crate::platform::paths::default_swarmgit_dir();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    if let Err(e) = crate::swarm::gitmirror::fan_out::verify_chain_for_push(
+    if let Err(e) = crate::swarm::swarmgit::fan_out::verify_chain_for_push(
         &chain,
         &project_id,
-        &gitmirror_base,
+        &swarmgit_base,
         now,
     ) {
         return forbidden(&format!("chain rejected: {:#}", e));
@@ -650,7 +650,7 @@ async fn handle_gitmirror_push_v2(
     // Stream the body into a temp file under incoming/ so we never
     // hold a multi-GiB bundle in process memory. Body size capped at
     // MAX_BUNDLE_SIZE.
-    let staging = gitmirror_base.join("incoming");
+    let staging = swarmgit_base.join("incoming");
     if let Err(e) = std::fs::create_dir_all(&staging) {
         return service_unavailable(&format!("create incoming dir: {}", e));
     }
@@ -687,11 +687,11 @@ async fn handle_gitmirror_push_v2(
             if let Ok(data) = frame.into_data() {
                 let chunk: &[u8] = &data;
                 total = total.saturating_add(chunk.len() as u64);
-                if total > crate::swarm::gitmirror::MAX_BUNDLE_SIZE {
+                if total > crate::swarm::swarmgit::MAX_BUNDLE_SIZE {
                     let _ = std::fs::remove_file(&bundle_path);
                     return payload_too_large(&format!(
                         "bundle size exceeds MAX_BUNDLE_SIZE ({} GiB)",
-                        crate::swarm::gitmirror::MAX_BUNDLE_SIZE / (1024 * 1024 * 1024),
+                        crate::swarm::swarmgit::MAX_BUNDLE_SIZE / (1024 * 1024 * 1024),
                     ));
                 }
                 if let Err(e) = tmp.write_all(chunk) {
@@ -710,8 +710,8 @@ async fn handle_gitmirror_push_v2(
 
     let refs_changed_result = tokio::task::block_in_place(|| {
         let body_bytes = std::fs::read(&bundle_path)?;
-        crate::swarm::gitmirror::fan_out::ingest_bundle(
-            &gitmirror_base,
+        crate::swarm::swarmgit::fan_out::ingest_bundle(
+            &swarmgit_base,
             &project_id,
             &body_bytes,
         )
@@ -724,7 +724,7 @@ async fn handle_gitmirror_push_v2(
             warn!(
                 project_id = %pid_hex,
                 error = %e,
-                "gitmirror push: ingest failed"
+                "swarmgit push: ingest failed"
             );
             return bad_request(&format!("ingest failed: {:#}", e));
         }
@@ -734,7 +734,7 @@ async fn handle_gitmirror_push_v2(
         project_id = %pid_hex,
         bytes = total,
         refs_changed,
-        "gitmirror push: accepted"
+        "swarmgit push: accepted"
     );
 
     let body = format!(
@@ -751,15 +751,15 @@ enum EnvelopeKind {
 }
 
 /// Extract the `<pid_hex>` segment from a path of shape
-/// `/swarm/gitmirror/envelopes/<pid_hex>/<suffix>`. Returns `None`
+/// `/swarm/swarmgit/envelopes/<pid_hex>/<suffix>`. Returns `None`
 /// if the shape is wrong or `<pid_hex>` isn't valid.
-fn parse_envelope_path(path: &str) -> Option<[u8; crate::swarm::gitmirror::tokens::ID_LEN]> {
-    let stripped = path.strip_prefix("/swarm/gitmirror/envelopes/")?;
+fn parse_envelope_path(path: &str) -> Option<[u8; crate::swarm::swarmgit::tokens::ID_LEN]> {
+    let stripped = path.strip_prefix("/swarm/swarmgit/envelopes/")?;
     let (pid_hex, _suffix) = stripped.split_once('/')?;
     if !is_project_id_path_segment(pid_hex) {
         return None;
     }
-    crate::swarm::gitmirror::project_state::parse_hex_id(pid_hex).ok()
+    crate::swarm::swarmgit::project_state::parse_hex_id(pid_hex).ok()
 }
 
 /// Cap on accepted envelope JSON body size. Envelopes are tiny
@@ -799,11 +799,11 @@ async fn handle_envelope_post(
         }
     }
 
-    let gitmirror_base = crate::platform::paths::default_gitmirror_dir();
+    let swarmgit_base = crate::platform::paths::default_swarmgit_dir();
     let result = tokio::task::block_in_place(|| -> Result<bool, anyhow::Error> {
         match kind {
             EnvelopeKind::Revoke => {
-                let env: crate::swarm::gitmirror::envelopes::RevokeEnvelope =
+                let env: crate::swarm::swarmgit::envelopes::RevokeEnvelope =
                     serde_json::from_slice(&buf)
                         .map_err(|e| anyhow::anyhow!("parse revoke envelope: {}", e))?;
                 let raw = env
@@ -815,11 +815,11 @@ async fn handle_envelope_post(
                     ));
                 }
                 let changed =
-                    crate::swarm::gitmirror::envelopes::save_revoke(&gitmirror_base, &env)?;
+                    crate::swarm::swarmgit::envelopes::save_revoke(&swarmgit_base, &env)?;
                 Ok(changed)
             }
             EnvelopeKind::Leave => {
-                let env: crate::swarm::gitmirror::envelopes::LeaveEnvelope =
+                let env: crate::swarm::swarmgit::envelopes::LeaveEnvelope =
                     serde_json::from_slice(&buf)
                         .map_err(|e| anyhow::anyhow!("parse leave envelope: {}", e))?;
                 let raw = env
@@ -831,7 +831,7 @@ async fn handle_envelope_post(
                     ));
                 }
                 let changed =
-                    crate::swarm::gitmirror::envelopes::save_leave(&gitmirror_base, &env)?;
+                    crate::swarm::swarmgit::envelopes::save_leave(&swarmgit_base, &env)?;
                 Ok(changed)
             }
         }
@@ -858,9 +858,9 @@ fn handle_envelope_digest(path: &str) -> Response<Full<Bytes>> {
         Some(p) => p,
         None => return bad_request("malformed envelope path"),
     };
-    let gitmirror_base = crate::platform::paths::default_gitmirror_dir();
-    match crate::swarm::gitmirror::fan_out::DigestResponse::for_project(
-        &gitmirror_base,
+    let swarmgit_base = crate::platform::paths::default_swarmgit_dir();
+    match crate::swarm::swarmgit::fan_out::DigestResponse::for_project(
+        &swarmgit_base,
         &project_id,
     ) {
         Ok(d) => match serde_json::to_string(&d) {
@@ -876,9 +876,9 @@ fn handle_envelope_all(path: &str) -> Response<Full<Bytes>> {
         Some(p) => p,
         None => return bad_request("malformed envelope path"),
     };
-    let gitmirror_base = crate::platform::paths::default_gitmirror_dir();
-    match crate::swarm::gitmirror::fan_out::EnvelopesBundle::for_project(
-        &gitmirror_base,
+    let swarmgit_base = crate::platform::paths::default_swarmgit_dir();
+    match crate::swarm::swarmgit::fan_out::EnvelopesBundle::for_project(
+        &swarmgit_base,
         &project_id,
     ) {
         Ok(b) => match serde_json::to_string(&b) {
@@ -986,13 +986,13 @@ fn parse_query(q: &str) -> std::collections::HashMap<String, String> {
     out
 }
 
-// ── Gitmirror cross-subnet push handler (Phase 7) ──────────────────────────
+// ── Swarmgit cross-subnet push handler (Phase 7) ──────────────────────────
 
-/// Handle `POST /gitmirror/push/<label>` — the cross-subnet direct
+/// Handle `POST /swarmgit/push/<label>` — the cross-subnet direct
 /// push endpoint.
 ///
-/// Path format: `/gitmirror/push/<url-encoded-label>`. The label is
-/// a full content-seed label `gitmirror:<seeder>:<user>:<project>`;
+/// Path format: `/swarmgit/push/<url-encoded-label>`. The label is
+/// a full content-seed label `swarmgit:<seeder>:<user>:<project>`;
 /// we accept it url-encoded (colons percent-escaped) or raw.
 ///
 /// Required headers:
@@ -1005,51 +1005,51 @@ fn parse_query(q: &str) -> std::collections::HashMap<String, String> {
 ///
 /// Validation order (each rejection returns a specific 4xx):
 ///
-/// 1. Gitmirror enabled on this envoy (`gitmirror_ctx.is_some()`)
+/// 1. Swarmgit enabled on this envoy (`swarmgit_ctx.is_some()`)
 /// 2. Label parses into (seeder, user, project) segments
 /// 3. Label's `<seeder>` segment equals `X-Vigo-Seeder`
 /// 4. Local user from `<user>` segment exists
-/// 5. Body size ≤ [`crate::swarm::gitmirror::MAX_BUNDLE_SIZE`]
+/// 5. Body size ≤ [`crate::swarm::swarmgit::MAX_BUNDLE_SIZE`]
 /// 6. Body sha256 matches `X-Vigo-Blob-Sha256`
 ///
 /// On accept:
 ///
 /// - Body is written atomically to the blob cache at the computed
 ///   sha path.
-/// - A manifest entry is recorded locally so the gitmirror
+/// - A manifest entry is recorded locally so the swarmgit
 ///   receiver's next tick can resolve the label → blob.
 /// - The `ClaimsHandle` receives an `ingest_lan_claim(label,
 ///   sender, true, now)` so the reactor picks it up on its next
 ///   tick.
 ///
 /// Returns 200 OK with a short JSON body on success.
-async fn handle_gitmirror_push(
+async fn handle_swarmgit_push(
     path: &str,
     req: Request<hyper::body::Incoming>,
     state: &ServerState,
 ) -> Response<Full<Bytes>> {
-    // 1. Gitmirror must be enabled on this envoy. The context is
+    // 1. Swarmgit must be enabled on this envoy. The context is
     // always present on new builds, but the gate may be off — both
     // conditions return the same 403 to the caller.
-    let ctx = match state.gitmirror_ctx.as_ref() {
+    let ctx = match state.swarmgit_ctx.as_ref() {
         Some(c) => c.clone(),
-        None => return forbidden("gitmirror not enabled on this envoy"),
+        None => return forbidden("swarmgit not enabled on this envoy"),
     };
     if !ctx.gate.enabled() {
-        return forbidden("gitmirror not enabled on this envoy");
+        return forbidden("swarmgit not enabled on this envoy");
     }
 
     // 2. Extract the label from the URL path.
-    let raw_label = path.trim_start_matches("/swarm/gitmirror/push/");
+    let raw_label = path.trim_start_matches("/swarm/swarmgit/push/");
     let label = match url_decode(raw_label) {
         Some(l) => l,
         None => return bad_request("malformed label url-encoding"),
     };
 
     // 3. Parse label segments.
-    let (seeder, user, project) = match parse_gitmirror_label(&label) {
+    let (seeder, user, project) = match parse_swarmgit_label(&label) {
         Some(t) => t,
-        None => return bad_request("malformed gitmirror label"),
+        None => return bad_request("malformed swarmgit label"),
     };
 
     // 4. Read required headers.
@@ -1078,7 +1078,7 @@ async fn handle_gitmirror_push(
         return bad_request("X-Vigo-Blob-Sha256 is not a 64-char hex sha256");
     }
 
-    // 7. Local user must exist. Gitmirror won't materialize a
+    // 7. Local user must exist. Swarmgit won't materialize a
     // mirror for a user with no local account on this envoy.
     if crate::platform::users::lookup_user(&user).is_none() {
         return forbidden(&format!("user '{}' does not exist on this envoy", user));
@@ -1089,10 +1089,10 @@ async fn handle_gitmirror_push(
     // 7a. Receiver-side disk-pressure guard. The sender probes before
     // push, but the probe is cached 60 s — a concurrent writer could
     // have pushed free-pct below threshold in that window. Cheap
-    // statvfs on the gitmirror mirror mountpoint; reject 507 before
+    // statvfs on the swarmgit mirror mountpoint; reject 507 before
     // reading a byte of the bundle body.
-    if super::peer_health::is_self_pressured(&super::peer_health::Purpose::Gitmirror) {
-        return insufficient_storage("gitmirror mirror filesystem under disk pressure");
+    if super::peer_health::is_self_pressured(&super::peer_health::Purpose::Swarmgit) {
+        return insufficient_storage("swarmgit mirror filesystem under disk pressure");
     }
 
     // 8-10. Stream the body straight to disk under .tmp while hashing
@@ -1144,11 +1144,11 @@ async fn handle_gitmirror_push(
             if let Ok(data) = frame.into_data() {
                 let chunk: &[u8] = &data;
                 total = total.saturating_add(chunk.len() as u64);
-                if total > crate::swarm::gitmirror::MAX_BUNDLE_SIZE {
+                if total > crate::swarm::swarmgit::MAX_BUNDLE_SIZE {
                     let _ = std::fs::remove_file(&tmp_path);
                     return payload_too_large(&format!(
                         "bundle size exceeds MAX_BUNDLE_SIZE ({} GiB)",
-                        crate::swarm::gitmirror::MAX_BUNDLE_SIZE / (1024 * 1024 * 1024),
+                        crate::swarm::swarmgit::MAX_BUNDLE_SIZE / (1024 * 1024 * 1024),
                     ));
                 }
                 hasher.update(chunk);
@@ -1190,12 +1190,12 @@ async fn handle_gitmirror_push(
         warn!(
             error = %e,
             path = %final_path.display(),
-            "gitmirror push: failed to move blob into place"
+            "swarmgit push: failed to move blob into place"
         );
         return service_unavailable(&format!("failed to write blob: {}", e));
     }
 
-    // 11. Inject a manifest entry so the gitmirror receiver reactor
+    // 11. Inject a manifest entry so the swarmgit receiver reactor
     // can resolve the label → blob. The seeder_address field is
     // set to the literal "direct-push" to distinguish manual
     // injections from manifest entries that came through normal
@@ -1212,9 +1212,9 @@ async fn handle_gitmirror_push(
     );
 
     // 12. Ingest the LAN claim so the receiver picks it up on
-    // its next tick. Same path as a GITMIRRORCLAIM multicast —
+    // its next tick. Same path as a SWARMGITCLAIM multicast —
     // the source hostname is used for dedup keying.
-    let now = crate::swarm::gitmirror::state::unix_seconds_now();
+    let now = crate::swarm::swarmgit::state::unix_seconds_now();
     ctx.claims.ingest_lan_claim(&label, &seeder, true, now);
 
     info!(
@@ -1222,7 +1222,7 @@ async fn handle_gitmirror_push(
         seeder = %seeder,
         size = body_len,
         sha = %&actual_sha[..12.min(actual_sha.len())],
-        "gitmirror push: accepted bundle"
+        "swarmgit push: accepted bundle"
     );
 
     ok_json(r#"{"status":"accepted"}"#)
@@ -1273,10 +1273,10 @@ async fn handle_echo_announce(
     }
 }
 
-/// Parse a gitmirror content-seed label `gitmirror:<seeder>:<user>:<project>`
+/// Parse a swarmgit content-seed label `swarmgit:<seeder>:<user>:<project>`
 /// into its three segments. Returns `None` for malformed labels.
-fn parse_gitmirror_label(label: &str) -> Option<(String, String, String)> {
-    let rest = label.strip_prefix("gitmirror:")?;
+fn parse_swarmgit_label(label: &str) -> Option<(String, String, String)> {
+    let rest = label.strip_prefix("swarmgit:")?;
     let mut parts = rest.splitn(3, ':');
     let seeder = parts.next()?;
     let user = parts.next()?;
@@ -1387,7 +1387,7 @@ mod tests {
             bandwidth: BandwidthMonitor::new(),
             peer_map: Arc::new(PeerMap::new()),
             manifest,
-            gitmirror_ctx: None,
+            swarmgit_ctx: None,
         })
     }
 
@@ -1397,45 +1397,45 @@ mod tests {
         assert_eq!(build_meta_etag(42, 1000), r#""42-1000""#);
     }
 
-    // ── Phase 7 gitmirror push pure helpers ────────────────────
+    // ── Phase 7 swarmgit push pure helpers ────────────────────
 
     #[test]
-    fn parse_gitmirror_label_accepts_valid_shape() {
-        let (s, u, p) = parse_gitmirror_label("gitmirror:danlap:dan:vigo-web").unwrap();
+    fn parse_swarmgit_label_accepts_valid_shape() {
+        let (s, u, p) = parse_swarmgit_label("swarmgit:danlap:dan:vigo-web").unwrap();
         assert_eq!(s, "danlap");
         assert_eq!(u, "dan");
         assert_eq!(p, "vigo-web");
     }
 
     #[test]
-    fn parse_gitmirror_label_accepts_project_with_dashes_and_dots() {
-        let (_, _, p) = parse_gitmirror_label("gitmirror:h:u:my-repo.v2").unwrap();
+    fn parse_swarmgit_label_accepts_project_with_dashes_and_dots() {
+        let (_, _, p) = parse_swarmgit_label("swarmgit:h:u:my-repo.v2").unwrap();
         assert_eq!(p, "my-repo.v2");
     }
 
     #[test]
-    fn parse_gitmirror_label_rejects_missing_prefix() {
-        assert!(parse_gitmirror_label("danlap:dan:vigo-web").is_none());
+    fn parse_swarmgit_label_rejects_missing_prefix() {
+        assert!(parse_swarmgit_label("danlap:dan:vigo-web").is_none());
     }
 
     #[test]
-    fn parse_gitmirror_label_rejects_too_few_segments() {
-        assert!(parse_gitmirror_label("gitmirror:dan:vigo-web").is_none());
-        assert!(parse_gitmirror_label("gitmirror:danlap").is_none());
+    fn parse_swarmgit_label_rejects_too_few_segments() {
+        assert!(parse_swarmgit_label("swarmgit:dan:vigo-web").is_none());
+        assert!(parse_swarmgit_label("swarmgit:danlap").is_none());
     }
 
     #[test]
-    fn parse_gitmirror_label_rejects_empty_segment() {
-        assert!(parse_gitmirror_label("gitmirror::dan:vigo-web").is_none());
-        assert!(parse_gitmirror_label("gitmirror:dan::vigo-web").is_none());
-        assert!(parse_gitmirror_label("gitmirror:dan:user:").is_none());
+    fn parse_swarmgit_label_rejects_empty_segment() {
+        assert!(parse_swarmgit_label("swarmgit::dan:vigo-web").is_none());
+        assert!(parse_swarmgit_label("swarmgit:dan::vigo-web").is_none());
+        assert!(parse_swarmgit_label("swarmgit:dan:user:").is_none());
     }
 
     #[test]
     fn url_decode_handles_percent_colons() {
         assert_eq!(
-            url_decode("gitmirror%3Adanlap%3Adan%3Avigo-web").unwrap(),
-            "gitmirror:danlap:dan:vigo-web",
+            url_decode("swarmgit%3Adanlap%3Adan%3Avigo-web").unwrap(),
+            "swarmgit:danlap:dan:vigo-web",
         );
     }
 
@@ -1449,8 +1449,8 @@ mod tests {
         // If someone passes the label without percent-encoding,
         // we still handle it (colons are legal in URL paths).
         assert_eq!(
-            url_decode("gitmirror:danlap:dan:vigo-web").unwrap(),
-            "gitmirror:danlap:dan:vigo-web",
+            url_decode("swarmgit:danlap:dan:vigo-web").unwrap(),
+            "swarmgit:danlap:dan:vigo-web",
         );
     }
 
@@ -1479,9 +1479,9 @@ mod tests {
 
     #[test]
     fn is_project_id_path_segment_rejects_legacy_label() {
-        // Legacy "gitmirror:host:user:project" labels never match —
+        // Legacy "swarmgit:host:user:project" labels never match —
         // colons are not hex and the length almost never aligns to 64.
-        assert!(!is_project_id_path_segment("gitmirror:danlap:dan:vigo-web"));
+        assert!(!is_project_id_path_segment("swarmgit:danlap:dan:vigo-web"));
         // Even a 64-char string with non-hex chars must be rejected.
         let mostly_hex = format!("{}!", "a".repeat(63));
         assert!(!is_project_id_path_segment(&mostly_hex));
@@ -1491,7 +1491,7 @@ mod tests {
     fn parse_envelope_path_extracts_canonical_pid() {
         let pid = "0".repeat(64);
         let parsed = parse_envelope_path(&format!(
-            "/swarm/gitmirror/envelopes/{}/digest",
+            "/swarm/swarmgit/envelopes/{}/digest",
             pid
         ))
         .unwrap();
@@ -1502,7 +1502,7 @@ mod tests {
     fn parse_envelope_path_handles_revokes_suffix() {
         let pid = "f".repeat(64);
         let parsed = parse_envelope_path(&format!(
-            "/swarm/gitmirror/envelopes/{}/revokes",
+            "/swarm/swarmgit/envelopes/{}/revokes",
             pid
         ))
         .unwrap();
@@ -1511,19 +1511,19 @@ mod tests {
 
     #[test]
     fn parse_envelope_path_rejects_short_pid() {
-        assert!(parse_envelope_path("/swarm/gitmirror/envelopes/abc/digest").is_none());
+        assert!(parse_envelope_path("/swarm/swarmgit/envelopes/abc/digest").is_none());
     }
 
     #[test]
     fn parse_envelope_path_rejects_missing_suffix() {
         let pid = "a".repeat(64);
-        assert!(parse_envelope_path(&format!("/swarm/gitmirror/envelopes/{}", pid)).is_none());
+        assert!(parse_envelope_path(&format!("/swarm/swarmgit/envelopes/{}", pid)).is_none());
     }
 
     #[test]
     fn parse_envelope_path_rejects_uppercase_pid() {
         let pid = "A".repeat(64);
-        assert!(parse_envelope_path(&format!("/swarm/gitmirror/envelopes/{}/digest", pid)).is_none());
+        assert!(parse_envelope_path(&format!("/swarm/swarmgit/envelopes/{}/digest", pid)).is_none());
     }
 
     #[test]

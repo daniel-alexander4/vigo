@@ -37,16 +37,16 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 				Status: "complete", When: "2h ago", Link: "/swarm/swarmcast/abc",
 			},
 			{
-				Name: "gitmirror: dan/vigo (from danlap)", Detail: "abc456 · danlap",
+				Name: "swarmgit: dan/vigo (from danlap)", Detail: "abc456 · danlap",
 				Size: 8192, SizeHuman: "8.0 KiB",
 				Status: "downloading", Progress: "3/16 chunks", When: "1m ago", Link: "/swarm/swarmcast/abc456",
 			},
 		},
-		Gitmirror: []SwarmLoadRow{{
-			Name: "/var/lib/vigo/swarm/gitmirror/mirrors/danlap/dan/vigo.git",
+		Swarmgit: []SwarmLoadRow{{
+			Name: "/var/lib/vigo/swarm/swarmgit/mirrors/danlap/dan/vigo.git",
 			Detail: "dan/vigo — from danlap · git deadbeef",
 			Size: 4_096, SizeHuman: "4.0 KiB",
-			Status: "stale", When: "45d ago", Link: "/swarm/gitmirror/gitmirror:danlap:dan:vigo",
+			Status: "stale", When: "45d ago", Link: "/swarm/swarmgit/swarmgit:danlap:dan:vigo",
 		}},
 		Longdrawer: []SwarmLoadRow{{
 			Name: "~dan/longdrawer/notes.md", Detail: "user dan",
@@ -58,7 +58,7 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 			Size: 512, SizeHuman: "512 B",
 			Status: "live", When: "10m ago",
 		}},
-		LodeTotal: 1_056_768, GitmirrorTotal: 4_096, EchoTotal: 2_048, LockboxTotal: 512,
+		LodeTotal: 1_056_768, SwarmgitTotal: 4_096, EchoTotal: 2_048, LockboxTotal: 512,
 		GrandTotal: 1_063_424,
 	}
 	rec := httptest.NewRecorder()
@@ -71,9 +71,9 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 	// up at least one won't appear.
 	for _, must := range []string{
 		"Total Swarm Footprint",
-		">Payload<", ">Gitmirror<", ">Longdrawer<", ">Lockbox<",
+		">Payload<", ">Swarmgit<", ">Longdrawer<", ">Lockbox<",
 		"firmware.bin",
-		"/var/lib/vigo/swarm/gitmirror/mirrors/danlap/dan/vigo.git",
+		"/var/lib/vigo/swarm/swarmgit/mirrors/danlap/dan/vigo.git",
 		"~dan/longdrawer/notes.md",
 		"~dan/lockbox/secrets.age",
 	} {
@@ -96,7 +96,7 @@ func truncateForTest(s string, n int) string {
 }
 
 // TestUserFriendlyBlobName pins the label-to-display transforms that
-// the Swarm Load page applies to every row's Name column. Gitmirror labels
+// the Swarm Load page applies to every row's Name column. Swarmgit labels
 // must render in human-readable form; admin swarmcast labels pass
 // through unchanged; unlabeled blobs fall back to a short sha so the
 // operator always has something to grab.
@@ -108,10 +108,10 @@ func TestUserFriendlyBlobName(t *testing.T) {
 		want  string
 	}{
 		{
-			name:  "gitmirror label renders as user/project",
-			label: "gitmirror:danlap:dan:vigo",
+			name:  "swarmgit label renders as user/project",
+			label: "swarmgit:danlap:dan:vigo",
 			sha:   "abc123def456",
-			want:  "gitmirror: dan/vigo (from danlap)",
+			want:  "swarmgit: dan/vigo (from danlap)",
 		},
 		{
 			name:  "admin swarmcast keeps its filename label",
@@ -126,10 +126,10 @@ func TestUserFriendlyBlobName(t *testing.T) {
 			want:  "abc123def456",
 		},
 		{
-			name:  "malformed gitmirror label passes through",
-			label: "gitmirror:broken",
+			name:  "malformed swarmgit label passes through",
+			label: "swarmgit:broken",
 			sha:   "aabbcc",
-			want:  "gitmirror:broken",
+			want:  "swarmgit:broken",
 		},
 	}
 	for _, c := range cases {

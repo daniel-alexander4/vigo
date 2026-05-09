@@ -397,8 +397,8 @@
         <div class="stat-card__value">{{humanBytes .LodeTotal}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Gitmirror (bare repos)</div>
-        <div class="stat-card__value">{{humanBytes .GitmirrorTotal}}</div>
+        <div class="stat-card__label">Swarmgit (bare repos)</div>
+        <div class="stat-card__value">{{humanBytes .SwarmgitTotal}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__label">Longdrawer (plaintext sync)</div>
@@ -410,8 +410,8 @@
     </div>
 </div>
 
-{{template "swarm-load-section" dict "Title" "Payload" "Subtitle" "Admin-distributed payloads cached on this envoy (includes gitmirror bundle content while it sits in .blobs/)." "Rows" .Payload}}
-{{template "swarm-load-section" dict "Title" "Gitmirror" "Subtitle" "Materialized bare git repos under /var/lib/vigo/swarm/gitmirror/mirrors/." "Rows" .Gitmirror}}
+{{template "swarm-load-section" dict "Title" "Payload" "Subtitle" "Admin-distributed payloads cached on this envoy (includes swarmgit bundle content while it sits in .blobs/)." "Rows" .Payload}}
+{{template "swarm-load-section" dict "Title" "Swarmgit" "Subtitle" "Materialized bare git repos under /var/lib/vigo/swarm/swarmgit/mirrors/." "Rows" .Swarmgit}}
 {{template "swarm-load-section" dict "Title" "Longdrawer" "Subtitle" "Per-user LAN plaintext sync files under ~user/longdrawer/." "Rows" .Longdrawer}}
 {{template "swarm-load-section" dict "Title" "Lockbox" "Subtitle" "Per-user encrypted sync files under ~user/lockbox/ (sizes are ciphertext-on-disk)." "Rows" .Lockbox}}
 {{end}}

@@ -151,7 +151,7 @@ func TestBootstrapScript_NoSubstrateNamesAsShellCommands(t *testing.T) {
 	body, _ := io.ReadAll(w.Result().Body)
 	script := string(body)
 
-	for _, name := range []string{"longdrawer", "lockbox", "gitmirror", "payload"} {
+	for _, name := range []string{"longdrawer", "lockbox", "swarmgit", "payload"} {
 		// Match the name as a shell command at the start of a line
 		// (optionally indented). Doc lines and quoted-arg uses are fine.
 		for _, prefix := range []string{name + " ", name + "\t", name + "\n"} {

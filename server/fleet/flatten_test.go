@@ -29,12 +29,12 @@ func TestFlattenJSON_TopLevelString(t *testing.T) {
 }
 
 // TestFlattenJSON_ArrayOfStringsStoredVerbatim is the regression test
-// for the gitmirror "candidates_count=0" bug: before the fix, array
+// for the swarmgit "candidates_count=0" bug: before the fix, array
 // string elements were re-JSON-marshaled and stored with literal
 // double-quote characters embedded in the value (e.g. `"\"dan\""`
 // instead of `"dan"`). That broke every downstream consumer comparing
 // flattened trait values to plain strings — most visibly
-// gitmirror/builder.go:envoyHasHumanUser which checks `v == "dan"`.
+// swarmgit/builder.go:envoyHasHumanUser which checks `v == "dan"`.
 //
 // The fix adds a `case string:` branch inside the array-element
 // switch so strings bypass the JSON-marshal path.
@@ -113,14 +113,14 @@ func TestFlattenJSON_ArrayOfNumbersStillJSONMarshaled(t *testing.T) {
 	}
 }
 
-// TestFlattenJSON_ProductionGitmirrorUseCase replays the exact scenario
+// TestFlattenJSON_ProductionSwarmgitUseCase replays the exact scenario
 // that the diagnostic log uncovered: a fleet envoy reports a
-// `users.human` array containing "dan", and the gitmirror candidate
+// `users.human` array containing "dan", and the swarmgit candidate
 // filter needs `Traits["users.human.0"] == "dan"` to return true.
 // Before the fix, the value was `"dan"` (quoted) and the comparison
 // failed. After the fix, it's `dan` (bare) and the comparison
 // succeeds. This is the end-to-end assertion for the production bug.
-func TestFlattenJSON_ProductionGitmirrorUseCase(t *testing.T) {
+func TestFlattenJSON_ProductionSwarmgitUseCase(t *testing.T) {
 	// Full agent-shape trait payload, matching the real flush-hook
 	// input byte-for-byte for the users subtree.
 	raw := map[string]any{
@@ -133,8 +133,8 @@ func TestFlattenJSON_ProductionGitmirrorUseCase(t *testing.T) {
 	flat := make(map[string]string)
 	FlattenJSON("", raw, flat)
 
-	// Simulate gitmirror's envoyHasHumanUser check. The function
-	// lives in server/gitmirror/builder.go and does:
+	// Simulate swarmgit's envoyHasHumanUser check. The function
+	// lives in server/swarmgit/builder.go and does:
 	//
 	//   for k, v := range traits {
 	//       if strings.HasPrefix(k, "users.human.") && v == user {
@@ -152,7 +152,7 @@ func TestFlattenJSON_ProductionGitmirrorUseCase(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Errorf("gitmirror's envoyHasHumanUser would not match — flattened users.human.* values: %v",
+		t.Errorf("swarmgit's envoyHasHumanUser would not match — flattened users.human.* values: %v",
 			filterKeysWithPrefix(flat, "users.human."))
 	}
 }

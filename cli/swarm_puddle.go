@@ -66,7 +66,7 @@ accepted during the 0.40.0 transition.`,
 		// Delegate to the existing lockbox-evict implementation:
 		// today's puddle-eviction is structurally a lockbox eviction
 		// (peer-table drop + recipients regen + reencrypt). When
-		// gitmirror project-revoke fan-out lands, this verb will also
+		// swarmgit project-revoke fan-out lands, this verb will also
 		// dispatch the per-project revokes — see ADR-021 follow-up.
 		return runLockboxEvict(host, user, allUsers, yes)
 	},

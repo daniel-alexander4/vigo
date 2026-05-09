@@ -579,7 +579,7 @@ smtp:
 
 ### swarm
 
-Configures the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **payload** (admin-pushed file distribution), **gitmirror** (user source-control mirroring), **puddle/lockbox** (encrypted user directory sync), and **longdrawer** (LAN plaintext user directory sync). Each subsystem is gated per-envoy by a hostname pattern list (0.41.0+); both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for any subsystem to be active there.
+Configures the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **payload** (admin-pushed file distribution), **swarmgit** (user source-control mirroring), **puddle/lockbox** (encrypted user directory sync), and **longdrawer** (LAN plaintext user directory sync). Each subsystem is gated per-envoy by a hostname pattern list (0.41.0+); both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for any subsystem to be active there.
 
 Pattern lists are first-match-wins, `-` prefix denies, default-deny on no match — same semantics as Vigo's matchfile patterns (ADR-002).
 
@@ -607,7 +607,7 @@ swarm:
     enabled: ["*"]
   puddle:
     enabled: ["annlap", "plex", "girlslaptop"]    # lockbox follows
-  gitmirror:
+  swarmgit:
     enabled: ["*"]
 ```
 
@@ -626,13 +626,13 @@ swarm:
 | `puddle.enabled` | `[]` | Hostname pattern list of envoys allowed to run puddle. **Lockbox derives ITS AUTHORIZATION from this list** — there is no `swarm.lockbox.enabled` field (ADR-020). A host allowed here can hold puddle identity material and lockbox ciphertext for its locally-enrolled members. |
 | `lockbox.max_file_bytes` | `1073741824` (1 GiB) | Per-file ciphertext cap on lockbox auto-encrypt + push. `0` = no cap. Authorization still gated by `puddle.enabled`. |
 | `lockbox.envelope_retention` | `90d` | LEAVE/RESURRECT/TOMBSTONE envelope retention before reap. Empty = compile-time default (90d). |
-| `gitmirror.enabled` | `[]` | Hostname pattern list of envoys allowed to run gitmirror — publisher and receiver. |
-| `gitmirror.max_bundle_bytes` | `1073741824` (1 GiB) | Per-bundle fan-out size cap. `0` = no cap. Enforced publisher-side at fan-out time. |
-| `gitmirror.envelope_retention` | `90d` | Revoke/leave envelope reap window. Empty = compile-time default (90d). |
+| `swarmgit.enabled` | `[]` | Hostname pattern list of envoys allowed to run swarmgit — publisher and receiver. |
+| `swarmgit.max_bundle_bytes` | `1073741824` (1 GiB) | Per-bundle fan-out size cap. `0` = no cap. Enforced publisher-side at fan-out time. |
+| `swarmgit.envelope_retention` | `90d` | Revoke/leave envelope reap window. Empty = compile-time default (90d). |
 
 **Runtime caps reach agents via CheckIn.** The `max_*_bytes` and `*_retention` fields are pushed to every agent in the `CheckInResponse` and replace the agent's previously-hardcoded constants. Changes take effect within one CheckIn cycle (typically <30s) — no agent restart required.
 
-**Per-user authorization.** The envoy-level pattern lists answer "is this subsystem available on this envoy?" The user-level usercrate flags answer "which Unix users on this envoy can use it?" Both must say yes for a user to use a subsystem; default-deny on both. See the user-resource `puddle: bool` and `gitmirror: bool` flags in your usercrate. Longdrawer gates by Unix file ownership (no usercrate flag); payload by admin call site.
+**Per-user authorization.** The envoy-level pattern lists answer "is this subsystem available on this envoy?" The user-level usercrate flags answer "which Unix users on this envoy can use it?" Both must say yes for a user to use a subsystem; default-deny on both. See the user-resource `puddle: bool` and `swarmgit: bool` flags in your usercrate. Longdrawer gates by Unix file ownership (no usercrate flag); payload by admin call site.
 
 Agents listen on the configured port for peer chunk requests using the same mTLS certificates as gRPC communication. Multicast discovery uses UDP on `224.0.0.42` at the same port.
 

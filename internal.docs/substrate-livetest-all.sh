@@ -9,7 +9,7 @@
 #
 # Phase scope (see substrate-livetests.md for detail):
 #
-#   phase-b  — gitmirror source CLI + leave/evict (gitmirror +
+#   phase-b  — swarmgit source CLI + leave/evict (swarmgit +
 #              lockbox). Sections 4–7 require
 #              LOCKBOX_PASSWORD_FILE; skipped gracefully if absent.
 #   phase-c  — swarm health (peers + manifest gossip), payload
@@ -37,7 +37,7 @@ RESET=$'\033[0m'
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PHASES=(
-    "phase-b:Gitmirror source CLI + leave/evict (gitmirror + lockbox)"
+    "phase-b:Swarmgit source CLI + leave/evict (swarmgit + lockbox)"
     "phase-c:Swarm health, payload, longdrawer"
     "phase-d:Lockbox encrypt/push/decrypt + leaves catch-up"
 )

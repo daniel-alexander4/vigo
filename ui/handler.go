@@ -43,7 +43,7 @@ import (
 	"git.alexander4.io/vigo/server/peer"
 	"git.alexander4.io/vigo/server/spanner"
 	"git.alexander4.io/vigo/server/swarm/lockboxmesh"
-	"git.alexander4.io/vigo/server/swarm/gitmirrormesh"
+	"git.alexander4.io/vigo/server/swarm/swarmgitmesh"
 	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
 )
 
@@ -242,7 +242,7 @@ type Handler struct {
 	swarmConfig        config.SwarmSection
 	traitLookup        TraitLookup
 	fleetCache         *FleetCache
-	gitmirrorFleet      GitmirrorFleetSource
+	swarmgitFleet      SwarmgitFleetSource
 	mesh               MeshSource
 	swarmAPI           SwarmSource
 	traitQuery         TraitQueryDispatcher
@@ -265,21 +265,21 @@ func (h *Handler) SetTraitQueryDispatcher(d TraitQueryDispatcher) {
 	h.traitQuery = d
 }
 
-// GitmirrorFleetSource surfaces the aggregated fleet-wide gitmirror
-// view. Used by the swarm list (to decorate gitmirror rows with
+// SwarmgitFleetSource surfaces the aggregated fleet-wide swarmgit
+// view. Used by the swarm list (to decorate swarmgit rows with
 // mirror summary pills) and the swarm detail page (to render the
-// Gitmirror Mesh card). Implemented by `*api.GitmirrorHandler` in
+// Swarmgit Mesh card). Implemented by `*api.SwarmgitHandler` in
 // the main binary; a tiny interface so the UI package doesn't
 // depend on the full aggregator handler type.
-type GitmirrorFleetSource interface {
-	FleetSnapshot(ctx context.Context) (*gitmirrormesh.Fleet, error)
-	EnvoyProjects(ctx context.Context, envoyID string) []gitmirrormesh.EnvoyProject
+type SwarmgitFleetSource interface {
+	FleetSnapshot(ctx context.Context) (*swarmgitmesh.Fleet, error)
+	EnvoyProjects(ctx context.Context, envoyID string) []swarmgitmesh.EnvoyProject
 }
 
-// SetGitmirrorFleet wires the fleet aggregator into the UI handler.
+// SetSwarmgitFleet wires the fleet aggregator into the UI handler.
 // Called from gateway.go after both handlers are constructed.
-func (h *Handler) SetGitmirrorFleet(src GitmirrorFleetSource) {
-	h.gitmirrorFleet = src
+func (h *Handler) SetSwarmgitFleet(src SwarmgitFleetSource) {
+	h.swarmgitFleet = src
 }
 
 // MeshSource surfaces the longdrawer + lockbox fleet aggregators.
@@ -586,14 +586,14 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /swarm/swarmcast/{sha256}", h.Swarmcast)
 	mux.HandleFunc("GET /ui/fragments/swarm-swarmcast-envoys", h.SwarmcastEnvoysFragment)
 
-	// Longdrawer, lockbox, gitmirror observability — sibling pages
+	// Longdrawer, lockbox, swarmgit observability — sibling pages
 	// under the Swarm nav group. Each admin-only; viewer sees a 403.
 	mux.HandleFunc("GET /swarm/longdrawer", h.Longdrawer)
 	mux.HandleFunc("GET /ui/fragments/swarm-longdrawer-user/{user}", h.EchoUserDrilldown)
 	mux.HandleFunc("GET /swarm/lockbox", h.Lockbox)
 	mux.HandleFunc("GET /ui/fragments/swarm-lockbox-user/{user}", h.LockboxUserDrilldown)
-	mux.HandleFunc("GET /swarm/gitmirror", h.Gitmirror)
-	mux.HandleFunc("GET /swarm/gitmirror/{project_id}", h.Gitmirror)
+	mux.HandleFunc("GET /swarm/swarmgit", h.Swarmgit)
+	mux.HandleFunc("GET /swarm/swarmgit/{project_id}", h.Swarmgit)
 	// Backwards-compat: /mesh → /longdrawer (or /lockbox when ?tab=crypt).
 	// Keep for one minor release so muscle-memory URLs don't 404.
 	mux.HandleFunc("GET /mesh", h.MeshRedirect)

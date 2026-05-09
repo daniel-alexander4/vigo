@@ -53,7 +53,7 @@ use anyhow::Result;
 /// `identity.pub` is present, `Ok(None)` when the user hasn't
 /// initialized puddle yet, `Err(_)` on read failure.
 ///
-/// Used by sibling subsystems (gitmirror under ADR-015, lockbox
+/// Used by sibling subsystems (swarmgit under ADR-015, lockbox
 /// membership under ADR-016) to query "is this user puddle-enabled
 /// here?" without having to touch the wrapped blob.
 pub fn local_puddle_pubkey(home: &Path) -> Result<Option<String>> {

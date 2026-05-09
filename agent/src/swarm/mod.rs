@@ -22,7 +22,7 @@ pub mod discovery;
 pub mod download;
 pub mod longdrawer;
 pub mod gates;
-pub mod gitmirror;
+pub mod swarmgit;
 pub mod manager;
 pub mod manifest;
 pub mod meta;

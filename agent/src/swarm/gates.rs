@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! Shared gate-evaluation helper for the four swarm content subsystems
-//! (payload, gitmirror, lockbox, longdrawer).
+//! (payload, swarmgit, lockbox, longdrawer).
 //!
 //! Every subsystem reads two bits from `PolicyBundle.vars_json`,
 //! cached in the LMDB state store on each accepted check-in:
@@ -23,7 +23,7 @@
 //!
 //! Per-host blacklists were retired in 0.41.0 in favor of negative
 //! patterns inside the per-subsystem allow list (e.g.
-//! `swarm.gitmirror.enabled: ["-rasp1", "*"]`). The server evaluates
+//! `swarm.swarmgit.enabled: ["-rasp1", "*"]`). The server evaluates
 //! the pattern list per envoy hostname and emits a single bool — the
 //! agent never sees the patterns themselves.
 //!
@@ -46,7 +46,7 @@ use crate::state::StateStore;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Substrate {
     Payload,
-    Gitmirror,
+    Swarmgit,
     Lockbox,
     Longdrawer,
 }
@@ -55,7 +55,7 @@ impl Substrate {
     fn enabled_key(self) -> &'static str {
         match self {
             Substrate::Payload => "swarm_swarmcast_enabled",
-            Substrate::Gitmirror => "swarm_gitmirror_enabled",
+            Substrate::Swarmgit => "swarm_swarmgit_enabled",
             // Lockbox derives from puddle — single source of truth
             // per ADR-020. The server emits only `swarm_puddle_enabled`;
             // there is no `swarm_lockbox_enabled` in 0.41.0+.
@@ -69,7 +69,7 @@ impl Substrate {
     pub fn name(self) -> &'static str {
         match self {
             Substrate::Payload => "payload",
-            Substrate::Gitmirror => "gitmirror",
+            Substrate::Swarmgit => "swarmgit",
             Substrate::Lockbox => "lockbox",
             Substrate::Longdrawer => "longdrawer",
         }
@@ -79,7 +79,7 @@ impl Substrate {
 /// Compute whether `substrate` should be active for this envoy right
 /// now. Reads from the cached `PolicyBundle.vars_json` if available.
 /// Returns `true` (active) in every ambiguous case — fail-open is
-/// the design (matches gitmirror's pre-existing semantics): a fresh
+/// the design (matches swarmgit's pre-existing semantics): a fresh
 /// enrollment, an LMDB hiccup, or a parse failure all keep substrates
 /// running until the server explicitly flips them off.
 pub fn substrate_active(substrate: Substrate, state_store: Option<&StateStore>) -> bool {
@@ -164,19 +164,19 @@ mod tests {
 
     #[test]
     fn enabled_keys_are_distinct_except_lockbox_aliases_puddle() {
-        // Payload, Gitmirror, Longdrawer each have their own key.
+        // Payload, Swarmgit, Longdrawer each have their own key.
         // Lockbox intentionally aliases the puddle key — single
         // source of truth.
         assert_ne!(
             Substrate::Payload.enabled_key(),
-            Substrate::Gitmirror.enabled_key()
+            Substrate::Swarmgit.enabled_key()
         );
         assert_ne!(
             Substrate::Payload.enabled_key(),
             Substrate::Longdrawer.enabled_key()
         );
         assert_ne!(
-            Substrate::Gitmirror.enabled_key(),
+            Substrate::Swarmgit.enabled_key(),
             Substrate::Longdrawer.enabled_key()
         );
     }
@@ -185,7 +185,7 @@ mod tests {
     fn substrate_names_are_distinct() {
         let subs = [
             Substrate::Payload,
-            Substrate::Gitmirror,
+            Substrate::Swarmgit,
             Substrate::Lockbox,
             Substrate::Longdrawer,
         ];

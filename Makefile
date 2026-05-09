@@ -46,13 +46,13 @@ test-integration: build-agent
 
 # End-to-end swarm validation against a real fleet (defaults to
 # plex,girlslaptop,annlap; override via VIGO_FLEET). Destructive: wipes
-# per-user swarm state and root-owned /var/lib/vigo/swarm/{gitmirror,
+# per-user swarm state and root-owned /var/lib/vigo/swarm/{swarmgit,
 # lockbox} on every envoy, then runs the full 5-step substrate
-# sequence (payload → longdrawer → puddle → lockbox → gitmirror) from
+# sequence (payload → longdrawer → puddle → lockbox → swarmgit) from
 # a clean slate. Mirrors tshoot/log-substrate-2026-05-09.md.
 #
 # For a fleet-free quick smoke, run `make test-agent` (picks up
-# tests/gitmirror_helper.rs and tests/lockbox_roundtrip.rs).
+# tests/swarmgit_helper.rs and tests/lockbox_roundtrip.rs).
 test-substrate:
 	test/swarm-substrate.sh --wipe
 

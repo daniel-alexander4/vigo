@@ -92,6 +92,8 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 //   - swarm.cryptsync.* — retired (renamed to swarm.lockbox.* in this
 //     release; authorization still derives from swarm.puddle.enabled
 //     per ADR-020).
+//   - swarm.gitmirror.* — retired (renamed to swarm.swarmgit.* in
+//     this release).
 //   - swarm.<sub>.blacklist — retired across all sub-subsections in
 //     0.41.0 (subsumed by negative patterns in the new pattern-list shape).
 //   - swarm.enabled / swarm.<sub>.enabled as a bool — retired in 0.41.0
@@ -113,12 +115,9 @@ func detectRetiredSwarmShape(data []byte) error {
 			Puddle    struct {
 				Enabled any `yaml:"enabled"`
 			} `yaml:"puddle"`
-			Gitmirror struct {
-				Enabled   any `yaml:"enabled"`
-				Blacklist any `yaml:"blacklist"`
-			} `yaml:"gitmirror"`
-			Filesync any `yaml:"filesync"`
-			Payload  any `yaml:"payload"`
+			Gitmirror any `yaml:"gitmirror"`
+			Filesync  any `yaml:"filesync"`
+			Payload   any `yaml:"payload"`
 		} `yaml:"swarm"`
 	}
 	if err := yaml.Unmarshal(data, &raw); err != nil {
@@ -136,11 +135,8 @@ func detectRetiredSwarmShape(data []byte) error {
 	if isBoolScalar(raw.Swarm.Puddle.Enabled) {
 		retired = append(retired, "swarm.puddle.enabled is a bool but must be a pattern list")
 	}
-	if isBoolScalar(raw.Swarm.Gitmirror.Enabled) {
-		retired = append(retired, "swarm.gitmirror.enabled is a bool but must be a pattern list")
-	}
-	if raw.Swarm.Gitmirror.Blacklist != nil {
-		retired = append(retired, "swarm.gitmirror.blacklist — retired; use a deny pattern in swarm.gitmirror.enabled (e.g. [\"-rasp1\", \"*\"])")
+	if raw.Swarm.Gitmirror != nil {
+		retired = append(retired, "swarm.gitmirror.* — retired in the swarmgit rename; move the entire section to swarm.swarmgit.* (same fields)")
 	}
 	if raw.Swarm.Filesync != nil {
 		retired = append(retired, "swarm.filesync.* — retired in the longdrawer rename; move the entire section to swarm.longdrawer.* (same fields)")

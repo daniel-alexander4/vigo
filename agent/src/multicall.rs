@@ -24,10 +24,10 @@
 //!    would be both too permissive and too brittle.
 //!
 //! ADR-015 step 4 wired the real body in
-//! [`crate::swarm::gitmirror::remote_helper::run`]: speak the git
+//! [`crate::swarm::swarmgit::remote_helper::run`]: speak the git
 //! remote-helper protocol on stdin/stdout, declare the `connect`
 //! capability, and on `connect <service>` open
-//! `/var/run/vigo/gitmirror.sock`, send the
+//! `/var/run/vigo/swarmgit.sock`, send the
 //! `HELLO <project_id_hex> <service>` handshake, and splice the
 //! socket transparently to git's stdio. The agent on the other end
 //! verifies the user's token chain and proxies to
@@ -92,7 +92,7 @@ fn classify_basename(basename: &str) -> Option<MulticallMode> {
 /// and exits when the tunnel closes (or the daemon refuses). Always
 /// terminates the process — never returns.
 pub fn run_git_remote_vigo(args: Vec<String>) -> ! {
-    crate::swarm::gitmirror::remote_helper::run(args);
+    crate::swarm::swarmgit::remote_helper::run(args);
 }
 
 #[cfg(test)]
