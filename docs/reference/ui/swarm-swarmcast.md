@@ -3,7 +3,7 @@
 
 **Route:** `/payload`
 
-Displays all admin-distributed payloads ("payload") with distribution progress across the fleet. The payloads ride the [swarm](../../engineering/subsystems/swarm.md) substrate (peer-to-peer mTLS transport on port 1531); this page is the operator-facing surface for managing and observing those distributions. Auto-refreshes every 5 seconds on the detail view.
+Displays all admin-distributed swarmcasts ("swarmcast") with distribution progress across the fleet. The payloads ride the [swarm](../../engineering/subsystems/swarm.md) substrate (peer-to-peer mTLS transport on port 1531); this page is the operator-facing surface for managing and observing those distributions. Auto-refreshes every 5 seconds on the detail view.
 
 **Gitmirror bundles are excluded.** Personal-DR repo mirrors (labels prefixed with `gitmirror:`) have their own page at `/gitmirror` — see the [gitmirror subsystem docs](../../engineering/subsystems/gitmirror.md) — and are filtered out of Payload. Pasting a gitmirror blob sha into `/payload/{sha}` redirects to `/gitmirror/{label}`.
 
@@ -55,6 +55,6 @@ Slot assignment is alphabetic by hostname, so an envoy keeps the same color rega
 
 - [Swarm Concepts](../../engineering/subsystems/swarm.md) — How swarm works
 - [Swarm Operations](../../operations/swarm.md) — Configuration and troubleshooting
-- [vigocli payload](../cli/swarm-payload.md) — CLI reference
+- [vigocli payload](../cli/swarm-swarmcast.md) — CLI reference
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

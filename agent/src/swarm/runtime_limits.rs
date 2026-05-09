@@ -8,7 +8,7 @@
 //! here so subsystem-level enforcement sites can read the operator's
 //! current intent without re-plumbing the response through every
 //! call path. This is the agent-side end of the
-//! `server.yaml swarm.{payload,cryptsync,gitmirror,filesync}.*` →
+//! `server.yaml swarm.{swarmcast,cryptsync,gitmirror,filesync}.*` →
 //! `CheckInResponse.swarm_runtime_limits` → enforcement-point flow.
 //!
 //! ### Design
@@ -37,8 +37,8 @@ use std::sync::{OnceLock, RwLock};
 /// only some fields) doesn't reset other fields to zero.
 #[derive(Debug, Clone, Default)]
 pub struct SwarmLimits {
-    pub payload_max_size_bytes: Option<u64>,
-    pub payload_default_retention: Option<String>,
+    pub swarmcast_max_size_bytes: Option<u64>,
+    pub swarmcast_default_retention: Option<String>,
     pub cryptsync_max_file_bytes: Option<u64>,
     pub cryptsync_envelope_retention_secs: Option<u64>,
     pub gitmirror_max_bundle_bytes: Option<u64>,
@@ -56,8 +56,8 @@ fn cell() -> &'static RwLock<SwarmLimits> {
 /// fallbacks at the read sites stay simple.
 pub fn update_from_proto(msg: &crate::proto::SwarmRuntimeLimits) {
     let new = SwarmLimits {
-        payload_max_size_bytes: opt_nonzero_u64(msg.payload_max_size_bytes),
-        payload_default_retention: opt_nonempty_string(&msg.payload_default_retention),
+        swarmcast_max_size_bytes: opt_nonzero_u64(msg.swarmcast_max_size_bytes),
+        swarmcast_default_retention: opt_nonempty_string(&msg.swarmcast_default_retention),
         cryptsync_max_file_bytes: opt_nonzero_u64(msg.cryptsync_max_file_bytes),
         cryptsync_envelope_retention_secs: opt_nonzero_u64(msg.cryptsync_envelope_retention_secs),
         gitmirror_max_bundle_bytes: opt_nonzero_u64(msg.gitmirror_max_bundle_bytes),
@@ -157,8 +157,8 @@ mod tests {
     fn server_values_propagate() {
         fresh();
         let msg = crate::proto::SwarmRuntimeLimits {
-            payload_max_size_bytes: 100,
-            payload_default_retention: "30d".to_string(),
+            swarmcast_max_size_bytes: 100,
+            swarmcast_default_retention: "30d".to_string(),
             cryptsync_max_file_bytes: 200,
             cryptsync_envelope_retention_secs: 300,
             gitmirror_max_bundle_bytes: 400,
@@ -171,16 +171,16 @@ mod tests {
         assert_eq!(gitmirror_max_bundle_bytes(), Some(400));
         assert_eq!(gitmirror_envelope_retention_secs(), 500);
         assert_eq!(filesync_max_file_bytes(), Some(600));
-        assert_eq!(current().payload_max_size_bytes, Some(100));
-        assert_eq!(current().payload_default_retention.as_deref(), Some("30d"));
+        assert_eq!(current().swarmcast_max_size_bytes, Some(100));
+        assert_eq!(current().swarmcast_default_retention.as_deref(), Some("30d"));
     }
 
     #[test]
     fn zero_fields_fall_back_to_defaults() {
         fresh();
         let msg = crate::proto::SwarmRuntimeLimits {
-            payload_max_size_bytes: 0,
-            payload_default_retention: String::new(),
+            swarmcast_max_size_bytes: 0,
+            swarmcast_default_retention: String::new(),
             cryptsync_max_file_bytes: 0,
             cryptsync_envelope_retention_secs: 0,
             gitmirror_max_bundle_bytes: 0,

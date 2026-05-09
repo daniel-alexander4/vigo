@@ -3,7 +3,7 @@
 
 **Location:** Tab on the envoy detail page (`/envoys/{id}`) — the **Swarm** button in the tab bar between Attack Surface and Sessions. HTMX-loads into the detail page's content area like every other tab (Drift, Runs, Traits, Config, Trace, Compliance, Attack Surface, Sessions); there is no standalone route.
 
-Per-envoy disk footprint across the four swarm subsystems — [payload](swarm-payload.md) (admin-distributed payloads), [gitmirror](../../engineering/subsystems/gitmirror.md) (personal-DR bare repos), [filesync](../../engineering/subsystems/filesync.md) (LAN plaintext sync), and [cryptsync](../../engineering/subsystems/cryptsync.md) (encrypted sync).
+Per-envoy disk footprint across the four swarm subsystems — [payload](swarm-swarmcast.md) (admin-distributed swarmcasts), [gitmirror](../../engineering/subsystems/gitmirror.md) (personal-DR bare repos), [filesync](../../engineering/subsystems/filesync.md) (LAN plaintext sync), and [cryptsync](../../engineering/subsystems/cryptsync.md) (encrypted sync).
 
 The motivating use case is debugging full-disk incidents on a specific envoy: every row is a real on-disk artifact, every section is sorted largest first, and totals roll up per subsystem so the biggest consumer surfaces immediately.
 
@@ -22,7 +22,7 @@ Each section renders the same five-column table (Name / Size / Status / Progress
 
 ### Payload
 
-Swarm blobs cached on this envoy. Covers both admin-distributed payloads (`vigocli swarm distribute`) and cached gitmirror bundle content sitting in `/var/lib/vigo/swarm/.blobs/` before it's unpacked into a bare repo.
+Swarm blobs cached on this envoy. Covers both admin-distributed swarmcasts (`vigocli swarm distribute`) and cached gitmirror bundle content sitting in `/var/lib/vigo/swarm/.blobs/` before it's unpacked into a bare repo.
 
 - **Name** — the blob's label. For admin payloads this is the filename. For gitmirror-labeled blobs (`gitmirror:<seeder>:<user>:<project>`) it's rendered as `gitmirror: <user>/<project> (from <seeder>)` — the internal label is only surfaced in the link target.
 - **Status** — `source` (this envoy seeded the blob), `complete` (fully cached), `downloading` (partial, in-flight), `revoking` (seed revoked, eviction pending).
@@ -64,7 +64,7 @@ Gitmirror sizes are the one field added specifically for this page: receiver-sid
 
 ## Related
 
-- [Payload page](swarm-payload.md) — fleet-wide view of one blob's distribution.
+- [Payload page](swarm-swarmcast.md) — fleet-wide view of one blob's distribution.
 - [Gitmirror subsystem](../../engineering/subsystems/gitmirror.md) — how the personal-DR mesh works.
 - [Filesync subsystem](../../engineering/subsystems/filesync.md) — LAN plaintext sync.
 - [Cryptsync subsystem](../../engineering/subsystems/cryptsync.md) — encrypted per-user sync.

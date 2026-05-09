@@ -614,13 +614,13 @@ swarm:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `enabled` | `[]` | Hostname pattern list controlling which envoys run the swarm substrate. Empty list disables it everywhere. |
-| `seed_dir` | `/var/lib/vigo/swarm/seed` | Directory where `vigocli swarm payload distribute` writes seed files |
+| `seed_dir` | `/var/lib/vigo/swarm/seed` | Directory where `vigocli swarm swarmcast distribute` writes seed files |
 | `port` | `1531` | Agent peer server listen port (mTLS HTTPS) |
 | `max_bandwidth_percent` | `50` | Maximum network bandwidth agents will use for swarm transfers (percentage of interface capacity) |
 | `manifest_liveness_ttl` | `24h` | Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Set to `0` or empty to disable the sweep on tiny static fleets. |
-| `payload.enabled` | `[]` | Hostname pattern list of envoys allowed to receive admin-pushed payloads. The admin distribute endpoint refuses when this list is empty (no envoy could possibly receive). |
+| `payload.enabled` | `[]` | Hostname pattern list of envoys allowed to receive admin-pushed swarmcasts. The admin distribute endpoint refuses when this list is empty (no envoy could possibly receive). |
 | `payload.max_size_bytes` | `0` | Per-distribute upload cap, enforced at the admin API. `0` = no cap. |
-| `payload.default_retention` | `7d` | Default retention applied when `vigocli swarm payload distribute` omits `--retention`. |
+| `payload.default_retention` | `7d` | Default retention applied when `vigocli swarm swarmcast distribute` omits `--retention`. |
 | `filesync.enabled` | `[]` | Hostname pattern list of envoys allowed to run filesync. Per-user opt-in still requires the user creating `~/filesync/`. |
 | `filesync.max_file_bytes` | `2147483648` (2 GiB) | Per-file LAN sync size cap. `0` = no cap. |
 | `puddle.enabled` | `[]` | Hostname pattern list of envoys allowed to run puddle. **Cryptsync derives ITS AUTHORIZATION from this list** — there is no `swarm.cryptsync.enabled` field (ADR-020). A host allowed here can hold puddle identity material and cryptsync ciphertext for its locally-enrolled members. |

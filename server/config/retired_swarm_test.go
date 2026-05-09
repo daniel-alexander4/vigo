@@ -16,14 +16,14 @@ func TestDetectRetiredSwarmShape(t *testing.T) {
 		wantInError string // substring expected in error message
 	}{
 		{
-			name: "0.41.0 shape passes",
+			name: "current shape passes",
 			yaml: `
 swarm:
   enabled: ["*"]
   puddle: { enabled: ["annlap"] }
   gitmirror: { enabled: ["*"] }
   filesync: { enabled: ["*"] }
-  payload: { enabled: ["*"] }
+  swarmcast: { enabled: ["*"] }
 `,
 			wantErr: false,
 		},
@@ -65,24 +65,34 @@ swarm:
 			wantInError: "swarm.filesync.blacklist",
 		},
 		{
-			name: "swarm.payload.blacklist is retired",
+			name: "swarm.payload section is retired (renamed to swarmcast)",
 			yaml: `
 swarm:
   payload:
-    blacklist: ["rasp1"]
+    enabled: ["*"]
 `,
 			wantErr:     true,
-			wantInError: "swarm.payload.blacklist",
+			wantInError: "swarm.payload.* — retired in the swarmcast rename",
 		},
 		{
-			name: "per-subsystem bool enabled is retired",
+			name: "swarm.payload retired error names the new key",
 			yaml: `
 swarm:
   payload:
+    enabled: ["*"]
+`,
+			wantErr:     true,
+			wantInError: "swarm.swarmcast",
+		},
+		{
+			name: "per-subsystem bool enabled is retired (filesync)",
+			yaml: `
+swarm:
+  filesync:
     enabled: false
 `,
 			wantErr:     true,
-			wantInError: "swarm.payload.enabled is a bool",
+			wantInError: "swarm.filesync.enabled is a bool",
 		},
 		{
 			name: "migration pointer included",

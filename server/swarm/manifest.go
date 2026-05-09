@@ -238,7 +238,7 @@ func (m *ManifestStore) Revoke(sha256 string) {
 // pruner uses to decide an entry is still actively held.
 //
 // This method is the **creator path**: callers may introduce new
-// entries unconditionally. Used by the admin payload-distribute API
+// entries unconditionally. Used by the admin swarmcast-distribute API
 // (server-side, authoritative). For agent gossip, use
 // RecordSeedFromAgent so unknown SHAs are rejected.
 func (m *ManifestStore) RecordSeed(sha256, label, target, retention, seederID string, size uint64) {

@@ -136,7 +136,7 @@ fn decode_gates(vars_json: &[u8]) -> GateState {
     };
     GateState {
         swarm: gate_truthy(val.get("swarm_enabled")),
-        payload: gate_truthy(val.get("swarm_payload_enabled")),
+        payload: gate_truthy(val.get("swarm_swarmcast_enabled")),
         gitmirror: gate_truthy(val.get("swarm_gitmirror_enabled")),
         filesync: gate_truthy(val.get("swarm_filesync_enabled")),
         puddle: gate_truthy(val.get("swarm_puddle_enabled")),
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn explicit_false_disables() {
-        let g = decode_gates(br#"{"swarm_payload_enabled": false}"#);
+        let g = decode_gates(br#"{"swarm_swarmcast_enabled": false}"#);
         assert!(g.swarm);
         assert!(!g.payload);
         assert!(g.gitmirror && g.filesync && g.puddle);

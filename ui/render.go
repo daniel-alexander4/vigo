@@ -911,7 +911,7 @@ func truncGitSha(sha string) string {
 // swarm blob label — the file name as the user thinks of it. Legacy
 // gitmirror labels take the form `gitmirror:<host>:<user>:<project>`
 // and this helper surfaces just the project tail. Labels without a
-// colon (e.g. admin payload labels like `pc-payload-1777298130`)
+// colon (e.g. admin swarmcast labels like `pc-payload-1777298130`)
 // pass through unchanged. The full routing label is intentionally
 // not surfaced anywhere user visible — host/user are in the row
 // subtitle when relevant.

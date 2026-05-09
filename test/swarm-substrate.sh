@@ -201,7 +201,7 @@ if true; then
     MARKER=/tmp/$TAG-payload.txt
     echo "$TAG payload marker $(date -Iseconds)" > "$MARKER"
     SHA=$(sha256sum "$MARKER" | cut -d' ' -f1)
-    sudo vigocli swarm payload distribute "$MARKER" --target '*' --label "$TAG" --retention 1h >/dev/null
+    sudo vigocli swarm swarmcast distribute "$MARKER" --target '*' --label "$TAG" --retention 1h >/dev/null
     echo "  seeded sha256=$SHA"
 
     deadline=$(( $(date +%s) + 60 ))

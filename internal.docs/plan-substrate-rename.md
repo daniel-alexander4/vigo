@@ -24,7 +24,7 @@
 
 | Legacy | New | Admin CLI | Agent CLI | Filesystem | REST | Multicast |
 |--------|-----|-----------|-----------|-----------|------|-----------|
-| lode | payload | `vigocli swarm payload` | `vigo swarm payload` | `/var/lib/vigo/swarm/payload/` | `/api/v1/swarm/payload/` | n/a |
+| lode | payload | `vigocli swarm swarmcast` | `vigo swarm swarmcast` | `/var/lib/vigo/swarm/swarmcast/` | `/api/v1/swarm/swarmcast/` | n/a |
 | cairn | gitmirror | `vigocli swarm gitmirror` | `vigo swarm gitmirror` | `/var/lib/vigo/swarm/gitmirror/` | `/api/v1/swarm/gitmirror/` | n/a |
 | echo | filesync | `vigocli swarm filesync` | `vigo swarm filesync` | `/var/lib/vigo/swarm/filesync/` | `/api/v1/swarm/filesync/` | 224.0.0.43:1532 (unchanged) |
 | sigil | cryptsync | `vigocli swarm cryptsync` | `vigo swarm cryptsync` | `/var/lib/vigo/swarm/cryptsync/` | `/api/v1/swarm/cryptsync/` | 224.0.0.44:1533 (unchanged) |
@@ -35,7 +35,7 @@ Multicast addresses, port 1531 (peer mTLS), and the swarm transport itself are u
 ## Scope of changes
 
 ### Source tree
-- `agent/src/lode/` → `agent/src/swarm/payload/`
+- `agent/src/lode/` → `agent/src/swarm/swarmcast/`
 - `agent/src/cairn/` → `agent/src/swarm/gitmirror/`
 - `agent/src/echo/` → `agent/src/swarm/filesync/`
 - `agent/src/sigil/` → `agent/src/swarm/cryptsync/`
@@ -61,7 +61,7 @@ Multicast addresses, port 1531 (peer mTLS), and the swarm transport itself are u
 - server.yaml: `swarm.seeding_envoys` kept; any subsystem-specific stanzas renamed
 
 ### Filesystem paths
-- `/var/lib/vigo/lode/` → `/var/lib/vigo/swarm/payload/`
+- `/var/lib/vigo/lode/` → `/var/lib/vigo/swarm/swarmcast/`
 - `/var/lib/vigo/cairn/` → `/var/lib/vigo/swarm/gitmirror/`
 - `/var/lib/vigo/echo/` → `/var/lib/vigo/swarm/filesync/` (if it existed at top level)
 - `/var/lib/vigo/sigil/` → `/var/lib/vigo/swarm/cryptsync/`
@@ -76,7 +76,7 @@ Multicast addresses, port 1531 (peer mTLS), and the swarm transport itself are u
 - `/api/v1/cairn/fleet` → `/api/v1/swarm/gitmirror/fleet`
 - `/api/v1/sigil/fleet` → `/api/v1/swarm/cryptsync/fleet`
 - `/api/v1/echo/fleet` → `/api/v1/swarm/filesync/fleet`
-- `/api/v1/lode/...` → `/api/v1/swarm/payload/...`
+- `/api/v1/lode/...` → `/api/v1/swarm/swarmcast/...`
 - Agent peer endpoints (port 1531): `/cairn/push/<label>` → `/swarm/gitmirror/push/<label>`; `/sigil/push/<user>/<name>` → `/swarm/cryptsync/push/<user>/<name>`; `/sigil/leaves/<user>` → `/swarm/cryptsync/leaves/<user>`; `/echo/announce` → `/swarm/filesync/announce`
 
 ### Web UI
@@ -86,7 +86,7 @@ Multicast addresses, port 1531 (peer mTLS), and the swarm transport itself are u
 - Nav menu: remove Sandgorgon item; rename four substrate links
 
 ### CLI verbs
-- `vigocli lode {distribute,status,list,revoke,broken}` → `vigocli swarm payload {distribute,status,list,revoke,broken}`
+- `vigocli lode {distribute,status,list,revoke,broken}` → `vigocli swarm swarmcast {distribute,status,list,revoke,broken}`
 - `vigocli cairn {status,list,show,evict}` → `vigocli swarm gitmirror {status,list,show,evict}`
 - `vigocli echo {status,list,show}` → `vigocli swarm filesync {status,list,show}`
 - `vigocli sigil {status,list,show,evict}` → `vigocli swarm cryptsync {status,list,show,evict}`

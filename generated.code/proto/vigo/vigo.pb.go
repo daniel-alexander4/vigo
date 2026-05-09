@@ -513,8 +513,8 @@ func (x *CheckInResponse) GetSwarmRuntimeLimits() *SwarmRuntimeLimits {
 // only seen during the brief strict-equal-version cutover window.
 type SwarmRuntimeLimits struct {
 	state                          protoimpl.MessageState `protogen:"open.v1"`
-	PayloadMaxSizeBytes            uint64                 `protobuf:"varint,1,opt,name=payload_max_size_bytes,json=payloadMaxSizeBytes,proto3" json:"payload_max_size_bytes,omitempty"`                                  // admin-distribute upload cap; 0 = no cap
-	PayloadDefaultRetention        string                 `protobuf:"bytes,2,opt,name=payload_default_retention,json=payloadDefaultRetention,proto3" json:"payload_default_retention,omitempty"`                         // server-yaml default when --retention is omitted on distribute (e.g. "7d")
+	SwarmcastMaxSizeBytes          uint64                 `protobuf:"varint,1,opt,name=swarmcast_max_size_bytes,json=swarmcastMaxSizeBytes,proto3" json:"swarmcast_max_size_bytes,omitempty"`                            // admin-distribute upload cap; 0 = no cap
+	SwarmcastDefaultRetention      string                 `protobuf:"bytes,2,opt,name=swarmcast_default_retention,json=swarmcastDefaultRetention,proto3" json:"swarmcast_default_retention,omitempty"`                   // server-yaml default when --retention is omitted on distribute (e.g. "7d")
 	CryptsyncMaxFileBytes          uint64                 `protobuf:"varint,3,opt,name=cryptsync_max_file_bytes,json=cryptsyncMaxFileBytes,proto3" json:"cryptsync_max_file_bytes,omitempty"`                            // per-file ciphertext cap on auto-encrypt + push; 0 = no cap (1 GiB historical default)
 	CryptsyncEnvelopeRetentionSecs uint64                 `protobuf:"varint,4,opt,name=cryptsync_envelope_retention_secs,json=cryptsyncEnvelopeRetentionSecs,proto3" json:"cryptsync_envelope_retention_secs,omitempty"` // LEAVE/RESURRECT/TOMBSTONE retention before reap; 0 = compile-time default (90d)
 	GitmirrorMaxBundleBytes        uint64                 `protobuf:"varint,5,opt,name=gitmirror_max_bundle_bytes,json=gitmirrorMaxBundleBytes,proto3" json:"gitmirror_max_bundle_bytes,omitempty"`                      // per-bundle fan-out cap; 0 = no cap
@@ -554,16 +554,16 @@ func (*SwarmRuntimeLimits) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *SwarmRuntimeLimits) GetPayloadMaxSizeBytes() uint64 {
+func (x *SwarmRuntimeLimits) GetSwarmcastMaxSizeBytes() uint64 {
 	if x != nil {
-		return x.PayloadMaxSizeBytes
+		return x.SwarmcastMaxSizeBytes
 	}
 	return 0
 }
 
-func (x *SwarmRuntimeLimits) GetPayloadDefaultRetention() string {
+func (x *SwarmRuntimeLimits) GetSwarmcastDefaultRetention() string {
 	if x != nil {
-		return x.PayloadDefaultRetention
+		return x.SwarmcastDefaultRetention
 	}
 	return ""
 }
@@ -7553,10 +7553,10 @@ const file_vigo_proto_rawDesc = "" +
 	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12F\n" +
 	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\x12M\n" +
-	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimitsJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xc8\x03\n" +
-	"\x12SwarmRuntimeLimits\x123\n" +
-	"\x16payload_max_size_bytes\x18\x01 \x01(\x04R\x13payloadMaxSizeBytes\x12:\n" +
-	"\x19payload_default_retention\x18\x02 \x01(\tR\x17payloadDefaultRetention\x127\n" +
+	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimitsJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xd0\x03\n" +
+	"\x12SwarmRuntimeLimits\x127\n" +
+	"\x18swarmcast_max_size_bytes\x18\x01 \x01(\x04R\x15swarmcastMaxSizeBytes\x12>\n" +
+	"\x1bswarmcast_default_retention\x18\x02 \x01(\tR\x19swarmcastDefaultRetention\x127\n" +
 	"\x18cryptsync_max_file_bytes\x18\x03 \x01(\x04R\x15cryptsyncMaxFileBytes\x12I\n" +
 	"!cryptsync_envelope_retention_secs\x18\x04 \x01(\x04R\x1ecryptsyncEnvelopeRetentionSecs\x12;\n" +
 	"\x1agitmirror_max_bundle_bytes\x18\x05 \x01(\x04R\x17gitmirrorMaxBundleBytes\x12I\n" +

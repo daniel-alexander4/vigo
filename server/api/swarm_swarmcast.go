@@ -26,9 +26,9 @@ import (
 	"git.alexander4.io/vigo/server/swarm"
 )
 
-// Payload is the content label for administrator-pushed payloads that ride
+// Swarmcast is the content label for administrator-pushed swarmcasts that ride
 // the swarm substrate. This handler wires the admin-facing REST surface
-// (`/api/v1/swarm/payload/*`); the substrate itself — tracker, manifest CRDT,
+// (`/api/v1/swarm/swarmcast/*`); the substrate itself — tracker, manifest CRDT,
 // peer transfer — still lives in `server/swarm/` because it's shared
 // with gitmirror and (read-side) filesync/cryptsync.
 
@@ -38,7 +38,7 @@ type LodeForcePusher interface {
 	ForcePush(envoyID string) int
 }
 
-// LodeHandler handles payload distribution REST endpoints.
+// LodeHandler handles swarmcast distribution REST endpoints.
 type LodeHandler struct {
 	seedDir       string
 	tracker       *swarm.PeerTracker
@@ -70,7 +70,7 @@ func (h *LodeHandler) SetForcePusher(fp LodeForcePusher) {
 }
 
 // SetSwarmConfig captures the current swarm config so the Distribute
-// handler can gate-check `swarm.enabled` and `swarm.payload.enabled`
+// handler can gate-check `swarm.enabled` and `swarm.swarmcast.enabled`
 // before accepting an upload. Called from main.go at startup and from
 // the config-publish hook on every reload.
 func (h *LodeHandler) SetSwarmConfig(cfg config.SwarmSection) {
@@ -86,12 +86,12 @@ func (h *LodeHandler) SetAuditWriter(w *audit.Writer) {
 	h.auditWriter = w
 }
 
-// payloadGate reports whether `vigocli swarm payload distribute` should
+// payloadGate reports whether `vigocli swarm swarmcast distribute` should
 // be allowed right now. Returns (allowed, reason) — when false, reason
 // is the operator-facing explanation surfaced in the 403 body and the
 // audit-chain summary. Refuses when neither layer would let any envoy
 // receive a payload — i.e. swarm.enabled is empty (substrate off
-// fleet-wide) or swarm.payload.enabled is empty (subsystem off
+// fleet-wide) or swarm.swarmcast.enabled is empty (subsystem off
 // fleet-wide). Per-host gating is enforced agent-side; this check is
 // just the floor.
 func (h *LodeHandler) payloadGate() (bool, string) {
@@ -100,8 +100,8 @@ func (h *LodeHandler) payloadGate() (bool, string) {
 	if len(h.swarmCfg.Enabled) == 0 {
 		return false, "swarm is disabled fleet-wide (swarm.enabled: [])"
 	}
-	if len(h.swarmCfg.Payload.Enabled) == 0 {
-		return false, "payload subsystem is disabled (swarm.payload.enabled: [])"
+	if len(h.swarmCfg.Swarmcast.Enabled) == 0 {
+		return false, "swarmcast subsystem is disabled (swarm.swarmcast.enabled: [])"
 	}
 	return true, ""
 }
@@ -110,8 +110,8 @@ func (h *LodeHandler) recordPayloadDenial(ctx context.Context, actor, reason str
 	if h.auditWriter == nil {
 		return
 	}
-	payload := fmt.Sprintf(`{"endpoint":"/api/v1/swarm/payload/distribute","reason":%q}`, reason)
-	if err := h.auditWriter.Record(ctx, "swarm.payload.denied", actor, "api", reason, payload); err != nil {
+	payload := fmt.Sprintf(`{"endpoint":"/api/v1/swarm/swarmcast/distribute","reason":%q}`, reason)
+	if err := h.auditWriter.Record(ctx, "swarm.swarmcast.denied", actor, "api", reason, payload); err != nil {
 		slog.Warn("audit: failed to record payload denial", "error", err)
 	}
 }
@@ -124,12 +124,12 @@ func (h *LodeHandler) recordPayloadDenial(ctx context.Context, actor, reason str
 func (h *LodeHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := auth.RequirePermission(auth.PermFleetRead)
 	admin := auth.RequireAdmin("")
-	mux.Handle("POST /api/v1/swarm/payload/distribute", admin(http.HandlerFunc(h.Distribute)))
-	mux.Handle("GET /api/v1/swarm/payload/list", read(http.HandlerFunc(h.List)))
-	mux.Handle("GET /api/v1/swarm/payload/status/{sha256}", read(http.HandlerFunc(h.Status)))
-	mux.Handle("DELETE /api/v1/swarm/payload/{sha256}", admin(http.HandlerFunc(h.Revoke)))
-	mux.Handle("GET /api/v1/swarm/payload/broken", read(http.HandlerFunc(h.BrokenSeeds)))
-	mux.Handle("GET /api/v1/swarm/payload/match", read(http.HandlerFunc(h.Match)))
+	mux.Handle("POST /api/v1/swarm/swarmcast/distribute", admin(http.HandlerFunc(h.Distribute)))
+	mux.Handle("GET /api/v1/swarm/swarmcast/list", read(http.HandlerFunc(h.List)))
+	mux.Handle("GET /api/v1/swarm/swarmcast/status/{sha256}", read(http.HandlerFunc(h.Status)))
+	mux.Handle("DELETE /api/v1/swarm/swarmcast/{sha256}", admin(http.HandlerFunc(h.Revoke)))
+	mux.Handle("GET /api/v1/swarm/swarmcast/broken", read(http.HandlerFunc(h.BrokenSeeds)))
+	mux.Handle("GET /api/v1/swarm/swarmcast/match", read(http.HandlerFunc(h.Match)))
 }
 
 // Distribute accepts a file upload and places it in the server's seed directory
@@ -142,7 +142,7 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Substrate operability gate. When the operator has flipped
-	// `swarm.enabled: false` or `swarm.payload.enabled: false` in
+	// `swarm.enabled: false` or `swarm.swarmcast.enabled: false` in
 	// server.yaml and republished, refuse new admin pushes — existing
 	// payloads keep flowing on agents that hold them, but no new
 	// admin-initiated work lands. Audit the denial so an operator can
@@ -157,9 +157,9 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	label := r.Header.Get("X-Payload-Label")
-	target := r.Header.Get("X-Payload-Target")
-	retention := r.Header.Get("X-Payload-Retention")
+	label := r.Header.Get("X-Swarmcast-Label")
+	target := r.Header.Get("X-Swarmcast-Target")
+	retention := r.Header.Get("X-Swarmcast-Retention")
 
 	if label == "" {
 		writeError(w, http.StatusBadRequest, "X-Payload-Label header required")
@@ -169,25 +169,25 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 		target = "*"
 	}
 	if retention == "" {
-		// Per swarm.payload.default_retention if set, else compile-time default.
+		// Per swarm.swarmcast.default_retention if set, else compile-time default.
 		h.swarmCfgMu.RLock()
-		retention = h.swarmCfg.Payload.DefaultRetention
+		retention = h.swarmCfg.Swarmcast.DefaultRetention
 		h.swarmCfgMu.RUnlock()
 		if retention == "" {
 			retention = "7d"
 		}
 	}
 
-	// Per-distribute size cap (swarm.payload.max_size_bytes). Fast-path
+	// Per-distribute size cap (swarm.swarmcast.max_size_bytes). Fast-path
 	// reject via Content-Length when set; the streaming copy below also
 	// checks against the cap as it writes so a chunked upload that lies
 	// in Content-Length still fails closed at the cap.
 	h.swarmCfgMu.RLock()
-	maxSize := h.swarmCfg.Payload.MaxSizeBytes
+	maxSize := h.swarmCfg.Swarmcast.MaxSizeBytes
 	h.swarmCfgMu.RUnlock()
 	if maxSize > 0 && r.ContentLength > maxSize {
 		writeError(w, http.StatusRequestEntityTooLarge,
-			fmt.Sprintf("payload size %d exceeds swarm.payload.max_size_bytes (%d)", r.ContentLength, maxSize))
+			fmt.Sprintf("payload size %d exceeds swarm.swarmcast.max_size_bytes (%d)", r.ContentLength, maxSize))
 		return
 	}
 
@@ -235,7 +235,7 @@ func (h *LodeHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 		var maxErr *http.MaxBytesError
 		if errors.As(err, &maxErr) {
 			writeError(w, http.StatusRequestEntityTooLarge,
-				fmt.Sprintf("payload exceeded swarm.payload.max_size_bytes (%d)", maxSize))
+				fmt.Sprintf("payload exceeded swarm.swarmcast.max_size_bytes (%d)", maxSize))
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "writing file: "+err.Error())
@@ -392,7 +392,7 @@ func seedToLodeEntry(sha256 string, seed swarm.SeedState, tracker *swarm.PeerTra
 // Revoke marks a seed as revoked: tracker entry transitions to revoked state,
 // manifest CRDT records the revocation for gossip propagation, and the
 // server's local seed file is removed so the trait collector stops re-reporting
-// it. Bound to HTTP DELETE /api/v1/swarm/payload/{sha256}.
+// it. Bound to HTTP DELETE /api/v1/swarm/swarmcast/{sha256}.
 func (h *LodeHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 	if h.tracker == nil {
 		writeError(w, http.StatusServiceUnavailable, "swarm substrate not enabled — payload requires swarm")

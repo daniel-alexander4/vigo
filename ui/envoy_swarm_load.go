@@ -14,7 +14,7 @@ import (
 )
 
 // EnvoySwarmLoadPageData feeds the per-envoy Swarm Load page. One
-// section per subsystem — payload (admin-distributed payloads + the
+// section per subsystem — swarmcast (admin-distributed files + the
 // cached form of gitmirror bundles), gitmirror (materialized bare repos),
 // filesync (plaintext per-user sync), cryptsync (encrypted per-user sync).
 // Totals roll up across all four so the operator can spot which
@@ -96,7 +96,7 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 		EnvoyID:  idStr,
 	}
 
-	// --- Payload (swarm blob cache, admin payloads + gitmirror bundles) ---
+	// --- Payload (swarm blob cache, admin swarmcasts + gitmirror bundles) ---
 	if h.swarmTracker != nil {
 		blobs := h.swarmTracker.BlobsOnEnvoy(idStr)
 		for _, b := range blobs {
@@ -108,7 +108,7 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 				SizeHuman: humanSize(size),
 				Status:    b.Status,
 				When:      formatRelative(b.DistributedAt),
-				Link:      "/swarm/payload/" + b.SHA256,
+				Link:      "/swarm/swarmcast/" + b.SHA256,
 			}
 			if b.Status == "downloading" && b.ChunksTotal > 0 {
 				row.Progress = fmt.Sprintf("%d/%d chunks", b.ChunksHave, b.ChunksTotal)

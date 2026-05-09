@@ -221,7 +221,7 @@ func MaxBodyMiddleware(next http.Handler) http.Handler {
 		}
 		// Skip body limiting for payload distribute — streams to disk
 		// via io.Copy and doesn't buffer in memory.
-		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/swarm/payload/distribute" {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/swarm/swarmcast/distribute" {
 			next.ServeHTTP(w, r)
 			return
 		}

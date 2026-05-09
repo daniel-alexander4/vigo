@@ -34,12 +34,12 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 			{
 				Name: "firmware.bin", Detail: "abc123 · admin",
 				Size: 1_048_576, SizeHuman: "1.0 MiB",
-				Status: "complete", When: "2h ago", Link: "/swarm/payload/abc",
+				Status: "complete", When: "2h ago", Link: "/swarm/swarmcast/abc",
 			},
 			{
 				Name: "gitmirror: dan/vigo (from danlap)", Detail: "abc456 · danlap",
 				Size: 8192, SizeHuman: "8.0 KiB",
-				Status: "downloading", Progress: "3/16 chunks", When: "1m ago", Link: "/swarm/payload/abc456",
+				Status: "downloading", Progress: "3/16 chunks", When: "1m ago", Link: "/swarm/swarmcast/abc456",
 			},
 		},
 		Gitmirror: []SwarmLoadRow{{
@@ -97,7 +97,7 @@ func truncateForTest(s string, n int) string {
 
 // TestUserFriendlyBlobName pins the label-to-display transforms that
 // the Swarm Load page applies to every row's Name column. Gitmirror labels
-// must render in human-readable form; admin payload labels pass
+// must render in human-readable form; admin swarmcast labels pass
 // through unchanged; unlabeled blobs fall back to a short sha so the
 // operator always has something to grab.
 func TestUserFriendlyBlobName(t *testing.T) {
@@ -114,7 +114,7 @@ func TestUserFriendlyBlobName(t *testing.T) {
 			want:  "gitmirror: dan/vigo (from danlap)",
 		},
 		{
-			name:  "admin payload keeps its filename label",
+			name:  "admin swarmcast keeps its filename label",
 			label: "firmware-v2.1.bin",
 			sha:   "abc123def456",
 			want:  "firmware-v2.1.bin",

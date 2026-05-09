@@ -16,10 +16,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Admin-pushed file distribution on the swarm substrate. "Payload" is the
+// Admin-pushed file distribution on the swarm substrate. "Swarmcast" is the
 // content label for these payloads — swarm is the transport layer. The
-// CLI verb tree under `vigocli swarm payload` wraps the server's
-// `/api/v1/swarm/payload/*` endpoints.
+// CLI verb tree under `vigocli swarm swarmcast` wraps the server's
+// `/api/v1/swarm/swarmcast/*` endpoints.
 
 var payloadCmd = &cobra.Command{
 	Use:   "payload",
@@ -35,9 +35,9 @@ to envoys matching the target spec. Envoys download from each other over mTLS
 HTTPS on port 1531 (the swarm substrate).
 
 Examples:
-  vigocli swarm payload distribute agent-0.8.0-linux-amd64.tar.gz --target '*'
-  vigocli swarm payload distribute app-v2.tar.gz --target '*.web.*' --label app-v2
-  vigocli swarm payload distribute firmware.bin --target 'dmi.product_name=PowerEdge R750'`,
+  vigocli swarm swarmcast distribute agent-0.8.0-linux-amd64.tar.gz --target '*'
+  vigocli swarm swarmcast distribute app-v2.tar.gz --target '*.web.*' --label app-v2
+  vigocli swarm swarmcast distribute firmware.bin --target 'dmi.product_name=PowerEdge R750'`,
 	Args: cobra.ExactArgs(1),
 	RunE: runLodeDistribute,
 }
@@ -106,11 +106,11 @@ func runLodeDistribute(cmd *cobra.Command, args []string) error {
 		Label  string `json:"label"`
 	}
 	headers := map[string]string{
-		"X-Payload-Label":     label,
-		"X-Payload-Target":    target,
-		"X-Payload-Retention": retention,
+		"X-Swarmcast-Label":     label,
+		"X-Swarmcast-Target":    target,
+		"X-Swarmcast-Retention": retention,
 	}
-	if err := client.postRaw("/api/v1/swarm/payload/distribute", body, headers, &resp); err != nil {
+	if err := client.postRaw("/api/v1/swarm/swarmcast/distribute", body, headers, &resp); err != nil {
 		return fmt.Errorf("distributing: %w", err)
 	}
 
@@ -126,7 +126,7 @@ func runLodeDistribute(cmd *cobra.Command, args []string) error {
 	var matchResp struct {
 		Count int `json:"count"`
 	}
-	if err := client.get(fmt.Sprintf("/api/v1/swarm/payload/match?target=%s", url.QueryEscape(target)), &matchResp); err == nil {
+	if err := client.get(fmt.Sprintf("/api/v1/swarm/swarmcast/match?target=%s", url.QueryEscape(target)), &matchResp); err == nil {
 		if matchResp.Count == 0 {
 			fmt.Printf("\n  %s target %q matched 0 envoys — no distribution will occur.\n", yellow("Warning:"), target)
 		} else {
@@ -135,7 +135,7 @@ func runLodeDistribute(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Printf("\n  Seeded — distribution begins on next check-in cycle.\n")
 	}
-	fmt.Printf("  Track progress: vigocli swarm payload status %s\n", resp.SHA256)
+	fmt.Printf("  Track progress: vigocli swarm swarmcast status %s\n", resp.SHA256)
 	return nil
 }
 
@@ -167,7 +167,7 @@ func runLodeStatus(cmd *cobra.Command, args []string) error {
 			SkipReason string `json:"skip_reason,omitempty"`
 		} `json:"envoys"`
 	}
-	if err := client.get("/api/v1/swarm/payload/status/"+hash, &resp); err != nil {
+	if err := client.get("/api/v1/swarm/swarmcast/status/"+hash, &resp); err != nil {
 		return fmt.Errorf("fetching status: %w", err)
 	}
 
@@ -178,7 +178,7 @@ func runLodeStatus(cmd *cobra.Command, args []string) error {
 
 	revoked := resp.Status == "revoked"
 
-	fmt.Printf("Payload: %s\n", bold(label))
+	fmt.Printf("Swarmcast: %s\n", bold(label))
 	if resp.SHA256 != "" {
 		fmt.Printf("  SHA256: %s\n", resp.SHA256)
 	}
@@ -280,7 +280,7 @@ func runLodeList(cmd *cobra.Command, args []string) error {
 		Payloads []payloadEntry `json:"payloads"`
 	}
 
-	path := "/api/v1/swarm/payload/list"
+	path := "/api/v1/swarm/swarmcast/list"
 	revoked, _ := cmd.Flags().GetBool("revoked")
 	if revoked {
 		path += "?revoked=true"
@@ -366,7 +366,7 @@ func runLodeBroken(cmd *cobra.Command, args []string) error {
 			} `json:"broken_seeds"`
 		} `json:"envoys"`
 	}
-	if err := client.get("/api/v1/swarm/payload/broken", &resp); err != nil {
+	if err := client.get("/api/v1/swarm/swarmcast/broken", &resp); err != nil {
 		return fmt.Errorf("listing broken seeds: %w", err)
 	}
 
@@ -394,7 +394,7 @@ func runLodeRevoke(cmd *cobra.Command, args []string) error {
 		Revoked        string `json:"revoked"`
 		AlreadyRevoked bool   `json:"already_revoked"`
 	}
-	if err := client.delete("/api/v1/swarm/payload/"+hash, &resp); err != nil {
+	if err := client.delete("/api/v1/swarm/swarmcast/"+hash, &resp); err != nil {
 		return fmt.Errorf("revoking payload: %w", err)
 	}
 

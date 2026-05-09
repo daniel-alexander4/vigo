@@ -59,7 +59,7 @@ func ValidateSwarmPatternOrder(s SwarmSection) []SwarmPatternFinding {
 	out = append(out, checkPatternList("puddle", s.Puddle.Enabled)...)
 	out = append(out, checkPatternList("gitmirror", s.Gitmirror.Enabled)...)
 	out = append(out, checkPatternList("filesync", s.Filesync.Enabled)...)
-	out = append(out, checkPatternList("payload", s.Payload.Enabled)...)
+	out = append(out, checkPatternList("swarmcast", s.Swarmcast.Enabled)...)
 	return out
 }
 

@@ -87,19 +87,21 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 }
 
 // detectRetiredSwarmShape inspects raw server.yaml for swarm fields that
-// were valid pre-0.41.0 and now produce a hard error. Catches:
+// were valid in earlier versions and now produce a hard error. Catches:
 //
-//   - swarm.cryptsync.* — entire section retired (cryptsync derives from
-//     swarm.puddle.enabled).
-//   - swarm.<sub>.blacklist — retired across all sub-subsections (subsumed
-//     by negative patterns in the new pattern-list shape).
-//   - swarm.enabled / swarm.<sub>.enabled as a bool — retired (now a
-//     pattern list of hostname globs).
+//   - swarm.cryptsync.* — entire section retired in 0.41.0 (cryptsync
+//     derives from swarm.puddle.enabled).
+//   - swarm.<sub>.blacklist — retired across all sub-subsections in
+//     0.41.0 (subsumed by negative patterns in the new pattern-list shape).
+//   - swarm.enabled / swarm.<sub>.enabled as a bool — retired in 0.41.0
+//     (now a pattern list of hostname globs).
+//   - swarm.payload.* — retired in the swarmcast rename; the same
+//     authorization lives at swarm.swarmcast.* now.
 //
-// Without this, yaml.v3 would silently drop unknown fields (cryptsync,
-// blacklist) and surface the bool→list mismatch as an opaque type
-// error. This pre-parse pass produces a single error pointing at the
-// migration doc so the operator can fix everything in one pass.
+// Without this, yaml.v3 would silently drop unknown fields and surface
+// shape mismatches as opaque type errors. This pre-parse pass produces a
+// single error pointing at the migration doc so the operator can fix
+// everything in one pass.
 func detectRetiredSwarmShape(data []byte) error {
 	var raw struct {
 		Swarm struct {
@@ -116,10 +118,7 @@ func detectRetiredSwarmShape(data []byte) error {
 				Enabled   any `yaml:"enabled"`
 				Blacklist any `yaml:"blacklist"`
 			} `yaml:"filesync"`
-			Payload struct {
-				Enabled   any `yaml:"enabled"`
-				Blacklist any `yaml:"blacklist"`
-			} `yaml:"payload"`
+			Payload any `yaml:"payload"`
 		} `yaml:"swarm"`
 	}
 	if err := yaml.Unmarshal(data, &raw); err != nil {
@@ -149,16 +148,13 @@ func detectRetiredSwarmShape(data []byte) error {
 	if raw.Swarm.Filesync.Blacklist != nil {
 		retired = append(retired, "swarm.filesync.blacklist — retired; use a deny pattern in swarm.filesync.enabled")
 	}
-	if isBoolScalar(raw.Swarm.Payload.Enabled) {
-		retired = append(retired, "swarm.payload.enabled is a bool but must be a pattern list")
-	}
-	if raw.Swarm.Payload.Blacklist != nil {
-		retired = append(retired, "swarm.payload.blacklist — retired; use a deny pattern in swarm.payload.enabled")
+	if raw.Swarm.Payload != nil {
+		retired = append(retired, "swarm.payload.* — retired in the swarmcast rename; move the entire section to swarm.swarmcast.* (same fields)")
 	}
 	if len(retired) == 0 {
 		return nil
 	}
-	return fmt.Errorf("server.yaml uses retired swarm shape (pre-0.41.0):\n  - %s\n\nsee docs/reference/server-yaml.md#0.41.0-migration",
+	return fmt.Errorf("server.yaml uses retired swarm shape:\n  - %s\n\nsee docs/reference/server-yaml.md#0.41.0-migration",
 		strings.Join(retired, "\n  - "))
 }
 

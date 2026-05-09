@@ -74,7 +74,7 @@ If the target spec matches zero envoys, a warning is printed:
 
 ### Operability
 
-`distribute` is the lone admin-write that rides the payload substrate, so it is gated by the substrate's [kill switches](../../engineering/subsystems/swarm.md#operability--kill-switches). When the operator has set `swarm.enabled: false` or `swarm.payload.enabled: false` in `server.yaml` and republished, the server responds with HTTP **403** and a message naming the offending knob. The denial is recorded as a `swarm.payload.denied` entry in the [tamper-evident audit chain](../../compliance/tamper-evident-audit.md) under the calling user's identity.
+`distribute` is the lone admin-write that rides the payload substrate, so it is gated by the substrate's [kill switches](../../engineering/subsystems/swarm.md#operability--kill-switches). When the operator has set `swarm.enabled: false` or `swarm.swarmcast.enabled: false` in `server.yaml` and republished, the server responds with HTTP **403** and a message naming the offending knob. The denial is recorded as a `swarm.swarmcast.denied` entry in the [tamper-evident audit chain](../../compliance/tamper-evident-audit.md) under the calling user's identity.
 
 `status`, `list`, `match`, and `broken` (read-only views) are not gated — operators can still inspect the substrate's state while it's halted. `revoke` is also allowed when disabled, since cleanup needs to work on a halted substrate.
 
@@ -210,7 +210,7 @@ Repeat revokes are idempotent:
 Already revoked: a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
 ```
 
-To re-distribute the same content after deletion, run `vigocli swarm payload distribute` again — the fresh manifest entry overrides the revocation.
+To re-distribute the same content after deletion, run `vigocli swarm swarmcast distribute` again — the fresh manifest entry overrides the revocation.
 
 ## broken
 

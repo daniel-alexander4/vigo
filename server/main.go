@@ -1222,7 +1222,7 @@ func run() error {
 			lastPuddlePatterns := append([]string(nil), cfg.Swarm.Puddle.Enabled...)
 			lastGitmirrorPatterns := append([]string(nil), cfg.Swarm.Gitmirror.Enabled...)
 			lastFilesyncPatterns := append([]string(nil), cfg.Swarm.Filesync.Enabled...)
-			lastPayloadPatterns := append([]string(nil), cfg.Swarm.Payload.Enabled...)
+			lastSwarmcastPatterns := append([]string(nil), cfg.Swarm.Swarmcast.Enabled...)
 
 			configStore.SetOnReloadSuccess(func() {
 				// Re-read server.yaml directly — ConfigStore.Reload() only
@@ -1254,9 +1254,9 @@ func run() error {
 					recordSwarmPatternsChange(ctx, auditWriter, "filesync", lastFilesyncPatterns, newCfg.Swarm.Filesync.Enabled)
 					lastFilesyncPatterns = append([]string(nil), newCfg.Swarm.Filesync.Enabled...)
 				}
-				if !sameStringSet(lastPayloadPatterns, newCfg.Swarm.Payload.Enabled) {
-					recordSwarmPatternsChange(ctx, auditWriter, "payload", lastPayloadPatterns, newCfg.Swarm.Payload.Enabled)
-					lastPayloadPatterns = append([]string(nil), newCfg.Swarm.Payload.Enabled...)
+				if !sameStringSet(lastSwarmcastPatterns, newCfg.Swarm.Swarmcast.Enabled) {
+					recordSwarmPatternsChange(ctx, auditWriter, "swarmcast", lastSwarmcastPatterns, newCfg.Swarm.Swarmcast.Enabled)
+					lastSwarmcastPatterns = append([]string(nil), newCfg.Swarm.Swarmcast.Enabled...)
 				}
 			})
 
@@ -2320,7 +2320,7 @@ func sameStringSet(a, b []string) bool {
 // recordSwarmPatternsChange emits a tamper-evident audit-chain entry
 // whenever a swarm authorization pattern list changes. `substrate` is
 // "swarm" for the top-level pattern, or one of
-// "puddle"/"gitmirror"/"filesync"/"payload" for the per-subsystem
+// "puddle"/"gitmirror"/"filesync"/"swarmcast" for the per-subsystem
 // patterns. The summary states the pattern delta; the payload carries
 // the full new list so a reviewer can reconstruct post-change state
 // without joining log streams. Failures are logged at WARN — the audit

@@ -117,7 +117,7 @@ type ServerConfig struct {
 }
 
 // SwarmSection configures peer-to-peer content distribution. The four
-// content subsystems (puddle/cryptsync, gitmirror, filesync, payload)
+// content subsystems (puddle/lockbox, swarmgit, longdrawer, swarmcast)
 // are gated per-envoy by hostname pattern lists. The top-level Enabled
 // list controls whether the swarm substrate runs on a host at all;
 // each sub-section's Enabled list further restricts that subsystem.
@@ -133,7 +133,7 @@ type SwarmSection struct {
 	Port                int                   `yaml:"port" doc:"TCP port on which agents serve blobs to each other over mTLS." default:"1531" example:"1-65535; must be open between envoys"`
 	MaxBandwidthPercent int                   `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
 	ManifestLivenessTTL string                `yaml:"manifest_liveness_ttl" doc:"Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Guards against orphaned entries when a publisher disappears. Empty / zero disables the sweep." default:"24h" example:"24h, 12h, 0 (disable)"`
-	Payload             SwarmPayloadSection   `yaml:"payload" doc:"Payload (admin-pushed fleet file distribution) authorization." long:"Hostname pattern list controlling which envoys receive admin-pushed payloads. Distribution requests are refused at the API layer when the list is empty."`
+	Swarmcast           SwarmcastSection      `yaml:"swarmcast" doc:"Swarmcast (admin-pushed fleet file distribution) authorization." long:"Hostname pattern list controlling which envoys receive admin-pushed files. Distribution requests are refused at the API layer when the list is empty."`
 	Filesync            SwarmFilesyncSection  `yaml:"filesync" doc:"Filesync (LAN plaintext directory mirror) authorization + per-file size cap." long:"Hostname pattern list controlling which envoys run the filesync daemon. Per-user opt-in still requires the user creating ~/filesync/. Plus a per-file size cap on LAN sync."`
 	Puddle              SwarmPuddleSection    `yaml:"puddle" doc:"Puddle (per-user identity) authorization. Cryptsync derives ITS AUTHORIZATION from this section per ADR-020 — only operational tuning lives in cryptsync below." long:"Hostname pattern list controlling which envoys can host puddle identity material. Cryptsync's authorization (allow/deny) follows this list — a host allowed here can hold cryptsync ciphertext for its locally-enrolled puddle members; a host denied here cannot use cryptsync at all."`
 	Cryptsync           SwarmCryptsyncSection `yaml:"cryptsync" doc:"Cryptsync operational tuning (size + envelope retention). Authorization derives from puddle above; this section is size/retention only." long:"Per-file ciphertext size cap and envelope (LEAVE/RESURRECT/TOMBSTONE) retention window. Authorization gating still derives from swarm.puddle.enabled per ADR-020 — there is no enabled field here."`
@@ -169,16 +169,16 @@ type SwarmFilesyncSection struct {
 	MaxFileBytes int64    `yaml:"max_file_bytes" doc:"Per-file size cap on LAN filesync. 0 = no cap." default:"1073741824" example:"1073741824 (1 GiB), 0 (uncapped)"`
 }
 
-// SwarmPayloadSection authorizes the payload (admin-pushed fleet file
+// SwarmcastSection authorizes the swarmcast (admin-pushed fleet file
 // distribution) subsystem per envoy and caps admin-side distribute
 // behavior. The admin distribute endpoint refuses when the `Enabled`
 // list is empty (no envoy could possibly receive); `MaxSizeBytes`
 // caps individual blob size at the API entry; `DefaultRetention` is
-// used when `vigocli swarm payload distribute` omits `--retention`.
-type SwarmPayloadSection struct {
-	Enabled          []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to receive admin-pushed payloads." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"]"`
+// used when `vigocli swarm swarmcast distribute` omits `--retention`.
+type SwarmcastSection struct {
+	Enabled          []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to receive admin-pushed files." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"]"`
 	MaxSizeBytes     int64    `yaml:"max_size_bytes" doc:"Per-distribute blob size cap, enforced at the admin API. 0 = no cap." default:"0" example:"5368709120 (5 GiB), 0 (uncapped)"`
-	DefaultRetention string   `yaml:"default_retention" doc:"Default retention applied when 'vigocli swarm payload distribute' omits --retention. Empty = compile-time default (7d)." default:"7d" example:"7d, 30d, 24h"`
+	DefaultRetention string   `yaml:"default_retention" doc:"Default retention applied when 'vigocli swarm swarmcast distribute' omits --retention. Empty = compile-time default (7d)." default:"7d" example:"7d, 30d, 24h"`
 }
 
 // SwarmCryptsyncSection tunes cryptsync operational caps. Authorization

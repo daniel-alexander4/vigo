@@ -101,14 +101,14 @@ on_host_as_user() {
 
 # ───────────────── payload helpers ─────────────────
 
-# Poll vigocli swarm payload status until every TEST envoy (PRIMARY/
+# Poll vigocli swarm swarmcast status until every TEST envoy (PRIMARY/
 # SECONDARY/THIRD that's reachable) shows complete / cached / source on
 # its per-envoy line. The fleet may include other envoys (girlslaptop,
 # raspberrypi, etc.) that aren't under test and may be perpetually
 # pending — checking the summary "downloading + pending == 0" would
 # wait for those too and time out.
 #
-# Per-envoy line shape (cli/swarm_payload.go renders):
+# Per-envoy line shape (cli/swarm_swarmcast.go renders):
 #     "  ✓ <hostname>                    complete"
 #     "  ✓ <hostname>                    cached"
 #     "  ★ <hostname>                    source"
@@ -118,7 +118,7 @@ wait_payload_complete() {
     local elapsed=0
     while (( elapsed < timeout )); do
         local out
-        out=$(vigocli swarm payload status "$sha" 2>&1 || true)
+        out=$(vigocli swarm swarmcast status "$sha" 2>&1 || true)
         local all_done=1
         for h in "${ALL_HOSTS[@]}"; do
             (( HOST_REACHABLE[$h] == 0 )) && continue
@@ -154,7 +154,7 @@ wait_payload_revoked() {
     local elapsed=0
     while (( elapsed < timeout )); do
         local out
-        out=$(vigocli swarm payload status "$sha" 2>&1 || true)
+        out=$(vigocli swarm swarmcast status "$sha" 2>&1 || true)
         local all_revoked=1
         for h in "${ALL_HOSTS[@]}"; do
             (( HOST_REACHABLE[$h] == 0 )) && continue
@@ -189,9 +189,9 @@ cleanup() {
     # Remove leftover payload test artifacts (best-effort — names match a
     # phase-c-payload-* prefix so we don't touch other operator payloads).
     if [[ -n "${PAYLOAD_SHA:-}" ]]; then
-        if vigocli swarm payload status "$PAYLOAD_SHA" >/dev/null 2>&1; then
+        if vigocli swarm swarmcast status "$PAYLOAD_SHA" >/dev/null 2>&1; then
             note "revoking leftover payload $PAYLOAD_SHA"
-            vigocli swarm payload revoke "$PAYLOAD_SHA" >/dev/null 2>&1 || true
+            vigocli swarm swarmcast revoke "$PAYLOAD_SHA" >/dev/null 2>&1 || true
         fi
     fi
 
@@ -281,7 +281,7 @@ fi
 # ───────────────────────── 1. Payload + swarm health ─────────────────────────
 section "1. Payload + swarm health — distribute, sample peer table + manifest mid-flow, revoke"
 
-# Keep the label ≤27 chars — `vigocli swarm payload list` truncates
+# Keep the label ≤27 chars — `vigocli swarm swarmcast list` truncates
 # anything longer to first 24 chars + "...", which would defeat the
 # substring grep below.
 PAYLOAD_LABEL="pc-payload-$(date +%s)"
@@ -295,8 +295,8 @@ else
     exit 1
 fi
 
-step "vigocli swarm payload distribute --target '*' --label $PAYLOAD_LABEL"
-distribute_out=$(vigocli swarm payload distribute "$PAYLOAD_FILE" --target '*' --label "$PAYLOAD_LABEL" 2>&1)
+step "vigocli swarm swarmcast distribute --target '*' --label $PAYLOAD_LABEL"
+distribute_out=$(vigocli swarm swarmcast distribute "$PAYLOAD_FILE" --target '*' --label "$PAYLOAD_LABEL" 2>&1)
 if [[ $? -ne 0 ]]; then
     fail "distribute failed: $(head -2 <<<"$distribute_out" | tr '\n' ' ')"
     exit 1
@@ -323,7 +323,7 @@ if wait_payload_complete "$PAYLOAD_SHA" "$PAYLOAD_TIMEOUT"; then
 else
     fail "payload distribution did not complete within ${PAYLOAD_TIMEOUT}s"
     note "current status:"
-    vigocli swarm payload status "$PAYLOAD_SHA" 2>&1 | head -20 | while IFS= read -r line; do note "  $line"; done
+    vigocli swarm swarmcast status "$PAYLOAD_SHA" 2>&1 | head -20 | while IFS= read -r line; do note "  $line"; done
 fi
 
 # Swarm peers.json is a blob-holder index: a JSON array of records
@@ -434,15 +434,15 @@ for h in "${ALL_HOSTS[@]}"; do
     fi
 done
 
-step "vigocli swarm payload list shows the payload"
-if vigocli swarm payload list 2>&1 | grep -q "$PAYLOAD_LABEL"; then
+step "vigocli swarm swarmcast list shows the payload"
+if vigocli swarm swarmcast list 2>&1 | grep -q "$PAYLOAD_LABEL"; then
     pass "list output contains $PAYLOAD_LABEL"
 else
     fail "list output does not contain $PAYLOAD_LABEL"
 fi
 
-step "vigocli swarm payload revoke $PAYLOAD_SHA"
-if vigocli swarm payload revoke "$PAYLOAD_SHA" >/dev/null 2>&1; then
+step "vigocli swarm swarmcast revoke $PAYLOAD_SHA"
+if vigocli swarm swarmcast revoke "$PAYLOAD_SHA" >/dev/null 2>&1; then
     pass "revoke returned 0"
 else
     fail "revoke command failed"

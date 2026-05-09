@@ -103,8 +103,8 @@ func (h *Handler) SetSwarm(tracker *swarm.PeerTracker, resolver SwarmHostnameRes
 	h.swarmConfig = swarmCfg
 }
 
-// Payload renders the admin-distributed-payload list or detail page.
-func (h *Handler) Payload(w http.ResponseWriter, r *http.Request) {
+// Swarmcast renders the admin-distributed swarmcast list or detail page.
+func (h *Handler) Swarmcast(w http.ResponseWriter, r *http.Request) {
 	sha := r.PathValue("sha256")
 	if sha != "" {
 		h.lodeDetail(w, r, sha)
@@ -115,7 +115,7 @@ func (h *Handler) Payload(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) lodeList(w http.ResponseWriter, r *http.Request) {
 	data := LodePageData{
-		PageData: PageData{Title: "Payload", ActiveNav: "payload"},
+		PageData: PageData{Title: "Swarmcast", ActiveNav: "swarmcast"},
 	}
 
 	var totalSize int64
@@ -189,7 +189,7 @@ func (h *Handler) lodeList(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) lodeDetail(w http.ResponseWriter, r *http.Request, sha string) {
 	data := LodePageData{
-		PageData: PageData{Title: "Payload", ActiveNav: "payload"},
+		PageData: PageData{Title: "Swarmcast", ActiveNav: "swarmcast"},
 	}
 
 	var detail *LodeBlobDetail
@@ -267,7 +267,7 @@ func (h *Handler) populateVizData(data *LodePageData, envoys []swarm.EnvoySwarmS
 }
 
 // LodeEnvoysFragment serves the HTMX auto-refresh fragment for blob detail.
-func (h *Handler) LodeEnvoysFragment(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SwarmcastEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 	sha := r.URL.Query().Get("sha256")
 	if sha == "" || h.swarmTracker == nil {
 		w.WriteHeader(http.StatusOK)
@@ -503,14 +503,14 @@ func buildLodeHealth(blobs []LodeBlobEntry) HealthBanner {
 				Kind:     "skipped",
 				Subject:  label,
 				Detail:   fmt.Sprintf("%d envoy(s) matched the target but couldn't receive (out of disk, unreachable, or offline)", b.Summary.Skipped),
-				Link:     "/swarm/payload/" + b.SHA256,
+				Link:     "/swarm/swarmcast/" + b.SHA256,
 				Severity: "warn",
 			})
 		}
 	}
 	headline := fmt.Sprintf("%d payload(s) active, %d revoked. No delivery failures.",
 		active, len(blobs)-active)
-	return finalizeHealthBanner("Payload", problems, headline)
+	return finalizeHealthBanner("Swarmcast", problems, headline)
 }
 
 func humanSize(bytes int64) string {

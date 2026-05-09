@@ -68,7 +68,7 @@ List all swarm seeds:
 vigocli swarm list
 ```
 
-The web UI at [`/payload`](../reference/ui/swarm-payload.md) shows all active and revoked seeds with distribution progress. Detail pages auto-refresh every 5 seconds.
+The web UI at [`/payload`](../reference/ui/swarm-swarmcast.md) shows all active and revoked seeds with distribution progress. Detail pages auto-refresh every 5 seconds.
 
 ## Envoy-Seeded Distribution
 
@@ -210,7 +210,7 @@ No configuration is needed — jitter is automatic.
 
 ## Disk Space
 
-Every peer-to-peer delivery path in the fleet — payload (admin-distributed swarm blobs), vigocrypt (cryptsync ciphertext), gitmirror (gitmirror bundles), and vigosync (filesync announcements) — refuses to commit bytes to a filesystem that has **10% or less free**. The check applies symmetrically on both sides of each transfer:
+Every peer-to-peer delivery path in the fleet — swarmcast (admin-distributed swarm blobs), vigocrypt (cryptsync ciphertext), gitmirror (gitmirror bundles), and vigosync (filesync announcements) — refuses to commit bytes to a filesystem that has **10% or less free**. The check applies symmetrically on both sides of each transfer:
 
 - **Sender side** — before a push, the sender asks the recipient's peer server `GET /health/storage?for=<subsystem>[&user=…]` over the existing mTLS on port 1531 and compares the returned `free_pct` to the threshold. A peer at or below 10% free is skipped quietly; fan-outs across many peers probe each one once per minute (60s cache) so a burst doesn't hammer the health endpoint.
 - **Receiver side** — the push handler (`/cryptsync/push`, `/gitmirror/push`) re-checks its own disk on entry and returns **507 Insufficient Storage** before reading any body bytes. This closes the race between a sender's cached probe and the push arriving when the disk has since filled up.
@@ -373,7 +373,7 @@ What happens for every action an operator can take on the seeder or downloader.
 ## Related
 
 - [Swarm Concepts](../engineering/subsystems/swarm.md) — How swarm works
-- [vigocli payload](../reference/cli/swarm-payload.md) — CLI reference for admin-pushed payloads on this substrate
+- [vigocli payload](../reference/cli/swarm-swarmcast.md) — CLI reference for admin-pushed swarmcasts on this substrate
 - [Server Configuration](../getting-started/server-config.md) — `swarm:` section
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

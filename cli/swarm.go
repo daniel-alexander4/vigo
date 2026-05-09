@@ -16,7 +16,7 @@ import (
 
 // Substrate-level view of the envoy P2P network. `vigocli swarm` is
 // the substrate — the transport layer every content subsystem rides
-// on. Admin-pushed payloads are `vigocli swarm payload`; personal-DR mirrors
+// on. Admin-pushed payloads are `vigocli swarm swarmcast`; personal-DR mirrors
 // are `vigocli swarm gitmirror`; per-user directory sync is `vigocli swarm filesync` and
 // `vigocli swarm cryptsync`. Muscle memory from the pre-rename era points here
 // for content verbs — the command's long help leads with that
@@ -70,7 +70,7 @@ four content subsystems ride on.
 This command is the SUBSTRATE. For the content verbs that used to live
 under 'vigocli swarm distribute' etc., see:
 
-  vigocli swarm payload      — admin-pushed payloads (was 'swarm distribute')
+  vigocli swarm swarmcast      — admin-pushed swarmcasts (was 'swarm distribute')
   vigocli swarm gitmirror     — personal-DR git mirror fleet view
   vigocli swarm filesync      — per-user plaintext directory sync mesh
   vigocli swarm cryptsync     — per-user encrypted directory sync mesh

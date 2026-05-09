@@ -3,7 +3,7 @@
 
 Read-only admin view of the [swarm substrate](../../engineering/subsystems/swarm.md) — the envoy peer-to-peer network that all four content subsystems ride on.
 
-> **This is the substrate, not content.** For admin-pushed payloads (formerly `vigocli swarm distribute`), use [`vigocli swarm payload`](swarm-payload.md). For personal-DR mirrors, [`vigocli swarm gitmirror`](swarm-gitmirror.md). For per-user sync meshes, [`vigocli swarm filesync`](swarm-filesync.md) and [`vigocli swarm cryptsync`](swarm-cryptsync.md).
+> **This is the substrate, not content.** For admin-pushed swarmcasts (formerly `vigocli swarm distribute`), use [`vigocli swarm swarmcast`](swarm-swarmcast.md). For personal-DR mirrors, [`vigocli swarm gitmirror`](swarm-gitmirror.md). For per-user sync meshes, [`vigocli swarm filesync`](swarm-filesync.md) and [`vigocli swarm cryptsync`](swarm-cryptsync.md).
 
 ## Subcommands
 
@@ -111,13 +111,13 @@ Per-envoy results:
 
 ### Tag-pinned colors in the swarm visualization
 
-Adjacent operator knob from the same release: a `viz.color=<name|hex>` tag on an envoy pins it to a fixed hue in the `/swarm` and `/swarm/payload/<sha>` visualizations regardless of fleet churn. Set via `vigocli envoys tag <hostname> viz.color=green`. Recognized names: `yellow`, `red`, `green`, `blue`, `peach`, `mauve`, `teal`, `pink`. A literal hex code (`#rrggbb` or `#rgb`) is accepted as a passthrough. Bad values fall through to the default hash-based slot assignment.
+Adjacent operator knob from the same release: a `viz.color=<name|hex>` tag on an envoy pins it to a fixed hue in the `/swarm` and `/swarm/swarmcast/<sha>` visualizations regardless of fleet churn. Set via `vigocli envoys tag <hostname> viz.color=green`. Recognized names: `yellow`, `red`, `green`, `blue`, `peach`, `mauve`, `teal`, `pink`. A literal hex code (`#rrggbb` or `#rgb`) is accepted as a passthrough. Bad values fall through to the default hash-based slot assignment.
 
 ## Related
 
 - [Swarm Substrate](../../engineering/subsystems/swarm.md) — How the peer-to-peer network works
 - [Swarm page](../ui/swarm.md) — `/swarm` in the web UI
-- [`vigocli swarm payload`](swarm-payload.md) — Admin-pushed payloads on the substrate
+- [`vigocli swarm swarmcast`](swarm-swarmcast.md) — Admin-pushed payloads on the substrate
 - [`vigocli swarm gitmirror`](swarm-gitmirror.md), [`vigocli swarm filesync`](swarm-filesync.md), [`vigocli swarm cryptsync`](swarm-cryptsync.md) — Other content subsystems on the substrate
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

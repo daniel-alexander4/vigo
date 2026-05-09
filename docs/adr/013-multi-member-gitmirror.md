@@ -127,7 +127,7 @@ If founder + all admins are lost (no one with a valid admin token), the project 
 
 **Hot-path posture:**
 - Only the gitmirrormesh check-in extension lands on the convergence-cycle path. Bounded by including project metadata only (no per-project rosters); rosters fetch on-demand at push time.
-- Bundle ingestion on swarm peer-port and fan-out workers are off the convergence loop, capped at 2 concurrent (matching payload distribution).
+- Bundle ingestion on swarm peer-port and fan-out workers are off the convergence loop, capped at 2 concurrent (matching swarmcast distribution).
 - Trait collection for multi-member status caches snapshots and recomputes only on state change (mark-dirty pattern from cryptsync).
 - Revocation list lookup is O(1) per push; not on convergence path.
 

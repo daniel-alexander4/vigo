@@ -17,7 +17,7 @@ The UI is built with Go templates and HTMX for partial page updates without full
 | [Workflows](workflows.md) | `/workflows` | Multi-step workflow execution |
 | [Spanner](spanner.md) | `/spanner` | Hub-spoke topology and health |
 | [Swarm](swarm.md) | `/swarm` | Envoy P2P substrate overview — fleet status, subsystem counts, seeding allowlist, per-envoy peer table |
-| [Payload](swarm-payload.md) | `/payload` | Admin-distributed payloads — status and per-envoy progress over the swarm substrate |
+| [Payload](swarm-swarmcast.md) | `/payload` | Admin-distributed payloads — status and per-envoy progress over the swarm substrate |
 | Gitmirror | `/gitmirror` | Personal-DR repo mirror inventory — one row per repo, publisher, mirror counts, orphan/stale health |
 | Filesync | `/filesync` | Per-user LAN plaintext sync mesh — one row per user, file/tombstone/envoy counts, divergence status |
 | Cryptsync | `/cryptsync` | Per-user encrypted sync mesh — same shape as Filesync plus recipient drift and active unlock sessions |

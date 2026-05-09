@@ -578,13 +578,13 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /audit", h.Audit)
 	mux.HandleFunc("GET /audit/verify", h.AuditVerify)
 	mux.HandleFunc("GET /platform/compliance", h.PlatformCompliance)
-	// Payload pages (admin-distributed payloads riding the swarm substrate) —
+	// Swarmcast pages (admin-distributed files riding the swarm substrate) —
 	// always registered because SetSwarm is called after RegisterRoutes.
 	// The handlers check h.swarmTracker at request time.
 	mux.HandleFunc("GET /swarm", h.Swarm)
-	mux.HandleFunc("GET /swarm/payload", h.Payload)
-	mux.HandleFunc("GET /swarm/payload/{sha256}", h.Payload)
-	mux.HandleFunc("GET /ui/fragments/swarm-payload-envoys", h.LodeEnvoysFragment)
+	mux.HandleFunc("GET /swarm/swarmcast", h.Swarmcast)
+	mux.HandleFunc("GET /swarm/swarmcast/{sha256}", h.Swarmcast)
+	mux.HandleFunc("GET /ui/fragments/swarm-swarmcast-envoys", h.SwarmcastEnvoysFragment)
 
 	// Filesync, cryptsync, gitmirror observability — sibling pages
 	// under the Swarm nav group. Each admin-only; viewer sees a 403.

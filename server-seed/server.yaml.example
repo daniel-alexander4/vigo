@@ -367,11 +367,11 @@ watcher:
 #   max_bandwidth_percent: 50                   # max % of detected link speed agents use for transfers
 #   manifest_liveness_ttl: 24h                  # active manifest entries unrefreshed for this long get revoked
 #
-#   # Payload (admin-pushed file distribution).
+#   # Swarmcast (admin-pushed file distribution).
 #   payload:
-#     enabled: ["*"]                            # which envoys may receive admin-pushed payloads
+#     enabled: ["*"]                            # which envoys may receive admin-pushed swarmcasts
 #     max_size_bytes: 0                         # per-distribute upload cap. 0 = no cap (today's behavior)
-#     default_retention: "7d"                   # default retention when --retention omitted on `vigocli swarm payload distribute`
+#     default_retention: "7d"                   # default retention when --retention omitted on `vigocli swarm swarmcast distribute`
 #
 #   # Gitmirror (git-over-swarm). Authorization gate + bundle size +
 #   # envelope retention. Bundle cap is enforced publisher-side at

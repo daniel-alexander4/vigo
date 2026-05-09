@@ -54,7 +54,7 @@ Vigo has two CLI binaries:
 | [cve](cve.md) | Search the fleet for hosts affected by a specific CVE |
 | [license](license.md) | View license status and manage license keys |
 | [swarm](swarm.md) | Substrate-level view of the envoy P2P network (status + peers) |
-| [payload](swarm-payload.md) | Admin-pushed file distribution on the swarm substrate |
+| [payload](swarm-swarmcast.md) | Admin-pushed file distribution on the swarm substrate |
 | [gitmirror](swarm-gitmirror.md) | Fleet-wide read-only view of gitmirror personal-DR mirrors |
 | [filesync](swarm-filesync.md) | Fleet-wide read-only view of the filesync per-user directory sync mesh |
 | [cryptsync](swarm-cryptsync.md) | Fleet-wide read-only view of the cryptsync per-user encrypted directory sync mesh |

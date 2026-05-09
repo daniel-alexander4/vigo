@@ -76,7 +76,7 @@ var publicPrefixes = []string{
 	"/auth/",
 	"/api/v1/agent/",
 	"/api/v1/bootstrap/",
-	"/api/v1/swarm/payload/blob/",
+	"/api/v1/swarm/swarmcast/blob/",
 }
 
 // publicPaths are exact URL paths that never require authentication.

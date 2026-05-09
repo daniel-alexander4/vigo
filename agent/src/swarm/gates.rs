@@ -54,7 +54,7 @@ pub enum Substrate {
 impl Substrate {
     fn enabled_key(self) -> &'static str {
         match self {
-            Substrate::Payload => "swarm_payload_enabled",
+            Substrate::Payload => "swarm_swarmcast_enabled",
             Substrate::Gitmirror => "swarm_gitmirror_enabled",
             // Cryptsync derives from puddle — single source of truth
             // per ADR-020. The server emits only `swarm_puddle_enabled`;

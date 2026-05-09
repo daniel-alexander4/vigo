@@ -155,7 +155,7 @@ The server also ships its manifest CRDT with every check-in response. This is th
 
 The server's `ManifestStore` persists to `<dir(seed_dir)>/server-manifest.json` (mode `0600`, atomic temp+rename via a 1-second debounced background flusher). Without persistence, a server restart wipes the in-RAM manifest and agents reporting their cached `swarm_seeds` traits re-create every entry — including ones the operator just revoked — within seconds. This was the root cause of the 2026-04-24 cairn/gitmirror reset incident; persistence + the gate below close the footgun structurally. The filename is deliberately distinct from the agent's `/var/lib/vigo/swarm/manifest.json` (Rust schema) since the server-as-envoy story has both processes sharing that directory via bind-mount.
 
-The agent-driven `RecordSeedFromAgent` path is gated: agents can only refresh entries the server has already seen via the authoritative admin-distribute path. Unknown or revoked SHAs reported via gossip are dropped (logged at INFO, no entry created). The admin path (`POST /api/v1/swarm/payload/distribute` → `RecordSeed`) remains the only way to introduce new entries.
+The agent-driven `RecordSeedFromAgent` path is gated: agents can only refresh entries the server has already seen via the authoritative admin-distribute path. Unknown or revoked SHAs reported via gossip are dropped (logged at INFO, no entry created). The admin path (`POST /api/v1/swarm/swarmcast/distribute` → `RecordSeed`) remains the only way to introduce new entries.
 
 A liveness sweep in `RetentionPruner` revokes active entries whose `LastReSeededAt` (a per-entry timestamp parallel to LWW's `UpdatedAt`, bumped on every Record\* call) has aged past `swarm.manifest_liveness_ttl` (default `24h`). Combined with the gossip gate, this keeps the manifest from accumulating orphans when a publisher permanently disappears. Set `manifest_liveness_ttl: 0` to disable the sweep on tiny static fleets where no entry should ever expire.
 
@@ -187,7 +187,7 @@ swarm:
   payload:   { enabled: ["*"] }
 ```
 
-The server evaluates patterns against each agent's hostname and emits the resolved bools in `PolicyBundle.vars_json` on every check-in (`swarm_enabled`, `swarm_puddle_enabled`, `swarm_gitmirror_enabled`, `swarm_filesync_enabled`, `swarm_payload_enabled`). Agents never see the patterns — they only see their own resolved gate. A `vigocli config publish` propagates within one check-in cycle without restarting anything.
+The server evaluates patterns against each agent's hostname and emits the resolved bools in `PolicyBundle.vars_json` on every check-in (`swarm_enabled`, `swarm_puddle_enabled`, `swarm_gitmirror_enabled`, `swarm_filesync_enabled`, `swarm_swarmcast_enabled`). Agents never see the patterns — they only see their own resolved gate. A `vigocli config publish` propagates within one check-in cycle without restarting anything.
 
 **Two layers.** Both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for the subsystem to be active there. Empty list at either layer disables the subsystem on that host.
 
@@ -201,13 +201,13 @@ The server evaluates patterns against each agent's hostname and emits the resolv
 | `swarm.puddle.enabled: []` | Halts puddle and cryptsync on hosts that don't match. Identity material under `~user/.vigo-puddle/` and `~user/.cryptsync/` is preserved (gate-only). | `swarm.puddle.enabled` |
 | `swarm.gitmirror.enabled: []` | Halts gitmirror publisher and receiver on hosts that don't match. Already-held mirrors preserved. | `swarm.gitmirror.enabled` |
 | `swarm.filesync.enabled: []` | Halts filesync announcer / listener / push handler on hosts that don't match. `~user/filesync/` content preserved. | `swarm.filesync.enabled` |
-| `swarm.payload.enabled: []` | Halts payload reception. `POST /api/v1/swarm/payload/distribute` returns **403** with `audit_event=swarm.payload.denied` when the list is empty (no envoy could possibly receive). | `swarm.payload.enabled` (flip), `swarm.payload.denied` (per blocked admin push) |
+| `swarm.swarmcast.enabled: []` | Halts payload reception. `POST /api/v1/swarm/swarmcast/distribute` returns **403** with `audit_event=swarm.swarmcast.denied` when the list is empty (no envoy could possibly receive). | `swarm.swarmcast.enabled` (flip), `swarm.swarmcast.denied` (per blocked admin push) |
 
 **Audit-chain coverage.** Every pattern-list change at config-publish time records a tamper-evident entry under `actor=config.reload` / `source=config`. Admin-push denials record under `actor=<authenticated user>` / `source=api`. Inspect via `/api/v1/audit?event_type=swarm.*`.
 
 **Soft-skip vs hard-stop.** Vigo uses soft-skip: data structures stay resident, the listener stays bound, but emit/serve paths consult an `Arc<AtomicBool>` and return early when the gate is off. Re-enabling resumes work without process restart and without losing in-flight transfers. Hard-stop semantics (kill listener, drop in-flight) are not implemented.
 
-**Payload note.** Payload rides this generic transport rather than having its own per-substrate listener, so the agent-side gate for payload is currently **forward-compat only** — the `swarm_payload_enabled` flag flows to agents but no agent code branches on it. The operator-meaningful enforcement for payload is server-side: the gate guard at `POST /api/v1/swarm/payload/distribute`. Existing in-flight payloads continue propagating across the fleet via the shared swarm transport regardless.
+**Payload note.** Payload rides this generic transport rather than having its own per-substrate listener, so the agent-side gate for payload is currently **forward-compat only** — the `swarm_swarmcast_enabled` flag flows to agents but no agent code branches on it. The operator-meaningful enforcement for payload is server-side: the gate guard at `POST /api/v1/swarm/swarmcast/distribute`. Existing in-flight payloads continue propagating across the fleet via the shared swarm transport regardless.
 
 ## Usercrate authorization
 
@@ -232,7 +232,7 @@ Both flags default to `false`. Filesync and payload have no usercrate flag — f
 ## Related
 
 - [Swarm Operations](../../operations/swarm.md) — Configuration, monitoring, troubleshooting
-- [vigocli payload](../../reference/cli/swarm-payload.md) — CLI reference for admin-pushed payloads on this substrate
+- [vigocli payload](../../reference/cli/swarm-swarmcast.md) — CLI reference for admin-pushed swarmcasts on this substrate
 - [Server Configuration](../../getting-started/server-config.md) — `swarm:` section
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

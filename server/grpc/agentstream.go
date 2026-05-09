@@ -542,8 +542,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Filesync.Enabled) {
 		gates["swarm_filesync_enabled"] = false
 	}
-	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Payload.Enabled) {
-		gates["swarm_payload_enabled"] = false
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Swarmcast.Enabled) {
+		gates["swarm_swarmcast_enabled"] = false
 	}
 	if err := injectServerVars(bundle, gates); err != nil {
 		slog.Warn("failed to inject server vars into policy bundle",
@@ -718,15 +718,15 @@ func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
 	// Heuristic for "no config loaded yet": every cap zero AND every
 	// retention string empty. Cheap; matches the SwarmSection zero
 	// value.
-	if sc.Payload.MaxSizeBytes == 0 && sc.Payload.DefaultRetention == "" &&
+	if sc.Swarmcast.MaxSizeBytes == 0 && sc.Swarmcast.DefaultRetention == "" &&
 		sc.Cryptsync.MaxFileBytes == 0 && sc.Cryptsync.EnvelopeRetention == "" &&
 		sc.Gitmirror.MaxBundleBytes == 0 && sc.Gitmirror.EnvelopeRetention == "" &&
 		sc.Filesync.MaxFileBytes == 0 {
 		return nil
 	}
 	return &pb.SwarmRuntimeLimits{
-		PayloadMaxSizeBytes:           uint64(maxNonNeg(sc.Payload.MaxSizeBytes)),
-		PayloadDefaultRetention:       sc.Payload.DefaultRetention,
+		SwarmcastMaxSizeBytes:         uint64(maxNonNeg(sc.Swarmcast.MaxSizeBytes)),
+		SwarmcastDefaultRetention:     sc.Swarmcast.DefaultRetention,
 		CryptsyncMaxFileBytes:         uint64(maxNonNeg(sc.Cryptsync.MaxFileBytes)),
 		CryptsyncEnvelopeRetentionSecs: durationSecsOrZero(sc.Cryptsync.EnvelopeRetention),
 		GitmirrorMaxBundleBytes:       uint64(maxNonNeg(sc.Gitmirror.MaxBundleBytes)),

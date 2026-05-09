@@ -35,14 +35,14 @@ func TestPayloadGate_AllowsWhenAllEnabled(t *testing.T) {
 			name: "wildcard fleet-wide on",
 			cfg: config.SwarmSection{
 				Enabled: []string{"*"},
-				Payload: config.SwarmPayloadSection{Enabled: []string{"*"}},
+				Swarmcast: config.SwarmcastSection{Enabled: []string{"*"}},
 			},
 		},
 		{
 			name: "explicit allow set with hosts",
 			cfg: config.SwarmSection{
 				Enabled: []string{"annlap", "plex"},
-				Payload: config.SwarmPayloadSection{Enabled: []string{"annlap", "plex"}},
+				Swarmcast: config.SwarmcastSection{Enabled: []string{"annlap", "plex"}},
 			},
 		},
 	}
@@ -74,14 +74,14 @@ func TestPayloadGate_DeniesWhenPayloadDisabled(t *testing.T) {
 	h := &LodeHandler{}
 	h.SetSwarmConfig(config.SwarmSection{
 		Enabled: []string{"*"},
-		Payload: config.SwarmPayloadSection{Enabled: nil},
+		Swarmcast: config.SwarmcastSection{Enabled: nil},
 	})
 	ok, reason := h.payloadGate()
 	if ok {
-		t.Fatal("expected denial when swarm.payload.enabled is empty")
+		t.Fatal("expected denial when swarm.swarmcast.enabled is empty")
 	}
-	if !strings.Contains(reason, "payload subsystem") {
-		t.Errorf("reason should call out payload subsystem, got %q", reason)
+	if !strings.Contains(reason, "swarmcast subsystem") {
+		t.Errorf("reason should call out swarmcast subsystem, got %q", reason)
 	}
 }
 
@@ -91,12 +91,12 @@ func TestDistribute_GatedReturns403AndAudits(t *testing.T) {
 
 	cfg := config.SwarmSection{
 		Enabled: []string{"*"},
-		Payload: config.SwarmPayloadSection{Enabled: nil},
+		Swarmcast: config.SwarmcastSection{Enabled: nil},
 	}
 	h := newGatedHandler(t, cfg, queries)
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/swarm/payload/distribute", strings.NewReader("ignored"))
-	req.Header.Set("X-Payload-Label", "anything")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/swarm/swarmcast/distribute", strings.NewReader("ignored"))
+	req.Header.Set("X-Swarmcast-Label", "anything")
 	rec := httptest.NewRecorder()
 
 	h.Distribute(rec, req)
@@ -104,23 +104,23 @@ func TestDistribute_GatedReturns403AndAudits(t *testing.T) {
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d (body: %s)", rec.Code, rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "payload subsystem") {
+	if !strings.Contains(rec.Body.String(), "swarmcast subsystem") {
 		t.Errorf("body should explain the gate, got: %s", rec.Body.String())
 	}
 
 	// Verify the denial event hash-chained into the audit log.
-	row := sqlDB.QueryRow(`SELECT event_type, summary FROM audit_entries WHERE event_type = 'swarm.payload.denied' LIMIT 1`)
+	row := sqlDB.QueryRow(`SELECT event_type, summary FROM audit_entries WHERE event_type = 'swarm.swarmcast.denied' LIMIT 1`)
 	var eventType, summary string
 	if err := row.Scan(&eventType, &summary); err != nil {
-		t.Fatalf("expected swarm.payload.denied audit row, got error: %v", err)
+		t.Fatalf("expected swarm.swarmcast.denied audit row, got error: %v", err)
 	}
-	if !strings.Contains(summary, "payload subsystem") {
+	if !strings.Contains(summary, "swarmcast subsystem") {
 		t.Errorf("audit summary should explain the gate, got %q", summary)
 	}
 }
 
 func TestDistribute_RejectsOversizeViaMaxSizeBytes(t *testing.T) {
-	// Server-side enforcement: when swarm.payload.max_size_bytes is set
+	// Server-side enforcement: when swarm.swarmcast.max_size_bytes is set
 	// and the request exceeds it, distribute returns 413 before writing
 	// the payload to disk. Closes the bandwidth-glutton vector — a
 	// 5 GiB upload to a fleet that wanted 100 MiB caps should never
@@ -131,7 +131,7 @@ func TestDistribute_RejectsOversizeViaMaxSizeBytes(t *testing.T) {
 	h := NewLodeHandler(seedDir, nil, nil, nil, queries)
 	h.SetSwarmConfig(config.SwarmSection{
 		Enabled: []string{"*"},
-		Payload: config.SwarmPayloadSection{
+		Swarmcast: config.SwarmcastSection{
 			Enabled:      []string{"*"},
 			MaxSizeBytes: 100, // 100-byte cap for the test
 		},
@@ -139,8 +139,8 @@ func TestDistribute_RejectsOversizeViaMaxSizeBytes(t *testing.T) {
 	h.SetAuditWriter(audit.NewWriter(queries))
 
 	body := strings.Repeat("x", 200) // 200 bytes — over the 100-byte cap
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/swarm/payload/distribute", strings.NewReader(body))
-	req.Header.Set("X-Payload-Label", "oversize")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/swarm/swarmcast/distribute", strings.NewReader(body))
+	req.Header.Set("X-Swarmcast-Label", "oversize")
 	req.ContentLength = int64(len(body))
 	rec := httptest.NewRecorder()
 
@@ -155,7 +155,7 @@ func TestDistribute_RejectsOversizeViaMaxSizeBytes(t *testing.T) {
 
 func TestDistribute_PicksUpDefaultRetention(t *testing.T) {
 	// Server-side fallback: when --retention is omitted (no
-	// X-Payload-Retention header) and swarm.payload.default_retention
+	// X-Payload-Retention header) and swarm.swarmcast.default_retention
 	// is set, the manifest should record the configured default.
 	// Compile-time fallback is "7d" — this test pins a non-default to
 	// prove the config value is being read, not the constant.
@@ -165,7 +165,7 @@ func TestDistribute_PicksUpDefaultRetention(t *testing.T) {
 	h := NewLodeHandler(seedDir, nil, nil, nil, queries)
 	h.SetSwarmConfig(config.SwarmSection{
 		Enabled: []string{"*"},
-		Payload: config.SwarmPayloadSection{
+		Swarmcast: config.SwarmcastSection{
 			Enabled:          []string{"*"},
 			DefaultRetention: "30d",
 		},
@@ -173,8 +173,8 @@ func TestDistribute_PicksUpDefaultRetention(t *testing.T) {
 	h.SetAuditWriter(audit.NewWriter(queries))
 
 	body := "small"
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/swarm/payload/distribute", strings.NewReader(body))
-	req.Header.Set("X-Payload-Label", "ret-test")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/swarm/swarmcast/distribute", strings.NewReader(body))
+	req.Header.Set("X-Swarmcast-Label", "ret-test")
 	// Note: no X-Payload-Retention header — we want the default to fire.
 	req.ContentLength = int64(len(body))
 	rec := httptest.NewRecorder()
@@ -207,12 +207,12 @@ func TestDistribute_AllowedWhenNotGated_StillGuardsOnSeedDir(t *testing.T) {
 	h := NewLodeHandler("", nil, nil, nil, queries)
 	h.SetSwarmConfig(config.SwarmSection{
 		Enabled: []string{"*"},
-		Payload: config.SwarmPayloadSection{Enabled: []string{"*"}},
+		Swarmcast: config.SwarmcastSection{Enabled: []string{"*"}},
 	})
 	h.SetAuditWriter(audit.NewWriter(queries))
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/swarm/payload/distribute", strings.NewReader(""))
-	req.Header.Set("X-Payload-Label", "anything")
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/swarm/swarmcast/distribute", strings.NewReader(""))
+	req.Header.Set("X-Swarmcast-Label", "anything")
 	rec := httptest.NewRecorder()
 
 	h.Distribute(rec, req)

@@ -43,7 +43,7 @@ Because each hash incorporates the previous entry's hash, modifying or deleting 
 | `peer.promote` | Peer promoted to primary | "peer2 promoted" |
 | `swarm.enabled` | Substrate-level pattern list changed at config publish | "added: \*; removed: -rasp1" |
 | `swarm.<sub>.enabled` | Per-subsystem (`puddle`/`gitmirror`/`filesync`/`payload`) pattern list changed at config publish | "added: annlap, plex; removed: \*" |
-| `swarm.payload.denied` | Admin attempted `POST /api/v1/swarm/payload/distribute` while subsystem disabled | "payload subsystem is disabled (swarm.payload.enabled: \[\])" |
+| `swarm.swarmcast.denied` | Admin attempted `POST /api/v1/swarm/swarmcast/distribute` while subsystem disabled | "swarmcast subsystem is disabled (swarm.swarmcast.enabled: \[\])" |
 
 The audit trail is always on. There is no configuration to disable it.
 

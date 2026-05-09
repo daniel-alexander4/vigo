@@ -26,7 +26,7 @@
 
 <div class="card mt-2">
     <h2 style="margin:0 0 16px;">Content Subsystems</h2>
-    <p style="color:var(--subtext0);margin-bottom:12px;">Active payloads by subsystem, counted server-side from the manifest CRDT. Filesync and Cryptsync are per-user content and don't surface as payload counts here — use their dedicated pages for user-level detail.</p>
+    <p style="color:var(--subtext0);margin-bottom:12px;">Active blobs by subsystem, counted server-side from the manifest CRDT. Filesync and Cryptsync are per-user content and don't surface as payload counts here — use their dedicated pages for user-level detail.</p>
     <div class="table-container">
         <table class="table">
             <thead>
@@ -38,9 +38,9 @@
             </thead>
             <tbody>
                 <tr>
-                    <td><strong>Payload</strong> <span style="color:var(--subtext0);">— admin-pushed payloads</span></td>
+                    <td><strong>Payload</strong> <span style="color:var(--subtext0);">— admin-pushed swarmcasts</span></td>
                     <td>{{.Status.Payloads.Payload}}</td>
-                    <td><a href="/swarm/payload">/payload</a></td>
+                    <td><a href="/swarm/swarmcast">/swarmcast</a></td>
                 </tr>
                 <tr>
                     <td><strong>Gitmirror</strong> <span style="color:var(--subtext0);">— personal-DR repo mirrors</span></td>

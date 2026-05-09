@@ -149,6 +149,6 @@ vigocli swarm gitmirror list --json | jq '.[] | select(.divergent_refs | length 
 
 - [`vigo swarm gitmirror`](agent-swarm-gitmirror.md) — envoy-local verb tree (`project init / invite / join / leave / revoke / reanchor`)
 - [gitmirror trait](../traits/gitmirror.md) — the per-envoy report this command aggregates
-- [`vigocli swarm payload`](swarm-payload.md) — admin-pushed payload distribution on the swarm substrate
+- [`vigocli swarm swarmcast`](swarm-swarmcast.md) — admin-pushed swarmcast distribution on the swarm substrate
 - [gitmirror concepts](../../engineering/subsystems/gitmirror.md)
 - [ADR-015 — Unified gitmirror substrate](../../adr/015-unified-gitmirror-substrate.md)
