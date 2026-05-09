@@ -374,6 +374,18 @@ async fn handle_client(
         )
     })?;
     let child_pid = child.id();
+    // Defensively close the parent's copies of the dup'd stdio fds.
+    // tokio's spawn path leaks them — /proc/$daemon/fd shows stdin_fd
+    // and stdout_fd still open in the parent after spawn returns,
+    // alongside the child's own copies. Each leaked parent fd holds
+    // an extra reference to the kernel socket, delaying EOF detection
+    // on the client side once the child exits and contributing to the
+    // refs-advertisement deadlock observed in 0.41.7-9. Stdio took
+    // ownership but didn't release; we drop our last two references
+    // here. EBADF (-1) is fine — it just means tokio did close them
+    // and we're double-checking.
+    let close_in = unsafe { libc::close(stdin_fd) };
+    let close_out = unsafe { libc::close(stdout_fd) };
     tracing::info!(
         uid,
         raw_fd,
@@ -381,7 +393,9 @@ async fn handle_client(
         service = service.as_str(),
         elapsed_ms = started.elapsed().as_millis() as u64,
         spawn_ms = spawn_started.elapsed().as_millis() as u64,
-        "gitmirror helper: git child spawned"
+        close_stdin_fd = close_in,
+        close_stdout_fd = close_out,
+        "gitmirror helper: git child spawned, parent stdio fds released"
     );
     // Drain git's stderr in the background so a non-zero exit
     // surfaces with diagnostic output rather than disappearing.
