@@ -369,4 +369,61 @@ mod tests {
         assert_eq!(n, 0);
         assert!(buf.is_empty());
     }
+
+    #[test]
+    fn copy_via_buffer_empty_input() {
+        let mut src: &[u8] = b"";
+        let mut dst = Vec::new();
+        let n = copy_via_buffer(&mut src, &mut dst).unwrap();
+        assert_eq!(n, 0);
+        assert!(dst.is_empty());
+    }
+
+    #[test]
+    fn copy_via_buffer_small_payload() {
+        let mut src: &[u8] = b"hello, world";
+        let mut dst = Vec::new();
+        let n = copy_via_buffer(&mut src, &mut dst).unwrap();
+        assert_eq!(n, 12);
+        assert_eq!(&dst, b"hello, world");
+    }
+
+    #[test]
+    fn copy_via_buffer_large_payload_crosses_buffer_boundary() {
+        // 50KB payload — forces multiple read iterations through the
+        // 16KB internal buffer.
+        let payload: Vec<u8> = (0..50_000).map(|i| (i % 251) as u8).collect();
+        let mut src = payload.as_slice();
+        let mut dst = Vec::new();
+        let n = copy_via_buffer(&mut src, &mut dst).unwrap();
+        assert_eq!(n, 50_000);
+        assert_eq!(dst, payload);
+    }
+
+    #[test]
+    fn copy_via_buffer_retries_on_interrupted() {
+        // Reader that returns Interrupted on the first call, then EOF.
+        // copy_via_buffer must retry rather than propagate the error.
+        struct InterruptOnce {
+            yielded: bool,
+        }
+        impl std::io::Read for InterruptOnce {
+            fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
+                if !self.yielded {
+                    self.yielded = true;
+                    Err(std::io::Error::new(
+                        std::io::ErrorKind::Interrupted,
+                        "test",
+                    ))
+                } else {
+                    Ok(0)
+                }
+            }
+        }
+        let mut src = InterruptOnce { yielded: false };
+        let mut dst = Vec::new();
+        let n = copy_via_buffer(&mut src, &mut dst).unwrap();
+        assert_eq!(n, 0);
+        assert!(dst.is_empty());
+    }
 }
