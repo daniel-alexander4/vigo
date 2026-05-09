@@ -15,6 +15,7 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleetpressure"
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/traits"
 	"git.alexander4.io/vigo/ui"
@@ -954,6 +955,41 @@ func parseInt64(s string) int64 {
 		}
 	}
 	return n
+}
+
+// FleetPressure aggregates per-envoy `agent_self.*` / `host_self.*`
+// telemetry into the dashboard rollup. Revoked envoys are skipped —
+// they're not contributing to the live fleet's pressure picture.
+func (ds *DataSource) FleetPressure() fleetpressure.FleetSummary {
+	envoys := ds.fleet.AllEnvoys()
+	sources := make([]fleetpressure.EnvoySource, 0, len(envoys))
+	for _, ts := range envoys {
+		if ts.Revoked {
+			continue
+		}
+		sources = append(sources, fleetpressure.EnvoySource{
+			ID:       ts.ID,
+			Hostname: ts.Hostname,
+			Traits:   ts.Traits,
+		})
+	}
+	return fleetpressure.Aggregate(sources)
+}
+
+// EnvoyPressure projects one envoy's flattened traits into the
+// per-envoy "Agent footprint" data shape. Returns zero + false when
+// the envoy is unknown to the in-memory index (race during
+// enrollment, or stale URL).
+func (ds *DataSource) EnvoyPressure(envoyID string) (fleetpressure.EnvoyPressure, bool) {
+	ts, ok, _ := ds.fleet.GetEnvoyLite(envoyID)
+	if !ok {
+		return fleetpressure.EnvoyPressure{}, false
+	}
+	return fleetpressure.Compute(fleetpressure.EnvoySource{
+		ID:       ts.ID,
+		Hostname: ts.Hostname,
+		Traits:   ts.Traits,
+	}), true
 }
 
 // SecurityScanTraits returns the flattened security_scan.* traits for a single envoy.

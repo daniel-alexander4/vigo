@@ -35,6 +35,7 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleetpressure"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/risk"
@@ -77,6 +78,14 @@ type DataSource interface {
 	// no cert_lifecycle trait rows matching the filter.
 	EnvoyCertDetails(envoyID, bucket string) ([]CertDetail, string, bool)
 	RunningCVESummary() RunningCVESummary
+	// FleetPressure rolls up per-envoy `agent_self.*` / `host_self.*`
+	// telemetry into the dashboard "Agent Pressure" card via the
+	// fleetpressure SoT package.
+	FleetPressure() fleetpressure.FleetSummary
+	// EnvoyPressure returns the per-envoy projection used by the
+	// envoy-detail "Agent footprint" tab. Bool is false when the
+	// envoy is unknown to the fleet index.
+	EnvoyPressure(envoyID string) (fleetpressure.EnvoyPressure, bool)
 }
 
 // RunningCVESummary aggregates `cve_running_correlation.summary.*`
@@ -539,6 +548,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /envoys/{id}/trace", h.EnvoyTrace)
 	mux.HandleFunc("GET /envoys/{id}/trace/viz", h.EnvoyTraceViz)
 	mux.HandleFunc("GET /ui/fragments/envoy-swarm-load/{id}", h.EnvoySwarmLoadFragment)
+	mux.HandleFunc("GET /ui/fragments/envoy-footprint/{id}", h.EnvoyFootprintFragment)
+	mux.HandleFunc("GET /ui/fragments/dashboard-pressure", h.DashboardPressureFragment)
 	mux.HandleFunc("GET /ui/api/envoys/{id}/security", h.EnvoySecurityTraits)
 	mux.HandleFunc("GET /ui/fragments/security-envoy/{id}", h.SecurityEnvoyFragment)
 	mux.HandleFunc("GET /runs", h.Runs)
@@ -6063,6 +6074,15 @@ func (ds *dbDataSource) RunningCVESummary() RunningCVESummary {
 	// Same reason as CertExpirySummary — trait aggregation lives on
 	// the Fleet DataSource.
 	return RunningCVESummary{}
+}
+
+func (ds *dbDataSource) FleetPressure() fleetpressure.FleetSummary {
+	// Trait aggregation lives on the Fleet DataSource.
+	return fleetpressure.FleetSummary{}
+}
+
+func (ds *dbDataSource) EnvoyPressure(_ string) (fleetpressure.EnvoyPressure, bool) {
+	return fleetpressure.EnvoyPressure{}, false
 }
 
 // --- Task and Workflow page types ---

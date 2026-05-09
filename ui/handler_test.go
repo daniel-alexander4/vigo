@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"git.alexander4.io/vigo/server/fleetpressure"
 )
 
 func TestDashboardHandler(t *testing.T) {
@@ -258,6 +260,151 @@ func TestEnvoyDetailHandler(t *testing.T) {
 	if !strings.Contains(body, "traits") {
 		t.Error("EnvoyDetail page missing traits panel")
 	}
+}
+
+func TestEnvoyFootprintFragmentRendersWhenPresent(t *testing.T) {
+	h := newTestHandler(t)
+	envoyID := h.dataSource.(*mockDataSource).data.envoys[0].id
+
+	// Override the mock so EnvoyPressure returns populated values —
+	// the fragment must render the warn/fail rows and the field
+	// labels. The default mock returns ok=false; this exercises the
+	// real branch.
+	h.dataSource = &footprintMock{base: h.dataSource}
+
+	req := httptest.NewRequest(http.MethodGet, "/ui/fragments/envoy-footprint/"+envoyID.String(), nil)
+	req.SetPathValue("id", envoyID.String())
+	rec := httptest.NewRecorder()
+
+	h.EnvoyFootprintFragment(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("EnvoyFootprintFragment returned %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"Open file descriptors",
+		"Host FD usage",
+		"Recent oom-killer",
+		"Resident memory",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("EnvoyFootprintFragment body missing %q", want)
+		}
+	}
+}
+
+func TestEnvoyFootprintFragmentEmptyState(t *testing.T) {
+	h := newTestHandler(t)
+	envoyID := h.dataSource.(*mockDataSource).data.envoys[0].id
+
+	req := httptest.NewRequest(http.MethodGet, "/ui/fragments/envoy-footprint/"+envoyID.String(), nil)
+	req.SetPathValue("id", envoyID.String())
+	rec := httptest.NewRecorder()
+
+	h.EnvoyFootprintFragment(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("EnvoyFootprintFragment returned %d, want %d", rec.Code, http.StatusOK)
+	}
+	if !strings.Contains(rec.Body.String(), "No agent or host telemetry yet") {
+		t.Errorf("expected empty-state message when EnvoyPressure returns ok=false; got: %s", rec.Body.String())
+	}
+}
+
+func TestDashboardPressureFragmentRenders(t *testing.T) {
+	h := newTestHandler(t)
+	req := httptest.NewRequest(http.MethodGet, "/ui/fragments/dashboard-pressure", nil)
+	rec := httptest.NewRecorder()
+
+	h.DashboardPressureFragment(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("DashboardPressureFragment returned %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "Agent Pressure") {
+		t.Errorf("dashboard pressure card missing title; body: %s", body)
+	}
+}
+
+// footprintMock wraps the default mock and overrides only the
+// EnvoyPressure call so the populated-render path can be exercised.
+type footprintMock struct {
+	base DataSource
+}
+
+func (m *footprintMock) DashboardData(d time.Duration) DashboardPageData {
+	return m.base.DashboardData(d)
+}
+func (m *footprintMock) ConvergenceData(d time.Duration) ConvergencePageData {
+	return m.base.ConvergenceData(d)
+}
+func (m *footprintMock) DashboardStatsData(d time.Duration) DashboardStatsFragmentData {
+	return m.base.DashboardStatsData(d)
+}
+func (m *footprintMock) EnvoysData(d time.Duration, s, a string, l int, q string) EnvoysPageData {
+	return m.base.EnvoysData(d, s, a, l, q)
+}
+func (m *footprintMock) EnvoyDetailData(id string, d time.Duration) (EnvoyDetailPageData, error) {
+	return m.base.EnvoyDetailData(id, d)
+}
+func (m *footprintMock) EnvoyRunsData(id string) (EnvoyRunsFragmentData, error) {
+	return m.base.EnvoyRunsData(id)
+}
+func (m *footprintMock) EnvoyTraitsData(id string) (EnvoyTraitsFragmentData, error) {
+	return m.base.EnvoyTraitsData(id)
+}
+func (m *footprintMock) RunsData(s string) RunsPageData          { return m.base.RunsData(s) }
+func (m *footprintMock) RunDetailData(id string) (RunDetailPageData, error) {
+	return m.base.RunDetailData(id)
+}
+func (m *footprintMock) ConfigData(h string) (ConfigPageData, error) { return m.base.ConfigData(h) }
+func (m *footprintMock) PlanDetailData(id string) (PlanDetailPageData, error) {
+	return m.base.PlanDetailData(id)
+}
+func (m *footprintMock) SecurityScanData() SecurityScanPageData { return m.base.SecurityScanData() }
+func (m *footprintMock) SecurityScanTraits(id string) (map[string]string, bool) {
+	return m.base.SecurityScanTraits(id)
+}
+func (m *footprintMock) SecurityScanContext(id string) (string, map[string]string, bool) {
+	return m.base.SecurityScanContext(id)
+}
+func (m *footprintMock) RiskData(d time.Duration) RiskSummaryData { return m.base.RiskData(d) }
+func (m *footprintMock) RiskPostureData(d time.Duration) RiskPosturePageData {
+	return m.base.RiskPostureData(d)
+}
+func (m *footprintMock) CertExpirySummary() CertExpirySummary { return m.base.CertExpirySummary() }
+func (m *footprintMock) EnvoyCertDetails(id, b string) ([]CertDetail, string, bool) {
+	return m.base.EnvoyCertDetails(id, b)
+}
+func (m *footprintMock) RunningCVESummary() RunningCVESummary { return m.base.RunningCVESummary() }
+func (m *footprintMock) FleetPressure() fleetpressure.FleetSummary {
+	return fleetpressure.FleetSummary{
+		MaxOpenFDs:         640,
+		MaxOpenFDsHost:     "alpha.example.com",
+		MaxOpenFDsID:       "00000000-0000-0000-0000-000000000001",
+		MaxOpenFDsSeverity: fleetpressure.Fail,
+		HighFDPctCount:     2,
+		HighFDPctExample:   "bravo.example.com",
+		RecentOomCount:     0,
+		TotalReporting:     5,
+	}
+}
+func (m *footprintMock) EnvoyPressure(_ string) (fleetpressure.EnvoyPressure, bool) {
+	return fleetpressure.EnvoyPressure{
+		ID:       "00000000-0000-0000-0000-000000000001",
+		Hostname: "alpha.example.com",
+		RSSBytes:          fleetpressure.Metric{Value: 64 * 1024 * 1024, Present: true, Severity: fleetpressure.OK},
+		OpenFDs:           fleetpressure.Metric{Value: 640, Present: true, Severity: fleetpressure.Fail},
+		Threads:           fleetpressure.Metric{Value: 12, Present: true, Severity: fleetpressure.OK},
+		Descendants:       fleetpressure.Metric{Value: 1, Present: true, Severity: fleetpressure.OK},
+		DescendantOpenFDs: fleetpressure.Metric{Value: 50, Present: true, Severity: fleetpressure.OK},
+		UptimeSecs:        fleetpressure.Metric{Value: 86400, Present: true, Severity: fleetpressure.OK},
+		FDUsed:            fleetpressure.Metric{Value: 8192, Present: true, Severity: fleetpressure.OK},
+		FDMax:             fleetpressure.Metric{Value: 32768, Present: true, Severity: fleetpressure.OK},
+		FDPct:             fleetpressure.PercentMetric{Value: 25.0, Present: true, Severity: fleetpressure.OK},
+		ProcCount:         fleetpressure.Metric{Value: 200, Present: true, Severity: fleetpressure.OK},
+		OomRecent:         fleetpressure.Metric{Value: 0, Present: true, Severity: fleetpressure.OK},
+		Overall:           fleetpressure.Fail,
+	}, true
 }
 
 func TestEnvoyDetailHandler404(t *testing.T) {
@@ -1024,6 +1171,14 @@ func (m *mockDataSource) CertExpirySummary() CertExpirySummary {
 
 func (m *mockDataSource) RunningCVESummary() RunningCVESummary {
 	return RunningCVESummary{}
+}
+
+func (m *mockDataSource) FleetPressure() fleetpressure.FleetSummary {
+	return fleetpressure.FleetSummary{}
+}
+
+func (m *mockDataSource) EnvoyPressure(_ string) (fleetpressure.EnvoyPressure, bool) {
+	return fleetpressure.EnvoyPressure{}, false
 }
 
 // actionColor maps a plan action to a badge CSS class.

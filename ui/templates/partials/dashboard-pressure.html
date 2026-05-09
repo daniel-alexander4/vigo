@@ -1,0 +1,25 @@
+{{define "dashboard-pressure"}}
+{{$p := .Pressure}}
+<div class="dash-columns">
+    <a class="dash-column dash-column--link" {{if $p.MaxOpenFDsID}}href="/envoys/{{$p.MaxOpenFDsID}}#footprint"{{else}}href="/envoys"{{end}} aria-label="Agent and host pressure summary — open the worst-offender envoy's Agent Footprint tab">
+        <h3 class="dash-column__title">Agent Pressure</h3>
+        <div class="stat-cards">
+            {{if $p.MaxOpenFDsHost}}
+                {{template "stat-card" dict "Value" $p.MaxOpenFDs "Label" (printf "Max FDs (%s)" $p.MaxOpenFDsHost) "Color" (severityColor $p.MaxOpenFDsSeverity) "Tooltip" "Highest agent_self.open_fds across the fleet — click to drill into the offender's Agent Footprint tab"}}
+            {{else}}
+                {{template "stat-card" dict "Value" "—" "Label" "Max FDs" "Color" "brand" "Tooltip" "No envoys have reported agent_self.open_fds yet"}}
+            {{end}}
+            {{if gt $p.HighFDPctCount 0}}
+                {{template "stat-card" dict "Value" $p.HighFDPctCount "Label" (printf "Hosts ≥50%% FDs (%s)" $p.HighFDPctExample) "Color" "warning" "Tooltip" "Hosts where host_self.fd_pct exceeded 50% — first-seen example shown"}}
+            {{else}}
+                {{template "stat-card" dict "Value" 0 "Label" "Hosts ≥50% FDs" "Color" "success" "Tooltip" "No host above the 50% kernel-FD warning threshold"}}
+            {{end}}
+            {{if gt $p.RecentOomCount 0}}
+                {{template "stat-card" dict "Value" $p.RecentOomCount "Label" (printf "Recent OOMs (%s)" $p.RecentOomExample) "Color" "danger" "Tooltip" "Hosts with kernel oom-killer activity in the recent kern.log window"}}
+            {{else}}
+                {{template "stat-card" dict "Value" 0 "Label" "Recent OOMs" "Color" "success" "Tooltip" "No oom-killer activity reported by any envoy this window"}}
+            {{end}}
+        </div>
+    </a>
+</div>
+{{end}}

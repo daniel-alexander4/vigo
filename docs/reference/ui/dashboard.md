@@ -41,6 +41,7 @@ Hover lifts the card with a subtle shadow.
 | **Security Posture** | `/security` | Unique CVEs, Certs ≤30d (color-tiered by urgency), rootkit warnings, running CVEs. |
 | **Standards Compliance** | `/compliance` | Partial + Not Met control counts with a combined coverage card at the bottom showing the percent headline with an "X of Y covered" label. 30-day coverage % sparkline (fixed 0–100 axis). |
 | **Risk Posture** | `/risk` | Avg risk score, critical / high / medium counts. |
+| **Agent Pressure** | `/envoys/{worst}#footprint` | Highest `agent_self.open_fds` across the fleet (with offender hostname), count of hosts above the 50% kernel-FD threshold, and count of hosts with recent oom-killer activity. Drills to the offender's Agent Footprint tab. Loaded from a separate fragment (`/ui/fragments/dashboard-pressure`) — same poll cadence as the main stats grid. See [`envoy-footprint.md`](envoy-footprint.md) for the per-envoy detail view. |
 
 ### Onboarding Card
 
@@ -75,6 +76,10 @@ Auto-refreshes every 60s.
   frameworks per snapshot date
 - Stat cards also enriched with: SecurityScanData, ComplianceIndex, RiskData,
   CertExpirySummary (for the Certs ≤30d card)
+- Agent Pressure card: `server/fleetpressure.Aggregate` — flattened per-envoy
+  `agent_self.*` and `host_self.*` traits, walked once per fragment request.
+  Same SoT package backs the per-envoy Agent Footprint tab so the rollup
+  numbers and the per-row values can never disagree.
 
 ## Auto-Refresh
 

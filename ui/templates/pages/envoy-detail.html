@@ -51,6 +51,11 @@
             hx-target="#envoy-content"
             hx-swap="innerHTML"
             onclick="setActiveTab(this)">Swarm</button>
+    <button class="btn btn--sm" id="tab-footprint"
+            hx-get="/ui/fragments/envoy-footprint/{{.Envoy.ID}}"
+            hx-target="#envoy-content"
+            hx-swap="innerHTML"
+            onclick="setActiveTab(this)">Agent Footprint</button>
     {{if .ScrierEnabled}}
     <button class="btn btn--sm" id="tab-sessions"
             hx-get="/ui/fragments/envoy-sessions/{{.Envoy.ID}}"
@@ -447,4 +452,77 @@
     <p style="color:var(--subtext0);">Nothing on this envoy.</p>
     {{end}}
 </div>
+{{end}}
+
+{{define "envoy-footprint-fragment"}}
+{{$p := .Pressure}}
+<div class="mt-1">
+    <p>Resource footprint of the agent process and pressure on the host. Yellow values are warnings; red values are above the failure threshold. Values flow from the <code>agent_self.*</code> and <code>host_self.*</code> traits the agent emits every check-in.</p>
+</div>
+
+{{if not .HasData}}
+<div class="card mt-2">
+    <p style="color:var(--subtext0);margin:0;">No agent or host telemetry yet — the agent has not reported a check-in for this envoy. Footprint values will appear once the next check-in lands.</p>
+</div>
+{{else}}
+
+<div class="card mt-2">
+    <h2 style="margin:0 0 4px;">Agent Process</h2>
+    <p style="color:var(--subtext0);margin:0 0 12px;">From <code>/proc/self/{status,fd}</code> on Linux; <code>ps</code> fallback on macOS. Sourced from the <code>agent_self</code> trait collector.</p>
+    <div class="table-container">
+        <table class="table">
+            <tbody>
+                <tr>
+                    <td style="width:40%;">Resident memory (RSS)</td>
+                    <td class="mono"><span class="text-{{severityColor $p.RSSBytes.Severity}}">{{humanRSS $p.RSSBytes}}</span></td>
+                </tr>
+                <tr>
+                    <td>Open file descriptors</td>
+                    <td class="mono"><span class="text-{{severityColor $p.OpenFDs.Severity}}">{{humanMetric $p.OpenFDs}}</span> <span class="text-muted">(warn &gt; 250, fail &gt; 500)</span></td>
+                </tr>
+                <tr>
+                    <td>Threads</td>
+                    <td class="mono">{{humanMetric $p.Threads}}</td>
+                </tr>
+                <tr>
+                    <td>Live descendants (child processes)</td>
+                    <td class="mono">{{humanMetric $p.Descendants}}</td>
+                </tr>
+                <tr>
+                    <td>Open FDs across descendants</td>
+                    <td class="mono"><span class="text-{{severityColor $p.DescendantOpenFDs.Severity}}">{{humanMetric $p.DescendantOpenFDs}}</span> <span class="text-muted">(warn &gt; 200, fail &gt; 500)</span></td>
+                </tr>
+                <tr>
+                    <td>Agent uptime</td>
+                    <td class="mono">{{humanUptime $p.UptimeSecs}}</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card mt-2">
+    <h2 style="margin:0 0 4px;">Host Pressure</h2>
+    <p style="color:var(--subtext0);margin:0 0 12px;">Kernel-wide file descriptor and process counts plus oom-killer activity. Sourced from the <code>host_self</code> trait collector (Linux only).</p>
+    <div class="table-container">
+        <table class="table">
+            <tbody>
+                <tr>
+                    <td style="width:40%;">Host FD usage</td>
+                    <td class="mono"><span class="text-{{severityColor $p.FDPct.Severity}}">{{humanFDPct $p.FDPct}}</span> <span class="text-muted">{{if $p.FDUsed.Present}}({{$p.FDUsed.Value}} / {{if $p.FDMax.Present}}{{$p.FDMax.Value}}{{else}}?{{end}}){{end}} (warn &gt; 50%, fail &gt; 80%)</span></td>
+                </tr>
+                <tr>
+                    <td>Total processes on host</td>
+                    <td class="mono">{{humanMetric $p.ProcCount}}</td>
+                </tr>
+                <tr>
+                    <td>Recent oom-killer events (kern.log window)</td>
+                    <td class="mono"><span class="text-{{severityColor $p.OomRecent.Severity}}">{{humanMetric $p.OomRecent}}</span></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{{end}}
 {{end}}

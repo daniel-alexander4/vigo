@@ -17,6 +17,7 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/cve"
+	"git.alexander4.io/vigo/server/fleetpressure"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/risk"
 
@@ -426,6 +427,66 @@ func funcMap() template.FuncMap {
 		// ("1.6 KiB", "12.1 MiB"). Mirrors ui/payload.go::humanSize for
 		// template-only call sites that can't reuse the Go helper.
 		"humanBytes": humanSize,
+		// severityColor maps a fleetpressure.Severity to the existing
+		// stat-card-- color modifier so the dashboard "Agent Pressure"
+		// rollup uses the same palette as the rest of the dashboard.
+		"severityColor": func(s fleetpressure.Severity) string {
+			switch s {
+			case fleetpressure.Fail:
+				return "danger"
+			case fleetpressure.Warn:
+				return "warning"
+			case fleetpressure.OK:
+				return "success"
+			default:
+				return "brand"
+			}
+		},
+		// humanFDPct renders a host_self.fd_pct float with one decimal
+		// or "—" for the unset case. Templates can't easily distinguish
+		// PercentMetric.Present from a real zero, so this helper
+		// branches and formats in one go.
+		"humanFDPct": func(p fleetpressure.PercentMetric) string {
+			if !p.Present {
+				return "—"
+			}
+			return fmt.Sprintf("%.1f%%", p.Value)
+		},
+		// humanMetric renders a fleetpressure.Metric value or "—"
+		// when absent. Centralizes the missing-trait dash so every
+		// row in the agent-footprint table renders consistently.
+		"humanMetric": func(m fleetpressure.Metric) string {
+			if !m.Present {
+				return "—"
+			}
+			return fmt.Sprintf("%d", m.Value)
+		},
+		// humanRSS renders a byte count compactly when present, else "—".
+		"humanRSS": func(m fleetpressure.Metric) string {
+			if !m.Present {
+				return "—"
+			}
+			return humanSize(int64(m.Value))
+		},
+		// humanUptime renders an uptime in seconds as days/hours/minutes
+		// or "—" when the trait is missing. Uses the largest unit so an
+		// envoy that's been up two days reads "2d", not "172800s".
+		"humanUptime": func(m fleetpressure.Metric) string {
+			if !m.Present {
+				return "—"
+			}
+			s := m.Value
+			switch {
+			case s < 60:
+				return fmt.Sprintf("%ds", s)
+			case s < 3600:
+				return fmt.Sprintf("%dm", s/60)
+			case s < 86400:
+				return fmt.Sprintf("%dh", s/3600)
+			default:
+				return fmt.Sprintf("%dd", s/86400)
+			}
+		},
 	}
 }
 

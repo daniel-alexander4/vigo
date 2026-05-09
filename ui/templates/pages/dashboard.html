@@ -66,6 +66,14 @@
     {{template "dashboard-stats" .}}
 </div>
 
+<div id="pressure"
+     hx-get="/ui/fragments/dashboard-pressure"
+     hx-trigger="load, every {{.PollInterval}}"
+     hx-swap="innerHTML"
+     aria-live="polite">
+    <div class="dash-columns"><div class="dash-column"><h3 class="dash-column__title">Agent Pressure</h3><p style="color:var(--subtext0);">Loading…</p></div></div>
+</div>
+
 {{template "dashboard-fleet" .}}
 {{template "dashboard-activity" .}}
 {{end}}
