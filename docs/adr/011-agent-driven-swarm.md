@@ -42,7 +42,7 @@ Shift the swarm architecture from "server routes, agents download" to "server se
 ## Consequences
 
 - The server's check-in handler is simpler — no more `collectSwarmAssignments()`, `PopAssignments()`, or per-envoy peer list construction.
-- `vigocli swarm swarmcast status` no longer shows a "pending" state (there are no server-side assignments). Envoys are either complete, downloading, or skipped. After a revoke, complete/downloading envoys transition to `revoking` (seed revoked, envoy still has the payload) and then to `revoked` (envoy's trait report confirms eviction) — see [payload CLI reference](../reference/cli/swarm-swarmcast.md) for the full state machine.
+- `vigocli swarm swarmcast status` no longer shows a "pending" state (there are no server-side assignments). Envoys are either complete, downloading, or skipped. After a revoke, complete/downloading envoys transition to `revoking` (seed revoked, envoy still has the payload) and then to `revoked` (envoy's trait report confirms eviction) — see [swarmcast CLI reference](../reference/cli/swarm-swarmcast.md) for the full state machine.
 - The `SwarmAssignment`, `SwarmPeer`, and `CheckInResponse.swarm_assignments` proto types were removed entirely. The agent's internal download pipeline now takes `BlobEntry` from the manifest directly.
 - The `record_retention` silent disk leak (blobs with retention deadlines never being recorded because the feeder channel had been emptied) was fixed: the swarm manager now records retention on download completion and on the cache-hit path.
 - Longdrawer was redesigned as a standalone LAN-only P2P subsystem that does not touch the server at all. See [Longdrawer](../engineering/subsystems/longdrawer.md).

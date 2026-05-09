@@ -47,9 +47,9 @@ A managed node running the `vigo` Rust agent. Each envoy enrolls once, receives 
 
 The Rust implementation of a resource type in the agent (`file`, `package`, `service`, `user`, `cron`, etc.). Executors check current state, act only on drift (idempotent), and return one of `None`/`Created`/`Updated`/`Deleted`/`Skipped`/`Blocked`. See the [Executor Reference](executors/_index.md).
 
-## payload
+## swarmcast
 
-Administrator-pushed file distribution on top of the [swarm](#swarm) substrate. An operator runs `vigocli swarm distribute <file>` (or drops a payload + `.swarm` sidecar on a seeder) and the blob replicates across the fleet via swarm's peer channel. Payload is one of four content subsystems that ride swarm; the other three ([longdrawer](#longdrawer), [swarmgit](#swarmgit), [lockbox](#lockbox)) are user-scoped, while payload is operator-scoped and fleet-wide. Surfaced in the web UI at [`/payload`](ui/swarm-swarmcast.md). The CLI verb still reads `vigocli swarm …` because it predates the name split.
+Administrator-pushed file distribution on top of the [swarm](#swarm) substrate. An operator runs `vigocli swarm swarmcast distribute <file>` (or drops a file + `.swarm` sidecar on a seeder) and the blob replicates across the fleet via swarm's peer channel. Swarmcast is one of four content subsystems that ride swarm; the other three ([longdrawer](#longdrawer), [swarmgit](#swarmgit), [lockbox](#lockbox)) are user-scoped, while swarmcast is operator-scoped and fleet-wide. Surfaced in the web UI at [`/swarm/swarmcast`](ui/swarm-swarmcast.md).
 
 ## manifest
 

@@ -20,7 +20,7 @@ A grossly unbalanced row (e.g. Swarmgit at 40 GB while the others sit at tens of
 
 Each section renders the same five-column table (Name / Size / Status / Progress / When), biggest first. The **Name** column is user-friendly — real filenames and filesystem paths, never internal labels or sha256 hashes.
 
-### Payload
+### Swarmcast
 
 Swarm blobs cached on this envoy. Covers both admin-distributed swarmcasts (`vigocli swarm distribute`) and cached swarmgit bundle content sitting in `/var/lib/vigo/swarm/.blobs/` before it's unpacked into a bare repo.
 
