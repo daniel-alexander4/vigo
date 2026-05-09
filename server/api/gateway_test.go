@@ -38,7 +38,7 @@ func TestMaxBodyMiddleware_SmallBody(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	if rec.Body.Len() != 100 {
-		t.Fatalf("expected 100-byte filesync, got %d bytes", rec.Body.Len())
+		t.Fatalf("expected 100-byte longdrawer, got %d bytes", rec.Body.Len())
 	}
 }
 
@@ -55,7 +55,7 @@ func TestMaxBodyMiddleware_ExactLimit(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 	if rec.Body.Len() != maxRequestBodySize {
-		t.Fatalf("expected %d-byte filesync, got %d bytes", maxRequestBodySize, rec.Body.Len())
+		t.Fatalf("expected %d-byte longdrawer, got %d bytes", maxRequestBodySize, rec.Body.Len())
 	}
 }
 
@@ -70,7 +70,7 @@ func TestMaxBodyMiddleware_OversizedBody(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	// The handler calls io.ReadAll which hits the MaxBytesReader limit.
-	// MaxBytesReader causes the read to fail, and our filesync handler returns 413.
+	// MaxBytesReader causes the read to fail, and our longdrawer handler returns 413.
 	if rec.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("expected 413, got %d: %s", rec.Code, rec.Body.String())
 	}

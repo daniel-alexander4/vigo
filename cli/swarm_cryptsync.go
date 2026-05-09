@@ -20,7 +20,7 @@ import (
 // joins each envoy's `cryptsync` trait into a mesh view, including
 // recipient drift and active unlock sessions.
 //
-// Mirrors the shape of `vigocli swarm gitmirror` + `vigocli swarm filesync`. No write
+// Mirrors the shape of `vigocli swarm gitmirror` + `vigocli swarm longdrawer`. No write
 // verbs — cryptsync enrollment is per-user on the envoy. Per ADR-020,
 // cryptsync is puddle-only: bootstrap auto-runs on `vigo swarm puddle
 // unlock` (which invokes `vigo swarm cryptsync puddle init` inline).
@@ -28,7 +28,7 @@ import (
 
 // cryptsyncFleet mirrors `server/cryptsyncmesh.Fleet`. Duplicated rather than
 // imported so the CLI stays decoupled from the server package
-// (matches the pattern in cli/gitmirror.go, cli/filesync.go).
+// (matches the pattern in cli/gitmirror.go, cli/longdrawer.go).
 type cryptsyncFleet struct {
 	GeneratedAt  time.Time          `json:"generated_at"`
 	Users        []cryptsyncUserSummary `json:"users"`

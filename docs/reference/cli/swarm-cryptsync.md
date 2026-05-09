@@ -109,7 +109,7 @@ Unlocked on:      danlap
 
 `SESSION` is `unlocked` (green) when the envoy is running a `vigo swarm cryptsync unlock` session for this user. Admin visibility into session state is observational only — it reports whether the session helper is present, never the unlocked key.
 
-Per-envoy states follow the same meanings as [vigocli filesync show](swarm-filesync.md#show).
+Per-envoy states follow the same meanings as [vigocli longdrawer show](swarm-longdrawer.md#show).
 
 ## Related
 

@@ -1,16 +1,16 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! HTTPS route handler for serving filesync file contents + per-user state
+//! HTTPS route handler for serving longdrawer file contents + per-user state
 //! to peer agents. Piggybacks on the swarm peer HTTPS server on port 1531
 //! — the peer is already mTLS-authenticated by the swarm server, so any
 //! agent that reached us is trusted.
 //!
 //! Routes:
-//!   `GET /swarm/filesync/state/{user}`    → full `UserState` JSON (pulled on
+//!   `GET /swarm/longdrawer/state/{user}`    → full `UserState` JSON (pulled on
 //!                                 digest-mismatch from the 0.30.11+
 //!                                 digest-only multicast announcement)
-//!   `GET /swarm/filesync/{user}/{filename}` → raw file bytes
+//!   `GET /swarm/longdrawer/{user}/{filename}` → raw file bytes
 
 use http_body_util::Full;
 use hyper::body::Bytes;
@@ -20,10 +20,10 @@ use std::fs;
 use super::applier::valid_filename;
 use super::scanner::effective_max_file_size;
 use super::state::UserState;
-use crate::platform::paths::default_filesync_dir;
+use crate::platform::paths::default_longdrawer_dir;
 use crate::platform::users::user_home;
 
-/// Handle a `/swarm/filesync/...` request. Returns 404 for missing files,
+/// Handle a `/swarm/longdrawer/...` request. Returns 404 for missing files,
 /// 400 for malformed paths, 413 for oversize files, 200 with raw bytes or
 /// JSON.
 pub fn handle(path: &str) -> Response<Full<Bytes>> {
@@ -31,12 +31,12 @@ pub fn handle(path: &str) -> Response<Full<Bytes>> {
     // Per-user state pull. Receivers call this on digest mismatch to
     // catch up; the announcement only carried the digest so we never
     // leaked file metadata to the LAN.
-    if let ["swarm", "filesync", "state", user] = segments.as_slice() {
+    if let ["swarm", "longdrawer", "state", user] = segments.as_slice() {
         return handle_state(user);
     }
-    // ["swarm", "filesync", user, filename]
+    // ["swarm", "longdrawer", user, filename]
     let (user, name) = match segments.as_slice() {
-        ["swarm", "filesync", user, name] => (*user, *name),
+        ["swarm", "longdrawer", user, name] => (*user, *name),
         _ => return not_found(),
     };
 
@@ -61,11 +61,11 @@ pub fn handle(path: &str) -> Response<Full<Bytes>> {
         Some(h) => h,
         None => return not_found(),
     };
-    let target = home.join("filesync").join(&name);
+    let target = home.join("longdrawer").join(&name);
 
-    // Belt-and-braces: ensure the resolved path is still inside ~<user>/filesync/
+    // Belt-and-braces: ensure the resolved path is still inside ~<user>/longdrawer/
     // after any symlink shenanigans. Use canonicalize and check prefix.
-    let sync_dir = home.join("filesync");
+    let sync_dir = home.join("longdrawer");
     let canon_target = match target.canonicalize() {
         Ok(p) => p,
         Err(_) => return not_found(),
@@ -88,7 +88,7 @@ pub fn handle(path: &str) -> Response<Full<Bytes>> {
     if meta.len() > effective_max_file_size() {
         return Response::builder()
             .status(StatusCode::PAYLOAD_TOO_LARGE)
-            .body(Full::new(Bytes::from("file exceeds filesync size limit")))
+            .body(Full::new(Bytes::from("file exceeds longdrawer size limit")))
             .unwrap();
     }
 
@@ -103,7 +103,7 @@ pub fn handle(path: &str) -> Response<Full<Bytes>> {
     }
 }
 
-/// Handle `GET /swarm/filesync/state/{user}` — return the full UserState JSON for
+/// Handle `GET /swarm/longdrawer/state/{user}` — return the full UserState JSON for
 /// `user` on this envoy. Called by the multicast-receiver side of a peer
 /// when the announced digest doesn't match the peer's cached value for
 /// this (user, machine) tuple.
@@ -123,7 +123,7 @@ fn handle_state(user: &str) -> Response<Full<Bytes>> {
         return not_found();
     }
 
-    let state_dir = default_filesync_dir();
+    let state_dir = default_longdrawer_dir();
     let state = UserState::load(&state_dir, &user);
     match serde_json::to_vec(&state) {
         Ok(body) => Response::builder()

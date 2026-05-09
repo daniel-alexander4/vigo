@@ -57,7 +57,7 @@
   <rect x="20" y="62" width="760" height="32" rx="12" fill="url(#swarmGrad)"/>
   <rect x="20" y="80" width="760" height="14" fill="url(#swarmGrad)"/>
   <text x="400" y="84" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">vigo swarm — peer-to-peer substrate</text>
-  <text x="36" y="113" font-size="10" fill="#4a5568">mTLS on :1531  ·  multicast peer discovery on :1532 (filesync) and :1533 (cryptsync)  ·  shared transport for all subsystems below</text>
+  <text x="36" y="113" font-size="10" fill="#4a5568">mTLS on :1531  ·  multicast peer discovery on :1532 (longdrawer) and :1533 (cryptsync)  ·  shared transport for all subsystems below</text>
 
   <!-- ===== PUDDLE (inside swarm) ===== -->
   <rect x="40" y="128" width="720" height="298" rx="10" fill="url(#puddleBodyGrad)" stroke="#3182ce" stroke-width="1.5" filter="url(#shadow)"/>
@@ -112,7 +112,7 @@
   <text x="400" y="464" text-anchor="middle" font-size="11" font-weight="700" fill="#fff">Other content subsystems — orthogonal, no puddle dependency</text>
 
   <rect x="56" y="486" width="338" height="44" rx="6" fill="#fff" stroke="#a0aec0" stroke-width="1"/>
-  <text x="68" y="502" font-size="11" font-weight="700" fill="#2d3748">filesync</text>
+  <text x="68" y="502" font-size="11" font-weight="700" fill="#2d3748">longdrawer</text>
   <text x="68" y="518" font-size="9.5" fill="#4a5568">LAN plaintext directory sync (multicast :1532).  No puddle required.</text>
 
   <rect x="406" y="486" width="338" height="44" rx="6" fill="#fff" stroke="#a0aec0" stroke-width="1"/>

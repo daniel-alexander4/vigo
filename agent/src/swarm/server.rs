@@ -227,7 +227,7 @@ async fn handle_request(
 
         // Pre-flight disk-pressure probe — senders ask "is the
         // filesystem where my push will land >10% free?" before
-        // committing bytes. Query: ?for=<swarm|cryptsync|gitmirror|filesync>[&user=...].
+        // committing bytes. Query: ?for=<swarm|cryptsync|gitmirror|longdrawer>[&user=...].
         (&Method::GET, "/health/storage") => {
             handle_health_storage(req.uri().query().unwrap_or(""))
         }
@@ -254,19 +254,19 @@ async fn handle_request(
             tokio::task::block_in_place(|| handle_blob_request(p, inm.as_deref(), state))
         }
 
-        // Filesync: serve raw file bytes from a user's ~/filesync/ directory.
-        // /filesync/{user}/{filename}
-        (&Method::GET, p) if p.starts_with("/swarm/filesync/") => {
-            tokio::task::block_in_place(|| crate::swarm::filesync::server::handle(p))
+        // Longdrawer: serve raw file bytes from a user's ~/longdrawer/ directory.
+        // /longdrawer/{user}/{filename}
+        (&Method::GET, p) if p.starts_with("/swarm/longdrawer/") => {
+            tokio::task::block_in_place(|| crate::swarm::longdrawer::server::handle(p))
         }
 
-        // Filesync cross-subnet announce. Source envoys POST their
+        // Longdrawer cross-subnet announce. Source envoys POST their
         // Announcement JSON here (configured via `cross_subnet_peers:` in
-        // `~<user>/.filesync/config.yaml`). The handler resolves the
+        // `~<user>/.longdrawer/config.yaml`). The handler resolves the
         // sender's peer address from the TCP connection and feeds the
         // announcement into the same reconciler path that multicast
-        // uses. Returns 503 if filesync isn't running on this envoy.
-        (&Method::POST, "/swarm/filesync/announce") => {
+        // uses. Returns 503 if longdrawer isn't running on this envoy.
+        (&Method::POST, "/swarm/longdrawer/announce") => {
             handle_echo_announce(req, peer_addr).await
         }
 
@@ -310,7 +310,7 @@ async fn handle_request(
         }
 
         // Cryptsync: pull ciphertext from a user's ~/cryptsync/.
-        // Symmetric with filesync's pull but under /cryptsync/pull/.
+        // Symmetric with longdrawer's pull but under /cryptsync/pull/.
         (&Method::GET, p) if p.starts_with("/swarm/cryptsync/pull/") => {
             tokio::task::block_in_place(|| crate::swarm::cryptsync::server::handle_pull(p))
         }
@@ -1228,16 +1228,16 @@ async fn handle_gitmirror_push(
     ok_json(r#"{"status":"accepted"}"#)
 }
 
-/// Handle `POST /swarm/filesync/announce` — cross-subnet unicast announcements
-/// from peers listed in a user's `~<user>/.filesync/config.yaml` →
-/// `cross_subnet_peers:`. The body is a JSON-serialized filesync Announcement.
+/// Handle `POST /swarm/longdrawer/announce` — cross-subnet unicast announcements
+/// from peers listed in a user's `~<user>/.longdrawer/config.yaml` →
+/// `cross_subnet_peers:`. The body is a JSON-serialized longdrawer Announcement.
 /// The sender's TCP peer address is used as the reconciler's peer (same
 /// model as multicast, where the UDP source IP is used), so subsequent
-/// `GET /swarm/filesync/<user>/<file>` fetches go back to the real remote host
+/// `GET /swarm/longdrawer/<user>/<file>` fetches go back to the real remote host
 /// rather than a self-reported hostname.
 ///
 /// mTLS already attests the sender at the transport layer; the
-/// authorization question here is "is filesync accepting work?" — if
+/// authorization question here is "is longdrawer accepting work?" — if
 /// the daemon hasn't spawned (no TLS certs on this envoy, for example),
 /// return 503. Otherwise feed the announcement into the reconciler path.
 async fn handle_echo_announce(
@@ -1257,19 +1257,19 @@ async fn handle_echo_announce(
     };
     let body_bytes = collected.to_bytes();
     if body_bytes.len() > MAX_ANNOUNCE_BYTES {
-        return payload_too_large("filesync announcement exceeds size limit");
+        return payload_too_large("longdrawer announcement exceeds size limit");
     }
 
-    let announcement: crate::swarm::filesync::state::Announcement =
+    let announcement: crate::swarm::longdrawer::state::Announcement =
         match serde_json::from_slice(&body_bytes) {
             Ok(a) => a,
             Err(e) => return bad_request(&format!("malformed announcement: {}", e)),
         };
 
-    if crate::swarm::filesync::submit_announcement(peer_addr, announcement) {
+    if crate::swarm::longdrawer::submit_announcement(peer_addr, announcement) {
         ok_json(r#"{"status":"accepted"}"#)
     } else {
-        service_unavailable("filesync daemon not running on this envoy")
+        service_unavailable("longdrawer daemon not running on this envoy")
     }
 }
 

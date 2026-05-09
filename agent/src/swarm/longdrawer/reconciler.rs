@@ -27,14 +27,14 @@ use super::state::{FileEntry, Tombstone, UserState};
 /// An action to perform locally as a result of reconciling with a peer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Action {
-    /// Fetch the file from the peer and write it to our ~/filesync/.
+    /// Fetch the file from the peer and write it to our ~/longdrawer/.
     Fetch {
         name: String,
         sha256: String,
         size: u64,
         mtime: i64,
     },
-    /// Delete the file from our ~/filesync/.
+    /// Delete the file from our ~/longdrawer/.
     Delete { name: String },
 }
 

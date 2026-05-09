@@ -539,8 +539,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Gitmirror.Enabled) {
 		gates["swarm_gitmirror_enabled"] = false
 	}
-	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Filesync.Enabled) {
-		gates["swarm_filesync_enabled"] = false
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Longdrawer.Enabled) {
+		gates["swarm_longdrawer_enabled"] = false
 	}
 	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Swarmcast.Enabled) {
 		gates["swarm_swarmcast_enabled"] = false
@@ -721,7 +721,7 @@ func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
 	if sc.Swarmcast.MaxSizeBytes == 0 && sc.Swarmcast.DefaultRetention == "" &&
 		sc.Cryptsync.MaxFileBytes == 0 && sc.Cryptsync.EnvelopeRetention == "" &&
 		sc.Gitmirror.MaxBundleBytes == 0 && sc.Gitmirror.EnvelopeRetention == "" &&
-		sc.Filesync.MaxFileBytes == 0 {
+		sc.Longdrawer.MaxFileBytes == 0 {
 		return nil
 	}
 	return &pb.SwarmRuntimeLimits{
@@ -731,7 +731,7 @@ func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
 		CryptsyncEnvelopeRetentionSecs: durationSecsOrZero(sc.Cryptsync.EnvelopeRetention),
 		GitmirrorMaxBundleBytes:       uint64(maxNonNeg(sc.Gitmirror.MaxBundleBytes)),
 		GitmirrorEnvelopeRetentionSecs: durationSecsOrZero(sc.Gitmirror.EnvelopeRetention),
-		FilesyncMaxFileBytes:          uint64(maxNonNeg(sc.Filesync.MaxFileBytes)),
+		LongdrawerMaxFileBytes:          uint64(maxNonNeg(sc.Longdrawer.MaxFileBytes)),
 	}
 }
 
@@ -1048,8 +1048,8 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 }
 
 
-// Filesync is an agent-side LAN-only P2P feature — the server has no role.
-// No server-side ingest function lives here. See agent/src/filesync/.
+// Longdrawer is an agent-side LAN-only P2P feature — the server has no role.
+// No server-side ingest function lives here. See agent/src/longdrawer/.
 
 // goosGoarchFromTraits extracts the agent's Go-style goos/goarch pair from
 // its reported traits JSON. Returns ("", "") if either field is missing or

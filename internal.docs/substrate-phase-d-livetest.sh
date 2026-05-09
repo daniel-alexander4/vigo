@@ -3,7 +3,7 @@
 # substrate-phase-d-livetest.sh
 #
 # Cryptsync end-to-end livetest. Companion to phase-{a,b,c} —
-# phase-c covers swarm health + payload + filesync; phase-d covers the
+# phase-c covers swarm health + payload + longdrawer; phase-d covers the
 # cryptsync-specific surface that 0.30.24 + 0.30.25 changed:
 #
 #   §1  Cryptsync encrypt perms — `vigo swarm cryptsync encrypt` on

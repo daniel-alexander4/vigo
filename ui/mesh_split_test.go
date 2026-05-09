@@ -11,18 +11,18 @@ import (
 
 	"git.alexander4.io/vigo/server/swarm/cryptsyncmesh"
 	"git.alexander4.io/vigo/server/swarm/gitmirrormesh"
-	"git.alexander4.io/vigo/server/swarm/filesyncmesh"
+	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
 )
 
 // mockMesh implements MeshSource with injectable snapshots so the
 // split-out page handlers can be exercised without standing up a
 // full aggregator + DB.
 type mockMesh struct {
-	sync  *filesyncmesh.Fleet
+	sync  *longdrawermesh.Fleet
 	crypt *cryptsyncmesh.Fleet
 }
 
-func (m *mockMesh) SyncSnapshot(ctx context.Context) (*filesyncmesh.Fleet, error) {
+func (m *mockMesh) SyncSnapshot(ctx context.Context) (*longdrawermesh.Fleet, error) {
 	return m.sync, nil
 }
 
@@ -30,7 +30,7 @@ func (m *mockMesh) CryptSnapshot(ctx context.Context) (*cryptsyncmesh.Fleet, err
 	return m.crypt, nil
 }
 
-func (m *mockMesh) EnvoyFilesyncFiles(_ context.Context, _ string) []filesyncmesh.EnvoyFile {
+func (m *mockMesh) EnvoyLongdrawerFiles(_ context.Context, _ string) []longdrawermesh.EnvoyFile {
 	return nil
 }
 
@@ -62,8 +62,8 @@ func TestMeshSplit_RBAC(t *testing.T) {
 		path    string
 		handler http.HandlerFunc
 	}{
-		{"/filesync", h.Filesync},
-		{"/ui/fragments/filesync-user/dan", h.EchoUserDrilldown},
+		{"/longdrawer", h.Longdrawer},
+		{"/ui/fragments/longdrawer-user/dan", h.EchoUserDrilldown},
 		{"/swarm/cryptsync", h.Cryptsync},
 		{"/ui/fragments/cryptsync-user/dan", h.CryptsyncUserDrilldown},
 		{"/swarm/gitmirror", h.Gitmirror},
@@ -71,7 +71,7 @@ func TestMeshSplit_RBAC(t *testing.T) {
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
 		req := viewerRequest(http.MethodGet, c.path)
-		if c.path == "/ui/fragments/filesync-user/dan" || c.path == "/ui/fragments/cryptsync-user/dan" {
+		if c.path == "/ui/fragments/longdrawer-user/dan" || c.path == "/ui/fragments/cryptsync-user/dan" {
 			req.SetPathValue("user", "dan")
 		}
 		c.handler(rec, req)
@@ -91,10 +91,10 @@ func TestMeshRedirect_PreservesMuscleMemoryURLs(t *testing.T) {
 		from string
 		to   string
 	}{
-		{"/mesh", "/filesync"},
-		{"/mesh?tab=sync", "/filesync"},
+		{"/mesh", "/longdrawer"},
+		{"/mesh?tab=sync", "/longdrawer"},
 		{"/mesh?tab=crypt", "/swarm/cryptsync"},
-		{"/mesh?tab=unknown", "/filesync"},
+		{"/mesh?tab=unknown", "/longdrawer"},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
@@ -114,16 +114,16 @@ func TestMeshRedirect_PreservesMuscleMemoryURLs(t *testing.T) {
 func TestEcho_EmptyRendersHealthy(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
-	h.mesh = &mockMesh{sync: &filesyncmesh.Fleet{}}
+	h.mesh = &mockMesh{sync: &longdrawermesh.Fleet{}}
 
 	rec := httptest.NewRecorder()
-	h.Filesync(rec, adminRequest(http.MethodGet, "/filesync"))
+	h.Longdrawer(rec, adminRequest(http.MethodGet, "/longdrawer"))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Filesync returned %d, want 200", rec.Code)
+		t.Fatalf("Longdrawer returned %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
-	if !containsAll(body, "Filesync", "health-banner--ok") {
-		t.Errorf("empty filesync should render healthy banner; body sample:\n%s", snippet(body, 1000))
+	if !containsAll(body, "Longdrawer", "health-banner--ok") {
+		t.Errorf("empty longdrawer should render healthy banner; body sample:\n%s", snippet(body, 1000))
 	}
 }
 

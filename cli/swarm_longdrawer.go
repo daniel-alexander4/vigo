@@ -14,16 +14,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Admin-side view of filesync — per-user LAN plaintext directory sync on
-// the swarm substrate. Read-only. The server plays no role in filesync
+// Admin-side view of longdrawer — per-user LAN plaintext directory sync on
+// the swarm substrate. Read-only. The server plays no role in longdrawer
 // content or discovery; this command exposes the fleet-wide aggregator
-// that joins each envoy's `filesync` trait into a mesh view.
+// that joins each envoy's `longdrawer` trait into a mesh view.
 //
 // Mirrors the shape of `vigocli swarm gitmirror` (fleet status/list/show). No
-// write verbs — filesync membership is per-user and content is driven by
-// dropping files into `~<user>/filesync/` on any envoy.
+// write verbs — longdrawer membership is per-user and content is driven by
+// dropping files into `~<user>/longdrawer/` on any envoy.
 
-// echoFleet mirrors `server/filesyncmesh.Fleet`. Duplicated rather than
+// echoFleet mirrors `server/longdrawermesh.Fleet`. Duplicated rather than
 // imported so the CLI stays decoupled from the server package
 // (matches the pattern in cli/gitmirror.go).
 type echoFleet struct {
@@ -58,24 +58,24 @@ type echoEnvoyPresence struct {
 	TombstoneCount int    `json:"tombstone_count"`
 }
 
-var filesyncCmd = &cobra.Command{
-	Use:   "filesync",
-	Short: "Fleet-wide view of filesync per-user LAN directory sync",
-	Long: `Read-only admin view of the filesync mesh across every envoy.
+var longdrawerCmd = &cobra.Command{
+	Use:   "longdrawer",
+	Short: "Fleet-wide view of longdrawer per-user LAN directory sync",
+	Long: `Read-only admin view of the longdrawer mesh across every envoy.
 
-Each envoy reports its per-user filesync state — files, revoked entries,
-and peer digest — through the 'filesync' trait on every check-in. The
+Each envoy reports its per-user longdrawer state — files, revoked entries,
+and peer digest — through the 'longdrawer' trait on every check-in. The
 server joins every envoy's report into a fleet view; this command
 renders it. One row per user.
 
-Filesync membership is per-user: users opt in by dropping files into
-~<user>/filesync/ on any envoy. There is no admin write path — this
+Longdrawer membership is per-user: users opt in by dropping files into
+~<user>/longdrawer/ on any envoy. There is no admin write path — this
 command never touches files or revocation records.`,
 }
 
 var echoStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Fleet-wide filesync totals",
+	Short: "Fleet-wide longdrawer totals",
 	Args:  cobra.NoArgs,
 	RunE:  runEchoStatus,
 }
@@ -97,8 +97,8 @@ var echoShowCmd = &cobra.Command{
 func fetchEchoFleet() (*echoFleet, error) {
 	client := newAPIClient()
 	var resp echoFleet
-	if err := client.get("/api/v1/swarm/filesync/fleet", &resp); err != nil {
-		return nil, fmt.Errorf("fetching filesync fleet: %w", err)
+	if err := client.get("/api/v1/swarm/longdrawer/fleet", &resp); err != nil {
+		return nil, fmt.Errorf("fetching longdrawer fleet: %w", err)
 	}
 	return &resp, nil
 }
@@ -113,7 +113,7 @@ func runEchoStatus(cmd *cobra.Command, _ []string) error {
 		return writeJSONPretty(fleet)
 	}
 
-	fmt.Printf("Filesync fleet — generated %s\n\n", fleet.GeneratedAt.Local().Format("2006-01-02 15:04:05"))
+	fmt.Printf("Longdrawer fleet — generated %s\n\n", fleet.GeneratedAt.Local().Format("2006-01-02 15:04:05"))
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Users"), fleet.Totals.Users)
@@ -137,7 +137,7 @@ func runEchoList(cmd *cobra.Command, _ []string) error {
 	}
 
 	if len(fleet.Users) == 0 {
-		fmt.Println("No filesync users reported by the fleet.")
+		fmt.Println("No longdrawer users reported by the fleet.")
 		return nil
 	}
 
@@ -177,7 +177,7 @@ func runEchoShow(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if match == nil {
-		return fmt.Errorf("no filesync user %q reported by the fleet", target)
+		return fmt.Errorf("no longdrawer user %q reported by the fleet", target)
 	}
 	if asJSON {
 		return writeJSONPretty(match)
@@ -241,5 +241,5 @@ func init() {
 	echoStatusCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
 	echoListCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
 	echoShowCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
-	filesyncCmd.AddCommand(echoStatusCmd, echoListCmd, echoShowCmd)
+	longdrawerCmd.AddCommand(echoStatusCmd, echoListCmd, echoShowCmd)
 }

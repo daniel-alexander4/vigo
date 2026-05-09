@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! Shared gate-evaluation helper for the four swarm content subsystems
-//! (payload, gitmirror, cryptsync, filesync).
+//! (payload, gitmirror, cryptsync, longdrawer).
 //!
 //! Every subsystem reads two bits from `PolicyBundle.vars_json`,
 //! cached in the LMDB state store on each accepted check-in:
@@ -48,7 +48,7 @@ pub enum Substrate {
     Payload,
     Gitmirror,
     Cryptsync,
-    Filesync,
+    Longdrawer,
 }
 
 impl Substrate {
@@ -60,7 +60,7 @@ impl Substrate {
             // per ADR-020. The server emits only `swarm_puddle_enabled`;
             // there is no `swarm_cryptsync_enabled` in 0.41.0+.
             Substrate::Cryptsync => "swarm_puddle_enabled",
-            Substrate::Filesync => "swarm_filesync_enabled",
+            Substrate::Longdrawer => "swarm_longdrawer_enabled",
         }
     }
 
@@ -71,7 +71,7 @@ impl Substrate {
             Substrate::Payload => "payload",
             Substrate::Gitmirror => "gitmirror",
             Substrate::Cryptsync => "cryptsync",
-            Substrate::Filesync => "filesync",
+            Substrate::Longdrawer => "longdrawer",
         }
     }
 }
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn enabled_keys_are_distinct_except_cryptsync_aliases_puddle() {
-        // Payload, Gitmirror, Filesync each have their own key.
+        // Payload, Gitmirror, Longdrawer each have their own key.
         // Cryptsync intentionally aliases the puddle key — single
         // source of truth.
         assert_ne!(
@@ -173,11 +173,11 @@ mod tests {
         );
         assert_ne!(
             Substrate::Payload.enabled_key(),
-            Substrate::Filesync.enabled_key()
+            Substrate::Longdrawer.enabled_key()
         );
         assert_ne!(
             Substrate::Gitmirror.enabled_key(),
-            Substrate::Filesync.enabled_key()
+            Substrate::Longdrawer.enabled_key()
         );
     }
 
@@ -187,7 +187,7 @@ mod tests {
             Substrate::Payload,
             Substrate::Gitmirror,
             Substrate::Cryptsync,
-            Substrate::Filesync,
+            Substrate::Longdrawer,
         ];
         for (i, a) in subs.iter().enumerate() {
             for b in &subs[i + 1..] {

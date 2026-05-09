@@ -4,7 +4,7 @@
 Swarm is the envoy-only peer-to-peer network that Vigo's content subsystems ride on. It is not itself a product feature operators push files with — it's the transport layer: peer discovery, mTLS HTTPS between envoys on port 1531, a manifest CRDT gossiped across the fleet, and content-addressed chunking. Four content subsystems reuse this substrate:
 
 - **[Payload](../../reference/glossary.md#payload)** — administrator-pushed file distribution (`vigocli swarm distribute`). Fleet-wide, operator-scoped.
-- **[Filesync](filesync.md)** — per-user plaintext home-directory sync. User-scoped, LAN-local by default.
+- **[Longdrawer](longdrawer.md)** — per-user plaintext home-directory sync. User-scoped, LAN-local by default.
 - **[Gitmirror](gitmirror.md)** — per-user source-control repo mirroring for personal disaster recovery. User-scoped.
 - **[Cryptsync](cryptsync.md)** — per-user always-encrypted home-directory sync. Ciphertext at rest, password-gated decryption.
 
@@ -183,11 +183,11 @@ swarm:
   enabled: ["*"]                          # substrate runs on these hosts
   puddle:    { enabled: ["*"] }           # cryptsync derives from this list
   gitmirror: { enabled: ["annlap", "plex", "girlslaptop"] }
-  filesync:  { enabled: ["*"] }
+  longdrawer:  { enabled: ["*"] }
   payload:   { enabled: ["*"] }
 ```
 
-The server evaluates patterns against each agent's hostname and emits the resolved bools in `PolicyBundle.vars_json` on every check-in (`swarm_enabled`, `swarm_puddle_enabled`, `swarm_gitmirror_enabled`, `swarm_filesync_enabled`, `swarm_swarmcast_enabled`). Agents never see the patterns — they only see their own resolved gate. A `vigocli config publish` propagates within one check-in cycle without restarting anything.
+The server evaluates patterns against each agent's hostname and emits the resolved bools in `PolicyBundle.vars_json` on every check-in (`swarm_enabled`, `swarm_puddle_enabled`, `swarm_gitmirror_enabled`, `swarm_longdrawer_enabled`, `swarm_swarmcast_enabled`). Agents never see the patterns — they only see their own resolved gate. A `vigocli config publish` propagates within one check-in cycle without restarting anything.
 
 **Two layers.** Both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for the subsystem to be active there. Empty list at either layer disables the subsystem on that host.
 
@@ -200,7 +200,7 @@ The server evaluates patterns against each agent's hostname and emits the resolv
 | `swarm.enabled: []` | Substrate-level kill switch. Agents whose hostname doesn't match stop announcing, stop serving, stop fetching across every subsystem. | `swarm.enabled` (with added/removed patterns) |
 | `swarm.puddle.enabled: []` | Halts puddle and cryptsync on hosts that don't match. Identity material under `~user/.vigo-puddle/` and `~user/.cryptsync/` is preserved (gate-only). | `swarm.puddle.enabled` |
 | `swarm.gitmirror.enabled: []` | Halts gitmirror publisher and receiver on hosts that don't match. Already-held mirrors preserved. | `swarm.gitmirror.enabled` |
-| `swarm.filesync.enabled: []` | Halts filesync announcer / listener / push handler on hosts that don't match. `~user/filesync/` content preserved. | `swarm.filesync.enabled` |
+| `swarm.longdrawer.enabled: []` | Halts longdrawer announcer / listener / push handler on hosts that don't match. `~user/longdrawer/` content preserved. | `swarm.longdrawer.enabled` |
 | `swarm.swarmcast.enabled: []` | Halts payload reception. `POST /api/v1/swarm/swarmcast/distribute` returns **403** with `audit_event=swarm.swarmcast.denied` when the list is empty (no envoy could possibly receive). | `swarm.swarmcast.enabled` (flip), `swarm.swarmcast.denied` (per blocked admin push) |
 
 **Audit-chain coverage.** Every pattern-list change at config-publish time records a tamper-evident entry under `actor=config.reload` / `source=config`. Admin-push denials record under `actor=<authenticated user>` / `source=api`. Inspect via `/api/v1/audit?event_type=swarm.*`.
@@ -223,7 +223,7 @@ resources:
     gitmirror: true    # authorizes dan to run `vigo swarm gitmirror project *`
 ```
 
-Both flags default to `false`. Filesync and payload have no usercrate flag — filesync gates by Unix file ownership (the user creates `~/filesync/`), payload by admin call site.
+Both flags default to `false`. Longdrawer and payload have no usercrate flag — longdrawer gates by Unix file ownership (the user creates `~/longdrawer/`), payload by admin call site.
 
 **Cache.** The user executor writes the resolved flags to `/var/lib/vigo/usercrate-policy/<username>.json` on every reconcile pass (root-owned, mode 0644). Per-user CLI verbs read this cache as a precondition — no server round-trip, works offline.
 

@@ -579,7 +579,7 @@ smtp:
 
 ### swarm
 
-Configures the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **payload** (admin-pushed file distribution), **gitmirror** (user source-control mirroring), **puddle/cryptsync** (encrypted user directory sync), and **filesync** (LAN plaintext user directory sync). Each subsystem is gated per-envoy by a hostname pattern list (0.41.0+); both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for any subsystem to be active there.
+Configures the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **payload** (admin-pushed file distribution), **gitmirror** (user source-control mirroring), **puddle/cryptsync** (encrypted user directory sync), and **longdrawer** (LAN plaintext user directory sync). Each subsystem is gated per-envoy by a hostname pattern list (0.41.0+); both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for any subsystem to be active there.
 
 Pattern lists are first-match-wins, `-` prefix denies, default-deny on no match — same semantics as Vigo's matchfile patterns (ADR-002).
 
@@ -603,7 +603,7 @@ swarm:
   manifest_liveness_ttl: 24h
   payload:
     enabled: ["*"]
-  filesync:
+  longdrawer:
     enabled: ["*"]
   puddle:
     enabled: ["annlap", "plex", "girlslaptop"]    # cryptsync follows
@@ -621,8 +621,8 @@ swarm:
 | `payload.enabled` | `[]` | Hostname pattern list of envoys allowed to receive admin-pushed swarmcasts. The admin distribute endpoint refuses when this list is empty (no envoy could possibly receive). |
 | `payload.max_size_bytes` | `0` | Per-distribute upload cap, enforced at the admin API. `0` = no cap. |
 | `payload.default_retention` | `7d` | Default retention applied when `vigocli swarm swarmcast distribute` omits `--retention`. |
-| `filesync.enabled` | `[]` | Hostname pattern list of envoys allowed to run filesync. Per-user opt-in still requires the user creating `~/filesync/`. |
-| `filesync.max_file_bytes` | `2147483648` (2 GiB) | Per-file LAN sync size cap. `0` = no cap. |
+| `longdrawer.enabled` | `[]` | Hostname pattern list of envoys allowed to run longdrawer. Per-user opt-in still requires the user creating `~/longdrawer/`. |
+| `longdrawer.max_file_bytes` | `2147483648` (2 GiB) | Per-file LAN sync size cap. `0` = no cap. |
 | `puddle.enabled` | `[]` | Hostname pattern list of envoys allowed to run puddle. **Cryptsync derives ITS AUTHORIZATION from this list** — there is no `swarm.cryptsync.enabled` field (ADR-020). A host allowed here can hold puddle identity material and cryptsync ciphertext for its locally-enrolled members. |
 | `cryptsync.max_file_bytes` | `1073741824` (1 GiB) | Per-file ciphertext cap on cryptsync auto-encrypt + push. `0` = no cap. Authorization still gated by `puddle.enabled`. |
 | `cryptsync.envelope_retention` | `90d` | LEAVE/RESURRECT/TOMBSTONE envelope retention before reap. Empty = compile-time default (90d). |
@@ -632,7 +632,7 @@ swarm:
 
 **Runtime caps reach agents via CheckIn.** The `max_*_bytes` and `*_retention` fields are pushed to every agent in the `CheckInResponse` and replace the agent's previously-hardcoded constants. Changes take effect within one CheckIn cycle (typically <30s) — no agent restart required.
 
-**Per-user authorization.** The envoy-level pattern lists answer "is this subsystem available on this envoy?" The user-level usercrate flags answer "which Unix users on this envoy can use it?" Both must say yes for a user to use a subsystem; default-deny on both. See the user-resource `puddle: bool` and `gitmirror: bool` flags in your usercrate. Filesync gates by Unix file ownership (no usercrate flag); payload by admin call site.
+**Per-user authorization.** The envoy-level pattern lists answer "is this subsystem available on this envoy?" The user-level usercrate flags answer "which Unix users on this envoy can use it?" Both must say yes for a user to use a subsystem; default-deny on both. See the user-resource `puddle: bool` and `gitmirror: bool` flags in your usercrate. Longdrawer gates by Unix file ownership (no usercrate flag); payload by admin call site.
 
 Agents listen on the configured port for peer chunk requests using the same mTLS certificates as gRPC communication. Multicast discovery uses UDP on `224.0.0.42` at the same port.
 

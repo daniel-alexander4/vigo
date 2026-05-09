@@ -3,7 +3,7 @@
 
 Read-only admin view of the [swarm substrate](../../engineering/subsystems/swarm.md) — the envoy peer-to-peer network that all four content subsystems ride on.
 
-> **This is the substrate, not content.** For admin-pushed swarmcasts (formerly `vigocli swarm distribute`), use [`vigocli swarm swarmcast`](swarm-swarmcast.md). For personal-DR mirrors, [`vigocli swarm gitmirror`](swarm-gitmirror.md). For per-user sync meshes, [`vigocli swarm filesync`](swarm-filesync.md) and [`vigocli swarm cryptsync`](swarm-cryptsync.md).
+> **This is the substrate, not content.** For admin-pushed swarmcasts (formerly `vigocli swarm distribute`), use [`vigocli swarm swarmcast`](swarm-swarmcast.md). For personal-DR mirrors, [`vigocli swarm gitmirror`](swarm-gitmirror.md). For per-user sync meshes, [`vigocli swarm longdrawer`](swarm-longdrawer.md) and [`vigocli swarm cryptsync`](swarm-cryptsync.md).
 
 ## Subcommands
 
@@ -40,7 +40,7 @@ Counts reflect the rollup of server-side state (`PeerTracker` + `ManifestStore` 
 
 - **Substrate active** — envoys with at least one peer record in the tracker or acting as a seeder for at least one payload
 - **Fleet footprint** — sum of cached blob sizes across all envoys (excludes in-flight partials)
-- **Active payloads** — split by content subsystem; filesync/cryptsync are per-user and don't surface here
+- **Active payloads** — split by content subsystem; longdrawer/cryptsync are per-user and don't surface here
 
 ## peers
 
@@ -118,6 +118,6 @@ Adjacent operator knob from the same release: a `viz.color=<name|hex>` tag on an
 - [Swarm Substrate](../../engineering/subsystems/swarm.md) — How the peer-to-peer network works
 - [Swarm page](../ui/swarm.md) — `/swarm` in the web UI
 - [`vigocli swarm swarmcast`](swarm-swarmcast.md) — Admin-pushed payloads on the substrate
-- [`vigocli swarm gitmirror`](swarm-gitmirror.md), [`vigocli swarm filesync`](swarm-filesync.md), [`vigocli swarm cryptsync`](swarm-cryptsync.md) — Other content subsystems on the substrate
+- [`vigocli swarm gitmirror`](swarm-gitmirror.md), [`vigocli swarm longdrawer`](swarm-longdrawer.md), [`vigocli swarm cryptsync`](swarm-cryptsync.md) — Other content subsystems on the substrate
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -44,7 +44,7 @@ import (
 	"git.alexander4.io/vigo/server/spanner"
 	"git.alexander4.io/vigo/server/swarm/cryptsyncmesh"
 	"git.alexander4.io/vigo/server/swarm/gitmirrormesh"
-	"git.alexander4.io/vigo/server/swarm/filesyncmesh"
+	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
 )
 
 // DataSource abstracts data fetching for UI handlers.
@@ -282,17 +282,17 @@ func (h *Handler) SetGitmirrorFleet(src GitmirrorFleetSource) {
 	h.gitmirrorFleet = src
 }
 
-// MeshSource surfaces the filesync + cryptsync fleet aggregators.
+// MeshSource surfaces the longdrawer + cryptsync fleet aggregators.
 // Implemented by `*api.MeshHandler`; tiny interface so the UI
 // package doesn't depend on the full handler type.
 type MeshSource interface {
-	SyncSnapshot(ctx context.Context) (*filesyncmesh.Fleet, error)
+	SyncSnapshot(ctx context.Context) (*longdrawermesh.Fleet, error)
 	CryptSnapshot(ctx context.Context) (*cryptsyncmesh.Fleet, error)
-	EnvoyFilesyncFiles(ctx context.Context, envoyID string) []filesyncmesh.EnvoyFile
+	EnvoyLongdrawerFiles(ctx context.Context, envoyID string) []longdrawermesh.EnvoyFile
 	EnvoyCryptsyncFiles(ctx context.Context, envoyID string) []cryptsyncmesh.EnvoyFile
 }
 
-// SetMesh wires the filesync/cryptsync fleet aggregators into the
+// SetMesh wires the longdrawer/cryptsync fleet aggregators into the
 // UI handler. Called from gateway.go.
 func (h *Handler) SetMesh(src MeshSource) {
 	h.mesh = src
@@ -586,15 +586,15 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /swarm/swarmcast/{sha256}", h.Swarmcast)
 	mux.HandleFunc("GET /ui/fragments/swarm-swarmcast-envoys", h.SwarmcastEnvoysFragment)
 
-	// Filesync, cryptsync, gitmirror observability — sibling pages
+	// Longdrawer, cryptsync, gitmirror observability — sibling pages
 	// under the Swarm nav group. Each admin-only; viewer sees a 403.
-	mux.HandleFunc("GET /swarm/filesync", h.Filesync)
-	mux.HandleFunc("GET /ui/fragments/swarm-filesync-user/{user}", h.EchoUserDrilldown)
+	mux.HandleFunc("GET /swarm/longdrawer", h.Longdrawer)
+	mux.HandleFunc("GET /ui/fragments/swarm-longdrawer-user/{user}", h.EchoUserDrilldown)
 	mux.HandleFunc("GET /swarm/cryptsync", h.Cryptsync)
 	mux.HandleFunc("GET /ui/fragments/swarm-cryptsync-user/{user}", h.CryptsyncUserDrilldown)
 	mux.HandleFunc("GET /swarm/gitmirror", h.Gitmirror)
 	mux.HandleFunc("GET /swarm/gitmirror/{project_id}", h.Gitmirror)
-	// Backwards-compat: /mesh → /filesync (or /cryptsync when ?tab=crypt).
+	// Backwards-compat: /mesh → /longdrawer (or /cryptsync when ?tab=crypt).
 	// Keep for one minor release so muscle-memory URLs don't 404.
 	mux.HandleFunc("GET /mesh", h.MeshRedirect)
 

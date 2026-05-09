@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! UDP multicast announcer + listener for filesync.
+//! UDP multicast announcer + listener for longdrawer.
 //!
 //! Uses a dedicated multicast group/port distinct from the swarm peer
 //! discovery channel. Each announcement carries one user's full state
@@ -9,7 +9,7 @@
 //!
 //! Message format (LAN-local plaintext, line-delimited):
 //! ```text
-//! FILESYNC-1
+//! LONGDRAWER-1
 //! <json body>
 //! ```
 
@@ -24,13 +24,13 @@ use tracing::{debug, info, warn};
 
 use super::state::Announcement;
 
-/// Multicast group for filesync — distinct from swarm's 224.0.0.42.
+/// Multicast group for longdrawer — distinct from swarm's 224.0.0.42.
 pub const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 43);
 pub const MULTICAST_PORT: u16 = 1532;
-pub const HEADER: &str = "FILESYNC-1";
+pub const HEADER: &str = "LONGDRAWER-1";
 
 /// Maximum UDP payload we'll send/receive. The announcement is a JSON
-/// serialization of `UserState` (all of a user's filesync files + tombstones
+/// serialization of `UserState` (all of a user's longdrawer files + tombstones
 /// for one machine); per-file overhead is ~150 bytes JSON so the
 /// ceiling is ~400 files per announcement at 64 KiB.
 ///
@@ -54,7 +54,7 @@ pub struct IncomingAnnouncement {
 ///
 /// Returns three channel ends: an outbound sender for announcements we
 /// want to emit, plus both ends of the inbound announcement channel.
-/// The inbound sender is cloned into the HTTPS `POST /filesync/announce`
+/// The inbound sender is cloned into the HTTPS `POST /longdrawer/announce`
 /// handler so cross-subnet peers can feed announcements into the same
 /// reconciler path as multicast discovery.
 pub fn spawn(
@@ -72,7 +72,7 @@ pub fn spawn(
     let in_tx_listener = in_tx.clone();
     tokio::spawn(async move {
         if let Err(e) = listen_loop(in_tx_listener, cancel_listen).await {
-            warn!(error = %e, "filesync multicast listener exited");
+            warn!(error = %e, "longdrawer multicast listener exited");
         }
     });
 
@@ -80,7 +80,7 @@ pub fn spawn(
     let cancel_announce = cancel.clone();
     tokio::spawn(async move {
         if let Err(e) = announce_loop(out_rx, cancel_announce).await {
-            warn!(error = %e, "filesync multicast announcer exited");
+            warn!(error = %e, "longdrawer multicast announcer exited");
         }
     });
 
@@ -96,7 +96,7 @@ async fn listen_loop(
     let std_socket: std::net::UdpSocket = socket.into();
     let udp = tokio::net::UdpSocket::from_std(std_socket)?;
 
-    info!("filesync multicast listener started on {}:{}", MULTICAST_ADDR, MULTICAST_PORT);
+    info!("longdrawer multicast listener started on {}:{}", MULTICAST_ADDR, MULTICAST_PORT);
 
     let mut buf = vec![0u8; MAX_PAYLOAD];
     loop {
@@ -114,7 +114,7 @@ async fn listen_loop(
                     }
                     Err(e) => {
                         if e.kind() != std::io::ErrorKind::WouldBlock {
-                            debug!(error = %e, "filesync multicast recv error");
+                            debug!(error = %e, "longdrawer multicast recv error");
                         }
                     }
                 }
@@ -135,7 +135,7 @@ async fn announce_loop(
     let udp = tokio::net::UdpSocket::from_std(std_socket)?;
     let dest = SocketAddr::V4(SocketAddrV4::new(MULTICAST_ADDR, MULTICAST_PORT));
 
-    info!("filesync multicast announcer started");
+    info!("longdrawer multicast announcer started");
 
     loop {
         tokio::select! {
@@ -152,7 +152,7 @@ async fn announce_loop(
                             bytes = p.len(),
                             limit = MAX_PAYLOAD,
                             user = %ann.user,
-                            "filesync announcement exceeds multicast limit — unexpected for digest-only \
+                            "longdrawer announcement exceeds multicast limit — unexpected for digest-only \
                              announcements, likely malformed state digest or overflowed machine/user \
                              identifier. Not a files problem on the 0.30.11+ wire format.",
                         );
@@ -163,21 +163,21 @@ async fn announce_loop(
                 if let Err(e) = udp.send_to(&payload, dest).await {
                     // warn! (not debug!) so operators actually see this when
                     // something like a firewall rule silently drops outbound
-                    // packets. Found during 0.20.9 troubleshooting when filesync
+                    // packets. Found during 0.20.9 troubleshooting when longdrawer
                     // was silently non-functional for days because port 1532
                     // wasn't in the swarm-firewall allow list.
                     warn!(
                         error = %e,
                         dest = %dest,
                         bytes = payload.len(),
-                        "filesync multicast send failed",
+                        "longdrawer multicast send failed",
                     );
                 } else {
                     debug!(
                         user = %ann.user,
                         digest = %ann.state_digest,
                         bytes = payload.len(),
-                        "filesync announcement sent"
+                        "longdrawer announcement sent"
                     );
                 }
             }

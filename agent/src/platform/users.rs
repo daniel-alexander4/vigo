@@ -133,7 +133,7 @@ pub fn chown_to_user(path: &Path, username: &str) {
 
 #[cfg(windows)]
 pub fn chown_to_user(_path: &Path, _username: &str) {
-    // Windows ownership model is ACL-based; filesync/gitmirror don't set
+    // Windows ownership model is ACL-based; longdrawer/gitmirror don't set
     // per-file ACLs on Windows — leave ownership to the default inheritance.
 }
 

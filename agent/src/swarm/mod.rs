@@ -20,7 +20,7 @@ pub mod cli;
 pub mod cryptsync;
 pub mod discovery;
 pub mod download;
-pub mod filesync;
+pub mod longdrawer;
 pub mod gates;
 pub mod gitmirror;
 pub mod manager;

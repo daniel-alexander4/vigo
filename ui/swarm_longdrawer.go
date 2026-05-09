@@ -8,53 +8,53 @@ import (
 	"net/http"
 	"time"
 
-	"git.alexander4.io/vigo/server/swarm/filesyncmesh"
+	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
 )
 
-// EchoPageData drives `ui/templates/pages/filesync.html`. The
+// EchoPageData drives `ui/templates/pages/longdrawer.html`. The
 // page opens with a health banner + problems table so an on-call
 // operator sees "is anything broken" before any totals.
 type EchoPageData struct {
 	PageData
 	Health HealthBanner
-	Sync   *filesyncmesh.Fleet
+	Sync   *longdrawermesh.Fleet
 	Error  string
 }
 
-// Filesync serves `GET /filesync`. Admin-only — fleet-wide per-user
+// Longdrawer serves `GET /longdrawer`. Admin-only — fleet-wide per-user
 // file lists aren't viewer-appropriate.
-func (h *Handler) Filesync(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Longdrawer(w http.ResponseWriter, r *http.Request) {
 	if !h.adminOnly(w, r) {
 		return
 	}
 	data := EchoPageData{
-		PageData: PageData{Title: "Filesync", ActiveNav: "filesync"},
+		PageData: PageData{Title: "Longdrawer", ActiveNav: "longdrawer"},
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 
 	if h.mesh == nil {
 		data.Error = "mesh aggregator not available"
-		data.Health = finalizeHealthBanner("Filesync", nil, "Aggregator unavailable")
+		data.Health = finalizeHealthBanner("Longdrawer", nil, "Aggregator unavailable")
 		data.Health.Level = "warn"
-		h.renderer.Render(w, "filesync", data)
+		h.renderer.Render(w, "longdrawer", data)
 		return
 	}
 
 	fleet, err := h.mesh.SyncSnapshot(r.Context())
 	if err != nil {
 		data.Error = err.Error()
-		data.Health = finalizeHealthBanner("Filesync", nil, "Snapshot failed")
+		data.Health = finalizeHealthBanner("Longdrawer", nil, "Snapshot failed")
 		data.Health.Level = "warn"
-		h.renderer.Render(w, "filesync", data)
+		h.renderer.Render(w, "longdrawer", data)
 		return
 	}
 	data.Sync = fleet
 	data.Health = buildEchoHealth(fleet)
-	h.renderer.Render(w, "filesync", data)
+	h.renderer.Render(w, "longdrawer", data)
 }
 
 // EchoUserDrilldown renders the HTMX fragment showing one user's
-// full filesync state across the fleet. Admin-only.
+// full longdrawer state across the fleet. Admin-only.
 func (h *Handler) EchoUserDrilldown(w http.ResponseWriter, r *http.Request) {
 	if !h.adminOnly(w, r) {
 		return
@@ -79,19 +79,19 @@ func (h *Handler) EchoUserDrilldown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	frag := struct {
-		User *filesyncmesh.UserSummary
+		User *longdrawermesh.UserSummary
 		Now  time.Time
 	}{User: summary, Now: time.Now()}
-	h.renderer.RenderFragment(w, "filesync", "filesync-user-fragment", frag)
+	h.renderer.RenderFragment(w, "longdrawer", "longdrawer-user-fragment", frag)
 }
 
 // buildEchoHealth derives the problems list from the aggregator's
 // existing fields: any user with non-empty Divergences is "err"; any
 // envoy in "stale" state is "warn". Sorted by severity so err rows
 // surface first.
-func buildEchoHealth(f *filesyncmesh.Fleet) HealthBanner {
+func buildEchoHealth(f *longdrawermesh.Fleet) HealthBanner {
 	if f == nil {
-		return finalizeHealthBanner("Filesync", nil, "No data")
+		return finalizeHealthBanner("Longdrawer", nil, "No data")
 	}
 	var problems []HealthProblem
 	for _, u := range f.Users {
@@ -102,7 +102,7 @@ func buildEchoHealth(f *filesyncmesh.Fleet) HealthBanner {
 			Kind:     "divergent",
 			Subject:  u.User,
 			Detail:   fmt.Sprintf("%d file(s) disagree across envoys: %s", len(u.Divergences), joinFirstN(u.Divergences, 3)),
-			Link:     "/filesync#user-" + u.User,
+			Link:     "/longdrawer#user-" + u.User,
 			Severity: "err",
 		})
 	}
@@ -119,14 +119,14 @@ func buildEchoHealth(f *filesyncmesh.Fleet) HealthBanner {
 			problems = append(problems, HealthProblem{
 				Kind:     "stale",
 				Subject:  ep.Hostname,
-				Detail:   "filesync trait not refreshed within the last 5 minutes",
+				Detail:   "longdrawer trait not refreshed within the last 5 minutes",
 				Severity: "warn",
 			})
 		}
 	}
 	headline := fmt.Sprintf("%d user(s), %d envoy(s), %d file(s). No divergences, no stale envoys.",
 		f.Totals.Users, f.Totals.Envoys, f.Totals.Files)
-	return finalizeHealthBanner("Filesync", problems, headline)
+	return finalizeHealthBanner("Longdrawer", problems, headline)
 }
 
 func joinFirstN(ss []string, n int) string {

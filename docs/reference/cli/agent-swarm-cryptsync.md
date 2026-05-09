@@ -256,5 +256,5 @@ idle_timeout_minutes: 60    # session helper auto-lock (default 60)
 
 ## See also
 
-- [cryptsync concept](../../engineering/subsystems/cryptsync.md) — architecture, threat model, relationship to filesync
-- [Filesync](../../engineering/subsystems/filesync.md) — the plaintext sibling
+- [cryptsync concept](../../engineering/subsystems/cryptsync.md) — architecture, threat model, relationship to longdrawer
+- [Longdrawer](../../engineering/subsystems/longdrawer.md) — the plaintext sibling

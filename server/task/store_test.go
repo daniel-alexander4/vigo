@@ -22,7 +22,7 @@ func TestStore_Load(t *testing.T) {
 name: hello
 description: Say hello
 timeout: 30
-script: filesync hello
+script: longdrawer hello
 parameters:
   name:
     type: string
@@ -54,7 +54,7 @@ script: uptime
 	if !ok {
 		t.Fatal("expected to find 'hello' task")
 	}
-	if def.Script != "filesync hello" {
+	if def.Script != "longdrawer hello" {
 		t.Errorf("unexpected script: %s", def.Script)
 	}
 	if def.Timeout != 30 {
@@ -86,7 +86,7 @@ func TestStore_LoadDefaultTimeout(t *testing.T) {
 	dir := t.TempDir()
 	writeTask(t, dir, "fast.vgo", `
 name: fast
-script: filesync fast
+script: longdrawer fast
 `)
 
 	store := NewStore()
@@ -215,8 +215,8 @@ func TestBuildEnv_EmptyDefault(t *testing.T) {
 
 func TestStore_All(t *testing.T) {
 	dir := t.TempDir()
-	writeTask(t, dir, "b.vgo", "name: b\nscript: filesync b")
-	writeTask(t, dir, "a.vgo", "name: a\nscript: filesync a")
+	writeTask(t, dir, "b.vgo", "name: b\nscript: longdrawer b")
+	writeTask(t, dir, "a.vgo", "name: a\nscript: longdrawer a")
 
 	store := NewStore()
 	if err := store.Load(dir); err != nil {

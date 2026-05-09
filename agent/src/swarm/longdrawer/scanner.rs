@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Scan users' `~/filesync/` directories, compute file entries, and detect
+//! Scan users' `~/longdrawer/` directories, compute file entries, and detect
 //! deletions by diffing against the previous snapshot.
 
 use anyhow::Result;
@@ -14,7 +14,7 @@ use std::time::SystemTime;
 
 use super::state::{FileEntry, Tombstone, UserState};
 
-/// Maximum file size for filesync (2 GB). Files larger than this are skipped.
+/// Maximum file size for longdrawer (2 GB). Files larger than this are skipped.
 ///
 /// Sized for the "personal files carried between machines" use case — configs,
 /// notes, scripts, small datasets, VM images up to this bound. Receivers stream
@@ -24,10 +24,10 @@ use super::state::{FileEntry, Tombstone, UserState};
 pub const MAX_FILE_SIZE: u64 = 2 * 1024 * 1024 * 1024;
 
 /// Returns the effective per-file cap. Sourced from `server.yaml
-/// swarm.filesync.max_file_bytes` via the runtime-limits cache; falls
+/// swarm.longdrawer.max_file_bytes` via the runtime-limits cache; falls
 /// back to [`MAX_FILE_SIZE`] when the operator hasn't set one.
 pub fn effective_max_file_size() -> u64 {
-    crate::swarm::runtime_limits::filesync_max_file_bytes().unwrap_or(MAX_FILE_SIZE)
+    crate::swarm::runtime_limits::longdrawer_max_file_bytes().unwrap_or(MAX_FILE_SIZE)
 }
 
 /// List (username, home_dir) pairs for real users on this machine.
@@ -84,7 +84,7 @@ pub fn list_home_dirs() -> Vec<(String, PathBuf)> {
     results
 }
 
-/// Scan a single user's ~/filesync/ directory. Returns a filename → FileEntry map.
+/// Scan a single user's ~/longdrawer/ directory. Returns a filename → FileEntry map.
 ///
 /// Non-recursive; only regular files; dotfiles skipped; files > MAX_FILE_SIZE skipped.
 ///
@@ -165,7 +165,7 @@ pub fn hash_file(path: &Path) -> Result<String> {
 /// `now` is wall-clock time in unix seconds; used as the deletion timestamp
 /// for files present in `previous` but missing from `current`.
 ///
-/// `dir` is the user's `~/filesync/` directory — used to bump on-disk mtime
+/// `dir` is the user's `~/longdrawer/` directory — used to bump on-disk mtime
 /// when a previously-tombstoned file reappears. Without that bump, a file
 /// re-added via `mv` keeps its preserved (older) mtime, which loses the
 /// reconcile vs any peer's tombstone with `deletion_time > preserved_mtime`

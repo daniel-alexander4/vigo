@@ -5,7 +5,7 @@
 //!
 //! - **Announcement** — the UDP multicast / cross-subnet unicast
 //!   payload. Carries one envoy's pubkey for one user. Unlike
-//!   filesync's announcement (which piggybacks full file + tombstone
+//!   longdrawer's announcement (which piggybacks full file + tombstone
 //!   state), cryptsync's is deliberately tiny: push/pull are
 //!   event-driven, not inferred from announcements.
 //!
@@ -474,7 +474,7 @@ impl PeerTable {
 ///
 /// `generation` is a monotonic counter per (envoy, user) incremented
 /// on each boot / identity rotation. Reserved for future key-rotation
-/// validation; current code doesn't use it beyond filesyncing it back.
+/// validation; current code doesn't use it beyond longdrawering it back.
 ///
 /// `sign_pubkey` was added in 0.27.4 alongside tombstone propagation.
 /// It's the sender's Ed25519 verification pubkey for DELETE envelopes.

@@ -3,9 +3,9 @@
 
 **Route:** `/swarm` · **Active nav:** `swarm`
 
-Fleet-wide view of the [swarm substrate](../../engineering/subsystems/swarm.md) — the envoy peer-to-peer network that Payload, Gitmirror, Filesync, and Cryptsync all ride on. Admin-only.
+Fleet-wide view of the [swarm substrate](../../engineering/subsystems/swarm.md) — the envoy peer-to-peer network that Payload, Gitmirror, Longdrawer, and Cryptsync all ride on. Admin-only.
 
-The nav group label "Swarm" is itself the link to this page; the four child links (Payload / Filesync / Gitmirror / Cryptsync) remain the drill-downs into each content subsystem's state.
+The nav group label "Swarm" is itself the link to this page; the four child links (Payload / Longdrawer / Gitmirror / Cryptsync) remain the drill-downs into each content subsystem's state.
 
 ## Sections
 
@@ -24,10 +24,10 @@ Active-payload count per subsystem plus a deep-link to the subsystem page:
 |-----------|-----------|-----------|
 | Payload | Admin-pushed payloads | `/payload` |
 | Gitmirror | Personal-DR repo mirrors | `/gitmirror` |
-| Filesync | Per-user plaintext sync | `/filesync` |
+| Longdrawer | Per-user plaintext sync | `/longdrawer` |
 | Cryptsync | Per-user encrypted sync | `/cryptsync` |
 
-Filesync and Cryptsync don't surface payload counts here — those are per-user content. Use the dedicated pages for user-level detail.
+Longdrawer and Cryptsync don't surface payload counts here — those are per-user content. Use the dedicated pages for user-level detail.
 
 ### Peers (table)
 

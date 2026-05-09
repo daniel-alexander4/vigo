@@ -20,7 +20,7 @@ mod swarm_seeds;
 mod time_collector;
 mod cryptsync;
 mod gitmirror;
-mod filesync;
+mod longdrawer;
 
 // Shared sysctl utility for macOS/BSD collectors.
 #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "illumos"))]
@@ -277,9 +277,9 @@ pub enum CollectorKind {
     /// for CVEs affecting code that's actually executing, not just
     /// installed. Linux-only, periodic (hourly).
     CveRunningCorrelation,
-    /// Per-user filesync mesh state — file list, tombstones, digests.
-    /// Consumed by `server/swarm/filesyncmesh` to render the `/mesh` page.
-    Filesync,
+    /// Per-user longdrawer mesh state — file list, tombstones, digests.
+    /// Consumed by `server/swarm/longdrawermesh` to render the `/mesh` page.
+    Longdrawer,
     /// Per-user cryptsync mesh state — file list, tombstones,
     /// recipients, session-unlocked signal. Consumed by
     /// `server/swarm/cryptsyncmesh`.
@@ -342,7 +342,7 @@ impl CollectorKind {
             Self::KernelModuleAttestation => "kernel_module_attestation",
             Self::Listeners => "listeners",
             Self::CveRunningCorrelation => "cve_running_correlation",
-            Self::Filesync => "filesync",
+            Self::Longdrawer => "longdrawer",
             Self::Cryptsync => "cryptsync",
             Self::AgentSelf => "agent_self",
             Self::HostSelf => "host_self",
@@ -378,7 +378,7 @@ impl CollectorKind {
             Self::SwarmCache => swarm_cache::collect(),
             Self::SwarmSeeds => swarm_seeds::collect(),
             Self::Gitmirror => gitmirror::collect(),
-            Self::Filesync => filesync::collect(),
+            Self::Longdrawer => longdrawer::collect(),
             Self::Cryptsync => cryptsync::collect(),
             Self::AgentSelf => agent_self::collect(),
             Self::HostSelf => host_self::collect(),
@@ -644,7 +644,7 @@ impl CollectorKind {
             "kernel_module_attestation" => Some(Self::KernelModuleAttestation),
             "listeners" => Some(Self::Listeners),
             "cve_running_correlation" => Some(Self::CveRunningCorrelation),
-            "filesync" => Some(Self::Filesync),
+            "longdrawer" => Some(Self::Longdrawer),
             "cryptsync" => Some(Self::Cryptsync),
             "agent_self" => Some(Self::AgentSelf),
             "host_self" => Some(Self::HostSelf),
@@ -696,7 +696,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::KernelModuleAttestation,
         CollectorKind::Listeners,
         CollectorKind::CveRunningCorrelation,
-        CollectorKind::Filesync,
+        CollectorKind::Longdrawer,
         CollectorKind::Cryptsync,
         CollectorKind::AgentSelf,
         CollectorKind::HostSelf,
@@ -718,7 +718,7 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::SwarmCache,
         CollectorKind::SwarmSeeds,
         CollectorKind::Gitmirror,
-        CollectorKind::Filesync,
+        CollectorKind::Longdrawer,
         CollectorKind::Cryptsync,
         CollectorKind::AgentSelf,
         CollectorKind::HostSelf,

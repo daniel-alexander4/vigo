@@ -1221,7 +1221,7 @@ func run() error {
 			lastSwarmPatterns := append([]string(nil), cfg.Swarm.Enabled...)
 			lastPuddlePatterns := append([]string(nil), cfg.Swarm.Puddle.Enabled...)
 			lastGitmirrorPatterns := append([]string(nil), cfg.Swarm.Gitmirror.Enabled...)
-			lastFilesyncPatterns := append([]string(nil), cfg.Swarm.Filesync.Enabled...)
+			lastLongdrawerPatterns := append([]string(nil), cfg.Swarm.Longdrawer.Enabled...)
 			lastSwarmcastPatterns := append([]string(nil), cfg.Swarm.Swarmcast.Enabled...)
 
 			configStore.SetOnReloadSuccess(func() {
@@ -1250,9 +1250,9 @@ func run() error {
 					recordSwarmPatternsChange(ctx, auditWriter, "gitmirror", lastGitmirrorPatterns, newCfg.Swarm.Gitmirror.Enabled)
 					lastGitmirrorPatterns = append([]string(nil), newCfg.Swarm.Gitmirror.Enabled...)
 				}
-				if !sameStringSet(lastFilesyncPatterns, newCfg.Swarm.Filesync.Enabled) {
-					recordSwarmPatternsChange(ctx, auditWriter, "filesync", lastFilesyncPatterns, newCfg.Swarm.Filesync.Enabled)
-					lastFilesyncPatterns = append([]string(nil), newCfg.Swarm.Filesync.Enabled...)
+				if !sameStringSet(lastLongdrawerPatterns, newCfg.Swarm.Longdrawer.Enabled) {
+					recordSwarmPatternsChange(ctx, auditWriter, "longdrawer", lastLongdrawerPatterns, newCfg.Swarm.Longdrawer.Enabled)
+					lastLongdrawerPatterns = append([]string(nil), newCfg.Swarm.Longdrawer.Enabled...)
 				}
 				if !sameStringSet(lastSwarmcastPatterns, newCfg.Swarm.Swarmcast.Enabled) {
 					recordSwarmPatternsChange(ctx, auditWriter, "swarmcast", lastSwarmcastPatterns, newCfg.Swarm.Swarmcast.Enabled)
@@ -2320,7 +2320,7 @@ func sameStringSet(a, b []string) bool {
 // recordSwarmPatternsChange emits a tamper-evident audit-chain entry
 // whenever a swarm authorization pattern list changes. `substrate` is
 // "swarm" for the top-level pattern, or one of
-// "puddle"/"gitmirror"/"filesync"/"swarmcast" for the per-subsystem
+// "puddle"/"gitmirror"/"longdrawer"/"swarmcast" for the per-subsystem
 // patterns. The summary states the pattern delta; the payload carries
 // the full new list so a reviewer can reconstruct post-change state
 // without joining log streams. Failures are logged at WARN — the audit

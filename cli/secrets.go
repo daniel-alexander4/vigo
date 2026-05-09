@@ -45,7 +45,7 @@ processed before storage:
 
 For raw secrets, the value can be provided via --from-file, stdin pipe,
 or interactive prompt. For os and web types, the value is always prompted
-interactively with filesync disabled and password complexity enforcement.
+interactively with longdrawer disabled and password complexity enforcement.
 
 The os and web types also store the original plaintext at <key>.txt
 (encrypted) for recovery via reveal-password.`,
@@ -245,7 +245,7 @@ func readSecretValue(cmd *cobra.Command) (string, error) {
 		return strings.TrimRight(string(data), "\n"), nil
 	}
 
-	// Priority 3: Interactive prompt with filesync disabled.
+	// Priority 3: Interactive prompt with longdrawer disabled.
 	fmt.Fprint(os.Stderr, "Enter secret value: ")
 	value, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Fprintln(os.Stderr) // newline after hidden input

@@ -32,7 +32,7 @@ func TestIsClaimOnlyLabel_StandardNamespaces(t *testing.T) {
 		"",
 		"module-bundle",
 		"Win11_25H2_English_x64.iso",
-		"filesync:user:file",
+		"longdrawer:user:file",
 		"gitmirrorfoo",      // missing colon — not a namespace match
 		"foo:gitmirror:bar", // not at start
 		"GITMIRROR:X:Y:Z",   // case-sensitive, not claim-only

@@ -13,13 +13,13 @@
 #              cryptsync). Sections 4–7 require
 #              CRYPTSYNC_PASSWORD_FILE; skipped gracefully if absent.
 #   phase-c  — swarm health (peers + manifest gossip), payload
-#              distribute/revoke, filesync round-trip.
+#              distribute/revoke, longdrawer round-trip.
 #   phase-d  — cryptsync encrypt/push/decrypt perms, leaves catch-up
 #              smoke. Section 3 (decrypt) requires
 #              CRYPTSYNC_PASSWORD_FILE; skipped gracefully if absent.
 #
 # All env vars accepted by the underlying scripts (PRIMARY,
-# SECONDARY, THIRD, FILESYNC_USER, CRYPTSYNC_USER, VIGO_BIN, etc.)
+# SECONDARY, THIRD, LONGDRAWER_USER, CRYPTSYNC_USER, VIGO_BIN, etc.)
 # pass through transparently — set them before invoking this wrapper.
 #
 # Run: ./substrate-livetest-all.sh
@@ -38,7 +38,7 @@ RESET=$'\033[0m'
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PHASES=(
     "phase-b:Gitmirror source CLI + leave/evict (gitmirror + cryptsync)"
-    "phase-c:Swarm health, payload, filesync"
+    "phase-c:Swarm health, payload, longdrawer"
     "phase-d:Cryptsync encrypt/push/decrypt + leaves catch-up"
 )
 

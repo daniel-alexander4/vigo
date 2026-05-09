@@ -392,9 +392,9 @@ watcher:
 #   payload:
 #     enabled: ["*"]
 #
-#   # Filesync (LAN plaintext directory mirror) daemon authorization.
-#   # Per-user opt-in still requires the user creating ~/filesync/.
-#   filesync:
+#   # Longdrawer (LAN plaintext directory mirror) daemon authorization.
+#   # Per-user opt-in still requires the user creating ~/longdrawer/.
+#   longdrawer:
 #     enabled: ["*"]
 #
 #   # Puddle (per-user identity) authorization. Cryptsync derives its

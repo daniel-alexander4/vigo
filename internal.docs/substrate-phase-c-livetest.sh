@@ -14,7 +14,7 @@
 #                              empty and is a measurement artifact, not
 #                              a fleet failure), verify materialization,
 #                              revoke, verify eviction.
-#   §2  Filesync end-to-end  — drop a file in PRIMARY's ~/filesync/, verify
+#   §2  Longdrawer end-to-end  — drop a file in PRIMARY's ~/longdrawer/, verify
 #                              it propagates to SECONDARY, modify on
 #                              SECONDARY, verify the update reflects on
 #                              PRIMARY, delete on PRIMARY, verify removal.
@@ -27,13 +27,13 @@
 #   PRIMARY          default danlap   — workstation; must run vigocli locally
 #   SECONDARY        default annlap
 #   THIRD            default plex
-#   FILESYNC_USER    default dan      — user account for filesync files (must
-#                                        have ~/filesync/ in their home)
+#   LONGDRAWER_USER    default dan      — user account for longdrawer files (must
+#                                        have ~/longdrawer/ in their home)
 #   VIGOCLI_CMD      default "sudo vigocli" — vigocli is mode 0700 root
 #                                             by design. See feedback memory.
 #   PAYLOAD_TIMEOUT  default 90       — seconds to wait for distribution
 #                                        to reach all envoys
-#   FILESYNC_TIMEOUT default 30       — seconds to wait for a filesync sync
+#   LONGDRAWER_TIMEOUT default 30       — seconds to wait for a longdrawer sync
 #                                        event to propagate
 
 set -uo pipefail
@@ -41,10 +41,10 @@ set -uo pipefail
 PRIMARY="${PRIMARY:-danlap}"
 SECONDARY="${SECONDARY:-annlap}"
 THIRD="${THIRD:-plex}"
-FILESYNC_USER="${FILESYNC_USER:-dan}"
+LONGDRAWER_USER="${LONGDRAWER_USER:-dan}"
 VIGOCLI_CMD="${VIGOCLI_CMD:-sudo vigocli}"
 PAYLOAD_TIMEOUT="${PAYLOAD_TIMEOUT:-90}"
-FILESYNC_TIMEOUT="${FILESYNC_TIMEOUT:-30}"
+LONGDRAWER_TIMEOUT="${LONGDRAWER_TIMEOUT:-30}"
 
 # Catppuccin Mocha — same palette as phase-b for visual continuity.
 GREEN=$'\033[38;2;166;227;161m'
@@ -82,10 +82,10 @@ on_host() {
     fi
 }
 
-# Run a command as $FILESYNC_USER on a host. Local: su -; remote: ssh as
-# user. Filesync files must be owned by the user, not root, so we can't
+# Run a command as $LONGDRAWER_USER on a host. Local: su -; remote: ssh as
+# user. Longdrawer files must be owned by the user, not root, so we can't
 # use the default on_host (which runs as the invoking user — usually
-# fine since the invoker IS the filesync user, but this is explicit).
+# fine since the invoker IS the longdrawer user, but this is explicit).
 on_host_as_user() {
     local host=$1 user=$2; shift 2
     if is_local "$host"; then
@@ -198,12 +198,12 @@ cleanup() {
     # Remove the workstation-side test payload file we generated.
     [[ -n "${PAYLOAD_FILE:-}" && -f "$PAYLOAD_FILE" ]] && rm -f "$PAYLOAD_FILE"
 
-    # Filesync cleanup: remove the test file from every reachable envoy
+    # Longdrawer cleanup: remove the test file from every reachable envoy
     # if it somehow survived. Safe — name is unique to this run.
     if [[ -n "${FS_NAME:-}" ]]; then
         for h in "${ALL_HOSTS[@]}"; do
             (( ${HOST_REACHABLE[$h]:-0} == 0 )) && continue
-            on_host_as_user "$h" "$FILESYNC_USER" "rm -f \$HOME/filesync/$FS_NAME" >/dev/null 2>&1 || true
+            on_host_as_user "$h" "$LONGDRAWER_USER" "rm -f \$HOME/longdrawer/$FS_NAME" >/dev/null 2>&1 || true
         done
     fi
 
@@ -225,8 +225,8 @@ trap cleanup EXIT
 # ───────────────────────── preflight ─────────────────────────
 section "Preflight"
 note "PRIMARY=$PRIMARY  SECONDARY=$SECONDARY  THIRD=$THIRD"
-note "FILESYNC_USER=$FILESYNC_USER  vigocli prefix: $VIGOCLI_CMD"
-note "payload timeout: ${PAYLOAD_TIMEOUT}s   filesync timeout: ${FILESYNC_TIMEOUT}s"
+note "LONGDRAWER_USER=$LONGDRAWER_USER  vigocli prefix: $VIGOCLI_CMD"
+note "payload timeout: ${PAYLOAD_TIMEOUT}s   longdrawer timeout: ${LONGDRAWER_TIMEOUT}s"
 
 # Sanity: vigocli reachable.
 if ! vigocli --help >/dev/null 2>&1; then
@@ -477,20 +477,20 @@ done
 # but produces a noisier cleanup log).
 PAYLOAD_SHA=""
 
-# ───────────────────────── 2. Filesync end-to-end ─────────────────────────
-section "2. Filesync — drop file, sync, modify, propagate back, delete"
+# ───────────────────────── 2. Longdrawer end-to-end ─────────────────────────
+section "2. Longdrawer — drop file, sync, modify, propagate back, delete"
 
-# Filesync round-trip needs PRIMARY and SECONDARY both reachable. Skip
+# Longdrawer round-trip needs PRIMARY and SECONDARY both reachable. Skip
 # the whole section if not — we'd just be timing out on every assertion.
 if (( HOST_REACHABLE[$PRIMARY] == 0 || HOST_REACHABLE[$SECONDARY] == 0 )); then
-    skip "filesync round-trip needs both $PRIMARY and $SECONDARY reachable"
+    skip "longdrawer round-trip needs both $PRIMARY and $SECONDARY reachable"
 else
-# Pre-flight: every reachable envoy must have ~$FILESYNC_USER/filesync/. The
-# agent auto-creates it when the user is enrolled in filesync, but on
+# Pre-flight: every reachable envoy must have ~$LONGDRAWER_USER/longdrawer/. The
+# agent auto-creates it when the user is enrolled in longdrawer, but on
 # first boot it might not exist. mkdir is idempotent.
 for h in "${ALL_HOSTS[@]}"; do
     (( HOST_REACHABLE[$h] == 0 )) && continue
-    on_host_as_user "$h" "$FILESYNC_USER" 'mkdir -p $HOME/filesync' >/dev/null 2>&1 || true
+    on_host_as_user "$h" "$LONGDRAWER_USER" 'mkdir -p $HOME/longdrawer' >/dev/null 2>&1 || true
 done
 
 FS_NAME="phase-c-fs-$$-$(date +%s).txt"
@@ -498,18 +498,18 @@ FS_BODY_1="hello from $PRIMARY at $(date +%s)"
 FS_BODY_2="updated by $SECONDARY at $(date +%s)+1"
 
 step "$PRIMARY: write $FS_NAME with body 1"
-if on_host_as_user "$PRIMARY" "$FILESYNC_USER" "printf '%s\n' '$FS_BODY_1' > \$HOME/filesync/$FS_NAME"; then
-    pass "wrote ~/filesync/$FS_NAME on $PRIMARY"
+if on_host_as_user "$PRIMARY" "$LONGDRAWER_USER" "printf '%s\n' '$FS_BODY_1' > \$HOME/longdrawer/$FS_NAME"; then
+    pass "wrote ~/longdrawer/$FS_NAME on $PRIMARY"
 else
-    fail "could not write filesync file on $PRIMARY"
+    fail "could not write longdrawer file on $PRIMARY"
     exit 1
 fi
 
-step "polling for $FS_NAME on $SECONDARY (timeout ${FILESYNC_TIMEOUT}s)"
+step "polling for $FS_NAME on $SECONDARY (timeout ${LONGDRAWER_TIMEOUT}s)"
 elapsed=0
 synced=0
-while (( elapsed < FILESYNC_TIMEOUT )); do
-    if on_host_as_user "$SECONDARY" "$FILESYNC_USER" "test -f \$HOME/filesync/$FS_NAME" >/dev/null 2>&1; then
+while (( elapsed < LONGDRAWER_TIMEOUT )); do
+    if on_host_as_user "$SECONDARY" "$LONGDRAWER_USER" "test -f \$HOME/longdrawer/$FS_NAME" >/dev/null 2>&1; then
         synced=1
         break
     fi
@@ -519,11 +519,11 @@ done
 if (( synced == 1 )); then
     pass "$FS_NAME appeared on $SECONDARY in ${elapsed}s"
 else
-    fail "$FS_NAME did not appear on $SECONDARY within ${FILESYNC_TIMEOUT}s"
+    fail "$FS_NAME did not appear on $SECONDARY within ${LONGDRAWER_TIMEOUT}s"
 fi
 
 step "verify content on $SECONDARY matches body 1"
-remote_body=$(on_host_as_user "$SECONDARY" "$FILESYNC_USER" "cat \$HOME/filesync/$FS_NAME 2>/dev/null" | tr -d '\n')
+remote_body=$(on_host_as_user "$SECONDARY" "$LONGDRAWER_USER" "cat \$HOME/longdrawer/$FS_NAME 2>/dev/null" | tr -d '\n')
 if [[ "$remote_body" == "$FS_BODY_1" ]]; then
     pass "content matches"
 else
@@ -531,17 +531,17 @@ else
 fi
 
 step "$SECONDARY: overwrite $FS_NAME with body 2"
-if on_host_as_user "$SECONDARY" "$FILESYNC_USER" "printf '%s\n' '$FS_BODY_2' > \$HOME/filesync/$FS_NAME"; then
+if on_host_as_user "$SECONDARY" "$LONGDRAWER_USER" "printf '%s\n' '$FS_BODY_2' > \$HOME/longdrawer/$FS_NAME"; then
     pass "wrote update on $SECONDARY"
 else
     fail "could not write update on $SECONDARY"
 fi
 
-step "polling for body-2 update on $PRIMARY (timeout ${FILESYNC_TIMEOUT}s)"
+step "polling for body-2 update on $PRIMARY (timeout ${LONGDRAWER_TIMEOUT}s)"
 elapsed=0
 updated=0
-while (( elapsed < FILESYNC_TIMEOUT )); do
-    primary_body=$(on_host_as_user "$PRIMARY" "$FILESYNC_USER" "cat \$HOME/filesync/$FS_NAME 2>/dev/null" | tr -d '\n')
+while (( elapsed < LONGDRAWER_TIMEOUT )); do
+    primary_body=$(on_host_as_user "$PRIMARY" "$LONGDRAWER_USER" "cat \$HOME/longdrawer/$FS_NAME 2>/dev/null" | tr -d '\n')
     if [[ "$primary_body" == "$FS_BODY_2" ]]; then
         updated=1
         break
@@ -552,21 +552,21 @@ done
 if (( updated == 1 )); then
     pass "body-2 reflected on $PRIMARY in ${elapsed}s"
 else
-    fail "body-2 did not reach $PRIMARY within ${FILESYNC_TIMEOUT}s"
+    fail "body-2 did not reach $PRIMARY within ${LONGDRAWER_TIMEOUT}s"
 fi
 
 step "$PRIMARY: delete $FS_NAME"
-if on_host_as_user "$PRIMARY" "$FILESYNC_USER" "rm -f \$HOME/filesync/$FS_NAME"; then
-    pass "removed ~/filesync/$FS_NAME on $PRIMARY"
+if on_host_as_user "$PRIMARY" "$LONGDRAWER_USER" "rm -f \$HOME/longdrawer/$FS_NAME"; then
+    pass "removed ~/longdrawer/$FS_NAME on $PRIMARY"
 else
-    fail "could not delete filesync file on $PRIMARY"
+    fail "could not delete longdrawer file on $PRIMARY"
 fi
 
-step "polling for deletion to reach $SECONDARY (timeout ${FILESYNC_TIMEOUT}s)"
+step "polling for deletion to reach $SECONDARY (timeout ${LONGDRAWER_TIMEOUT}s)"
 elapsed=0
 deleted=0
-while (( elapsed < FILESYNC_TIMEOUT )); do
-    if ! on_host_as_user "$SECONDARY" "$FILESYNC_USER" "test -f \$HOME/filesync/$FS_NAME" >/dev/null 2>&1; then
+while (( elapsed < LONGDRAWER_TIMEOUT )); do
+    if ! on_host_as_user "$SECONDARY" "$LONGDRAWER_USER" "test -f \$HOME/longdrawer/$FS_NAME" >/dev/null 2>&1; then
         deleted=1
         break
     fi
@@ -576,6 +576,6 @@ done
 if (( deleted == 1 )); then
     pass "$FS_NAME removed from $SECONDARY in ${elapsed}s"
 else
-    fail "$FS_NAME still present on $SECONDARY after ${FILESYNC_TIMEOUT}s"
+    fail "$FS_NAME still present on $SECONDARY after ${LONGDRAWER_TIMEOUT}s"
 fi
-fi  # close: if filesync round-trip prerequisites met
+fi  # close: if longdrawer round-trip prerequisites met

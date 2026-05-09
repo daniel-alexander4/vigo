@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Filesync — per-user LAN-local directory sync across machines.
+//! Longdrawer — per-user LAN-local directory sync across machines.
 //!
-//! Each user's `~/filesync/` directory is mirrored to the same user's
-//! `~/filesync/` on every other machine on the LAN. File additions and
+//! Each user's `~/longdrawer/` directory is mirrored to the same user's
+//! `~/longdrawer/` on every other machine on the LAN. File additions and
 //! modifications propagate; deletions propagate via tombstones.
 //!
 //! ### Design
@@ -12,8 +12,8 @@
 //! - **Pure P2P**, LAN-only. No server involvement. Discovery via multicast
 //!   on `224.0.0.43:1532`, separate from swarm's 224.0.0.42:1531.
 //! - **Content transport** piggybacks on the existing swarm peer HTTPS
-//!   server (port 1531, mTLS). New route: `/filesync/{user}/{filename}`.
-//! - **State** per user is kept under `/var/lib/vigo/swarm/filesync/<user>.json`:
+//!   server (port 1531, mTLS). New route: `/longdrawer/{user}/{filename}`.
+//! - **State** per user is kept under `/var/lib/vigo/swarm/longdrawer/<user>.json`:
 //!   a file snapshot (name → sha256/mtime/size) plus tombstones
 //!   (name → deletion_time).
 //! - **Reconciliation** is last-write-wins by mtime, with tombstones that
@@ -71,25 +71,25 @@ const CYCLE_INTERVAL: Duration = Duration::from_secs(30);
 /// knob for accepting zombie files vs. unbounded tombstone growth.
 const TOMBSTONE_MAX_AGE_SECS: i64 = 30 * 24 * 3600;
 
-/// The swarm peer server port — filesync fetches file content from this port.
+/// The swarm peer server port — longdrawer fetches file content from this port.
 const PEER_PORT: u16 = crate::swarm::server::DEFAULT_PORT;
 
-/// Spawn the filesync daemon. Runs until the cancellation token fires.
+/// Spawn the longdrawer daemon. Runs until the cancellation token fires.
 ///
 /// Requires mTLS certs so it can fetch files from peers over HTTPS. If
-/// certs aren't available, filesync silently does nothing (same pattern
+/// certs aren't available, longdrawer silently does nothing (same pattern
 /// as the swarm peer server).
 pub fn spawn(tls: Option<TlsCerts>, cancel: CancellationToken) {
     let tls = match tls {
         Some(t) => t,
         None => {
-            debug!("filesync: no TLS certs, skipping (will not participate in sync)");
+            debug!("longdrawer: no TLS certs, skipping (will not participate in sync)");
             return;
         }
     };
 
     // Get a stable machine identifier. Hostname is good enough for LAN use;
-    // if two machines share a hostname, filesync will misbehave — document
+    // if two machines share a hostname, longdrawer will misbehave — document
     // it, don't try to solve it.
     let machine = std::fs::read_to_string("/etc/hostname")
         .unwrap_or_else(|_| "unknown".to_string())
@@ -97,7 +97,7 @@ pub fn spawn(tls: Option<TlsCerts>, cancel: CancellationToken) {
         .to_string();
 
     let (out_tx, in_tx, in_rx) = spawn_discovery(cancel.clone());
-    // Publish the inbound sender so the HTTPS `/filesync/announce` handler
+    // Publish the inbound sender so the HTTPS `/longdrawer/announce` handler
     // can feed cross-subnet announcements into the same reconciler path.
     let _ = INCOMING_ANNOUNCE.set(in_tx);
     let (extra_tx, extra_rx) = tokio::sync::mpsc::unbounded_channel::<ExtraPeerJob>();
@@ -106,16 +106,16 @@ pub fn spawn(tls: Option<TlsCerts>, cancel: CancellationToken) {
     tokio::spawn(run(machine, tls, out_tx, in_rx, extra_tx, cancel));
 }
 
-/// Inbound-announcement sender, published when the filesync daemon starts.
-/// The HTTPS `/filesync/announce` handler uses this to feed unicast
+/// Inbound-announcement sender, published when the longdrawer daemon starts.
+/// The HTTPS `/longdrawer/announce` handler uses this to feed unicast
 /// announcements from `cross_subnet_peers` into the same reconciler path that
-/// multicast discovery uses. `None` before filesync has spawned.
+/// multicast discovery uses. `None` before longdrawer has spawned.
 static INCOMING_ANNOUNCE: std::sync::OnceLock<tokio::sync::mpsc::Sender<IncomingAnnouncement>> =
     std::sync::OnceLock::new();
 
-/// Deliver a unicast announcement into the filesync reconciler. Returns
-/// true on success, false if filesync isn't running or the channel is
-/// full. Used by the `POST /filesync/announce` HTTPS handler.
+/// Deliver a unicast announcement into the longdrawer reconciler. Returns
+/// true on success, false if longdrawer isn't running or the channel is
+/// full. Used by the `POST /longdrawer/announce` HTTPS handler.
 pub fn submit_announcement(from: std::net::SocketAddr, announcement: Announcement) -> bool {
     match INCOMING_ANNOUNCE.get() {
         Some(tx) => tx
@@ -133,21 +133,21 @@ async fn run(
     extra_peer_tx: tokio::sync::mpsc::UnboundedSender<ExtraPeerJob>,
     cancel: CancellationToken,
 ) {
-    let state_dir = crate::platform::paths::default_filesync_dir();
+    let state_dir = crate::platform::paths::default_longdrawer_dir();
     if let Err(e) = std::fs::create_dir_all(&state_dir) {
-        warn!(path = %state_dir.display(), error = %e, "filesync: cannot create state dir");
+        warn!(path = %state_dir.display(), error = %e, "longdrawer: cannot create state dir");
         return;
     }
 
     let http = match build_peer_agent(&tls) {
         Ok(a) => Arc::new(a),
         Err(e) => {
-            warn!(error = %e, "filesync: cannot build peer HTTP agent");
+            warn!(error = %e, "longdrawer: cannot build peer HTTP agent");
             return;
         }
     };
 
-    info!(machine = %machine, state_dir = %state_dir.display(), "filesync daemon started");
+    info!(machine = %machine, state_dir = %state_dir.display(), "longdrawer daemon started");
 
     // Initial scan then loop.
     let mut tick = tokio::time::interval(CYCLE_INTERVAL);
@@ -158,7 +158,7 @@ async fn run(
             biased;
 
             _ = cancel.cancelled() => {
-                info!("filesync daemon shutting down");
+                info!("longdrawer daemon shutting down");
                 return;
             }
 
@@ -177,7 +177,7 @@ async fn run(
     }
 }
 
-/// Scan every user's `~/filesync/`, update state, and emit announcements.
+/// Scan every user's `~/longdrawer/`, update state, and emit announcements.
 async fn scan_and_announce(
     machine: &str,
     state_dir: &std::path::Path,
@@ -188,9 +188,9 @@ async fn scan_and_announce(
     let now = now_secs();
 
     for (user, home) in users {
-        let sync_dir = home.join("filesync");
+        let sync_dir = home.join("longdrawer");
         if !sync_dir.is_dir() {
-            // Skip users without a ~/filesync/ directory. They don't opt in.
+            // Skip users without a ~/longdrawer/ directory. They don't opt in.
             continue;
         }
 
@@ -208,7 +208,7 @@ async fn scan_and_announce(
         state.gc_tombstones(now, TOMBSTONE_MAX_AGE_SECS);
 
         if let Err(e) = state.save(state_dir) {
-            warn!(user = %user, error = %e, "filesync: failed to save state");
+            warn!(user = %user, error = %e, "longdrawer: failed to save state");
             continue;
         }
 
@@ -261,7 +261,7 @@ async fn run_extra_peer_pusher(
     let http = match build_peer_agent(&tls) {
         Ok(a) => Arc::new(a),
         Err(e) => {
-            warn!(error = %e, "filesync: cross_subnet_peers pusher could not build HTTPS agent");
+            warn!(error = %e, "longdrawer: cross_subnet_peers pusher could not build HTTPS agent");
             return;
         }
     };
@@ -278,7 +278,7 @@ async fn run_extra_peer_pusher(
                             host = %job.host,
                             user = %job.announcement.user,
                             error = %e,
-                            "filesync: extra_peer push failed (will retry next cycle)"
+                            "longdrawer: extra_peer push failed (will retry next cycle)"
                         );
                     }
                 });
@@ -288,15 +288,15 @@ async fn run_extra_peer_pusher(
     }
 }
 
-/// POST a filesync announcement to an extra peer's
-/// `/filesync/announce` route. Non-2xx responses return an error so
+/// POST a longdrawer announcement to an extra peer's
+/// `/longdrawer/announce` route. Non-2xx responses return an error so
 /// the caller can log them.
 /// Pull the full `UserState` for `user` from a peer via mTLS HTTPS.
 /// Called on digest-mismatch in the multicast receiver; the peer returns
-/// the JSON body served by `GET /swarm/filesync/state/{user}` on its swarm
+/// the JSON body served by `GET /swarm/longdrawer/state/{user}` on its swarm
 /// peer server. Blocking I/O — caller wraps in `spawn_blocking`.
 fn pull_user_state(http: &ureq::Agent, peer_addr: &str, user: &str) -> Result<UserState, anyhow::Error> {
-    let url = format!("https://{}/swarm/filesync/state/{}", peer_addr, user);
+    let url = format!("https://{}/swarm/longdrawer/state/{}", peer_addr, user);
     let resp = http.get(&url).call()?;
     let status = resp.status();
     if status != 200 {
@@ -314,7 +314,7 @@ fn push_announcement(
     ann: &Announcement,
 ) -> Result<(), anyhow::Error> {
     // Pre-flight disk-pressure probe. An announcement is tiny, but if
-    // the peer's `~<user>/filesync/` filesystem is ≤10% free it can't
+    // the peer's `~<user>/longdrawer/` filesystem is ≤10% free it can't
     // accept the files the announcement refers to either — skip the
     // round trip. Cached per (peer, purpose) for 60 s so periodic
     // re-announces don't hammer the health endpoint.
@@ -322,7 +322,7 @@ fn push_announcement(
     let outcome = probe(
         http,
         &format!("{}:{}", host, PEER_PORT),
-        &Purpose::Filesync { user: ann.user.clone() },
+        &Purpose::Longdrawer { user: ann.user.clone() },
     );
     if !outcome.allow() {
         anyhow::bail!(
@@ -332,7 +332,7 @@ fn push_announcement(
         );
     }
 
-    let url = format!("https://{}:{}/swarm/filesync/announce", host, PEER_PORT);
+    let url = format!("https://{}:{}/swarm/longdrawer/announce", host, PEER_PORT);
     let body = serde_json::to_vec(ann)?;
     let resp = http
         .post(&url)
@@ -362,7 +362,7 @@ async fn handle_incoming(
     let peer_ip = match incoming.from {
         std::net::SocketAddr::V4(v4) => v4.ip().to_string(),
         std::net::SocketAddr::V6(_) => {
-            debug!("filesync: ignoring IPv6 announcement");
+            debug!("longdrawer: ignoring IPv6 announcement");
             return;
         }
     };
@@ -374,11 +374,11 @@ async fn handle_incoming(
     let home = match crate::platform::users::user_home(&user) {
         Some(h) => h,
         None => {
-            debug!(user = %user, "filesync: no local home, ignoring");
+            debug!(user = %user, "longdrawer: no local home, ignoring");
             return;
         }
     };
-    let sync_dir = home.join("filesync");
+    let sync_dir = home.join("longdrawer");
 
     let mut local = UserState::load(state_dir, &user);
     // Cheap short-circuit: if the announcing peer's digest matches our
@@ -401,7 +401,7 @@ async fn handle_incoming(
     {
         Ok(Ok(s)) => s,
         Ok(Err(e)) => {
-            debug!(user = %user, peer = %peer_addr, error = %e, "filesync: state pull failed");
+            debug!(user = %user, peer = %peer_addr, error = %e, "longdrawer: state pull failed");
             return;
         }
         Err(_) => return, // spawn_blocking joined with panic
@@ -418,7 +418,7 @@ async fn handle_incoming(
         peer = %peer_addr,
         actions = outcome.actions.len(),
         tombstones = outcome.merged_tombstones.len(),
-        "filesync: reconciling incoming announcement"
+        "longdrawer: reconciling incoming announcement"
     );
 
     // Apply actions (may block on I/O, so run in a blocking task).
@@ -437,7 +437,7 @@ async fn handle_incoming(
                     peer = %peer_addr_clone,
                     action = ?action,
                     error = %e,
-                    "filesync: apply failed"
+                    "longdrawer: apply failed"
                 ),
             }
         }
@@ -468,7 +468,7 @@ async fn handle_incoming(
     merge_tombstones(&mut local, outcome.merged_tombstones);
 
     if let Err(e) = local.save(state_dir) {
-        warn!(user = %user, error = %e, "filesync: failed to save state after reconcile");
+        warn!(user = %user, error = %e, "longdrawer: failed to save state after reconcile");
     }
 }
 

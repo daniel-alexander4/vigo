@@ -97,6 +97,8 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 //     (now a pattern list of hostname globs).
 //   - swarm.payload.* — retired in the swarmcast rename; the same
 //     authorization lives at swarm.swarmcast.* now.
+//   - swarm.filesync.* — retired in the longdrawer rename; the same
+//     authorization lives at swarm.longdrawer.* now.
 //
 // Without this, yaml.v3 would silently drop unknown fields and surface
 // shape mismatches as opaque type errors. This pre-parse pass produces a
@@ -114,11 +116,8 @@ func detectRetiredSwarmShape(data []byte) error {
 				Enabled   any `yaml:"enabled"`
 				Blacklist any `yaml:"blacklist"`
 			} `yaml:"gitmirror"`
-			Filesync struct {
-				Enabled   any `yaml:"enabled"`
-				Blacklist any `yaml:"blacklist"`
-			} `yaml:"filesync"`
-			Payload any `yaml:"payload"`
+			Filesync any `yaml:"filesync"`
+			Payload  any `yaml:"payload"`
 		} `yaml:"swarm"`
 	}
 	if err := yaml.Unmarshal(data, &raw); err != nil {
@@ -142,11 +141,8 @@ func detectRetiredSwarmShape(data []byte) error {
 	if raw.Swarm.Gitmirror.Blacklist != nil {
 		retired = append(retired, "swarm.gitmirror.blacklist — retired; use a deny pattern in swarm.gitmirror.enabled (e.g. [\"-rasp1\", \"*\"])")
 	}
-	if isBoolScalar(raw.Swarm.Filesync.Enabled) {
-		retired = append(retired, "swarm.filesync.enabled is a bool but must be a pattern list")
-	}
-	if raw.Swarm.Filesync.Blacklist != nil {
-		retired = append(retired, "swarm.filesync.blacklist — retired; use a deny pattern in swarm.filesync.enabled")
+	if raw.Swarm.Filesync != nil {
+		retired = append(retired, "swarm.filesync.* — retired in the longdrawer rename; move the entire section to swarm.longdrawer.* (same fields)")
 	}
 	if raw.Swarm.Payload != nil {
 		retired = append(retired, "swarm.payload.* — retired in the swarmcast rename; move the entire section to swarm.swarmcast.* (same fields)")

@@ -27,7 +27,7 @@
 //!   outside the user's home so the user's `~/.cryptsync/` is
 //!   cleanly "my keys + who I trust."
 //!
-//! Unlike filesync, cryptsync never writes a plaintext identity to
+//! Unlike longdrawer, cryptsync never writes a plaintext identity to
 //! disk. The wrap key is derived from the user's cryptsync password
 //! via Argon2id; only the per-user session helper (week 3) holds the
 //! unwrapped bytes at runtime, and only in memory.

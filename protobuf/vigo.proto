@@ -298,7 +298,7 @@ message SwarmRuntimeLimits {
   uint64 cryptsync_envelope_retention_secs = 4;  // LEAVE/RESURRECT/TOMBSTONE retention before reap; 0 = compile-time default (90d)
   uint64 gitmirror_max_bundle_bytes = 5;         // per-bundle fan-out cap; 0 = no cap
   uint64 gitmirror_envelope_retention_secs = 6;  // revoke/leave envelope retention before reap; 0 = compile-time default (90d)
-  uint64 filesync_max_file_bytes = 7;            // per-file size cap on LAN sync; 0 = no cap
+  uint64 longdrawer_max_file_bytes = 7;            // per-file size cap on LAN sync; 0 = no cap
 }
 
 // SwarmManifestEntry is a single entry in the swarm manifest CRDT,

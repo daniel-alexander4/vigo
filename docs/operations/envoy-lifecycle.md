@@ -26,7 +26,7 @@ For the HIPAA-flavored physical-disposal procedure (sanitize on-disk Vigo state,
 - **Audit log** — append-only, untouched.
 - **Cryptsync recipients on other envoys** — *cleared* (the envoy can no longer decrypt cryptsync ciphertext that lands on its peers, and the peers stop encrypting to it).
 - **Gitmirror project membership** — preserved. The envoy's bare repos under `/var/lib/vigo/swarm/gitmirror/projects/` stay on disk; if the host is re-enrolled under the same puddle, projects come back.
-- **Filesync state on other envoys** — unchanged (filesync has no server-side per-envoy state to clean up).
+- **Longdrawer state on other envoys** — unchanged (longdrawer has no server-side per-envoy state to clean up).
 - **Sandgorgon asset record** — preserved.
 
 ### After delete (and purge)

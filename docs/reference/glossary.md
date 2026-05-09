@@ -49,7 +49,7 @@ The Rust implementation of a resource type in the agent (`file`, `package`, `ser
 
 ## payload
 
-Administrator-pushed file distribution on top of the [swarm](#swarm) substrate. An operator runs `vigocli swarm distribute <file>` (or drops a payload + `.swarm` sidecar on a seeder) and the blob replicates across the fleet via swarm's peer channel. Payload is one of four content subsystems that ride swarm; the other three ([filesync](#filesync), [gitmirror](#gitmirror), [cryptsync](#cryptsync)) are user-scoped, while payload is operator-scoped and fleet-wide. Surfaced in the web UI at [`/payload`](ui/swarm-swarmcast.md). The CLI verb still reads `vigocli swarm …` because it predates the name split.
+Administrator-pushed file distribution on top of the [swarm](#swarm) substrate. An operator runs `vigocli swarm distribute <file>` (or drops a payload + `.swarm` sidecar on a seeder) and the blob replicates across the fleet via swarm's peer channel. Payload is one of four content subsystems that ride swarm; the other three ([longdrawer](#longdrawer), [gitmirror](#gitmirror), [cryptsync](#cryptsync)) are user-scoped, while payload is operator-scoped and fleet-wide. Surfaced in the web UI at [`/payload`](ui/swarm-swarmcast.md). The CLI verb still reads `vigocli swarm …` because it predates the name split.
 
 ## manifest
 
@@ -101,7 +101,7 @@ A module definition file in `stockpile/modules/**/*.vgo`. The directory name `mo
 
 ## swarm
 
-The envoy-only P2P network substrate. Swarm is the transport layer that all P2P content subsystems ride on: peer discovery (multicast on `224.0.0.42:1531` + registry-backed hints), mTLS HTTPS between envoys on port 1531, manifest CRDT gossip, and content-addressed chunking. Swarm does not itself define *what* gets distributed — the four content subsystems do: [payload](#payload) (admin-pushed blobs), [filesync](#filesync) (plaintext home-dir sync), [gitmirror](#gitmirror) (source-control repo mirrors), [cryptsync](#cryptsync) (encrypted home-dir sync). Each subsystem has its own content rules but reuses swarm's peer channel, port, and mTLS trust. See [Swarm](../engineering/subsystems/swarm.md).
+The envoy-only P2P network substrate. Swarm is the transport layer that all P2P content subsystems ride on: peer discovery (multicast on `224.0.0.42:1531` + registry-backed hints), mTLS HTTPS between envoys on port 1531, manifest CRDT gossip, and content-addressed chunking. Swarm does not itself define *what* gets distributed — the four content subsystems do: [payload](#payload) (admin-pushed blobs), [longdrawer](#longdrawer) (plaintext home-dir sync), [gitmirror](#gitmirror) (source-control repo mirrors), [cryptsync](#cryptsync) (encrypted home-dir sync). Each subsystem has its own content rules but reuses swarm's peer channel, port, and mTLS trust. See [Swarm](../engineering/subsystems/swarm.md).
 
 ## trait
 
@@ -115,7 +115,7 @@ A config module scoped to one or more users' environments (account creation, hom
 
 ## cryptsync
 
-Per-user always-encrypted home-directory sync on the [swarm](#swarm) substrate. Files dropped into `~/cryptsync/` are age-encrypted to every enrolled envoy in the user's mesh and synced as ciphertext — every envoy holds the same encrypted bytes, only mesh members can decrypt. Requires the user's cryptsync password for decryption. The encryption-first sibling of [filesync](#filesync): same transport, different content rules. See [Cryptsync](../engineering/subsystems/cryptsync.md).
+Per-user always-encrypted home-directory sync on the [swarm](#swarm) substrate. Files dropped into `~/cryptsync/` are age-encrypted to every enrolled envoy in the user's mesh and synced as ciphertext — every envoy holds the same encrypted bytes, only mesh members can decrypt. Requires the user's cryptsync password for decryption. The encryption-first sibling of [longdrawer](#longdrawer): same transport, different content rules. See [Cryptsync](../engineering/subsystems/cryptsync.md).
 
 ## puddle
 
@@ -129,9 +129,9 @@ The primary onboarding flow for [puddle](#puddle) and (by ADR-015) the unified g
 
 Personal disaster-recovery source-control distribution on the [swarm](#swarm) substrate. The agent scans `~/gitmirror/<project>/` for repositories with a `.gitmirror.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P on top of swarm — no server involvement in selection or delivery. Default-deny per-envoy in 0.41.0+; operators authorize hosts via the `swarm.gitmirror.enabled` pattern list in server.yaml (first-match-wins, `-` prefix denies). Per-user opt-in is gated by the `gitmirror: true` flag on the user resource in the usercrate. See [Gitmirror](../engineering/subsystems/gitmirror.md).
 
-## filesync
+## longdrawer
 
-Per-user home-directory sync on the [swarm](#swarm) substrate. Files in `~/filesync/` replicate to peer envoys over swarm's mTLS peer HTTPS channel, with filesync's own LAN multicast group on `224.0.0.43:1532` for discovery. Plaintext at rest (encryption moved to [cryptsync](#cryptsync) as of 0.26.1). Cross-subnet peers via `cross_subnet_peers:` in `~/.filesync/config.yaml`. See [Filesync](../engineering/subsystems/filesync.md).
+Per-user home-directory sync on the [swarm](#swarm) substrate. Files in `~/longdrawer/` replicate to peer envoys over swarm's mTLS peer HTTPS channel, with longdrawer's own LAN multicast group on `224.0.0.43:1532` for discovery. Plaintext at rest (encryption moved to [cryptsync](#cryptsync) as of 0.26.1). Cross-subnet peers via `cross_subnet_peers:` in `~/.longdrawer/config.yaml`. See [Longdrawer](../engineering/subsystems/longdrawer.md).
 
 ## audit bundle
 

@@ -10,7 +10,7 @@
 // join. Types + snapshot functions live here so `server/api` and
 // `ui/` can both consume them without creating an import cycle — the
 // same split the content-subsystem aggregators use
-// (gitmirrormesh/filesyncmesh/cryptsyncmesh).
+// (gitmirrormesh/longdrawermesh/cryptsyncmesh).
 //
 // All functions are pure reads over already-in-memory data; nothing
 // here runs on the agent check-in hot path.
@@ -27,7 +27,7 @@ import (
 // EnvoyInput is the minimal per-envoy shape swarmview needs from the
 // fleet index. Declared here so this package doesn't import
 // server/fleet — matches the pattern in server/gitmirrormesh and
-// server/filesyncmesh. Callers convert fleet.EnvoyState → EnvoyInput
+// server/longdrawermesh. Callers convert fleet.EnvoyState → EnvoyInput
 // before calling Snapshot*.
 type EnvoyInput struct {
 	ID       string

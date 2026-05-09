@@ -382,9 +382,9 @@ watcher:
 #     max_bundle_bytes: 1073741824              # 1 GiB. 0 = no cap.
 #     envelope_retention: "90d"                 # revoke/leave envelope reap window. Empty = compile-time default (90d).
 #
-#   # Filesync (LAN plaintext directory mirror). Per-user opt-in still
-#   # requires the user creating ~/filesync/.
-#   filesync:
+#   # Longdrawer (LAN plaintext directory mirror). Per-user opt-in still
+#   # requires the user creating ~/longdrawer/.
+#   longdrawer:
 #     enabled: ["*"]
 #     max_file_bytes: 2147483648                # 2 GiB. 0 = no cap.
 #

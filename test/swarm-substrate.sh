@@ -4,7 +4,7 @@
 #
 # End-to-end swarm validation against a real Vigo fleet.
 #
-# Exercises all four swarm content subsystems — payload, filesync,
+# Exercises all four swarm content subsystems — payload, longdrawer,
 # puddle (lifecycle), cryptsync, gitmirror — in sequence. Pass/fail per
 # step, exit non-zero on any failure. Mirrors the manual procedure
 # captured in tshoot/log-substrate-2026-05-09.md so a future "did
@@ -21,10 +21,10 @@
 # Behavior:
 #   --wipe is required and destructive. Stops the agent on each envoy,
 #   removes per-user swarm dirs (~/.vigo-puddle, ~/.cryptsync,
-#   ~/cryptsync, ~/.vigo-gitmirror, ~/filesync), removes the
+#   ~/cryptsync, ~/.vigo-gitmirror, ~/longdrawer), removes the
 #   root-owned /var/lib/vigo/swarm/{gitmirror,cryptsync}, restarts the
 #   agent, then runs the full 5-step substrate sequence (payload →
-#   filesync → puddle → cryptsync → gitmirror) from a clean slate.
+#   longdrawer → puddle → cryptsync → gitmirror) from a clean slate.
 #
 # Why no non-destructive mode: gitmirror's project_id is fixed by the
 # founder's puddle pubkey, so a single founder can only have ONE
@@ -175,7 +175,7 @@ if [[ $WIPE -eq 1 ]]; then
         ssh "$h" '
             set -e
             sudo systemctl stop vigo-envoy
-            rm -rf ~/.vigo-puddle ~/.cryptsync ~/cryptsync ~/.vigo-gitmirror ~/filesync
+            rm -rf ~/.vigo-puddle ~/.cryptsync ~/cryptsync ~/.vigo-gitmirror ~/longdrawer
             sudo rm -rf /var/lib/vigo/swarm/gitmirror /var/lib/vigo/swarm/cryptsync
             sudo systemctl start vigo-envoy
             # Poll for active state — vigo-envoy can spend several
@@ -223,32 +223,32 @@ if true; then
     ok "payload materialized on ${#HOSTS[@]} envoys"
 fi
 
-# ---------- step 4: filesync ----------
+# ---------- step 4: longdrawer ----------
 
 if true; then
-    step "filesync: drop on $FOUNDER, watch peers"
+    step "longdrawer: drop on $FOUNDER, watch peers"
     for h in "${HOSTS[@]}"; do
-        ssh "$h" 'mkdir -p ~/filesync'
+        ssh "$h" 'mkdir -p ~/longdrawer'
     done
-    ssh "$FOUNDER" "echo '$TAG filesync from $FOUNDER' > ~/filesync/$TAG.txt"
+    ssh "$FOUNDER" "echo '$TAG longdrawer from $FOUNDER' > ~/longdrawer/$TAG.txt"
 
     deadline=$(( $(date +%s) + 60 ))
     while :; do
         ready=0
         for h in "${RECEIVERS[@]}"; do
-            if ssh "$h" "test -f ~/filesync/$TAG.txt"; then
+            if ssh "$h" "test -f ~/longdrawer/$TAG.txt"; then
                 ready=$((ready+1))
             fi
         done
         echo "  receivers ready: $ready/${#RECEIVERS[@]}"
         [[ $ready -eq ${#RECEIVERS[@]} ]] && break
         if [[ $(date +%s) -ge $deadline ]]; then
-            bad "filesync didn't propagate to all receivers within 60s"
+            bad "longdrawer didn't propagate to all receivers within 60s"
             exit 1
         fi
         sleep 3
     done
-    ok "filesync propagated to ${#RECEIVERS[@]} receiver(s)"
+    ok "longdrawer propagated to ${#RECEIVERS[@]} receiver(s)"
 fi
 
 # ---------- step 5: puddle ----------

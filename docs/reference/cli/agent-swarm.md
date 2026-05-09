@@ -45,7 +45,7 @@ Swarm posture for this envoy
   Gates (resolved from server pattern lists):
     swarm:        on
     payload:      on
-    filesync:     on
+    longdrawer:     on
     puddle:       on  (cryptsync follows)
     gitmirror:    on
 

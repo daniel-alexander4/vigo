@@ -5,17 +5,17 @@
 
 Cryptsync keeps `~/cryptsync/` in sync across every envoy where a user is enrolled, **ciphertext at rest** everywhere. Drop a plaintext file on the primary, cryptsync encrypts it to every peer's public key and fans out the ciphertext. Unlock with the user's cryptsync password on any envoy to decrypt.
 
-Cryptsync is the encryption-first sibling of [Filesync](filesync.md):
+Cryptsync is the encryption-first sibling of [Longdrawer](longdrawer.md):
 
-| | Filesync | Cryptsync |
+| | Longdrawer | Cryptsync |
 |---|---|---|
 | At-rest state | Plaintext | **Ciphertext** everywhere |
 | Key material | N/A | Per-envoy age identity, password-wrapped |
 | Read access | Any user login | Requires `vigo swarm cryptsync unlock` (password) |
 | Fan-out trigger | Directory scan every 30s | Filesystem watch + explicit CLI |
-| Membership | Any user on the LAN with `~/filesync/` | `cryptsync: true` on the user's usercrate |
+| Membership | Any user on the LAN with `~/longdrawer/` | `cryptsync: true` on the user's usercrate |
 
-Pick filesync for ambient work files you want across machines. Pick cryptsync for anything you'd want to stay unreadable on a stolen envoy.
+Pick longdrawer for ambient work files you want across machines. Pick cryptsync for anything you'd want to stay unreadable on a stolen envoy.
 
 Cryptsync is one of four content subsystems that ride the [swarm](swarm.md) substrate. The server plays no role in content or keys — cryptsync reuses swarm's mTLS peer channel (port 1531) for ciphertext transfers and runs its own multicast group (`224.0.0.44:1533`) for announcements.
 
@@ -285,7 +285,7 @@ Pattern-list changes record tamper-evident audit-chain entries (`swarm.puddle.en
 - Root compromise on an envoy with an active unlocked session — root can read the session helper's memory.
 - Keyloggers or compromised shells capturing the password.
 - Weak passwords (Argon2id slows brute force but doesn't prevent it).
-- Filename, size, or mtime leakage — these are not encrypted (deliberate, matches filesync's boundary).
+- Filename, size, or mtime leakage — these are not encrypted (deliberate, matches longdrawer's boundary).
 
 Lose the password on every envoy and the data is unrecoverable. Phase 1 has no key escrow.
 
@@ -293,7 +293,7 @@ Lose the password on every envoy and the data is unrecoverable. Phase 1 has no k
 
 Every enrolled envoy ships a `cryptsync` trait on each check-in carrying per-user state: file count, `recent_files: [last 20 by mtime]`, ciphertext SHA-256 digest, tombstone count + recent deletions, known peers (hostname + pubkey + sign_pubkey), and the current session-helper-unlocked signal. The server-side aggregator (`server/cryptsyncmesh/`) joins these across the fleet to power the `/cryptsync` page.
 
-The `/filesync`, `/cryptsync`, `/gitmirror` pages and every mesh endpoint (`/api/v1/swarm/filesync/*`, `/api/v1/swarm/cryptsync/*`, `/api/v1/swarm/gitmirror/fleet`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't appropriate for non-admin roles. Viewer and compliance-role users get a 403 on direct access and don't see the nav links. The legacy `/mesh` URL 301-redirects to `/filesync` (or `/cryptsync` with `?tab=crypt`) for one release while muscle memory migrates.
+The `/longdrawer`, `/cryptsync`, `/gitmirror` pages and every mesh endpoint (`/api/v1/swarm/longdrawer/*`, `/api/v1/swarm/cryptsync/*`, `/api/v1/swarm/gitmirror/fleet`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't appropriate for non-admin roles. Viewer and compliance-role users get a 403 on direct access and don't see the nav links. The legacy `/mesh` URL 301-redirects to `/longdrawer` (or `/cryptsync` with `?tab=crypt`) for one release while muscle memory migrates.
 
 Operator-facing signals surfaced on that page:
 
@@ -308,6 +308,6 @@ Ciphertext SHA-256 is cached per-(filename, mtime, size) at `/var/lib/vigo/swarm
 
 ## Relationship to Other Subsystems
 
-- **Filesync** is the plaintext sibling. Cryptsync does not replace it; pick whichever matches the threat model.
+- **Longdrawer** is the plaintext sibling. Cryptsync does not replace it; pick whichever matches the threat model.
 - **Swarm** handles fleet-wide blob distribution (Vigo-managed content). Cryptsync rides on the same mTLS peer server (port 1531) but uses its own routes, its own multicast group (224.0.0.44:1533), and its own peer table — no shared state.
 - **Gitmirror** is the git-repo sibling for personal DR. Similar opt-in pattern; different subsystem entirely.

@@ -316,7 +316,7 @@ func TestTaskHandler_RequireDefinitionBlocksAdHoc(t *testing.T) {
 	handler.RegisterRoutes(mux)
 
 	// Ad-hoc command (no taskName) should be rejected.
-	body := `{"command":"filesync hello","target":"*"}`
+	body := `{"command":"longdrawer hello","target":"*"}`
 	req := httptest.NewRequest("POST", "/api/v1/task", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, adminReq(req))

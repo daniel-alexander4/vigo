@@ -12,7 +12,7 @@ import (
 )
 
 // CryptsyncPageData drives `ui/templates/pages/cryptsync.html`. Same
-// engineer-first shape as filesync: health banner + problems first.
+// engineer-first shape as longdrawer: health banner + problems first.
 type CryptsyncPageData struct {
 	PageData
 	Health HealthBanner

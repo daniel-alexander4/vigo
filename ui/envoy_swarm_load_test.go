@@ -48,8 +48,8 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 			Size: 4_096, SizeHuman: "4.0 KiB",
 			Status: "stale", When: "45d ago", Link: "/swarm/gitmirror/gitmirror:danlap:dan:vigo",
 		}},
-		Filesync: []SwarmLoadRow{{
-			Name: "~dan/filesync/notes.md", Detail: "user dan",
+		Longdrawer: []SwarmLoadRow{{
+			Name: "~dan/longdrawer/notes.md", Detail: "user dan",
 			Size: 2_048, SizeHuman: "2.0 KiB",
 			Status: "live", When: "just now",
 		}},
@@ -71,10 +71,10 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 	// up at least one won't appear.
 	for _, must := range []string{
 		"Total Swarm Footprint",
-		">Payload<", ">Gitmirror<", ">Filesync<", ">Cryptsync<",
+		">Payload<", ">Gitmirror<", ">Longdrawer<", ">Cryptsync<",
 		"firmware.bin",
 		"/var/lib/vigo/swarm/gitmirror/mirrors/danlap/dan/vigo.git",
-		"~dan/filesync/notes.md",
+		"~dan/longdrawer/notes.md",
 		"~dan/cryptsync/secrets.age",
 	} {
 		if !strings.Contains(body, must) {

@@ -163,12 +163,12 @@ Circular dependencies are rejected at config load time:
 resources:
   - name: a
     type: exec
-    command: "filesync a"
+    command: "longdrawer a"
     depends_on: [b]
 
   - name: b
     type: exec
-    command: "filesync b"
+    command: "longdrawer b"
     depends_on: [a]
 ```
 

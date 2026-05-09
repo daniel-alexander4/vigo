@@ -188,10 +188,10 @@ pub fn unwrap_identity(blob: &[u8], password: &[u8], salt: &[u8]) -> Result<Iden
 
 // ---------- age content encryption ----------
 //
-// These mirror filesync/crypt.rs::encrypt_in_place / decrypt_to_writer
+// These mirror longdrawer/crypt.rs::encrypt_in_place / decrypt_to_writer
 // but are re-exported here because cryptsync is deliberately
 // self-contained (see plan_cryptsync.md "Reuse vs. duplication with
-// filesync"). Shared extraction happens only if a third consumer
+// longdrawer"). Shared extraction happens only if a third consumer
 // appears.
 
 /// Age file magic — every age-encrypted file begins with this line.

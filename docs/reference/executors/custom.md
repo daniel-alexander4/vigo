@@ -55,22 +55,22 @@ Place scripts in `/etc/vigo/executors/` (or the configured custom executor direc
 ```bash
 #!/bin/bash
 INPUT=$(cat)
-DRY_RUN=$(filesync "$INPUT" | jq -r '.dry_run')
-NAME=$(filesync "$INPUT" | jq -r '.params.name')
+DRY_RUN=$(longdrawer "$INPUT" | jq -r '.dry_run')
+NAME=$(longdrawer "$INPUT" | jq -r '.params.name')
 # Check current state
 if [ -f "/var/lib/myapp/$NAME" ]; then
-    filesync '{"action": "already in desired state", "changed": false, "error": ""}'
+    longdrawer '{"action": "already in desired state", "changed": false, "error": ""}'
     exit 0
 fi
 
 if [ "$DRY_RUN" = "true" ]; then
-    filesync '{"action": "created", "changed": true, "error": ""}'
+    longdrawer '{"action": "created", "changed": true, "error": ""}'
     exit 0
 fi
 
 # Apply change
 touch "/var/lib/myapp/$NAME"
-filesync '{"action": "created", "changed": true, "error": ""}'
+longdrawer '{"action": "created", "changed": true, "error": ""}'
 ```
 
 ### Using the custom executor

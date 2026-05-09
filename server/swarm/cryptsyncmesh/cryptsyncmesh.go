@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package cryptsyncmesh builds the fleet-wide cryptsync
-// observability view. Same pattern as filesyncmesh — trait-based
+// observability view. Same pattern as longdrawermesh — trait-based
 // projection over the standard check-in pipeline — plus two
 // cryptsync-specific signals:
 //
@@ -101,7 +101,7 @@ type TombstoneRow struct {
 	KnownOn      []string `json:"known_on"`
 }
 
-// StaleAfter matches filesyncmesh — 5 minutes between the last
+// StaleAfter matches longdrawermesh — 5 minutes between the last
 // reported trait and "now" flips an envoy to stale.
 const StaleAfter = 5 * time.Minute
 

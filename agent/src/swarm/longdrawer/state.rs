@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Per-user filesync state: file snapshot + tombstones, persisted as JSON.
+//! Per-user longdrawer state: file snapshot + tombstones, persisted as JSON.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// A file currently present in a user's ~/filesync/ directory.
+/// A file currently present in a user's ~/longdrawer/ directory.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileEntry {
     pub sha256: String,
@@ -26,7 +26,7 @@ pub struct Tombstone {
     pub deletion_time: i64,
 }
 
-/// Per-user filesync state — files currently present plus deletion tombstones.
+/// Per-user longdrawer state — files currently present plus deletion tombstones.
 ///
 /// Uses BTreeMap for stable serialization order so the sha256 of the serialized
 /// state is deterministic across machines.
@@ -62,7 +62,7 @@ impl UserState {
         fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
         let path = Self::state_path(dir, &self.user);
         let tmp = path.with_extension("json.tmp");
-        let json = serde_json::to_string_pretty(self).context("serializing filesync state")?;
+        let json = serde_json::to_string_pretty(self).context("serializing longdrawer state")?;
         fs::write(&tmp, json).with_context(|| format!("writing {}", tmp.display()))?;
         fs::rename(&tmp, &path).with_context(|| format!("renaming to {}", path.display()))?;
         Ok(())
@@ -119,7 +119,7 @@ impl UserState {
 /// announcement tells receivers who this machine is, how to reach it, and
 /// a short digest of the state. Receivers compare the digest against the
 /// last one they observed from this peer; on mismatch, they pull
-/// `GET /filesync/state/{user}` from the announcing peer via mTLS and hand
+/// `GET /longdrawer/state/{user}` from the announcing peer via mTLS and hand
 /// the full `UserState` to the reconciler.
 ///
 /// The previous wire format (full `UserState` embedded in the packet)

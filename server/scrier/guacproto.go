@@ -308,7 +308,7 @@ func buildConnectArgs(argNames []string, protocol, host, port, sshUsername strin
 				values[i] = ""
 			}
 		default:
-			// Filesync the version string back so guacd uses the correct protocol level.
+			// Longdrawer the version string back so guacd uses the correct protocol level.
 			// Without this, guacd falls back to VERSION_1_0_0 behavior.
 			if strings.HasPrefix(name, "VERSION_") {
 				values[i] = name

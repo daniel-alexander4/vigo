@@ -48,7 +48,7 @@ test-integration: build-agent
 # plex,girlslaptop,annlap; override via VIGO_FLEET). Destructive: wipes
 # per-user swarm state and root-owned /var/lib/vigo/swarm/{gitmirror,
 # cryptsync} on every envoy, then runs the full 5-step substrate
-# sequence (payload → filesync → puddle → cryptsync → gitmirror) from
+# sequence (payload → longdrawer → puddle → cryptsync → gitmirror) from
 # a clean slate. Mirrors tshoot/log-substrate-2026-05-09.md.
 #
 # For a fleet-free quick smoke, run `make test-agent` (picks up

@@ -23,7 +23,7 @@ name: deploy
 description: Deploy application
 steps:
   - name: setup
-    command: filesync setup
+    command: longdrawer setup
     target: "*.web.*"
   - name: restart
     task: restart-app
@@ -32,7 +32,7 @@ steps:
       env: staging
     on_failure: rollback
   - name: rollback
-    command: filesync rollback
+    command: longdrawer rollback
     target: "*.web.*"
 `)
 
@@ -72,7 +72,7 @@ func TestEngine_LoadDefaultName(t *testing.T) {
 	writeWorkflow(t, dir, "myflow.vgo", `
 steps:
   - name: step1
-    command: filesync ok
+    command: longdrawer ok
     target: "*"
 `)
 
@@ -114,7 +114,7 @@ func TestEngine_RollingParams(t *testing.T) {
 name: rolling
 steps:
   - name: deploy
-    command: filesync deploy
+    command: longdrawer deploy
     target: "*.web.*"
     batch_size: "2"
     max_failures: "1"
@@ -165,15 +165,15 @@ func TestEngine_OnSuccessOnFailure(t *testing.T) {
 name: branch
 steps:
   - name: check
-    command: filesync check
+    command: longdrawer check
     target: "*"
     on_success: deploy
     on_failure: alert
   - name: deploy
-    command: filesync deploy
+    command: longdrawer deploy
     target: "*"
   - name: alert
-    command: filesync alert
+    command: longdrawer alert
     target: "*"
 `)
 

@@ -519,7 +519,7 @@ type SwarmRuntimeLimits struct {
 	CryptsyncEnvelopeRetentionSecs uint64                 `protobuf:"varint,4,opt,name=cryptsync_envelope_retention_secs,json=cryptsyncEnvelopeRetentionSecs,proto3" json:"cryptsync_envelope_retention_secs,omitempty"` // LEAVE/RESURRECT/TOMBSTONE retention before reap; 0 = compile-time default (90d)
 	GitmirrorMaxBundleBytes        uint64                 `protobuf:"varint,5,opt,name=gitmirror_max_bundle_bytes,json=gitmirrorMaxBundleBytes,proto3" json:"gitmirror_max_bundle_bytes,omitempty"`                      // per-bundle fan-out cap; 0 = no cap
 	GitmirrorEnvelopeRetentionSecs uint64                 `protobuf:"varint,6,opt,name=gitmirror_envelope_retention_secs,json=gitmirrorEnvelopeRetentionSecs,proto3" json:"gitmirror_envelope_retention_secs,omitempty"` // revoke/leave envelope retention before reap; 0 = compile-time default (90d)
-	FilesyncMaxFileBytes           uint64                 `protobuf:"varint,7,opt,name=filesync_max_file_bytes,json=filesyncMaxFileBytes,proto3" json:"filesync_max_file_bytes,omitempty"`                               // per-file size cap on LAN sync; 0 = no cap
+	LongdrawerMaxFileBytes         uint64                 `protobuf:"varint,7,opt,name=longdrawer_max_file_bytes,json=longdrawerMaxFileBytes,proto3" json:"longdrawer_max_file_bytes,omitempty"`                         // per-file size cap on LAN sync; 0 = no cap
 	unknownFields                  protoimpl.UnknownFields
 	sizeCache                      protoimpl.SizeCache
 }
@@ -596,9 +596,9 @@ func (x *SwarmRuntimeLimits) GetGitmirrorEnvelopeRetentionSecs() uint64 {
 	return 0
 }
 
-func (x *SwarmRuntimeLimits) GetFilesyncMaxFileBytes() uint64 {
+func (x *SwarmRuntimeLimits) GetLongdrawerMaxFileBytes() uint64 {
 	if x != nil {
-		return x.FilesyncMaxFileBytes
+		return x.LongdrawerMaxFileBytes
 	}
 	return 0
 }
@@ -7553,15 +7553,15 @@ const file_vigo_proto_rawDesc = "" +
 	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12F\n" +
 	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\x12M\n" +
-	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimitsJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xd0\x03\n" +
+	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimitsJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xd4\x03\n" +
 	"\x12SwarmRuntimeLimits\x127\n" +
 	"\x18swarmcast_max_size_bytes\x18\x01 \x01(\x04R\x15swarmcastMaxSizeBytes\x12>\n" +
 	"\x1bswarmcast_default_retention\x18\x02 \x01(\tR\x19swarmcastDefaultRetention\x127\n" +
 	"\x18cryptsync_max_file_bytes\x18\x03 \x01(\x04R\x15cryptsyncMaxFileBytes\x12I\n" +
 	"!cryptsync_envelope_retention_secs\x18\x04 \x01(\x04R\x1ecryptsyncEnvelopeRetentionSecs\x12;\n" +
 	"\x1agitmirror_max_bundle_bytes\x18\x05 \x01(\x04R\x17gitmirrorMaxBundleBytes\x12I\n" +
-	"!gitmirror_envelope_retention_secs\x18\x06 \x01(\x04R\x1egitmirrorEnvelopeRetentionSecs\x125\n" +
-	"\x17filesync_max_file_bytes\x18\a \x01(\x04R\x14filesyncMaxFileBytes\"\xff\x01\n" +
+	"!gitmirror_envelope_retention_secs\x18\x06 \x01(\x04R\x1egitmirrorEnvelopeRetentionSecs\x129\n" +
+	"\x19longdrawer_max_file_bytes\x18\a \x01(\x04R\x16longdrawerMaxFileBytes\"\xff\x01\n" +
 	"\x12SwarmManifestEntry\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x16\n" +

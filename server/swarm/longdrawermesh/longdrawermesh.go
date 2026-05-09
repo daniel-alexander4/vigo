@@ -1,16 +1,16 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package filesyncmesh builds the fleet-wide filesync observability
+// Package longdrawermesh builds the fleet-wide longdrawer observability
 // view by joining per-user snapshots from every envoy's latest
-// `filesync` trait. Mirrors the gitmirrormesh pattern — pure
+// `longdrawer` trait. Mirrors the gitmirrormesh pattern — pure
 // projection over the standard trait pipeline, no new RPC.
 //
-// Filesync is plaintext LAN-only peer sync. This aggregator exists
+// Longdrawer is plaintext LAN-only peer sync. This aggregator exists
 // purely so operators with admin access can see which users are in
 // which mesh, spot file-set divergence, and diagnose sync failures
 // without shelling into every envoy.
-package filesyncmesh
+package longdrawermesh
 
 import (
 	"context"
@@ -102,9 +102,9 @@ type TombstoneRow struct {
 	KnownOn      []string `json:"known_on"` // envoys that hold this tombstone
 }
 
-// Staleness cutoff — an envoy whose most recent filesync trait is
+// Staleness cutoff — an envoy whose most recent longdrawer trait is
 // older than this is reported as `stale`. Two missed announce
-// cycles (filesync's reconciler runs every 30s) gives tolerance
+// cycles (longdrawer's reconciler runs every 30s) gives tolerance
 // for a single missed check-in without a flap.
 const StaleAfter = 5 * time.Minute
 
@@ -180,7 +180,7 @@ type envRow struct {
 	reported bool
 }
 
-// build walks the full envoy list, pulls each one's filesync
+// build walks the full envoy list, pulls each one's longdrawer
 // trait, and constructs the cross-envoy joined view.
 func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, error) {
 	rows := make([]envRow, 0, len(envoys))
@@ -406,9 +406,9 @@ func finalizeFiles(summary *UserSummary) {
 	sort.Slice(summary.Files, func(i, j int) bool { return summary.Files[i].Name < summary.Files[j].Name })
 }
 
-// EnvoyFile is one filesync file present on a given envoy, projected
+// EnvoyFile is one longdrawer file present on a given envoy, projected
 // from the per-user `users[].files[]` field for the per-envoy Swarm
-// Load page. Path is the user-friendly render (`~<user>/filesync/<name>`)
+// Load page. Path is the user-friendly render (`~<user>/longdrawer/<name>`)
 // so the UI never surfaces an internal key.
 type EnvoyFile struct {
 	User  string
@@ -418,10 +418,10 @@ type EnvoyFile struct {
 	Mtime int64
 }
 
-// FilesOnEnvoy returns every filesync file this envoy holds across every
+// FilesOnEnvoy returns every longdrawer file this envoy holds across every
 // user with state on it, in user+name order. Used by the per-envoy
 // Swarm Load page to rank disk consumers. Returns nil when the
-// envoy has no filesync trait.
+// envoy has no longdrawer trait.
 func (a *Aggregator) FilesOnEnvoy(ctx context.Context, envoyID string) []EnvoyFile {
 	env, ok := a.loadTrait(ctx, envoyID)
 	if !ok {
@@ -433,7 +433,7 @@ func (a *Aggregator) FilesOnEnvoy(ctx context.Context, envoyID string) []EnvoyFi
 			out = append(out, EnvoyFile{
 				User:  u.User,
 				Name:  f.Name,
-				Path:  "~" + u.User + "/filesync/" + f.Name,
+				Path:  "~" + u.User + "/longdrawer/" + f.Name,
 				Size:  f.Size,
 				Mtime: f.Mtime,
 			})
@@ -443,7 +443,7 @@ func (a *Aggregator) FilesOnEnvoy(ctx context.Context, envoyID string) []EnvoyFi
 }
 
 // loadTrait pulls the latest envoy traits row and extracts the
-// `filesync` namespace. Missing / malformed / absent namespace all
+// `longdrawer` namespace. Missing / malformed / absent namespace all
 // collapse to `(nil, false)` — treated as "not reporting."
 func (a *Aggregator) loadTrait(ctx context.Context, envoyID string) (*traitEnvelope, bool) {
 	tr, err := a.queries.GetLatestEnvoyTraits(ctx, envoyID)
@@ -454,15 +454,15 @@ func (a *Aggregator) loadTrait(ctx context.Context, envoyID string) (*traitEnvel
 		return nil, false
 	}
 	var outer struct {
-		Filesync *traitEnvelope `json:"filesync"`
+		Longdrawer *traitEnvelope `json:"longdrawer"`
 	}
 	if err := json.Unmarshal([]byte(tr.Traits), &outer); err != nil {
 		return nil, false
 	}
-	if outer.Filesync == nil {
+	if outer.Longdrawer == nil {
 		return nil, false
 	}
-	return outer.Filesync, true
+	return outer.Longdrawer, true
 }
 
 // --- trait payload shapes (agent side, deserialized here) ---

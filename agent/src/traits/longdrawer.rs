@@ -1,16 +1,16 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Reports per-user filesync mesh state.
+//! Reports per-user longdrawer mesh state.
 //!
-//! The filesync reactor writes `UserState { files, tombstones }` per
-//! user at `/var/lib/vigo/filesync/<user>.json` on each reconcile.
+//! The longdrawer reactor writes `UserState { files, tombstones }` per
+//! user at `/var/lib/vigo/longdrawer/<user>.json` on each reconcile.
 //! This collector reads every state file on the envoy and ships it
-//! as the `filesync` trait — no separate snapshot writer needed
-//! because filesync already persists what the UI wants to see.
+//! as the `longdrawer` trait — no separate snapshot writer needed
+//! because longdrawer already persists what the UI wants to see.
 //!
 //! Returns `Value::Null` when no per-user state files exist (cold
-//! envoy that never had a `~/filesync/` directory); matches the
+//! envoy that never had a `~/longdrawer/` directory); matches the
 //! pattern used by other observability-only trait collectors.
 
 use std::collections::BTreeMap;
@@ -21,10 +21,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{to_value, Value};
 use sha2::Digest;
 
-use crate::platform::paths::default_filesync_dir;
-use crate::swarm::filesync::state::UserState;
+use crate::platform::paths::default_longdrawer_dir;
+use crate::swarm::longdrawer::state::UserState;
 
-/// One file observed in a user's `~/filesync/`.
+/// One file observed in a user's `~/longdrawer/`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FileEntry {
     pub name: String,
@@ -33,7 +33,7 @@ pub struct FileEntry {
     pub sha256: String,
 }
 
-/// Tombstone observation for a user's `~/filesync/`.
+/// Tombstone observation for a user's `~/longdrawer/`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TombstoneEntry {
     pub name: String,
@@ -62,7 +62,7 @@ pub struct TraitPayload {
 }
 
 pub fn collect() -> Result<Value> {
-    let dir = default_filesync_dir();
+    let dir = default_longdrawer_dir();
     if !dir.is_dir() {
         return Ok(Value::Null);
     }

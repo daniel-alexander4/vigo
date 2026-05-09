@@ -192,7 +192,7 @@ For the `local` secrets backend, create the secret file:
 
 ```bash
 mkdir -p /srv/vigo/secrets/vigo/app
-filesync -n 'my-secure-password' > /srv/vigo/secrets/vigo/app/db_password
+longdrawer -n 'my-secure-password' > /srv/vigo/secrets/vigo/app/db_password
 chmod 600 /srv/vigo/secrets/vigo/app/db_password
 ```
 

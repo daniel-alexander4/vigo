@@ -1,7 +1,7 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Swarm</h1>
-    <p>Envoy peer-to-peer substrate. Payload, Gitmirror, Filesync, and Cryptsync all ride on this transport. <a href="/docs/engineering/subsystems/swarm">What is this?</a></p>
+    <p>Envoy peer-to-peer substrate. Payload, Gitmirror, Longdrawer, and Cryptsync all ride on this transport. <a href="/docs/engineering/subsystems/swarm">What is this?</a></p>
 </div>
 
 {{if not .Status.GeneratedAt.IsZero}}
@@ -26,7 +26,7 @@
 
 <div class="card mt-2">
     <h2 style="margin:0 0 16px;">Content Subsystems</h2>
-    <p style="color:var(--subtext0);margin-bottom:12px;">Active blobs by subsystem, counted server-side from the manifest CRDT. Filesync and Cryptsync are per-user content and don't surface as payload counts here — use their dedicated pages for user-level detail.</p>
+    <p style="color:var(--subtext0);margin-bottom:12px;">Active blobs by subsystem, counted server-side from the manifest CRDT. Longdrawer and Cryptsync are per-user content and don't surface as payload counts here — use their dedicated pages for user-level detail.</p>
     <div class="table-container">
         <table class="table">
             <thead>
@@ -48,9 +48,9 @@
                     <td><a href="/swarm/gitmirror">/gitmirror</a></td>
                 </tr>
                 <tr>
-                    <td><strong>Filesync</strong> <span style="color:var(--subtext0);">— per-user plaintext sync</span></td>
+                    <td><strong>Longdrawer</strong> <span style="color:var(--subtext0);">— per-user plaintext sync</span></td>
                     <td>—</td>
-                    <td><a href="/swarm/filesync">/filesync</a></td>
+                    <td><a href="/swarm/longdrawer">/longdrawer</a></td>
                 </tr>
                 <tr>
                     <td><strong>Cryptsync</strong> <span style="color:var(--subtext0);">— per-user encrypted sync</span></td>

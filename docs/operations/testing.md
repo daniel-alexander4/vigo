@@ -38,7 +38,7 @@ The script runs 107 test calls across 30 sections:
 | config | 8 | History, publish (dry-run), trace, tree, pending, search, rollback |
 | config freeze | 2 | Freeze and unfreeze config publishes |
 | inventory | 2 | Fleet search by trait values |
-| task | 3 | Task list, dispatch filesync command, status check |
+| task | 3 | Task list, dispatch longdrawer command, status check |
 | packages | 1 | Package version drift detection |
 | query | 1 | Live trait query to enrolled envoy |
 | export | 3 | SIEM, CMDB, and OSCAL compliance export |

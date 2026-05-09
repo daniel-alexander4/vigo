@@ -4,7 +4,7 @@
 //! Shared peer disk-pressure probe.
 //!
 //! Before any of the four peer-delivery subsystems (swarm pull, cryptsync push,
-//! gitmirror push, filesync announce) commits bytes to a remote peer, the sender
+//! gitmirror push, longdrawer announce) commits bytes to a remote peer, the sender
 //! asks the peer "how full is the filesystem this will land on?" over the
 //! existing mTLS HTTPS on port 1531 (`GET /health/storage`). If the peer
 //! reports `free_pct <= DEFAULT_MIN_FREE_PCT` (10%), the send is skipped —
@@ -19,7 +19,7 @@
 //! The [`Purpose`] enum captures which mountpoint the receiver should
 //! measure — the subsystems write to different directories that may sit
 //! on different filesystems (`/var/lib/vigo/swarm/.blobs`,
-//! `/var/lib/vigo/swarm/gitmirror`, `~<user>/cryptsync`, `~<user>/filesync`).
+//! `/var/lib/vigo/swarm/gitmirror`, `~<user>/cryptsync`, `~<user>/longdrawer`).
 //!
 //! Symmetrically, receivers call [`local_free_pct`] to compute their own
 //! free-pct for a given purpose — used both to answer probe requests and
@@ -71,8 +71,8 @@ pub enum Purpose {
     Gitmirror,
     /// Cryptsync per-user ciphertext: `~<user>/cryptsync`.
     Cryptsync { user: String },
-    /// Filesync per-user plaintext: `~<user>/filesync`.
-    Filesync { user: String },
+    /// Longdrawer per-user plaintext: `~<user>/longdrawer`.
+    Longdrawer { user: String },
 }
 
 impl Purpose {
@@ -82,15 +82,15 @@ impl Purpose {
             Purpose::Swarm => "swarm",
             Purpose::Gitmirror => "gitmirror",
             Purpose::Cryptsync { .. } => "cryptsync",
-            Purpose::Filesync { .. } => "filesync",
+            Purpose::Longdrawer { .. } => "longdrawer",
         }
     }
 
     /// The user bound to this purpose, if any. Used for per-user
-    /// target paths (`~<user>/cryptsync`, `~<user>/filesync`).
+    /// target paths (`~<user>/cryptsync`, `~<user>/longdrawer`).
     pub fn user(&self) -> Option<&str> {
         match self {
-            Purpose::Cryptsync { user } | Purpose::Filesync { user } => Some(user.as_str()),
+            Purpose::Cryptsync { user } | Purpose::Longdrawer { user } => Some(user.as_str()),
             _ => None,
         }
     }
@@ -109,7 +109,7 @@ impl Purpose {
             ("swarm", _) => Some(Purpose::Swarm),
             ("gitmirror", _) => Some(Purpose::Gitmirror),
             ("cryptsync", Some(u)) if !u.is_empty() => Some(Purpose::Cryptsync { user: u.to_string() }),
-            ("filesync", Some(u)) if !u.is_empty() => Some(Purpose::Filesync { user: u.to_string() }),
+            ("longdrawer", Some(u)) if !u.is_empty() => Some(Purpose::Longdrawer { user: u.to_string() }),
             _ => None,
         }
     }
@@ -201,8 +201,8 @@ pub fn target_path(purpose: &Purpose) -> Option<PathBuf> {
         Purpose::Cryptsync { user } => {
             crate::platform::users::user_home(user).map(|h| h.join("cryptsync"))
         }
-        Purpose::Filesync { user } => {
-            crate::platform::users::user_home(user).map(|h| h.join("filesync"))
+        Purpose::Longdrawer { user } => {
+            crate::platform::users::user_home(user).map(|h| h.join("longdrawer"))
         }
     }
 }
@@ -390,14 +390,14 @@ mod tests {
         assert_eq!(Purpose::parse("swarm", None), Some(Purpose::Swarm));
         assert_eq!(Purpose::parse("gitmirror", Some("ignored")), Some(Purpose::Gitmirror));
         assert_eq!(Purpose::parse("cryptsync", None), None);
-        assert_eq!(Purpose::parse("filesync", Some("")), None);
+        assert_eq!(Purpose::parse("longdrawer", Some("")), None);
         assert_eq!(Purpose::parse("bogus", None), None);
     }
 
     #[test]
     fn purpose_query_urlencodes_user() {
-        let p = Purpose::Filesync { user: "a b+c".into() };
-        assert_eq!(p.query(), "for=filesync&user=a%20b%2Bc");
+        let p = Purpose::Longdrawer { user: "a b+c".into() };
+        assert_eq!(p.query(), "for=longdrawer&user=a%20b%2Bc");
     }
 
     #[test]

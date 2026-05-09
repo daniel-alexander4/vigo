@@ -9,8 +9,8 @@
 //! at rest. Files are never plaintext on disk in `~/cryptsync/` — the
 //! whole point.
 //!
-//! Relationship to filesync: both are per-user LAN-first P2P sync
-//! subsystems. Filesync is unencrypted plaintext sync (LAN-trusted).
+//! Relationship to longdrawer: both are per-user LAN-first P2P sync
+//! subsystems. Longdrawer is unencrypted plaintext sync (LAN-trusted).
 //! Cryptsync is always-encrypted sync where only envoys in the mesh
 //! can decrypt, and decryption requires the user's cryptsync
 //! password.
@@ -124,7 +124,7 @@ pub fn submit_announcement(from: std::net::SocketAddr, announcement: Announcemen
 /// `tls` is the same mTLS bundle swarm uses. When absent, the
 /// fan-out pusher is disabled but everything else runs (discovery,
 /// peer table maintenance, `recipients.txt` regen, serving
-/// `/cryptsync/pull/...` GETs). Matches filesync's posture.
+/// `/cryptsync/pull/...` GETs). Matches longdrawer's posture.
 pub fn spawn(tls: Option<TlsCerts>, cancel: CancellationToken) {
     let machine = std::fs::read_to_string("/etc/hostname")
         .unwrap_or_else(|_| "unknown".to_string())

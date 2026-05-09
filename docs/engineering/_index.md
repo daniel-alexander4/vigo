@@ -32,12 +32,12 @@ Reference for authoring `.vgo` configs.
 
 Optional subsystems. Read the one you're using; skip the rest.
 
-- [Swarm](subsystems/swarm.md) — The envoy P2P substrate (transport layer for payload, filesync, gitmirror, cryptsync)
+- [Swarm](subsystems/swarm.md) — The envoy P2P substrate (transport layer for payload, longdrawer, gitmirror, cryptsync)
 - [Spanner](subsystems/spanner.md) — Hub-spoke multi-server topology
 - [P2P Spanner](subsystems/p2p-spanner.md) — Peer-to-peer spanner (design)
 - [Scrier](subsystems/scrier.md) — Admin remote access (SSH/RDP/VNC) over the envoy's outbound tunnel
 - [Gitmirror](subsystems/gitmirror.md) — Personal-DR git mirroring, P2P
-- [Filesync](subsystems/filesync.md) — Per-user plaintext directory sync across LAN envoys
+- [Longdrawer](subsystems/longdrawer.md) — Per-user plaintext directory sync across LAN envoys
 - [Cryptsync](subsystems/cryptsync.md) — Per-user encrypted P2P directory
 - [Network Devices](subsystems/network-devices.md) — Gateway-proxy architecture for switches/routers
 

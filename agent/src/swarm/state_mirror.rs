@@ -54,7 +54,7 @@ pub struct GateState {
     pub swarm: bool,
     pub payload: bool,
     pub gitmirror: bool,
-    pub filesync: bool,
+    pub longdrawer: bool,
     pub puddle: bool,
 }
 
@@ -68,7 +68,7 @@ impl Default for GateState {
             swarm: true,
             payload: true,
             gitmirror: true,
-            filesync: true,
+            longdrawer: true,
             puddle: true,
         }
     }
@@ -138,7 +138,7 @@ fn decode_gates(vars_json: &[u8]) -> GateState {
         swarm: gate_truthy(val.get("swarm_enabled")),
         payload: gate_truthy(val.get("swarm_swarmcast_enabled")),
         gitmirror: gate_truthy(val.get("swarm_gitmirror_enabled")),
-        filesync: gate_truthy(val.get("swarm_filesync_enabled")),
+        longdrawer: gate_truthy(val.get("swarm_longdrawer_enabled")),
         puddle: gate_truthy(val.get("swarm_puddle_enabled")),
     }
 }
@@ -184,25 +184,25 @@ mod tests {
         // Defaults stay on for keys not in vars_json.
         assert!(got.gates.payload);
         assert!(got.gates.gitmirror);
-        assert!(got.gates.filesync);
+        assert!(got.gates.longdrawer);
     }
 
     #[test]
     fn empty_vars_json_means_all_on() {
         let g = decode_gates(b"");
-        assert!(g.swarm && g.payload && g.gitmirror && g.filesync && g.puddle);
+        assert!(g.swarm && g.payload && g.gitmirror && g.longdrawer && g.puddle);
     }
 
     #[test]
     fn malformed_vars_json_means_all_on() {
         let g = decode_gates(b"not json");
-        assert!(g.swarm && g.payload && g.gitmirror && g.filesync && g.puddle);
+        assert!(g.swarm && g.payload && g.gitmirror && g.longdrawer && g.puddle);
     }
 
     #[test]
     fn missing_keys_default_to_on() {
         let g = decode_gates(b"{}");
-        assert!(g.swarm && g.payload && g.gitmirror && g.filesync && g.puddle);
+        assert!(g.swarm && g.payload && g.gitmirror && g.longdrawer && g.puddle);
     }
 
     #[test]
@@ -210,7 +210,7 @@ mod tests {
         let g = decode_gates(br#"{"swarm_swarmcast_enabled": false}"#);
         assert!(g.swarm);
         assert!(!g.payload);
-        assert!(g.gitmirror && g.filesync && g.puddle);
+        assert!(g.gitmirror && g.longdrawer && g.puddle);
     }
 
     #[test]

@@ -56,7 +56,7 @@ Vigo has two CLI binaries:
 | [swarm](swarm.md) | Substrate-level view of the envoy P2P network (status + peers) |
 | [payload](swarm-swarmcast.md) | Admin-pushed file distribution on the swarm substrate |
 | [gitmirror](swarm-gitmirror.md) | Fleet-wide read-only view of gitmirror personal-DR mirrors |
-| [filesync](swarm-filesync.md) | Fleet-wide read-only view of the filesync per-user directory sync mesh |
+| [longdrawer](swarm-longdrawer.md) | Fleet-wide read-only view of the longdrawer per-user directory sync mesh |
 | [cryptsync](swarm-cryptsync.md) | Fleet-wide read-only view of the cryptsync per-user encrypted directory sync mesh |
 | [scrier](scrier.md) | Remote access — user mappings and interactive shell sessions |
 | [sandgorgon](sandgorgon.md) | Bare-metal lifecycle — commission, provision, decommission |

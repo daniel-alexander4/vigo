@@ -407,7 +407,7 @@ resources:
     target_path: "{{ .Vars.document_root }}/index.php"
     content: |
       <?php
-      filesync "Managed by Vigo on {{ .Traits.identity.hostname }}";
+      longdrawer "Managed by Vigo on {{ .Traits.identity.hostname }}";
       phpinfo();
     notify: [restart-apache]
 

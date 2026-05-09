@@ -3,7 +3,7 @@
 
 //! UDP multicast announcer + listener for cryptsync.
 //!
-//! Mirrors filesync/discovery.rs in shape but on its own multicast
+//! Mirrors longdrawer/discovery.rs in shape but on its own multicast
 //! group/port and with its own envelope header so the two subsystems
 //! never confuse each other's traffic on the wire.
 //!
@@ -23,7 +23,7 @@ use tracing::{debug, info, warn};
 
 use super::state::Announcement;
 
-/// Multicast group for cryptsync — distinct from filesync's 224.0.0.43
+/// Multicast group for cryptsync — distinct from longdrawer's 224.0.0.43
 /// and swarm's 224.0.0.42. Keep stable across versions.
 pub const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 44);
 pub const MULTICAST_PORT: u16 = 1533;
@@ -154,7 +154,7 @@ async fn announce_loop(
                 };
                 if let Err(e) = udp.send_to(&payload, dest).await {
                     // warn! so firewall-drop bugs are visible — matches
-                    // filesync's diagnostic posture after 0.20.9's silent
+                    // longdrawer's diagnostic posture after 0.20.9's silent
                     // multicast-drop incident.
                     warn!(
                         error = %e,
@@ -233,7 +233,7 @@ mod tests {
 
     #[test]
     fn parse_rejects_unknown_header() {
-        let bad = b"FILESYNC-1\n{}";
+        let bad = b"LONGDRAWER-1\n{}";
         assert!(parse(bad).is_none());
     }
 

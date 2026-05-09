@@ -130,9 +130,9 @@ func TestBootstrapScript_WorksWithoutToken(t *testing.T) {
 }
 
 // TestBootstrapScript_NoSubstrateNamesAsShellCommands guards against the
-// 0.31.0 substrate rename's collateral damage: a blind `echo → filesync`
+// 0.31.0 substrate rename's collateral damage: a blind `echo → longdrawer`
 // substitution swept every shell `echo` in the bootstrap template, leaving
-// new agent installs failing with `sh: filesync: not found`. None of the
+// new agent installs failing with `sh: longdrawer: not found`. None of the
 // renamed substrate vocabulary is a real shell command, so any line that
 // invokes them as commands (`^…$name `) means the substitution slipped
 // back in.
@@ -151,7 +151,7 @@ func TestBootstrapScript_NoSubstrateNamesAsShellCommands(t *testing.T) {
 	body, _ := io.ReadAll(w.Result().Body)
 	script := string(body)
 
-	for _, name := range []string{"filesync", "cryptsync", "gitmirror", "payload"} {
+	for _, name := range []string{"longdrawer", "cryptsync", "gitmirror", "payload"} {
 		// Match the name as a shell command at the start of a line
 		// (optionally indented). Doc lines and quoted-arg uses are fine.
 		for _, prefix := range []string{name + " ", name + "\t", name + "\n"} {

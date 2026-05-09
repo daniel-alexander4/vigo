@@ -33,7 +33,7 @@ resources:
 
   - name: ufw-enable
     type: exec
-    command: 'filesync "y" | ufw enable'
+    command: 'longdrawer "y" | ufw enable'
     onlyif: "ufw status | grep -q inactive"
     when: "os_family('debian')"
     depends_on: [ufw-default-deny]

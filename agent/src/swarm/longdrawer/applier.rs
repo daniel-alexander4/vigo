@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! Apply reconciliation actions: fetch files from peers and write them to
-//! the user's ~/filesync/ with correct ownership, or delete local files.
+//! the user's ~/longdrawer/ with correct ownership, or delete local files.
 
 use anyhow::{bail, Context, Result};
 use sha2::{Digest, Sha256};
@@ -18,7 +18,7 @@ use crate::platform::users::chown_to_user;
 /// small enough not to pressure RAM on receivers.
 const STREAM_CHUNK: usize = 256 * 1024;
 
-/// Execute a single action against a user's ~/filesync/ directory.
+/// Execute a single action against a user's ~/longdrawer/ directory.
 ///
 /// For `Fetch`, opens an mTLS connection to the peer, downloads the file,
 /// verifies the sha256, writes it to the target path, sets ownership to
@@ -40,7 +40,7 @@ pub fn apply(
     }
 }
 
-/// GET https://<peer>/filesync/<user>/<name> and write to sync_dir/name.
+/// GET https://<peer>/longdrawer/<user>/<name> and write to sync_dir/name.
 ///
 /// Streams the response body directly to a temp file, hashing and size-checking
 /// as we go. Nothing is buffered in RAM beyond `STREAM_CHUNK` bytes. On any
@@ -64,7 +64,7 @@ fn fetch_file(
     }
 
     let url = format!(
-        "https://{}/swarm/filesync/{}/{}",
+        "https://{}/swarm/longdrawer/{}/{}",
         peer_addr,
         urlencode(user),
         urlencode(name)
@@ -81,7 +81,7 @@ fn fetch_file(
 
     fs::create_dir_all(sync_dir).with_context(|| format!("creating {}", sync_dir.display()))?;
     let target = sync_dir.join(name);
-    let tmp = sync_dir.join(format!(".{}.filesync.tmp", name));
+    let tmp = sync_dir.join(format!(".{}.longdrawer.tmp", name));
 
     let result = stream_body_to_file(
         &mut resp,
@@ -133,7 +133,7 @@ fn stream_body_to_file(
     loop {
         let n = reader
             .read(&mut buf)
-            .with_context(|| format!("reading filesync body for {}", name))?;
+            .with_context(|| format!("reading longdrawer body for {}", name))?;
         if n == 0 {
             break;
         }

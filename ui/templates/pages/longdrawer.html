@@ -1,15 +1,15 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Filesync</h1>
-    <p>Per-user LAN directory sync mesh. <a href="/docs/engineering/subsystems/swarm/filesync">What is this?</a></p>
+    <h1>Longdrawer</h1>
+    <p>Per-user LAN directory sync mesh. <a href="/docs/engineering/subsystems/swarm/longdrawer">What is this?</a></p>
 </div>
 
 {{template "health-banner" .Health}}
 
 {{if .Error}}
-    <div class="alert alert--warn">Filesync aggregator: {{.Error}}</div>
+    <div class="alert alert--warn">Longdrawer aggregator: {{.Error}}</div>
 {{else if or (not .Sync) (eq (len .Sync.Users) 0)}}
-    {{template "empty-state" dict "Message" "No users with filesync state observed across the fleet."}}
+    {{template "empty-state" dict "Message" "No users with longdrawer state observed across the fleet."}}
 {{else}}
     <div class="stat-cards mb-2">
         <div class="stat-card">
@@ -48,7 +48,7 @@
             </thead>
             <tbody>
                 {{range .Sync.Users}}
-                <tr hx-get="/ui/fragments/swarm-filesync-user/{{.User}}" hx-target="#filesync-drilldown" hx-swap="innerHTML" style="cursor:pointer;">
+                <tr hx-get="/ui/fragments/swarm-longdrawer-user/{{.User}}" hx-target="#longdrawer-drilldown" hx-swap="innerHTML" style="cursor:pointer;">
                     <td><strong>{{.User}}</strong></td>
                     <td>{{.FileCount}}</td>
                     <td>{{len .Tombstones}}</td>
@@ -65,14 +65,14 @@
             </tbody>
         </table>
 
-        <div id="filesync-drilldown" class="mt-2"></div>
+        <div id="longdrawer-drilldown" class="mt-2"></div>
     </div>
 {{end}}
 {{end}}
 
-{{define "filesync-user-fragment"}}
+{{define "longdrawer-user-fragment"}}
 <div class="card">
-    <h3 style="margin-top:0;">Filesync — {{.User.User}}</h3>
+    <h3 style="margin-top:0;">Longdrawer — {{.User.User}}</h3>
 
     <h4>Envoys ({{len .User.Envoys}})</h4>
     <table class="table">

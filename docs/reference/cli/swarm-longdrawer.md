@@ -1,9 +1,9 @@
 
-# vigocli filesync
+# vigocli longdrawer
 
-Read-only admin view of the [filesync](../../engineering/subsystems/filesync.md) mesh across the fleet — per-user plaintext directory sync on the [swarm](../../engineering/subsystems/swarm.md) substrate. Every envoy reports its per-user filesync state (files, tombstones, peer digest) through the `filesync` trait; this command renders the fleet-wide join.
+Read-only admin view of the [longdrawer](../../engineering/subsystems/longdrawer.md) mesh across the fleet — per-user plaintext directory sync on the [swarm](../../engineering/subsystems/swarm.md) substrate. Every envoy reports its per-user longdrawer state (files, tombstones, peer digest) through the `longdrawer` trait; this command renders the fleet-wide join.
 
-Filesync membership is per-user: users opt in by dropping files into `~<user>/filesync/`. There is no admin write path — `vigocli swarm filesync` never touches files, tombstones, or decides what syncs where.
+Longdrawer membership is per-user: users opt in by dropping files into `~<user>/longdrawer/`. There is no admin write path — `vigocli swarm longdrawer` never touches files, tombstones, or decides what syncs where.
 
 ## Subcommands
 
@@ -18,11 +18,11 @@ All subcommands support `--json` for machine-readable output.
 ## status
 
 ```bash
-vigocli filesync status
+vigocli longdrawer status
 ```
 
 ```
-Filesync fleet — generated 2026-04-23 18:12:04
+Longdrawer fleet — generated 2026-04-23 18:12:04
 
 Users              3
 Envoys reporting   7
@@ -37,7 +37,7 @@ Participants       7
 ## list
 
 ```bash
-vigocli filesync list
+vigocli longdrawer list
 ```
 
 ```
@@ -50,7 +50,7 @@ dan    4       15     1.1 MB  2 divergence(s)
 | Column | Description |
 |--------|-------------|
 | USER | Unix username reported by the envoys |
-| ENVOYS | Number of envoys where this user has an filesync directory |
+| ENVOYS | Number of envoys where this user has an longdrawer directory |
 | FILES | Total file count across all envoys (may exceed per-envoy count if divergent) |
 | SIZE | Sum of live file sizes |
 | STATE | `in sync` (green) or `N divergence(s)` (red) |
@@ -58,11 +58,11 @@ dan    4       15     1.1 MB  2 divergence(s)
 ## show
 
 ```bash
-vigocli filesync show <user>
+vigocli longdrawer show <user>
 ```
 
 ```bash
-vigocli filesync show dan
+vigocli longdrawer show dan
 ```
 
 ```
@@ -83,13 +83,13 @@ Per-envoy states:
 
 | Status | Meaning |
 |--------|---------|
-| `reporting` | Envoy's most recent check-in carried a fresh `filesync` trait payload for this user |
+| `reporting` | Envoy's most recent check-in carried a fresh `longdrawer` trait payload for this user |
 | `stale` | Last check-in is older than the staleness threshold — presence counts may be behind |
-| `not_reporting` | Envoy is enrolled and reachable but emitted no filesync trait (user may have been removed from the envoy) |
+| `not_reporting` | Envoy is enrolled and reachable but emitted no longdrawer trait (user may have been removed from the envoy) |
 
 ## Related
 
-- [Filesync Subsystem](../../engineering/subsystems/filesync.md) — How the plaintext per-user sync works
-- [Swarm Substrate](../../engineering/subsystems/swarm.md) — The envoy P2P transport filesync rides on
+- [Longdrawer Subsystem](../../engineering/subsystems/longdrawer.md) — How the plaintext per-user sync works
+- [Swarm Substrate](../../engineering/subsystems/swarm.md) — The envoy P2P transport longdrawer rides on
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

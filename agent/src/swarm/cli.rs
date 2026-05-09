@@ -99,7 +99,7 @@ fn cmd_status(args: &[String]) -> Result<()> {
         println!("  Gates (resolved from server pattern lists):");
         println!("    swarm:        {}", on_off(s.gates.swarm));
         println!("    payload:      {}", on_off(s.gates.payload));
-        println!("    filesync:     {}", on_off(s.gates.filesync));
+        println!("    longdrawer:     {}", on_off(s.gates.longdrawer));
         println!("    puddle:       {}  (cryptsync follows)", on_off(s.gates.puddle));
         println!("    gitmirror:    {}", on_off(s.gates.gitmirror));
     } else {

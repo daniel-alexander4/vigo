@@ -8,14 +8,14 @@
 //! Routes (dispatched from `agent/src/swarm/server.rs`):
 //!
 //! - `GET /swarm/cryptsync/pull/{user}/{filename}` — serve ciphertext
-//!   bytes from `~<user>/cryptsync/<filename>`. Mirrors filesync's pull
+//!   bytes from `~<user>/cryptsync/<filename>`. Mirrors longdrawer's pull
 //!   path but with a `/pull/` prefix segment for clarity (cryptsync
-//!   has a matching `/push/`, filesync does not).
+//!   has a matching `/push/`, longdrawer does not).
 //!
 //! - `POST /swarm/cryptsync/push/{user}/{filename}` — receive a
 //!   ciphertext blob from a peer and write it into
 //!   `~<user>/cryptsync/<filename>` atomically. Body capped at 1 GiB
-//!   (vs. filesync's 128 KiB cap on `/swarm/filesync/announce` — push
+//!   (vs. longdrawer's 128 KiB cap on `/swarm/longdrawer/announce` — push
 //!   is a different beast).
 //!
 //! - `POST /swarm/cryptsync/announce` — receive an Announcement JSON

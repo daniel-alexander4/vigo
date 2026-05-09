@@ -16,7 +16,7 @@ import (
 // EnvoySwarmLoadPageData feeds the per-envoy Swarm Load page. One
 // section per subsystem — swarmcast (admin-distributed files + the
 // cached form of gitmirror bundles), gitmirror (materialized bare repos),
-// filesync (plaintext per-user sync), cryptsync (encrypted per-user sync).
+// longdrawer (plaintext per-user sync), cryptsync (encrypted per-user sync).
 // Totals roll up across all four so the operator can spot which
 // subsystem is filling the disk before drilling into the rows.
 type EnvoySwarmLoadPageData struct {
@@ -26,7 +26,7 @@ type EnvoySwarmLoadPageData struct {
 
 	Payload  []SwarmLoadRow
 	Gitmirror []SwarmLoadRow
-	Filesync  []SwarmLoadRow
+	Longdrawer  []SwarmLoadRow
 	Cryptsync []SwarmLoadRow
 
 	// Totals are int64 (not the uint64 the wire protocols use) so the
@@ -46,7 +46,7 @@ type EnvoySwarmLoadPageData struct {
 // section so size comparisons read at a glance.
 type SwarmLoadRow struct {
 	// Name is the user-friendly primary identifier (filename,
-	// `~user/filesync/<name>`, bare-repo path). Never a sha256 or
+	// `~user/longdrawer/<name>`, bare-repo path). Never a sha256 or
 	// an internal label like `gitmirror:a:b:c`.
 	Name string
 	// Detail is a secondary line (seeder, git sha, user, etc.) —
@@ -67,7 +67,7 @@ type SwarmLoadRow struct {
 	// When is a formatted timestamp (last refresh, mtime, distributed-at).
 	When string
 	// Link is an optional deep link. Payload rows link to /payload/{sha};
-	// gitmirror rows link to /gitmirror/{label}. Filesync/cryptsync rows leave this
+	// gitmirror rows link to /gitmirror/{label}. Longdrawer/cryptsync rows leave this
 	// empty — there's no deeper page for one file.
 	Link string
 }
@@ -154,11 +154,11 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	// --- Filesync (per-user plaintext) ---
+	// --- Longdrawer (per-user plaintext) ---
 	if h.mesh != nil {
-		for _, f := range h.mesh.EnvoyFilesyncFiles(r.Context(), idStr) {
+		for _, f := range h.mesh.EnvoyLongdrawerFiles(r.Context(), idStr) {
 			size := int64(f.Size)
-			data.Filesync = append(data.Filesync, SwarmLoadRow{
+			data.Longdrawer = append(data.Longdrawer, SwarmLoadRow{
 				Name:      f.Path,
 				Detail:    "user " + f.User,
 				Size:      size,
@@ -188,7 +188,7 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 
 	// Biggest first within each section — that's what "why is disk
 	// full?" wants to see.
-	for _, rows := range [][]SwarmLoadRow{data.Payload, data.Gitmirror, data.Filesync, data.Cryptsync} {
+	for _, rows := range [][]SwarmLoadRow{data.Payload, data.Gitmirror, data.Longdrawer, data.Cryptsync} {
 		sort.SliceStable(rows, func(i, j int) bool { return rows[i].Size > rows[j].Size })
 	}
 

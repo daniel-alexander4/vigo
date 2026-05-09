@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package filesyncmesh
+package longdrawermesh
 
 import (
 	"sort"

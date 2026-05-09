@@ -22,7 +22,7 @@ swarm:
   enabled: ["*"]
   puddle: { enabled: ["annlap"] }
   gitmirror: { enabled: ["*"] }
-  filesync: { enabled: ["*"] }
+  longdrawer: { enabled: ["*"] }
   swarmcast: { enabled: ["*"] }
 `,
 			wantErr: false,
@@ -55,14 +55,24 @@ swarm:
 			wantInError: "swarm.gitmirror.blacklist",
 		},
 		{
-			name: "swarm.filesync.blacklist is retired",
+			name: "swarm.filesync section is retired (renamed to longdrawer)",
 			yaml: `
 swarm:
   filesync:
-    blacklist: ["rasp1"]
+    enabled: ["*"]
 `,
 			wantErr:     true,
-			wantInError: "swarm.filesync.blacklist",
+			wantInError: "swarm.filesync.* — retired in the longdrawer rename",
+		},
+		{
+			name: "swarm.filesync retired error names the new key",
+			yaml: `
+swarm:
+  filesync:
+    enabled: ["*"]
+`,
+			wantErr:     true,
+			wantInError: "swarm.longdrawer",
 		},
 		{
 			name: "swarm.payload section is retired (renamed to swarmcast)",
@@ -85,14 +95,14 @@ swarm:
 			wantInError: "swarm.swarmcast",
 		},
 		{
-			name: "per-subsystem bool enabled is retired (filesync)",
+			name: "per-subsystem bool enabled is retired (gitmirror)",
 			yaml: `
 swarm:
-  filesync:
+  gitmirror:
     enabled: false
 `,
 			wantErr:     true,
-			wantInError: "swarm.filesync.enabled is a bool",
+			wantInError: "swarm.gitmirror.enabled is a bool",
 		},
 		{
 			name: "migration pointer included",

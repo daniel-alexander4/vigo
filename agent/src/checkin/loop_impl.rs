@@ -505,7 +505,7 @@ pub async fn run_once_with_update(
     // server populated the field. Done unconditionally on every CheckIn
     // (not just no-change cycles) so admin tweaks to server.yaml swarm
     // caps reach agents within one cycle. Read sites in cryptsync /
-    // gitmirror / filesync consult crate::swarm::runtime_limits.
+    // gitmirror / longdrawer consult crate::swarm::runtime_limits.
     if let Some(ref limits) = resp.swarm_runtime_limits {
         crate::swarm::runtime_limits::update_from_proto(limits);
     }

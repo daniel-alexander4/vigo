@@ -17,7 +17,7 @@
 //! - `VIGO_BLOBS_DIR`     → [`default_blobs_dir`]
 //! - `VIGO_SEEDS_DIR`     → [`default_seeds_dir`]
 //! - `VIGO_GRAVEYARD_DIR` → [`default_graveyard_dir`]
-//! - `VIGO_FILESYNC_DIR`  → [`default_filesync_dir`]
+//! - `VIGO_LONGDRAWER_DIR`  → [`default_longdrawer_dir`]
 //! - `VIGO_EXECUTORS_DIR` → [`default_executors_dir`]
 //!
 //! These are NOT part of the user-facing configuration surface. They
@@ -173,23 +173,23 @@ pub fn default_graveyard_dir() -> PathBuf {
     default_data_dir().join("swarm").join("graveyard")
 }
 
-/// Default filesync state directory (per-user snapshots + tombstones).
+/// Default longdrawer state directory (per-user snapshots + tombstones).
 #[cfg(all(unix, not(target_os = "macos")))]
-pub fn default_filesync_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_FILESYNC_DIR") { return p; }
-    PathBuf::from("/var/lib/vigo/swarm/filesync")
+pub fn default_longdrawer_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_LONGDRAWER_DIR") { return p; }
+    PathBuf::from("/var/lib/vigo/swarm/longdrawer")
 }
 
 #[cfg(target_os = "macos")]
-pub fn default_filesync_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_FILESYNC_DIR") { return p; }
-    PathBuf::from("/Library/Vigo/swarm/filesync")
+pub fn default_longdrawer_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_LONGDRAWER_DIR") { return p; }
+    PathBuf::from("/Library/Vigo/swarm/longdrawer")
 }
 
 #[cfg(windows)]
-pub fn default_filesync_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_FILESYNC_DIR") { return p; }
-    default_data_dir().join("swarm").join("filesync")
+pub fn default_longdrawer_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_LONGDRAWER_DIR") { return p; }
+    default_data_dir().join("swarm").join("longdrawer")
 }
 
 /// Default gitmirror state directory (last_seeded_sha, bundle tmp dir).
@@ -302,7 +302,7 @@ mod tests {
         for var in [
             "VIGO_DATA_DIR", "VIGO_STATE_DIR", "VIGO_SNAPSHOT_DIR",
             "VIGO_FLAGS_DIR", "VIGO_BLOBS_DIR", "VIGO_SEEDS_DIR",
-            "VIGO_GRAVEYARD_DIR", "VIGO_REJECTED_DIR", "VIGO_FILESYNC_DIR",
+            "VIGO_GRAVEYARD_DIR", "VIGO_REJECTED_DIR", "VIGO_LONGDRAWER_DIR",
             "VIGO_EXECUTORS_DIR",
         ] {
             std::env::remove_var(var);

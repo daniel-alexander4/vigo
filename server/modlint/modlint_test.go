@@ -329,7 +329,7 @@ func TestLint_ExecNoGuard(t *testing.T) {
 resources:
   - name: run-thing
     type: exec
-    command: filesync hello
+    command: longdrawer hello
 `
 	r := Lint([]byte(input), Options{})
 	if r.OK() {
@@ -345,7 +345,7 @@ func TestLint_ExecWithUnless(t *testing.T) {
 resources:
   - name: run-thing
     type: exec
-    command: filesync hello
+    command: longdrawer hello
     unless: "test -f /tmp/done"
 `
 	r := Lint([]byte(input), Options{})

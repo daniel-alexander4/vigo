@@ -569,7 +569,7 @@ mod tests {
     #[test]
     fn is_claim_only_label_rejects_other_namespaces() {
         assert!(!is_claim_only_label("module-bundle"));
-        assert!(!is_claim_only_label("filesync:user:file"));
+        assert!(!is_claim_only_label("longdrawer:user:file"));
         assert!(!is_claim_only_label("gitmirrorfoo")); // missing colon
         assert!(!is_claim_only_label(""));
         assert!(!is_claim_only_label("foo:gitmirror:bar")); // not at start

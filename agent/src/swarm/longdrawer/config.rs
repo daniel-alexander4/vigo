@@ -1,17 +1,17 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Per-user filesync config.
+//! Per-user longdrawer config.
 //!
-//! Files live under `~<user>/.filesync/`:
+//! Files live under `~<user>/.longdrawer/`:
 //!
 //! - `config.yaml` — YAML with optional `cross_subnet_peers: [hostname,
 //!   ...]`. Missing file = LAN-only multicast, no cross-subnet.
 //!
-//! Filesync is plaintext LAN sync. If you want ciphertext at rest +
+//! Longdrawer is plaintext LAN sync. If you want ciphertext at rest +
 //! cross-mesh encryption, use [cryptsync](../cryptsync) instead —
 //! separate subsystem, separate directory, separate threat model.
-//! The 0.25.0 `encrypt: true` opt-in on filesync was removed in
+//! The 0.25.0 `encrypt: true` opt-in on longdrawer was removed in
 //! 0.26.1 in favor of cryptsync.
 
 use std::fs;
@@ -19,22 +19,22 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-/// `~<user>/.filesync/` — the per-user config dir.
+/// `~<user>/.longdrawer/` — the per-user config dir.
 pub fn dot_dir(home: &Path) -> PathBuf {
-    home.join(".filesync")
+    home.join(".longdrawer")
 }
 
 pub fn config_path(home: &Path) -> PathBuf {
     dot_dir(home).join("config.yaml")
 }
 
-/// Per-user filesync settings. Default (missing file) = LAN-only,
+/// Per-user longdrawer settings. Default (missing file) = LAN-only,
 /// no cross-subnet peers.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UserConfig {
     /// Hostnames of cross-subnet receivers that can't be reached via
     /// multicast. The sender POSTs state announcements to each peer's
-    /// `https://<host>:1531/swarm/filesync/announce`. Empty by default.
+    /// `https://<host>:1531/swarm/longdrawer/announce`. Empty by default.
     #[serde(default)]
     pub cross_subnet_peers: Vec<String>,
 }
@@ -49,7 +49,7 @@ pub fn load_config(home: &Path) -> UserConfig {
             tracing::warn!(
                 path = %path.display(),
                 error = %e,
-                "filesync: malformed config.yaml, falling back to defaults"
+                "longdrawer: malformed config.yaml, falling back to defaults"
             );
             UserConfig::default()
         }),

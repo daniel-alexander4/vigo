@@ -1,13 +1,13 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Runtime on/off switch for the filesync subsystem.
+//! Runtime on/off switch for the longdrawer subsystem.
 //!
-//! Filesync is gated per-envoy via two server.yaml pattern lists
+//! Longdrawer is gated per-envoy via two server.yaml pattern lists
 //! (0.41.0+): the substrate-level `swarm.enabled` AND the per-subsystem
-//! `swarm.filesync.enabled`. Both arrive on every check-in inside
+//! `swarm.longdrawer.enabled`. Both arrive on every check-in inside
 //! `PolicyBundle.vars_json` as `swarm_enabled` and
-//! `swarm_filesync_enabled`; the agent re-reads the cached bundle
+//! `swarm_longdrawer_enabled`; the agent re-reads the cached bundle
 //! and drives this gate.
 //! [`crate::swarm::gates::substrate_active`] computes the
 //! global-AND-per-substrate product.
@@ -16,8 +16,8 @@
 //! reconciler) consults [`Gate::enabled`] at its own natural sample
 //! point. When the gate is off the announcer stops broadcasting, the
 //! push handler returns 403, and the reconciler skips its work on
-//! every tick. Content under `~user/filesync/` is left in place — the
-//! gate is a pause, not an evict. Filesync content is plaintext user
+//! every tick. Content under `~user/longdrawer/` is left in place — the
+//! gate is a pause, not an evict. Longdrawer content is plaintext user
 //! data; destructive removal is always a manual operator action.
 //!
 //! A `set` call returns the previous value so callers can detect
@@ -26,7 +26,7 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-/// Shared on/off flag for the filesync subsystem.
+/// Shared on/off flag for the longdrawer subsystem.
 ///
 /// Cheap to clone (`Arc<AtomicBool>`). Reads use `Ordering::Relaxed`
 /// — single-bit eventually-consistent view, read on hot paths

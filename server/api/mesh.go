@@ -13,15 +13,15 @@ import (
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/swarm/cryptsyncmesh"
-	"git.alexander4.io/vigo/server/swarm/filesyncmesh"
+	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
 )
 
-// MeshHandler serves the fleet-wide filesync + cryptsync mesh
+// MeshHandler serves the fleet-wide longdrawer + cryptsync mesh
 // observability endpoints. Both aggregators live alongside because
 // the UI renders them on a single `/mesh` page with subsystem tabs.
 type MeshHandler struct {
 	fleetIndex *fleet.FleetIndex
-	sync       *filesyncmesh.Aggregator
+	sync       *longdrawermesh.Aggregator
 	crypt      *cryptsyncmesh.Aggregator
 	authMethod string
 }
@@ -29,7 +29,7 @@ type MeshHandler struct {
 func NewMeshHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, authMethod string) *MeshHandler {
 	return &MeshHandler{
 		fleetIndex: fleetIndex,
-		sync:       filesyncmesh.NewAggregator(queries),
+		sync:       longdrawermesh.NewAggregator(queries),
 		crypt:      cryptsyncmesh.NewAggregator(queries),
 		authMethod: authMethod,
 	}
@@ -40,17 +40,17 @@ func NewMeshHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, authMetho
 // visible to admins.
 func (h *MeshHandler) RegisterRoutes(mux *http.ServeMux) {
 	adminMW := auth.RequireAdmin(h.authMethod)
-	mux.Handle("GET /api/v1/swarm/filesync/fleet", adminMW(http.HandlerFunc(h.handleFilesyncFleet)))
+	mux.Handle("GET /api/v1/swarm/longdrawer/fleet", adminMW(http.HandlerFunc(h.handleLongdrawerFleet)))
 	mux.Handle("GET /api/v1/swarm/cryptsync/fleet", adminMW(http.HandlerFunc(h.handleCryptsyncFleet)))
-	mux.Handle("GET /api/v1/swarm/filesync/envoy/{id}/users/{user}/files",
-		adminMW(http.HandlerFunc(h.handleFilesyncDrilldown)))
+	mux.Handle("GET /api/v1/swarm/longdrawer/envoy/{id}/users/{user}/files",
+		adminMW(http.HandlerFunc(h.handleLongdrawerDrilldown)))
 	mux.Handle("GET /api/v1/swarm/cryptsync/envoy/{id}/users/{user}/files",
 		adminMW(http.HandlerFunc(h.handleCryptsyncDrilldown)))
 }
 
-// SyncSnapshot returns the cached filesync fleet view. Used by the
+// SyncSnapshot returns the cached longdrawer fleet view. Used by the
 // UI handler directly (no HTTP round-trip).
-func (h *MeshHandler) SyncSnapshot(ctx context.Context) (*filesyncmesh.Fleet, error) {
+func (h *MeshHandler) SyncSnapshot(ctx context.Context) (*longdrawermesh.Fleet, error) {
 	return h.sync.Snapshot(ctx, h.envoyInputsSync())
 }
 
@@ -59,10 +59,10 @@ func (h *MeshHandler) CryptSnapshot(ctx context.Context) (*cryptsyncmesh.Fleet, 
 	return h.crypt.Snapshot(ctx, h.envoyInputsCrypt())
 }
 
-// EnvoyFilesyncFiles returns per-envoy filesync files for the Swarm Load
+// EnvoyLongdrawerFiles returns per-envoy longdrawer files for the Swarm Load
 // page. Passthrough to the aggregator so the UI handler can consume
-// it through the MeshSource interface without importing filesyncmesh.
-func (h *MeshHandler) EnvoyFilesyncFiles(ctx context.Context, envoyID string) []filesyncmesh.EnvoyFile {
+// it through the MeshSource interface without importing longdrawermesh.
+func (h *MeshHandler) EnvoyLongdrawerFiles(ctx context.Context, envoyID string) []longdrawermesh.EnvoyFile {
 	return h.sync.FilesOnEnvoy(ctx, envoyID)
 }
 
@@ -72,11 +72,11 @@ func (h *MeshHandler) EnvoyCryptsyncFiles(ctx context.Context, envoyID string) [
 	return h.crypt.FilesOnEnvoy(ctx, envoyID)
 }
 
-func (h *MeshHandler) envoyInputsSync() []filesyncmesh.EnvoyInput {
+func (h *MeshHandler) envoyInputsSync() []longdrawermesh.EnvoyInput {
 	envoys := h.fleetIndex.AllEnvoys()
-	out := make([]filesyncmesh.EnvoyInput, 0, len(envoys))
+	out := make([]longdrawermesh.EnvoyInput, 0, len(envoys))
 	for _, e := range envoys {
-		out = append(out, filesyncmesh.EnvoyInput{
+		out = append(out, longdrawermesh.EnvoyInput{
 			ID: e.ID, Hostname: e.Hostname, Revoked: e.Revoked,
 		})
 	}
@@ -94,19 +94,19 @@ func (h *MeshHandler) envoyInputsCrypt() []cryptsyncmesh.EnvoyInput {
 	return out
 }
 
-func (h *MeshHandler) handleFilesyncFleet(w http.ResponseWriter, r *http.Request) {
+func (h *MeshHandler) handleLongdrawerFleet(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
 		writeError(w, http.StatusServiceUnavailable, "fleet index not available")
 		return
 	}
 	fleet, err := h.SyncSnapshot(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "filesync fleet query failed")
+		writeError(w, http.StatusInternalServerError, "longdrawer fleet query failed")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(fleet); err != nil {
-		slog.Debug("filesync fleet response encode failed", "error", err)
+		slog.Debug("longdrawer fleet response encode failed", "error", err)
 	}
 }
 
@@ -126,7 +126,7 @@ func (h *MeshHandler) handleCryptsyncFleet(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-func (h *MeshHandler) handleFilesyncDrilldown(w http.ResponseWriter, r *http.Request) {
+func (h *MeshHandler) handleLongdrawerDrilldown(w http.ResponseWriter, r *http.Request) {
 	envoyID := r.PathValue("id")
 	user := r.PathValue("user")
 	if envoyID == "" || user == "" {
@@ -135,17 +135,17 @@ func (h *MeshHandler) handleFilesyncDrilldown(w http.ResponseWriter, r *http.Req
 	}
 	files, err := h.sync.FullFileList(r.Context(), envoyID, user)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "filesync drilldown failed")
+		writeError(w, http.StatusInternalServerError, "longdrawer drilldown failed")
 		return
 	}
 	if files == nil {
-		files = []filesyncmesh.FileRow{}
+		files = []longdrawermesh.FileRow{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(struct {
-		Files []filesyncmesh.FileRow `json:"files"`
+		Files []longdrawermesh.FileRow `json:"files"`
 	}{Files: files}); err != nil {
-		slog.Debug("filesync drilldown response encode failed", "error", err)
+		slog.Debug("longdrawer drilldown response encode failed", "error", err)
 	}
 }
 

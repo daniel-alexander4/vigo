@@ -165,7 +165,7 @@ func TestFlattenDependsOnAcrossBlockBoundaryOutsideToInside(t *testing.T) {
     resources:
       - name: inside
         type: exec
-        command: "filesync hello"
+        command: "longdrawer hello"
 `
 	resources, err := flattenFromYAML(t, input)
 	if err != nil {
@@ -195,7 +195,7 @@ func TestFlattenDependsOnFromInsideToOutside(t *testing.T) {
     resources:
       - name: inside
         type: exec
-        command: "filesync hello"
+        command: "longdrawer hello"
         depends_on: [outside]
 `
 	resources, err := flattenFromYAML(t, input)

@@ -350,7 +350,7 @@ func funcMap() template.FuncMap {
 				// Green for anything that reads as "present and healthy."
 				// Source is the seeder (has by construction); live
 				// covers materialized gitmirror mirrors and per-user
-				// filesync/cryptsync files.
+				// longdrawer/cryptsync files.
 				return "converged"
 			case "cached":
 				return "cached"

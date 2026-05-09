@@ -1702,7 +1702,7 @@ name: bad
 resources:
   - name: yolo-exec
     type: exec
-    command: "filesync hello"
+    command: "longdrawer hello"
 `)
 	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
@@ -1737,7 +1737,7 @@ name: bad
 resources:
   - name: yolo-exec
     type: exec
-    command: "filesync hello"
+    command: "longdrawer hello"
 `)
 	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
@@ -1821,17 +1821,17 @@ name: bad1
 resources:
   - name: yolo-exec
     type: exec
-    command: "filesync one"
+    command: "longdrawer one"
 `)
 	writeFile(t, filepath.Join(dir, "stockpile", "modules", "bad2.vgo"), `
 name: bad2
 resources:
   - name: another-yolo
     type: exec
-    command: "filesync two"
+    command: "longdrawer two"
   - name: third-yolo
     type: exec
-    command: "filesync three"
+    command: "longdrawer three"
 `)
 	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:

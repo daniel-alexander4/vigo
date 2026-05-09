@@ -130,7 +130,7 @@ name: risky
 resources:
   - name: run-something
     type: exec
-    command: "filesync hello"
+    command: "longdrawer hello"
 `)
 	writeFile(t, filepath.Join(stockpile, "envoys", "all.vgo"), `
 envoys:

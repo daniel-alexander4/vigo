@@ -1266,7 +1266,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // Echo daemon — per-user LAN-only directory sync. Piggybacks on the
     // swarm peer HTTPS server for content transport; uses its own multicast
     // group/port for peer discovery. No server involvement.
-    vigo::swarm::filesync::spawn(swarm_tls.clone(), cancel.clone());
+    vigo::swarm::longdrawer::spawn(swarm_tls.clone(), cancel.clone());
 
     // Cryptsync daemon — per-user always-encrypted P2P directory.
     // Separate multicast group (224.0.0.44:1533) and separate peer

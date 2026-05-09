@@ -11,7 +11,7 @@
 | 1 | Rename substrate subsystems and module primitive to descriptive labels |
 | 2 | `lode` → `payload` |
 | 3 | `cairn` → `gitmirror` |
-| 4 | `echo` → `filesync` |
+| 4 | `echo` → `longdrawer` |
 | 5 | `sigil` → `cryptsync` |
 | 6 | `stones` → `modules` |
 | 7 | Keep `swarm` umbrella; group all admin verbs under `vigocli swarm <sub>` |
@@ -26,7 +26,7 @@
 |--------|-----|-----------|-----------|-----------|------|-----------|
 | lode | payload | `vigocli swarm swarmcast` | `vigo swarm swarmcast` | `/var/lib/vigo/swarm/swarmcast/` | `/api/v1/swarm/swarmcast/` | n/a |
 | cairn | gitmirror | `vigocli swarm gitmirror` | `vigo swarm gitmirror` | `/var/lib/vigo/swarm/gitmirror/` | `/api/v1/swarm/gitmirror/` | n/a |
-| echo | filesync | `vigocli swarm filesync` | `vigo swarm filesync` | `/var/lib/vigo/swarm/filesync/` | `/api/v1/swarm/filesync/` | 224.0.0.43:1532 (unchanged) |
+| echo | longdrawer | `vigocli swarm longdrawer` | `vigo swarm longdrawer` | `/var/lib/vigo/swarm/longdrawer/` | `/api/v1/swarm/longdrawer/` | 224.0.0.43:1532 (unchanged) |
 | sigil | cryptsync | `vigocli swarm cryptsync` | `vigo swarm cryptsync` | `/var/lib/vigo/swarm/cryptsync/` | `/api/v1/swarm/cryptsync/` | 224.0.0.44:1533 (unchanged) |
 | stones | modules | n/a (config dir) | n/a | `worksite/stockpile/modules/` | n/a | n/a |
 
@@ -37,14 +37,14 @@ Multicast addresses, port 1531 (peer mTLS), and the swarm transport itself are u
 ### Source tree
 - `agent/src/lode/` → `agent/src/swarm/swarmcast/`
 - `agent/src/cairn/` → `agent/src/swarm/gitmirror/`
-- `agent/src/echo/` → `agent/src/swarm/filesync/`
+- `agent/src/echo/` → `agent/src/swarm/longdrawer/`
 - `agent/src/sigil/` → `agent/src/swarm/cryptsync/`
 - `agent/src/swarm/` (transport) — already at this path; submodule additions land underneath
-- `agent/src/traits/{cairn,sigil,echo}.rs` → `agent/src/traits/{gitmirror,cryptsync,filesync}.rs`
+- `agent/src/traits/{cairn,sigil,echo}.rs` → `agent/src/traits/{gitmirror,cryptsync,longdrawer}.rs`
 - `agent/src/vigorepo/` — delete entirely (Dan confirmed: "vigorepo should not exist anymore")
 - Server-side packages: `server/cairnmesh/`, `server/sigil*/`, `server/echomesh/`, `server/lode*/` (whichever exist) → fold into `server/swarm/<sub>mesh/` or rename in place to match
-- `cli/{lode,cairn,echo,sigil}.go` → `cli/swarm.go` with `cli/swarm_{payload,gitmirror,filesync,cryptsync}.go` per subsystem
-- `server/api/{lode,cairn,echo,sigil}.go` → `server/api/swarm_{payload,gitmirror,filesync,cryptsync}.go`
+- `cli/{lode,cairn,echo,sigil}.go` → `cli/swarm.go` with `cli/swarm_{payload,gitmirror,longdrawer,cryptsync}.go` per subsystem
+- `server/api/{lode,cairn,echo,sigil}.go` → `server/api/swarm_{payload,gitmirror,longdrawer,cryptsync}.go`
 - `server/db/queries/{cairn,sigil,echo,lode}.sql` → corresponding new names; regen with `make sqlc`
 - `worksite/stockpile/stones/` → `worksite/stockpile/modules/`
 
@@ -55,7 +55,7 @@ Multicast addresses, port 1531 (peer mTLS), and the swarm transport itself are u
 - SQL: table names, column names, index names
 
 ### Config keys (YAML)
-- User executor: `sigil: true` → `cryptsync: true`; `echo: ...` → `filesync: ...` (echo had no `true` flag — was opt-in by drop-in dir, but any references in matchfiles)
+- User executor: `sigil: true` → `cryptsync: true`; `echo: ...` → `longdrawer: ...` (echo had no `true` flag — was opt-in by drop-in dir, but any references in matchfiles)
 - Matchfile vars: `vars: { cairn: true }` → `vars: { gitmirror: true }`
 - Sidecar: `.cairn.yaml` → `.gitmirror.yaml`; `cross_subnet_mirrors:` field name kept (still describes the field accurately)
 - server.yaml: `swarm.seeding_envoys` kept; any subsystem-specific stanzas renamed
@@ -63,11 +63,11 @@ Multicast addresses, port 1531 (peer mTLS), and the swarm transport itself are u
 ### Filesystem paths
 - `/var/lib/vigo/lode/` → `/var/lib/vigo/swarm/swarmcast/`
 - `/var/lib/vigo/cairn/` → `/var/lib/vigo/swarm/gitmirror/`
-- `/var/lib/vigo/echo/` → `/var/lib/vigo/swarm/filesync/` (if it existed at top level)
+- `/var/lib/vigo/echo/` → `/var/lib/vigo/swarm/longdrawer/` (if it existed at top level)
 - `/var/lib/vigo/sigil/` → `/var/lib/vigo/swarm/cryptsync/`
 - `~/.sigil/` → `~/.cryptsync/` (per-user identity dir)
 - `~/cairn/` → `~/gitmirror/` (per-user repo source dir)
-- `~/echo/` → `~/filesync/` (per-user sync dir)
+- `~/echo/` → `~/longdrawer/` (per-user sync dir)
 - `~/sigil/` → `~/cryptsync/` (per-user encrypted sync dir)
 - `/var/lib/vigo/swarm/` (transport state) — unchanged
 - Sentinel files: `enroll.pending`, `leave.pending`, `reencrypt.pending` keep filenames inside the new dirs
@@ -75,9 +75,9 @@ Multicast addresses, port 1531 (peer mTLS), and the swarm transport itself are u
 ### REST routes
 - `/api/v1/cairn/fleet` → `/api/v1/swarm/gitmirror/fleet`
 - `/api/v1/sigil/fleet` → `/api/v1/swarm/cryptsync/fleet`
-- `/api/v1/echo/fleet` → `/api/v1/swarm/filesync/fleet`
+- `/api/v1/echo/fleet` → `/api/v1/swarm/longdrawer/fleet`
 - `/api/v1/lode/...` → `/api/v1/swarm/swarmcast/...`
-- Agent peer endpoints (port 1531): `/cairn/push/<label>` → `/swarm/gitmirror/push/<label>`; `/sigil/push/<user>/<name>` → `/swarm/cryptsync/push/<user>/<name>`; `/sigil/leaves/<user>` → `/swarm/cryptsync/leaves/<user>`; `/echo/announce` → `/swarm/filesync/announce`
+- Agent peer endpoints (port 1531): `/cairn/push/<label>` → `/swarm/gitmirror/push/<label>`; `/sigil/push/<user>/<name>` → `/swarm/cryptsync/push/<user>/<name>`; `/sigil/leaves/<user>` → `/swarm/cryptsync/leaves/<user>`; `/echo/announce` → `/swarm/longdrawer/announce`
 
 ### Web UI
 - Page routes: `/cairn`, `/cairn/{label}`, `/lode`, `/lode/{sha256}`, `/sigil/...`, `/echo/...` → corresponding `/swarm/<sub>/...` paths (or whatever shape Dan prefers — inherited from REST)
@@ -88,7 +88,7 @@ Multicast addresses, port 1531 (peer mTLS), and the swarm transport itself are u
 ### CLI verbs
 - `vigocli lode {distribute,status,list,revoke,broken}` → `vigocli swarm swarmcast {distribute,status,list,revoke,broken}`
 - `vigocli cairn {status,list,show,evict}` → `vigocli swarm gitmirror {status,list,show,evict}`
-- `vigocli echo {status,list,show}` → `vigocli swarm filesync {status,list,show}`
+- `vigocli echo {status,list,show}` → `vigocli swarm longdrawer {status,list,show}`
 - `vigocli sigil {status,list,show,evict}` → `vigocli swarm cryptsync {status,list,show,evict}`
 - `vigo cairn {recover,source add/remove/pause/resume/show/validate/list,leave}` → `vigo swarm gitmirror {recover,source ...,leave}`
 - `vigo sigil {init,enroll,unlock,lock,encrypt,decrypt,forget,leave,reencrypt,status,_apply-evict}` → `vigo swarm cryptsync {init,enroll,unlock,lock,encrypt,decrypt,forget,leave,reencrypt,status,_apply-evict}`
@@ -100,7 +100,7 @@ Multicast addresses, port 1531 (peer mTLS), and the swarm transport itself are u
 - sqlc regen after SQL changes.
 
 ### Trait fields
-- Trait blob keys: `cairn`, `sigil`, `echo` → `gitmirror`, `cryptsync`, `filesync`
+- Trait blob keys: `cairn`, `sigil`, `echo` → `gitmirror`, `cryptsync`, `longdrawer`
 - Server-side trait consumers (cairnmesh aggregator, etc.) follow
 
 ### Multicast / port log lines
@@ -108,7 +108,7 @@ Multicast addresses, port 1531 (peer mTLS), and the swarm transport itself are u
 - Listener `listener started on 224.0.0.44:1533` log lines — update naming, keep numeric values
 
 ### Docs
-- `docs/concepts/cairn.md`, `docs/concepts/echo.md`, `docs/concepts/sigil.md` → `docs/concepts/gitmirror.md`, `docs/concepts/filesync.md`, `docs/concepts/cryptsync.md` (and a new `docs/concepts/payload.md` if lode lacks one — verify in implementation pass)
+- `docs/concepts/cairn.md`, `docs/concepts/echo.md`, `docs/concepts/sigil.md` → `docs/concepts/gitmirror.md`, `docs/concepts/longdrawer.md`, `docs/concepts/cryptsync.md` (and a new `docs/concepts/payload.md` if lode lacks one — verify in implementation pass)
 - `docs/cli/{cairn,echo,sigil,lode}.md` → corresponding `docs/cli/swarm-{sub}.md`
 - `docs/cli/_index.md` updates
 - `docs/api/` route docs
@@ -137,7 +137,7 @@ Multicast addresses, port 1531 (peer mTLS), and the swarm transport itself are u
 
 ### Phase 1 — agent (Rust)
 1. Delete `agent/src/vigorepo/` entirely.
-2. Move `agent/src/{lode,cairn,echo,sigil}/` → `agent/src/swarm/{payload,gitmirror,filesync,cryptsync}/` with `git mv`.
+2. Move `agent/src/{lode,cairn,echo,sigil}/` → `agent/src/swarm/{payload,gitmirror,longdrawer,cryptsync}/` with `git mv`.
 3. Update Rust module decls (`mod foo`, `use crate::foo`, `pub mod foo`).
 4. Rename Rust identifiers (types, functions, consts) per the naming map.
 5. Update filesystem path constants in `agent/src/swarm/<sub>/config.rs` (or equivalent) and any cross-subsystem references.
@@ -170,7 +170,7 @@ Multicast addresses, port 1531 (peer mTLS), and the swarm transport itself are u
 ### Phase 5 — config + modules
 1. `git mv worksite/stockpile/stones worksite/stockpile/modules`.
 2. Update config loader path constants.
-3. Update YAML config keys (`sigil:`, `cairn:`, `echo:` → `cryptsync:`, `gitmirror:`, `filesync:`) wherever they appear in code as recognized field names.
+3. Update YAML config keys (`sigil:`, `cairn:`, `echo:` → `cryptsync:`, `gitmirror:`, `longdrawer:`) wherever they appear in code as recognized field names.
 4. Update example configs and any `.vgo.example` files.
 5. Sidecar rename: `.cairn.yaml` → `.gitmirror.yaml` everywhere code references it.
 
@@ -252,13 +252,13 @@ refactor(rename): substrate subsystems and module primitive to descriptive names
 Substrate subsystems renamed for clarity:
   lode    → payload    (admin-pushed binary distribution)
   cairn   → gitmirror  (P2P git repo backup)
-  echo    → filesync   (LAN plaintext per-user dir sync)
+  echo    → longdrawer   (LAN plaintext per-user dir sync)
   sigil   → cryptsync  (LAN encrypted per-user dir sync)
   stones  → modules    (config primitive)
 
 All admin and agent verbs now grouped under `swarm`:
-  vigocli swarm {payload,gitmirror,filesync,cryptsync} ...
-  vigo    swarm {payload,gitmirror,filesync,cryptsync} ...
+  vigocli swarm {payload,gitmirror,longdrawer,cryptsync} ...
+  vigo    swarm {payload,gitmirror,longdrawer,cryptsync} ...
 
 Symmetry across surfaces:
   /var/lib/vigo/swarm/<sub>/                       (filesystem state)

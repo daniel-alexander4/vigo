@@ -3,7 +3,7 @@
 
 **Location:** Tab on the envoy detail page (`/envoys/{id}`) — the **Swarm** button in the tab bar between Attack Surface and Sessions. HTMX-loads into the detail page's content area like every other tab (Drift, Runs, Traits, Config, Trace, Compliance, Attack Surface, Sessions); there is no standalone route.
 
-Per-envoy disk footprint across the four swarm subsystems — [payload](swarm-swarmcast.md) (admin-distributed swarmcasts), [gitmirror](../../engineering/subsystems/gitmirror.md) (personal-DR bare repos), [filesync](../../engineering/subsystems/filesync.md) (LAN plaintext sync), and [cryptsync](../../engineering/subsystems/cryptsync.md) (encrypted sync).
+Per-envoy disk footprint across the four swarm subsystems — [payload](swarm-swarmcast.md) (admin-distributed swarmcasts), [gitmirror](../../engineering/subsystems/gitmirror.md) (personal-DR bare repos), [longdrawer](../../engineering/subsystems/longdrawer.md) (LAN plaintext sync), and [cryptsync](../../engineering/subsystems/cryptsync.md) (encrypted sync).
 
 The motivating use case is debugging full-disk incidents on a specific envoy: every row is a real on-disk artifact, every section is sorted largest first, and totals roll up per subsystem so the biggest consumer surfaces immediately.
 
@@ -12,7 +12,7 @@ The motivating use case is debugging full-disk incidents on a specific envoy: ev
 Five cards at the top:
 
 - **Total Swarm Footprint** — sum of all four subsystems.
-- **Payload**, **Gitmirror**, **Filesync**, **Cryptsync** — per-subsystem totals.
+- **Payload**, **Gitmirror**, **Longdrawer**, **Cryptsync** — per-subsystem totals.
 
 A grossly unbalanced row (e.g. Gitmirror at 40 GB while the others sit at tens of MB) tells you which section to drill into first.
 
@@ -41,12 +41,12 @@ Materialized receiver-side mirrors under `/var/lib/vigo/swarm/gitmirror/mirrors/
 - **Status** — `live` for fresh mirrors, `stale` for mirrors past the 30-day refresh threshold.
 - **Link** — deep-links to `/gitmirror/{label}` for the fleet-wide mesh view.
 
-### Filesync
+### Longdrawer
 
-Per-user LAN plaintext sync files under `~<user>/filesync/`. One row per file across every user with filesync state on this envoy.
+Per-user LAN plaintext sync files under `~<user>/longdrawer/`. One row per file across every user with longdrawer state on this envoy.
 
-- **Name** — `~<user>/filesync/<filename>` — the real path on disk.
-- **Status** — always `live`; filesync tombstones are reported separately and don't consume disk.
+- **Name** — `~<user>/longdrawer/<filename>` — the real path on disk.
+- **Status** — always `live`; longdrawer tombstones are reported separately and don't consume disk.
 
 ### Cryptsync
 
@@ -58,7 +58,7 @@ Per-user encrypted sync files under `~<user>/cryptsync/`. One row per ciphertext
 
 ## Data source
 
-Everything on the page comes from data the server already holds — no extra agent round-trip. Blob presence comes from the swarm `PeerTracker`; gitmirror/filesync/cryptsync come from each envoy's most recent check-in trait.
+Everything on the page comes from data the server already holds — no extra agent round-trip. Blob presence comes from the swarm `PeerTracker`; gitmirror/longdrawer/cryptsync come from each envoy's most recent check-in trait.
 
 Gitmirror sizes are the one field added specifically for this page: receiver-side `mirrors[]` entries now carry `size_bytes` (see [gitmirror trait](../traits/gitmirror.md)), computed by the agent during its trait projection.
 
@@ -66,7 +66,7 @@ Gitmirror sizes are the one field added specifically for this page: receiver-sid
 
 - [Payload page](swarm-swarmcast.md) — fleet-wide view of one blob's distribution.
 - [Gitmirror subsystem](../../engineering/subsystems/gitmirror.md) — how the personal-DR mesh works.
-- [Filesync subsystem](../../engineering/subsystems/filesync.md) — LAN plaintext sync.
+- [Longdrawer subsystem](../../engineering/subsystems/longdrawer.md) — LAN plaintext sync.
 - [Cryptsync subsystem](../../engineering/subsystems/cryptsync.md) — encrypted per-user sync.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

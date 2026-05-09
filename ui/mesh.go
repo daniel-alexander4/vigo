@@ -7,15 +7,15 @@ import (
 	"net/http"
 
 	"git.alexander4.io/vigo/server/swarm/cryptsyncmesh"
-	"git.alexander4.io/vigo/server/swarm/filesyncmesh"
+	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
 )
 
 // MeshRedirect preserves the pre-split `/mesh` URL — redirects to the
 // subsystem page an operator was looking for. `?tab=crypt` → cryptsync;
-// anything else defaults to filesync. One-minor-release compatibility
+// anything else defaults to longdrawer. One-minor-release compatibility
 // step; safe to remove once muscle-memory URLs have migrated.
 func (h *Handler) MeshRedirect(w http.ResponseWriter, r *http.Request) {
-	dest := "/filesync"
+	dest := "/longdrawer"
 	if r.URL.Query().Get("tab") == "crypt" {
 		dest = "/swarm/cryptsync"
 	}
@@ -23,8 +23,8 @@ func (h *Handler) MeshRedirect(w http.ResponseWriter, r *http.Request) {
 }
 
 // findSyncUser finds a user summary by username. Used by the
-// filesync drilldown fragment handler.
-func findSyncUser(f *filesyncmesh.Fleet, user string) *filesyncmesh.UserSummary {
+// longdrawer drilldown fragment handler.
+func findSyncUser(f *longdrawermesh.Fleet, user string) *longdrawermesh.UserSummary {
 	if f == nil {
 		return nil
 	}
