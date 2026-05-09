@@ -16,7 +16,7 @@ import (
 // EnvoySwarmLoadPageData feeds the per-envoy Swarm Load page. One
 // section per subsystem — swarmcast (admin-distributed files + the
 // cached form of gitmirror bundles), gitmirror (materialized bare repos),
-// longdrawer (plaintext per-user sync), cryptsync (encrypted per-user sync).
+// longdrawer (plaintext per-user sync), lockbox (encrypted per-user sync).
 // Totals roll up across all four so the operator can spot which
 // subsystem is filling the disk before drilling into the rows.
 type EnvoySwarmLoadPageData struct {
@@ -27,7 +27,7 @@ type EnvoySwarmLoadPageData struct {
 	Payload  []SwarmLoadRow
 	Gitmirror []SwarmLoadRow
 	Longdrawer  []SwarmLoadRow
-	Cryptsync []SwarmLoadRow
+	Lockbox []SwarmLoadRow
 
 	// Totals are int64 (not the uint64 the wire protocols use) so the
 	// humanBytes template func — which takes int64 — can render them
@@ -36,7 +36,7 @@ type EnvoySwarmLoadPageData struct {
 	LodeTotal  int64
 	GitmirrorTotal int64
 	EchoTotal  int64
-	CryptsyncTotal int64
+	LockboxTotal int64
 	GrandTotal int64
 }
 
@@ -67,7 +67,7 @@ type SwarmLoadRow struct {
 	// When is a formatted timestamp (last refresh, mtime, distributed-at).
 	When string
 	// Link is an optional deep link. Payload rows link to /payload/{sha};
-	// gitmirror rows link to /gitmirror/{label}. Longdrawer/cryptsync rows leave this
+	// gitmirror rows link to /gitmirror/{label}. Longdrawer/lockbox rows leave this
 	// empty — there's no deeper page for one file.
 	Link string
 }
@@ -169,10 +169,10 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 			data.EchoTotal += size
 		}
 
-		// --- Cryptsync (per-user ciphertext) ---
-		for _, f := range h.mesh.EnvoyCryptsyncFiles(r.Context(), idStr) {
+		// --- Lockbox (per-user ciphertext) ---
+		for _, f := range h.mesh.EnvoyLockboxFiles(r.Context(), idStr) {
 			size := int64(f.Size)
-			data.Cryptsync = append(data.Cryptsync, SwarmLoadRow{
+			data.Lockbox = append(data.Lockbox, SwarmLoadRow{
 				Name:      f.Path,
 				Detail:    "user " + f.User,
 				Size:      size,
@@ -180,15 +180,15 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 				Status:    "live",
 				When:      formatRelative(time.Unix(f.Mtime, 0)),
 			})
-			data.CryptsyncTotal += size
+			data.LockboxTotal += size
 		}
 	}
 
-	data.GrandTotal = data.LodeTotal + data.GitmirrorTotal + data.EchoTotal + data.CryptsyncTotal
+	data.GrandTotal = data.LodeTotal + data.GitmirrorTotal + data.EchoTotal + data.LockboxTotal
 
 	// Biggest first within each section — that's what "why is disk
 	// full?" wants to see.
-	for _, rows := range [][]SwarmLoadRow{data.Payload, data.Gitmirror, data.Longdrawer, data.Cryptsync} {
+	for _, rows := range [][]SwarmLoadRow{data.Payload, data.Gitmirror, data.Longdrawer, data.Lockbox} {
 		sort.SliceStable(rows, func(i, j int) bool { return rows[i].Size > rows[j].Size })
 	}
 

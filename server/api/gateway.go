@@ -144,7 +144,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	gitmirrorHandler.RegisterRoutes(mux)
 	uiHandler.SetGitmirrorFleet(gitmirrorHandler)
 
-	// Mount longdrawer + cryptsync mesh observability endpoints. Same
+	// Mount longdrawer + lockbox mesh observability endpoints. Same
 	// handler-sharing pattern — the `/mesh` UI page reads the
 	// cached aggregators directly. Admin-only RBAC is enforced
 	// inside RegisterRoutes; the UI handler adds its own check.

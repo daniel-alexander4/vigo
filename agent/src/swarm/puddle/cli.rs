@@ -15,7 +15,7 @@ use super::config;
 use super::pair;
 use super::rekey;
 use super::session;
-use crate::swarm::cryptsync::crypt::{
+use crate::swarm::lockbox::crypt::{
     encode_sign_pubkey, generate_signing_keypair, unwrap_signing_key, wrap_signing_key,
     SIGN_PUBKEY_LEN,
 };
@@ -73,8 +73,8 @@ LIFECYCLE:
     init                       Generate a new puddle keypair on the founder envoy.
     pair                       Issue a 5-minute pairing code so a peer envoy can join.
     join --from <host>         Receive the wrapped key from <host> using the pairing code.
-    leave [--yes]              Leave the puddle on this envoy: sign LEAVE for cryptsync
-                               peers, scrub ~/.vigo-puddle/, ~/.cryptsync/, ~/cryptsync/,
+    leave [--yes]              Leave the puddle on this envoy: sign LEAVE for lockbox
+                               peers, scrub ~/.vigo-puddle/, ~/.lockbox/, ~/lockbox/,
                                and ~/.vigo-gitmirror/.
 
 REKEY (ADR-018, puddle keypair rotation):
@@ -119,7 +119,7 @@ fn cmd_init(_args: &[String]) -> Result<()> {
 
     let keypair = generate_signing_keypair();
     let pubkey_text = encode_sign_pubkey(&keypair.verifying_key());
-    let salt = crate::swarm::cryptsync::crypt::fresh_salt();
+    let salt = crate::swarm::lockbox::crypt::fresh_salt();
     let blob = wrap_signing_key(&keypair, password.as_bytes(), &salt)
         .context("wrapping puddle identity")?;
 
@@ -185,16 +185,16 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
 
     // ADR-016 slice 4: now that the puddle session helper is
     // running, this is the one moment at which a fresh envoy can
-    // bootstrap cryptsync without the user having to type a second
+    // bootstrap lockbox without the user having to type a second
     // passphrase — puddle-mode wrap-key derivation goes through the
     // helper we just spawned. Two paths:
     //
-    //   - Identity missing → run `cryptsync puddle init` to create the
+    //   - Identity missing → run `lockbox puddle init` to create the
     //     per-envoy age key, recipients, and puddle-membership cert.
-    //   - Identity present + wrap_mode=Puddle → run `cryptsync unlock`
-    //     to start the cryptsync session helper. Without this step,
+    //   - Identity present + wrap_mode=Puddle → run `lockbox unlock`
+    //     to start the lockbox session helper. Without this step,
     //     the auto-encrypt watcher queues plaintext drops indefinitely
-    //     because it can't derive the wrap key without the cryptsync
+    //     because it can't derive the wrap key without the lockbox
     //     helper running, even though the puddle helper has the
     //     material. Operator hit this on every `puddle unlock` after
     //     the first one until 0.39.6.
@@ -204,43 +204,43 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
     //
     // Failures don't undo the unlock — we surface the error and keep
     // going so the operator can re-run manually.
-    let cs_dot = home.join(".cryptsync");
+    let cs_dot = home.join(".lockbox");
     let cs_identity = cs_dot.join("identity.age");
     let mut bootstrap_ok = true;
     if !cs_identity.exists() {
         println!();
-        println!("Bootstrapping cryptsync (puddle-mode wrap, no extra passphrase)...");
-        match crate::swarm::cryptsync::cli::run(vec![
+        println!("Bootstrapping lockbox (puddle-mode wrap, no extra passphrase)...");
+        match crate::swarm::lockbox::cli::run(vec![
             "puddle".to_string(),
             "init".to_string(),
         ]) {
             Ok(()) => {}
             Err(e) => {
-                eprintln!("warning: cryptsync auto-init failed: {:#}", e);
+                eprintln!("warning: lockbox auto-init failed: {:#}", e);
                 eprintln!(
-                    "         re-run manually: `vigo swarm cryptsync puddle init`"
+                    "         re-run manually: `vigo swarm lockbox puddle init`"
                 );
                 bootstrap_ok = false;
             }
         }
     }
-    // Whether cryptsync was already enrolled or we just bootstrapped
+    // Whether lockbox was already enrolled or we just bootstrapped
     // it, start its session helper so encrypt / decrypt / list verbs
     // work immediately. Pre-0.41.2 only auto-started in the
     // already-enrolled branch, leaving freshly-bootstrapped envoys
     // half-ready (operator could encrypt but not decrypt until they
-    // ran `cryptsync unlock` manually). Skip when bootstrap failed —
+    // ran `lockbox unlock` manually). Skip when bootstrap failed —
     // there's no identity to unlock and the operator needs to fix
     // the bootstrap first.
     if bootstrap_ok {
         println!();
-        println!("Starting cryptsync session helper (puddle-derived wrap, no extra passphrase)...");
-        match crate::swarm::cryptsync::cli::run(vec!["unlock".to_string()]) {
+        println!("Starting lockbox session helper (puddle-derived wrap, no extra passphrase)...");
+        match crate::swarm::lockbox::cli::run(vec!["unlock".to_string()]) {
             Ok(()) => {}
             Err(e) => {
-                eprintln!("warning: cryptsync unlock failed: {:#}", e);
+                eprintln!("warning: lockbox unlock failed: {:#}", e);
                 eprintln!(
-                    "         re-run manually: `vigo swarm cryptsync unlock`"
+                    "         re-run manually: `vigo swarm lockbox unlock`"
                 );
             }
         }
@@ -395,16 +395,16 @@ fn cmd_join(args: &[String]) -> Result<()> {
     );
 
     // ADR-016 slice 4: the next `puddle unlock` will auto-bootstrap
-    // cryptsync on this envoy if its identity.age is still missing.
+    // lockbox on this envoy if its identity.age is still missing.
     // The session helper isn't running yet (`join` only persists the
     // wrapped blob; the user activates it on their own login), so we
-    // don't run cryptsync init inline here — surface the side effect
+    // don't run lockbox init inline here — surface the side effect
     // the operator should expect from the unlock that follows.
-    let cs_identity = home.join(".cryptsync").join("identity.age");
+    let cs_identity = home.join(".lockbox").join("identity.age");
     if !cs_identity.exists() {
         println!();
         println!(
-            "note: the next `puddle unlock` on this envoy will also bootstrap cryptsync \
+            "note: the next `puddle unlock` on this envoy will also bootstrap lockbox \
              (encrypted P2P sync), wrapped under your puddle identity — no extra passphrase."
         );
     }
@@ -414,20 +414,20 @@ fn cmd_join(args: &[String]) -> Result<()> {
 // ---------- leave ----------
 
 /// Leave the puddle on this envoy. Per ADR-021 (0.40.0), this is the
-/// canonical lifecycle exit verb covering puddle + cryptsync +
+/// canonical lifecycle exit verb covering puddle + lockbox +
 /// gitmirror cleanup.
 ///
 /// Steps:
-///   1. If cryptsync is enrolled: invoke `cryptsync leave --purge
-///      --yes` internally — the cryptsync daemon picks up the
+///   1. If lockbox is enrolled: invoke `lockbox leave --purge
+///      --yes` internally — the lockbox daemon picks up the
 ///      `leave.pending` sentinel and fans out a signed LEAVE envelope
-///      to live peers, then scrubs `~/.cryptsync/` + `~/cryptsync/`.
+///      to live peers, then scrubs `~/.lockbox/` + `~/lockbox/`.
 ///   2. Lock the puddle session helper (best-effort).
 ///   3. Scrub `~/.vigo-puddle/` (the wrapped keypair, salt, pubkey).
 ///   4. Scrub `~/.vigo-gitmirror/` if present (per-project state for
 ///      every gitmirror project this user was in).
 ///
-/// Idempotent on the dir-removal side. The cryptsync LEAVE fanout is
+/// Idempotent on the dir-removal side. The lockbox LEAVE fanout is
 /// asynchronous — peers may take up to one announce tick (~30s) to
 /// observe the departure, but the local scrub returns immediately.
 ///
@@ -442,9 +442,9 @@ fn cmd_leave(args: &[String]) -> Result<()> {
                 eprintln!(
                     "vigo swarm puddle leave — leave the puddle on this envoy\n\n\
                      USAGE:\n    vigo swarm puddle leave [--yes]\n\n\
-                     Signs a LEAVE envelope for cryptsync peers, locks the puddle\n\
-                     session helper, and wipes ~/.vigo-puddle/, ~/.cryptsync/,\n\
-                     ~/cryptsync/, and ~/.vigo-gitmirror/. Refuses without --yes."
+                     Signs a LEAVE envelope for lockbox peers, locks the puddle\n\
+                     session helper, and wipes ~/.vigo-puddle/, ~/.lockbox/,\n\
+                     ~/lockbox/, and ~/.vigo-gitmirror/. Refuses without --yes."
                 );
                 return Ok(());
             }
@@ -468,11 +468,11 @@ fn cmd_leave(args: &[String]) -> Result<()> {
         eprintln!("This will leave the puddle on this envoy and wipe local state:");
         eprintln!("  puddle pubkey:    {}", pubkey);
         eprintln!("  ~/.vigo-puddle/   keypair, salt, pubkey, retired-puddles log");
-        eprintln!("  ~/.cryptsync/     wrapped age identity + recipients + cert");
-        eprintln!("  ~/cryptsync/      ciphertext at rest (recoverable from peers)");
+        eprintln!("  ~/.lockbox/     wrapped age identity + recipients + cert");
+        eprintln!("  ~/lockbox/      ciphertext at rest (recoverable from peers)");
         eprintln!("  ~/.vigo-gitmirror/ per-project state for any gitmirror projects");
         eprintln!();
-        eprintln!("Cryptsync peers receive a signed LEAVE envelope on the next");
+        eprintln!("Lockbox peers receive a signed LEAVE envelope on the next");
         eprintln!("announce tick (~30s). Gitmirror projects are not gossiped — admin");
         eprintln!("`gitmirror project revoke` is a separate cleanup step if needed.");
         eprintln!();
@@ -480,28 +480,28 @@ fn cmd_leave(args: &[String]) -> Result<()> {
         return Ok(());
     }
 
-    // 1. Cryptsync leave (signs envelope, fans out, scrubs cryptsync
+    // 1. Lockbox leave (signs envelope, fans out, scrubs lockbox
     //    state). Best-effort: a failure here doesn't stop the puddle
-    //    cleanup — the operator can always run `cryptsync purge` later
+    //    cleanup — the operator can always run `lockbox purge` later
     //    to finish the local wipe. Per ADR-021 (0.40.0), we drop the
-    //    leave.pending sentinel directly via the cryptsync helper
-    //    function rather than going through a public `cryptsync leave`
+    //    leave.pending sentinel directly via the lockbox helper
+    //    function rather than going through a public `lockbox leave`
     //    verb (which retired in 0.40.0).
-    let cs_identity = home.join(".cryptsync").join("identity.age");
+    let cs_identity = home.join(".lockbox").join("identity.age");
     if cs_identity.exists() {
         let username = user_for_invocation()?;
-        println!("Signing cryptsync LEAVE envelope and scrubbing ciphertext...");
-        match crate::swarm::cryptsync::cli::enqueue_leave(
+        println!("Signing lockbox LEAVE envelope and scrubbing ciphertext...");
+        match crate::swarm::lockbox::cli::enqueue_leave(
             &home,
             &username,
             /* keep_identity */ false,
             /* purge_content */ true,
         ) {
             Ok(()) => {
-                println!("✓ cryptsync leave queued (peers learn within ~30s)");
+                println!("✓ lockbox leave queued (peers learn within ~30s)");
             }
             Err(e) => {
-                eprintln!("warning: cryptsync leave failed: {:#}", e);
+                eprintln!("warning: lockbox leave failed: {:#}", e);
                 eprintln!("         continuing with puddle cleanup anyway");
             }
         }
@@ -556,9 +556,9 @@ fn cmd_leave(args: &[String]) -> Result<()> {
 /// Founder-side: rotate the puddle keypair and issue a 5-minute claim
 /// code. On the first call inside the 24h graceful window, generates
 /// a new keypair, atomic-swaps the local identity files, runs the
-/// cryptsync rewrap, and records the retirement entry. On subsequent
+/// lockbox rewrap, and records the retirement entry. On subsequent
 /// calls inside the same window, only a fresh claim code is issued —
-/// the keypair and cryptsync state are not rotated again.
+/// the keypair and lockbox state are not rotated again.
 ///
 /// Flags:
 ///   --close             Close the active rekey window immediately. No
@@ -673,7 +673,7 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     // passphrase so surviving envoys keep the single-passphrase UX.
     let new_key = generate_signing_keypair();
     let new_pubkey_text = encode_sign_pubkey(&new_key.verifying_key());
-    let new_salt = crate::swarm::cryptsync::crypt::fresh_salt();
+    let new_salt = crate::swarm::lockbox::crypt::fresh_salt();
     let new_blob = wrap_signing_key(&new_key, passphrase.as_bytes(), &new_salt)
         .context("wrapping new puddle identity")?;
 
@@ -733,7 +733,7 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
         return Err(e.context("writing new puddle identity — restored from backup"));
     }
 
-    // Persist retirement entry before the cryptsync sync. If the
+    // Persist retirement entry before the lockbox sync. If the
     // rewrap fails the founder still has a record of "we rotated to
     // X at T" which the operator can reconcile manually.
     rekey::record_retirement(
@@ -745,17 +745,17 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
         window_secs,
     )?;
 
-    // Cryptsync rewrap + TOFU pin clear + recipients regen. Logged
+    // Lockbox rewrap + TOFU pin clear + recipients regen. Logged
     // outcome — not fatal for the rotation if the user has no
-    // cryptsync state.
-    let outcome = rekey::apply_post_rotation_cryptsync_sync(
+    // lockbox state.
+    let outcome = rekey::apply_post_rotation_lockbox_sync(
         &home,
         &username,
         &old_key,
         &new_key,
         &old_pubkey_text,
     )
-    .context("cryptsync sync after rotation")?;
+    .context("lockbox sync after rotation")?;
 
     // ADR-019: gitmirror rekey sync — sign + append delegations under
     // OLD for every project the user founded, rebuild tokens.json
@@ -889,15 +889,15 @@ fn print_gitmirror_rekey_outcome(
     }
 }
 
-fn print_rewrap_outcome(outcome: crate::swarm::cryptsync::identity_rewrap::RewrapOutcome) {
-    use crate::swarm::cryptsync::identity_rewrap::RewrapOutcome;
+fn print_rewrap_outcome(outcome: crate::swarm::lockbox::identity_rewrap::RewrapOutcome) {
+    use crate::swarm::lockbox::identity_rewrap::RewrapOutcome;
     match outcome {
         RewrapOutcome::NotEnrolled => {
-            println!("  Cryptsync rewrap: skipped (not enrolled on this envoy)");
+            println!("  Lockbox rewrap: skipped (not enrolled on this envoy)");
         }
         RewrapOutcome::Rewrapped { backup_path } => {
             println!(
-                "  Cryptsync rewrap: ok (backup at {})",
+                "  Lockbox rewrap: ok (backup at {})",
                 backup_path.display()
             );
         }
@@ -951,7 +951,7 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
     println!("passphrase to unwrap the new key the founder issued.");
 
     // Unwrap the OLD puddle key locally first — required input for
-    // the cryptsync rewrap. The founder uses the same passphrase
+    // the lockbox rewrap. The founder uses the same passphrase
     // (rekey-pair preserves it), so we ask once and use it twice.
     let passphrase = prompt_password(false)?;
     if passphrase.is_empty() {
@@ -1083,14 +1083,14 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
         rekey::REKEY_GRACEFUL_SECS,
     )?;
 
-    let outcome = rekey::apply_post_rotation_cryptsync_sync(
+    let outcome = rekey::apply_post_rotation_lockbox_sync(
         &home,
         &username,
         &old_key,
         &new_key,
         &old_pubkey_text,
     )
-    .context("cryptsync sync after rotation")?;
+    .context("lockbox sync after rotation")?;
 
     // ADR-019: gitmirror sync — same as the founder side. Each envoy
     // in the puddle signs its OWN delegation locally using its copy
@@ -1138,9 +1138,9 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
 
 fn cmd_members(_args: &[String]) -> Result<()> {
     // Local-only view: this envoy's pubkey + initialization status.
-    // ADR-015 (gitmirror substrate) and ADR-016 (cryptsync membership
+    // ADR-015 (gitmirror substrate) and ADR-016 (lockbox membership
     // on puddle) shipped, so peer puddle pubkeys ARE observable —
-    // but via the cryptsync peer table, not the puddle module's own
+    // but via the lockbox peer table, not the puddle module's own
     // state. Surface that path so an operator looking at the local
     // puddle view knows where to find the cross-envoy aggregate.
     let home = user_home_for_invocation()?;
@@ -1155,8 +1155,8 @@ fn cmd_members(_args: &[String]) -> Result<()> {
     println!();
     println!(
         "This is the local view. For the cross-envoy puddle pubkey aggregate (which peers\n\
-         this envoy has discovered via swarm announces), inspect `~/.cryptsync/recipients.txt`\n\
-         or run `vigocli swarm cryptsync show <user>` from an admin shell for the server-\n\
+         this envoy has discovered via swarm announces), inspect `~/.lockbox/recipients.txt`\n\
+         or run `vigocli swarm lockbox show <user>` from an admin shell for the server-\n\
          side fleet rollup."
     );
     Ok(())
@@ -1188,7 +1188,7 @@ fn cmd_rotate_passphrase(_args: &[String]) -> Result<()> {
         bail!("passphrase must not be empty");
     }
 
-    let new_salt = crate::swarm::cryptsync::crypt::fresh_salt();
+    let new_salt = crate::swarm::lockbox::crypt::fresh_salt();
     let new_blob = wrap_signing_key(&key, new.as_bytes(), &new_salt)?;
 
     // Atomic write via tempfile + rename so a crash mid-rotate
@@ -1425,13 +1425,13 @@ fn humanize_duration(seconds: i64) -> String {
     format!("{}s", seconds.max(0))
 }
 
-/// If any peer in the local cryptsync peer table is announcing under
+/// If any peer in the local lockbox peer table is announcing under
 /// a puddle pubkey that doesn't match this envoy's local puddle pubkey,
 /// this envoy was probably offline during a rekey on the founder.
 /// Print a one-shot hint so the operator knows where to migrate from.
 ///
 /// Comparison is on the bare hex (after stripping the `ed25519:`
-/// prefix and lowercasing). cryptsync state stores puddle_pubkey
+/// prefix and lowercasing). lockbox state stores puddle_pubkey
 /// without the prefix; puddle stores with the prefix in
 /// identity.pub.
 fn print_offline_envoy_hint(local_puddle_pubkey: &str, username: &str) {
@@ -1443,7 +1443,7 @@ fn print_offline_envoy_hint(local_puddle_pubkey: &str, username: &str) {
     if local_hex.is_empty() {
         return;
     }
-    let table = crate::swarm::cryptsync::state::PeerTable::load(username);
+    let table = crate::swarm::lockbox::state::PeerTable::load(username);
     let mut divergent: Vec<(String, String)> = Vec::new();
     for entry in table.peers.values() {
         if entry.puddle_pubkey.is_empty() {
@@ -1510,7 +1510,7 @@ fn user_for_invocation() -> Result<String> {
 
 fn user_home_for_invocation() -> Result<PathBuf> {
     let username = user_for_invocation()?;
-    crate::swarm::cryptsync::home_for_user_pub(&username)
+    crate::swarm::lockbox::home_for_user_pub(&username)
         .ok_or_else(|| anyhow!("could not resolve home directory for user {}", username))
 }
 
@@ -1629,7 +1629,7 @@ fn write_private(path: &Path, content: &[u8], username: &str) -> Result<()> {
         .with_context(|| format!("creating {}", path.display()))?;
     f.write_all(content)?;
     f.sync_all().ok();
-    crate::swarm::cryptsync::chown_to_user_pub(path, username)
+    crate::swarm::lockbox::chown_to_user_pub(path, username)
         .with_context(|| format!("chown {} to {}", path.display(), username))?;
     Ok(())
 }
@@ -1651,7 +1651,7 @@ fn write_pubkey(path: &Path, pubkey: &str, username: &str) -> Result<()> {
         .with_context(|| format!("creating {}", path.display()))?;
     writeln!(f, "{}", pubkey)?;
     f.sync_all().ok();
-    crate::swarm::cryptsync::chown_to_user_pub(path, username)
+    crate::swarm::lockbox::chown_to_user_pub(path, username)
         .with_context(|| format!("chown {} to {}", path.display(), username))?;
     Ok(())
 }
@@ -1672,7 +1672,7 @@ fn create_user_dir(path: &Path, username: &str, mode: u32) -> Result<()> {
             .create(path)
             .with_context(|| format!("creating {}", path.display()))?;
     }
-    crate::swarm::cryptsync::chown_to_user_pub(path, username)
+    crate::swarm::lockbox::chown_to_user_pub(path, username)
         .with_context(|| format!("chown {} to {}", path.display(), username))?;
     Ok(())
 }
@@ -1738,7 +1738,7 @@ fn load_envoy_tls() -> Result<crate::update::TlsCerts> {
 }
 
 fn build_mtls_agent(tls: &crate::update::TlsCerts) -> Result<ureq::Agent> {
-    crate::swarm::cryptsync::pusher::build_agent_for_mod(tls)
+    crate::swarm::lockbox::pusher::build_agent_for_mod(tls)
 }
 
 // Defensive — silence dead-code warnings while the feature lands.

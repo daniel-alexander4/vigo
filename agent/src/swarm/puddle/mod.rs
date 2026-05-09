@@ -8,8 +8,8 @@
 //! identified by a single Ed25519 keypair generated locally on the
 //! first envoy where the user runs `vigo swarm puddle init`. The
 //! private half is wrapped under the user's passphrase using the
-//! same Argon2id + XChaCha20-Poly1305 envelope cryptsync uses for
-//! its age identity (see [`super::cryptsync::crypt::wrap_signing_key`]).
+//! same Argon2id + XChaCha20-Poly1305 envelope lockbox uses for
+//! its age identity (see [`super::lockbox::crypt::wrap_signing_key`]).
 //!
 //! Membership of an envoy in a puddle is local: the wrapped
 //! private blob lives at `~/.vigo-puddle/identity.wrapped`, the
@@ -53,7 +53,7 @@ use anyhow::Result;
 /// `identity.pub` is present, `Ok(None)` when the user hasn't
 /// initialized puddle yet, `Err(_)` on read failure.
 ///
-/// Used by sibling subsystems (gitmirror under ADR-015, cryptsync
+/// Used by sibling subsystems (gitmirror under ADR-015, lockbox
 /// membership under ADR-016) to query "is this user puddle-enabled
 /// here?" without having to touch the wrapped blob.
 pub fn local_puddle_pubkey(home: &Path) -> Result<Option<String>> {

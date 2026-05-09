@@ -75,7 +75,7 @@ Verbs that take a `<project_id>` argument also accept a unique handle prefix amo
 
 ## `status`
 
-Envoy-wide gitmirror posture, parallel to [`vigo swarm cryptsync status`](agent-swarm-cryptsync.md#status). Reads `traits.json` under `/var/lib/vigo/swarm/gitmirror/` and surfaces the helper-daemon socket. Distinct from `project status <id>`, which shows a single ADR-015 project's local state.
+Envoy-wide gitmirror posture, parallel to [`vigo swarm lockbox status`](agent-swarm-lockbox.md#status). Reads `traits.json` under `/var/lib/vigo/swarm/gitmirror/` and surfaces the helper-daemon socket. Distinct from `project status <id>`, which shows a single ADR-015 project's local state.
 
 ```
 vigo swarm gitmirror status
@@ -104,7 +104,7 @@ A fresh envoy that hasn't run the gitmirror reactor yet shows `(not yet written 
 
 ## `purge`
 
-Power-user wipe of local gitmirror state on this envoy. Symmetric with [`vigo swarm cryptsync purge`](agent-swarm-cryptsync.md#vigo-swarm-cryptsync-purge). Distinct from `project leave --purge` (one project's bare repo) and from the server-driven `_apply-blacklist` (envoy-wide bare repos via TaskDispatch).
+Power-user wipe of local gitmirror state on this envoy. Symmetric with [`vigo swarm lockbox purge`](agent-swarm-lockbox.md#vigo-swarm-lockbox-purge). Distinct from `project leave --purge` (one project's bare repo) and from the server-driven `_apply-blacklist` (envoy-wide bare repos via TaskDispatch).
 
 ```
 vigo swarm gitmirror purge --yes
@@ -257,7 +257,7 @@ vigo swarm gitmirror project revoke <project_id> --token-id <hex> [--reason <tex
 - `--token-id <hex>` — 64-char hex token ID. Tokens are content-addressed (`token_id = sha256(canonical_bytes)`), surfaced via `project status` (chain depth) and the audit log.
 - `--reason <text>` — optional human-readable reason captured in the envelope.
 
-**Effects:** signs a REVOKE envelope inline via the user's puddle session helper (the leaf admin token's subject == this user's puddle pubkey, so the user holds an authorized signing key) and writes it as a `revoke.pending` sentinel under `~/.vigo-gitmirror/<project_id>/`. The agent's root reactor sweeps every 60 s and moves the signed envelope into `/var/lib/vigo/swarm/gitmirror/envelopes/<project_id>/revokes/<token_id_hex>.json`. From that point any push presenting a chain that includes the revoked token id is rejected by the helper daemon on this envoy. Cross-envoy gossip lands in the next slice of step 4. 90-day retention before reap, matching cryptsync.
+**Effects:** signs a REVOKE envelope inline via the user's puddle session helper (the leaf admin token's subject == this user's puddle pubkey, so the user holds an authorized signing key) and writes it as a `revoke.pending` sentinel under `~/.vigo-gitmirror/<project_id>/`. The agent's root reactor sweeps every 60 s and moves the signed envelope into `/var/lib/vigo/swarm/gitmirror/envelopes/<project_id>/revokes/<token_id_hex>.json`. From that point any push presenting a chain that includes the revoked token id is rejected by the helper daemon on this envoy. Cross-envoy gossip lands in the next slice of step 4. 90-day retention before reap, matching lockbox.
 
 ## `project reanchor`
 

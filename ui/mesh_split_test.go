@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"git.alexander4.io/vigo/server/swarm/cryptsyncmesh"
+	"git.alexander4.io/vigo/server/swarm/lockboxmesh"
 	"git.alexander4.io/vigo/server/swarm/gitmirrormesh"
 	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
 )
@@ -19,14 +19,14 @@ import (
 // full aggregator + DB.
 type mockMesh struct {
 	sync  *longdrawermesh.Fleet
-	crypt *cryptsyncmesh.Fleet
+	crypt *lockboxmesh.Fleet
 }
 
 func (m *mockMesh) SyncSnapshot(ctx context.Context) (*longdrawermesh.Fleet, error) {
 	return m.sync, nil
 }
 
-func (m *mockMesh) CryptSnapshot(ctx context.Context) (*cryptsyncmesh.Fleet, error) {
+func (m *mockMesh) CryptSnapshot(ctx context.Context) (*lockboxmesh.Fleet, error) {
 	return m.crypt, nil
 }
 
@@ -34,7 +34,7 @@ func (m *mockMesh) EnvoyLongdrawerFiles(_ context.Context, _ string) []longdrawe
 	return nil
 }
 
-func (m *mockMesh) EnvoyCryptsyncFiles(_ context.Context, _ string) []cryptsyncmesh.EnvoyFile {
+func (m *mockMesh) EnvoyLockboxFiles(_ context.Context, _ string) []lockboxmesh.EnvoyFile {
 	return nil
 }
 
@@ -64,14 +64,14 @@ func TestMeshSplit_RBAC(t *testing.T) {
 	}{
 		{"/longdrawer", h.Longdrawer},
 		{"/ui/fragments/longdrawer-user/dan", h.EchoUserDrilldown},
-		{"/swarm/cryptsync", h.Cryptsync},
-		{"/ui/fragments/cryptsync-user/dan", h.CryptsyncUserDrilldown},
+		{"/swarm/lockbox", h.Lockbox},
+		{"/ui/fragments/lockbox-user/dan", h.LockboxUserDrilldown},
 		{"/swarm/gitmirror", h.Gitmirror},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
 		req := viewerRequest(http.MethodGet, c.path)
-		if c.path == "/ui/fragments/longdrawer-user/dan" || c.path == "/ui/fragments/cryptsync-user/dan" {
+		if c.path == "/ui/fragments/longdrawer-user/dan" || c.path == "/ui/fragments/lockbox-user/dan" {
 			req.SetPathValue("user", "dan")
 		}
 		c.handler(rec, req)
@@ -93,7 +93,7 @@ func TestMeshRedirect_PreservesMuscleMemoryURLs(t *testing.T) {
 	}{
 		{"/mesh", "/longdrawer"},
 		{"/mesh?tab=sync", "/longdrawer"},
-		{"/mesh?tab=crypt", "/swarm/cryptsync"},
+		{"/mesh?tab=crypt", "/swarm/lockbox"},
 		{"/mesh?tab=unknown", "/longdrawer"},
 	}
 	for _, c := range cases {
@@ -127,18 +127,18 @@ func TestEcho_EmptyRendersHealthy(t *testing.T) {
 	}
 }
 
-func TestCryptsync_EmptyRendersHealthy(t *testing.T) {
+func TestLockbox_EmptyRendersHealthy(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
-	h.mesh = &mockMesh{crypt: &cryptsyncmesh.Fleet{}}
+	h.mesh = &mockMesh{crypt: &lockboxmesh.Fleet{}}
 
 	rec := httptest.NewRecorder()
-	h.Cryptsync(rec, adminRequest(http.MethodGet, "/swarm/cryptsync"))
+	h.Lockbox(rec, adminRequest(http.MethodGet, "/swarm/lockbox"))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Cryptsync returned %d, want 200", rec.Code)
+		t.Fatalf("Lockbox returned %d, want 200", rec.Code)
 	}
-	if !containsAll(rec.Body.String(), "Cryptsync", "health-banner--ok") {
-		t.Error("empty cryptsync should render healthy banner")
+	if !containsAll(rec.Body.String(), "Lockbox", "health-banner--ok") {
+		t.Error("empty lockbox should render healthy banner")
 	}
 }
 

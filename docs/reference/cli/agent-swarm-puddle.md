@@ -5,7 +5,7 @@ weight: 26
 
 # `vigo swarm puddle`
 
-`vigo swarm puddle` is the user-facing CLI for the [puddle](../../engineering/subsystems/puddle.md) primitive — a per-user Ed25519 puddle identity that subsystems like gitmirror (ADR-015) and cryptsync membership (ADR-016) consume as a single trust unit. State lives under `~/.vigo-puddle/`. No Vigo-server contact for any verb on this page.
+`vigo swarm puddle` is the user-facing CLI for the [puddle](../../engineering/subsystems/puddle.md) primitive — a per-user Ed25519 puddle identity that subsystems like gitmirror (ADR-015) and lockbox membership (ADR-016) consume as a single trust unit. State lives under `~/.vigo-puddle/`. No Vigo-server contact for any verb on this page.
 
 ## Invocation
 
@@ -25,9 +25,9 @@ Most verbs run as the invoking user against `~/.vigo-puddle/`. The one exception
 | `init` | Founder envoy, once per puddle ever. Generates a fresh Ed25519 keypair, prompts (with confirm) for the puddle passphrase, wraps the private half via Argon2id + XChaCha20-Poly1305 with a fresh 16-byte salt, writes `identity.wrapped` / `identity.salt` / `identity.pub`. Refuses to overwrite an existing puddle on this envoy. |
 | `pair` | On a puddle member, issue a 5-minute single-use 8-character pairing code (`NNNN-NNNN`). Drops `~/.vigo-puddle/pair.pending` (storing the SHA-256 of the code, never plaintext) so the daemon-side pair-claim handler can validate the joining envoy's request. Re-running overwrites any existing pending session. |
 | `join --from <host>` | **Requires sudo.** New envoy, once per envoy ever. Prompts for the pairing code, POSTs it to `https://<host>:1531/swarm/puddle/pair-claim/<user>` over mTLS, receives the wrapped blob and salt, prompts for the puddle passphrase, verifies the unwrap, persists `~/.vigo-puddle/` files. Tells the user to run `unlock` next (no helper spawn — runs in user context). |
-| `leave [--yes]` | (0.39.15) Leave the puddle on this envoy. Signs a cryptsync LEAVE envelope (queued via `~/.cryptsync/leave.pending` for the daemon to fan out to live peers within ~30s), locks the puddle session helper, then scrubs `~/.vigo-puddle/`, `~/.cryptsync/`, `~/cryptsync/`, and `~/.vigo-gitmirror/`. The local scrub is synchronous; peer notification is asynchronous. Refuses without `--yes`. To re-join later, pair from a current puddle member and `puddle join` on this envoy. Gitmirror bare repos under `/var/lib/vigo/swarm/gitmirror/` are root-owned and survive a user-context leave; admin-side cleanup is a separate path. |
-| `rekey-pair [--close] [--window-secs <N>] [--force-orphan-projects]` | (ADR-018 / ADR-019) On a current puddle member, rotate the puddle keypair and issue a 5-minute claim code so surviving envoys can migrate. Re-prompts for the puddle passphrase. Runs an ADR-019 pre-flight check that aborts the rotation if any founded gitmirror project's delegation chain has hit `DELEGATION_MAX_LEN` (5). Atomic-renames `identity.{wrapped,salt,pub}` to `.pre-rekey-<ts>` backups, runs cryptsync identity-rewrap, clears stale TOFU pins on local cryptsync state, runs the gitmirror sync (signs + appends a delegation envelope under OLD for every founded project, rewrites `project.json::members[]` OLD → NEW), restarts the session helper, records a 24h graceful retirement entry in `retired_puddles.json`. Re-running inside the active window only reissues a fresh claim code — keypair and on-disk state untouched. `--close` ends the active window; `--window-secs <N>` overrides the 24h default. `--force-orphan-projects` proceeds even if a founded project is at the delegation cap; affected projects get `project.json::tombstoned_at` set on disk (helper daemon refuses git operations on them, CLI verbs skip them) — operator clears via `gitmirror project re-found <handle>` or drops via `project leave`. |
-| `rekey --from <host> [--force-orphan-projects]` | **Requires sudo.** (ADR-018 / ADR-019) On a surviving envoy, claim the new wrapped puddle blob from `<host>`, migrate this envoy onto it. Asks for the puddle passphrase (used both to unwrap the OLD local key for cryptsync rewrap and to unwrap the NEW wrapped blob the founder issued under the same passphrase). Same ADR-019 pre-flight check as `rekey-pair`. Atomic-renames identity files, calls cryptsync identity-rewrap, clears local TOFU pins, signs + appends its own delegation envelope under OLD for every founded project (each envoy maintains its own self-consistent delegation chain), rewrites local member entries OLD → NEW, locks the session helper. Refuses if the unwrapped blob carries the same puddle pubkey already held locally. `--force-orphan-projects` matches the founder-side flag for symmetry. |
+| `leave [--yes]` | (0.39.15) Leave the puddle on this envoy. Signs a lockbox LEAVE envelope (queued via `~/.lockbox/leave.pending` for the daemon to fan out to live peers within ~30s), locks the puddle session helper, then scrubs `~/.vigo-puddle/`, `~/.lockbox/`, `~/lockbox/`, and `~/.vigo-gitmirror/`. The local scrub is synchronous; peer notification is asynchronous. Refuses without `--yes`. To re-join later, pair from a current puddle member and `puddle join` on this envoy. Gitmirror bare repos under `/var/lib/vigo/swarm/gitmirror/` are root-owned and survive a user-context leave; admin-side cleanup is a separate path. |
+| `rekey-pair [--close] [--window-secs <N>] [--force-orphan-projects]` | (ADR-018 / ADR-019) On a current puddle member, rotate the puddle keypair and issue a 5-minute claim code so surviving envoys can migrate. Re-prompts for the puddle passphrase. Runs an ADR-019 pre-flight check that aborts the rotation if any founded gitmirror project's delegation chain has hit `DELEGATION_MAX_LEN` (5). Atomic-renames `identity.{wrapped,salt,pub}` to `.pre-rekey-<ts>` backups, runs lockbox identity-rewrap, clears stale TOFU pins on local lockbox state, runs the gitmirror sync (signs + appends a delegation envelope under OLD for every founded project, rewrites `project.json::members[]` OLD → NEW), restarts the session helper, records a 24h graceful retirement entry in `retired_puddles.json`. Re-running inside the active window only reissues a fresh claim code — keypair and on-disk state untouched. `--close` ends the active window; `--window-secs <N>` overrides the 24h default. `--force-orphan-projects` proceeds even if a founded project is at the delegation cap; affected projects get `project.json::tombstoned_at` set on disk (helper daemon refuses git operations on them, CLI verbs skip them) — operator clears via `gitmirror project re-found <handle>` or drops via `project leave`. |
+| `rekey --from <host> [--force-orphan-projects]` | **Requires sudo.** (ADR-018 / ADR-019) On a surviving envoy, claim the new wrapped puddle blob from `<host>`, migrate this envoy onto it. Asks for the puddle passphrase (used both to unwrap the OLD local key for lockbox rewrap and to unwrap the NEW wrapped blob the founder issued under the same passphrase). Same ADR-019 pre-flight check as `rekey-pair`. Atomic-renames identity files, calls lockbox identity-rewrap, clears local TOFU pins, signs + appends its own delegation envelope under OLD for every founded project (each envoy maintains its own self-consistent delegation chain), rewrites local member entries OLD → NEW, locks the session helper. Refuses if the unwrapped blob carries the same puddle pubkey already held locally. `--force-orphan-projects` matches the founder-side flag for symmetry. |
 | `unlock` | Read the wrapped blob, prompt for the passphrase, unwrap, hand the key to the session helper. Helper holds the key in RAM until logout, lock, or idle timeout (60 min default). |
 | `lock` | Scrub the held key and stop the session helper. Idempotent (no-op if no helper is running). Auto-fires on parent-shell exit and idle timeout. |
 | `pubkey` | Print the local puddle pubkey in `ed25519:<hex>` form. Used for invites, capability lists, dictation between envoys. |
@@ -88,9 +88,9 @@ Run `vigo swarm puddle unlock` (no sudo) to activate the session on this envoy.
 puddle passphrase: ****
 ✓ Unlocked. Puddle session helper running until logout, lock, or 60 min idle.
 
-Bootstrapping cryptsync (puddle-mode wrap, no extra passphrase)...
-wrote /home/dan/.cryptsync/identity.age (0600, wrapped)
-wrote /home/dan/.cryptsync/identity.salt (0600)
+Bootstrapping lockbox (puddle-mode wrap, no extra passphrase)...
+wrote /home/dan/.lockbox/identity.age (0600, wrapped)
+wrote /home/dan/.lockbox/identity.salt (0600)
 …
 ✓ Issued puddle-membership cert (expires in 30 days)
 ```
@@ -110,7 +110,7 @@ puddle passphrase: ****
   Old puddle pubkey: ed25519:9f3a…c1d8
   New puddle pubkey: ed25519:7a2b…f04e
   Backups (30d):    /home/dan/.vigo-puddle/identity.wrapped.pre-rekey-1730000000, …
-  Cryptsync rewrap: ok (backup at /home/dan/.cryptsync/identity.age.pre-rekey-1730000000)
+  Lockbox rewrap: ok (backup at /home/dan/.lockbox/identity.age.pre-rekey-1730000000)
 
   Rekey window:     24h (86400s) before founder closes the session
   Claim code:       4827-9163
@@ -135,14 +135,14 @@ rekey claim code (NNNN-NNNN): 4827-9163
   Old puddle pubkey: ed25519:9f3a…c1d8
   New puddle pubkey: ed25519:7a2b…f04e
   Backups (30d):    /home/dan/.vigo-puddle/identity.wrapped.pre-rekey-1730000060, …
-  Cryptsync rewrap: ok (backup at /home/dan/.cryptsync/identity.age.pre-rekey-1730000060)
+  Lockbox rewrap: ok (backup at /home/dan/.lockbox/identity.age.pre-rekey-1730000060)
 
 Run `vigo swarm puddle unlock` (no sudo) to start the session helper under the new puddle identity.
 ```
 
 **Issuing additional claim codes within the 24h window:**
 
-Re-running `rekey-pair` on the founder inside an active rotation window reissues only the claim code. The keypair, identity files, cryptsync state, and retirement entry are untouched.
+Re-running `rekey-pair` on the founder inside an active rotation window reissues only the claim code. The keypair, identity files, lockbox state, and retirement entry are untouched.
 
 ```
 [laptop] $ vigo swarm puddle rekey-pair
@@ -162,14 +162,14 @@ Reissued rekey claim code (rotation already in progress)
 
 **What gets preserved across a rekey:**
 
-- Each envoy's per-envoy cryptsync `identity.age` (re-wrapped under the new puddle-derived key, with a 30-day backup retained at `.pre-rekey-<ts>`).
-- Cryptsync ciphertext under `~/cryptsync/` (untouched on disk; recipients get re-evaluated on the next encrypt).
+- Each envoy's per-envoy lockbox `identity.age` (re-wrapped under the new puddle-derived key, with a 30-day backup retained at `.pre-rekey-<ts>`).
+- Lockbox ciphertext under `~/lockbox/` (untouched on disk; recipients get re-evaluated on the next encrypt).
 - **Founded gitmirror project URLs, bare repos, and pre-rekey tokens** (ADR-019, shipped at 0.35.18–0.35.21). `project_id` stays anchored to the genesis founder pubkey baked into `sha256(founder_puddle_pubkey)`, so `vigo://<project_id>/<handle>` URLs survive the rotation. The on-disk delegation chain at `~/.vigo-gitmirror/<pid>/delegations.json` bridges the genesis pubkey to the post-rekey signing identity — pre-rekey tokens still verify under genesis's authority window, post-rekey admin tokens verify under the new founder pubkey via the chained delegations. The post-rotation hook also rebuilds `tokens.json` to `[bootstrap, fresh_admin_under_NEW]` so subsequent `gitmirror project invite` / `re-invite-all` work without manual intervention. After 5 chained rekeys (`DELEGATION_MAX_LEN = 5`) the next rekey is refused unless `--force-orphan-projects` is passed.
 
 **What does NOT survive a rekey:**
 
 - Envoys offline during the rotation window — they keep the OLD puddle identity. `puddle status` on those envoys surfaces a hint when peers' announces show a divergent puddle pubkey; operator runs `rekey --from <peer>` to migrate.
-- During the rotation rollout (between founder rekey and last surviving-envoy rekey), the founder's cryptsync recipient set excludes unrekeyed peers. Files written during this window land at a smaller recipient set than steady state.
+- During the rotation rollout (between founder rekey and last surviving-envoy rekey), the founder's lockbox recipient set excludes unrekeyed peers. Files written during this window land at a smaller recipient set than steady state.
 - For multi-puddle gitmirror projects (members in foreign puddles), cross-puddle members need a one-time `gitmirror project rejoin` ceremony under a fresh out-of-band capability code from the founder. The founder issues these in batch via `vigo swarm gitmirror project re-invite-all`, prints the JSON invitations to stdout, communicates each block OOB to the matching member puddle — same trust hop as the original `project invite` / `join` flow. Until each cross-puddle member rejoins, their helper daemon will reject the founder's post-rekey pushes (`SignerOutsideFounderWindow` error) and `gitmirror status` flags the divergence. Single-puddle personal-DR projects (founder is the sole member) survive transparently with zero post-rekey ceremony.
 
 **Why the friction is intentional.** Each surviving envoy still needs a fresh out-of-band 5-min claim code from the trusted founder. There is no chain-of-trust shortcut from the OLD puddle key — the threat model includes a stolen device that holds the old key and could otherwise sign a forged "rekey to my pubkey instead" envelope. Pairing-code dictation over voice / SMS / in-person is the same security posture as the original `pair` flow.
@@ -184,7 +184,7 @@ puddle passphrase: ****
 ✓ Unlocked. Puddle session helper running until logout, lock, or 60 min idle.
 ```
 
-**Cryptsync auto-bootstrap (ADR-016 slice 4).** When `unlock` runs and `~/.cryptsync/identity.age` is absent, the verb auto-runs `cryptsync puddle init` inline using the just-spawned session helper to derive the wrap key (no second passphrase prompt — the same puddle identity that protects puddle protects cryptsync). Suppressed once cryptsync is already enrolled. Failure to bootstrap is non-fatal: a warning surfaces and the operator can re-run `vigo swarm cryptsync puddle init` manually. `join` does not auto-run cryptsync (the session helper isn't running yet at that point); the next `unlock` after `join` handles it instead.
+**Lockbox auto-bootstrap (ADR-016 slice 4).** When `unlock` runs and `~/.lockbox/identity.age` is absent, the verb auto-runs `lockbox puddle init` inline using the just-spawned session helper to derive the wrap key (no second passphrase prompt — the same puddle identity that protects puddle protects lockbox). Suppressed once lockbox is already enrolled. Failure to bootstrap is non-fatal: a warning surfaces and the operator can re-run `vigo swarm lockbox puddle init` manually. `join` does not auto-run lockbox (the session helper isn't running yet at that point); the next `unlock` after `join` handles it instead.
 
 ## File layout
 
@@ -203,7 +203,7 @@ puddle passphrase: ****
   identity.salt.pre-rekey-<unix_ts>
   identity.pub.pre-rekey-<unix_ts>
                        # 30-day backups left after `rekey-pair` / `rekey`. Same retention
-                       # as cryptsync's identity.age.pre-rekey-<ts>.
+                       # as lockbox's identity.age.pre-rekey-<ts>.
   session.unlocked     # session helper PID, present only while unlocked. Siblings probe this.
 ```
 
@@ -241,7 +241,7 @@ Failure status codes:
 
 ## Configuration
 
-No `~/.vigo-puddle/config.yaml` today. The session helper's idle timeout is hard-coded at 60 minutes. If a per-user override surfaces real demand, add a config the same shape cryptsync uses; until then defaults are the contract.
+No `~/.vigo-puddle/config.yaml` today. The session helper's idle timeout is hard-coded at 60 minutes. If a per-user override surfaces real demand, add a config the same shape lockbox uses; until then defaults are the contract.
 
 ## Limits
 
@@ -255,7 +255,7 @@ No `~/.vigo-puddle/config.yaml` today. The session helper's idle timeout is hard
 - [Puddle subsystem](../../engineering/subsystems/puddle.md) — design + code map.
 - [ADR-014](../../adr/014-puddle-primitive.md) — design of record.
 - [ADR-015](../../adr/015-unified-gitmirror-substrate.md) — first consumer of puddle.
-- [ADR-016](../../adr/016-cryptsync-membership-on-puddle.md) — second consumer.
+- [ADR-016](../../adr/016-lockbox-membership-on-puddle.md) — second consumer.
 - [ADR-017](../../adr/017-no-puddle-level-revoke.md) — why there is no `revoke` verb.
 - [ADR-018](../../adr/018-puddle-rekey.md) — design of the `rekey-pair` / `rekey` verbs.
-- [`vigo swarm cryptsync`](agent-swarm-cryptsync.md) — shares the wrap envelope + session-helper pattern.
+- [`vigo swarm lockbox`](agent-swarm-lockbox.md) — shares the wrap envelope + session-helper pattern.

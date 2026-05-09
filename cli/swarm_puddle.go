@@ -26,10 +26,10 @@ rotate-passphrase, rekey-pair, rekey) are per-user-per-envoy and live
 on the agent CLI ('vigo swarm puddle <verb>'). The admin-authority
 verbs that span envoys live here.
 
-Per ADR-020 + ADR-021, cryptsync is mandatory on puddle membership
+Per ADR-020 + ADR-021, lockbox is mandatory on puddle membership
 and 'puddle evict' is the canonical fleet-wide eviction path —
-covering cryptsync recipient cleanup as a side effect. The legacy
-'vigocli swarm cryptsync evict' is retained as an alias during the
+covering lockbox recipient cleanup as a side effect. The legacy
+'vigocli swarm lockbox evict' is retained as an alias during the
 0.40.0 transition.`,
 }
 
@@ -38,7 +38,7 @@ covering cryptsync recipient cleanup as a side effect. The legacy
 var puddleEvictCmd = &cobra.Command{
 	Use:   "evict <host>",
 	Short: "Evict a host from a puddle (cross-envoy)",
-	Long: `Evict a host from a user's puddle fleet-wide. Triggers cryptsync
+	Long: `Evict a host from a user's puddle fleet-wide. Triggers lockbox
 peer-table cleanup, recipients.txt regeneration, and a queued
 reencrypt on every remaining puddle member so the evicted host
 cannot decrypt future ciphertext. Authenticated end-to-end by mTLS
@@ -49,7 +49,7 @@ Offline envoys pick up the eviction on their next check-in via the
 normal task-dispatch retry.
 
 Per ADR-021, this is the canonical admin-side eviction verb. The
-older 'vigocli swarm cryptsync evict' delegates here; both are
+older 'vigocli swarm lockbox evict' delegates here; both are
 accepted during the 0.40.0 transition.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -63,12 +63,12 @@ accepted during the 0.40.0 transition.`,
 		if user != "" && allUsers {
 			return fmt.Errorf("--user and --all-users are mutually exclusive")
 		}
-		// Delegate to the existing cryptsync-evict implementation:
-		// today's puddle-eviction is structurally a cryptsync eviction
+		// Delegate to the existing lockbox-evict implementation:
+		// today's puddle-eviction is structurally a lockbox eviction
 		// (peer-table drop + recipients regen + reencrypt). When
 		// gitmirror project-revoke fan-out lands, this verb will also
 		// dispatch the per-project revokes — see ADR-021 follow-up.
-		return runCryptsyncEvict(host, user, allUsers, yes)
+		return runLockboxEvict(host, user, allUsers, yes)
 	},
 }
 

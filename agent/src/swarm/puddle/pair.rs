@@ -210,7 +210,7 @@ pub async fn handle_pair_claim(
 }
 
 fn resolve_user_home(username: &str) -> Option<std::path::PathBuf> {
-    crate::swarm::cryptsync::home_for_user_pub(username)
+    crate::swarm::lockbox::home_for_user_pub(username)
 }
 
 #[cfg(test)]

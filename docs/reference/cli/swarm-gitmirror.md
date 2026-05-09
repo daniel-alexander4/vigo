@@ -12,7 +12,7 @@ Admin-side, fleet-wide view of the [gitmirror](../../engineering/subsystems/gitm
 | `status` | Fleet-wide totals (projects, hosts, divergent refs, envelope counts) |
 | `list` | One row per project with handle, fan-out, member fleets, host count, divergence, envelopes |
 | `show <project_id\|handle>` | Detailed view of one project with refs and per-host breakdown |
-| `members [project_id\|handle]` | Per-project membership (founder + member puddle pubkeys) as a table; mirrors `vigocli swarm cryptsync members` |
+| `members [project_id\|handle]` | Per-project membership (founder + member puddle pubkeys) as a table; mirrors `vigocli swarm lockbox members` |
 
 Every subcommand accepts `--json` to emit machine-readable output.
 
@@ -109,7 +109,7 @@ The positional argument accepts, in order:
 
 ## `vigocli swarm gitmirror members [project_id|handle]`
 
-Per-project membership table mirroring [`vigocli swarm cryptsync members`](swarm-cryptsync.md). Without an argument, prints every project; with one, scopes to a single project (same resolution rules as `show`).
+Per-project membership table mirroring [`vigocli swarm lockbox members`](swarm-lockbox.md). Without an argument, prints every project; with one, scopes to a single project (same resolution rules as `show`).
 
 ```
 $ vigocli swarm gitmirror members
@@ -128,7 +128,7 @@ member    ed25519:f43f6ef3eea29e3780d73aa2cee4a78193419a69f43f6ef3eea29e3780d73a
 | `ROLE` | `founder` for the project's anchor fleet (always the first member); `member` for every additional fleet. |
 | `FLEET-PUBKEY` | The fleet's Ed25519 pubkey, prefixed with `ed25519:` for symmetry with `vigo swarm puddle pubkey` output. |
 
-For host-presence detail (which envoys hold the bare repo, sizes, last-seen times) use `vigocli swarm gitmirror show <project>` instead — `members` is intentionally cryptographic-membership only, mirroring how `cryptsync members` is per-user-circle only.
+For host-presence detail (which envoys hold the bare repo, sizes, last-seen times) use `vigocli swarm gitmirror show <project>` instead — `members` is intentionally cryptographic-membership only, mirroring how `lockbox members` is per-user-circle only.
 
 ## JSON output
 

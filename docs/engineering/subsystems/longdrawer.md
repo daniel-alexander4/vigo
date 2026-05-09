@@ -75,15 +75,15 @@ The agent keeps per-user state (file snapshots + tombstones) under `/var/lib/vig
 - Filenames are validated: no `/`, `\`, `\0`, `.`, `..`, or leading `.`
 - Users can only sync files into their own home directory on other machines
 
-**For encrypted sync**, use [cryptsync](cryptsync.md) — the sibling subsystem that keeps ciphertext at rest on every envoy and gates decryption behind a per-user password-wrapped age identity. Longdrawer is deliberately unencrypted now; the 0.25.0 `encrypt: true` opt-in was removed in 0.26.1 because maintaining two overlapping encryption models confused the threat-model story.
+**For encrypted sync**, use [lockbox](lockbox.md) — the sibling subsystem that keeps ciphertext at rest on every envoy and gates decryption behind a per-user password-wrapped age identity. Longdrawer is deliberately unencrypted now; the 0.25.0 `encrypt: true` opt-in was removed in 0.26.1 because maintaining two overlapping encryption models confused the threat-model story.
 
 ### Migrating from longdrawer 0.25.0 encryption
 
 If you adopted `encrypt: true` in 0.25.0 and want encrypted sync going forward:
 
 1. Decrypt existing ciphertext files with the age CLI directly: `age -d -i ~/.longdrawer/identity.txt ~/longdrawer/foo > /tmp/foo && mv /tmp/foo ~/longdrawer/foo`. Vigo no longer ships `vigo swarm longdrawer decrypt` — use upstream age.
-2. Enroll the user in cryptsync via `cryptsync: true` on the user resource, or run `vigo swarm cryptsync init` on the primary + `vigo swarm cryptsync enroll` on every secondary.
-3. Move the plaintext files from `~/longdrawer/` to `~/cryptsync/` via `vigo swarm cryptsync encrypt`.
+2. Enroll the user in lockbox via `lockbox: true` on the user resource, or run `vigo swarm lockbox init` on the primary + `vigo swarm lockbox enroll` on every secondary.
+3. Move the plaintext files from `~/longdrawer/` to `~/lockbox/` via `vigo swarm lockbox encrypt`.
 4. Delete the leftover `~/.longdrawer/identity.txt` and `~/.longdrawer/recipients.txt` — they're no longer read.
 
 ## Cross-subnet receivers
@@ -107,13 +107,13 @@ Unreachable cross_subnet_peers log a debug-level error and retry next cycle; tra
 - No conflict resolution beyond last-write-wins
 - No versioning or history
 - No clock-skew correction — bad clocks mean bad sync
-- No encryption. Use [cryptsync](cryptsync.md) if you need encrypted sync.
+- No encryption. Use [lockbox](lockbox.md) if you need encrypted sync.
 
 ## Observability (`/longdrawer` UI)
 
 Every envoy with per-user longdrawer state on disk ships a `longdrawer` trait containing the file set (sha + size + mtime), tombstones, and a stable 16-byte digest over the full-file-set. The server-side aggregator (`server/swarm/longdrawermesh/`) joins these across the fleet for the `/longdrawer` page.
 
-The `/longdrawer`, `/cryptsync`, `/gitmirror` pages and every mesh endpoint (`/api/v1/swarm/longdrawer/*`, `/api/v1/swarm/cryptsync/*`, `/api/v1/swarm/gitmirror/fleet`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't appropriate for non-admin roles. Viewer and compliance-role users get a 403 on direct access and don't see the nav links. The legacy `/mesh` URL 301-redirects to `/longdrawer` (or `/cryptsync` with `?tab=crypt`) for one release while muscle memory migrates.
+The `/longdrawer`, `/lockbox`, `/gitmirror` pages and every mesh endpoint (`/api/v1/swarm/longdrawer/*`, `/api/v1/swarm/lockbox/*`, `/api/v1/swarm/gitmirror/fleet`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't appropriate for non-admin roles. Viewer and compliance-role users get a 403 on direct access and don't see the nav links. The legacy `/mesh` URL 301-redirects to `/longdrawer` (or `/lockbox` with `?tab=crypt`) for one release while muscle memory migrates.
 
 Surfaces:
 
@@ -121,7 +121,7 @@ Surfaces:
 - **Three-state envoy reporting** — reporting / stale (>5 min) / not_reporting
 - **Drill-down endpoint** — `GET /api/v1/swarm/longdrawer/envoy/{id}/users/{user}/files` for the unbounded file list when an operator clicks through.
 
-Longdrawer is LAN-only plaintext, so there's no signing-key or encryption-state signal to surface (unlike cryptsync).
+Longdrawer is LAN-only plaintext, so there's no signing-key or encryption-state signal to surface (unlike lockbox).
 
 ## Troubleshooting
 

@@ -147,7 +147,7 @@ pub fn parse_hex_id(s: &str) -> Result<[u8; ID_LEN]> {
 /// fleet envoy as a backup. Non-member receivers hold the bytes; the
 /// helper daemon refuses non-root reads on those envoys (root retains
 /// direct filesystem access by design — gitmirror is for *availability*,
-/// not bytes-on-disk confidentiality; cryptsync owns confidentiality).
+/// not bytes-on-disk confidentiality; lockbox owns confidentiality).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum DrFanout {

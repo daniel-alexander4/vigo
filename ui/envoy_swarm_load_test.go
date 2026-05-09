@@ -53,12 +53,12 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 			Size: 2_048, SizeHuman: "2.0 KiB",
 			Status: "live", When: "just now",
 		}},
-		Cryptsync: []SwarmLoadRow{{
-			Name: "~dan/cryptsync/secrets.age", Detail: "user dan",
+		Lockbox: []SwarmLoadRow{{
+			Name: "~dan/lockbox/secrets.age", Detail: "user dan",
 			Size: 512, SizeHuman: "512 B",
 			Status: "live", When: "10m ago",
 		}},
-		LodeTotal: 1_056_768, GitmirrorTotal: 4_096, EchoTotal: 2_048, CryptsyncTotal: 512,
+		LodeTotal: 1_056_768, GitmirrorTotal: 4_096, EchoTotal: 2_048, LockboxTotal: 512,
 		GrandTotal: 1_063_424,
 	}
 	rec := httptest.NewRecorder()
@@ -71,11 +71,11 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 	// up at least one won't appear.
 	for _, must := range []string{
 		"Total Swarm Footprint",
-		">Payload<", ">Gitmirror<", ">Longdrawer<", ">Cryptsync<",
+		">Payload<", ">Gitmirror<", ">Longdrawer<", ">Lockbox<",
 		"firmware.bin",
 		"/var/lib/vigo/swarm/gitmirror/mirrors/danlap/dan/vigo.git",
 		"~dan/longdrawer/notes.md",
-		"~dan/cryptsync/secrets.age",
+		"~dan/lockbox/secrets.age",
 	} {
 		if !strings.Contains(body, must) {
 			t.Errorf("rendered body missing %q\n--- body snippet ---\n%s", must, truncateForTest(body, 1200))

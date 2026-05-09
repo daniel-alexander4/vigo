@@ -16,7 +16,7 @@
 //! ```
 //!
 //! The token bytes signed by the issuer are a hand-rolled
-//! deterministic encoding (matching cryptsync's leaves.rs pattern,
+//! deterministic encoding (matching lockbox's leaves.rs pattern,
 //! never JSON whitespace). Token ID is the sha256 of those exact
 //! signed bytes — content-addressed, so revocation envelopes can name
 //! a token by id without ambiguity.

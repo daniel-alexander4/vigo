@@ -34,15 +34,25 @@ swarm:
 			wantInError: "swarm.enabled is a bool",
 		},
 		{
-			name: "swarm.cryptsync section is retired",
+			name: "swarm.cryptsync section is retired (renamed to lockbox)",
 			yaml: `
 swarm:
   enabled: ["*"]
   cryptsync:
-    enabled: true
+    max_file_bytes: 0
 `,
 			wantErr:     true,
-			wantInError: "swarm.cryptsync",
+			wantInError: "swarm.cryptsync.* — retired",
+		},
+		{
+			name: "swarm.cryptsync retired error names the new key",
+			yaml: `
+swarm:
+  cryptsync:
+    max_file_bytes: 0
+`,
+			wantErr:     true,
+			wantInError: "swarm.lockbox",
 		},
 		{
 			name: "swarm.gitmirror.blacklist is retired",

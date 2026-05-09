@@ -420,7 +420,7 @@ impl UserExecutor {
             .unwrap_or_default();
 
         if old_policy.puddle && !new_policy.puddle {
-            errors.extend(self.scrub_swarm_state(username, ScrubScope::PuddleAndCryptsync));
+            errors.extend(self.scrub_swarm_state(username, ScrubScope::PuddleAndLockbox));
         }
         if old_policy.gitmirror && !new_policy.gitmirror {
             errors.extend(self.scrub_swarm_state(username, ScrubScope::Gitmirror));
@@ -439,7 +439,7 @@ impl UserExecutor {
     /// single failure doesn't abort the rest. Failures collect into
     /// the returned vec and surface in the run report.
     ///
-    /// Cryptsync LEAVE: queues a `~/.cryptsync/leave.pending` sentinel
+    /// Lockbox LEAVE: queues a `~/.lockbox/leave.pending` sentinel
     /// for the daemon's reactor to pick up on its next tick. The
     /// daemon signs the envelope under the user's identity and fans
     /// it out to live peers — root-here doesn't have to know the key.
@@ -447,7 +447,7 @@ impl UserExecutor {
     /// (puddle_members + per-peer silent-for, 0.39.12).
     fn scrub_swarm_state(&self, username: &str, scope: ScrubScope) -> Vec<String> {
         let mut errors = Vec::new();
-        let home = match crate::swarm::cryptsync::home_for_user_pub(username) {
+        let home = match crate::swarm::lockbox::home_for_user_pub(username) {
             Some(h) => h,
             None => {
                 errors.push(format!(
@@ -458,26 +458,26 @@ impl UserExecutor {
             }
         };
 
-        let scrub_puddle = matches!(scope, ScrubScope::PuddleAndCryptsync);
+        let scrub_puddle = matches!(scope, ScrubScope::PuddleAndLockbox);
         let scrub_gitmirror = matches!(scope, ScrubScope::Gitmirror);
 
         if scrub_puddle {
-            // Queue cryptsync LEAVE for live peers. Skip if the user
+            // Queue lockbox LEAVE for live peers. Skip if the user
             // never enrolled (no identity.age means no LEAVE to sign).
-            let cs_identity = home.join(".cryptsync").join("identity.age");
+            let cs_identity = home.join(".lockbox").join("identity.age");
             if cs_identity.exists() {
-                if let Err(e) = crate::swarm::cryptsync::cli::enqueue_leave(
+                if let Err(e) = crate::swarm::lockbox::cli::enqueue_leave(
                     &home,
                     username,
                     /* keep_identity */ false,
                     /* purge_content */ true,
                 ) {
                     errors.push(format!(
-                        "cryptsync LEAVE enqueue for {username}: {e:#}"
+                        "lockbox LEAVE enqueue for {username}: {e:#}"
                     ));
                 }
             }
-            for dir in [".vigo-puddle", ".cryptsync", "cryptsync", ".vigo-gitmirror"] {
+            for dir in [".vigo-puddle", ".lockbox", "lockbox", ".vigo-gitmirror"] {
                 let path = home.join(dir);
                 if path.exists() {
                     if let Err(e) = std::fs::remove_dir_all(&path) {
@@ -508,16 +508,16 @@ impl UserExecutor {
 
 /// Scope of a swarm-state scrub triggered by a usercrate flag flip.
 ///
-/// `PuddleAndCryptsync` covers the heavier removal: puddle keypair,
-/// cryptsync identity + ciphertext, and the per-user gitmirror state
+/// `PuddleAndLockbox` covers the heavier removal: puddle keypair,
+/// lockbox identity + ciphertext, and the per-user gitmirror state
 /// dir (gitmirror projects are puddle-anchored — losing puddle means
 /// losing every project this user was a member of).
 ///
 /// `Gitmirror` covers only `~/.vigo-gitmirror/`. A user who keeps
-/// `puddle: true` but loses `gitmirror: true` retains their cryptsync
+/// `puddle: true` but loses `gitmirror: true` retains their lockbox
 /// state and puddle identity.
 enum ScrubScope {
-    PuddleAndCryptsync,
+    PuddleAndLockbox,
     Gitmirror,
 }
 
@@ -703,15 +703,15 @@ impl UserExecutor {
                         partial_errors.push(e);
                     }
 
-                    // Cryptsync enrollment used to be opt-in via
-                    // `cryptsync: true` on the user resource (dropped
-                    // a `~/.cryptsync/enroll.pending` sentinel). Per
-                    // ADR-020 + ADR-021 (0.40.0), cryptsync is a
+                    // Lockbox enrollment used to be opt-in via
+                    // `lockbox: true` on the user resource (dropped
+                    // a `~/.lockbox/enroll.pending` sentinel). Per
+                    // ADR-020 + ADR-021 (0.40.0), lockbox is a
                     // mandatory capability of puddle membership: it
                     // bootstraps automatically on `puddle unlock` for
                     // any puddle-enrolled user. The flag and its
                     // sentinel-drop logic are retired; existing
-                    // usercrates carrying `cryptsync: true` continue
+                    // usercrates carrying `lockbox: true` continue
                     // to load (serde silently ignores the unknown
                     // field) but the flag has no effect.
 
@@ -1057,8 +1057,8 @@ impl UserExecutor {
                         }
                     }
 
-                    // Cryptsync enrollment (ADR-020 + ADR-021): no
-                    // longer driven by a `cryptsync:` flag; bootstraps
+                    // Lockbox enrollment (ADR-020 + ADR-021): no
+                    // longer driven by a `lockbox:` flag; bootstraps
                     // automatically on the user's first `puddle
                     // unlock`. See the present-block comment above.
 

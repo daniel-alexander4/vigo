@@ -38,7 +38,7 @@ The agent data directory is fixed at `/etc/vigo-envoy` on Linux (and the platfor
 | `traits` | Run trait collectors and print JSON |
 | `version` | Print agent version |
 | `repo` | [Inspect and recover gitmirror personal-DR mirrors](swarm-gitmirror.md) |
-| `crypt` | [Manage cryptsync — per-user encrypted P2P directory](swarm-cryptsync.md) |
+| `crypt` | [Manage lockbox — per-user encrypted P2P directory](swarm-lockbox.md) |
 
 ---
 

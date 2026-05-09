@@ -17,7 +17,7 @@ pub mod bandwidth;
 pub mod bitmap;
 pub mod cache;
 pub mod cli;
-pub mod cryptsync;
+pub mod lockbox;
 pub mod discovery;
 pub mod download;
 pub mod longdrawer;

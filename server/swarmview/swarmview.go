@@ -10,7 +10,7 @@
 // join. Types + snapshot functions live here so `server/api` and
 // `ui/` can both consume them without creating an import cycle — the
 // same split the content-subsystem aggregators use
-// (gitmirrormesh/longdrawermesh/cryptsyncmesh).
+// (gitmirrormesh/longdrawermesh/lockboxmesh).
 //
 // All functions are pure reads over already-in-memory data; nothing
 // here runs on the agent check-in hot path.

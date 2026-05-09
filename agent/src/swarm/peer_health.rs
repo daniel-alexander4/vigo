@@ -3,7 +3,7 @@
 
 //! Shared peer disk-pressure probe.
 //!
-//! Before any of the four peer-delivery subsystems (swarm pull, cryptsync push,
+//! Before any of the four peer-delivery subsystems (swarm pull, lockbox push,
 //! gitmirror push, longdrawer announce) commits bytes to a remote peer, the sender
 //! asks the peer "how full is the filesystem this will land on?" over the
 //! existing mTLS HTTPS on port 1531 (`GET /health/storage`). If the peer
@@ -12,14 +12,14 @@
 //! recovers on a later tick.
 //!
 //! Probe results are cached per `(peer, purpose)` for [`CACHE_TTL`] (60s)
-//! so a cryptsync fan-out across many peers in the same burst doesn't hammer
+//! so a lockbox fan-out across many peers in the same burst doesn't hammer
 //! the health endpoint. Callers fail closed: unreachable or malformed
 //! probe responses are treated as pressured.
 //!
 //! The [`Purpose`] enum captures which mountpoint the receiver should
 //! measure — the subsystems write to different directories that may sit
 //! on different filesystems (`/var/lib/vigo/swarm/.blobs`,
-//! `/var/lib/vigo/swarm/gitmirror`, `~<user>/cryptsync`, `~<user>/longdrawer`).
+//! `/var/lib/vigo/swarm/gitmirror`, `~<user>/lockbox`, `~<user>/longdrawer`).
 //!
 //! Symmetrically, receivers call [`local_free_pct`] to compute their own
 //! free-pct for a given purpose — used both to answer probe requests and
@@ -69,8 +69,8 @@ pub enum Purpose {
     Swarm,
     /// Gitmirror mirror store: `/var/lib/vigo/swarm/gitmirror`.
     Gitmirror,
-    /// Cryptsync per-user ciphertext: `~<user>/cryptsync`.
-    Cryptsync { user: String },
+    /// Lockbox per-user ciphertext: `~<user>/lockbox`.
+    Lockbox { user: String },
     /// Longdrawer per-user plaintext: `~<user>/longdrawer`.
     Longdrawer { user: String },
 }
@@ -81,16 +81,16 @@ impl Purpose {
         match self {
             Purpose::Swarm => "swarm",
             Purpose::Gitmirror => "gitmirror",
-            Purpose::Cryptsync { .. } => "cryptsync",
+            Purpose::Lockbox { .. } => "lockbox",
             Purpose::Longdrawer { .. } => "longdrawer",
         }
     }
 
     /// The user bound to this purpose, if any. Used for per-user
-    /// target paths (`~<user>/cryptsync`, `~<user>/longdrawer`).
+    /// target paths (`~<user>/lockbox`, `~<user>/longdrawer`).
     pub fn user(&self) -> Option<&str> {
         match self {
-            Purpose::Cryptsync { user } | Purpose::Longdrawer { user } => Some(user.as_str()),
+            Purpose::Lockbox { user } | Purpose::Longdrawer { user } => Some(user.as_str()),
             _ => None,
         }
     }
@@ -108,7 +108,7 @@ impl Purpose {
         match (kind, user) {
             ("swarm", _) => Some(Purpose::Swarm),
             ("gitmirror", _) => Some(Purpose::Gitmirror),
-            ("cryptsync", Some(u)) if !u.is_empty() => Some(Purpose::Cryptsync { user: u.to_string() }),
+            ("lockbox", Some(u)) if !u.is_empty() => Some(Purpose::Lockbox { user: u.to_string() }),
             ("longdrawer", Some(u)) if !u.is_empty() => Some(Purpose::Longdrawer { user: u.to_string() }),
             _ => None,
         }
@@ -192,14 +192,14 @@ pub fn local_free_pct(purpose: &Purpose) -> Option<f64> {
 
 /// Resolve the target path for a purpose. Returns a path whose
 /// containing filesystem is the one to measure. The path may not
-/// exist yet (e.g., a user who has never run `vigo swarm cryptsync enroll`);
+/// exist yet (e.g., a user who has never run `vigo swarm lockbox enroll`);
 /// [`free_pct_for_path`] walks up to the nearest existing ancestor.
 pub fn target_path(purpose: &Purpose) -> Option<PathBuf> {
     match purpose {
         Purpose::Swarm => Some(crate::platform::paths::default_blobs_dir()),
         Purpose::Gitmirror => Some(crate::platform::paths::default_gitmirror_dir()),
-        Purpose::Cryptsync { user } => {
-            crate::platform::users::user_home(user).map(|h| h.join("cryptsync"))
+        Purpose::Lockbox { user } => {
+            crate::platform::users::user_home(user).map(|h| h.join("lockbox"))
         }
         Purpose::Longdrawer { user } => {
             crate::platform::users::user_home(user).map(|h| h.join("longdrawer"))
@@ -285,7 +285,7 @@ fn fetch(agent: &ureq::Agent, url: &str) -> Result<f64> {
 }
 
 /// Compute free-pct on the nearest existing ancestor of `path`.
-/// `statvfs(2)` requires an existing path, but `~user/cryptsync` may not
+/// `statvfs(2)` requires an existing path, but `~user/lockbox` may not
 /// exist yet on a freshly-enrolled envoy — walking up to the home
 /// directory (or root) gives a correct answer for the same filesystem.
 fn free_pct_for_path(path: &Path) -> Result<f64> {
@@ -381,15 +381,15 @@ mod tests {
 
     #[test]
     fn purpose_roundtrips_through_query_and_parse() {
-        let p = Purpose::Cryptsync { user: "alice".into() };
-        assert_eq!(p.query(), "for=cryptsync&user=alice");
+        let p = Purpose::Lockbox { user: "alice".into() };
+        assert_eq!(p.query(), "for=lockbox&user=alice");
         assert_eq!(
-            Purpose::parse("cryptsync", Some("alice")),
-            Some(Purpose::Cryptsync { user: "alice".into() })
+            Purpose::parse("lockbox", Some("alice")),
+            Some(Purpose::Lockbox { user: "alice".into() })
         );
         assert_eq!(Purpose::parse("swarm", None), Some(Purpose::Swarm));
         assert_eq!(Purpose::parse("gitmirror", Some("ignored")), Some(Purpose::Gitmirror));
-        assert_eq!(Purpose::parse("cryptsync", None), None);
+        assert_eq!(Purpose::parse("lockbox", None), None);
         assert_eq!(Purpose::parse("longdrawer", Some("")), None);
         assert_eq!(Purpose::parse("bogus", None), None);
     }

@@ -6,7 +6,7 @@ package ui
 import "fmt"
 
 // HealthBanner carries the engineer-first status strip rendered at the
-// top of every /payload, /longdrawer, /gitmirror, /cryptsync page. The
+// top of every /payload, /longdrawer, /gitmirror, /lockbox page. The
 // problems list doubles as the "problems table" rendered under the
 // banner when non-empty — the banner + table together tell an on-call
 // operator "is anything broken, and where" before any totals or

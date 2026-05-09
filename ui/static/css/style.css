@@ -2544,7 +2544,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 .badge--mauve { background: var(--color-badge-mauve-bg); color: var(--color-badge-mauve-text); }
 
 /* === Health banner — top-of-page status strip ===
-   Rendered first on /swarm/swarmcast, /swarm/longdrawer, /swarm/gitmirror, /swarm/cryptsync so an on-call
+   Rendered first on /swarm/swarmcast, /swarm/longdrawer, /swarm/gitmirror, /swarm/lockbox so an on-call
    operator sees "is anything broken" inside the first viewport. The severity
    modifier maps to the page-wide worst problem. */
 .health-banner {
@@ -4001,7 +4001,7 @@ th.sortable .sort-arrow { font-size: 10px; margin-left: 3px; opacity: 0.3; }
 th.sortable.sort-active .sort-arrow { opacity: 1; color: var(--color-brand); }
 
 /* === Generic card surface ===
-   Used ~70× across templates (Payload, Gitmirror, Longdrawer, Cryptsync, Compliance,
+   Used ~70× across templates (Payload, Gitmirror, Longdrawer, Lockbox, Compliance,
    Workflows, etc.) as a framed content block. The shared chrome —
    padding, surface background, subtle border, and shadow — gives every
    page a consistent "card on the page" feel without per-page CSS. */

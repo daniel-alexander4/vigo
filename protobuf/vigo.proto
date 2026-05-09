@@ -294,8 +294,8 @@ message CheckInResponse {
 message SwarmRuntimeLimits {
   uint64 swarmcast_max_size_bytes = 1;             // admin-distribute upload cap; 0 = no cap
   string swarmcast_default_retention = 2;          // server-yaml default when --retention is omitted on distribute (e.g. "7d")
-  uint64 cryptsync_max_file_bytes = 3;           // per-file ciphertext cap on auto-encrypt + push; 0 = no cap (1 GiB historical default)
-  uint64 cryptsync_envelope_retention_secs = 4;  // LEAVE/RESURRECT/TOMBSTONE retention before reap; 0 = compile-time default (90d)
+  uint64 lockbox_max_file_bytes = 3;           // per-file ciphertext cap on auto-encrypt + push; 0 = no cap (1 GiB historical default)
+  uint64 lockbox_envelope_retention_secs = 4;  // LEAVE/RESURRECT/TOMBSTONE retention before reap; 0 = compile-time default (90d)
   uint64 gitmirror_max_bundle_bytes = 5;         // per-bundle fan-out cap; 0 = no cap
   uint64 gitmirror_envelope_retention_secs = 6;  // revoke/leave envelope retention before reap; 0 = compile-time default (90d)
   uint64 longdrawer_max_file_bytes = 7;            // per-file size cap on LAN sync; 0 = no cap
@@ -666,8 +666,8 @@ message GetEnvoyResponse {
 message RevokeEnvoyRequest {
   string id = 1;
   // skip_swarm_cleanup defaults to false. When true, the server does
-  // NOT dispatch cryptsync evict for this hostname; other envoys keep
-  // the revoked host's pubkey in their cryptsync recipients lists
+  // NOT dispatch lockbox evict for this hostname; other envoys keep
+  // the revoked host's pubkey in their lockbox recipients lists
   // until manually cleaned up. Use only when the operator plans to
   // re-bootstrap the same host shortly (e.g., investigating a
   // suspected compromise).

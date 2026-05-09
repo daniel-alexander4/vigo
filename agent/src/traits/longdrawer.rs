@@ -40,7 +40,7 @@ pub struct TombstoneEntry {
     pub deletion_time: i64,
 }
 
-/// Cap on inline recent files. Same ceiling as cryptsync's snapshot
+/// Cap on inline recent files. Same ceiling as lockbox's snapshot
 /// cap — keeps announce payloads bounded at scale.
 pub const RECENT_FILE_CAP: usize = 20;
 

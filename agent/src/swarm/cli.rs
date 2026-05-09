@@ -69,7 +69,7 @@ DIAGNOSTIC (envoy-wide; read-only):
 
 PER-USER CONTENT:
     puddle <verb>         Per-user puddle identity (ADR-014).
-    cryptsync <verb>      Per-user encrypted P2P sync (ADR-016 / 020).
+    lockbox <verb>      Per-user encrypted P2P sync (ADR-016 / 020).
     gitmirror <verb>      Git-over-swarm projects (ADR-015).
 
 The diagnostic verbs read /var/lib/vigo/swarm/{{state,manifest,peers}}.json
@@ -100,7 +100,7 @@ fn cmd_status(args: &[String]) -> Result<()> {
         println!("    swarm:        {}", on_off(s.gates.swarm));
         println!("    payload:      {}", on_off(s.gates.payload));
         println!("    longdrawer:     {}", on_off(s.gates.longdrawer));
-        println!("    puddle:       {}  (cryptsync follows)", on_off(s.gates.puddle));
+        println!("    puddle:       {}  (lockbox follows)", on_off(s.gates.puddle));
         println!("    gitmirror:    {}", on_off(s.gates.gitmirror));
     } else {
         println!("  state.json:       not found (agent has not completed a check-in yet?)");

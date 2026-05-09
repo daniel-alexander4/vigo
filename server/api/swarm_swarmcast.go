@@ -30,7 +30,7 @@ import (
 // the swarm substrate. This handler wires the admin-facing REST surface
 // (`/api/v1/swarm/swarmcast/*`); the substrate itself — tracker, manifest CRDT,
 // peer transfer — still lives in `server/swarm/` because it's shared
-// with gitmirror and (read-side) longdrawer/cryptsync.
+// with gitmirror and (read-side) longdrawer/lockbox.
 
 // LodeForcePusher triggers a force-push to streaming agents so they
 // send a fresh CheckIn and receive pending payload assignments.

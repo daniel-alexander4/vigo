@@ -89,8 +89,9 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 // detectRetiredSwarmShape inspects raw server.yaml for swarm fields that
 // were valid in earlier versions and now produce a hard error. Catches:
 //
-//   - swarm.cryptsync.* — entire section retired in 0.41.0 (cryptsync
-//     derives from swarm.puddle.enabled).
+//   - swarm.cryptsync.* — retired (renamed to swarm.lockbox.* in this
+//     release; authorization still derives from swarm.puddle.enabled
+//     per ADR-020).
 //   - swarm.<sub>.blacklist — retired across all sub-subsections in
 //     0.41.0 (subsumed by negative patterns in the new pattern-list shape).
 //   - swarm.enabled / swarm.<sub>.enabled as a bool — retired in 0.41.0
@@ -130,7 +131,7 @@ func detectRetiredSwarmShape(data []byte) error {
 		retired = append(retired, "swarm.enabled is a bool but must be a pattern list (e.g. [\"*\"] for fleet-wide on, [] for off)")
 	}
 	if raw.Swarm.Cryptsync != nil {
-		retired = append(retired, "swarm.cryptsync.* — entire section retired in 0.41.0; cryptsync now derives from swarm.puddle.enabled")
+		retired = append(retired, "swarm.cryptsync.* — retired (renamed to swarm.lockbox.* in this release; authorization still derives from swarm.puddle.enabled per ADR-020)")
 	}
 	if isBoolScalar(raw.Swarm.Puddle.Enabled) {
 		retired = append(retired, "swarm.puddle.enabled is a bool but must be a pattern list")

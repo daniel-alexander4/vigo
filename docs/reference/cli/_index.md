@@ -3,7 +3,7 @@
 
 Vigo has two CLI binaries:
 
-- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the read-only [`vigo swarm` diagnostic verbs](agent-swarm.md) (`status` / `seeds {list,show}` / `peers list`) for envoy-side substrate inspection, the [`vigo swarm gitmirror` recovery CLI](agent-swarm-gitmirror.md) for inspecting and recovering personal-DR git mirrors, the [`vigo swarm cryptsync` CLI](agent-swarm-cryptsync.md) for managing [cryptsync](../../engineering/subsystems/cryptsync.md) — the per-user encrypted P2P directory, and the [`vigo swarm puddle` CLI](agent-swarm-puddle.md) for managing [puddle](../../engineering/subsystems/puddle.md) — the per-user puddle identity primitive.
+- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the read-only [`vigo swarm` diagnostic verbs](agent-swarm.md) (`status` / `seeds {list,show}` / `peers list`) for envoy-side substrate inspection, the [`vigo swarm gitmirror` recovery CLI](agent-swarm-gitmirror.md) for inspecting and recovering personal-DR git mirrors, the [`vigo swarm lockbox` CLI](agent-swarm-lockbox.md) for managing [lockbox](../../engineering/subsystems/lockbox.md) — the per-user encrypted P2P directory, and the [`vigo swarm puddle` CLI](agent-swarm-puddle.md) for managing [puddle](../../engineering/subsystems/puddle.md) — the per-user puddle identity primitive.
 - **`vigocli`** -- the admin CLI that talks to the server's REST API (documented below).
 
 ---
@@ -57,7 +57,7 @@ Vigo has two CLI binaries:
 | [payload](swarm-swarmcast.md) | Admin-pushed file distribution on the swarm substrate |
 | [gitmirror](swarm-gitmirror.md) | Fleet-wide read-only view of gitmirror personal-DR mirrors |
 | [longdrawer](swarm-longdrawer.md) | Fleet-wide read-only view of the longdrawer per-user directory sync mesh |
-| [cryptsync](swarm-cryptsync.md) | Fleet-wide read-only view of the cryptsync per-user encrypted directory sync mesh |
+| [lockbox](swarm-lockbox.md) | Fleet-wide read-only view of the lockbox per-user encrypted directory sync mesh |
 | [scrier](scrier.md) | Remote access — user mappings and interactive shell sessions |
 | [sandgorgon](sandgorgon.md) | Bare-metal lifecycle — commission, provision, decommission |
 | [security](security.md) | Fleet-wide security posture summary and findings |

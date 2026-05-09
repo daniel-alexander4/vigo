@@ -18,7 +18,7 @@ mod docker;
 pub(crate) mod swarm_cache;
 mod swarm_seeds;
 mod time_collector;
-mod cryptsync;
+mod lockbox;
 mod gitmirror;
 mod longdrawer;
 
@@ -280,10 +280,10 @@ pub enum CollectorKind {
     /// Per-user longdrawer mesh state — file list, tombstones, digests.
     /// Consumed by `server/swarm/longdrawermesh` to render the `/mesh` page.
     Longdrawer,
-    /// Per-user cryptsync mesh state — file list, tombstones,
+    /// Per-user lockbox mesh state — file list, tombstones,
     /// recipients, session-unlocked signal. Consumed by
-    /// `server/swarm/cryptsyncmesh`.
-    Cryptsync,
+    /// `server/swarm/lockboxmesh`.
+    Lockbox,
     /// Agent self-telemetry — RSS, VSZ, threads, open FDs, uptime.
     /// Cheap procfs reads (Linux); `ps` fallback (macOS). Lets the
     /// server track per-envoy agent memory growth over time without
@@ -343,7 +343,7 @@ impl CollectorKind {
             Self::Listeners => "listeners",
             Self::CveRunningCorrelation => "cve_running_correlation",
             Self::Longdrawer => "longdrawer",
-            Self::Cryptsync => "cryptsync",
+            Self::Lockbox => "lockbox",
             Self::AgentSelf => "agent_self",
             Self::HostSelf => "host_self",
         }
@@ -379,7 +379,7 @@ impl CollectorKind {
             Self::SwarmSeeds => swarm_seeds::collect(),
             Self::Gitmirror => gitmirror::collect(),
             Self::Longdrawer => longdrawer::collect(),
-            Self::Cryptsync => cryptsync::collect(),
+            Self::Lockbox => lockbox::collect(),
             Self::AgentSelf => agent_self::collect(),
             Self::HostSelf => host_self::collect(),
 
@@ -645,7 +645,7 @@ impl CollectorKind {
             "listeners" => Some(Self::Listeners),
             "cve_running_correlation" => Some(Self::CveRunningCorrelation),
             "longdrawer" => Some(Self::Longdrawer),
-            "cryptsync" => Some(Self::Cryptsync),
+            "lockbox" => Some(Self::Lockbox),
             "agent_self" => Some(Self::AgentSelf),
             "host_self" => Some(Self::HostSelf),
             _ => None,
@@ -697,7 +697,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::Listeners,
         CollectorKind::CveRunningCorrelation,
         CollectorKind::Longdrawer,
-        CollectorKind::Cryptsync,
+        CollectorKind::Lockbox,
         CollectorKind::AgentSelf,
         CollectorKind::HostSelf,
     ]
@@ -719,7 +719,7 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::SwarmSeeds,
         CollectorKind::Gitmirror,
         CollectorKind::Longdrawer,
-        CollectorKind::Cryptsync,
+        CollectorKind::Lockbox,
         CollectorKind::AgentSelf,
         CollectorKind::HostSelf,
     ]

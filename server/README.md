@@ -22,7 +22,7 @@ docker compose up -d
 
 # First post-install step: enroll the server's own host as an envoy.
 # Vigo assumes every server runs a co-hosted agent — this is how the
-# server participates in swarm / puddle / cryptsync alongside its
+# server participates in swarm / puddle / lockbox alongside its
 # managed nodes. Run from the server host itself; loopback is covered
 # by the default trusted_enrollment CIDR list (no token required).
 curl -sSfk https://localhost:8443/bootstrap | sudo sh

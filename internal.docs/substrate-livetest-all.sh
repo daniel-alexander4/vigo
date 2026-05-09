@@ -10,20 +10,20 @@
 # Phase scope (see substrate-livetests.md for detail):
 #
 #   phase-b  — gitmirror source CLI + leave/evict (gitmirror +
-#              cryptsync). Sections 4–7 require
-#              CRYPTSYNC_PASSWORD_FILE; skipped gracefully if absent.
+#              lockbox). Sections 4–7 require
+#              LOCKBOX_PASSWORD_FILE; skipped gracefully if absent.
 #   phase-c  — swarm health (peers + manifest gossip), payload
 #              distribute/revoke, longdrawer round-trip.
-#   phase-d  — cryptsync encrypt/push/decrypt perms, leaves catch-up
+#   phase-d  — lockbox encrypt/push/decrypt perms, leaves catch-up
 #              smoke. Section 3 (decrypt) requires
-#              CRYPTSYNC_PASSWORD_FILE; skipped gracefully if absent.
+#              LOCKBOX_PASSWORD_FILE; skipped gracefully if absent.
 #
 # All env vars accepted by the underlying scripts (PRIMARY,
-# SECONDARY, THIRD, LONGDRAWER_USER, CRYPTSYNC_USER, VIGO_BIN, etc.)
+# SECONDARY, THIRD, LONGDRAWER_USER, LOCKBOX_USER, VIGO_BIN, etc.)
 # pass through transparently — set them before invoking this wrapper.
 #
 # Run: ./substrate-livetest-all.sh
-#      CRYPTSYNC_PASSWORD_FILE=~/.pw ./substrate-livetest-all.sh
+#      LOCKBOX_PASSWORD_FILE=~/.pw ./substrate-livetest-all.sh
 
 set -uo pipefail
 
@@ -37,9 +37,9 @@ RESET=$'\033[0m'
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 PHASES=(
-    "phase-b:Gitmirror source CLI + leave/evict (gitmirror + cryptsync)"
+    "phase-b:Gitmirror source CLI + leave/evict (gitmirror + lockbox)"
     "phase-c:Swarm health, payload, longdrawer"
-    "phase-d:Cryptsync encrypt/push/decrypt + leaves catch-up"
+    "phase-d:Lockbox encrypt/push/decrypt + leaves catch-up"
 )
 
 declare -A PHASE_RC

@@ -778,7 +778,7 @@ fn peer_uid(stream: &UnixStream) -> Option<u32> {
     {
         let fd = stream.as_raw_fd();
         // SOL_LOCAL/LOCAL_PEEREID returns (uid, gid) — same shape
-        // cryptsync's session helper uses.
+        // lockbox's session helper uses.
         let mut cred: [u32; 2] = [0; 2];
         let mut len = std::mem::size_of_val(&cred) as libc::socklen_t;
         const SOL_LOCAL: libc::c_int = 0;
@@ -930,7 +930,7 @@ mod tests {
     // intentional change here is fine — bump the snapshot. Accidental
     // changes (rename of a service token, stray trailing space in
     // HELLO) fail loudly here instead of confusing a remote peer at
-    // runtime. See `cryptsync_roundtrip` and `gitmirror_helper`
+    // runtime. See `lockbox_roundtrip` and `gitmirror_helper`
     // integration tests for the higher-level round-trip assertions.
 
     #[test]

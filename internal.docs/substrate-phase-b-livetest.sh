@@ -10,18 +10,18 @@
 # vigocli host. Assumes passwordless SSH + sudo on every target host.
 #
 # Required for sections 4–7:
-#   CRYPTSYNC_PASSWORD_FILE  default ~/.cryptsync-test-password — mode 0600
-#                            file containing the user's cryptsync password
+#   LOCKBOX_PASSWORD_FILE  default ~/.lockbox-test-password — mode 0600
+#                            file containing the user's lockbox password
 #                            on a single line. Sections 4–7 are SKIPPED if
 #                            the file is missing.
 #
 # Optional env:
-#   PRIMARY         default danlap   — gitmirror primary, cryptsync recipient watcher
-#   SECONDARY       default annlap   — cryptsync leave/evict subject
-#   THIRD           default plex     — additional cryptsync peer (evicted in §5)
+#   PRIMARY         default danlap   — gitmirror primary, lockbox recipient watcher
+#   SECONDARY       default annlap   — lockbox leave/evict subject
+#   THIRD           default plex     — additional lockbox peer (evicted in §5)
 #   ABSENT          default girlslaptop — host expected to fail evict gracefully
-#   CRYPTSYNC_USER  default dan      — used as the gitmirror sidecar owner in §1–3
-#                                       and the cryptsync user in §4–7
+#   LOCKBOX_USER  default dan      — used as the gitmirror sidecar owner in §1–3
+#                                       and the lockbox user in §4–7
 #   VIGOCLI_CMD     default "sudo vigocli" — vigocli is installed mode 0700
 #                                            root:root and must be invoked as
 #                                            root. Override for remote/docker
@@ -34,8 +34,8 @@ PRIMARY="${PRIMARY:-danlap}"
 SECONDARY="${SECONDARY:-annlap}"
 THIRD="${THIRD:-plex}"
 ABSENT="${ABSENT:-girlslaptop}"
-CRYPTSYNC_USER="${CRYPTSYNC_USER:-dan}"
-CRYPTSYNC_PASSWORD_FILE="${CRYPTSYNC_PASSWORD_FILE:-$HOME/.cryptsync-test-password}"
+LOCKBOX_USER="${LOCKBOX_USER:-dan}"
+LOCKBOX_PASSWORD_FILE="${LOCKBOX_PASSWORD_FILE:-$HOME/.lockbox-test-password}"
 VIGOCLI_CMD="${VIGOCLI_CMD:-sudo vigocli}"
 
 GREEN=$'\033[38;2;166;227;161m'
@@ -114,7 +114,7 @@ on_host() {
 # straight through bash -c (local) or ssh (remote).
 reenroll() {
     local host=$1
-    if printf '%s\n' "$PW" | on_host "$host" 'vigo swarm cryptsync enroll' >/dev/null 2>&1; then
+    if printf '%s\n' "$PW" | on_host "$host" 'vigo swarm lockbox enroll' >/dev/null 2>&1; then
         return 0
     fi
     return 1
@@ -124,7 +124,7 @@ cleanup() {
     section "Cleanup"
     if [[ -n "${PW:-}" ]]; then
         for h in "$SECONDARY" "$THIRD"; do
-            if on_host "$h" 'test -f $HOME/.cryptsync/identity.age' >/dev/null 2>&1; then
+            if on_host "$h" 'test -f $HOME/.lockbox/identity.age' >/dev/null 2>&1; then
                 note "$h still enrolled — no restore needed"
             elif reenroll "$h"; then
                 note "$h re-enrolled"
@@ -133,7 +133,7 @@ cleanup() {
             fi
         done
     else
-        note "no cryptsync password loaded; skipping enrollment restore"
+        note "no lockbox password loaded; skipping enrollment restore"
     fi
 
     section "Summary"
@@ -155,24 +155,24 @@ trap cleanup EXIT
 section "Preflight"
 HAVE_PASSWORD=0
 PW=""
-if [[ -r "$CRYPTSYNC_PASSWORD_FILE" ]]; then
-    mode=$(stat -c %a "$CRYPTSYNC_PASSWORD_FILE")
+if [[ -r "$LOCKBOX_PASSWORD_FILE" ]]; then
+    mode=$(stat -c %a "$LOCKBOX_PASSWORD_FILE")
     if [[ "$mode" != "600" ]]; then
-        fail "$CRYPTSYNC_PASSWORD_FILE must be mode 600 (currently $mode)"
+        fail "$LOCKBOX_PASSWORD_FILE must be mode 600 (currently $mode)"
         exit 1
     fi
-    PW=$(<"$CRYPTSYNC_PASSWORD_FILE")
+    PW=$(<"$LOCKBOX_PASSWORD_FILE")
     HAVE_PASSWORD=1
-    note "loaded cryptsync password from $CRYPTSYNC_PASSWORD_FILE"
+    note "loaded lockbox password from $LOCKBOX_PASSWORD_FILE"
 else
-    note "no $CRYPTSYNC_PASSWORD_FILE — sections 4–7 will be skipped"
+    note "no $LOCKBOX_PASSWORD_FILE — sections 4–7 will be skipped"
 fi
 
 note "PRIMARY=$PRIMARY  SECONDARY=$SECONDARY  THIRD=$THIRD  ABSENT=$ABSENT"
 note "vigocli prefix: $VIGOCLI_CMD"
 
 # ───────────────────────── 1. Phase A — gitmirror source CLI ─────────────────────────
-section "1. Phase A — gitmirror source CLI (on $PRIMARY as $CRYPTSYNC_USER)"
+section "1. Phase A — gitmirror source CLI (on $PRIMARY as $LOCKBOX_USER)"
 
 step "preparing test repo on $PRIMARY"
 # Clean any prior-run residue so init/add/commit are deterministic —
@@ -210,7 +210,7 @@ expect_nonzero "sidecar gone after remove" \
     on_host "$PRIMARY" 'test -f $HOME/gitmirror/sourcetest/.gitmirror.yaml'
 
 # ───────────────────────── 2. Phase B — vigo swarm gitmirror leave ─────────────────────────
-section "2. Phase B — vigo swarm gitmirror leave (on $PRIMARY as $CRYPTSYNC_USER)"
+section "2. Phase B — vigo swarm gitmirror leave (on $PRIMARY as $LOCKBOX_USER)"
 
 for n in leave1 leave2; do
     on_host "$PRIMARY" "mkdir -p \$HOME/gitmirror/$n && cd \$HOME/gitmirror/$n && git init -q && echo $n > x && git add . && git commit -qm $n" >/dev/null
@@ -247,44 +247,44 @@ expect_zero "vigocli swarm gitmirror evict --host $ABSENT" vigocli swarm gitmirr
 sleep 10
 expect_zero "vigocli swarm gitmirror status" vigocli swarm gitmirror status
 
-# ───────────────────────── sections 4–7 require cryptsync password ─────────────────────────
+# ───────────────────────── sections 4–7 require lockbox password ─────────────────────────
 if (( HAVE_PASSWORD == 0 )); then
-    for s in "4. vigo swarm cryptsync leave" "5. vigocli swarm cryptsync evict" "6. cryptsync leave --purge" "7. DELETE tombstone regression"; do
+    for s in "4. vigo swarm lockbox leave" "5. vigocli swarm lockbox evict" "6. lockbox leave --purge" "7. DELETE tombstone regression"; do
         section "$s"
-        skip "no CRYPTSYNC_PASSWORD_FILE — section skipped"
+        skip "no LOCKBOX_PASSWORD_FILE — section skipped"
     done
     exit 0
 fi
 
-# ───────────────────────── 4. Phase B — vigo swarm cryptsync leave ─────────────────────────
-section "4. Phase B — vigo swarm cryptsync leave (on $SECONDARY as $CRYPTSYNC_USER)"
+# ───────────────────────── 4. Phase B — vigo swarm lockbox leave ─────────────────────────
+section "4. Phase B — vigo swarm lockbox leave (on $SECONDARY as $LOCKBOX_USER)"
 
-expect_zero "$SECONDARY: cryptsync status" on_host "$SECONDARY" 'vigo swarm cryptsync status'
+expect_zero "$SECONDARY: lockbox status" on_host "$SECONDARY" 'vigo swarm lockbox status'
 
 on_host "$SECONDARY" 'echo phase-b > /tmp/test.txt' >/dev/null
 expect_zero "$SECONDARY: encrypt smoketest.age" \
-    on_host "$SECONDARY" 'vigo swarm cryptsync encrypt /tmp/test.txt --as smoketest.age'
+    on_host "$SECONDARY" 'vigo swarm lockbox encrypt /tmp/test.txt --as smoketest.age'
 
-before=$(on_host "$PRIMARY" 'wc -l < $HOME/.cryptsync/recipients.txt' 2>/dev/null || echo 0)
+before=$(on_host "$PRIMARY" 'wc -l < $HOME/.lockbox/recipients.txt' 2>/dev/null || echo 0)
 note "$PRIMARY recipients before leave: $before"
 
-expect_zero "$SECONDARY: cryptsync leave --yes" on_host "$SECONDARY" 'vigo swarm cryptsync leave --yes'
+expect_zero "$SECONDARY: lockbox leave --yes" on_host "$SECONDARY" 'vigo swarm lockbox leave --yes'
 
 note "waiting 45s for daemon reactor (30s tick) to process leave.pending + fan out envelope"
 sleep 45
 
-# Default leave removes individual files inside ~/.cryptsync/ (identity.age,
+# Default leave removes individual files inside ~/.lockbox/ (identity.age,
 # identity.salt, recipients.txt, config.yaml) but does NOT remove the
 # directory itself. The signature of "daemon processed the sentinel" is
 # (a) identity.age is gone and (b) leave.pending is gone.
 expect_nonzero "$SECONDARY: identity.age removed (default leave)" \
-    on_host "$SECONDARY" 'test -f $HOME/.cryptsync/identity.age'
+    on_host "$SECONDARY" 'test -f $HOME/.lockbox/identity.age'
 expect_nonzero "$SECONDARY: leave.pending consumed by daemon" \
-    on_host "$SECONDARY" 'test -f $HOME/.cryptsync/leave.pending'
-expect_zero "$SECONDARY: ~/cryptsync/ ciphertext dir kept (orphaned)" \
-    on_host "$SECONDARY" 'test -d $HOME/cryptsync'
+    on_host "$SECONDARY" 'test -f $HOME/.lockbox/leave.pending'
+expect_zero "$SECONDARY: ~/lockbox/ ciphertext dir kept (orphaned)" \
+    on_host "$SECONDARY" 'test -d $HOME/lockbox'
 
-after=$(on_host "$PRIMARY" 'wc -l < $HOME/.cryptsync/recipients.txt' 2>/dev/null || echo 0)
+after=$(on_host "$PRIMARY" 'wc -l < $HOME/.lockbox/recipients.txt' 2>/dev/null || echo 0)
 note "$PRIMARY recipients after leave: $after"
 if (( after < before )); then
     pass "$PRIMARY recipients shrank ($before → $after)"
@@ -293,15 +293,15 @@ else
 fi
 
 expect_zero "$PRIMARY: reencrypt.pending sentinel dropped" \
-    on_host "$PRIMARY" 'test -f $HOME/.cryptsync/reencrypt.pending'
+    on_host "$PRIMARY" 'test -f $HOME/.lockbox/reencrypt.pending'
 
 # NOTE: reencrypt.pending is created when a peer leaves but is NEVER
-# auto-removed by any code path (verified in agent/src/swarm/cryptsync/mod.rs
+# auto-removed by any code path (verified in agent/src/swarm/lockbox/mod.rs
 # + cli.rs — only leave.pending and enroll.pending have remove_file calls).
 # So we don't assert it's cleared after unlock — that would always fail.
 # This is a real UX gap in the agent; tracking separately.
 step "$PRIMARY: unlock (verifies session helper accepts piped password)"
-if printf '%s\n' "$PW" | on_host "$PRIMARY" 'vigo swarm cryptsync unlock' >/dev/null 2>&1; then
+if printf '%s\n' "$PW" | on_host "$PRIMARY" 'vigo swarm lockbox unlock' >/dev/null 2>&1; then
     pass "$PRIMARY unlock succeeded"
 else
     fail "$PRIMARY unlock failed"
@@ -310,27 +310,27 @@ fi
 step "restoring $SECONDARY enrollment"
 if reenroll "$SECONDARY"; then pass "$SECONDARY re-enrolled"; else fail "$SECONDARY re-enroll failed"; fi
 
-# ───────────────────────── 5. Phase B — vigocli swarm cryptsync evict ─────────────────────────
-section "5. Phase B — vigocli swarm cryptsync evict (server host)"
+# ───────────────────────── 5. Phase B — vigocli swarm lockbox evict ─────────────────────────
+section "5. Phase B — vigocli swarm lockbox evict (server host)"
 
-expect_zero "vigocli swarm cryptsync members $CRYPTSYNC_USER" vigocli swarm cryptsync members "$CRYPTSYNC_USER"
+expect_zero "vigocli swarm lockbox members $LOCKBOX_USER" vigocli swarm lockbox members "$LOCKBOX_USER"
 
-expect_zero "vigocli swarm cryptsync evict --host $THIRD --user $CRYPTSYNC_USER" \
-    vigocli swarm cryptsync evict --host "$THIRD" --user "$CRYPTSYNC_USER" --yes
+expect_zero "vigocli swarm lockbox evict --host $THIRD --user $LOCKBOX_USER" \
+    vigocli swarm lockbox evict --host "$THIRD" --user "$LOCKBOX_USER" --yes
 # Server dispatches via TaskDispatch over AgentStream — agent picks up the
 # task within seconds, _apply-evict regenerates recipients.txt locally.
 sleep 10
-if on_host "$PRIMARY" "grep -q $THIRD \$HOME/.cryptsync/recipients.txt" >/dev/null 2>&1; then
+if on_host "$PRIMARY" "grep -q $THIRD \$HOME/.lockbox/recipients.txt" >/dev/null 2>&1; then
     fail "$THIRD pubkey still in $PRIMARY recipients.txt"
 else
     pass "$THIRD pubkey gone from $PRIMARY recipients.txt"
 fi
 
 # Known fleet-projection gap: girlslaptop. Either succeeds (if fleet has it)
-# or fails with the 'not enrolled in any matching cryptsync circle' error. Both
+# or fails with the 'not enrolled in any matching lockbox circle' error. Both
 # outcomes are acceptable here — we just want it to not crash the server.
-step "vigocli swarm cryptsync evict --host $ABSENT --all-users (may report 'not enrolled')"
-if vigocli swarm cryptsync evict --host "$ABSENT" --all-users --yes >/tmp/livetest.out 2>&1; then
+step "vigocli swarm lockbox evict --host $ABSENT --all-users (may report 'not enrolled')"
+if vigocli swarm lockbox evict --host "$ABSENT" --all-users --yes >/tmp/livetest.out 2>&1; then
     pass "evict $ABSENT succeeded"
 else
     if grep -qi 'not enrolled\|no matching\|not found' /tmp/livetest.out; then
@@ -341,15 +341,15 @@ else
 fi
 
 step "restoring $THIRD enrollment"
-# vigocli swarm cryptsync evict dispatches via TaskDispatch — the actual
+# vigocli swarm lockbox evict dispatches via TaskDispatch — the actual
 # self-evict scrub on the evicted host runs async via the agent
 # stream. Poll for identity.age to disappear (timeout 30s) before
-# trying to re-enroll, otherwise `vigo swarm cryptsync enroll` bails with
+# trying to re-enroll, otherwise `vigo swarm lockbox enroll` bails with
 # "already enrolled" because the scrub hasn't landed yet.
 note "waiting for $THIRD self-evict scrub (identity.age removal) — up to 30s"
 scrubbed=0
 for _ in $(seq 1 30); do
-    if ! on_host "$THIRD" 'test -f $HOME/.cryptsync/identity.age' >/dev/null 2>&1; then
+    if ! on_host "$THIRD" 'test -f $HOME/.lockbox/identity.age' >/dev/null 2>&1; then
         scrubbed=1
         break
     fi
@@ -361,46 +361,46 @@ fi
 if reenroll "$THIRD"; then pass "$THIRD re-enrolled"; else fail "$THIRD re-enroll failed"; fi
 
 # ───────────────────────── 6. --purge variant ─────────────────────────
-section "6. --purge variant on cryptsync leave (on $SECONDARY)"
+section "6. --purge variant on lockbox leave (on $SECONDARY)"
 
 # Make sure secondary is enrolled before the test
-if ! on_host "$SECONDARY" 'test -f $HOME/.cryptsync/identity.age' >/dev/null 2>&1; then
+if ! on_host "$SECONDARY" 'test -f $HOME/.lockbox/identity.age' >/dev/null 2>&1; then
     if reenroll "$SECONDARY"; then note "re-enrolled $SECONDARY for §6"; else fail "could not enroll $SECONDARY for §6"; fi
 fi
 
-on_host "$SECONDARY" 'echo secret > /tmp/s.txt && vigo swarm cryptsync encrypt /tmp/s.txt' >/dev/null 2>&1
-expect_zero "$SECONDARY: ~/cryptsync has content" \
-    on_host "$SECONDARY" '[ -n "$(ls $HOME/cryptsync/ 2>/dev/null)" ]'
+on_host "$SECONDARY" 'echo secret > /tmp/s.txt && vigo swarm lockbox encrypt /tmp/s.txt' >/dev/null 2>&1
+expect_zero "$SECONDARY: ~/lockbox has content" \
+    on_host "$SECONDARY" '[ -n "$(ls $HOME/lockbox/ 2>/dev/null)" ]'
 
-expect_zero "$SECONDARY: cryptsync leave --purge --yes" \
-    on_host "$SECONDARY" 'vigo swarm cryptsync leave --purge --yes'
+expect_zero "$SECONDARY: lockbox leave --purge --yes" \
+    on_host "$SECONDARY" 'vigo swarm lockbox leave --purge --yes'
 note "waiting 45s for daemon to process purge"
 sleep 45
-# --purge removes the ~/cryptsync/ content directory entirely AND removes the
-# identity files from ~/.cryptsync/. The ~/.cryptsync/ directory itself stays.
+# --purge removes the ~/lockbox/ content directory entirely AND removes the
+# identity files from ~/.lockbox/. The ~/.lockbox/ directory itself stays.
 expect_nonzero "$SECONDARY: identity.age removed by --purge" \
-    on_host "$SECONDARY" 'test -f $HOME/.cryptsync/identity.age'
-expect_nonzero "$SECONDARY: ~/cryptsync/ removed by --purge" \
-    on_host "$SECONDARY" 'test -d $HOME/cryptsync'
+    on_host "$SECONDARY" 'test -f $HOME/.lockbox/identity.age'
+expect_nonzero "$SECONDARY: ~/lockbox/ removed by --purge" \
+    on_host "$SECONDARY" 'test -d $HOME/lockbox'
 
 # ───────────────────────── 7. Regression — DELETE tombstone path ─────────────────────────
 section "7. Regression — DELETE tombstone path (on $SECONDARY)"
 
 if reenroll "$SECONDARY"; then note "$SECONDARY re-enrolled for §7"; else fail "could not enroll $SECONDARY for §7"; fi
 
-# §6's --purge destroyed ~/cryptsync/; reenroll just recreated it under
+# §6's --purge destroyed ~/lockbox/; reenroll just recreated it under
 # the same path but a different inode. The watcher's reconciler
 # detects the rotation and re-arms its inotify watch on the next
-# 30s tick (see agent/src/swarm/cryptsync/watcher.rs). Wait for that
+# 30s tick (see agent/src/swarm/lockbox/watcher.rs). Wait for that
 # tick before the encrypt — without it, the inotify event is captured
 # against the dead watch and no PushJob/DeleteJob is generated.
-note "waiting 35s for watcher reconciler to re-arm on the recreated ~/cryptsync/"
+note "waiting 35s for watcher reconciler to re-arm on the recreated ~/lockbox/"
 sleep 35
 
-on_host "$SECONDARY" 'echo regress > /tmp/r.txt && vigo swarm cryptsync encrypt /tmp/r.txt --as regress.age' >/dev/null 2>&1
+on_host "$SECONDARY" 'echo regress > /tmp/r.txt && vigo swarm lockbox encrypt /tmp/r.txt --as regress.age' >/dev/null 2>&1
 expect_zero "$SECONDARY: delete regress.age" \
-    on_host "$SECONDARY" 'vigo swarm cryptsync delete regress.age'
+    on_host "$SECONDARY" 'vigo swarm lockbox delete regress.age'
 note "waiting 45s for tombstone gossip (one announce tick at 30s + slack)"
 sleep 45
 expect_match "tombstone propagated to $PRIMARY" 'regress\.age' \
-    on_host "$PRIMARY" 'vigo swarm cryptsync list --tombstones'
+    on_host "$PRIMARY" 'vigo swarm lockbox list --tombstones'

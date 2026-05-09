@@ -388,15 +388,15 @@ watcher:
 #     enabled: ["*"]
 #     max_file_bytes: 2147483648                # 2 GiB. 0 = no cap.
 #
-#   # Puddle (per-user identity, ADR-014). Cryptsync derives ITS
+#   # Puddle (per-user identity, ADR-014). Lockbox derives ITS
 #   # AUTHORIZATION from this section per ADR-020 — there is no
-#   # `enabled` field under cryptsync below.
+#   # `enabled` field under lockbox below.
 #   puddle:
 #     enabled: ["*"]
 #
-#   # Cryptsync operational tuning. Authorization derives from puddle
+#   # Lockbox operational tuning. Authorization derives from puddle
 #   # above; this section is size + envelope retention only.
-#   cryptsync:
+#   lockbox:
 #     max_file_bytes: 1073741824                # 1 GiB per-file ciphertext cap on auto-encrypt + push. 0 = no cap.
 #     envelope_retention: "90d"                 # LEAVE/RESURRECT/TOMBSTONE reap window. Empty = compile-time default (90d).
 

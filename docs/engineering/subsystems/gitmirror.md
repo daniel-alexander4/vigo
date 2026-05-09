@@ -1,7 +1,7 @@
 
 # Gitmirror — Unified Git Substrate (ADR-015)
 
-> **ADR-015 cutover complete.** Steps 1–3 shipped earlier; step 4 shipped across six slices on 2026-04-30. The substrate is keyed on `project_id = sha256(founder_puddle_pubkey)` with helper-daemon-mediated push/fetch over a SO_PEERCRED-gated Unix socket, push-driven fan-out, LAN auto-discovery, cross-envoy revoke/leave envelope gossip with digest catch-up, project-id-keyed fleet observability (UI + REST + CLI), a REST member-roster endpoint for push-time lookup, and `reanchor` byte-level migration. ADR-016 (cryptsync membership on puddle) is the next ADR in the puddle arc.
+> **ADR-015 cutover complete.** Steps 1–3 shipped earlier; step 4 shipped across six slices on 2026-04-30. The substrate is keyed on `project_id = sha256(founder_puddle_pubkey)` with helper-daemon-mediated push/fetch over a SO_PEERCRED-gated Unix socket, push-driven fan-out, LAN auto-discovery, cross-envoy revoke/leave envelope gossip with digest catch-up, project-id-keyed fleet observability (UI + REST + CLI), a REST member-roster endpoint for push-time lookup, and `reanchor` byte-level migration. ADR-016 (lockbox membership on puddle) is the next ADR in the puddle arc.
 
 Gitmirror is the P2P git substrate underlying both personal disaster-recovery (today's primary use case) and multi-member collaboration (an axis introduced by ADR-015). Each project is identified by `project_id = sha256(founder_puddle_pubkey)`; project shape is described by two orthogonal axes:
 
@@ -91,7 +91,7 @@ struct PushChain {
 }
 ```
 
-`encode_chain_header(chain, delegations)` and `decode_chain_header()` round-trip this shape; the decoder also tolerates pre-ADR-019 senders that emitted bare `TokenChain` JSON via a fallback path. `verify_chain_for_push` threads sender-presented delegations into `verify_chain`. Acceptable because gitmirror's threat model is *availability*, not confidentiality — an attacker who has compromised a retired founder key could push junk to bare repos but cannot exfiltrate user-readable bytes (cryptsync owns confidentiality). Authoritative trust still flows through OOB cap codes at rejoin time.
+`encode_chain_header(chain, delegations)` and `decode_chain_header()` round-trip this shape; the decoder also tolerates pre-ADR-019 senders that emitted bare `TokenChain` JSON via a fallback path. `verify_chain_for_push` threads sender-presented delegations into `verify_chain`. Acceptable because gitmirror's threat model is *availability*, not confidentiality — an attacker who has compromised a retired founder key could push junk to bare repos but cannot exfiltrate user-readable bytes (lockbox owns confidentiality). Authoritative trust still flows through OOB cap codes at rejoin time.
 
 **Re-found escape hatch (slice 5).** Once a project's delegation chain hits `DELEGATION_MAX_LEN`, the founder runs `vigo swarm gitmirror project re-found <handle>`. This:
 
@@ -130,7 +130,7 @@ Pattern-list changes record tamper-evident audit-chain entries (`swarm.gitmirror
 - [`vigo swarm gitmirror` CLI reference](../../reference/cli/agent-swarm-gitmirror.md) — operator-facing verb walkthroughs
 - [Swarm](swarm.md) — the underlying P2P substrate gitmirror rides
 - [Puddle](puddle.md) — per-user puddle identity (ADR-014); the trust unit gitmirror's tokens chain to
-- [Cryptsync](cryptsync.md) — the encryption-first sibling subsystem that owns *confidentiality* (gitmirror owns *availability*)
+- [Lockbox](lockbox.md) — the encryption-first sibling subsystem that owns *confidentiality* (gitmirror owns *availability*)
 - [`gitmirror` trait reference](../../reference/traits/gitmirror.md) — schema of the per-project entries the agent emits on each check-in (project_id, members, dr_fanout, head_refs, envelope counts)
 
 ---

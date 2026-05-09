@@ -131,7 +131,7 @@ var envoysRevokeCmd = &cobra.Command{
 longer check in, and re-enrollment under the same UUID is blocked.
 
 Cross-envoy cleanup runs by default: the revoked host's pubkey is
-dropped from every other envoy's per-user cryptsync recipients list
+dropped from every other envoy's per-user lockbox recipients list
 so future re-encrypts don't target a host that can't receive. Use
 --skip-swarm-cleanup if you plan to re-bootstrap the same host
 shortly (e.g. investigating a suspected compromise) and want the
@@ -161,7 +161,7 @@ var envoysDeleteCmd = &cobra.Command{
 	Long: `Permanently delete an envoy and CASCADE its traits, runs, and
 snapshots from the database.
 
-Cross-envoy cryptsync cleanup runs by default — same semantic as
+Cross-envoy lockbox cleanup runs by default — same semantic as
 'envoys revoke'. Pass --skip-swarm-cleanup to leave peer recipient
 state intact (rare; only useful if you intend to re-create the same
 hostname shortly under a different UUID).`,
@@ -486,9 +486,9 @@ func init() {
 	envoysMaintenanceCmd.Flags().Bool("clear", false, "clear maintenance mode")
 	envoysPurgeCmd.Flags().Bool("dry-run", false, "preview duplicates without deleting")
 	envoysRevokeCmd.Flags().Bool("skip-swarm-cleanup", false,
-		"don't drop the host's pubkey from peers' cryptsync recipients (use only when re-bootstrapping the same host shortly)")
+		"don't drop the host's pubkey from peers' lockbox recipients (use only when re-bootstrapping the same host shortly)")
 	envoysDeleteCmd.Flags().Bool("skip-swarm-cleanup", false,
-		"don't drop the host's pubkey from peers' cryptsync recipients")
+		"don't drop the host's pubkey from peers' lockbox recipients")
 	envoysCmd.AddCommand(envoysListCmd, envoysShowCmd, envoysRevokeCmd, envoysDeleteCmd,
 		envoysTraitsCmd, envoysMaintenanceCmd,
 		envoysPurgeCmd, envoysRebootstrapCmd, envoysPushCmd, envoysRevertCmd, previewCmd)

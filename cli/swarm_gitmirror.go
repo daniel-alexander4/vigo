@@ -124,7 +124,7 @@ across the fleet, sourced from the 'gitmirror' trait projection.
 Pass [project_id|handle] to scope to one project; omit to list every
 project's members.
 
-Read-only. Mirrors the shape of 'vigocli swarm cryptsync members'.
+Read-only. Mirrors the shape of 'vigocli swarm lockbox members'.
 For host-presence detail use 'vigocli swarm gitmirror show <project>'.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runGitmirrorMembers,

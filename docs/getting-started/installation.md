@@ -66,7 +66,7 @@ vigocli doctor                     # full diagnostic
 
 ### 4. Enroll the server's own envoy (do this first)
 
-Vigo assumes every server runs a co-hosted `vigo` agent on the same host as the vigosrv container. The server's own envoy is what makes the server visible in `vigocli swarm status`, lets it participate in puddle / cryptsync / gitmirror, and seeds payloads to peers via the swarm substrate. This step is the canonical first thing to do after the container is up.
+Vigo assumes every server runs a co-hosted `vigo` agent on the same host as the vigosrv container. The server's own envoy is what makes the server visible in `vigocli swarm status`, lets it participate in puddle / lockbox / gitmirror, and seeds payloads to peers via the swarm substrate. This step is the canonical first thing to do after the container is up.
 
 From the server host itself:
 

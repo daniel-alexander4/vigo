@@ -84,7 +84,7 @@ WantedBy=multi-user.target
 
 `LimitNOFILE=65536` raises both soft and hard FD limits from the
 systemd defaults (soft 1024 / hard 524288). The swarm peer server, blob
-cache, LMDB state store, and per-user multicast/cryptsync sockets all
+cache, LMDB state store, and per-user multicast/lockbox sockets all
 consume FDs; under load the soft default of 1024 can be exhausted,
 which the agent surfaces as `accept failed error=No file descriptors
 available (os error 24)` in the journal and recovers from with a 100ms

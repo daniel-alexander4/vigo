@@ -8,7 +8,7 @@
 //! founder runs `vigo swarm puddle rekey-pair` to generate a new
 //! puddle keypair and issue a single-use claim code; surviving envoys
 //! run `vigo swarm puddle rekey --from <host>` to claim the new
-//! wrapped blob, migrate their cryptsync wrap envelope, and join the
+//! wrapped blob, migrate their lockbox wrap envelope, and join the
 //! new puddle identity. ADR-017 explicitly chose this over a puddle
 //! "evict" verb — rotating the shared keypair is the only response
 //! that addresses the underlying compromise.
@@ -20,7 +20,7 @@
 //!   `~/.vigo-puddle/retired_puddles.json`, including the active rekey
 //!   session's 24h graceful window;
 //! - the `POST /swarm/puddle/rekey-claim/<user>` HTTP handler;
-//! - the post-rotation cryptsync sync (rewrap `identity.age`, clear
+//! - the post-rotation lockbox sync (rewrap `identity.age`, clear
 //!   stale TOFU pins, regenerate `recipients.txt`).
 //!
 //! The CLI verbs themselves live in `cli.rs` alongside `cmd_pair` /
@@ -117,7 +117,7 @@ pub fn save_retired(
         .with_context(|| format!("rename to {}", path.display()))?;
     #[cfg(unix)]
     {
-        let _ = crate::swarm::cryptsync::chown_to_user_pub(&path, username);
+        let _ = crate::swarm::lockbox::chown_to_user_pub(&path, username);
     }
     let _ = username;
     Ok(())
@@ -193,43 +193,43 @@ pub fn clear_pending(home: &Path) {
     codes::clear_pending(&config::rekey_pending_path(home));
 }
 
-/// Post-rotation cryptsync sync. Runs on every envoy that has
+/// Post-rotation lockbox sync. Runs on every envoy that has
 /// rotated its puddle keypair (founder during `rekey-pair`,
 /// surviving envoys during `rekey`). Three steps, all best-effort
 /// after the puddle rotation has already committed to disk:
 ///
-/// 1. Re-wrap `~/.cryptsync/identity.age` from the old puddle-derived
-///    wrap key to the new one. Skipped when cryptsync isn't enrolled
+/// 1. Re-wrap `~/.lockbox/identity.age` from the old puddle-derived
+///    wrap key to the new one. Skipped when lockbox isn't enrolled
 ///    or runs in standalone wrap-mode.
-/// 2. Clear local cryptsync TOFU pins for the retired puddle pubkey
+/// 2. Clear local lockbox TOFU pins for the retired puddle pubkey
 ///    so the next announce from a peer that has also rekeyed re-pins
 ///    cleanly under the new puddle pubkey.
 /// 3. Regenerate `recipients.txt` so post-rotation writes go to the
 ///    correct recipient set immediately, instead of waiting for the
 ///    next announce tick.
 ///
-/// Returns the cryptsync rewrap outcome for the caller's UX.
-pub fn apply_post_rotation_cryptsync_sync(
+/// Returns the lockbox rewrap outcome for the caller's UX.
+pub fn apply_post_rotation_lockbox_sync(
     home: &Path,
     username: &str,
     old: &SigningKey,
     new: &SigningKey,
     old_puddle_pubkey_hex: &str,
-) -> Result<crate::swarm::cryptsync::identity_rewrap::RewrapOutcome> {
-    let outcome = crate::swarm::cryptsync::identity_rewrap::rewrap_identity_for_new_puddle_key(
+) -> Result<crate::swarm::lockbox::identity_rewrap::RewrapOutcome> {
+    let outcome = crate::swarm::lockbox::identity_rewrap::rewrap_identity_for_new_puddle_key(
         home, username, old, new,
     )
-    .context("rewrap cryptsync identity for new puddle keypair")?;
+    .context("rewrap lockbox identity for new puddle keypair")?;
 
     // Clear stale TOFU pins so post-rotation peer announces re-pin.
-    // Best-effort: if the peer table doesn't exist yet (cryptsync not
+    // Best-effort: if the peer table doesn't exist yet (lockbox not
     // enrolled), this is a no-op. The hex form lives in peer
     // entries' `puddle_pubkey` field, so strip the `ed25519:` prefix.
     let retired_hex = old_puddle_pubkey_hex
         .strip_prefix("ed25519:")
         .unwrap_or(old_puddle_pubkey_hex)
         .to_ascii_lowercase();
-    let _ = crate::swarm::cryptsync::state::PeerTable::modify(username, |table| {
+    let _ = crate::swarm::lockbox::state::PeerTable::modify(username, |table| {
         if table.clear_pins_for_puddle(&retired_hex) > 0 {
             Some("puddle-rekey")
         } else {
@@ -238,14 +238,14 @@ pub fn apply_post_rotation_cryptsync_sync(
     });
 
     // Regenerate recipients.txt so the next encrypt sees the new
-    // puddle filter. Best-effort — when cryptsync isn't enrolled the
+    // puddle filter. Best-effort — when lockbox isn't enrolled the
     // recipients.txt path doesn't exist and the call no-ops at the
     // load_local_pubkey step. Don't propagate errors here; the
     // rotation itself has already succeeded on disk.
-    if let Err(e) = crate::swarm::cryptsync::regenerate_recipients_now(username, home) {
+    if let Err(e) = crate::swarm::lockbox::regenerate_recipients_now(username, home) {
         tracing::debug!(
             error = %e,
-            "puddle rekey: regenerate_recipients_now skipped (cryptsync not enrolled?)"
+            "puddle rekey: regenerate_recipients_now skipped (lockbox not enrolled?)"
         );
     }
 
@@ -270,7 +270,7 @@ pub async fn handle_rekey_claim(
             return Ok(codes::plain(StatusCode::BAD_REQUEST, "malformed path"))
         }
     };
-    let home = match crate::swarm::cryptsync::home_for_user_pub(&user) {
+    let home = match crate::swarm::lockbox::home_for_user_pub(&user) {
         Some(h) => h,
         None => return Ok(codes::plain(StatusCode::NOT_FOUND, "no such user")),
     };

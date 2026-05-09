@@ -264,7 +264,7 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 	if blobPeers := t.peers[sha256]; blobPeers != nil {
 		for envoyID, ps := range blobPeers {
 			// Skip revoked / deleted envoys at the fleet level — match
-			// cryptsyncmesh/longdrawermesh/gitmirrormesh, which all filter
+			// lockboxmesh/longdrawermesh/gitmirrormesh, which all filter
 			// `if e.Revoked { continue }` at their build sites. The
 			// tracker's in-memory peers map can keep the entry; the
 			// filter just hides it from operator-facing surfaces.

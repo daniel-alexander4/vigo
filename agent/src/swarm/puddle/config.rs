@@ -6,7 +6,7 @@
 //! All user-side state lives under `~/.vigo-puddle/`:
 //!
 //! - `identity.wrapped` — Ed25519 private key wrapped under the
-//!   user's passphrase. Same envelope as cryptsync's `identity.age`
+//!   user's passphrase. Same envelope as lockbox's `identity.age`
 //!   (1 byte version + 24 byte XChaCha20-Poly1305 nonce + ciphertext
 //!   + 16 byte auth tag). 0600 user-owned. Portable across envoys.
 //! - `identity.salt` — 16 random bytes, Argon2id input. 0600.
@@ -22,7 +22,7 @@
 //!   PID, written by the helper at startup, removed at shutdown.
 //!   Used by sibling subsystems to detect "is the puddle identity
 //!   currently unlocked on this envoy?" without having to talk to
-//!   the helper. Same pattern cryptsync uses (ADR-012).
+//!   the helper. Same pattern lockbox uses (ADR-012).
 
 use std::path::{Path, PathBuf};
 

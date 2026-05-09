@@ -48,7 +48,7 @@ pub struct AgentSwarmState {
 
 /// Resolved gate booleans for the four content subsystems plus the
 /// substrate-level kill switch. `puddle` is the single-source-of-truth
-/// for cryptsync (ADR-020) — there is no separate cryptsync field.
+/// for lockbox (ADR-020) — there is no separate lockbox field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GateState {
     pub swarm: bool,

@@ -9,15 +9,15 @@ title: "ADR-017: No puddle-level revoke"
 
 ## Context
 
-ADR-016 introduced puddle-aware membership for cryptsync and, in passing, asserted that envoy eviction would happen "via puddle's lock-and-revoke flow." That sentence pointed at a primitive that does not exist — ADR-014's puddle ships no revocation verb in v1, and the question of whether one should be built was deferred. Slices 1–4 of ADR-016 shipped without it, and the gap surfaced when working through a concrete stolen-laptop scenario.
+ADR-016 introduced puddle-aware membership for lockbox and, in passing, asserted that envoy eviction would happen "via puddle's lock-and-revoke flow." That sentence pointed at a primitive that does not exist — ADR-014's puddle ships no revocation verb in v1, and the question of whether one should be built was deferred. Slices 1–4 of ADR-016 shipped without it, and the gap surfaced when working through a concrete stolen-laptop scenario.
 
-The natural-sounding feature would be `vigo swarm puddle revoke <host>`: founder issues a signed envelope, peers gossip it, receivers filter the revoked envoy's per-envoy age pubkey out of cryptsync recipient resolution. The mechanics map cleanly onto the existing `cryptsync/leaves.rs` envelope + gossip + 90-day-reap pattern. It looks straightforward.
+The natural-sounding feature would be `vigo swarm puddle revoke <host>`: founder issues a signed envelope, peers gossip it, receivers filter the revoked envoy's per-envoy age pubkey out of lockbox recipient resolution. The mechanics map cleanly onto the existing `lockbox/leaves.rs` envelope + gossip + 90-day-reap pattern. It looks straightforward.
 
 It is not actually solving the problem an admin has.
 
 ## Decision
 
-**Puddle-level revoke is out of scope. Puddle ships no `revoke` verb. Cryptsync's existing per-envoy `leave` envelope is the only eviction primitive.**
+**Puddle-level revoke is out of scope. Puddle ships no `revoke` verb. Lockbox's existing per-envoy `leave` envelope is the only eviction primitive.**
 
 The reasoning splits along the two scenarios that motivate eviction:
 
@@ -29,13 +29,13 @@ In the stolen-laptop case, the thief gets a copy of the **puddle keypair itself*
 - Sign anything other envoys treat as puddle-attested.
 - Forge any future signing layer added on top — including revoke envelopes themselves, even with founder asymmetry, because the *membership* key is the layer being attacked.
 
-A "revoke laptop's age pubkey" command leaves the actual root compromise — the shared puddle keypair on a hostile device — entirely unaddressed. The only correct response is to retire the puddle keypair: re-init the puddle, accept the blast radius (gitmirror project_ids re-anchor, cryptsync puddle-mode wrap re-derives, surviving envoys re-pair), and rotate every other credential the laptop touched. Revoke would be a placebo.
+A "revoke laptop's age pubkey" command leaves the actual root compromise — the shared puddle keypair on a hostile device — entirely unaddressed. The only correct response is to retire the puddle keypair: re-init the puddle, accept the blast radius (gitmirror project_ids re-anchor, lockbox puddle-mode wrap re-derives, surviving envoys re-pair), and rotate every other credential the laptop touched. Revoke would be a placebo.
 
 ### Cooperative removal (clean decommission)
 
-When an envoy is being decommissioned willingly — old laptop being sold after wipe, server being repurposed, puddle shrinking — the departing envoy can sign a `cryptsync leave` envelope with its own age key today (`agent/src/swarm/cryptsync/leaves.rs`). The envelope gossips to live peers, gets persisted under 90-day reap, and `regenerate_recipients()` filters the departing envoy's pubkey out of the recipient set on every other envoy. This works without any puddle-level primitive.
+When an envoy is being decommissioned willingly — old laptop being sold after wipe, server being repurposed, puddle shrinking — the departing envoy can sign a `lockbox leave` envelope with its own age key today (`agent/src/swarm/lockbox/leaves.rs`). The envelope gossips to live peers, gets persisted under 90-day reap, and `regenerate_recipients()` filters the departing envoy's pubkey out of the recipient set on every other envoy. This works without any puddle-level primitive.
 
-The departing envoy stopping its puddle announces also lets it age out of LAN-discovered peer tables naturally. For receivers cross-subnet-pinned, `vigo swarm cryptsync forget <host>` clears the TOFU pin.
+The departing envoy stopping its puddle announces also lets it age out of LAN-discovered peer tables naturally. For receivers cross-subnet-pinned, `vigo swarm lockbox forget <host>` clears the TOFU pin.
 
 The cooperative case has its mechanism. Building a second one at the puddle layer would be redundant.
 
@@ -53,11 +53,11 @@ The cooperative case has its mechanism. Building a second one at the puddle laye
 
 **Code:**
 - No new puddle verb.
-- ADR-016's "Eviction is puddle-level" sentence is superseded by this ADR. The cryptsync-leave envelope path remains the eviction mechanism.
+- ADR-016's "Eviction is puddle-level" sentence is superseded by this ADR. The lockbox-leave envelope path remains the eviction mechanism.
 - `agent/src/swarm/puddle/cli.rs` `print_usage()` does not list a revoke verb. No need to add explanatory text — absence is the right signal.
 
 **Documentation:**
-- `docs/concepts/cryptsync.md` — the eviction section, if/when written, points at `vigo swarm cryptsync leave` for cooperative removal and at the lost-envoy runbook for adversarial.
+- `docs/concepts/lockbox.md` — the eviction section, if/when written, points at `vigo swarm lockbox leave` for cooperative removal and at the lost-envoy runbook for adversarial.
 - A lost-envoy runbook in `docs/operations/` (or equivalent) is a separate follow-up: list the steps for re-initing a compromised puddle, what re-anchors (gitmirror project_ids), what gets orphaned (offline envoys can't follow the rotation), what other credentials need rotation. Out of scope for this ADR; tracked separately.
 
 **Operational:**
@@ -65,6 +65,6 @@ The cooperative case has its mechanism. Building a second one at the puddle laye
 - ADR-016 status note will be updated to mark the "Eviction is puddle-level" decision as superseded by ADR-017.
 
 **Behavioral consequences:**
-- For routine "I'm decommissioning this envoy" workflows, users run `vigo swarm cryptsync leave` on the departing envoy. Same mechanism that exists today.
+- For routine "I'm decommissioning this envoy" workflows, users run `vigo swarm lockbox leave` on the departing envoy. Same mechanism that exists today.
 - For "this envoy was compromised" workflows, the answer is "re-init the puddle and rotate everything else too." The pain of re-init is real and is the next thing to chip away at — see follow-up work on reducing re-init blast radius — but the pain of re-init is the honest cost of a compromised shared key, not a deficiency in the eviction surface.
 - Future puddle primitives that change the threat model (e.g., per-envoy puddle-membership keys distributed via a CA-style puddle trust root, where revoking one envoy doesn't compromise the others) could re-open this decision. Such a primitive would be its own ADR.

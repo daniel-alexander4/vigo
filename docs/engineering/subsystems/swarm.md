@@ -6,7 +6,7 @@ Swarm is the envoy-only peer-to-peer network that Vigo's content subsystems ride
 - **[Payload](../../reference/glossary.md#payload)** — administrator-pushed file distribution (`vigocli swarm distribute`). Fleet-wide, operator-scoped.
 - **[Longdrawer](longdrawer.md)** — per-user plaintext home-directory sync. User-scoped, LAN-local by default.
 - **[Gitmirror](gitmirror.md)** — per-user source-control repo mirroring for personal disaster recovery. User-scoped.
-- **[Cryptsync](cryptsync.md)** — per-user always-encrypted home-directory sync. Ciphertext at rest, password-gated decryption.
+- **[Lockbox](lockbox.md)** — per-user always-encrypted home-directory sync. Ciphertext at rest, password-gated decryption.
 
 Each content subsystem has its own content rules, multicast group, and sidecar format, but all four reuse swarm's mTLS trust, peer channel, and manifest gossip. This page documents the substrate. For a given content type, follow the links above.
 
@@ -181,7 +181,7 @@ In 0.41.0 the substrate switched from a fleet-wide enabled-bool plus per-substra
 ```yaml
 swarm:
   enabled: ["*"]                          # substrate runs on these hosts
-  puddle:    { enabled: ["*"] }           # cryptsync derives from this list
+  puddle:    { enabled: ["*"] }           # lockbox derives from this list
   gitmirror: { enabled: ["annlap", "plex", "girlslaptop"] }
   longdrawer:  { enabled: ["*"] }
   payload:   { enabled: ["*"] }
@@ -191,14 +191,14 @@ The server evaluates patterns against each agent's hostname and emits the resolv
 
 **Two layers.** Both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for the subsystem to be active there. Empty list at either layer disables the subsystem on that host.
 
-**Cryptsync derives from puddle.** ADR-020. There is no `swarm.cryptsync` section. A host allowed in `swarm.puddle.enabled` can hold cryptsync ciphertext for its locally-enrolled members; a host denied there cannot use cryptsync at all. Single source of truth.
+**Lockbox derives from puddle.** ADR-020. There is no `swarm.lockbox` section. A host allowed in `swarm.puddle.enabled` can hold lockbox ciphertext for its locally-enrolled members; a host denied there cannot use lockbox at all. Single source of truth.
 
 **No more blacklists.** The destructive-blacklist semantic retired in 0.41.0 (one-tiny-typo-wipes-fleet-state was a footgun). Negative patterns subsume the gate-only use case (`["-rasp1", "*"]` excludes a single host; the rest of the fleet is allowed). Destructive scrub of per-user state moved to the usercrate `puddle: bool` and `gitmirror: bool` flags — see [Usercrate authorization](#usercrate-authorization) below.
 
 | Knob | Effect | Audit event |
 |------|--------|-------------|
 | `swarm.enabled: []` | Substrate-level kill switch. Agents whose hostname doesn't match stop announcing, stop serving, stop fetching across every subsystem. | `swarm.enabled` (with added/removed patterns) |
-| `swarm.puddle.enabled: []` | Halts puddle and cryptsync on hosts that don't match. Identity material under `~user/.vigo-puddle/` and `~user/.cryptsync/` is preserved (gate-only). | `swarm.puddle.enabled` |
+| `swarm.puddle.enabled: []` | Halts puddle and lockbox on hosts that don't match. Identity material under `~user/.vigo-puddle/` and `~user/.lockbox/` is preserved (gate-only). | `swarm.puddle.enabled` |
 | `swarm.gitmirror.enabled: []` | Halts gitmirror publisher and receiver on hosts that don't match. Already-held mirrors preserved. | `swarm.gitmirror.enabled` |
 | `swarm.longdrawer.enabled: []` | Halts longdrawer announcer / listener / push handler on hosts that don't match. `~user/longdrawer/` content preserved. | `swarm.longdrawer.enabled` |
 | `swarm.swarmcast.enabled: []` | Halts payload reception. `POST /api/v1/swarm/swarmcast/distribute` returns **403** with `audit_event=swarm.swarmcast.denied` when the list is empty (no envoy could possibly receive). | `swarm.swarmcast.enabled` (flip), `swarm.swarmcast.denied` (per blocked admin push) |
@@ -227,7 +227,7 @@ Both flags default to `false`. Longdrawer and payload have no usercrate flag —
 
 **Cache.** The user executor writes the resolved flags to `/var/lib/vigo/usercrate-policy/<username>.json` on every reconcile pass (root-owned, mode 0644). Per-user CLI verbs read this cache as a precondition — no server round-trip, works offline.
 
-**Scrub-on-transition.** Removing `puddle: true` from a usercrate triggers destructive cleanup on the next reconcile: cryptsync LEAVE sentinel, then wipe of `~/.vigo-puddle/`, `~/.cryptsync/`, `~/cryptsync/`, and `~/.vigo-gitmirror/`. Removing `gitmirror: true` scrubs only `~/.vigo-gitmirror/`. The flags' removal is the destructive lever in 0.41.0 — envoy-level pattern flips are gate-only.
+**Scrub-on-transition.** Removing `puddle: true` from a usercrate triggers destructive cleanup on the next reconcile: lockbox LEAVE sentinel, then wipe of `~/.vigo-puddle/`, `~/.lockbox/`, `~/lockbox/`, and `~/.vigo-gitmirror/`. Removing `gitmirror: true` scrubs only `~/.vigo-gitmirror/`. The flags' removal is the destructive lever in 0.41.0 — envoy-level pattern flips are gate-only.
 
 ## Related
 

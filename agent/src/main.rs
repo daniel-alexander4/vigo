@@ -99,19 +99,19 @@ enum Commands {
     Gitmirror {
         args: Vec<String>,
     },
-    /// User-facing cryptsync key management + encrypted-directory verbs.
-    /// Dispatched from `vigo swarm cryptsync ...`. Week 1 verbs are pure
+    /// User-facing lockbox key management + encrypted-directory verbs.
+    /// Dispatched from `vigo swarm lockbox ...`. Week 1 verbs are pure
     /// user-home file operations; later weeks add session-helper and
     /// transport paths.
-    Cryptsync {
+    Lockbox {
         args: Vec<String>,
     },
-    /// Hidden: cryptsync session helper daemon. Invoked by
-    /// `vigo swarm cryptsync unlock` via `current_exe()` + `setsid()`;
+    /// Hidden: lockbox session helper daemon. Invoked by
+    /// `vigo swarm lockbox unlock` via `current_exe()` + `setsid()`;
     /// never by a human. Reads the unwrapped age identity from stdin,
     /// binds its Unix socket, serves DECRYPT/STATUS/LOCK until timeout
     /// or parent-PID exit.
-    CryptsyncSessionDaemon {
+    LockboxSessionDaemon {
         args: Vec<String>,
     },
     /// Per-user fleet-identity verbs (ADR-014). Dispatched from
@@ -301,7 +301,7 @@ fn parse_args() -> Result<Cli> {
             }
             "swarm" => match positional.get(1).map(|s| s.as_str()) {
                 Some("gitmirror") => Commands::Gitmirror { args: positional[2..].to_vec() },
-                Some("cryptsync") => Commands::Cryptsync { args: positional[2..].to_vec() },
+                Some("lockbox") => Commands::Lockbox { args: positional[2..].to_vec() },
                 Some("puddle") => Commands::SelfFleet { args: positional[2..].to_vec() },
                 // Read-only diagnostic verbs (0.41.1+): substrate
                 // status, seed inventory, peer table. Read against
@@ -315,7 +315,7 @@ fn parse_args() -> Result<Cli> {
                     Commands::SwarmDiag { args: positional[1..].to_vec() }
                 }
                 // Hidden: server-dispatched cleanup verb. Mirrors the
-                // `_apply-blacklist` pattern (gitmirror/cryptsync), but
+                // `_apply-blacklist` pattern (gitmirror/lockbox), but
                 // operates on the substrate-shared blob cache rather
                 // than per-substrate state. Not advertised in --help.
                 Some("_apply-cleanup") => Commands::SwarmApplyCleanup,
@@ -324,8 +324,8 @@ fn parse_args() -> Result<Cli> {
                      run `vigo swarm --help` for usage"
                 ),
             },
-            "cryptsync-session-daemon" => {
-                Commands::CryptsyncSessionDaemon { args: positional[1..].to_vec() }
+            "lockbox-session-daemon" => {
+                Commands::LockboxSessionDaemon { args: positional[1..].to_vec() }
             }
             "puddle-session-daemon" => {
                 Commands::SelfFleetSessionDaemon { args: positional[1..].to_vec() }
@@ -375,7 +375,7 @@ COMMANDS:
     traits      Print collected traits as JSON [COLLECTORS...]
     swarm gitmirror     Inspect + recover gitmirror mirrors on this envoy
                           list | show | log | branches | peers | recover | recover-all
-    swarm cryptsync     Manage cryptsync — per-user encrypted P2P directory
+    swarm lockbox     Manage lockbox — per-user encrypted P2P directory
                           init | enroll | status | unlock | lock | encrypt | decrypt | forget | reencrypt
 
 With no command, runs as a daemon.
@@ -1268,13 +1268,13 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // group/port for peer discovery. No server involvement.
     vigo::swarm::longdrawer::spawn(swarm_tls.clone(), cancel.clone());
 
-    // Cryptsync daemon — per-user always-encrypted P2P directory.
+    // Lockbox daemon — per-user always-encrypted P2P directory.
     // Separate multicast group (224.0.0.44:1533) and separate peer
     // table from echo; no shared state. HTTPS push/pull routes
     // ride the same swarm peer server on port 1531. TLS certs feed
     // the watcher+pusher+cross_subnet_peers unicast; without them the
     // daemon still runs in passive mode (discovery + serves pulls).
-    vigo::swarm::cryptsync::spawn(swarm_tls.clone(), cancel.clone());
+    vigo::swarm::lockbox::spawn(swarm_tls.clone(), cancel.clone());
 
     // Gitmirror subsystem — git-commit-triggered repo sync over swarm.
     // Pass both halves of the receiver wiring: the claims handle (for
@@ -1691,16 +1691,16 @@ async fn async_main() -> Result<()> {
             vigo::swarm::gitmirror::cli::run(args.clone())
         }
 
-        Some(Commands::Cryptsync { args }) => {
-            // Cryptsync verbs. Week 1 (init/enroll/status) is pure
+        Some(Commands::Lockbox { args }) => {
+            // Lockbox verbs. Week 1 (init/enroll/status) is pure
             // user-home file ops; later weeks add session-helper IPC.
-            vigo::swarm::cryptsync::cli::run(args.clone())
+            vigo::swarm::lockbox::cli::run(args.clone())
         }
 
-        Some(Commands::CryptsyncSessionDaemon { args }) => {
-            // Hidden: cryptsync session helper daemon entry point.
-            // Not in `vigo --help`; invoked only by `vigo swarm cryptsync unlock`.
-            vigo::swarm::cryptsync::session::daemon_main(args.clone()).await
+        Some(Commands::LockboxSessionDaemon { args }) => {
+            // Hidden: lockbox session helper daemon entry point.
+            // Not in `vigo --help`; invoked only by `vigo swarm lockbox unlock`.
+            vigo::swarm::lockbox::session::daemon_main(args.clone()).await
         }
 
         Some(Commands::SelfFleet { args }) => {

@@ -23,7 +23,7 @@
 //! Step 3 of the ADR-015 arc lands the local-state surface only.
 //! Verbs that depend on the helper-daemon-mediated transport (push,
 //! fetch, fan-out, gossip) write a sentinel file the daemon will pick
-//! up in step 4 — same pattern cryptsync uses for `leave.pending` /
+//! up in step 4 — same pattern lockbox uses for `leave.pending` /
 //! `reencrypt.pending`.
 
 use std::fs;
@@ -58,7 +58,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
             Ok(())
         }
         "project" => with_gitmirror_authz(|| dispatch_project(&args[1..])),
-        // Top-level envoy posture — parallel to `vigo swarm cryptsync
+        // Top-level envoy posture — parallel to `vigo swarm lockbox
         // status`. Reads `<gitmirror_dir>/state.json` + `traits.json`
         // and surfaces the helper-daemon socket path. Distinct from
         // `vigo swarm gitmirror project status <id>`, which shows one
@@ -2026,7 +2026,7 @@ To proceed, type the project handle exactly: {}",
 // status (envoy-wide)
 // ============================================================
 
-/// Envoy-wide gitmirror posture, parallel to `vigo swarm cryptsync
+/// Envoy-wide gitmirror posture, parallel to `vigo swarm lockbox
 /// status`. Reads root-owned `state.json` + `traits.json` under the
 /// gitmirror base dir and surfaces the helper-daemon socket. Distinct
 /// from `project status <id>`, which shows a single ADR-015 project's
@@ -2253,11 +2253,11 @@ fn format_age_seconds(secs: u64) -> String {
 }
 
 // ============================================================
-// purge — full local-state wipe, parallel to cryptsync purge
+// purge — full local-state wipe, parallel to lockbox purge
 // ============================================================
 
 /// Power-user verb. Wipes ALL local gitmirror state on this envoy.
-/// Symmetric with `vigo swarm cryptsync purge`. Distinct from
+/// Symmetric with `vigo swarm lockbox purge`. Distinct from
 /// `project leave --purge` (one project's bare repo) and from the
 /// hidden `_apply-blacklist` (server-driven, all projects but root-
 /// owned only).

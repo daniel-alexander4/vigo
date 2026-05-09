@@ -227,7 +227,7 @@ async fn handle_request(
 
         // Pre-flight disk-pressure probe — senders ask "is the
         // filesystem where my push will land >10% free?" before
-        // committing bytes. Query: ?for=<swarm|cryptsync|gitmirror|longdrawer>[&user=...].
+        // committing bytes. Query: ?for=<swarm|lockbox|gitmirror|longdrawer>[&user=...].
         (&Method::GET, "/health/storage") => {
             handle_health_storage(req.uri().query().unwrap_or(""))
         }
@@ -309,69 +309,69 @@ async fn handle_request(
             tokio::task::block_in_place(|| handle_envelope_all(p))
         }
 
-        // Cryptsync: pull ciphertext from a user's ~/cryptsync/.
-        // Symmetric with longdrawer's pull but under /cryptsync/pull/.
-        (&Method::GET, p) if p.starts_with("/swarm/cryptsync/pull/") => {
-            tokio::task::block_in_place(|| crate::swarm::cryptsync::server::handle_pull(p))
+        // Lockbox: pull ciphertext from a user's ~/lockbox/.
+        // Symmetric with longdrawer's pull but under /lockbox/pull/.
+        (&Method::GET, p) if p.starts_with("/swarm/lockbox/pull/") => {
+            tokio::task::block_in_place(|| crate::swarm::lockbox::server::handle_pull(p))
         }
 
-        // Cryptsync: receive a ciphertext blob from a peer and
-        // write it into the target user's ~/cryptsync/. 1 GiB cap.
-        (&Method::POST, p) if p.starts_with("/swarm/cryptsync/push/") => {
-            crate::swarm::cryptsync::server::handle_push(p, req).await
+        // Lockbox: receive a ciphertext blob from a peer and
+        // write it into the target user's ~/lockbox/. 1 GiB cap.
+        (&Method::POST, p) if p.starts_with("/swarm/lockbox/push/") => {
+            crate::swarm::lockbox::server::handle_push(p, req).await
         }
 
-        // Cryptsync: cross-subnet unicast announcement from a peer
+        // Lockbox: cross-subnet unicast announcement from a peer
         // listed in some local user's `cross_subnet_peers:`. 128 KiB cap.
-        // Feeds the cryptsync reconciler's inbound channel.
-        (&Method::POST, "/swarm/cryptsync/announce") => {
-            crate::swarm::cryptsync::server::handle_announce(req, peer_addr).await
+        // Feeds the lockbox reconciler's inbound channel.
+        (&Method::POST, "/swarm/lockbox/announce") => {
+            crate::swarm::lockbox::server::handle_announce(req, peer_addr).await
         }
 
-        // Cryptsync: receive a signed DELETE envelope from a peer.
+        // Lockbox: receive a signed DELETE envelope from a peer.
         // Records a tombstone locally and removes the local file.
-        (&Method::POST, p) if p.starts_with("/swarm/cryptsync/tombstones/") => {
-            crate::swarm::cryptsync::server::handle_tombstone_delete(p, req, peer_addr).await
+        (&Method::POST, p) if p.starts_with("/swarm/lockbox/tombstones/") => {
+            crate::swarm::lockbox::server::handle_tombstone_delete(p, req, peer_addr).await
         }
 
-        // Cryptsync: catch-up pull of the full tombstone list for a user.
+        // Lockbox: catch-up pull of the full tombstone list for a user.
         // Returns JSON of the TombstoneTable; peers use this after seeing
         // an announcement digest that differs from their own view.
-        (&Method::GET, p) if p.starts_with("/swarm/cryptsync/tombstones/") => {
-            tokio::task::block_in_place(|| crate::swarm::cryptsync::server::handle_tombstones_list(p))
+        (&Method::GET, p) if p.starts_with("/swarm/lockbox/tombstones/") => {
+            tokio::task::block_in_place(|| crate::swarm::lockbox::server::handle_tombstones_list(p))
         }
 
-        // Cryptsync: receive a signed LEAVE envelope from a peer that is
+        // Lockbox: receive a signed LEAVE envelope from a peer that is
         // unenrolling. Verifies the signer is the subject, then drops
         // the pubkey from the peer table, regenerates recipients.txt,
         // drops the reencrypt.pending sentinel, and records the LEAVE.
-        (&Method::POST, p) if p.starts_with("/swarm/cryptsync/leaves/") => {
-            crate::swarm::cryptsync::server::handle_leave(p, req, peer_addr).await
+        (&Method::POST, p) if p.starts_with("/swarm/lockbox/leaves/") => {
+            crate::swarm::lockbox::server::handle_leave(p, req, peer_addr).await
         }
 
-        // Cryptsync: catch-up pull of the full leaves table for a user.
+        // Lockbox: catch-up pull of the full leaves table for a user.
         // Returns JSON of the LeavesTable; peers use this after seeing
         // an announcement leaves_digest that differs from their own.
         // Mirrors the tombstones GET handler.
-        (&Method::GET, p) if p.starts_with("/swarm/cryptsync/leaves/") => {
-            tokio::task::block_in_place(|| crate::swarm::cryptsync::server::handle_leaves_list(p))
+        (&Method::GET, p) if p.starts_with("/swarm/lockbox/leaves/") => {
+            tokio::task::block_in_place(|| crate::swarm::lockbox::server::handle_leaves_list(p))
         }
 
-        // Cryptsync: receive a signed RESURRECT envelope from a peer.
+        // Lockbox: receive a signed RESURRECT envelope from a peer.
         // Mirror of the tombstone DELETE handler — verifies sender +
         // signature, then records the resurrect locally so subsequent
         // pushes of the same filename pass the effective_tombstone gate.
-        (&Method::POST, p) if p.starts_with("/swarm/cryptsync/resurrects/") => {
-            crate::swarm::cryptsync::server::handle_resurrect(p, req, peer_addr).await
+        (&Method::POST, p) if p.starts_with("/swarm/lockbox/resurrects/") => {
+            crate::swarm::lockbox::server::handle_resurrect(p, req, peer_addr).await
         }
 
-        // Cryptsync: catch-up pull of the full resurrects table for a
+        // Lockbox: catch-up pull of the full resurrects table for a
         // user. Mirror of handle_tombstones_list — pulled when an
         // announcement's resurrects_digest disagrees with the local
         // digest, used by `merge` to converge state across peers that
         // were offline during a resurrect.
-        (&Method::GET, p) if p.starts_with("/swarm/cryptsync/resurrects/") => {
-            tokio::task::block_in_place(|| crate::swarm::cryptsync::server::handle_resurrects_list(p))
+        (&Method::GET, p) if p.starts_with("/swarm/lockbox/resurrects/") => {
+            tokio::task::block_in_place(|| crate::swarm::lockbox::server::handle_resurrects_list(p))
         }
 
         // Puddle: receive a pair-claim from a peer envoy that ran

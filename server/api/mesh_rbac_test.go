@@ -14,7 +14,7 @@ import (
 	"git.alexander4.io/vigo/server/fleet"
 )
 
-// Fleet-wide per-user longdrawer/cryptsync state exposes filename lists
+// Fleet-wide per-user longdrawer/lockbox state exposes filename lists
 // and peer sets, so every mesh endpoint must be admin-only. Covers the
 // four /api/v1 routes registered in MeshHandler.RegisterRoutes.
 func TestMesh_RBACViewerBlocked(t *testing.T) {
@@ -25,9 +25,9 @@ func TestMesh_RBACViewerBlocked(t *testing.T) {
 
 	paths := []string{
 		"/api/v1/swarm/longdrawer/fleet",
-		"/api/v1/swarm/cryptsync/fleet",
+		"/api/v1/swarm/lockbox/fleet",
 		"/api/v1/swarm/longdrawer/envoy/abc/users/alice/files",
-		"/api/v1/swarm/cryptsync/envoy/abc/users/alice/files",
+		"/api/v1/swarm/lockbox/envoy/abc/users/alice/files",
 	}
 	for _, p := range paths {
 		req := userRequestWithUser("GET", p, nil, "viewer-id", "viewer", "viewer")

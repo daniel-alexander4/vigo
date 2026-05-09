@@ -2107,10 +2107,10 @@ Administrator-pushed file distribution on the swarm substrate. These endpoints p
 - **GET /api/v1/swarm/longdrawer/fleet** — fleet-wide longdrawer mesh view (per-user LAN plaintext sync state aggregated from every envoy's `longdrawer` trait).
 - **GET /api/v1/swarm/longdrawer/envoy/{id}/users/{user}/files** — per-(envoy, user) file list drilldown for the `/longdrawer` page.
 
-### Cryptsync
+### Lockbox
 
-- **GET /api/v1/swarm/cryptsync/fleet** — fleet-wide cryptsync mesh view (per-user encrypted sync state aggregated from every envoy's `cryptsync` trait).
-- **GET /api/v1/swarm/cryptsync/envoy/{id}/users/{user}/files** — per-(envoy, user) file list drilldown for the `/cryptsync` page.
+- **GET /api/v1/swarm/lockbox/fleet** — fleet-wide lockbox mesh view (per-user encrypted sync state aggregated from every envoy's `lockbox` trait).
+- **GET /api/v1/swarm/lockbox/envoy/{id}/users/{user}/files** — per-(envoy, user) file list drilldown for the `/lockbox` page.
 
 ### Scrier
 

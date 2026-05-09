@@ -5,7 +5,7 @@
 # End-to-end swarm validation against a real Vigo fleet.
 #
 # Exercises all four swarm content subsystems — payload, longdrawer,
-# puddle (lifecycle), cryptsync, gitmirror — in sequence. Pass/fail per
+# puddle (lifecycle), lockbox, gitmirror — in sequence. Pass/fail per
 # step, exit non-zero on any failure. Mirrors the manual procedure
 # captured in tshoot/log-substrate-2026-05-09.md so a future "did
 # everything still work" check is one command.
@@ -20,11 +20,11 @@
 #
 # Behavior:
 #   --wipe is required and destructive. Stops the agent on each envoy,
-#   removes per-user swarm dirs (~/.vigo-puddle, ~/.cryptsync,
-#   ~/cryptsync, ~/.vigo-gitmirror, ~/longdrawer), removes the
-#   root-owned /var/lib/vigo/swarm/{gitmirror,cryptsync}, restarts the
+#   removes per-user swarm dirs (~/.vigo-puddle, ~/.lockbox,
+#   ~/lockbox, ~/.vigo-gitmirror, ~/longdrawer), removes the
+#   root-owned /var/lib/vigo/swarm/{gitmirror,lockbox}, restarts the
 #   agent, then runs the full 5-step substrate sequence (payload →
-#   longdrawer → puddle → cryptsync → gitmirror) from a clean slate.
+#   longdrawer → puddle → lockbox → gitmirror) from a clean slate.
 #
 # Why no non-destructive mode: gitmirror's project_id is fixed by the
 # founder's puddle pubkey, so a single founder can only have ONE
@@ -36,7 +36,7 @@
 # Operator quirks the runlog flagged:
 #   - non-interactive ssh sessions don't inherit XDG_RUNTIME_DIR; this
 #     script exports it explicitly before every vigo verb.
-#   - puddle/cryptsync session daemons exit when their parent bash
+#   - puddle/lockbox session daemons exit when their parent bash
 #     dies; this script keeps each unlock + verb chain in one ssh.
 #   - linger must be enabled per-user (see step pre/wipe). Idempotent.
 
@@ -65,7 +65,7 @@ if [[ $WIPE -ne 1 ]]; then
 swarm-substrate.sh requires --wipe.
 
 This script is destructive: it wipes per-user swarm state and
-root-owned /var/lib/vigo/swarm/{gitmirror,cryptsync} on every envoy,
+root-owned /var/lib/vigo/swarm/{gitmirror,lockbox} on every envoy,
 then runs the full 5-step substrate test from a clean slate. There
 is no non-destructive mode (gitmirror's single-project-per-puddle
 invariant precludes a re-runnable smoke).
@@ -175,8 +175,8 @@ if [[ $WIPE -eq 1 ]]; then
         ssh "$h" '
             set -e
             sudo systemctl stop vigo-envoy
-            rm -rf ~/.vigo-puddle ~/.cryptsync ~/cryptsync ~/.vigo-gitmirror ~/longdrawer
-            sudo rm -rf /var/lib/vigo/swarm/gitmirror /var/lib/vigo/swarm/cryptsync
+            rm -rf ~/.vigo-puddle ~/.lockbox ~/lockbox ~/.vigo-gitmirror ~/longdrawer
+            sudo rm -rf /var/lib/vigo/swarm/gitmirror /var/lib/vigo/swarm/lockbox
             sudo systemctl start vigo-envoy
             # Poll for active state — vigo-envoy can spend several
             # seconds in "activating" while it does enrollment refresh
@@ -278,16 +278,16 @@ if true; then
     ok "all ${#HOSTS[@]} envoys members of the same puddle"
 fi
 
-# ---------- step 6: cryptsync ----------
+# ---------- step 6: lockbox ----------
 
 if true; then
-    step "cryptsync: encrypt on $FOUNDER, decrypt on receivers"
+    step "lockbox: encrypt on $FOUNDER, decrypt on receivers"
     # Wait for recipients.txt to converge (3 entries on each).
     deadline=$(( $(date +%s) + 30 ))
     while :; do
         all_three=1
         for h in "${HOSTS[@]}"; do
-            n=$(ssh "$h" 'wc -l < ~/.cryptsync/recipients.txt 2>/dev/null' || echo 0)
+            n=$(ssh "$h" 'wc -l < ~/.lockbox/recipients.txt 2>/dev/null' || echo 0)
             [[ "$n" -lt ${#HOSTS[@]} ]] && all_three=0
         done
         [[ $all_three -eq 1 ]] && break
@@ -306,7 +306,7 @@ if true; then
     ssh "$FOUNDER" "
         export XDG_RUNTIME_DIR=/run/user/\$(id -u)
         vigo swarm puddle lock >/dev/null 2>&1 || true
-        echo '$TAG cryptsync from $FOUNDER' > ~/cryptsync/$TAG.txt
+        echo '$TAG lockbox from $FOUNDER' > ~/lockbox/$TAG.txt
         sleep 1
         echo '$PASSPHRASE' | vigo swarm puddle unlock >/dev/null
         sleep 5
@@ -316,7 +316,7 @@ if true; then
         # Wait for ciphertext to land.
         deadline=$(( $(date +%s) + 30 ))
         while :; do
-            if ssh "$h" "test -f ~/cryptsync/$TAG.txt"; then
+            if ssh "$h" "test -f ~/lockbox/$TAG.txt"; then
                 break
             fi
             if [[ $(date +%s) -ge $deadline ]]; then
@@ -329,15 +329,15 @@ if true; then
             export XDG_RUNTIME_DIR=/run/user/\$(id -u)
             echo '$PASSPHRASE' | vigo swarm puddle unlock >/dev/null 2>&1
             sleep 1
-            vigo swarm cryptsync decrypt $TAG.txt -o /tmp/$TAG-dec.txt >/dev/null 2>&1 && cat /tmp/$TAG-dec.txt
+            vigo swarm lockbox decrypt $TAG.txt -o /tmp/$TAG-dec.txt >/dev/null 2>&1 && cat /tmp/$TAG-dec.txt
         ")
-        expected="$TAG cryptsync from $FOUNDER"
+        expected="$TAG lockbox from $FOUNDER"
         if [[ "$plain" != "$expected" ]]; then
             bad "decrypt on $h: expected '$expected' got '$plain'"; exit 1
         fi
         echo "  $h decrypted ok"
     done
-    ok "cryptsync round-trip on ${#RECEIVERS[@]} receiver(s)"
+    ok "lockbox round-trip on ${#RECEIVERS[@]} receiver(s)"
 fi
 
 # ---------- step 7: gitmirror (always runs) ----------

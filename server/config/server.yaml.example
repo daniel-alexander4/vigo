@@ -397,10 +397,10 @@ watcher:
 #   longdrawer:
 #     enabled: ["*"]
 #
-#   # Puddle (per-user identity) authorization. Cryptsync derives its
-#   # authorization from this list — there is no separate cryptsync
+#   # Puddle (per-user identity) authorization. Lockbox derives its
+#   # authorization from this list — there is no separate lockbox
 #   # section. A host allowed here can hold puddle identity material
-#   # and cryptsync ciphertext for its locally-enrolled members; a
+#   # and lockbox ciphertext for its locally-enrolled members; a
 #   # host denied here cannot use either subsystem.
 #   puddle:
 #     enabled: ["annlap", "plex", "girlslaptop"]

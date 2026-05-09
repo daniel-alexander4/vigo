@@ -183,7 +183,7 @@ func (s *AdminService) RevokeEnvoy(ctx context.Context, req *pb.RevokeEnvoyReque
 
 	slog.Warn("envoy revoked", "envoy_id", req.Id, "hostname", hostname)
 
-	// Cross-envoy cryptsync cleanup: drop the revoked host's pubkey
+	// Cross-envoy lockbox cleanup: drop the revoked host's pubkey
 	// from every other envoy's per-user recipients list so future
 	// re-encrypts no longer encrypt to a host that can't check in.
 	// Skipped on operator opt-out (req.SkipSwarmCleanup) for cases
@@ -191,7 +191,7 @@ func (s *AdminService) RevokeEnvoy(ctx context.Context, req *pb.RevokeEnvoyReque
 	// Best-effort — a dispatch failure doesn't roll back the revoke.
 	if s.swarmCleanup != nil && !req.GetSkipSwarmCleanup() && hostname != "" {
 		if err := s.swarmCleanup(ctx, hostname); err != nil {
-			slog.Warn("envoy revoke: cryptsync cleanup dispatch failed",
+			slog.Warn("envoy revoke: lockbox cleanup dispatch failed",
 				"hostname", hostname, "error", err)
 		}
 	}
@@ -240,12 +240,12 @@ func (s *AdminService) DeleteEnvoy(ctx context.Context, req *pb.DeleteEnvoyReque
 
 	slog.Warn("envoy deleted", "envoy_id", req.Id, "hostname", hostname)
 
-	// Same cryptsync cleanup as RevokeEnvoy. Schema-delete is even
+	// Same lockbox cleanup as RevokeEnvoy. Schema-delete is even
 	// more destructive than revoke (CASCADE drops traits/runs/snapshots),
 	// so leaving stale recipient entries on peers makes no sense.
 	if s.swarmCleanup != nil && !req.GetSkipSwarmCleanup() && hostname != "" && hostname != req.Id {
 		if err := s.swarmCleanup(ctx, hostname); err != nil {
-			slog.Warn("envoy delete: cryptsync cleanup dispatch failed",
+			slog.Warn("envoy delete: lockbox cleanup dispatch failed",
 				"hostname", hostname, "error", err)
 		}
 	}

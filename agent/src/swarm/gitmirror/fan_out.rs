@@ -274,7 +274,7 @@ pub fn decode_chain_header(value: &str) -> Result<PushChain> {
 /// mathematically; this is acceptable because gitmirror is for
 /// *availability*, not confidentiality (an attacker who has
 /// compromised a retired founder key could push junk to bare
-/// repos but cannot exfiltrate user-readable bytes — cryptsync
+/// repos but cannot exfiltrate user-readable bytes — lockbox
 /// owns confidentiality).
 pub fn verify_chain_for_push(
     push: &PushChain,

@@ -9,10 +9,10 @@
 //!   ...]`. Missing file = LAN-only multicast, no cross-subnet.
 //!
 //! Longdrawer is plaintext LAN sync. If you want ciphertext at rest +
-//! cross-mesh encryption, use [cryptsync](../cryptsync) instead —
+//! cross-mesh encryption, use [lockbox](../lockbox) instead —
 //! separate subsystem, separate directory, separate threat model.
 //! The 0.25.0 `encrypt: true` opt-in on longdrawer was removed in
-//! 0.26.1 in favor of cryptsync.
+//! 0.26.1 in favor of lockbox.
 
 use std::fs;
 use std::path::{Path, PathBuf};

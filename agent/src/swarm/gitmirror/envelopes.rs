@@ -16,7 +16,7 @@
 //!
 //! Design mirrors [`super::tokens`] (canonical hand-rolled encoding,
 //! distinct domain prefix per envelope type) and
-//! [`crate::swarm::cryptsync::leaves`] (90-day reap, idempotent
+//! [`crate::swarm::lockbox::leaves`] (90-day reap, idempotent
 //! upsert, persistence on the daemon-only canonical path).
 //!
 //! ### Trust model
@@ -77,7 +77,7 @@ pub const LEAVE_DOMAIN: &[u8] = b"vigo-gitmirror-leave-v1\0";
 /// signature can never be replayed as a different envelope type.
 pub const DELEGATION_DOMAIN: &[u8] = b"vigo-gitmirror-delegate-v1\0";
 
-/// Compile-time fallback reap window — 90 days, matching cryptsync's
+/// Compile-time fallback reap window — 90 days, matching lockbox's
 /// tombstone + leave retention. Read sites should prefer
 /// [`effective_retention_secs`] which consults the server-distributed
 /// `swarm.gitmirror.envelope_retention` setting.
@@ -104,7 +104,7 @@ pub const DELEGATION_WARN_LEN: usize = 3;
 pub const DELEGATION_MAX_LEN: usize = 5;
 
 /// Length of an aggregate digest (used by gossip catch-up). 16 bytes
-/// of sha256 — same width cryptsync uses.
+/// of sha256 — same width lockbox uses.
 pub const DIGEST_LEN: usize = 16;
 
 // ---------- canonical signed bytes ----------
@@ -1163,7 +1163,7 @@ mod tests {
 
     #[test]
     fn delegation_build_with_self_verifies() {
-        // Mirror the cryptsync session-helper signing path: caller
+        // Mirror the lockbox session-helper signing path: caller
         // owns the signing oracle, build_with self-verifies before
         // returning.
         let old_key = fresh_key();

@@ -26,15 +26,15 @@ A first-principles P2P design eliminates shared mutable membership state entirel
 
 ### Revocation: append-only signed envelopes, gossiped on the swarm substrate
 
-- Admin issues a `Revoke(token_id, revoked_at)` envelope, signed by the issuing admin's token. Envelope gossips via the existing swarm transport (same shape as `agent/src/swarm/cryptsync/leaves.rs`).
+- Admin issues a `Revoke(token_id, revoked_at)` envelope, signed by the issuing admin's token. Envelope gossips via the existing swarm transport (same shape as `agent/src/swarm/lockbox/leaves.rs`).
 - Each envoy pins received revocations to a per-project local list. Pushes naming a revoked token are rejected.
-- Retention: 90 days, reaped via the same scheduler cryptsync uses.
+- Retention: 90 days, reaped via the same scheduler lockbox uses.
 
 ### Transport: `vigo://` URL handled by a multi-call helper
 
 - Users do `git remote add origin vigo://<project_id>/<handle>` then plain `git push` and `git pull`.
 - The `vigo` binary itself dispatches as `git-remote-vigo` when invoked under that argv[0] (multi-call binary, not a separate executable — saves ~3–5 MiB of duplicate static linkage).
-- Helper runs as the calling user. It connects to the agent over a `SO_PEERCRED`-gated Unix socket at `$XDG_RUNTIME_DIR/vigo/gitmirror.sock` (mirroring cryptsync's session-helper pattern). Username comes from SO_PEERCRED; envoy fingerprint comes from the agent's mTLS cert.
+- Helper runs as the calling user. It connects to the agent over a `SO_PEERCRED`-gated Unix socket at `$XDG_RUNTIME_DIR/vigo/gitmirror.sock` (mirroring lockbox's session-helper pattern). Username comes from SO_PEERCRED; envoy fingerprint comes from the agent's mTLS cert.
 - The agent (running as root) enforces token validity, ref policy, and proxies to `git-receive-pack` / `git-upload-pack` against the local bare repo.
 
 ### Storage: per-member bare repo at a flat path
@@ -101,10 +101,10 @@ If founder + all admins are lost (no one with a valid admin token), the project 
 ## Consequences
 
 **Files to modify (agent — Rust):**
-- `agent/src/swarm/gitmirror/` — new modules for token issuance/parse/verify (mirroring `cryptsync/leaves.rs` shape), the multi-call helper dispatch (argv[0] check), receive-pack proxy with ref-policy enforcement, fan-out-on-push trigger, revocation list (gossip + persist + 90-day reap).
+- `agent/src/swarm/gitmirror/` — new modules for token issuance/parse/verify (mirroring `lockbox/leaves.rs` shape), the multi-call helper dispatch (argv[0] check), receive-pack proxy with ref-policy enforcement, fan-out-on-push trigger, revocation list (gossip + persist + 90-day reap).
 - `agent/src/swarm/gitmirror/cli.rs` — new `multi {init,invite,join,leave,list,revoke,reanchor}` verbs.
 - `agent/src/swarm/gitmirror/sidecar.rs` — no schema change for v1 (multi-member is detected by the presence of `~/.vigo-gitmirror/<project_id>/` state, not a sidecar field).
-- New Unix socket daemon under `agent/src/swarm/gitmirror/socket.rs` (or similar) — `SO_PEERCRED`-gated, mirroring cryptsync's session-helper.
+- New Unix socket daemon under `agent/src/swarm/gitmirror/socket.rs` (or similar) — `SO_PEERCRED`-gated, mirroring lockbox's session-helper.
 
 **Files to modify (server — Go):**
 - `server/swarm/gitmirrormesh/` — extend aggregator to surface multi-member project metadata (id, member_count, last_rotation_ts). No detailed rosters in check-in payload (lazy fetch on push).
@@ -128,7 +128,7 @@ If founder + all admins are lost (no one with a valid admin token), the project 
 **Hot-path posture:**
 - Only the gitmirrormesh check-in extension lands on the convergence-cycle path. Bounded by including project metadata only (no per-project rosters); rosters fetch on-demand at push time.
 - Bundle ingestion on swarm peer-port and fan-out workers are off the convergence loop, capped at 2 concurrent (matching swarmcast distribution).
-- Trait collection for multi-member status caches snapshots and recomputes only on state change (mark-dirty pattern from cryptsync).
+- Trait collection for multi-member status caches snapshots and recomputes only on state change (mark-dirty pattern from lockbox).
 - Revocation list lookup is O(1) per push; not on convergence path.
 
 **Behavioral consequences:**

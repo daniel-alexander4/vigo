@@ -5,7 +5,7 @@ weight: 65
 
 # Puddle
 
-Puddle is a per-user puddle identity primitive: a single Ed25519 keypair representing "this user's collection of envoys, treated as one trust unit." Sibling subsystems (gitmirror under [ADR-015](../../adr/015-unified-gitmirror-substrate.md), cryptsync membership under [ADR-016](../../adr/016-cryptsync-membership-on-puddle.md)) consume it to express membership and drive onboarding without re-doing the per-pair-of-envoys ceremony each subsystem invented in isolation.
+Puddle is a per-user puddle identity primitive: a single Ed25519 keypair representing "this user's collection of envoys, treated as one trust unit." Sibling subsystems (gitmirror under [ADR-015](../../adr/015-unified-gitmirror-substrate.md), lockbox membership under [ADR-016](../../adr/016-lockbox-membership-on-puddle.md)) consume it to express membership and drive onboarding without re-doing the per-pair-of-envoys ceremony each subsystem invented in isolation.
 
 [ADR-014](../../adr/014-puddle-primitive.md) is the design of record. This page is a working snapshot of how it's actually built.
 
@@ -16,12 +16,12 @@ Vigo's existing trust primitives are envoy-scoped — each enrolled envoy has it
 Phase 1 explicitly defers:
 
 - **Multi-puddle per user** — one puddle per user. Multi-puddle ("personal" + "work" identities, puddle selection on every CLI verb) waits for a real demand.
-- **Recovery without the passphrase** — no Shamir / escrow / quorum in v1. Passphrase loss = re-init from scratch (new puddle pubkey; existing project tokens / cryptsync recipients become orphaned).
+- **Recovery without the passphrase** — no Shamir / escrow / quorum in v1. Passphrase loss = re-init from scratch (new puddle pubkey; existing project tokens / lockbox recipients become orphaned).
 - **Cross-envoy gossip of puddle membership** — `members` shows only the local view in v1. ADR-015 / ADR-016 add puddle pubkeys to swarm gossip.
 
 ## Identity
 
-The puddle keypair is Ed25519, generated locally on the founder envoy by `vigo swarm puddle init`. The private half is wrapped under the user's passphrase using the same envelope cryptsync uses (Argon2id 64 MiB / 3 iter / 1 lane → 32 byte wrap key, then XChaCha20-Poly1305 with a fresh 24-byte nonce). The wrapped blob format is identical bytes to cryptsync's signing-key wrap:
+The puddle keypair is Ed25519, generated locally on the founder envoy by `vigo swarm puddle init`. The private half is wrapped under the user's passphrase using the same envelope lockbox uses (Argon2id 64 MiB / 3 iter / 1 lane → 32 byte wrap key, then XChaCha20-Poly1305 with a fresh 24-byte nonce). The wrapped blob format is identical bytes to lockbox's signing-key wrap:
 
 ```
 [1 byte version = 0x01][24 byte nonce][ciphertext + 16 byte tag]
@@ -39,7 +39,7 @@ An envoy is a puddle member iff:
 
 There is no central registry. Sibling subsystems query "is the user puddle-enabled here, and what's the pubkey?" via `puddle::local_puddle_pubkey(home)`.
 
-The session helper additionally drops a `~/.vigo-puddle/session.unlocked` sentinel containing its PID — same shape cryptsync uses (ADR-012). Sibling subsystems can use this to detect "is the puddle identity *currently* unlocked?" without speaking the SIGN protocol.
+The session helper additionally drops a `~/.vigo-puddle/session.unlocked` sentinel containing its PID — same shape lockbox uses (ADR-012). Sibling subsystems can use this to detect "is the puddle identity *currently* unlocked?" without speaking the SIGN protocol.
 
 ## Distribution: peer-pair (primary)
 
@@ -115,7 +115,7 @@ The wrapped blob is opaque ciphertext on disk; the security boundary is the pass
 `vigo swarm puddle unlock` reads the wrapped blob, prompts for the passphrase, unwraps to an `ed25519_dalek::SigningKey`, then spawns a `setsid`-detached per-user daemon that holds the key in process memory and serves SIGN / STATUS / PUBKEY / LOCK over a Unix socket:
 
 - Linux: `$XDG_RUNTIME_DIR/vigo/puddle.sock`, mode 0600, SO_PEERCRED-gated against the calling uid.
-- macOS: `$TMPDIR/cryptsync-<UID>/puddle.sock` (yes, the parent dir is shared with cryptsync — one 0700 dir per uid keeps the layout simple), LOCAL_PEEREID-gated.
+- macOS: `$TMPDIR/lockbox-<UID>/puddle.sock` (yes, the parent dir is shared with lockbox — one 0700 dir per uid keeps the layout simple), LOCAL_PEEREID-gated.
 
 Three independent shutdown triggers each scrub the key and exit:
 
@@ -160,9 +160,9 @@ See [agent-swarm-puddle](../../reference/cli/agent-swarm-puddle.md) for the full
 
 ## Failure modes
 
-- **Passphrase forgotten.** No recovery in v1. Re-init creates a new puddle (different pubkey); existing project tokens / cryptsync recipients become orphaned. Documented loudly. `status` surfaces "puddle locked, recovery requires passphrase or re-init."
+- **Passphrase forgotten.** No recovery in v1. Re-init creates a new puddle (different pubkey); existing project tokens / lockbox recipients become orphaned. Documented loudly. `status` surfaces "puddle locked, recovery requires passphrase or re-init."
 - **All wrapped key copies lost across all envoys.** Same as passphrase forgotten — re-init from scratch. Disaster recovery for the user, not silent data loss.
-- **Single envoy compromised.** Wrapped blob + passphrase = attacker has the puddle key. Mitigations: short Argon2id verification time on unlock (cost factor matched to cryptsync), session-helper idle lock, system-level disk encryption strongly recommended.
+- **Single envoy compromised.** Wrapped blob + passphrase = attacker has the puddle key. Mitigations: short Argon2id verification time on unlock (cost factor matched to lockbox), session-helper idle lock, system-level disk encryption strongly recommended.
 - **Pair-claim code brute force.** 100M code space + 5-min TTL + single-use + mTLS-only callers. Every probe is forensically attributable.
 
 ## Code map
@@ -172,9 +172,9 @@ See [agent-swarm-puddle](../../reference/cli/agent-swarm-puddle.md) for the full
 - `agent/src/swarm/puddle/cli.rs` — verb dispatcher; status surface enrichment for retired-puddles and offline-envoy hint.
 - `agent/src/swarm/puddle/codes.rs` — generic 8-digit claim-code primitives (shared by pair + rekey).
 - `agent/src/swarm/puddle/pair.rs` — pair-specific path bindings + HTTP claim handler.
-- `agent/src/swarm/puddle/rekey.rs` — `RetiredFleetEntry` log + active-session predicate + post-rotation cryptsync sync + rekey-claim HTTP handler (ADR-018).
+- `agent/src/swarm/puddle/rekey.rs` — `RetiredFleetEntry` log + active-session predicate + post-rotation lockbox sync + rekey-claim HTTP handler (ADR-018).
 - `agent/src/swarm/puddle/session.rs` — session helper daemon.
-- `agent/src/swarm/cryptsync/identity_rewrap.rs` — atomic re-wrap of the per-envoy age key from one puddle keypair's wrap-key to another (ADR-018 prereq).
+- `agent/src/swarm/lockbox/identity_rewrap.rs` — atomic re-wrap of the per-envoy age key from one puddle keypair's wrap-key to another (ADR-018 prereq).
 - `agent/src/swarm/server.rs` — wires `POST /swarm/puddle/pair-claim/<user>` and `POST /swarm/puddle/rekey-claim/<user>` to the respective handlers.
 - `agent/src/main.rs` — argv dispatch for `swarm puddle *` and the hidden `puddle-session-daemon` verb.
 
@@ -182,7 +182,7 @@ See [agent-swarm-puddle](../../reference/cli/agent-swarm-puddle.md) for the full
 
 - [ADR-014](../../adr/014-puddle-primitive.md) — the design.
 - [ADR-015](../../adr/015-unified-gitmirror-substrate.md) — unified gitmirror substrate built on puddle (next).
-- [ADR-016](../../adr/016-cryptsync-membership-on-puddle.md) — cryptsync membership on puddle (after 015).
+- [ADR-016](../../adr/016-lockbox-membership-on-puddle.md) — lockbox membership on puddle (after 015).
 - [ADR-017](../../adr/017-no-puddle-level-revoke.md) — why there is no puddle-level revoke.
 - [ADR-018](../../adr/018-puddle-rekey.md) — design of the rekey flow.
-- [Cryptsync](cryptsync.md) — shares the wrap envelope and the session-helper shape.
+- [Lockbox](lockbox.md) — shares the wrap envelope and the session-helper shape.

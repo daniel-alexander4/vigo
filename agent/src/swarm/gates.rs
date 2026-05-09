@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! Shared gate-evaluation helper for the four swarm content subsystems
-//! (payload, gitmirror, cryptsync, longdrawer).
+//! (payload, gitmirror, lockbox, longdrawer).
 //!
 //! Every subsystem reads two bits from `PolicyBundle.vars_json`,
 //! cached in the LMDB state store on each accepted check-in:
@@ -15,11 +15,11 @@
 //! setting OFF") so a fresh-enrolled envoy with no policy bundle yet
 //! runs every subsystem until the server says otherwise.
 //!
-//! Cryptsync's per-substrate key is `swarm_puddle_enabled` (ADR-020 +
-//! 0.41.0): cryptsync's authorization derives from puddle, single
-//! source of truth. There is no `swarm_cryptsync_enabled` key in
+//! Lockbox's per-substrate key is `swarm_puddle_enabled` (ADR-020 +
+//! 0.41.0): lockbox's authorization derives from puddle, single
+//! source of truth. There is no `swarm_lockbox_enabled` key in
 //! 0.41.0+; the server emits only `swarm_puddle_enabled`, and a host
-//! denied puddle authorization cannot use cryptsync.
+//! denied puddle authorization cannot use lockbox.
 //!
 //! Per-host blacklists were retired in 0.41.0 in favor of negative
 //! patterns inside the per-subsystem allow list (e.g.
@@ -47,7 +47,7 @@ use crate::state::StateStore;
 pub enum Substrate {
     Payload,
     Gitmirror,
-    Cryptsync,
+    Lockbox,
     Longdrawer,
 }
 
@@ -56,10 +56,10 @@ impl Substrate {
         match self {
             Substrate::Payload => "swarm_swarmcast_enabled",
             Substrate::Gitmirror => "swarm_gitmirror_enabled",
-            // Cryptsync derives from puddle — single source of truth
+            // Lockbox derives from puddle — single source of truth
             // per ADR-020. The server emits only `swarm_puddle_enabled`;
-            // there is no `swarm_cryptsync_enabled` in 0.41.0+.
-            Substrate::Cryptsync => "swarm_puddle_enabled",
+            // there is no `swarm_lockbox_enabled` in 0.41.0+.
+            Substrate::Lockbox => "swarm_puddle_enabled",
             Substrate::Longdrawer => "swarm_longdrawer_enabled",
         }
     }
@@ -70,7 +70,7 @@ impl Substrate {
         match self {
             Substrate::Payload => "payload",
             Substrate::Gitmirror => "gitmirror",
-            Substrate::Cryptsync => "cryptsync",
+            Substrate::Lockbox => "lockbox",
             Substrate::Longdrawer => "longdrawer",
         }
     }
@@ -156,16 +156,16 @@ mod tests {
     }
 
     #[test]
-    fn cryptsync_derives_from_puddle() {
-        // The whole point of ADR-020: cryptsync's gate must consult
-        // swarm_puddle_enabled, not a separate cryptsync key.
-        assert_eq!(Substrate::Cryptsync.enabled_key(), "swarm_puddle_enabled");
+    fn lockbox_derives_from_puddle() {
+        // The whole point of ADR-020: lockbox's gate must consult
+        // swarm_puddle_enabled, not a separate lockbox key.
+        assert_eq!(Substrate::Lockbox.enabled_key(), "swarm_puddle_enabled");
     }
 
     #[test]
-    fn enabled_keys_are_distinct_except_cryptsync_aliases_puddle() {
+    fn enabled_keys_are_distinct_except_lockbox_aliases_puddle() {
         // Payload, Gitmirror, Longdrawer each have their own key.
-        // Cryptsync intentionally aliases the puddle key — single
+        // Lockbox intentionally aliases the puddle key — single
         // source of truth.
         assert_ne!(
             Substrate::Payload.enabled_key(),
@@ -186,7 +186,7 @@ mod tests {
         let subs = [
             Substrate::Payload,
             Substrate::Gitmirror,
-            Substrate::Cryptsync,
+            Substrate::Lockbox,
             Substrate::Longdrawer,
         ];
         for (i, a) in subs.iter().enumerate() {

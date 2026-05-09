@@ -11,7 +11,7 @@ import (
 
 // Usercrate-specific rules. Each fires only when opts.IsUsercrate is
 // true, since usercrate files have semantics modules don't (Unix users
-// with passwords, ssh keys, cryptsync enrollment).
+// with passwords, ssh keys, lockbox enrollment).
 
 // --- password-must-be-hashed-or-secret ---
 

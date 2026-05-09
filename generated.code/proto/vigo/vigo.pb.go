@@ -515,8 +515,8 @@ type SwarmRuntimeLimits struct {
 	state                          protoimpl.MessageState `protogen:"open.v1"`
 	SwarmcastMaxSizeBytes          uint64                 `protobuf:"varint,1,opt,name=swarmcast_max_size_bytes,json=swarmcastMaxSizeBytes,proto3" json:"swarmcast_max_size_bytes,omitempty"`                            // admin-distribute upload cap; 0 = no cap
 	SwarmcastDefaultRetention      string                 `protobuf:"bytes,2,opt,name=swarmcast_default_retention,json=swarmcastDefaultRetention,proto3" json:"swarmcast_default_retention,omitempty"`                   // server-yaml default when --retention is omitted on distribute (e.g. "7d")
-	CryptsyncMaxFileBytes          uint64                 `protobuf:"varint,3,opt,name=cryptsync_max_file_bytes,json=cryptsyncMaxFileBytes,proto3" json:"cryptsync_max_file_bytes,omitempty"`                            // per-file ciphertext cap on auto-encrypt + push; 0 = no cap (1 GiB historical default)
-	CryptsyncEnvelopeRetentionSecs uint64                 `protobuf:"varint,4,opt,name=cryptsync_envelope_retention_secs,json=cryptsyncEnvelopeRetentionSecs,proto3" json:"cryptsync_envelope_retention_secs,omitempty"` // LEAVE/RESURRECT/TOMBSTONE retention before reap; 0 = compile-time default (90d)
+	LockboxMaxFileBytes            uint64                 `protobuf:"varint,3,opt,name=lockbox_max_file_bytes,json=lockboxMaxFileBytes,proto3" json:"lockbox_max_file_bytes,omitempty"`                                  // per-file ciphertext cap on auto-encrypt + push; 0 = no cap (1 GiB historical default)
+	LockboxEnvelopeRetentionSecs   uint64                 `protobuf:"varint,4,opt,name=lockbox_envelope_retention_secs,json=lockboxEnvelopeRetentionSecs,proto3" json:"lockbox_envelope_retention_secs,omitempty"`       // LEAVE/RESURRECT/TOMBSTONE retention before reap; 0 = compile-time default (90d)
 	GitmirrorMaxBundleBytes        uint64                 `protobuf:"varint,5,opt,name=gitmirror_max_bundle_bytes,json=gitmirrorMaxBundleBytes,proto3" json:"gitmirror_max_bundle_bytes,omitempty"`                      // per-bundle fan-out cap; 0 = no cap
 	GitmirrorEnvelopeRetentionSecs uint64                 `protobuf:"varint,6,opt,name=gitmirror_envelope_retention_secs,json=gitmirrorEnvelopeRetentionSecs,proto3" json:"gitmirror_envelope_retention_secs,omitempty"` // revoke/leave envelope retention before reap; 0 = compile-time default (90d)
 	LongdrawerMaxFileBytes         uint64                 `protobuf:"varint,7,opt,name=longdrawer_max_file_bytes,json=longdrawerMaxFileBytes,proto3" json:"longdrawer_max_file_bytes,omitempty"`                         // per-file size cap on LAN sync; 0 = no cap
@@ -568,16 +568,16 @@ func (x *SwarmRuntimeLimits) GetSwarmcastDefaultRetention() string {
 	return ""
 }
 
-func (x *SwarmRuntimeLimits) GetCryptsyncMaxFileBytes() uint64 {
+func (x *SwarmRuntimeLimits) GetLockboxMaxFileBytes() uint64 {
 	if x != nil {
-		return x.CryptsyncMaxFileBytes
+		return x.LockboxMaxFileBytes
 	}
 	return 0
 }
 
-func (x *SwarmRuntimeLimits) GetCryptsyncEnvelopeRetentionSecs() uint64 {
+func (x *SwarmRuntimeLimits) GetLockboxEnvelopeRetentionSecs() uint64 {
 	if x != nil {
-		return x.CryptsyncEnvelopeRetentionSecs
+		return x.LockboxEnvelopeRetentionSecs
 	}
 	return 0
 }
@@ -3741,8 +3741,8 @@ type RevokeEnvoyRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// skip_swarm_cleanup defaults to false. When true, the server does
-	// NOT dispatch cryptsync evict for this hostname; other envoys keep
-	// the revoked host's pubkey in their cryptsync recipients lists
+	// NOT dispatch lockbox evict for this hostname; other envoys keep
+	// the revoked host's pubkey in their lockbox recipients lists
 	// until manually cleaned up. Use only when the operator plans to
 	// re-bootstrap the same host shortly (e.g., investigating a
 	// suspected compromise).
@@ -7553,12 +7553,12 @@ const file_vigo_proto_rawDesc = "" +
 	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12F\n" +
 	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\x12M\n" +
-	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimitsJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xd4\x03\n" +
+	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimitsJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xcc\x03\n" +
 	"\x12SwarmRuntimeLimits\x127\n" +
 	"\x18swarmcast_max_size_bytes\x18\x01 \x01(\x04R\x15swarmcastMaxSizeBytes\x12>\n" +
-	"\x1bswarmcast_default_retention\x18\x02 \x01(\tR\x19swarmcastDefaultRetention\x127\n" +
-	"\x18cryptsync_max_file_bytes\x18\x03 \x01(\x04R\x15cryptsyncMaxFileBytes\x12I\n" +
-	"!cryptsync_envelope_retention_secs\x18\x04 \x01(\x04R\x1ecryptsyncEnvelopeRetentionSecs\x12;\n" +
+	"\x1bswarmcast_default_retention\x18\x02 \x01(\tR\x19swarmcastDefaultRetention\x123\n" +
+	"\x16lockbox_max_file_bytes\x18\x03 \x01(\x04R\x13lockboxMaxFileBytes\x12E\n" +
+	"\x1flockbox_envelope_retention_secs\x18\x04 \x01(\x04R\x1clockboxEnvelopeRetentionSecs\x12;\n" +
 	"\x1agitmirror_max_bundle_bytes\x18\x05 \x01(\x04R\x17gitmirrorMaxBundleBytes\x12I\n" +
 	"!gitmirror_envelope_retention_secs\x18\x06 \x01(\x04R\x1egitmirrorEnvelopeRetentionSecs\x129\n" +
 	"\x19longdrawer_max_file_bytes\x18\a \x01(\x04R\x16longdrawerMaxFileBytes\"\xff\x01\n" +

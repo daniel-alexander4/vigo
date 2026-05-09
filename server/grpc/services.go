@@ -122,7 +122,7 @@ func (s *AgentService) SetSwarm(pt *swarm.PeerTracker, ms *swarm.ManifestStore) 
 }
 
 // SetSwarmConfig stores the swarm config section so subsystem-level
-// gates (e.g., gitmirror/cryptsync blacklists) can be consulted at
+// gates (e.g., gitmirror/lockbox blacklists) can be consulted at
 // check-in time.
 func (s *AgentService) SetSwarmConfig(sc config.SwarmSection) {
 	s.swarmCfg = sc
@@ -192,7 +192,7 @@ type AdminService struct {
 	integrations  *integrations.Dispatcher
 	// swarmCleanup, when set, is invoked from RevokeEnvoy / DeleteEnvoy
 	// after the DB update lands and before the response returns. It
-	// dispatches cryptsync recipient-list cleanup to every envoy so the
+	// dispatches lockbox recipient-list cleanup to every envoy so the
 	// retired host's pubkey is dropped fleet-wide. Best-effort — failure
 	// here logs a warning but doesn't fail the revoke/delete (the audit
 	// chain has already recorded the operator action). Wired up in
@@ -206,7 +206,7 @@ func (s *AdminService) SetAuditWriter(w auditRecorder) {
 	s.auditWriter = w
 }
 
-// SetSwarmCleanup attaches the cross-envoy cryptsync cleanup callback
+// SetSwarmCleanup attaches the cross-envoy lockbox cleanup callback
 // fired after RevokeEnvoy / DeleteEnvoy unless the request opts out.
 func (s *AdminService) SetSwarmCleanup(fn func(ctx context.Context, hostname string) error) {
 	s.swarmCleanup = fn

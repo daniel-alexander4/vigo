@@ -525,8 +525,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	// only emit a key when its value would gate the subsystem off,
 	// keeping vars_json small.
 	//
-	// Cryptsync is intentionally absent — its authorization derives from
-	// puddle (single source of truth, ADR-020). The agent's cryptsync
+	// Lockbox is intentionally absent — its authorization derives from
+	// puddle (single source of truth, ADR-020). The agent's lockbox
 	// gate consults swarm_puddle_enabled instead.
 	gates := map[string]any{}
 	swarmAllowed := config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Enabled)
@@ -719,7 +719,7 @@ func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
 	// retention string empty. Cheap; matches the SwarmSection zero
 	// value.
 	if sc.Swarmcast.MaxSizeBytes == 0 && sc.Swarmcast.DefaultRetention == "" &&
-		sc.Cryptsync.MaxFileBytes == 0 && sc.Cryptsync.EnvelopeRetention == "" &&
+		sc.Lockbox.MaxFileBytes == 0 && sc.Lockbox.EnvelopeRetention == "" &&
 		sc.Gitmirror.MaxBundleBytes == 0 && sc.Gitmirror.EnvelopeRetention == "" &&
 		sc.Longdrawer.MaxFileBytes == 0 {
 		return nil
@@ -727,8 +727,8 @@ func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
 	return &pb.SwarmRuntimeLimits{
 		SwarmcastMaxSizeBytes:         uint64(maxNonNeg(sc.Swarmcast.MaxSizeBytes)),
 		SwarmcastDefaultRetention:     sc.Swarmcast.DefaultRetention,
-		CryptsyncMaxFileBytes:         uint64(maxNonNeg(sc.Cryptsync.MaxFileBytes)),
-		CryptsyncEnvelopeRetentionSecs: durationSecsOrZero(sc.Cryptsync.EnvelopeRetention),
+		LockboxMaxFileBytes:         uint64(maxNonNeg(sc.Lockbox.MaxFileBytes)),
+		LockboxEnvelopeRetentionSecs: durationSecsOrZero(sc.Lockbox.EnvelopeRetention),
 		GitmirrorMaxBundleBytes:       uint64(maxNonNeg(sc.Gitmirror.MaxBundleBytes)),
 		GitmirrorEnvelopeRetentionSecs: durationSecsOrZero(sc.Gitmirror.EnvelopeRetention),
 		LongdrawerMaxFileBytes:          uint64(maxNonNeg(sc.Longdrawer.MaxFileBytes)),

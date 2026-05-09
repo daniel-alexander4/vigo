@@ -664,7 +664,7 @@
       "properties": {
         "skipSwarmCleanup": {
           "type": "boolean",
-          "description": "skip_swarm_cleanup defaults to false. When true, the server does\nNOT dispatch cryptsync evict for this hostname; other envoys keep\nthe revoked host's pubkey in their cryptsync recipients lists\nuntil manually cleaned up. Use only when the operator plans to\nre-bootstrap the same host shortly (e.g., investigating a\nsuspected compromise)."
+          "description": "skip_swarm_cleanup defaults to false. When true, the server does\nNOT dispatch lockbox evict for this hostname; other envoys keep\nthe revoked host's pubkey in their lockbox recipients lists\nuntil manually cleaned up. Use only when the operator plans to\nre-bootstrap the same host shortly (e.g., investigating a\nsuspected compromise)."
         }
       }
     },

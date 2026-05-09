@@ -940,14 +940,14 @@ func run() error {
 	// Wire workflow engine for auto-triggered workflows on trait changes.
 	agentSvc.SetWorkflowTrigger(workflowEngine)
 
-	// Wire the cross-envoy cryptsync cleanup callback fired by
+	// Wire the cross-envoy lockbox cleanup callback fired by
 	// AdminService.RevokeEnvoy / DeleteEnvoy (0.41.3+). Dispatches one
 	// `_apply-evict --hostname <h> --all-users` task to every envoy,
 	// which causes each agent to drop the retired host's pubkey from
 	// every locally-enrolled user's recipients list. Idempotent;
 	// best-effort.
 	adminSvc.SetSwarmCleanup(func(ctx context.Context, hostname string) error {
-		cmd := fmt.Sprintf("vigo swarm cryptsync _apply-evict --hostname %s --all-users", hostname)
+		cmd := fmt.Sprintf("vigo swarm lockbox _apply-evict --hostname %s --all-users", hostname)
 		_, err := agentSvc.DispatchPush(ctx, isgrpc.DispatchParams{
 			Command:     cmd,
 			TargetSpec:  "*",
@@ -1216,7 +1216,7 @@ func run() error {
 			// the operator actually edited in YAML — per-host transition
 			// detection is unnecessary because pattern flips are gate-only
 			// in 0.41.0+ (the destructive blacklist dispatch path was
-			// retired with the cryptsync rework — destructive scrub is
+			// retired with the lockbox rework — destructive scrub is
 			// now usercrate-flag-driven, not envoy-pattern-driven).
 			lastSwarmPatterns := append([]string(nil), cfg.Swarm.Enabled...)
 			lastPuddlePatterns := append([]string(nil), cfg.Swarm.Puddle.Enabled...)

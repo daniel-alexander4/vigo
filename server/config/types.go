@@ -135,18 +135,18 @@ type SwarmSection struct {
 	ManifestLivenessTTL string                `yaml:"manifest_liveness_ttl" doc:"Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Guards against orphaned entries when a publisher disappears. Empty / zero disables the sweep." default:"24h" example:"24h, 12h, 0 (disable)"`
 	Swarmcast           SwarmcastSection      `yaml:"swarmcast" doc:"Swarmcast (admin-pushed fleet file distribution) authorization." long:"Hostname pattern list controlling which envoys receive admin-pushed files. Distribution requests are refused at the API layer when the list is empty."`
 	Longdrawer            LongdrawerSection  `yaml:"longdrawer" doc:"Longdrawer (LAN plaintext directory mirror) authorization + per-file size cap." long:"Hostname pattern list controlling which envoys run the longdrawer daemon. Per-user opt-in still requires the user creating ~/longdrawer/. Plus a per-file size cap on LAN sync."`
-	Puddle              SwarmPuddleSection    `yaml:"puddle" doc:"Puddle (per-user identity) authorization. Cryptsync derives ITS AUTHORIZATION from this section per ADR-020 — only operational tuning lives in cryptsync below." long:"Hostname pattern list controlling which envoys can host puddle identity material. Cryptsync's authorization (allow/deny) follows this list — a host allowed here can hold cryptsync ciphertext for its locally-enrolled puddle members; a host denied here cannot use cryptsync at all."`
-	Cryptsync           SwarmCryptsyncSection `yaml:"cryptsync" doc:"Cryptsync operational tuning (size + envelope retention). Authorization derives from puddle above; this section is size/retention only." long:"Per-file ciphertext size cap and envelope (LEAVE/RESURRECT/TOMBSTONE) retention window. Authorization gating still derives from swarm.puddle.enabled per ADR-020 — there is no enabled field here."`
+	Puddle              SwarmPuddleSection    `yaml:"puddle" doc:"Puddle (per-user identity) authorization. Lockbox derives ITS AUTHORIZATION from this section per ADR-020 — only operational tuning lives in lockbox below." long:"Hostname pattern list controlling which envoys can host puddle identity material. Lockbox's authorization (allow/deny) follows this list — a host allowed here can hold lockbox ciphertext for its locally-enrolled puddle members; a host denied here cannot use lockbox at all."`
+	Lockbox           SwarmLockboxSection `yaml:"lockbox" doc:"Lockbox operational tuning (size + envelope retention). Authorization derives from puddle above; this section is size/retention only." long:"Per-file ciphertext size cap and envelope (LEAVE/RESURRECT/TOMBSTONE) retention window. Authorization gating still derives from swarm.puddle.enabled per ADR-020 — there is no enabled field here."`
 	Gitmirror           SwarmGitmirrorSection `yaml:"gitmirror" doc:"Gitmirror (git-over-swarm) authorization + bundle size + envelope retention." long:"Hostname pattern list controlling which envoys participate in gitmirror — both as publishers and as bundle holders. Plus per-bundle fan-out size cap and revoke/leave envelope retention."`
 }
 
 // SwarmPuddleSection authorizes the puddle (per-user identity) subsystem
-// per envoy. Cryptsync derives its authorization from this section —
-// there is no separate cryptsync section. A host listed here can hold
-// puddle identity material and cryptsync ciphertext for its locally-
+// per envoy. Lockbox derives its authorization from this section —
+// there is no separate lockbox section. A host listed here can hold
+// puddle identity material and lockbox ciphertext for its locally-
 // enrolled members; a host denied here cannot do either.
 type SwarmPuddleSection struct {
-	Enabled []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run puddle. Cryptsync follows the same gate." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
+	Enabled []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run puddle. Lockbox follows the same gate." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
 }
 
 // SwarmGitmirrorSection authorizes the gitmirror subsystem per envoy
@@ -181,14 +181,14 @@ type SwarmcastSection struct {
 	DefaultRetention string   `yaml:"default_retention" doc:"Default retention applied when 'vigocli swarm swarmcast distribute' omits --retention. Empty = compile-time default (7d)." default:"7d" example:"7d, 30d, 24h"`
 }
 
-// SwarmCryptsyncSection tunes cryptsync operational caps. Authorization
-// is NOT specified here — cryptsync derives its enable/deny gate from
-// `SwarmPuddleSection` per ADR-020 (cryptsync is bound to puddle
+// SwarmLockboxSection tunes lockbox operational caps. Authorization
+// is NOT specified here — lockbox derives its enable/deny gate from
+// `SwarmPuddleSection` per ADR-020 (lockbox is bound to puddle
 // membership). This section exists so admins can cap per-file
 // ciphertext size and envelope retention without re-routing the
 // authorization model.
-type SwarmCryptsyncSection struct {
-	MaxFileBytes      int64  `yaml:"max_file_bytes" doc:"Per-file cap on cryptsync ciphertext (auto-encrypt + push). 0 = no cap. Authorization derives from puddle.enabled per ADR-020." default:"1073741824" example:"1073741824 (1 GiB), 0 (uncapped)"`
+type SwarmLockboxSection struct {
+	MaxFileBytes      int64  `yaml:"max_file_bytes" doc:"Per-file cap on lockbox ciphertext (auto-encrypt + push). 0 = no cap. Authorization derives from puddle.enabled per ADR-020." default:"1073741824" example:"1073741824 (1 GiB), 0 (uncapped)"`
 	EnvelopeRetention string `yaml:"envelope_retention" doc:"Retention window for LEAVE/RESURRECT/TOMBSTONE envelopes before they are reaped. Empty = compile-time default (90d)." default:"90d" example:"90d, 30d, 365d"`
 }
 

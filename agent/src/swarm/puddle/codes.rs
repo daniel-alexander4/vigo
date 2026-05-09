@@ -140,7 +140,7 @@ pub fn write_pending(path: &Path, code: &str, username: &str) -> Result<()> {
             .with_context(|| format!("creating {}", path.display()))?;
     }
     #[cfg(unix)]
-    if let Err(e) = crate::swarm::cryptsync::chown_to_user_pub(path, username) {
+    if let Err(e) = crate::swarm::lockbox::chown_to_user_pub(path, username) {
         tracing::debug!(path = %path.display(), error = %e, "puddle claim: chown failed");
     }
     #[cfg(not(unix))]

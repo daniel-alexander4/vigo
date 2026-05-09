@@ -4,21 +4,21 @@ title: "ADR-014: Puddle primitive"
 
 # ADR-014: Puddle primitive
 
-**Status:** Complete (shipped 0.34.8). Multi-puddle per user, Shamir/escrow recovery, and cross-envoy gossip of puddle membership remain explicitly deferred per the Decision section's scope gates. Puddle keypair rotation, originally implied as "re-init from scratch," is now addressed by [ADR-018](018-puddle-rekey.md) (rekey verbs preserve cryptsync state across rotation; gitmirror founder-rekey still pending its own ADR).
+**Status:** Complete (shipped 0.34.8). Multi-puddle per user, Shamir/escrow recovery, and cross-envoy gossip of puddle membership remain explicitly deferred per the Decision section's scope gates. Puddle keypair rotation, originally implied as "re-init from scratch," is now addressed by [ADR-018](018-puddle-rekey.md) (rekey verbs preserve lockbox state across rotation; gitmirror founder-rekey still pending its own ADR).
 **Date:** 2026-04-29
 **Updated 2026-04-29:** Distribution section restructured to put peer-pair as the primary onboarding path (manual scp survives as air-gapped fallback). CLI verbs renamed for clarity (`activate` split into `unlock` + `join`; `deactivate` → `lock`; `show` → `pubkey`; new `pair` verb). Resolved scope gates recorded in the Decision section: single puddle per user (multi-puddle deferred to v2), three sequential releases (014 → 015 → 016), re-init from scratch on passphrase loss (no Shamir/escrow in v1).
 
 ## Context
 
-Vigo's existing trust primitives are envoy-scoped: each enrolled envoy has its own mTLS cert, and per-user state on each envoy (cryptsync `identity.age`, gitmirror sidecars, etc.) is independent. There is no cross-envoy user-identity primitive. The consequence is that "dan-on-laptop" and "dan-on-desktop" are cryptographically distinct identities even though they belong to the same human, which forces every personal-multi-envoy workflow to re-create membership ceremony per-envoy: cryptsync requires `init` + `enroll` + `unlock` on every envoy independently; multi-member gitmirror would require explicit per-pair invites for each personal envoy.
+Vigo's existing trust primitives are envoy-scoped: each enrolled envoy has its own mTLS cert, and per-user state on each envoy (lockbox `identity.age`, gitmirror sidecars, etc.) is independent. There is no cross-envoy user-identity primitive. The consequence is that "dan-on-laptop" and "dan-on-desktop" are cryptographically distinct identities even though they belong to the same human, which forces every personal-multi-envoy workflow to re-create membership ceremony per-envoy: lockbox requires `init` + `enroll` + `unlock` on every envoy independently; multi-member gitmirror would require explicit per-pair invites for each personal envoy.
 
-The right primitive is a **per-user puddle identity** — a single keypair representing "dan's puddle of envoys," distributable across the user's own envoys, that subsystems can query as a single trust unit. This ADR defines that primitive. ADR-015 (unified gitmirror substrate) and ADR-016 (cryptsync membership on puddle) build on it.
+The right primitive is a **per-user puddle identity** — a single keypair representing "dan's puddle of envoys," distributable across the user's own envoys, that subsystems can query as a single trust unit. This ADR defines that primitive. ADR-015 (unified gitmirror substrate) and ADR-016 (lockbox membership on puddle) build on it.
 
 ## Decision
 
 ### Identity
 
-A puddle is owned by one human user across one or more enrolled envoys. The puddle's cryptographic identity is a single ed25519 keypair, generated locally on the first envoy where the user runs `puddle init`. The private half is wrapped using the same primitive cryptsync already uses (`Argon2id` parameter set + `XChaCha20-Poly1305`, see `agent/src/swarm/cryptsync/crypt.rs`) under a user-supplied passphrase. The wrapped blob is portable across envoys; the unwrapping passphrase is held only by the user.
+A puddle is owned by one human user across one or more enrolled envoys. The puddle's cryptographic identity is a single ed25519 keypair, generated locally on the first envoy where the user runs `puddle init`. The private half is wrapped using the same primitive lockbox already uses (`Argon2id` parameter set + `XChaCha20-Poly1305`, see `agent/src/swarm/lockbox/crypt.rs`) under a user-supplied passphrase. The wrapped blob is portable across envoys; the unwrapping passphrase is held only by the user.
 
 The puddle's public half is the **puddle pubkey** — the unit other subsystems and other users see. Subsystems treat "puddle pubkey X" as a trust anchor; what envoys are inside puddle X is invisible at the trust boundary.
 
@@ -43,7 +43,7 @@ Optional audit-log entries flow through the existing audit hash chain on next ch
 
 ### Session helper
 
-Like cryptsync's session helper, an unlocked puddle identity lives in process memory in a `setsid`-detached per-user daemon, gated by `SO_PEERCRED` on a Unix socket at `$XDG_RUNTIME_DIR/vigo/puddle.sock`. The daemon answers signing requests for the calling user. Idle timeout (default 60 minutes) and explicit `lock` zero the in-memory key. Parent-PID watchdog terminates the helper on agent restart.
+Like lockbox's session helper, an unlocked puddle identity lives in process memory in a `setsid`-detached per-user daemon, gated by `SO_PEERCRED` on a Unix socket at `$XDG_RUNTIME_DIR/vigo/puddle.sock`. The daemon answers signing requests for the calling user. Idle timeout (default 60 minutes) and explicit `lock` zero the in-memory key. Parent-PID watchdog terminates the helper on agent restart.
 
 ### CLI verbs
 
@@ -51,11 +51,11 @@ Lifecycle:
 
 - `vigo swarm puddle init` — generate keypair, prompt for passphrase, wrap, store at `~/.vigo-puddle/identity.wrapped`. Fails if file already exists. **Once per puddle, ever.** (Founder envoy only.)
 - `vigo swarm puddle pair` — on an already-unlocked envoy: print a 5-minute single-use pairing code, listen for one incoming pair request. Used to onboard a new envoy into an existing puddle.
-- `vigo swarm puddle join --from <host>` — on a new envoy: connect to `<host>` over swarm mTLS, present the pairing code, receive the wrapped blob, prompt for passphrase, unwrap, populate session helper. **Once per envoy, ever.** Auto-runs `cryptsync puddle init` on success (per ADR-016).
+- `vigo swarm puddle join --from <host>` — on a new envoy: connect to `<host>` over swarm mTLS, present the pairing code, receive the wrapped blob, prompt for passphrase, unwrap, populate session helper. **Once per envoy, ever.** Auto-runs `lockbox puddle init` on success (per ADR-016).
 
 Daily:
 
-- `vigo swarm puddle unlock` — unwrap local `identity.wrapped`, hand key to session helper. Prompts for passphrase. Idempotent if already unlocked. Auto-runs `cryptsync puddle init` if cryptsync state is absent (per ADR-016).
+- `vigo swarm puddle unlock` — unwrap local `identity.wrapped`, hand key to session helper. Prompts for passphrase. Idempotent if already unlocked. Auto-runs `lockbox puddle init` if lockbox state is absent (per ADR-016).
 - `vigo swarm puddle lock` — zero in-memory key, kill session helper. Wrapped blob on disk untouched.
 
 Informational / maintenance:
@@ -66,9 +66,9 @@ Informational / maintenance:
 
 ### Failure modes
 
-- **Passphrase forgotten.** No recovery in v1. Re-init creates a new puddle (different pubkey); existing project tokens / cryptsync recipients become orphaned. Documented loudly. Status output surfaces "puddle locked, recovery requires passphrase or re-init."
+- **Passphrase forgotten.** No recovery in v1. Re-init creates a new puddle (different pubkey); existing project tokens / lockbox recipients become orphaned. Documented loudly. Status output surfaces "puddle locked, recovery requires passphrase or re-init."
 - **All wrapped key copies lost across all envoys.** Same as passphrase forgotten — re-init from scratch. Disaster recovery for the user, not silent data loss.
-- **Single envoy compromised.** Wrapped blob + passphrase = attacker has the puddle key. Mitigation: short Argon2id verification time on unlock (cost factor matched to cryptsync), session-helper idle lock, system-level disk encryption recommended.
+- **Single envoy compromised.** Wrapped blob + passphrase = attacker has the puddle key. Mitigation: short Argon2id verification time on unlock (cost factor matched to lockbox), session-helper idle lock, system-level disk encryption recommended.
 
 ### Resolved scope gates
 
@@ -82,7 +82,7 @@ The following defaults from the original draft were ratified before implementati
 
 **Per-envoy keypairs with cross-envoy trust attestations.** Each envoy generates its own keypair; envoys mutually sign "this other envoy is also me" attestations. Rejected because it creates O(N²) declarations for an N-envoy personal puddle and provides no UX win over the shared-key model — the security delta is nil since any envoy in the puddle can decrypt content sent to the puddle either way.
 
-**Reuse cryptsync's age identity as the puddle identity.** Tempting because cryptsync already has a per-user wrapped identity. Rejected because age is encryption-only (no signing primitive), and puddle's primary use case (signing capability tokens for gitmirror) requires Ed25519. Coupling the two would also mean cryptsync enrollment becomes mandatory for any subsystem using puddle, which is undesirable.
+**Reuse lockbox's age identity as the puddle identity.** Tempting because lockbox already has a per-user wrapped identity. Rejected because age is encryption-only (no signing primitive), and puddle's primary use case (signing capability tokens for gitmirror) requires Ed25519. Coupling the two would also mean lockbox enrollment becomes mandatory for any subsystem using puddle, which is undesirable.
 
 **Reuse the agent's mTLS keypair.** Rejected — the mTLS key is per-envoy, not per-user, and is already bound to TLS handshake usage. Conflating it with user-puddle identity creates confusing trust semantics.
 
@@ -93,12 +93,12 @@ The following defaults from the original draft were ratified before implementati
 ## Consequences
 
 **Files to add (agent — Rust):**
-- `agent/src/swarm/puddle/` — new subsystem directory, mirroring `agent/src/swarm/cryptsync/` shape.
-  - `crypt.rs` — wrap / unwrap (reuse cryptsync's Argon2id + XChaCha20 primitive verbatim).
-  - `session.rs` — session helper daemon + Unix socket + SO_PEERCRED + idle timeout (mirror cryptsync's `session.rs`).
+- `agent/src/swarm/puddle/` — new subsystem directory, mirroring `agent/src/swarm/lockbox/` shape.
+  - `crypt.rs` — wrap / unwrap (reuse lockbox's Argon2id + XChaCha20 primitive verbatim).
+  - `session.rs` — session helper daemon + Unix socket + SO_PEERCRED + idle timeout (mirror lockbox's `session.rs`).
   - `pair.rs` — pairing-code issuance + peer-pair handshake over swarm mTLS (port 1531). Pairing code: 8-character format (e.g., `4827-9163`), constant-time compare, single-use, 5-minute TTL.
   - `cli.rs` — verbs `init|pair|join|unlock|lock|pubkey|members|rotate-passphrase`.
-  - `mod.rs` — public API surface that other subsystems (gitmirror, cryptsync) call to: get puddle pubkey, sign blob, query "is this puddle pubkey known to local agent."
+  - `mod.rs` — public API surface that other subsystems (gitmirror, lockbox) call to: get puddle pubkey, sign blob, query "is this puddle pubkey known to local agent."
 - `agent/src/main.rs` — wire `swarm puddle *` verbs into argv dispatch.
 
 **Server-side changes:** none in the data path. Optional audit-log entry types `puddle.pair-issued` and `puddle.pair-completed` flow through the existing audit hash chain on next check-in; server learns the pair *happened* but never sees the wrapped blob.
@@ -112,12 +112,12 @@ The following defaults from the original draft were ratified before implementati
 **Operational:**
 - Agent rebuild + cross-compile + redeploy required.
 - Z-level version bump.
-- No new dependencies — `ed25519-dalek` and the Argon2id/XChaCha20 stack are already linked for cryptsync.
+- No new dependencies — `ed25519-dalek` and the Argon2id/XChaCha20 stack are already linked for lockbox.
 
-**Estimated weight:** ~50–100 KiB on the agent binary (peer-pair adds a small handshake module on top of the original ~40–80 KiB estimate). Heavy reuse of cryptsync's wrapping code.
+**Estimated weight:** ~50–100 KiB on the agent binary (peer-pair adds a small handshake module on top of the original ~40–80 KiB estimate). Heavy reuse of lockbox's wrapping code.
 
 **Behavioral consequences:**
-- Puddle is opt-in. An envoy that never runs `puddle init|join` works exactly as today; only subsystems that consume puddle (gitmirror per ADR-015, cryptsync membership per ADR-016) gain new behavior.
+- Puddle is opt-in. An envoy that never runs `puddle init|join` works exactly as today; only subsystems that consume puddle (gitmirror per ADR-015, lockbox membership per ADR-016) gain new behavior.
 - Passphrase forgetting is real disaster recovery for the user. v1 is honest about that — no silent data loss, but no quorum / escrow either.
 - Single-puddle-per-user in v1. Multi-puddle (e.g., separate "personal" and "work" identities) is deferred until a real user asks for it.
 - Peer-pair is the primary onboarding path. Air-gapped envoys still have `unlock` after manual scp as the fallback, but the typical flow is two commands and a passphrase, no scp.

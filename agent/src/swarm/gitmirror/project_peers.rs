@@ -35,7 +35,7 @@
 //! In-memory only. Discovery already restores hostnames into the
 //! generic peer table; project_peers fills in fresh on each
 //! announce-cycle. Restarts lose the index for one announce
-//! interval — same UX cost as cryptsync's peer table.
+//! interval — same UX cost as lockbox's peer table.
 
 use std::collections::HashMap;
 use std::net::IpAddr;
@@ -156,7 +156,7 @@ impl ProjectPeers {
 // modules avoid parameter-plumbing through discovery.rs's spawn
 // signature (which already has a dozen args).
 //
-// Mirrors the pattern cryptsync uses for INCOMING_ANNOUNCE — set
+// Mirrors the pattern lockbox uses for INCOMING_ANNOUNCE — set
 // once at agent startup, read by everyone afterwards. Tests that
 // need isolation construct their own ProjectPeers directly.
 

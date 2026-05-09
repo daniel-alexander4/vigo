@@ -3,7 +3,7 @@
 
 //! Per-envoy gitmirror sync triggered by puddle rekey (ADR-019).
 //!
-//! Sibling of [`crate::swarm::cryptsync::identity_rewrap`] in shape and
+//! Sibling of [`crate::swarm::lockbox::identity_rewrap`] in shape and
 //! intent: a localized state migration that runs during the
 //! puddle `rekey-pair` / `rekey` ceremony, while the OLD signing
 //! key is still unwrapped in process memory.
@@ -20,7 +20,7 @@
 //!    user mid-swap.
 //!
 //! 2. **Post-rotation sync** ([`apply_post_rotation_gitmirror_sync`]):
-//!    runs alongside [`crate::swarm::cryptsync::identity_rewrap`] in
+//!    runs alongside [`crate::swarm::lockbox::identity_rewrap`] in
 //!    the rekey ceremony. For every project the user founded, signs
 //!    a fresh delegation envelope under OLD and appends it to
 //!    `~/.vigo-gitmirror/<project_id>/delegations.json`. For every

@@ -8,7 +8,7 @@
 //! here so subsystem-level enforcement sites can read the operator's
 //! current intent without re-plumbing the response through every
 //! call path. This is the agent-side end of the
-//! `server.yaml swarm.{swarmcast,cryptsync,gitmirror,longdrawer}.*` →
+//! `server.yaml swarm.{swarmcast,lockbox,gitmirror,longdrawer}.*` →
 //! `CheckInResponse.swarm_runtime_limits` → enforcement-point flow.
 //!
 //! ### Design
@@ -39,8 +39,8 @@ use std::sync::{OnceLock, RwLock};
 pub struct SwarmLimits {
     pub swarmcast_max_size_bytes: Option<u64>,
     pub swarmcast_default_retention: Option<String>,
-    pub cryptsync_max_file_bytes: Option<u64>,
-    pub cryptsync_envelope_retention_secs: Option<u64>,
+    pub lockbox_max_file_bytes: Option<u64>,
+    pub lockbox_envelope_retention_secs: Option<u64>,
     pub gitmirror_max_bundle_bytes: Option<u64>,
     pub gitmirror_envelope_retention_secs: Option<u64>,
     pub longdrawer_max_file_bytes: Option<u64>,
@@ -58,8 +58,8 @@ pub fn update_from_proto(msg: &crate::proto::SwarmRuntimeLimits) {
     let new = SwarmLimits {
         swarmcast_max_size_bytes: opt_nonzero_u64(msg.swarmcast_max_size_bytes),
         swarmcast_default_retention: opt_nonempty_string(&msg.swarmcast_default_retention),
-        cryptsync_max_file_bytes: opt_nonzero_u64(msg.cryptsync_max_file_bytes),
-        cryptsync_envelope_retention_secs: opt_nonzero_u64(msg.cryptsync_envelope_retention_secs),
+        lockbox_max_file_bytes: opt_nonzero_u64(msg.lockbox_max_file_bytes),
+        lockbox_envelope_retention_secs: opt_nonzero_u64(msg.lockbox_envelope_retention_secs),
         gitmirror_max_bundle_bytes: opt_nonzero_u64(msg.gitmirror_max_bundle_bytes),
         gitmirror_envelope_retention_secs: opt_nonzero_u64(msg.gitmirror_envelope_retention_secs),
         longdrawer_max_file_bytes: opt_nonzero_u64(msg.longdrawer_max_file_bytes),
@@ -100,19 +100,19 @@ fn opt_nonempty_string(s: &str) -> Option<String> {
 
 // ---------- typed read helpers ----------
 
-/// Cryptsync: per-file ciphertext cap. Falls back to the historical
+/// Lockbox: per-file ciphertext cap. Falls back to the historical
 /// 1 GiB compile-time default when the server hasn't published a
 /// limit yet.
-pub fn cryptsync_max_file_bytes() -> u64 {
+pub fn lockbox_max_file_bytes() -> u64 {
     current()
-        .cryptsync_max_file_bytes
+        .lockbox_max_file_bytes
         .unwrap_or(1024 * 1024 * 1024)
 }
 
-/// Cryptsync: envelope retention in seconds. Falls back to 90 days.
-pub fn cryptsync_envelope_retention_secs() -> i64 {
+/// Lockbox: envelope retention in seconds. Falls back to 90 days.
+pub fn lockbox_envelope_retention_secs() -> i64 {
     current()
-        .cryptsync_envelope_retention_secs
+        .lockbox_envelope_retention_secs
         .map(|v| v as i64)
         .unwrap_or(90 * 24 * 60 * 60)
 }
@@ -146,8 +146,8 @@ mod tests {
     #[test]
     fn defaults_when_unset() {
         fresh();
-        assert_eq!(cryptsync_max_file_bytes(), 1024 * 1024 * 1024);
-        assert_eq!(cryptsync_envelope_retention_secs(), 90 * 24 * 60 * 60);
+        assert_eq!(lockbox_max_file_bytes(), 1024 * 1024 * 1024);
+        assert_eq!(lockbox_envelope_retention_secs(), 90 * 24 * 60 * 60);
         assert_eq!(gitmirror_envelope_retention_secs(), 90 * 24 * 60 * 60);
         assert_eq!(gitmirror_max_bundle_bytes(), None);
         assert_eq!(longdrawer_max_file_bytes(), None);
@@ -159,15 +159,15 @@ mod tests {
         let msg = crate::proto::SwarmRuntimeLimits {
             swarmcast_max_size_bytes: 100,
             swarmcast_default_retention: "30d".to_string(),
-            cryptsync_max_file_bytes: 200,
-            cryptsync_envelope_retention_secs: 300,
+            lockbox_max_file_bytes: 200,
+            lockbox_envelope_retention_secs: 300,
             gitmirror_max_bundle_bytes: 400,
             gitmirror_envelope_retention_secs: 500,
             longdrawer_max_file_bytes: 600,
         };
         update_from_proto(&msg);
-        assert_eq!(cryptsync_max_file_bytes(), 200);
-        assert_eq!(cryptsync_envelope_retention_secs(), 300);
+        assert_eq!(lockbox_max_file_bytes(), 200);
+        assert_eq!(lockbox_envelope_retention_secs(), 300);
         assert_eq!(gitmirror_max_bundle_bytes(), Some(400));
         assert_eq!(gitmirror_envelope_retention_secs(), 500);
         assert_eq!(longdrawer_max_file_bytes(), Some(600));
@@ -181,8 +181,8 @@ mod tests {
         let msg = crate::proto::SwarmRuntimeLimits {
             swarmcast_max_size_bytes: 0,
             swarmcast_default_retention: String::new(),
-            cryptsync_max_file_bytes: 0,
-            cryptsync_envelope_retention_secs: 0,
+            lockbox_max_file_bytes: 0,
+            lockbox_envelope_retention_secs: 0,
             gitmirror_max_bundle_bytes: 0,
             gitmirror_envelope_retention_secs: 0,
             longdrawer_max_file_bytes: 0,
@@ -190,7 +190,7 @@ mod tests {
         update_from_proto(&msg);
         // Zero / empty server values become None internally — read
         // helpers return their compile-time defaults.
-        assert_eq!(cryptsync_max_file_bytes(), 1024 * 1024 * 1024);
+        assert_eq!(lockbox_max_file_bytes(), 1024 * 1024 * 1024);
         assert_eq!(gitmirror_max_bundle_bytes(), None);
     }
 }

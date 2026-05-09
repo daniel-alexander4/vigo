@@ -81,7 +81,7 @@ impl UserState {
     /// Compute a deterministic digest of `(files, tombstones)`. Used to
     /// drive the digest-only announcement model: peers include the digest
     /// on every multicast tick, and receivers pull the full state via
-    /// mTLS only when the digest changes. Matches cryptsync's approach
+    /// mTLS only when the digest changes. Matches lockbox's approach
     /// (sha256 → 16-byte truncation → hex) — keeps the wire footprint
     /// small (~32 hex chars) and prevents leaking file paths to anyone
     /// on the LAN. Iteration is ordered because both maps are BTreeMap.
@@ -115,7 +115,7 @@ impl UserState {
 /// timestamps** — so the packet reveals nothing about user content to
 /// observers on the LAN.
 ///
-/// Model is identical to cryptsync (`cryptsync/state.rs::Announcement`): a peer's
+/// Model is identical to lockbox (`lockbox/state.rs::Announcement`): a peer's
 /// announcement tells receivers who this machine is, how to reach it, and
 /// a short digest of the state. Receivers compare the digest against the
 /// last one they observed from this peer; on mismatch, they pull

@@ -229,7 +229,7 @@ func echoPresenceStatus(s string) string {
 	}
 }
 
-// meshCountWarn is shared with cli/cryptsync.go.
+// meshCountWarn is shared with cli/lockbox.go.
 func meshCountWarn(n int) string {
 	if n == 0 {
 		return "0"

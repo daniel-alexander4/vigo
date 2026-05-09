@@ -3,19 +3,19 @@
 
 //! Puddle session helper daemon.
 //!
-//! Mirrors `crate::swarm::cryptsync::session` in shape but holds an
+//! Mirrors `crate::swarm::lockbox::session` in shape but holds an
 //! Ed25519 [`SigningKey`](ed25519_dalek::SigningKey) instead of an
 //! age identity. Spawned by `vigo swarm puddle unlock` and the
 //! `join` flow; serves SIGN / STATUS / LOCK over a per-user Unix
 //! socket (`$XDG_RUNTIME_DIR/vigo/puddle.sock` on Linux,
-//! `$TMPDIR/cryptsync-<UID>/puddle.sock` on macOS), 0600,
+//! `$TMPDIR/lockbox-<UID>/puddle.sock` on macOS), 0600,
 //! `SO_PEERCRED`-gated.
 //!
 //! The unwrapped key is held in process memory only. Three
 //! independent shutdown triggers — explicit LOCK, parent-PID
 //! disappearance, idle timeout (default 60 m) — each scrub the key
 //! and exit. The same `~/.vigo-puddle/session.unlocked` sentinel
-//! cryptsync uses for ADR-012 is mirrored here so sibling
+//! lockbox uses for ADR-012 is mirrored here so sibling
 //! subsystems can ask "is this user's puddle identity unlocked?"
 //! without speaking the SIGN protocol.
 
@@ -34,7 +34,7 @@ use zeroize::Zeroizing;
 
 // ---------- runtime paths ----------
 
-/// Per-UID runtime dir. Same shape as cryptsync's; reusing the
+/// Per-UID runtime dir. Same shape as lockbox's; reusing the
 /// `vigo/` parent so a single 0700 dir holds every per-user socket
 /// the agent owns.
 pub fn runtime_dir() -> Result<PathBuf> {
@@ -42,9 +42,9 @@ pub fn runtime_dir() -> Result<PathBuf> {
     let dir = if let Some(xdg) = std::env::var_os("XDG_RUNTIME_DIR") {
         PathBuf::from(xdg).join("vigo")
     } else if let Some(tmp) = std::env::var_os("TMPDIR") {
-        PathBuf::from(tmp).join(format!("cryptsync-{}", uid))
+        PathBuf::from(tmp).join(format!("lockbox-{}", uid))
     } else {
-        PathBuf::from(format!("/tmp/cryptsync-{}", uid))
+        PathBuf::from(format!("/tmp/lockbox-{}", uid))
     };
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating {}", dir.display()))?;
@@ -140,7 +140,7 @@ fn parse_ok_or_err(line: &str) -> Result<Vec<u8>> {
 // ---------- spawn the helper ----------
 
 /// Spawn the puddle session helper from the `unlock` / `join`
-/// CLI path. Same `setsid` + stdin-piped-secret pattern cryptsync
+/// CLI path. Same `setsid` + stdin-piped-secret pattern lockbox
 /// uses so the helper outlives its launching shell and the wire
 /// secret never lands in argv or env.
 pub fn spawn_helper(
@@ -158,7 +158,7 @@ pub fn spawn_helper(
     std::thread::sleep(Duration::from_millis(100));
 
     // Stderr → log file in the runtime dir; same convention as
-    // cryptsync. Avoids holding the parent shell's stderr open.
+    // lockbox. Avoids holding the parent shell's stderr open.
     let log_path = runtime_dir()?.join("puddle.log");
     let log_file = std::fs::OpenOptions::new()
         .create(true)
@@ -209,7 +209,7 @@ pub fn spawn_helper(
 
     // Wait for the helper to bind its socket before returning. Without
     // this, callers who immediately try to talk to the helper (notably
-    // the cryptsync auto-bootstrap inside `cmd_unlock`) race the
+    // the lockbox auto-bootstrap inside `cmd_unlock`) race the
     // helper's stdin-read + bind sequence and hit ENOENT on
     // UnixStream::connect. The bind in `daemon_main` is the last
     // synchronous step before the accept loop, so a successful

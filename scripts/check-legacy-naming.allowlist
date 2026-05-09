@@ -44,7 +44,7 @@ internal.docs/multi-axis-audit.md:*:cairn
 
 # Historical probe scripts under internal.docs/ targeting the old sigil
 # subsystem. They no longer run — vigo sigil verbs were folded into
-# `vigo swarm cryptsync`. Kept as historical context until Dan deletes.
+# `vigo swarm lockbox`. Kept as historical context until Dan deletes.
 internal.docs/sigil-peers-probe.sh:*:sigil
 internal.docs/sigil-tombstone-probe.sh:*:sigil
 
