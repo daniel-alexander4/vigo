@@ -312,13 +312,37 @@ async fn handle_client(
             std::io::Error::last_os_error()
         );
     }
+    // Clear O_NONBLOCK on the dup'd fds before handing them to git's
+    // child. raw_fd inherits O_NONBLOCK from tokio's accept (the
+    // listener was set_nonblocking(true) in bind_listener), and dup
+    // produces fds sharing the same open file description, so the
+    // non-blocking flag is sticky. git's receive-pack/upload-pack
+    // expect blocking stdio — with O_NONBLOCK set, reads return
+    // EAGAIN out of order with the smart-protocol pkt-line state
+    // machine and the connection deadlocks (server has refs to
+    // advertise, client has commands to send, neither's read sees
+    // data when it should). fcntl(F_SETFL) acts on the open file
+    // description, so flipping it once on stdin_fd flips it for
+    // stdout_fd and the child's inherited copies as well — but we
+    // clear both for symmetry and to defend against future kernels
+    // that might split the descriptions.
+    unsafe {
+        let stdin_fl = libc::fcntl(stdin_fd, libc::F_GETFL);
+        if stdin_fl >= 0 {
+            let _ = libc::fcntl(stdin_fd, libc::F_SETFL, stdin_fl & !libc::O_NONBLOCK);
+        }
+        let stdout_fl = libc::fcntl(stdout_fd, libc::F_GETFL);
+        if stdout_fl >= 0 {
+            let _ = libc::fcntl(stdout_fd, libc::F_SETFL, stdout_fl & !libc::O_NONBLOCK);
+        }
+    }
     tracing::info!(
         uid,
         raw_fd,
         stdin_fd,
         stdout_fd,
         elapsed_ms = started.elapsed().as_millis() as u64,
-        "gitmirror helper: dup'd client fd, OK sent, releasing tokio halves"
+        "gitmirror helper: dup'd client fd, cleared O_NONBLOCK, OK sent, releasing tokio halves"
     );
 
     drop(br);
