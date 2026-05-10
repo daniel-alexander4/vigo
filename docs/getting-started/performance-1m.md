@@ -5,7 +5,7 @@ These projections are based on benchmarked per-request costs from the codebase, 
 
 This document analyzes Vigo server performance under 1-minute check-in intervals on modest hardware. All numbers reference benchmarked values from the codebase or are derived from measured operations.
 
-See also: [30-second intervals](performance-30s.md) | [15-second intervals](performance-15s.md)
+See also: [30-second intervals](performance-30s.md) | [15-second intervals](performance-15s.md) | [5-second intervals](performance-5s.md)
 
 ## Hardware Assumptions
 

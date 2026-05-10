@@ -198,7 +198,7 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 | Salt | Compile state tree, resolve pillar data, serialize | Moderate — Python state compilation per minion | ~1 minute |
 | CFEngine | Serve flat policy files; Enterprise hub ingests run reports | Minimal for policy serving; moderate for report ingestion | ~1 minute |
 
-Vigo's check-in is cheap enough to run 20× more frequently than the industry default. At 15-second intervals on a single 4 vCPU server with 10,000 envoys, sustained CPU load is ~20% of one core. See [Performance Analysis (15s)](performance-15s.md) for detailed projections.
+Vigo's check-in is cheap enough to run 20× more frequently than the industry default. At 15-second intervals on a single 4 vCPU server with 10,000 envoys, sustained CPU load is ~20% of one core. See [Performance Analysis (15s)](performance-15s.md) for detailed projections, and the [5-second study](performance-5s.md) for the edge case on small fleets (where the limiting factor becomes the agent's convergence-cycle time, not the server).
 
 ### Scaling architecture
 

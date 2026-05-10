@@ -3,9 +3,11 @@
 
 These projections are based on benchmarked per-request costs from the codebase, not measured end-to-end under production load. Actual performance will vary with hardware, network conditions, policy complexity, and fleet composition.
 
-This document analyzes Vigo server performance under 15-second check-in intervals on modest hardware. 15-second intervals provide near-real-time responsiveness — drift corrected in under 15 seconds, stale machines flagged within 45 seconds. This is the fastest practical polling interval before streaming becomes a better choice.
+This document analyzes Vigo server performance under 15-second check-in intervals on modest hardware. 15-second intervals provide near-real-time responsiveness — drift corrected in under 15 seconds, stale machines flagged within 45 seconds. This is the fastest interval that holds up regardless of policy weight; for the edge case below it — where the *configured* interval becomes aspirational on non-trivial policies — see the [5-second study](performance-5s.md).
 
 All numbers reference benchmarked values from the codebase or are derived from measured operations. See [performance-1m.md](performance-1m.md) for the per-request cost derivations.
+
+See also: [1-minute intervals](performance-1m.md) | [30-second intervals](performance-30s.md) | [5-second intervals](performance-5s.md)
 
 ## Hardware Assumptions
 

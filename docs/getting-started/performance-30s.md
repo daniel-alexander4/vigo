@@ -7,6 +7,8 @@ This document analyzes Vigo server performance under 30-second check-in interval
 
 All numbers reference benchmarked values from the codebase or are derived from measured operations. See [performance-1m.md](performance-1m.md) for the per-request cost derivations.
 
+See also: [1-minute intervals](performance-1m.md) | [15-second intervals](performance-15s.md) | [5-second intervals](performance-5s.md)
+
 ## Hardware Assumptions
 
 - 4 vCPU (modern x86_64, e.g., Hetzner CPX21, DigitalOcean c-4)
