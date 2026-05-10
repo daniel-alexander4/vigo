@@ -66,17 +66,25 @@ arch('amd64'), version_ge('22.04'), in_group('docker')
 
 ## Finding Investigations
 
-When the user message starts with ` + "`<hostname> · <kind>`" + ` (e.g. ` + "`webby01 · trivy CVE-2024-1234 (high): libssl3 3.0.11→3.0.12`" + `), treat it as a security-finding investigation. Reply in markdown with the four sections below, in this order, no preamble. Section labels are bold inline (e.g. ` + "`**Problem.**`" + `) followed by the content on the same paragraph; separate sections with a blank line. Use a fenced ` + "```yaml" + ` code block for the .vgo snippet so chroma can syntax-highlight it.
+When the user message starts with ` + "`<hostname> · <kind>`" + ` (e.g. ` + "`webby01 · cve CVE-2024-1234 (high) — Memory leak in TLS handshake (https://www.cve.org/CVERecord?id=CVE-2024-1234)`" + ` or ` + "`webby01 · trivy CVE-2024-1234 (high): libssl3 3.0.11→3.0.12 — ... (<url>)`" + `), treat it as a security-finding investigation. Reply in markdown, no preamble. Use bold inline section labels (e.g. ` + "`**Fix.**`" + `) with the content on the same paragraph, a blank line between sections, and a fenced ` + "```yaml" + ` code block for any .vgo snippet so chroma can syntax-highlight it. You are still read-only — any commands in "Run it now" are for the operator to run, not actions you take.
 
-**Problem.** One sentence — what this finding is.
+Begin with a one-line header (no ` + "`**Label.**`" + ` prefix). For a CVE finding: ` + "`**<CVE-ID> — <title>**  ·  [CVE record](<url>)`" + ` — the id, title, and url all come from the question; drop ` + "` — <title>`" + ` when none was supplied. For a non-CVE finding: a short bold phrase naming what was flagged. Then the labeled sections:
 
-**Action.** One sentence — what needs to happen on the system to resolve it.
+**What it is.** 1–2 sentences — the flaw, its impact, the severity, and (when you know) whether it is actively exploited or only reachable from a network the host is exposed to.
 
-**Vigo module.** A .vgo snippet the operator can paste into stockpile/modules/, in a fenced ` + "```yaml" + ` code block. If vigo cannot fix this finding, replace the code block with one or two sentences explaining why — and, when relevant, the reason (action is forensic, requires human judgment, sits outside vigo's resource model, or depends on out-of-band approval).
+**Fix.** 1–2 sentences — what resolves it on the host (e.g. upgrade <pkg> to ≥<version>) and how to confirm afterward (the next ` + "`security_scan`" + ` trait, or ` + "`vigocli security cve <id>`" + `). If the question did not carry the affected package (a cached CVE card clicked before "Fetch Live Detail"), say so and tell the operator to run "Fetch Live Detail" in the drawer or ` + "`vigocli security cve <id>`" + ` for the exact package and fixed version.
 
-**How it works.** Only when the module's mechanism isn't obvious. Skip entirely (don't print the heading) when the .vgo is self-evident (a plain package upgrade) or when there's no module.
+**Vigo module.** A .vgo snippet the operator drops in stockpile/modules/, in a fenced ` + "```yaml" + ` code block; put any non-obvious mechanism note in ` + "`#`" + ` comments inside it — do not write a separate explanation section. If Vigo cannot fix this finding, replace the code block with one or two sentences on why: the action is forensic, requires human judgment, sits outside Vigo's resource model, or depends on out-of-band approval.
 
-If the finding is benign (e.g. a clean Lynis summary clicked for context), reply with a single line: ` + "`**No action required.**`" + ` followed by one sentence on why, and skip the other sections.`
+**Run it now.** Include this section ONLY when the finding is urgent — severity CRITICAL or HIGH **and** the host is internet-exposed or the CVE is known-exploited. Default form: after saving the module above into stockpile/modules/, publish it and force just that host to converge instead of waiting for its interval —
+
+` + "```" + `
+vigocli config publish && vigocli envoys push <hostname>
+` + "```" + `
+
+If the fix needs ordered steps (patch → restart service → verify), give a short ` + "```yaml" + ` workflow instead. Fall back to a one-shot ` + "`vigocli task`" + ` exec command only when there is genuinely no module path. Omit this heading entirely when the finding is not urgent.
+
+If the finding is benign (e.g. a clean Lynis summary clicked for context), reply with a single line: ` + "`**No action required.**`" + ` followed by one sentence on why, and skip every other section.`
 
 	if docsCorpus != "" {
 		return base + "\n\n## Documentation Reference\n\n" + docsCorpus

@@ -14,13 +14,40 @@ import (
 // the prompt-template recognition. These tests pin the format so a regression
 // surfaces immediately rather than degrading to bare-word AI replies.
 
+func TestCachedCVEAIQuestion_Full(t *testing.T) {
+	got := cachedCVEAIQuestion("webby01", CachedCVE{
+		ID: "CVE-2023-24538", Severity: "critical", Packages: 1,
+		Title: "html/template: improper sanitization of JS template literals",
+	})
+	want := "webby01 · cve CVE-2023-24538 (critical) — html/template: improper sanitization of JS template literals (https://www.cve.org/CVERecord?id=CVE-2023-24538)"
+	if got != want {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
+
+func TestCachedCVEAIQuestion_MultiPkgNoTitle(t *testing.T) {
+	got := cachedCVEAIQuestion("h", CachedCVE{ID: "CVE-2022-27664", Severity: "high", Packages: 3})
+	want := "h · cve CVE-2022-27664 (high), 3 packages (https://www.cve.org/CVERecord?id=CVE-2022-27664)"
+	if got != want {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
+
+func TestCachedCVEAIQuestion_Bare(t *testing.T) {
+	got := cachedCVEAIQuestion("h", CachedCVE{ID: "CVE-2024-1234", Severity: "medium", Packages: 1})
+	want := "h · cve CVE-2024-1234 (medium) (https://www.cve.org/CVERecord?id=CVE-2024-1234)"
+	if got != want {
+		t.Errorf("got %q\nwant %q", got, want)
+	}
+}
+
 func TestTrivyAIQuestion_Format(t *testing.T) {
 	got := trivyAIQuestion("webby01", TrivyVuln{
 		CVEID: "CVE-2024-1234", Severity: "high",
 		Package: "libssl3", Installed: "3.0.11", Fixed: "3.0.12",
 		Title: "Memory leak in TLS handshake",
 	})
-	want := "webby01 · trivy CVE-2024-1234 (high): libssl3 3.0.11→3.0.12 — Memory leak in TLS handshake"
+	want := "webby01 · trivy CVE-2024-1234 (high): libssl3 3.0.11→3.0.12 — Memory leak in TLS handshake (https://www.cve.org/CVERecord?id=CVE-2024-1234)"
 	if got != want {
 		t.Errorf("got %q\nwant %q", got, want)
 	}
@@ -30,7 +57,7 @@ func TestTrivyAIQuestion_NoFixOrTitle(t *testing.T) {
 	got := trivyAIQuestion("h", TrivyVuln{
 		CVEID: "CVE-X", Severity: "low", Package: "p", Installed: "1.0",
 	})
-	want := "h · trivy CVE-X (low): p 1.0"
+	want := "h · trivy CVE-X (low): p 1.0 (https://www.cve.org/CVERecord?id=CVE-X)"
 	if got != want {
 		t.Errorf("got %q\nwant %q", got, want)
 	}
@@ -38,7 +65,7 @@ func TestTrivyAIQuestion_NoFixOrTitle(t *testing.T) {
 
 func TestDebsecanAIQuestion_Format(t *testing.T) {
 	got := debsecanAIQuestion("h", DebsecanVuln{CVEID: "CVE-Y", Urgency: "high", Package: "nginx"})
-	want := "h · debsecan CVE-Y (high): nginx"
+	want := "h · debsecan CVE-Y (high): nginx (https://security-tracker.debian.org/tracker/CVE-Y)"
 	if got != want {
 		t.Errorf("got %q\nwant %q", got, want)
 	}

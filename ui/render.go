@@ -65,6 +65,7 @@ func funcMap() template.FuncMap {
 		"debianCVEURL":   debianCVEURL,
 		"lynisControlURL": lynisControlURL,
 		"secAIQuestion":  securityAIQuestion,
+		"cachedCVEAIQ":   cachedCVEAIQuestion,
 		"trivyAIQ":       trivyAIQuestion,
 		"debsecanAIQ":    debsecanAIQuestion,
 		"lynisWarnAIQ":   lynisWarningAIQuestion,

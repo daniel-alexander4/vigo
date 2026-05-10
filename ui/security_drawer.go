@@ -601,7 +601,24 @@ func securityAIQuestion(host, finding string) string {
 
 // ── Per-section AI-question helpers ─────────────────────────────────────────
 // Each emits a single structured line: `<host> · <kind>[severity]: <details>`.
-// The system prompt does the heavy lifting on the response shape.
+// The system prompt does the heavy lifting on the response shape. CVE-bearing
+// findings append the canonical record URL so the assistant can cite it.
+
+// cachedCVEAIQuestion is the Ask-AI line for a cached-summary CVE card. The
+// cached list is deduped across scanners (trivy / debsecan / windows-updates),
+// so the kind is the generic "cve", not "trivy":
+//
+//	<host> · cve <ID> (<sev>)[, <N> packages][ — <title>] (<cveURL>)
+func cachedCVEAIQuestion(host string, c CachedCVE) string {
+	s := fmt.Sprintf("%s · cve %s (%s)", host, c.ID, c.Severity)
+	if c.Packages > 1 {
+		s += fmt.Sprintf(", %d packages", c.Packages)
+	}
+	if c.Title != "" {
+		s += " — " + c.Title
+	}
+	return s + " (" + cveURL(c.ID) + ")"
+}
 
 func trivyAIQuestion(host string, v TrivyVuln) string {
 	pkg := v.Package
@@ -615,11 +632,11 @@ func trivyAIQuestion(host string, v TrivyVuln) string {
 	if v.Title != "" {
 		s += " — " + v.Title
 	}
-	return s
+	return s + " (" + cveURL(v.CVEID) + ")"
 }
 
 func debsecanAIQuestion(host string, v DebsecanVuln) string {
-	return fmt.Sprintf("%s · debsecan %s (%s): %s", host, v.CVEID, v.Urgency, v.Package)
+	return fmt.Sprintf("%s · debsecan %s (%s): %s (%s)", host, v.CVEID, v.Urgency, v.Package, debianCVEURL(v.CVEID))
 }
 
 func lynisWarningAIQuestion(host string, e LynisEntry) string {
