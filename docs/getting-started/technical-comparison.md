@@ -96,19 +96,20 @@ Vigo's offline convergence is the most complete — signed policy bundles with T
 | Language type | YAML | Custom DSL | Ruby | YAML + Jinja2 | YAML + Jinja2 | Promise DSL |
 | Turing complete | No | Yes | Yes | Effectively (Jinja2) | Effectively (Jinja2) | Yes |
 | Conditionals | `when:` expressions, `case/match`, `conditional_block` | `if/elsif/else`, `case`, selectors | Ruby if/case | `when:` conditions, Jinja2 | Jinja2 if/else | `ifvarclass`, `or`, `and` |
-| Iteration | `foreach` on vars | `each`, resource collectors | Ruby loops | `loop`, `with_items` | Jinja2 loops | `slist` iteration |
-| Functions | Built-in `when:` builtins | 100+ stdlib functions | Ruby methods | 100+ filters + plugins | Jinja2 filters | 50+ body functions |
-| Data hierarchy | Module vars → node vars → env overrides → conditional vars | Hiera (unlimited depth, pluggable backends) | Attributes (role → env → node) | Variable precedence (22 levels) | Pillar (targeted data) | `def.json` augments |
-| Custom resource types | Custom executor (JSON protocol) | Defined types + custom types (Ruby) | Custom resources (Ruby) | Custom modules (Python) | Custom states (Python) | Custom promise types |
-| Template engine | Go templates in `content:` only | ERB everywhere | ERB everywhere | Jinja2 everywhere | Jinja2 everywhere | Variable expansion |
+| Iteration | `foreach:` on resources **and modules** (a module instantiated once per list item — the defined-type analog) | `each`, resource collectors | Ruby loops | `loop`, `with_items` | Jinja2 loops | `slist` iteration |
+| Functions | Built-in `when:` builtins (+ `tag()`/`host()`/`trait()` in `fleet:` selectors) | 100+ stdlib functions | Ruby methods | 100+ filters + plugins | Jinja2 filters | 50+ body functions |
+| Data hierarchy | `common.vgo` directory inheritance (unbounded depth; modules/roles accumulate, vars last-wins) → role `includes:` → match-block vars → `environments.vgo` overrides | Hiera (unlimited depth, pluggable backends, per-key merge strategies) | Attributes (role → env → node) | Variable precedence (22 levels) | Pillar (targeted data) | `def.json` augments |
+| Cross-node config | `fleet:` lookup — a var resolved server-side at check-in from the live fleet trait index (LB pools, monitoring targets, cluster member lists) | Exported resources + collectors (via PuppetDB) | `search()` over the Chef Server index | `hostvars`/`groups` within a play | Salt Mine | Hub-served collected data |
+| Custom resource types | `type: custom` executor (JSON protocol) | Defined types + custom types (Ruby) | Custom resources (Ruby) | Custom modules (Python) | Custom states (Python) | Custom promise types |
+| Template engine | Go templates in `content:` & resource attributes — interpolation only, no `{{ if }}`/`{{ range }}` (the one exception: a `fleet:` `select:` is a full Go template, server-side) | ERB everywhere | ERB everywhere | Jinja2 everywhere | Jinja2 everywhere | Variable expansion |
 
-Vigo intentionally limits where templates can appear (`content:` attributes only) to prevent the "templates in filenames and commands" anti-pattern that plagues Ansible and Salt deployments. This is a readability trade-off — less flexible but configs are always auditable without evaluating expressions.
+Vigo intentionally keeps `content:`/attribute templates interpolation-only — no control flow in a config file's body — to prevent the "templates in filenames and commands, `{{ if }}` in every config" anti-pattern that plagues Ansible and Salt deployments. Per-instance shaping is a `when:`-gated companion resource or a narrower `fleet:` query. This is a readability trade-off — less flexible, but configs are auditable without evaluating expressions and `modlint` can statically validate a whole stockpile.
 
 ### Composition model
 
-Vigo's five-layer composition (glob matching → roles with includes → modules with ordering → resource tools → templates) covers most real-world cases without a programming language. See [Composition Patterns](../engineering/writing-modules/composition-patterns.md) for detailed examples.
+Vigo's six-layer composition — directory inheritance (`common.vgo`) → glob matching → roles with `includes:` → modules (with ordering, and module-level `foreach:`) → resource tools (`foreach:`/`case:`/`conditional_block:`/`when:`/`fleet:`) → templates — covers most real-world cases without a programming language. See [Composition Patterns](../engineering/writing-modules/composition-patterns.md) for detailed examples.
 
-Puppet's class/defined-type system is more expressive — you can create parameterized resource types that act like new primitives. Chef's custom resources are similarly powerful. Vigo's module system is simpler but less composable for deep abstraction hierarchies.
+Puppet's class/defined-type system is still more expressive for *deep* abstraction — unlimited class composition vs. Vigo's single-level role `includes:`, typed parameters vs. Vigo's untyped `vars:`/`.Each` items, and arbitrary logic inside a defined-type body vs. Vigo's `{{ .Each.x }}` interpolation + `when:`-gated resources. But the core "instantiate a parameterized resource group N times" pattern that Puppet defined types and Chef custom resources are built on is now a Vigo primitive too: a module referenced with `foreach:` (`{name: vhost, foreach: vhosts, key: server_name}` → `vhost[www.example.com]`, …). Vigo's module system is simpler; the remaining gap is depth, not the abstraction itself.
 
 Ansible's role system is the closest analog to Vigo's roles, but Ansible roles can include tasks, handlers, files, templates, defaults, vars, and meta — a more complex structure. Vigo's roles are just named module lists.
 
