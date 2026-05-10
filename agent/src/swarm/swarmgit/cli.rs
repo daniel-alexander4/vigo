@@ -247,6 +247,7 @@ VERBS:
 struct CallerIdentity {
     home: PathBuf,
     is_root: bool,
+    username: String,
 }
 
 fn resolve_caller() -> Result<CallerIdentity> {
@@ -259,6 +260,7 @@ fn resolve_caller() -> Result<CallerIdentity> {
             .flatten()
             .context("cannot resolve current Unix user")?;
         Ok(CallerIdentity {
+            username: user.name,
             home: user.dir,
             is_root: uid.is_root(),
         })
@@ -1963,6 +1965,70 @@ To proceed, type the project handle exactly: {}",
         chain: vec![bootstrap],
     };
     new_chain.save(&caller.home, &new_project_id)?;
+
+    // ADR-022: if the founder holds a friendly-name claim that pointed
+    // at THIS project's old anchor, re-issue it to point at the new
+    // anchor (== `local_pub`) carrying this project's rekey-delegation
+    // chain in `supersedes` — proving the new anchor descends from the
+    // old. A resolver seeing both the (stale) old claim and the new one
+    // treats it as a supersession, so `swarmgit://<name>/<handle>`
+    // transparently follows the re-found. Best-effort: a failure here
+    // doesn't roll back the re-found; the operator can re-run
+    // `vigo swarm puddle name set <name>` afterwards.
+    let new_anchor_hex = hex_id(&local_pub);
+    match crate::swarm::puddle::name::NameClaim::load(&caller.home) {
+        Ok(Some(claim)) => {
+            if claim.body.puddle_pubkey.eq_ignore_ascii_case(&new_anchor_hex) {
+                println!(
+                    "  Note: your puddle name '{}' already points at the new anchor — left unchanged.",
+                    claim.body.name
+                );
+            } else if claim.body.puddle_pubkey.eq_ignore_ascii_case(&cfg.founder_puddle_pubkey) {
+                let body = crate::swarm::puddle::name::NameClaimBody {
+                    puddle_pubkey: new_anchor_hex.clone(),
+                    name: claim.body.name.clone(),
+                    claimed_at: now,
+                    supersedes: delegations.clone(),
+                };
+                match crate::swarm::puddle::name::NameClaim::issue_with(body, |msg| {
+                    sign_with_session(msg)
+                }) {
+                    Ok(new_claim) => match new_claim.save(&caller.home, &caller.username) {
+                        Ok(()) => {
+                            println!(
+                                "  Re-issued puddle name '{}' → ed25519:{} (carries the rekey-delegation chain)",
+                                claim.body.name, new_anchor_hex
+                            );
+                            println!(
+                                "    swarmgit://{}/{} now follows the re-found transparently.",
+                                claim.body.name, cfg.handle
+                            );
+                        }
+                        Err(e) => eprintln!(
+                            "  warning: re-issued the puddle name claim but couldn't write it ({}); \
+                             run `vigo swarm puddle name set {}` after this completes.",
+                            e, claim.body.name
+                        ),
+                    },
+                    Err(e) => eprintln!(
+                        "  warning: couldn't re-issue puddle name claim '{}' ({}); \
+                         run `vigo swarm puddle name set {}` after this completes.",
+                        claim.body.name, e, claim.body.name
+                    ),
+                }
+            } else {
+                println!(
+                    "  Note: your puddle name '{}' points at a different anchor (not this project's) — left unchanged.",
+                    claim.body.name
+                );
+            }
+        }
+        Ok(None) => {}
+        Err(e) => eprintln!(
+            "  warning: couldn't read your puddle name claim ({}); not re-issued.",
+            e
+        ),
+    }
 
     // Byte migration: copy refs from the at-cap bare repo into the
     // new bare repo. Same path as `reanchor`. Root-only; non-root
