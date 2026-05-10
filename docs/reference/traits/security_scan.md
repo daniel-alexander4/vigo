@@ -29,15 +29,28 @@ The `security_scan` trait collector reads output from security scanning tools an
 ```json
 {
   "security_scan": {
+    "unique_critical": 14,
+    "unique_high": 157,
+    "unique_medium": 174,
+    "unique_low": 7930,
     "trivy": {
-      "critical": 2,
-      "high": 5,
+      "critical": 120,
+      "high": 1553,
+      "medium": 1804,
+      "low": 436,
+      "total": 3913,
+      "last_scan": "2026-05-10T13:01:54Z"
+    },
+    "debsecan": {
+      "high": 0,
       "medium": 12,
-      "low": 3,
-      "total": 22
+      "low": 7500,
+      "unassigned": 1,
+      "total": 7513,
+      "last_scan": "2026-05-10T12:58:00Z"
     },
     "lynis": {
-      "hardening_score": 82
+      "score": 82
     },
     "chkrootkit": {
       "infected": 0
@@ -59,7 +72,16 @@ The `security_scan` trait collector reads output from security scanning tools an
 }
 ```
 
-The cross-scanner `cves` list is capped at 200 entries (severity-desc, then CVE-ID-desc). Each entry carries the highest severity seen across scanners, the summed affected-package count, and a one-line `title` (NVD short title from Trivy / the update title on Windows; omitted when no scanner supplied one — debsecan output has no titles). Titles are trimmed to a single line, max 160 characters.
+### Two CVE-count vocabularies — read this before comparing numbers
+
+| Keys | What they count | Surfaced where |
+|------|-----------------|----------------|
+| `unique_critical` / `unique_high` / `unique_medium` / `unique_low` | **Distinct CVE IDs per severity**, deduplicated across *every* scanner that ran (Trivy + debsecan + Windows-updates), highest-severity-wins on dedup. Computed from the full deduped set — **not** capped by the `cves` list limit below. This is the operator-meaningful "how many distinct vulns does this host have" figure. | `/security` per-host "Unique CVEs by Host" table; the per-host "Scan Details" drawer's lead row; the envoy-detail attack-surface badges; the risk scorer's CVE factors; the explorer's "Critical CVEs detected" health alert. **All read these keys** — they agree. |
+| `trivy.{critical,high,medium,low,total}` · `debsecan.{high,medium,low,unassigned,total}` · `windows_updates.{...}` | **Raw per-scanner package-level match counts** — a CVE affecting *N* packages counts *N* times, and each scanner is independent (no cross-scanner dedup). Trivy's `critical` is therefore typically *larger* than `unique_critical` (package multiplicity); debsecan floods `low`/`unassigned` with the full Debian backlog, so `unique_low` can be far *larger* than `trivy.low`. | The per-host "Scan Details" drawer only, under each scanner's own labelled row ("Trivy — N package-level matches", "debsecan — …"). Never aggregated fleet-wide. |
+
+The cross-scanner `cves` list is capped at 200 entries (severity-desc, then CVE-ID-desc). Each entry carries the highest severity seen across scanners, the summed affected-package count, and a one-line `title` (NVD short title from Trivy / the update title on Windows; omitted when no scanner supplied one — debsecan output has no titles). Titles are trimmed to a single line, max 160 characters. When a host has more than 200 distinct CVEs, the `unique_*` counts stay exact but the listed CVEs are only the top 200 by severity (the long tail — all `low` — is dropped from the list); the drawer says "showing first 200", and the only figure that genuinely undercounts is the *fleet-wide* "Unique CVEs" stat (server-side dedup can only see each host's top 200).
+
+Trait key constants for all `security_scan.*` keys live in `server/traits/keys.go` — UI and server code reads through those, never hardcoded strings.
 
 ## Classification
 

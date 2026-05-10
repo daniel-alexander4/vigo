@@ -587,24 +587,13 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 		hasScan := false
 		row := ui.SecurityHostRow{ID: ts.ID, Hostname: ts.Hostname}
 
-		if v, ok := ts.Traits[traits.TrivyCritical]; ok {
+		// Trivy ran iff it reported a summary (`security_scan.trivy.total`
+		// is always present then, even at zero findings). Per-host CVE
+		// counts shown to operators are the cross-scanner deduped `unique_*`
+		// set below — Trivy's raw per-package match counts are surfaced
+		// only in the per-host drawer, not aggregated here.
+		if _, ok := ts.Traits[traits.TrivyTotal]; ok {
 			hasScan = true
-			n := parseInt64(v)
-			row.TrivyCritical = n
-			data.TrivyCritical += n
-		}
-		if v, ok := ts.Traits[traits.TrivyHigh]; ok {
-			n := parseInt64(v)
-			row.TrivyHigh = n
-			data.TrivyHigh += n
-		}
-		if v, ok := ts.Traits[traits.TrivyMedium]; ok {
-			row.TrivyMedium = parseInt64(v)
-			data.TrivyMedium += row.TrivyMedium
-		}
-		if v, ok := ts.Traits[traits.TrivyLow]; ok {
-			row.TrivyLow = parseInt64(v)
-			data.TrivyLow += row.TrivyLow
 		}
 		if v, ok := ts.Traits[traits.LynisScore]; ok {
 			hasScan = true

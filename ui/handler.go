@@ -45,6 +45,7 @@ import (
 	"git.alexander4.io/vigo/server/swarm/lockboxmesh"
 	"git.alexander4.io/vigo/server/swarm/swarmgitmesh"
 	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
+	"git.alexander4.io/vigo/server/traits"
 )
 
 // DataSource abstracts data fetching for UI handlers.
@@ -4530,11 +4531,11 @@ func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Requ
 	// Headline counts read the same deduped trait keys the scorer reads,
 	// so the per-severity badges agree with the points contributed by
 	// the "Critical CVEs" / "High CVEs" / "Medium CVEs" risk factors.
-	data.CVECritical = atoiTrait(flat, "security_scan.unique_critical")
-	data.CVEHigh = atoiTrait(flat, "security_scan.unique_high")
-	data.CVEMedium = atoiTrait(flat, "security_scan.unique_medium")
-	data.CVELow = atoiTrait(flat, "security_scan.unique_low")
-	data.HardeningScore = atoiTrait(flat, "security_scan.lynis.score")
+	data.CVECritical = atoiTrait(flat, traits.UniqueCritical)
+	data.CVEHigh = atoiTrait(flat, traits.UniqueHigh)
+	data.CVEMedium = atoiTrait(flat, traits.UniqueMedium)
+	data.CVELow = atoiTrait(flat, traits.UniqueLow)
+	data.HardeningScore = atoiTrait(flat, traits.LynisScore)
 
 	for k, v := range flat {
 		if strings.HasPrefix(k, "ports.listening.") {
@@ -6866,12 +6867,9 @@ type SecurityDriftRow struct {
 
 // SecurityScanPageData holds aggregated security scan results for the security page.
 type SecurityScanPageData struct {
-	// Fleet-wide totals (raw findings — same CVE affecting multiple packages counts multiple times).
-	TrivyCritical  int64
-	TrivyHigh      int64
-	TrivyMedium    int64
-	TrivyLow       int64
-	// Unique CVE counts (deduplicated across the fleet).
+	// Unique CVE counts — distinct CVE IDs, deduplicated across the fleet
+	// and across scanners. The only CVE-count vocabulary the UI aggregates;
+	// raw per-scanner match counts live in the per-host drawer only.
 	UniqueCVEs     int64 // total unique CVE IDs
 	UniqueCritical int64
 	UniqueHigh     int64
@@ -6908,11 +6906,7 @@ type CVEEntry struct {
 type SecurityHostRow struct {
 	ID             string
 	Hostname       string
-	TrivyCritical  int64 // raw scanner count
-	TrivyHigh      int64
-	TrivyMedium    int64
-	TrivyLow       int64
-	UniqueCritical int64 // unique CVE IDs (agent-authoritative)
+	UniqueCritical int64 // distinct CVE IDs per severity, deduped across scanners (agent-authoritative)
 	UniqueHigh     int64
 	UniqueMedium   int64
 	UniqueLow      int64
@@ -7513,10 +7507,12 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 		alerts = append(alerts, healthAlert{Level: "warning", Title: "Disk usage above 90%", Count: len(diskFullHosts), Hosts: diskFullHosts})
 	}
 
-	// Critical CVEs check.
+	// Critical CVEs check — reads the canonical deduped count
+	// (security_scan.unique_critical), the same key the /security page,
+	// the risk scorer, and the envoy-detail badge use.
 	var cveHosts []string
 	for _, p := range parsed {
-		crit := inventoryTraverse(p.Traits, "security_scan.cve_critical")
+		crit := inventoryTraverse(p.Traits, traits.UniqueCritical)
 		if crit != "-" && crit != "" && crit != "0" {
 			cveHosts = append(cveHosts, p.Hostname+" ("+crit+" critical)")
 		}

@@ -317,7 +317,7 @@
 {{define "security-cached-summary"}}
 <div class="sec-cached-summary">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <h4 style="margin:0;">Trivy Scanner Findings</h4>
+        <h4 style="margin:0;">Scanner Findings</h4>
         <button class="btn btn--sm btn--outline"
                 hx-get="/ui/fragments/security-envoy/{{.EnvoyID}}?live=true"
                 hx-target="#sec-drawer-content"
@@ -332,22 +332,52 @@
         <div class="sec-spinner" aria-hidden="true"></div>
     </div>
 
-    {{with .Cached.Trivy}}
+    {{/* Canonical CVE count — same numbers as the /security per-host table.
+         Distinct CVE IDs per severity, deduplicated across every scanner. */}}
+    {{with .Cached.Unique}}
+    <p style="font-size:13px;font-weight:600;margin:8px 0 2px;">Unique CVEs <span class="text-muted" style="font-weight:400;">— deduplicated across all scanners</span></p>
     <table class="security-drift-table">
-        <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th><th>Last Scan</th></tr></thead>
+        <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th></tr></thead>
+        <tbody><tr>
+            <td class="{{if .Critical}}text-danger{{else}}text-success{{end}}">{{.Critical}}</td>
+            <td class="{{if .High}}text-warning{{else}}text-success{{end}}">{{.High}}</td>
+            <td>{{.Medium}}</td>
+            <td>{{.Low}}</td>
+            <td>{{.Total}}</td>
+        </tr></tbody>
+    </table>
+    {{end}}
+
+    {{/* Raw per-scanner package-match counts — a CVE affecting N packages
+         counts N times here; the cross-scanner deduped figure is the
+         "Unique CVEs" row above. */}}
+    {{with .Cached.Trivy}}
+    <p class="text-muted" style="font-size:11px;margin:10px 0 2px;">Trivy — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
+    <table class="security-drift-table">
+        <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th></tr></thead>
         <tbody><tr>
             <td class="text-danger">{{.Critical}}</td>
             <td class="text-warning">{{.High}}</td>
             <td>{{.Medium}}</td>
             <td>{{.Low}}</td>
-            <td>{{.Total}}</td>
-            <td>{{if .LastScan}}{{.LastScan}}{{else}}—{{end}}</td>
+        </tr></tbody>
+    </table>
+    {{end}}
+    {{with .Cached.Debsecan}}
+    <p class="text-muted" style="font-size:11px;margin:10px 0 2px;">debsecan (Debian security tracker) — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
+    <table class="security-drift-table">
+        <thead><tr><th>High</th><th>Medium</th><th>Low</th><th>Unassigned</th></tr></thead>
+        <tbody><tr>
+            <td class="text-warning">{{.High}}</td>
+            <td>{{.Medium}}</td>
+            <td>{{.Low}}</td>
+            <td>{{.Unassigned}}</td>
         </tr></tbody>
     </table>
     {{end}}
 
     {{if .Cached.CVEs}}
-    <h4>CVEs ({{len .Cached.CVEs}} unique)</h4>
+    <h4>CVEs ({{if .Cached.Unique}}{{.Cached.Unique.Total}}{{else}}{{len .Cached.CVEs}}{{end}} unique{{if .Cached.CVEsTruncated}}, showing first {{len .Cached.CVEs}}{{end}})</h4>
     {{range .Cached.CVEs}}
     <div class="sec-card {{secSeverityClass .Severity}}">
         <div class="sec-card__header">

@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"git.alexander4.io/vigo/server/traits"
 	"github.com/google/uuid"
 )
 
@@ -23,17 +24,50 @@ import (
 // instantly when the security drawer opens. Everything here is sourced from
 // the envoy's last check-in traits via FleetIndex — no agent query required.
 type SecurityDrawerCached struct {
-	Trivy   *TrivyCached
-	Lynis   *LynisCached
-	Rootkit *RootkitCached
-	ClamAV  *ClamAVCached
-	AIDE    *AIDECached
-	CVEs    []CachedCVE
+	// Unique is the canonical per-host CVE count — distinct CVE IDs per
+	// severity, deduplicated across every scanner that ran. This is the
+	// same number the /security per-host table shows; the drawer leads
+	// with it so the two surfaces agree.
+	Unique *UniqueCVECounts
+	// Trivy / Debsecan are raw per-scanner package-match counts (a CVE in
+	// N packages counts N times; the scanners aren't cross-deduped). They
+	// run larger than Unique by that multiplicity, and debsecan floods the
+	// low tier — shown in the drawer as scanner diagnostics, never aggregated.
+	Trivy    *TrivyCached
+	Debsecan *DebsecanCached
+	Lynis    *LynisCached
+	Rootkit  *RootkitCached
+	ClamAV   *ClamAVCached
+	AIDE     *AIDECached
+	CVEs     []CachedCVE
+	// CVEsTruncated is true when the agent's MAX_CVES wire cap dropped
+	// entries — len(CVEs) is then less than Unique.Total(). The count in
+	// Unique stays exact; only the listed CVEs are the top-N by severity.
+	CVEsTruncated bool
 }
+
+// UniqueCVECounts is the operator-meaningful CVE count for one host:
+// distinct CVE IDs per severity, deduplicated across every scanner that
+// ran (Trivy + debsecan + Windows-updates), highest-severity-wins. Sourced
+// from security_scan.unique_{critical,high,medium,low}.
+type UniqueCVECounts struct {
+	Critical, High, Medium, Low int
+}
+
+// Total returns the total distinct CVE count across all severities.
+func (u UniqueCVECounts) Total() int { return u.Critical + u.High + u.Medium + u.Low }
 
 type TrivyCached struct {
 	Critical, High, Medium, Low, Total int
 	LastScan                           string
+}
+
+// DebsecanCached mirrors TrivyCached for the Debian Security Analyzer.
+// debsecan classifies by Debian "urgency" (high/medium/low/unassigned) —
+// it has no "critical" tier. Total is the raw package-level match count.
+type DebsecanCached struct {
+	High, Medium, Low, Unassigned, Total int
+	LastScan                             string
 }
 
 type LynisCached struct {
@@ -232,7 +266,7 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
 		return
 	}
-	hostname, traits, ok := h.dataSource.SecurityScanContext(envoyID)
+	hostname, flat, ok := h.dataSource.SecurityScanContext(envoyID)
 	if !ok {
 		data := SecurityDrawerData{EnvoyID: envoyID, Hostname: hostname}
 		h.renderer.RenderFragment(w, "security", "security-drawer-empty", data)
@@ -242,7 +276,7 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 	data := SecurityDrawerData{
 		EnvoyID:  envoyID,
 		Hostname: hostname,
-		Cached:   buildSecurityCached(traits),
+		Cached:   buildSecurityCached(flat),
 		Timeout:  securityLiveTimeoutSec,
 	}
 
@@ -375,73 +409,105 @@ func (h *Handler) SecurityCerts(w http.ResponseWriter, r *http.Request) {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-func buildSecurityCached(traits map[string]string) SecurityDrawerCached {
+// buildSecurityCached projects an envoy's flat security_scan.* traits into
+// the drawer's instant-render summary. Trait keys come from server/traits so
+// the drawer reads the same keys the /security page and the agent write. The
+// parameter is `flat` (not `traits`) so it doesn't shadow the package.
+func buildSecurityCached(flat map[string]string) SecurityDrawerCached {
 	out := SecurityDrawerCached{}
 
 	getInt := func(k string) int {
-		v, _ := strconv.Atoi(traits[k])
+		v, _ := strconv.Atoi(flat[k])
 		return v
 	}
 	has := func(k string) bool {
-		_, ok := traits[k]
+		_, ok := flat[k]
 		return ok
 	}
 
-	if has("security_scan.trivy.critical") || has("security_scan.trivy.high") {
+	// Canonical CVE count — distinct CVE IDs per severity, cross-scanner
+	// deduped. Present whenever any CVE scanner ran (the agent always emits
+	// unique_* once security_scan has any data). Same numbers the /security
+	// per-host table shows; the drawer leads with it.
+	if has(traits.UniqueCritical) || has(traits.UniqueHigh) || has(traits.UniqueMedium) || has(traits.UniqueLow) {
+		out.Unique = &UniqueCVECounts{
+			Critical: getInt(traits.UniqueCritical),
+			High:     getInt(traits.UniqueHigh),
+			Medium:   getInt(traits.UniqueMedium),
+			Low:      getInt(traits.UniqueLow),
+		}
+	}
+	if has(traits.TrivyCritical) || has(traits.TrivyHigh) {
 		out.Trivy = &TrivyCached{
-			Critical: getInt("security_scan.trivy.critical"),
-			High:     getInt("security_scan.trivy.high"),
-			Medium:   getInt("security_scan.trivy.medium"),
-			Low:      getInt("security_scan.trivy.low"),
-			Total:    getInt("security_scan.trivy.total"),
-			LastScan: traits["security_scan.trivy.last_scan"],
+			Critical: getInt(traits.TrivyCritical),
+			High:     getInt(traits.TrivyHigh),
+			Medium:   getInt(traits.TrivyMedium),
+			Low:      getInt(traits.TrivyLow),
+			Total:    getInt(traits.TrivyTotal),
+			LastScan: flat[traits.TrivyLastScan],
 		}
 	}
-	if has("security_scan.lynis.score") {
+	if has(traits.DebsecanHigh) || has(traits.DebsecanMedium) || has(traits.DebsecanLow) || has(traits.DebsecanUnassigned) {
+		out.Debsecan = &DebsecanCached{
+			High:       getInt(traits.DebsecanHigh),
+			Medium:     getInt(traits.DebsecanMedium),
+			Low:        getInt(traits.DebsecanLow),
+			Unassigned: getInt(traits.DebsecanUnassigned),
+			Total:      getInt(traits.DebsecanTotal),
+			LastScan:   flat[traits.DebsecanLastScan],
+		}
+	}
+	if has(traits.LynisScore) {
 		out.Lynis = &LynisCached{
-			Score:       getInt("security_scan.lynis.score"),
-			Warnings:    getInt("security_scan.lynis.warnings"),
-			Suggestions: getInt("security_scan.lynis.suggestions"),
+			Score:       getInt(traits.LynisScore),
+			Warnings:    getInt(traits.LynisWarnings),
+			Suggestions: getInt(traits.LynisSuggestions),
 		}
 	}
-	if has("security_scan.chkrootkit.clean") || has("security_scan.rkhunter.clean") {
-		rc := traits["security_scan.chkrootkit.clean"]
-		rh := traits["security_scan.rkhunter.clean"]
+	if has(traits.ChkrootkitClean) || has(traits.RkhunterClean) {
+		rc := flat[traits.ChkrootkitClean]
+		rh := flat[traits.RkhunterClean]
 		out.Rootkit = &RootkitCached{
 			BothPresent:     true,
 			ChkrootkitClean: rc == "" || rc == "true",
 			RkhunterClean:   rh == "" || rh == "true",
 		}
 	}
-	if has("security_scan.clamav.clean") {
+	if has(traits.ClamavClean) {
 		out.ClamAV = &ClamAVCached{
-			Clean:    traits["security_scan.clamav.clean"] == "true",
-			Infected: getInt("security_scan.clamav.infected"),
+			Clean:    flat[traits.ClamavClean] == "true",
+			Infected: getInt(traits.ClamavInfected),
 		}
 	}
-	if has("security_scan.aide.clean") {
+	if has(traits.AideClean) {
 		out.AIDE = &AIDECached{
-			Clean:   traits["security_scan.aide.clean"] == "true",
-			Added:   getInt("security_scan.aide.added"),
-			Removed: getInt("security_scan.aide.removed"),
-			Changed: getInt("security_scan.aide.changed"),
+			Clean:   flat[traits.AideClean] == "true",
+			Added:   getInt(traits.AideAdded),
+			Removed: getInt(traits.AideRemoved),
+			Changed: getInt(traits.AideChanged),
 		}
 	}
-	out.CVEs = extractCachedCVEs(traits)
+	out.CVEs = extractCachedCVEs(flat)
+	// The unified CVE list rode the wire capped at the agent's MAX_CVES;
+	// the unique_* counts did not. A shortfall means the listed CVEs are
+	// only the top-N by severity (the long tail dropped, all Low).
+	if out.Unique != nil && out.Unique.Total() > len(out.CVEs) {
+		out.CVEsTruncated = true
+	}
 	return out
 }
 
 // extractCachedCVEs walks security_scan.cves.N.{id,severity,packages,title}
 // keys and collapses them into a displayable slice. Ordered by severity
 // (critical → high → medium → low → unassigned), then CVE ID.
-func extractCachedCVEs(traits map[string]string) []CachedCVE {
+func extractCachedCVEs(flat map[string]string) []CachedCVE {
 	grouped := map[string]*CachedCVE{}
-	for k, v := range traits {
-		if !strings.HasPrefix(k, "security_scan.cves.") {
+	for k, v := range flat {
+		if !strings.HasPrefix(k, traits.PrefixCVEs) {
 			continue
 		}
 		// security_scan.cves.<N>.<field>
-		parts := strings.SplitN(strings.TrimPrefix(k, "security_scan.cves."), ".", 2)
+		parts := strings.SplitN(strings.TrimPrefix(k, traits.PrefixCVEs), ".", 2)
 		if len(parts) != 2 {
 			continue
 		}

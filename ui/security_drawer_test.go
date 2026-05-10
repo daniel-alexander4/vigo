@@ -207,3 +207,84 @@ func TestDebsecanUrgencyCounts_RanksAndDrops(t *testing.T) {
 		t.Errorf("ordering wrong: %+v", got)
 	}
 }
+
+func TestBuildSecurityCached_UniqueLeadsAndScannerCountsFollow(t *testing.T) {
+	// A Debian host: Trivy + debsecan both ran; the cross-scanner unique
+	// counts are the canonical figure, the per-scanner rows are raw
+	// package-match counts (debsecan's flood of Low ⇒ unique.Low ≫ trivy.Low).
+	flat := map[string]string{
+		"security_scan.unique_critical":     "14",
+		"security_scan.unique_high":         "157",
+		"security_scan.unique_medium":       "174",
+		"security_scan.unique_low":          "7930",
+		"security_scan.trivy.critical":      "120",
+		"security_scan.trivy.high":          "1553",
+		"security_scan.trivy.medium":        "1804",
+		"security_scan.trivy.low":           "436",
+		"security_scan.trivy.total":         "3913",
+		"security_scan.trivy.last_scan":     "2026-05-10T13:01:54Z",
+		"security_scan.debsecan.high":       "0",
+		"security_scan.debsecan.medium":     "12",
+		"security_scan.debsecan.low":        "7500",
+		"security_scan.debsecan.unassigned": "1",
+		"security_scan.debsecan.total":      "7513",
+		"security_scan.lynis.score":         "78",
+		// Two CVEs rode the wire; unique total (8275) far exceeds it.
+		"security_scan.cves.0.id":       "CVE-2026-1",
+		"security_scan.cves.0.severity": "critical",
+		"security_scan.cves.1.id":       "CVE-2026-2",
+		"security_scan.cves.1.severity": "high",
+	}
+	got := buildSecurityCached(flat)
+
+	if got.Unique == nil {
+		t.Fatal("Unique should be populated")
+	}
+	if got.Unique.Critical != 14 || got.Unique.Low != 7930 {
+		t.Errorf("Unique = %+v, want Critical=14 Low=7930", *got.Unique)
+	}
+	if got.Unique.Total() != 14+157+174+7930 {
+		t.Errorf("Unique.Total() = %d, want %d", got.Unique.Total(), 14+157+174+7930)
+	}
+	if got.Trivy == nil || got.Trivy.Critical != 120 || got.Trivy.Total != 3913 ||
+		got.Trivy.LastScan != "2026-05-10T13:01:54Z" {
+		t.Errorf("Trivy = %+v, want Critical=120 Total=3913", got.Trivy)
+	}
+	if got.Debsecan == nil || got.Debsecan.Low != 7500 || got.Debsecan.Unassigned != 1 || got.Debsecan.Total != 7513 {
+		t.Errorf("Debsecan = %+v, want Low=7500 Unassigned=1 Total=7513", got.Debsecan)
+	}
+	if got.Lynis == nil || got.Lynis.Score != 78 {
+		t.Errorf("Lynis = %+v, want Score=78", got.Lynis)
+	}
+	if !got.CVEsTruncated {
+		t.Error("CVEsTruncated should be true (2 listed CVEs vs unique total 8275)")
+	}
+}
+
+func TestBuildSecurityCached_NoTruncationWhenListCoversUnique(t *testing.T) {
+	flat := map[string]string{
+		"security_scan.unique_critical": "1",
+		"security_scan.unique_high":     "1",
+		"security_scan.cves.0.id":       "CVE-A",
+		"security_scan.cves.0.severity": "critical",
+		"security_scan.cves.1.id":       "CVE-B",
+		"security_scan.cves.1.severity": "high",
+	}
+	got := buildSecurityCached(flat)
+	if got.Unique == nil || got.Unique.Total() != 2 {
+		t.Fatalf("Unique.Total() = %v, want 2", got.Unique)
+	}
+	if got.CVEsTruncated {
+		t.Error("CVEsTruncated should be false when the list covers the unique count")
+	}
+	if got.Trivy != nil || got.Debsecan != nil {
+		t.Error("no Trivy/Debsecan cards expected when those keys are absent")
+	}
+}
+
+func TestBuildSecurityCached_NoScanData(t *testing.T) {
+	got := buildSecurityCached(map[string]string{})
+	if got.Unique != nil || got.Trivy != nil || got.Debsecan != nil || got.CVEsTruncated || len(got.CVEs) != 0 {
+		t.Errorf("empty traits should yield an empty summary, got %+v", got)
+	}
+}
