@@ -19,6 +19,7 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/registry"
 	"git.alexander4.io/vigo/server/swarm"
@@ -455,7 +456,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	// This bypasses the pattern-level policy cache since expansion varies per envoy.
 	hasCaseRes := config.HasCaseResources(cfg)
 	hasLookups := cfg.HasLookups
-	if hasCaseRes || hasLookups {
+	hasFleetLookups := cfg.HasFleetLookups
+	if hasCaseRes || hasLookups || hasFleetLookups {
 		var traits map[string]any
 		if len(inlineTraits) > 0 {
 			if err := json.Unmarshal(inlineTraits, &traits); err != nil {
@@ -485,6 +487,39 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 				return nil, status.Errorf(codes.Internal, "resolving lookups: %v", err)
 			}
 		}
+		if hasFleetLookups {
+			members := func() []config.FleetMember {
+				es := s.fleetIndex.AllEnvoys()
+				out := make([]config.FleetMember, 0, len(es))
+				for _, e := range es {
+					if e.Revoked {
+						continue
+					}
+					out = append(out, config.FleetMember{
+						Hostname: e.Hostname,
+						IP:       e.IP,
+						Tags:     e.Tags,
+						Traits:   e.Traits,
+						LastSeen: e.LastSeen,
+					})
+				}
+				return out
+			}
+			isStale := func(m config.FleetMember) bool {
+				return freshness.IsStaleFromCycle(m.LastSeen, s.baseInterval, 0)
+			}
+			if err := config.ResolveFleetLookupsInConfig(cloned, members, isStale, time.Now()); err != nil {
+				return nil, status.Errorf(codes.Internal, "resolving fleet lookups: %v", err)
+			}
+			// foreach: over a now-resolved fleet: var (a list) expands here.
+			for i := range cloned.Modules {
+				expanded, err := config.ExpandForEach(cloned.Modules[i].Resources, cloned.Vars)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "expanding foreach for module %q: %v", cloned.Modules[i].Name, err)
+				}
+				cloned.Modules[i].Resources = expanded
+			}
+		}
 		cfg = cloned
 	}
 
@@ -498,7 +533,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 
 	// Get or build cached base bundle, then customize stubs.
 	var bundle *pb.PolicyBundle
-	if s.policyCache != nil && pattern != "" && !hasCaseRes && !hasLookups {
+	if s.policyCache != nil && pattern != "" && !hasCaseRes && !hasLookups && !hasFleetLookups {
 		base, err := s.policyCache.GetOrBuild(pattern, cfg, configVersion, s.streamEdit)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)

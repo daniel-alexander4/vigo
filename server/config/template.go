@@ -97,53 +97,57 @@ func evalBuiltinsServerSide(when string, traits map[string]any) bool {
 	if idx := strings.Index(trimmed, "("); idx > 0 {
 		funcName := trimmed[:idx]
 		argStr := strings.Trim(trimmed[idx:], "()'\"")
-
-		// Traits may be flat ("os.family" keys) or nested ({"os": {"family": ...}}).
-		// Try flat keys first (agent check-in format), fall back to nested.
-		traitVal := func(key string) string {
-			// Flat: "os.family" → traits["os.family"]
-			if v, ok := traits[key]; ok {
-				if s, ok := v.(string); ok {
-					return s
-				}
-			}
-			// Nested: "os.family" → traits["os"]["family"]
-			parts := strings.SplitN(key, ".", 2)
-			if len(parts) == 2 {
-				if sub, ok := traits[parts[0]].(map[string]any); ok {
-					if s, ok := sub[parts[1]].(string); ok {
-						return s
-					}
-				}
-			}
-			return ""
-		}
-
-		switch funcName {
-		case "distro":
-			return strings.EqualFold(traitVal("os.distro"), argStr)
-		case "os_family":
-			// "linux" matches any Linux-based family (debian, rhel, suse, etc.)
-			if strings.EqualFold(argStr, "linux") {
-				family := strings.ToLower(traitVal("os.family"))
-				return family != "" && family != "windows" && family != "darwin" &&
-					family != "freebsd" && family != "openbsd" && family != "netbsd" && family != "illumos"
-			}
-			return strings.EqualFold(traitVal("os.family"), argStr)
-		case "os":
-			return strings.EqualFold(traitVal("os.distro"), argStr)
-		case "arch":
-			return strings.EqualFold(traitVal("os.arch"), argStr)
-		case "version_ge":
-			return traitVal("os.version") >= argStr
-		case "has_display":
-			return traitVal("display.server") != "" && traitVal("display.server") != "none"
-		}
+		return evalTraitFunc(funcName, argStr, traits)
 	}
 
 	return false
 }
 
+// traitValue looks up a trait by dotted key in a traits map that may be flat
+// ("os.family" keys, agent check-in format) or nested ({"os": {"family": ...}}).
+func traitValue(traits map[string]any, key string) string {
+	if v, ok := traits[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	parts := strings.SplitN(key, ".", 2)
+	if len(parts) == 2 {
+		if sub, ok := traits[parts[0]].(map[string]any); ok {
+			if s, ok := sub[parts[1]].(string); ok {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+// evalTraitFunc evaluates a trait-based builtin (distro/os_family/os/arch/
+// version_ge/has_display) against a traits map. Unknown function names → false.
+// Shared by when:-expression evaluation and fleet: selector evaluation.
+func evalTraitFunc(funcName, argStr string, traits map[string]any) bool {
+	switch funcName {
+	case "distro":
+		return strings.EqualFold(traitValue(traits, "os.distro"), argStr)
+	case "os_family":
+		// "linux" matches any Linux-based family (debian, rhel, suse, etc.)
+		if strings.EqualFold(argStr, "linux") {
+			family := strings.ToLower(traitValue(traits, "os.family"))
+			return family != "" && family != "windows" && family != "darwin" &&
+				family != "freebsd" && family != "openbsd" && family != "netbsd" && family != "illumos"
+		}
+		return strings.EqualFold(traitValue(traits, "os.family"), argStr)
+	case "os":
+		return strings.EqualFold(traitValue(traits, "os.distro"), argStr)
+	case "arch":
+		return strings.EqualFold(traitValue(traits, "os.arch"), argStr)
+	case "version_ge":
+		return traitValue(traits, "os.version") >= argStr
+	case "has_display":
+		return traitValue(traits, "display.server") != "" && traitValue(traits, "display.server") != "none"
+	}
+	return false
+}
 
 // RenderVars renders Go template syntax in var values in declaration order.
 // Only string values are rendered; non-string values (int, bool, map, etc.)

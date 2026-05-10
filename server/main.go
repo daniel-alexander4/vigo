@@ -401,6 +401,16 @@ func run() error {
 		}
 	}
 
+	// TTL for resolved fleet: cross-node config lookups (default 30s).
+	if cfg.CheckIn.FleetLookupTTL != "" {
+		if parsed, err := time.ParseDuration(cfg.CheckIn.FleetLookupTTL); err == nil && parsed > 0 {
+			config.SetFleetLookupTTL(parsed)
+		} else if err != nil {
+			slog.Warn("invalid checkin.fleet_lookup_ttl; using default 30s",
+				"value", cfg.CheckIn.FleetLookupTTL, "error", err)
+		}
+	}
+
 	// Parse tuning parameters (all optional, zero values use defaults).
 	sigWindow := parseDuration(cfg.Tuning.SignatureWindow, 0)
 	lastSeenFlush := parseDuration(cfg.Tuning.LastSeenFlush, 10*time.Second)

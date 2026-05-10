@@ -2341,7 +2341,25 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 		IPAddress:       entry.IPAddress,
 	}
 
-	// Expand foreach resources now that vars are fully merged.
+	// Detect fleet: lookups in top-level vars. Parsing/validating here surfaces
+	// a malformed construct at config publish; resolution happens per-envoy at
+	// check-in (it needs the live fleet snapshot).
+	for name, v := range cfg.Vars {
+		inner, ok := asFleetLookupConstruct(v)
+		if !ok {
+			continue
+		}
+		fl, err := ParseFleetLookup(name, inner)
+		if err != nil {
+			return nil, err
+		}
+		cfg.Vars[name] = fl
+		cfg.HasFleetLookups = true
+	}
+
+	// Expand foreach resources now that vars are fully merged. A foreach: over
+	// an unresolved fleet: var is left for the per-envoy clone path (see
+	// ExpandForEach), which re-runs this after ResolveFleetLookupsInConfig.
 	for i := range cfg.Modules {
 		expanded, err := ExpandForEach(cfg.Modules[i].Resources, cfg.Vars)
 		if err != nil {

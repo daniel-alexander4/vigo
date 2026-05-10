@@ -26,6 +26,14 @@ func ExpandForEach(resources []ResourceConfig, vars map[string]any) ([]ResourceC
 		if !ok {
 			return nil, fmt.Errorf("resource %q: foreach var %q not found", res.Name, res.ForEach)
 		}
+		if _, isFleet := raw.(*FleetLookup); isFleet {
+			// foreach: over a fleet: var — the var is still unresolved at config
+			// load. Leave the resource for the deferred ExpandForEach the
+			// per-envoy clone path runs after ResolveFleetLookupsInConfig. (The
+			// fleet: lookup must not set join: for this — foreach: needs a list.)
+			result = append(result, res)
+			continue
+		}
 
 		items, err := toSlice(raw)
 		if err != nil {

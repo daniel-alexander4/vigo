@@ -1,0 +1,37 @@
+name: nginx-upstream
+
+# Renders an nginx upstream block from the live fleet — no hand-maintained
+# backend list. Supply the `app_backends` var where you assign this module
+# (a role, common.vgo, environments.vgo, or a match block), as a fleet: lookup:
+#
+#   vars:
+#     app_backends:
+#       fleet:
+#         where: "tag('app') && os_family('linux')"   # which envoys are backends
+#         select: "    server {{ .IP }}:8080;"        # rendered once per matched envoy
+#         join: "\n"                                  # glue them into one block
+#         # include_stale: false                      # default: drop offline envoys
+#
+# The server resolves this on every check-in from its in-memory fleet index,
+# sorted (no churn from map order), offline hosts excluded, cached for a short
+# TTL (server.yaml checkin.fleet_lookup_ttl, default 30s). where: is the when:
+# language plus tag('<glob>'), host('<glob>'), and trait('<key>','<value>')
+# (use trait() for dotted keys like os.distro). select: sees the matched
+# envoy's {{ .Hostname }} {{ .IP }} {{ .Tags }} {{ .Traits }} — not .Vars.
+
+vars:
+  app_backends: ""   # override via a fleet: lookup; empty → an empty upstream
+
+resources:
+  - name: nginx-upstream-conf
+    type: file
+    target_path: /etc/nginx/conf.d/app-upstream.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Vigo — backends tracked from the live fleet, do not edit
+      upstream app {
+      {{ .Vars.app_backends }}
+      }
+    notify: [reload-nginx]

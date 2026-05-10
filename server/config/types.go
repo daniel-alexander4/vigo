@@ -847,6 +847,7 @@ type CheckInSection struct {
 	JitterPercent       int    `yaml:"jitter_percent" doc:"Random ± jitter applied to the check-in interval (percent)." example:"0-50; 10 (default) spreads load across a ±10% window"`
 	BundleMaxAge        string `yaml:"bundle_max_age" doc:"Signed-bundle TTL on agents (e.g. 24h). \"0\" means bundles never expire." default:"24h" example:"1h, 24h, 168h (accepts s, m, h); 0 to disable"`
 	OfflineThreshold    string `yaml:"offline_threshold" doc:"Override the staleness threshold used by the Offline pill, risk scorer, and stale-envoy notifier. Empty preserves the default 2.5× check-in interval." example:"empty (use 2.5× interval), 5m, 15m (accepts s, m, h)"`
+	FleetLookupTTL      string `yaml:"fleet_lookup_ttl" doc:"How long a resolved fleet: cross-node config lookup is reused before recomputing from the live fleet. Higher = cheaper, staler." default:"30s" example:"30s (default), 1m, 10s"`
 	ObserveOnly         bool   `yaml:"observe_only" doc:"Fleet-wide observe-only mode — all envoys report drift but never apply changes." default:"false" example:"true during Salt/Puppet migration"`
 	ComplianceThreshold int    `yaml:"compliance_threshold" doc:"Convergence percentage below which the convergence.threshold event fires. 0 disables." example:"0-100; 90 for prod alerting, 95 for tight SLOs"`
 }
@@ -868,10 +869,11 @@ type EnvoyConfig struct {
 	Modules         []ModuleConfig            `yaml:"modules"`
 	Vars            map[string]any            `yaml:"vars"`
 	VarOrder        []string                  `yaml:"-"`
-	Tags        []string `yaml:"-"` // static tags from the match block, propagated to FleetIndex on check-in
-	HasLookups  bool     `yaml:"-"` // true if any resource attribute or top-level var is a tag/host/trait lookup table
-	ObserveOnly bool     `yaml:"-"` // observe-only mode: report drift only, don't enforce
-	MerkleRoot  string   `yaml:"-"` // SHA256 Merkle root over modules + vars (computed at load)
+	Tags            []string `yaml:"-"` // static tags from the match block, propagated to FleetIndex on check-in
+	HasLookups      bool     `yaml:"-"` // true if any resource attribute or top-level var is a tag/host/trait lookup table
+	HasFleetLookups bool     `yaml:"-"` // true if any top-level var is a fleet: lookup (cross-node, resolved at check-in)
+	ObserveOnly     bool     `yaml:"-"` // observe-only mode: report drift only, don't enforce
+	MerkleRoot      string   `yaml:"-"` // SHA256 Merkle root over modules + vars (computed at load)
 
 	// Network device fields — populated for virtual envoys managed via gateway proxy.
 	Gateway    string `yaml:"-"` // hostname of managing gateway envoy

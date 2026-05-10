@@ -503,6 +503,46 @@ env:
 
 Env is cross-cutting — declaring it on the match block + centralizing the overrides in a sibling file means the same role can serve every tier with no inline per-env boilerplate. See [Multi-Axis Config](multi-axis-config.md).
 
+### fleet: — Pull a value from the rest of the fleet
+
+**Problem:** A load-balancer's backend pool *is* the current set of `web` hosts. A monitoring file should list every host running `node-exporter`. A cluster member list (`etcd --initial-cluster=…`) should track the actual cluster. Hand-maintaining these as a literal list goes stale the moment a host is added or replaced.
+
+**Solution:** a top-level var whose value is a `fleet:` construct resolves, at check-in, to a value derived from the live fleet — every envoy matching a selector, with a chosen field rendered and (optionally) joined into a block:
+
+```yaml
+# in a common.vgo / environments.vgo / a match block — wherever vars are set
+vars:
+  app_backends:
+    fleet:
+      where: "tag('app') && os_family('linux')"      # selector over each envoy's traits/tags
+      select: "    server {{ .IP }}:8080;"            # rendered once per matched envoy
+      join: "\n"                                      # glue them into one block (omit → a list)
+      include_stale: false                            # default: drop offline envoys
+```
+
+```yaml
+# the module that consumes it
+resources:
+  - name: app-upstream
+    type: file
+    target_path: /etc/nginx/conf.d/app-upstream.conf
+    content: |
+      upstream app {
+      {{ .Vars.app_backends }}
+      }
+    notify: [reload-nginx]
+```
+
+On every check-in the server resolves `app_backends` from its in-memory fleet index — for `web*` and any other host tagged `app` — and the file is rendered with the current pool, sorted (so there's no needless churn from map order). Offline hosts (per the staleness threshold) are excluded unless `include_stale: true`. The result is cached for a short TTL (`checkin.fleet_lookup_ttl`, default 30s) so a check-in is a cache hit, not a fleet walk.
+
+- **`where:`** is the `when:` language plus three fleet-specific builtins: `tag('<glob>')`, `host('<glob>')`, and `trait('<key>', '<value>')` (use `trait()` for dotted trait keys like `os.distro` — the `when:` lexer won't take a dot in a bare identifier). The OS/arch builtins (`os_family`, `distro`, `arch`, `version_ge`, `has_display`) work too. Agent-only builtins (`file_exists`, `has_command`, …) are rejected at config publish — a fleet selector must be fully server-evaluable.
+- **`select:`** is a Go template over the matched envoy's `{{ .Hostname }}`, `{{ .IP }}`, `{{ .Tags }}`, and `{{ .Traits }}` (a flat map — `{{ index .Traits "network.primary_ip" }}` for a dotted key). It does **not** see `.Vars` — the value is the same for every host that uses it, derived from the fleet, not from the asking host.
+- **`join:`** glues the per-envoy strings into one string for `content:`. Omit it and the var is a list instead — which you can `foreach:` over to produce N resources (N firewall rules, N `sshkey` entries): `foreach:` over a `fleet:` var works (it's expanded after the lookup resolves). `foreach:` needs a list, so don't set `join:` in that case.
+- **Where it can appear:** a *top-level* var value only — `myvar: { fleet: {...} }`. Not nested inside another var, and not a resource attribute. Put a `fleet:` in its own var and reference the var.
+- **No inline `{{ if }}`/`{{ range }}`** — Vigo's templates are interpolation-only. Per-instance shaping is the `select:` template plus, if you need it, a second `fleet:` var with a narrower `where:`.
+
+`fleet:` is the one cross-node mechanism — every other layer above governs *which static config applies to which host*; `fleet:` is *config derived from the other hosts' live state*. It's eventually-consistent: at an empty fleet the value is empty and fills in as hosts enroll.
+
 ## Layer 5: Templates — Dynamic Values from Traits
 
 **Problem:** Config file content needs to reference the machine's actual hostname, IP, CPU count, etc.
