@@ -16,12 +16,13 @@ import (
 
 // Substrate-level view of the envoy P2P network. `vigocli swarm` is
 // the substrate — the transport layer every content subsystem rides
-// on. Admin-pushed payloads are `vigocli swarm swarmcast`; personal-DR mirrors
-// are `vigocli swarm swarmgit`; per-user directory sync is `vigocli swarm longdrawer` and
-// `vigocli swarm lockbox`. Muscle memory from the pre-rename era points here
-// for content verbs — the command's long help leads with that
-// disambiguation so a mistyped "swarm distribute" produces an obvious
-// pointer at `payload distribute`.
+// on. Admin-pushed file fan-out is `vigocli swarm swarmcast`; personal-DR
+// mirrors are `vigocli swarm swarmgit`; per-user directory sync is
+// `vigocli swarm longdrawer` and `vigocli swarm lockbox`. Muscle memory
+// from the pre-rename era points here for content verbs — the
+// command's long help leads with that disambiguation so a mistyped
+// "swarm distribute" produces an obvious pointer at
+// `swarmcast distribute`.
 
 type swarmStatusFleet struct {
 	GeneratedAt            time.Time             `json:"generated_at"`
@@ -81,7 +82,7 @@ blob cache, who is seeding, total footprint across the fleet.`,
 
 var swarmStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Fleet-wide substrate totals (envoys, seeders, payloads, footprint)",
+	Short: "Fleet-wide substrate totals (envoys, seeders, blobs, footprint)",
 	Args:  cobra.NoArgs,
 	RunE:  runSwarmStatus,
 }
@@ -256,5 +257,5 @@ func init() {
 	}
 	swarmCleanupCmd.Flags().String("target", "*", "Hostname pattern (filepath.Match glob) to scope the sweep; default '*' = whole fleet")
 	swarmCmd.AddCommand(swarmStatusCmd, swarmPeersCmd, swarmCleanupCmd)
-	swarmCmd.AddCommand(payloadCmd, swarmgitCmd, longdrawerCmd, lockboxCmd, puddleCmd)
+	swarmCmd.AddCommand(swarmcastCmd, swarmgitCmd, longdrawerCmd, lockboxCmd, puddleCmd)
 }

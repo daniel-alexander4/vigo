@@ -21,12 +21,12 @@ import (
 // CLI verb tree under `vigocli swarm swarmcast` wraps the server's
 // `/api/v1/swarm/swarmcast/*` endpoints.
 
-var payloadCmd = &cobra.Command{
-	Use:   "payload",
+var swarmcastCmd = &cobra.Command{
+	Use:   "swarmcast",
 	Short: "Administrator-pushed file distribution on the swarm substrate",
 }
 
-var payloadDistributeCmd = &cobra.Command{
+var swarmcastDistributeCmd = &cobra.Command{
 	Use:   "distribute <file>",
 	Short: "Seed a file for P2P distribution to envoys",
 	Long: `Places a file in the server's seed directory for P2P distribution.
@@ -39,38 +39,38 @@ Examples:
   vigocli swarm swarmcast distribute app-v2.tar.gz --target '*.web.*' --label app-v2
   vigocli swarm swarmcast distribute firmware.bin --target 'dmi.product_name=PowerEdge R750'`,
 	Args: cobra.ExactArgs(1),
-	RunE: runLodeDistribute,
+	RunE: runSwarmcastDistribute,
 }
 
-var payloadStatusCmd = &cobra.Command{
+var swarmcastStatusCmd = &cobra.Command{
 	Use:   "status <sha256>",
-	Short: "Show distribution progress for a payload",
+	Short: "Show distribution progress for a swarmcast",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runLodeStatus,
+	RunE:  runSwarmcastStatus,
 }
 
-var payloadListCmd = &cobra.Command{
+var swarmcastListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all payload payloads and their distribution status",
+	Short: "List all swarmcast files and their distribution status",
 	Args:  cobra.NoArgs,
-	RunE:  runLodeList,
+	RunE:  runSwarmcastList,
 }
 
-var payloadRevokeCmd = &cobra.Command{
+var swarmcastRevokeCmd = &cobra.Command{
 	Use:   "revoke <sha256>",
-	Short: "Revoke a payload payload: stop distribution and evict from envoys",
+	Short: "Revoke a swarmcast: stop distribution and evict from envoys",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runLodeRevoke,
+	RunE:  runSwarmcastRevoke,
 }
 
-var payloadBrokenCmd = &cobra.Command{
+var swarmcastBrokenCmd = &cobra.Command{
 	Use:   "broken",
 	Short: "List broken seed manifests across envoys",
 	Args:  cobra.NoArgs,
-	RunE:  runLodeBroken,
+	RunE:  runSwarmcastBroken,
 }
 
-func runLodeDistribute(cmd *cobra.Command, args []string) error {
+func runSwarmcastDistribute(cmd *cobra.Command, args []string) error {
 	filePath := args[0]
 	target, _ := cmd.Flags().GetString("target")
 	label, _ := cmd.Flags().GetString("label")
@@ -139,7 +139,7 @@ func runLodeDistribute(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runLodeStatus(cmd *cobra.Command, args []string) error {
+func runSwarmcastStatus(cmd *cobra.Command, args []string) error {
 	hash := args[0]
 	client := newAPIClient()
 
@@ -256,7 +256,7 @@ func runLodeStatus(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runLodeList(cmd *cobra.Command, args []string) error {
+func runSwarmcastList(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 
 	type payloadEntry struct {
@@ -354,7 +354,7 @@ func runLodeList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runLodeBroken(cmd *cobra.Command, args []string) error {
+func runSwarmcastBroken(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 
 	var resp struct {
@@ -386,7 +386,7 @@ func runLodeBroken(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runLodeRevoke(cmd *cobra.Command, args []string) error {
+func runSwarmcastRevoke(cmd *cobra.Command, args []string) error {
 	hash := args[0]
 	client := newAPIClient()
 
@@ -430,13 +430,13 @@ func percent(have, need int) int {
 }
 
 func init() {
-	payloadDistributeCmd.Flags().String("target", "*", "Target spec: hostname glob, trait filter (key=value), or '*' for all")
-	payloadDistributeCmd.Flags().String("label", "", "Human-readable label (defaults to filename)")
-	payloadDistributeCmd.Flags().String("retention", "7d", "Auto-evict from agents after this duration (e.g. 7d, 168h); 0 to keep forever")
+	swarmcastDistributeCmd.Flags().String("target", "*", "Target spec: hostname glob, trait filter (key=value), or '*' for all")
+	swarmcastDistributeCmd.Flags().String("label", "", "Human-readable label (defaults to filename)")
+	swarmcastDistributeCmd.Flags().String("retention", "7d", "Auto-evict from agents after this duration (e.g. 7d, 168h); 0 to keep forever")
 
-	payloadListCmd.Flags().String("source", "", "Filter by source: server or seed")
-	payloadListCmd.Flags().String("status", "", "Filter by status: active or complete")
-	payloadListCmd.Flags().Bool("revoked", false, "Include revoked (expired or operator-revoked) payloads")
+	swarmcastListCmd.Flags().String("source", "", "Filter by source: server or seed")
+	swarmcastListCmd.Flags().String("status", "", "Filter by status: active or complete")
+	swarmcastListCmd.Flags().Bool("revoked", false, "Include revoked (expired or operator-revoked) payloads")
 
-	payloadCmd.AddCommand(payloadDistributeCmd, payloadStatusCmd, payloadListCmd, payloadRevokeCmd, payloadBrokenCmd)
+	swarmcastCmd.AddCommand(swarmcastDistributeCmd, swarmcastStatusCmd, swarmcastListCmd, swarmcastRevokeCmd, swarmcastBrokenCmd)
 }
