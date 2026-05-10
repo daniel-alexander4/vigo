@@ -111,11 +111,12 @@ resources:
     when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
       sh -c 'trivy rootfs --format json --severity {{ .Vars.trivy_severity }}
-      --scanners vuln --skip-java-db-update --skip-files "*.log"
+      --scanners vuln --skip-files "*.log"
+      --skip-dirs "/home/*/.cache,/root/.cache,/var/cache,/tmp,/var/lib/docker,/var/lib/containerd,/var/lib/snapd,/var/lib/flatpak,/proc,/sys,/dev"
       --cache-dir /var/cache/trivy --timeout {{ .Vars.trivy_timeout }}s
       --output {{ .Vars.scan_dir }}/trivy.json /
-      && rm -rf /tmp/trivy-* /tmp/trivy /root/.cache/trivy 2>/dev/null;
-      touch /tmp/.vigo-trivy-$(date +%Y%m%d)'
+      && rm -rf /tmp/trivy-* /tmp/trivy /root/.cache/trivy 2>/dev/null
+      && touch /tmp/.vigo-trivy-$(date +%Y%m%d)'
     onlyif: "! test -f /tmp/.vigo-trivy-$(date +%Y%m%d)"
     background: "true"
     timeout: "{{ .Vars.trivy_exec_timeout }}"

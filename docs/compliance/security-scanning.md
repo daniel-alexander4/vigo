@@ -181,13 +181,25 @@ vars:
 
 Each tool runs once per day. The sentinel file pattern (`/tmp/.vigo-<tool>-YYYYMMDD`) prevents repeated scans within the same day.
 
+**Sentinel-on-success vs unconditional sentinel.** The trivy block uses `&& touch` so the sentinel only fires when the scan completes successfully — a failed scan retries on the next convergence cycle instead of being silenced for 24h. The other scanners (chkrootkit, rkhunter, AIDE, ClamAV, debsecan) intentionally use `|| true; touch` because their non-zero exit codes are legitimate findings (e.g., chkrootkit returns non-zero when it detects warnings, AIDE returns non-zero when integrity changes are detected). For those, the sentinel reflects "the scan ran" rather than "the scan succeeded."
+
 ## Background Execution
 
 All scan exec resources use `background: "true"` — the agent spawns each scan as a detached process and returns immediately. Convergence completes in seconds regardless of how long the scans take. Background commands automatically run at the lowest CPU priority (nice 19), which the agent promotes to the `ionice idle` class on Linux (agent 0.30.2+) so scans only get disk I/O when nothing else wants it. Each `run-*` resource also carries a `timeout:` ceiling so a wedged scan (e.g. `aide --check` on a full filesystem) can't linger across cycles — on expiry the agent SIGTERMs the process group, waits 5s, then SIGKILLs, and the next day's cycle respawns cleanly.
 
-The sentinel `touch` command is appended to each scan command (e.g., `&& touch /tmp/.vigo-trivy-$(date +%Y%m%d)`) so the sentinel file is only created when the scan actually finishes. This prevents re-spawning the same scan on subsequent convergence cycles within the same day.
-
 Since background processes run independently, there is no output capture or exit code checking by the agent. Scan results are consumed asynchronously by the trait collector from the output files.
+
+## Trivy Scan Scope
+
+`run-trivy` scans the host root filesystem (`trivy rootfs /`) for OS package vulnerabilities. The default `--skip-dirs` list excludes paths that don't carry install-managed package metadata and would otherwise dominate scan time on workstations or container hosts:
+
+```
+/home/*/.cache,/root/.cache,/var/cache,/tmp,/var/lib/docker,/var/lib/containerd,/var/lib/snapd,/var/lib/flatpak,/proc,/sys,/dev
+```
+
+User browser caches (chromium, firefox), package-manager caches (apt, yum), Docker/containerd image layers, snap/flatpak app sandboxes, and pseudo-filesystems are all skipped. Container layers should be scanned via `trivy image`, not via the host rootfs scan.
+
+If you operate hosts where one of the skipped directories actually contains install-managed binaries (rare), override `run-trivy.command` in a per-envoy matchfile or copy the module and adjust.
 
 ## Customizing Trivy Severity
 
