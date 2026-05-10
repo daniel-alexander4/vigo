@@ -147,16 +147,17 @@ The Trivy and Debsecan detail views include a severity filter bar. Click a level
 
 ## Ask AI
 
-Every finding card in the per-host security drawer carries an **Ask AI** button. Click it to open the AI chat drawer pre-populated with a structured prompt of the form `<hostname> · <kind>: <details>` (e.g. `webby01 · trivy CVE-2024-1234 (high): libssl3 3.0.11→3.0.12 — Memory leak in TLS handshake`).
+Every finding card in the per-host security drawer carries an **Ask AI** button. Click it to open the AI chat drawer pre-populated with a structured prompt of the form `<hostname> · <kind>: <details>`. CVE cards carry the CVE ID, severity, the one-line title, and the canonical record URL — e.g. `webby01 · cve CVE-2023-24538 (critical) — html/template: improper sanitization of JS template literals (https://www.cve.org/CVERecord?id=CVE-2023-24538)`; the live-detail Trivy card additionally carries the affected package and the fixed version.
 
-The assistant replies in a fixed four-section format tailored to vigo:
+The assistant replies in a fixed shape tailored to vigo:
 
-- **Problem.** One sentence summarizing what the finding is.
-- **Action.** One sentence on what needs to change on the host.
-- **Vigo module.** A pasteable `.vgo` snippet for `stockpile/modules/`. When vigo can't fix the finding (active malware, forensic-only investigations), this section explains why instead of providing a snippet.
-- **How it works.** Optional — only when the module's mechanism isn't obvious.
+- A one-line header — for a CVE, `**<CVE-ID> — <title>** · [CVE record](<url>)`; for other findings, a short bold phrase naming what was flagged.
+- **What it is.** 1–2 sentences: the flaw, its impact, the severity, and whether it's actively exploited or only reachable from a network the host is exposed to.
+- **Fix.** 1–2 sentences: what resolves it on the host (e.g. upgrade the package to ≥ the fixed version) and how to confirm afterward. If you clicked a cached CVE card before "Fetch Live Detail", the assistant tells you how to pull the exact package and fixed version.
+- **Vigo module.** A pasteable `.vgo` snippet for `stockpile/modules/`, with any non-obvious mechanism note in `#` comments. When vigo can't fix the finding (active malware, forensic-only investigations, out-of-band approval needed), this section explains why instead of providing a snippet.
+- **Run it now.** Only for urgent findings (CRITICAL/HIGH severity *and* the host is internet-exposed or the CVE is known-exploited): the commands to publish the module and force just that host to converge immediately — `vigocli config publish && vigocli envoys push <hostname>` — instead of waiting for its next interval. A short workflow appears here instead when the fix needs ordered steps (patch → restart → verify).
 
-Available on Trivy CVEs, Debsecan CVEs, Lynis warnings/suggestions, rkhunter warnings, chkrootkit infections, ClamAV findings, AIDE integrity changes, Windows Defender threats, and SCAP failures, plus the cached-summary cards (Lynis, Rootkit, ClamAV, AIDE) that show host-level scan state without per-finding detail.
+Available on Trivy CVEs, Debsecan CVEs, Lynis warnings/suggestions, rkhunter warnings, chkrootkit infections, ClamAV findings, AIDE integrity changes, Windows Defender threats, and SCAP failures, plus the cached-summary cards (CVEs, Lynis, Rootkit, ClamAV, AIDE) that show host-level scan state without per-finding detail.
 
 ## CVE Links
 
