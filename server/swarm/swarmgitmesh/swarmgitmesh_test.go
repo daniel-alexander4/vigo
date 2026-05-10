@@ -14,30 +14,30 @@ func TestSummarizeProjectAllAgree(t *testing.T) {
 	founder := "f00dface" + "00000000000000000000000000000000000000000000000000000000"
 	entries := []projectTrait{
 		{
-			ProjectID:          pid,
-			Handle:             "vigo-web",
+			ProjectID:           pid,
+			Handle:              "vigo-web",
 			FounderPuddlePubkey: founder,
-			Members:            []string{founder},
-			DrScope:            "swarm-wide",
-			HasBareRepo:        true,
-			BareRepoSizeBytes:  4096,
-			HeadRefs:           map[string]string{"refs/heads/main": "abc123"},
-			Envelopes:          envelopeCountsTrait{Revokes: 0, Leaves: 0, DigestHex: "00"},
-			LeafRole:           "Admin",
-			TokenChainDepth:    1,
+			Members:             []string{founder},
+			DrScope:             "swarm-wide",
+			HasBareRepo:         true,
+			BareRepoSizeBytes:   4096,
+			HeadRefs:            map[string]string{"refs/heads/main": "abc123"},
+			Envelopes:           envelopeCountsTrait{Revokes: 0, Leaves: 0, DigestHex: "00"},
+			LeafRole:            "Admin",
+			TokenChainDepth:     1,
 		},
 		{
-			ProjectID:          pid,
-			Handle:             "vigo-web",
+			ProjectID:           pid,
+			Handle:              "vigo-web",
 			FounderPuddlePubkey: founder,
-			Members:            []string{founder},
-			DrScope:            "swarm-wide",
-			HasBareRepo:        true,
-			BareRepoSizeBytes:  4096,
-			HeadRefs:           map[string]string{"refs/heads/main": "abc123"},
-			Envelopes:          envelopeCountsTrait{Revokes: 0, Leaves: 0, DigestHex: "00"},
-			LeafRole:           "Admin",
-			TokenChainDepth:    1,
+			Members:             []string{founder},
+			DrScope:             "swarm-wide",
+			HasBareRepo:         true,
+			BareRepoSizeBytes:   4096,
+			HeadRefs:            map[string]string{"refs/heads/main": "abc123"},
+			Envelopes:           envelopeCountsTrait{Revokes: 0, Leaves: 0, DigestHex: "00"},
+			LeafRole:            "Admin",
+			TokenChainDepth:     1,
 		},
 	}
 	hosts := []string{"plex", "danlap"}
@@ -179,6 +179,54 @@ func TestNilFleetSafe(t *testing.T) {
 	}
 	if f.LookupByHandle("x") != nil {
 		t.Error("nil receiver should return nil from LookupByHandle")
+	}
+}
+
+func TestGroupNameClaims(t *testing.T) {
+	mk := func(name, pk string, claimedAt int64) TraitNameClaim {
+		return TraitNameClaim{
+			User: "dan",
+			Claim: NameClaim{
+				Body:      NameClaimBody{PuddlePubkey: pk, Name: name, ClaimedAt: claimedAt},
+				Signature: "deadbeef",
+			},
+		}
+	}
+	pkA := "aa" + "00112233445566778899aabbccddeeff00112233445566778899aabbccdd"
+	pkB := "bb" + "00112233445566778899aabbccddeeff00112233445566778899aabbccdd"
+
+	envs := []*traitEnvelope{
+		// host1: dan→pkA (old), team→pkB
+		{NameClaims: []TraitNameClaim{mk("dan", pkA, 100), mk("team", pkB, 50)}},
+		// host2: dan→pkA (newer revision — should win), dan→pkB (collision!)
+		{NameClaims: []TraitNameClaim{mk("dan", pkA, 200), mk("dan", pkB, 70)}},
+		// host3: junk entries dropped
+		{NameClaims: []TraitNameClaim{mk("", pkA, 1), mk("x", "", 1)}},
+	}
+	got := groupNameClaims(envs)
+
+	// "dan" has two distinct claimants → collision, both present, sorted by pubkey.
+	dan := got["dan"]
+	if len(dan) != 2 {
+		t.Fatalf("expected 2 claimants for 'dan', got %d: %+v", len(dan), dan)
+	}
+	if dan[0].Body.PuddlePubkey != pkA || dan[1].Body.PuddlePubkey != pkB {
+		t.Errorf("'dan' claimants not sorted by pubkey: %s, %s", dan[0].Body.PuddlePubkey, dan[1].Body.PuddlePubkey)
+	}
+	// The pkA claim should be the freshest revision (claimed_at 200).
+	if dan[0].Body.ClaimedAt != 200 {
+		t.Errorf("'dan'→pkA claimed_at = %d, want 200 (freshest revision wins)", dan[0].Body.ClaimedAt)
+	}
+	// "team" is unambiguous.
+	if len(got["team"]) != 1 || got["team"][0].Body.PuddlePubkey != pkB {
+		t.Errorf("'team' = %+v", got["team"])
+	}
+	// Junk names dropped.
+	if _, ok := got[""]; ok {
+		t.Error("empty name should be dropped")
+	}
+	if _, ok := got["x"]; ok {
+		t.Error("name with empty pubkey should be dropped")
 	}
 }
 

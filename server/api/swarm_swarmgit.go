@@ -39,6 +39,12 @@ func (h *SwarmgitHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/swarm/swarmgit/fleet", read(http.HandlerFunc(h.handleFleet)))
 	mux.Handle("GET /api/v1/swarm/swarmgit/projects/{project_id}/roster",
 		read(http.HandlerFunc(h.handleRoster)))
+	// Friendly puddle-name map (ADR-022). Public-by-construction —
+	// name↔pubkey bindings, nothing secret — so the agent can fetch
+	// it on startup the same way it fetches /api/v1/fleet/pubkeys;
+	// mTLS is the transport guard. vigocli reaches the same data via
+	// `vigocli swarm puddle names list`.
+	mux.HandleFunc("GET /api/v1/swarm/puddle/names", h.handlePuddleNames)
 }
 
 // FleetSnapshot returns the cached aggregated view. The UI handler
@@ -90,6 +96,29 @@ func (h *SwarmgitHandler) handleFleet(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// PuddleNamesSnapshot returns the cached aggregated friendly-name
+// map. The agent's names-cache bootstrap loop and `vigocli swarm
+// puddle names list` both call through this.
+func (h *SwarmgitHandler) PuddleNamesSnapshot(ctx context.Context) (*swarmgitmesh.FleetNames, error) {
+	return h.agg.NamesSnapshot(ctx, h.envoyInputs())
+}
+
+func (h *SwarmgitHandler) handlePuddleNames(w http.ResponseWriter, r *http.Request) {
+	if h.fleetIndex == nil {
+		writeError(w, http.StatusServiceUnavailable, "fleet index not available")
+		return
+	}
+	out, err := h.PuddleNamesSnapshot(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "puddle name map query failed")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(out); err != nil {
+		slog.Debug("puddle names response encode failed", "error", err)
+	}
+}
+
 // RosterResponse is the JSON shape returned by
 // `GET /api/v1/swarm/swarmgit/projects/<pid>/roster`. It carries the
 // canonical member-fleet list for a project plus the metadata helpers
@@ -106,12 +135,12 @@ func (h *SwarmgitHandler) handleFleet(w http.ResponseWriter, r *http.Request) {
 // `ProjectSummary` canonical-field rule. Projects no envoy in the
 // fleet has reported on yet return 404.
 type RosterResponse struct {
-	ProjectID          string   `json:"project_id"`
-	Handle             string   `json:"handle"`
+	ProjectID           string   `json:"project_id"`
+	Handle              string   `json:"handle"`
 	FounderPuddlePubkey string   `json:"founder_puddle_pubkey"`
-	Members            []string `json:"members"`
-	DrScope            string   `json:"dr_scope"`
-	MemberFleetCount   int      `json:"member_fleet_count"`
+	Members             []string `json:"members"`
+	DrScope             string   `json:"dr_scope"`
+	MemberFleetCount    int      `json:"member_fleet_count"`
 }
 
 func (h *SwarmgitHandler) handleRoster(w http.ResponseWriter, r *http.Request) {
@@ -137,12 +166,12 @@ func (h *SwarmgitHandler) handleRoster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp := RosterResponse{
-		ProjectID:          summary.ProjectID,
-		Handle:             summary.Handle,
+		ProjectID:           summary.ProjectID,
+		Handle:              summary.Handle,
 		FounderPuddlePubkey: summary.FounderPuddlePubkey,
-		Members:            summary.Members,
-		DrScope:            summary.DrScope,
-		MemberFleetCount:   summary.MemberFleetCount,
+		Members:             summary.Members,
+		DrScope:             summary.DrScope,
+		MemberFleetCount:    summary.MemberFleetCount,
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(resp); err != nil {

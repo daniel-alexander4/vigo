@@ -25,6 +25,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -62,14 +63,14 @@ type Totals struct {
 
 // ProjectSummary aggregates one project across the fleet.
 type ProjectSummary struct {
-	ProjectID          string               `json:"project_id"`
-	Handle             string               `json:"handle"`
-	FounderPuddlePubkey string               `json:"founder_puddle_pubkey"`
-	Members            []string             `json:"members"`
-	DrScope            string               `json:"dr_scope"`
+	ProjectID           string   `json:"project_id"`
+	Handle              string   `json:"handle"`
+	FounderPuddlePubkey string   `json:"founder_puddle_pubkey"`
+	Members             []string `json:"members"`
+	DrScope             string   `json:"dr_scope"`
 
-	Hosts            []HostPresence       `json:"hosts"`
-	HeadRefs         map[string]RefStatus `json:"head_refs"`
+	Hosts    []HostPresence       `json:"hosts"`
+	HeadRefs map[string]RefStatus `json:"head_refs"`
 
 	MemberFleetCount int      `json:"member_fleet_count"`
 	HostCount        int      `json:"host_count"`
@@ -143,6 +144,8 @@ type Aggregator struct {
 	mu       sync.Mutex
 	cache    *Fleet
 	cacheExp time.Time
+	names    *FleetNames
+	namesExp time.Time
 	ttl      time.Duration
 }
 
@@ -169,6 +172,80 @@ func (a *Aggregator) Snapshot(ctx context.Context, envoys []EnvoyInput) (*Fleet,
 	a.cache = fleet
 	a.cacheExp = time.Now().Add(a.ttl)
 	return fleet, nil
+}
+
+// NamesSnapshot returns the cached aggregated friendly-name map or
+// rebuilds it from the passed envoy list. Independent TTL cache from
+// the project view but the same window.
+func (a *Aggregator) NamesSnapshot(ctx context.Context, envoys []EnvoyInput) (*FleetNames, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.names != nil && time.Now().Before(a.namesExp) {
+		return a.names, nil
+	}
+	out := a.buildNames(ctx, envoys)
+	a.names = out
+	a.namesExp = time.Now().Add(a.ttl)
+	return out, nil
+}
+
+// buildNames walks every (non-revoked) envoy's `swarmgit` trait and
+// groups the `name_claims` entries it carries. The grouping itself is
+// in the pure helper [`groupNameClaims`] so it's unit-testable
+// without a DB.
+func (a *Aggregator) buildNames(ctx context.Context, envoys []EnvoyInput) *FleetNames {
+	envs := make([]*traitEnvelope, 0, len(envoys))
+	for _, e := range envoys {
+		if e.Revoked {
+			continue
+		}
+		env, ok := a.loadTrait(ctx, e.ID)
+		if !ok {
+			continue
+		}
+		envs = append(envs, env)
+	}
+	return &FleetNames{UpdatedAt: time.Now().UTC().Unix(), Names: groupNameClaims(envs)}
+}
+
+// groupNameClaims collapses per-envoy `name_claims` lists into a
+// `name → claims` map, deduped by puddle pubkey (the freshest
+// `claimed_at` wins when several envoys report different revisions of
+// the same puddle's claim during a propagation window). No
+// arbitration: every distinct claimant for a name is kept, sorted by
+// pubkey for stable output.
+func groupNameClaims(envs []*traitEnvelope) map[string][]NameClaim {
+	// name → puddle_pubkey(lower) → freshest claim
+	byName := make(map[string]map[string]NameClaim)
+	for _, env := range envs {
+		for _, nc := range env.NameClaims {
+			name := nc.Claim.Body.Name
+			pk := strings.ToLower(nc.Claim.Body.PuddlePubkey)
+			if name == "" || pk == "" {
+				continue
+			}
+			m := byName[name]
+			if m == nil {
+				m = make(map[string]NameClaim)
+				byName[name] = m
+			}
+			if existing, seen := m[pk]; !seen || nc.Claim.Body.ClaimedAt > existing.Body.ClaimedAt {
+				m[pk] = nc.Claim
+			}
+		}
+	}
+	names := make(map[string][]NameClaim, len(byName))
+	for name, m := range byName {
+		list := make([]NameClaim, 0, len(m))
+		for _, c := range m {
+			list = append(list, c)
+		}
+		sort.Slice(list, func(i, j int) bool {
+			return list[i].Body.PuddlePubkey < list[j].Body.PuddlePubkey
+		})
+		names[name] = list
+	}
+	return names
 }
 
 // build fetches every envoy's `swarmgit` trait, joins per-envoy
@@ -366,20 +443,20 @@ func summarizeProject(projectID string, entries []projectTrait, hosts []string, 
 	}
 
 	return ProjectSummary{
-		ProjectID:          projectID,
-		Handle:             canonical.Handle,
+		ProjectID:           projectID,
+		Handle:              canonical.Handle,
 		FounderPuddlePubkey: canonical.FounderPuddlePubkey,
-		Members:            append([]string(nil), canonical.Members...),
-		DrScope:            canonical.DrScope,
-		Hosts:              hostsList,
-		HeadRefs:           headRefs,
-		MemberFleetCount:   len(canonical.Members),
-		HostCount:          len(hostsList),
-		LastUpdated:        lastUpdated,
-		DivergentRefs:      divergent,
-		RevokesCount:       revokes,
-		LeavesCount:        leaves,
-		DigestUnanimous:    digestUnanimous,
+		Members:             append([]string(nil), canonical.Members...),
+		DrScope:             canonical.DrScope,
+		Hosts:               hostsList,
+		HeadRefs:            headRefs,
+		MemberFleetCount:    len(canonical.Members),
+		HostCount:           len(hostsList),
+		LastUpdated:         lastUpdated,
+		DivergentRefs:       divergent,
+		RevokesCount:        revokes,
+		LeavesCount:         leaves,
+		DigestUnanimous:     digestUnanimous,
 	}
 }
 
@@ -387,18 +464,18 @@ func summarizeProject(projectID string, entries []projectTrait, hosts []string, 
 // projected out of the swarmgit trait for the per-envoy Swarm Load
 // page. Replaces the legacy `EnvoyMirror` shape.
 type EnvoyProject struct {
-	ProjectID         string
-	Handle            string
-	HasBareRepo       bool
-	SizeBytes         uint64
-	BareRepoPath      string
-	HeadRefs          map[string]string
-	UsersWithState    []string
-	LeafRole          string
-	TokenChainDepth   int
-	RevokesCount      int
-	LeavesCount       int
-	DrScope           string
+	ProjectID       string
+	Handle          string
+	HasBareRepo     bool
+	SizeBytes       uint64
+	BareRepoPath    string
+	HeadRefs        map[string]string
+	UsersWithState  []string
+	LeafRole        string
+	TokenChainDepth int
+	RevokesCount    int
+	LeavesCount     int
+	DrScope         string
 }
 
 // EnvoyProjects returns the project entries the envoy reported in
@@ -456,25 +533,69 @@ func (a *Aggregator) loadTrait(ctx context.Context, envoyID string) (*traitEnvel
 // --- trait payload shapes (deserialized from agent JSON) ---
 
 type traitEnvelope struct {
-	UpdatedAt    int64          `json:"updated_at"`
-	ProjectCount int            `json:"project_count"`
-	Projects     []projectTrait `json:"projects"`
+	UpdatedAt      int64            `json:"updated_at"`
+	ProjectCount   int              `json:"project_count"`
+	Projects       []projectTrait   `json:"projects"`
+	NameClaimCount int              `json:"name_claim_count"`
+	NameClaims     []TraitNameClaim `json:"name_claims"`
+}
+
+// TraitNameClaim is one Unix user's friendly-name claim (ADR-022) as
+// it appears inside the `swarmgit` trait. The `Claim` is passed
+// through to the published fleet name map verbatim — the server
+// publishes signed claims; it never re-signs or arbitrates.
+type TraitNameClaim struct {
+	User  string    `json:"user"`
+	Claim NameClaim `json:"claim"`
+}
+
+// NameClaim mirrors the agent's `puddle::name::NameClaim` wire shape.
+// Used both for parsing the trait and for the REST / cache output, so
+// the claim bytes flow through unchanged and resolvers can verify the
+// signature + `supersedes` chain end-to-end.
+type NameClaim struct {
+	Body      NameClaimBody `json:"body"`
+	Signature string        `json:"signature"`
+}
+
+// NameClaimBody is the signed body of a name claim. `Supersedes` is a
+// `[]DelegationEnvelope` in the agent; we keep it as raw JSON since
+// the server only needs `Name` / `PuddlePubkey` / `ClaimedAt` for
+// grouping + dedup, and re-emitting the chain verbatim preserves its
+// signatures.
+type NameClaimBody struct {
+	PuddlePubkey string          `json:"puddle_pubkey"`
+	Name         string          `json:"name"`
+	ClaimedAt    int64           `json:"claimed_at"`
+	Supersedes   json.RawMessage `json:"supersedes,omitempty"`
+}
+
+// FleetNames is the aggregated friendly-name map (ADR-022). Also the
+// JSON shape of `GET /api/v1/swarm/puddle/names` and of the agent's
+// local cache at `/var/lib/vigo/swarm/puddle/names.json`. A name with
+// one claim is unambiguous; a name with several is either a collision
+// (the resolver errors, pointing at the hex form) or a `re-found`
+// supersession (the resolver follows the newer claim's `supersedes`
+// chain). The server emits all of them and decides nothing.
+type FleetNames struct {
+	UpdatedAt int64                  `json:"updated_at"` // unix seconds
+	Names     map[string][]NameClaim `json:"names"`
 }
 
 type projectTrait struct {
-	ProjectID          string                 `json:"project_id"`
-	Handle             string                 `json:"handle"`
-	FounderPuddlePubkey string                 `json:"founder_puddle_pubkey"`
-	Members            []string               `json:"members"`
-	DrScope            string                 `json:"dr_scope"`
-	UsersWithState     []string               `json:"users_with_state"`
-	HasBareRepo        bool                   `json:"has_bare_repo"`
-	BareRepoSizeBytes  uint64                 `json:"bare_repo_size_bytes"`
-	HeadRefs           map[string]string      `json:"head_refs"`
-	Envelopes          envelopeCountsTrait    `json:"envelopes"`
-	LeafRole           string                 `json:"leaf_role,omitempty"`
-	TokenChainDepth    int                    `json:"token_chain_depth"`
-	TokenExpiresAt     *int64                 `json:"token_expires_at"`
+	ProjectID           string              `json:"project_id"`
+	Handle              string              `json:"handle"`
+	FounderPuddlePubkey string              `json:"founder_puddle_pubkey"`
+	Members             []string            `json:"members"`
+	DrScope             string              `json:"dr_scope"`
+	UsersWithState      []string            `json:"users_with_state"`
+	HasBareRepo         bool                `json:"has_bare_repo"`
+	BareRepoSizeBytes   uint64              `json:"bare_repo_size_bytes"`
+	HeadRefs            map[string]string   `json:"head_refs"`
+	Envelopes           envelopeCountsTrait `json:"envelopes"`
+	LeafRole            string              `json:"leaf_role,omitempty"`
+	TokenChainDepth     int                 `json:"token_chain_depth"`
+	TokenExpiresAt      *int64              `json:"token_expires_at"`
 }
 
 type envelopeCountsTrait struct {
