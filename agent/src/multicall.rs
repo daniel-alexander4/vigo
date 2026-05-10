@@ -153,11 +153,11 @@ mod tests {
         // macOS HFS+ default is case-insensitive; the kernel hands us
         // whatever case the caller used in their PATH lookup.
         assert_eq!(
-            classify_argv0(&os("Git-Remote-Vigo")),
+            classify_argv0(&os("Git-Remote-Swarmgit")),
             Some(MulticallMode::GitRemoteSwarmgit)
         );
         assert_eq!(
-            classify_argv0(&os("GIT-REMOTE-VIGO")),
+            classify_argv0(&os("GIT-REMOTE-SWARMGIT")),
             Some(MulticallMode::GitRemoteSwarmgit)
         );
     }
