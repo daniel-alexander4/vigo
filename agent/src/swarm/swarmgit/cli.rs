@@ -450,7 +450,7 @@ fn cmd_init(args: &[String]) -> Result<()> {
 
     let caller = resolve_caller()?;
     let founder_pub = local_puddle_pubkey_bytes(&caller.home)?;
-    let project_id = project_id_for(&founder_pub);
+    let project_id = project_id_for(&founder_pub, &handle);
 
     // Refuse to overwrite an existing project — the founder's
     // bootstrap is a one-shot artifact; re-running init would mint a
@@ -471,6 +471,7 @@ fn cmd_init(args: &[String]) -> Result<()> {
     let now = now_secs();
     let body = TokenBody {
         project_id,
+        handle: handle.clone(),
         subject_puddle_pubkey: founder_pub,
         role: Role::Admin,
         issued_at: now,
@@ -625,6 +626,7 @@ fn cmd_invite(args: &[String]) -> Result<()> {
     let expires_at = expires_days.map(|d| now + (d as i64) * 86400);
     let body = TokenBody {
         project_id,
+        handle: cfg.handle.clone(),
         subject_puddle_pubkey: fleet,
         role,
         issued_at: now,
@@ -770,9 +772,9 @@ fn cmd_join(args: &[String]) -> Result<()> {
 
     // Verify the chain back to the founder pubkey embedded in the
     // invitation's project config. `verify_chain` re-derives
-    // project_id from founder and rejects the chain if it doesn't
-    // match — defense against a malicious invitation that swaps the
-    // founder pubkey to a key the attacker controls.
+    // project_id as `sha256(founder ‖ bootstrap-token handle)` and
+    // rejects the chain if it doesn't match — defense against a
+    // malicious invitation that swaps the founder pubkey or the handle.
     //
     // ADR-019: pass the invitation's delegation chain through to the
     // verifier so a post-rekey founder's leaf chains correctly back
@@ -788,6 +790,18 @@ fn cmd_join(args: &[String]) -> Result<()> {
         now_secs(),
     )
     .map_err(|e| anyhow!("invitation chain failed verification: {}", e))?;
+
+    // The handle the invitation displays must be the one the bootstrap
+    // token committed to (verify_chain proved that handle reproduces
+    // project_id). A mismatch isn't a security hole — project_id is the
+    // cryptographic key — but it would make the local config lie.
+    let bootstrap_handle = invitation.chain.chain[0].body.handle.clone();
+    if invitation.project.handle != bootstrap_handle {
+        bail!(
+            "invitation's project handle '{}' doesn't match the handle bound into its bootstrap token ('{}')",
+            invitation.project.handle, bootstrap_handle
+        );
+    }
 
     // Leaf must be granting access to *our* puddle pubkey.
     let leaf = invitation.chain.chain.last().ok_or_else(|| anyhow!("empty chain"))?;
@@ -970,6 +984,7 @@ fn cmd_re_invite_all(args: &[String]) -> Result<()> {
             let now = now_secs();
             let body = TokenBody {
                 project_id: pid,
+                handle: cfg.handle.clone(),
                 subject_puddle_pubkey: recipient,
                 role: Role::Member,
                 issued_at: now,
@@ -1609,7 +1624,7 @@ fn cmd_reanchor(args: &[String]) -> Result<()> {
     // that's the same as the existing founder, reanchor is a no-op
     // (and would overwrite local state under the same dir) — refuse.
     let new_founder_pub = local_puddle_pubkey_bytes(&caller.home)?;
-    let new_project_id = project_id_for(&new_founder_pub);
+    let new_project_id = project_id_for(&new_founder_pub, &cfg.handle);
     if new_project_id == project_id {
         bail!(
             "this user is already the founder of project '{}' — reanchor is meant for \
@@ -1660,6 +1675,7 @@ To proceed, type the project handle exactly: {}",
     let now = now_secs();
     let body = TokenBody {
         project_id: new_project_id,
+        handle: cfg.handle.clone(),
         subject_puddle_pubkey: new_founder_pub,
         role: Role::Admin,
         issued_at: now,
@@ -1856,7 +1872,7 @@ fn cmd_re_found(args: &[String]) -> Result<()> {
     // founder hasn't rekeyed since founding (current_pubkey ==
     // genesis_pubkey), the new project_id collides with the old —
     // re-found is impossible without first rekeying the puddle.
-    let new_project_id = project_id_for(&local_pub);
+    let new_project_id = project_id_for(&local_pub, &cfg.handle);
     if new_project_id == project_id {
         bail!(
             "the founder hasn't rekeyed since founding project '{}'; the new project_id would \
@@ -1912,6 +1928,7 @@ To proceed, type the project handle exactly: {}",
     // shape `cmd_init` produces.
     let body = TokenBody {
         project_id: new_project_id,
+        handle: cfg.handle.clone(),
         subject_puddle_pubkey: local_pub,
         role: Role::Admin,
         issued_at: now,
@@ -2554,9 +2571,9 @@ mod tests {
         let team = SigningKey::generate(&mut OsRng);
         let founder_pub = founder.verifying_key().to_bytes();
         let team_pub = team.verifying_key().to_bytes();
-        let pid = project_id_for(&founder_pub);
+        let pid = project_id_for(&founder_pub, "proj");
 
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         let member = issue_child(&founder, &bootstrap, &team_pub, Role::Member, 150, None).unwrap();
 
         let invitation = Invitation {

@@ -342,7 +342,7 @@ mod tests {
     fn seed_project(home: &Path, handle: &str) -> [u8; ID_LEN] {
         use crate::swarm::swarmgit::tokens::project_id_for;
         let founder = fresh_key();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let cfg = ProjectConfig {
             version: PROJECT_STATE_VERSION,
             project_id: hex::encode(pid),
@@ -389,7 +389,7 @@ mod tests {
         // users' dot-dirs (e.g., they were both invited as members).
         use crate::swarm::swarmgit::tokens::project_id_for;
         let founder = fresh_key();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let cfg = ProjectConfig {
             version: PROJECT_STATE_VERSION,
             project_id: hex::encode(pid),

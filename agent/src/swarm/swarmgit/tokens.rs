@@ -94,21 +94,28 @@ impl Role {
 /// encoding of these fields; the `Token` envelope wraps body +
 /// signature for transport / persistence.
 ///
-/// Field order in the canonical bytes (1 byte version-prefix-included
-/// via TOKEN_DOMAIN, then):
+/// Field order in the canonical bytes (TOKEN_DOMAIN prefix, then):
 /// 1. project_id (32B)
-/// 2. subject_puddle_pubkey (32B)
-/// 3. role (1B)
-/// 4. issued_at (8B BE i64)
-/// 5. expires_at (8B BE i64, 0 = NEVER_EXPIRES)
-/// 6. signer_puddle_pubkey (32B)
-/// 7. parent_token_id (32B, NO_PARENT when None)
+/// 2. handle (2B BE length + UTF-8 bytes)
+/// 3. subject_puddle_pubkey (32B)
+/// 4. role (1B)
+/// 5. issued_at (8B BE i64)
+/// 6. expires_at (8B BE i64, 0 = NEVER_EXPIRES)
+/// 7. signer_puddle_pubkey (32B)
+/// 8. parent_token_id (32B, NO_PARENT when None)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenBody {
-    /// Project anchor. `project_id = sha256(founder_puddle_pubkey)`
-    /// — content-addressed so the URL `swarmgit://<project_id>/<handle>`
-    /// can't be squatted.
+    /// Project anchor. `project_id = sha256(founder_puddle_pubkey ‖ handle)`
+    /// — content-addressed; the URL is `swarmgit://<project_id>/<handle>`.
+    /// One puddle can found multiple projects (one per repo); each handle
+    /// yields a distinct project_id, so handles can't be squatted.
     pub project_id: [u8; ID_LEN],
+    /// The project's human-readable handle. Committed to here so the
+    /// bootstrap token's `sha256(signer_puddle_pubkey ‖ handle)`
+    /// reproduces `project_id` — that binding is what stops a third
+    /// party minting a chain for a `project_id` they don't own.
+    /// Identical across every token in a chain.
+    pub handle: String,
     /// Puddle pubkey this token grants access to. Holders of puddle
     /// F's wrapped key (any envoy that ran `puddle unlock` /
     /// `join`) can push under a token whose subject is F.
@@ -147,9 +154,17 @@ pub struct Token {
 /// silently produce two different signed messages for what looks
 /// like the same body.
 pub fn canonical_bytes(body: &TokenBody) -> Vec<u8> {
-    let mut out = Vec::with_capacity(TOKEN_DOMAIN.len() + 32 + 32 + 1 + 8 + 8 + 32 + 32);
+    let handle_bytes = body.handle.as_bytes();
+    let mut out =
+        Vec::with_capacity(TOKEN_DOMAIN.len() + 32 + 2 + handle_bytes.len() + 32 + 1 + 8 + 8 + 32 + 32);
     out.extend_from_slice(TOKEN_DOMAIN);
     out.extend_from_slice(&body.project_id);
+    // Handle: 2-byte BE length prefix so `pubkey ‖ handle` (and the
+    // surrounding fields) parse unambiguously regardless of handle
+    // content. `validate_handle` caps the length at 64; the u16 prefix
+    // is defense in depth, not a constraint relaxation.
+    out.extend_from_slice(&(handle_bytes.len() as u16).to_be_bytes());
+    out.extend_from_slice(handle_bytes);
     out.extend_from_slice(&body.subject_puddle_pubkey);
     out.push(body.role.as_byte());
     out.extend_from_slice(&body.issued_at.to_be_bytes());
@@ -159,11 +174,16 @@ pub fn canonical_bytes(body: &TokenBody) -> Vec<u8> {
     out
 }
 
-/// `project_id = sha256(founder_puddle_pubkey)`. Stable across all
-/// envoys; baked into the URL.
-pub fn project_id_for(founder_puddle_pubkey: &[u8; ID_LEN]) -> [u8; ID_LEN] {
+/// `project_id = sha256(founder_puddle_pubkey ‖ handle)`. Stable across
+/// all envoys; baked into the URL `swarmgit://<project_id>/<handle>`.
+/// Including the handle lets one puddle found multiple projects (one per
+/// repo) — each handle yields a distinct project_id. The pubkey is
+/// fixed-width (32 B), so `pubkey ‖ handle_bytes` is unambiguous without
+/// a separator.
+pub fn project_id_for(founder_puddle_pubkey: &[u8; ID_LEN], handle: &str) -> [u8; ID_LEN] {
     let mut hasher = Sha256::new();
     hasher.update(founder_puddle_pubkey);
+    hasher.update(handle.as_bytes());
     let digest = hasher.finalize();
     let mut out = [0u8; ID_LEN];
     out.copy_from_slice(&digest);
@@ -426,12 +446,11 @@ pub fn verify_chain(
         return Err(ChainError::Empty);
     }
 
-    // Check the project_id is consistent with the founder pubkey
-    // (catches "different project entirely" before signature work).
-    let expected_project_id = project_id_for(founder_puddle_pubkey);
-    if &expected_project_id != project_id {
-        return Err(ChainError::RootNotFounder);
-    }
+    // The `project_id == sha256(founder_puddle_pubkey ‖ handle)`
+    // binding is checked below, after the bootstrap token's signature is
+    // verified — we need the handle from the (signature-verified)
+    // bootstrap body, and binding it any earlier would trust an
+    // unverified field.
 
     // ---- Pre-walk: validate the delegation chain itself. ----
     if delegations.len() > super::envelopes::DELEGATION_MAX_LEN {
@@ -504,6 +523,14 @@ pub fn verify_chain(
             msg: e.to_string(),
         })?;
     expiry_check(root, 0, now)?;
+    // Now that the bootstrap's signature is verified and its signer is
+    // confirmed to be the genesis founder pubkey, the project_id MUST be
+    // sha256(genesis founder pubkey ‖ bootstrap handle). This binding is
+    // what stops a third party minting a chain claiming a project_id
+    // derived from someone else's pubkey + handle.
+    if &project_id_for(founder_puddle_pubkey, &root.body.handle) != project_id {
+        return Err(ChainError::RootNotFounder);
+    }
 
     // ---- Walk the rest of the chain. ----
     for i in 1..chain.len() {
@@ -511,6 +538,12 @@ pub fn verify_chain(
         let cur = &chain[i];
 
         if &cur.body.project_id != project_id {
+            return Err(ChainError::ProjectIdMismatch { index: i });
+        }
+        // Every token in a chain carries the same handle as the
+        // bootstrap. A mismatch can't break the binding (project_id is
+        // the cryptographic key) but is a tamper signal — reject it.
+        if cur.body.handle != root.body.handle {
             return Err(ChainError::ProjectIdMismatch { index: i });
         }
         if parent.body.role != Role::Admin {
@@ -596,13 +629,15 @@ mod serde_signature {
 /// None and signer_puddle_pubkey = founder pubkey."
 pub fn issue_bootstrap(
     founder_signing_key: &SigningKey,
+    handle: &str,
     issued_at: i64,
     expires_at: Option<i64>,
 ) -> Result<Token> {
     let founder_pub = founder_signing_key.verifying_key().to_bytes();
-    let project_id = project_id_for(&founder_pub);
+    let project_id = project_id_for(&founder_pub, handle);
     let body = TokenBody {
         project_id,
+        handle: handle.to_string(),
         subject_puddle_pubkey: founder_pub,
         role: Role::Admin,
         issued_at,
@@ -641,6 +676,7 @@ pub fn issue_child(
     }
     let body = TokenBody {
         project_id: parent.body.project_id,
+        handle: parent.body.handle.clone(),
         subject_puddle_pubkey: *subject_fleet,
         role: subject_role,
         issued_at,
@@ -666,19 +702,66 @@ mod tests {
     }
 
     #[test]
-    fn project_id_is_sha256_of_founder_pubkey() {
+    fn project_id_is_sha256_of_founder_pubkey_and_handle() {
         let k = fresh_key();
-        let p = project_id_for(&pub_bytes(&k));
+        let p = project_id_for(&pub_bytes(&k), "vigo");
         let mut hasher = Sha256::new();
         hasher.update(pub_bytes(&k));
+        hasher.update(b"vigo");
         let expected: [u8; 32] = hasher.finalize().into();
         assert_eq!(p, expected);
     }
 
     #[test]
+    fn project_id_distinct_per_handle_same_founder() {
+        // The whole point of folding the handle into the id: one puddle
+        // founds N projects (one per repo), each with its own project_id.
+        let k = fresh_key();
+        let a = project_id_for(&pub_bytes(&k), "vigo");
+        let b = project_id_for(&pub_bytes(&k), "tessera");
+        let a2 = project_id_for(&pub_bytes(&k), "vigo");
+        assert_ne!(a, b, "different handles must yield different project_ids");
+        assert_eq!(a, a2, "same (pubkey, handle) must be stable");
+        // Different founders, same handle → still distinct (no squatting).
+        let k2 = fresh_key();
+        assert_ne!(project_id_for(&pub_bytes(&k2), "vigo"), a);
+    }
+
+    #[test]
+    fn verify_chain_rejects_forged_project_id_for_someone_elses_pubkey() {
+        // Attacker mints a bootstrap claiming a project_id derived from
+        // the *victim's* pubkey + a known handle, but signs it with the
+        // attacker's own key. `verify_chain` must reject: the bootstrap's
+        // signer (attacker) doesn't reproduce the claimed project_id.
+        let victim = fresh_key();
+        let attacker = fresh_key();
+        let victim_project = project_id_for(&pub_bytes(&victim), "secret-repo");
+        let body = TokenBody {
+            project_id: victim_project,
+            handle: "secret-repo".to_string(),
+            subject_puddle_pubkey: pub_bytes(&attacker),
+            role: Role::Admin,
+            issued_at: 100,
+            expires_at: None,
+            signer_puddle_pubkey: pub_bytes(&attacker),
+            parent_token_id: None,
+        };
+        let forged = Token::issue(&attacker, body).unwrap();
+        // Even if the receiver is told the *attacker* is the founder
+        // (so the signer matches), the project_id won't reproduce from
+        // sha256(attacker ‖ handle), so it's still rejected.
+        let r1 = verify_chain(&victim_project, &pub_bytes(&attacker), &[], &[forged.clone()], 200);
+        assert_eq!(r1, Err(ChainError::RootNotFounder));
+        // And if the receiver is told the victim is the founder, the
+        // bootstrap signer (attacker) ≠ founder → rejected too.
+        let r2 = verify_chain(&victim_project, &pub_bytes(&victim), &[], &[forged], 200);
+        assert_eq!(r2, Err(ChainError::RootNotFounder));
+    }
+
+    #[test]
     fn token_id_is_stable_across_calls() {
         let k = fresh_key();
-        let token = issue_bootstrap(&k, 100, None).unwrap();
+        let token = issue_bootstrap(&k, "proj", 100, None).unwrap();
         let id1 = token.id();
         let id2 = token.id();
         assert_eq!(id1, id2);
@@ -687,7 +770,7 @@ mod tests {
     #[test]
     fn token_id_changes_with_any_field_flip() {
         let k = fresh_key();
-        let mut a = issue_bootstrap(&k, 100, None).unwrap();
+        let mut a = issue_bootstrap(&k, "proj", 100, None).unwrap();
         let original = a.id();
         // Flip issued_at → ID changes.
         a.body.issued_at = 101;
@@ -697,14 +780,14 @@ mod tests {
     #[test]
     fn bootstrap_signature_verifies() {
         let k = fresh_key();
-        let token = issue_bootstrap(&k, 100, None).unwrap();
+        let token = issue_bootstrap(&k, "proj", 100, None).unwrap();
         token.verify_signature().expect("bootstrap should verify");
     }
 
     #[test]
     fn tampered_body_fails_verification() {
         let k = fresh_key();
-        let mut token = issue_bootstrap(&k, 100, None).unwrap();
+        let mut token = issue_bootstrap(&k, "proj", 100, None).unwrap();
         // Flip a byte in subject_puddle_pubkey.
         token.body.subject_puddle_pubkey[0] ^= 0x01;
         let err = token.verify_signature().unwrap_err();
@@ -716,7 +799,8 @@ mod tests {
         let founder = fresh_key();
         let other = fresh_key();
         let body = TokenBody {
-            project_id: project_id_for(&pub_bytes(&founder)),
+            project_id: project_id_for(&pub_bytes(&founder), "proj"),
+            handle: "proj".to_string(),
             subject_puddle_pubkey: pub_bytes(&founder),
             role: Role::Admin,
             issued_at: 100,
@@ -732,15 +816,15 @@ mod tests {
     #[test]
     fn verify_chain_accepts_lone_bootstrap() {
         let founder = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap], 200).unwrap();
     }
 
     #[test]
     fn verify_chain_rejects_empty() {
         let founder = fresh_key();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let r = verify_chain(&pid, &pub_bytes(&founder), &[], &[], 200);
         assert_eq!(r.unwrap_err(), ChainError::Empty);
     }
@@ -748,13 +832,13 @@ mod tests {
     #[test]
     fn verify_chain_rejects_root_with_parent_set() {
         let founder = fresh_key();
-        let mut bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let mut bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         bootstrap.body.parent_token_id = Some([0xFF; 32]);
         // Re-sign so signature is over the tampered body — otherwise
         // we'd fail at signature check first.
         let bytes = canonical_bytes(&bootstrap.body);
         bootstrap.signature = founder.sign(&bytes).to_bytes();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let r = verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap], 200);
         assert_eq!(r.unwrap_err(), ChainError::RootHasParent);
     }
@@ -765,7 +849,8 @@ mod tests {
         let imposter = fresh_key();
         // Imposter issues a bootstrap claiming founder's project_id.
         let body = TokenBody {
-            project_id: project_id_for(&pub_bytes(&founder)),
+            project_id: project_id_for(&pub_bytes(&founder), "proj"),
+            handle: "proj".to_string(),
             subject_puddle_pubkey: pub_bytes(&imposter),
             role: Role::Admin,
             issued_at: 100,
@@ -774,7 +859,7 @@ mod tests {
             parent_token_id: None,
         };
         let bootstrap = Token::issue(&imposter, body).unwrap();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let r = verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap], 200);
         assert_eq!(r.unwrap_err(), ChainError::RootNotFounder);
     }
@@ -783,7 +868,7 @@ mod tests {
     fn verify_chain_two_link_admin_then_member() {
         let founder = fresh_key();
         let team = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         // Bootstrap is the founder's admin token; founder uses it to
         // mint a member token for `team`.
         let member = issue_child(
@@ -795,7 +880,7 @@ mod tests {
             None,
         )
         .unwrap();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap, member], 200).unwrap();
     }
 
@@ -804,7 +889,7 @@ mod tests {
         let founder = fresh_key();
         let lieutenant = fresh_key();
         let team = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         let lieutenant_admin = issue_child(
             &founder,
             &bootstrap,
@@ -823,7 +908,7 @@ mod tests {
             None,
         )
         .unwrap();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         verify_chain(
             &pid,
             &pub_bytes(&founder),
@@ -839,7 +924,7 @@ mod tests {
         let founder = fresh_key();
         let team = fresh_key();
         let other = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         // Founder mints a *member* token for team.
         let team_member = issue_child(
             &founder,
@@ -854,7 +939,8 @@ mod tests {
         // We construct the body manually because `issue_child` would
         // refuse — we want to test the *verify* path.
         let body = TokenBody {
-            project_id: project_id_for(&pub_bytes(&founder)),
+            project_id: project_id_for(&pub_bytes(&founder), "proj"),
+            handle: "proj".to_string(),
             subject_puddle_pubkey: pub_bytes(&other),
             role: Role::Member,
             issued_at: 160,
@@ -863,7 +949,7 @@ mod tests {
             parent_token_id: Some(team_member.id()),
         };
         let bogus_child = Token::issue(&team, body).unwrap();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let err = verify_chain(
             &pid,
             &pub_bytes(&founder),
@@ -879,7 +965,7 @@ mod tests {
     fn verify_chain_rejects_parent_id_mismatch() {
         let founder = fresh_key();
         let team = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         let mut child = issue_child(
             &founder,
             &bootstrap,
@@ -895,7 +981,7 @@ mod tests {
         child.body.parent_token_id = Some([0xAB; 32]);
         let bytes = canonical_bytes(&child.body);
         child.signature = founder.sign(&bytes).to_bytes();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let err = verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap, child], 200)
             .unwrap_err();
         assert_eq!(err, ChainError::ParentMismatch { index: 1 });
@@ -910,7 +996,7 @@ mod tests {
         let founder = fresh_key();
         let team = fresh_key();
         let imposter = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         let team_member = issue_child(
             &founder,
             &bootstrap,
@@ -924,7 +1010,7 @@ mod tests {
         bogus.body.signer_puddle_pubkey = pub_bytes(&imposter);
         let bytes = canonical_bytes(&bogus.body);
         bogus.signature = imposter.sign(&bytes).to_bytes();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let err = verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap, bogus], 200)
             .unwrap_err();
         assert!(
@@ -944,7 +1030,7 @@ mod tests {
         let lieutenant = fresh_key();
         let team = fresh_key();
         let imposter = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         let lieutenant_admin = issue_child(
             &founder,
             &bootstrap,
@@ -969,7 +1055,7 @@ mod tests {
         bogus.body.signer_puddle_pubkey = pub_bytes(&imposter);
         let bytes = canonical_bytes(&bogus.body);
         bogus.signature = imposter.sign(&bytes).to_bytes();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let err = verify_chain(
             &pid,
             &pub_bytes(&founder),
@@ -984,8 +1070,8 @@ mod tests {
     #[test]
     fn verify_chain_rejects_expired_token() {
         let founder = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, Some(150)).unwrap();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, Some(150)).unwrap();
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         // now=200, expiry=150 → expired
         let err = verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap.clone()], 200)
             .unwrap_err();
@@ -1005,7 +1091,7 @@ mod tests {
         let founder = fresh_key();
         let team = fresh_key();
         let other_founder = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         let mut child = issue_child(
             &founder,
             &bootstrap,
@@ -1016,10 +1102,10 @@ mod tests {
         )
         .unwrap();
         // Swap project_id to a different project, re-sign.
-        child.body.project_id = project_id_for(&pub_bytes(&other_founder));
+        child.body.project_id = project_id_for(&pub_bytes(&other_founder), "proj");
         let bytes = canonical_bytes(&child.body);
         child.signature = founder.sign(&bytes).to_bytes();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let err =
             verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap, child], 200).unwrap_err();
         assert_eq!(err, ChainError::ProjectIdMismatch { index: 1 });
@@ -1029,7 +1115,7 @@ mod tests {
     fn json_roundtrip_preserves_signature_and_id() {
         let founder = fresh_key();
         let team = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         let member = issue_child(
             &founder,
             &bootstrap,
@@ -1064,9 +1150,10 @@ mod tests {
         // chosen to differ only in field representation (Option::Some(0)
         // vs Option::None for expires_at, when 0 is the wire sentinel).
         let founder = fresh_key();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let body_none = TokenBody {
             project_id: pid,
+            handle: "proj".to_string(),
             subject_puddle_pubkey: pub_bytes(&founder),
             role: Role::Admin,
             issued_at: 100,
@@ -1099,6 +1186,7 @@ mod tests {
     ) -> Token {
         let body = TokenBody {
             project_id: bootstrap.body.project_id,
+            handle: "proj".to_string(),
             subject_puddle_pubkey: *subject,
             role: Role::Admin,
             issued_at,
@@ -1119,11 +1207,11 @@ mod tests {
         let new_founder = fresh_key();
         let new_admin = fresh_key(); // any subject, distinct from signer
 
-        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&genesis, "proj", 100, None).unwrap();
         // Delegation: signed by genesis, names new_founder, dated AFTER bootstrap.
         let d0 = DelegationEnvelope::build(
             &genesis,
-            &project_id_for(&pub_bytes(&genesis)),
+            &project_id_for(&pub_bytes(&genesis), "proj"),
             &pub_bytes(&new_founder),
             200,
         );
@@ -1134,7 +1222,7 @@ mod tests {
             &pub_bytes(&new_admin),
             300,
         );
-        let pid = project_id_for(&pub_bytes(&genesis));
+        let pid = project_id_for(&pub_bytes(&genesis), "proj");
         verify_chain(&pid, &pub_bytes(&genesis), &[d0], &[bootstrap, admin], 400)
             .expect("post-rekey admin should verify via delegation");
     }
@@ -1147,7 +1235,7 @@ mod tests {
         let genesis = fresh_key();
         let new_founder = fresh_key();
         let team = fresh_key();
-        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&genesis, "proj", 100, None).unwrap();
         let pre_rekey_admin = issue_child(
             &genesis,
             &bootstrap,
@@ -1159,11 +1247,11 @@ mod tests {
         .unwrap();
         let d0 = DelegationEnvelope::build(
             &genesis,
-            &project_id_for(&pub_bytes(&genesis)),
+            &project_id_for(&pub_bytes(&genesis), "proj"),
             &pub_bytes(&new_founder),
             200,
         );
-        let pid = project_id_for(&pub_bytes(&genesis));
+        let pid = project_id_for(&pub_bytes(&genesis), "proj");
         verify_chain(
             &pid,
             &pub_bytes(&genesis),
@@ -1183,8 +1271,8 @@ mod tests {
         let r2 = fresh_key();
         let r3 = fresh_key();
         let admin_subject = fresh_key();
-        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
-        let pid = project_id_for(&pub_bytes(&genesis));
+        let bootstrap = issue_bootstrap(&genesis, "proj", 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis), "proj");
         let d0 = DelegationEnvelope::build(&genesis, &pid, &pub_bytes(&r1), 200);
         let d1 = DelegationEnvelope::build(&r1, &pid, &pub_bytes(&r2), 300);
         let d2 = DelegationEnvelope::build(&r2, &pid, &pub_bytes(&r3), 400);
@@ -1209,8 +1297,8 @@ mod tests {
         let r1 = fresh_key();
         let r2 = fresh_key();
         let admin_subject = fresh_key();
-        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
-        let pid = project_id_for(&pub_bytes(&genesis));
+        let bootstrap = issue_bootstrap(&genesis, "proj", 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis), "proj");
         let d0 = DelegationEnvelope::build(&genesis, &pid, &pub_bytes(&r1), 200);
         let d1 = DelegationEnvelope::build(&r1, &pid, &pub_bytes(&r2), 300);
         // Attacker signs a fresh admin under r1 with issued_at past d_1.
@@ -1238,8 +1326,8 @@ mod tests {
         let genesis = fresh_key();
         let r1 = fresh_key();
         let admin_subject = fresh_key();
-        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
-        let pid = project_id_for(&pub_bytes(&genesis));
+        let bootstrap = issue_bootstrap(&genesis, "proj", 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis), "proj");
         let d0 = DelegationEnvelope::build(&genesis, &pid, &pub_bytes(&r1), 200);
         // r1 attempts to sign a token at issued_at=150 (before d_0
         // at 200). Outside r1's window, inside genesis's.
@@ -1268,8 +1356,8 @@ mod tests {
         let genesis = fresh_key();
         let attacker = fresh_key();
         let attacker_pubkey = pub_bytes(&attacker);
-        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
-        let pid = project_id_for(&pub_bytes(&genesis));
+        let bootstrap = issue_bootstrap(&genesis, "proj", 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis), "proj");
         // Attacker signs the delegation with their own key but claims
         // genesis is the signer.
         let mut forged = DelegationEnvelope::build(&attacker, &pid, &attacker_pubkey, 200);
@@ -1309,8 +1397,8 @@ mod tests {
         let r1 = fresh_key();
         let imposter = fresh_key();
         let r2 = fresh_key();
-        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
-        let pid = project_id_for(&pub_bytes(&genesis));
+        let bootstrap = issue_bootstrap(&genesis, "proj", 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis), "proj");
         let d0 = DelegationEnvelope::build(&genesis, &pid, &pub_bytes(&r1), 200);
         // d_1 is signed by `imposter`, not r1 — link is broken.
         let d1_bad = DelegationEnvelope::build(&imposter, &pid, &pub_bytes(&r2), 300);
@@ -1328,8 +1416,8 @@ mod tests {
         let genesis = fresh_key();
         let r1 = fresh_key();
         let r2 = fresh_key();
-        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
-        let pid = project_id_for(&pub_bytes(&genesis));
+        let bootstrap = issue_bootstrap(&genesis, "proj", 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis), "proj");
         // Identical delegated_at on both → ordering violated.
         let d0 = DelegationEnvelope::build(&genesis, &pid, &pub_bytes(&r1), 200);
         let d1 = DelegationEnvelope::build(&r1, &pid, &pub_bytes(&r2), 200);
@@ -1346,9 +1434,9 @@ mod tests {
         let genesis = fresh_key();
         let other_genesis = fresh_key();
         let r1 = fresh_key();
-        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
-        let our_pid = project_id_for(&pub_bytes(&genesis));
-        let other_pid = project_id_for(&pub_bytes(&other_genesis));
+        let bootstrap = issue_bootstrap(&genesis, "proj", 100, None).unwrap();
+        let our_pid = project_id_for(&pub_bytes(&genesis), "proj");
+        let other_pid = project_id_for(&pub_bytes(&other_genesis), "proj");
         // Delegation signed by genesis but pointed at some other
         // project. Signature verifies against the canonical bytes
         // including the other_pid; we need to manually construct it
@@ -1372,8 +1460,8 @@ mod tests {
         // longer than DELEGATION_MAX_LEN, the verifier rejects it
         // before walking signatures.
         let genesis = fresh_key();
-        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
-        let pid = project_id_for(&pub_bytes(&genesis));
+        let bootstrap = issue_bootstrap(&genesis, "proj", 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis), "proj");
         let mut delegations = Vec::with_capacity(DELEGATION_MAX_LEN + 1);
         let mut prev_signer = genesis.clone();
         for i in 0..(DELEGATION_MAX_LEN + 1) {
@@ -1409,7 +1497,7 @@ mod tests {
         // that haven't yet seen a founder rekey.
         let founder = fresh_key();
         let team = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         let member = issue_child(
             &founder,
             &bootstrap,
@@ -1419,7 +1507,7 @@ mod tests {
             None,
         )
         .unwrap();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap, member], 200)
             .expect("empty delegations must reproduce pre-ADR-019 behavior");
     }

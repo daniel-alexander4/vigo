@@ -554,6 +554,7 @@ fn rebuild_tokens_json(
 
     let body = TokenBody {
         project_id: *project_id,
+        handle: bootstrap.body.handle.clone(),
         subject_puddle_pubkey: *new_pubkey,
         role: Role::Admin,
         issued_at,
@@ -602,7 +603,7 @@ mod tests {
         founder: &SigningKey,
         handle: &str,
     ) -> ProjectConfig {
-        let pid = project_id_for(&pub_bytes(founder));
+        let pid = project_id_for(&pub_bytes(founder), "proj");
         let founder_hex = hex::encode(pub_bytes(founder));
         let cfg = ProjectConfig {
             version: PROJECT_STATE_VERSION,
@@ -620,7 +621,7 @@ mod tests {
         // (slice 4) can load chain[0] back. The rebuild path is part
         // of apply_post_rotation_swarmgit_sync's contract for
         // founded projects.
-        let bootstrap = issue_bootstrap(founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(founder, "proj", 100, None).unwrap();
         let chain = TokenChain {
             version: PROJECT_STATE_VERSION,
             chain: vec![bootstrap],
@@ -736,7 +737,7 @@ mod tests {
         let new = fresh_key();
         let other_user = fresh_key();
         // Project founded by someone else; local user not a member.
-        let pid = project_id_for(&pub_bytes(&other_user));
+        let pid = project_id_for(&pub_bytes(&other_user), "proj");
         let cfg = ProjectConfig {
             version: PROJECT_STATE_VERSION,
             project_id: hex_id(&pid),
@@ -779,7 +780,7 @@ mod tests {
         let old = fresh_key();
         let new = fresh_key();
         let other_founder = fresh_key();
-        let pid = project_id_for(&pub_bytes(&other_founder));
+        let pid = project_id_for(&pub_bytes(&other_founder), "proj");
         let cfg = ProjectConfig {
             version: PROJECT_STATE_VERSION,
             project_id: hex_id(&pid),

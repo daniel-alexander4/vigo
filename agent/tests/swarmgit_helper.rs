@@ -78,13 +78,13 @@ async fn helper_daemon_push_and_clone_roundtrip() {
     let mut rng = rand::rngs::OsRng;
     let signing_key = ed25519_dalek::SigningKey::generate(&mut rng);
     let founder_pub = signing_key.verifying_key().to_bytes();
-    let project_id = project_id_for(&founder_pub);
+    let project_id = project_id_for(&founder_pub, "proj");
 
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs() as i64;
-    let bootstrap = issue_bootstrap(&signing_key, now, None).expect("bootstrap token");
+    let bootstrap = issue_bootstrap(&signing_key, "proj", now, None).expect("bootstrap token");
 
     // Per-user project state under the spoofed home.
     let cfg = ProjectConfig {

@@ -1082,7 +1082,7 @@ mod tests {
     #[test]
     fn chain_header_round_trips() {
         let founder = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         let chain = TokenChain {
             version: super::super::project_state::PROJECT_STATE_VERSION,
             chain: vec![bootstrap],
@@ -1098,8 +1098,8 @@ mod tests {
     fn verify_chain_for_push_accepts_well_formed_chain() {
         let dir = tempfile::tempdir().unwrap();
         let founder = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let push = PushChain {
             version: PUSH_CHAIN_VERSION,
             chain: vec![bootstrap],
@@ -1113,13 +1113,13 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let founder = fresh_key();
         let other = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         let push = PushChain {
             version: PUSH_CHAIN_VERSION,
             chain: vec![bootstrap],
             delegations: Vec::new(),
         };
-        let wrong_pid = project_id_for(&pub_bytes(&other));
+        let wrong_pid = project_id_for(&pub_bytes(&other), "proj");
         let err = verify_chain_for_push(&push, &wrong_pid, dir.path(), 200).unwrap_err();
         assert!(err.to_string().contains("chain verification"));
     }
@@ -1226,10 +1226,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let founder = fresh_key();
         let team = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         let member =
             issue_child(&founder, &bootstrap, &pub_bytes(&team), Role::Member, 150, None).unwrap();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let push = PushChain {
             version: PUSH_CHAIN_VERSION,
             chain: vec![bootstrap, member.clone()],
@@ -1256,8 +1256,8 @@ mod tests {
     fn push_chain_header_roundtrip_with_delegations() {
         let founder = fresh_key();
         let new_founder = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let chain = TokenChain {
             version: super::super::project_state::PROJECT_STATE_VERSION,
             chain: vec![bootstrap],
@@ -1283,8 +1283,8 @@ mod tests {
         let genesis = fresh_key();
         let new_founder = fresh_key();
         let new_admin_subject = fresh_key();
-        let bootstrap = issue_bootstrap(&genesis, 100, None).unwrap();
-        let pid = project_id_for(&pub_bytes(&genesis));
+        let bootstrap = issue_bootstrap(&genesis, "proj", 100, None).unwrap();
+        let pid = project_id_for(&pub_bytes(&genesis), "proj");
         let delegation = super::super::envelopes::DelegationEnvelope::build(
             &genesis,
             &pid,
@@ -1294,6 +1294,7 @@ mod tests {
         // Mint a fresh admin under NEW chained off bootstrap.
         let body = super::super::tokens::TokenBody {
             project_id: pid,
+            handle: "proj".to_string(),
             subject_puddle_pubkey: pub_bytes(&new_admin_subject),
             role: super::super::tokens::Role::Admin,
             issued_at: 250,

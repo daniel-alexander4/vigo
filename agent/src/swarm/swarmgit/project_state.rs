@@ -70,7 +70,13 @@ use super::tokens::{Token, ID_LEN};
 /// Schema version for `project.json` and `tokens.json` files. Bump on
 /// incompatible changes; per zero-users doctrine the loader rejects
 /// older versions and treats them as missing rather than migrating.
-pub const PROJECT_STATE_VERSION: u32 = 1;
+///
+/// v2: `project_id` is now `sha256(founder_puddle_pubkey ‖ handle)` (was
+/// `sha256(founder_puddle_pubkey)`), and the token body carries a `handle`
+/// field — so v1 `tokens.json` chains no longer verify. The loader
+/// returning `None` on the version mismatch lets stale v1 state be
+/// scrubbed cleanly instead of failing mid-verify.
+pub const PROJECT_STATE_VERSION: u32 = 2;
 
 /// Per-user state directory: `~<user>/.vigo-swarmgit/`.
 ///
@@ -609,7 +615,7 @@ mod tests {
 
     fn sample_config() -> ProjectConfig {
         let founder = fresh_key();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         ProjectConfig {
             version: PROJECT_STATE_VERSION,
             project_id: hex_id(&pid),
@@ -786,7 +792,7 @@ mod tests {
     fn sample_chain() -> TokenChain {
         let founder = fresh_key();
         let team = fresh_key();
-        let bootstrap = issue_bootstrap(&founder, 100, None).unwrap();
+        let bootstrap = issue_bootstrap(&founder, "proj", 100, None).unwrap();
         let member = issue_child(
             &founder,
             &bootstrap,
@@ -875,7 +881,7 @@ mod tests {
         let mut b = sample_config();
         // Different founder → different project_id → separate dir.
         let other_founder = fresh_key();
-        let other_pid = project_id_for(&pub_bytes(&other_founder));
+        let other_pid = project_id_for(&pub_bytes(&other_founder), "proj");
         b.project_id = hex_id(&other_pid);
         b.founder_puddle_pubkey = hex_id(&pub_bytes(&other_founder));
         b.handle = "alpha".to_string();
@@ -984,7 +990,7 @@ mod tests {
         let home = tempdir().unwrap();
         let founder = fresh_key();
         let rekey1 = fresh_key();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let chain = DelegationChain {
             version: PROJECT_STATE_VERSION,
             delegations: vec![sample_delegation(
@@ -1005,7 +1011,7 @@ mod tests {
         let founder = fresh_key();
         let rekey1 = fresh_key();
         let rekey2 = fresh_key();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
 
         let mut chain = DelegationChain::default();
         chain.version = PROJECT_STATE_VERSION;
@@ -1039,7 +1045,7 @@ mod tests {
         // cap check would just mean save() refuses on disk.
         let home = tempdir().unwrap();
         let founder = fresh_key();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let mut chain = DelegationChain::default();
         chain.version = PROJECT_STATE_VERSION;
 
@@ -1091,7 +1097,7 @@ mod tests {
         // memory without going through append) must still refuse.
         let home = tempdir().unwrap();
         let founder = fresh_key();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let mut delegations = Vec::new();
         let mut prev_signer = founder.clone();
         for i in 0..(DELEGATION_MAX_LEN + 1) {
@@ -1121,7 +1127,7 @@ mod tests {
         // Synthesize entries by pushing zero-data delegations — we're
         // exercising length predicates only, not signatures.
         let founder = fresh_key();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         for _ in 0..2 {
             chain.delegations.push(sample_delegation(
                 &founder,
@@ -1158,7 +1164,7 @@ mod tests {
     fn delegation_chain_load_version_mismatch_returns_none() {
         let home = tempdir().unwrap();
         let founder = fresh_key();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let chain = DelegationChain {
             version: 99,
             delegations: vec![sample_delegation(&founder, &pub_bytes(&fresh_key()), &pid, 0)],
@@ -1180,7 +1186,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let home = tempdir().unwrap();
         let founder = fresh_key();
-        let pid = project_id_for(&pub_bytes(&founder));
+        let pid = project_id_for(&pub_bytes(&founder), "proj");
         let chain = DelegationChain {
             version: PROJECT_STATE_VERSION,
             delegations: vec![sample_delegation(
