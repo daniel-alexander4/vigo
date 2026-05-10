@@ -1056,9 +1056,19 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	cfg := entry.config
 	for _, mod := range cfg.Modules {
 		trace.Modules = append(trace.Modules, mod.Name)
-		if _, exists := moduleSources[mod.Name]; !exists {
-			moduleSources[mod.Name] = "direct"
+		if _, exists := moduleSources[mod.Name]; exists {
+			continue
 		}
+		if mod.BaseName != "" {
+			// A foreach: instance — attribute it to the base module's source.
+			if src, ok := moduleSources[mod.BaseName]; ok {
+				moduleSources[mod.Name] = "foreach: " + mod.BaseName + " (" + src + ")"
+			} else {
+				moduleSources[mod.Name] = "foreach: " + mod.BaseName
+			}
+			continue
+		}
+		moduleSources[mod.Name] = "direct"
 	}
 	trace.ModuleSources = moduleSources
 
@@ -2166,14 +2176,30 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 		}
 	}
 
+	// Expand module refs carrying foreach: into one synthetic ref per list item
+	// ("<module>[<key>]"). Each item's fields become {{ .Each.<field> }} (maps)
+	// or {{ .Item }} (scalars) inside the instance's resources.
+	moduleRefs, err := expandForeachModuleRefs(moduleRefs, moduleDefs, entry.Vars)
+	if err != nil {
+		return nil, err
+	}
+
 	// Resolve module definitions into ModuleConfigs, carrying conditional fields.
 	var modules []ModuleConfig
 	for _, ref := range moduleRefs {
-		def, ok := moduleDefs[ref.Name]
+		defName := ref.Name
+		if ref.BaseName != "" {
+			defName = ref.BaseName
+		}
+		def, ok := moduleDefs[defName]
 		if !ok {
-			return nil, fmt.Errorf("module %q does not exist%s",
-				ref.Name,
-				notFoundHint(ref.Name, moduleCandidates(moduleDefs), "add a module definition to modules/"))
+			via := ""
+			if ref.BaseName != "" {
+				via = " (referenced via foreach:)"
+			}
+			return nil, fmt.Errorf("module %q%s does not exist%s",
+				defName, via,
+				notFoundHint(defName, moduleCandidates(moduleDefs), "add a module definition to modules/"))
 		}
 		// Shallow-clone the compliance map so later mutation of one doesn't
 		// leak into the other. ModuleDefinition.Compliance already carries
@@ -2186,12 +2212,23 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 				compliance[k] = append([]string(nil), v...)
 			}
 		}
+		resources := cloneResources(def.Resources)
+		modName := def.Name
+		if ref.BaseName != "" {
+			modName = ref.Name
+			expanded, rerr := expandModuleInstanceResources(resources, ref.EachItem, ref.InstanceKey)
+			if rerr != nil {
+				return nil, fmt.Errorf("module %q instance [%s]: %w", ref.BaseName, ref.InstanceKey, rerr)
+			}
+			resources = expanded
+		}
 		modules = append(modules, ModuleConfig{
-			Name:       def.Name,
+			Name:       modName,
 			DependsOn:  append([]string(nil), def.DependsOn...),
 			When:       ref.When,
-			Resources:  cloneResources(def.Resources),
+			Resources:  resources,
 			Compliance: compliance,
+			BaseName:   ref.BaseName,
 		})
 	}
 
@@ -2213,14 +2250,24 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 	}
 
 	// Resolve "before" into reverse "depends_on". Module A with before: [B]
-	// means B depends on A — so we add A to B's DependsOn list.
-	modulesByName := make(map[string]int, len(modules))
+	// means B depends on A — so we add A to B's DependsOn list. before: targets
+	// name a module by its definition name; if that module was foreach-expanded,
+	// the relation fans out to every instance.
+	modulesByBase := make(map[string][]int, len(modules))
 	for i, mod := range modules {
-		modulesByName[mod.Name] = i
+		base := mod.Name
+		if mod.BaseName != "" {
+			base = mod.BaseName
+		}
+		modulesByBase[base] = append(modulesByBase[base], i)
 	}
 	for _, mod := range modules {
-		for _, target := range moduleDefs[mod.Name].Before {
-			idx, ok := modulesByName[target]
+		defName := mod.Name
+		if mod.BaseName != "" {
+			defName = mod.BaseName
+		}
+		for _, target := range moduleDefs[defName].Before {
+			idxs, ok := modulesByBase[target]
 			if !ok {
 				// Distinguish three cases for a more actionable error:
 				//  1. Target module does not exist anywhere in modules/
@@ -2240,14 +2287,21 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 				return nil, fmt.Errorf("module %q has before: [%s] but module %q is not assigned to this envoy — add it to the envoy's modules: list (directly or via a role) or drop the before: reference",
 					mod.Name, target, target)
 			}
-			modules[idx].DependsOn = appendUnique(modules[idx].DependsOn, mod.Name)
+			for _, idx := range idxs {
+				modules[idx].DependsOn = appendUnique(modules[idx].DependsOn, mod.Name)
+			}
 		}
 	}
 
-	// Extract module names for var collection below.
+	// Extract module definition names for var collection below. A foreach
+	// instance's var defaults come from the base module definition.
 	moduleNames := make([]string, len(moduleRefs))
 	for i, ref := range moduleRefs {
-		moduleNames[i] = ref.Name
+		if ref.BaseName != "" {
+			moduleNames[i] = ref.BaseName
+		} else {
+			moduleNames[i] = ref.Name
+		}
 	}
 
 	// Build vars: module defaults → envoy-level overrides.
@@ -2861,7 +2915,10 @@ func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig, perEn
 		}
 	}
 
-	if len(commons) == 0 && len(inheritedUsercrates) == 0 {
+	// Nothing to inherit and no environments.vgo overlays to apply — bail.
+	// (perEnvOverrides is checked too so an environments.vgo block still
+	// applies even when there are no common.vgo files in the chain.)
+	if len(commons) == 0 && len(inheritedUsercrates) == 0 && len(perEnvOverrides) == 0 {
 		return
 	}
 

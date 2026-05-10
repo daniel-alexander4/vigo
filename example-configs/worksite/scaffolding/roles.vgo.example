@@ -5,11 +5,26 @@
 #   - name: webserver
 #     includes: [bastion]
 #     modules: [nginx, certbot]
+#
+# A module reference can carry foreach: (a list var) + key: (the item field
+# naming each instance) to stamp the module out once per list item — see the
+# webserver-vhosts role below and modules/web/vhost.vgo.example.
 
 roles:
   - name: webserver
     includes: [bastion]
     modules: [nginx]
+
+  # nginx (singleton: package + service) plus one vhost module instance per
+  # entry in the `vhosts` var — supply that var in environments.vgo, a
+  # common.vgo, or a match block. Expands to vhost[<server_name>] instances.
+  - name: webserver-vhosts
+    includes: [bastion]
+    modules:
+      - nginx
+      - name: vhost
+        foreach: vhosts
+        key: server_name
 
   - name: database
     modules: [postgresql]

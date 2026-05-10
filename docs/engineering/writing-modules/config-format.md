@@ -110,6 +110,8 @@ modules:
 
 Modules in a role can be plain strings or objects with a `when:` expression for conditional inclusion.
 
+A module object can also carry `foreach:` (a list var) and, for a list of maps, `key:` (the item field naming each instance) — the module is instantiated once per list item as `<module>[<key>]`, with each item's fields available inside as `{{ .Each.<field> }}`. This works wherever a module reference appears (role `modules:`/`case:`, `common.vgo`, `environments.vgo`, a match block). See [Composition Patterns: Module-level foreach](composition-patterns.md#module-level-foreach--stamp-out-a-module-per-item).
+
 ### Role-Level When
 
 A role definition can have its own `when:` expression. All modules in the role inherit the condition unless they have their own:

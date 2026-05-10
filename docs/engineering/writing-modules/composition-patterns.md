@@ -252,6 +252,83 @@ resources:
     command: "/usr/local/bin/deploy.sh"
 ```
 
+### Module-level `foreach:` — Stamp Out a Module Per Item
+
+**Problem:** A "vhost" isn't one resource — it's a docroot directory *plus* a config file *plus* a logrotate stanza *plus* a service reload. You have 8 of them, each with a different `server_name` and a couple of per-vhost knobs. Resource-level `foreach:` (Layer 4) only multiplies *one* resource at a time; you want to multiply the whole bundle.
+
+**Solution:** Write the bundle once as a module, then reference it with `foreach:` — the module is instantiated once per item in a list var. Each item's fields are available throughout the module's resources as `{{ .Each.<field> }}` (or `{{ .Item }}` for a list of scalars).
+
+```yaml
+# modules/vhost.vgo — the "vhost type", written once
+name: vhost
+vars:
+  doc_root_base: "/var/www"
+resources:
+  - name: vhost-docroot
+    type: directory
+    target_path: "{{ .Vars.doc_root_base }}/{{ .Each.server_name }}"
+    owner: www-data
+    mode: "0755"
+  - name: vhost-conf
+    type: file
+    target_path: "/etc/nginx/sites-enabled/{{ .Each.server_name }}.conf"
+    source: templates/nginx-vhost.tmpl     # the template sees .Each, .Vars, .Traits
+    depends_on: [vhost-docroot]
+    notify: [nginx-reload]                 # a resource in the (singleton) nginx module
+  - name: vhost-logrotate
+    type: file
+    target_path: "/etc/logrotate.d/nginx-{{ .Each.server_name }}"
+    content: |
+      /var/log/nginx/{{ .Each.server_name }}.access.log { weekly rotate 8 compress }
+```
+
+```yaml
+# roles/webserver.vgo — reference the module with foreach: + key:
+name: webserver
+modules:
+  - nginx                       # singleton: package + service (defines nginx-reload)
+  - name: vhost
+    foreach: vhosts             # the var list to iterate
+    key: server_name            # which item field names each instance
+  - firewall-web
+```
+
+```yaml
+# environments.vgo (or a common.vgo, or the match block) — the data
+env:
+  production:
+    vars:
+      vhosts:
+        - server_name: www.example.com
+        - server_name: shop.example.com
+```
+
+On a production web host this expands to module instances **`vhost[www.example.com]`** and **`vhost[shop.example.com]`**, each carrying its three resources with `{{ .Each.server_name }}` baked in. The module is written once; every host's set of vhosts is pure data, and it can live at whatever layer fits — a `common.vgo` for "every host in this subtree", `environments.vgo` for "prod vs. staging", or the match block for one host.
+
+**Naming.** A foreach instance and its resources are suffixed with `[<key>]` — module `vhost[www.example.com]`, resource `vhost-conf[www.example.com]` — so instances never collide. You write plain resource names in the module; the loader does the suffixing, and rewrites intra-module `depends_on`/`notify`/`subscribes`/`before` references to match (so `depends_on: [vhost-docroot]` becomes `depends_on: [vhost-docroot[www.example.com]]` inside that instance, while a reference to a resource in another module — `notify: [nginx-reload]` — is left alone).
+
+**Keys.**
+
+- A list of **scalars** (`foreach: cache_kinds` over `[nginx, redis]`) is keyed by the value: instances `cache[nginx]`, `cache[redis]`. Omit `key:`.
+- A list of **maps** requires `key:` on the ref naming which field supplies the suffix. It's a load-time error to omit it, to point `key:` at a field an item lacks, or for two items to resolve to the same key.
+
+**Var defaults.** A foreach instance still gets the module's `vars:` defaults (`doc_root_base` above), merged with the envoy's vars as usual. The `{{ .Each.<field> }}` values come from the list item and are substituted at config-load time; `{{ .Vars.<field> }}` and `{{ .Traits.<field> }}` resolve at check-in like any other module. Because `.Each` is substituted by name at load time, **every item must provide every `.Each` field the module references** — a leftover `{{ .Each.something }}` is a load error, not a silent skip.
+
+**Per-instance variation** is interpolation (`{{ .Each.port }}`) plus, for "this instance also gets an extra resource", a resource in the module gated on `when:` against an item field:
+
+```yaml
+  # in modules/vhost.vgo
+  - name: vhost-extra-locations
+    type: blockinfile
+    when: "'{{ .Each.has_extra }}' == 'yes'"        # items set has_extra: yes / no
+    target_path: "/etc/nginx/sites-enabled/{{ .Each.server_name }}.conf"
+    content: "{{ .Each.extra_locations }}"
+```
+
+Items then carry `has_extra: yes` (and `extra_locations:`) or `has_extra: no`. Vigo's template language is interpolation-only — there is no `{{ if }}`/`{{ range }}` *inside* a `content:` body — so per-instance structural differences are expressed as separate `when:`-gated resources (or, for a clean split, a second module `foreach:`-ed over a filtered sub-list). This is by design: config stays data, readable at a glance, and statically lintable.
+
+**Limitations.** A module can be `foreach:`-ed under one name at most (the same name used both plainly and with `foreach:`, or two `foreach:` refs of the same module, is collapsed by the first-ref-wins rule — put everything in one list). A resource *inside* a foreach'd module that carries its own resource-level `foreach:` iterates a global var, not the module item — nested data-dependent iteration isn't supported.
+
 ## Layer 4: Resource Tools — Eliminate Per-Resource Repetition
 
 ### foreach — Generate N resources from one definition

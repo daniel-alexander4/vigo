@@ -1,0 +1,80 @@
+name: vhost
+
+# A parameterized "vhost type": one module, instantiated once per item in a
+# list var. Reference it from a role / common.vgo / environments.vgo / match
+# block with foreach: (the list) and key: (which item field names each
+# instance), e.g.:
+#
+#   roles:
+#     - name: webserver
+#       modules:
+#         - nginx                 # singleton — defines reload-nginx
+#         - name: vhost
+#           foreach: vhosts
+#           key: server_name
+#
+#   # then in environments.vgo / common.vgo / a match block:
+#   vars:
+#     vhosts:
+#       - server_name: www.example.com
+#       - server_name: shop.example.com
+#
+# Each item's fields are available throughout this module as {{ .Each.<field> }}.
+# Resource names get a [<server_name>] suffix automatically, so instances never
+# collide; intra-module depends_on/notify are rewritten to match. Every item
+# must supply every .Each field this module references (here: just server_name).
+#
+# Per-instance structural variation — "this vhost also gets an extra block" —
+# is *not* an inline {{ if }} in a content body (Vigo's templates are
+# interpolation-only). Two ways to do it:
+#   1. Add a when:-gated resource here, e.g.
+#        - name: vhost-extra
+#          type: blockinfile
+#          when: "'{{ .Each.has_extra }}' == 'yes'"
+#          target_path: "/etc/nginx/sites-enabled/{{ .Each.server_name }}.conf"
+#          content: "{{ .Each.extra }}"
+#      ...but then every vhosts item must carry has_extra (yes/no) AND extra.
+#   2. Or keep this module clean and add a second module foreach'd over a
+#      filtered sub-list (e.g. vhosts_with_extras) where every item has the
+#      extra fields.
+
+vars:
+  doc_root_base: "/var/www"
+
+resources:
+  - name: vhost-docroot
+    type: directory
+    target_path: "{{ .Vars.doc_root_base }}/{{ .Each.server_name }}"
+    owner: www-data
+    group: www-data
+    mode: "0755"
+
+  - name: vhost-conf
+    type: file
+    target_path: "/etc/nginx/sites-enabled/{{ .Each.server_name }}.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Vigo — do not edit manually
+      server {
+          server_name {{ .Each.server_name }};
+          root {{ .Vars.doc_root_base }}/{{ .Each.server_name }};
+          access_log /var/log/nginx/{{ .Each.server_name }}.access.log;
+      }
+    depends_on: [vhost-docroot]
+    notify: [reload-nginx]
+
+  - name: vhost-logrotate
+    type: file
+    target_path: "/etc/logrotate.d/nginx-{{ .Each.server_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      /var/log/nginx/{{ .Each.server_name }}.access.log {
+          weekly
+          rotate 8
+          compress
+          missingok
+      }

@@ -913,6 +913,7 @@ type ModuleConfig struct {
 	Resources   []ResourceConfig    `yaml:"resources"`
 	Compliance  map[string][]string `yaml:"-"` // framework → control IDs, including ancestor compliance.vgo claims
 	ContentHash string              `yaml:"-"` // pre-computed at config load for delta transfer
+	BaseName    string              `yaml:"-"` // for a foreach: instance "vhost[www]", the source module name "vhost"; "" otherwise
 }
 
 // ResourceConfig describes a single resource within a module.
@@ -1007,9 +1008,25 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 //	modules:
 //	  - name: nginx                # object form with optional when expression
 //	    when: "is_debian"
+//	  - name: vhost                # foreach: instantiate the module once per
+//	    foreach: vhosts            # item in the var list, with each item's
+//	    key: server_name           # fields exposed as {{ .Each.<field> }}.
+//	                               # key: names the item field that supplies the
+//	                               # instance suffix → modules vhost[<server_name>].
+//	                               # (scalar lists: omit key:, the value is the key)
 type ModuleRef struct {
-	Name string `yaml:"name"`
-	When string `yaml:"when,omitempty"`
+	Name    string `yaml:"name"`
+	When    string `yaml:"when,omitempty"`
+	ForEach string `yaml:"foreach,omitempty"` // var name (a list) — instantiate once per item
+	Key     string `yaml:"key,omitempty"`     // item field providing the instance suffix (map lists)
+
+	// Set by expandForeachModuleRefs when a foreach: ref is expanded into
+	// per-item instances. BaseName is the original module name (for moduleDefs
+	// lookup); EachItem is this instance's list item; InstanceKey is the
+	// resolved suffix. Empty/nil for an ordinary ref.
+	BaseName    string `yaml:"-"`
+	EachItem    any    `yaml:"-"`
+	InstanceKey string `yaml:"-"`
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler for ModuleRef. It handles two forms:

@@ -100,6 +100,8 @@ vars:
 
 Empty lists produce zero resources — canonical modules stay untouched.
 
+To instantiate a *whole module* per item (not just one resource), put `foreach:` on the module reference instead — see [Composition Patterns: Module-level foreach](composition-patterns.md#module-level-foreach--stamp-out-a-module-per-item).
+
 ## case / match
 
 Select attribute overrides based on a template expression:
