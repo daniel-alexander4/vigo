@@ -88,7 +88,7 @@ A named grouping of modules and vars defined in `roles.vgo` (or the legacy `role
 
 ## sandgorgon
 
-Vigo's bare metal lifecycle subsystem: PXE provisioning, BMC (Redfish) integration, decommission workflow with NIST 800-88 certificate generation, CSV/NetBox inventory import. Exposed at `/sandgorgon/` in the web UI and via `vigocli sandgorgon`. See [Sandgorgon](../sandgorgon/_index.md).
+Vigo's bare metal lifecycle subsystem: PXE provisioning, BMC (Redfish) integration, decommission workflow with NIST 800-88 certificate generation, CSV/NetBox inventory import. Exposed at `/sandgorgon/` in the web UI and via `vigocli sandgorgon`. **Deferred to post-v1** -- the code is present but bare-metal lifecycle is not a v1-supported feature. See [Sandgorgon](../sandgorgon/_index.md).
 
 ## scrier
 

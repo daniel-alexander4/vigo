@@ -97,7 +97,7 @@ See the full [Engineering Guide](engineering/_index.md). Highlights:
 
 ## Sandgorgon
 
-- [Sandgorgon Documentation](sandgorgon/_index.md) -- Bare metal lifecycle: decommission, NIST 800-88 certificates, BMC/Redfish management
+- [Sandgorgon Documentation](sandgorgon/_index.md) -- Bare metal lifecycle: decommission, NIST 800-88 certificates, BMC/Redfish management. **(Deferred to post-v1 -- code present, not a v1-supported feature.)**
 
 ## Architecture Decisions
 
