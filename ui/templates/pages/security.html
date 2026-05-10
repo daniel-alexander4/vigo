@@ -332,48 +332,62 @@
         <div class="sec-spinner" aria-hidden="true"></div>
     </div>
 
-    {{/* Canonical CVE count — same numbers as the /security per-host table.
-         Distinct CVE IDs per severity, deduplicated across every scanner. */}}
-    {{with .Cached.Unique}}
-    <p style="font-size:13px;font-weight:600;margin:8px 0 2px;">Unique CVEs <span class="text-muted" style="font-weight:400;">— deduplicated across all scanners</span></p>
-    <table class="security-drift-table">
-        <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th></tr></thead>
-        <tbody><tr>
-            <td class="{{if .Critical}}text-danger{{else}}text-success{{end}}">{{.Critical}}</td>
-            <td class="{{if .High}}text-warning{{else}}text-success{{end}}">{{.High}}</td>
-            <td>{{.Medium}}</td>
-            <td>{{.Low}}</td>
-            <td>{{.Total}}</td>
-        </tr></tbody>
-    </table>
+    {{/* Count tables behind tabs (reuses .sec-drawer__tabs / .sec-tab /
+         .sec-tab-pane — same CSS + updateActiveTab() JS as the live-detail
+         tab strip). "Unique CVEs" — distinct CVE IDs deduped across every
+         scanner, the same figure the /security per-host table shows — is
+         the canonical one and the first .sec-tab-pane, so it renders by
+         default; Trivy/debsecan are raw per-scanner package-match counts. */}}
+    {{if or .Cached.Unique .Cached.Trivy .Cached.Debsecan}}
+    <nav class="sec-drawer__tabs" role="tablist">
+        {{if .Cached.Unique}}<a class="sec-tab" href="#sec-pane-cached-unique" role="tab">Unique CVEs</a>{{end}}
+        {{if .Cached.Trivy}}<a class="sec-tab" href="#sec-pane-cached-trivy" role="tab">Trivy</a>{{end}}
+        {{if .Cached.Debsecan}}<a class="sec-tab" href="#sec-pane-cached-debsecan" role="tab">debsecan</a>{{end}}
+    </nav>
     {{end}}
 
-    {{/* Raw per-scanner package-match counts — a CVE affecting N packages
-         counts N times here; the cross-scanner deduped figure is the
-         "Unique CVEs" row above. */}}
+    {{with .Cached.Unique}}
+    <section class="sec-tab-pane" id="sec-pane-cached-unique" role="tabpanel">
+        <p class="text-muted" style="font-size:11px;margin:8px 0 4px;">Distinct CVE IDs, deduplicated across all scanners.</p>
+        <table class="security-drift-table">
+            <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th></tr></thead>
+            <tbody><tr>
+                <td class="{{if .Critical}}text-danger{{else}}text-success{{end}}">{{.Critical}}</td>
+                <td class="{{if .High}}text-warning{{else}}text-success{{end}}">{{.High}}</td>
+                <td>{{.Medium}}</td>
+                <td>{{.Low}}</td>
+                <td>{{.Total}}</td>
+            </tr></tbody>
+        </table>
+    </section>
+    {{end}}
     {{with .Cached.Trivy}}
-    <p class="text-muted" style="font-size:11px;margin:10px 0 2px;">Trivy — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
-    <table class="security-drift-table">
-        <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th></tr></thead>
-        <tbody><tr>
-            <td class="text-danger">{{.Critical}}</td>
-            <td class="text-warning">{{.High}}</td>
-            <td>{{.Medium}}</td>
-            <td>{{.Low}}</td>
-        </tr></tbody>
-    </table>
+    <section class="sec-tab-pane" id="sec-pane-cached-trivy" role="tabpanel">
+        <p class="text-muted" style="font-size:11px;margin:8px 0 4px;">Trivy — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
+        <table class="security-drift-table">
+            <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th></tr></thead>
+            <tbody><tr>
+                <td class="text-danger">{{.Critical}}</td>
+                <td class="text-warning">{{.High}}</td>
+                <td>{{.Medium}}</td>
+                <td>{{.Low}}</td>
+            </tr></tbody>
+        </table>
+    </section>
     {{end}}
     {{with .Cached.Debsecan}}
-    <p class="text-muted" style="font-size:11px;margin:10px 0 2px;">debsecan (Debian security tracker) — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
-    <table class="security-drift-table">
-        <thead><tr><th>High</th><th>Medium</th><th>Low</th><th>Unassigned</th></tr></thead>
-        <tbody><tr>
-            <td class="text-warning">{{.High}}</td>
-            <td>{{.Medium}}</td>
-            <td>{{.Low}}</td>
-            <td>{{.Unassigned}}</td>
-        </tr></tbody>
-    </table>
+    <section class="sec-tab-pane" id="sec-pane-cached-debsecan" role="tabpanel">
+        <p class="text-muted" style="font-size:11px;margin:8px 0 4px;">debsecan (Debian security tracker) — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
+        <table class="security-drift-table">
+            <thead><tr><th>High</th><th>Medium</th><th>Low</th><th>Unassigned</th></tr></thead>
+            <tbody><tr>
+                <td class="text-warning">{{.High}}</td>
+                <td>{{.Medium}}</td>
+                <td>{{.Low}}</td>
+                <td>{{.Unassigned}}</td>
+            </tr></tbody>
+        </table>
+    </section>
     {{end}}
 
     {{if .Cached.CVEs}}
