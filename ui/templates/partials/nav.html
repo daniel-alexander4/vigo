@@ -39,6 +39,20 @@
             Spanner
         </a>
         {{end}}
+
+        <div class="nav-group__label">Operations</div>
+        <a href="/task" class="nav-link{{if eq .ActiveNav "task"}} nav-link--active{{end}}">
+            Tasks
+        </a>
+        <a href="/workflows" class="nav-link{{if eq .ActiveNav "workflows"}} nav-link--active{{end}}">
+            Workflows
+        </a>
+        {{if .ApprovalRequired}}
+        <a href="/approvals" class="nav-link{{if eq .ActiveNav "approvals"}} nav-link--active{{end}}">
+            Config Approvals
+        </a>
+        {{end}}
+
         {{if .SwarmEnabled}}
         <a href="/swarm" class="nav-group__label nav-group__label--link{{if eq .ActiveNav "swarm"}} nav-group__label--active{{end}}">Swarm <span class="nav-group__label-hint">Envoy P2P</span></a>
         <a href="/swarm/swarmcast" class="nav-link{{if eq .ActiveNav "swarmcast"}} nav-link--active{{end}}" title="P2P Administrator Pushed File Distribution">
@@ -55,21 +69,6 @@
             Swarmgit
         </a>
         {{end}}
-        {{end}}
-        {{end}}
-
-        {{if .CurrentUser.HasPermission "fleet.read"}}
-        <div class="nav-group__label">Operations</div>
-        <a href="/task" class="nav-link{{if eq .ActiveNav "task"}} nav-link--active{{end}}">
-            Tasks
-        </a>
-        <a href="/workflows" class="nav-link{{if eq .ActiveNav "workflows"}} nav-link--active{{end}}">
-            Workflows
-        </a>
-        {{if .ApprovalRequired}}
-        <a href="/approvals" class="nav-link{{if eq .ActiveNav "approvals"}} nav-link--active{{end}}">
-            Config Approvals
-        </a>
         {{end}}
         {{end}}
 
