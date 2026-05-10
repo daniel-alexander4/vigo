@@ -6,9 +6,9 @@ title: swarmgit
 
 Reports each envoy's local view of the unified-substrate swarmgit subsystem (ADR-015): which projects this envoy holds local state for, the bare-repo / head-ref state per project, and counts of revoke / leave envelopes that have propagated.
 
-The agent walks every user's `~/.vigo-swarmgit/<project_id>/` and joins per-user state with the per-envoy bare repo at `/var/lib/vigo/swarm/swarmgit/projects/<project_id>.git` and the per-envoy envelopes store at `/var/lib/vigo/swarm/swarmgit/envelopes/<project_id>/`. Multiple users on the same envoy holding the same project collapse to one entry.
+The agent walks every user's `~/.vigo-swarmgit/<project_id>/` and joins per-user state with the per-envoy bare repo at `/var/lib/vigo/swarm/swarmgit/projects/<project_id>.git` and the per-envoy envelopes store at `/var/lib/vigo/swarm/swarmgit/envelopes/<project_id>/`. Multiple users on the same envoy holding the same project collapse to one entry. The collector also reads each user's `~/.vigo-puddle/name-claim.json` and reports the **friendly-name claim** (ADR-022) verbatim — see [`name_claims[]`](#name_claims) below.
 
-The server's `swarmgitmesh` aggregator joins these per-envoy reports across the fleet and renders the join at `/swarm/swarmgit` (UI) and `GET /api/v1/swarm/swarmgit/fleet` (REST).
+The server's `swarmgitmesh` aggregator joins these per-envoy reports across the fleet and renders the join at `/swarm/swarmgit` (UI) and `GET /api/v1/swarm/swarmgit/fleet` (REST); the name claims are aggregated into the fleet name map at `GET /api/v1/swarm/puddle/names` (consumed by `vigocli swarm puddle names list` and, on each agent, by the `git-remote-swarmgit` resolver for `swarmgit://<name>/<repo>` URLs).
 
 ## Fields
 
@@ -17,6 +17,10 @@ The server's `swarmgitmesh` aggregator joins these per-envoy reports across the 
 | `updated_at` | int | Unix seconds when the trait was collected. |
 | `project_count` | int | Number of distinct projects this envoy holds local state for. |
 | `projects` | object[] | One entry per project. See below. |
+| `name_claim_count` | int | Number of `~/.vigo-puddle/name-claim.json` files found across all users on this envoy. Omitted when 0. |
+| `name_claims` | object[] | One entry per user's friendly-name claim. Omitted when empty. See [`name_claims[]`](#name_claims). |
+
+> The trait is emitted whenever there's *either* swarmgit project state *or* a name claim — a user can have a `name_claims` entry with `project_count: 0`.
 
 ### `projects[]`
 
@@ -43,6 +47,19 @@ The server's `swarmgitmesh` aggregator joins these per-envoy reports across the 
 | `revokes` | int | Count of revoke envelopes persisted under `<swarmgit_base>/envelopes/<project_id>/revokes/`. |
 | `leaves` | int | Count of leave envelopes persisted under `<swarmgit_base>/envelopes/<project_id>/leaves/`. |
 | `digest_hex` | string | Hex-encoded 16-byte digest of the project's full envelope set. Used by the server-side mesh aggregator to flag projects where the envelope state has diverged across hosts (gossip in flight). |
+
+### `name_claims[]`
+
+One entry per Unix user on this envoy who has run `vigo swarm puddle name set <name>` (ADR-022). The `claim` is the full signed `~/.vigo-puddle/name-claim.json` reported verbatim — the server publishes signed claims, never re-signs, and resolvers verify the signature + `supersedes` chain themselves. A claim whose signature doesn't self-verify is dropped here, not published.
+
+| Field | Type | Description |
+|---|---|---|
+| `user` | string | Unix username whose `~/.vigo-puddle/` holds the claim. |
+| `claim.body.puddle_pubkey` | string | 64-char lowercase hex of the puddle pubkey claiming the name. Resolving `swarmgit://<name>/<repo>` yields `project_id = sha256(puddle_pubkey ‖ <repo>)`. |
+| `claim.body.name` | string | The claimed friendly name. Same character rules as a project handle, plus: must not look like a 64-char-hex project_id. |
+| `claim.body.claimed_at` | int | Unix seconds the claim was signed. |
+| `claim.body.supersedes` | object[] | Rekey-delegation chain (ADR-019 `DelegationEnvelope` shape) proving this pubkey descends from a previous pubkey that held the same name. Empty/absent for a first claim; populated by `re-found`. |
+| `claim.signature` | string | 128-char hex Ed25519 signature over the canonical encoding of `body` (domain `swarmgit-name-v1\0`), made by `puddle_pubkey`. |
 
 ## Example
 
@@ -72,6 +89,20 @@ The server's `swarmgitmesh` aggregator joins these per-envoy reports across the 
       "token_chain_depth": 1,
       "token_expires_at": null
     }
+  ],
+  "name_claim_count": 1,
+  "name_claims": [
+    {
+      "user": "dan",
+      "claim": {
+        "body": {
+          "puddle_pubkey": "8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8",
+          "name": "dan",
+          "claimed_at": 1777520400
+        },
+        "signature": "1f2e…(128 hex chars)…a90"
+      }
+    }
   ]
 }
 ```
@@ -80,19 +111,22 @@ The server's `swarmgitmesh` aggregator joins these per-envoy reports across the 
 
 The trait is `null` (not an object with empty `projects: []`) when:
 
-- `/etc/passwd` cannot be read.
-- No user has any `~/.vigo-swarmgit/<pid>/` state on this envoy.
+- `/etc/passwd` cannot be read, or
+- no user has any `~/.vigo-swarmgit/<pid>/` state **and** no user has a `~/.vigo-puddle/name-claim.json`.
 
-The server-side aggregator treats a `null` trait the same as "no participation reported" — the envoy contributes nothing to the fleet view.
+The server-side aggregator treats a `null` trait the same as "no participation reported" — the envoy contributes nothing to either the fleet swarmgit view or the fleet name map.
 
 ## Consumers
 
-- `server/swarm/swarmgitmesh` — aggregates per-envoy reports into the fleet-wide `Fleet` shape (head-ref consensus, divergent-ref detection, envelope-digest unanimity).
-- `GET /api/v1/swarm/swarmgit/fleet` — serves the aggregated view to admins and the `vigocli swarm swarmgit` CLI.
+- `server/swarm/swarmgitmesh` — aggregates per-envoy reports into the fleet-wide `Fleet` shape (head-ref consensus, divergent-ref detection, envelope-digest unanimity) and into the `FleetNames` map (`name → []claim`, deduped per puddle pubkey, collisions kept — the server publishes, never arbitrates).
+- `GET /api/v1/swarm/swarmgit/fleet` — serves the aggregated swarmgit view to admins and the `vigocli swarm swarmgit` CLI.
+- `GET /api/v1/swarm/puddle/names` — serves the fleet name map (public-by-construction, no token; same access posture as `/api/v1/fleet/pubkeys`). Consumed by `vigocli swarm puddle names list` and, on every agent, by the `puddle name-map bootstrap` loop which caches it at `/var/lib/vigo/swarm/puddle/names.json` for the `git-remote-swarmgit` resolver and the `vigo swarm puddle name set` collision check.
 - `/swarm/swarmgit` UI page — renders the fleet view + per-project drill-down.
 
 ## See also
 
 - [ADR-015 — Unified swarmgit substrate](../../adr/015-unified-swarmgit-substrate.md)
-- [`vigo swarm swarmgit project ...`](../cli/agent-swarm-swarmgit.md) — envoy-side verb tree that mutates the state this trait reports.
+- [ADR-022 — Friendly swarmgit names](../../adr/022-swarmgit-friendly-names.md) — the `name_claims[]` half of this trait.
+- [`vigo swarm swarmgit project ...`](../cli/agent-swarm-swarmgit.md) — envoy-side verb tree that mutates the project state this trait reports.
+- [`vigo swarm puddle name ...`](../cli/agent-swarm-puddle.md) — envoy-side verb that writes the `name-claim.json` this trait reports.
 - [`vigocli swarm swarmgit`](../cli/swarm-swarmgit.md) — admin-side CLI that consumes the aggregated trait.

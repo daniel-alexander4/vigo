@@ -58,6 +58,7 @@ Vigo has two CLI binaries:
 | [swarmgit](swarm-swarmgit.md) | Fleet-wide read-only view of swarmgit personal-DR mirrors |
 | [longdrawer](swarm-longdrawer.md) | Fleet-wide read-only view of the longdrawer per-user directory sync mesh |
 | [lockbox](swarm-lockbox.md) | Fleet-wide read-only view of the lockbox per-user encrypted directory sync mesh |
+| [puddle](swarm-puddle.md) | Cross-envoy puddle ops — eviction + the fleet friendly-name map (ADR-022) |
 | [scrier](scrier.md) | Remote access — user mappings and interactive shell sessions |
 | [sandgorgon](sandgorgon.md) | Bare-metal lifecycle — commission, provision, decommission |
 | [security](security.md) | Fleet-wide security posture summary and findings |

@@ -2101,6 +2101,7 @@ Administrator-pushed file distribution on the swarm substrate. These endpoints p
 
 - **GET /api/v1/swarm/swarmgit/fleet** — fleet-wide swarmgit project view (aggregated from per-envoy traits). _(fleet.read)_
 - **GET /api/v1/swarm/swarmgit/projects/{project_id}/roster** — canonical member fleet list for one project. Returns `{project_id, handle, founder_puddle_pubkey, members[], dr_scope, member_fleet_count}`. The helper daemon's lazy-fetch target at push time. 404 if no envoy in the fleet has reported the project. _(fleet.read)_
+- **GET /api/v1/swarm/puddle/names** — fleet friendly-name map (ADR-022): `{updated_at, names: {<name>: [{body:{puddle_pubkey, name, claimed_at, supersedes}, signature}, …]}}`, aggregated from every envoy's `swarmgit` trait `name_claims`. The server publishes signed claims verbatim and never arbitrates — a name with more than one claimant is returned with all of them (a collision the resolver refuses). Unauthenticated, like `/api/v1/fleet/pubkeys` — the bindings are public-by-construction; mTLS is the transport guard. Consumed by each agent's `puddle name-map bootstrap` loop (cached at `/var/lib/vigo/swarm/puddle/names.json` for the `git-remote-swarmgit` resolver and the `vigo swarm puddle name set` collision check) and by `vigocli swarm puddle names list`.
 
 ### Longdrawer
 

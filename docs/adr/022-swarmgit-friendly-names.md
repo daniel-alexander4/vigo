@@ -4,7 +4,7 @@ title: "ADR-022: Friendly swarmgit names (puddle/repo)"
 
 # ADR-022: Friendly swarmgit names (`puddle/repo`)
 
-**Status:** Accepted, not yet implemented. Targets 0.42.0.
+**Status:** Implemented in 0.42.0.
 **Date:** 2026-05-10
 
 ## Context

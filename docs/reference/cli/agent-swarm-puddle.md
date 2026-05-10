@@ -34,6 +34,9 @@ Most verbs run as the invoking user against `~/.vigo-puddle/`. The one exception
 | `members` | Show this envoy's view of puddle membership. Phase 1 surfaces only the local envoy's pubkey; cross-envoy gossip lands with ADR-015 / ADR-016. |
 | `rotate-passphrase` | Prompt the current passphrase, then a new one (with confirm), re-wrap the local copy of the key under the new passphrase. **This envoy only** — every other puddle envoy retains the old passphrase until rotated separately. The puddle pubkey is unchanged; downstream subsystem trust anchors are unaffected. |
 | `status` | Show local puddle state: initialized, puddle pubkey, pair pending, session helper, active rekey window (if any), retired-puddles history, hint when peers are announcing under a different puddle pubkey. |
+| `name set <name>` | (ADR-022) Claim `<name>` for this puddle. Requires the puddle unlocked (the session helper signs). Writes a signed `name-claim.json` recording `{puddle_pubkey, name, claimed_at, supersedes?}`. Refuses if the cached fleet name map already shows `<name>` claimed by a different puddle (the *accidental*-collision check — it can't beat the propagation window or a deliberate squatter). Afterwards `swarmgit://<name>/<repo>` resolves to `swarmgit://sha256(your-pubkey ‖ <repo>)/<repo>`. Re-running with the same `<name>` re-issues (preserving any `supersedes` chain); with a different name, replaces the old claim. `<name>` follows the swarmgit project-handle rules and must not look like a 64-hex project_id. |
+| `name clear [--yes]` | Drop this puddle's name claim. Warns loudly and refuses without `--yes`: every `swarmgit://<name>/…` URL anyone wrote down stops resolving, and if another puddle later claims the name those URLs would resolve to *their* projects. Claims do not expire on their own; `clear` is the only way to give a name back. |
+| `name show` | Print this puddle's name claim (name, pubkey, claimed-at, supersedes depth, signature OK?) and the fleet view of it from the cached name map (`/var/lib/vigo/swarm/puddle/names.json`) — yours/unambiguous, claimed-by-someone-else, or COLLISION. |
 
 ## Bootstrap walkthrough
 
@@ -186,6 +189,34 @@ puddle passphrase: ****
 
 **Lockbox auto-bootstrap (ADR-016 slice 4).** When `unlock` runs and `~/.lockbox/identity.age` is absent, the verb auto-runs `lockbox puddle init` inline using the just-spawned session helper to derive the wrap key (no second passphrase prompt — the same puddle identity that protects puddle protects lockbox). Suppressed once lockbox is already enrolled. Failure to bootstrap is non-fatal: a warning surfaces and the operator can re-run `vigo swarm lockbox puddle init` manually. `join` does not auto-run lockbox (the session helper isn't running yet at that point); the next `unlock` after `join` handles it instead.
 
+## Friendly names (ADR-022)
+
+`swarmgit://<project_id>/<repo>` is self-certifying — `project_id = sha256(founder_puddle_pubkey ‖ repo)` so it can't be squatted and resolves identically everywhere — but it's a 64-char hex string nobody can type or remember. `name set` claims a human-meaningful name for your puddle so `swarmgit://<name>/<repo>` works alongside the hex form. Resolution: `<name>` → puddle pubkey (via the claim) → `project_id = sha256(pubkey ‖ <repo>)` → proceed exactly as a hex URL would.
+
+```
+[laptop] $ vigo swarm puddle unlock
+puddle passphrase: ****
+✓ Unlocked. …
+
+[laptop] $ vigo swarm puddle name set dan
+✓ Claimed puddle name 'dan'
+  Puddle pubkey: ed25519:8711b12bac759fea30363f0ed4ab95b4…
+  Resolves:      swarmgit://dan/<repo>  →  swarmgit://8711b12bac759fea…/<repo>  (project_id = sha256(pubkey ‖ repo))
+
+# now this works on any envoy that's seen the claim:
+$ git clone swarmgit://dan/vigo-web
+git-remote-swarmgit: resolved swarmgit://dan/vigo-web → swarmgit://e3b0c44298fc…b855/vigo-web (founder ed25519:8711b12bac75…0a9aea8)
+```
+
+Properties — read these before relying on it:
+
+- **First-come, cooperatively enforced.** `name set` refuses a name another puddle already holds *in the agent's current fleet view* — that kills the accidental collision (Alice and Bob both reaching for `mainbox`). It does **not** beat the propagation window (two puddles can both check "free" and claim within seconds) and does **nothing** against a deliberate squatter.
+- **A friendly name is a hint, not a trust anchor.** If an attacker claims `acme` before the real Acme does, `swarmgit://acme/billing` cleanly resolves to the attacker's repo with no warning (unless the real Acme also has a claim — then it's a collision → resolution errors). Inherent to decentralized naming. The clone output prints the resolved `(project_id, founder pubkey)` so a vigilant operator can spot a mismatch; the unforgeable form is always `swarmgit://<project_id>/<repo>`.
+- **Collisions degrade to ambiguous, never to wrong.** A resolver seeing two unrelated claims for `dan` errors and tells you to use the hex form until a human runs `name clear` on one. No automatic tiebreaker.
+- **`re-found` follows.** A bare puddle rekey doesn't touch the claim (the friendly URL keeps resolving to your pre-rekey projects). A `swarmgit project re-found` mints a fresh project anchor, so it auto-re-issues the claim pointing at the new anchor with a `supersedes` chain proving descent — `swarmgit://<name>/<repo>` transparently follows it; the hex `swarmgit://<old_pid>/<repo>` breaks (as it always has on re-found).
+- **Repo handles are uncontested within a puddle.** `project_id = sha256(pubkey ‖ handle)` already guarantees one puddle can't have two `vigo`s — there's no claiming for repo handles, ever. This is GitHub's model: puddle name ≈ `github.com/<user>`, repo handle ≈ the repo name.
+- **Propagation.** Claims ride the `swarmgit` trait → the server aggregates them into the fleet name map (`GET /api/v1/swarm/puddle/names`, view it with `vigocli swarm puddle names list`) → each agent caches it at `/var/lib/vigo/swarm/puddle/names.json` on startup + every 15 min. Until a peer's agent has fetched a refresh that includes your claim, `swarmgit://<name>/<repo>` won't resolve there — but the hex form always does. The server *publishes* the map; it never arbitrates.
+
 ## File layout
 
 ```
@@ -199,6 +230,10 @@ puddle passphrase: ****
                        # written by `rekey-pair`, read+cleared by the rekey-claim handler.
   retired_puddles.json  # historical log of rotations (active + closed). 0600.
                        # consumed by `status` for visibility; not gossiped between envoys.
+  name-claim.json      # signed friendly-name claim (ADR-022): {body:{puddle_pubkey,
+                       # name, claimed_at, supersedes?}, signature}. 0644 (public-by-
+                       # construction). Written by `name set`, removed by `name clear`,
+                       # read by the swarmgit traits collector → fleet name map.
   identity.wrapped.pre-rekey-<unix_ts>
   identity.salt.pre-rekey-<unix_ts>
   identity.pub.pre-rekey-<unix_ts>
@@ -258,4 +293,6 @@ No `~/.vigo-puddle/config.yaml` today. The session helper's idle timeout is hard
 - [ADR-016](../../adr/016-lockbox-membership-on-puddle.md) — second consumer.
 - [ADR-017](../../adr/017-no-puddle-level-revoke.md) — why there is no `revoke` verb.
 - [ADR-018](../../adr/018-puddle-rekey.md) — design of the `rekey-pair` / `rekey` verbs.
+- [ADR-022](../../adr/022-swarmgit-friendly-names.md) — design of the `name` verbs + the fleet name map.
 - [`vigo swarm lockbox`](agent-swarm-lockbox.md) — shares the wrap envelope + session-helper pattern.
+- [`vigocli swarm puddle`](swarm-puddle.md) — admin-side cross-envoy puddle ops (`evict`, `names list`).

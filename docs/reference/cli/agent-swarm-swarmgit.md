@@ -53,6 +53,8 @@ swarmgit://<project_id>/<handle>
 
 The handle is human-readable; cryptographic identity is the project_id. Squatting on a handle is impossible — there's no central registry. Any fleet can found a project named `vigo-web`, but the resulting project_ids will differ.
 
+**Friendly URLs (ADR-022).** If the founder's puddle has claimed a name (`vigo swarm puddle name set <name>`), `swarmgit://<name>/<handle>` works for git operations alongside the hex form — `git-remote-swarmgit` resolves `<name>` to the puddle pubkey via the cached fleet name map and computes `sha256(pubkey ‖ handle)`. The friendly form is a convenience; the hex `swarmgit://<project_id>/<handle>` is the proof (a name is squattable — first claim wins). See [`vigo swarm puddle name`](agent-swarm-puddle.md#friendly-names-adr-022). The `<project_id>` arguments below take the hex id or a local handle prefix — *not* a friendly name (that's a URL-resolution feature, not a CLI-argument one).
+
 Verbs that take a `<project_id>` argument also accept a unique handle prefix among projects this user has joined locally — `vigo swarm swarmgit project status vigo-web` resolves the same as the full hex id.
 
 ## Commands

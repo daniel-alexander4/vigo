@@ -40,6 +40,7 @@ Swarmgit is one of four content subsystems that ride the [swarm](swarm.md) subst
 | `vigocli swarm swarmgit` CLI rewrite for project-id view | ✅ step 4 fifth slice |
 | REST member-roster endpoint (`GET /api/v1/swarm/swarmgit/projects/<pid>/roster`) | ✅ step 4 sixth slice |
 | `reanchor` byte-level migration (`git fetch +refs/*:refs/*` from old to new bare repo) | ✅ step 4 sixth slice |
+| Friendly `swarmgit://<puddle-name>/<repo>` URLs + fleet name map (ADR-022) | ✅ 0.42.0 |
 
 ## ADR-019: Founder-rekey delegation chains
 
@@ -106,6 +107,12 @@ URLs change at re-found (this is the one place in the design where they do). Cro
 
 **Shipping cadence.** Five slices in tree at 0.35.18–0.35.22: data layer; chained verifier with authority windows; rekey-time hooks + `--force-orphan-projects`; multi-puddle `re-invite-all` + `rejoin` + `PushChain` wire format; `re-found` escape hatch + tombstone marker + the formal [ADR-019 document](../../adr/019-swarmgit-founder-rekey.md).
 
+## ADR-022: Friendly URLs (`swarmgit://<puddle-name>/<repo>`)
+
+The self-certifying `swarmgit://<project_id>/<repo>` form is unrememberable. ADR-022 (0.42.0) layers a friendly form on top: a puddle claims a human-meaningful **name** (`vigo swarm puddle name set <name>`, signed by the puddle key, persisted at `~/.vigo-puddle/name-claim.json`), and `swarmgit://<name>/<repo>` resolves as `project_id = sha256(<that puddle's pubkey> ‖ <repo>)` — then proceeds exactly as a hex URL. Resolution lives in `git-remote-swarmgit`: a 64-hex first component is a project_id directly; otherwise it's a name, and the binary asks the helper daemon (`RESOLVE-NAME <name> <repo>`) which looks the name up in the locally-cached fleet name map and replies `OK <pid_hex> <founder_pubkey_hex>` (or `ERR …`). The clone output prints the resolved `(project_id, founder pubkey)` so an operator can eyeball the binding.
+
+Claims propagate as `swarmgit`-trait data — the collector reports each user's `name-claim.json` verbatim, `swarmgitmesh` joins them into a `name → claims` map (`GET /api/v1/swarm/puddle/names`), each agent caches it (`/var/lib/vigo/swarm/puddle/names.json`, refreshed on startup + every 15 min, off the hot path). **The server publishes signed claims and never arbitrates** — a name with one claimant resolves; a name with two unrelated claimants is a collision the resolver refuses (use the hex form); two claims where the newer carries a `supersedes` rekey-delegation chain back to the older are a `re-found` and the resolver follows it (so `re-found` auto-re-issues the claim with that chain — see ADR-019's `re-found` above). Repo handles are uncontested within a puddle (one puddle can't have two `vigo`s — `sha256(pubkey ‖ handle)` already guarantees it), so there's no claiming for handles, ever. **A friendly name is a hint, not a trust anchor** — spoofable by squatting (first claim wins, including a malicious first-claimer); the unforgeable form is always `swarmgit://<project_id>/<repo>`. Full design: [ADR-022](../../adr/022-swarmgit-friendly-names.md).
+
 ## Operability
 
 Swarmgit is gated per-envoy via the `swarm.swarmgit.enabled` pattern list in server.yaml (0.41.0+). Both `swarm.enabled` AND `swarm.swarmgit.enabled` must allow the host.
@@ -127,6 +134,7 @@ Pattern-list changes record tamper-evident audit-chain entries (`swarm.swarmgit.
 
 - [ADR-015 — Unified swarmgit substrate](../../adr/015-unified-swarmgit-substrate.md) — the foundational design (project shape, capability tokens, helper daemon, fan-out, gossip)
 - [ADR-019 — Founder-rekey delegation chains](../../adr/019-swarmgit-founder-rekey.md) — the design behind `re-invite-all`, `rejoin`, `re-found`, the delegation chain primitive, and authority windows
+- [ADR-022 — Friendly swarmgit names](../../adr/022-swarmgit-friendly-names.md) — `swarmgit://<puddle-name>/<repo>` layered on the hex form; the fleet name map; first-come/ambiguous-on-collision semantics
 - [`vigo swarm swarmgit` CLI reference](../../reference/cli/agent-swarm-swarmgit.md) — operator-facing verb walkthroughs
 - [Swarm](swarm.md) — the underlying P2P substrate swarmgit rides
 - [Puddle](puddle.md) — per-user puddle identity (ADR-014); the trust unit swarmgit's tokens chain to

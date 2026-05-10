@@ -135,9 +135,22 @@ User-side, all under `~/.vigo-puddle/` (mode 0700, owned by the user):
 | `identity.salt` | 0600 | 16 random bytes, Argon2id input. Portable across envoys. |
 | `identity.pub` | 0644 | `ed25519:<hex>` puddle pubkey, one line. Public; sibling subsystems read this. |
 | `pair.pending` | 0600 | Active pairing-code session (`code_hash` + `expires_at`). Removed on first claim or TTL expiry. |
+| `rekey.pending` | 0600 | Active rekey-claim session (same JSON shape as `pair.pending`). |
+| `retired_puddles.json` | 0600 | Rotation log (active + closed). Consumed by `status`; not gossiped. |
 | `session.unlocked` | 0600 | Session-helper PID. Written on unlock; removed on lock/idle/parent-gone. Siblings probe + `pid_alive` to detect lock state. |
+| `name-claim.json` | 0644 | Signed friendly-name claim (ADR-022): `{body:{puddle_pubkey, name, claimed_at, supersedes?}, signature}`. Public-by-construction. Written by `name set`, removed by `name clear`, read by the `swarmgit` traits collector. |
 
-Daemon-side state: none today. The pair-claim handler is stateless — it reads `pair.pending` directly under the target user's home.
+Daemon-side state: the pair/rekey-claim handlers are stateless (they read `pair.pending` / `rekey.pending` directly under the target user's home). One daemon-owned per-envoy cache: `/var/lib/vigo/swarm/puddle/names.json` (0644) — the fleet friendly-name map, refreshed from `GET /api/v1/swarm/puddle/names` on agent startup + every 15 min by the `names_bootstrap` loop, never on the check-in path. Read by the `git-remote-swarmgit` resolver (via the helper daemon) and by `vigo swarm puddle name set`'s collision check.
+
+## Friendly names (ADR-022)
+
+`swarmgit://<project_id>/<repo>` is self-certifying — `project_id = sha256(founder_puddle_pubkey ‖ repo)` — but unrememberable. A **name claim** binds a human name to a puddle pubkey so `swarmgit://<name>/<repo>` resolves as `sha256(<that pubkey> ‖ <repo>)`. The claim is a small signed blob (domain `swarmgit-name-v1\0`, hand-rolled canonical encoding like `swarmgit::tokens` / `swarmgit::envelopes`) at `~/.vigo-puddle/name-claim.json`; `name set` requires the puddle unlocked (the session helper signs).
+
+- **Propagation is via traits, not gossip.** The `swarmgit` traits collector reports each user's claim verbatim → `swarmgitmesh` joins them into a fleet `name → claims` map (deduped per pubkey, collisions kept) → `GET /api/v1/swarm/puddle/names` → each agent caches it. The server **publishes, never arbitrates** — this is the same passive-aggregator role `swarmgitmesh` already plays for project rosters, and it's off the check-in hot path.
+- **First-come, cooperatively enforced; ambiguous-on-collision.** `name set` refuses a name another puddle holds in the agent's current view (kills the accidental collision); it can't beat the propagation window or a deliberate squatter. Two unrelated claims for one name → resolvers error and require the hex form. No automatic tiebreaker. `re-found` re-issues the claim with a `supersedes` rekey-delegation chain so a resolver can pick the descendant — a bare rekey doesn't touch the claim.
+- **A name is a hint, not a trust anchor.** Spoofable by squatting, stated loudly. The unforgeable form is always `swarmgit://<project_id>/<repo>`. The `git-remote-swarmgit` resolver prints the resolved `(project_id, founder pubkey)` so a vigilant operator can spot a mismatch.
+
+See [ADR-022](../../adr/022-swarmgit-friendly-names.md) for the full design + Zooko-triangle tradeoffs, and [agent-swarm-puddle § Friendly names](../../reference/cli/agent-swarm-puddle.md#friendly-names-adr-022) for the operator-facing walkthrough.
 
 ## CLI verbs
 
@@ -154,6 +167,9 @@ vigo swarm puddle pubkey                # print puddle pubkey
 vigo swarm puddle members               # show this envoy's view
 vigo swarm puddle rotate-passphrase     # re-wrap locally (does not change puddle pubkey)
 vigo swarm puddle status                # init / unlock / pair-pending / rekey state
+vigo swarm puddle name set <name>       # ADR-022: claim a friendly name for this puddle (unlocked)
+vigo swarm puddle name clear [--yes]    # ADR-022: drop the claim (breaks swarmgit://<name>/… URLs)
+vigo swarm puddle name show             # ADR-022: local claim + fleet view of it
 ```
 
 See [agent-swarm-puddle](../../reference/cli/agent-swarm-puddle.md) for the full reference.
@@ -167,13 +183,18 @@ See [agent-swarm-puddle](../../reference/cli/agent-swarm-puddle.md) for the full
 
 ## Code map
 
-- `agent/src/swarm/puddle/mod.rs` — public API (`local_puddle_pubkey`, `is_initialized`).
+- `agent/src/swarm/puddle/mod.rs` — public API (`local_puddle_pubkey`, `is_initialized`, `local_name_claim`).
 - `agent/src/swarm/puddle/config.rs` — paths under `~/.vigo-puddle/`.
-- `agent/src/swarm/puddle/cli.rs` — verb dispatcher; status surface enrichment for retired-puddles and offline-envoy hint.
+- `agent/src/swarm/puddle/cli.rs` — verb dispatcher (incl. `name {set,clear,show}`); status surface enrichment; `write_user_file_0644`.
 - `agent/src/swarm/puddle/codes.rs` — generic 8-digit claim-code primitives (shared by pair + rekey).
 - `agent/src/swarm/puddle/pair.rs` — pair-specific path bindings + HTTP claim handler.
 - `agent/src/swarm/puddle/rekey.rs` — `RetiredFleetEntry` log + active-session predicate + post-rotation lockbox sync + rekey-claim HTTP handler (ADR-018).
 - `agent/src/swarm/puddle/session.rs` — session helper daemon.
+- `agent/src/swarm/puddle/name.rs` — `NameClaim` (canonical encoding, issue/verify, persistence) + `resolve_claims` (supersedes-chain walk) (ADR-022).
+- `agent/src/swarm/puddle/names_cache.rs` — on-disk shape of the fleet name map; `verified_claims` / `claimed_by_other`.
+- `agent/src/swarm/puddle/names_bootstrap.rs` — periodic fetch of `GET /api/v1/swarm/puddle/names` → local cache (mirrors `swarmgit::pubkey_bootstrap`).
+- `server/swarm/swarmgitmesh/swarmgitmesh.go` — `FleetNames` + `NamesSnapshot` / `groupNameClaims`; `server/api/swarm_swarmgit.go` — `GET /api/v1/swarm/puddle/names`.
+- `agent/src/swarm/swarmgit/helper.rs` — `RESOLVE-NAME` socket verb; `agent/src/swarm/swarmgit/remote_helper.rs` — `swarmgit://<name>/<repo>` URL branch.
 - `agent/src/swarm/lockbox/identity_rewrap.rs` — atomic re-wrap of the per-envoy age key from one puddle keypair's wrap-key to another (ADR-018 prereq).
 - `agent/src/swarm/server.rs` — wires `POST /swarm/puddle/pair-claim/<user>` and `POST /swarm/puddle/rekey-claim/<user>` to the respective handlers.
 - `agent/src/main.rs` — argv dispatch for `swarm puddle *` and the hidden `puddle-session-daemon` verb.
@@ -185,4 +206,6 @@ See [agent-swarm-puddle](../../reference/cli/agent-swarm-puddle.md) for the full
 - [ADR-016](../../adr/016-lockbox-membership-on-puddle.md) — lockbox membership on puddle (after 015).
 - [ADR-017](../../adr/017-no-puddle-level-revoke.md) — why there is no puddle-level revoke.
 - [ADR-018](../../adr/018-puddle-rekey.md) — design of the rekey flow.
+- [ADR-022](../../adr/022-swarmgit-friendly-names.md) — friendly names (`name set/clear/show`, the fleet name map).
+- [Swarmgit](swarmgit.md) — the URLs that friendly names resolve to.
 - [Lockbox](lockbox.md) — shares the wrap envelope and the session-helper shape.
