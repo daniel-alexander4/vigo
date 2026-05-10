@@ -237,7 +237,6 @@ type Handler struct {
 	globalObserveOnly  bool
 	scrierEnabled      bool
 	serverConfigPath   string
-	approvalRequired   bool
 	swarmTracker       *swarm.PeerTracker
 	swarmFleetIndex    SwarmHostnameResolver
 	swarmConfig        config.SwarmSection
@@ -495,13 +494,6 @@ func (h *Handler) SetServerConfigPath(path string) {
 	h.serverConfigPath = path
 }
 
-// SetPublishApprovalRequired wires the publish.approval_required flag from
-// server.yaml. Gates the Approvals sidebar entry — it only renders when
-// approval workflows are actually in use.
-func (h *Handler) SetPublishApprovalRequired(v bool) {
-	h.approvalRequired = v
-}
-
 // SetGlobalObserveOnly sets the global observe-only flag from server.yaml.
 func (h *Handler) SetGlobalObserveOnly(v bool) {
 	h.globalObserveOnly = v
@@ -645,7 +637,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/inventory-explore", h.InventoryExploreFragment)
 	mux.HandleFunc("GET /ui/fragments/inventory-explore-table", h.InventoryExploreTableFragment)
 	mux.HandleFunc("GET /ui/export/inventory-explore.ods", h.InventoryExploreODSExport)
-	mux.HandleFunc("GET /ui/fragments/approvals", h.ApprovalsFragment)
 	mux.HandleFunc("GET /ui/fragments/health", h.HealthFragment)
 
 	// Spanner pages (only registered when running as hub)
@@ -681,7 +672,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /inventory/hardware/{hwtype}/{label}", h.InventoryHardwareDetail)
 	mux.HandleFunc("GET /inventory/{id}", h.InventoryDetail)
 	mux.HandleFunc("GET /ui/export/inventory.csv", h.InventoryCSVExport)
-	mux.HandleFunc("GET /approvals", h.Approvals)
 	mux.HandleFunc("GET /health", h.Health)
 
 	// Admin functions are CLI-only (vigocli). No admin pages in web UI.
@@ -708,8 +698,6 @@ type PageData struct {
 	AuthMethod        string
 	CurrentUser       *AuthUser
 	LicenseWarning    string // non-empty when license is near or over limits
-	PendingChanges    int    // count of pending config changes awaiting approval
-	ApprovalRequired  bool   // publish.approval_required in server.yaml — gates the Approvals sidebar entry
 	OrgName           string // custom org name from branding config
 	CustomLogo        bool   // true when a custom logo path is configured
 	CustomFavicon     bool   // true when a custom favicon path is configured
@@ -1928,7 +1916,6 @@ func (h *Handler) setCommon(pd *PageData) {
 	if pd.Theme == "" {
 		pd.Theme = "light"
 	}
-	pd.ApprovalRequired = h.approvalRequired
 
 	if h.enforcer != nil {
 		s := h.enforcer.GetStatus()
@@ -1940,13 +1927,6 @@ func (h *Handler) setCommon(pd *PageData) {
 				pd.LicenseWarning = fmt.Sprintf("License usage at %d/%d nodes (%d%%) — approaching limit",
 					s.ActiveEnvoys, s.MaxEnvoys, s.ActiveEnvoys*100/s.MaxEnvoys)
 			}
-		}
-	}
-
-	// Check for pending config changes (best-effort).
-	if h.queries != nil {
-		if pending, err := h.queries.ListPendingConfigChanges(context.Background()); err == nil {
-			pd.PendingChanges = len(pending)
 		}
 	}
 }
@@ -8185,13 +8165,6 @@ func csvEscape(s string) string {
 	return s
 }
 
-// Approvals renders the config approvals page.
-func (h *Handler) Approvals(w http.ResponseWriter, r *http.Request) {
-	data := PageData{Title: "Config Approvals", ActiveNav: "approvals"}
-	h.setCommonWithRequest(&data, r)
-	h.renderer.Render(w, "approvals", data)
-}
-
 // Health renders the Vigo Health diagnostics page.
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	data := PageData{Title: "Vigo Health", ActiveNav: "health"}
@@ -9522,38 +9495,6 @@ func inventoryAllBlockDevices(data map[string]any, namespace string) []string {
 	}
 	sort.Strings(result)
 	return result
-}
-
-// ApprovalsFragment returns the pending config changes table via HTMX.
-func (h *Handler) ApprovalsFragment(w http.ResponseWriter, r *http.Request) {
-	changes, err := h.queries.ListPendingConfigChanges(r.Context())
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err != nil {
-		fmt.Fprintf(w, `<p>Error loading changes: %s</p>`, template.HTMLEscapeString(err.Error()))
-		return
-	}
-	if len(changes) == 0 {
-		fmt.Fprintf(w, `<p>No pending config changes.</p>`)
-		return
-	}
-	fmt.Fprintf(w, `<table class="table"><thead><tr><th>ID</th><th>Status</th><th>Requested By</th><th>Requested At</th><th>Summary</th></tr></thead><tbody>`)
-	for _, c := range changes {
-		statusCSS := "info"
-		switch c.Status {
-		case "approved":
-			statusCSS = "success"
-		case "rejected":
-			statusCSS = "danger"
-		case "pending":
-			statusCSS = "warning"
-		}
-		fmt.Fprintf(w, `<tr><td>%d</td><td><span class="badge badge--%s">%s</span></td><td>%s</td><td>%s</td><td>%s</td></tr>`,
-			c.ID, statusCSS, template.HTMLEscapeString(c.Status),
-			template.HTMLEscapeString(c.RequestedBy),
-			c.RequestedAt.Local().Format("2006-01-02 15:04"),
-			template.HTMLEscapeString(c.DiffSummary))
-	}
-	fmt.Fprintf(w, `</tbody></table>`)
 }
 
 // HealthFragment returns the Vigo Health diagnostics via HTMX.

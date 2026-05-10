@@ -97,12 +97,6 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	}
 	configHandler.RegisterRoutes(mux)
 
-	// Mount change approval endpoints (always registered — the approval
-	// handler is the entry point when approval_required is true).
-	approvalHandler := NewApprovalHandler(queries, configStore, publishCfg, cfgSyncer, fleetIndex, configHandler.convergenceMonitor)
-	approvalHandler.SetAuditWriter(aw)
-	approvalHandler.RegisterRoutes(mux)
-
 	// Mount envoy management endpoints (tags, maintenance).
 	envoysHandler := NewEnvoysHandler(queries, fleetIndex)
 	envoysHandler.RegisterRoutes(mux)

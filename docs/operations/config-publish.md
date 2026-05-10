@@ -247,15 +247,5 @@ Published: 12 modules, 3 roles, 8 envoy entries (15 files synced)
   + modules/sshd.vgo
   + envoys/web.vgo
 ```
-
-## Integration with Change Approval
-
-When `publish.approval_required: true` is set in `server.yaml`, the publish flow adds an approval gate before configs go live. Instead of immediately syncing to `.live/` and triggering a reload, `vigocli config publish` creates a pending change request. The validated configs are staged but not activated.
-
-A second admin must then run `vigocli config approve <id>` to activate the change. This enforces two-person review for all config changes reaching production.
-
-If `approval_required` is `false` (the default), the publish flow works exactly as described above with no approval gate.
-
-See [Change Approval](change-approval.md) for full details on the approval workflow, expiration, and rejection.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

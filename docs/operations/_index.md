@@ -16,7 +16,6 @@ This section covers the operational aspects of running a Vigo server in producti
 ## Config Management
 
 - [Config Publish Pipeline](config-publish.md) -- Staging validation before live config sync
-- [Change Approval](change-approval.md) -- Two-person rule for config changes
 - [Blast Radius Limits](blast-radius.md) -- Auto-rollback on compliance drop after config publish
 - [Maintenance Windows](maintenance-windows.md) -- Per-envoy and global change freeze
 - [Envoy Lifecycle](envoy-lifecycle.md) -- Revoke, puddle evict, delete, purge: what each verb does and what survives

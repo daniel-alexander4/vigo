@@ -47,11 +47,6 @@
         <a href="/workflows" class="nav-link{{if eq .ActiveNav "workflows"}} nav-link--active{{end}}">
             Workflows
         </a>
-        {{if .ApprovalRequired}}
-        <a href="/approvals" class="nav-link{{if eq .ActiveNav "approvals"}} nav-link--active{{end}}">
-            Config Approvals
-        </a>
-        {{end}}
 
         {{if .SwarmEnabled}}
         <a href="/swarm" class="nav-group__label nav-group__label--link{{if eq .ActiveNav "swarm"}} nav-group__label--active{{end}}">Swarm <span class="nav-group__label-hint">Envoy P2P</span></a>

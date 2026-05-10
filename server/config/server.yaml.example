@@ -340,8 +340,6 @@ watcher:
 # publish:
 #   compliance_threshold: 80                   # 0 = disabled (default), 1-100 = minimum %
 #   rollback_window: "5m"                      # how long to watch after reload
-#   approval_required: false                   # require two-person approval before config reload
-#   approval_timeout: "24h"                    # how long pending changes stay valid
 #   retraction:
 #     enabled: false                           # auto-generate retract modules when modules are removed
 #                                              # requires ai.enabled: true — uses AI to improve exec reversals

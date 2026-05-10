@@ -329,25 +329,19 @@ See [Maintenance Windows](../operations/maintenance-windows.md) for details.
 
 ### publish
 
-Controls change approval workflow for `vigocli config publish`.
+Blast-radius limits and `.retract` drafting for `vigocli config publish`.
 
 ```yaml
 publish:
-  approval_required: true
-  approval_timeout: "24h"
   compliance_threshold: 90
   rollback_window: "5m"
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `approval_required` | `false` | When true, `config publish` creates a pending change requiring a second admin to approve |
-| `approval_timeout` | `"24h"` | Pending changes expire after this duration |
 | `compliance_threshold` | `0` (disabled) | Auto-rollback if fleet convergence drops below this percentage after reload (1-100) |
 | `rollback_window` | `"5m"` | Duration to monitor convergence after reload |
 | `retraction.enabled` | `false` | Auto-generate `.retract` modules when modules are removed during publish. Requires `ai.enabled: true`. See [Module Retraction](../engineering/writing-modules/retraction.md) |
-
-When `approval_required` is enabled, `vigocli config publish` no longer applies changes immediately. Instead it creates a pending change record that must be approved by a different admin via `vigocli config approve` or the REST API. Pending changes that are not approved within `approval_timeout` expire automatically.
 
 If `compliance_threshold` is set, the server monitors fleet convergence for `rollback_window` after a config reload. If convergence drops below the threshold percentage, the server automatically rolls back to the previous config snapshot.
 

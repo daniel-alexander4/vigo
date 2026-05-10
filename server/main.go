@@ -1118,7 +1118,6 @@ func run() error {
 		uiHandler.SetTraitQueryDispatcher(&traitQueryAdapter{agentSvc: agentSvc})
 		uiHandler.SetServerHostname(cfg.Server.Hostname)
 		uiHandler.SetServerConfigPath(configFile)
-		uiHandler.SetPublishApprovalRequired(cfg.Publish.ApprovalRequired)
 		uiHandler.SetGlobalObserveOnly(cfg.CheckIn.ObserveOnly)
 		uiHandler.SetCVESearcher(&cveSearchAdapter{cveHandler})
 		uiHandler.SetHealthChecker(&healthCheckAdapter{doctorHandler})
@@ -1292,12 +1291,6 @@ func run() error {
 			slog.Error("REST gateway error", "error", err)
 		}
 	}()
-
-	// Start change approval expiry loop (expires pending changes past their timeout).
-	if cfg.Publish.ApprovalRequired {
-		go api.StartExpiryLoop(ctx, queries)
-		slog.Info("change approval workflow enabled", "timeout", stringOrDefault(cfg.Publish.ApprovalTimeout, "24h"))
-	}
 
 	if role == config.RoleSpoke {
 		// Start spoke status reporter if hub address is configured.

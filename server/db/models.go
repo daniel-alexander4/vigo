@@ -85,18 +85,6 @@ type ComplianceWaiver struct {
 	Active    int64        `json:"active"`
 }
 
-type ConfigChange struct {
-	ID           int64          `json:"id"`
-	Status       string         `json:"status"`
-	RequestedBy  string         `json:"requested_by"`
-	ApprovedBy   sql.NullString `json:"approved_by"`
-	RequestedAt  time.Time      `json:"requested_at"`
-	ResolvedAt   sql.NullTime   `json:"resolved_at"`
-	ExpiresAt    time.Time      `json:"expires_at"`
-	DiffSummary  string         `json:"diff_summary"`
-	RejectReason sql.NullString `json:"reject_reason"`
-}
-
 type ConfigPublish struct {
 	ID           string    `json:"id"`
 	Operator     string    `json:"operator"`

@@ -127,13 +127,6 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 // that watches fleet compliance for the rollback window. If compliance drops
 // below the threshold, the previous config snapshot is automatically restored.
 func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
-	// When approval is required, block direct reload — callers must use
-	// the change approval flow (POST /api/v1/config/changes → approve).
-	if h.publishCfg.ApprovalRequired {
-		writeError(w, http.StatusForbidden, "approval required: submit a change via POST /api/v1/config/changes and have a second user approve it")
-		return
-	}
-
 	if err := h.configStore.Reload(); err != nil {
 		writeError(w, http.StatusInternalServerError, "config reload failed: "+err.Error())
 		return
@@ -160,7 +153,7 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Record tamper-evident audit event.
-	recordAudit(r.Context(), h.auditWriter, "config.reload", usernameFromRequest(r), "rest", "config reloaded", "")
+	recordAudit(r.Context(), h.auditWriter, "config.reload", actorFromRequest(r), "rest", "config reloaded", "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }

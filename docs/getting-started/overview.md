@@ -48,7 +48,6 @@ Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed over SSH via a gate
 - The publish pipeline validates configs before they go live: YAML syntax, cross-reference integrity, circular dependency detection, idempotency enforcement, self-protection guardrails, and URL aliveness checks. When validation fails, the built-in AI assistant streams fix suggestions to the terminal.
 - Self-protection guardrails block any resource that targets the agent binary, server binary, config directory, or service unit. These checks cannot be bypassed.
 - Tamper-evident audit trail: every auditable event is recorded in a SHA-256 hash chain. Any modification or deletion is cryptographically detectable.
-- Optional two-person approval workflow for config publish: a second admin must approve before changes go live.
 - Blast radius protection: auto-rollback if fleet compliance drops below threshold after config publish.
 - Peer replication: primary/peer file sync for server redundancy with automatic agent failover and CLI-driven promotion.
 - `vigo status` shows the local agent's enforced policy, collected traits, and pending results — fully transparent to the machine's admin.

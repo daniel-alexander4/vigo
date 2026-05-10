@@ -13,7 +13,6 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/publish"
@@ -204,22 +203,5 @@ func TestConfig_Unfreeze(t *testing.T) {
 
 	if publish.FreezeUntil != nil {
 		t.Error("expected publish.FreezeUntil to be nil after unfreeze")
-	}
-}
-
-func TestConfig_ReloadBlockedByApproval(t *testing.T) {
-	queries := db.New(openMigratedTestDB(t))
-
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), nil)
-	handler.publishCfg = config.PublishSection{ApprovalRequired: true}
-	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
-
-	req := httptest.NewRequest("POST", "/api/v1/config/reload", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, adminReq(req))
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 when approval required, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

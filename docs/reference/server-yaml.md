@@ -397,14 +397,12 @@ license:
 
 ## publish
 
-Blast radius protection and change approval.
+Blast radius protection on config publish.
 
 ```yaml
 publish:
   compliance_threshold: 80           # auto-rollback if convergence drops below this %
   rollback_window: "5m"              # monitoring window after config reload
-  approval_required: false           # two-person approval before config reload
-  approval_timeout: "24h"            # how long pending changes stay valid
 ```
 
 ## backup

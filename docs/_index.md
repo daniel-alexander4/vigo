@@ -29,7 +29,6 @@ See the full [Engineering Guide](engineering/_index.md). Highlights:
 - [Tuning](operations/tuning.md) — Runtime tuning parameters
 - [Integrations](operations/integrations.md) — GRC platforms, webhooks, and external systems
 - [Config Publishing](operations/config-publish.md) — Validate, sync, and reload
-- [Change Approval](operations/change-approval.md) — Two-person approval gate for config publish
 - [Blast Radius Limits](operations/blast-radius.md) — Auto-rollback on compliance drop
 - [Maintenance Windows](operations/maintenance-windows.md) — Per-envoy and global change freeze
 - [Prometheus Metrics](operations/metrics.md) — 50+ metrics reference
