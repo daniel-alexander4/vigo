@@ -40,6 +40,8 @@
 pub mod cli;
 pub mod codes;
 pub mod config;
+pub mod name;
+pub mod names_cache;
 pub mod pair;
 pub mod rekey;
 pub mod session;
@@ -77,4 +79,13 @@ pub fn is_initialized(home: &Path) -> bool {
     config::wrapped_path(home).exists()
         && config::salt_path(home).exists()
         && config::pubkey_path(home).exists()
+}
+
+/// Read the local user's friendly-name claim (ADR-022), if any.
+/// `Ok(None)` when no name has been claimed on this envoy; `Err` on a
+/// present-but-corrupt `name-claim.json`. Thin wrapper over
+/// [`name::NameClaim::load`] for siblings (the `swarmgit` traits
+/// collector) that just want "does this user have a name claim?".
+pub fn local_name_claim(home: &Path) -> Result<Option<name::NameClaim>> {
+    name::NameClaim::load(home)
 }

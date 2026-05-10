@@ -12,6 +12,8 @@ use ed25519_dalek::SigningKey;
 
 use super::codes;
 use super::config;
+use super::name;
+use super::names_cache;
 use super::pair;
 use super::rekey;
 use super::session;
@@ -41,6 +43,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "members" => with_puddle_authz(|| cmd_members(&args[1..])),
         "rotate-passphrase" => with_puddle_authz(|| cmd_rotate_passphrase(&args[1..])),
         "status" => with_puddle_authz(|| cmd_status(&args[1..])),
+        "name" => with_puddle_authz(|| cmd_name(&args[1..])),
         other => bail!(
             "unknown `vigo swarm puddle` subcommand: {}\nrun `vigo swarm puddle --help` for usage",
             other
@@ -85,6 +88,15 @@ REKEY (ADR-018, puddle keypair rotation):
 DAILY:
     unlock                     Unwrap the key and start the session helper.
     lock                       Scrub the held key and stop the session helper.
+
+FRIENDLY NAMES (ADR-022):
+    name set <name>            Claim <name> for this puddle (puddle must be unlocked).
+                               Makes `swarmgit://<name>/<repo>` resolve to your projects,
+                               alongside the hex `swarmgit://<project_id>/<repo>` form.
+    name clear [--yes]         Drop this puddle's name claim. Breaks every
+                               `swarmgit://<name>/…` URL anyone wrote down; the hex
+                               project_id URLs keep working.
+    name show                  Show this puddle's name claim and the fleet view of it.
 
 INFO / MAINTENANCE:
     pubkey                     Print the local puddle pubkey fingerprint.
@@ -1481,6 +1493,302 @@ fn print_offline_envoy_hint(local_puddle_pubkey: &str, username: &str) {
     );
 }
 
+// ---------- name (friendly puddle names, ADR-022) ----------
+
+fn print_name_usage() {
+    eprintln!(
+        "vigo swarm puddle name — friendly names for swarmgit projects (ADR-022)
+
+USAGE:
+    vigo swarm puddle name set <name>     Claim <name> for this puddle. Requires the
+                                          puddle unlocked. Afterwards `swarmgit://<name>/<repo>`
+                                          resolves to `swarmgit://sha256(your-pubkey ‖ <repo>)/<repo>`.
+    vigo swarm puddle name clear [--yes]  Drop this puddle's name claim. Breaks every
+                                          `swarmgit://<name>/…` URL; the hex project_id URLs keep working.
+    vigo swarm puddle name show           Show this puddle's name claim and the fleet view of it.
+
+Friendly names are first-come and cooperatively enforced — a hint, not a trust anchor.
+The unforgeable form is always `swarmgit://<project_id>/<repo>`. See ADR-022."
+    );
+}
+
+fn cmd_name(args: &[String]) -> Result<()> {
+    let (sub, rest): (&str, &[String]) = match args.split_first() {
+        Some((first, rest)) => (first.as_str(), rest),
+        None => ("show", &[]),
+    };
+    match sub {
+        "show" => cmd_name_show(rest),
+        "set" => cmd_name_set(rest),
+        "clear" => cmd_name_clear(rest),
+        "help" | "--help" | "-h" => {
+            print_name_usage();
+            Ok(())
+        }
+        other => bail!(
+            "unknown `vigo swarm puddle name` subcommand: {}\n\
+             usage: vigo swarm puddle name {{set <name> | clear [--yes] | show}}",
+            other
+        ),
+    }
+}
+
+/// Bare lowercase-hex form of this envoy's local puddle pubkey.
+/// Errors if puddle isn't initialized or `identity.pub` is missing /
+/// malformed.
+fn local_puddle_pubkey_hex(home: &Path) -> Result<String> {
+    let raw = super::local_puddle_pubkey(home)?.ok_or_else(|| {
+        anyhow!(
+            "puddle not initialized on this envoy — run `vigo swarm puddle init` \
+             (or `vigo swarm puddle join --from <host>`) first"
+        )
+    })?;
+    let hex = raw
+        .strip_prefix("ed25519:")
+        .unwrap_or(&raw)
+        .trim()
+        .to_ascii_lowercase();
+    name::parse_pubkey_hex(&hex).context("local ~/.vigo-puddle/identity.pub is malformed")?;
+    Ok(hex)
+}
+
+fn sig_to_array(v: &[u8]) -> Result<[u8; 64]> {
+    if v.len() != 64 {
+        bail!(
+            "puddle session helper returned a {}-byte signature, expected 64",
+            v.len()
+        );
+    }
+    let mut a = [0u8; 64];
+    a.copy_from_slice(v);
+    Ok(a)
+}
+
+fn cmd_name_set(args: &[String]) -> Result<()> {
+    let mut name_arg: Option<String> = None;
+    for a in args {
+        match a.as_str() {
+            "--help" | "-h" => {
+                print_name_usage();
+                return Ok(());
+            }
+            other if other.starts_with('-') => bail!("unknown flag for `name set`: {}", other),
+            other => {
+                if name_arg.is_some() {
+                    bail!("`name set` takes exactly one <name>; got an extra argument {:?}", other);
+                }
+                name_arg = Some(other.to_string());
+            }
+        }
+    }
+    let name_arg = name_arg.context("usage: vigo swarm puddle name set <name>")?;
+    name::validate_name(&name_arg)?;
+
+    let home = user_home_for_invocation()?;
+    let username = user_for_invocation()?;
+    if !super::is_initialized(&home) {
+        bail!(
+            "puddle not initialized on this envoy — run `vigo swarm puddle init` \
+             (or `vigo swarm puddle join --from <host>`) first"
+        );
+    }
+    let my_hex = local_puddle_pubkey_hex(&home)?;
+
+    // Refuse the *accidental* collision: someone else already holds
+    // this name in our current fleet view. This cannot beat the
+    // propagation window or a deliberate squatter — see ADR-022. A
+    // stale read of the cache is acceptable: worst case we refuse a
+    // name that's actually free, and the operator retries after the
+    // next refresh.
+    let fleet = names_cache::FleetNameMap::load().unwrap_or_default();
+    if let Some(other) = fleet.claimed_by_other(&name_arg, &my_hex) {
+        bail!(
+            "name '{}' is already claimed by puddle ed25519:{} in this fleet's current view.\n\
+             Pick another name. If you believe that claim is stale (the other puddle ran \
+             `name clear`), wait for the fleet name map to refresh and retry.\n\
+             The unforgeable form is always swarmgit://<project_id>/<repo>.",
+            name_arg, other
+        );
+    }
+
+    // Carry a re-found supersedes chain forward only when re-issuing
+    // the *same* name under the *same* anchor; any other `name set`
+    // starts a fresh (empty) chain.
+    let prior = name::NameClaim::load(&home).ok().flatten();
+    let (supersedes, reissuing) = match &prior {
+        Some(p)
+            if p.body.name == name_arg && p.body.puddle_pubkey.eq_ignore_ascii_case(&my_hex) =>
+        {
+            (p.body.supersedes.clone(), true)
+        }
+        Some(p) if p.body.name != name_arg => {
+            println!(
+                "Replacing this puddle's existing name claim '{}' → '{}'.",
+                p.body.name, name_arg
+            );
+            (Vec::new(), false)
+        }
+        _ => (Vec::new(), false),
+    };
+    if reissuing {
+        println!("Re-issuing the existing name claim '{}'.", name_arg);
+    }
+
+    let body = name::NameClaimBody {
+        puddle_pubkey: my_hex.clone(),
+        name: name_arg.clone(),
+        claimed_at: now_secs(),
+        supersedes,
+    };
+    let claim = name::NameClaim::issue_with(body, |msg| {
+        let sig = session::request_sign(msg).context(
+            "the puddle session helper isn't running — run `vigo swarm puddle unlock` first",
+        )?;
+        sig_to_array(&sig)
+    })?;
+    claim.save(&home, &username)?;
+
+    let pk_short = if my_hex.len() > 16 {
+        format!("{}…", &my_hex[..16])
+    } else {
+        my_hex.clone()
+    };
+    println!("✓ Claimed puddle name '{}'", name_arg);
+    println!("  Puddle pubkey: ed25519:{}", my_hex);
+    println!(
+        "  Resolves:      swarmgit://{}/<repo>  →  swarmgit://{}/<repo>  (project_id = sha256(pubkey ‖ repo))",
+        name_arg, pk_short
+    );
+    println!();
+    println!("Cooperative first-come naming — a hint, not a trust anchor. The fleet name map");
+    println!("updates as agents check in; until a peer has seen this claim it can't resolve");
+    println!("swarmgit://{}/<repo>. The hex form is always unambiguous.", name_arg);
+    Ok(())
+}
+
+fn cmd_name_clear(args: &[String]) -> Result<()> {
+    let mut yes = false;
+    for a in args {
+        match a.as_str() {
+            "--yes" | "-y" => yes = true,
+            "--help" | "-h" => {
+                print_name_usage();
+                return Ok(());
+            }
+            other => bail!("unknown flag for `name clear`: {}", other),
+        }
+    }
+    let home = user_home_for_invocation()?;
+    let Some(claim) = name::NameClaim::load(&home).ok().flatten() else {
+        println!("No name claim on this envoy — nothing to clear.");
+        return Ok(());
+    };
+    if !yes {
+        eprintln!(
+            "Clearing this puddle's name claim '{name}'.\n\n\
+             Every `swarmgit://{name}/<repo>` URL anyone wrote down will stop resolving — \
+             and if a different puddle later claims '{name}', those URLs would resolve to \
+             *their* projects instead. The hex `swarmgit://<project_id>/<repo>` URLs keep \
+             working. Name claims do not expire on their own; clearing is the only way to \
+             give the name back.\n\n\
+             Re-run with --yes to proceed.",
+            name = claim.body.name
+        );
+        bail!("refused without --yes");
+    }
+    name::NameClaim::clear(&home)?;
+    println!("✓ Cleared puddle name claim '{}'.", claim.body.name);
+    println!("  The fleet name map drops it on the next agent check-in cycle.");
+    Ok(())
+}
+
+fn cmd_name_show(_args: &[String]) -> Result<()> {
+    let home = user_home_for_invocation()?;
+    println!("puddle name (ADR-022)");
+    let local_claim = match name::NameClaim::load(&home) {
+        Ok(Some(claim)) => {
+            println!("  claimed name:     {}", claim.body.name);
+            println!("  puddle pubkey:    ed25519:{}", claim.body.puddle_pubkey);
+            println!("  claimed at:       {} (unix seconds)", claim.body.claimed_at);
+            if claim.body.supersedes.is_empty() {
+                println!("  supersedes:       (none — original claim)");
+            } else {
+                println!(
+                    "  supersedes:       {} delegation link(s) (re-found chain)",
+                    claim.body.supersedes.len()
+                );
+            }
+            match claim.verify_signature() {
+                Ok(()) => println!("  signature:        ok"),
+                Err(e) => println!(
+                    "  signature:        INVALID ({}) — re-run `name set {}` to re-issue",
+                    e, claim.body.name
+                ),
+            }
+            Some(claim)
+        }
+        Ok(None) => {
+            println!(
+                "  claimed name:     (none) — run `vigo swarm puddle name set <name>` to claim one"
+            );
+            None
+        }
+        Err(e) => {
+            println!(
+                "  claimed name:     (unreadable: {}) — name-claim.json is corrupt; re-run `name set <name>`",
+                e
+            );
+            None
+        }
+    };
+
+    println!();
+    println!("  fleet name map:   {}", names_cache::names_cache_path().display());
+    match names_cache::FleetNameMap::load() {
+        Ok(map) => {
+            if map.updated_at > 0 {
+                println!("  last refreshed:   {} (unix seconds)", map.updated_at);
+            } else {
+                println!("  last refreshed:   (never — agent hasn't fetched it yet)");
+            }
+            println!("  names known:      {}", map.names.len());
+            if let Some(claim) = &local_claim {
+                let claimants = map.verified_claims(&claim.body.name);
+                if claimants.is_empty() {
+                    println!(
+                        "  fleet view '{}': not yet visible (agents haven't propagated your claim)",
+                        claim.body.name
+                    );
+                } else if claimants.len() == 1 {
+                    if claimants[0]
+                        .0
+                        .body
+                        .puddle_pubkey
+                        .eq_ignore_ascii_case(&claim.body.puddle_pubkey)
+                    {
+                        println!("  fleet view '{}': yours, unambiguous ✓", claim.body.name);
+                    } else {
+                        println!(
+                            "  fleet view '{}': claimed by ed25519:{} — NOT yours",
+                            claim.body.name, claimants[0].0.body.puddle_pubkey
+                        );
+                    }
+                } else {
+                    println!(
+                        "  fleet view '{}': COLLISION — {} puddles claim it; resolvers will refuse it and require swarmgit://<project_id>/<repo>:",
+                        claim.body.name, claimants.len()
+                    );
+                    for (c, _) in &claimants {
+                        println!("                    - ed25519:{}", c.body.puddle_pubkey);
+                    }
+                }
+            }
+        }
+        Err(e) => println!("  fleet name map:   (unreadable: {})", e),
+    }
+    Ok(())
+}
+
 // ---------- helpers ----------
 
 fn user_for_invocation() -> Result<String> {
@@ -1660,6 +1968,45 @@ fn write_pubkey(path: &Path, pubkey: &str, username: &str) -> Result<()> {
 fn write_pubkey(path: &Path, pubkey: &str, _username: &str) -> Result<()> {
     fs::write(path, format!("{}\n", pubkey))
         .with_context(|| format!("writing {}", path.display()))
+}
+
+/// Atomically write `content` to `path` with mode 0644, chowned to
+/// `username` when running as root. Write-to-temp-then-rename so a
+/// concurrent reader (the `swarmgit` traits collector) never sees a
+/// torn file. Used for public-by-construction per-user JSON — i.e.
+/// the name claim ([`super::name::NameClaim::save`]).
+#[cfg(unix)]
+pub(super) fn write_user_file_0644(path: &Path, content: &[u8], username: &str) -> Result<()> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let dir = path
+        .parent()
+        .ok_or_else(|| anyhow!("{} has no parent directory", path.display()))?;
+    let file_name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow!("{} has no file name", path.display()))?;
+    let tmp = dir.join(format!(".{}.tmp.{}", file_name, std::process::id()));
+    {
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o644)
+            .open(&tmp)
+            .with_context(|| format!("creating {}", tmp.display()))?;
+        f.write_all(content)?;
+        f.sync_all().ok();
+    }
+    crate::swarm::lockbox::chown_to_user_pub(&tmp, username)
+        .with_context(|| format!("chown {} to {}", tmp.display(), username))?;
+    fs::rename(&tmp, path)
+        .with_context(|| format!("rename {} -> {}", tmp.display(), path.display()))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+pub(super) fn write_user_file_0644(path: &Path, content: &[u8], _username: &str) -> Result<()> {
+    fs::write(path, content).with_context(|| format!("writing {}", path.display()))
 }
 
 #[cfg(unix)]

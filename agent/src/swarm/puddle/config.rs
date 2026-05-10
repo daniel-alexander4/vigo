@@ -65,6 +65,15 @@ pub fn session_unlocked_path(home: &Path) -> PathBuf {
     dot_dir(home).join("session.unlocked")
 }
 
+/// Signed friendly-name claim for this puddle (ADR-022). JSON-encoded
+/// [`super::name::NameClaim`]. 0644 — public-by-construction (the
+/// signature is over a hex pubkey + a name; nothing secret). Read by
+/// the `swarmgit` traits collector so the fleet name map can be
+/// aggregated server-side.
+pub fn name_claim_path(home: &Path) -> PathBuf {
+    dot_dir(home).join("name-claim.json")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

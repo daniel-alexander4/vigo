@@ -38,13 +38,35 @@
 //! }
 //! ```
 //!
+//! ### Friendly-name claims (ADR-022)
+//!
+//! The collector also walks each Unix user's `~/.vigo-puddle/name-claim.json`
+//! and emits the **full signed claim** verbatim, so the server-side
+//! aggregator (`swarmgitmesh`) can join them into a fleet
+//! `name → claims` map and resolvers can verify the signature +
+//! `supersedes` chain end-to-end without trusting the server. A
+//! locally-corrupt or non-self-verifying claim is dropped here rather
+//! than published.
+//!
+//! ```jsonc
+//! "name_claims": [
+//!   { "user": "dan", "claim": { "body": { "puddle_pubkey": "<64-hex>",
+//!                                          "name": "dan",
+//!                                          "claimed_at": <unix-seconds>,
+//!                                          "supersedes": [ ... ] },
+//!                               "signature": "<128-hex>" } }
+//! ]
+//! ```
+//!
 //! Top-level shape:
 //!
 //! ```jsonc
 //! {
-//!   "updated_at":    <unix-seconds>,
-//!   "project_count": 3,
-//!   "projects":     [ ... ]
+//!   "updated_at":       <unix-seconds>,
+//!   "project_count":    3,
+//!   "projects":        [ ... ],
+//!   "name_claim_count": 1,            // omitted when 0
+//!   "name_claims":     [ ... ]        // omitted when empty
 //! }
 //! ```
 
@@ -98,15 +120,54 @@ pub fn collect() -> Result<Value> {
     };
 
     let projects = collect_projects(&passwd_body, &swarmgit_base);
-    if projects.is_empty() {
+    let name_claims = collect_name_claims(&passwd_body);
+    if projects.is_empty() && name_claims.is_empty() {
         return Ok(Value::Null);
     }
 
-    Ok(json!({
+    let mut out = json!({
         "updated_at": unix_seconds_now(),
         "project_count": projects.len(),
         "projects": projects,
-    }))
+    });
+    if !name_claims.is_empty() {
+        out["name_claim_count"] = json!(name_claims.len());
+        out["name_claims"] = json!(name_claims);
+    }
+    Ok(out)
+}
+
+/// One Unix user's friendly-name claim (ADR-022), as it appears in
+/// the `swarmgit` trait. The `claim` is the full signed
+/// [`crate::swarm::puddle::name::NameClaim`] — published verbatim so
+/// resolvers verify it themselves.
+#[derive(Debug, Serialize)]
+pub struct NameClaimEntry {
+    pub user: String,
+    pub claim: crate::swarm::puddle::name::NameClaim,
+}
+
+/// Walk passwd, read each user's `~/.vigo-puddle/name-claim.json`, and
+/// return the self-verifying ones. Sorted by claimed name then user
+/// for deterministic trait output.
+pub(crate) fn collect_name_claims(passwd_body: &str) -> Vec<NameClaimEntry> {
+    use crate::swarm::puddle::name::NameClaim;
+    let mut out = Vec::new();
+    for (user, home) in walk_passwd(passwd_body) {
+        if let Ok(Some(claim)) = NameClaim::load(&home) {
+            if claim.verify_signature().is_ok() {
+                out.push(NameClaimEntry { user, claim });
+            }
+        }
+    }
+    out.sort_by(|a, b| {
+        a.claim
+            .body
+            .name
+            .cmp(&b.claim.body.name)
+            .then_with(|| a.user.cmp(&b.user))
+    });
+    out
 }
 
 /// Walk the passwd file and for each user with a `~/.vigo-swarmgit/`
@@ -460,5 +521,73 @@ mod tests {
         std::fs::create_dir_all(dir.path().join("sub")).unwrap();
         std::fs::write(dir.path().join("sub/b"), b"world!").unwrap(); // 6
         assert_eq!(dir_size_bytes(dir.path()).unwrap(), 11);
+    }
+
+    #[test]
+    fn collect_name_claims_reads_per_user_claims() {
+        use crate::swarm::puddle::name::{NameClaim, NameClaimBody};
+        let base = tempdir().unwrap();
+        let dan_home = base.path().join("home/dan");
+        let alice_home = base.path().join("home/alice");
+        std::fs::create_dir_all(dan_home.join(".vigo-puddle")).unwrap();
+        std::fs::create_dir_all(alice_home.join(".vigo-puddle")).unwrap();
+
+        let dan_key = SigningKey::generate(&mut OsRng);
+        let dan_claim = NameClaim::issue(
+            &dan_key,
+            NameClaimBody {
+                puddle_pubkey: hex::encode(pub_bytes(&dan_key)),
+                name: "dan".to_string(),
+                claimed_at: 1_700_000_000,
+                supersedes: vec![],
+            },
+        )
+        .unwrap();
+        std::fs::write(
+            dan_home.join(".vigo-puddle/name-claim.json"),
+            serde_json::to_vec_pretty(&dan_claim).unwrap(),
+        )
+        .unwrap();
+
+        // Alice's file is corrupt — must be skipped, not crash.
+        std::fs::write(alice_home.join(".vigo-puddle/name-claim.json"), b"{not json").unwrap();
+
+        let body = format!(
+            "dan:x:1000:1000::{}:/bin/sh\nalice:x:1001:1001::{}:/bin/sh\n",
+            dan_home.display(),
+            alice_home.display()
+        );
+        let claims = collect_name_claims(&body);
+        assert_eq!(claims.len(), 1);
+        assert_eq!(claims[0].user, "dan");
+        assert_eq!(claims[0].claim.body.name, "dan");
+    }
+
+    #[test]
+    fn collect_name_claims_drops_non_self_verifying() {
+        use crate::swarm::puddle::name::{NameClaim, NameClaimBody};
+        let base = tempdir().unwrap();
+        let home = base.path().join("home/eve");
+        std::fs::create_dir_all(home.join(".vigo-puddle")).unwrap();
+        let key = SigningKey::generate(&mut OsRng);
+        let mut claim = NameClaim::issue(
+            &key,
+            NameClaimBody {
+                puddle_pubkey: hex::encode(pub_bytes(&key)),
+                name: "eve".to_string(),
+                claimed_at: 1,
+                supersedes: vec![],
+            },
+        )
+        .unwrap();
+        // Tamper the signature so it no longer verifies.
+        claim.signature = hex::encode([0u8; 64]);
+        std::fs::write(
+            home.join(".vigo-puddle/name-claim.json"),
+            serde_json::to_vec_pretty(&claim).unwrap(),
+        )
+        .unwrap();
+        let body = format!("eve:x:1002:1002::{}:/bin/sh\n", home.display());
+        assert!(collect_name_claims(&body).is_empty());
     }
 }
