@@ -229,6 +229,37 @@ async fn handle_client(
         }
     };
 
+    // ADR-022: `RESOLVE-NAME <puddle-name> <repo-handle>` is a pure
+    // lookup — resolve the friendly name → project_id against the
+    // locally-cached fleet name map, reply `OK <pid_hex>
+    // <founder_pubkey_hex>\n` (or `ERR ...\n`), and close. No git
+    // process, no token chain. `git-remote-swarmgit` sends this when
+    // the first URL component isn't 64-char lowercase hex.
+    if header
+        .split_ascii_whitespace()
+        .next()
+        .map(|v| v.eq_ignore_ascii_case("RESOLVE-NAME"))
+        .unwrap_or(false)
+    {
+        return match handle_resolve_name(&header) {
+            Ok((pid_hex, founder_hex)) => {
+                tracing::info!(uid, project_id = %pid_hex, "swarmgit helper: RESOLVE-NAME ok");
+                let _ = write_half
+                    .write_all(format!("OK {} {}\n", pid_hex, founder_hex).as_bytes())
+                    .await;
+                let _ = write_half.flush().await;
+                Ok(())
+            }
+            Err(e) => {
+                let _ = write_half
+                    .write_all(format!("ERR {}\n", sanitize_err(&e.to_string())).as_bytes())
+                    .await;
+                let _ = write_half.flush().await;
+                Err(e)
+            }
+        };
+    }
+
     let (project_id, service) = match parse_header(&header) {
         Ok(v) => v,
         Err(e) => {
@@ -627,6 +658,71 @@ fn parse_header(line: &str) -> Result<([u8; ID_LEN], Service)> {
     let service =
         Service::parse(service_str).ok_or_else(|| anyhow!("unknown service {:?}", service_str))?;
     Ok((project_id, service))
+}
+
+/// Resolve a `RESOLVE-NAME <puddle-name> <repo-handle>` request
+/// (ADR-022) against the local fleet name-map cache. Returns
+/// `(project_id_hex, founder_pubkey_hex)`. Pure lookup — no per-user
+/// state, no token chain, no git process.
+fn handle_resolve_name(header: &str) -> Result<(String, String)> {
+    let trimmed = header.trim_end_matches(['\n', '\r']);
+    let mut it = trimmed.split_ascii_whitespace();
+    let _verb = it.next(); // RESOLVE-NAME — already matched by the caller
+    let name = it
+        .next()
+        .ok_or_else(|| anyhow!("RESOLVE-NAME missing <puddle-name>"))?;
+    let handle = it
+        .next()
+        .ok_or_else(|| anyhow!("RESOLVE-NAME missing <repo-handle>"))?;
+    if it.next().is_some() {
+        bail!("RESOLVE-NAME has extra tokens");
+    }
+    crate::swarm::puddle::name::validate_name(name).context("puddle name in swarmgit:// URL")?;
+    if handle.is_empty() {
+        bail!("RESOLVE-NAME repo handle must not be empty");
+    }
+
+    let map = crate::swarm::puddle::names_cache::FleetNameMap::load()
+        .context("loading fleet name-map cache")?;
+    let verified: Vec<_> = map
+        .verified_claims(name)
+        .into_iter()
+        .map(|(claim, _)| claim)
+        .collect();
+
+    use crate::swarm::puddle::name::NameResolve;
+    let founder_pk = match crate::swarm::puddle::name::resolve_claims(&verified) {
+        NameResolve::Unique(pk) | NameResolve::Superseded(pk) => pk,
+        NameResolve::NotFound => bail!(
+            "puddle name {:?} is not in this envoy's fleet name map yet — set it with \
+             `vigo swarm puddle name set {}`, or clone swarmgit://<project_id>/{} directly",
+            name,
+            name,
+            handle
+        ),
+        NameResolve::Ambiguous(claimants) => {
+            let prefixes: Vec<String> = claimants
+                .iter()
+                .map(|p| {
+                    if p.len() > 12 {
+                        format!("{}…", &p[..12])
+                    } else {
+                        p.clone()
+                    }
+                })
+                .collect();
+            bail!(
+                "puddle name {:?} is claimed by {} puddles ({}); resolution is ambiguous — \
+                 clone swarmgit://<project_id>/{} directly",
+                name,
+                claimants.len(),
+                prefixes.join(", "),
+                handle
+            );
+        }
+    };
+    let pid = crate::swarm::swarmgit::tokens::project_id_for(&founder_pk, handle);
+    Ok((super::project_state::hex_id(&pid), hex::encode(founder_pk)))
 }
 
 fn authorize(home: &Path, project_id: &[u8; ID_LEN]) -> Result<TokenChain> {

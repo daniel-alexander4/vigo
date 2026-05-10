@@ -118,18 +118,97 @@ fn run_inner(args: Vec<String>) -> Result<()> {
     protocol_loop(&project_id)
 }
 
-/// Parse a `swarmgit://<project_id_hex>/<handle>` URL into its 32-byte
-/// project_id. Handle is permitted but ignored (cryptographic
-/// identity is the project_id alone).
+/// Parse a `swarmgit://...` URL into its 32-byte project_id. Two
+/// forms (ADR-015 + ADR-022):
+///
+/// - `swarmgit://<64-hex project_id>/<handle>` — the self-certifying
+///   form. The handle is decorative here (cryptographic identity is
+///   the project_id alone); parsed and returned directly, no daemon
+///   round-trip.
+/// - `swarmgit://<puddle-name>/<repo-handle>` — the friendly form.
+///   The first component isn't 64-char lowercase hex, so it's a
+///   puddle name; we ask the helper daemon to resolve
+///   `<name>`→pubkey from its cached fleet name map and compute
+///   `project_id = sha256(pubkey ‖ <repo-handle>)`. Prints the
+///   resolved `(project_id, founder pubkey)` to stderr so the caller
+///   can eyeball the binding (friendly names are a hint, not a trust
+///   anchor — see ADR-022).
 pub fn parse_swarmgit_url(url: &str) -> Result<[u8; ID_LEN]> {
     let body = url
         .strip_prefix("swarmgit://")
         .ok_or_else(|| anyhow!("expected swarmgit:// URL, got {:?}", url))?;
-    let (pid_hex, _handle) = match body.split_once('/') {
+    let (first, handle) = match body.split_once('/') {
         Some(t) => t,
         None => (body, ""),
     };
-    parse_hex_id(pid_hex).context("swarmgit:// URL has invalid project_id (expected 64-char lowercase hex)")
+
+    // 64-char lowercase hex first component → already a project_id.
+    if let Ok(pid) = parse_hex_id(first) {
+        return Ok(pid);
+    }
+
+    // Otherwise the first component is a friendly puddle name. It
+    // needs a repo handle to hash against the resolved pubkey.
+    if handle.is_empty() {
+        bail!(
+            "swarmgit://<puddle-name>/<repo> needs a repo handle — got just {:?}. \
+             (For the self-certifying form, the first component must be exactly 64 \
+             lowercase hex characters.)",
+            first
+        );
+    }
+    let (pid_hex, founder_hex) = resolve_name_via_daemon(first, handle)
+        .with_context(|| format!("resolving swarmgit://{}/{}", first, handle))?;
+    let pid = parse_hex_id(&pid_hex).context("helper daemon returned a malformed project_id")?;
+    eprintln!(
+        "git-remote-swarmgit: resolved swarmgit://{name}/{handle} → swarmgit://{pid}/{handle} (founder ed25519:{founder})",
+        name = first,
+        handle = handle,
+        pid = pid_hex,
+        founder = short_pubkey_hex(&founder_hex),
+    );
+    Ok(pid)
+}
+
+fn short_pubkey_hex(hex: &str) -> String {
+    if hex.len() > 20 {
+        format!("{}…{}", &hex[..12], &hex[hex.len() - 8..])
+    } else {
+        hex.to_string()
+    }
+}
+
+/// Ask the helper daemon to resolve a friendly puddle name + repo
+/// handle to `(project_id_hex, founder_pubkey_hex)` against its
+/// locally-cached fleet name map. Synchronous std I/O — same shape as
+/// the HELLO handshake.
+fn resolve_name_via_daemon(name: &str, handle: &str) -> Result<(String, String)> {
+    let sock = socket_path();
+    let mut socket = UnixStream::connect(&sock).with_context(|| {
+        format!(
+            "connecting to vigo helper daemon at {}. Is the vigo agent running?",
+            sock.display()
+        )
+    })?;
+    socket
+        .write_all(format!("RESOLVE-NAME {} {}\n", name, handle).as_bytes())
+        .context("sending RESOLVE-NAME to helper daemon")?;
+    socket.flush().ok();
+    let response = read_response_line(&mut socket)?;
+    if let Some(rest) = response.strip_prefix("OK ") {
+        let mut parts = rest.split_ascii_whitespace();
+        let pid = parts
+            .next()
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| anyhow!("helper daemon returned an empty project_id"))?
+            .to_string();
+        let founder = parts.next().unwrap_or("").to_string();
+        Ok((pid, founder))
+    } else if let Some(msg) = response.strip_prefix("ERR ") {
+        bail!("helper daemon refused: {}", msg);
+    } else {
+        bail!("unexpected response from helper daemon: {:?}", response);
+    }
 }
 
 fn protocol_loop(project_id: &[u8; ID_LEN]) -> Result<()> {
@@ -428,6 +507,18 @@ mod tests {
     fn rejects_https_scheme() {
         let url = format!("https://example.com/{}", "0".repeat(64));
         assert!(parse_swarmgit_url(&url).is_err());
+    }
+
+    #[test]
+    fn friendly_name_without_handle_is_rejected() {
+        // `swarmgit://dan` alone — a friendly name with no /<repo> to
+        // hash. Rejected with a clear message; no daemon round-trip.
+        let err = parse_swarmgit_url("swarmgit://dan").unwrap_err();
+        assert!(
+            format!("{:#}", err).contains("repo handle"),
+            "unexpected error: {:#}",
+            err
+        );
     }
 
     #[test]

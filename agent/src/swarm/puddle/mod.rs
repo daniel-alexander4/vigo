@@ -41,6 +41,7 @@ pub mod cli;
 pub mod codes;
 pub mod config;
 pub mod name;
+pub mod names_bootstrap;
 pub mod names_cache;
 pub mod pair;
 pub mod rekey;

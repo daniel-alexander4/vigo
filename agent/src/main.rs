@@ -1187,6 +1187,17 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
             tls.clone(),
             cancel.clone(),
         );
+        // ADR-022: keep the fleet friendly-name map (~/.vigo-puddle name
+        // claims aggregated server-side) cached locally so
+        // `git-remote-swarmgit` can resolve `swarmgit://<name>/<repo>`
+        // and `vigo swarm puddle name set` can run its collision check —
+        // both off the check-in path. Fetched over mTLS sans token, same
+        // as the pubkey bootstrap above.
+        vigo::swarm::puddle::names_bootstrap::spawn(
+            cli.api_addr.clone(),
+            tls.clone(),
+            cancel.clone(),
+        );
     }
 
     if let Some(ref tls) = swarm_tls {

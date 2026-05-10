@@ -73,6 +73,12 @@ pub fn validate_name(name: &str) -> Result<()> {
     if name.starts_with('.') {
         bail!("puddle name must not start with '.'");
     }
+    // A name that looks exactly like a project_id (64 lowercase hex)
+    // would always be parsed as the hex form in a `swarmgit://` URL,
+    // so a friendly URL using it could never resolve. Reject up front.
+    if name.len() == 64 && name.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        bail!("puddle name must not look like a project_id (64 lowercase hex characters)");
+    }
     for c in name.chars() {
         if !(c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.') {
             bail!(
@@ -277,6 +283,103 @@ impl NameClaim {
     }
 }
 
+/// Outcome of resolving a `<puddle-name>` to a puddle pubkey from the
+/// set of competing claims for that name (ADR-022).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NameResolve {
+    /// Exactly one claimant — resolve to it.
+    Unique([u8; PUBKEY_LEN]),
+    /// Several claimants, but one supersedes all the others via a
+    /// verified rekey-delegation chain (a `re-found` mid-propagation)
+    /// — resolve to it.
+    Superseded([u8; PUBKEY_LEN]),
+    /// No claimant for this name.
+    NotFound,
+    /// Several unrelated claimants — ambiguous; the caller must fall
+    /// back to `swarmgit://<project_id>/<repo>`. Carries the claimant
+    /// pubkeys (hex) for the error message.
+    Ambiguous(Vec<String>),
+}
+
+/// Resolve `<name>` from `claims` — the set of **signature-verified**
+/// claims for that name (the caller drops claims whose signature
+/// doesn't check before calling this; `verify_signature` is *not*
+/// re-run here). An empty slice → [`NameResolve::NotFound`]. With more
+/// than one claim, walks each claim's `supersedes` chain: a claim
+/// whose verified chain descends from every other claimant supersedes
+/// them (this is what makes `re-found` seamless across the
+/// propagation window); otherwise the name is ambiguous.
+pub fn resolve_claims(claims: &[NameClaim]) -> NameResolve {
+    match claims.len() {
+        0 => NameResolve::NotFound,
+        1 => match claims[0].puddle_pubkey_bytes() {
+            Ok(pk) => NameResolve::Unique(pk),
+            Err(_) => NameResolve::Ambiguous(vec![claims[0].body.puddle_pubkey.clone()]),
+        },
+        _ => {
+            let mut pubkeys: Vec<[u8; PUBKEY_LEN]> = Vec::with_capacity(claims.len());
+            for c in claims {
+                match c.puddle_pubkey_bytes() {
+                    Ok(pk) => pubkeys.push(pk),
+                    Err(_) => {
+                        return NameResolve::Ambiguous(
+                            claims.iter().map(|c| c.body.puddle_pubkey.clone()).collect(),
+                        )
+                    }
+                }
+            }
+            for (i, c) in claims.iter().enumerate() {
+                let this_pk = pubkeys[i];
+                let Some(ancestry) = verified_chain_ancestry(&c.body.supersedes, &this_pk) else {
+                    continue;
+                };
+                let absorbs_all_others = pubkeys
+                    .iter()
+                    .enumerate()
+                    .all(|(j, pk)| j == i || ancestry.contains(pk));
+                if absorbs_all_others {
+                    return NameResolve::Superseded(this_pk);
+                }
+            }
+            NameResolve::Ambiguous(claims.iter().map(|c| c.body.puddle_pubkey.clone()).collect())
+        }
+    }
+}
+
+/// Verify a `supersedes` delegation chain ends at `terminal_pubkey`:
+/// each link's signature is valid (over its embedded
+/// `old_founder_pubkey`), consecutive links chain
+/// (`new` of link _i_ == `old` of link _i+1_), and the last link's
+/// `new_founder_pubkey` equals `terminal_pubkey`. On success returns
+/// the set of every `old_founder_pubkey` in the chain — the ancestry
+/// `terminal_pubkey` descends from. `None` for an empty, malformed,
+/// mis-linked, or bad-signature chain.
+fn verified_chain_ancestry(
+    chain: &[DelegationEnvelope],
+    terminal_pubkey: &[u8; PUBKEY_LEN],
+) -> Option<std::collections::HashSet<[u8; PUBKEY_LEN]>> {
+    if chain.is_empty() {
+        return None;
+    }
+    let mut ancestry = std::collections::HashSet::new();
+    let mut expect_old: Option<[u8; PUBKEY_LEN]> = None;
+    for env in chain {
+        let raw = env.verify_signature().ok()?;
+        if let Some(exp) = expect_old {
+            if raw.old_founder_pubkey != exp {
+                return None;
+            }
+        }
+        ancestry.insert(raw.old_founder_pubkey);
+        expect_old = Some(raw.new_founder_pubkey);
+    }
+    if expect_old.as_ref() == Some(terminal_pubkey) {
+        Some(ancestry)
+    } else {
+        None
+    }
+}
+
 /// Parse a 64-char lowercase-hex Ed25519 pubkey (the canonical form
 /// in name claims and project state). Accepts an optional `ed25519:`
 /// prefix so callers can pass `identity.pub` contents directly.
@@ -419,6 +522,100 @@ mod tests {
         let other_env = DelegationEnvelope::build(&old, &pid, &key.verifying_key().to_bytes(), 999);
         tampered.body.supersedes = vec![other_env];
         assert!(tampered.verify_signature().is_err());
+    }
+
+    #[test]
+    fn validate_name_rejects_project_id_lookalike() {
+        let pid_like = "a".repeat(64);
+        assert!(validate_name(&pid_like).is_err());
+        // 63 hex chars is fine (not project_id-shaped).
+        assert!(validate_name(&"a".repeat(63)).is_ok());
+        // 64 chars with a non-hex char is fine.
+        assert!(validate_name(&("z".to_string() + &"a".repeat(63))).is_ok());
+    }
+
+    #[test]
+    fn resolve_claims_handles_zero_one_and_ambiguous() {
+        assert_eq!(resolve_claims(&[]), NameResolve::NotFound);
+
+        let a = fresh_key();
+        let claim_a = NameClaim::issue(&a, body_for(&a, "dan")).unwrap();
+        assert_eq!(
+            resolve_claims(std::slice::from_ref(&claim_a)),
+            NameResolve::Unique(a.verifying_key().to_bytes())
+        );
+
+        let b = fresh_key();
+        let claim_b = NameClaim::issue(&b, body_for(&b, "dan")).unwrap();
+        match resolve_claims(&[claim_a.clone(), claim_b.clone()]) {
+            NameResolve::Ambiguous(pks) => assert_eq!(pks.len(), 2),
+            other => panic!("expected Ambiguous, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn resolve_claims_follows_supersedes_chain() {
+        // genesis A → rekeyed B. B's claim carries supersedes [A→B].
+        let a = fresh_key();
+        let b = fresh_key();
+        let pid = [9u8; 32]; // the old project's id; irrelevant beyond sig coverage
+        let d_ab = DelegationEnvelope::build(&a, &pid, &b.verifying_key().to_bytes(), 100);
+        let mut body_b = body_for(&b, "dan");
+        body_b.supersedes = vec![d_ab.clone()];
+        let claim_b = NameClaim::issue(&b, body_b).unwrap();
+        let claim_a = NameClaim::issue(&a, body_for(&a, "dan")).unwrap();
+
+        // A and B compete; B supersedes A.
+        assert_eq!(
+            resolve_claims(&[claim_a.clone(), claim_b.clone()]),
+            NameResolve::Superseded(b.verifying_key().to_bytes())
+        );
+        // Just B → unique.
+        assert_eq!(
+            resolve_claims(std::slice::from_ref(&claim_b)),
+            NameResolve::Unique(b.verifying_key().to_bytes())
+        );
+
+        // Two-link chain: A → B → C. C's claim carries [A→B, B→C].
+        let c = fresh_key();
+        let d_bc = DelegationEnvelope::build(&b, &pid, &c.verifying_key().to_bytes(), 200);
+        let mut body_c = body_for(&c, "dan");
+        body_c.supersedes = vec![d_ab.clone(), d_bc.clone()];
+        let claim_c = NameClaim::issue(&c, body_c).unwrap();
+        assert_eq!(
+            resolve_claims(&[claim_a.clone(), claim_b.clone(), claim_c.clone()]),
+            NameResolve::Superseded(c.verifying_key().to_bytes())
+        );
+
+        // A claim with a chain that doesn't actually reach its own pubkey
+        // is ignored — A and a bogus B' stay ambiguous.
+        let bprime = fresh_key();
+        let mut body_bp = body_for(&bprime, "dan");
+        body_bp.supersedes = vec![d_ab.clone()]; // chain ends at B, not B'
+        let claim_bp = NameClaim::issue(&bprime, body_bp).unwrap();
+        match resolve_claims(&[claim_a, claim_bp]) {
+            NameResolve::Ambiguous(_) => {}
+            other => panic!("expected Ambiguous (mis-targeted chain ignored), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn resolve_claims_rejects_unsigned_chain_link() {
+        // B's claim carries a delegation that was never actually signed
+        // by A (tampered signature) — the chain must not be honored.
+        let a = fresh_key();
+        let b = fresh_key();
+        let pid = [3u8; 32];
+        let mut forged = DelegationEnvelope::build(&a, &pid, &b.verifying_key().to_bytes(), 100);
+        forged.signature = hex::encode([0u8; 64]);
+        let mut body_b = body_for(&b, "dan");
+        body_b.supersedes = vec![forged];
+        let claim_b = NameClaim::issue(&b, body_b).unwrap();
+        let claim_a = NameClaim::issue(&a, body_for(&a, "dan")).unwrap();
+        match resolve_claims(&[claim_a, claim_b]) {
+            NameResolve::Ambiguous(_) => {}
+            other => panic!("expected Ambiguous (forged chain link), got {:?}", other),
+        }
     }
 
     #[test]
