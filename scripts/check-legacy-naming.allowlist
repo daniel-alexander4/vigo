@@ -25,8 +25,8 @@
 # Dan's literal disk layout still has historical projects under
 # ~/cairn/. The substrate rename does not move his personal directories
 # on disk; it only renames the code-side per-user expectation
-# (~/gitmirror/<project>/) inside agent code. The license repo
-# (formerly ~/cairn/vigo-lic, now ~/gitmirror/tessera) followed the
+# (~/swarmgit/<project>/) inside agent code. The license repo
+# (formerly ~/cairn/vigo-lic, now ~/swarmgit/tessera) followed the
 # rename — entries below that pointed at the old path are obsolete.
 
 # The substrate-rename plan document describes the rename — every
@@ -72,5 +72,5 @@ scripts/migrate-0.30.sh:*:cairn
 scripts/check-legacy-naming.sh:*:cairn
 
 # CLAUDE.md previously referenced ~/cairn/vigo-lic for the license
-# repo; that's now ~/gitmirror/tessera, so no `cairn` token remains
+# repo; that's now ~/swarmgit/tessera, so no `cairn` token remains
 # to allowlist there.
