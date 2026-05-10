@@ -80,7 +80,7 @@ func TestValidateSwarmPatternOrder_AllSubsystems(t *testing.T) {
 	s := SwarmSection{
 		Enabled:   bad,
 		Puddle:    SwarmPuddleSection{Enabled: bad},
-		Swarmgit: SwarmSwarmgitSection{Enabled: bad},
+		Swarmgit: SwarmgitSection{Enabled: bad},
 		Longdrawer:  LongdrawerSection{Enabled: bad},
 		Swarmcast:   SwarmcastSection{Enabled: bad},
 	}
