@@ -1,7 +1,7 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Lockbox</h1>
-    <p>Per-user encrypted sync mesh. <a href="/docs/engineering/subsystems/swarm/lockbox">What is this?</a></p>
+    <p>Per-user encrypted home-directory sync over the swarm substrate. Membership = the user's puddle. <a href="/docs/engineering/subsystems/swarm/lockbox">What is this?</a></p>
 </div>
 
 {{template "health-banner" .Health}}
@@ -94,7 +94,7 @@
 
     {{if .User.RecipientDrift}}
     <div class="alert alert--warn mb-2">
-        <strong>Recipient drift detected.</strong> Two or more envoys in this user's mesh
+        <strong>Recipient drift detected.</strong> Two or more envoys in this user's puddle
         report different peer sets. New files encrypted on envoys with the smaller recipient
         view will not be decryptable on newly-added peers until recipients reconverge.
     </div>

@@ -47,6 +47,17 @@ A managed node running the `vigo` Rust agent. Each envoy enrolls once, receives 
 
 The Rust implementation of a resource type in the agent (`file`, `package`, `service`, `user`, `cron`, etc.). Executors check current state, act only on drift (idempotent), and return one of `None`/`Created`/`Updated`/`Deleted`/`Skipped`/`Blocked`. See the [Executor Reference](executors/_index.md).
 
+## fleet
+
+Every [envoy](#envoy) enrolled with a given server. "Fleet-wide" means *across all those envoys* — it is the broadest scope in Vigo. Distinguish from two narrower scopes that the UI must not conflate with it:
+
+- The **[swarm](#swarm)** is the P2P substrate connecting envoys to each other; in practice the swarm spans the same envoys as the fleet, but it is the *transport layer*, not the set of machines. There is exactly one swarm — there is no "a user's swarm."
+- A **[puddle](#puddle)** is a *per-user* trust unit: one user's collection of envoys, treated as a single Ed25519 identity. "A user's puddle" is meaningful; "the fleet's puddle" is not.
+
+Canonical scope words, narrowest to broadest: **puddle** ⊆ envoys-running-a-given-user ⊆ **fleet**; the **swarm** is the substrate over the fleet. ("Mesh" is *not* a canonical Vigo term — where older prose said "mesh" it meant either the puddle (for [lockbox](#lockbox)) or an ad-hoc per-user sync set (for [longdrawer](#longdrawer)); use the precise term.)
+
+See the [scope-hierarchy diagram](../engineering/subsystems/swarm.md#scope-fleet-vs-swarm-vs-puddle) on the Swarm page for how these layers and the four content subsystems relate.
+
 ## swarmcast
 
 Administrator-pushed file distribution on top of the [swarm](#swarm) substrate. An operator runs `vigocli swarm swarmcast distribute <file>` (or drops a file + `.swarm` sidecar on a seeder) and the blob replicates across the fleet via swarm's peer channel. Swarmcast is one of four content subsystems that ride swarm; the other three ([longdrawer](#longdrawer), [swarmgit](#swarmgit), [lockbox](#lockbox)) are user-scoped, while swarmcast is operator-scoped and fleet-wide. Surfaced in the web UI at [`/swarm/swarmcast`](ui/swarm-swarmcast.md).
@@ -101,7 +112,7 @@ A module definition file in `stockpile/modules/**/*.vgo`. The directory name `mo
 
 ## swarm
 
-The envoy-only P2P network substrate. Swarm is the transport layer that all P2P content subsystems ride on: peer discovery (multicast on `224.0.0.42:1531` + registry-backed hints), mTLS HTTPS between envoys on port 1531, manifest CRDT gossip, and content-addressed chunking. Swarm does not itself define *what* gets distributed — the four content subsystems do: [payload](#payload) (admin-pushed blobs), [longdrawer](#longdrawer) (plaintext home-dir sync), [swarmgit](#swarmgit) (source-control repo mirrors), [lockbox](#lockbox) (encrypted home-dir sync). Each subsystem has its own content rules but reuses swarm's peer channel, port, and mTLS trust. See [Swarm](../engineering/subsystems/swarm.md).
+The envoy-only P2P network substrate. Swarm is the transport layer that all P2P content subsystems ride on: peer discovery (multicast on `224.0.0.42:1531` + registry-backed hints), mTLS HTTPS between envoys on port 1531, manifest CRDT gossip, and content-addressed chunking. Swarm does not itself define *what* gets distributed — the four content subsystems do: [swarmcast](#swarmcast) (admin-pushed blobs, fleet-wide), [longdrawer](#longdrawer) (plaintext home-dir sync, per-user LAN set), [swarmgit](#swarmgit) (source-control repo mirrors, per-puddle), [lockbox](#lockbox) (encrypted home-dir sync, per-puddle). Each subsystem has its own content rules but reuses swarm's peer channel, port, and mTLS trust. The swarm is singular and fleet-wide — see [fleet](#fleet) for the scope-word distinctions. See [Swarm](../engineering/subsystems/swarm.md).
 
 ## trait
 
@@ -115,7 +126,7 @@ A config module scoped to one or more users' environments (account creation, hom
 
 ## lockbox
 
-Per-user always-encrypted home-directory sync on the [swarm](#swarm) substrate. Files dropped into `~/lockbox/` are age-encrypted to every enrolled envoy in the user's mesh and synced as ciphertext — every envoy holds the same encrypted bytes, only mesh members can decrypt. Requires the user's lockbox password for decryption. The encryption-first sibling of [longdrawer](#longdrawer): same transport, different content rules. See [Lockbox](../engineering/subsystems/lockbox.md).
+Per-user always-encrypted home-directory sync on the [swarm](#swarm) substrate. Membership is the user's [puddle](#puddle) (ADR-020 — lockbox is puddle-only). Files dropped into `~/lockbox/` are age-encrypted to every envoy in the user's puddle and synced as ciphertext — every envoy holds the same encrypted bytes, only puddle members can decrypt. Requires the user's lockbox password for decryption. The encryption-first sibling of [longdrawer](#longdrawer): same transport, different content rules. See [Lockbox](../engineering/subsystems/lockbox.md).
 
 ## puddle
 
@@ -131,7 +142,7 @@ Personal disaster-recovery source-control distribution on the [swarm](#swarm) su
 
 ## longdrawer
 
-Per-user home-directory sync on the [swarm](#swarm) substrate. Files in `~/longdrawer/` replicate to peer envoys over swarm's mTLS peer HTTPS channel, with longdrawer's own LAN multicast group on `224.0.0.43:1532` for discovery. Plaintext at rest (encryption moved to [lockbox](#lockbox) as of 0.26.1). Cross-subnet peers via `cross_subnet_peers:` in `~/.longdrawer/config.yaml`. See [Longdrawer](../engineering/subsystems/longdrawer.md).
+Per-user home-directory sync on the [swarm](#swarm) substrate. Files in `~/longdrawer/` replicate to peer envoys over swarm's mTLS peer HTTPS channel, with longdrawer's own LAN multicast group on `224.0.0.43:1532` for discovery. Unlike [lockbox](#lockbox), longdrawer is *not* puddle-scoped — the sync set is the envoys on the user's LAN segment (plus any `cross_subnet_peers:`) that hold a `~/longdrawer/` directory for that user. Plaintext at rest (encryption moved to [lockbox](#lockbox) as of 0.26.1). Cross-subnet peers via `cross_subnet_peers:` in `~/.longdrawer/config.yaml`. See [Longdrawer](../engineering/subsystems/longdrawer.md).
 
 ## audit bundle
 

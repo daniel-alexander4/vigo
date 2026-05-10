@@ -3,16 +3,28 @@
 
 Swarm is the envoy-only peer-to-peer network that Vigo's content subsystems ride on. It is not itself a product feature operators push files with — it's the transport layer: peer discovery, mTLS HTTPS between envoys on port 1531, a manifest CRDT gossiped across the fleet, and content-addressed chunking. Four content subsystems reuse this substrate:
 
-- **[Payload](../../reference/glossary.md#payload)** — administrator-pushed file distribution (`vigocli swarm distribute`). Fleet-wide, operator-scoped.
-- **[Longdrawer](longdrawer.md)** — per-user plaintext home-directory sync. User-scoped, LAN-local by default.
-- **[Swarmgit](swarmgit.md)** — per-user source-control repo mirroring for personal disaster recovery. User-scoped.
-- **[Lockbox](lockbox.md)** — per-user always-encrypted home-directory sync. Ciphertext at rest, password-gated decryption.
+- **[Swarmcast](../../reference/glossary.md#swarmcast)** — administrator-pushed file distribution (`vigocli swarm swarmcast distribute`). Fleet-wide, operator-scoped.
+- **[Longdrawer](longdrawer.md)** — per-user plaintext home-directory sync. User-scoped; sync set = the envoys on the user's LAN that hold a `~/longdrawer/` directory.
+- **[Swarmgit](swarmgit.md)** — per-user source-control repo mirroring for personal disaster recovery. User-scoped; membership is the user's [puddle](puddle.md).
+- **[Lockbox](lockbox.md)** — per-user always-encrypted home-directory sync. Ciphertext at rest, password-gated decryption; membership is the user's [puddle](puddle.md).
 
 Each content subsystem has its own content rules, multicast group, and sidecar format, but all four reuse swarm's mTLS trust, peer channel, and manifest gossip. This page documents the substrate. For a given content type, follow the links above.
 
+## Scope: fleet vs swarm vs puddle
+
+These three are distinct and the UI/docs must not conflate them — see the [glossary entry for *fleet*](../../reference/glossary.md#fleet) for the canonical definitions:
+
+![Vigo scope hierarchy — fleet, swarm, puddle](../img/swarm-scope.svg)
+
+- **Fleet** — every envoy enrolled with this server. Broadest scope. "Fleet-wide" = across all of them.
+- **Swarm** — *the* P2P substrate (singular). It spans the same envoys as the fleet, but it's the transport layer, not the machine set. There is no "a user's swarm."
+- **Puddle** — a *per-user* trust unit: one user's collection of envoys, expressed as a single Ed25519 identity. Lockbox and swarmgit use it as the trust anchor. "A user's puddle" is meaningful; "the fleet's puddle" is not.
+
+"Mesh" is **not** a canonical term — older UI prose used it loosely for the puddle (lockbox) or for the ad-hoc LAN sync set (longdrawer). Prefer the precise word.
+
 ## When to Use Swarm
 
-The rest of this page describes swarm's original workload — distributing large binary artifacts — which is what the `vigocli swarm distribute` CLI surfaces today. That content subsystem is called **payload** in the UI and glossary; the CLI still reads `swarm` because it predates the name split. Good candidates are agent updates, firmware images, application tarballs, disk images, database dumps. For small config files (a few KB), the normal check-in bundle is more efficient.
+The rest of this page describes swarm's original workload — distributing large binary artifacts — surfaced as the **[swarmcast](../../reference/glossary.md#swarmcast)** content subsystem via `vigocli swarm swarmcast distribute`. Good candidates are agent updates, firmware images, application tarballs, disk images, database dumps. For small config files (a few KB), the normal check-in bundle is more efficient.
 
 **Good candidates:** 50 MB+ files going to 10+ envoys — agent binaries, container images, OS images, application releases.
 
@@ -26,7 +38,7 @@ Every blob is identified by its SHA256 hash. Blobs are split into 1 MiB chunks. 
 
 ### Distribution Flow
 
-1. **Seed:** Admin runs `vigocli swarm distribute <file> --target '*.web.*'`, which streams the file to the server's seed directory (hashed in a single pass). Alternatively, drop a file + `.swarm` manifest on any envoy.
+1. **Seed:** Admin runs `vigocli swarm swarmcast distribute <file> --target '*.web.*'`, which streams the file to the server's seed directory (hashed in a single pass). Alternatively, drop a file + `.swarm` manifest on any envoy.
 2. **Registration:** The server registers the seed in the tracker and manifest CRDT immediately on upload, then force-pushes streaming agents. For envoy-seeded blobs, the seeder's agent reports the file via the `swarm_seeds` trait on the next check-in.
 3. **Manifest:** The manifest entry is gossipped to all envoys via check-in responses
 4. **Self-assignment:** Each agent evaluates the manifest's target specs against its own hostname and traits. If it matches, it queues the blob for download — no server assignment needed.
@@ -36,7 +48,7 @@ Every blob is identified by its SHA256 hash. Blobs are split into 1 MiB chunks. 
 8. **Serving:** Envoys that have the blob serve chunks to peers that still need it
 9. **Retirement:** After retention expires (default 7 days), seeders stop serving and receivers evict
 
-Both `vigocli swarm distribute` and the envoy seed directory use the same mechanism. The CLI is a convenient way to place a file in the server's seed directory remotely. The server is just another envoy.
+Both `vigocli swarm swarmcast distribute` and the envoy seed directory use the same mechanism. The CLI is a convenient way to place a file in the server's seed directory remotely. The server is just another envoy.
 
 ### Agent-Driven Peer Discovery
 
@@ -184,7 +196,7 @@ swarm:
   puddle:    { enabled: ["*"] }           # lockbox derives from this list
   swarmgit: { enabled: ["annlap", "plex", "girlslaptop"] }
   longdrawer:  { enabled: ["*"] }
-  payload:   { enabled: ["*"] }
+  swarmcast:   { enabled: ["*"] }
 ```
 
 The server evaluates patterns against each agent's hostname and emits the resolved bools in `PolicyBundle.vars_json` on every check-in (`swarm_enabled`, `swarm_puddle_enabled`, `swarm_swarmgit_enabled`, `swarm_longdrawer_enabled`, `swarm_swarmcast_enabled`). Agents never see the patterns — they only see their own resolved gate. A `vigocli config publish` propagates within one check-in cycle without restarting anything.
@@ -201,13 +213,13 @@ The server evaluates patterns against each agent's hostname and emits the resolv
 | `swarm.puddle.enabled: []` | Halts puddle and lockbox on hosts that don't match. Identity material under `~user/.vigo-puddle/` and `~user/.lockbox/` is preserved (gate-only). | `swarm.puddle.enabled` |
 | `swarm.swarmgit.enabled: []` | Halts swarmgit publisher and receiver on hosts that don't match. Already-held mirrors preserved. | `swarm.swarmgit.enabled` |
 | `swarm.longdrawer.enabled: []` | Halts longdrawer announcer / listener / push handler on hosts that don't match. `~user/longdrawer/` content preserved. | `swarm.longdrawer.enabled` |
-| `swarm.swarmcast.enabled: []` | Halts payload reception. `POST /api/v1/swarm/swarmcast/distribute` returns **403** with `audit_event=swarm.swarmcast.denied` when the list is empty (no envoy could possibly receive). | `swarm.swarmcast.enabled` (flip), `swarm.swarmcast.denied` (per blocked admin push) |
+| `swarm.swarmcast.enabled: []` | Halts swarmcast reception. `POST /api/v1/swarm/swarmcast/distribute` returns **403** with `audit_event=swarm.swarmcast.denied` when the list is empty (no envoy could possibly receive). | `swarm.swarmcast.enabled` (flip), `swarm.swarmcast.denied` (per blocked admin push) |
 
 **Audit-chain coverage.** Every pattern-list change at config-publish time records a tamper-evident entry under `actor=config.reload` / `source=config`. Admin-push denials record under `actor=<authenticated user>` / `source=api`. Inspect via `/api/v1/audit?event_type=swarm.*`.
 
 **Soft-skip vs hard-stop.** Vigo uses soft-skip: data structures stay resident, the listener stays bound, but emit/serve paths consult an `Arc<AtomicBool>` and return early when the gate is off. Re-enabling resumes work without process restart and without losing in-flight transfers. Hard-stop semantics (kill listener, drop in-flight) are not implemented.
 
-**Payload note.** Payload rides this generic transport rather than having its own per-substrate listener, so the agent-side gate for payload is currently **forward-compat only** — the `swarm_swarmcast_enabled` flag flows to agents but no agent code branches on it. The operator-meaningful enforcement for payload is server-side: the gate guard at `POST /api/v1/swarm/swarmcast/distribute`. Existing in-flight payloads continue propagating across the fleet via the shared swarm transport regardless.
+**Swarmcast note.** Swarmcast rides this generic transport rather than having its own per-substrate listener, so the agent-side gate for swarmcast is currently **forward-compat only** — the `swarm_swarmcast_enabled` flag flows to agents but no agent code branches on it. The operator-meaningful enforcement for swarmcast is server-side: the gate guard at `POST /api/v1/swarm/swarmcast/distribute`. Existing in-flight swarmcast blobs continue propagating across the fleet via the shared swarm transport regardless.
 
 ## Usercrate authorization
 
@@ -223,7 +235,7 @@ resources:
     swarmgit: true    # authorizes dan to run `vigo swarm swarmgit project *`
 ```
 
-Both flags default to `false`. Longdrawer and payload have no usercrate flag — longdrawer gates by Unix file ownership (the user creates `~/longdrawer/`), payload by admin call site.
+Both flags default to `false`. Longdrawer and swarmcast have no usercrate flag — longdrawer gates by Unix file ownership (the user creates `~/longdrawer/`), swarmcast by admin call site.
 
 **Cache.** The user executor writes the resolved flags to `/var/lib/vigo/usercrate-policy/<username>.json` on every reconcile pass (root-owned, mode 0644). Per-user CLI verbs read this cache as a precondition — no server round-trip, works offline.
 
@@ -232,7 +244,7 @@ Both flags default to `false`. Longdrawer and payload have no usercrate flag —
 ## Related
 
 - [Swarm Operations](../../operations/swarm.md) — Configuration, monitoring, troubleshooting
-- [vigocli payload](../../reference/cli/swarm-swarmcast.md) — CLI reference for admin-pushed swarmcasts on this substrate
+- [vigocli swarm swarmcast](../../reference/cli/swarm-swarmcast.md) — CLI reference for admin-pushed swarmcasts on this substrate
 - [Server Configuration](../../getting-started/server-config.md) — `swarm:` section
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
