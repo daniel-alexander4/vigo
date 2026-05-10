@@ -22,9 +22,9 @@ The server's `swarmgitmesh` aggregator joins these per-envoy reports across the 
 
 | Field | Type | Description |
 |---|---|---|
-| `project_id` | string | 64-char lowercase hex `sha256(founder_puddle_pubkey)`. Stable cryptographic identity baked into the URL `swarmgit://<project_id>/<handle>`. |
+| `project_id` | string | 64-char lowercase hex `sha256(founder_puddle_pubkey ‖ handle)`. Stable cryptographic identity baked into the URL `swarmgit://<project_id>/<handle>`. |
 | `handle` | string | Human-readable handle from `project.json`. Display only — not authoritative; two projects can share a handle. |
-| `founder_puddle_pubkey` | string | 64-char lowercase hex of the founder puddle's Ed25519 pubkey. The TOFU anchor: `sha256(founder_puddle_pubkey) == project_id`. |
+| `founder_puddle_pubkey` | string | 64-char lowercase hex of the founder puddle's Ed25519 pubkey. The TOFU anchor: `sha256(founder_puddle_pubkey ‖ handle) == project_id`. |
 | `members` | string[] | Hex Ed25519 puddle pubkeys of every member puddle, in `project.json` order (founder first). |
 | `dr_scope` | string | `"swarm-wide"` (replicas land on every swarmgit-authorized envoy in the swarm) or `"members-only"` (replicas only on member-puddle envoys). |
 | `users_with_state` | string[] | Local Unix usernames whose `~/.vigo-swarmgit/<project_id>/` directory holds a `project.json` for this project. Multiple users on the same envoy collapse into one entry; this list names them. |

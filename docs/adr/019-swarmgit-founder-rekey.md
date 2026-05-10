@@ -9,7 +9,7 @@ title: "ADR-019: Swarmgit founder-rekey via anchor-preserving delegation chains"
 
 ## Context
 
-ADR-018 rotates the puddle keypair to recover from a compromised or hygiene-rotated identity, but explicitly defers swarmgit. The deferral is a real problem: under ADR-015, every swarmgit project's identity is `project_id = sha256(founder_puddle_pubkey)`, and capability tokens chain back to that founder pubkey via `verify_chain` (`tokens.rs:321`). A naive founder rekey would therefore:
+ADR-018 rotates the puddle keypair to recover from a compromised or hygiene-rotated identity, but explicitly defers swarmgit. The deferral is a real problem: under ADR-015, every swarmgit project's identity is `project_id = sha256(founder_puddle_pubkey ‖ handle)`, and capability tokens chain back to that founder pubkey via `verify_chain` (`tokens.rs:321`). A naive founder rekey would therefore:
 
 - Make every `swarmgit://<old_pid>/<handle>` URL the founder typed into a `git remote` config dead.
 - Strand bare repos at `/var/lib/vigo/swarm/swarmgit/projects/<old_pid>.git` across every member's disk.
@@ -24,7 +24,7 @@ The dominant use case is personal-DR (founder = sole member, `dr_scope: swarm-wi
 
 ### Anchor-preserving identity
 
-`project_id` stays anchored to the **genesis** founder pubkey forever — the value baked in at `cmd_init` time via `sha256(local_puddle_pubkey)`. URLs survive every rekey, bare repos don't move, and capability tokens issued before any rekey continue to verify under the original anchor.
+`project_id` stays anchored to the **genesis** founder pubkey forever — the value baked in at `cmd_init` time via `sha256(local_puddle_pubkey ‖ handle)`. URLs survive every rekey, bare repos don't move, and capability tokens issued before any rekey continue to verify under the original anchor.
 
 The bridge from genesis to the current signing identity is a **delegation chain**: an Ed25519-signed list mapping each retired founder pubkey to its successor, persisted at `~/.vigo-swarmgit/<project_id>/delegations.json`. Each entry is signed by the *previous* link's `new_founder_pubkey` (or, for the first link, the genesis pubkey baked into `project_id`). At verification time, `tokens::verify_chain` walks the delegation list before walking the token chain and applies authority windows so each historical founder pubkey is only trusted to sign tokens with `issued_at` falling inside its half-open `[delegated_at, next_delegated_at)` window.
 

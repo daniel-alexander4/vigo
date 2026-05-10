@@ -11,7 +11,7 @@ title: "ADR-018: Puddle rekey"
 
 ADR-017 established that puddle-level revoke is a placebo: the only correct response to a compromised puddle keypair is to retire it (re-init the puddle) and rotate every other credential the lost device touched. That decision left an obvious operational pain — naïve re-init blows away surviving envoys' lockbox state, all swarmgit project_ids the user founded, and offers no path back for envoys that were offline during the rotation. ADR-014 deliberately scoped re-init to "delete `~/.vigo-puddle/` and start over" because the v1 model assumed loss-of-passphrase was the only rotation event; in practice users will rotate after a stolen-laptop scare, after a routine hygiene window, or when a founder envoy is being decommissioned cleanly, and "blow it all away" is a bigger hammer than the situation needs.
 
-This ADR introduces a rotation flow that preserves lockbox state on surviving envoys, records a 24h graceful retirement window, and surfaces UX hints for envoys that missed the rotation. It does **not** address the swarmgit project_id rotation problem (project_id = sha256(founder_puddle_pubkey)) — that is its own design exercise involving capability-token chain anchoring across the rotation, and is queued for a future ADR.
+This ADR introduces a rotation flow that preserves lockbox state on surviving envoys, records a 24h graceful retirement window, and surfaces UX hints for envoys that missed the rotation. It does **not** address the swarmgit project_id rotation problem (project_id = sha256(founder_puddle_pubkey ‖ handle)) — that is its own design exercise involving capability-token chain anchoring across the rotation, and is queued for a future ADR.
 
 ## Decision
 

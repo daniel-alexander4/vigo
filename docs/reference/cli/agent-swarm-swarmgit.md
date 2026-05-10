@@ -45,7 +45,7 @@ The command lives inside the `vigo` agent binary. CLI verbs run as the calling u
 
 ## Project identity
 
-Every project is identified by `project_id = sha256(founder_puddle_pubkey)` rendered as 64-character lowercase hex. Project URLs take the form:
+Every project is identified by `project_id = sha256(founder_puddle_pubkey ‖ handle)` rendered as 64-character lowercase hex. Project URLs take the form:
 
 ```
 swarmgit://<project_id>/<handle>
@@ -128,7 +128,7 @@ vigo swarm swarmgit purge --yes
 
 ## `project init`
 
-Founds a new project. The local fleet (per [ADR-014](../../adr/014-puddle-primitive.md)) becomes the founder; `project_id = sha256(local_puddle_pubkey)`.
+Founds a new project. The local fleet (per [ADR-014](../../adr/014-puddle-primitive.md)) becomes the founder; `project_id = sha256(local_puddle_pubkey ‖ handle)`.
 
 ```
 vigo swarm swarmgit project init <handle> [--scope swarm-wide|members-only]
@@ -271,7 +271,7 @@ vigo swarm swarmgit project reanchor <project_id>
 
 **Effects:**
 
-- Refuses if `sha256(this_user_puddle_pubkey) == old_project_id` (the calling user is already the founder, so reanchor is a no-op).
+- Refuses if `sha256(this_user_puddle_pubkey ‖ handle) == old_project_id` (the calling user is already the founder, so reanchor is a no-op).
 - Refuses if a project already exists locally under the proposed new project_id.
 - Mints a fresh founder bootstrap admin token under this user's puddle and persists `project.json` + `tokens.json` under `~/.vigo-swarmgit/<new_project_id>/`. The new members list starts as `[this_fleet]`; surviving members from the old project must be re-invited via `project invite <new_project_id> --puddle <fp> --role <r>`.
 - When run as root **and** the old bare repo exists at `/var/lib/vigo/swarm/swarmgit/projects/<old_project_id>.git`, runs `git -C <new_repo> fetch <old_repo> +refs/*:refs/*` to copy every ref + the objects backing them into the new bare repo. Non-root invocations (or envoys that don't hold the old bare repo) print a note and rebuild only the local auth surface; another member with root + the old bare repo can complete the migration later.
@@ -369,7 +369,7 @@ vigo swarm swarmgit project re-found <project_id> [--force]
 
 - Puddle must be unlocked (the verb signs a fresh bootstrap token via the session helper).
 - Caller must be the project's current founder. The predicate uses `chain.last().new_founder_pubkey` (or `founder_puddle_pubkey` if there are no delegations).
-- The founder must have rekeyed at least once since founding the project — otherwise the new project_id (`sha256(current_puddle_pubkey)`) collides with the old, and re-found refuses with a hint to run `puddle rekey-pair` first.
+- The founder must have rekeyed at least once since founding the project — otherwise the new project_id (`sha256(current_puddle_pubkey ‖ handle)`) collides with the old, and re-found refuses with a hint to run `puddle rekey-pair` first.
 - A project under the proposed new project_id must not already exist locally.
 
 **Interactive:** prints the consequences (old URL becomes dead, new URL must be communicated to members, etc.) and refuses to proceed unless the operator types the project handle exactly. Same anti-footgun pattern as `git push --force-with-lease`.

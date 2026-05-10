@@ -1,9 +1,9 @@
 
 # Swarmgit — Unified Git Substrate (ADR-015)
 
-> **ADR-015 cutover complete.** Steps 1–3 shipped earlier; step 4 shipped across six slices on 2026-04-30. The substrate is keyed on `project_id = sha256(founder_puddle_pubkey)` with helper-daemon-mediated push/fetch over a SO_PEERCRED-gated Unix socket, push-driven fan-out, LAN auto-discovery, cross-envoy revoke/leave envelope gossip with digest catch-up, project-id-keyed fleet observability (UI + REST + CLI), a REST member-roster endpoint for push-time lookup, and `reanchor` byte-level migration. ADR-016 (lockbox membership on puddle) is the next ADR in the puddle arc.
+> **ADR-015 cutover complete.** Steps 1–3 shipped earlier; step 4 shipped across six slices on 2026-04-30. The substrate is keyed on `project_id = sha256(founder_puddle_pubkey ‖ handle)` with helper-daemon-mediated push/fetch over a SO_PEERCRED-gated Unix socket, push-driven fan-out, LAN auto-discovery, cross-envoy revoke/leave envelope gossip with digest catch-up, project-id-keyed fleet observability (UI + REST + CLI), a REST member-roster endpoint for push-time lookup, and `reanchor` byte-level migration. ADR-016 (lockbox membership on puddle) is the next ADR in the puddle arc.
 
-Swarmgit is the P2P git substrate underlying both personal disaster-recovery (today's primary use case) and multi-member collaboration (an axis introduced by ADR-015). Each project is identified by `project_id = sha256(founder_puddle_pubkey)`; project shape is described by two orthogonal axes:
+Swarmgit is the P2P git substrate underlying both personal disaster-recovery (today's primary use case) and multi-member collaboration (an axis introduced by ADR-015). Each project is identified by `project_id = sha256(founder_puddle_pubkey ‖ handle)`; project shape is described by two orthogonal axes:
 
 | `members:`           | `dr_scope:`    | Use case                      |
 |----------------------|----------------|-------------------------------|
@@ -43,7 +43,7 @@ Swarmgit is one of four content subsystems that ride the [swarm](swarm.md) subst
 
 ## ADR-019: Founder-rekey delegation chains
 
-ADR-018 rotates the puddle keypair but explicitly defers swarmgit. Project IDs are anchored to `sha256(founder_puddle_pubkey)`, so a founder rekey would naively orphan every founded project — dead URLs, stranded bare repos, capability tokens that no longer chain to the founder's current signing identity. ADR-019 closes this by introducing a per-project **delegation chain**: an Ed25519-signed bridge from each retired founder pubkey to its successor, persisted alongside `tokens.json` and `project.json`. Project_id stays anchored to the genesis founder pubkey forever — URLs survive, bare repos don't move, pre-rekey tokens still verify.
+ADR-018 rotates the puddle keypair but explicitly defers swarmgit. Project IDs are anchored to `sha256(founder_puddle_pubkey ‖ handle)`, so a founder rekey would naively orphan every founded project — dead URLs, stranded bare repos, capability tokens that no longer chain to the founder's current signing identity. ADR-019 closes this by introducing a per-project **delegation chain**: an Ed25519-signed bridge from each retired founder pubkey to its successor, persisted alongside `tokens.json` and `project.json`. Project_id stays anchored to the genesis founder pubkey forever — URLs survive, bare repos don't move, pre-rekey tokens still verify.
 
 **On-disk shape** (`~/.vigo-swarmgit/<project_id>/delegations.json`):
 
@@ -97,7 +97,7 @@ struct PushChain {
 
 1. Refuses unless the calling user IS the current founder (predicate matches `re-invite-all`'s).
 2. Refuses unless chain is at cap, project is tombstoned, or `--force` is passed.
-3. Refuses if the founder hasn't rekeyed since founding (new `project_id = sha256(current_puddle_pubkey)` would collide with the old).
+3. Refuses if the founder hasn't rekeyed since founding (new `project_id = sha256(current_puddle_pubkey ‖ handle)` would collide with the old).
 4. Mints a fresh founder bootstrap admin token under the current puddle identity, persists `project.json` + `tokens.json` under the new project_id with `members: [this_fleet]`.
 5. Byte-migrates from the old bare repo via `git -C <new_repo> fetch <old_repo> +refs/*:refs/*` (root-only; non-root prints a note).
 6. Tombstones the old project on disk: `project.json::tombstoned_at = unix_ts`. Tombstoned projects keep their bare repo + URL on disk as an archive — helper daemon refuses git operations against them, CLI verbs (`invite`, `revoke`, `re-invite-all`) skip them, `project status` flags them with a warning banner. `--force-orphan-projects` on `rekey-pair` also writes the tombstone marker, so projects past the cap can be left behind during a rekey rather than blocking it.

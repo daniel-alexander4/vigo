@@ -18,7 +18,7 @@ Every subcommand accepts `--json` to emit machine-readable output.
 
 ## Project identity
 
-Every project is identified by `project_id = sha256(founder_puddle_pubkey)` rendered as 64-character lowercase hex. URLs:
+Every project is identified by `project_id = sha256(founder_puddle_pubkey ‖ handle)` rendered as 64-character lowercase hex. URLs:
 
 ```
 swarmgit://<project_id>/<handle>
