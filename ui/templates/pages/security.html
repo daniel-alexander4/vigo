@@ -355,6 +355,7 @@
             <span class="sec-card__sev">{{.Severity}}</span>
         </div>
         {{if gt .Packages 1}}<div class="sec-card__body"><span class="text-muted">({{.Packages}} packages)</span></div>{{end}}
+        {{if .Title}}<div class="sec-card__desc">{{.Title}}</div>{{end}}
         <div class="sec-card__actions">
             <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "trivy %s (%s)" .ID .Severity)}}">Ask AI</button>
         </div>

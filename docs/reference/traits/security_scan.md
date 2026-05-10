@@ -51,12 +51,15 @@ The `security_scan` trait collector reads output from security scanning tools an
       {
         "id": "CVE-2024-1234",
         "severity": "critical",
-        "packages": 1
+        "packages": 1,
+        "title": "openssl: buffer overflow in X.509 name verification"
       }
     ]
   }
 }
 ```
+
+The cross-scanner `cves` list is capped at 200 entries (severity-desc, then CVE-ID-desc). Each entry carries the highest severity seen across scanners, the summed affected-package count, and a one-line `title` (NVD short title from Trivy / the update title on Windows; omitted when no scanner supplied one — debsecan output has no titles). Titles are trimmed to a single line, max 160 characters.
 
 ## Classification
 

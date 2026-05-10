@@ -58,13 +58,15 @@ type AIDECached struct {
 	Added, Removed, Changed int
 }
 
-// CachedCVE is one row from `security_scan.cves.N.{id,severity,packages}`
+// CachedCVE is one row from `security_scan.cves.N.{id,severity,packages,title}`
 // flattened into a displayable struct. The JS used to build this map inline;
 // moving it server-side makes the drawer HTML complete on first render.
+// Title is the NVD short title (may be empty — debsecan carries no titles).
 type CachedCVE struct {
 	ID       string
 	Severity string
 	Packages int
+	Title    string
 }
 
 // ── Live-detail types (parsed from the `security_scan_detail` trait) ────────
@@ -429,8 +431,8 @@ func buildSecurityCached(traits map[string]string) SecurityDrawerCached {
 	return out
 }
 
-// extractCachedCVEs walks security_scan.cves.N.{id,severity,packages} keys
-// and collapses them into a displayable slice. Ordered by severity
+// extractCachedCVEs walks security_scan.cves.N.{id,severity,packages,title}
+// keys and collapses them into a displayable slice. Ordered by severity
 // (critical → high → medium → low → unassigned), then CVE ID.
 func extractCachedCVEs(traits map[string]string) []CachedCVE {
 	grouped := map[string]*CachedCVE{}
@@ -455,6 +457,8 @@ func extractCachedCVEs(traits map[string]string) []CachedCVE {
 		case "packages":
 			n, _ := strconv.Atoi(v)
 			grouped[idx].Packages = n
+		case "title":
+			grouped[idx].Title = v
 		}
 	}
 	out := make([]CachedCVE, 0, len(grouped))

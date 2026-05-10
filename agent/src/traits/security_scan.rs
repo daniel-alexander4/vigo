@@ -39,6 +39,20 @@ const MAX_CVES: usize = 200;
 struct RawCVE {
     severity: String, // lowercase: "critical", "high", "medium", "low"
     packages: u64,    // how many packages this CVE affects
+    title: String,    // one-line summary (NVD short title), empty if unknown
+}
+
+/// Cap on a single CVE title in the cross-scanner list — keeps the
+/// `security_scan` trait bounded (≤ MAX_CVES titles × this on the wire).
+const MAX_TITLE_LEN: usize = 160;
+
+/// Trim a scanner-supplied title/description to a clean one-liner.
+fn short_title(raw: &str) -> String {
+    let mut t = raw.split(['\n', '\r']).next().unwrap_or("").trim().to_string();
+    if t.chars().count() > MAX_TITLE_LEN {
+        t = t.chars().take(MAX_TITLE_LEN - 1).collect::<String>() + "…";
+    }
+    t
 }
 
 fn sev_rank(s: &str) -> u8 {
@@ -108,7 +122,16 @@ pub fn collect() -> Result<Value> {
     cve_list.truncate(MAX_CVES);
 
     let cves_json: Vec<Value> = cve_list.iter()
-        .map(|(id, cve)| json!({"id": id, "severity": cve.severity, "packages": cve.packages}))
+        .map(|(id, cve)| {
+            let mut o = serde_json::Map::new();
+            o.insert("id".into(), json!(id));
+            o.insert("severity".into(), json!(cve.severity));
+            o.insert("packages".into(), json!(cve.packages));
+            if !cve.title.is_empty() {
+                o.insert("title".into(), json!(cve.title));
+            }
+            Value::Object(o)
+        })
         .collect();
 
     // Count unique CVEs per severity.
@@ -142,6 +165,9 @@ fn merge_cves(all: &mut std::collections::HashMap<String, RawCVE>, scanner_cves:
                 existing.packages += cve.packages;
                 if sev_rank(&cve.severity) > sev_rank(&existing.severity) {
                     existing.severity = cve.severity.clone();
+                }
+                if existing.title.is_empty() && !cve.title.is_empty() {
+                    existing.title = cve.title.clone();
                 }
             })
             .or_insert(cve);
@@ -218,14 +244,21 @@ fn parse_trivy() -> Option<(Value, std::collections::HashMap<String, RawCVE>)> {
                         continue;
                     }
                     let norm = sev.to_lowercase();
+                    let title = vuln.get("Title").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty())
+                        .or_else(|| vuln.get("Description").and_then(|v| v.as_str()))
+                        .map(short_title)
+                        .unwrap_or_default();
                     by_cve.entry(id.to_string())
                         .and_modify(|existing| {
                             existing.packages += 1;
                             if sev_rank(&norm) > sev_rank(&existing.severity) {
                                 existing.severity = norm.clone();
                             }
+                            if existing.title.is_empty() && !title.is_empty() {
+                                existing.title = title.clone();
+                            }
                         })
-                        .or_insert(RawCVE { severity: norm, packages: 1 });
+                        .or_insert(RawCVE { severity: norm, packages: 1, title });
                 }
             }
         }
@@ -415,7 +448,8 @@ fn parse_debsecan() -> Option<(Value, std::collections::HashMap<String, RawCVE>)
                     existing.severity = sev.to_string();
                 }
             })
-            .or_insert(RawCVE { severity: sev.to_string(), packages: 1 });
+            // debsecan output carries no CVE title — leave it blank.
+            .or_insert(RawCVE { severity: sev.to_string(), packages: 1, title: String::new() });
     }
 
     let summary = json!({
@@ -496,6 +530,10 @@ fn parse_windows_updates() -> Option<(Value, std::collections::HashMap<String, R
             "Important" => "high",
             _ => "medium",
         };
+        let title = update.get("Title").and_then(|v| v.as_str())
+            .filter(|s| !s.trim().is_empty())
+            .map(short_title)
+            .unwrap_or_default();
         if let Some(cve_str) = update.get("CVEs").and_then(|v| v.as_str()) {
             for cve in cve_str.split(',') {
                 let cve = cve.trim();
@@ -508,8 +546,11 @@ fn parse_windows_updates() -> Option<(Value, std::collections::HashMap<String, R
                         if sev_rank(norm_sev) > sev_rank(&existing.severity) {
                             existing.severity = norm_sev.to_string();
                         }
+                        if existing.title.is_empty() && !title.is_empty() {
+                            existing.title = title.clone();
+                        }
                     })
-                    .or_insert(RawCVE { severity: norm_sev.to_string(), packages: 1 });
+                    .or_insert(RawCVE { severity: norm_sev.to_string(), packages: 1, title: title.clone() });
             }
         }
     }
@@ -1172,6 +1213,16 @@ CVE-2024-11111 (low urgency)\n\
         // 1970-01-01 = day 0
         let (y, m, d) = days_to_ymd(0);
         assert_eq!((y, m, d), (1970, 1, 1));
+    }
+
+    #[test]
+    fn test_short_title() {
+        assert_eq!(short_title("  curl: heap overflow  "), "curl: heap overflow");
+        assert_eq!(short_title("first line\nsecond line"), "first line");
+        let long = "x".repeat(300);
+        let t = short_title(&long);
+        assert_eq!(t.chars().count(), MAX_TITLE_LEN);
+        assert!(t.ends_with('…'));
     }
 
     #[test]
