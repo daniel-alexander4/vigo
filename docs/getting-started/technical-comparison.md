@@ -3,7 +3,9 @@
 
 A factual comparison of Vigo against five established configuration management systems — Puppet, CFEngine, Chef, Ansible, and SaltStack — covering architecture, security, performance, expressiveness, scalability, and operational characteristics.
 
-Where capacity and performance are compared, all tools are evaluated against the same reference hardware: **4 vCPU, 8 GB RAM, SSD storage, with a 5-minute agent check-in interval.** Vendor-documented requirements are cited where available. Vigo has no production deployments — its figures are theoretical estimates derived from internal benchmarks and should be read as projections, not measured results.
+Where capacity and performance are compared, all tools are evaluated against the same reference hardware: **4 vCPU, 8 GB RAM, SSD storage, with a 5-minute agent check-in interval.** Vendor-documented requirements are cited where available.
+
+> **On Vigo's numbers.** Vigo has no production deployment and no end-to-end load test. Every Vigo figure below is one of: (a) a Go microbenchmark from the codebase (`go test -bench`), (b) a value read directly out of the source (`unsafe.Sizeof`, registry counts, binary size on disk), or (c) a single ad-hoc observation from the developer's home-lab fleet — labelled as such. This document **does not extrapolate a node-count ceiling** from those inputs; that projection, with its assumptions stated, lives in the [Performance Analysis](performance-1m.md) pages. Read the comparison as architecture-and-cost, not as a capacity guarantee.
 
 ## Architecture at a Glance
 
@@ -16,7 +18,7 @@ Where capacity and performance are compared, all tools are evaluated against the
 | Transport security | gRPC over mTLS + ED25519 signatures | HTTPS + client certs | HTTPS + API tokens | SSH | ZeroMQ + AES | Custom TLS |
 | State store (server) | SQLite | PostgreSQL (PuppetDB) | PostgreSQL | None | SQLite/MySQL/PostgreSQL | None |
 | State store (agent) | LMDB | YAML cache | JSON cache | None | Msgpack cache | BerkeleyDB |
-| Agent binary size | ~7 MB x86_64 / ~6 MB arm64 (static musl) | ~200 MB (Ruby + gems) | ~100 MB (omnibus) | 0 (agentless) | ~50 MB (Python + deps) | ~3 MB |
+| Agent binary size | ~8.1 MiB x86_64 / ~6.2 MiB arm64 (static musl, measured) | ~200 MB (Ruby + gems) | ~100 MB (omnibus) | 0 (agentless) | ~50 MB (Python + deps) | ~3 MB |
 
 ## Transport and Security
 
@@ -57,19 +59,21 @@ Salt's check-in is lightweight (ZeroMQ message) but state compilation happens on
 
 CFEngine's agent evaluates promises locally from cached policy — the server interaction is minimal (just policy distribution).
 
-**Verdict:** Vigo and CFEngine have the lightest agent-side check-in paths. Puppet's is the heaviest. On the server side, Vigo's FleetIndex keeps fleet state in ~388 bytes per node (in-process memory), while CFEngine Enterprise's reporting hub requires ~8 MB per node in PostgreSQL. Vigo's design target is 50K-200K envoys on a single commodity server.
+**Verdict:** Vigo and CFEngine have the lightest agent-side check-in paths. Puppet's is the heaviest. On the server side, Vigo holds fleet state in process — the fixed `EnvoyState` struct is **416 bytes** (`unsafe.Sizeof`, `server/fleet/index.go`), though the resident cost per envoy is dominated by the per-envoy trait map (`Traits map[string]string` — dozens to low-hundreds of keys on a typical host) and the bounded recent-run history, so the real figure is materially larger and fleet-dependent. By contrast, CFEngine Enterprise's reporting hub documents ~8 MB per node in PostgreSQL. No measured single-server node ceiling exists for Vigo — see the disclaimer above.
 
 ### Agent resource consumption
 
 | | Memory (idle) | CPU (convergence) | Disk |
 |---|---|---|---|
-| Vigo | ~8 MB RSS | Minimal (compiled Rust) | ~7 MB binary (x86_64) / ~6 MB (arm64) + LMDB state |
+| Vigo | ~20–25 MB RSS¹ | Minimal (compiled Rust) | ~8 MiB binary (x86_64) / ~6 MiB (arm64) + LMDB state |
 | Puppet | ~200 MB RSS (Ruby VM) | High (Ruby interpretation) | ~200 MB + YAML cache |
 | Chef | ~150 MB RSS (Ruby VM) | High (Ruby interpretation) | ~100 MB + cookbook cache |
 | Salt | ~80 MB RSS (Python) | Moderate | ~50 MB + state cache |
 | CFEngine | ~5 MB RSS | Minimal (compiled C) | ~3 MB binary + BDB |
 
-Vigo and CFEngine are in the same class for resource consumption. Ruby-based tools (Puppet, Chef) are an order of magnitude heavier. This matters for edge computing, IoT, containers, and cost-conscious cloud deployments.
+¹ Single observed sample from a long-running home-lab envoy (`agent_self.rss_bytes`); not yet characterized across operating systems, uptimes, or policy weights — treat as indicative, not a spec. The static binary is ~8 MiB on disk.
+
+Vigo is close to CFEngine for resource consumption and well under the Ruby/Python-based tools (Puppet, Chef, Salt). This matters for edge computing, IoT, containers, and cost-conscious cloud deployments.
 
 ### Offline operation
 
@@ -142,7 +146,7 @@ Vigo's idempotency is **enforced continuously**, not just applied once at deploy
 | LVM/RAID | No | Yes | No | Yes | No | No |
 | Docker containers | Yes (compose, container, image) | Via puppetlabs-docker | Via docker cookbook | Yes (docker modules) | Via dockerng | No |
 
-Vigo has 73 built-in resource types covering the core system administration needs. Puppet has the deepest built-in resource coverage. Ansible has the widest (cloud, network, containers) through its module ecosystem. Vigo's custom executor JSON protocol allows extending coverage without modifying the agent binary.
+Vigo registers **69 built-in resource types** (`agent/src/runner/mod.rs::build_executors`, excluding the test-only `mock`), counting platform variants (`reboot` vs `reboot_windows`, etc.) once each as the operator writes them. Puppet has the deepest built-in resource coverage. Ansible has the widest (cloud, network, containers) through its module ecosystem. Vigo's custom executor JSON protocol allows extending coverage without modifying the agent binary.
 
 ### Package management depth
 
@@ -150,7 +154,7 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 
 ## Scalability
 
-> **Note on methodology:** All tools are compared on the same reference hardware: 4 vCPU, 8 GB RAM, SSD storage, 5-minute check-in interval. Vendor-documented requirements are cited where available. Vigo's figures are theoretical estimates derived from internal benchmarks — no production deployments exist. These comparisons are intended to illustrate architectural differences, not to make absolute performance claims. Real-world results depend on configuration complexity, network conditions, and workload patterns.
+> **Note on methodology:** All tools are compared on the same reference hardware: 4 vCPU, 8 GB RAM, SSD storage, 5-minute check-in interval. The non-Vigo rows are derived from each vendor's documented requirements. Vigo's rows carry only what is directly measurable in the codebase (microbenchmarks, struct sizes, binary size, registry counts) — no production deployment exists, and this section deliberately stops short of a node-count estimate (see the top-of-document disclaimer). These comparisons illustrate architectural differences, not absolute performance.
 
 ### Vendor-documented requirements
 
@@ -161,26 +165,26 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 | **Ansible** | ~1 GB per 10 forks + 2 GB base. 4 forks per CPU core baseline. 400 forks requires ~42 GB RAM. Each fork ~100 MB. | [AAP 2.5 System Requirements](https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/2.5/html/rpm_installation/platform-system-requirements) |
 | **Salt** | 5,000-50,000 minions per master depending on hardware. 8 GB and 8 cores sufficient for ~1,200 minions. Documentation notes 50,000 minions possible on 64-bit OS without modification. | [Salt at Scale](https://docs.saltproject.io/en/latest/topics/tutorials/intro_scale.html) |
 | **CFEngine** | Minimum 8 MB RAM per bootstrapped agent on the Enterprise hub. 5,000 hosts requires 40 GB RAM, 500 GB disk. Community edition without reporting hub is lighter. | [CFEngine 3.26 Installation](https://docs.cfengine.com/docs/3.26/getting-started-installation-general-installation-installation-enterprise.html) |
-| **Vigo** | No vendor-documented capacity (no production deployments). Internal benchmarks: ~388 bytes per envoy in FleetIndex, ~300µs per check-in on cache hit, ~10,000 check-ins/sec on 4 cores. Conservative estimate: 50K-200K envoys. | [Performance Analysis](performance-1m.md) |
+| **Vigo** | No vendor-documented capacity (no production deployment, no end-to-end load test). Measured microbenchmarks (`go test -bench`, dev hardware): ED25519 payload verify **~53 µs** (the dominant per-check-in cost — `BenchmarkVerifyPayload`); the rest of the cache-hit check-in path totals **<1 µs** (timestamp check ~32 ns, pubkey lookup ~143 ns, policy-cache hit ~19 ns, per-envoy stub customization ~300 ns, in-memory mark-seen ~170 ns); policy-bundle rebuild on a cache miss **~5.5 µs** on a small test config (`BenchmarkBuildPolicyBundle`, config-size dependent); `EnvoyState` struct **416 B**. A node-count ceiling is not derived here. | [Performance Analysis](performance-1m.md) |
 
 ### Estimated capacity on reference hardware (4 vCPU, 8 GB RAM, 5-min check-in)
 
 | | Estimated nodes | Primary constraint | Notes |
 |---|---|---|---|
-| **Vigo** | 50K-200K* | SQLite write batching (50K); PostgreSQL extends to 200K | *Theoretical. FleetIndex uses ~388 bytes/node. 200K nodes = ~78 MB fleet memory. |
+| **Vigo** | Not estimated here* | — | *No production deployment, no end-to-end load test; deriving a ceiling from the microbenchmarks above would be extrapolation, which this document avoids. Projection scenarios (with stated assumptions) are in [Performance Analysis](performance-1m.md). |
 | **Puppet** | ~100-500 | Below vendor minimum. PE requires 10 GB RAM for 100 nodes, 24 GB for 2,500. | 8 GB is below the documented minimum for any production tier. |
 | **Chef** | ~2,000-4,000 | 8 GB meets minimum (4 GB base + node overhead at ~2 MB disk/node). | Chef's check-in is cookbook serving, lighter than catalog compilation. |
 | **Ansible** | ~200-400 | ~50 concurrent forks at 100 MB each. Push model: 50 forks × 5 min / 30s = ~500 hosts/cycle. | Requires Tower/AWX for scheduled convergence. |
 | **Salt** | ~1,200-5,000 | Salt docs indicate 8 GB + 8 cores handles ~1,200 minions. ZeroMQ transport is efficient. | Python state compilation is the CPU bottleneck. |
 | **CFEngine** | ~1,000 | Enterprise hub: 8 MB/node × 1,000 = 8 GB. Community edition without reporting DB handles more. | Enterprise reporting requires PostgreSQL; community edition serves flat policy files only. |
 
-*Vigo's estimate is based on benchmark extrapolation, not production measurements. The conservative range accounts for GC pauses, policy cache misses after config changes (10-50ms vs 300µs cache hit), network I/O contention, and SQLite WAL checkpoint overhead. See [Performance Analysis](performance-1m.md) for methodology.
+*The other rows are derived from each vendor's documented requirements scaled to the reference hardware; Vigo has no vendor doc and no production deployment, so it carries no estimate here. The factors that would have to be folded into any such estimate — GC pauses, policy-cache misses after config changes, network I/O contention, SQLite WAL checkpoint overhead — are exactly why this document does not publish one. See [Performance Analysis](performance-1m.md), where projections are made explicitly and labelled theoretical.
 
 ### Server memory per node
 
 | | Per-node server memory | Source |
 |---|---|---|
-| Vigo | ~388 bytes | FleetIndex struct size (measured) |
+| Vigo | 416 B fixed struct; larger in practice (trait map + run history dominate) | `unsafe.Sizeof(EnvoyState{})`, `server/fleet/index.go` |
 | Puppet | Varies by facts/catalog size | PuppetDB stores full fact sets + catalogs in PostgreSQL |
 | Chef | ~2 MB disk per node | Chef docs: "allocate 2 MB for each node" |
 | Ansible | ~100 MB per concurrent fork | Red Hat docs: "1 GB per 10 forks" |
@@ -191,14 +195,14 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 
 | | What happens per check-in | Server-side computation | Practical minimum interval |
 |---|---|---|---|
-| Vigo | In-memory FleetIndex lookup, pre-built policy cache copy, async batched DB writes | Minimal — ~300µs per check-in (benchmarked, cache hit) | **15 seconds** (10K envoys on 4 vCPU) |
+| Vigo | In-memory FleetIndex lookup, pre-built policy cache copy, async batched DB write | ED25519 verify **~53 µs** (benchmarked — the dominant cost); rest of the cache-hit path **<1 µs**; end-to-end including gRPC/protobuf/TLS framing not separately benchmarked | **15 s** documented ([15-second analysis](performance-15s.md)); on a non-trivial policy the agent's own convergence-cycle time, not the configured interval, is the practical floor |
 | Puppet | Parse manifests, resolve Hiera data, query PuppetDB, compile catalog graph, serialize | Significant — Ruby/JRuby interpretation, multiple DB queries | ~5 minutes |
 | Chef | Resolve run list, serve cookbook files, update node object | Moderate — cookbook file serving + PostgreSQL writes | ~5 minutes |
 | Ansible | (Push model — no agent check-in. Controller compiles and pushes via SSH.) | N/A for check-in; compilation happens on the controller | N/A |
 | Salt | Compile state tree, resolve pillar data, serialize | Moderate — Python state compilation per minion | ~1 minute |
 | CFEngine | Serve flat policy files; Enterprise hub ingests run reports | Minimal for policy serving; moderate for report ingestion | ~1 minute |
 
-Vigo's check-in is cheap enough to run 20× more frequently than the industry default. At 15-second intervals on a single 4 vCPU server with 10,000 envoys, sustained CPU load is ~20% of one core. See [Performance Analysis (15s)](performance-15s.md) for detailed projections, and the [5-second study](performance-5s.md) for the edge case on small fleets (where the limiting factor becomes the agent's convergence-cycle time, not the server).
+The check-in path is cheap — its dominant cost is the ~53 µs ED25519 verify, with everything else on the cache-hit path under a microsecond — which is what makes sub-minute intervals plausible at all. The [15-second](performance-15s.md) and [5-second](performance-5s.md) analyses work through the *projected* CPU, memory, and network at those cadences; those numbers are theoretical (no production deployment) and the pages say so.
 
 ### Scaling architecture
 
@@ -230,7 +234,7 @@ Vigo and CFEngine have the fastest bootstrap. Puppet's certificate signing workf
 
 | | Built-in metrics | Compliance tracking | Web UI | Event webhooks |
 |---|---|---|---|---|
-| Vigo | Prometheus (50+ metrics) | Per-envoy status, sparklines, SIEM/CMDB export | HTMX dashboard + security posture + admin section | Yes (HMAC-signed) |
+| Vigo | Prometheus — 56 metric definitions (`server/metrics/metrics.go`; more time series at runtime via labels) | Per-envoy status, sparklines, SIEM/CMDB export | HTMX dashboard + security posture + admin section | Yes (HMAC-signed) |
 | Puppet | Via PuppetDB queries | Puppet Enterprise reports | Puppet Enterprise Console | Via report processors |
 | Chef | Via Chef Automate | Chef Automate compliance | Chef Automate UI | Via handlers |
 | Ansible | Via Tower/AWX | Tower compliance reports | Tower/AWX UI | Via callback plugins |
@@ -245,10 +249,10 @@ The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no 
 - When you value **simplicity** — YAML configs anyone can read, one server, one binary, one publish command. No DSL to learn — not true of Puppet manifests, Chef recipes, or CFEngine promises
 - When you value **security** — mTLS everywhere, ED25519 per-request signing on every payload (no other CM tool does this), and a first-class `secret:` resolver that never lets secrets touch config files, databases, logs, or wire payloads
 - When you value **ease of operation** — single process, embedded SQLite, bootstrap in 30 seconds with a single curl command. No package manager, no runtime dependencies, no external database
-- When you value **performance** — ~300 µs check-ins, zero database queries on the hot path, 3,300 check-ins per second on a single core. Check-in intervals scale down to 15 seconds on commodity hardware
+- When you value **performance** — the per-check-in path's dominant cost is a ~53 µs ED25519 verify (benchmarked); everything else on the cache-hit path totals under a microsecond; zero database queries on the hot path (the state write is batched and asynchronous). Check-in intervals scale down to 15 seconds on commodity hardware per the [performance analyses](performance-15s.md) (theoretical)
 - When you need **continuous enforcement** — every resource is idempotent and re-evaluated every check-in. At 15-second intervals, drift is corrected before anyone notices it happened. This enables provable continuous compliance, self-healing infrastructure, and sub-minute incident response — capabilities that require 5-30 minute intervals with any other tool
-- When you need **scalability** — 50,000+ nodes on a single server, no compile masters, no database clusters, no worker pools
-- When **agent footprint** matters — ~7 MB static musl binary (x86_64; ~6 MB on arm64) vs 50–200 MB for Ruby/Python-based agents. Deploys anywhere — edge, IoT, containers, resource-constrained hosts
+- When you need **scalability** — no compile masters, no database clusters, no worker pools; the spanner hub-spoke topology adds horizontal scale on top. (No production-measured node ceiling — see the disclaimer at the top.)
+- When **agent footprint** matters — ~8 MiB static musl binary (x86_64; ~6 MiB on arm64) vs 50–200 MB for Ruby/Python-based agents. Deploys anywhere — edge, IoT, containers, resource-constrained hosts
 - When you need **offline resilience** — signed policy bundles with local convergence and results queuing for air-gapped, shipboard, or unreliable network environments. Most complete offline story of any agent-based CM tool
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
