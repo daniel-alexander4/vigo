@@ -7,8 +7,8 @@
 // invoke it like any other process. The dispatch we want to verify
 // inspects argv[0] *before* any clap parsing — so the test invokes
 // the binary with the regular `vigo` argv[0] and asserts the process
-// does NOT match the git-remote-vigo dispatch path. End-to-end
-// dispatch (argv[0] = "git-remote-vigo" via symlink → real handler
+// does NOT match the git-remote-swarmgit dispatch path. End-to-end
+// dispatch (argv[0] = "git-remote-swarmgit" via symlink → real handler
 // runs the protocol loop with git → push/clone succeed) is covered
 // by `agent/tests/swarmgit_helper.rs`.
 
@@ -27,8 +27,8 @@ fn vigo_bin() -> String {
 fn argv0_default_falls_through_to_cli() {
     // Sanity check: invoking with the normal `vigo` argv[0] and no
     // subcommand should give the regular CLI's no-command behavior,
-    // NOT enter the git-remote-vigo dispatch (which expects a
-    // `vigo://` URL and would error differently). Catches a
+    // NOT enter the git-remote-swarmgit dispatch (which expects a
+    // `swarmgit://` URL and would error differently). Catches a
     // regression where multicall canonicalization matches too
     // eagerly on the default name.
     let bin = vigo_bin();
@@ -39,12 +39,12 @@ fn argv0_default_falls_through_to_cli() {
     let output = cmd.output().expect("failed to run vigo");
     let stderr = String::from_utf8_lossy(&output.stderr);
 
-    // The git-remote-vigo handler exits with this exact prefix when
-    // invoked without a vigo:// URL. If default invocation hit that
+    // The git-remote-swarmgit handler exits with this exact prefix when
+    // invoked without a swarmgit:// URL. If default invocation hit that
     // path, stderr would carry that string.
     assert!(
-        !stderr.contains("expected vigo:// URL"),
-        "default invocation should not enter git-remote-vigo dispatch; \
+        !stderr.contains("expected swarmgit:// URL"),
+        "default invocation should not enter git-remote-swarmgit dispatch; \
          stderr suggests it did: {}",
         stderr
     );

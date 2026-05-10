@@ -19,7 +19,7 @@ A first-principles P2P design eliminates shared mutable membership state entirel
 
 ### Identity & membership: capability tokens anchored to a self-certifying project ID
 
-- **Project ID is the founder's pubkey fingerprint.** `vigo swarm swarmgit multi init <handle>` generates a project ed25519 keypair locally; the project's URL is `vigo://<sha256(project_pubkey)>/<handle>`. The handle is human-readable but the cryptographic identity is the fingerprint. Name squatting is impossible by construction — different fingerprints, different URLs.
+- **Project ID is the founder's pubkey fingerprint.** `vigo swarm swarmgit multi init <handle>` generates a project ed25519 keypair locally; the project's URL is `swarmgit://<sha256(project_pubkey)>/<handle>`. The handle is human-readable but the cryptographic identity is the fingerprint. Name squatting is impossible by construction — different fingerprints, different URLs.
 - **Membership is a stack of capability tokens, not a list.** Each member's envoy holds a signed token of the form `(project_id, holder_envoy_fingerprint, holder_username, role, [expiry])`, signed by the project key (or by an admin token). Tokens live at `~/.vigo-swarmgit/<project_id>/token` on the holder's envoy. **There is no `members.toml`.**
 - **Roles are `admin` and `member`.** Admin tokens authorize their holder to sub-issue further tokens. Verification walks the chain back to the project pubkey. Cap delegation depth at 3 to bound runaway issuance.
 - **Authority on push: token signature chain + revocation list.** A push from member C presents C's token; the receiving envoy verifies the chain back to the project pubkey baked into the URL, then checks that no envelope in the local revocation list names C's token-id. Both must pass.
@@ -30,10 +30,10 @@ A first-principles P2P design eliminates shared mutable membership state entirel
 - Each envoy pins received revocations to a per-project local list. Pushes naming a revoked token are rejected.
 - Retention: 90 days, reaped via the same scheduler lockbox uses.
 
-### Transport: `vigo://` URL handled by a multi-call helper
+### Transport: `swarmgit://` URL handled by a multi-call helper
 
-- Users do `git remote add origin vigo://<project_id>/<handle>` then plain `git push` and `git pull`.
-- The `vigo` binary itself dispatches as `git-remote-vigo` when invoked under that argv[0] (multi-call binary, not a separate executable — saves ~3–5 MiB of duplicate static linkage).
+- Users do `git remote add origin swarmgit://<project_id>/<handle>` then plain `git push` and `git pull`.
+- The `vigo` binary itself dispatches as `git-remote-swarmgit` when invoked under that argv[0] (multi-call binary, not a separate executable — saves ~3–5 MiB of duplicate static linkage).
 - Helper runs as the calling user. It connects to the agent over a `SO_PEERCRED`-gated Unix socket at `$XDG_RUNTIME_DIR/vigo/swarmgit.sock` (mirroring lockbox's session-helper pattern). Username comes from SO_PEERCRED; envoy fingerprint comes from the agent's mTLS cert.
 - The agent (running as root) enforces token validity, ref policy, and proxies to `git-receive-pack` / `git-upload-pack` against the local bare repo.
 
@@ -123,7 +123,7 @@ If founder + all admins are lost (no one with a valid admin token), the project 
 **Binary weight (estimated):**
 - Agent: ~50–150 KiB (≤2 % of current 7.7 MiB).
 - Server: ~100–200 KiB (sub-percent of vigosrv).
-- `git-remote-vigo` ships as a multi-call dispatch from `vigo`, not a separate binary.
+- `git-remote-swarmgit` ships as a multi-call dispatch from `vigo`, not a separate binary.
 
 **Hot-path posture:**
 - Only the swarmgitmesh check-in extension lands on the convergence-cycle path. Bounded by including project metadata only (no per-project rosters); rosters fetch on-demand at push time.

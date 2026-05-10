@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! Helper daemon — root-side Unix socket that proxies
-//! `git-receive-pack` / `git-upload-pack` for `vigo://` URLs.
+//! `git-receive-pack` / `git-upload-pack` for `swarmgit://` URLs.
 //!
 //! ### Why a daemon
 //!
@@ -10,7 +10,7 @@
 //! project's bare repo at `/var/lib/vigo/swarm/swarmgit/projects/
 //! <project_id_hex>.git`, mode `0700 root:root`. That permission
 //! posture exists to gate **non-root local users** from cloning bare
-//! repos that aren't theirs. The user-side `git-remote-vigo` binary
+//! repos that aren't theirs. The user-side `git-remote-swarmgit` binary
 //! (multicall mode of `vigo`) runs as the calling user; without a
 //! root-side mediator, it cannot read the bare repo. The helper
 //! daemon is that mediator.
@@ -19,7 +19,7 @@
 //!
 //! Daemon binds [`socket_path`] on agent startup (under
 //! [`spawn`](super::spawn)) and accepts connections forever. Each
-//! connection is a fresh `git-remote-vigo` invocation:
+//! connection is a fresh `git-remote-swarmgit` invocation:
 //!
 //! 1. Client sends a one-line `HELLO <project_id_hex> <service>\n`
 //!    handshake. `service` is `git-upload-pack` (fetch) or
@@ -83,7 +83,7 @@ use super::project_state::{
 use super::tokens::{verify_chain, ID_LEN};
 use crate::update::TlsCerts;
 
-/// System-wide socket path the daemon binds and `git-remote-vigo`
+/// System-wide socket path the daemon binds and `git-remote-swarmgit`
 /// connects to. `/var/run` is portable across Linux (where it's a
 /// symlink to `/run`), macOS (tmpfs, recreated at boot), and the
 /// BSDs / illumos. `vigo/` is the per-product subdir; we share it

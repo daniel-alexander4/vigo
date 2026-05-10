@@ -38,7 +38,7 @@ use sha2::{Digest, Sha256};
 /// prevents a token from one Vigo subsystem being confused for
 /// another in a future where multiple subsystems sign Ed25519
 /// envelopes.
-pub const TOKEN_DOMAIN: &[u8] = b"vigo-swarmgit-token-v1\0";
+pub const TOKEN_DOMAIN: &[u8] = b"swarmgit-token-v2\0";
 
 /// Length of puddle pubkeys + token IDs (raw Ed25519 pubkey + sha256).
 pub const ID_LEN: usize = 32;
@@ -106,7 +106,7 @@ impl Role {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenBody {
     /// Project anchor. `project_id = sha256(founder_puddle_pubkey)`
-    /// — content-addressed so the URL `vigo://<project_id>/<handle>`
+    /// — content-addressed so the URL `swarmgit://<project_id>/<handle>`
     /// can't be squatted.
     pub project_id: [u8; ID_LEN],
     /// Puddle pubkey this token grants access to. Holders of puddle

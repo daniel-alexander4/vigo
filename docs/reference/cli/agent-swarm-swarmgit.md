@@ -5,13 +5,13 @@
 
 ## Status: ADR-015 cutover in progress
 
-Steps 1–3 (multi-call dispatch, capability tokens, per-user state + CLI) and step 4's first six slices (helper daemon + `git-remote-vigo`; push-driven fan-out + receive-side endpoint; LAN auto-discovery; envelope gossip with digest catch-up; trait re-emit + mesh schema + UI/CLI rewrite; REST member-roster + reanchor byte migration) have shipped. Verbs that mint or sign envelopes (`init`, `invite`, `revoke`, `leave`, `reanchor`) require puddle to be unlocked — see [`vigo swarm puddle`](agent-swarm-puddle.md).
+Steps 1–3 (multi-call dispatch, capability tokens, per-user state + CLI) and step 4's first six slices (helper daemon + `git-remote-swarmgit`; push-driven fan-out + receive-side endpoint; LAN auto-discovery; envelope gossip with digest catch-up; trait re-emit + mesh schema + UI/CLI rewrite; REST member-roster + reanchor byte migration) have shipped. Verbs that mint or sign envelopes (`init`, `invite`, `revoke`, `leave`, `reanchor`) require puddle to be unlocked — see [`vigo swarm puddle`](agent-swarm-puddle.md).
 
 What works end-to-end today:
 
 - `init` / `invite` / `join` / `list` / `status` are fully functional locally.
 - `leave` and `revoke` sign envelopes inline via the user's puddle session helper, write the signed envelope as a `*.pending` sentinel; the agent's root reactor sweeps every 60 s and persists them to `/var/lib/vigo/swarm/swarmgit/envelopes/<project_id>/{revokes,leaves}/`.
-- `git clone vigo://<project_id>/<handle>` and `git push vigo://…` against the local envoy: the user-side `git-remote-vigo` binary opens `/var/run/vigo/swarmgit.sock` (SO_PEERCRED-gated), the agent verifies the user's token chain, and proxies to `git upload-pack` / `git receive-pack` against the bare repo.
+- `git clone swarmgit://<project_id>/<handle>` and `git push swarmgit://…` against the local envoy: the user-side `git-remote-swarmgit` binary opens `/var/run/vigo/swarmgit.sock` (SO_PEERCRED-gated), the agent verifies the user's token chain, and proxies to `git upload-pack` / `git receive-pack` against the bare repo.
 - Cross-envoy push: after a successful local `git-receive-pack`, the helper daemon snapshots refs pre/post and (on delta) builds a `git bundle --all` and POSTs it to every known peer for the project over swarm mTLS (port 1531). Targets come from two deduplicated sources: peers that have advertised holding the project on the LAN multicast (`SWARMGITPROJECT:<host>:<pid_hex>` announce lines, indexed by `ProjectPeers`), and explicit hostnames listed in `project.json::cross_subnet_members`. Receivers verify the X-Vigo-Chain header against the URL's project_id, ingest via `git bundle verify` + `git fetch`, and return `{accepted, refs_changed}`.
 - Cross-envoy envelope gossip: after `revoke` or `leave` writes a signed envelope locally, the reactor fans it out to every known peer via `POST /swarm/swarmgit/envelopes/<pid>/{revokes,leaves}`. Receivers verify the signature, re-check the project_id, and persist idempotently. Every 5 minutes the reactor reconciles via `GET /swarm/swarmgit/envelopes/<pid>/digest` against each peer; on mismatch it pulls `GET /swarm/swarmgit/envelopes/<pid>/all` and merges. Peers offline during the original gossip catch up within one reconciliation tick of coming back online.
 
@@ -48,7 +48,7 @@ The command lives inside the `vigo` agent binary. CLI verbs run as the calling u
 Every project is identified by `project_id = sha256(founder_puddle_pubkey)` rendered as 64-character lowercase hex. Project URLs take the form:
 
 ```
-vigo://<project_id>/<handle>
+swarmgit://<project_id>/<handle>
 ```
 
 The handle is human-readable; cryptographic identity is the project_id. Squatting on a handle is impossible — there's no central registry. Any fleet can found a project named `vigo-web`, but the resulting project_ids will differ.
@@ -148,7 +148,7 @@ vigo swarm swarmgit project init <handle> [--scope swarm-wide|members-only]
 ```
 $ vigo swarm swarmgit project init vigo-web
 ✓ Founded project vigo-web
-  URL:        vigo://e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/vigo-web
+  URL:        swarmgit://e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/vigo-web
   Project ID: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   Founder:    ed25519:f43f6ef3eea29e3780d73aa2cee4a78193419a69f43f6ef3eea29e3780d73aa2
   Scope:      swarm-wide
@@ -341,7 +341,7 @@ vigo swarm swarmgit project rejoin <project_id> [--invitation <file|->]
 ```
 $ vigo swarm swarmgit project rejoin team-repo --invitation re-invite.json
 ✓ Re-joined project team-repo (chain refreshed)
-  URL:        vigo://e3b0…/team-repo
+  URL:        swarmgit://e3b0…/team-repo
   Role:       Member
   Members:    3
   Scope:      members-only

@@ -23,7 +23,7 @@
 //! `cleanup_stale_bundles` helper for the old bundle scratch dir.
 //! All of that machinery was retired when ADR-015 step 4 replaced
 //! the bundle-based swarmgit pipeline with the helper-daemon +
-//! git-remote-vigo + push fan-out architecture (shipped 0.35.6). The
+//! git-remote-swarmgit + push fan-out architecture (shipped 0.35.6). The
 //! trait-snapshot schema survives because the trait collector still
 //! reads `traits.json` for fleet-wide source/mirror visibility.
 

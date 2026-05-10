@@ -5,8 +5,8 @@
 //!
 //! Each project has a stable, content-addressed identity:
 //! `project_id = sha256(founder_puddle_pubkey)`. Projects are accessed
-//! over a `vigo://<project_id>/<handle>` URL via the multi-call
-//! `git-remote-vigo` helper (ADR-015 step 1, shipped 0.34.9). The
+//! over a `swarmgit://<project_id>/<handle>` URL via the multi-call
+//! `git-remote-swarmgit` helper (ADR-015 step 1, shipped 0.34.9). The
 //! `vigo` agent verifies a stack of capability tokens (step 2, shipped
 //! 0.34.10) against the project's anchor pubkey, then proxies to
 //! `git-receive-pack` / `git-upload-pack` against a root-owned bare
@@ -88,7 +88,7 @@ pub const MAX_BUNDLE_SIZE: u64 = 20 * 1024 * 1024 * 1024;
 ///
 /// 1. **Helper daemon** ([`helper::run`]) — listens on
 ///    `/var/run/vigo/swarmgit.sock`, proxies `git-receive-pack` /
-///    `git-upload-pack` for the user-side `git-remote-vigo` binary
+///    `git-upload-pack` for the user-side `git-remote-swarmgit` binary
 ///    after token-chain verification.
 /// 2. **Sentinel reactor** ([`run_sentinel_reactor`]) — periodically
 ///    scans every user's `~/.vigo-swarmgit/<pid>/{leave,revoke}.pending`

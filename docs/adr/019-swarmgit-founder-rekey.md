@@ -11,7 +11,7 @@ title: "ADR-019: Swarmgit founder-rekey via anchor-preserving delegation chains"
 
 ADR-018 rotates the puddle keypair to recover from a compromised or hygiene-rotated identity, but explicitly defers swarmgit. The deferral is a real problem: under ADR-015, every swarmgit project's identity is `project_id = sha256(founder_puddle_pubkey)`, and capability tokens chain back to that founder pubkey via `verify_chain` (`tokens.rs:321`). A naive founder rekey would therefore:
 
-- Make every `vigo://<old_pid>/<handle>` URL the founder typed into a `git remote` config dead.
+- Make every `swarmgit://<old_pid>/<handle>` URL the founder typed into a `git remote` config dead.
 - Strand bare repos at `/var/lib/vigo/swarm/swarmgit/projects/<old_pid>.git` across every member's disk.
 - Leave capability tokens that mathematically still verify against the OLD founder pubkey, but the founder no longer holds the OLD private key, so they cannot mint new tokens against that anchor.
 - Break helper-daemon-mediated `git push` / `git fetch` for the founder's own envoys against their own bare repos, because the founder's tokens.json has them as admin via the OLD identity.

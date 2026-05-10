@@ -1553,7 +1553,7 @@ fn main() -> Result<()> {
     std::hint::black_box(&VIGO_BUILD_VERSION);
 
     // ADR-015 multi-call binary dispatch: when invoked under a
-    // recognized non-default argv[0] (e.g., as `git-remote-vigo` via
+    // recognized non-default argv[0] (e.g., as `git-remote-swarmgit` via
     // a symlink), branch to the corresponding mode without going
     // through clap. The check has to be before any arg parsing
     // because git invokes us with `<remote-name> <url>` positionals
@@ -1563,17 +1563,17 @@ fn main() -> Result<()> {
     // mode regardless of OS.
     //
     // Dispatch lands BEFORE we build the tokio runtime: the
-    // git-remote-vigo body uses its own `current_thread` runtime
+    // git-remote-swarmgit body uses its own `current_thread` runtime
     // inside `tunnel()` to drive the bidirectional copy through
     // tokio async I/O (the fix for the AF_UNIX wakeup race that
     // hit 0.41.7-15 on the synchronous-recv path), and that nested
     // construction would panic if we were already inside the agent
     // multi-thread runtime.
     if let Some(arg0) = std::env::args_os().next() {
-        if let Some(multicall::MulticallMode::GitRemoteVigo) = multicall::classify_argv0(&arg0) {
+        if let Some(multicall::MulticallMode::GitRemoteSwarmgit) = multicall::classify_argv0(&arg0) {
             let args: Vec<String> = std::env::args().collect();
-            multicall::run_git_remote_vigo(args);
-            // multicall::run_git_remote_vigo returns `!` — execution
+            multicall::run_git_remote_swarmgit(args);
+            // multicall::run_git_remote_swarmgit returns `!` — execution
             // never reaches here.
         }
     }

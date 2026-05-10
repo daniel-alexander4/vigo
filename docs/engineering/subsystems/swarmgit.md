@@ -20,7 +20,7 @@ Swarmgit is one of four content subsystems that ride the [swarm](swarm.md) subst
 
 | Piece | Status |
 |-------|--------|
-| Multi-call binary dispatch (`git-remote-vigo`) | ✅ 0.34.9 (step 1) |
+| Multi-call binary dispatch (`git-remote-swarmgit`) | ✅ 0.34.9 (step 1) |
 | Capability-token primitives (`tokens.rs`) | ✅ 0.34.10 (step 2) |
 | `~/.vigo-swarmgit/<project_id>/` per-user state + `projects/<project_id>.git` storage | ✅ step 3 |
 | `vigo swarm swarmgit project {init,invite,join,leave,list,status}` local verbs | ✅ step 3 |
@@ -28,7 +28,7 @@ Swarmgit is one of four content subsystems that ride the [swarm](swarm.md) subst
 | `vigocli swarm swarmgit members` admin verb (Phase C) | ✅ 0.38.10 |
 | `vigo swarm swarmgit project {revoke,leave}` envelope **signing** + sentinel queueing | ✅ step 4 first slice (CLI signs inline via puddle session helper) |
 | Helper daemon + SO_PEERCRED socket + receive-pack / upload-pack proxy | ✅ step 4 first slice (`/var/run/vigo/swarmgit.sock`) |
-| `git-remote-vigo` body — `connect` capability + transparent splice | ✅ step 4 first slice |
+| `git-remote-swarmgit` body — `connect` capability + transparent splice | ✅ step 4 first slice |
 | Revoke / leave envelope persistence + 90-day reap | ✅ step 4 first slice (`/var/lib/vigo/swarm/swarmgit/envelopes/<project_id>/`) |
 | Push-driven fan-out (cycle prevention via delta check) | ✅ step 4 second slice |
 | Receive-side `POST /swarm/swarmgit/push/<project_id_hex>` endpoint | ✅ step 4 second slice |

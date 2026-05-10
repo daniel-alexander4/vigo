@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! `git-remote-vigo` body — the user-side half of the helper-daemon
-//! transport (ADR-015). Invoked by git when it sees a `vigo://` URL
+//! `git-remote-swarmgit` body — the user-side half of the helper-daemon
+//! transport (ADR-015). Invoked by git when it sees a `swarmgit://` URL
 //! (we install the binary as a symlink to `vigo` at install time, and
 //! [`crate::multicall`] dispatches based on argv[0]).
 //!
@@ -100,7 +100,7 @@ pub fn run(args: Vec<String>) -> ! {
     match run_inner(args) {
         Ok(()) => std::process::exit(0),
         Err(e) => {
-            eprintln!("git-remote-vigo: {:#}", e);
+            eprintln!("git-remote-swarmgit: {:#}", e);
             std::process::exit(1);
         }
     }
@@ -108,28 +108,28 @@ pub fn run(args: Vec<String>) -> ! {
 
 fn run_inner(args: Vec<String>) -> Result<()> {
     // git invokes us with up to two trailing args:
-    //   `git-remote-vigo <remote-name> <url>` (configured remote)
-    //   `git-remote-vigo <url> <url>`         (URL on the command line)
+    //   `git-remote-swarmgit <remote-name> <url>` (configured remote)
+    //   `git-remote-swarmgit <url> <url>`         (URL on the command line)
     // The URL is always the last argument.
     let url = args
         .last()
-        .ok_or_else(|| anyhow!("git did not pass a URL — usage: git-remote-vigo <remote> <url>"))?;
-    let project_id = parse_vigo_url(url)?;
+        .ok_or_else(|| anyhow!("git did not pass a URL — usage: git-remote-swarmgit <remote> <url>"))?;
+    let project_id = parse_swarmgit_url(url)?;
     protocol_loop(&project_id)
 }
 
-/// Parse a `vigo://<project_id_hex>/<handle>` URL into its 32-byte
+/// Parse a `swarmgit://<project_id_hex>/<handle>` URL into its 32-byte
 /// project_id. Handle is permitted but ignored (cryptographic
 /// identity is the project_id alone).
-pub fn parse_vigo_url(url: &str) -> Result<[u8; ID_LEN]> {
+pub fn parse_swarmgit_url(url: &str) -> Result<[u8; ID_LEN]> {
     let body = url
-        .strip_prefix("vigo://")
-        .ok_or_else(|| anyhow!("expected vigo:// URL, got {:?}", url))?;
+        .strip_prefix("swarmgit://")
+        .ok_or_else(|| anyhow!("expected swarmgit:// URL, got {:?}", url))?;
     let (pid_hex, _handle) = match body.split_once('/') {
         Some(t) => t,
         None => (body, ""),
     };
-    parse_hex_id(pid_hex).context("vigo:// URL has invalid project_id (expected 64-char lowercase hex)")
+    parse_hex_id(pid_hex).context("swarmgit:// URL has invalid project_id (expected 64-char lowercase hex)")
 }
 
 fn protocol_loop(project_id: &[u8; ID_LEN]) -> Result<()> {
@@ -399,46 +399,46 @@ mod tests {
     #[test]
     fn parses_canonical_url() {
         let url = format!(
-            "vigo://{}/myproject",
+            "swarmgit://{}/myproject",
             "0".repeat(64)
         );
-        let pid = parse_vigo_url(&url).unwrap();
+        let pid = parse_swarmgit_url(&url).unwrap();
         assert_eq!(pid, [0u8; ID_LEN]);
     }
 
     #[test]
     fn parses_url_without_handle() {
         // Some clone configurations strip the path. Tolerate it.
-        let url = format!("vigo://{}", "a".repeat(64));
-        let pid = parse_vigo_url(&url).unwrap();
+        let url = format!("swarmgit://{}", "a".repeat(64));
+        let pid = parse_swarmgit_url(&url).unwrap();
         assert_eq!(pid[0], 0xAA);
     }
 
     #[test]
     fn parses_url_with_dashed_handle() {
         let url = format!(
-            "vigo://{}/team-repo",
+            "swarmgit://{}/team-repo",
             "1".repeat(64)
         );
-        let pid = parse_vigo_url(&url).unwrap();
+        let pid = parse_swarmgit_url(&url).unwrap();
         assert_eq!(pid[0], 0x11);
     }
 
     #[test]
     fn rejects_https_scheme() {
         let url = format!("https://example.com/{}", "0".repeat(64));
-        assert!(parse_vigo_url(&url).is_err());
+        assert!(parse_swarmgit_url(&url).is_err());
     }
 
     #[test]
     fn rejects_short_pid() {
-        assert!(parse_vigo_url("vigo://deadbeef/proj").is_err());
+        assert!(parse_swarmgit_url("swarmgit://deadbeef/proj").is_err());
     }
 
     #[test]
     fn rejects_uppercase_pid() {
-        let url = format!("vigo://{}/proj", "A".repeat(64));
-        assert!(parse_vigo_url(&url).is_err());
+        let url = format!("swarmgit://{}/proj", "A".repeat(64));
+        assert!(parse_swarmgit_url(&url).is_err());
     }
 
     #[test]

@@ -375,6 +375,23 @@ pub async fn apply(
         "binary updated successfully"
     );
 
+    // Re-assert the `git-remote-swarmgit` PATH symlink. `bootstrap`
+    // installs it, but a self-update is a separate code path — without
+    // this an envoy that came back via the update path (rather than a
+    // fresh bootstrap) loses the helper, so `git push swarmgit://`
+    // breaks. Best-effort, mirrors the bootstrap install paths. Also
+    // sweeps the pre-rename `git-remote-vigo` symlink.
+    #[cfg(unix)]
+    {
+        if let Err(e) = crate::bootstrap::ensure_git_remote_swarmgit_symlink(current_binary) {
+            warn!(
+                error = %e,
+                link = crate::bootstrap::GIT_REMOTE_SWARMGIT_SYMLINK,
+                "could not refresh git-remote-swarmgit symlink; swarmgit:// git URLs unavailable until fixed"
+            );
+        }
+    }
+
     // Refresh the systemd unit file if the bootstrap template has
     // changed since this envoy was first installed. Without this,
     // envoys bootstrapped on older agent versions never pick up new

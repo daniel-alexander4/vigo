@@ -352,7 +352,7 @@ if [[ -z "$PID" ]] || [[ -z "$PUDDLE_PUB" ]]; then
     bad "could not parse project init output"
     echo "$INIT_OUT"; exit 1
 fi
-URL="vigo://$PID/$TAG"
+URL="swarmgit://$PID/$TAG"
 echo "  project_id=$PID"
 
 # Founder mints invitation; ferry it to each receiver and join.

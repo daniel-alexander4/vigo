@@ -177,7 +177,7 @@ USAGE:
 VERBS:
     init <handle> [--scope swarm-wide|members-only]
         Found a new project. Puddle must be unlocked. Prints the
-        canonical project URL `vigo://<project_id>/<handle>`.
+        canonical project URL `swarmgit://<project_id>/<handle>`.
 
     invite <project_id> --puddle <fp> --role admin|member [--expires <Nd>]
         Mint a child token for another fleet. Prints an invitation
@@ -505,7 +505,7 @@ fn cmd_init(args: &[String]) -> Result<()> {
     chain.save(&caller.home, &project_id)?;
 
     println!("✓ Founded project {}", handle);
-    println!("  URL:        vigo://{}/{}", hex_id(&project_id), handle);
+    println!("  URL:        swarmgit://{}/{}", hex_id(&project_id), handle);
     println!("  Project ID: {}", hex_id(&project_id));
     println!("  Founder:    ed25519:{}", hex_id(&founder_pub));
     println!("  Scope:      {}", scope.as_str());
@@ -828,7 +828,7 @@ fn cmd_join(args: &[String]) -> Result<()> {
     }
 
     println!("✓ Joined project {}", invitation.project.handle);
-    println!("  URL:        vigo://{}/{}", invitation.project.project_id, invitation.project.handle);
+    println!("  URL:        swarmgit://{}/{}", invitation.project.project_id, invitation.project.handle);
     println!("  Role:       {:?}", leaf.body.role);
     println!("  Members:    {}", invitation.project.members.len());
     println!("  Scope:      {}", invitation.project.dr_scope.as_str());
@@ -1181,7 +1181,7 @@ fn cmd_rejoin(args: &[String]) -> Result<()> {
             "  (note: rejoin called on a project we'd never joined — `join` would also have worked)"
         );
     }
-    println!("  URL:        vigo://{}/{}", invitation.project.project_id, invitation.project.handle);
+    println!("  URL:        swarmgit://{}/{}", invitation.project.project_id, invitation.project.handle);
     println!("  Role:       {:?}", leaf.body.role);
     println!("  Members:    {}", invitation.project.members.len());
     println!("  Scope:      {}", invitation.project.dr_scope.as_str());
@@ -1379,7 +1379,7 @@ fn cmd_status(args: &[String]) -> Result<()> {
     let chain = TokenChain::load(&caller.home, &project_id)?;
 
     println!("Project:           {}", cfg.handle);
-    println!("URL:               vigo://{}/{}", cfg.project_id, cfg.handle);
+    println!("URL:               swarmgit://{}/{}", cfg.project_id, cfg.handle);
     println!("Project ID:        {}", cfg.project_id);
     println!("Founder:           ed25519:{}", cfg.founder_puddle_pubkey);
     println!("Scope:             {}", cfg.dr_scope.as_str());
@@ -1631,8 +1631,8 @@ fn cmd_reanchor(args: &[String]) -> Result<()> {
     eprintln!(
         "Reanchor — hard-fork project '{}' under a new founder.
 
-  • The current URL `vigo://{}/{}` becomes permanently dead.
-  • New URL will be `vigo://{}/{}`.
+  • The current URL `swarmgit://{}/{}` becomes permanently dead.
+  • New URL will be `swarmgit://{}/{}`.
   • Every existing member must re-add the new remote URL by hand.
   • Existing tokens (admin or member) are NOT portable to the new project.
   • Refs + objects from the old bare repo are imported wholesale into the
@@ -1754,8 +1754,8 @@ To proceed, type the project handle exactly: {}",
     }
 
     println!("✓ Reanchored project '{}'", cfg.handle);
-    println!("  Old URL:    vigo://{}/{}", cfg.project_id, cfg.handle);
-    println!("  New URL:    vigo://{}/{}", hex_id(&new_project_id), cfg.handle);
+    println!("  Old URL:    swarmgit://{}/{}", cfg.project_id, cfg.handle);
+    println!("  New URL:    swarmgit://{}/{}", hex_id(&new_project_id), cfg.handle);
     println!("  New founder: ed25519:{}", hex_id(&new_founder_pub));
     if migrated_refs > 0 {
         println!("  Migrated {} ref(s) from old bare repo into new bare repo", migrated_refs);
@@ -1879,8 +1879,8 @@ fn cmd_re_found(args: &[String]) -> Result<()> {
     eprintln!(
         "Re-found — mint a fresh project_id for '{}' under your current puddle identity.
 
-  • The current URL `vigo://{}/{}` becomes permanently dead.
-  • New URL will be `vigo://{}/{}`.
+  • The current URL `swarmgit://{}/{}` becomes permanently dead.
+  • New URL will be `swarmgit://{}/{}`.
   • Every existing member must update their remote URL and rejoin under
     the new project_id. Run `re-invite-all {}` after this completes.
   • Existing tokens (admin or member) are NOT portable to the new project.
@@ -2006,8 +2006,8 @@ To proceed, type the project handle exactly: {}",
         .context("tombstoning old project.json")?;
 
     println!("✓ Re-founded project '{}'", cfg.handle);
-    println!("  Old URL:    vigo://{}/{}", cfg.project_id, cfg.handle);
-    println!("  New URL:    vigo://{}/{}", hex_id(&new_project_id), cfg.handle);
+    println!("  Old URL:    swarmgit://{}/{}", cfg.project_id, cfg.handle);
+    println!("  New URL:    swarmgit://{}/{}", hex_id(&new_project_id), cfg.handle);
     println!("  New founder: ed25519:{}", hex_id(&local_pub));
     if migrated_refs > 0 {
         println!("  Migrated {} ref(s) from old bare repo into new bare repo", migrated_refs);
@@ -2018,7 +2018,7 @@ To proceed, type the project handle exactly: {}",
     println!("Next steps:");
     println!("  • Run `vigo swarm swarmgit project re-invite-all {}` to mint fresh", hex_id(&new_project_id));
     println!("    invitations for every cross-puddle member of the old project.");
-    println!("  • Each member updates their remote URL to `vigo://{}/{}` and runs", hex_id(&new_project_id), cfg.handle);
+    println!("  • Each member updates their remote URL to `swarmgit://{}/{}` and runs", hex_id(&new_project_id), cfg.handle);
     println!("    `project rejoin {} --invitation -` with the new invitation.", hex_id(&new_project_id));
     println!("  • The old project state at {} is tombstoned but kept on disk as an", cfg.project_id);
     println!("    archive. Drop it via `project leave {}` once the new project is healthy.", cfg.project_id);
@@ -2229,7 +2229,7 @@ fn print_status_top<W: std::io::Write>(
         )?;
         writeln!(
             out,
-            "                       against `vigo://` URLs will fail until the"
+            "                       against `swarmgit://` URLs will fail until the"
         )?;
         writeln!(
             out,

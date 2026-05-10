@@ -203,7 +203,7 @@ pub struct ProjectConfig {
     #[serde(default = "default_version")]
     pub version: u32,
     /// Hex-encoded `sha256(founder_puddle_pubkey)`. Matches the parent
-    /// directory name and the URL: `vigo://<project_id>/<handle>`.
+    /// directory name and the URL: `swarmgit://<project_id>/<handle>`.
     pub project_id: String,
     /// Human-readable project handle, operator-chosen at `project init`.
     /// Free-form (no uniqueness guarantee — the cryptographic identity

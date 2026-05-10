@@ -38,7 +38,7 @@ systemctl daemon-reload
 
 echo "Removing agent binaries (current + legacy)..."
 rm -f /usr/local/sbin/vigo
-rm -f /usr/local/bin/git-remote-vigo
+rm -f /usr/local/bin/git-remote-swarmgit
 rm -f /usr/local/bin/isogov-agent
 
 echo "Removing agent data (/etc/vigo-envoy)..."

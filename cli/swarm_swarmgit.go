@@ -21,7 +21,7 @@ import (
 // `GET /api/v1/swarm/swarmgit/fleet`.
 //
 // Post-ADR-015 the model is project-id-keyed (every project is
-// `vigo://<project_id>/<handle>` with `project_id =
+// `swarmgit://<project_id>/<handle>` with `project_id =
 // sha256(founder_puddle_pubkey)`). Membership is a stack of capability
 // tokens; the legacy publisher/receiver distinction is gone.
 //
@@ -87,7 +87,7 @@ var swarmgitCmd = &cobra.Command{
 	Long: `Read-only admin view of the unified-substrate swarmgit mesh
 (ADR-015). Each project is identified by
 project_id = sha256(founder_puddle_pubkey) and accessed via
-vigo://<project_id>/<handle>. Membership is a stack of Ed25519
+swarmgit://<project_id>/<handle>. Membership is a stack of Ed25519
 capability tokens.
 
 Use the envoy-side 'vigo swarm swarmgit project ...' verbs to
@@ -224,7 +224,7 @@ func runSwarmgitShow(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Project:        %s\n", bold(match.Handle))
-	fmt.Printf("URL:            vigo://%s/%s\n", match.ProjectID, match.Handle)
+	fmt.Printf("URL:            swarmgit://%s/%s\n", match.ProjectID, match.Handle)
 	fmt.Printf("Project ID:     %s\n", match.ProjectID)
 	fmt.Printf("Founder puddle: ed25519:%s\n", match.FounderPuddlePubkey)
 	fmt.Printf("Scope:          %s\n", match.DrScope)

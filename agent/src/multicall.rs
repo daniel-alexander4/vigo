@@ -6,9 +6,9 @@
 //! The `vigo` agent binary ships as a multi-call binary: when invoked
 //! under a different argv[0] (typically via a symlink), it switches
 //! into a different mode without having to maintain a second
-//! executable. ADR-015 introduces this for `git-remote-vigo` — git's
+//! executable. ADR-015 introduces this for `git-remote-swarmgit` — git's
 //! remote-helper protocol needs an executable named exactly that to
-//! handle `vigo://` URLs.
+//! handle `swarmgit://` URLs.
 //!
 //! Dispatch is the **very first thing** main() runs, before any clap
 //! parsing, before any logger setup. Two failure modes the ADR
@@ -16,11 +16,11 @@
 //!
 //! 1. The check has to live ahead of any code that would reject
 //!    "unknown" arguments — git invokes us as
-//!    `git-remote-vigo <remote-name> <url>`, which would not survive
+//!    `git-remote-swarmgit <remote-name> <url>`, which would not survive
 //!    the regular CLI parser.
 //! 2. The argv[0] inspection has to canonicalize: strip directory
 //!    prefix, strip `.exe` suffix on Windows-built binaries, then
-//!    match against an explicit table. A blanket `contains("git-remote-vigo")`
+//!    match against an explicit table. A blanket `contains("git-remote-swarmgit")`
 //!    would be both too permissive and too brittle.
 //!
 //! ADR-015 step 4 wired the real body in
@@ -40,9 +40,9 @@ use std::path::Path;
 /// `vigo-*` invocations — the caller falls through to clap parsing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MulticallMode {
-    /// `git-remote-vigo` — git remote helper for `vigo://` URLs.
+    /// `git-remote-swarmgit` — git remote helper for `swarmgit://` URLs.
     /// Bound to ADR-015's git transport layer.
-    GitRemoteVigo,
+    GitRemoteSwarmgit,
 }
 
 /// Inspect argv[0] and decide whether we're being invoked under a
@@ -50,8 +50,8 @@ pub enum MulticallMode {
 /// or `None` for normal CLI dispatch.
 ///
 /// Canonicalization:
-/// - Strip directory components (`/usr/local/bin/git-remote-vigo` →
-///   `git-remote-vigo`).
+/// - Strip directory components (`/usr/local/bin/git-remote-swarmgit` →
+///   `git-remote-swarmgit`).
 /// - Strip a `.exe` suffix (Windows builds — Phase 1 of ADR-015 is
 ///   Linux + macOS, but the dispatch shape stays consistent).
 /// - Lowercase the result for case-insensitive matching on macOS HFS+
@@ -83,7 +83,7 @@ pub fn classify_argv0(argv0: &OsStr) -> Option<MulticallMode> {
 fn classify_basename(basename: &str) -> Option<MulticallMode> {
     let stripped = basename.strip_suffix(".exe").unwrap_or(basename);
     match stripped.to_ascii_lowercase().as_str() {
-        "git-remote-vigo" => Some(MulticallMode::GitRemoteVigo),
+        "git-remote-swarmgit" => Some(MulticallMode::GitRemoteSwarmgit),
         _ => None,
     }
 }
@@ -91,7 +91,7 @@ fn classify_basename(basename: &str) -> Option<MulticallMode> {
 /// Dispatch entry point. Runs the git remote-helper protocol loop
 /// and exits when the tunnel closes (or the daemon refuses). Always
 /// terminates the process — never returns.
-pub fn run_git_remote_vigo(args: Vec<String>) -> ! {
+pub fn run_git_remote_swarmgit(args: Vec<String>) -> ! {
     crate::swarm::swarmgit::remote_helper::run(args);
 }
 
@@ -107,28 +107,28 @@ mod tests {
     #[test]
     fn plain_basename_matches() {
         assert_eq!(
-            classify_argv0(&os("git-remote-vigo")),
-            Some(MulticallMode::GitRemoteVigo)
+            classify_argv0(&os("git-remote-swarmgit")),
+            Some(MulticallMode::GitRemoteSwarmgit)
         );
     }
 
     #[test]
     fn absolute_path_strips_dirs() {
         assert_eq!(
-            classify_argv0(&os("/usr/local/bin/git-remote-vigo")),
-            Some(MulticallMode::GitRemoteVigo)
+            classify_argv0(&os("/usr/local/bin/git-remote-swarmgit")),
+            Some(MulticallMode::GitRemoteSwarmgit)
         );
     }
 
     #[test]
     fn relative_path_strips_dirs() {
         assert_eq!(
-            classify_argv0(&os("./git-remote-vigo")),
-            Some(MulticallMode::GitRemoteVigo)
+            classify_argv0(&os("./git-remote-swarmgit")),
+            Some(MulticallMode::GitRemoteSwarmgit)
         );
         assert_eq!(
-            classify_argv0(&os("../bin/git-remote-vigo")),
-            Some(MulticallMode::GitRemoteVigo)
+            classify_argv0(&os("../bin/git-remote-swarmgit")),
+            Some(MulticallMode::GitRemoteSwarmgit)
         );
     }
 
@@ -139,12 +139,12 @@ mod tests {
         // already handles it so when the Windows port lands we
         // don't have to revisit this.
         assert_eq!(
-            classify_argv0(&os("git-remote-vigo.exe")),
-            Some(MulticallMode::GitRemoteVigo)
+            classify_argv0(&os("git-remote-swarmgit.exe")),
+            Some(MulticallMode::GitRemoteSwarmgit)
         );
         assert_eq!(
-            classify_argv0(&os("C:\\Program Files\\Vigo\\git-remote-vigo.exe")),
-            Some(MulticallMode::GitRemoteVigo)
+            classify_argv0(&os("C:\\Program Files\\Vigo\\git-remote-swarmgit.exe")),
+            Some(MulticallMode::GitRemoteSwarmgit)
         );
     }
 
@@ -154,11 +154,11 @@ mod tests {
         // whatever case the caller used in their PATH lookup.
         assert_eq!(
             classify_argv0(&os("Git-Remote-Vigo")),
-            Some(MulticallMode::GitRemoteVigo)
+            Some(MulticallMode::GitRemoteSwarmgit)
         );
         assert_eq!(
             classify_argv0(&os("GIT-REMOTE-VIGO")),
-            Some(MulticallMode::GitRemoteVigo)
+            Some(MulticallMode::GitRemoteSwarmgit)
         );
     }
 
@@ -172,8 +172,8 @@ mod tests {
     #[test]
     fn rejects_partial_matches() {
         // No `contains()` heuristic — must match exactly.
-        assert_eq!(classify_argv0(&os("git-remote-vigo-something")), None);
-        assert_eq!(classify_argv0(&os("xgit-remote-vigo")), None);
+        assert_eq!(classify_argv0(&os("git-remote-swarmgit-something")), None);
+        assert_eq!(classify_argv0(&os("xgit-remote-swarmgit")), None);
         assert_eq!(classify_argv0(&os("git-remote")), None);
         assert_eq!(classify_argv0(&os("git-remote-foo")), None);
     }

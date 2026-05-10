@@ -103,7 +103,7 @@
   <text x="418" y="357" font-size="10" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#44337a">project init  join  leave</text>
   <text x="418" y="371" font-size="10" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" fill="#44337a">invite  revoke  list  status  reanchor</text>
 
-  <text x="418" y="394" font-size="9" font-style="italic" fill="#553c9a">Content: standard git over vigo://&lt;project_id&gt;/...</text>
+  <text x="418" y="394" font-size="9" font-style="italic" fill="#553c9a">Content: standard git over swarmgit://&lt;project_id&gt;/...</text>
 
   <!-- ===== Other subsystems (orthogonal to puddle) ===== -->
   <rect x="40" y="446" width="720" height="92" rx="10" fill="url(#otherBodyGrad)" stroke="#718096" stroke-width="1.5" filter="url(#shadow)"/>

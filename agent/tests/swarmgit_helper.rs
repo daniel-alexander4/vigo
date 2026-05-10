@@ -6,7 +6,7 @@
 //! Spawns the daemon on a per-test temp Unix socket (override via
 //! `VIGO_SWARMGIT_SOCKET_PATH`), generates a self-contained puddle
 //! keypair and bootstrap token chain, and runs `git push` + `git
-//! clone` against a temp bare repo via `vigo://` URLs. The whole
+//! clone` against a temp bare repo via `swarmgit://` URLs. The whole
 //! round-trip finishes in well under a second on a working build.
 //!
 //! The 0.41.7-18 AF_UNIX `unix_stream_data_wait` wakeup-race regression
@@ -68,7 +68,7 @@ async fn helper_daemon_push_and_clone_roundtrip() {
     .unwrap();
 
     // Process-global env so both the in-process daemon and the
-    // child `git-remote-vigo` (spawned by `git`) pick up the
+    // child `git-remote-swarmgit` (spawned by `git`) pick up the
     // override paths.
     std::env::set_var("VIGO_SWARMGIT_SOCKET_PATH", &sock);
     std::env::set_var("VIGO_SWARMGIT_DIR", &base);
@@ -122,12 +122,12 @@ async fn helper_daemon_push_and_clone_roundtrip() {
         tokio::time::sleep(Duration::from_millis(20)).await;
     }
 
-    // Symlink the test binary as `git-remote-vigo` so git's transport
+    // Symlink the test binary as `git-remote-swarmgit` so git's transport
     // dispatch finds the multicall handler. CARGO_BIN_EXE_vigo is set
     // by Cargo for integration tests in a crate that builds a binary.
     let target = env!("CARGO_BIN_EXE_vigo");
-    let link = bin_dir.join("git-remote-vigo");
-    std::os::unix::fs::symlink(target, &link).expect("symlink git-remote-vigo");
+    let link = bin_dir.join("git-remote-swarmgit");
+    std::os::unix::fs::symlink(target, &link).expect("symlink git-remote-swarmgit");
     let path = format!(
         "{}:{}",
         bin_dir.display(),
@@ -142,7 +142,7 @@ async fn helper_daemon_push_and_clone_roundtrip() {
     git_must(&src_repo, &["add", "c1.txt"], &path);
     git_must(&src_repo, &["commit", "-qm", "c1"], &path);
 
-    let url = format!("vigo://{}/test-project", hex_id(&project_id));
+    let url = format!("swarmgit://{}/test-project", hex_id(&project_id));
 
     // Push. With the AF_UNIX wakeup-race active, this hangs > 30s.
     let push = run_with_timeout(

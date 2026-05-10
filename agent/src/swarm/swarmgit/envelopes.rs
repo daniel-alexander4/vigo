@@ -67,15 +67,15 @@ use super::tokens::{ID_LEN, SIG_LEN};
 /// Domain prefix for canonical bytes signed in a REVOKE envelope.
 /// Distinct from [`super::tokens::TOKEN_DOMAIN`] and [`LEAVE_DOMAIN`]
 /// so a signature over one shape can never be mistaken for another.
-pub const REVOKE_DOMAIN: &[u8] = b"vigo-swarmgit-revoke-v1\0";
+pub const REVOKE_DOMAIN: &[u8] = b"swarmgit-revoke-v2\0";
 
 /// Domain prefix for canonical bytes signed in a LEAVE envelope.
-pub const LEAVE_DOMAIN: &[u8] = b"vigo-swarmgit-leave-v1\0";
+pub const LEAVE_DOMAIN: &[u8] = b"swarmgit-leave-v2\0";
 
 /// Domain prefix for canonical bytes signed in a DELEGATION envelope
 /// (ADR-019). Distinct from every other domain so a delegation
 /// signature can never be replayed as a different envelope type.
-pub const DELEGATION_DOMAIN: &[u8] = b"vigo-swarmgit-delegate-v1\0";
+pub const DELEGATION_DOMAIN: &[u8] = b"swarmgit-delegate-v2\0";
 
 /// Compile-time fallback reap window — 90 days, matching lockbox's
 /// tombstone + leave retention. Read sites should prefer
@@ -444,7 +444,7 @@ impl LeaveEnvelope {
 ///   already gates puddle membership; swarmgit inherits that trust.
 /// - **Multi-puddle case** (project members in foreign puddles): a
 ///   delegation becomes authoritative for member F only after F runs
-///   `swarmgit project rejoin <vigo://...> <code>` with a fresh
+///   `swarmgit project rejoin <swarmgit://...> <code>` with a fresh
 ///   capability code from the founder over an out-of-band channel
 ///   — same trust hop as the original `project invite`/`join`.
 ///
