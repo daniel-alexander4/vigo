@@ -288,3 +288,29 @@ func TestBuildSecurityCached_NoScanData(t *testing.T) {
 		t.Errorf("empty traits should yield an empty summary, got %+v", got)
 	}
 }
+
+func TestBuildSecurityCached_RootkitScannersAreSeparate(t *testing.T) {
+	// Only chkrootkit reported, and it's not clean.
+	got := buildSecurityCached(map[string]string{
+		"security_scan.chkrootkit.clean":    "false",
+		"security_scan.chkrootkit.infected": "2",
+	})
+	if got.Chkrootkit == nil || got.Chkrootkit.Clean || got.Chkrootkit.Issues != 2 {
+		t.Errorf("Chkrootkit = %+v, want {Clean:false Issues:2}", got.Chkrootkit)
+	}
+	if got.Rkhunter != nil {
+		t.Errorf("Rkhunter should be nil when rkhunter didn't report, got %+v", got.Rkhunter)
+	}
+
+	// Only rkhunter reported, clean (absent value treated as clean).
+	got = buildSecurityCached(map[string]string{
+		"security_scan.rkhunter.clean":    "true",
+		"security_scan.rkhunter.warnings": "0",
+	})
+	if got.Rkhunter == nil || !got.Rkhunter.Clean || got.Rkhunter.Issues != 0 {
+		t.Errorf("Rkhunter = %+v, want {Clean:true Issues:0}", got.Rkhunter)
+	}
+	if got.Chkrootkit != nil {
+		t.Errorf("Chkrootkit should be nil when chkrootkit didn't report, got %+v", got.Chkrootkit)
+	}
+}

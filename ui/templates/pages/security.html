@@ -332,23 +332,31 @@
         <div class="sec-spinner" aria-hidden="true"></div>
     </div>
 
-    {{/* Count tables behind tabs (reuses .sec-drawer__tabs / .sec-tab /
-         .sec-tab-pane — same CSS + updateActiveTab() JS as the live-detail
-         tab strip). "Unique CVEs" — distinct CVE IDs deduped across every
-         scanner, the same figure the /security per-host table shows — is
-         the canonical one and the first .sec-tab-pane, so it renders by
-         default; Trivy/debsecan are raw per-scanner package-match counts. */}}
-    {{if or .Cached.Unique .Cached.Trivy .Cached.Debsecan}}
+    {{/* Fully tabbed. One .sec-tab-pane per scanner that ran, plus an
+         always-present "Certs" tab. Reuses the .sec-drawer__tabs / .sec-tab /
+         .sec-tab-pane CSS + the updateActiveTab() JS the live-detail tab
+         strip uses — no new CSS/JS. The first pane (the "CVEs" pane when
+         any CVE scanner ran, otherwise the first present scanner) renders
+         by default via .sec-tab-pane:first-of-type. */}}
+    {{$hasCVEs := or .Cached.Unique .Cached.CVEs}}
     <nav class="sec-drawer__tabs" role="tablist">
-        {{if .Cached.Unique}}<a class="sec-tab" href="#sec-pane-cached-unique" role="tab">Unique CVEs</a>{{end}}
+        {{if $hasCVEs}}<a class="sec-tab" href="#sec-pane-cached-cves" role="tab">CVEs</a>{{end}}
         {{if .Cached.Trivy}}<a class="sec-tab" href="#sec-pane-cached-trivy" role="tab">Trivy</a>{{end}}
         {{if .Cached.Debsecan}}<a class="sec-tab" href="#sec-pane-cached-debsecan" role="tab">debsecan</a>{{end}}
+        {{if .Cached.Lynis}}<a class="sec-tab" href="#sec-pane-cached-lynis" role="tab">Lynis</a>{{end}}
+        {{if .Cached.Chkrootkit}}<a class="sec-tab" href="#sec-pane-cached-chkrootkit" role="tab">chkrootkit</a>{{end}}
+        {{if .Cached.Rkhunter}}<a class="sec-tab" href="#sec-pane-cached-rkhunter" role="tab">rkhunter</a>{{end}}
+        {{if .Cached.ClamAV}}<a class="sec-tab" href="#sec-pane-cached-clamav" role="tab">ClamAV</a>{{end}}
+        {{if .Cached.AIDE}}<a class="sec-tab" href="#sec-pane-cached-aide" role="tab">AIDE</a>{{end}}
+        <a class="sec-tab" href="#sec-pane-cached-certs" role="tab">Certs</a>
     </nav>
-    {{end}}
 
-    {{with .Cached.Unique}}
-    <section class="sec-tab-pane" id="sec-pane-cached-unique" role="tabpanel">
-        <p class="text-muted" style="font-size:11px;margin:8px 0 4px;">Distinct CVE IDs, deduplicated across all scanners.</p>
+    {{/* ── CVEs ── unique count (the figure the /security per-host table
+         shows) + the unified cross-scanner CVE list (capped at MAX_CVES). */}}
+    {{if $hasCVEs}}
+    <section class="sec-tab-pane" id="sec-pane-cached-cves" role="tabpanel">
+        {{with .Cached.Unique}}
+        <p class="text-muted" style="font-size:11px;margin:0 0 4px;">Distinct CVE IDs, deduplicated across all scanners.</p>
         <table class="security-drift-table">
             <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th></tr></thead>
             <tbody><tr>
@@ -359,11 +367,34 @@
                 <td>{{.Total}}</td>
             </tr></tbody>
         </table>
+        {{end}}
+        {{if .Cached.CVEs}}
+        <h4 style="margin-top:12px;">{{if .Cached.Unique}}{{.Cached.Unique.Total}}{{else}}{{len .Cached.CVEs}}{{end}} unique CVE{{if ne (len .Cached.CVEs) 1}}s{{end}}{{if .Cached.CVEsTruncated}} — showing first {{len .Cached.CVEs}}{{end}}</h4>
+        {{range .Cached.CVEs}}
+        <div class="sec-card {{secSeverityClass .Severity}}">
+            <div class="sec-card__header">
+                <a href="{{cveURL .ID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.ID}}</a>
+                <span class="sec-card__sev">{{.Severity}}</span>
+            </div>
+            {{if gt .Packages 1}}<div class="sec-card__body"><span class="text-muted">({{.Packages}} packages)</span></div>{{end}}
+            {{if .Title}}<div class="sec-card__desc">{{.Title}}</div>{{end}}
+            <div class="sec-card__actions">
+                <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{cachedCVEAIQ $.Hostname .}}">Ask AI</button>
+            </div>
+        </div>
+        {{end}}
+        {{else}}
+        <p class="text-muted" style="margin-top:8px;">No CVEs reported.</p>
+        {{end}}
     </section>
     {{end}}
+
+    {{/* ── Trivy / debsecan ── raw per-package match counts (a CVE in N
+         packages counts N times; the cross-scanner deduped figure is in
+         the CVEs tab). ── */}}
     {{with .Cached.Trivy}}
     <section class="sec-tab-pane" id="sec-pane-cached-trivy" role="tabpanel">
-        <p class="text-muted" style="font-size:11px;margin:8px 0 4px;">Trivy — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
+        <p class="text-muted" style="font-size:11px;margin:0 0 4px;">Trivy — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
         <table class="security-drift-table">
             <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th></tr></thead>
             <tbody><tr>
@@ -377,7 +408,7 @@
     {{end}}
     {{with .Cached.Debsecan}}
     <section class="sec-tab-pane" id="sec-pane-cached-debsecan" role="tabpanel">
-        <p class="text-muted" style="font-size:11px;margin:8px 0 4px;">debsecan (Debian security tracker) — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
+        <p class="text-muted" style="font-size:11px;margin:0 0 4px;">debsecan (Debian security tracker) — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
         <table class="security-drift-table">
             <thead><tr><th>High</th><th>Medium</th><th>Low</th><th>Unassigned</th></tr></thead>
             <tbody><tr>
@@ -390,81 +421,111 @@
     </section>
     {{end}}
 
-    {{if .Cached.CVEs}}
-    <h4>CVEs ({{if .Cached.Unique}}{{.Cached.Unique.Total}}{{else}}{{len .Cached.CVEs}}{{end}} unique{{if .Cached.CVEsTruncated}}, showing first {{len .Cached.CVEs}}{{end}})</h4>
-    {{range .Cached.CVEs}}
-    <div class="sec-card {{secSeverityClass .Severity}}">
-        <div class="sec-card__header">
-            <a href="{{cveURL .ID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.ID}}</a>
-            <span class="sec-card__sev">{{.Severity}}</span>
-        </div>
-        {{if gt .Packages 1}}<div class="sec-card__body"><span class="text-muted">({{.Packages}} packages)</span></div>{{end}}
-        {{if .Title}}<div class="sec-card__desc">{{.Title}}</div>{{end}}
-        <div class="sec-card__actions">
-            <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{cachedCVEAIQ $.Hostname .}}">Ask AI</button>
-        </div>
-    </div>
-    {{end}}
-    {{end}}
-
+    {{/* ── Lynis ── */}}
     {{with .Cached.Lynis}}
     {{$clean := eq .Warnings 0}}
-    <div class="sec-card {{if $clean}}sec-card--info{{else}}sec-card--high{{end}}">
-        <div class="sec-card__header">
-            <span class="sec-card__cve">Lynis Hardening</span>
-            <span class="sec-card__sev">Score: {{.Score}}/100</span>
+    <section class="sec-tab-pane" id="sec-pane-cached-lynis" role="tabpanel">
+        <div class="sec-card {{if $clean}}sec-card--info{{else}}sec-card--high{{end}}">
+            <div class="sec-card__header">
+                <span class="sec-card__cve">Lynis Hardening</span>
+                <span class="sec-card__sev">Score: {{.Score}}/100</span>
+            </div>
+            <div class="sec-card__body">Warnings: {{.Warnings}} &middot; Suggestions: {{.Suggestions}}</div>
+            <div class="sec-card__actions">
+                <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "lynis-summary: %d/100, %d warnings, %d suggestions" .Score .Warnings .Suggestions)}}">Ask AI</button>
+            </div>
         </div>
-        <div class="sec-card__body">Warnings: {{.Warnings}} &middot; Suggestions: {{.Suggestions}}</div>
-        <div class="sec-card__actions">
-            <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "lynis-summary: %d/100, %d warnings, %d suggestions" .Score .Warnings .Suggestions)}}">Ask AI</button>
-        </div>
-    </div>
+    </section>
     {{end}}
 
-    {{with .Cached.Rootkit}}
-    {{$clean := and .ChkrootkitClean .RkhunterClean}}
-    {{$ck := "clean"}}{{if not .ChkrootkitClean}}{{$ck = "warning"}}{{end}}
-    {{$rk := "clean"}}{{if not .RkhunterClean}}{{$rk = "warning"}}{{end}}
-    <div class="sec-card {{if $clean}}sec-card--info{{else}}sec-card--critical{{end}}">
-        <div class="sec-card__header">
-            <span class="sec-card__cve">Rootkit Detection</span>
-            <span class="sec-card__sev">{{if $clean}}Clean{{else}}Warning{{end}}</span>
+    {{/* ── chkrootkit ── */}}
+    {{with .Cached.Chkrootkit}}
+    {{$st := "clean"}}{{if not .Clean}}{{$st = "infected"}}{{end}}
+    <section class="sec-tab-pane" id="sec-pane-cached-chkrootkit" role="tabpanel">
+        <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--critical{{end}}">
+            <div class="sec-card__header">
+                <span class="sec-card__cve">chkrootkit</span>
+                <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Infected{{end}}</span>
+            </div>
+            {{if not .Clean}}<div class="sec-card__body text-danger">{{.Issues}} suspicious finding{{if ne .Issues 1}}s{{end}}</div>{{end}}
+            <div class="sec-card__actions">
+                <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "chkrootkit-summary: %s, %d findings" $st .Issues)}}">Ask AI</button>
+            </div>
         </div>
-        <div class="sec-card__body">
-            chkrootkit: {{if .ChkrootkitClean}}clean{{else}}<strong class="text-danger">infected</strong>{{end}} &middot;
-            rkhunter: {{if .RkhunterClean}}clean{{else}}<strong class="text-danger">warning</strong>{{end}}
-        </div>
-        <div class="sec-card__actions">
-            <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "rootkit-summary: chkrootkit %s, rkhunter %s" $ck $rk)}}">Ask AI</button>
-        </div>
-    </div>
+    </section>
     {{end}}
 
+    {{/* ── rkhunter ── */}}
+    {{with .Cached.Rkhunter}}
+    {{$st := "clean"}}{{if not .Clean}}{{$st = "warning"}}{{end}}
+    <section class="sec-tab-pane" id="sec-pane-cached-rkhunter" role="tabpanel">
+        <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--high{{end}}">
+            <div class="sec-card__header">
+                <span class="sec-card__cve">rkhunter</span>
+                <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Warning{{end}}</span>
+            </div>
+            {{if not .Clean}}<div class="sec-card__body">{{.Issues}} warning{{if ne .Issues 1}}s{{end}}</div>{{end}}
+            <div class="sec-card__actions">
+                <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "rkhunter-summary: %s, %d warnings" $st .Issues)}}">Ask AI</button>
+            </div>
+        </div>
+    </section>
+    {{end}}
+
+    {{/* ── ClamAV ── */}}
     {{with .Cached.ClamAV}}
-    <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--critical{{end}}">
-        <div class="sec-card__header">
-            <span class="sec-card__cve">ClamAV Malware Scan</span>
-            <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Infected{{end}}</span>
+    <section class="sec-tab-pane" id="sec-pane-cached-clamav" role="tabpanel">
+        <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--critical{{end}}">
+            <div class="sec-card__header">
+                <span class="sec-card__cve">ClamAV Malware Scan</span>
+                <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Infected{{end}}</span>
+            </div>
+            {{if not .Clean}}<div class="sec-card__body text-danger">{{.Infected}} infected file{{if ne .Infected 1}}s{{end}}</div>{{end}}
+            <div class="sec-card__actions">
+                <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "clamav-summary: %d infected" .Infected)}}">Ask AI</button>
+            </div>
         </div>
-        {{if not .Clean}}<div class="sec-card__body text-danger">{{.Infected}} infected file(s)</div>{{end}}
-        <div class="sec-card__actions">
-            <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "clamav-summary: %d infected" .Infected)}}">Ask AI</button>
-        </div>
-    </div>
+    </section>
     {{end}}
 
+    {{/* ── AIDE ── */}}
     {{with .Cached.AIDE}}
-    <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--high{{end}}">
-        <div class="sec-card__header">
-            <span class="sec-card__cve">AIDE File Integrity</span>
-            <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Changed{{end}}</span>
+    <section class="sec-tab-pane" id="sec-pane-cached-aide" role="tabpanel">
+        <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--high{{end}}">
+            <div class="sec-card__header">
+                <span class="sec-card__cve">AIDE File Integrity</span>
+                <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Changed{{end}}</span>
+            </div>
+            {{if not .Clean}}<div class="sec-card__body">Added: {{.Added}} &middot; Removed: {{.Removed}} &middot; Changed: {{.Changed}}</div>{{end}}
+            <div class="sec-card__actions">
+                <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "aide-summary: %d added, %d removed, %d changed" .Added .Removed .Changed)}}">Ask AI</button>
+            </div>
         </div>
-        {{if not .Clean}}<div class="sec-card__body">Added: {{.Added}} &middot; Removed: {{.Removed}} &middot; Changed: {{.Changed}}</div>{{end}}
-        <div class="sec-card__actions">
-            <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "aide-summary: %d added, %d removed, %d changed" .Added .Removed .Changed)}}">Ask AI</button>
-        </div>
-    </div>
+    </section>
     {{end}}
+
+    {{/* ── Certs ── this host's certificates expiring or expired within
+         30 days (the same scope as /security's cert panel). Always present. */}}
+    <section class="sec-tab-pane" id="sec-pane-cached-certs" role="tabpanel">
+        {{if .Certs}}
+        <p class="text-muted" style="font-size:11px;margin:0 0 4px;">{{len .Certs}} certificate{{if ne (len .Certs) 1}}s{{end}} expiring or expired within 30 days.</p>
+        <table class="security-drift-table">
+            <thead><tr><th>Certificate</th><th>Days left</th><th>Expires</th><th>Issuer</th></tr></thead>
+            <tbody>
+            {{range .Certs}}
+            <tr>
+                <td>{{if .CN}}{{.CN}}{{else}}<span class="text-muted mono">{{.Path}}</span>{{end}}{{if .IsCA}} <span class="text-muted">(CA)</span>{{end}}</td>
+                <td class="{{if lt .DaysRemaining 0}}text-danger{{else if lt .DaysRemaining 7}}text-warning{{end}}">{{if lt .DaysRemaining 0}}expired{{else}}{{.DaysRemaining}}{{end}}</td>
+                <td>{{.NotAfter}}</td>
+                <td class="text-muted">{{.Issuer}}</td>
+            </tr>
+            {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <p class="text-success" style="margin-top:8px;">No certificates expiring within 30 days.</p>
+        {{end}}
+    </section>
 </div>
 {{end}}
 

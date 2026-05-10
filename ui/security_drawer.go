@@ -23,23 +23,24 @@ import (
 // SecurityDrawerCached is the server-rendered summary the operator sees
 // instantly when the security drawer opens. Everything here is sourced from
 // the envoy's last check-in traits via FleetIndex — no agent query required.
+// Each non-nil scanner field becomes a tab in the drawer.
 type SecurityDrawerCached struct {
 	// Unique is the canonical per-host CVE count — distinct CVE IDs per
-	// severity, deduplicated across every scanner that ran. This is the
-	// same number the /security per-host table shows; the drawer leads
-	// with it so the two surfaces agree.
+	// severity, deduplicated across every scanner that ran. Same numbers
+	// the /security per-host table shows; rendered atop the CVEs tab.
 	Unique *UniqueCVECounts
 	// Trivy / Debsecan are raw per-scanner package-match counts (a CVE in
-	// N packages counts N times; the scanners aren't cross-deduped). They
-	// run larger than Unique by that multiplicity, and debsecan floods the
-	// low tier — shown in the drawer as scanner diagnostics, never aggregated.
-	Trivy    *TrivyCached
-	Debsecan *DebsecanCached
-	Lynis    *LynisCached
-	Rootkit  *RootkitCached
-	ClamAV   *ClamAVCached
-	AIDE     *AIDECached
-	CVEs     []CachedCVE
+	// N packages counts N times; the scanners aren't cross-deduped) — run
+	// larger than Unique by that multiplicity; shown as scanner-diagnostic
+	// tabs, never aggregated.
+	Trivy      *TrivyCached
+	Debsecan   *DebsecanCached
+	Lynis      *LynisCached
+	Chkrootkit *RootkitScannerCached // nil when chkrootkit didn't report
+	Rkhunter   *RootkitScannerCached // nil when rkhunter didn't report
+	ClamAV     *ClamAVCached
+	AIDE       *AIDECached
+	CVEs       []CachedCVE
 	// CVEsTruncated is true when the agent's MAX_CVES wire cap dropped
 	// entries — len(CVEs) is then less than Unique.Total(). The count in
 	// Unique stays exact; only the listed CVEs are the top-N by severity.
@@ -76,10 +77,13 @@ type LynisCached struct {
 	Suggestions int
 }
 
-type RootkitCached struct {
-	ChkrootkitClean bool
-	RkhunterClean   bool
-	BothPresent     bool // one of the two scanners reported at all
+// RootkitScannerCached is one rootkit scanner's summary (chkrootkit or
+// rkhunter). Issues is that scanner's count of suspicious findings —
+// chkrootkit reports it as "infected", rkhunter as "warnings"; non-zero
+// when not clean.
+type RootkitScannerCached struct {
+	Clean  bool
+	Issues int
 }
 
 type ClamAVCached struct {
@@ -233,6 +237,11 @@ type SecurityDrawerData struct {
 	Live     bool                  // true when live-dispatch completed successfully
 	Timeout  int                   // seconds; exposed to the template for the spinner hint
 	Cached   SecurityDrawerCached
+	// Certs are this host's certificates expiring or expired within 30 days
+	// (via DataSource.EnvoyCertDetails) — feeds the always-present "Certs"
+	// tab in the cached summary. Empty means none expiring; the live-detail
+	// view ignores this field.
+	Certs    []CertDetail
 	Detail   *SecurityScanDetail   // only populated on Live=true
 	Error    string                // set when dispatch timed out or the envoy was offline
 	// RkhunterRows / ChkrootkitRows are normalized versions of Detail's
@@ -279,6 +288,10 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 		Cached:   buildSecurityCached(flat),
 		Timeout:  securityLiveTimeoutSec,
 	}
+	// Certs aren't part of the security_scan trait — pull this host's
+	// expiring/expired certs separately for the always-present Certs tab.
+	// nil (no cert_lifecycle rows / none expiring) → the tab shows "none".
+	data.Certs, _, _ = h.dataSource.EnvoyCertDetails(envoyID, "")
 
 	if r.URL.Query().Get("live") == "true" {
 		if h.traitQuery == nil {
@@ -464,13 +477,16 @@ func buildSecurityCached(flat map[string]string) SecurityDrawerCached {
 			Suggestions: getInt(traits.LynisSuggestions),
 		}
 	}
-	if has(traits.ChkrootkitClean) || has(traits.RkhunterClean) {
-		rc := flat[traits.ChkrootkitClean]
-		rh := flat[traits.RkhunterClean]
-		out.Rootkit = &RootkitCached{
-			BothPresent:     true,
-			ChkrootkitClean: rc == "" || rc == "true",
-			RkhunterClean:   rh == "" || rh == "true",
+	if has(traits.ChkrootkitClean) {
+		out.Chkrootkit = &RootkitScannerCached{
+			Clean:  flat[traits.ChkrootkitClean] != "false",
+			Issues: getInt(traits.ChkrootkitInfected),
+		}
+	}
+	if has(traits.RkhunterClean) {
+		out.Rkhunter = &RootkitScannerCached{
+			Clean:  flat[traits.RkhunterClean] != "false",
+			Issues: getInt(traits.RkhunterWarnings),
 		}
 	}
 	if has(traits.ClamavClean) {
