@@ -4,7 +4,7 @@
 //! `vigo swarm swarmgit project <verb>` — ADR-015 unified-substrate CLI.
 //!
 //! ```text
-//! vigo swarm swarmgit project init <handle> [--fanout fleet-wide|members-only]
+//! vigo swarm swarmgit project init <handle> [--scope swarm-wide|members-only]
 //! vigo swarm swarmgit project invite <project_id> --puddle <fp> --role <r> [--expires <Nd>]
 //! vigo swarm swarmgit project join <project_id> [--invitation <file|->]
 //! vigo swarm swarmgit project leave <project_id> [--purge] [--yes]
@@ -38,7 +38,7 @@ use super::envelopes::DelegationEnvelope;
 use super::helper::socket_path as helper_socket_path;
 use super::project_state::{
     self, hex_id, parse_hex_id, project_repo_path, projects_dir, purge_user_state,
-    DelegationChain, DrFanout, ProjectConfig, TokenChain,
+    DelegationChain, DrScope, ProjectConfig, TokenChain,
 };
 use super::state::{traits_snapshot_path, unix_seconds_now, TraitsSnapshot};
 use super::tokens::{
@@ -175,7 +175,7 @@ USAGE:
     vigo swarm swarmgit project <verb> [args]
 
 VERBS:
-    init <handle> [--fanout fleet-wide|members-only]
+    init <handle> [--scope swarm-wide|members-only]
         Found a new project. Puddle must be unlocked. Prints the
         canonical project URL `vigo://<project_id>/<handle>`.
 
@@ -426,15 +426,18 @@ fn refuse_if_tombstoned(cfg: &ProjectConfig, verb: &str) -> Result<()> {
 
 fn cmd_init(args: &[String]) -> Result<()> {
     let mut handle: Option<String> = None;
-    let mut fanout = DrFanout::FleetWide;
+    let mut scope = DrScope::SwarmWide;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
-            "--fanout" => {
+            "--scope" => {
                 i += 1;
-                let v = args.get(i).context("--fanout requires a value")?;
-                fanout = v.parse()?;
+                let v = args.get(i).context("--scope requires a value")?;
+                scope = v.parse()?;
             }
+            "--fanout" => bail!(
+                "--fanout was renamed to --scope (and its 'fleet-wide' value to 'swarm-wide') in 0.41.32"
+            ),
             other if !other.starts_with('-') && handle.is_none() => {
                 handle = Some(other.to_string());
             }
@@ -442,7 +445,7 @@ fn cmd_init(args: &[String]) -> Result<()> {
         }
         i += 1;
     }
-    let handle = handle.context("usage: vigo swarm swarmgit project init <handle> [--fanout …]")?;
+    let handle = handle.context("usage: vigo swarm swarmgit project init <handle> [--scope …]")?;
     validate_handle(&handle)?;
 
     let caller = resolve_caller()?;
@@ -489,7 +492,7 @@ fn cmd_init(args: &[String]) -> Result<()> {
         handle: handle.clone(),
         founder_puddle_pubkey: hex_id(&founder_pub),
         members: vec![hex_id(&founder_pub)],
-        dr_fanout: fanout,
+        dr_scope: scope,
         cross_subnet_members: vec![],
         updated_at: now,
         tombstoned_at: None,
@@ -505,7 +508,7 @@ fn cmd_init(args: &[String]) -> Result<()> {
     println!("  URL:        vigo://{}/{}", hex_id(&project_id), handle);
     println!("  Project ID: {}", hex_id(&project_id));
     println!("  Founder:    ed25519:{}", hex_id(&founder_pub));
-    println!("  Fan-out:    {}", fanout.as_str());
+    println!("  Scope:      {}", scope.as_str());
     println!();
     println!("State written to {}", project_state::user_project_dir(&caller.home, &project_id).display());
     println!();
@@ -828,7 +831,7 @@ fn cmd_join(args: &[String]) -> Result<()> {
     println!("  URL:        vigo://{}/{}", invitation.project.project_id, invitation.project.handle);
     println!("  Role:       {:?}", leaf.body.role);
     println!("  Members:    {}", invitation.project.members.len());
-    println!("  Fan-out:    {}", invitation.project.dr_fanout.as_str());
+    println!("  Scope:      {}", invitation.project.dr_scope.as_str());
     if !invitation.delegations.is_empty() {
         println!(
             "  Delegations: {} hop(s) (founder has rekeyed since project init)",
@@ -1181,7 +1184,7 @@ fn cmd_rejoin(args: &[String]) -> Result<()> {
     println!("  URL:        vigo://{}/{}", invitation.project.project_id, invitation.project.handle);
     println!("  Role:       {:?}", leaf.body.role);
     println!("  Members:    {}", invitation.project.members.len());
-    println!("  Fan-out:    {}", invitation.project.dr_fanout.as_str());
+    println!("  Scope:      {}", invitation.project.dr_scope.as_str());
     if !invitation.delegations.is_empty() {
         println!(
             "  Delegations: {} hop(s) (chain anchors to genesis founder ed25519:{:.16}…)",
@@ -1323,7 +1326,7 @@ fn cmd_list(args: &[String]) -> Result<()> {
     }
     println!(
         "{:<24} {:<14} {:<14} {:<8} {}",
-        "HANDLE", "FAN-OUT", "MEMBERS", "TOKENS", "PROJECT_ID"
+        "HANDLE", "SCOPE", "MEMBERS", "TOKENS", "PROJECT_ID"
     );
     for p in &projects {
         let pid = parse_hex_id(&p.project_id).unwrap_or([0u8; ID_LEN]);
@@ -1335,7 +1338,7 @@ fn cmd_list(args: &[String]) -> Result<()> {
         println!(
             "{:<24} {:<14} {:<14} {:<8} {}",
             truncate(&p.handle, 24),
-            p.dr_fanout.as_str(),
+            p.dr_scope.as_str(),
             p.members.len(),
             token_len,
             short_id(&p.project_id),
@@ -1379,7 +1382,7 @@ fn cmd_status(args: &[String]) -> Result<()> {
     println!("URL:               vigo://{}/{}", cfg.project_id, cfg.handle);
     println!("Project ID:        {}", cfg.project_id);
     println!("Founder:           ed25519:{}", cfg.founder_puddle_pubkey);
-    println!("Fan-out:           {}", cfg.dr_fanout.as_str());
+    println!("Scope:             {}", cfg.dr_scope.as_str());
     if let Some(when) = cfg.tombstoned_at {
         println!(
             "TOMBSTONED:        since unix-ts {} — this project_id has been", when
@@ -1681,7 +1684,7 @@ To proceed, type the project handle exactly: {}",
         handle: cfg.handle.clone(),
         founder_puddle_pubkey: hex_id(&new_founder_pub),
         members: vec![hex_id(&new_founder_pub)],
-        dr_fanout: cfg.dr_fanout,
+        dr_scope: cfg.dr_scope,
         cross_subnet_members: cfg.cross_subnet_members.clone(),
         updated_at: now,
         tombstoned_at: None,
@@ -1697,7 +1700,7 @@ To proceed, type the project handle exactly: {}",
     // /var/lib/vigo/swarm/swarmgit/projects/<old_pid>.git is read
     // into the new repo at projects/<new_pid>.git via
     // `git -C <new> fetch <old> +refs/*:refs/*`. Skip cleanly when the
-    // old repo doesn't exist locally (this envoy was a non-fanout
+    // old repo doesn't exist locally (this envoy was a non-replica
     // member that never received the bytes) or when the caller isn't
     // root (the bare repos are 0700 root:root).
     let base = crate::platform::paths::default_swarmgit_dir();
@@ -1932,7 +1935,7 @@ To proceed, type the project handle exactly: {}",
         handle: cfg.handle.clone(),
         founder_puddle_pubkey: hex_id(&local_pub),
         members: vec![hex_id(&local_pub)],
-        dr_fanout: cfg.dr_fanout,
+        dr_scope: cfg.dr_scope,
         cross_subnet_members: cfg.cross_subnet_members.clone(),
         updated_at: now,
         tombstoned_at: None,
@@ -2564,7 +2567,7 @@ mod tests {
                 handle: "vigo-web".to_string(),
                 founder_puddle_pubkey: hex_id(&founder_pub),
                 members: vec![hex_id(&founder_pub), hex_id(&team_pub)],
-                dr_fanout: DrFanout::FleetWide,
+                dr_scope: DrScope::SwarmWide,
                 cross_subnet_members: vec![],
                 updated_at: 1_744_560_000,
                 tombstoned_at: None,

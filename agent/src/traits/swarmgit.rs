@@ -22,7 +22,7 @@
 //!   "handle":               "vigo-web",
 //!   "founder_puddle_pubkey": "<64-hex>",
 //!   "members":              ["<64-hex>", ...],
-//!   "dr_fanout":            "fleet-wide" | "members-only",
+//!   "dr_scope":             "swarm-wide" | "members-only",
 //!   "users_with_state":     ["dan", "alice"],
 //!   "has_bare_repo":        true,
 //!   "bare_repo_size_bytes": 4096,
@@ -72,7 +72,7 @@ pub struct ProjectEntry {
     pub handle: String,
     pub founder_puddle_pubkey: String,
     pub members: Vec<String>,
-    pub dr_fanout: String,
+    pub dr_scope: String,
     pub users_with_state: Vec<String>,
     pub has_bare_repo: bool,
     pub bare_repo_size_bytes: u64,
@@ -209,7 +209,7 @@ pub(crate) fn collect_projects(passwd_body: &str, swarmgit_base: &Path) -> Vec<P
             handle: std::mem::take(&mut acc.handle),
             founder_puddle_pubkey: std::mem::take(&mut acc.founder_puddle_pubkey),
             members: std::mem::take(&mut acc.members),
-            dr_fanout: std::mem::take(&mut acc.dr_fanout),
+            dr_scope: std::mem::take(&mut acc.dr_scope),
             users_with_state,
             has_bare_repo,
             bare_repo_size_bytes,
@@ -231,7 +231,7 @@ struct ProjectAccumulator {
     handle: String,
     founder_puddle_pubkey: String,
     members: Vec<String>,
-    dr_fanout: String,
+    dr_scope: String,
     users: BTreeSet<String>,
     leaf_role: Option<String>,
     token_chain_depth: usize,
@@ -244,7 +244,7 @@ impl ProjectAccumulator {
             handle: cfg.handle,
             founder_puddle_pubkey: cfg.founder_puddle_pubkey,
             members: cfg.members,
-            dr_fanout: cfg.dr_fanout.as_str().to_string(),
+            dr_scope: cfg.dr_scope.as_str().to_string(),
             users: BTreeSet::new(),
             leaf_role: None,
             token_chain_depth: 0,
@@ -323,7 +323,7 @@ fn unix_seconds_now() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::swarm::swarmgit::project_state::DrFanout;
+    use crate::swarm::swarmgit::project_state::DrScope;
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
     use tempfile::tempdir;
@@ -349,7 +349,7 @@ mod tests {
             handle: handle.to_string(),
             founder_puddle_pubkey: hex::encode(pub_bytes(&founder)),
             members: vec![hex::encode(pub_bytes(&founder))],
-            dr_fanout: DrFanout::FleetWide,
+            dr_scope: DrScope::SwarmWide,
             cross_subnet_members: vec![],
             updated_at: 1_700_000_000,
             tombstoned_at: None,
@@ -396,7 +396,7 @@ mod tests {
             handle: "team-notes".to_string(),
             founder_puddle_pubkey: hex::encode(pub_bytes(&founder)),
             members: vec![hex::encode(pub_bytes(&founder))],
-            dr_fanout: DrFanout::MembersOnly,
+            dr_scope: DrScope::MembersOnly,
             cross_subnet_members: vec![],
             updated_at: 1_700_000_000,
             tombstoned_at: None,
@@ -414,7 +414,7 @@ mod tests {
         let p = &projects[0];
         assert_eq!(p.handle, "team-notes");
         assert_eq!(p.users_with_state, vec!["alice", "dan"]);
-        assert_eq!(p.dr_fanout, "members-only");
+        assert_eq!(p.dr_scope, "members-only");
         assert!(!p.has_bare_repo); // no bare repo seeded in this test
         assert_eq!(p.envelopes.revokes, 0);
     }

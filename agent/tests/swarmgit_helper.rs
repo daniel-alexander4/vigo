@@ -25,7 +25,7 @@ use tempfile::TempDir;
 use tokio_util::sync::CancellationToken;
 
 use vigo::swarm::swarmgit::project_state::{
-    hex_id, DrFanout, ProjectConfig, TokenChain, PROJECT_STATE_VERSION,
+    hex_id, DrScope, ProjectConfig, TokenChain, PROJECT_STATE_VERSION,
 };
 use vigo::swarm::swarmgit::tokens::{issue_bootstrap, project_id_for};
 
@@ -93,7 +93,7 @@ async fn helper_daemon_push_and_clone_roundtrip() {
         handle: "test-project".to_string(),
         founder_puddle_pubkey: hex::encode(founder_pub),
         members: vec![hex::encode(founder_pub)],
-        dr_fanout: DrFanout::MembersOnly,
+        dr_scope: DrScope::MembersOnly,
         cross_subnet_members: Vec::new(),
         updated_at: now,
         tombstoned_at: None,

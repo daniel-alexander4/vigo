@@ -172,7 +172,7 @@ func TestSwarmgit_DivergentRefsPromotesBannerWarn(t *testing.T) {
 			{
 				ProjectID:        pid,
 				Handle:           "team-notes",
-				DrFanout:         "members-only",
+				DrScope:          "members-only",
 				HostCount:        2,
 				MemberFleetCount: 1,
 				DivergentRefs:    []string{"refs/heads/main"},

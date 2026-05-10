@@ -10,7 +10,7 @@
 //! **Per-user, under `~<user>/.vigo-swarmgit/<project_id_hex>/`:**
 //!
 //! - `project.json` — local view of the project: handle, founder puddle
-//!   pubkey (TOFU anchor), member puddle pubkeys, dr_fanout policy,
+//!   pubkey (TOFU anchor), member puddle pubkeys, dr_scope policy,
 //!   optional explicit cross-subnet member hostnames. Founder writes
 //!   it at `project init`; joiner writes it at `project join`. In step 4
 //!   gossip-driven membership changes refresh this file.
@@ -138,44 +138,50 @@ pub fn parse_hex_id(s: &str) -> Result<[u8; ID_LEN]> {
     Ok(out)
 }
 
-/// DR fan-out scope for a project.
+/// DR distribution scope for a project.
 ///
 /// `MembersOnly` keeps the bare repo on member envoys only — the
 /// project is invisible to other puddle members.
 ///
-/// `FleetWide` distributes the bare repo to every (non-blacklisted)
-/// fleet envoy as a backup. Non-member receivers hold the bytes; the
-/// helper daemon refuses non-root reads on those envoys (root retains
-/// direct filesystem access by design — swarmgit is for *availability*,
-/// not bytes-on-disk confidentiality; lockbox owns confidentiality).
+/// `SwarmWide` distributes the bare repo to every swarmgit-authorized
+/// envoy in the swarm as a backup. Non-member receivers hold the bytes;
+/// the helper daemon refuses non-root reads on those envoys (root
+/// retains direct filesystem access by design — swarmgit is for
+/// *availability*, not bytes-on-disk confidentiality; lockbox owns
+/// confidentiality).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub enum DrFanout {
+pub enum DrScope {
     /// Replica only on envoys whose puddle is in `members:`.
     MembersOnly,
-    /// Replica on every fleet envoy for DR purposes.
-    FleetWide,
+    /// Replica on every swarmgit-authorized envoy for DR purposes.
+    SwarmWide,
 }
 
-impl DrFanout {
+impl DrScope {
     /// Display-friendly string used in CLI output and the trait
     /// payload. Matches the kebab-case JSON form.
     pub fn as_str(&self) -> &'static str {
         match self {
-            DrFanout::MembersOnly => "members-only",
-            DrFanout::FleetWide => "fleet-wide",
+            DrScope::MembersOnly => "members-only",
+            DrScope::SwarmWide => "swarm-wide",
         }
     }
 }
 
-impl std::str::FromStr for DrFanout {
+impl std::str::FromStr for DrScope {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self> {
         match s {
-            "members-only" => Ok(DrFanout::MembersOnly),
-            "fleet-wide" => Ok(DrFanout::FleetWide),
+            "members-only" => Ok(DrScope::MembersOnly),
+            "swarm-wide" => Ok(DrScope::SwarmWide),
+            // Retired in 0.41.32: `dr_fanout: fleet-wide` → `dr_scope: swarm-wide`.
+            "fleet-wide" => bail!(
+                "dr_scope value 'fleet-wide' was renamed to 'swarm-wide' (and the field \
+                 'dr_fanout' to 'dr_scope', the flag '--fanout' to '--scope') in 0.41.32"
+            ),
             other => bail!(
-                "unknown dr_fanout '{}': expected 'members-only' or 'fleet-wide'",
+                "unknown dr_scope '{}': expected 'members-only' or 'swarm-wide'",
                 other
             ),
         }
@@ -211,7 +217,7 @@ pub struct ProjectConfig {
     /// single-user projects (`{my-puddle}`) the list has one entry.
     pub members: Vec<String>,
     /// Distribution scope.
-    pub dr_fanout: DrFanout,
+    pub dr_scope: DrScope,
     /// Optional explicit cross-subnet member envoy hostnames. Receivers
     /// not reachable via the LAN multicast discovery layer can be named
     /// here — the helper daemon (step 4) pushes to them directly over
@@ -610,7 +616,7 @@ mod tests {
             handle: "vigo-web".to_string(),
             founder_puddle_pubkey: hex_id(&pub_bytes(&founder)),
             members: vec![hex_id(&pub_bytes(&founder))],
-            dr_fanout: DrFanout::FleetWide,
+            dr_scope: DrScope::SwarmWide,
             cross_subnet_members: vec![],
             updated_at: 1_744_560_000,
             tombstoned_at: None,
@@ -647,25 +653,32 @@ mod tests {
     }
 
     #[test]
-    fn dr_fanout_str_roundtrip() {
-        for f in [DrFanout::FleetWide, DrFanout::MembersOnly] {
+    fn dr_scope_str_roundtrip() {
+        for f in [DrScope::SwarmWide, DrScope::MembersOnly] {
             let s = f.as_str();
-            let back: DrFanout = s.parse().unwrap();
+            let back: DrScope = s.parse().unwrap();
             assert_eq!(back, f);
         }
     }
 
     #[test]
-    fn dr_fanout_from_str_rejects_garbage() {
-        assert!("everyone".parse::<DrFanout>().is_err());
-        assert!("".parse::<DrFanout>().is_err());
+    fn dr_scope_from_str_rejects_garbage() {
+        assert!("everyone".parse::<DrScope>().is_err());
+        assert!("".parse::<DrScope>().is_err());
     }
 
     #[test]
-    fn dr_fanout_serializes_kebab_case() {
+    fn dr_scope_from_str_rejects_retired_fleet_wide() {
+        let err = "fleet-wide".parse::<DrScope>().unwrap_err().to_string();
+        assert!(err.contains("swarm-wide"), "retired-value error should name the new value: {err}");
+    }
+
+    #[test]
+    fn dr_scope_serializes_kebab_case() {
         let cfg = sample_config();
         let s = serde_json::to_string(&cfg).unwrap();
-        assert!(s.contains("\"fleet-wide\""), "expected kebab-case in {}", s);
+        assert!(s.contains("\"swarm-wide\""), "expected kebab-case in {}", s);
+        assert!(s.contains("\"dr_scope\""), "expected dr_scope field key in {}", s);
     }
 
     #[test]

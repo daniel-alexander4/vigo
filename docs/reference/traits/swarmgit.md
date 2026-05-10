@@ -26,7 +26,7 @@ The server's `swarmgitmesh` aggregator joins these per-envoy reports across the 
 | `handle` | string | Human-readable handle from `project.json`. Display only — not authoritative; two projects can share a handle. |
 | `founder_puddle_pubkey` | string | 64-char lowercase hex of the founder puddle's Ed25519 pubkey. The TOFU anchor: `sha256(founder_puddle_pubkey) == project_id`. |
 | `members` | string[] | Hex Ed25519 puddle pubkeys of every member puddle, in `project.json` order (founder first). |
-| `dr_fanout` | string | `"fleet-wide"` (replicas land on every fleet envoy) or `"members-only"` (replicas only on member-fleet envoys). |
+| `dr_scope` | string | `"swarm-wide"` (replicas land on every swarmgit-authorized envoy in the swarm) or `"members-only"` (replicas only on member-puddle envoys). |
 | `users_with_state` | string[] | Local Unix usernames whose `~/.vigo-swarmgit/<project_id>/` directory holds a `project.json` for this project. Multiple users on the same envoy collapse into one entry; this list names them. |
 | `has_bare_repo` | bool | `true` when `/var/lib/vigo/swarm/swarmgit/projects/<project_id>.git` exists on this envoy. |
 | `bare_repo_size_bytes` | int | Total bytes occupied by the bare repo (sum of every regular file under it). Zero when `has_bare_repo` is false. |
@@ -56,7 +56,7 @@ The server's `swarmgitmesh` aggregator joins these per-envoy reports across the 
       "handle": "vigo-web",
       "founder_puddle_pubkey": "8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8",
       "members": ["8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8"],
-      "dr_fanout": "fleet-wide",
+      "dr_scope": "swarm-wide",
       "users_with_state": ["dan"],
       "has_bare_repo": true,
       "bare_repo_size_bytes": 4096,

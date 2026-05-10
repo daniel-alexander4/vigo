@@ -52,7 +52,7 @@ type fleetProjectSummary struct {
 	Handle             string                  `json:"handle"`
 	FounderPuddlePubkey string                  `json:"founder_puddle_pubkey"`
 	Members            []string                `json:"members"`
-	DrFanout           string                  `json:"dr_fanout"`
+	DrScope            string                  `json:"dr_scope"`
 	Hosts              []fleetHostPresence     `json:"hosts"`
 	HeadRefs           map[string]fleetRefStat `json:"head_refs"`
 	MemberFleetCount   int                     `json:"member_fleet_count"`
@@ -188,7 +188,7 @@ func runSwarmgitList(cmd *cobra.Command, _ []string) error {
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-		bold("HANDLE"), bold("FAN-OUT"), bold("MEMBERS"),
+		bold("HANDLE"), bold("SCOPE"), bold("MEMBERS"),
 		bold("HOSTS"), bold("DIVERGENT"), bold("ENVELOPES"), bold("PROJECT_ID"))
 	for _, p := range sorted {
 		divergent := "—"
@@ -200,7 +200,7 @@ func runSwarmgitList(cmd *cobra.Command, _ []string) error {
 			envelopes += " " + yellow("(skew)")
 		}
 		fmt.Fprintf(w, "%s\t%s\t%d\t%d\t%s\t%s\t%s\n",
-			p.Handle, p.DrFanout, p.MemberFleetCount, p.HostCount,
+			p.Handle, p.DrScope, p.MemberFleetCount, p.HostCount,
 			divergent, envelopes, shortSha(p.ProjectID))
 	}
 	w.Flush()
@@ -227,7 +227,7 @@ func runSwarmgitShow(cmd *cobra.Command, args []string) error {
 	fmt.Printf("URL:            vigo://%s/%s\n", match.ProjectID, match.Handle)
 	fmt.Printf("Project ID:     %s\n", match.ProjectID)
 	fmt.Printf("Founder puddle: ed25519:%s\n", match.FounderPuddlePubkey)
-	fmt.Printf("Fan-out:        %s\n", match.DrFanout)
+	fmt.Printf("Scope:          %s\n", match.DrScope)
 	fmt.Printf("Members (%d):\n", match.MemberFleetCount)
 	for _, m := range match.Members {
 		fmt.Printf("  ed25519:%s\n", m)

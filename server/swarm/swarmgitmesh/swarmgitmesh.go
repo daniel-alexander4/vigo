@@ -66,7 +66,7 @@ type ProjectSummary struct {
 	Handle             string               `json:"handle"`
 	FounderPuddlePubkey string               `json:"founder_puddle_pubkey"`
 	Members            []string             `json:"members"`
-	DrFanout           string               `json:"dr_fanout"`
+	DrScope            string               `json:"dr_scope"`
 
 	Hosts            []HostPresence       `json:"hosts"`
 	HeadRefs         map[string]RefStatus `json:"head_refs"`
@@ -252,7 +252,7 @@ func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, er
 
 // summarizeProject collapses one project's per-host trait entries
 // into a ProjectSummary. The project_id, handle, founder, members,
-// and dr_fanout fields are taken from the most-recently-updated
+// and dr_scope fields are taken from the most-recently-updated
 // host's report (gossip should have converged identical values
 // across the fleet, but if any field disagrees we surface the
 // freshest as the canonical view).
@@ -370,7 +370,7 @@ func summarizeProject(projectID string, entries []projectTrait, hosts []string, 
 		Handle:             canonical.Handle,
 		FounderPuddlePubkey: canonical.FounderPuddlePubkey,
 		Members:            append([]string(nil), canonical.Members...),
-		DrFanout:           canonical.DrFanout,
+		DrScope:            canonical.DrScope,
 		Hosts:              hostsList,
 		HeadRefs:           headRefs,
 		MemberFleetCount:   len(canonical.Members),
@@ -398,7 +398,7 @@ type EnvoyProject struct {
 	TokenChainDepth   int
 	RevokesCount      int
 	LeavesCount       int
-	DrFanout          string
+	DrScope           string
 }
 
 // EnvoyProjects returns the project entries the envoy reported in
@@ -423,7 +423,7 @@ func (a *Aggregator) EnvoyProjects(ctx context.Context, envoyID string) []EnvoyP
 			TokenChainDepth: p.TokenChainDepth,
 			RevokesCount:    p.Envelopes.Revokes,
 			LeavesCount:     p.Envelopes.Leaves,
-			DrFanout:        p.DrFanout,
+			DrScope:         p.DrScope,
 		})
 	}
 	return out
@@ -466,7 +466,7 @@ type projectTrait struct {
 	Handle             string                 `json:"handle"`
 	FounderPuddlePubkey string                 `json:"founder_puddle_pubkey"`
 	Members            []string               `json:"members"`
-	DrFanout           string                 `json:"dr_fanout"`
+	DrScope            string                 `json:"dr_scope"`
 	UsersWithState     []string               `json:"users_with_state"`
 	HasBareRepo        bool                   `json:"has_bare_repo"`
 	BareRepoSizeBytes  uint64                 `json:"bare_repo_size_bytes"`

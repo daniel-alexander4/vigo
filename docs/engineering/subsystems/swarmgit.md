@@ -5,12 +5,12 @@
 
 Swarmgit is the P2P git substrate underlying both personal disaster-recovery (today's primary use case) and multi-member collaboration (an axis introduced by ADR-015). Each project is identified by `project_id = sha256(founder_puddle_pubkey)`; project shape is described by two orthogonal axes:
 
-| `members:`           | `dr_fanout:`   | Use case                      |
+| `members:`           | `dr_scope:`    | Use case                      |
 |----------------------|----------------|-------------------------------|
-| `{my-puddle}`         | `fleet-wide`   | Personal-DR (today's default) |
+| `{my-puddle}`         | `swarm-wide`   | Personal-DR (today's default) |
 | `{my-puddle}`         | `members-only` | Single-user, single-puddle     |
 | `{team1, team2, …}`  | `members-only` | Multi-member collaboration    |
-| `{team1, team2, …}`  | `fleet-wide`   | Team repo + fleet-wide DR     |
+| `{team1, team2, …}`  | `swarm-wide`   | Team repo + swarm-wide DR     |
 
 Per-puddle identity (per [ADR-014](../../adr/014-puddle-primitive.md)) gives multi-envoy users a stable trust unit; the substrate sees fleets, not envoys.
 
@@ -131,7 +131,7 @@ Pattern-list changes record tamper-evident audit-chain entries (`swarm.swarmgit.
 - [Swarm](swarm.md) — the underlying P2P substrate swarmgit rides
 - [Puddle](puddle.md) — per-user puddle identity (ADR-014); the trust unit swarmgit's tokens chain to
 - [Lockbox](lockbox.md) — the encryption-first sibling subsystem that owns *confidentiality* (swarmgit owns *availability*)
-- [`swarmgit` trait reference](../../reference/traits/swarmgit.md) — schema of the per-project entries the agent emits on each check-in (project_id, members, dr_fanout, head_refs, envelope counts)
+- [`swarmgit` trait reference](../../reference/traits/swarmgit.md) — schema of the per-project entries the agent emits on each check-in (project_id, members, dr_scope, head_refs, envelope counts)
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

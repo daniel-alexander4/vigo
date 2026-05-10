@@ -2100,7 +2100,7 @@ Administrator-pushed file distribution on the swarm substrate. These endpoints p
 ### Swarmgit
 
 - **GET /api/v1/swarm/swarmgit/fleet** — fleet-wide swarmgit project view (aggregated from per-envoy traits). _(fleet.read)_
-- **GET /api/v1/swarm/swarmgit/projects/{project_id}/roster** — canonical member fleet list for one project. Returns `{project_id, handle, founder_puddle_pubkey, members[], dr_fanout, member_fleet_count}`. The helper daemon's lazy-fetch target at push time. 404 if no envoy in the fleet has reported the project. _(fleet.read)_
+- **GET /api/v1/swarm/swarmgit/projects/{project_id}/roster** — canonical member fleet list for one project. Returns `{project_id, handle, founder_puddle_pubkey, members[], dr_scope, member_fleet_count}`. The helper daemon's lazy-fetch target at push time. 404 if no envoy in the fleet has reported the project. _(fleet.read)_
 
 ### Longdrawer
 

@@ -79,7 +79,7 @@ The cost of forced enrollment: a wrapped age key on disk (~1 KB), an empty `~/lo
 
 ### Swarmgit lifecycle is NOT absorbed
 
-Swarmgit operates at a different granularity than lockbox. Lockbox is "one mesh per puddle"; swarmgit is "many projects per puddle, each with its own membership stack and fanout policy." Project lifecycle (`project init`, `project join`, `project leave`, `project invite`, etc.) lives at the project level — below puddle in the trust hierarchy but with its own scope axis. Folding `swarmgit project *` verbs under `puddle` would either misalign (puddle shouldn't own per-project state) or just rename verbs without simplifying anything.
+Swarmgit operates at a different granularity than lockbox. Lockbox is "one mesh per puddle"; swarmgit is "many projects per puddle, each with its own membership stack and dr_scope policy." Project lifecycle (`project init`, `project join`, `project leave`, `project invite`, etc.) lives at the project level — below puddle in the trust hierarchy but with its own scope axis. Folding `swarmgit project *` verbs under `puddle` would either misalign (puddle shouldn't own per-project state) or just rename verbs without simplifying anything.
 
 What swarmgit gets from this work: the puddle session helper (started by `puddle unlock`) becomes the canonical "am I authorized to do puddle-anchored things" gate. `git push vigo://...` rides on `puddle unlock` like lockbox does. Already true today; this ADR formalizes the coupling.
 

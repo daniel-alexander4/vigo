@@ -18,7 +18,7 @@ ADR-018 rotates the puddle keypair to recover from a compromised or hygiene-rota
 
 ADR-018's deferral was correct as scoping — swarmgit founder-rekey is its own design exercise, not a slice of puddle rekey — but the gap had to close before users with founded projects could safely run `puddle rekey-pair`. ADR-019 is that design.
 
-The dominant use case is personal-DR (founder = sole member, `dr_fanout: fleet-wide`). Multi-puddle projects (members across foreign puddles, team-repo + DR shape) are a smaller fraction but a non-zero one — Dan explicitly chose "multi-puddle must work in Phase 1, not deferred" during the design discussion.
+The dominant use case is personal-DR (founder = sole member, `dr_scope: swarm-wide`). Multi-puddle projects (members across foreign puddles, team-repo + DR shape) are a smaller fraction but a non-zero one — Dan explicitly chose "multi-puddle must work in Phase 1, not deferred" during the design discussion.
 
 ## Decision
 

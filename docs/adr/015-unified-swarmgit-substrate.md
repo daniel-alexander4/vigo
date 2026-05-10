@@ -17,7 +17,7 @@ Two further observations made unification the correct call:
 
 1. **Single-user swarmgit's permission posture is an access-control gap.** Bare repos at `mirrors/<seeder>/<user>/<project>.git` are `0755 root:root`; any **non-root** user on any receiver can `git clone` them via plain git. The per-user CLI filter is cosmetic. Multi-member swarmgit was going to need helper-enforced access control for identity-bound push; rolling that into single-user simultaneously fixes the gap. (This is access control for non-root local users, not bytes-on-disk confidentiality — root retains direct filesystem access by design.)
 
-2. **A genuinely new use case falls out naturally.** With single-user and multi-member sharing one substrate plus a `dr_fanout` axis, "team repo with fleet-wide DR" — currently inexpressible — becomes free.
+2. **A genuinely new use case falls out naturally.** With single-user and multi-member sharing one substrate plus a `dr_scope` axis, "team repo with swarm-wide DR" — currently inexpressible — becomes free.
 
 Puddle (ADR-014) provides the per-user identity that lets single-user collapse into multi-member as the trivial case `members={my-puddle}`.
 
@@ -29,14 +29,14 @@ Every swarmgit project is identified by a **project ID** = `sha256(founder_puddl
 
 Project shape is described by two orthogonal axes:
 
-| `members:` | `dr_fanout:` | Resulting use case |
+| `members:` | `dr_scope:` | Resulting use case |
 |---|---|---|
-| `{my-puddle}` | `fleet-wide` | Today's personal DR |
+| `{my-puddle}` | `swarm-wide` | Today's personal DR |
 | `{my-puddle}` | `members-only` | Personal repo, only on my envoys |
 | `{team1, team2, …}` | `members-only` | Multi-member collaboration |
-| `{team1, team2, …}` | `fleet-wide` | Team repo + fleet-wide DR (new, previously inexpressible) |
+| `{team1, team2, …}` | `swarm-wide` | Team repo + swarm-wide DR (new, previously inexpressible) |
 
-`members:` is a list of puddle pubkeys (one per participating user-puddle). `dr_fanout` controls whether non-member envoys in the fleet receive replicas as backups.
+`members:` is a list of puddle pubkeys (one per participating user-puddle). `dr_scope` controls whether non-member envoys in the swarm receive replicas as backups.
 
 ### Identity & membership
 
@@ -74,13 +74,13 @@ The legacy single-user layout `mirrors/<seeder>/<user>/<project>.git` is fully r
 
 ### Distribution scope
 
-Determined by `dr_fanout`:
+Determined by `dr_scope`:
 - `members-only` — bare repo lands only on envoys whose puddle is in `members:`.
-- `fleet-wide` — bare repo lands on every (non-blacklisted) envoy in the fleet for DR purposes; non-member envoys hold the bytes but cannot read or push (helper rejects non-root callers; root can read but is trusted).
+- `swarm-wide` — bare repo lands on every swarmgit-authorized envoy in the swarm for DR purposes; non-member envoys hold the bytes but cannot read or push (helper rejects non-root callers; root can read but is trusted).
 
-Non-member fleet-wide receivers store the bare repo with the same `0700 root:root` perms; the helper checks token presence before allowing non-root fetch/push.
+Non-member swarm-wide receivers store the bare repo with the same `0700 root:root` perms; the helper checks token presence before allowing non-root fetch/push.
 
-**Bytes-on-disk confidentiality is explicitly not a goal for swarmgit.** `dr_fanout=fleet-wide` distributes plaintext git objects to every (non-blacklisted) fleet envoy, where root can read them directly. If you want confidentiality, use lockbox — swarmgit is for *availability*, lockbox is for *confidentiality*. The two subsystems are deliberately complementary; no encryption-at-rest layer is added to swarmgit in v1, v2, or any future version of the design.
+**Bytes-on-disk confidentiality is explicitly not a goal for swarmgit.** `dr_scope=swarm-wide` distributes plaintext git objects to every swarmgit-authorized envoy in the swarm, where root can read them directly. If you want confidentiality, use lockbox — swarmgit is for *availability*, lockbox is for *confidentiality*. The two subsystems are deliberately complementary; no encryption-at-rest layer is added to swarmgit in v1, v2, or any future version of the design.
 
 ### Conflict policy
 
@@ -90,7 +90,7 @@ Concurrent same-branch pushes from different fleets: one wins, the other receive
 
 ### Fan-out
 
-After `git-receive-pack` completes successfully, the daemon computes `git rev-parse --all` before/after. If any ref changed, fan-out a bundle to other listed members' envoys (and, if `dr_fanout=fleet-wide`, to non-blacklisted fleet receivers) using the existing swarm peer-port (1531) machinery.
+After `git-receive-pack` completes successfully, the daemon computes `git rev-parse --all` before/after. If any ref changed, fan-out a bundle to other listed members' envoys (and, if `dr_scope=swarm-wide`, to non-member swarm receivers) using the existing swarm peer-port (1531) machinery.
 
 If no refs changed (idempotent ingest), no fan-out fires. **Cycle prevention via this delta check** — works correctly across partitions, rejoins, and concurrent pushes.
 
@@ -108,7 +108,7 @@ A multi-member project can in principle operate without the server if members ma
 
 Single namespace: `vigo swarm swarmgit project *` (replaces both today's `multi *` ADR-013 sketch and the implicit single-user CLI):
 
-- `vigo swarm swarmgit project init <handle> [--fanout fleet-wide|members-only]` — founder.
+- `vigo swarm swarmgit project init <handle> [--scope swarm-wide|members-only]` — founder.
 - `vigo swarm swarmgit project invite <project_id> --puddle <fp> --role <r>` — admin only.
 - `vigo swarm swarmgit project join <project_id> <founder-host>` — joining envoy / puddle.
 - `vigo swarm swarmgit project leave <project_id>` — self-leave; emits self-revoke envelope.
@@ -127,7 +127,7 @@ Repo content is recoverable as long as one puddle holds it. If the founder puddl
 
 **Per-envoy identity (no puddle) for multi-member.** Was the original ADR-013 model. Rejected: forces O(N²) per-pair declarations for personal multi-envoy use, makes "dan-on-laptop and dan-on-desktop are the same person" require explicit per-pair invites for every project. Puddle collapses this to O(N) (one wrapped key per envoy).
 
-**Encryption-at-rest for non-member fleet-wide DR receivers.** Considered and **rejected outright** (not just deferred). Would require encrypting bundles to each member puddle's pubkey and storing ciphertext on non-member receivers, with on-demand decrypt during recover. Real engineering surface, and the wrong abstraction layer: swarmgit is for *availability* (fleet-wide replicas, fast recovery, fast clones); lockbox is for *confidentiality* (encryption-at-rest, age recipients, controlled access). Coupling encryption into swarmgit would blur the boundary between two subsystems whose value lies in being orthogonal. Users wanting confidential storage of git content should put `~/lockbox/<repo>/` instead; swarmgit is plaintext by design.
+**Encryption-at-rest for non-member swarm-wide DR receivers.** Considered and **rejected outright** (not just deferred). Would require encrypting bundles to each member puddle's pubkey and storing ciphertext on non-member receivers, with on-demand decrypt during recover. Real engineering surface, and the wrong abstraction layer: swarmgit is for *availability* (swarm-wide replicas, fast recovery, fast clones); lockbox is for *confidentiality* (encryption-at-rest, age recipients, controlled access). Coupling encryption into swarmgit would blur the boundary between two subsystems whose value lies in being orthogonal. Users wanting confidential storage of git content should put `~/lockbox/<repo>/` instead; swarmgit is plaintext by design.
 
 **Single-user as a degenerate `members={}` case (no puddle at all).** Rejected: makes the trust model inconsistent (some projects authenticated, some not) and re-creates the "any local user can clone" gap. Unifying everything under puddle ensures one trust model puddle-wide.
 
@@ -176,6 +176,6 @@ Linux + macOS at launch per CLAUDE.md's Linux-first doctrine; Windows multi-call
 - Existing swarmgit users (zero) would re-init projects under the new model. No migration shim.
 - `git clone /var/lib/vigo/swarm/swarmgit/...` from non-root user accounts no longer works — perms tightened to 0700, helper-enforced. Root retains direct filesystem access by design. This closes the non-root-readable bare-repo gap from today's single-user mode.
 - "Dan can recover his own repo on his other envoy" requires puddle to be unlocked on both envoys (per-envoy setup is `init` once on the first envoy and `join --from <host>` once per additional envoy, then `unlock` daily). Persists across all projects.
-- "Team repo + fleet-wide DR" becomes expressible — set `members={team-puddles}, dr_fanout=fleet-wide`.
+- "Team repo + swarm-wide DR" becomes expressible — set `members={team-puddles}, dr_scope=swarm-wide`.
 
 **Estimated weight:** ~80–200 KiB on the agent (combined token machinery + helper proxy + revocation + storage rework, partially offset by removal of sidecar/recover code paths). ~100–200 KiB on the server. No new dependencies.

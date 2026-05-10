@@ -19,7 +19,7 @@
                 <tr><td style="font-weight:600;width:200px;">URL</td><td><code>vigo://{{.Project.ProjectID}}/{{.Project.Handle}}</code></td></tr>
                 <tr><td style="font-weight:600;">Project ID</td><td><code>{{.Project.ProjectID}}</code></td></tr>
                 <tr><td style="font-weight:600;">Founder puddle</td><td><code>ed25519:{{.Project.FounderPuddlePubkey}}</code></td></tr>
-                <tr><td style="font-weight:600;">Fan-out</td><td>{{.Project.DrFanout}}</td></tr>
+                <tr><td style="font-weight:600;">Scope</td><td>{{.Project.DrScope}}</td></tr>
                 <tr><td style="font-weight:600;">Member fleets</td><td>{{.Project.MemberFleetCount}}{{range .Project.Members}}<br><code>ed25519:{{.}}</code>{{end}}</td></tr>
                 <tr><td style="font-weight:600;">Hosts holding repo</td><td>{{.Project.HostCount}}</td></tr>
                 <tr><td style="font-weight:600;">Last updated</td><td>{{if gt .Project.LastUpdated 0}}{{formatUnixTime .Project.LastUpdated}}{{else}}&mdash;{{end}}</td></tr>
@@ -138,7 +138,7 @@
             <thead>
                 <tr>
                     <th>Handle</th>
-                    <th>Fan-out</th>
+                    <th>Scope</th>
                     <th>Members</th>
                     <th>Hosts</th>
                     <th>Divergent refs</th>
@@ -150,7 +150,7 @@
                 {{range .Fleet.Projects}}
                 <tr onclick="location.href='/swarm/swarmgit/{{.ProjectID}}'" style="cursor:pointer;">
                     <td><strong>{{.Handle}}</strong></td>
-                    <td>{{.DrFanout}}</td>
+                    <td>{{.DrScope}}</td>
                     <td>{{.MemberFleetCount}}</td>
                     <td>{{.HostCount}}</td>
                     <td>{{if gt (len .DivergentRefs) 0}}<span class="badge badge--warn">{{len .DivergentRefs}}</span>{{else}}&mdash;{{end}}</td>

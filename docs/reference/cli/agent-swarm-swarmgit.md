@@ -61,7 +61,7 @@ Verbs that take a `<project_id>` argument also accept a unique handle prefix amo
 |------|---------|
 | `status` | Show envoy-wide swarmgit posture (publisher + receiver state, helper-daemon socket) |
 | `purge --yes` | Power-user wipe of local swarmgit state. As a non-root user: `~/.vigo-swarmgit/`. As root: also envoy-wide root-owned state. Distinct from per-project `leave --purge`; does not gossip. |
-| `project init <handle> [--fanout <kind>]` | Found a new project as the local fleet |
+| `project init <handle> [--scope <kind>]` | Found a new project as the local fleet |
 | `project invite <project_id> --puddle <fp> --role <role> [--expires <Nd>]` | Mint a child token for another fleet |
 | `project join <project_id> [--invitation <file\|->]` | Adopt an invitation issued by an admin |
 | `project leave <project_id> [--purge] [--yes]` | Drop local membership, queue LEAVE envelope |
@@ -131,14 +131,14 @@ vigo swarm swarmgit purge --yes
 Founds a new project. The local fleet (per [ADR-014](../../adr/014-puddle-primitive.md)) becomes the founder; `project_id = sha256(local_puddle_pubkey)`.
 
 ```
-vigo swarm swarmgit project init <handle> [--fanout fleet-wide|members-only]
+vigo swarm swarmgit project init <handle> [--scope swarm-wide|members-only]
 ```
 
 **Arguments:**
 
 - `<handle>` — human-readable name. 1-64 ASCII alphanumeric + `-` `_` `.`, no leading dot.
-- `--fanout` — distribution scope:
-  - `fleet-wide` (default): bare repo lands on every (non-blacklisted) envoy in the fleet for DR purposes.
+- `--scope` — distribution scope:
+  - `swarm-wide` (default): bare repo lands on every swarmgit-authorized envoy in the swarm for DR purposes.
   - `members-only`: bare repo lands only on envoys whose puddle is in the project's `members` list.
 
 **Preconditions:** puddle must be unlocked. Run `vigo swarm puddle unlock` first.
@@ -151,7 +151,7 @@ $ vigo swarm swarmgit project init vigo-web
   URL:        vigo://e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/vigo-web
   Project ID: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   Founder:    ed25519:f43f6ef3eea29e3780d73aa2cee4a78193419a69f43f6ef3eea29e3780d73aa2
-  Fan-out:    fleet-wide
+  Scope:      swarm-wide
 ```
 
 ## `project invite`
@@ -228,8 +228,8 @@ vigo swarm swarmgit project leave <project_id> [--purge] [--yes]
 
 ```
 $ vigo swarm swarmgit project list
-HANDLE                   FAN-OUT        MEMBERS        TOKENS   PROJECT_ID
-vigo-web                 fleet-wide     1              1        e3b0c44298fc1c14…
+HANDLE                   SCOPE          MEMBERS        TOKENS   PROJECT_ID
+vigo-web                 swarm-wide     1              1        e3b0c44298fc1c14…
 team-notes               members-only   3              2        a891c4b27e3431af…
 ```
 
@@ -344,7 +344,7 @@ $ vigo swarm swarmgit project rejoin team-repo --invitation re-invite.json
   URL:        vigo://e3b0…/team-repo
   Role:       Member
   Members:    3
-  Fan-out:    members-only
+  Scope:      members-only
   Delegations: 1 hop(s) (chain anchors to genesis founder ed25519:ab12345…)
 
 State updated under /home/dan/.vigo-swarmgit/e3b0…

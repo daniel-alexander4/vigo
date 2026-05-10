@@ -56,16 +56,16 @@ Prints one row per project.
 
 ```
 $ vigocli swarm swarmgit list
-HANDLE       FAN-OUT        MEMBERS  HOSTS  DIVERGENT  ENVELOPES   PROJECT_ID
+HANDLE       SCOPE          MEMBERS  HOSTS  DIVERGENT  ENVELOPES   PROJECT_ID
 notes        members-only   1        1      —          0 R / 0 L   8e23bc5491cf
-team-repo    fleet-wide     2        4      1 ref(s)   1 R / 0 L   1d8a5e23fffa
-vigo-web     fleet-wide     1        2      —          0 R / 0 L   e3b0c44298fc
+team-repo    swarm-wide     2        4      1 ref(s)   1 R / 0 L   1d8a5e23fffa
+vigo-web     swarm-wide     1        2      —          0 R / 0 L   e3b0c44298fc
 ```
 
 | Column | Meaning |
 |--------|---------|
 | `HANDLE` | Human-readable handle from `project.json`. Display only. |
-| `FAN-OUT` | `fleet-wide` (replicas land on every fleet envoy) or `members-only`. |
+| `SCOPE` | `swarm-wide` (replicas land on every swarmgit-authorized envoy in the swarm) or `members-only`. |
 | `MEMBERS` | Number of distinct member fleets. |
 | `HOSTS` | Number of envoys reporting that they hold the project. |
 | `DIVERGENT` | Count of refs where hosts disagree on the head sha. Yellow when non-zero. |
@@ -82,7 +82,7 @@ Project:        vigo-web
 URL:            vigo://e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/vigo-web
 Project ID:     e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 Founder puddle:  ed25519:8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8
-Fan-out:        fleet-wide
+Scope:          swarm-wide
 Members (1):
   ed25519:8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8
 Hosts:          2

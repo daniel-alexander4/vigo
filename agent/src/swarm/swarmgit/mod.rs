@@ -15,12 +15,12 @@
 //!
 //! Project shape is described by two orthogonal axes:
 //!
-//! | `members:`           | `dr_fanout:`   | Use case                      |
+//! | `members:`           | `dr_scope:`    | Use case                      |
 //! |----------------------|----------------|-------------------------------|
-//! | `{my-puddle}`         | `fleet-wide`   | Personal-DR (today's default) |
+//! | `{my-puddle}`         | `swarm-wide`   | Personal-DR (today's default) |
 //! | `{my-puddle}`         | `members-only` | Single-user, single-puddle     |
 //! | `{team1, team2, …}`  | `members-only` | Multi-member collaboration    |
-//! | `{team1, team2, …}`  | `fleet-wide`   | Team repo + fleet-wide DR     |
+//! | `{team1, team2, …}`  | `swarm-wide`   | Team repo + swarm-wide DR     |
 //!
 //! ### Module layout (post-ADR-015 step 3)
 //!

@@ -98,7 +98,7 @@ func (h *SwarmgitHandler) handleFleet(w http.ResponseWriter, r *http.Request) {
 //   - `members[]` — every authorized member fleet's Ed25519 pubkey
 //     (hex). The first entry is always the founder puddle; the helper
 //     daemon walks the token chain it received against this list.
-//   - `dr_fanout` — `"fleet-wide"` or `"members-only"`. Hints to
+//   - `dr_scope` — `"swarm-wide"` or `"members-only"`. Hints to
 //     the caller's fan-out logic which envoys to push to.
 //
 // Roster is **derived from the swarmgitmesh aggregator** — the
@@ -110,7 +110,7 @@ type RosterResponse struct {
 	Handle             string   `json:"handle"`
 	FounderPuddlePubkey string   `json:"founder_puddle_pubkey"`
 	Members            []string `json:"members"`
-	DrFanout           string   `json:"dr_fanout"`
+	DrScope            string   `json:"dr_scope"`
 	MemberFleetCount   int      `json:"member_fleet_count"`
 }
 
@@ -141,7 +141,7 @@ func (h *SwarmgitHandler) handleRoster(w http.ResponseWriter, r *http.Request) {
 		Handle:             summary.Handle,
 		FounderPuddlePubkey: summary.FounderPuddlePubkey,
 		Members:            summary.Members,
-		DrFanout:           summary.DrFanout,
+		DrScope:            summary.DrScope,
 		MemberFleetCount:   summary.MemberFleetCount,
 	}
 	w.Header().Set("Content-Type", "application/json")

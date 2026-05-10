@@ -18,7 +18,7 @@ func TestSummarizeProjectAllAgree(t *testing.T) {
 			Handle:             "vigo-web",
 			FounderPuddlePubkey: founder,
 			Members:            []string{founder},
-			DrFanout:           "fleet-wide",
+			DrScope:            "swarm-wide",
 			HasBareRepo:        true,
 			BareRepoSizeBytes:  4096,
 			HeadRefs:           map[string]string{"refs/heads/main": "abc123"},
@@ -31,7 +31,7 @@ func TestSummarizeProjectAllAgree(t *testing.T) {
 			Handle:             "vigo-web",
 			FounderPuddlePubkey: founder,
 			Members:            []string{founder},
-			DrFanout:           "fleet-wide",
+			DrScope:            "swarm-wide",
 			HasBareRepo:        true,
 			BareRepoSizeBytes:  4096,
 			HeadRefs:           map[string]string{"refs/heads/main": "abc123"},
@@ -135,15 +135,15 @@ func TestSummarizeProjectFreshestHostWinsCanonicalFields(t *testing.T) {
 	// Older host claims one set of members; fresher host claims another.
 	// The fresher one should win.
 	entries := []projectTrait{
-		{ProjectID: pid, Handle: "old-name", Members: []string{"old"}, DrFanout: "members-only"},
-		{ProjectID: pid, Handle: "new-name", Members: []string{"new"}, DrFanout: "fleet-wide"},
+		{ProjectID: pid, Handle: "old-name", Members: []string{"old"}, DrScope: "members-only"},
+		{ProjectID: pid, Handle: "new-name", Members: []string{"new"}, DrScope: "swarm-wide"},
 	}
 	got := summarizeProject(pid, entries, []string{"a", "b"}, []int64{100, 200})
 	if got.Handle != "new-name" {
 		t.Errorf("handle = %q, want new-name (freshest host wins)", got.Handle)
 	}
-	if got.DrFanout != "fleet-wide" {
-		t.Errorf("dr_fanout = %q", got.DrFanout)
+	if got.DrScope != "swarm-wide" {
+		t.Errorf("dr_scope = %q", got.DrScope)
 	}
 	if !sliceContainsAll(got.Members, []string{"new"}) {
 		t.Errorf("members = %v", got.Members)

@@ -143,7 +143,7 @@ func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request)
 			}
 			data.Swarmgit = append(data.Swarmgit, SwarmLoadRow{
 				Name:      p.BareRepoPath,
-				Detail:    fmt.Sprintf("%s · %s · git %s", p.Handle, p.DrFanout, shortSha(headSha)),
+				Detail:    fmt.Sprintf("%s · %s · git %s", p.Handle, p.DrScope, shortSha(headSha)),
 				Size:      size,
 				SizeHuman: humanSize(size),
 				Status:    "live",

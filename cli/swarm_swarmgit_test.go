@@ -48,7 +48,7 @@ func sampleFleet() fleetResponse {
 			{
 				ProjectID:        pidA,
 				Handle:           "vigo",
-				DrFanout:         "fleet-wide",
+				DrScope:          "swarm-wide",
 				MemberFleetCount: 1,
 				HostCount:        2,
 				DigestUnanimous:  true,
@@ -56,7 +56,7 @@ func sampleFleet() fleetResponse {
 			{
 				ProjectID:        pidB,
 				Handle:           "notes",
-				DrFanout:         "members-only",
+				DrScope:          "members-only",
 				MemberFleetCount: 1,
 				HostCount:        1,
 				DigestUnanimous:  true,
@@ -144,7 +144,7 @@ func TestRenderSwarmgitMembersTable(t *testing.T) {
 			FounderPuddlePubkey: founder,
 			Members:            []string{founder, mem},
 			MemberFleetCount:   2,
-			DrFanout:           "fleet-wide",
+			DrScope:            "swarm-wide",
 		},
 	}
 	var buf bytes.Buffer
