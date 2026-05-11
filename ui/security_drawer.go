@@ -138,7 +138,9 @@ type TrivyVuln struct {
 	Installed string `json:"installed"`
 	Fixed     string `json:"fixed"`
 	Title     string `json:"title"`
-	Others    string `json:"others"`
+	// Others is the count of lower-severity CVEs collapsed into this
+	// per-package card (the agent groups by package, keeping the top one).
+	Others int `json:"others"`
 }
 
 type DebsecanDetail struct {

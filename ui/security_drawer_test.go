@@ -4,6 +4,7 @@
 package ui
 
 import (
+	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -416,5 +417,35 @@ func TestSecurityDrawerFragment_RendersBothStates(t *testing.T) {
 	}
 	if strings.Contains(body, "Fetch Live Detail above for individual findings") {
 		t.Error("live: the cached-summary hint should not appear once detail is fetched")
+	}
+}
+
+// TestSecurityScanDetail_Unmarshal pins the wire shape the agent's
+// security_scan_detail query emits (agent/src/traits/security_scan.rs:
+// detail_trivy, detail_debsecan, …). A type drift here — e.g. `others`
+// going back to a Go string — makes the whole live-detail dispatch fail
+// to parse and the drawer falls back to the cached summaries.
+func TestSecurityScanDetail_Unmarshal(t *testing.T) {
+	// Mirrors detail_trivy / detail_debsecan / detail_lynis / detail_aide
+	// output. Note `others` is a number.
+	raw := `{
+	  "available": true, "scan_dir": "/var/lib/vigo/security",
+	  "trivy": {"vulnerabilities": [
+	      {"cve_id":"CVE-2024-1","severity":"CRITICAL","package":"openssl","installed":"1.0","fixed":"1.1","title":"x","target":"app","others":3},
+	      {"cve_id":"CVE-2024-2","severity":"HIGH","package":"zlib","installed":"1.2","fixed":"","title":"","target":"os","others":0}
+	    ], "truncated": false, "last_scan": "2026-05-10T00:00:00Z"},
+	  "debsecan": {"vulnerabilities": [{"cve_id":"CVE-2024-3","package":"bash","urgency":"high"}], "truncated": false, "last_scan": "2026-05-10T00:00:00Z"},
+	  "lynis": {"score": 71, "warnings": [{"id":"AUTH-9286","text":"weak"}], "suggestions": [], "last_scan": "2026-05-10T00:00:00Z"},
+	  "aide": {"added": ["/a"], "removed": [], "changed": ["/b"], "clean": false, "last_scan": "2026-05-10T00:00:00Z"}
+	}`
+	var d SecurityScanDetail
+	if err := json.Unmarshal([]byte(raw), &d); err != nil {
+		t.Fatalf("unmarshal failed (wire shape drifted from the agent): %v", err)
+	}
+	if d.Trivy == nil || len(d.Trivy.Vulnerabilities) != 2 || d.Trivy.Vulnerabilities[0].Others != 3 {
+		t.Fatalf("trivy not parsed as expected: %+v", d.Trivy)
+	}
+	if d.Debsecan == nil || len(d.Debsecan.Vulnerabilities) != 1 || d.Lynis == nil || d.Lynis.Score != 71 || d.AIDE == nil || len(d.AIDE.Added) != 1 {
+		t.Fatalf("other scanners not parsed as expected: %+v", d)
 	}
 }
