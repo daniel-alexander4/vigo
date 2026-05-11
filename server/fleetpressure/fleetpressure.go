@@ -2,14 +2,16 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package fleetpressure is the single source of truth for translating
-// per-envoy `agent_self.*` and `host_self.*` traits into operator-
-// facing pressure metrics. Both the dashboard rollup card and the
-// per-envoy "Agent footprint" panel consume types from this package
-// so the same numbers can never disagree across surfaces.
+// per-envoy resource-and-repo traits into an "agent health" composite —
+// FDs (`agent_self.*` / `host_self.*`), rootfs and inode pressure on `/`
+// (`mountpoints.mounts./.*`), and package-repo health (`repo_health.*`).
+// The dashboard rollup card, the `/agent-health` fleet page, and the
+// per-envoy panel all consume types from this package so the same
+// numbers and thresholds can never disagree across surfaces.
 //
 // The package owns *data*, not *rendering*: callers build whatever
 // HTML / JSON / CSS classes they need, but every threshold decision
-// flows through [Classify] (see envoyStatsSot feedback memory).
+// flows through [Compute] (see envoyStatsSot feedback memory).
 package fleetpressure
 
 import (
@@ -27,6 +29,12 @@ const (
 	DescendantFDsFail  = 500
 	HostFDPctWarn      = 50.0
 	HostFDPctFail      = 80.0
+	// Rootfs / inode breakpoints follow standard disk-pressure
+	// practice: warn at 80% so there's room to act before fail at 90%.
+	RootfsPctWarn      = 80.0
+	RootfsPctFail      = 90.0
+	InodePctWarn       = 80.0
+	InodePctFail       = 90.0
 )
 
 // Severity is the threshold-classification result. Higher numeric
@@ -76,9 +84,9 @@ type PercentMetric struct {
 }
 
 // EnvoyPressure is the per-envoy projection. Mirrors the
-// `agent_self.*` / `host_self.*` trait shape — see
-// `agent/src/traits/{agent_self,host_self}.rs` for the
-// authoritative definitions.
+// `agent_self.*` / `host_self.*` / `mountpoints.*` / `repo_health.*`
+// trait shape — see `agent/src/traits/` for the authoritative
+// definitions.
 type EnvoyPressure struct {
 	ID                 string
 	Hostname           string
@@ -98,15 +106,47 @@ type EnvoyPressure struct {
 	ProcCount          Metric
 	OomRecent          Metric
 
-	// Worst severity across the four colored fields. Drives the
-	// dashboard card's offender selection.
-	Overall            Severity
+	// mountpoints — rootfs (`/`) disk and inode pressure.
+	RootfsPct          PercentMetric
+	InodePct           PercentMetric
+
+	// repo_health — package-repository health (apt / dnf). Absent
+	// until the agent emits a `repo_health.status` trait; warnings
+	// and errors counts surface for the per-envoy detail view.
+	RepoHealth         RepoHealthMetric
+
+	// Health is the worst Severity across every colored field above —
+	// FDs (open + descendant + host%), OOM-recent, rootfs%, inode%,
+	// and repo-health. Drives the dashboard card's color, the
+	// `/agent-health` row coloring, and the offender drilldown.
+	// Unknown only if every colored field is also Unknown.
+	Health             Severity
+}
+
+// RepoHealthMetric mirrors Metric for the package-repo trait. The agent
+// emits `repo_health.status` as one of "ok" / "warn" / "fail" (anything
+// else, or a missing trait, leaves Status="" and Severity=Unknown);
+// Warnings and Errors are integer counts from the last update parse.
+type RepoHealthMetric struct {
+	Status    string
+	Warnings  uint64
+	Errors    uint64
+	Present   bool
+	Severity  Severity
 }
 
 // FleetSummary is the dashboard rollup. Holds the loud numbers
 // and the offender hostname so the card can drill down to the
 // per-envoy view without re-walking the fleet.
 type FleetSummary struct {
+	// WorstSeverity is the worst per-envoy Health across the fleet —
+	// drives the dashboard "Agent Health" card's color. Unknown only
+	// when no envoy reported any of the colored fields.
+	WorstSeverity        Severity
+	// DegradedCount is the number of envoys whose Health is Warn or
+	// Fail — drives the card's value.
+	DegradedCount        int
+
 	// MaxOpenFDs is the highest open_fds value seen across the
 	// fleet, with the hostname that hit it. Both fields are zero
 	// when no envoy reported the trait.
@@ -161,27 +201,52 @@ func Compute(src EnvoySource) EnvoyPressure {
 	p.FDPct = floatMetric(src.Traits, "host_self.fd_pct", classifyHostFDPct)
 	p.ProcCount = uintMetric(src.Traits, "host_self.proc_count", classifyNeutral)
 	p.OomRecent = uintMetric(src.Traits, "host_self.oom_recent", classifyOomRecent)
+	// Rootfs (`/`) disk + inode pressure. FlattenJSON uses dot
+	// separators and doesn't escape slashes, so the `/` mount key is
+	// literal — see server/fleet/index.go FlattenJSON + the trait
+	// shape in agent/src/traits/mountpoints.rs.
+	p.RootfsPct = floatMetric(src.Traits, "mountpoints.mounts./.used_pct", classifyDiskPct)
+	p.InodePct = floatMetric(src.Traits, "mountpoints.mounts./.inode_pct", classifyInodePct)
+	p.RepoHealth = repoHealthMetric(src.Traits)
 	if src.Traits == nil {
 		// Distinguish "no data" from "everything OK" — leave
-		// Overall as the zero value (Unknown).
+		// Health as the zero value (Unknown).
 		return p
 	}
-	p.Overall = worstOf(p.OpenFDs.Severity, p.DescendantOpenFDs.Severity, p.FDPct.Severity, p.OomRecent.Severity)
+	p.Health = worstOf(
+		p.OpenFDs.Severity,
+		p.DescendantOpenFDs.Severity,
+		p.FDPct.Severity,
+		p.OomRecent.Severity,
+		p.RootfsPct.Severity,
+		p.InodePct.Severity,
+		p.RepoHealth.Severity,
+	)
 	return p
 }
 
 // Aggregate walks a slice of EnvoySources and produces the
-// dashboard rollup. Iteration order follows the input slice;
+// dashboard rollup plus the per-envoy slice the `/agent-health`
+// page table needs. Iteration order follows the input slice;
 // offender selection is stable (first envoy hitting the max
 // wins, ties broken by input order).
-func Aggregate(sources []EnvoySource) FleetSummary {
+func Aggregate(sources []EnvoySource) (FleetSummary, []EnvoyPressure) {
 	var sum FleetSummary
+	out := make([]EnvoyPressure, 0, len(sources))
 	for _, src := range sources {
 		p := Compute(src)
+		out = append(out, p)
 		hasAny := p.OpenFDs.Present || p.DescendantOpenFDs.Present ||
-			p.FDPct.Present || p.OomRecent.Present
+			p.FDPct.Present || p.OomRecent.Present ||
+			p.RootfsPct.Present || p.InodePct.Present || p.RepoHealth.Present
 		if hasAny {
 			sum.TotalReporting++
+		}
+		if p.Health >= Warn {
+			sum.DegradedCount++
+		}
+		if p.Health != Unknown && p.Health > sum.WorstSeverity {
+			sum.WorstSeverity = p.Health
 		}
 		if p.OpenFDs.Present && p.OpenFDs.Value > sum.MaxOpenFDs {
 			sum.MaxOpenFDs = p.OpenFDs.Value
@@ -202,7 +267,7 @@ func Aggregate(sources []EnvoySource) FleetSummary {
 			}
 		}
 	}
-	return sum
+	return sum, out
 }
 
 // ---------- internal helpers ----------
@@ -271,6 +336,67 @@ func classifyOomRecent(v uint64) Severity {
 		return Warn
 	}
 	return OK
+}
+
+func classifyDiskPct(v float64) Severity {
+	switch {
+	case v > RootfsPctFail:
+		return Fail
+	case v > RootfsPctWarn:
+		return Warn
+	default:
+		return OK
+	}
+}
+
+func classifyInodePct(v float64) Severity {
+	switch {
+	case v > InodePctFail:
+		return Fail
+	case v > InodePctWarn:
+		return Warn
+	default:
+		return OK
+	}
+}
+
+// repoHealthMetric reads the `repo_health.status` trait (one of
+// "ok" / "warn" / "fail") plus the warning + error counts the agent
+// emits alongside it. Anything else, or a missing status, leaves
+// Severity=Unknown so the composite doesn't get pulled down by an
+// envoy that simply hasn't collected the trait yet (e.g. a non-Linux
+// host, or one running an older agent build).
+func repoHealthMetric(traits map[string]string) RepoHealthMetric {
+	if traits == nil {
+		return RepoHealthMetric{Severity: Unknown}
+	}
+	status, ok := traits["repo_health.status"]
+	if !ok || status == "" {
+		return RepoHealthMetric{Severity: Unknown}
+	}
+	var sev Severity
+	switch status {
+	case "ok":
+		sev = OK
+	case "warn":
+		sev = Warn
+	case "fail":
+		sev = Fail
+	default:
+		// Unrecognized status — surface it as Status but classify
+		// Unknown so the composite isn't tainted by an unexpected
+		// value the agent might emit.
+		return RepoHealthMetric{Status: status, Present: true, Severity: Unknown}
+	}
+	warnings, _ := strconv.ParseUint(traits["repo_health.warnings"], 10, 64)
+	errors, _ := strconv.ParseUint(traits["repo_health.errors"], 10, 64)
+	return RepoHealthMetric{
+		Status:   status,
+		Warnings: warnings,
+		Errors:   errors,
+		Present:  true,
+		Severity: sev,
+	}
 }
 
 func worstOf(severities ...Severity) Severity {

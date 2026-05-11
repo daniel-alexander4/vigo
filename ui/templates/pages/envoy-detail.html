@@ -55,7 +55,7 @@
             hx-get="/ui/fragments/envoy-footprint/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Agent Footprint</button>
+            onclick="setActiveTab(this)">Agent Health</button>
     {{if .ScrierEnabled}}
     <button class="btn btn--sm" id="tab-sessions"
             hx-get="/ui/fragments/envoy-sessions/{{.Envoy.ID}}"
@@ -453,7 +453,7 @@
 {{define "envoy-footprint-fragment"}}
 {{$p := .Pressure}}
 <div class="mt-1">
-    <p>Resource footprint of the agent process and pressure on the host. Yellow values are warnings; red values are above the failure threshold. Values flow from the <code>agent_self.*</code> and <code>host_self.*</code> traits the agent emits every check-in.</p>
+    <p>Agent process footprint, host FD pressure, rootfs / inode usage on <code>/</code>, and package-repo health. Yellow values are warnings; red values are above the failure threshold. Sourced from the <code>agent_self.*</code>, <code>host_self.*</code>, <code>mountpoints.*</code>, and <code>repo_health.*</code> traits the agent emits every check-in; the composite ("Agent Health") and fleet rollup live on <a href="/agent-health">/agent-health</a>.</p>
 </div>
 
 {{if not .HasData}}

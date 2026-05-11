@@ -71,7 +71,7 @@
      hx-trigger="load, every {{.PollInterval}}"
      hx-swap="innerHTML"
      aria-live="polite">
-    <div class="dash-columns"><div class="dash-column"><h3 class="dash-column__title">Agent Pressure</h3><p style="color:var(--subtext0);">Loading…</p></div></div>
+    <div class="stat-card stat-card--brand" aria-label="Agent Health loading"><div class="stat-card__value">…</div><div class="stat-card__label">Agent Health</div></div>
 </div>
 
 {{template "dashboard-fleet" .}}

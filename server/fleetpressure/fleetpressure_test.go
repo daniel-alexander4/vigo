@@ -20,8 +20,8 @@ func TestComputeMissingTraitsAreUnknown(t *testing.T) {
 	if p.OpenFDs.Severity != Unknown {
 		t.Errorf("expected open_fds Severity=Unknown; got %v", p.OpenFDs.Severity)
 	}
-	if p.Overall != OK {
-		t.Errorf("expected Overall=OK with all missing; got %v", p.Overall)
+	if p.Health != OK {
+		t.Errorf("expected Health=OK with all missing; got %v", p.Health)
 	}
 }
 
@@ -105,27 +105,75 @@ func TestComputeOomRecentTripsOnAnyNonzero(t *testing.T) {
 	}
 }
 
-func TestComputeOverallTakesWorst(t *testing.T) {
+func TestComputeHealthTakesWorst(t *testing.T) {
 	state := newState("e1", "h1", map[string]string{
 		"agent_self.open_fds":            "100",   // OK
 		"agent_self.descendant_open_fds": "9999",  // Fail
 		"host_self.fd_pct":               "10.0",  // OK
 	})
 	p := Compute(state)
-	if p.Overall != Fail {
-		t.Errorf("overall should be Fail (descendants in fail band); got %v", p.Overall)
+	if p.Health != Fail {
+		t.Errorf("Health should be Fail (descendants in fail band); got %v", p.Health)
 	}
 }
 
-func TestComputeOverallIgnoresUnknown(t *testing.T) {
-	// Only one trait reported; the other three are Unknown. Overall
-	// should reflect just the one present field, not Unknown.
+func TestComputeHealthIgnoresUnknown(t *testing.T) {
+	// Only one trait reported; the others are Unknown. Health should
+	// reflect just the one present field, not Unknown.
 	state := newState("e1", "h1", map[string]string{
 		"agent_self.open_fds": "300", // Warn
 	})
 	p := Compute(state)
-	if p.Overall != Warn {
-		t.Errorf("overall should ignore Unknown and report Warn; got %v", p.Overall)
+	if p.Health != Warn {
+		t.Errorf("Health should ignore Unknown and report Warn; got %v", p.Health)
+	}
+}
+
+func TestComputeHealthFoldsRootfsAndInodeAndRepo(t *testing.T) {
+	// Open FDs OK, but rootfs is in the fail band — Health flips Fail.
+	state := newState("e1", "h1", map[string]string{
+		"agent_self.open_fds":            "100",  // OK
+		"mountpoints.mounts./.used_pct":  "95.0", // Fail (>90)
+		"mountpoints.mounts./.inode_pct": "10.0", // OK
+		"repo_health.status":             "ok",   // OK
+	})
+	p := Compute(state)
+	if p.RootfsPct.Severity != Fail {
+		t.Errorf("rootfs 95%% should be Fail; got %v", p.RootfsPct.Severity)
+	}
+	if p.InodePct.Severity != OK {
+		t.Errorf("inode 10%% should be OK; got %v", p.InodePct.Severity)
+	}
+	if p.RepoHealth.Severity != OK {
+		t.Errorf("repo_health=ok should be OK; got %v", p.RepoHealth.Severity)
+	}
+	if p.Health != Fail {
+		t.Errorf("Health should fold rootfs into composite (Fail); got %v", p.Health)
+	}
+}
+
+func TestRepoHealthStatusMapping(t *testing.T) {
+	cases := []struct {
+		status string
+		want   Severity
+	}{
+		{"ok", OK},
+		{"warn", Warn},
+		{"fail", Fail},
+		{"", Unknown},        // missing trait
+		{"degraded", Unknown}, // unrecognized status — surfaced but not classified
+	}
+	for _, tc := range cases {
+		t.Run(tc.status, func(t *testing.T) {
+			m := map[string]string{}
+			if tc.status != "" {
+				m["repo_health.status"] = tc.status
+			}
+			p := Compute(EnvoySource{ID: "e1", Hostname: "h1", Traits: m})
+			if p.RepoHealth.Severity != tc.want {
+				t.Errorf("repo_health.status=%q: want %v, got %v", tc.status, tc.want, p.RepoHealth.Severity)
+			}
+		})
 	}
 }
 
@@ -135,7 +183,10 @@ func TestAggregatePicksMaxOffender(t *testing.T) {
 		newState("b", "bravo", map[string]string{"agent_self.open_fds": "750"}),
 		newState("c", "charlie", map[string]string{"agent_self.open_fds": "200"}),
 	}
-	sum := Aggregate(states)
+	sum, perEnvoy := Aggregate(states)
+	if len(perEnvoy) != 3 {
+		t.Errorf("expected 3 per-envoy projections; got %d", len(perEnvoy))
+	}
 	if sum.MaxOpenFDs != 750 || sum.MaxOpenFDsHost != "bravo" {
 		t.Errorf("expected max=750 host=bravo; got max=%d host=%q", sum.MaxOpenFDs, sum.MaxOpenFDsHost)
 	}
@@ -158,7 +209,7 @@ func TestAggregateCountsHighFDPctAndOom(t *testing.T) {
 		newState("d", "delta", map[string]string{"host_self.oom_recent": "1"}),
 		newState("e", "echo", map[string]string{"host_self.oom_recent": "0"}),
 	}
-	sum := Aggregate(states)
+	sum, _ := Aggregate(states)
 	if sum.HighFDPctCount != 2 {
 		t.Errorf("expected 2 high-fd-pct; got %d", sum.HighFDPctCount)
 	}
@@ -181,7 +232,7 @@ func TestAggregateNoData(t *testing.T) {
 		newState("b", "bravo", map[string]string{"unrelated.trait": "x"}),
 		newState("c", "charlie", nil),
 	}
-	sum := Aggregate(states)
+	sum, _ := Aggregate(states)
 	if sum.TotalReporting != 0 {
 		t.Errorf("expected TotalReporting=0; got %d", sum.TotalReporting)
 	}
@@ -198,7 +249,26 @@ func TestComputeNilTraitsSafe(t *testing.T) {
 	if p.ID != "" || p.Hostname != "" {
 		t.Errorf("zero-value source should return zero identity fields; got %+v", p)
 	}
-	if p.Overall != Unknown {
-		t.Errorf("nil-traits Overall should be Unknown; got %v", p.Overall)
+	if p.Health != Unknown {
+		t.Errorf("nil-traits Health should be Unknown; got %v", p.Health)
+	}
+}
+
+func TestAggregateRollupWorstSeverityAndDegradedCount(t *testing.T) {
+	states := []EnvoySource{
+		newState("a", "alpha", map[string]string{"agent_self.open_fds": "100"}),                 // OK
+		newState("b", "bravo", map[string]string{"agent_self.open_fds": "300"}),                 // Warn
+		newState("c", "charlie", map[string]string{"mountpoints.mounts./.used_pct": "95.0"}),    // Fail
+		newState("d", "delta", map[string]string{}),                                              // Unknown
+	}
+	sum, perEnvoy := Aggregate(states)
+	if len(perEnvoy) != 4 {
+		t.Fatalf("expected 4 per-envoy projections; got %d", len(perEnvoy))
+	}
+	if sum.WorstSeverity != Fail {
+		t.Errorf("WorstSeverity should be Fail (charlie at 95%% rootfs); got %v", sum.WorstSeverity)
+	}
+	if sum.DegradedCount != 2 {
+		t.Errorf("DegradedCount should count bravo + charlie (= 2); got %d", sum.DegradedCount)
 	}
 }

@@ -79,13 +79,16 @@ type DataSource interface {
 	// no cert_lifecycle trait rows matching the filter.
 	EnvoyCertDetails(envoyID, bucket string) ([]CertDetail, string, bool)
 	RunningCVESummary() RunningCVESummary
-	// FleetPressure rolls up per-envoy `agent_self.*` / `host_self.*`
-	// telemetry into the dashboard "Agent Pressure" card via the
-	// fleetpressure SoT package.
+	// FleetPressure rolls up per-envoy resource + repo-health telemetry
+	// into the dashboard "Agent Health" card via the fleetpressure SoT
+	// package.
 	FleetPressure() fleetpressure.FleetSummary
+	// FleetPressureDetail returns the same rollup plus every per-envoy
+	// projection in one walk — feeds the `/agent-health` fleet table.
+	FleetPressureDetail() (fleetpressure.FleetSummary, []fleetpressure.EnvoyPressure)
 	// EnvoyPressure returns the per-envoy projection used by the
-	// envoy-detail "Agent footprint" tab. Bool is false when the
-	// envoy is unknown to the fleet index.
+	// envoy-detail "Agent Health" tab. Bool is false when the envoy
+	// is unknown to the fleet index.
 	EnvoyPressure(envoyID string) (fleetpressure.EnvoyPressure, bool)
 }
 
@@ -554,6 +557,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /server/config/{section}", h.ServerConfigSection)
 	mux.HandleFunc("GET /plans/{id}", h.Plans)
 	mux.HandleFunc("GET /risk", h.RiskPosture)
+	mux.HandleFunc("GET /agent-health", h.AgentHealth)
 	mux.HandleFunc("GET /compliance", h.Compliance)
 	mux.HandleFunc("GET /compliance/executive", h.ComplianceExecutive)
 	mux.HandleFunc("GET /integrations", h.Integrations)
@@ -6062,6 +6066,10 @@ func (ds *dbDataSource) RunningCVESummary() RunningCVESummary {
 func (ds *dbDataSource) FleetPressure() fleetpressure.FleetSummary {
 	// Trait aggregation lives on the Fleet DataSource.
 	return fleetpressure.FleetSummary{}
+}
+
+func (ds *dbDataSource) FleetPressureDetail() (fleetpressure.FleetSummary, []fleetpressure.EnvoyPressure) {
+	return fleetpressure.FleetSummary{}, nil
 }
 
 func (ds *dbDataSource) EnvoyPressure(_ string) (fleetpressure.EnvoyPressure, bool) {

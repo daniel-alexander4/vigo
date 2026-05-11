@@ -45,7 +45,7 @@ func (h *Handler) EnvoyFootprintFragment(w http.ResponseWriter, r *http.Request)
 		PageData: PageData{Title: "Agent Footprint: " + detail.Envoy.Hostname, ActiveNav: "envoys"},
 		Hostname: detail.Envoy.Hostname,
 		EnvoyID:  idStr,
-		HasData:  ok && pressure.Overall != fleetpressure.Unknown,
+		HasData:  ok && pressure.Health != fleetpressure.Unknown,
 		Pressure: pressure,
 	}
 	h.setCommonWithRequest(&data.PageData, r)

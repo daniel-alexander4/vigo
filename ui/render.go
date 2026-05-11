@@ -429,7 +429,7 @@ func funcMap() template.FuncMap {
 		// template-only call sites that can't reuse the Go helper.
 		"humanBytes": humanSize,
 		// severityColor maps a fleetpressure.Severity to the existing
-		// stat-card-- color modifier so the dashboard "Agent Pressure"
+		// stat-card-- color modifier so the dashboard "Agent Health"
 		// rollup uses the same palette as the rest of the dashboard.
 		"severityColor": func(s fleetpressure.Severity) string {
 			switch s {
@@ -441,6 +441,35 @@ func funcMap() template.FuncMap {
 				return "success"
 			default:
 				return "brand"
+			}
+		},
+		// severityLabel renders a fleetpressure.Severity as the
+		// operator-facing word shown in /agent-health cells. Unknown
+		// collapses to a dash so missing data doesn't look healthy.
+		"severityLabel": func(s fleetpressure.Severity) string {
+			switch s {
+			case fleetpressure.Fail:
+				return "Fail"
+			case fleetpressure.Warn:
+				return "Warn"
+			case fleetpressure.OK:
+				return "OK"
+			default:
+				return "—"
+			}
+		},
+		// severityTextClass maps a fleetpressure.Severity to a text-*
+		// utility class so inline labels match the column-card palette.
+		"severityTextClass": func(s fleetpressure.Severity) string {
+			switch s {
+			case fleetpressure.Fail:
+				return "text-danger"
+			case fleetpressure.Warn:
+				return "text-warning"
+			case fleetpressure.OK:
+				return "text-success"
+			default:
+				return "text-muted"
 			}
 		},
 		// humanFDPct renders a host_self.fd_pct float with one decimal

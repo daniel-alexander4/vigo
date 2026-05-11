@@ -1,0 +1,66 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Agent Health</h1>
+    <p>Per-envoy resource pressure (open FDs, host FD%, rootfs %, inode %) and package-repo health. The composite is the worst signal across the six.</p>
+</div>
+
+<div class="stat-cards">
+    <div class="stat-card stat-card--{{severityColor .Summary.WorstSeverity}}">
+        <div class="stat-card__value">{{severityLabel .Summary.WorstSeverity}}</div>
+        <div class="stat-card__label">Worst Level</div>
+    </div>
+    <div class="stat-card{{if gt .Summary.DegradedCount 0}} stat-card--{{severityColor .Summary.WorstSeverity}}{{end}}">
+        <div class="stat-card__value">{{.Summary.DegradedCount}}</div>
+        <div class="stat-card__label">Degraded Envoys</div>
+    </div>
+    <div class="stat-card stat-card--brand">
+        <div class="stat-card__value">{{.Summary.TotalReporting}}</div>
+        <div class="stat-card__label">Reporting</div>
+    </div>
+    {{if gt .Summary.HighFDPctCount 0}}
+    <div class="stat-card stat-card--warning">
+        <div class="stat-card__value">{{.Summary.HighFDPctCount}}</div>
+        <div class="stat-card__label">Hosts ≥50% FDs</div>
+    </div>
+    {{end}}
+    {{if gt .Summary.RecentOomCount 0}}
+    <div class="stat-card stat-card--danger">
+        <div class="stat-card__value">{{.Summary.RecentOomCount}}</div>
+        <div class="stat-card__label">Recent OOMs</div>
+    </div>
+    {{end}}
+</div>
+
+{{if .Envoys}}
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Hostname</th>
+                <th>Open FDs</th>
+                <th>Host FD%</th>
+                <th>Rootfs %</th>
+                <th>Inode %</th>
+                <th>Repo Health</th>
+                <th>Composite</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Envoys}}
+            <tr>
+                <td><a href="/envoys/{{.ID}}#footprint">{{.Hostname}}</a></td>
+                <td class="{{severityTextClass .OpenFDs.Severity}}">{{humanMetric .OpenFDs}}</td>
+                <td class="{{severityTextClass .FDPct.Severity}}">{{humanFDPct .FDPct}}</td>
+                <td class="{{severityTextClass .RootfsPct.Severity}}">{{humanFDPct .RootfsPct}}</td>
+                <td class="{{severityTextClass .InodePct.Severity}}">{{humanFDPct .InodePct}}</td>
+                <td class="{{severityTextClass .RepoHealth.Severity}}"{{if .RepoHealth.Present}} title="{{.RepoHealth.Warnings}} warning(s) · {{.RepoHealth.Errors}} error(s)"{{end}}>{{severityLabel .RepoHealth.Severity}}</td>
+                <td class="{{severityTextClass .Health}}"><strong>{{severityLabel .Health}}</strong></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{else}}
+<p class="text-muted" style="text-align:center;padding:40px;">No envoys reporting agent-health traits yet.</p>
+{{end}}
+{{end}}

@@ -946,10 +946,26 @@ func parseInt64(s string) int64 {
 	return n
 }
 
-// FleetPressure aggregates per-envoy `agent_self.*` / `host_self.*`
-// telemetry into the dashboard rollup. Revoked envoys are skipped —
-// they're not contributing to the live fleet's pressure picture.
+// FleetPressure aggregates per-envoy `agent_self.*` / `host_self.*` /
+// `mountpoints.*` / `repo_health.*` telemetry into the dashboard rollup.
+// Revoked envoys are skipped — they're not contributing to the live
+// fleet's pressure picture.
 func (ds *DataSource) FleetPressure() fleetpressure.FleetSummary {
+	sum, _ := fleetpressure.Aggregate(ds.healthSources())
+	return sum
+}
+
+// FleetPressureDetail returns the rollup plus every per-envoy projection
+// in one walk — feeds the `/agent-health` page table without re-walking
+// the fleet. Revoked envoys are skipped, same as FleetPressure.
+func (ds *DataSource) FleetPressureDetail() (fleetpressure.FleetSummary, []fleetpressure.EnvoyPressure) {
+	return fleetpressure.Aggregate(ds.healthSources())
+}
+
+// healthSources collects every non-revoked envoy as an EnvoySource for
+// the fleetpressure package to digest. Single iteration helper so the
+// rollup and the per-envoy detail can share the walk.
+func (ds *DataSource) healthSources() []fleetpressure.EnvoySource {
 	envoys := ds.fleet.AllEnvoys()
 	sources := make([]fleetpressure.EnvoySource, 0, len(envoys))
 	for _, ts := range envoys {
@@ -962,7 +978,7 @@ func (ds *DataSource) FleetPressure() fleetpressure.FleetSummary {
 			Traits:   ts.Traits,
 		})
 	}
-	return fleetpressure.Aggregate(sources)
+	return sources
 }
 
 // EnvoyPressure projects one envoy's flattened traits into the

@@ -320,8 +320,11 @@ func TestDashboardPressureFragmentRenders(t *testing.T) {
 		t.Fatalf("DashboardPressureFragment returned %d, want %d (body: %s)", rec.Code, http.StatusOK, rec.Body.String())
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "Agent Pressure") {
-		t.Errorf("dashboard pressure card missing title; body: %s", body)
+	if !strings.Contains(body, "Agent Health") {
+		t.Errorf("dashboard agent-health card missing title; body: %s", body)
+	}
+	if !strings.Contains(body, `href="/agent-health"`) {
+		t.Errorf("dashboard agent-health card missing drilldown link to /agent-health; body: %s", body)
 	}
 }
 
@@ -388,6 +391,9 @@ func (m *footprintMock) FleetPressure() fleetpressure.FleetSummary {
 		TotalReporting:     5,
 	}
 }
+func (m *footprintMock) FleetPressureDetail() (fleetpressure.FleetSummary, []fleetpressure.EnvoyPressure) {
+	return m.FleetPressure(), nil
+}
 func (m *footprintMock) EnvoyPressure(_ string) (fleetpressure.EnvoyPressure, bool) {
 	return fleetpressure.EnvoyPressure{
 		ID:       "00000000-0000-0000-0000-000000000001",
@@ -403,7 +409,7 @@ func (m *footprintMock) EnvoyPressure(_ string) (fleetpressure.EnvoyPressure, bo
 		FDPct:             fleetpressure.PercentMetric{Value: 25.0, Present: true, Severity: fleetpressure.OK},
 		ProcCount:         fleetpressure.Metric{Value: 200, Present: true, Severity: fleetpressure.OK},
 		OomRecent:         fleetpressure.Metric{Value: 0, Present: true, Severity: fleetpressure.OK},
-		Overall:           fleetpressure.Fail,
+		Health:            fleetpressure.Fail,
 	}, true
 }
 
@@ -1175,6 +1181,10 @@ func (m *mockDataSource) RunningCVESummary() RunningCVESummary {
 
 func (m *mockDataSource) FleetPressure() fleetpressure.FleetSummary {
 	return fleetpressure.FleetSummary{}
+}
+
+func (m *mockDataSource) FleetPressureDetail() (fleetpressure.FleetSummary, []fleetpressure.EnvoyPressure) {
+	return fleetpressure.FleetSummary{}, nil
 }
 
 func (m *mockDataSource) EnvoyPressure(_ string) (fleetpressure.EnvoyPressure, bool) {
