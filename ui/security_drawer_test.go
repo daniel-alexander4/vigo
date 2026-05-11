@@ -449,3 +449,30 @@ func TestSecurityScanDetail_Unmarshal(t *testing.T) {
 		t.Fatalf("other scanners not parsed as expected: %+v", d)
 	}
 }
+
+// A single type-mismatched field shouldn't blank the live view: encoding/json
+// skips it and keeps decoding, so the handler (jerr == nil || detail.hasData())
+// shows what was returned with a soft warning. A total parse failure still
+// hard-fails. This pins both halves.
+func TestSecurityScanDetail_PartialDecodeKeepsTheRest(t *testing.T) {
+	// `lynis.score` arrives as a string; everything else is well-formed.
+	raw := `{"available": true,
+	  "trivy": {"vulnerabilities": [{"cve_id":"CVE-1","severity":"HIGH","package":"p","others":2}], "last_scan":"x"},
+	  "lynis": {"score": "oops", "warnings": [], "suggestions": [], "last_scan":"x"}}`
+	var d SecurityScanDetail
+	if err := json.Unmarshal([]byte(raw), &d); err == nil {
+		t.Fatal("expected a type error for lynis.score")
+	}
+	if !d.hasData() {
+		t.Fatal("partial decode should still report hasData()")
+	}
+	if d.Trivy == nil || len(d.Trivy.Vulnerabilities) != 1 || d.Trivy.Vulnerabilities[0].Others != 2 {
+		t.Fatalf("trivy should have decoded fully despite the lynis error: %+v", d.Trivy)
+	}
+
+	// Not an object at all → real failure, no data.
+	var bad SecurityScanDetail
+	if err := json.Unmarshal([]byte(`"nope"`), &bad); err == nil || bad.hasData() {
+		t.Fatalf("total parse failure should error and not hasData(); err=%v hasData=%v", err, bad.hasData())
+	}
+}

@@ -125,6 +125,17 @@ type SecurityScanDetail struct {
 	SCAP      *SCAPDetail      `json:"scap,omitempty"`
 }
 
+// hasData reports whether the decoded detail carries any scanner output.
+// encoding/json skips a type-mismatched field and keeps decoding the rest,
+// returning only the first error — so this tells a partial decode (one bad
+// field, the rest intact) from a total parse failure.
+func (d *SecurityScanDetail) hasData() bool {
+	return d.Available ||
+		d.Trivy != nil || d.Debsecan != nil || d.Lynis != nil ||
+		d.Rkhunter != nil || d.Chkrootkit != nil || d.ClamAV != nil ||
+		d.AIDE != nil || d.Defender != nil || d.SCAP != nil
+}
+
 type TrivyDetail struct {
 	Vulnerabilities []TrivyVuln `json:"vulnerabilities"`
 	LastScan        string      `json:"last_scan"`
@@ -308,13 +319,21 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 				data.Error = "agent did not respond within " + strconv.Itoa(securityLiveTimeoutSec) + "s — it may not have checked in during the wait window."
 			default:
 				var detail SecurityScanDetail
-				if jerr := json.Unmarshal([]byte(value), &detail); jerr != nil {
-					data.Error = "could not parse agent response: " + jerr.Error()
-				} else {
+				jerr := json.Unmarshal([]byte(value), &detail)
+				if jerr == nil || detail.hasData() {
+					// A partial decode (one type-mismatched field skipped,
+					// the rest intact) still carries the bulk of the
+					// findings — show them and surface the parse error as a
+					// soft warning rather than blanking the whole live view.
 					data.Live = true
 					data.Detail = &detail
 					data.RkhunterRows = flattenRkhunter(detail.Rkhunter)
 					data.ChkrootkitRows = flattenChkrootkit(detail.Chkrootkit)
+					if jerr != nil {
+						data.Error = "some scan fields couldn't be parsed (showing what was returned): " + jerr.Error()
+					}
+				} else {
+					data.Error = "could not parse agent response: " + jerr.Error()
 				}
 			}
 		}

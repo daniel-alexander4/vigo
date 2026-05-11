@@ -543,7 +543,7 @@
         <span class="mono">{{.Package}}</span>
         <span class="text-danger">{{.Installed}}</span>
         {{if .Fixed}}<span class="text-muted">→</span> <span class="text-success">{{.Fixed}}</span>{{end}}
-        {{if .Others}}<span class="text-muted">(+{{.Others}} lower severity)</span>{{end}}
+        {{if .Others}}<span class="text-muted">(+{{.Others}} more CVE{{if ne .Others 1}}s{{end}} in this package)</span>{{end}}
     </div>
     {{if .Title}}<div class="sec-card__desc">{{.Title}}</div>{{end}}
     <div class="sec-card__actions">
