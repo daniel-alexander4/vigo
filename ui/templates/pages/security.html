@@ -332,6 +332,7 @@
         <p class="text-muted" style="font-size:11px">Querying agent — streaming agents respond instantly, others respond on next check-in (up to ~{{if .Timeout}}{{.Timeout}}{{else}}90{{end}}s).</p>
         <div class="sec-spinner" aria-hidden="true"></div>
     </div>
+    {{if .Live}}<p class="text-muted" style="font-size:11px;margin:0 0 8px;">Live detail{{if .LiveFromCache}} from {{timeAgo .LiveFetchedAt}} — "Refresh Live Detail" re-runs the scan query{{else}} — fetched just now{{end}}.</p>{{end}}
 
     {{if not .Sections}}
     <p class="text-muted">No security scan data for this host.</p>

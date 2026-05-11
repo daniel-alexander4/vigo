@@ -6,8 +6,10 @@ package ui
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The AI-question helpers feed the per-card "Ask AI" buttons in the security
@@ -475,4 +477,71 @@ func TestSecurityScanDetail_PartialDecodeKeepsTheRest(t *testing.T) {
 	if err := json.Unmarshal([]byte(`"nope"`), &bad); err == nil || bad.hasData() {
 		t.Fatalf("total parse failure should error and not hasData(); err=%v hasData=%v", err, bad.hasData())
 	}
+}
+
+func TestApplyLiveDetail(t *testing.T) {
+	at := time.Now().Add(-3 * time.Minute)
+
+	// Clean parse → Live, Detail, fetch metadata set.
+	var d SecurityDrawerData
+	applyLiveDetail(&d, `{"available":true,"trivy":{"vulnerabilities":[{"cve_id":"CVE-1","severity":"HIGH","package":"p","others":0}],"last_scan":"x"}}`, at, true)
+	if !d.Live || d.Detail == nil || d.Detail.Trivy == nil || !d.LiveFromCache || !d.LiveFetchedAt.Equal(at) || d.Error != "" {
+		t.Fatalf("clean parse: got %+v", d)
+	}
+
+	// Partial parse (bad lynis.score) → still Live, with a soft Error.
+	var p SecurityDrawerData
+	applyLiveDetail(&p, `{"available":true,"trivy":{"vulnerabilities":[],"last_scan":"x"},"lynis":{"score":"oops"}}`, at, false)
+	if !p.Live || p.Detail == nil || p.LiveFromCache || p.Error == "" {
+		t.Fatalf("partial parse: got %+v", p)
+	}
+
+	// Total failure → not Live, hard Error.
+	var f SecurityDrawerData
+	applyLiveDetail(&f, `"nope"`, at, false)
+	if f.Live || f.Detail != nil || f.Error == "" {
+		t.Fatalf("total failure: got %+v", f)
+	}
+}
+
+func TestSecurityLiveCache(t *testing.T) {
+	c := newSecurityLiveCache()
+
+	if _, _, ok := c.get("e1"); ok {
+		t.Fatal("empty cache should miss")
+	}
+	c.put("e1", `{"available":true}`)
+	if raw, at, ok := c.get("e1"); !ok || raw != `{"available":true}` || at.IsZero() {
+		t.Fatalf("hit expected; got raw=%q at=%v ok=%v", raw, at, ok)
+	}
+
+	// Expired entry is evicted on access.
+	c.entries["e1"] = securityLiveEntry{raw: `{"available":true}`, fetchedAt: time.Now().Add(-securityLiveCacheTTL - time.Minute)}
+	if _, _, ok := c.get("e1"); ok {
+		t.Fatal("expired entry should miss and be evicted")
+	}
+	if _, present := c.entries["e1"]; present {
+		t.Fatal("expired entry should have been deleted")
+	}
+
+	// Overflow drops the oldest.
+	base := time.Now()
+	for i := 0; i < securityLiveCacheMax; i++ {
+		c.entries[strconv.Itoa(i)] = securityLiveEntry{raw: "x", fetchedAt: base.Add(time.Duration(i) * time.Second)}
+	}
+	oldestKey := "0" // fetchedAt == base
+	c.put("newcomer", "y")
+	if len(c.entries) > securityLiveCacheMax {
+		t.Fatalf("cache should be capped at %d, got %d", securityLiveCacheMax, len(c.entries))
+	}
+	if _, present := c.entries[oldestKey]; present {
+		t.Fatalf("oldest entry %q should have been evicted on overflow", oldestKey)
+	}
+
+	// A nil cache is safe (defensive).
+	var nilCache *securityLiveCache
+	if _, _, ok := nilCache.get("x"); ok {
+		t.Fatal("nil cache get should miss")
+	}
+	nilCache.put("x", "y") // must not panic
 }

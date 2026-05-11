@@ -141,6 +141,10 @@ To bound trait-payload size on hosts with extremely long CVE tails, the agent ca
 
 If you operate hosts with more than 200 unique CVEs that you want represented in the fleet stat, raise `MAX_CVES` in `agent/src/traits/security_scan.rs` and rebuild + redeploy the agent.
 
+## The Per-Host Drawer
+
+Each `/security` host row has a **Scan Details** button that opens a drawer. It opens on the *cached summary* — the per-scanner counts the agent reports on every check-in — with one tab per scanner that ran, plus a cross-scanner **CVEs** rollup and a **Certs** tab. **Fetch Live Detail** dispatches a one-shot `security_scan_detail` query to the agent (≤90s; instant for streaming agents) and replaces the summaries with the full per-finding cards (CVE/control links + Ask AI). That live result is cached server-side for **24 hours** keyed by envoy — reopening the drawer within that window shows the live detail directly (labeled "Live detail from \<when>"); **Refresh Live Detail** re-runs the query and resets the clock. A response with one type-mismatched field still renders — the cards you can show, plus a one-line warning naming the field — rather than blanking. The cache is in-memory (cleared on a server restart).
+
 ## Severity Filter
 
 The Trivy and Debsecan detail views include a severity filter bar. Click a level (Critical, High, Medium, Low) to show only cards at that severity, or click **All** to reset. Counts per level are shown on each button.

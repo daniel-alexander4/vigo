@@ -247,6 +247,7 @@ type Handler struct {
 	swarmAPI           SwarmSource
 	traitQuery         TraitQueryDispatcher
 	complianceDocs     ComplianceDocsListing
+	securityLive       *securityLiveCache // 24h cache of security_scan_detail dispatch results
 }
 
 // TraitQueryDispatcher dispatches a single live trait-value query to one
@@ -439,6 +440,7 @@ func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterv
 		enforcer:     enforcer,
 		authEnabled:  true,
 		authMethod:   authMethod,
+		securityLive: newSecurityLiveCache(),
 	}
 
 	if docsDir != "" {

@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"git.alexander4.io/vigo/server/traits"
@@ -256,6 +257,11 @@ type SecurityDrawerData struct {
 	Certs    []CertDetail
 	Detail   *SecurityScanDetail   // only populated on Live=true
 	Error    string                // set when dispatch timed out or the envoy was offline
+	// LiveFetchedAt is when the security_scan_detail in Detail was
+	// dispatched; LiveFromCache marks a replay of a cached dispatch (vs a
+	// fresh one). Both zero/false when Live=false.
+	LiveFetchedAt time.Time
+	LiveFromCache bool
 	// RkhunterRows / ChkrootkitRows are normalized versions of Detail's
 	// polymorphic JSON — populated so templates can range over structs.
 	RkhunterRows   []RkhunterRow
@@ -305,50 +311,133 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 	// nil (no cert_lifecycle rows / none expiring) → the tab shows "none".
 	data.Certs, _, _ = h.dataSource.EnvoyCertDetails(envoyID, "")
 
-	if r.URL.Query().Get("live") == "true" {
+	switch {
+	case r.URL.Query().Get("live") == "true":
+		// Fresh dispatch — and cache the result so a reopen doesn't re-run it.
 		if h.traitQuery == nil {
 			data.Error = "live query dispatcher not configured"
-		} else {
-			ctx, cancel := context.WithTimeout(r.Context(), time.Duration(securityLiveTimeoutSec+5)*time.Second)
-			defer cancel()
-			value, found, err := h.traitQuery.DispatchTraitQuery(ctx, "security_scan_detail", hostname, time.Duration(securityLiveTimeoutSec)*time.Second)
-			switch {
-			case err != nil:
-				data.Error = "dispatch failed: " + err.Error()
-			case !found:
-				data.Error = "agent did not respond within " + strconv.Itoa(securityLiveTimeoutSec) + "s — it may not have checked in during the wait window."
-			default:
-				var detail SecurityScanDetail
-				jerr := json.Unmarshal([]byte(value), &detail)
-				if jerr == nil || detail.hasData() {
-					// A partial decode (one type-mismatched field skipped,
-					// the rest intact) still carries the bulk of the
-					// findings — show them and surface the parse error as a
-					// soft warning rather than blanking the whole live view.
-					data.Live = true
-					data.Detail = &detail
-					data.RkhunterRows = flattenRkhunter(detail.Rkhunter)
-					data.ChkrootkitRows = flattenChkrootkit(detail.Chkrootkit)
-					if jerr != nil {
-						data.Error = "some scan fields couldn't be parsed (showing what was returned): " + jerr.Error()
-					}
-				} else {
-					data.Error = "could not parse agent response: " + jerr.Error()
-				}
+			break
+		}
+		ctx, cancel := context.WithTimeout(r.Context(), time.Duration(securityLiveTimeoutSec+5)*time.Second)
+		defer cancel()
+		value, found, err := h.traitQuery.DispatchTraitQuery(ctx, "security_scan_detail", hostname, time.Duration(securityLiveTimeoutSec)*time.Second)
+		switch {
+		case err != nil:
+			data.Error = "dispatch failed: " + err.Error()
+		case !found:
+			data.Error = "agent did not respond within " + strconv.Itoa(securityLiveTimeoutSec) + "s — it may not have checked in during the wait window."
+		default:
+			applyLiveDetail(&data, value, time.Now(), false)
+			if data.Live {
+				h.securityLive.put(envoyID, value)
 			}
+		}
+	default:
+		// Plain open — show the most recent live detail if it's still fresh,
+		// otherwise fall through to the cached-trait summary below.
+		if raw, at, ok := h.securityLive.get(envoyID); ok {
+			applyLiveDetail(&data, raw, at, true)
 		}
 	}
 
-	// One tab list for the whole drawer: cached scanners before the live
-	// fetch, live scanners after (data.Detail is nil unless the dispatch
-	// succeeded), plus the CVEs rollup and the Certs tab.
+	// One tab list for the whole drawer: cached scanners before any live
+	// fetch, live scanners once Detail is populated (fresh or replayed from
+	// the cache), plus the CVEs rollup and the Certs tab.
 	data.Sections = drawerSections(data.Cached, data.Detail)
 	h.renderer.RenderFragment(w, "security", "security-drawer-fragment", data)
+}
+
+// applyLiveDetail unmarshals a security_scan_detail payload into data,
+// tolerating a partial decode (encoding/json skips a type-mismatched field
+// and keeps decoding, returning the first error) — only a total parse
+// failure leaves Live=false. fetchedAt is when the dispatch ran; fromCache
+// marks a replay of a previously-cached result.
+func applyLiveDetail(data *SecurityDrawerData, raw string, fetchedAt time.Time, fromCache bool) {
+	var detail SecurityScanDetail
+	jerr := json.Unmarshal([]byte(raw), &detail)
+	if jerr == nil || detail.hasData() {
+		data.Live = true
+		data.Detail = &detail
+		data.RkhunterRows = flattenRkhunter(detail.Rkhunter)
+		data.ChkrootkitRows = flattenChkrootkit(detail.Chkrootkit)
+		data.LiveFetchedAt = fetchedAt
+		data.LiveFromCache = fromCache
+		if jerr != nil {
+			data.Error = "some scan fields couldn't be parsed (showing what was returned): " + jerr.Error()
+		}
+		return
+	}
+	data.Error = "could not parse agent response: " + jerr.Error()
 }
 
 // securityLiveTimeoutSec is the wait window for the live dispatch. Matches
 // the existing SecurityPage.QueryTimeoutSec used by the legacy client flow.
 const securityLiveTimeoutSec = 90
+
+const (
+	// securityLiveCacheTTL is how long a dispatched security_scan_detail
+	// stays warm so reopening the drawer doesn't re-run the ~90s query.
+	securityLiveCacheTTL = 24 * time.Hour
+	// securityLiveCacheMax caps the cache; the oldest entry is dropped on
+	// overflow. Bounds memory on large fleets — entries are themselves
+	// bounded by the agent's MAX_DETAIL_* caps.
+	securityLiveCacheMax = 256
+)
+
+// securityLiveCache holds recent security_scan_detail dispatch results
+// keyed by envoy ID. In-memory only; lost on restart (a UI convenience).
+type securityLiveCache struct {
+	mu      sync.Mutex
+	entries map[string]securityLiveEntry
+}
+
+type securityLiveEntry struct {
+	raw       string
+	fetchedAt time.Time
+}
+
+func newSecurityLiveCache() *securityLiveCache {
+	return &securityLiveCache{entries: make(map[string]securityLiveEntry)}
+}
+
+// get returns the cached payload and its fetch time for envoyID if a
+// non-expired entry exists; expired entries are evicted on access.
+func (c *securityLiveCache) get(envoyID string) (string, time.Time, bool) {
+	if c == nil {
+		return "", time.Time{}, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	e, ok := c.entries[envoyID]
+	if !ok {
+		return "", time.Time{}, false
+	}
+	if time.Since(e.fetchedAt) > securityLiveCacheTTL {
+		delete(c.entries, envoyID)
+		return "", time.Time{}, false
+	}
+	return e.raw, e.fetchedAt, true
+}
+
+// put stores raw for envoyID, evicting the oldest entry first if full.
+func (c *securityLiveCache) put(envoyID, raw string) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, exists := c.entries[envoyID]; !exists && len(c.entries) >= securityLiveCacheMax {
+		var oldestKey string
+		var oldestAt time.Time
+		for k, e := range c.entries {
+			if oldestKey == "" || e.fetchedAt.Before(oldestAt) {
+				oldestKey, oldestAt = k, e.fetchedAt
+			}
+		}
+		delete(c.entries, oldestKey)
+	}
+	c.entries[envoyID] = securityLiveEntry{raw: raw, fetchedAt: time.Now()}
+}
 
 // SecurityCertsPageData drives the dedicated /security/certs/{id} page —
 // the per-envoy expiring-certificate inventory. Rendered as a full page
