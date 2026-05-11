@@ -157,7 +157,7 @@ The assistant replies in a fixed shape tailored to vigo:
 - **Vigo module.** A pasteable `.vgo` snippet for `stockpile/modules/`, with any non-obvious mechanism note in `#` comments. When vigo can't fix the finding (active malware, forensic-only investigations, out-of-band approval needed), this section explains why instead of providing a snippet.
 - **Run it now.** Only for urgent findings (CRITICAL/HIGH severity *and* the host is internet-exposed or the CVE is known-exploited): the commands to publish the module and force just that host to converge immediately — `vigocli config publish && vigocli envoys push <hostname>` — instead of waiting for its next interval. A short workflow appears here instead when the fix needs ordered steps (patch → restart → verify).
 
-Available on Trivy CVEs, Debsecan CVEs, Lynis warnings/suggestions, rkhunter warnings, chkrootkit infections, ClamAV findings, AIDE integrity changes, Windows Defender threats, and SCAP failures, plus the cached-summary cards (CVEs, Lynis, Rootkit, ClamAV, AIDE) that show host-level scan state without per-finding detail.
+Available on Trivy CVEs, Debsecan CVEs, Lynis warnings/suggestions, rkhunter warnings, chkrootkit infections, ClamAV findings, AIDE integrity changes, Windows Defender threats, and SCAP failures, plus the cached-summary cards (CVEs, Lynis, chkrootkit, rkhunter, ClamAV, AIDE) each scanner tab shows before "Fetch Live Detail" pulls the per-finding cards.
 
 ## CVE Links
 

@@ -239,8 +239,7 @@ type SecurityDrawerData struct {
 	Cached   SecurityDrawerCached
 	// Certs are this host's certificates expiring or expired within 30 days
 	// (via DataSource.EnvoyCertDetails) — feeds the always-present "Certs"
-	// tab in the cached summary. Empty means none expiring; the live-detail
-	// view ignores this field.
+	// tab. Empty means none expiring (the pane self-reports that).
 	Certs    []CertDetail
 	Detail   *SecurityScanDetail   // only populated on Live=true
 	Error    string                // set when dispatch timed out or the envoy was offline
@@ -248,16 +247,16 @@ type SecurityDrawerData struct {
 	// polymorphic JSON — populated so templates can range over structs.
 	RkhunterRows   []RkhunterRow
 	ChkrootkitRows []ChkrootkitRow
-	// Sections is the ordered list of scanner slugs that have data for
-	// this envoy. Drives the tab strip — the first entry is the default-
-	// visible pane (via CSS :target fallback).
+	// Sections is the ordered tab list (CVEs rollup, then scanners, then
+	// Certs) — see drawerSections. Drives the tab strip; the first entry
+	// is the default-visible pane (via CSS :target fallback).
 	Sections []SecuritySection
 }
 
-// SecuritySection is one tab in the live-detail view.
+// SecuritySection is one tab in the security drawer.
 type SecuritySection struct {
-	Slug  string // "trivy", "lynis", "rkhunter", …
-	Label string // "Trivy CVEs", "Lynis", "rkhunter", …
+	Slug  string // "cves", "trivy", "lynis", "certs", …
+	Label string // "CVEs", "Trivy", "Lynis", "Certs", …
 }
 
 // SecurityEnvoyFragment serves the security drawer body for one envoy.
@@ -296,31 +295,33 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 	if r.URL.Query().Get("live") == "true" {
 		if h.traitQuery == nil {
 			data.Error = "live query dispatcher not configured"
-			h.renderer.RenderFragment(w, "security", "security-drawer-fragment", data)
-			return
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), time.Duration(securityLiveTimeoutSec+5)*time.Second)
-		defer cancel()
-		value, found, err := h.traitQuery.DispatchTraitQuery(ctx, "security_scan_detail", hostname, time.Duration(securityLiveTimeoutSec)*time.Second)
-		switch {
-		case err != nil:
-			data.Error = "dispatch failed: " + err.Error()
-		case !found:
-			data.Error = "agent did not respond within " + strconv.Itoa(securityLiveTimeoutSec) + "s — it may not have checked in during the wait window."
-		default:
-			var detail SecurityScanDetail
-			if jerr := json.Unmarshal([]byte(value), &detail); jerr != nil {
-				data.Error = "could not parse agent response: " + jerr.Error()
-			} else {
-				data.Live = true
-				data.Detail = &detail
-				data.RkhunterRows = flattenRkhunter(detail.Rkhunter)
-				data.ChkrootkitRows = flattenChkrootkit(detail.Chkrootkit)
-				data.Sections = liveSections(&detail)
+		} else {
+			ctx, cancel := context.WithTimeout(r.Context(), time.Duration(securityLiveTimeoutSec+5)*time.Second)
+			defer cancel()
+			value, found, err := h.traitQuery.DispatchTraitQuery(ctx, "security_scan_detail", hostname, time.Duration(securityLiveTimeoutSec)*time.Second)
+			switch {
+			case err != nil:
+				data.Error = "dispatch failed: " + err.Error()
+			case !found:
+				data.Error = "agent did not respond within " + strconv.Itoa(securityLiveTimeoutSec) + "s — it may not have checked in during the wait window."
+			default:
+				var detail SecurityScanDetail
+				if jerr := json.Unmarshal([]byte(value), &detail); jerr != nil {
+					data.Error = "could not parse agent response: " + jerr.Error()
+				} else {
+					data.Live = true
+					data.Detail = &detail
+					data.RkhunterRows = flattenRkhunter(detail.Rkhunter)
+					data.ChkrootkitRows = flattenChkrootkit(detail.Chkrootkit)
+				}
 			}
 		}
 	}
 
+	// One tab list for the whole drawer: cached scanners before the live
+	// fetch, live scanners after (data.Detail is nil unless the dispatch
+	// succeeded), plus the CVEs rollup and the Certs tab.
+	data.Sections = drawerSections(data.Cached, data.Detail)
 	h.renderer.RenderFragment(w, "security", "security-drawer-fragment", data)
 }
 
@@ -611,49 +612,39 @@ func flattenChkrootkit(d *ChkrootkitDetail) []ChkrootkitRow {
 	return rows
 }
 
-// liveSections returns the ordered list of tabs that have data for this
-// envoy. The first entry is the default-visible pane when no tab is
-// targeted via URL fragment.
-func liveSections(d *SecurityScanDetail) []SecuritySection {
-	candidates := []SecuritySection{
-		{"trivy", "Trivy CVEs"},
-		{"debsecan", "Debsecan"},
-		{"lynis", "Lynis"},
-		{"rkhunter", "rkhunter"},
-		{"chkrootkit", "chkrootkit"},
-		{"clamav", "ClamAV"},
-		{"aide", "AIDE"},
-		{"defender", "Windows Defender"},
-		{"scap", "SCAP/STIG"},
+// drawerSections returns the ordered tab list for the security drawer.
+// Before the live fetch (detail == nil) it lists scanners that have a cached
+// summary; after a successful fetch it lists scanners present in the live
+// detail (one dispatch covers every scanner). The cross-scanner "CVEs"
+// rollup leads when there is any CVE data, and "Certs" always trails (the
+// pane self-reports when nothing is expiring). The first entry is the
+// default-visible pane when no tab is targeted via URL fragment.
+func drawerSections(cached SecurityDrawerCached, detail *SecurityScanDetail) []SecuritySection {
+	var out []SecuritySection
+	if cached.Unique != nil || len(cached.CVEs) > 0 {
+		out = append(out, SecuritySection{"cves", "CVEs"})
 	}
-	out := []SecuritySection{}
-	for _, c := range candidates {
-		has := false
-		switch c.Slug {
-		case "trivy":
-			has = d.Trivy != nil
-		case "debsecan":
-			has = d.Debsecan != nil
-		case "lynis":
-			has = d.Lynis != nil
-		case "rkhunter":
-			has = d.Rkhunter != nil
-		case "chkrootkit":
-			has = d.Chkrootkit != nil
-		case "clamav":
-			has = d.ClamAV != nil
-		case "aide":
-			has = d.AIDE != nil
-		case "defender":
-			has = d.Defender != nil
-		case "scap":
-			has = d.SCAP != nil
-		}
-		if has {
-			out = append(out, c)
+	live := detail != nil
+	scanners := []struct {
+		slug, label      string
+		cachedOK, liveOK bool
+	}{
+		{"trivy", "Trivy", cached.Trivy != nil, live && detail.Trivy != nil},
+		{"debsecan", "debsecan", cached.Debsecan != nil, live && detail.Debsecan != nil},
+		{"lynis", "Lynis", cached.Lynis != nil, live && detail.Lynis != nil},
+		{"chkrootkit", "chkrootkit", cached.Chkrootkit != nil, live && detail.Chkrootkit != nil},
+		{"rkhunter", "rkhunter", cached.Rkhunter != nil, live && detail.Rkhunter != nil},
+		{"clamav", "ClamAV", cached.ClamAV != nil, live && detail.ClamAV != nil},
+		{"aide", "AIDE", cached.AIDE != nil, live && detail.AIDE != nil},
+		{"defender", "Windows Defender", false, live && detail.Defender != nil},
+		{"scap", "SCAP/STIG", false, live && detail.SCAP != nil},
+	}
+	for _, s := range scanners {
+		if (live && s.liveOK) || (!live && s.cachedOK) {
+			out = append(out, SecuritySection{s.slug, s.label})
 		}
 	}
-	return out
+	return append(out, SecuritySection{"certs", "Certs"})
 }
 
 // cveURL returns the external CVE record URL for a given CVE ID.

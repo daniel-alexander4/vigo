@@ -4,6 +4,7 @@
 package ui
 
 import (
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -312,5 +313,108 @@ func TestBuildSecurityCached_RootkitScannersAreSeparate(t *testing.T) {
 	}
 	if got.Chkrootkit != nil {
 		t.Errorf("Chkrootkit should be nil when chkrootkit didn't report, got %+v", got.Chkrootkit)
+	}
+}
+
+func sectionSlugs(s []SecuritySection) []string {
+	out := make([]string, len(s))
+	for i, sec := range s {
+		out[i] = sec.Slug
+	}
+	return out
+}
+
+func TestDrawerSections_CachedThenLive(t *testing.T) {
+	cached := SecurityDrawerCached{
+		Unique: &UniqueCVECounts{Critical: 1},
+		Trivy:  &TrivyCached{},
+		Lynis:  &LynisCached{},
+		AIDE:   &AIDECached{},
+	}
+	// Before the live fetch: scanners come from cached data; CVEs leads,
+	// Certs trails.
+	got := sectionSlugs(drawerSections(cached, nil))
+	if want := []string{"cves", "trivy", "lynis", "aide", "certs"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("not-live sections = %v, want %v", got, want)
+	}
+	// After the fetch: scanner tabs come from the live detail (here Trivy +
+	// Defender), not the cached set; CVEs (a check-in-trait rollup) and
+	// Certs still bracket them.
+	detail := &SecurityScanDetail{Trivy: &TrivyDetail{}, Defender: &DefenderDetail{}}
+	got = sectionSlugs(drawerSections(cached, detail))
+	if want := []string{"cves", "trivy", "defender", "certs"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("live sections = %v, want %v", got, want)
+	}
+	// No cached CVE data and no live detail: just the always-present Certs tab.
+	got = sectionSlugs(drawerSections(SecurityDrawerCached{}, nil))
+	if want := []string{"certs"}; strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("empty sections = %v, want %v", got, want)
+	}
+}
+
+func TestSecurityDrawerFragment_RendersBothStates(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	data := SecurityDrawerData{
+		EnvoyID:  "00000000-0000-0000-0000-000000000001",
+		Hostname: "danlap",
+		Timeout:  90,
+		Cached: SecurityDrawerCached{
+			Unique:     &UniqueCVECounts{Critical: 2, High: 5},
+			Trivy:      &TrivyCached{Critical: 1, Total: 1},
+			Lynis:      &LynisCached{Score: 78, Warnings: 3, Suggestions: 9},
+			Chkrootkit: &RootkitScannerCached{Clean: true},
+			AIDE:       &AIDECached{Clean: false, Added: 1},
+			CVEs:       []CachedCVE{{ID: "CVE-2024-0001", Severity: "critical", Packages: 1}},
+		},
+		Certs: []CertDetail{{CN: "x.example", Issuer: "Let's Encrypt", NotAfter: "2026-06-01", DaysRemaining: 10}},
+	}
+
+	// Not-live: cached summaries + the "Fetch Live Detail" affordance; no
+	// Defender tab (no cached Defender summary).
+	data.Sections = drawerSections(data.Cached, nil)
+	rec := httptest.NewRecorder()
+	r.RenderFragment(rec, "security", "security-drawer-fragment", data)
+	body := rec.Body.String()
+	for _, want := range []string{
+		`id="sec-pane-cves"`, `id="sec-pane-trivy"`, `id="sec-pane-lynis"`,
+		`id="sec-pane-chkrootkit"`, `id="sec-pane-aide"`, `id="sec-pane-certs"`,
+		"Fetch Live Detail", "Lynis Hardening", "CVE-2024-0001",
+		"Fetch Live Detail above for individual findings",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("not-live: rendered drawer missing %q", want)
+		}
+	}
+	if strings.Contains(body, `id="sec-pane-defender"`) {
+		t.Error("not-live: Defender tab should be absent (no cached Defender data)")
+	}
+
+	// Live: the per-finding cards replace the summaries; scanner tabs now
+	// come from Detail (Trivy + Lynis + Defender); the chkrootkit/aide tabs
+	// drop off (no live detail for them).
+	data.Live = true
+	data.Detail = &SecurityScanDetail{
+		Trivy:    &TrivyDetail{Vulnerabilities: []TrivyVuln{{CVEID: "CVE-2024-9999", Severity: "high", Package: "openssl", Installed: "1.0.0"}}, LastScan: "now"},
+		Lynis:    &LynisDetail{Score: 78, Warnings: []LynisEntry{{ID: "AUTH-0001", Text: "weak setting"}}, LastScan: "now"},
+		Defender: &DefenderDetail{Enabled: true, RealtimeProtection: true, LastScan: "now"},
+	}
+	data.Sections = drawerSections(data.Cached, data.Detail)
+	rec = httptest.NewRecorder()
+	r.RenderFragment(rec, "security", "security-drawer-fragment", data)
+	body = rec.Body.String()
+	for _, want := range []string{
+		`id="sec-pane-cves"`, `id="sec-pane-trivy"`, `id="sec-pane-lynis"`,
+		`id="sec-pane-defender"`, `id="sec-pane-certs"`,
+		"Refresh Live Detail", "CVE-2024-9999", "AUTH-0001",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("live: rendered drawer missing %q", want)
+		}
+	}
+	if strings.Contains(body, "Fetch Live Detail above for individual findings") {
+		t.Error("live: the cached-summary hint should not appear once detail is fetched")
 	}
 }

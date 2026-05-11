@@ -305,26 +305,27 @@
 <div class="alert alert--warn" style="margin-bottom:12px;">{{.Error}}</div>
 {{end}}
 
-{{if .Live}}
-    {{template "security-live-detail" .}}
-{{else}}
-    {{template "security-cached-summary" .}}
-{{end}}
-{{end}}
-
-
-{{/* ── Cached summary: instant render on drawer open ─────────────────── */}}
-{{define "security-cached-summary"}}
+{{/* One drawer view — no cached-vs-live fork. Tabs come from .Sections:
+     scanners with cached summary data (before "Fetch Live Detail") or
+     scanners present in the live detail (after — one dispatch covers every
+     scanner), plus the cross-scanner "CVEs" rollup and an always-present
+     "Certs" tab. A scanner pane shows the cached summary + a hint until the
+     live fetch lands, then the per-finding cards (sec-section-* templates —
+     official-page links + Ask AI). CSS-only tabs via :target; the first
+     .sec-tab-pane is the default pane; updateActiveTab() in
+     security-drawer.js repaints .sec-tab--active on hashchange /
+     htmx:afterSwap. Pane IDs are stable across the fetch so you stay on the
+     tab you were on. */}}
 <div class="sec-cached-summary">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-        <h4 style="margin:0;">Scanner Findings</h4>
+        <h4 style="margin:0;">{{if .Live}}Live Scanner Detail{{else}}Scanner Findings{{end}}</h4>
         <button class="btn btn--sm btn--outline"
                 hx-get="/ui/fragments/security-envoy/{{.EnvoyID}}?live=true"
                 hx-target="#sec-drawer-content"
                 hx-swap="innerHTML"
                 hx-disabled-elt="this"
                 hx-indicator="#sec-live-spinner">
-            Fetch Live Detail
+            {{if .Live}}Refresh Live Detail{{else}}Fetch Live Detail{{end}}
         </button>
     </div>
     <div id="sec-live-spinner" class="sec-live-spinner htmx-indicator">
@@ -332,232 +333,189 @@
         <div class="sec-spinner" aria-hidden="true"></div>
     </div>
 
-    {{/* Fully tabbed. One .sec-tab-pane per scanner that ran, plus an
-         always-present "Certs" tab. Reuses the .sec-drawer__tabs / .sec-tab /
-         .sec-tab-pane CSS + the updateActiveTab() JS the live-detail tab
-         strip uses — no new CSS/JS. The first pane (the "CVEs" pane when
-         any CVE scanner ran, otherwise the first present scanner) renders
-         by default via .sec-tab-pane:first-of-type. */}}
-    {{$hasCVEs := or .Cached.Unique .Cached.CVEs}}
+    {{if not .Sections}}
+    <p class="text-muted">No security scan data for this host.</p>
+    {{else}}
     <nav class="sec-drawer__tabs" role="tablist">
-        {{if $hasCVEs}}<a class="sec-tab" href="#sec-pane-cached-cves" role="tab">CVEs</a>{{end}}
-        {{if .Cached.Trivy}}<a class="sec-tab" href="#sec-pane-cached-trivy" role="tab">Trivy</a>{{end}}
-        {{if .Cached.Debsecan}}<a class="sec-tab" href="#sec-pane-cached-debsecan" role="tab">debsecan</a>{{end}}
-        {{if .Cached.Lynis}}<a class="sec-tab" href="#sec-pane-cached-lynis" role="tab">Lynis</a>{{end}}
-        {{if .Cached.Chkrootkit}}<a class="sec-tab" href="#sec-pane-cached-chkrootkit" role="tab">chkrootkit</a>{{end}}
-        {{if .Cached.Rkhunter}}<a class="sec-tab" href="#sec-pane-cached-rkhunter" role="tab">rkhunter</a>{{end}}
-        {{if .Cached.ClamAV}}<a class="sec-tab" href="#sec-pane-cached-clamav" role="tab">ClamAV</a>{{end}}
-        {{if .Cached.AIDE}}<a class="sec-tab" href="#sec-pane-cached-aide" role="tab">AIDE</a>{{end}}
-        <a class="sec-tab" href="#sec-pane-cached-certs" role="tab">Certs</a>
+        {{range .Sections}}<a class="sec-tab" href="#sec-pane-{{.Slug}}" role="tab" id="sec-tab-{{.Slug}}">{{.Label}}</a>{{end}}
     </nav>
-
-    {{/* ── CVEs ── unique count (the figure the /security per-host table
-         shows) + the unified cross-scanner CVE list (capped at MAX_CVES). */}}
-    {{if $hasCVEs}}
-    <section class="sec-tab-pane" id="sec-pane-cached-cves" role="tabpanel">
-        {{with .Cached.Unique}}
-        <p class="text-muted" style="font-size:11px;margin:0 0 4px;">Distinct CVE IDs, deduplicated across all scanners.</p>
-        <table class="security-drift-table">
-            <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th></tr></thead>
-            <tbody><tr>
-                <td class="{{if .Critical}}text-danger{{else}}text-success{{end}}">{{.Critical}}</td>
-                <td class="{{if .High}}text-warning{{else}}text-success{{end}}">{{.High}}</td>
-                <td>{{.Medium}}</td>
-                <td>{{.Low}}</td>
-                <td>{{.Total}}</td>
-            </tr></tbody>
-        </table>
-        {{end}}
-        {{if .Cached.CVEs}}
-        <h4 style="margin-top:12px;">{{if .Cached.Unique}}{{.Cached.Unique.Total}}{{else}}{{len .Cached.CVEs}}{{end}} unique CVE{{if ne (len .Cached.CVEs) 1}}s{{end}}{{if .Cached.CVEsTruncated}} — showing first {{len .Cached.CVEs}}{{end}}</h4>
-        {{range .Cached.CVEs}}
-        <div class="sec-card {{secSeverityClass .Severity}}">
-            <div class="sec-card__header">
-                <a href="{{cveURL .ID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.ID}}</a>
-                <span class="sec-card__sev">{{.Severity}}</span>
-            </div>
-            {{if gt .Packages 1}}<div class="sec-card__body"><span class="text-muted">({{.Packages}} packages)</span></div>{{end}}
-            {{if .Title}}<div class="sec-card__desc">{{.Title}}</div>{{end}}
-            <div class="sec-card__actions">
-                <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{cachedCVEAIQ $.Hostname .}}">Ask AI</button>
-            </div>
-        </div>
-        {{end}}
-        {{else}}
-        <p class="text-muted" style="margin-top:8px;">No CVEs reported.</p>
-        {{end}}
-    </section>
-    {{end}}
-
-    {{/* ── Trivy / debsecan ── raw per-package match counts (a CVE in N
-         packages counts N times; the cross-scanner deduped figure is in
-         the CVEs tab). ── */}}
-    {{with .Cached.Trivy}}
-    <section class="sec-tab-pane" id="sec-pane-cached-trivy" role="tabpanel">
-        <p class="text-muted" style="font-size:11px;margin:0 0 4px;">Trivy — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
-        <table class="security-drift-table">
-            <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th></tr></thead>
-            <tbody><tr>
-                <td class="text-danger">{{.Critical}}</td>
-                <td class="text-warning">{{.High}}</td>
-                <td>{{.Medium}}</td>
-                <td>{{.Low}}</td>
-            </tr></tbody>
-        </table>
-    </section>
-    {{end}}
-    {{with .Cached.Debsecan}}
-    <section class="sec-tab-pane" id="sec-pane-cached-debsecan" role="tabpanel">
-        <p class="text-muted" style="font-size:11px;margin:0 0 4px;">debsecan (Debian security tracker) — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
-        <table class="security-drift-table">
-            <thead><tr><th>High</th><th>Medium</th><th>Low</th><th>Unassigned</th></tr></thead>
-            <tbody><tr>
-                <td class="text-warning">{{.High}}</td>
-                <td>{{.Medium}}</td>
-                <td>{{.Low}}</td>
-                <td>{{.Unassigned}}</td>
-            </tr></tbody>
-        </table>
-    </section>
-    {{end}}
-
-    {{/* ── Lynis ── */}}
-    {{with .Cached.Lynis}}
-    {{$clean := eq .Warnings 0}}
-    <section class="sec-tab-pane" id="sec-pane-cached-lynis" role="tabpanel">
-        <div class="sec-card {{if $clean}}sec-card--info{{else}}sec-card--high{{end}}">
-            <div class="sec-card__header">
-                <span class="sec-card__cve">Lynis Hardening</span>
-                <span class="sec-card__sev">Score: {{.Score}}/100</span>
-            </div>
-            <div class="sec-card__body">Warnings: {{.Warnings}} &middot; Suggestions: {{.Suggestions}}</div>
-            <div class="sec-card__actions">
-                <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "lynis-summary: %d/100, %d warnings, %d suggestions" .Score .Warnings .Suggestions)}}">Ask AI</button>
-            </div>
-        </div>
-    </section>
-    {{end}}
-
-    {{/* ── chkrootkit ── */}}
-    {{with .Cached.Chkrootkit}}
-    {{$st := "clean"}}{{if not .Clean}}{{$st = "infected"}}{{end}}
-    <section class="sec-tab-pane" id="sec-pane-cached-chkrootkit" role="tabpanel">
-        <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--critical{{end}}">
-            <div class="sec-card__header">
-                <span class="sec-card__cve">chkrootkit</span>
-                <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Infected{{end}}</span>
-            </div>
-            {{if not .Clean}}<div class="sec-card__body text-danger">{{.Issues}} suspicious finding{{if ne .Issues 1}}s{{end}}</div>{{end}}
-            <div class="sec-card__actions">
-                <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "chkrootkit-summary: %s, %d findings" $st .Issues)}}">Ask AI</button>
-            </div>
-        </div>
-    </section>
-    {{end}}
-
-    {{/* ── rkhunter ── */}}
-    {{with .Cached.Rkhunter}}
-    {{$st := "clean"}}{{if not .Clean}}{{$st = "warning"}}{{end}}
-    <section class="sec-tab-pane" id="sec-pane-cached-rkhunter" role="tabpanel">
-        <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--high{{end}}">
-            <div class="sec-card__header">
-                <span class="sec-card__cve">rkhunter</span>
-                <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Warning{{end}}</span>
-            </div>
-            {{if not .Clean}}<div class="sec-card__body">{{.Issues}} warning{{if ne .Issues 1}}s{{end}}</div>{{end}}
-            <div class="sec-card__actions">
-                <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "rkhunter-summary: %s, %d warnings" $st .Issues)}}">Ask AI</button>
-            </div>
-        </div>
-    </section>
-    {{end}}
-
-    {{/* ── ClamAV ── */}}
-    {{with .Cached.ClamAV}}
-    <section class="sec-tab-pane" id="sec-pane-cached-clamav" role="tabpanel">
-        <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--critical{{end}}">
-            <div class="sec-card__header">
-                <span class="sec-card__cve">ClamAV Malware Scan</span>
-                <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Infected{{end}}</span>
-            </div>
-            {{if not .Clean}}<div class="sec-card__body text-danger">{{.Infected}} infected file{{if ne .Infected 1}}s{{end}}</div>{{end}}
-            <div class="sec-card__actions">
-                <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "clamav-summary: %d infected" .Infected)}}">Ask AI</button>
-            </div>
-        </div>
-    </section>
-    {{end}}
-
-    {{/* ── AIDE ── */}}
-    {{with .Cached.AIDE}}
-    <section class="sec-tab-pane" id="sec-pane-cached-aide" role="tabpanel">
-        <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--high{{end}}">
-            <div class="sec-card__header">
-                <span class="sec-card__cve">AIDE File Integrity</span>
-                <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Changed{{end}}</span>
-            </div>
-            {{if not .Clean}}<div class="sec-card__body">Added: {{.Added}} &middot; Removed: {{.Removed}} &middot; Changed: {{.Changed}}</div>{{end}}
-            <div class="sec-card__actions">
-                <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "aide-summary: %d added, %d removed, %d changed" .Added .Removed .Changed)}}">Ask AI</button>
-            </div>
-        </div>
-    </section>
-    {{end}}
-
-    {{/* ── Certs ── this host's certificates expiring or expired within
-         30 days (the same scope as /security's cert panel). Always present. */}}
-    <section class="sec-tab-pane" id="sec-pane-cached-certs" role="tabpanel">
-        {{if .Certs}}
-        <p class="text-muted" style="font-size:11px;margin:0 0 4px;">{{len .Certs}} certificate{{if ne (len .Certs) 1}}s{{end}} expiring or expired within 30 days.</p>
-        <table class="security-drift-table">
-            <thead><tr><th>Certificate</th><th>Days left</th><th>Expires</th><th>Issuer</th></tr></thead>
-            <tbody>
-            {{range .Certs}}
-            <tr>
-                <td>{{if .CN}}{{.CN}}{{else}}<span class="text-muted mono">{{.Path}}</span>{{end}}{{if .IsCA}} <span class="text-muted">(CA)</span>{{end}}</td>
-                <td class="{{if lt .DaysRemaining 0}}text-danger{{else if lt .DaysRemaining 7}}text-warning{{end}}">{{if lt .DaysRemaining 0}}expired{{else}}{{.DaysRemaining}}{{end}}</td>
-                <td>{{.NotAfter}}</td>
-                <td class="text-muted">{{.Issuer}}</td>
-            </tr>
+    {{range .Sections}}
+    <section class="sec-tab-pane" id="sec-pane-{{.Slug}}" role="tabpanel" aria-labelledby="sec-tab-{{.Slug}}">
+        {{if eq .Slug "cves"}}{{template "sec-pane-cves" $}}
+        {{else if eq .Slug "certs"}}{{template "sec-pane-certs" $}}
+        {{else if $.Live}}
+            {{if eq .Slug "trivy"}}{{template "sec-section-trivy" dict "Detail" $.Detail.Trivy "Hostname" $.Hostname}}
+            {{else if eq .Slug "debsecan"}}{{template "sec-section-debsecan" dict "Detail" $.Detail.Debsecan "Hostname" $.Hostname}}
+            {{else if eq .Slug "lynis"}}{{template "sec-section-lynis" dict "Detail" $.Detail.Lynis "Hostname" $.Hostname}}
+            {{else if eq .Slug "chkrootkit"}}{{template "sec-section-chkrootkit" dict "Rows" $.ChkrootkitRows "LastScan" $.Detail.Chkrootkit.LastScan "Hostname" $.Hostname}}
+            {{else if eq .Slug "rkhunter"}}{{template "sec-section-rkhunter" dict "Rows" $.RkhunterRows "LastScan" $.Detail.Rkhunter.LastScan "Hostname" $.Hostname}}
+            {{else if eq .Slug "clamav"}}{{template "sec-section-clamav" dict "Detail" $.Detail.ClamAV "Hostname" $.Hostname}}
+            {{else if eq .Slug "aide"}}{{template "sec-section-aide" dict "Detail" $.Detail.AIDE "Hostname" $.Hostname}}
+            {{else if eq .Slug "defender"}}{{template "sec-section-defender" dict "Detail" $.Detail.Defender "Hostname" $.Hostname}}
+            {{else if eq .Slug "scap"}}{{template "sec-section-scap" dict "Detail" $.Detail.SCAP "Hostname" $.Hostname}}
             {{end}}
-            </tbody>
-        </table>
-        {{else}}
-        <p class="text-success" style="margin-top:8px;">No certificates expiring within 30 days.</p>
+        {{else}}{{template "sec-pane-cached-scanner" dict "Slug" .Slug "Cached" $.Cached "Hostname" $.Hostname}}
         {{end}}
     </section>
+    {{end}}
+    {{end}}
 </div>
 {{end}}
 
 
-{{/* ── Live detail: agent dispatch completed, render all tabs ──────────
-     CSS-only tabs: each tab button is an <a href="#sec-pane-X">; the
-     .sec-tab-pane CSS shows only the :target pane, or falls back to the
-     :first-of-type when no fragment is selected. No JS required. */}}
-{{define "security-live-detail"}}
-{{if not .Sections}}
-<p class="text-muted">No scan output files found.</p>
+{{/* ── CVEs pane ── the cross-scanner deduplicated CVE list (the figure
+     /security's per-host table shows) + the unified list capped at MAX_CVES.
+     A check-in-trait rollup — the live fetch doesn't add to it; the Trivy
+     and debsecan per-package vulns live in their own tabs. */}}
+{{define "sec-pane-cves"}}
+{{with .Cached.Unique}}
+<p class="text-muted" style="font-size:11px;margin:0 0 4px;">Distinct CVE IDs, deduplicated across all scanners.</p>
+<table class="security-drift-table">
+    <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th></tr></thead>
+    <tbody><tr>
+        <td class="{{if .Critical}}text-danger{{else}}text-success{{end}}">{{.Critical}}</td>
+        <td class="{{if .High}}text-warning{{else}}text-success{{end}}">{{.High}}</td>
+        <td>{{.Medium}}</td>
+        <td>{{.Low}}</td>
+        <td>{{.Total}}</td>
+    </tr></tbody>
+</table>
+{{end}}
+{{if .Cached.CVEs}}
+<h4 style="margin-top:12px;">{{if .Cached.Unique}}{{.Cached.Unique.Total}}{{else}}{{len .Cached.CVEs}}{{end}} unique CVE{{if ne (len .Cached.CVEs) 1}}s{{end}}{{if .Cached.CVEsTruncated}} — showing first {{len .Cached.CVEs}}{{end}}</h4>
+{{range .Cached.CVEs}}
+<div class="sec-card {{secSeverityClass .Severity}}">
+    <div class="sec-card__header">
+        <a href="{{cveURL .ID}}" target="_blank" rel="noopener" class="sec-card__cve">{{.ID}}</a>
+        <span class="sec-card__sev">{{.Severity}}</span>
+    </div>
+    {{if gt .Packages 1}}<div class="sec-card__body"><span class="text-muted">({{.Packages}} packages)</span></div>{{end}}
+    {{if .Title}}<div class="sec-card__desc">{{.Title}}</div>{{end}}
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{cachedCVEAIQ $.Hostname .}}">Ask AI</button>
+    </div>
+</div>
+{{end}}
 {{else}}
-<nav class="sec-drawer__tabs" role="tablist">
-    {{range .Sections}}
-    <a class="sec-tab" href="#sec-pane-{{.Slug}}" role="tab">{{.Label}}</a>
-    {{end}}
-</nav>
-{{range .Sections}}
-<section class="sec-tab-pane" id="sec-pane-{{.Slug}}" role="tabpanel" aria-labelledby="sec-tab-{{.Slug}}">
-    {{if eq .Slug "trivy"}}{{template "sec-section-trivy" dict "Detail" $.Detail.Trivy "Hostname" $.Hostname}}
-    {{else if eq .Slug "debsecan"}}{{template "sec-section-debsecan" dict "Detail" $.Detail.Debsecan "Hostname" $.Hostname}}
-    {{else if eq .Slug "lynis"}}{{template "sec-section-lynis" dict "Detail" $.Detail.Lynis "Hostname" $.Hostname}}
-    {{else if eq .Slug "rkhunter"}}{{template "sec-section-rkhunter" dict "Rows" $.RkhunterRows "LastScan" $.Detail.Rkhunter.LastScan "Hostname" $.Hostname}}
-    {{else if eq .Slug "chkrootkit"}}{{template "sec-section-chkrootkit" dict "Rows" $.ChkrootkitRows "LastScan" $.Detail.Chkrootkit.LastScan "Hostname" $.Hostname}}
-    {{else if eq .Slug "clamav"}}{{template "sec-section-clamav" dict "Detail" $.Detail.ClamAV "Hostname" $.Hostname}}
-    {{else if eq .Slug "aide"}}{{template "sec-section-aide" dict "Detail" $.Detail.AIDE "Hostname" $.Hostname}}
-    {{else if eq .Slug "defender"}}{{template "sec-section-defender" dict "Detail" $.Detail.Defender "Hostname" $.Hostname}}
-    {{else if eq .Slug "scap"}}{{template "sec-section-scap" dict "Detail" $.Detail.SCAP "Hostname" $.Hostname}}
-    {{end}}
-</section>
+<p class="text-muted" style="margin-top:8px;">No CVEs reported.</p>
 {{end}}
 {{end}}
+
+
+{{/* ── Certs pane ── this host's certificates expiring or expired within
+     30 days (the same scope as /security's cert panel). Always present. */}}
+{{define "sec-pane-certs"}}
+{{if .Certs}}
+<p class="text-muted" style="font-size:11px;margin:0 0 4px;">{{len .Certs}} certificate{{if ne (len .Certs) 1}}s{{end}} expiring or expired within 30 days.</p>
+<table class="security-drift-table">
+    <thead><tr><th>Certificate</th><th>Days left</th><th>Expires</th><th>Issuer</th></tr></thead>
+    <tbody>
+    {{range .Certs}}
+    <tr>
+        <td>{{if .CN}}{{.CN}}{{else}}<span class="text-muted mono">{{.Path}}</span>{{end}}{{if .IsCA}} <span class="text-muted">(CA)</span>{{end}}</td>
+        <td class="{{if lt .DaysRemaining 0}}text-danger{{else if lt .DaysRemaining 7}}text-warning{{end}}">{{if lt .DaysRemaining 0}}expired{{else}}{{.DaysRemaining}}{{end}}</td>
+        <td>{{.NotAfter}}</td>
+        <td class="text-muted">{{.Issuer}}</td>
+    </tr>
+    {{end}}
+    </tbody>
+</table>
+{{else}}
+<p class="text-success" style="margin-top:8px;">No certificates expiring within 30 days.</p>
+{{end}}
+{{end}}
+
+
+{{/* ── Cached scanner summary ── shown in a scanner's pane until the live
+     fetch lands; the sec-section-* per-finding cards replace it afterward.
+     Arg: dict "Slug" <slug> "Cached" <SecurityDrawerCached> "Hostname" <h>. */}}
+{{define "sec-pane-cached-scanner"}}
+{{if eq .Slug "trivy"}}{{with .Cached.Trivy}}
+<p class="text-muted" style="font-size:11px;margin:0 0 4px;">Trivy — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
+<table class="security-drift-table">
+    <thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th></tr></thead>
+    <tbody><tr>
+        <td class="text-danger">{{.Critical}}</td>
+        <td class="text-warning">{{.High}}</td>
+        <td>{{.Medium}}</td>
+        <td>{{.Low}}</td>
+    </tr></tbody>
+</table>
+{{end}}
+{{else if eq .Slug "debsecan"}}{{with .Cached.Debsecan}}
+<p class="text-muted" style="font-size:11px;margin:0 0 4px;">debsecan (Debian security tracker) — {{.Total}} package-level match{{if ne .Total 1}}es{{end}}{{if .LastScan}} · scanned {{.LastScan}}{{end}}</p>
+<table class="security-drift-table">
+    <thead><tr><th>High</th><th>Medium</th><th>Low</th><th>Unassigned</th></tr></thead>
+    <tbody><tr>
+        <td class="text-warning">{{.High}}</td>
+        <td>{{.Medium}}</td>
+        <td>{{.Low}}</td>
+        <td>{{.Unassigned}}</td>
+    </tr></tbody>
+</table>
+{{end}}
+{{else if eq .Slug "lynis"}}{{with .Cached.Lynis}}
+<div class="sec-card {{if eq .Warnings 0}}sec-card--info{{else}}sec-card--high{{end}}">
+    <div class="sec-card__header">
+        <span class="sec-card__cve">Lynis Hardening</span>
+        <span class="sec-card__sev">Score: {{.Score}}/100</span>
+    </div>
+    <div class="sec-card__body">Warnings: {{.Warnings}} &middot; Suggestions: {{.Suggestions}}</div>
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "lynis-summary: %d/100, %d warnings, %d suggestions" .Score .Warnings .Suggestions)}}">Ask AI</button>
+    </div>
+</div>
+{{end}}
+{{else if eq .Slug "chkrootkit"}}{{with .Cached.Chkrootkit}}{{$st := "clean"}}{{if not .Clean}}{{$st = "infected"}}{{end}}
+<div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--critical{{end}}">
+    <div class="sec-card__header">
+        <span class="sec-card__cve">chkrootkit</span>
+        <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Infected{{end}}</span>
+    </div>
+    {{if not .Clean}}<div class="sec-card__body text-danger">{{.Issues}} suspicious finding{{if ne .Issues 1}}s{{end}}</div>{{end}}
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "chkrootkit-summary: %s, %d findings" $st .Issues)}}">Ask AI</button>
+    </div>
+</div>
+{{end}}
+{{else if eq .Slug "rkhunter"}}{{with .Cached.Rkhunter}}{{$st := "clean"}}{{if not .Clean}}{{$st = "warning"}}{{end}}
+<div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--high{{end}}">
+    <div class="sec-card__header">
+        <span class="sec-card__cve">rkhunter</span>
+        <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Warning{{end}}</span>
+    </div>
+    {{if not .Clean}}<div class="sec-card__body">{{.Issues}} warning{{if ne .Issues 1}}s{{end}}</div>{{end}}
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "rkhunter-summary: %s, %d warnings" $st .Issues)}}">Ask AI</button>
+    </div>
+</div>
+{{end}}
+{{else if eq .Slug "clamav"}}{{with .Cached.ClamAV}}
+<div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--critical{{end}}">
+    <div class="sec-card__header">
+        <span class="sec-card__cve">ClamAV Malware Scan</span>
+        <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Infected{{end}}</span>
+    </div>
+    {{if not .Clean}}<div class="sec-card__body text-danger">{{.Infected}} infected file{{if ne .Infected 1}}s{{end}}</div>{{end}}
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "clamav-summary: %d infected" .Infected)}}">Ask AI</button>
+    </div>
+</div>
+{{end}}
+{{else if eq .Slug "aide"}}{{with .Cached.AIDE}}
+<div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--high{{end}}">
+    <div class="sec-card__header">
+        <span class="sec-card__cve">AIDE File Integrity</span>
+        <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Changed{{end}}</span>
+    </div>
+    {{if not .Clean}}<div class="sec-card__body">Added: {{.Added}} &middot; Removed: {{.Removed}} &middot; Changed: {{.Changed}}</div>{{end}}
+    <div class="sec-card__actions">
+        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "aide-summary: %d added, %d removed, %d changed" .Added .Removed .Changed)}}">Ask AI</button>
+    </div>
+</div>
+{{end}}
+{{end}}
+<p class="text-muted" style="font-size:11px;margin-top:8px;">Fetch Live Detail above for individual findings — official-page links and Ask AI.</p>
 {{end}}
 
 
