@@ -230,6 +230,38 @@ func TestGroupNameClaims(t *testing.T) {
 	}
 }
 
+func TestUnambiguousNameByPubkey(t *testing.T) {
+	pkA := "aa" + "00112233445566778899aabbccddeeff00112233445566778899aabbccdd"
+	pkB := "bb" + "00112233445566778899aabbccddeeff00112233445566778899aabbccdd"
+	pkC := "cc" + "00112233445566778899aabbccddeeff00112233445566778899aabbccdd"
+	claim := func(name, pk string, at int64) NameClaim {
+		return NameClaim{Body: NameClaimBody{PuddlePubkey: pk, Name: name, ClaimedAt: at}}
+	}
+	grouped := map[string][]NameClaim{
+		// unambiguous: one claimant
+		"team": {claim("team", pkB, 50)},
+		// contested: two claimants → dropped
+		"dan": {claim("dan", pkA, 200), claim("dan", pkC, 70)},
+		// pkA also (unambiguously) claims "danny" later → wins for pkA
+		"danny": {claim("danny", pkA, 300)},
+		// empty pubkey → dropped
+		"junk": {claim("junk", "", 1)},
+	}
+	got := unambiguousNameByPubkey(grouped)
+	if got[pkB] != "team" {
+		t.Errorf("pkB → %q, want 'team'", got[pkB])
+	}
+	if got[pkA] != "danny" {
+		t.Errorf("pkA → %q, want 'danny' (its only uncontested name; the contested 'dan' is ignored)", got[pkA])
+	}
+	if _, ok := got[pkC]; ok {
+		t.Errorf("pkC should not resolve — its only name 'dan' is contested")
+	}
+	if len(got) != 2 {
+		t.Errorf("got %d entries, want 2: %+v", len(got), got)
+	}
+}
+
 func sliceContainsAll(have, want []string) bool {
 	a := append([]string(nil), have...)
 	b := append([]string(nil), want...)

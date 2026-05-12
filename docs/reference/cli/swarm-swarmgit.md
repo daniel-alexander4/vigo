@@ -21,10 +21,11 @@ Every subcommand accepts `--json` to emit machine-readable output.
 Every project is identified by `project_id = sha256(founder_puddle_pubkey ‖ handle)` rendered as 64-character lowercase hex. URLs:
 
 ```
-swarmgit://<project_id>/<handle>
+swarmgit://<project_id>/<handle>          # canonical, self-certifying
+swarmgit://<puddle-name>/<handle>         # friendly form, when the founder puddle has claimed a name (ADR-022)
 ```
 
-The handle is human-readable; cryptographic identity is the project_id. Two projects can share a handle — there's no central registry.
+The handle is human-readable; cryptographic identity is the project_id. Two projects can share a handle — there's no central registry. When the founder puddle has an uncontested name claim, `status`/`list`/`show` surface the friendly URL alongside the canonical one; the friendly name is a hint, the project_id is the proof.
 
 ## Usage
 
@@ -79,7 +80,8 @@ Detailed view of one project.
 ```
 $ vigocli swarm swarmgit show vigo-web
 Project:        vigo-web
-URL:            swarmgit://e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/vigo-web
+URL:            swarmgit://dan/vigo-web
+Canonical URL:  swarmgit://e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/vigo-web
 Project ID:     e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 Founder puddle:  ed25519:8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8
 Scope:          swarm-wide

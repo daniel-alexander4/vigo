@@ -22,8 +22,10 @@ import (
 //
 // Post-ADR-015 the model is project-id-keyed (every project is
 // `swarmgit://<project_id>/<handle>` with `project_id =
-// sha256(founder_puddle_pubkey)`). Membership is a stack of capability
-// tokens; the legacy publisher/receiver distinction is gone.
+// sha256(founder_puddle_pubkey ‖ handle)`, or `swarmgit://<puddle-name>/<handle>`
+// when the founder puddle has claimed a name — ADR-022). Membership is
+// a stack of capability tokens; the legacy publisher/receiver
+// distinction is gone.
 //
 // All subcommands are read-only. Recovery, push, and revoke
 // operations live on the envoy side under
@@ -33,10 +35,10 @@ import (
 // exactly. Duplicated here so the CLI stays decoupled from the
 // server package (matches the pattern in cli/swarm.go).
 type fleetResponse struct {
-	GeneratedAt  time.Time              `json:"generated_at"`
-	Participants []string               `json:"participants"`
-	Totals       fleetTotals            `json:"totals"`
-	Projects     []fleetProjectSummary  `json:"projects"`
+	GeneratedAt  time.Time             `json:"generated_at"`
+	Participants []string              `json:"participants"`
+	Totals       fleetTotals           `json:"totals"`
+	Projects     []fleetProjectSummary `json:"projects"`
 }
 
 type fleetTotals struct {
@@ -48,20 +50,21 @@ type fleetTotals struct {
 }
 
 type fleetProjectSummary struct {
-	ProjectID          string                  `json:"project_id"`
-	Handle             string                  `json:"handle"`
+	ProjectID           string                  `json:"project_id"`
+	Handle              string                  `json:"handle"`
 	FounderPuddlePubkey string                  `json:"founder_puddle_pubkey"`
-	Members            []string                `json:"members"`
-	DrScope            string                  `json:"dr_scope"`
-	Hosts              []fleetHostPresence     `json:"hosts"`
-	HeadRefs           map[string]fleetRefStat `json:"head_refs"`
-	MemberFleetCount   int                     `json:"member_fleet_count"`
-	HostCount          int                     `json:"host_count"`
-	LastUpdated        int64                   `json:"last_updated"`
-	DivergentRefs      []string                `json:"divergent_refs,omitempty"`
-	RevokesCount       int                     `json:"revokes_count"`
-	LeavesCount        int                     `json:"leaves_count"`
-	DigestUnanimous    bool                    `json:"digest_unanimous"`
+	FriendlyName        string                  `json:"friendly_name,omitempty"`
+	Members             []string                `json:"members"`
+	DrScope             string                  `json:"dr_scope"`
+	Hosts               []fleetHostPresence     `json:"hosts"`
+	HeadRefs            map[string]fleetRefStat `json:"head_refs"`
+	MemberFleetCount    int                     `json:"member_fleet_count"`
+	HostCount           int                     `json:"host_count"`
+	LastUpdated         int64                   `json:"last_updated"`
+	DivergentRefs       []string                `json:"divergent_refs,omitempty"`
+	RevokesCount        int                     `json:"revokes_count"`
+	LeavesCount         int                     `json:"leaves_count"`
+	DigestUnanimous     bool                    `json:"digest_unanimous"`
 }
 
 type fleetHostPresence struct {
@@ -86,9 +89,10 @@ var swarmgitCmd = &cobra.Command{
 	Short: "Fleet-wide view of swarmgit projects",
 	Long: `Read-only admin view of the unified-substrate swarmgit mesh
 (ADR-015). Each project is identified by
-project_id = sha256(founder_puddle_pubkey) and accessed via
-swarmgit://<project_id>/<handle>. Membership is a stack of Ed25519
-capability tokens.
+project_id = sha256(founder_puddle_pubkey ‖ handle) and accessed via
+swarmgit://<project_id>/<handle> — or swarmgit://<puddle-name>/<handle>
+when the founder puddle has claimed a name (ADR-022). Membership is a
+stack of Ed25519 capability tokens.
 
 Use the envoy-side 'vigo swarm swarmgit project ...' verbs to
 init / invite / join / leave / revoke / reanchor projects. This
@@ -224,7 +228,12 @@ func runSwarmgitShow(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("Project:        %s\n", bold(match.Handle))
-	fmt.Printf("URL:            swarmgit://%s/%s\n", match.ProjectID, match.Handle)
+	if match.FriendlyName != "" {
+		fmt.Printf("URL:            swarmgit://%s/%s\n", match.FriendlyName, match.Handle)
+		fmt.Printf("Canonical URL:  swarmgit://%s/%s\n", match.ProjectID, match.Handle)
+	} else {
+		fmt.Printf("URL:            swarmgit://%s/%s\n", match.ProjectID, match.Handle)
+	}
 	fmt.Printf("Project ID:     %s\n", match.ProjectID)
 	fmt.Printf("Founder puddle: ed25519:%s\n", match.FounderPuddlePubkey)
 	fmt.Printf("Scope:          %s\n", match.DrScope)

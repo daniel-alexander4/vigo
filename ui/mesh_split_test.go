@@ -190,6 +190,49 @@ func TestSwarmgit_DivergentRefsPromotesBannerWarn(t *testing.T) {
 	}
 }
 
+// TestSwarmgit_DetailRendersFriendlyURLAndHostSize pins the project
+// detail page against a populated summary. Two regression guards in
+// one: (1) the host-size cell renders through humanBytes — a uint64
+// HostPresence.SizeBytes used to abort the template mid-execute with
+// "template error" the moment any host actually held a bare repo;
+// (2) when the founder puddle has a friendly name (ADR-022), the
+// swarmgit:// URL reflects it, with the canonical hex form alongside.
+func TestSwarmgit_DetailRendersFriendlyURLAndHostSize(t *testing.T) {
+	h := newTestHandler(t)
+	h.authEnabled = true
+	pid := "154e3b59465fe34a2d590edf5af6f81fba82608f27c7ca3b56a1bad5b5069d66"
+	h.swarmgitFleet = &mockSwarmgit{fleet: &swarmgitmesh.Fleet{
+		Projects: []swarmgitmesh.ProjectSummary{
+			{
+				ProjectID:           pid,
+				Handle:              "vigo",
+				FounderPuddlePubkey: "ed2551900000000000000000000000000000000000000000000000000000beef",
+				FriendlyName:        "dan",
+				DrScope:             "swarm-wide",
+				HostCount:           1,
+				MemberFleetCount:    1,
+				DigestUnanimous:     true,
+				Hosts: []swarmgitmesh.HostPresence{
+					{Host: "danlap", HasBareRepo: true, SizeBytes: 4096, UpdatedAt: 1, LeafRole: "Admin"},
+				},
+			},
+		},
+		Totals: swarmgitmesh.Totals{Projects: 1, Hosts: 1},
+	}}
+
+	req := adminRequest(http.MethodGet, "/swarm/swarmgit/"+pid)
+	req.SetPathValue("project_id", pid)
+	rec := httptest.NewRecorder()
+	h.Swarmgit(rec, req)
+	body := rec.Body.String()
+	if containsSubstr(body, "template error") {
+		t.Fatalf("detail page rendered a template error; body sample:\n%s", snippet(body, 2000))
+	}
+	if !containsAll(body, "swarmgit://dan/vigo", "swarmgit://"+pid+"/vigo", "4.0 KB") {
+		t.Errorf("expected friendly URL + canonical URL + host size; body sample:\n%s", snippet(body, 2500))
+	}
+}
+
 func containsAll(haystack string, needles ...string) bool {
 	for _, n := range needles {
 		if !containsSubstr(haystack, n) {

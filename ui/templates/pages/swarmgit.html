@@ -16,7 +16,12 @@
     <div class="table-container" style="margin-bottom:24px;">
         <table class="table">
             <tbody>
+                {{if .Project.FriendlyName}}
+                <tr><td style="font-weight:600;width:200px;">URL</td><td><code>swarmgit://{{.Project.FriendlyName}}/{{.Project.Handle}}</code></td></tr>
+                <tr><td style="font-weight:600;">Canonical URL</td><td><code>swarmgit://{{.Project.ProjectID}}/{{.Project.Handle}}</code></td></tr>
+                {{else}}
                 <tr><td style="font-weight:600;width:200px;">URL</td><td><code>swarmgit://{{.Project.ProjectID}}/{{.Project.Handle}}</code></td></tr>
+                {{end}}
                 <tr><td style="font-weight:600;">Project ID</td><td><code>{{.Project.ProjectID}}</code></td></tr>
                 <tr><td style="font-weight:600;">Founder puddle</td><td><code>ed25519:{{.Project.FounderPuddlePubkey}}</code></td></tr>
                 <tr><td style="font-weight:600;">Scope</td><td>{{.Project.DrScope}}</td></tr>
@@ -99,7 +104,7 @@
 {{/* ── List view ── */}}
 <div class="page-header">
     <h1>Swarmgit</h1>
-    <p>Fleet-wide unified-substrate swarmgit view. Projects are keyed by <code>project_id = sha256(founder_puddle_pubkey)</code>.</p>
+    <p>Fleet-wide unified-substrate swarmgit view. Projects are keyed by <code>project_id = sha256(founder_puddle_pubkey ‖ handle)</code>; when the founder puddle has claimed a name (ADR-022) the friendly <code>swarmgit://&lt;name&gt;/&lt;handle&gt;</code> form is shown alongside.</p>
 </div>
 
 {{template "health-banner" .Health}}
@@ -149,7 +154,7 @@
             <tbody>
                 {{range .Fleet.Projects}}
                 <tr onclick="location.href='/swarm/swarmgit/{{.ProjectID}}'" style="cursor:pointer;">
-                    <td><strong>{{.Handle}}</strong></td>
+                    <td><strong>{{.Handle}}</strong>{{if .FriendlyName}}<br><code>swarmgit://{{.FriendlyName}}/{{.Handle}}</code>{{end}}</td>
                     <td>{{.DrScope}}</td>
                     <td>{{.MemberFleetCount}}</td>
                     <td>{{.HostCount}}</td>

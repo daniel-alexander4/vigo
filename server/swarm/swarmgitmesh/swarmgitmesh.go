@@ -63,11 +63,17 @@ type Totals struct {
 
 // ProjectSummary aggregates one project across the fleet.
 type ProjectSummary struct {
-	ProjectID           string   `json:"project_id"`
-	Handle              string   `json:"handle"`
-	FounderPuddlePubkey string   `json:"founder_puddle_pubkey"`
-	Members             []string `json:"members"`
-	DrScope             string   `json:"dr_scope"`
+	ProjectID           string `json:"project_id"`
+	Handle              string `json:"handle"`
+	FounderPuddlePubkey string `json:"founder_puddle_pubkey"`
+	// FriendlyName is the founder puddle's claimed name (ADR-022),
+	// or "" when the puddle hasn't claimed one or the name it
+	// claimed is contested. When set, `swarmgit://<FriendlyName>/<Handle>`
+	// resolves to this project alongside the canonical hex form. It's a
+	// display hint only — the project_id is the cryptographic identity.
+	FriendlyName string   `json:"friendly_name,omitempty"`
+	Members      []string `json:"members"`
+	DrScope      string   `json:"dr_scope"`
 
 	Hosts    []HostPresence       `json:"hosts"`
 	HeadRefs map[string]RefStatus `json:"head_refs"`
@@ -114,10 +120,14 @@ func (f *Fleet) LookupByHandle(handle string) *ProjectSummary {
 
 // HostPresence describes one envoy's view of a project.
 type HostPresence struct {
-	Host            string            `json:"host"`
-	UpdatedAt       int64             `json:"updated_at"`
-	HasBareRepo     bool              `json:"has_bare_repo"`
-	SizeBytes       uint64            `json:"size_bytes,omitempty"`
+	Host        string `json:"host"`
+	UpdatedAt   int64  `json:"updated_at"`
+	HasBareRepo bool   `json:"has_bare_repo"`
+	// SizeBytes is int64 (not the uint64 the wire trait uses) so the
+	// `humanBytes` template helper — which takes int64 — renders it
+	// without a per-row cast. Bare-repo footprints stay within int64
+	// range indefinitely in practice.
+	SizeBytes       int64             `json:"size_bytes,omitempty"`
 	HeadRefs        map[string]string `json:"head_refs,omitempty"`
 	EnvelopesDigest string            `json:"envelopes_digest,omitempty"`
 	UsersWithState  []string          `json:"users_with_state,omitempty"`
@@ -248,6 +258,39 @@ func groupNameClaims(envs []*traitEnvelope) map[string][]NameClaim {
 	return names
 }
 
+// unambiguousNameByPubkey reverses the grouped name map into
+// puddle_pubkey(lower) → friendly name. Only names with a single
+// claimant survive — a contested name resolves to nothing and the
+// hex project_id stays the proof (ADR-022). If a puddle has claimed
+// several distinct uncontested names (a re-found supersession window,
+// say), the freshest `claimed_at` wins so the display tracks the
+// puddle's current name.
+func unambiguousNameByPubkey(grouped map[string][]NameClaim) map[string]string {
+	type pick struct {
+		name string
+		at   int64
+	}
+	best := make(map[string]pick)
+	for name, claims := range grouped {
+		if len(claims) != 1 {
+			continue // contested — not a usable display name
+		}
+		c := claims[0]
+		pk := strings.ToLower(c.Body.PuddlePubkey)
+		if pk == "" {
+			continue
+		}
+		if cur, ok := best[pk]; !ok || c.Body.ClaimedAt > cur.at {
+			best[pk] = pick{name: name, at: c.Body.ClaimedAt}
+		}
+	}
+	out := make(map[string]string, len(best))
+	for pk, p := range best {
+		out[pk] = p.name
+	}
+	return out
+}
+
 // build fetches every envoy's `swarmgit` trait, joins per-envoy
 // project entries by project_id, and computes per-ref consensus.
 func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, error) {
@@ -289,9 +332,20 @@ func (a *Aggregator) build(ctx context.Context, envoys []EnvoyInput) (*Fleet, er
 		}
 	}
 
+	// Reverse the fleet's friendly-name claims so each summary can
+	// carry its founder puddle's display name (ADR-022). Built from
+	// the same trait envelopes we already loaded above.
+	envs := make([]*traitEnvelope, 0, len(rows))
+	for _, row := range rows {
+		envs = append(envs, row.envelope)
+	}
+	nameByPubkey := unambiguousNameByPubkey(groupNameClaims(envs))
+
 	summaries := make([]ProjectSummary, 0, len(by))
 	for projectID, slot := range by {
-		summaries = append(summaries, summarizeProject(projectID, slot.entries, slot.hosts, slot.updated))
+		s := summarizeProject(projectID, slot.entries, slot.hosts, slot.updated)
+		s.FriendlyName = nameByPubkey[strings.ToLower(s.FounderPuddlePubkey)]
+		summaries = append(summaries, s)
 	}
 
 	sort.Slice(summaries, func(i, j int) bool {
@@ -355,7 +409,7 @@ func summarizeProject(projectID string, entries []projectTrait, hosts []string, 
 			Host:            hosts[i],
 			UpdatedAt:       updated[i],
 			HasBareRepo:     e.HasBareRepo,
-			SizeBytes:       e.BareRepoSizeBytes,
+			SizeBytes:       int64(e.BareRepoSizeBytes),
 			HeadRefs:        e.HeadRefs,
 			EnvelopesDigest: e.envelopesDigestHex(),
 			UsersWithState:  append([]string(nil), e.UsersWithState...),
