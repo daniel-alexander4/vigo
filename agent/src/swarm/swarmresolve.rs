@@ -36,7 +36,9 @@ use std::io;
 use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Duration;
 
+use notify::Watcher;
 use tokio_util::sync::CancellationToken;
 
 use crate::state::StateStore;
@@ -324,20 +326,85 @@ fn write_atomic(path: &Path, contents: &str) -> io::Result<()> {
 
 // ── reactor ───────────────────────────────────────────────────────
 
-/// How often the swarmresolve reactor reconciles `/etc/hosts` with the
-/// host index (and prunes stale index entries). Off the hot path; a
-/// minute is plenty given the ~30 s announce cadence.
-const SWARMRESOLVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+/// Backstop interval for the swarmresolve reactor. The fast path is an
+/// inotify/kqueue watch on `/etc/hosts` (see [`spawn`]) that re-renders
+/// the managed block within [`DEBOUNCE`] of any out-of-band rewrite — so
+/// a config-management run that clobbers the file is repaired in ~1 s,
+/// not after a minute. This timer just guarantees the block is rebuilt
+/// (and stale host-index entries pruned) even if the watch ever misses
+/// an event or couldn't be created. Off the hot path.
+const SWARMRESOLVE_INTERVAL: Duration = Duration::from_secs(60);
 
-/// Spawn the swarmresolve reactor. Always spawned — each tick it reads
-/// `swarm_swarmresolve_enabled` from the cached policy bundle (via
-/// [`crate::swarm::gates::swarmresolve_active`]) and either rewrites the
-/// managed `/etc/hosts` block from the host index or, when disabled,
-/// removes it. The host index is populated independently by
-/// `discovery`'s listener parsing `HOST:` lines.
+/// Coalescing window for filesystem events on `/etc/hosts`. An external
+/// rewrite is normally temp-create + rename-over (+ maybe a chmod) —
+/// several events within a few milliseconds; the reactor waits this long
+/// after the first before reconciling so the burst collapses into a
+/// single rewrite.
+const DEBOUNCE: Duration = Duration::from_millis(750);
+
+/// Spawn the swarmresolve reactor. Always spawned. Reconciles the
+/// managed `/etc/hosts` block on two triggers:
+///
+/// - **inotify/kqueue watch on `/etc/hosts`** (the fast path) — fires
+///   when anything *else* rewrites the file (a config-management module,
+///   a hand edit), so the managed block is restored within [`DEBOUNCE`]
+///   rather than only on the timer. We watch the *directory*, not the
+///   file inode, because an external rewrite is a temp-file +
+///   rename-over and a file-level watch goes deaf after the first
+///   replace. If the watcher can't be created the reactor degrades to
+///   timer-only — still correct, just slower to repair a clobber.
+/// - **[`SWARMRESOLVE_INTERVAL`] timer** (the backstop) — guarantees
+///   eventual convergence and prunes stale host-index entries.
+///
+/// Each reconcile reads `swarm_swarmresolve_enabled` from the cached
+/// policy bundle (via [`crate::swarm::gates::swarmresolve_active`]) and
+/// either rewrites the block from the host index or, when disabled,
+/// removes it. The host index is populated independently by `discovery`'s
+/// listener parsing `HOST:` lines. swarmresolve's own writes (atomic
+/// temp+rename in the same dir) trip the watch too, but the follow-up
+/// reconcile is a no-op (`apply_block` finds the file already in the
+/// desired state and doesn't write), so there's no feedback loop.
 pub fn spawn(state_store: Option<Arc<StateStore>>, cancel: CancellationToken) {
     let _ = init_host_map();
     tokio::spawn(async move {
+        let hosts_file = hosts_path();
+        let watch_dir = hosts_file
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("/etc"));
+        let (ev_tx, mut ev_rx) = tokio::sync::mpsc::channel::<()>(8);
+
+        // The watcher owns its callback (which holds `ev_tx`); it must
+        // outlive the loop, so bind it for the duration of the task.
+        // `None` ⇒ no watcher ⇒ `ev_rx` is closed ⇒ the recv arms below
+        // stay disabled ⇒ timer-only operation.
+        let _watcher: Option<notify::RecommendedWatcher> =
+            match notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+                if let Ok(ev) = res {
+                    if event_touches(&ev, &hosts_file) {
+                        let _ = ev_tx.try_send(());
+                    }
+                }
+            }) {
+                Ok(mut w) => match w.watch(&watch_dir, notify::RecursiveMode::NonRecursive) {
+                    Ok(()) => Some(w),
+                    Err(e) => {
+                        tracing::warn!(
+                            dir = %watch_dir.display(), error = %e,
+                            "swarmresolve: cannot watch directory for /etc/hosts changes — timer-only"
+                        );
+                        None
+                    }
+                },
+                Err(e) => {
+                    tracing::warn!(
+                        error = %e,
+                        "swarmresolve: cannot create filesystem watcher — timer-only"
+                    );
+                    None
+                }
+            };
+
         let mut tick = tokio::time::interval(SWARMRESOLVE_INTERVAL);
         tick.tick().await; // skip the immediate first tick
         loop {
@@ -346,9 +413,35 @@ pub fn spawn(state_store: Option<Arc<StateStore>>, cancel: CancellationToken) {
                 _ = tick.tick() => {
                     reconcile_once(state_store.as_deref());
                 }
+                Some(()) = ev_rx.recv() => {
+                    // Coalesce the burst (temp-create + rename + chmod)
+                    // into one pass — each fresh event resets the wait.
+                    loop {
+                        tokio::select! {
+                            _ = tokio::time::sleep(DEBOUNCE) => break,
+                            Some(()) = ev_rx.recv() => continue,
+                        }
+                    }
+                    tracing::debug!(
+                        "swarmresolve: /etc/hosts changed out of band — reconciling managed block"
+                    );
+                    reconcile_once(state_store.as_deref());
+                }
             }
         }
     });
+}
+
+/// True if `ev` is a non-`Access` change to `hosts_file` — a
+/// create / modify / remove of the target path. Temp-file churn in the
+/// same directory (a different path) and read-only `Access` events are
+/// ignored; swarmresolve's own rename-over of `/etc/hosts` does match
+/// (harmless — the follow-up reconcile is a no-op, see [`spawn`]).
+fn event_touches(ev: &notify::Event, hosts_file: &Path) -> bool {
+    if matches!(ev.kind, notify::EventKind::Access(_)) {
+        return false;
+    }
+    ev.paths.iter().any(|p| p == hosts_file)
 }
 
 /// One reconcile pass: render the desired managed-block body (from the
@@ -513,5 +606,35 @@ mod tests {
         assert!(!apply_block("").unwrap());
 
         std::env::remove_var("VIGO_SWARMRESOLVE_HOSTS_FILE");
+    }
+
+    #[test]
+    fn event_touches_matches_target_path_only() {
+        use notify::event::{AccessKind, CreateKind, ModifyKind, RemoveKind};
+        use notify::{Event, EventKind};
+
+        let hosts = Path::new("/etc/hosts");
+        let mk = |kind: EventKind, path: &str| Event {
+            kind,
+            paths: vec![PathBuf::from(path)],
+            attrs: Default::default(),
+        };
+
+        // create / modify / remove of /etc/hosts (incl. an external
+        // rename-over) → reconcile.
+        assert!(event_touches(&mk(EventKind::Create(CreateKind::File), "/etc/hosts"), hosts));
+        assert!(event_touches(&mk(EventKind::Modify(ModifyKind::Any), "/etc/hosts"), hosts));
+        assert!(event_touches(&mk(EventKind::Remove(RemoveKind::File), "/etc/hosts"), hosts));
+
+        // Our own temp file churning in the same dir → ignored (different path).
+        assert!(!event_touches(
+            &mk(EventKind::Create(CreateKind::File), "/etc/.vigo-hosts.deadbeef.tmp"),
+            hosts
+        ));
+        // An unrelated file in /etc → ignored.
+        assert!(!event_touches(&mk(EventKind::Modify(ModifyKind::Any), "/etc/resolv.conf"), hosts));
+        // A read-only access event on /etc/hosts → ignored (a name lookup
+        // touched the file; nothing to reconcile).
+        assert!(!event_touches(&mk(EventKind::Access(AccessKind::Read), "/etc/hosts"), hosts));
     }
 }
