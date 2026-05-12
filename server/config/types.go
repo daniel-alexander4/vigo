@@ -128,16 +128,17 @@ type ServerConfig struct {
 // denies all, "*" allows all, "-rasp1" denies a specific host, first
 // match wins, default-deny on no match.
 type SwarmSection struct {
-	Enabled             []string              `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) controlling which envoys run the swarm substrate. Both this and the per-subsystem list must allow a host for any subsystem to be active." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\"]"`
-	SeedDir             string                `yaml:"seed_dir" doc:"Directory where server-distributed seeds are written (bind-mounted to agents)." default:"/var/lib/vigo/swarm/seed" example:"/var/lib/vigo/swarm/seed"`
-	Port                int                   `yaml:"port" doc:"TCP port on which agents serve blobs to each other over mTLS." default:"1531" example:"1-65535; must be open between envoys"`
-	MaxBandwidthPercent int                   `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
-	ManifestLivenessTTL string                `yaml:"manifest_liveness_ttl" doc:"Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Guards against orphaned entries when a publisher disappears. Empty / zero disables the sweep." default:"24h" example:"24h, 12h, 0 (disable)"`
-	Swarmcast           SwarmcastSection      `yaml:"swarmcast" doc:"Swarmcast (admin-pushed fleet file distribution) authorization." long:"Hostname pattern list controlling which envoys receive admin-pushed files. Distribution requests are refused at the API layer when the list is empty."`
-	Longdrawer            LongdrawerSection  `yaml:"longdrawer" doc:"Longdrawer (LAN plaintext directory mirror) authorization + per-file size cap." long:"Hostname pattern list controlling which envoys run the longdrawer daemon. Per-user opt-in still requires the user creating ~/longdrawer/. Plus a per-file size cap on LAN sync."`
-	Puddle              SwarmPuddleSection    `yaml:"puddle" doc:"Puddle (per-user identity) authorization. Lockbox derives ITS AUTHORIZATION from this section per ADR-020 — only operational tuning lives in lockbox below." long:"Hostname pattern list controlling which envoys can host puddle identity material. Lockbox's authorization (allow/deny) follows this list — a host allowed here can hold lockbox ciphertext for its locally-enrolled puddle members; a host denied here cannot use lockbox at all."`
-	Lockbox           SwarmLockboxSection `yaml:"lockbox" doc:"Lockbox operational tuning (size + envelope retention). Authorization derives from puddle above; this section is size/retention only." long:"Per-file ciphertext size cap and envelope (LEAVE/RESURRECT/TOMBSTONE) retention window. Authorization gating still derives from swarm.puddle.enabled per ADR-020 — there is no enabled field here."`
-	Swarmgit           SwarmgitSection `yaml:"swarmgit" doc:"Swarmgit (git-over-swarm) authorization + bundle size + envelope retention." long:"Hostname pattern list controlling which envoys participate in swarmgit — both as publishers and as bundle holders. Plus per-bundle fan-out size cap and revoke/leave envelope retention."`
+	Enabled             []string            `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) controlling which envoys run the swarm substrate. Both this and the per-subsystem list must allow a host for any subsystem to be active." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\"]"`
+	SeedDir             string              `yaml:"seed_dir" doc:"Directory where server-distributed seeds are written (bind-mounted to agents)." default:"/var/lib/vigo/swarm/seed" example:"/var/lib/vigo/swarm/seed"`
+	Port                int                 `yaml:"port" doc:"TCP port on which agents serve blobs to each other over mTLS." default:"1531" example:"1-65535; must be open between envoys"`
+	MaxBandwidthPercent int                 `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
+	ManifestLivenessTTL string              `yaml:"manifest_liveness_ttl" doc:"Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Guards against orphaned entries when a publisher disappears. Empty / zero disables the sweep." default:"24h" example:"24h, 12h, 0 (disable)"`
+	Swarmcast           SwarmcastSection    `yaml:"swarmcast" doc:"Swarmcast (admin-pushed fleet file distribution) authorization." long:"Hostname pattern list controlling which envoys receive admin-pushed files. Distribution requests are refused at the API layer when the list is empty."`
+	Longdrawer          LongdrawerSection   `yaml:"longdrawer" doc:"Longdrawer (LAN plaintext directory mirror) authorization + per-file size cap." long:"Hostname pattern list controlling which envoys run the longdrawer daemon. Per-user opt-in still requires the user creating ~/longdrawer/. Plus a per-file size cap on LAN sync."`
+	Puddle              SwarmPuddleSection  `yaml:"puddle" doc:"Puddle (per-user identity) authorization. Lockbox derives ITS AUTHORIZATION from this section per ADR-020 — only operational tuning lives in lockbox below." long:"Hostname pattern list controlling which envoys can host puddle identity material. Lockbox's authorization (allow/deny) follows this list — a host allowed here can hold lockbox ciphertext for its locally-enrolled puddle members; a host denied here cannot use lockbox at all."`
+	Lockbox             SwarmLockboxSection `yaml:"lockbox" doc:"Lockbox operational tuning (size + envelope retention). Authorization derives from puddle above; this section is size/retention only." long:"Per-file ciphertext size cap and envelope (LEAVE/RESURRECT/TOMBSTONE) retention window. Authorization gating still derives from swarm.puddle.enabled per ADR-020 — there is no enabled field here."`
+	Swarmgit            SwarmgitSection     `yaml:"swarmgit" doc:"Swarmgit (git-over-swarm) authorization + bundle size + envelope retention." long:"Hostname pattern list controlling which envoys participate in swarmgit — both as publishers and as bundle holders. Plus per-bundle fan-out size cap and revoke/leave envelope retention."`
+	Swarmdns            bool                `yaml:"swarmdns" doc:"When true, each swarm-enabled agent maintains a delimited block in /etc/hosts mapping every announced peer hostname to its LAN IP — additive name resolution for fleets whose DNS doesn't own the local domain. Default false (opt-in)." default:"false" example:"true to let agents edit /etc/hosts; false (or omit) to leave it alone"`
 }
 
 // SwarmPuddleSection authorizes the puddle (per-user identity) subsystem
@@ -242,8 +243,8 @@ func (s ScrierSection) ScrierMaxSessions() int {
 // documentation artifacts (BAA, IR plan, risk assessment, training
 // records, etc.) live.
 type ComplianceSection struct {
-	Standards       []string         `yaml:"standards" doc:"Enabled framework slugs (e.g. hipaa, soc2, pci). Empty means all frameworks are enabled." example:"[hipaa, soc2, pci_dss, nist_800_53]"`
-	ApprovedSources []string         `yaml:"approved_sources" doc:"URL prefixes allowed as package-manager sources. Each package_source_audit.sources.N row is annotated with approved=true if its URL starts with any listed prefix, approved=false otherwise. Empty disables the annotation entirely." example:"[http://archive.ubuntu.com/, https://download.docker.com/, https://download.fedoraproject.org/]"`
+	Standards       []string              `yaml:"standards" doc:"Enabled framework slugs (e.g. hipaa, soc2, pci). Empty means all frameworks are enabled." example:"[hipaa, soc2, pci_dss, nist_800_53]"`
+	ApprovedSources []string              `yaml:"approved_sources" doc:"URL prefixes allowed as package-manager sources. Each package_source_audit.sources.N row is annotated with approved=true if its URL starts with any listed prefix, approved=false otherwise. Empty disables the annotation entirely." example:"[http://archive.ubuntu.com/, https://download.docker.com/, https://download.fedoraproject.org/]"`
 	Docs            ComplianceDocsSection `yaml:"docs" doc:"Operator-uploaded documentation store for documented-scope controls." long:"Configures where Vigo writes envelope-encrypted compliance artifacts (BAA, IR plan, risk assessment, training records, signed contracts) and how aggressively to cap upload sizes. Files land at <docs_dir>/<id>, encrypted with the same AES-256-GCM master key used by the secrets provider; metadata lives in compliance_docs / compliance_doc_links."`
 }
 
@@ -862,18 +863,18 @@ type ConditionalBlock struct {
 // EnvoyConfig represents the resolved per-envoy configuration.
 // This is the output type returned by ConfigStore.Get().
 type EnvoyConfig struct {
-	Envoy          string                    `yaml:"envoy"`
-	MatchPattern    string                    `yaml:"-"` // original match pattern from envoys.vgo
-	Environment     string                    `yaml:"environment"`
-	Roles           []string                  `yaml:"-"` // role names that were expanded
-	Modules         []ModuleConfig            `yaml:"modules"`
-	Vars            map[string]any            `yaml:"vars"`
-	VarOrder        []string                  `yaml:"-"`
-	Tags            []string `yaml:"-"` // static tags from the match block, propagated to FleetIndex on check-in
-	HasLookups      bool     `yaml:"-"` // true if any resource attribute or top-level var is a tag/host/trait lookup table
-	HasFleetLookups bool     `yaml:"-"` // true if any top-level var is a fleet: lookup (cross-node, resolved at check-in)
-	ObserveOnly     bool     `yaml:"-"` // observe-only mode: report drift only, don't enforce
-	MerkleRoot      string   `yaml:"-"` // SHA256 Merkle root over modules + vars (computed at load)
+	Envoy           string         `yaml:"envoy"`
+	MatchPattern    string         `yaml:"-"` // original match pattern from envoys.vgo
+	Environment     string         `yaml:"environment"`
+	Roles           []string       `yaml:"-"` // role names that were expanded
+	Modules         []ModuleConfig `yaml:"modules"`
+	Vars            map[string]any `yaml:"vars"`
+	VarOrder        []string       `yaml:"-"`
+	Tags            []string       `yaml:"-"` // static tags from the match block, propagated to FleetIndex on check-in
+	HasLookups      bool           `yaml:"-"` // true if any resource attribute or top-level var is a tag/host/trait lookup table
+	HasFleetLookups bool           `yaml:"-"` // true if any top-level var is a fleet: lookup (cross-node, resolved at check-in)
+	ObserveOnly     bool           `yaml:"-"` // observe-only mode: report drift only, don't enforce
+	MerkleRoot      string         `yaml:"-"` // SHA256 Merkle root over modules + vars (computed at load)
 
 	// Network device fields — populated for virtual envoys managed via gateway proxy.
 	Gateway    string `yaml:"-"` // hostname of managing gateway envoy
@@ -918,32 +919,32 @@ type ModuleConfig struct {
 
 // ResourceConfig describes a single resource within a module.
 type ResourceConfig struct {
-	Name             string                    `yaml:"name"`
-	Type             string                    `yaml:"type"`
-	When             string                    `yaml:"when,omitempty"`
-	Attributes       map[string]any            `yaml:",inline"`
-	Notify           []string                  `yaml:"notify"`
-	Subscribes       []string                  `yaml:"subscribes"`
+	Name        string                    `yaml:"name"`
+	Type        string                    `yaml:"type"`
+	When        string                    `yaml:"when,omitempty"`
+	Attributes  map[string]any            `yaml:",inline"`
+	Notify      []string                  `yaml:"notify"`
+	Subscribes  []string                  `yaml:"subscribes"`
 	WatchSecret []string                  `yaml:"watch_secret"`
-	DependsOn        []string                  `yaml:"depends_on"`
-	Before           []string                  `yaml:"before"`
-	ForEach          string                    `yaml:"-"` // var name to iterate (config-load-time expansion)
-	Case             string                    `yaml:"-"` // template expression for case switching (check-in-time)
-	CaseMatch        map[string]map[string]any `yaml:"-"` // case branch → attribute overrides
+	DependsOn   []string                  `yaml:"depends_on"`
+	Before      []string                  `yaml:"before"`
+	ForEach     string                    `yaml:"-"` // var name to iterate (config-load-time expansion)
+	Case        string                    `yaml:"-"` // template expression for case switching (check-in-time)
+	CaseMatch   map[string]map[string]any `yaml:"-"` // case branch → attribute overrides
 }
 
 // ModuleDefinition is a reusable module loaded from config/modules/*.yaml.
 // It has a custom UnmarshalYAML that flattens conditional_block entries
 // in the resources list into plain ResourceConfig items.
 type ModuleDefinition struct {
-	Name            string                        `yaml:"name"`
-	SourceFile      string                        `yaml:"-"` // stockpile-relative path, set by loader
-	DependsOn       []string                      `yaml:"depends_on"`
-	Before          []string                      `yaml:"before"`
-	Defaults        map[string]any                `yaml:"defaults"`
-	Resources       []ResourceConfig              `yaml:"resources"`
-	Vars            map[string]any                `yaml:"vars"`
-	Compliance      map[string][]string           `yaml:"compliance"`
+	Name       string              `yaml:"name"`
+	SourceFile string              `yaml:"-"` // stockpile-relative path, set by loader
+	DependsOn  []string            `yaml:"depends_on"`
+	Before     []string            `yaml:"before"`
+	Defaults   map[string]any      `yaml:"defaults"`
+	Resources  []ResourceConfig    `yaml:"resources"`
+	Vars       map[string]any      `yaml:"vars"`
+	Compliance map[string][]string `yaml:"compliance"`
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler for ModuleDefinition.
@@ -1088,9 +1089,9 @@ func (r *RoleRef) UnmarshalYAML(value *yaml.Node) error {
 type RoleDefinition struct {
 	Name     string      `yaml:"name"`
 	When     string      `yaml:"when,omitempty"`
-	Includes []string    `yaml:"includes"`        // other role names to include (single level)
-	Modules  []ModuleRef `yaml:"modules"`          // unconditional modules
-	Case     []RoleCase  `yaml:"case,omitempty"`   // conditional module groups
+	Includes []string    `yaml:"includes"`       // other role names to include (single level)
+	Modules  []ModuleRef `yaml:"modules"`        // unconditional modules
+	Case     []RoleCase  `yaml:"case,omitempty"` // conditional module groups
 }
 
 // RoleCase is a conditional group of modules within a role definition.
@@ -1102,27 +1103,27 @@ type RoleCase struct {
 
 // ValidDeviceTypes lists the supported network device types for gateway proxy management.
 var ValidDeviceTypes = map[string]bool{
-	"cisco_ios":      true,
-	"cisco_nxos":     true,
-	"juniper_junos":  true,
-	"arista_eos":     true,
-	"cisco_iosxr":    true,
+	"cisco_ios":     true,
+	"cisco_nxos":    true,
+	"juniper_junos": true,
+	"arista_eos":    true,
+	"cisco_iosxr":   true,
 }
 
 // EnvoyEntry is a single entry in envoys.vgo. It has a custom UnmarshalYAML
 // that merges duplicate 'modules' and 'roles' keys (standard YAML would
 // silently keep only the last value).
 type EnvoyEntry struct {
-	Match       string                    `yaml:"match"`
-	Environment string                    `yaml:"environment"`
-	Roles       []RoleRef                 `yaml:"roles"`
-	Modules     []ModuleRef               `yaml:"modules"`
-	Vars        map[string]any            `yaml:"vars"`
-	Tags                 []string `yaml:"tags"` // static tags for targeting
-	ExcludeModules       []string `yaml:"exclude_modules"`   // opt out of inherited modules
-	ExcludeUsercrates    []string `yaml:"exclude_usercrates"` // opt out of auto-applied usercrates from usercrates/ subdirs in the ancestor chain
-	ExcludeResources     []string `yaml:"exclude_resources"` // opt out of specific resources by name
-	ObserveOnly          bool     `yaml:"observe_only"` // observe-only mode: report drift only, don't enforce
+	Match             string         `yaml:"match"`
+	Environment       string         `yaml:"environment"`
+	Roles             []RoleRef      `yaml:"roles"`
+	Modules           []ModuleRef    `yaml:"modules"`
+	Vars              map[string]any `yaml:"vars"`
+	Tags              []string       `yaml:"tags"`               // static tags for targeting
+	ExcludeModules    []string       `yaml:"exclude_modules"`    // opt out of inherited modules
+	ExcludeUsercrates []string       `yaml:"exclude_usercrates"` // opt out of auto-applied usercrates from usercrates/ subdirs in the ancestor chain
+	ExcludeResources  []string       `yaml:"exclude_resources"`  // opt out of specific resources by name
+	ObserveOnly       bool           `yaml:"observe_only"`       // observe-only mode: report drift only, don't enforce
 
 	// DirPath is the relative directory path within the config tree where
 	// this entry was loaded from. Set by the loader for inheritance resolution.
@@ -1181,7 +1182,7 @@ type CommonConfig struct {
 	Roles             []RoleRef      `yaml:"roles"`
 	Vars              map[string]any `yaml:"vars"`
 	ExcludeUsercrates []string       `yaml:"exclude_usercrates"` // drop named usercrates for every entry at this directory level and below
-	DirPath           string         `yaml:"-"` // relative dir path (e.g., "production/web")
+	DirPath           string         `yaml:"-"`                  // relative dir path (e.g., "production/web")
 }
 
 // PerEnvOverrideBlock holds modules, vars, and exclusions for a single

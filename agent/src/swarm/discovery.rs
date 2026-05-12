@@ -128,6 +128,11 @@ pub fn spawn(
     swarmgit_signing_key: Option<Arc<ed25519_dalek::SigningKey>>,
     swarmgit_pubkey_cache: Option<Arc<crate::swarm::swarmgit::peer_pubkey_cache::PeerPubkeyCache>>,
 ) {
+    // Make the swarmdns host index available before the listener
+    // starts so early `HOST:` lines aren't dropped on the floor.
+    // Idempotent — `swarmdns::spawn` also calls this.
+    let _ = crate::swarm::swarmdns::init_host_map();
+
     // Build one shared peer agent at spawn time. Wrapped in an Arc so the
     // listener can clone it cheaply into the blocking tasks it spawns per
     // probe. `None` if TLS isn't configured (bootstrap agents before
@@ -303,6 +308,22 @@ async fn listen_loop(
                                         now,
                                     );
                                 }
+                            }
+                            // Feed the swarmdns host index. Not gated
+                            // on any subsystem — the index is benign;
+                            // the swarmdns reactor decides whether to
+                            // touch /etc/hosts. (HOST: lines are not
+                            // signed-content-critical the way SWARMGIT*
+                            // lines are; a spoofed one only mislabels
+                            // an IP in a managed /etc/hosts block on a
+                            // host whose operator opted into swarmdns —
+                            // same trust model as the LAN itself.)
+                            if let Some(host) = &result.host_name {
+                                crate::swarm::swarmdns::record_host_global(
+                                    host,
+                                    src.ip(),
+                                    now_unix_seconds(),
+                                );
                             }
                             // Trigger manifest sync if a version mismatch was detected.
                             if let Some(addr) = result.manifest_sync_peer {
@@ -639,6 +660,17 @@ fn now_unix_seconds() -> i64 {
         .unwrap_or(0)
 }
 
+/// This envoy's hostname for the `HOST:` announce line. `gethostname(2)`;
+/// `None` when it's empty or non-UTF-8 — in which case the line is just
+/// omitted and receivers fall back to DNS for this envoy.
+fn announce_hostname() -> Option<String> {
+    hostname::get()
+        .ok()
+        .and_then(|h| h.into_string().ok())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+}
+
 /// Build the multicast announcement(s) for one cycle. Returns one packet
 /// in the common case, or two when swarmgit content would crowd out swarm
 /// HAVE/WANT lines.
@@ -781,6 +813,13 @@ fn build_announcement(
     }
 
     msg.push_str(&addr_line);
+    // HOST:<hostname> — the sender's hostname, so receivers can build a
+    // fleet `hostname → IP` index for swarmdns (`/etc/hosts` block).
+    // Always emitted (independent of any subsystem gate); tiny, sits in
+    // the always-present tail next to ADDR.
+    if let Some(h) = announce_hostname() {
+        msg.push_str(&format!("HOST:{}\n", h));
+    }
     if let Some(key) = signing_key {
         sign_and_append(&mut msg, key, timestamp_secs);
     }
@@ -877,6 +916,12 @@ struct AnnouncementResult {
     /// [`crate::swarm::swarmgit::project_peers::record_global`]
     /// per entry to populate the project-keyed peer index.
     swarmgit_projects: Vec<(String, String)>,
+    /// Parsed `HOST:<hostname>` line, if present — the sender's
+    /// hostname. The listener pairs it with the datagram source IP
+    /// and feeds `crate::swarm::swarmdns::record_host_global` to
+    /// build the fleet `hostname → IP` index swarmdns renders into
+    /// `/etc/hosts`. `None` from a sender on an older agent.
+    host_name: Option<String>,
 }
 
 /// Parse a received multicast announcement and update the peer map.
@@ -950,6 +995,14 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
             }
         } else if let Some(rest) = line.strip_prefix("ADDR:") {
             addr = Some(rest.to_string());
+        } else if let Some(rest) = line.strip_prefix("HOST:") {
+            // Sender's hostname for the swarmdns fleet `hostname → IP`
+            // index. The IP comes from the datagram source, not this
+            // line. Last one wins (a packet only carries one).
+            let h = rest.trim();
+            if !h.is_empty() {
+                result.host_name = Some(h.to_string());
+            }
         } else if line.starts_with("SWARMGITCLAIM:") {
             // Order matters: SWARMGITCLAIM: must be tried before
             // SWARMGIT: because both share the SWARMGIT prefix.
@@ -1283,6 +1336,28 @@ mod tests {
         // A probe must be queued for the async /meta fetch.
         assert_eq!(result.bitmap_probes.len(), 1);
         assert_eq!(result.bitmap_probes[0], ("10.0.0.2:1531".to_string(), sha));
+    }
+
+    #[test]
+    fn test_parse_announcement_extracts_host_name() {
+        let pm = PeerMap::new();
+        let manifest = test_manifest();
+        // With a HOST: line.
+        let msg = "VIGO-SWARM\nMANIFEST:0\nADDR:192.168.1.2:1531\nHOST:danlap\n";
+        let result = parse_announcement(&msg, "192.168.1.2:1531".parse().unwrap(), &pm, &manifest);
+        assert_eq!(result.host_name.as_deref(), Some("danlap"));
+        // Without one (older agent) → None.
+        let msg = "VIGO-SWARM\nMANIFEST:0\nADDR:192.168.1.2:1531\n";
+        let result = parse_announcement(&msg, "192.168.1.2:1531".parse().unwrap(), &pm, &manifest);
+        assert!(result.host_name.is_none());
+        // build_announcement always emits a HOST: line for this envoy.
+        let cache_dir = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(cache_dir.path().to_path_buf()).unwrap();
+        let pkts = build_announcement(
+            &[], &[], &cache, &manifest, "192.168.1.5".parse().unwrap(), 1531,
+            None, &[], &[], None, 0,
+        );
+        assert!(pkts.iter().any(|p| p.contains("HOST:")), "announcement must carry a HOST: line");
     }
 
     #[test]

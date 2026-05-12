@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"github.com/google/uuid"
 
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
@@ -430,16 +430,16 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		metrics.CheckinsTotal.WithLabelValues("no_change_merkle").Inc()
 
 		resp := &pb.CheckInResponse{
-			NoChange:             true,
-			PolicyVersion:        configVersion,
-			ResponseFingerprint:  cfg.MerkleRoot,
-			StreamRequested:      streamRequested,
-			TunnelRequested:      tunnelRequested,
-			ForceUpdate:          forceUpdate,
-			ObserveOnly:          s.globalObserveOnly || cfg.ObserveOnly,
-			Interval:             interval,
-			JitterPercent:        s.jitterPercent,
-			ServerPubkeyPem:      s.bundlePubKeyPEM,
+			NoChange:            true,
+			PolicyVersion:       configVersion,
+			ResponseFingerprint: cfg.MerkleRoot,
+			StreamRequested:     streamRequested,
+			TunnelRequested:     tunnelRequested,
+			ForceUpdate:         forceUpdate,
+			ObserveOnly:         s.globalObserveOnly || cfg.ObserveOnly,
+			Interval:            interval,
+			JitterPercent:       s.jitterPercent,
+			ServerPubkeyPem:     s.bundlePubKeyPEM,
 		}
 		if s.reassignStore != nil {
 			if info, ok := s.reassignStore.Pop(envoyID); ok {
@@ -563,6 +563,11 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	// Lockbox is intentionally absent — its authorization derives from
 	// puddle (single source of truth, ADR-020). The agent's lockbox
 	// gate consults swarm_puddle_enabled instead.
+	//
+	// swarmdns is the one exception to "only emit when gating off": it
+	// is default-OFF on the agent (editing /etc/hosts is an operator
+	// decision), so the agent treats absence as off and we must emit
+	// swarm_swarmdns_enabled=true when it should be ON. Off ⇒ omit.
 	gates := map[string]any{}
 	swarmAllowed := config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Enabled)
 	if !swarmAllowed {
@@ -579,6 +584,9 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	}
 	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Swarmcast.Enabled) {
 		gates["swarm_swarmcast_enabled"] = false
+	}
+	if swarmAllowed && s.swarmCfg.Swarmdns {
+		gates["swarm_swarmdns_enabled"] = true
 	}
 	if err := injectServerVars(bundle, gates); err != nil {
 		slog.Warn("failed to inject server vars into policy bundle",
@@ -721,7 +729,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		deviceID := DeviceVirtualID(dev.Hostname)
 
 		resp.ProxiedDevices = append(resp.ProxiedDevices, &pb.ProxiedDevice{
-			EnvoyId:   deviceID,
+			EnvoyId:    deviceID,
 			Hostname:   dev.Hostname,
 			DeviceType: dev.DeviceType,
 			Credential: dev.Credential,
@@ -762,11 +770,11 @@ func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
 	return &pb.SwarmRuntimeLimits{
 		SwarmcastMaxSizeBytes:         uint64(maxNonNeg(sc.Swarmcast.MaxSizeBytes)),
 		SwarmcastDefaultRetention:     sc.Swarmcast.DefaultRetention,
-		LockboxMaxFileBytes:         uint64(maxNonNeg(sc.Lockbox.MaxFileBytes)),
-		LockboxEnvelopeRetentionSecs: durationSecsOrZero(sc.Lockbox.EnvelopeRetention),
-		SwarmgitMaxBundleBytes:       uint64(maxNonNeg(sc.Swarmgit.MaxBundleBytes)),
+		LockboxMaxFileBytes:           uint64(maxNonNeg(sc.Lockbox.MaxFileBytes)),
+		LockboxEnvelopeRetentionSecs:  durationSecsOrZero(sc.Lockbox.EnvelopeRetention),
+		SwarmgitMaxBundleBytes:        uint64(maxNonNeg(sc.Swarmgit.MaxBundleBytes)),
 		SwarmgitEnvelopeRetentionSecs: durationSecsOrZero(sc.Swarmgit.EnvelopeRetention),
-		LongdrawerMaxFileBytes:          uint64(maxNonNeg(sc.Longdrawer.MaxFileBytes)),
+		LongdrawerMaxFileBytes:        uint64(maxNonNeg(sc.Longdrawer.MaxFileBytes)),
 	}
 }
 
@@ -842,10 +850,10 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 	}
 	var swarmData struct {
 		Blobs            []string                       `json:"blobs"`
-		ChunkSources     map[string]map[string]int      `json:"chunk_sources"`       // sha256 → {source → count}
-		ChunkDetails     map[string][]swarm.ChunkDetail `json:"chunk_details"`       // sha256 → per-chunk detail
-		ActiveDownloadMs map[string]int64               `json:"active_download_ms"`  // sha256 → active scheduler wall-clock ms (excludes pre-cached chunks)
-		Downloading      map[string]int                 `json:"downloading"`         // sha256 → chunks_have (in-progress)
+		ChunkSources     map[string]map[string]int      `json:"chunk_sources"`      // sha256 → {source → count}
+		ChunkDetails     map[string][]swarm.ChunkDetail `json:"chunk_details"`      // sha256 → per-chunk detail
+		ActiveDownloadMs map[string]int64               `json:"active_download_ms"` // sha256 → active scheduler wall-clock ms (excludes pre-cached chunks)
+		Downloading      map[string]int                 `json:"downloading"`        // sha256 → chunks_have (in-progress)
 	}
 	if err := json.Unmarshal(swarmRaw, &swarmData); err != nil {
 		return
@@ -870,8 +878,8 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 			s.peerTracker.ReportComplete(envoyID, hash, peerAddr)
 			// Store chunk source data and download duration if reported.
 			if sources, ok := swarmData.ChunkSources[hash]; ok && len(sources) > 0 {
-				details := swarmData.ChunkDetails[hash]           // may be nil
-				dlMs := swarmData.ActiveDownloadMs[hash]           // 0 if not reported
+				details := swarmData.ChunkDetails[hash]  // may be nil
+				dlMs := swarmData.ActiveDownloadMs[hash] // 0 if not reported
 				s.peerTracker.SetChunkSources(envoyID, hash, sources, details, dlMs)
 			}
 		}
@@ -1081,7 +1089,6 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 		)
 	}
 }
-
 
 // Longdrawer is an agent-side LAN-only P2P feature — the server has no role.
 // No server-side ingest function lives here. See agent/src/longdrawer/.

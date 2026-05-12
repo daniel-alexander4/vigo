@@ -407,6 +407,18 @@ watcher:
 #   # bundle-holder gate.
 #   swarmgit:
 #     enabled: ["*"]
+#
+#   # swarmdns — let each swarm-enabled agent answer LAN name lookups for
+#   # its swarm peers. When true, the agent maintains a delimited block in
+#   # /etc/hosts mapping every peer's announced hostname to its LAN IP
+#   # (learned from the swarm multicast — the same data `vigocli swarm
+#   # status` shows), refreshed as peers come and go. Additive only: lines
+#   # outside the managed block are never touched, and any name the swarm
+#   # doesn't hold still resolves via your normal DNS. Off (or omitted)
+#   # leaves /etc/hosts alone — turn it on for fleets whose DNS doesn't
+#   # authoritatively own the local domain. A plain bool, not a pattern
+#   # list: it follows swarm.enabled per-host.
+#   swarmdns: false
 
 
 # ── Gossip & Fleet Primitives ────────────────────────────────────────────

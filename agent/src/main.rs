@@ -1303,6 +1303,14 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         swarmgit_gate.clone(),
     );
 
+    // swarmdns reactor — maintains the agent-managed `/etc/hosts` block
+    // from the swarm host index when the operator has set
+    // `swarm.swarmdns: true`. Always spawned; each tick reads the gate
+    // from the cached policy bundle (default-OFF — see
+    // `swarm::gates::swarmdns_active`) and rewrites or removes the
+    // block accordingly.
+    vigo::swarm::swarmdns::spawn(state_store.clone(), cancel.clone());
+
     let cfg = checkin::loop_impl::LoopConfig {
         trait_refresh_cycles: cli.trait_refresh_cycles,
         result_cache_cycles: cli.result_cache_cycles,
