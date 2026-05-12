@@ -27,6 +27,15 @@ pub enum RunAs {
     /// receiver-side operations that write into the root-owned bare
     /// repo (bundle verify, bundle unbundle, init bare).
     Root,
+    /// Run as whoever invoked the CLI — no privilege transition. Use
+    /// for CLI verbs operating on the caller's own working repo
+    /// (`project init` / `project push` running `git remote add` +
+    /// `git push` in the operator's checkout). Same env hardening as
+    /// [`RunAs::Root`] — neutralizes the user's hooks during the
+    /// automated push and never blocks on an interactive prompt — but
+    /// no `uid`/`gid` change and no `env_clear`, since we're already
+    /// the right user.
+    Caller,
     /// Drop to a target user before `exec()` via
     /// `std::os::unix::process::CommandExt::uid()` / `gid()`.
     /// Use for source-side `git bundle create` and receiver-side
@@ -90,7 +99,7 @@ pub fn build_command(run_as: RunAs) -> Command {
     ]);
 
     match run_as {
-        RunAs::Root => {
+        RunAs::Root | RunAs::Caller => {
             cmd.env("GIT_CONFIG_GLOBAL", "/dev/null");
             cmd.env("GIT_CONFIG_SYSTEM", "/dev/null");
             cmd.env("GIT_TERMINAL_PROMPT", "0");
@@ -215,6 +224,38 @@ mod tests {
         assert!(envs
             .iter()
             .any(|(k, v)| k == "GIT_TERMINAL_PROMPT" && v == "0"));
+    }
+
+    #[test]
+    fn build_command_caller_matches_root_env_hardening() {
+        let cmd = build_command(RunAs::Caller);
+        let envs: Vec<(String, String)> = cmd
+            .get_envs()
+            .filter_map(|(k, v)| {
+                v.map(|v| {
+                    (
+                        k.to_string_lossy().into_owned(),
+                        v.to_string_lossy().into_owned(),
+                    )
+                })
+            })
+            .collect();
+        assert!(envs
+            .iter()
+            .any(|(k, v)| k == "GIT_CONFIG_GLOBAL" && v == "/dev/null"));
+        assert!(envs
+            .iter()
+            .any(|(k, v)| k == "GIT_CONFIG_SYSTEM" && v == "/dev/null"));
+        assert!(envs
+            .iter()
+            .any(|(k, v)| k == "GIT_TERMINAL_PROMPT" && v == "0"));
+        // No uid/gid override — Command exposes that via get_uid()/get_gid(),
+        // which are nightly-only; instead just confirm the hardening args land.
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|s| s.to_string_lossy().into_owned())
+            .collect();
+        assert!(args.iter().any(|a| a == "core.hooksPath=/dev/null"));
     }
 
     #[test]

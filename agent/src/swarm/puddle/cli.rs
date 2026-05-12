@@ -1660,9 +1660,12 @@ fn cmd_name_set(args: &[String]) -> Result<()> {
         name_arg, pk_short
     );
     println!();
-    println!("Cooperative first-come naming — a hint, not a trust anchor. The fleet name map");
-    println!("updates as agents check in; until a peer has seen this claim it can't resolve");
-    println!("swarmgit://{}/<repo>. The hex form is always unambiguous.", name_arg);
+    println!(
+        "Cooperative first-come naming — a hint, not a trust anchor. swarmgit://{}/<repo>",
+        name_arg
+    );
+    println!("resolves from this envoy immediately; other envoys pick it up as the fleet name");
+    println!("map refreshes (next check-in + ~15 min). The hex form is always unambiguous.");
     Ok(())
 }
 

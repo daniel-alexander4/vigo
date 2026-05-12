@@ -241,7 +241,7 @@ async fn handle_client(
         .map(|v| v.eq_ignore_ascii_case("RESOLVE-NAME"))
         .unwrap_or(false)
     {
-        return match handle_resolve_name(&header) {
+        return match handle_resolve_name(uid, &header) {
             Ok((pid_hex, founder_hex)) => {
                 tracing::info!(uid, project_id = %pid_hex, "swarmgit helper: RESOLVE-NAME ok");
                 let _ = write_half
@@ -661,10 +661,14 @@ fn parse_header(line: &str) -> Result<([u8; ID_LEN], Service)> {
 }
 
 /// Resolve a `RESOLVE-NAME <puddle-name> <repo-handle>` request
-/// (ADR-022) against the local fleet name-map cache. Returns
-/// `(project_id_hex, founder_pubkey_hex)`. Pure lookup — no per-user
-/// state, no token chain, no git process.
-fn handle_resolve_name(header: &str) -> Result<(String, String)> {
+/// (ADR-022). Returns `(project_id_hex, founder_pubkey_hex)`. Tries
+/// the locally-cached fleet name map first; on a miss, falls back to
+/// the *requesting* user's own `~/.vigo-puddle/name-claim.json` so a
+/// freshly-`puddle name set` claim resolves from that envoy before it
+/// has propagated through the trait → server → re-fetch round trip.
+/// Pure lookup — no per-user token chain, no git process. `uid` is the
+/// SO_PEERCRED'd caller, used only for that self-claim fallback.
+fn handle_resolve_name(uid: u32, header: &str) -> Result<(String, String)> {
     let trimmed = header.trim_end_matches(['\n', '\r']);
     let mut it = trimmed.split_ascii_whitespace();
     let _verb = it.next(); // RESOLVE-NAME — already matched by the caller
@@ -682,8 +686,10 @@ fn handle_resolve_name(header: &str) -> Result<(String, String)> {
         bail!("RESOLVE-NAME repo handle must not be empty");
     }
 
-    let map = crate::swarm::puddle::names_cache::FleetNameMap::load()
-        .context("loading fleet name-map cache")?;
+    // A missing/corrupt cache file isn't fatal — fall through to the
+    // self-claim fallback below (covers a fresh envoy whose name-map
+    // bootstrap hasn't run yet).
+    let map = crate::swarm::puddle::names_cache::FleetNameMap::load().unwrap_or_default();
     let verified: Vec<_> = map
         .verified_claims(name)
         .into_iter()
@@ -693,13 +699,19 @@ fn handle_resolve_name(header: &str) -> Result<(String, String)> {
     use crate::swarm::puddle::name::NameResolve;
     let founder_pk = match crate::swarm::puddle::name::resolve_claims(&verified) {
         NameResolve::Unique(pk) | NameResolve::Superseded(pk) => pk,
-        NameResolve::NotFound => bail!(
-            "puddle name {:?} is not in this envoy's fleet name map yet — set it with \
-             `vigo swarm puddle name set {}`, or clone swarmgit://<project_id>/{} directly",
-            name,
-            name,
-            handle
-        ),
+        NameResolve::NotFound => {
+            if let Some(resolved) = resolve_name_via_local_claim(uid, name, handle) {
+                return Ok(resolved);
+            }
+            bail!(
+                "puddle name {:?} is not in this envoy's fleet name map and no local claim \
+                 matches it — set it with `vigo swarm puddle name set {}`, or clone \
+                 swarmgit://<project_id>/{} directly",
+                name,
+                name,
+                handle
+            )
+        }
         NameResolve::Ambiguous(claimants) => {
             let prefixes: Vec<String> = claimants
                 .iter()
@@ -723,6 +735,25 @@ fn handle_resolve_name(header: &str) -> Result<(String, String)> {
     };
     let pid = crate::swarm::swarmgit::tokens::project_id_for(&founder_pk, handle);
     Ok((super::project_state::hex_id(&pid), hex::encode(founder_pk)))
+}
+
+/// Resolve `<name>` against the requesting user's own
+/// `~/.vigo-puddle/name-claim.json` — the helper runs as root and can
+/// read it (it's world-readable by construction). Used only when the
+/// fleet name map misses, so `swarmgit://<my-puddle-name>/<repo>`
+/// works from the envoy that just ran `puddle name set`. Returns
+/// `(project_id_hex, founder_pubkey_hex)` on a verified self-claim,
+/// `None` otherwise.
+fn resolve_name_via_local_claim(uid: u32, name: &str, handle: &str) -> Option<(String, String)> {
+    let home = home_for_uid(uid).ok()?;
+    let claim = crate::swarm::puddle::local_name_claim(&home).ok().flatten()?;
+    if claim.body.name != name {
+        return None;
+    }
+    claim.verify_signature().ok()?;
+    let pk = claim.puddle_pubkey_bytes().ok()?;
+    let pid = crate::swarm::swarmgit::tokens::project_id_for(&pk, handle);
+    Some((super::project_state::hex_id(&pid), hex::encode(pk)))
 }
 
 fn authorize(home: &Path, project_id: &[u8; ID_LEN]) -> Result<TokenChain> {

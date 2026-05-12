@@ -4,7 +4,8 @@
 //! `vigo swarm swarmgit project <verb>` — ADR-015 unified-substrate CLI.
 //!
 //! ```text
-//! vigo swarm swarmgit project init <handle> [--scope swarm-wide|members-only]
+//! vigo swarm swarmgit project init <handle> [--scope swarm-wide|members-only] [--repo <path>] [--no-push]
+//! vigo swarm swarmgit project push [<handle>] [--repo <path>]
 //! vigo swarm swarmgit project invite <project_id> --puddle <fp> --role <r> [--expires <Nd>]
 //! vigo swarm swarmgit project join <project_id> [--invitation <file|->]
 //! vigo swarm swarmgit project leave <project_id> [--purge] [--yes]
@@ -20,11 +21,11 @@
 //! `$XDG_RUNTIME_DIR/vigo/puddle.sock` is the only place the
 //! Ed25519 private key lives; CLI doesn't unwrap directly.
 //!
-//! Step 3 of the ADR-015 arc lands the local-state surface only.
-//! Verbs that depend on the helper-daemon-mediated transport (push,
-//! fetch, fan-out, gossip) write a sentinel file the daemon will pick
-//! up in step 4 — same pattern lockbox uses for `leave.pending` /
-//! `reencrypt.pending`.
+//! `init` (and `push`), when run from inside a git work tree, also
+//! add the `swarm` remote and run `git push swarm --all && --tags`
+//! through the helper daemon — so founding a project and publishing
+//! it is one command. `revoke` / `leave` still write a `*.pending`
+//! sentinel the daemon's reactor picks up and signs.
 
 use std::fs;
 use std::io::{Read, Write};
@@ -125,6 +126,7 @@ fn dispatch_project(args: &[String]) -> Result<()> {
             Ok(())
         }
         "init" => cmd_init(&args[1..]),
+        "push" => cmd_push(&args[1..]),
         "invite" => cmd_invite(&args[1..]),
         "join" => cmd_join(&args[1..]),
         "leave" => cmd_leave(&args[1..]),
@@ -176,9 +178,21 @@ USAGE:
     vigo swarm swarmgit project <verb> [args]
 
 VERBS:
-    init <handle> [--scope swarm-wide|members-only]
-        Found a new project. Puddle must be unlocked. Prints the
-        canonical project URL `swarmgit://<project_id>/<handle>`.
+    init <handle> [--scope swarm-wide|members-only] [--repo <path>] [--no-push]
+        Found a new project. Puddle must be unlocked. From inside a git
+        work tree (or with --repo <path>), also adds the `swarm` remote
+        pointing at swarmgit://<project_id>/<handle> and runs
+        `git push swarm --all && git push swarm --tags` to publish it.
+        --no-push registers the project only (publish later with
+        `project push`).
+
+    push [<handle>] [--repo <path>]
+        Publish (or re-publish) a project from its working repo: adds
+        the `swarm` remote if missing — or re-points it after a
+        re-found / reanchor changes the project_id — then
+        `git push swarm --all && git push swarm --tags`. Run from
+        inside the repo, or pass --repo <path>. With no <handle>,
+        pushes to the existing `swarm` remote as-is. Idempotent.
 
     invite <project_id> --puddle <fp> --role admin|member [--expires <Nd>]
         Mint a child token for another fleet. Prints an invitation
@@ -430,6 +444,8 @@ fn refuse_if_tombstoned(cfg: &ProjectConfig, verb: &str) -> Result<()> {
 fn cmd_init(args: &[String]) -> Result<()> {
     let mut handle: Option<String> = None;
     let mut scope = DrScope::SwarmWide;
+    let mut repo_flag: Option<String> = None;
+    let mut no_push = false;
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
@@ -438,6 +454,11 @@ fn cmd_init(args: &[String]) -> Result<()> {
                 let v = args.get(i).context("--scope requires a value")?;
                 scope = v.parse()?;
             }
+            "--repo" => {
+                i += 1;
+                repo_flag = Some(args.get(i).context("--repo requires a path")?.to_string());
+            }
+            "--no-push" => no_push = true,
             "--fanout" => bail!(
                 "--fanout was renamed to --scope (and its 'fleet-wide' value to 'swarm-wide') in 0.41.32"
             ),
@@ -448,7 +469,10 @@ fn cmd_init(args: &[String]) -> Result<()> {
         }
         i += 1;
     }
-    let handle = handle.context("usage: vigo swarm swarmgit project init <handle> [--scope …]")?;
+    let handle = handle.context(
+        "usage: vigo swarm swarmgit project init <handle> \
+         [--scope swarm-wide|members-only] [--repo <path>] [--no-push]",
+    )?;
     validate_handle(&handle)?;
 
     let caller = resolve_caller()?;
@@ -508,16 +532,92 @@ fn cmd_init(args: &[String]) -> Result<()> {
     };
     chain.save(&caller.home, &project_id)?;
 
+    let hex_url = format!("swarmgit://{}/{}", hex_id(&project_id), handle);
+    let friendly = local_puddle_friendly_name(&caller.home, &founder_pub);
     println!("✓ Founded project {}", handle);
-    println!("  URL:        swarmgit://{}/{}", hex_id(&project_id), handle);
-    println!("  Project ID: {}", hex_id(&project_id));
-    println!("  Founder:    ed25519:{}", hex_id(&founder_pub));
-    println!("  Scope:      {}", scope.as_str());
+    match &friendly {
+        Some(name) => {
+            println!("  URL:           swarmgit://{}/{}", name, handle);
+            println!("  Canonical URL: {}", hex_url);
+        }
+        None => println!("  URL:           {}", hex_url),
+    }
+    println!("  Founder:       ed25519:{}", hex_id(&founder_pub));
+    println!("  Scope:         {}", scope.as_str());
+    println!(
+        "  State:         {}",
+        project_state::user_project_dir(&caller.home, &project_id).display()
+    );
+
+    // --no-push: register the auth surface only; the operator publishes
+    // later from the working repo.
+    if no_push {
+        println!();
+        println!("Registered only (--no-push). Publish from the repo with:");
+        println!("  vigo swarm swarmgit project push {}", handle);
+        return Ok(());
+    }
+
+    // Resolve the working repo to publish: --repo, else the cwd if it's
+    // a git work tree; nothing → register-only (same end state as
+    // --no-push, just inferred).
+    let workdir = match detect_workdir(repo_flag.as_deref())? {
+        Some(d) => d,
+        None => {
+            println!();
+            println!("Not inside a git work tree — registered the project only. Publish later with:");
+            println!("  cd <your repo> && vigo swarm swarmgit project push {}", handle);
+            return Ok(());
+        }
+    };
+
+    // The push rides the helper daemon; if it isn't up, register-only
+    // and tell the operator how to finish once it is.
+    if !helper_socket_path().exists() {
+        eprintln!(
+            "note: swarmgit helper socket not present at {} — is the agent running and is \
+             swarmgit enabled on this host? Project registered; publish once it's up with:\n  \
+             vigo swarm swarmgit project push {}",
+            helper_socket_path().display(),
+            handle
+        );
+        return Ok(());
+    }
+
+    // Warn (don't block) when the work tree's name doesn't match the
+    // handle — likely a wrong-directory mistake, but the handle is the
+    // operator's call.
+    if let Some(base) = workdir.file_name().and_then(|n| n.to_str()) {
+        if base != handle {
+            eprintln!(
+                "note: founding project '{}' but the work tree at {} is named '{}' — pushing it \
+                 anyway (pass --repo for a different tree, or --no-push to register only)",
+                handle,
+                workdir.display(),
+                base
+            );
+        }
+    }
+
+    match ensure_swarm_remote(&workdir, &hex_url)? {
+        SwarmRemote::Added => println!("  Remote 'swarm' → {}", hex_url),
+        SwarmRemote::AlreadyOurs => {}
+        SwarmRemote::Conflicts(other) => {
+            eprintln!(
+                "note: remote 'swarm' already points at {} — leaving it untouched. Publish this \
+                 project with:\n  git remote set-url swarm {} && git push swarm --all && git push swarm --tags",
+                other, hex_url
+            );
+            return Ok(());
+        }
+    }
+
+    push_swarm(&workdir)?;
     println!();
-    println!("State written to {}", project_state::user_project_dir(&caller.home, &project_id).display());
-    println!();
-    println!("Note: the bare repo and helper-daemon-mediated transport land in step 4");
-    println!("of the ADR-015 arc; for now this verb only persists the local auth surface.");
+    println!(
+        "Published. Verify replication with `vigocli swarm swarmgit show {}`.",
+        handle
+    );
     Ok(())
 }
 
@@ -542,6 +642,248 @@ fn validate_handle(handle: &str) -> Result<()> {
             );
         }
     }
+    Ok(())
+}
+
+// ============================================================
+// Working-repo helpers (project init / push)
+//
+// These run as the invoking user against the operator's own
+// checkout — `git remote add` / `git push swarm …` — exactly the
+// commands the operator would type. They go through
+// `git_ops::build_command(RunAs::Caller)` so the swarmgit subsystem
+// keeps a single chokepoint for spawning git, with the usual hook /
+// prompt hardening but no privilege transition.
+// ============================================================
+
+/// The friendly name this user's puddle has claimed (ADR-022), but
+/// only when it's anchored to `expected_pub` — so `project init`
+/// prints `swarmgit://<name>/<handle>` alongside the hex form when
+/// (and only when) the resolver would actually map it back here.
+fn local_puddle_friendly_name(home: &Path, expected_pub: &[u8; ID_LEN]) -> Option<String> {
+    let claim = puddle::local_name_claim(home).ok().flatten()?;
+    if claim.body.puddle_pubkey.eq_ignore_ascii_case(&hex_id(expected_pub)) {
+        Some(claim.body.name)
+    } else {
+        None
+    }
+}
+
+/// A hardened `git` command rooted in `repo`, run as the calling user.
+fn git_in_repo(repo: &Path) -> std::process::Command {
+    let mut cmd = super::git_ops::build_command(super::git_ops::RunAs::Caller);
+    cmd.current_dir(repo);
+    cmd
+}
+
+/// `git -C <dir> rev-parse --show-toplevel`, trimmed. `Ok(None)` when
+/// the path (or cwd, if `dir` is `None`) isn't inside a git work tree.
+fn git_toplevel(dir: Option<&Path>) -> Result<Option<PathBuf>> {
+    let mut cmd = super::git_ops::build_command(super::git_ops::RunAs::Caller);
+    if let Some(d) = dir {
+        cmd.arg("-C").arg(d);
+    }
+    cmd.args(["rev-parse", "--show-toplevel"])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    let out = cmd.output().context("run `git rev-parse --show-toplevel`")?;
+    if !out.status.success() {
+        return Ok(None);
+    }
+    let top = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if top.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(PathBuf::from(top)))
+}
+
+/// Resolve the working repo to publish. `--repo` must be a git work
+/// tree (error otherwise); with no flag, the cwd's work-tree root if
+/// there is one, else `Ok(None)` (the caller treats that as
+/// register-only).
+fn detect_workdir(repo_flag: Option<&str>) -> Result<Option<PathBuf>> {
+    match repo_flag {
+        Some(p) => Ok(Some(git_toplevel(Some(Path::new(p)))?.with_context(|| {
+            format!("--repo {} is not inside a git work tree", p)
+        })?)),
+        None => git_toplevel(None),
+    }
+}
+
+/// `git -C <repo> remote get-url <name>`, trimmed; `Ok(None)` when the
+/// remote doesn't exist.
+fn git_remote_url(repo: &Path, name: &str) -> Result<Option<String>> {
+    let out = git_in_repo(repo)
+        .args(["remote", "get-url", name])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .context("run `git remote get-url`")?;
+    if !out.status.success() {
+        return Ok(None);
+    }
+    Ok(Some(String::from_utf8_lossy(&out.stdout).trim().to_string()))
+}
+
+/// Whether a `swarmgit://` remote URL addresses the same project as
+/// `canonical_url` — i.e. its trailing `/<handle>` matches. Lets us
+/// leave a friendly-form remote (`swarmgit://<name>/<handle>`)
+/// untouched without resolving the name.
+fn remote_url_is_same_project(remote_url: &str, canonical_url: &str) -> bool {
+    remote_url.starts_with("swarmgit://")
+        && remote_url.rsplit('/').next() == canonical_url.rsplit('/').next()
+}
+
+/// Result of [`ensure_swarm_remote`].
+enum SwarmRemote {
+    /// No `swarm` remote existed; added it pointing at the canonical URL.
+    Added,
+    /// A `swarm` remote already addresses this project (hex or friendly form).
+    AlreadyOurs,
+    /// A `swarm` remote exists but points at something else; left it alone.
+    Conflicts(String),
+}
+
+/// Ensure the work tree has a `swarm` remote pointing at the canonical
+/// hex `swarmgit://<pid>/<handle>` URL. Adds it when absent; never
+/// clobbers an existing `swarm` remote that points elsewhere — `init`
+/// reports the conflict and lets the operator decide.
+fn ensure_swarm_remote(repo: &Path, canonical_url: &str) -> Result<SwarmRemote> {
+    match git_remote_url(repo, "swarm")? {
+        None => {
+            run_git(
+                git_in_repo(repo).args(["remote", "add", "swarm", canonical_url]),
+                "git remote add swarm",
+            )?;
+            Ok(SwarmRemote::Added)
+        }
+        Some(url) if url == canonical_url || remote_url_is_same_project(&url, canonical_url) => {
+            Ok(SwarmRemote::AlreadyOurs)
+        }
+        Some(other) => Ok(SwarmRemote::Conflicts(other)),
+    }
+}
+
+/// Run a prepared `git` command, inheriting stdio (the operator sees
+/// git's own output), and bail on a non-zero exit. `what` is the human
+/// label for the error message.
+fn run_git(cmd: &mut std::process::Command, what: &str) -> Result<()> {
+    let st = cmd
+        .stdin(std::process::Stdio::null())
+        .status()
+        .with_context(|| format!("spawn `{}`", what))?;
+    if !st.success() {
+        bail!("`{}` exited with status {}", what, st);
+    }
+    Ok(())
+}
+
+/// `git push swarm --all` then `git push swarm --tags` against `repo`,
+/// inheriting stdio. Bails on the first failure with a pointer back to
+/// `project push` for the retry.
+fn push_swarm(repo: &Path) -> Result<()> {
+    for spec in [
+        ["push", "swarm", "--all"],
+        ["push", "swarm", "--tags"],
+    ] {
+        let st = git_in_repo(repo)
+            .args(spec)
+            .stdin(std::process::Stdio::null())
+            .status()
+            .with_context(|| format!("spawn `git {}`", spec.join(" ")))?;
+        if !st.success() {
+            bail!(
+                "`git {}` failed (status {}) — fix the cause and retry with \
+                 `vigo swarm swarmgit project push`",
+                spec.join(" "),
+                st
+            );
+        }
+    }
+    Ok(())
+}
+
+// ============================================================
+// project push
+// ============================================================
+
+/// `vigo swarm swarmgit project push [<handle>] [--repo <path>]` —
+/// publish (or re-publish) a project from its working repo: add the
+/// `swarm` remote if missing, or re-point it after a `re-found` /
+/// `reanchor`, then `git push swarm --all && --tags`. With no
+/// `<handle>`, requires an existing `swarm` remote and pushes to it
+/// as-is. Idempotent — safe to re-run.
+fn cmd_push(args: &[String]) -> Result<()> {
+    let mut handle_arg: Option<String> = None;
+    let mut repo_flag: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--repo" => {
+                i += 1;
+                repo_flag = Some(args.get(i).context("--repo requires a path")?.to_string());
+            }
+            other if !other.starts_with('-') && handle_arg.is_none() => {
+                handle_arg = Some(other.to_string());
+            }
+            other => bail!("unknown push flag: {}", other),
+        }
+        i += 1;
+    }
+
+    let caller = resolve_caller()?;
+    let workdir = detect_workdir(repo_flag.as_deref())?.context(
+        "not inside a git work tree — run `project push` from the repo, or pass --repo <path>",
+    )?;
+
+    if !helper_socket_path().exists() {
+        bail!(
+            "swarmgit helper socket not present at {} — is the agent running and is swarmgit \
+             enabled on this host?",
+            helper_socket_path().display()
+        );
+    }
+
+    match handle_arg {
+        Some(h) => {
+            // Resolve to a project_id from this user's local state —
+            // works for both founded and joined projects.
+            let pid = resolve_project_id(&caller.home, &h)?;
+            let cfg = ProjectConfig::load(&caller.home, &pid)?
+                .ok_or_else(|| anyhow!("no local state for project {}", hex_id(&pid)))?;
+            let canonical_url = format!("swarmgit://{}/{}", hex_id(&pid), cfg.handle);
+            match git_remote_url(&workdir, "swarm")? {
+                None => {
+                    run_git(
+                        git_in_repo(&workdir).args(["remote", "add", "swarm", &canonical_url]),
+                        "git remote add swarm",
+                    )?;
+                    println!("Remote 'swarm' → {}", canonical_url);
+                }
+                Some(url) if url == canonical_url || remote_url_is_same_project(&url, &canonical_url) => {}
+                Some(other) => {
+                    run_git(
+                        git_in_repo(&workdir).args(["remote", "set-url", "swarm", &canonical_url]),
+                        "git remote set-url swarm",
+                    )?;
+                    println!("Re-pointed remote 'swarm': {} → {}", other, canonical_url);
+                }
+            }
+        }
+        None => {
+            if git_remote_url(&workdir, "swarm")?.is_none() {
+                bail!(
+                    "no `swarm` remote in {} and no <handle> given — run \
+                     `project push <handle>`, or add one with \
+                     `git remote add swarm swarmgit://<project_id>/<handle>` first",
+                    workdir.display()
+                );
+            }
+        }
+    }
+
+    push_swarm(&workdir)?;
+    println!("✓ Pushed {} to the swarm.", workdir.display());
     Ok(())
 }
 
@@ -1783,11 +2125,14 @@ To proceed, type the project handle exactly: {}",
     }
     println!();
     println!("Next steps:");
+    println!("  • Re-publish from your working repo:");
+    println!("    `cd <repo> && vigo swarm swarmgit project push {}`", hex_id(&new_project_id));
     println!("  • Re-invite each surviving member fleet via");
     println!("    `vigo swarm swarmgit project invite {} --puddle <fp> --role <r>`",
              hex_id(&new_project_id));
-    println!("  • Each invitee runs `project join {}` and re-adds the remote.",
+    println!("  • Each invitee runs `project join {}`, then re-points their remote with",
              hex_id(&new_project_id));
+    println!("    `vigo swarm swarmgit project push {} --repo <repo>`", hex_id(&new_project_id));
     println!("  • The old project state at {} is left in place — drop it via `project leave {}` once you confirm the new project is healthy.",
              cfg.project_id, cfg.project_id);
     Ok(())
@@ -2100,10 +2445,13 @@ To proceed, type the project handle exactly: {}",
     }
     println!();
     println!("Next steps:");
+    println!("  • Re-publish from your working repo:");
+    println!("    `cd <repo> && vigo swarm swarmgit project push {}`", hex_id(&new_project_id));
     println!("  • Run `vigo swarm swarmgit project re-invite-all {}` to mint fresh", hex_id(&new_project_id));
     println!("    invitations for every cross-puddle member of the old project.");
-    println!("  • Each member updates their remote URL to `swarmgit://{}/{}` and runs", hex_id(&new_project_id), cfg.handle);
-    println!("    `project rejoin {} --invitation -` with the new invitation.", hex_id(&new_project_id));
+    println!("  • Each member runs `project rejoin {} --invitation -` with the new", hex_id(&new_project_id));
+    println!("    invitation, then re-points their remote with");
+    println!("    `vigo swarm swarmgit project push {} --repo <repo>`.", hex_id(&new_project_id));
     println!("  • The old project state at {} is tombstoned but kept on disk as an", cfg.project_id);
     println!("    archive. Drop it via `project leave {}` once the new project is healthy.", cfg.project_id);
     Ok(())
