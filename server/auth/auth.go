@@ -81,17 +81,28 @@ var publicPrefixes = []string{
 
 // publicPaths are exact URL paths that never require authentication.
 var publicPaths = map[string]bool{
-	"/bootstrap":          true,
-	"/bootstrap/agent":    true,
-	"/bootstrap/cert":     true,
-	"/bootstrap/csr":      true,
-	"/metrics":            true,
-	"/healthz":            true,
-	"/login":              true,
-	"/totp":               true,
-	"/setup":              true,
+	"/bootstrap":              true,
+	"/bootstrap/agent":        true,
+	"/bootstrap/cert":         true,
+	"/bootstrap/csr":          true,
+	"/metrics":                true,
+	"/healthz":                true,
+	"/login":                  true,
+	"/totp":                   true,
+	"/setup":                  true,
 	"/api/v1/bootstrap":       true,
 	"/api/v1/secrets/rotated": true,
+	// fleet/pubkeys and swarm/puddle/names are public-by-construction:
+	// hostname↔pubkey and name↔pubkey bindings, nothing secret (the
+	// pubkeys ride every multicast SWARMGIT: line; the names are the
+	// swarmgit://<name>/<repo> URL form). Agents fetch them on a timer
+	// with only an mTLS client cert — no session token — so they have to
+	// be in the allowlist or the agent never bootstraps its peer-pubkey
+	// cache / friendly-name map. Both handlers are registered bare (no
+	// per-route permission wrapper), so unlike /api/v1/config/reload
+	// below this is safe: the no-user request just runs the handler.
+	"/api/v1/fleet/pubkeys":      true,
+	"/api/v1/swarm/puddle/names": true,
 	// /api/v1/config/reload is INTENTIONALLY NOT public. The route's own
 	// RequirePermission(PermConfigPublish) wrapper handles auth — adding
 	// it here bypassed the auth middleware entirely (no user injected
@@ -174,4 +185,3 @@ func TryPeerAuth(r *http.Request) *User {
 	)
 	return loopbackAdmin
 }
-

@@ -29,6 +29,13 @@ func TestIsPublicPath(t *testing.T) {
 		{"/api/v1/agent/download/linux/arm64", true},
 		{"/api/v1/agent/latest", true},
 		{"/api/v1/bootstrap/register", true},
+		// Public-by-construction (name↔pubkey / hostname↔pubkey bindings).
+		// Agents fetch these with only an mTLS client cert, no token.
+		{"/api/v1/fleet/pubkeys", true},
+		{"/api/v1/swarm/puddle/names", true},
+		// ...but the exact-match granularity holds: the authed swarmgit
+		// fleet view stays gated.
+		{"/api/v1/swarm/swarmgit/fleet", false},
 		// /api/v1/config/reload must NOT be public — the route guards it
 		// with RequirePermission(PermConfigPublish). Marking the path
 		// public bypassed the auth middleware (no user in context), then
