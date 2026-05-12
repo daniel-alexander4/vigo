@@ -203,13 +203,14 @@ puddle passphrase: ****
   Puddle pubkey: ed25519:8711b12bac759fea30363f0ed4ab95b4…
   Resolves:      swarmgit://dan/<repo>  →  swarmgit://8711b12bac759fea…/<repo>  (project_id = sha256(pubkey ‖ repo))
 
-# now this works on any envoy that's seen the claim:
+# works from this envoy immediately, and from other envoys once the fleet name map refreshes:
 $ git clone swarmgit://dan/vigo-web
 git-remote-swarmgit: resolved swarmgit://dan/vigo-web → swarmgit://e3b0c44298fc…b855/vigo-web (founder ed25519:8711b12bac75…0a9aea8)
 ```
 
 Properties — read these before relying on it:
 
+- **Resolves immediately from the claiming envoy.** A push/clone of `swarmgit://<your-name>/<repo>` from the same envoy works the instant `name set` returns — the helper daemon's resolver falls back to your own `~/.vigo-puddle/name-claim.json` when the fleet name map hasn't picked up the claim yet. Other envoys resolve it once their map refreshes (their next check-in, then ~15 min). The hex form is always unambiguous everywhere.
 - **First-come, cooperatively enforced.** `name set` refuses a name another puddle already holds *in the agent's current fleet view* — that kills the accidental collision (Alice and Bob both reaching for `mainbox`). It does **not** beat the propagation window (two puddles can both check "free" and claim within seconds) and does **nothing** against a deliberate squatter.
 - **A friendly name is a hint, not a trust anchor.** If an attacker claims `acme` before the real Acme does, `swarmgit://acme/billing` cleanly resolves to the attacker's repo with no warning (unless the real Acme also has a claim — then it's a collision → resolution errors). Inherent to decentralized naming. The clone output prints the resolved `(project_id, founder pubkey)` so a vigilant operator can spot a mismatch; the unforgeable form is always `swarmgit://<project_id>/<repo>`.
 - **Collisions degrade to ambiguous, never to wrong.** A resolver seeing two unrelated claims for `dan` errors and tells you to use the hex form until a human runs `name clear` on one. No automatic tiebreaker.

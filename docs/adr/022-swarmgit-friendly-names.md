@@ -165,7 +165,12 @@ root commit X)" — but no upstream-tracking machinery in v1.
    check-in hot path).
 6. `agent/src/swarm/swarmgit/helper.rs` — new socket verb: resolve a puddle
    name → project_id against the cached map (0 → error, >1 → ambiguous error,
-   1 → `sha256(pubkey ‖ validate_handle(handle))`).
+   1 → `sha256(pubkey ‖ validate_handle(handle))`). *(0.48.0:* on a cache miss
+   the verb falls back to the SO_PEERCRED'd caller's own
+   `~/.vigo-puddle/name-claim.json` — the helper runs as root and can read it —
+   so `swarmgit://<my-name>/<repo>` resolves from the envoy that just ran
+   `puddle name set`, before the claim has propagated; a missing/corrupt
+   `names.json` is therefore non-fatal.*)
 7. `agent/src/swarm/swarmgit/remote_helper.rs` — `parse_swarmgit_url`
    branches: 64-hex first component → project_id (today); else → ask the
    helper daemon to resolve the name. Clone output prints the resolved

@@ -9,7 +9,7 @@ Steps 1–3 (multi-call dispatch, capability tokens, per-user state + CLI) and s
 
 What works end-to-end today:
 
-- `init` / `invite` / `join` / `list` / `status` are fully functional locally.
+- `init` / `invite` / `join` / `list` / `status` are fully functional locally. Run from inside a git work tree, `init` also adds the `swarm` remote and `git push --all && --tags` — founding and publishing a repo is one command; `--no-push` keeps it register-only. `project push` is the standalone re-publish verb (remote-add-if-missing, push `--all`/`--tags`).
 - `leave` and `revoke` sign envelopes inline via the user's puddle session helper, write the signed envelope as a `*.pending` sentinel; the agent's root reactor sweeps every 60 s and persists them to `/var/lib/vigo/swarm/swarmgit/envelopes/<project_id>/{revokes,leaves}/`.
 - `git clone swarmgit://<project_id>/<handle>` and `git push swarmgit://…` against the local envoy: the user-side `git-remote-swarmgit` binary opens `/var/run/vigo/swarmgit.sock` (SO_PEERCRED-gated), the agent verifies the user's token chain, and proxies to `git upload-pack` / `git receive-pack` against the bare repo.
 - Cross-envoy push: after a successful local `git-receive-pack`, the helper daemon snapshots refs pre/post and (on delta) builds a `git bundle --all` and POSTs it to every known peer for the project over swarm mTLS (port 1531). Targets come from two deduplicated sources: peers that have advertised holding the project on the LAN multicast (`SWARMGITPROJECT:<host>:<pid_hex>` announce lines, indexed by `ProjectPeers`), and explicit hostnames listed in `project.json::cross_subnet_members`. Receivers verify the X-Vigo-Chain header against the URL's project_id, ingest via `git bundle verify` + `git fetch`, and return `{accepted, refs_changed}`.
@@ -54,7 +54,7 @@ swarmgit://<project_id>/<handle>
 
 The handle is human-readable; cryptographic identity is the project_id. Squatting on a handle is impossible — there's no central registry. Any fleet can found a project named `vigo-web`, but the resulting project_ids will differ.
 
-**Friendly URLs (ADR-022).** If the founder's puddle has claimed a name (`vigo swarm puddle name set <name>`), `swarmgit://<name>/<handle>` works for git operations alongside the hex form — `git-remote-swarmgit` resolves `<name>` to the puddle pubkey via the cached fleet name map and computes `sha256(pubkey ‖ handle)`. The friendly form is a convenience; the hex `swarmgit://<project_id>/<handle>` is the proof (a name is squattable — first claim wins). See [`vigo swarm puddle name`](agent-swarm-puddle.md#friendly-names-adr-022). The `<project_id>` arguments below take the hex id or a local handle prefix — *not* a friendly name (that's a URL-resolution feature, not a CLI-argument one).
+**Friendly URLs (ADR-022).** If the founder's puddle has claimed a name (`vigo swarm puddle name set <name>`), `swarmgit://<name>/<handle>` works for git operations alongside the hex form — `git-remote-swarmgit` resolves `<name>` to the puddle pubkey via the cached fleet name map and computes `sha256(pubkey ‖ handle)`. On a fleet-name-map miss (or a fresh envoy whose map hasn't bootstrapped yet), the resolver falls back to the *requesting* user's own `~/.vigo-puddle/name-claim.json`, so `swarmgit://<my-name>/<repo>` resolves from the envoy that just ran `puddle name set` without waiting for the claim to propagate through the trait → server → re-fetch round trip. The friendly form is a convenience; the hex `swarmgit://<project_id>/<handle>` is the proof (a name is squattable — first claim wins). See [`vigo swarm puddle name`](agent-swarm-puddle.md#friendly-names-adr-022). The `<project_id>` arguments below take the hex id or a local handle prefix — *not* a friendly name (that's a URL-resolution feature, not a CLI-argument one).
 
 Verbs that take a `<project_id>` argument also accept a unique handle prefix among projects this user has joined locally — `vigo swarm swarmgit project status vigo-web` resolves the same as the full hex id.
 
@@ -64,7 +64,8 @@ Verbs that take a `<project_id>` argument also accept a unique handle prefix amo
 |------|---------|
 | `status` | Show envoy-wide swarmgit posture (publisher + receiver state, helper-daemon socket) |
 | `purge --yes` | Power-user wipe of local swarmgit state. As a non-root user: `~/.vigo-swarmgit/`. As root: also envoy-wide root-owned state. Distinct from per-project `leave --purge`; does not gossip. |
-| `project init <handle> [--scope <kind>]` | Found a new project as the local fleet |
+| `project init <handle> [--scope <kind>] [--repo <path>] [--no-push]` | Found a new project as the local fleet — and, from inside a git work tree, also add the `swarm` remote and `git push --all && --tags` to publish it |
+| `project push [<handle>] [--repo <path>]` | Publish (or re-publish) a project from its working repo: add the `swarm` remote if missing, or re-point it after a `re-found`/`reanchor`, then `git push swarm --all && --tags`. Idempotent |
 | `project invite <project_id> --puddle <fp> --role <role> [--expires <Nd>]` | Mint a child token for another fleet |
 | `project join <project_id> [--invitation <file\|->]` | Adopt an invitation issued by an admin |
 | `project leave <project_id> [--purge] [--yes]` | Drop local membership, queue LEAVE envelope |
@@ -132,10 +133,10 @@ vigo swarm swarmgit purge --yes
 
 ## `project init`
 
-Founds a new project. The local fleet (per [ADR-014](../../adr/014-puddle-primitive.md)) becomes the founder; `project_id = sha256(local_puddle_pubkey ‖ handle)`.
+Founds a new project. The local fleet (per [ADR-014](../../adr/014-puddle-primitive.md)) becomes the founder; `project_id = sha256(local_puddle_pubkey ‖ handle)`. Run from inside a git work tree (or pass `--repo <path>`), `init` also adds the `swarm` remote and publishes the repo — founding and publishing are one command.
 
 ```
-vigo swarm swarmgit project init <handle> [--scope swarm-wide|members-only]
+vigo swarm swarmgit project init <handle> [--scope swarm-wide|members-only] [--repo <path>] [--no-push]
 ```
 
 **Arguments:**
@@ -144,18 +145,51 @@ vigo swarm swarmgit project init <handle> [--scope swarm-wide|members-only]
 - `--scope` — distribution scope:
   - `swarm-wide` (default): bare repo lands on every swarmgit-authorized envoy in the swarm for DR purposes.
   - `members-only`: bare repo lands only on envoys whose puddle is in the project's `members` list.
+- `--repo <path>` — the git work tree to publish. Default: the current directory if it's a git work tree.
+- `--no-push` — register the project (`project.json` + `tokens.json`) only; don't touch any working repo. Publish later with `project push`.
 
 **Preconditions:** puddle must be unlocked. Run `vigo swarm puddle unlock` first.
 
-**Effects:** writes `project.json` and `tokens.json` (with the founder's bootstrap token) under `~/.vigo-swarmgit/<project_id>/`. Prints the canonical URL.
+**Effects:**
+
+1. Writes `project.json` and `tokens.json` (with the founder's bootstrap token) under `~/.vigo-swarmgit/<project_id>/`.
+2. Unless `--no-push`: if the working repo (cwd or `--repo`) is a git work tree and the helper daemon socket is up, adds a `swarm` remote pointing at `swarmgit://<project_id>/<handle>` (hex form — always resolves) and runs `git push swarm --all && git push swarm --tags`, which seeds the bare repo and triggers fan-out. Warns (doesn't block) when `<handle>` doesn't match the work-tree's directory name. If you're not in a git work tree, or the helper isn't running, or a `swarm` remote already points elsewhere, it registers the project only and prints how to publish later.
 
 ```
-$ vigo swarm swarmgit project init vigo-web
+$ cd ~/repos/vigo-web && vigo swarm swarmgit project init vigo-web
 ✓ Founded project vigo-web
-  URL:        swarmgit://e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/vigo-web
-  Project ID: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-  Founder:    ed25519:f43f6ef3eea29e3780d73aa2cee4a78193419a69f43f6ef3eea29e3780d73aa2
-  Scope:      swarm-wide
+  URL:           swarmgit://e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/vigo-web
+  Founder:       ed25519:f43f6ef3eea29e3780d73aa2cee4a78193419a69f43f6ef3eea29e3780d73aa2
+  Scope:         swarm-wide
+  State:         /home/dan/.vigo-swarmgit/e3b0c4…/
+  Remote 'swarm' → swarmgit://e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/vigo-web
+… git push output …
+
+Published. Verify replication with `vigocli swarm swarmgit show vigo-web`.
+```
+
+When the founder's puddle has claimed a name (`vigo swarm puddle name set`), the `URL:` line shows the friendly `swarmgit://<name>/<handle>` form with `Canonical URL:` beneath it.
+
+## `project push`
+
+Publishes (or re-publishes) a project from its working repo. The everyday companion to `init` — and what you run after a `re-found`/`reanchor` changes the `project_id`. Idempotent; safe to re-run.
+
+```
+vigo swarm swarmgit project push [<handle>] [--repo <path>]
+```
+
+**Arguments:**
+
+- `<handle>` — a project handle (or `project_id` / unique prefix) you have local state for. With it, `push` ensures the `swarm` remote points at this project — adding it if missing, or re-pointing it (`git remote set-url`) if it currently addresses a different project. Without it, `push` requires an existing `swarm` remote and pushes to it as-is.
+- `--repo <path>` — the git work tree. Default: the current directory.
+
+**Preconditions:** must be run from inside a git work tree (or with `--repo`); the helper daemon socket must be up.
+
+**Effects:** ensures the `swarm` remote (per the rule above), then `git push swarm --all && git push swarm --tags`.
+
+```
+$ cd ~/repos/vigo-web && vigo swarm swarmgit project push vigo-web
+✓ Pushed /home/dan/repos/vigo-web to the swarm.
 ```
 
 ## `project invite`
