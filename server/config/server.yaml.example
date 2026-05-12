@@ -417,7 +417,10 @@ watcher:
 #   # any name the swarm doesn't hold still resolves via your normal DNS.
 #   # Off (or omitted) leaves /etc/hosts alone — turn it on for fleets whose
 #   # DNS doesn't authoritatively own the local domain. A plain bool, not a
-#   # pattern list: it follows swarm.enabled per-host.
+#   # pattern list: it follows swarm.enabled per-host. NOTE: on hosts where
+#   # this is on, do NOT also manage /etc/hosts with a whole-file `type: file`
+#   # module — it'll clobber the managed block and the two will flap. Use
+#   # `type: host` (per-entry) or `type: blockinfile` (own markers) instead.
 #   swarmresolve: false
 
 
