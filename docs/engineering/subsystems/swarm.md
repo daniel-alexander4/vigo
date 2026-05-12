@@ -197,14 +197,14 @@ swarm:
   swarmgit: { enabled: ["annlap", "plex", "girlslaptop"] }
   longdrawer:  { enabled: ["*"] }
   swarmcast:   { enabled: ["*"] }
-  swarmdns: false                         # plain bool — agent-managed /etc/hosts block (default off)
+  swarmresolve: false                     # plain bool — agent-managed /etc/hosts block (default off)
 ```
 
-The server evaluates patterns against each agent's hostname and emits the resolved bools in `PolicyBundle.vars_json` on every check-in (`swarm_enabled`, `swarm_puddle_enabled`, `swarm_swarmgit_enabled`, `swarm_longdrawer_enabled`, `swarm_swarmcast_enabled`, plus `swarm_swarmdns_enabled` when `swarm.swarmdns: true`). Agents never see the patterns — they only see their own resolved gate. A `vigocli config publish` propagates within one check-in cycle without restarting anything.
+The server evaluates patterns against each agent's hostname and emits the resolved bools in `PolicyBundle.vars_json` on every check-in (`swarm_enabled`, `swarm_puddle_enabled`, `swarm_swarmgit_enabled`, `swarm_longdrawer_enabled`, `swarm_swarmcast_enabled`, plus `swarm_swarmresolve_enabled` when `swarm.swarmresolve: true`). Agents never see the patterns — they only see their own resolved gate. A `vigocli config publish` propagates within one check-in cycle without restarting anything.
 
-### swarmdns — agent-managed `/etc/hosts` block
+### swarmresolve — agent-managed `/etc/hosts` block
 
-`swarm.swarmdns` is the one swarm knob that's a plain bool, not a pattern list (it follows `swarm.enabled` per host), and the one that's **default-OFF on the agent** rather than fail-open: editing `/etc/hosts` is an operator decision, so the agent treats absence of `swarm_swarmdns_enabled` (a fresh enrollment, a config that doesn't set it, an explicit `false`) as off. When on, every swarm-enabled agent emits its hostname in a `HOST:<hostname>` line in the multicast announcement preamble; receivers join `(hostname, datagram-source-IP)` into a fleet `hostname → IP` index, and a ~60 s reactor renders it into a delimited block in `/etc/hosts`:
+`swarm.swarmresolve` is the one swarm knob that's a plain bool, not a pattern list (it follows `swarm.enabled` per host), and the one that's **default-OFF on the agent** rather than fail-open: editing `/etc/hosts` is an operator decision, so the agent treats absence of `swarm_swarmresolve_enabled` (a fresh enrollment, a config that doesn't set it, an explicit `false`) as off. When on, every swarm-enabled agent emits its hostname in a `HOST:<hostname>` line in the multicast announcement preamble; receivers join `(hostname, datagram-source-IP)` into a fleet `hostname → IP` index, and a ~60 s reactor renders it into a delimited block in `/etc/hosts`:
 
 ```
 # BEGIN vigo swarm peers — managed by the vigo agent; do not edit
@@ -213,7 +213,7 @@ The server evaluates patterns against each agent's hostname and emits the resolv
 # END vigo swarm peers
 ```
 
-Strictly additive: lines outside the markers are preserved verbatim (atomic temp+rename, file mode preserved), loopback addresses are skipped defensively, and any name the swarm doesn't hold still resolves via the OS resolver / DNS unchanged — `/etc/hosts` (`files`) is consulted alongside `dns`, not instead of it. Flipping `swarm.swarmdns` back to `false` removes the managed block on the next tick; stale entries (a peer gone quiet for >5 min) drop out the same way. It exists for the case the swarm is built for — a LAN where DNS doesn't authoritatively own the local domain — so `vigo swarm puddle join --from <host>`, `ssh <host>`, `git`, and friends resolve fleet hostnames without `/etc/hosts` edits or a working local resolver. (`/etc/hosts` is **not** on the agent's hardcoded guardrail protected-path list — and shouldn't be, since the agent only ever rewrites its own delimited region.) Inspect it from the envoy with `vigo swarm swarmdns status` — the resolved gate plus the current managed-block contents — or the `swarmdns:` line in `vigo swarm status`.
+Strictly additive: lines outside the markers are preserved verbatim (atomic temp+rename, file mode preserved), loopback addresses are skipped defensively, and any name the swarm doesn't hold still resolves via the OS resolver / DNS unchanged — `/etc/hosts` (`files`) is consulted alongside `dns`, not instead of it. Flipping `swarm.swarmresolve` back to `false` removes the managed block on the next tick; stale entries (a peer gone quiet for >5 min) drop out the same way. It exists for the case the swarm is built for — a LAN where DNS doesn't authoritatively own the local domain — so `vigo swarm puddle join --from <host>`, `ssh <host>`, `git`, and friends resolve fleet hostnames without `/etc/hosts` edits or a working local resolver. (`/etc/hosts` is **not** on the agent's hardcoded guardrail protected-path list — and shouldn't be, since the agent only ever rewrites its own delimited region.) Inspect it from the envoy with `vigo swarm swarmresolve status` — the resolved gate plus the current managed-block contents — or the `swarmresolve:` line in `vigo swarm status`.
 
 **Two layers.** Both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for the subsystem to be active there. Empty list at either layer disables the subsystem on that host.
 

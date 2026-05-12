@@ -304,10 +304,10 @@ fn parse_args() -> Result<Cli> {
                 Some("lockbox") => Commands::Lockbox { args: positional[2..].to_vec() },
                 Some("puddle") => Commands::SelfFleet { args: positional[2..].to_vec() },
                 // Read-only diagnostic verbs (0.41.1+): substrate
-                // status, seed inventory, peer table, swarmdns posture.
+                // status, seed inventory, peer table, swarmresolve posture.
                 // Read against /var/lib/vigo/swarm/{state,manifest,
                 // peers}.json and the /etc/hosts managed block.
-                Some("status") | Some("seeds") | Some("peers") | Some("swarmdns") => {
+                Some("status") | Some("seeds") | Some("peers") | Some("swarmresolve") => {
                     Commands::SwarmDiag { args: positional[1..].to_vec() }
                 }
                 // Help routes through the diag dispatcher so the
@@ -1304,13 +1304,13 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         swarmgit_gate.clone(),
     );
 
-    // swarmdns reactor — maintains the agent-managed `/etc/hosts` block
-    // from the swarm host index when the operator has set
-    // `swarm.swarmdns: true`. Always spawned; each tick reads the gate
-    // from the cached policy bundle (default-OFF — see
-    // `swarm::gates::swarmdns_active`) and rewrites or removes the
+    // swarmresolve reactor — maintains the agent-managed `/etc/hosts`
+    // block from the swarm host index when the operator has set
+    // `swarm.swarmresolve: true`. Always spawned; each tick reads the
+    // gate from the cached policy bundle (default-OFF — see
+    // `swarm::gates::swarmresolve_active`) and rewrites or removes the
     // block accordingly.
-    vigo::swarm::swarmdns::spawn(state_store.clone(), cancel.clone());
+    vigo::swarm::swarmresolve::spawn(state_store.clone(), cancel.clone());
 
     let cfg = checkin::loop_impl::LoopConfig {
         trait_refresh_cycles: cli.trait_refresh_cycles,

@@ -38,13 +38,14 @@
 //! `sync_*_gate` functions call into here to compute the new value
 //! before flipping the gate.
 //!
-//! `swarmdns` (the agent-managed `/etc/hosts` block) is gated here
-//! too, via [`swarmdns_active`] — but with the **opposite** fail
-//! mode: default-OFF. The server emits `swarm_swarmdns_enabled` only
-//! when the operator set `swarm.swarmdns: true` and the host matches
-//! `swarm.enabled`; anything else — absent, explicit `false`, no
-//! policy bundle yet — means off. Editing `/etc/hosts` is an operator
-//! decision, not something a fresh-enrolled envoy does on its own.
+//! `swarmresolve` (the agent-managed `/etc/hosts` block) is gated here
+//! too, via [`swarmresolve_active`] — but with the **opposite** fail
+//! mode: default-OFF. The server emits `swarm_swarmresolve_enabled`
+//! only when the operator set `swarm.swarmresolve: true` and the host
+//! matches `swarm.enabled`; anything else — absent, explicit `false`,
+//! no policy bundle yet — means off. Editing `/etc/hosts` is an
+//! operator decision, not something a fresh-enrolled envoy does on its
+//! own.
 
 use crate::state::StateStore;
 
@@ -138,11 +139,12 @@ fn is_truthy_or_absent(v: Option<&serde_json::Value>) -> bool {
     }
 }
 
-/// Strict truthy check used for `swarm_swarmdns_enabled`. Returns true
-/// **only** for an explicit truthy value (`true`, `"true"`/`"yes"`/`"1"`,
-/// nonzero number); absence, `null`, `false`, and anything else are
-/// off. This is the fail-*closed* counterpart of [`is_truthy_or_absent`]
-/// — swarmdns must not turn itself on by default.
+/// Strict truthy check used for `swarm_swarmresolve_enabled`. Returns
+/// true **only** for an explicit truthy value (`true`, `"true"`/`"yes"`/
+/// `"1"`, nonzero number); absence, `null`, `false`, and anything else
+/// are off. This is the fail-*closed* counterpart of
+/// [`is_truthy_or_absent`] — swarmresolve must not turn itself on by
+/// default.
 fn is_explicitly_true(v: Option<&serde_json::Value>) -> bool {
     match v {
         Some(serde_json::Value::Bool(b)) => *b,
@@ -154,13 +156,13 @@ fn is_explicitly_true(v: Option<&serde_json::Value>) -> bool {
     }
 }
 
-/// Compute whether the swarmdns `/etc/hosts` writer should be active
-/// for this envoy right now — `swarm_enabled` (fail-open) AND
-/// `swarm_swarmdns_enabled` (fail-closed, see [`is_explicitly_true`]).
+/// Compute whether the swarmresolve `/etc/hosts` writer should be
+/// active for this envoy right now — `swarm_enabled` (fail-open) AND
+/// `swarm_swarmresolve_enabled` (fail-closed, see [`is_explicitly_true`]).
 /// Returns `false` in every ambiguous case (no state store, no policy
 /// bundle yet, parse failure): the agent does not touch `/etc/hosts`
-/// until the server explicitly says swarmdns is on.
-pub fn swarmdns_active(state_store: Option<&StateStore>) -> bool {
+/// until the server explicitly says swarmresolve is on.
+pub fn swarmresolve_active(state_store: Option<&StateStore>) -> bool {
     let Some(store) = state_store else {
         return false;
     };
@@ -182,7 +184,7 @@ pub fn swarmdns_active(state_store: Option<&StateStore>) -> bool {
     if !is_truthy_or_absent(val.get("swarm_enabled")) {
         return false;
     }
-    is_explicitly_true(val.get("swarm_swarmdns_enabled"))
+    is_explicitly_true(val.get("swarm_swarmresolve_enabled"))
 }
 
 #[cfg(test)]
@@ -229,8 +231,8 @@ mod tests {
     }
 
     #[test]
-    fn swarmdns_active_off_without_state_store() {
-        assert!(!swarmdns_active(None));
+    fn swarmresolve_active_off_without_state_store() {
+        assert!(!swarmresolve_active(None));
     }
 
     #[test]

@@ -564,10 +564,10 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	// puddle (single source of truth, ADR-020). The agent's lockbox
 	// gate consults swarm_puddle_enabled instead.
 	//
-	// swarmdns is the one exception to "only emit when gating off": it
-	// is default-OFF on the agent (editing /etc/hosts is an operator
+	// swarmresolve is the one exception to "only emit when gating off":
+	// it is default-OFF on the agent (editing /etc/hosts is an operator
 	// decision), so the agent treats absence as off and we must emit
-	// swarm_swarmdns_enabled=true when it should be ON. Off ⇒ omit.
+	// swarm_swarmresolve_enabled=true when it should be ON. Off ⇒ omit.
 	gates := map[string]any{}
 	swarmAllowed := config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Enabled)
 	if !swarmAllowed {
@@ -585,8 +585,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Swarmcast.Enabled) {
 		gates["swarm_swarmcast_enabled"] = false
 	}
-	if swarmAllowed && s.swarmCfg.Swarmdns {
-		gates["swarm_swarmdns_enabled"] = true
+	if swarmAllowed && s.swarmCfg.Swarmresolve {
+		gates["swarm_swarmresolve_enabled"] = true
 	}
 	if err := injectServerVars(bundle, gates); err != nil {
 		slog.Warn("failed to inject server vars into policy bundle",

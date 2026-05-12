@@ -37,7 +37,7 @@ pub mod scheduler;
 pub mod puddle;
 pub mod server;
 pub mod state_mirror;
-pub mod swarmdns;
+pub mod swarmresolve;
 pub mod target;
 
 use std::collections::hash_map::DefaultHasher;

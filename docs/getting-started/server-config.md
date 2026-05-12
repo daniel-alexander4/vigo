@@ -605,7 +605,7 @@ swarm:
     enabled: ["annlap", "plex", "girlslaptop"]    # lockbox follows
   swarmgit:
     enabled: ["*"]
-  swarmdns: false                                 # let agents maintain a managed block in /etc/hosts
+  swarmresolve: false                             # let agents maintain a managed block in /etc/hosts
 ```
 
 | Option | Default | Description |
@@ -626,7 +626,7 @@ swarm:
 | `swarmgit.enabled` | `[]` | Hostname pattern list of envoys allowed to run swarmgit — publisher and receiver. |
 | `swarmgit.max_bundle_bytes` | `1073741824` (1 GiB) | Per-bundle fan-out size cap. `0` = no cap. Enforced publisher-side at fan-out time. |
 | `swarmgit.envelope_retention` | `90d` | Revoke/leave envelope reap window. Empty = compile-time default (90d). |
-| `swarmdns` | `false` | When `true`, every swarm-enabled agent maintains a delimited block in `/etc/hosts` mapping each announced peer hostname → its LAN IP (learned from the swarm multicast). Additive — lines outside the managed block are untouched, and names the swarm doesn't hold still resolve via DNS. **Opt-in** (default-OFF on the agent; the server emits `swarm_swarmdns_enabled` only when this is `true` and the host matches `swarm.enabled`). Set `false` (or omit) to leave `/etc/hosts` alone. A plain bool, not a pattern list — it follows `swarm.enabled` per host. Useful on fleets whose DNS doesn't authoritatively own the local domain. |
+| `swarmresolve` | `false` | When `true`, every swarm-enabled agent maintains a delimited block in `/etc/hosts` mapping each announced peer hostname → its LAN IP (learned from the swarm multicast). Additive — lines outside the managed block are untouched, and names the swarm doesn't hold still resolve via DNS. **Opt-in** (default-OFF on the agent; the server emits `swarm_swarmresolve_enabled` only when this is `true` and the host matches `swarm.enabled`). Set `false` (or omit) to leave `/etc/hosts` alone. A plain bool, not a pattern list — it follows `swarm.enabled` per host. Useful on fleets whose DNS doesn't authoritatively own the local domain. |
 
 **Runtime caps reach agents via CheckIn.** The `max_*_bytes` and `*_retention` fields are pushed to every agent in the `CheckInResponse` and replace the agent's previously-hardcoded constants. Changes take effect within one CheckIn cycle (typically <30s) — no agent restart required.
 

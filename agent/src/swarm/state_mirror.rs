@@ -47,11 +47,11 @@ pub struct AgentSwarmState {
 }
 
 /// Resolved gate booleans for the four content subsystems plus the
-/// substrate-level kill switch, plus `swarmdns`. `puddle` is the
+/// substrate-level kill switch, plus `swarmresolve`. `puddle` is the
 /// single-source-of-truth for lockbox (ADR-020) — there is no
-/// separate lockbox field. `swarmdns` is the one default-OFF gate
+/// separate lockbox field. `swarmresolve` is the one default-OFF gate
 /// (editing `/etc/hosts` is an operator decision — see
-/// [`super::gates::swarmdns_active`]).
+/// [`super::gates::swarmresolve_active`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GateState {
     pub swarm: bool,
@@ -60,15 +60,15 @@ pub struct GateState {
     pub longdrawer: bool,
     pub puddle: bool,
     #[serde(default)]
-    pub swarmdns: bool,
+    pub swarmresolve: bool,
 }
 
 impl Default for GateState {
-    /// Default is all-on EXCEPT `swarmdns` — mirrors the fail-open
+    /// Default is all-on EXCEPT `swarmresolve` — mirrors the fail-open
     /// semantic in [`super::gates::substrate_active`] for the content
     /// subsystems (a freshly-enrolled envoy with no policy bundle yet
     /// runs them until told otherwise) and the fail-*closed* semantic
-    /// for swarmdns (off until the server explicitly says on).
+    /// for swarmresolve (off until the server explicitly says on).
     fn default() -> Self {
         Self {
             swarm: true,
@@ -76,7 +76,7 @@ impl Default for GateState {
             swarmgit: true,
             longdrawer: true,
             puddle: true,
-            swarmdns: false,
+            swarmresolve: false,
         }
     }
 }
@@ -132,9 +132,9 @@ pub fn read(path: &Path) -> Result<AgentSwarmState> {
 /// runtime evaluation so the disk mirror reflects what the gates
 /// actually do: the content subsystems use the fail-open semantics of
 /// [`super::gates::substrate_active`] (explicit `false` → off; absent
-/// / missing / malformed → on), while `swarmdns` uses the fail-closed
-/// semantics of [`super::gates::swarmdns_active`] (only an explicit
-/// truthy value → on).
+/// / missing / malformed → on), while `swarmresolve` uses the
+/// fail-closed semantics of [`super::gates::swarmresolve_active`] (only
+/// an explicit truthy value → on).
 fn decode_gates(vars_json: &[u8]) -> GateState {
     if vars_json.is_empty() {
         return GateState::default();
@@ -149,7 +149,7 @@ fn decode_gates(vars_json: &[u8]) -> GateState {
         swarmgit: gate_truthy(val.get("swarm_swarmgit_enabled")),
         longdrawer: gate_truthy(val.get("swarm_longdrawer_enabled")),
         puddle: gate_truthy(val.get("swarm_puddle_enabled")),
-        swarmdns: gate_explicitly_true(val.get("swarm_swarmdns_enabled")),
+        swarmresolve: gate_explicitly_true(val.get("swarm_swarmresolve_enabled")),
     }
 }
 
@@ -170,8 +170,8 @@ fn gate_truthy(v: Option<&serde_json::Value>) -> bool {
 }
 
 /// Strict truthy check matching [`super::gates::is_explicitly_true`]
-/// (used for `swarm_swarmdns_enabled`): on only for an explicit truthy
-/// value — absence / `null` / `false` are off.
+/// (used for `swarm_swarmresolve_enabled`): on only for an explicit
+/// truthy value — absence / `null` / `false` are off.
 fn gate_explicitly_true(v: Option<&serde_json::Value>) -> bool {
     match v {
         Some(serde_json::Value::Bool(b)) => *b,
@@ -245,19 +245,19 @@ mod tests {
     }
 
     #[test]
-    fn swarmdns_gate_defaults_off_and_is_strict() {
+    fn swarmresolve_gate_defaults_off_and_is_strict() {
         // Default-off — the opposite of the content subsystems.
-        assert!(!decode_gates(b"").swarmdns);
-        assert!(!decode_gates(b"{}").swarmdns);
-        assert!(!decode_gates(b"not json").swarmdns);
-        assert!(!GateState::default().swarmdns);
+        assert!(!decode_gates(b"").swarmresolve);
+        assert!(!decode_gates(b"{}").swarmresolve);
+        assert!(!decode_gates(b"not json").swarmresolve);
+        assert!(!GateState::default().swarmresolve);
         // Off for explicit false / null / anything ambiguous.
-        assert!(!decode_gates(br#"{"swarm_swarmdns_enabled": false}"#).swarmdns);
-        assert!(!decode_gates(br#"{"swarm_swarmdns_enabled": null}"#).swarmdns);
-        assert!(!decode_gates(br#"{"swarm_swarmdns_enabled": "maybe"}"#).swarmdns);
+        assert!(!decode_gates(br#"{"swarm_swarmresolve_enabled": false}"#).swarmresolve);
+        assert!(!decode_gates(br#"{"swarm_swarmresolve_enabled": null}"#).swarmresolve);
+        assert!(!decode_gates(br#"{"swarm_swarmresolve_enabled": "maybe"}"#).swarmresolve);
         // On only for an explicit truthy value.
-        assert!(decode_gates(br#"{"swarm_swarmdns_enabled": true}"#).swarmdns);
-        assert!(decode_gates(br#"{"swarm_swarmdns_enabled": "true"}"#).swarmdns);
-        assert!(decode_gates(br#"{"swarm_swarmdns_enabled": 1}"#).swarmdns);
+        assert!(decode_gates(br#"{"swarm_swarmresolve_enabled": true}"#).swarmresolve);
+        assert!(decode_gates(br#"{"swarm_swarmresolve_enabled": "true"}"#).swarmresolve);
+        assert!(decode_gates(br#"{"swarm_swarmresolve_enabled": 1}"#).swarmresolve);
     }
 }

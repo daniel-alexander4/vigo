@@ -128,10 +128,10 @@ pub fn spawn(
     swarmgit_signing_key: Option<Arc<ed25519_dalek::SigningKey>>,
     swarmgit_pubkey_cache: Option<Arc<crate::swarm::swarmgit::peer_pubkey_cache::PeerPubkeyCache>>,
 ) {
-    // Make the swarmdns host index available before the listener
+    // Make the swarmresolve host index available before the listener
     // starts so early `HOST:` lines aren't dropped on the floor.
-    // Idempotent — `swarmdns::spawn` also calls this.
-    let _ = crate::swarm::swarmdns::init_host_map();
+    // Idempotent — `swarmresolve::spawn` also calls this.
+    let _ = crate::swarm::swarmresolve::init_host_map();
 
     // Build one shared peer agent at spawn time. Wrapped in an Arc so the
     // listener can clone it cheaply into the blocking tasks it spawns per
@@ -315,17 +315,17 @@ async fn listen_loop(
                                     );
                                 }
                             }
-                            // Feed the swarmdns host index. Not gated
+                            // Feed the swarmresolve host index. Not gated
                             // on any subsystem — the index is benign;
-                            // the swarmdns reactor decides whether to
+                            // the swarmresolve reactor decides whether to
                             // touch /etc/hosts. (HOST: lines are not
                             // signed-content-critical the way SWARMGIT*
                             // lines are; a spoofed one only mislabels
                             // an IP in a managed /etc/hosts block on a
-                            // host whose operator opted into swarmdns —
+                            // host whose operator opted into swarmresolve —
                             // same trust model as the LAN itself.)
                             if let Some(host) = &result.host_name {
-                                crate::swarm::swarmdns::record_host_global(
+                                crate::swarm::swarmresolve::record_host_global(
                                     host,
                                     src.ip(),
                                     now_unix_seconds(),
@@ -827,7 +827,7 @@ fn build_announcement(
 
     msg.push_str(&addr_line);
     // HOST:<hostname> — the sender's hostname, so receivers can build a
-    // fleet `hostname → IP` index for swarmdns (`/etc/hosts` block).
+    // fleet `hostname → IP` index for swarmresolve (`/etc/hosts` block).
     // Always emitted (independent of any subsystem gate); tiny, sits in
     // the always-present tail next to ADDR.
     if let Some(h) = announce_hostname() {
@@ -935,8 +935,8 @@ struct AnnouncementResult {
     swarmgit_projects: Vec<(String, String, Option<String>, Option<String>)>,
     /// Parsed `HOST:<hostname>` line, if present — the sender's
     /// hostname. The listener pairs it with the datagram source IP
-    /// and feeds `crate::swarm::swarmdns::record_host_global` to
-    /// build the fleet `hostname → IP` index swarmdns renders into
+    /// and feeds `crate::swarm::swarmresolve::record_host_global` to
+    /// build the fleet `hostname → IP` index swarmresolve renders into
     /// `/etc/hosts`. `None` from a sender on an older agent.
     host_name: Option<String>,
 }
@@ -1013,7 +1013,7 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
         } else if let Some(rest) = line.strip_prefix("ADDR:") {
             addr = Some(rest.to_string());
         } else if let Some(rest) = line.strip_prefix("HOST:") {
-            // Sender's hostname for the swarmdns fleet `hostname → IP`
+            // Sender's hostname for the swarmresolve fleet `hostname → IP`
             // index. The IP comes from the datagram source, not this
             // line. Last one wins (a packet only carries one).
             let h = rest.trim();

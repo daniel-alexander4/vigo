@@ -399,14 +399,14 @@ watcher:
 #     max_file_bytes: 1073741824                # 1 GiB per-file ciphertext cap on auto-encrypt + push. 0 = no cap.
 #     envelope_retention: "90d"                 # LEAVE/RESURRECT/TOMBSTONE reap window. Empty = compile-time default (90d).
 #
-#   # swarmdns — when true, each swarm-enabled agent maintains a delimited
-#   # block in /etc/hosts mapping every announced peer hostname to its LAN
-#   # IP. Additive only: lines outside the managed block are untouched, and
-#   # any name the swarm doesn't hold still resolves via DNS. Off (or
-#   # omitted) leaves /etc/hosts alone. Turn it on for fleets whose DNS
-#   # doesn't authoritatively own the local domain. A plain bool, not a
+#   # swarmresolve — when true, each swarm-enabled agent maintains a
+#   # delimited block in /etc/hosts mapping every announced peer hostname to
+#   # its LAN IP. Additive only: lines outside the managed block are
+#   # untouched, and any name the swarm doesn't hold still resolves via DNS.
+#   # Off (or omitted) leaves /etc/hosts alone. Turn it on for fleets whose
+#   # DNS doesn't authoritatively own the local domain. A plain bool, not a
 #   # pattern list — it follows swarm.enabled per host.
-#   swarmdns: false
+#   swarmresolve: false
 
 
 # ── Gossip & Fleet Primitives ────────────────────────────────────────────

@@ -8,7 +8,7 @@
 //! vigo swarm seeds list          # one line per active blob this envoy holds
 //! vigo swarm seeds show <key>    # full detail for one blob (sha-prefix or label)
 //! vigo swarm peers list          # known peers from the multicast / gossip table
-//! vigo swarm swarmdns status     # is swarmdns on? + the /etc/hosts managed block
+//! vigo swarm swarmresolve status # is swarmresolve on? + the /etc/hosts managed block
 //! ```
 //!
 //! Read-only against three daemon-canonical files written under
@@ -46,7 +46,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "status" => cmd_status(&args[1..]),
         "seeds" => dispatch_seeds(&args[1..]),
         "peers" => dispatch_peers(&args[1..]),
-        "swarmdns" => dispatch_swarmdns(&args[1..]),
+        "swarmresolve" => dispatch_swarmresolve(&args[1..]),
         other => bail!(
             "unknown `vigo swarm` subcommand: {other}\n\
              run `vigo swarm --help` for usage"
@@ -68,7 +68,7 @@ DIAGNOSTIC (envoy-wide; read-only):
     seeds show <key>      Full detail for one blob. <key> is a sha256
                           prefix (>=4 chars) or a label match.
     peers list            Known peers from the gossip / multicast table.
-    swarmdns status       Whether swarmdns is on for this envoy + the
+    swarmresolve status   Whether swarmresolve is on for this envoy + the
                           current agent-managed block in /etc/hosts.
 
 PER-USER CONTENT:
@@ -106,7 +106,7 @@ fn cmd_status(args: &[String]) -> Result<()> {
         println!("    longdrawer:     {}", on_off(s.gates.longdrawer));
         println!("    puddle:       {}  (lockbox follows)", on_off(s.gates.puddle));
         println!("    swarmgit:    {}", on_off(s.gates.swarmgit));
-        println!("    swarmdns:     {}  (managed /etc/hosts block)", on_off(s.gates.swarmdns));
+        println!("    swarmresolve: {}  (managed /etc/hosts block)", on_off(s.gates.swarmresolve));
     } else {
         println!("  state.json:       not found (agent has not completed a check-in yet?)");
         println!("                    expected at {}",
@@ -144,38 +144,38 @@ fn cmd_status(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-// ---------------- swarmdns ----------------
+// ---------------- swarmresolve ----------------
 
-fn dispatch_swarmdns(args: &[String]) -> Result<()> {
+fn dispatch_swarmresolve(args: &[String]) -> Result<()> {
     match args.first().map(String::as_str) {
-        None | Some("") | Some("status") => cmd_swarmdns_status(),
+        None | Some("") | Some("status") => cmd_swarmresolve_status(),
         Some("-h") | Some("--help") | Some("help") => {
             eprintln!(
-                "vigo swarm swarmdns status — show whether swarmdns is enabled on this\n\
-                 envoy (from the server-resolved gate in state.json) and the current\n\
+                "vigo swarm swarmresolve status — show whether swarmresolve is enabled on\n\
+                 this envoy (from the server-resolved gate in state.json) and the current\n\
                  contents of the agent-managed block in /etc/hosts. Read-only; no sudo."
             );
             Ok(())
         }
         Some(other) => bail!(
-            "unknown `vigo swarm swarmdns` subcommand: {other}\n\
+            "unknown `vigo swarm swarmresolve` subcommand: {other}\n\
              only `status` is supported"
         ),
     }
 }
 
-fn cmd_swarmdns_status() -> Result<()> {
+fn cmd_swarmresolve_status() -> Result<()> {
     let state = state_mirror::read(&state_mirror::default_path()).ok();
-    let enabled = state.as_ref().map(|s| s.gates.swarmdns);
+    let enabled = state.as_ref().map(|s| s.gates.swarmresolve);
 
-    println!("swarmdns status");
+    println!("swarmresolve status");
     println!();
     match enabled {
         Some(true) => println!(
-            "  enabled:          yes  (server.yaml swarm.swarmdns: true, and this host matches swarm.enabled)"
+            "  enabled:          yes  (server.yaml swarm.swarmresolve: true, and this host matches swarm.enabled)"
         ),
         Some(false) => println!(
-            "  enabled:          no   (server.yaml swarm.swarmdns unset/false, or this host isn't in swarm.enabled)"
+            "  enabled:          no   (server.yaml swarm.swarmresolve unset/false, or this host isn't in swarm.enabled)"
         ),
         None => println!(
             "  enabled:          unknown — state.json not found at {} (no check-in yet?)",
@@ -183,8 +183,8 @@ fn cmd_swarmdns_status() -> Result<()> {
         ),
     }
 
-    let entries = crate::swarm::swarmdns::managed_block_entries();
-    if crate::swarm::swarmdns::managed_block_present() {
+    let entries = crate::swarm::swarmresolve::managed_block_entries();
+    if crate::swarm::swarmresolve::managed_block_present() {
         println!("  /etc/hosts block: present — {} peer name(s):", entries.len());
         for (ip, host) in &entries {
             println!("    {:<15} {}", ip, host);

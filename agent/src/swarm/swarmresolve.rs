@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Swarm-DNS — let each agent answer LAN name lookups for its swarm
-//! peers by maintaining a delimited block in `/etc/hosts` mapping
-//! every announced peer hostname to its LAN IP.
+//! swarmresolve — let each envoy resolve its swarm peers' hostnames to
+//! their LAN addresses by maintaining a delimited block in `/etc/hosts`
+//! mapping every announced peer hostname to its LAN IP.
 //!
 //! *Additive* to the system resolver: lines outside the managed block
 //! are never touched, and any name the swarm doesn't hold still
@@ -14,15 +14,16 @@
 //! `vigo swarm puddle join --from <host>`, `ssh <host>`, `git`, and
 //! friends resolve fleet hostnames regardless.
 //!
-//! **Opt-in.** Off unless the operator sets `swarm.swarmdns: true` in
-//! `server.yaml` (and the envoy's hostname matches `swarm.enabled`).
-//! The server emits `swarm_swarmdns_enabled` in `PolicyBundle.vars_json`
-//! only when both hold; the agent treats anything else — absent,
-//! `false`, no policy bundle yet — as off. That's the *opposite* of
-//! the fail-open default the content subsystems use, on purpose:
-//! editing `/etc/hosts` is an operator decision, not something a
-//! fresh-enrolled envoy does on its own. Flipping it back to `false`
-//! removes the managed block on the next reactor tick.
+//! **Opt-in.** Off unless the operator sets `swarm.swarmresolve: true`
+//! in `server.yaml` (and the envoy's hostname matches `swarm.enabled`).
+//! The server emits `swarm_swarmresolve_enabled` in
+//! `PolicyBundle.vars_json` only when both hold; the agent treats
+//! anything else — absent, `false`, no policy bundle yet — as off.
+//! That's the *opposite* of the fail-open default the content
+//! subsystems use, on purpose: editing `/etc/hosts` is an operator
+//! decision, not something a fresh-enrolled envoy does on its own.
+//! Flipping it back to `false` removes the managed block on the next
+//! reactor tick.
 //!
 //! Data source: `HOST:<hostname>` lines on the swarm multicast
 //! ([`crate::swarm::discovery`]). Every envoy in the swarm emits one
@@ -134,7 +135,7 @@ impl HostMap {
 static HOST_MAP: OnceLock<Arc<HostMap>> = OnceLock::new();
 
 /// Initialize the process-wide [`HostMap`]. Called from
-/// `discovery::spawn` and `swarmdns::spawn`; idempotent.
+/// `discovery::spawn` and `swarmresolve::spawn`; idempotent.
 pub fn init_host_map() -> Arc<HostMap> {
     HOST_MAP.get_or_init(|| Arc::new(HostMap::new())).clone()
 }
@@ -155,7 +156,7 @@ pub fn record_host_global(host: &str, addr: IpAddr, now: i64) {
 // ── /etc/hosts managed block ──────────────────────────────────────
 
 fn hosts_path() -> PathBuf {
-    if let Some(p) = std::env::var_os("VIGO_SWARMDNS_HOSTS_FILE") {
+    if let Some(p) = std::env::var_os("VIGO_SWARMRESOLVE_HOSTS_FILE") {
         return PathBuf::from(p);
     }
     PathBuf::from("/etc/hosts")
@@ -235,9 +236,9 @@ fn strip_managed_block(content: &str) -> String {
 /// Read the current managed-block body lines from `/etc/hosts` as
 /// `(ip, hostname)` pairs (whitespace-split, first two columns). Empty
 /// when there's no managed block or the file is missing. Used by
-/// `vigo swarm swarmdns status` — the CLI runs in a separate process
-/// from the agent so it can't read the in-memory [`HostMap`]; the
-/// managed block is the on-disk reflection of the last reactor tick.
+/// `vigo swarm swarmresolve status` — the CLI runs in a separate
+/// process from the agent so it can't read the in-memory [`HostMap`];
+/// the managed block is the on-disk reflection of the last reactor tick.
 pub fn managed_block_entries() -> Vec<(String, String)> {
     let content = match std::fs::read_to_string(hosts_path()) {
         Ok(s) => s,
@@ -323,21 +324,21 @@ fn write_atomic(path: &Path, contents: &str) -> io::Result<()> {
 
 // ── reactor ───────────────────────────────────────────────────────
 
-/// How often the swarmdns reactor reconciles `/etc/hosts` with the
+/// How often the swarmresolve reactor reconciles `/etc/hosts` with the
 /// host index (and prunes stale index entries). Off the hot path; a
 /// minute is plenty given the ~30 s announce cadence.
-const SWARMDNS_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+const SWARMRESOLVE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
 
-/// Spawn the swarmdns reactor. Always spawned — each tick it reads
-/// `swarm_swarmdns_enabled` from the cached policy bundle (via
-/// [`crate::swarm::gates::swarmdns_active`]) and either rewrites the
+/// Spawn the swarmresolve reactor. Always spawned — each tick it reads
+/// `swarm_swarmresolve_enabled` from the cached policy bundle (via
+/// [`crate::swarm::gates::swarmresolve_active`]) and either rewrites the
 /// managed `/etc/hosts` block from the host index or, when disabled,
 /// removes it. The host index is populated independently by
 /// `discovery`'s listener parsing `HOST:` lines.
 pub fn spawn(state_store: Option<Arc<StateStore>>, cancel: CancellationToken) {
     let _ = init_host_map();
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(SWARMDNS_INTERVAL);
+        let mut tick = tokio::time::interval(SWARMRESOLVE_INTERVAL);
         tick.tick().await; // skip the immediate first tick
         loop {
             tokio::select! {
@@ -351,11 +352,11 @@ pub fn spawn(state_store: Option<Arc<StateStore>>, cancel: CancellationToken) {
 }
 
 /// One reconcile pass: render the desired managed-block body (from the
-/// host index when swarmdns is enabled, empty otherwise) and apply it.
-/// Pulled out so tests can drive it without the timer.
+/// host index when swarmresolve is enabled, empty otherwise) and apply
+/// it. Pulled out so tests can drive it without the timer.
 fn reconcile_once(state_store: Option<&StateStore>) {
     let now = unix_secs();
-    let enabled = crate::swarm::gates::swarmdns_active(state_store);
+    let enabled = crate::swarm::gates::swarmresolve_active(state_store);
     let body = if enabled {
         match host_map() {
             Some(m) => {
@@ -371,10 +372,10 @@ fn reconcile_once(state_store: Option<&StateStore>) {
         Ok(true) => tracing::info!(
             enabled,
             entries = body.lines().count(),
-            "swarmdns: updated /etc/hosts managed block"
+            "swarmresolve: updated /etc/hosts managed block"
         ),
         Ok(false) => {}
-        Err(e) => tracing::warn!(error = %e, "swarmdns: failed to update /etc/hosts"),
+        Err(e) => tracing::warn!(error = %e, "swarmresolve: failed to update /etc/hosts"),
     }
 }
 
@@ -486,7 +487,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let hosts = dir.path().join("hosts");
         std::fs::write(&hosts, "127.0.0.1 localhost\n").unwrap();
-        std::env::set_var("VIGO_SWARMDNS_HOSTS_FILE", &hosts);
+        std::env::set_var("VIGO_SWARMRESOLVE_HOSTS_FILE", &hosts);
 
         // First write — block added, file changed.
         assert!(apply_block("192.168.1.2\tdanlap\n").unwrap());
@@ -511,6 +512,6 @@ mod tests {
         // Re-remove — no change.
         assert!(!apply_block("").unwrap());
 
-        std::env::remove_var("VIGO_SWARMDNS_HOSTS_FILE");
+        std::env::remove_var("VIGO_SWARMRESOLVE_HOSTS_FILE");
     }
 }
