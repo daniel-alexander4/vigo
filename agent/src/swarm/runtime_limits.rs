@@ -117,9 +117,17 @@ pub fn lockbox_envelope_retention_secs() -> i64 {
         .unwrap_or(90 * 24 * 60 * 60)
 }
 
-/// Swarmgit: per-bundle fan-out size cap. `None` = uncapped.
-pub fn swarmgit_max_bundle_bytes() -> Option<u64> {
-    current().swarmgit_max_bundle_bytes
+/// Swarmgit: per-bundle size cap, in bytes. Falls back to the
+/// compile-time [`crate::swarm::swarmgit::DEFAULT_MAX_BUNDLE_SIZE`]
+/// (2 GiB) when the server hasn't published a limit yet, or when the
+/// operator left `swarm.swarmgit.max_bundle_bytes` at 0/unset (which
+/// the proto→struct mapping turns into `None`). Enforced on every
+/// path that moves a bundle: publisher fan-out, the push-receive
+/// POST handlers, and the DR catch-up GET.
+pub fn swarmgit_max_bundle_bytes() -> u64 {
+    current()
+        .swarmgit_max_bundle_bytes
+        .unwrap_or(crate::swarm::swarmgit::DEFAULT_MAX_BUNDLE_SIZE)
 }
 
 /// Swarmgit: envelope retention in seconds. Falls back to 90 days.
@@ -149,7 +157,10 @@ mod tests {
         assert_eq!(lockbox_max_file_bytes(), 1024 * 1024 * 1024);
         assert_eq!(lockbox_envelope_retention_secs(), 90 * 24 * 60 * 60);
         assert_eq!(swarmgit_envelope_retention_secs(), 90 * 24 * 60 * 60);
-        assert_eq!(swarmgit_max_bundle_bytes(), None);
+        assert_eq!(
+            swarmgit_max_bundle_bytes(),
+            crate::swarm::swarmgit::DEFAULT_MAX_BUNDLE_SIZE
+        );
         assert_eq!(longdrawer_max_file_bytes(), None);
     }
 
@@ -168,7 +179,7 @@ mod tests {
         update_from_proto(&msg);
         assert_eq!(lockbox_max_file_bytes(), 200);
         assert_eq!(lockbox_envelope_retention_secs(), 300);
-        assert_eq!(swarmgit_max_bundle_bytes(), Some(400));
+        assert_eq!(swarmgit_max_bundle_bytes(), 400);
         assert_eq!(swarmgit_envelope_retention_secs(), 500);
         assert_eq!(longdrawer_max_file_bytes(), Some(600));
         assert_eq!(current().swarmcast_max_size_bytes, Some(100));
@@ -191,6 +202,9 @@ mod tests {
         // Zero / empty server values become None internally — read
         // helpers return their compile-time defaults.
         assert_eq!(lockbox_max_file_bytes(), 1024 * 1024 * 1024);
-        assert_eq!(swarmgit_max_bundle_bytes(), None);
+        assert_eq!(
+            swarmgit_max_bundle_bytes(),
+            crate::swarm::swarmgit::DEFAULT_MAX_BUNDLE_SIZE
+        );
     }
 }

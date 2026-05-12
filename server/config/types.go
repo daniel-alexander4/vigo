@@ -152,12 +152,13 @@ type SwarmPuddleSection struct {
 
 // SwarmgitSection authorizes the swarmgit subsystem per envoy
 // and tunes its operational caps. `Enabled` gates which envoys
-// participate; `MaxBundleBytes` caps per-fanout bundle size on the
-// receiver; `EnvelopeRetention` controls the retention window for
+// participate; `MaxBundleBytes` caps a project's `git bundle --all`
+// size on every transfer path (publisher fan-out, push-receive,
+// DR catch-up); `EnvelopeRetention` controls the retention window for
 // revoke/leave gossip envelopes before they are reaped.
 type SwarmgitSection struct {
 	Enabled           []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run swarmgit — publisher and receiver." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
-	MaxBundleBytes    int64    `yaml:"max_bundle_bytes" doc:"Per-bundle size cap for swarmgit fan-out. 0 = no cap." default:"1073741824" example:"1073741824 (1 GiB), 5368709120 (5 GiB), 0 (uncapped)"`
+	MaxBundleBytes    int64    `yaml:"max_bundle_bytes" doc:"Per-bundle (git bundle --all) size cap, in bytes, enforced on every swarmgit transfer path. 0 / unset = the 2 GiB compile-time default. There is no uncapped mode." default:"2147483648" example:"2147483648 (2 GiB), 5368709120 (5 GiB), 536870912 (512 MiB)"`
 	EnvelopeRetention string   `yaml:"envelope_retention" doc:"Retention window for revoke/leave gossip envelopes before they are reaped. Empty = compile-time default (90d)." default:"90d" example:"90d, 30d, 365d"`
 }
 

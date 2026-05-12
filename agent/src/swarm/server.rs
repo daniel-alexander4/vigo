@@ -601,8 +601,9 @@ fn is_project_id_path_segment(seg: &str) -> bool {
 ///   [`crate::swarm::swarmgit::project_state::TokenChain`] proving
 ///   the pushing puddle is an authorized member.
 ///
-/// Body: a `git bundle create --all` blob, capped at
-/// [`crate::swarm::swarmgit::MAX_BUNDLE_SIZE`] (20 GiB).
+/// Body: a `git bundle create --all` blob, capped at the per-host
+/// `swarm.swarmgit.max_bundle_bytes` (default 2 GiB; resolved via
+/// [`crate::swarm::runtime_limits::swarmgit_max_bundle_bytes`]).
 ///
 /// Validation:
 /// 1. project_id_hex parses as a 32-byte project_id.
@@ -610,10 +611,10 @@ fn is_project_id_path_segment(seg: &str) -> bool {
 ///    [`crate::swarm::swarmgit::fan_out::verify_chain_for_push`]
 ///    (chain anchors to `sha256(founder_pubkey) == project_id`,
 ///    no link is in the local revocation set).
-/// 3. Body size ≤ MAX_BUNDLE_SIZE; streamed to a temp file to bound
-///    transient memory.
+/// 3. Body size ≤ the configured per-bundle cap; streamed to a temp
+///    file to bound transient memory.
 /// 4. Bundle ingests cleanly via
-///    [`crate::swarm::swarmgit::fan_out::ingest_bundle`] (which
+///    [`crate::swarm::swarmgit::fan_out::ingest_bundle_file`] (which
 ///    runs `git bundle verify` before `git fetch`).
 ///
 /// On success returns `200 OK` with JSON body
@@ -663,7 +664,8 @@ async fn handle_swarmgit_push_v2(
 
     // Stream the body into a temp file under incoming/ so we never
     // hold a multi-GiB bundle in process memory. Body size capped at
-    // MAX_BUNDLE_SIZE.
+    // the per-host `swarm.swarmgit.max_bundle_bytes`.
+    let max_bundle_bytes = crate::swarm::runtime_limits::swarmgit_max_bundle_bytes();
     let staging = swarmgit_base.join("incoming");
     if let Err(e) = std::fs::create_dir_all(&staging) {
         return service_unavailable(&format!("create incoming dir: {}", e));
@@ -701,11 +703,11 @@ async fn handle_swarmgit_push_v2(
             if let Ok(data) = frame.into_data() {
                 let chunk: &[u8] = &data;
                 total = total.saturating_add(chunk.len() as u64);
-                if total > crate::swarm::swarmgit::MAX_BUNDLE_SIZE {
+                if total > max_bundle_bytes {
                     let _ = std::fs::remove_file(&bundle_path);
                     return payload_too_large(&format!(
-                        "bundle size exceeds MAX_BUNDLE_SIZE ({} GiB)",
-                        crate::swarm::swarmgit::MAX_BUNDLE_SIZE / (1024 * 1024 * 1024),
+                        "bundle exceeds the {}-byte cap (swarm.swarmgit.max_bundle_bytes)",
+                        max_bundle_bytes,
                     ));
                 }
                 if let Err(e) = tmp.write_all(chunk) {
@@ -722,12 +724,13 @@ async fn handle_swarmgit_push_v2(
         total
     };
 
+    // The body is already streamed to `bundle_path`; ingest it in
+    // place — no read-back into RAM.
     let refs_changed_result = tokio::task::block_in_place(|| {
-        let body_bytes = std::fs::read(&bundle_path)?;
-        crate::swarm::swarmgit::fan_out::ingest_bundle(
+        crate::swarm::swarmgit::fan_out::ingest_bundle_file(
             &swarmgit_base,
             &project_id,
-            &body_bytes,
+            &bundle_path,
         )
     });
     let _ = std::fs::remove_file(&bundle_path);
@@ -1126,7 +1129,7 @@ fn parse_query(q: &str) -> std::collections::HashMap<String, String> {
 /// 2. Label parses into (seeder, user, project) segments
 /// 3. Label's `<seeder>` segment equals `X-Vigo-Seeder`
 /// 4. Local user from `<user>` segment exists
-/// 5. Body size ≤ [`crate::swarm::swarmgit::MAX_BUNDLE_SIZE`]
+/// 5. Body size ≤ the per-host `swarm.swarmgit.max_bundle_bytes`
 /// 6. Body sha256 matches `X-Vigo-Blob-Sha256`
 ///
 /// On accept:
@@ -1229,6 +1232,7 @@ async fn handle_swarmgit_push(
             return service_unavailable(&format!("failed to create blob dir: {}", e));
         }
     }
+    let max_bundle_bytes = crate::swarm::runtime_limits::swarmgit_max_bundle_bytes();
 
     let (body_len, actual_sha) = {
         use http_body_util::BodyExt;
@@ -1261,11 +1265,11 @@ async fn handle_swarmgit_push(
             if let Ok(data) = frame.into_data() {
                 let chunk: &[u8] = &data;
                 total = total.saturating_add(chunk.len() as u64);
-                if total > crate::swarm::swarmgit::MAX_BUNDLE_SIZE {
+                if total > max_bundle_bytes {
                     let _ = std::fs::remove_file(&tmp_path);
                     return payload_too_large(&format!(
-                        "bundle size exceeds MAX_BUNDLE_SIZE ({} GiB)",
-                        crate::swarm::swarmgit::MAX_BUNDLE_SIZE / (1024 * 1024 * 1024),
+                        "bundle exceeds the {}-byte cap (swarm.swarmgit.max_bundle_bytes)",
+                        max_bundle_bytes,
                     ));
                 }
                 hasher.update(chunk);

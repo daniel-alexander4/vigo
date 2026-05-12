@@ -74,15 +74,18 @@ pub use gate::Gate;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-/// Maximum git bundle size swarmgit will accept on the swarm peer
-/// port, in bytes.
+/// Default maximum git bundle size swarmgit accepts on any transfer
+/// path, in bytes — overridable per host via
+/// `swarm.swarmgit.max_bundle_bytes` in server.yaml (resolved through
+/// [`crate::swarm::runtime_limits::swarmgit_max_bundle_bytes`]; `0` /
+/// unset falls back to this default).
 ///
-/// 20 GiB. Bundles are git history, not working-tree contents, so
-/// even a large personal repo with long history typically fits in a
-/// few hundred megabytes. The cap exists to prevent unbounded growth
-/// from a misconfigured source, not to be tight. Enforced by the
-/// swarm peer-port HTTP server on inbound bundle PUTs.
-pub const MAX_BUNDLE_SIZE: u64 = 20 * 1024 * 1024 * 1024;
+/// 2 GiB. Bundles are git history, not working-tree contents, so a
+/// large personal repo with deep history still typically fits in a
+/// few hundred megabytes; the cap bounds a runaway source rather than
+/// being tight. Enforced identically on the publisher fan-out, the
+/// swarm peer-port push-receive handlers, and the DR catch-up GET.
+pub const DEFAULT_MAX_BUNDLE_SIZE: u64 = 2 * 1024 * 1024 * 1024;
 
 /// Spawn the swarmgit subsystem.
 ///
@@ -325,6 +328,7 @@ fn catchup_all_users(swarmgit_base: &std::path::Path, tls: &crate::update::TlsCe
             if holders.is_empty() {
                 continue; // no known holder yet — retry next tick
             }
+            let mut last_err: Option<String> = None;
             for holder in &holders {
                 match fan_out::fetch_bundle_from_peer(
                     swarmgit_base,
@@ -350,12 +354,19 @@ fn catchup_all_users(swarmgit_base: &std::path::Path, tls: &crate::update::TlsCe
                             error = %e,
                             "swarmgit catch-up: peer pull failed, trying next"
                         );
+                        last_err = Some(format!("{:#}", e));
                     }
                 }
             }
-            tracing::debug!(
+            // Every announced holder failed this tick. Warn (not debug)
+            // with the last error so the journal names the problem —
+            // catch-up retries every CATCHUP_INTERVAL, so a persistent
+            // failure (bundle too large, peer 404, transport) would
+            // otherwise loop silently at the default log level.
+            tracing::warn!(
                 project_id = %name,
                 holders = holders.len(),
+                error = %last_err.as_deref().unwrap_or("(none)"),
                 "swarmgit catch-up: no announced holder served the bundle this tick; will retry"
             );
         }

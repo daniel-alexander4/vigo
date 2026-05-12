@@ -35,7 +35,7 @@
 //! POST /swarm/swarmgit/push/<project_id_hex>
 //! X-Vigo-Chain: base64(JSON([Token, Token, ...]))
 //! Content-Type: application/x-git-bundle
-//! Body: <bundle bytes, ≤ MAX_BUNDLE_SIZE>
+//! Body: <bundle bytes, streamed; ≤ swarm.swarmgit.max_bundle_bytes (default 2 GiB)>
 //!
 //! → 200 OK
 //!   Content-Type: application/json
@@ -49,6 +49,8 @@
 //! tokens have been revoked.
 
 use std::collections::BTreeMap;
+use std::fs::File;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
@@ -308,18 +310,37 @@ pub fn verify_chain_for_push(
     Ok(())
 }
 
-/// Receive-side bundle ingestion. Called by the swarm peer-server
-/// route handler. Stages `body_bytes` in a temp file, verifies the
-/// bundle, fetches refs into the bare repo, and returns whether
-/// refs changed.
-pub fn ingest_bundle(
+/// Ingest a bundle that's already staged on disk into the project's
+/// bare repo: ensure the repo exists, snapshot refs before/after,
+/// `git bundle verify` + `git fetch` the bundle. Returns whether refs
+/// changed. The caller owns `bundle_path`'s lifecycle — this never
+/// unlinks it.
+pub fn ingest_bundle_file(
     swarmgit_base: &Path,
     project_id: &[u8; ID_LEN],
-    body_bytes: &[u8],
+    bundle_path: &Path,
 ) -> Result<bool> {
     let repo = project_repo_path(swarmgit_base, project_id);
     ensure_bare_repo(&repo)?;
+    let before = snapshot_refs(&repo).unwrap_or_default();
+    apply_bundle(&repo, bundle_path)?;
+    let after = snapshot_refs(&repo).unwrap_or_default();
+    Ok(before != after)
+}
 
+/// Receive-side bundle ingestion from a streaming source. Stages `src`
+/// to a temp file under `incoming/` — refusing it if it exceeds
+/// `max_bytes` (so a runaway peer can't fill the disk) — then
+/// [`ingest_bundle_file`]s it. Never holds the whole bundle in RAM.
+/// Unlinks the temp file regardless of outcome. The cap is passed in
+/// (callers read it from [`crate::swarm::runtime_limits::swarmgit_max_bundle_bytes`])
+/// so this stays pure.
+pub fn ingest_bundle<R: Read>(
+    swarmgit_base: &Path,
+    project_id: &[u8; ID_LEN],
+    mut src: R,
+    max_bytes: u64,
+) -> Result<bool> {
     let staging = incoming_dir(swarmgit_base);
     std::fs::create_dir_all(&staging)
         .with_context(|| format!("create {}", staging.display()))?;
@@ -331,14 +352,25 @@ pub fn ingest_bundle(
 
     let nonce: u128 = rand::random();
     let bundle_path = staging.join(format!("{}-{:032x}.bundle", hex_id(project_id), nonce));
-    std::fs::write(&bundle_path, body_bytes)
-        .with_context(|| format!("write bundle to {}", bundle_path.display()))?;
 
     let result = (|| -> Result<bool> {
-        let before = snapshot_refs(&repo).unwrap_or_default();
-        apply_bundle(&repo, &bundle_path)?;
-        let after = snapshot_refs(&repo).unwrap_or_default();
-        Ok(before != after)
+        // `take(max_bytes + 1)` so a copied count of `max_bytes + 1`
+        // distinguishes "exactly at the cap" (OK) from "over it" (reject).
+        let written = {
+            let mut f = File::create(&bundle_path)
+                .with_context(|| format!("create {}", bundle_path.display()))?;
+            let mut limited = (&mut src).take(max_bytes.saturating_add(1));
+            let n = io::copy(&mut limited, &mut f).context("staging bundle to disk")?;
+            f.sync_all().context("sync staged bundle")?;
+            n
+        };
+        if written > max_bytes {
+            bail!(
+                "bundle exceeds the {}-byte cap (swarm.swarmgit.max_bundle_bytes)",
+                max_bytes
+            );
+        }
+        ingest_bundle_file(swarmgit_base, project_id, &bundle_path)
     })();
 
     let _ = std::fs::remove_file(&bundle_path);
@@ -385,16 +417,15 @@ pub fn fetch_bundle_from_peer(
     if !status.is_success() {
         bail!("peer returned {}", status);
     }
-    // The response body is the bundle itself. It's bounded by the
-    // capped pushes that built the serving peer's bare repo, so no
-    // separate ceiling is needed here — `ingest_bundle` runs
-    // `git bundle verify` before touching the object store anyway.
-    let mut body = resp.into_body();
-    let bytes = body.read_to_vec().context("read bundle response body")?;
-    if bytes.is_empty() {
-        bail!("peer returned an empty body");
-    }
-    ingest_bundle(swarmgit_base, project_id, &bytes)
+    // Stream the response body straight to disk through `ingest_bundle`
+    // (which caps it and runs `git bundle verify` before touching the
+    // object store) — never buffer a multi-hundred-MB bundle in RAM.
+    ingest_bundle(
+        swarmgit_base,
+        project_id,
+        resp.into_body().into_reader(),
+        crate::swarm::runtime_limits::swarmgit_max_bundle_bytes(),
+    )
 }
 
 /// Fan out a bundle to every peer that has advertised holding this
@@ -503,37 +534,36 @@ pub fn fan_out_bundle(
         }
     };
 
-    let mut attempted = 0;
-    let mut succeeded = 0;
-    let bundle_bytes = match std::fs::read(bundle_path) {
-        Ok(b) => b,
+    // Cap check from the file size — the bundle stays on disk and is
+    // streamed per peer, never buffered. Operator-tunable via
+    // server.yaml `swarm.swarmgit.max_bundle_bytes` (default 2 GiB);
+    // refusing here is a publisher-side courtesy — the receivers' POST
+    // handlers enforce the same cap independently.
+    let bundle_size = match std::fs::metadata(bundle_path) {
+        Ok(m) => m.len(),
         Err(e) => {
             tracing::warn!(
                 bundle = %bundle_path.display(),
                 error = %e,
-                "fan-out: cannot read bundle for upload"
+                "fan-out: cannot stat bundle for upload"
             );
             return (0, 0);
         }
     };
-
-    // Operator-tunable bundle cap from server.yaml swarm.swarmgit.
-    // max_bundle_bytes. None = no cap (pre-0.41.21 behavior). Refusing
-    // here is a publisher-side decision — the receivers' POST handlers
-    // would also reject if their copy of the cap is smaller.
-    if let Some(cap) = crate::swarm::runtime_limits::swarmgit_max_bundle_bytes() {
-        if (bundle_bytes.len() as u64) > cap {
-            tracing::warn!(
-                project_id = %pid_hex,
-                bundle = %bundle_path.display(),
-                size = bundle_bytes.len(),
-                cap,
-                "fan-out: bundle exceeds swarm.swarmgit.max_bundle_bytes; skipping fan-out"
-            );
-            return (0, 0);
-        }
+    let cap = crate::swarm::runtime_limits::swarmgit_max_bundle_bytes();
+    if bundle_size > cap {
+        tracing::warn!(
+            project_id = %pid_hex,
+            bundle = %bundle_path.display(),
+            size = bundle_size,
+            cap,
+            "fan-out: bundle exceeds swarm.swarmgit.max_bundle_bytes; skipping fan-out"
+        );
+        return (0, 0);
     }
 
+    let mut attempted = 0;
+    let mut succeeded = 0;
     for (url_host, display_host) in &targets {
         attempted += 1;
         let url = format!(
@@ -542,7 +572,7 @@ pub fn fan_out_bundle(
             crate::swarm::server::DEFAULT_PORT,
             pid_hex
         );
-        match push_to_peer(&agent, &url, &chain_header, &bundle_bytes) {
+        match push_to_peer(&agent, &url, &chain_header, bundle_path) {
             Ok(refs_changed) => {
                 tracing::info!(
                     project_id = %pid_hex,
@@ -930,13 +960,15 @@ fn push_to_peer(
     agent: &ureq::Agent,
     url: &str,
     chain_header: &str,
-    bundle_bytes: &[u8],
+    bundle_path: &Path,
 ) -> Result<bool> {
+    let file = File::open(bundle_path)
+        .with_context(|| format!("open {}", bundle_path.display()))?;
     let resp = agent
         .post(url)
         .header(CHAIN_HEADER, chain_header)
         .header("Content-Type", "application/x-git-bundle")
-        .send(bundle_bytes)
+        .send(ureq::SendBody::from_owned_reader(file))
         .with_context(|| format!("POST {}", url))?;
     let status = resp.status();
     if !status.is_success() {
@@ -1092,7 +1124,7 @@ mod tests {
     }
 
     #[test]
-    fn ingest_bundle_idempotent_returns_no_change() {
+    fn ingest_bundle_file_idempotent_returns_no_change() {
         if !git_available() {
             return;
         }
@@ -1103,21 +1135,19 @@ mod tests {
         let src = seed_repo(dir.path(), "src");
         let bundle_tmp = dir.path().join("first.bundle");
         build_bundle(&src, &bundle_tmp).unwrap();
-        let body = std::fs::read(&bundle_tmp).unwrap();
 
-        // Stand up a destination bare repo at the canonical path and
-        // pre-seed it from the src so the second ingest is a no-op.
+        // Pre-seed the destination bare repo at the canonical path from
+        // the src so the next ingest of the same bundle is a no-op.
         let dst = project_repo_path(&base, &pid);
         ensure_bare_repo(&dst).unwrap();
         apply_bundle(&dst, &bundle_tmp).unwrap();
 
-        // Second ingest of the same bundle: no ref change.
-        let changed = ingest_bundle(&base, &pid, &body).unwrap();
+        let changed = ingest_bundle_file(&base, &pid, &bundle_tmp).unwrap();
         assert!(!changed, "idempotent re-ingest should report refs_changed=false");
     }
 
     #[test]
-    fn ingest_bundle_advances_empty_repo() {
+    fn ingest_bundle_file_advances_empty_repo() {
         if !git_available() {
             return;
         }
@@ -1128,13 +1158,50 @@ mod tests {
         let src = seed_repo(dir.path(), "src");
         let bundle_tmp = dir.path().join("first.bundle");
         build_bundle(&src, &bundle_tmp).unwrap();
-        let body = std::fs::read(&bundle_tmp).unwrap();
 
-        let changed = ingest_bundle(&base, &pid, &body).unwrap();
+        let changed = ingest_bundle_file(&base, &pid, &bundle_tmp).unwrap();
         assert!(changed, "first ingest into empty repo should report refs_changed=true");
         let dst = project_repo_path(&base, &pid);
         let snap = snapshot_refs(&dst).unwrap();
         assert!(snap.contains_key("refs/heads/main"));
+    }
+
+    #[test]
+    fn ingest_bundle_streams_to_disk_and_enforces_cap() {
+        if !git_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let src = seed_repo(dir.path(), "src");
+        let bundle_tmp = dir.path().join("first.bundle");
+        let sz = build_bundle(&src, &bundle_tmp).unwrap();
+        assert!(sz > 1);
+
+        // Under the cap: streams in, refs advance.
+        let base_ok = dir.path().join("ok-base");
+        let pid_ok = [0x91u8; ID_LEN];
+        let changed = ingest_bundle(
+            &base_ok,
+            &pid_ok,
+            File::open(&bundle_tmp).unwrap(),
+            crate::swarm::swarmgit::DEFAULT_MAX_BUNDLE_SIZE,
+        )
+        .unwrap();
+        assert!(changed);
+        assert!(snapshot_refs(&project_repo_path(&base_ok, &pid_ok))
+            .unwrap()
+            .contains_key("refs/heads/main"));
+
+        // Over the cap: rejected, nothing left behind in `incoming/`.
+        let base_cap = dir.path().join("cap-base");
+        let pid_cap = [0x92u8; ID_LEN];
+        let err = ingest_bundle(&base_cap, &pid_cap, File::open(&bundle_tmp).unwrap(), sz - 1)
+            .unwrap_err();
+        assert!(err.to_string().contains("cap"), "got: {err}");
+        let leftovers: Vec<_> = std::fs::read_dir(incoming_dir(&base_cap))
+            .map(|it| it.flatten().collect())
+            .unwrap_or_default();
+        assert!(leftovers.is_empty(), "staged bundle should be cleaned up");
     }
 
     #[test]
