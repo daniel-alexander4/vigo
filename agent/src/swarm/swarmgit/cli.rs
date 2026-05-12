@@ -441,6 +441,70 @@ fn refuse_if_tombstoned(cfg: &ProjectConfig, verb: &str) -> Result<()> {
 // project init
 // ============================================================
 
+/// Mint and persist the founder-bootstrap state for a project this
+/// envoy's puddle is founding (`project init`) or auto-adopting
+/// (ADR-023, from `vigo swarm puddle unlock`): a self-signed admin
+/// token chain plus a [`ProjectConfig`] listing the founder as the
+/// sole member. Returns the project_id.
+///
+/// Requires the puddle session helper to be running — it signs the
+/// canonical token bytes. The caller is expected to have already
+/// checked the project doesn't exist locally; this re-checks cheaply
+/// and bails rather than minting a second bootstrap with a fresh
+/// `issued_at` (which would silently change every member's
+/// authorization context).
+pub(crate) fn mint_founder_project(
+    home: &Path,
+    handle: &str,
+    scope: DrScope,
+) -> Result<[u8; ID_LEN]> {
+    validate_handle(handle)?;
+    let founder_pub = local_puddle_pubkey_bytes(home)?;
+    let project_id = project_id_for(&founder_pub, handle);
+    if project_state::ProjectConfig::load(home, &project_id)?.is_some() {
+        bail!(
+            "project {} already exists at {}",
+            hex_id(&project_id),
+            project_state::user_project_dir(home, &project_id).display(),
+        );
+    }
+    let now = now_secs();
+    let body = TokenBody {
+        project_id,
+        handle: handle.to_string(),
+        subject_puddle_pubkey: founder_pub,
+        role: Role::Admin,
+        issued_at: now,
+        expires_at: None,
+        signer_puddle_pubkey: founder_pub,
+        parent_token_id: None,
+    };
+    let bytes = canonical_bytes(&body);
+    let signature = sign_with_session(&bytes)?;
+    let bootstrap = Token { body, signature };
+    bootstrap
+        .verify_signature()
+        .context("bootstrap token failed self-verification (session helper malfunction?)")?;
+    let cfg = ProjectConfig {
+        version: project_state::PROJECT_STATE_VERSION,
+        project_id: hex_id(&project_id),
+        handle: handle.to_string(),
+        founder_puddle_pubkey: hex_id(&founder_pub),
+        members: vec![hex_id(&founder_pub)],
+        dr_scope: scope,
+        cross_subnet_members: vec![],
+        updated_at: now,
+        tombstoned_at: None,
+    };
+    cfg.save(home)?;
+    let chain = TokenChain {
+        version: project_state::PROJECT_STATE_VERSION,
+        chain: vec![bootstrap],
+    };
+    chain.save(home, &project_id)?;
+    Ok(project_id)
+}
+
 fn cmd_init(args: &[String]) -> Result<()> {
     let mut handle: Option<String> = None;
     let mut scope = DrScope::SwarmWide;
@@ -493,44 +557,10 @@ fn cmd_init(args: &[String]) -> Result<()> {
         );
     }
 
-    // Build the founder bootstrap body (admin role, no parent, no
-    // expiry) and ask the session helper to sign the canonical bytes.
-    let now = now_secs();
-    let body = TokenBody {
-        project_id,
-        handle: handle.clone(),
-        subject_puddle_pubkey: founder_pub,
-        role: Role::Admin,
-        issued_at: now,
-        expires_at: None,
-        signer_puddle_pubkey: founder_pub,
-        parent_token_id: None,
-    };
-    let bytes = canonical_bytes(&body);
-    let signature = sign_with_session(&bytes)?;
-    let bootstrap = Token { body, signature };
-    bootstrap
-        .verify_signature()
-        .context("bootstrap token failed self-verification (session helper malfunction?)")?;
-
-    // Persist project config + token chain.
-    let cfg = ProjectConfig {
-        version: project_state::PROJECT_STATE_VERSION,
-        project_id: hex_id(&project_id),
-        handle: handle.clone(),
-        founder_puddle_pubkey: hex_id(&founder_pub),
-        members: vec![hex_id(&founder_pub)],
-        dr_scope: scope,
-        cross_subnet_members: vec![],
-        updated_at: now,
-        tombstoned_at: None,
-    };
-    cfg.save(&caller.home)?;
-    let chain = TokenChain {
-        version: project_state::PROJECT_STATE_VERSION,
-        chain: vec![bootstrap],
-    };
-    chain.save(&caller.home, &project_id)?;
+    // Mint + persist the founder bootstrap (admin token chain +
+    // project config). Shared with the ADR-023 auto-adoption path in
+    // `vigo swarm puddle unlock`.
+    mint_founder_project(&caller.home, &handle, scope)?;
 
     let hex_url = format!("swarmgit://{}/{}", hex_id(&project_id), handle);
     let friendly = local_puddle_friendly_name(&caller.home, &founder_pub);

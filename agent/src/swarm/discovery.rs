@@ -294,17 +294,23 @@ async fn listen_loop(
                                 }
                             }
                             // Ingest any SWARMGITPROJECT entries —
-                            // record (host, pid_hex, src_addr, now)
-                            // into the global ProjectPeers index for
-                            // the helper-daemon fan-out hook.
+                            // record (host, pid_hex, src_addr, handle,
+                            // dr_scope, now) into the global
+                            // ProjectPeers index for the helper-daemon
+                            // fan-out hook and the ADR-023 announced-
+                            // projects cache. `handle` / `dr_scope` are
+                            // `None` from a peer still on the pre-0.49.0
+                            // 2-field announce form.
                             if gate_on && !result.swarmgit_projects.is_empty() {
                                 let now = now_unix_seconds();
                                 let src_ip = src.ip();
-                                for (host, pid_hex) in &result.swarmgit_projects {
+                                for (host, pid_hex, handle, dr_scope) in &result.swarmgit_projects {
                                     crate::swarm::swarmgit::project_peers::record_global(
                                         pid_hex,
                                         host,
                                         Some(src_ip),
+                                        handle.as_deref(),
+                                        dr_scope.as_deref(),
                                         now,
                                     );
                                 }
@@ -500,10 +506,11 @@ async fn announce_loop(
             None
         };
         // Enumerate locally-held projects under every user's
-        // ~/.vigo-swarmgit/. Cheap (filesystem stat per user); read
-        // once per announce tick. Empty when the gate is off so a
-        // dormant swarmgit subsystem advertises no projects.
-        let project_snapshot: Vec<String> = if gate_on {
+        // ~/.vigo-swarmgit/, as (pid_hex, handle, dr_scope). Cheap
+        // (filesystem stat + a small JSON read per project); read once
+        // per announce tick. Empty when the gate is off so a dormant
+        // swarmgit subsystem advertises no projects.
+        let project_snapshot: Vec<(String, String, String)> = if gate_on {
             crate::swarm::swarmgit::project_peers::enumerate_local_projects()
         } else {
             Vec::new()
@@ -699,11 +706,12 @@ fn build_announcement(
     port: u16,
     swarmgit_local_info: Option<&SwarmgitLocalInfo>,
     swarmgit_claims: &[(String, Vec<String>)],
-    // Project ids this envoy currently holds local state for. One
-    // SWARMGITPROJECT:<host>:<pid_hex> line emitted per id; receivers
-    // populate ProjectPeers from these. Empty slice in test fixtures
-    // + envoys with the gate off.
-    swarmgit_projects: &[String],
+    // Projects this envoy currently holds per-user state for, as
+    // (pid_hex, handle, dr_scope). One ADR-023 4-field
+    // SWARMGITPROJECT:<host>:<pid_hex>:<handle>:<dr_scope> line emitted
+    // per project; receivers populate ProjectPeers from these. Empty
+    // slice in test fixtures + envoys with the gate off.
+    swarmgit_projects: &[(String, String, String)],
     signing_key: Option<&ed25519_dalek::SigningKey>,
     timestamp_secs: i64,
 ) -> Vec<String> {
@@ -742,15 +750,20 @@ fn build_announcement(
     // SWARMGITCLAIM — anything that doesn't fit gets bumped into a
     // spillover packet so a many-project envoy still announces every
     // project within the same 30 s tick.
-    let mut overflow_projects: Vec<String> = Vec::new();
+    let mut overflow_projects: Vec<(String, String, String)> = Vec::new();
     if let Some(li) = swarmgit_local_info {
-        for pid_hex in swarmgit_projects {
+        for (pid_hex, handle, dr_scope) in swarmgit_projects {
             let line = format!(
                 "{}\n",
-                crate::swarm::swarmgit::project_peers::format_project_line(&li.hostname, pid_hex)
+                crate::swarm::swarmgit::project_peers::format_project_line(
+                    &li.hostname,
+                    pid_hex,
+                    handle,
+                    dr_scope,
+                )
             );
             if msg.len() + line.len() > swarmgit_budget_limit {
-                overflow_projects.push(pid_hex.clone());
+                overflow_projects.push((pid_hex.clone(), handle.clone(), dr_scope.clone()));
                 continue;
             }
             msg.push_str(&line);
@@ -850,12 +863,14 @@ fn build_announcement(
         }
         let mut hard_overflow_projects = 0usize;
         if let Some(li) = swarmgit_local_info {
-            for pid_hex in &overflow_projects {
+            for (pid_hex, handle, dr_scope) in &overflow_projects {
                 let line = format!(
                     "{}\n",
                     crate::swarm::swarmgit::project_peers::format_project_line(
                         &li.hostname,
-                        pid_hex
+                        pid_hex,
+                        handle,
+                        dr_scope,
                     )
                 );
                 if spill.len() + line.len() + addr_line.len() > MAX_CONTENT_SIZE {
@@ -911,11 +926,13 @@ struct AnnouncementResult {
     /// field above) and calls `ClaimsHandle::ingest_lan_claim`.
     /// Malformed lines are dropped silently.
     swarmgit_claims: Vec<(String, Vec<String>)>,
-    /// Parsed `SWARMGITPROJECT:` lines. Each entry is a (host,
-    /// project_id_hex) pair. The listener calls
+    /// Parsed `SWARMGITPROJECT:` lines. Each entry is
+    /// `(host, project_id_hex, handle, dr_scope)`; `handle` /
+    /// `dr_scope` are `None` from a peer still on the pre-0.49.0
+    /// 2-field form. The listener calls
     /// [`crate::swarm::swarmgit::project_peers::record_global`]
     /// per entry to populate the project-keyed peer index.
-    swarmgit_projects: Vec<(String, String)>,
+    swarmgit_projects: Vec<(String, String, Option<String>, Option<String>)>,
     /// Parsed `HOST:<hostname>` line, if present — the sender's
     /// hostname. The listener pairs it with the datagram source IP
     /// and feeds `crate::swarm::swarmdns::record_host_global` to
@@ -1010,14 +1027,19 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
                 result.swarmgit_claims.push((label, hosts));
             }
         } else if line.starts_with("SWARMGITPROJECT:") {
-            // ADR-015 step 4 LAN auto-discovery — record the
-            // (host, pid_hex) pair into the global ProjectPeers
-            // index so the helper-daemon fan-out hook can find
-            // peers without explicit cross_subnet_members config.
+            // ADR-015 step 4 LAN auto-discovery (extended by ADR-023
+            // to carry the handle + dr_scope) — record into the global
+            // ProjectPeers index so the helper-daemon fan-out hook can
+            // find peers without explicit cross_subnet_members config,
+            // and so `puddle unlock` can auto-adopt founded projects.
             // Order matters: must be tried before plain SWARMGIT:
             // because both share the SWARMGIT prefix.
-            if let Some((host, pid_hex)) = crate::swarm::swarmgit::project_peers::parse_project_line(line) {
-                result.swarmgit_projects.push((host, pid_hex));
+            if let Some((host, pid_hex, handle, dr_scope)) =
+                crate::swarm::swarmgit::project_peers::parse_project_line(line)
+            {
+                result
+                    .swarmgit_projects
+                    .push((host, pid_hex, handle, dr_scope));
             }
         } else if line.starts_with("SWARMGIT:") {
             // Parse and stash for listener ingest. Malformed lines
@@ -1727,7 +1749,14 @@ mod tests {
         };
         let pid_a = "a".repeat(64);
         let pid_b = "b".repeat(64);
-        let projects = vec![pid_a.clone(), pid_b.clone()];
+        let projects = vec![
+            (pid_a.clone(), "vigo".to_string(), "swarm-wide".to_string()),
+            (
+                pid_b.clone(),
+                "dotfiles".to_string(),
+                "members-only".to_string(),
+            ),
+        ];
         let packets = build_announcement(
             &[],
             &[],
@@ -1742,21 +1771,26 @@ mod tests {
             0,
         );
         let msg = &packets[0];
-        assert!(msg.contains(&format!("SWARMGITPROJECT:danlap:{}", pid_a)));
-        assert!(msg.contains(&format!("SWARMGITPROJECT:danlap:{}", pid_b)));
+        assert!(msg.contains(&format!("SWARMGITPROJECT:danlap:{}:vigo:swarm-wide", pid_a)));
+        assert!(msg.contains(&format!(
+            "SWARMGITPROJECT:danlap:{}:dotfiles:members-only",
+            pid_b
+        )));
     }
 
     #[test]
     fn parse_announcement_recovers_swarmgitproject_lines() {
         let pubkey_hex = "a".repeat(64);
-        let pid_hex = "c".repeat(64);
+        let pid_legacy = "c".repeat(64);
+        let pid_new = "d".repeat(64);
         let msg = format!(
             "VIGO-SWARM\n\
              MANIFEST:1\n\
              ADDR:10.0.0.1:1531\n\
              SWARMGIT:danlap:dan:workstation:{}\n\
-             SWARMGITPROJECT:danlap:{}\n",
-            pubkey_hex, pid_hex,
+             SWARMGITPROJECT:danlap:{}\n\
+             SWARMGITPROJECT:danlap:{}:vigo:swarm-wide\n",
+            pubkey_hex, pid_legacy, pid_new,
         );
         let pm = PeerMap::new();
         let manifest = test_manifest();
@@ -1766,9 +1800,19 @@ mod tests {
             &pm,
             &manifest,
         );
-        assert_eq!(result.swarmgit_projects.len(), 1);
-        assert_eq!(result.swarmgit_projects[0].0, "danlap");
-        assert_eq!(result.swarmgit_projects[0].1, pid_hex);
+        assert_eq!(result.swarmgit_projects.len(), 2);
+        // Legacy 2-field line — handle/dr_scope absent.
+        let legacy = &result.swarmgit_projects[0];
+        assert_eq!(legacy.0, "danlap");
+        assert_eq!(legacy.1, pid_legacy);
+        assert!(legacy.2.is_none());
+        assert!(legacy.3.is_none());
+        // ADR-023 4-field line — handle/dr_scope present.
+        let new = &result.swarmgit_projects[1];
+        assert_eq!(new.0, "danlap");
+        assert_eq!(new.1, pid_new);
+        assert_eq!(new.2.as_deref(), Some("vigo"));
+        assert_eq!(new.3.as_deref(), Some("swarm-wide"));
     }
 
     #[test]

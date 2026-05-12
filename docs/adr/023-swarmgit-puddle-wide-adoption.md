@@ -4,7 +4,7 @@ title: "ADR-023: Puddle-wide swarmgit project adoption"
 
 # ADR-023: Puddle-wide swarmgit project adoption
 
-**Status:** Planned (not yet implemented). Target 0.49.0.
+**Status:** Implemented in 0.49.0.
 **Date:** 2026-05-11
 
 ## Context

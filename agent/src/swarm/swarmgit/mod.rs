@@ -245,6 +245,11 @@ async fn run_catchup_reactor(
 /// project has a populated bare repo.
 fn catchup_all_users(swarmgit_base: &std::path::Path, tls: &crate::update::TlsCerts) {
     use std::collections::HashSet;
+    let now = unix_seconds_now();
+    // ADR-023: refresh the world-readable announced-projects cache
+    // every tick so `vigo swarm puddle unlock` can auto-adopt the
+    // projects this puddle founded. Best-effort; off the hot path.
+    project_peers::write_announced_cache(now);
     let body = match std::fs::read_to_string("/etc/passwd") {
         Ok(b) => b,
         Err(_) => return,
@@ -253,7 +258,6 @@ fn catchup_all_users(swarmgit_base: &std::path::Path, tls: &crate::update::TlsCe
         Some(p) => p,
         None => return,
     };
-    let now = unix_seconds_now() as i64;
     // Multiple users can hold the same project; handle each project
     // once per tick.
     let mut handled: HashSet<String> = HashSet::new();

@@ -257,7 +257,65 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
             }
         }
     }
+
+    // ADR-023: with the session helper up (the one moment with a
+    // usable signing key), auto-adopt the swarmgit projects this
+    // puddle founded so `dr_scope: swarm-wide` repos actually reach
+    // this envoy. Off the hot path; failures warn only — never undo
+    // the unlock.
+    let my_pubkey = key.verifying_key().to_bytes();
+    adopt_founded_swarmgit_projects(&home, &my_pubkey);
+
     Ok(())
+}
+
+/// ADR-023: auto-adopt the swarmgit projects this puddle founded.
+///
+/// For each project the swarm is currently announcing (cached at
+/// `swarmgit-announced.json` by the agent's catch-up reactor) whose
+/// `project_id == sha256(my_puddle_pubkey ‖ handle)` and for which
+/// this user has no local state yet, mint the founder-bootstrap state
+/// — the same thing `vigo swarm swarmgit project init` does. The
+/// 0.46.0 catch-up reactor then pulls the bare repo within a couple of
+/// ticks. Founder-key-current only: a post-rekey (ADR-019) founded
+/// project stays anchored to the *genesis* pubkey, so it won't match
+/// here — use `swarmgit project rejoin` for those. Non-founder
+/// memberships are never adopted (they need an invitation). Failures
+/// warn but never undo the unlock.
+fn adopt_founded_swarmgit_projects(home: &Path, my_pubkey: &[u8; 32]) {
+    use crate::swarm::swarmgit::{cli as swarmgit_cli, project_peers, project_state, tokens};
+
+    let announced = project_peers::load_announced_cache();
+    if announced.is_empty() {
+        return;
+    }
+    for ap in announced {
+        let pid = tokens::project_id_for(my_pubkey, &ap.handle);
+        if hex::encode(pid) != ap.project_id {
+            continue; // founded by a different puddle (or a corrupt entry)
+        }
+        // Already have local state? Steady state after the first
+        // unlock — nothing to do, and no warning.
+        match project_state::ProjectConfig::load(home, &pid) {
+            Ok(Some(_)) => continue,
+            Ok(None) => {}
+            Err(_) => continue, // transient I/O — retry next unlock
+        }
+        let scope = ap
+            .dr_scope
+            .parse()
+            .unwrap_or(project_state::DrScope::SwarmWide);
+        match swarmgit_cli::mint_founder_project(home, &ap.handle, scope) {
+            Ok(_) => println!(
+                "Adopted swarmgit project '{}' — the catch-up reactor will pull it shortly.",
+                ap.handle
+            ),
+            Err(e) => eprintln!(
+                "warning: could not adopt swarmgit project '{}': {:#}",
+                ap.handle, e
+            ),
+        }
+    }
 }
 
 // ---------- lock ----------
