@@ -41,6 +41,11 @@ Swarmgit is one of four content subsystems that ride the [swarm](swarm.md) subst
 | REST member-roster endpoint (`GET /api/v1/swarm/swarmgit/projects/<pid>/roster`) | ✅ step 4 sixth slice |
 | `reanchor` byte-level migration (`git fetch +refs/*:refs/*` from old to new bare repo) | ✅ step 4 sixth slice |
 | Friendly `swarmgit://<puddle-name>/<repo>` URLs + fleet name map (ADR-022) | ✅ 0.42.0 |
+| Receiver-initiated DR catch-up (`GET /swarm/swarmgit/bundle/<pid>` + catch-up reactor) | ✅ 0.46.0 |
+
+### Receiver-initiated DR catch-up (0.46.0)
+
+`project init` / `join` writes only per-user state; the post-receive fan-out fires only on a ref delta. So between joining and the founder's next push, a member held no bare repo at all — "swarm-wide DR" didn't actually reach a freshly-enrolled or re-joined envoy until something pushed. (Operators worked around it with a throwaway tag push or a hand-edited `cross_subnet_members`.) The catch-up reactor closes the gap: every ~45 s it walks each user's `~/.vigo-swarmgit/<pid>/`, and for the first project that has local state but no (or an empty) bare repo, it `GET`s `/swarm/swarmgit/bundle/<pid>` from a peer that announces holding it (`SWARMGITPROJECT:` index, addressed by the announced LAN IP). The request carries the same `X-Vigo-Chain` envelope a push does, so the serving peer verifies membership identically; the response body is a `git bundle create - --all`, ingested through the existing `ingest_bundle` path (which `git bundle verify`s before touching the object store). One repo backfilled per tick — git history is hundreds of MB for a real repo and DR catch-up isn't latency-critical; the reactor is a no-op once every locally-held project has refs.
 
 ## ADR-019: Founder-rekey delegation chains
 

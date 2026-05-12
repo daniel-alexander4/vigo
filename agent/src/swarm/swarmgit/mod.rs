@@ -86,7 +86,7 @@ pub const MAX_BUNDLE_SIZE: u64 = 20 * 1024 * 1024 * 1024;
 
 /// Spawn the swarmgit subsystem.
 ///
-/// Three concurrent tasks run under the cancellation token:
+/// Four concurrent tasks run under the cancellation token:
 ///
 /// 1. **Helper daemon** ([`helper::run`]) — listens on
 ///    `/var/run/vigo/swarmgit.sock`, proxies `git-receive-pack` /
@@ -96,8 +96,11 @@ pub const MAX_BUNDLE_SIZE: u64 = 20 * 1024 * 1024 * 1024;
 ///    scans every user's `~/.vigo-swarmgit/<pid>/{leave,revoke}.pending`
 ///    files (which the CLI writes as already-signed envelopes), moves
 ///    them into the canonical envelopes/ store, and unlinks the
-///    sentinels.
-/// 3. **Reap reactor** ([`run_reap_reactor`]) — hourly GC of envelopes
+///    sentinels; also runs the periodic envelope `/digest` reconcile.
+/// 3. **Catch-up reactor** ([`run_catchup_reactor`]) — pulls a bare
+///    repo for any locally-held project this envoy has no (or an
+///    empty) bare repo for, from a peer that announces holding it.
+/// 4. **Reap reactor** ([`run_reap_reactor`]) — hourly GC of envelopes
 ///    older than 90 days.
 ///
 pub fn spawn(
@@ -131,7 +134,15 @@ pub fn spawn(
     // Sentinel reactor — drains *.pending files into canonical
     // envelopes/, gossips signed envelopes to known peers, and
     // periodically reconciles via /digest comparisons.
-    tokio::spawn(run_sentinel_reactor(cancel.clone(), tls));
+    tokio::spawn(run_sentinel_reactor(cancel.clone(), tls.clone()));
+
+    // DR catch-up reactor — pulls a bare repo for any project this
+    // envoy holds local state for but has no (or an empty) bare repo
+    // for, from a peer that announces holding it. Closes the
+    // swarm-wide-DR bootstrap gap (post-receive fan-out only fires on
+    // a ref delta, so a freshly-joined member otherwise waits for the
+    // founder's next push).
+    tokio::spawn(run_catchup_reactor(cancel.clone(), tls));
 
     // 90-day reap.
     tokio::spawn(run_reap_reactor(cancel));
@@ -157,6 +168,14 @@ const REAP_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60 * 6
 /// flooding the network on a steady-state cluster — the cheap path
 /// is the digest GET, which is just a sha256 + counts.
 const RECONCILE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
+/// How often the catch-up reactor looks for locally-held projects
+/// missing their bare repo and pulls them from a peer. Slightly
+/// longer than the ~30 s multicast announce cadence so a freshly-
+/// joined holder has had a chance to advertise first; the per-tick
+/// cost is an in-memory peer-index read — the GET only fires when a
+/// real gap exists, and stops as soon as the bare repo has refs.
+const CATCHUP_INTERVAL: std::time::Duration = std::time::Duration::from_secs(45);
 
 async fn run_sentinel_reactor(
     cancel: CancellationToken,
@@ -189,6 +208,152 @@ async fn run_sentinel_reactor(
                     }
                 });
             }
+        }
+    }
+}
+
+async fn run_catchup_reactor(
+    cancel: CancellationToken,
+    tls: Option<crate::update::TlsCerts>,
+) {
+    // No mTLS material → we can't talk to peers; nothing to do.
+    let tls = match tls {
+        Some(t) => t,
+        None => return,
+    };
+    let mut tick = tokio::time::interval(CATCHUP_INTERVAL);
+    tick.tick().await; // skip the immediate first tick
+    loop {
+        tokio::select! {
+            _ = cancel.cancelled() => return,
+            _ = tick.tick() => {
+                let base = crate::platform::paths::default_swarmgit_dir();
+                let tls = tls.clone();
+                tokio::task::spawn_blocking(move || catchup_all_users(&base, &tls));
+            }
+        }
+    }
+}
+
+/// Walk every user's `~/.vigo-swarmgit/<pid>/`; for the first project
+/// the user holds local state for but where this envoy has no (or an
+/// empty) bare repo, pull a `git bundle --all` from a peer that
+/// announces holding it, then stop — at most one repo backfilled per
+/// tick (a `vigo` repo's history is hundreds of MB; we don't want to
+/// pull four of them back to back). Peers are tried in turn until one
+/// serves it; the whole thing is a no-op once every locally-held
+/// project has a populated bare repo.
+fn catchup_all_users(swarmgit_base: &std::path::Path, tls: &crate::update::TlsCerts) {
+    use std::collections::HashSet;
+    let body = match std::fs::read_to_string("/etc/passwd") {
+        Ok(b) => b,
+        Err(_) => return,
+    };
+    let peers = match project_peers::global() {
+        Some(p) => p,
+        None => return,
+    };
+    let now = unix_seconds_now() as i64;
+    // Multiple users can hold the same project; handle each project
+    // once per tick.
+    let mut handled: HashSet<String> = HashSet::new();
+    for line in body.lines() {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let fields: Vec<&str> = line.split(':').collect();
+        if fields.len() < 7 {
+            continue;
+        }
+        let home = std::path::PathBuf::from(fields[5]);
+        let entries = match std::fs::read_dir(home.join(".vigo-swarmgit")) {
+            Ok(it) => it,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if !p.is_dir() {
+                continue;
+            }
+            let name = match p.file_name().and_then(|n| n.to_str()) {
+                Some(n) => n.to_string(),
+                None => continue,
+            };
+            if handled.contains(&name) {
+                continue;
+            }
+            let pid = match project_state::parse_hex_id(&name) {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+            handled.insert(name.clone());
+
+            // Already hold a populated bare repo? Nothing to do.
+            let repo = project_state::project_repo_path(swarmgit_base, &pid);
+            if repo.exists()
+                && fan_out::snapshot_refs(&repo)
+                    .map(|m| !m.is_empty())
+                    .unwrap_or(false)
+            {
+                continue;
+            }
+            // Need this user's authority chain (+ founder delegations)
+            // to ask a peer for the bundle.
+            let chain = match project_state::TokenChain::load(&home, &pid) {
+                Ok(Some(c)) => c,
+                _ => continue,
+            };
+            let delegations = project_state::DelegationChain::load(&home, &pid)
+                .ok()
+                .flatten()
+                .map(|c| c.delegations)
+                .unwrap_or_default();
+
+            let holders: Vec<String> = peers
+                .peers_for(&name, now)
+                .into_iter()
+                .map(|e| match e.addr {
+                    Some(std::net::IpAddr::V4(v4)) => v4.to_string(),
+                    Some(std::net::IpAddr::V6(v6)) => format!("[{}]", v6),
+                    None => e.host,
+                })
+                .collect();
+            if holders.is_empty() {
+                continue; // no known holder yet — retry next tick
+            }
+            for holder in &holders {
+                match fan_out::fetch_bundle_from_peer(
+                    swarmgit_base,
+                    &pid,
+                    &chain,
+                    &delegations,
+                    holder,
+                    tls,
+                ) {
+                    Ok(changed) => {
+                        tracing::info!(
+                            project_id = %name,
+                            from = %holder,
+                            refs_changed = changed,
+                            "swarmgit catch-up: pulled bare repo from peer"
+                        );
+                        return; // one repo per tick — gentle on the host
+                    }
+                    Err(e) => {
+                        tracing::debug!(
+                            project_id = %name,
+                            from = %holder,
+                            error = %e,
+                            "swarmgit catch-up: peer pull failed, trying next"
+                        );
+                    }
+                }
+            }
+            tracing::debug!(
+                project_id = %name,
+                holders = holders.len(),
+                "swarmgit catch-up: no announced holder served the bundle this tick; will retry"
+            );
         }
     }
 }

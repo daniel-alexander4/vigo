@@ -293,6 +293,20 @@ async fn handle_request(
             }
         }
 
+        // Swarmgit DR catch-up — closes the swarm-wide-DR bootstrap
+        // gap. A member that holds local project state but no bare
+        // repo pulls a full `git bundle --all` of the project from any
+        // peer that announces holding it; the X-Vigo-Chain header
+        // proves membership exactly as it does on a push. 404 when
+        // this envoy doesn't hold (a populated copy of) the project.
+        (&Method::GET, p) if p.starts_with(crate::swarm::swarmgit::fan_out::BUNDLE_GET_PREFIX) => {
+            let tail = p
+                .trim_start_matches(crate::swarm::swarmgit::fan_out::BUNDLE_GET_PREFIX)
+                .to_string();
+            let chain = header_string(&req, crate::swarm::swarmgit::fan_out::CHAIN_HEADER);
+            tokio::task::block_in_place(|| handle_swarmgit_bundle_get(&tail, chain.as_deref()))
+        }
+
         // Envelope gossip endpoints (ADR-015 step 4 fourth slice).
         // Receivers persist signed envelopes idempotently (save_*
         // returns false on no-op) so re-arrival is cheap.
@@ -742,6 +756,109 @@ async fn handle_swarmgit_push_v2(
         refs_changed
     );
     ok_json(&body)
+}
+
+/// Handle `GET /swarm/swarmgit/bundle/<project_id_hex>` — the
+/// receiver-initiated DR catch-up endpoint.
+///
+/// Required header: `X-Vigo-Chain` — base64 of the JSON-encoded
+/// [`crate::swarm::swarmgit::fan_out::PushChain`] proving the
+/// requesting puddle is an authorized member (same envelope and same
+/// verification as the push endpoint).
+///
+/// Validation, in order:
+/// 1. `<project_id_hex>` is a 64-char lowercase-hex project_id.
+/// 2. `X-Vigo-Chain` decodes + verifies via
+///    [`crate::swarm::swarmgit::fan_out::verify_chain_for_push`]
+///    (anchors to `project_id`, no link revoked).
+/// 3. This envoy holds a non-empty bare repo for the project — else
+///    `404` ("we don't have it; ask another holder").
+///
+/// On success returns `200 OK` with `Content-Type:
+/// application/x-git-bundle` and a `git bundle create - --all` body.
+fn handle_swarmgit_bundle_get(
+    pid_hex: &str,
+    chain_header: Option<&str>,
+) -> Response<Full<Bytes>> {
+    if !is_project_id_path_segment(pid_hex) {
+        return bad_request("invalid project_id path segment");
+    }
+    let project_id = match crate::swarm::swarmgit::project_state::parse_hex_id(pid_hex) {
+        Ok(p) => p,
+        Err(e) => return bad_request(&format!("invalid project_id: {}", e)),
+    };
+    let chain_header = match chain_header {
+        Some(s) => s,
+        None => {
+            return bad_request(&format!(
+                "missing {} header",
+                crate::swarm::swarmgit::fan_out::CHAIN_HEADER
+            ));
+        }
+    };
+    let push = match crate::swarm::swarmgit::fan_out::decode_chain_header(chain_header) {
+        Ok(c) => c,
+        Err(e) => return bad_request(&format!("decode chain header: {:#}", e)),
+    };
+
+    let swarmgit_base = crate::platform::paths::default_swarmgit_dir();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    if let Err(e) = crate::swarm::swarmgit::fan_out::verify_chain_for_push(
+        &push,
+        &project_id,
+        &swarmgit_base,
+        now,
+    ) {
+        return forbidden(&format!("chain rejected: {:#}", e));
+    }
+
+    // We can only serve a project we hold a populated bare repo for.
+    let repo =
+        crate::swarm::swarmgit::project_state::project_repo_path(&swarmgit_base, &project_id);
+    let has_refs = repo.exists()
+        && crate::swarm::swarmgit::fan_out::snapshot_refs(&repo)
+            .map(|m| !m.is_empty())
+            .unwrap_or(false);
+    if !has_refs {
+        return not_found();
+    }
+
+    // Build the bundle into a temp file under incoming/, read it
+    // back, hand it over. Bounded by the capped pushes that built
+    // this bare repo; symmetric with the push handler's temp-file
+    // dance.
+    let staging = swarmgit_base.join("incoming");
+    if let Err(e) = std::fs::create_dir_all(&staging) {
+        return service_unavailable(&format!("create incoming dir: {}", e));
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&staging, std::fs::Permissions::from_mode(0o700));
+    }
+    let nonce: u128 = rand::random();
+    let bundle_path = staging.join(format!("{}-serve-{:032x}.bundle", pid_hex, nonce));
+    let bytes = match crate::swarm::swarmgit::fan_out::build_bundle(&repo, &bundle_path)
+        .and_then(|_| std::fs::read(&bundle_path).map_err(Into::into))
+    {
+        Ok(b) => b,
+        Err(e) => {
+            let _ = std::fs::remove_file(&bundle_path);
+            warn!(project_id = %pid_hex, error = %e, "swarmgit bundle GET: build failed");
+            return service_unavailable(&format!("build bundle: {:#}", e));
+        }
+    };
+    let _ = std::fs::remove_file(&bundle_path);
+
+    info!(project_id = %pid_hex, bytes = bytes.len(), "swarmgit bundle GET: served");
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/x-git-bundle")
+        .body(Full::new(Bytes::from(bytes)))
+        .unwrap()
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1485,6 +1602,19 @@ mod tests {
         // Even a 64-char string with non-hex chars must be rejected.
         let mostly_hex = format!("{}!", "a".repeat(63));
         assert!(!is_project_id_path_segment(&mostly_hex));
+    }
+
+    #[test]
+    fn handle_swarmgit_bundle_get_rejects_bad_inputs() {
+        // Non-hex path segment → 400, before any filesystem touch.
+        let r = handle_swarmgit_bundle_get("not-a-pid", Some("whatever"));
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        // Valid pid but no chain header → 400.
+        let r = handle_swarmgit_bundle_get(&"a".repeat(64), None);
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
+        // Valid pid, garbage chain header → 400 (decode fails).
+        let r = handle_swarmgit_bundle_get(&"a".repeat(64), Some("!!!not base64!!!"));
+        assert_eq!(r.status(), StatusCode::BAD_REQUEST);
     }
 
     #[test]

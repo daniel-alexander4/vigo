@@ -70,6 +70,12 @@ const PEER_PUSH_TIMEOUT: Duration = Duration::from_secs(300);
 /// HTTP header used to carry the token chain on a fan-out push.
 pub const CHAIN_HEADER: &str = "X-Vigo-Chain";
 
+/// URL path prefix for the receiver-initiated DR catch-up GET — a
+/// member that holds local project state but no bare repo pulls a
+/// full `git bundle --all` snapshot of the project from any peer that
+/// announces holding it. The `<project_id_hex>` follows.
+pub const BUNDLE_GET_PREFIX: &str = "/swarm/swarmgit/bundle/";
+
 /// Path under `<swarmgit_base>/incoming/` where inbound bundles are
 /// staged before `git fetch`. Cleaned up on success or failure.
 fn incoming_dir(swarmgit_base: &Path) -> PathBuf {
@@ -337,6 +343,58 @@ pub fn ingest_bundle(
 
     let _ = std::fs::remove_file(&bundle_path);
     result
+}
+
+/// Receiver-initiated DR catch-up. Pull a `git bundle --all` of
+/// `project_id` from `url_host` (an IP or hostname; the swarm peer
+/// port is appended) and ingest it into the local bare repo, creating
+/// the repo if it doesn't exist. The user's authority chain +
+/// delegations ride the `X-Vigo-Chain` header so the serving peer can
+/// verify membership exactly as it does on a push. Returns whether
+/// refs changed locally.
+///
+/// This is the path that closes the bootstrap gap in swarm-wide DR:
+/// `project init` / `join` only writes per-user state, and the
+/// post-receive fan-out only fires on a ref delta, so a freshly-
+/// enrolled or re-joined member never received the bytes until the
+/// founder happened to push. Now the catch-up reactor pulls them.
+pub fn fetch_bundle_from_peer(
+    swarmgit_base: &Path,
+    project_id: &[u8; ID_LEN],
+    chain: &TokenChain,
+    delegations: &[super::envelopes::DelegationEnvelope],
+    url_host: &str,
+    tls: &crate::update::TlsCerts,
+) -> Result<bool> {
+    let chain_header = encode_chain_header(chain, delegations)?;
+    let agent = build_push_agent(tls)?;
+    let pid_hex = hex_id(project_id);
+    let url = format!(
+        "https://{}:{}{}{}",
+        url_host,
+        crate::swarm::server::DEFAULT_PORT,
+        BUNDLE_GET_PREFIX,
+        pid_hex
+    );
+    let resp = agent
+        .get(&url)
+        .header(CHAIN_HEADER, &chain_header)
+        .call()
+        .with_context(|| format!("GET {}", url))?;
+    let status = resp.status();
+    if !status.is_success() {
+        bail!("peer returned {}", status);
+    }
+    // The response body is the bundle itself. It's bounded by the
+    // capped pushes that built the serving peer's bare repo, so no
+    // separate ceiling is needed here — `ingest_bundle` runs
+    // `git bundle verify` before touching the object store anyway.
+    let mut body = resp.into_body();
+    let bytes = body.read_to_vec().context("read bundle response body")?;
+    if bytes.is_empty() {
+        bail!("peer returned an empty body");
+    }
+    ingest_bundle(swarmgit_base, project_id, &bytes)
 }
 
 /// Fan out a bundle to every peer that has advertised holding this
