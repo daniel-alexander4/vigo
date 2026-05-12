@@ -315,7 +315,7 @@ impl ProjectAccumulator {
 }
 
 /// Production passwd path, env-overridable for tests.
-fn passwd_path() -> PathBuf {
+pub(crate) fn passwd_path() -> PathBuf {
     if let Some(p) = std::env::var_os("VIGO_SWARMGIT_PASSWD_FILE") {
         return PathBuf::from(p);
     }

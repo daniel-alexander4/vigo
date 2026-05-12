@@ -19,7 +19,7 @@ pub(crate) mod swarm_cache;
 mod swarm_seeds;
 mod time_collector;
 mod lockbox;
-mod swarmgit;
+pub(crate) mod swarmgit;
 mod longdrawer;
 
 // Shared sysctl utility for macOS/BSD collectors.

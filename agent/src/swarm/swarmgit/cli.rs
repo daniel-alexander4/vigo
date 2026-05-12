@@ -40,7 +40,7 @@ use super::project_state::{
     self, hex_id, parse_hex_id, project_repo_path, projects_dir, purge_user_state,
     DelegationChain, DrScope, ProjectConfig, TokenChain,
 };
-use super::state::{traits_snapshot_path, unix_seconds_now, TraitsSnapshot};
+use crate::traits::swarmgit::{collect_projects, passwd_path, ProjectEntry};
 use super::tokens::{
     canonical_bytes, issue_child as token_issue_child, project_id_for, verify_chain,
     Role, Token, TokenBody, ID_LEN, NEVER_EXPIRES, SIG_LEN,
@@ -59,10 +59,11 @@ pub fn run(args: Vec<String>) -> Result<()> {
         }
         "project" => with_swarmgit_authz(|| dispatch_project(&args[1..])),
         // Top-level envoy posture — parallel to `vigo swarm lockbox
-        // status`. Reads `<swarmgit_dir>/state.json` + `traits.json`
-        // and surfaces the helper-daemon socket path. Distinct from
-        // `vigo swarm swarmgit project status <id>`, which shows one
-        // project's local state.
+        // status`. Walks every user's `~/.vigo-swarmgit/` joined with
+        // the per-envoy bare repos + queued envelopes, plus the
+        // helper-daemon socket check. Distinct from `vigo swarm
+        // swarmgit project status <id>`, which shows one project's
+        // local state in detail.
         "status" => with_swarmgit_authz(|| cmd_status_top(&args[1..])),
         // Power-user wipe of local swarmgit state on this envoy.
         // Distinct from per-project `leave --purge` (one project's
@@ -2113,184 +2114,63 @@ To proceed, type the project handle exactly: {}",
 // ============================================================
 
 /// Envoy-wide swarmgit posture, parallel to `vigo swarm lockbox
-/// status`. Reads root-owned `state.json` + `traits.json` under the
-/// swarmgit base dir and surfaces the helper-daemon socket. Distinct
-/// from `project status <id>`, which shows a single ADR-015 project's
-/// local view from per-user state.
+/// status`. Built by walking every Unix user's `~/.vigo-swarmgit/`
+/// per-user state joined with the per-envoy bare repos under the
+/// swarmgit base dir, plus the helper-daemon socket check. Distinct
+/// from `project status <id>`, which shows one project in detail.
 ///
 /// Read-only. Safe for any user; does not require puddle to be
 /// unlocked.
 fn cmd_status_top(_args: &[String]) -> Result<()> {
     let base = crate::platform::paths::default_swarmgit_dir();
     let socket = helper_socket_path();
-    print_status_top(&base, &socket, &mut std::io::stdout())
+    let passwd = std::fs::read_to_string(passwd_path()).unwrap_or_default();
+    let projects = collect_projects(&passwd, &base);
+    print_status_top(&base, &socket, &projects, &mut std::io::stdout())
 }
 
 fn print_status_top<W: std::io::Write>(
     base: &Path,
     socket: &Path,
+    projects: &[ProjectEntry],
     out: &mut W,
 ) -> Result<()> {
     writeln!(out, "swarmgit status")?;
     writeln!(out, "  base:                {}", base.display())?;
 
-    // traits.json — combined publisher + receiver projection. Shows
-    // the most recent reactor activity plus any errors operators
-    // should know about.
-    let traits_file = traits_snapshot_path(base);
-    match TraitsSnapshot::load(base) {
-        Ok(Some(snap)) => {
-            let now = unix_seconds_now();
-            let last = if snap.updated_at == 0 {
-                "(unknown)".to_string()
+    if projects.is_empty() {
+        writeln!(
+            out,
+            "  projects:            none — no Unix user on this envoy has founded or joined one"
+        )?;
+    } else {
+        let with_repo = projects.iter().filter(|p| p.has_bare_repo).count();
+        let total_bytes: u64 = projects.iter().map(|p| p.bare_repo_size_bytes).sum();
+        let revokes: usize = projects.iter().map(|p| p.envelopes.revokes).sum();
+        let leaves: usize = projects.iter().map(|p| p.envelopes.leaves).sum();
+        writeln!(
+            out,
+            "  projects:            {} ({} with a local bare repo)",
+            projects.len(),
+            with_repo
+        )?;
+        writeln!(out, "  bare repos:          {} on disk", human_bytes(total_bytes))?;
+        writeln!(
+            out,
+            "  envelopes:           {} revoke(s), {} leave(s) queued",
+            revokes, leaves
+        )?;
+        for p in projects {
+            let repo_state = if p.has_bare_repo {
+                format!(
+                    "{} ref(s), {}",
+                    p.head_refs.len(),
+                    human_bytes(p.bare_repo_size_bytes)
+                )
             } else {
-                format_age_seconds(now.saturating_sub(snap.updated_at))
+                "no bare repo yet (awaiting first push or DR catch-up)".to_string()
             };
-            writeln!(
-                out,
-                "  traits.json:         present (last tick: {})",
-                last
-            )?;
-            writeln!(
-                out,
-                "  sources:             {} active, {} paused",
-                snap.active_sources, snap.paused_sources
-            )?;
-            if snap.source_errors.is_empty() {
-                writeln!(out, "  source errors:       0")?;
-            } else {
-                writeln!(
-                    out,
-                    "  source errors:       {} — these paths could not be loaded",
-                    snap.source_errors.len()
-                )?;
-                writeln!(
-                    out,
-                    "                       as swarmgit sources, so their"
-                )?;
-                writeln!(
-                    out,
-                    "                       contents won't reach peers. Fix the"
-                )?;
-                writeln!(
-                    out,
-                    "                       underlying issue (missing repo, bad"
-                )?;
-                writeln!(
-                    out,
-                    "                       permissions, broken remote)."
-                )?;
-                for err in &snap.source_errors {
-                    writeln!(out, "                         {} — {}", err.path, err.reason)?;
-                }
-            }
-            if snap.publish_errors.is_empty() {
-                writeln!(out, "  publish errors:      0")?;
-            } else {
-                writeln!(
-                    out,
-                    "  publish errors:      {} — these labels failed to publish",
-                    snap.publish_errors.len()
-                )?;
-                writeln!(
-                    out,
-                    "                       to the swarm. Peers won't see the"
-                )?;
-                writeln!(
-                    out,
-                    "                       latest content for the listed labels"
-                )?;
-                writeln!(
-                    out,
-                    "                       until the underlying error clears."
-                )?;
-                for err in &snap.publish_errors {
-                    writeln!(out, "                         {} — {}", err.label, err.reason)?;
-                }
-            }
-            writeln!(out, "  mirrors:             {}", snap.mirrors.len())?;
-            if snap.stale_mirrors.is_empty() {
-                writeln!(out, "  stale mirrors:       0")?;
-            } else {
-                writeln!(
-                    out,
-                    "  stale mirrors:       {} — these mirrors haven't advanced",
-                    snap.stale_mirrors.len()
-                )?;
-                writeln!(
-                    out,
-                    "                       past the staleness threshold. Either"
-                )?;
-                writeln!(
-                    out,
-                    "                       the project has no recent pushes, or"
-                )?;
-                writeln!(
-                    out,
-                    "                       the local mirror is stuck. Run"
-                )?;
-                writeln!(
-                    out,
-                    "                       `vigo swarm swarmgit project status"
-                )?;
-                writeln!(
-                    out,
-                    "                       <handle>` per label to investigate."
-                )?;
-                for label in &snap.stale_mirrors {
-                    writeln!(out, "                         {}", label)?;
-                }
-            }
-        }
-        Ok(None) if traits_file.exists() => {
-            writeln!(
-                out,
-                "  traits.json:         (corrupt — treated as empty;"
-            )?;
-            writeln!(
-                out,
-                "                       the next reactor tick will overwrite"
-            )?;
-            writeln!(
-                out,
-                "                       it. No action needed.)"
-            )?;
-        }
-        Ok(None) => {
-            writeln!(
-                out,
-                "  traits.json:         (not yet written — reactor has not"
-            )?;
-            writeln!(
-                out,
-                "                       ticked on this envoy. Wait for the next"
-            )?;
-            writeln!(
-                out,
-                "                       check-in cycle, or run `vigo run`"
-            )?;
-            writeln!(
-                out,
-                "                       interactively to force one.)"
-            )?;
-        }
-        Err(e) => {
-            writeln!(
-                out,
-                "  traits.json:         ERROR reading: {} — local state is", e
-            )?;
-            writeln!(
-                out,
-                "                       unreadable. Restart the agent"
-            )?;
-            writeln!(
-                out,
-                "                       (`sudo systemctl restart vigo-envoy`);"
-            )?;
-            writeln!(
-                out,
-                "                       if the error persists, file an issue."
-            )?;
+            writeln!(out, "    {:<24} {:<13} {}", p.handle, p.dr_scope, repo_state)?;
         }
     }
 
@@ -2326,15 +2206,18 @@ fn print_status_top<W: std::io::Write>(
     Ok(())
 }
 
-fn format_age_seconds(secs: u64) -> String {
-    if secs < 60 {
-        format!("{}s ago", secs)
-    } else if secs < 3600 {
-        format!("{}m ago", secs / 60)
-    } else if secs < 86400 {
-        format!("{}h{:02}m ago", secs / 3600, (secs % 3600) / 60)
+/// Human-friendly byte count for status output (base-1000, one decimal).
+fn human_bytes(n: u64) -> String {
+    const K: f64 = 1000.0;
+    let f = n as f64;
+    if f < K {
+        format!("{} B", n)
+    } else if f < K * K {
+        format!("{:.1} KB", f / K)
+    } else if f < K * K * K {
+        format!("{:.1} MB", f / (K * K))
     } else {
-        format!("{}d{}h ago", secs / 86400, (secs % 86400) / 3600)
+        format!("{:.1} GB", f / (K * K * K))
     }
 }
 
@@ -2355,9 +2238,8 @@ fn format_age_seconds(secs: u64) -> String {
 /// command under sudo to wipe those too.
 ///
 /// **As root** ALSO wipes envoy-wide root-owned state: every bare repo
-/// under `projects/` and the trait projection `traits.json`. The
-/// user-side dot-dirs are not touched in root mode (each user's home
-/// is theirs to manage).
+/// under `projects/`. The user-side dot-dirs are not touched in root
+/// mode (each user's home is theirs to manage).
 ///
 /// Refuses without `--yes`. Does not gossip — peers age this envoy
 /// out via the swarm staleness window unless the operator runs
@@ -2375,7 +2257,7 @@ fn cmd_purge(args: &[String]) -> Result<()> {
                      project's per-user state for this user). Root-owned bare repos\n\
                      under /var/lib/vigo/swarm/swarmgit/projects/ survive — rerun\n\
                      under sudo to scrub those too.\n\n\
-                     As root: also scrubs the envoy-wide projects/ + traits.json.\n\n\
+                     As root: also scrubs the envoy-wide projects/ dir.\n\n\
                      Refuses without --yes. Does NOT gossip — run `project leave`\n\
                      per project first if you want peers to learn of the departure."
                 );
@@ -2407,13 +2289,10 @@ fn do_purge<W: std::io::Write>(
     };
 
     let root_list: Vec<PathBuf> = if is_root {
-        [
-            projects_dir(base),
-            traits_snapshot_path(base),
-        ]
-        .into_iter()
-        .filter(|p: &PathBuf| p.exists())
-        .collect()
+        [projects_dir(base)]
+            .into_iter()
+            .filter(|p: &PathBuf| p.exists())
+            .collect()
     } else {
         Vec::new()
     };
@@ -2672,106 +2551,93 @@ mod tests {
     // --- top-level status -----------------------------------------
 
     #[test]
-    fn format_age_seconds_buckets() {
-        assert_eq!(format_age_seconds(0), "0s ago");
-        assert_eq!(format_age_seconds(45), "45s ago");
-        assert_eq!(format_age_seconds(60), "1m ago");
-        assert_eq!(format_age_seconds(125), "2m ago");
-        assert_eq!(format_age_seconds(3_600), "1h00m ago");
-        assert_eq!(format_age_seconds(3_725), "1h02m ago");
-        assert_eq!(format_age_seconds(86_400), "1d0h ago");
-        assert_eq!(format_age_seconds(90_061), "1d1h ago");
+    fn human_bytes_buckets() {
+        assert_eq!(human_bytes(0), "0 B");
+        assert_eq!(human_bytes(512), "512 B");
+        assert_eq!(human_bytes(1_500), "1.5 KB");
+        assert_eq!(human_bytes(2_400_000), "2.4 MB");
+        assert_eq!(human_bytes(3_100_000_000), "3.1 GB");
     }
 
     #[test]
     fn print_status_top_on_empty_envoy_does_not_error() {
-        // Fresh envoy: no state.json, no traits.json, no socket.
+        // Fresh envoy: no per-user project state, no socket.
         let base = tempfile::tempdir().unwrap();
         let socket = base.path().join("absent.sock");
         let mut buf: Vec<u8> = Vec::new();
-        print_status_top(base.path(), &socket, &mut buf).unwrap();
+        print_status_top(base.path(), &socket, &[], &mut buf).unwrap();
         let out = String::from_utf8(buf).unwrap();
         assert!(out.contains("swarmgit status"));
-        assert!(out.contains("not yet written"));
+        assert!(out.contains("projects:            none"));
         assert!(out.contains("socket absent"));
     }
 
     #[test]
-    fn print_status_top_renders_state_and_traits_summaries() {
-        use crate::swarm::swarmgit::state::{
-            PublishErrorEntry, SourceErrorEntry, SourceTraitEntry, TraitsSnapshot,
-            TRAITS_SNAPSHOT_VERSION,
-        };
+    fn print_status_top_renders_project_summary() {
+        use crate::traits::swarmgit::EnvelopeSummary;
+        use std::collections::BTreeMap;
+
+        let mut main_ref = BTreeMap::new();
+        main_ref.insert("refs/heads/main".to_string(), "abc123".to_string());
+
+        let projects = vec![
+            ProjectEntry {
+                project_id: "aa".repeat(32),
+                handle: "vigo".to_string(),
+                founder_puddle_pubkey: "bb".repeat(32),
+                members: vec!["bb".repeat(32)],
+                dr_scope: "swarm-wide".to_string(),
+                users_with_state: vec!["dan".to_string()],
+                has_bare_repo: true,
+                bare_repo_size_bytes: 2_500_000,
+                head_refs: main_ref,
+                envelopes: EnvelopeSummary {
+                    revokes: 1,
+                    leaves: 0,
+                    digest_hex: String::new(),
+                },
+                leaf_role: Some("Admin".to_string()),
+                token_chain_depth: 1,
+                token_expires_at: None,
+            },
+            ProjectEntry {
+                project_id: "cc".repeat(32),
+                handle: "vigo-web".to_string(),
+                founder_puddle_pubkey: "bb".repeat(32),
+                members: vec!["bb".repeat(32)],
+                dr_scope: "members-only".to_string(),
+                users_with_state: vec!["dan".to_string()],
+                has_bare_repo: false,
+                bare_repo_size_bytes: 0,
+                head_refs: BTreeMap::new(),
+                envelopes: EnvelopeSummary {
+                    revokes: 0,
+                    leaves: 0,
+                    digest_hex: String::new(),
+                },
+                leaf_role: Some("Admin".to_string()),
+                token_chain_depth: 1,
+                token_expires_at: None,
+            },
+        ];
 
         let base = tempfile::tempdir().unwrap();
-
-        // Lay down a traits.json with one source-error and one
-        // publish-error so the status output exercises the loops.
-        let snap = TraitsSnapshot {
-            version: TRAITS_SNAPSHOT_VERSION,
-            updated_at: unix_seconds_now().saturating_sub(120),
-            sources: vec![SourceTraitEntry {
-                label: "swarmgit:h:u:p1".to_string(),
-                paused: false,
-                max_mirrors: 5,
-                tags: vec![],
-                description: String::new(),
-                include_envoys: vec![],
-                exclude_envoys: vec![],
-                when: String::new(),
-                cross_subnet_mirrors: vec![],
-                git_sha: Some("deadbeef".to_string()),
-                blob_sha: Some("cafef00d".to_string()),
-                last_publish_full: Some(true),
-                last_bundle_size: Some(1024),
-                selected_mirrors: vec![],
-            }],
-            active_sources: 1,
-            paused_sources: 0,
-            source_errors: vec![SourceErrorEntry {
-                path: "/home/dan/swarmgit/bad".to_string(),
-                reason: "invalid sidecar".to_string(),
-            }],
-            publish_errors: vec![PublishErrorEntry {
-                label: "swarmgit:h:u:broken".to_string(),
-                reason: "bundle exceeds cap".to_string(),
-            }],
-            stale_mirrors: vec!["swarmgit:h:u:abandoned".to_string()],
-            mirrors: vec![],
-        };
-        snap.save(base.path()).unwrap();
-
-        // Plant a fake socket file so the helper-daemon line takes
-        // the "present" branch.
+        // Plant a fake socket file so the helper-daemon line takes the
+        // "present" branch.
         let socket = base.path().join("swarmgit.sock");
         fs::write(&socket, b"").unwrap();
 
         let mut buf: Vec<u8> = Vec::new();
-        print_status_top(base.path(), &socket, &mut buf).unwrap();
+        print_status_top(base.path(), &socket, &projects, &mut buf).unwrap();
         let out = String::from_utf8(buf).unwrap();
 
-        assert!(out.contains("1 active, 0 paused"));
-        assert!(out.contains("source errors:       1"));
-        assert!(out.contains("invalid sidecar"));
-        assert!(out.contains("publish errors:      1"));
-        assert!(out.contains("bundle exceeds cap"));
-        assert!(out.contains("stale mirrors:       1"));
-        assert!(out.contains("swarmgit:h:u:abandoned"));
+        assert!(out.contains("projects:            2 (1 with a local bare repo)"));
+        assert!(out.contains("2.5 MB"));
+        assert!(out.contains("1 revoke(s), 0 leave(s)"));
+        assert!(out.contains("vigo"));
+        assert!(out.contains("vigo-web"));
+        assert!(out.contains("no bare repo yet"));
         assert!(out.contains("socket present"));
-    }
-
-    #[test]
-    fn print_status_top_corrupt_traits_is_treated_as_empty() {
-        let base = tempfile::tempdir().unwrap();
-        // Write garbage where traits.json should be — TraitsSnapshot::load
-        // returns Ok(None) on parse failure (logged as warn). The status
-        // output should explain rather than error.
-        fs::write(traits_snapshot_path(base.path()), b"not json").unwrap();
-        let socket = base.path().join("absent.sock");
-        let mut buf: Vec<u8> = Vec::new();
-        print_status_top(base.path(), &socket, &mut buf).unwrap();
-        let out = String::from_utf8(buf).unwrap();
-        assert!(out.contains("corrupt"));
     }
 
     // --- purge ----------------------------------------------------
@@ -2849,16 +2715,12 @@ mod tests {
         let dot = project_state::user_dot_dir(home.path());
         fs::create_dir_all(&dot).unwrap();
         fs::create_dir_all(projects_dir(base.path())).unwrap();
-        // Plant a bogus traits.json so traits_snapshot_path resolves to
-        // an existing file that purge will remove.
-        fs::write(traits_snapshot_path(base.path()), b"{}").unwrap();
 
         let mut buf: Vec<u8> = Vec::new();
         do_purge(home.path(), base.path(), true, true, &mut buf).unwrap();
 
         assert!(!dot.exists(), "user dot dir must be wiped");
         assert!(!projects_dir(base.path()).exists(), "projects/ must be wiped under root");
-        assert!(!traits_snapshot_path(base.path()).exists(), "traits.json must be wiped under root");
     }
 
     #[test]

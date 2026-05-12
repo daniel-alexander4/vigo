@@ -44,10 +44,12 @@
 //! support for the discovery / swarm-server transport code in
 //! `crate::swarm::{discovery, server}`: `ClaimsHandle` ingests
 //! LAN claim announcements; `PendingClaims` + `format_claim_line` /
-//! `parse_claim_line` shape the multicast wire format; `TraitsSnapshot`
-//! is the schema the trait collector reads. The legacy bundle-based
+//! `parse_claim_line` shape the multicast wire format; `state` holds
+//! the shared `unix_seconds_now` helper. The legacy bundle-based
 //! receiver/publisher pipeline they originally served was removed in
-//! 0.38.16 alongside ADR-015 step 4's complete rollout.
+//! 0.38.16 alongside ADR-015 step 4's complete rollout — including the
+//! `traits.json` snapshot the trait collector used to read; the
+//! collector now walks live per-user state directly.
 
 pub mod cli;
 pub mod envelopes;

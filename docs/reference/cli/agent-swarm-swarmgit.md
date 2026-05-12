@@ -77,7 +77,7 @@ Verbs that take a `<project_id>` argument also accept a unique handle prefix amo
 
 ## `status`
 
-Envoy-wide swarmgit posture, parallel to [`vigo swarm lockbox status`](agent-swarm-lockbox.md#status). Reads `traits.json` under `/var/lib/vigo/swarm/swarmgit/` and surfaces the helper-daemon socket. Distinct from `project status <id>`, which shows a single ADR-015 project's local state.
+Envoy-wide swarmgit posture, parallel to [`vigo swarm lockbox status`](agent-swarm-lockbox.md#status). Built by walking every Unix user's `~/.vigo-swarmgit/` per-user state, joining it with the per-envoy bare repos under `/var/lib/vigo/swarm/swarmgit/projects/` and the queued envelopes, plus the helper-daemon socket check. Distinct from `project status <id>`, which shows one project in detail.
 
 ```
 vigo swarm swarmgit status
@@ -93,16 +93,17 @@ vigo swarm swarmgit status
 $ vigo swarm swarmgit status
 swarmgit status
   base:                /var/lib/vigo/swarm/swarmgit
-  traits.json:         present (last tick: 12s ago)
-  sources:             2 active, 1 paused
-  source errors:       0
-  publish errors:      0
-  mirrors:             5
-  stale mirrors:       0
+  projects:            4 (3 with a local bare repo)
+  bare repos:          511.4 MB on disk
+  envelopes:           0 revoke(s), 0 leave(s) queued
+    apractia                 swarm-wide    1 ref(s), 4.1 MB
+    tessera                  swarm-wide    1 ref(s), 812.0 KB
+    vigo                     swarm-wide    1 ref(s), 506.5 MB
+    vigo-web                 members-only  no bare repo yet (awaiting first push or DR catch-up)
   helper daemon:       socket present (/var/run/vigo/swarmgit.sock)
 ```
 
-A fresh envoy that hasn't run the swarmgit reactor yet shows `(not yet written — reactor has not ticked on this envoy)` for `traits.json`. The socket line shows `socket absent` when the daemon isn't running.
+On an envoy where no Unix user has founded or joined a project, the `projects:` line reads `none`. A project shows `no bare repo yet` until its first push lands or the DR catch-up reactor pulls it from a peer. The socket line shows `socket absent` when the helper daemon isn't running.
 
 ## `purge`
 
@@ -115,7 +116,7 @@ vigo swarm swarmgit purge --yes
 **Mode-aware behaviour:**
 
 - **As a non-root user:** wipes `~/.vigo-swarmgit/` for the calling user (every joined project's per-user state — `project.json`, `tokens.json`, `delegations.json`, any pending sentinels). Root-owned bare repos under `/var/lib/vigo/swarm/swarmgit/projects/` survive; rerun under `sudo` to scrub those too.
-- **As root:** wipes the envoy-wide root-owned state — `projects/` and `traits.json` — under `/var/lib/vigo/swarm/swarmgit/`. The user-side `~/.vigo-swarmgit/` of the invoking user is also cleared if it exists; per-user dot-dirs of OTHER users are not touched (each user's home is theirs).
+- **As root:** wipes the envoy-wide root-owned `projects/` dir under `/var/lib/vigo/swarm/swarmgit/`. The user-side `~/.vigo-swarmgit/` of the invoking user is also cleared if it exists; per-user dot-dirs of OTHER users are not touched (each user's home is theirs).
 
 **Flags:**
 
