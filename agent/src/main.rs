@@ -304,9 +304,10 @@ fn parse_args() -> Result<Cli> {
                 Some("lockbox") => Commands::Lockbox { args: positional[2..].to_vec() },
                 Some("puddle") => Commands::SelfFleet { args: positional[2..].to_vec() },
                 // Read-only diagnostic verbs (0.41.1+): substrate
-                // status, seed inventory, peer table. Read against
-                // /var/lib/vigo/swarm/{state,manifest,peers}.json.
-                Some("status") | Some("seeds") | Some("peers") => {
+                // status, seed inventory, peer table, swarmdns posture.
+                // Read against /var/lib/vigo/swarm/{state,manifest,
+                // peers}.json and the /etc/hosts managed block.
+                Some("status") | Some("seeds") | Some("peers") | Some("swarmdns") => {
                     Commands::SwarmDiag { args: positional[1..].to_vec() }
                 }
                 // Help routes through the diag dispatcher so the

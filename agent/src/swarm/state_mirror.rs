@@ -47,8 +47,11 @@ pub struct AgentSwarmState {
 }
 
 /// Resolved gate booleans for the four content subsystems plus the
-/// substrate-level kill switch. `puddle` is the single-source-of-truth
-/// for lockbox (ADR-020) — there is no separate lockbox field.
+/// substrate-level kill switch, plus `swarmdns`. `puddle` is the
+/// single-source-of-truth for lockbox (ADR-020) — there is no
+/// separate lockbox field. `swarmdns` is the one default-OFF gate
+/// (editing `/etc/hosts` is an operator decision — see
+/// [`super::gates::swarmdns_active`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GateState {
     pub swarm: bool,
@@ -56,13 +59,16 @@ pub struct GateState {
     pub swarmgit: bool,
     pub longdrawer: bool,
     pub puddle: bool,
+    #[serde(default)]
+    pub swarmdns: bool,
 }
 
 impl Default for GateState {
-    /// Default is all-on. Mirrors the fail-open semantic in
-    /// [`super::gates::substrate_active`] — a freshly-enrolled envoy
-    /// with no policy bundle yet runs every subsystem until told
-    /// otherwise.
+    /// Default is all-on EXCEPT `swarmdns` — mirrors the fail-open
+    /// semantic in [`super::gates::substrate_active`] for the content
+    /// subsystems (a freshly-enrolled envoy with no policy bundle yet
+    /// runs them until told otherwise) and the fail-*closed* semantic
+    /// for swarmdns (off until the server explicitly says on).
     fn default() -> Self {
         Self {
             swarm: true,
@@ -70,6 +76,7 @@ impl Default for GateState {
             swarmgit: true,
             longdrawer: true,
             puddle: true,
+            swarmdns: false,
         }
     }
 }
@@ -121,11 +128,13 @@ pub fn read(path: &Path) -> Result<AgentSwarmState> {
         .with_context(|| format!("parsing swarm state mirror at {}", path.display()))
 }
 
-/// Decode the five gate keys from `vars_json` using the same
-/// fail-open semantics as [`super::gates::substrate_active`]: an
-/// explicit `false` decodes to off; absent / missing / malformed
-/// decodes to on. Mirrors the agent's runtime evaluation so the
-/// disk file matches what the gates actually do.
+/// Decode the gate keys from `vars_json`, matching the agent's
+/// runtime evaluation so the disk mirror reflects what the gates
+/// actually do: the content subsystems use the fail-open semantics of
+/// [`super::gates::substrate_active`] (explicit `false` → off; absent
+/// / missing / malformed → on), while `swarmdns` uses the fail-closed
+/// semantics of [`super::gates::swarmdns_active`] (only an explicit
+/// truthy value → on).
 fn decode_gates(vars_json: &[u8]) -> GateState {
     if vars_json.is_empty() {
         return GateState::default();
@@ -140,6 +149,7 @@ fn decode_gates(vars_json: &[u8]) -> GateState {
         swarmgit: gate_truthy(val.get("swarm_swarmgit_enabled")),
         longdrawer: gate_truthy(val.get("swarm_longdrawer_enabled")),
         puddle: gate_truthy(val.get("swarm_puddle_enabled")),
+        swarmdns: gate_explicitly_true(val.get("swarm_swarmdns_enabled")),
     }
 }
 
@@ -156,6 +166,20 @@ fn gate_truthy(v: Option<&serde_json::Value>) -> bool {
         ),
         Some(serde_json::Value::Number(n)) => n.as_i64().map_or(true, |i| i != 0),
         _ => true,
+    }
+}
+
+/// Strict truthy check matching [`super::gates::is_explicitly_true`]
+/// (used for `swarm_swarmdns_enabled`): on only for an explicit truthy
+/// value — absence / `null` / `false` are off.
+fn gate_explicitly_true(v: Option<&serde_json::Value>) -> bool {
+    match v {
+        Some(serde_json::Value::Bool(b)) => *b,
+        Some(serde_json::Value::String(s)) => {
+            matches!(s.to_ascii_lowercase().as_str(), "true" | "yes" | "1")
+        }
+        Some(serde_json::Value::Number(n)) => n.as_i64().map_or(false, |i| i != 0),
+        _ => false,
     }
 }
 
@@ -218,5 +242,22 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let err = read(&dir.path().join("nope.json")).unwrap_err();
         assert!(format!("{:#}", err).contains("nope.json"));
+    }
+
+    #[test]
+    fn swarmdns_gate_defaults_off_and_is_strict() {
+        // Default-off — the opposite of the content subsystems.
+        assert!(!decode_gates(b"").swarmdns);
+        assert!(!decode_gates(b"{}").swarmdns);
+        assert!(!decode_gates(b"not json").swarmdns);
+        assert!(!GateState::default().swarmdns);
+        // Off for explicit false / null / anything ambiguous.
+        assert!(!decode_gates(br#"{"swarm_swarmdns_enabled": false}"#).swarmdns);
+        assert!(!decode_gates(br#"{"swarm_swarmdns_enabled": null}"#).swarmdns);
+        assert!(!decode_gates(br#"{"swarm_swarmdns_enabled": "maybe"}"#).swarmdns);
+        // On only for an explicit truthy value.
+        assert!(decode_gates(br#"{"swarm_swarmdns_enabled": true}"#).swarmdns);
+        assert!(decode_gates(br#"{"swarm_swarmdns_enabled": "true"}"#).swarmdns);
+        assert!(decode_gates(br#"{"swarm_swarmdns_enabled": 1}"#).swarmdns);
     }
 }

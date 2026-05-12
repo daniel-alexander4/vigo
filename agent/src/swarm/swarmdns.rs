@@ -232,6 +232,51 @@ fn strip_managed_block(content: &str) -> String {
     out
 }
 
+/// Read the current managed-block body lines from `/etc/hosts` as
+/// `(ip, hostname)` pairs (whitespace-split, first two columns). Empty
+/// when there's no managed block or the file is missing. Used by
+/// `vigo swarm swarmdns status` — the CLI runs in a separate process
+/// from the agent so it can't read the in-memory [`HostMap`]; the
+/// managed block is the on-disk reflection of the last reactor tick.
+pub fn managed_block_entries() -> Vec<(String, String)> {
+    let content = match std::fs::read_to_string(hosts_path()) {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+    let mut out = Vec::new();
+    let mut in_block = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if !in_block {
+            if trimmed == BLOCK_BEGIN {
+                in_block = true;
+            }
+            continue;
+        }
+        if trimmed == BLOCK_END {
+            break;
+        }
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let mut cols = trimmed.split_whitespace();
+        if let (Some(ip), Some(host)) = (cols.next(), cols.next()) {
+            out.push((ip.to_string(), host.to_string()));
+        }
+    }
+    out
+}
+
+/// Whether the `/etc/hosts` managed block markers are currently
+/// present. (`managed_block_entries().is_empty()` can't distinguish
+/// "no block" from "block exists but holds nothing" — but the reactor
+/// never leaves an empty block, so in practice they coincide.)
+pub fn managed_block_present() -> bool {
+    std::fs::read_to_string(hosts_path())
+        .map(|c| c.contains(BLOCK_BEGIN))
+        .unwrap_or(false)
+}
+
 /// Rewrite `/etc/hosts` so the managed block contains exactly `body`
 /// (empty ⇒ block removed). Atomic (temp file + rename in the same
 /// dir), preserving the file's current mode. Returns `Ok(true)` if
@@ -453,9 +498,16 @@ mod tests {
         // Re-apply same body — no change.
         assert!(!apply_block("192.168.1.2\tdanlap\n").unwrap());
 
-        // Remove — block gone, original content intact.
+        // Read it back via the CLI-facing helpers.
+        assert!(managed_block_present());
+        let entries = managed_block_entries();
+        assert_eq!(entries, vec![("192.168.1.2".to_string(), "danlap".to_string())]);
+
+        // Remove — block gone, original content intact, helpers report empty.
         assert!(apply_block("").unwrap());
         assert_eq!(std::fs::read_to_string(&hosts).unwrap(), "127.0.0.1 localhost\n");
+        assert!(!managed_block_present());
+        assert!(managed_block_entries().is_empty());
         // Re-remove — no change.
         assert!(!apply_block("").unwrap());
 

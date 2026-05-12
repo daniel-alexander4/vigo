@@ -8,6 +8,7 @@
 //! vigo swarm seeds list          # one line per active blob this envoy holds
 //! vigo swarm seeds show <key>    # full detail for one blob (sha-prefix or label)
 //! vigo swarm peers list          # known peers from the multicast / gossip table
+//! vigo swarm swarmdns status     # is swarmdns on? + the /etc/hosts managed block
 //! ```
 //!
 //! Read-only against three daemon-canonical files written under
@@ -45,6 +46,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "status" => cmd_status(&args[1..]),
         "seeds" => dispatch_seeds(&args[1..]),
         "peers" => dispatch_peers(&args[1..]),
+        "swarmdns" => dispatch_swarmdns(&args[1..]),
         other => bail!(
             "unknown `vigo swarm` subcommand: {other}\n\
              run `vigo swarm --help` for usage"
@@ -66,6 +68,8 @@ DIAGNOSTIC (envoy-wide; read-only):
     seeds show <key>      Full detail for one blob. <key> is a sha256
                           prefix (>=4 chars) or a label match.
     peers list            Known peers from the gossip / multicast table.
+    swarmdns status       Whether swarmdns is on for this envoy + the
+                          current agent-managed block in /etc/hosts.
 
 PER-USER CONTENT:
     puddle <verb>         Per-user puddle identity (ADR-014).
@@ -102,6 +106,7 @@ fn cmd_status(args: &[String]) -> Result<()> {
         println!("    longdrawer:     {}", on_off(s.gates.longdrawer));
         println!("    puddle:       {}  (lockbox follows)", on_off(s.gates.puddle));
         println!("    swarmgit:    {}", on_off(s.gates.swarmgit));
+        println!("    swarmdns:     {}  (managed /etc/hosts block)", on_off(s.gates.swarmdns));
     } else {
         println!("  state.json:       not found (agent has not completed a check-in yet?)");
         println!("                    expected at {}",
@@ -135,6 +140,65 @@ fn cmd_status(args: &[String]) -> Result<()> {
     match dir_size(&blobs_dir) {
         Ok(size) => println!("  Blob cache:       {} ({})", human_bytes(size), blobs_dir.display()),
         Err(_) => println!("  Blob cache:       (root-only) {}", blobs_dir.display()),
+    }
+    Ok(())
+}
+
+// ---------------- swarmdns ----------------
+
+fn dispatch_swarmdns(args: &[String]) -> Result<()> {
+    match args.first().map(String::as_str) {
+        None | Some("") | Some("status") => cmd_swarmdns_status(),
+        Some("-h") | Some("--help") | Some("help") => {
+            eprintln!(
+                "vigo swarm swarmdns status — show whether swarmdns is enabled on this\n\
+                 envoy (from the server-resolved gate in state.json) and the current\n\
+                 contents of the agent-managed block in /etc/hosts. Read-only; no sudo."
+            );
+            Ok(())
+        }
+        Some(other) => bail!(
+            "unknown `vigo swarm swarmdns` subcommand: {other}\n\
+             only `status` is supported"
+        ),
+    }
+}
+
+fn cmd_swarmdns_status() -> Result<()> {
+    let state = state_mirror::read(&state_mirror::default_path()).ok();
+    let enabled = state.as_ref().map(|s| s.gates.swarmdns);
+
+    println!("swarmdns status");
+    println!();
+    match enabled {
+        Some(true) => println!(
+            "  enabled:          yes  (server.yaml swarm.swarmdns: true, and this host matches swarm.enabled)"
+        ),
+        Some(false) => println!(
+            "  enabled:          no   (server.yaml swarm.swarmdns unset/false, or this host isn't in swarm.enabled)"
+        ),
+        None => println!(
+            "  enabled:          unknown — state.json not found at {} (no check-in yet?)",
+            state_mirror::default_path().display()
+        ),
+    }
+
+    let entries = crate::swarm::swarmdns::managed_block_entries();
+    if crate::swarm::swarmdns::managed_block_present() {
+        println!("  /etc/hosts block: present — {} peer name(s):", entries.len());
+        for (ip, host) in &entries {
+            println!("    {:<15} {}", ip, host);
+        }
+    } else {
+        println!("  /etc/hosts block: absent");
+        if enabled == Some(true) {
+            println!(
+                "                    (enabled, but no peers announced yet — the reactor writes the"
+            );
+            println!(
+                "                     block on its next tick once it has at least one peer, ~60s)"
+            );
+        }
     }
     Ok(())
 }
