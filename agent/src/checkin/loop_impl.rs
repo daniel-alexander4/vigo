@@ -113,6 +113,10 @@ pub struct RunResult {
     pub force_update: bool,
     /// Manifest entries from the server (fallback gossip channel).
     pub swarm_manifest_entries: Vec<crate::proto::SwarmManifestEntry>,
+    /// Curator fleet catalog (ADR-024): JSON `[]CatalogEntry` the server
+    /// attaches to every check-in; cached agent-side so resolution survives a
+    /// server outage. Empty when the server hasn't published one yet.
+    pub curator_catalog: Vec<u8>,
 }
 
 /// Accepted policy state across convergence cycles.
@@ -313,6 +317,7 @@ fn converge(
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
             swarm_manifest_entries: resp.manifest_entries.clone(),
+            curator_catalog: resp.curator_catalog.clone(),
         });
     } else {
         return Ok(RunResult {
@@ -329,6 +334,7 @@ fn converge(
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
             swarm_manifest_entries: resp.manifest_entries.clone(),
+            curator_catalog: resp.curator_catalog.clone(),
         });
     };
 
@@ -357,6 +363,7 @@ fn converge(
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
                 swarm_manifest_entries: resp.manifest_entries.clone(),
+                curator_catalog: resp.curator_catalog.clone(),
             });
         }
     };
@@ -383,6 +390,7 @@ fn converge(
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
             swarm_manifest_entries: resp.manifest_entries.clone(),
+            curator_catalog: resp.curator_catalog.clone(),
         });
     }
 
@@ -405,6 +413,7 @@ fn converge(
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
                 swarm_manifest_entries: resp.manifest_entries.clone(),
+                curator_catalog: resp.curator_catalog.clone(),
             });
         }
         Err(e) => {
@@ -445,6 +454,7 @@ fn converge(
         server_pubkey_pem: resp.server_pubkey_pem.clone(),
         force_update: resp.force_update,
         swarm_manifest_entries: resp.manifest_entries.clone(),
+        curator_catalog: resp.curator_catalog.clone(),
     })
 }
 
@@ -1017,6 +1027,11 @@ pub async fn daemon_loop(
                 }
                 crate::swarm::cleanup_graveyard();
                 crate::swarm::cleanup_stale_partials();
+                // Cache the fleet artifact catalog (ADR-024) so curator
+                // resolution survives a server outage. Best-effort.
+                if let Err(e) = crate::swarm::curator::catalog_cache::write_catalog(&rr.curator_catalog) {
+                    tracing::warn!(error = %e, "curator: failed to cache the fleet catalog");
+                }
                 if let Some(ref m) = manifest {
                     crate::swarm::merge_manifest_entries(m, &rr.swarm_manifest_entries, peer_map.as_ref());
                     // Register local seeds into manifest for P2P gossip.
@@ -1331,6 +1346,9 @@ async fn stream_loop(
             crate::swarm::evict_expired(store);
         }
         crate::swarm::cleanup_graveyard();
+        if let Err(e) = crate::swarm::curator::catalog_cache::write_catalog(&resp.curator_catalog) {
+            tracing::warn!(error = %e, "curator: failed to cache the fleet catalog");
+        }
         if let Some(ref m) = manifest {
             crate::swarm::merge_manifest_entries(m, &resp.manifest_entries, peer_map);
             // Register local seeds into manifest for P2P gossip.
@@ -1989,6 +2007,7 @@ mod tests {
             server_pubkey_pem: String::new(),
             force_update: false,
             swarm_manifest_entries: vec![],
+            curator_catalog: vec![],
         };
 
         update_state(&mut ps, &rr, Some(&mut fp));
@@ -2014,6 +2033,7 @@ mod tests {
             server_pubkey_pem: String::new(),
             force_update: false,
             swarm_manifest_entries: vec![],
+            curator_catalog: vec![],
         };
 
         update_state(&mut ps, &rr, None);
@@ -2070,6 +2090,7 @@ mod tests {
             server_pubkey_pem: String::new(),
             force_update: false,
             swarm_manifest_entries: vec![],
+            curator_catalog: vec![],
         };
 
         update_state(&mut ps, &rr, None);
@@ -2263,6 +2284,7 @@ mod tests {
             server_pubkey_pem: String::new(),
             force_update: false,
             swarm_manifest_entries: vec![],
+            curator_catalog: vec![],
         };
 
         update_state(&mut ps, &rr, None);

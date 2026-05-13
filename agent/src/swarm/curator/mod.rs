@@ -26,15 +26,24 @@
 //! - [`run_sentinel_reactor`] — the root reactor that re-verifies each
 //!   `entry.json.pending` and promotes it (last-write-wins on `issued_at`) to the
 //!   canonical `entry.json` the `swarm_curator` trait collector reads.
+//! - [`catalog_cache`] — the agent-side state under `/var/lib/vigo/artifacts/`:
+//!   `catalog.json` (the fleet catalog the server attaches to every check-in,
+//!   re-cached on each accepted bundle, so resolution survives a server outage)
+//!   and `cache.json` (the materialization index).
+//! - [`resolver`] — resolve a `<artifact_id>` ref → blob (server-mediated, with
+//!   a cached-catalog fallback) → fetch the bytes (local DR replica or the
+//!   server's `/blob` relay) → verify the sha → materialize under
+//!   `artifacts/<artifact_id>/<name>/<version>/<os>-<arch>` + update `cache.json`.
 //!
-//! Slices 1-2 ship the catalog + the publish path + config plumbing; the server
-//! REST surface (`resolve`/`blob`/`fleet`/`block`) + the agent resolver +
-//! materializer + the catalog cache are slice 3, the `vigocli`/`vigo` CLI
-//! surfaces slice 4, and the `/curator` UI + docs slice 5 (see ADR-024). Slice 2
-//! deliberately does **not** gossip catalog entries peer-to-peer (the propagation
-//! path through slices 1-3 is `entry.json` → `swarm_curator` trait → check-in →
-//! `curatormesh` aggregator → the slice-3 agent catalog cache sourced from the
-//! server, like the ADR-022 name map — see `pending.md`).
+//! Slices 1-2 ship the catalog + the publish path + config plumbing; slice 3 the
+//! server REST surface (`resolve`/`blob`/`fleet`/`block`) + the catalog feed into
+//! the manifest store + the agent-side catalog cache + resolver/materializer; the
+//! `vigocli`/`vigo` CLI surfaces are slice 4 (and the resolver's first callers),
+//! the `/curator` UI + docs slice 5 (see ADR-024). Slice 2 deliberately does
+//! **not** gossip catalog entries peer-to-peer (the propagation path is
+//! `entry.json` → `swarm_curator` trait → check-in → `curatormesh` aggregator →
+//! the agent catalog cache, sourced from the server like the ADR-022 name map —
+//! see `pending.md`).
 //!
 //! `catalog.rs` reuses [`crate::swarm::gitback::envelopes::DelegationEnvelope`]
 //! (the ADR-019 rekey-bridge envelope) and `helper.rs` reuses
@@ -45,7 +54,9 @@
 //! `anchor::`.
 
 pub mod catalog;
+pub mod catalog_cache;
 pub mod helper;
+pub mod resolver;
 pub mod state;
 
 use std::path::Path;
