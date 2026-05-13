@@ -43,7 +43,7 @@ Optional audit-log entries flow through the existing audit hash chain on next ch
 
 ### Session helper
 
-Like lockbox's session helper, an unlocked puddle identity lives in process memory in a `setsid`-detached per-user daemon, gated by `SO_PEERCRED` on a Unix socket at `$XDG_RUNTIME_DIR/vigo/puddle.sock`. The daemon answers signing requests for the calling user. Idle timeout (default 60 minutes) and explicit `lock` zero the in-memory key. Parent-PID watchdog terminates the helper on agent restart.
+Like lockbox's session helper, an unlocked puddle identity lives in process memory in a `setsid`-detached per-user daemon, gated by `SO_PEERCRED` on a Unix socket at `$XDG_RUNTIME_DIR/vigo/puddle.sock`. The daemon answers signing requests for the calling user. Idle timeout (default 24 hours, resets on each request; overridable per-unlock with `vigo swarm puddle unlock --idle-mins <N>`) and explicit `lock` zero the in-memory key. Parent-PID watchdog terminates the helper on agent restart.
 
 ### CLI verbs
 
