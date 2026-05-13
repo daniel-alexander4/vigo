@@ -1,7 +1,7 @@
 
-# vigocli payload
+# vigocli swarm filecast
 
-Administrator-pushed file distribution on the [swarm](../../engineering/subsystems/swarm.md) substrate. Distribute payloads across the fleet via peer-to-peer transfer and monitor progress.
+Administrator-pushed file distribution on the [swarm](../../engineering/subsystems/swarm.md) substrate. Distribute files across the fleet via peer-to-peer transfer and monitor progress.
 
 ## Subcommands
 
@@ -9,14 +9,14 @@ Administrator-pushed file distribution on the [swarm](../../engineering/subsyste
 |------------|-------------|
 | `distribute` | Seed a file for P2P distribution to targeted envoys |
 | `status` | Show per-envoy distribution progress |
-| `list` | List all payload payloads and their distribution status |
-| `revoke` | Revoke a payload fleet-wide; agents evict on next check-in |
+| `list` | List all filecast files and their distribution status |
+| `revoke` | Revoke a filecast fleet-wide; agents evict on next check-in |
 | `broken` | List broken seed manifests across envoys |
 
 ## Usage
 
 ```bash
-vigocli payload [subcommand] [flags]
+vigocli swarm filecast [subcommand] [flags]
 ```
 
 ## distribute
@@ -24,37 +24,37 @@ vigocli payload [subcommand] [flags]
 Place a file in the server's seed directory for P2P distribution. The server registers the seed immediately and gossips the manifest entry to streaming agents.
 
 ```bash
-vigocli payload distribute <file> [flags]
+vigocli swarm filecast distribute <file> --target <spec> [flags]
 ```
 
 ### Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--target` | `*` | Comma-separated target spec: hostname globs, trait filters, `-` prefix to exclude. See examples below |
-| `--label` | filename | Human-readable label for the payload |
+| `--target` | *(required)* | Comma-separated target spec: hostname globs, exact hostnames, trait filters (`key=value`), `-` prefix to exclude (exclusions win over inclusions). **No default** — running `distribute` without it (or with an empty value) prints a usage error listing the pattern forms and exits non-zero; it never falls back to a fleet-wide push. See examples below |
+| `--label` | filename | Human-readable label for the file |
 | `--retention` | `7d` | Auto-evict from agents after this duration (e.g. `7d`, `168h`). `0` = keep forever |
 
 ### Examples
 
 ```bash
 # Distribute to all envoys
-vigocli payload distribute agent-0.8.4-linux-amd64.tar.gz --target '*'
+vigocli swarm filecast distribute agent-0.8.4-linux-amd64.tar.gz --target '*'
 
 # Distribute to web servers with a custom label
-vigocli payload distribute app-v2.tar.gz --target '*.web.*' --label app-v2
+vigocli swarm filecast distribute app-v2.tar.gz --target '*.web.*' --label app-v2
 
 # Comma-separated patterns with exclusion
-vigocli payload distribute image.iso --target '*lap*,-rasp*'
+vigocli swarm filecast distribute image.iso --target '*lap*,-rasp*'
 
 # Exclusion-only (all envoys except raspberries)
-vigocli payload distribute update.tar.gz --target '-rasp*'
+vigocli swarm filecast distribute update.tar.gz --target '-rasp*'
 
 # Distribute by trait filter
-vigocli payload distribute firmware.bin --target 'dmi.product_name=PowerEdge R750'
+vigocli swarm filecast distribute firmware.bin --target 'dmi.product_name=PowerEdge R750'
 
 # Keep forever (no auto-eviction)
-vigocli payload distribute golden-image.tar.gz --retention 0
+vigocli swarm filecast distribute golden-image.tar.gz --retention 0
 ```
 
 ```
@@ -63,7 +63,21 @@ Seeding app-v2.tar.gz (47.2 MB)...
   Size:   47.2 MB
 
   Seeded — distribution begins on next check-in cycle (12 envoys matched).
-  Track progress: vigocli payload status a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
+  Track progress: vigocli swarm filecast status a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
+```
+
+If `--target` is omitted, `distribute` refuses and prints the recipient-pattern forms — it never silently goes fleet-wide:
+
+```
+--target is required: name the envoys this file goes to so a push never goes fleet-wide by accident.
+
+  --target '*'                  every envoy
+  --target '*,-raspberrypi'     every envoy except raspberrypi
+  --target '-rasp*'             every envoy except hostnames matching rasp*
+  --target 'danlap,annlap'      just those two
+  --target 'os.distro=ubuntu'   envoys whose os.distro trait is "ubuntu"
+
+Patterns: comma-separated; "-" prefix excludes; exclusions win; "host*" globs; "trait=value" matches.
 ```
 
 If the target spec matches zero envoys, a warning is printed:
@@ -83,21 +97,21 @@ If the target spec matches zero envoys, a warning is printed:
 Show per-envoy distribution progress. Accepts a full SHA256 hash or a unique prefix (minimum 6 characters).
 
 ```bash
-vigocli payload status <sha256-or-prefix>
+vigocli swarm filecast status <sha256-or-prefix>
 ```
 
 ### Example
 
 ```bash
 # Full hash
-vigocli payload status a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
+vigocli swarm filecast status a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
 
 # Short prefix (must be unique)
-vigocli payload status a1b2c3
+vigocli swarm filecast status a1b2c3
 ```
 
 ```
-Payload: app-v2
+Filecast: app-v2
   SHA256: a1b2c3d4e5f6...
   Chunks: 47
 
@@ -126,7 +140,7 @@ Per-envoy states:
 If the payload has been revoked, the summary layout changes — source/complete/downloading/pending/skipped counts are replaced with revoking/revoked counts, and each envoy row shows its per-host eviction progress:
 
 ```
-Payload: app-v2
+Filecast: app-v2
   SHA256: a1b2c3d4e5f6...
   Chunks: 47
   Status: revoked (pending eviction from envoys)
@@ -149,10 +163,10 @@ Per-envoy states during revocation:
 
 ## list
 
-List all payload payloads with distribution progress.
+List all filecast files with distribution progress.
 
 ```bash
-vigocli payload list [flags]
+vigocli swarm filecast list [flags]
 ```
 
 ### Flags
@@ -184,20 +198,20 @@ tar_errors.log               9faa44b9cb01    135.4 KB   annlap         7d       
 
 ## revoke
 
-Revoke a payload fleet-wide. Marks the seed as revoked in the server tracker, records a revocation in the manifest CRDT, and propagates the revocation to all envoys via gossip. Each envoy evicts the payload from its cache upon receiving the revocation; the original seeder additionally removes the source file from `seed/` and moves the cached payload to `graveyard/` for a 7-day grace window (a same-SHA reseed within that window resurrects the content without re-downloading).
+Revoke a filecast fleet-wide. Marks the seed as revoked in the server tracker, records a revocation in the manifest CRDT, and propagates the revocation to all envoys via gossip. Each envoy evicts the payload from its cache upon receiving the revocation; the original seeder additionally removes the source file from `seed/` and moves the cached payload to `graveyard/` for a 7-day grace window (a same-SHA reseed within that window resurrects the content without re-downloading).
 
 On a LAN, all copies are removed within seconds via multicast gossip. Cross-subnet envoys receive the revocation on their next check-in or peer connection.
 
 Accepts a full SHA256 hash or a unique prefix (minimum 6 characters).
 
 ```bash
-vigocli payload revoke <sha256-or-prefix>
+vigocli swarm filecast revoke <sha256-or-prefix>
 ```
 
 ### Example
 
 ```bash
-vigocli payload revoke a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
+vigocli swarm filecast revoke a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
 ```
 
 ```
@@ -217,7 +231,7 @@ To re-distribute the same content after deletion, run `vigocli swarm filecast di
 List seed files with invalid or missing `.swarm` manifests across all envoys. Reports errors detected during the agent's seed trait collection. The on-disk sidecar extension remains `.swarm` — that names the substrate's manifest format, not the content class.
 
 ```bash
-vigocli payload broken
+vigocli swarm filecast broken
 ```
 
 ### Example

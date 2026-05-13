@@ -31,11 +31,16 @@ var filecastDistributeCmd = &cobra.Command{
 	Short: "Seed a file for P2P distribution to envoys",
 	Long: `Places a file in the server's seed directory for P2P distribution.
 The server's agent discovers the seed on the next check-in and auto-distributes
-to envoys matching the target spec. Envoys download from each other over mTLS
-HTTPS on port 1531 (the swarm substrate).
+to envoys matching --target. Envoys download from each other over mTLS HTTPS on
+port 1531 (the swarm substrate).
+
+--target is required — name the recipient set explicitly so a push never goes
+fleet-wide by accident. Patterns are comma-separated; "-" prefix excludes;
+exclusions win over inclusions; "host*" globs; "trait=value" matches a trait.
 
 Examples:
   vigocli swarm filecast distribute agent-0.8.0-linux-amd64.tar.gz --target '*'
+  vigocli swarm filecast distribute image.iso --target '*,-rasp*' --label lmde-3
   vigocli swarm filecast distribute app-v2.tar.gz --target '*.web.*' --label app-v2
   vigocli swarm filecast distribute firmware.bin --target 'dmi.product_name=PowerEdge R750'`,
 	Args: cobra.ExactArgs(1),
@@ -73,6 +78,17 @@ var filecastBrokenCmd = &cobra.Command{
 func runFilecastDistribute(cmd *cobra.Command, args []string) error {
 	filePath := args[0]
 	target, _ := cmd.Flags().GetString("target")
+	if strings.TrimSpace(target) == "" {
+		return fmt.Errorf(`--target is required: name the envoys this file goes to so a push never goes fleet-wide by accident.
+
+  --target '*'                  every envoy
+  --target '*,-raspberrypi'     every envoy except raspberrypi
+  --target '-rasp*'             every envoy except hostnames matching rasp*
+  --target 'danlap,annlap'      just those two
+  --target 'os.distro=ubuntu'   envoys whose os.distro trait is "ubuntu"
+
+Patterns: comma-separated; "-" prefix excludes; exclusions win; "host*" globs; "trait=value" matches.`)
+	}
 	label, _ := cmd.Flags().GetString("label")
 	retention, _ := cmd.Flags().GetString("retention")
 
@@ -430,7 +446,7 @@ func percent(have, need int) int {
 }
 
 func init() {
-	filecastDistributeCmd.Flags().String("target", "*", "Target spec: hostname glob, trait filter (key=value), or '*' for all")
+	filecastDistributeCmd.Flags().String("target", "", "Required — which envoys receive the file: hostname glob, exact hostname, trait filter (key=value), or '*' for all; comma-separated, '-' prefix excludes")
 	filecastDistributeCmd.Flags().String("label", "", "Human-readable label (defaults to filename)")
 	filecastDistributeCmd.Flags().String("retention", "7d", "Auto-evict from agents after this duration (e.g. 7d, 168h); 0 to keep forever")
 
