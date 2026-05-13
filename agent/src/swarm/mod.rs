@@ -17,6 +17,7 @@ pub mod bandwidth;
 pub mod bitmap;
 pub mod cache;
 pub mod cli;
+pub mod curator;
 pub mod lockbox;
 pub mod discovery;
 pub mod download;
