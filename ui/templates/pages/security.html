@@ -128,7 +128,7 @@
                                 <td class="{{if .UniqueHigh}}text-warning{{else}}text-success{{end}}">{{.UniqueHigh}}</td>
                                 <td>{{.UniqueMedium}}</td>
                                 <td>{{.UniqueLow}}</td>
-                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="cves">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -149,7 +149,7 @@
                                 <td class="{{if gt .LynisScore 70}}text-success{{else if gt .LynisScore 50}}text-warning{{else}}text-danger{{end}}">{{.LynisScore}}</td>
                                 <td class="{{if .LynisWarnings}}text-warning{{end}}">{{.LynisWarnings}}</td>
                                 <td>{{.LynisSuggestions}}</td>
-                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="lynis">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -170,7 +170,7 @@
                                 <td class="text-danger">Warning</td>
                                 <td class="{{if .RkhunterWarnings}}text-warning{{end}}">{{.RkhunterWarnings}}</td>
                                 <td class="{{if .ChkrootkitInfected}}text-danger{{end}}">{{.ChkrootkitInfected}}</td>
-                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="{{if .ChkrootkitInfected}}chkrootkit{{else}}rkhunter{{end}}">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -190,7 +190,7 @@
                                 <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="text-danger">Infected</td>
                                 <td class="text-danger">{{.ClamavInfected}}</td>
-                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="clamav">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -199,12 +199,16 @@
             </div>
 
             {{/* ── Cert expiry panel ──
-                 The hostname + three count cells all link to the dedicated
-                 /security/certs/{id} page. Inline expansion was abandoned
+                 The hostname + three count cells link to the dedicated
+                 /security/certs/{id} page (count cells pre-filter via the
+                 bucket query param). Inline row expansion was abandoned
                  because the parent security-status fragment auto-refreshes
-                 on PollInterval — any injected child row would blink out on
-                 the next tick. Count cells pre-filter the destination page
-                 via the bucket query param. */}}
+                 on PollInterval — an injected child row would blink out on
+                 the next tick. The last column's "Scan Details" button opens
+                 the per-host security drawer on its "Certs" tab (data-tab),
+                 same as every other scan panel opens the drawer on its own
+                 tab — the drawer is a fixed overlay outside the polling
+                 fragment, so it doesn't blink. */}}
             <div class="sec-detail" id="sec-panel-certs">
                 <h4>Certificates Expiring Soon</h4>
                 {{if .Certs.PerHost}}
@@ -231,7 +235,7 @@
                                     {{if .ExpiringIn30}}<a href="/security/certs/{{.ID}}?bucket=30d">{{.ExpiringIn30}}</a>
                                     {{else}}0{{end}}
                                 </td>
-                                <td><a href="/security/certs/{{.ID}}" class="btn btn--sm btn--outline">View Certs</a></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="certs">Scan Details</button></td>
                             </tr>
                             {{end}}
                         </tbody>
@@ -255,7 +259,7 @@
                                 <td class="{{if .AideAdded}}text-warning{{end}}">{{.AideAdded}}</td>
                                 <td class="{{if .AideRemoved}}text-danger{{end}}">{{.AideRemoved}}</td>
                                 <td class="{{if .AideChanged}}text-warning{{end}}">{{.AideChanged}}</td>
-                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}" data-tab="aide">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>

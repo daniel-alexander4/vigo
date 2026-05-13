@@ -7497,20 +7497,6 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 		alerts = append(alerts, healthAlert{Level: "warning", Title: "Disk usage above 90%", Count: len(diskFullHosts), Hosts: diskFullHosts})
 	}
 
-	// Critical CVEs check — reads the canonical deduped count
-	// (security_scan.unique_critical), the same key the /security page,
-	// the risk scorer, and the envoy-detail badge use.
-	var cveHosts []string
-	for _, p := range parsed {
-		crit := inventoryTraverse(p.Traits, traits.UniqueCritical)
-		if crit != "-" && crit != "" && crit != "0" {
-			cveHosts = append(cveHosts, p.Hostname+" ("+crit+" critical)")
-		}
-	}
-	if len(cveHosts) > 0 {
-		alerts = append(alerts, healthAlert{Level: "danger", Title: "Critical CVEs detected", Count: len(cveHosts), Hosts: cveHosts})
-	}
-
 	// Fleet diversity score.
 	uniqueOS := len(osCounts)
 	uniqueArch := len(archCounts)

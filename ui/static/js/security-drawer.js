@@ -38,11 +38,16 @@
     };
 
     // "Scan Details" click → HTMX-load the drawer fragment, then open.
+    // data-tab (optional) pre-selects a drawer tab by slug — the hash
+    // drives both the :target pane CSS and updateActiveTab() (which fires
+    // on the afterSwap below). A slug with no matching section falls back
+    // to the first tab via the same machinery, so it's always safe.
     document.addEventListener('click', function (e) {
         const btn = e.target.closest('.sec-detail-btn');
         if (!btn) return;
         const envoyID = btn.dataset.id;
         if (!envoyID) return;
+        if (btn.dataset.tab) window.location.hash = '#sec-pane-' + btn.dataset.tab;
         if (window.htmx) {
             window.htmx.ajax('GET', '/ui/fragments/security-envoy/' + envoyID, '#sec-drawer-content');
         }
