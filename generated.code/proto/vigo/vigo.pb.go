@@ -336,6 +336,7 @@ type CheckInResponse struct {
 	TunnelRequested     bool                   `protobuf:"varint,17,opt,name=tunnel_requested,json=tunnelRequested,proto3" json:"tunnel_requested,omitempty"`           // server wants agent to open a TunnelStream (Scrier)
 	ManifestEntries     []*SwarmManifestEntry  `protobuf:"bytes,20,rep,name=manifest_entries,json=manifestEntries,proto3" json:"manifest_entries,omitempty"`            // manifest updates for gossip (revocations, new seeds)
 	SwarmRuntimeLimits  *SwarmRuntimeLimits    `protobuf:"bytes,23,opt,name=swarm_runtime_limits,json=swarmRuntimeLimits,proto3" json:"swarm_runtime_limits,omitempty"` // per-subsystem operational caps (size, retention) sourced from server.yaml; replaces hardcoded constants on the agent
+	CuratorCatalog      []byte                 `protobuf:"bytes,24,opt,name=curator_catalog,json=curatorCatalog,proto3" json:"curator_catalog,omitempty"`               // ADR-024: JSON-encoded array of curator CatalogEntry — the fleet artifact catalog, cached agent-side so resolution survives a server outage. The server's resolve endpoint still owns access (recipients) enforcement; the agent self-gates at materialization.
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -499,6 +500,13 @@ func (x *CheckInResponse) GetManifestEntries() []*SwarmManifestEntry {
 func (x *CheckInResponse) GetSwarmRuntimeLimits() *SwarmRuntimeLimits {
 	if x != nil {
 		return x.SwarmRuntimeLimits
+	}
+	return nil
+}
+
+func (x *CheckInResponse) GetCuratorCatalog() []byte {
+	if x != nil {
+		return x.CuratorCatalog
 	}
 	return nil
 }
@@ -7539,7 +7547,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x15last_checkin_delta_ms\x18\f \x01(\rR\x12lastCheckinDeltaMs\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9e\a\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc7\a\n" +
 	"\x0fCheckInResponse\x12)\n" +
 	"\amodules\x18\x01 \x03(\v2\x0f.vigo.v1.ModuleR\amodules\x12\x1a\n" +
 	"\binterval\x18\x02 \x01(\tR\binterval\x12%\n" +
@@ -7561,7 +7569,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12F\n" +
 	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\x12M\n" +
-	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimitsJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xec\x03\n" +
+	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimits\x12'\n" +
+	"\x0fcurator_catalog\x18\x18 \x01(\fR\x0ecuratorCatalogJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xec\x03\n" +
 	"\x12SwarmRuntimeLimits\x125\n" +
 	"\x17filecast_max_size_bytes\x18\x01 \x01(\x04R\x14filecastMaxSizeBytes\x12<\n" +
 	"\x1afilecast_default_retention\x18\x02 \x01(\tR\x18filecastDefaultRetention\x123\n" +

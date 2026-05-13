@@ -394,6 +394,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		// learns and the on-disk manifest stays at the cold-start version.
 		resp.ManifestEntries = s.collectManifestEntries()
 		resp.SwarmRuntimeLimits = s.buildSwarmRuntimeLimits()
+		resp.CuratorCatalog = s.curatorCatalogBytes()
 		return resp, nil
 	}
 
@@ -449,6 +450,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 		resp.ManifestEntries = s.collectManifestEntries()
 		resp.SwarmRuntimeLimits = s.buildSwarmRuntimeLimits()
+		resp.CuratorCatalog = s.curatorCatalogBytes()
 		return resp, nil
 	}
 
@@ -699,10 +701,13 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 	}
 
-	// Swarm: ship the manifest CRDT and the operator-tunable runtime
-	// limits (max sizes + envelope retention) sourced from server.yaml.
+	// Swarm: ship the manifest CRDT, the operator-tunable runtime limits
+	// (max sizes + envelope retention) sourced from server.yaml, and the
+	// curator artifact catalog (ADR-024) so agents can resolve through a
+	// server outage.
 	resp.ManifestEntries = s.collectManifestEntries()
 	resp.SwarmRuntimeLimits = s.buildSwarmRuntimeLimits()
+	resp.CuratorCatalog = s.curatorCatalogBytes()
 
 	// Build ProxiedDevice list for gateway envoys. Network devices whose
 	// gateway field matches this envoy's hostname get their resolved config

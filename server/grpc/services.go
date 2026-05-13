@@ -6,6 +6,7 @@ package grpc
 import (
 	"context"
 	"log/slog"
+	"sync/atomic"
 	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
@@ -68,6 +69,13 @@ type AgentService struct {
 	peerTracker        *swarm.PeerTracker       // swarm peer tracker (nil when swarm disabled)
 	manifestStore      *swarm.ManifestStore     // swarm manifest CRDT (nil when swarm disabled)
 	swarmCfg           config.SwarmSection      // swarm config section (subsystem blacklists, etc.)
+	// curatorCatalog holds the JSON-encoded fleet artifact catalog (ADR-024) —
+	// the same `[]curatormesh.CatalogEntry` the curator feed reactor (server/main.go)
+	// produces every cycle for the swarm.ManifestStore feed. Attached verbatim to
+	// every CheckInResponse so agents cache it and can resolve through a server
+	// outage. Producer: the feed reactor via SetCuratorCatalog; consumers: the
+	// check-in handler. nil until the first feed cycle (or when swarm is disabled).
+	curatorCatalog atomic.Pointer[[]byte]
 }
 
 // workflowTriggerer is the interface for auto-triggering workflows on trait changes.
@@ -126,6 +134,28 @@ func (s *AgentService) SetSwarm(pt *swarm.PeerTracker, ms *swarm.ManifestStore) 
 // check-in time.
 func (s *AgentService) SetSwarmConfig(sc config.SwarmSection) {
 	s.swarmCfg = sc
+}
+
+// SetCuratorCatalog stores the JSON-encoded fleet artifact catalog the curator
+// feed reactor produces each cycle; the check-in handler ships it to agents
+// verbatim. Passing nil or an empty slice clears it. Cheap (atomic pointer
+// swap) so the feed reactor can call it freely.
+func (s *AgentService) SetCuratorCatalog(b []byte) {
+	if len(b) == 0 {
+		s.curatorCatalog.Store(nil)
+		return
+	}
+	bb := b
+	s.curatorCatalog.Store(&bb)
+}
+
+// curatorCatalogBytes returns the latest JSON-encoded catalog, or nil if the
+// feed reactor hasn't produced one yet (or swarm is disabled).
+func (s *AgentService) curatorCatalogBytes() []byte {
+	if b := s.curatorCatalog.Load(); b != nil {
+		return *b
+	}
+	return nil
 }
 
 // DispatchCleanup fans `vigo swarm _apply-cleanup` out to every envoy

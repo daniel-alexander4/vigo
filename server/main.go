@@ -64,6 +64,7 @@ import (
 	"git.alexander4.io/vigo/server/peer"
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/swarm"
+	"git.alexander4.io/vigo/server/swarm/curatormesh"
 	"git.alexander4.io/vigo/server/traits"
 	"git.alexander4.io/vigo/server/watcher"
 	"git.alexander4.io/vigo/server/workflows"
@@ -1220,6 +1221,16 @@ func run() error {
 			uiHandler.SetSwarm(peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex}, cfg.Swarm)
 			slog.Info("swarm enabled", "seed_dir", seedDir, "port", cfg.Swarm.Port)
 
+			// Curator (ADR-024): reconcile the fleet artifact catalog's
+			// per-platform blobs into the authoritative manifest store —
+			// so the existing filecast distribution machinery carries
+			// curator artifact bytes fleet-wide, including to cross-subnet
+			// and swarm-disabled envoys — and ship the catalog to agents
+			// on every check-in (cached so resolution survives a server
+			// outage). On a timer; publishes are ad hoc, so a few-minute
+			// distribution latency is fine for a registry.
+			go runCuratorFeed(ctx, curatormesh.NewAggregator(queries), manifestStore, fleetIndex, agentSvc, 5*time.Minute)
+
 			// Track pattern lists across reloads so we can audit operator
 			// edits to each subsystem's authorization. Patterns are what
 			// the operator actually edited in YAML — per-host transition
@@ -2286,6 +2297,69 @@ func parseLivenessTTL(s string) time.Duration {
 		return 0
 	}
 	return d
+}
+
+// runCuratorFeed periodically (every `interval`, with a first pass after a
+// short delay) rebuilds the fleet artifact catalog (ADR-024) via curatormesh,
+// reconciles its per-platform blobs into the authoritative `swarm.ManifestStore`
+// — `RecordSeed` for blobs the catalog still references, `Revoke` for `curator:*`
+// entries it no longer does — and hands the marshaled catalog to the agent
+// service so it rides every CheckInResponse. Blocks until ctx is cancelled.
+func runCuratorFeed(ctx context.Context, agg *curatormesh.Aggregator, store *swarm.ManifestStore, fleetIdx *fleet.FleetIndex, agentSvc *isgrpc.AgentService, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(20 * time.Second): // let the fleet index rehydrate first
+		curatorFeedOnce(ctx, agg, store, fleetIdx, agentSvc)
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			curatorFeedOnce(ctx, agg, store, fleetIdx, agentSvc)
+		}
+	}
+}
+
+func curatorFeedOnce(ctx context.Context, agg *curatormesh.Aggregator, store *swarm.ManifestStore, fleetIdx *fleet.FleetIndex, agentSvc *isgrpc.AgentService) {
+	cat, err := agg.Snapshot(ctx, curatorEnvoyInputs(fleetIdx))
+	if err != nil {
+		slog.Warn("curator feed: catalog snapshot failed", "error", err)
+		return
+	}
+	desired := curatormesh.ManifestBlobs(cat)
+	present := make(map[string]struct{}, len(desired))
+	for _, b := range desired {
+		present[b.SHA256] = struct{}{}
+		store.RecordSeed(b.SHA256, b.Label, b.Target, "", "curator-catalog", b.Size)
+	}
+	for _, e := range store.Entries() {
+		if e.Status == "active" && strings.HasPrefix(e.Label, curatormesh.ManifestLabelPrefix) {
+			if _, ok := present[e.SHA256]; !ok {
+				store.Revoke(e.SHA256)
+			}
+		}
+	}
+	if b, err := json.Marshal(cat.Artifacts); err == nil {
+		agentSvc.SetCuratorCatalog(b)
+	} else {
+		slog.Warn("curator feed: marshal catalog failed", "error", err)
+	}
+}
+
+func curatorEnvoyInputs(fleetIdx *fleet.FleetIndex) []curatormesh.EnvoyInput {
+	if fleetIdx == nil {
+		return nil
+	}
+	envoys := fleetIdx.AllEnvoys()
+	out := make([]curatormesh.EnvoyInput, 0, len(envoys))
+	for _, e := range envoys {
+		out = append(out, curatormesh.EnvoyInput{ID: e.ID, Hostname: e.Hostname, Revoked: e.Revoked})
+	}
+	return out
 }
 
 // sameStringSet reports whether `a` and `b` contain the same elements

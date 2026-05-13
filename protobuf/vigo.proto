@@ -281,6 +281,7 @@ message CheckInResponse {
   reserved "rejected_seeds", "cairn_claims";
   repeated SwarmManifestEntry manifest_entries = 20; // manifest updates for gossip (revocations, new seeds)
   SwarmRuntimeLimits swarm_runtime_limits = 23;     // per-subsystem operational caps (size, retention) sourced from server.yaml; replaces hardcoded constants on the agent
+  bytes curator_catalog = 24;                       // ADR-024: JSON-encoded array of curator CatalogEntry — the fleet artifact catalog, cached agent-side so resolution survives a server outage. The server's resolve endpoint still owns access (recipients) enforcement; the agent self-gates at materialization.
 }
 
 // SwarmRuntimeLimits carries per-subsystem operational caps from the
