@@ -132,6 +132,27 @@ pub fn record_retention(sha256: &str, retention_seconds: u64, state: &StateStore
     }
 }
 
+/// Load and flatten the agent's most recently cached traits (any age) into the
+/// dotted-key map [`target::match_target`] uses for `key=value` swarm
+/// self-assignment patterns. Returns an empty map when no traits are cached or
+/// the cache can't be read/parsed — hostname-glob targets still work; only
+/// `key=value` targets depend on this. Cached traits can be stale (bounded by
+/// the check-in cadence); for self-assignment, stale traits beat no traits.
+pub fn cached_traits(state: &StateStore) -> std::collections::HashMap<String, String> {
+    let rtxn = match state.read_txn() {
+        Ok(t) => t,
+        Err(_) => return std::collections::HashMap::new(),
+    };
+    let json = match state.traits.load_any(&rtxn) {
+        Ok(Some(j)) => j,
+        _ => return std::collections::HashMap::new(),
+    };
+    match serde_json::from_slice::<serde_json::Value>(&json) {
+        Ok(v) => target::flatten_traits(&v),
+        Err(_) => std::collections::HashMap::new(),
+    }
+}
+
 /// Evict expired swarm blobs from the cache based on retention timestamps in LMDB.
 pub fn evict_expired(state: &StateStore) {
     let rtxn = match state.read_txn() {
@@ -732,4 +753,30 @@ pub(crate) fn download_jitter(sha256: &str) -> u64 {
     hostname.hash(&mut hasher);
     sha256.hash(&mut hasher);
     hasher.finish() % MAX_DOWNLOAD_JITTER_MS
+}
+
+#[cfg(test)]
+mod cached_traits_tests {
+    use super::*;
+
+    #[test]
+    fn test_cached_traits_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = StateStore::open(dir.path()).unwrap();
+
+        // Nothing cached yet → empty map (so a `trait=value` target just
+        // matches nothing, rather than the call panicking).
+        assert!(cached_traits(&store).is_empty());
+
+        let mut wtxn = store.write_txn().unwrap();
+        store
+            .traits
+            .store(&mut wtxn, br#"{"os":{"distro":"ubuntu"},"is_container":false}"#)
+            .unwrap();
+        wtxn.commit().unwrap();
+
+        let f = cached_traits(&store);
+        assert_eq!(f.get("os.distro").map(String::as_str), Some("ubuntu"));
+        assert_eq!(f.get("is_container").map(String::as_str), Some("false"));
+    }
 }

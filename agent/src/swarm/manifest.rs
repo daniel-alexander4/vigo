@@ -667,4 +667,40 @@ mod tests {
         wanted.insert("gitback:danlap:dan:proj".to_string());
         assert!(manifest.entries_for_labels(&wanted).is_empty());
     }
+
+    #[test]
+    fn test_assignments_for() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = Manifest::load(dir.path());
+
+        manifest.record_seed("aaa", "blob-a", "os.distro=ubuntu", "7d", "danlap", 100, "");
+        manifest.record_seed("bbb", "blob-b", "*,-rasp*", "7d", "danlap", 100, "");
+        // Claim-only label — never self-assigned regardless of its target spec.
+        manifest.record_seed("ccc", "gitback:danlap:dan:proj", "*", "7d", "danlap", 100, "");
+
+        let ubuntu: std::collections::HashMap<String, String> =
+            [("os.distro".to_string(), "ubuntu".to_string())].into_iter().collect();
+        let debian: std::collections::HashMap<String, String> =
+            [("os.distro".to_string(), "debian".to_string())].into_iter().collect();
+        let labels = |v: Vec<BlobEntry>| -> std::collections::HashSet<String> {
+            v.into_iter().map(|e| e.label).collect()
+        };
+
+        // danlap + ubuntu: gets the trait-matched blob AND the not-rasp blob;
+        // never the claim-only one.
+        let got = labels(manifest.assignments_for("danlap", &ubuntu));
+        assert!(got.contains("blob-a"), "trait target matched");
+        assert!(got.contains("blob-b"), "danlap is not rasp*");
+        assert!(!got.contains("gitback:danlap:dan:proj"), "claim-only labels are never self-assigned");
+
+        // danlap + debian: the trait target no longer matches.
+        let got = labels(manifest.assignments_for("danlap", &debian));
+        assert!(!got.contains("blob-a"));
+        assert!(got.contains("blob-b"));
+
+        // raspberrypi: -rasp* on blob-b excludes it; the trait blob still matches.
+        let got = labels(manifest.assignments_for("raspberrypi", &ubuntu));
+        assert!(got.contains("blob-a"), "trait still matches on raspberrypi");
+        assert!(!got.contains("blob-b"), "-rasp* excludes raspberrypi");
+    }
 }

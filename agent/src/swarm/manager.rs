@@ -255,8 +255,17 @@ async fn run(
                             }
                         }
 
-                        // Self-assignment: evaluate manifest target specs locally.
-                        let traits = std::collections::HashMap::new(); // TODO: pass cached traits
+                        // Self-assignment: evaluate manifest target specs locally
+                        // against this envoy's hostname + its most recently
+                        // cached traits (so `--target 'os.distro=ubuntu'`-style
+                        // specs resolve here, not just hostname globs). Re-read
+                        // each manifest update so trait changes are picked up;
+                        // empty map (no cache / parse error) ⇒ hostname-only
+                        // matching, same as before.
+                        let traits = state
+                            .as_ref()
+                            .map(|s| super::cached_traits(s))
+                            .unwrap_or_default();
                         let mut matched = manifest.assignments_for(&hostname, &traits);
 
                         // Gitback claim-driven downloads. The gitback content

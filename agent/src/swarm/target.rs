@@ -5,9 +5,15 @@
 //!
 //! Port of `server/swarm/target.go` `MatchTarget()`. Supports comma-separated
 //! patterns with `-` prefix for exclusion, glob matching on hostnames, and
-//! `key=value` trait matching.
+//! `key=value` trait matching. [`flatten_traits`] (a port of
+//! `server/fleet/index.go::FlattenJSON`) turns this envoy's nested traits JSON
+//! into the dotted-key map the `key=value` patterns match against, so the
+//! agent's self-assignment and the server's `vigocli swarm filecast match`
+//! count agree.
 
 use std::collections::HashMap;
+
+use serde_json::Value;
 
 /// Check whether this agent matches a target spec.
 ///
@@ -109,6 +115,52 @@ fn glob_match(pattern: &str, text: &str) -> bool {
     true
 }
 
+/// Flatten a nested traits JSON value into the dotted-key
+/// `HashMap<String, String>` that [`match_target`]'s `key=value` patterns
+/// expect — a port of `server/fleet/index.go::FlattenJSON`. Nested objects
+/// produce dotted keys (`os.distro`); arrays produce `key.0`, `key.1`, …;
+/// string leaves and string array elements are stored verbatim; numbers,
+/// bools, and null are JSON-stringified (`42` → `"42"`, `true` → `"true"`,
+/// `null` → `"null"`), matching Go's `json.Marshal`.
+pub fn flatten_traits(value: &Value) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    flatten_into("", value, &mut out);
+    out
+}
+
+fn flatten_into(prefix: &str, value: &Value, out: &mut HashMap<String, String>) {
+    let dotted = |key: &str| -> String {
+        if prefix.is_empty() {
+            key.to_string()
+        } else {
+            format!("{prefix}.{key}")
+        }
+    };
+    match value {
+        Value::Object(map) => {
+            for (k, v) in map {
+                flatten_into(&dotted(k), v, out);
+            }
+        }
+        Value::Array(arr) => {
+            for (i, v) in arr.iter().enumerate() {
+                flatten_into(&dotted(&i.to_string()), v, out);
+            }
+        }
+        Value::String(s) => {
+            if !prefix.is_empty() {
+                out.insert(prefix.to_string(), s.clone());
+            }
+        }
+        // Number / Bool / Null — same as the server's json.Marshal fallback.
+        other => {
+            if !prefix.is_empty() {
+                out.insert(prefix.to_string(), other.to_string());
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,5 +224,29 @@ mod tests {
     fn test_glob_question_mark() {
         assert!(match_target("web-01", &HashMap::new(), "web-0?"));
         assert!(!match_target("web-01", &HashMap::new(), "web-?"));
+    }
+
+    #[test]
+    fn test_flatten_traits() {
+        let v = serde_json::json!({
+            "os": {"family": "linux", "distro": "ubuntu"},
+            "version": "22.04",
+            "mem": {"total_bytes": 8589934592i64},
+            "is_container": false,
+            "users": {"human": ["dan", "ann"], "logged_in": []},
+        });
+        let f = flatten_traits(&v);
+        assert_eq!(f.get("os.family").map(String::as_str), Some("linux"));
+        assert_eq!(f.get("os.distro").map(String::as_str), Some("ubuntu"));
+        assert_eq!(f.get("version").map(String::as_str), Some("22.04"));
+        assert_eq!(f.get("mem.total_bytes").map(String::as_str), Some("8589934592"));
+        assert_eq!(f.get("is_container").map(String::as_str), Some("false"));
+        assert_eq!(f.get("users.human.0").map(String::as_str), Some("dan"));
+        assert_eq!(f.get("users.human.1").map(String::as_str), Some("ann"));
+        // Empty array contributes nothing.
+        assert!(f.keys().all(|k| !k.starts_with("users.logged_in")));
+        // A flattened trait map then drives match_target's `key=value` patterns.
+        assert!(match_target("web-01", &f, "os.distro=ubuntu"));
+        assert!(!match_target("web-01", &f, "os.distro=debian"));
     }
 }
