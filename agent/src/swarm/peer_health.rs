@@ -4,7 +4,7 @@
 //! Shared peer disk-pressure probe.
 //!
 //! Before any of the four peer-delivery subsystems (swarm pull, lockbox push,
-//! swarmgit push, longdrawer announce) commits bytes to a remote peer, the sender
+//! gitback push, longdrawer announce) commits bytes to a remote peer, the sender
 //! asks the peer "how full is the filesystem this will land on?" over the
 //! existing mTLS HTTPS on port 1531 (`GET /health/storage`). If the peer
 //! reports `free_pct <= DEFAULT_MIN_FREE_PCT` (10%), the send is skipped —
@@ -19,7 +19,7 @@
 //! The [`Purpose`] enum captures which mountpoint the receiver should
 //! measure — the subsystems write to different directories that may sit
 //! on different filesystems (`/var/lib/vigo/swarm/.blobs`,
-//! `/var/lib/vigo/swarm/swarmgit`, `~<user>/lockbox`, `~<user>/longdrawer`).
+//! `/var/lib/vigo/swarm/gitback`, `~<user>/lockbox`, `~<user>/longdrawer`).
 //!
 //! Symmetrically, receivers call [`local_free_pct`] to compute their own
 //! free-pct for a given purpose — used both to answer probe requests and
@@ -67,8 +67,8 @@ const PEER_PORT: u16 = 1531;
 pub enum Purpose {
     /// Swarm blob cache: `/var/lib/vigo/swarm/.blobs`.
     Swarm,
-    /// Swarmgit mirror store: `/var/lib/vigo/swarm/swarmgit`.
-    Swarmgit,
+    /// Gitback mirror store: `/var/lib/vigo/swarm/gitback`.
+    Gitback,
     /// Lockbox per-user ciphertext: `~<user>/lockbox`.
     Lockbox { user: String },
     /// Longdrawer per-user plaintext: `~<user>/longdrawer`.
@@ -80,7 +80,7 @@ impl Purpose {
     pub fn tag(&self) -> &'static str {
         match self {
             Purpose::Swarm => "swarm",
-            Purpose::Swarmgit => "swarmgit",
+            Purpose::Gitback => "gitback",
             Purpose::Lockbox { .. } => "lockbox",
             Purpose::Longdrawer { .. } => "longdrawer",
         }
@@ -107,7 +107,7 @@ impl Purpose {
     pub fn parse(kind: &str, user: Option<&str>) -> Option<Self> {
         match (kind, user) {
             ("swarm", _) => Some(Purpose::Swarm),
-            ("swarmgit", _) => Some(Purpose::Swarmgit),
+            ("gitback", _) => Some(Purpose::Gitback),
             ("lockbox", Some(u)) if !u.is_empty() => Some(Purpose::Lockbox { user: u.to_string() }),
             ("longdrawer", Some(u)) if !u.is_empty() => Some(Purpose::Longdrawer { user: u.to_string() }),
             _ => None,
@@ -197,7 +197,7 @@ pub fn local_free_pct(purpose: &Purpose) -> Option<f64> {
 pub fn target_path(purpose: &Purpose) -> Option<PathBuf> {
     match purpose {
         Purpose::Swarm => Some(crate::platform::paths::default_blobs_dir()),
-        Purpose::Swarmgit => Some(crate::platform::paths::default_swarmgit_dir()),
+        Purpose::Gitback => Some(crate::platform::paths::default_gitback_dir()),
         Purpose::Lockbox { user } => {
             crate::platform::users::user_home(user).map(|h| h.join("lockbox"))
         }
@@ -388,7 +388,7 @@ mod tests {
             Some(Purpose::Lockbox { user: "alice".into() })
         );
         assert_eq!(Purpose::parse("swarm", None), Some(Purpose::Swarm));
-        assert_eq!(Purpose::parse("swarmgit", Some("ignored")), Some(Purpose::Swarmgit));
+        assert_eq!(Purpose::parse("gitback", Some("ignored")), Some(Purpose::Gitback));
         assert_eq!(Purpose::parse("lockbox", None), None);
         assert_eq!(Purpose::parse("longdrawer", Some("")), None);
         assert_eq!(Purpose::parse("bogus", None), None);

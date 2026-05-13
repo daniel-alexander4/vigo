@@ -42,8 +42,8 @@ Because each hash incorporates the previous entry's hash, modifying or deleting 
 | `task.dispatch` | Ad-hoc task dispatched | "uptime on *.web.*" |
 | `peer.promote` | Peer promoted to primary | "peer2 promoted" |
 | `swarm.enabled` | Substrate-level pattern list changed at config publish | "added: \*; removed: -rasp1" |
-| `swarm.<sub>.enabled` | Per-subsystem (`puddle`/`swarmgit`/`longdrawer`/`payload`) pattern list changed at config publish | "added: annlap, plex; removed: \*" |
-| `swarm.swarmcast.denied` | Admin attempted `POST /api/v1/swarm/swarmcast/distribute` while subsystem disabled | "swarmcast subsystem is disabled (swarm.swarmcast.enabled: \[\])" |
+| `swarm.<sub>.enabled` | Per-subsystem (`puddle`/`gitback`/`longdrawer`/`payload`) pattern list changed at config publish | "added: annlap, plex; removed: \*" |
+| `swarm.filecast.denied` | Admin attempted `POST /api/v1/swarm/filecast/distribute` while subsystem disabled | "filecast subsystem is disabled (swarm.filecast.enabled: \[\])" |
 
 The audit trail is always on. There is no configuration to disable it.
 

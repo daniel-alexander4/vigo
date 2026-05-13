@@ -92,14 +92,14 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 //   - swarm.cryptsync.* — retired (renamed to swarm.lockbox.* in this
 //     release; authorization still derives from swarm.puddle.enabled
 //     per ADR-020).
-//   - swarm.gitmirror.* — retired (renamed to swarm.swarmgit.* in
+//   - swarm.gitmirror.* — retired (renamed to swarm.gitback.* in
 //     this release).
 //   - swarm.<sub>.blacklist — retired across all sub-subsections in
 //     0.41.0 (subsumed by negative patterns in the new pattern-list shape).
 //   - swarm.enabled / swarm.<sub>.enabled as a bool — retired in 0.41.0
 //     (now a pattern list of hostname globs).
-//   - swarm.payload.* — retired in the swarmcast rename; the same
-//     authorization lives at swarm.swarmcast.* now.
+//   - swarm.payload.* — retired in the filecast rename; the same
+//     authorization lives at swarm.filecast.* now.
 //   - swarm.filesync.* — retired in the longdrawer rename; the same
 //     authorization lives at swarm.longdrawer.* now.
 //
@@ -136,13 +136,13 @@ func detectRetiredSwarmShape(data []byte) error {
 		retired = append(retired, "swarm.puddle.enabled is a bool but must be a pattern list")
 	}
 	if raw.Swarm.Gitmirror != nil {
-		retired = append(retired, "swarm.gitmirror.* — retired in the swarmgit rename; move the entire section to swarm.swarmgit.* (same fields)")
+		retired = append(retired, "swarm.gitmirror.* — retired in the gitback rename; move the entire section to swarm.gitback.* (same fields)")
 	}
 	if raw.Swarm.Filesync != nil {
 		retired = append(retired, "swarm.filesync.* — retired in the longdrawer rename; move the entire section to swarm.longdrawer.* (same fields)")
 	}
 	if raw.Swarm.Payload != nil {
-		retired = append(retired, "swarm.payload.* — retired in the swarmcast rename; move the entire section to swarm.swarmcast.* (same fields)")
+		retired = append(retired, "swarm.payload.* — retired in the filecast rename; move the entire section to swarm.filecast.* (same fields)")
 	}
 	if len(retired) == 0 {
 		return nil

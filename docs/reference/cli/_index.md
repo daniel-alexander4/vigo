@@ -3,7 +3,7 @@
 
 Vigo has two CLI binaries:
 
-- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the read-only [`vigo swarm` diagnostic verbs](agent-swarm.md) (`status` / `seeds {list,show}` / `peers list`) for envoy-side substrate inspection, the [`vigo swarm swarmgit` recovery CLI](agent-swarm-swarmgit.md) for inspecting and recovering personal-DR git mirrors, the [`vigo swarm lockbox` CLI](agent-swarm-lockbox.md) for managing [lockbox](../../engineering/subsystems/lockbox.md) — the per-user encrypted P2P directory, and the [`vigo swarm puddle` CLI](agent-swarm-puddle.md) for managing [puddle](../../engineering/subsystems/puddle.md) — the per-user puddle identity primitive.
+- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the read-only [`vigo swarm` diagnostic verbs](agent-swarm.md) (`status` / `seeds {list,show}` / `peers list`) for envoy-side substrate inspection, the [`vigo swarm gitback` recovery CLI](agent-swarm-gitback.md) for inspecting and recovering personal-DR git mirrors, the [`vigo swarm lockbox` CLI](agent-swarm-lockbox.md) for managing [lockbox](../../engineering/subsystems/lockbox.md) — the per-user encrypted P2P directory, and the [`vigo swarm puddle` CLI](agent-swarm-puddle.md) for managing [puddle](../../engineering/subsystems/puddle.md) — the per-user puddle identity primitive.
 - **`vigocli`** -- the admin CLI that talks to the server's REST API (documented below).
 
 ---
@@ -54,8 +54,8 @@ Vigo has two CLI binaries:
 | [cve](cve.md) | Search the fleet for hosts affected by a specific CVE |
 | [license](license.md) | View license status and manage license keys |
 | [swarm](swarm.md) | Substrate-level view of the envoy P2P network (status + peers) |
-| [payload](swarm-swarmcast.md) | Admin-pushed file distribution on the swarm substrate |
-| [swarmgit](swarm-swarmgit.md) | Fleet-wide read-only view of swarmgit personal-DR mirrors |
+| [payload](swarm-filecast.md) | Admin-pushed file distribution on the swarm substrate |
+| [gitback](swarm-gitback.md) | Fleet-wide read-only view of gitback personal-DR mirrors |
 | [longdrawer](swarm-longdrawer.md) | Fleet-wide read-only view of the longdrawer per-user directory sync mesh |
 | [lockbox](swarm-lockbox.md) | Fleet-wide read-only view of the lockbox per-user encrypted directory sync mesh |
 | [puddle](swarm-puddle.md) | Cross-envoy puddle ops — eviction + the fleet friendly-name map (ADR-022) |

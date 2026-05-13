@@ -269,7 +269,7 @@ Both `swarm.enabled` AND `swarm.puddle.enabled` must allow the host. The agent's
 
 When a host falls out of the pattern list, the announcer / listener / push handler all idle on the next check-in. Already-wrapped identity material under `~user/.lockbox/` and ciphertext under `~user/lockbox/` are preserved — gate flips are pause/resume, not evict.
 
-The destructive lever moved to the **usercrate `puddle: bool` flag** (0.41.0). Removing `puddle: true` from a usercrate triggers a scrub on the next reconcile pass: queue a lockbox LEAVE sentinel for fan-out, then wipe `~/.vigo-puddle/`, `~/.lockbox/`, `~/lockbox/`, and `~/.vigo-swarmgit/` for that user. See [swarm Operability](swarm.md#operability--pattern-list-authorization) for the full picture.
+The destructive lever moved to the **usercrate `puddle: bool` flag** (0.41.0). Removing `puddle: true` from a usercrate triggers a scrub on the next reconcile pass: queue a lockbox LEAVE sentinel for fan-out, then wipe `~/.vigo-puddle/`, `~/.lockbox/`, `~/lockbox/`, and `~/.vigo-gitback/` for that user. See [swarm Operability](swarm.md#operability--pattern-list-authorization) for the full picture.
 
 Pattern-list changes record tamper-evident audit-chain entries (`swarm.puddle.enabled`) under `actor=config.reload` at publish time.
 
@@ -293,7 +293,7 @@ Lose the password on every envoy and the data is unrecoverable. Phase 1 has no k
 
 Every enrolled envoy ships a `lockbox` trait on each check-in carrying per-user state: file count, `recent_files: [last 20 by mtime]`, ciphertext SHA-256 digest, tombstone count + recent deletions, known peers (hostname + pubkey + sign_pubkey), and the current session-helper-unlocked signal. The server-side aggregator (`server/lockboxmesh/`) joins these across the fleet to power the `/lockbox` page.
 
-The `/longdrawer`, `/lockbox`, `/swarmgit` pages and every mesh endpoint (`/api/v1/swarm/longdrawer/*`, `/api/v1/swarm/lockbox/*`, `/api/v1/swarm/swarmgit/fleet`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't appropriate for non-admin roles. Viewer and compliance-role users get a 403 on direct access and don't see the nav links. The legacy `/mesh` URL 301-redirects to `/longdrawer` (or `/lockbox` with `?tab=crypt`) for one release while muscle memory migrates.
+The `/longdrawer`, `/lockbox`, `/gitback` pages and every mesh endpoint (`/api/v1/swarm/longdrawer/*`, `/api/v1/swarm/lockbox/*`, `/api/v1/swarm/gitback/fleet`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't appropriate for non-admin roles. Viewer and compliance-role users get a 403 on direct access and don't see the nav links. The legacy `/mesh` URL 301-redirects to `/longdrawer` (or `/lockbox` with `?tab=crypt`) for one release while muscle memory migrates.
 
 Operator-facing signals surfaced on that page:
 
@@ -310,4 +310,4 @@ Ciphertext SHA-256 is cached per-(filename, mtime, size) at `/var/lib/vigo/swarm
 
 - **Longdrawer** is the plaintext sibling. Lockbox does not replace it; pick whichever matches the threat model.
 - **Swarm** handles fleet-wide blob distribution (Vigo-managed content). Lockbox rides on the same mTLS peer server (port 1531) but uses its own routes, its own multicast group (224.0.0.44:1533), and its own peer table — no shared state.
-- **Swarmgit** is the git-repo sibling for personal DR. Similar opt-in pattern; different subsystem entirely.
+- **Gitback** is the git-repo sibling for personal DR. Similar opt-in pattern; different subsystem entirely.

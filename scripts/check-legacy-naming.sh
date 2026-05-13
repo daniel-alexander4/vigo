@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
-# check-legacy-naming.sh — fail if any tracked file still uses the
-# pre-0.31.0 substrate vocabulary.
+# check-legacy-naming.sh — fail if any tracked file still uses a
+# retired subsystem/vocabulary name.
 #
 # Substrate rename map (committed in 0.31.0):
 #   lode    -> payload     (admin-pushed binary distribution)
-#   cairn   -> swarmgit   (P2P git repo backup)
-#   echo    -> longdrawer    (LAN plaintext per-user dir sync)
-#   sigil   -> lockbox   (LAN encrypted per-user dir sync)
+#   cairn   -> swarmgit    (P2P git repo backup) — itself retired in 0.50.0, see below
+#   echo    -> longdrawer  (LAN plaintext per-user dir sync)
+#   sigil   -> lockbox     (LAN encrypted per-user dir sync)
 #   stones  -> modules     (config primitive directory)
+#
+# Swarm-subsystem rename map (committed in 0.50.0):
+#   swarmcast    -> filecast   (admin-pushed fleet file distribution)
+#   swarmgit     -> gitback    (git over swarm; swarmgitmesh -> gitbackmesh,
+#                               git-remote-swarmgit -> git-remote-gitback,
+#                               swarmgit:// -> gitback://)
+#   swarmresolve -> hostdox    (agent-managed /etc/hosts block from peer gossip)
+#   swarmreg     -> curator    (planned P2P artifact registry, ADR-024)
 #
 # This script greps every tracked source/doc/config file for the legacy
 # tokens and the legacy filesystem/REST paths. Exit 1 on any match
@@ -45,6 +53,24 @@ TOKENS=(
   '\bstones\b'
   '\bStones\b'
   '\bSTONES\b'
+  # --- 0.50.0 swarm-subsystem rename ---
+  '\bswarmcast\b'
+  '\bSwarmcast\b'
+  '\bSWARMCAST\b'
+  '\bswarmgit\b'
+  '\bSwarmgit\b'
+  '\bSWARMGIT\b'
+  '\bswarmgitmesh\b'
+  '\bSwarmgitmesh\b'
+  '\bswarmresolve\b'
+  '\bSwarmresolve\b'
+  '\bSWARMRESOLVE\b'
+  '\bswarmdns\b'
+  '\bSwarmdns\b'
+  '\bSWARMDNS\b'
+  '\bswarmreg\b'
+  '\bSwarmreg\b'
+  '\bSWARMREG\b'
 )
 
 # Legacy paths. These would silently break runtime because the new
@@ -65,6 +91,17 @@ PATHS=(
   'server/sigilmesh\b'
   'server/echomesh\b'
   'stockpile/stones\b'
+  # --- 0.50.0 swarm-subsystem rename ---
+  '/var/lib/vigo/swarm/swarmgit\b'
+  '/var/lib/vigo/swarm/swarmcast\b'
+  '/api/v1/swarm/swarmgit/'
+  '/api/v1/swarm/swarmcast/'
+  '/api/v1/swarm/swarmreg/'
+  'agent/src/swarm/swarmgit/'
+  'server/swarm/swarmgitmesh\b'
+  'git-remote-swarmgit\b'
+  'swarmgit://'
+  '\.vigo-swarmgit\b'
 )
 
 # `echo` is too generic to whole-word grep — it's the shell builtin in

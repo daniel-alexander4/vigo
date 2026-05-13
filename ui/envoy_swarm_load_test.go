@@ -30,23 +30,23 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 		PageData: PageData{Title: "Swarm Load: test", ActiveNav: "envoys"},
 		Hostname: "raspberrypi",
 		EnvoyID:  "00000000-0000-0000-0000-000000000001",
-		Swarmcast: []SwarmLoadRow{
+		Filecast: []SwarmLoadRow{
 			{
 				Name: "firmware.bin", Detail: "abc123 · admin",
 				Size: 1_048_576, SizeHuman: "1.0 MiB",
-				Status: "complete", When: "2h ago", Link: "/swarm/swarmcast/abc",
+				Status: "complete", When: "2h ago", Link: "/swarm/filecast/abc",
 			},
 			{
-				Name: "swarmgit: dan/vigo (from danlap)", Detail: "abc456 · danlap",
+				Name: "gitback: dan/vigo (from danlap)", Detail: "abc456 · danlap",
 				Size: 8192, SizeHuman: "8.0 KiB",
-				Status: "downloading", Progress: "3/16 chunks", When: "1m ago", Link: "/swarm/swarmcast/abc456",
+				Status: "downloading", Progress: "3/16 chunks", When: "1m ago", Link: "/swarm/filecast/abc456",
 			},
 		},
-		Swarmgit: []SwarmLoadRow{{
-			Name: "/var/lib/vigo/swarm/swarmgit/mirrors/danlap/dan/vigo.git",
+		Gitback: []SwarmLoadRow{{
+			Name: "/var/lib/vigo/swarm/gitback/mirrors/danlap/dan/vigo.git",
 			Detail: "dan/vigo — from danlap · git deadbeef",
 			Size: 4_096, SizeHuman: "4.0 KiB",
-			Status: "stale", When: "45d ago", Link: "/swarm/swarmgit/swarmgit:danlap:dan:vigo",
+			Status: "stale", When: "45d ago", Link: "/swarm/gitback/gitback:danlap:dan:vigo",
 		}},
 		Longdrawer: []SwarmLoadRow{{
 			Name: "~dan/longdrawer/notes.md", Detail: "user dan",
@@ -58,7 +58,7 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 			Size: 512, SizeHuman: "512 B",
 			Status: "live", When: "10m ago",
 		}},
-		SwarmcastTotal: 1_056_768, SwarmgitTotal: 4_096, LongdrawerTotal: 2_048, LockboxTotal: 512,
+		FilecastTotal: 1_056_768, GitbackTotal: 4_096, LongdrawerTotal: 2_048, LockboxTotal: 512,
 		GrandTotal: 1_063_424,
 	}
 	rec := httptest.NewRecorder()
@@ -71,9 +71,9 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 	// up at least one won't appear.
 	for _, must := range []string{
 		"Total Swarm Footprint",
-		">Swarmcast<", ">Swarmgit<", ">Longdrawer<", ">Lockbox<",
+		">Filecast<", ">Gitback<", ">Longdrawer<", ">Lockbox<",
 		"firmware.bin",
-		"/var/lib/vigo/swarm/swarmgit/mirrors/danlap/dan/vigo.git",
+		"/var/lib/vigo/swarm/gitback/mirrors/danlap/dan/vigo.git",
 		"~dan/longdrawer/notes.md",
 		"~dan/lockbox/secrets.age",
 	} {
@@ -96,8 +96,8 @@ func truncateForTest(s string, n int) string {
 }
 
 // TestUserFriendlyBlobName pins the label-to-display transforms that
-// the Swarm Load page applies to every row's Name column. Swarmgit labels
-// must render in human-readable form; admin swarmcast labels pass
+// the Swarm Load page applies to every row's Name column. Gitback labels
+// must render in human-readable form; admin filecast labels pass
 // through unchanged; unlabeled blobs fall back to a short sha so the
 // operator always has something to grab.
 func TestUserFriendlyBlobName(t *testing.T) {
@@ -108,13 +108,13 @@ func TestUserFriendlyBlobName(t *testing.T) {
 		want  string
 	}{
 		{
-			name:  "swarmgit label renders as user/project",
-			label: "swarmgit:danlap:dan:vigo",
+			name:  "gitback label renders as user/project",
+			label: "gitback:danlap:dan:vigo",
 			sha:   "abc123def456",
-			want:  "swarmgit: dan/vigo (from danlap)",
+			want:  "gitback: dan/vigo (from danlap)",
 		},
 		{
-			name:  "admin swarmcast keeps its filename label",
+			name:  "admin filecast keeps its filename label",
 			label: "firmware-v2.1.bin",
 			sha:   "abc123def456",
 			want:  "firmware-v2.1.bin",
@@ -126,10 +126,10 @@ func TestUserFriendlyBlobName(t *testing.T) {
 			want:  "abc123def456",
 		},
 		{
-			name:  "malformed swarmgit label passes through",
-			label: "swarmgit:broken",
+			name:  "malformed gitback label passes through",
+			label: "gitback:broken",
 			sha:   "aabbcc",
-			want:  "swarmgit:broken",
+			want:  "gitback:broken",
 		},
 	}
 	for _, c := range cases {

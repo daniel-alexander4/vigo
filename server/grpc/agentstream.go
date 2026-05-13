@@ -564,10 +564,10 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	// puddle (single source of truth, ADR-020). The agent's lockbox
 	// gate consults swarm_puddle_enabled instead.
 	//
-	// swarmresolve is the one exception to "only emit when gating off":
+	// hostdox is the one exception to "only emit when gating off":
 	// it is default-OFF on the agent (editing /etc/hosts is an operator
 	// decision), so the agent treats absence as off and we must emit
-	// swarm_swarmresolve_enabled=true when it should be ON. Off ⇒ omit.
+	// swarm_hostdox_enabled=true when it should be ON. Off ⇒ omit.
 	gates := map[string]any{}
 	swarmAllowed := config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Enabled)
 	if !swarmAllowed {
@@ -576,17 +576,17 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Puddle.Enabled) {
 		gates["swarm_puddle_enabled"] = false
 	}
-	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Swarmgit.Enabled) {
-		gates["swarm_swarmgit_enabled"] = false
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Gitback.Enabled) {
+		gates["swarm_gitback_enabled"] = false
 	}
 	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Longdrawer.Enabled) {
 		gates["swarm_longdrawer_enabled"] = false
 	}
-	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Swarmcast.Enabled) {
-		gates["swarm_swarmcast_enabled"] = false
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Filecast.Enabled) {
+		gates["swarm_filecast_enabled"] = false
 	}
-	if swarmAllowed && s.swarmCfg.Swarmresolve {
-		gates["swarm_swarmresolve_enabled"] = true
+	if swarmAllowed && s.swarmCfg.Hostdox {
+		gates["swarm_hostdox_enabled"] = true
 	}
 	if err := injectServerVars(bundle, gates); err != nil {
 		slog.Warn("failed to inject server vars into policy bundle",
@@ -761,19 +761,19 @@ func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
 	// Heuristic for "no config loaded yet": every cap zero AND every
 	// retention string empty. Cheap; matches the SwarmSection zero
 	// value.
-	if sc.Swarmcast.MaxSizeBytes == 0 && sc.Swarmcast.DefaultRetention == "" &&
+	if sc.Filecast.MaxSizeBytes == 0 && sc.Filecast.DefaultRetention == "" &&
 		sc.Lockbox.MaxFileBytes == 0 && sc.Lockbox.EnvelopeRetention == "" &&
-		sc.Swarmgit.MaxBundleBytes == 0 && sc.Swarmgit.EnvelopeRetention == "" &&
+		sc.Gitback.MaxBundleBytes == 0 && sc.Gitback.EnvelopeRetention == "" &&
 		sc.Longdrawer.MaxFileBytes == 0 {
 		return nil
 	}
 	return &pb.SwarmRuntimeLimits{
-		SwarmcastMaxSizeBytes:         uint64(maxNonNeg(sc.Swarmcast.MaxSizeBytes)),
-		SwarmcastDefaultRetention:     sc.Swarmcast.DefaultRetention,
+		FilecastMaxSizeBytes:         uint64(maxNonNeg(sc.Filecast.MaxSizeBytes)),
+		FilecastDefaultRetention:     sc.Filecast.DefaultRetention,
 		LockboxMaxFileBytes:           uint64(maxNonNeg(sc.Lockbox.MaxFileBytes)),
 		LockboxEnvelopeRetentionSecs:  durationSecsOrZero(sc.Lockbox.EnvelopeRetention),
-		SwarmgitMaxBundleBytes:        uint64(maxNonNeg(sc.Swarmgit.MaxBundleBytes)),
-		SwarmgitEnvelopeRetentionSecs: durationSecsOrZero(sc.Swarmgit.EnvelopeRetention),
+		GitbackMaxBundleBytes:        uint64(maxNonNeg(sc.Gitback.MaxBundleBytes)),
+		GitbackEnvelopeRetentionSecs: durationSecsOrZero(sc.Gitback.EnvelopeRetention),
 		LongdrawerMaxFileBytes:        uint64(maxNonNeg(sc.Longdrawer.MaxFileBytes)),
 	}
 }

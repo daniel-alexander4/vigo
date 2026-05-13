@@ -12,7 +12,7 @@
 //! recipient-drift views on the `/mesh` page.
 //!
 //! Returns `Value::Null` when no users are enrolled on this envoy
-//! — matches the pattern used by `swarmgit::collect` and
+//! — matches the pattern used by `gitback::collect` and
 //! `swarm_seeds::collect` for empty state.
 
 use anyhow::Result;

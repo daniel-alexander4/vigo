@@ -56,7 +56,7 @@ use anyhow::Result;
 /// `identity.pub` is present, `Ok(None)` when the user hasn't
 /// initialized puddle yet, `Err(_)` on read failure.
 ///
-/// Used by sibling subsystems (swarmgit under ADR-015, lockbox
+/// Used by sibling subsystems (gitback under ADR-015, lockbox
 /// membership under ADR-016) to query "is this user puddle-enabled
 /// here?" without having to touch the wrapped blob.
 pub fn local_puddle_pubkey(home: &Path) -> Result<Option<String>> {
@@ -85,7 +85,7 @@ pub fn is_initialized(home: &Path) -> bool {
 /// Read the local user's friendly-name claim (ADR-022), if any.
 /// `Ok(None)` when no name has been claimed on this envoy; `Err` on a
 /// present-but-corrupt `name-claim.json`. Thin wrapper over
-/// [`name::NameClaim::load`] for siblings (the `swarmgit` traits
+/// [`name::NameClaim::load`] for siblings (the `gitback` traits
 /// collector) that just want "does this user have a name claim?".
 pub fn local_name_claim(home: &Path) -> Result<Option<name::NameClaim>> {
     name::NameClaim::load(home)

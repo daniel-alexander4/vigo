@@ -3,7 +3,7 @@
 
 Read-only admin view of the [swarm substrate](../../engineering/subsystems/swarm.md) — the envoy peer-to-peer network that all four content subsystems ride on.
 
-> **This is the substrate, not content.** For admin-pushed swarmcasts (formerly `vigocli swarm distribute`), use [`vigocli swarm swarmcast`](swarm-swarmcast.md). For personal-DR mirrors, [`vigocli swarm swarmgit`](swarm-swarmgit.md). For per-user sync meshes, [`vigocli swarm longdrawer`](swarm-longdrawer.md) and [`vigocli swarm lockbox`](swarm-lockbox.md).
+> **This is the substrate, not content.** For admin-pushed filecasts (formerly `vigocli swarm distribute`), use [`vigocli swarm filecast`](swarm-filecast.md). For personal-DR mirrors, [`vigocli swarm gitback`](swarm-gitback.md). For per-user sync meshes, [`vigocli swarm longdrawer`](swarm-longdrawer.md) and [`vigocli swarm lockbox`](swarm-lockbox.md).
 
 ## Subcommands
 
@@ -29,7 +29,7 @@ Substrate active  5
 Seeding envoys    2
 Fleet footprint   482 MB
 Manifest entries  12 active · 3 revoked
-Active payloads   8 payload · 4 swarmgit
+Active payloads   8 payload · 4 gitback
 
 Seeding allowlist
   vigoserver  (server.hostname — implicit)
@@ -111,13 +111,13 @@ Per-envoy results:
 
 ### Tag-pinned colors in the swarm visualization
 
-Adjacent operator knob from the same release: a `viz.color=<name|hex>` tag on an envoy pins it to a fixed hue in the `/swarm` and `/swarm/swarmcast/<sha>` visualizations regardless of fleet churn. Set via `vigocli envoys tag <hostname> viz.color=green`. Recognized names: `yellow`, `red`, `green`, `blue`, `peach`, `mauve`, `teal`, `pink`. A literal hex code (`#rrggbb` or `#rgb`) is accepted as a passthrough. Bad values fall through to the default hash-based slot assignment.
+Adjacent operator knob from the same release: a `viz.color=<name|hex>` tag on an envoy pins it to a fixed hue in the `/swarm` and `/swarm/filecast/<sha>` visualizations regardless of fleet churn. Set via `vigocli envoys tag <hostname> viz.color=green`. Recognized names: `yellow`, `red`, `green`, `blue`, `peach`, `mauve`, `teal`, `pink`. A literal hex code (`#rrggbb` or `#rgb`) is accepted as a passthrough. Bad values fall through to the default hash-based slot assignment.
 
 ## Related
 
 - [Swarm Substrate](../../engineering/subsystems/swarm.md) — How the peer-to-peer network works
 - [Swarm page](../ui/swarm.md) — `/swarm` in the web UI
-- [`vigocli swarm swarmcast`](swarm-swarmcast.md) — Admin-pushed payloads on the substrate
-- [`vigocli swarm swarmgit`](swarm-swarmgit.md), [`vigocli swarm longdrawer`](swarm-longdrawer.md), [`vigocli swarm lockbox`](swarm-lockbox.md) — Other content subsystems on the substrate
+- [`vigocli swarm filecast`](swarm-filecast.md) — Admin-pushed payloads on the substrate
+- [`vigocli swarm gitback`](swarm-gitback.md), [`vigocli swarm longdrawer`](swarm-longdrawer.md), [`vigocli swarm lockbox`](swarm-lockbox.md) — Other content subsystems on the substrate
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

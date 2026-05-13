@@ -66,7 +66,7 @@ vigocli doctor                     # full diagnostic
 
 ### 4. Enroll the server's own envoy (do this first)
 
-Vigo assumes every server runs a co-hosted `vigo` agent on the same host as the vigosrv container. The server's own envoy is what makes the server visible in `vigocli swarm status`, lets it participate in puddle / lockbox / swarmgit, and seeds payloads to peers via the swarm substrate. This step is the canonical first thing to do after the container is up.
+Vigo assumes every server runs a co-hosted `vigo` agent on the same host as the vigosrv container. The server's own envoy is what makes the server visible in `vigocli swarm status`, lets it participate in puddle / lockbox / gitback, and seeds payloads to peers via the swarm substrate. This step is the canonical first thing to do after the container is up.
 
 From the server host itself:
 
@@ -83,7 +83,7 @@ vigocli envoys list                  # the server should appear under its host's
 
 The agent's enrolled hostname is whatever `hostname` returns on the host. Match this with `server.hostname` in `server.yaml` (used for compliance display) so the two views agree.
 
-If you skip this step, swarm features that route through the server envoy will silently no-op for the server's own hostname. `vigocli swarm swarmcast distribute` still works (writes directly to the bind-mounted seed dir), but most other swarm operations don't involve the server in the peer set.
+If you skip this step, swarm features that route through the server envoy will silently no-op for the server's own hostname. `vigocli swarm filecast distribute` still works (writes directly to the bind-mounted seed dir), but most other swarm operations don't involve the server in the peer set.
 
 ### Optional services
 

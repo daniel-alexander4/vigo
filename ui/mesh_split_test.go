@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"git.alexander4.io/vigo/server/swarm/lockboxmesh"
-	"git.alexander4.io/vigo/server/swarm/swarmgitmesh"
+	"git.alexander4.io/vigo/server/swarm/gitbackmesh"
 	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
 )
 
@@ -38,15 +38,15 @@ func (m *mockMesh) EnvoyLockboxFiles(_ context.Context, _ string) []lockboxmesh.
 	return nil
 }
 
-type mockSwarmgit struct {
-	fleet *swarmgitmesh.Fleet
+type mockGitback struct {
+	fleet *gitbackmesh.Fleet
 }
 
-func (m *mockSwarmgit) FleetSnapshot(ctx context.Context) (*swarmgitmesh.Fleet, error) {
+func (m *mockGitback) FleetSnapshot(ctx context.Context) (*gitbackmesh.Fleet, error) {
 	return m.fleet, nil
 }
 
-func (m *mockSwarmgit) EnvoyProjects(_ context.Context, _ string) []swarmgitmesh.EnvoyProject {
+func (m *mockGitback) EnvoyProjects(_ context.Context, _ string) []gitbackmesh.EnvoyProject {
 	return nil
 }
 
@@ -56,7 +56,7 @@ func TestMeshSplit_RBAC(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
 	h.mesh = &mockMesh{}
-	h.swarmgitFleet = &mockSwarmgit{}
+	h.gitbackFleet = &mockGitback{}
 
 	cases := []struct {
 		path    string
@@ -66,7 +66,7 @@ func TestMeshSplit_RBAC(t *testing.T) {
 		{"/ui/fragments/longdrawer-user/dan", h.EchoUserDrilldown},
 		{"/swarm/lockbox", h.Lockbox},
 		{"/ui/fragments/lockbox-user/dan", h.LockboxUserDrilldown},
-		{"/swarm/swarmgit", h.Swarmgit},
+		{"/swarm/gitback", h.Gitback},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
@@ -142,33 +142,33 @@ func TestLockbox_EmptyRendersHealthy(t *testing.T) {
 	}
 }
 
-func TestSwarmgit_EmptyRendersHealthy(t *testing.T) {
+func TestGitback_EmptyRendersHealthy(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
-	h.swarmgitFleet = &mockSwarmgit{fleet: &swarmgitmesh.Fleet{}}
+	h.gitbackFleet = &mockGitback{fleet: &gitbackmesh.Fleet{}}
 
 	rec := httptest.NewRecorder()
-	h.Swarmgit(rec, adminRequest(http.MethodGet, "/swarm/swarmgit"))
+	h.Gitback(rec, adminRequest(http.MethodGet, "/swarm/gitback"))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Swarmgit returned %d, want 200", rec.Code)
+		t.Fatalf("Gitback returned %d, want 200", rec.Code)
 	}
-	if !containsAll(rec.Body.String(), "Swarmgit", "health-banner--ok") {
-		t.Error("empty swarmgit should render healthy banner")
+	if !containsAll(rec.Body.String(), "Gitback", "health-banner--ok") {
+		t.Error("empty gitback should render healthy banner")
 	}
 }
 
-// TestSwarmgit_DivergentRefsPromotesBannerWarn — when an aggregator
+// TestGitback_DivergentRefsPromotesBannerWarn — when an aggregator
 // surfaces a project where hosts disagree on a head sha, the banner
 // must be warn-level and list the problem. (Post-ADR-015 the
 // orphan/pending/stale signals from the legacy publisher-receiver
 // model are gone; the new conditions are ref divergence and
 // envelope-digest skew across hosts.)
-func TestSwarmgit_DivergentRefsPromotesBannerWarn(t *testing.T) {
+func TestGitback_DivergentRefsPromotesBannerWarn(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
 	pid := "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
-	h.swarmgitFleet = &mockSwarmgit{fleet: &swarmgitmesh.Fleet{
-		Projects: []swarmgitmesh.ProjectSummary{
+	h.gitbackFleet = &mockGitback{fleet: &gitbackmesh.Fleet{
+		Projects: []gitbackmesh.ProjectSummary{
 			{
 				ProjectID:        pid,
 				Handle:           "team-notes",
@@ -179,30 +179,30 @@ func TestSwarmgit_DivergentRefsPromotesBannerWarn(t *testing.T) {
 				DigestUnanimous:  true,
 			},
 		},
-		Totals: swarmgitmesh.Totals{Projects: 1, Hosts: 2, DivergentRefs: 1},
+		Totals: gitbackmesh.Totals{Projects: 1, Hosts: 2, DivergentRefs: 1},
 	}}
 
 	rec := httptest.NewRecorder()
-	h.Swarmgit(rec, adminRequest(http.MethodGet, "/swarm/swarmgit"))
+	h.Gitback(rec, adminRequest(http.MethodGet, "/swarm/gitback"))
 	body := rec.Body.String()
 	if !containsAll(body, "health-banner--warn", "divergent", "team-notes") {
 		t.Errorf("divergent refs should surface in warn-level banner; body sample:\n%s", snippet(body, 1500))
 	}
 }
 
-// TestSwarmgit_DetailRendersFriendlyURLAndHostSize pins the project
+// TestGitback_DetailRendersFriendlyURLAndHostSize pins the project
 // detail page against a populated summary. Two regression guards in
 // one: (1) the host-size cell renders through humanBytes — a uint64
 // HostPresence.SizeBytes used to abort the template mid-execute with
 // "template error" the moment any host actually held a bare repo;
 // (2) when the founder puddle has a friendly name (ADR-022), the
-// swarmgit:// URL reflects it, with the canonical hex form alongside.
-func TestSwarmgit_DetailRendersFriendlyURLAndHostSize(t *testing.T) {
+// gitback:// URL reflects it, with the canonical hex form alongside.
+func TestGitback_DetailRendersFriendlyURLAndHostSize(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
 	pid := "154e3b59465fe34a2d590edf5af6f81fba82608f27c7ca3b56a1bad5b5069d66"
-	h.swarmgitFleet = &mockSwarmgit{fleet: &swarmgitmesh.Fleet{
-		Projects: []swarmgitmesh.ProjectSummary{
+	h.gitbackFleet = &mockGitback{fleet: &gitbackmesh.Fleet{
+		Projects: []gitbackmesh.ProjectSummary{
 			{
 				ProjectID:           pid,
 				Handle:              "vigo",
@@ -212,23 +212,23 @@ func TestSwarmgit_DetailRendersFriendlyURLAndHostSize(t *testing.T) {
 				HostCount:           1,
 				MemberFleetCount:    1,
 				DigestUnanimous:     true,
-				Hosts: []swarmgitmesh.HostPresence{
+				Hosts: []gitbackmesh.HostPresence{
 					{Host: "danlap", HasBareRepo: true, SizeBytes: 4096, UpdatedAt: 1, LeafRole: "Admin"},
 				},
 			},
 		},
-		Totals: swarmgitmesh.Totals{Projects: 1, Hosts: 1},
+		Totals: gitbackmesh.Totals{Projects: 1, Hosts: 1},
 	}}
 
-	req := adminRequest(http.MethodGet, "/swarm/swarmgit/"+pid)
+	req := adminRequest(http.MethodGet, "/swarm/gitback/"+pid)
 	req.SetPathValue("project_id", pid)
 	rec := httptest.NewRecorder()
-	h.Swarmgit(rec, req)
+	h.Gitback(rec, req)
 	body := rec.Body.String()
 	if containsSubstr(body, "template error") {
 		t.Fatalf("detail page rendered a template error; body sample:\n%s", snippet(body, 2000))
 	}
-	if !containsAll(body, "swarmgit://dan/vigo", "swarmgit://"+pid+"/vigo", "4.0 KB") {
+	if !containsAll(body, "gitback://dan/vigo", "gitback://"+pid+"/vigo", "4.0 KB") {
 		t.Errorf("expected friendly URL + canonical URL + host size; body sample:\n%s", snippet(body, 2500))
 	}
 }

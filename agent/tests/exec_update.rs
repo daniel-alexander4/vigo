@@ -599,7 +599,7 @@ mod exec_update {
             .expect("build tokio runtime");
 
         // Spawn background tasks to simulate the agent's workload
-        // (check-in loop, swarm, multicast, swarmgit reactor, etc.).
+        // (check-in loop, swarm, multicast, gitback reactor, etc.).
         for _ in 0..10 {
             rt.spawn(async {
                 loop {

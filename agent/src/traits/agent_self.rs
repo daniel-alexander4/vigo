@@ -20,7 +20,7 @@
 //!   - uptime_secs: seconds since the agent binary started
 //!
 //! Why descendants matter: the agent regularly spawns short-lived
-//! children (git-receive-pack via the swarmgit helper, package-manager
+//! children (git-receive-pack via the gitback helper, package-manager
 //! probes, exec resources) and FD leaks in those children would not
 //! show up in `open_fds`. Tracking the descendant total lets the fleet
 //! detector catch leaks in child code paths that the agent's own
@@ -101,7 +101,7 @@ fn collect_linux(uptime_secs: u64) -> Value {
 
 /// Walk /proc once and return (count, total_fd_count) for processes
 /// whose PPID is the given pid. One level deep — the agent's direct
-/// children are what we care about (swarmgit helper's git child,
+/// children are what we care about (gitback helper's git child,
 /// exec-resource subprocesses, package-manager probes). Going deeper
 /// would be more accurate for grandchildren but adds proc-walk cost
 /// on every check-in; defer until we see a real grandchild leak.

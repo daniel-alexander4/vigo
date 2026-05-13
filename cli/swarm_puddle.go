@@ -71,7 +71,7 @@ accepted during the 0.40.0 transition.`,
 		// Delegate to the existing lockbox-evict implementation:
 		// today's puddle-eviction is structurally a lockbox eviction
 		// (peer-table drop + recipients regen + reencrypt). When
-		// swarmgit project-revoke fan-out lands, this verb will also
+		// gitback project-revoke fan-out lands, this verb will also
 		// dispatch the per-project revokes — see ADR-021 follow-up.
 		return runLockboxEvict(host, user, allUsers, yes)
 	},
@@ -83,8 +83,8 @@ var puddleNamesCmd = &cobra.Command{
 	Use:   "names",
 	Short: "Fleet view of friendly puddle names (ADR-022)",
 	Long: `Friendly names map a human-meaningful label to a puddle pubkey, so
-swarmgit://<name>/<repo> can be used alongside the self-certifying
-swarmgit://<project_id>/<repo> form. Names are first-come and
+gitback://<name>/<repo> can be used alongside the self-certifying
+gitback://<project_id>/<repo> form. Names are first-come and
 cooperatively enforced; the server publishes the fleet name map and
 arbitrates nothing — a name with competing claims is shown with all
 of them, and resolvers refuse it. Set / clear a name on an envoy with
@@ -98,7 +98,7 @@ var puddleNamesListCmd = &cobra.Command{
 	RunE:  runPuddleNamesList,
 }
 
-// puddleNamesResponse mirrors server/swarm/swarmgitmesh.FleetNames.
+// puddleNamesResponse mirrors server/swarm/gitbackmesh.FleetNames.
 // Duplicated here so the CLI stays decoupled from the server package.
 type puddleNamesResponse struct {
 	UpdatedAt int64                        `json:"updated_at"`
@@ -176,7 +176,7 @@ func runPuddleNamesList(cmd *cobra.Command, _ []string) error {
 	}
 	w.Flush()
 	if collisions > 0 {
-		fmt.Printf("\n%d name(s) have competing claims; resolvers refuse those and require swarmgit://<project_id>/<repo>.\n", collisions)
+		fmt.Printf("\n%d name(s) have competing claims; resolvers refuse those and require gitback://<project_id>/<repo>.\n", collisions)
 	}
 	return nil
 }

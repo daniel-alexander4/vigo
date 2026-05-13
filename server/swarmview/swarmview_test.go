@@ -10,15 +10,15 @@ import (
 	"git.alexander4.io/vigo/server/swarm"
 )
 
-// TestSnapshotStatusSplitsByLabelPrefix pins the "swarmgit:" label
-// prefix → Swarmgit bucket, everything else → Payload bucket rule used
+// TestSnapshotStatusSplitsByLabelPrefix pins the "gitback:" label
+// prefix → Gitback bucket, everything else → Payload bucket rule used
 // by the substrate status rollup. The rule lives implicitly in the
 // seed-label naming convention, so this test guards against a seed
 // prefix rename silently miscounting payloads on the /swarm page.
 func TestSnapshotStatusSplitsByLabelPrefix(t *testing.T) {
 	tracker := swarm.NewPeerTracker(5 * time.Minute)
 	tracker.RegisterSeed("aaaa", swarm.SeedState{Label: "app-v2.tar.gz", SeederID: "envoy-1", Size: 100})
-	tracker.RegisterSeed("bbbb", swarm.SeedState{Label: "swarmgit:danlap:dan:web", SeederID: "envoy-2", Size: 50})
+	tracker.RegisterSeed("bbbb", swarm.SeedState{Label: "gitback:danlap:dan:web", SeederID: "envoy-2", Size: 50})
 	tracker.RegisterSeed("cccc", swarm.SeedState{Label: "firmware.bin", SeederID: "envoy-1", Size: 200})
 
 	src := Sources{
@@ -32,11 +32,11 @@ func TestSnapshotStatusSplitsByLabelPrefix(t *testing.T) {
 	}
 
 	s := SnapshotStatus(src)
-	if s.BlobsByKind.Swarmcast != 2 {
-		t.Errorf("expected 2 swarmcast blobs (app-v2 + firmware), got %d", s.BlobsByKind.Swarmcast)
+	if s.BlobsByKind.Filecast != 2 {
+		t.Errorf("expected 2 filecast blobs (app-v2 + firmware), got %d", s.BlobsByKind.Filecast)
 	}
-	if s.BlobsByKind.Swarmgit != 1 {
-		t.Errorf("expected 1 swarmgit blob, got %d", s.BlobsByKind.Swarmgit)
+	if s.BlobsByKind.Gitback != 1 {
+		t.Errorf("expected 1 gitback blob, got %d", s.BlobsByKind.Gitback)
 	}
 	// Both seeders are distinct envoys.
 	if s.EnvoysSeeding != 2 {

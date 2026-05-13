@@ -4,8 +4,8 @@
 //! Friendly puddle-name claims (ADR-022).
 //!
 //! A **name claim** binds a human-meaningful name (`dan`, `acme`) to a
-//! puddle pubkey, so `swarmgit://dan/vigo` can be used alongside the
-//! self-certifying hex form `swarmgit://<project_id>/vigo`. Resolution:
+//! puddle pubkey, so `gitback://dan/vigo` can be used alongside the
+//! self-certifying hex form `gitback://<project_id>/vigo`. Resolution:
 //! `<name>` → puddle pubkey (via this claim), then
 //! `project_id = sha256(<that pubkey> ‖ <repo-handle>)`, then proceed
 //! exactly as a hex URL would.
@@ -13,13 +13,13 @@
 //! A claim is a small signed blob — `{ puddle_pubkey, name, claimed_at,
 //! supersedes?, sig }` — signed by the puddle key over a
 //! domain-separated canonical encoding ([`NAME_CLAIM_DOMAIN`]),
-//! hand-rolled like [`crate::swarm::swarmgit::tokens`] /
-//! [`crate::swarm::swarmgit::envelopes`] (never JSON whitespace).
+//! hand-rolled like [`crate::swarm::gitback::tokens`] /
+//! [`crate::swarm::gitback::envelopes`] (never JSON whitespace).
 //! Persisted at `~<user>/.vigo-puddle/name-claim.json`. Creating one
 //! requires the puddle unlocked (the session helper signs).
 //!
-//! Claims propagate **as traits**: the `swarmgit` traits collector
-//! reads each user's `name-claim.json` and reports it; `swarmgitmesh`
+//! Claims propagate **as traits**: the `gitback` traits collector
+//! reads each user's `name-claim.json` and reports it; `gitbackmesh`
 //! joins them into a fleet `name → pubkey` map; the server publishes
 //! it at `GET /api/v1/swarm/puddle/names`. The server **publishes,
 //! never arbitrates** — collisions degrade to *ambiguous* (a resolver
@@ -44,7 +44,7 @@ use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 use super::config;
-use crate::swarm::swarmgit::envelopes::DelegationEnvelope;
+use crate::swarm::gitback::envelopes::DelegationEnvelope;
 
 /// Length of a raw Ed25519 puddle pubkey.
 pub const PUBKEY_LEN: usize = 32;
@@ -57,14 +57,14 @@ pub const SIG_LEN: usize = 64;
 /// signature over a different domain even with matching key material —
 /// keeps a name-claim signature from being confused with a token or a
 /// delegation envelope.
-pub const NAME_CLAIM_DOMAIN: &[u8] = b"swarmgit-name-v1\0";
+pub const NAME_CLAIM_DOMAIN: &[u8] = b"gitback-name-v1\0";
 
-/// Max length of a puddle name. Matches the swarmgit project-handle
+/// Max length of a puddle name. Matches the gitback project-handle
 /// limit so `<name>/<handle>` URLs stay bounded.
 pub const MAX_NAME_LEN: usize = 64;
 
-/// Validate a puddle name. Same character rules as swarmgit project
-/// handles (see `swarmgit::cli::validate_handle`): 1-64 chars, ASCII
+/// Validate a puddle name. Same character rules as gitback project
+/// handles (see `gitback::cli::validate_handle`): 1-64 chars, ASCII
 /// alphanumeric + `-` `_` `.`, no leading dot, no whitespace.
 pub fn validate_name(name: &str) -> Result<()> {
     if name.is_empty() || name.len() > MAX_NAME_LEN {
@@ -74,7 +74,7 @@ pub fn validate_name(name: &str) -> Result<()> {
         bail!("puddle name must not start with '.'");
     }
     // A name that looks exactly like a project_id (64 lowercase hex)
-    // would always be parsed as the hex form in a `swarmgit://` URL,
+    // would always be parsed as the hex form in a `gitback://` URL,
     // so a friendly URL using it could never resolve. Reject up front.
     if name.len() == 64 && name.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
         bail!("puddle name must not look like a project_id (64 lowercase hex characters)");
@@ -97,7 +97,7 @@ pub fn validate_name(name: &str) -> Result<()> {
 pub struct NameClaimBody {
     /// Hex-encoded puddle pubkey claiming the name. This is the pubkey
     /// `project_id = sha256(pubkey ‖ handle)` is computed against when
-    /// resolving `swarmgit://<name>/<handle>`.
+    /// resolving `gitback://<name>/<handle>`.
     pub puddle_pubkey: String,
     /// The friendly name being claimed. `validate_name`-checked.
     pub name: String,
@@ -296,7 +296,7 @@ pub enum NameResolve {
     /// No claimant for this name.
     NotFound,
     /// Several unrelated claimants — ambiguous; the caller must fall
-    /// back to `swarmgit://<project_id>/<repo>`. Carries the claimant
+    /// back to `gitback://<project_id>/<repo>`. Carries the claimant
     /// pubkeys (hex) for the error message.
     Ambiguous(Vec<String>),
 }

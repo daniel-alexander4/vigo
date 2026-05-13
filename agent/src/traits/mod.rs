@@ -19,7 +19,7 @@ pub(crate) mod swarm_cache;
 mod swarm_seeds;
 mod time_collector;
 mod lockbox;
-pub(crate) mod swarmgit;
+pub(crate) mod gitback;
 mod longdrawer;
 
 // Shared sysctl utility for macOS/BSD collectors.
@@ -252,11 +252,11 @@ pub enum CollectorKind {
     SwarmCache,
     /// Reports seed files available for envoy-originated distribution.
     SwarmSeeds,
-    /// Reports swarmgit source-side publishing state (active sources,
+    /// Reports gitback source-side publishing state (active sources,
     /// discovery errors, publish errors). Source-side data is written
-    /// by `swarm::swarmgit::reactor` as a snapshot file; this collector
+    /// by `swarm::gitback::reactor` as a snapshot file; this collector
     /// reads the snapshot on each check-in cycle.
-    Swarmgit,
+    Gitback,
     /// Enumerates apt/yum/dnf package sources configured on the host.
     /// Emits per-source rows with URL (credentials stripped), suite,
     /// components, and enabled state. Linux-only. Server-side compares
@@ -337,7 +337,7 @@ impl CollectorKind {
             Self::PackageUpdates => "package_updates",
             Self::SwarmCache => "swarm",
             Self::SwarmSeeds => "swarm_seeds",
-            Self::Swarmgit => "swarmgit",
+            Self::Gitback => "gitback",
             Self::PackageSourceAudit => "package_source_audit",
             Self::KernelModuleAttestation => "kernel_module_attestation",
             Self::Listeners => "listeners",
@@ -377,7 +377,7 @@ impl CollectorKind {
             Self::Docker => docker::collect(),
             Self::SwarmCache => swarm_cache::collect(),
             Self::SwarmSeeds => swarm_seeds::collect(),
-            Self::Swarmgit => swarmgit::collect(),
+            Self::Gitback => gitback::collect(),
             Self::Longdrawer => longdrawer::collect(),
             Self::Lockbox => lockbox::collect(),
             Self::AgentSelf => agent_self::collect(),
@@ -639,7 +639,7 @@ impl CollectorKind {
             "package_updates" => Some(Self::PackageUpdates),
             "swarm" => Some(Self::SwarmCache),
             "swarm_seeds" => Some(Self::SwarmSeeds),
-            "swarmgit" => Some(Self::Swarmgit),
+            "gitback" => Some(Self::Gitback),
             "package_source_audit" => Some(Self::PackageSourceAudit),
             "kernel_module_attestation" => Some(Self::KernelModuleAttestation),
             "listeners" => Some(Self::Listeners),
@@ -691,7 +691,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::PackageUpdates,
         CollectorKind::SwarmCache,
         CollectorKind::SwarmSeeds,
-        CollectorKind::Swarmgit,
+        CollectorKind::Gitback,
         CollectorKind::PackageSourceAudit,
         CollectorKind::KernelModuleAttestation,
         CollectorKind::Listeners,
@@ -717,7 +717,7 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::Ports,
         CollectorKind::SwarmCache,
         CollectorKind::SwarmSeeds,
-        CollectorKind::Swarmgit,
+        CollectorKind::Gitback,
         CollectorKind::Longdrawer,
         CollectorKind::Lockbox,
         CollectorKind::AgentSelf,

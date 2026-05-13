@@ -76,7 +76,7 @@ LIFECYCLE:
     join --from <host>         Receive the wrapped key from <host> using the pairing code.
     leave [--yes]              Leave the puddle on this envoy: sign LEAVE for lockbox
                                peers, scrub ~/.vigo-puddle/, ~/.lockbox/, ~/lockbox/,
-                               and ~/.vigo-swarmgit/.
+                               and ~/.vigo-gitback/.
 
 REKEY (ADR-018, puddle keypair rotation):
     rekey-pair                 Rotate the puddle keypair and issue a 5-minute claim code.
@@ -91,10 +91,10 @@ DAILY:
 
 FRIENDLY NAMES (ADR-022):
     name set <name>            Claim <name> for this puddle (puddle must be unlocked).
-                               Makes `swarmgit://<name>/<repo>` resolve to your projects,
-                               alongside the hex `swarmgit://<project_id>/<repo>` form.
+                               Makes `gitback://<name>/<repo>` resolve to your projects,
+                               alongside the hex `gitback://<project_id>/<repo>` form.
     name clear [--yes]         Drop this puddle's name claim. Breaks every
-                               `swarmgit://<name>/…` URL anyone wrote down; the hex
+                               `gitback://<name>/…` URL anyone wrote down; the hex
                                project_id URLs keep working.
     name show                  Show this puddle's name claim and the fleet view of it.
 
@@ -291,31 +291,31 @@ fn cmd_unlock(args: &[String]) -> Result<()> {
     }
 
     // ADR-023: with the session helper up (the one moment with a
-    // usable signing key), auto-adopt the swarmgit projects this
+    // usable signing key), auto-adopt the gitback projects this
     // puddle founded so `dr_scope: swarm-wide` repos actually reach
     // this envoy. Off the hot path; failures warn only — never undo
     // the unlock.
     let my_pubkey = key.verifying_key().to_bytes();
-    adopt_founded_swarmgit_projects(&home, &my_pubkey);
+    adopt_founded_gitback_projects(&home, &my_pubkey);
 
     Ok(())
 }
 
-/// ADR-023: auto-adopt the swarmgit projects this puddle founded.
+/// ADR-023: auto-adopt the gitback projects this puddle founded.
 ///
 /// For each project the swarm is currently announcing (cached at
-/// `swarmgit-announced.json` by the agent's catch-up reactor) whose
+/// `gitback-announced.json` by the agent's catch-up reactor) whose
 /// `project_id == sha256(my_puddle_pubkey ‖ handle)` and for which
 /// this user has no local state yet, mint the founder-bootstrap state
-/// — the same thing `vigo swarm swarmgit project init` does. The
+/// — the same thing `vigo swarm gitback project init` does. The
 /// 0.46.0 catch-up reactor then pulls the bare repo within a couple of
 /// ticks. Founder-key-current only: a post-rekey (ADR-019) founded
 /// project stays anchored to the *genesis* pubkey, so it won't match
-/// here — use `swarmgit project rejoin` for those. Non-founder
+/// here — use `gitback project rejoin` for those. Non-founder
 /// memberships are never adopted (they need an invitation). Failures
 /// warn but never undo the unlock.
-fn adopt_founded_swarmgit_projects(home: &Path, my_pubkey: &[u8; 32]) {
-    use crate::swarm::swarmgit::{cli as swarmgit_cli, project_peers, project_state, tokens};
+fn adopt_founded_gitback_projects(home: &Path, my_pubkey: &[u8; 32]) {
+    use crate::swarm::gitback::{cli as gitback_cli, project_peers, project_state, tokens};
 
     let announced = project_peers::load_announced_cache();
     if announced.is_empty() {
@@ -337,13 +337,13 @@ fn adopt_founded_swarmgit_projects(home: &Path, my_pubkey: &[u8; 32]) {
             .dr_scope
             .parse()
             .unwrap_or(project_state::DrScope::SwarmWide);
-        match swarmgit_cli::mint_founder_project(home, &ap.handle, scope) {
+        match gitback_cli::mint_founder_project(home, &ap.handle, scope) {
             Ok(_) => println!(
-                "Adopted swarmgit project '{}' — the catch-up reactor will pull it shortly.",
+                "Adopted gitback project '{}' — the catch-up reactor will pull it shortly.",
                 ap.handle
             ),
             Err(e) => eprintln!(
-                "warning: could not adopt swarmgit project '{}': {:#}",
+                "warning: could not adopt gitback project '{}': {:#}",
                 ap.handle, e
             ),
         }
@@ -517,7 +517,7 @@ fn cmd_join(args: &[String]) -> Result<()> {
 
 /// Leave the puddle on this envoy. Per ADR-021 (0.40.0), this is the
 /// canonical lifecycle exit verb covering puddle + lockbox +
-/// swarmgit cleanup.
+/// gitback cleanup.
 ///
 /// Steps:
 ///   1. If lockbox is enrolled: invoke `lockbox leave --purge
@@ -526,8 +526,8 @@ fn cmd_join(args: &[String]) -> Result<()> {
 ///      to live peers, then scrubs `~/.lockbox/` + `~/lockbox/`.
 ///   2. Lock the puddle session helper (best-effort).
 ///   3. Scrub `~/.vigo-puddle/` (the wrapped keypair, salt, pubkey).
-///   4. Scrub `~/.vigo-swarmgit/` if present (per-project state for
-///      every swarmgit project this user was in).
+///   4. Scrub `~/.vigo-gitback/` if present (per-project state for
+///      every gitback project this user was in).
 ///
 /// Idempotent on the dir-removal side. The lockbox LEAVE fanout is
 /// asynchronous — peers may take up to one announce tick (~30s) to
@@ -546,7 +546,7 @@ fn cmd_leave(args: &[String]) -> Result<()> {
                      USAGE:\n    vigo swarm puddle leave [--yes]\n\n\
                      Signs a LEAVE envelope for lockbox peers, locks the puddle\n\
                      session helper, and wipes ~/.vigo-puddle/, ~/.lockbox/,\n\
-                     ~/lockbox/, and ~/.vigo-swarmgit/. Refuses without --yes."
+                     ~/lockbox/, and ~/.vigo-gitback/. Refuses without --yes."
                 );
                 return Ok(());
             }
@@ -572,11 +572,11 @@ fn cmd_leave(args: &[String]) -> Result<()> {
         eprintln!("  ~/.vigo-puddle/   keypair, salt, pubkey, retired-puddles log");
         eprintln!("  ~/.lockbox/     wrapped age identity + recipients + cert");
         eprintln!("  ~/lockbox/      ciphertext at rest (recoverable from peers)");
-        eprintln!("  ~/.vigo-swarmgit/ per-project state for any swarmgit projects");
+        eprintln!("  ~/.vigo-gitback/ per-project state for any gitback projects");
         eprintln!();
         eprintln!("Lockbox peers receive a signed LEAVE envelope on the next");
-        eprintln!("announce tick (~30s). Swarmgit projects are not gossiped — admin");
-        eprintln!("`swarmgit project revoke` is a separate cleanup step if needed.");
+        eprintln!("announce tick (~30s). Gitback projects are not gossiped — admin");
+        eprintln!("`gitback project revoke` is a separate cleanup step if needed.");
         eprintln!();
         eprintln!("Pass --yes to confirm.");
         return Ok(());
@@ -628,11 +628,11 @@ fn cmd_leave(args: &[String]) -> Result<()> {
         }
     }
 
-    // 4. Scrub ~/.vigo-swarmgit/ — per-project state for every
-    //    swarmgit project this user was a member of. Bare repos
-    //    under /var/lib/vigo/swarm/swarmgit/ are root-owned and
+    // 4. Scrub ~/.vigo-gitback/ — per-project state for every
+    //    gitback project this user was a member of. Bare repos
+    //    under /var/lib/vigo/swarm/gitback/ are root-owned and
     //    survive — admin cleanup is a separate path.
-    let gm_user_dir = home.join(".vigo-swarmgit");
+    let gm_user_dir = home.join(".vigo-gitback");
     if gm_user_dir.exists() {
         match fs::remove_dir_all(&gm_user_dir) {
             Ok(()) => println!("✓ scrubbed {}", gm_user_dir.display()),
@@ -687,7 +687,7 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
                     bail!("--window-secs must be at least 60");
                 }
             }
-            // ADR-019: when a swarmgit project's delegation chain has
+            // ADR-019: when a gitback project's delegation chain has
             // hit DELEGATION_MAX_LEN, the pre-flight check refuses to
             // proceed. This flag opts into "rekey anyway, mark those
             // projects frozen-at-rekey" — operator's escape hatch for
@@ -779,24 +779,24 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     let new_blob = wrap_signing_key(&new_key, passphrase.as_bytes(), &new_salt)
         .context("wrapping new puddle identity")?;
 
-    // ADR-019 pre-flight: check every swarmgit project the user
+    // ADR-019 pre-flight: check every gitback project the user
     // founded against the delegation cap. Aborts here BEFORE any
     // keypair mutation when a project would push past the cap and
     // the operator hasn't passed --force-orphan-projects.
-    let pre_flight = crate::swarm::swarmgit::rekey::pre_flight_check_caps(
+    let pre_flight = crate::swarm::gitback::rekey::pre_flight_check_caps(
         &home,
         &old_pubkey_text,
     )
-    .context("swarmgit pre-flight cap check")?;
+    .context("gitback pre-flight cap check")?;
     if !pre_flight.at_cap.is_empty() && !force_orphan_projects {
         bail!(
-            "{} swarmgit project(s) at delegation cap ({}/{}): {}\n  \
-             Run `vigo swarm swarmgit project re-found <handle>` per project to \
+            "{} gitback project(s) at delegation cap ({}/{}): {}\n  \
+             Run `vigo swarm gitback project re-found <handle>` per project to \
              mint a fresh project_id, or pass --force-orphan-projects to proceed \
              and mark these projects frozen-at-rekey.",
             pre_flight.at_cap.len(),
-            crate::swarm::swarmgit::envelopes::DELEGATION_MAX_LEN,
-            crate::swarm::swarmgit::envelopes::DELEGATION_MAX_LEN,
+            crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN,
+            crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN,
             pre_flight.at_cap.join(", ")
         );
     }
@@ -859,13 +859,13 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     )
     .context("lockbox sync after rotation")?;
 
-    // ADR-019: swarmgit rekey sync — sign + append delegations under
+    // ADR-019: gitback rekey sync — sign + append delegations under
     // OLD for every project the user founded, rebuild tokens.json
     // (chain[0] bootstrap + fresh admin under NEW), rewrite member
     // entries OLD → NEW. Best-effort with per-project failure
     // tracking; the rotation itself has already committed.
     let gm_outcome =
-        crate::swarm::swarmgit::rekey::apply_post_rotation_swarmgit_sync(
+        crate::swarm::gitback::rekey::apply_post_rotation_gitback_sync(
             &home,
             &old_key,
             &new_key,
@@ -874,7 +874,7 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
             now,
             force_orphan_projects,
         )
-        .context("swarmgit sync after rotation")?;
+        .context("gitback sync after rotation")?;
 
     // Restart the session helper with the new key so sibling
     // subsystems pick up the rotation immediately. Lock first
@@ -908,7 +908,7 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
         pp_bak.display()
     );
     print_rewrap_outcome(outcome);
-    print_swarmgit_rekey_outcome(&gm_outcome);
+    print_gitback_rekey_outcome(&gm_outcome);
     println!();
     println!(
         "  Rekey window:     {}h ({}s) before founder closes the session",
@@ -936,8 +936,8 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn print_swarmgit_rekey_outcome(
-    outcome: &crate::swarm::swarmgit::rekey::SwarmgitRekeyOutcome,
+fn print_gitback_rekey_outcome(
+    outcome: &crate::swarm::gitback::rekey::GitbackRekeyOutcome,
 ) {
     if outcome.delegations_signed.is_empty()
         && outcome.members_updated.is_empty()
@@ -945,12 +945,12 @@ fn print_swarmgit_rekey_outcome(
         && outcome.failures.is_empty()
         && outcome.in_warn_band.is_empty()
     {
-        println!("  Swarmgit sync:   skipped (no projects under ~/.vigo-swarmgit)");
+        println!("  Gitback sync:   skipped (no projects under ~/.vigo-gitback)");
         return;
     }
     if !outcome.delegations_signed.is_empty() {
         println!(
-            "  Swarmgit sync:   delegated {} project(s): {}",
+            "  Gitback sync:   delegated {} project(s): {}",
             outcome.delegations_signed.len(),
             outcome.delegations_signed.join(", ")
         );
@@ -973,11 +973,11 @@ fn print_swarmgit_rekey_outcome(
         println!(
             "                    ⚠ {} project(s) at chain length ≥ {}: {}",
             outcome.in_warn_band.len(),
-            crate::swarm::swarmgit::envelopes::DELEGATION_WARN_LEN,
+            crate::swarm::gitback::envelopes::DELEGATION_WARN_LEN,
             outcome.in_warn_band.join(", ")
         );
         println!(
-            "                       consider `vigo swarm swarmgit project re-found <handle>` for hygiene"
+            "                       consider `vigo swarm gitback project re-found <handle>` for hygiene"
         );
     }
     if !outcome.failures.is_empty() {
@@ -1014,7 +1014,7 @@ fn print_rewrap_outcome(outcome: crate::swarm::lockbox::identity_rewrap::RewrapO
 /// Flags:
 ///   --from <host>                Hostname of the founder envoy that ran rekey-pair.
 ///   --force-orphan-projects      ADR-019 escape hatch — proceed even if any
-///                                swarmgit project is at the delegation cap;
+///                                gitback project is at the delegation cap;
 ///                                affected projects are marked frozen-at-rekey.
 fn cmd_rekey(args: &[String]) -> Result<()> {
     let mut from: Option<String> = None;
@@ -1121,20 +1121,20 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
     // rekey-pair already cleared the cap on their envoy; this
     // envoy's local state should match unless this envoy has been
     // offline long enough to fall behind on prior rekeys.
-    let pre_flight = crate::swarm::swarmgit::rekey::pre_flight_check_caps(
+    let pre_flight = crate::swarm::gitback::rekey::pre_flight_check_caps(
         &home,
         &old_pubkey_text,
     )
-    .context("swarmgit pre-flight cap check")?;
+    .context("gitback pre-flight cap check")?;
     if !pre_flight.at_cap.is_empty() && !force_orphan_projects {
         bail!(
-            "{} swarmgit project(s) at delegation cap ({}/{}): {}\n  \
-             Run `vigo swarm swarmgit project re-found <handle>` per project to \
+            "{} gitback project(s) at delegation cap ({}/{}): {}\n  \
+             Run `vigo swarm gitback project re-found <handle>` per project to \
              mint a fresh project_id, or pass --force-orphan-projects to proceed \
              and mark these projects frozen-at-rekey.",
             pre_flight.at_cap.len(),
-            crate::swarm::swarmgit::envelopes::DELEGATION_MAX_LEN,
-            crate::swarm::swarmgit::envelopes::DELEGATION_MAX_LEN,
+            crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN,
+            crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN,
             pre_flight.at_cap.join(", ")
         );
     }
@@ -1194,14 +1194,14 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
     )
     .context("lockbox sync after rotation")?;
 
-    // ADR-019: swarmgit sync — same as the founder side. Each envoy
+    // ADR-019: gitback sync — same as the founder side. Each envoy
     // in the puddle signs its OWN delegation locally using its copy
     // of the OLD puddle key (which is the same shared keypair, so the
     // canonical signed bytes are identical modulo `delegated_at`)
     // and rebuilds tokens.json with the fresh admin under NEW. Each
     // envoy maintains a self-consistent local view.
     let gm_outcome =
-        crate::swarm::swarmgit::rekey::apply_post_rotation_swarmgit_sync(
+        crate::swarm::gitback::rekey::apply_post_rotation_gitback_sync(
             &home,
             &old_key,
             &new_key,
@@ -1210,7 +1210,7 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
             now,
             force_orphan_projects,
         )
-        .context("swarmgit sync after rotation")?;
+        .context("gitback sync after rotation")?;
 
     // Lock any stale session helper; the user runs `unlock` in their
     // own (non-sudo) shell to start the new helper.
@@ -1227,7 +1227,7 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
         pp_bak.display()
     );
     print_rewrap_outcome(outcome);
-    print_swarmgit_rekey_outcome(&gm_outcome);
+    print_gitback_rekey_outcome(&gm_outcome);
     println!();
     println!(
         "Run `vigo swarm puddle unlock` (no sudo) to start the session helper under the"
@@ -1240,7 +1240,7 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
 
 fn cmd_members(_args: &[String]) -> Result<()> {
     // Local-only view: this envoy's pubkey + initialization status.
-    // ADR-015 (swarmgit substrate) and ADR-016 (lockbox membership
+    // ADR-015 (gitback substrate) and ADR-016 (lockbox membership
     // on puddle) shipped, so peer puddle pubkeys ARE observable —
     // but via the lockbox peer table, not the puddle module's own
     // state. Surface that path so an operator looking at the local
@@ -1587,18 +1587,18 @@ fn print_offline_envoy_hint(local_puddle_pubkey: &str, username: &str) {
 
 fn print_name_usage() {
     eprintln!(
-        "vigo swarm puddle name — friendly names for swarmgit projects (ADR-022)
+        "vigo swarm puddle name — friendly names for gitback projects (ADR-022)
 
 USAGE:
     vigo swarm puddle name set <name>     Claim <name> for this puddle. Requires the
-                                          puddle unlocked. Afterwards `swarmgit://<name>/<repo>`
-                                          resolves to `swarmgit://sha256(your-pubkey ‖ <repo>)/<repo>`.
+                                          puddle unlocked. Afterwards `gitback://<name>/<repo>`
+                                          resolves to `gitback://sha256(your-pubkey ‖ <repo>)/<repo>`.
     vigo swarm puddle name clear [--yes]  Drop this puddle's name claim. Breaks every
-                                          `swarmgit://<name>/…` URL; the hex project_id URLs keep working.
+                                          `gitback://<name>/…` URL; the hex project_id URLs keep working.
     vigo swarm puddle name show           Show this puddle's name claim and the fleet view of it.
 
 Friendly names are first-come and cooperatively enforced — a hint, not a trust anchor.
-The unforgeable form is always `swarmgit://<project_id>/<repo>`. See ADR-022."
+The unforgeable form is always `gitback://<project_id>/<repo>`. See ADR-022."
     );
 }
 
@@ -1696,7 +1696,7 @@ fn cmd_name_set(args: &[String]) -> Result<()> {
             "name '{}' is already claimed by puddle ed25519:{} in this fleet's current view.\n\
              Pick another name. If you believe that claim is stale (the other puddle ran \
              `name clear`), wait for the fleet name map to refresh and retry.\n\
-             The unforgeable form is always swarmgit://<project_id>/<repo>.",
+             The unforgeable form is always gitback://<project_id>/<repo>.",
             name_arg, other
         );
     }
@@ -1746,12 +1746,12 @@ fn cmd_name_set(args: &[String]) -> Result<()> {
     println!("✓ Claimed puddle name '{}'", name_arg);
     println!("  Puddle pubkey: ed25519:{}", my_hex);
     println!(
-        "  Resolves:      swarmgit://{}/<repo>  →  swarmgit://{}/<repo>  (project_id = sha256(pubkey ‖ repo))",
+        "  Resolves:      gitback://{}/<repo>  →  gitback://{}/<repo>  (project_id = sha256(pubkey ‖ repo))",
         name_arg, pk_short
     );
     println!();
     println!(
-        "Cooperative first-come naming — a hint, not a trust anchor. swarmgit://{}/<repo>",
+        "Cooperative first-come naming — a hint, not a trust anchor. gitback://{}/<repo>",
         name_arg
     );
     println!("resolves from this envoy immediately; other envoys pick it up as the fleet name");
@@ -1779,9 +1779,9 @@ fn cmd_name_clear(args: &[String]) -> Result<()> {
     if !yes {
         eprintln!(
             "Clearing this puddle's name claim '{name}'.\n\n\
-             Every `swarmgit://{name}/<repo>` URL anyone wrote down will stop resolving — \
+             Every `gitback://{name}/<repo>` URL anyone wrote down will stop resolving — \
              and if a different puddle later claims '{name}', those URLs would resolve to \
-             *their* projects instead. The hex `swarmgit://<project_id>/<repo>` URLs keep \
+             *their* projects instead. The hex `gitback://<project_id>/<repo>` URLs keep \
              working. Name claims do not expire on their own; clearing is the only way to \
              give the name back.\n\n\
              Re-run with --yes to proceed.",
@@ -1868,7 +1868,7 @@ fn cmd_name_show(_args: &[String]) -> Result<()> {
                     }
                 } else {
                     println!(
-                        "  fleet view '{}': COLLISION — {} puddles claim it; resolvers will refuse it and require swarmgit://<project_id>/<repo>:",
+                        "  fleet view '{}': COLLISION — {} puddles claim it; resolvers will refuse it and require gitback://<project_id>/<repo>:",
                         claim.body.name, claimants.len()
                     );
                     for (c, _) in &claimants {
@@ -2065,7 +2065,7 @@ fn write_pubkey(path: &Path, pubkey: &str, _username: &str) -> Result<()> {
 
 /// Atomically write `content` to `path` with mode 0644, chowned to
 /// `username` when running as root. Write-to-temp-then-rename so a
-/// concurrent reader (the `swarmgit` traits collector) never sees a
+/// concurrent reader (the `gitback` traits collector) never sees a
 /// torn file. Used for public-by-construction per-user JSON — i.e.
 /// the name claim ([`super::name::NameClaim::save`]).
 #[cfg(unix)]

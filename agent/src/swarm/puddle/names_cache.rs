@@ -4,7 +4,7 @@
 //! Local cache of the fleet friendly-name map (ADR-022).
 //!
 //! The server aggregates every puddle's name claim (gossiped via the
-//! `swarmgit` trait) into a `name → claims` map and serves it at
+//! `gitback` trait) into a `name → claims` map and serves it at
 //! `GET /api/v1/swarm/puddle/names`. The agent's `names_bootstrap`
 //! loop fetches that periodically and on startup, writing the result
 //! here as world-readable JSON. Three consumers read it, all *off*
@@ -12,7 +12,7 @@
 //!
 //! - `vigo swarm puddle name set <name>` — refuse-check ("is this
 //!   name already claimed by a different puddle?").
-//! - the `git-remote-swarmgit` resolver — `<name>` → puddle pubkey →
+//! - the `git-remote-gitback` resolver — `<name>` → puddle pubkey →
 //!   `project_id = sha256(pubkey ‖ handle)` (via the helper daemon).
 //! - `vigo swarm puddle name show` — surfaces the fleet view.
 //!

@@ -366,17 +366,17 @@ watcher:
 #   max_bandwidth_percent: 50                   # max % of detected link speed agents use for transfers
 #   manifest_liveness_ttl: 24h                  # active manifest entries unrefreshed for this long get revoked
 #
-#   # Swarmcast (admin-pushed file distribution).
+#   # Filecast (admin-pushed file distribution).
 #   payload:
-#     enabled: ["*"]                            # which envoys may receive admin-pushed swarmcasts
+#     enabled: ["*"]                            # which envoys may receive admin-pushed filecasts
 #     max_size_bytes: 0                         # per-distribute upload cap. 0 = no cap (today's behavior)
-#     default_retention: "7d"                   # default retention when --retention omitted on `vigocli swarm swarmcast distribute`
+#     default_retention: "7d"                   # default retention when --retention omitted on `vigocli swarm filecast distribute`
 #
-#   # Swarmgit (git-over-swarm). Authorization gate + bundle size +
+#   # Gitback (git-over-swarm). Authorization gate + bundle size +
 #   # envelope retention. Bundle cap is enforced publisher-side at
 #   # fan-out time; envelope retention controls when revoke/leave
 #   # gossip envelopes are reaped.
-#   swarmgit:
+#   gitback:
 #     enabled: ["*"]
 #     max_bundle_bytes: 1073741824              # 1 GiB. 0 = no cap.
 #     envelope_retention: "90d"                 # revoke/leave envelope reap window. Empty = compile-time default (90d).
@@ -399,7 +399,7 @@ watcher:
 #     max_file_bytes: 1073741824                # 1 GiB per-file ciphertext cap on auto-encrypt + push. 0 = no cap.
 #     envelope_retention: "90d"                 # LEAVE/RESURRECT/TOMBSTONE reap window. Empty = compile-time default (90d).
 #
-#   # swarmresolve — when true, each swarm-enabled agent maintains a
+#   # hostdox — when true, each swarm-enabled agent maintains a
 #   # delimited block in /etc/hosts mapping every announced peer hostname to
 #   # its LAN IP. Additive only: lines outside the managed block are
 #   # untouched, and any name the swarm doesn't hold still resolves via DNS.
@@ -409,7 +409,7 @@ watcher:
 #   # this is on, do NOT also manage /etc/hosts with a whole-file `type: file`
 #   # module — it'll clobber the managed block and the two will flap. Use
 #   # `type: host` (per-entry) or `type: blockinfile` (own markers) instead.
-#   swarmresolve: false
+#   hostdox: false
 
 
 # ── Gossip & Fleet Primitives ────────────────────────────────────────────

@@ -47,36 +47,36 @@ pub struct AgentSwarmState {
 }
 
 /// Resolved gate booleans for the four content subsystems plus the
-/// substrate-level kill switch, plus `swarmresolve`. `puddle` is the
+/// substrate-level kill switch, plus `hostdox`. `puddle` is the
 /// single-source-of-truth for lockbox (ADR-020) — there is no
-/// separate lockbox field. `swarmresolve` is the one default-OFF gate
+/// separate lockbox field. `hostdox` is the one default-OFF gate
 /// (editing `/etc/hosts` is an operator decision — see
-/// [`super::gates::swarmresolve_active`]).
+/// [`super::gates::hostdox_active`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GateState {
     pub swarm: bool,
     pub payload: bool,
-    pub swarmgit: bool,
+    pub gitback: bool,
     pub longdrawer: bool,
     pub puddle: bool,
     #[serde(default)]
-    pub swarmresolve: bool,
+    pub hostdox: bool,
 }
 
 impl Default for GateState {
-    /// Default is all-on EXCEPT `swarmresolve` — mirrors the fail-open
+    /// Default is all-on EXCEPT `hostdox` — mirrors the fail-open
     /// semantic in [`super::gates::substrate_active`] for the content
     /// subsystems (a freshly-enrolled envoy with no policy bundle yet
     /// runs them until told otherwise) and the fail-*closed* semantic
-    /// for swarmresolve (off until the server explicitly says on).
+    /// for hostdox (off until the server explicitly says on).
     fn default() -> Self {
         Self {
             swarm: true,
             payload: true,
-            swarmgit: true,
+            gitback: true,
             longdrawer: true,
             puddle: true,
-            swarmresolve: false,
+            hostdox: false,
         }
     }
 }
@@ -132,8 +132,8 @@ pub fn read(path: &Path) -> Result<AgentSwarmState> {
 /// runtime evaluation so the disk mirror reflects what the gates
 /// actually do: the content subsystems use the fail-open semantics of
 /// [`super::gates::substrate_active`] (explicit `false` → off; absent
-/// / missing / malformed → on), while `swarmresolve` uses the
-/// fail-closed semantics of [`super::gates::swarmresolve_active`] (only
+/// / missing / malformed → on), while `hostdox` uses the
+/// fail-closed semantics of [`super::gates::hostdox_active`] (only
 /// an explicit truthy value → on).
 fn decode_gates(vars_json: &[u8]) -> GateState {
     if vars_json.is_empty() {
@@ -145,11 +145,11 @@ fn decode_gates(vars_json: &[u8]) -> GateState {
     };
     GateState {
         swarm: gate_truthy(val.get("swarm_enabled")),
-        payload: gate_truthy(val.get("swarm_swarmcast_enabled")),
-        swarmgit: gate_truthy(val.get("swarm_swarmgit_enabled")),
+        payload: gate_truthy(val.get("swarm_filecast_enabled")),
+        gitback: gate_truthy(val.get("swarm_gitback_enabled")),
         longdrawer: gate_truthy(val.get("swarm_longdrawer_enabled")),
         puddle: gate_truthy(val.get("swarm_puddle_enabled")),
-        swarmresolve: gate_explicitly_true(val.get("swarm_swarmresolve_enabled")),
+        hostdox: gate_explicitly_true(val.get("swarm_hostdox_enabled")),
     }
 }
 
@@ -170,7 +170,7 @@ fn gate_truthy(v: Option<&serde_json::Value>) -> bool {
 }
 
 /// Strict truthy check matching [`super::gates::is_explicitly_true`]
-/// (used for `swarm_swarmresolve_enabled`): on only for an explicit
+/// (used for `swarm_hostdox_enabled`): on only for an explicit
 /// truthy value — absence / `null` / `false` are off.
 fn gate_explicitly_true(v: Option<&serde_json::Value>) -> bool {
     match v {
@@ -207,34 +207,34 @@ mod tests {
         assert!(!got.gates.puddle);
         // Defaults stay on for keys not in vars_json.
         assert!(got.gates.payload);
-        assert!(got.gates.swarmgit);
+        assert!(got.gates.gitback);
         assert!(got.gates.longdrawer);
     }
 
     #[test]
     fn empty_vars_json_means_all_on() {
         let g = decode_gates(b"");
-        assert!(g.swarm && g.payload && g.swarmgit && g.longdrawer && g.puddle);
+        assert!(g.swarm && g.payload && g.gitback && g.longdrawer && g.puddle);
     }
 
     #[test]
     fn malformed_vars_json_means_all_on() {
         let g = decode_gates(b"not json");
-        assert!(g.swarm && g.payload && g.swarmgit && g.longdrawer && g.puddle);
+        assert!(g.swarm && g.payload && g.gitback && g.longdrawer && g.puddle);
     }
 
     #[test]
     fn missing_keys_default_to_on() {
         let g = decode_gates(b"{}");
-        assert!(g.swarm && g.payload && g.swarmgit && g.longdrawer && g.puddle);
+        assert!(g.swarm && g.payload && g.gitback && g.longdrawer && g.puddle);
     }
 
     #[test]
     fn explicit_false_disables() {
-        let g = decode_gates(br#"{"swarm_swarmcast_enabled": false}"#);
+        let g = decode_gates(br#"{"swarm_filecast_enabled": false}"#);
         assert!(g.swarm);
         assert!(!g.payload);
-        assert!(g.swarmgit && g.longdrawer && g.puddle);
+        assert!(g.gitback && g.longdrawer && g.puddle);
     }
 
     #[test]
@@ -245,19 +245,19 @@ mod tests {
     }
 
     #[test]
-    fn swarmresolve_gate_defaults_off_and_is_strict() {
+    fn hostdox_gate_defaults_off_and_is_strict() {
         // Default-off — the opposite of the content subsystems.
-        assert!(!decode_gates(b"").swarmresolve);
-        assert!(!decode_gates(b"{}").swarmresolve);
-        assert!(!decode_gates(b"not json").swarmresolve);
-        assert!(!GateState::default().swarmresolve);
+        assert!(!decode_gates(b"").hostdox);
+        assert!(!decode_gates(b"{}").hostdox);
+        assert!(!decode_gates(b"not json").hostdox);
+        assert!(!GateState::default().hostdox);
         // Off for explicit false / null / anything ambiguous.
-        assert!(!decode_gates(br#"{"swarm_swarmresolve_enabled": false}"#).swarmresolve);
-        assert!(!decode_gates(br#"{"swarm_swarmresolve_enabled": null}"#).swarmresolve);
-        assert!(!decode_gates(br#"{"swarm_swarmresolve_enabled": "maybe"}"#).swarmresolve);
+        assert!(!decode_gates(br#"{"swarm_hostdox_enabled": false}"#).hostdox);
+        assert!(!decode_gates(br#"{"swarm_hostdox_enabled": null}"#).hostdox);
+        assert!(!decode_gates(br#"{"swarm_hostdox_enabled": "maybe"}"#).hostdox);
         // On only for an explicit truthy value.
-        assert!(decode_gates(br#"{"swarm_swarmresolve_enabled": true}"#).swarmresolve);
-        assert!(decode_gates(br#"{"swarm_swarmresolve_enabled": "true"}"#).swarmresolve);
-        assert!(decode_gates(br#"{"swarm_swarmresolve_enabled": 1}"#).swarmresolve);
+        assert!(decode_gates(br#"{"swarm_hostdox_enabled": true}"#).hostdox);
+        assert!(decode_gates(br#"{"swarm_hostdox_enabled": "true"}"#).hostdox);
+        assert!(decode_gates(br#"{"swarm_hostdox_enabled": 1}"#).hostdox);
     }
 }

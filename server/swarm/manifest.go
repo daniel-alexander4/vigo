@@ -50,7 +50,7 @@ type ManifestEntry struct {
 // flusher (default 1s cadence) so a server restart preserves intent —
 // without persistence, an empty post-restart manifest gets re-poisoned
 // by agents reporting their cached `swarm_seeds` traits within seconds
-// (root cause of the 2026-04-24 swarmgit reset incident, see
+// (root cause of the 2026-04-24 gitback reset incident, see
 // `tshoot/log-archive-cairn-resolved-20260424-124050.md`). Agents can
 // only refresh existing entries (`RecordSeedFromAgent`); creating new
 // entries via gossip is rejected.
@@ -238,7 +238,7 @@ func (m *ManifestStore) Revoke(sha256 string) {
 // pruner uses to decide an entry is still actively held.
 //
 // This method is the **creator path**: callers may introduce new
-// entries unconditionally. Used by the admin swarmcast-distribute API
+// entries unconditionally. Used by the admin filecast-distribute API
 // (server-side, authoritative). For agent gossip, use
 // RecordSeedFromAgent so unknown SHAs are rejected.
 func (m *ManifestStore) RecordSeed(sha256, label, target, retention, seederID string, size uint64) {

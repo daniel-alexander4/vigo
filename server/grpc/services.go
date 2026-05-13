@@ -122,7 +122,7 @@ func (s *AgentService) SetSwarm(pt *swarm.PeerTracker, ms *swarm.ManifestStore) 
 }
 
 // SetSwarmConfig stores the swarm config section so subsystem-level
-// gates (e.g., swarmgit/lockbox blacklists) can be consulted at
+// gates (e.g., gitback/lockbox blacklists) can be consulted at
 // check-in time.
 func (s *AgentService) SetSwarmConfig(sc config.SwarmSection) {
 	s.swarmCfg = sc

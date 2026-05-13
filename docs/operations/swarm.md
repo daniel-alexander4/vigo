@@ -1,7 +1,7 @@
 
 # Swarm Operations
 
-How to configure, monitor, and troubleshoot the envoy P2P substrate and the four content subsystems that ride it ([payload](../reference/glossary.md#payload), [longdrawer](../engineering/subsystems/longdrawer.md), [swarmgit](../engineering/subsystems/swarmgit.md), [lockbox](../engineering/subsystems/lockbox.md)).
+How to configure, monitor, and troubleshoot the envoy P2P substrate and the four content subsystems that ride it ([payload](../reference/glossary.md#payload), [longdrawer](../engineering/subsystems/longdrawer.md), [gitback](../engineering/subsystems/gitback.md), [lockbox](../engineering/subsystems/lockbox.md)).
 
 ## Enabling Swarm
 
@@ -13,7 +13,7 @@ swarm:
   port: 1531                         # agent peer server port (default)
   max_bandwidth_percent: 50          # agent download throttle (default)
   puddle:    { enabled: ["*"] }      # lockbox derives from this
-  swarmgit: { enabled: ["*"] }
+  gitback: { enabled: ["*"] }
   longdrawer:  { enabled: ["*"] }
   payload:   { enabled: ["*"] }
 ```
@@ -68,7 +68,7 @@ List all swarm seeds:
 vigocli swarm list
 ```
 
-The web UI at [`/payload`](../reference/ui/swarm-swarmcast.md) shows all active and revoked seeds with distribution progress. Detail pages auto-refresh every 5 seconds.
+The web UI at [`/payload`](../reference/ui/swarm-filecast.md) shows all active and revoked seeds with distribution progress. Detail pages auto-refresh every 5 seconds.
 
 ## Envoy-Seeded Distribution
 
@@ -210,17 +210,17 @@ No configuration is needed — jitter is automatic.
 
 ## Disk Space
 
-Every peer-to-peer delivery path in the fleet — swarmcast (admin-distributed swarm blobs), vigocrypt (lockbox ciphertext), swarmgit (swarmgit bundles), and vigosync (longdrawer announcements) — refuses to commit bytes to a filesystem that has **10% or less free**. The check applies symmetrically on both sides of each transfer:
+Every peer-to-peer delivery path in the fleet — filecast (admin-distributed swarm blobs), vigocrypt (lockbox ciphertext), gitback (gitback bundles), and vigosync (longdrawer announcements) — refuses to commit bytes to a filesystem that has **10% or less free**. The check applies symmetrically on both sides of each transfer:
 
 - **Sender side** — before a push, the sender asks the recipient's peer server `GET /health/storage?for=<subsystem>[&user=…]` over the existing mTLS on port 1531 and compares the returned `free_pct` to the threshold. A peer at or below 10% free is skipped quietly; fan-outs across many peers probe each one once per minute (60s cache) so a burst doesn't hammer the health endpoint.
-- **Receiver side** — the push handler (`/lockbox/push`, `/swarmgit/push`) re-checks its own disk on entry and returns **507 Insufficient Storage** before reading any body bytes. This closes the race between a sender's cached probe and the push arriving when the disk has since filled up.
+- **Receiver side** — the push handler (`/lockbox/push`, `/gitback/push`) re-checks its own disk on entry and returns **507 Insufficient Storage** before reading any body bytes. This closes the race between a sender's cached probe and the push arriving when the disk has since filled up.
 - **Swarm (pull-based)** — the downloader gates itself in `BlobCache::check_disk_space`, which now enforces both the classic absolute-reserve check (`available >= blob_size + 512 MiB`) AND the 10% free-pct gate. A receiver with 9% free aborts the download before committing chunks.
 
 Skipped pushes are no-ops, not failures: the next push cadence re-probes, and as soon as the peer crosses above 10% free the pushes resume on their own. No backoff state accumulates. Senders log skips at `warn` (or `debug` for announcement-only paths like longdrawer) so operators can see which peers are in disk-pressure state.
 
 The 10% threshold is the default, overridable with `VIGO_MIN_FREE_PCT=<f64>` in the agent environment (primarily for tests). Fleet-wide policy override via `server.yaml` is a follow-up.
 
-Each subsystem measures the filesystem where its data actually lands — `/var/lib/vigo/swarm/.blobs` for payload, `/var/lib/vigo/swarm/swarmgit` for swarmgit mirrors, `~<user>/lockbox` for lockbox ciphertext, `~<user>/longdrawer` for longdrawer plaintext. These may sit on different mounts; the check uses the correct one per purpose.
+Each subsystem measures the filesystem where its data actually lands — `/var/lib/vigo/swarm/.blobs` for payload, `/var/lib/vigo/swarm/gitback` for gitback mirrors, `~<user>/lockbox` for lockbox ciphertext, `~<user>/longdrawer` for longdrawer plaintext. These may sit on different mounts; the check uses the correct one per purpose.
 
 ## Troubleshooting
 
@@ -373,7 +373,7 @@ What happens for every action an operator can take on the seeder or downloader.
 ## Related
 
 - [Swarm Concepts](../engineering/subsystems/swarm.md) — How swarm works
-- [vigocli payload](../reference/cli/swarm-swarmcast.md) — CLI reference for admin-pushed swarmcasts on this substrate
+- [vigocli payload](../reference/cli/swarm-filecast.md) — CLI reference for admin-pushed filecasts on this substrate
 - [Server Configuration](../getting-started/server-config.md) — `swarm:` section
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

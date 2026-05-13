@@ -23,7 +23,7 @@ From `/proc/self/{status,fd}` on Linux; `ps` fallback on macOS. Each row is one 
 | Open FDs across descendants | `agent_self.descendant_open_fds` | warn > 200 / fail > 500 |
 | Agent uptime | `agent_self.uptime_secs` | uncolored — context only |
 
-The descendant rows matter because the agent regularly spawns short-lived children (git-receive-pack via the swarmgit helper, package-manager probes, exec resources) and FD leaks in those children would not show up in `open_fds`. Tracking the descendant total catches leaks in child code paths the agent's own /proc/self/fd count is blind to.
+The descendant rows matter because the agent regularly spawns short-lived children (git-receive-pack via the gitback helper, package-manager probes, exec resources) and FD leaks in those children would not show up in `open_fds`. Tracking the descendant total catches leaks in child code paths the agent's own /proc/self/fd count is blind to.
 
 ### Host Pressure
 

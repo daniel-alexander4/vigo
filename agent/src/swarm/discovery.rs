@@ -34,9 +34,9 @@ use super::meta::chunks_for_size;
 use super::peer_client;
 use super::peermap::{PeerMap, PeerSource};
 use crate::update::TlsCerts;
-use crate::swarm::swarmgit::peer_table::{LocalInfo as SwarmgitLocalInfo, PeerTable as SwarmgitPeerTable};
-use crate::swarm::swarmgit::pending_claims::{format_claim_line, parse_claim_line, PendingClaims as SwarmgitPendingClaims};
-use crate::swarm::swarmgit::receiver::ClaimsHandle as SwarmgitClaimsHandle;
+use crate::swarm::gitback::peer_table::{LocalInfo as GitbackLocalInfo, PeerTable as GitbackPeerTable};
+use crate::swarm::gitback::pending_claims::{format_claim_line, parse_claim_line, PendingClaims as GitbackPendingClaims};
+use crate::swarm::gitback::receiver::ClaimsHandle as GitbackClaimsHandle;
 
 /// Multicast group address.
 const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 42);
@@ -78,7 +78,7 @@ const MAX_MSG_SIZE: usize = 1400;
 /// past MAX_MSG_SIZE — before, build checks capped at MAX_MSG_SIZE
 /// and the SIG was appended *after*, producing ~1500-byte packets
 /// that the 1400-byte receive buffer silently truncated, stripping
-/// the SIG line and killing swarmgit authenticity on every datagram.
+/// the SIG line and killing gitback authenticity on every datagram.
 const SIG_FOOTER_RESERVE: usize = 160;
 
 /// Effective content budget for `build_announcement`. Subtract the
@@ -88,7 +88,7 @@ const MAX_CONTENT_SIZE: usize = MAX_MSG_SIZE - SIG_FOOTER_RESERVE;
 /// Receive buffer size. Deliberately larger than [`MAX_MSG_SIZE`] so a
 /// sender that slips past the budget (protocol growth, a mismatched
 /// build, a bug) isn't silently truncated — truncation drops the SIG
-/// line and kills swarmgit authenticity for the whole datagram. A
+/// line and kills gitback authenticity for the whole datagram. A
 /// warn-once fires if `recv_from` fills this buffer, flagging the
 /// sender as misbehaving instead of leaving the investigator to
 /// discover the issue via tcpdump.
@@ -120,18 +120,18 @@ pub fn spawn(
     swarm_port: u16,
     cancel: tokio_util::sync::CancellationToken,
     announce: Arc<super::AnnounceSignal>,
-    swarmgit_peer_table: Option<Arc<SwarmgitPeerTable>>,
-    swarmgit_local_info: Option<SwarmgitLocalInfo>,
-    swarmgit_pending_claims: Option<Arc<SwarmgitPendingClaims>>,
-    swarmgit_claims_handle: Option<SwarmgitClaimsHandle>,
-    swarmgit_gate: crate::swarm::swarmgit::Gate,
-    swarmgit_signing_key: Option<Arc<ed25519_dalek::SigningKey>>,
-    swarmgit_pubkey_cache: Option<Arc<crate::swarm::swarmgit::peer_pubkey_cache::PeerPubkeyCache>>,
+    gitback_peer_table: Option<Arc<GitbackPeerTable>>,
+    gitback_local_info: Option<GitbackLocalInfo>,
+    gitback_pending_claims: Option<Arc<GitbackPendingClaims>>,
+    gitback_claims_handle: Option<GitbackClaimsHandle>,
+    gitback_gate: crate::swarm::gitback::Gate,
+    gitback_signing_key: Option<Arc<ed25519_dalek::SigningKey>>,
+    gitback_pubkey_cache: Option<Arc<crate::swarm::gitback::peer_pubkey_cache::PeerPubkeyCache>>,
 ) {
-    // Make the swarmresolve host index available before the listener
+    // Make the hostdox host index available before the listener
     // starts so early `HOST:` lines aren't dropped on the floor.
-    // Idempotent — `swarmresolve::spawn` also calls this.
-    let _ = crate::swarm::swarmresolve::init_host_map();
+    // Idempotent — `hostdox::spawn` also calls this.
+    let _ = crate::swarm::hostdox::init_host_map();
 
     // Build one shared peer agent at spawn time. Wrapped in an Arc so the
     // listener can clone it cheaply into the blocking tasks it spawns per
@@ -151,13 +151,13 @@ pub fn spawn(
     let manifest_listen = manifest.clone();
     let cancel_listen = cancel.clone();
     let listen_agent = shared_agent.clone();
-    let swarmgit_table_listen = swarmgit_peer_table.clone();
-    let swarmgit_claims_listen = swarmgit_claims_handle.clone();
-    let listen_hostname = swarmgit_local_info
+    let gitback_table_listen = gitback_peer_table.clone();
+    let gitback_claims_listen = gitback_claims_handle.clone();
+    let listen_hostname = gitback_local_info
         .as_ref()
         .map(|li| li.hostname.clone());
-    let gate_listen = swarmgit_gate.clone();
-    let pubkey_cache_listen = swarmgit_pubkey_cache.clone();
+    let gate_listen = gitback_gate.clone();
+    let pubkey_cache_listen = gitback_pubkey_cache.clone();
 
     // Listener task.
     tokio::spawn(async move {
@@ -166,8 +166,8 @@ pub fn spawn(
             manifest_listen,
             listen_agent,
             cancel_listen,
-            swarmgit_table_listen,
-            swarmgit_claims_listen,
+            gitback_table_listen,
+            gitback_claims_listen,
             listen_hostname,
             gate_listen,
             pubkey_cache_listen,
@@ -187,10 +187,10 @@ pub fn spawn(
             swarm_port,
             cancel,
             announce,
-            swarmgit_local_info,
-            swarmgit_pending_claims,
-            swarmgit_gate,
-            swarmgit_signing_key,
+            gitback_local_info,
+            gitback_pending_claims,
+            gitback_gate,
+            gitback_signing_key,
         )
         .await
         {
@@ -206,11 +206,11 @@ async fn listen_loop(
     manifest: Arc<Manifest>,
     shared_agent: Option<Arc<ureq::Agent>>,
     cancel: tokio_util::sync::CancellationToken,
-    swarmgit_peer_table: Option<Arc<SwarmgitPeerTable>>,
-    swarmgit_claims_handle: Option<SwarmgitClaimsHandle>,
+    gitback_peer_table: Option<Arc<GitbackPeerTable>>,
+    gitback_claims_handle: Option<GitbackClaimsHandle>,
     local_hostname: Option<String>,
-    swarmgit_gate: crate::swarm::swarmgit::Gate,
-    swarmgit_pubkey_cache: Option<Arc<crate::swarm::swarmgit::peer_pubkey_cache::PeerPubkeyCache>>,
+    gitback_gate: crate::swarm::gitback::Gate,
+    gitback_pubkey_cache: Option<Arc<crate::swarm::gitback::peer_pubkey_cache::PeerPubkeyCache>>,
 ) -> anyhow::Result<()> {
     let socket = create_multicast_socket()?;
     socket.set_nonblocking(true)?;
@@ -230,8 +230,8 @@ async fn listen_loop(
                         if n == RECV_BUF_SIZE && !warned_truncation {
                             // Datagram filled the receive buffer — the kernel
                             // may have truncated the tail, which for signed
-                            // swarmgit packets means losing the SIG line and
-                            // dropping swarmgit content for this peer. Warn
+                            // gitback packets means losing the SIG line and
+                            // dropping gitback content for this peer. Warn
                             // once per process so the journal names the
                             // symptom instead of leaving it to tcpdump.
                             warn!(
@@ -243,57 +243,57 @@ async fn listen_loop(
                         }
                         if let Ok(msg) = std::str::from_utf8(&buf[..n]) {
                             let mut result = parse_announcement(msg, src, &peer_map, &manifest);
-                            // Swarmgit authenticity (0.30.11+): verify the
+                            // Gitback authenticity (0.30.11+): verify the
                             // SIG line against the embedded pubkey on
-                            // the SWARMGIT line and cross-check the pubkey
+                            // the GITBACK line and cross-check the pubkey
                             // against the TOFU cache. On any failure,
-                            // strip swarmgit_peer + swarmgit_claims so we
+                            // strip gitback_peer + gitback_claims so we
                             // don't act on spoofed content. Swarm
                             // HAVE/WANT parsing is kept — those lines
                             // are not security-critical and losing
                             // them on a rollout gap would stall blob
                             // discovery for no gain.
-                            if let Some(cache) = swarmgit_pubkey_cache.as_ref() {
-                                if !verify_swarmgit_authenticity(msg, &result, cache) {
-                                    result.swarmgit_peer = None;
-                                    result.swarmgit_claims.clear();
-                                    result.swarmgit_projects.clear();
+                            if let Some(cache) = gitback_pubkey_cache.as_ref() {
+                                if !verify_gitback_authenticity(msg, &result, cache) {
+                                    result.gitback_peer = None;
+                                    result.gitback_claims.clear();
+                                    result.gitback_projects.clear();
                                 }
                             }
-                            // Ingest any swarmgit peer info into the
+                            // Ingest any gitback peer info into the
                             // local peer table. Skipped while the
                             // local gate is off — a dormant envoy
-                            // drops received SWARMGIT lines on the
+                            // drops received GITBACK lines on the
                             // floor so the local peer table doesn't
                             // accumulate state that should not exist.
-                            let sender_hostname = result.swarmgit_peer.as_ref().map(|li| li.hostname.clone());
-                            let gate_on = swarmgit_gate.enabled();
+                            let sender_hostname = result.gitback_peer.as_ref().map(|li| li.hostname.clone());
+                            let gate_on = gitback_gate.enabled();
                             if gate_on {
                                 if let (Some(table), Some(li)) =
-                                    (swarmgit_peer_table.as_ref(), result.swarmgit_peer.clone())
+                                    (gitback_peer_table.as_ref(), result.gitback_peer.clone())
                                 {
                                     table.update(li.into_peer_entry());
                                 }
                             }
-                            // Ingest any SWARMGITCLAIM entries:
+                            // Ingest any GITBACKCLAIM entries:
                             // check whether the local hostname is
                             // in each claim list and update the
                             // ClaimsHandle accordingly. Skipped
                             // when the gate is off.
                             if gate_on {
                                 if let (Some(ch), Some(my_host), Some(sender)) = (
-                                    swarmgit_claims_handle.as_ref(),
+                                    gitback_claims_handle.as_ref(),
                                     local_hostname.as_ref(),
                                     sender_hostname.as_ref(),
                                 ) {
-                                    let now = crate::swarm::swarmgit::state::unix_seconds_now();
-                                    for (label, hosts) in &result.swarmgit_claims {
+                                    let now = crate::swarm::gitback::state::unix_seconds_now();
+                                    for (label, hosts) in &result.gitback_claims {
                                         let in_list = hosts.iter().any(|h| h == my_host);
                                         ch.ingest_lan_claim(label, sender, in_list, now);
                                     }
                                 }
                             }
-                            // Ingest any SWARMGITPROJECT entries —
+                            // Ingest any GITBACKPROJECT entries —
                             // record (host, pid_hex, src_addr, handle,
                             // dr_scope, now) into the global
                             // ProjectPeers index for the helper-daemon
@@ -301,11 +301,11 @@ async fn listen_loop(
                             // projects cache. `handle` / `dr_scope` are
                             // `None` from a peer still on the pre-0.49.0
                             // 2-field announce form.
-                            if gate_on && !result.swarmgit_projects.is_empty() {
+                            if gate_on && !result.gitback_projects.is_empty() {
                                 let now = now_unix_seconds();
                                 let src_ip = src.ip();
-                                for (host, pid_hex, handle, dr_scope) in &result.swarmgit_projects {
-                                    crate::swarm::swarmgit::project_peers::record_global(
+                                for (host, pid_hex, handle, dr_scope) in &result.gitback_projects {
+                                    crate::swarm::gitback::project_peers::record_global(
                                         pid_hex,
                                         host,
                                         Some(src_ip),
@@ -315,17 +315,17 @@ async fn listen_loop(
                                     );
                                 }
                             }
-                            // Feed the swarmresolve host index. Not gated
+                            // Feed the hostdox host index. Not gated
                             // on any subsystem — the index is benign;
-                            // the swarmresolve reactor decides whether to
+                            // the hostdox reactor decides whether to
                             // touch /etc/hosts. (HOST: lines are not
-                            // signed-content-critical the way SWARMGIT*
+                            // signed-content-critical the way GITBACK*
                             // lines are; a spoofed one only mislabels
                             // an IP in a managed /etc/hosts block on a
-                            // host whose operator opted into swarmresolve —
+                            // host whose operator opted into hostdox —
                             // same trust model as the LAN itself.)
                             if let Some(host) = &result.host_name {
-                                crate::swarm::swarmresolve::record_host_global(
+                                crate::swarm::hostdox::record_host_global(
                                     host,
                                     src.ip(),
                                     now_unix_seconds(),
@@ -396,10 +396,10 @@ async fn announce_loop(
     swarm_port: u16,
     cancel: tokio_util::sync::CancellationToken,
     announce: Arc<super::AnnounceSignal>,
-    swarmgit_local_info: Option<SwarmgitLocalInfo>,
-    swarmgit_pending_claims: Option<Arc<SwarmgitPendingClaims>>,
-    swarmgit_gate: crate::swarm::swarmgit::Gate,
-    swarmgit_signing_key: Option<Arc<ed25519_dalek::SigningKey>>,
+    gitback_local_info: Option<GitbackLocalInfo>,
+    gitback_pending_claims: Option<Arc<GitbackPendingClaims>>,
+    gitback_gate: crate::swarm::gitback::Gate,
+    gitback_signing_key: Option<Arc<ed25519_dalek::SigningKey>>,
 ) -> anyhow::Result<()> {
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     socket.set_multicast_ttl_v4(1)?; // LAN-local only
@@ -465,16 +465,16 @@ async fn announce_loop(
             .into_iter()
             .filter(|sha| !manifest.is_revoked(sha))
             .collect();
-        // The swarmgit gate may flip at runtime — re-read on every
-        // iteration. When off, skip emitting the SWARMGIT and
-        // SWARMGITCLAIM lines; receivers will see the envoy drop
+        // The gitback gate may flip at runtime — re-read on every
+        // iteration. When off, skip emitting the GITBACK and
+        // GITBACKCLAIM lines; receivers will see the envoy drop
         // out of their peer tables on the next TTL cycle.
-        let gate_on = swarmgit_gate.enabled();
-        let announce_local_info = if gate_on { swarmgit_local_info.as_ref() } else { None };
+        let gate_on = gitback_gate.enabled();
+        let announce_local_info = if gate_on { gitback_local_info.as_ref() } else { None };
 
         // Short-circuit only if we have nothing AT ALL to announce.
-        // A pure swarmgit receiver (no swarm blobs cached yet) still
-        // needs to announce its swarmgit peer info so source envoys
+        // A pure gitback receiver (no swarm blobs cached yet) still
+        // needs to announce its gitback peer info so source envoys
         // can pick it — otherwise we'd be invisible to the LAN peer
         // table until we happened to download something.
         if complete.is_empty() && partials.is_empty() && announce_local_info.is_none() {
@@ -486,10 +486,10 @@ async fn announce_loop(
         // Decoupled from the reactor's cadence — the announcer
         // emits whatever the reactor has staged, without needing
         // a channel or lock coordination. Empty snapshot when the
-        // gate is off so the announcement carries no SWARMGITCLAIM
+        // gate is off so the announcement carries no GITBACKCLAIM
         // lines.
         let claim_snapshot: Vec<(String, Vec<String>)> = if gate_on {
-            swarmgit_pending_claims
+            gitback_pending_claims
                 .as_ref()
                 .map(|pc| pc.snapshot())
                 .unwrap_or_default()
@@ -497,21 +497,21 @@ async fn announce_loop(
             Vec::new()
         };
 
-        // Sign announcements only when the swarmgit gate is on — an
-        // envoy with swarmgit disabled emits no SWARMGIT/SWARMGITCLAIM lines,
+        // Sign announcements only when the gitback gate is on — an
+        // envoy with gitback disabled emits no GITBACK/GITBACKCLAIM lines,
         // so there's nothing for a SIG to cover that matters.
         let sign_for_this_tick = if gate_on {
-            swarmgit_signing_key.as_deref()
+            gitback_signing_key.as_deref()
         } else {
             None
         };
         // Enumerate locally-held projects under every user's
-        // ~/.vigo-swarmgit/, as (pid_hex, handle, dr_scope). Cheap
+        // ~/.vigo-gitback/, as (pid_hex, handle, dr_scope). Cheap
         // (filesystem stat + a small JSON read per project); read once
         // per announce tick. Empty when the gate is off so a dormant
-        // swarmgit subsystem advertises no projects.
+        // gitback subsystem advertises no projects.
         let project_snapshot: Vec<(String, String, String)> = if gate_on {
-            crate::swarm::swarmgit::project_peers::enumerate_local_projects()
+            crate::swarm::gitback::project_peers::enumerate_local_projects()
         } else {
             Vec::new()
         };
@@ -569,7 +569,7 @@ fn sign_and_append(msg: &mut String, key: &ed25519_dalek::SigningKey, timestamp_
 /// Extract the SIG line from a multicast packet, if present. Returns
 /// `(body_without_sig, timestamp_string, signature_bytes)`. Unsigned
 /// packets return `None` — caller decides how to treat them (current
-/// policy: drop swarmgit_peer + swarmgit_claims; swarm HAVE/WANT still
+/// policy: drop gitback_peer + gitback_claims; swarm HAVE/WANT still
 /// honored so blob discovery isn't held hostage to sig rollout).
 pub fn extract_sig(packet: &str) -> Option<(&str, String, Vec<u8>)> {
     // SIG line is the last non-empty line of the packet. Locate it by
@@ -586,24 +586,24 @@ pub fn extract_sig(packet: &str) -> Option<(&str, String, Vec<u8>)> {
     Some((&packet[..=sig_start], ts.to_string(), sig_bytes))
 }
 
-/// Verify an incoming packet's swarmgit authenticity: SIG line present,
-/// signature valid under the SWARMGIT line's embedded pubkey, and that
+/// Verify an incoming packet's gitback authenticity: SIG line present,
+/// signature valid under the GITBACK line's embedded pubkey, and that
 /// pubkey matches the TOFU cache for the sender's hostname. Returns
-/// true iff swarmgit content should be trusted. Packets without a SWARMGIT
-/// line pass through (nothing to verify). Packets with SWARMGIT but no
-/// valid sig return false and the caller strips swarmgit state.
-fn verify_swarmgit_authenticity(
+/// true iff gitback content should be trusted. Packets without a GITBACK
+/// line pass through (nothing to verify). Packets with GITBACK but no
+/// valid sig return false and the caller strips gitback state.
+fn verify_gitback_authenticity(
     raw_packet: &str,
     result: &AnnouncementResult,
-    cache: &std::sync::Arc<crate::swarm::swarmgit::peer_pubkey_cache::PeerPubkeyCache>,
+    cache: &std::sync::Arc<crate::swarm::gitback::peer_pubkey_cache::PeerPubkeyCache>,
 ) -> bool {
-    use crate::swarm::swarmgit::peer_pubkey_cache::CheckOutcome;
-    let peer = match result.swarmgit_peer.as_ref() {
+    use crate::swarm::gitback::peer_pubkey_cache::CheckOutcome;
+    let peer = match result.gitback_peer.as_ref() {
         Some(p) => p,
-        None => return true, // no swarmgit content to verify
+        None => return true, // no gitback content to verify
     };
     if peer.pubkey_hex.is_empty() {
-        warn!(hostname = %peer.hostname, "swarmgit: announcement missing embedded pubkey, dropping swarmgit content");
+        warn!(hostname = %peer.hostname, "gitback: announcement missing embedded pubkey, dropping gitback content");
         return false;
     }
 
@@ -611,7 +611,7 @@ fn verify_swarmgit_authenticity(
     let (body, ts_string, sig_bytes) = match extract_sig(raw_packet) {
         Some(parts) => parts,
         None => {
-            warn!(hostname = %peer.hostname, "swarmgit: announcement missing SIG line, dropping swarmgit content");
+            warn!(hostname = %peer.hostname, "gitback: announcement missing SIG line, dropping gitback content");
             return false;
         }
     };
@@ -620,7 +620,7 @@ fn verify_swarmgit_authenticity(
     let pub_bytes = match hex::decode(&peer.pubkey_hex) {
         Ok(b) if b.len() == 32 => b,
         _ => {
-            warn!(hostname = %peer.hostname, "swarmgit: embedded pubkey malformed, dropping swarmgit content");
+            warn!(hostname = %peer.hostname, "gitback: embedded pubkey malformed, dropping gitback content");
             return false;
         }
     };
@@ -628,13 +628,13 @@ fn verify_swarmgit_authenticity(
     let verifying_key = match ed25519_dalek::VerifyingKey::from_bytes(&pub_array) {
         Ok(k) => k,
         Err(_) => {
-            warn!(hostname = %peer.hostname, "swarmgit: embedded pubkey invalid, dropping swarmgit content");
+            warn!(hostname = %peer.hostname, "gitback: embedded pubkey invalid, dropping gitback content");
             return false;
         }
     };
 
     if !crate::auth::signer::verify_payload(body.as_bytes(), &ts_string, &sig_bytes, &verifying_key) {
-        warn!(hostname = %peer.hostname, "swarmgit: SIG verification failed, dropping swarmgit content");
+        warn!(hostname = %peer.hostname, "gitback: SIG verification failed, dropping gitback content");
         return false;
     }
 
@@ -653,7 +653,7 @@ fn verify_swarmgit_authenticity(
                 hostname = %peer.hostname,
                 announced_pubkey_prefix = %peer.pubkey_hex.chars().take(12).collect::<String>(),
                 cached_pubkey_prefix = %cached_prefix,
-                "swarmgit: pubkey mismatch — dropping swarmgit content. Clear /var/lib/vigo/swarm/swarmgit/peer_pubkeys.json if the hostname was legitimately re-enrolled."
+                "gitback: pubkey mismatch — dropping gitback content. Clear /var/lib/vigo/swarm/gitback/peer_pubkeys.json if the hostname was legitimately re-enrolled."
             );
             false
         }
@@ -679,21 +679,21 @@ fn announce_hostname() -> Option<String> {
 }
 
 /// Build the multicast announcement(s) for one cycle. Returns one packet
-/// in the common case, or two when swarmgit content would crowd out swarm
+/// in the common case, or two when gitback content would crowd out swarm
 /// HAVE/WANT lines.
 ///
 /// Priority inversion fix (0.30.10): earlier revisions appended
-/// SWARMGIT/SWARMGITCLAIM last so they'd be the first thing dropped on MTU
-/// overflow. That silently broke swarmgit on any envoy with more than
+/// GITBACK/GITBACKCLAIM last so they'd be the first thing dropped on MTU
+/// overflow. That silently broke gitback on any envoy with more than
 /// ~15 cached swarm blobs — HAVE lines would fill the packet and the
-/// coordination announcements never went out. Swarmgit content is both
+/// coordination announcements never went out. Gitback content is both
 /// low-bandwidth (a few labels × short hostname lists) and
-/// high-criticality (receivers fire on SWARMGITCLAIM, nothing fires without
+/// high-criticality (receivers fire on GITBACKCLAIM, nothing fires without
 /// it), while HAVE content is high-bandwidth and self-healing (the next
-/// 5s cycle retries). Pack swarmgit first; let HAVE spill across cycles.
+/// 5s cycle retries). Pack gitback first; let HAVE spill across cycles.
 ///
-/// Large-fleet edge case: ~60+ swarmgit labels on one source envoy could
-/// push SWARMGIT+SWARMGITCLAIM past MTU on its own. Split into a second
+/// Large-fleet edge case: ~60+ gitback labels on one source envoy could
+/// push GITBACK+GITBACKCLAIM past MTU on its own. Split into a second
 /// packet in that case — receivers tolerate either packet shape
 /// (every section is optional past HEADER+MANIFEST+ADDR).
 #[allow(clippy::too_many_arguments)]
@@ -704,65 +704,65 @@ fn build_announcement(
     manifest: &Manifest,
     local_ip: Ipv4Addr,
     port: u16,
-    swarmgit_local_info: Option<&SwarmgitLocalInfo>,
-    swarmgit_claims: &[(String, Vec<String>)],
+    gitback_local_info: Option<&GitbackLocalInfo>,
+    gitback_claims: &[(String, Vec<String>)],
     // Projects this envoy currently holds per-user state for, as
     // (pid_hex, handle, dr_scope). One ADR-023 4-field
-    // SWARMGITPROJECT:<host>:<pid_hex>:<handle>:<dr_scope> line emitted
+    // GITBACKPROJECT:<host>:<pid_hex>:<handle>:<dr_scope> line emitted
     // per project; receivers populate ProjectPeers from these. Empty
     // slice in test fixtures + envoys with the gate off.
-    swarmgit_projects: &[(String, String, String)],
+    gitback_projects: &[(String, String, String)],
     signing_key: Option<&ed25519_dalek::SigningKey>,
     timestamp_secs: i64,
 ) -> Vec<String> {
     let manifest_line = format!("MANIFEST:{}\n", manifest.version());
     let addr_line = format!("ADDR:{}:{}\n", local_ip, port);
 
-    // Primary packet. Preamble + SWARMGIT + as many SWARMGITCLAIM as fit under
+    // Primary packet. Preamble + GITBACK + as many GITBACKCLAIM as fit under
     // a reserved budget (leave ≥300 bytes for MANIFEST/ADDR/one HAVE).
     // MAX_CONTENT_SIZE already reserves space for the SIG footer, so a
     // packet that fills this budget still fits in MAX_MSG_SIZE after
     // sign_and_append.
-    let swarmgit_budget_limit = MAX_CONTENT_SIZE - 300;
+    let gitback_budget_limit = MAX_CONTENT_SIZE - 300;
     let mut msg = String::from(HEADER);
     msg.push('\n');
     msg.push_str(&manifest_line);
 
-    if let Some(li) = swarmgit_local_info {
+    if let Some(li) = gitback_local_info {
         let line = format!("{}\n", li.format_announce_line());
-        if msg.len() + line.len() <= swarmgit_budget_limit {
+        if msg.len() + line.len() <= gitback_budget_limit {
             msg.push_str(&line);
         }
     }
 
     let mut overflow_claims: Vec<(String, Vec<String>)> = Vec::new();
-    for (label, hosts) in swarmgit_claims {
+    for (label, hosts) in gitback_claims {
         let line = format!("{}\n", format_claim_line(label, hosts));
-        if msg.len() + line.len() > swarmgit_budget_limit {
+        if msg.len() + line.len() > gitback_budget_limit {
             overflow_claims.push((label.clone(), hosts.clone()));
             continue;
         }
         msg.push_str(&line);
     }
 
-    // SWARMGITPROJECT lines (ADR-015 step 4 LAN auto-discovery).
+    // GITBACKPROJECT lines (ADR-015 step 4 LAN auto-discovery).
     // One line per locally-held project. Same overflow pattern as
-    // SWARMGITCLAIM — anything that doesn't fit gets bumped into a
+    // GITBACKCLAIM — anything that doesn't fit gets bumped into a
     // spillover packet so a many-project envoy still announces every
     // project within the same 30 s tick.
     let mut overflow_projects: Vec<(String, String, String)> = Vec::new();
-    if let Some(li) = swarmgit_local_info {
-        for (pid_hex, handle, dr_scope) in swarmgit_projects {
+    if let Some(li) = gitback_local_info {
+        for (pid_hex, handle, dr_scope) in gitback_projects {
             let line = format!(
                 "{}\n",
-                crate::swarm::swarmgit::project_peers::format_project_line(
+                crate::swarm::gitback::project_peers::format_project_line(
                     &li.hostname,
                     pid_hex,
                     handle,
                     dr_scope,
                 )
             );
-            if msg.len() + line.len() > swarmgit_budget_limit {
+            if msg.len() + line.len() > gitback_budget_limit {
                 overflow_projects.push((pid_hex.clone(), handle.clone(), dr_scope.clone()));
                 continue;
             }
@@ -770,7 +770,7 @@ fn build_announcement(
         }
     }
 
-    // Swarm blob lines, appended after swarmgit. Same overflow break pattern
+    // Swarm blob lines, appended after gitback. Same overflow break pattern
     // as before — losing a HAVE line is safe, the next cycle retries and
     // peers still see the blob via other paths.
     for sha in complete {
@@ -827,7 +827,7 @@ fn build_announcement(
 
     msg.push_str(&addr_line);
     // HOST:<hostname> — the sender's hostname, so receivers can build a
-    // fleet `hostname → IP` index for swarmresolve (`/etc/hosts` block).
+    // fleet `hostname → IP` index for hostdox (`/etc/hosts` block).
     // Always emitted (independent of any subsystem gate); tiny, sits in
     // the always-present tail next to ADDR.
     if let Some(h) = announce_hostname() {
@@ -838,16 +838,16 @@ fn build_announcement(
     }
     let mut packets = vec![msg];
 
-    // Spillover packet for the rare case where SWARMGIT+SWARMGITCLAIM
-    // / SWARMGITPROJECT alone exceed the swarmgit budget. Carries
+    // Spillover packet for the rare case where GITBACK+GITBACKCLAIM
+    // / GITBACKPROJECT alone exceed the gitback budget. Carries
     // only the lines that didn't fit, plus the minimum envelope
-    // (HEADER + MANIFEST + SWARMGIT + ADDR) so the receiver can
+    // (HEADER + MANIFEST + GITBACK + ADDR) so the receiver can
     // identify the sender and ingest claims/projects.
     if !overflow_claims.is_empty() || !overflow_projects.is_empty() {
         let mut spill = String::from(HEADER);
         spill.push('\n');
         spill.push_str(&manifest_line);
-        if let Some(li) = swarmgit_local_info {
+        if let Some(li) = gitback_local_info {
             spill.push_str(&format!("{}\n", li.format_announce_line()));
         }
         let mut hard_overflow_claims = 0usize;
@@ -862,11 +862,11 @@ fn build_announcement(
             spill.push_str(&line);
         }
         let mut hard_overflow_projects = 0usize;
-        if let Some(li) = swarmgit_local_info {
+        if let Some(li) = gitback_local_info {
             for (pid_hex, handle, dr_scope) in &overflow_projects {
                 let line = format!(
                     "{}\n",
-                    crate::swarm::swarmgit::project_peers::format_project_line(
+                    crate::swarm::gitback::project_peers::format_project_line(
                         &li.hostname,
                         pid_hex,
                         handle,
@@ -888,15 +888,15 @@ fn build_announcement(
         if hard_overflow_claims > 0 {
             warn!(
                 overflow_labels = hard_overflow_claims,
-                total_labels = swarmgit_claims.len(),
-                "swarmgit claim list exceeds two-packet capacity — some labels deferred to next cycle"
+                total_labels = gitback_claims.len(),
+                "gitback claim list exceeds two-packet capacity — some labels deferred to next cycle"
             );
         }
         if hard_overflow_projects > 0 {
             warn!(
                 overflow_projects = hard_overflow_projects,
-                total_projects = swarmgit_projects.len(),
-                "swarmgit project list exceeds two-packet capacity — some projects deferred to next cycle"
+                total_projects = gitback_projects.len(),
+                "gitback project list exceeds two-packet capacity — some projects deferred to next cycle"
             );
         }
     }
@@ -914,29 +914,29 @@ struct AnnouncementResult {
     /// via the sentinel `HAVE:<sha>:<have>/<total>` form and we need to
     /// pull `/blob/<sha>/meta` to discover which chunks it actually has.
     bitmap_probes: Vec<(String, String)>,
-    /// Parsed `SWARMGIT:` line if the announcer included one. Used by
-    /// the listener to refresh the swarmgit peer table. Absence means
-    /// the announcer is not swarmgit-enabled (dormant subsystem from
+    /// Parsed `GITBACK:` line if the announcer included one. Used by
+    /// the listener to refresh the gitback peer table. Absence means
+    /// the announcer is not gitback-enabled (dormant subsystem from
     /// Phase 2's matchfile gate) — the peer table stays untouched.
-    swarmgit_peer: Option<SwarmgitLocalInfo>,
-    /// Parsed `SWARMGITCLAIM:` lines. Each entry is a (label,
+    gitback_peer: Option<GitbackLocalInfo>,
+    /// Parsed `GITBACKCLAIM:` lines. Each entry is a (label,
     /// host_list) pair naming which envoys the announcer has
     /// selected to mirror that label. The listener pairs each
-    /// entry with the sender's hostname (from the `swarmgit_peer`
+    /// entry with the sender's hostname (from the `gitback_peer`
     /// field above) and calls `ClaimsHandle::ingest_lan_claim`.
     /// Malformed lines are dropped silently.
-    swarmgit_claims: Vec<(String, Vec<String>)>,
-    /// Parsed `SWARMGITPROJECT:` lines. Each entry is
+    gitback_claims: Vec<(String, Vec<String>)>,
+    /// Parsed `GITBACKPROJECT:` lines. Each entry is
     /// `(host, project_id_hex, handle, dr_scope)`; `handle` /
     /// `dr_scope` are `None` from a peer still on the pre-0.49.0
     /// 2-field form. The listener calls
-    /// [`crate::swarm::swarmgit::project_peers::record_global`]
+    /// [`crate::swarm::gitback::project_peers::record_global`]
     /// per entry to populate the project-keyed peer index.
-    swarmgit_projects: Vec<(String, String, Option<String>, Option<String>)>,
+    gitback_projects: Vec<(String, String, Option<String>, Option<String>)>,
     /// Parsed `HOST:<hostname>` line, if present — the sender's
     /// hostname. The listener pairs it with the datagram source IP
-    /// and feeds `crate::swarm::swarmresolve::record_host_global` to
-    /// build the fleet `hostname → IP` index swarmresolve renders into
+    /// and feeds `crate::swarm::hostdox::record_host_global` to
+    /// build the fleet `hostname → IP` index hostdox renders into
     /// `/etc/hosts`. `None` from a sender on an older agent.
     host_name: Option<String>,
 }
@@ -1013,39 +1013,39 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
         } else if let Some(rest) = line.strip_prefix("ADDR:") {
             addr = Some(rest.to_string());
         } else if let Some(rest) = line.strip_prefix("HOST:") {
-            // Sender's hostname for the swarmresolve fleet `hostname → IP`
+            // Sender's hostname for the hostdox fleet `hostname → IP`
             // index. The IP comes from the datagram source, not this
             // line. Last one wins (a packet only carries one).
             let h = rest.trim();
             if !h.is_empty() {
                 result.host_name = Some(h.to_string());
             }
-        } else if line.starts_with("SWARMGITCLAIM:") {
-            // Order matters: SWARMGITCLAIM: must be tried before
-            // SWARMGIT: because both share the SWARMGIT prefix.
+        } else if line.starts_with("GITBACKCLAIM:") {
+            // Order matters: GITBACKCLAIM: must be tried before
+            // GITBACK: because both share the GITBACK prefix.
             if let Some((label, hosts)) = parse_claim_line(line) {
-                result.swarmgit_claims.push((label, hosts));
+                result.gitback_claims.push((label, hosts));
             }
-        } else if line.starts_with("SWARMGITPROJECT:") {
+        } else if line.starts_with("GITBACKPROJECT:") {
             // ADR-015 step 4 LAN auto-discovery (extended by ADR-023
             // to carry the handle + dr_scope) — record into the global
             // ProjectPeers index so the helper-daemon fan-out hook can
             // find peers without explicit cross_subnet_members config,
             // and so `puddle unlock` can auto-adopt founded projects.
-            // Order matters: must be tried before plain SWARMGIT:
-            // because both share the SWARMGIT prefix.
+            // Order matters: must be tried before plain GITBACK:
+            // because both share the GITBACK prefix.
             if let Some((host, pid_hex, handle, dr_scope)) =
-                crate::swarm::swarmgit::project_peers::parse_project_line(line)
+                crate::swarm::gitback::project_peers::parse_project_line(line)
             {
                 result
-                    .swarmgit_projects
+                    .gitback_projects
                     .push((host, pid_hex, handle, dr_scope));
             }
-        } else if line.starts_with("SWARMGIT:") {
+        } else if line.starts_with("GITBACK:") {
             // Parse and stash for listener ingest. Malformed lines
             // are dropped silently by parse_announce_line.
-            if let Some(li) = SwarmgitLocalInfo::parse_announce_line(line) {
-                result.swarmgit_peer = Some(li);
+            if let Some(li) = GitbackLocalInfo::parse_announce_line(line) {
+                result.gitback_peer = Some(li);
             }
         }
     }
@@ -1591,14 +1591,14 @@ mod tests {
         assert_eq!(peers[0].chunks, expected);
     }
 
-    // ----- swarmgit peer announcement round-trip -----
+    // ----- gitback peer announcement round-trip -----
 
     #[test]
-    fn build_announcement_appends_swarmgit_line_when_local_info_present() {
+    fn build_announcement_appends_gitback_line_when_local_info_present() {
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
-        let li = SwarmgitLocalInfo {
+        let li = GitbackLocalInfo {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec!["workstation".to_string()],
@@ -1618,11 +1618,11 @@ mod tests {
             0,
         );
         let msg = &packets[0];
-        assert!(msg.contains("SWARMGIT:danlap:dan:workstation"));
+        assert!(msg.contains("GITBACK:danlap:dan:workstation"));
     }
 
     #[test]
-    fn build_announcement_omits_swarmgit_line_when_none() {
+    fn build_announcement_omits_gitback_line_when_none() {
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
@@ -1640,17 +1640,17 @@ mod tests {
             0,
         );
         let msg = &packets[0];
-        assert!(!msg.contains("SWARMGIT:"));
+        assert!(!msg.contains("GITBACK:"));
     }
 
     #[test]
-    fn parse_announcement_recovers_swarmgit_line() {
+    fn parse_announcement_recovers_gitback_line() {
         let pubkey_hex = "a".repeat(64);
         let msg = format!(
             "VIGO-SWARM\n\
              MANIFEST:1\n\
              ADDR:10.0.0.1:1531\n\
-             SWARMGIT:plex:dan,alice:homelab:{}\n",
+             GITBACK:plex:dan,alice:homelab:{}\n",
             pubkey_hex
         );
         let pm = PeerMap::new();
@@ -1661,7 +1661,7 @@ mod tests {
             &pm,
             &manifest,
         );
-        let li = result.swarmgit_peer.expect("swarmgit line must be parsed");
+        let li = result.gitback_peer.expect("gitback line must be parsed");
         assert_eq!(li.hostname, "plex");
         assert_eq!(li.users, vec!["dan".to_string(), "alice".to_string()]);
         assert_eq!(li.tags, vec!["homelab".to_string()]);
@@ -1669,7 +1669,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_announcement_without_swarmgit_line_returns_none() {
+    fn parse_announcement_without_gitback_line_returns_none() {
         let msg = "VIGO-SWARM\n\
                    MANIFEST:1\n\
                    ADDR:10.0.0.1:1531\n";
@@ -1681,15 +1681,15 @@ mod tests {
             &pm,
             &manifest,
         );
-        assert!(result.swarmgit_peer.is_none());
+        assert!(result.gitback_peer.is_none());
     }
 
     #[test]
-    fn parse_announcement_ignores_malformed_swarmgit_line() {
+    fn parse_announcement_ignores_malformed_gitback_line() {
         let msg = "VIGO-SWARM\n\
                    MANIFEST:1\n\
                    ADDR:10.0.0.1:1531\n\
-                   SWARMGIT:\n";
+                   GITBACK:\n";
         let pm = PeerMap::new();
         let manifest = test_manifest();
         let result = parse_announcement(
@@ -1698,23 +1698,23 @@ mod tests {
             &pm,
             &manifest,
         );
-        assert!(result.swarmgit_peer.is_none());
+        assert!(result.gitback_peer.is_none());
     }
 
-    // --- SWARMGITCLAIM round-trip (Phase 6) ---
+    // --- GITBACKCLAIM round-trip (Phase 6) ---
 
     #[test]
-    fn build_announcement_appends_swarmgit_claim_lines() {
+    fn build_announcement_appends_gitback_claim_lines() {
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
         let claims = vec![
             (
-                "swarmgit:danlap:dan:vigo-web".to_string(),
+                "gitback:danlap:dan:vigo-web".to_string(),
                 vec!["plex".to_string(), "annlap".to_string()],
             ),
             (
-                "swarmgit:danlap:dan:dotfiles".to_string(),
+                "gitback:danlap:dan:dotfiles".to_string(),
                 vec!["plex".to_string()],
             ),
         ];
@@ -1732,16 +1732,16 @@ mod tests {
             0,
         );
         let msg = &packets[0];
-        assert!(msg.contains("SWARMGITCLAIM:swarmgit:danlap:dan:vigo-web:plex,annlap"));
-        assert!(msg.contains("SWARMGITCLAIM:swarmgit:danlap:dan:dotfiles:plex"));
+        assert!(msg.contains("GITBACKCLAIM:gitback:danlap:dan:vigo-web:plex,annlap"));
+        assert!(msg.contains("GITBACKCLAIM:gitback:danlap:dan:dotfiles:plex"));
     }
 
     #[test]
-    fn build_announcement_emits_swarmgitproject_lines_when_provided() {
+    fn build_announcement_emits_gitbackproject_lines_when_provided() {
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
-        let li = SwarmgitLocalInfo {
+        let li = GitbackLocalInfo {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec![],
@@ -1771,15 +1771,15 @@ mod tests {
             0,
         );
         let msg = &packets[0];
-        assert!(msg.contains(&format!("SWARMGITPROJECT:danlap:{}:vigo:swarm-wide", pid_a)));
+        assert!(msg.contains(&format!("GITBACKPROJECT:danlap:{}:vigo:swarm-wide", pid_a)));
         assert!(msg.contains(&format!(
-            "SWARMGITPROJECT:danlap:{}:dotfiles:members-only",
+            "GITBACKPROJECT:danlap:{}:dotfiles:members-only",
             pid_b
         )));
     }
 
     #[test]
-    fn parse_announcement_recovers_swarmgitproject_lines() {
+    fn parse_announcement_recovers_gitbackproject_lines() {
         let pubkey_hex = "a".repeat(64);
         let pid_legacy = "c".repeat(64);
         let pid_new = "d".repeat(64);
@@ -1787,9 +1787,9 @@ mod tests {
             "VIGO-SWARM\n\
              MANIFEST:1\n\
              ADDR:10.0.0.1:1531\n\
-             SWARMGIT:danlap:dan:workstation:{}\n\
-             SWARMGITPROJECT:danlap:{}\n\
-             SWARMGITPROJECT:danlap:{}:vigo:swarm-wide\n",
+             GITBACK:danlap:dan:workstation:{}\n\
+             GITBACKPROJECT:danlap:{}\n\
+             GITBACKPROJECT:danlap:{}:vigo:swarm-wide\n",
             pubkey_hex, pid_legacy, pid_new,
         );
         let pm = PeerMap::new();
@@ -1800,15 +1800,15 @@ mod tests {
             &pm,
             &manifest,
         );
-        assert_eq!(result.swarmgit_projects.len(), 2);
+        assert_eq!(result.gitback_projects.len(), 2);
         // Legacy 2-field line — handle/dr_scope absent.
-        let legacy = &result.swarmgit_projects[0];
+        let legacy = &result.gitback_projects[0];
         assert_eq!(legacy.0, "danlap");
         assert_eq!(legacy.1, pid_legacy);
         assert!(legacy.2.is_none());
         assert!(legacy.3.is_none());
         // ADR-023 4-field line — handle/dr_scope present.
-        let new = &result.swarmgit_projects[1];
+        let new = &result.gitback_projects[1];
         assert_eq!(new.0, "danlap");
         assert_eq!(new.1, pid_new);
         assert_eq!(new.2.as_deref(), Some("vigo"));
@@ -1816,12 +1816,12 @@ mod tests {
     }
 
     #[test]
-    fn parse_announcement_drops_malformed_swarmgitproject() {
+    fn parse_announcement_drops_malformed_gitbackproject() {
         // wrong prefix → ignored entirely
         let msg = "VIGO-SWARM\n\
                    MANIFEST:1\n\
                    ADDR:10.0.0.1:1531\n\
-                   SWARMGITPROJECT:host:not-a-pid\n";
+                   GITBACKPROJECT:host:not-a-pid\n";
         let pm = PeerMap::new();
         let manifest = test_manifest();
         let result = parse_announcement(
@@ -1830,19 +1830,19 @@ mod tests {
             &pm,
             &manifest,
         );
-        assert!(result.swarmgit_projects.is_empty());
+        assert!(result.gitback_projects.is_empty());
     }
 
     #[test]
-    fn parse_announcement_recovers_swarmgit_claim_lines() {
+    fn parse_announcement_recovers_gitback_claim_lines() {
         let pubkey_hex = "a".repeat(64);
         let msg = format!(
             "VIGO-SWARM\n\
              MANIFEST:1\n\
              ADDR:10.0.0.1:1531\n\
-             SWARMGIT:danlap:dan:workstation:{}\n\
-             SWARMGITCLAIM:swarmgit:danlap:dan:vigo-web:plex,annlap\n\
-             SWARMGITCLAIM:swarmgit:danlap:dan:dotfiles:plex\n",
+             GITBACK:danlap:dan:workstation:{}\n\
+             GITBACKCLAIM:gitback:danlap:dan:vigo-web:plex,annlap\n\
+             GITBACKCLAIM:gitback:danlap:dan:dotfiles:plex\n",
             pubkey_hex
         );
         let pm = PeerMap::new();
@@ -1853,34 +1853,34 @@ mod tests {
             &pm,
             &manifest,
         );
-        assert_eq!(result.swarmgit_peer.as_ref().map(|li| li.hostname.clone()),
+        assert_eq!(result.gitback_peer.as_ref().map(|li| li.hostname.clone()),
             Some("danlap".to_string()));
-        assert_eq!(result.swarmgit_claims.len(), 2);
+        assert_eq!(result.gitback_claims.len(), 2);
         assert_eq!(
-            result.swarmgit_claims[0],
+            result.gitback_claims[0],
             (
-                "swarmgit:danlap:dan:vigo-web".to_string(),
+                "gitback:danlap:dan:vigo-web".to_string(),
                 vec!["plex".to_string(), "annlap".to_string()],
             ),
         );
         assert_eq!(
-            result.swarmgit_claims[1],
+            result.gitback_claims[1],
             (
-                "swarmgit:danlap:dan:dotfiles".to_string(),
+                "gitback:danlap:dan:dotfiles".to_string(),
                 vec!["plex".to_string()],
             ),
         );
     }
 
     #[test]
-    fn parse_announcement_swarmgitclaim_prefix_match_is_specific() {
-        // Regression: `SWARMGITCLAIM:` must match BEFORE `SWARMGIT:`
+    fn parse_announcement_gitbackclaim_prefix_match_is_specific() {
+        // Regression: `GITBACKCLAIM:` must match BEFORE `GITBACK:`
         // otherwise the latter's parser would see a malformed peer
         // line and drop it. Both should work together.
         let msg = "VIGO-SWARM\n\
                    MANIFEST:1\n\
                    ADDR:10.0.0.1:1531\n\
-                   SWARMGITCLAIM:swarmgit:h:u:p:some-host\n";
+                   GITBACKCLAIM:gitback:h:u:p:some-host\n";
         let pm = PeerMap::new();
         let manifest = test_manifest();
         let result = parse_announcement(
@@ -1889,11 +1889,11 @@ mod tests {
             &pm,
             &manifest,
         );
-        // SWARMGITCLAIM was picked up correctly.
-        assert_eq!(result.swarmgit_claims.len(), 1);
-        // And it did NOT also get parsed as a malformed SWARMGIT
+        // GITBACKCLAIM was picked up correctly.
+        assert_eq!(result.gitback_claims.len(), 1);
+        // And it did NOT also get parsed as a malformed GITBACK
         // peer line.
-        assert!(result.swarmgit_peer.is_none());
+        assert!(result.gitback_peer.is_none());
     }
 
     #[test]
@@ -1904,7 +1904,7 @@ mod tests {
         // used MAX_MSG_SIZE directly and the emitted packet could
         // exceed MAX_MSG_SIZE by the full SIG length — the 1400-byte
         // receive buffer then silently truncated the tail, stripping
-        // the SIG line and killing swarmgit authenticity on every
+        // the SIG line and killing gitback authenticity on every
         // datagram. Saturate every section of the primary packet AND
         // force a spillover secondary packet, then confirm both still
         // fit in MAX_MSG_SIZE after signing.
@@ -1921,18 +1921,18 @@ mod tests {
             cache.assemble(&sha, data.as_bytes().len() as u64, 1).unwrap();
         }
 
-        let li = SwarmgitLocalInfo {
+        let li = GitbackLocalInfo {
             hostname: "danlap.home.arpa".to_string(),
             users: vec!["dan".to_string(), "anja".to_string(), "elena".to_string()],
             tags: vec![],
             pubkey_hex: "a".repeat(64),
         };
-        // Enough claims to force SWARMGITCLAIM overflow into the spillover
+        // Enough claims to force GITBACKCLAIM overflow into the spillover
         // packet, so BOTH emitted packets get exercised against the cap.
         let claims: Vec<(String, Vec<String>)> = (0..12)
             .map(|i| {
                 (
-                    format!("swarmgit:danlap:dan:project-{:02}", i),
+                    format!("gitback:danlap:dan:project-{:02}", i),
                     vec![
                         "plex.home.arpa".to_string(),
                         "girlslaptop.home.arpa".to_string(),
@@ -1981,7 +1981,7 @@ mod tests {
         // exceed MAX_MSG_SIZE even in a dedicated spillover packet.
         let many_hosts: Vec<String> =
             (0..200).map(|i| format!("peer-with-a-long-name-{}", i)).collect();
-        let claims = vec![("swarmgit:h:u:huge".to_string(), many_hosts)];
+        let claims = vec![("gitback:h:u:huge".to_string(), many_hosts)];
         let packets = build_announcement(
             &[],
             &[],
@@ -1998,7 +1998,7 @@ mod tests {
         // The oversized claim line must not appear in any emitted packet.
         for msg in &packets {
             assert!(
-                !msg.contains("SWARMGITCLAIM:swarmgit:h:u:huge:"),
+                !msg.contains("GITBACKCLAIM:gitback:h:u:huge:"),
                 "oversized claim line should have been dropped, found in packet: {}",
                 msg,
             );
@@ -2011,11 +2011,11 @@ mod tests {
     // ----- 0.30.10 priority-inversion + spillover tests -----
 
     #[test]
-    fn build_announcement_places_swarmgit_before_have() {
-        // Regression: SWARMGIT/SWARMGITCLAIM must be emitted BEFORE HAVE lines
+    fn build_announcement_places_gitback_before_have() {
+        // Regression: GITBACK/GITBACKCLAIM must be emitted BEFORE HAVE lines
         // so a blob-heavy source still reaches receivers with
         // coordination info. Prior to 0.30.10, HAVE packed first and
-        // SWARMGIT fell off MTU on any cache with ~15+ blobs.
+        // GITBACK fell off MTU on any cache with ~15+ blobs.
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
@@ -2027,13 +2027,13 @@ mod tests {
         cache.write_chunk(&sha, 0, data).unwrap();
         cache.assemble(&sha, data.len() as u64, 1).unwrap();
 
-        let li = SwarmgitLocalInfo {
+        let li = GitbackLocalInfo {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec![],
                     pubkey_hex: "a".repeat(64),
         };
-        let claims = vec![("swarmgit:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
+        let claims = vec![("gitback:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
         let packets = build_announcement(
             &cache.list_blobs(),
             &cache.list_partials(),
@@ -2048,19 +2048,19 @@ mod tests {
             0,
         );
         let msg = &packets[0];
-        let swarmgit_pos = msg.find("SWARMGIT:danlap:").expect("SWARMGIT line present");
-        let swarmgitclaim_pos = msg.find("SWARMGITCLAIM:swarmgit:danlap:dan:vigo:plex")
-            .expect("SWARMGITCLAIM line present");
+        let gitback_pos = msg.find("GITBACK:danlap:").expect("GITBACK line present");
+        let gitbackclaim_pos = msg.find("GITBACKCLAIM:gitback:danlap:dan:vigo:plex")
+            .expect("GITBACKCLAIM line present");
         let have_pos = msg.find("HAVE:").expect("HAVE line present");
-        assert!(swarmgit_pos < have_pos, "SWARMGIT must precede HAVE");
-        assert!(swarmgitclaim_pos < have_pos, "SWARMGITCLAIM must precede HAVE");
+        assert!(gitback_pos < have_pos, "GITBACK must precede HAVE");
+        assert!(gitbackclaim_pos < have_pos, "GITBACKCLAIM must precede HAVE");
     }
 
     #[test]
-    fn build_announcement_preserves_swarmgit_under_heavy_have_load() {
+    fn build_announcement_preserves_gitback_under_heavy_have_load() {
         // Simulate the failure mode Dan hit in production on 2026-04-23:
-        // ~60 cached blobs starve swarmgit of MTU budget. The new packing
-        // guarantees SWARMGIT/SWARMGITCLAIM survive.
+        // ~60 cached blobs starve gitback of MTU budget. The new packing
+        // guarantees GITBACK/GITBACKCLAIM survive.
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
@@ -2073,13 +2073,13 @@ mod tests {
             cache.assemble(&sha, data.len() as u64, 1).unwrap();
         }
 
-        let li = SwarmgitLocalInfo {
+        let li = GitbackLocalInfo {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec![],
                     pubkey_hex: "a".repeat(64),
         };
-        let claims = vec![("swarmgit:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
+        let claims = vec![("gitback:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
         let packets = build_announcement(
             &cache.list_blobs(),
             &cache.list_partials(),
@@ -2094,31 +2094,31 @@ mod tests {
             0,
         );
         let joined: String = packets.join("");
-        assert!(joined.contains("SWARMGIT:danlap:"), "SWARMGIT line must survive heavy HAVE load");
-        assert!(joined.contains("SWARMGITCLAIM:swarmgit:danlap:dan:vigo:plex"),
-            "SWARMGITCLAIM line must survive heavy HAVE load");
+        assert!(joined.contains("GITBACK:danlap:"), "GITBACK line must survive heavy HAVE load");
+        assert!(joined.contains("GITBACKCLAIM:gitback:danlap:dan:vigo:plex"),
+            "GITBACKCLAIM line must survive heavy HAVE load");
     }
 
     #[test]
-    fn build_announcement_spills_swarmgitclaims_to_second_packet() {
-        // A large-fleet publisher with many swarmgit labels overflows the
-        // swarmgit budget of the primary packet. Remaining SWARMGITCLAIM
+    fn build_announcement_spills_gitbackclaims_to_second_packet() {
+        // A large-fleet publisher with many gitback labels overflows the
+        // gitback budget of the primary packet. Remaining GITBACKCLAIM
         // lines land in a second packet on the same cycle.
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
 
-        // 30 labels × ~40 bytes each = ~1.2 KB of SWARMGITCLAIM, past the
-        // swarmgit budget (MAX_MSG_SIZE - 300 = 1100 bytes).
+        // 30 labels × ~40 bytes each = ~1.2 KB of GITBACKCLAIM, past the
+        // gitback budget (MAX_MSG_SIZE - 300 = 1100 bytes).
         let claims: Vec<(String, Vec<String>)> = (0..30)
             .map(|i| {
                 (
-                    format!("swarmgit:danlap:dan:project-{:02}", i),
+                    format!("gitback:danlap:dan:project-{:02}", i),
                     vec!["plex".to_string(), "annlap".to_string()],
                 )
             })
             .collect();
-        let li = SwarmgitLocalInfo {
+        let li = GitbackLocalInfo {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec![],
@@ -2139,15 +2139,15 @@ mod tests {
             0,
         );
         assert_eq!(packets.len(), 2, "expected a spillover packet");
-        // SWARMGIT peer line appears in both packets so the receiver can
+        // GITBACK peer line appears in both packets so the receiver can
         // attribute the claims to a sender regardless of which packet
         // arrives first.
-        assert!(packets[0].contains("SWARMGIT:danlap:"));
-        assert!(packets[1].contains("SWARMGIT:danlap:"));
+        assert!(packets[0].contains("GITBACK:danlap:"));
+        assert!(packets[1].contains("GITBACK:danlap:"));
         // Every label lands somewhere across the two packets.
         let joined: String = packets.join("");
         for i in 0..30 {
-            let label = format!("SWARMGITCLAIM:swarmgit:danlap:dan:project-{:02}:plex,annlap", i);
+            let label = format!("GITBACKCLAIM:gitback:danlap:dan:project-{:02}:plex,annlap", i);
             assert!(joined.contains(&label), "missing claim line for {}", i);
         }
     }
@@ -2155,9 +2155,9 @@ mod tests {
     #[test]
     fn build_announcement_spillover_preserves_have_on_primary() {
         // The primary packet should still carry HAVE lines when it
-        // triggers a swarmgit spillover — the spillover is additive, not a
+        // triggers a gitback spillover — the spillover is additive, not a
         // replacement. Proves we didn't regress swarm discovery by
-        // fixing swarmgit.
+        // fixing gitback.
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
@@ -2171,7 +2171,7 @@ mod tests {
         let claims: Vec<(String, Vec<String>)> = (0..30)
             .map(|i| {
                 (
-                    format!("swarmgit:danlap:dan:project-{:02}", i),
+                    format!("gitback:danlap:dan:project-{:02}", i),
                     vec!["plex".to_string(), "annlap".to_string()],
                 )
             })
@@ -2195,13 +2195,13 @@ mod tests {
             "primary packet must still carry HAVE lines when spillover is used");
     }
 
-    // ----- 0.30.11 swarmgit signature tests -----
+    // ----- 0.30.11 gitback signature tests -----
 
     #[test]
     fn signed_announcement_verifies_round_trip() {
         let (verify, sign) = crate::auth::keypair::generate_keypair().unwrap();
         let pubkey_hex = hex::encode(verify.to_bytes());
-        let li = SwarmgitLocalInfo {
+        let li = GitbackLocalInfo {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec![],
@@ -2210,7 +2210,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
-        let claims = vec![("swarmgit:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
+        let claims = vec![("gitback:danlap:dan:vigo".to_string(), vec!["plex".to_string()])];
         let packets = build_announcement(
             &[],
             &[],
@@ -2241,7 +2241,7 @@ mod tests {
     #[test]
     fn tampered_signed_announcement_fails_verification() {
         let (verify, sign) = crate::auth::keypair::generate_keypair().unwrap();
-        let li = SwarmgitLocalInfo {
+        let li = GitbackLocalInfo {
             hostname: "danlap".to_string(),
             users: vec!["dan".to_string()],
             tags: vec![],
@@ -2263,7 +2263,7 @@ mod tests {
             Some(&sign),
             1_700_000_000,
         );
-        // Tamper with the body (swap the SWARMGITCLAIM target). Verification must fail.
+        // Tamper with the body (swap the GITBACKCLAIM target). Verification must fail.
         let tampered = packets[0].replace("danlap", "attacker");
         let (body, ts, sig_bytes) = extract_sig(&tampered).expect("extract sig");
         assert!(!crate::auth::signer::verify_payload(body.as_bytes(), &ts, &sig_bytes, &verify),
@@ -2273,7 +2273,7 @@ mod tests {
     #[test]
     fn unsigned_announcement_has_no_sig_line() {
         // When build_announcement is called without a signing key (pre-
-        // 0.30.11 behavior, or a non-swarmgit envoy), it emits no SIG line.
+        // 0.30.11 behavior, or a non-gitback envoy), it emits no SIG line.
         let tmp = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
         let manifest = test_manifest();
@@ -2296,7 +2296,7 @@ mod tests {
 
     #[test]
     fn tofu_cache_blocks_pubkey_swap() {
-        use crate::swarm::swarmgit::peer_pubkey_cache::{CheckOutcome, PeerPubkeyCache};
+        use crate::swarm::gitback::peer_pubkey_cache::{CheckOutcome, PeerPubkeyCache};
         let cache = PeerPubkeyCache::empty();
         let pk1 = "a".repeat(64);
         let pk2 = "b".repeat(64);

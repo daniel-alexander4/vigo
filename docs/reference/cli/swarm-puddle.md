@@ -11,7 +11,7 @@ Admin-side cross-envoy operations for the [puddle](../../engineering/subsystems/
 
 ## Friendly names
 
-`names list` consumes `GET /api/v1/swarm/puddle/names` — the fleet name map the server builds by aggregating every envoy's `swarmgit` trait (each user's `~/.vigo-puddle/name-claim.json`, reported verbatim). The server **publishes, never arbitrates**: a name with one claimant is unambiguous; a name with two or more is shown with all of them and flagged a collision (resolvers refuse it and require the hex `swarmgit://<project_id>/<repo>` form).
+`names list` consumes `GET /api/v1/swarm/puddle/names` — the fleet name map the server builds by aggregating every envoy's `gitback` trait (each user's `~/.vigo-puddle/name-claim.json`, reported verbatim). The server **publishes, never arbitrates**: a name with one claimant is unambiguous; a name with two or more is shown with all of them and flagged a collision (resolvers refuse it and require the hex `gitback://<project_id>/<repo>` form).
 
 ```bash
 vigocli swarm puddle names list
@@ -26,15 +26,15 @@ dan   ed25519:9f3acafe1234…c1d8abc1  2026-04-09  ok
 ops   ed25519:11aa22bb33cc…ddeeff00  2026-04-15  COLLISION — 2 competing claims
 ops   ed25519:99887766aabb…ccddeeff  2026-04-16
 
-1 name(s) have competing claims; resolvers refuse those and require swarmgit://<project_id>/<repo>.
+1 name(s) have competing claims; resolvers refuse those and require gitback://<project_id>/<repo>.
 ```
 
-A friendly name is a hint, not a trust anchor — it's spoofable by squatting (first claim wins, including a malicious first-claimer). The unforgeable form is always `swarmgit://<project_id>/<repo>`. See [ADR-022](../../adr/022-swarmgit-friendly-names.md) for the full design + tradeoffs, and the envoy-side [Friendly names](agent-swarm-puddle.md#friendly-names-adr-022) section for setting/clearing one.
+A friendly name is a hint, not a trust anchor — it's spoofable by squatting (first claim wins, including a malicious first-claimer). The unforgeable form is always `gitback://<project_id>/<repo>`. See [ADR-022](../../adr/022-gitback-friendly-names.md) for the full design + tradeoffs, and the envoy-side [Friendly names](agent-swarm-puddle.md#friendly-names-adr-022) section for setting/clearing one.
 
 ## See also
 
 - [`vigo swarm puddle`](agent-swarm-puddle.md) — the per-user envoy-side verb tree (including `name set/clear/show`).
 - [Puddle subsystem](../../engineering/subsystems/puddle.md) — design + code map.
 - [ADR-021](../../adr/021-lockbox-lifecycle-on-puddle.md) — why `puddle evict` is the canonical eviction verb.
-- [ADR-022](../../adr/022-swarmgit-friendly-names.md) — friendly names.
-- [`vigocli swarm swarmgit`](swarm-swarmgit.md) — fleet-wide view of swarmgit projects (the things friendly names point at).
+- [ADR-022](../../adr/022-gitback-friendly-names.md) — friendly names.
+- [`vigocli swarm gitback`](swarm-gitback.md) — fleet-wide view of gitback projects (the things friendly names point at).

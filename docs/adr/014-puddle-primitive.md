@@ -4,15 +4,15 @@ title: "ADR-014: Puddle primitive"
 
 # ADR-014: Puddle primitive
 
-**Status:** Complete (shipped 0.34.8). Multi-puddle per user, Shamir/escrow recovery, and cross-envoy gossip of puddle membership remain explicitly deferred per the Decision section's scope gates. Puddle keypair rotation, originally implied as "re-init from scratch," is now addressed by [ADR-018](018-puddle-rekey.md) (rekey verbs preserve lockbox state across rotation; swarmgit founder-rekey still pending its own ADR).
+**Status:** Complete (shipped 0.34.8). Multi-puddle per user, Shamir/escrow recovery, and cross-envoy gossip of puddle membership remain explicitly deferred per the Decision section's scope gates. Puddle keypair rotation, originally implied as "re-init from scratch," is now addressed by [ADR-018](018-puddle-rekey.md) (rekey verbs preserve lockbox state across rotation; gitback founder-rekey still pending its own ADR).
 **Date:** 2026-04-29
 **Updated 2026-04-29:** Distribution section restructured to put peer-pair as the primary onboarding path (manual scp survives as air-gapped fallback). CLI verbs renamed for clarity (`activate` split into `unlock` + `join`; `deactivate` → `lock`; `show` → `pubkey`; new `pair` verb). Resolved scope gates recorded in the Decision section: single puddle per user (multi-puddle deferred to v2), three sequential releases (014 → 015 → 016), re-init from scratch on passphrase loss (no Shamir/escrow in v1).
 
 ## Context
 
-Vigo's existing trust primitives are envoy-scoped: each enrolled envoy has its own mTLS cert, and per-user state on each envoy (lockbox `identity.age`, swarmgit sidecars, etc.) is independent. There is no cross-envoy user-identity primitive. The consequence is that "dan-on-laptop" and "dan-on-desktop" are cryptographically distinct identities even though they belong to the same human, which forces every personal-multi-envoy workflow to re-create membership ceremony per-envoy: lockbox requires `init` + `enroll` + `unlock` on every envoy independently; multi-member swarmgit would require explicit per-pair invites for each personal envoy.
+Vigo's existing trust primitives are envoy-scoped: each enrolled envoy has its own mTLS cert, and per-user state on each envoy (lockbox `identity.age`, gitback sidecars, etc.) is independent. There is no cross-envoy user-identity primitive. The consequence is that "dan-on-laptop" and "dan-on-desktop" are cryptographically distinct identities even though they belong to the same human, which forces every personal-multi-envoy workflow to re-create membership ceremony per-envoy: lockbox requires `init` + `enroll` + `unlock` on every envoy independently; multi-member gitback would require explicit per-pair invites for each personal envoy.
 
-The right primitive is a **per-user puddle identity** — a single keypair representing "dan's puddle of envoys," distributable across the user's own envoys, that subsystems can query as a single trust unit. This ADR defines that primitive. ADR-015 (unified swarmgit substrate) and ADR-016 (lockbox membership on puddle) build on it.
+The right primitive is a **per-user puddle identity** — a single keypair representing "dan's puddle of envoys," distributable across the user's own envoys, that subsystems can query as a single trust unit. This ADR defines that primitive. ADR-015 (unified gitback substrate) and ADR-016 (lockbox membership on puddle) build on it.
 
 ## Decision
 
@@ -82,7 +82,7 @@ The following defaults from the original draft were ratified before implementati
 
 **Per-envoy keypairs with cross-envoy trust attestations.** Each envoy generates its own keypair; envoys mutually sign "this other envoy is also me" attestations. Rejected because it creates O(N²) declarations for an N-envoy personal puddle and provides no UX win over the shared-key model — the security delta is nil since any envoy in the puddle can decrypt content sent to the puddle either way.
 
-**Reuse lockbox's age identity as the puddle identity.** Tempting because lockbox already has a per-user wrapped identity. Rejected because age is encryption-only (no signing primitive), and puddle's primary use case (signing capability tokens for swarmgit) requires Ed25519. Coupling the two would also mean lockbox enrollment becomes mandatory for any subsystem using puddle, which is undesirable.
+**Reuse lockbox's age identity as the puddle identity.** Tempting because lockbox already has a per-user wrapped identity. Rejected because age is encryption-only (no signing primitive), and puddle's primary use case (signing capability tokens for gitback) requires Ed25519. Coupling the two would also mean lockbox enrollment becomes mandatory for any subsystem using puddle, which is undesirable.
 
 **Reuse the agent's mTLS keypair.** Rejected — the mTLS key is per-envoy, not per-user, and is already bound to TLS handshake usage. Conflating it with user-puddle identity creates confusing trust semantics.
 
@@ -98,7 +98,7 @@ The following defaults from the original draft were ratified before implementati
   - `session.rs` — session helper daemon + Unix socket + SO_PEERCRED + idle timeout (mirror lockbox's `session.rs`).
   - `pair.rs` — pairing-code issuance + peer-pair handshake over swarm mTLS (port 1531). Pairing code: 8-character format (e.g., `4827-9163`), constant-time compare, single-use, 5-minute TTL.
   - `cli.rs` — verbs `init|pair|join|unlock|lock|pubkey|members|rotate-passphrase`.
-  - `mod.rs` — public API surface that other subsystems (swarmgit, lockbox) call to: get puddle pubkey, sign blob, query "is this puddle pubkey known to local agent."
+  - `mod.rs` — public API surface that other subsystems (gitback, lockbox) call to: get puddle pubkey, sign blob, query "is this puddle pubkey known to local agent."
 - `agent/src/main.rs` — wire `swarm puddle *` verbs into argv dispatch.
 
 **Server-side changes:** none in the data path. Optional audit-log entry types `puddle.pair-issued` and `puddle.pair-completed` flow through the existing audit hash chain on next check-in; server learns the pair *happened* but never sees the wrapped blob.
@@ -117,7 +117,7 @@ The following defaults from the original draft were ratified before implementati
 **Estimated weight:** ~50–100 KiB on the agent binary (peer-pair adds a small handshake module on top of the original ~40–80 KiB estimate). Heavy reuse of lockbox's wrapping code.
 
 **Behavioral consequences:**
-- Puddle is opt-in. An envoy that never runs `puddle init|join` works exactly as today; only subsystems that consume puddle (swarmgit per ADR-015, lockbox membership per ADR-016) gain new behavior.
+- Puddle is opt-in. An envoy that never runs `puddle init|join` works exactly as today; only subsystems that consume puddle (gitback per ADR-015, lockbox membership per ADR-016) gain new behavior.
 - Passphrase forgetting is real disaster recovery for the user. v1 is honest about that — no silent data loss, but no quorum / escrow either.
 - Single-puddle-per-user in v1. Multi-puddle (e.g., separate "personal" and "work" identities) is deferred until a real user asks for it.
 - Peer-pair is the primary onboarding path. Air-gapped envoys still have `unlock` after manual scp as the fallback, but the typical flow is two commands and a passphrase, no scp.

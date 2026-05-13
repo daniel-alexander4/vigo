@@ -21,9 +21,9 @@ func TestDetectRetiredSwarmShape(t *testing.T) {
 swarm:
   enabled: ["*"]
   puddle: { enabled: ["annlap"] }
-  swarmgit: { enabled: ["*"] }
+  gitback: { enabled: ["*"] }
   longdrawer: { enabled: ["*"] }
-  swarmcast: { enabled: ["*"] }
+  filecast: { enabled: ["*"] }
 `,
 			wantErr: false,
 		},
@@ -55,14 +55,14 @@ swarm:
 			wantInError: "swarm.lockbox",
 		},
 		{
-			name: "swarm.gitmirror section is retired (renamed to swarmgit)",
+			name: "swarm.gitmirror section is retired (renamed to gitback)",
 			yaml: `
 swarm:
   gitmirror:
     enabled: ["*"]
 `,
 			wantErr:     true,
-			wantInError: "swarm.gitmirror.* — retired in the swarmgit rename",
+			wantInError: "swarm.gitmirror.* — retired in the gitback rename",
 		},
 		{
 			name: "swarm.gitmirror retired error names the new key",
@@ -72,7 +72,7 @@ swarm:
     enabled: ["*"]
 `,
 			wantErr:     true,
-			wantInError: "swarm.swarmgit",
+			wantInError: "swarm.gitback",
 		},
 		{
 			name: "swarm.filesync section is retired (renamed to longdrawer)",
@@ -95,14 +95,14 @@ swarm:
 			wantInError: "swarm.longdrawer",
 		},
 		{
-			name: "swarm.payload section is retired (renamed to swarmcast)",
+			name: "swarm.payload section is retired (renamed to filecast)",
 			yaml: `
 swarm:
   payload:
     enabled: ["*"]
 `,
 			wantErr:     true,
-			wantInError: "swarm.payload.* — retired in the swarmcast rename",
+			wantInError: "swarm.payload.* — retired in the filecast rename",
 		},
 		{
 			name: "swarm.payload retired error names the new key",
@@ -112,7 +112,7 @@ swarm:
     enabled: ["*"]
 `,
 			wantErr:     true,
-			wantInError: "swarm.swarmcast",
+			wantInError: "swarm.filecast",
 		},
 		{
 			name: "per-subsystem bool enabled is retired (puddle)",

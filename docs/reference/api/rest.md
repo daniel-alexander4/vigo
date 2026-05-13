@@ -1472,7 +1472,7 @@ Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `
 | GET | `/api/v1/agent/download/{os}/{arch}` | Agent binary download |
 | GET | `/api/v1/agent/signing-key` | ED25519 signing public key (hex) |
 | POST | `/api/v1/bootstrap/register` | Agent enrollment with CSR signing |
-| GET | `/api/v1/fleet/pubkeys` | Hostname → Ed25519 pubkey map for the (non-revoked) fleet. Used by agents to bootstrap their swarmgit peer-pubkey TOFU cache. Pubkeys are public-by-construction (broadcast on multicast); endpoint is unauthenticated. |
+| GET | `/api/v1/fleet/pubkeys` | Hostname → Ed25519 pubkey map for the (non-revoked) fleet. Used by agents to bootstrap their gitback peer-pubkey TOFU cache. Pubkeys are public-by-construction (broadcast on multicast); endpoint is unauthenticated. |
 
 ---
 
@@ -1981,22 +1981,22 @@ Substrate-level overview of the envoy P2P network. Content-subsystem operations 
 - **GET /api/v1/swarm/peers** — per-envoy rollup with `?sort=footprint|blobs|hostname` and `?limit=N` (0 for unbounded). _(fleet.read)_
 - **POST /api/v1/swarm/cleanup** — dispatch the hidden `vigo swarm _apply-cleanup` verb to envoys matching `?target=<pat>` (default `*`). Each envoy removes dangling `files/<label>` symlinks and `.partial/` dirs whose final blob has been assembled. Idempotent. Returns `{target, dispatched, task_run_id}` — pass `task_run_id` to `vigocli task status` for per-envoy detail. _(admin)_
 
-### Swarmcast
+### Filecast
 
-Administrator-pushed file distribution on the swarm substrate. These endpoints power `vigocli swarm swarmcast`.
+Administrator-pushed file distribution on the swarm substrate. These endpoints power `vigocli swarm filecast`.
 
-- **GET /api/v1/swarm/swarmcast/list** — list all active payload payloads. _(fleet.read)_
-- **GET /api/v1/swarm/swarmcast/match** — preview which envoys match a given target expression. _(fleet.read)_
-- **GET /api/v1/swarm/swarmcast/status/{sha256}** — per-envoy distribution status for one payload. _(fleet.read)_
-- **GET /api/v1/swarm/swarmcast/broken** — payloads with unreachable peers or failed distributions. _(fleet.read)_
-- **POST /api/v1/swarm/swarmcast/distribute** — seed a new payload into the swarm for distribution. _(admin)_ Returns **403** when `swarm.enabled: false` or `swarm.swarmcast.enabled: false`; denials are recorded as `swarm.swarmcast.denied` in the [tamper-evident audit chain](../../compliance/tamper-evident-audit.md).
-- **DELETE /api/v1/swarm/swarmcast/{sha256}** — revoke a payload; agents evict on next check-in. _(admin)_ Allowed when the substrate is disabled (cleanup must work on a halted substrate).
+- **GET /api/v1/swarm/filecast/list** — list all active payload payloads. _(fleet.read)_
+- **GET /api/v1/swarm/filecast/match** — preview which envoys match a given target expression. _(fleet.read)_
+- **GET /api/v1/swarm/filecast/status/{sha256}** — per-envoy distribution status for one payload. _(fleet.read)_
+- **GET /api/v1/swarm/filecast/broken** — payloads with unreachable peers or failed distributions. _(fleet.read)_
+- **POST /api/v1/swarm/filecast/distribute** — seed a new payload into the swarm for distribution. _(admin)_ Returns **403** when `swarm.enabled: false` or `swarm.filecast.enabled: false`; denials are recorded as `swarm.filecast.denied` in the [tamper-evident audit chain](../../compliance/tamper-evident-audit.md).
+- **DELETE /api/v1/swarm/filecast/{sha256}** — revoke a payload; agents evict on next check-in. _(admin)_ Allowed when the substrate is disabled (cleanup must work on a halted substrate).
 
-### Swarmgit
+### Gitback
 
-- **GET /api/v1/swarm/swarmgit/fleet** — fleet-wide swarmgit project view (aggregated from per-envoy traits). _(fleet.read)_
-- **GET /api/v1/swarm/swarmgit/projects/{project_id}/roster** — canonical member fleet list for one project. Returns `{project_id, handle, founder_puddle_pubkey, members[], dr_scope, member_fleet_count}`. The helper daemon's lazy-fetch target at push time. 404 if no envoy in the fleet has reported the project. _(fleet.read)_
-- **GET /api/v1/swarm/puddle/names** — fleet friendly-name map (ADR-022): `{updated_at, names: {<name>: [{body:{puddle_pubkey, name, claimed_at, supersedes}, signature}, …]}}`, aggregated from every envoy's `swarmgit` trait `name_claims`. The server publishes signed claims verbatim and never arbitrates — a name with more than one claimant is returned with all of them (a collision the resolver refuses). Unauthenticated, like `/api/v1/fleet/pubkeys` — the bindings are public-by-construction; mTLS is the transport guard. Consumed by each agent's `puddle name-map bootstrap` loop (cached at `/var/lib/vigo/swarm/puddle/names.json` for the `git-remote-swarmgit` resolver and the `vigo swarm puddle name set` collision check) and by `vigocli swarm puddle names list`.
+- **GET /api/v1/swarm/gitback/fleet** — fleet-wide gitback project view (aggregated from per-envoy traits). _(fleet.read)_
+- **GET /api/v1/swarm/gitback/projects/{project_id}/roster** — canonical member fleet list for one project. Returns `{project_id, handle, founder_puddle_pubkey, members[], dr_scope, member_fleet_count}`. The helper daemon's lazy-fetch target at push time. 404 if no envoy in the fleet has reported the project. _(fleet.read)_
+- **GET /api/v1/swarm/puddle/names** — fleet friendly-name map (ADR-022): `{updated_at, names: {<name>: [{body:{puddle_pubkey, name, claimed_at, supersedes}, signature}, …]}}`, aggregated from every envoy's `gitback` trait `name_claims`. The server publishes signed claims verbatim and never arbitrates — a name with more than one claimant is returned with all of them (a collision the resolver refuses). Unauthenticated, like `/api/v1/fleet/pubkeys` — the bindings are public-by-construction; mTLS is the transport guard. Consumed by each agent's `puddle name-map bootstrap` loop (cached at `/var/lib/vigo/swarm/puddle/names.json` for the `git-remote-gitback` resolver and the `vigo swarm puddle name set` collision check) and by `vigocli swarm puddle names list`.
 
 ### Longdrawer
 

@@ -1126,7 +1126,7 @@ func FlattenJSON(prefix string, data map[string]any, out map[string]string) {
 					// `"dan"` with literal double-quote characters),
 					// which breaks every downstream consumer that
 					// compares flattened trait values against plain
-					// strings — most visibly swarmgit's
+					// strings — most visibly gitback's
 					// envoyHasHumanUser filter.
 					out[elemKey] = e
 				default:

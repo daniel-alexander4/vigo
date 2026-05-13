@@ -10,7 +10,7 @@
 // join. Types + snapshot functions live here so `server/api` and
 // `ui/` can both consume them without creating an import cycle — the
 // same split the content-subsystem aggregators use
-// (swarmgitmesh/longdrawermesh/lockboxmesh).
+// (gitbackmesh/longdrawermesh/lockboxmesh).
 //
 // All functions are pure reads over already-in-memory data; nothing
 // here runs on the agent check-in hot path.
@@ -26,7 +26,7 @@ import (
 
 // EnvoyInput is the minimal per-envoy shape swarmview needs from the
 // fleet index. Declared here so this package doesn't import
-// server/fleet — matches the pattern in server/swarmgitmesh and
+// server/fleet — matches the pattern in server/gitbackmesh and
 // server/longdrawermesh. Callers convert fleet.EnvoyState → EnvoyInput
 // before calling Snapshot*.
 type EnvoyInput struct {
@@ -52,8 +52,8 @@ type Status struct {
 
 // BlobCounts breaks active seeds out by content subsystem.
 type BlobCounts struct {
-	Swarmcast int `json:"swarmcast"`
-	Swarmgit  int `json:"swarmgit"`
+	Filecast int `json:"filecast"`
+	Gitback  int `json:"gitback"`
 }
 
 // Peers is the per-envoy rollup.
@@ -103,10 +103,10 @@ func SnapshotStatus(src Sources) Status {
 	if src.Tracker != nil {
 		for sha, seed := range src.Tracker.ListSeeds() {
 			seedSize[sha] = seed.Size
-			if strings.HasPrefix(seed.Label, "swarmgit:") {
-				out.BlobsByKind.Swarmgit++
+			if strings.HasPrefix(seed.Label, "gitback:") {
+				out.BlobsByKind.Gitback++
 			} else {
-				out.BlobsByKind.Swarmcast++
+				out.BlobsByKind.Filecast++
 			}
 			if seed.SeederID != "" {
 				seedingEnvoys[seed.SeederID] = true

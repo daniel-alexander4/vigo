@@ -131,12 +131,12 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 		uiHandler.SetComplianceDocs(&complianceDocsListing{store: complianceDocsStore})
 	}
 
-	// Mount swarmgit fleet aggregator. Share the handler with the
-	// UI so the `/swarmgit` page reads the cached aggregation
+	// Mount gitback fleet aggregator. Share the handler with the
+	// UI so the `/gitback` page reads the cached aggregation
 	// directly rather than round-tripping through the REST endpoint.
-	swarmgitHandler := NewSwarmgitHandler(fleetIndex, queries)
-	swarmgitHandler.RegisterRoutes(mux)
-	uiHandler.SetSwarmgitFleet(swarmgitHandler)
+	gitbackHandler := NewGitbackHandler(fleetIndex, queries)
+	gitbackHandler.RegisterRoutes(mux)
+	uiHandler.SetGitbackFleet(gitbackHandler)
 
 	// Mount longdrawer + lockbox mesh observability endpoints. Same
 	// handler-sharing pattern — the `/mesh` UI page reads the
@@ -215,7 +215,7 @@ func MaxBodyMiddleware(next http.Handler) http.Handler {
 		}
 		// Skip body limiting for payload distribute — streams to disk
 		// via io.Copy and doesn't buffer in memory.
-		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/swarm/swarmcast/distribute" {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/swarm/filecast/distribute" {
 			next.ServeHTTP(w, r)
 			return
 		}

@@ -276,7 +276,7 @@ message CheckInResponse {
   // Field 21 (rejected_seeds) and 22 (cairn_claims) were removed in 0.32.x
   // when the seeding-envoys allowlist (and its corresponding RejectedSeed
   // wire message) were dropped in favor of receiver-side blacklisting and
-  // the legacy server-side swarmgit ClaimTable was deleted in 0.23.0.
+  // the legacy server-side gitback ClaimTable was deleted in 0.23.0.
   reserved 21, 22;
   reserved "rejected_seeds", "cairn_claims";
   repeated SwarmManifestEntry manifest_entries = 20; // manifest updates for gossip (revocations, new seeds)
@@ -292,12 +292,12 @@ message CheckInResponse {
 // matching the previously-hardcoded values, so unset fields here are
 // only seen during the brief strict-equal-version cutover window.
 message SwarmRuntimeLimits {
-  uint64 swarmcast_max_size_bytes = 1;             // admin-distribute upload cap; 0 = no cap
-  string swarmcast_default_retention = 2;          // server-yaml default when --retention is omitted on distribute (e.g. "7d")
+  uint64 filecast_max_size_bytes = 1;             // admin-distribute upload cap; 0 = no cap
+  string filecast_default_retention = 2;          // server-yaml default when --retention is omitted on distribute (e.g. "7d")
   uint64 lockbox_max_file_bytes = 3;           // per-file ciphertext cap on auto-encrypt + push; 0 = no cap (1 GiB historical default)
   uint64 lockbox_envelope_retention_secs = 4;  // LEAVE/RESURRECT/TOMBSTONE retention before reap; 0 = compile-time default (90d)
-  uint64 swarmgit_max_bundle_bytes = 5;         // per-bundle fan-out cap; 0 = no cap
-  uint64 swarmgit_envelope_retention_secs = 6;  // revoke/leave envelope retention before reap; 0 = compile-time default (90d)
+  uint64 gitback_max_bundle_bytes = 5;         // per-bundle fan-out cap; 0 = no cap
+  uint64 gitback_envelope_retention_secs = 6;  // revoke/leave envelope retention before reap; 0 = compile-time default (90d)
   uint64 longdrawer_max_file_bytes = 7;            // per-file size cap on LAN sync; 0 = no cap
 }
 

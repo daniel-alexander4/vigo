@@ -512,16 +512,16 @@ func (x *CheckInResponse) GetSwarmRuntimeLimits() *SwarmRuntimeLimits {
 // matching the previously-hardcoded values, so unset fields here are
 // only seen during the brief strict-equal-version cutover window.
 type SwarmRuntimeLimits struct {
-	state                         protoimpl.MessageState `protogen:"open.v1"`
-	SwarmcastMaxSizeBytes         uint64                 `protobuf:"varint,1,opt,name=swarmcast_max_size_bytes,json=swarmcastMaxSizeBytes,proto3" json:"swarmcast_max_size_bytes,omitempty"`                         // admin-distribute upload cap; 0 = no cap
-	SwarmcastDefaultRetention     string                 `protobuf:"bytes,2,opt,name=swarmcast_default_retention,json=swarmcastDefaultRetention,proto3" json:"swarmcast_default_retention,omitempty"`                // server-yaml default when --retention is omitted on distribute (e.g. "7d")
-	LockboxMaxFileBytes           uint64                 `protobuf:"varint,3,opt,name=lockbox_max_file_bytes,json=lockboxMaxFileBytes,proto3" json:"lockbox_max_file_bytes,omitempty"`                               // per-file ciphertext cap on auto-encrypt + push; 0 = no cap (1 GiB historical default)
-	LockboxEnvelopeRetentionSecs  uint64                 `protobuf:"varint,4,opt,name=lockbox_envelope_retention_secs,json=lockboxEnvelopeRetentionSecs,proto3" json:"lockbox_envelope_retention_secs,omitempty"`    // LEAVE/RESURRECT/TOMBSTONE retention before reap; 0 = compile-time default (90d)
-	SwarmgitMaxBundleBytes        uint64                 `protobuf:"varint,5,opt,name=swarmgit_max_bundle_bytes,json=swarmgitMaxBundleBytes,proto3" json:"swarmgit_max_bundle_bytes,omitempty"`                      // per-bundle fan-out cap; 0 = no cap
-	SwarmgitEnvelopeRetentionSecs uint64                 `protobuf:"varint,6,opt,name=swarmgit_envelope_retention_secs,json=swarmgitEnvelopeRetentionSecs,proto3" json:"swarmgit_envelope_retention_secs,omitempty"` // revoke/leave envelope retention before reap; 0 = compile-time default (90d)
-	LongdrawerMaxFileBytes        uint64                 `protobuf:"varint,7,opt,name=longdrawer_max_file_bytes,json=longdrawerMaxFileBytes,proto3" json:"longdrawer_max_file_bytes,omitempty"`                      // per-file size cap on LAN sync; 0 = no cap
-	unknownFields                 protoimpl.UnknownFields
-	sizeCache                     protoimpl.SizeCache
+	state                        protoimpl.MessageState `protogen:"open.v1"`
+	FilecastMaxSizeBytes         uint64                 `protobuf:"varint,1,opt,name=filecast_max_size_bytes,json=filecastMaxSizeBytes,proto3" json:"filecast_max_size_bytes,omitempty"`                         // admin-distribute upload cap; 0 = no cap
+	FilecastDefaultRetention     string                 `protobuf:"bytes,2,opt,name=filecast_default_retention,json=filecastDefaultRetention,proto3" json:"filecast_default_retention,omitempty"`                // server-yaml default when --retention is omitted on distribute (e.g. "7d")
+	LockboxMaxFileBytes          uint64                 `protobuf:"varint,3,opt,name=lockbox_max_file_bytes,json=lockboxMaxFileBytes,proto3" json:"lockbox_max_file_bytes,omitempty"`                            // per-file ciphertext cap on auto-encrypt + push; 0 = no cap (1 GiB historical default)
+	LockboxEnvelopeRetentionSecs uint64                 `protobuf:"varint,4,opt,name=lockbox_envelope_retention_secs,json=lockboxEnvelopeRetentionSecs,proto3" json:"lockbox_envelope_retention_secs,omitempty"` // LEAVE/RESURRECT/TOMBSTONE retention before reap; 0 = compile-time default (90d)
+	GitbackMaxBundleBytes        uint64                 `protobuf:"varint,5,opt,name=gitback_max_bundle_bytes,json=gitbackMaxBundleBytes,proto3" json:"gitback_max_bundle_bytes,omitempty"`                      // per-bundle fan-out cap; 0 = no cap
+	GitbackEnvelopeRetentionSecs uint64                 `protobuf:"varint,6,opt,name=gitback_envelope_retention_secs,json=gitbackEnvelopeRetentionSecs,proto3" json:"gitback_envelope_retention_secs,omitempty"` // revoke/leave envelope retention before reap; 0 = compile-time default (90d)
+	LongdrawerMaxFileBytes       uint64                 `protobuf:"varint,7,opt,name=longdrawer_max_file_bytes,json=longdrawerMaxFileBytes,proto3" json:"longdrawer_max_file_bytes,omitempty"`                   // per-file size cap on LAN sync; 0 = no cap
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *SwarmRuntimeLimits) Reset() {
@@ -554,16 +554,16 @@ func (*SwarmRuntimeLimits) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *SwarmRuntimeLimits) GetSwarmcastMaxSizeBytes() uint64 {
+func (x *SwarmRuntimeLimits) GetFilecastMaxSizeBytes() uint64 {
 	if x != nil {
-		return x.SwarmcastMaxSizeBytes
+		return x.FilecastMaxSizeBytes
 	}
 	return 0
 }
 
-func (x *SwarmRuntimeLimits) GetSwarmcastDefaultRetention() string {
+func (x *SwarmRuntimeLimits) GetFilecastDefaultRetention() string {
 	if x != nil {
-		return x.SwarmcastDefaultRetention
+		return x.FilecastDefaultRetention
 	}
 	return ""
 }
@@ -582,16 +582,16 @@ func (x *SwarmRuntimeLimits) GetLockboxEnvelopeRetentionSecs() uint64 {
 	return 0
 }
 
-func (x *SwarmRuntimeLimits) GetSwarmgitMaxBundleBytes() uint64 {
+func (x *SwarmRuntimeLimits) GetGitbackMaxBundleBytes() uint64 {
 	if x != nil {
-		return x.SwarmgitMaxBundleBytes
+		return x.GitbackMaxBundleBytes
 	}
 	return 0
 }
 
-func (x *SwarmRuntimeLimits) GetSwarmgitEnvelopeRetentionSecs() uint64 {
+func (x *SwarmRuntimeLimits) GetGitbackEnvelopeRetentionSecs() uint64 {
 	if x != nil {
-		return x.SwarmgitEnvelopeRetentionSecs
+		return x.GitbackEnvelopeRetentionSecs
 	}
 	return 0
 }
@@ -7553,14 +7553,14 @@ const file_vigo_proto_rawDesc = "" +
 	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12F\n" +
 	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\x12M\n" +
-	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimitsJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xc8\x03\n" +
-	"\x12SwarmRuntimeLimits\x127\n" +
-	"\x18swarmcast_max_size_bytes\x18\x01 \x01(\x04R\x15swarmcastMaxSizeBytes\x12>\n" +
-	"\x1bswarmcast_default_retention\x18\x02 \x01(\tR\x19swarmcastDefaultRetention\x123\n" +
+	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimitsJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xc0\x03\n" +
+	"\x12SwarmRuntimeLimits\x125\n" +
+	"\x17filecast_max_size_bytes\x18\x01 \x01(\x04R\x14filecastMaxSizeBytes\x12<\n" +
+	"\x1afilecast_default_retention\x18\x02 \x01(\tR\x18filecastDefaultRetention\x123\n" +
 	"\x16lockbox_max_file_bytes\x18\x03 \x01(\x04R\x13lockboxMaxFileBytes\x12E\n" +
-	"\x1flockbox_envelope_retention_secs\x18\x04 \x01(\x04R\x1clockboxEnvelopeRetentionSecs\x129\n" +
-	"\x19swarmgit_max_bundle_bytes\x18\x05 \x01(\x04R\x16swarmgitMaxBundleBytes\x12G\n" +
-	" swarmgit_envelope_retention_secs\x18\x06 \x01(\x04R\x1dswarmgitEnvelopeRetentionSecs\x129\n" +
+	"\x1flockbox_envelope_retention_secs\x18\x04 \x01(\x04R\x1clockboxEnvelopeRetentionSecs\x127\n" +
+	"\x18gitback_max_bundle_bytes\x18\x05 \x01(\x04R\x15gitbackMaxBundleBytes\x12E\n" +
+	"\x1fgitback_envelope_retention_secs\x18\x06 \x01(\x04R\x1cgitbackEnvelopeRetentionSecs\x129\n" +
 	"\x19longdrawer_max_file_bytes\x18\a \x01(\x04R\x16longdrawerMaxFileBytes\"\xff\x01\n" +
 	"\x12SwarmManifestEntry\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\x14\n" +

@@ -7,7 +7,7 @@
 //! `/var/lib/vigo/usercrate-policy/<username>.json` at every reconcile
 //! pass that touches the user (present state). The file mirrors the
 //! authorization flags from the user resource — `puddle: bool` and
-//! `swarmgit: bool` — so user-mode CLI verbs can decide whether
+//! `gitback: bool` — so user-mode CLI verbs can decide whether
 //! to proceed without contacting the server.
 //!
 //! Daemon-canonical + user-readable. Root writes (mode 0644); CLI
@@ -16,7 +16,7 @@
 //!
 //! Refusal on missing cache is intentional. It surfaces the
 //! "user provisioned via raw useradd, never enrolled in a Vigo
-//! usercrate" case rather than silently allowing puddle / swarmgit
+//! usercrate" case rather than silently allowing puddle / gitback
 //! verbs that the operator didn't authorize. The error message
 //! points at the cache path so the operator knows which file the
 //! agent is looking for.
@@ -40,7 +40,7 @@ pub struct UserPolicy {
     #[serde(default)]
     pub puddle: bool,
     #[serde(default)]
-    pub swarmgit: bool,
+    pub gitback: bool,
 }
 
 /// Path to the on-disk policy file for `username` under `dir`.
@@ -66,7 +66,7 @@ pub fn read_user_policy_at(dir: &Path, username: &str) -> Result<UserPolicy> {
         format!(
             "reading usercrate-policy cache at {} — has the agent checked in \
              and reconciled this user? Per-user swarm verbs require a Vigo \
-             usercrate enrollment with `puddle: true` or `swarmgit: true`.",
+             usercrate enrollment with `puddle: true` or `gitback: true`.",
             path.display()
         )
     })?;
@@ -172,24 +172,24 @@ pub fn require_puddle(username: &str) -> Result<()> {
     Ok(())
 }
 
-/// Refuse early in a CLI verb if the invoking user lacks the swarmgit
+/// Refuse early in a CLI verb if the invoking user lacks the gitback
 /// authorization flag, OR if the envoy itself is denied by the
 /// substrate-level pattern list. See [`require_puddle`] for the
 /// two-layer rationale.
-pub fn require_swarmgit(username: &str) -> Result<()> {
+pub fn require_gitback(username: &str) -> Result<()> {
     let policy = read_user_policy(username)?;
-    if !policy.swarmgit {
+    if !policy.gitback {
         bail!(
-            "user {username} is not authorized to use swarmgit on this envoy. \
-             Set `swarmgit: true` on the user resource in the usercrate, \
+            "user {username} is not authorized to use gitback on this envoy. \
+             Set `gitback: true` on the user resource in the usercrate, \
              publish the config, and wait for the agent to reconcile."
         );
     }
-    if !envoy_layer_allows("swarmgit") {
+    if !envoy_layer_allows("gitback") {
         bail!(
             "user {username} is authorized but this envoy is not in the \
-             swarmgit pattern list. Add this hostname to \
-             `swarm.swarmgit.enabled` in server.yaml, publish, and wait \
+             gitback pattern list. Add this hostname to \
+             `swarm.gitback.enabled` in server.yaml, publish, and wait \
              for the agent to check in."
         );
     }
@@ -202,7 +202,7 @@ pub fn require_swarmgit(username: &str) -> Result<()> {
 /// bundle, so absence means either a freshly-enrolled envoy that hasn't
 /// completed a check-in yet OR the daemon is on a pre-0.41.1 binary.
 /// In both cases, refusing here would block the user from doing any
-/// puddle/swarmgit setup, so we fail open.
+/// puddle/gitback setup, so we fail open.
 fn envoy_layer_allows(subsystem: &str) -> bool {
     envoy_layer_allows_at(&crate::swarm::state_mirror::default_path(), subsystem)
 }
@@ -217,7 +217,7 @@ fn envoy_layer_allows_at(path: &std::path::Path, subsystem: &str) -> bool {
     };
     match subsystem {
         "puddle" => state.gates.puddle,
-        "swarmgit" => state.gates.swarmgit,
+        "gitback" => state.gates.gitback,
         _ => true,
     }
 }
@@ -228,7 +228,7 @@ mod tests {
 
     #[test]
     fn user_policy_round_trips_through_json() {
-        let p = UserPolicy { puddle: true, swarmgit: false };
+        let p = UserPolicy { puddle: true, gitback: false };
         let json = serde_json::to_string(&p).unwrap();
         let q: UserPolicy = serde_json::from_str(&json).unwrap();
         assert_eq!(p, q);
@@ -240,7 +240,7 @@ mod tests {
         // on-disk files. Empty {} parses as both-false.
         let p: UserPolicy = serde_json::from_str("{}").unwrap();
         assert!(!p.puddle);
-        assert!(!p.swarmgit);
+        assert!(!p.gitback);
     }
 
     #[test]
@@ -248,11 +248,11 @@ mod tests {
         // Tolerate extra keys an older agent might encounter from a
         // newer user-executor write.
         let p: UserPolicy = serde_json::from_str(
-            r#"{"puddle": true, "swarmgit": false, "future_thing": 42}"#,
+            r#"{"puddle": true, "gitback": false, "future_thing": 42}"#,
         )
         .unwrap();
         assert!(p.puddle);
-        assert!(!p.swarmgit);
+        assert!(!p.gitback);
     }
 
     #[test]
@@ -281,7 +281,7 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let path = dir.path().join("nope.json");
         assert!(envoy_layer_allows_at(&path, "puddle"));
-        assert!(envoy_layer_allows_at(&path, "swarmgit"));
+        assert!(envoy_layer_allows_at(&path, "gitback"));
         // Unknown subsystem name — defensive default-true.
         assert!(envoy_layer_allows_at(&path, "payload"));
     }
@@ -293,6 +293,6 @@ mod tests {
         crate::swarm::state_mirror::write(&path, "0.41.3", 1, br#"{"swarm_puddle_enabled": false}"#).unwrap();
         assert!(!envoy_layer_allows_at(&path, "puddle"));
         // Defaults to true for keys not in vars_json.
-        assert!(envoy_layer_allows_at(&path, "swarmgit"));
+        assert!(envoy_layer_allows_at(&path, "gitback"));
     }
 }

@@ -56,8 +56,8 @@ use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 /// Domain-separator prefix for canonical signed bytes. Distinct from
-/// every other Ed25519 envelope shape vigo signs (swarmgit tokens,
-/// swarmgit revoke / leave envelopes, lockbox DELETE / LEAVE).
+/// every other Ed25519 envelope shape vigo signs (gitback tokens,
+/// gitback revoke / leave envelopes, lockbox DELETE / LEAVE).
 pub const CERT_DOMAIN: &[u8] = b"vigo-lockbox-puddle-cert-v1\0";
 
 /// On-disk schema version. Bumps when the canonical bytes change.
@@ -66,7 +66,7 @@ pub const CERT_VERSION: u32 = 1;
 /// Default certificate lifetime: 30 days.
 pub const DEFAULT_LIFETIME_SECS: i64 = 30 * 24 * 60 * 60;
 
-/// Length of an Ed25519 signature. Same as the swarmgit tokens
+/// Length of an Ed25519 signature. Same as the gitback tokens
 /// constant; redeclared here to avoid the cross-subsystem dep.
 pub const SIG_LEN: usize = 64;
 

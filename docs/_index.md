@@ -18,7 +18,7 @@ See the full [Engineering Guide](engineering/_index.md). Highlights:
 
 - Architecture: [Overview](engineering/architecture/overview.md), [Check-in Lifecycle](engineering/architecture/check-in-lifecycle.md), [Convergence Walkthrough](engineering/architecture/convergence-walkthrough.md), [Resource DAG](engineering/architecture/resource-dag.md), [Offline Bundles](engineering/architecture/offline-bundles.md)
 - Writing modules: [Resource Types](engineering/writing-modules/resource-types.md), [When Expressions](engineering/writing-modules/when-expressions.md), [Lookups](engineering/writing-modules/lookups.md), [Templates](engineering/writing-modules/templates.md), [Multi-Axis Config](engineering/writing-modules/multi-axis-config.md), [Composition Patterns](engineering/writing-modules/composition-patterns.md), [Retraction](engineering/writing-modules/retraction.md), [Stream-Edit](engineering/writing-modules/stream-edit.md), [Config Format](engineering/writing-modules/config-format.md), [Usercrates](engineering/writing-modules/usercrates.md)
-- Subsystems: [Swarm](engineering/subsystems/swarm.md), [Spanner](engineering/subsystems/spanner.md), [P2P Spanner](engineering/subsystems/p2p-spanner.md), [Scrier](engineering/subsystems/scrier.md), [Swarmgit](engineering/subsystems/swarmgit.md), [Longdrawer](engineering/subsystems/longdrawer.md), [Lockbox](engineering/subsystems/lockbox.md), [Network Devices](engineering/subsystems/network-devices.md)
+- Subsystems: [Swarm](engineering/subsystems/swarm.md), [Spanner](engineering/subsystems/spanner.md), [P2P Spanner](engineering/subsystems/p2p-spanner.md), [Scrier](engineering/subsystems/scrier.md), [Gitback](engineering/subsystems/gitback.md), [Longdrawer](engineering/subsystems/longdrawer.md), [Lockbox](engineering/subsystems/lockbox.md), [Network Devices](engineering/subsystems/network-devices.md)
 - Extending: [Custom Executors](engineering/extending/custom-executors.md), [Custom Traits](engineering/extending/custom-traits.md)
 
 ## Operations
@@ -39,7 +39,7 @@ See the full [Engineering Guide](engineering/_index.md). Highlights:
 - [Rate Limiting](operations/rate-limiting.md) — Token-bucket rate limiting
 - [Peer Replication](operations/peer-replication.md) — Primary/peer file sync and automatic failover
 - [Geo-Distributed Deployments](operations/geo-distributed.md) — Multi-region fleets
-- [Swarm](operations/swarm.md) — envoy P2P substrate operations (payload, longdrawer, swarmgit, lockbox)
+- [Swarm](operations/swarm.md) — envoy P2P substrate operations (payload, longdrawer, gitback, lockbox)
 - [Backup & Recovery](operations/backup.md) — Litestream replication, snapshots, web UI download
 - [Disaster Recovery](operations/disaster-recovery.md) — Five failure scenarios with runbooks
 - [Server Migration](operations/server-migration.md) — Moving server without re-enrolling agents

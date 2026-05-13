@@ -881,7 +881,7 @@ func run() error {
 	})
 	// Seed the doctor handler's swarm-config view so the
 	// swarm_pattern_order check has data on the first /doctor call.
-	// Refreshed on every reload below alongside the agentSvc / lode /
+	// Refreshed on every reload below alongside the agentSvc / filecast /
 	// uiHandler swarm-config setters.
 	doctorHandler.SetSwarmConfig(cfg.Swarm)
 
@@ -973,7 +973,7 @@ func run() error {
 		slog.Warn("stream_edit globally disabled — all stream_edit attributes will be stripped from policy bundles")
 	}
 
-	// Swarmgit is fully P2P as of 0.23.0 — no server-side ClaimTable,
+	// Gitback is fully P2P as of 0.23.0 — no server-side ClaimTable,
 	// no trait-driven Builder, no SetCairn wiring. See
 	// `plan_cairn_p2p_first.md` for the rearchitecture history.
 
@@ -1162,7 +1162,7 @@ func run() error {
 		tokensHandler.RegisterRoutes(gwMux)
 		scrierAPIHandler.RegisterRoutes(gwMux)
 		// Fleet pubkey distribution. Lives outside the swarm-enabled
-		// gate so agents can bootstrap their swarmgit peer-pubkey
+		// gate so agents can bootstrap their gitback peer-pubkey
 		// TOFU cache regardless of whether THIS server has the swarm
 		// substrate enabled — the endpoint just reads FleetIndex,
 		// which is always populated. Without this hoist, agents on
@@ -1229,9 +1229,9 @@ func run() error {
 			// now usercrate-flag-driven, not envoy-pattern-driven).
 			lastSwarmPatterns := append([]string(nil), cfg.Swarm.Enabled...)
 			lastPuddlePatterns := append([]string(nil), cfg.Swarm.Puddle.Enabled...)
-			lastSwarmgitPatterns := append([]string(nil), cfg.Swarm.Swarmgit.Enabled...)
+			lastGitbackPatterns := append([]string(nil), cfg.Swarm.Gitback.Enabled...)
 			lastLongdrawerPatterns := append([]string(nil), cfg.Swarm.Longdrawer.Enabled...)
-			lastSwarmcastPatterns := append([]string(nil), cfg.Swarm.Swarmcast.Enabled...)
+			lastFilecastPatterns := append([]string(nil), cfg.Swarm.Filecast.Enabled...)
 
 			configStore.SetOnReloadSuccess(func() {
 				// Re-read server.yaml directly — ConfigStore.Reload() only
@@ -1255,17 +1255,17 @@ func run() error {
 					recordSwarmPatternsChange(ctx, auditWriter, "puddle", lastPuddlePatterns, newCfg.Swarm.Puddle.Enabled)
 					lastPuddlePatterns = append([]string(nil), newCfg.Swarm.Puddle.Enabled...)
 				}
-				if !sameStringSet(lastSwarmgitPatterns, newCfg.Swarm.Swarmgit.Enabled) {
-					recordSwarmPatternsChange(ctx, auditWriter, "swarmgit", lastSwarmgitPatterns, newCfg.Swarm.Swarmgit.Enabled)
-					lastSwarmgitPatterns = append([]string(nil), newCfg.Swarm.Swarmgit.Enabled...)
+				if !sameStringSet(lastGitbackPatterns, newCfg.Swarm.Gitback.Enabled) {
+					recordSwarmPatternsChange(ctx, auditWriter, "gitback", lastGitbackPatterns, newCfg.Swarm.Gitback.Enabled)
+					lastGitbackPatterns = append([]string(nil), newCfg.Swarm.Gitback.Enabled...)
 				}
 				if !sameStringSet(lastLongdrawerPatterns, newCfg.Swarm.Longdrawer.Enabled) {
 					recordSwarmPatternsChange(ctx, auditWriter, "longdrawer", lastLongdrawerPatterns, newCfg.Swarm.Longdrawer.Enabled)
 					lastLongdrawerPatterns = append([]string(nil), newCfg.Swarm.Longdrawer.Enabled...)
 				}
-				if !sameStringSet(lastSwarmcastPatterns, newCfg.Swarm.Swarmcast.Enabled) {
-					recordSwarmPatternsChange(ctx, auditWriter, "swarmcast", lastSwarmcastPatterns, newCfg.Swarm.Swarmcast.Enabled)
-					lastSwarmcastPatterns = append([]string(nil), newCfg.Swarm.Swarmcast.Enabled...)
+				if !sameStringSet(lastFilecastPatterns, newCfg.Swarm.Filecast.Enabled) {
+					recordSwarmPatternsChange(ctx, auditWriter, "filecast", lastFilecastPatterns, newCfg.Swarm.Filecast.Enabled)
+					lastFilecastPatterns = append([]string(nil), newCfg.Swarm.Filecast.Enabled...)
 				}
 			})
 
@@ -2323,7 +2323,7 @@ func sameStringSet(a, b []string) bool {
 // recordSwarmPatternsChange emits a tamper-evident audit-chain entry
 // whenever a swarm authorization pattern list changes. `substrate` is
 // "swarm" for the top-level pattern, or one of
-// "puddle"/"swarmgit"/"longdrawer"/"swarmcast" for the per-subsystem
+// "puddle"/"gitback"/"longdrawer"/"filecast" for the per-subsystem
 // patterns. The summary states the pattern delta; the payload carries
 // the full new list so a reviewer can reconstruct post-change state
 // without joining log streams. Failures are logged at WARN — the audit

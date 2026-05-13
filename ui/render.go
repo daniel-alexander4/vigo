@@ -350,7 +350,7 @@ func funcMap() template.FuncMap {
 			case "complete", "source", "live":
 				// Green for anything that reads as "present and healthy."
 				// Source is the seeder (has by construction); live
-				// covers materialized swarmgit mirrors and per-user
+				// covers materialized gitback mirrors and per-user
 				// longdrawer/lockbox files.
 				return "converged"
 			case "cached":
@@ -939,9 +939,9 @@ func truncGitSha(sha string) string {
 
 // labelDisplayName returns the rightmost colon-delimited segment of a
 // swarm blob label — the file name as the user thinks of it. Legacy
-// swarmgit labels take the form `swarmgit:<host>:<user>:<project>`
+// gitback labels take the form `gitback:<host>:<user>:<project>`
 // and this helper surfaces just the project tail. Labels without a
-// colon (e.g. admin swarmcast labels like `pc-payload-1777298130`)
+// colon (e.g. admin filecast labels like `pc-payload-1777298130`)
 // pass through unchanged. The full routing label is intentionally
 // not surfaced anywhere user visible — host/user are in the row
 // subtitle when relevant.

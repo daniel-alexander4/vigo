@@ -17,11 +17,11 @@ The UI is built with Go templates and HTMX for partial page updates without full
 | [Workflows](workflows.md) | `/workflows` | Multi-step workflow execution |
 | [Spanner](spanner.md) | `/spanner` | Hub-spoke topology and health |
 | [Swarm](swarm.md) | `/swarm` | Envoy P2P substrate overview — fleet status, subsystem counts, seeding allowlist, per-envoy peer table |
-| [Payload](swarm-swarmcast.md) | `/payload` | Admin-distributed payloads — status and per-envoy progress over the swarm substrate |
-| Swarmgit | `/swarmgit` | Personal-DR repo mirror inventory — one row per repo, publisher, mirror counts, orphan/stale health |
+| [Payload](swarm-filecast.md) | `/payload` | Admin-distributed payloads — status and per-envoy progress over the swarm substrate |
+| Gitback | `/gitback` | Personal-DR repo mirror inventory — one row per repo, publisher, mirror counts, orphan/stale health |
 | Longdrawer | `/longdrawer` | Per-user LAN plaintext sync mesh — one row per user, file/tombstone/envoy counts, divergence status |
 | Lockbox | `/lockbox` | Per-user encrypted sync mesh — same shape as Longdrawer plus recipient drift and active unlock sessions |
-| [Envoy Swarm Load](envoy-swarm-load.md) | `/envoys/{id}` · Swarm tab | Per-envoy disk footprint across payload, swarmgit, longdrawer, and lockbox — biggest consumers first |
+| [Envoy Swarm Load](envoy-swarm-load.md) | `/envoys/{id}` · Swarm tab | Per-envoy disk footprint across payload, gitback, longdrawer, and lockbox — biggest consumers first |
 | [Envoy Agent Footprint](envoy-footprint.md) | `/envoys/{id}` · Agent Footprint tab | Agent process resource usage and host FD pressure (`agent_self.*` and `host_self.*` traits, threshold-colored) |
 | [Security](security.md) | `/envoys/{id}` | Envoy detail and security info |
 | Security Certs | `/security/certs/{id}` | Per-envoy certificate expiry detail — linked from the /security page's Certs Expiring Soon panel; supports `?bucket=expired\|7d\|30d` filter |

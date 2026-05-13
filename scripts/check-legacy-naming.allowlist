@@ -1,5 +1,6 @@
-# scripts/check-legacy-naming.allowlist — exceptions for the
-# 0.31.0 substrate-rename verification script.
+# scripts/check-legacy-naming.allowlist — exceptions for the rename
+# verification script (0.31.0 lode/cairn/echo/sigil/stones; 0.50.0
+# swarmcast/swarmgit/swarmresolve/swarmreg → filecast/gitback/hostdox/curator).
 #
 # Format:
 #   <path>:<line>:<token>   exact-line allowlist
@@ -22,17 +23,20 @@
 # ~/.claude/projects/...) so `git ls-files` doesn't return them.
 # Listed here as a safety net in case future tooling brings them in.
 
-# Dan's literal disk layout still has historical projects under
-# ~/cairn/. The substrate rename does not move his personal directories
-# on disk; it only renames the code-side per-user expectation
-# (~/swarmgit/<project>/) inside agent code. The license repo
-# (formerly ~/cairn/vigo-lic, now ~/swarmgit/tessera) followed the
-# rename — entries below that pointed at the old path are obsolete.
+# Dan's literal dev-repo directory is ~/swarmgit/{vigo,tessera,vigo-web}.
+# Neither the 0.31.0 nor the 0.50.0 rename moves it on disk; they only
+# rename the code-side per-user convention (~/gitback/<project>/ after
+# 0.50.0). The CLAUDE.md lines below point at where tessera / vigo-web
+# actually live, so the ~/swarmgit/ token there is intentional.
+CLAUDE.md:56:\bswarmgit\b
+CLAUDE.md:65:\bswarmgit\b
+CLAUDE.md:141:\bswarmgit\b
+CLAUDE.md:143:\bswarmgit\b
 
-# The substrate-rename plan document describes the rename — every
-# legacy term appears as part of the mapping description. Allowlisted
-# wholesale.
+# The rename plan documents describe their renames — every legacy term
+# appears as part of the mapping description. Allowlisted wholesale.
 internal.docs/plan-substrate-rename.md:*:cairn
+internal.docs/plan-rename-2026-05.md:*:swarmgit
 
 # The France GTM plan lists "Cairn" as a product name in its glossary
 # section; that prose was authored before the rename. Future pass.
@@ -74,3 +78,18 @@ scripts/check-legacy-naming.sh:*:cairn
 # CLAUDE.md previously referenced ~/cairn/vigo-lic for the license
 # repo; that's now ~/swarmgit/tessera, so no `cairn` token remains
 # to allowlist there.
+
+# Pre-existing references to the historical "cairn"-era reset incident —
+# the tshoot archive file is named log-archive-cairn-resolved-20260424-…
+# (its name can't change), and the prose pointing at it cites it by that
+# name. Not introduced by the 0.50.0 rename; allowlisted by line so the
+# checker stays green.
+server/grpc/agentstream.go:982:\bcairn\b
+server/swarm/manifest.go:54:\bcairn\b
+server/swarm/manifest.go:291:\bcairn\b
+docs/engineering/subsystems/swarm.md:168:\bcairn\b
+
+# Doc cross-link to a memory file whose directory name encodes Dan's
+# literal working-tree path (.claude/projects/-home-dan-swarmgit-vigo/…) —
+# that "swarmgit" is the on-disk path, not the subsystem, so it stays.
+docs/reference/ui/envoy-footprint.md:48:\bswarmgit\b

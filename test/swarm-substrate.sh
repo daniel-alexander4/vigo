@@ -5,7 +5,7 @@
 # End-to-end swarm validation against a real Vigo fleet.
 #
 # Exercises all four swarm content subsystems — payload, longdrawer,
-# puddle (lifecycle), lockbox, swarmgit — in sequence. Pass/fail per
+# puddle (lifecycle), lockbox, gitback — in sequence. Pass/fail per
 # step, exit non-zero on any failure. Mirrors the manual procedure
 # captured in tshoot/log-substrate-2026-05-09.md so a future "did
 # everything still work" check is one command.
@@ -21,16 +21,16 @@
 # Behavior:
 #   --wipe is required and destructive. Stops the agent on each envoy,
 #   removes per-user swarm dirs (~/.vigo-puddle, ~/.lockbox,
-#   ~/lockbox, ~/.vigo-swarmgit, ~/longdrawer), removes the
-#   root-owned /var/lib/vigo/swarm/{swarmgit,lockbox}, restarts the
+#   ~/lockbox, ~/.vigo-gitback, ~/longdrawer), removes the
+#   root-owned /var/lib/vigo/swarm/{gitback,lockbox}, restarts the
 #   agent, then runs the full 5-step substrate sequence (payload →
-#   longdrawer → puddle → lockbox → swarmgit) from a clean slate.
+#   longdrawer → puddle → lockbox → gitback) from a clean slate.
 #
-# Why no non-destructive mode: swarmgit's project_id is fixed by the
+# Why no non-destructive mode: gitback's project_id is fixed by the
 # founder's puddle pubkey, so a single founder can only have ONE
 # project at a time. A "quick smoke" mode that re-inits would
 # always collide with the prior run's project. Use the
-# `cargo test --test swarmgit_helper` integration test for a
+# `cargo test --test gitback_helper` integration test for a
 # fleet-free smoke; this script is for full multi-envoy validation.
 #
 # Operator quirks the runlog flagged:
@@ -65,13 +65,13 @@ if [[ $WIPE -ne 1 ]]; then
 swarm-substrate.sh requires --wipe.
 
 This script is destructive: it wipes per-user swarm state and
-root-owned /var/lib/vigo/swarm/{swarmgit,lockbox} on every envoy,
+root-owned /var/lib/vigo/swarm/{gitback,lockbox} on every envoy,
 then runs the full 5-step substrate test from a clean slate. There
-is no non-destructive mode (swarmgit's single-project-per-puddle
+is no non-destructive mode (gitback's single-project-per-puddle
 invariant precludes a re-runnable smoke).
 
 For a fleet-free quick smoke, run:
-    cd agent && cargo test --test swarmgit_helper
+    cd agent && cargo test --test gitback_helper
 
 To run this script anyway:
     test/swarm-substrate.sh --wipe
@@ -175,8 +175,8 @@ if [[ $WIPE -eq 1 ]]; then
         ssh "$h" '
             set -e
             sudo systemctl stop vigo-envoy
-            rm -rf ~/.vigo-puddle ~/.lockbox ~/lockbox ~/.vigo-swarmgit ~/longdrawer
-            sudo rm -rf /var/lib/vigo/swarm/swarmgit /var/lib/vigo/swarm/lockbox
+            rm -rf ~/.vigo-puddle ~/.lockbox ~/lockbox ~/.vigo-gitback ~/longdrawer
+            sudo rm -rf /var/lib/vigo/swarm/gitback /var/lib/vigo/swarm/lockbox
             sudo systemctl start vigo-envoy
             # Poll for active state — vigo-envoy can spend several
             # seconds in "activating" while it does enrollment refresh
@@ -201,7 +201,7 @@ if true; then
     MARKER=/tmp/$TAG-payload.txt
     echo "$TAG payload marker $(date -Iseconds)" > "$MARKER"
     SHA=$(sha256sum "$MARKER" | cut -d' ' -f1)
-    sudo vigocli swarm swarmcast distribute "$MARKER" --target '*' --label "$TAG" --retention 1h >/dev/null
+    sudo vigocli swarm filecast distribute "$MARKER" --target '*' --label "$TAG" --retention 1h >/dev/null
     echo "  seeded sha256=$SHA"
 
     deadline=$(( $(date +%s) + 60 ))
@@ -340,19 +340,19 @@ if true; then
     ok "lockbox round-trip on ${#RECEIVERS[@]} receiver(s)"
 fi
 
-# ---------- step 7: swarmgit (always runs) ----------
+# ---------- step 7: gitback (always runs) ----------
 
-step "swarmgit: init project, push, fan-out, cross-envoy clone"
+step "gitback: init project, push, fan-out, cross-envoy clone"
 
 # Founder inits the project.
-INIT_OUT=$(remote_unlock_and "$FOUNDER" "vigo swarm swarmgit project init $TAG")
+INIT_OUT=$(remote_unlock_and "$FOUNDER" "vigo swarm gitback project init $TAG")
 PID=$(echo "$INIT_OUT" | awk '/Project ID:/{print $3}')
 PUDDLE_PUB=$(echo "$INIT_OUT" | awk '/Founder:/{print $2}')
 if [[ -z "$PID" ]] || [[ -z "$PUDDLE_PUB" ]]; then
     bad "could not parse project init output"
     echo "$INIT_OUT"; exit 1
 fi
-URL="swarmgit://$PID/$TAG"
+URL="gitback://$PID/$TAG"
 echo "  project_id=$PID"
 
 # Founder mints invitation; ferry it to each receiver and join.
@@ -361,12 +361,12 @@ ssh "$FOUNDER" "
     export XDG_RUNTIME_DIR=/run/user/\$(id -u)
     echo '$PASSPHRASE' | vigo swarm puddle unlock >/dev/null 2>&1
     sleep 1
-    vigo swarm swarmgit project invite $PID --puddle $PUDDLE_PUB --role member --expires 1d 2>/dev/null > /tmp/$TAG-invite.json
+    vigo swarm gitback project invite $PID --puddle $PUDDLE_PUB --role member --expires 1d 2>/dev/null > /tmp/$TAG-invite.json
 "
 scp -q "$FOUNDER:/tmp/$TAG-invite.json" "$INVITE_LOCAL"
 for h in "${RECEIVERS[@]}"; do
     scp -q "$INVITE_LOCAL" "$h:/tmp/$TAG-invite.json"
-    remote_unlock_and "$h" "vigo swarm swarmgit project join $PID --invitation /tmp/$TAG-invite.json >/dev/null"
+    remote_unlock_and "$h" "vigo swarm gitback project join $PID --invitation /tmp/$TAG-invite.json >/dev/null"
 done
 echo "  ${#RECEIVERS[@]} receiver(s) joined"
 
@@ -402,7 +402,7 @@ deadline=$(( $(date +%s) + 90 ))
 while :; do
     ready=0
     for h in "${HOSTS[@]}"; do
-        sha=$(ssh "$h" "sudo git -C /var/lib/vigo/swarm/swarmgit/projects/$PID.git rev-parse refs/heads/master 2>/dev/null" || echo "")
+        sha=$(ssh "$h" "sudo git -C /var/lib/vigo/swarm/gitback/projects/$PID.git rev-parse refs/heads/master 2>/dev/null" || echo "")
         if [[ "$sha" == "$HEAD_SHA" ]]; then
             ready=$((ready+1))
         fi
@@ -436,7 +436,7 @@ ssh "$CLONER" "
 " || { bad "cross-envoy clone from $CLONER failed"; exit 1; }
 echo "  clone from $CLONER: c1.txt content verified"
 
-ok "swarmgit push + fan-out + cross-envoy clone on ${#HOSTS[@]} envoys"
+ok "gitback push + fan-out + cross-envoy clone on ${#HOSTS[@]} envoys"
 
 # ---------- summary ----------
 

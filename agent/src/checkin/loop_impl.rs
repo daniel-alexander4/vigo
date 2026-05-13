@@ -70,10 +70,10 @@ pub struct LoopConfig {
     /// Swarm download coordinator. When set, check-in responses are forwarded
     /// to the manager instead of spawning ad-hoc download tasks.
     pub swarm_manager: Option<crate::swarm::manager::SwarmManager>,
-    /// Live on/off switch for the swarmgit subsystem. Re-evaluated after
-    /// every accepted policy bundle so operators can flip `swarmgit: true`
+    /// Live on/off switch for the gitback subsystem. Re-evaluated after
+    /// every accepted policy bundle so operators can flip `gitback: true`
     /// in a matchfile without restarting the agent.
-    pub swarmgit_gate: Option<crate::swarm::swarmgit::Gate>,
+    pub gitback_gate: Option<crate::swarm::gitback::Gate>,
 }
 
 impl Default for LoopConfig {
@@ -89,7 +89,7 @@ impl Default for LoopConfig {
             peer_map: None,
             manifest: None,
             swarm_manager: None,
-            swarmgit_gate: None,
+            gitback_gate: None,
         }
     }
 }
@@ -505,7 +505,7 @@ pub async fn run_once_with_update(
     // server populated the field. Done unconditionally on every CheckIn
     // (not just no-change cycles) so admin tweaks to server.yaml swarm
     // caps reach agents within one cycle. Read sites in lockbox /
-    // swarmgit / longdrawer consult crate::swarm::runtime_limits.
+    // gitback / longdrawer consult crate::swarm::runtime_limits.
     if let Some(ref limits) = resp.swarm_runtime_limits {
         crate::swarm::runtime_limits::update_from_proto(limits);
     }
@@ -725,21 +725,21 @@ async fn deliver_pending(client: &mut Client, store: &StateStore) {
     }
 }
 
-/// Re-read the swarmgit authorization vars from the freshly-accepted
+/// Re-read the gitback authorization vars from the freshly-accepted
 /// bundle and propagate the result to the shared gate. Logs only on
 /// transitions so the steady state is quiet.
-fn sync_swarmgit_gate(
-    gate: Option<&crate::swarm::swarmgit::Gate>,
+fn sync_gitback_gate(
+    gate: Option<&crate::swarm::gitback::Gate>,
     store: &StateStore,
 ) {
     let Some(gate) = gate else { return };
-    let new_state = crate::swarm::swarmgit::swarmgit_enabled_for_envoy(Some(store));
+    let new_state = crate::swarm::gitback::gitback_enabled_for_envoy(Some(store));
     let prev = gate.set(new_state);
     if prev != new_state {
         if new_state {
-            info!("swarmgit: enabled (this envoy now matches swarm.swarmgit.enabled; live flip, no restart required)");
+            info!("gitback: enabled (this envoy now matches swarm.gitback.enabled; live flip, no restart required)");
         } else {
-            info!("swarmgit: disabled (this envoy no longer matches swarm.swarmgit.enabled; live flip, reactor will idle)");
+            info!("gitback: disabled (this envoy no longer matches swarm.gitback.enabled; live flip, reactor will idle)");
         }
     }
 }
@@ -891,7 +891,7 @@ pub async fn daemon_loop(
     let peer_map = cfg.peer_map;
     let manifest = cfg.manifest;
     let swarm_manager = cfg.swarm_manager;
-    let swarmgit_gate = cfg.swarmgit_gate;
+    let gitback_gate = cfg.gitback_gate;
 
     let mut bo = Backoff::new();
     let mut last_fingerprint = String::new();
@@ -996,7 +996,7 @@ pub async fn daemon_loop(
                 // Accept bundle after successful online convergence.
                 if let Some(ref store) = state_store {
                     accept_bundle(store, &policy_state, traits_json.as_deref());
-                    sync_swarmgit_gate(swarmgit_gate.as_ref(), store);
+                    sync_gitback_gate(gitback_gate.as_ref(), store);
                     crate::swarm::evict_expired(store);
                 }
                 crate::swarm::cleanup_graveyard();
@@ -1064,7 +1064,7 @@ pub async fn daemon_loop(
                             // Cache state after stream disconnect.
                             if let Some(ref store) = state_store {
                                 accept_bundle(store, &policy_state, traits_json.as_deref());
-                                sync_swarmgit_gate(swarmgit_gate.as_ref(), store);
+                                sync_gitback_gate(gitback_gate.as_ref(), store);
                             }
 
                             if cancel.is_cancelled() {

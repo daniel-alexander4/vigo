@@ -22,7 +22,7 @@ pub mod discovery;
 pub mod download;
 pub mod longdrawer;
 pub mod gates;
-pub mod swarmgit;
+pub mod gitback;
 pub mod manager;
 pub mod manifest;
 pub mod meta;
@@ -37,7 +37,7 @@ pub mod scheduler;
 pub mod puddle;
 pub mod server;
 pub mod state_mirror;
-pub mod swarmresolve;
+pub mod hostdox;
 pub mod target;
 
 use std::collections::hash_map::DefaultHasher;

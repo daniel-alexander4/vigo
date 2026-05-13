@@ -11,7 +11,7 @@ An opaque byte sequence distributed by the [swarm](../engineering/subsystems/swa
 
 ## bundle
 
-A self-contained git repository archive produced by `git bundle create`, used as [swarmgit](../engineering/subsystems/swarmgit.md)'s unit of distribution. Bundles can be full (complete repository history) or incremental (deltas since a previous bundle). Receivers materialize bundles into bare repositories at `/var/lib/vigo/swarm/swarmgit/mirrors/<seeder>/<user>/<project>.git`.
+A self-contained git repository archive produced by `git bundle create`, used as [gitback](../engineering/subsystems/gitback.md)'s unit of distribution. Bundles can be full (complete repository history) or incremental (deltas since a previous bundle). Receivers materialize bundles into bare repositories at `/var/lib/vigo/swarm/gitback/mirrors/<seeder>/<user>/<project>.git`.
 
 ## compliance
 
@@ -58,9 +58,9 @@ Canonical scope words, narrowest to broadest: **puddle** ⊆ envoys-running-a-gi
 
 See the [scope-hierarchy diagram](../engineering/subsystems/swarm.md#scope-fleet-vs-swarm-vs-puddle) on the Swarm page for how these layers and the four content subsystems relate.
 
-## swarmcast
+## filecast
 
-Administrator-pushed file distribution on top of the [swarm](#swarm) substrate. An operator runs `vigocli swarm swarmcast distribute <file>` (or drops a file + `.swarm` sidecar on a seeder) and the blob replicates across the fleet via swarm's peer channel. Swarmcast is one of four content subsystems that ride swarm; the other three ([longdrawer](#longdrawer), [swarmgit](#swarmgit), [lockbox](#lockbox)) are user-scoped, while swarmcast is operator-scoped and fleet-wide. Surfaced in the web UI at [`/swarm/swarmcast`](ui/swarm-swarmcast.md).
+Administrator-pushed file distribution on top of the [swarm](#swarm) substrate. An operator runs `vigocli swarm filecast distribute <file>` (or drops a file + `.swarm` sidecar on a seeder) and the blob replicates across the fleet via swarm's peer channel. Filecast is one of four content subsystems that ride swarm; the other three ([longdrawer](#longdrawer), [gitback](#gitback), [lockbox](#lockbox)) are user-scoped, while filecast is operator-scoped and fleet-wide. Surfaced in the web UI at [`/swarm/filecast`](ui/swarm-filecast.md).
 
 ## manifest
 
@@ -96,7 +96,7 @@ Vigo's admin remote-access subsystem: interactive SSH, RDP, and VNC sessions to 
 
 ## seed
 
-The originating instance of a swarm blob on an envoy — the source of truth for that blob. Today seeds are created exclusively by `vigocli swarm swarmcast distribute`, which writes into the server's bind-mounted seed directory. The envoy-originated seed verb (`vigo swarm seed add`) is deferred — see `pending.md` for status. Peers pull chunks from seeds until they have full local copies.
+The originating instance of a swarm blob on an envoy — the source of truth for that blob. Today seeds are created exclusively by `vigocli swarm filecast distribute`, which writes into the server's bind-mounted seed directory. The envoy-originated seed verb (`vigo swarm seed add`) is deferred — see `pending.md` for status. Peers pull chunks from seeds until they have full local copies.
 
 ## spanner
 
@@ -112,7 +112,7 @@ A module definition file in `stockpile/modules/**/*.vgo`. The directory name `mo
 
 ## swarm
 
-The envoy-only P2P network substrate. Swarm is the transport layer that all P2P content subsystems ride on: peer discovery (multicast on `224.0.0.42:1531` + registry-backed hints), mTLS HTTPS between envoys on port 1531, manifest CRDT gossip, and content-addressed chunking. Swarm does not itself define *what* gets distributed — the four content subsystems do: [swarmcast](#swarmcast) (admin-pushed blobs, fleet-wide), [longdrawer](#longdrawer) (plaintext home-dir sync, per-user LAN set), [swarmgit](#swarmgit) (source-control repo mirrors, per-puddle), [lockbox](#lockbox) (encrypted home-dir sync, per-puddle). Each subsystem has its own content rules but reuses swarm's peer channel, port, and mTLS trust. The swarm is singular and fleet-wide — see [fleet](#fleet) for the scope-word distinctions. See [Swarm](../engineering/subsystems/swarm.md).
+The envoy-only P2P network substrate. Swarm is the transport layer that all P2P content subsystems ride on: peer discovery (multicast on `224.0.0.42:1531` + registry-backed hints), mTLS HTTPS between envoys on port 1531, manifest CRDT gossip, and content-addressed chunking. Swarm does not itself define *what* gets distributed — the four content subsystems do: [filecast](#filecast) (admin-pushed blobs, fleet-wide), [longdrawer](#longdrawer) (plaintext home-dir sync, per-user LAN set), [gitback](#gitback) (source-control repo mirrors, per-puddle), [lockbox](#lockbox) (encrypted home-dir sync, per-puddle). Each subsystem has its own content rules but reuses swarm's peer channel, port, and mTLS trust. The swarm is singular and fleet-wide — see [fleet](#fleet) for the scope-word distinctions. See [Swarm](../engineering/subsystems/swarm.md).
 
 ## trait
 
@@ -130,15 +130,15 @@ Per-user always-encrypted home-directory sync on the [swarm](#swarm) substrate. 
 
 ## puddle
 
-Per-user puddle identity primitive (ADR-014). A single Ed25519 keypair representing "this user's collection of envoys, treated as one trust unit," wrapped under the user's passphrase using lockbox's Argon2id+XChaCha20 envelope. Sibling subsystems ([swarmgit](#swarmgit) under ADR-015, lockbox membership under ADR-016) consume it as a trust anchor — "envoys in puddle X" expressed as a single pubkey rather than a per-pair invite ceremony. Onboarding via [peer-pair](#peer-pair); manual scp survives as the air-gapped fallback. State at `~/.vigo-puddle/`. CLI: `vigo swarm puddle {init,pair,join,unlock,lock,pubkey,members,rotate-passphrase,status}`. See [Puddle](../engineering/subsystems/puddle.md).
+Per-user puddle identity primitive (ADR-014). A single Ed25519 keypair representing "this user's collection of envoys, treated as one trust unit," wrapped under the user's passphrase using lockbox's Argon2id+XChaCha20 envelope. Sibling subsystems ([gitback](#gitback) under ADR-015, lockbox membership under ADR-016) consume it as a trust anchor — "envoys in puddle X" expressed as a single pubkey rather than a per-pair invite ceremony. Onboarding via [peer-pair](#peer-pair); manual scp survives as the air-gapped fallback. State at `~/.vigo-puddle/`. CLI: `vigo swarm puddle {init,pair,join,unlock,lock,pubkey,members,rotate-passphrase,status}`. See [Puddle](../engineering/subsystems/puddle.md).
 
 ## peer-pair
 
-The primary onboarding flow for [puddle](#puddle) and (by ADR-015) the unified swarmgit substrate. The active envoy issues a 5-minute single-use 8-character pairing code (`NNNN-NNNN`); the joining envoy POSTs the code over swarm mTLS (port 1531) to receive the wrapped identity blob. The user's passphrase never leaves the destination envoy. Same human-explicit-authorization model as Signal/Bluetooth pairing; the dual gate of mTLS-trusted-CA + dictated code prevents any other fleet-CA peer from silently requesting the blob.
+The primary onboarding flow for [puddle](#puddle) and (by ADR-015) the unified gitback substrate. The active envoy issues a 5-minute single-use 8-character pairing code (`NNNN-NNNN`); the joining envoy POSTs the code over swarm mTLS (port 1531) to receive the wrapped identity blob. The user's passphrase never leaves the destination envoy. Same human-explicit-authorization model as Signal/Bluetooth pairing; the dual gate of mTLS-trusted-CA + dictated code prevents any other fleet-CA peer from silently requesting the blob.
 
-## swarmgit
+## gitback
 
-Personal disaster-recovery source-control distribution on the [swarm](#swarm) substrate. The agent scans `~/swarmgit/<project>/` for repositories with a `.swarmgit.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P on top of swarm — no server involvement in selection or delivery. Default-deny per-envoy in 0.41.0+; operators authorize hosts via the `swarm.swarmgit.enabled` pattern list in server.yaml (first-match-wins, `-` prefix denies). Per-user opt-in is gated by the `swarmgit: true` flag on the user resource in the usercrate. See [Swarmgit](../engineering/subsystems/swarmgit.md).
+Personal disaster-recovery source-control distribution on the [swarm](#swarm) substrate. The agent scans `~/gitback/<project>/` for repositories with a `.gitback.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P on top of swarm — no server involvement in selection or delivery. Default-deny per-envoy in 0.41.0+; operators authorize hosts via the `swarm.gitback.enabled` pattern list in server.yaml (first-match-wins, `-` prefix denies). Per-user opt-in is gated by the `gitback: true` flag on the user resource in the usercrate. See [Gitback](../engineering/subsystems/gitback.md).
 
 ## longdrawer
 

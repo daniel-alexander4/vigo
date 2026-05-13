@@ -50,8 +50,8 @@
 
         {{if .SwarmEnabled}}
         <a href="/swarm" class="nav-group__label nav-group__label--link{{if eq .ActiveNav "swarm"}} nav-group__label--active{{end}}">Swarm <span class="nav-group__label-hint">Envoy P2P</span></a>
-        <a href="/swarm/swarmcast" class="nav-link{{if eq .ActiveNav "swarmcast"}} nav-link--active{{end}}" title="P2P Administrator Pushed File Distribution">
-            Swarmcast
+        <a href="/swarm/filecast" class="nav-link{{if eq .ActiveNav "filecast"}} nav-link--active{{end}}" title="P2P Administrator Pushed File Distribution">
+            Filecast
         </a>
         {{if .CurrentUser.HasPermission "fleet.write"}}
         <a href="/swarm/longdrawer" class="nav-link{{if eq .ActiveNav "longdrawer"}} nav-link--active{{end}}" title="P2P Synchronized User Directory">
@@ -60,8 +60,8 @@
         <a href="/swarm/lockbox" class="nav-link{{if eq .ActiveNav "lockbox"}} nav-link--active{{end}}" title="Fully Encrypted P2P Synchronized User Directory">
             Lockbox
         </a>
-        <a href="/swarm/swarmgit" class="nav-link{{if eq .ActiveNav "swarmgit"}} nav-link--active{{end}}" title="P2P Distributed Source Control Repositories">
-            Swarmgit
+        <a href="/swarm/gitback" class="nav-link{{if eq .ActiveNav "gitback"}} nav-link--active{{end}}" title="P2P Distributed Source Control Repositories">
+            Gitback
         </a>
         {{end}}
         {{end}}

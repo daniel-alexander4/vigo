@@ -15,7 +15,7 @@ Read-only envoy-side diagnostic verbs for the swarm substrate (0.41.1+). Surface
 | `vigo swarm seeds list` | One line per active blob this envoy holds (sha-prefix, label, target, age, retention). Sorted newest-first. |
 | `vigo swarm seeds show <key>` | Full detail for one blob. `<key>` is a sha256 prefix (≥4 chars, must be unambiguous) or an exact label match. Includes peers known to hold the blob. |
 | `vigo swarm peers list` | Known peers from the gossip / multicast table — address, blob count, last-seen age. |
-| `vigo swarm swarmresolve status` | Whether swarmresolve is enabled for this envoy (from the server-resolved gate in `state.json`) plus the current contents of the agent-managed `# BEGIN/END vigo swarm peers` block in `/etc/hosts` (one line per peer name → IP). |
+| `vigo swarm hostdox status` | Whether hostdox is enabled for this envoy (from the server-resolved gate in `state.json`) plus the current contents of the agent-managed `# BEGIN/END vigo swarm peers` block in `/etc/hosts` (one line per peer name → IP). |
 
 ## Permissions
 
@@ -48,8 +48,8 @@ Swarm posture for this envoy
     payload:      on
     longdrawer:     on
     puddle:       on  (lockbox follows)
-    swarmgit:    on
-    swarmresolve: off  (managed /etc/hosts block)
+    gitback:    on
+    hostdox: off  (managed /etc/hosts block)
 
   Manifest:
     version:      19
@@ -71,10 +71,10 @@ a3f2c1d4e5b6   agent-0.41.1         *                        45m      7d
 ```
 
 ```text
-$ vigo swarm swarmresolve status
-swarmresolve status
+$ vigo swarm hostdox status
+hostdox status
 
-  enabled:          yes  (server.yaml swarm.swarmresolve: true, and this host matches swarm.enabled)
+  enabled:          yes  (server.yaml swarm.hostdox: true, and this host matches swarm.enabled)
   /etc/hosts block: present — 3 peer name(s):
     192.168.1.2     danlap
     192.168.1.74    annlap

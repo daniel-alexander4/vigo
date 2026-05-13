@@ -19,13 +19,13 @@ import (
 // content or discovery; this command exposes the fleet-wide aggregator
 // that joins each envoy's `longdrawer` trait into a mesh view.
 //
-// Mirrors the shape of `vigocli swarm swarmgit` (fleet status/list/show). No
+// Mirrors the shape of `vigocli swarm gitback` (fleet status/list/show). No
 // write verbs — longdrawer membership is per-user and content is driven by
 // dropping files into `~<user>/longdrawer/` on any envoy.
 
 // echoFleet mirrors `server/longdrawermesh.Fleet`. Duplicated rather than
 // imported so the CLI stays decoupled from the server package
-// (matches the pattern in cli/swarmgit.go).
+// (matches the pattern in cli/gitback.go).
 type echoFleet struct {
 	GeneratedAt  time.Time         `json:"generated_at"`
 	Users        []echoUserSummary `json:"users"`

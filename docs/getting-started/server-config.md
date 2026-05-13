@@ -575,7 +575,7 @@ smtp:
 
 ### swarm
 
-Configures the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **payload** (admin-pushed file distribution), **swarmgit** (user source-control mirroring), **puddle/lockbox** (encrypted user directory sync), and **longdrawer** (LAN plaintext user directory sync). Each subsystem is gated per-envoy by a hostname pattern list (0.41.0+); both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for any subsystem to be active there.
+Configures the envoy P2P substrate. Swarm is the transport layer four content subsystems ride on — **payload** (admin-pushed file distribution), **gitback** (user source-control mirroring), **puddle/lockbox** (encrypted user directory sync), and **longdrawer** (LAN plaintext user directory sync). Each subsystem is gated per-envoy by a hostname pattern list (0.41.0+); both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for any subsystem to be active there.
 
 Pattern lists are first-match-wins, `-` prefix denies, default-deny on no match — same semantics as Vigo's matchfile patterns (ADR-002).
 
@@ -603,34 +603,34 @@ swarm:
     enabled: ["*"]
   puddle:
     enabled: ["annlap", "plex", "girlslaptop"]    # lockbox follows
-  swarmgit:
+  gitback:
     enabled: ["*"]
-  swarmresolve: false                             # let agents maintain a managed block in /etc/hosts
+  hostdox: false                             # let agents maintain a managed block in /etc/hosts
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `enabled` | `[]` | Hostname pattern list controlling which envoys run the swarm substrate. Empty list disables it everywhere. |
-| `seed_dir` | `/var/lib/vigo/swarm/seed` | Directory where `vigocli swarm swarmcast distribute` writes seed files |
+| `seed_dir` | `/var/lib/vigo/swarm/seed` | Directory where `vigocli swarm filecast distribute` writes seed files |
 | `port` | `1531` | Agent peer server listen port (mTLS HTTPS) |
 | `max_bandwidth_percent` | `50` | Maximum network bandwidth agents will use for swarm transfers (percentage of interface capacity) |
 | `manifest_liveness_ttl` | `24h` | Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Set to `0` or empty to disable the sweep on tiny static fleets. |
-| `payload.enabled` | `[]` | Hostname pattern list of envoys allowed to receive admin-pushed swarmcasts. The admin distribute endpoint refuses when this list is empty (no envoy could possibly receive). |
+| `payload.enabled` | `[]` | Hostname pattern list of envoys allowed to receive admin-pushed filecasts. The admin distribute endpoint refuses when this list is empty (no envoy could possibly receive). |
 | `payload.max_size_bytes` | `0` | Per-distribute upload cap, enforced at the admin API. `0` = no cap. |
-| `payload.default_retention` | `7d` | Default retention applied when `vigocli swarm swarmcast distribute` omits `--retention`. |
+| `payload.default_retention` | `7d` | Default retention applied when `vigocli swarm filecast distribute` omits `--retention`. |
 | `longdrawer.enabled` | `[]` | Hostname pattern list of envoys allowed to run longdrawer. Per-user opt-in still requires the user creating `~/longdrawer/`. |
 | `longdrawer.max_file_bytes` | `2147483648` (2 GiB) | Per-file LAN sync size cap. `0` = no cap. |
 | `puddle.enabled` | `[]` | Hostname pattern list of envoys allowed to run puddle. **Lockbox derives ITS AUTHORIZATION from this list** — there is no `swarm.lockbox.enabled` field (ADR-020). A host allowed here can hold puddle identity material and lockbox ciphertext for its locally-enrolled members. |
 | `lockbox.max_file_bytes` | `1073741824` (1 GiB) | Per-file ciphertext cap on lockbox auto-encrypt + push. `0` = no cap. Authorization still gated by `puddle.enabled`. |
 | `lockbox.envelope_retention` | `90d` | LEAVE/RESURRECT/TOMBSTONE envelope retention before reap. Empty = compile-time default (90d). |
-| `swarmgit.enabled` | `[]` | Hostname pattern list of envoys allowed to run swarmgit — publisher and receiver. |
-| `swarmgit.max_bundle_bytes` | `2147483648` (2 GiB) | Per-bundle (`git bundle --all`) size cap, in bytes, enforced identically on every transfer path — publisher fan-out, the push-receive POST handlers, and DR catch-up GET. `0` / unset falls back to the 2 GiB compile-time default; there is no uncapped mode. |
-| `swarmgit.envelope_retention` | `90d` | Revoke/leave envelope reap window. Empty = compile-time default (90d). |
-| `swarmresolve` | `false` | When `true`, every swarm-enabled agent maintains a delimited `# BEGIN/END vigo swarm peers` block in `/etc/hosts` mapping each announced peer hostname → its LAN IP (learned from the swarm multicast). Additive — lines outside the managed block are untouched, and names the swarm doesn't hold still resolve via DNS. **Opt-in** (default-OFF on the agent; the server emits `swarm_swarmresolve_enabled` only when this is `true` and the host matches `swarm.enabled`). Set `false` (or omit) to leave `/etc/hosts` alone. A plain bool, not a pattern list — it follows `swarm.enabled` per host. Useful on fleets whose DNS doesn't authoritatively own the local domain. **Coexistence:** swarmresolve owns only its delimited block, so it composes with `type: host` entries and `type: blockinfile` region editors — but do **not** manage `/etc/hosts` with a whole-file `type: file` resource on a swarmresolve-enabled envoy; the two will flap. Use `type: host` (or `type: blockinfile` with distinct markers) instead. See the [swarmresolve section of the Swarm reference](../engineering/subsystems/swarm.md) for the coexistence rules. |
+| `gitback.enabled` | `[]` | Hostname pattern list of envoys allowed to run gitback — publisher and receiver. |
+| `gitback.max_bundle_bytes` | `2147483648` (2 GiB) | Per-bundle (`git bundle --all`) size cap, in bytes, enforced identically on every transfer path — publisher fan-out, the push-receive POST handlers, and DR catch-up GET. `0` / unset falls back to the 2 GiB compile-time default; there is no uncapped mode. |
+| `gitback.envelope_retention` | `90d` | Revoke/leave envelope reap window. Empty = compile-time default (90d). |
+| `hostdox` | `false` | When `true`, every swarm-enabled agent maintains a delimited `# BEGIN/END vigo swarm peers` block in `/etc/hosts` mapping each announced peer hostname → its LAN IP (learned from the swarm multicast). Additive — lines outside the managed block are untouched, and names the swarm doesn't hold still resolve via DNS. **Opt-in** (default-OFF on the agent; the server emits `swarm_hostdox_enabled` only when this is `true` and the host matches `swarm.enabled`). Set `false` (or omit) to leave `/etc/hosts` alone. A plain bool, not a pattern list — it follows `swarm.enabled` per host. Useful on fleets whose DNS doesn't authoritatively own the local domain. **Coexistence:** hostdox owns only its delimited block, so it composes with `type: host` entries and `type: blockinfile` region editors — but do **not** manage `/etc/hosts` with a whole-file `type: file` resource on a hostdox-enabled envoy; the two will flap. Use `type: host` (or `type: blockinfile` with distinct markers) instead. See the [hostdox section of the Swarm reference](../engineering/subsystems/swarm.md) for the coexistence rules. |
 
 **Runtime caps reach agents via CheckIn.** The `max_*_bytes` and `*_retention` fields are pushed to every agent in the `CheckInResponse` and replace the agent's previously-hardcoded constants. Changes take effect within one CheckIn cycle (typically <30s) — no agent restart required.
 
-**Per-user authorization.** The envoy-level pattern lists answer "is this subsystem available on this envoy?" The user-level usercrate flags answer "which Unix users on this envoy can use it?" Both must say yes for a user to use a subsystem; default-deny on both. See the user-resource `puddle: bool` and `swarmgit: bool` flags in your usercrate. Longdrawer gates by Unix file ownership (no usercrate flag); payload by admin call site.
+**Per-user authorization.** The envoy-level pattern lists answer "is this subsystem available on this envoy?" The user-level usercrate flags answer "which Unix users on this envoy can use it?" Both must say yes for a user to use a subsystem; default-deny on both. See the user-resource `puddle: bool` and `gitback: bool` flags in your usercrate. Longdrawer gates by Unix file ownership (no usercrate flag); payload by admin call site.
 
 Agents listen on the configured port for peer chunk requests using the same mTLS certificates as gRPC communication. Multicast discovery uses UDP on `224.0.0.42` at the same port.
 

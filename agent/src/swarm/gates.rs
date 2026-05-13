@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! Shared gate-evaluation helper for the four swarm content subsystems
-//! (payload, swarmgit, lockbox, longdrawer).
+//! (payload, gitback, lockbox, longdrawer).
 //!
 //! Every subsystem reads two bits from `PolicyBundle.vars_json`,
 //! cached in the LMDB state store on each accepted check-in:
@@ -23,7 +23,7 @@
 //!
 //! Per-host blacklists were retired in 0.41.0 in favor of negative
 //! patterns inside the per-subsystem allow list (e.g.
-//! `swarm.swarmgit.enabled: ["-rasp1", "*"]`). The server evaluates
+//! `swarm.gitback.enabled: ["-rasp1", "*"]`). The server evaluates
 //! the pattern list per envoy hostname and emits a single bool — the
 //! agent never sees the patterns themselves.
 //!
@@ -38,10 +38,10 @@
 //! `sync_*_gate` functions call into here to compute the new value
 //! before flipping the gate.
 //!
-//! `swarmresolve` (the agent-managed `/etc/hosts` block) is gated here
-//! too, via [`swarmresolve_active`] — but with the **opposite** fail
-//! mode: default-OFF. The server emits `swarm_swarmresolve_enabled`
-//! only when the operator set `swarm.swarmresolve: true` and the host
+//! `hostdox` (the agent-managed `/etc/hosts` block) is gated here
+//! too, via [`hostdox_active`] — but with the **opposite** fail
+//! mode: default-OFF. The server emits `swarm_hostdox_enabled`
+//! only when the operator set `swarm.hostdox: true` and the host
 //! matches `swarm.enabled`; anything else — absent, explicit `false`,
 //! no policy bundle yet — means off. Editing `/etc/hosts` is an
 //! operator decision, not something a fresh-enrolled envoy does on its
@@ -55,7 +55,7 @@ use crate::state::StateStore;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Substrate {
     Payload,
-    Swarmgit,
+    Gitback,
     Lockbox,
     Longdrawer,
 }
@@ -63,8 +63,8 @@ pub enum Substrate {
 impl Substrate {
     fn enabled_key(self) -> &'static str {
         match self {
-            Substrate::Payload => "swarm_swarmcast_enabled",
-            Substrate::Swarmgit => "swarm_swarmgit_enabled",
+            Substrate::Payload => "swarm_filecast_enabled",
+            Substrate::Gitback => "swarm_gitback_enabled",
             // Lockbox derives from puddle — single source of truth
             // per ADR-020. The server emits only `swarm_puddle_enabled`;
             // there is no `swarm_lockbox_enabled` in 0.41.0+.
@@ -78,7 +78,7 @@ impl Substrate {
     pub fn name(self) -> &'static str {
         match self {
             Substrate::Payload => "payload",
-            Substrate::Swarmgit => "swarmgit",
+            Substrate::Gitback => "gitback",
             Substrate::Lockbox => "lockbox",
             Substrate::Longdrawer => "longdrawer",
         }
@@ -88,7 +88,7 @@ impl Substrate {
 /// Compute whether `substrate` should be active for this envoy right
 /// now. Reads from the cached `PolicyBundle.vars_json` if available.
 /// Returns `true` (active) in every ambiguous case — fail-open is
-/// the design (matches swarmgit's pre-existing semantics): a fresh
+/// the design (matches gitback's pre-existing semantics): a fresh
 /// enrollment, an LMDB hiccup, or a parse failure all keep substrates
 /// running until the server explicitly flips them off.
 pub fn substrate_active(substrate: Substrate, state_store: Option<&StateStore>) -> bool {
@@ -139,11 +139,11 @@ fn is_truthy_or_absent(v: Option<&serde_json::Value>) -> bool {
     }
 }
 
-/// Strict truthy check used for `swarm_swarmresolve_enabled`. Returns
+/// Strict truthy check used for `swarm_hostdox_enabled`. Returns
 /// true **only** for an explicit truthy value (`true`, `"true"`/`"yes"`/
 /// `"1"`, nonzero number); absence, `null`, `false`, and anything else
 /// are off. This is the fail-*closed* counterpart of
-/// [`is_truthy_or_absent`] — swarmresolve must not turn itself on by
+/// [`is_truthy_or_absent`] — hostdox must not turn itself on by
 /// default.
 fn is_explicitly_true(v: Option<&serde_json::Value>) -> bool {
     match v {
@@ -156,13 +156,13 @@ fn is_explicitly_true(v: Option<&serde_json::Value>) -> bool {
     }
 }
 
-/// Compute whether the swarmresolve `/etc/hosts` writer should be
+/// Compute whether the hostdox `/etc/hosts` writer should be
 /// active for this envoy right now — `swarm_enabled` (fail-open) AND
-/// `swarm_swarmresolve_enabled` (fail-closed, see [`is_explicitly_true`]).
+/// `swarm_hostdox_enabled` (fail-closed, see [`is_explicitly_true`]).
 /// Returns `false` in every ambiguous case (no state store, no policy
 /// bundle yet, parse failure): the agent does not touch `/etc/hosts`
-/// until the server explicitly says swarmresolve is on.
-pub fn swarmresolve_active(state_store: Option<&StateStore>) -> bool {
+/// until the server explicitly says hostdox is on.
+pub fn hostdox_active(state_store: Option<&StateStore>) -> bool {
     let Some(store) = state_store else {
         return false;
     };
@@ -184,7 +184,7 @@ pub fn swarmresolve_active(state_store: Option<&StateStore>) -> bool {
     if !is_truthy_or_absent(val.get("swarm_enabled")) {
         return false;
     }
-    is_explicitly_true(val.get("swarm_swarmresolve_enabled"))
+    is_explicitly_true(val.get("swarm_hostdox_enabled"))
 }
 
 #[cfg(test)]
@@ -231,8 +231,8 @@ mod tests {
     }
 
     #[test]
-    fn swarmresolve_active_off_without_state_store() {
-        assert!(!swarmresolve_active(None));
+    fn hostdox_active_off_without_state_store() {
+        assert!(!hostdox_active(None));
     }
 
     #[test]
@@ -244,19 +244,19 @@ mod tests {
 
     #[test]
     fn enabled_keys_are_distinct_except_lockbox_aliases_puddle() {
-        // Payload, Swarmgit, Longdrawer each have their own key.
+        // Payload, Gitback, Longdrawer each have their own key.
         // Lockbox intentionally aliases the puddle key — single
         // source of truth.
         assert_ne!(
             Substrate::Payload.enabled_key(),
-            Substrate::Swarmgit.enabled_key()
+            Substrate::Gitback.enabled_key()
         );
         assert_ne!(
             Substrate::Payload.enabled_key(),
             Substrate::Longdrawer.enabled_key()
         );
         assert_ne!(
-            Substrate::Swarmgit.enabled_key(),
+            Substrate::Gitback.enabled_key(),
             Substrate::Longdrawer.enabled_key()
         );
     }
@@ -265,7 +265,7 @@ mod tests {
     fn substrate_names_are_distinct() {
         let subs = [
             Substrate::Payload,
-            Substrate::Swarmgit,
+            Substrate::Gitback,
             Substrate::Lockbox,
             Substrate::Longdrawer,
         ];

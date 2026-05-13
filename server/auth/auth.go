@@ -76,7 +76,7 @@ var publicPrefixes = []string{
 	"/auth/",
 	"/api/v1/agent/",
 	"/api/v1/bootstrap/",
-	"/api/v1/swarm/swarmcast/blob/",
+	"/api/v1/swarm/filecast/blob/",
 }
 
 // publicPaths are exact URL paths that never require authentication.
@@ -94,8 +94,8 @@ var publicPaths = map[string]bool{
 	"/api/v1/secrets/rotated": true,
 	// fleet/pubkeys and swarm/puddle/names are public-by-construction:
 	// hostname↔pubkey and name↔pubkey bindings, nothing secret (the
-	// pubkeys ride every multicast SWARMGIT: line; the names are the
-	// swarmgit://<name>/<repo> URL form). Agents fetch them on a timer
+	// pubkeys ride every multicast GITBACK: line; the names are the
+	// gitback://<name>/<repo> URL form). Agents fetch them on a timer
 	// with only an mTLS client cert — no session token — so they have to
 	// be in the allowlist or the agent never bootstraps its peer-pubkey
 	// cache / friendly-name map. Both handlers are registered bare (no

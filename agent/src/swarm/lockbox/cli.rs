@@ -139,7 +139,7 @@ CONTENT-DOMAIN VERBS:
 LIFECYCLE (ADR-021, 0.40.0 — owned by puddle):
     Lifecycle verbs migrated to the puddle subtree:
       vigo swarm puddle leave        — leave the puddle (covers lockbox LEAVE +
-                                       puddle scrub + swarmgit cleanup)
+                                       puddle scrub + gitback cleanup)
       vigocli swarm puddle evict     — admin: evict a host from a user's puddle
                                        (cross-envoy; replaces `lockbox forget`)
 

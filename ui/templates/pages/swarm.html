@@ -1,7 +1,7 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Swarm</h1>
-    <p>Envoy peer-to-peer substrate. Swarmcast, Swarmgit, Longdrawer, and Lockbox all ride on this transport. <a href="/docs/engineering/subsystems/swarm">What is this?</a></p>
+    <p>Envoy peer-to-peer substrate. Filecast, Gitback, Longdrawer, and Lockbox all ride on this transport. <a href="/docs/engineering/subsystems/swarm">What is this?</a></p>
 </div>
 
 {{if not .Status.GeneratedAt.IsZero}}
@@ -38,14 +38,14 @@
             </thead>
             <tbody>
                 <tr>
-                    <td><strong>Swarmcast</strong> <span style="color:var(--subtext0);">— admin-pushed file fan-out</span></td>
-                    <td>{{.Status.BlobsByKind.Swarmcast}}</td>
-                    <td><a href="/swarm/swarmcast">/swarmcast</a></td>
+                    <td><strong>Filecast</strong> <span style="color:var(--subtext0);">— admin-pushed file fan-out</span></td>
+                    <td>{{.Status.BlobsByKind.Filecast}}</td>
+                    <td><a href="/swarm/filecast">/filecast</a></td>
                 </tr>
                 <tr>
-                    <td><strong>Swarmgit</strong> <span style="color:var(--subtext0);">— personal-DR repo mirrors</span></td>
-                    <td>{{.Status.BlobsByKind.Swarmgit}}</td>
-                    <td><a href="/swarm/swarmgit">/swarmgit</a></td>
+                    <td><strong>Gitback</strong> <span style="color:var(--subtext0);">— personal-DR repo mirrors</span></td>
+                    <td>{{.Status.BlobsByKind.Gitback}}</td>
+                    <td><a href="/swarm/gitback">/gitback</a></td>
                 </tr>
                 <tr>
                     <td><strong>Longdrawer</strong> <span style="color:var(--subtext0);">— per-user plaintext sync</span></td>

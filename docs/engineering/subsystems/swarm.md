@@ -3,9 +3,9 @@
 
 Swarm is the envoy-only peer-to-peer network that Vigo's content subsystems ride on. It is not itself a product feature operators push files with — it's the transport layer: peer discovery, mTLS HTTPS between envoys on port 1531, a manifest CRDT gossiped across the fleet, and content-addressed chunking. Four content subsystems reuse this substrate:
 
-- **[Swarmcast](../../reference/glossary.md#swarmcast)** — administrator-pushed file distribution (`vigocli swarm swarmcast distribute`). Fleet-wide, operator-scoped.
+- **[Filecast](../../reference/glossary.md#filecast)** — administrator-pushed file distribution (`vigocli swarm filecast distribute`). Fleet-wide, operator-scoped.
 - **[Longdrawer](longdrawer.md)** — per-user plaintext home-directory sync. User-scoped; sync set = the envoys on the user's LAN that hold a `~/longdrawer/` directory.
-- **[Swarmgit](swarmgit.md)** — per-user source-control repo mirroring for personal disaster recovery. User-scoped; membership is the user's [puddle](puddle.md).
+- **[Gitback](gitback.md)** — per-user source-control repo mirroring for personal disaster recovery. User-scoped; membership is the user's [puddle](puddle.md).
 - **[Lockbox](lockbox.md)** — per-user always-encrypted home-directory sync. Ciphertext at rest, password-gated decryption; membership is the user's [puddle](puddle.md).
 
 Each content subsystem has its own content rules, multicast group, and sidecar format, but all four reuse swarm's mTLS trust, peer channel, and manifest gossip. This page documents the substrate. For a given content type, follow the links above.
@@ -18,13 +18,13 @@ These three are distinct and the UI/docs must not conflate them — see the [glo
 
 - **Fleet** — every envoy enrolled with this server. Broadest scope. "Fleet-wide" = across all of them.
 - **Swarm** — *the* P2P substrate (singular). It spans the same envoys as the fleet, but it's the transport layer, not the machine set. There is no "a user's swarm."
-- **Puddle** — a *per-user* trust unit: one user's collection of envoys, expressed as a single Ed25519 identity. Lockbox and swarmgit use it as the trust anchor. "A user's puddle" is meaningful; "the fleet's puddle" is not.
+- **Puddle** — a *per-user* trust unit: one user's collection of envoys, expressed as a single Ed25519 identity. Lockbox and gitback use it as the trust anchor. "A user's puddle" is meaningful; "the fleet's puddle" is not.
 
 "Mesh" is **not** a canonical term — older UI prose used it loosely for the puddle (lockbox) or for the ad-hoc LAN sync set (longdrawer). Prefer the precise word.
 
 ## When to Use Swarm
 
-The rest of this page describes swarm's original workload — distributing large binary artifacts — surfaced as the **[swarmcast](../../reference/glossary.md#swarmcast)** content subsystem via `vigocli swarm swarmcast distribute`. Good candidates are agent updates, firmware images, application tarballs, disk images, database dumps. For small config files (a few KB), the normal check-in bundle is more efficient.
+The rest of this page describes swarm's original workload — distributing large binary artifacts — surfaced as the **[filecast](../../reference/glossary.md#filecast)** content subsystem via `vigocli swarm filecast distribute`. Good candidates are agent updates, firmware images, application tarballs, disk images, database dumps. For small config files (a few KB), the normal check-in bundle is more efficient.
 
 **Good candidates:** 50 MB+ files going to 10+ envoys — agent binaries, container images, OS images, application releases.
 
@@ -38,7 +38,7 @@ Every blob is identified by its SHA256 hash. Blobs are split into 1 MiB chunks. 
 
 ### Distribution Flow
 
-1. **Seed:** Admin runs `vigocli swarm swarmcast distribute <file> --target '*.web.*'`, which streams the file to the server's seed directory (hashed in a single pass). Alternatively, drop a file + `.swarm` manifest on any envoy.
+1. **Seed:** Admin runs `vigocli swarm filecast distribute <file> --target '*.web.*'`, which streams the file to the server's seed directory (hashed in a single pass). Alternatively, drop a file + `.swarm` manifest on any envoy.
 2. **Registration:** The server registers the seed in the tracker and manifest CRDT immediately on upload, then force-pushes streaming agents. For envoy-seeded blobs, the seeder's agent reports the file via the `swarm_seeds` trait on the next check-in.
 3. **Manifest:** The manifest entry is gossipped to all envoys via check-in responses
 4. **Self-assignment:** Each agent evaluates the manifest's target specs against its own hostname and traits. If it matches, it queues the blob for download — no server assignment needed.
@@ -48,7 +48,7 @@ Every blob is identified by its SHA256 hash. Blobs are split into 1 MiB chunks. 
 8. **Serving:** Envoys that have the blob serve chunks to peers that still need it
 9. **Retirement:** After retention expires (default 7 days), seeders stop serving and receivers evict
 
-Both `vigocli swarm swarmcast distribute` and the envoy seed directory use the same mechanism. The CLI is a convenient way to place a file in the server's seed directory remotely. The server is just another envoy.
+Both `vigocli swarm filecast distribute` and the envoy seed directory use the same mechanism. The CLI is a convenient way to place a file in the server's seed directory remotely. The server is just another envoy.
 
 ### Agent-Driven Peer Discovery
 
@@ -165,9 +165,9 @@ The server also ships its manifest CRDT with every check-in response. This is th
 
 ### Server-side persistence + agent-gossip gate
 
-The server's `ManifestStore` persists to `<dir(seed_dir)>/server-manifest.json` (mode `0600`, atomic temp+rename via a 1-second debounced background flusher). Without persistence, a server restart wipes the in-RAM manifest and agents reporting their cached `swarm_seeds` traits re-create every entry — including ones the operator just revoked — within seconds. This was the root cause of the 2026-04-24 cairn/swarmgit reset incident; persistence + the gate below close the footgun structurally. The filename is deliberately distinct from the agent's `/var/lib/vigo/swarm/manifest.json` (Rust schema) since the server-as-envoy story has both processes sharing that directory via bind-mount.
+The server's `ManifestStore` persists to `<dir(seed_dir)>/server-manifest.json` (mode `0600`, atomic temp+rename via a 1-second debounced background flusher). Without persistence, a server restart wipes the in-RAM manifest and agents reporting their cached `swarm_seeds` traits re-create every entry — including ones the operator just revoked — within seconds. This was the root cause of the 2026-04-24 cairn/gitback reset incident; persistence + the gate below close the footgun structurally. The filename is deliberately distinct from the agent's `/var/lib/vigo/swarm/manifest.json` (Rust schema) since the server-as-envoy story has both processes sharing that directory via bind-mount.
 
-The agent-driven `RecordSeedFromAgent` path is gated: agents can only refresh entries the server has already seen via the authoritative admin-distribute path. Unknown or revoked SHAs reported via gossip are dropped (logged at INFO, no entry created). The admin path (`POST /api/v1/swarm/swarmcast/distribute` → `RecordSeed`) remains the only way to introduce new entries.
+The agent-driven `RecordSeedFromAgent` path is gated: agents can only refresh entries the server has already seen via the authoritative admin-distribute path. Unknown or revoked SHAs reported via gossip are dropped (logged at INFO, no entry created). The admin path (`POST /api/v1/swarm/filecast/distribute` → `RecordSeed`) remains the only way to introduce new entries.
 
 A liveness sweep in `RetentionPruner` revokes active entries whose `LastReSeededAt` (a per-entry timestamp parallel to LWW's `UpdatedAt`, bumped on every Record\* call) has aged past `swarm.manifest_liveness_ttl` (default `24h`). Combined with the gossip gate, this keeps the manifest from accumulating orphans when a publisher permanently disappears. Set `manifest_liveness_ttl: 0` to disable the sweep on tiny static fleets where no entry should ever expire.
 
@@ -194,17 +194,17 @@ In 0.41.0 the substrate switched from a fleet-wide enabled-bool plus per-substra
 swarm:
   enabled: ["*"]                          # substrate runs on these hosts
   puddle:    { enabled: ["*"] }           # lockbox derives from this list
-  swarmgit: { enabled: ["annlap", "plex", "girlslaptop"] }
+  gitback: { enabled: ["annlap", "plex", "girlslaptop"] }
   longdrawer:  { enabled: ["*"] }
-  swarmcast:   { enabled: ["*"] }
-  swarmresolve: false                     # plain bool — agent-managed /etc/hosts block (default off)
+  filecast:   { enabled: ["*"] }
+  hostdox: false                     # plain bool — agent-managed /etc/hosts block (default off)
 ```
 
-The server evaluates patterns against each agent's hostname and emits the resolved bools in `PolicyBundle.vars_json` on every check-in (`swarm_enabled`, `swarm_puddle_enabled`, `swarm_swarmgit_enabled`, `swarm_longdrawer_enabled`, `swarm_swarmcast_enabled`, plus `swarm_swarmresolve_enabled` when `swarm.swarmresolve: true`). Agents never see the patterns — they only see their own resolved gate. A `vigocli config publish` propagates within one check-in cycle without restarting anything.
+The server evaluates patterns against each agent's hostname and emits the resolved bools in `PolicyBundle.vars_json` on every check-in (`swarm_enabled`, `swarm_puddle_enabled`, `swarm_gitback_enabled`, `swarm_longdrawer_enabled`, `swarm_filecast_enabled`, plus `swarm_hostdox_enabled` when `swarm.hostdox: true`). Agents never see the patterns — they only see their own resolved gate. A `vigocli config publish` propagates within one check-in cycle without restarting anything.
 
-### swarmresolve — agent-managed `/etc/hosts` block
+### hostdox — agent-managed `/etc/hosts` block
 
-`swarm.swarmresolve` is the one swarm knob that's a plain bool, not a pattern list (it follows `swarm.enabled` per host), and the one that's **default-OFF on the agent** rather than fail-open: editing `/etc/hosts` is an operator decision, so the agent treats absence of `swarm_swarmresolve_enabled` (a fresh enrollment, a config that doesn't set it, an explicit `false`) as off. When on, every swarm-enabled agent emits its hostname in a `HOST:<hostname>` line in the multicast announcement preamble; receivers join `(hostname, datagram-source-IP)` into a fleet `hostname → IP` index, and the swarmresolve reactor renders it into a delimited block in `/etc/hosts`. The reactor runs on two triggers: an **inotify/kqueue watch on `/etc/hosts`** (it re-renders the block within ~1 s of any out-of-band rewrite — so a config-management run that clobbers the file is repaired fast) and a **~60 s backstop timer** (eventual convergence and stale-entry pruning if the watch ever misses an event). The block looks like:
+`swarm.hostdox` is the one swarm knob that's a plain bool, not a pattern list (it follows `swarm.enabled` per host), and the one that's **default-OFF on the agent** rather than fail-open: editing `/etc/hosts` is an operator decision, so the agent treats absence of `swarm_hostdox_enabled` (a fresh enrollment, a config that doesn't set it, an explicit `false`) as off. When on, every swarm-enabled agent emits its hostname in a `HOST:<hostname>` line in the multicast announcement preamble; receivers join `(hostname, datagram-source-IP)` into a fleet `hostname → IP` index, and the hostdox reactor renders it into a delimited block in `/etc/hosts`. The reactor runs on two triggers: an **inotify/kqueue watch on `/etc/hosts`** (it re-renders the block within ~1 s of any out-of-band rewrite — so a config-management run that clobbers the file is repaired fast) and a **~60 s backstop timer** (eventual convergence and stale-entry pruning if the watch ever misses an event). The block looks like:
 
 ```
 # BEGIN vigo swarm peers — managed by the vigo agent; do not edit
@@ -213,33 +213,33 @@ The server evaluates patterns against each agent's hostname and emits the resolv
 # END vigo swarm peers
 ```
 
-Strictly additive: lines outside the markers are preserved verbatim (atomic temp+rename, file mode preserved), loopback addresses are skipped defensively, and any name the swarm doesn't hold still resolves via the OS resolver / DNS unchanged — `/etc/hosts` (`files`) is consulted alongside `dns`, not instead of it. Flipping `swarm.swarmresolve` back to `false` removes the managed block on the next tick; stale entries (a peer gone quiet for >5 min) drop out the same way. It exists for the case the swarm is built for — a LAN where DNS doesn't authoritatively own the local domain — so `vigo swarm puddle join --from <host>`, `ssh <host>`, `git`, and friends resolve fleet hostnames without `/etc/hosts` edits or a working local resolver. (`/etc/hosts` is **not** on the agent's hardcoded guardrail protected-path list — and shouldn't be, since the agent only ever rewrites its own delimited region.) Inspect it from the envoy with `vigo swarm swarmresolve status` — the resolved gate plus the current managed-block contents — or the `swarmresolve:` line in `vigo swarm status`.
+Strictly additive: lines outside the markers are preserved verbatim (atomic temp+rename, file mode preserved), loopback addresses are skipped defensively, and any name the swarm doesn't hold still resolves via the OS resolver / DNS unchanged — `/etc/hosts` (`files`) is consulted alongside `dns`, not instead of it. Flipping `swarm.hostdox` back to `false` removes the managed block on the next tick; stale entries (a peer gone quiet for >5 min) drop out the same way. It exists for the case the swarm is built for — a LAN where DNS doesn't authoritatively own the local domain — so `vigo swarm puddle join --from <host>`, `ssh <host>`, `git`, and friends resolve fleet hostnames without `/etc/hosts` edits or a working local resolver. (`/etc/hosts` is **not** on the agent's hardcoded guardrail protected-path list — and shouldn't be, since the agent only ever rewrites its own delimited region.) Inspect it from the envoy with `vigo swarm hostdox status` — the resolved gate plus the current managed-block contents — or the `hostdox:` line in `vigo swarm status`.
 
 #### Coexisting with `/etc/hosts` management
 
-swarmresolve owns **only** the `# BEGIN ... # END vigo swarm peers` region — it reads the current file, re-emits every line outside the markers verbatim, and rewrites just the block. So it composes cleanly with anything that manages a *different* part of `/etc/hosts`: the [`host`](../../reference/executors/host.md) resource (which manages individual `ip hostname` entries and leaves the rest, including swarmresolve's block, untouched), a [`blockinfile`](../../reference/executors/blockinfile.md) region editor with its own distinct markers, static hand-edited entries, DHCP-injected lines — none of those collide with the managed block, and the managed block doesn't collide with them.
+hostdox owns **only** the `# BEGIN ... # END vigo swarm peers` region — it reads the current file, re-emits every line outside the markers verbatim, and rewrites just the block. So it composes cleanly with anything that manages a *different* part of `/etc/hosts`: the [`host`](../../reference/executors/host.md) resource (which manages individual `ip hostname` entries and leaves the rest, including hostdox's block, untouched), a [`blockinfile`](../../reference/executors/blockinfile.md) region editor with its own distinct markers, static hand-edited entries, DHCP-injected lines — none of those collide with the managed block, and the managed block doesn't collide with them.
 
-What it does **not** compose with is a *whole-file* owner of `/etc/hosts`: a `type: file` resource with `path: /etc/hosts` and a `content:` / `source:` template, or any external tool that does `cat > /etc/hosts`. That rewrites the file from scratch on every run — dropping the managed block (and any `host`-resource entries) — after which swarmresolve re-adds its block (the inotify watch fires within ~1 s of the clobber), the next config-management pass drops it again, and the two flap against each other; in the gaps the peer names are unresolvable. **Don't manage `/etc/hosts` with a whole-file `file:` resource on a swarmresolve-enabled envoy.** If you need Vigo to place `/etc/hosts` entries, use `type: host` for per-entry control, or a `type: blockinfile` editor with markers distinct from `# BEGIN/END vigo swarm peers`. The agent can't tell "this `file:` resource is fighting swarmresolve" from "the operator means it" — which is exactly why `/etc/hosts` isn't a guardrails-protected path — so this is a config-design rule, not something the agent enforces. (If a fight does occur it's bounded, not corrupting: swarmresolve reconverges within ~1 s of each clobber and the config-management tool within its own interval; it's a lost-update flap, not file corruption — but it's still a flap, so don't set it up.)
+What it does **not** compose with is a *whole-file* owner of `/etc/hosts`: a `type: file` resource with `path: /etc/hosts` and a `content:` / `source:` template, or any external tool that does `cat > /etc/hosts`. That rewrites the file from scratch on every run — dropping the managed block (and any `host`-resource entries) — after which hostdox re-adds its block (the inotify watch fires within ~1 s of the clobber), the next config-management pass drops it again, and the two flap against each other; in the gaps the peer names are unresolvable. **Don't manage `/etc/hosts` with a whole-file `file:` resource on a hostdox-enabled envoy.** If you need Vigo to place `/etc/hosts` entries, use `type: host` for per-entry control, or a `type: blockinfile` editor with markers distinct from `# BEGIN/END vigo swarm peers`. The agent can't tell "this `file:` resource is fighting hostdox" from "the operator means it" — which is exactly why `/etc/hosts` isn't a guardrails-protected path — so this is a config-design rule, not something the agent enforces. (If a fight does occur it's bounded, not corrupting: hostdox reconverges within ~1 s of each clobber and the config-management tool within its own interval; it's a lost-update flap, not file corruption — but it's still a flap, so don't set it up.)
 
 **Two layers.** Both the substrate-level `swarm.enabled` AND the per-subsystem list must allow a host for the subsystem to be active there. Empty list at either layer disables the subsystem on that host.
 
 **Lockbox derives from puddle.** ADR-020. There is no `swarm.lockbox` section. A host allowed in `swarm.puddle.enabled` can hold lockbox ciphertext for its locally-enrolled members; a host denied there cannot use lockbox at all. Single source of truth.
 
-**No more blacklists.** The destructive-blacklist semantic retired in 0.41.0 (one-tiny-typo-wipes-fleet-state was a footgun). Negative patterns subsume the gate-only use case (`["-rasp1", "*"]` excludes a single host; the rest of the fleet is allowed). Destructive scrub of per-user state moved to the usercrate `puddle: bool` and `swarmgit: bool` flags — see [Usercrate authorization](#usercrate-authorization) below.
+**No more blacklists.** The destructive-blacklist semantic retired in 0.41.0 (one-tiny-typo-wipes-fleet-state was a footgun). Negative patterns subsume the gate-only use case (`["-rasp1", "*"]` excludes a single host; the rest of the fleet is allowed). Destructive scrub of per-user state moved to the usercrate `puddle: bool` and `gitback: bool` flags — see [Usercrate authorization](#usercrate-authorization) below.
 
 | Knob | Effect | Audit event |
 |------|--------|-------------|
 | `swarm.enabled: []` | Substrate-level kill switch. Agents whose hostname doesn't match stop announcing, stop serving, stop fetching across every subsystem. | `swarm.enabled` (with added/removed patterns) |
 | `swarm.puddle.enabled: []` | Halts puddle and lockbox on hosts that don't match. Identity material under `~user/.vigo-puddle/` and `~user/.lockbox/` is preserved (gate-only). | `swarm.puddle.enabled` |
-| `swarm.swarmgit.enabled: []` | Halts swarmgit publisher and receiver on hosts that don't match. Already-held mirrors preserved. | `swarm.swarmgit.enabled` |
+| `swarm.gitback.enabled: []` | Halts gitback publisher and receiver on hosts that don't match. Already-held mirrors preserved. | `swarm.gitback.enabled` |
 | `swarm.longdrawer.enabled: []` | Halts longdrawer announcer / listener / push handler on hosts that don't match. `~user/longdrawer/` content preserved. | `swarm.longdrawer.enabled` |
-| `swarm.swarmcast.enabled: []` | Halts swarmcast reception. `POST /api/v1/swarm/swarmcast/distribute` returns **403** with `audit_event=swarm.swarmcast.denied` when the list is empty (no envoy could possibly receive). | `swarm.swarmcast.enabled` (flip), `swarm.swarmcast.denied` (per blocked admin push) |
+| `swarm.filecast.enabled: []` | Halts filecast reception. `POST /api/v1/swarm/filecast/distribute` returns **403** with `audit_event=swarm.filecast.denied` when the list is empty (no envoy could possibly receive). | `swarm.filecast.enabled` (flip), `swarm.filecast.denied` (per blocked admin push) |
 
 **Audit-chain coverage.** Every pattern-list change at config-publish time records a tamper-evident entry under `actor=config.reload` / `source=config`. Admin-push denials record under `actor=<authenticated user>` / `source=api`. Inspect via `/api/v1/audit?event_type=swarm.*`.
 
 **Soft-skip vs hard-stop.** Vigo uses soft-skip: data structures stay resident, the listener stays bound, but emit/serve paths consult an `Arc<AtomicBool>` and return early when the gate is off. Re-enabling resumes work without process restart and without losing in-flight transfers. Hard-stop semantics (kill listener, drop in-flight) are not implemented.
 
-**Swarmcast note.** Swarmcast rides this generic transport rather than having its own per-substrate listener, so the agent-side gate for swarmcast is currently **forward-compat only** — the `swarm_swarmcast_enabled` flag flows to agents but no agent code branches on it. The operator-meaningful enforcement for swarmcast is server-side: the gate guard at `POST /api/v1/swarm/swarmcast/distribute`. Existing in-flight swarmcast blobs continue propagating across the fleet via the shared swarm transport regardless.
+**Filecast note.** Filecast rides this generic transport rather than having its own per-substrate listener, so the agent-side gate for filecast is currently **forward-compat only** — the `swarm_filecast_enabled` flag flows to agents but no agent code branches on it. The operator-meaningful enforcement for filecast is server-side: the gate guard at `POST /api/v1/swarm/filecast/distribute`. Existing in-flight filecast blobs continue propagating across the fleet via the shared swarm transport regardless.
 
 ## Usercrate authorization
 
@@ -252,19 +252,19 @@ resources:
     name: dan
     home: /home/dan
     puddle: true       # authorizes dan to run `vigo swarm puddle *`
-    swarmgit: true    # authorizes dan to run `vigo swarm swarmgit project *`
+    gitback: true    # authorizes dan to run `vigo swarm gitback project *`
 ```
 
-Both flags default to `false`. Longdrawer and swarmcast have no usercrate flag — longdrawer gates by Unix file ownership (the user creates `~/longdrawer/`), swarmcast by admin call site.
+Both flags default to `false`. Longdrawer and filecast have no usercrate flag — longdrawer gates by Unix file ownership (the user creates `~/longdrawer/`), filecast by admin call site.
 
 **Cache.** The user executor writes the resolved flags to `/var/lib/vigo/usercrate-policy/<username>.json` on every reconcile pass (root-owned, mode 0644). Per-user CLI verbs read this cache as a precondition — no server round-trip, works offline.
 
-**Scrub-on-transition.** Removing `puddle: true` from a usercrate triggers destructive cleanup on the next reconcile: lockbox LEAVE sentinel, then wipe of `~/.vigo-puddle/`, `~/.lockbox/`, `~/lockbox/`, and `~/.vigo-swarmgit/`. Removing `swarmgit: true` scrubs only `~/.vigo-swarmgit/`. The flags' removal is the destructive lever in 0.41.0 — envoy-level pattern flips are gate-only.
+**Scrub-on-transition.** Removing `puddle: true` from a usercrate triggers destructive cleanup on the next reconcile: lockbox LEAVE sentinel, then wipe of `~/.vigo-puddle/`, `~/.lockbox/`, `~/lockbox/`, and `~/.vigo-gitback/`. Removing `gitback: true` scrubs only `~/.vigo-gitback/`. The flags' removal is the destructive lever in 0.41.0 — envoy-level pattern flips are gate-only.
 
 ## Related
 
 - [Swarm Operations](../../operations/swarm.md) — Configuration, monitoring, troubleshooting
-- [vigocli swarm swarmcast](../../reference/cli/swarm-swarmcast.md) — CLI reference for admin-pushed swarmcasts on this substrate
+- [vigocli swarm filecast](../../reference/cli/swarm-filecast.md) — CLI reference for admin-pushed filecasts on this substrate
 - [Server Configuration](../../getting-started/server-config.md) — `swarm:` section
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

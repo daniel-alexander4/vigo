@@ -35,7 +35,7 @@ use super::cache::BlobCache;
 use super::manifest::Manifest;
 use super::meta::chunks_for_size;
 use super::peermap::PeerMap;
-use crate::swarm::swarmgit::receiver::ClaimsHandle as SwarmgitClaimsHandle;
+use crate::swarm::gitback::receiver::ClaimsHandle as GitbackClaimsHandle;
 
 /// Default swarm peer port.
 pub const DEFAULT_PORT: u16 = 1531;
@@ -50,27 +50,27 @@ struct ServerState {
     bandwidth: BandwidthMonitor,
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
-    /// Swarmgit server-side context for cross-subnet `/swarmgit/push`
-    /// handling (Phase 7). `None` when swarmgit is disabled on this
-    /// envoy — in which case the `/swarmgit/push` route returns
+    /// Gitback server-side context for cross-subnet `/gitback/push`
+    /// handling (Phase 7). `None` when gitback is disabled on this
+    /// envoy — in which case the `/gitback/push` route returns
     /// 403 regardless of sender identity, which is the correct
-    /// response for a dormant swarmgit subsystem.
-    swarmgit_ctx: Option<SwarmgitServerCtx>,
+    /// response for a dormant gitback subsystem.
+    gitback_ctx: Option<GitbackServerCtx>,
 }
 
-/// Handles that the swarmgit push handler needs to validate and
+/// Handles that the gitback push handler needs to validate and
 /// accept an incoming bundle. Built once at swarm server startup and
 /// cloned into the per-request handler. The `gate` field is consulted
-/// on every `/swarmgit/push` request so enable/disable flips take
+/// on every `/gitback/push` request so enable/disable flips take
 /// effect without restarting the agent; when the gate is off the
 /// handler returns 403 just as it used to when this context itself
 /// was absent.
 #[derive(Clone)]
-pub struct SwarmgitServerCtx {
-    pub claims: SwarmgitClaimsHandle,
+pub struct GitbackServerCtx {
+    pub claims: GitbackClaimsHandle,
     pub manifest: Arc<Manifest>,
     pub local_hostname: String,
-    pub gate: crate::swarm::swarmgit::Gate,
+    pub gate: crate::swarm::gitback::Gate,
 }
 
 /// Run the swarm peer HTTPS server until cancellation.
@@ -82,7 +82,7 @@ pub async fn run(
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
     cancel: tokio_util::sync::CancellationToken,
-    swarmgit_ctx: Option<SwarmgitServerCtx>,
+    gitback_ctx: Option<GitbackServerCtx>,
 ) -> Result<()> {
     let cache = BlobCache::new(blobs_dir).context("initializing swarm server blob cache")?;
 
@@ -92,7 +92,7 @@ pub async fn run(
         bandwidth,
         peer_map,
         manifest,
-        swarmgit_ctx,
+        gitback_ctx,
     });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -227,7 +227,7 @@ async fn handle_request(
 
         // Pre-flight disk-pressure probe — senders ask "is the
         // filesystem where my push will land >10% free?" before
-        // committing bytes. Query: ?for=<swarm|lockbox|swarmgit|longdrawer>[&user=...].
+        // committing bytes. Query: ?for=<swarm|lockbox|gitback|longdrawer>[&user=...].
         (&Method::GET, "/health/storage") => {
             handle_health_storage(req.uri().query().unwrap_or(""))
         }
@@ -270,56 +270,56 @@ async fn handle_request(
             handle_echo_announce(req, peer_addr).await
         }
 
-        // Swarmgit cross-subnet push (Phase 7). Source envoys POST
-        // a bundle directly to this endpoint when a `.swarmgit.yaml`
+        // Gitback cross-subnet push (Phase 7). Source envoys POST
+        // a bundle directly to this endpoint when a `.gitback.yaml`
         // sidecar lists an explicit `cross_subnet_mirrors:` target. The
         // handler validates the sender, writes the blob to the local
         // swarm cache, injects a manifest entry, and ingests a LAN
-        // claim so the swarmgit receiver picks it up on the next
+        // claim so the gitback receiver picks it up on the next
         // tick — same path as a LAN-discovered mirror.
-        (&Method::POST, p) if p.starts_with("/swarm/swarmgit/push/") => {
+        (&Method::POST, p) if p.starts_with("/swarm/gitback/push/") => {
             // Two cohabiting flavors:
             //  - Unified-substrate (ADR-015 step 4): tail is 64-char
             //    lowercase hex `<project_id>`. Handled inline below.
             //  - Legacy claim-based (pre-ADR-015): tail is the
-            //    url-encoded label `swarmgit:<host>:<user>:<project>`.
+            //    url-encoded label `gitback:<host>:<user>:<project>`.
             //    Handled by the original receiver path while the
             //    legacy code is still in tree.
-            let tail = p.trim_start_matches("/swarm/swarmgit/push/");
+            let tail = p.trim_start_matches("/swarm/gitback/push/");
             if is_project_id_path_segment(tail) {
-                handle_swarmgit_push_v2(tail, req).await
+                handle_gitback_push_v2(tail, req).await
             } else {
-                handle_swarmgit_push(p, req, state).await
+                handle_gitback_push(p, req, state).await
             }
         }
 
-        // Swarmgit DR catch-up — closes the swarm-wide-DR bootstrap
+        // Gitback DR catch-up — closes the swarm-wide-DR bootstrap
         // gap. A member that holds local project state but no bare
         // repo pulls a full `git bundle --all` of the project from any
         // peer that announces holding it; the X-Vigo-Chain header
         // proves membership exactly as it does on a push. 404 when
         // this envoy doesn't hold (a populated copy of) the project.
-        (&Method::GET, p) if p.starts_with(crate::swarm::swarmgit::fan_out::BUNDLE_GET_PREFIX) => {
+        (&Method::GET, p) if p.starts_with(crate::swarm::gitback::fan_out::BUNDLE_GET_PREFIX) => {
             let tail = p
-                .trim_start_matches(crate::swarm::swarmgit::fan_out::BUNDLE_GET_PREFIX)
+                .trim_start_matches(crate::swarm::gitback::fan_out::BUNDLE_GET_PREFIX)
                 .to_string();
-            let chain = header_string(&req, crate::swarm::swarmgit::fan_out::CHAIN_HEADER);
-            tokio::task::block_in_place(|| handle_swarmgit_bundle_get(&tail, chain.as_deref()))
+            let chain = header_string(&req, crate::swarm::gitback::fan_out::CHAIN_HEADER);
+            tokio::task::block_in_place(|| handle_gitback_bundle_get(&tail, chain.as_deref()))
         }
 
         // Envelope gossip endpoints (ADR-015 step 4 fourth slice).
         // Receivers persist signed envelopes idempotently (save_*
         // returns false on no-op) so re-arrival is cheap.
-        (&Method::POST, p) if p.starts_with("/swarm/swarmgit/envelopes/") && p.ends_with("/revokes") => {
+        (&Method::POST, p) if p.starts_with("/swarm/gitback/envelopes/") && p.ends_with("/revokes") => {
             handle_envelope_post(p, req, EnvelopeKind::Revoke).await
         }
-        (&Method::POST, p) if p.starts_with("/swarm/swarmgit/envelopes/") && p.ends_with("/leaves") => {
+        (&Method::POST, p) if p.starts_with("/swarm/gitback/envelopes/") && p.ends_with("/leaves") => {
             handle_envelope_post(p, req, EnvelopeKind::Leave).await
         }
-        (&Method::GET, p) if p.starts_with("/swarm/swarmgit/envelopes/") && p.ends_with("/digest") => {
+        (&Method::GET, p) if p.starts_with("/swarm/gitback/envelopes/") && p.ends_with("/digest") => {
             tokio::task::block_in_place(|| handle_envelope_digest(p))
         }
-        (&Method::GET, p) if p.starts_with("/swarm/swarmgit/envelopes/") && p.ends_with("/all") => {
+        (&Method::GET, p) if p.starts_with("/swarm/gitback/envelopes/") && p.ends_with("/all") => {
             tokio::task::block_in_place(|| handle_envelope_all(p))
         }
 
@@ -581,10 +581,10 @@ fn validate_sha256(s: &str) -> bool {
     s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-/// True when `seg` looks like a unified-substrate swarmgit project_id:
+/// True when `seg` looks like a unified-substrate gitback project_id:
 /// 64 lowercase hex chars and nothing else. Used to disambiguate the
-/// new POST `/swarm/swarmgit/push/<project_id_hex>` route from the
-/// legacy label-based POST `/swarm/swarmgit/push/<swarmgit:...>`
+/// new POST `/swarm/gitback/push/<project_id_hex>` route from the
+/// legacy label-based POST `/swarm/gitback/push/<gitback:...>`
 /// handler that still ships while the legacy receiver is in tree.
 fn is_project_id_path_segment(seg: &str) -> bool {
     seg.len() == 64
@@ -593,28 +593,28 @@ fn is_project_id_path_segment(seg: &str) -> bool {
             .all(|c| c.is_ascii_digit() || ('a'..='f').contains(&c))
 }
 
-/// Handle `POST /swarm/swarmgit/push/<project_id_hex>` — the
+/// Handle `POST /swarm/gitback/push/<project_id_hex>` — the
 /// unified-substrate (ADR-015 step 4) fan-out endpoint.
 ///
 /// Required headers:
 /// - `X-Vigo-Chain` — base64 of the JSON-encoded
-///   [`crate::swarm::swarmgit::project_state::TokenChain`] proving
+///   [`crate::swarm::gitback::project_state::TokenChain`] proving
 ///   the pushing puddle is an authorized member.
 ///
 /// Body: a `git bundle create --all` blob, capped at the per-host
-/// `swarm.swarmgit.max_bundle_bytes` (default 2 GiB; resolved via
-/// [`crate::swarm::runtime_limits::swarmgit_max_bundle_bytes`]).
+/// `swarm.gitback.max_bundle_bytes` (default 2 GiB; resolved via
+/// [`crate::swarm::runtime_limits::gitback_max_bundle_bytes`]).
 ///
 /// Validation:
 /// 1. project_id_hex parses as a 32-byte project_id.
 /// 2. X-Vigo-Chain decodes + verifies via
-///    [`crate::swarm::swarmgit::fan_out::verify_chain_for_push`]
+///    [`crate::swarm::gitback::fan_out::verify_chain_for_push`]
 ///    (chain anchors to `sha256(founder_pubkey) == project_id`,
 ///    no link is in the local revocation set).
 /// 3. Body size ≤ the configured per-bundle cap; streamed to a temp
 ///    file to bound transient memory.
 /// 4. Bundle ingests cleanly via
-///    [`crate::swarm::swarmgit::fan_out::ingest_bundle_file`] (which
+///    [`crate::swarm::gitback::fan_out::ingest_bundle_file`] (which
 ///    runs `git bundle verify` before `git fetch`).
 ///
 /// On success returns `200 OK` with JSON body
@@ -622,41 +622,41 @@ fn is_project_id_path_segment(seg: &str) -> bool {
 /// flag is the cycle-prevention signal — receivers chain-fan-out
 /// only when refs actually advanced (chain-fan-out itself is not
 /// implemented in this slice; see `fan_out.rs` module docs).
-async fn handle_swarmgit_push_v2(
+async fn handle_gitback_push_v2(
     pid_hex: &str,
     req: Request<hyper::body::Incoming>,
 ) -> Response<Full<Bytes>> {
     use http_body_util::BodyExt;
 
-    let project_id = match crate::swarm::swarmgit::project_state::parse_hex_id(pid_hex) {
+    let project_id = match crate::swarm::gitback::project_state::parse_hex_id(pid_hex) {
         Ok(p) => p,
         Err(e) => return bad_request(&format!("invalid project_id: {}", e)),
     };
 
-    let chain_header = match header_string(&req, crate::swarm::swarmgit::fan_out::CHAIN_HEADER) {
+    let chain_header = match header_string(&req, crate::swarm::gitback::fan_out::CHAIN_HEADER) {
         Some(s) => s,
         None => {
             return bad_request(&format!(
                 "missing {} header",
-                crate::swarm::swarmgit::fan_out::CHAIN_HEADER
+                crate::swarm::gitback::fan_out::CHAIN_HEADER
             ));
         }
     };
 
-    let chain = match crate::swarm::swarmgit::fan_out::decode_chain_header(&chain_header) {
+    let chain = match crate::swarm::gitback::fan_out::decode_chain_header(&chain_header) {
         Ok(c) => c,
         Err(e) => return bad_request(&format!("decode chain header: {:#}", e)),
     };
 
-    let swarmgit_base = crate::platform::paths::default_swarmgit_dir();
+    let gitback_base = crate::platform::paths::default_gitback_dir();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    if let Err(e) = crate::swarm::swarmgit::fan_out::verify_chain_for_push(
+    if let Err(e) = crate::swarm::gitback::fan_out::verify_chain_for_push(
         &chain,
         &project_id,
-        &swarmgit_base,
+        &gitback_base,
         now,
     ) {
         return forbidden(&format!("chain rejected: {:#}", e));
@@ -664,9 +664,9 @@ async fn handle_swarmgit_push_v2(
 
     // Stream the body into a temp file under incoming/ so we never
     // hold a multi-GiB bundle in process memory. Body size capped at
-    // the per-host `swarm.swarmgit.max_bundle_bytes`.
-    let max_bundle_bytes = crate::swarm::runtime_limits::swarmgit_max_bundle_bytes();
-    let staging = swarmgit_base.join("incoming");
+    // the per-host `swarm.gitback.max_bundle_bytes`.
+    let max_bundle_bytes = crate::swarm::runtime_limits::gitback_max_bundle_bytes();
+    let staging = gitback_base.join("incoming");
     if let Err(e) = std::fs::create_dir_all(&staging) {
         return service_unavailable(&format!("create incoming dir: {}", e));
     }
@@ -706,7 +706,7 @@ async fn handle_swarmgit_push_v2(
                 if total > max_bundle_bytes {
                     let _ = std::fs::remove_file(&bundle_path);
                     return payload_too_large(&format!(
-                        "bundle exceeds the {}-byte cap (swarm.swarmgit.max_bundle_bytes)",
+                        "bundle exceeds the {}-byte cap (swarm.gitback.max_bundle_bytes)",
                         max_bundle_bytes,
                     ));
                 }
@@ -727,8 +727,8 @@ async fn handle_swarmgit_push_v2(
     // The body is already streamed to `bundle_path`; ingest it in
     // place — no read-back into RAM.
     let refs_changed_result = tokio::task::block_in_place(|| {
-        crate::swarm::swarmgit::fan_out::ingest_bundle_file(
-            &swarmgit_base,
+        crate::swarm::gitback::fan_out::ingest_bundle_file(
+            &gitback_base,
             &project_id,
             &bundle_path,
         )
@@ -741,7 +741,7 @@ async fn handle_swarmgit_push_v2(
             warn!(
                 project_id = %pid_hex,
                 error = %e,
-                "swarmgit push: ingest failed"
+                "gitback push: ingest failed"
             );
             return bad_request(&format!("ingest failed: {:#}", e));
         }
@@ -751,7 +751,7 @@ async fn handle_swarmgit_push_v2(
         project_id = %pid_hex,
         bytes = total,
         refs_changed,
-        "swarmgit push: accepted"
+        "gitback push: accepted"
     );
 
     let body = format!(
@@ -761,32 +761,32 @@ async fn handle_swarmgit_push_v2(
     ok_json(&body)
 }
 
-/// Handle `GET /swarm/swarmgit/bundle/<project_id_hex>` — the
+/// Handle `GET /swarm/gitback/bundle/<project_id_hex>` — the
 /// receiver-initiated DR catch-up endpoint.
 ///
 /// Required header: `X-Vigo-Chain` — base64 of the JSON-encoded
-/// [`crate::swarm::swarmgit::fan_out::PushChain`] proving the
+/// [`crate::swarm::gitback::fan_out::PushChain`] proving the
 /// requesting puddle is an authorized member (same envelope and same
 /// verification as the push endpoint).
 ///
 /// Validation, in order:
 /// 1. `<project_id_hex>` is a 64-char lowercase-hex project_id.
 /// 2. `X-Vigo-Chain` decodes + verifies via
-///    [`crate::swarm::swarmgit::fan_out::verify_chain_for_push`]
+///    [`crate::swarm::gitback::fan_out::verify_chain_for_push`]
 ///    (anchors to `project_id`, no link revoked).
 /// 3. This envoy holds a non-empty bare repo for the project — else
 ///    `404` ("we don't have it; ask another holder").
 ///
 /// On success returns `200 OK` with `Content-Type:
 /// application/x-git-bundle` and a `git bundle create - --all` body.
-fn handle_swarmgit_bundle_get(
+fn handle_gitback_bundle_get(
     pid_hex: &str,
     chain_header: Option<&str>,
 ) -> Response<Full<Bytes>> {
     if !is_project_id_path_segment(pid_hex) {
         return bad_request("invalid project_id path segment");
     }
-    let project_id = match crate::swarm::swarmgit::project_state::parse_hex_id(pid_hex) {
+    let project_id = match crate::swarm::gitback::project_state::parse_hex_id(pid_hex) {
         Ok(p) => p,
         Err(e) => return bad_request(&format!("invalid project_id: {}", e)),
     };
@@ -795,24 +795,24 @@ fn handle_swarmgit_bundle_get(
         None => {
             return bad_request(&format!(
                 "missing {} header",
-                crate::swarm::swarmgit::fan_out::CHAIN_HEADER
+                crate::swarm::gitback::fan_out::CHAIN_HEADER
             ));
         }
     };
-    let push = match crate::swarm::swarmgit::fan_out::decode_chain_header(chain_header) {
+    let push = match crate::swarm::gitback::fan_out::decode_chain_header(chain_header) {
         Ok(c) => c,
         Err(e) => return bad_request(&format!("decode chain header: {:#}", e)),
     };
 
-    let swarmgit_base = crate::platform::paths::default_swarmgit_dir();
+    let gitback_base = crate::platform::paths::default_gitback_dir();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
-    if let Err(e) = crate::swarm::swarmgit::fan_out::verify_chain_for_push(
+    if let Err(e) = crate::swarm::gitback::fan_out::verify_chain_for_push(
         &push,
         &project_id,
-        &swarmgit_base,
+        &gitback_base,
         now,
     ) {
         return forbidden(&format!("chain rejected: {:#}", e));
@@ -820,9 +820,9 @@ fn handle_swarmgit_bundle_get(
 
     // We can only serve a project we hold a populated bare repo for.
     let repo =
-        crate::swarm::swarmgit::project_state::project_repo_path(&swarmgit_base, &project_id);
+        crate::swarm::gitback::project_state::project_repo_path(&gitback_base, &project_id);
     let has_refs = repo.exists()
-        && crate::swarm::swarmgit::fan_out::snapshot_refs(&repo)
+        && crate::swarm::gitback::fan_out::snapshot_refs(&repo)
             .map(|m| !m.is_empty())
             .unwrap_or(false);
     if !has_refs {
@@ -833,7 +833,7 @@ fn handle_swarmgit_bundle_get(
     // back, hand it over. Bounded by the capped pushes that built
     // this bare repo; symmetric with the push handler's temp-file
     // dance.
-    let staging = swarmgit_base.join("incoming");
+    let staging = gitback_base.join("incoming");
     if let Err(e) = std::fs::create_dir_all(&staging) {
         return service_unavailable(&format!("create incoming dir: {}", e));
     }
@@ -844,19 +844,19 @@ fn handle_swarmgit_bundle_get(
     }
     let nonce: u128 = rand::random();
     let bundle_path = staging.join(format!("{}-serve-{:032x}.bundle", pid_hex, nonce));
-    let bytes = match crate::swarm::swarmgit::fan_out::build_bundle(&repo, &bundle_path)
+    let bytes = match crate::swarm::gitback::fan_out::build_bundle(&repo, &bundle_path)
         .and_then(|_| std::fs::read(&bundle_path).map_err(Into::into))
     {
         Ok(b) => b,
         Err(e) => {
             let _ = std::fs::remove_file(&bundle_path);
-            warn!(project_id = %pid_hex, error = %e, "swarmgit bundle GET: build failed");
+            warn!(project_id = %pid_hex, error = %e, "gitback bundle GET: build failed");
             return service_unavailable(&format!("build bundle: {:#}", e));
         }
     };
     let _ = std::fs::remove_file(&bundle_path);
 
-    info!(project_id = %pid_hex, bytes = bytes.len(), "swarmgit bundle GET: served");
+    info!(project_id = %pid_hex, bytes = bytes.len(), "gitback bundle GET: served");
     Response::builder()
         .status(StatusCode::OK)
         .header("Content-Type", "application/x-git-bundle")
@@ -871,15 +871,15 @@ enum EnvelopeKind {
 }
 
 /// Extract the `<pid_hex>` segment from a path of shape
-/// `/swarm/swarmgit/envelopes/<pid_hex>/<suffix>`. Returns `None`
+/// `/swarm/gitback/envelopes/<pid_hex>/<suffix>`. Returns `None`
 /// if the shape is wrong or `<pid_hex>` isn't valid.
-fn parse_envelope_path(path: &str) -> Option<[u8; crate::swarm::swarmgit::tokens::ID_LEN]> {
-    let stripped = path.strip_prefix("/swarm/swarmgit/envelopes/")?;
+fn parse_envelope_path(path: &str) -> Option<[u8; crate::swarm::gitback::tokens::ID_LEN]> {
+    let stripped = path.strip_prefix("/swarm/gitback/envelopes/")?;
     let (pid_hex, _suffix) = stripped.split_once('/')?;
     if !is_project_id_path_segment(pid_hex) {
         return None;
     }
-    crate::swarm::swarmgit::project_state::parse_hex_id(pid_hex).ok()
+    crate::swarm::gitback::project_state::parse_hex_id(pid_hex).ok()
 }
 
 /// Cap on accepted envelope JSON body size. Envelopes are tiny
@@ -919,11 +919,11 @@ async fn handle_envelope_post(
         }
     }
 
-    let swarmgit_base = crate::platform::paths::default_swarmgit_dir();
+    let gitback_base = crate::platform::paths::default_gitback_dir();
     let result = tokio::task::block_in_place(|| -> Result<bool, anyhow::Error> {
         match kind {
             EnvelopeKind::Revoke => {
-                let env: crate::swarm::swarmgit::envelopes::RevokeEnvelope =
+                let env: crate::swarm::gitback::envelopes::RevokeEnvelope =
                     serde_json::from_slice(&buf)
                         .map_err(|e| anyhow::anyhow!("parse revoke envelope: {}", e))?;
                 let raw = env
@@ -935,11 +935,11 @@ async fn handle_envelope_post(
                     ));
                 }
                 let changed =
-                    crate::swarm::swarmgit::envelopes::save_revoke(&swarmgit_base, &env)?;
+                    crate::swarm::gitback::envelopes::save_revoke(&gitback_base, &env)?;
                 Ok(changed)
             }
             EnvelopeKind::Leave => {
-                let env: crate::swarm::swarmgit::envelopes::LeaveEnvelope =
+                let env: crate::swarm::gitback::envelopes::LeaveEnvelope =
                     serde_json::from_slice(&buf)
                         .map_err(|e| anyhow::anyhow!("parse leave envelope: {}", e))?;
                 let raw = env
@@ -951,7 +951,7 @@ async fn handle_envelope_post(
                     ));
                 }
                 let changed =
-                    crate::swarm::swarmgit::envelopes::save_leave(&swarmgit_base, &env)?;
+                    crate::swarm::gitback::envelopes::save_leave(&gitback_base, &env)?;
                 Ok(changed)
             }
         }
@@ -978,9 +978,9 @@ fn handle_envelope_digest(path: &str) -> Response<Full<Bytes>> {
         Some(p) => p,
         None => return bad_request("malformed envelope path"),
     };
-    let swarmgit_base = crate::platform::paths::default_swarmgit_dir();
-    match crate::swarm::swarmgit::fan_out::DigestResponse::for_project(
-        &swarmgit_base,
+    let gitback_base = crate::platform::paths::default_gitback_dir();
+    match crate::swarm::gitback::fan_out::DigestResponse::for_project(
+        &gitback_base,
         &project_id,
     ) {
         Ok(d) => match serde_json::to_string(&d) {
@@ -996,9 +996,9 @@ fn handle_envelope_all(path: &str) -> Response<Full<Bytes>> {
         Some(p) => p,
         None => return bad_request("malformed envelope path"),
     };
-    let swarmgit_base = crate::platform::paths::default_swarmgit_dir();
-    match crate::swarm::swarmgit::fan_out::EnvelopesBundle::for_project(
-        &swarmgit_base,
+    let gitback_base = crate::platform::paths::default_gitback_dir();
+    match crate::swarm::gitback::fan_out::EnvelopesBundle::for_project(
+        &gitback_base,
         &project_id,
     ) {
         Ok(b) => match serde_json::to_string(&b) {
@@ -1106,13 +1106,13 @@ fn parse_query(q: &str) -> std::collections::HashMap<String, String> {
     out
 }
 
-// ── Swarmgit cross-subnet push handler (Phase 7) ──────────────────────────
+// ── Gitback cross-subnet push handler (Phase 7) ──────────────────────────
 
-/// Handle `POST /swarmgit/push/<label>` — the cross-subnet direct
+/// Handle `POST /gitback/push/<label>` — the cross-subnet direct
 /// push endpoint.
 ///
-/// Path format: `/swarmgit/push/<url-encoded-label>`. The label is
-/// a full content-seed label `swarmgit:<seeder>:<user>:<project>`;
+/// Path format: `/gitback/push/<url-encoded-label>`. The label is
+/// a full content-seed label `gitback:<seeder>:<user>:<project>`;
 /// we accept it url-encoded (colons percent-escaped) or raw.
 ///
 /// Required headers:
@@ -1125,51 +1125,51 @@ fn parse_query(q: &str) -> std::collections::HashMap<String, String> {
 ///
 /// Validation order (each rejection returns a specific 4xx):
 ///
-/// 1. Swarmgit enabled on this envoy (`swarmgit_ctx.is_some()`)
+/// 1. Gitback enabled on this envoy (`gitback_ctx.is_some()`)
 /// 2. Label parses into (seeder, user, project) segments
 /// 3. Label's `<seeder>` segment equals `X-Vigo-Seeder`
 /// 4. Local user from `<user>` segment exists
-/// 5. Body size ≤ the per-host `swarm.swarmgit.max_bundle_bytes`
+/// 5. Body size ≤ the per-host `swarm.gitback.max_bundle_bytes`
 /// 6. Body sha256 matches `X-Vigo-Blob-Sha256`
 ///
 /// On accept:
 ///
 /// - Body is written atomically to the blob cache at the computed
 ///   sha path.
-/// - A manifest entry is recorded locally so the swarmgit
+/// - A manifest entry is recorded locally so the gitback
 ///   receiver's next tick can resolve the label → blob.
 /// - The `ClaimsHandle` receives an `ingest_lan_claim(label,
 ///   sender, true, now)` so the reactor picks it up on its next
 ///   tick.
 ///
 /// Returns 200 OK with a short JSON body on success.
-async fn handle_swarmgit_push(
+async fn handle_gitback_push(
     path: &str,
     req: Request<hyper::body::Incoming>,
     state: &ServerState,
 ) -> Response<Full<Bytes>> {
-    // 1. Swarmgit must be enabled on this envoy. The context is
+    // 1. Gitback must be enabled on this envoy. The context is
     // always present on new builds, but the gate may be off — both
     // conditions return the same 403 to the caller.
-    let ctx = match state.swarmgit_ctx.as_ref() {
+    let ctx = match state.gitback_ctx.as_ref() {
         Some(c) => c.clone(),
-        None => return forbidden("swarmgit not enabled on this envoy"),
+        None => return forbidden("gitback not enabled on this envoy"),
     };
     if !ctx.gate.enabled() {
-        return forbidden("swarmgit not enabled on this envoy");
+        return forbidden("gitback not enabled on this envoy");
     }
 
     // 2. Extract the label from the URL path.
-    let raw_label = path.trim_start_matches("/swarm/swarmgit/push/");
+    let raw_label = path.trim_start_matches("/swarm/gitback/push/");
     let label = match url_decode(raw_label) {
         Some(l) => l,
         None => return bad_request("malformed label url-encoding"),
     };
 
     // 3. Parse label segments.
-    let (seeder, user, project) = match parse_swarmgit_label(&label) {
+    let (seeder, user, project) = match parse_gitback_label(&label) {
         Some(t) => t,
-        None => return bad_request("malformed swarmgit label"),
+        None => return bad_request("malformed gitback label"),
     };
 
     // 4. Read required headers.
@@ -1198,7 +1198,7 @@ async fn handle_swarmgit_push(
         return bad_request("X-Vigo-Blob-Sha256 is not a 64-char hex sha256");
     }
 
-    // 7. Local user must exist. Swarmgit won't materialize a
+    // 7. Local user must exist. Gitback won't materialize a
     // mirror for a user with no local account on this envoy.
     if crate::platform::users::lookup_user(&user).is_none() {
         return forbidden(&format!("user '{}' does not exist on this envoy", user));
@@ -1209,10 +1209,10 @@ async fn handle_swarmgit_push(
     // 7a. Receiver-side disk-pressure guard. The sender probes before
     // push, but the probe is cached 60 s — a concurrent writer could
     // have pushed free-pct below threshold in that window. Cheap
-    // statvfs on the swarmgit mirror mountpoint; reject 507 before
+    // statvfs on the gitback mirror mountpoint; reject 507 before
     // reading a byte of the bundle body.
-    if super::peer_health::is_self_pressured(&super::peer_health::Purpose::Swarmgit) {
-        return insufficient_storage("swarmgit mirror filesystem under disk pressure");
+    if super::peer_health::is_self_pressured(&super::peer_health::Purpose::Gitback) {
+        return insufficient_storage("gitback mirror filesystem under disk pressure");
     }
 
     // 8-10. Stream the body straight to disk under .tmp while hashing
@@ -1232,7 +1232,7 @@ async fn handle_swarmgit_push(
             return service_unavailable(&format!("failed to create blob dir: {}", e));
         }
     }
-    let max_bundle_bytes = crate::swarm::runtime_limits::swarmgit_max_bundle_bytes();
+    let max_bundle_bytes = crate::swarm::runtime_limits::gitback_max_bundle_bytes();
 
     let (body_len, actual_sha) = {
         use http_body_util::BodyExt;
@@ -1268,7 +1268,7 @@ async fn handle_swarmgit_push(
                 if total > max_bundle_bytes {
                     let _ = std::fs::remove_file(&tmp_path);
                     return payload_too_large(&format!(
-                        "bundle exceeds the {}-byte cap (swarm.swarmgit.max_bundle_bytes)",
+                        "bundle exceeds the {}-byte cap (swarm.gitback.max_bundle_bytes)",
                         max_bundle_bytes,
                     ));
                 }
@@ -1311,12 +1311,12 @@ async fn handle_swarmgit_push(
         warn!(
             error = %e,
             path = %final_path.display(),
-            "swarmgit push: failed to move blob into place"
+            "gitback push: failed to move blob into place"
         );
         return service_unavailable(&format!("failed to write blob: {}", e));
     }
 
-    // 11. Inject a manifest entry so the swarmgit receiver reactor
+    // 11. Inject a manifest entry so the gitback receiver reactor
     // can resolve the label → blob. The seeder_address field is
     // set to the literal "direct-push" to distinguish manual
     // injections from manifest entries that came through normal
@@ -1333,9 +1333,9 @@ async fn handle_swarmgit_push(
     );
 
     // 12. Ingest the LAN claim so the receiver picks it up on
-    // its next tick. Same path as a SWARMGITCLAIM multicast —
+    // its next tick. Same path as a GITBACKCLAIM multicast —
     // the source hostname is used for dedup keying.
-    let now = crate::swarm::swarmgit::state::unix_seconds_now();
+    let now = crate::swarm::gitback::state::unix_seconds_now();
     ctx.claims.ingest_lan_claim(&label, &seeder, true, now);
 
     info!(
@@ -1343,7 +1343,7 @@ async fn handle_swarmgit_push(
         seeder = %seeder,
         size = body_len,
         sha = %&actual_sha[..12.min(actual_sha.len())],
-        "swarmgit push: accepted bundle"
+        "gitback push: accepted bundle"
     );
 
     ok_json(r#"{"status":"accepted"}"#)
@@ -1394,10 +1394,10 @@ async fn handle_echo_announce(
     }
 }
 
-/// Parse a swarmgit content-seed label `swarmgit:<seeder>:<user>:<project>`
+/// Parse a gitback content-seed label `gitback:<seeder>:<user>:<project>`
 /// into its three segments. Returns `None` for malformed labels.
-fn parse_swarmgit_label(label: &str) -> Option<(String, String, String)> {
-    let rest = label.strip_prefix("swarmgit:")?;
+fn parse_gitback_label(label: &str) -> Option<(String, String, String)> {
+    let rest = label.strip_prefix("gitback:")?;
     let mut parts = rest.splitn(3, ':');
     let seeder = parts.next()?;
     let user = parts.next()?;
@@ -1508,7 +1508,7 @@ mod tests {
             bandwidth: BandwidthMonitor::new(),
             peer_map: Arc::new(PeerMap::new()),
             manifest,
-            swarmgit_ctx: None,
+            gitback_ctx: None,
         })
     }
 
@@ -1518,45 +1518,45 @@ mod tests {
         assert_eq!(build_meta_etag(42, 1000), r#""42-1000""#);
     }
 
-    // ── Phase 7 swarmgit push pure helpers ────────────────────
+    // ── Phase 7 gitback push pure helpers ────────────────────
 
     #[test]
-    fn parse_swarmgit_label_accepts_valid_shape() {
-        let (s, u, p) = parse_swarmgit_label("swarmgit:danlap:dan:vigo-web").unwrap();
+    fn parse_gitback_label_accepts_valid_shape() {
+        let (s, u, p) = parse_gitback_label("gitback:danlap:dan:vigo-web").unwrap();
         assert_eq!(s, "danlap");
         assert_eq!(u, "dan");
         assert_eq!(p, "vigo-web");
     }
 
     #[test]
-    fn parse_swarmgit_label_accepts_project_with_dashes_and_dots() {
-        let (_, _, p) = parse_swarmgit_label("swarmgit:h:u:my-repo.v2").unwrap();
+    fn parse_gitback_label_accepts_project_with_dashes_and_dots() {
+        let (_, _, p) = parse_gitback_label("gitback:h:u:my-repo.v2").unwrap();
         assert_eq!(p, "my-repo.v2");
     }
 
     #[test]
-    fn parse_swarmgit_label_rejects_missing_prefix() {
-        assert!(parse_swarmgit_label("danlap:dan:vigo-web").is_none());
+    fn parse_gitback_label_rejects_missing_prefix() {
+        assert!(parse_gitback_label("danlap:dan:vigo-web").is_none());
     }
 
     #[test]
-    fn parse_swarmgit_label_rejects_too_few_segments() {
-        assert!(parse_swarmgit_label("swarmgit:dan:vigo-web").is_none());
-        assert!(parse_swarmgit_label("swarmgit:danlap").is_none());
+    fn parse_gitback_label_rejects_too_few_segments() {
+        assert!(parse_gitback_label("gitback:dan:vigo-web").is_none());
+        assert!(parse_gitback_label("gitback:danlap").is_none());
     }
 
     #[test]
-    fn parse_swarmgit_label_rejects_empty_segment() {
-        assert!(parse_swarmgit_label("swarmgit::dan:vigo-web").is_none());
-        assert!(parse_swarmgit_label("swarmgit:dan::vigo-web").is_none());
-        assert!(parse_swarmgit_label("swarmgit:dan:user:").is_none());
+    fn parse_gitback_label_rejects_empty_segment() {
+        assert!(parse_gitback_label("gitback::dan:vigo-web").is_none());
+        assert!(parse_gitback_label("gitback:dan::vigo-web").is_none());
+        assert!(parse_gitback_label("gitback:dan:user:").is_none());
     }
 
     #[test]
     fn url_decode_handles_percent_colons() {
         assert_eq!(
-            url_decode("swarmgit%3Adanlap%3Adan%3Avigo-web").unwrap(),
-            "swarmgit:danlap:dan:vigo-web",
+            url_decode("gitback%3Adanlap%3Adan%3Avigo-web").unwrap(),
+            "gitback:danlap:dan:vigo-web",
         );
     }
 
@@ -1570,8 +1570,8 @@ mod tests {
         // If someone passes the label without percent-encoding,
         // we still handle it (colons are legal in URL paths).
         assert_eq!(
-            url_decode("swarmgit:danlap:dan:vigo-web").unwrap(),
-            "swarmgit:danlap:dan:vigo-web",
+            url_decode("gitback:danlap:dan:vigo-web").unwrap(),
+            "gitback:danlap:dan:vigo-web",
         );
     }
 
@@ -1600,24 +1600,24 @@ mod tests {
 
     #[test]
     fn is_project_id_path_segment_rejects_legacy_label() {
-        // Legacy "swarmgit:host:user:project" labels never match —
+        // Legacy "gitback:host:user:project" labels never match —
         // colons are not hex and the length almost never aligns to 64.
-        assert!(!is_project_id_path_segment("swarmgit:danlap:dan:vigo-web"));
+        assert!(!is_project_id_path_segment("gitback:danlap:dan:vigo-web"));
         // Even a 64-char string with non-hex chars must be rejected.
         let mostly_hex = format!("{}!", "a".repeat(63));
         assert!(!is_project_id_path_segment(&mostly_hex));
     }
 
     #[test]
-    fn handle_swarmgit_bundle_get_rejects_bad_inputs() {
+    fn handle_gitback_bundle_get_rejects_bad_inputs() {
         // Non-hex path segment → 400, before any filesystem touch.
-        let r = handle_swarmgit_bundle_get("not-a-pid", Some("whatever"));
+        let r = handle_gitback_bundle_get("not-a-pid", Some("whatever"));
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);
         // Valid pid but no chain header → 400.
-        let r = handle_swarmgit_bundle_get(&"a".repeat(64), None);
+        let r = handle_gitback_bundle_get(&"a".repeat(64), None);
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);
         // Valid pid, garbage chain header → 400 (decode fails).
-        let r = handle_swarmgit_bundle_get(&"a".repeat(64), Some("!!!not base64!!!"));
+        let r = handle_gitback_bundle_get(&"a".repeat(64), Some("!!!not base64!!!"));
         assert_eq!(r.status(), StatusCode::BAD_REQUEST);
     }
 
@@ -1625,7 +1625,7 @@ mod tests {
     fn parse_envelope_path_extracts_canonical_pid() {
         let pid = "0".repeat(64);
         let parsed = parse_envelope_path(&format!(
-            "/swarm/swarmgit/envelopes/{}/digest",
+            "/swarm/gitback/envelopes/{}/digest",
             pid
         ))
         .unwrap();
@@ -1636,7 +1636,7 @@ mod tests {
     fn parse_envelope_path_handles_revokes_suffix() {
         let pid = "f".repeat(64);
         let parsed = parse_envelope_path(&format!(
-            "/swarm/swarmgit/envelopes/{}/revokes",
+            "/swarm/gitback/envelopes/{}/revokes",
             pid
         ))
         .unwrap();
@@ -1645,19 +1645,19 @@ mod tests {
 
     #[test]
     fn parse_envelope_path_rejects_short_pid() {
-        assert!(parse_envelope_path("/swarm/swarmgit/envelopes/abc/digest").is_none());
+        assert!(parse_envelope_path("/swarm/gitback/envelopes/abc/digest").is_none());
     }
 
     #[test]
     fn parse_envelope_path_rejects_missing_suffix() {
         let pid = "a".repeat(64);
-        assert!(parse_envelope_path(&format!("/swarm/swarmgit/envelopes/{}", pid)).is_none());
+        assert!(parse_envelope_path(&format!("/swarm/gitback/envelopes/{}", pid)).is_none());
     }
 
     #[test]
     fn parse_envelope_path_rejects_uppercase_pid() {
         let pid = "A".repeat(64);
-        assert!(parse_envelope_path(&format!("/swarm/swarmgit/envelopes/{}/digest", pid)).is_none());
+        assert!(parse_envelope_path(&format!("/swarm/gitback/envelopes/{}/digest", pid)).is_none());
     }
 
     #[test]

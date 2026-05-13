@@ -403,12 +403,12 @@ watcher:
 #   puddle:
 #     enabled: ["annlap", "plex", "girlslaptop"]
 #
-#   # Swarmgit (git-over-swarm) authorization — publisher and
+#   # Gitback (git-over-swarm) authorization — publisher and
 #   # bundle-holder gate.
-#   swarmgit:
+#   gitback:
 #     enabled: ["*"]
 #
-#   # swarmresolve — let each swarm-enabled agent resolve its swarm peers'
+#   # hostdox — let each swarm-enabled agent resolve its swarm peers'
 #   # hostnames to their LAN addresses. When true, the agent maintains a
 #   # delimited block in /etc/hosts mapping every peer's announced hostname
 #   # to its LAN IP (learned from the swarm multicast — the same data
@@ -421,7 +421,7 @@ watcher:
 #   # this is on, do NOT also manage /etc/hosts with a whole-file `type: file`
 #   # module — it'll clobber the managed block and the two will flap. Use
 #   # `type: host` (per-entry) or `type: blockinfile` (own markers) instead.
-#   swarmresolve: false
+#   hostdox: false
 
 
 # ── Gossip & Fleet Primitives ────────────────────────────────────────────

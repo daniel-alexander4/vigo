@@ -117,7 +117,7 @@ type ServerConfig struct {
 }
 
 // SwarmSection configures peer-to-peer content distribution. The four
-// content subsystems (puddle/lockbox, swarmgit, longdrawer, swarmcast)
+// content subsystems (puddle/lockbox, gitback, longdrawer, filecast)
 // are gated per-envoy by hostname pattern lists. The top-level Enabled
 // list controls whether the swarm substrate runs on a host at all;
 // each sub-section's Enabled list further restricts that subsystem.
@@ -133,12 +133,12 @@ type SwarmSection struct {
 	Port                int                 `yaml:"port" doc:"TCP port on which agents serve blobs to each other over mTLS." default:"1531" example:"1-65535; must be open between envoys"`
 	MaxBandwidthPercent int                 `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
 	ManifestLivenessTTL string              `yaml:"manifest_liveness_ttl" doc:"Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Guards against orphaned entries when a publisher disappears. Empty / zero disables the sweep." default:"24h" example:"24h, 12h, 0 (disable)"`
-	Swarmcast           SwarmcastSection    `yaml:"swarmcast" doc:"Swarmcast (admin-pushed fleet file distribution) authorization." long:"Hostname pattern list controlling which envoys receive admin-pushed files. Distribution requests are refused at the API layer when the list is empty."`
+	Filecast           FilecastSection    `yaml:"filecast" doc:"Filecast (admin-pushed fleet file distribution) authorization." long:"Hostname pattern list controlling which envoys receive admin-pushed files. Distribution requests are refused at the API layer when the list is empty."`
 	Longdrawer          LongdrawerSection   `yaml:"longdrawer" doc:"Longdrawer (LAN plaintext directory mirror) authorization + per-file size cap." long:"Hostname pattern list controlling which envoys run the longdrawer daemon. Per-user opt-in still requires the user creating ~/longdrawer/. Plus a per-file size cap on LAN sync."`
 	Puddle              SwarmPuddleSection  `yaml:"puddle" doc:"Puddle (per-user identity) authorization. Lockbox derives ITS AUTHORIZATION from this section per ADR-020 — only operational tuning lives in lockbox below." long:"Hostname pattern list controlling which envoys can host puddle identity material. Lockbox's authorization (allow/deny) follows this list — a host allowed here can hold lockbox ciphertext for its locally-enrolled puddle members; a host denied here cannot use lockbox at all."`
 	Lockbox             SwarmLockboxSection `yaml:"lockbox" doc:"Lockbox operational tuning (size + envelope retention). Authorization derives from puddle above; this section is size/retention only." long:"Per-file ciphertext size cap and envelope (LEAVE/RESURRECT/TOMBSTONE) retention window. Authorization gating still derives from swarm.puddle.enabled per ADR-020 — there is no enabled field here."`
-	Swarmgit            SwarmgitSection     `yaml:"swarmgit" doc:"Swarmgit (git-over-swarm) authorization + bundle size + envelope retention." long:"Hostname pattern list controlling which envoys participate in swarmgit — both as publishers and as bundle holders. Plus per-bundle fan-out size cap and revoke/leave envelope retention."`
-	Swarmresolve        bool                `yaml:"swarmresolve" doc:"When true, each swarm-enabled agent maintains a delimited block in /etc/hosts mapping every announced peer hostname to its LAN IP — additive name resolution for fleets whose DNS doesn't own the local domain. Default false (opt-in)." default:"false" example:"true to let agents edit /etc/hosts; false (or omit) to leave it alone"`
+	Gitback            GitbackSection     `yaml:"gitback" doc:"Gitback (git-over-swarm) authorization + bundle size + envelope retention." long:"Hostname pattern list controlling which envoys participate in gitback — both as publishers and as bundle holders. Plus per-bundle fan-out size cap and revoke/leave envelope retention."`
+	Hostdox        bool                `yaml:"hostdox" doc:"When true, each swarm-enabled agent maintains a delimited block in /etc/hosts mapping every announced peer hostname to its LAN IP — additive name resolution for fleets whose DNS doesn't own the local domain. Default false (opt-in)." default:"false" example:"true to let agents edit /etc/hosts; false (or omit) to leave it alone"`
 }
 
 // SwarmPuddleSection authorizes the puddle (per-user identity) subsystem
@@ -150,15 +150,15 @@ type SwarmPuddleSection struct {
 	Enabled []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run puddle. Lockbox follows the same gate." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
 }
 
-// SwarmgitSection authorizes the swarmgit subsystem per envoy
+// GitbackSection authorizes the gitback subsystem per envoy
 // and tunes its operational caps. `Enabled` gates which envoys
 // participate; `MaxBundleBytes` caps a project's `git bundle --all`
 // size on every transfer path (publisher fan-out, push-receive,
 // DR catch-up); `EnvelopeRetention` controls the retention window for
 // revoke/leave gossip envelopes before they are reaped.
-type SwarmgitSection struct {
-	Enabled           []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run swarmgit — publisher and receiver." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
-	MaxBundleBytes    int64    `yaml:"max_bundle_bytes" doc:"Per-bundle (git bundle --all) size cap, in bytes, enforced on every swarmgit transfer path. 0 / unset = the 2 GiB compile-time default. There is no uncapped mode." default:"2147483648" example:"2147483648 (2 GiB), 5368709120 (5 GiB), 536870912 (512 MiB)"`
+type GitbackSection struct {
+	Enabled           []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run gitback — publisher and receiver." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
+	MaxBundleBytes    int64    `yaml:"max_bundle_bytes" doc:"Per-bundle (git bundle --all) size cap, in bytes, enforced on every gitback transfer path. 0 / unset = the 2 GiB compile-time default. There is no uncapped mode." default:"2147483648" example:"2147483648 (2 GiB), 5368709120 (5 GiB), 536870912 (512 MiB)"`
 	EnvelopeRetention string   `yaml:"envelope_retention" doc:"Retention window for revoke/leave gossip envelopes before they are reaped. Empty = compile-time default (90d)." default:"90d" example:"90d, 30d, 365d"`
 }
 
@@ -171,16 +171,16 @@ type LongdrawerSection struct {
 	MaxFileBytes int64    `yaml:"max_file_bytes" doc:"Per-file size cap on LAN longdrawer. 0 = no cap." default:"1073741824" example:"1073741824 (1 GiB), 0 (uncapped)"`
 }
 
-// SwarmcastSection authorizes the swarmcast (admin-pushed fleet file
+// FilecastSection authorizes the filecast (admin-pushed fleet file
 // distribution) subsystem per envoy and caps admin-side distribute
 // behavior. The admin distribute endpoint refuses when the `Enabled`
 // list is empty (no envoy could possibly receive); `MaxSizeBytes`
 // caps individual blob size at the API entry; `DefaultRetention` is
-// used when `vigocli swarm swarmcast distribute` omits `--retention`.
-type SwarmcastSection struct {
+// used when `vigocli swarm filecast distribute` omits `--retention`.
+type FilecastSection struct {
 	Enabled          []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to receive admin-pushed files." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"]"`
 	MaxSizeBytes     int64    `yaml:"max_size_bytes" doc:"Per-distribute blob size cap, enforced at the admin API. 0 = no cap." default:"0" example:"5368709120 (5 GiB), 0 (uncapped)"`
-	DefaultRetention string   `yaml:"default_retention" doc:"Default retention applied when 'vigocli swarm swarmcast distribute' omits --retention. Empty = compile-time default (7d)." default:"7d" example:"7d, 30d, 24h"`
+	DefaultRetention string   `yaml:"default_retention" doc:"Default retention applied when 'vigocli swarm filecast distribute' omits --retention. Empty = compile-time default (7d)." default:"7d" example:"7d, 30d, 24h"`
 }
 
 // SwarmLockboxSection tunes lockbox operational caps. Authorization

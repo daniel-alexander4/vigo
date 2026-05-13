@@ -432,8 +432,8 @@ func TestPeerTracker_MarkEvictedNoOpForUnknownEnvoy(t *testing.T) {
 
 // TestPeerTracker_StatusFiltersInactiveEnvoys checks the SetActiveChecker
 // filter that brings the payload tracker to parity with the lockbox /
-// longdrawer / swarmgit mesh aggregators. Without the filter, revoked or
-// deleted envoys keep showing up on `/swarm/swarmcast` blob-detail until
+// longdrawer / gitback mesh aggregators. Without the filter, revoked or
+// deleted envoys keep showing up on `/swarm/filecast` blob-detail until
 // process restart.
 func TestPeerTracker_StatusFiltersInactiveEnvoys(t *testing.T) {
 	pt := NewPeerTracker(60 * time.Second)

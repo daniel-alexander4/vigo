@@ -80,9 +80,9 @@ func TestValidateSwarmPatternOrder_AllSubsystems(t *testing.T) {
 	s := SwarmSection{
 		Enabled:   bad,
 		Puddle:    SwarmPuddleSection{Enabled: bad},
-		Swarmgit: SwarmgitSection{Enabled: bad},
+		Gitback: GitbackSection{Enabled: bad},
 		Longdrawer:  LongdrawerSection{Enabled: bad},
-		Swarmcast:   SwarmcastSection{Enabled: bad},
+		Filecast:   FilecastSection{Enabled: bad},
 	}
 	findings := ValidateSwarmPatternOrder(s)
 	if len(findings) != 5 {
@@ -92,7 +92,7 @@ func TestValidateSwarmPatternOrder_AllSubsystems(t *testing.T) {
 	for _, f := range findings {
 		seen[f.Subsystem] = true
 	}
-	for _, sub := range []string{"swarm", "puddle", "swarmgit", "longdrawer", "swarmcast"} {
+	for _, sub := range []string{"swarm", "puddle", "gitback", "longdrawer", "filecast"} {
 		if !seen[sub] {
 			t.Errorf("missing finding for subsystem %q", sub)
 		}

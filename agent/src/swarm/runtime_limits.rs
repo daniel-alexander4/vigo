@@ -8,7 +8,7 @@
 //! here so subsystem-level enforcement sites can read the operator's
 //! current intent without re-plumbing the response through every
 //! call path. This is the agent-side end of the
-//! `server.yaml swarm.{swarmcast,lockbox,swarmgit,longdrawer}.*` →
+//! `server.yaml swarm.{filecast,lockbox,gitback,longdrawer}.*` →
 //! `CheckInResponse.swarm_runtime_limits` → enforcement-point flow.
 //!
 //! ### Design
@@ -37,12 +37,12 @@ use std::sync::{OnceLock, RwLock};
 /// only some fields) doesn't reset other fields to zero.
 #[derive(Debug, Clone, Default)]
 pub struct SwarmLimits {
-    pub swarmcast_max_size_bytes: Option<u64>,
-    pub swarmcast_default_retention: Option<String>,
+    pub filecast_max_size_bytes: Option<u64>,
+    pub filecast_default_retention: Option<String>,
     pub lockbox_max_file_bytes: Option<u64>,
     pub lockbox_envelope_retention_secs: Option<u64>,
-    pub swarmgit_max_bundle_bytes: Option<u64>,
-    pub swarmgit_envelope_retention_secs: Option<u64>,
+    pub gitback_max_bundle_bytes: Option<u64>,
+    pub gitback_envelope_retention_secs: Option<u64>,
     pub longdrawer_max_file_bytes: Option<u64>,
 }
 
@@ -56,12 +56,12 @@ fn cell() -> &'static RwLock<SwarmLimits> {
 /// fallbacks at the read sites stay simple.
 pub fn update_from_proto(msg: &crate::proto::SwarmRuntimeLimits) {
     let new = SwarmLimits {
-        swarmcast_max_size_bytes: opt_nonzero_u64(msg.swarmcast_max_size_bytes),
-        swarmcast_default_retention: opt_nonempty_string(&msg.swarmcast_default_retention),
+        filecast_max_size_bytes: opt_nonzero_u64(msg.filecast_max_size_bytes),
+        filecast_default_retention: opt_nonempty_string(&msg.filecast_default_retention),
         lockbox_max_file_bytes: opt_nonzero_u64(msg.lockbox_max_file_bytes),
         lockbox_envelope_retention_secs: opt_nonzero_u64(msg.lockbox_envelope_retention_secs),
-        swarmgit_max_bundle_bytes: opt_nonzero_u64(msg.swarmgit_max_bundle_bytes),
-        swarmgit_envelope_retention_secs: opt_nonzero_u64(msg.swarmgit_envelope_retention_secs),
+        gitback_max_bundle_bytes: opt_nonzero_u64(msg.gitback_max_bundle_bytes),
+        gitback_envelope_retention_secs: opt_nonzero_u64(msg.gitback_envelope_retention_secs),
         longdrawer_max_file_bytes: opt_nonzero_u64(msg.longdrawer_max_file_bytes),
     };
     let mut w = cell().write().expect("swarm runtime limits cache poisoned");
@@ -117,23 +117,23 @@ pub fn lockbox_envelope_retention_secs() -> i64 {
         .unwrap_or(90 * 24 * 60 * 60)
 }
 
-/// Swarmgit: per-bundle size cap, in bytes. Falls back to the
-/// compile-time [`crate::swarm::swarmgit::DEFAULT_MAX_BUNDLE_SIZE`]
+/// Gitback: per-bundle size cap, in bytes. Falls back to the
+/// compile-time [`crate::swarm::gitback::DEFAULT_MAX_BUNDLE_SIZE`]
 /// (2 GiB) when the server hasn't published a limit yet, or when the
-/// operator left `swarm.swarmgit.max_bundle_bytes` at 0/unset (which
+/// operator left `swarm.gitback.max_bundle_bytes` at 0/unset (which
 /// the proto→struct mapping turns into `None`). Enforced on every
 /// path that moves a bundle: publisher fan-out, the push-receive
 /// POST handlers, and the DR catch-up GET.
-pub fn swarmgit_max_bundle_bytes() -> u64 {
+pub fn gitback_max_bundle_bytes() -> u64 {
     current()
-        .swarmgit_max_bundle_bytes
-        .unwrap_or(crate::swarm::swarmgit::DEFAULT_MAX_BUNDLE_SIZE)
+        .gitback_max_bundle_bytes
+        .unwrap_or(crate::swarm::gitback::DEFAULT_MAX_BUNDLE_SIZE)
 }
 
-/// Swarmgit: envelope retention in seconds. Falls back to 90 days.
-pub fn swarmgit_envelope_retention_secs() -> i64 {
+/// Gitback: envelope retention in seconds. Falls back to 90 days.
+pub fn gitback_envelope_retention_secs() -> i64 {
     current()
-        .swarmgit_envelope_retention_secs
+        .gitback_envelope_retention_secs
         .map(|v| v as i64)
         .unwrap_or(90 * 24 * 60 * 60)
 }
@@ -156,10 +156,10 @@ mod tests {
         fresh();
         assert_eq!(lockbox_max_file_bytes(), 1024 * 1024 * 1024);
         assert_eq!(lockbox_envelope_retention_secs(), 90 * 24 * 60 * 60);
-        assert_eq!(swarmgit_envelope_retention_secs(), 90 * 24 * 60 * 60);
+        assert_eq!(gitback_envelope_retention_secs(), 90 * 24 * 60 * 60);
         assert_eq!(
-            swarmgit_max_bundle_bytes(),
-            crate::swarm::swarmgit::DEFAULT_MAX_BUNDLE_SIZE
+            gitback_max_bundle_bytes(),
+            crate::swarm::gitback::DEFAULT_MAX_BUNDLE_SIZE
         );
         assert_eq!(longdrawer_max_file_bytes(), None);
     }
@@ -168,34 +168,34 @@ mod tests {
     fn server_values_propagate() {
         fresh();
         let msg = crate::proto::SwarmRuntimeLimits {
-            swarmcast_max_size_bytes: 100,
-            swarmcast_default_retention: "30d".to_string(),
+            filecast_max_size_bytes: 100,
+            filecast_default_retention: "30d".to_string(),
             lockbox_max_file_bytes: 200,
             lockbox_envelope_retention_secs: 300,
-            swarmgit_max_bundle_bytes: 400,
-            swarmgit_envelope_retention_secs: 500,
+            gitback_max_bundle_bytes: 400,
+            gitback_envelope_retention_secs: 500,
             longdrawer_max_file_bytes: 600,
         };
         update_from_proto(&msg);
         assert_eq!(lockbox_max_file_bytes(), 200);
         assert_eq!(lockbox_envelope_retention_secs(), 300);
-        assert_eq!(swarmgit_max_bundle_bytes(), 400);
-        assert_eq!(swarmgit_envelope_retention_secs(), 500);
+        assert_eq!(gitback_max_bundle_bytes(), 400);
+        assert_eq!(gitback_envelope_retention_secs(), 500);
         assert_eq!(longdrawer_max_file_bytes(), Some(600));
-        assert_eq!(current().swarmcast_max_size_bytes, Some(100));
-        assert_eq!(current().swarmcast_default_retention.as_deref(), Some("30d"));
+        assert_eq!(current().filecast_max_size_bytes, Some(100));
+        assert_eq!(current().filecast_default_retention.as_deref(), Some("30d"));
     }
 
     #[test]
     fn zero_fields_fall_back_to_defaults() {
         fresh();
         let msg = crate::proto::SwarmRuntimeLimits {
-            swarmcast_max_size_bytes: 0,
-            swarmcast_default_retention: String::new(),
+            filecast_max_size_bytes: 0,
+            filecast_default_retention: String::new(),
             lockbox_max_file_bytes: 0,
             lockbox_envelope_retention_secs: 0,
-            swarmgit_max_bundle_bytes: 0,
-            swarmgit_envelope_retention_secs: 0,
+            gitback_max_bundle_bytes: 0,
+            gitback_envelope_retention_secs: 0,
             longdrawer_max_file_bytes: 0,
         };
         update_from_proto(&msg);
@@ -203,8 +203,8 @@ mod tests {
         // helpers return their compile-time defaults.
         assert_eq!(lockbox_max_file_bytes(), 1024 * 1024 * 1024);
         assert_eq!(
-            swarmgit_max_bundle_bytes(),
-            crate::swarm::swarmgit::DEFAULT_MAX_BUNDLE_SIZE
+            gitback_max_bundle_bytes(),
+            crate::swarm::gitback::DEFAULT_MAX_BUNDLE_SIZE
         );
     }
 }

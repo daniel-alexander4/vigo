@@ -10,15 +10,15 @@
 //! consumers read that cache — none on the check-in path:
 //!
 //! - `vigo swarm puddle name set` (refuse-the-collision check),
-//! - the `git-remote-swarmgit` helper daemon (`<name>` → project_id),
+//! - the `git-remote-gitback` helper daemon (`<name>` → project_id),
 //! - `vigo swarm puddle name show`.
 //!
 //! The endpoint carries only public-by-construction name↔pubkey
 //! bindings, so — like `/api/v1/fleet/pubkeys` — it's fetched over
 //! mTLS without a token. Transient failures log WARN and leave the
 //! last good cache in place; name resolution then just falls back to
-//! the hex `swarmgit://<project_id>/<repo>` form until the next
-//! refresh. Mirrors [`crate::swarm::swarmgit::pubkey_bootstrap`].
+//! the hex `gitback://<project_id>/<repo>` form until the next
+//! refresh. Mirrors [`crate::swarm::gitback::pubkey_bootstrap`].
 
 use std::path::Path;
 use std::time::Duration;
@@ -30,7 +30,7 @@ use tracing::{info, warn};
 
 use crate::update::TlsCerts;
 
-/// Refresh cadence — same as the swarmgit pubkey bootstrap.
+/// Refresh cadence — same as the gitback pubkey bootstrap.
 const REFRESH_INTERVAL: Duration = Duration::from_secs(15 * 60);
 
 /// Per-request timeout — the response is a small JSON map.
@@ -38,7 +38,7 @@ const FETCH_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Spawn the periodic fetch+write loop. Returns immediately. Performs
 /// one fetch on entry so the cache is populated before the first
-/// `swarmgit://<name>/<repo>` clone; failures are logged and tolerated
+/// `gitback://<name>/<repo>` clone; failures are logged and tolerated
 /// (resolution falls back to the hex form).
 pub fn spawn(server_addr: String, tls: TlsCerts, cancel: CancellationToken) {
     tokio::spawn(async move {
@@ -141,7 +141,7 @@ fn write_world_readable(path: &Path, content: &[u8]) -> Result<()> {
 }
 
 /// Build an mTLS ureq agent for talking to the server. Same shape as
-/// `swarmgit::pubkey_bootstrap::build_mtls_agent` (small JSON
+/// `gitback::pubkey_bootstrap::build_mtls_agent` (small JSON
 /// endpoint, short global timeout); hostname verification stays on —
 /// the agent talks to its configured server.
 fn build_mtls_agent(tls: &TlsCerts) -> Result<ureq::Agent> {
