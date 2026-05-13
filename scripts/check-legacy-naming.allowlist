@@ -12,8 +12,8 @@
 #
 # Add a line here only when the legacy term is genuinely unavoidable —
 # typically: historical commit messages preserved in completed.md, the
-# user's literal disk-layout path (~/cairn/...), or test fixtures that
-# deliberately probe the legacy terminology.
+# user's literal disk-layout path, or test fixtures that deliberately
+# probe the legacy terminology.
 
 # completed.md is the historical record — every entry there is from
 # before its surrounding rename and stays as-it-was for accuracy.
@@ -22,16 +22,6 @@
 # Memory files live outside the repo working tree (in
 # ~/.claude/projects/...) so `git ls-files` doesn't return them.
 # Listed here as a safety net in case future tooling brings them in.
-
-# Dan's literal dev-repo directory is ~/swarmgit/{vigo,tessera,vigo-web}.
-# Neither the 0.31.0 nor the 0.50.0 rename moves it on disk; they only
-# rename the code-side per-user convention (~/gitback/<project>/ after
-# 0.50.0). The CLAUDE.md lines below point at where tessera / vigo-web
-# actually live, so the ~/swarmgit/ token there is intentional.
-CLAUDE.md:56:\bswarmgit\b
-CLAUDE.md:65:\bswarmgit\b
-CLAUDE.md:141:\bswarmgit\b
-CLAUDE.md:143:\bswarmgit\b
 
 # The rename plan documents describe their renames — every legacy term
 # appears as part of the mapping description. Allowlisted wholesale.
@@ -75,10 +65,6 @@ scripts/migrate-0.30.sh:*:cairn
 # patterns it greps for.
 scripts/check-legacy-naming.sh:*:cairn
 
-# CLAUDE.md previously referenced ~/cairn/vigo-lic for the license
-# repo; that's now ~/swarmgit/tessera, so no `cairn` token remains
-# to allowlist there.
-
 # Pre-existing references to the historical "cairn"-era reset incident —
 # the tshoot archive file is named log-archive-cairn-resolved-20260424-…
 # (its name can't change), and the prose pointing at it cites it by that
@@ -88,8 +74,3 @@ server/grpc/agentstream.go:982:\bcairn\b
 server/swarm/manifest.go:54:\bcairn\b
 server/swarm/manifest.go:291:\bcairn\b
 docs/engineering/subsystems/swarm.md:168:\bcairn\b
-
-# Doc cross-link to a memory file whose directory name encodes Dan's
-# literal working-tree path (.claude/projects/-home-dan-swarmgit-vigo/…) —
-# that "swarmgit" is the on-disk path, not the subsystem, so it stays.
-docs/reference/ui/envoy-footprint.md:48:\bswarmgit\b
