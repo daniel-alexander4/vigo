@@ -74,7 +74,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::platform::paths::default_swarmgit_dir;
@@ -87,8 +87,12 @@ use crate::swarm::swarmgit::project_state::{
 use crate::swarm::swarmgit::tokens::{Role, ID_LEN, NEVER_EXPIRES};
 
 /// One project's view for the trait. Sorted by `project_id` in the
-/// emitted array for deterministic output.
-#[derive(Debug, Serialize)]
+/// emitted array for deterministic output. `Deserialize` so the
+/// `vigo swarm swarmgit status` CLI can parse the helper daemon's
+/// `STATUS` reply (the daemon runs `collect_projects` as root, since
+/// the bare-repo facts live under a `0700` `projects/` dir the
+/// unprivileged CLI can't stat into).
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ProjectEntry {
     pub project_id: String,
     pub handle: String,
@@ -105,7 +109,7 @@ pub struct ProjectEntry {
     pub token_expires_at: Option<i64>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct EnvelopeSummary {
     pub revokes: usize,
     pub leaves: usize,
@@ -512,6 +516,35 @@ mod tests {
         let body = format!("dan:x:1000:1000::{}:/bin/sh\n", dan_home.display());
         let projects = collect_projects(&body, base.path());
         assert_eq!(projects.len(), 1);
+    }
+
+    #[test]
+    fn collect_reports_bare_repo_when_present_and_round_trips_json() {
+        let base = tempdir().unwrap();
+        let dan_home = base.path().join("home/dan");
+        std::fs::create_dir_all(&dan_home).unwrap();
+        let pid = seed_project(&dan_home, "vigo");
+        // Materialize a bare repo at the canonical path, as a first
+        // push / DR catch-up would. A non-empty directory is enough to
+        // exercise `has_bare_repo` + `bare_repo_size_bytes`; we don't
+        // need a real git repo here.
+        let repo = project_repo_path(base.path(), &pid);
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::write(repo.join("HEAD"), b"ref: refs/heads/main\n").unwrap();
+
+        let body = format!("dan:x:1000:1000::{}:/bin/sh\n", dan_home.display());
+        let projects = collect_projects(&body, base.path());
+        assert_eq!(projects.len(), 1);
+        assert!(projects[0].has_bare_repo, "bare repo dir exists");
+        assert!(projects[0].bare_repo_size_bytes > 0);
+
+        // The helper-daemon `STATUS` reply is exactly this JSON.
+        let json = serde_json::to_string(&projects).unwrap();
+        let back: Vec<ProjectEntry> = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.len(), 1);
+        assert!(back[0].has_bare_repo);
+        assert_eq!(back[0].project_id, projects[0].project_id);
+        assert_eq!(back[0].handle, "vigo");
     }
 
     #[test]

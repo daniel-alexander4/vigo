@@ -44,6 +44,7 @@ Swarmgit is one of four content subsystems that ride the [swarm](swarm.md) subst
 | Receiver-initiated DR catch-up (`GET /swarm/swarmgit/bundle/<pid>` + catch-up reactor) | ✅ 0.46.0 |
 | Puddle-wide project adoption — `puddle unlock` mints founder-bootstrap state for the puddle's founded projects (ADR-023; widens `SWARMGITPROJECT:` to `…:<handle>:<dr_scope>`; reactor flushes `swarmgit-announced.json`) | ✅ 0.49.0 |
 | Bare-repo `HEAD` reconciliation — keep `HEAD` pointing at a live branch so a fresh `git clone` checks out without `git checkout main` | ✅ 0.49.6 |
+| Helper-daemon `STATUS` verb — `vigo swarm swarmgit status` gets the root-owned bare-repo facts from the daemon instead of mis-reporting "0 bare repos" when run unprivileged | ✅ 0.49.7 |
 
 ### Receiver-initiated DR catch-up (0.46.0)
 
@@ -58,6 +59,10 @@ DR catch-up backfills a bare repo for a project an envoy *already has per-user s
 ### Bare-repo `HEAD` reconciliation (0.49.6)
 
 `git init --bare` leaves `HEAD` at git's compiled-in default (`refs/heads/master`); the first push or DR-catch-up bundle ingest establishes the real branches (commonly just `main`) but never repoints `HEAD`. So `git upload-pack` advertised `symref=HEAD:refs/heads/master`, a nonexistent ref, and every fresh `git clone swarmgit://…/<repo>` warned "remote HEAD refers to nonexistent ref, unable to checkout" and left an empty working tree until the operator ran `git checkout main` by hand. `fan_out::set_head_to_default_branch` reconciles `HEAD` to a branch that actually exists — preferring `main`, then `master`, then the alphabetically-first branch — and is invoked at the points where a bare repo's refs can move: after a ref-changing `git-receive-pack` (the first push's post-receive), inside `apply_bundle` (every fan-out / DR ingest), and before `git-upload-pack` serves a clone (which also self-heals repos created before this shipped). Idempotent — a no-op when `HEAD` is already valid, `Ok(())` on a branchless repo. The preference order is deterministic, so receivers converge on the same `HEAD` the originator picked. Agent-only change: cross-compile + redeploy.
+
+### Helper-daemon `STATUS` verb (0.49.7)
+
+The bare repos under `/var/lib/vigo/swarm/swarmgit/projects/` are `0700 root:root` — non-root callers reach them only through the helper daemon. So `vigo swarm swarmgit status`, which an operator runs as their own (unprivileged) user, couldn't `stat` into `projects/`: `project_repo_path(...).exists()` returned `false` for every project, and the command printed "0 with a local bare repo / 0 B on disk / no bare repo yet" even when the repos were fully materialized. (The `swarmgit` *trait* never had this problem — it's built by the root agent, which is why `vigocli swarm swarmgit` was always correct.) Fixed by giving the helper daemon a third socket verb alongside `HELLO` / `RESOLVE-NAME`: `STATUS` → `OK <compact-json-array>\n`, the daemon (root) running `traits::swarmgit::collect_projects` and serializing the result — the same per-project view the trait carries. The CLI asks for it; if the socket's unreachable it falls back to a local scan and marks the output `partial data:` rather than asserting a falsehood. The verb is unauthenticated — the data is the same public tier as the `0644` `swarmgit-announced.json` cache and the server-bound trait — and runs `collect_projects` in `spawn_blocking` so it doesn't stall the reactor. Agent-only change: cross-compile + redeploy.
 
 ## ADR-019: Founder-rekey delegation chains
 

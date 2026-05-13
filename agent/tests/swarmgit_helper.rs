@@ -198,6 +198,44 @@ async fn helper_daemon_push_and_clone_roundtrip() {
     );
     assert_eq!(blob.stdout, b"hello\n");
 
+    // `STATUS` verb — the path `vigo swarm swarmgit status` uses (an
+    // unprivileged caller can't stat the `0700` bare repo, so it asks
+    // the daemon). Reply is `OK <compact-json-array>\n`.
+    {
+        use std::io::{BufRead, BufReader, Write};
+        use std::os::unix::net::UnixStream;
+
+        let mut s = UnixStream::connect(&sock).expect("connect for STATUS");
+        s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+        s.write_all(b"STATUS\n").expect("send STATUS");
+        s.flush().ok();
+        let mut line = String::new();
+        BufReader::new(s)
+            .read_line(&mut line)
+            .expect("read STATUS reply");
+        let line = line.trim_end_matches(['\n', '\r']);
+        let json = line
+            .strip_prefix("OK ")
+            .unwrap_or_else(|| panic!("STATUS reply not OK: {line:?}"));
+        let v: serde_json::Value = serde_json::from_str(json).expect("parse STATUS JSON");
+        let arr = v.as_array().expect("STATUS reply is a JSON array");
+        let p = arr
+            .iter()
+            .find(|p| p["handle"] == "test-project")
+            .unwrap_or_else(|| panic!("STATUS did not list test-project: {v}"));
+        assert_eq!(
+            p["has_bare_repo"],
+            serde_json::json!(true),
+            "STATUS should report the pushed bare repo present"
+        );
+        assert!(p["bare_repo_size_bytes"].as_u64().unwrap_or(0) > 0);
+        assert!(
+            p["head_refs"].get("refs/heads/master").is_some(),
+            "head_refs: {}",
+            p["head_refs"]
+        );
+    }
+
     cancel.cancel();
     let _ = daemon.await;
 }

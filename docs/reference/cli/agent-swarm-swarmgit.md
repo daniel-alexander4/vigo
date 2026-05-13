@@ -79,7 +79,7 @@ Verbs that take a `<project_id>` argument also accept a unique handle prefix amo
 
 ## `status`
 
-Envoy-wide swarmgit posture, parallel to [`vigo swarm lockbox status`](agent-swarm-lockbox.md#status). Built by walking every Unix user's `~/.vigo-swarmgit/` per-user state, joining it with the per-envoy bare repos under `/var/lib/vigo/swarm/swarmgit/projects/` and the queued envelopes, plus the helper-daemon socket check. Distinct from `project status <id>`, which shows one project in detail.
+Envoy-wide swarmgit posture, parallel to [`vigo swarm lockbox status`](agent-swarm-lockbox.md#status). The bare repos under `/var/lib/vigo/swarm/swarmgit/projects/` are `0700 root:root` (non-root callers reach them only through the helper daemon), so `status` asks the helper daemon — which runs as root — for the authoritative envoy-wide view (per-user `~/.vigo-swarmgit/` state joined with the bare repos, head refs, and queued envelopes — exactly what the `swarmgit` trait carries). If the helper daemon's socket isn't reachable it falls back to a local scan, which sees only the calling user's per-user state and — unless you run it as root — no bare-repo facts; that output is marked `partial data:`. Distinct from `project status <id>`, which shows one project in detail.
 
 ```
 vigo swarm swarmgit status
@@ -105,7 +105,7 @@ swarmgit status
   helper daemon:       socket present (/var/run/vigo/swarmgit.sock)
 ```
 
-On an envoy where no Unix user has founded or joined a project, the `projects:` line reads `none`. A project shows `no bare repo yet` until its first push lands or the DR catch-up reactor pulls it from a peer. The socket line shows `socket absent` when the helper daemon isn't running.
+On an envoy where no Unix user has founded or joined a project, the `projects:` line reads `none`. A project shows `no bare repo yet` until its first push lands or the DR catch-up reactor pulls it from a peer. The socket line shows `socket absent` when the helper daemon isn't running — in which case a `partial data:` line warns that the bare-repo counts above came from a local scan and may be incomplete (run as root, or restart the agent, for the full picture).
 
 ## `purge`
 

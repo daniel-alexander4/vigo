@@ -260,6 +260,45 @@ async fn handle_client(
         };
     }
 
+    // `STATUS` — a pure read of the envoy-wide swarmgit project view
+    // (the same data `collect_projects` builds for the `swarmgit`
+    // trait on every check-in). The daemon runs as root, so it can
+    // see the `0700` bare repos under `projects/`; an unprivileged
+    // `vigo swarm swarmgit status` can't, so it asks us. Reply
+    // `OK <compact-json-array>\n` (or `ERR ...\n`), then close. No
+    // git process, no token chain — this metadata is the same
+    // public tier as the `0644` `swarmgit-announced.json` cache and
+    // the server-bound trait.
+    if header
+        .split_ascii_whitespace()
+        .next()
+        .map(|v| v.eq_ignore_ascii_case("STATUS"))
+        .unwrap_or(false)
+    {
+        // `collect_projects` does synchronous filesystem walks (incl.
+        // `git for-each-ref` per project) — keep it off the reactor.
+        return match tokio::task::spawn_blocking(status_response).await {
+            Ok(Ok(json)) => {
+                tracing::info!(uid, bytes = json.len(), "swarmgit helper: STATUS ok");
+                let _ = write_half.write_all(format!("OK {}\n", json).as_bytes()).await;
+                let _ = write_half.flush().await;
+                Ok(())
+            }
+            Ok(Err(e)) => {
+                let _ = write_half
+                    .write_all(format!("ERR {}\n", sanitize_err(&e.to_string())).as_bytes())
+                    .await;
+                let _ = write_half.flush().await;
+                Err(e)
+            }
+            Err(e) => {
+                let _ = write_half.write_all(b"ERR status task failed\n").await;
+                let _ = write_half.flush().await;
+                bail!("status task join error: {}", e);
+            }
+        };
+    }
+
     let (project_id, service) = match parse_header(&header) {
         Ok(v) => v,
         Err(e) => {
@@ -765,6 +804,22 @@ fn handle_resolve_name(uid: u32, header: &str) -> Result<(String, String)> {
     };
     let pid = crate::swarm::swarmgit::tokens::project_id_for(&founder_pk, handle);
     Ok((super::project_state::hex_id(&pid), hex::encode(founder_pk)))
+}
+
+/// Build the `STATUS` socket-verb payload: the authoritative
+/// envoy-wide swarmgit project view, as `crate::traits::swarmgit::
+/// collect_projects` computes it for the `swarmgit` trait on every
+/// check-in (per-user `~/.vigo-swarmgit/` state joined with the
+/// root-owned bare repos + envelope store). Compact single-line JSON
+/// array of `ProjectEntry` so it fits the socket's one-line response
+/// convention. Runs as root inside the daemon, so the bare-repo
+/// `exists()` / size / ref checks actually succeed.
+fn status_response() -> Result<String> {
+    let base = crate::platform::paths::default_swarmgit_dir();
+    let passwd =
+        std::fs::read_to_string(crate::traits::swarmgit::passwd_path()).unwrap_or_default();
+    let projects = crate::traits::swarmgit::collect_projects(&passwd, &base);
+    serde_json::to_string(&projects).context("serialize STATUS payload")
 }
 
 /// Resolve `<name>` against the requesting user's own

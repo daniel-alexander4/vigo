@@ -2502,15 +2502,57 @@ To proceed, type the project handle exactly: {}",
 fn cmd_status_top(_args: &[String]) -> Result<()> {
     let base = crate::platform::paths::default_swarmgit_dir();
     let socket = helper_socket_path();
-    let passwd = std::fs::read_to_string(passwd_path()).unwrap_or_default();
-    let projects = collect_projects(&passwd, &base);
-    print_status_top(&base, &socket, &projects, &mut std::io::stdout())
+    // The bare-repo facts (exists / size / head refs / envelope
+    // counts) live under the `0700` `projects/` dir, which an
+    // unprivileged caller can't stat into — so ask the helper daemon
+    // (root) for the authoritative envoy-wide view. Fall back to a
+    // local scan if the daemon isn't reachable: that sees only this
+    // user's per-user state and, when not run as root, can't see the
+    // bare repos at all (so we flag the output as partial).
+    let (projects, via_helper) = match query_helper_status(&socket) {
+        Ok(p) => (p, true),
+        Err(e) => {
+            tracing::debug!(error = %e, "swarmgit status: helper STATUS unavailable, falling back to local scan");
+            let passwd = std::fs::read_to_string(passwd_path()).unwrap_or_default();
+            (collect_projects(&passwd, &base), false)
+        }
+    };
+    print_status_top(&base, &socket, &projects, via_helper, &mut std::io::stdout())
+}
+
+/// Ask the helper daemon (`STATUS` verb) for the authoritative
+/// envoy-wide project view. Blocking; short timeouts so a wedged
+/// daemon can't hang the CLI.
+fn query_helper_status(socket: &Path) -> Result<Vec<ProjectEntry>> {
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixStream;
+
+    let mut stream =
+        UnixStream::connect(socket).with_context(|| format!("connect {}", socket.display()))?;
+    stream.set_read_timeout(Some(std::time::Duration::from_secs(5)))?;
+    stream.set_write_timeout(Some(std::time::Duration::from_secs(5)))?;
+    stream.write_all(b"STATUS\n").context("send STATUS")?;
+    stream.flush().ok();
+
+    let mut line = String::new();
+    BufReader::new(stream)
+        .read_line(&mut line)
+        .context("read STATUS response")?;
+    let line = line.trim_end_matches(['\n', '\r']);
+    if let Some(json) = line.strip_prefix("OK ") {
+        serde_json::from_str::<Vec<ProjectEntry>>(json).context("parse STATUS JSON")
+    } else if let Some(msg) = line.strip_prefix("ERR ") {
+        bail!("helper daemon: {}", msg)
+    } else {
+        bail!("unexpected STATUS response: {:?}", line)
+    }
 }
 
 fn print_status_top<W: std::io::Write>(
     base: &Path,
     socket: &Path,
     projects: &[ProjectEntry],
+    via_helper: bool,
     out: &mut W,
 ) -> Result<()> {
     writeln!(out, "swarmgit status")?;
@@ -2550,6 +2592,21 @@ fn print_status_top<W: std::io::Write>(
             };
             writeln!(out, "    {:<24} {:<13} {}", p.handle, p.dr_scope, repo_state)?;
         }
+    }
+
+    if !via_helper {
+        writeln!(
+            out,
+            "  partial data:        helper daemon unreachable — counts reflect this user's"
+        )?;
+        writeln!(
+            out,
+            "                       per-user state only; bare repos are root-owned, so run"
+        )?;
+        writeln!(
+            out,
+            "                       as root (or restart the agent) for the full picture."
+        )?;
     }
 
     // Helper daemon socket — the ADR-015 helper-daemon transport for
@@ -2939,15 +2996,49 @@ mod tests {
 
     #[test]
     fn print_status_top_on_empty_envoy_does_not_error() {
-        // Fresh envoy: no per-user project state, no socket.
+        // Fresh envoy: no per-user project state, no socket — so the
+        // helper round-trip would have failed (via_helper = false).
         let base = tempfile::tempdir().unwrap();
         let socket = base.path().join("absent.sock");
         let mut buf: Vec<u8> = Vec::new();
-        print_status_top(base.path(), &socket, &[], &mut buf).unwrap();
+        print_status_top(base.path(), &socket, &[], false, &mut buf).unwrap();
         let out = String::from_utf8(buf).unwrap();
         assert!(out.contains("swarmgit status"));
         assert!(out.contains("projects:            none"));
         assert!(out.contains("socket absent"));
+    }
+
+    #[test]
+    fn print_status_top_flags_partial_data_when_helper_unreachable() {
+        use crate::traits::swarmgit::EnvelopeSummary;
+        use std::collections::BTreeMap;
+        let projects = vec![ProjectEntry {
+            project_id: "aa".repeat(32),
+            handle: "vigo".to_string(),
+            founder_puddle_pubkey: "bb".repeat(32),
+            members: vec!["bb".repeat(32)],
+            dr_scope: "swarm-wide".to_string(),
+            users_with_state: vec!["dan".to_string()],
+            // Local scan as non-root can't see the root-owned bare repo.
+            has_bare_repo: false,
+            bare_repo_size_bytes: 0,
+            head_refs: BTreeMap::new(),
+            envelopes: EnvelopeSummary {
+                revokes: 0,
+                leaves: 0,
+                digest_hex: String::new(),
+            },
+            leaf_role: Some("Admin".to_string()),
+            token_chain_depth: 1,
+            token_expires_at: None,
+        }];
+        let base = tempfile::tempdir().unwrap();
+        let socket = base.path().join("swarmgit.sock");
+        let mut buf: Vec<u8> = Vec::new();
+        print_status_top(base.path(), &socket, &projects, false, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("partial data:"), "got:\n{out}");
+        assert!(out.contains("helper daemon unreachable"));
     }
 
     #[test]
@@ -3006,7 +3097,7 @@ mod tests {
         fs::write(&socket, b"").unwrap();
 
         let mut buf: Vec<u8> = Vec::new();
-        print_status_top(base.path(), &socket, &projects, &mut buf).unwrap();
+        print_status_top(base.path(), &socket, &projects, true, &mut buf).unwrap();
         let out = String::from_utf8(buf).unwrap();
 
         assert!(out.contains("projects:            2 (1 with a local bare repo)"));
@@ -3016,6 +3107,8 @@ mod tests {
         assert!(out.contains("vigo-web"));
         assert!(out.contains("no bare repo yet"));
         assert!(out.contains("socket present"));
+        // Came via the helper daemon → no partial-data caveat.
+        assert!(!out.contains("partial data:"), "got:\n{out}");
     }
 
     // --- purge ----------------------------------------------------
