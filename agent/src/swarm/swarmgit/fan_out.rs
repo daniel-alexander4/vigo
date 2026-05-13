@@ -180,6 +180,21 @@ pub fn apply_bundle(repo: &Path, bundle_path: &Path) -> Result<()> {
         let stderr = String::from_utf8_lossy(&f.stderr);
         bail!("git fetch <bundle> failed: {}", stderr.trim());
     }
+
+    // The bundle's refs are in. A first ingest into a freshly
+    // `git init --bare`d repo leaves `HEAD` at the system default
+    // (`master`) even when the only branch pushed is `main`, so a
+    // clone served from this envoy would warn "remote HEAD refers to
+    // nonexistent ref" and skip the checkout. Repoint `HEAD` at a live
+    // branch. Non-fatal — the refs are already updated; a still-stale
+    // `HEAD` only costs the clone that one warning.
+    if let Err(e) = set_head_to_default_branch(repo) {
+        tracing::warn!(
+            repo = %repo.display(),
+            error = %e,
+            "swarmgit: could not reconcile bare repo HEAD after bundle apply; continuing"
+        );
+    }
     Ok(())
 }
 
@@ -216,6 +231,101 @@ pub fn ensure_bare_repo(repo: &Path) -> Result<()> {
         use std::os::unix::fs::PermissionsExt;
         let _ = std::fs::set_permissions(repo, std::fs::Permissions::from_mode(0o700));
     }
+    Ok(())
+}
+
+/// Ensure the bare repo's `HEAD` symref names a branch that exists, so
+/// a fresh `git clone` checks out a working tree instead of warning
+/// "remote HEAD refers to nonexistent ref, unable to checkout".
+///
+/// `git init --bare` leaves `HEAD` at git's compiled-in default
+/// (`refs/heads/master`); the first push or bundle ingest establishes
+/// the real branches but never repoints `HEAD`. This reconciles it,
+/// preferring `main`, then `master`, then the alphabetically-first
+/// branch. Idempotent: a no-op when `HEAD` already resolves to a live
+/// branch, and `Ok(())` when the repo has no branches yet. Called
+/// wherever a bare repo's refs can change (first push's post-receive,
+/// bundle ingest) and before serving a clone, so repos created before
+/// this shipped self-heal on next access. The same deterministic
+/// preference on every envoy means receivers converge on the same
+/// `HEAD` the originator picked.
+pub fn set_head_to_default_branch(repo: &Path) -> Result<()> {
+    // Branch refnames; `for-each-ref` returns them sorted by name.
+    let branches = {
+        let mut cmd = build_command(RunAs::Root);
+        cmd.arg("-C")
+            .arg(repo)
+            .arg("for-each-ref")
+            .arg("--format=%(refname)")
+            .arg("refs/heads/")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let out = cmd.output().context("git for-each-ref refs/heads")?;
+        if !out.status.success() {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            bail!("git for-each-ref failed: {}", stderr.trim());
+        }
+        let stdout = String::from_utf8(out.stdout).context("for-each-ref output not UTF-8")?;
+        stdout
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect::<Vec<_>>()
+    };
+    if branches.is_empty() {
+        return Ok(()); // empty bare repo — nothing to point HEAD at yet
+    }
+
+    // Current HEAD target if it's a symref; `-q` makes a detached HEAD
+    // exit non-zero with empty stdout rather than erroring.
+    let current = {
+        let mut cmd = build_command(RunAs::Root);
+        cmd.arg("-C")
+            .arg(repo)
+            .arg("symbolic-ref")
+            .arg("-q")
+            .arg("HEAD")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        let out = cmd.output().context("git symbolic-ref HEAD")?;
+        if out.status.success() {
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        } else {
+            String::new()
+        }
+    };
+    if branches.iter().any(|b| b == &current) {
+        return Ok(()); // HEAD already names a live branch
+    }
+
+    let pick = if branches.iter().any(|b| b == "refs/heads/main") {
+        "refs/heads/main"
+    } else if branches.iter().any(|b| b == "refs/heads/master") {
+        "refs/heads/master"
+    } else {
+        branches[0].as_str() // alphabetically first (for-each-ref is sorted)
+    };
+    let mut cmd = build_command(RunAs::Root);
+    cmd.arg("-C")
+        .arg(repo)
+        .arg("symbolic-ref")
+        .arg("HEAD")
+        .arg(pick)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    let out = cmd.output().context("git symbolic-ref HEAD <branch>")?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        bail!("git symbolic-ref HEAD {} failed: {}", pick, stderr.trim());
+    }
+    tracing::info!(
+        repo = %repo.display(),
+        head = pick,
+        "swarmgit: repointed bare repo HEAD to a live branch"
+    );
     Ok(())
 }
 
@@ -1082,6 +1192,42 @@ mod tests {
         }
     }
 
+    /// `git symbolic-ref HEAD` against a (bare) repo, trimmed.
+    fn read_head(repo: &Path) -> String {
+        let mut cmd = build_command(RunAs::Root);
+        cmd.arg("-C").arg(repo).arg("symbolic-ref").arg("HEAD");
+        let out = cmd.output().expect("spawn git symbolic-ref");
+        assert!(out.status.success(), "symbolic-ref HEAD failed");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    /// Seed a bare repo with branches `develop` + `master` (no `main`).
+    fn seed_repo_with_branches(dir: &Path, name: &str, branches: &[&str]) -> PathBuf {
+        let repo = dir.join(format!("{}.git", name));
+        ensure_bare_repo(&repo).unwrap();
+        let work = dir.join(format!("{}-work", name));
+        std::fs::create_dir_all(&work).unwrap();
+        run_git(&work, &["init", "-q", "-b", branches[0]]);
+        run_git(&work, &["config", "user.email", "t@example"]);
+        run_git(&work, &["config", "user.name", "t"]);
+        std::fs::write(work.join("f"), "x\n").unwrap();
+        run_git(&work, &["add", "f"]);
+        run_git(&work, &["commit", "-q", "-m", "c"]);
+        for b in &branches[1..] {
+            run_git(&work, &["branch", b]);
+        }
+        let mut push_args = vec!["push", "-q", repo.to_str().unwrap()];
+        let specs: Vec<String> = branches
+            .iter()
+            .map(|b| format!("refs/heads/{b}:refs/heads/{b}"))
+            .collect();
+        for s in &specs {
+            push_args.push(s);
+        }
+        run_git(&work, &push_args);
+        repo
+    }
+
     fn git_available() -> bool {
         std::process::Command::new("git")
             .arg("--version")
@@ -1435,5 +1581,86 @@ mod tests {
         };
         verify_chain_for_push(&push, &pid, dir.path(), 300)
             .expect("post-rekey chain with delegation should verify");
+    }
+
+    // --- set_head_to_default_branch ---
+
+    #[test]
+    fn set_head_repoints_phantom_head_to_main() {
+        if !git_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let repo = seed_repo(dir.path(), "p"); // refs/heads/main only
+        // Make HEAD point at a branch that doesn't exist (the bug shape).
+        run_git(&repo, &["symbolic-ref", "HEAD", "refs/heads/__phantom__"]);
+        set_head_to_default_branch(&repo).unwrap();
+        assert_eq!(read_head(&repo), "refs/heads/main");
+    }
+
+    #[test]
+    fn set_head_is_noop_when_already_valid() {
+        if !git_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let repo = seed_repo(dir.path(), "v");
+        run_git(&repo, &["symbolic-ref", "HEAD", "refs/heads/main"]);
+        set_head_to_default_branch(&repo).unwrap();
+        assert_eq!(read_head(&repo), "refs/heads/main");
+    }
+
+    #[test]
+    fn set_head_prefers_master_when_no_main() {
+        if !git_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let repo = seed_repo_with_branches(dir.path(), "m", &["develop", "master"]);
+        run_git(&repo, &["symbolic-ref", "HEAD", "refs/heads/__phantom__"]);
+        set_head_to_default_branch(&repo).unwrap();
+        assert_eq!(read_head(&repo), "refs/heads/master");
+    }
+
+    #[test]
+    fn set_head_picks_first_branch_when_no_main_or_master() {
+        if !git_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let repo = seed_repo_with_branches(dir.path(), "f", &["zeta", "alpha"]);
+        run_git(&repo, &["symbolic-ref", "HEAD", "refs/heads/__phantom__"]);
+        set_head_to_default_branch(&repo).unwrap();
+        // for-each-ref sorts by name → alphabetically first.
+        assert_eq!(read_head(&repo), "refs/heads/alpha");
+    }
+
+    #[test]
+    fn set_head_is_noop_on_empty_bare_repo() {
+        if !git_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("empty.git");
+        ensure_bare_repo(&repo).unwrap();
+        let before = read_head(&repo);
+        set_head_to_default_branch(&repo).unwrap(); // must not error
+        assert_eq!(read_head(&repo), before); // and must not change HEAD
+    }
+
+    #[test]
+    fn apply_bundle_reconciles_phantom_head() {
+        if !git_available() {
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let src = seed_repo(dir.path(), "src"); // refs/heads/main only
+        let bundle = dir.path().join("b.bundle");
+        build_bundle(&src, &bundle).unwrap();
+        let dst = dir.path().join("dst.git");
+        ensure_bare_repo(&dst).unwrap();
+        run_git(&dst, &["symbolic-ref", "HEAD", "refs/heads/__phantom__"]);
+        apply_bundle(&dst, &bundle).unwrap();
+        assert_eq!(read_head(&dst), "refs/heads/main");
     }
 }

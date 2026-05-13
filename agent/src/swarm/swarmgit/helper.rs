@@ -310,6 +310,23 @@ async fn handle_client(
             return Err(e);
         }
     }
+    if matches!(service, Service::UploadPack) {
+        // Before serving a clone/fetch, make sure the bare repo's
+        // `HEAD` symref names a branch that exists — `git init --bare`
+        // leaves it at `master`, so a repo whose only branch is `main`
+        // would advertise `symref=HEAD:refs/heads/master` and the
+        // client's `git clone` would warn and skip the checkout. No-op
+        // when `HEAD` is already valid; this also self-heals repos
+        // created before this shipped. (ReceivePack reconciles after
+        // the push instead — see the post-receive block below.)
+        if let Err(e) = fan_out::set_head_to_default_branch(&repo) {
+            tracing::warn!(
+                project_id = %super::project_state::hex_id(&project_id),
+                error = %e,
+                "swarmgit helper: could not reconcile bare repo HEAD before upload-pack; continuing"
+            );
+        }
+    }
 
     // Hand off via piped stdio: spawn git with pipe stdin/stdout and
     // shovel bytes between the unix socket and the child's pipes
@@ -557,6 +574,19 @@ async fn handle_client(
             };
             if before == after {
                 return Ok(());
+            }
+            // Refs advanced — repoint `HEAD` at a live branch. The
+            // first push into a freshly-`git init --bare`d repo lands
+            // the branches but leaves `HEAD` at `master`, so a clone
+            // from this envoy would skip the checkout. No-op when
+            // `HEAD` is already valid. Non-fatal: the push succeeded
+            // regardless.
+            if let Err(e) = fan_out::set_head_to_default_branch(&repo) {
+                tracing::warn!(
+                    project_id = %super::project_state::hex_id(&project_id),
+                    error = %e,
+                    "swarmgit helper: could not reconcile bare repo HEAD after push; continuing"
+                );
             }
             let tls_for_fanout = match tls.as_ref() {
                 Some(t) => t.clone(),
