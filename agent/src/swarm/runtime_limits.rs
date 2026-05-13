@@ -8,7 +8,7 @@
 //! here so subsystem-level enforcement sites can read the operator's
 //! current intent without re-plumbing the response through every
 //! call path. This is the agent-side end of the
-//! `server.yaml swarm.{filecast,lockbox,gitback,longdrawer}.*` →
+//! `server.yaml swarm.{filecast,lockbox,gitback,curator,longdrawer}.*` →
 //! `CheckInResponse.swarm_runtime_limits` → enforcement-point flow.
 //!
 //! ### Design
@@ -44,6 +44,7 @@ pub struct SwarmLimits {
     pub gitback_max_bundle_bytes: Option<u64>,
     pub gitback_envelope_retention_secs: Option<u64>,
     pub longdrawer_max_file_bytes: Option<u64>,
+    pub curator_max_bytes: Option<u64>,
 }
 
 fn cell() -> &'static RwLock<SwarmLimits> {
@@ -63,6 +64,7 @@ pub fn update_from_proto(msg: &crate::proto::SwarmRuntimeLimits) {
         gitback_max_bundle_bytes: opt_nonzero_u64(msg.gitback_max_bundle_bytes),
         gitback_envelope_retention_secs: opt_nonzero_u64(msg.gitback_envelope_retention_secs),
         longdrawer_max_file_bytes: opt_nonzero_u64(msg.longdrawer_max_file_bytes),
+        curator_max_bytes: opt_nonzero_u64(msg.curator_max_bytes),
     };
     let mut w = cell().write().expect("swarm runtime limits cache poisoned");
     *w = new;
@@ -143,6 +145,18 @@ pub fn longdrawer_max_file_bytes() -> Option<u64> {
     current().longdrawer_max_file_bytes
 }
 
+/// Curator: per-blob (one `{name, version, os, arch}` artifact) size cap, in
+/// bytes. Falls back to [`crate::swarm::curator::DEFAULT_MAX_BYTES`] (2 GiB)
+/// when the server hasn't published a limit yet, or when the operator left
+/// `swarm.curator.max_bytes` at 0/unset (the proto→struct mapping turns that
+/// into `None`). Enforced on the publish path — the curator helper daemon
+/// rejects an artifact blob over this size. There is no uncapped mode.
+pub fn curator_max_bytes() -> u64 {
+    current()
+        .curator_max_bytes
+        .unwrap_or(crate::swarm::curator::DEFAULT_MAX_BYTES)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,6 +176,7 @@ mod tests {
             crate::swarm::gitback::DEFAULT_MAX_BUNDLE_SIZE
         );
         assert_eq!(longdrawer_max_file_bytes(), None);
+        assert_eq!(curator_max_bytes(), crate::swarm::curator::DEFAULT_MAX_BYTES);
     }
 
     #[test]
@@ -175,6 +190,7 @@ mod tests {
             gitback_max_bundle_bytes: 400,
             gitback_envelope_retention_secs: 500,
             longdrawer_max_file_bytes: 600,
+            curator_max_bytes: 700,
         };
         update_from_proto(&msg);
         assert_eq!(lockbox_max_file_bytes(), 200);
@@ -182,6 +198,7 @@ mod tests {
         assert_eq!(gitback_max_bundle_bytes(), 400);
         assert_eq!(gitback_envelope_retention_secs(), 500);
         assert_eq!(longdrawer_max_file_bytes(), Some(600));
+        assert_eq!(curator_max_bytes(), 700);
         assert_eq!(current().filecast_max_size_bytes, Some(100));
         assert_eq!(current().filecast_default_retention.as_deref(), Some("30d"));
     }
@@ -197,6 +214,7 @@ mod tests {
             gitback_max_bundle_bytes: 0,
             gitback_envelope_retention_secs: 0,
             longdrawer_max_file_bytes: 0,
+            curator_max_bytes: 0,
         };
         update_from_proto(&msg);
         // Zero / empty server values become None internally — read
@@ -206,5 +224,6 @@ mod tests {
             gitback_max_bundle_bytes(),
             crate::swarm::gitback::DEFAULT_MAX_BUNDLE_SIZE
         );
+        assert_eq!(curator_max_bytes(), crate::swarm::curator::DEFAULT_MAX_BYTES);
     }
 }

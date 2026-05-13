@@ -6,9 +6,9 @@
 //! The user executor writes
 //! `/var/lib/vigo/usercrate-policy/<username>.json` at every reconcile
 //! pass that touches the user (present state). The file mirrors the
-//! authorization flags from the user resource — `puddle: bool` and
-//! `gitback: bool` — so user-mode CLI verbs can decide whether
-//! to proceed without contacting the server.
+//! authorization flags from the user resource — `puddle: bool`,
+//! `gitback: bool`, and `curator: bool` (ADR-024) — so user-mode CLI
+//! verbs can decide whether to proceed without contacting the server.
 //!
 //! Daemon-canonical + user-readable. Root writes (mode 0644); CLI
 //! verbs read. Same shape as the existing peers.json / tombstones.json
@@ -16,8 +16,8 @@
 //!
 //! Refusal on missing cache is intentional. It surfaces the
 //! "user provisioned via raw useradd, never enrolled in a Vigo
-//! usercrate" case rather than silently allowing puddle / gitback
-//! verbs that the operator didn't authorize. The error message
+//! usercrate" case rather than silently allowing puddle / gitback /
+//! curator verbs that the operator didn't authorize. The error message
 //! points at the cache path so the operator knows which file the
 //! agent is looking for.
 
@@ -31,16 +31,20 @@ use serde::{Deserialize, Serialize};
 /// land here; tests pass a tempdir to the `_at` variants below.
 pub const POLICY_DIR: &str = "/var/lib/vigo/usercrate-policy";
 
-/// Authorization flags resolved from the user's usercrate. Both
+/// Authorization flags resolved from the user's usercrate. All
 /// default to `false` — the user can use a swarm subsystem only when
 /// the matching flag is explicitly set in the usercrate AND the
-/// envoy-level pattern list matches this host.
+/// envoy-level pattern list matches this host. `curator` is the
+/// heaviest grant (publish to the fleet's registry, fleet-readable by
+/// default — ADR-024) and additionally requires an unlocked puddle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct UserPolicy {
     #[serde(default)]
     pub puddle: bool,
     #[serde(default)]
     pub gitback: bool,
+    #[serde(default)]
+    pub curator: bool,
 }
 
 /// Path to the on-disk policy file for `username` under `dir`.
@@ -196,6 +200,33 @@ pub fn require_gitback(username: &str) -> Result<()> {
     Ok(())
 }
 
+/// Refuse early in a CLI verb if the invoking user lacks the curator
+/// authorization flag, OR if the envoy itself is denied by the
+/// `swarm.curator.enabled` pattern list. See [`require_puddle`] for the
+/// two-layer rationale. Note: `curator: true` does not by itself let
+/// the user publish — the helper daemon also requires an unlocked
+/// puddle (the signing key) per ADR-024; this check is the cheap
+/// up-front "is this user/envoy even allowed to try" gate.
+pub fn require_curator(username: &str) -> Result<()> {
+    let policy = read_user_policy(username)?;
+    if !policy.curator {
+        bail!(
+            "user {username} is not authorized to use curator on this envoy. \
+             Set `curator: true` on the user resource in the usercrate, \
+             publish the config, and wait for the agent to reconcile."
+        );
+    }
+    if !envoy_layer_allows("curator") {
+        bail!(
+            "user {username} is authorized but this envoy is not in the \
+             curator pattern list. Add this hostname to \
+             `swarm.curator.enabled` in server.yaml, publish, and wait \
+             for the agent to check in."
+        );
+    }
+    Ok(())
+}
+
 /// Read `state.json` and report whether the named subsystem gate is on.
 /// A missing or unreadable state.json returns `true` (skip the envoy
 /// check) — the file is written by the daemon after every accepted
@@ -218,6 +249,7 @@ fn envoy_layer_allows_at(path: &std::path::Path, subsystem: &str) -> bool {
     match subsystem {
         "puddle" => state.gates.puddle,
         "gitback" => state.gates.gitback,
+        "curator" => state.gates.curator,
         _ => true,
     }
 }
@@ -228,7 +260,7 @@ mod tests {
 
     #[test]
     fn user_policy_round_trips_through_json() {
-        let p = UserPolicy { puddle: true, gitback: false };
+        let p = UserPolicy { puddle: true, gitback: false, curator: true };
         let json = serde_json::to_string(&p).unwrap();
         let q: UserPolicy = serde_json::from_str(&json).unwrap();
         assert_eq!(p, q);
@@ -237,10 +269,17 @@ mod tests {
     #[test]
     fn missing_fields_default_to_false() {
         // A future field added to UserPolicy must not break existing
-        // on-disk files. Empty {} parses as both-false.
+        // on-disk files. Empty {} parses as all-false. (This also
+        // covers the pre-curator on-disk file an upgraded agent would
+        // read for one reconcile cycle.)
         let p: UserPolicy = serde_json::from_str("{}").unwrap();
         assert!(!p.puddle);
         assert!(!p.gitback);
+        assert!(!p.curator);
+        // A pre-curator file with the two old keys present must parse
+        // and leave curator at its safe default (false / deny).
+        let old: UserPolicy = serde_json::from_str(r#"{"puddle": true, "gitback": true}"#).unwrap();
+        assert!(old.puddle && old.gitback && !old.curator);
     }
 
     #[test]
@@ -248,11 +287,12 @@ mod tests {
         // Tolerate extra keys an older agent might encounter from a
         // newer user-executor write.
         let p: UserPolicy = serde_json::from_str(
-            r#"{"puddle": true, "gitback": false, "future_thing": 42}"#,
+            r#"{"puddle": true, "gitback": false, "curator": true, "future_thing": 42}"#,
         )
         .unwrap();
         assert!(p.puddle);
         assert!(!p.gitback);
+        assert!(p.curator);
     }
 
     #[test]
@@ -282,6 +322,7 @@ mod tests {
         let path = dir.path().join("nope.json");
         assert!(envoy_layer_allows_at(&path, "puddle"));
         assert!(envoy_layer_allows_at(&path, "gitback"));
+        assert!(envoy_layer_allows_at(&path, "curator"));
         // Unknown subsystem name — defensive default-true.
         assert!(envoy_layer_allows_at(&path, "payload"));
     }
@@ -290,8 +331,9 @@ mod tests {
     fn envoy_layer_respects_explicit_state_json() {
         let dir = tempfile::TempDir::new().unwrap();
         let path = dir.path().join("state.json");
-        crate::swarm::state_mirror::write(&path, "0.41.3", 1, br#"{"swarm_puddle_enabled": false}"#).unwrap();
+        crate::swarm::state_mirror::write(&path, "0.41.3", 1, br#"{"swarm_puddle_enabled": false, "swarm_curator_enabled": false}"#).unwrap();
         assert!(!envoy_layer_allows_at(&path, "puddle"));
+        assert!(!envoy_layer_allows_at(&path, "curator"));
         // Defaults to true for keys not in vars_json.
         assert!(envoy_layer_allows_at(&path, "gitback"));
     }

@@ -12,10 +12,12 @@
 //! — versions × platforms + a mutable tag map — re-signed last-write-wins on every
 //! mutation; the signature is the "writable only by puddle members" enforcement.
 //!
-//! Slice 1 (this commit): the catalog data model + signed-entry envelope
-//! ([`catalog`]). The `swarm_curator` trait collector, the `curatormesh`
-//! aggregator, the helper-daemon publish path, the server REST surface, the CLI,
-//! and the UI land in later slices (see ADR-024).
+//! Slice 1: the catalog data model + signed-entry envelope ([`catalog`]) + the
+//! `swarm_curator` trait collector + the `curatormesh` aggregator. Slice 2: the
+//! `swarm.curator.{enabled,max_bytes}` config + usercrate `curator:` flag +
+//! [`SwarmRuntimeLimits::curator_max_bytes`][crate::proto::SwarmRuntimeLimits]
+//! plumbing (this commit); the helper-daemon publish path follows in slice 2b.
+//! The server REST surface, the CLI, and the UI land in slices 3-5 (see ADR-024).
 //!
 //! `catalog.rs` reuses [`crate::swarm::gitback::envelopes::DelegationEnvelope`]
 //! (the ADR-019 rekey-bridge envelope) — the same cross-subsystem reuse
@@ -25,3 +27,11 @@
 //! all import it from `anchor::`.
 
 pub mod catalog;
+
+/// Per-blob (one `{name, version, os, arch}` artifact) size cap when the
+/// operator hasn't published `swarm.curator.max_bytes` yet, or left it at
+/// 0/unset — 2 GiB, matching the post-0.49.3 gitback bundle default
+/// ([`crate::swarm::gitback::DEFAULT_MAX_BUNDLE_SIZE`]). Read at the publish
+/// gate via [`crate::swarm::runtime_limits::curator_max_bytes`]; raise the
+/// server-side knob for large container images.
+pub const DEFAULT_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;

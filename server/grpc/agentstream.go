@@ -579,6 +579,9 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Gitback.Enabled) {
 		gates["swarm_gitback_enabled"] = false
 	}
+	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Curator.Enabled) {
+		gates["swarm_curator_enabled"] = false
+	}
 	if !swarmAllowed || !config.HostMatchesPatterns(envoy.Hostname, s.swarmCfg.Longdrawer.Enabled) {
 		gates["swarm_longdrawer_enabled"] = false
 	}
@@ -764,6 +767,7 @@ func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
 	if sc.Filecast.MaxSizeBytes == 0 && sc.Filecast.DefaultRetention == "" &&
 		sc.Lockbox.MaxFileBytes == 0 && sc.Lockbox.EnvelopeRetention == "" &&
 		sc.Gitback.MaxBundleBytes == 0 && sc.Gitback.EnvelopeRetention == "" &&
+		sc.Curator.MaxBytes == 0 &&
 		sc.Longdrawer.MaxFileBytes == 0 {
 		return nil
 	}
@@ -775,6 +779,7 @@ func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
 		GitbackMaxBundleBytes:        uint64(maxNonNeg(sc.Gitback.MaxBundleBytes)),
 		GitbackEnvelopeRetentionSecs: durationSecsOrZero(sc.Gitback.EnvelopeRetention),
 		LongdrawerMaxFileBytes:        uint64(maxNonNeg(sc.Longdrawer.MaxFileBytes)),
+		CuratorMaxBytes:              uint64(maxNonNeg(sc.Curator.MaxBytes)),
 	}
 }
 

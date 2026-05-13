@@ -46,17 +46,29 @@ pub struct AgentSwarmState {
     pub gates: GateState,
 }
 
-/// Resolved gate booleans for the four content subsystems plus the
+/// Resolved gate booleans for the five content subsystems plus the
 /// substrate-level kill switch, plus `hostdox`. `puddle` is the
 /// single-source-of-truth for lockbox (ADR-020) — there is no
 /// separate lockbox field. `hostdox` is the one default-OFF gate
 /// (editing `/etc/hosts` is an operator decision — see
 /// [`super::gates::hostdox_active`]).
+///
+/// `curator` (ADR-024) is a fail-open content gate like the rest; it
+/// is intentionally **not** `#[serde(default)]`, so a pre-curator
+/// `state.json` written by an older daemon (with a `gates` object that
+/// lacks the key) fails to decode → [`read`] errors → the CLI's
+/// `envoy_layer_allows` fails open — the correct behavior for the one
+/// reconcile cycle between a strict-version upgrade and the first
+/// check-in that rewrites this file in the new shape. (`hostdox` can
+/// be `#[serde(default)]` because its `false` default matches its
+/// fail-closed semantics; a `false` curator default would be a
+/// wrong-direction refusal.)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GateState {
     pub swarm: bool,
     pub payload: bool,
     pub gitback: bool,
+    pub curator: bool,
     pub longdrawer: bool,
     pub puddle: bool,
     #[serde(default)]
@@ -74,6 +86,7 @@ impl Default for GateState {
             swarm: true,
             payload: true,
             gitback: true,
+            curator: true,
             longdrawer: true,
             puddle: true,
             hostdox: false,
@@ -147,6 +160,7 @@ fn decode_gates(vars_json: &[u8]) -> GateState {
         swarm: gate_truthy(val.get("swarm_enabled")),
         payload: gate_truthy(val.get("swarm_filecast_enabled")),
         gitback: gate_truthy(val.get("swarm_gitback_enabled")),
+        curator: gate_truthy(val.get("swarm_curator_enabled")),
         longdrawer: gate_truthy(val.get("swarm_longdrawer_enabled")),
         puddle: gate_truthy(val.get("swarm_puddle_enabled")),
         hostdox: gate_explicitly_true(val.get("swarm_hostdox_enabled")),
@@ -208,25 +222,26 @@ mod tests {
         // Defaults stay on for keys not in vars_json.
         assert!(got.gates.payload);
         assert!(got.gates.gitback);
+        assert!(got.gates.curator);
         assert!(got.gates.longdrawer);
     }
 
     #[test]
     fn empty_vars_json_means_all_on() {
         let g = decode_gates(b"");
-        assert!(g.swarm && g.payload && g.gitback && g.longdrawer && g.puddle);
+        assert!(g.swarm && g.payload && g.gitback && g.curator && g.longdrawer && g.puddle);
     }
 
     #[test]
     fn malformed_vars_json_means_all_on() {
         let g = decode_gates(b"not json");
-        assert!(g.swarm && g.payload && g.gitback && g.longdrawer && g.puddle);
+        assert!(g.swarm && g.payload && g.gitback && g.curator && g.longdrawer && g.puddle);
     }
 
     #[test]
     fn missing_keys_default_to_on() {
         let g = decode_gates(b"{}");
-        assert!(g.swarm && g.payload && g.gitback && g.longdrawer && g.puddle);
+        assert!(g.swarm && g.payload && g.gitback && g.curator && g.longdrawer && g.puddle);
     }
 
     #[test]
@@ -234,7 +249,11 @@ mod tests {
         let g = decode_gates(br#"{"swarm_filecast_enabled": false}"#);
         assert!(g.swarm);
         assert!(!g.payload);
-        assert!(g.gitback && g.longdrawer && g.puddle);
+        assert!(g.gitback && g.curator && g.longdrawer && g.puddle);
+        // Curator gates off the same way.
+        let g = decode_gates(br#"{"swarm_curator_enabled": false}"#);
+        assert!(g.swarm && g.payload && g.gitback && g.longdrawer && g.puddle);
+        assert!(!g.curator);
     }
 
     #[test]

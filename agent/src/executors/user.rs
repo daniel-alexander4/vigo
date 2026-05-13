@@ -411,9 +411,10 @@ impl UserExecutor {
         let new_policy = crate::swarm::policy::UserPolicy {
             puddle: parse_bool_flag(params.get("puddle")),
             gitback: parse_bool_flag(params.get("gitback")),
+            curator: parse_bool_flag(params.get("curator")),
         };
         // Read the previously-cached policy so we can detect flag
-        // flips. Missing-or-unreadable cache is treated as both-false:
+        // flips. Missing-or-unreadable cache is treated as all-false:
         // a fresh user gets no scrub on first reconcile, regardless
         // of which flags they currently carry.
         let old_policy = crate::swarm::policy::read_user_policy_at(policy_dir, username)
@@ -424,6 +425,12 @@ impl UserExecutor {
         }
         if old_policy.gitback && !new_policy.gitback {
             errors.extend(self.scrub_swarm_state(username, ScrubScope::Gitback));
+        }
+        // A `puddle: true→false` scrub already wiped ~/.vigo-curator/
+        // (see ScrubScope::PuddleAndLockbox); only run the curator-only
+        // scrub when puddle stays on but `curator:` was withdrawn.
+        if old_policy.curator && !new_policy.curator && new_policy.puddle {
+            errors.extend(self.scrub_swarm_state(username, ScrubScope::Curator));
         }
 
         if let Err(e) =
@@ -452,7 +459,7 @@ impl UserExecutor {
             None => {
                 errors.push(format!(
                     "swarm scrub: cannot resolve home for user {username} \
-                     (skipping puddle/gitback cleanup)"
+                     (skipping puddle/gitback/curator cleanup)"
                 ));
                 return errors;
             }
@@ -460,6 +467,7 @@ impl UserExecutor {
 
         let scrub_puddle = matches!(scope, ScrubScope::PuddleAndLockbox);
         let scrub_gitback = matches!(scope, ScrubScope::Gitback);
+        let scrub_curator = matches!(scope, ScrubScope::Curator);
 
         if scrub_puddle {
             // Queue lockbox LEAVE for live peers. Skip if the user
@@ -477,7 +485,7 @@ impl UserExecutor {
                     ));
                 }
             }
-            for dir in [".vigo-puddle", ".lockbox", "lockbox", ".vigo-gitback"] {
+            for dir in [".vigo-puddle", ".lockbox", "lockbox", ".vigo-gitback", ".vigo-curator"] {
                 let path = home.join(dir);
                 if path.exists() {
                     if let Err(e) = std::fs::remove_dir_all(&path) {
@@ -502,6 +510,18 @@ impl UserExecutor {
             }
         }
 
+        if scrub_curator {
+            let cm = home.join(".vigo-curator");
+            if cm.exists() {
+                if let Err(e) = std::fs::remove_dir_all(&cm) {
+                    errors.push(format!(
+                        "removing {} for {username}: {e}",
+                        cm.display()
+                    ));
+                }
+            }
+        }
+
         errors
     }
 }
@@ -509,16 +529,20 @@ impl UserExecutor {
 /// Scope of a swarm-state scrub triggered by a usercrate flag flip.
 ///
 /// `PuddleAndLockbox` covers the heavier removal: puddle keypair,
-/// lockbox identity + ciphertext, and the per-user gitback state
-/// dir (gitback projects are puddle-anchored — losing puddle means
-/// losing every project this user was a member of).
+/// lockbox identity + ciphertext, the per-user gitback state dir, and
+/// the per-user curator publish-state dir (gitback projects and
+/// curator artifacts are both puddle-anchored — losing puddle means
+/// losing them).
 ///
-/// `Gitback` covers only `~/.vigo-gitback/`. A user who keeps
-/// `puddle: true` but loses `gitback: true` retains their lockbox
-/// state and puddle identity.
+/// `Gitback` covers only `~/.vigo-gitback/`; `Curator` covers only
+/// `~/.vigo-curator/`. A user who keeps `puddle: true` but loses one
+/// of `gitback: true` / `curator: true` retains everything else
+/// (already-published artifacts/projects stay — losing a flag doesn't
+/// recall them, per ADR-024).
 enum ScrubScope {
     PuddleAndLockbox,
     Gitback,
+    Curator,
 }
 
 /// Parse a boolean usercrate flag. Accepts `"true"` / `"false"`;
@@ -2194,6 +2218,7 @@ mod tests {
                 ("home", "/home/dan"),
                 ("puddle", "true"),
                 ("gitback", "false"),
+                ("curator", "true"),
             ]),
             false,
         );
@@ -2201,6 +2226,7 @@ mod tests {
         let cached = crate::swarm::policy::read_user_policy_at(&policy_dir, "dan").unwrap();
         assert!(cached.puddle);
         assert!(!cached.gitback);
+        assert!(cached.curator);
     }
 
     #[test]
@@ -2211,7 +2237,7 @@ mod tests {
             ok_output("root:x:0:\ndan:x:1001:\n"),
         ]);
         let (exec, policy_dir) = user_exec_with_policy_dir(mock, dir.path());
-        // No `puddle:` or `gitback:` keys → both default false.
+        // No `puddle:` / `gitback:` / `curator:` keys → all default false.
         exec.execute(
             &make_params(&[
                 ("username", "dan"),
@@ -2223,6 +2249,7 @@ mod tests {
         let cached = crate::swarm::policy::read_user_policy_at(&policy_dir, "dan").unwrap();
         assert!(!cached.puddle);
         assert!(!cached.gitback);
+        assert!(!cached.curator);
     }
 
     #[test]
@@ -2233,7 +2260,7 @@ mod tests {
         crate::swarm::policy::write_user_policy_at(
             &policy_dir,
             "ghost",
-            &crate::swarm::policy::UserPolicy { puddle: true, gitback: true },
+            &crate::swarm::policy::UserPolicy { puddle: true, gitback: true, curator: true },
         )
         .unwrap();
         assert!(policy_dir.join("ghost.json").exists());

@@ -138,6 +138,7 @@ type SwarmSection struct {
 	Puddle              SwarmPuddleSection  `yaml:"puddle" doc:"Puddle (per-user identity) authorization. Lockbox derives ITS AUTHORIZATION from this section per ADR-020 — only operational tuning lives in lockbox below." long:"Hostname pattern list controlling which envoys can host puddle identity material. Lockbox's authorization (allow/deny) follows this list — a host allowed here can hold lockbox ciphertext for its locally-enrolled puddle members; a host denied here cannot use lockbox at all."`
 	Lockbox             SwarmLockboxSection `yaml:"lockbox" doc:"Lockbox operational tuning (size + envelope retention). Authorization derives from puddle above; this section is size/retention only." long:"Per-file ciphertext size cap and envelope (LEAVE/RESURRECT/TOMBSTONE) retention window. Authorization gating still derives from swarm.puddle.enabled per ADR-020 — there is no enabled field here."`
 	Gitback            GitbackSection     `yaml:"gitback" doc:"Gitback (git-over-swarm) authorization + bundle size + envelope retention." long:"Hostname pattern list controlling which envoys participate in gitback — both as publishers and as bundle holders. Plus per-bundle fan-out size cap and revoke/leave envelope retention."`
+	Curator         CuratorSection     `yaml:"curator" doc:"Curator (P2P artifact registry, ADR-024) authorization + per-blob size cap." long:"Hostname pattern list controlling which envoys participate in curator — both as publishers and as artifact-blob holders. Plus a per-blob (one {name,version,os,arch} artifact) size cap on the publish path. Publishing also requires a usercrate 'curator: true' flag and an unlocked puddle (a heavier grant than gitback)."`
 	Hostdox        bool                `yaml:"hostdox" doc:"When true, each swarm-enabled agent maintains a delimited block in /etc/hosts mapping every announced peer hostname to its LAN IP — additive name resolution for fleets whose DNS doesn't own the local domain. Default false (opt-in)." default:"false" example:"true to let agents edit /etc/hosts; false (or omit) to leave it alone"`
 }
 
@@ -160,6 +161,18 @@ type GitbackSection struct {
 	Enabled           []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run gitback — publisher and receiver." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
 	MaxBundleBytes    int64    `yaml:"max_bundle_bytes" doc:"Per-bundle (git bundle --all) size cap, in bytes, enforced on every gitback transfer path. 0 / unset = the 2 GiB compile-time default. There is no uncapped mode." default:"2147483648" example:"2147483648 (2 GiB), 5368709120 (5 GiB), 536870912 (512 MiB)"`
 	EnvelopeRetention string   `yaml:"envelope_retention" doc:"Retention window for revoke/leave gossip envelopes before they are reaped. Empty = compile-time default (90d)." default:"90d" example:"90d, 30d, 365d"`
+}
+
+// CuratorSection authorizes the curator subsystem per envoy and caps
+// per-blob artifact size (ADR-024). `Enabled` gates which envoys
+// participate — as publishers and as artifact-blob holders;
+// `MaxBytes` caps an individual artifact blob (one {name,version,os,
+// arch} build) on the publish path. Curator is a heavier grant than
+// gitback: publishing also requires a usercrate `curator: true` flag
+// and an unlocked puddle.
+type CuratorSection struct {
+	Enabled  []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run curator — publishers and artifact-blob holders." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
+	MaxBytes int64    `yaml:"max_bytes" doc:"Per-blob (one {name,version,os,arch} artifact) size cap, in bytes, enforced on the publish path. 0 / unset = the 2 GiB compile-time default. There is no uncapped mode." default:"2147483648" example:"2147483648 (2 GiB), 5368709120 (5 GiB), 21474836480 (20 GiB, large container images)"`
 }
 
 // LongdrawerSection authorizes the longdrawer subsystem per envoy

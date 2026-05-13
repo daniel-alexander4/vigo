@@ -520,6 +520,7 @@ type SwarmRuntimeLimits struct {
 	GitbackMaxBundleBytes        uint64                 `protobuf:"varint,5,opt,name=gitback_max_bundle_bytes,json=gitbackMaxBundleBytes,proto3" json:"gitback_max_bundle_bytes,omitempty"`                      // per-bundle fan-out cap; 0 = no cap
 	GitbackEnvelopeRetentionSecs uint64                 `protobuf:"varint,6,opt,name=gitback_envelope_retention_secs,json=gitbackEnvelopeRetentionSecs,proto3" json:"gitback_envelope_retention_secs,omitempty"` // revoke/leave envelope retention before reap; 0 = compile-time default (90d)
 	LongdrawerMaxFileBytes       uint64                 `protobuf:"varint,7,opt,name=longdrawer_max_file_bytes,json=longdrawerMaxFileBytes,proto3" json:"longdrawer_max_file_bytes,omitempty"`                   // per-file size cap on LAN sync; 0 = no cap
+	CuratorMaxBytes              uint64                 `protobuf:"varint,8,opt,name=curator_max_bytes,json=curatorMaxBytes,proto3" json:"curator_max_bytes,omitempty"`                                          // per-blob (one {name,version,os,arch} artifact) cap on the curator publish path; 0 = compile-time default (2 GiB)
 	unknownFields                protoimpl.UnknownFields
 	sizeCache                    protoimpl.SizeCache
 }
@@ -599,6 +600,13 @@ func (x *SwarmRuntimeLimits) GetGitbackEnvelopeRetentionSecs() uint64 {
 func (x *SwarmRuntimeLimits) GetLongdrawerMaxFileBytes() uint64 {
 	if x != nil {
 		return x.LongdrawerMaxFileBytes
+	}
+	return 0
+}
+
+func (x *SwarmRuntimeLimits) GetCuratorMaxBytes() uint64 {
+	if x != nil {
+		return x.CuratorMaxBytes
 	}
 	return 0
 }
@@ -7553,7 +7561,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12F\n" +
 	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\x12M\n" +
-	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimitsJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xc0\x03\n" +
+	"\x14swarm_runtime_limits\x18\x17 \x01(\v2\x1b.vigo.v1.SwarmRuntimeLimitsR\x12swarmRuntimeLimitsJ\x04\b\x15\x10\x16J\x04\b\x16\x10\x17R\x0erejected_seedsR\fcairn_claims\"\xec\x03\n" +
 	"\x12SwarmRuntimeLimits\x125\n" +
 	"\x17filecast_max_size_bytes\x18\x01 \x01(\x04R\x14filecastMaxSizeBytes\x12<\n" +
 	"\x1afilecast_default_retention\x18\x02 \x01(\tR\x18filecastDefaultRetention\x123\n" +
@@ -7561,7 +7569,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\x1flockbox_envelope_retention_secs\x18\x04 \x01(\x04R\x1clockboxEnvelopeRetentionSecs\x127\n" +
 	"\x18gitback_max_bundle_bytes\x18\x05 \x01(\x04R\x15gitbackMaxBundleBytes\x12E\n" +
 	"\x1fgitback_envelope_retention_secs\x18\x06 \x01(\x04R\x1cgitbackEnvelopeRetentionSecs\x129\n" +
-	"\x19longdrawer_max_file_bytes\x18\a \x01(\x04R\x16longdrawerMaxFileBytes\"\xff\x01\n" +
+	"\x19longdrawer_max_file_bytes\x18\a \x01(\x04R\x16longdrawerMaxFileBytes\x12*\n" +
+	"\x11curator_max_bytes\x18\b \x01(\x04R\x0fcuratorMaxBytes\"\xff\x01\n" +
 	"\x12SwarmManifestEntry\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x16\n" +
