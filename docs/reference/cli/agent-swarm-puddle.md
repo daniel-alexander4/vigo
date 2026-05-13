@@ -28,7 +28,7 @@ Most verbs run as the invoking user against `~/.vigo-puddle/`. The one exception
 | `leave [--yes]` | (0.39.15) Leave the puddle on this envoy. Signs a lockbox LEAVE envelope (queued via `~/.lockbox/leave.pending` for the daemon to fan out to live peers within ~30s), locks the puddle session helper, then scrubs `~/.vigo-puddle/`, `~/.lockbox/`, `~/lockbox/`, and `~/.vigo-swarmgit/`. The local scrub is synchronous; peer notification is asynchronous. Refuses without `--yes`. To re-join later, pair from a current puddle member and `puddle join` on this envoy. Swarmgit bare repos under `/var/lib/vigo/swarm/swarmgit/` are root-owned and survive a user-context leave; admin-side cleanup is a separate path. |
 | `rekey-pair [--close] [--window-secs <N>] [--force-orphan-projects]` | (ADR-018 / ADR-019) On a current puddle member, rotate the puddle keypair and issue a 5-minute claim code so surviving envoys can migrate. Re-prompts for the puddle passphrase. Runs an ADR-019 pre-flight check that aborts the rotation if any founded swarmgit project's delegation chain has hit `DELEGATION_MAX_LEN` (5). Atomic-renames `identity.{wrapped,salt,pub}` to `.pre-rekey-<ts>` backups, runs lockbox identity-rewrap, clears stale TOFU pins on local lockbox state, runs the swarmgit sync (signs + appends a delegation envelope under OLD for every founded project, rewrites `project.json::members[]` OLD → NEW), restarts the session helper, records a 24h graceful retirement entry in `retired_puddles.json`. Re-running inside the active window only reissues a fresh claim code — keypair and on-disk state untouched. `--close` ends the active window; `--window-secs <N>` overrides the 24h default. `--force-orphan-projects` proceeds even if a founded project is at the delegation cap; affected projects get `project.json::tombstoned_at` set on disk (helper daemon refuses git operations on them, CLI verbs skip them) — operator clears via `swarmgit project re-found <handle>` or drops via `project leave`. |
 | `rekey --from <host> [--force-orphan-projects]` | **Requires sudo.** (ADR-018 / ADR-019) On a surviving envoy, claim the new wrapped puddle blob from `<host>`, migrate this envoy onto it. Asks for the puddle passphrase (used both to unwrap the OLD local key for lockbox rewrap and to unwrap the NEW wrapped blob the founder issued under the same passphrase). Same ADR-019 pre-flight check as `rekey-pair`. Atomic-renames identity files, calls lockbox identity-rewrap, clears local TOFU pins, signs + appends its own delegation envelope under OLD for every founded project (each envoy maintains its own self-consistent delegation chain), rewrites local member entries OLD → NEW, locks the session helper. Refuses if the unwrapped blob carries the same puddle pubkey already held locally. `--force-orphan-projects` matches the founder-side flag for symmetry. |
-| `unlock` | Read the wrapped blob, prompt for the passphrase, unwrap, hand the key to the session helper. Helper holds the key in RAM until logout, lock, or idle timeout (60 min default). Once the helper is up, also auto-bootstraps lockbox (see below) and, per ADR-023, auto-adopts the swarmgit projects this puddle founded — mints founder-bootstrap state for every project the swarm is announcing where `sha256(local_puddle_pubkey ‖ handle) == project_id` and there's no local state yet, so `dr_scope: swarm-wide` repos reach this envoy without per-project commands. Both side effects are best-effort: a failure warns and the operator can fix it without re-unlocking. |
+| `unlock [--idle-mins <N>]` | Read the wrapped blob, prompt for the passphrase, unwrap, hand the key to the session helper. Helper holds the key in RAM until logout, lock, or idle timeout (24 h default; the timer resets on each use; `--idle-mins <N>` overrides it for this unlock, `N` ≥ 1). Once the helper is up, also auto-bootstraps lockbox (see below) and, per ADR-023, auto-adopts the swarmgit projects this puddle founded — mints founder-bootstrap state for every project the swarm is announcing where `sha256(local_puddle_pubkey ‖ handle) == project_id` and there's no local state yet, so `dr_scope: swarm-wide` repos reach this envoy without per-project commands. Both side effects are best-effort: a failure warns and the operator can fix it without re-unlocking. |
 | `lock` | Scrub the held key and stop the session helper. Idempotent (no-op if no helper is running). Auto-fires on parent-shell exit and idle timeout. |
 | `pubkey` | Print the local puddle pubkey in `ed25519:<hex>` form. Used for invites, capability lists, dictation between envoys. |
 | `members` | Show this envoy's view of puddle membership. Phase 1 surfaces only the local envoy's pubkey; cross-envoy gossip lands with ADR-015 / ADR-016. |
@@ -89,7 +89,7 @@ Run `vigo swarm puddle unlock` (no sudo) to activate the session on this envoy.
 ```
 [desktop] $ vigo swarm puddle unlock
 puddle passphrase: ****
-✓ Unlocked. Puddle session helper running until logout, lock, or 60 min idle.
+✓ Unlocked. Puddle session helper running until logout, lock, or 24h idle.
 
 Bootstrapping lockbox (puddle-mode wrap, no extra passphrase)...
 wrote /home/dan/.lockbox/identity.age (0600, wrapped)
@@ -184,7 +184,7 @@ Reissued rekey claim code (rotation already in progress)
               dan@air-gapped:/home/dan/.vigo-puddle/
 [air-gapped] $ vigo swarm puddle unlock
 puddle passphrase: ****
-✓ Unlocked. Puddle session helper running until logout, lock, or 60 min idle.
+✓ Unlocked. Puddle session helper running until logout, lock, or 24h idle.
 ```
 
 **Lockbox auto-bootstrap (ADR-016 slice 4).** When `unlock` runs and `~/.lockbox/identity.age` is absent, the verb auto-runs `lockbox puddle init` inline using the just-spawned session helper to derive the wrap key (no second passphrase prompt — the same puddle identity that protects puddle protects lockbox). Suppressed once lockbox is already enrolled. Failure to bootstrap is non-fatal: a warning surfaces and the operator can re-run `vigo swarm lockbox puddle init` manually. `join` does not auto-run lockbox (the session helper isn't running yet at that point); the next `unlock` after `join` handles it instead.
@@ -279,7 +279,7 @@ Failure status codes:
 
 ## Configuration
 
-No `~/.vigo-puddle/config.yaml` today. The session helper's idle timeout is hard-coded at 60 minutes. If a per-user override surfaces real demand, add a config the same shape lockbox uses; until then defaults are the contract.
+The session helper's idle timeout defaults to **24 hours**; override it per-unlock with `vigo swarm puddle unlock --idle-mins <N>` (`N` minutes, ≥ 1). The timer resets on every SIGN / STATUS request, so an actively-used puddle stays unlocked regardless. There's no `~/.vigo-puddle/config.yaml` persistent override today (lockbox's separate session helper has one via `idle_timeout_minutes`; the puddle helper doesn't) — the per-unlock flag is the knob.
 
 ## Limits
 

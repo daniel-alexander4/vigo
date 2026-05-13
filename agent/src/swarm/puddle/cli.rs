@@ -22,8 +22,6 @@ use crate::swarm::lockbox::crypt::{
     SIGN_PUBKEY_LEN,
 };
 
-const DEFAULT_IDLE_MINUTES: u32 = 60;
-
 pub fn run(args: Vec<String>) -> Result<()> {
     let verb = args.first().map(String::as_str).unwrap_or("");
     match verb {
@@ -86,7 +84,9 @@ REKEY (ADR-018, puddle keypair rotation):
     rekey --from <host>        Migrate this envoy to the founder's new puddle keypair.
 
 DAILY:
-    unlock                     Unwrap the key and start the session helper.
+    unlock [--idle-mins <N>]   Unwrap the key and start the session helper. The helper
+                               re-locks after <N> minutes idle (default 24h), on logout,
+                               or on `lock`. The idle timer resets on each use.
     lock                       Scrub the held key and stop the session helper.
 
 FRIENDLY NAMES (ADR-022):
@@ -167,7 +167,39 @@ fn cmd_pubkey(_args: &[String]) -> Result<()> {
 
 // ---------- unlock ----------
 
-fn cmd_unlock(_args: &[String]) -> Result<()> {
+/// Humanize an idle-timeout for the unlock confirmation: whole hours
+/// as `Nh`, otherwise `Nm`.
+fn fmt_idle(mins: u32) -> String {
+    if mins % 60 == 0 {
+        format!("{}h", mins / 60)
+    } else {
+        format!("{}m", mins)
+    }
+}
+
+fn cmd_unlock(args: &[String]) -> Result<()> {
+    let mut idle_mins = session::DEFAULT_IDLE_MINUTES;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--idle-mins" => {
+                i += 1;
+                let v: u32 = args
+                    .get(i)
+                    .context("--idle-mins requires a value in minutes")?
+                    .parse()
+                    .context("--idle-mins must be a positive integer (minutes)")?;
+                if v < 1 {
+                    bail!("--idle-mins must be ≥ 1");
+                }
+                idle_mins = v;
+            }
+            s if s.starts_with("--") => bail!("unknown flag: {}", s),
+            s => bail!("unexpected positional argument: {}", s),
+        }
+        i += 1;
+    }
+
     let home = user_home_for_invocation()?;
     if !super::is_initialized(&home) {
         bail!(
@@ -188,11 +220,11 @@ fn cmd_unlock(_args: &[String]) -> Result<()> {
 
     let parent_pid = resolve_shell_pid()
         .unwrap_or_else(|| unsafe { libc::getppid() } as u32);
-    session::spawn_helper(&key, parent_pid, DEFAULT_IDLE_MINUTES, &home)?;
+    session::spawn_helper(&key, parent_pid, idle_mins, &home)?;
 
     println!(
-        "✓ Unlocked. Puddle session helper running until logout, lock, or {} min idle.",
-        DEFAULT_IDLE_MINUTES
+        "✓ Unlocked. Puddle session helper running until logout, lock, or {} idle.",
+        fmt_idle(idle_mins)
     );
 
     // ADR-016 slice 4: now that the puddle session helper is
@@ -853,7 +885,7 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
     let parent_pid =
         resolve_shell_pid().unwrap_or_else(|| unsafe { libc::getppid() } as u32);
     if let Err(e) =
-        session::spawn_helper(&new_key, parent_pid, DEFAULT_IDLE_MINUTES, &home)
+        session::spawn_helper(&new_key, parent_pid, session::DEFAULT_IDLE_MINUTES, &home)
     {
         eprintln!("warning: failed to restart puddle session helper: {:#}", e);
         eprintln!(
@@ -2153,4 +2185,19 @@ fn build_mtls_agent(tls: &crate::update::TlsCerts) -> Result<ureq::Agent> {
 #[allow(dead_code)]
 fn _types_check_marker(_k: &SigningKey) {
     let _ = SIGN_PUBKEY_LEN;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fmt_idle_humanizes_minutes() {
+        assert_eq!(fmt_idle(session::DEFAULT_IDLE_MINUTES), "24h");
+        assert_eq!(fmt_idle(60), "1h");
+        assert_eq!(fmt_idle(120), "2h");
+        assert_eq!(fmt_idle(30), "30m");
+        assert_eq!(fmt_idle(90), "90m");
+        assert_eq!(fmt_idle(1), "1m");
+    }
 }

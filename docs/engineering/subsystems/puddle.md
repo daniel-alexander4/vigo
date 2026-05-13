@@ -121,7 +121,7 @@ Three independent shutdown triggers each scrub the key and exit:
 
 - explicit `LOCK` request,
 - the parent shell PID disappearing (10s polling watchdog),
-- idle timeout (default 60 minutes; resets on every SIGN / STATUS).
+- idle timeout (default 24 hours; resets on every SIGN / STATUS; override per-unlock with `vigo swarm puddle unlock --idle-mins <N>`).
 
 The key never lives on disk in plaintext. The CLI pipes the unwrapped key bytes through the helper's stdin and immediately closes the pipe; both ends go through `Zeroizing` to scrub any in-process leftover.
 

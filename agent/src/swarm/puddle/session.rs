@@ -13,7 +13,7 @@
 //!
 //! The unwrapped key is held in process memory only. Three
 //! independent shutdown triggers — explicit LOCK, parent-PID
-//! disappearance, idle timeout (default 60 m) — each scrub the key
+//! disappearance, idle timeout (default 24 h) — each scrub the key
 //! and exit. The same `~/.vigo-puddle/session.unlocked` sentinel
 //! lockbox uses for ADR-012 is mirrored here so sibling
 //! subsystems can ask "is this user's puddle identity unlocked?"
@@ -31,6 +31,17 @@ use base64::Engine;
 use ed25519_dalek::{Signer, SigningKey};
 use tokio::sync::mpsc;
 use zeroize::Zeroizing;
+
+/// Default idle-timeout for the puddle session helper, in minutes.
+/// The helper re-locks (scrubs the in-RAM key) after this much
+/// inactivity — the timer resets on every SIGN/STATUS/LOCK request,
+/// so an actively-used puddle stays unlocked. Independent of, and
+/// ANDed with, the parent-PID watchdog (re-locks on logout) and the
+/// explicit `vigo swarm puddle lock`. Overridable per-unlock via
+/// `vigo swarm puddle unlock --idle-mins <N>`. The single source of
+/// truth: `cli.rs` passes it into [`spawn_helper`], and
+/// [`daemon_main`] falls back to it when `--idle-mins` is absent.
+pub const DEFAULT_IDLE_MINUTES: u32 = 24 * 60;
 
 // ---------- runtime paths ----------
 
@@ -252,9 +263,12 @@ pub fn spawn_helper(
 
 pub async fn daemon_main(args: Vec<String>) -> Result<()> {
     let parent_pid = arg_value(&args, "--parent-pid")?.parse::<u32>()?;
-    let idle_mins = arg_value(&args, "--idle-mins")
-        .unwrap_or_else(|_| "60".into())
-        .parse::<u32>()?;
+    let idle_mins = match arg_value(&args, "--idle-mins") {
+        Ok(s) => s
+            .parse::<u32>()
+            .context("--idle-mins must be a positive integer (minutes)")?,
+        Err(_) => DEFAULT_IDLE_MINUTES,
+    };
     let home_arg = arg_value(&args, "--home").ok().map(PathBuf::from);
 
     // Read the 32-byte key from stdin.
@@ -333,7 +347,10 @@ async fn run_server(
     idle_mins: u32,
 ) -> Result<()> {
     let my_uid = unsafe { libc::getuid() };
-    let idle_total = Duration::from_secs(idle_mins as u64 * 60);
+    // Floor at 1 minute — a 0 here would make the idle timer fire
+    // immediately and the helper suicide on start. The CLI rejects
+    // `--idle-mins 0`; this guards the direct-daemon-invocation path.
+    let idle_total = Duration::from_secs(idle_mins.max(1) as u64 * 60);
     let (activity_tx, mut activity_rx) = mpsc::unbounded_channel::<()>();
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel::<()>(1);
 
