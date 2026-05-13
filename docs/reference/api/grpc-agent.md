@@ -202,6 +202,6 @@ When `policy_mode: true`, the server returns a `PolicyBundle` containing:
 - ED25519 signature covering content fields + Merkle root
 - `max_age_seconds` TTL for offline operation
 
-The agent evaluates templates and conditionals locally using its own traits, enabling offline convergence when the server is unreachable.
+The agent evaluates templates and conditionals locally using its own traits, enabling offline convergence when the server is unreachable. The bundle the agent caches for offline use is the *resolved* form — delta-transfer stub modules filled from the agent's module cache — not the raw wire bundle, so a cached bundle always carries full module content even when the last check-in was a delta.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

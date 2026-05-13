@@ -361,7 +361,10 @@ fn converge(
         }
     };
 
-    // Strip one-shot _secret_triggered flags.
+    // Strip one-shot _secret_triggered flags. (This cycle's runner still sees
+    // them via `modules` above, evaluated before the strip.) `update_state`
+    // applies the same merge_stubs + strip_secret_triggers to the bundle it
+    // persists as `accepted_bundle` — keep the two in sync.
     strip_secret_triggers(&mut bundle);
 
     if modules.is_empty() {
@@ -593,11 +596,24 @@ fn update_state(
     if rr.policy_version > 0 {
         ps.version = rr.policy_version;
     }
-    if let Some(ref bundle) = rr.policy_bundle {
-        if !bundle.custom_traits.is_empty() {
-            ps.custom_traits = bundle.custom_traits.clone();
+    if let Some(ref wire) = rr.policy_bundle {
+        if !wire.custom_traits.is_empty() {
+            ps.custom_traits = wire.custom_traits.clone();
         }
-        ps.accepted_bundle = Some(bundle.clone());
+        // `rr.policy_bundle` is the bundle exactly as the server transmitted it
+        // — that form is what `verify_bundle` checks the signature against, so
+        // it must not be altered before verification. But after the first
+        // check-in its modules are delta-transfer *stubs* (name + content hash,
+        // no resources); persisting it as-is leaves the cached bundle with zero
+        // resources, which is what offline `vigo run` and the no_change fast
+        // path re-use. Store the *resolved* form instead: stubs filled from the
+        // module cache (already updated with this cycle's resolved modules in
+        // `converge`), one-shot secret triggers stripped. Keep these two
+        // transforms in sync with `converge`'s `merge_stubs` + `strip_secret_triggers`.
+        let mut resolved = wire.clone();
+        resolved.modules = merge_stubs(resolved.modules, &ps.module_cache);
+        strip_secret_triggers(&mut resolved);
+        ps.accepted_bundle = Some(resolved);
         ps.accepted_at = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
@@ -2002,6 +2018,78 @@ mod tests {
 
         update_state(&mut ps, &rr, None);
         assert_eq!(ps.version, 10);
+    }
+
+    #[test]
+    fn update_state_fills_stub_modules_before_accepting() {
+        // Reproduces the offline-`vigo run` bug: after the first check-in the
+        // server sends modules as delta-transfer stubs (name + hash, no
+        // resources). `update_state` must persist the *resolved* bundle —
+        // stubs filled from the module cache — not the raw wire bundle, or the
+        // cached policy ends up with zero resources.
+        let mut ps = PolicyState::new();
+        // converge() warms the cache with this cycle's resolved modules.
+        ps.module_cache.update(&[PolicyModule {
+            name: "nginx".into(),
+            content_hash: "h1".into(),
+            resources: vec![crate::proto::PolicyResource {
+                name: "conf".into(),
+                r#type: "file".into(),
+                attributes: {
+                    let mut a = std::collections::HashMap::new();
+                    a.insert("_secret_triggered".into(), "true".into());
+                    a
+                },
+                ..Default::default()
+            }],
+            ..Default::default()
+        }]);
+
+        let rr = RunResult {
+            results: vec![],
+            interval: Duration::from_secs(300),
+            jitter_pct: 10,
+            no_change: false,
+            response_fingerprint: "fp".into(),
+            policy_version: 5,
+            // The wire bundle as transmitted: nginx is a stub.
+            policy_bundle: Some(PolicyBundle {
+                policy_version: 5,
+                modules: vec![PolicyModule {
+                    name: "nginx".into(),
+                    content_hash: "h1".into(),
+                    stub: true,
+                    resources: vec![],
+                    ..Default::default()
+                }],
+                ..Default::default()
+            }),
+            stream_requested: false,
+            tunnel_requested: false,
+            proxied_devices: vec![],
+            server_pubkey_pem: String::new(),
+            force_update: false,
+            swarm_manifest_entries: vec![],
+        };
+
+        update_state(&mut ps, &rr, None);
+
+        let accepted = ps.accepted_bundle.expect("bundle accepted");
+        assert_eq!(accepted.modules.len(), 1);
+        assert!(!accepted.modules[0].stub, "stub replaced with full module");
+        assert_eq!(
+            accepted.modules[0].resources.len(),
+            1,
+            "resources restored from the module cache"
+        );
+        assert!(
+            !accepted.modules[0].resources[0]
+                .attributes
+                .contains_key("_secret_triggered"),
+            "one-shot secret trigger stripped before persisting"
+        );
+        // The wire bundle itself is left untouched (verify_bundle relies on it).
+        assert!(rr.policy_bundle.as_ref().unwrap().modules[0].stub);
     }
 
     #[test]
