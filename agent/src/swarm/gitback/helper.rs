@@ -965,7 +965,12 @@ fn sanitize_err(s: &str) -> String {
 
 // ---------- peer credentials ----------
 
-fn peer_uid(stream: &UnixStream) -> Option<u32> {
+/// Resolve the connecting Unix user's UID via SO_PEERCRED (Linux),
+/// LOCAL_PEEREID (macOS), or `getpeereid(3)` (BSD). `pub(crate)` so the
+/// curator helper daemon ([`crate::swarm::curator::helper`]) reuses it
+/// rather than re-deriving the platform `#[cfg]` matrix; both move into
+/// the shared `anchor` layer when it's extracted (see `pending.md`).
+pub(crate) fn peer_uid(stream: &UnixStream) -> Option<u32> {
     #[cfg(target_os = "linux")]
     {
         use std::mem;

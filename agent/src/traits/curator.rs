@@ -66,7 +66,7 @@ pub(crate) fn collect_artifacts(passwd_body: &str) -> Vec<CatalogEntry> {
         if fields.len() < 7 {
             continue;
         }
-        let dot = Path::new(fields[5]).join(".vigo-curator");
+        let dot = crate::swarm::curator::state::user_curator_dir(Path::new(fields[5]));
         let dir_it = match std::fs::read_dir(&dot) {
             Ok(it) => it,
             Err(_) => continue,
@@ -76,7 +76,7 @@ pub(crate) fn collect_artifacts(passwd_body: &str) -> Vec<CatalogEntry> {
             if !p.is_dir() {
                 continue;
             }
-            let raw = match std::fs::read_to_string(p.join("entry.json")) {
+            let raw = match std::fs::read_to_string(p.join(crate::swarm::curator::state::ENTRY_FILE)) {
                 Ok(s) => s,
                 Err(_) => continue,
             };

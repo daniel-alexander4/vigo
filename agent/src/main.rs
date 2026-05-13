@@ -1304,6 +1304,23 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         gitback_gate.clone(),
     );
 
+    // Curator subsystem — P2P artifact registry (ADR-024). The helper
+    // daemon at /var/run/vigo/curator.sock takes a `curator: true`
+    // user's re-signed catalog entry + the blob, stages the blob into
+    // the shared swarm cache, records a Manifest entry with the
+    // artifact's target (so the filecast Manager distributes it), and
+    // drops the entry as a *.pending sentinel; the sentinel reactor
+    // promotes it to the canonical entry.json the `swarm_curator` trait
+    // collector reads. Always spawned; per-host authorization
+    // (`swarm.curator.enabled`) is enforced by `require_curator` at the
+    // CLI front-ends (slice 4), per-user by the usercrate `curator:`
+    // flag the daemon checks.
+    vigo::swarm::curator::spawn(
+        envoy_id.clone(),
+        cancel.clone(),
+        shared_manifest.clone(),
+    );
+
     // hostdox reactor — maintains the agent-managed `/etc/hosts`
     // block from the swarm host index when the operator has set
     // `swarm.hostdox: true`. Always spawned; each tick reads the
