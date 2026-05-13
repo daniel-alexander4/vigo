@@ -77,6 +77,12 @@ var publicPrefixes = []string{
 	"/api/v1/agent/",
 	"/api/v1/bootstrap/",
 	"/api/v1/swarm/filecast/blob/",
+	// Curator (ADR-024) blob relay — artifacts are fleet-readable (the
+	// publish side is gated, not the read side), so the relay is
+	// public-by-construction like the name map below; mTLS is the
+	// transport guard. The handler scopes it to curator artifact blobs
+	// only, so it isn't a back door to relay filecast/lockbox/gitback bytes.
+	"/api/v1/swarm/curator/blob/",
 }
 
 // publicPaths are exact URL paths that never require authentication.
@@ -103,6 +109,11 @@ var publicPaths = map[string]bool{
 	// below this is safe: the no-user request just runs the handler.
 	"/api/v1/fleet/pubkeys":      true,
 	"/api/v1/swarm/puddle/names": true,
+	// Curator (ADR-024) resolve — `<name>:<tag>` → blob coordinates +
+	// the signed catalog entry; fleet-readable (same rationale as the
+	// `blob/` prefix above). Registered bare (no per-route wrapper), so
+	// the no-user request just runs the handler.
+	"/api/v1/swarm/curator/resolve": true,
 	// /api/v1/config/reload is INTENTIONALLY NOT public. The route's own
 	// RequirePermission(PermConfigPublish) wrapper handles auth — adding
 	// it here bypassed the auth middleware entirely (no user injected

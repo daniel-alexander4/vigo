@@ -107,6 +107,13 @@ type ConvergenceHistory struct {
 	Offline    int64  `json:"offline"`
 }
 
+type CuratorBlockedArtifact struct {
+	ArtifactID string    `json:"artifact_id"`
+	BlockedAt  time.Time `json:"blocked_at"`
+	BlockedBy  string    `json:"blocked_by"`
+	Reason     string    `json:"reason"`
+}
+
 type CveCvssCache struct {
 	CveID      string    `json:"cve_id"`
 	CvssScore  float64   `json:"cvss_score"`

@@ -1221,15 +1221,21 @@ func run() error {
 			uiHandler.SetSwarm(peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex}, cfg.Swarm)
 			slog.Info("swarm enabled", "seed_dir", seedDir, "port", cfg.Swarm.Port)
 
-			// Curator (ADR-024): reconcile the fleet artifact catalog's
-			// per-platform blobs into the authoritative manifest store —
-			// so the existing filecast distribution machinery carries
-			// curator artifact bytes fleet-wide, including to cross-subnet
-			// and swarm-disabled envoys — and ship the catalog to agents
-			// on every check-in (cached so resolution survives a server
-			// outage). On a timer; publishes are ad hoc, so a few-minute
-			// distribution latency is fine for a registry.
-			go runCuratorFeed(ctx, curatormesh.NewAggregator(queries), manifestStore, fleetIndex, agentSvc, 5*time.Minute)
+			// Curator (ADR-024): the read side. The feed reactor reconciles
+			// the fleet artifact catalog's per-platform blobs into the
+			// authoritative manifest store — so the existing filecast
+			// distribution machinery carries curator artifact bytes
+			// fleet-wide, including to cross-subnet and swarm-disabled
+			// envoys — and ships the catalog to agents on every check-in
+			// (cached so resolution survives a server outage). The REST
+			// handler serves resolve/blob (public — artifacts are
+			// fleet-readable; the publish side is what's gated), the
+			// fleet.read operator views, and the admin block/unblock
+			// moderation backstop. Publishes are ad hoc, so the feed's
+			// few-minute distribution latency is fine for a registry.
+			curatorAgg := curatormesh.NewAggregator(queries)
+			go runCuratorFeed(ctx, curatorAgg, manifestStore, fleetIndex, agentSvc, 5*time.Minute)
+			api.NewCuratorHandler(curatorAgg, queries, fleetIndex, filepath.Join(filepath.Dir(seedDir), ".blobs")).RegisterRoutes(gwMux)
 
 			// Track pattern lists across reloads so we can audit operator
 			// edits to each subsystem's authorization. Patterns are what
