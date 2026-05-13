@@ -52,7 +52,7 @@ The agent's pull loop. Returns the modules to apply based on current state.
 | `traits_json` | bytes | Inline traits JSON (avoids separate ReportTraits call) |
 | `policy_version` | uint64 | Agent's cached policy version (0 = no cache) |
 | `policy_mode` | bool | True if agent supports policy bundles |
-| `cached_module_hashes` | map<string, string> | Module name to content hash for delta transfer |
+| `cached_module_hashes` | map<string, string> | Module name → content hash for delta transfer — only modules the agent holds *full content* for (a hash without cached content is never reported, so the server always sends that module's resources) |
 | `capabilities` | StreamCapabilities | Agent protocol capabilities (delta streaming) |
 | `agent_version` | string | Agent binary version (e.g. "0.18.8") |
 | `ip_address` | string | Agent's preferred outbound IP (refreshed each check-in) |

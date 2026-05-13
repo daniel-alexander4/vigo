@@ -9,6 +9,7 @@
 
 use crate::proto::PolicyModule;
 use std::collections::HashMap;
+use tracing::warn;
 
 struct CachedModule {
     hash: String,
@@ -51,13 +52,24 @@ impl ModuleCache {
 
     /// Update the cache with fully resolved modules. Evicts modules no longer
     /// in the bundle (role changed, etc.).
+    ///
+    /// Stub modules (`m.stub == true`, no resources) are **never cached** —
+    /// only modules carrying real content. Caching a stub would make the
+    /// agent report its hash in `cached_module_hashes` on the next check-in,
+    /// the server would reply with a stub again ("you already have it"),
+    /// `merge_stubs` would "fill" the stub from the cached stub, and the
+    /// envoy would be permanently stuck applying zero resources. Skipping
+    /// stubs here is the load-bearing line: an unfilled stub falls out of
+    /// the cache, so the next check-in omits its hash and the server sends
+    /// it full. (A module that reappears as a stub keeps its prior full
+    /// copy in the cache — the stub doesn't overwrite it.)
     pub fn update(&mut self, modules: &[PolicyModule]) {
         let mut active: std::collections::HashSet<&str> =
             std::collections::HashSet::with_capacity(modules.len());
 
         for m in modules {
             active.insert(&m.name);
-            if !m.content_hash.is_empty() {
+            if !m.content_hash.is_empty() && !m.stub {
                 self.modules.insert(
                     m.name.clone(),
                     CachedModule {
@@ -72,8 +84,12 @@ impl ModuleCache {
     }
 }
 
-/// Fill stub modules from the cache. Stubs whose hash doesn't match are
-/// returned as-is (empty resources, harmless).
+/// Fill stub modules from the cache. A stub the cache can't fill is returned
+/// as-is (empty resources) and warned about — the module has no content this
+/// cycle; `update` won't cache the stub, so the next check-in won't report
+/// its hash and the server re-sends it full, closing the gap within two
+/// cycles. (Only ever fills a stub from a *full* cached module — `update`
+/// never caches stubs, so `cache.get` can't return one.)
 pub fn merge_stubs(modules: Vec<PolicyModule>, cache: &ModuleCache) -> Vec<PolicyModule> {
     modules
         .into_iter()
@@ -82,6 +98,11 @@ pub fn merge_stubs(modules: Vec<PolicyModule>, cache: &ModuleCache) -> Vec<Polic
                 if let Some(cached) = cache.get(&m.name, &m.content_hash) {
                     return cached.clone();
                 }
+                warn!(
+                    module = %m.name,
+                    content_hash = %m.content_hash,
+                    "delta-transfer stub not in module cache — no content this cycle; next check-in re-fetches it full"
+                );
             }
             m
         })
@@ -174,5 +195,34 @@ mod tests {
 
         assert_eq!(merged.len(), 1);
         assert!(merged[0].stub); // stays as stub
+    }
+
+    #[test]
+    fn update_skips_stub_modules() {
+        // A stub carries a content_hash but no resources. Caching it would
+        // poison the delta-transfer loop (server sends stub → "fill" with
+        // cached stub → 0 resources, forever). It must not be cached.
+        let mut c = ModuleCache::new();
+        c.update(&[make_module("nginx", "abc", true)]);
+        assert!(c.hashes().is_none(), "stub must not appear in cached hashes");
+        assert!(c.get("nginx", "abc").is_none(), "stub must not be cached");
+    }
+
+    #[test]
+    fn update_keeps_prior_full_when_module_reappears_as_stub() {
+        // First cycle: full module, cached. Next cycle the server sends a
+        // stub for it (delta transfer). update() with that stub must leave
+        // the prior full copy in place so merge_stubs can still fill it.
+        let mut c = ModuleCache::new();
+        c.update(&[make_module("nginx", "abc", false)]);
+        c.update(&[make_module("nginx", "abc", true)]);
+
+        let cached = c.get("nginx", "abc").expect("prior full module retained");
+        assert!(!cached.stub);
+        assert!(!cached.resources.is_empty());
+
+        let merged = merge_stubs(vec![make_module("nginx", "abc", true)], &c);
+        assert!(!merged[0].stub, "stub filled from the retained full copy");
+        assert!(!merged[0].resources.is_empty());
     }
 }
