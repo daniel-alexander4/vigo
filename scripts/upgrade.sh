@@ -7,7 +7,7 @@ set -euo pipefail
 #
 # Usage:
 #   sudo scripts/upgrade.sh                  # pull latest image and restart
-#   sudo scripts/upgrade.sh --build          # rebuild everything from source
+#   sudo scripts/upgrade.sh --build          # full rebuild (Go + agent linux amd64+arm64 + image)
 #   sudo scripts/upgrade.sh --server         # rebuild Go (server+CLI) only, fast
 #   sudo scripts/upgrade.sh --agent          # rebuild Rust agent only
 #   sudo scripts/upgrade.sh --cross          # cross-compile agent (linux amd64+arm64)
@@ -45,6 +45,18 @@ export PATH="/usr/local/go/bin:$HOME/.cargo/bin:/home/dan/.cargo/bin:$PATH"
 export GOPATH="${GOPATH:-/home/dan/go}"
 
 cd "$DATA_DIR"
+
+# Extract an agent binary's compiled-in version from its embedded
+# VIGO-BUILD-VERSION marker (the #[used]/#[no_mangle] static in
+# agent/src/main.rs, section .vigo_version) — works for any target arch
+# without executing the binary. The server reads the .version sidecar at
+# startup to decide what version to advertise per arch; deriving the
+# sidecar from this guarantees it can never disagree with the binary it
+# labels (a disagreement = the agent's update guard aborts in a loop).
+# Empty string if the marker is missing (should never happen).
+agent_bin_version() {
+    grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' "$1" 2>/dev/null | head -1 | cut -d= -f2
+}
 
 # ---------------------------------------------------------------------------
 # Parse flags
@@ -89,6 +101,16 @@ for t in "${CROSS_TARGETS[@]+"${CROSS_TARGETS[@]}"}"; do
     expanded+=("$t")
 done
 CROSS_TARGETS=("${expanded[@]+"${expanded[@]}"}")
+
+# --build rebuilds the Docker image, which COPYs the host's dist/agent/
+# tree in (Dockerfile.server) — so any stale arch left in dist/agent/ gets
+# baked into the image and the fleet splits versions / loops on update.
+# Make --build self-contained: cross-compile the deployed Linux arches
+# first so the tree is fresh and internally consistent before the image
+# build. (--cross all / --cross arm64 etc. still override this.)
+if $BUILD_ALL && [ ${#CROSS_TARGETS[@]} -eq 0 ]; then
+    CROSS_TARGETS=(amd64 arm64)
+fi
 
 # --build does a full Docker image rebuild. Go and Rust are both compiled
 # inside the Dockerfile — no local toolchain needed. --server and --agent
@@ -175,17 +197,13 @@ if [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
 
     echo "Cross-compiling agent for: ${CROSS_TARGETS[*]}"
 
-    # Read the agent's compiled-in version once, here in the host shell, and
-    # interpolate it into every cross-compile's vigo.version sidecar. The
-    # server's bootstrap handler reads these sidecars at startup to learn each
-    # arch's binary version (it can't probe a foreign-arch binary). A missing
-    # or stale sidecar makes the server advertise the wrong version, which
-    # the agent's compiled-in safety check catches as a "version mismatch on
-    # downloaded binary" and aborts the update — that's the rpi update-loop
-    # symptom. The Makefile's `dist-agent` target writes these sidecars too;
-    # this path used to skip them, so a `--cross arm64` rebuild wrote a fresh
-    # binary on top of a stale sidecar.
-    AGENT_VERSION=$(grep -m1 '^version' "$REPO_DIR/agent/Cargo.toml" | sed 's/.*"\(.*\)".*/\1/')
+    # Each cross-compile writes its vigo.version sidecar from the binary's
+    # OWN embedded VIGO-BUILD-VERSION marker (agent/src/main.rs) — never
+    # from Cargo.toml — so the sidecar can't drift from the binary. The
+    # server reads these sidecars at startup to learn each arch's version
+    # (it can't run a foreign-arch binary); a sidecar that disagrees with
+    # its binary makes the server advertise the wrong version and the
+    # agent's update guard aborts in a loop.
 
     RUST_TARGETS=""
     APT_PACKAGES="musl-tools protobuf-compiler"
@@ -200,7 +218,7 @@ echo 'Building linux/amd64...'
 CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
 mkdir -p /build/dist/agent/linux/amd64
 cp .build/x86_64-unknown-linux-musl/release/vigo /build/dist/agent/linux/amd64/vigo
-echo '$AGENT_VERSION' > /build/dist/agent/linux/amd64/vigo.version"
+grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/amd64/vigo | head -1 | cut -d= -f2 > /build/dist/agent/linux/amd64/vigo.version"
                 ;;
             arm64)
                 RUST_TARGETS="$RUST_TARGETS aarch64-unknown-linux-musl"
@@ -212,30 +230,28 @@ CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc \
     cargo build --release --target aarch64-unknown-linux-musl
 mkdir -p /build/dist/agent/linux/arm64
 cp .build/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/vigo
-echo '$AGENT_VERSION' > /build/dist/agent/linux/arm64/vigo.version"
+grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/arm64/vigo | head -1 | cut -d= -f2 > /build/dist/agent/linux/arm64/vigo.version"
                 ;;
             freebsd)
                 echo "  freebsd: using cargo-cross container"
                 (cd "$REPO_DIR" && \
                     docker run --rm --dns 1.1.1.1 --dns 8.8.8.8 -v "$REPO_DIR/agent:/build/agent" -v "$REPO_DIR/protobuf:/build/protobuf" -v "$REPO_DIR/dist:/build/dist" -w /build/agent \
-                    -e AGENT_VERSION="$AGENT_VERSION" \
                     ghcr.io/cross-rs/x86_64-unknown-freebsd:main sh -c '
                         cargo build --release --target x86_64-unknown-freebsd 2>&1
                         mkdir -p /build/dist/agent/freebsd/amd64
                         cp .build/x86_64-unknown-freebsd/release/vigo /build/dist/agent/freebsd/amd64/vigo
-                        echo "$AGENT_VERSION" > /build/dist/agent/freebsd/amd64/vigo.version
+                        grep -aoE "VIGO-BUILD-VERSION=[0-9.]+" /build/dist/agent/freebsd/amd64/vigo | head -1 | cut -d= -f2 > /build/dist/agent/freebsd/amd64/vigo.version
                     ') || echo "  WARN: freebsd cross-compile failed"
                 ;;
             windows)
                 echo "  windows: using cargo-cross container"
                 (cd "$REPO_DIR" && \
                     docker run --rm --dns 1.1.1.1 --dns 8.8.8.8 -v "$REPO_DIR/agent:/build/agent" -v "$REPO_DIR/protobuf:/build/protobuf" -v "$REPO_DIR/dist:/build/dist" -w /build/agent \
-                    -e AGENT_VERSION="$AGENT_VERSION" \
                     ghcr.io/cross-rs/x86_64-pc-windows-msvc:main sh -c '
                         cargo build --release --target x86_64-pc-windows-msvc 2>&1
                         mkdir -p /build/dist/agent/windows/amd64
                         cp .build/x86_64-pc-windows-msvc/release/vigo.exe /build/dist/agent/windows/amd64/vigo.exe
-                        echo "$AGENT_VERSION" > /build/dist/agent/windows/amd64/vigo.exe.version
+                        grep -aoE "VIGO-BUILD-VERSION=[0-9.]+" /build/dist/agent/windows/amd64/vigo.exe | head -1 | cut -d= -f2 > /build/dist/agent/windows/amd64/vigo.exe.version
                     ') || echo "  WARN: windows cross-compile failed"
                 ;;
             darwin)
@@ -267,9 +283,6 @@ echo '$AGENT_VERSION' > /build/dist/agent/linux/arm64/vigo.version"
                 $BUILD_SCRIPT
                 echo 'Linux agent builds complete.'
             "
-        # Touch dist binaries so their mtime is newer than any source file
-        # (cargo build with bind mounts can update src mtimes during multi-target builds).
-        find "$REPO_DIR/dist/agent" -name 'vigo' -exec touch {} +
     fi
 
     # Cross-compiles in docker run as root and write to host-mounted
@@ -293,6 +306,38 @@ echo '$AGENT_VERSION' > /build/dist/agent/linux/arm64/vigo.version"
         size=$(ls -lh "$f" | awk '{print $5}')
         echo "  $platform  $size"
     done
+    echo ""
+
+    # Gate before anything bakes this tree into an image: every freshly
+    # built agent binary must report the repo's VERSION via its embedded
+    # VIGO-BUILD-VERSION marker. Catches a stale cargo cache-hit, a version
+    # bump that landed mid-build, or a stripped marker — bail loudly rather
+    # than ship a tree that loops the fleet on update.
+    REPO_VERSION="$(cat "$REPO_DIR/VERSION" 2>/dev/null | tr -d '[:space:]')"
+    for t in "${CROSS_TARGETS[@]}"; do
+        case "$t" in
+            amd64)   bins="$REPO_DIR/dist/agent/linux/amd64/vigo" ;;
+            arm64)   bins="$REPO_DIR/dist/agent/linux/arm64/vigo" ;;
+            freebsd) bins="$REPO_DIR/dist/agent/freebsd/amd64/vigo" ;;
+            windows) bins="$REPO_DIR/dist/agent/windows/amd64/vigo.exe" ;;
+            darwin)  bins="$REPO_DIR/dist/agent/darwin/amd64/vigo $REPO_DIR/dist/agent/darwin/arm64/vigo" ;;
+            *)       continue ;;
+        esac
+        for b in $bins; do
+            [ -f "$b" ] || continue   # this cross-compile may have failed (WARN'd above)
+            bv="$(agent_bin_version "$b")"
+            if [ -z "$bv" ]; then
+                echo "ERROR: $b has no VIGO-BUILD-VERSION marker — refusing to ship it." >&2
+                exit 1
+            fi
+            if [ -n "$REPO_VERSION" ] && [ "$bv" != "$REPO_VERSION" ]; then
+                echo "ERROR: $b is version $bv but VERSION says $REPO_VERSION — stale build." >&2
+                echo "       Run 'make clean' (or 'cd agent && cargo clean -p vigo'), clear dist/agent/, and re-run." >&2
+                exit 1
+            fi
+        done
+    done
+    [ -n "$REPO_VERSION" ] && echo "Agent dist tree verified — all built arches at $REPO_VERSION, sidecars derived from binaries."
     echo ""
 fi
 
@@ -555,23 +600,19 @@ if $NEED_CONTAINER_RESTART && docker ps -q -f name=vigo | grep -q .; then
 fi
 
 # ---------------------------------------------------------------------------
-# Re-touch in-container agent binaries
+# Re-read agent versions in the server (after a --cross-only inject)
 # ---------------------------------------------------------------------------
 #
-# The server-image rebuild above touches `agent/src/main.rs` (around
-# line 342) to bust Docker layer caches. When --cross also fired,
-# the cross-compile produced its dist binaries BEFORE that main.rs
-# touch, then `docker cp` injected them into the container preserving
-# their pre-touch mtime. Net result: in-container binary mtime <
-# main.rs mtime, and the freshness check below fires a false-positive
-# "source is newer than binary" even though the binary version stamps
-# match the source.
-#
-# Re-touch the in-container agent binaries after every other phase
-# has settled so the freshness check's mtime comparison reflects the
-# real build state. Gated on having actually built them this run.
-if [ ${#CROSS_TARGETS[@]} -gt 0 ] && docker ps -q -f name=vigo | grep -q .; then
-    docker exec vigo find /dist/agent \( -name 'vigo' -o -name 'vigo.exe' \) -exec touch {} + 2>/dev/null || true
+# vigosrv snapshots per-arch agent versions (detectAgentVersions) once, at
+# startup, from the dist tree's vigo.version sidecars. When --cross fired
+# WITHOUT a full image rebuild, the inject step above changed the running
+# container's /dist/agent/ tree AFTER that snapshot — so the server is
+# still advertising the old versions and envoys won't update. Restart it
+# so it re-reads. (--build already brings the container up fresh from the
+# rebuilt image, after the cross-compile, so its snapshot is current.)
+if [ ${#CROSS_TARGETS[@]} -gt 0 ] && ! $BUILD_ALL && docker ps -q -f name=vigo | grep -q .; then
+    echo "Restarting vigo so it re-reads the injected agent versions..."
+    (cd "$DATA_DIR" && docker compose restart vigo)
 fi
 
 # ---------------------------------------------------------------------------
@@ -612,31 +653,33 @@ if [ -d "$REPO_DIR" ]; then
     fi
 fi
 
-# Agent freshness — per arch shipped in the dist tree.
+# Agent freshness — per arch shipped in the dist tree. The check that
+# matters: each binary's embedded version must equal the repo VERSION,
+# AND its .version sidecar (which the server reads at startup to decide
+# what to advertise per arch) must equal the binary. A sidecar that
+# disagrees with its binary puts that arch's envoys in an update loop.
+# (Container runs busybox: LC_ALL=C forces byte-treatment of the binary
+# so the regex matches; the trailing `|| true`s keep a missing marker
+# from tripping `set -e` and aborting the whole freshness check.)
 if [ -d "$REPO_DIR" ]; then
-    NEWEST_RS=$(find "$REPO_DIR/agent/src" -name '*.rs' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
-    NEWEST_RS=${NEWEST_RS%.*}
+    REPO_VERSION="$(cat "$REPO_DIR/VERSION" 2>/dev/null | tr -d '[:space:]')"
     AGENT_PLATFORMS=$(docker exec vigo find /dist/agent \( -name 'vigo' -o -name 'vigo.exe' \) 2>/dev/null || true)
     if [ -n "$AGENT_PLATFORMS" ]; then
         for agent_path in $AGENT_PLATFORMS; do
-            CTR_AGENT=$(docker exec vigo stat -c '%Y' "$agent_path" 2>/dev/null || echo 0)
             platform=$(echo "$agent_path" | sed 's|/dist/agent/||; s|/vigo.*||')
-            # Read the version embedded in the binary itself, regardless of arch.
-            # The agent ships a `VIGO-BUILD-VERSION=x.y.z` marker (see agent/src/main.rs).
-            # Notes:
-            #   - The container runs busybox grep which ignores -a (binary-as-text).
-            #     LC_ALL=C forces busybox to treat the file as bytes so the regex
-            #     matches binary content. GNU grep on the host would also accept -a.
-            #   - The pipeline's trailing `|| true` prevents a failed grep (e.g. the
-            #     marker missing from a stripped binary) from tripping set -euo
-            #     pipefail and silently aborting the freshness check entirely.
-            AGENT_VER=$(docker exec vigo sh -c "LC_ALL=C grep -oE 'VIGO-BUILD-VERSION=[0-9.]+' '$agent_path'" 2>/dev/null | head -1 | cut -d= -f2 || true)
-            [ -z "$AGENT_VER" ] && AGENT_VER="unknown"
-            if [ -n "$NEWEST_RS" ] && [ "$NEWEST_RS" -gt "$CTR_AGENT" ]; then
-                echo "  STALE  agent $platform  version=$AGENT_VER  (source is newer than binary)"
+            cross_t=$(echo "$platform" | sed 's|^linux/||; s|/.*$||')   # linux/amd64 → amd64
+            BIN_VER=$(docker exec vigo sh -c "LC_ALL=C grep -oE 'VIGO-BUILD-VERSION=[0-9.]+' '$agent_path'" 2>/dev/null | head -1 | cut -d= -f2 || true)
+            SIDE_VER=$(docker exec vigo sh -c "cat '$agent_path.version' 2>/dev/null" 2>/dev/null | tr -d '[:space:]' || true)
+            [ -z "$BIN_VER" ] && BIN_VER="unknown"
+            [ -z "$SIDE_VER" ] && SIDE_VER="(missing)"
+            if [ "$SIDE_VER" != "$BIN_VER" ]; then
+                echo "  MISMATCH agent $platform  binary=$BIN_VER  sidecar=$SIDE_VER  (server advertises the wrong version — envoys loop; re-run with --cross $cross_t)"
+                STALE=1
+            elif [ -n "$REPO_VERSION" ] && [ "$BIN_VER" != "$REPO_VERSION" ]; then
+                echo "  STALE  agent $platform  version=$BIN_VER  (repo is $REPO_VERSION — re-run with --cross $cross_t)"
                 STALE=1
             else
-                echo "  OK     agent $platform  version=$AGENT_VER"
+                echo "  OK     agent $platform  version=$BIN_VER"
             fi
         done
     fi

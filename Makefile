@@ -105,15 +105,19 @@ dist-agent:
 	cp agent/.build/x86_64-unknown-linux-musl/release/vigo dist/agent/linux/amd64/vigo
 	cd agent && CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
 	cp agent/.build/aarch64-unknown-linux-musl/release/vigo dist/agent/linux/arm64/vigo
-	@# Write per-binary .version sidecar files. The server reads these at
-	@# startup to learn each cross-arch binary's version (it can't run a
-	@# foreign-arch binary itself). Without these, cross-arch envoys land
-	@# in an update loop because the server advertises the wrong version
-	@# for their arch — see tshoot/log-archive-rpi-update-loop-*.md.
-	@AGENT_VER=$$(grep -m1 '^version' agent/Cargo.toml | sed 's/.*"\(.*\)".*/\1/') ; \
-		echo "$$AGENT_VER" > dist/agent/linux/amd64/vigo.version ; \
-		echo "$$AGENT_VER" > dist/agent/linux/arm64/vigo.version ; \
-		echo "wrote vigo.version=$$AGENT_VER for linux/amd64 + linux/arm64"
+	@# Write each binary's .version sidecar from the binary's OWN embedded
+	@# VIGO-BUILD-VERSION marker (agent/src/main.rs) — never from Cargo.toml —
+	@# so a sidecar can't drift from the binary it labels. The server reads
+	@# these at startup to learn each cross-arch binary's version (it can't
+	@# run a foreign-arch binary); a sidecar that disagrees with its binary
+	@# makes the server advertise the wrong version and the agent's update
+	@# guard aborts in a loop. See tshoot/log-archive-*update-loop*.
+	@for a in amd64 arm64 ; do \
+		v=$$(grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' dist/agent/linux/$$a/vigo | head -1 | cut -d= -f2) ; \
+		[ -n "$$v" ] || { echo "ERROR: no VIGO-BUILD-VERSION marker in dist/agent/linux/$$a/vigo" >&2 ; exit 1 ; } ; \
+		printf '%s\n' "$$v" > dist/agent/linux/$$a/vigo.version ; \
+		echo "wrote dist/agent/linux/$$a/vigo.version=$$v" ; \
+	done
 
 # Cross-compile Rust agent for Windows.
 # Prerequisites:
@@ -123,9 +127,11 @@ dist-agent-windows:
 	mkdir -p dist/agent/windows/amd64
 	cd agent && cross build --release --target x86_64-pc-windows-msvc
 	cp agent/.build/x86_64-pc-windows-msvc/release/vigo.exe dist/agent/windows/amd64/vigo.exe
-	@AGENT_VER=$$(grep -m1 '^version' agent/Cargo.toml | sed 's/.*"\(.*\)".*/\1/') ; \
-		echo "$$AGENT_VER" > dist/agent/windows/amd64/vigo.exe.version ; \
-		echo "wrote vigo.exe.version=$$AGENT_VER for windows/amd64"
+	@# Sidecar from the binary's own VIGO-BUILD-VERSION marker, not Cargo.toml — see dist-agent.
+	@v=$$(grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' dist/agent/windows/amd64/vigo.exe | head -1 | cut -d= -f2) ; \
+		[ -n "$$v" ] || { echo "ERROR: no VIGO-BUILD-VERSION marker in dist/agent/windows/amd64/vigo.exe" >&2 ; exit 1 ; } ; \
+		printf '%s\n' "$$v" > dist/agent/windows/amd64/vigo.exe.version ; \
+		echo "wrote dist/agent/windows/amd64/vigo.exe.version=$$v"
 
 # Cross-compile Rust agent for macOS.
 # Prerequisites (from Linux):
@@ -137,6 +143,13 @@ dist-agent-macos:
 	cp agent/.build/x86_64-apple-darwin/release/vigo dist/agent/darwin/amd64/vigo
 	cd agent && cargo build --release --target aarch64-apple-darwin
 	cp agent/.build/aarch64-apple-darwin/release/vigo dist/agent/darwin/arm64/vigo
+	@# Sidecars from each binary's VIGO-BUILD-VERSION marker — see dist-agent.
+	@for a in amd64 arm64 ; do \
+		v=$$(grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' dist/agent/darwin/$$a/vigo | head -1 | cut -d= -f2) ; \
+		[ -n "$$v" ] || { echo "ERROR: no VIGO-BUILD-VERSION marker in dist/agent/darwin/$$a/vigo" >&2 ; exit 1 ; } ; \
+		printf '%s\n' "$$v" > dist/agent/darwin/$$a/vigo.version ; \
+		echo "wrote dist/agent/darwin/$$a/vigo.version=$$v" ; \
+	done
 
 # Cross-compile Rust agent for FreeBSD (Rust Tier 2).
 # Prerequisites:
@@ -146,6 +159,10 @@ dist-agent-freebsd:
 	mkdir -p dist/agent/freebsd/amd64
 	cd agent && cross build --release --target x86_64-unknown-freebsd
 	cp agent/.build/x86_64-unknown-freebsd/release/vigo dist/agent/freebsd/amd64/vigo
+	@v=$$(grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' dist/agent/freebsd/amd64/vigo | head -1 | cut -d= -f2) ; \
+		[ -n "$$v" ] || { echo "ERROR: no VIGO-BUILD-VERSION marker in dist/agent/freebsd/amd64/vigo" >&2 ; exit 1 ; } ; \
+		printf '%s\n' "$$v" > dist/agent/freebsd/amd64/vigo.version ; \
+		echo "wrote dist/agent/freebsd/amd64/vigo.version=$$v"
 
 # Build Rust agent for illumos (native build only).
 # Prerequisites:
@@ -155,6 +172,10 @@ dist-agent-illumos:
 	mkdir -p dist/agent/illumos/amd64
 	cd agent && cargo build --release --target x86_64-unknown-illumos
 	cp agent/.build/x86_64-unknown-illumos/release/vigo dist/agent/illumos/amd64/vigo
+	@v=$$(grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' dist/agent/illumos/amd64/vigo | head -1 | cut -d= -f2) ; \
+		[ -n "$$v" ] || { echo "ERROR: no VIGO-BUILD-VERSION marker in dist/agent/illumos/amd64/vigo" >&2 ; exit 1 ; } ; \
+		printf '%s\n' "$$v" > dist/agent/illumos/amd64/vigo.version ; \
+		echo "wrote dist/agent/illumos/amd64/vigo.version=$$v"
 
 # --- Connwaer (compliance verification agent) ---
 
