@@ -315,7 +315,8 @@ fn cmd_unlock(args: &[String]) -> Result<()> {
 /// memberships are never adopted (they need an invitation). Failures
 /// warn but never undo the unlock.
 fn adopt_founded_gitback_projects(home: &Path, my_pubkey: &[u8; 32]) {
-    use crate::swarm::gitback::{cli as gitback_cli, project_peers, project_state, tokens};
+    use crate::swarm::anchor::tokens;
+    use crate::swarm::gitback::{cli as gitback_cli, project_peers, project_state};
 
     let announced = project_peers::load_announced_cache();
     if announced.is_empty() {

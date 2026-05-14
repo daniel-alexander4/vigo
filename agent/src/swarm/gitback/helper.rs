@@ -30,7 +30,7 @@
 //!    from disk under root authority means the helper never needs to
 //!    trust wire-presented bytes for authorization.
 //! 3. Daemon verifies the token chain against the URL's project_id
-//!    via [`crate::swarm::gitback::tokens::verify_chain`]. It also
+//!    via [`crate::swarm::anchor::tokens::verify_chain`]. It also
 //!    rejects any chain that names a token id present in the local
 //!    revocation set (see [`super::envelopes::is_token_revoked`]).
 //! 4. Daemon writes `OK\n` and spawns `git <service> <repo_path>`
@@ -80,7 +80,7 @@ use super::fan_out;
 use super::project_state::{
     parse_hex_id, project_repo_path, DelegationChain, ProjectConfig, TokenChain,
 };
-use super::tokens::{verify_chain, ID_LEN};
+use crate::swarm::anchor::tokens::{verify_chain, ID_LEN};
 use crate::update::TlsCerts;
 
 /// System-wide socket path the daemon binds and `git-remote-gitback`
@@ -802,7 +802,7 @@ fn handle_resolve_name(uid: u32, header: &str) -> Result<(String, String)> {
             );
         }
     };
-    let pid = crate::swarm::gitback::tokens::project_id_for(&founder_pk, handle);
+    let pid = crate::swarm::anchor::tokens::project_id_for(&founder_pk, handle);
     Ok((super::project_state::hex_id(&pid), hex::encode(founder_pk)))
 }
 
@@ -837,7 +837,7 @@ fn resolve_name_via_local_claim(uid: u32, name: &str, handle: &str) -> Option<(S
     }
     claim.verify_signature().ok()?;
     let pk = claim.puddle_pubkey_bytes().ok()?;
-    let pid = crate::swarm::gitback::tokens::project_id_for(&pk, handle);
+    let pid = crate::swarm::anchor::tokens::project_id_for(&pk, handle);
     Some((super::project_state::hex_id(&pid), hex::encode(pk)))
 }
 

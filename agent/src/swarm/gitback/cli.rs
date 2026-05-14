@@ -42,7 +42,7 @@ use super::project_state::{
     DelegationChain, DrScope, ProjectConfig, TokenChain,
 };
 use crate::traits::gitback::{collect_projects, passwd_path, ProjectEntry};
-use super::tokens::{
+use crate::swarm::anchor::tokens::{
     canonical_bytes, issue_child as token_issue_child, project_id_for, verify_chain,
     Role, Token, TokenBody, ID_LEN, NEVER_EXPIRES, SIG_LEN,
 };
@@ -2943,7 +2943,7 @@ mod tests {
         // The shape that flows over `invite | join`. Build a synthetic
         // chain (uses real Ed25519) and verify deserialization +
         // chain re-verification both succeed end-to-end.
-        use crate::swarm::gitback::tokens::{issue_bootstrap, issue_child, project_id_for, Role};
+        use crate::swarm::anchor::tokens::{issue_bootstrap, issue_child, project_id_for, Role};
         use ed25519_dalek::SigningKey;
         use rand::rngs::OsRng;
 

@@ -84,7 +84,7 @@ use crate::swarm::gitback::project_state::{
     parse_hex_id, project_repo_path, ProjectConfig, TokenChain, PROJECT_STATE_VERSION,
 };
 #[allow(unused_imports)]
-use crate::swarm::gitback::tokens::{Role, ID_LEN, NEVER_EXPIRES};
+use crate::swarm::anchor::tokens::{Role, ID_LEN, NEVER_EXPIRES};
 
 /// One project's view for the trait. Sorted by `project_id` in the
 /// emitted array for deterministic output. `Deserialize` so the
@@ -405,7 +405,7 @@ mod tests {
     /// it under `<home>/.vigo-gitback/<pid>/project.json`. Returns
     /// the project_id.
     fn seed_project(home: &Path, handle: &str) -> [u8; ID_LEN] {
-        use crate::swarm::gitback::tokens::project_id_for;
+        use crate::swarm::anchor::tokens::project_id_for;
         let founder = fresh_key();
         let pid = project_id_for(&pub_bytes(&founder), "proj");
         let cfg = ProjectConfig {
@@ -452,7 +452,7 @@ mod tests {
 
         // Same project_id from a single founder, persisted under both
         // users' dot-dirs (e.g., they were both invited as members).
-        use crate::swarm::gitback::tokens::project_id_for;
+        use crate::swarm::anchor::tokens::project_id_for;
         let founder = fresh_key();
         let pid = project_id_for(&pub_bytes(&founder), "proj");
         let cfg = ProjectConfig {

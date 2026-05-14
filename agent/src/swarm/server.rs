@@ -873,7 +873,7 @@ enum EnvelopeKind {
 /// Extract the `<pid_hex>` segment from a path of shape
 /// `/swarm/gitback/envelopes/<pid_hex>/<suffix>`. Returns `None`
 /// if the shape is wrong or `<pid_hex>` isn't valid.
-fn parse_envelope_path(path: &str) -> Option<[u8; crate::swarm::gitback::tokens::ID_LEN]> {
+fn parse_envelope_path(path: &str) -> Option<[u8; crate::swarm::anchor::tokens::ID_LEN]> {
     let stripped = path.strip_prefix("/swarm/gitback/envelopes/")?;
     let (pid_hex, _suffix) = stripped.split_once('/')?;
     if !is_project_id_path_segment(pid_hex) {

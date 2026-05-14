@@ -65,7 +65,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
 use super::envelopes::{DelegationEnvelope, DELEGATION_MAX_LEN};
-use super::tokens::{Token, ID_LEN};
+use crate::swarm::anchor::tokens::{Token, ID_LEN};
 
 /// Schema version for `project.json` and `tokens.json` files. Bump on
 /// incompatible changes; per zero-users doctrine the loader rejects
@@ -319,7 +319,7 @@ impl ProjectConfig {
 /// helper daemon (step 4) loads + verifies this chain before
 /// authorizing a push.
 ///
-/// Verification logic lives in `super::tokens::verify_chain`; this
+/// Verification logic lives in `crate::swarm::anchor::tokens::verify_chain`; this
 /// struct is a thin persistence envelope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenChain {
@@ -600,7 +600,7 @@ fn write_user_file(path: &Path, bytes: &[u8], _mode: u32) -> std::io::Result<()>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::swarm::gitback::tokens::{issue_bootstrap, issue_child, project_id_for, Role};
+    use crate::swarm::anchor::tokens::{issue_bootstrap, issue_child, project_id_for, Role};
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
     use tempfile::tempdir;

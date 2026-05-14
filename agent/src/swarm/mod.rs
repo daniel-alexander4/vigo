@@ -13,6 +13,7 @@
 //! split into chunks, and in-progress downloads survive process restarts
 //! via on-disk partial directories.
 
+pub mod anchor;
 pub mod bandwidth;
 pub mod bitmap;
 pub mod cache;

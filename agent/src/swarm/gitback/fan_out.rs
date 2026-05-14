@@ -63,7 +63,7 @@ use serde::{Deserialize, Serialize};
 use super::envelopes::is_token_revoked;
 use super::git_ops::{build_command, RunAs};
 use super::project_state::{hex_id, project_repo_path, ProjectConfig, TokenChain};
-use super::tokens::{verify_chain, ID_LEN};
+use crate::swarm::anchor::tokens::{verify_chain, ID_LEN};
 
 /// Per-peer push timeout. Generous for a multi-GiB bundle on a slow
 /// link; bounded so a stuck connection can't pin a tokio worker.
@@ -343,7 +343,7 @@ pub struct PushChain {
     /// On-the-wire serialization of the user's `tokens.json`
     /// chain. Must verify against the project_id baked into the URL
     /// once `delegations` are walked.
-    pub chain: Vec<super::tokens::Token>,
+    pub chain: Vec<crate::swarm::anchor::tokens::Token>,
     /// Optional founder rekey delegation chain (ADR-019). Empty for
     /// senders who haven't rekeyed; capped at `DELEGATION_MAX_LEN`
     /// by the verifier even when the sender presents more.
@@ -1152,7 +1152,7 @@ mod tests {
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 
-    use super::super::tokens::{issue_bootstrap, issue_child, project_id_for, Role};
+    use crate::swarm::anchor::tokens::{issue_bootstrap, issue_child, project_id_for, Role};
 
     fn fresh_key() -> SigningKey {
         SigningKey::generate(&mut OsRng)
@@ -1469,7 +1469,7 @@ mod tests {
             "",
         );
         // Tamper with the signature so verify_signature fails.
-        r.signature = "00".repeat(super::super::tokens::SIG_LEN);
+        r.signature = "00".repeat(crate::swarm::anchor::tokens::SIG_LEN);
         let bundle = EnvelopesBundle {
             revokes: vec![r],
             leaves: vec![],
@@ -1563,17 +1563,17 @@ mod tests {
             200,
         );
         // Mint a fresh admin under NEW chained off bootstrap.
-        let body = super::super::tokens::TokenBody {
+        let body = crate::swarm::anchor::tokens::TokenBody {
             project_id: pid,
             handle: "proj".to_string(),
             subject_puddle_pubkey: pub_bytes(&new_admin_subject),
-            role: super::super::tokens::Role::Admin,
+            role: crate::swarm::anchor::tokens::Role::Admin,
             issued_at: 250,
             expires_at: None,
             signer_puddle_pubkey: pub_bytes(&new_founder),
             parent_token_id: Some(bootstrap.id()),
         };
-        let admin = super::super::tokens::Token::issue(&new_founder, body).unwrap();
+        let admin = crate::swarm::anchor::tokens::Token::issue(&new_founder, body).unwrap();
         let push = PushChain {
             version: PUSH_CHAIN_VERSION,
             chain: vec![bootstrap, admin],

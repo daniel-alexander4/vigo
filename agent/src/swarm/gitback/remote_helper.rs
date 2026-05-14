@@ -82,7 +82,7 @@ use anyhow::{anyhow, bail, Context, Result};
 
 use super::helper::socket_path;
 use super::project_state::{hex_id, parse_hex_id};
-use super::tokens::ID_LEN;
+use crate::swarm::anchor::tokens::ID_LEN;
 
 /// Maximum line length we'll accept from the daemon's `OK`/`ERR`
 /// response. Picks up runaway server responses without an unbounded

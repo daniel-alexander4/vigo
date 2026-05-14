@@ -60,7 +60,7 @@ use super::envelopes::{DelegationEnvelope, DELEGATION_MAX_LEN};
 use super::project_state::{
     list_projects, parse_hex_id, DelegationChain, ProjectConfig, TokenChain, PROJECT_STATE_VERSION,
 };
-use super::tokens::{Role, Token, TokenBody, ID_LEN};
+use crate::swarm::anchor::tokens::{Role, Token, TokenBody, ID_LEN};
 
 /// Outcome of [`apply_post_rotation_gitback_sync`]. Surfaced to
 /// stdout in the rekey verb so the operator can see exactly what
@@ -579,7 +579,7 @@ fn rebuild_tokens_json(
 mod tests {
     use super::*;
     use crate::swarm::gitback::project_state::hex_id;
-    use crate::swarm::gitback::tokens::{issue_bootstrap, project_id_for};
+    use crate::swarm::anchor::tokens::{issue_bootstrap, project_id_for};
     use crate::swarm::puddle::rekey::{record_retirement, REKEY_GRACEFUL_SECS};
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;

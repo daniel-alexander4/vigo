@@ -71,7 +71,7 @@ pub fn validate_artifact_name(name: &str) -> Result<()> {
 }
 
 /// `artifact_id = sha256(founder_puddle_pubkey ‖ name)` — frozen across all
-/// rekeys (the same shape as `gitback::tokens::project_id_for`).
+/// rekeys (the same shape as `crate::swarm::anchor::tokens::project_id_for`).
 pub fn artifact_id_for(founder_puddle_pubkey: &[u8; ID_LEN], name: &str) -> [u8; ID_LEN] {
     let mut hasher = Sha256::new();
     hasher.update(founder_puddle_pubkey);

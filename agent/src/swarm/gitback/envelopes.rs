@@ -14,7 +14,7 @@
 //! gossip as informational hints only, never as authority (see
 //! [`DelegationEnvelope`] for the threat-model rationale).
 //!
-//! Design mirrors [`super::tokens`] (canonical hand-rolled encoding,
+//! Design mirrors [`crate::swarm::anchor::tokens`] (canonical hand-rolled encoding,
 //! distinct domain prefix per envelope type) and
 //! [`crate::swarm::lockbox::leaves`] (90-day reap, idempotent
 //! upsert, persistence on the daemon-only canonical path).
@@ -62,10 +62,10 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::project_state::{hex_id, parse_hex_id};
-use super::tokens::{ID_LEN, SIG_LEN};
+use crate::swarm::anchor::tokens::{ID_LEN, SIG_LEN};
 
 /// Domain prefix for canonical bytes signed in a REVOKE envelope.
-/// Distinct from [`super::tokens::TOKEN_DOMAIN`] and [`LEAVE_DOMAIN`]
+/// Distinct from [`crate::swarm::anchor::tokens::TOKEN_DOMAIN`] and [`LEAVE_DOMAIN`]
 /// so a signature over one shape can never be mistaken for another.
 pub const REVOKE_DOMAIN: &[u8] = b"gitback-revoke-v2\0";
 

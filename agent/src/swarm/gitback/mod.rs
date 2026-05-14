@@ -67,7 +67,6 @@ pub mod receiver;
 pub mod rekey;
 pub mod remote_helper;
 pub mod state;
-pub mod tokens;
 
 pub use gate::Gate;
 
@@ -573,6 +572,7 @@ fn unix_seconds_now() -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::swarm::anchor::tokens;
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
 

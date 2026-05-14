@@ -13,7 +13,7 @@
 //! A claim is a small signed blob — `{ puddle_pubkey, name, claimed_at,
 //! supersedes?, sig }` — signed by the puddle key over a
 //! domain-separated canonical encoding ([`NAME_CLAIM_DOMAIN`]),
-//! hand-rolled like [`crate::swarm::gitback::tokens`] /
+//! hand-rolled like [`crate::swarm::anchor::tokens`] /
 //! [`crate::swarm::gitback::envelopes`] (never JSON whitespace).
 //! Persisted at `~<user>/.vigo-puddle/name-claim.json`. Creating one
 //! requires the puddle unlocked (the session helper signs).

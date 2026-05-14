@@ -27,7 +27,7 @@ use tokio_util::sync::CancellationToken;
 use vigo::swarm::gitback::project_state::{
     hex_id, DrScope, ProjectConfig, TokenChain, PROJECT_STATE_VERSION,
 };
-use vigo::swarm::gitback::tokens::{issue_bootstrap, project_id_for};
+use vigo::swarm::anchor::tokens::{issue_bootstrap, project_id_for};
 
 fn git_available() -> bool {
     Command::new("git")
