@@ -4,7 +4,7 @@ title: "ADR-024: curator — P2P artifact registry"
 
 # ADR-024: curator — P2P artifact registry
 
-**Status:** Implemented — slices 0–5 (catalog + helper + server REST + agent CLI + UI/docs) shipped 0.51.0 (2026-05-14); slice 6 (`artifact:` executor param) shipped 0.51.5 (2026-05-13); slice 7 (Docker Registry v2 shim) shipped 0.51.6 (2026-05-13); the `anchor` layer (curator's puddle-rooted-ownership cross-subsystem primitive, shared with gitback) extracted into `agent/src/swarm/anchor/` at 0.51.7 (2026-05-14).
+**Status:** Implemented — slices 0–5 (catalog + helper + server REST + agent CLI + UI/docs) shipped 0.51.0 (2026-05-14); slice 6 (`artifact:` executor param) shipped 0.51.5 (2026-05-13); slice 7 (Docker Registry v2 shim) shipped 0.51.6 (2026-05-13); the `anchor` layer (curator's puddle-rooted-ownership cross-subsystem primitive, shared with gitback) extracted into `agent/src/swarm/anchor/` at 0.51.7 (2026-05-14); slice 8 (agent self-update accelerator — `vigo-agent` artifact convention, REST stays authoritative) shipped 0.51.8 (2026-05-13).
 **Date:** 2026-05-11
 
 ## Context

@@ -4,6 +4,16 @@
 //! Agent self-update mechanism: version checking against the server, binary
 //! download with SHA256 + ED25519 signature verification, atomic replacement,
 //! and process restart.
+//!
+//! The byte-fetch step is routed through [`curator_accelerator`] first (ADR-024
+//! slice 8) — when the operator has published the agent as a curator artifact,
+//! envoys with the matching platform's blob in their local swarm cache get the
+//! bytes P2P instead of from the server. The REST `download_url` is the
+//! always-on fallback and the authoritative answer; curator never replaces
+//! `/api/v1/agent/latest`. The SHA256 + ED25519 signature verification runs
+//! identically on whichever path produced the bytes.
+
+pub mod curator_accelerator;
 
 use anyhow::{bail, Context, Result};
 use ed25519_dalek::{Signature, VerifyingKey};
@@ -267,22 +277,48 @@ pub async fn apply(
     let signature = info.signature.clone();
 
     let expected_sha = info.sha256.clone();
+    let version_for_curator = info.version.clone();
+    // Translate Rust's OS/arch constants into the catalog's GNU-style vocab
+    // for the curator artifact lookup ("linux"/"darwin"/"windows", "amd64"/
+    // "arm64"). Apply() is always called inside the running agent so
+    // std::env::consts is exact for the host we're updating.
+    let curator_os = match std::env::consts::OS {
+        "macos" => "darwin".to_string(),
+        other => other.to_string(),
+    };
+    let curator_arch = match std::env::consts::ARCH {
+        "x86_64" => "amd64".to_string(),
+        "aarch64" => "arm64".to_string(),
+        other => other.to_string(),
+    };
 
     let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
         let agent = build_agent(tls_certs.as_ref());
 
-        let resp = agent
-            .get(&download_url)
-            .call()
-            .map_err(|e| anyhow::anyhow!("download binary: {}", e))?;
+        // ADR-024 slice 8: try curator first. The SHA256 + signature gate
+        // below runs identically on whichever path produced the bytes; the
+        // REST `download_url` is the always-on fallback and the authority.
+        let body = if let Some(bytes) = curator_accelerator::fetch_via_curator(
+            &version_for_curator,
+            &expected_sha,
+            &curator_os,
+            &curator_arch,
+        ) {
+            bytes
+        } else {
+            let resp = agent
+                .get(&download_url)
+                .call()
+                .map_err(|e| anyhow::anyhow!("download binary: {}", e))?;
 
-        if resp.status() != 200 {
-            bail!("download returned status {}", resp.status());
-        }
+            if resp.status() != 200 {
+                bail!("download returned status {}", resp.status());
+            }
 
-        let body = resp.into_body()
-            .read_to_vec()
-            .context("download binary body")?;
+            resp.into_body()
+                .read_to_vec()
+                .context("download binary body")?
+        };
 
         // Compute SHA256 digest.
         let digest = Sha256::digest(&body);

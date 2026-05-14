@@ -149,6 +149,24 @@ Two thin clients of the same backend:
 - **`vigo swarm curator`** (agent-side, runs as the user) — founder + consumer surface. Mutating verbs sign via the puddle helper and submit to the local socket. Read verbs (`status`, `list`, `inspect`, `versions`, `resolve`, `pull`) work locally + against the server. Cleanup verbs (`stale`, `prune`, `gc`, `purge`) hygiene the envoy.
 - **`vigocli swarm curator`** (server-side, operator front-end) — read views + admin moderation (`block` / `unblock`). Mutating verbs deliberately don't live here — they need an unlocked per-user puddle, which doesn't fit vigocli's root-only / peer-auth posture.
 
+### Accelerating agent updates (0.51.8+)
+
+Curator can absorb the bandwidth cost of agent self-updates. The flow:
+
+1. After you cross-compile a new agent, push the resulting binary as a curator artifact under your operator puddle, one platform per cross-compile target. The artifact name is **`vigo-agent`** and the tag is the version string — those are the conventions the agent looks for.
+
+   ```bash
+   vigo swarm curator push vigo-agent:0.51.8 ./dist/agent/linux/amd64/vigo --platform linux/amd64
+   vigo swarm curator push vigo-agent:0.51.8 ./dist/agent/linux/arm64/vigo --platform linux/arm64
+   # ... one push per platform you ship
+   ```
+
+2. On every check-in, when an envoy decides to self-update to version V, it first asks curator for `vigo-agent:V` on its host platform. If the catalog says yes and the artifact's `blob_sha` matches what the server's `/api/v1/agent/latest` reports, the envoy pulls the bytes P2P from the local swarm cache (or via the server relay if it's swarm-disabled) instead of re-downloading from `/dist/agent/<os>/<arch>/vigo`.
+
+3. The agent verifies SHA256 + ed25519 binary signature on the bytes regardless of where they came from. **The REST endpoint stays the authority** — if the curator artifact is missing, the SHAs don't match, or curator is broken in any way, the agent silently falls back to `/dist/agent/<os>/<arch>/vigo` and self-updates as it always has.
+
+This is opportunistic. You never have to publish `vigo-agent` for the fleet to update; you do it when you want to spare your server's egress on a fleet-wide bump. A mismatched `blob_sha` (you pushed the wrong build) produces one `warn!` in the agent log and falls back to REST — the published artifact is just ignored until you repush.
+
 ### Where to look when it doesn't work
 
 - **`vigo swarm curator status`** — local cache state, in-flight pushes, helper-daemon liveness.
@@ -164,6 +182,6 @@ Two thin clients of the same backend:
 - **`pull` hangs or sha-mismatches** → [Troubleshoot common issues](troubleshoot.md).
 
 ---
-*Verified on Vigo 0.51.6 · 2026-05-13.*
+*Verified on Vigo 0.51.8 · 2026-05-13.*
 
 *Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*
