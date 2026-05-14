@@ -82,7 +82,7 @@ The agent keeps per-user state (file snapshots + tombstones) under `/var/lib/vig
 If you adopted `encrypt: true` in 0.25.0 and want encrypted sync going forward:
 
 1. Decrypt existing ciphertext files with the age CLI directly: `age -d -i ~/.longdrawer/identity.txt ~/longdrawer/foo > /tmp/foo && mv /tmp/foo ~/longdrawer/foo`. Vigo no longer ships `vigo swarm longdrawer decrypt` — use upstream age.
-2. Enroll the user in lockbox via `lockbox: true` on the user resource, or run `vigo swarm lockbox init` on the primary + `vigo swarm lockbox enroll` on every secondary.
+2. Give the user a puddle (`puddle: true` on the user resource) and run `vigo swarm puddle unlock` on each envoy — lockbox bootstraps automatically as a capability of puddle membership (per [ADR-020](../../adr/020-lockbox-puddle-only.md); there is no separate `lockbox:` flag, no `lockbox init`/`enroll` verb).
 3. Move the plaintext files from `~/longdrawer/` to `~/lockbox/` via `vigo swarm lockbox encrypt`.
 4. Delete the leftover `~/.longdrawer/identity.txt` and `~/.longdrawer/recipients.txt` — they're no longer read.
 

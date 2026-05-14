@@ -1,7 +1,7 @@
 
 # Lockbox — Per-User Encrypted P2P Directory
 
-> **Status (0.40.0):** Lockbox is puddle-only ([ADR-020](../../adr/020-lockbox-puddle-only.md)) and its lifecycle layer has absorbed into puddle ([ADR-021](../../adr/021-lockbox-lifecycle-on-puddle.md)). The lockbox verb tree is content-only — `encrypt / decrypt / push / list / status / reencrypt / resurrect / purge` plus `puddle init / renew-cert` for recovery. Lifecycle verbs (`init / leave / forget`) retired in favor of `vigo swarm puddle leave` and `vigocli swarm puddle evict`. See [`swarm-puddle-architecture.svg`](../img/swarm-puddle-architecture.svg) for the hierarchy.
+> **Status (0.40.0):** Lockbox is puddle-only ([ADR-020](../../adr/020-lockbox-puddle-only.md)) and its lifecycle layer has absorbed into puddle ([ADR-021](../../adr/021-lockbox-lifecycle-on-puddle.md)). The `vigo swarm lockbox` verb tree is content-only — `unlock / lock / encrypt / decrypt / delete / list / status / reencrypt / resurrect / purge`, plus `vigo swarm lockbox puddle init` / `puddle renew-cert` for recovery. Lifecycle verbs (`init / enroll / leave / forget`) are retired: enrollment is automatic on `vigo swarm puddle unlock`, exit is `vigo swarm puddle leave`, and admin eviction is `vigocli swarm puddle evict`. See [`swarm-puddle-architecture.svg`](../img/swarm-puddle-architecture.svg) for the hierarchy.
 
 Lockbox keeps `~/lockbox/` in sync across every envoy where a user is enrolled, **ciphertext at rest** everywhere. Drop a plaintext file on the primary, lockbox encrypts it to every peer's public key and fans out the ciphertext. Unlock with the user's lockbox password on any envoy to decrypt.
 
@@ -13,7 +13,7 @@ Lockbox is the encryption-first sibling of [Longdrawer](longdrawer.md):
 | Key material | N/A | Per-envoy age identity, password-wrapped |
 | Read access | Any user login | Requires `vigo swarm lockbox unlock` (password) |
 | Fan-out trigger | Directory scan every 30s | Filesystem watch + explicit CLI |
-| Membership | Any user on the LAN with `~/longdrawer/` | `lockbox: true` on the user's usercrate |
+| Membership | Any user on the LAN with `~/longdrawer/` | Puddle membership (`puddle: true` on the usercrate) — lockbox bootstraps on `puddle unlock` |
 
 Pick longdrawer for ambient work files you want across machines. Pick lockbox for anything you'd want to stay unreadable on a stolen envoy.
 
@@ -23,29 +23,32 @@ Lockbox is one of four content subsystems that ride the [swarm](swarm.md) substr
 
 Lockbox is a **pure peer-to-peer** feature. The Vigo server plays no role in content or keys. Envoys discover each other via UDP multicast and exchange ciphertext directly over mTLS on swarm's peer port.
 
-1. **Enroll.** On each envoy that should hold the user's encrypted files, the user's usercrate applies `lockbox: true`. The user executor drops `~/.lockbox/enroll.pending`. The next time the user runs any `vigo swarm lockbox *` verb, the CLI prompts for the lockbox password and generates a fresh age identity on that envoy. The identity is wrapped with the password (Argon2id + XChaCha20-Poly1305) and stored at `~/.lockbox/identity.age` with mode 0600. The public key is written to `~/.lockbox/recipients.txt` and begins appearing in UDP announcements.
+1. **Enroll.** Lockbox is a mandatory capability of [puddle](puddle.md) membership ([ADR-020](../../adr/020-lockbox-puddle-only.md)) — any user with `puddle: true` on their usercrate gets it; there is no separate `lockbox:` flag. The first `vigo swarm puddle unlock` on each envoy auto-bootstraps lockbox inline (see [Auto-bootstrap from puddle](#auto-bootstrap-from-puddle) below): it generates a fresh age identity on that envoy, wraps it with a key derived from the puddle session helper (Argon2id + XChaCha20-Poly1305), stores it at `~/.lockbox/identity.age` (mode 0600), writes the public key to `~/.lockbox/recipients.txt`, and starts emitting it in UDP announcements. No second passphrase — the puddle passphrase covers it.
 2. **Discover.** Every 30 seconds, each enrolled envoy multicasts a compact announcement on `224.0.0.44:1533` — `{machine, user, pubkey, emitted_at, port}`. Other envoys running lockbox for the same user receive the announcement and add the peer to `/var/lib/vigo/swarm/lockbox/<user>/peers.json`. `~/.lockbox/recipients.txt` is regenerated from the peer table so future encrypts reach the new peer automatically. When the announcer's puddle pubkey matches the local user's, the peer is also recorded in `/var/lib/vigo/swarm/lockbox/<user>/puddle_members.json` — the append-only "ever-known members" table that backs the long-term-absence gap line in `lockbox status`. Unlike `peers.json` (which `prune_stale` evicts after `STALE_SECS=90s`), `puddle_members.json` shrinks only on authoritative removal (`apply_leave` paths, including admin evict and self-leave), so the membership denominator and per-peer silent-for duration keep working hours and days into a peer's absence.
 3. **Encrypt.** Two equivalent paths: explicit (`vigo swarm lockbox encrypt ~/Downloads/foo.pdf`) or **drop-and-forget** — copy a plaintext file into `~/lockbox/` and the watcher auto-encrypts it in place. Either way the CLI/daemon reads `recipients.txt`, age-encrypts the plaintext to every listed public key, and writes the ciphertext atomically to `~/lockbox/foo.pdf`. The output lands as **mode 0600 owned by the invoking user** even though the binary runs in a root context — `chmod 0600` + `chown` to the user (resolved via `SUDO_USER` or `getuid()`) happens before the atomic rename exposes the final name. No password prompt — encryption uses public keys only. See **Auto-encrypt-on-write** below for the drop-and-forget rules.
 4. **Fan out.** The agent daemon watches `~/lockbox/` via inotify (Linux) / kqueue (macOS). On a new or modified ciphertext file, the pusher POSTs the ciphertext to every live peer on `https://<peer>:1531/lockbox/push/<user>/<filename>`, plus every host listed in the user's `cross_subnet_peers:` config. Pushes run in parallel with bounded concurrency (4 at a time).
 5. **Receive.** On the peer side, the `/lockbox/push/...` HTTPS handler writes the ciphertext atomically into the target user's `~/lockbox/<filename>` as **mode 0600 owned by the destination user**. The handler runs in the agent daemon's root context but the same temp + `chmod 0600` + `chown` + rename sequence used by `encrypt` drops ownership to the destination user before exposure, so every envoy ends up with identical bytes on disk under identical perms.
 6. **Decrypt.** On any enrolled envoy, `vigo swarm lockbox unlock` prompts for the password, unwraps the age identity into a per-user session helper daemon, and holds the key in RAM until the session ends or the idle timer fires. `vigo swarm lockbox decrypt <name> -o <path>` streams the ciphertext through the helper's DECRYPT socket and writes plaintext to a user-chosen path.
-7. **Revoke.** `vigo swarm lockbox forget <hostname>` removes the peer's pubkey from `recipients.txt` so future encrypts exclude it. `vigo swarm lockbox reencrypt` re-encrypts every existing file in `~/lockbox/` to the reduced recipient set, cutting off access to any ciphertext the revoked envoy will cache afterward.
+7. **Revoke.** A host leaves the user's lockbox circle via `vigo swarm puddle leave` (run on the departing envoy), `vigocli swarm puddle evict <host>` (admin, for a host that can't leave itself), or removal of `puddle: true` from that host's usercrate (auto-scrub on the next reconcile). Any of these fans out a signed LEAVE envelope; each remaining peer drops the departed host's pubkey from `recipients.txt` and queues a `reencrypt` so existing ciphertext is re-wrapped to the reduced set — cutting off any copy the departed envoy still holds. See [Leaving lockbox](#leaving-lockbox) below.
 
 ## Commands
 
+`vigo swarm lockbox` is content-only — enrollment and exit live on `vigo swarm puddle` (see [Leaving lockbox](#leaving-lockbox)). Agent-side verbs:
+
 | Command | Behavior |
 |---|---|
-| `vigo swarm lockbox init` | First-time setup on the primary envoy. Prompts password (confirm), generates wrapped identity, creates `~/lockbox/`. |
-| `vigo swarm lockbox enroll` | Per-envoy setup. Normally triggered by the `enroll.pending` sentinel on first `vigo swarm lockbox *` invocation; can be run manually. Idempotent. |
-| `vigo swarm lockbox unlock` | Prompt password, start the session helper daemon. |
-| `vigo swarm lockbox lock` | Scrub the held key. Auto-fires on logout and idle timeout. |
-| `vigo swarm lockbox encrypt <file> [--as <name>]` | Encrypt a plaintext file into `~/lockbox/`. Does not require `unlock`. |
+| `vigo swarm lockbox unlock` | Unwrap the age identity via the running puddle session helper, start the lockbox session helper daemon, run the unlock sweep (encrypt any plaintext that landed while locked), and auto-bootstrap `identity.age` if it's missing. |
+| `vigo swarm lockbox lock` | Scrub the held key and stop the lockbox session helper. Auto-fires on logout and idle timeout. |
+| `vigo swarm lockbox encrypt <file> [--as <name>]` | Encrypt a plaintext file into `~/lockbox/`. Does not require `unlock` (public-key encryption only). |
 | `vigo swarm lockbox decrypt <file> -o <path>` | Decrypt from `~/lockbox/` to a user-chosen path. Requires `unlock`. `-o` is mandatory — no default destination. |
-| `vigo swarm lockbox forget <hostname>` | Revoke an envoy from the recipient set. |
-| `vigo swarm lockbox leave [--purge] [--keep-identity] [--yes]` | Self-unenroll: drop a `leave.pending` sentinel; the daemon signs + fans out a LEAVE envelope, then scrubs local state per the flags. |
-| `vigo swarm lockbox purge --yes` | Power-user wipe of `~/.lockbox/` + `~/lockbox/` for the calling user. Distinct from `leave --purge` — does NOT gossip; peers age this envoy out via the staleness rule. |
-| `vigo swarm lockbox reencrypt` | Force re-encrypt of every file in `~/lockbox/` to the current recipient set. Requires `unlock`. |
-| `vigo swarm lockbox status` | Show local state: enrolled, recipients, file count breakdown (ciphertext/plaintext/failed), session helper status. |
+| `vigo swarm lockbox delete <name>` | Delete a file mesh-wide: fan out a signed DELETE envelope; every peer records a tombstone and removes its copy. |
+| `vigo swarm lockbox resurrect <file> [--as <name>]` | Override an active tombstone so a previously-deleted filename can be re-encrypted and re-pushed. |
+| `vigo swarm lockbox reencrypt` | Re-encrypt every file in `~/lockbox/` to the current recipient set. Requires `unlock`. |
+| `vigo swarm lockbox list` (`ls`) | List `~/lockbox/` contents with per-file state (ciphertext / plaintext / tombstoned). |
+| `vigo swarm lockbox status` | Local state: recipients, file-count breakdown (ciphertext/plaintext/failed), tombstone count, session-helper status, long-absence gap line. |
+| `vigo swarm lockbox purge --yes` | Power-user wipe of `~/.lockbox/` + `~/lockbox/` for the calling user. Does **not** gossip — peers age this envoy out via the staleness rule. For a clean exit that *does* fan out a LEAVE, use `vigo swarm puddle leave`. |
+| `vigo swarm lockbox puddle init` | Recovery: re-bootstrap the lockbox identity from the already-unlocked puddle helper when `identity.age` is missing. Runs automatically on `vigo swarm puddle unlock`. |
+| `vigo swarm lockbox puddle renew-cert` | Recovery: re-issue the lockbox peer certificate. |
 
 ## Auto-Encrypt-on-Write
 
@@ -87,17 +90,19 @@ Counts derive from a single `read_dir` scan + a one-line magic peek per file at 
 
 ## Usercrate Integration
 
+Lockbox has **no usercrate flag of its own**. A user gets lockbox iff they have `puddle: true` (puddle membership) — per [ADR-020](../../adr/020-lockbox-puddle-only.md), lockbox is a mandatory capability of being in a puddle, and the bootstrap runs automatically the first time that user runs `vigo swarm puddle unlock` on an envoy.
+
 ```yaml
 - type: user
   name: dan
   home: /home/dan
   shell: /bin/bash
-  lockbox: true        # enroll this user in lockbox on this envoy
+  puddle: true         # puddle membership → lockbox follows automatically
 ```
 
-`lockbox: true` tells the user executor to drop `~/.lockbox/enroll.pending` after user creation. On first login the user runs any `vigo swarm lockbox *` verb and completes enrollment interactively (one password prompt). The field is idempotent — flipping it true on an already-enrolled user is a no-op.
+The legacy `lockbox: true` flag is retired (0.40.0): old usercrates carrying it still load — serde ignores the unknown field — but it has no effect, and the user executor no longer drops `~/.lockbox/enroll.pending`. Removing `puddle: true` is the destructive lever: the next reconcile queues a lockbox LEAVE envelope, then wipes `~/.vigo-puddle/`, `~/.lockbox/`, `~/lockbox/`, and `~/.vigo-gitback/` for that user.
 
-The lockbox password ceremony is collapsed into the puddle one (per [ADR-020](../../adr/020-lockbox-puddle-only.md), 0.39.13): the wrap key is derived from the user's puddle identity, so `unlock` requires no extra prompt — the puddle session helper must be running.
+The lockbox password ceremony is collapsed into the puddle one ([ADR-020](../../adr/020-lockbox-puddle-only.md), 0.39.13): the wrap key is derived from the user's puddle identity, so `unlock` needs no extra prompt — but the puddle session helper must be running.
 
 ## Key Wrapping
 
@@ -171,7 +176,7 @@ Deletion is a first-class mesh operation, not a local-only `rm`. When the operat
 
 Each envoy generates an Ed25519 keypair *the first time the lockbox daemon observes enrollment for that user*. The raw private key lives at `/var/lib/vigo/swarm/lockbox/<user>/signing.key` (root-owned, 0600); the matching pubkey is at `signing.pub` (0644 text) and advertised on every announcement so peers can record it in their `peers.json` for signature verification.
 
-The signing key is **daemon-owned, not password-wrapped**. Unlike the age identity (which gates content decryption — losing it is catastrophic and permanent), the signing key only authorizes destructive operations on behalf of this envoy. Recovery from a compromised signing key is fast: peers run `vigo swarm lockbox forget <stolen-host>` on every other envoy, which removes the compromised pubkey from their `peers.json`, and subsequent DELETE envelopes from the compromised host fail validation. This tradeoff is deliberate — wrapping the signing key would force the user to be unlocked for deletions to propagate, which breaks the pusher's reactive model.
+The signing key is **daemon-owned, not password-wrapped**. Unlike the age identity (which gates content decryption — losing it is catastrophic and permanent), the signing key only authorizes destructive operations on behalf of this envoy. Recovery from a compromised signing key is fast: an admin runs `vigocli swarm puddle evict <stolen-host>`, which dispatches the eviction to every other envoy — each drops the compromised pubkey from its `peers.json`, and subsequent DELETE envelopes from the compromised host fail validation. This tradeoff is deliberate — wrapping the signing key would force the user to be unlocked for deletions to propagate, which breaks the pusher's reactive model.
 
 ### Resurrecting a deleted filename
 
@@ -196,11 +201,11 @@ Catch-up: announcements carry a third 16-byte digest, `resurrects_digest`, along
 
 ## Leaving lockbox
 
-Two paths exist for removing a host from a user's lockbox circle — both land on the same local-apply function (`apply_leave` in `agent/src/lockbox/mod.rs`) but differ in how the agent learns about the leave.
+Two paths exist for removing a host from a user's lockbox circle — both land on the same local-apply function (`apply_leave` in `agent/src/swarm/lockbox/mod.rs`) but differ in how the agent learns about the leave.
 
 ### Path A — self-leave (user-triggered, P2P)
 
-User runs `vigo swarm lockbox leave` on the departing envoy. The CLI drops a `~/.lockbox/leave.pending` sentinel; the daemon reactor picks it up on its next announce tick (~30 s), builds a **signed LEAVE envelope** (`agent/src/lockbox/leaves.rs`), fans it out to every live peer via `POST /lockbox/leaves/<user>`, persists the record to `/var/lib/vigo/swarm/lockbox/<user>/leaves.json`, and scrubs local state per the sentinel's flags.
+User runs `vigo swarm puddle leave` on the departing envoy (the canonical exit per [ADR-021](../../adr/021-lockbox-lifecycle-on-puddle.md) — it covers the lockbox LEAVE, the puddle scrub, and gitback cleanup in one step). It queues a `~/.lockbox/leave.pending` sentinel; the daemon reactor picks it up on its next announce tick (~30 s), builds a **signed LEAVE envelope** (`agent/src/swarm/lockbox/leaves.rs`), fans it out to every live peer via `POST /lockbox/leaves/<user>`, persists the record to `/var/lib/vigo/swarm/lockbox/<user>/leaves.json`, and scrubs local state.
 
 ### Signed LEAVE envelope
 
@@ -225,7 +230,7 @@ Retention: 90 days (matches tombstones). A digest of the sorted `(age_pubkey, le
 
 ### Path B — admin eviction (server-triggered, control plane)
 
-Admin runs `vigocli swarm lockbox evict --host <h> {--user <u> | --all-users}`. The CLI queries `/api/v1/swarm/lockbox/fleet` to find affected users, then dispatches a shell command via `POST /api/v1/task`:
+Admin runs `vigocli swarm puddle evict <host> {--user <u> | --all-users}` — the canonical fleet-wide eviction verb per [ADR-021](../../adr/021-lockbox-lifecycle-on-puddle.md). (`vigocli swarm lockbox evict --host <h>` is retained as a delegating alias for muscle memory.) The CLI queries `/api/v1/swarm/lockbox/fleet` to find affected users, then dispatches a shell command via `POST /api/v1/task`:
 
 ```
 vigo swarm lockbox _apply-evict --user <u> --hostname <h>
@@ -235,14 +240,11 @@ Each enrolled agent receives the task, resolves the target's age pubkey from its
 
 No signed envelope; authority is end-to-end mTLS + admin token at the control plane, not a P2P signature. This is the right shape for "gone host, can't self-leave" scenarios where no-one can produce the subject's signature.
 
-**Self-evict scrub:** the dispatch goes to `target: "*"` so the evicted host receives `_apply-evict` for itself. Peer tables never include self, so the standard pubkey-lookup path would short-circuit as a no-op and leave the host's identity intact — blocking subsequent `vigo swarm lockbox enroll` (which bails when `~/.lockbox/identity.age` already exists). The agent detects the self case (local `/etc/hostname` matches the `--hostname` argument) and instead scrubs `~/.lockbox/identity.age`, `identity.salt`, `recipients.txt`, and `config.yaml` — same set as a `!keep_identity` self-leave. `~/lockbox/` ciphertext is preserved (operator can `rm -rf` for full wipe). Re-enroll then proceeds cleanly.
+**Self-evict scrub:** the dispatch goes to `target: "*"` so the evicted host receives `_apply-evict` for itself. Peer tables never include self, so the standard pubkey-lookup path would short-circuit as a no-op and leave the host's identity intact — blocking the re-bootstrap on its next `vigo swarm puddle unlock` (which bails when `~/.lockbox/identity.age` already exists). The agent detects the self case (local `/etc/hostname` matches the `--hostname` argument) and instead scrubs `~/.lockbox/identity.age`, `identity.salt`, `recipients.txt`, and `config.yaml`. `~/lockbox/` ciphertext is preserved (operator can `rm -rf` for full wipe). Re-bootstrap then proceeds cleanly on the next `puddle unlock`.
 
 ### Local scrub on self-leave
 
-`vigo swarm lockbox leave` defaults to **delete identity, keep ciphertext**. `~/.lockbox/` is removed (wrapped identity, salt, recipients, config); `~/lockbox/` ciphertext is left in place but orphaned — the host no longer has an identity to decrypt it locally. Flags:
-
-- `--purge` — also delete `~/lockbox/` ciphertext.
-- `--keep-identity` — keep `~/.lockbox/` (rare; used when planning to re-enroll with the same keys).
+`vigo swarm puddle leave --yes` wipes the user's whole puddle footprint on this envoy: `~/.vigo-puddle/` (keypair, salt, pubkey, retired-puddles log), `~/.lockbox/` (wrapped identity, salt, recipients, cert), `~/lockbox/` (ciphertext — recoverable from peers), and `~/.vigo-gitback/` (per-project state). It refuses without `--yes`. There is no keep-identity or keep-ciphertext flag — a clean exit is total; if you want to leave the ciphertext behind, use `vigo swarm lockbox purge` instead (which doesn't gossip). Gitback bare repos under `/var/lib/vigo/swarm/gitback/` are server/root-owned and aren't touched — admin `gitback project revoke` is the separate cleanup step there.
 
 ### Reencrypt queueing on peers
 
@@ -250,9 +252,9 @@ When a LEAVE lands on a peer, the agent drops `~<user>/.lockbox/reencrypt.pendin
 
 ### State persistence — per-user serialization
 
-`TombstoneTable`, `LeavesTable`, and `PeerTable` all follow a load → mutate → save pattern. Two concurrent paths against the same user (e.g., the watcher fanning out N DeleteJobs from a single `vigo swarm lockbox leave --purge`, or simultaneous DELETE envelopes from different peers) would race their load-modify-save pairs — both load identical state, each upserts a different entry, the second save() overwrites the first, and the loser's update is silently lost. The atomic temp+rename guards readers against partial writes but doesn't serialize concurrent writers.
+`TombstoneTable`, `LeavesTable`, and `PeerTable` all follow a load → mutate → save pattern. Two concurrent paths against the same user (e.g., the watcher fanning out N DeleteJobs from a single `vigo swarm puddle leave`, or simultaneous DELETE envelopes from different peers) would race their load-modify-save pairs — both load identical state, each upserts a different entry, the second save() overwrites the first, and the loser's update is silently lost. The atomic temp+rename guards readers against partial writes but doesn't serialize concurrent writers.
 
-`agent/src/lockbox/locks.rs` exposes a `user_lock(table, user)` helper backed by three per-user lock maps (one per table type). Each table type has a `modify(user, |&mut Self| -> bool)` constructor that holds the per-user lock for the entire load+mutate+save+mirror sequence. Granularity is per-user so user A's tombstone activity doesn't block user B's, and per-table-type so a tombstone modify on user dan doesn't block a peer-table modify on user dan. Save still calls `write_user_mirror_json` inside the lock so canonical and user-side mirror stay in lockstep. Holding the lock across local file I/O is intentional — saves are rare and brief (milliseconds on local disk), and a copy-then-CAS shape would add code without a real win.
+`agent/src/swarm/lockbox/locks.rs` exposes a `user_lock(table, user)` helper backed by three per-user lock maps (one per table type). Each table type has a `modify(user, |&mut Self| -> bool)` constructor that holds the per-user lock for the entire load+mutate+save+mirror sequence. Granularity is per-user so user A's tombstone activity doesn't block user B's, and per-table-type so a tombstone modify on user dan doesn't block a peer-table modify on user dan. Save still calls `write_user_mirror_json` inside the lock so canonical and user-side mirror stay in lockstep. Holding the lock across local file I/O is intentional — saves are rare and brief (milliseconds on local disk), and a copy-then-CAS shape would add code without a real win.
 
 ## Operability
 
