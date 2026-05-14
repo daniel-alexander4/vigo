@@ -15,4 +15,4 @@ Run `vigocli compliance --help` on a live server for the current set of subcomma
 - [Compliance](../compliance-matrix.md) — conceptual overview of how Vigo measures compliance
 - [Compliance Report](../compliance-matrix.md) — HIPAA-specific report format
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

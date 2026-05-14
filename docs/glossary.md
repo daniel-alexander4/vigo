@@ -196,4 +196,4 @@ The read-only retract-template tree under [stacks](#stacks), at `/srv/vigo/stack
 The validated published output tree under [stacks](#stacks), at `/srv/vigo/stacks/.live/`. `vigocli config publish` lints [stockpile](#stockpile) and atomically syncs canonical bytes here; the server reads `.live/` on every reload. Locked read-only between publishes. Never hand-edit — the loader's filename validator will refuse reload on a misplaced file. Renamed from `structure/` (0.28.0) back to `.live/` in 0.33.1.
 
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](legal/license.md).*

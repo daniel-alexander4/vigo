@@ -98,4 +98,4 @@ At check-in time the server:
 
 Because the database password lives in `environments.vgo` too, each env naturally gets its own secret path — no per-match-block duplication needed. The secrets provider resolves the `secret:` prefix at check-in time.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

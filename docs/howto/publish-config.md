@@ -248,4 +248,4 @@ Published: 12 modules, 3 roles, 8 envoy entries (15 files synced)
   + envoys/web.vgo
 ```
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

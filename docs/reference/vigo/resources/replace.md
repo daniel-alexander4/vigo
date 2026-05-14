@@ -91,4 +91,4 @@ Cross-platform.
 | [blockinfile](blockinfile.md) | Managing a multi-line block with markers, not individual patterns |
 | [file](file.md) | Replacing the entire file content from a template |
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

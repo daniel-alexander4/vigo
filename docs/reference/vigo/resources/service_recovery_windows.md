@@ -97,4 +97,4 @@ Windows only.
 - The `reboot` action reboots the entire machine. Use with extreme caution and only as a last resort for critical services.
 - The `run` action requires the `command` parameter and automatically enables the failure flag so the command runs on non-crash exits too.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

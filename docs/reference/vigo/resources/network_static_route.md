@@ -98,4 +98,4 @@ resources:
 
 Available on all platforms. Runs on the gateway envoy.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

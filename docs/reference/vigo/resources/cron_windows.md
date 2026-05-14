@@ -95,4 +95,4 @@ Windows only. On Linux, `type: cron` maps to the [cron](cron.md) executor.
 - Unsupported or complex cron expressions that cannot be translated will produce an error.
 - When a task exists and `state: present`, it is deleted and recreated to ensure accuracy.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

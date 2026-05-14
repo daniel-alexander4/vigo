@@ -269,7 +269,7 @@ tuning:
 
 See [Tuning Parameters](troubleshoot.md) for all tuning options.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
 
 ---
@@ -569,4 +569,4 @@ groups:
           summary: "Spanner spoke {{ $labels.spoke_id }} is down"
 ```
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

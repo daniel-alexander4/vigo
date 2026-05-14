@@ -41,4 +41,4 @@ Reads three files from `/proc`:
 ## Platform
 Linux
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

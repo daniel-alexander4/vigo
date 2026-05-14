@@ -114,4 +114,4 @@ vigocli export oscal --output assessment.json
 - [Compliance Export](../compliance-matrix.md) -- configuration and integration guide
 - [REST API export endpoints](../api.md#export) -- API reference
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

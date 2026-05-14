@@ -95,4 +95,4 @@ Cross-platform. Requires `git` to be installed on the system.
 - Branch switching fetches all remotes first (`git fetch --all`), then checks out the desired branch.
 - The `depth` parameter only applies to initial clones, not updates.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

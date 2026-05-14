@@ -126,4 +126,4 @@ Traits are available as `.Traits` in Go templates within `content:` attributes:
     Memory: {{ .Traits.hardware.memory_mb }} MB
 ```
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

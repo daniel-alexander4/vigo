@@ -21,4 +21,4 @@ Run `vigocli traits --help` for current flags.
 
 The agent binary has its own `vigo traits` subcommand that actually runs the collectors locally and prints the results as JSON — see [Agent CLI](agent.md) for that. The `vigocli traits` command here is an admin-side *schema browser* that looks up what names exist; the agent-side command is the one that produces values for a specific host.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

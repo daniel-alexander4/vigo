@@ -95,4 +95,4 @@ Windows only. Requires network connectivity to a domain controller.
 - For `state=absent`, credentials are optional. If omitted, the machine attempts an unauthenticated leave (works when the machine account still has permissions).
 - After joining, subsequent convergence runs detect the domain membership and take no action, making this safe to leave in config permanently.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

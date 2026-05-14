@@ -99,4 +99,4 @@ Windows only.
 - The `environment` parameter sets variables only for the duration of the command. For persistent environment variables, use the [`windows_env`](windows_env.md) executor.
 - Guard commands (`unless`, `onlyif`) run under the same PowerShell flags and environment as the main command.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

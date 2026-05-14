@@ -254,4 +254,4 @@ vigocli backup restore /backup/vigo-latest.tar.gz \
 - [FleetIndex](troubleshoot.md) — In-memory index rebuilt on startup
 - [Troubleshooting](troubleshoot.md) — Common issues and diagnostics
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

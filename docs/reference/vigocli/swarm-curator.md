@@ -212,4 +212,4 @@ vigocli swarm curator show e3b0c44298fc --json | jq '[.entry.body.versions[].pla
 - [`vigocli swarm filecast`](swarm-filecast.md) — admin-pushed *one-off* file distribution (curator is for named, versioned, mutable-tag artifacts)
 
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

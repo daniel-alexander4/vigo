@@ -274,4 +274,4 @@ vigocli secrets generate-certs --san vigo.example.com --san 10.0.1.5
 - [webusers](webusers.md) -- manage web UI user accounts
 - [doctor](doctor.md) -- verify secret resolution with health checks
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

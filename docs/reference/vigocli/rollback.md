@@ -46,4 +46,4 @@ Rollback successful: Restored /etc/nginx/nginx.conf to previous snapshot
 - [preview](preview.md) -- preview planned changes
 - [task](task.md) -- dispatch ad-hoc tasks
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

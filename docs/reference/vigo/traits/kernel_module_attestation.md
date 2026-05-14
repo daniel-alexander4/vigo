@@ -108,4 +108,4 @@ vigocli inventory --where "kernel_module_attestation.summary.unsigned>0" \
 
 **Stable** — loaded kernel modules change infrequently after boot. Cached across convergence cycles.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

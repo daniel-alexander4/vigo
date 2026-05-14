@@ -76,4 +76,4 @@ Cross-platform. Uses `shutdown -r` on Linux/macOS.
 - Cancel uses `shutdown -c`. If no reboot is pending, the command may fail, but this is treated as a successful no-op.
 - Use `reboot_required_file` to make reboots conditional -- only reboot when the OS indicates it is needed (e.g., after kernel or library updates).
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

@@ -103,4 +103,4 @@ Linux, macOS, FreeBSD, Windows (NTFS). Uses `std::fs::hard_link` which maps to P
 - Snapshot directory names use UTC time.
 
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

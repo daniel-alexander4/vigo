@@ -39,4 +39,4 @@ Uses `localtime_r` via libc to get the `tm_zone` abbreviation and `tm_gmtoff` of
 ## Platform
 Linux
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

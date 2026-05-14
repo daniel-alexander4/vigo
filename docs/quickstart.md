@@ -1,7 +1,7 @@
 
 # Quickstart
 
-Get Vigo running and manage your first envoy in 10 minutes.
+Stand up the Vigo server, enroll your first envoy, and apply your first module.
 
 ## 1. Start the server
 
@@ -29,7 +29,7 @@ Open `https://localhost:8443` — accept the self-signed cert, you'll land on th
 
 ## 2. Enroll envoys
 
-**The server's own host first.** Every Vigo server runs a co-hosted `vigo` agent so it can participate in swarm operations alongside its managed nodes. From the server host:
+**The server's own host first.** Every Vigo server runs a co-hosted `vigo` agent so it can participate in swarm operations alongside its envoys. From the server host:
 
 ```bash
 curl -sSfk https://localhost:8443/bootstrap | sudo sh
@@ -38,7 +38,7 @@ curl -sSfk https://localhost:8443/bootstrap | sudo sh
 Then any other machine you want to manage:
 
 ```bash
-# On the managed node:
+# On the envoy:
 curl -sSfk https://<server-ip>:8443/bootstrap | sudo sh
 ```
 

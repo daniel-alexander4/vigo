@@ -84,4 +84,4 @@ Cross-platform. Owner/group setting requires Unix (Linux/macOS).
 - Uses `create_dir_all` for recursive creation and `remove_dir_all` for recursive deletion.
 - Mode is applied after creation on Linux.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

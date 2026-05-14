@@ -205,4 +205,4 @@ chmod 600 /srv/vigo/secrets/vigo/app/db_password
 
 See [Multi-Axis Config](../reference/writing-modules.md) for the full canonical model.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

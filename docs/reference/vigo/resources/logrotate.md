@@ -94,4 +94,4 @@ Linux only.
 - Boolean options default to common best practices: compress, delaycompress, missingok, and notifempty are on; copytruncate is off.
 - The `postrotate` script is wrapped in `postrotate` / `endscript` directives.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

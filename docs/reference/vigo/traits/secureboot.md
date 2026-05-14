@@ -21,4 +21,4 @@ Linux only. Reads the `SecureBoot-*` EFI variable from `/sys/firmware/efi/efivar
 - On legacy BIOS systems, `mode` is `bios` and `enabled` is always `false`.
 - Compliance frameworks that reference Secure Boot: CIS Benchmarks (1.4.1 UEFI), DISA STIG, NIST 800-53 SI-7 (Software, Firmware, and Information Integrity).
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

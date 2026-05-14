@@ -84,4 +84,4 @@ Cross-platform. Uses `pgrep`/`pkill` which must be available on the system.
 - When `state: stopped`, the executor sends the specified signal using `pkill`.
 - Count constraints (`count`, `min`, `max`) provide fine-grained control over process pool sizes.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

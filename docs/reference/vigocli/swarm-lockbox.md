@@ -117,4 +117,4 @@ Per-envoy states follow the same meanings as [vigocli longdrawer show](swarm-lon
 - [`vigo swarm lockbox`](agent-swarm-lockbox.md) — Per-user CLI on the envoy (init, enroll, unlock, encrypt, decrypt, lock)
 - [Swarm Substrate](../../howto/set-up-swarm.md) — The envoy P2P transport lockbox rides on
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

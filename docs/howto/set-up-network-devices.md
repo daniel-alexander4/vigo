@@ -177,4 +177,4 @@ Network devices participate fully in Vigo's compliance system:
 - **Fleet views** -- devices appear in `vigocli nodes list` and the web UI dashboard
 - **Trait queries** -- `vigocli nodes traits core-sw01.example.com` shows device facts
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

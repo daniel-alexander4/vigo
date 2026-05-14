@@ -87,4 +87,4 @@ Trait key constants for all `security_scan.*` keys live in `server/traits/keys.g
 
 **Volatile** -- security scan results change as packages are updated and scans are re-run. Collected every cycle.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

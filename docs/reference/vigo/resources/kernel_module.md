@@ -84,4 +84,4 @@ Linux only.
 - Persistence files are written to `/etc/modules-load.d/vigo-<module>.conf`.
 - Module name comparison normalizes hyphens to underscores (e.g., `br-netfilter` matches `br_netfilter` in lsmod).
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

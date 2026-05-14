@@ -390,4 +390,4 @@ The server requires `ssh-keygen` in the PATH for isowebauth signature verificati
 **API returns 401 with valid token:**
 Check that the token hasn't expired. List your tokens with `vigocli auth status` or the tokens API.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

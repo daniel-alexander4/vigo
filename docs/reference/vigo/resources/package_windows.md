@@ -71,4 +71,4 @@ Windows only. On Linux, `type: package` maps to the [package](package.md) execut
 - The executor uses `where.exe` to probe for available package managers.
 - Chocolatey operations include `--no-progress` to suppress progress bars. winget operations include `--accept-source-agreements --accept-package-agreements`.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

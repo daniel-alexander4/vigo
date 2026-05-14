@@ -371,4 +371,4 @@ Cross-platform. Owner/group setting requires Unix (Linux/macOS).
 - Templates are **not** allowed in `stream_edit` paths. Use literal paths or vars with literal overrides at the node level.
 - **Don't whole-file-manage `/etc/hosts` on a hostdox-enabled envoy.** If `swarm.hostdox: true` reaches this host, the agent maintains a delimited `# BEGIN/END vigo swarm peers` block in `/etc/hosts`; a `type: file` resource that owns the whole file will clobber that block (and any `type: host` entries) on every run, hostdox re-adds it within ~1 s (it watches `/etc/hosts`; a ~60 s timer is the backstop), and the two flap. Use [`type: host`](host.md) for per-entry control, or [`type: blockinfile`](blockinfile.md) region editing with markers distinct from `# BEGIN/END vigo swarm peers`. (Same caution applies to any file another agent subsystem writes its own region into.)
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

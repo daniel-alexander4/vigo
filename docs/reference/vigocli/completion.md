@@ -60,4 +60,4 @@ vigocli completion bash    # bash script
 vigocli completion zsh     # zsh script
 ```
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

@@ -95,4 +95,4 @@ Cross-platform.
 | [json_file](json_file.md) | Setting values in JSON files by dot-path |
 | [field_edit](field_edit.md) | Editing fields in columnar files like `/etc/passwd` |
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

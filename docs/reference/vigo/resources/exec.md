@@ -263,4 +263,4 @@ Use a specialized executor instead of `exec` whenever one exists. Specialized ex
 - `retries` wraps only the command execution. Guards (`onlyif`/`unless`) run once before any attempts. Background execs (`background: true`) are never retried.
 - The `shell` parameter sets the shell for both the main command and guard commands. When `user` is set, commands run via `su -c` regardless of shell override.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

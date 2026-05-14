@@ -141,4 +141,4 @@ Windows only. Requires administrator privileges for `secedit /configure`.
 - Changes take effect immediately after `secedit /configure` completes. No reboot is required.
 - Temporary files created during export and configure are cleaned up automatically.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

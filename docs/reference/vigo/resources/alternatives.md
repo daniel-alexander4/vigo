@@ -68,4 +68,4 @@ Linux only (requires `update-alternatives`).
 - When `state: present`, both `--install` and `--set` are called to ensure the specified path is the active alternative.
 - Priority is used by the automatic mode of update-alternatives when no manual selection is made.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

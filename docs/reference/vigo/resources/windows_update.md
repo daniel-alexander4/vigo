@@ -101,4 +101,4 @@ Windows only. Requires administrator privileges for registry writes under `HKLM:
 - The `scheduled_day` and `scheduled_time` parameters are only applied when `auto_update_enabled=scheduled`. They are ignored for other modes.
 - Changes take effect on the next Windows Update check cycle. No reboot is required, but you may need to restart the Windows Update service (`wuauserv`) for immediate effect.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

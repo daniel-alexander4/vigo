@@ -92,4 +92,4 @@ Per-envoy states:
 - [Longdrawer Subsystem](../../howto/set-up-longdrawer.md) — How the plaintext per-user sync works
 - [Swarm Substrate](../../howto/set-up-swarm.md) — The envoy P2P transport longdrawer rides on
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

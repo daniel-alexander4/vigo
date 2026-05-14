@@ -65,4 +65,4 @@ Windows only. On Linux, `type: user` maps to the [user](user.md) executor.
 - Group membership comparison is case-insensitive.
 - When creating a user with a password, the password is passed as a positional argument to `net user`.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

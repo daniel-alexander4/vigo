@@ -225,4 +225,4 @@ vigocli envoys show web1.example.com
 - [Templates](../reference/writing-modules.md) — Go template syntax for content: attributes
 - [File Executor: stream_edit](../reference/vigo/resources/file.md#stream-edit) — Pipe file content through transform scripts before writing
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

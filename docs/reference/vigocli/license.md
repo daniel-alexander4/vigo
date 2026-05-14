@@ -77,4 +77,4 @@ The fingerprint is `SHA256(machine-id + primary-MAC + CA-cert-fingerprint)`. It 
 - [Licensing](../../howto/troubleshoot.md) -- tiers, enforcement stages, and machine fingerprint
 - [REST API: License](../api.md#license)
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

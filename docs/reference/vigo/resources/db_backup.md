@@ -123,4 +123,4 @@ Linux, macOS, FreeBSD, Windows. Requires the appropriate dump tool to be install
 - Unlike the backup executor, db_backup does not use hardlinks between snapshots — each dump is a fresh file. The snapshot directory structure provides dated organization and retention.
 
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

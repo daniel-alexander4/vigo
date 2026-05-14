@@ -83,4 +83,4 @@ Revoked approved pattern a1b2c3d4
 - [tokens](tokens.md) -- generate enrollment tokens
 - [envoys](envoys.md) -- manage enrolled envoys
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

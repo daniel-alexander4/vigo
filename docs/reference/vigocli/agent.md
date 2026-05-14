@@ -222,4 +222,4 @@ vigo version
 - [Guardrails](../../howto/troubleshoot.md) -- Self-protection for agent paths
 - [Troubleshooting](../../howto/troubleshoot.md) -- Common issues and diagnostics
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

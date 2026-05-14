@@ -62,4 +62,4 @@ stockpile/modules/app.vgo: [error] app: resource "deploy" (exec) missing idempot
 - [doctor](doctor.md) -- server health checks including config validation
 - [config publish](config.md#config-publish) -- full validation + linting pipeline
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

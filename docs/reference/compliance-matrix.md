@@ -74,7 +74,7 @@ For frameworks not listed (FedRAMP, CMMC, etc.), map them yourself using the und
 
 ## Connwaer trait additions
 
-Connwaer (separate product, see [Connwaer docs](https://alexander4.io/connwaer) — formerly bundled in this repo, ejected 2026-05-13) adds **trait-driven escalation**: a control that a Vigo module can't directly enforce gets satisfied if Connwaer's runtime check confirms it. Examples:
+Connwaer is a separate Alexander4 compliance-verification agent. Its docs are currently archived ahead of a dedicated location; once Connwaer ships independently, the canonical reference will live there. Connwaer adds **trait-driven escalation**: a control that a Vigo module can't directly enforce gets satisfied if Connwaer's runtime check confirms it. Examples:
 
 - `connwaer.worm` — verifies WORM storage (immutable backups, tamper-evident archives). Satisfies HIPAA 164.312(c)(1), NIST AU-9.
 - `connwaer.fim` — runtime file-integrity monitoring beyond `aide`. Satisfies PCI-DSS 11.5, NIST SI-7.

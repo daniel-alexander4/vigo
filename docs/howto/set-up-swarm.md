@@ -376,4 +376,4 @@ What happens for every action an operator can take on the seeder or downloader.
 - [vigocli payload](../reference/vigocli/swarm-filecast.md) — CLI reference for admin-pushed filecasts on this substrate
 - [Server Configuration](../reference/server-yaml.md) — `swarm:` section
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

@@ -65,4 +65,4 @@ Linux only.
 - When `state: absent`, the executor runs `swapoff`, removes the fstab entry, then deletes the file.
 - The `size` parameter is only required when the swap file does not already exist.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

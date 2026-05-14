@@ -1,7 +1,7 @@
 
 # Set up Scrier
 
-Scrier is Vigo's admin remote-access feature: interactive SSH, RDP, and VNC sessions to any enrolled envoy, routed through the Vigo server and the envoy's already-open outbound gRPC connection. **The envoy doesn't need any inbound port open.** Sessions work through customer firewalls, cloud security groups, and NAT without bastion hosts or VPNs.
+Scrier is Vigo's admin remote-access feature: interactive SSH, RDP, and VNC sessions to any enrolled envoy, routed through the Vigo server and the envoy's already-open outbound gRPC connection. **No inbound port is required on the envoy.** The same connection the agent uses for check-in carries the session bytes back.
 
 ## What you get
 
@@ -94,7 +94,7 @@ vigocli scrier ssh annlap --ssh-key-file ~/.ssh/id_other.pub   # override auto-d
 4. For SSH, the agent scans regular users via `getpwent`, finds whichever user's `authorized_keys` contains the operator pubkey, appends the ephemeral key with a `# vigo-scrier-ephemeral` marker, and reports back the OS username. Server SSH-dials `127.0.0.1:22` over the tunnel using the ephemeral private key.
 5. For RDP/VNC, the agent connects to `127.0.0.1:<port>` on the envoy; Guacamole handshakes server-side and proxies display instructions over the operator's WebSocket as binary frames.
 6. Operator's client (xterm.js or Guacamole.js or the CLI's WebSocket reader) attaches to `/ws/scrier/{session_id}` and bytes flow.
-7. Either side closing the WebSocket closes the tunnel. The agent strips its ephemeral line from `authorized_keys` (RAII guard — fires even on panic). The session row is marked `closed` and an `scrier.disconnect` audit record is written.
+7. Either side closing the WebSocket closes the tunnel. The agent strips its ephemeral line from `authorized_keys` — the cleanup runs even if the agent crashes mid-session, and a sweep at agent startup removes any stale lines left from previous crashes. The session row is marked `closed` and an `scrier.disconnect` audit record is written.
 
 ## Common failure modes
 

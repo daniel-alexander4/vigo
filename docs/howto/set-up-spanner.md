@@ -167,4 +167,4 @@ The web UI has a spoke detail page at `/spanner/spokes/{id}` showing per-spoke c
 - [Architecture](../reference/_index.md) — System overview
 - [Server Configuration](../reference/server-yaml.md) — spanner: section
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

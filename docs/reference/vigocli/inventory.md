@@ -89,4 +89,4 @@ No matching envoys found.
 - [envoys](envoys.md) -- manage enrolled envoys and view traits
 - [query](query.md) -- query trait values in real time
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

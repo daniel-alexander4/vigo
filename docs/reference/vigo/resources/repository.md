@@ -247,4 +247,4 @@ When `apt-get update` fails after adding a repository, the executor parses the e
 - Alpine APK does not use GPG keys directly — Alpine uses its own trust model.
 - The executor auto-detects the package manager backend based on the OS family.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

@@ -74,4 +74,4 @@ Linux only (systemd).
 - After writing, `systemd-tmpfiles --create <path>` is run to apply the configuration immediately.
 - The file format follows the tmpfiles.d specification: `<type> <path> <mode> <user> <group> <age>`.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

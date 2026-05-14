@@ -83,4 +83,4 @@ Linux only.
 - For `state: mounted`, the executor first ensures the fstab entry, then runs `mount <path>` (which uses the fstab entry).
 - fstab entries are compared field-by-field and updated in place when they drift.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

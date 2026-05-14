@@ -106,4 +106,4 @@ Windows only.
 - Use the `secret:` prefix for PFX passwords to keep them out of plaintext config.
 - The imported certificate's thumbprint is exposed so downstream tooling can bind it (e.g. to an HTTPS listener) via the standard Windows APIs.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

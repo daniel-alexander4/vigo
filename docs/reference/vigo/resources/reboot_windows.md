@@ -81,4 +81,4 @@ Windows only.
 - After a reboot, the agent service starts automatically and resumes convergence. The reboot resource will be skipped on the next run if no new reboot is pending.
 - The `delay_secs` parameter gives logged-in users time to save work. Set to `0` for an immediate reboot.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

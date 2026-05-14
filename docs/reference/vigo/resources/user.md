@@ -192,4 +192,4 @@ Linux only. On Windows, the same `type: user` maps to the [user_windows](user_wi
 - When `state: absent`, the user is deleted with `userdel --remove` (which also removes the home directory) and any `/etc/sudoers.d/<username>` file is removed.
 - Sudoers files are written to `/etc/sudoers.d/<username>` with mode `0440`. Setting both `sudo_passwd` and `sudo_nopasswd` to `true` is an error. Removing both params from a user that previously had sudo will delete the sudoers file.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

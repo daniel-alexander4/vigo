@@ -353,4 +353,4 @@ The destructive lever is the **usercrate `curator: bool` flag**. Removing it tri
 - [user executor](../vigo/resources/user.md) — where the `curator: bool` flag goes
 
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

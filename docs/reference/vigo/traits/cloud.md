@@ -106,4 +106,4 @@ Cloud metadata rarely changes during instance lifetime, so this collector runs o
 ## Platform
 Linux (all providers), Windows (AWS, Azure, GCP — IMDS is accessible on Windows instances)
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

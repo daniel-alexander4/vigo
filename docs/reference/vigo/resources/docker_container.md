@@ -105,4 +105,4 @@ Cross-platform. Requires Docker to be installed and the Docker daemon to be runn
 - The `pull` parameter controls when images are pulled. `missing` (default) pulls only when the image is not locally available.
 - Port, env, and volume parameters are comma-separated lists.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

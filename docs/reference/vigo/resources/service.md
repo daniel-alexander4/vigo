@@ -123,4 +123,4 @@ Linux only (systemd). On Windows, the same `type: service` maps to the [service_
 - The `enabled` parameter uses `systemctl enable` / `systemctl disable`.
 - `restarted` and `reloaded` always apply — gate them with `when: "changed"` to prevent restarts every convergence cycle.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

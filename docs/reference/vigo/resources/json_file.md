@@ -80,4 +80,4 @@ Cross-platform.
 - Array indices can be used in key paths (e.g., `servers.0.host`).
 - The file is pretty-printed with the configured indentation after modification.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

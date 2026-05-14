@@ -257,4 +257,4 @@ Network transient errors (DNS resolution failure, connection timeout) are retrie
 - `flags` are split on whitespace and appended to the package manager command for install, upgrade, downgrade, and remove operations.
 - `timeout`, `retries`, and `retry_delay` are parsed and validated but not yet wired into execution — the runner's 300s timeout and APT's internal retry logic apply.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

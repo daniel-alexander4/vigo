@@ -174,4 +174,4 @@ See `example-configs/stockpile/workflows/` for 10 pre-built security and operati
 - [task](task.md) -- dispatch individual ad-hoc tasks
 - [runs](runs.md) -- view convergence run history
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

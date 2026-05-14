@@ -304,4 +304,4 @@ Litestream covers the SQLite database with near-real-time replication. The built
 
 5. **Test restores periodically.** See [Disaster Recovery](disaster-recovery.md) for the full restore walkthrough.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

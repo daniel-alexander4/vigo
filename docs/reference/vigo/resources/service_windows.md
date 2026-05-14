@@ -67,4 +67,4 @@ Windows only. On Linux, `type: service` maps to the [service](service.md) execut
 - If the service is not found, an error is returned.
 - Comma-separated service names are processed individually.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

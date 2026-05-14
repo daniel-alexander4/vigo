@@ -65,4 +65,4 @@ The collector is classified `volatile` — it refreshes every cycle so a sudden 
 Linux only. macOS, BSD, and Windows return `null` for the entire trait — none of them expose `/proc/sys/fs/file-nr` or `/proc` the same way, and substituting `lsof | wc -l` would mean spawning a subprocess on every check-in.
 
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

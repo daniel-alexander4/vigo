@@ -120,4 +120,4 @@ Adjacent operator knob from the same release: a `viz.color=<name|hex>` tag on an
 - [`vigocli swarm filecast`](swarm-filecast.md) — Admin-pushed payloads on the substrate
 - [`vigocli swarm gitback`](swarm-gitback.md), [`vigocli swarm longdrawer`](swarm-longdrawer.md), [`vigocli swarm lockbox`](swarm-lockbox.md) — Other content subsystems on the substrate
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

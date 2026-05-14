@@ -120,4 +120,4 @@ Server-side allowlist filtering (configured in `server.yaml` under `compliance.a
 
 **Stable** — source lists change infrequently. Cached across convergence cycles.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

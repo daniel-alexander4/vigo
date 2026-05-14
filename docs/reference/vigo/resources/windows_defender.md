@@ -94,4 +94,4 @@ Windows only.
 - Scan schedule controls the daily quick scan time. For full scan scheduling, use the `powershell` executor with `Set-MpPreference -ScanScheduleDay` and `-ScanScheduleTime`.
 - Exclusion paths are compared case-insensitively, matching Windows filesystem behavior.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

@@ -109,4 +109,4 @@ Batching: the collector runs one `dpkg-query -S <paths...>` (or `rpm -qf <paths.
 
 **Periodic** — runs on an hourly cadence rather than every check-in. Scanner output changes on a slower cadence than check-ins (scanners typically run nightly), and the `/proc` walk + dpkg/rpm lookup is cheap-but-not-free.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

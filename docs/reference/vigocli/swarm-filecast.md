@@ -248,4 +248,4 @@ plex                           backup.tar.gz                  invalid manifest: 
 - [Swarm Substrate](../../howto/set-up-swarm.md) — The envoy P2P transport payload rides on
 - [Swarm Operations](../../howto/set-up-swarm.md) — Configuration, monitoring, troubleshooting
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../legal/license.md).*

@@ -21,4 +21,4 @@ Linux only. Reads from `/sys/class/tpm/tpm0/tpm_version_major`.
 - TPM 2.0 is required for Windows 11, BitLocker, and many compliance frameworks.
 - Compliance frameworks that reference TPM: NIST 800-53 SC-12 (Cryptographic Key Establishment and Management), DISA STIG.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

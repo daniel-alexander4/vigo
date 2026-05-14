@@ -189,4 +189,4 @@ The executor compiles on all platforms. Install/remove functionality works on:
 - The executor cleans up its temp download directory after install, whether the install succeeds or fails.
 - `lock_version` uses `apt-mark hold` on Debian or `dnf versionlock` / `yum versionlock` on RHEL. No lock mechanism exists for macOS `.pkg` or Windows `.msi`.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

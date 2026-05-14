@@ -519,7 +519,7 @@ No server restart needed. Config parse errors are logged and trigger an SMTP not
 - [When Expressions](#when-expressions) — Conditional logic
 - [Templates](#templates) — Go templates in content: attributes
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
 
 ---
@@ -806,7 +806,7 @@ Default timeouts by resource type:
 - [Resource DAG](../reference/writing-modules.md#resource-dag) — Dependency ordering
 - [When Expressions](#when-expressions) — Conditional logic
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
 
 ---
@@ -1068,7 +1068,7 @@ All matching cases contribute modules. A module with its own `when:` keeps it re
 - [Config Format](#config-format) — Conditional vars
 - [Trait Collectors](../reference/vigo/traits/_index.md) — Available trait data for expressions
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
 
 ---
@@ -1270,7 +1270,7 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
 - [Trait Collectors](../reference/vigo/traits/_index.md) — Available .Traits data
 - [Executors](../reference/vigo/resources/_index.md) — Which attributes each executor uses
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
 
 ---
@@ -1931,7 +1931,7 @@ env:
 - [Templates](#templates) — Go template expressions in content
 - [Resource DAG](../reference/writing-modules.md#resource-dag) — Dependency and notification ordering
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
 
 ---
@@ -2319,7 +2319,7 @@ User management looks deceptively similar to other vigo resource management on p
 - [Lookup Tables](#lookups) — per-envoy resource field variation via tag/host/trait keys
 - [Config Format](#config-format#compliance-waivers--claims) — directory-level compliance claim inheritance
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
 
 ---

@@ -38,4 +38,4 @@ Windows only. On Linux, `type: hostname` maps to the [hostname](hostname.md) exe
 - A reboot may be required for the hostname change to take full effect.
 - Hostname comparison is case-insensitive.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

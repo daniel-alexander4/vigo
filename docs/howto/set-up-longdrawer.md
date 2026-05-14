@@ -155,4 +155,4 @@ Pattern-list changes record tamper-evident audit-chain entries (`swarm.longdrawe
 - [Swarm Operations](../howto/set-up-swarm.md) — Swarm configuration and troubleshooting
 - [Gitback](set-up-gitback.md) — Personal-DR git mirroring (sister subsystem; pure P2P as of 0.23.0, receivers hold root-owned bare repos only)
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

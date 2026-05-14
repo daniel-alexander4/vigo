@@ -103,4 +103,4 @@ Cross-platform. Requires Docker with the Compose plugin (`docker compose`) to be
 - When `state: up` and services are already running, `docker compose up` is not re-run. Use `notify`/`subscribes` to force re-up on config changes.
 - The `volumes` parameter only applies to `state: down` and removes named volumes declared in the compose file.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

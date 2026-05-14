@@ -95,4 +95,4 @@ Cross-platform. Scripts must be executable and available at the configured path.
 - Errors from the script (non-zero exit, invalid JSON, or a non-empty `error` field) are reported as resource failures.
 - Scripts should respect the `dry_run` flag and avoid mutating system state when it is `true`.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

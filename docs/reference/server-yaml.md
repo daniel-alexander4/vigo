@@ -514,4 +514,4 @@ All event types available for SMTP, webhook, and integration subscriptions:
 | `security.cve_critical` | New critical CVE found |
 | `security.hardening_drop` | Hardening score dropped significantly |
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

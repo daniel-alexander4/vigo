@@ -85,4 +85,4 @@ Cross-platform. Requires pip to be installed.
 - When using `virtualenv`, the pip binary path is constructed as `<virtualenv>/bin/<pip_cmd>`.
 - The `latest` state always runs `pip install --upgrade`, so it always reports `changed: true`.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

@@ -221,4 +221,4 @@ The `depends_on` declarations create a DAG:
 
 This ensures the firewall is configured before SSH is hardened, and fail2ban starts after SSH configuration is in place.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

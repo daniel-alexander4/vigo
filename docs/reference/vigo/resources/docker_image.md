@@ -72,4 +72,4 @@ Cross-platform. Requires Docker to be installed.
 - The `force` parameter is useful for mutable tags like `latest` where you want to ensure the newest version is pulled.
 - Image removal uses `docker rmi`.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

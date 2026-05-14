@@ -39,4 +39,4 @@ Runs `whoami` to get the current username, stripping the `DOMAIN\` prefix if pre
 ## Platform
 Windows
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

@@ -231,4 +231,4 @@ Mutually exclusive with `url:`. `sha256:` alongside `artifact:` is redundant (cu
 - [Filecast](set-up-swarm.md) — the admin-pushed sibling for *one-off* file fan-out (curator is for named, versioned, mutable-tag artifacts)
 
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

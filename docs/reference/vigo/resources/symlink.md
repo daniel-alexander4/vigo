@@ -77,4 +77,4 @@ Cross-platform. Hard links require the target file to exist. Owner/group require
 - When `force: true` and a file (not a symlink) already exists at `target_path`, it is removed before creating the link.
 - Symlink ownership is set via `lchown` (does not follow the link).
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*

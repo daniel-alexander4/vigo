@@ -166,4 +166,4 @@ Pattern-list changes record tamper-evident audit-chain entries (`swarm.gitback.e
 - [`gitback` trait reference](../reference/vigo/traits/) — schema of the per-project entries the agent emits on each check-in (project_id, members, dr_scope, head_refs, envelope counts)
 
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
