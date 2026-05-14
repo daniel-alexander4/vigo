@@ -24,9 +24,12 @@
 //!
 //! ### Module layout (post-ADR-015 step 3)
 //!
-//! - [`tokens`] — capability-token primitives (Ed25519, deterministic
-//!   canonical encoding, content-addressed token IDs, chain
-//!   verification). Shipped at 0.34.10.
+//! The puddle-rooted ownership/access primitive (capability tokens,
+//! ADR-019 delegation envelopes, the SO_PEERCRED helper) is **shared**
+//! with curator (ADR-024) and the ADR-022 friendly-name claims, and
+//! lives in [`crate::swarm::anchor`] — gitback imports it like any
+//! other consumer. The submodules below are the git-specific layer.
+//!
 //! - [`project_state`] — per-user state at
 //!   `~/.vigo-gitback/<project_id>/` (project config + token chain)
 //!   and bare-repo path helpers under

@@ -3,8 +3,10 @@
 
 //! curator — the fifth swarm content subsystem: a P2P artifact registry.
 //!
-//! filecast's content-addressed blob transport + gitback's puddle-keyed
-//! identity/access machinery + a thin catalog layer (ADR-024). An *artifact*
+//! filecast's content-addressed blob transport + the [`crate::swarm::anchor`]
+//! layer's puddle-keyed identity/access machinery (capability tokens,
+//! ADR-019 delegation envelopes, the SO_PEERCRED helper-daemon helper,
+//! shared with gitback) + a thin catalog layer (ADR-024). An *artifact*
 //! is keyed `artifact_id = sha256(founder_puddle_pubkey ‖ name)` (same shape as
 //! a gitback `project_id`, so Alice's `foo` ≠ Bob's `foo`); the human-facing
 //! reference is `<founder-puddle-name>/<name>` (the puddle name resolves via the
@@ -45,13 +47,10 @@
 //! the agent catalog cache, sourced from the server like the ADR-022 name map —
 //! see `pending.md`).
 //!
-//! `catalog.rs` reuses [`crate::swarm::anchor::envelopes::DelegationEnvelope`]
-//! (the ADR-019 rekey-bridge envelope) and `helper.rs` reuses
-//! [`crate::swarm::gitback::helper::peer_uid`] — the same cross-subsystem reuse
-//! `crate::swarm::puddle::name` already does. When the shared puddle-rooted
-//! ownership/access layer is eventually extracted (the `anchor` follow-up, see
-//! `pending.md`), those move there and gitback / puddle / curator all import from
-//! `anchor::`.
+//! `catalog.rs` imports [`crate::swarm::anchor::envelopes::DelegationEnvelope`]
+//! (the ADR-019 rekey-bridge envelope) and `helper.rs` imports
+//! [`crate::swarm::anchor::peer_uid::peer_uid`] (SO_PEERCRED) directly from the
+//! anchor layer. The extraction landed at 0.51.7 (see [`crate::swarm::anchor`]).
 
 pub mod catalog;
 pub mod catalog_cache;
