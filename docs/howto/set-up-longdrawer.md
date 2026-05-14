@@ -1,11 +1,34 @@
 
 # Set up Longdrawer
 
-Longdrawer keeps `~/longdrawer/` in sync across every machine where a user has an account, on the same LAN. Drop a file on any machine and it appears on all the others. Delete a file and it disappears from all of them. No config, no commands, no server involvement.
+Longdrawer keeps `~/longdrawer/` in sync across every envoy where a user has an account, on the same LAN. Drop a file on any envoy and it appears on all the others. Delete a file and it disappears from all of them. No config, no commands, no server involvement.
 
-Longdrawer is one of four content subsystems that ride the [swarm](set-up-swarm.md) substrate. The server plays no role in content or discovery — longdrawer reuses swarm's mTLS peer channel (port 1531) for transfers and runs its own multicast group (`224.0.0.43:1532`) for announcements.
+## Enable it
+
+Longdrawer is opt-in by directory existence — no usercrate flag, no server.yaml gate. **Create `~/longdrawer/` on at least one envoy** and the agent picks it up on the next 30-second scan. Other envoys hosting the same user with `~/longdrawer/` will start syncing automatically.
+
+For cross-subnet peers (LAN multicast doesn't reach them) add them to the user's longdrawer config:
+
+```yaml
+# /home/<user>/.longdrawer/config.yaml
+cross_subnet_peers:
+  - peer-host.example.com
+  - 10.20.30.40
+```
+
+## Use it
+
+There are no CLI verbs. Drop a file into `~/longdrawer/`; it appears on every peer. Remove it; the tombstone propagates. That's the whole operator surface.
+
+If a file isn't propagating, check:
+
+- `~/longdrawer/` exists on both sides (it's an opt-in-by-existence signal).
+- Multicast traffic isn't being firewalled on `224.0.0.43:1532` (or that the cross-subnet peer list is set, if peers are on different subnets).
+- The disk has more than 10% free on both sides (the swarm-wide refuse-below threshold applies).
 
 ## How It Works
+
+Longdrawer is one of four content subsystems that ride the [swarm](set-up-swarm.md) substrate. The server plays no role in content or discovery — longdrawer reuses swarm's mTLS peer channel (port 1531) for transfers and runs its own multicast group (`224.0.0.43:1532`) for announcements.
 
 Longdrawer is a **pure peer-to-peer LAN feature**. The Vigo server plays no role at all. Envoys discover each other via UDP multicast and exchange files directly over mTLS on swarm's peer port.
 

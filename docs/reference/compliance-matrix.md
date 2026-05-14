@@ -78,11 +78,25 @@ For frameworks not listed (FedRAMP, CMMC, etc.), map them yourself using the und
 
 Connwaer is a separate Alexander4 compliance-verification agent. Its docs are currently archived ahead of a dedicated location; once Connwaer ships independently, the canonical reference will live there. Connwaer adds **trait-driven escalation**: a control that a Vigo module can't directly enforce gets satisfied if Connwaer's runtime check confirms it. Examples:
 
-- `connwaer.worm` — verifies WORM storage (immutable backups, tamper-evident archives). Satisfies HIPAA 164.312(c)(1), NIST AU-9.
-- `connwaer.fim` — runtime file-integrity monitoring beyond `aide`. Satisfies PCI-DSS 11.5, NIST SI-7.
-- `connwaer.rng` — validates FIPS-approved RNG sources. Satisfies FIPS 140-3, NIST SP 800-90B.
-- `connwaer.hsm-lifecycle` — verifies HSM key-lifecycle handling. Satisfies CCSS-9.1, PCI-DSS 3.5.
-- `connwaer.kill-switch` — verifies sub-millisecond trading-system kill switch. Satisfies MiFID II RTS 24.
+- `connwaer.app-allowlisting` — verifies application-allowlist enforcement (only approved binaries can execute). Satisfies NIST CM-7(5), CIS 2.5.x, HIPAA 164.312(a)(2)(ii).
+- `connwaer.backup-restore` — verifies the *restore* half of backup discipline by exercising it on a schedule (a backup that can't be restored isn't a backup). Satisfies NIST CP-9(1) / CP-10, ISO A.8.13, HIPAA 164.308(a)(7)(ii)(B).
+- `connwaer.bcp-test` — verifies business-continuity-plan exercises happened on schedule with documented outcomes. Satisfies NIST CP-4, ISO A.5.30, HITRUST 12.b.
+- `connwaer.capacity-monitor` — verifies capacity headroom against declared thresholds (disk, memory, file descriptors). Satisfies SOC 2 A1.1, NIST CP-2(2), ISO A.8.6.
+- `connwaer.encryption-at-rest` — verifies encryption-at-rest is actually engaged (LUKS, ZFS-native, dm-crypt, BitLocker) and the keys are managed per policy. Satisfies HIPAA 164.312(a)(2)(iv), PCI-DSS 3.4 / 3.5, NIST SC-28 / SC-28(1).
+- `connwaer.fim` — runtime file-integrity monitoring beyond `aide`. Satisfies PCI-DSS 11.5, NIST SI-7 / SI-7(1) / SI-7(7).
+- `connwaer.hsm-lifecycle` — verifies HSM key-lifecycle handling (generation, rotation, retirement, destruction). Satisfies CCSS-9.1, PCI-DSS 3.5 / 3.6, NIST SC-12 / SC-12(2).
+- `connwaer.integrity-monitoring` — broader integrity surface than `connwaer.fim`: kernel modules, boot chain, service unit files. Satisfies NIST SI-7, ISO A.8.34.
+- `connwaer.kill-switch` — verifies sub-millisecond trading-system kill switch (financial-services). Satisfies MiFID II RTS 24, SEC Rule 15c3-5.
+- `connwaer.log-review` — verifies logs are reviewed on a defined cadence with documented outcomes. Satisfies PCI-DSS 10.4, NIST AU-6 / AU-6(1), ISO A.8.15 / A.8.16.
+- `connwaer.network-segmentation` — verifies segmentation between fleet partitions (CDE vs non-CDE, prod vs dev, tenant boundaries). Satisfies PCI-DSS 1.2 / 1.3, NIST SC-7, ISO A.8.22.
+- `connwaer.password-policy` — verifies password-complexity, history, and lockout policy enforcement. Satisfies NIST IA-5 / IA-5(1), CIS 5.4.x, HIPAA 164.308(a)(5)(ii)(D).
+- `connwaer.privilege-escalation` — verifies sudo / SeDebug / setuid policy and auditing. Satisfies NIST AC-6 / AC-6(1) / AC-6(2), PCI-DSS 7.2.1, CIS 5.2.x.
+- `connwaer.rng-validation` — validates FIPS-approved RNG sources. Satisfies FIPS 140-3, NIST SP 800-90B.
+- `connwaer.sandboxing` — verifies process sandboxing (systemd hardening directives, AppArmor / SELinux profiles in enforce mode, Windows sandbox). Satisfies NIST SC-39, CIS 1.x.
+- `connwaer.session-timeout` — verifies idle-session and absolute-session timeouts on interactive shells. Satisfies HIPAA 164.312(a)(2)(iii), PCI-DSS 8.2.8, NIST AC-12.
+- `connwaer.snmp-collector` — collects SNMP traits from network devices and tagged hosts for compliance evidence. Satisfies operational visibility requirements under most frameworks.
+- `connwaer.time-sync` — verifies NTP/chrony health, peer reachability, drift bounds. Satisfies PCI-DSS 10.4, NIST AU-8 / AU-8(1), ISO A.12.4.4.
+- `connwaer.worm-verify` — verifies WORM storage (immutable backups, tamper-evident archives) is actually immutable. Satisfies HIPAA 164.312(c)(1), NIST AU-9 / AU-9(2), FINRA SEC-17a-4.
 
 Connwaer's trait outputs feed Vigo's compliance index via the same `compliance:` mechanism modules use — to an auditor reading the framework report, a control satisfied by a Vigo module and a control satisfied by a Connwaer trait check are indistinguishable.
 

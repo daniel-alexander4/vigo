@@ -1,7 +1,7 @@
 
 # Migrating from CFEngine
 
-Vigo inherits CFEngine's promise theory DNA — both systems model desired state as declarative promises that agents evaluate and converge locally. If you've written CFEngine policy, Vigo's resource model maps directly to promises, modules map to bundles, and `when:` expressions replace the class system.
+CFEngine and Vigo both model desired state as declarative units that agents evaluate and converge locally. Vigo's resource model maps onto CFEngine promises, modules onto bundles, and `when:` expressions onto the class system. The shift is mostly notational (CFEngine policy language → YAML) plus a different identity model on the server side (matchfiles + roles + environments).
 
 ## Architecture Differences
 

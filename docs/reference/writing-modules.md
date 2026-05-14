@@ -512,12 +512,6 @@ After `vigocli config publish` syncs files to `.live/`, it calls the server's re
 
 No server restart needed. Config parse errors are logged and trigger an SMTP notification if configured.
 
-## Related
-
-- [Resource DAG](../reference/writing-modules.md#resource-dag) — Dependency ordering
-- [Resource Language](#resource-types) — Advanced config features
-- [When Expressions](#when-expressions) — Conditional logic
-- [Templates](#templates) — Go templates in content: attributes
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
@@ -800,11 +794,6 @@ Default timeouts by resource type:
 | `exec`, `source_package`, `nonrepo_package`, `custom`, `package`, `repository` | 300s (5 min) |
 | All others (`file`, `service`, `user`, etc.) | 60s |
 
-## Related
-
-- [Config Format](#config-format) — Module and variable structure
-- [Resource DAG](../reference/writing-modules.md#resource-dag) — Dependency ordering
-- [When Expressions](#when-expressions) — Conditional logic
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
@@ -1062,11 +1051,6 @@ All matching cases contribute modules. A module with its own `when:` keeps it re
 3. Role definition `when:`
 4. Role ref `when:` (at the match block)
 
-## Related
-
-- [Resource Language](#resource-types) — conditional_block for grouping
-- [Config Format](#config-format) — Conditional vars
-- [Trait Collectors](../reference/vigo/traits/_index.md) — Available trait data for expressions
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
@@ -1264,11 +1248,6 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
 
 **Fix:** Use vars to set the service name directly as a resource attribute.
 
-## Related
-
-- [Config Format](#config-format) — Vars and environments.vgo
-- [Trait Collectors](../reference/vigo/traits/_index.md) — Available .Traits data
-- [Executors](../reference/vigo/resources/_index.md) — Which attributes each executor uses
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
@@ -1923,13 +1902,6 @@ env:
 
 **No duplication.** Adding a new vhost: add one entry to the `vhosts` list. Adding a new environment: add one envoy entry with the environment name. Adding monitoring to all servers: add the module to `base` role. Each change happens in exactly one place.
 
-## Related
-
-- [Config Format](#config-format) — Module, role, and envoy structure
-- [Resource Language](#resource-types) — foreach, case, conditional_block, defaults, stream_edit
-- [When Expressions](#when-expressions) — Conditional logic syntax
-- [Templates](#templates) — Go template expressions in content
-- [Resource DAG](../reference/writing-modules.md#resource-dag) — Dependency and notification ordering
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
@@ -2150,15 +2122,6 @@ These mechanisms were deleted because they duplicated what other axes already do
 
 Conditional vars and match vars flowed all the way to the agent via protobuf `ConditionalVarDef`. That machinery is gone; the agent no longer evaluates trait-based boolean vars on each check-in.
 
-## Related reading
-
-- [Config Format](#config-format) — file-level YAML structure for modules, roles, matchfiles, common.vgo, environments.vgo.
-- [User Management](#usercrates) — the usercrate pattern for per-user config.
-- [Lookup Tables](#lookups) — tag-keyed and platform-keyed field variation inside modules.
-- [Composition Patterns](#composition-patterns) — roles, includes, inheritance, when expressions.
-- [Glossary](../glossary.md) — canonical term definitions for stacks, stockpile, examples, .live, stone, usercrate.
-
-
 ---
 ## User Account Management
 
@@ -2313,11 +2276,6 @@ The 1:1 convention (one crate per human) is the recommended shape for individual
 
 User management looks deceptively similar to other vigo resource management on paper — it's just another resource type — but the executor is fundamentally more complicated and the organizational needs are fundamentally different. The recommended pattern (per-user files under `stockpile/usercrates/`, inline compliance claims, lookup-table per-host variation, two-phase retirement) falls out directly from those needs. Follow it and user management stays auditable, per-host variation stays readable, and retirement stays clean.
 
-## Related
-
-- [reference/executors/user.md](../reference/vigo/resources/user.md) — parameter reference, examples, idempotency details
-- [Lookup Tables](#lookups) — per-envoy resource field variation via tag/host/trait keys
-- [Config Format](#config-format#compliance-waivers--claims) — directory-level compliance claim inheritance
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
@@ -2621,14 +2579,6 @@ Cache entries live under the agent's state directory and are pruned when their c
 A script that exits non-zero fails the whole pipeline; the resource is reported as failed and the file is not written. The next convergence attempt re-runs the pipeline from scratch (cache miss is forced on the stage that failed).
 
 Scripts should be pure transformations — stateless, deterministic, no side effects. Writing to disk, hitting the network, or depending on external state defeats caching and creates flaky convergence.
-
-## Related
-
-- [Server-config > stream_edit](../reference/server-yaml.md#stream_edit) — config reference
-- [Resource Language](#resource-types) — the `file` resource and its attributes
-- [Templates](#templates) — upstream rendering before stream-edit stages
-- [Guardrails](../howto/troubleshoot.md) — the broader self-protection model for agent-side execution
-
 
 ---
 *Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

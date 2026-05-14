@@ -1,7 +1,7 @@
 
 # Migrating from Chef
 
-Vigo and Chef share the pull-based model and converge-on-interval pattern. The biggest shift is from Ruby DSL to plain YAML, and from Chef's 15-level attribute precedence to three levels. If you've managed infrastructure with Chef, Vigo's resource model will be instantly recognizable.
+Chef and Vigo share the pull-based model and converge-on-interval pattern. The biggest practical shifts: Ruby DSL → plain YAML; Chef's 15-level attribute precedence → Vigo's three levels (match-block vars > inherited vars > module defaults, with `environments.vgo` overrides at the top). The resource shape — declarative, idempotent, with `notify` / `subscribes` triggers — maps closely.
 
 ## Architecture Differences
 

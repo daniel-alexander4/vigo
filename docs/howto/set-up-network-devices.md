@@ -1,7 +1,29 @@
 
 # Set up network devices
 
-Vigo manages network devices (switches, routers, firewalls) that can't run the agent binary. These devices appear as first-class fleet members with compliance status, traits, and run history -- managed through a **gateway proxy** pattern over SSH. Five device types are supported: Cisco IOS, NX-OS, IOS-XR, Arista EOS, and Juniper Junos.
+Vigo manages network devices (switches, routers, firewalls) that can't run the agent binary. These devices appear as fleet members with compliance status, traits, and run history — managed through a **gateway proxy** pattern over SSH. Five device types are supported today: Cisco IOS, NX-OS, IOS-XR, Arista EOS, and Juniper Junos.
+
+## Enable it
+
+Pick one envoy on the same management network as the device(s) — call it the **gateway envoy**. It'll SSH to each network device on Vigo's behalf. Declare the devices as envoys via the network-device matchfile shape, with the gateway specified:
+
+```yaml
+# /srv/vigo/stacks/stockpile/envoys.vgo
+envoys:
+  - match: "switch-*.lab"
+    network_device:
+      gateway: gateway-envoy.lab
+      type: cisco_ios
+      ssh_user: "secret:vigo/net/ssh-user"
+      ssh_password: "secret:vigo/net/ssh-pass"
+    modules: [switch-baseline]
+```
+
+The gateway envoy itself needs the matching `network_device` capability enabled in `server.yaml` (or via the gateway envoy's role).
+
+## Use it
+
+Once the matchfile lands and the gateway envoy has converged, the network devices appear in `vigocli envoys list` like any other envoy. Modules targeting them run their resources via the gateway: e.g., a `cisco_vlan` resource declares "VLAN 100 should exist on this switch"; the gateway SSHs in, checks current state, applies the diff, reports back.
 
 ## Architecture
 

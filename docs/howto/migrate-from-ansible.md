@@ -1,7 +1,7 @@
 
 # Migrating from Ansible
 
-Vigo and Ansible solve the same problem but with opposite architectures. The biggest shift is from push-based (SSH from a control node) to pull-based (agents poll a server). If you're comfortable with Ansible's YAML and role structure, Vigo's config format will feel natural — the differences are in execution model, templating, and state management.
+Ansible pushes configuration over SSH from a control node; Vigo runs a persistent agent on each envoy that pulls desired state from a central server. The biggest practical shifts when porting an Ansible setup: execution model (push → pull), template scope (Jinja2 everywhere → Go templates inside `content:` only), and inventory shape (`host_vars` / `group_vars` → matchfiles + roles + per-host vars).
 
 ## Architecture Differences
 

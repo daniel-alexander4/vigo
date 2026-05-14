@@ -1,7 +1,7 @@
 
 # Migrating from Puppet
 
-Vigo is the most conceptually similar tool to Puppet — both are pull-based, compile a desired-state catalog on the server, and apply idempotent resources on the agent. If you think in Puppet, Vigo will feel familiar.
+Puppet and Vigo share the closest conceptual shape — both are pull-based, both compile a desired-state catalog on the server, both apply idempotent resources on the agent. The migration is mostly a translation of Puppet DSL to YAML and Hiera to Vigo's three-level var precedence; the operational model is the same.
 
 ## Architecture Differences
 

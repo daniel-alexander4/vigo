@@ -1,7 +1,7 @@
 
 # Migrating from Salt
 
-Vigo and Salt share a YAML-first configuration philosophy, making Salt the smoothest migration path. Both use YAML for state definitions, have a concept of system facts (grains/traits), and support a pull-based agent model. The key differences are template rendering, data lookup, and execution model.
+Salt and Vigo both use YAML for state definitions, both have system facts (Salt grains, Vigo traits), and both support a pull-based agent model. The biggest practical shifts: template rendering (Jinja2 → Go templates scoped to `content:`), data lookup (Salt pillar → Vigo `secret:` resolution + matchfile vars + lookups), and execution model (Salt's master-issued commands → Vigo's pulled-policy convergence).
 
 ## Architecture Differences
 

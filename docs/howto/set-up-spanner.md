@@ -1,9 +1,38 @@
 
 # Set up Spanner (hub-spoke sharding)
 
-Spanner enables hub-spoke scaling for large fleets. A hub server aggregates data from spoke servers, each of which handles a partition of envoys.
+Spanner shards the control plane across multiple Vigo servers — a hub server aggregates data from spoke servers, each of which owns a partition of the fleet (typically by hostname pattern). Use it when one server can't comfortably hold the fleet you're managing.
 
-> **License requirement:** Spanner requires a paid license. The built-in free license (100 envoys) does not support hub or spoke mode. The server will refuse to start if `spanner.role` is set to `hub` or `spoke` on the free license. Paid licenses are bound to a specific server via [machine fingerprint](../howto/troubleshoot.md#machine-fingerprint-binding) — if you migrate the hub to a new machine, you will need a new license.
+> **License requirement:** Spanner needs a paid license. The built-in free license (100 envoys) does not support hub or spoke mode; the server refuses to start with `spanner.role` set to `hub` or `spoke` on the free license. Paid licenses are bound to a specific server via [machine fingerprint](troubleshoot.md#machine-fingerprint-binding) — migrating the hub to a new machine requires a new license.
+
+## Enable it
+
+Three roles: `standalone` (default — no spanner config), `hub` (aggregates spokes), and `spoke` (handles its partition). Pick the role per server in `server.yaml`:
+
+```yaml
+# Hub server.yaml:
+spanner:
+  role: hub
+  spokes:
+    - hostname: spoke-east.lab
+      partition: "*.east.example.com"
+    - hostname: spoke-west.lab
+      partition: "*.west.example.com"
+
+# Spoke server.yaml:
+spanner:
+  role: spoke
+  hub: hub.lab
+  partition: "*.east.example.com"
+```
+
+Restart each server (hub first, spokes second). The hub will start health-checking spokes and aggregating their data.
+
+## Use it
+
+`vigocli spanner status` shows the spanner topology, per-spoke health, aggregated convergence + compliance + license usage. Cross-spoke admin queries (force-push, ad-hoc tasks, live queries) work through the hub: you talk to one place, the hub fans out to the right spoke(s).
+
+If a spoke health-checks N times in a row, the hub drains it by reassigning its envoys to the hub itself (envoys keep checking in; no data loss). Recovery is automatic when the spoke returns.
 
 ## Architecture
 
