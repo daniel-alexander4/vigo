@@ -1,7 +1,9 @@
 
 # Set up Swarm
 
-How to configure, monitor, and troubleshoot the envoy P2P substrate and the four content subsystems that ride it ([payload](../glossary.md#payload), [longdrawer](../howto/set-up-longdrawer.md), [gitback](../howto/set-up-gitback.md), [lockbox](../howto/set-up-lockbox.md)).
+How to configure, monitor, and troubleshoot the envoy P2P substrate and the five content subsystems that ride it ([filecast](../glossary.md#payload), [longdrawer](set-up-longdrawer.md), [gitback](set-up-gitback.md), [lockbox](set-up-lockbox.md), [curator](set-up-curator.md)).
+
+![Swarm overview — envoys talk peer-to-peer over mTLS port 1531; five content subsystems ride the substrate](../img/swarm-overview.svg)
 
 ## Enabling Swarm
 

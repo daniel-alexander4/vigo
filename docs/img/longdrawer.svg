@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 460" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="760" height="460" fill="#ffffff"/>
+
+  <!-- Three envoys arranged horizontally -->
+  <g>
+    <rect x="20" y="60" width="220" height="240" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+    <text x="130" y="84" text-anchor="middle" font-weight="600">Envoy A (LAN)</text>
+    <rect x="40" y="100" width="180" height="40" fill="#ffffff" stroke="#94a3b8" stroke-width="1" rx="3"/>
+    <text x="130" y="120" text-anchor="middle" font-size="11" font-weight="600">~/longdrawer/foo</text>
+    <text x="130" y="134" text-anchor="middle" font-size="10" fill="#475569">plaintext</text>
+    <text x="130" y="166" text-anchor="middle" font-size="10" fill="#475569">↓ 30s scan</text>
+    <rect x="40" y="178" width="180" height="32" fill="#dbeafe" stroke="#2563eb" stroke-width="1" rx="3"/>
+    <text x="130" y="198" text-anchor="middle" font-size="11">state digest: SHA-256(files)</text>
+    <text x="130" y="225" text-anchor="middle" font-size="10" fill="#475569">↓ multicast announce</text>
+    <rect x="40" y="237" width="180" height="48" fill="#fef3c7" stroke="#a16207" stroke-width="1" rx="3"/>
+    <text x="130" y="257" text-anchor="middle" font-size="11" font-weight="600">224.0.0.43:1532  TTL=1</text>
+    <text x="130" y="273" text-anchor="middle" font-size="10" fill="#475569">{machine, user, port, digest}</text>
+  </g>
+
+  <g>
+    <rect x="270" y="60" width="220" height="240" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+    <text x="380" y="84" text-anchor="middle" font-weight="600">Envoy B (same LAN)</text>
+    <rect x="290" y="100" width="180" height="40" fill="#ffffff" stroke="#94a3b8" stroke-width="1" rx="3"/>
+    <text x="380" y="120" text-anchor="middle" font-size="11" font-weight="600">~/longdrawer/  (empty)</text>
+    <text x="380" y="166" text-anchor="middle" font-size="10" fill="#475569">↓ digest mismatch</text>
+    <rect x="290" y="178" width="180" height="32" fill="#dbeafe" stroke="#2563eb" stroke-width="1" rx="3"/>
+    <text x="380" y="198" text-anchor="middle" font-size="11">GET /longdrawer/state/&lt;u&gt;</text>
+    <text x="380" y="225" text-anchor="middle" font-size="10" fill="#475569">↓ reconcile per-file</text>
+    <rect x="290" y="237" width="180" height="48" fill="#dcfce7" stroke="#16a34a" stroke-width="1" rx="3"/>
+    <text x="380" y="257" text-anchor="middle" font-size="11" font-weight="600">~/longdrawer/foo</text>
+    <text x="380" y="273" text-anchor="middle" font-size="10" fill="#475569">plaintext (fetched)</text>
+  </g>
+
+  <g>
+    <rect x="520" y="60" width="220" height="240" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+    <text x="630" y="84" text-anchor="middle" font-weight="600">Envoy C (same LAN)</text>
+    <rect x="540" y="100" width="180" height="40" fill="#ffffff" stroke="#94a3b8" stroke-width="1" rx="3"/>
+    <text x="630" y="120" text-anchor="middle" font-size="11" font-weight="600">~/longdrawer/foo (stale)</text>
+    <text x="630" y="134" text-anchor="middle" font-size="10" fill="#475569">older mtime</text>
+    <text x="630" y="166" text-anchor="middle" font-size="10" fill="#475569">↓ digest mismatch</text>
+    <rect x="540" y="178" width="180" height="32" fill="#dbeafe" stroke="#2563eb" stroke-width="1" rx="3"/>
+    <text x="630" y="198" text-anchor="middle" font-size="11">GET /longdrawer/state/&lt;u&gt;</text>
+    <text x="630" y="225" text-anchor="middle" font-size="10" fill="#475569">↓ peer newer → fetch</text>
+    <rect x="540" y="237" width="180" height="48" fill="#dcfce7" stroke="#16a34a" stroke-width="1" rx="3"/>
+    <text x="630" y="257" text-anchor="middle" font-size="11" font-weight="600">~/longdrawer/foo</text>
+    <text x="630" y="273" text-anchor="middle" font-size="10" fill="#475569">plaintext (updated)</text>
+  </g>
+
+  <!-- Multicast wave -->
+  <path d="M 220 261 L 290 261" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 470 261 L 540 261" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+
+  <!-- Pull arrows -->
+  <path d="M 290 195 Q 230 320 220 200" stroke="#475569" stroke-width="1" stroke-dasharray="3 3" fill="none" marker-end="url(#arr)"/>
+  <path d="M 540 195 Q 480 350 220 200" stroke="#475569" stroke-width="1" stroke-dasharray="3 3" fill="none" marker-end="url(#arr)"/>
+  <text x="380" y="378" font-size="10" fill="#475569" text-anchor="middle">peer pulls full state from announcer over mTLS port 1531</text>
+
+  <!-- Notes -->
+  <rect x="20" y="396" width="720" height="48" fill="#f1f5f9" stroke="#475569" stroke-width="1" rx="4"/>
+  <text x="380" y="416" text-anchor="middle" font-size="11" font-weight="600">No encryption · No CLI verbs · Opt-in by creating ~/longdrawer/ · TTL=1 multicast (LAN-only)</text>
+  <text x="380" y="434" text-anchor="middle" font-size="10" fill="#475569">Tombstones for deletes (90d retention) · Plaintext bytes only — pick lockbox for ciphertext-at-rest</text>
+</svg>

@@ -46,6 +46,8 @@ The puddle's full verb tree: `init,pair,join,rekey-pair,rekey,unlock,lock,pubkey
 
 ## How it works
 
+![Puddle — peer-pair onboarding plus a session helper that sibling subsystems consume](../img/puddle.svg)
+
 A puddle is a per-user Ed25519 keypair representing "this user's collection of envoys, treated as one trust unit." Without it, every per-user subsystem (lockbox, gitback) would have to re-do peer-pair ceremony per envoy. Puddle is that primitive: one keypair, multiple envoys, distributable peer-to-peer.
 
 The puddle keypair is generated locally by `vigo swarm puddle init`. The private half is wrapped under the user's passphrase using Argon2id (64 MiB / 3 iter / 1 lane) + XChaCha20-Poly1305 with a fresh nonce — the same envelope lockbox uses for its identity keys. The wrapped blob is **portable** across envoys; every member envoy holds identical bytes for `~/.vigo-puddle/identity.wrapped`. The unwrapping passphrase is held only by the user.

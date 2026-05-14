@@ -59,6 +59,8 @@ vigocli swarm curator unblock <artifact_id>
 
 ## How it works
 
+![Curator — publish gates by puddle membership; read is universal via the server with P2P or server-relay byte fetch](../img/curator.svg)
+
 Curator combines two existing fleet primitives: the swarm blob substrate (content-addressed, chunked, target-scoped, P2P) handles the *bytes*, and gitback's puddle-keyed identity/access machinery handles the *who-can-do-what*. A thin signed-catalog layer stitches them together.
 
 ### Identity

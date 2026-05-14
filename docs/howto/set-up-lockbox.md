@@ -54,6 +54,8 @@ Pick longdrawer for ambient work files you want across machines. Pick lockbox fo
 
 ## How It Works
 
+![Lockbox — drop plaintext, auto-encrypt to every peer's pubkey, ciphertext fans out at 0600 everywhere](../img/lockbox.svg)
+
 Pure peer-to-peer — the Vigo server never sees content or keys. Envoys discover each other via UDP multicast and exchange ciphertext directly over mTLS on swarm's peer port.
 
 **Network surface** (open these for cross-host operation):

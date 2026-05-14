@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 500" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="760" height="500" fill="#ffffff"/>
+
+  <!-- Envoy A (source) -->
+  <rect x="20" y="40" width="220" height="220" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+  <text x="130" y="64" text-anchor="middle" font-weight="600">Envoy A (you drop a file)</text>
+
+  <rect x="40" y="80" width="180" height="32" fill="#ffffff" stroke="#94a3b8" stroke-width="1" rx="3"/>
+  <text x="130" y="100" text-anchor="middle" font-size="11">cp foo.pdf ~/lockbox/foo.pdf</text>
+
+  <text x="130" y="128" text-anchor="middle" font-size="11" fill="#475569">↓ inotify / kqueue</text>
+
+  <rect x="40" y="138" width="180" height="32" fill="#dbeafe" stroke="#2563eb" stroke-width="1" rx="3"/>
+  <text x="130" y="158" text-anchor="middle" font-size="11">watcher (must be unlocked)</text>
+
+  <text x="130" y="186" text-anchor="middle" font-size="11" fill="#475569">↓ age-encrypt to recipients</text>
+
+  <rect x="40" y="196" width="180" height="50" fill="#fce7f3" stroke="#be185d" stroke-width="1" rx="3"/>
+  <text x="130" y="216" text-anchor="middle" font-size="11" font-weight="600">~/lockbox/foo.pdf</text>
+  <text x="130" y="234" text-anchor="middle" font-size="10" fill="#475569">ciphertext · mode 0600</text>
+
+  <!-- Fan-out -->
+  <path d="M 240 230 L 340 130" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 240 230 L 340 240" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 240 230 L 340 350" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <text x="295" y="195" font-size="10" fill="#16a34a">POST</text>
+  <text x="295" y="180" font-size="10" fill="#16a34a">/lockbox/push/...</text>
+  <text x="295" y="295" font-size="10" fill="#16a34a">(mTLS 1531)</text>
+
+  <!-- Peer envoys -->
+  <rect x="350" y="80" width="220" height="100" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+  <text x="460" y="104" text-anchor="middle" font-weight="600">Envoy B</text>
+  <rect x="370" y="120" width="180" height="40" fill="#fce7f3" stroke="#be185d" stroke-width="1" rx="3"/>
+  <text x="460" y="138" text-anchor="middle" font-size="11" font-weight="600">~/lockbox/foo.pdf</text>
+  <text x="460" y="153" text-anchor="middle" font-size="10" fill="#475569">ciphertext · 0600</text>
+
+  <rect x="350" y="200" width="220" height="100" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+  <text x="460" y="224" text-anchor="middle" font-weight="600">Envoy C</text>
+  <rect x="370" y="240" width="180" height="40" fill="#fce7f3" stroke="#be185d" stroke-width="1" rx="3"/>
+  <text x="460" y="258" text-anchor="middle" font-size="11" font-weight="600">~/lockbox/foo.pdf</text>
+  <text x="460" y="273" text-anchor="middle" font-size="10" fill="#475569">ciphertext · 0600</text>
+
+  <rect x="350" y="320" width="220" height="100" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+  <text x="460" y="344" text-anchor="middle" font-weight="600">Envoy D</text>
+  <rect x="370" y="360" width="180" height="40" fill="#fce7f3" stroke="#be185d" stroke-width="1" rx="3"/>
+  <text x="460" y="378" text-anchor="middle" font-size="11" font-weight="600">~/lockbox/foo.pdf</text>
+  <text x="460" y="393" text-anchor="middle" font-size="10" fill="#475569">ciphertext · 0600</text>
+
+  <!-- Decrypt side -->
+  <path d="M 580 250 L 650 250" stroke="#475569" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="615" y="240" text-anchor="middle" font-size="10" fill="#475569">unlock</text>
+
+  <rect x="650" y="200" width="90" height="100" fill="#dcfce7" stroke="#16a34a" stroke-width="1.5" rx="6"/>
+  <text x="695" y="225" text-anchor="middle" font-weight="600" font-size="12">Decrypt</text>
+  <text x="695" y="245" text-anchor="middle" font-size="10" fill="#475569">via puddle</text>
+  <text x="695" y="259" text-anchor="middle" font-size="10" fill="#475569">session helper</text>
+  <text x="695" y="278" text-anchor="middle" font-size="10" fill="#475569">→ plaintext</text>
+  <text x="695" y="292" text-anchor="middle" font-size="10" fill="#475569">to operator path</text>
+
+  <!-- Discovery -->
+  <rect x="20" y="440" width="720" height="44" fill="#f1f5f9" stroke="#475569" stroke-width="1" rx="4"/>
+  <text x="380" y="460" text-anchor="middle" font-size="11" font-weight="600">Discovery: UDP multicast 224.0.0.44:1533 every 30s {machine, user, pubkey, port}</text>
+  <text x="380" y="476" text-anchor="middle" font-size="10" fill="#475569">Cross-subnet peers: list in ~/.lockbox/config.yaml</text>
+</svg>

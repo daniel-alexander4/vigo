@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 480" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="760" height="480" fill="#ffffff"/>
+
+  <!-- Server -->
+  <rect x="280" y="20" width="200" height="60" fill="#bee3f8" stroke="#2563eb" stroke-width="1.5" rx="6"/>
+  <text x="380" y="44" text-anchor="middle" font-weight="600">vigosrv</text>
+  <text x="380" y="62" text-anchor="middle" font-size="11" fill="#475569">manifest CRDT · catalog aggregator · audit log</text>
+
+  <!-- Envoys ring -->
+  <g id="envoy-a">
+    <rect x="40" y="170" width="170" height="80" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+    <text x="125" y="195" text-anchor="middle" font-weight="600">envoy A</text>
+    <text x="125" y="215" text-anchor="middle" font-size="11" fill="#475569">agent + swarm peer</text>
+    <text x="125" y="232" text-anchor="middle" font-size="11" fill="#475569">port 1531 (mTLS)</text>
+  </g>
+
+  <g id="envoy-b">
+    <rect x="295" y="170" width="170" height="80" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+    <text x="380" y="195" text-anchor="middle" font-weight="600">envoy B</text>
+    <text x="380" y="215" text-anchor="middle" font-size="11" fill="#475569">agent + swarm peer</text>
+    <text x="380" y="232" text-anchor="middle" font-size="11" fill="#475569">port 1531 (mTLS)</text>
+  </g>
+
+  <g id="envoy-c">
+    <rect x="550" y="170" width="170" height="80" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+    <text x="635" y="195" text-anchor="middle" font-weight="600">envoy C</text>
+    <text x="635" y="215" text-anchor="middle" font-size="11" fill="#475569">agent + swarm peer</text>
+    <text x="635" y="232" text-anchor="middle" font-size="11" fill="#475569">port 1531 (mTLS)</text>
+  </g>
+
+  <!-- check-in arrows -->
+  <line x1="125" y1="170" x2="290" y2="80" stroke="#475569" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+  <line x1="380" y1="170" x2="380" y2="85" stroke="#475569" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+  <line x1="635" y1="170" x2="470" y2="80" stroke="#475569" stroke-width="1" stroke-dasharray="4 3" marker-end="url(#arr)"/>
+  <text x="200" y="130" font-size="10" fill="#475569">check-in</text>
+  <text x="555" y="130" font-size="10" fill="#475569">check-in</text>
+
+  <!-- P2P arrows between envoys -->
+  <path d="M 210 210 Q 250 250 295 210" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 465 210 Q 505 250 550 210" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 210 240 Q 380 320 550 240" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <text x="380" y="305" text-anchor="middle" font-size="11" fill="#16a34a" font-weight="600">P2P content over mTLS · UDP multicast for discovery</text>
+
+  <!-- Five subsystem tenants -->
+  <rect x="40" y="380" width="680" height="80" fill="#f1f5f9" stroke="#475569" stroke-width="1" rx="6"/>
+  <text x="380" y="402" text-anchor="middle" font-weight="600" font-size="13">Five content subsystems ride this substrate</text>
+
+  <g font-size="11">
+    <rect x="60" y="415" width="120" height="34" fill="#dbeafe" stroke="#2563eb" stroke-width="1" rx="3"/>
+    <text x="120" y="430" text-anchor="middle" font-weight="600">filecast</text>
+    <text x="120" y="443" text-anchor="middle" fill="#475569">admin-push blobs</text>
+
+    <rect x="190" y="415" width="120" height="34" fill="#dcfce7" stroke="#16a34a" stroke-width="1" rx="3"/>
+    <text x="250" y="430" text-anchor="middle" font-weight="600">gitback</text>
+    <text x="250" y="443" text-anchor="middle" fill="#475569">per-puddle git</text>
+
+    <rect x="320" y="415" width="120" height="34" fill="#fce7f3" stroke="#be185d" stroke-width="1" rx="3"/>
+    <text x="380" y="430" text-anchor="middle" font-weight="600">lockbox</text>
+    <text x="380" y="443" text-anchor="middle" fill="#475569">per-user ciphertext</text>
+
+    <rect x="450" y="415" width="120" height="34" fill="#fef3c7" stroke="#a16207" stroke-width="1" rx="3"/>
+    <text x="510" y="430" text-anchor="middle" font-weight="600">longdrawer</text>
+    <text x="510" y="443" text-anchor="middle" fill="#475569">LAN plaintext</text>
+
+    <rect x="580" y="415" width="120" height="34" fill="#e0e7ff" stroke="#4338ca" stroke-width="1" rx="3"/>
+    <text x="640" y="430" text-anchor="middle" font-weight="600">curator</text>
+    <text x="640" y="443" text-anchor="middle" fill="#475569">signed artifacts</text>
+  </g>
+</svg>

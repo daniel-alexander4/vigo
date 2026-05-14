@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 460" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="760" height="460" fill="#ffffff"/>
+
+  <!-- Founder envoy -->
+  <rect x="20" y="40" width="240" height="240" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+  <text x="140" y="64" text-anchor="middle" font-weight="600">Founder envoy</text>
+
+  <rect x="40" y="80" width="200" height="32" fill="#ffffff" stroke="#94a3b8" stroke-width="1" rx="3"/>
+  <text x="140" y="100" text-anchor="middle" font-size="11">git push gitback main</text>
+
+  <text x="140" y="128" text-anchor="middle" font-size="10" fill="#475569">↓ git-remote-gitback (multicall)</text>
+
+  <rect x="40" y="138" width="200" height="48" fill="#dbeafe" stroke="#2563eb" stroke-width="1" rx="3"/>
+  <text x="140" y="158" text-anchor="middle" font-size="11" font-weight="600">user state</text>
+  <text x="140" y="174" text-anchor="middle" font-size="10" fill="#475569">~/.vigo-gitback/&lt;pid&gt;/</text>
+
+  <text x="140" y="200" text-anchor="middle" font-size="10" fill="#475569">↓ via /var/run/vigo/gitback.sock (SO_PEERCRED)</text>
+
+  <rect x="40" y="210" width="200" height="56" fill="#dcfce7" stroke="#16a34a" stroke-width="1" rx="3"/>
+  <text x="140" y="232" text-anchor="middle" font-size="11" font-weight="600">bare repo (root-owned)</text>
+  <text x="140" y="248" text-anchor="middle" font-size="10" fill="#475569">/var/lib/vigo/swarm/gitback/</text>
+  <text x="140" y="262" text-anchor="middle" font-size="10" fill="#475569">projects/&lt;pid&gt;.git · 0700</text>
+
+  <!-- Push fan-out -->
+  <path d="M 260 230 L 360 130" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 260 240 L 360 240" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <path d="M 260 250 L 360 350" stroke="#16a34a" stroke-width="1.5" fill="none" marker-end="url(#arr)"/>
+  <text x="312" y="200" font-size="10" fill="#16a34a">POST</text>
+  <text x="307" y="185" font-size="10" fill="#16a34a">/swarm/gitback/push/&lt;pid&gt;</text>
+  <text x="312" y="295" font-size="10" fill="#16a34a">(mTLS 1531)</text>
+
+  <!-- Member envoys -->
+  <rect x="370" y="80" width="220" height="100" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+  <text x="480" y="104" text-anchor="middle" font-weight="600">Member envoy B</text>
+  <rect x="390" y="118" width="180" height="46" fill="#dcfce7" stroke="#16a34a" stroke-width="1" rx="3"/>
+  <text x="480" y="138" text-anchor="middle" font-size="11" font-weight="600">bare repo</text>
+  <text x="480" y="153" text-anchor="middle" font-size="10" fill="#475569">projects/&lt;pid&gt;.git</text>
+
+  <rect x="370" y="200" width="220" height="100" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+  <text x="480" y="224" text-anchor="middle" font-weight="600">Member envoy C</text>
+  <rect x="390" y="238" width="180" height="46" fill="#dcfce7" stroke="#16a34a" stroke-width="1" rx="3"/>
+  <text x="480" y="258" text-anchor="middle" font-size="11" font-weight="600">bare repo</text>
+  <text x="480" y="273" text-anchor="middle" font-size="10" fill="#475569">projects/&lt;pid&gt;.git</text>
+
+  <rect x="370" y="320" width="220" height="100" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+  <text x="480" y="344" text-anchor="middle" font-weight="600">Member envoy D</text>
+  <rect x="390" y="358" width="180" height="46" fill="#dcfce7" stroke="#16a34a" stroke-width="1" rx="3"/>
+  <text x="480" y="378" text-anchor="middle" font-size="11" font-weight="600">bare repo</text>
+  <text x="480" y="393" text-anchor="middle" font-size="10" fill="#475569">projects/&lt;pid&gt;.git</text>
+
+  <!-- Identity panel -->
+  <rect x="610" y="80" width="140" height="340" fill="#e0e7ff" stroke="#4338ca" stroke-width="1.5" rx="6"/>
+  <text x="680" y="104" text-anchor="middle" font-weight="600">Identity</text>
+
+  <text x="680" y="138" text-anchor="middle" font-size="11" font-weight="600">project_id</text>
+  <text x="680" y="155" text-anchor="middle" font-size="10" fill="#475569">sha256(</text>
+  <text x="680" y="170" text-anchor="middle" font-size="10" fill="#475569">founder_pubkey</text>
+  <text x="680" y="185" text-anchor="middle" font-size="10" fill="#475569">‖ handle)</text>
+
+  <text x="680" y="225" text-anchor="middle" font-size="11" font-weight="600">URL</text>
+  <text x="680" y="244" text-anchor="middle" font-size="10" fill="#475569">gitback://&lt;name&gt;</text>
+  <text x="680" y="258" text-anchor="middle" font-size="10" fill="#475569">/&lt;handle&gt;</text>
+  <text x="680" y="275" text-anchor="middle" font-size="10" fill="#475569">(or hex pid)</text>
+
+  <text x="680" y="315" text-anchor="middle" font-size="11" font-weight="600">members</text>
+  <text x="680" y="334" text-anchor="middle" font-size="10" fill="#475569">capability tokens</text>
+  <text x="680" y="348" text-anchor="middle" font-size="10" fill="#475569">signed by puddle</text>
+  <text x="680" y="362" text-anchor="middle" font-size="10" fill="#475569">session helper</text>
+
+  <text x="680" y="394" text-anchor="middle" font-size="10" fill="#475569">verified offline</text>
+  <text x="680" y="407" text-anchor="middle" font-size="10" fill="#475569">against project_id</text>
+
+  <!-- Bottom note -->
+  <text x="380" y="448" text-anchor="middle" font-size="11" fill="#475569" font-weight="600">availability ≠ confidentiality — bare-repo bytes are root-readable on every target envoy</text>
+</svg>

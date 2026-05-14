@@ -28,9 +28,11 @@ If a file isn't propagating, check:
 
 ## How It Works
 
+![Longdrawer — multicast announce on the LAN, digest mismatch triggers a pull, reconcile per file](../img/longdrawer.svg)
+
 Longdrawer is one of four content subsystems that ride the [swarm](set-up-swarm.md) substrate. The server plays no role in content or discovery — longdrawer reuses swarm's mTLS peer channel (port 1531) for transfers and runs its own multicast group (`224.0.0.43:1532`) for announcements.
 
-Longdrawer is a **pure peer-to-peer LAN feature**. The Vigo server plays no role at all. Envoys discover each other via UDP multicast and exchange files directly over mTLS on swarm's peer port.
+Pure peer-to-peer LAN feature. Envoys discover each other via UDP multicast and exchange files directly over mTLS on swarm's peer port.
 
 1. **Scan.** Every 30 seconds each agent scans `~/longdrawer/` for every local user. Files are hashed (SHA-256), and the in-memory state (file list + deletion tombstones) is compared against the previous snapshot. Added files show up in the new state; deleted files get a tombstone stamped with the current time.
 2. **Announce.** Each agent multicasts a **digest-only announcement** on `224.0.0.43:1532`: `{machine, user, port, generation, state_digest}`. The digest is a 16-byte truncated SHA-256 over the sorted file + tombstone set. **File paths, sha256s, mtimes never ride on the wire** — everything a LAN observer can see is the peer's identity and a short opaque digest. TTL=1, LAN-local.

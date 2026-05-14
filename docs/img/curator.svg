@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 520" font-family="Inter, system-ui, -apple-system, sans-serif" font-size="13">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="760" height="520" fill="#ffffff"/>
+
+  <!-- LEFT: PUBLISH side -->
+  <rect x="20" y="30" width="350" height="470" fill="#fef9c3" stroke="#a16207" stroke-width="1.5" rx="6"/>
+  <text x="195" y="56" text-anchor="middle" font-weight="600">PUBLISH — puddle members only</text>
+
+  <rect x="40" y="76" width="310" height="40" fill="#ffffff" stroke="#94a3b8" stroke-width="1" rx="3"/>
+  <text x="195" y="100" text-anchor="middle" font-size="11">vigo swarm curator push vigo-agent:1.2.3 ./bin --platform linux/amd64</text>
+
+  <text x="195" y="132" text-anchor="middle" font-size="10" fill="#475569">↓ signs entry via puddle session helper</text>
+
+  <rect x="40" y="144" width="310" height="44" fill="#e0e7ff" stroke="#4338ca" stroke-width="1" rx="3"/>
+  <text x="195" y="164" text-anchor="middle" font-size="11" font-weight="600">/var/run/vigo/curator.sock</text>
+  <text x="195" y="180" text-anchor="middle" font-size="10" fill="#475569">SO_PEERCRED + usercrate curator: true</text>
+
+  <text x="195" y="204" text-anchor="middle" font-size="10" fill="#475569">↓ helper (root) validates signature, sha, size, max_bytes</text>
+
+  <rect x="40" y="216" width="310" height="48" fill="#dbeafe" stroke="#2563eb" stroke-width="1" rx="3"/>
+  <text x="195" y="236" text-anchor="middle" font-size="11" font-weight="600">stage blob into swarm cache</text>
+  <text x="195" y="252" text-anchor="middle" font-size="10" fill="#475569">/var/lib/vigo/swarm/.blobs/&lt;sha&gt;</text>
+
+  <text x="195" y="280" text-anchor="middle" font-size="10" fill="#475569">↓ drop entry.json.pending</text>
+
+  <rect x="40" y="292" width="310" height="48" fill="#dcfce7" stroke="#16a34a" stroke-width="1" rx="3"/>
+  <text x="195" y="312" text-anchor="middle" font-size="11" font-weight="600">root sentinel reactor (60s sweep)</text>
+  <text x="195" y="328" text-anchor="middle" font-size="10" fill="#475569">re-verify → promote to entry.json</text>
+
+  <text x="195" y="356" text-anchor="middle" font-size="10" fill="#475569">↓ swarm_curator trait → check-in</text>
+
+  <rect x="40" y="368" width="310" height="56" fill="#fce7f3" stroke="#be185d" stroke-width="1" rx="3"/>
+  <text x="195" y="388" text-anchor="middle" font-size="11" font-weight="600">filecast distributor fans bytes out</text>
+  <text x="195" y="404" text-anchor="middle" font-size="10" fill="#475569">manifest CRDT with artifact's target</text>
+  <text x="195" y="418" text-anchor="middle" font-size="10" fill="#475569">→ matching swarm-enabled envoys hold DR copy</text>
+
+  <rect x="40" y="436" width="310" height="50" fill="#ffffff" stroke="#94a3b8" stroke-width="1" rx="3"/>
+  <text x="195" y="456" text-anchor="middle" font-size="11" font-weight="600">artifact_id = sha256(founder_pubkey ‖ name)</text>
+  <text x="195" y="473" text-anchor="middle" font-size="10" fill="#475569">signed catalog entry · re-signed LWW on every change</text>
+
+  <!-- RIGHT: READ side -->
+  <rect x="390" y="30" width="350" height="470" fill="#dbeafe" stroke="#2563eb" stroke-width="1.5" rx="6"/>
+  <text x="565" y="56" text-anchor="middle" font-weight="600">READ — universal, server-mediated</text>
+
+  <rect x="410" y="76" width="310" height="40" fill="#ffffff" stroke="#94a3b8" stroke-width="1" rx="3"/>
+  <text x="565" y="100" text-anchor="middle" font-size="11">vigo swarm curator pull vigo-agent:latest</text>
+
+  <text x="565" y="132" text-anchor="middle" font-size="10" fill="#475569">↓ resolve</text>
+
+  <rect x="410" y="144" width="310" height="60" fill="#fef3c7" stroke="#a16207" stroke-width="1" rx="3"/>
+  <text x="565" y="164" text-anchor="middle" font-size="11" font-weight="600">GET /api/v1/swarm/curator/resolve</text>
+  <text x="565" y="180" text-anchor="middle" font-size="10" fill="#475569">?artifact_id=&amp;tag=&amp;os=&amp;arch=</text>
+  <text x="565" y="194" text-anchor="middle" font-size="10" fill="#475569">→ {blob_sha, size, signed_entry}</text>
+
+  <text x="565" y="222" text-anchor="middle" font-size="10" fill="#475569">↓ server checks block table, 30s TTL cache</text>
+
+  <rect x="410" y="234" width="310" height="60" fill="#fef3c7" stroke="#a16207" stroke-width="1" rx="3"/>
+  <text x="565" y="254" text-anchor="middle" font-size="11" font-weight="600">fetch bytes</text>
+  <text x="565" y="270" text-anchor="middle" font-size="10" fill="#475569">swarm-enabled: P2P from local swarm cache</text>
+  <text x="565" y="284" text-anchor="middle" font-size="10" fill="#475569">swarm-disabled: GET /blob/&lt;sha&gt; (server relay)</text>
+
+  <text x="565" y="312" text-anchor="middle" font-size="10" fill="#475569">↓ verify sha, materialize</text>
+
+  <rect x="410" y="324" width="310" height="60" fill="#dcfce7" stroke="#16a34a" stroke-width="1" rx="3"/>
+  <text x="565" y="344" text-anchor="middle" font-size="11" font-weight="600">/var/lib/vigo/artifacts/</text>
+  <text x="565" y="360" text-anchor="middle" font-size="10" fill="#475569">&lt;aid&gt;/&lt;name&gt;/&lt;version&gt;/&lt;os&gt;-&lt;arch&gt; · 0644</text>
+  <text x="565" y="374" text-anchor="middle" font-size="10" fill="#475569">+ cache.json alias entry</text>
+
+  <rect x="410" y="400" width="310" height="80" fill="#fce7f3" stroke="#be185d" stroke-width="1" rx="3"/>
+  <text x="565" y="420" text-anchor="middle" font-size="11" font-weight="600">operator moderation backstop</text>
+  <text x="565" y="438" text-anchor="middle" font-size="10" fill="#475569">vigocli swarm curator block &lt;aid&gt;</text>
+  <text x="565" y="452" text-anchor="middle" font-size="10" fill="#475569">→ server stops resolving/relaying for whole fleet</text>
+  <text x="565" y="468" text-anchor="middle" font-size="10" fill="#475569">(bytes stay on envoys until publisher rm)</text>
+
+  <!-- Cross-link -->
+  <path d="M 370 240 Q 380 240 390 254" stroke="#475569" stroke-width="1" stroke-dasharray="3 3" fill="none"/>
+</svg>

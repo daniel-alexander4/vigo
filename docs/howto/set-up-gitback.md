@@ -55,6 +55,8 @@ The full verb tree: `vigo swarm gitback {status,purge}` plus `project {init,invi
 
 ## How it works
 
+![Gitback — git push triggers helper-daemon fan-out to every member envoy's bare repo](../img/gitback.svg)
+
 Each project is keyed `project_id = sha256(founder_puddle_pubkey ‖ handle)`, so two operators publishing `my-config` don't collide. Project shape is two orthogonal axes:
 
 | `members:` | `dr_scope:` | Use case |
