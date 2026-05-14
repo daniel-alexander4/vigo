@@ -158,6 +158,7 @@ pub fn remove_user_policy(username: &str) -> Result<()> {
 /// envoy check is skipped — refusing on absence would block legitimate
 /// bootstrap on a freshly-enrolled envoy.
 pub fn require_puddle(username: &str) -> Result<()> {
+    refuse_root("puddle", username)?;
     let policy = read_user_policy(username)?;
     if !policy.puddle {
         bail!(
@@ -181,6 +182,7 @@ pub fn require_puddle(username: &str) -> Result<()> {
 /// substrate-level pattern list. See [`require_puddle`] for the
 /// two-layer rationale.
 pub fn require_gitback(username: &str) -> Result<()> {
+    refuse_root("gitback", username)?;
     let policy = read_user_policy(username)?;
     if !policy.gitback {
         bail!(
@@ -208,6 +210,7 @@ pub fn require_gitback(username: &str) -> Result<()> {
 /// puddle (the signing key) per ADR-024; this check is the cheap
 /// up-front "is this user/envoy even allowed to try" gate.
 pub fn require_curator(username: &str) -> Result<()> {
+    refuse_root("curator", username)?;
     let policy = read_user_policy(username)?;
     if !policy.curator {
         bail!(
@@ -225,6 +228,26 @@ pub fn require_curator(username: &str) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Refuse a per-user swarm verb invocation when the resolved invoking user
+/// is `root`. The CLI's user-resolver returns `"root"` only when uid == 0,
+/// `SUDO_USER` is unset/empty/`root`, and `USER=root` — i.e. an interactive
+/// root shell, never a real-user-via-sudo invocation (sudo's `SUDO_USER`
+/// path is checked first). Per-user verbs sign with the user's puddle
+/// identity (`~/.vigo-puddle/`), which root doesn't have, so we point at
+/// the fix instead of letting the failure manifest as "missing root.json"
+/// or "no puddle session helper" downstream.
+fn refuse_root(feature: &str, username: &str) -> Result<()> {
+    if username != "root" {
+        return Ok(());
+    }
+    bail!(
+        "this `{feature}` verb signs with a per-user puddle identity and \
+         cannot run as root. Switch to the Unix user whose usercrate carries \
+         `{feature}: true` — e.g. `su - <username>` or `sudo -iu <username>` \
+         — and try again on this envoy."
+    );
 }
 
 /// Read `state.json` and report whether the named subsystem gate is on.
@@ -302,6 +325,28 @@ mod tests {
             PathBuf::from("/var/lib/vigo/usercrate-policy/dan.json")
         );
         assert_ne!(policy_path("dan"), policy_path("alice"));
+    }
+
+    #[test]
+    fn refuse_root_bails_for_root_only() {
+        // A non-root username falls through silently — the rest of
+        // `require_*` then runs as normal.
+        assert!(refuse_root("puddle", "dan").is_ok());
+        assert!(refuse_root("gitback", "alice").is_ok());
+        assert!(refuse_root("curator", "ann").is_ok());
+
+        // Root bails for each feature with a tailored message that
+        // names the right flag and the fix.
+        for feature in ["puddle", "gitback", "curator"] {
+            let err = refuse_root(feature, "root").unwrap_err();
+            let msg = format!("{err:#}");
+            assert!(msg.contains("cannot run as root"), "feature={feature} msg={msg}");
+            assert!(
+                msg.contains(&format!("`{feature}: true`")),
+                "feature={feature} msg={msg}"
+            );
+            assert!(msg.contains("su - <username>"), "feature={feature} msg={msg}");
+        }
     }
 
     // The two-layer envoy_layer_allows helper isn't directly testable

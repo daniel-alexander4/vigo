@@ -200,4 +200,15 @@ func init() {
 
 	puddleCmd.AddCommand(puddleEvictCmd)
 	puddleCmd.AddCommand(puddleNamesCmd)
+	// Hidden redirects for the per-user agent-side verbs. Puddle identity
+	// is per-Unix-user; every lifecycle + signing verb lives on
+	// `vigo swarm puddle` and signs with the user's own ~/.vigo-puddle/
+	// identity. The operator-side `vigocli swarm puddle` is admin-only
+	// (evict, names list). This is the most common mis-invocation —
+	// `vigo swarm puddle status` run as root was the original trigger
+	// for adding these redirects.
+	addAgentRedirects(puddleCmd, "puddle", "puddle", []string{
+		"init", "pubkey", "unlock", "lock", "pair", "join", "leave",
+		"rekey-pair", "rekey", "members", "rotate-passphrase", "status", "name",
+	})
 }

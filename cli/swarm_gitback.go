@@ -453,4 +453,11 @@ func init() {
 	gitbackMembersCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
 
 	gitbackCmd.AddCommand(gitbackStatusCmd, gitbackListCmd, gitbackShowCmd, gitbackMembersCmd)
+	// Hidden redirect for the agent-side `project` verb tree (init / invite
+	// / join / leave / revoke / reanchor / re-invite-all / rejoin /
+	// re-found / push / status). All of them sign capability tokens or
+	// envelopes with the user's puddle identity, so they live on
+	// `vigo swarm gitback project <verb>`. Single redirect under `project`
+	// catches every subverb because DisableFlagParsing forwards the rest.
+	addAgentRedirects(gitbackCmd, "gitback", "gitback", []string{"project", "purge"})
 }

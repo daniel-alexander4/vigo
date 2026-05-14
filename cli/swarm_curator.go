@@ -742,4 +742,11 @@ func init() {
 		curatorBlockCmd,
 		curatorUnblockCmd,
 	)
+	// Hidden redirects for agent-side verbs operators commonly mis-type into
+	// vigocli. Per ADR-024 open Q#1: mutating + cleanup verbs live on
+	// `vigo swarm curator` because they need an unlocked per-user puddle.
+	addAgentRedirects(curatorCmd, "curator", "curator", []string{
+		"push", "tag", "untag", "set-recipients", "set-target", "rm",
+		"prune", "gc", "stale", "purge", "pull",
+	})
 }

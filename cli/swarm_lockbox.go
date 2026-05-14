@@ -428,4 +428,13 @@ func init() {
 	lockboxEvictCmd.Flags().Bool("yes", false, "Skip the confirmation prompt")
 
 	lockboxCmd.AddCommand(lockboxStatusCmd, lockboxListCmd, lockboxShowCmd, lockboxMembersCmd, lockboxEvictCmd)
+	// Hidden redirects for the per-user agent-side verbs. Lockbox bootstraps
+	// on `vigo swarm puddle unlock` (ADR-020/021) and content verbs are
+	// per-user on the envoy — none of these belong on the operator surface.
+	// Authorization derives from `puddle: true` (ADR-020 — there is no
+	// separate lockbox usercrate flag), hence the flag name below.
+	addAgentRedirects(lockboxCmd, "lockbox", "puddle", []string{
+		"unlock", "lock", "encrypt", "decrypt", "delete", "resurrect",
+		"reencrypt", "purge",
+	})
 }
