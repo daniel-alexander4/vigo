@@ -4,7 +4,7 @@ title: "ADR-024: curator — P2P artifact registry"
 
 # ADR-024: curator — P2P artifact registry
 
-**Status:** Planned (not yet implemented).
+**Status:** Implemented — shipped across slices 0–5, 0.51.0 (2026-05-14).
 **Date:** 2026-05-11
 
 ## Context
