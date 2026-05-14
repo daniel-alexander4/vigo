@@ -121,6 +121,15 @@ enum Commands {
     SelfFleet {
         args: Vec<String>,
     },
+    /// Curator artifact-registry CLI (ADR-024). Dispatched from
+    /// `vigo swarm curator ...`. Read verbs (status/list/inspect/
+    /// versions/resolve/pull) ship in slice 4b; mutating verbs (push/
+    /// tag/untag/set-recipients/set-target/rm/prune/gc/stale/purge)
+    /// ship in slice 4c and need `curator: true` plus an unlocked
+    /// puddle.
+    Curator {
+        args: Vec<String>,
+    },
     /// Hidden: puddle session helper daemon. Invoked by `unlock`
     /// (and the join flow) via `current_exe()` + `setsid()`; never
     /// by a human. Reads the 32-byte Ed25519 key from stdin, binds
@@ -303,6 +312,7 @@ fn parse_args() -> Result<Cli> {
                 Some("gitback") => Commands::Gitback { args: positional[2..].to_vec() },
                 Some("lockbox") => Commands::Lockbox { args: positional[2..].to_vec() },
                 Some("puddle") => Commands::SelfFleet { args: positional[2..].to_vec() },
+                Some("curator") => Commands::Curator { args: positional[2..].to_vec() },
                 // Read-only diagnostic verbs (0.41.1+): substrate
                 // status, seed inventory, peer table, hostdox posture.
                 // Read against /var/lib/vigo/swarm/{state,manifest,
@@ -378,6 +388,8 @@ COMMANDS:
                           list | show | log | branches | peers | recover | recover-all
     swarm lockbox     Manage lockbox — per-user encrypted P2P directory
                           init | enroll | status | unlock | lock | encrypt | decrypt | forget | reencrypt
+    swarm curator     P2P artifact registry (ADR-024)
+                          status | list | inspect | versions | resolve | pull
 
 With no command, runs as a daemon.
 
@@ -1752,6 +1764,15 @@ async fn async_main() -> Result<()> {
             // Hidden: puddle session helper daemon entry point.
             // Spawned by `vigo swarm puddle unlock`.
             vigo::swarm::puddle::session::daemon_main(args.clone()).await
+        }
+
+        Some(Commands::Curator { args }) => {
+            // Curator (ADR-024) artifact-registry CLI. Slice 4b ships
+            // read-only verbs (status/list/inspect/versions/resolve/
+            // pull) — pure local state reads + the existing Resolver
+            // for resolve/pull (server-mediated with a cached-catalog
+            // fallback). Mutating verbs land in slice 4c.
+            vigo::swarm::curator::cli::run(args.clone())
         }
 
         Some(Commands::SwarmApplyCleanup) => {
