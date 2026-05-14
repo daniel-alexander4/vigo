@@ -78,7 +78,7 @@ The chain is capped at `DELEGATION_MAX_LEN = 5` (hard fail at verify time, pre-f
 
 ## Consequences
 
-**Code changes:**
+**Code changes** (paths reflect where each piece landed at ADR-019 implementation time; the `DelegationEnvelope` type + canonical bytes + sign/verify, and the capability-token chain-walker, were later relocated into `agent/src/swarm/anchor/{envelopes,tokens}.rs` at 0.51.7 when curator gave the layer a second consumer — same code, same wire-format domain strings, new file path):
 - `agent/src/swarm/gitback/envelopes.rs` — `DelegationEnvelope` type + canonical bytes + sign/verify (slice 1).
 - `agent/src/swarm/gitback/project_state.rs` — `DelegationChain` persistence (slice 1); `tombstoned_at` field on `ProjectConfig` (slice 5).
 - `agent/src/swarm/gitback/tokens.rs` — `verify_chain` signature change + new `ChainError` variants + authority-window logic (slice 2).
