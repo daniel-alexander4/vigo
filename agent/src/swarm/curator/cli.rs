@@ -34,16 +34,25 @@
 //! prefers the server `resolve` endpoint and falls back to the cached
 //! catalog on a network error (still verifying the signed entry).
 
+use std::io::{Read, Write};
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, bail, Context, Result};
+use sha2::{Digest, Sha256};
 
-use super::catalog::CatalogEntry;
+use super::catalog::{
+    canonical_bytes, validate_artifact_name, ArtifactVersion, CatalogEntry, CatalogEntryBody,
+    Platform, ID_LEN, SIG_LEN,
+};
 use super::catalog_cache;
+use super::helper::socket_path as helper_socket_path;
 use super::resolver::Resolver;
 use super::state;
 use crate::auth;
 use crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN;
+use crate::swarm::puddle;
 use crate::traits::gitback::passwd_path;
 use crate::update::TlsCerts;
 
@@ -61,12 +70,35 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "versions" => cmd_versions(&args[1..]),
         "resolve" => cmd_resolve(&args[1..]),
         "pull" => cmd_pull(&args[1..]),
+        "push" => with_curator_authz(|| cmd_push(&args[1..])),
+        "tag" => with_curator_authz(|| cmd_tag(&args[1..])),
+        "untag" => with_curator_authz(|| cmd_untag(&args[1..])),
+        "set-recipients" => with_curator_authz(|| cmd_set_recipients(&args[1..])),
+        "set-target" => with_curator_authz(|| cmd_set_target(&args[1..])),
+        "rm" => with_curator_authz(|| cmd_rm(&args[1..])),
         other => bail!(
             "unknown subcommand `vigo swarm curator {}`. \
              Run `vigo swarm curator --help` for usage.",
             other
         ),
     }
+}
+
+/// Refuse early if the invoking user lacks `curator: true` in their usercrate.
+/// The daemon enforces the same gate again on the socket — this front-loads the
+/// error so the operator sees it before the CLI builds + signs an entry that
+/// would just be rejected. Skipped for root (admin running curator verbs
+/// against the envoy-wide root-owned state isn't acting as a usercrate-managed
+/// user — same carve-out gitback uses).
+fn with_curator_authz<F, T>(f: F) -> Result<T>
+where
+    F: FnOnce() -> Result<T>,
+{
+    let caller = resolve_caller()?;
+    if !caller.is_root {
+        crate::swarm::policy::require_curator(&caller.username)?;
+    }
+    f()
 }
 
 fn print_usage() {
@@ -93,10 +125,32 @@ READ-ONLY VERBS:
                                     Requires root (or sudo) — the materialization
                                     tree is root-owned.
 
-Mutating verbs (push / tag / untag / set-recipients / set-target / rm /
-prune / gc / stale / purge) ship in slice 4c — they sign catalog entries
-through the per-user puddle session helper and need an unlocked puddle
-plus `curator: true` on your usercrate.
+MUTATING VERBS (require `curator: true` on your usercrate + an unlocked puddle):
+    push <name> --file <path> --version <v> --os <os> --arch <arch>
+        [--tag <tag>] [--target <glob>] [--recipients <list>]
+                                    Publish a (name, version, os, arch) build.
+                                    Adds the platform to the artifact's catalog
+                                    entry, signs it, streams the bytes through
+                                    the helper daemon, and the daemon stages
+                                    the blob + records a manifest seed with
+                                    the artifact's target.
+    tag <ref> <tag>=<version>       Move/set a tag; re-signs the entry.
+    untag <ref> <tag>               Remove a tag; re-signs the entry.
+    set-recipients <ref> <list>     Replace `recipients`. Pass `*` or a comma-
+                                    separated list of hex puddle pubkeys.
+    set-target <ref> <glob>         Replace the DR-replica target glob; the
+                                    helper daemon refreshes the manifest seed
+                                    for each of this artifact's blobs that we
+                                    seed, so filecast redistributes on the
+                                    next Manager pass.
+    rm <ref> [--version <v>]        Without --version: scrub local publish
+                                    state for this artifact (does not unpublish
+                                    cluster-wide — peers keep the prior entry).
+                                    With --version: re-sign without that
+                                    version (and drop any tags that pointed
+                                    at it), so consumers stop resolving it.
+
+Local cleanup verbs (prune / gc / stale / purge) ship in slice 4d.
 "
     );
 }
@@ -622,6 +676,622 @@ fn is_hex64(s: &str) -> bool {
     s.len() == 64 && s.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
+// ============================================================
+// mutating verbs (slice 4c)
+// ============================================================
+
+/// Resolved identity of the invoking Unix user — `getuid()` is the source of
+/// truth (publish verbs run as the user, not root, so SO_PEERCRED in the
+/// daemon agrees with what we see locally).
+struct CallerIdentity {
+    home: PathBuf,
+    is_root: bool,
+    username: String,
+}
+
+fn resolve_caller() -> Result<CallerIdentity> {
+    #[cfg(unix)]
+    {
+        use nix::unistd::{Uid, User};
+        let uid = Uid::current();
+        let user = User::from_uid(uid)
+            .ok()
+            .flatten()
+            .context("cannot resolve current Unix user")?;
+        Ok(CallerIdentity {
+            username: user.name,
+            home: user.dir,
+            is_root: uid.is_root(),
+        })
+    }
+    #[cfg(not(unix))]
+    {
+        bail!("curator CLI is Unix-only")
+    }
+}
+
+/// Read the caller's local puddle pubkey as raw 32 bytes. Verbs that mint or
+/// re-sign catalog entries need it — both as the founder anchor (when creating
+/// a new artifact) and to refuse mutating someone else's artifact.
+fn local_puddle_pubkey_bytes(home: &Path) -> Result<[u8; ID_LEN]> {
+    let text = puddle::local_puddle_pubkey(home)?.ok_or_else(|| {
+        anyhow!(
+            "puddle is not initialized for this user. \
+             Run `vigo swarm puddle init` (or `join --from <host>`) first."
+        )
+    })?;
+    let hexpart = text
+        .strip_prefix("ed25519:")
+        .ok_or_else(|| anyhow!("malformed puddle pubkey: missing ed25519: prefix"))?;
+    if hexpart.len() != ID_LEN * 2 {
+        bail!("puddle pubkey is wrong length: {}", hexpart);
+    }
+    let bytes = hex::decode(hexpart).context("decode puddle pubkey hex")?;
+    let mut out = [0u8; ID_LEN];
+    out.copy_from_slice(&bytes);
+    Ok(out)
+}
+
+/// Sign `payload` with the user's puddle key via the session helper. The
+/// session helper is the only place the private key lives — the CLI never
+/// unwraps it directly. Same shape gitback's `sign_with_session` uses.
+fn sign_with_session(payload: &[u8]) -> Result<[u8; SIG_LEN]> {
+    let sig = puddle::session::request_sign(payload).map_err(|e| {
+        anyhow!(
+            "could not sign with puddle identity: {}\n\
+             Run `vigo swarm puddle unlock` to start the session helper.",
+            e
+        )
+    })?;
+    if sig.len() != SIG_LEN {
+        bail!(
+            "session helper returned a {}-byte signature, expected {}",
+            sig.len(),
+            SIG_LEN
+        );
+    }
+    let mut out = [0u8; SIG_LEN];
+    out.copy_from_slice(&sig);
+    Ok(out)
+}
+
+fn now_millis() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// Load the caller's local entry for `artifact_id` if one exists. Returns
+/// `Ok(None)` when the file is absent (= "no prior publish; we're founding").
+fn load_local_entry(home: &Path, artifact_id_hex: &str) -> Result<Option<CatalogEntry>> {
+    let path = state::entry_path(home, artifact_id_hex);
+    let raw = match std::fs::read(&path) {
+        Ok(r) => r,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(anyhow!("reading {}: {e}", path.display())),
+    };
+    let entry: CatalogEntry =
+        serde_json::from_slice(&raw).with_context(|| format!("parsing {}", path.display()))?;
+    Ok(Some(entry))
+}
+
+/// Re-sign `body` with the user's puddle key via the session helper. The
+/// resulting [`CatalogEntry`] self-verifies before this returns.
+fn issue_via_session(body: CatalogEntryBody) -> Result<CatalogEntry> {
+    let msg = canonical_bytes(&body).context("canonical_bytes")?;
+    let sig = sign_with_session(&msg)?;
+    let entry = CatalogEntry {
+        body,
+        signature: hex::encode(sig),
+    };
+    entry
+        .verify(DELEGATION_MAX_LEN)
+        .context("re-signed catalog entry failed self-verification")?;
+    Ok(entry)
+}
+
+/// Bump `issued_at` so the LWW merge picks our re-sign. Uses Unix-millis now,
+/// falling back to `existing + 1` when wall-clock isn't strictly greater.
+fn next_issued_at(existing: i64) -> i64 {
+    let now = now_millis();
+    if now > existing {
+        now
+    } else {
+        existing.saturating_add(1)
+    }
+}
+
+/// Take a `<ref>` (hex artifact_id, exact name, or unique name prefix) and
+/// return `(artifact_id_hex, base_entry)` where `base_entry` is the caller's
+/// local entry for that artifact. Errors when the caller has no local state
+/// for the resolved artifact (because mutating verbs are about *re-signing
+/// our own publication*, not someone else's).
+fn resolve_local_ref(home: &Path, target: &str) -> Result<(String, CatalogEntry)> {
+    if is_hex64(target) {
+        let aid = target.to_ascii_lowercase();
+        let e = load_local_entry(home, &aid)?.ok_or_else(|| {
+            anyhow!("no local catalog entry for artifact_id {aid} — publish it first with `push`")
+        })?;
+        return Ok((aid, e));
+    }
+    // Walk the caller's `~/.vigo-curator/` for entries whose `name` matches.
+    let dir = state::user_curator_dir(home);
+    let rd = std::fs::read_dir(&dir).ok();
+    let mut exact: Vec<(String, CatalogEntry)> = Vec::new();
+    let mut prefix: Vec<(String, CatalogEntry)> = Vec::new();
+    if let Some(rd) = rd {
+        for ent in rd.flatten() {
+            let p = ent.path();
+            if !p.is_dir() {
+                continue;
+            }
+            let aid = match p.file_name().and_then(|n| n.to_str()) {
+                Some(s) => s.to_string(),
+                None => continue,
+            };
+            let e = match load_local_entry(home, &aid) {
+                Ok(Some(e)) => e,
+                _ => continue,
+            };
+            if e.body.name == target {
+                exact.push((aid, e));
+            } else if e.body.name.starts_with(target) {
+                prefix.push((aid.clone(), e));
+            }
+        }
+    }
+    if exact.len() == 1 {
+        return Ok(exact.into_iter().next().unwrap());
+    }
+    if exact.len() > 1 {
+        let ids: Vec<String> = exact.iter().map(|(a, _)| short_sha(a)).collect();
+        bail!(
+            "name {target:?} matches {} of your local artifacts (artifact_ids {}); pass the full artifact_id",
+            exact.len(),
+            ids.join(", ")
+        );
+    }
+    if prefix.len() == 1 {
+        return Ok(prefix.into_iter().next().unwrap());
+    }
+    if prefix.len() > 1 {
+        let names: Vec<String> = prefix.iter().map(|(_, e)| e.body.name.clone()).collect();
+        bail!("prefix {target:?} is ambiguous; candidates: {}", names.join(", "));
+    }
+    bail!(
+        "no local artifact matches {target:?}. If you're trying to mutate someone else's \
+         artifact, you can't — mutating verbs only re-sign your own publications. \
+         If this is yours but the local state is gone, re-found it with `push --new` \
+         (you'd be minting a fresh artifact_id, since the genesis-pubkey anchor is in \
+         the hash)."
+    )
+}
+
+// ----- helper-daemon client ----------------------------------------------
+
+fn helper_socket() -> Result<UnixStream> {
+    let path = helper_socket_path();
+    if !path.exists() {
+        bail!(
+            "curator helper socket not present at {}. Is the agent running, \
+             and does `swarm.curator.enabled` match this envoy?",
+            path.display()
+        );
+    }
+    let s = UnixStream::connect(&path)
+        .with_context(|| format!("connecting to {}", path.display()))?;
+    s.set_read_timeout(Some(Duration::from_secs(120))).ok();
+    s.set_write_timeout(Some(Duration::from_secs(120))).ok();
+    Ok(s)
+}
+
+/// Send a PUSH: header line + raw blob bytes from `blob_path`. The daemon
+/// answers `READY\n` after the header validates, then we stream the file and
+/// it answers `OK\n` once the bytes hash to the entry's recorded sha and the
+/// manifest seed has been recorded.
+fn submit_push(
+    entry: &CatalogEntry,
+    version: &str,
+    os: &str,
+    arch: &str,
+    blob_path: &Path,
+    blob_size: u64,
+) -> Result<()> {
+    let mut stream = helper_socket()?;
+    let header = serde_json::json!({
+        "entry": entry,
+        "version": version,
+        "os": os,
+        "arch": arch,
+        "blob_size": blob_size,
+    });
+    let mut buf = b"PUSH\n".to_vec();
+    buf.extend_from_slice(serde_json::to_string(&header)?.as_bytes());
+    buf.push(b'\n');
+    stream.write_all(&buf).context("writing PUSH header")?;
+    stream.flush().ok();
+
+    // Expect READY (or an early ERR).
+    let line = read_line_from(&mut stream)?;
+    if line.trim() != "READY" {
+        bail!("daemon did not say READY: {line:?}");
+    }
+
+    // Stream the file.
+    let mut f = std::fs::File::open(blob_path)
+        .with_context(|| format!("opening {}", blob_path.display()))?;
+    let mut chunk = vec![0u8; 64 * 1024];
+    let mut sent: u64 = 0;
+    while sent < blob_size {
+        let want = (blob_size - sent).min(chunk.len() as u64) as usize;
+        let n = f.read(&mut chunk[..want]).context("reading blob bytes")?;
+        if n == 0 {
+            bail!(
+                "blob file ended after {sent} of {blob_size} bytes — did it change while we were sending?"
+            );
+        }
+        stream.write_all(&chunk[..n]).context("streaming blob")?;
+        sent += n as u64;
+    }
+    stream.flush().ok();
+
+    // Expect OK.
+    let line = read_line_from(&mut stream)?;
+    let trimmed = line.trim();
+    if trimmed == "OK" {
+        Ok(())
+    } else if let Some(msg) = trimmed.strip_prefix("ERR ") {
+        bail!("daemon: {msg}")
+    } else {
+        bail!("unexpected daemon response: {trimmed:?}")
+    }
+}
+
+/// Send a header-only re-sign via the ENTRY verb. The daemon validates +
+/// drops it as `*.pending`; the reactor promotes (LWW) on its next tick.
+fn submit_entry(entry: &CatalogEntry) -> Result<()> {
+    let mut stream = helper_socket()?;
+    let mut buf = b"ENTRY\n".to_vec();
+    buf.extend_from_slice(serde_json::to_string(entry)?.as_bytes());
+    buf.push(b'\n');
+    stream.write_all(&buf).context("writing ENTRY")?;
+    stream.flush().ok();
+    let line = read_line_from(&mut stream)?;
+    let trimmed = line.trim();
+    if trimmed == "OK" {
+        Ok(())
+    } else if let Some(msg) = trimmed.strip_prefix("ERR ") {
+        bail!("daemon: {msg}")
+    } else {
+        bail!("unexpected daemon response: {trimmed:?}")
+    }
+}
+
+fn read_line_from(s: &mut UnixStream) -> Result<String> {
+    use std::io::BufRead;
+    let mut br = std::io::BufReader::new(s);
+    let mut line = String::new();
+    let n = br.read_line(&mut line).context("reading daemon response")?;
+    if n == 0 {
+        bail!("daemon closed the connection without responding");
+    }
+    Ok(line)
+}
+
+// ----- verbs -------------------------------------------------------------
+
+fn cmd_push(args: &[String]) -> Result<()> {
+    // push <name> --file <path> --version <v> --os <os> --arch <arch>
+    //             [--tag <tag>] [--target <glob>] [--recipients <list>]
+    let mut name_arg: Option<String> = None;
+    let mut file_arg: Option<String> = None;
+    let mut version_arg: Option<String> = None;
+    let mut os_arg: Option<String> = None;
+    let mut arch_arg: Option<String> = None;
+    let mut tag_arg: Option<String> = None;
+    let mut target_arg: Option<String> = None;
+    let mut recipients_arg: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--file" => { i += 1; file_arg = Some(args.get(i).context("--file requires a value")?.clone()); }
+            "--version" => { i += 1; version_arg = Some(args.get(i).context("--version requires a value")?.clone()); }
+            "--os" => { i += 1; os_arg = Some(args.get(i).context("--os requires a value")?.clone()); }
+            "--arch" => { i += 1; arch_arg = Some(args.get(i).context("--arch requires a value")?.clone()); }
+            "--tag" => { i += 1; tag_arg = Some(args.get(i).context("--tag requires a value")?.clone()); }
+            "--target" => { i += 1; target_arg = Some(args.get(i).context("--target requires a value")?.clone()); }
+            "--recipients" => { i += 1; recipients_arg = Some(args.get(i).context("--recipients requires a value")?.clone()); }
+            other if !other.starts_with('-') && name_arg.is_none() => name_arg = Some(other.to_string()),
+            other => bail!("unknown push flag: {other}"),
+        }
+        i += 1;
+    }
+    let name = name_arg.context(
+        "usage: vigo swarm curator push <name> --file <path> --version <v> --os <os> --arch <arch> \
+         [--tag <tag>] [--target <glob>] [--recipients <list>]",
+    )?;
+    validate_artifact_name(&name)?;
+    let file_path = PathBuf::from(file_arg.context("--file is required")?);
+    let version = version_arg.context("--version is required")?;
+    let os = os_arg.context("--os is required")?;
+    let arch = arch_arg.context("--arch is required")?;
+
+    let caller = resolve_caller()?;
+    let founder_pub = local_puddle_pubkey_bytes(&caller.home)?;
+    let artifact_id_hex = hex::encode(super::catalog::artifact_id_for(&founder_pub, &name));
+
+    // Hash + size the file we're about to ship.
+    let (blob_sha, blob_size) = hash_file(&file_path).with_context(|| {
+        format!("hashing artifact file {}", file_path.display())
+    })?;
+
+    // Build the new body: start from the existing entry if any, replace this
+    // platform's record under the named version, optionally apply tag/target/
+    // recipients overrides. A fresh push (no prior entry) needs a target or
+    // defaults to "*" (fleet-replicate) and recipients to ["*"] (fleet-read).
+    let existing = load_local_entry(&caller.home, &artifact_id_hex)?;
+    let mut body = match existing {
+        Some(e) => {
+            if e.body.name != name {
+                // artifact_id matches but the entry's name doesn't — shouldn't
+                // happen under normal use (artifact_id is sha256(pubkey ‖ name)),
+                // but worth refusing loudly rather than silently rewriting.
+                bail!(
+                    "existing entry's name {:?} disagrees with this push's name {:?}",
+                    e.body.name,
+                    name
+                );
+            }
+            e.body
+        }
+        None => CatalogEntryBody {
+            schema_version: 1,
+            name: name.clone(),
+            founder_puddle_pubkey: hex::encode(founder_pub),
+            signing_puddle_pubkey: hex::encode(founder_pub),
+            versions: Default::default(),
+            tags: Default::default(),
+            recipients: vec!["*".into()],
+            target: "*".into(),
+            issued_at: 0,
+            delegations: vec![],
+        },
+    };
+
+    // Slot the platform in. Replaces any same-{os,arch} entry under this
+    // version, so re-pushing a fixed build for the same triplet works.
+    let new_platform = Platform {
+        os: os.clone(),
+        arch: arch.clone(),
+        blob_sha: blob_sha.clone(),
+        size: blob_size,
+    };
+    let av = body
+        .versions
+        .entry(version.clone())
+        .or_insert_with(|| ArtifactVersion { platforms: vec![] });
+    av.platforms.retain(|p| !(p.os == os && p.arch == arch));
+    av.platforms.push(new_platform);
+
+    if let Some(t) = tag_arg {
+        body.tags.insert(t, version.clone());
+    }
+    if let Some(t) = target_arg {
+        body.target = t;
+    }
+    if let Some(rs) = recipients_arg {
+        body.recipients = parse_recipients(&rs)?;
+    }
+    body.issued_at = next_issued_at(body.issued_at);
+
+    // Sign + ship. The CLI prepares everything; the daemon enforces (signature,
+    // delegation chain, blob size cap, blob sha match) before it stages.
+    let entry = issue_via_session(body)?;
+    submit_push(&entry, &version, &os, &arch, &file_path, blob_size)?;
+
+    println!("✓ Published {}@{} on {}/{} ({})", name, version, os, arch, format_bytes(blob_size));
+    println!("  artifact_id: {}", artifact_id_hex);
+    println!("  blob_sha:    {}", blob_sha);
+    Ok(())
+}
+
+fn cmd_tag(args: &[String]) -> Result<()> {
+    // tag <ref> <tag>=<version>
+    if args.len() < 2 {
+        bail!("usage: vigo swarm curator tag <artifact_id|name> <tag>=<version>");
+    }
+    let assignment = &args[1];
+    let (tag, version) = assignment
+        .split_once('=')
+        .ok_or_else(|| anyhow!("tag assignment must be `<tag>=<version>`, got {assignment:?}"))?;
+    if tag.is_empty() {
+        bail!("tag must be non-empty");
+    }
+    let caller = resolve_caller()?;
+    let (aid, base) = resolve_local_ref(&caller.home, &args[0])?;
+    if !base.body.versions.contains_key(version) {
+        bail!(
+            "version {version:?} isn't in this artifact's catalog entry. Versions: {}",
+            base.body
+                .versions
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    let mut body = base.body.clone();
+    body.tags.insert(tag.to_string(), version.to_string());
+    body.issued_at = next_issued_at(body.issued_at);
+    let entry = issue_via_session(body)?;
+    submit_entry(&entry)?;
+    println!("✓ Tagged {} {} → {}", short_sha(&aid), tag, version);
+    Ok(())
+}
+
+fn cmd_untag(args: &[String]) -> Result<()> {
+    // untag <ref> <tag>
+    if args.len() < 2 {
+        bail!("usage: vigo swarm curator untag <artifact_id|name> <tag>");
+    }
+    let tag = &args[1];
+    let caller = resolve_caller()?;
+    let (aid, base) = resolve_local_ref(&caller.home, &args[0])?;
+    if !base.body.tags.contains_key(tag) {
+        bail!("tag {tag:?} is not set on this artifact");
+    }
+    let mut body = base.body.clone();
+    body.tags.remove(tag);
+    body.issued_at = next_issued_at(body.issued_at);
+    let entry = issue_via_session(body)?;
+    submit_entry(&entry)?;
+    println!("✓ Removed tag {} from {}", tag, short_sha(&aid));
+    Ok(())
+}
+
+fn cmd_set_recipients(args: &[String]) -> Result<()> {
+    // set-recipients <ref> <list-or-*>
+    if args.len() < 2 {
+        bail!("usage: vigo swarm curator set-recipients <artifact_id|name> <* | <pubkey>[,<pubkey>...]>");
+    }
+    let list = parse_recipients(&args[1])?;
+    let caller = resolve_caller()?;
+    let (aid, base) = resolve_local_ref(&caller.home, &args[0])?;
+    let mut body = base.body.clone();
+    body.recipients = list.clone();
+    body.issued_at = next_issued_at(body.issued_at);
+    let entry = issue_via_session(body)?;
+    submit_entry(&entry)?;
+    println!("✓ Set recipients on {} to {}", short_sha(&aid), list.join(", "));
+    Ok(())
+}
+
+fn cmd_set_target(args: &[String]) -> Result<()> {
+    // set-target <ref> <glob>
+    if args.len() < 2 {
+        bail!("usage: vigo swarm curator set-target <artifact_id|name> <hostname-glob-or-trait-filter>");
+    }
+    let target = args[1].clone();
+    if target.is_empty() {
+        bail!("target glob must be non-empty");
+    }
+    let caller = resolve_caller()?;
+    let (aid, base) = resolve_local_ref(&caller.home, &args[0])?;
+    let mut body = base.body.clone();
+    body.target = target.clone();
+    body.issued_at = next_issued_at(body.issued_at);
+    let entry = issue_via_session(body)?;
+    submit_entry(&entry)?;
+    println!("✓ Set target on {} to {}", short_sha(&aid), target);
+    println!(
+        "  Manifest seeds refreshed; filecast Manager will redistribute on the next pass."
+    );
+    Ok(())
+}
+
+fn cmd_rm(args: &[String]) -> Result<()> {
+    // rm <ref> [--version <v>]
+    let mut ref_arg: Option<String> = None;
+    let mut version_arg: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--version" => { i += 1; version_arg = Some(args.get(i).context("--version requires a value")?.clone()); }
+            other if !other.starts_with('-') && ref_arg.is_none() => ref_arg = Some(other.to_string()),
+            other => bail!("unknown rm flag: {other}"),
+        }
+        i += 1;
+    }
+    let target = ref_arg.context("usage: vigo swarm curator rm <artifact_id|name> [--version <v>]")?;
+    let caller = resolve_caller()?;
+    let (aid, base) = resolve_local_ref(&caller.home, &target)?;
+
+    if let Some(v) = version_arg {
+        if !base.body.versions.contains_key(&v) {
+            bail!("version {v:?} isn't in this artifact's catalog entry");
+        }
+        let mut body = base.body.clone();
+        body.versions.remove(&v);
+        // Drop any tags pointing at the removed version — leaving a dangling
+        // tag would resolve to nothing on consumers anyway.
+        body.tags.retain(|_, ver| ver != &v);
+        body.issued_at = next_issued_at(body.issued_at);
+        let entry = issue_via_session(body)?;
+        submit_entry(&entry)?;
+        println!("✓ Dropped version {} from {}", v, short_sha(&aid));
+        println!(
+            "  Note: the blob still sits in the swarm cache until retention/GC expires it (slice 4d)."
+        );
+        return Ok(());
+    }
+
+    // No --version: scrub local publish state for this artifact. Consumers
+    // keep their last-known entry (LWW; we have no entry to win with). This
+    // matches the ADR's "you can't recall by losing a flag — same as gitback"
+    // stance.
+    let dir = state::artifact_dir(&caller.home, &aid);
+    std::fs::remove_dir_all(&dir).with_context(|| format!("removing {}", dir.display()))?;
+    println!("✓ Scrubbed local publish state for {}", short_sha(&aid));
+    println!("  ({}.)", dir.display());
+    println!("  Note: this does NOT unpublish across the fleet — peers retain the last entry");
+    println!("        they saw. To stop a specific version from resolving, use");
+    println!("        `vigo swarm curator rm <ref> --version <v>` before this.");
+    Ok(())
+}
+
+// ----- mutating-verb helpers ---------------------------------------------
+
+/// Hash a file once to compute (sha256-hex, byte-count). Streams 64 KiB at a
+/// time so a 2 GiB image doesn't blow the heap.
+fn hash_file(path: &Path) -> Result<(String, u64)> {
+    let mut f = std::fs::File::open(path).with_context(|| format!("opening {}", path.display()))?;
+    let mut hasher = Sha256::new();
+    let mut chunk = vec![0u8; 64 * 1024];
+    let mut total: u64 = 0;
+    loop {
+        let n = f.read(&mut chunk).context("reading file for hashing")?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&chunk[..n]);
+        total += n as u64;
+    }
+    Ok((hex::encode(hasher.finalize()), total))
+}
+
+/// Parse a `--recipients` argument: `*` ⇒ fleet-readable, or a comma-separated
+/// list of hex puddle pubkeys (with optional `ed25519:` prefix). Validates
+/// each pubkey is 32 bytes of hex so a typo can't sneak in.
+fn parse_recipients(arg: &str) -> Result<Vec<String>> {
+    let arg = arg.trim();
+    if arg == "*" {
+        return Ok(vec!["*".into()]);
+    }
+    let mut out = Vec::new();
+    for item in arg.split(',') {
+        let item = item.trim();
+        if item.is_empty() {
+            continue;
+        }
+        if item == "*" {
+            bail!("`*` in a recipient list is redundant — pass either `*` alone or a list of pubkeys");
+        }
+        let hex_part = item.strip_prefix("ed25519:").unwrap_or(item);
+        if hex_part.len() != ID_LEN * 2 {
+            bail!("recipient pubkey {item:?} is wrong length (need 64 hex characters)");
+        }
+        if hex::decode(hex_part).is_err() {
+            bail!("recipient pubkey {item:?} isn't valid hex");
+        }
+        out.push(hex_part.to_ascii_lowercase());
+    }
+    if out.is_empty() {
+        bail!("recipients list must be `*` or at least one pubkey");
+    }
+    Ok(out)
+}
+
 // path helpers we re-export so the agent can mark these dirs read-from
 #[allow(dead_code)]
 fn artifacts_dir_for_tests() -> PathBuf {
@@ -820,5 +1490,107 @@ mod tests {
         assert!(!is_hex64(&"a".repeat(63)));
         assert!(!is_hex64(&"a".repeat(65)));
         assert!(!is_hex64(&format!("g{}", "a".repeat(63))));
+    }
+
+    // ----- slice 4c helpers -----
+
+    #[test]
+    fn parse_recipients_accepts_star_or_pubkey_list() {
+        assert_eq!(parse_recipients("*").unwrap(), vec!["*".to_string()]);
+        let pk1 = "a".repeat(64);
+        let pk2 = format!("ed25519:{}", "b".repeat(64));
+        let got = parse_recipients(&format!("{pk1},{pk2}")).unwrap();
+        assert_eq!(got, vec!["a".repeat(64), "b".repeat(64)]);
+        // Whitespace tolerated; case normalized.
+        let got = parse_recipients(&format!(" {pk1} , {pk2} ")).unwrap();
+        assert_eq!(got.len(), 2);
+        // Errors.
+        assert!(parse_recipients("").is_err());
+        assert!(parse_recipients("not-hex").is_err());
+        assert!(parse_recipients(&"a".repeat(63)).is_err()); // wrong length
+        assert!(parse_recipients(&format!("*,{pk1}")).is_err(), "* alongside an explicit list is rejected");
+    }
+
+    #[test]
+    fn hash_file_streams_and_returns_sha_and_size() {
+        let tmp = TempDir::new().unwrap();
+        let payload = b"the artifact bytes".to_vec();
+        let p = tmp.path().join("blob");
+        std::fs::write(&p, &payload).unwrap();
+        let (sha, size) = hash_file(&p).unwrap();
+        assert_eq!(size, payload.len() as u64);
+        let want = hex::encode(Sha256::digest(&payload));
+        assert_eq!(sha, want);
+    }
+
+    #[test]
+    fn next_issued_at_is_strictly_monotonic() {
+        let now = now_millis();
+        // If the existing is in the future, we still strictly advance.
+        let future = now + 1_000_000;
+        assert_eq!(next_issued_at(future), future + 1);
+        // If wall-clock is ahead, we use wall-clock.
+        let old = now - 10_000;
+        assert!(next_issued_at(old) > old);
+    }
+
+    fn write_canonical_entry(home: &Path, aid: &str, entry: &CatalogEntry) {
+        // Promote it past .pending so resolve_local_ref sees it.
+        let dir = state::artifact_dir(home, aid);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(state::entry_path(home, aid), serde_json::to_vec(entry).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn resolve_local_ref_matches_hex_name_and_prefix() {
+        let home = TempDir::new().unwrap();
+        let k = SigningKey::generate(&mut OsRng);
+        let entry = entry_for(&k, "vigo-agent", 100);
+        let aid = entry.artifact_id_hex().unwrap();
+        write_canonical_entry(home.path(), &aid, &entry);
+
+        // Hex.
+        let (got_aid, got_e) = resolve_local_ref(home.path(), &aid).unwrap();
+        assert_eq!(got_aid, aid);
+        assert_eq!(got_e.body.name, "vigo-agent");
+        // Exact name.
+        let (got_aid, _) = resolve_local_ref(home.path(), "vigo-agent").unwrap();
+        assert_eq!(got_aid, aid);
+        // Unique prefix.
+        let (got_aid, _) = resolve_local_ref(home.path(), "vigo-a").unwrap();
+        assert_eq!(got_aid, aid);
+        // No match — clear error pointing at `push`.
+        let err = resolve_local_ref(home.path(), "nope").unwrap_err();
+        assert!(
+            format!("{err:#}").contains("no local artifact"),
+            "got: {err:#}"
+        );
+    }
+
+    #[test]
+    fn resolve_local_ref_ambiguous_name_errors() {
+        let home = TempDir::new().unwrap();
+        let k1 = SigningKey::generate(&mut OsRng);
+        let k2 = SigningKey::generate(&mut OsRng);
+        let e1 = entry_for(&k1, "redis", 1);
+        let e2 = entry_for(&k2, "redis", 1);
+        let aid1 = e1.artifact_id_hex().unwrap();
+        let aid2 = e2.artifact_id_hex().unwrap();
+        write_canonical_entry(home.path(), &aid1, &e1);
+        write_canonical_entry(home.path(), &aid2, &e2);
+        let err = resolve_local_ref(home.path(), "redis").unwrap_err();
+        assert!(format!("{err:#}").contains("matches 2"), "got: {err:#}");
+    }
+
+    #[test]
+    fn load_local_entry_handles_missing_and_present() {
+        let home = TempDir::new().unwrap();
+        let k = SigningKey::generate(&mut OsRng);
+        let entry = entry_for(&k, "x", 100);
+        let aid = entry.artifact_id_hex().unwrap();
+        assert!(load_local_entry(home.path(), &aid).unwrap().is_none());
+        write_canonical_entry(home.path(), &aid, &entry);
+        let got = load_local_entry(home.path(), &aid).unwrap().unwrap();
+        assert_eq!(got.body.name, "x");
     }
 }

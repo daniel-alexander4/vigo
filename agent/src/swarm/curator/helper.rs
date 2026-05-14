@@ -28,8 +28,9 @@
 //!    and promotes it to `entry.json`, where the `swarm_curator` trait collector
 //!    picks it up → `curatormesh` → the fleet catalog.
 //!
-//! Wire protocol (a tiny two-phase exchange so the client doesn't push a 2 GiB
-//! blob into a connection the daemon already rejected):
+//! Wire protocol — one of two verbs per connection:
+//!
+//! ### `PUSH` — publish a new blob (the version + platform must be in the entry):
 //!
 //! ```text
 //! → PUSH\n
@@ -40,6 +41,23 @@
 //! → <blob_size bytes>
 //! ← OK\n                      (or ← ERR <msg>\n if hashing/staging fails)
 //! ```
+//!
+//! ### `ENTRY` — re-sign an existing artifact without shipping blob bytes:
+//!
+//! ```text
+//! → ENTRY\n
+//! → <CatalogEntry JSON>\n
+//! ← OK\n                      (or ← ERR <msg>\n)
+//! ```
+//!
+//! The ENTRY verb is the publish path for `tag`/`untag`/`set-recipients`/
+//! `set-target`/`rm` (slice 4c): the client re-signs the entry under the
+//! same anchor key, the daemon validates + drops it as a `*.pending` for
+//! the reactor to promote (LWW). For `set-target`, the daemon also
+//! re-records the manifest seed for every referenced blob so the filecast
+//! `Manager` re-distributes to the new target on the next pass — without
+//! that, target changes wouldn't take effect until the bytes happened to
+//! be re-pushed.
 //!
 //! What slice 2 does **not** do: fan the entry out peer-to-peer (the propagation
 //! path through slices 1-3 is the `swarm_curator` trait → check-in →
@@ -259,9 +277,9 @@ fn resolve_caller(uid: u32) -> Result<Caller> {
     Ok(Caller { username, home, policy })
 }
 
-/// Serve one PUSH. Returns `Ok(())` once the blob is staged, the manifest entry
-/// is recorded, and the pending catalog entry is written; the caller writes the
-/// final `OK\n`. On the error path the caller writes `ERR <msg>\n`.
+/// Serve one connection — dispatches on the verb line. Returns `Ok(())` once
+/// the requested operation succeeded; the caller writes the final `OK\n`. On
+/// the error path the caller writes `ERR <msg>\n`.
 async fn serve<R, W>(
     br: &mut BufReader<R>,
     write: &mut W,
@@ -286,10 +304,27 @@ where
     // --- verb.
     let verb = read_line(br, MAX_VERB_BYTES).await.context("reading verb line")?;
     let verb = verb.trim();
-    if verb != "PUSH" {
-        bail!("unknown verb {verb:?} (expected PUSH)");
+    match verb {
+        "PUSH" => serve_push(br, write, caller, cache, manifest, envoy_id).await,
+        "ENTRY" => serve_entry(br, caller, manifest, envoy_id).await,
+        other => bail!("unknown verb {other:?} (expected PUSH or ENTRY)"),
     }
+}
 
+/// PUSH — publish a new blob. The catalog entry must already carry the
+/// `{version, os, arch}` whose bytes are being streamed. See module docs.
+async fn serve_push<R, W>(
+    br: &mut BufReader<R>,
+    write: &mut W,
+    caller: &Caller,
+    cache: &BlobCache,
+    manifest: &Manifest,
+    envoy_id: &str,
+) -> Result<()>
+where
+    R: tokio::io::AsyncRead + Unpin,
+    W: tokio::io::AsyncWrite + Unpin,
+{
     // --- header: the signed catalog entry + which build the bytes are.
     let header_line = read_line(br, MAX_PUSH_HEADER_BYTES).await.context("reading PUSH header")?;
     let PushHeader { entry, version, os, arch, blob_size } =
@@ -389,6 +424,94 @@ where
         sha = %&expected_sha[..12],
         bytes = blob_size,
         "curator: published artifact build"
+    );
+    Ok(())
+}
+
+/// ENTRY — re-sign without shipping new bytes. Used by tag / untag /
+/// set-recipients / set-target / rm. Validates the signed entry end-to-end,
+/// drops it as `*.pending` for the reactor's LWW promotion, and (for blobs
+/// the entry references that the manifest already knows about) re-records
+/// the seed so the new `target` glob takes effect for filecast
+/// redistribution on the next Manager pass. Doesn't touch the blob cache —
+/// the bytes were staged by a prior PUSH (or aren't ours).
+async fn serve_entry<R>(
+    br: &mut BufReader<R>,
+    caller: &Caller,
+    manifest: &Manifest,
+    envoy_id: &str,
+) -> Result<()>
+where
+    R: tokio::io::AsyncRead + Unpin,
+{
+    let header_line = read_line(br, MAX_PUSH_HEADER_BYTES)
+        .await
+        .context("reading ENTRY body")?;
+    let entry: CatalogEntry =
+        serde_json::from_str(header_line.trim()).context("parsing ENTRY JSON")?;
+
+    entry
+        .verify(DELEGATION_MAX_LEN)
+        .context("submitted catalog entry failed verification")?;
+    validate_artifact_name(&entry.body.name).context("submitted catalog entry artifact name")?;
+    let artifact_id_hex = entry.artifact_id_hex().context("deriving artifact_id")?;
+
+    // Re-record any blob this entry still references that's already in the
+    // manifest. For `tag`/`untag`/`set-recipients` this is a no-op-shaped
+    // overwrite (target/label unchanged); for `set-target` it's the whole
+    // point — refresh the manifest's `target` so the filecast Manager
+    // redistributes to the new envoy set on its next pass. Blobs the
+    // manifest doesn't know about are silently skipped — they belong to a
+    // peer publisher and aren't ours to re-record.
+    let address = format!(
+        "{}:{}",
+        crate::swarm::discovery::local_ipv4().unwrap_or(std::net::Ipv4Addr::LOCALHOST),
+        crate::swarm::server::DEFAULT_PORT
+    );
+    let mut refreshed_blobs = 0usize;
+    for (version, av) in &entry.body.versions {
+        for p in &av.platforms {
+            let sha = p.blob_sha.to_ascii_lowercase();
+            let existing = match manifest.get_entry(&sha) {
+                Some(e) => e,
+                None => continue,
+            };
+            // Only refresh entries this envoy seeded (`seeder_id == envoy_id`)
+            // — refreshing a peer's seed entry would silently transfer
+            // ownership of a blob we don't actually hold.
+            if existing.seeder_id != envoy_id {
+                continue;
+            }
+            let label = format!(
+                "curator:{artifact_id_hex}:{}:{}-{}",
+                version, p.os, p.arch
+            );
+            manifest.record_seed(
+                &sha,
+                &label,
+                &entry.body.target,
+                ARTIFACT_RETENTION,
+                envoy_id,
+                p.size,
+                &address,
+            );
+            refreshed_blobs += 1;
+        }
+    }
+
+    write_pending_entry(&caller.home, &artifact_id_hex, &entry)
+        .with_context(|| format!("writing pending catalog entry for {}", caller.username))?;
+
+    info!(
+        user = %caller.username,
+        artifact_id = %artifact_id_hex,
+        name = %entry.body.name,
+        target = %entry.body.target,
+        recipients = entry.body.recipients.len(),
+        versions = entry.body.versions.len(),
+        tags = entry.body.tags.len(),
+        refreshed_blobs,
+        "curator: submitted re-signed catalog entry"
     );
     Ok(())
 }
@@ -682,5 +805,153 @@ mod tests {
         let caller = bed.caller(true);
         let (r, _) = run_serve(&bed, &caller, b"HOWDY\n").await;
         assert!(format!("{:#}", r.unwrap_err()).contains("unknown verb"));
+    }
+
+    // ----- ENTRY verb (slice 4c) -----
+
+    fn entry_request(entry: &CatalogEntry) -> Vec<u8> {
+        let mut out = b"ENTRY\n".to_vec();
+        out.extend_from_slice(serde_json::to_string(entry).unwrap().as_bytes());
+        out.push(b'\n');
+        out
+    }
+
+    /// Re-issue a signed entry under the same key with a higher `issued_at`
+    /// and a tweaked field — what `tag`/`set-target`/etc. produce.
+    fn reissue_with<F: FnOnce(&mut CatalogEntryBody)>(k: &SigningKey, base: &CatalogEntry, mutate: F) -> CatalogEntry {
+        let mut body = base.body.clone();
+        body.issued_at += 1;
+        mutate(&mut body);
+        CatalogEntry::issue(k, body).unwrap()
+    }
+
+    /// Seed the manifest the way a prior PUSH would have, without driving
+    /// `serve_push` — sidesteps the shared `runtime_limits` static the
+    /// oversize-blob test mutates. Same shape `serve_push` records.
+    fn seed_manifest_for(bed: &Bed, seeder_id: &str, entry: &CatalogEntry) {
+        for (version, av) in &entry.body.versions {
+            for p in &av.platforms {
+                let sha = p.blob_sha.to_ascii_lowercase();
+                let aid = entry.artifact_id_hex().unwrap();
+                let label = format!("curator:{aid}:{version}:{}-{}", p.os, p.arch);
+                bed.manifest.record_seed(
+                    &sha,
+                    &label,
+                    &entry.body.target,
+                    "",
+                    seeder_id,
+                    p.size,
+                    "127.0.0.1:1531",
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn entry_writes_pending_without_blob() {
+        let bed = Bed::new();
+        let caller = bed.caller(true);
+        let k = fresh_key();
+        let blob = b"the artifact bytes".to_vec();
+        let initial = entry_for(&k, "vigo-agent", &blob);
+        let aid = initial.artifact_id_hex().unwrap();
+        let sha = hex::encode(Sha256::digest(&blob));
+        seed_manifest_for(&bed, "envoy-test", &initial);
+        // Stage the blob (would have been done by a real PUSH).
+        std::fs::write(bed.cache().blob_path(&sha), &blob).unwrap();
+        // Lay down the canonical entry the reactor would have promoted.
+        let dir = state::artifact_dir(&bed.home, &aid);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(state::entry_path(&bed.home, &aid), serde_json::to_vec(&initial).unwrap()).unwrap();
+
+        // ENTRY re-sign (add a tag) — no blob bytes flow.
+        let revised = reissue_with(&k, &initial, |b| {
+            b.tags.insert("stable".into(), "1.0.0".into());
+        });
+        let (r, resp) = run_serve(&bed, &caller, &entry_request(&revised)).await;
+        r.unwrap();
+        assert_eq!(resp, b"", "ENTRY sends no intermediate response — caller writes OK after Ok(())");
+
+        // Pending was written.
+        assert!(state::entry_pending_path(&bed.home, &aid).exists());
+        let written: CatalogEntry =
+            serde_json::from_slice(&std::fs::read(state::entry_pending_path(&bed.home, &aid)).unwrap()).unwrap();
+        assert_eq!(written.body.tags.get("stable").map(String::as_str), Some("1.0.0"));
+        // Blob stayed put.
+        assert!(bed.cache().has_blob(&sha));
+    }
+
+    #[tokio::test]
+    async fn entry_set_target_refreshes_manifest_for_our_seeded_blobs() {
+        let bed = Bed::new();
+        let caller = bed.caller(true);
+        let k = fresh_key();
+        let blob = b"the artifact bytes".to_vec();
+        let initial = entry_for(&k, "vigo-agent", &blob);
+        let sha = hex::encode(Sha256::digest(&blob));
+        seed_manifest_for(&bed, "envoy-test", &initial);
+        assert_eq!(bed.manifest.get_entry(&sha).unwrap().target, "*");
+
+        // Re-sign with a narrowed target.
+        let revised = reissue_with(&k, &initial, |b| b.target = "us-west1-*".into());
+        run_serve(&bed, &caller, &entry_request(&revised)).await.0.unwrap();
+        assert_eq!(
+            bed.manifest.get_entry(&sha).unwrap().target,
+            "us-west1-*",
+            "ENTRY with a changed target must refresh the manifest seed so filecast redistributes"
+        );
+    }
+
+    #[tokio::test]
+    async fn entry_does_not_refresh_peer_seeded_blobs() {
+        // A peer originally seeded the blob (different envoy_id). Our daemon
+        // must NOT silently take ownership when we ENTRY-resubmit the entry
+        // pointing at it.
+        let bed = Bed::new();
+        let caller = bed.caller(true);
+        let k = fresh_key();
+        let blob = b"peer-seeded".to_vec();
+        let initial = entry_for(&k, "vigo-agent", &blob);
+        let sha = hex::encode(Sha256::digest(&blob));
+        bed.manifest.record_seed(
+            &sha,
+            "curator:peer-seeded",
+            "*",
+            "",
+            "other-envoy",
+            blob.len() as u64,
+            "10.0.0.99:1531",
+        );
+        // ENTRY with our key under a different target.
+        let revised = reissue_with(&k, &initial, |b| b.target = "elsewhere-*".into());
+        run_serve(&bed, &caller, &entry_request(&revised)).await.0.unwrap();
+        let me = bed.manifest.get_entry(&sha).unwrap();
+        assert_eq!(me.seeder_id, "other-envoy", "peer-seeded blob must keep its original seeder_id");
+        assert_eq!(me.target, "*", "peer-seeded blob target must not be overwritten by our ENTRY");
+    }
+
+    #[tokio::test]
+    async fn entry_rejects_tampered_resign() {
+        let bed = Bed::new();
+        let caller = bed.caller(true);
+        let k = fresh_key();
+        let blob = b"x".to_vec();
+        let base = entry_for(&k, "x", &blob);
+        let mut tampered = base.clone();
+        tampered.body.tags.insert("evil".into(), "1.0.0".into()); // mutates body without re-signing
+        let (r, _) = run_serve(&bed, &caller, &entry_request(&tampered)).await;
+        assert!(format!("{:#}", r.unwrap_err()).contains("verification"));
+    }
+
+    #[tokio::test]
+    async fn entry_refuses_when_user_lacks_curator_flag() {
+        let bed = Bed::new();
+        let caller = bed.caller(false);
+        let k = fresh_key();
+        let blob = b"x".to_vec();
+        let base = entry_for(&k, "x", &blob);
+        let revised = reissue_with(&k, &base, |b| b.target = "narrowed".into());
+        let (r, _) = run_serve(&bed, &caller, &entry_request(&revised)).await;
+        assert!(format!("{:#}", r.unwrap_err()).contains("not authorized"));
     }
 }
