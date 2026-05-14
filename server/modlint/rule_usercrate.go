@@ -106,7 +106,7 @@ var absentIgnoredAttrs = []string{
 	"home", "shell", "password", "groups", "group",
 	"authorized_keys", "uid", "gid", "comment",
 	"sudo_passwd", "sudo_nopasswd", "system",
-	"puddle", "gitback",
+	"puddle", "gitback", "curator",
 }
 
 func (absentWithUnusedAttrsRule) apply(mod *module, opts Options) []Finding {
