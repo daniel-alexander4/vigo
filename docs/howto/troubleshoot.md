@@ -1,7 +1,69 @@
 
-# Troubleshooting
+# Troubleshoot common issues
 
-Common issues and how to diagnose them.
+This page is grep-friendly: when an envoy throws an error or a session fails, search this page for the exact string the operator sees. Each symptom links to its fix. The diagnostic-tool reference is at the bottom for when none of the known symptoms match.
+
+## Symptoms (in operator-grep form)
+
+### `SSH pubkey not authorized on this envoy`
+
+Scrier-SSH session fails immediately with this server-side error. The operator's pubkey (from `users.ssh_public_key` for browser sessions, or auto-detected by the CLI for `vigocli scrier ssh`) isn't in any regular user's `~/.ssh/authorized_keys` on the target envoy.
+
+**Fix:** add the operator's pubkey to a regular user on the envoy. Typical path: declare the user in a usercrate with `authorized_keys:` and publish. Then retry. See [Set up Scrier](set-up-scrier.md#make-sure-the-operators-pubkey-is-in-some-regular-users-authorized_keys-on-each-envoy).
+
+### `no SSH pubkey available — either run vigocli scrier ssh...`
+
+The web user has no `ssh_public_key` set AND the connect request didn't carry one (i.e., it came from the browser, not the CLI).
+
+**Fix:** run `vigocli scrier ssh <envoy>` once from a host where your SSH key lives — the CLI auto-detects and write-throughs your pubkey to `users.ssh_public_key`. Browser sessions thereafter work. Or `PUT /api/v1/users/{id}` with `ssh_public_key` directly.
+
+### `agent <uuid> did not open TunnelStream within 90s`
+
+Scrier session times out waiting for the envoy's agent to dial back. The agent received the wake signal (or should have) but didn't open the TunnelStream.
+
+**Fix:** check the envoy's agent state — `vigocli envoys list <uuid>` for staleness; `vigocli traits livequery <uuid> host_self.fs_root_pct` for disk pressure (a starved agent can fail to open new sockets); inspect the agent's host with `vigo status` on-box. Disk-pressure recoveries: clear journald (`journalctl --vacuum-size=200M`) and apt cache (`apt clean`); restart the agent.
+
+### `scrier: verify pubkey not found in any regular user's authorized_keys`
+
+Agent-side error from the scrier scan. The operator's pubkey isn't in `/home/*/.ssh/authorized_keys` for any regular (uid != 0) user.
+
+**Fix:** same as the first symptom above. Root is **never** a scrier landing target; if the operator's key lives only in `/root/.ssh/authorized_keys`, the scan won't find it. Add it to a regular user.
+
+### Envoy shows as stale but the agent is running
+
+The freshness predicate marked the envoy offline despite the agent running. Likely: the check-in interval is configured too low and the convergence cycle takes longer than the interval, so check-ins back up.
+
+**Fix:** check `vigo status` on the envoy for the observed inter-CheckIn cadence. If it's much higher than the configured `checkin.interval`, the convergence pass is bottlenecked. Bump the interval, or set the `checkin.offline_threshold` override in `server.yaml` (see [reference/server-yaml.md](../reference/server-yaml.md)).
+
+### `vigocli config publish` fails with validation errors
+
+The published config didn't pass one of the validation gates (YAML syntax, cross-reference integrity, circular dependency detection, idempotency, guardrails, URL aliveness).
+
+**Fix:** the built-in AI assistant streams fix suggestions to your terminal when validation fails. Read those. For specific gates, see [Publish your config](publish-config.md). To skip URL-aliveness checks in air-gapped environments, use `--skip-url-checks`.
+
+### Module convergence loop — same resource changes every cycle
+
+A resource declares state that some external process keeps reverting (a package manager auto-rolls back the version, another tool rewrites the file, the OS updates a value).
+
+**Fix:** `vigocli config trace <envoy> <module>` shows the resolution chain. Inspect what's writing the file outside of Vigo. The drift-counter on the envoy's detail page distinguishes `Diverged` (≥5 consecutive runs of changes — that's this case) from `Changed` (one-off).
+
+### Convergence rollback fired mid-publish
+
+`server/publish/` auto-rolls back a publish whose convergence drops below threshold.
+
+**Fix:** the previous good `.live/` is restored automatically; the operator sees the rollback in `vigocli config history` and the publish-audit-log. Inspect the runs that triggered the rollback to find what changed; fix and re-publish.
+
+### License-related enrollment refusal
+
+Agent registration refused at the server because the enrolled-envoy count would exceed the license cap.
+
+**Fix:** see `vigocli license` for current usage / cap. Revoke unused envoys (`vigocli envoys revoke <uuid>`) before adding new ones, or upgrade the license tier.
+
+### `kex_exchange_identification: read: Connection reset by peer` on an envoy's sshd (not scrier)
+
+Direct SSH to the envoy host (not via scrier) is rejected. Usually disk-pressure or resource-starvation on the host.
+
+**Fix:** check disk + load. Vigo's swarm subsystems refuse pushes below 10% free disk — that often correlates with sshd misbehavior on the same host. Clear journald + apt cache; restart sshd if needed.
 
 ## Diagnostic Tools
 

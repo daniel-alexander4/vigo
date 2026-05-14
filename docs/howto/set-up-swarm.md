@@ -1,5 +1,5 @@
 
-# Swarm Operations
+# Set up Swarm
 
 How to configure, monitor, and troubleshoot the envoy P2P substrate and the four content subsystems that ride it ([payload](../glossary.md#payload), [longdrawer](../howto/set-up-longdrawer.md), [gitback](../howto/set-up-gitback.md), [lockbox](../howto/set-up-lockbox.md)).
 

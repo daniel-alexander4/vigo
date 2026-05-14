@@ -1,9 +1,60 @@
 
-# Gitback — Unified Git Substrate (ADR-015)
+# Set up Gitback
 
-> **ADR-015 cutover complete.** Steps 1–3 shipped earlier; step 4 shipped across six slices on 2026-04-30. The substrate is keyed on `project_id = sha256(founder_puddle_pubkey ‖ handle)` with helper-daemon-mediated push/fetch over a SO_PEERCRED-gated Unix socket, push-driven fan-out, LAN auto-discovery, cross-envoy revoke/leave envelope gossip with digest catch-up, project-id-keyed fleet observability (UI + REST + CLI), a REST member-roster endpoint for push-time lookup, and `reanchor` byte-level migration. ADR-016 (lockbox membership on puddle) is the next ADR in the puddle arc.
+Gitback runs git over Vigo's swarm substrate — you `git push` to a project that lives across your envoys (and optionally your teammates' envoys) without a central git server. The use cases are personal disaster recovery (one user, many envoys, one source of truth that survives any single envoy disappearing) and small-team collaboration (multiple puddles share a single project).
 
-Gitback is the P2P git substrate underlying both personal disaster-recovery (today's primary use case) and multi-member collaboration (an axis introduced by ADR-015). Each project is identified by `project_id = sha256(founder_puddle_pubkey ‖ handle)`; project shape is described by two orthogonal axes:
+## Enable it
+
+Gitback rides on top of puddle, so the prerequisite is [puddle membership](set-up-puddle.md). Also enable it per-user via the usercrate:
+
+```yaml
+# /srv/vigo/stacks/stockpile/usercrates/dan.vgo
+resources:
+  - type: user
+    username: dan
+    puddle: true
+    gitback: true             # opt-in for git-over-swarm
+```
+
+The fleet-wide gate lives in `server.yaml`:
+
+```yaml
+swarm:
+  gitback:
+    enabled:
+      - "*"                   # all envoys (or use first-match-wins patterns)
+```
+
+Publish (`sudo vigocli config publish`).
+
+## Use it
+
+```bash
+# Start a project (on any envoy where you have puddle unlocked):
+vigo swarm gitback project init my-config-repo
+
+# Add the gitback remote and push:
+cd my-config-repo
+git remote add gitback gitback://<your-puddle-name>/my-config-repo
+git push gitback main
+
+# On another of your envoys:
+git clone gitback://<your-puddle-name>/my-config-repo
+```
+
+Per-puddle status:
+
+```bash
+vigo swarm gitback status                          # what's local vs remote
+vigo swarm gitback project list                    # all projects you have a foothold in
+vigo swarm gitback project invite <other-puddle>   # for multi-member collaboration
+```
+
+The full verb tree: `vigo swarm gitback {status,purge}` plus `project {init,invite,join,leave,list,status,revoke,reanchor,re-invite-all,rejoin,re-found}`. Operators rarely touch `reanchor` / `re-found` — those are recovery paths for compromised-key scenarios documented in [ADR-019](../adr/019-gitback-founder-rekey.md).
+
+## How it works
+
+Gitback is the P2P git substrate underlying both personal disaster-recovery (today's primary use case) and multi-member collaboration (an axis introduced by [ADR-015](../adr/015-unified-gitback-substrate.md)). Each project is identified by `project_id = sha256(founder_puddle_pubkey ‖ handle)`; project shape is described by two orthogonal axes:
 
 | `members:`           | `dr_scope:`    | Use case                      |
 |----------------------|----------------|-------------------------------|

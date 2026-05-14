@@ -1,11 +1,67 @@
 
-# Curator — P2P Artifact Registry (ADR-024)
+# Set up Curator
 
-> **Status (0.51.0):** Shipped. Curator is the fifth swarm content subsystem — filecast's content-addressed blob transport + gitback's puddle-keyed identity/access machinery + a thin signed-catalog layer. Read side is server-mediated and universal (every envoy can resolve `<name>:<tag>` regardless of swarm-gating); write side is puddle-members-only via the helper daemon at `/var/run/vigo/curator.sock`.
+Curator is Vigo's P2P artifact registry — release binaries, tarballs, `.deb`/`.rpm` packages, container images. Operators publish artifacts from any envoy with an unlocked puddle; the fleet pulls them P2P (server-relayed when peer-to-peer can't reach). Read side is fleet-wide by default; write side is puddle-members-only.
 
-Curator is for **artifacts** — release binaries, tarballs, `.deb`/`.rpm` packages, container images, and (post-v1) the agent's own self-update binaries. The pieces to build a registry already existed in the fleet: the swarm blob substrate is content-addressed, chunked, target-scoped, and P2P; OCI image layers are already sha256-addressed and map 1:1 onto swarm blobs; release binaries / tarballs / packages are just blobs. Gitback already carried the *identity and access* primitives — puddle-keyed ownership, Ed25519 capability/envelope signing anchored to `sha256(founder_pubkey ‖ handle)`, founder-rekey delegation chains, the `*.pending`-sentinel + root-reactor pattern, and the SO_PEERCRED helper-daemon shape. Curator stitches the two together with a signed-catalog layer.
+## Enable it
 
-## Identity
+Per-envoy: opt in via `server.yaml`:
+
+```yaml
+swarm:
+  curator:
+    enabled:
+      - "*"                   # pattern list, first-match-wins; "-" prefix denies
+    max_bytes: 2147483648     # per-blob cap; default 2 GiB
+```
+
+Per-user: grant `curator: true` on the usercrate (heavier than `gitback:` — write access to a fleet-readable artifact registry):
+
+```yaml
+resources:
+  - type: user
+    username: dan
+    puddle: true              # required
+    curator: true             # opt-in for curator publish
+```
+
+Publish (`sudo vigocli config publish`).
+
+## Use it
+
+From an envoy where the operator has puddle unlocked:
+
+```bash
+# Publish a binary or archive (the implicit namespace is the operator's puddle name):
+vigo swarm curator push vigo-agent:1.2.3 ./vigo-agent-linux-amd64 \
+  --platform linux/amd64
+
+# Tag mutably:
+vigo swarm curator tag vigo-agent:latest 1.2.3
+
+# Resolve / pull anywhere (no puddle needed for read):
+vigo swarm curator resolve vigo-agent:latest      # show coordinates
+vigo swarm curator pull vigo-agent:latest         # fetch to /var/lib/vigo/artifacts/...
+
+# Operator views:
+vigo swarm curator list                           # everything published
+vigo swarm curator inspect vigo-agent             # full signed entry
+vigo swarm curator versions vigo-agent
+```
+
+From the admin server (`vigocli`) — same verbs plus moderation:
+
+```bash
+vigocli swarm curator list
+vigocli swarm curator block <artifact_id>         # server refuses to resolve/relay
+vigocli swarm curator unblock <artifact_id>
+```
+
+## How it works
+
+The pieces to build a registry already existed in the fleet: the swarm blob substrate is content-addressed, chunked, target-scoped, and P2P; OCI image layers are already sha256-addressed and map 1:1 onto swarm blobs; release binaries / tarballs / packages are just blobs. Gitback already carried the *identity and access* primitives — puddle-keyed ownership, Ed25519 capability/envelope signing anchored to `sha256(founder_pubkey ‖ handle)`, founder-rekey delegation chains, the `*.pending`-sentinel + root-reactor pattern, and the SO_PEERCRED helper-daemon shape. Curator stitches the two together with a signed-catalog layer.
+
+### Identity
 
 An artifact is keyed `artifact_id = sha256(founder_puddle_pubkey ‖ name)` — same shape as a gitback `project_id`, so Alice's `redis` ≠ Bob's `redis`. The human-facing reference is `<founder-puddle-name>/<name>` (the puddle name resolves to the pubkey via the [ADR-022](../adr/022-gitback-friendly-names.md) fleet name map, then to the artifact_id), with **the operator's puddle as the implicit default namespace** — `artifact:vigo-agent:latest` ≡ `artifact:<operator-puddle>/vigo-agent:latest`. The hex `<artifact_id>/<name>` form always works (self-certifying, like a gitback hex pid).
 

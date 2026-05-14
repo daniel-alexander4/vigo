@@ -1,15 +1,53 @@
----
-title: Puddle
-weight: 65
----
+# Set up Puddle
 
-# Puddle
+A **puddle** is the per-user identity that ties together "this user's collection of envoys, treated as one trust unit." It's the prerequisite for lockbox (per-user encrypted directory) and gitback (puddle-keyed git repos) — both subsystems consume puddle membership to express who can read / write.
 
-Puddle is a per-user puddle identity primitive: a single Ed25519 keypair representing "this user's collection of envoys, treated as one trust unit." Sibling subsystems (gitback under [ADR-015](../adr/015-unified-gitback-substrate.md), lockbox membership under [ADR-016](../adr/016-lockbox-membership-on-puddle.md)) consume it to express membership and drive onboarding without re-doing the per-pair-of-envoys ceremony each subsystem invented in isolation.
+## Enable it
 
-[ADR-014](../adr/014-puddle-primitive.md) is the design of record. This page is a working snapshot of how it's actually built.
+Puddle is per-user, not per-fleet. Grant a user the `puddle: true` flag in their usercrate:
 
-## Why a puddle identity exists
+```yaml
+# /srv/vigo/stacks/stockpile/usercrates/dan.vgo
+resources:
+  - type: user
+    username: dan
+    home: /home/dan
+    shell: /bin/bash
+    puddle: true              # enables puddle + (as of 0.40.0) lockbox
+    gitback: true             # opt-in for git-over-swarm too
+    authorized_keys: |
+      ssh-ed25519 AAAA... operator@laptop
+```
+
+Publish (`sudo vigocli config publish`); the next agent convergence creates the necessary directories and dependency-installs.
+
+## Use it
+
+On the user's first envoy (the **founder envoy**):
+
+```bash
+vigo swarm puddle init       # generate keypair, set passphrase
+vigo swarm puddle status     # confirm
+```
+
+On every additional envoy where the user wants the same puddle identity:
+
+```bash
+# On the founder envoy:
+vigo swarm puddle pair       # prints a 5-minute single-use code
+
+# On the new envoy:
+vigo swarm puddle join --from <founder-host>   # claims the pair code over swarm mTLS
+vigo swarm puddle unlock                       # enter passphrase, bring the local session up
+```
+
+The puddle's full verb tree: `init,pair,join,rekey-pair,rekey,unlock,lock,pubkey,members,rotate-passphrase,status,name {set,clear,show}`. Day-to-day, the operator only touches `unlock` (every login) and `status` / `members` when curious.
+
+## How it works
+
+Puddle is a per-user identity primitive — a single Ed25519 keypair representing "this user's collection of envoys, treated as one trust unit." Sibling subsystems (gitback under [ADR-015](../adr/015-unified-gitback-substrate.md), lockbox membership under [ADR-016](../adr/016-lockbox-membership-on-puddle.md)) consume it to express membership and drive onboarding without re-doing the per-pair-of-envoys ceremony each subsystem invented in isolation.
+
+### Why a puddle identity exists
 
 Vigo's existing trust primitives are envoy-scoped — each enrolled envoy has its own mTLS cert and per-envoy state for every per-user subsystem. Without a per-user identity above that, "dan-on-laptop" and "dan-on-desktop" are cryptographically distinct, so every personal-multi-envoy workflow has to re-create membership ceremony per envoy. Puddle is the missing primitive: one keypair, multiple envoys, distributable peer-to-peer.
 

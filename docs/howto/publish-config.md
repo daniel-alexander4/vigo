@@ -1,5 +1,5 @@
 
-# Config Publish Pipeline
+# Publish your config
 
 Operators edit `.vgo` files in `stacks/stockpile/`. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then atomically syncs to `stacks/.live/stockpile/`, the locked-read-only directory the server reads from.
 
@@ -55,6 +55,26 @@ vigocli config publish --skip-url-check
 | `--ask-ai` | `false` | Ask AI to suggest fixes for validation errors |
 
 ## How It Works
+
+```mermaid
+flowchart LR
+    A[stockpile/<br/>operator edits]
+    B[vigocli config publish<br/>validate]
+    C{validates?}
+    D[.live/<br/>atomic swap]
+    E[server reload<br/>via REST trigger]
+    F[fan-out to<br/>envoys on<br/>next check-in]
+    G[convergence<br/>rollback monitor]
+    H{convergence<br/>below threshold?}
+    I[auto-rollback<br/>to previous .live/]
+    J[publish complete]
+
+    A --> B --> C
+    C -- "no: AI assistant<br/>suggests fixes" --> A
+    C -- "yes" --> D --> E --> F --> G --> H
+    H -- "no" --> J
+    H -- "yes" --> I --> E
+```
 
 1. Normalizes whitespace in all `.vgo` files (strip trailing spaces, fix line endings, replace tabs in YAML indentation, drop UTF-8 BOM). Templates (`.tmpl`) are not normalized — operators may rely on whitespace inside Go template directives.
 2. Diffs `stockpile/` against `.live/stockpile/` using SHA-256 hashes to find new, changed, and removed files. Only `.vgo` and `.tmpl` files are tracked; everything else under stockpile is invisible to publish.

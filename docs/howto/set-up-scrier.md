@@ -88,6 +88,30 @@ vigocli scrier ssh annlap --ssh-key-file ~/.ssh/id_other.pub   # override auto-d
 
 ## How it works
 
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Op as Operator
+    participant Srv as Vigo server
+    participant Agt as Agent on envoy
+    participant Sd as sshd on envoy (127.0.0.1:22)
+
+    Op->>Srv: POST /api/v1/scrier/connect<br/>(envoy_id, protocol, ssh_public_key?)
+    Note right of Srv: validate pubkey,<br/>write-through users.ssh_public_key
+    Srv->>Agt: TunnelRequest (over existing AgentStream)
+    Agt->>Srv: open TunnelStream gRPC
+    Srv->>Agt: TunnelOpen<br/>(verify_pubkey, ephemeral_pubkey)
+    Note right of Agt: scan /home/*/.ssh/authorized_keys<br/>for verify_pubkey<br/>(getpwent, uid≠0)
+    Agt->>Agt: install ephemeral_pubkey in matched user<br/>(# vigo-scrier-ephemeral marker)
+    Agt->>Srv: TunnelOpenResult (ssh_username = <matched user>)
+    Srv->>Sd: SSH dial 127.0.0.1:22 with ephemeral_privkey,<br/>auth as <matched user> (via tunnel)
+    Op->>Srv: WebSocket /ws/scrier/{session_id}
+    Srv-->>Op: raw PTY bytes ↔ Sd via tunnel
+    Note over Agt: on close: strip ephemeral line<br/>(RAII; also a startup-sweep<br/>safety net)
+```
+
+
+
 1. Operator hits `POST /api/v1/scrier/connect` with `{envoy_id, protocol, port, ssh_public_key (optional)}`. The CLI populates `ssh_public_key` from local discovery; the browser leaves it empty.
 2. Server creates a `scrier_sessions` row in state `waiting` and pushes a `TunnelRequest` to the envoy over its already-open `AgentStream` — the only server-initiated leg.
 3. Agent opens a new `TunnelStream` gRPC connection back to the server. Server replies with `TunnelOpen`: SSH-target pubkey + per-session ephemeral pubkey for SSH, or target `host:port` for RDP/VNC.

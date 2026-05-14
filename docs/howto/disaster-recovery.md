@@ -1,5 +1,5 @@
 
-# Disaster Recovery
+# Disaster recovery
 
 This playbook covers how to recover a Vigo server from scratch after hardware failure, data corruption, or any scenario where the server is lost. It assumes you have a backup created by `vigocli backup create` or a Litestream replica.
 

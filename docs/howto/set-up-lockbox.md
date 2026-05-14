@@ -1,9 +1,45 @@
 
-# Lockbox — Per-User Encrypted P2P Directory
+# Set up Lockbox
 
-> **Status (0.40.0):** Lockbox is puddle-only ([ADR-020](../adr/020-lockbox-puddle-only.md)) and its lifecycle layer has absorbed into puddle ([ADR-021](../adr/021-lockbox-lifecycle-on-puddle.md)). The `vigo swarm lockbox` verb tree is content-only — `unlock / lock / encrypt / decrypt / delete / list / status / reencrypt / resurrect / purge`, plus `vigo swarm lockbox puddle init` / `puddle renew-cert` for recovery. Lifecycle verbs (`init / enroll / leave / forget`) are retired: enrollment is automatic on `vigo swarm puddle unlock`, exit is `vigo swarm puddle leave`, and admin eviction is `vigocli swarm puddle evict`. See [`swarm-puddle-architecture.svg`](../img/swarm-puddle-architecture.svg) for the hierarchy.
+Lockbox keeps `~/lockbox/` in sync across every envoy where a user is enrolled — **ciphertext at rest** on every disk. Drop a plaintext file on any envoy; lockbox encrypts it to every peer's public key and fans out the ciphertext. Unlock with the user's puddle passphrase on any envoy to decrypt.
 
-Lockbox keeps `~/lockbox/` in sync across every envoy where a user is enrolled, **ciphertext at rest** everywhere. Drop a plaintext file on the primary, lockbox encrypts it to every peer's public key and fans out the ciphertext. Unlock with the user's lockbox password on any envoy to decrypt.
+## Enable it
+
+Lockbox is a mandatory capability of [puddle](set-up-puddle.md) membership — any user with `puddle: true` on their usercrate gets it, no separate flag needed. Make sure puddle is set up first ([Set up Puddle](set-up-puddle.md)), then nothing more is required for lockbox.
+
+The fleet-wide gate also lives in the same `server.yaml` block as puddle:
+
+```yaml
+swarm:
+  puddle:
+    enabled:
+      - "*"
+```
+
+## Use it
+
+On any envoy where the user has puddle unlocked:
+
+```bash
+# First-time setup on this envoy (runs automatically on `puddle unlock`):
+vigo swarm puddle unlock                           # also bootstraps lockbox
+
+# Encrypt-on-write:
+cp /tmp/secrets.txt ~/lockbox/secrets.txt          # auto-encrypted in place
+
+# Or explicit:
+vigo swarm lockbox encrypt ~/Downloads/foo.pdf
+
+# Decrypt out of lockbox on demand:
+vigo swarm lockbox unlock                          # session-helper holds the key in RAM
+vigo swarm lockbox decrypt secrets.txt -o /tmp/out
+
+# Status / list:
+vigo swarm lockbox status
+vigo swarm lockbox list
+```
+
+The full verb tree: `unlock,lock,encrypt,decrypt,delete,list,status,reencrypt,resurrect,purge`, plus `vigo swarm lockbox puddle init` / `puddle renew-cert` for recovery. Lifecycle verbs (`init / leave / forget`) are retired — exit happens via `vigo swarm puddle leave`, admin eviction via `vigocli swarm puddle evict <host>`.
 
 Lockbox is the encryption-first sibling of [Longdrawer](set-up-longdrawer.md):
 

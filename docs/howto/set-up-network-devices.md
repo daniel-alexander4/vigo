@@ -1,5 +1,5 @@
 
-# Network Device Management
+# Set up network devices
 
 Vigo manages network devices (switches, routers, firewalls) that can't run the agent binary. These devices appear as first-class fleet members with compliance status, traits, and run history -- managed through a **gateway proxy** pattern over SSH. Five device types are supported: Cisco IOS, NX-OS, IOS-XR, Arista EOS, and Juniper Junos.
 

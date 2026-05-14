@@ -1,5 +1,5 @@
 
-# Longdrawer — Per-User LAN File Sync
+# Set up Longdrawer
 
 Longdrawer keeps `~/longdrawer/` in sync across every machine where a user has an account, on the same LAN. Drop a file on any machine and it appears on all the others. Delete a file and it disappears from all of them. No config, no commands, no server involvement.
 

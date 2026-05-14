@@ -1,5 +1,5 @@
 
-# Installation
+# Install the Vigo server
 
 Vigo has three components: the server (`vigosrv`), the CLI (`vigocli`), and the agent (`vigo`). The server and CLI ship as a container image. The agent is installed on each managed machine via a bootstrap script.
 

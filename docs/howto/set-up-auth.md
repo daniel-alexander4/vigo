@@ -3,7 +3,7 @@
 title: Authentication
 ---
 
-# Authentication
+# Set up authentication
 
 All access to the web UI and REST API requires authentication. Three methods are supported:
 

@@ -42,7 +42,9 @@ Then any other machine you want to manage:
 curl -sSfk https://<server-ip>:8443/bootstrap | sudo sh
 ```
 
-The bootstrap script downloads the agent, generates an ED25519 keypair, registers with the server (token-free from loopback by default; require tokens elsewhere), and installs the per-OS service (systemd / launchd / rc.d / rcctl / SMF / Windows Service).
+The `-k` is intentional. The Vigo server runs its own CA and presents a self-signed cert. Trust gets established on the *next* step: the bootstrap script downloads the agent, generates a per-host ED25519 keypair, and registers it with the server (token-free from loopback by default; require tokens elsewhere). Every subsequent gRPC call between the agent and the server is mTLS-pinned against that pair — `-k` only relaxes the one-time bootstrap fetch, not the steady-state security.
+
+The bootstrap script also installs the per-OS service (systemd / launchd / rc.d / rcctl / SMF / Windows Service).
 
 After enrollment each envoy appears in the dashboard at `https://localhost:8443/envoys` and begins checking in every 5 minutes.
 

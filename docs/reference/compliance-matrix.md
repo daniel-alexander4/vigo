@@ -9,15 +9,15 @@ For *how* to tag modules and run reports, see [howto/compliance-reporting.md](..
 
 Every row is a Vigo capability — a thing one or more modules can do, or a thing Connwaer can verify. Columns are frameworks. A cell holds the control IDs that capability satisfies in that framework. Empty cell means the capability doesn't map to that framework (or hasn't been mapped yet — file an issue).
 
-Frameworks tracked:
+Frameworks tracked. The version is the currently-mapped baseline; if you're auditing against a different revision, cross-check control IDs in your authoritative copy of the standard.
 
 - **HIPAA** — Security Rule (45 CFR §164.302–318)
 - **SOC 2** — Trust Services Criteria 2017 (Security, Availability, Confidentiality)
-- **PCI-DSS** — v4.0
-- **NIST 800-53** — Rev. 5
+- **PCI-DSS** — v4.0 *(version claimed in `server/compliance/appcontrols.go`)*
+- **NIST 800-53** — Rev. 5 baseline (verify control IDs against the rev you're auditing to)
 - **ISO 27001** — :2022 Annex A
-- **CIS Ubuntu 22.04** — Benchmark v1.0.0
-- **HITRUST CSF** — v11.x
+- **CIS Ubuntu** — 22.04 Benchmark baseline
+- **HITRUST CSF** — v11.x baseline
 - **GDPR** — technical & organizational measures
 - **NERC CIP** — v6 (electric power utilities)
 - **IEC 62443** — industrial control systems
@@ -26,6 +26,8 @@ Frameworks tracked:
 - **ABA Cybersecurity** — banking-sector self-assessment
 
 For frameworks not listed (FedRAMP, CMMC, etc.), map them yourself using the underlying capability column — the capabilities are framework-agnostic.
+
+> Only PCI-DSS carries an explicit version string in `server/compliance/appcontrols.go` today. For the other frameworks, version specificity is by convention; verify the control IDs you care about against your auditor's authoritative copy. File an issue if a control ID has drifted across revisions you need to map.
 
 ## Capability × framework table
 

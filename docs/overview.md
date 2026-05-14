@@ -19,7 +19,7 @@ Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows. Per-platform init syst
 
 1. **Declare state in YAML files** under `/srv/vigo/stacks/stockpile/`. Hostname patterns match envoys to roles, roles aggregate modules, modules describe resources (files, packages, services, users, repositories, exec actions). Per-host overrides, environment splits, and conditional logic compose on top.
 2. **Publish.** `vigocli config publish` validates the tree, syncs it to `/srv/vigo/stacks/.live/`, and triggers a server reload.
-3. **Agents converge.** Every check-in interval — as short as 15 seconds on modest hardware (4 vCPU / 8 GB), default 5 minutes — each envoy pulls the modules matching its hostname, applies any drift idempotently, and reports per-resource outcomes. Drift from manual changes, package upgrades, or external automation is corrected within one interval.
+3. **Agents converge.** Every check-in interval — default 5 minutes; configurable shorter on capable hardware — each envoy pulls the modules matching its hostname, applies any drift idempotently, and reports per-resource outcomes. Drift from manual changes, package upgrades, or external automation is corrected within one interval. (Per-fleet capacity at low intervals is workload-dependent; see your own benchmarks rather than relying on a static "X seconds works" claim.)
 4. **Observe.** The Web UI shows fleet convergence, drift, compliance posture, risk scoring, audit history, and a per-envoy detail view. The CLI gives you the same data plus orchestration verbs (task dispatch, workflow execution, ad-hoc query, Scrier shells).
 
 ## Key properties you'll encounter

@@ -1,11 +1,27 @@
 
-# Bootstrap Enrollment
+# Enroll an envoy
 
 Bootstrap is the process by which a new machine becomes a managed envoy. The server provides a one-line bootstrap script that handles agent installation and enrollment.
 
 ## How It Works
 
-![Bootstrap Enrollment Flow](../img/bootstrap-flow.svg)
+```mermaid
+sequenceDiagram
+    autonumber
+    participant N as New envoy
+    participant S as Vigo server
+    N->>S: GET /bootstrap (HTTPS)
+    Note right of S: server returns OS/arch-aware<br/>install script
+    S-->>N: install script
+    N->>N: download `vigo` binary,<br/>generate ED25519 keypair,<br/>install per-OS service
+    N->>S: Register (gRPC over mTLS)<br/>hostname, IP, pubkey, one-time token
+    Note right of S: matches hostname against<br/>matchfile patterns;<br/>validates token (bcrypt-hashed at rest)
+    S-->>N: client UUID + initial policy bundle
+    N->>S: CheckIn (every checkin.interval)
+    Note over N,S: steady state: ed25519-signed CheckIn ↔ signed response,<br/>both sides mTLS-pinned
+```
+
+(The earlier in-tree `bootstrap-flow.svg` SVG covers the same path; the diagram above is the Markdown-native version.)
 
 ## Bootstrap Script
 
