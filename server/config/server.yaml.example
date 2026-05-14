@@ -408,6 +408,22 @@ watcher:
 #   gitback:
 #     enabled: ["*"]
 #
+#   # Curator (P2P artifact registry — ADR-024) authorization. Both a
+#   # publisher gate and an artifact-blob-holder gate. Publishing also
+#   # requires `curator: true` on the user's usercrate AND an unlocked
+#   # puddle — a heavier grant than `gitback:`. Reading is ungated:
+#   # every envoy can resolve artifacts via the server (`/api/v1/swarm/
+#   # curator/resolve`) and `vigo swarm curator pull` regardless of the
+#   # pattern list — `enabled` only controls whether this envoy can
+#   # PUBLISH and whether it holds the P2P DR replica for matching
+#   # artifacts.
+#   curator:
+#     enabled: ["annlap", "plex", "girlslaptop"]
+#     # Per-blob (one {name,version,os,arch} artifact) size cap. 0 or
+#     # unset = the 2 GiB compile-time default. There is no uncapped
+#     # mode. Raise this for large container images.
+#     max_bytes: 2147483648   # 2 GiB
+#
 #   # hostdox — let each swarm-enabled agent resolve its swarm peers'
 #   # hostnames to their LAN addresses. When true, the agent maintains a
 #   # delimited block in /etc/hosts mapping every peer's announced hostname

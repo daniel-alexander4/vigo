@@ -32,13 +32,14 @@ Reference for authoring `.vgo` configs.
 
 Optional subsystems. Read the one you're using; skip the rest.
 
-- [Swarm](subsystems/swarm.md) — The envoy P2P substrate (transport layer for payload, longdrawer, gitback, lockbox)
+- [Swarm](subsystems/swarm.md) — The envoy P2P substrate (transport layer for filecast, longdrawer, gitback, lockbox, curator)
 - [Spanner](subsystems/spanner.md) — Hub-spoke multi-server topology
 - [P2P Spanner](subsystems/p2p-spanner.md) — Peer-to-peer spanner (design)
 - [Scrier](subsystems/scrier.md) — Admin remote access (SSH/RDP/VNC) over the envoy's outbound tunnel
 - [Gitback](subsystems/gitback.md) — Personal-DR git mirroring, P2P
 - [Longdrawer](subsystems/longdrawer.md) — Per-user plaintext directory sync across LAN envoys
 - [Lockbox](subsystems/lockbox.md) — Per-user encrypted P2P directory
+- [Curator](subsystems/curator.md) — P2P artifact registry (release binaries, container images, packages)
 - [Network Devices](subsystems/network-devices.md) — Gateway-proxy architecture for switches/routers
 
 ## Extending

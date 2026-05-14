@@ -3,7 +3,7 @@
 
 Vigo has two CLI binaries:
 
-- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the read-only [`vigo swarm` diagnostic verbs](agent-swarm.md) (`status` / `seeds {list,show}` / `peers list`) for envoy-side substrate inspection, the [`vigo swarm gitback` recovery CLI](agent-swarm-gitback.md) for inspecting and recovering personal-DR git mirrors, the [`vigo swarm lockbox` CLI](agent-swarm-lockbox.md) for managing [lockbox](../../engineering/subsystems/lockbox.md) — the per-user encrypted P2P directory, and the [`vigo swarm puddle` CLI](agent-swarm-puddle.md) for managing [puddle](../../engineering/subsystems/puddle.md) — the per-user puddle identity primitive.
+- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the read-only [`vigo swarm` diagnostic verbs](agent-swarm.md) (`status` / `seeds {list,show}` / `peers list`) for envoy-side substrate inspection, the [`vigo swarm gitback` recovery CLI](agent-swarm-gitback.md) for inspecting and recovering personal-DR git mirrors, the [`vigo swarm lockbox` CLI](agent-swarm-lockbox.md) for managing [lockbox](../../engineering/subsystems/lockbox.md) — the per-user encrypted P2P directory, the [`vigo swarm puddle` CLI](agent-swarm-puddle.md) for managing [puddle](../../engineering/subsystems/puddle.md) — the per-user puddle identity primitive, and the [`vigo swarm curator` CLI](agent-swarm-curator.md) for publishing + consuming artifacts in the [curator](../../engineering/subsystems/curator.md) P2P artifact registry.
 - **`vigocli`** -- the admin CLI that talks to the server's REST API (documented below).
 
 ---
@@ -59,6 +59,7 @@ Vigo has two CLI binaries:
 | [longdrawer](swarm-longdrawer.md) | Fleet-wide read-only view of the longdrawer per-user directory sync mesh |
 | [lockbox](swarm-lockbox.md) | Fleet-wide read-only view of the lockbox per-user encrypted directory sync mesh |
 | [puddle](swarm-puddle.md) | Cross-envoy puddle ops — eviction + the fleet friendly-name map (ADR-022) |
+| [curator](swarm-curator.md) | Fleet-wide read-only view of the [curator](../../engineering/subsystems/curator.md) P2P artifact registry + admin block / unblock (ADR-024) |
 | [scrier](scrier.md) | Remote access — user mappings and interactive shell sessions |
 | [sandgorgon](sandgorgon.md) | Bare-metal lifecycle — commission, provision, decommission |
 | [security](security.md) | Fleet-wide security posture summary and findings |
