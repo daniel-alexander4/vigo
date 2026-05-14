@@ -5,7 +5,7 @@
        dist-agent-windows dist-agent-macos dist-agent-freebsd dist-agent-illumos \
        dist-sign dist-sign-agent \
        embed-examples \
-       proto certs migrate sqlc up down logs clean
+       proto certs migrate sqlc schemas up down logs clean
 
 VERSION ?= $(shell cat VERSION 2>/dev/null || echo dev)
 
@@ -23,7 +23,7 @@ GO_HARDENED := -buildmode=pie -trimpath $(GO_LDFLAGS)
 export CGO_CFLAGS := -D_FORTIFY_SOURCE=2 -fstack-protector-strong -O2
 export CGO_LDFLAGS := -Wl,-z,relro,-z,now,-z,noexecstack
 
-build: build-agent embed-examples
+build: build-agent embed-examples schemas
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigosrv ./server
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigocli ./cli
 
@@ -70,7 +70,7 @@ lint-agent:
 # (see GO_HARDENED above).
 #
 # To sign binaries after build: make dist-sign SIGN_KEY=path/to/ed25519.key
-dist: dist-agent
+dist: dist-agent schemas
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build $(GO_HARDENED) -o dist/server/linux/amd64/vigosrv ./server
 	GOOS=linux GOARCH=amd64 go build $(GO_HARDENED) -o dist/cli/linux/amd64/vigocli ./cli
 
