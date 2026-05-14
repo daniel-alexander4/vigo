@@ -1,6 +1,6 @@
 [package]
 name = "vigo"
-version = "0.51.5"
+version = "0.51.6"
 edition = "2021"
 description = "Vigo distributed state enforcement agent"
 license = "LicenseRef-Proprietary"
@@ -55,6 +55,9 @@ russh-keys = "0.46"
 
 # UDP multicast (swarm peer discovery)
 socket2 = { version = "0.5", features = ["all"] }
+
+# OCI archive parsing (curator registry shim — ADR-024 slice 7)
+tar = { version = "0.4", default-features = false }
 
 # Misc
 regex-lite = "0.1"

@@ -267,12 +267,45 @@ OS/arch auto-detect from the running envoy (`linux`/`darwin` × `amd64`/`arm64`,
 
 Mutually exclusive with `url:`. `sha256:` alongside `artifact:` is redundant (curator already verified) and rejected at validate time.
 
+## Pulling container images via `docker pull` (slice 7, 0.51.6+)
+
+Curator artifacts published as OCI image-layout archives can be pulled directly with `docker pull` / docker-compose against a localhost-only registry shim. The agent runs a read-only Docker Registry v2 subset on `127.0.0.1:<port>` and serves manifests + blobs straight from the materialized artifact cache — no per-host bearer auth, no inbound network exposure.
+
+Opt in by setting `swarm.curator.registry_port` in `server.yaml`:
+
+```yaml
+swarm:
+  curator:
+    enabled: ["*"]
+    registry_port: 5000   # 0 / unset disables the shim
+```
+
+The setting is published on every check-in; the agent's supervisor binds the listener within a tick. Flipping the port at runtime restarts the listener; setting it back to `0` stops it. **Bind is always loopback** — `127.0.0.1` only, never an external interface.
+
+```bash
+# After publishing an OCI archive of my-image:latest with curator:
+docker pull 127.0.0.1:5000/alexander4/my-image:latest
+docker pull 127.0.0.1:5000/my-image:latest              # bare = implicit namespace
+docker pull 127.0.0.1:5000/<artifact_id>/my-image:latest # fully self-certifying
+
+# docker-compose
+services:
+  app:
+    image: 127.0.0.1:5000/alexander4/my-image:latest
+```
+
+Publish-side constraints:
+
+- **Single-arch per artifact.** Curator's catalog already keys platforms as `{os, arch}` rows; the shim picks the host arch automatically and returns `404 manifest unknown` with the list of available platforms if no match exists for the requesting envoy.
+- **OCI image-layout archives only.** Legacy `docker save` tarballs (top-level `manifest.json`, no `oci-layout`) are rejected. Use `docker save --format=oci-archive`, `buildah push --format=oci`, or `skopeo copy docker-daemon:… oci-archive:…` when packaging the blob for `vigo swarm curator push`.
+- **No `docker push`, no `docker login`.** The shim is read-only; every mutating method returns `405`. Publishing stays the curator `push` verb path through the helper daemon.
+
 ## Post-v1
 
 | Slice | Feature |
 |---|---|
 | 6 | `artifact:<ns/name>:<tag>` param on `nonrepo_package` / `source_package` executors — **shipped in 0.51.5**; see [the section above](#consuming-artifacts-from-modules-slice-6-0515) |
-| 7 | Docker Registry v2 shim on `127.0.0.1:5000` (agent-side HTTP service serving the OCI Distribution v2 subset over the artifact cache) |
+| 7 | Docker Registry v2 shim on `127.0.0.1:<port>` (agent-side HTTP service serving the OCI Distribution v2 subset over the artifact cache) — **shipped in 0.51.6**; see [the section above](#pulling-container-images-via-docker-pull-slice-7-0516) |
 | 8 | Agent-self-update *accelerator* — P2P-pull `vigo-agent:<v>` from the registry if cached, **falling back to the existing `/api/v1/agent/latest`** which stays the authoritative source |
 | Later | Per-artifact byte-confidentiality (publish encrypted blobs, lockbox-style); cross-publisher moderation beyond `block` (a server-side `force-rm` tombstone); the operator-authority (server-published, filecast-style) flavor for fleet content if a multi-tenant scenario needs it |
 

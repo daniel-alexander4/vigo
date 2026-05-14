@@ -3366,6 +3366,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tar"
+version = "0.4.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22692a6476a21fa75fdfc11d452fda482af402c008cdbaf3476414e122040973"
+dependencies = [
+ "filetime",
+ "libc",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3835,7 +3845,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vigo"
-version = "0.51.5"
+version = "0.51.6"
 dependencies = [
  "age",
  "anyhow",
@@ -3875,6 +3885,7 @@ dependencies = [
  "sha2",
  "socket2 0.5.10",
  "spki",
+ "tar",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",

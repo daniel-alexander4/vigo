@@ -789,6 +789,7 @@ mod tests {
             gitback_envelope_retention_secs: 0,
             longdrawer_max_file_bytes: 0,
             curator_max_bytes: 4,
+            curator_registry_port: 0,
         });
         let k = fresh_key();
         let blob = b"too big for the cap".to_vec();

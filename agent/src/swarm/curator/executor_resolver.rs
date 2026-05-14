@@ -194,6 +194,40 @@ pub fn current_platform() -> (String, String) {
     (os, arch)
 }
 
+/// Parse a registry-style `<namespace>/<name>` or bare `<name>` (no tag,
+/// no version) and resolve it to `(artifact_id_hex, name)`. Used by the
+/// curator registry shim (ADR-024 slice 7), where the URL path supplies
+/// the repo independently of the tag/digest in subsequent path segments.
+///
+/// Same namespace rules as [`resolve_artifact_param`]:
+/// - `None` → consult the fleet name map for the unique claim.
+/// - 64-hex → treated as a literal puddle pubkey.
+/// - anything else → puddle friendly name lookup.
+pub fn resolve_repo_to_artifact_id(repo: &str, names: &FleetNameMap) -> Result<(String, String)> {
+    let s = repo.trim();
+    if s.is_empty() {
+        bail!("repo is empty");
+    }
+    let (namespace, name) = match s.split_once('/') {
+        Some((ns, n)) => (Some(ns), n),
+        None => (None, s),
+    };
+    if let Some(ns) = namespace {
+        if ns.is_empty() {
+            bail!("repo namespace is empty (`{repo}`) — drop the leading `/`");
+        }
+    }
+    if name.is_empty() {
+        bail!("repo name is empty in `{repo}`");
+    }
+    if name.contains('/') {
+        bail!("repo name `{name}` contains a slash — only single-level namespaces are supported");
+    }
+    let pubkey = resolve_namespace(namespace, names)?;
+    let aid = artifact_id(&pubkey, name);
+    Ok((hex::encode(aid), name.to_string()))
+}
+
 /// Resolve an `artifact:` param to a materialized local path via
 /// curator's resolver. Convenience over [`Resolver::pull`] that handles
 /// namespace lookup + platform auto-detect.

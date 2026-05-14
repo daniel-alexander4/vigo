@@ -407,6 +407,7 @@ watcher:
 #   curator:
 #     enabled: ["*"]
 #     max_bytes: 2147483648                     # 2 GiB per-blob cap. 0 = the 2 GiB compile-time default; raise for large container images.
+#     registry_port: 5000                       # Localhost-only OCI Distribution v2 shim port (ADR-024 slice 7). Lets `docker pull 127.0.0.1:5000/<puddle-name>/<artifact>:<tag>` and docker-compose `image:` references work against curator-published OCI archives. 0 (or unset) disables the shim; set to 5000 (the conventional registry port) or any free port to enable. The agent binds 127.0.0.1 only — never an external interface.
 #
 #   # hostdox — when true, each swarm-enabled agent maintains a
 #   # delimited block in /etc/hosts mapping every announced peer hostname to

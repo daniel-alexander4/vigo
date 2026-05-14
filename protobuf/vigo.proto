@@ -301,6 +301,7 @@ message SwarmRuntimeLimits {
   uint64 gitback_envelope_retention_secs = 6;  // revoke/leave envelope retention before reap; 0 = compile-time default (90d)
   uint64 longdrawer_max_file_bytes = 7;            // per-file size cap on LAN sync; 0 = no cap
   uint64 curator_max_bytes = 8;                // per-blob (one {name,version,os,arch} artifact) cap on the curator publish path; 0 = compile-time default (2 GiB)
+  uint32 curator_registry_port = 9;            // localhost OCI Distribution v2 shim port for `docker pull 127.0.0.1:<port>/...` (ADR-024 slice 7); 0 = disabled; default 5000 when unset and curator is enabled on the envoy
 }
 
 // SwarmManifestEntry is a single entry in the swarm manifest CRDT,

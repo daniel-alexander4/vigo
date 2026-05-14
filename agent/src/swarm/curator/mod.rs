@@ -58,6 +58,7 @@ pub mod catalog_cache;
 pub mod cli;
 pub mod executor_resolver;
 pub mod helper;
+pub mod registry;
 pub mod resolver;
 pub mod state;
 
@@ -83,10 +84,11 @@ pub const DEFAULT_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// tick, while idle envoys spend only a few `read_dir` calls per minute.
 const SENTINEL_SCAN_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
 
-/// Spawn the curator subsystem — two concurrent tasks under the cancellation token:
+/// Spawn the curator subsystem — three concurrent tasks under the cancellation token:
 ///
 /// - **Helper daemon** ([`helper::run`]) — listens on `/var/run/vigo/curator.sock`; validates a re-signed [`catalog::CatalogEntry`] + the blob bytes pushed by a `curator: true` user, stages the blob into the swarm cache, records a `Manifest` entry with the artifact's `target`, and drops the entry as `~<user>/.vigo-curator/<artifact_id>/entry.json.pending`.
 /// - **Sentinel reactor** ([`run_sentinel_reactor`]) — periodically re-verifies each `entry.json.pending` and promotes it (last-write-wins on `issued_at`) to `entry.json`, the single canonical copy the `swarm_curator` trait collector reads.
+/// - **Registry shim supervisor** ([`registry::listener::run_supervisor`], ADR-024 slice 7) — watches the server-published `swarm.curator.registry_port` cap and binds `127.0.0.1:<port>` to the Docker Registry v2 surface in [`registry::routes`]. Disabled (no listener) when the server-side port is 0 / unset; re-binds when the operator flips the value at runtime.
 ///
 /// `envoy_id` is this envoy's enrollment id (used as the manifest seeder id);
 /// `manifest` is the shared swarm manifest CRDT.
@@ -94,7 +96,7 @@ pub fn spawn(envoy_id: String, cancel: CancellationToken, manifest: std::sync::A
     info!(
         socket = %helper::socket_path().display(),
         envoy_id = %envoy_id,
-        "curator: spawning helper daemon + sentinel reactor (ADR-024 slice 2)"
+        "curator: spawning helper daemon + sentinel reactor + registry supervisor (ADR-024 slices 2 + 7)"
     );
     let helper_cancel = cancel.clone();
     tokio::spawn(async move {
@@ -102,7 +104,9 @@ pub fn spawn(envoy_id: String, cancel: CancellationToken, manifest: std::sync::A
             warn!(error = %e, "curator helper daemon exited with error");
         }
     });
-    tokio::spawn(run_sentinel_reactor(cancel));
+    let reactor_cancel = cancel.clone();
+    tokio::spawn(run_sentinel_reactor(reactor_cancel));
+    tokio::spawn(registry::listener::run_supervisor(cancel));
 }
 
 async fn run_sentinel_reactor(cancel: CancellationToken) {

@@ -4,7 +4,7 @@ title: "ADR-024: curator — P2P artifact registry"
 
 # ADR-024: curator — P2P artifact registry
 
-**Status:** Implemented — shipped across slices 0–5, 0.51.0 (2026-05-14).
+**Status:** Implemented — slices 0–5 (catalog + helper + server REST + agent CLI + UI/docs) shipped 0.51.0 (2026-05-14); slice 6 (`artifact:` executor param) shipped 0.51.5 (2026-05-13); slice 7 (Docker Registry v2 shim) shipped 0.51.6 (2026-05-13).
 **Date:** 2026-05-11
 
 ## Context

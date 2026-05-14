@@ -87,6 +87,16 @@ impl Resolver {
         Self { api_addr: api_addr.into(), tls, blobs_dir, artifacts_dir }
     }
 
+    /// Read-only accessor: the directory this resolver materializes into and
+    /// the `catalog.json` / `cache.json` it reads. The registry shim
+    /// ([`crate::swarm::curator::registry`]) consults it so its
+    /// `catalog_cache::load_catalog_in` calls hit the same on-disk catalog the
+    /// resolver does — production and tests stay in lockstep without the shim
+    /// re-deriving the path.
+    pub fn artifacts_dir(&self) -> &Path {
+        &self.artifacts_dir
+    }
+
     /// Resolve `<artifact_id_hex>` + `<tag-or-version>` + `<os>/<arch>` to a
     /// [`Resolution`]. Asks the server first; on a network error, falls back to
     /// the check-in-cached catalog. The returned entry has been verified
