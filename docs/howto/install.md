@@ -1,7 +1,15 @@
 
 # Install the Vigo server
 
+You'll finish this page with a Vigo server running in Docker on a host of your choice, listening on `:8443` (REST + Web UI) and `:1530` (gRPC), with TLS material auto-generated and a seeded config tree under `/srv/vigo/`. From there, [Enroll an envoy](enroll-an-envoy.md) is the natural next step.
+
+**When you'd use this:** standing up Vigo for the first time, or re-installing after wiping a host. If you already have a running server and want to *upgrade* it, see the upgrade note at the bottom of this page.
+
+**When you'd skip this:** if someone else stood up the server and you only need to enroll your laptop or a managed node, skip ahead to [Enroll an envoy](enroll-an-envoy.md).
+
 Vigo has three components: the server (`vigosrv`), the CLI (`vigocli`), and the agent (`vigo`). The server and CLI ship as a container image. The agent is installed on each managed machine via a bootstrap script.
+
+![Vigo dashboard after install and first check-in](../img/screenshots/vigo.dashboard.png)
 
 ## Server
 
@@ -214,5 +222,34 @@ See [Bootstrap](enroll-an-envoy.md) for details on the enrollment flow, token-ba
 ├── snapshots/                 # file snapshots for rollback
 └── flags/                     # flag markers for when: expressions
 ```
+
+## What success looks like
+
+A healthy server reports its components individually via `vigocli doctor`:
+
+```text
+$ docker exec vigo /usr/local/bin/vigocli doctor
+  database ................ OK
+  tls ..................... OK (expires 2027-05-05)
+  secrets ................. OK (local)
+  license ................. OK (Compliant, 5/100 envoys)
+  spanner ................. SKIP (standalone)
+  integrations ............ SKIP (no integrations configured)
+  config .................. OK (43 modules, 5 entries)
+  swarm_pattern_order ..... OK (all swarm.*.enabled pattern lists well-ordered)
+  stale_envoys ............ OK
+  Status: healthy
+```
+
+`SKIP` is expected for `spanner` (you're not running hub-spoke) and `integrations` (you haven't wired any external alerting yet). `database / tls / secrets / license / config` should all be `OK` on a fresh install. A `WARN` on `stale_envoys` after the first check-in cycle means at least one envoy hasn't reported in `2.5 × max(interval, observed_cycle)` seconds — go look at it.
+
+## What's next
+
+- **Add a managed node** → [Enroll an envoy](enroll-an-envoy.md).
+- **Write your first declarative config** → [Write your first module](write-your-first-module.md).
+- **If the server didn't come up clean** → [Troubleshoot common issues](troubleshoot.md).
+
 ---
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

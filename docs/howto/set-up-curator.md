@@ -1,7 +1,11 @@
 
 # Set up Curator
 
-Curator is Vigo's P2P artifact registry — release binaries, tarballs, `.deb`/`.rpm` packages, container images. Operators publish artifacts from any envoy with an unlocked puddle; the fleet pulls them P2P (server-relayed when peer-to-peer can't reach). Read side is fleet-wide by default; write side is puddle-members-only.
+You'll finish this page with an artifact (binary, archive, package, container image) published from one envoy and pullable on every envoy in the fleet — peer-to-peer when reachable, server-relayed when not. The blob is signed by the publisher's puddle and verified end-to-end on every read. Reads are universal; writes are puddle-members-only.
+
+**When you'd use this:** any time the same bytes have to land on more than one envoy — agent binaries, vendor tarballs, custom `.deb` / `.rpm` packages, ML model files, container images, large fixtures. Curator earns its keep when an HTTP file server is the alternative you're avoiding.
+
+**When you'd skip this:** secrets and credentials (use [lockbox](set-up-lockbox.md) or the `secret:` config prefix); state that should live as a git repo (use [gitback](set-up-gitback.md)); ad-hoc admin-pushed config files (use filecast).
 
 ## Enable it
 
@@ -152,5 +156,14 @@ Two thin clients of the same backend:
 - **Agent logs** carry one specific WARN per actionable failure (`sha mismatch`, `blob exceeds max_bytes`, `entry signature invalid`, `target glob matched zero envoys`).
 - **Disk pressure**: like the other swarm subsystems, curator skips pushes to peers ≤10% free disk. See [Disk Space](set-up-swarm.md#disk-space).
 
+## What's next
+
+- **Refer to artifacts from a module's `package` / `source_package` / `file` resource** → `resources/package` in the reference vocabulary. Curator URIs work wherever a download URL fits.
+- **The blob is bigger than 2 GiB** → raise `swarm.curator.max_bytes` per envoy. Republish; tags re-anchor automatically.
+- **Recall a bad release** → `vigocli swarm curator block <artifact_id>` blocks fleet-wide resolution; only a publisher `rm` truly purges the bytes.
+- **`pull` hangs or sha-mismatches** → [Troubleshoot common issues](troubleshoot.md).
+
 ---
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
 *Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

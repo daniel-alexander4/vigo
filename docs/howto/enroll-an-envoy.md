@@ -1,6 +1,12 @@
 
 # Enroll an envoy
 
+You'll finish this page with a new machine running the Vigo agent, signed in to the server, visible in the Web UI's envoy list, and checking in on its configured interval. One shell line on the new machine does all of it.
+
+**When you'd use this:** any time you want a new machine under Vigo management — a new laptop, a fresh VM, a freshly-imaged hardware node, the server host itself (yes, the server runs an agent for its own host).
+
+**When you'd skip this:** never, for the host you're managing. The agent is how Vigo applies state.
+
 Bootstrap is the process by which a new machine becomes a managed envoy. The server provides a one-line bootstrap script that handles agent installation and enrollment.
 
 ## How It Works
@@ -175,10 +181,53 @@ vigo register --token <token> --force
 - Ensure the server's container image includes agent binaries for the target platform
 - Check that the `/srv/vigo/` volume is correctly mounted
 
-## Related
+## What success looks like
+
+After the script finishes and the agent's first check-in completes, the envoy appears in `vigocli envoys list`:
+
+```text
+$ docker exec vigo /usr/local/bin/vigocli envoys list
+ID                                    HOSTNAME     IP             ENROLLED          LAST SEEN         STATUS
+63dfa092-5262-44ac-b04b-1533c709ab42  danlap       192.168.1.2    2026-05-05 13:03  2026-05-14 00:21  active
+cb4acb1f-f995-4026-a01e-f5390283ca6c  annlap       192.168.1.74   2026-05-05 13:03  2026-05-14 00:21  active
+64cf705c-0caa-4a8c-a536-f660d3f8c625  raspberrypi  192.168.1.78   2026-05-05 13:03  2026-05-14 00:20  active
+d1f86266-139f-419a-b760-902c0616f586  plex         192.168.1.219  2026-05-05 13:03  2026-05-14 00:21  active
+6403aa29-096b-4b50-85b5-6ee4460665a0  girlslaptop  192.168.1.215  2026-05-05 13:03  2026-05-13 23:37  active
+```
+
+…and on the agent host, `vigo status` reports the cached policy bundle:
+
+```text
+$ sudo vigo status
+Envoy ID:         cb4acb1f-f995-4026-a01e-f5390283ca6c
+Server:           192.168.1.2:1530
+Data directory:   /etc/vigo-envoy
+State store:      /var/lib/vigo/state
+
+Policy:
+  Cached:         yes
+  Version:        1
+  Modules:        27 (cis-ubuntu-access, cis-ubuntu-filesystem, …)
+  Resources:      172
+```
+
+In the Web UI, the new envoy appears in `/envoys` with a populated check-in time and resource count.
+
+![Envoy list — one row per enrolled envoy, with hostname, last-seen, drift indicator](../img/screenshots/vigo.envoys.png)
+
+## What's next
+
+- **Apply some declarative state to the envoy** → [Write your first module](write-your-first-module.md).
+- **The envoy enrolled but isn't checking in** → [Troubleshoot common issues](troubleshoot.md#envoy-shows-as-stale-but-the-agent-is-running).
+- **Repeat the procedure on more envoys** — the same one-liner works for every additional machine you want managed.
+
+## Reference
 
 - [Installation](install.md)
-- [Server Configuration](../reference/server-yaml.md)
-- [Architecture](../reference/writing-modules.md)
+- [Server config (`server.yaml`) reference](../reference/server-yaml.md)
+- [Module-writing reference](../reference/writing-modules.md)
+
 ---
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

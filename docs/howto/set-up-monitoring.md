@@ -1,6 +1,14 @@
 
 # Set up monitoring
 
+You'll finish this page with a Prometheus instance scraping the Vigo server, the five bundled Grafana dashboards loaded, and alert rules firing on the conditions that matter: stale envoys, convergence failures, license drift, CVE counts, and (if you run hub-spoke) spoke health.
+
+**When you'd use this:** any deployment where someone other than you needs to know about fleet anomalies. For a single-operator home lab, `vigocli doctor` + the Web UI dashboard is enough; Prometheus + Grafana starts paying for itself around five envoys or when you need history.
+
+**When you'd skip this:** single-laptop development. The `/metrics` endpoint exists either way — you can come back when you need it.
+
+![Vigo's integrations surface — Prometheus, Slack, PagerDuty, ServiceNow, Datadog from one config block](../img/screenshots/vigo.integrations.png)
+
 The Vigo server exposes Prometheus metrics at `GET /metrics` on the REST port (default 8443).
 
 ## Available Metrics
@@ -568,5 +576,14 @@ groups:
         annotations:
           summary: "Spanner spoke {{ $labels.spoke_id }} is down"
 ```
+
+## What's next
+
+- **A metric is high and you don't know which envoy** → drill in via `vigocli envoys list` then the envoy detail page.
+- **You need an alert routed to PagerDuty / Slack / ServiceNow** → see the integrations section above; same config block, different endpoint.
+- **A metric value looks wrong** → [Troubleshoot common issues](troubleshoot.md).
+
 ---
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

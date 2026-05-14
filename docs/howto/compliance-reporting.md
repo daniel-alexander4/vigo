@@ -1,7 +1,11 @@
 
 # Compliance reporting
 
-Vigo turns module-level `compliance:` tags into per-framework coverage reports. Modules say what controls they satisfy; the server unions that across the fleet and renders the result through the Web UI and `vigocli compliance` verbs. You publish the resulting report; auditors read it.
+You'll finish this page with module-level `compliance:` tags rolled up into per-framework coverage that auditors can read directly — produced as JSON or HTML on the CLI, or browsed on the `/compliance` Web UI. The numbers come from one place: modules declare what controls they satisfy, the server unions that across the fleet (plus Connwaer trait checks and `waivers.vgo`), and every surface reads from the same join. No spreadsheets, no per-control bookkeeping outside the module file itself.
+
+**When you'd use this:** any time you need an artifact for an external auditor (HIPAA, SOC 2, PCI, HITRUST, CIS), feed evidence into a GRC platform (Vanta / Drata / Secureframe / Laika / Thoropass / ServiceNow), or answer "what controls is our fleet satisfying?" from a single command.
+
+**When you'd skip this:** controls Vigo can't honestly attest (physical security, BAA paperwork, vendor reviews) — declare those in `waivers.vgo` and document the rationale; don't tag a module that can't actually prove the control.
 
 ## Tag your modules
 
@@ -30,38 +34,53 @@ A control counts as covered for an envoy when **any** of the following is true:
 
 ## Look at the coverage
 
-**Per-framework summary (CLI):**
-
-```bash
-vigocli compliance frameworks
-vigocli compliance frameworks --framework hipaa
-vigocli compliance frameworks --framework pci-dss --format json
-```
-
-**Per-envoy detail (CLI):**
-
-```bash
-vigocli compliance envoy <envoy-id>
-vigocli compliance envoy <envoy-id> --framework soc2
-```
+The Web UI is the right place to *browse* coverage. The CLI is the right place to *produce* the auditor's artifact.
 
 **Web UI:** `https://vigo:8443/compliance` — framework cards with coverage %, drill-down to per-control state and per-envoy attribution.
 
+![Compliance dashboard with per-framework coverage cards](../img/screenshots/vigo.compliance.png)
+
+Each card is clickable; the per-framework page shows which controls are covered, which are uncovered, and which envoy is currently the weakest link.
+
+![Per-framework view — control list with coverage attribution and per-envoy roll-up](../img/screenshots/vigo.compliance-frameworks.png)
+
 ## Produce a report for an auditor
 
+One verb per framework, with `--format html` or `--format json` and `--output <file>`:
+
 ```bash
-vigocli compliance report --framework hipaa --format pdf -o hipaa-2026-Q2.pdf
-vigocli compliance report --framework soc2 --format pdf -o soc2-2026-Q2.pdf
-vigocli compliance report --framework all  --format pdf -o full-2026-Q2.pdf
+vigocli compliance report compliance --format html --output hipaa-2026-Q2.html
+vigocli compliance report soc2       --format html --output soc2-2026-Q2.html
+vigocli compliance report pci        --format html --output pci-2026-Q2.html
+vigocli compliance report hitrust    --format html --output hitrust-2026-Q2.html
+vigocli compliance report cis        --format html --output cis-2026-Q2.html
 ```
 
-PDF generation runs via WeasyPrint as a subprocess off the hot path. Output includes:
+(The HIPAA verb is `compliance` rather than `hipaa` for historical reasons — HIPAA was the original framework, so the generic name carries that mapping. The other verbs match their frameworks one-to-one.)
+
+For a tamper-evident bundle that pairs the report with the relevant audit-log slice:
+
+```bash
+vigocli compliance report audit-bundle hipaa --output hipaa-audit-2026-Q2.zip
+```
+
+HTML reports render server-side; JSON reports give you the same data shaped for ingestion. Output includes:
 
 - Executive summary with overall coverage % per framework.
 - Per-control table: control ID, description, status (covered / partial / uncovered / waived), satisfying modules, attesting envoys, last-converged timestamp.
-- Audit-trail extract: every change to the framework's coverage status over the report window, hash-chained for tamper-evidence.
+- For `audit-bundle`: a hash-chained audit-log extract over the report window.
 
-For `--format json` (machine-readable) and `--format csv` (spreadsheet-friendly), the same data with different shaping. Use these to feed GRC platforms.
+## Feed a GRC platform
+
+Outbound exporters for the major GRC platforms:
+
+```bash
+vigocli compliance export siem  --output evidence.jsonl
+vigocli compliance export cmdb  --output cmdb.json
+vigocli compliance export oscal --output oscal.json
+```
+
+For continuous push (rather than one-shot export), wire the GRC integration in `server.yaml` — Vigo POSTs evidence on a schedule.
 
 ## GRC platform push (Vanta, Drata, Secureframe, Laika, Thoropass, ServiceNow GRC)
 
@@ -111,10 +130,10 @@ The framework matrix tells you what controls each framework requires and which V
 ### HIPAA Security Rule checklist
 
 1. **Inventory PHI flows.** List every envoy that touches PHI; tag them with a `phi: true` matchfile label. Vigo doesn't infer PHI scope — you declare it.
-2. **§164.312(a)(1) access control.** Run the `user` and `sudo` modules; tag them with the relevant HIPAA control. Verify per-envoy via `vigocli compliance envoy <id> --framework hipaa`.
+2. **§164.312(a)(1) access control.** Run the `user` and `sudo` modules; tag them with the relevant HIPAA control. Verify with `vigocli compliance report compliance --format html --output verify.html` and drill into the per-envoy section.
 3. **§164.312(b) audit controls.** Vigo's hash-chained audit log satisfies the "audit mechanisms" requirement; export with `vigocli audit export --since 2026-01-01 --to 2026-03-31 --format pdf`.
 4. **§164.312(c) integrity controls.** File-integrity-monitoring modules; pair with Connwaer's WORM verification if you're using it.
-5. **§164.312(e)(1) transmission security.** mTLS is enforced by construction; document with `vigocli compliance report --framework hipaa`.
+5. **§164.312(e)(1) transmission security.** mTLS is enforced by construction; document with `vigocli compliance report compliance`.
 6. **Business Associate Agreement.** Outside Vigo's scope. Maintain in your contract repository; link from the compliance report.
 7. **Annual risk assessment.** Vigo's `/risk` page produces fleet-wide scoring; export with `vigocli risk report --format pdf`.
 
@@ -131,7 +150,7 @@ The framework matrix tells you what controls each framework requires and which V
 
 1. **CDE scoping.** Tag every envoy in the cardholder-data environment (`cde: true`). Modules that target CDE envoys carry the `pci-dss:` compliance tag.
 2. **Requirement 1 — firewall.** Vigo doesn't replace your firewall; it can verify host-firewall state via the `firewall` executor or Connwaer's network-segmentation check.
-3. **Requirement 2 — defaults.** The `security-hardening` module disables default accounts and changes default passwords; cross-reference via `vigocli compliance envoy <id> --framework pci-dss`.
+3. **Requirement 2 — defaults.** The `security-hardening` module disables default accounts and changes default passwords; cross-reference with `vigocli compliance report pci` and drill into the per-envoy section.
 4. **Requirement 6 — secure dev.** Vigo's build provenance (binary signatures, supply-chain attestations) is captured in the audit log.
 5. **Requirement 10 — logging.** mTLS-secured audit shipping to a SIEM; the `integrations` config covers Splunk, Datadog, generic syslog.
 6. **Quarterly ASV scans.** Outside Vigo's scope.
@@ -149,7 +168,7 @@ The framework matrix tells you what controls each framework requires and which V
 
 1. **Revoke first, delete later.** `vigocli envoys revoke <id>` — the envoy can no longer check in, but the historical record stays.
 2. **Wipe sensitive state** if you're physically reusing the hardware: `vigo swarm puddle leave --yes` on the envoy (if puddle membership existed); standard NIST 800-88 wipe procedure for the disk.
-3. **Document the decommission** with a final compliance report extract: `vigocli compliance envoy <id> --framework all --format pdf -o decommission-<hostname>-2026-Q2.pdf`.
+3. **Document the decommission** with a final compliance report extract — run the per-framework report verbs you care about and archive the HTML output alongside the decommission ticket.
 4. **Delete the envoy record** after your retention window: `vigocli envoys delete <id>`.
 
 ### Incident response checklist
@@ -161,5 +180,14 @@ The framework matrix tells you what controls each framework requires and which V
 5. **Reset and re-enroll.** If the envoy is compromised: wipe and re-bootstrap; the new envoy gets a fresh ED25519 keypair, so the compromised host can't impersonate it on re-enrollment.
 6. **Post-mortem.** Audit-log extract over the incident window; attach to your incident ticket.
 
+## What's next
+
+- **Tag a module** → see the [compliance matrix](../reference/compliance-matrix.md) for which controls each framework expects and which Vigo executors / Connwaer checks satisfy them.
+- **Push evidence to a GRC platform on a schedule** → wire the GRC section in [`server.yaml`](../reference/server-yaml.md).
+- **A control can't be satisfied by automation** → file a waiver in `waivers.vgo` with a rationale and an expiry; the report still labels it covered-by-waiver rather than uncovered.
+- **A report verb fails or the numbers look wrong** → [Troubleshoot common issues](troubleshoot.md).
+
 ---
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
 *Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

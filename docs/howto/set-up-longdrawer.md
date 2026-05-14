@@ -1,7 +1,11 @@
 
 # Set up Longdrawer
 
-Longdrawer keeps `~/longdrawer/` in sync across every envoy where a user has an account, on the same LAN. Drop a file on any envoy and it appears on all the others. Delete a file and it disappears from all of them. No config, no commands, no server involvement.
+You'll finish this page with `~/longdrawer/` syncing on the LAN — drop a file on any envoy where you have an account, it lands on every other envoy in the same broadcast domain within ~60s; delete it and the tombstone fans out the same way. No config files, no CLI verbs, no server involvement. Activation is "create `~/longdrawer/` on at least one envoy."
+
+**When you'd use this:** ambient working files you want present on every machine you log into — scratch notes, dotfile drafts, shell history bookmarks, work-in-progress that you don't want to ferry over scp. The LAN-only scope is the design: the bytes don't leave the trust boundary of the broadcast domain.
+
+**When you'd skip this:** anything you want at rest on disk as ciphertext (use [lockbox](set-up-lockbox.md) — identical shape, encryption included); anything you need fan-out for across the WAN (longdrawer doesn't cross subnets without an explicit peer list); state that's better held as a git repo (use [gitback](set-up-gitback.md)).
 
 ## Enable it
 
@@ -170,5 +174,14 @@ Pattern-list changes record tamper-evident audit-chain entries (`swarm.longdrawe
 - [Swarm](set-up-swarm.md) — Infrastructure-level P2P blob distribution (operator-controlled, server-orchestrated)
 - [Swarm Operations](../howto/set-up-swarm.md) — Swarm configuration and troubleshooting
 - [Gitback](set-up-gitback.md) — Personal-DR git mirroring (sister subsystem; pure P2P as of 0.23.0, receivers hold root-owned bare repos only)
+
+## What's next
+
+- **You need confidentiality at rest** → [Set up Lockbox](set-up-lockbox.md). Same drop-a-file shape; ciphertext on every envoy.
+- **You need to reach an envoy on a different subnet** → add it to `~/.longdrawer/config.yaml` under `cross_subnet_peers:` (the multicast scan never crosses routers by design).
+- **A file isn't propagating** → run the troubleshooting list above; if it persists, [Troubleshoot common issues](troubleshoot.md).
+
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
+*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

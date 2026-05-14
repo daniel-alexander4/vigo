@@ -1,7 +1,15 @@
 
 # Publish your config
 
+You'll finish this page knowing how to ship a config change to the fleet safely: edit under `stockpile/`, validate without applying, publish atomically to `.live/`, and (when something's wrong post-publish) roll back to the previous live version with one command.
+
+**When you'd use this:** every time you add or change a module, role, matchfile, usercrate, environment override, waiver, or compliance claim. Validation runs locally before anything touches the fleet, so this is also how you sanity-check changes before pushing them through a CI gate.
+
+**When you'd skip this:** never, if you're authoring config. There's no other path; the server only reads `.live/`.
+
 Operators edit `.vgo` files in `stacks/stockpile/`. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then atomically syncs to `stacks/.live/stockpile/`, the locked-read-only directory the server reads from.
+
+![Per-envoy config-resolution view — which matchfile + role + module + environment override resolved which value](../img/screenshots/vigo.envoy-config.png)
 
 ## Directory Layout
 
@@ -267,5 +275,15 @@ Published: 12 modules, 3 roles, 8 envoy entries (15 files synced)
   + modules/sshd.vgo
   + envoys/web.vgo
 ```
+
+## What's next
+
+- **A publish failed validation** → read the AI-streamed fix suggestions in your terminal; if you need the full validation rules, see [the module-writing reference](../reference/writing-modules.md).
+- **You want to trace why a particular envoy got a particular value** → `vigocli config trace <envoy> <module>` walks the resolution chain.
+- **A publish landed but rolled itself back** → the convergence-rollback monitor caught it; inspect the audit log via `vigocli config history`.
+- **You need to verify what's live** → `vigocli config tree` shows the entire resolved tree as the server sees it.
+
 ---
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

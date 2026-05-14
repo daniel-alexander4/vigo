@@ -1,7 +1,11 @@
 
 # Set up Spanner (hub-spoke sharding)
 
-Spanner shards the control plane across multiple Vigo servers — a hub server aggregates data from spoke servers, each of which owns a partition of the fleet (typically by hostname pattern). Use it when one server can't comfortably hold the fleet you're managing.
+You'll finish this page with a hub server fronting one or more spoke servers — each spoke owning a hostname-pattern partition of the fleet, the hub aggregating their data and routing admin queries fleet-wide. Envoys keep checking in on whatever address they originally enrolled against; the hub's job is fan-out + aggregation, not steady-state traffic.
+
+**When you'd use this:** when one server can no longer comfortably hold the fleet's check-in cadence, query load, or convergence-history retention. Practical inflection points are usually north of ~5,000 envoys per server, or when you want geographic partitioning so a regional outage doesn't take the whole control plane down.
+
+**When you'd skip this:** smaller fleets (a single-server `standalone` deployment is the default and the right answer for almost every operator); fleets that need HA but not horizontal sharding (use `server/peer/` primary/secondary replication instead — see [set-up-peer.md](#) if it exists, otherwise the `peer:` section in `server.yaml`).
 
 > **License requirement:** Spanner needs a paid license. The built-in free license (100 envoys) does not support hub or spoke mode; the server refuses to start with `spanner.role` set to `hub` or `spoke` on the free license. Paid licenses are bound to a specific server via [machine fingerprint](troubleshoot.md#machine-fingerprint-binding) — migrating the hub to a new machine requires a new license.
 
@@ -195,5 +199,15 @@ The web UI has a spoke detail page at `/spanner/spokes/{id}` showing per-spoke c
 
 - [Architecture](../reference/_index.md) — System overview
 - [Server Configuration](../reference/server-yaml.md) — spanner: section
+
+## What's next
+
+- **HA for the hub itself** → `server/peer/` primary/secondary replication. Pair it with `hub_fallback_addrs:` on every spoke so failover is transparent.
+- **A spoke is wedged** → `vigocli spanner status` shows per-spoke health; the hub auto-drains after `threshold` consecutive misses. Manually drain with `vigocli spanner drain --spoke <id> --to <other>`.
+- **License is too small** → spanner needs a paid license; see [license](../reference/server-yaml.md) and [troubleshoot.md#machine-fingerprint-binding](troubleshoot.md#machine-fingerprint-binding) for fingerprint rebinds.
+- **Cross-spoke admin queries are slow** → spoke health-probe interval is `30s` by default; reduce for tighter convergence on flapping spokes (`spanner.auto_failover.interval`).
+
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
+*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

@@ -1,6 +1,12 @@
 
 # Write your first module
 
+You'll finish this page with a working nginx module published to your fleet — nginx installed, a config file rendered with traits, and the service started — applied idempotently on every envoy in scope. The same shape generalizes to every module you'll write afterward: package, file, service, dependency chain.
+
+**When you'd use this:** every operator writing their first Vigo module. The example is nginx because it exercises the five most common resource types in one go (`package`, `file`, `service`, `directory`, `exec`); swap the package and config and you have a template for postgres, redis, prometheus, anything.
+
+**When you'd skip this:** you've already shipped modules for a different service; jump straight to the [module-writing reference](../reference/writing-modules.md).
+
 This walkthrough builds a complete nginx module with package installation, config file management, and service control — demonstrating the core patterns you'll use in every Vigo module.
 
 ## Module Structure
@@ -224,5 +230,30 @@ vigocli envoys show web1.example.com
 - [When Expressions](../reference/writing-modules.md) — Conditional logic reference
 - [Templates](../reference/writing-modules.md) — Go template syntax for content: attributes
 - [File Executor: stream_edit](../reference/vigo/resources/file.md#stream-edit) — Pipe file content through transform scripts before writing
+
+## What success looks like
+
+After `vigocli config publish` and a check-in cycle, the module applies cleanly across the fleet:
+
+```text
+$ docker exec vigo /usr/local/bin/vigocli runs list --limit 5
+ID                                    ENVOY                                 STARTED           STATUS   CHANGED  FAILED
+b791b14c-d9c9-4699-979f-0be8e232f930  d1f86266-139f-419a-b760-902c0616f586  2026-05-14 00:21  success  0        0
+be3f86c5-c809-4989-a014-20a9d9647b2b  cb4acb1f-f995-4026-a01e-f5390283ca6c  2026-05-14 00:21  success  0        0
+4f732d0f-c442-4c0c-81fc-b3352514de7c  d1f86266-139f-419a-b760-902c0616f586  2026-05-14 00:20  success  0        0
+```
+
+`CHANGED=0` after the first cycle means the module has converged and the next cycle is a no-op — that's idempotency working. A non-zero `FAILED` count means an envoy's run had at least one resource refuse to converge; drill in via the envoy's detail page or `vigocli runs show <run_id>`.
+
+![Per-envoy detail page — modules, last run, drift indicator](../img/screenshots/vigo.envoy-detail.png)
+
+## What's next
+
+- **Add more modules** → assign by hostname pattern or role, see [Publish your config](publish-config.md).
+- **Make modules vary by host / OS / environment** → [the module-writing reference](../reference/writing-modules.md) covers conditionals, lookups, foreach, and per-environment overrides.
+- **A resource didn't apply** → [Troubleshoot common issues](troubleshoot.md#module-convergence-loop--same-resource-changes-every-cycle).
+
 ---
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

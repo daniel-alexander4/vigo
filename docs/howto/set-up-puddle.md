@@ -1,5 +1,11 @@
 # Set up Puddle
 
+You'll finish this page with a puddle (per-user Ed25519 identity) initialized on one envoy and propagated to every other envoy a given user touches — paired peer-to-peer with a 5-minute single-use code. Once puddle is in place, the per-user content subsystems ([lockbox](set-up-lockbox.md), [gitback](set-up-gitback.md)) bootstrap on top of it.
+
+**When you'd use this:** before turning on lockbox or gitback for any user. Puddle is the substrate identity those subsystems consume.
+
+**When you'd skip this:** users who only need admin-pushed content (filecast, curator) — those don't require puddle. The default-off setting on the usercrate `puddle:` field is fine for service accounts and human users who don't need per-user encrypted state.
+
 A **puddle** is the per-user identity that ties together "this user's collection of envoys, treated as one trust unit." It's the prerequisite for lockbox (per-user encrypted directory) and gitback (puddle-keyed git repos) — both subsystems consume puddle membership to express who can read / write.
 
 ## Enable it
@@ -147,5 +153,13 @@ Phase 1 deliberately defers: multi-puddle per user (one puddle per user for now)
 - **Agent logs** carry WARN lines for pair-claim mismatch, signature failures, and helper crashes.
 - **ADRs** for the design rationale: [ADR-014](../adr/014-puddle-primitive.md) (the primitive), [ADR-015](../adr/015-unified-gitback-substrate.md) (gitback on puddle), [ADR-016](../adr/016-lockbox-membership-on-puddle.md) (lockbox on puddle), [ADR-017](../adr/017-no-puddle-level-revoke.md) (no puddle-level revoke), [ADR-018](../adr/018-puddle-rekey.md) (rekey), [ADR-022](../adr/022-gitback-friendly-names.md) (friendly names).
 
+## What's next
+
+- **Turn on the per-user content subsystems** → [Set up Lockbox](set-up-lockbox.md), [Set up Gitback](set-up-gitback.md).
+- **You forgot the passphrase** → re-init from scratch (puddle has no recovery in v1); existing lockbox recipients and gitback project tokens for the old puddle pubkey become orphans.
+- **A `pair` / `join` is failing** → [Troubleshoot common issues](troubleshoot.md).
+
 ---
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
 *Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

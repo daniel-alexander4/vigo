@@ -1,9 +1,13 @@
 
 # Back up and recover
 
-Vigo uses [Litestream](https://litestream.io) for continuous SQLite WAL replication. When configured, the server manages a Litestream subprocess that streams WAL changes to a remote replica in near-real-time.
+You'll finish this page with three independent recovery paths in place: **Litestream** continuously replicating the SQLite WAL off-host (near-zero RPO), the **`backups` module** producing daily hardlink-deduped snapshots of `/srv/vigo`, and the `vigocli backup create / restore` CLI for point-in-time tarballs you can ship anywhere. The three are complementary — Litestream catches the live database, the module covers the filesystem state Litestream doesn't, the CLI covers ad-hoc snapshots before risky changes.
 
-Backup is only applicable when `database.driver` is `sqlite` (the default).
+**When you'd use this:** any production deployment. Even a single-server fleet should have at least one of these on; a real production deployment should have all three.
+
+**When you'd skip this:** development and pre-production servers where the entire stack is reproducible from git. Keep `stockpile/` in version control regardless — Vigo's config source of truth is plain YAML, so git is the cheapest first-line backup you have.
+
+Backup is only applicable when `database.driver` is `sqlite` (the default). PostgreSQL deployments back up via their own mechanism.
 
 ## Configuration
 
@@ -303,5 +307,14 @@ Litestream covers the SQLite database with near-real-time replication. The built
 4. **Protect the master key separately.** `secrets/.master.key` is the single most critical file. Store a copy in a password manager, HSM, or separate secure location. Without it, all encrypted secrets are unrecoverable.
 
 5. **Test restores periodically.** See [Disaster Recovery](disaster-recovery.md) for the full restore walkthrough.
+
+## What's next
+
+- **Walk through a full DR drill** → [Disaster recovery](disaster-recovery.md). Test before you need it, on a schedule.
+- **Ship the master key somewhere safe** → `secrets/.master.key` is the single most critical file in the deployment; loss of the master key is loss of every encrypted secret. Password manager / HSM / sealed envelope in a safe — whichever fits your operating model.
+- **A restore fails or the archive doesn't open** → [Troubleshoot common issues](troubleshoot.md).
+
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
+*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

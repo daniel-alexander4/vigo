@@ -5,7 +5,13 @@ title: Authentication
 
 # Set up authentication
 
-All access to the web UI and REST API requires authentication. Three methods are supported:
+You'll finish this page with a Web UI and REST API that only authenticated users can reach — either via local username/password (default), OIDC against your existing identity provider, or `isowebauth` (Alexander4's hosted WebAuthn service). Plus API tokens for automation.
+
+**When you'd use this:** every deployment past the first laptop. You're picking *which* method.
+
+**When you'd skip this:** you can't — the server refuses unauthenticated requests by construction.
+
+All access to the Web UI and REST API requires authentication. Three methods are supported:
 
 | Method | Description | Use Case |
 |--------|-------------|----------|
@@ -389,5 +395,14 @@ The server requires `ssh-keygen` in the PATH for isowebauth signature verificati
 
 **API returns 401 with valid token:**
 Check that the token hasn't expired. List your tokens with `vigocli auth status` or the tokens API.
+
+## What's next
+
+- **Add per-user SSH pubkeys** so Scrier sessions auto-detect them → [Set up Scrier](set-up-scrier.md).
+- **Audit who logged in when** → every auth event lands in the [hash-chained audit log](compliance-reporting.md).
+- **Auth is misbehaving** → [Troubleshoot common issues](troubleshoot.md).
+
 ---
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

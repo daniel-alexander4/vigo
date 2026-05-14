@@ -1,7 +1,16 @@
 
 # Set up Scrier
 
+You'll finish this page with admin-only browser and CLI SSH/RDP/VNC sessions working to every enrolled envoy — without opening an inbound port on any of them. The bytes ride the same outbound mTLS connection the agent already uses for check-in.
+
+**When you'd use this:** debugging a specific envoy without a bastion or VPN; remoting into desktops via RDP/VNC; reaching envoys behind customer firewalls or CGNAT; any time you'd otherwise open port 22.
+
+**When you'd skip this:** if you already have a working bastion/VPN setup and the audit story it gives you, Scrier is optional. The trade-off is whether you want session recording and per-session ephemeral keys (Scrier) versus the bastion you've already paid for.
+
 Scrier is Vigo's admin remote-access feature: interactive SSH, RDP, and VNC sessions to any enrolled envoy, routed through the Vigo server and the envoy's already-open outbound gRPC connection. **No inbound port is required on the envoy.** The same connection the agent uses for check-in carries the session bytes back.
+
+<!-- TODO: capture screenshot of /scrier/<envoy_id>?protocol=ssh showing an active xterm.js session on Vigo 0.51.6 -->
+*Screenshot needed: an active Scrier SSH session in the browser, xterm.js fully rendered with a shell prompt.*
 
 ## What you get
 
@@ -138,5 +147,13 @@ sequenceDiagram
 - Windows VNC (TightVNC) is on the roadmap, not shipped.
 - The CLI requires a TTY — piped invocations are refused.
 
+## What's next
+
+- **A session fails** → [Troubleshoot common issues — Scrier section](troubleshoot.md#ssh-pubkey-not-authorized-on-this-envoy) covers the four most common failure strings with their fixes.
+- **You want compliance evidence for who SSH'd into what when** → every Scrier connect / disconnect lands in the [hash-chained audit log](compliance-reporting.md); export it via `vigocli audit export`.
+- **You want session recording** → not shipped today; the `recording_enabled` toggle is a schema placeholder for the eventual feature.
+
 ---
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
 *Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

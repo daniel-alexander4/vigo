@@ -1,9 +1,13 @@
 
 # Disaster recovery
 
-This playbook covers how to recover a Vigo server from scratch after hardware failure, data corruption, or any scenario where the server is lost. It assumes you have a backup created by `vigocli backup create` or a Litestream replica.
+You'll finish this page with a written, tested playbook for "the Vigo server is gone — disk failure, host gone, region down, an `rm -rf` that landed in the wrong place" — and a calibrated estimate of how long the recovery takes. The shape of the playbook is `provision → restore → publish → start`; the recovery time is dominated by provisioning, not by Vigo. Five concrete scenarios are covered below in increasing order of pain.
 
-For backup configuration and creation, see [Backup & Recovery](backup-and-recovery.md).
+**When you'd use this:** before you need it. Walk through Scenario 1 against a real backup tarball on a staging host once a quarter. Don't discover during the real outage that your master key wasn't actually in the archive.
+
+**When you'd skip this:** never — even single-server fleets that take an outage do better with this read in advance.
+
+For backup configuration and creation, see [Backup & Recovery](backup-and-recovery.md). One important fact below: **agents survive server outages indefinitely** thanks to LMDB-cached policy and queued results, so a multi-hour server outage is not a fleet outage.
 
 ## What You Need to Recover
 
@@ -253,5 +257,14 @@ vigocli backup restore /backup/vigo-latest.tar.gz \
 - [Database](../reference/server-yaml.md) — SQLite and Postgres configuration
 - [FleetIndex](troubleshoot.md) — In-memory index rebuilt on startup
 - [Troubleshooting](troubleshoot.md) — Common issues and diagnostics
+
+## What's next
+
+- **Schedule a quarterly DR drill** → restore a backup tarball to a throwaway host. Verify `/api/v1/health`, then walk an envoy through a check-in against the restored server. Treat untested backups as inoperable.
+- **You operate spanner hub-spoke** → restore each role independently (hub and spoke have separate databases). Re-verify reassignments and drains after hub restore.
+- **A restore step failed** → [Troubleshoot common issues](troubleshoot.md).
+
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
+*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

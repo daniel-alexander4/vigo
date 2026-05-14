@@ -1,7 +1,13 @@
 
 # Set up Swarm
 
-How to configure, monitor, and troubleshoot the envoy P2P substrate and the five content subsystems that ride it ([filecast](../glossary.md#payload), [longdrawer](set-up-longdrawer.md), [gitback](set-up-gitback.md), [lockbox](set-up-lockbox.md), [curator](set-up-curator.md)).
+You'll finish this page with the envoy peer-to-peer substrate enabled — agents discovering each other on the LAN via multicast, exchanging content over mTLS port 1531, and ready to host any of the five subsystems that ride it (filecast, gitback, lockbox, longdrawer, curator).
+
+**When you'd use this:** any time you want fleet-internal content distribution without bouncing through the server — encrypted per-user directories ([lockbox](set-up-lockbox.md)), P2P git ([gitback](set-up-gitback.md)), artifact distribution ([curator](set-up-curator.md)), or LAN file sync ([longdrawer](set-up-longdrawer.md)). Also the prerequisite for [puddle](set-up-puddle.md), the per-user identity primitive every per-user subsystem consumes.
+
+**When you'd skip this:** single-envoy deployments and deployments where the server is the only thing that needs to push content to envoys (admin-managed files via the filecast verb still work without swarm enabled on the envoy receiving them — but content can only come from the server, not from peers).
+
+This page configures the substrate. The five content subsystems each have their own howto: [longdrawer](set-up-longdrawer.md), [gitback](set-up-gitback.md), [lockbox](set-up-lockbox.md), [curator](set-up-curator.md), plus filecast (covered inline below).
 
 ![Swarm overview — envoys talk peer-to-peer over mTLS port 1531; five content subsystems ride the substrate](../img/swarm-overview.svg)
 
@@ -374,8 +380,15 @@ What happens for every action an operator can take on the seeder or downloader.
 
 ## Related
 
-- [Swarm Concepts](../howto/set-up-swarm.md) — How swarm works
-- [vigocli payload](../reference/vigocli/swarm-filecast.md) — CLI reference for admin-pushed filecasts on this substrate
+- [vigocli swarm filecast](../reference/vigocli/swarm-filecast.md) — CLI reference for admin-pushed filecasts on this substrate
 - [Server Configuration](../reference/server-yaml.md) — `swarm:` section
+
+## What's next
+
+- **Now turn on the content subsystems** — pick the one you need: [puddle](set-up-puddle.md) first (prereq for the per-user ones), then [lockbox](set-up-lockbox.md) / [gitback](set-up-gitback.md) / [curator](set-up-curator.md) / [longdrawer](set-up-longdrawer.md).
+- **An envoy isn't receiving content** → [Troubleshoot common issues](troubleshoot.md).
+
 ---
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

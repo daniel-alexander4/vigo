@@ -1,5 +1,11 @@
 # Set up Lockbox
 
+You'll finish this page with `~/lockbox/` syncing across every envoy a user is enrolled on — plaintext drops in, ciphertext fans out, every envoy holds the bytes at rest at mode 0600 and only the user's puddle passphrase decrypts them. The unlock ceremony piggybacks on `puddle unlock` — no separate password.
+
+**When you'd use this:** any user with a per-user secret / credential / SSH-key set / personal files that they want available on every machine they use, without trusting the disk on any one of them. Operators routinely use lockbox for SSH keys, password-manager exports, license files, GPG keys.
+
+**When you'd skip this:** files that should live on the LAN as plaintext (use [longdrawer](set-up-longdrawer.md) — same shape, no encryption); files an admin pushes (use filecast); secrets that should never leave the server's secret store (use the `secret:` config prefix).
+
 Lockbox keeps `~/lockbox/` in sync across every envoy where a user is enrolled — **ciphertext at rest** on every disk. Drop a plaintext file on any envoy; lockbox encrypts it to every peer's public key and fans out the ciphertext. Unlock with the user's puddle passphrase on any envoy to decrypt.
 
 ## Enable it
@@ -153,5 +159,14 @@ Phase 1 has no key escrow. Lose the passphrase on every envoy → data is unreco
 - **`/lockbox` Web UI** (admin-only) — presence matrix per (user × envoy × filename), recipient drift detection, active-session indicators, three-state envoy reporting (reporting / stale / not_reporting).
 - **`vigo swarm puddle status`** — if the puddle session helper is down, lockbox is locked everywhere; that's the first thing to check.
 
+## What's next
+
+- **Add git over the same substrate** → [Set up Gitback](set-up-gitback.md). Same puddle identity; private project repos with content-encrypted blobs.
+- **A non-encrypted LAN sibling for ambient work files** → [Set up Longdrawer](set-up-longdrawer.md). Same shape; plaintext at rest; never crosses the LAN.
+- **You forgot a puddle passphrase** → no recovery in v1; re-init the puddle and rejoin lockbox. See the recovery notes in [Set up Puddle](set-up-puddle.md).
+- **Files aren't fanning out** → [Troubleshoot common issues](troubleshoot.md).
+
 ---
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
 *Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

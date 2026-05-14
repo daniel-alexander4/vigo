@@ -473,5 +473,8 @@ This re-seeds `server.yaml`, `.env`, `docker-compose.yml`, TLS certs, and exampl
 | `webhook: delivery failed after retries` | All retry attempts for a webhook exhausted |
 | `litestream exited` | Backup replication subprocess crashed |
 | `rate limit exceeded` | AI assistant request rate limit hit |
+
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
+*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

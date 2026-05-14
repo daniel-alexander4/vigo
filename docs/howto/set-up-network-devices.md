@@ -1,7 +1,11 @@
 
 # Set up network devices
 
-Vigo manages network devices (switches, routers, firewalls) that can't run the agent binary. These devices appear as fleet members with compliance status, traits, and run history — managed through a **gateway proxy** pattern over SSH. Five device types are supported today: Cisco IOS, NX-OS, IOS-XR, Arista EOS, and Juniper Junos.
+You'll finish this page with switches, routers, and firewalls under the same convergence model as your servers — each device appears in `vigocli envoys list` with traits, compliance status, and run history. The trick: a designated **gateway envoy** (a regular Linux/macOS host running the agent) does the SSH work on Vigo's behalf, so the network device itself runs no Vigo software. Five device families today: Cisco IOS, NX-OS, IOS-XR, Arista EOS, Juniper Junos.
+
+**When you'd use this:** you have devices that can't (or shouldn't) run the agent binary but need to be on the same compliance, audit, and convergence rails as the rest of the fleet. The classic case is a fleet of access switches whose VLAN / interface / ACL state you want declarative.
+
+**When you'd skip this:** devices that already run the agent (route them as normal envoys); one-off devices you'd rather manage with a domain-specific tool (NSO, NAPALM, vendor controllers); read-only inventory (use the inventory query path instead — no need to introduce a gateway).
 
 ## Enable it
 
@@ -196,7 +200,16 @@ Network devices participate fully in Vigo's compliance system:
 
 - **Status tracking** -- converged, relapsed, diverged, degraded, failed, offline, or no data
 - **Run history** -- every convergence run is recorded with per-resource outcomes
-- **Fleet views** -- devices appear in `vigocli nodes list` and the web UI dashboard
-- **Trait queries** -- `vigocli nodes traits core-sw01.example.com` shows device facts
+- **Fleet views** -- devices appear in `vigocli envoys list` and the web UI dashboard
+- **Trait queries** -- `vigocli traits show <device-hostname>` shows device facts
+
+## What's next
+
+- **Write modules against the device executors** → see `cisco_vlan`, `network_ntp`, `network_syslog`, `network_user` in the resource reference. Cross-platform executors abstract the device-type differences where possible.
+- **A device's SSH host key changed** → the TOFU cache hard-errors; investigate before clearing. If the change is legitimate, remove the cached key on the gateway and re-converge.
+- **The gateway can't reach a device** → [Troubleshoot common issues](troubleshoot.md) covers the gateway-proxy connectivity matrix.
+
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
+*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

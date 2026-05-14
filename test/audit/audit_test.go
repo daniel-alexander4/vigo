@@ -275,7 +275,7 @@ func TestEveryCLICommandHasDocPage(t *testing.T) {
 		}
 	}
 
-	docsDir := filepath.Join(root, "docs", "reference", "cli")
+	docsDir := filepath.Join(root, "docs", "reference", "vigocli")
 
 	var missing []string
 	for _, varName := range varNames {
@@ -293,7 +293,7 @@ func TestEveryCLICommandHasDocPage(t *testing.T) {
 
 	sort.Strings(missing)
 	if len(missing) > 0 {
-		t.Errorf("CLI commands missing doc pages in docs/cli/:\n  %s", strings.Join(missing, "\n  "))
+		t.Errorf("CLI commands missing doc pages in docs/reference/vigocli/:\n  %s", strings.Join(missing, "\n  "))
 	}
 }
 

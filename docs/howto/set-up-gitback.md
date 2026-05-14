@@ -1,7 +1,11 @@
 
 # Set up Gitback
 
-Gitback runs git over Vigo's swarm substrate — you `git push` to a project that lives across your envoys (and optionally your teammates' envoys) without a central git server. The use cases are personal disaster recovery (one user, many envoys, one source of truth that survives any single envoy disappearing) and small-team collaboration (multiple puddles share a single project).
+You'll finish this page with a git project living across every puddle-member envoy a user touches — `git push` triggers fan-out to root-owned bare repos on each member's `/var/lib/vigo/swarm/gitback/projects/<pid>.git`, and any one of those envoys can hand a fresh clone back. The Vigo server stays out of membership decisions; project identity is the founder's puddle pubkey.
+
+**When you'd use this:** personal disaster recovery — one user, many envoys, no central git server, no single envoy whose disappearance loses your repo. Also small-team collaboration where multiple puddles share a project.
+
+**When you'd skip this:** repos where bytes-on-disk confidentiality matters (gitback bare repos are root-readable on every member envoy — use lockbox for content secrecy); repos where a central forge already meets the DR bar (GitHub/Gitea); single-envoy state with no replication need.
 
 ## Enable it
 
@@ -113,5 +117,14 @@ Removing `gitback: true` from a usercrate triggers a scrub on the next reconcile
 - **Disk pressure**: pushes refuse at ≤10% free (same fleet-wide rule as other swarm subsystems).
 - **ADRs**: [ADR-015](../adr/015-unified-gitback-substrate.md) (substrate), [ADR-019](../adr/019-gitback-founder-rekey.md) (rekey), [ADR-022](../adr/022-gitback-friendly-names.md) (names), [ADR-023](../adr/023-gitback-puddle-wide-adoption.md) (puddle-wide adoption).
 
+## What's next
+
+- **Encrypt content that lives in the same fleet** → [Set up Lockbox](set-up-lockbox.md). Gitback is for availability; lockbox is for confidentiality.
+- **Push admin-curated artifacts (binaries, model files, fixtures) over the same substrate** → [Set up Curator](set-up-curator.md).
+- **A puddle key was compromised** → re-issue invitations with `vigo swarm gitback project re-invite-all` or, past the delegation cap, `re-found`. See [ADR-019](../adr/019-gitback-founder-rekey.md) before acting.
+- **`git push` hangs or refuses** → [Troubleshoot common issues](troubleshoot.md).
+
 ---
+*Verified on Vigo 0.51.6 · 2026-05-13.*
+
 *Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*
