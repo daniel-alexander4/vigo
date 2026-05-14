@@ -96,12 +96,6 @@ type curatorVersionsResponse struct {
 	Tags       map[string]string                 `json:"tags"`
 }
 
-type curatorFleetResponse struct {
-	GeneratedAt   time.Time `json:"generated_at"`
-	Participants  []string  `json:"participants"`
-	ArtifactCount int       `json:"artifact_count"`
-}
-
 type curatorResolveResponse struct {
 	ArtifactID  string              `json:"artifact_id"`
 	Version     string              `json:"version"`
@@ -126,12 +120,11 @@ Mutating verbs (push / tag / untag / set-recipients / set-target / rm
 'vigo swarm curator', run as a real user with an unlocked puddle.
 This command is read-only plus the admin moderation backstop:
 
+  status      Fleet rollup (artifacts, participants, blocked count, hosts).
   list        One row per artifact across the fleet.
-  inspect     Full signed entry for one artifact.
+  show        Detailed view of one artifact (full signed catalog entry).
   versions    Version/tag table for one artifact.
   resolve     Show the blob coordinates a pull would fetch.
-  fleet       Participant + artifact-count rollup.
-  status      Fleet rollup (artifacts, participants, blocked count).
   block       Operator-block an artifact (server refuses to resolve/relay).
   unblock     Reverse a prior block.`,
 }
@@ -150,36 +143,29 @@ var curatorListCmd = &cobra.Command{
 	RunE:  runCuratorList,
 }
 
-var curatorInspectCmd = &cobra.Command{
-	Use:   "inspect <artifact_id>",
-	Short: "Full signed catalog entry for one artifact",
+var curatorShowCmd = &cobra.Command{
+	Use:   "show <artifact_id|name>",
+	Short: "Detailed view of one artifact (full signed catalog entry)",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runCuratorInspect,
+	RunE:  runCuratorShow,
 }
 
 var curatorVersionsCmd = &cobra.Command{
-	Use:   "versions <artifact_id>",
+	Use:   "versions <artifact_id|name>",
 	Short: "Version + tag table for one artifact",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runCuratorVersions,
 }
 
 var curatorResolveCmd = &cobra.Command{
-	Use:   "resolve <artifact_id> <tag-or-version> <os> <arch>",
-	Short: "Show the blob coordinates a pull would fetch",
+	Use:   "resolve <artifact_id|name> <tag-or-version> <os> <arch>",
+	Short: "Show the blob coordinates a pull would fetch (does not download)",
 	Args:  cobra.ExactArgs(4),
 	RunE:  runCuratorResolve,
 }
 
-var curatorFleetCmd = &cobra.Command{
-	Use:   "fleet",
-	Short: "Participant + artifact-count rollup",
-	Args:  cobra.NoArgs,
-	RunE:  runCuratorFleet,
-}
-
 var curatorBlockCmd = &cobra.Command{
-	Use:   "block <artifact_id>",
+	Use:   "block <artifact_id|name>",
 	Short: "Operator-block an artifact — the server refuses to resolve or relay it",
 	Long: `Mark an artifact as operator-blocked. The server stops resolving
 it on /api/v1/swarm/curator/resolve and stops relaying its bytes on
@@ -193,7 +179,7 @@ on the audit row.`,
 }
 
 var curatorUnblockCmd = &cobra.Command{
-	Use:   "unblock <artifact_id>",
+	Use:   "unblock <artifact_id|name>",
 	Short: "Reverse a prior block",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runCuratorUnblock,
@@ -206,15 +192,6 @@ func fetchCuratorList() (*curatorListResponse, error) {
 	var resp curatorListResponse
 	if err := client.get("/api/v1/swarm/curator/list", &resp); err != nil {
 		return nil, fmt.Errorf("fetching curator catalog: %w", err)
-	}
-	return &resp, nil
-}
-
-func fetchCuratorFleet() (*curatorFleetResponse, error) {
-	client := newAPIClient()
-	var resp curatorFleetResponse
-	if err := client.get("/api/v1/swarm/curator/fleet", &resp); err != nil {
-		return nil, fmt.Errorf("fetching curator fleet: %w", err)
 	}
 	return &resp, nil
 }
@@ -251,19 +228,27 @@ func runCuratorStatus(cmd *cobra.Command, _ []string) error {
 
 	gen := time.Time{}
 	artifacts := 0
-	participants := 0
+	var participants []string
 	if list.Catalog != nil {
 		gen = list.Catalog.GeneratedAt
 		artifacts = len(list.Catalog.Artifacts)
-		participants = len(list.Catalog.Participants)
+		participants = list.Catalog.Participants
 	}
 	fmt.Printf("Curator — generated %s\n\n", gen.Local().Format("2006-01-02 15:04:05"))
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Artifacts"), artifacts)
-	fmt.Fprintf(w, "%s\t%d\n", bold("Participants"), participants)
+	fmt.Fprintf(w, "%s\t%d\n", bold("Participants"), len(participants))
 	fmt.Fprintf(w, "%s\t%s\n", bold("Blocked"), curatorBlockedCount(len(list.Blocked)))
 	w.Flush()
+
+	if len(participants) > 0 {
+		fmt.Println()
+		fmt.Println("Participating hosts:")
+		for _, h := range participants {
+			fmt.Printf("  %s\n", h)
+		}
+	}
 	return nil
 }
 
@@ -364,20 +349,20 @@ func renderCuratorList(list *curatorListResponse, out io.Writer) error {
 	return nil
 }
 
-func runCuratorInspect(cmd *cobra.Command, args []string) error {
+func runCuratorShow(cmd *cobra.Command, args []string) error {
 	asJSON, _ := cmd.Flags().GetBool("json")
 	target := args[0]
-	resp, err := resolveAndInspect(target)
+	resp, err := resolveAndShow(target)
 	if err != nil {
 		return err
 	}
 	if asJSON {
 		return writeJSONPretty(resp)
 	}
-	return renderCuratorInspect(resp, os.Stdout)
+	return renderCuratorShow(resp, os.Stdout)
 }
 
-func renderCuratorInspect(resp *curatorInspectResponse, out io.Writer) error {
+func renderCuratorShow(resp *curatorInspectResponse, out io.Writer) error {
 	if resp.Entry == nil && !resp.Blocked {
 		fmt.Fprintln(out, "No such artifact.")
 		return nil
@@ -554,30 +539,6 @@ func runCuratorResolve(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runCuratorFleet(cmd *cobra.Command, _ []string) error {
-	asJSON, _ := cmd.Flags().GetBool("json")
-	fleet, err := fetchCuratorFleet()
-	if err != nil {
-		return err
-	}
-	if asJSON {
-		return writeJSONPretty(fleet)
-	}
-	fmt.Printf("Curator fleet — generated %s\n\n", fleet.GeneratedAt.Local().Format("2006-01-02 15:04:05"))
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "%s\t%d\n", bold("Artifacts"), fleet.ArtifactCount)
-	fmt.Fprintf(w, "%s\t%d\n", bold("Participants"), len(fleet.Participants))
-	w.Flush()
-	if len(fleet.Participants) > 0 {
-		fmt.Println()
-		fmt.Println("Participating hosts:")
-		for _, h := range fleet.Participants {
-			fmt.Printf("  %s\n", h)
-		}
-	}
-	return nil
-}
-
 func runCuratorBlock(cmd *cobra.Command, args []string) error {
 	reason, _ := cmd.Flags().GetString("reason")
 	aid, err := resolveCuratorTarget(args[0])
@@ -616,10 +577,13 @@ func runCuratorUnblock(cmd *cobra.Command, args []string) error {
 
 // --- helpers ---
 
-// resolveAndInspect resolves `target` (artifact_id, name, or name prefix) to
+// resolveAndShow resolves `target` (artifact_id, name, or name prefix) to
 // the inspectResponse for that artifact. The server's `/inspect/{aid}` route
 // only accepts a hex artifact_id, so a name lookup falls back to /list.
-func resolveAndInspect(target string) (*curatorInspectResponse, error) {
+// (REST endpoint name kept as `/inspect/{aid}` — that's an internal URL;
+// the operator-facing CLI verb is `show` to match the gitback / lockbox /
+// longdrawer sibling convention.)
+func resolveAndShow(target string) (*curatorInspectResponse, error) {
 	if isHex64CLI(target) {
 		return fetchCuratorInspect(strings.ToLower(target))
 	}
@@ -635,7 +599,7 @@ func resolveAndInspect(target string) (*curatorInspectResponse, error) {
 }
 
 // resolveCuratorTarget turns an artifact_id, name, or name prefix into a hex
-// artifact_id by consulting the fleet catalog. Used by block/unblock/inspect.
+// artifact_id by consulting the fleet catalog. Used by block/unblock/show.
 func resolveCuratorTarget(target string) (string, error) {
 	if isHex64CLI(target) {
 		return strings.ToLower(target), nil
@@ -764,19 +728,17 @@ func isHex64CLI(s string) bool {
 func init() {
 	curatorStatusCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
 	curatorListCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
-	curatorInspectCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
+	curatorShowCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
 	curatorVersionsCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
 	curatorResolveCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
-	curatorFleetCmd.Flags().Bool("json", false, "Emit machine-readable JSON instead of a table")
 	curatorBlockCmd.Flags().String("reason", "", "Free-text reason recorded on the block row")
 
 	curatorCmd.AddCommand(
 		curatorStatusCmd,
 		curatorListCmd,
-		curatorInspectCmd,
+		curatorShowCmd,
 		curatorVersionsCmd,
 		curatorResolveCmd,
-		curatorFleetCmd,
 		curatorBlockCmd,
 		curatorUnblockCmd,
 	)

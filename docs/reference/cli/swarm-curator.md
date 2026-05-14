@@ -11,10 +11,9 @@ Operator-side view of [curator](../../engineering/subsystems/curator.md) — the
 |---|---|
 | `status` | Fleet-wide totals (artifacts, participants, blocked count) |
 | `list` | One row per artifact across the fleet; flags blocked entries; surfaces orphan blocks in a footer |
-| `inspect <ref>` | Full signed catalog entry for one artifact (versions, tags, recipients, target, rekey hint, dangling tags) |
+| `show <ref>` | Detailed view of one artifact — full signed catalog entry (versions, tags, recipients, target, rekey hint, dangling tags) |
 | `versions <ref>` | Version + tag table for one artifact |
 | `resolve <ref> <tag\|version> <os> <arch>` | Show the blob coordinates a pull would fetch |
-| `fleet` | Participants + artifact-count rollup |
 | `block <ref> [--reason <text>]` | Operator-block an artifact — server refuses to resolve/relay regardless of who published |
 | `unblock <ref>` | Reverse a prior block |
 
@@ -38,7 +37,7 @@ vigocli swarm curator <subcommand> [flags]
 
 ## `vigocli swarm curator status`
 
-Aggregate counts across the fleet.
+Aggregate counts across the fleet, plus the participating-hosts list.
 
 ```
 $ vigocli swarm curator status
@@ -47,9 +46,15 @@ Curator — generated 2026-05-14 09:12:33
 Artifacts     7
 Participants  4
 Blocked       0
+
+Participating hosts:
+  annlap
+  danlap
+  girlslaptop
+  plex
 ```
 
-`Blocked` is yellow when non-zero so an operator can see at a glance whether any moderation actions are in effect.
+`Blocked` is yellow when non-zero so an operator can see at a glance whether any moderation actions are in effect. The participating-hosts list inline is the envoys reporting a `swarm_curator` trait (any envoy holding local publish state for any user) — useful for verifying that the right hosts are actually reporting.
 
 ## `vigocli swarm curator list`
 
@@ -69,10 +74,10 @@ old-thing        1         0     linux/amd64             *        blocked   af31
 | `NAME` | Artifact name from the catalog entry. |
 | `VERSIONS` | Number of distinct version strings published. |
 | `TAGS` | Number of distinct tag bindings. |
-| `PLATFORMS` | Sorted, deduped union of `<os>/<arch>` across all versions. Truncated for display; use `inspect` for the full breakdown. |
+| `PLATFORMS` | Sorted, deduped union of `<os>/<arch>` across all versions. Truncated for display; use `show` for the full breakdown. |
 | `TARGET` | The `target` glob from the entry — which envoys hold the P2P DR replica. Truncated for display. |
 | `STATUS` | `ok` (green) for a normal entry; `blocked` (red) when the server is refusing to resolve/relay. |
-| `ARTIFACT_ID` | First 12 chars of the artifact_id hex. Pass the full id to `inspect` / `block` / `unblock` to disambiguate name collisions. |
+| `ARTIFACT_ID` | First 12 chars of the artifact_id hex. Pass the full id to `show` / `block` / `unblock` to disambiguate name collisions. |
 
 ### Orphan blocks
 
@@ -87,12 +92,12 @@ Note: 1 block(s) without a current catalog entry:
   af31c2e84d12  blocked 2026-05-12 by dan — supply-chain incident #ABC
 ```
 
-## `vigocli swarm curator inspect <ref>`
+## `vigocli swarm curator show <ref>`
 
-Full detail for one artifact.
+Detailed view of one artifact — full signed catalog entry.
 
 ```
-$ vigocli swarm curator inspect vigo-agent
+$ vigocli swarm curator show vigo-agent
 Name:           vigo-agent
 Artifact ID:    e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 Founder puddle: ed25519:8711b12bac759fea30363f0ed4ab95b49b90b1b51c1cd4c095cb788cd0a9aea8
@@ -111,7 +116,7 @@ Versions:
                           darwin/arm64   8.7 MiB   4a9e7b3c2f1d
 ```
 
-When the signing puddle differs from the founder puddle (the founder has rekeyed via [ADR-019](../../adr/019-gitback-founder-rekey.md)), `inspect` notes the rekey hint:
+When the signing puddle differs from the founder puddle (the founder has rekeyed via [ADR-019](../../adr/019-gitback-founder-rekey.md)), `show` notes the rekey hint:
 
 ```
 Signing puddle: ed25519:<new pubkey>  (rekeyed — delegation chain bridges)
@@ -153,24 +158,6 @@ Version   0.51.0
 
 The CLI tries `tag=` first; on miss, falls back to `version=` (the server treats them as alternative parameters, not fallbacks).
 
-## `vigocli swarm curator fleet`
-
-Participants + count rollup, plus the participating-hosts list.
-
-```
-$ vigocli swarm curator fleet
-Curator fleet — generated 2026-05-14 09:12:33
-
-Artifacts     7
-Participants  4
-
-Participating hosts:
-  annlap
-  danlap
-  girlslaptop
-  plex
-```
-
 ## `vigocli swarm curator block <ref> [--reason <text>]`
 
 Operator-block an artifact. The server stops resolving it on `/resolve` and stops relaying its bytes on `/blob/<sha>` regardless of who published it. The signed catalog entry still exists and gossips, and the DR bytes still sit on every swarm-enabled envoy that holds the `target` replica — only a publisher `vigo swarm curator rm` truly purges.
@@ -181,7 +168,7 @@ Blocked af31c2e84d12.
 Reason: supply-chain incident #ABC
 ```
 
-Block events go in the tamper-evident audit chain. The aggregator's TTL cache is invalidated immediately so the moderation effect is synchronously visible on `list`/`inspect`/`resolve` — no waiting for the 30-second window.
+Block events go in the tamper-evident audit chain. The aggregator's TTL cache is invalidated immediately so the moderation effect is synchronously visible on `list`/`show`/`resolve` — no waiting for the 30-second window.
 
 ## `vigocli swarm curator unblock <ref>`
 
@@ -206,7 +193,7 @@ vigocli swarm curator list --json | jq '.catalog.artifacts[] | select(.body.foun
 vigocli swarm curator list --json | jq '.blocked[] | {id: .artifact_id, when: .blocked_at, who: .blocked_by, why: .reason}'
 
 # Just the size of the largest version of a single artifact.
-vigocli swarm curator inspect e3b0c44298fc --json | jq '[.entry.body.versions[].platforms[].size] | max'
+vigocli swarm curator show e3b0c44298fc --json | jq '[.entry.body.versions[].platforms[].size] | max'
 ```
 
 ## Exit codes

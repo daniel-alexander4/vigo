@@ -219,7 +219,7 @@ func TestRenderCuratorListShowsBlockedOrphans(t *testing.T) {
 	}
 }
 
-func TestRenderCuratorInspectFlagsRekey(t *testing.T) {
+func TestRenderCuratorShowFlagsRekey(t *testing.T) {
 	e := entryFor(0x01, "thing")
 	e.Body.SigningPuddlePubkey = pubkeyFrom(0x02) // different from founder
 	resp := &curatorInspectResponse{
@@ -227,7 +227,7 @@ func TestRenderCuratorInspectFlagsRekey(t *testing.T) {
 		Entry:      &e,
 	}
 	var buf bytes.Buffer
-	if err := renderCuratorInspect(resp, &buf); err != nil {
+	if err := renderCuratorShow(resp, &buf); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !strings.Contains(buf.String(), "rekeyed") {
@@ -235,7 +235,7 @@ func TestRenderCuratorInspectFlagsRekey(t *testing.T) {
 	}
 }
 
-func TestRenderCuratorInspectFlagsDanglingTags(t *testing.T) {
+func TestRenderCuratorShowFlagsDanglingTags(t *testing.T) {
 	e := entryFor(0x01, "x")
 	e.Body.Tags["nightly"] = "9.9.9" // version doesn't exist
 	resp := &curatorInspectResponse{
@@ -243,7 +243,7 @@ func TestRenderCuratorInspectFlagsDanglingTags(t *testing.T) {
 		Entry:      &e,
 	}
 	var buf bytes.Buffer
-	if err := renderCuratorInspect(resp, &buf); err != nil {
+	if err := renderCuratorShow(resp, &buf); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !strings.Contains(buf.String(), "dangling tag") {
@@ -254,14 +254,14 @@ func TestRenderCuratorInspectFlagsDanglingTags(t *testing.T) {
 	}
 }
 
-func TestRenderCuratorInspectBlockedNoEntry(t *testing.T) {
+func TestRenderCuratorShowBlockedNoEntry(t *testing.T) {
 	resp := &curatorInspectResponse{
 		ArtifactID: strings.Repeat("a", 64),
 		Entry:      nil,
 		Blocked:    true,
 	}
 	var buf bytes.Buffer
-	if err := renderCuratorInspect(resp, &buf); err != nil {
+	if err := renderCuratorShow(resp, &buf); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !strings.Contains(buf.String(), "blocked") {
@@ -305,27 +305,6 @@ func TestFetchCuratorListHitsCanonicalEndpoint(t *testing.T) {
 	}
 	if got.Catalog.Artifacts[0].Body.Name != "vigo-agent" {
 		t.Errorf("got %q, want vigo-agent", got.Catalog.Artifacts[0].Body.Name)
-	}
-}
-
-func TestFetchCuratorFleetHitsCanonicalEndpoint(t *testing.T) {
-	cleanup := curatorFixture(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/swarm/curator/fleet" {
-			t.Errorf("expected /api/v1/swarm/curator/fleet, got %s", r.URL.Path)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(curatorFleetResponse{
-			Participants:  []string{"a", "b"},
-			ArtifactCount: 3,
-		})
-	})
-	defer cleanup()
-	got, err := fetchCuratorFleet()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got.ArtifactCount != 3 || len(got.Participants) != 2 {
-		t.Errorf("unexpected payload: %+v", got)
 	}
 }
 
