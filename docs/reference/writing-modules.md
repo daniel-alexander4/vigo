@@ -345,7 +345,7 @@ Usercrates and regular modules share one namespace — the `name:` field in a us
 
 ### User management specifically
 
-See [User Management](#usercrates) for why user accounts benefit from the usercrate pattern specifically — per-person audit trail, lookup-table-driven per-envoy variation, two-phase retirement.
+See [User management — why usercrates exist](#user-management--why-usercrates-exist) for why user accounts specifically benefit from the usercrate pattern — `user` executor complexity, per-person audit trail, two-phase retirement.
 
 ## Compliance Waivers + Claims
 
@@ -1515,180 +1515,28 @@ Key rules:
 - **Usercrates live at any scope within stockpile.** Root for fleet-wide, customer subdir for customer-scoped.
 - **Organization axes** (customer, site, tenant, region, cloud) mirror your business, not your infrastructure. `aws/` or `gcp/` also works if cloud is your organizing axis.
 
-## Layout history
+## User management — why usercrates exist
 
-These transitions all migrate automatically via the container entrypoint on first boot — no operator action required.
+The `user` executor is the most complex resource type Vigo manages: it reads and writes across `/etc/passwd`, `/etc/shadow`, `/etc/group`, `~/.ssh/authorized_keys`, `~/.xsession`, and `/etc/sudoers.d/<u>`; `groups:` is the only list field with both merge (`useradd -aG`) and replace (`purge_groups: true`) semantics; `authorized_keys:` deliberately preserves Scrier ephemeral lines across convergence; the executor kills user processes with `pkill -u` when `usermod` fails "user is currently used by process"; `system: true` auto-assigns a UID < 1000; and the four platform implementations (`user`, `user_macos`, `user_freebsd`, `user_windows`) diverge more than any other `type:`. Full reference at [reference/vigo/resources/user.md](../reference/vigo/resources/user.md).
 
-- **0.28.0** — moved the tree under `worksite/`; promoted `.live/` out as sibling `structure/`.
-- **0.29.0** — split into `stockpile/` (module library) and `stockpile/` (envoy rules) subtrees; renamed `stockpile/modules/` at the filesystem level (YAML keys + Go/Rust identifiers keep `module`); renamed waivers-tree `compliance.vgo` → `waivers.vgo`.
-- **0.29.1** — enforced filename-per-tree as fatal checks at publish and load (previously a silent warning).
-- **0.33.1** — collapsed `worksite/{stockpile,scaffolding,structure}/` into `stacks/{stockpile,examples,.live}/`. Single operator-edited tree (stockpile) holding every primitive; `.live/` rename completes the path. The two-tree filename-per-tree rule simplified to canonical-filename rules within stockpile.
+User accounts also vary per-envoy more than any other resource (per-host shell, per-host group sets, per-host `sudo_nopasswd`), have a multi-step lifecycle (joiners → key/group rotation → retirement), and need per-person audit history for compliance. That combination is why **usercrates** exist — see [Usercrates](#usercrates) for the layout and the auto-apply rules.
 
-## What this replaces — removed 0.27.0
+### Retirement two-phase (do not skip)
 
-These mechanisms were deleted because they duplicated what other axes already do, not because their underlying use cases went away.
+When a person leaves, the user resource must be **`state: absent` in the config for at least one convergence cycle** so the agent actually runs `userdel`. Deleting the usercrate file directly stops the module from being applied but never tells the agent to delete the account.
 
-- **`environment_overrides:`** on match blocks (per-host in-matchfile env overrides). **Removed.** Use `environments.vgo` at the appropriate directory level.
-- **`vars_from:`** external var files loaded into match blocks or `common.vgo`. **Removed.** Put shared var blocks in `common.vgo` at a parent directory — directory inheritance does what `vars_from:` did without the extra file concept.
-- **Conditional vars** (`when:`-guarded var values that produced booleans). **Removed.** Use `when: "os_family('debian')"` directly on resources or in role `case:` — evaluate against traits without the indirection layer. If you need a named boolean shared across resources, define a tag on the envoy.
-- **Match vars** (`when:`-with-fallback chains inside var definitions). **Removed.** Use tag-keyed or platform-keyed lookup tables inside the resource fields that need the variation.
-- **`modules/users/` pattern** (per-user modules listed in `common.vgo`). **Removed.** Migrate to `stockpile/usercrates/` — auto-applies, no listing needed. See [User Management](#usercrates).
+The convention:
 
-Conditional vars and match vars flowed all the way to the agent via protobuf `ConditionalVarDef`. That machinery is gone; the agent no longer evaluates trait-based boolean vars on each check-in.
+1. Edit the resource to `state: absent` (keep `username`, keep `password`-`secret:` ref so the secret can be retired after).
+2. Move the file to `stockpile/usercrates/retired/<name>.vgo`.
+3. Commit, publish, wait one full convergence cycle on every envoy that ever held the account.
+4. Only then is it safe to delete the file. The `retired/` directory is the historical roster — git history plus the retained file answers "did we provision `<name>` on this envoy between X and Y" cleanly.
 
----
-## User Account Management
+### Things that look right but aren't
 
-User accounts are the most complicated resource type vigo manages. This page explains why, and why that complexity shapes how stockpiles should organize user-management modules.
-
-## Why the `user` executor is exceptional
-
-The `user` executor (see [reference/executors/user.md](../reference/vigo/resources/user.md)) stands apart from every other executor in the tree in five ways. No other executor combines all of these.
-
-### 1. Multi-file state
-
-Most executors touch one file or one daemon. `file:` edits one file. `service:` talks to systemd or launchd. `package:` calls the distro package manager. The `user` executor reads and writes across a half-dozen independent state locations:
-
-- `/etc/passwd` — existence, UID, GID, home, shell, GECOS
-- `/etc/shadow` — password hash, password aging
-- `/etc/group` — supplementary group membership
-- `~<user>/.ssh/authorized_keys` — SSH access, with ownership fixup and symlink detection
-- `~<user>/.xsession` — desktop session selection for RDP access
-- `/etc/sudoers.d/<username>` — privilege escalation policy
-
-Every convergence cycle, the executor reads all six to compute drift, and writes only the subset that needs to change. A single user resource can touch every one of those files in a single run.
-
-### 2. List fields with merge-vs-replace semantics
-
-`groups:` on a user resource is the only list-valued attribute in vigo that has **both** merge and replace semantics, toggled by a flag:
-
-- **Default (merge):** `useradd -aG` on create, then selective add/remove on update. A user already in `wheel` outside vigo's knowledge stays in `wheel`. The resource adds missing groups from the list and otherwise leaves memberships alone.
-- **With `purge_groups: true` (replace):** `useradd -G` / `usermod -G`. Vigo becomes authoritative — anything not in the list is removed.
-
-No other executor has this toggle. `file:` always replaces. `package:` state is binary. Only `user` treats a list attribute as something that can be either "these are the groups we care about" or "these are the only groups."
-
-`authorized_keys:` has a similar split: Vigo-managed keys are replaced on every run, but ephemeral Scrier remote-access keys are preserved across converges so an active Scrier session can't be terminated by a convergence run. Again, unique to `user`.
-
-### 3. Process-killing recovery
-
-If `usermod` fails with "user is currently used by process," the executor runs `pkill -u <username>` and retries. This is the only executor that kills processes on the host as part of its normal idempotency logic. The reason is that user modifications on a logged-in account fail deterministically — you either skip the change (accepting drift) or evict the user's running processes. The executor picks the latter because "the resource didn't converge" is worse than "that user got logged out."
-
-### 4. Desktop session mapping and system UID auto-assignment
-
-- **Desktop mapping:** `desktop: cinnamon` writes `~<user>/.xsession` with the correct exec command for cinnamon, and similarly for gnome, xfce, mate, plasma, lxde, lxqt, fvwm, i3, sway, openbox, budgie. This knowledge lives inside the executor because no other vigo concept needs it.
-- **System UID auto-assignment:** `system: true` with a user already holding UID ≥ 1000 finds an available UID in the 100–999 range and reassigns. No other executor reorganizes kernel-level identifiers.
-
-### 5. Cross-platform divergence
-
-`type: user` maps to four different implementations:
-
-- `user` (Linux)
-- `user_macos`
-- `user_freebsd`
-- `user_windows` (which manages SIDs, local groups, RDP-User group membership, and very different sudoers equivalents)
-
-The behavior is consistent enough that you can write one resource and have it apply everywhere, but the implementations under the hood are fully separate. This is true for `file:` and `service:` to a lesser extent, but `user`'s platform branches diverge the most.
-
-## What that complexity implies for organization
-
-All of the above is intrinsic to user management — you can't simplify the executor without giving up capability. But the complexity has organizational consequences that shape how you should lay out user-management modules in a stockpile.
-
-### User accounts vary per envoy more than any other resource
-
-A given user typically needs a slightly different configuration on every envoy they touch. The shell might be `/bin/fish` on a workstation and `/bin/bash` everywhere else. Supplementary groups might include `virtualbox` and `kvm` on workstations but `plex` on mediaservers. `sudo_nopasswd` might be `true` on trusted hosts and `false` in production. Keys might rotate. Desktop sessions apply on some boxes and not others.
-
-By contrast, `package:` and `file:` resources tend to be uniform fleet-wide — nginx is nginx, the same `nginx.conf` template renders everywhere. Per-host variation is the exception, not the rule. For users it's the rule.
-
-### Users have a lifecycle beyond convergence
-
-- **Joiners:** new account, new home dir, new initial keys, specific per-host placement.
-- **Rotators:** SSH key rotation, password changes, group changes over time as responsibilities shift.
-- **Retirees:** `state: absent`, `userdel -r`, audit trail of when and why.
-
-No other resource type has this lifecycle with the same level of audit relevance. A package install doesn't need per-user git blame. A user account does — "when did dan get sudo access on plex.home?" is a real question for compliance audits.
-
-### Audit trail per person
-
-Compliance frameworks (CIS, NIST 800-53, PCI-DSS, SOC 2, HIPAA) all have controls that require per-user auditing of account existence, privileges, credentials, and retirement. Keeping user resources grouped by person (rather than scattered across general-purpose modules) makes that audit trivial: `git log stockpile/usercrates/alice.vgo` answers every question about alice's fleet-wide account history.
-
-## The recommended organizational pattern
-
-From those three properties — heavy per-envoy variation, long lifecycle, per-person audit — a clear organizational shape falls out. Per-user config files are called **usercrates** (see [Glossary](../glossary.md#usercrate)). They live in `stockpile/usercrates/` and auto-apply to every envoy in that directory's scope — no need to list them in `common.vgo`.
-
-```
-stockpile/usercrates/
-  dan.vgo              # one file per human operator
-  alice.vgo
-  bob.vgo
-  service-accounts.vgo # one file per category for non-humans (nginx, postgres, etc.)
-  retired/             # moved here during retirement, see "Retirement" below
-    ex-employee.vgo    # state: absent, kept for audit history
-```
-
-For per-site scoping (MSP-style multi-customer stockpiles), nest usercrates under the relevant directory — `stockpile/customerA/usercrates/alice.vgo` applies only to envoys matched under `customerA/`.
-
-A typical usercrate is a single-resource module:
-
-```yaml
-# stockpile/usercrates/dan.vgo
-resources:
-  - name: dan
-    type: user
-    username: dan
-    comment: Daniel Alexander
-    # Per-envoy variation via lookup tables:
-    shell:
-      danlap:  /bin/fish
-      default: /bin/bash
-    groups:
-      tag:workstation:  [docker, virtualbox, kvm]
-      tag:mediaserver:  [docker, plex]
-      default:          [docker]
-    sudo_nopasswd:
-      tag:workstation: "true"
-      default:         "false"
-    password: secret:vigo/os-users/dan
-    authorized_keys: |
-      ssh-ed25519 AAAA... dan@workstation
-```
-
-The module-level `name:` field is optional and defaults to the filename stem — `stockpile/usercrates/dan.vgo` becomes the `dan` usercrate. Only set `name:` explicitly when you want the identifier to differ from the filename.
-
-Compliance claims shared across every usercrate in a directory belong in a sibling `compliance.vgo` file inside that `usercrates/` directory — exactly like `modules/compliance.vgo` works for the modules tree. Claims declared there are inherited by every usercrate in the same directory (and scoped subtrees get their own). For claims that apply to just one usercrate, attach an inline `compliance:` block at the module level of that crate.
-
-```
-stockpile/usercrates/
-  compliance.vgo         # shared claims (CIS 5.4.1, NIST AC-3, etc.) inherited by every crate here
-  dan.vgo
-  alice.vgo
-  retired/
-    ex-employee.vgo
-```
-
-A scoped `customerA/usercrates/compliance.vgo` attaches only to usercrates under `customerA/usercrates/`; it does not leak into root-level usercrates. Waiver blocks (`waivers:`) in a usercrate-tree `compliance.vgo` are warned-and-ignored, the same treatment modules-tree `compliance.vgo` gives them — waivers belong in the envoys tree.
-
-### Team, role, or project crates
-
-The 1:1 convention (one crate per human) is the recommended shape for individual operators because it gives clean per-person git blame. But the loader permits multiple `user:` resources in a single crate file when grouping makes sense — a team crate (`usercrates/ops_team.vgo` with alice, bob, carol), a role crate (`usercrates/on_call.vgo` with a rotating set), or a service-account bundle (`usercrates/service-accounts.vgo` with nginx, postgres, redis). The auto-apply and opt-out behaviors work the same way at the crate level; `exclude_usercrates: [ops_team]` excludes the whole bundle as a unit.
-
-### Why this pattern, specifically
-
-- **One file per human, per category for non-humans.** Humans need per-user git blame and audit trail. A 20-person `humans.vgo` makes that messy. Service accounts, by contrast, are typically interchangeable ("the nginx account, the postgres account, the deploy bot") and benefit from being grouped so common attributes are visible together.
-- **Auto-apply within directory scope.** Drop a file in `stockpile/usercrates/` and it applies fleet-wide. Drop it in `stockpile/customerA/usercrates/` and it scopes to customerA envoys only. No explicit listing in `common.vgo` required — the filesystem path IS the scope. Per-envoy exclusion via `exclude_usercrates: [alice]` on a match block.
-- **Lookup tables handle per-host variation inside the usercrate.** See [Lookup Tables](#lookups). The `shell:`, `groups:`, and `sudo_nopasswd:` fields all accept a tag/host/trait-keyed map, which removes the need for separate usercrates per envoy profile.
-- **Directory-level compliance claims avoid duplication.** The compliance block that would otherwise be copy-pasted into every usercrate lives once in `stockpile/usercrates/compliance.vgo` and flows down. See [config-format.md](#config-format#compliance-waivers--claims).
-- **Retirement convention is two-phase.** When someone leaves, edit the resource to `state: absent`, move the file to `stockpile/usercrates/retired/<name>.vgo`, commit, publish, wait at least one full convergence cycle so every envoy runs `userdel`. Only then is it safe to delete the file. The `retired/` subdirectory is a historical roster — if you ever need to answer "did we provision `ex-employee` on this envoy between X and Y," git history plus the retained file gives you a complete answer.
-
-### What NOT to do
-
-- **Don't put user resources in general-purpose modules.** `modules/base.vgo` is the wrong home for a user resource. Git blame becomes useless, and per-person audit is impossible.
-- **Prefer one file per human, with the filename matching the identifier.** For individual operators the 1:1 shape gives clean per-person git blame and lets the default `name:` behavior stay transparent. Team/role/project crates (multiple users per file) are supported but should be a deliberate choice for groups that genuinely move together. Splitting one human across multiple files makes history noisier without any corresponding benefit.
-- **Don't re-list usercrates from match blocks or `common.vgo`.** Usercrates auto-apply based on their directory scope — listing them explicitly is redundant and will break if the crate is later renamed. Use `exclude_usercrates:` on a match block to opt out.
-- **Don't skip the retirement two-phase.** Deleting a user file without first converting to `state: absent` leaves the account in place on every envoy the user ever touched. The loader's module-retraction mechanism tells agents to stop applying the module, but it does not run `userdel` — the resource must be in the config with `state: absent` at least once for the agent to run the deletion.
-
-## Summary
-
-User management looks deceptively similar to other vigo resource management on paper — it's just another resource type — but the executor is fundamentally more complicated and the organizational needs are fundamentally different. The recommended pattern (per-user files under `stockpile/usercrates/`, inline compliance claims, lookup-table per-host variation, two-phase retirement) falls out directly from those needs. Follow it and user management stays auditable, per-host variation stays readable, and retirement stays clean.
+- **User resources in general-purpose modules.** Don't put `type: user` in `modules/base.vgo`. Git blame becomes useless and per-person audit is impossible. Put it in a usercrate.
+- **Re-listing usercrates in `common.vgo` or match blocks.** They auto-apply by directory scope. Listing them explicitly is redundant and breaks on rename. Use `exclude_usercrates:` to opt out.
+- **One human across multiple files.** Splitting a human's config across files makes history noisier without benefit. The opposite — multiple humans per file (a team / role / on-call rotation crate) — is supported when the group genuinely moves together; `exclude_usercrates: [ops_team]` excludes the bundle as a unit.
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
