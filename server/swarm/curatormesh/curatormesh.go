@@ -32,6 +32,7 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"git.alexander4.io/vigo/server/db"
@@ -187,20 +188,62 @@ func IsRecipient(e *CatalogEntry, envoyPuddlePubkeys []string) bool {
 	return false
 }
 
-// Aggregator builds the fleet catalog from the trait pipeline. One per server
-// (or per consuming handler); cheap to construct.
+// Aggregator builds the fleet catalog from the trait pipeline. Carries a
+// short-lived in-memory cache so a burst of `resolve`/`blob`/`list`/`inspect`
+// calls in the same window (a `vigo swarm curator pull` flow hits both
+// `resolve` and `blob`; a UI render fans out to several read endpoints) only
+// pays the per-envoy trait scan + JSON parse once. Same shape as
+// `gitbackmesh.Aggregator`.
 type Aggregator struct {
 	queries *db.Queries
+
+	mu       sync.Mutex
+	cache    *Catalog
+	cacheExp time.Time
+	ttl      time.Duration
 }
 
-// NewAggregator constructs an aggregator over the given query layer.
+// NewAggregator constructs an aggregator over the given query layer with the
+// default 30-second cache TTL — the same window gitbackmesh uses, chosen to
+// stay below a typical check-in interval so an operator refreshing the UI
+// sees data no more than one cycle stale.
 func NewAggregator(queries *db.Queries) *Aggregator {
-	return &Aggregator{queries: queries}
+	return &Aggregator{queries: queries, ttl: 30 * time.Second}
 }
 
-// Snapshot builds the fleet catalog from every (non-revoked) envoy's `curator`
-// trait.
+// SetTTL overrides the cache TTL — for tests + the rare deployment that wants
+// a longer window on a slow-converging fleet. Invalidates the current cached
+// entry so the new TTL takes effect on the next [Snapshot] (otherwise a
+// pre-SetTTL cache would survive until its old expiry, which would surprise an
+// operator setting TTL=0 to disable caching).
+func (a *Aggregator) SetTTL(d time.Duration) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.ttl = d
+	a.cache = nil
+	a.cacheExp = time.Time{}
+}
+
+// InvalidateCache forces the next [Snapshot] to rebuild. Use after an
+// authoritative state change (e.g., a [BlockArtifact] write) so the API
+// response reflects it immediately instead of waiting up to one TTL window.
+func (a *Aggregator) InvalidateCache() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.cache = nil
+	a.cacheExp = time.Time{}
+}
+
+// Snapshot returns the cached fleet catalog or rebuilds it from the passed
+// envoy list. The cache key is implicit (the aggregator is per-server; the
+// envoy list comes from the same FleetIndex on every call), matching
+// gitbackmesh's contract.
 func (a *Aggregator) Snapshot(ctx context.Context, envoys []EnvoyInput) (*Catalog, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.cache != nil && time.Now().Before(a.cacheExp) {
+		return a.cache, nil
+	}
 	rows := make([]envelopeRow, 0, len(envoys))
 	for _, e := range envoys {
 		if e.Revoked {
@@ -214,6 +257,8 @@ func (a *Aggregator) Snapshot(ctx context.Context, envoys []EnvoyInput) (*Catalo
 	}
 	cat := aggregate(rows)
 	cat.GeneratedAt = time.Now().UTC()
+	a.cache = cat
+	a.cacheExp = time.Now().Add(a.ttl)
 	return cat, nil
 }
 

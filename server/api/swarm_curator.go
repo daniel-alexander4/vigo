@@ -71,10 +71,12 @@ func (h *CuratorHandler) envoyInputs() []curatormesh.EnvoyInput {
 	return out
 }
 
-// snapshot rebuilds the fleet catalog. TODO(slice 4): TTL-cache this once
-// `resolve`/`blob` have real callers (the agent `pull` verb, the `artifact:`
-// executor param) — mirror gitbackmesh's per-aggregator cache. Until then there
-// are no callers, so the per-request trait scan is harmless.
+// snapshot returns the fleet catalog. Slice 4d wired a 30-second cache into
+// curatormesh's `Aggregator.Snapshot`, so a burst of `resolve`+`blob` calls
+// from a single `vigo swarm curator pull` flow only pays the per-envoy trait
+// scan + JSON parse once. Block/unblock writes invalidate the cache directly
+// so the moderation backstop takes effect immediately rather than waiting up
+// to one TTL window.
 func (h *CuratorHandler) snapshot(r *http.Request) (*curatormesh.Catalog, error) {
 	return h.agg.Snapshot(r.Context(), h.envoyInputs())
 }
@@ -333,6 +335,11 @@ func (h *CuratorHandler) handleBlock(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "blocking artifact: "+err.Error())
 		return
 	}
+	// `isBlocked` is consulted on every resolve/blob; the catalog snapshot's
+	// cache doesn't gate that, but invalidating here keeps any rendered "is
+	// this blocked?" column on /list / /inspect synchronously consistent with
+	// the block we just wrote.
+	h.agg.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "artifact_id": id, "blocked": true})
 }
 
@@ -346,6 +353,7 @@ func (h *CuratorHandler) handleUnblock(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "unblocking artifact: "+err.Error())
 		return
 	}
+	h.agg.InvalidateCache()
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "artifact_id": id, "blocked": false})
 }
 

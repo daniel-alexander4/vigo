@@ -76,6 +76,10 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "set-recipients" => with_curator_authz(|| cmd_set_recipients(&args[1..])),
         "set-target" => with_curator_authz(|| cmd_set_target(&args[1..])),
         "rm" => with_curator_authz(|| cmd_rm(&args[1..])),
+        "stale" => cmd_stale(&args[1..]),
+        "prune" => with_curator_authz(|| cmd_prune(&args[1..])),
+        "gc" => with_curator_authz(|| cmd_gc(&args[1..])),
+        "purge" => with_curator_authz(|| cmd_purge(&args[1..])),
         other => bail!(
             "unknown subcommand `vigo swarm curator {}`. \
              Run `vigo swarm curator --help` for usage.",
@@ -150,7 +154,25 @@ MUTATING VERBS (require `curator: true` on your usercrate + an unlocked puddle):
                                     version (and drop any tags that pointed
                                     at it), so consumers stop resolving it.
 
-Local cleanup verbs (prune / gc / stale / purge) ship in slice 4d.
+LOCAL-CLEANUP VERBS:
+    stale                           Read-only: list .pending sentinels older
+                                    than the reactor-sweep window, dangling
+                                    tags, and corrupt local entry files.
+                                    Doesn't change anything.
+    prune                           Remove the .stale items above (corrupt
+                                    entries, .pending older than the sweep
+                                    window). Per-user (your local state).
+    gc                              Free blob-cache disk: revoke `curator:`
+                                    manifest entries WE SEEDED that no current
+                                    catalog entry — local or cached fleet —
+                                    references anymore. Peers age them out via
+                                    the manifest's revocation gossip.
+    purge --yes                     Power-user wipe. As a non-root user,
+                                    scrubs `~/.vigo-curator/`. As root, also
+                                    wipes /var/lib/vigo/artifacts/catalog.json
+                                    + cache.json and revokes every `curator:`
+                                    blob this envoy seeds. Refuses without
+                                    `--yes`.
 "
     );
 }
@@ -1292,6 +1314,334 @@ fn parse_recipients(arg: &str) -> Result<Vec<String>> {
     Ok(out)
 }
 
+// ----- cleanup verbs (slice 4d) ------------------------------------------
+
+/// How long a `*.pending` sentinel can sit before we treat it as orphaned.
+/// The reactor sweeps once a minute; allow 3 sweeps before flagging.
+const PENDING_STALE_SECS: u64 = 180;
+
+#[derive(Default, Debug)]
+struct StaleReport {
+    pending_too_old: Vec<(PathBuf, u64)>,        // (path, age_seconds)
+    corrupt_entries: Vec<(PathBuf, String)>,     // (path, reason)
+    dangling_tags: Vec<(String, String, String)>, // (artifact_name, tag, missing_version)
+    orphan_blobs: Vec<(String, String, u64)>,    // (label, sha, size_bytes) — slice "would gc"
+}
+
+fn cmd_stale(_args: &[String]) -> Result<()> {
+    let caller = resolve_caller()?;
+    let report = collect_stale(&caller.home, SystemTime::now())?;
+    print_stale_report(&report);
+    if report_is_empty(&report) {
+        println!("Curator state is clean — nothing to prune.");
+    }
+    Ok(())
+}
+
+fn cmd_prune(_args: &[String]) -> Result<()> {
+    let caller = resolve_caller()?;
+    let report = collect_stale(&caller.home, SystemTime::now())?;
+    let mut pending_removed = 0usize;
+    for (p, _) in &report.pending_too_old {
+        if std::fs::remove_file(p).is_ok() {
+            pending_removed += 1;
+        }
+    }
+    let mut corrupt_removed = 0usize;
+    for (p, _) in &report.corrupt_entries {
+        // `p` is the entry.json (or .pending) path; remove the file, leaving
+        // any sibling pending/canonical alone (different failure modes get
+        // pruned independently).
+        if std::fs::remove_file(p).is_ok() {
+            corrupt_removed += 1;
+        }
+    }
+    println!(
+        "Pruned {pending_removed} orphan .pending sentinel(s) and {corrupt_removed} corrupt entry file(s)."
+    );
+    if !report.dangling_tags.is_empty() {
+        println!(
+            "Note: {} dangling tag(s) require a re-sign (use `vigo swarm curator untag …`):",
+            report.dangling_tags.len()
+        );
+        for (name, tag, ver) in &report.dangling_tags {
+            println!("  {name}: {tag} → {ver}");
+        }
+    }
+    Ok(())
+}
+
+fn cmd_gc(_args: &[String]) -> Result<()> {
+    let caller = resolve_caller()?;
+    if !caller.is_root {
+        bail!(
+            "`vigo swarm curator gc` revokes manifest entries this envoy seeds; \
+             must run as root. Re-run with sudo."
+        );
+    }
+    let manifest = crate::swarm::manifest::Manifest::load(&blobs_dir_parent());
+    let live_shas = build_live_shas(&caller.home)?;
+    let envoy_id = current_envoy_id().unwrap_or_default();
+    if envoy_id.is_empty() {
+        bail!(
+            "this envoy isn't enrolled (no envoy id in /var/lib/vigo/state) — \
+             can't authorize manifest revocations"
+        );
+    }
+    let mut revoked = 0usize;
+    let mut bytes_freed: u64 = 0;
+    for entry in manifest.snapshot().entries.values() {
+        if !entry.label.starts_with("curator:") {
+            continue;
+        }
+        if entry.seeder_id != envoy_id {
+            continue; // only revoke what we seeded
+        }
+        let sha = entry.sha256.to_ascii_lowercase();
+        if live_shas.contains(&sha) {
+            continue;
+        }
+        if entry.status == crate::swarm::manifest::BlobStatus::Revoked {
+            continue;
+        }
+        if manifest.revoke(&entry.sha256, &envoy_id) {
+            revoked += 1;
+            bytes_freed = bytes_freed.saturating_add(entry.size);
+        }
+    }
+    println!(
+        "Revoked {revoked} curator blob(s) we seeded that no current catalog entry references ({}).",
+        format_bytes(bytes_freed)
+    );
+    println!(
+        "Peers will evict their copies via the manifest's revocation gossip; local cache reclaim happens \
+         on the next retention prune cycle."
+    );
+    Ok(())
+}
+
+fn cmd_purge(args: &[String]) -> Result<()> {
+    if !args.iter().any(|a| a == "--yes") {
+        bail!(
+            "`vigo swarm curator purge` wipes all local curator state. \
+             Pass `--yes` to confirm."
+        );
+    }
+    let caller = resolve_caller()?;
+    // User scope: scrub ~/.vigo-curator/ for the calling user. Always done.
+    let user_dir = state::user_curator_dir(&caller.home);
+    let user_scrubbed = if user_dir.exists() {
+        std::fs::remove_dir_all(&user_dir).with_context(|| format!("removing {}", user_dir.display()))?;
+        true
+    } else {
+        false
+    };
+    if user_scrubbed {
+        println!("✓ Scrubbed {}", user_dir.display());
+    } else {
+        println!("  ({} was already absent)", user_dir.display());
+    }
+    if !caller.is_root {
+        println!(
+            "Note: re-run as root to also wipe /var/lib/vigo/artifacts/ and revoke this envoy's seeded \
+             curator blobs in the manifest."
+        );
+        return Ok(());
+    }
+    // Root scope: wipe the agent-side cache + revoke our seeded blobs.
+    let arts = catalog_cache::artifacts_dir();
+    for f in ["catalog.json", "cache.json"] {
+        let p = arts.join(f);
+        if p.exists() {
+            std::fs::remove_file(&p).with_context(|| format!("removing {}", p.display()))?;
+            println!("✓ Removed {}", p.display());
+        }
+    }
+    let envoy_id = current_envoy_id().unwrap_or_default();
+    if !envoy_id.is_empty() {
+        let manifest = crate::swarm::manifest::Manifest::load(&blobs_dir_parent());
+        let mut revoked = 0usize;
+        for entry in manifest.snapshot().entries.values() {
+            if !entry.label.starts_with("curator:") {
+                continue;
+            }
+            if entry.seeder_id != envoy_id {
+                continue;
+            }
+            if entry.status == crate::swarm::manifest::BlobStatus::Revoked {
+                continue;
+            }
+            if manifest.revoke(&entry.sha256, &envoy_id) {
+                revoked += 1;
+            }
+        }
+        println!("✓ Revoked {revoked} curator blob(s) this envoy seeded.");
+    }
+    Ok(())
+}
+
+// ----- cleanup-verb helpers ----------------------------------------------
+
+fn report_is_empty(r: &StaleReport) -> bool {
+    r.pending_too_old.is_empty()
+        && r.corrupt_entries.is_empty()
+        && r.dangling_tags.is_empty()
+        && r.orphan_blobs.is_empty()
+}
+
+fn print_stale_report(r: &StaleReport) {
+    if !r.pending_too_old.is_empty() {
+        println!(
+            "Orphan .pending sentinels (older than {PENDING_STALE_SECS}s — reactor should have promoted them):"
+        );
+        for (p, age) in &r.pending_too_old {
+            println!("  {p} (age {age}s)", p = p.display());
+        }
+        println!();
+    }
+    if !r.corrupt_entries.is_empty() {
+        println!("Corrupt or unverifiable local entries:");
+        for (p, reason) in &r.corrupt_entries {
+            println!("  {p}: {reason}", p = p.display());
+        }
+        println!();
+    }
+    if !r.dangling_tags.is_empty() {
+        println!("Dangling tags (point at a version that doesn't exist):");
+        for (name, tag, ver) in &r.dangling_tags {
+            println!("  {name}: {tag} → {ver}");
+        }
+        println!();
+    }
+}
+
+/// Walk `~<caller>/.vigo-curator/` and identify everything `prune` would
+/// remove plus what `gc`/`stale` would flag. Pure read. `now` is the clock
+/// reference used to age `.pending` sentinels — production callers pass
+/// `SystemTime::now()`; tests pass a known instant.
+fn collect_stale(home: &Path, now: SystemTime) -> Result<StaleReport> {
+    let mut out = StaleReport::default();
+    let curator_dir = state::user_curator_dir(home);
+    let rd = match std::fs::read_dir(&curator_dir) {
+        Ok(rd) => rd,
+        Err(_) => return Ok(out),
+    };
+    for ent in rd.flatten() {
+        let p = ent.path();
+        if !p.is_dir() {
+            continue;
+        }
+        let dir_name = match p.file_name().and_then(|n| n.to_str()) {
+            Some(s) => s.to_string(),
+            None => continue,
+        };
+        // .pending — age it.
+        let pending = p.join(state::ENTRY_PENDING_FILE);
+        if let Ok(meta) = std::fs::metadata(&pending) {
+            if let Ok(mtime) = meta.modified() {
+                if let Ok(age) = now.duration_since(mtime) {
+                    if age.as_secs() > PENDING_STALE_SECS {
+                        out.pending_too_old.push((pending.clone(), age.as_secs()));
+                    }
+                }
+            }
+        }
+        // entry.json — must self-verify + match its dir name.
+        let entry_path = p.join(state::ENTRY_FILE);
+        let raw = match std::fs::read(&entry_path) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        let entry: CatalogEntry = match serde_json::from_slice(&raw) {
+            Ok(e) => e,
+            Err(_) => {
+                out.corrupt_entries
+                    .push((entry_path.clone(), "not valid JSON".into()));
+                continue;
+            }
+        };
+        match entry.artifact_id_hex() {
+            Ok(aid) if aid == dir_name => {}
+            Ok(aid) => {
+                out.corrupt_entries.push((
+                    entry_path.clone(),
+                    format!("filed under {dir_name} but its artifact_id is {aid}"),
+                ));
+                continue;
+            }
+            Err(e) => {
+                out.corrupt_entries
+                    .push((entry_path.clone(), format!("artifact_id: {e:#}")));
+                continue;
+            }
+        };
+        if let Err(e) = entry.verify(DELEGATION_MAX_LEN) {
+            out.corrupt_entries
+                .push((entry_path.clone(), format!("verification: {e:#}")));
+            continue;
+        }
+        // Dangling tags.
+        for (tag, v) in &entry.body.tags {
+            if !entry.body.versions.contains_key(v) {
+                out.dangling_tags
+                    .push((entry.body.name.clone(), tag.clone(), v.clone()));
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// Build the set of blob shas referenced by ANY currently-known catalog entry
+/// (the caller's local entries + the cached fleet catalog). `gc` revokes blobs
+/// outside this set.
+fn build_live_shas(home: &Path) -> Result<std::collections::HashSet<String>> {
+    let passwd = std::fs::read_to_string(passwd_path()).unwrap_or_default();
+    let local = collect_local_entries(&passwd);
+    let cached = catalog_cache::load_catalog();
+    let pool = merge_entries(local.entries, cached);
+    // Include this caller's home explicitly in case it isn't in passwd.
+    let mut local2: Vec<CatalogEntry> = Vec::new();
+    if let Ok(rd) = std::fs::read_dir(state::user_curator_dir(home)) {
+        for ent in rd.flatten() {
+            let p = ent.path();
+            if !p.is_dir() {
+                continue;
+            }
+            if let Ok(raw) = std::fs::read(p.join(state::ENTRY_FILE)) {
+                if let Ok(e) = serde_json::from_slice::<CatalogEntry>(&raw) {
+                    local2.push(e);
+                }
+            }
+        }
+    }
+    let merged = merge_entries(local2, pool);
+    let mut out = std::collections::HashSet::new();
+    for e in &merged {
+        for av in e.body.versions.values() {
+            for p in &av.platforms {
+                out.insert(p.blob_sha.to_ascii_lowercase());
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// `/var/lib/vigo/swarm/` — the directory the swarm manifest persists under.
+/// `Manifest::load(dir)` reads `dir/manifest.json`.
+fn blobs_dir_parent() -> PathBuf {
+    crate::platform::paths::default_blobs_dir()
+        .parent()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/var/lib/vigo/swarm"))
+}
+
+/// This envoy's enrollment id, the `seeder_id` `serve_push` records on every
+/// curator blob. Same `state/envoy.id` file the rest of the agent reads.
+fn current_envoy_id() -> Option<String> {
+    let path = crate::platform::paths::default_state_dir().join("envoy.id");
+    std::fs::read_to_string(&path).ok().map(|s| s.trim().to_string())
+}
+
 // path helpers we re-export so the agent can mark these dirs read-from
 #[allow(dead_code)]
 fn artifacts_dir_for_tests() -> PathBuf {
@@ -1592,5 +1942,84 @@ mod tests {
         write_canonical_entry(home.path(), &aid, &entry);
         let got = load_local_entry(home.path(), &aid).unwrap().unwrap();
         assert_eq!(got.body.name, "x");
+    }
+
+    // ----- slice 4d cleanup helpers -----
+
+    #[test]
+    fn collect_stale_finds_corrupt_misfiled_and_dangling() {
+        let home = TempDir::new().unwrap();
+        let k = SigningKey::generate(&mut OsRng);
+
+        // 1. A clean entry — must NOT be flagged for anything by itself.
+        let clean = entry_for(&k, "clean", 100);
+        let clean_aid = clean.artifact_id_hex().unwrap();
+        write_canonical_entry(home.path(), &clean_aid, &clean);
+
+        // 2. An entry with a dangling tag (`stable → 9.9.9`, no such version).
+        let mut with_dangling = clean.body.clone();
+        with_dangling.name = "with-dangling".into();
+        with_dangling
+            .tags
+            .insert("stable".into(), "9.9.9".into());
+        with_dangling.issued_at += 1;
+        let signed = CatalogEntry::issue(&k, with_dangling).unwrap();
+        write_canonical_entry(home.path(), &signed.artifact_id_hex().unwrap(), &signed);
+
+        // 3. A corrupt entry (not JSON).
+        let bad_dir = state::artifact_dir(home.path(), &"a".repeat(64));
+        std::fs::create_dir_all(&bad_dir).unwrap();
+        std::fs::write(bad_dir.join(state::ENTRY_FILE), b"not json").unwrap();
+
+        // 4. A misfiled entry (filed under the wrong artifact_id dir).
+        let misfiled = entry_for(&k, "misfiled", 1);
+        let misfiled_dir = state::artifact_dir(home.path(), &"b".repeat(64));
+        std::fs::create_dir_all(&misfiled_dir).unwrap();
+        std::fs::write(
+            misfiled_dir.join(state::ENTRY_FILE),
+            serde_json::to_vec(&misfiled).unwrap(),
+        )
+        .unwrap();
+
+        let r = collect_stale(home.path(), SystemTime::now()).unwrap();
+        assert_eq!(r.corrupt_entries.len(), 2, "corrupt + misfiled both reported: {:?}", r.corrupt_entries);
+        assert_eq!(r.dangling_tags.len(), 1, "only 'with-dangling' is dangling");
+        assert_eq!(r.dangling_tags[0].0, "with-dangling");
+        assert_eq!(r.dangling_tags[0].1, "stable");
+        assert_eq!(r.dangling_tags[0].2, "9.9.9");
+    }
+
+    #[test]
+    fn collect_stale_flags_old_pending_sentinels() {
+        // Use a `now` set FAR in the future to make today's file mtime look
+        // ancient — avoids touching the filesystem clock or shimming utimes.
+        let home = TempDir::new().unwrap();
+        let dir = state::artifact_dir(home.path(), &"c".repeat(64));
+        std::fs::create_dir_all(&dir).unwrap();
+        let pending = dir.join(state::ENTRY_PENDING_FILE);
+        std::fs::write(&pending, b"{}").unwrap();
+
+        // 10 years in the future ⇒ the fresh file looks ~315M seconds old.
+        let far_future = SystemTime::now() + Duration::from_secs(60 * 60 * 24 * 365 * 10);
+        let r = collect_stale(home.path(), far_future).unwrap();
+        assert!(
+            r.pending_too_old.iter().any(|(p, _)| p == &pending),
+            "old .pending must be flagged when now is well past the threshold: {r:?}"
+        );
+
+        // A fresh-clock collect_stale must NOT flag the same file.
+        let r2 = collect_stale(home.path(), SystemTime::now()).unwrap();
+        assert!(
+            r2.pending_too_old.is_empty(),
+            "fresh .pending must not be flagged when now is current: {r2:?}"
+        );
+    }
+
+    #[test]
+    fn report_is_empty_works() {
+        assert!(report_is_empty(&StaleReport::default()));
+        let mut r = StaleReport::default();
+        r.corrupt_entries.push((PathBuf::from("/x"), "bad".into()));
+        assert!(!report_is_empty(&r));
     }
 }

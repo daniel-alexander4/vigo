@@ -255,3 +255,10 @@ func TestIsRecipient(t *testing.T) {
 		t.Error("IsRecipient(nil) must be nil-safe")
 	}
 }
+
+// TTL cache: the cache pointer contract (cached within TTL, rebuilds after
+// invalidation, never caches at TTL=0) is covered by
+// `server/api.TestCurator_AggregatorTTLCache` which has a real *db.Queries
+// fixture. We don't drive `Aggregator.Snapshot` here because `loadTrait`
+// dereferences the queries handle, which would panic on a nil value — the
+// same reason `gitbackmesh` doesn't unit-test its aggregator.

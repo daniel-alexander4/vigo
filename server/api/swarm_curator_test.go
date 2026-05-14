@@ -176,3 +176,77 @@ func TestCurator_Fleet_EmptyCatalog(t *testing.T) {
 		t.Fatalf("fleet = %+v, want empty", fr)
 	}
 }
+
+// --- slice 4d: TTL cache on the aggregator's Snapshot ---
+//
+// Lives here rather than in `curatormesh` because `Aggregator.Snapshot`
+// dereferences `*db.Queries`, which the unit-level package doesn't have a
+// fixture for. The shared `openAuditTestDB` here yields a real Queries with
+// an empty traits table — Snapshot returns an empty *Catalog, and we assert
+// the *pointer-identity* contract: cache hits return the same pointer; an
+// invalidation forces a rebuild; TTL=0 rebuilds every call.
+
+func TestCurator_AggregatorTTLCache(t *testing.T) {
+	h := newCuratorHandler(t)
+
+	c1, err := h.agg.Snapshot(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("first Snapshot: %v", err)
+	}
+	c2, err := h.agg.Snapshot(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("second Snapshot: %v", err)
+	}
+	if c1 != c2 {
+		t.Fatalf("Snapshot within TTL must return the cached pointer; rebuilt instead")
+	}
+
+	h.agg.InvalidateCache()
+	c3, err := h.agg.Snapshot(t.Context(), nil)
+	if err != nil {
+		t.Fatalf("Snapshot after invalidate: %v", err)
+	}
+	if c2 == c3 {
+		t.Fatalf("InvalidateCache must force the next Snapshot to rebuild")
+	}
+
+	h.agg.SetTTL(0)
+	c4, _ := h.agg.Snapshot(t.Context(), nil)
+	c5, _ := h.agg.Snapshot(t.Context(), nil)
+	if c4 == c5 {
+		t.Fatalf("TTL=0 must rebuild every call")
+	}
+}
+
+func TestCurator_BlockAndUnblockInvalidateCache(t *testing.T) {
+	h := newCuratorHandler(t)
+
+	// Prime the cache.
+	c1, _ := h.agg.Snapshot(t.Context(), nil)
+	c2, _ := h.agg.Snapshot(t.Context(), nil)
+	if c1 != c2 {
+		t.Fatalf("precondition: snapshot should cache within TTL")
+	}
+
+	// Block invalidates ⇒ next Snapshot rebuilds.
+	rec, r := mkReq(http.MethodPost, "/api/v1/swarm/curator/block/"+sampleAID, map[string]string{"artifact_id": sampleAID})
+	h.handleBlock(rec, adminReq(r))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("block status %d", rec.Code)
+	}
+	c3, _ := h.agg.Snapshot(t.Context(), nil)
+	if c2 == c3 {
+		t.Fatalf("Block must invalidate the cache; got the stale pointer back")
+	}
+
+	// Unblock invalidates too.
+	rec, r = mkReq(http.MethodPost, "/api/v1/swarm/curator/unblock/"+sampleAID, map[string]string{"artifact_id": sampleAID})
+	h.handleUnblock(rec, adminReq(r))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unblock status %d", rec.Code)
+	}
+	c4, _ := h.agg.Snapshot(t.Context(), nil)
+	if c3 == c4 {
+		t.Fatalf("Unblock must invalidate the cache; got the stale pointer back")
+	}
+}
