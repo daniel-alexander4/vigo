@@ -56,28 +56,33 @@ type FrameworkRef struct {
 
 // frameworkLabels maps the framework slugs used in AppControls to
 // the human label shown on /platform/compliance. Mirrors the labels
-// in server/main.go's framework metrics table.
+// in server/main.go's framework metrics table. The version string is
+// the currently-mapped baseline — i.e., the revision Vigo's control
+// IDs are aligned to. When a framework publishes a new revision, the
+// label here changes only after the control mappings are reviewed
+// against the new revision; auditors reading docs/reference/compliance-matrix.md
+// can rely on this label as the version-of-record.
 var frameworkLabels = map[string]string{
-	"compliance":      "HIPAA",
-	"hitrust":         "HITRUST CSF",
-	"soc2":            "SOC 2",
+	"compliance":      "HIPAA Security Rule (45 CFR §164.302–318)",
+	"hitrust":         "HITRUST CSF v11.x",
+	"soc2":            "SOC 2 Trust Services Criteria 2017",
 	"pci":             "PCI DSS v4.0",
-	"nist":            "NIST 800-53",
-	"iso27001":        "ISO 27001",
-	"gdpr":            "GDPR",
-	"nerccip":         "NERC CIP",
-	"cyberessentials": "Cyber Essentials+",
+	"nist":            "NIST 800-53 Rev. 5",
+	"iso27001":        "ISO/IEC 27001:2022 Annex A",
+	"gdpr":            "GDPR (technical & organizational measures)",
+	"nerccip":         "NERC CIP v6",
+	"cyberessentials": "Cyber Essentials Plus (UK)",
 	"iec62443":        "IEC 62443",
 	"sox":             "SOX",
 	"finra":           "FINRA",
-	"mifid2":          "MiFID II",
+	"mifid2":          "MiFID II RTS 24",
 	"ccss":            "CCSS",
 	"fda21cfr11":      "FDA 21 CFR Part 11",
 	"gaming":          "Gaming Commission",
-	"ciswindows":      "CIS Windows",
-	"cisubuntu":       "CIS Ubuntu",
-	"cisrhel":         "CIS RHEL",
-	"abacyber":        "ABA Cybersecurity",
+	"ciswindows":      "CIS Windows 11 Benchmark v3.x",
+	"cisubuntu":       "CIS Ubuntu 22.04 Benchmark v1.0.0",
+	"cisrhel":         "CIS RHEL 9 Benchmark v2.x",
+	"abacyber":        "ABA Cybersecurity (banking-sector self-assessment)",
 	"nydfscyber":      "NY DFS Cyber (23 NYCRR 500)",
 }
 

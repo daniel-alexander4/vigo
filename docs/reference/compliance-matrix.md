@@ -9,25 +9,29 @@ For *how* to tag modules and run reports, see [howto/compliance-reporting.md](..
 
 Every row is a Vigo capability — a thing one or more modules can do, or a thing Connwaer can verify. Columns are frameworks. A cell holds the control IDs that capability satisfies in that framework. Empty cell means the capability doesn't map to that framework (or hasn't been mapped yet — file an issue).
 
-Frameworks tracked. The version is the currently-mapped baseline; if you're auditing against a different revision, cross-check control IDs in your authoritative copy of the standard.
+Frameworks tracked. The version label is the **currently-mapped baseline** — i.e., the revision Vigo's control IDs are aligned to. The labels below are the authoritative source: they live in `server/compliance/appcontrols.go` and the `/platform/compliance` page renders the same string. If you're auditing against a different revision than what's listed, cross-check the control IDs in your auditor's authoritative copy.
 
 - **HIPAA** — Security Rule (45 CFR §164.302–318)
 - **SOC 2** — Trust Services Criteria 2017 (Security, Availability, Confidentiality)
-- **PCI-DSS** — v4.0 *(version claimed in `server/compliance/appcontrols.go`)*
-- **NIST 800-53** — Rev. 5 baseline (verify control IDs against the rev you're auditing to)
-- **ISO 27001** — :2022 Annex A
-- **CIS Ubuntu** — 22.04 Benchmark baseline
-- **HITRUST CSF** — v11.x baseline
+- **PCI DSS** — v4.0
+- **NIST 800-53** — Rev. 5
+- **ISO/IEC 27001** — :2022 Annex A
+- **CIS Ubuntu** — 22.04 Benchmark v1.0.0
+- **CIS Windows** — 11 Benchmark v3.x
+- **CIS RHEL** — 9 Benchmark v2.x
+- **HITRUST CSF** — v11.x
 - **GDPR** — technical & organizational measures
 - **NERC CIP** — v6 (electric power utilities)
 - **IEC 62443** — industrial control systems
 - **Cyber Essentials Plus** — UK government scheme
 - **NY DFS Cyber** — 23 NYCRR 500
 - **ABA Cybersecurity** — banking-sector self-assessment
+- **MiFID II** — RTS 24
+- **FINRA** / **SEC 17a-4** — broker-dealer recordkeeping
+- **FDA 21 CFR Part 11** — electronic records and signatures
+- **SOX** — public-company financial controls
 
-For frameworks not listed (FedRAMP, CMMC, etc.), map them yourself using the underlying capability column — the capabilities are framework-agnostic.
-
-> Only PCI-DSS carries an explicit version string in `server/compliance/appcontrols.go` today. For the other frameworks, version specificity is by convention; verify the control IDs you care about against your auditor's authoritative copy. File an issue if a control ID has drifted across revisions you need to map.
+For frameworks not listed (FedRAMP, CMMC, etc.), map them yourself using the underlying capability column — the capabilities are framework-agnostic. When a framework publishes a new revision, this list updates only after the control mappings are reviewed against the new revision; the label is the version-of-record.
 
 ## Capability × framework table
 

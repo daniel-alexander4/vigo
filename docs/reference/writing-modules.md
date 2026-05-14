@@ -3,7 +3,6 @@
 
 This is the canonical reference for operators authoring Vigo modules. It covers the YAML format, every resource type, the conditional language, the templating engine, the composition primitives (roles, matchfiles, common.vgo, usercrates, environments.vgo), lookups, retraction, and stream-edit pipelines. If you're new, work through the [Quickstart](../quickstart.md) and [Write your first module](../howto/write-your-first-module.md) first; come back here when you need the full surface.
 
-
 ---
 ## Config Format
 
@@ -515,7 +514,6 @@ No server restart needed. Config parse errors are logged and trigger an SMTP not
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
-
 ---
 ## Resource Language
 
@@ -639,7 +637,6 @@ resources:
         target_path: /etc/yum.conf.d/custom.conf
 ```
 
-
 The `case` expression is evaluated, and the matching `match` branch's attributes override the resource's base attributes. If no branch matches, the resource uses its base attributes (or is skipped if no base `content` exists).
 
 ## conditional_block
@@ -698,7 +695,6 @@ If a child resource already has a `when:`, the block's expression is ANDed:
 ```
 
 ## state: absent
-
 
 Every executor supports `state: absent` to remove/disable the managed resource:
 
@@ -797,7 +793,6 @@ Default timeouts by resource type:
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
-
 ---
 ## When Expressions
 
@@ -861,7 +856,6 @@ All builtins are evaluated on the agent using local system state and traits.
 ```
 
 ### Time
-
 
 | Function | Args | Description |
 |----------|------|-------------|
@@ -930,7 +924,6 @@ mkdir -p /var/lib/vigo/flags
 touch /var/lib/vigo/flags/beta-features
 ```
 
-
 ### Network
 
 | Function | Args | Description |
@@ -990,7 +983,6 @@ Conditional vars (those with a `trait:` field) are resolved by the server and su
 ## Evaluation Model
 
 When expressions are evaluated in two phases:
-
 
 ![When Expression Evaluation](../img/when-evaluation.svg)
 
@@ -1053,7 +1045,6 @@ All matching cases contribute modules. A module with its own `when:` keeps it re
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
-
 
 ---
 ## Templates
@@ -1175,7 +1166,6 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
 
 ## Examples
 
-
 ### SSH Configuration
 
 ```yaml
@@ -1250,7 +1240,6 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
-
 
 ---
 ## Composition Patterns
@@ -1627,7 +1616,6 @@ Two resource definitions expand to 6 resources (3 config files + 3 directories).
 
 **Problem:** Package manager config differs by OS family.
 
-
 ```yaml
 resources:
   - name: package-manager-config
@@ -1904,7 +1892,6 @@ env:
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
-
 
 ---
 ## Multi-Axis Configuration
@@ -2279,7 +2266,6 @@ User management looks deceptively similar to other vigo resource management on p
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*
 
-
 ---
 ## Tag/Host/Trait Lookup Tables
 
@@ -2394,7 +2380,6 @@ Use `default: []` for list fields that should be empty when no arm matches, `def
 
 At config load time, vigo scans every resource attribute and sets `HasLookups=true` on the `EnvoyConfig` if any attribute is a lookup table. At check-in time, configs with `HasLookups=true` bypass the pattern-level policy cache and get a freshly resolved bundle per envoy — the same mechanism that `case:` conditional resources already use. The cost is a bundle rebuild per check-in for affected envoys; for configs without lookups, nothing changes.
 
-
 ---
 ## Module Retraction
 
@@ -2496,7 +2481,6 @@ To use an example retraction:
 3. Add `nginx-retract` to the relevant match blocks or roles
 4. Publish: `vigocli config publish`
 5. After all affected envoys converge, remove the retract module and its match block
-
 
 ---
 ## Stream-Edit
