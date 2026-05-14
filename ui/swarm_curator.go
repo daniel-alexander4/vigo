@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
 )
@@ -38,6 +39,14 @@ type curatorArtifactView struct {
 	FounderPuddlePubkey string
 	SigningPuddlePubkey string
 	Target              string
+	// TargetEnvoys is the resolved hostname list: envoys whose hostname
+	// matches the entry's `target` glob AND `swarm.curator.enabled`. The
+	// raw glob (often `*`) is kept in [Target] to preserve operator intent;
+	// this expansion shows the actual envoys that hold the P2P replica —
+	// what `*` resolves to on this fleet, not what it could resolve to on
+	// any fleet. Empty when no live envoys match (publish-only glob, or
+	// curator.enabled = []).
+	TargetEnvoys        []string
 	Recipients          []string
 	IssuedAt            int64
 	Versions            []curatorVersionRow
@@ -147,10 +156,47 @@ func (h *Handler) curatorDetail(w http.ResponseWriter, r *http.Request, id strin
 			break
 		}
 	}
-	view := buildCuratorArtifactView(matchedID, entry, blockedSet)
+	targetEnvoys := h.resolveCuratorTargetEnvoys(entry.Body.Target)
+	view := buildCuratorArtifactView(matchedID, entry, blockedSet, targetEnvoys)
 	data.Artifact = view
 	data.Health = buildCuratorArtifactHealth(view)
 	h.renderer.Render(w, "curator", data)
+}
+
+// resolveCuratorTargetEnvoys intersects an artifact's target glob with
+// `swarm.curator.enabled`. The catalog entry's `target` says "which envoys
+// would be eligible to hold the replica if curator were on everywhere";
+// `swarm.curator.enabled` (server.yaml) says "which envoys actually run
+// curator at all". The envoys that hold the P2P DR replica are the
+// intersection — so the UI shows the resolved set, not just the literal
+// glob (which is often `*` and misleading on a partially-enabled fleet).
+//
+// Returns `nil` (not an empty slice) when the swarm-config or fleet-index
+// dependencies aren't wired — the template treats nil and empty the same
+// way ("no envoys match"), but nil lets a future caller distinguish
+// "unknown — UI handler can't compute it" from "known empty".
+func (h *Handler) resolveCuratorTargetEnvoys(target string) []string {
+	if h.swarmFleetIndex == nil {
+		return nil
+	}
+	matchedByTarget := h.swarmFleetIndex.MatchingEnvoys(target)
+	if len(matchedByTarget) == 0 {
+		return matchedByTarget
+	}
+	patterns := h.swarmConfig.Curator.Enabled
+	if len(patterns) == 0 {
+		// Empty enabled list = curator disabled fleet-wide. Returning an
+		// empty slice (not nil) — the data IS known: zero envoys hold the
+		// replica because nobody is curator-enabled.
+		return []string{}
+	}
+	out := make([]string, 0, len(matchedByTarget))
+	for _, host := range matchedByTarget {
+		if config.HostMatchesPatterns(host, patterns) {
+			out = append(out, host)
+		}
+	}
+	return out
 }
 
 // lookupCuratorByName tries an exact name match, then a unique
@@ -192,7 +238,11 @@ func lookupCuratorByName(cat *curatormesh.Catalog, target string) (*curatormesh.
 
 // buildCuratorArtifactView assembles the per-entry render shape: an
 // ordered version list, each with its tag bindings and sorted platforms.
-func buildCuratorArtifactView(artifactID string, e *curatormesh.CatalogEntry, blocked bool) *curatorArtifactView {
+// `targetEnvoys` is the resolved hostname list — see
+// [Handler.resolveCuratorTargetEnvoys] — passed in by the handler so the
+// view builder stays free of fleet/config dependencies (also keeps tests
+// hermetic).
+func buildCuratorArtifactView(artifactID string, e *curatormesh.CatalogEntry, blocked bool, targetEnvoys []string) *curatorArtifactView {
 	tagsByVersion := make(map[string][]string, len(e.Body.Tags))
 	for tag, v := range e.Body.Tags {
 		tagsByVersion[v] = append(tagsByVersion[v], tag)
@@ -242,6 +292,7 @@ func buildCuratorArtifactView(artifactID string, e *curatormesh.CatalogEntry, bl
 		FounderPuddlePubkey: e.Body.FounderPuddlePubkey,
 		SigningPuddlePubkey: e.Body.SigningPuddlePubkey,
 		Target:              e.Body.Target,
+		TargetEnvoys:        targetEnvoys,
 		Recipients:          e.Body.Recipients,
 		IssuedAt:            e.Body.IssuedAt,
 		Versions:            versions,

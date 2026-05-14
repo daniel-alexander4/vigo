@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
 )
@@ -27,6 +28,20 @@ type mockCurator struct {
 
 func (m *mockCurator) FleetSnapshot(_ context.Context) (*curatormesh.Catalog, []db.CuratorBlockedArtifact, error) {
 	return m.cat, m.blocked, m.err
+}
+
+// stubResolver is a minimal SwarmHostnameResolver for tests: callers set a
+// canned `matches` map keyed by target glob and the stub returns the value
+// for the matching key (treated as "envoys whose hostname matches this
+// glob"). Resolver methods we don't exercise here return zero values.
+type stubResolver struct {
+	matches map[string][]string
+}
+
+func (s *stubResolver) ResolveHostname(_ string) string { return "" }
+func (s *stubResolver) ResolveIP(_ string) string       { return "" }
+func (s *stubResolver) MatchingEnvoys(target string) []string {
+	return s.matches[target]
 }
 
 // pubkeyHex builds a deterministic 32-byte hex puddle pubkey from a seed.
@@ -329,5 +344,138 @@ func TestBuildCuratorHealth(t *testing.T) {
 	}
 	if orphanProblems != 1 {
 		t.Errorf("expected exactly one blocked-orphan rollup, got %d", orphanProblems)
+	}
+}
+
+// --- resolveCuratorTargetEnvoys ---
+
+func TestResolveCuratorTargetEnvoys_IntersectsTargetWithEnabledList(t *testing.T) {
+	h := newTestHandler(t)
+	h.swarmFleetIndex = &stubResolver{
+		matches: map[string][]string{
+			"*": {"plex", "danlap", "girlslaptop", "annlap", "raspberrypi"},
+		},
+	}
+	h.swarmConfig = config.SwarmSection{
+		Curator: config.CuratorSection{Enabled: []string{"plex", "danlap", "girlslaptop"}},
+	}
+
+	got := h.resolveCuratorTargetEnvoys("*")
+	want := []string{"plex", "danlap", "girlslaptop"}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v (intersection of `*` ∩ curator.enabled)", got, want)
+	}
+	for i, g := range got {
+		if g != want[i] {
+			t.Errorf("position %d: got %q, want %q", i, g, want[i])
+		}
+	}
+}
+
+func TestResolveCuratorTargetEnvoys_HonorsDenyPattern(t *testing.T) {
+	// `swarm.curator.enabled = ["-rasp*", "*"]` denies rasp-prefixed hosts
+	// even though they match the artifact's `*` target.
+	h := newTestHandler(t)
+	h.swarmFleetIndex = &stubResolver{
+		matches: map[string][]string{
+			"*": {"plex", "raspberrypi", "danlap"},
+		},
+	}
+	h.swarmConfig = config.SwarmSection{
+		Curator: config.CuratorSection{Enabled: []string{"-rasp*", "*"}},
+	}
+
+	got := h.resolveCuratorTargetEnvoys("*")
+	want := []string{"plex", "danlap"} // raspberrypi denied
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestResolveCuratorTargetEnvoys_NarrowTargetGlobIntersects(t *testing.T) {
+	// Artifact published with `target: "*lap"` (only laptops). The
+	// fleet-index resolver returns those that match; the curator-enabled
+	// pattern list is `*` (every host eligible). Result: just the laptops.
+	h := newTestHandler(t)
+	h.swarmFleetIndex = &stubResolver{
+		matches: map[string][]string{
+			"*lap": {"danlap", "girlslaptop"},
+		},
+	}
+	h.swarmConfig = config.SwarmSection{
+		Curator: config.CuratorSection{Enabled: []string{"*"}},
+	}
+	got := h.resolveCuratorTargetEnvoys("*lap")
+	if len(got) != 2 || got[0] != "danlap" || got[1] != "girlslaptop" {
+		t.Errorf("got %v, want [danlap girlslaptop]", got)
+	}
+}
+
+func TestResolveCuratorTargetEnvoys_EmptyEnabledListReturnsEmpty(t *testing.T) {
+	// curator.enabled == [] means curator is disabled fleet-wide. Even if
+	// the target glob matches every envoy, the intersection is empty —
+	// the data is KNOWN (return empty slice), not unknown (would be nil).
+	h := newTestHandler(t)
+	h.swarmFleetIndex = &stubResolver{
+		matches: map[string][]string{"*": {"plex", "danlap"}},
+	}
+	h.swarmConfig = config.SwarmSection{Curator: config.CuratorSection{Enabled: nil}}
+
+	got := h.resolveCuratorTargetEnvoys("*")
+	if got == nil {
+		t.Errorf("empty enabled list must return empty slice (known: zero matches), not nil (unknown)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty", got)
+	}
+}
+
+func TestResolveCuratorTargetEnvoys_NilFleetIndexReturnsNil(t *testing.T) {
+	// Pre-wiring: handler doesn't have a fleet resolver yet. Returning nil
+	// signals "unknown" so the template can render "(resolver not wired)"
+	// rather than incorrectly claiming "no envoys match".
+	h := newTestHandler(t)
+	h.swarmFleetIndex = nil
+	got := h.resolveCuratorTargetEnvoys("*")
+	if got != nil {
+		t.Errorf("nil swarmFleetIndex must yield nil (unknown), got %v", got)
+	}
+}
+
+// --- end-to-end: detail page renders the resolved list ---
+
+func TestCurator_DetailPageShowsResolvedTargetEnvoys(t *testing.T) {
+	h := newTestHandler(t)
+	h.swarmFleetIndex = &stubResolver{
+		matches: map[string][]string{
+			"*": {"plex", "danlap", "girlslaptop", "raspberrypi"},
+		},
+	}
+	h.swarmConfig = config.SwarmSection{
+		Curator: config.CuratorSection{Enabled: []string{"plex", "danlap", "girlslaptop"}},
+	}
+
+	e := sampleEntry(0x01, "vigo-agent", 1714521000000)
+	aid, _ := curatormesh.ArtifactID(e)
+	h.curatorFleet = &mockCurator{cat: &curatormesh.Catalog{Artifacts: []curatormesh.CatalogEntry{e}}}
+
+	rec := httptest.NewRecorder()
+	req := adminRequest(http.MethodGet, "/swarm/curator/"+aid)
+	req.SetPathValue("artifact_id", aid)
+	h.Curator(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body: %s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"plex", "danlap", "girlslaptop"} {
+		if !strings.Contains(body, ">"+want+"<") {
+			t.Errorf("expected %q in resolved-envoys list, body: %s", want, body)
+		}
+	}
+	if strings.Contains(body, ">raspberrypi<") {
+		t.Errorf("raspberrypi is not curator-enabled and must not appear")
+	}
+	if !strings.Contains(body, "3 envoys") {
+		t.Errorf("expected envoy count summary in body")
 	}
 }

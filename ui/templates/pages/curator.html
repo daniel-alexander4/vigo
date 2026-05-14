@@ -27,7 +27,20 @@
                     </td>
                 </tr>
                 {{end}}
-                <tr><td style="font-weight:600;">Target</td><td><code>{{.Artifact.Target}}</code><br><span class="muted">Which swarm-enabled envoys hold the P2P DR replica.</span></td></tr>
+                <tr>
+                    <td style="font-weight:600;">Target</td>
+                    <td>
+                        <code>{{.Artifact.Target}}</code>
+                        {{if .Artifact.TargetEnvoys}}
+                            &nbsp;→&nbsp;
+                            {{range $i, $h := .Artifact.TargetEnvoys}}{{if $i}}, {{end}}<code>{{$h}}</code>{{end}}
+                            <span class="muted">({{len .Artifact.TargetEnvoys}} envoy{{if ne (len .Artifact.TargetEnvoys) 1}}s{{end}})</span>
+                        {{else}}
+                            &nbsp;→&nbsp;<span class="muted">no envoys match — check <code>swarm.curator.enabled</code> in server.yaml</span>
+                        {{end}}
+                        <br><span class="muted">Which swarm-enabled envoys hold the P2P DR replica. Computed as <code>target</code> &cap; <code>swarm.curator.enabled</code> against the live fleet.</span>
+                    </td>
+                </tr>
                 <tr>
                     <td style="font-weight:600;">Recipients</td>
                     <td>
