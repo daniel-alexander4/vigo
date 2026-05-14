@@ -689,6 +689,7 @@ mod tests {
     // --- tests ------------------------------------------------------------
 
     #[tokio::test]
+    #[serial_test::serial(runtime_limits)]
     async fn happy_path_stages_blob_records_manifest_writes_pending() {
         let bed = Bed::new();
         let caller = bed.caller(true);
@@ -742,6 +743,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial(runtime_limits)]
     async fn rejects_blob_sha_mismatch() {
         let bed = Bed::new();
         let caller = bed.caller(true);
@@ -776,11 +778,11 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial_test::serial(runtime_limits)]
     async fn rejects_oversize_blob() {
         let bed = Bed::new();
         let caller = bed.caller(true);
-        crate::swarm::runtime_limits::reset_for_tests();
-        crate::swarm::runtime_limits::update_from_proto(&crate::proto::SwarmRuntimeLimits {
+        let _g = crate::swarm::runtime_limits::install_for_test(&crate::proto::SwarmRuntimeLimits {
             filecast_max_size_bytes: 0,
             filecast_default_retention: String::new(),
             lockbox_max_file_bytes: 0,
@@ -795,7 +797,6 @@ mod tests {
         let blob = b"too big for the cap".to_vec();
         let entry = entry_for(&k, "big", &blob);
         let (r, resp) = run_serve(&bed, &caller, &push_request(&entry, "1.0.0", "linux", "amd64", &blob)).await;
-        crate::swarm::runtime_limits::reset_for_tests();
         assert!(format!("{:#}", r.unwrap_err()).contains("over the curator max_bytes"));
         assert!(resp.is_empty(), "rejected before READY");
     }

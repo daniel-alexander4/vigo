@@ -144,16 +144,18 @@ mod tests {
     /// the parent token stops the listener and the port becomes connectable
     /// again (or, in CI's flaky lab, at least the supervisor exits cleanly).
     #[tokio::test]
+    #[serial_test::serial(runtime_limits)]
     async fn supervisor_binds_and_releases_on_cancel() -> Result<()> {
-        crate::swarm::runtime_limits::reset_for_tests();
-
         // Pick an ephemeral port the kernel hands us right now, so the test
         // doesn't fight a real Docker daemon listening on 5000.
         let probe = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).await?;
         let port = probe.local_addr()?.port();
         drop(probe);
 
-        crate::swarm::runtime_limits::update_from_proto(&crate::proto::SwarmRuntimeLimits {
+        // The guard installs the port and resets the cell on drop, so
+        // neighboring tests in the same process never pick up our test port
+        // even if this test panics mid-body.
+        let _g = crate::swarm::runtime_limits::install_for_test(&crate::proto::SwarmRuntimeLimits {
             filecast_max_size_bytes: 0,
             filecast_default_retention: String::new(),
             lockbox_max_file_bytes: 0,
@@ -186,10 +188,6 @@ mod tests {
 
         cancel.cancel();
         let _ = tokio::time::timeout(Duration::from_secs(2), task).await;
-
-        // Tear down whatever the cell still holds so neighboring tests in
-        // the same process don't pick up our test port.
-        crate::swarm::runtime_limits::reset_for_tests();
 
         assert!(bound, "supervisor must bind the listener within {SUPERVISOR_TICK:?} + 5s");
         Ok(())

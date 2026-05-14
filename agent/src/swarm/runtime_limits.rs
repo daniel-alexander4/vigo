@@ -86,6 +86,46 @@ pub fn reset_for_tests() {
     *w = SwarmLimits::default();
 }
 
+/// Test-only RAII guard: installs the given runtime limits into the
+/// process-global cell and resets to defaults on drop. Combined with
+/// `#[serial_test::serial(runtime_limits)]` on every mutating test, the
+/// cell can never leak state into a downstream test — the guard
+/// guarantees a clean cell across test boundaries, and the serial
+/// annotation guarantees mutating tests don't stomp each other's state
+/// while they run.
+///
+/// Without this, the pre-fix code path was: a test called
+/// `update_from_proto(...)` to install non-default limits, never
+/// reset, and the next test in the same module that *read* the limits
+/// (e.g. through `curator_max_bytes()` or `curator_registry_port()`)
+/// saw the leaked value. Cargo's parallel test runner exposed it as a
+/// race: tests passed in isolation but failed when run together. The
+/// observable symptoms were `curator::helper::tests::rejects_oversize_blob`
+/// leaking `curator_max_bytes: 4` into `happy_path_stages_blob_…` and
+/// `rejects_blob_sha_mismatch` running afterward.
+#[cfg(test)]
+#[must_use = "the guard resets runtime limits on drop; bind it to a variable"]
+pub struct TestGuard;
+
+#[cfg(test)]
+impl Drop for TestGuard {
+    fn drop(&mut self) {
+        reset_for_tests();
+    }
+}
+
+/// Install `msg` into the cell and return a [`TestGuard`] that resets
+/// to defaults when it goes out of scope. Tests bind it to `_g` and
+/// the cell is clean when the test returns. Use alongside
+/// `#[serial_test::serial(runtime_limits)]` on the test fn for
+/// race-safety against other mutating tests.
+#[cfg(test)]
+pub fn install_for_test(msg: &crate::proto::SwarmRuntimeLimits) -> TestGuard {
+    reset_for_tests();
+    update_from_proto(msg);
+    TestGuard
+}
+
 fn opt_nonzero_u64(v: u64) -> Option<u64> {
     if v == 0 {
         None
@@ -179,14 +219,13 @@ pub fn curator_registry_port() -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn fresh() {
-        reset_for_tests();
-    }
+    use serial_test::serial;
 
     #[test]
+    #[serial(runtime_limits)]
     fn defaults_when_unset() {
-        fresh();
+        reset_for_tests();
+        let _g = TestGuard; // restores defaults on drop
         assert_eq!(lockbox_max_file_bytes(), 1024 * 1024 * 1024);
         assert_eq!(lockbox_envelope_retention_secs(), 90 * 24 * 60 * 60);
         assert_eq!(gitback_envelope_retention_secs(), 90 * 24 * 60 * 60);
@@ -200,9 +239,9 @@ mod tests {
     }
 
     #[test]
+    #[serial(runtime_limits)]
     fn server_values_propagate() {
-        fresh();
-        let msg = crate::proto::SwarmRuntimeLimits {
+        let _g = install_for_test(&crate::proto::SwarmRuntimeLimits {
             filecast_max_size_bytes: 100,
             filecast_default_retention: "30d".to_string(),
             lockbox_max_file_bytes: 200,
@@ -212,8 +251,7 @@ mod tests {
             longdrawer_max_file_bytes: 600,
             curator_max_bytes: 700,
             curator_registry_port: 5050,
-        };
-        update_from_proto(&msg);
+        });
         assert_eq!(lockbox_max_file_bytes(), 200);
         assert_eq!(lockbox_envelope_retention_secs(), 300);
         assert_eq!(gitback_max_bundle_bytes(), 400);
@@ -226,9 +264,9 @@ mod tests {
     }
 
     #[test]
+    #[serial(runtime_limits)]
     fn zero_fields_fall_back_to_defaults() {
-        fresh();
-        let msg = crate::proto::SwarmRuntimeLimits {
+        let _g = install_for_test(&crate::proto::SwarmRuntimeLimits {
             filecast_max_size_bytes: 0,
             filecast_default_retention: String::new(),
             lockbox_max_file_bytes: 0,
@@ -238,8 +276,7 @@ mod tests {
             longdrawer_max_file_bytes: 0,
             curator_max_bytes: 0,
             curator_registry_port: 0,
-        };
-        update_from_proto(&msg);
+        });
         // Zero / empty server values become None internally — read
         // helpers return their compile-time defaults.
         assert_eq!(lockbox_max_file_bytes(), 1024 * 1024 * 1024);
