@@ -90,7 +90,7 @@ use crate::swarm::cache::BlobCache;
 use crate::swarm::curator::catalog::{validate_artifact_name, CatalogEntry};
 use crate::swarm::curator::state;
 use crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN;
-use crate::swarm::gitback::helper::peer_uid;
+use crate::swarm::anchor::peer_uid::peer_uid;
 use crate::swarm::manifest::Manifest;
 use crate::swarm::policy::UserPolicy;
 

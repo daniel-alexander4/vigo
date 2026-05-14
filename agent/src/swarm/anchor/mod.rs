@@ -50,4 +50,5 @@
 //! cleanup pass.
 
 pub mod envelopes;
+pub mod peer_uid;
 pub mod tokens;

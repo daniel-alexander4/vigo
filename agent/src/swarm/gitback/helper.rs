@@ -65,7 +65,6 @@
 //! `~/.vigo-gitback/<pid>/tokens.json` and SO_PEERCRED-matches
 //! that user's UID can fetch and push under that puddle's identity.
 
-use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
@@ -80,6 +79,7 @@ use super::fan_out;
 use super::project_state::{
     parse_hex_id, project_repo_path, DelegationChain, ProjectConfig, TokenChain,
 };
+use crate::swarm::anchor::peer_uid::peer_uid;
 use crate::swarm::anchor::tokens::{verify_chain, ID_LEN};
 use crate::update::TlsCerts;
 
@@ -963,96 +963,8 @@ fn sanitize_err(s: &str) -> String {
     s.replace(['\n', '\r'], " ")
 }
 
-// ---------- peer credentials ----------
-
-/// Resolve the connecting Unix user's UID via SO_PEERCRED (Linux),
-/// LOCAL_PEEREID (macOS), or `getpeereid(3)` (BSD). `pub(crate)` so the
-/// curator helper daemon ([`crate::swarm::curator::helper`]) reuses it
-/// rather than re-deriving the platform `#[cfg]` matrix; both move into
-/// the shared `anchor` layer when it's extracted (see `pending.md`).
-pub(crate) fn peer_uid(stream: &UnixStream) -> Option<u32> {
-    #[cfg(target_os = "linux")]
-    {
-        use std::mem;
-        let fd = stream.as_raw_fd();
-        let mut cred: libc::ucred = unsafe { mem::zeroed() };
-        let mut len = mem::size_of::<libc::ucred>() as libc::socklen_t;
-        let rc = unsafe {
-            libc::getsockopt(
-                fd,
-                libc::SOL_SOCKET,
-                libc::SO_PEERCRED,
-                &mut cred as *mut _ as *mut _,
-                &mut len,
-            )
-        };
-        if rc != 0 {
-            return None;
-        }
-        return Some(cred.uid);
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let fd = stream.as_raw_fd();
-        // SOL_LOCAL/LOCAL_PEEREID returns (uid, gid) — same shape
-        // lockbox's session helper uses.
-        let mut cred: [u32; 2] = [0; 2];
-        let mut len = std::mem::size_of_val(&cred) as libc::socklen_t;
-        const SOL_LOCAL: libc::c_int = 0;
-        const LOCAL_PEEREID: libc::c_int = 3;
-        let rc = unsafe {
-            libc::getsockopt(
-                fd,
-                SOL_LOCAL,
-                LOCAL_PEEREID,
-                cred.as_mut_ptr() as *mut _,
-                &mut len,
-            )
-        };
-        if rc != 0 {
-            return None;
-        }
-        return Some(cred[0]);
-    }
-    #[cfg(any(
-        target_os = "freebsd",
-        target_os = "openbsd",
-        target_os = "netbsd",
-        target_os = "dragonfly"
-    ))]
-    {
-        // BSD getpeereid(3) — populates uid + gid by FD.
-        let fd = stream.as_raw_fd();
-        let mut uid: libc::uid_t = 0;
-        let mut gid: libc::gid_t = 0;
-        let rc = unsafe { libc::getpeereid(fd, &mut uid, &mut gid) };
-        if rc != 0 {
-            return None;
-        }
-        return Some(uid);
-    }
-    #[cfg(target_os = "illumos")]
-    {
-        // illumos exposes ucred via getpeerucred(3C); fall back to
-        // SO_PEERCRED-style getsockopt where supported. For Phase 1
-        // we leave this stubbed; agent on illumos still loads.
-        let _ = stream;
-        return None;
-    }
-    #[cfg(not(any(
-        target_os = "linux",
-        target_os = "macos",
-        target_os = "freebsd",
-        target_os = "openbsd",
-        target_os = "netbsd",
-        target_os = "dragonfly",
-        target_os = "illumos"
-    )))]
-    {
-        let _ = stream;
-        None
-    }
-}
+// `peer_uid` moved to `crate::swarm::anchor::peer_uid` — the
+// SO_PEERCRED helper is shared by every root-side helper daemon.
 
 // ---------- /etc/passwd lookup ----------
 
