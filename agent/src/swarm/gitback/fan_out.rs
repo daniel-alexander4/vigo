@@ -348,7 +348,7 @@ pub struct PushChain {
     /// senders who haven't rekeyed; capped at `DELEGATION_MAX_LEN`
     /// by the verifier even when the sender presents more.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub delegations: Vec<super::envelopes::DelegationEnvelope>,
+    pub delegations: Vec<crate::swarm::anchor::envelopes::DelegationEnvelope>,
 }
 
 fn default_push_chain_version() -> u32 {
@@ -361,7 +361,7 @@ const PUSH_CHAIN_VERSION: u32 = 1;
 /// `X-Vigo-Chain` header. Sender side.
 pub fn encode_chain_header(
     chain: &TokenChain,
-    delegations: &[super::envelopes::DelegationEnvelope],
+    delegations: &[crate::swarm::anchor::envelopes::DelegationEnvelope],
 ) -> Result<String> {
     let envelope = PushChain {
         version: PUSH_CHAIN_VERSION,
@@ -504,7 +504,7 @@ pub fn fetch_bundle_from_peer(
     gitback_base: &Path,
     project_id: &[u8; ID_LEN],
     chain: &TokenChain,
-    delegations: &[super::envelopes::DelegationEnvelope],
+    delegations: &[crate::swarm::anchor::envelopes::DelegationEnvelope],
     url_host: &str,
     tls: &crate::update::TlsCerts,
 ) -> Result<bool> {
@@ -556,7 +556,7 @@ pub fn fan_out_bundle(
     home: &Path,
     project_id: &[u8; ID_LEN],
     chain: &TokenChain,
-    delegations: &[super::envelopes::DelegationEnvelope],
+    delegations: &[crate::swarm::anchor::envelopes::DelegationEnvelope],
     bundle_path: &Path,
     tls: &crate::update::TlsCerts,
 ) -> (usize, usize) {
@@ -1533,7 +1533,7 @@ mod tests {
             version: super::super::project_state::PROJECT_STATE_VERSION,
             chain: vec![bootstrap],
         };
-        let delegation = super::super::envelopes::DelegationEnvelope::build(
+        let delegation = crate::swarm::anchor::envelopes::DelegationEnvelope::build(
             &founder,
             &pid,
             &pub_bytes(&new_founder),
@@ -1556,7 +1556,7 @@ mod tests {
         let new_admin_subject = fresh_key();
         let bootstrap = issue_bootstrap(&genesis, "proj", 100, None).unwrap();
         let pid = project_id_for(&pub_bytes(&genesis), "proj");
-        let delegation = super::super::envelopes::DelegationEnvelope::build(
+        let delegation = crate::swarm::anchor::envelopes::DelegationEnvelope::build(
             &genesis,
             &pid,
             &pub_bytes(&new_founder),

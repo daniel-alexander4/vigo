@@ -15,7 +15,7 @@
 //! founder's artifact.
 //!
 //! Modeled on [`crate::swarm::puddle::name`] (the closest existing signed-envelope
-//! shape) and reuses [`crate::swarm::gitback::envelopes::DelegationEnvelope`] for
+//! shape) and reuses [`crate::swarm::anchor::envelopes::DelegationEnvelope`] for
 //! the rekey-bridge chain — see this module's `mod.rs` on the eventual `anchor`
 //! extraction that will unify those.
 
@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-use crate::swarm::gitback::envelopes::{DelegationEnvelope, DELEGATION_MAX_LEN};
+use crate::swarm::anchor::envelopes::{DelegationEnvelope, DELEGATION_MAX_LEN};
 
 /// Length of a raw Ed25519 puddle pubkey / a sha256 (artifact_id, blob_sha).
 pub const ID_LEN: usize = 32;

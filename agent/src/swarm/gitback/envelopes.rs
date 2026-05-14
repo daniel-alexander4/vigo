@@ -12,7 +12,7 @@
 //! signed Ed25519 blobs that gossip across the swarm and persist on
 //! every envoy that holds the project — except DELEGATION envelopes
 //! gossip as informational hints only, never as authority (see
-//! [`DelegationEnvelope`] for the threat-model rationale).
+//! [`crate::swarm::anchor::envelopes::DelegationEnvelope`] for the threat-model rationale).
 //!
 //! Design mirrors [`crate::swarm::anchor::tokens`] (canonical hand-rolled encoding,
 //! distinct domain prefix per envelope type) and
@@ -72,11 +72,6 @@ pub const REVOKE_DOMAIN: &[u8] = b"gitback-revoke-v2\0";
 /// Domain prefix for canonical bytes signed in a LEAVE envelope.
 pub const LEAVE_DOMAIN: &[u8] = b"gitback-leave-v2\0";
 
-/// Domain prefix for canonical bytes signed in a DELEGATION envelope
-/// (ADR-019). Distinct from every other domain so a delegation
-/// signature can never be replayed as a different envelope type.
-pub const DELEGATION_DOMAIN: &[u8] = b"gitback-delegate-v2\0";
-
 /// Compile-time fallback reap window — 90 days, matching lockbox's
 /// tombstone + leave retention. Read sites should prefer
 /// [`effective_retention_secs`] which consults the server-distributed
@@ -89,19 +84,6 @@ pub const DEFAULT_RETENTION_SECS: i64 = 90 * 24 * 60 * 60;
 pub fn effective_retention_secs() -> i64 {
     crate::swarm::runtime_limits::gitback_envelope_retention_secs()
 }
-
-/// ADR-019 chain hygiene: warn the operator at this length. Status
-/// surfaces a yellow flag per affected project saying "consider
-/// re-founding for hygiene." Soft signal, not enforced.
-pub const DELEGATION_WARN_LEN: usize = 3;
-
-/// ADR-019 hard cap. The pre-rotation hook in `cmd_rekey_pair` aborts
-/// the rekey when a project is at this length, and `verify_chain`
-/// rejects any presented chain that exceeds it. Past the cap the
-/// operator's only path forward is `gitback project re-found
-/// <handle>` (which mints a new project_id) or
-/// `--force-orphan-projects` on `rekey-pair`.
-pub const DELEGATION_MAX_LEN: usize = 5;
 
 /// Length of an aggregate digest (used by gossip catch-up). 16 bytes
 /// of sha256 — same width lockbox uses.
@@ -161,38 +143,9 @@ pub fn canonical_leave_bytes(
     out
 }
 
-/// Canonical bytes signed when issuing a DELEGATION envelope
-/// (ADR-019). Layout:
-/// 1. `DELEGATION_DOMAIN` (26B)
-/// 2. `project_id` (32B) — anchors to the genesis founder pubkey via
-///    the `sha256` baked into the URL; never changes across rekeys.
-/// 3. `old_founder_pubkey` (32B) — the *signer* of this envelope.
-///    For the first delegation in a project's chain, this is the
-///    genesis founder pubkey. For subsequent delegations, this is the
-///    previous link's `new_founder_pubkey` (i.e. the most-recent
-///    rekey's outgoing key).
-/// 4. `new_founder_pubkey` (32B) — the delegated-to key (the rekey
-///    target). Future admin tokens chain through this pubkey until
-///    the next rekey appends another delegation.
-/// 5. `delegated_at` (8B BE i64).
-///
-/// `signer_puddle_pubkey` is intentionally absent — `old_founder_pubkey`
-/// IS the signer, so re-including it would be redundant. The verifier
-/// asserts the binding during signature check.
-pub fn canonical_delegation_bytes(
-    project_id: &[u8; ID_LEN],
-    old_founder_pubkey: &[u8; ID_LEN],
-    new_founder_pubkey: &[u8; ID_LEN],
-    delegated_at: i64,
-) -> Vec<u8> {
-    let mut out = Vec::with_capacity(DELEGATION_DOMAIN.len() + 32 + 32 + 32 + 8);
-    out.extend_from_slice(DELEGATION_DOMAIN);
-    out.extend_from_slice(project_id);
-    out.extend_from_slice(old_founder_pubkey);
-    out.extend_from_slice(new_founder_pubkey);
-    out.extend_from_slice(&delegated_at.to_be_bytes());
-    out
-}
+// `canonical_delegation_bytes` + `DELEGATION_DOMAIN` moved to
+// `crate::swarm::anchor::envelopes` — delegations are anchor-shared
+// (gitback + curator + ADR-022 name claims all use the same envelope).
 
 // ---------- envelope shapes ----------
 
@@ -421,167 +374,9 @@ impl LeaveEnvelope {
     }
 }
 
-/// A signed founder-rekey delegation (ADR-019).
-///
-/// Bridges the gap between `project_id`'s frozen anchor (the genesis
-/// founder pubkey) and the founder's *current* signing key after one
-/// or more puddle rekeys. The chain stack `bootstrap (anchored to
-/// genesis) → delegation_0 (genesis signs rekey_1) → delegation_1
-/// (rekey_1 signs rekey_2) → … → admin_token (rekey_N signs)` is
-/// what `tokens::verify_chain` walks at request time.
-///
-/// **Threat-model wrinkle (load-bearing):** the OLD signer's key is by
-/// definition still available *during* a rekey ceremony — ADR-018's
-/// `rekey-pair` requires the OLD passphrase, so the founder can sign
-/// this envelope inline. But that same property means an attacker who
-/// has compromised the OLD key can also sign a forged delegation
-/// pointing at *their* puddle pubkey. A delegation envelope on its
-/// own therefore is **not authoritative**:
-///
-/// - **Single-puddle case** (founder = sole member of all members'
-///   puddle): delegations are local-only artifacts, never
-///   gossiped as authority. ADR-018's pair-claim out-of-band code
-///   already gates puddle membership; gitback inherits that trust.
-/// - **Multi-puddle case** (project members in foreign puddles): a
-///   delegation becomes authoritative for member F only after F runs
-///   `gitback project rejoin <gitback://...> <code>` with a fresh
-///   capability code from the founder over an out-of-band channel
-///   — same trust hop as the original `project invite`/`join`.
-///
-/// Receiving a delegation via the gossip rail (slice 4) is a *hint*
-/// surfaced in `gitback status`, not a state change.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DelegationEnvelope {
-    /// Hex-encoded `sha256(genesis_founder_puddle_pubkey)` — frozen
-    /// across all rekeys for this project.
-    pub project_id: String,
-    /// Hex-encoded puddle pubkey that signed THIS delegation. For the
-    /// first delegation in a project's chain, equals the genesis
-    /// founder pubkey baked into `project_id`. For subsequent
-    /// delegations, equals the previous link's `new_founder_pubkey`.
-    pub old_founder_pubkey: String,
-    /// Hex-encoded puddle pubkey that this delegation grants founder
-    /// authority to. Future tokens / further delegations chain
-    /// through this pubkey until the next rekey.
-    pub new_founder_pubkey: String,
-    /// Unix seconds when the delegation was signed.
-    pub delegated_at: i64,
-    /// Hex-encoded 64-byte Ed25519 signature.
-    pub signature: String,
-}
+// `DelegationEnvelope` + `RawDelegation` moved to
+// `crate::swarm::anchor::envelopes` (delegations are anchor-shared).
 
-/// Decoded raw form of a [`DelegationEnvelope`] — bytes ready for
-/// signature verification or chain-walk integrity checks.
-pub struct RawDelegation {
-    pub project_id: [u8; ID_LEN],
-    pub old_founder_pubkey: [u8; ID_LEN],
-    pub new_founder_pubkey: [u8; ID_LEN],
-    pub signature: [u8; SIG_LEN],
-}
-
-impl DelegationEnvelope {
-    /// Build + sign a delegation under the OLD founder key. Caller
-    /// supplies the OLD signing key (during a rekey ceremony, this
-    /// key is still unwrapped in process memory). The envelope's
-    /// `old_founder_pubkey` is derived from the public half so a
-    /// key/pubkey mismatch fails loudly.
-    pub fn build(
-        old_signing_key: &SigningKey,
-        project_id: &[u8; ID_LEN],
-        new_founder_pubkey: &[u8; ID_LEN],
-        delegated_at: i64,
-    ) -> Self {
-        let old_pub: [u8; ID_LEN] = old_signing_key.verifying_key().to_bytes();
-        let msg = canonical_delegation_bytes(
-            project_id,
-            &old_pub,
-            new_founder_pubkey,
-            delegated_at,
-        );
-        let sig = old_signing_key.sign(&msg);
-        Self {
-            project_id: hex_id(project_id),
-            old_founder_pubkey: hex_id(&old_pub),
-            new_founder_pubkey: hex_id(new_founder_pubkey),
-            delegated_at,
-            signature: hex::encode(sig.to_bytes()),
-        }
-    }
-
-    /// Build with a delegated signer (e.g. the puddle session
-    /// helper). Returns an envelope that has self-verified — bad
-    /// caller-supplied signatures fail loudly here rather than at
-    /// chain-walk time. See [`RevokeEnvelope::build_with`] for the
-    /// rationale.
-    pub fn build_with<F>(
-        project_id: &[u8; ID_LEN],
-        old_founder_pubkey: &[u8; ID_LEN],
-        new_founder_pubkey: &[u8; ID_LEN],
-        delegated_at: i64,
-        sign: F,
-    ) -> Result<Self>
-    where
-        F: FnOnce(&[u8]) -> Result<[u8; SIG_LEN]>,
-    {
-        let msg = canonical_delegation_bytes(
-            project_id,
-            old_founder_pubkey,
-            new_founder_pubkey,
-            delegated_at,
-        );
-        let sig = sign(&msg)?;
-        let env = Self {
-            project_id: hex_id(project_id),
-            old_founder_pubkey: hex_id(old_founder_pubkey),
-            new_founder_pubkey: hex_id(new_founder_pubkey),
-            delegated_at,
-            signature: hex::encode(sig),
-        };
-        env.verify_signature()
-            .context("freshly-built delegation envelope failed self-verification")?;
-        Ok(env)
-    }
-
-    /// Decode all hex fields into raw byte arrays.
-    pub fn raw(&self) -> Result<RawDelegation> {
-        let project_id = parse_hex_id(&self.project_id).context("project_id hex")?;
-        let old_founder_pubkey = parse_hex_id(&self.old_founder_pubkey)
-            .context("old_founder_pubkey hex")?;
-        let new_founder_pubkey = parse_hex_id(&self.new_founder_pubkey)
-            .context("new_founder_pubkey hex")?;
-        let sig_bytes = hex::decode(&self.signature).context("signature hex")?;
-        if sig_bytes.len() != SIG_LEN {
-            bail!("signature is {} bytes, expected {}", sig_bytes.len(), SIG_LEN);
-        }
-        let mut signature = [0u8; SIG_LEN];
-        signature.copy_from_slice(&sig_bytes);
-        Ok(RawDelegation {
-            project_id,
-            old_founder_pubkey,
-            new_founder_pubkey,
-            signature,
-        })
-    }
-
-    /// Verify the Ed25519 signature on this envelope against
-    /// `old_founder_pubkey` (the embedded signer). Does NOT verify
-    /// chain integrity — that's `tokens::verify_chain`'s job (slice 2).
-    pub fn verify_signature(&self) -> Result<RawDelegation> {
-        let raw = self.raw()?;
-        let vk = VerifyingKey::from_bytes(&raw.old_founder_pubkey)
-            .map_err(|e| anyhow!("invalid old founder pubkey: {}", e))?;
-        let sig = Signature::from_bytes(&raw.signature);
-        let msg = canonical_delegation_bytes(
-            &raw.project_id,
-            &raw.old_founder_pubkey,
-            &raw.new_founder_pubkey,
-            self.delegated_at,
-        );
-        vk.verify(&msg, &sig)
-            .map_err(|e| anyhow!("signature verification failed: {}", e))?;
-        Ok(raw)
-    }
-}
 
 // ---------- persistence ----------
 
@@ -1083,148 +878,4 @@ mod tests {
         assert_ne!(d0, d1);
     }
 
-    // ---- delegation (ADR-019) ----
-
-    #[test]
-    fn delegation_signs_and_verifies() {
-        let old_key = fresh_key();
-        let new_key = fresh_key();
-        let env = DelegationEnvelope::build(
-            &old_key,
-            &sample_pid(),
-            &pub_bytes(&new_key),
-            1_700_000_000,
-        );
-        let raw = env.verify_signature().expect("signature should verify");
-        assert_eq!(raw.project_id, sample_pid());
-        assert_eq!(raw.old_founder_pubkey, pub_bytes(&old_key));
-        assert_eq!(raw.new_founder_pubkey, pub_bytes(&new_key));
-    }
-
-    #[test]
-    fn delegation_rejects_tampered_new_pubkey() {
-        let old_key = fresh_key();
-        let new_key = fresh_key();
-        let attacker = fresh_key();
-        let mut env = DelegationEnvelope::build(
-            &old_key,
-            &sample_pid(),
-            &pub_bytes(&new_key),
-            1_700_000_000,
-        );
-        env.new_founder_pubkey = hex_id(&pub_bytes(&attacker));
-        assert!(env.verify_signature().is_err());
-    }
-
-    #[test]
-    fn delegation_rejects_tampered_old_pubkey() {
-        let old_key = fresh_key();
-        let new_key = fresh_key();
-        let attacker = fresh_key();
-        let mut env = DelegationEnvelope::build(
-            &old_key,
-            &sample_pid(),
-            &pub_bytes(&new_key),
-            1_700_000_000,
-        );
-        // Re-pointing the signer to a different key turns the
-        // signature into "verified against the wrong pubkey" → fail.
-        env.old_founder_pubkey = hex_id(&pub_bytes(&attacker));
-        assert!(env.verify_signature().is_err());
-    }
-
-    #[test]
-    fn delegation_rejects_tampered_timestamp() {
-        let old_key = fresh_key();
-        let new_key = fresh_key();
-        let mut env = DelegationEnvelope::build(
-            &old_key,
-            &sample_pid(),
-            &pub_bytes(&new_key),
-            1_700_000_000,
-        );
-        env.delegated_at += 1;
-        assert!(env.verify_signature().is_err());
-    }
-
-    #[test]
-    fn delegation_rejects_tampered_project_id() {
-        let old_key = fresh_key();
-        let new_key = fresh_key();
-        let mut env = DelegationEnvelope::build(
-            &old_key,
-            &sample_pid(),
-            &pub_bytes(&new_key),
-            1_700_000_000,
-        );
-        env.project_id = hex_id(&[0xCDu8; ID_LEN]);
-        assert!(env.verify_signature().is_err());
-    }
-
-    #[test]
-    fn delegation_build_with_self_verifies() {
-        // Mirror the lockbox session-helper signing path: caller
-        // owns the signing oracle, build_with self-verifies before
-        // returning.
-        let old_key = fresh_key();
-        let new_key = fresh_key();
-        let env = DelegationEnvelope::build_with(
-            &sample_pid(),
-            &pub_bytes(&old_key),
-            &pub_bytes(&new_key),
-            1_700_000_000,
-            |msg| Ok(old_key.sign(msg).to_bytes()),
-        )
-        .expect("build_with should succeed and self-verify");
-        env.verify_signature().expect("post-build verification");
-    }
-
-    #[test]
-    fn delegation_build_with_rejects_bad_signer_oracle() {
-        // Oracle returns a sig from the WRONG key — build_with's
-        // self-verify must catch this before returning.
-        let old_key = fresh_key();
-        let new_key = fresh_key();
-        let attacker = fresh_key();
-        let result = DelegationEnvelope::build_with(
-            &sample_pid(),
-            &pub_bytes(&old_key),
-            &pub_bytes(&new_key),
-            1_700_000_000,
-            |msg| Ok(attacker.sign(msg).to_bytes()),
-        );
-        assert!(
-            result.is_err(),
-            "build_with must reject a signature that doesn't match old_founder_pubkey"
-        );
-    }
-
-    // ---- domain separation: delegation signature does not satisfy other envelopes ----
-
-    #[test]
-    fn delegation_signature_does_not_satisfy_revoke_or_leave() {
-        let key = fresh_key();
-        let other = fresh_key();
-        let delegation_msg = canonical_delegation_bytes(
-            &sample_pid(),
-            &pub_bytes(&key),
-            &pub_bytes(&other),
-            1_700_000_000,
-        );
-        let revoke_msg = canonical_revoke_bytes(
-            &sample_pid(),
-            &sample_tid(),
-            1_700_000_000,
-            "",
-            &pub_bytes(&key),
-        );
-        let leave_msg = canonical_leave_bytes(&sample_pid(), &pub_bytes(&key), 1_700_000_000);
-        // Each domain prefix is unique to its envelope type; canonical
-        // bytes for one shape must not start with another's prefix.
-        assert!(delegation_msg.starts_with(DELEGATION_DOMAIN));
-        assert!(!delegation_msg.starts_with(REVOKE_DOMAIN));
-        assert!(!delegation_msg.starts_with(LEAVE_DOMAIN));
-        assert!(!revoke_msg.starts_with(DELEGATION_DOMAIN));
-        assert!(!leave_msg.starts_with(DELEGATION_DOMAIN));
-    }
 }

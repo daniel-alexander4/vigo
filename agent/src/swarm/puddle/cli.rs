@@ -796,8 +796,8 @@ fn cmd_rekey_pair(args: &[String]) -> Result<()> {
              mint a fresh project_id, or pass --force-orphan-projects to proceed \
              and mark these projects frozen-at-rekey.",
             pre_flight.at_cap.len(),
-            crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN,
-            crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN,
+            crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN,
+            crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN,
             pre_flight.at_cap.join(", ")
         );
     }
@@ -974,7 +974,7 @@ fn print_gitback_rekey_outcome(
         println!(
             "                    ⚠ {} project(s) at chain length ≥ {}: {}",
             outcome.in_warn_band.len(),
-            crate::swarm::gitback::envelopes::DELEGATION_WARN_LEN,
+            crate::swarm::anchor::envelopes::DELEGATION_WARN_LEN,
             outcome.in_warn_band.join(", ")
         );
         println!(
@@ -1134,8 +1134,8 @@ fn cmd_rekey(args: &[String]) -> Result<()> {
              mint a fresh project_id, or pass --force-orphan-projects to proceed \
              and mark these projects frozen-at-rekey.",
             pre_flight.at_cap.len(),
-            crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN,
-            crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN,
+            crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN,
+            crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN,
             pre_flight.at_cap.join(", ")
         );
     }

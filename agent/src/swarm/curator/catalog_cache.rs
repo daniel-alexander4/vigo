@@ -103,7 +103,7 @@ pub fn load_catalog() -> Vec<CatalogEntry> {
 /// the agent never trusts a cached entry it can't verify, same as the trait
 /// collector and the server-side aggregator's consumers.
 pub fn lookup_verified<'a>(entries: &'a [CatalogEntry], artifact_id_hex: &str) -> Option<&'a CatalogEntry> {
-    use crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN;
+    use crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN;
     let want = artifact_id_hex.to_ascii_lowercase();
     entries.iter().find(|e| {
         e.artifact_id_hex().map(|a| a == want).unwrap_or(false) && e.verify(DELEGATION_MAX_LEN).is_ok()

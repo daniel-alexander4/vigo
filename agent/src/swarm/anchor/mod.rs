@@ -49,4 +49,5 @@
 //! validated it. That happened with curator slices 1-5; this module is the
 //! cleanup pass.
 
+pub mod envelopes;
 pub mod tokens;

@@ -12,7 +12,7 @@
 //!
 //! 1. **Pre-flight cap check** ([`pre_flight_check_caps`]): scans every
 //!    project the user founded, compares each project's delegation
-//!    chain length against [`super::envelopes::DELEGATION_MAX_LEN`].
+//!    chain length against [`crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN`].
 //!    Returns the list of projects at the cap. The caller (the
 //!    `cmd_rekey_pair` verb) decides whether to abort the rekey or
 //!    continue under `--force-orphan-projects`. Runs BEFORE any
@@ -56,7 +56,7 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use ed25519_dalek::SigningKey;
 
-use super::envelopes::{DelegationEnvelope, DELEGATION_MAX_LEN};
+use crate::swarm::anchor::envelopes::{DelegationEnvelope, DELEGATION_MAX_LEN};
 use super::project_state::{
     list_projects, parse_hex_id, DelegationChain, ProjectConfig, TokenChain, PROJECT_STATE_VERSION,
 };
@@ -95,7 +95,7 @@ pub struct GitbackRekeyOutcome {
     /// is `(handle, error_string)`.
     pub failures: Vec<(String, String)>,
     /// Projects whose post-append chain length is in the warn band
-    /// (≥ [`super::envelopes::DELEGATION_WARN_LEN`] but ≤ cap). Status
+    /// (≥ [`crate::swarm::anchor::envelopes::DELEGATION_WARN_LEN`] but ≤ cap). Status
     /// surface paints these yellow so the operator knows the chain is
     /// getting long.
     pub in_warn_band: Vec<String>,

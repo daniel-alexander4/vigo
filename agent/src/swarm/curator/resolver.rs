@@ -33,7 +33,7 @@ use sha2::{Digest, Sha256};
 
 use crate::swarm::curator::catalog::CatalogEntry;
 use crate::swarm::curator::catalog_cache;
-use crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN;
+use crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN;
 use crate::update::TlsCerts;
 
 /// Short timeout for the small JSON `/resolve` call.

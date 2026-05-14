@@ -44,7 +44,7 @@ use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 use super::config;
-use crate::swarm::gitback::envelopes::DelegationEnvelope;
+use crate::swarm::anchor::envelopes::DelegationEnvelope;
 
 /// Length of a raw Ed25519 puddle pubkey.
 pub const PUBKEY_LEN: usize = 32;

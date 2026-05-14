@@ -35,7 +35,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
-use super::envelopes::DelegationEnvelope;
+use crate::swarm::anchor::envelopes::DelegationEnvelope;
 use super::helper::socket_path as helper_socket_path;
 use super::project_state::{
     self, hex_id, parse_hex_id, project_repo_path, projects_dir, purge_user_state,
@@ -1843,8 +1843,8 @@ fn cmd_status(args: &[String]) -> Result<()> {
         .map(|c| c.delegations)
         .unwrap_or_default();
     let dlen = delegations.len();
-    let cap = super::envelopes::DELEGATION_MAX_LEN;
-    let warn = super::envelopes::DELEGATION_WARN_LEN;
+    let cap = crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN;
+    let warn = crate::swarm::anchor::envelopes::DELEGATION_WARN_LEN;
     if dlen == 0 {
         println!("Delegation chain:  none (founder hasn't rekeyed since project init)");
     } else if dlen >= warn {
@@ -2232,7 +2232,7 @@ fn cmd_re_found(args: &[String]) -> Result<()> {
     }
 
     // Precondition: chain at cap, project tombstoned, or --force.
-    let at_cap = delegations.len() >= super::envelopes::DELEGATION_MAX_LEN;
+    let at_cap = delegations.len() >= crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN;
     let tombstoned = cfg.tombstoned_at.is_some();
     if !at_cap && !tombstoned && !force {
         bail!(
@@ -2242,7 +2242,7 @@ fn cmd_re_found(args: &[String]) -> Result<()> {
              chain-hygiene reset).",
             cfg.handle,
             delegations.len(),
-            super::envelopes::DELEGATION_MAX_LEN
+            crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN
         );
     }
 

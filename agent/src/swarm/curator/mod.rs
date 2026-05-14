@@ -45,7 +45,7 @@
 //! the agent catalog cache, sourced from the server like the ADR-022 name map —
 //! see `pending.md`).
 //!
-//! `catalog.rs` reuses [`crate::swarm::gitback::envelopes::DelegationEnvelope`]
+//! `catalog.rs` reuses [`crate::swarm::anchor::envelopes::DelegationEnvelope`]
 //! (the ADR-019 rekey-bridge envelope) and `helper.rs` reuses
 //! [`crate::swarm::gitback::helper::peer_uid`] — the same cross-subsystem reuse
 //! `crate::swarm::puddle::name` already does. When the shared puddle-rooted
@@ -67,7 +67,7 @@ use std::path::Path;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN;
+use crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN;
 use crate::swarm::manifest::Manifest;
 
 /// Per-blob (one `{name, version, os, arch}` artifact) size cap when the

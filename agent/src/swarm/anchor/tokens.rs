@@ -282,7 +282,7 @@ pub enum ChainError {
     #[allow(dead_code)]
     IssuanceOrder { index: usize },
     // ----- ADR-019 founder-rekey delegation chain -----
-    /// Delegation list exceeds [`crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN`].
+    /// Delegation list exceeds [`crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN`].
     /// Pre-rotation hook in `cmd_rekey_pair` should have aborted the
     /// rekey before reaching this state; encountering it at verify
     /// time means a peer presented a chain we'd never have signed.
@@ -358,7 +358,7 @@ impl std::fmt::Display for ChainError {
                 f,
                 "delegation chain length {} exceeds cap {}",
                 len,
-                crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN
+                crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN
             ),
             ChainError::DelegationDecode { index, msg } => write!(
                 f,
@@ -423,8 +423,8 @@ impl std::error::Error for ChainError {}
 /// (`DelegationChain::delegations`). Empty = the founder hasn't
 /// rekeyed; verifier behaves identically to pre-ADR-019. Non-empty
 /// = each entry signed by the previous founder, naming the next.
-/// Cap is [`crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN`]; warn band starts
-/// at [`crate::swarm::gitback::envelopes::DELEGATION_WARN_LEN`].
+/// Cap is [`crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN`]; warn band starts
+/// at [`crate::swarm::anchor::envelopes::DELEGATION_WARN_LEN`].
 ///
 /// **Authority windows.** Each founder pubkey is authoritative over
 /// a half-open interval `[start, end)`:
@@ -444,7 +444,7 @@ impl std::error::Error for ChainError {}
 pub fn verify_chain(
     project_id: &[u8; ID_LEN],
     founder_puddle_pubkey: &[u8; ID_LEN],
-    delegations: &[crate::swarm::gitback::envelopes::DelegationEnvelope],
+    delegations: &[crate::swarm::anchor::envelopes::DelegationEnvelope],
     chain: &[Token],
     now: i64,
 ) -> std::result::Result<(), ChainError> {
@@ -459,7 +459,7 @@ pub fn verify_chain(
     // unverified field.
 
     // ---- Pre-walk: validate the delegation chain itself. ----
-    if delegations.len() > crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN {
+    if delegations.len() > crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN {
         return Err(ChainError::DelegationCapExceeded { len: delegations.len() });
     }
     // Window starts indexed by founder pubkey, in genesis-first order.
@@ -1178,7 +1178,7 @@ mod tests {
 
     // ---- ADR-019 chained verification ----
 
-    use crate::swarm::gitback::envelopes::{DelegationEnvelope, DELEGATION_MAX_LEN};
+    use crate::swarm::anchor::envelopes::{DelegationEnvelope, DELEGATION_MAX_LEN};
 
     /// Issue a fresh admin token at chain[1] signed by `signer_key`,
     /// parented to `bootstrap`. Used to simulate post-rekey admin

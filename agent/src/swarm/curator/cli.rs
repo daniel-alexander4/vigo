@@ -50,7 +50,7 @@ use super::catalog_cache;
 use super::helper::socket_path as helper_socket_path;
 use super::resolver::Resolver;
 use super::state;
-use crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN;
+use crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN;
 use crate::swarm::puddle;
 use crate::traits::gitback::passwd_path;
 

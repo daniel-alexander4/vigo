@@ -64,7 +64,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
-use super::envelopes::{DelegationEnvelope, DELEGATION_MAX_LEN};
+use crate::swarm::anchor::envelopes::{DelegationEnvelope, DELEGATION_MAX_LEN};
 use crate::swarm::anchor::tokens::{Token, ID_LEN};
 
 /// Schema version for `project.json` and `tokens.json` files. Bump on
@@ -495,9 +495,9 @@ impl DelegationChain {
     /// True iff the chain is in the warning band ([`DELEGATION_WARN_LEN`]
     /// and above, but still below [`DELEGATION_MAX_LEN`]). Status
     /// surface flags affected projects. See
-    /// [`super::envelopes::DELEGATION_WARN_LEN`].
+    /// [`crate::swarm::anchor::envelopes::DELEGATION_WARN_LEN`].
     pub fn is_in_warn_band(&self) -> bool {
-        self.delegations.len() >= super::envelopes::DELEGATION_WARN_LEN
+        self.delegations.len() >= crate::swarm::anchor::envelopes::DELEGATION_WARN_LEN
             && self.delegations.len() <= DELEGATION_MAX_LEN
     }
 }

@@ -33,7 +33,7 @@ use serde_json::{json, Value};
 
 use super::gitback::passwd_path;
 use crate::swarm::curator::catalog::CatalogEntry;
-use crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN;
+use crate::swarm::anchor::envelopes::DELEGATION_MAX_LEN;
 
 pub fn collect() -> Result<Value> {
     let passwd_body = match std::fs::read_to_string(passwd_path()) {
