@@ -100,15 +100,6 @@ The agent keeps per-user state (file snapshots + tombstones) under `/var/lib/vig
 
 **For encrypted sync**, use [lockbox](set-up-lockbox.md) — the sibling subsystem that keeps ciphertext at rest on every envoy and gates decryption behind a per-user password-wrapped age identity. Longdrawer is deliberately unencrypted now; the 0.25.0 `encrypt: true` opt-in was removed in 0.26.1 because maintaining two overlapping encryption models confused the threat-model story.
 
-### Migrating from longdrawer 0.25.0 encryption
-
-If you adopted `encrypt: true` in 0.25.0 and want encrypted sync going forward:
-
-1. Decrypt existing ciphertext files with the age CLI directly: `age -d -i ~/.longdrawer/identity.txt ~/longdrawer/foo > /tmp/foo && mv /tmp/foo ~/longdrawer/foo`. Vigo no longer ships `vigo swarm longdrawer decrypt` — use upstream age.
-2. Give the user a puddle (`puddle: true` on the user resource) and run `vigo swarm puddle unlock` on each envoy — lockbox bootstraps automatically as a capability of puddle membership (per [ADR-020](../adr/020-lockbox-puddle-only.md); there is no separate `lockbox:` flag, no `lockbox init`/`enroll` verb).
-3. Move the plaintext files from `~/longdrawer/` to `~/lockbox/` via `vigo swarm lockbox encrypt`.
-4. Delete the leftover `~/.longdrawer/identity.txt` and `~/.longdrawer/recipients.txt` — they're no longer read.
-
 ## Cross-subnet receivers
 
 By default longdrawer is LAN-only (multicast TTL=1). To reach a peer on a different subnet, list it in `~/.longdrawer/config.yaml`:
