@@ -22,9 +22,11 @@
 //                 via the agent's existing TunnelStream; no inbound port
 //                 needs to be open on the customer side.
 //
-// The OS user the session logs in as is resolved server-side from the
-// caller's web-user → OS-user mapping configured by
-// `vigocli scrier users map`. There is no --as override in V1.
+// The OS user the session logs in as is whichever regular user on the envoy
+// holds the operator's SSH pubkey in their authorized_keys. The CLI
+// auto-detects the operator's pubkey via the discovery chain in
+// resolveOperatorPubkey (SSH_USER_AUTH → /proc/self/loginuid → SUDO_USER),
+// sends it in the connect request, and the server scans + lands there.
 
 package main
 
@@ -39,6 +41,8 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"os/user"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -56,31 +60,115 @@ the Vigo server and the envoy's agent-initiated gRPC stream. The envoy
 never needs an inbound port open — the same tunnel that serves the
 browser-based Scrier UI is reused.
 
-The OS user this session logs in as is determined by the web-user →
-OS-user mapping configured with "vigocli scrier users map". There is no
-per-invocation override.
+The OS user the session lands in is whichever regular user on the envoy
+has your SSH pubkey in their authorized_keys. The CLI auto-detects your
+pubkey (sshd's $SSH_USER_AUTH if ExposeAuthInfo is on, else the audit
+loginuid's home directory, else $SUDO_USER's) and sends it in the
+connect request; pass --ssh-key-file to override the auto-detected key.
 
 <envoy> may be either a hostname or an envoy UUID.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		timeout, _ := cmd.Flags().GetDuration("timeout")
-		return runScrierSSH(cmd.Context(), args[0], timeout)
+		sshKeyFile, _ := cmd.Flags().GetString("ssh-key-file")
+		return runScrierSSH(cmd.Context(), args[0], timeout, sshKeyFile)
 	},
 }
 
 func init() {
 	scrierSSHCmd.Flags().Duration("timeout", 30*time.Second, "How long to wait for the envoy's agent to bring the session to \"ready\"")
+	scrierSSHCmd.Flags().String("ssh-key-file", "", "Path to an SSH public key file to use as the verify source. Overrides the auto-detection chain (SSH_USER_AUTH → loginuid → SUDO_USER).")
 	scrierCmd.AddCommand(scrierSSHCmd)
+}
+
+// resolveOperatorPubkey walks the operator-pubkey discovery chain. First hit
+// wins; the chain is documented on scrierSSHCmd. Returns the normalized
+// pubkey ("type base64 [comment]") on success.
+func resolveOperatorPubkey(explicitPath string) (string, error) {
+	if explicitPath != "" {
+		data, err := os.ReadFile(explicitPath)
+		if err != nil {
+			return "", fmt.Errorf("reading --ssh-key-file %s: %w", explicitPath, err)
+		}
+		key := strings.TrimSpace(string(data))
+		if key == "" {
+			return "", fmt.Errorf("%s is empty", explicitPath)
+		}
+		return key, nil
+	}
+
+	// $SSH_USER_AUTH — sshd writes "method <args>" lines for the auth
+	// methods used by THIS session. For pubkey auth: "publickey <type>
+	// <base64>". Requires ExposeAuthInfo=yes in sshd_config.
+	if path := os.Getenv("SSH_USER_AUTH"); path != "" {
+		if data, err := os.ReadFile(path); err == nil {
+			for _, line := range strings.Split(string(data), "\n") {
+				line = strings.TrimSpace(line)
+				if rest, ok := strings.CutPrefix(line, "publickey "); ok {
+					return rest, nil
+				}
+			}
+		}
+	}
+
+	// /proc/self/loginuid — Linux audit subsystem records the original
+	// login uid as a process attribute; survives every sudo/su/su-
+	// transition. "-1" / 4294967295 means unset (kernel without audit).
+	if data, err := os.ReadFile("/proc/self/loginuid"); err == nil {
+		s := strings.TrimSpace(string(data))
+		if s != "" && s != "-1" && s != "4294967295" {
+			if u, err := user.LookupId(s); err == nil {
+				if key, err := readDefaultSSHPubkey(u.HomeDir); err == nil {
+					return key, nil
+				}
+			}
+		}
+	}
+
+	// $SUDO_USER — set by sudo, cleared by `su -`. Belt-and-suspenders.
+	if name := os.Getenv("SUDO_USER"); name != "" {
+		if u, err := user.Lookup(name); err == nil {
+			if key, err := readDefaultSSHPubkey(u.HomeDir); err == nil {
+				return key, nil
+			}
+		}
+	}
+
+	return "", errors.New("cannot auto-detect your SSH pubkey " +
+		"(no SSH_USER_AUTH, no usable /proc/self/loginuid, no SUDO_USER); " +
+		"pass --ssh-key-file PATH, or set `ExposeAuthInfo yes` in /etc/ssh/sshd_config so sshd records the key you authenticated with")
+}
+
+// readDefaultSSHPubkey tries the standard pubkey names in `<home>/.ssh/`,
+// in the same order cli/users.go's `webusers create --ssh-key-file` users
+// will be familiar with.
+func readDefaultSSHPubkey(home string) (string, error) {
+	for _, name := range []string{"id_ed25519.pub", "id_rsa.pub"} {
+		data, err := os.ReadFile(filepath.Join(home, ".ssh", name))
+		if err != nil {
+			continue
+		}
+		key := strings.TrimSpace(string(data))
+		if key != "" {
+			return key, nil
+		}
+	}
+	return "", fmt.Errorf("no SSH pubkey at %s/.ssh/id_ed25519.pub or id_rsa.pub", home)
 }
 
 // runScrierSSH is the entry point extracted for testability — callers can
 // pass a short timeout and a pre-resolved envoy arg in unit tests.
-func runScrierSSH(ctx context.Context, envoyArg string, setupTimeout time.Duration) error {
+func runScrierSSH(ctx context.Context, envoyArg string, setupTimeout time.Duration, sshKeyFile string) error {
 	// Refuse early on non-TTY so we don't silently mangle piped usage.
 	stdinFd := int(os.Stdin.Fd())
 	stdoutFd := int(os.Stdout.Fd())
 	if !term.IsTerminal(stdinFd) || !term.IsTerminal(stdoutFd) {
 		return fmt.Errorf("stdin/stdout must be a TTY (cannot pipe `vigocli scrier ssh`)")
+	}
+
+	pubkey, err := resolveOperatorPubkey(sshKeyFile)
+	if err != nil {
+		return err
 	}
 
 	client := newAPIClient()
@@ -96,9 +184,10 @@ func runScrierSSH(ctx context.Context, envoyArg string, setupTimeout time.Durati
 		Status    string `json:"status"`
 	}
 	if err := client.post("/api/v1/scrier/connect", map[string]any{
-		"envoy_id": envoyID,
-		"protocol": "ssh",
-		"port":     22,
+		"envoy_id":       envoyID,
+		"protocol":       "ssh",
+		"port":           22,
+		"ssh_public_key": pubkey,
 		// width/height are for RDP/VNC canvas sizing; SSH uses the
 		// first post-connect resize to set pty dimensions. Server
 		// defaults these to 1024x768 when zero.

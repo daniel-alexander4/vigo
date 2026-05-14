@@ -10,6 +10,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -108,6 +110,130 @@ func TestWaitForScrierReady_ErrorStatus(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "agent never opened tunnel") {
 		t.Errorf("error did not include server-provided detail: %v", err)
+	}
+}
+
+// TestResolveOperatorPubkey_ExplicitPath wins over every other source.
+func TestResolveOperatorPubkey_ExplicitPath(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "explicit.pub")
+	want := "ssh-ed25519 AAAA-explicit user@laptop\n"
+	if err := os.WriteFile(keyPath, []byte(want), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Even with SSH_USER_AUTH set to a different key, the explicit path
+	// must win — that's the operator-override contract.
+	authPath := filepath.Join(dir, "auth.txt")
+	_ = os.WriteFile(authPath, []byte("publickey ssh-ed25519 AAAA-fromauth\n"), 0o600)
+	t.Setenv("SSH_USER_AUTH", authPath)
+
+	got, err := resolveOperatorPubkey(keyPath)
+	if err != nil {
+		t.Fatalf("resolveOperatorPubkey: %v", err)
+	}
+	if got != strings.TrimSpace(want) {
+		t.Errorf("got %q, want %q", got, strings.TrimSpace(want))
+	}
+}
+
+// TestResolveOperatorPubkey_ExplicitPath_Empty rejects an empty file.
+func TestResolveOperatorPubkey_ExplicitPath_Empty(t *testing.T) {
+	dir := t.TempDir()
+	keyPath := filepath.Join(dir, "empty.pub")
+	if err := os.WriteFile(keyPath, []byte("   \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolveOperatorPubkey(keyPath); err == nil {
+		t.Fatalf("expected error on empty key file")
+	}
+}
+
+// TestResolveOperatorPubkey_SSHUserAuth parses sshd's per-session auth-info
+// file and returns the publickey line.
+func TestResolveOperatorPubkey_SSHUserAuth(t *testing.T) {
+	dir := t.TempDir()
+	authPath := filepath.Join(dir, "auth.txt")
+	// Real sshd writes one method per line; pubkey lines include the
+	// rest verbatim. Extra method lines should be skipped.
+	contents := "publickey ssh-ed25519 AAAA-the-real-key user@laptop\n"
+	if err := os.WriteFile(authPath, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SSH_USER_AUTH", authPath)
+
+	// No --ssh-key-file override; should hit the SSH_USER_AUTH branch.
+	got, err := resolveOperatorPubkey("")
+	if err != nil {
+		t.Fatalf("resolveOperatorPubkey: %v", err)
+	}
+	want := "ssh-ed25519 AAAA-the-real-key user@laptop"
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// TestReadDefaultSSHPubkey_PrefersEd25519 confirms id_ed25519.pub wins over
+// id_rsa.pub when both are present.
+func TestReadDefaultSSHPubkey_PrefersEd25519(t *testing.T) {
+	home := t.TempDir()
+	ssh := filepath.Join(home, ".ssh")
+	if err := os.MkdirAll(ssh, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(ssh, "id_rsa.pub"), []byte("ssh-rsa AAAA-rsa rsa@x\n"), 0o600)
+	_ = os.WriteFile(filepath.Join(ssh, "id_ed25519.pub"), []byte("ssh-ed25519 AAAA-ed ed@x\n"), 0o600)
+
+	got, err := readDefaultSSHPubkey(home)
+	if err != nil {
+		t.Fatalf("readDefaultSSHPubkey: %v", err)
+	}
+	if !strings.HasPrefix(got, "ssh-ed25519 ") {
+		t.Errorf("expected ed25519 to win, got %q", got)
+	}
+}
+
+// TestReadDefaultSSHPubkey_FallsBackToRSA when only id_rsa.pub is present.
+func TestReadDefaultSSHPubkey_FallsBackToRSA(t *testing.T) {
+	home := t.TempDir()
+	ssh := filepath.Join(home, ".ssh")
+	if err := os.MkdirAll(ssh, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(ssh, "id_rsa.pub"), []byte("ssh-rsa AAAA-rsa rsa@x\n"), 0o600)
+
+	got, err := readDefaultSSHPubkey(home)
+	if err != nil {
+		t.Fatalf("readDefaultSSHPubkey: %v", err)
+	}
+	if !strings.HasPrefix(got, "ssh-rsa ") {
+		t.Errorf("expected rsa fallback, got %q", got)
+	}
+}
+
+// TestReadDefaultSSHPubkey_NoKeys returns an error when neither default key exists.
+func TestReadDefaultSSHPubkey_NoKeys(t *testing.T) {
+	home := t.TempDir()
+	if _, err := readDefaultSSHPubkey(home); err == nil {
+		t.Fatalf("expected error when no default pubkey is present")
+	}
+}
+
+// TestResolveOperatorPubkey_AllSourcesEmpty surfaces the hint about
+// --ssh-key-file when nothing in the chain hits.
+func TestResolveOperatorPubkey_AllSourcesEmpty(t *testing.T) {
+	t.Setenv("SSH_USER_AUTH", "")
+	t.Setenv("SUDO_USER", "")
+	// /proc/self/loginuid still exists on Linux test runners and may
+	// return a valid uid pointing at the test runner's home — which
+	// happens to NOT have ~/.ssh/id_*.pub in CI environments. The
+	// chain falls through and we get the hint.
+	_, err := resolveOperatorPubkey("")
+	if err == nil {
+		t.Skip("test runner has discoverable SSH keys; skipping")
+	}
+	if !strings.Contains(err.Error(), "--ssh-key-file") {
+		t.Errorf("error must mention the --ssh-key-file fallback hint: %v", err)
 	}
 }
 

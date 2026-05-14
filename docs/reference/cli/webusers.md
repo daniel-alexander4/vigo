@@ -46,7 +46,17 @@ vigocli webusers create --username carol --role compliance \
 | `--role` | `viewer` | Role: `admin`, `viewer`, or `compliance` |
 | `--display-name` | — | Display name |
 | `--email` | — | Email address |
-| `--ssh-key-file` | — | Path to SSH public key file (isowebauth) |
+| `--ssh-key-file` | — | Path to SSH public key file. Optional — `vigocli scrier ssh` auto-detects the operator's pubkey at invocation time and write-through-stores it, so an existing web user doesn't need this set in advance. Useful for pre-populating other users at create time and for isowebauth. |
+
+To set or update the pubkey on an *existing* user without going through a CLI scrier session, use the REST API directly:
+
+```bash
+curl -X PUT https://vigo:8443/api/v1/users/<id> \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"ssh_public_key":"ssh-ed25519 AAAA…","display_name":"…","email":"…","role":"admin"}'
+```
+
+(The `PUT` replaces every field, so include the unchanged ones too.)
 
 ### Setting a password
 

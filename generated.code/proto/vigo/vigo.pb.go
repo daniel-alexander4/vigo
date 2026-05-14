@@ -7117,10 +7117,9 @@ type TunnelOpen struct {
 	TargetHost         string                 `protobuf:"bytes,2,opt,name=target_host,json=targetHost,proto3" json:"target_host,omitempty"`                           // always "127.0.0.1" — agent enforces this
 	TargetPort         uint32                 `protobuf:"varint,3,opt,name=target_port,json=targetPort,proto3" json:"target_port,omitempty"`                          // SSH=22, RDP=3389, VNC=5900 (hint — agent may override for VNC)
 	Protocol           string                 `protobuf:"bytes,4,opt,name=protocol,proto3" json:"protocol,omitempty"`                                                 // "ssh", "rdp", "vnc"
-	SshVerifyPubkey    string                 `protobuf:"bytes,5,opt,name=ssh_verify_pubkey,json=sshVerifyPubkey,proto3" json:"ssh_verify_pubkey,omitempty"`          // web user's SSH pubkey — agent checks authorized_keys
-	SshEphemeralPubkey string                 `protobuf:"bytes,6,opt,name=ssh_ephemeral_pubkey,json=sshEphemeralPubkey,proto3" json:"ssh_ephemeral_pubkey,omitempty"` // per-session pubkey — agent installs temporarily
-	SshTargetUsername  string                 `protobuf:"bytes,7,opt,name=ssh_target_username,json=sshTargetUsername,proto3" json:"ssh_target_username,omitempty"`    // Unix username to check — agent only looks in this user's authorized_keys
-	ConsentMode        string                 `protobuf:"bytes,8,opt,name=consent_mode,json=consentMode,proto3" json:"consent_mode,omitempty"`                        // VNC shadow: "always" (prompt user) or "never" (unattended)
+	SshVerifyPubkey    string                 `protobuf:"bytes,5,opt,name=ssh_verify_pubkey,json=sshVerifyPubkey,proto3" json:"ssh_verify_pubkey,omitempty"`          // web user's SSH pubkey — agent scans every regular user's authorized_keys for it
+	SshEphemeralPubkey string                 `protobuf:"bytes,6,opt,name=ssh_ephemeral_pubkey,json=sshEphemeralPubkey,proto3" json:"ssh_ephemeral_pubkey,omitempty"` // per-session pubkey — agent installs temporarily into the matching user's authorized_keys
+	ConsentMode        string                 `protobuf:"bytes,7,opt,name=consent_mode,json=consentMode,proto3" json:"consent_mode,omitempty"`                        // VNC shadow: "always" (prompt user) or "never" (unattended)
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -7193,13 +7192,6 @@ func (x *TunnelOpen) GetSshVerifyPubkey() string {
 func (x *TunnelOpen) GetSshEphemeralPubkey() string {
 	if x != nil {
 		return x.SshEphemeralPubkey
-	}
-	return ""
-}
-
-func (x *TunnelOpen) GetSshTargetUsername() string {
-	if x != nil {
-		return x.SshTargetUsername
 	}
 	return ""
 }
@@ -8053,7 +8045,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x0fTunnelHandshake\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x1c\n" +
 	"\tsignature\x18\x02 \x01(\fR\tsignature\x12\x1c\n" +
-	"\ttimestamp\x18\x03 \x01(\tR\ttimestamp\"\xb8\x02\n" +
+	"\ttimestamp\x18\x03 \x01(\tR\ttimestamp\"\x88\x02\n" +
 	"\n" +
 	"TunnelOpen\x12\x1b\n" +
 	"\ttunnel_id\x18\x01 \x01(\tR\btunnelId\x12\x1f\n" +
@@ -8063,9 +8055,8 @@ const file_vigo_proto_rawDesc = "" +
 	"targetPort\x12\x1a\n" +
 	"\bprotocol\x18\x04 \x01(\tR\bprotocol\x12*\n" +
 	"\x11ssh_verify_pubkey\x18\x05 \x01(\tR\x0fsshVerifyPubkey\x120\n" +
-	"\x14ssh_ephemeral_pubkey\x18\x06 \x01(\tR\x12sshEphemeralPubkey\x12.\n" +
-	"\x13ssh_target_username\x18\a \x01(\tR\x11sshTargetUsername\x12!\n" +
-	"\fconsent_mode\x18\b \x01(\tR\vconsentMode\"\xcf\x01\n" +
+	"\x14ssh_ephemeral_pubkey\x18\x06 \x01(\tR\x12sshEphemeralPubkey\x12!\n" +
+	"\fconsent_mode\x18\a \x01(\tR\vconsentMode\"\xcf\x01\n" +
 	"\x10TunnelOpenResult\x12\x1b\n" +
 	"\ttunnel_id\x18\x01 \x01(\tR\btunnelId\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\bR\asuccess\x12#\n" +

@@ -1,23 +1,23 @@
 -- name: GetUserByID :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, scrier_username, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 FROM users WHERE id = ?;
 
 -- name: GetUserByUsername :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, scrier_username, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 FROM users WHERE username = ?;
 
 -- name: GetUserByOIDCSubject :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, scrier_username, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 FROM users WHERE oidc_subject = ?;
 
 -- name: ListUsers :many
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, scrier_username, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 FROM users ORDER BY username;
 
 -- name: InsertUser :one
 INSERT INTO users (username, display_name, email, role, ssh_public_key, oidc_subject)
 VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id, username, display_name, email, role, permissions, ssh_public_key, scrier_username, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at;
+RETURNING id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at;
 
 -- name: UpdateUser :exec
 UPDATE users SET
@@ -51,13 +51,6 @@ WHERE id = ?;
 UPDATE users SET totp_recovery = ?, updated_at = datetime('now')
 WHERE id = ?;
 
--- name: GetUserScrierAuth :one
-SELECT ssh_public_key, scrier_username FROM users WHERE username = ?;
-
--- name: ListScrierUsers :many
-SELECT username, scrier_username FROM users
-WHERE scrier_username != '' ORDER BY username;
-
--- name: SetScrierUsername :exec
-UPDATE users SET scrier_username = ?, updated_at = datetime('now')
-WHERE username = ?;
+-- name: SetUserSSHPublicKey :exec
+UPDATE users SET ssh_public_key = ?, updated_at = datetime('now')
+WHERE id = ?;

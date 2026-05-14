@@ -39,7 +39,16 @@ Both clients speak the exact same `/ws/scrier/{id}` WebSocket protocol. Binary f
 
 The server runs the SSH client (using Go's `crypto/ssh`); the agent relays raw TCP bytes to `127.0.0.1:22` on the envoy. The shell lives on the envoy's own `sshd`, but `sshd` only needs to listen on localhost — it never needs to be exposed to the network.
 
-Authentication is ephemeral-key-per-session. For each new session the server generates a fresh ED25519 keypair, sends the public half in `TunnelOpen`, and the agent installs it in the target user's `~/.ssh/authorized_keys` for the duration of the session. The key is removed when the tunnel closes (including on crash).
+Authentication is ephemeral-key-per-session. For each new session the server generates a fresh ED25519 keypair and sends two things to the agent in `TunnelOpen`: the operator's persistent SSH pubkey as the **verify** pubkey, and the new ephemeral pubkey to install. The agent walks every regular user on the host (libc `getpwent`; covers Linux `/home/*`, macOS `/Users/*`, BSDs, illumos, and LDAP/NSS users — root is **never** considered) and checks each `~/.ssh/authorized_keys` for the verify pubkey. The first matching user's name becomes the OS-user landing target, the ephemeral key is appended to their authorized_keys for the duration of the session (marked `# vigo-scrier-ephemeral` so cleanup and the agent's user-resource convergence both recognise it), and the server then SSH-dials into that user with the ephemeral private key. The ephemeral line is removed when the tunnel closes (RAII guard; runs even on panic), and a sweep at agent startup removes any leftover markers from previous crashes.
+
+The verify pubkey comes from one of two places, in this order:
+
+1. **CLI invocation:** `vigocli scrier ssh` auto-detects the operator's pubkey at request time. Discovery chain: `--ssh-key-file PATH` flag → `$SSH_USER_AUTH` (sshd's per-session auth record, available when `ExposeAuthInfo yes` is set in `sshd_config`) → `/proc/self/loginuid` → the audit-tracked original user's `~/.ssh/id_ed25519.pub` (then `id_rsa.pub`) → `$SUDO_USER`'s home → error suggesting `--ssh-key-file`. The detected pubkey is shipped in the connect-request body and write-through-stored on `users.ssh_public_key` for the calling web user — so the very next browser session has a cached value to use.
+2. **Browser invocation:** the connect request carries no pubkey; the server falls back to `users.ssh_public_key`, populated by a prior CLI invocation (the typical bootstrap), or — for pure-browser users — set directly via `PUT /api/v1/users/{id}`.
+
+The auto-detect makes "operator runs `vigocli scrier ssh <envoy>`" the only setup step there ever is. Rotating the operator's SSH key on the host is silently picked up by the next CLI run; the new value overwrites the stored one; the next browser session uses the new key.
+
+If the operator's pubkey appears in multiple regular users' authorized_keys files (key-reuse misconfiguration), the alphabetical-first match wins and a `WARN scrier: verify pubkey matches multiple users` log line names every match so the operator can clean it up. If the pubkey isn't in any local authorized_keys, the session fails with that reason rather than landing the operator anywhere.
 
 ### RDP
 
@@ -53,18 +62,11 @@ VNC is used for **console shadowing** — watching or assisting what's actually 
 - **Wayland**: not supported. No reliable Wayland-native VNC server exists at time of writing.
 - **Windows**: deferred. TightVNC support is on the roadmap but not shipped.
 
-## User Mapping
+## OS-User Resolution
 
-Scrier decides which OS user to log in as via the `scrier_users` mapping: `web_user → os_user`. The mapping is managed through the CLI:
+There is **no operator-managed web-to-OS-user mapping**. The OS user is whichever regular user on the envoy holds the operator's SSH pubkey in their `~/.ssh/authorized_keys` — the agent finds it by scan, the server lands there. To grant a web user SSH access on a host, put their pubkey in some user's authorized_keys on that host (typically via the same usercrate that creates the Unix account); to revoke it, remove the pubkey there.
 
-```bash
-vigocli scrier users map --user alice --os-user ubuntu
-vigocli scrier users list
-```
-
-When a session starts, the agent scans `authorized_keys` for each local user to find the one whose key list matches the verify pubkey the server sent — that defines the target OS user. If no mapping exists, the session fails at setup.
-
-There is deliberately no per-session OS-user override; the mapping is the single source of truth for "who is this operator, as which local user, on this envoy."
+**Root is deliberately never a Scrier-SSH landing target.** Operators land in a regular user (uid != 0) and `sudo` if they need elevation. If you put your key only in `/root/.ssh/authorized_keys`, the scan won't find it and the session will fail with a clear error — create a regular user.
 
 ## Authentication & Authorization
 

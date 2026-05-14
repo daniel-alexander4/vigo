@@ -8,11 +8,30 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
+
+	"golang.org/x/crypto/ssh"
 
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/secrets"
 )
+
+// validateSSHPubkey parses an OpenSSH-formatted public key (one line: type +
+// base64 + optional comment). Returns the trimmed key on success or a
+// non-nil error message suitable for surfacing to API callers. Empty input
+// is accepted (treated as "no pubkey set"); validation only runs on
+// non-empty values.
+func validateSSHPubkey(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", nil
+	}
+	if _, _, _, _, err := ssh.ParseAuthorizedKey([]byte(trimmed)); err != nil {
+		return "", fmt.Errorf("invalid ssh_public_key: %w", err)
+	}
+	return trimmed, nil
+}
 
 // UsersHandler provides REST endpoints for user management.
 type UsersHandler struct {
@@ -82,6 +101,11 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("role must be one of %v", auth.ValidRoles))
 		return
 	}
+	pubkey, err := validateSSHPubkey(req.SSHPublicKey)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	// Require admin role for user creation.
 	u := auth.UserFromContext(r.Context())
@@ -95,7 +119,7 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		DisplayName:  req.DisplayName,
 		Email:        req.Email,
 		Role:         req.Role,
-		SshPublicKey: req.SSHPublicKey,
+		SshPublicKey: pubkey,
 	})
 	if err != nil {
 		slog.Error("creating user", "error", err)
@@ -129,6 +153,12 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("role must be one of %v", auth.ValidRoles))
 		return
 	}
+	pubkey, err := validateSSHPubkey(req.SSHPublicKey)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	req.SSHPublicKey = pubkey
 
 	// Fetch existing user to preserve unchanged fields.
 	existing, err := h.store.GetByID(r.Context(), id)

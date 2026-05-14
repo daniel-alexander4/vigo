@@ -486,27 +486,6 @@ func (cs *ConfigStore) Version() uint64 {
 	return cs.version.Load()
 }
 
-// UserAuthorizedKeys returns the first authorized_keys value found across all
-// module definitions for a user resource matching the given Unix username.
-func (cs *ConfigStore) UserAuthorizedKeys(username string) string {
-	cs.mu.RLock()
-	defer cs.mu.RUnlock()
-
-	for _, mod := range cs.moduleDefs {
-		for _, res := range mod.Resources {
-			if res.Type != "user" {
-				continue
-			}
-			if u, _ := res.Attributes["username"].(string); u == username {
-				if keys, _ := res.Attributes["authorized_keys"].(string); keys != "" {
-					return strings.TrimSpace(keys)
-				}
-			}
-		}
-	}
-	return ""
-}
-
 // LastReloadError returns the error from the most recent config reload,
 // or nil if the last reload succeeded. Surfaced to agents as a check-in warning.
 func (cs *ConfigStore) LastReloadError() error {

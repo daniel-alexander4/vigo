@@ -30,6 +30,14 @@ type tunnelManager struct {
 	fleetIndex    *fleet.FleetIndex                 // sets TunnelRequested flag for unary agents
 }
 
+// sshAuthResult carries the agent's TunnelOpenResult auth fields back to the
+// session setup code. Either Username is set (success) or ErrorMessage is set
+// (the agent rejected the auth or failed the local connect).
+type sshAuthResult struct {
+	Username     string
+	ErrorMessage string
+}
+
 // activeTunnel represents a single remote access session.
 type activeTunnel struct {
 	tunnelID   string
@@ -39,15 +47,14 @@ type activeTunnel struct {
 	targetPort uint32
 	startedAt  time.Time
 
-	// SSH pubkey auth fields (set by HandleWebSocket, consumed by runTunnelRelay).
-	sshVerifyPubkey    string // web user's SSH pubkey for authorized_keys check
+	// SSH pubkey auth fields (set by OpenTunnel, consumed by runTunnelRelay).
+	sshVerifyPubkey    string // web user's SSH pubkey
 	sshEphemeralPubkey string // per-session pubkey installed temporarily on the agent
-	sshTargetUsername  string // Unix username — agent only checks this user's authorized_keys
 
-	// SSH username discovered by the agent from authorized_keys.
-	// Set by runTunnelRelay after receiving TunnelOpenResult.
-	sshUsername   string
-	sshUsernameCh chan string // signaled after TunnelOpenResult with ssh_username
+	// Result reported by the agent in TunnelOpenResult. sshAuthCh is buffered
+	// (cap 1); runTunnelRelay sends exactly one value on it and SSHResult
+	// reads it.
+	sshAuthCh chan sshAuthResult
 
 	// guacd side: TCP connection to guacd process.
 	guacdConn net.Conn
@@ -278,21 +285,20 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 	tunnelID := uuid.New().String()
 
 	t := &activeTunnel{
-		tunnelID:      tunnelID,
-		envoyID:       envoyID,
-		hostname:      hostname,
-		protocol:      protocol,
-		targetPort:    targetPort,
-		startedAt:     time.Now(),
-		agentRecv:     make(chan []byte, 256),
-		agentSend:     make(chan []byte, 256),
-		done:          make(chan struct{}),
-		sshUsernameCh: make(chan string, 1),
+		tunnelID:   tunnelID,
+		envoyID:    envoyID,
+		hostname:   hostname,
+		protocol:   protocol,
+		targetPort: targetPort,
+		startedAt:  time.Now(),
+		agentRecv:  make(chan []byte, 256),
+		agentSend:  make(chan []byte, 256),
+		done:       make(chan struct{}),
+		sshAuthCh:  make(chan sshAuthResult, 1),
 	}
 	if sshAuth != nil {
 		t.sshVerifyPubkey = sshAuth.VerifyPubkey
 		t.sshEphemeralPubkey = sshAuth.EphemeralPubkey
-		t.sshTargetUsername = sshAuth.TargetUsername
 	}
 
 	// Check session limit and insert atomically to prevent TOCTOU race.
@@ -446,21 +452,24 @@ func (tm *tunnelManager) ActiveSessions() int {
 	return tm.activeSessions()
 }
 
-// SSHUsername returns the Unix username discovered by the agent for a tunnel.
-// Blocks until the agent responds with TunnelOpenResult (up to 15s).
-func (tm *tunnelManager) SSHUsername(tunnelID string) string {
+// SSHResult blocks for the agent's TunnelOpenResult and returns the OS username
+// it landed in plus any failure reason it reported. Empty username with
+// non-empty errorMessage means the agent rejected the auth (e.g., the verify
+// pubkey isn't in any regular user's authorized_keys); empty/empty means the
+// agent never responded within 15s or the tunnel was torn down first.
+func (tm *tunnelManager) SSHResult(tunnelID string) (string, string) {
 	t := tm.getTunnel(tunnelID)
 	if t == nil {
-		return ""
+		return "", ""
 	}
 	select {
-	case username := <-t.sshUsernameCh:
-		return username
+	case res := <-t.sshAuthCh:
+		return res.Username, res.ErrorMessage
 	case <-time.After(15 * time.Second):
-		slog.Warn("scrier: timed out waiting for SSH username from agent",
+		slog.Warn("scrier: timed out waiting for SSH auth result from agent",
 			"tunnel_id", tunnelID)
-		return ""
+		return "", ""
 	case <-t.done:
-		return ""
+		return "", ""
 	}
 }

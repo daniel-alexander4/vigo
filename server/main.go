@@ -919,9 +919,6 @@ func run() error {
 	tokensHandler := api.NewTokensHandler(tokenStore, authMethod)
 	tokensHandler.SetAuditWriter(auditWriter)
 
-	scrierAPIHandler := api.NewScrierHandler(queries, authMethod)
-	scrierAPIHandler.SetAuditWriter(auditWriter)
-
 	// Seed default admin account on first startup (no password — must be set via CLI).
 	if count, err := userStore.CountUsers(ctx); err == nil && count == 0 {
 		if _, err := userStore.Create(ctx, db.InsertUserParams{
@@ -990,7 +987,7 @@ func run() error {
 			fleetIndex,
 		)
 		agentSvc.SetTunnelManager(tm)
-		scrierHandler = vigoscrier.NewHandler(tm, fleetIndex, queries, configStore, version, baseInterval)
+		scrierHandler = vigoscrier.NewHandler(tm, fleetIndex, queries, version, baseInterval)
 		scrierHandler.SetAuditWriter(auditWriter)
 		slog.Info("scrier remote access enabled",
 			"guacd", cfg.Scrier.ScrierGuacdAddr(),
@@ -1040,7 +1037,6 @@ func run() error {
 		reportHandler.SetAuditWriter(auditWriter)
 		usersHandler.RegisterRoutes(mux)
 		tokensHandler.RegisterRoutes(mux)
-		scrierAPIHandler.RegisterRoutes(mux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(mux)
 		}
@@ -1161,7 +1157,6 @@ func run() error {
 		cveHandler.RegisterRoutes(gwMux)
 		usersHandler.RegisterRoutes(gwMux)
 		tokensHandler.RegisterRoutes(gwMux)
-		scrierAPIHandler.RegisterRoutes(gwMux)
 		// Fleet pubkey distribution. Lives outside the swarm-enabled
 		// gate so agents can bootstrap their gitback peer-pubkey
 		// TOFU cache regardless of whether THIS server has the swarm

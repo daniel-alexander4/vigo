@@ -3,85 +3,13 @@
 
 package main
 
-import (
-	"fmt"
-	"os"
-	"text/tabwriter"
+import "github.com/spf13/cobra"
 
-	"github.com/spf13/cobra"
-)
-
+// scrierCmd is the root for Scrier remote-access verbs. Subcommands attach in
+// their own files (scrier_ssh.go etc.). There is no operator-managed
+// web-to-OS-user mapping any more — the agent identifies the OS user by
+// scanning every regular user's authorized_keys for the web user's pubkey.
 var scrierCmd = &cobra.Command{
 	Use:   "scrier",
 	Short: "Manage Scrier remote access",
-}
-
-var scrierUsersCmd = &cobra.Command{
-	Use:   "users",
-	Short: "Manage Scrier user-to-OS-user mappings",
-}
-
-var scrierUsersListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List Scrier user mappings",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		client := newAPIClient()
-		var resp struct {
-			Users []struct {
-				Username string `json:"username"`
-				OSUser   string `json:"os_user"`
-			} `json:"users"`
-		}
-		if err := client.get("/api/v1/scrier/users", &resp); err != nil {
-			return err
-		}
-
-		if len(resp.Users) == 0 {
-			fmt.Println("No Scrier user mappings configured.")
-			return nil
-		}
-
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintf(w, "%s\t%s\n", header("USERNAME"), header("OS USER"))
-		for _, u := range resp.Users {
-			osUser := u.OSUser
-			if osUser == "" {
-				osUser = "-"
-			}
-			fmt.Fprintf(w, "%s\t%s\n", u.Username, osUser)
-		}
-		return w.Flush()
-	},
-}
-
-var scrierUsersMapCmd = &cobra.Command{
-	Use:   "map --user <web_username> --os-user <unix_username>",
-	Short: "Map a web UI user to an OS username for Scrier SSH connections",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		username, _ := cmd.Flags().GetString("user")
-		if username == "" {
-			return fmt.Errorf("--user is required")
-		}
-		osUser, _ := cmd.Flags().GetString("os-user")
-		if osUser == "" {
-			return fmt.Errorf("--os-user is required")
-		}
-
-		client := newAPIClient()
-		if err := client.put("/api/v1/scrier/users/"+username+"/osuser",
-			map[string]string{"os_user": osUser}, nil); err != nil {
-			return err
-		}
-
-		fmt.Printf("Mapped Scrier user %s → OS user %s\n", username, osUser)
-		return nil
-	},
-}
-
-func init() {
-	scrierUsersMapCmd.Flags().String("user", "", "Web UI username")
-	scrierUsersMapCmd.Flags().String("os-user", "", "Unix username on target envoy")
-
-	scrierUsersCmd.AddCommand(scrierUsersListCmd, scrierUsersMapCmd)
-	scrierCmd.AddCommand(scrierUsersCmd)
 }

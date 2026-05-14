@@ -37,11 +37,12 @@ import (
 )
 
 // SSHPubkeyAuth holds the SSH pubkey auth parameters for a Scrier session.
+// The agent scans every regular user's authorized_keys for VerifyPubkey to
+// determine which OS user to land in — there is no operator-supplied target.
 type SSHPubkeyAuth struct {
-	VerifyPubkey    string // web user's SSH pubkey for authorized_keys check
-	EphemeralPubkey string // per-session pubkey installed temporarily
+	VerifyPubkey    string // web user's SSH pubkey
+	EphemeralPubkey string // per-session pubkey installed temporarily into the matched user's authorized_keys
 	EphemeralKey    []byte // PEM-encoded ephemeral private key
-	TargetUsername  string // Unix username — agent only checks this user's authorized_keys
 }
 
 // TunnelOpener is the interface the WebSocket handler uses to create tunnels.
@@ -51,17 +52,16 @@ type TunnelOpener interface {
 	CloseTunnel(tunnelID string)
 	ActiveSessions() int
 	GuacdAddr() string
-	SSHUsername(tunnelID string) string
+	// SSHResult blocks for the agent's TunnelOpenResult and returns the OS
+	// username it landed in plus any failure reason it reported. Empty
+	// username with non-empty errorMessage means the agent rejected the
+	// auth; empty/empty means timeout.
+	SSHResult(tunnelID string) (username, errorMessage string)
 }
 
 // AuditRecorder writes tamper-evident audit entries.
 type AuditRecorder interface {
 	Record(ctx context.Context, eventType, actor, source, summary, payload string) error
-}
-
-// ConfigKeyLookup finds authorized_keys for a Unix username from config modules.
-type ConfigKeyLookup interface {
-	UserAuthorizedKeys(username string) string
 }
 
 // --- Session store ---
@@ -77,16 +77,17 @@ const (
 
 // scrierSession holds state for a single Scrier connection setup.
 type scrierSession struct {
-	mu        sync.Mutex
-	id        string
-	envoyID   string
-	hostname  string
-	protocol  string
-	port      uint32
-	user      string // web UI username
-	status    sessionStatus
-	errorMsg  string
-	createdAt time.Time
+	mu              sync.Mutex
+	id              string
+	envoyID         string
+	hostname        string
+	protocol        string
+	port            uint32
+	user            string // web UI username
+	requestedPubkey string // pubkey shipped in connect request (CLI path); empty on browser path
+	status          sessionStatus
+	errorMsg        string
+	createdAt       time.Time
 
 	// Set during setup:
 	tunnelID   string
@@ -137,7 +138,6 @@ type Handler struct {
 	tunnelOpener TunnelOpener
 	fleetIndex   *fleet.FleetIndex
 	queries      *db.Queries
-	configKeys   ConfigKeyLookup
 	auditWriter  AuditRecorder
 	version      string
 	connectWait  string // human-readable max wait (check-in interval + 20%)
@@ -149,7 +149,7 @@ type Handler struct {
 }
 
 // NewHandler creates a Scrier handler.
-func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Queries, configKeys ConfigKeyLookup, version string, checkinInterval time.Duration) *Handler {
+func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Queries, version string, checkinInterval time.Duration) *Handler {
 	tmplSSH := template.Must(template.New("scrier-ssh").Parse(scrierSessionSSHHTML))
 	tmplRDP := template.Must(template.New("scrier-rdp").Parse(scrierSessionRDPHTML))
 
@@ -161,7 +161,6 @@ func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Q
 		tunnelOpener: opener,
 		fleetIndex:   fleetIndex,
 		queries:      queries,
-		configKeys:   configKeys,
 		version:      version,
 		connectWait:  waitStr,
 		tmplSSH:      tmplSSH,
@@ -269,6 +268,13 @@ type connectRequest struct {
 	Port     uint32 `json:"port"`
 	Width    int    `json:"width"`
 	Height   int    `json:"height"`
+	// SSHPublicKey lets the operator's CLI ship a freshly-detected pubkey
+	// per session (see cli/scrier_ssh.go::resolveOperatorPubkey). When
+	// present, the server validates it, writes it through to the calling
+	// user's users.ssh_public_key row, and uses it as the verify source
+	// for this session. When absent (browser path), the server falls back
+	// to the stored value.
+	SSHPublicKey string `json:"ssh_public_key,omitempty"`
 }
 
 // HandleConnect starts a Scrier session setup in the background.
@@ -317,16 +323,17 @@ func (h *Handler) HandleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess := &scrierSession{
-		id:        uuid.New().String(),
-		envoyID:   req.EnvoyID,
-		hostname:  envoy.Hostname,
-		protocol:  req.Protocol,
-		port:      req.Port,
-		width:     width,
-		height:    height,
-		user:      user.Username,
-		status:    statusWaiting,
-		createdAt: time.Now(),
+		id:               uuid.New().String(),
+		envoyID:          req.EnvoyID,
+		hostname:         envoy.Hostname,
+		protocol:         req.Protocol,
+		port:             req.Port,
+		width:            width,
+		height:           height,
+		user:             user.Username,
+		requestedPubkey:  strings.TrimSpace(req.SSHPublicKey),
+		status:           statusWaiting,
+		createdAt:        time.Now(),
 	}
 
 	h.sessionsMu.Lock()
@@ -355,33 +362,53 @@ func (h *Handler) HandleConnect(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 	ctx := context.Background()
 
-	// SSH pubkey auth: resolve OS username, then look up authorized_keys from config.
+	// SSH pubkey auth: the web user's own pubkey is the verify source. The
+	// agent will scan every regular user's authorized_keys for it and land
+	// the operator in whichever OS user owns the match.
+	//
+	// Two ingress paths:
+	//   CLI path — the request carries the operator's freshly-detected
+	//     pubkey (cli/scrier_ssh.go::resolveOperatorPubkey). We validate
+	//     it, write it through to users.ssh_public_key so future browser
+	//     sessions see it, and use it for this session.
+	//   Browser path — no pubkey in the request; we fall back to the
+	//     stored users.ssh_public_key (populated by a previous CLI run).
 	var sshAuth *SSHPubkeyAuth
-	if sess.protocol == "ssh" && h.configKeys != nil {
-		osUsername := user.Username
-		scrierAuth, err := h.queries.GetUserScrierAuth(ctx, user.Username)
-		if err != nil {
-			slog.Warn("scrier username lookup failed", "user", user.Username, "error", err)
-		} else if scrierAuth.ScrierUsername != "" {
-			osUsername = scrierAuth.ScrierUsername
-		}
-
-		authorizedKeys := h.configKeys.UserAuthorizedKeys(osUsername)
-		if authorizedKeys != "" {
-			ephPriv, ephPub, err := GenerateEphemeralSSHKey()
-			if err != nil {
-				sess.setStatus(statusError, "failed to generate session key")
+	if sess.protocol == "ssh" {
+		verifyPubkey := user.SSHPublicKey
+		if sess.requestedPubkey != "" {
+			if _, _, _, _, err := ssh.ParseAuthorizedKey([]byte(sess.requestedPubkey)); err != nil {
+				sess.setStatus(statusError, "invalid SSH pubkey in connect request: "+err.Error())
 				return
 			}
-			sshAuth = &SSHPubkeyAuth{
-				VerifyPubkey:    authorizedKeys,
-				EphemeralPubkey: ephPub,
-				EphemeralKey:    ephPriv,
-				TargetUsername:  osUsername,
+			verifyPubkey = sess.requestedPubkey
+			if verifyPubkey != user.SSHPublicKey {
+				if err := h.queries.SetUserSSHPublicKey(ctx, db.SetUserSSHPublicKeyParams{
+					SshPublicKey: verifyPubkey,
+					ID:           user.ID,
+				}); err != nil {
+					slog.Warn("scrier: write-through of ssh_public_key failed",
+						"session_id", sess.id, "user", user.Username, "error", err)
+					// Non-fatal: the session can still proceed using the
+					// per-request pubkey; only future browser sessions
+					// won't have the new value cached.
+				}
 			}
-		} else {
-			slog.Warn("scrier: no authorized_keys found in config for OS user",
-				"web_user", user.Username, "os_user", osUsername)
+		}
+		if verifyPubkey == "" {
+			sess.setStatus(statusError,
+				"no SSH pubkey available — either run `vigocli scrier ssh` from a host with your SSH key on disk so the CLI auto-detects it, or set users.ssh_public_key for "+user.Username+" via `PUT /api/v1/users/{id}`")
+			return
+		}
+		ephPriv, ephPub, err := GenerateEphemeralSSHKey()
+		if err != nil {
+			sess.setStatus(statusError, "failed to generate session key")
+			return
+		}
+		sshAuth = &SSHPubkeyAuth{
+			VerifyPubkey:    verifyPubkey,
+			EphemeralPubkey: ephPub,
+			EphemeralKey:    ephPriv,
 		}
 	}
 
@@ -405,7 +432,7 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 	case "ssh":
 		h.setupSSH(sess, sshAuth, tunnelID, proxyAddr)
 	case "rdp", "vnc":
-		h.setupGuacd(sess, sshAuth, tunnelID, proxyAddr)
+		h.setupGuacd(sess, tunnelID, proxyAddr)
 	}
 
 	if st, _ := sess.getStatus(); st == statusError {
@@ -449,19 +476,22 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 // setupSSH connects to the agent's SSH daemon through the tunnel proxy
 // using the Go SSH client with ephemeral key authentication.
 func (h *Handler) setupSSH(sess *scrierSession, sshAuth *SSHPubkeyAuth, tunnelID, proxyAddr string) {
-	// Get SSH username from agent (blocks up to 15s).
-	sshUsername := h.tunnelOpener.SSHUsername(tunnelID)
+	// Block up to 15s for the agent's TunnelOpenResult. The agent either
+	// reports the OS username it landed in (success) or an explanation
+	// (e.g., pubkey not in any local authorized_keys).
+	sshUsername, agentErr := h.tunnelOpener.SSHResult(tunnelID)
 	if sshUsername == "" {
-		slog.Warn("scrier: no SSH username from agent", "session_id", sess.id)
-		// Fall back to target username from config.
-		if sshAuth != nil {
-			sshUsername = sshAuth.TargetUsername
+		msg := agentErr
+		if msg == "" {
+			msg = "SSH pubkey not authorized on this envoy"
 		}
-		if sshUsername == "" {
-			h.tunnelOpener.CloseTunnel(tunnelID)
-			sess.setStatus(statusError, "SSH authentication failed — no username")
-			return
-		}
+		slog.Warn("scrier: SSH auth failed",
+			"session_id", sess.id,
+			"agent_error", agentErr,
+		)
+		h.tunnelOpener.CloseTunnel(tunnelID)
+		sess.setStatus(statusError, msg)
+		return
 	}
 
 	sess.mu.Lock()
@@ -568,18 +598,11 @@ func (h *Handler) setupSSH(sess *scrierSession, sshAuth *SSHPubkeyAuth, tunnelID
 }
 
 // setupGuacd connects to guacd and performs the Guacamole handshake for RDP and VNC sessions.
-func (h *Handler) setupGuacd(sess *scrierSession, sshAuth *SSHPubkeyAuth, tunnelID, proxyAddr string) {
-	// Get SSH username from agent if SSH auth was used.
+// These protocols don't carry SSH auth — guacd handles their own auth — so no
+// authorized_keys interaction is needed on the agent side.
+func (h *Handler) setupGuacd(sess *scrierSession, tunnelID, proxyAddr string) {
 	var sshUsername string
 	var sshPrivateKeyPEM []byte
-	if sshAuth != nil {
-		sshUsername = h.tunnelOpener.SSHUsername(tunnelID)
-		sshPrivateKeyPEM = sshAuth.EphemeralKey
-	}
-
-	sess.mu.Lock()
-	sess.sshUsername = sshUsername
-	sess.mu.Unlock()
 
 	// Connect to guacd.
 	guacdConn, err := net.DialTimeout("tcp", h.tunnelOpener.GuacdAddr(), 5*time.Second)

@@ -1048,10 +1048,9 @@ message TunnelOpen {
   string target_host = 2;     // always "127.0.0.1" — agent enforces this
   uint32 target_port = 3;     // SSH=22, RDP=3389, VNC=5900 (hint — agent may override for VNC)
   string protocol = 4;        // "ssh", "rdp", "vnc"
-  string ssh_verify_pubkey = 5;    // web user's SSH pubkey — agent checks authorized_keys
-  string ssh_ephemeral_pubkey = 6; // per-session pubkey — agent installs temporarily
-  string ssh_target_username = 7;  // Unix username to check — agent only looks in this user's authorized_keys
-  string consent_mode = 8;        // VNC shadow: "always" (prompt user) or "never" (unattended)
+  string ssh_verify_pubkey = 5;    // web user's SSH pubkey — agent scans every regular user's authorized_keys for it
+  string ssh_ephemeral_pubkey = 6; // per-session pubkey — agent installs temporarily into the matching user's authorized_keys
+  string consent_mode = 7;         // VNC shadow: "always" (prompt user) or "never" (unattended)
 }
 
 // TunnelOpenResult is the agent's response to TunnelOpen.

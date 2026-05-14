@@ -92,13 +92,12 @@ func (s *AgentService) runTunnelRelay(
 	err := stream.Send(&pb.TunnelServerMessage{
 		Msg: &pb.TunnelServerMessage_Open{
 			Open: &pb.TunnelOpen{
-				TunnelId:            tunnel.tunnelID,
-				TargetHost:          "127.0.0.1",
-				TargetPort:          tunnel.targetPort,
-				Protocol:            tunnel.protocol,
-				SshVerifyPubkey:     tunnel.sshVerifyPubkey,
-				SshEphemeralPubkey:  tunnel.sshEphemeralPubkey,
-				SshTargetUsername:   tunnel.sshTargetUsername,
+				TunnelId:           tunnel.tunnelID,
+				TargetHost:         "127.0.0.1",
+				TargetPort:         tunnel.targetPort,
+				Protocol:           tunnel.protocol,
+				SshVerifyPubkey:    tunnel.sshVerifyPubkey,
+				SshEphemeralPubkey: tunnel.sshEphemeralPubkey,
 			},
 		},
 	})
@@ -120,7 +119,14 @@ func (s *AgentService) runTunnelRelay(
 		return status.Error(codes.InvalidArgument, "expected TunnelOpenResult")
 	}
 	if !result.Success {
-		s.tunnelMgr.closeTunnel(tunnel.tunnelID)
+		// Surface the agent's reason to scrier's setupSSH via sshAuthCh, then
+		// return. Do NOT closeTunnel here — setupSSH needs the tunnel alive
+		// just long enough to read the error and surface it as the session's
+		// failure message. setupSSH closes the tunnel after consuming it.
+		select {
+		case tunnel.sshAuthCh <- sshAuthResult{ErrorMessage: result.ErrorMessage}:
+		default:
+		}
 		slog.Warn("agent failed to open tunnel target",
 			"tunnel_id", tunnel.tunnelID,
 			"error", result.ErrorMessage,
@@ -128,10 +134,9 @@ func (s *AgentService) runTunnelRelay(
 		return status.Errorf(codes.FailedPrecondition, "agent: %s", result.ErrorMessage)
 	}
 
-	// Store SSH username from agent's authorized_keys check and signal waiters.
-	tunnel.sshUsername = result.SshUsername
+	// Signal the username to waiters and continue into the relay loop.
 	select {
-	case tunnel.sshUsernameCh <- result.SshUsername:
+	case tunnel.sshAuthCh <- sshAuthResult{Username: result.SshUsername}:
 	default:
 	}
 

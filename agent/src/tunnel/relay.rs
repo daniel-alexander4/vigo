@@ -88,22 +88,23 @@ pub async fn run(
         "tunnel open request received"
     );
 
-    // SSH pubkey auth: if the server sent a verify pubkey, check authorized_keys
-    // and install the ephemeral key before connecting. The EphemeralKeyGuard
+    // SSH pubkey auth: if the server sent a verify pubkey, scan every regular
+    // user's authorized_keys for it. On match, install the ephemeral key in
+    // that user's file and report the username back. The EphemeralKeyGuard
     // ensures cleanup even on panic or early return.
     let mut ssh_username = String::new();
     let mut _key_guard = super::sshauth::EphemeralKeyGuard::empty();
 
-    if !open.ssh_verify_pubkey.is_empty() && !open.ssh_ephemeral_pubkey.is_empty() && !open.ssh_target_username.is_empty() {
-        info!(tunnel_id = %tunnel_id, target_user = %open.ssh_target_username, "scrier: verifying SSH pubkey against authorized_keys");
-        match super::sshauth::verify_and_install(&open.ssh_target_username, &open.ssh_verify_pubkey, &open.ssh_ephemeral_pubkey) {
+    if !open.ssh_verify_pubkey.is_empty() && !open.ssh_ephemeral_pubkey.is_empty() {
+        info!(tunnel_id = %tunnel_id, "scrier: scanning authorized_keys for verify pubkey");
+        match super::sshauth::scan_and_install(&open.ssh_verify_pubkey, &open.ssh_ephemeral_pubkey) {
             Some(result) => {
                 ssh_username = result.username.clone();
                 _key_guard = super::sshauth::EphemeralKeyGuard::new(result.authorized_keys_path);
                 info!(tunnel_id = %tunnel_id, username = %result.username, "scrier: SSH pubkey verified");
             }
             None => {
-                let err_msg = "SSH pubkey not found in any authorized_keys file".to_string();
+                let err_msg = "scrier: verify pubkey not found in any regular user's authorized_keys".to_string();
                 warn!(tunnel_id = %tunnel_id, error = %err_msg);
                 let _ = tx
                     .send(TunnelClientMessage {

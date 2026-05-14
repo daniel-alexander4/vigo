@@ -3,16 +3,31 @@
 
 //! SSH authorized_keys verification and ephemeral key management for Scrier.
 //!
-//! When the server sends ssh_verify_pubkey in TunnelOpen, the agent:
-//! 1. Scans authorized_keys files to find which Unix user has that key
-//! 2. Installs the ephemeral pubkey in that user's authorized_keys
-//! 3. Returns the username so guacd can authenticate with the ephemeral key
-//! 4. Removes the ephemeral key when the tunnel closes (including on panic/crash via Drop)
+//! When the server sends `ssh_verify_pubkey` in TunnelOpen, the agent:
+//!   1. Enumerates every regular user (uid != 0) on this host via libc
+//!      getpwent — covers Linux `/home/*`, macOS `/Users/*`, BSDs, illumos,
+//!      and LDAP/NSS users without per-OS path branching.
+//!   2. Scans each user's `~/.ssh/authorized_keys` for the verify pubkey.
+//!   3. Installs the ephemeral pubkey into the matched user's file (with the
+//!      EPHEMERAL_MARKER comment so cleanup and convergence-strip can
+//!      recognise it later).
+//!   4. Returns that user's name so the server can SSH in as them.
+//!
+//! Root is deliberately never a scrier landing target — operators land in a
+//! regular user and sudo when they need elevation. If no regular user holds
+//! the verify pubkey, the session fails with a clear error.
 
+use std::ffi::CStr;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
+
+/// A single passwd entry, narrowed to the fields scrier cares about.
+struct RegularUser {
+    name: String,
+    home: PathBuf,
+}
 
 /// Result of checking authorized_keys for a public key.
 pub struct AuthResult {
@@ -50,89 +65,123 @@ impl Drop for EphemeralKeyGuard {
 /// Public so the user executor can preserve these lines during convergence.
 pub const EPHEMERAL_MARKER: &str = "# vigo-scrier-ephemeral";
 
-/// Remove any stale ephemeral keys left behind by crashed sessions.
-/// Called on agent startup to clean up after unclean shutdowns.
-pub fn cleanup_stale_keys() {
-    let mut paths: Vec<PathBuf> = Vec::new();
-
-    let root_ak = PathBuf::from("/root/.ssh/authorized_keys");
-    if root_ak.exists() {
-        paths.push(root_ak);
-    }
-    if let Ok(entries) = fs::read_dir("/home") {
-        for entry in entries.flatten() {
-            let ak = entry.path().join(".ssh/authorized_keys");
-            if ak.exists() && !is_symlink(&ak) {
-                paths.push(ak);
+/// Enumerate every regular user (uid != 0) on this host with a non-empty home
+/// directory. Sorted by username for deterministic tie-break in the multi-
+/// match case. Single source of truth for "every local user's authorized_keys"
+/// — both `scan_and_install` and `cleanup_stale_keys` use this list.
+///
+/// Walks libc's passwd database (getpwent/setpwent/endpwent) so /etc/passwd,
+/// LDAP/NSS, and any platform-specific home layout (Linux /home/*,
+/// macOS /Users/*, BSDs, illumos) are all covered without per-OS branching.
+fn regular_users() -> Vec<RegularUser> {
+    let mut out: Vec<RegularUser> = Vec::new();
+    // SAFETY: setpwent/getpwent/endpwent are POSIX. getpwent returns a pointer
+    // to a static buffer reused on each call; we copy the fields out before
+    // the next iteration. The whole sequence runs single-threaded — scrier
+    // session setup is per-request, no parallel scans.
+    unsafe {
+        libc::setpwent();
+        loop {
+            let pw = libc::getpwent();
+            if pw.is_null() {
+                break;
             }
+            let pw = &*pw;
+            if pw.pw_uid == 0 {
+                continue;
+            }
+            let name = match CStr::from_ptr(pw.pw_name).to_str() {
+                Ok(s) if !s.is_empty() => s.to_string(),
+                _ => continue,
+            };
+            let home = match CStr::from_ptr(pw.pw_dir).to_str() {
+                Ok(s) if !s.is_empty() => PathBuf::from(s),
+                _ => continue,
+            };
+            out.push(RegularUser { name, home });
         }
+        libc::endpwent();
     }
-
-    for path in &paths {
-        let content = match fs::read_to_string(path) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-        if content.contains(EPHEMERAL_MARKER) {
-            info!(path = %path.display(), "scrier: removing stale ephemeral key from previous session");
-            remove_ephemeral_key(path);
-        }
-    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out
 }
 
-/// Verify the pubkey in the target user's authorized_keys and install the
-/// ephemeral key. Only checks the specified user — no scanning.
-pub fn verify_and_install(target_username: &str, verify_pubkey: &str, ephemeral_pubkey: &str) -> Option<AuthResult> {
+/// Scan every regular user's authorized_keys for the verify pubkey and, on
+/// first match, install the ephemeral key in that user's file. Returns None
+/// if no regular user holds the verify pubkey.
+///
+/// If multiple users hold the same pubkey (operator key-reuse), the first
+/// alphabetical match wins and a WARN line names every match so the
+/// misconfiguration is discoverable.
+pub fn scan_and_install(verify_pubkey: &str, ephemeral_pubkey: &str) -> Option<AuthResult> {
     let verify_key = normalize_key(verify_pubkey);
     if verify_key.is_empty() {
-        warn!("empty verify pubkey, skipping authorized_keys check");
-        return None;
-    }
-    if target_username.is_empty() {
-        warn!("empty target username, skipping authorized_keys check");
+        warn!("scrier: empty verify pubkey, refusing to scan");
         return None;
     }
 
-    // Build the path to the target user's authorized_keys.
-    let ak = if target_username == "root" {
-        PathBuf::from("/root/.ssh/authorized_keys")
-    } else {
-        PathBuf::from(format!("/home/{}/.ssh/authorized_keys", target_username))
-    };
+    let users = regular_users();
+    let mut matches: Vec<(String, PathBuf)> = Vec::new();
 
-    if !ak.exists() {
-        warn!(username = %target_username, path = %ak.display(),
-            "scrier: authorized_keys file not found for target user");
-        return None;
-    }
-    if is_symlink(&ak) {
-        warn!(path = %ak.display(), "scrier: skipping symlinked authorized_keys");
-        return None;
+    for u in &users {
+        let ak = u.home.join(".ssh/authorized_keys");
+        if !ak.exists() || is_symlink(&ak) {
+            continue;
+        }
+        if file_contains_key(&ak, &verify_key) {
+            matches.push((u.name.clone(), ak));
+        }
     }
 
-    if !file_contains_key(&ak, &verify_key) {
-        warn!(username = %target_username,
-            "scrier: verify pubkey not found in {}'s authorized_keys", target_username);
+    if matches.is_empty() {
+        warn!("scrier: verify pubkey not found in any regular user's authorized_keys");
         return None;
     }
+    if matches.len() > 1 {
+        let names: Vec<&str> = matches.iter().map(|(n, _)| n.as_str()).collect();
+        warn!(
+            users = ?names,
+            "scrier: verify pubkey matches multiple users; landing in first (alphabetical)"
+        );
+    }
 
-    info!(username = %target_username, "scrier: verify pubkey found in authorized_keys");
+    let (username, ak) = matches.into_iter().next().unwrap();
 
     if let Err(e) = append_ephemeral_key(&ak, ephemeral_pubkey) {
-        warn!(error = %e, path = %ak.display(), "failed to install ephemeral key");
+        warn!(error = %e, path = %ak.display(), "scrier: failed to install ephemeral key");
         return None;
     }
 
-    info!(username = %target_username, path = %ak.display(), "scrier: ephemeral key installed");
-
+    info!(username = %username, path = %ak.display(), "scrier: ephemeral key installed");
     Some(AuthResult {
-        username: target_username.to_string(),
+        username,
         authorized_keys_path: ak,
     })
 }
 
+/// Remove any stale ephemeral keys left behind by crashed sessions. Called
+/// on agent startup to clean up after unclean shutdowns. Iterates the same
+/// regular-user set as `scan_and_install` so the two functions can never
+/// disagree on which files they look at.
+pub fn cleanup_stale_keys() {
+    let users = regular_users();
+    for u in &users {
+        let ak = u.home.join(".ssh/authorized_keys");
+        if !ak.exists() || is_symlink(&ak) {
+            continue;
+        }
+        let content = match fs::read_to_string(&ak) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        if content.contains(EPHEMERAL_MARKER) {
+            info!(path = %ak.display(), "scrier: removing stale ephemeral key from previous session");
+            remove_ephemeral_key(&ak);
+        }
+    }
+}
+
 /// Remove the ephemeral key from an authorized_keys file.
-/// Uses file locking for atomicity with concurrent operations.
 pub fn remove_ephemeral_key(path: &Path) {
     let content = match fs::read_to_string(path) {
         Ok(c) => c,
@@ -177,7 +226,7 @@ fn is_symlink(path: &Path) -> bool {
     }
 }
 
-/// Check if an authorized_keys file contains the given key.
+/// Check if an authorized_keys file contains the given normalized key.
 /// Compares only the key-type + base64 portion, ignoring comments.
 fn file_contains_key(path: &Path, normalized_key: &str) -> bool {
     let file = match fs::File::open(path) {
@@ -216,9 +265,7 @@ fn normalize_key(key: &str) -> String {
 
 /// Append the ephemeral pubkey to an authorized_keys file with a marker comment.
 fn append_ephemeral_key(path: &Path, ephemeral_pubkey: &str) -> std::io::Result<()> {
-    let mut file = fs::OpenOptions::new()
-        .append(true)
-        .open(path)?;
+    let mut file = fs::OpenOptions::new().append(true).open(path)?;
     let key = ephemeral_pubkey.trim();
     writeln!(file, "{} {}", key, EPHEMERAL_MARKER)?;
     Ok(())
