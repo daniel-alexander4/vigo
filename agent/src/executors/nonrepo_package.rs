@@ -40,6 +40,7 @@ impl Executor for NonRepoPackageExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
         let url = params.get("url").cloned().unwrap_or_default();
+        let artifact = params.get("artifact").cloned().unwrap_or_default();
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
         let sha256_expected = params.get("sha256").cloned().unwrap_or_default();
         let lock_version = params.get("lock_version").map(|s| s == "true").unwrap_or(false);
@@ -64,33 +65,116 @@ impl Executor for NonRepoPackageExecutor {
             .and_then(|s| s.parse().ok())
             .unwrap_or(5);
 
-        let mut result = ResourceResult::new("nonrepo_package", &url);
+        let mut result = ResourceResult::new("nonrepo_package", if !artifact.is_empty() { &artifact } else { &url });
 
-        if url.is_empty() {
-            result.error = Some("nonrepo_package executor: url param is required".into());
+        // Source resolution: either `url:` (download to /tmp) or `artifact:`
+        // (curator-materialized at /var/lib/vigo/artifacts/…). Mutually
+        // exclusive — operator must pick one. `sha256:` is redundant with
+        // `artifact:` because curator already verified the blob_sha; reject
+        // the combo to keep the integrity story unambiguous (slice 6,
+        // ADR-024).
+        if url.is_empty() && artifact.is_empty() {
+            result.error = Some(
+                "nonrepo_package executor: one of `url:` or `artifact:` is required".into(),
+            );
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
+        if !url.is_empty() && !artifact.is_empty() {
+            result.error = Some(
+                "nonrepo_package executor: `url:` and `artifact:` are mutually exclusive".into(),
+            );
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
+        if !artifact.is_empty() && !sha256_expected.is_empty() {
+            result.error = Some(
+                "nonrepo_package executor: `sha256:` is redundant with `artifact:` — \
+                 the catalog entry's signed blob_sha is already verified by curator. \
+                 Drop one or the other.".into(),
+            );
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
 
-        // Detect package format from URL.
-        let detect_url = &url;
-        let format = match detect_format(detect_url) {
-            Some(f) => f,
-            None => {
-                result.error = Some(format!(
-                    "nonrepo_package executor: cannot detect package format from URL (expected .deb, .rpm, .pkg, or .msi): {}",
-                    detect_url
-                ));
-                result.duration_ms = start.elapsed().as_millis() as i32;
-                return result;
-            }
+        // Resolve install source up front: format, default package name,
+        // and (for `artifact:`) the persistent materialized path. The URL
+        // path defers its download until after pre_install / cleanup —
+        // see further below — so we leave `install_path` empty here and
+        // signal the URL path with `pending_download`.
+        let (format, default_pkg_name, install_path_pre_download, pending_download): (
+            PackageFormat,
+            String,
+            String,
+            bool,
+        ) = if !artifact.is_empty() {
+            let resolver = match super::super::swarm::curator::executor_resolver::build_resolver_from_agent_config() {
+                Ok(r) => r,
+                Err(e) => {
+                    result.error = Some(format!(
+                        "nonrepo_package executor: cannot construct curator resolver: {e:#}"
+                    ));
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            };
+            let resolved = match super::super::swarm::curator::executor_resolver::resolve_artifact_param(&artifact, &resolver) {
+                Ok(r) => r,
+                Err(e) => {
+                    result.error = Some(format!(
+                        "nonrepo_package executor: resolving `artifact: {artifact}`: {e:#}"
+                    ));
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            };
+            let path = resolved.path.to_string_lossy().to_string();
+            let sniffed = match detect_format_magic(&path) {
+                Some(f) => f,
+                None => {
+                    result.error = Some(format!(
+                        "nonrepo_package executor: cannot detect package format from \
+                         artifact's first 8 bytes at {} (supported magic prefixes: \
+                         .deb `!<arch>`, .rpm `ed ab ee db`, .pkg `xar!`, .msi `D0 CF 11 E0`). \
+                         Re-publish the artifact with one of those formats, or use \
+                         `url:` instead of `artifact:`.",
+                        path
+                    ));
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            };
+            (sniffed, resolved.name, path, false)
+        } else {
+            let f = match detect_format(&url) {
+                Some(f) => f,
+                None => {
+                    result.error = Some(format!(
+                        "nonrepo_package executor: cannot detect package format from URL \
+                         (expected .deb, .rpm, .pkg, or .msi): {}",
+                        url
+                    ));
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            };
+            (f, package_name_from_url(&url, f), String::new(), true)
         };
 
-        // Auto-detect package name from URL or use explicit param.
+        // Auto-detect package name from URL/artifact or use explicit param.
         let pkg_name = params
             .get("package")
             .cloned()
-            .unwrap_or_else(|| package_name_from_url(detect_url, format));
+            .unwrap_or(default_pkg_name);
+        if pkg_name.is_empty() {
+            let src = if !artifact.is_empty() { format!("artifact:{artifact}") } else { format!("url:{url}") };
+            result.error = Some(format!(
+                "nonrepo_package executor: could not derive package name from {src}; \
+                 set the `package:` param explicitly."
+            ));
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
 
         // Update result name to the package name for clearer reporting.
         result.resource_name = pkg_name.clone();
@@ -180,72 +264,82 @@ impl Executor for NonRepoPackageExecutor {
             }
         }
 
-        // Clean up stale temp dirs from previous cycles (older than 1 hour).
-        cleanup_stale_tmp_dirs();
+        // Resolve the install source. URL path downloads to a per-cycle
+        // tmp dir; artifact path reuses the curator-materialized file
+        // (persistent under /var/lib/vigo/artifacts/, no cleanup). The
+        // `tmp_dir_cleanup` Option signals whether we own a tmp dir that
+        // needs removing on every exit path below.
+        let (install_path, tmp_dir_cleanup): (String, Option<String>) = if !pending_download {
+            // artifact: → install_path already populated above; nothing to
+            // download and nothing to clean up. Curator already verified
+            // the blob_sha during pull, so the sha256 verification block
+            // below is skipped (mutual-exclusion enforced at the top).
+            (install_path_pre_download, None)
+        } else {
+            // URL path — original behavior.
+            cleanup_stale_tmp_dirs();
+            let tmp_dir = format!("/tmp/vigo-nonrepo-pkg-{}", uuid::Uuid::new_v4());
+            if let Err(e) = std::fs::create_dir_all(&tmp_dir) {
+                result.error = Some(format!("create temp dir: {}", e));
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
+            }
+            let filename = match sanitize_url_filename(&url) {
+                Ok(f) => f,
+                Err(e) => {
+                    let _ = std::fs::remove_dir_all(&tmp_dir);
+                    result.error = Some(e);
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            };
+            let download_path = format!("{}/{}", tmp_dir, filename);
 
-        // Download the package.
-        let tmp_dir = format!("/tmp/vigo-nonrepo-pkg-{}", uuid::Uuid::new_v4());
-        if let Err(e) = std::fs::create_dir_all(&tmp_dir) {
-            result.error = Some(format!("create temp dir: {}", e));
-            result.duration_ms = start.elapsed().as_millis() as i32;
-            return result;
-        }
-
-        let filename = match sanitize_url_filename(&url) {
-            Ok(f) => f,
-            Err(e) => {
+            // Parse headers from params.
+            let headers_str = params.get("headers").cloned().unwrap_or_default();
+            let header_list: Vec<&str> = if headers_str.is_empty() {
+                Vec::new()
+            } else {
+                headers_str.split('\n').collect()
+            };
+            let config = DownloadConfig {
+                url: &url,
+                dest: &download_path,
+                retries,
+                retry_delay: Duration::from_secs(retry_delay),
+                timeout_secs,
+                headers: &header_list,
+            };
+            if let Err(e) = download_with_retry(&*self.runner, &config) {
                 let _ = std::fs::remove_dir_all(&tmp_dir);
                 result.error = Some(e);
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }
-        };
-        let download_path = format!("{}/{}", tmp_dir, filename);
-
-        // Parse headers from params.
-        let headers_str = params.get("headers").cloned().unwrap_or_default();
-        let header_list: Vec<&str> = if headers_str.is_empty() {
-            Vec::new()
-        } else {
-            headers_str.split('\n').collect()
-        };
-
-        let config = DownloadConfig {
-            url: &url,
-            dest: &download_path,
-            retries,
-            retry_delay: Duration::from_secs(retry_delay),
-            timeout_secs,
-            headers: &header_list,
-        };
-        if let Err(e) = download_with_retry(&*self.runner, &config) {
-            let _ = std::fs::remove_dir_all(&tmp_dir);
-            result.error = Some(e);
-            result.duration_ms = start.elapsed().as_millis() as i32;
-            return result;
-        }
-
-        // Verify SHA-256 if specified.
-        if !sha256_expected.is_empty() {
-            match file_sha256(&download_path) {
-                Ok(hash) if hash == sha256_expected => {}
-                Ok(hash) => {
-                    let _ = std::fs::remove_dir_all(&tmp_dir);
-                    result.error = Some(format!(
-                        "sha256 mismatch: expected {}, got {}",
-                        sha256_expected, hash
-                    ));
-                    result.duration_ms = start.elapsed().as_millis() as i32;
-                    return result;
-                }
-                Err(e) => {
-                    let _ = std::fs::remove_dir_all(&tmp_dir);
-                    result.error = Some(format!("hash {}: {}", download_path, e));
-                    result.duration_ms = start.elapsed().as_millis() as i32;
-                    return result;
+            // Verify SHA-256 if specified (URL path only — `artifact:`
+            // gets its integrity guarantee from the signed catalog entry).
+            if !sha256_expected.is_empty() {
+                match file_sha256(&download_path) {
+                    Ok(hash) if hash == sha256_expected => {}
+                    Ok(hash) => {
+                        let _ = std::fs::remove_dir_all(&tmp_dir);
+                        result.error = Some(format!(
+                            "sha256 mismatch: expected {}, got {}",
+                            sha256_expected, hash
+                        ));
+                        result.duration_ms = start.elapsed().as_millis() as i32;
+                        return result;
+                    }
+                    Err(e) => {
+                        let _ = std::fs::remove_dir_all(&tmp_dir);
+                        result.error = Some(format!("hash {}: {}", download_path, e));
+                        result.duration_ms = start.elapsed().as_millis() as i32;
+                        return result;
+                    }
                 }
             }
-        }
+            (download_path, Some(tmp_dir))
+        };
 
         // Update package cache before install if requested (helps dep resolution).
         if update_cache {
@@ -258,13 +352,18 @@ impl Executor for NonRepoPackageExecutor {
         // Install the package (with lock contention retry for dpkg/rpm).
         let install_result = install_package(
             &*self.runner,
-            &download_path,
+            &install_path,
             format,
             allow_downgrade,
             &flags,
         );
 
-        let _ = std::fs::remove_dir_all(&tmp_dir);
+        // Clean up our tmp dir if we own one (URL path). The artifact:
+        // path's install_path lives under /var/lib/vigo/artifacts/ and
+        // must NOT be deleted — curator owns retention there.
+        if let Some(d) = &tmp_dir_cleanup {
+            let _ = std::fs::remove_dir_all(d);
+        }
 
         match install_result {
             Ok(()) => {
@@ -339,6 +438,41 @@ impl Executor for NonRepoPackageExecutor {
 // ---------------------------------------------------------------------------
 // Format detection
 // ---------------------------------------------------------------------------
+
+/// Detect package format from a file's magic bytes (first 8 bytes are
+/// enough for all four supported formats). Used by the `artifact:` path —
+/// curator-materialized files have no extension, so URL-style detection
+/// can't run. Magic prefixes:
+///
+/// - `.deb`  — `21 3c 61 72 63 68 3e 0a` (`!<arch>\n`, the ar(1) signature)
+/// - `.rpm`  — `ed ab ee db` (RPM lead magic)
+/// - `.pkg`  — `78 61 72 21` (`xar!`, the xar archive signature)
+/// - `.msi`  — `d0 cf 11 e0` (Compound File Binary header)
+///
+/// Returns `None` for anything unrecognized; the executor surfaces a
+/// clear "supported formats" error in that case.
+fn detect_format_magic(path: &str) -> Option<PackageFormat> {
+    let mut f = std::fs::File::open(path).ok()?;
+    let mut buf = [0u8; 8];
+    // A short file (< 8 bytes) can't be any of the supported formats,
+    // but `read_exact` would fail in a way that loses the partial info.
+    // Use `read` and accept whatever we got — buf has trailing zeros if
+    // the file was shorter, which won't match any magic prefix.
+    if f.read(&mut buf).is_err() {
+        return None;
+    }
+    if buf.starts_with(&[0x21, 0x3c, 0x61, 0x72, 0x63, 0x68, 0x3e, 0x0a]) {
+        Some(PackageFormat::Deb)
+    } else if buf.starts_with(&[0xed, 0xab, 0xee, 0xdb]) {
+        Some(PackageFormat::Rpm)
+    } else if buf.starts_with(&[0x78, 0x61, 0x72, 0x21]) {
+        Some(PackageFormat::Pkg)
+    } else if buf.starts_with(&[0xd0, 0xcf, 0x11, 0xe0]) {
+        Some(PackageFormat::Msi)
+    } else {
+        None
+    }
+}
 
 /// Detect package format from URL extension.
 fn detect_format(url: &str) -> Option<PackageFormat> {
@@ -956,6 +1090,50 @@ mod tests {
     }
 
     #[test]
+    fn detect_magic_recognizes_all_four_formats() {
+        use std::io::Write;
+        let cases: &[(&str, &[u8], PackageFormat)] = &[
+            ("deb-magic.bin", &[0x21, 0x3c, 0x61, 0x72, 0x63, 0x68, 0x3e, 0x0a, 0xff, 0xff], PackageFormat::Deb),
+            ("rpm-magic.bin", &[0xed, 0xab, 0xee, 0xdb, 0x00, 0x00, 0x00, 0x00], PackageFormat::Rpm),
+            ("pkg-magic.bin", &[0x78, 0x61, 0x72, 0x21, 0x00, 0x1c, 0x00, 0x01], PackageFormat::Pkg),
+            ("msi-magic.bin", &[0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1], PackageFormat::Msi),
+        ];
+        for (name, bytes, expected) in cases {
+            let dir = tempfile::tempdir().unwrap();
+            let p = dir.path().join(name);
+            std::fs::File::create(&p).unwrap().write_all(bytes).unwrap();
+            assert_eq!(detect_format_magic(p.to_str().unwrap()), Some(*expected), "{name}");
+        }
+    }
+
+    #[test]
+    fn detect_magic_returns_none_for_unknown_or_short() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+
+        // Unknown magic — looks like a tarball.
+        let tar = dir.path().join("tar.bin");
+        std::fs::File::create(&tar)
+            .unwrap()
+            .write_all(&[0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00])
+            .unwrap();
+        assert_eq!(detect_format_magic(tar.to_str().unwrap()), None);
+
+        // Empty file — can't match anything.
+        let empty = dir.path().join("empty.bin");
+        std::fs::File::create(&empty).unwrap();
+        assert_eq!(detect_format_magic(empty.to_str().unwrap()), None);
+
+        // 1-byte file — short read shouldn't false-positive any magic.
+        let one = dir.path().join("one.bin");
+        std::fs::File::create(&one).unwrap().write_all(&[0x21]).unwrap();
+        assert_eq!(detect_format_magic(one.to_str().unwrap()), None);
+
+        // Nonexistent file — returns None, not a panic.
+        assert_eq!(detect_format_magic("/no/such/path/here"), None);
+    }
+
+    #[test]
     fn detect_with_query_string() {
         assert_eq!(
             detect_format("https://example.com/pkg.deb?token=abc"),
@@ -1333,8 +1511,47 @@ mod tests {
         };
         let result = exec.execute(&make_params(&[]), false);
         assert!(result.error.is_some());
+        // Slice 6: error names both source options now (one of url: or artifact:).
         assert!(
-            result.error.as_deref().unwrap().contains("url param is required"),
+            result.error.as_deref().unwrap().contains("`url:` or `artifact:`"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn url_and_artifact_together_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = NonRepoPackageExecutor { runner: Box::new(mock) };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", "https://example.com/x.deb"),
+                ("artifact", "alexander4/x:latest"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("mutually exclusive"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn sha256_alongside_artifact_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = NonRepoPackageExecutor { runner: Box::new(mock) };
+        let result = exec.execute(
+            &make_params(&[
+                ("artifact", "alexander4/x:latest"),
+                ("sha256", "abc"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("redundant with `artifact:`"),
             "unexpected error: {:?}",
             result.error
         );

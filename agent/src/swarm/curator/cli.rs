@@ -50,11 +50,9 @@ use super::catalog_cache;
 use super::helper::socket_path as helper_socket_path;
 use super::resolver::Resolver;
 use super::state;
-use crate::auth;
 use crate::swarm::gitback::envelopes::DELEGATION_MAX_LEN;
 use crate::swarm::puddle;
 use crate::traits::gitback::passwd_path;
-use crate::update::TlsCerts;
 
 /// Top-level dispatch for `vigo swarm curator …`. Called from `agent/src/main.rs`.
 pub fn run(args: Vec<String>) -> Result<()> {
@@ -569,24 +567,11 @@ fn resolve_aid(target: &str) -> Result<String> {
     resolve_ref(target)?.artifact_id_hex()
 }
 
-/// Build a [`Resolver`] pointed at this envoy's configured API + TLS. Empty
-/// api_addr / missing certs are tolerated — the resolver falls back to the
-/// cached catalog and the local blob cache, so read paths still work offline
-/// for any artifact this envoy already holds.
+/// CLI-side alias for the shared resolver constructor. Slice 6 lifted the
+/// implementation into `executor_resolver` so both the CLI and the
+/// nonrepo_package / source_package executors share one source of truth.
 fn build_resolver() -> Result<Resolver> {
-    let data_dir = crate::platform::paths::default_data_dir();
-    let cfg = crate::config::load(&data_dir);
-    let api_addr = cfg.get("api_addr").cloned().unwrap_or_else(|| "https://localhost:8443".to_string());
-    let tls = if auth::keypair::has_bootstrap_certs(&data_dir) {
-        Some(TlsCerts {
-            ca_cert: auth::keypair::ca_cert_path(&data_dir).to_string_lossy().to_string(),
-            client_cert: auth::keypair::tls_cert_path(&data_dir).to_string_lossy().to_string(),
-            client_key: auth::keypair::tls_key_path(&data_dir).to_string_lossy().to_string(),
-        })
-    } else {
-        None
-    };
-    Ok(Resolver::new(api_addr, tls))
+    super::executor_resolver::build_resolver_from_agent_config()
 }
 
 fn require_root_for(verb: &str) -> Result<()> {

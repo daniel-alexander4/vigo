@@ -56,6 +56,7 @@
 pub mod catalog;
 pub mod catalog_cache;
 pub mod cli;
+pub mod executor_resolver;
 pub mod helper;
 pub mod resolver;
 pub mod state;

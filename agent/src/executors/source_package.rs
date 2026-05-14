@@ -25,25 +25,109 @@ impl SourcePackageExecutor {
     }
 }
 
+/// Archive format selector — what the extract step does with the source
+/// file. Used by both the URL path (extension-derived via
+/// [`archive_format_from_url`]) and the `artifact:` path (magic-byte
+/// sniffed via [`archive_format_from_magic`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ArchiveFormat {
+    TarGz,
+    TarBz2,
+    TarXz,
+    Zip,
+    /// Anything not recognized as an archive — treated as a raw binary
+    /// and copied straight to `target_path`.
+    Raw,
+}
+
+/// Detect archive format from a URL or filename's extension.
+fn archive_format_from_url(path: &str) -> ArchiveFormat {
+    let p = path.to_lowercase();
+    if p.ends_with(".tar.gz") || p.ends_with(".tgz") {
+        ArchiveFormat::TarGz
+    } else if p.ends_with(".tar.bz2") {
+        ArchiveFormat::TarBz2
+    } else if p.ends_with(".tar.xz") {
+        ArchiveFormat::TarXz
+    } else if p.ends_with(".zip") {
+        ArchiveFormat::Zip
+    } else {
+        ArchiveFormat::Raw
+    }
+}
+
+/// Detect archive format from a file's first few bytes — what the
+/// `artifact:` path uses since curator-materialized files have no
+/// extension. Magic prefixes:
+///
+/// - gzip — `1f 8b` (covers `.tar.gz`/`.tgz`)
+/// - bzip2 — `42 5a 68` (`BZh`, covers `.tar.bz2`)
+/// - xz — `fd 37 7a 58 5a 00` (covers `.tar.xz`)
+/// - zip — `50 4b 03 04` (`PK\03\04`)
+///
+/// Note: gzip/bz2/xz magic only confirms the compression layer, not
+/// that it wraps a tar. In practice every archive published to curator
+/// with these compressions is a tarball; if it isn't, the `tar` call
+/// will fail with a clear error and the operator can re-publish or use
+/// `url:` with the explicit extension.
+///
+/// Unknown magic → [`ArchiveFormat::Raw`] — copy straight to target.
+fn archive_format_from_magic(path: &str) -> ArchiveFormat {
+    let mut f = match std::fs::File::open(path) {
+        Ok(f) => f,
+        Err(_) => return ArchiveFormat::Raw,
+    };
+    let mut buf = [0u8; 8];
+    if f.read(&mut buf).is_err() {
+        return ArchiveFormat::Raw;
+    }
+    if buf.starts_with(&[0x1f, 0x8b]) {
+        ArchiveFormat::TarGz
+    } else if buf.starts_with(&[0x42, 0x5a, 0x68]) {
+        ArchiveFormat::TarBz2
+    } else if buf.starts_with(&[0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00]) {
+        ArchiveFormat::TarXz
+    } else if buf.starts_with(&[0x50, 0x4b, 0x03, 0x04]) {
+        ArchiveFormat::Zip
+    } else {
+        ArchiveFormat::Raw
+    }
+}
+
 impl Executor for SourcePackageExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
         let url = params.get("url").cloned().unwrap_or_default();
+        let artifact = params.get("artifact").cloned().unwrap_or_default();
         let target = params
             .get("target_path")
             .cloned()
             .unwrap_or_default();
 
+        let source_desc = if !artifact.is_empty() { artifact.clone() } else { url.clone() };
         let effective_name = if !target.is_empty() {
             target.clone()
         } else {
-            url.clone()
+            source_desc.clone()
         };
         let name = &effective_name;
         let mut result = ResourceResult::new("source_package", name);
 
-        if url.is_empty() {
-            result.error = Some("source_package executor: url param is required".into());
+        // Source resolution: either `url:` (download) or `artifact:`
+        // (curator-materialized). Mutually exclusive. `sha256:` is
+        // redundant alongside `artifact:` (signed catalog entry already
+        // verifies blob_sha) — slice 6, ADR-024.
+        if url.is_empty() && artifact.is_empty() {
+            result.error = Some(
+                "source_package executor: one of `url:` or `artifact:` is required".into(),
+            );
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
+        if !url.is_empty() && !artifact.is_empty() {
+            result.error = Some(
+                "source_package executor: `url:` and `artifact:` are mutually exclusive".into(),
+            );
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -75,6 +159,15 @@ impl Executor for SourcePackageExecutor {
 
         let binary = params.get("binary_path").cloned().unwrap_or_default();
         let sha256 = params.get("sha256").cloned().unwrap_or_default();
+        if !artifact.is_empty() && !sha256.is_empty() {
+            result.error = Some(
+                "source_package executor: `sha256:` is redundant with `artifact:` — \
+                 the catalog entry's signed blob_sha is already verified by curator. \
+                 Drop one or the other.".into(),
+            );
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
         let unless_cmd = params.get("unless").cloned().unwrap_or_default();
         let mode = params.get("mode").map(|s| s.as_str()).unwrap_or("0755");
         let version = params.get("version").cloned().unwrap_or_default();
@@ -142,7 +235,12 @@ impl Executor for SourcePackageExecutor {
             return result;
         }
 
-        // Download to temp dir.
+        // Resolve the source file's local path + archive format. URL path
+        // downloads to a per-cycle tmp dir and detects format from URL
+        // extension. `artifact:` path reuses the curator-materialized file
+        // (persistent under /var/lib/vigo/artifacts/, no cleanup) and
+        // sniffs format from magic bytes — the materialized file has no
+        // extension by design.
         let tmp_dir = format!("/tmp/vigo-archive-{}", uuid::Uuid::new_v4());
         if let Err(e) = std::fs::create_dir_all(&tmp_dir) {
             result.error = Some(format!("create temp dir: {}", e));
@@ -150,90 +248,116 @@ impl Executor for SourcePackageExecutor {
             return result;
         }
 
-        let filename = match sanitize_url_filename(&url) {
-            Ok(f) => f,
-            Err(e) => {
+        let (source_path, archive_format): (String, ArchiveFormat) = if !artifact.is_empty() {
+            let resolver = match super::super::swarm::curator::executor_resolver::build_resolver_from_agent_config() {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = std::fs::remove_dir_all(&tmp_dir);
+                    result.error = Some(format!(
+                        "source_package executor: cannot construct curator resolver: {e:#}"
+                    ));
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            };
+            let resolved = match super::super::swarm::curator::executor_resolver::resolve_artifact_param(&artifact, &resolver) {
+                Ok(r) => r,
+                Err(e) => {
+                    let _ = std::fs::remove_dir_all(&tmp_dir);
+                    result.error = Some(format!(
+                        "source_package executor: resolving `artifact: {artifact}`: {e:#}"
+                    ));
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            };
+            let path = resolved.path.to_string_lossy().to_string();
+            let fmt = archive_format_from_magic(&path);
+            (path, fmt)
+        } else {
+            let filename = match sanitize_url_filename(&url) {
+                Ok(f) => f,
+                Err(e) => {
+                    let _ = std::fs::remove_dir_all(&tmp_dir);
+                    result.error = Some(e);
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            };
+            let download_path = format!("{}/{}", tmp_dir, filename);
+            let config = DownloadConfig {
+                url: &url,
+                dest: &download_path,
+                timeout_secs,
+                ..DownloadConfig::default()
+            };
+            if let Err(e) = download_with_retry(&*self.runner, &config) {
+                let _ = std::fs::remove_dir_all(&tmp_dir);
                 result.error = Some(e);
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }
+            let fmt = archive_format_from_url(&download_path);
+            (download_path, fmt)
         };
-        let download_path = format!("{}/{}", tmp_dir, filename);
 
-        let config = DownloadConfig {
-            url: &url,
-            dest: &download_path,
-            timeout_secs,
-            ..DownloadConfig::default()
-        };
-        if let Err(e) = download_with_retry(&*self.runner, &config) {
-            let _ = std::fs::remove_dir_all(&tmp_dir);
-            result.error = Some(e);
-            result.duration_ms = start.elapsed().as_millis() as i32;
-            return result;
-        }
-
-        // Detect format and extract.
+        // Extract dir is always under our tmp_dir even for the artifact
+        // path — we don't extract into /var/lib/vigo/artifacts/.
         let extract_dir = format!("{}/extracted", tmp_dir);
         let _ = std::fs::create_dir_all(&extract_dir);
 
-        let dl_lower = download_path.to_lowercase();
         let strip_str = strip_components.to_string();
 
-        let extract_result = if dl_lower.ends_with(".tar.gz") || dl_lower.ends_with(".tgz") {
-            let mut args = vec!["-xzf", &download_path, "-C", &extract_dir];
-            if strip_components > 0 {
-                args.push("--strip-components");
-                args.push(&strip_str);
+        let extract_result = match archive_format {
+            ArchiveFormat::TarGz | ArchiveFormat::TarBz2 | ArchiveFormat::TarXz => {
+                let flag = match archive_format {
+                    ArchiveFormat::TarGz => "-xzf",
+                    ArchiveFormat::TarBz2 => "-xjf",
+                    ArchiveFormat::TarXz => "-xJf",
+                    _ => unreachable!(),
+                };
+                let mut args = vec![flag, &source_path, "-C", &extract_dir];
+                if strip_components > 0 {
+                    args.push("--strip-components");
+                    args.push(&strip_str);
+                }
+                self.runner.run("tar", &args)
             }
-            self.runner.run("tar", &args)
-        } else if dl_lower.ends_with(".tar.bz2") {
-            let mut args = vec!["-xjf", &download_path, "-C", &extract_dir];
-            if strip_components > 0 {
-                args.push("--strip-components");
-                args.push(&strip_str);
-            }
-            self.runner.run("tar", &args)
-        } else if dl_lower.ends_with(".tar.xz") {
-            let mut args = vec!["-xJf", &download_path, "-C", &extract_dir];
-            if strip_components > 0 {
-                args.push("--strip-components");
-                args.push(&strip_str);
-            }
-            self.runner.run("tar", &args)
-        } else if dl_lower.ends_with(".zip") {
-            let zip_result = self.runner.run("unzip", &["-o", &download_path, "-d", &extract_dir]);
-            // For zip archives, strip_components requires post-extraction move.
-            if strip_components > 0 {
-                if let Ok(ref o) = zip_result {
-                    if o.status.success() {
-                        if let Err(e) = zip_strip_components(&extract_dir, strip_components) {
-                            let _ = std::fs::remove_dir_all(&tmp_dir);
-                            result.error = Some(format!("strip_components on zip: {}", e));
-                            result.duration_ms = start.elapsed().as_millis() as i32;
-                            return result;
+            ArchiveFormat::Zip => {
+                let zip_result = self.runner.run("unzip", &["-o", &source_path, "-d", &extract_dir]);
+                // strip_components for zip requires post-extraction move.
+                if strip_components > 0 {
+                    if let Ok(ref o) = zip_result {
+                        if o.status.success() {
+                            if let Err(e) = zip_strip_components(&extract_dir, strip_components) {
+                                let _ = std::fs::remove_dir_all(&tmp_dir);
+                                result.error = Some(format!("strip_components on zip: {}", e));
+                                result.duration_ms = start.elapsed().as_millis() as i32;
+                                return result;
+                            }
                         }
                     }
                 }
+                zip_result
             }
-            zip_result
-        } else {
-            // Unknown format — treat as raw binary, just copy to target.
-            if let Err(e) = std::fs::copy(&download_path, &target) {
+            ArchiveFormat::Raw => {
+                // Not an archive — copy the source straight to target.
+                if let Err(e) = std::fs::copy(&source_path, &target) {
+                    let _ = std::fs::remove_dir_all(&tmp_dir);
+                    result.error = Some(format!("copy {} to {}: {}", source_path, target, e));
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
                 let _ = std::fs::remove_dir_all(&tmp_dir);
-                result.error = Some(format!("copy {} to {}: {}", download_path, target, e));
+                set_file_mode(&target, mode);
+                apply_owner_group(&target, &owner, &group, &mut result);
+                verify_sha256(&target, &sha256, &mut result);
+                if result.error.is_none() {
+                    write_version_marker(&target, &version);
+                }
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }
-            let _ = std::fs::remove_dir_all(&tmp_dir);
-            set_file_mode(&target, mode);
-            apply_owner_group(&target, &owner, &group, &mut result);
-            verify_sha256(&target, &sha256, &mut result);
-            if result.error.is_none() {
-                write_version_marker(&target, &version);
-            }
-            result.duration_ms = start.elapsed().as_millis() as i32;
-            return result;
         };
 
         match extract_result {
@@ -562,11 +686,103 @@ mod tests {
         };
         let result = exec.execute(&make_params(&[]), false);
         assert!(result.error.is_some());
+        let msg = result.error.as_deref().unwrap();
+        // Slice 6: error name covers both source options now.
         assert!(
-            result.error.as_deref().unwrap().contains("url param is required"),
+            msg.contains("`url:` or `artifact:`"),
+            "unexpected error: {:?}",
+            msg
+        );
+    }
+
+    #[test]
+    fn url_and_artifact_together_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = SourcePackageExecutor { runner: Box::new(mock) };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", "https://example.com/x.tar.gz"),
+                ("artifact", "alexander4/x:latest"),
+                ("target_path", "/usr/local/bin/x"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("mutually exclusive"),
             "unexpected error: {:?}",
             result.error
         );
+    }
+
+    #[test]
+    fn sha256_alongside_artifact_errors() {
+        let mock = MockRunner::new(vec![]);
+        let exec = SourcePackageExecutor { runner: Box::new(mock) };
+        let result = exec.execute(
+            &make_params(&[
+                ("artifact", "alexander4/x:latest"),
+                ("target_path", "/usr/local/bin/x"),
+                ("sha256", "abc123"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result.error.as_deref().unwrap().contains("redundant with `artifact:`"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn archive_format_from_url_recognizes_extensions() {
+        assert_eq!(archive_format_from_url("/tmp/x.tar.gz"), ArchiveFormat::TarGz);
+        assert_eq!(archive_format_from_url("/tmp/x.tgz"), ArchiveFormat::TarGz);
+        assert_eq!(archive_format_from_url("/tmp/x.TAR.GZ"), ArchiveFormat::TarGz, "case-insensitive");
+        assert_eq!(archive_format_from_url("/tmp/x.tar.bz2"), ArchiveFormat::TarBz2);
+        assert_eq!(archive_format_from_url("/tmp/x.tar.xz"), ArchiveFormat::TarXz);
+        assert_eq!(archive_format_from_url("/tmp/x.zip"), ArchiveFormat::Zip);
+        assert_eq!(archive_format_from_url("/tmp/binary-no-extension"), ArchiveFormat::Raw);
+    }
+
+    #[test]
+    fn archive_format_from_magic_sniffs_compression_layers() {
+        use std::io::Write;
+        let cases: &[(&str, &[u8], ArchiveFormat)] = &[
+            ("gz", &[0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00], ArchiveFormat::TarGz),
+            ("bz2", &[0x42, 0x5a, 0x68, 0x39, 0x31, 0x41, 0x59, 0x26], ArchiveFormat::TarBz2),
+            ("xz", &[0xfd, 0x37, 0x7a, 0x58, 0x5a, 0x00, 0x00, 0x04], ArchiveFormat::TarXz),
+            ("zip", &[0x50, 0x4b, 0x03, 0x04, 0x14, 0x00, 0x00, 0x00], ArchiveFormat::Zip),
+        ];
+        for (name, magic, expected) in cases {
+            let dir = tempfile::tempdir().unwrap();
+            let p = dir.path().join(name);
+            std::fs::File::create(&p).unwrap().write_all(magic).unwrap();
+            assert_eq!(archive_format_from_magic(p.to_str().unwrap()), *expected, "{name}");
+        }
+    }
+
+    #[test]
+    fn archive_format_from_magic_unknown_falls_to_raw() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("plain");
+        // ELF header — not an archive, must be treated as raw binary.
+        std::fs::File::create(&p)
+            .unwrap()
+            .write_all(&[0x7f, 0x45, 0x4c, 0x46, 0x02, 0x01, 0x01, 0x00])
+            .unwrap();
+        assert_eq!(archive_format_from_magic(p.to_str().unwrap()), ArchiveFormat::Raw);
+
+        // Nonexistent file → Raw (lets the executor's copy-to-target
+        // branch surface the actual filesystem error).
+        assert_eq!(archive_format_from_magic("/no/such/path"), ArchiveFormat::Raw);
+
+        // Empty file → Raw.
+        let empty = dir.path().join("empty");
+        std::fs::File::create(&empty).unwrap();
+        assert_eq!(archive_format_from_magic(empty.to_str().unwrap()), ArchiveFormat::Raw);
     }
 
     #[test]
