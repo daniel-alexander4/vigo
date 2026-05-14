@@ -79,7 +79,8 @@ checkin:
   interval: "5m"                               # agent poll frequency
   jitter_percent: 20                           # randomize timing by 0-N%
   bundle_max_age: "24h"                        # signed bundle TTL on agents (0 = forever)
-  # offline_threshold: "15m"                   # override staleness boundary (default: 2.5 × max(interval, agent's observed inter-CheckIn cadence))
+  # offline_threshold: "15m"                   # override staleness boundary (default: 2.5 × interval)
+  # fleet_lookup_ttl: "30s"                    # how long a resolved fleet: cross-node lookup is reused before recomputing
   # observe_only: false                        # global observe-only: all envoys report drift only, no changes applied
 
 
@@ -353,87 +354,67 @@ watcher:
 # multicast discovery. Four-layer discovery: local multicast → peer exchange
 # → server peer list → direct from seeder.
 
-# Pattern lists are first-match-wins, "-" prefix denies, default-deny on no
-# match (same semantics as matchfile patterns).
-#
-# ⚠ ORDER MATTERS. Put specific deny patterns BEFORE any catch-all "*",
-# or the catch-all silently swallows them. The loader detects the most
-# common shadowing cases and logs a warning at startup + on every
-# reload (also surfaced via `vigocli doctor`); fix any "shadowed deny
-# pattern" warnings the loader emits.
-#
-# Examples:
-#   []                          → off everywhere (default)
-#   ["*"]                       → fleet-wide on
-#   ["-rasp1", "*"]             → everywhere except rasp1                ✓
-#   ["*", "-rasp1"]             → fleet-wide on (deny is dead)           ✗
-#   ["-rasp*", "*"]             → everywhere except every rasp* host     ✓
-#   ["annlap", "plex"]          → only those two; everything else denied
-#
-# Two layers gate every subsystem. Both `swarm.enabled` (substrate-level)
-# AND the per-subsystem list must allow a host for the subsystem to be
-# active there.
-
 # swarm:
-#   enabled: ["*"]                              # which envoys run the swarm substrate
+#   # Substrate gate. Empty list disables swarm fleet-wide. Pattern
+#   # semantics (every `enabled:` field below): first-match-wins,
+#   # `-` prefix denies, default-deny on no match. Both this AND the
+#   # per-subsystem list must allow a host before any subsystem
+#   # activates there.
+#   enabled: ["*"]                              # all enrolled envoys participate; ["-rasp1", "*"] denies one host
 #   seed_dir: "/var/lib/vigo/swarm/seed"        # where vigocli distribute writes seeds
-#   port: 1531                                  # agent swarm listen port
-#   max_bandwidth_percent: 50                   # max % of link speed agents use for swarm
-#   manifest_liveness_ttl: 24h                  # active manifest entries unrefreshed for this
-#                                               # duration are revoked by the retention pruner.
-#                                               # Guards against orphaned entries when a
-#                                               # publisher disappears. Empty / zero disables
-#                                               # the sweep.
+#   port: 1531                                  # agent peer-server port (mTLS HTTPS)
+#   max_bandwidth_percent: 50                   # max % of detected link speed agents use for transfers
+#   manifest_liveness_ttl: 24h                  # active manifest entries unrefreshed for this long get revoked
 #
-#   # Payload (admin-pushed fleet file distribution) authorization.
-#   # The admin distribute endpoint refuses when this list is empty.
-#   payload:
-#     enabled: ["*"]
+#   # Filecast (admin-pushed file distribution).
+#   filecast:
+#     enabled: ["*"]                            # which envoys may receive admin-pushed filecasts
+#     max_size_bytes: 0                         # per-distribute upload cap. 0 = no cap (today's behavior)
+#     default_retention: "7d"                   # default retention when --retention omitted on `vigocli swarm filecast distribute`
 #
-#   # Longdrawer (LAN plaintext directory mirror) daemon authorization.
-#   # Per-user opt-in still requires the user creating ~/longdrawer/.
-#   longdrawer:
-#     enabled: ["*"]
-#
-#   # Puddle (per-user identity) authorization. Lockbox derives its
-#   # authorization from this list — there is no separate lockbox
-#   # section. A host allowed here can hold puddle identity material
-#   # and lockbox ciphertext for its locally-enrolled members; a
-#   # host denied here cannot use either subsystem.
-#   puddle:
-#     enabled: ["annlap", "plex", "girlslaptop"]
-#
-#   # Gitback (git-over-swarm) authorization — publisher and
-#   # bundle-holder gate.
+#   # Gitback (git-over-swarm). Authorization gate + bundle size +
+#   # envelope retention. Bundle cap is enforced publisher-side at
+#   # fan-out time; envelope retention controls when revoke/leave
+#   # gossip envelopes are reaped.
 #   gitback:
 #     enabled: ["*"]
+#     max_bundle_bytes: 1073741824              # 1 GiB. 0 = no cap.
+#     envelope_retention: "90d"                 # revoke/leave envelope reap window. Empty = compile-time default (90d).
 #
-#   # Curator (P2P artifact registry — ADR-024) authorization. Both a
-#   # publisher gate and an artifact-blob-holder gate. Publishing also
-#   # requires `curator: true` on the user's usercrate AND an unlocked
-#   # puddle — a heavier grant than `gitback:`. Reading is ungated:
-#   # every envoy can resolve artifacts via the server (`/api/v1/swarm/
-#   # curator/resolve`) and `vigo swarm curator pull` regardless of the
-#   # pattern list — `enabled` only controls whether this envoy can
-#   # PUBLISH and whether it holds the P2P DR replica for matching
-#   # artifacts.
+#   # Longdrawer (LAN plaintext directory mirror). Per-user opt-in still
+#   # requires the user creating ~/longdrawer/.
+#   longdrawer:
+#     enabled: ["*"]
+#     max_file_bytes: 2147483648                # 2 GiB. 0 = no cap.
+#
+#   # Puddle (per-user identity, ADR-014). Lockbox derives ITS
+#   # AUTHORIZATION from this section per ADR-020 — there is no
+#   # `enabled` field under lockbox below.
+#   puddle:
+#     enabled: ["*"]
+#
+#   # Lockbox operational tuning. Authorization derives from puddle
+#   # above; this section is size + envelope retention only.
+#   lockbox:
+#     max_file_bytes: 1073741824                # 1 GiB per-file ciphertext cap on auto-encrypt + push. 0 = no cap.
+#     envelope_retention: "90d"                 # LEAVE/RESURRECT/TOMBSTONE reap window. Empty = compile-time default (90d).
+#
+#   # Curator (P2P artifact registry, ADR-024). Publisher + artifact-blob-holder
+#   # gate. Reading is ungated — every envoy can `vigo swarm curator pull`
+#   # regardless. `enabled` only controls who may PUBLISH and who holds the
+#   # P2P DR replica. Publishing additionally requires `curator: true` on the
+#   # user's usercrate AND an unlocked puddle (a heavier grant than `gitback:`).
 #   curator:
-#     enabled: ["annlap", "plex", "girlslaptop"]
-#     # Per-blob (one {name,version,os,arch} artifact) size cap. 0 or
-#     # unset = the 2 GiB compile-time default. There is no uncapped
-#     # mode. Raise this for large container images.
-#     max_bytes: 2147483648   # 2 GiB
+#     enabled: ["*"]
+#     max_bytes: 2147483648                     # 2 GiB per-blob cap. 0 = the 2 GiB compile-time default; raise for large container images.
 #
-#   # hostdox — let each swarm-enabled agent resolve its swarm peers'
-#   # hostnames to their LAN addresses. When true, the agent maintains a
-#   # delimited block in /etc/hosts mapping every peer's announced hostname
-#   # to its LAN IP (learned from the swarm multicast — the same data
-#   # `vigocli swarm status` shows), refreshed as peers come and go.
-#   # Additive only: lines outside the managed block are never touched, and
-#   # any name the swarm doesn't hold still resolves via your normal DNS.
-#   # Off (or omitted) leaves /etc/hosts alone — turn it on for fleets whose
+#   # hostdox — when true, each swarm-enabled agent maintains a
+#   # delimited block in /etc/hosts mapping every announced peer hostname to
+#   # its LAN IP. Additive only: lines outside the managed block are
+#   # untouched, and any name the swarm doesn't hold still resolves via DNS.
+#   # Off (or omitted) leaves /etc/hosts alone. Turn it on for fleets whose
 #   # DNS doesn't authoritatively own the local domain. A plain bool, not a
-#   # pattern list: it follows swarm.enabled per-host. NOTE: on hosts where
+#   # pattern list — it follows swarm.enabled per host. NOTE: on hosts where
 #   # this is on, do NOT also manage /etc/hosts with a whole-file `type: file`
 #   # module — it'll clobber the managed block and the two will flap. Use
 #   # `type: host` (per-entry) or `type: blockinfile` (own markers) instead.
