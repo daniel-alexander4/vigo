@@ -107,7 +107,7 @@ The following defaults from the original draft were ratified before implementati
 
 **Documentation:**
 - `docs/concepts/puddle.md` — the model, the bootstrap flow, the recovery posture.
-- `docs/reference/cli/agent-swarm-puddle.md` — verbs.
+- `do../reference/vigocli/agent-swarm-puddle.md` — verbs.
 
 **Operational:**
 - Agent rebuild + cross-compile + redeploy required.

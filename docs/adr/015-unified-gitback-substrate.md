@@ -160,7 +160,7 @@ Linux + macOS at launch per CLAUDE.md's Linux-first doctrine; Windows multi-call
 
 **Documentation:**
 - `docs/concepts/gitback.md` — full rewrite. The unified model, the four use-case combinations, the recovery posture, the conflict semantics.
-- `docs/reference/cli/agent-swarm-gitback.md` and `docs/reference/cli/swarm-gitback.md` — replace existing trees with project-namespaced verbs.
+- `do../reference/vigocli/agent-swarm-gitback.md` and `do../reference/vigocli/swarm-gitback.md` — replace existing trees with project-namespaced verbs.
 
 **Removed:**
 - The old single-user CLI verbs (`source add|remove|pause|resume|show|validate|list`, `recover`).

@@ -190,4 +190,4 @@ channel for name claims in the initial cut (deferrable +1). `public_read`
 feature, not part of this ADR.
 
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*

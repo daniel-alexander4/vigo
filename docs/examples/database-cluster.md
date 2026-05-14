@@ -203,6 +203,6 @@ chmod 600 /srv/vigo/secrets/vigo/app/db_password
 - `environments.vgo` — vars that differ per tier (`environment:`)
 - `secret:` prefix — credentials resolved server-side at check-in
 
-See [Multi-Axis Config](../engineering/writing-modules/multi-axis-config.md) for the full canonical model.
+See [Multi-Axis Config](../reference/writing-modules.md) for the full canonical model.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*

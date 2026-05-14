@@ -122,4 +122,4 @@ Extend the module with an SSL vhost:
 
 Note that the SSL key uses `secret:` -- the secrets provider resolves it, and the content is never stored in plaintext in the config files.
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*

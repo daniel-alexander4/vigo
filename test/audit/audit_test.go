@@ -330,10 +330,10 @@ func TestRESTEndpointsDocumented(t *testing.T) {
 		t.Fatal("found no API routes in server/api/ or server/bootstrap/")
 	}
 
-	// Read docs/reference/api/rest.md.
-	restDoc, err := os.ReadFile(filepath.Join(root, "docs", "reference", "api", "rest.md"))
+	// Read docs/reference/api.md.
+	restDoc, err := os.ReadFile(filepath.Join(root, "docs", "reference", "api.md"))
 	if err != nil {
-		t.Fatalf("reading docs/reference/api/rest.md: %v", err)
+		t.Fatalf("reading docs/reference/api.md: %v", err)
 	}
 	docContent := string(restDoc)
 

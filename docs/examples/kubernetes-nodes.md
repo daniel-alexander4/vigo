@@ -436,4 +436,4 @@ The module DAG ensures correct ordering:
 | OS patching + reboot coordination | Cluster upgrades (kubeadm upgrade) |
 | Node certificates (host-level PKI) | ServiceAccount tokens, RBAC |
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*

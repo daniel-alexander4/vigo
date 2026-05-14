@@ -92,9 +92,9 @@ The chain is capped at `DELEGATION_MAX_LEN = 5` (hard fail at verify time, pre-f
 - This ADR.
 - `docs/adr/_index.md` — entry added.
 - `docs/adr/018-puddle-rekey.md` — status header refreshed; "out of scope" item points at ADR-019.
-- `docs/reference/cli/agent-swarm-gitback.md` — verb table + reference sections for `re-invite-all`, `rejoin`, `re-found`; ADR-019 status subsection.
-- `docs/reference/cli/agent-swarm-puddle.md` — `rekey-pair` / `rekey` rows mention `--force-orphan-projects`; "What gets preserved" / "What does NOT survive" sections updated.
-- `docs/engineering/subsystems/gitback.md` — full ADR-019 section (data layer, authority windows, multi-puddle flow, `PushChain` wire format, shipping cadence).
+- `do../reference/vigocli/agent-swarm-gitback.md` — verb table + reference sections for `re-invite-all`, `rejoin`, `re-found`; ADR-019 status subsection.
+- `do../reference/vigocli/agent-swarm-puddle.md` — `rekey-pair` / `rekey` rows mention `--force-orphan-projects`; "What gets preserved" / "What does NOT survive" sections updated.
+- `docs/howto/set-up-gitback.md` — full ADR-019 section (data layer, authority windows, multi-puddle flow, `PushChain` wire format, shipping cadence).
 - `CLAUDE.md` — gitback agent block extended.
 
 **Operational:**

@@ -119,4 +119,4 @@ Override vars at the node level to tune the sound:
 | `brownnoise_pulse_uid` | `1000` | UID of the user whose PulseAudio socket to use |
 | `brownnoise_dir` | `/opt/brownnoise` | Working directory on the node |
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*

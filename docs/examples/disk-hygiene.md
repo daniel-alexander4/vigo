@@ -93,4 +93,4 @@ This role enforces **preventive policies** — it configures the system so disk 
 - **Replace service-specific logrotate configs.** Service modules (nginx, postgres, etc.) manage their own log rotation. This role handles system-wide defaults.
 
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*

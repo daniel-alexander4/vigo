@@ -422,7 +422,7 @@ backup:
 
 ## ai
 
-AI assistant configuration. Claude or OpenAI recommended for best results. Ollama works for air-gapped environments but requires a dedicated GPU and produces lower-quality answers. See [AI Providers](../operations/ai-providers.md) for details on each provider, hardware requirements, and data privacy considerations.
+AI assistant configuration. Claude or OpenAI recommended for best results. Ollama works for air-gapped environments but requires a dedicated GPU and produces lower-quality answers. See [AI Providers](../howto/troubleshoot.md) for details on each provider, hardware requirements, and data privacy considerations.
 
 ```yaml
 ai:
@@ -514,4 +514,4 @@ All event types available for SMTP, webhook, and integration subscriptions:
 | `security.cve_critical` | New critical CVE found |
 | `security.hardening_drop` | Hardening score dropped significantly |
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*

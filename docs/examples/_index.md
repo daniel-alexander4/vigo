@@ -20,12 +20,12 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 
 ## Migration Guides
 
-- [Migration Overview](migration/_index.md) -- Comparison table and guide index
-- [From Puppet](migration/puppet.md) -- Pull-based, catalog, resources, Facter
-- [From Ansible](migration/ansible.md) -- Push-to-pull shift, handlers to notify
-- [From Chef](migration/chef.md) -- Ruby DSL to YAML, cookbooks to modules
-- [From Salt](migration/salt.md) -- Both YAML, Pillar to vars, Grains to Traits
-- [From CFEngine](migration/cfengine.md) -- Promise theory, classes to when:
+- [Migration Overview](../howto/_index.md#coming-from-another-config-management-system) -- Comparison table and guide index
+- [From Puppet](../howto/migrate-from-puppet.md) -- Pull-based, catalog, resources, Facter
+- [From Ansible](../howto/migrate-from-ansible.md) -- Push-to-pull shift, handlers to notify
+- [From Chef](../howto/migrate-from-chef.md) -- Ruby DSL to YAML, cookbooks to modules
+- [From Salt](../howto/migrate-from-salt.md) -- Both YAML, Pillar to vars, Grains to Traits
+- [From CFEngine](../howto/migrate-from-cfengine.md) -- Promise theory, classes to when:
 
 ## Conventions
 
@@ -38,4 +38,4 @@ All examples follow these patterns:
 - OS-conditional packages use separate resources with `when:` expressions
 - Secrets use the `secret:` prefix and are resolved by the secrets provider
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*

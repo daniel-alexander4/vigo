@@ -1,7 +1,7 @@
 
 # Docker Stack Management
 
-This example uses the `docker_image`, `docker_container`, and `docker_compose` [executors](../reference/executors/_index.md) to manage containerized services.
+This example uses the `docker_image`, `docker_container`, and `docker_compose` [executors](../reference/vigo/resources/_index.md) to manage containerized services.
 
 ## Module Definition
 
@@ -164,4 +164,4 @@ The `docker_container` executor is idempotent:
 - If the container exists and is stopped, it is started
 - If the container exists and matches the desired state, no action is taken
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/license.md).*

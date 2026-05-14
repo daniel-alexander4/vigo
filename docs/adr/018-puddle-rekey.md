@@ -74,7 +74,7 @@ Re-running `rekey-pair` inside the active 24h window only reissues a fresh claim
 
 **Documentation:**
 - This ADR.
-- `docs/reference/cli/agent-swarm-puddle.md` — verb reference table extended with rekey-pair / rekey rows; a Rekey walkthrough section.
+- `do../reference/vigocli/agent-swarm-puddle.md` — verb reference table extended with rekey-pair / rekey rows; a Rekey walkthrough section.
 - `docs/adr/_index.md` — entry added.
 
 **Operational:**

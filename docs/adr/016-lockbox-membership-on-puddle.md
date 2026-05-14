@@ -118,7 +118,7 @@ This ADR deliberately preserves per-envoy age keys after introducing puddle iden
 
 **Documentation:**
 - `docs/concepts/lockbox.md` — describe puddle-aware membership. Bootstrap order via peer-pair. The standalone subtree. Per-envoy keys still preserved.
-- `docs/reference/cli/agent-swarm-lockbox.md` — `lockbox puddle *` and `lockbox standalone *` subtree structure with per-verb help text.
+- `do../reference/vigocli/agent-swarm-lockbox.md` — `lockbox puddle *` and `lockbox standalone *` subtree structure with per-verb help text.
 
 **Operational:**
 - Agent rebuild + cross-compile + redeploy required.

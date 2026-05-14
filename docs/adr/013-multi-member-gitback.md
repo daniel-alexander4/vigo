@@ -113,7 +113,7 @@ If founder + all admins are lost (no one with a valid admin token), the project 
 
 **Documentation:**
 - `docs/concepts/gitback-multi.md` — the multi-member model, the founder-loss recovery posture, the conflict-resolution semantics.
-- `docs/reference/cli/agent-swarm-gitback.md` and `docs/reference/cli/swarm-gitback.md` — new `multi` subcommand tree.
+- `do../reference/vigocli/agent-swarm-gitback.md` and `do../reference/vigocli/swarm-gitback.md` — new `multi` subcommand tree.
 
 **Operational:**
 - Agent rebuild + cross-compile + redeploy required (Z-level version bump).

@@ -1,17 +1,16 @@
 
 # Reference
 
-Complete reference documentation for Vigo's resource types, trait collectors, CLI commands, APIs, supported platforms, and web UI.
+Lookup material. Not a tutorial — get the shape of what you need from the [how-to guides](../howto/) first if you don't already know it.
 
-## Sections
+| Section | What's there |
+|---|---|
+| [vigocli/](vigocli/) | Every CLI command, one page per verb. |
+| [vigo/](vigo/) | The agent: flags, plus the full resource and trait vocabulary that you write modules in. |
+| [API](api.md) | REST API endpoints. The audit test (`go test ./test/audit/...`) verifies every `/api/v1/*` route in the codebase appears here. |
+| [server.yaml](server-yaml.md) | The full server-config schema. |
+| [Writing modules](writing-modules.md) | The canonical module-authoring reference: YAML format, resource types, conditionals, templates, composition (roles / matchfiles / usercrates / common.vgo / environments.vgo), lookups, retraction, stream-edit. |
+| [Compliance matrix](compliance-matrix.md) | Framework × control table; which Vigo modules / Connwaer traits satisfy each control. |
 
-- [Executors](executors/_index.md) -- 70 resource types across all platforms
-- [Trait Collectors](traits/_index.md) -- System fact collectors
-- [CLI Reference](cli/_index.md) -- vigocli admin commands
-- [API Reference](api/_index.md) -- gRPC and REST APIs
-- [Supported Platforms](platforms/_index.md) -- Platform-specific executors, traits, and bootstrap guides
-- [Web UI](ui/_index.md) -- Dashboard, envoys, compliance, runs, pushes, workflows, query, spanner
-- [Server Configuration](server-yaml.md) -- server.yaml reference
-- [Glossary](glossary.md) -- canonical definitions for Vigo-specific terms
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*
