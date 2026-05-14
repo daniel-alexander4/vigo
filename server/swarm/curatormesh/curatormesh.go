@@ -109,12 +109,22 @@ func ArtifactID(e CatalogEntry) (string, error) {
 }
 
 // LookupByID returns the catalog entry for an artifact_id (hex), or nil.
+// Production catalogs come from [aggregate], which prepopulates byID; for
+// catalogs built by hand (tests, fixtures) byID may be empty, so this falls
+// back to a linear scan over [Catalog.Artifacts] — same result, slower for
+// big catalogs but tests build tiny ones.
 func (c *Catalog) LookupByID(artifactID string) *CatalogEntry {
 	if c == nil {
 		return nil
 	}
-	if e, ok := c.byID[strings.ToLower(artifactID)]; ok {
+	want := strings.ToLower(artifactID)
+	if e, ok := c.byID[want]; ok {
 		return &e
+	}
+	for i := range c.Artifacts {
+		if aid, err := ArtifactID(c.Artifacts[i]); err == nil && aid == want {
+			return &c.Artifacts[i]
+		}
 	}
 	return nil
 }

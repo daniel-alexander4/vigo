@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -79,6 +80,23 @@ func (h *CuratorHandler) envoyInputs() []curatormesh.EnvoyInput {
 // to one TTL window.
 func (h *CuratorHandler) snapshot(r *http.Request) (*curatormesh.Catalog, error) {
 	return h.agg.Snapshot(r.Context(), h.envoyInputs())
+}
+
+// FleetSnapshot returns the cached fleet catalog plus the
+// operator-block table. Passthrough for the UI handler (slice 5b) —
+// the `/curator` page reads this via the [CuratorFleetSource]
+// interface in `ui/swarm_curator.go` so the ui package doesn't import
+// curatormesh + db directly.
+func (h *CuratorHandler) FleetSnapshot(ctx context.Context) (*curatormesh.Catalog, []db.CuratorBlockedArtifact, error) {
+	cat, err := h.agg.Snapshot(ctx, h.envoyInputs())
+	if err != nil {
+		return nil, nil, err
+	}
+	blocked, _ := h.queries.ListBlockedArtifacts(ctx)
+	if blocked == nil {
+		blocked = []db.CuratorBlockedArtifact{}
+	}
+	return cat, blocked, nil
 }
 
 func (h *CuratorHandler) isBlocked(r *http.Request, artifactID string) bool {

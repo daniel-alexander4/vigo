@@ -42,6 +42,7 @@ import (
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/peer"
 	"git.alexander4.io/vigo/server/spanner"
+	"git.alexander4.io/vigo/server/swarm/curatormesh"
 	"git.alexander4.io/vigo/server/swarm/lockboxmesh"
 	"git.alexander4.io/vigo/server/swarm/gitbackmesh"
 	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
@@ -246,6 +247,7 @@ type Handler struct {
 	traitLookup        TraitLookup
 	fleetCache         *FleetCache
 	gitbackFleet      GitbackFleetSource
+	curatorFleet      CuratorFleetSource
 	mesh               MeshSource
 	swarmAPI           SwarmSource
 	traitQuery         TraitQueryDispatcher
@@ -284,6 +286,24 @@ type GitbackFleetSource interface {
 // Called from gateway.go after both handlers are constructed.
 func (h *Handler) SetGitbackFleet(src GitbackFleetSource) {
 	h.gitbackFleet = src
+}
+
+// CuratorFleetSource surfaces the aggregated fleet-wide curator
+// view (signed catalog + operator-block table) — the same data the
+// `/api/v1/swarm/curator/list` REST endpoint serves. Implemented by
+// `*api.CuratorHandler` in the main binary; declared as a tiny
+// interface here so the ui package doesn't depend on the full handler
+// type. Slice 5b consumer.
+type CuratorFleetSource interface {
+	FleetSnapshot(ctx context.Context) (*curatormesh.Catalog, []db.CuratorBlockedArtifact, error)
+}
+
+// SetCuratorFleet wires the curator aggregator into the UI handler.
+// Called from server/main.go after the curator handler is constructed
+// (curator is mounted from main.go, not gateway.go, because it depends
+// on the swarm manifest store + the catalog feed reactor).
+func (h *Handler) SetCuratorFleet(src CuratorFleetSource) {
+	h.curatorFleet = src
 }
 
 // MeshSource surfaces the longdrawer + lockbox fleet aggregators.
@@ -593,6 +613,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/swarm-lockbox-user/{user}", h.LockboxUserDrilldown)
 	mux.HandleFunc("GET /swarm/gitback", h.Gitback)
 	mux.HandleFunc("GET /swarm/gitback/{project_id}", h.Gitback)
+	mux.HandleFunc("GET /swarm/curator", h.Curator)
+	mux.HandleFunc("GET /swarm/curator/{artifact_id}", h.Curator)
 	// Backwards-compat: /mesh → /longdrawer (or /lockbox when ?tab=crypt).
 	// Keep for one minor release so muscle-memory URLs don't 404.
 	mux.HandleFunc("GET /mesh", h.MeshRedirect)

@@ -17,9 +17,11 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/cve"
+	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleetpressure"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/risk"
+	"git.alexander4.io/vigo/server/swarm/curatormesh"
 
 	"github.com/alecthomas/chroma/v2"
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
@@ -428,6 +430,16 @@ func funcMap() template.FuncMap {
 		// ("1.6 KiB", "12.1 MiB"). Mirrors ui/payload.go::humanSize for
 		// template-only call sites that can't reuse the Go helper.
 		"humanBytes": humanSize,
+		// humanBytesU is the uint64 variant — curator catalog entries
+		// carry sizes as uint64 (protobuf wire compatibility); the
+		// existing humanBytes signature expects int64 and would error at
+		// template-execute time on a uint64 arg. Same body otherwise.
+		"humanBytesU": func(n uint64) string {
+			if n > 1<<62 {
+				n = 1 << 62 // clamp absurd inputs so the int64 conversion never wraps
+			}
+			return humanSize(int64(n))
+		},
 		// severityColor maps a fleetpressure.Severity to the existing
 		// stat-card-- color modifier so the dashboard "Agent Health"
 		// rollup uses the same palette as the rest of the dashboard.
@@ -516,6 +528,95 @@ func funcMap() template.FuncMap {
 			default:
 				return fmt.Sprintf("%dd", s/86400)
 			}
+		},
+		// truncCol shortens a string to fit in a fixed-width table column
+		// without breaking layout when an operator publishes an artifact
+		// with a verbose `target` glob or recipients list. Adds an
+		// ellipsis to signal truncation; max <= 1 is a no-op (degenerate).
+		"truncCol": func(s string, max int) string {
+			if max <= 1 || len(s) <= max {
+				return s
+			}
+			return s[:max-1] + "…"
+		},
+		// div is integer division for templates. Used by the curator
+		// detail page to drop millis from the catalog entry's
+		// `issued_at` before handing to formatUnixTime (which expects
+		// seconds). One-line helper rather than another timestamp
+		// formatter — keeps the render layer thin.
+		"div": func(a, b int64) int64 {
+			if b == 0 {
+				return 0
+			}
+			return a / b
+		},
+		// curatorArtifactID computes sha256(founder_puddle_pubkey ‖ name)
+		// for a CatalogEntry from the template. Mirrors the agent's
+		// catalog::artifact_id_for; cheap (one sha256 per row) and
+		// keeps the entry shape self-contained so the template doesn't
+		// need an artifact_id field bolted on. Returns "" on a bad
+		// pubkey — degenerate row will show "" in the column.
+		"curatorArtifactID": func(e curatormesh.CatalogEntry) string {
+			id, _ := curatormesh.ArtifactID(e)
+			return id
+		},
+		// curatorPlatformSummary collapses an entry's versions ×
+		// platforms into a sorted, deduped "os/arch,os/arch" string
+		// for the list view's PLATFORMS column. Truncated for display
+		// when the union grows large.
+		"curatorPlatformSummary": func(e curatormesh.CatalogEntry) string {
+			if len(e.Body.Versions) == 0 {
+				return "—"
+			}
+			seen := make(map[string]struct{})
+			for _, av := range e.Body.Versions {
+				for _, p := range av.Platforms {
+					seen[p.OS+"/"+p.Arch] = struct{}{}
+				}
+			}
+			out := make([]string, 0, len(seen))
+			for k := range seen {
+				out = append(out, k)
+			}
+			sort.Strings(out)
+			joined := strings.Join(out, ",")
+			if len(joined) > 28 {
+				return joined[:27] + "…"
+			}
+			return joined
+		},
+		// curatorIsBlocked tests whether an artifact_id (hex) appears in
+		// the blocked-list slice. Linear scan — list is small (most fleets
+		// will have zero blocks, a serious incident only adds a few).
+		"curatorIsBlocked": func(aid string, blocked []db.CuratorBlockedArtifact) bool {
+			low := strings.ToLower(aid)
+			for _, b := range blocked {
+				if strings.EqualFold(b.ArtifactID, low) {
+					return true
+				}
+			}
+			return false
+		},
+		// curatorOrphanBlocks returns block-table entries whose
+		// artifact_id has no live catalog row. Lets the operator see
+		// in-effect blocks that survive publisher rm.
+		"curatorOrphanBlocks": func(cat *curatormesh.Catalog, blocked []db.CuratorBlockedArtifact) []db.CuratorBlockedArtifact {
+			if cat == nil || len(blocked) == 0 {
+				return nil
+			}
+			live := make(map[string]struct{}, len(cat.Artifacts))
+			for i := range cat.Artifacts {
+				if aid, err := curatormesh.ArtifactID(cat.Artifacts[i]); err == nil {
+					live[strings.ToLower(aid)] = struct{}{}
+				}
+			}
+			var out []db.CuratorBlockedArtifact
+			for _, b := range blocked {
+				if _, ok := live[strings.ToLower(b.ArtifactID)]; !ok {
+					out = append(out, b)
+				}
+			}
+			return out
 		},
 	}
 }

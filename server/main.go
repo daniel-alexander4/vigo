@@ -1235,7 +1235,14 @@ func run() error {
 			// few-minute distribution latency is fine for a registry.
 			curatorAgg := curatormesh.NewAggregator(queries)
 			go runCuratorFeed(ctx, curatorAgg, manifestStore, fleetIndex, agentSvc, 5*time.Minute)
-			api.NewCuratorHandler(curatorAgg, queries, fleetIndex, filepath.Join(filepath.Dir(seedDir), ".blobs")).RegisterRoutes(gwMux)
+			curatorHandler := api.NewCuratorHandler(curatorAgg, queries, fleetIndex, filepath.Join(filepath.Dir(seedDir), ".blobs"))
+			curatorHandler.RegisterRoutes(gwMux)
+			// Share the handler with the UI so the `/curator` page reads
+			// the cached aggregator directly rather than round-tripping
+			// through the REST endpoint — same pattern gateway.go uses
+			// for gitback. Tiny interface in ui/handler.go keeps the ui
+			// package from importing the full handler type.
+			uiHandler.SetCuratorFleet(curatorHandler)
 
 			// Track pattern lists across reloads so we can audit operator
 			// edits to each subsystem's authorization. Patterns are what

@@ -1,0 +1,216 @@
+{{define "page-content"}}
+{{if .Artifact}}
+{{/* ── Detail view (single artifact) ── */}}
+<div class="breadcrumb mb-1">
+    <a href="/swarm/curator">Curator</a> &rsaquo; {{.Artifact.Name}}
+</div>
+
+{{template "health-banner" .Health}}
+
+<div class="card">
+    <div class="card-heading-row">
+        <h2 style="margin:0;">{{.Artifact.Name}}{{if .Artifact.Blocked}} <span class="badge badge--warn">blocked</span>{{end}}</h2>
+        <a href="/swarm/curator" class="btn btn--sm">Back to list</a>
+    </div>
+
+    <div class="table-container" style="margin-bottom:24px;">
+        <table class="table">
+            <tbody>
+                <tr><td style="font-weight:600;width:200px;">Artifact ID</td><td><code>{{.Artifact.ArtifactID}}</code></td></tr>
+                <tr><td style="font-weight:600;">Founder puddle</td><td><code>ed25519:{{.Artifact.FounderPuddlePubkey}}</code></td></tr>
+                {{if .Artifact.Rekeyed}}
+                <tr>
+                    <td style="font-weight:600;">Signing puddle</td>
+                    <td>
+                        <code>ed25519:{{.Artifact.SigningPuddlePubkey}}</code>
+                        <span class="badge badge--ok" title="The founder has rekeyed (ADR-019); the per-artifact delegation chain bridges the genesis pubkey baked into the artifact_id to the current signer.">rekeyed</span>
+                    </td>
+                </tr>
+                {{end}}
+                <tr><td style="font-weight:600;">Target</td><td><code>{{.Artifact.Target}}</code><br><span class="muted">Which swarm-enabled envoys hold the P2P DR replica.</span></td></tr>
+                <tr>
+                    <td style="font-weight:600;">Recipients</td>
+                    <td>
+                        {{range $i, $r := .Artifact.Recipients}}{{if $i}}, {{end}}<code>{{$r}}</code>{{end}}
+                        <br>
+                        <span class="muted">
+                            {{if eq (len .Artifact.Recipients) 1}}
+                                {{with index .Artifact.Recipients 0}}{{if eq . "*"}}Fleet-readable. Per-recipient gating is currently informational — the field reserves space for the post-v1 encrypted-blob feature.{{else}}Listed puddle pubkeys only. Currently informational (slice 3b — artifacts are fleet-readable in v1).{{end}}{{end}}
+                            {{else}}
+                                Listed puddle pubkeys only. Currently informational (slice 3b — artifacts are fleet-readable in v1).
+                            {{end}}
+                        </span>
+                    </td>
+                </tr>
+                <tr><td style="font-weight:600;">Issued at</td><td>{{if gt .Artifact.IssuedAt 0}}{{formatUnixTime (div .Artifact.IssuedAt 1000)}}{{else}}&mdash;{{end}}</td></tr>
+                <tr>
+                    <td style="font-weight:600;">Status</td>
+                    <td>
+                        {{if .Artifact.Blocked}}
+                            <span class="badge badge--warn">blocked by the operator</span>
+                            <br><span class="muted">The server refuses to <code>/resolve</code> or relay <code>/blob/&lt;sha&gt;</code> for this artifact regardless of who published it. The signed catalog entry still gossips and DR bytes still sit on target-matched envoys — only a publisher <code>vigo swarm curator rm</code> truly purges. Run <code>vigocli swarm curator unblock {{.Artifact.ArtifactID}}</code> to reverse.</span>
+                        {{else}}
+                            <span class="badge badge--ok">ok</span>
+                        {{end}}
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h3 style="margin:0 0 12px;">Versions &amp; Platforms</h3>
+    {{if .Artifact.Versions}}
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Version</th>
+                <th>Tags</th>
+                <th>OS / Arch</th>
+                <th>Size</th>
+                <th>Blob SHA</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Artifact.Versions}}
+                {{$ver := .Version}}
+                {{$tags := .Tags}}
+                {{$plats := .Platforms}}
+                {{if $plats}}
+                    {{range $i, $p := $plats}}
+                    <tr>
+                        {{if eq $i 0}}
+                            <td rowspan="{{len $plats}}"><strong>{{$ver}}</strong></td>
+                            <td rowspan="{{len $plats}}">{{range $tags}}<span class="badge">{{.}}</span> {{else}}&mdash;{{end}}</td>
+                        {{end}}
+                        <td><code>{{$p.OS}}/{{$p.Arch}}</code></td>
+                        <td>{{humanBytesU $p.Size}}</td>
+                        <td><code title="{{$p.BlobSha}}">{{truncGitSha $p.BlobSha}}</code></td>
+                    </tr>
+                    {{end}}
+                {{else}}
+                <tr>
+                    <td><strong>{{$ver}}</strong></td>
+                    <td>{{range $tags}}<span class="badge">{{.}}</span> {{else}}&mdash;{{end}}</td>
+                    <td>&mdash;</td>
+                    <td>&mdash;</td>
+                    <td>&mdash;</td>
+                </tr>
+                {{end}}
+            {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p><em>No versions published yet for this artifact.</em></p>
+    {{end}}
+
+    {{if .Artifact.DanglingTags}}
+    <h3 style="margin:24px 0 12px;">Dangling tags</h3>
+    <p class="muted">These tags point at a version string that doesn't exist in the catalog. Consumers resolving <code>{{$.Artifact.Name}}:&lt;tag&gt;</code> get a 404. Re-bind with <code>vigo swarm curator tag &lt;ref&gt; &lt;tag&gt;=&lt;real-version&gt;</code> or drop the tag with <code>vigo swarm curator untag &lt;ref&gt; &lt;tag&gt;</code>.</p>
+    <table class="table">
+        <thead>
+            <tr><th>Tag</th><th>Points at (missing)</th></tr>
+        </thead>
+        <tbody>
+            {{range .Artifact.DanglingTags}}
+            <tr>
+                <td><code>{{.Tag}}</code></td>
+                <td><code>{{.Version}}</code> <span class="badge badge--warn">missing</span></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{end}}
+</div>
+{{else}}
+{{/* ── List view ── */}}
+<div class="page-header">
+    <h1>Curator</h1>
+    <p>Fleet-wide P2P artifact registry (<a href="/docs/engineering/subsystems/curator">ADR-024</a>). Artifacts are keyed by <code>artifact_id = sha256(founder_puddle_pubkey ‖ name)</code>; the publish side is gated by the usercrate <code>curator: true</code> flag, the read side is universal — every envoy can resolve via the server and pull P2P-or-relayed bytes regardless of swarm gating.</p>
+</div>
+
+{{template "health-banner" .Health}}
+
+{{if .Error}}
+    <div class="alert alert--warn">Curator aggregator: {{.Error}}</div>
+{{else if or (not .Catalog) (eq (len .Catalog.Artifacts) 0)}}
+    {{template "empty-state" dict "Message" "No curator artifacts observed across the fleet." "Hint" "On a `swarm.curator.enabled`-matched envoy, run `vigo swarm curator push <name> --file <path> --version <v> --os <os> --arch <arch>` as a user with `curator: true` on their usercrate and an unlocked puddle."}}
+{{else}}
+    <div class="stat-cards mb-2">
+        <div class="stat-card" title="Distinct artifacts in the fleet catalog (LWW-deduped by artifact_id).">
+            <div class="stat-card__label">Artifacts</div>
+            <div class="stat-card__value">{{len .Catalog.Artifacts}}</div>
+        </div>
+        <div class="stat-card" title="Distinct envoys reporting a `swarm_curator` trait (i.e. holding local publish state for any user).">
+            <div class="stat-card__label">Participants</div>
+            <div class="stat-card__value">{{len .Catalog.Participants}}</div>
+        </div>
+        <div class="stat-card" title="Operator-block table entries — artifacts the server refuses to resolve or relay regardless of who published.">
+            <div class="stat-card__label">Blocked</div>
+            <div class="stat-card__value {{if gt (len .Blocked) 0}}text-warn{{end}}">{{len .Blocked}}</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3 style="margin:0 0 12px;">Artifacts</h3>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Versions</th>
+                    <th>Tags</th>
+                    <th>Platforms</th>
+                    <th>Target</th>
+                    <th>Status</th>
+                    <th>Artifact ID</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{$blocked := .Blocked}}
+                {{range .Catalog.Artifacts}}
+                {{$aid := curatorArtifactID .}}
+                {{$isBlocked := curatorIsBlocked $aid $blocked}}
+                <tr onclick="location.href='/swarm/curator/{{$aid}}'" style="cursor:pointer;">
+                    <td><strong>{{.Body.Name}}</strong></td>
+                    <td>{{len .Body.Versions}}</td>
+                    <td>{{len .Body.Tags}}</td>
+                    <td>{{curatorPlatformSummary .}}</td>
+                    <td><code title="{{.Body.Target}}">{{truncCol .Body.Target 24}}</code></td>
+                    <td>{{if $isBlocked}}<span class="badge badge--warn">blocked</span>{{else}}<span class="badge badge--ok">ok</span>{{end}}</td>
+                    <td><code title="{{$aid}}">{{truncGitSha $aid}}</code></td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    {{/* Orphan blocks footer: blocked entries that no longer have a live catalog row. */}}
+    {{$orphans := curatorOrphanBlocks .Catalog .Blocked}}
+    {{if $orphans}}
+    <div class="card mt-2">
+        <h3 style="margin:0 0 12px;">Operator blocks without a current catalog entry</h3>
+        <p class="muted">These artifact_ids are in the block table but no envoy currently advertises a catalog entry for them — likely the publisher ran <code>vigo swarm curator rm</code> after the block landed. The block stays in effect: if anyone re-publishes under the same artifact_id, the server will still refuse.</p>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Artifact ID</th>
+                    <th>Blocked at</th>
+                    <th>By</th>
+                    <th>Reason</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range $orphans}}
+                <tr>
+                    <td><code>{{.ArtifactID}}</code></td>
+                    <td>{{if not .BlockedAt.IsZero}}{{.BlockedAt.Format "2006-01-02 15:04:05 MST"}}{{else}}&mdash;{{end}}</td>
+                    <td>{{if .BlockedBy}}{{.BlockedBy}}{{else}}&mdash;{{end}}</td>
+                    <td>{{if .Reason}}{{.Reason}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{end}}
+{{end}}
+{{end}}
+{{end}}
