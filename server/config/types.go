@@ -371,7 +371,7 @@ type RiskSection struct {
 
 // NVDConfig configures optional NVD CVE API enrichment.
 type NVDConfig struct {
-	Enabled bool   `yaml:"enabled" doc:"Fetch CVSS scores and descriptions from the NVD API." default:"false" example:"true"`
+	Enabled bool   `yaml:"enabled" doc:"Fetch CVE detail from the NVD API (CVSS, description, CWE, references) — feeds risk scoring and the security-drawer Ask-AI prompt context. Disable for air-gapped deployments." default:"true" example:"false"`
 	APIKey  string `yaml:"api_key" doc:"NVD API key (supports the secret: prefix for indirect lookup)." example:"secret:vigo/nvd/api_key  (request at nvd.nist.gov/developers/request-an-api-key)"`
 }
 

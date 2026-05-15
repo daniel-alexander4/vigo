@@ -143,6 +143,18 @@ CREATE TABLE IF NOT EXISTS compliance_history (
     UNIQUE(snapshot_date, framework)
 );
 
+CREATE TABLE IF NOT EXISTS cve_cvss_cache (
+    cve_id        TEXT PRIMARY KEY,
+    cvss_score    REAL NOT NULL DEFAULT 0.0,
+    cvss_vector   TEXT NOT NULL DEFAULT '',
+    severity      TEXT NOT NULL DEFAULT '',
+    description   TEXT NOT NULL DEFAULT '',
+    cwe           TEXT NOT NULL DEFAULT '',
+    refs          TEXT NOT NULL DEFAULT '',
+    published_at  TEXT NOT NULL DEFAULT '',
+    fetched_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS env_promotions (
     id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     module_name TEXT NOT NULL,

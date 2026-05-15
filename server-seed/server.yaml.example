@@ -277,7 +277,7 @@ watcher:
 
 # risk:
 #   nvd:
-#     enabled: false
+#     enabled: true   # default — feeds CVSS scoring AND the security-drawer Ask-AI prompt. Set false for air-gapped deployments.
 #     api_key: "secret:vigo/nvd/api_key"  # optional — increases NVD API rate limit
 
 

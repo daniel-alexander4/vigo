@@ -115,11 +115,15 @@ type CuratorBlockedArtifact struct {
 }
 
 type CveCvssCache struct {
-	CveID      string    `json:"cve_id"`
-	CvssScore  float64   `json:"cvss_score"`
-	CvssVector string    `json:"cvss_vector"`
-	Severity   string    `json:"severity"`
-	FetchedAt  time.Time `json:"fetched_at"`
+	CveID       string    `json:"cve_id"`
+	CvssScore   float64   `json:"cvss_score"`
+	CvssVector  string    `json:"cvss_vector"`
+	Severity    string    `json:"severity"`
+	Description string    `json:"description"`
+	Cwe         string    `json:"cwe"`
+	Refs        string    `json:"refs"`
+	PublishedAt string    `json:"published_at"`
+	FetchedAt   time.Time `json:"fetched_at"`
 }
 
 type EnvPromotion struct {

@@ -51,6 +51,10 @@ type Assistant struct {
 	cfg          config.AISection
 	rateLimiter  *rateLimiter
 	systemPrompt string
+	// cveLookup, when set, enriches structured CVE-bearing Ask-AI
+	// questions with the authoritative NVD record before the model
+	// turn. Wired in main.go via the risk-package NVD enricher.
+	cveLookup CVELookup
 }
 
 // NewAssistant creates an assistant with the given provider and dependencies.
@@ -358,11 +362,12 @@ func (a *Assistant) prefetchData(ctx context.Context, question string, askCtx As
 	// carry every fact the system prompt needs in their one-line shape.
 	// The keyword scans below misfire on incidental words ("packages" in a
 	// multi-package CVE → fleet-wide drift dump; extractHostname picks up
-	// the CVE ID as "hostname" and runs four useless tool calls) and the
-	// system prompt's Risk / Remediation / Waiver / Investigate sections
-	// don't need enrichment. Skip prefetch entirely for these.
+	// the CVE ID as "hostname" and runs four useless tool calls). Skip
+	// the keyword-and-extractHostname branches; if the question carries
+	// a CVE ID, enrich with the authoritative NVD record so the assistant
+	// answers from ground truth instead of pointing at the link.
 	if isStructuredFindingQuestion(question) {
-		return ""
+		return a.lookupCVEDetail(ctx, extractCVEID(question))
 	}
 	var parts []string
 	lower := strings.ToLower(question)

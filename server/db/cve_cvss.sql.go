@@ -11,7 +11,7 @@ import (
 )
 
 const getCVECVSS = `-- name: GetCVECVSS :one
-SELECT cve_id, cvss_score, cvss_vector, severity, fetched_at
+SELECT cve_id, cvss_score, cvss_vector, severity, description, cwe, refs, published_at, fetched_at
 FROM cve_cvss_cache
 WHERE cve_id = ?
 `
@@ -24,6 +24,10 @@ func (q *Queries) GetCVECVSS(ctx context.Context, cveID string) (CveCvssCache, e
 		&i.CvssScore,
 		&i.CvssVector,
 		&i.Severity,
+		&i.Description,
+		&i.Cwe,
+		&i.Refs,
+		&i.PublishedAt,
 		&i.FetchedAt,
 	)
 	return i, err
@@ -71,20 +75,28 @@ func (q *Queries) ListCachedCVEs(ctx context.Context) ([]ListCachedCVEsRow, erro
 }
 
 const upsertCVECVSS = `-- name: UpsertCVECVSS :exec
-INSERT INTO cve_cvss_cache (cve_id, cvss_score, cvss_vector, severity)
-VALUES (?1, ?2, ?3, ?4)
+INSERT INTO cve_cvss_cache (cve_id, cvss_score, cvss_vector, severity, description, cwe, refs, published_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
 ON CONFLICT(cve_id) DO UPDATE SET
-    cvss_score  = excluded.cvss_score,
-    cvss_vector = excluded.cvss_vector,
-    severity    = excluded.severity,
-    fetched_at  = datetime('now')
+    cvss_score   = excluded.cvss_score,
+    cvss_vector  = excluded.cvss_vector,
+    severity     = excluded.severity,
+    description  = excluded.description,
+    cwe          = excluded.cwe,
+    refs         = excluded.refs,
+    published_at = excluded.published_at,
+    fetched_at   = datetime('now')
 `
 
 type UpsertCVECVSSParams struct {
-	CveID      string  `json:"cve_id"`
-	CvssScore  float64 `json:"cvss_score"`
-	CvssVector string  `json:"cvss_vector"`
-	Severity   string  `json:"severity"`
+	CveID       string  `json:"cve_id"`
+	CvssScore   float64 `json:"cvss_score"`
+	CvssVector  string  `json:"cvss_vector"`
+	Severity    string  `json:"severity"`
+	Description string  `json:"description"`
+	Cwe         string  `json:"cwe"`
+	Refs        string  `json:"refs"`
+	PublishedAt string  `json:"published_at"`
 }
 
 func (q *Queries) UpsertCVECVSS(ctx context.Context, arg UpsertCVECVSSParams) error {
@@ -93,6 +105,10 @@ func (q *Queries) UpsertCVECVSS(ctx context.Context, arg UpsertCVECVSSParams) er
 		arg.CvssScore,
 		arg.CvssVector,
 		arg.Severity,
+		arg.Description,
+		arg.Cwe,
+		arg.Refs,
+		arg.PublishedAt,
 	)
 	return err
 }

@@ -1,14 +1,18 @@
 -- name: UpsertCVECVSS :exec
-INSERT INTO cve_cvss_cache (cve_id, cvss_score, cvss_vector, severity)
-VALUES (?1, ?2, ?3, ?4)
+INSERT INTO cve_cvss_cache (cve_id, cvss_score, cvss_vector, severity, description, cwe, refs, published_at)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
 ON CONFLICT(cve_id) DO UPDATE SET
-    cvss_score  = excluded.cvss_score,
-    cvss_vector = excluded.cvss_vector,
-    severity    = excluded.severity,
-    fetched_at  = datetime('now');
+    cvss_score   = excluded.cvss_score,
+    cvss_vector  = excluded.cvss_vector,
+    severity     = excluded.severity,
+    description  = excluded.description,
+    cwe          = excluded.cwe,
+    refs         = excluded.refs,
+    published_at = excluded.published_at,
+    fetched_at   = datetime('now');
 
 -- name: GetCVECVSS :one
-SELECT cve_id, cvss_score, cvss_vector, severity, fetched_at
+SELECT cve_id, cvss_score, cvss_vector, severity, description, cwe, refs, published_at, fetched_at
 FROM cve_cvss_cache
 WHERE cve_id = ?;
 

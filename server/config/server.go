@@ -64,7 +64,13 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 		return nil, err
 	}
 
-	var cfg ServerConfig
+	// Defaults that diverge from Go zero-values land here before unmarshal.
+	// YAML keys that explicitly appear overwrite these; absent keys keep the
+	// pre-set value. (The `default:` struct tags in types.go are doc-only —
+	// the schema generator reads them, the loader does not.)
+	cfg := ServerConfig{
+		Risk: RiskSection{NVD: NVDConfig{Enabled: true}},
+	}
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parsing server config: %w", err)
 	}
