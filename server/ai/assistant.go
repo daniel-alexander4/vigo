@@ -354,6 +354,16 @@ func augmentWithContext(question string, ctx AskContext) string {
 }
 
 func (a *Assistant) prefetchData(ctx context.Context, question string, askCtx AskContext) string {
+	// Structured-finding clicks (Ask-AI buttons on the security drawer)
+	// carry every fact the system prompt needs in their one-line shape.
+	// The keyword scans below misfire on incidental words ("packages" in a
+	// multi-package CVE → fleet-wide drift dump; extractHostname picks up
+	// the CVE ID as "hostname" and runs four useless tool calls) and the
+	// system prompt's Risk / Remediation / Waiver / Investigate sections
+	// don't need enrichment. Skip prefetch entirely for these.
+	if isStructuredFindingQuestion(question) {
+		return ""
+	}
 	var parts []string
 	lower := strings.ToLower(question)
 
@@ -473,6 +483,29 @@ func (a *Assistant) prefetchData(ctx context.Context, question string, askCtx As
 	}
 
 	return strings.Join(parts, "\n\n")
+}
+
+// isStructuredFindingQuestion reports whether the question matches the
+// `<host> · <kind>` shape emitted by the security drawer's Ask-AI helpers
+// (cachedCVEAIQuestion, trivyAIQuestion, lynisWarningAIQuestion, …) and
+// pinned by their tests in ui/security_drawer_test.go. The system prompt
+// in prompt.go pattern-matches the same shape and replies in fixed
+// Risk / Remediation / Waiver / Investigate sections — these questions
+// don't benefit from prefetch enrichment, and the keyword scans below
+// actively misfire on them (e.g. "packages" → fleet-wide drift dump,
+// extractHostname picks up the CVE ID as "hostname").
+//
+// Detection key: the middle dot (U+00B7) separator surrounded by spaces.
+// Operators don't type that character; helpers always emit it.
+func isStructuredFindingQuestion(question string) bool {
+	// Strip the augmentWithContext prefix if present so a "[Context: …] "
+	// header doesn't confuse the detection.
+	if rest, ok := strings.CutPrefix(question, "[Context: "); ok {
+		if i := strings.Index(rest, "] "); i >= 0 {
+			question = rest[i+2:]
+		}
+	}
+	return strings.Contains(question, " · ")
 }
 
 func extractHostname(question string) string {

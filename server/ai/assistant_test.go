@@ -142,6 +142,44 @@ func TestExtractHostname(t *testing.T) {
 	}
 }
 
+// TestIsStructuredFindingQuestion pins the prefetch short-circuit that
+// keeps the security drawer's Ask-AI clicks from triggering keyword-based
+// prefetch noise (fleet-wide package drift, bogus extractHostname →
+// envoy-tool cascade). Every Ask-AI helper in ui/security_drawer.go
+// emits `<host> · <kind>` with a U+00B7 separator surrounded by spaces;
+// free-text operator questions don't.
+func TestIsStructuredFindingQuestion(t *testing.T) {
+	tests := []struct {
+		question string
+		want     bool
+	}{
+		// Structured-finding shapes from ui/security_drawer.go helpers.
+		{"danlap · cve CVE-2024-1234 (high), 3 packages — Memory leak (https://www.cve.org/CVERecord?id=CVE-2024-1234)", true},
+		{"webby01 · trivy CVE-2024-9999 (high): libssl3 3.0.11→3.0.12", true},
+		{"h · debsecan CVE-X (high): nginx (https://security-tracker.debian.org/tracker/CVE-X)", true},
+		{"h · lynis-warn AUTH-9286: User accounts with empty password fields", true},
+		{"h · rkhunter: /usr/bin/curl flagged", true},
+		{"h · aide changed: /etc/passwd", true},
+
+		// Structured shape carries through augmentWithContext's prefix.
+		{"[Context: page=security] danlap · cve CVE-2024-1 (high)", true},
+		{"[Context: page=security, envoy=danlap] danlap · trivy CVE-X (high): pkg", true},
+
+		// Free-text — no middle-dot separator.
+		{"why is web-03 failing?", false},
+		{"how many envoys do I have?", false},
+		{"what's the compliance status of the fleet?", false},
+		{"", false},
+
+		// Free-text with a context prefix — still no middle dot.
+		{"[Context: page=dashboard] how many envoys?", false},
+	}
+	for _, tt := range tests {
+		got := isStructuredFindingQuestion(tt.question)
+		assert.Equal(t, tt.want, got, "question: %q", tt.question)
+	}
+}
+
 func TestConfigValidation(t *testing.T) {
 	tests := []struct {
 		name    string
