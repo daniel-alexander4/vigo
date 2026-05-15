@@ -3178,6 +3178,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sha-crypt"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88e79009728d8311d42d754f2f319a975f9e38f156fd5e422d2451486c78b286"
+dependencies = [
+ "base64ct",
+ "rand 0.8.5",
+ "sha2",
+ "subtle",
+]
+
+[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3886,7 +3898,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vigo"
-version = "0.52.3"
+version = "0.53.0"
 dependencies = [
  "age",
  "anyhow",
@@ -3924,6 +3936,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "serial_test",
+ "sha-crypt",
  "sha2",
  "socket2 0.5.10",
  "spki",

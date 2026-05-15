@@ -1,6 +1,6 @@
 [package]
 name = "vigo"
-version = "0.52.3"
+version = "0.53.0"
 edition = "2021"
 description = "Vigo distributed state enforcement agent"
 license = "LicenseRef-Proprietary"
@@ -21,6 +21,7 @@ ed25519-dalek = { version = "2", features = ["pkcs8", "pem", "rand_core"] }
 hostname = "0.4"
 p256 = { version = "0.13", features = ["pkcs8", "pem"] }
 sha2 = "0.10"
+sha-crypt = "0.5"
 hex = "0.4"
 base64 = "0.22"
 age = { version = "0.11", default-features = false }

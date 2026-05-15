@@ -44,17 +44,17 @@ Set to `"0s"` to disable idle timeout (not recommended for regulated environment
 
 ## Basic (Username/Password)
 
-Basic authentication stores user accounts in the database and password hashes (bcrypt) in the local secrets provider. This separation ensures credentials never appear in the database.
+Basic authentication stores user accounts in the database and the password itself in the unlock-gated secrets vault (reversibly encrypted under the master key). The login handler resolves the stored value on every attempt and constant-time-compares it against the submitted password. This separation keeps credentials out of the database; the vault's unlock gate keeps casual access off the operator surface.
 
 ### Initial Setup
 
 The server automatically creates an `admin` account on first startup. The web UI redirects to a setup page with the one command needed to activate it:
 
 ```bash
-vigocli secrets set web vigo/web/auth/admin
+vigocli secrets set password vigo/web/auth/admin
 ```
 
-Until a password is set, all web UI requests redirect to the setup page. Password hashes are stored at `vigo/web/auth/<username>` in the secrets provider.
+Until a password is set, all web UI requests redirect to the setup page. Passwords are stored verbatim at `vigo/web/auth/<username>` inside the master-key AES-256-GCM envelope; the login handler does a `subtle.ConstantTimeCompare` against the resolved value on every attempt.
 
 ### Adding Users
 
@@ -66,13 +66,13 @@ vigocli webusers create --username alice --role viewer --email alice@example.com
 vigocli webusers create --username carol --role compliance --email carol@example.com
 
 # Set their password
-vigocli secrets set web vigo/web/auth/alice
+vigocli secrets set password vigo/web/auth/alice
 ```
 
 ### Resetting Passwords
 
 ```bash
-vigocli secrets set web vigo/web/auth/admin
+vigocli secrets set password vigo/web/auth/admin
 ```
 
 ### CLI Access (Localhost Trust)
@@ -167,7 +167,7 @@ Unlike OIDC, isowebauth requires users to be pre-created with their SSH public k
 
 ```bash
 # First, set the admin password to get CLI access:
-vigocli secrets set web vigo/web/auth/admin
+vigocli secrets set password vigo/web/auth/admin
 
 # Create users with SSH keys:
 vigocli webusers create --username bob --role viewer --ssh-key-file /path/to/bob.pub
@@ -354,7 +354,7 @@ The token is stored securely in the user's home directory.
 ```bash
 vigocli webusers list
 vigocli webusers create --username alice --role admin [--email alice@example.com] [--ssh-key-file ~/.ssh/id.pub]
-vigocli secrets set web vigo/web/auth/alice
+vigocli secrets set password vigo/web/auth/alice
 vigocli webusers delete --username alice
 ```
 

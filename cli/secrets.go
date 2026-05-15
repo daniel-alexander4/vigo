@@ -15,7 +15,6 @@ import (
 	"math/big"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
@@ -23,7 +22,6 @@ import (
 
 	"git.alexander4.io/vigo/server/secrets"
 	"github.com/spf13/cobra"
-	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/term"
 )
 
@@ -35,20 +33,18 @@ var secretsCmd = &cobra.Command{
 
 var secretsSetCmd = &cobra.Command{
 	Use:   "set <type> <key>",
-	Short: "Encrypt and store a secret value with optional hashing",
+	Short: "Encrypt and store a secret value",
 	Long: `Encrypt and store a secret value. The type determines how the value is
-processed before storage:
+read from the operator:
 
-  raw   Store verbatim (API keys, DSNs, certificates, arbitrary values)
-  os    SHA-512 crypt hash for Linux /etc/shadow (user executor password param)
-  web   Bcrypt hash for Vigo web UI authentication
+  raw       Arbitrary value (API keys, DSNs, certificates). Can be supplied via
+            --from-file, stdin pipe, or interactive prompt. No complexity check.
+  password  Human-typed credential. Interactive prompt only, complexity-enforced.
+            Stored verbatim — consumers (web auth, the agent's user: executor)
+            apply their own hashing at point of use.
 
-For raw secrets, the value can be provided via --from-file, stdin pipe,
-or interactive prompt. For os and web types, the value is always prompted
-interactively with longdrawer disabled and password complexity enforcement.
-
-The os and web types also store the original plaintext at <key>.txt
-(encrypted) for recovery via reveal-password.`,
+Both types store the value in plain form inside the master-key AES-256-GCM
+envelope. The unlock gate is the operator-side boundary.`,
 	Args: cobra.ExactArgs(2),
 	RunE: runSecretsSet,
 }
@@ -58,40 +54,6 @@ var secretsGetCmd = &cobra.Command{
 	Short: "Decrypt and print a secret value to stdout",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runSecretsGet,
-}
-
-var secretsRevealPasswordCmd = &cobra.Command{
-	Use:   "reveal-password <key>",
-	Short: "Decrypt and print the original plaintext password for a hashed secret",
-	Long: `Retrieves the plaintext password stored alongside a hashed secret.
-
-When "secrets set web" or "secrets set os" stores a bcrypt or SHA-512
-hash at <key>, it also stores the original plaintext at <key>.txt
-(encrypted with AES-256-GCM like all secrets). This command retrieves
-that plaintext.
-
-Each access is recorded in the tamper-evident audit trail.`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		provider, err := newLocalProvider(cmd)
-		if err != nil {
-			return err
-		}
-		defer provider.Close()
-
-		key := args[0] + ".txt"
-		val, err := provider.Get(cmd.Context(), key)
-		if err != nil {
-			return fmt.Errorf("no plaintext found at %s — was this password set with 'secrets set web' or 'secrets set os'?", key)
-		}
-		fmt.Println(val)
-
-		// Record access in the audit trail.
-		client := newAPIClient()
-		_ = client.post("/api/v1/secrets/accessed", map[string]any{"path": key}, nil)
-
-		return nil
-	},
 }
 
 var secretsDeleteCmd = &cobra.Command{
@@ -197,6 +159,7 @@ func validatePasswordComplexity(pw string) error {
 func init() {
 	secretsCmd.PersistentFlags().String("key-file", "", "Path to master encryption key (omit to auto-generate)")
 	secretsCmd.PersistentFlags().String("secrets-dir", "/srv/vigo/secrets", "Directory for secret files")
+	secretsCmd.PersistentPreRunE = requireUnlocked
 
 	secretsSetCmd.Flags().String("from-file", "", "Read secret value from a file")
 
@@ -211,7 +174,6 @@ func init() {
 
 	secretsCmd.AddCommand(secretsSetCmd)
 	secretsCmd.AddCommand(secretsGetCmd)
-	secretsCmd.AddCommand(secretsRevealPasswordCmd)
 	secretsCmd.AddCommand(secretsDeleteCmd)
 	secretsCmd.AddCommand(secretsListCmd)
 	secretsCmd.AddCommand(secretsInitCmd)
@@ -265,12 +227,10 @@ func runSecretsSet(cmd *cobra.Command, args []string) error {
 	switch secretType {
 	case "raw":
 		return setRawSecret(cmd, key)
-	case "os":
-		return setOSPassword(cmd, key)
-	case "web":
-		return setWebPassword(cmd, key)
+	case "password":
+		return setPasswordSecret(cmd, key)
 	default:
-		return fmt.Errorf("unknown secret type %q — must be raw, os, or web", secretType)
+		return fmt.Errorf("unknown secret type %q — must be raw or password", secretType)
 	}
 }
 
@@ -300,48 +260,15 @@ func setRawSecret(cmd *cobra.Command, key string) error {
 	return nil
 }
 
-func setOSPassword(cmd *cobra.Command, key string) error {
+// setPasswordSecret prompts for a human-typed credential with complexity
+// enforcement, stores it verbatim under the master-key envelope, and notifies
+// the server so watch_secret resources trigger on the next check-in. Replaces
+// the old set os / set web verbs — consumers (the agent's user: executor and
+// server/auth/basic.go) handle their own hashing or comparison at point of use.
+func setPasswordSecret(cmd *cobra.Command, key string) error {
 	pw, err := promptPassword()
 	if err != nil {
 		return err
-	}
-
-	// Use openssl to generate SHA-512 crypt hash.
-	opensslCmd := exec.Command("openssl", "passwd", "-6", "-stdin")
-	opensslCmd.Stdin = strings.NewReader(string(pw))
-	out, err := opensslCmd.Output()
-	if err != nil {
-		return fmt.Errorf("openssl passwd -6 failed (is openssl installed?): %w", err)
-	}
-	hash := strings.TrimSpace(string(out))
-
-	provider, err := newLocalProvider(cmd)
-	if err != nil {
-		return err
-	}
-	defer provider.Close()
-
-	if err := provider.Set(key, hash); err != nil {
-		return fmt.Errorf("storing password hash: %w", err)
-	}
-	if err := provider.Set(key+".txt", string(pw)); err != nil {
-		return fmt.Errorf("storing plaintext password: %w", err)
-	}
-
-	fmt.Printf("  SHA-512 password hash stored at %s\n", key)
-	fmt.Printf("  Plaintext password stored at %s.txt\n", key)
-	return nil
-}
-
-func setWebPassword(cmd *cobra.Command, key string) error {
-	pw, err := promptPassword()
-	if err != nil {
-		return err
-	}
-
-	hash, err := bcrypt.GenerateFromPassword(pw, bcrypt.DefaultCost)
-	if err != nil {
-		return fmt.Errorf("hashing password: %w", err)
 	}
 
 	provider, err := newLocalProvider(cmd)
@@ -350,15 +277,17 @@ func setWebPassword(cmd *cobra.Command, key string) error {
 	}
 	defer provider.Close()
 
-	if err := provider.Set(key, string(hash)); err != nil {
-		return fmt.Errorf("storing password hash: %w", err)
+	if err := provider.Set(key, string(pw)); err != nil {
+		return fmt.Errorf("storing password: %w", err)
 	}
-	if err := provider.Set(key+".txt", string(pw)); err != nil {
-		return fmt.Errorf("storing plaintext password: %w", err)
+	fmt.Printf("  Password stored at %s.\n", key)
+
+	// Notify the server so affected envoys converge on the new value.
+	client := newAPIClient()
+	if err := client.post("/api/v1/secrets/rotated", map[string]any{"path": key}, nil); err == nil {
+		fmt.Println("  Server notified — affected envoys will apply on next check-in.")
 	}
 
-	fmt.Printf("  Bcrypt password hash stored at %s\n", key)
-	fmt.Printf("  Plaintext password stored at %s.txt\n", key)
 	return nil
 }
 
@@ -375,13 +304,6 @@ func runSecretsGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	fmt.Println(val)
-
-	// Hint: bcrypt hashes look like encrypted gibberish but are the correct stored value.
-	if strings.HasPrefix(val, "$2a$") || strings.HasPrefix(val, "$2b$") {
-		fmt.Fprintln(os.Stderr, "  (this is a bcrypt hash — the correct stored value, not encrypted text)")
-	} else if strings.HasPrefix(val, "$6$") {
-		fmt.Fprintln(os.Stderr, "  (this is a SHA-512 crypt hash — the correct stored value, not encrypted text)")
-	}
 
 	// Record secret access in the audit trail.
 	client := newAPIClient()
@@ -438,33 +360,43 @@ func runSecretsList(cmd *cobra.Command, _ []string) error {
 func runSecretsInit(cmd *cobra.Command, _ []string) error {
 	keyFile, _ := cmd.Flags().GetString("key-file")
 
-	// Check if file already exists.
+	masterKeyExists := false
 	if _, err := os.Stat(keyFile); err == nil {
-		return fmt.Errorf("key file %q already exists — refusing to overwrite", keyFile)
+		masterKeyExists = true
 	}
 
-	// Generate 32 random bytes.
-	key := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, key); err != nil {
-		return fmt.Errorf("generating key: %w", err)
+	// Both halves of bootstrap already present — operator wants `rotate`, not `init`.
+	if masterKeyExists && verifierExists() {
+		return fmt.Errorf("vault already initialized (master key %s and verifier %s both exist) — use `vigocli secrets rotate` to change the passphrase", keyFile, verifierPath())
 	}
 
-	// Create parent directory if needed.
-	if dir := filepath.Dir(keyFile); dir != "." {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
+	if !masterKeyExists {
+		// Generate 32 random bytes.
+		key := make([]byte, 32)
+		if _, err := io.ReadFull(rand.Reader, key); err != nil {
+			return fmt.Errorf("generating key: %w", err)
 		}
+
+		// Create parent directory if needed.
+		if dir := filepath.Dir(keyFile); dir != "." {
+			if err := os.MkdirAll(dir, 0o700); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+		}
+
+		// Write as hex (64 characters).
+		hexKey := fmt.Sprintf("%x\n", key)
+		if err := os.WriteFile(keyFile, []byte(hexKey), 0o600); err != nil {
+			return fmt.Errorf("writing key file: %w", err)
+		}
+
+		fmt.Printf("  Master key written to %s (mode 0600).\n", keyFile)
+		fmt.Println("  Keep this file safe — losing it means losing access to all encrypted secrets.")
+	} else {
+		fmt.Printf("  Master key already present at %s — initializing unlock verifier only.\n", keyFile)
 	}
 
-	// Write as hex (64 characters).
-	hexKey := fmt.Sprintf("%x\n", key)
-	if err := os.WriteFile(keyFile, []byte(hexKey), 0o600); err != nil {
-		return fmt.Errorf("writing key file: %w", err)
-	}
-
-	fmt.Printf("  Master key written to %s (mode 0600).\n", keyFile)
-	fmt.Println("  Keep this file safe — losing it means losing access to all encrypted secrets.")
-	return nil
+	return initVerifierPrompt()
 }
 
 func runSecretsGenerateCerts(cmd *cobra.Command, _ []string) error {

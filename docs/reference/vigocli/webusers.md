@@ -63,7 +63,7 @@ curl -X PUT https://vigo:8443/api/v1/users/<id> \
 Web UI passwords are managed via the secrets system:
 
 ```bash
-vigocli secrets set web vigo/web/auth/admin
+vigocli secrets set password vigo/web/auth/admin
 ```
 
 See [vigocli secrets](secrets.md) for details.

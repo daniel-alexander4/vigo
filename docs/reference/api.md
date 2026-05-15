@@ -866,6 +866,39 @@ Record an audit trail entry when a secret is revealed via CLI. Called automatica
 
 The event is recorded in the tamper-evident audit chain as type `secret_accessed`.
 
+### POST /api/v1/secrets/event
+
+**Permission:** Admin role (internal — called by the vigocli unlock-gate lifecycle verbs)
+
+Record an audit trail entry for an unlock-gate lifecycle action. Called automatically by `vigocli secrets unlock` / `lock` / `rotate` / `reset`.
+
+**Request body:**
+
+```json
+{
+  "type": "secrets_unlocked"
+}
+```
+
+The accepted event types are:
+
+| Type | Source verb |
+|------|-------------|
+| `secrets_unlocked` | `vigocli secrets unlock` |
+| `secrets_locked` | `vigocli secrets lock` |
+| `secrets_passphrase_rotated` | `vigocli secrets rotate` |
+| `secrets_passphrase_reset` | `vigocli secrets reset` |
+
+Any other `type` value is rejected with 400 so the audit chain can't be polluted by client-supplied event names.
+
+**Response:**
+
+```json
+{
+  "recorded": true
+}
+```
+
 ---
 
 ## Envoy Tags

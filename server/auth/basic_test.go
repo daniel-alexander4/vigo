@@ -7,6 +7,8 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,6 +18,23 @@ import (
 	"git.alexander4.io/vigo/server/secrets"
 	"git.alexander4.io/vigo/server/testutil"
 )
+
+// stubSecretsProvider returns canned values keyed by path. Used by the
+// login-compare tests below — the rest of the file uses secrets.NullProvider
+// because the middleware tests never read a password.
+type stubSecretsProvider struct {
+	values map[string]string
+}
+
+func (s stubSecretsProvider) Get(_ context.Context, key string) (string, error) {
+	return s.values[key], nil
+}
+
+func (s stubSecretsProvider) GetBytes(_ context.Context, key string) ([]byte, error) {
+	return []byte(s.values[key]), nil
+}
+
+func (stubSecretsProvider) Close() error { return nil }
 
 // setupBasicProvider returns a fully-wired BasicProvider backed by a real
 // SCS session store plus a seeded admin user. The real SessionManager lets
@@ -210,4 +229,79 @@ func TestBasicMiddleware_InvalidToken_API_Returns401(t *testing.T) {
 	got, rec := runMiddleware(provider, req)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code, "invalid bearer token must 401, not silently fall through to peer-auth")
 	assert.Nil(t, got)
+}
+
+// setupBasicProviderWithSecrets is like setupBasicProvider but wires a
+// stubSecretsProvider so the login-compare path can be exercised end-to-end.
+func setupBasicProviderWithSecrets(t *testing.T, values map[string]string) *BasicProvider {
+	t.Helper()
+	sqlDB := testutil.OpenMigratedTestDB(t)
+	queries := db.New(sqlDB)
+
+	sm := NewSessionManager(sqlDB, 0)
+	userStore := NewUserStore(queries)
+	tokenStore := NewTokenStore(queries)
+
+	_, err := userStore.Create(context.Background(), db.InsertUserParams{
+		Username: "alice",
+		Role:     "admin",
+	})
+	require.NoError(t, err)
+
+	return NewBasicProvider(sm, userStore, tokenStore, stubSecretsProvider{values: values})
+}
+
+func postLogin(t *testing.T, provider *BasicProvider, username, password string) *httptest.ResponseRecorder {
+	t.Helper()
+	form := url.Values{}
+	form.Set("username", username)
+	form.Set("password", password)
+	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.RemoteAddr = "127.0.0.1:50000"
+	rec := httptest.NewRecorder()
+	mux := http.NewServeMux()
+	provider.RegisterRoutes(mux)
+	provider.sessions.LoadAndSave(mux).ServeHTTP(rec, req)
+	return rec
+}
+
+// TestBasicLogin_PlaintextCompare_Succeeds is the regression case for the
+// bcrypt → constant-time-compare swap. A correct plaintext-stored password
+// authenticates the user and produces a session cookie + redirect.
+func TestBasicLogin_PlaintextCompare_Succeeds(t *testing.T) {
+	provider := setupBasicProviderWithSecrets(t, map[string]string{
+		"vigo/web/auth/alice": "CorrectHorseBattery$tap1e!",
+	})
+
+	rec := postLogin(t, provider, "alice", "CorrectHorseBattery$tap1e!")
+	require.Equal(t, http.StatusFound, rec.Code, "successful login must redirect")
+	require.NotEmpty(t, rec.Header().Get("Set-Cookie"), "successful login must set a session cookie")
+}
+
+// TestBasicLogin_PlaintextCompare_WrongPasswordFails confirms a mismatched
+// password is rejected without setting a session cookie, and the response is
+// the login page (200), not a redirect.
+func TestBasicLogin_PlaintextCompare_WrongPasswordFails(t *testing.T) {
+	provider := setupBasicProviderWithSecrets(t, map[string]string{
+		"vigo/web/auth/alice": "CorrectHorseBattery$tap1e!",
+	})
+
+	rec := postLogin(t, provider, "alice", "WrongHorseBattery$tap1e!")
+	assert.Equal(t, http.StatusOK, rec.Code, "failed login must re-render the login page, not redirect")
+	for _, c := range rec.Result().Cookies() {
+		assert.NotEqual(t, "session", c.Name, "failed login must not set a session cookie")
+	}
+}
+
+// TestBasicLogin_NoPasswordStored_Fails confirms that a user with no entry in
+// the secrets store cannot log in regardless of what's submitted.
+func TestBasicLogin_NoPasswordStored_Fails(t *testing.T) {
+	provider := setupBasicProviderWithSecrets(t, map[string]string{})
+
+	rec := postLogin(t, provider, "alice", "anything")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	for _, c := range rec.Result().Cookies() {
+		assert.NotEqual(t, "session", c.Name)
+	}
 }

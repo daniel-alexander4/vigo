@@ -78,6 +78,9 @@ Examples:
 
 		// Resolve secret: references via the local secrets provider.
 		if strings.HasPrefix(dbDSN, "secret:") {
+			if err := requireUnlocked(cmd, nil); err != nil {
+				return err
+			}
 			secretPath := strings.TrimPrefix(dbDSN, "secret:")
 			secretsDir := filepath.Join(serverRoot, "secrets")
 			provider, provErr := secrets.NewLocalProvider("", secretsDir)

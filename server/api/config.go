@@ -116,6 +116,7 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/config/unused", read(http.HandlerFunc(h.HandleUnused)))
 	mux.Handle("POST /api/v1/secrets/rotated", admin(http.HandlerFunc(h.SecretRotated)))
 	mux.Handle("POST /api/v1/secrets/accessed", admin(http.HandlerFunc(h.SecretAccessed)))
+	mux.Handle("POST /api/v1/secrets/event", admin(http.HandlerFunc(h.SecretsLifecycleEvent)))
 }
 
 // ReloadConfig re-reads all config files from disk. Called by vigocli
@@ -200,6 +201,44 @@ func (h *ConfigHandler) SecretRotated(w http.ResponseWriter, r *http.Request) {
 		"path":     req.Path,
 		"affected": affected,
 	})
+}
+
+// secretsLifecycleEventTypes enumerates the audit event types accepted by the
+// /api/v1/secrets/event endpoint. Anything outside this set is rejected so
+// the audit chain can't be polluted by arbitrary client-supplied event names.
+var secretsLifecycleEventTypes = map[string]string{
+	"secrets_unlocked":           "Vault unlocked",
+	"secrets_locked":             "Vault locked",
+	"secrets_passphrase_rotated": "Unlock passphrase rotated",
+	"secrets_passphrase_reset":   "Unlock passphrase reset via break-glass",
+}
+
+// SecretsLifecycleEvent records an audit-chain entry for an unlock-gate
+// lifecycle action (unlock, lock, rotate, reset) fired by vigocli. The
+// payload is restricted to a known event-type vocabulary; client-supplied
+// names outside that set are rejected.
+func (h *ConfigHandler) SecretsLifecycleEvent(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Type string `json:"type"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Type == "" {
+		writeError(w, http.StatusBadRequest, "type is required")
+		return
+	}
+	summary, ok := secretsLifecycleEventTypes[req.Type]
+	if !ok {
+		writeError(w, http.StatusBadRequest, "unknown event type")
+		return
+	}
+
+	actor := actorFromRequest(r)
+	recordAudit(r.Context(), h.auditWriter,
+		req.Type, actor, "rest",
+		summary,
+		fmt.Sprintf(`{"actor":%q}`, actor),
+	)
+
+	writeJSON(w, http.StatusOK, map[string]any{"recorded": true})
 }
 
 // SecretAccessed records an audit trail entry when a secret is revealed via CLI.

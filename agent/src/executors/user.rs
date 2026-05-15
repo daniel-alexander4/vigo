@@ -4,10 +4,31 @@
 //! User executor — manages system users idempotently via useradd/usermod/userdel.
 
 use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
+use sha_crypt::{sha512_check, sha512_simple, Sha512Params};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::time::Instant;
+
+// password_matches_shadow returns true iff the SHA-512-crypt entry in
+// /etc/shadow represents the given plaintext. Any non-$6$ entry (locked "!",
+// no-password "*", legacy md5/sha256, malformed) is treated as a mismatch so
+// the caller re-applies. Constant-time comparison happens inside
+// sha512_check; we only inspect Ok-vs-Err here.
+fn password_matches_shadow(plaintext: &str, shadow_entry: &str) -> bool {
+    if !shadow_entry.starts_with("$6$") {
+        return false;
+    }
+    sha512_check(plaintext, shadow_entry).is_ok()
+}
+
+// compute_shadow_hash produces a `$6$<random-salt>$<hash>` string suitable
+// for `usermod -p`. A fresh random salt is generated each call — operators
+// who reset to the same plaintext still get a different on-disk entry.
+fn compute_shadow_hash(plaintext: &str) -> Result<String, String> {
+    sha512_simple(plaintext, &Sha512Params::default())
+        .map_err(|e| format!("sha512_simple: {:?}", e))
+}
 
 pub struct UserExecutor {
     pub runner: Box<dyn CommandRunner>,
@@ -210,11 +231,22 @@ impl UserExecutor {
         if system {
             args.push("--system".into());
         }
-        for (flag, key) in [("-u", "uid"), ("-s", "shell"), ("-d", "home"), ("-c", "comment"), ("-g", "group"), ("-p", "password"), ("--expiredate", "expiredate")] {
+        for (flag, key) in [("-u", "uid"), ("-s", "shell"), ("-d", "home"), ("-c", "comment"), ("-g", "group"), ("--expiredate", "expiredate")] {
             if let Some(v) = params.get(key) {
                 if !v.is_empty() {
                     args.push(flag.into());
                     args.push(v.clone());
+                }
+            }
+        }
+        // `password:` is plaintext; useradd -p wants SHA-512-crypt. Hash at
+        // call time. Skip silently on hash error — the apply-pass later will
+        // surface the failure via partial_errors after the user exists.
+        if let Some(pw) = params.get("password") {
+            if !pw.is_empty() {
+                if let Ok(hashed) = compute_shadow_hash(pw) {
+                    args.push("-p".into());
+                    args.push(hashed);
                 }
             }
         }
@@ -834,7 +866,13 @@ impl UserExecutor {
                         }
                     }
 
-                    // Check password.
+                    // Check password. `password:` carries plaintext (the
+                    // operator-side vault stores plaintext too); the agent
+                    // computes SHA-512-crypt at apply time so /etc/shadow
+                    // ends up with the form Linux expects. Idempotency
+                    // compares the plaintext against the current shadow
+                    // entry by re-running sha512_check with the entry's
+                    // own salt — a stable on-disk hash stays unchanged.
                     let mut password_changed = false;
                     let mut desired_password = String::new();
                     if let Some(pw) = params.get("password") {
@@ -842,7 +880,7 @@ impl UserExecutor {
                             desired_password = pw.clone();
                             match self.lookup_shadow_hash(&name) {
                                 Ok(current_hash) => {
-                                    if current_hash != *pw {
+                                    if !password_matches_shadow(pw, &current_hash) {
                                         password_changed = true;
                                         needs_update = true;
                                     }
@@ -1036,16 +1074,25 @@ impl UserExecutor {
                         }
                     }
 
-                    // Apply password.
+                    // Apply password — compute the SHA-512-crypt envelope
+                    // here so `usermod -p` receives the shadow-format string
+                    // Linux requires.
                     if password_changed {
-                        match self.runner.run("usermod", &["-p", &desired_password, &name]) {
-                            Ok(o) if !o.status.success() => {
-                                partial_errors.push(format!("usermod -p: {}", String::from_utf8_lossy(&o.stderr)));
+                        match compute_shadow_hash(&desired_password) {
+                            Ok(hashed) => {
+                                match self.runner.run("usermod", &["-p", &hashed, &name]) {
+                                    Ok(o) if !o.status.success() => {
+                                        partial_errors.push(format!("usermod -p: {}", String::from_utf8_lossy(&o.stderr)));
+                                    }
+                                    Err(e) => {
+                                        partial_errors.push(format!("usermod -p: {}", e));
+                                    }
+                                    _ => {}
+                                }
                             }
                             Err(e) => {
-                                partial_errors.push(format!("usermod -p: {}", e));
+                                partial_errors.push(format!("hashing password: {}", e));
                             }
-                            _ => {}
                         }
                     }
 
@@ -1133,6 +1180,35 @@ mod tests {
     use super::*;
     use crate::executors::test_support::mock::*;
     use std::sync::Arc;
+
+    #[test]
+    fn shadow_hash_round_trips() {
+        let hashed = compute_shadow_hash("hunter2!Hunter2").unwrap();
+        assert!(hashed.starts_with("$6$"), "got: {}", hashed);
+        assert!(password_matches_shadow("hunter2!Hunter2", &hashed));
+        assert!(!password_matches_shadow("WrongPass$1", &hashed));
+    }
+
+    #[test]
+    fn shadow_hash_mismatch_on_non_sha512_entries() {
+        // Locked / no-password / legacy entries must always report mismatch
+        // so the apply path re-runs `usermod -p`.
+        assert!(!password_matches_shadow("anything", "!"));
+        assert!(!password_matches_shadow("anything", "*"));
+        assert!(!password_matches_shadow("anything", ""));
+        assert!(!password_matches_shadow("anything", "$1$abcd$malformed"));
+    }
+
+    #[test]
+    fn useradd_args_hashes_password() {
+        let mut params = HashMap::new();
+        params.insert("password".to_string(), "MyPlain$Pass1".to_string());
+        let args = UserExecutor::build_useradd_args("alice", &params);
+        let p_idx = args.iter().position(|a| a == "-p").expect("-p flag present");
+        let hash = &args[p_idx + 1];
+        assert!(hash.starts_with("$6$"), "useradd -p got non-shadow form: {}", hash);
+        assert!(sha512_check("MyPlain$Pass1", hash).is_ok());
+    }
 
     #[test]
     fn normalize_groups_comma_string() {

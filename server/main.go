@@ -927,7 +927,7 @@ func run() error {
 		}); err != nil {
 			slog.Warn("failed to seed admin user", "error", err)
 		} else {
-			slog.Info("seeded default admin account (no password — run: vigocli secrets set web vigo/web/auth/admin)")
+			slog.Info("seeded default admin account (no password — run: vigocli secrets unlock && vigocli secrets set password vigo/web/auth/admin)")
 		}
 	}
 

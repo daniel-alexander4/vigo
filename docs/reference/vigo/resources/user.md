@@ -17,7 +17,7 @@ Manages local user accounts -- create, modify, and delete users with configurabl
 | `comment` | No | -- | User comment / GECOS field. |
 | `group` | No | -- | Primary group. |
 | `groups` | No | -- | Supplementary groups. Accepts either a comma-separated string (`"plex,docker"`) or a YAML list (`[plex, docker]`). List form is preferred because it composes with [lookup tables](../../../reference/writing-modules.md) for per-envoy variation. |
-| `password` | No | -- | Hashed password string. |
+| `password` | No | -- | Plaintext password. The agent computes `$6$<salt>$<hash>` SHA-512-crypt at apply time and feeds it to `usermod -p` / `useradd -p` — `/etc/shadow` still holds a hash, just one derived on the envoy instead of upstream. Idempotency works by re-running the crypt with the existing salt and comparing. Typically sourced from the vault via `secret:vigo/os-users/<name>` (which a `vigocli secrets set password` call populates). |
 | `authorized_keys` | No | -- | SSH authorized keys content (written to `~/.ssh/authorized_keys`). |
 | `system` | No | `false` | If `true`, create a system account (`useradd --system`). |
 | `manage_home` | No | `true` | If `false`, skip `-m` flag on `useradd` (no home dir creation). If `true`, `userdel -r` removes home on delete. |

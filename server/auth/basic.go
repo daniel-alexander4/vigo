@@ -5,6 +5,7 @@ package auth
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -12,7 +13,6 @@ import (
 	"net/http"
 
 	"git.alexander4.io/vigo/server/secrets"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // auditRecorder is the interface for the tamper-evident audit writer.
@@ -31,9 +31,11 @@ func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, source,
 }
 
 // BasicProvider implements Provider using username/password authentication.
-// User accounts live in the database; password hashes are stored in the
-// local secrets provider at vigo/web/auth/<username>. An account is not
-// active until a password secret is set via vigocli.
+// User accounts live in the database; passwords are stored verbatim in the
+// secrets provider at vigo/web/auth/<username> under the master-key
+// envelope. The unlock-gated vault is the operator-side boundary; this
+// handler does a constant-time compare against the resolved value on every
+// login attempt. An account is not active until a password secret is set.
 type BasicProvider struct {
 	sessions    *SessionManager
 	userStore   *UserStore
@@ -59,7 +61,7 @@ func (p *BasicProvider) Method() string { return "basic" }
 
 // needsSetup returns true when the admin user exists but has no password set.
 // This is the state after first startup — the server seeds an admin account
-// but the operator hasn't run vigocli secrets set web yet.
+// but the operator hasn't run `vigocli secrets set password vigo/web/auth/admin` yet.
 func (p *BasicProvider) needsSetup(ctx context.Context) bool {
 	count, err := p.userStore.CountUsers(ctx)
 	if err != nil || count == 0 {
@@ -213,23 +215,26 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Resolve password hash from secrets provider.
+	// Resolve the stored password from the secrets provider. The Provider
+	// is unattended (Get is direct, no operator interaction), so vigosrv
+	// keeps authenticating logins across restarts without ever touching the
+	// unlock gate.
 	secretKey := fmt.Sprintf("vigo/web/auth/%s", username)
-	hash, err := p.secrets.Get(r.Context(), secretKey)
+	stored, err := p.secrets.Get(r.Context(), secretKey)
 	if err != nil {
 		slog.Debug("no password secret for user", "username", username, "error", err)
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "no password configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, "Invalid username or password")
 		return
 	}
-	if hash == "" {
+	if stored == "" {
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "no password configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, "Invalid username or password")
 		return
 	}
 
-	// Compare password against bcrypt hash.
-	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
+	// Constant-time compare against the stored value.
+	if subtle.ConstantTimeCompare([]byte(stored), []byte(password)) != 1 {
 		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "bad password", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, "Invalid username or password")
 		return
@@ -447,7 +452,8 @@ func serveSetupPage(w http.ResponseWriter) {
                 An <strong>admin</strong> account has been created. Set its password to sign in.
             </p>
             <div style="background:#1e1e2e;color:#cdd6f4;border-radius:6px;padding:1rem;font-family:monospace;font-size:0.85rem;line-height:1.6;margin-bottom:1rem">
-                <div>vigocli secrets set web vigo/web/auth/admin</div>
+                <div>vigocli secrets unlock</div>
+                <div>vigocli secrets set password vigo/web/auth/admin</div>
             </div>
             <hr style="border:none;border-top:1px solid #e0e0e0;margin:1.5rem 0">
             <p style="color:#6c757d;text-align:center;font-size:0.85rem">
