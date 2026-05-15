@@ -84,10 +84,14 @@ func (sm *SessionManager) DestroyUser(ctx context.Context) error {
 // upgrade requests where the ResponseWriter must implement http.Hijacker.
 func (sm *SessionManager) LoadSessionReadOnly(r *http.Request) context.Context {
 	cookie, err := r.Cookie(sm.Cookie.Name)
-	if err != nil || cookie.Value == "" {
-		return r.Context()
+	token := ""
+	if err == nil {
+		token = cookie.Value
 	}
-	ctx, err := sm.SessionManager.Load(r.Context(), cookie.Value)
+	// Empty token matches LoadAndSave's no-cookie semantics — scs mints a
+	// fresh empty session bound to the context. Without this, downstream
+	// callers of GetUser/GetString panic on a context that never saw scs.
+	ctx, err := sm.SessionManager.Load(r.Context(), token)
 	if err != nil {
 		return r.Context()
 	}
