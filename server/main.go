@@ -916,6 +916,7 @@ func run() error {
 	usersHandler := api.NewUsersHandler(userStore, authMethod)
 	usersHandler.SetAuditWriter(auditWriter)
 	usersHandler.SetSecretsProvider(provider)
+	usersHandler.SetAdminValidation(queries, cfg.Server.Hostname)
 	tokensHandler := api.NewTokensHandler(tokenStore, authMethod)
 	tokensHandler.SetAuditWriter(auditWriter)
 

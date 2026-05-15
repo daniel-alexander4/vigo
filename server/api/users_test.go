@@ -5,6 +5,8 @@ package api
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -117,6 +119,184 @@ func TestUsers_CreateUserDefaultsToViewer(t *testing.T) {
 	json.NewDecoder(rec.Body).Decode(&user)
 	if user.Role != "viewer" {
 		t.Errorf("expected default role viewer, got %s", user.Role)
+	}
+}
+
+// --- admin username validation (per-operator OS-mapped admin) ---
+
+// seedLocalAgent inserts an envoy with the given hostname and a `users`
+// trait whose human field is the given list. Returns the queries handle
+// the test should pass to SetAdminValidation.
+func seedLocalAgent(t *testing.T, hostname string, human []string) (*db.Queries, *sql.DB) {
+	t.Helper()
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
+
+	envoy, err := queries.CreateEnvoy(context.Background(), db.CreateEnvoyParams{
+		Hostname:  hostname,
+		IpAddress: "127.0.0.1",
+		PubkeyPem: "test-pubkey",
+	})
+	if err != nil {
+		t.Fatalf("creating local agent envoy: %v", err)
+	}
+
+	traitsJSON := mustMarshal(t, map[string]any{
+		"users": map[string]any{
+			"human":      human,
+			"os":         []string{"daemon", "sshd"},
+			"thirdparty": []string{},
+			"logged_in":  human,
+		},
+	})
+	if _, err := queries.InsertEnvoyTraits(context.Background(), db.InsertEnvoyTraitsParams{
+		EnvoyID: envoy.ID,
+		Traits:  string(traitsJSON),
+	}); err != nil {
+		t.Fatalf("inserting local agent traits: %v", err)
+	}
+	return queries, sqlDB
+}
+
+func mustMarshal(t *testing.T, v any) []byte {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return b
+}
+
+func TestUsers_AdminValidation_Success(t *testing.T) {
+	queries, sqlDB := seedLocalAgent(t, "vigo.test", []string{"dan", "alice"})
+	store := vigoauth.NewUserStore(queries)
+	handler := NewUsersHandler(store, "none")
+	handler.SetAdminValidation(queries, "vigo.test")
+	_ = sqlDB
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"username":"dan","role":"admin"}`
+	req := userRequestWithUser("POST", "/api/v1/users", []byte(body), "admin-id", "admin", "admin")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUsers_AdminValidation_UsernameNotHuman(t *testing.T) {
+	queries, _ := seedLocalAgent(t, "vigo.test", []string{"dan"})
+	store := vigoauth.NewUserStore(queries)
+	handler := NewUsersHandler(store, "none")
+	handler.SetAdminValidation(queries, "vigo.test")
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"username":"ghost","role":"admin"}`
+	req := userRequestWithUser("POST", "/api/v1/users", []byte(body), "admin-id", "admin", "admin")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte("not a human OS user")) {
+		t.Errorf("expected error mentioning 'not a human OS user'; got %s", rec.Body.String())
+	}
+}
+
+func TestUsers_AdminValidation_NoLocalAgent(t *testing.T) {
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
+	store := vigoauth.NewUserStore(queries)
+	handler := NewUsersHandler(store, "none")
+	handler.SetAdminValidation(queries, "vigo.test") // no envoy with this hostname
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"username":"dan","role":"admin"}`
+	req := userRequestWithUser("POST", "/api/v1/users", []byte(body), "admin-id", "admin", "admin")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte("not yet enrolled")) {
+		t.Errorf("expected 'not yet enrolled' error; got %s", rec.Body.String())
+	}
+}
+
+func TestUsers_AdminValidation_NoTraitsYet(t *testing.T) {
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
+	if _, err := queries.CreateEnvoy(context.Background(), db.CreateEnvoyParams{
+		Hostname:  "vigo.test",
+		IpAddress: "127.0.0.1",
+		PubkeyPem: "x",
+	}); err != nil {
+		t.Fatalf("create envoy: %v", err)
+	}
+	store := vigoauth.NewUserStore(queries)
+	handler := NewUsersHandler(store, "none")
+	handler.SetAdminValidation(queries, "vigo.test")
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"username":"dan","role":"admin"}`
+	req := userRequestWithUser("POST", "/api/v1/users", []byte(body), "admin-id", "admin", "admin")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte("has not yet reported traits")) {
+		t.Errorf("expected 'has not yet reported traits' error; got %s", rec.Body.String())
+	}
+}
+
+func TestUsers_AdminValidation_NotConfigured(t *testing.T) {
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
+	store := vigoauth.NewUserStore(queries)
+	handler := NewUsersHandler(store, "none")
+	// SetAdminValidation NOT called.
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"username":"dan","role":"admin"}`
+	req := userRequestWithUser("POST", "/api/v1/users", []byte(body), "admin-id", "admin", "admin")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte("not configured")) {
+		t.Errorf("expected 'not configured' error; got %s", rec.Body.String())
+	}
+}
+
+func TestUsers_AdminValidation_ViewerSkipsCheck(t *testing.T) {
+	// Viewer / compliance users are one-offs — no OS-user constraint.
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
+	store := vigoauth.NewUserStore(queries)
+	handler := NewUsersHandler(store, "none")
+	handler.SetAdminValidation(queries, "vigo.test") // wired but no envoy/traits
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	body := `{"username":"ghost-viewer","role":"viewer"}`
+	req := userRequestWithUser("POST", "/api/v1/users", []byte(body), "admin-id", "admin", "admin")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 for viewer (no admin check), got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 

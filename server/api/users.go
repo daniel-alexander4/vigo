@@ -4,7 +4,10 @@
 package api
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -35,10 +38,12 @@ func validateSSHPubkey(raw string) (string, error) {
 
 // UsersHandler provides REST endpoints for user management.
 type UsersHandler struct {
-	store       *auth.UserStore
-	authMethod  string
-	auditWriter auditRecorder
-	secrets     secrets.Provider
+	store          *auth.UserStore
+	authMethod     string
+	auditWriter    auditRecorder
+	secrets        secrets.Provider
+	queries        *db.Queries // optional; required for admin-username validation
+	serverHostname string      // optional; configured server.hostname (local agent envoy)
 }
 
 // SetAuditWriter sets the audit writer for recording user management events.
@@ -47,9 +52,66 @@ func (h *UsersHandler) SetAuditWriter(w auditRecorder) { h.auditWriter = w }
 // SetSecretsProvider sets the secrets provider for TOTP secret storage.
 func (h *UsersHandler) SetSecretsProvider(p secrets.Provider) { h.secrets = p }
 
+// SetAdminValidation wires in the DB queries and the server's own hostname
+// so admin user creation can validate the requested username against the
+// local agent's `users.human` trait. Without this, admin-role creates are
+// rejected with a clear "validation not configured" error — call it from
+// production wiring in main.go after constructing the handler.
+func (h *UsersHandler) SetAdminValidation(q *db.Queries, serverHostname string) {
+	h.queries = q
+	h.serverHostname = serverHostname
+}
+
 // NewUsersHandler creates a users API handler.
 func NewUsersHandler(store *auth.UserStore, authMethod string) *UsersHandler {
 	return &UsersHandler{store: store, authMethod: authMethod}
+}
+
+// validateAdminUsername confirms that `username` is a human OS account on the
+// server host, by consulting the local agent's `users.human` trait. The local
+// agent is identified by `server.hostname` from server.yaml. Returns nil on
+// success; otherwise an error suitable for surfacing verbatim to the API
+// caller (it names the remediation step).
+func (h *UsersHandler) validateAdminUsername(ctx context.Context, username string) error {
+	if h.queries == nil || h.serverHostname == "" {
+		return fmt.Errorf("admin user validation is not configured on this server (missing server.hostname or DB wiring); see install docs")
+	}
+	envoy, err := h.queries.GetEnvoyByHostname(ctx, h.serverHostname)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("local agent (hostname %q) not yet enrolled — run `curl -sSfk https://localhost:8443/bootstrap | sudo sh` from the server host, then retry", h.serverHostname)
+	} else if err != nil {
+		return fmt.Errorf("looking up local agent envoy: %w", err)
+	}
+	traitsRow, err := h.queries.GetLatestEnvoyTraits(ctx, envoy.ID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("local agent is enrolled but has not yet reported traits; wait one check-in cycle (~30s) and retry")
+	} else if err != nil {
+		return fmt.Errorf("fetching local agent traits: %w", err)
+	}
+
+	// Traits column is a JSON object keyed by collector name. The `users`
+	// collector reports {human, os, thirdparty} — `human` is the uid≥1000,
+	// real-shell list, the only category eligible for admin mapping.
+	var allTraits map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(traitsRow.Traits), &allTraits); err != nil {
+		return fmt.Errorf("parsing local agent traits: %w", err)
+	}
+	usersRaw, ok := allTraits["users"]
+	if !ok {
+		return fmt.Errorf("local agent has not collected the `users` trait yet; wait one check-in cycle and retry")
+	}
+	var usersTrait struct {
+		Human []string `json:"human"`
+	}
+	if err := json.Unmarshal(usersRaw, &usersTrait); err != nil {
+		return fmt.Errorf("parsing local agent users trait: %w", err)
+	}
+	for _, name := range usersTrait.Human {
+		if name == username {
+			return nil
+		}
+	}
+	return fmt.Errorf("admin username %q is not a human OS user on the server host (got: %v); create the OS user (uid≥1000, real shell) first, then retry", username, usersTrait.Human)
 }
 
 // RegisterRoutes mounts user management endpoints.
@@ -114,6 +176,15 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Admin webusers must map 1:1 with a human OS user on the server host.
+	// Viewer / compliance users have no such constraint — they're one-offs.
+	if req.Role == "admin" {
+		if err := h.validateAdminUsername(r.Context(), req.Username); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+
 	user, err := h.store.Create(r.Context(), db.InsertUserParams{
 		Username:     req.Username,
 		DisplayName:  req.DisplayName,
@@ -175,6 +246,14 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	role := existing.Role
 	if req.Role != "" {
 		role = req.Role
+	}
+
+	// Same OS-user mapping invariant on promotion to admin.
+	if req.Role == "admin" && req.Role != existing.Role {
+		if err := h.validateAdminUsername(r.Context(), existing.Username); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 
 	// Recalculate permissions when role changes; preserve existing otherwise.

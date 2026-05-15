@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/user"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -85,7 +86,25 @@ var webusersCreateCmd = &cobra.Command{
 			"role":         userRole,
 		}
 
-		if userSSHKeyFile != "" {
+		// Admin webusers must map 1:1 with a human OS user on the server
+		// host. The pubkey is auto-read from that OS user's standard SSH
+		// key location to enforce the mapping (and so audit attribution
+		// has a real OS identity backing each admin action). Viewer /
+		// compliance users have no such constraint — they're one-offs.
+		if userRole == "admin" {
+			if userSSHKeyFile != "" {
+				return fmt.Errorf("--ssh-key-file is not allowed for --role admin; the pubkey is auto-read from the matching OS user's ~/.ssh/id_ed25519.pub (fallback id_rsa.pub). Drop the flag and run again from the server host as root or via sudo")
+			}
+			osUser, err := user.Lookup(userUsername)
+			if err != nil {
+				return fmt.Errorf("admin role requires a matching OS user on the server host — %q not found locally (%w). Run this command on the server host as root after the OS user has been created", userUsername, err)
+			}
+			pubkey, err := readDefaultSSHPubkey(osUser.HomeDir)
+			if err != nil {
+				return fmt.Errorf("admin pubkey auto-read: %w (generate a key for OS user %q first: `sudo -u %s ssh-keygen -t ed25519`)", err, userUsername, userUsername)
+			}
+			body["ssh_public_key"] = pubkey
+		} else if userSSHKeyFile != "" {
 			data, err := os.ReadFile(userSSHKeyFile)
 			if err != nil {
 				return fmt.Errorf("reading SSH key file: %w", err)
