@@ -175,7 +175,7 @@ var loopbackAdmin = &User{
 
 // TryPeerAuth is the shared peer-auth fallback called by every auth
 // provider. Returns the synthetic loopback admin when (and only when):
-//   - the request targets a /api/v1/* path, AND
+//   - the request targets a /api/v1/* path OR a /ws/* path, AND
 //   - the request originates from loopback or the Docker bridge,
 //
 // otherwise returns nil. Providers call this AFTER their token and
@@ -183,11 +183,17 @@ var loopbackAdmin = &User{
 // precedence. See basic_test.go:77 for the regression that pins the
 // ordering invariant.
 //
+// The /ws/* prefix is included so the CLI's WebSocket dial in
+// `vigocli scrier ssh` works the same way its `/api/v1/scrier/*`
+// REST calls already do — both are CLI-on-server-host traffic.
+// Browser WS dials carry a session cookie and authenticate before
+// peer-auth runs, so they're unaffected.
+//
 // Caller is responsible for injecting the returned user into the
 // request context (ContextWithUser) and serving the downstream
 // handler — this function doesn't write to the response.
 func TryPeerAuth(r *http.Request) *User {
-	if !isAPIPath(r.URL.Path) || !isLocalRequest(r) {
+	if !peerAuthEligiblePath(r.URL.Path) || !isLocalRequest(r) {
 		return nil
 	}
 	slog.Info("peer-auth granted loopback admin",
@@ -195,4 +201,13 @@ func TryPeerAuth(r *http.Request) *User {
 		"remote", r.RemoteAddr,
 	)
 	return loopbackAdmin
+}
+
+// peerAuthEligiblePath returns true for the URL prefixes that peer-auth
+// is allowed to grant on: the REST API (/api/v1/*) and the WebSocket
+// endpoints (/ws/*). Other paths (login pages, marketing pages, static
+// assets) are deliberately excluded — peer-auth fallthrough to those
+// would short-circuit the browser-side /login flow.
+func peerAuthEligiblePath(path string) bool {
+	return isAPIPath(path) || strings.HasPrefix(path, "/ws/")
 }
