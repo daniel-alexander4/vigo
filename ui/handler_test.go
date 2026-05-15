@@ -394,6 +394,9 @@ func (m *footprintMock) FleetPressure() fleetpressure.FleetSummary {
 func (m *footprintMock) FleetPressureDetail() (fleetpressure.FleetSummary, []fleetpressure.EnvoyPressure) {
 	return m.FleetPressure(), nil
 }
+func (m *footprintMock) EnvoyFreshness(id string) (time.Time, time.Duration, bool) {
+	return m.base.EnvoyFreshness(id)
+}
 func (m *footprintMock) EnvoyPressure(_ string) (fleetpressure.EnvoyPressure, bool) {
 	return fleetpressure.EnvoyPressure{
 		ID:       "00000000-0000-0000-0000-000000000001",
@@ -1157,6 +1160,10 @@ func (m *mockDataSource) SecurityScanTraits(_ string) (map[string]string, bool) 
 
 func (m *mockDataSource) SecurityScanContext(_ string) (string, map[string]string, bool) {
 	return "", nil, false
+}
+
+func (m *mockDataSource) EnvoyFreshness(_ string) (time.Time, time.Duration, bool) {
+	return time.Time{}, 0, false
 }
 
 func (m *mockDataSource) EnvoyCertDetails(_, _ string) ([]CertDetail, string, bool) {

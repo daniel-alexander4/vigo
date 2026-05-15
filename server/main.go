@@ -2229,17 +2229,29 @@ type traitQueryAdapter struct {
 	agentSvc *isgrpc.AgentService
 }
 
-func (a *traitQueryAdapter) DispatchTraitQuery(ctx context.Context, traitPath, hostname string, timeout time.Duration) (string, bool, error) {
+func (a *traitQueryAdapter) DispatchTraitQuery(ctx context.Context, traitPath, hostname string, timeout time.Duration) (string, ui.DispatchOutcome, error) {
 	res, err := a.agentSvc.DispatchQuery(ctx, traitPath, hostname, timeout)
 	if err != nil {
-		return "", false, err
+		return "", ui.DispatchTimeout, err
 	}
+	// First a responded-with-data entry wins.
 	for _, entry := range res.Responded {
 		if entry.Found {
-			return entry.Value, true, nil
+			return entry.Value, ui.DispatchResponded, nil
 		}
 	}
-	return "", false, nil
+	// No usable response. Classify the reason in priority order so the
+	// caller can render a precise message: offline (most actionable) →
+	// timeout (envoy was connected but never answered) → no-data (agent
+	// answered with found=false, currently latent in the agent code path).
+	switch {
+	case len(res.Offline) > 0:
+		return "", ui.DispatchOffline, nil
+	case len(res.TimedOut) > 0:
+		return "", ui.DispatchTimeout, nil
+	default:
+		return "", ui.DispatchNoData, nil
+	}
 }
 
 // traitLookupAdapter wraps fleet.FleetIndex to satisfy ui.TraitLookup.

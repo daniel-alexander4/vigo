@@ -340,18 +340,50 @@ func TestDrawerSections_CachedThenLive(t *testing.T) {
 	if want := []string{"cves", "trivy", "lynis", "aide", "certs"}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("not-live sections = %v, want %v", got, want)
 	}
-	// After the fetch: scanner tabs come from the live detail (here Trivy +
-	// Defender), not the cached set; CVEs (a check-in-trait rollup) and
-	// Certs still bracket them.
+	// After the fetch: scanner tabs union cached + live so the operator
+	// keeps tabs they were looking at. Trivy is in both (HasLive=true),
+	// Lynis + AIDE are cached-only (HasLive=false — pane shows cached
+	// summary), Defender is live-only (HasLive=true — no cached source).
 	detail := &SecurityScanDetail{Trivy: &TrivyDetail{}, Defender: &DefenderDetail{}}
-	got = sectionSlugs(drawerSections(cached, detail))
-	if want := []string{"cves", "trivy", "defender", "certs"}; strings.Join(got, ",") != strings.Join(want, ",") {
+	sections := drawerSections(cached, detail)
+	got = sectionSlugs(sections)
+	if want := []string{"cves", "trivy", "lynis", "aide", "defender", "certs"}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("live sections = %v, want %v", got, want)
+	}
+	wantHasLive := map[string]bool{"cves": false, "trivy": true, "lynis": false, "aide": false, "defender": true, "certs": false}
+	for _, s := range sections {
+		if s.HasLive != wantHasLive[s.Slug] {
+			t.Errorf("section %q HasLive=%v, want %v", s.Slug, s.HasLive, wantHasLive[s.Slug])
+		}
 	}
 	// No cached CVE data and no live detail: just the always-present Certs tab.
 	got = sectionSlugs(drawerSections(SecurityDrawerCached{}, nil))
 	if want := []string{"certs"}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("empty sections = %v, want %v", got, want)
+	}
+}
+
+func TestCollectLiveCVEIDs_UppercasesAndUnions(t *testing.T) {
+	d := &SecurityScanDetail{
+		Trivy: &TrivyDetail{Vulnerabilities: []TrivyVuln{
+			{CVEID: "cve-2024-1"}, {CVEID: "  CVE-2024-2 "}, {CVEID: ""},
+		}},
+		Debsecan: &DebsecanDetail{Vulnerabilities: []DebsecanVuln{
+			{CVEID: "CVE-2024-2"}, // duplicate across scanners — ok
+			{CVEID: "cve-2024-3"},
+		}},
+	}
+	got := collectLiveCVEIDs(d)
+	for _, want := range []string{"CVE-2024-1", "CVE-2024-2", "CVE-2024-3"} {
+		if !got[want] {
+			t.Errorf("expected %q in LiveCVEIDs, got %v", want, got)
+		}
+	}
+	if len(got) != 3 {
+		t.Errorf("expected 3 entries, got %d: %v", len(got), got)
+	}
+	if collectLiveCVEIDs(nil) != nil {
+		t.Error("nil detail should return nil map")
 	}
 }
 
@@ -361,9 +393,10 @@ func TestSecurityDrawerFragment_RendersBothStates(t *testing.T) {
 		t.Fatalf("NewRenderer: %v", err)
 	}
 	data := SecurityDrawerData{
-		EnvoyID:  "00000000-0000-0000-0000-000000000001",
-		Hostname: "danlap",
-		Timeout:  90,
+		EnvoyID:         "00000000-0000-0000-0000-000000000001",
+		Hostname:        "danlap",
+		Timeout:         90,
+		EnvoyResponsive: true,
 		Cached: SecurityDrawerCached{
 			Unique:     &UniqueCVECounts{Critical: 2, High: 5},
 			Trivy:      &TrivyCached{Critical: 1, Total: 1},
@@ -395,21 +428,23 @@ func TestSecurityDrawerFragment_RendersBothStates(t *testing.T) {
 		t.Error("not-live: Defender tab should be absent (no cached Defender data)")
 	}
 
-	// Live: the per-finding cards replace the summaries; scanner tabs now
-	// come from Detail (Trivy + Lynis + Defender); the chkrootkit/aide tabs
-	// drop off (no live detail for them).
+	// Live: per-finding cards for scanners present in the live response
+	// (Trivy + Lynis + Defender); cached-only scanners (Chkrootkit + AIDE)
+	// retain their cached-summary panes so operators don't lose tabs.
 	data.Live = true
 	data.Detail = &SecurityScanDetail{
 		Trivy:    &TrivyDetail{Vulnerabilities: []TrivyVuln{{CVEID: "CVE-2024-9999", Severity: "high", Package: "openssl", Installed: "1.0.0"}}, LastScan: "now"},
 		Lynis:    &LynisDetail{Score: 78, Warnings: []LynisEntry{{ID: "AUTH-0001", Text: "weak setting"}}, LastScan: "now"},
 		Defender: &DefenderDetail{Enabled: true, RealtimeProtection: true, LastScan: "now"},
 	}
+	data.LiveCVEIDs = collectLiveCVEIDs(data.Detail)
 	data.Sections = drawerSections(data.Cached, data.Detail)
 	rec = httptest.NewRecorder()
 	r.RenderFragment(rec, "security", "security-drawer-fragment", data)
 	body = rec.Body.String()
 	for _, want := range []string{
 		`id="sec-pane-cves"`, `id="sec-pane-trivy"`, `id="sec-pane-lynis"`,
+		`id="sec-pane-chkrootkit"`, `id="sec-pane-aide"`,
 		`id="sec-pane-defender"`, `id="sec-pane-certs"`,
 		"Refresh Live Detail", "CVE-2024-9999", "AUTH-0001",
 	} {
@@ -417,8 +452,115 @@ func TestSecurityDrawerFragment_RendersBothStates(t *testing.T) {
 			t.Errorf("live: rendered drawer missing %q", want)
 		}
 	}
-	if strings.Contains(body, "Fetch Live Detail above for individual findings") {
-		t.Error("live: the cached-summary hint should not appear once detail is fetched")
+}
+
+// TestSecurityDrawerFragment_UnresponsiveBanner pins the freshness pre-flight
+// banner above the Fetch Live Detail button when the envoy hasn't checked in
+// recently. The button stays visible so operators can "try anyway".
+func TestSecurityDrawerFragment_UnresponsiveBanner(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	data := SecurityDrawerData{
+		EnvoyID:         "00000000-0000-0000-0000-000000000001",
+		Hostname:        "stale-host",
+		Timeout:         90,
+		EnvoyResponsive: false,
+		EnvoyLastSeen:   time.Now().Add(-2 * time.Hour),
+		Sections:        []SecuritySection{{Slug: "certs", Label: "Certs"}},
+	}
+	rec := httptest.NewRecorder()
+	r.RenderFragment(rec, "security", "security-drawer-fragment", data)
+	body := rec.Body.String()
+	if !strings.Contains(body, "hasn't checked in for") {
+		t.Error("unresponsive envoy: expected pre-flight banner")
+	}
+	if !strings.Contains(body, "Fetch Live Detail") {
+		t.Error("unresponsive envoy: Fetch Live Detail button should still render")
+	}
+}
+
+// TestSecurityDrawerFragment_LiveNoDataBanner pins the actionable banner
+// shown when the live fetch completed but the agent reported no scanner
+// output. Without the flag set, the drawer would show an empty live pane.
+func TestSecurityDrawerFragment_LiveNoDataBanner(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	data := SecurityDrawerData{
+		EnvoyID:         "00000000-0000-0000-0000-000000000001",
+		Hostname:        "no-scans",
+		Timeout:         90,
+		EnvoyResponsive: true,
+		LiveNoData:      true,
+		Sections:        []SecuritySection{{Slug: "certs", Label: "Certs"}},
+	}
+	rec := httptest.NewRecorder()
+	r.RenderFragment(rec, "security", "security-drawer-fragment", data)
+	body := rec.Body.String()
+	if !strings.Contains(body, "Agent has no security scan data") {
+		t.Error("no-data: expected actionable banner")
+	}
+	if !strings.Contains(body, "/var/lib/vigo/security/") {
+		t.Error("no-data: expected scan-dir hint in banner body")
+	}
+}
+
+// TestSecurityDrawerFragment_AskAIGatedByLiveCVEIDs pins pending item 46:
+// the per-CVE Ask-AI button on cached CVE cards renders only when that CVE
+// is in the most-recent live Trivy/Debsecan response.
+func TestSecurityDrawerFragment_AskAIGatedByLiveCVEIDs(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer: %v", err)
+	}
+	data := SecurityDrawerData{
+		EnvoyID:         "00000000-0000-0000-0000-000000000001",
+		Hostname:        "h",
+		Timeout:         90,
+		EnvoyResponsive: true,
+		Cached: SecurityDrawerCached{
+			Unique: &UniqueCVECounts{High: 2},
+			CVEs: []CachedCVE{
+				{ID: "CVE-2024-IN-LIVE", Severity: "high"},
+				{ID: "CVE-2024-NOT-IN-LIVE", Severity: "low"},
+			},
+		},
+	}
+
+	// No live fetch yet → no Ask-AI on either card.
+	data.Sections = drawerSections(data.Cached, nil)
+	rec := httptest.NewRecorder()
+	r.RenderFragment(rec, "security", "security-drawer-fragment", data)
+	body := rec.Body.String()
+	if strings.Contains(body, "Ask AI") {
+		t.Error("pre-live: no Ask-AI button should render on cached CVE cards")
+	}
+
+	// Live fetch landed; only CVE-2024-IN-LIVE is in the live response.
+	data.Live = true
+	data.Detail = &SecurityScanDetail{Trivy: &TrivyDetail{Vulnerabilities: []TrivyVuln{
+		{CVEID: "CVE-2024-IN-LIVE", Severity: "high", Package: "p"},
+	}}}
+	data.LiveCVEIDs = collectLiveCVEIDs(data.Detail)
+	data.Sections = drawerSections(data.Cached, data.Detail)
+	rec = httptest.NewRecorder()
+	r.RenderFragment(rec, "security", "security-drawer-fragment", data)
+	body = rec.Body.String()
+	// The card whose ID is in LiveCVEIDs renders Ask-AI; the other doesn't.
+	cveInLiveAt := strings.Index(body, "CVE-2024-IN-LIVE")
+	cveNotInLiveAt := strings.Index(body, "CVE-2024-NOT-IN-LIVE")
+	askAt := strings.Index(body[cveInLiveAt:], "Ask AI")
+	if askAt < 0 || cveInLiveAt+askAt > cveNotInLiveAt {
+		t.Errorf("expected Ask-AI button to render under CVE-2024-IN-LIVE before CVE-2024-NOT-IN-LIVE; cveInLive@%d cveNotInLive@%d ask@%d",
+			cveInLiveAt, cveNotInLiveAt, askAt)
+	}
+	// And there should be exactly one Ask-AI on the CVE pane (we filter to
+	// just the one whose ID is in the live response).
+	if got := strings.Count(body, `data-question="h · cve CVE-2024`); got != 1 {
+		t.Errorf("expected 1 cached-CVE Ask-AI button, got %d", got)
 	}
 }
 
@@ -482,36 +624,51 @@ func TestSecurityScanDetail_PartialDecodeKeepsTheRest(t *testing.T) {
 func TestApplyLiveDetail(t *testing.T) {
 	at := time.Now().Add(-3 * time.Minute)
 
-	// Clean parse → Live, Detail, fetch metadata set.
+	// Clean parse with scanner data → Live, Detail, fetch metadata set.
 	var d SecurityDrawerData
 	applyLiveDetail(&d, `{"available":true,"trivy":{"vulnerabilities":[{"cve_id":"CVE-1","severity":"HIGH","package":"p","others":0}],"last_scan":"x"}}`, at, true)
-	if !d.Live || d.Detail == nil || d.Detail.Trivy == nil || !d.LiveFromCache || !d.LiveFetchedAt.Equal(at) || d.Error != "" {
+	if !d.Live || d.Detail == nil || d.Detail.Trivy == nil || !d.LiveFromCache || !d.LiveFetchedAt.Equal(at) || d.Error != "" || d.LiveNoData {
 		t.Fatalf("clean parse: got %+v", d)
 	}
 
 	// Partial parse (bad lynis.score) → still Live, with a soft Error.
 	var p SecurityDrawerData
 	applyLiveDetail(&p, `{"available":true,"trivy":{"vulnerabilities":[],"last_scan":"x"},"lynis":{"score":"oops"}}`, at, false)
-	if !p.Live || p.Detail == nil || p.LiveFromCache || p.Error == "" {
+	if !p.Live || p.Detail == nil || p.LiveFromCache || p.Error == "" || p.LiveNoData {
 		t.Fatalf("partial parse: got %+v", p)
+	}
+
+	// Clean parse but `available:false` (no scan dir) → LiveNoData, not Live.
+	var n SecurityDrawerData
+	applyLiveDetail(&n, `{"available":false,"scan_dir":"/var/lib/vigo/security"}`, at, false)
+	if n.Live || n.Detail != nil || !n.LiveNoData || n.Error != "" {
+		t.Fatalf("available:false: got %+v", n)
+	}
+
+	// Clean parse, available:true but no scanner data → LiveNoData.
+	var e SecurityDrawerData
+	applyLiveDetail(&e, `{"available":true,"scan_dir":"/var/lib/vigo/security"}`, at, false)
+	if e.Live || e.Detail != nil || !e.LiveNoData || e.Error != "" {
+		t.Fatalf("available:true with no scanners: got %+v", e)
 	}
 
 	// Total failure → not Live, hard Error.
 	var f SecurityDrawerData
 	applyLiveDetail(&f, `"nope"`, at, false)
-	if f.Live || f.Detail != nil || f.Error == "" {
+	if f.Live || f.Detail != nil || f.Error == "" || f.LiveNoData {
 		t.Fatalf("total failure: got %+v", f)
 	}
 }
 
 func TestSecurityLiveCache(t *testing.T) {
 	c := newSecurityLiveCache()
+	now := time.Now()
 
 	if _, _, ok := c.get("e1"); ok {
 		t.Fatal("empty cache should miss")
 	}
-	c.put("e1", `{"available":true}`)
-	if raw, at, ok := c.get("e1"); !ok || raw != `{"available":true}` || at.IsZero() {
+	c.put("e1", `{"available":true}`, now)
+	if raw, at, ok := c.get("e1"); !ok || raw != `{"available":true}` || !at.Equal(now) {
 		t.Fatalf("hit expected; got raw=%q at=%v ok=%v", raw, at, ok)
 	}
 
@@ -530,7 +687,7 @@ func TestSecurityLiveCache(t *testing.T) {
 		c.entries[strconv.Itoa(i)] = securityLiveEntry{raw: "x", fetchedAt: base.Add(time.Duration(i) * time.Second)}
 	}
 	oldestKey := "0" // fetchedAt == base
-	c.put("newcomer", "y")
+	c.put("newcomer", "y", time.Now())
 	if len(c.entries) > securityLiveCacheMax {
 		t.Fatalf("cache should be capped at %d, got %d", securityLiveCacheMax, len(c.entries))
 	}
@@ -543,5 +700,5 @@ func TestSecurityLiveCache(t *testing.T) {
 	if _, _, ok := nilCache.get("x"); ok {
 		t.Fatal("nil cache get should miss")
 	}
-	nilCache.put("x", "y") // must not panic
+	nilCache.put("x", "y", time.Now()) // must not panic
 }

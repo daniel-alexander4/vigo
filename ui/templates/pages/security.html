@@ -321,6 +321,16 @@
      htmx:afterSwap. Pane IDs are stable across the fetch so you stay on the
      tab you were on. */}}
 <div class="sec-cached-summary">
+    {{if not .EnvoyResponsive}}
+    <div class="alert alert--warn" style="margin-bottom:8px;font-size:12px;">
+        Envoy hasn't checked in for {{timeAgo .EnvoyLastSeen}}. Live fetch will likely fail — it returns when the agent next checks in (up to ~{{if .Timeout}}{{.Timeout}}{{else}}90{{end}}s).
+    </div>
+    {{end}}
+    {{if .LiveNoData}}
+    <div class="alert alert--warn" style="margin-bottom:8px;font-size:12px;">
+        Agent has no security scan data — install scanners (trivy / lynis / chkrootkit / rkhunter / clamav / aide / debsecan) and arrange a periodic run so their output lands in <code>/var/lib/vigo/security/</code>.
+    </div>
+    {{end}}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <h4 style="margin:0;">{{if .Live}}Live Scanner Detail{{else}}Scanner Findings{{end}}</h4>
         <button class="btn btn--sm btn--outline"
@@ -348,7 +358,7 @@
     <section class="sec-tab-pane" id="sec-pane-{{.Slug}}" role="tabpanel" aria-labelledby="sec-tab-{{.Slug}}">
         {{if eq .Slug "cves"}}{{template "sec-pane-cves" $}}
         {{else if eq .Slug "certs"}}{{template "sec-pane-certs" $}}
-        {{else if $.Live}}
+        {{else if .HasLive}}
             {{if eq .Slug "trivy"}}{{template "sec-section-trivy" dict "Detail" $.Detail.Trivy "Hostname" $.Hostname}}
             {{else if eq .Slug "debsecan"}}{{template "sec-section-debsecan" dict "Detail" $.Detail.Debsecan "Hostname" $.Hostname}}
             {{else if eq .Slug "lynis"}}{{template "sec-section-lynis" dict "Detail" $.Detail.Lynis "Hostname" $.Hostname}}
@@ -396,9 +406,15 @@
     </div>
     {{if gt .Packages 1}}<div class="sec-card__body"><span class="text-muted">({{.Packages}} packages)</span></div>{{end}}
     {{if .Title}}<div class="sec-card__desc">{{.Title}}</div>{{end}}
+    {{/* Ask-AI gates on the per-CVE join against live Trivy + Debsecan output.
+         Renders only when this CVE ID is in the most-recent live response —
+         pending item 46: don't offer Ask-AI on findings the current scanner
+         output no longer confirms. */}}
+    {{if index $.LiveCVEIDs .ID}}
     <div class="sec-card__actions">
         <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{cachedCVEAIQ $.Hostname .}}">Ask AI</button>
     </div>
+    {{end}}
 </div>
 {{end}}
 {{else}}
@@ -466,33 +482,24 @@
         <span class="sec-card__sev">Score: {{.Score}}/100</span>
     </div>
     <div class="sec-card__body">Warnings: {{.Warnings}} &middot; Suggestions: {{.Suggestions}}</div>
-    <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "lynis-summary: %d/100, %d warnings, %d suggestions" .Score .Warnings .Suggestions)}}">Ask AI</button>
-    </div>
 </div>
 {{end}}
-{{else if eq .Slug "chkrootkit"}}{{with .Cached.Chkrootkit}}{{$st := "clean"}}{{if not .Clean}}{{$st = "infected"}}{{end}}
+{{else if eq .Slug "chkrootkit"}}{{with .Cached.Chkrootkit}}
 <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--critical{{end}}">
     <div class="sec-card__header">
         <span class="sec-card__cve">chkrootkit</span>
         <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Infected{{end}}</span>
     </div>
     {{if not .Clean}}<div class="sec-card__body text-danger">{{.Issues}} suspicious finding{{if ne .Issues 1}}s{{end}}</div>{{end}}
-    <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "chkrootkit-summary: %s, %d findings" $st .Issues)}}">Ask AI</button>
-    </div>
 </div>
 {{end}}
-{{else if eq .Slug "rkhunter"}}{{with .Cached.Rkhunter}}{{$st := "clean"}}{{if not .Clean}}{{$st = "warning"}}{{end}}
+{{else if eq .Slug "rkhunter"}}{{with .Cached.Rkhunter}}
 <div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--high{{end}}">
     <div class="sec-card__header">
         <span class="sec-card__cve">rkhunter</span>
         <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Warning{{end}}</span>
     </div>
     {{if not .Clean}}<div class="sec-card__body">{{.Issues}} warning{{if ne .Issues 1}}s{{end}}</div>{{end}}
-    <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "rkhunter-summary: %s, %d warnings" $st .Issues)}}">Ask AI</button>
-    </div>
 </div>
 {{end}}
 {{else if eq .Slug "clamav"}}{{with .Cached.ClamAV}}
@@ -502,9 +509,6 @@
         <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Infected{{end}}</span>
     </div>
     {{if not .Clean}}<div class="sec-card__body text-danger">{{.Infected}} infected file{{if ne .Infected 1}}s{{end}}</div>{{end}}
-    <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "clamav-summary: %d infected" .Infected)}}">Ask AI</button>
-    </div>
 </div>
 {{end}}
 {{else if eq .Slug "aide"}}{{with .Cached.AIDE}}
@@ -514,9 +518,6 @@
         <span class="sec-card__sev">{{if .Clean}}Clean{{else}}Changed{{end}}</span>
     </div>
     {{if not .Clean}}<div class="sec-card__body">Added: {{.Added}} &middot; Removed: {{.Removed}} &middot; Changed: {{.Changed}}</div>{{end}}
-    <div class="sec-card__actions">
-        <button type="button" class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="{{secAIQuestion $.Hostname (printf "aide-summary: %d added, %d removed, %d changed" .Added .Removed .Changed)}}">Ask AI</button>
-    </div>
 </div>
 {{end}}
 {{end}}

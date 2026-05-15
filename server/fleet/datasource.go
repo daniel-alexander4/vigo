@@ -1003,6 +1003,18 @@ func (ds *DataSource) SecurityScanTraits(envoyID string) (map[string]string, boo
 	return result, ok
 }
 
+// EnvoyFreshness returns the envoy's last-check-in timestamp and smoothed
+// observed cadence. Feeds responsiveness checks on fragment handlers —
+// e.g. the security drawer's "live fetch will likely fail" pre-flight
+// banner. Bool is false when the envoy is unknown to the fleet index.
+func (ds *DataSource) EnvoyFreshness(envoyID string) (time.Time, time.Duration, bool) {
+	ts, ok, _ := ds.fleet.GetEnvoyLite(envoyID)
+	if !ok {
+		return time.Time{}, 0, false
+	}
+	return ts.LastSeen, ts.ObservedCycle(), true
+}
+
 // SecurityScanContext returns the envoy's hostname alongside its cached
 // security_scan.* traits. Consumed by the server-rendered security drawer
 // fragment which needs the hostname to dispatch a live-detail query.

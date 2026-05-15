@@ -91,6 +91,11 @@ type DataSource interface {
 	// envoy-detail "Agent Health" tab. Bool is false when the envoy
 	// is unknown to the fleet index.
 	EnvoyPressure(envoyID string) (fleetpressure.EnvoyPressure, bool)
+	// EnvoyFreshness returns the envoy's last-check-in timestamp and
+	// smoothed observed cadence — feeds responsiveness checks (e.g.
+	// the security drawer's pre-flight banner before a live dispatch).
+	// `ok=false` when the envoy is unknown.
+	EnvoyFreshness(envoyID string) (lastSeen time.Time, observedCycle time.Duration, ok bool)
 }
 
 // RunningCVESummary aggregates `cve_running_correlation.summary.*`
@@ -255,12 +260,32 @@ type Handler struct {
 	securityLive       *securityLiveCache // 24h cache of security_scan_detail dispatch results
 }
 
+// DispatchOutcome categorizes the result of a single-envoy live trait
+// dispatch so fragment handlers can render distinct operator messages
+// for offline / timeout / responded-but-empty / responded-with-data
+// — distinctions the previous `found bool` collapsed.
+type DispatchOutcome int
+
+const (
+	// DispatchResponded — agent answered with usable data.
+	DispatchResponded DispatchOutcome = iota
+	// DispatchNoData — agent answered, but with no usable data
+	// (found=false, empty value, or a payload that decodes to nothing).
+	DispatchNoData
+	// DispatchOffline — envoy is not in the connected set and has no
+	// useful cached value for the requested (often virtual) trait.
+	DispatchOffline
+	// DispatchTimeout — dispatched to the agent but no response landed
+	// inside the timeout window.
+	DispatchTimeout
+)
+
 // TraitQueryDispatcher dispatches a single live trait-value query to one
 // envoy on behalf of a UI fragment handler. Implemented by an adapter over
 // server/grpc.AgentService.DispatchQuery wired in at server startup — kept
 // as a minimal interface here so the ui package doesn't import server/grpc.
 type TraitQueryDispatcher interface {
-	DispatchTraitQuery(ctx context.Context, traitPath, hostname string, timeout time.Duration) (value string, found bool, err error)
+	DispatchTraitQuery(ctx context.Context, traitPath, hostname string, timeout time.Duration) (value string, outcome DispatchOutcome, err error)
 }
 
 // SetTraitQueryDispatcher wires the live-query dispatcher used by fragment
@@ -6057,6 +6082,10 @@ func (ds *dbDataSource) SecurityScanTraits(_ string) (map[string]string, bool) {
 
 func (ds *dbDataSource) SecurityScanContext(_ string) (string, map[string]string, bool) {
 	return "", nil, false
+}
+
+func (ds *dbDataSource) EnvoyFreshness(_ string) (time.Time, time.Duration, bool) {
+	return time.Time{}, 0, false
 }
 
 func (ds *dbDataSource) EnvoyCertDetails(_, _ string) ([]CertDetail, string, bool) {

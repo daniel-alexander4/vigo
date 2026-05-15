@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/traits"
 	"github.com/google/uuid"
 )
@@ -126,13 +127,22 @@ type SecurityScanDetail struct {
 	SCAP      *SCAPDetail      `json:"scap,omitempty"`
 }
 
-// hasData reports whether the decoded detail carries any scanner output.
-// encoding/json skips a type-mismatched field and keeps decoding the rest,
-// returning only the first error — so this tells a partial decode (one bad
-// field, the rest intact) from a total parse failure.
+// hasData reports whether the decoded detail carries any recognizable
+// field. encoding/json skips a type-mismatched field and keeps decoding
+// the rest, returning only the first error — this distinguishes a partial
+// decode (one bad field, the rest intact) from a total parse failure.
+// Used by tests pinning the partial-decode contract.
 func (d *SecurityScanDetail) hasData() bool {
-	return d.Available ||
-		d.Trivy != nil || d.Debsecan != nil || d.Lynis != nil ||
+	return d.Available || d.hasScannerData()
+}
+
+// hasScannerData reports whether the decoded detail carries any actual
+// per-scanner output. Distinct from hasData — `available:true` alone
+// (the agent reports a scan dir but no scanner files) returns false here,
+// so the drawer treats it as the no-data case rather than rendering an
+// empty live pane.
+func (d *SecurityScanDetail) hasScannerData() bool {
+	return d.Trivy != nil || d.Debsecan != nil || d.Lynis != nil ||
 		d.Rkhunter != nil || d.Chkrootkit != nil || d.ClamAV != nil ||
 		d.AIDE != nil || d.Defender != nil || d.SCAP != nil
 }
@@ -257,11 +267,29 @@ type SecurityDrawerData struct {
 	Certs    []CertDetail
 	Detail   *SecurityScanDetail   // only populated on Live=true
 	Error    string                // set when dispatch timed out or the envoy was offline
+	// LiveNoData is true when the live dispatch completed cleanly but the
+	// agent reported no scanner output for this host (SCAN_DIR missing or
+	// every per-scanner file unreadable). Drives the info banner that
+	// replaces the otherwise-empty "Live Scanner Detail" pane.
+	LiveNoData bool
 	// LiveFetchedAt is when the security_scan_detail in Detail was
 	// dispatched; LiveFromCache marks a replay of a cached dispatch (vs a
 	// fresh one). Both zero/false when Live=false.
 	LiveFetchedAt time.Time
 	LiveFromCache bool
+	// EnvoyResponsive is the freshness pre-flight: true means the envoy
+	// has checked in recently enough to plausibly answer a live dispatch
+	// (per freshness.IsResponsive). False shows a warning banner above
+	// the Fetch Live Detail button — the button stays enabled.
+	EnvoyResponsive bool
+	// EnvoyLastSeen is the envoy's last-CheckIn timestamp — rendered via
+	// timeAgo in the unresponsive-envoy banner.
+	EnvoyLastSeen time.Time
+	// LiveCVEIDs is the set of CVE IDs (uppercase) the live dispatch
+	// confirmed against current scanner output (Trivy + Debsecan). Used
+	// to gate the per-finding Ask-AI button on cached CVE cards — items
+	// not in current scanner output don't render Ask-AI.
+	LiveCVEIDs map[string]bool
 	// RkhunterRows / ChkrootkitRows are normalized versions of Detail's
 	// polymorphic JSON — populated so templates can range over structs.
 	RkhunterRows   []RkhunterRow
@@ -274,8 +302,9 @@ type SecurityDrawerData struct {
 
 // SecuritySection is one tab in the security drawer.
 type SecuritySection struct {
-	Slug  string // "cves", "trivy", "lynis", "certs", …
-	Label string // "CVEs", "Trivy", "Lynis", "Certs", …
+	Slug    string // "cves", "trivy", "lynis", "certs", …
+	Label   string // "CVEs", "Trivy", "Lynis", "Certs", …
+	HasLive bool   // true when the live response carried data for this scanner — drives live-vs-cached-summary pane choice
 }
 
 // SecurityEnvoyFragment serves the security drawer body for one envoy.
@@ -301,10 +330,19 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 	}
 
 	data := SecurityDrawerData{
-		EnvoyID:  envoyID,
-		Hostname: hostname,
-		Cached:   buildSecurityCached(flat),
-		Timeout:  securityLiveTimeoutSec,
+		EnvoyID:         envoyID,
+		Hostname:        hostname,
+		Cached:          buildSecurityCached(flat),
+		Timeout:         securityLiveTimeoutSec,
+		EnvoyResponsive: true, // default optimistic; freshness lookup below overrides
+	}
+	// Freshness pre-flight — if the envoy hasn't checked in within the
+	// canonical responsive window, the template renders a hint banner
+	// above the Fetch Live Detail button. The button stays enabled so
+	// the operator can "try anyway" against a host that just recovered.
+	if lastSeen, cycle, ok := h.dataSource.EnvoyFreshness(envoyID); ok {
+		data.EnvoyLastSeen = lastSeen
+		data.EnvoyResponsive = freshness.IsResponsive(lastSeen, h.baseInterval, cycle)
 	}
 	// Certs aren't part of the security_scan trait — pull this host's
 	// expiring/expired certs separately for the always-present Certs tab.
@@ -320,16 +358,28 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), time.Duration(securityLiveTimeoutSec+5)*time.Second)
 		defer cancel()
-		value, found, err := h.traitQuery.DispatchTraitQuery(ctx, "security_scan_detail", hostname, time.Duration(securityLiveTimeoutSec)*time.Second)
+		value, outcome, err := h.traitQuery.DispatchTraitQuery(ctx, "security_scan_detail", hostname, time.Duration(securityLiveTimeoutSec)*time.Second)
 		switch {
 		case err != nil:
 			data.Error = "dispatch failed: " + err.Error()
-		case !found:
-			data.Error = "agent did not respond within " + strconv.Itoa(securityLiveTimeoutSec) + "s — it may not have checked in during the wait window."
+		case outcome == DispatchOffline:
+			data.Error = "Envoy is offline — last check-in " + timeAgo(data.EnvoyLastSeen) + ". Cached summary shown."
+		case outcome == DispatchTimeout:
+			data.Error = "Agent did not respond within " + strconv.Itoa(securityLiveTimeoutSec) + "s — it may not have checked in during the wait window."
+		case outcome == DispatchNoData:
+			// Agent answered with found=false (latent in current agent code,
+			// but the outcome enum is the right home for it).
+			data.LiveNoData = true
 		default:
-			applyLiveDetail(&data, value, time.Now(), false)
-			if data.Live {
-				h.securityLive.put(envoyID, value)
+			now := time.Now()
+			applyLiveDetail(&data, value, now, false)
+			switch {
+			case data.Live:
+				data.LiveCVEIDs = collectLiveCVEIDs(data.Detail)
+				h.securityLive.put(envoyID, value, now)
+			case data.Error == "":
+				// Parsed cleanly but no scanner data — surface the no-data banner.
+				data.LiveNoData = true
 			}
 		}
 	default:
@@ -337,25 +387,44 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 		// otherwise fall through to the cached-trait summary below.
 		if raw, at, ok := h.securityLive.get(envoyID); ok {
 			applyLiveDetail(&data, raw, at, true)
+			if data.Live {
+				data.LiveCVEIDs = collectLiveCVEIDs(data.Detail)
+			}
 		}
 	}
 
 	// One tab list for the whole drawer: cached scanners before any live
-	// fetch, live scanners once Detail is populated (fresh or replayed from
-	// the cache), plus the CVEs rollup and the Certs tab.
+	// fetch, plus any scanners present in the live detail. In live mode
+	// the tab keeps its cached-summary pane when the live response didn't
+	// carry that scanner — see SecuritySection.HasLive.
 	data.Sections = drawerSections(data.Cached, data.Detail)
 	h.renderer.RenderFragment(w, "security", "security-drawer-fragment", data)
 }
 
-// applyLiveDetail unmarshals a security_scan_detail payload into data,
-// tolerating a partial decode (encoding/json skips a type-mismatched field
-// and keeps decoding, returning the first error) — only a total parse
-// failure leaves Live=false. fetchedAt is when the dispatch ran; fromCache
-// marks a replay of a previously-cached result.
+// applyLiveDetail unmarshals a security_scan_detail payload into data
+// and classifies the result into three states:
+//   - Live=true + Detail populated when the agent returned usable scanner data;
+//   - LiveNoData=true when the response parsed cleanly but carried no scanner
+//     output (SCAN_DIR missing or every per-scanner file unreadable);
+//   - Error set when the response failed to parse and decoded nothing usable.
+//
+// Partial decodes (encoding/json skips a type-mismatched field and keeps
+// decoding, returning the first error) still count as live data — the
+// operator gets a soft warning banner plus whatever the agent returned.
+// fetchedAt is when the dispatch ran; fromCache marks a replay of a
+// previously-cached result.
 func applyLiveDetail(data *SecurityDrawerData, raw string, fetchedAt time.Time, fromCache bool) {
 	var detail SecurityScanDetail
 	jerr := json.Unmarshal([]byte(raw), &detail)
-	if jerr == nil || detail.hasData() {
+	switch {
+	case jerr != nil && !detail.hasScannerData():
+		data.Error = "could not parse agent response: " + jerr.Error()
+	case !detail.hasScannerData():
+		// Clean parse but no scanner data — the explicit "no security
+		// scanners on this host" outcome. Flagged so the template can
+		// show an actionable banner instead of an empty pane.
+		data.LiveNoData = true
+	default:
 		data.Live = true
 		data.Detail = &detail
 		data.RkhunterRows = flattenRkhunter(detail.Rkhunter)
@@ -365,9 +434,7 @@ func applyLiveDetail(data *SecurityDrawerData, raw string, fetchedAt time.Time, 
 		if jerr != nil {
 			data.Error = "some scan fields couldn't be parsed (showing what was returned): " + jerr.Error()
 		}
-		return
 	}
-	data.Error = "could not parse agent response: " + jerr.Error()
 }
 
 // securityLiveTimeoutSec is the wait window for the live dispatch. Matches
@@ -420,7 +487,9 @@ func (c *securityLiveCache) get(envoyID string) (string, time.Time, bool) {
 }
 
 // put stores raw for envoyID, evicting the oldest entry first if full.
-func (c *securityLiveCache) put(envoyID, raw string) {
+// fetchedAt is the dispatch time threaded from the handler so the cache
+// entry and the rendered "fetched just now" label share one clock read.
+func (c *securityLiveCache) put(envoyID, raw string, fetchedAt time.Time) {
 	if c == nil {
 		return
 	}
@@ -436,7 +505,7 @@ func (c *securityLiveCache) put(envoyID, raw string) {
 		}
 		delete(c.entries, oldestKey)
 	}
-	c.entries[envoyID] = securityLiveEntry{raw: raw, fetchedAt: time.Now()}
+	c.entries[envoyID] = securityLiveEntry{raw: raw, fetchedAt: fetchedAt}
 }
 
 // SecurityCertsPageData drives the dedicated /security/certs/{id} page —
@@ -644,7 +713,10 @@ func extractCachedCVEs(flat map[string]string) []CachedCVE {
 		}
 		switch field {
 		case "id":
-			grouped[idx].ID = v
+			// Uppercase so the LiveCVEIDs lookup (also uppercased) is
+			// case-insensitive on agent output. CVE IDs are virtually
+			// always uppercase already; this is defensive.
+			grouped[idx].ID = strings.ToUpper(v)
 		case "severity":
 			grouped[idx].Severity = strings.ToLower(v)
 		case "packages":
@@ -723,16 +795,18 @@ func flattenChkrootkit(d *ChkrootkitDetail) []ChkrootkitRow {
 }
 
 // drawerSections returns the ordered tab list for the security drawer.
-// Before the live fetch (detail == nil) it lists scanners that have a cached
-// summary; after a successful fetch it lists scanners present in the live
-// detail (one dispatch covers every scanner). The cross-scanner "CVEs"
-// rollup leads when there is any CVE data, and "Certs" always trails (the
-// pane self-reports when nothing is expiring). The first entry is the
-// default-visible pane when no tab is targeted via URL fragment.
+// A scanner gets a tab when either a cached summary or live detail is
+// present for it — operators don't lose tabs they were looking at when
+// the live dispatch returns a smaller set than the cached counts. Each
+// section carries HasLive so the template can render the per-finding
+// live pane when the live response covered that scanner, falling back
+// to the cached-summary pane otherwise. The cross-scanner "CVEs" rollup
+// leads when there is any CVE data, and "Certs" always trails. The
+// first entry is the default-visible pane when no tab is targeted.
 func drawerSections(cached SecurityDrawerCached, detail *SecurityScanDetail) []SecuritySection {
 	var out []SecuritySection
 	if cached.Unique != nil || len(cached.CVEs) > 0 {
-		out = append(out, SecuritySection{"cves", "CVEs"})
+		out = append(out, SecuritySection{Slug: "cves", Label: "CVEs"})
 	}
 	live := detail != nil
 	scanners := []struct {
@@ -750,11 +824,37 @@ func drawerSections(cached SecurityDrawerCached, detail *SecurityScanDetail) []S
 		{"scap", "SCAP/STIG", false, live && detail.SCAP != nil},
 	}
 	for _, s := range scanners {
-		if (live && s.liveOK) || (!live && s.cachedOK) {
-			out = append(out, SecuritySection{s.slug, s.label})
+		if s.cachedOK || s.liveOK {
+			out = append(out, SecuritySection{Slug: s.slug, Label: s.label, HasLive: s.liveOK})
 		}
 	}
-	return append(out, SecuritySection{"certs", "Certs"})
+	return append(out, SecuritySection{Slug: "certs", Label: "Certs"})
+}
+
+// collectLiveCVEIDs builds the set of CVE IDs (uppercase) that appear in
+// the live Trivy + Debsecan responses. Gates the per-CVE Ask-AI buttons
+// on cached CVE cards — operators only get the affordance for findings
+// the current scanner output still flags. Empty/nil when no live data.
+func collectLiveCVEIDs(d *SecurityScanDetail) map[string]bool {
+	if d == nil {
+		return nil
+	}
+	out := make(map[string]bool)
+	if d.Trivy != nil {
+		for _, v := range d.Trivy.Vulnerabilities {
+			if id := strings.ToUpper(strings.TrimSpace(v.CVEID)); id != "" {
+				out[id] = true
+			}
+		}
+	}
+	if d.Debsecan != nil {
+		for _, v := range d.Debsecan.Vulnerabilities {
+			if id := strings.ToUpper(strings.TrimSpace(v.CVEID)); id != "" {
+				out[id] = true
+			}
+		}
+	}
+	return out
 }
 
 // cveURL returns the external CVE record URL for a given CVE ID.
