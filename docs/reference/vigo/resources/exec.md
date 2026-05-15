@@ -250,7 +250,7 @@ Use a specialized executor instead of `exec` whenever one exists. Specialized ex
 | `exec: "useradd -m deploy"` | `type: user` — manages UID, shell, groups, authorized_keys, detects drift |
 | `exec: "git clone ..."` | `type: git` — tracks branch HEAD, updates on drift |
 | `exec: "longdrawer '0 * * * * root /opt/task.sh' > /etc/cron.d/task"` | `type: cron` — manages schedule fields, validates syntax |
-| `exec: "docker compose up -d"` | `type: docker_compose` — handles pull, build, orphan removal |
+| `exec: "docker compose up -d"` | `type: container` per service — Vigo-native multi-container declaration with `depends_on` ordering, or keep the `exec:` wrapper with an `unless:` guard if the operator already has a maintained `docker-compose.yml` |
 
 `exec` is appropriate for operations with no dedicated executor — database migrations, one-time initialization scripts, custom health checks, or calling vendor-specific CLI tools.
 

@@ -19,7 +19,6 @@ var generatedSchemas = map[string][]string{
 	"cron": {"command","environment","name","schedule","state","user"},
 	"db_backup": {"db_dump_command","db_host","db_port","db_type","db_user","min_free_space","retain","schedule","source_db","target_path"},
 	"directory": {"group","mode","owner","recurse","state","target_path"},
-	"docker_compose": {"build","compose_file","project","pull","remove_orphans","services","state","volumes"},
 	"domain_membership": {"domain","ou_path","password","restart_after_join","state","username"},
 	"exec": {"background","command","cwd","environment","logoutput","name","nice","onlyif","report_settled","retries","retry_delay","returns","secret_file","sensitive","shell","stdin","timeout","unless","user"},
 	"field_edit": {"extend_fields","field_operation","field_separator","field_value","line_match","path","select_field","state","value_separator"},

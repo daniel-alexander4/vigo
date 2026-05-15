@@ -1,7 +1,7 @@
 
 # Executor Reference
 
-Vigo ships 69 built-in resource types that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
+Vigo ships 68 built-in resource types that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
 
 ## How Executors Work
 
@@ -16,7 +16,7 @@ Every resource in a `.vgo` config declares a `type:` field that maps to an execu
 | `Skipped` | Resource was skipped due to a guard condition. |
 | `Blocked` | Resource could not be applied due to an infrastructure issue (broken repo, expired GPG key, disk full). Maps to `diverged` convergence. |
 
-## Cross-Platform Executors (24)
+## Cross-Platform Executors (23)
 
 These executors compile and run on all seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows).
 
@@ -43,7 +43,6 @@ These executors compile and run on all seven supported platforms (Linux, macOS, 
 | `gem` | Manage Ruby gems | [gem](gem.md) |
 | `npm` | Manage Node.js packages via npm | [npm](npm.md) |
 | `container` | Manage OCI containers (Docker today; Podman/containerd later) | [container](container.md) |
-| `docker_compose` | Manage Docker Compose stacks | [docker_compose](docker_compose.md) |
 | `reboot` | Trigger or cancel system reboots | [reboot](reboot.md) |
 | `custom` | Run external scripts via JSON protocol | [custom](custom.md) |
 

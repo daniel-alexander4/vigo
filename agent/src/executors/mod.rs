@@ -18,7 +18,6 @@ pub mod db_backup;
 pub mod custom;
 pub mod directory;
 pub mod container;
-pub mod docker_compose;
 pub mod exec;
 pub mod field_edit;
 pub mod file;

@@ -1,7 +1,7 @@
 
 # Docker Stack Management
 
-This example uses the `container` and `docker_compose` [executors](../reference/vigo/resources/_index.md) to manage containerized services. The `container` executor pulls images on demand — no separate image-pull resource is needed.
+This example uses the `container` [executor](../reference/vigo/resources/_index.md) to manage containerized services. The `container` executor pulls images on demand — no separate image-pull resource is needed.
 
 ## Module Definition
 
@@ -99,9 +99,9 @@ vigocli task run \
   --health-check "curl -sf http://localhost:8080/health"
 ```
 
-## Using Docker Compose
+## Already have a `docker-compose.yml`?
 
-For multi-container stacks that already have a `docker-compose.yml`, use the `docker_compose` executor instead of managing individual containers:
+Vigo's preferred shape is one `container:` resource per service, joined with `depends_on` and (when the pod primitive lands) namespace-sharing. For operators with a maintained `docker-compose.yml` they don't want to rewrite, the migration recipe is a `file:` resource for the compose file plus an `exec:` wrapper guarded by a service-state check:
 
 `stockpile/modules/compose-app.vgo`:
 
@@ -121,21 +121,23 @@ resources:
           image: myregistry.example.com/api:v2.1.0
           ports:
             - "8080:8080"
-          environment:
-            DATABASE_URL: "${DATABASE_URL}"
         redis:
           image: redis:7-alpine
+    owner: root
+    group: root
+    mode: "0644"
     notify: app-stack
 
   - name: app-stack
-    type: docker_compose
-    compose_file: /opt/myapp/docker-compose.yml
-    pull: always
-    remove_orphans: "true"
+    type: exec
+    command: "docker compose -f /opt/myapp/docker-compose.yml up -d --remove-orphans --pull always"
+    # Idempotency: re-up only when at least one service is not running, or
+    # when the compose file changed (notify path).
+    unless: "docker compose -f /opt/myapp/docker-compose.yml ps --format '{{.State}}' | grep -qv running"
     subscribes: compose-file
 ```
 
-The `docker_compose` executor checks if all services are running via `docker compose ps`. When the compose file changes, the `notify`/`subscribes` relationship triggers a re-up.
+The `unless:` guard converges on "all services running" the way the retired `docker_compose:` executor did, with no Vigo-specific glue. A full migration to native `container:` resources (one per service) is the long-term shape — see the [`container`](../reference/vigo/resources/container.md) reference.
 
 ## Container Lifecycle
 

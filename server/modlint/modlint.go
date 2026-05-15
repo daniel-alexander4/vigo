@@ -1327,7 +1327,6 @@ var typeKeyOrder = map[string][]string{
 	"logrotate":        {"path", "frequency", "rotate_count"},
 	"reboot":           {"message", "reboot_required_file"},
 	"container":      {"container", "image", "artifact", "ports", "volumes", "state", "env", "network", "restart", "command", "pull", "tmpfs", "cap_drop", "cap_add", "labels", "log_driver", "log_options", "user", "read_only", "healthcheck_command", "healthcheck_interval", "healthcheck_timeout", "healthcheck_retries", "healthcheck_start_period"},
-	"docker_compose": {"target_path", "state"},
 	"replace":          {"target_path", "match_pattern", "replacement"},
 	"field_edit":       {"path", "line_match", "select_field", "field_value", "state"},
 	"systemd_dropin":   {"service", "section", "key", "value"},

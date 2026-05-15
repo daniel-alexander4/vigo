@@ -109,7 +109,6 @@ var KnownTypes = map[string]bool{
 	"npm":              true,
 	"blockinfile":      true,
 	"container":      true,
-	"docker_compose": true,
 	"replace":          true,
 	"field_edit":       true,
 	"systemd_dropin":   true,
@@ -212,7 +211,6 @@ var requiredAttrs = map[string][]string{
 	// "at least one for state=running" enforcement lives in the
 	// container-image-source modlint rule, since requiredAttrs can't
 	// express the OR.
-	"docker_compose": {"path"},
 	"backup":          {"source_dir", "target_path"},
 	"db_backup":       {"db_type", "source_db", "target_path"},
 }
@@ -225,7 +223,7 @@ var absPathAttrs = map[string][]string{
 	"ini": {"target_path"}, "json_file": {"target_path"}, "logrotate": {"path"},
 	"git": {"path"}, "alternatives": {"path"}, "pip": {"virtualenv"},
 	"blockinfile": {"target_path"}, "replace": {"target_path"}, "field_edit": {"path"},
-	"selinux": {"path"}, "docker_compose": {"path"},
+	"selinux": {"path"},
 	"backup": {"source_dir", "target_path"}, "db_backup": {"target_path"},
 	"exec": {"cwd"},
 }
