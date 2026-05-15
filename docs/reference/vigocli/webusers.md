@@ -49,7 +49,14 @@ sudo vigocli webusers create --username carol --role compliance \
 | `--email` | — | Email address |
 | `--ssh-key-file` | — | Path to SSH public key file. **Rejected for `--role admin`** — admins always auto-read from the matching OS user's home dir. Optional for viewer/compliance (used for isowebauth). |
 
-To re-read the pubkey for an admin user (after key rotation) without recreating the account, run `webusers update` with the same OS-mapped username — same auto-read happens.
+To re-read an admin user's pubkey after key rotation, delete and re-create the account:
+
+```bash
+sudo vigocli webusers delete --username dan
+sudo vigocli webusers create --username dan --role admin
+```
+
+The recreate auto-reads the (new) pubkey from `/home/<username>/.ssh/id_*.pub`. Sign out and back in on the browser side so the session cache picks up the rotated key. A dedicated `webusers update` subcommand that re-reads in place is on the pending list.
 
 ### Setting a password
 

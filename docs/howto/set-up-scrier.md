@@ -52,7 +52,14 @@ The pubkey lives in `users.ssh_public_key` and is set canonically at user-create
 sudo vigocli webusers create --username dan --role admin
 ```
 
-This is the canonical seeding step. Browser scrier sessions read this column directly. CLI scrier sessions ALSO send the pubkey inline at every invocation, so key rotations work for the current CLI session without re-running `webusers create|update`; for the browser to see the new key, run `sudo vigocli webusers update --username dan --role admin` to re-read the OS user's home dir.
+This is the canonical seeding step. Browser scrier sessions read this column directly. CLI scrier sessions ALSO send the pubkey inline at every invocation, so key rotations work for the current CLI session without any re-seed; for the browser to see the new key after rotation, delete and re-create the admin webuser:
+
+```bash
+sudo vigocli webusers delete --username dan
+sudo vigocli webusers create --username dan --role admin
+```
+
+The recreate re-reads from `/home/dan/.ssh/id_*.pub`. (A dedicated `vigocli webusers update --role admin` that re-reads in place is on the pending list.) After recreating, sign out of the browser and sign back in — the session cache holds the pubkey snapshot from login time.
 
 For viewer / compliance users (no scrier access), the OS-user mapping doesn't apply — they can be created freely with `--ssh-key-file <path>` if isowebauth needs a pubkey, but they're not Scrier targets.
 
