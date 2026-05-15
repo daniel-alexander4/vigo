@@ -15,7 +15,7 @@ var generatedSchemas = map[string][]string{
 	"cisco_acl": {"name"},
 	"cisco_interface": {"access_vlan","description","ip_address","name","shutdown","switchport_mode"},
 	"cisco_vlan": {"name"},
-	"container": {"command","container","env","image","network","ports","pull","restart","state","volumes"},
+	"container": {"cap_add","cap_drop","command","container","env","healthcheck_command","healthcheck_interval","healthcheck_retries","healthcheck_start_period","healthcheck_timeout","image","labels","log_driver","log_options","network","ports","pull","read_only","restart","state","tmpfs","user","volumes"},
 	"cron": {"command","environment","name","schedule","state","user"},
 	"db_backup": {"db_dump_command","db_host","db_port","db_type","db_user","min_free_space","retain","schedule","source_db","target_path"},
 	"directory": {"group","mode","owner","recurse","state","target_path"},

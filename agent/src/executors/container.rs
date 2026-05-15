@@ -16,6 +16,15 @@ const DOCKER: &str = "docker";
 /// inspect; short enough that a hung daemon doesn't stall convergence.
 const DAEMON_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// Health-poll cadence for `wait_for_healthy`. Docker's healthcheck loop is
+/// what actually determines health; this is just how often the agent asks.
+const HEALTH_POLL_INTERVAL: Duration = Duration::from_secs(2);
+
+/// Hard cap on how long the agent waits for a container to report healthy.
+/// Operators control the actual liveness window via Docker's
+/// `--health-interval`/`--health-retries`/`--health-start-period`.
+const HEALTH_WAIT_MAX: Duration = Duration::from_secs(120);
+
 pub struct ContainerExecutor {
     pub runner: Box<dyn CommandRunner>,
 }
@@ -54,47 +63,82 @@ impl ContainerExecutor {
         }
     }
 
-    fn build_create_args<'a>(
+    fn health_status(&self, name: &str) -> Option<String> {
+        let output = self
+            .run(&["inspect", "--format", "{{.State.Health.Status}}", name])
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let s = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        // Docker emits `<no value>` when the container has no healthcheck.
+        if s.is_empty() || s == "<no value>" {
+            None
+        } else {
+            Some(s)
+        }
+    }
+
+    fn wait_for_healthy(&self, name: &str) -> Result<(), String> {
+        let deadline = Instant::now() + HEALTH_WAIT_MAX;
+        loop {
+            match self.health_status(name).as_deref() {
+                Some("healthy") => return Ok(()),
+                Some("unhealthy") => {
+                    return Err(format!("container {} reported unhealthy", name));
+                }
+                _ => {} // "starting" or no healthcheck configured (None)
+            }
+            if Instant::now() >= deadline {
+                return Err(format!(
+                    "container {} did not become healthy within {}s",
+                    name,
+                    HEALTH_WAIT_MAX.as_secs()
+                ));
+            }
+            std::thread::sleep(HEALTH_POLL_INTERVAL);
+        }
+    }
+
+    fn build_create_args(
         &self,
-        name: &'a str,
-        image: &'a str,
-        params: &'a HashMap<String, String>,
+        name: &str,
+        image: &str,
+        params: &HashMap<String, String>,
     ) -> Vec<String> {
         let mut args = vec!["create".to_string(), "--name".into(), name.into()];
 
-        if let Some(ports) = params.get("ports") {
-            for port in ports.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
-                args.push("-p".into());
-                args.push(port.into());
-            }
-        }
+        push_repeated(&mut args, params, "ports", "-p");
+        push_repeated(&mut args, params, "env", "-e");
+        push_repeated(&mut args, params, "volumes", "-v");
+        push_repeated(&mut args, params, "tmpfs", "--tmpfs");
+        push_repeated(&mut args, params, "cap_drop", "--cap-drop");
+        push_repeated(&mut args, params, "cap_add", "--cap-add");
+        push_repeated(&mut args, params, "labels", "--label");
+        push_repeated(&mut args, params, "log_options", "--log-opt");
 
-        if let Some(env) = params.get("env") {
-            for e in env.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
-                args.push("-e".into());
-                args.push(e.into());
-            }
-        }
+        push_single(&mut args, params, "network", "--network");
+        push_single(&mut args, params, "restart", "--restart");
+        push_single(&mut args, params, "user", "--user");
+        push_single(&mut args, params, "log_driver", "--log-driver");
 
-        if let Some(volumes) = params.get("volumes") {
-            for v in volumes.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
-                args.push("-v".into());
-                args.push(v.into());
-            }
-        }
+        push_single(&mut args, params, "healthcheck_command", "--health-cmd");
+        push_single(&mut args, params, "healthcheck_interval", "--health-interval");
+        push_single(&mut args, params, "healthcheck_timeout", "--health-timeout");
+        push_single(&mut args, params, "healthcheck_retries", "--health-retries");
+        push_single(
+            &mut args,
+            params,
+            "healthcheck_start_period",
+            "--health-start-period",
+        );
 
-        if let Some(network) = params.get("network") {
-            if !network.is_empty() {
-                args.push("--network".into());
-                args.push(network.clone());
-            }
-        }
-
-        if let Some(restart) = params.get("restart") {
-            if !restart.is_empty() {
-                args.push("--restart".into());
-                args.push(restart.clone());
-            }
+        if params
+            .get("read_only")
+            .map(|s| s == "true")
+            .unwrap_or(false)
+        {
+            args.push("--read-only".into());
         }
 
         args.push(image.into());
@@ -111,6 +155,36 @@ impl ContainerExecutor {
     }
 }
 
+/// Append `flag <item>` for each comma-separated item in `params[key]`.
+fn push_repeated(
+    args: &mut Vec<String>,
+    params: &HashMap<String, String>,
+    key: &str,
+    flag: &str,
+) {
+    if let Some(val) = params.get(key) {
+        for item in val.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+            args.push(flag.into());
+            args.push(item.into());
+        }
+    }
+}
+
+/// Append `flag <value>` once if `params[key]` is set and non-empty.
+fn push_single(
+    args: &mut Vec<String>,
+    params: &HashMap<String, String>,
+    key: &str,
+    flag: &str,
+) {
+    if let Some(val) = params.get(key) {
+        if !val.is_empty() {
+            args.push(flag.into());
+            args.push(val.clone());
+        }
+    }
+}
+
 impl Executor for ContainerExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
@@ -124,9 +198,31 @@ impl Executor for ContainerExecutor {
             return result;
         }
 
+        // Secret refs inside `volumes:` are a UX trap — the operator likely
+        // expects the agent to mount the decrypted secret as a file. That's a
+        // separate feature; for v1, refuse loudly so they don't ship a broken
+        // bind mount thinking it works.
+        if let Some(vols) = params.get("volumes") {
+            for v in vols.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
+                if v.starts_with("secret:") {
+                    result.error = Some(
+                        "container executor: `secret:` in volumes is not supported in v1; \
+                         use env vars or write the secret to a file with a separate `file:` resource"
+                            .into(),
+                    );
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            }
+        }
+
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("running");
         let image = params.get("image").cloned().unwrap_or_default();
         let pull = params.get("pull").map(|s| s.as_str()).unwrap_or("missing");
+        let has_healthcheck = params
+            .get("healthcheck_command")
+            .map(|s| !s.is_empty())
+            .unwrap_or(false);
 
         let status = self.container_status(&name);
         let exists = status.is_some();
@@ -172,9 +268,20 @@ impl Executor for ContainerExecutor {
                         Ok(o) if !o.status.success() => {
                             let stderr = String::from_utf8_lossy(&o.stderr);
                             result.error = Some(format!("docker start: {}", stderr));
+                            result.duration_ms = start.elapsed().as_millis() as i32;
+                            return result;
                         }
-                        Err(e) => result.error = Some(format!("docker start: {}", e)),
+                        Err(e) => {
+                            result.error = Some(format!("docker start: {}", e));
+                            result.duration_ms = start.elapsed().as_millis() as i32;
+                            return result;
+                        }
                         _ => {}
+                    }
+                    if has_healthcheck {
+                        if let Err(e) = self.wait_for_healthy(&name) {
+                            result.error = Some(e);
+                        }
                     }
                     result.duration_ms = start.elapsed().as_millis() as i32;
                     return result;
@@ -213,9 +320,21 @@ impl Executor for ContainerExecutor {
                     Ok(o) if !o.status.success() => {
                         let stderr = String::from_utf8_lossy(&o.stderr);
                         result.error = Some(format!("docker start: {}", stderr));
+                        result.duration_ms = start.elapsed().as_millis() as i32;
+                        return result;
                     }
-                    Err(e) => result.error = Some(format!("docker start: {}", e)),
+                    Err(e) => {
+                        result.error = Some(format!("docker start: {}", e));
+                        result.duration_ms = start.elapsed().as_millis() as i32;
+                        return result;
+                    }
                     _ => {}
+                }
+
+                if has_healthcheck {
+                    if let Err(e) = self.wait_for_healthy(&name) {
+                        result.error = Some(e);
+                    }
                 }
             }
             "stopped" => {
@@ -487,6 +606,173 @@ mod tests {
                 .as_deref()
                 .unwrap()
                 .contains("unknown state"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn secret_in_volumes_rejected() {
+        let mock = MockRunner::new(vec![]);
+        let exec = ContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("container", "web"),
+                ("image", "nginx:latest"),
+                ("volumes", "secret:db/password:/etc/secrets/dbpass"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("secret:` in volumes is not supported"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    fn create_args_include_full_surface() {
+        let exec = ContainerExecutor {
+            runner: Box::new(MockRunner::new(vec![])),
+        };
+        let params = make_params(&[
+            ("container", "web"),
+            ("ports", "80:80,443:443"),
+            ("env", "FOO=bar"),
+            ("volumes", "/data:/var/lib/data"),
+            ("tmpfs", "/tmp,/run"),
+            ("cap_drop", "ALL"),
+            ("cap_add", "SETUID,SETGID"),
+            ("labels", "vigo.module=redis"),
+            ("log_options", "max-size=10m,max-file=5"),
+            ("network", "app-net"),
+            ("restart", "unless-stopped"),
+            ("user", "999:999"),
+            ("log_driver", "json-file"),
+            ("healthcheck_command", "redis-cli ping"),
+            ("healthcheck_interval", "10s"),
+            ("healthcheck_retries", "3"),
+            ("healthcheck_start_period", "5s"),
+            ("read_only", "true"),
+        ]);
+        let args = exec.build_create_args("web", "redis:7-alpine", &params);
+
+        // Order is: action, --name <n>, repeated/single flags, --read-only, image, command...
+        assert_eq!(args[0], "create");
+        assert_eq!(args[1], "--name");
+        assert_eq!(args[2], "web");
+        // Image lands before any optional trailing command.
+        assert!(args.contains(&"redis:7-alpine".to_string()));
+
+        // Spot-check every new flag made it in.
+        let joined = args.join(" ");
+        assert!(joined.contains("-p 80:80"), "missing -p; got: {}", joined);
+        assert!(joined.contains("-p 443:443"));
+        assert!(joined.contains("-e FOO=bar"));
+        assert!(joined.contains("-v /data:/var/lib/data"));
+        assert!(joined.contains("--tmpfs /tmp"));
+        assert!(joined.contains("--tmpfs /run"));
+        assert!(joined.contains("--cap-drop ALL"));
+        assert!(joined.contains("--cap-add SETUID"));
+        assert!(joined.contains("--cap-add SETGID"));
+        assert!(joined.contains("--label vigo.module=redis"));
+        assert!(joined.contains("--log-opt max-size=10m"));
+        assert!(joined.contains("--log-opt max-file=5"));
+        assert!(joined.contains("--network app-net"));
+        assert!(joined.contains("--restart unless-stopped"));
+        assert!(joined.contains("--user 999:999"));
+        assert!(joined.contains("--log-driver json-file"));
+        assert!(joined.contains("--health-cmd redis-cli ping"));
+        assert!(joined.contains("--health-interval 10s"));
+        assert!(joined.contains("--health-retries 3"));
+        assert!(joined.contains("--health-start-period 5s"));
+        assert!(joined.contains("--read-only"));
+    }
+
+    #[test]
+    fn read_only_false_omits_flag() {
+        let exec = ContainerExecutor {
+            runner: Box::new(MockRunner::new(vec![])),
+        };
+        let params = make_params(&[("container", "web"), ("read_only", "false")]);
+        let args = exec.build_create_args("web", "redis:7", &params);
+        assert!(!args.iter().any(|a| a == "--read-only"));
+    }
+
+    #[test]
+    fn create_then_wait_for_healthy() {
+        // inspect (not exists) → pull → create → start → health-inspect (healthy)
+        let mock = MockRunner::new(vec![
+            fail_output("No such container"),
+            ok_output(""),
+            ok_output(""),
+            ok_output(""),
+            ok_output("healthy\n"),
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = ContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("container", "web"),
+                ("image", "nginx:latest"),
+                ("state", "running"),
+                ("healthcheck_command", "curl -f localhost"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(
+            result.error.is_none(),
+            "unexpected error: {:?}",
+            result.error
+        );
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 5);
+        // Last call is the health-status inspect.
+        assert_eq!(calls[4].1[0], "inspect");
+        assert!(calls[4].1.iter().any(|a| a == "{{.State.Health.Status}}"));
+    }
+
+    #[test]
+    fn unhealthy_container_surfaces_error() {
+        let mock = MockRunner::new(vec![
+            fail_output("No such container"),
+            ok_output(""),
+            ok_output(""),
+            ok_output(""),
+            ok_output("unhealthy\n"),
+        ]);
+        let exec = ContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("container", "web"),
+                ("image", "nginx:latest"),
+                ("state", "running"),
+                ("healthcheck_command", "curl -f localhost"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_some());
+        assert!(
+            result
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("reported unhealthy"),
             "unexpected error: {:?}",
             result.error
         );

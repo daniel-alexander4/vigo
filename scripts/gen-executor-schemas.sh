@@ -50,9 +50,12 @@ GOHEADER
 
 for type_name in $(echo "${!TYPE_FILES[@]}" | tr ' ' '\n' | sort); do
     files="${TYPE_FILES[$type_name]}"
-    # Extract params.get("...") — handles both single-line and multi-line patterns.
-    # Join lines first to catch .get(\n"param") patterns, then extract.
-    params=$(cat $files 2>/dev/null | tr '\n' ' ' | grep -oP '\.get\(\s*"\K[^"]+' | grep -v '^_' | sort -u || true)
+    # Extract params from:
+    #   - direct  params.get("name")  calls (and the .get("name") shape generally)
+    #   - helper-call shapes like  push_repeated(&mut args, params, "name", "-flag")
+    #     or  push_single(&mut args, params, "name", "-flag")
+    # Join lines first to catch multi-line patterns.
+    params=$(cat $files 2>/dev/null | tr '\n' ' ' | grep -oP '(?:\.get\(\s*"|push_(?:repeated|single)\([^,]+,\s*params,\s*")\K[^"]+' | grep -v '^_' | sort -u || true)
     if [[ -z "$params" ]]; then
         echo "	\"$type_name\": {},"
     else

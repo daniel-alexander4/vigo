@@ -1,22 +1,69 @@
 
 # container
 
-Manages containers idempotently against a local container runtime (Docker today; Podman and containerd backends land as alternate runtimes when those are added). Pulls the image if needed, then creates, starts, stops, or removes the container.
+Manages containers idempotently against a local container runtime. Docker today; Podman and containerd land as alternate runtimes when those backends are added. Pulls the image if needed, then creates, starts, stops, or removes the container. Waits for healthcheck to report healthy before reporting the resource as settled.
 
 ## Parameters
 
-| Parameter | Required | Default | Description |
-|-----------|----------|---------|-------------|
-| `container` | Yes | -- | Container name. |
-| `state` | No | `running` | Desired state: `running`, `stopped`, or `absent`. |
-| `image` | Yes (for running) | -- | Image reference (e.g., `nginx:latest`). |
-| `ports` | No | -- | Comma-separated port mappings (e.g., `8080:80,8443:443`). |
-| `env` | No | -- | Comma-separated environment variables (e.g., `FOO=bar,BAZ=qux`). |
-| `volumes` | No | -- | Comma-separated volume mounts (e.g., `/data:/var/lib/data,/logs:/var/log`). |
-| `network` | No | -- | Container network to attach to. |
-| `restart` | No | -- | Restart policy (e.g., `always`, `unless-stopped`, `on-failure`). |
-| `command` | No | -- | Command to run in the container (overrides the image default). |
-| `pull` | No | `missing` | Image pull policy: `missing` (pull only if not present), `always`, or `never`. |
+### Required
+
+| Parameter | Description |
+|-----------|-------------|
+| `container` | Container name. Must be unique per host (Docker constraint). |
+| `image` | Image reference (e.g., `nginx:latest`). Required for `state: running`. |
+
+### Lifecycle
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `state` | `running` | Desired state: `running`, `stopped`, or `absent`. |
+| `pull` | `missing` | Image pull policy: `missing` (pull only if not present), `always`, or `never`. |
+| `command` | -- | Command to run in the container (overrides the image default). Space-separated tokens. |
+
+### Networking
+
+| Parameter | Description |
+|-----------|-------------|
+| `ports` | Comma-separated port mappings (e.g., `8080:80,8443:443` or `127.0.0.1:9121:9121`). |
+| `network` | Container network to attach to. |
+
+### Storage
+
+| Parameter | Description |
+|-----------|-------------|
+| `volumes` | Comma-separated volume mounts (e.g., `/data:/var/lib/data,/logs:/var/log:ro`). |
+| `tmpfs` | Comma-separated tmpfs mount paths inside the container (e.g., `/tmp,/run`). |
+| `read_only` | `"true"` makes the root filesystem read-only. |
+
+### Identity & runtime config
+
+| Parameter | Description |
+|-----------|-------------|
+| `env` | Comma-separated environment variables (e.g., `FOO=bar,BAZ=qux`). |
+| `user` | UID or `UID:GID` to run as (e.g., `999:999`). |
+| `cap_drop` | Comma-separated capabilities to drop (e.g., `ALL`). |
+| `cap_add` | Comma-separated capabilities to add (e.g., `SETUID,SETGID`). |
+| `labels` | Comma-separated `key=value` labels. |
+| `restart` | Restart policy (`no`, `on-failure`, `always`, `unless-stopped`). |
+
+### Logging
+
+| Parameter | Description |
+|-----------|-------------|
+| `log_driver` | Log driver name (e.g., `json-file`, `journald`). |
+| `log_options` | Comma-separated `key=value` log-driver options (e.g., `max-size=10m,max-file=5`). |
+
+### Healthcheck
+
+| Parameter | Description |
+|-----------|-------------|
+| `healthcheck_command` | Command to run for the healthcheck. Setting this enables the post-start health wait. |
+| `healthcheck_interval` | Time between checks (e.g., `10s`, `1m`). Defaults to Docker's `30s`. |
+| `healthcheck_timeout` | Maximum time a single check may take. Defaults to Docker's `30s`. |
+| `healthcheck_retries` | Consecutive failures before the container is marked unhealthy. Defaults to Docker's `3`. |
+| `healthcheck_start_period` | Grace period before failures count. Defaults to Docker's `0s`. |
+
+When `healthcheck_command` is set and `state: running`, the agent waits up to 2 minutes for the container to report `healthy` before returning. An `unhealthy` status returns an error.
 
 ## States
 
@@ -42,18 +89,30 @@ resources:
     restart: unless-stopped
 ```
 
-### With volumes and environment
+### Hardened workload with healthcheck
 
 ```yaml
 resources:
-  - name: postgres
+  - name: redis-cache
     type: container
-    container: postgres
-    image: postgres:16
-    ports: "5432:5432"
-    env: "POSTGRES_PASSWORD=secret:db/password,POSTGRES_DB=myapp"
-    volumes: "/opt/pgdata:/var/lib/postgresql/data"
-    restart: always
+    container: redis-cache
+    image: redis:7-alpine
+    state: running
+    ports: "6379:6379"
+    volumes: "/var/lib/redis:/data"
+    user: "999:999"
+    cap_drop: "ALL"
+    cap_add: "SETUID,SETGID"
+    read_only: "true"
+    tmpfs: "/tmp,/run"
+    log_driver: json-file
+    log_options: "max-size=10m,max-file=5"
+    labels: "vigo.module=redis"
+    healthcheck_command: "redis-cli ping"
+    healthcheck_interval: 10s
+    healthcheck_retries: 3
+    healthcheck_start_period: 5s
+    restart: unless-stopped
 ```
 
 ### With depends_on
@@ -116,8 +175,9 @@ Cross-platform. Requires Docker installed and the Docker daemon running. Declare
 ## Notes
 
 - When `state: running` and the container exists with a different image, the executor stops and removes the old container before creating a new one with the updated image.
+- `secret:` references inside `volumes:` are rejected explicitly — that pattern looks like it should bind-mount the decrypted secret value as a file, but no such behavior exists yet. Use environment variables for secret values, or write the secret to a file with a separate `file:` resource and mount that file in.
 - The `pull` parameter controls when images are pulled. `missing` (default) pulls only when the image is not locally available; `always` re-pulls every convergence; `never` skips pull entirely (assumes the image is already local).
-- Port, env, and volume parameters are comma-separated lists.
+- Port, env, volume, tmpfs, cap_drop, cap_add, labels, and log_options parameters are comma-separated lists.
 - Image removal is not part of this resource. To garbage-collect unused images, run `exec: docker image prune -f` on a schedule (a first-class `container_image_prune:` resource may land later).
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*
