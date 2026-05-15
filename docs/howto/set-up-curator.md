@@ -167,6 +167,23 @@ Curator can absorb the bandwidth cost of agent self-updates. The flow:
 
 This is opportunistic. You never have to publish `vigo-agent` for the fleet to update; you do it when you want to spare your server's egress on a fleet-wide bump. A mismatched `blob_sha` (you pushed the wrong build) produces one `warn!` in the agent log and falls back to REST — the published artifact is just ignored until you repush.
 
+### Pulling container images through curator
+
+When `swarm.curator.registry_port` is set to a non-zero value in `server.yaml`, the agent exposes a local OCI Distribution v2 shim on `127.0.0.1:<port>` that serves curator artifacts as a Docker registry. That means a `container:` resource can use `artifact:` instead of `image:`:
+
+```yaml
+- name: redis-cache
+  type: container
+  container: redis-cache
+  artifact: alexander4/redis:7.2-alpine    # pulled via the curator shim
+  state: running
+  ports: "6379:6379"
+  healthcheck_command: "redis-cli ping"
+  restart: unless-stopped
+```
+
+The agent translates `artifact: <ns>/<name>:<tag>` to `docker pull 127.0.0.1:<port>/<ns>/<name>:<tag>` at apply time. To publish container images, push them as OCI archives (`docker save --format=oci`) and `vigo swarm curator push` them like any other artifact. `image:` (a normal registry reference) and `artifact:` are mutually exclusive — pick one per resource. See [`container`](../reference/vigo/resources/container.md) for the full parameter surface.
+
 ### Where to look when it doesn't work
 
 - **`vigo swarm curator status`** — local cache state, in-flight pushes, helper-daemon liveness.

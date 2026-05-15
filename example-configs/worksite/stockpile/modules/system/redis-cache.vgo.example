@@ -1,0 +1,51 @@
+name: redis-cache
+
+# A worked example of the `container:` resource type — declares a single
+# hardened redis instance, idempotent across convergence cycles.
+#
+# Pair with the `docker.vgo.example` module (or any other path that
+# installs and enables the Docker daemon) so this module only attempts
+# container ops on hosts where the daemon is actually running.
+
+vars:
+  redis_image: "redis:7-alpine"
+  redis_port: "6379"
+  redis_data_dir: "/var/lib/redis"
+
+resources:
+  - name: redis-data-dir
+    type: directory
+    target_path: "{{ .Vars.redis_data_dir }}"
+    owner: root
+    group: root
+    mode: "0700"
+    when: "has_command('docker')"
+
+  - name: redis-cache
+    type: container
+    container: redis-cache
+    image: "{{ .Vars.redis_image }}"
+    state: running
+    ports: "{{ .Vars.redis_port }}:6379"
+    volumes: "{{ .Vars.redis_data_dir }}:/data"
+    # Hardening: lock the container down to the minimum surface needed
+    # to serve redis. read_only + tmpfs forces writable state into named
+    # locations; cap_drop ALL revokes every capability not explicitly
+    # added back.
+    read_only: "true"
+    tmpfs: "/tmp,/run"
+    cap_drop: "ALL"
+    user: "999:999"
+    # Healthcheck: the agent waits for `healthy` before reporting the
+    # resource as settled, which feeds the rolling-execution gate. A
+    # container stuck in `unhealthy` surfaces as a resource error.
+    healthcheck_command: "redis-cli ping"
+    healthcheck_interval: 10s
+    healthcheck_retries: 3
+    healthcheck_start_period: 5s
+    log_driver: "json-file"
+    log_options: "max-size=10m,max-file=5"
+    labels: "vigo.module=redis-cache"
+    restart: "unless-stopped"
+    depends_on: [redis-data-dir]
+    when: "has_command('docker')"

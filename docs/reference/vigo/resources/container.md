@@ -10,7 +10,7 @@ Manages containers idempotently against a local container runtime. Docker today;
 | Parameter | Description |
 |-----------|-------------|
 | `container` | Container name. Must be unique per host (Docker constraint). |
-| `image` *or* `artifact` | Image source. `image:` is a normal registry reference (e.g., `nginx:latest` or `myregistry.example.com/app:v1`). `artifact:` references a [curator](../../../concepts/curator.md) artifact and routes the pull through the local registry shim. Mutually exclusive. Required for `state: running`. |
+| `image` *or* `artifact` | Image source. `image:` is a normal registry reference (e.g., `nginx:latest` or `myregistry.example.com/app:v1`). `artifact:` references a [curator](../../../howto/set-up-curator.md) artifact and routes the pull through the local registry shim. Mutually exclusive. Required for `state: running`. |
 
 ### Curator-backed images
 
