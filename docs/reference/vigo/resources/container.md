@@ -10,7 +10,20 @@ Manages containers idempotently against a local container runtime. Docker today;
 | Parameter | Description |
 |-----------|-------------|
 | `container` | Container name. Must be unique per host (Docker constraint). |
-| `image` | Image reference (e.g., `nginx:latest`). Required for `state: running`. |
+| `image` *or* `artifact` | Image source. `image:` is a normal registry reference (e.g., `nginx:latest` or `myregistry.example.com/app:v1`). `artifact:` references a [curator](../../../concepts/curator.md) artifact and routes the pull through the local registry shim. Mutually exclusive. Required for `state: running`. |
+
+### Curator-backed images
+
+For `artifact:`, the operator must opt the envoy into the curator registry shim by setting `swarm.curator.registry_port` to a non-zero value in `server.yaml`. `artifact:` accepts the same value forms as the `artifact:` param on `nonrepo_package` and `source_package`:
+
+| Form | Example |
+|------|---------|
+| Bare `<name>:<tag>` (implicit puddle namespace) | `redis:7.2-alpine` |
+| Bare `<name>@<version>` | `redis@1.4` |
+| `<puddle-name>/<name>:<tag>` | `alexander4/redis:7.2-alpine` |
+| `<hex-artifact-id>/<name>@<version>` | `e3810a25.../redis@1.4` |
+
+The agent translates the artifact ref into a docker-pull URL (`127.0.0.1:<port>/<repo>:<tag>`) and lets the daemon pull through the shim. Docker only speaks `:tag` on the wire, so `@version` separators collapse to `:` — the shim resolves either form identically.
 
 ### Lifecycle
 
@@ -86,6 +99,22 @@ resources:
     container: web
     image: nginx:latest
     ports: "80:80,443:443"
+    restart: unless-stopped
+```
+
+### Curator-backed image with healthcheck
+
+```yaml
+resources:
+  - name: redis-cache
+    type: container
+    container: redis-cache
+    artifact: alexander4/redis:7-alpine    # pulled via the curator shim
+    state: running
+    ports: "6379:6379"
+    volumes: "/var/lib/redis:/data"
+    healthcheck_command: "redis-cli ping"
+    healthcheck_interval: 10s
     restart: unless-stopped
 ```
 

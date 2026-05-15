@@ -5,6 +5,12 @@
 //! runtime. Docker today; Podman / containerd land as alternate runtimes when
 //! those backends are added (they'll thread through a `runtime:` field; the
 //! abstraction stays absent until there's a second implementation).
+//!
+//! `image:` references a normal registry URL. `artifact:` references a curator
+//! artifact (ADR-024) and routes the pull through the local Docker Registry v2
+//! shim on `127.0.0.1:<curator_registry_port>/<repo>:<tag>`. The two are
+//! mutually exclusive; the shim port must be enabled via
+//! `swarm.curator.registry_port` for `artifact:` to work.
 
 use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
 use std::collections::HashMap;
@@ -155,6 +161,37 @@ impl ContainerExecutor {
     }
 }
 
+/// Translate an `artifact:` param value into the docker-pull URL that hits
+/// the local curator registry shim. Same parse rules as the curator
+/// `executor_resolver::parse_ref`, with one twist: docker pull URLs only
+/// speak `:tag`, so `@version` separators collapse to `:` on the wire (the
+/// shim resolves tag-vs-version identically).
+fn build_artifact_image(artifact: &str, port: u32) -> Result<String, String> {
+    let s = artifact.trim();
+    if s.is_empty() {
+        return Err("`artifact:` value is empty".into());
+    }
+    // Prefer '@' (version) over ':' (tag), matching curator parse_ref.
+    let (repo, tag_or_version) = if let Some((r, v)) = s.split_once('@') {
+        (r, v)
+    } else if let Some((r, t)) = s.split_once(':') {
+        (r, t)
+    } else {
+        return Err(format!(
+            "`artifact:` must include a tag or version \
+             (`<name>:<tag>` or `<name>@<version>`), got `{}`",
+            artifact
+        ));
+    };
+    if repo.is_empty() {
+        return Err(format!("`artifact: {}` has an empty repo", artifact));
+    }
+    if tag_or_version.is_empty() {
+        return Err(format!("`artifact: {}` has an empty tag/version", artifact));
+    }
+    Ok(format!("127.0.0.1:{}/{}:{}", port, repo, tag_or_version))
+}
+
 /// Append `flag <item>` for each comma-separated item in `params[key]`.
 fn push_repeated(
     args: &mut Vec<String>,
@@ -217,12 +254,48 @@ impl Executor for ContainerExecutor {
         }
 
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("running");
-        let image = params.get("image").cloned().unwrap_or_default();
+        let image_param = params.get("image").cloned().unwrap_or_default();
+        let artifact_param = params.get("artifact").cloned().unwrap_or_default();
         let pull = params.get("pull").map(|s| s.as_str()).unwrap_or("missing");
         let has_healthcheck = params
             .get("healthcheck_command")
             .map(|s| !s.is_empty())
             .unwrap_or(false);
+
+        if !image_param.is_empty() && !artifact_param.is_empty() {
+            result.error = Some(
+                "container executor: `image:` and `artifact:` are mutually exclusive".into(),
+            );
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
+
+        // Resolve `artifact:` (curator) to a registry-shim URL up front so
+        // the rest of the executor speaks a single `image` string.
+        let image = if !artifact_param.is_empty() {
+            let port = match crate::swarm::runtime_limits::curator_registry_port() {
+                Some(p) => p,
+                None => {
+                    result.error = Some(
+                        "container executor: `artifact:` requires the curator registry shim — \
+                         set `swarm.curator.registry_port` to a non-zero value in server.yaml"
+                            .into(),
+                    );
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            };
+            match build_artifact_image(&artifact_param, port) {
+                Ok(s) => s,
+                Err(e) => {
+                    result.error = Some(format!("container executor: {}", e));
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            }
+        } else {
+            image_param
+        };
 
         let status = self.container_status(&name);
         let exists = status.is_some();
@@ -741,6 +814,140 @@ mod tests {
         // Last call is the health-status inspect.
         assert_eq!(calls[4].1[0], "inspect");
         assert!(calls[4].1.iter().any(|a| a == "{{.State.Health.Status}}"));
+    }
+
+    #[test]
+    fn artifact_image_implicit_namespace() {
+        let url = build_artifact_image("redis:7.2-alpine", 5000).unwrap();
+        assert_eq!(url, "127.0.0.1:5000/redis:7.2-alpine");
+    }
+
+    #[test]
+    fn artifact_image_explicit_namespace() {
+        let url = build_artifact_image("alexander4/redis:7.2-alpine", 5000).unwrap();
+        assert_eq!(url, "127.0.0.1:5000/alexander4/redis:7.2-alpine");
+    }
+
+    #[test]
+    fn artifact_image_version_collapses_to_tag() {
+        // Docker pull URLs only speak `:tag`, so `@v3` lands as `:v3` on the
+        // wire. The shim resolves either tag or version identically.
+        let url = build_artifact_image("alexander4/redis@v3", 5000).unwrap();
+        assert_eq!(url, "127.0.0.1:5000/alexander4/redis:v3");
+    }
+
+    #[test]
+    fn artifact_image_rejects_no_tag_or_version() {
+        let err = build_artifact_image("alexander4/redis", 5000).unwrap_err();
+        assert!(err.contains("must include a tag or version"), "got: {}", err);
+    }
+
+    #[test]
+    fn artifact_image_rejects_empty() {
+        let err = build_artifact_image("   ", 5000).unwrap_err();
+        assert!(err.contains("value is empty"), "got: {}", err);
+    }
+
+    #[test]
+    fn image_and_artifact_mutually_exclusive() {
+        let mock = MockRunner::new(vec![]);
+        let exec = ContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("container", "web"),
+                ("image", "nginx:latest"),
+                ("artifact", "alexander4/nginx:latest"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("mutually exclusive"),
+            "unexpected error: {:?}",
+            result.error
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(runtime_limits)]
+    fn artifact_without_shim_port_errors() {
+        // Reset runtime_limits to defaults (port unset). The TestGuard
+        // restores prior state when dropped.
+        crate::swarm::runtime_limits::reset_for_tests();
+        let _g = crate::swarm::runtime_limits::TestGuard;
+        let mock = MockRunner::new(vec![]);
+        let exec = ContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("container", "web"),
+                ("artifact", "alexander4/nginx:latest"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_some());
+        let msg = result.error.as_deref().unwrap();
+        assert!(
+            msg.contains("curator registry shim") && msg.contains("registry_port"),
+            "unexpected error: {}",
+            msg
+        );
+    }
+
+    #[test]
+    #[serial_test::serial(runtime_limits)]
+    fn artifact_with_shim_port_resolves() {
+        let _g = crate::swarm::runtime_limits::install_for_test(&crate::proto::SwarmRuntimeLimits {
+            filecast_max_size_bytes: 0,
+            filecast_default_retention: String::new(),
+            lockbox_max_file_bytes: 0,
+            lockbox_envelope_retention_secs: 0,
+            gitback_max_bundle_bytes: 0,
+            gitback_envelope_retention_secs: 0,
+            longdrawer_max_file_bytes: 0,
+            curator_max_bytes: 0,
+            curator_registry_port: 5050,
+        });
+        // inspect (not exists) → pull (shim URL) → create → start
+        let mock = MockRunner::new(vec![
+            fail_output("No such container"),
+            ok_output(""),
+            ok_output(""),
+            ok_output(""),
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = ContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("container", "web"),
+                ("artifact", "alexander4/nginx:latest"),
+                ("state", "running"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        let calls = calls.lock().unwrap();
+        // The pull arg should be the shim URL, not the literal artifact ref.
+        assert_eq!(calls[1].1[0], "pull");
+        assert_eq!(calls[1].1[1], "127.0.0.1:5050/alexander4/nginx:latest");
+        // docker create's image arg (penultimate position in the args vec —
+        // the very last is the optional command) should also be the URL.
+        let create_args = &calls[2].1;
+        assert!(
+            create_args.iter().any(|a| a == "127.0.0.1:5050/alexander4/nginx:latest"),
+            "create args missing shim URL: {:?}",
+            create_args
+        );
     }
 
     #[test]
