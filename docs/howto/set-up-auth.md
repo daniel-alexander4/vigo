@@ -48,31 +48,43 @@ Basic authentication stores user accounts in the database and the password itsel
 
 ### Initial Setup
 
-The server automatically creates an `admin` account on first startup. The web UI redirects to a setup page with the one command needed to activate it:
+There is no auto-seeded `admin` user; the server starts up with no web users at all. Create your per-operator admin from the server host after enrolling the local agent:
 
 ```bash
-vigocli secrets set password vigo/web/auth/admin
+# First enroll the local agent so the server can verify the OS-user mapping:
+curl -sSfk https://localhost:8443/bootstrap | sudo sh
+
+# Then create yourself as the first admin. <yourname> must be a real human
+# OS account on this host (uid≥1000, real shell). The CLI auto-reads your
+# pubkey from ~<yourname>/.ssh/id_ed25519.pub (fallback id_rsa.pub).
+sudo vigocli webusers create --username <yourname> --role admin
+
+# Set your login password:
+vigocli secrets set password vigo/web/auth/<yourname>
 ```
 
-Until a password is set, all web UI requests redirect to the setup page. Passwords are stored verbatim at `vigo/web/auth/<username>` inside the master-key AES-256-GCM envelope; the login handler does a `subtle.ConstantTimeCompare` against the resolved value on every attempt.
+Sign in at `https://localhost:8443/login`. Passwords are stored verbatim at `vigo/web/auth/<username>` inside the master-key AES-256-GCM envelope; the login handler does a `subtle.ConstantTimeCompare` against the resolved value on every attempt.
+
+**Admin webusers map 1:1 with OS users.** The username on the web side must equal a human OS account on the server host — this gates audit attribution to a real person and seeds the pubkey for browser scrier sessions. Viewer and compliance users are unconstrained; they're one-offs (auditors, partners, read-only access) without OS counterparts.
 
 ### Adding Users
 
 ```bash
-# Create a viewer account
-vigocli webusers create --username alice --role viewer --email alice@example.com
+# Another per-operator admin (real OS user required):
+sudo vigocli webusers create --username alice --role admin
 
-# Create a compliance-staff account (compliance.read + compliance.docs.write only)
-vigocli webusers create --username carol --role compliance --email carol@example.com
+# Viewer / compliance — no OS-user constraint, --ssh-key-file optional:
+sudo vigocli webusers create --username auditor --role viewer --email auditor@example.com
+sudo vigocli webusers create --username carol --role compliance --email carol@example.com
 
-# Set their password
+# Set passwords:
 vigocli secrets set password vigo/web/auth/alice
 ```
 
 ### Resetting Passwords
 
 ```bash
-vigocli secrets set password vigo/web/auth/admin
+vigocli secrets set password vigo/web/auth/<username>
 ```
 
 ### CLI Access (Localhost Trust)
@@ -163,14 +175,15 @@ auth:
 
 ### User Management
 
-Unlike OIDC, isowebauth requires users to be pre-created with their SSH public keys. The auto-seeded admin account can be used to create them:
+Unlike OIDC, isowebauth requires users to be pre-created with their SSH public keys. After standing up your per-operator admin account (see *Initial Setup* above), create the other users from the server host:
 
 ```bash
-# First, set the admin password to get CLI access:
-vigocli secrets set password vigo/web/auth/admin
+# Viewer / compliance — --ssh-key-file accepted:
+sudo vigocli webusers create --username bob --role viewer --ssh-key-file /path/to/bob.pub
 
-# Create users with SSH keys:
-vigocli webusers create --username bob --role viewer --ssh-key-file /path/to/bob.pub
+# Per-operator admin — pubkey auto-read from the matching OS user's
+# home dir; --ssh-key-file rejected.
+sudo vigocli webusers create --username alice --role admin
 ```
 
 ### Sign-In Flow

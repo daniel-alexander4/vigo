@@ -160,10 +160,10 @@ The agent computes `$6$<salt>$<hash>` from the plaintext at apply time and feeds
 ### Set a Vigo web UI password (consumed by the basic auth provider)
 
 ```bash
-vigocli secrets set password vigo/web/auth/admin
+vigocli secrets set password vigo/web/auth/dan
 ```
 
-The key must follow the pattern `vigo/web/auth/<username>` to match the account created with `vigocli webusers create`. The server's basic-auth provider resolves the stored plaintext via the secrets Provider on every login attempt and `subtle.ConstantTimeCompare`s against the submitted password.
+The key must follow the pattern `vigo/web/auth/<username>` to match the account created with `vigocli webusers create`. (Admin webusers use real human OS usernames per [auth setup](../../howto/set-up-auth.md); `admin` is not auto-seeded as a default.) The server's basic-auth provider resolves the stored plaintext via the secrets Provider on every login attempt and `subtle.ConstantTimeCompare`s against the submitted password.
 
 ## reveal
 

@@ -39,22 +39,22 @@ If you're using the bundled Docker Compose, `guacd_addr: "guacd:4822"` and `prox
 
 Restart `vigosrv` after editing.
 
-## Give each web user an SSH pubkey
+## Give each admin web user an SSH pubkey
 
 Scrier's SSH path identifies the operator by their SSH pubkey. The agent scans every regular user's `~/.ssh/authorized_keys` on the target envoy and lands you in whichever user holds your key. **Root is never a Scrier landing target** — use `sudo` for elevation.
 
-The CLI auto-detects your pubkey at every `vigocli scrier ssh` invocation (chain: `--ssh-key-file` flag → `$SSH_USER_AUTH` if sshd has `ExposeAuthInfo yes` → `/proc/self/loginuid`'s home directory → `$SUDO_USER`'s home) and ships it in the connect request, so the server-side `users.ssh_public_key` stays in sync without you having to set it manually. The first time you run `vigocli scrier ssh <envoy>` on a host where your SSH key lives, the column is populated.
-
-For pure browser-only users (no CLI invocation ever), set the pubkey via REST:
+The pubkey lives in `users.ssh_public_key` and is set canonically at user-create time. For admin web users it's auto-read from the matching OS user's home dir:
 
 ```bash
-TOKEN=...    # admin API token
-curl -X PUT https://vigo:8443/api/v1/users/<id> \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"ssh_public_key":"ssh-ed25519 AAAA...","display_name":"...","email":"...","role":"admin"}'
+# Admin role: pubkey auto-read from /home/<username>/.ssh/id_ed25519.pub
+# (fallback id_rsa.pub). --ssh-key-file is rejected — the OS-user mapping
+# is the source of truth.
+sudo vigocli webusers create --username dan --role admin
 ```
 
-The `PUT` replaces every field — include the unchanged ones.
+This is the canonical seeding step. Browser scrier sessions read this column directly. CLI scrier sessions ALSO send the pubkey inline at every invocation, so key rotations work for the current CLI session without re-running `webusers create|update`; for the browser to see the new key, run `sudo vigocli webusers update --username dan --role admin` to re-read the OS user's home dir.
+
+For viewer / compliance users (no scrier access), the OS-user mapping doesn't apply — they can be created freely with `--ssh-key-file <path>` if isowebauth needs a pubkey, but they're not Scrier targets.
 
 ## Make sure the operator's pubkey is in some regular user's authorized_keys on each envoy
 

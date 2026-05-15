@@ -62,7 +62,13 @@ cd /srv/vigo
 docker compose up -d
 ```
 
-The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap). On first access, the web UI shows setup instructions — bootstrap the secrets vault with `vigocli secrets init --key-file /srv/vigo/secrets/.master.key` (which also prompts for the unlock passphrase), `vigocli secrets unlock`, create an admin account with `vigocli webusers create --username admin --role admin`, set a password with `vigocli secrets set password vigo/web/auth/admin`, then sign in at `https://localhost:8443/login`.
+The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap). Three CLI steps stand the install up from here, **in order**:
+
+1. **Bootstrap the secrets vault** — `vigocli secrets init --key-file /srv/vigo/secrets/.master.key` (prompts for the unlock passphrase), then `vigocli secrets unlock`.
+2. **Enroll the local agent** — `curl -sSfk https://localhost:8443/bootstrap | sudo sh` from the server host. The server has a canonical assumption (per CLAUDE.md) that a `vigo` agent runs on the same host alongside the container; the admin-create step below uses that agent's `users` trait to verify the OS-user mapping. Wait until the agent has reported one check-in (~30s) before continuing.
+3. **Create your per-operator admin** — `sudo vigocli webusers create --username <yourname> --role admin` from the server host, where `<yourname>` is a real human OS account on this machine (uid≥1000, real shell). The CLI auto-reads your pubkey from `/home/<yourname>/.ssh/id_ed25519.pub` (fallback `id_rsa.pub`); no `--ssh-key-file` flag for admin role. Then `vigocli secrets set password vigo/web/auth/<yourname>` to set your login password.
+
+Sign in at `https://localhost:8443/login` as `<yourname>`. The default `admin` user is deliberately not auto-created — admin webusers map 1:1 with real OS users so audit attribution always names a real human and browser scrier sessions seed your pubkey automatically. If you need multiple operators, repeat step 3 for each.
 
 ### 3. Verify
 

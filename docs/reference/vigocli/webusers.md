@@ -21,49 +21,42 @@ f6e5d4c3-b2a1-4f6e-9d8c-7b6a5f4e3d2c  alice       Alice Smith     alice@example.
 
 ### create
 
-Create a new user account. The first user created is always promoted to admin.
+Create a new user account. **Admin role** is constrained: the username must be a real human OS account on the server host (uid≥1000, real shell), validated against the local agent's `users.human` trait. The pubkey is auto-read from the matching OS user's `~/.ssh/id_ed25519.pub` (fallback `id_rsa.pub`); `--ssh-key-file` is rejected. **Viewer / compliance** roles are unconstrained one-offs — no OS-user requirement, `--ssh-key-file` accepted.
 
 ```bash
-# Create an admin account
-vigocli webusers create --username admin --role admin
+# Per-operator admin — run from the server host as root. Username must
+# match a real OS account; pubkey is auto-read from that account's home.
+sudo vigocli webusers create --username dan --role admin
 
-# Create a viewer with details
-vigocli webusers create --username alice --role viewer \
+# Viewer with details (no OS-user constraint):
+sudo vigocli webusers create --username alice --role viewer \
   --display-name "Alice Smith" --email alice@example.com
 
-# Create a user with an SSH key (for isowebauth)
-vigocli webusers create --username bob --role viewer \
+# Viewer with explicit SSH key (for isowebauth):
+sudo vigocli webusers create --username bob --role viewer \
   --ssh-key-file ~/.ssh/id_ed25519.pub
 
-# Create a compliance-staff account (compliance.read + compliance.docs.write only)
-vigocli webusers create --username carol --role compliance \
+# Compliance-staff account (compliance.read + compliance.docs.write only):
+sudo vigocli webusers create --username carol --role compliance \
   --display-name "Carol Compliance" --email carol@example.com
 ```
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--username` | — | Username (required) |
-| `--role` | `viewer` | Role: `admin`, `viewer`, or `compliance` |
+| `--username` | — | Username (required). For `--role admin`, must match a human OS user on the server host. |
+| `--role` | `viewer` | Role: `admin`, `viewer`, or `compliance`. `admin` requires OS-user mapping; others are one-offs. |
 | `--display-name` | — | Display name |
 | `--email` | — | Email address |
-| `--ssh-key-file` | — | Path to SSH public key file. Optional — `vigocli scrier ssh` auto-detects the operator's pubkey at invocation time and write-through-stores it, so an existing web user doesn't need this set in advance. Useful for pre-populating other users at create time and for isowebauth. |
+| `--ssh-key-file` | — | Path to SSH public key file. **Rejected for `--role admin`** — admins always auto-read from the matching OS user's home dir. Optional for viewer/compliance (used for isowebauth). |
 
-To set or update the pubkey on an *existing* user without going through a CLI scrier session, use the REST API directly:
-
-```bash
-curl -X PUT https://vigo:8443/api/v1/users/<id> \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"ssh_public_key":"ssh-ed25519 AAAA…","display_name":"…","email":"…","role":"admin"}'
-```
-
-(The `PUT` replaces every field, so include the unchanged ones too.)
+To re-read the pubkey for an admin user (after key rotation) without recreating the account, run `webusers update` with the same OS-mapped username — same auto-read happens.
 
 ### Setting a password
 
-Web UI passwords are managed via the secrets system:
+Web UI passwords are managed via the secrets system, keyed per username:
 
 ```bash
-vigocli secrets set password vigo/web/auth/admin
+vigocli secrets set password vigo/web/auth/dan
 ```
 
 See [vigocli secrets](secrets.md) for details.
