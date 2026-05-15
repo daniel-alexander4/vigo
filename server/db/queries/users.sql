@@ -50,7 +50,3 @@ WHERE id = ?;
 -- name: UpdateTOTPRecovery :exec
 UPDATE users SET totp_recovery = ?, updated_at = datetime('now')
 WHERE id = ?;
-
--- name: SetUserSSHPublicKey :exec
-UPDATE users SET ssh_public_key = ?, updated_at = datetime('now')
-WHERE id = ?;

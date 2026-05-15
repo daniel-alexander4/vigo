@@ -223,21 +223,6 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
-const setUserSSHPublicKey = `-- name: SetUserSSHPublicKey :exec
-UPDATE users SET ssh_public_key = ?, updated_at = datetime('now')
-WHERE id = ?
-`
-
-type SetUserSSHPublicKeyParams struct {
-	SshPublicKey string `json:"ssh_public_key"`
-	ID           string `json:"id"`
-}
-
-func (q *Queries) SetUserSSHPublicKey(ctx context.Context, arg SetUserSSHPublicKeyParams) error {
-	_, err := q.db.ExecContext(ctx, setUserSSHPublicKey, arg.SshPublicKey, arg.ID)
-	return err
-}
-
 const updateTOTPRecovery = `-- name: UpdateTOTPRecovery :exec
 UPDATE users SET totp_recovery = ?, updated_at = datetime('now')
 WHERE id = ?

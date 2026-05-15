@@ -369,10 +369,18 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 	// Two ingress paths:
 	//   CLI path — the request carries the operator's freshly-detected
 	//     pubkey (cli/scrier_ssh.go::resolveOperatorPubkey). We validate
-	//     it, write it through to users.ssh_public_key so future browser
-	//     sessions see it, and use it for this session.
-	//   Browser path — no pubkey in the request; we fall back to the
-	//     stored users.ssh_public_key (populated by a previous CLI run).
+	//     it and use it for THIS session.
+	//   Browser path — no pubkey in the request; we use the stored
+	//     users.ssh_public_key, which is set canonically by
+	//     `vigocli webusers create|update --role admin` (admin webusers
+	//     auto-read it from the matching OS user's home dir).
+	//
+	// No write-through: persisting per-user state from an opportunistic
+	// runtime side-effect was previously a silent fail for peer-authed
+	// CLI runs (the synthetic loopback admin's user.ID didn't match a
+	// real row, so the UPDATE affected zero rows and returned nil). The
+	// admin-webuser-create flow now owns DB-side pubkey state; this
+	// handler is a consumer only.
 	var sshAuth *SSHPubkeyAuth
 	if sess.protocol == "ssh" {
 		verifyPubkey := user.SSHPublicKey
@@ -382,22 +390,10 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 				return
 			}
 			verifyPubkey = sess.requestedPubkey
-			if verifyPubkey != user.SSHPublicKey {
-				if err := h.queries.SetUserSSHPublicKey(ctx, db.SetUserSSHPublicKeyParams{
-					SshPublicKey: verifyPubkey,
-					ID:           user.ID,
-				}); err != nil {
-					slog.Warn("scrier: write-through of ssh_public_key failed",
-						"session_id", sess.id, "user", user.Username, "error", err)
-					// Non-fatal: the session can still proceed using the
-					// per-request pubkey; only future browser sessions
-					// won't have the new value cached.
-				}
-			}
 		}
 		if verifyPubkey == "" {
 			sess.setStatus(statusError,
-				"no SSH pubkey available — either run `vigocli scrier ssh` from a host with your SSH key on disk so the CLI auto-detects it, or set users.ssh_public_key for "+user.Username+" via `PUT /api/v1/users/{id}`")
+				"no SSH pubkey available — for browser scrier, run `vigocli webusers create|update <yourname> --role admin` from the server host to seed your DB-side pubkey from your OS user's ~/.ssh/id_*.pub. For CLI scrier, the CLI auto-detects and sends inline.")
 			return
 		}
 		ephPriv, ephPub, err := GenerateEphemeralSSHKey()
