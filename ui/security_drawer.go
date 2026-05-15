@@ -285,11 +285,6 @@ type SecurityDrawerData struct {
 	// EnvoyLastSeen is the envoy's last-CheckIn timestamp — rendered via
 	// timeAgo in the unresponsive-envoy banner.
 	EnvoyLastSeen time.Time
-	// LiveCVEIDs is the set of CVE IDs (uppercase) the live dispatch
-	// confirmed against current scanner output (Trivy + Debsecan). Used
-	// to gate the per-finding Ask-AI button on cached CVE cards — items
-	// not in current scanner output don't render Ask-AI.
-	LiveCVEIDs map[string]bool
 	// RkhunterRows / ChkrootkitRows are normalized versions of Detail's
 	// polymorphic JSON — populated so templates can range over structs.
 	RkhunterRows   []RkhunterRow
@@ -375,7 +370,6 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 			applyLiveDetail(&data, value, now, false)
 			switch {
 			case data.Live:
-				data.LiveCVEIDs = collectLiveCVEIDs(data.Detail)
 				h.securityLive.put(envoyID, value, now)
 			case data.Error == "":
 				// Parsed cleanly but no scanner data — surface the no-data banner.
@@ -387,9 +381,6 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 		// otherwise fall through to the cached-trait summary below.
 		if raw, at, ok := h.securityLive.get(envoyID); ok {
 			applyLiveDetail(&data, raw, at, true)
-			if data.Live {
-				data.LiveCVEIDs = collectLiveCVEIDs(data.Detail)
-			}
 		}
 	}
 
@@ -713,9 +704,9 @@ func extractCachedCVEs(flat map[string]string) []CachedCVE {
 		}
 		switch field {
 		case "id":
-			// Uppercase so the LiveCVEIDs lookup (also uppercased) is
-			// case-insensitive on agent output. CVE IDs are virtually
-			// always uppercase already; this is defensive.
+			// CVE IDs are conventionally uppercase already; normalize
+			// here defensively so any consumer of CachedCVE.ID can
+			// compare case-insensitively without re-uppercasing.
 			grouped[idx].ID = strings.ToUpper(v)
 		case "severity":
 			grouped[idx].Severity = strings.ToLower(v)
@@ -829,32 +820,6 @@ func drawerSections(cached SecurityDrawerCached, detail *SecurityScanDetail) []S
 		}
 	}
 	return append(out, SecuritySection{Slug: "certs", Label: "Certs"})
-}
-
-// collectLiveCVEIDs builds the set of CVE IDs (uppercase) that appear in
-// the live Trivy + Debsecan responses. Gates the per-CVE Ask-AI buttons
-// on cached CVE cards — operators only get the affordance for findings
-// the current scanner output still flags. Empty/nil when no live data.
-func collectLiveCVEIDs(d *SecurityScanDetail) map[string]bool {
-	if d == nil {
-		return nil
-	}
-	out := make(map[string]bool)
-	if d.Trivy != nil {
-		for _, v := range d.Trivy.Vulnerabilities {
-			if id := strings.ToUpper(strings.TrimSpace(v.CVEID)); id != "" {
-				out[id] = true
-			}
-		}
-	}
-	if d.Debsecan != nil {
-		for _, v := range d.Debsecan.Vulnerabilities {
-			if id := strings.ToUpper(strings.TrimSpace(v.CVEID)); id != "" {
-				out[id] = true
-			}
-		}
-	}
-	return out
 }
 
 // cveURL returns the external CVE record URL for a given CVE ID.

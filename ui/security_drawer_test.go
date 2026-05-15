@@ -363,30 +363,6 @@ func TestDrawerSections_CachedThenLive(t *testing.T) {
 	}
 }
 
-func TestCollectLiveCVEIDs_UppercasesAndUnions(t *testing.T) {
-	d := &SecurityScanDetail{
-		Trivy: &TrivyDetail{Vulnerabilities: []TrivyVuln{
-			{CVEID: "cve-2024-1"}, {CVEID: "  CVE-2024-2 "}, {CVEID: ""},
-		}},
-		Debsecan: &DebsecanDetail{Vulnerabilities: []DebsecanVuln{
-			{CVEID: "CVE-2024-2"}, // duplicate across scanners — ok
-			{CVEID: "cve-2024-3"},
-		}},
-	}
-	got := collectLiveCVEIDs(d)
-	for _, want := range []string{"CVE-2024-1", "CVE-2024-2", "CVE-2024-3"} {
-		if !got[want] {
-			t.Errorf("expected %q in LiveCVEIDs, got %v", want, got)
-		}
-	}
-	if len(got) != 3 {
-		t.Errorf("expected 3 entries, got %d: %v", len(got), got)
-	}
-	if collectLiveCVEIDs(nil) != nil {
-		t.Error("nil detail should return nil map")
-	}
-}
-
 func TestSecurityDrawerFragment_RendersBothStates(t *testing.T) {
 	r, err := NewRenderer()
 	if err != nil {
@@ -437,7 +413,6 @@ func TestSecurityDrawerFragment_RendersBothStates(t *testing.T) {
 		Lynis:    &LynisDetail{Score: 78, Warnings: []LynisEntry{{ID: "AUTH-0001", Text: "weak setting"}}, LastScan: "now"},
 		Defender: &DefenderDetail{Enabled: true, RealtimeProtection: true, LastScan: "now"},
 	}
-	data.LiveCVEIDs = collectLiveCVEIDs(data.Detail)
 	data.Sections = drawerSections(data.Cached, data.Detail)
 	rec = httptest.NewRecorder()
 	r.RenderFragment(rec, "security", "security-drawer-fragment", data)
@@ -508,10 +483,14 @@ func TestSecurityDrawerFragment_LiveNoDataBanner(t *testing.T) {
 	}
 }
 
-// TestSecurityDrawerFragment_AskAIGatedByLiveCVEIDs pins pending item 46:
-// the per-CVE Ask-AI button on cached CVE cards renders only when that CVE
-// is in the most-recent live Trivy/Debsecan response.
-func TestSecurityDrawerFragment_AskAIGatedByLiveCVEIDs(t *testing.T) {
+// TestSecurityDrawerFragment_AskAIGatedByLive pins the cold-drawer half of
+// pending item 46: Ask-AI on cached CVE cards stays hidden until a live
+// fetch has succeeded. Once `data.Live` flips on, every cached CVE card
+// renders the button regardless of whether the live response carried that
+// specific CVE — the per-CVE join was tried in 0.53.4 (`LiveCVEIDs`) but
+// the agent's wire shape (Trivy per-package collapse, no Windows-updates
+// live source) made it produce mostly-hidden buttons; reverted in 0.53.5.
+func TestSecurityDrawerFragment_AskAIGatedByLive(t *testing.T) {
 	r, err := NewRenderer()
 	if err != nil {
 		t.Fatalf("NewRenderer: %v", err)
@@ -539,28 +518,19 @@ func TestSecurityDrawerFragment_AskAIGatedByLiveCVEIDs(t *testing.T) {
 		t.Error("pre-live: no Ask-AI button should render on cached CVE cards")
 	}
 
-	// Live fetch landed; only CVE-2024-IN-LIVE is in the live response.
+	// Live fetch landed. Only one CVE is in the live response, but the
+	// looser gate renders Ask-AI on every cached CVE card regardless —
+	// the operator has confirmed the agent's current state.
 	data.Live = true
 	data.Detail = &SecurityScanDetail{Trivy: &TrivyDetail{Vulnerabilities: []TrivyVuln{
 		{CVEID: "CVE-2024-IN-LIVE", Severity: "high", Package: "p"},
 	}}}
-	data.LiveCVEIDs = collectLiveCVEIDs(data.Detail)
 	data.Sections = drawerSections(data.Cached, data.Detail)
 	rec = httptest.NewRecorder()
 	r.RenderFragment(rec, "security", "security-drawer-fragment", data)
 	body = rec.Body.String()
-	// The card whose ID is in LiveCVEIDs renders Ask-AI; the other doesn't.
-	cveInLiveAt := strings.Index(body, "CVE-2024-IN-LIVE")
-	cveNotInLiveAt := strings.Index(body, "CVE-2024-NOT-IN-LIVE")
-	askAt := strings.Index(body[cveInLiveAt:], "Ask AI")
-	if askAt < 0 || cveInLiveAt+askAt > cveNotInLiveAt {
-		t.Errorf("expected Ask-AI button to render under CVE-2024-IN-LIVE before CVE-2024-NOT-IN-LIVE; cveInLive@%d cveNotInLive@%d ask@%d",
-			cveInLiveAt, cveNotInLiveAt, askAt)
-	}
-	// And there should be exactly one Ask-AI on the CVE pane (we filter to
-	// just the one whose ID is in the live response).
-	if got := strings.Count(body, `data-question="h · cve CVE-2024`); got != 1 {
-		t.Errorf("expected 1 cached-CVE Ask-AI button, got %d", got)
+	if got := strings.Count(body, `data-question="h · cve CVE-2024`); got != 2 {
+		t.Errorf("post-live: expected 2 cached-CVE Ask-AI buttons, got %d", got)
 	}
 }
 
