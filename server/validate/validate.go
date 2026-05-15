@@ -208,7 +208,10 @@ var requiredAttrs = map[string][]string{
 	"replace":         {"target_path", "match_pattern", "replacement"},
 	"field_edit":      {"path", "line_match", "select_field"},
 	"systemd_dropin":  {"unit", "content"},
-	"container":      {"image"},
+	// `container` requires `image` OR `artifact`; the mutual-exclusion +
+	// "at least one for state=running" enforcement lives in the
+	// container-image-source modlint rule, since requiredAttrs can't
+	// express the OR.
 	"docker_compose": {"path"},
 	"backup":          {"source_dir", "target_path"},
 	"db_backup":       {"db_type", "source_db", "target_path"},

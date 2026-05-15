@@ -168,6 +168,73 @@ resources:
 	}
 }
 
+// --- container-image-source ---
+
+func TestLint_ContainerImageSource_BothSet(t *testing.T) {
+	input := `name: m
+resources:
+  - name: confused
+    type: container
+    container: confused
+    image: "nginx:latest"
+    artifact: "alexander4/nginx:latest"
+    state: running
+`
+	r := Lint([]byte(input), Options{})
+	if r.OK() {
+		t.Fatal("expected error for container with both image and artifact")
+	}
+	if !containsError(r, "both 'image' and 'artifact'") {
+		t.Errorf("expected both-set error; got %v", r.Errors)
+	}
+}
+
+func TestLint_ContainerImageSource_NeitherSet_Running(t *testing.T) {
+	input := `name: m
+resources:
+  - name: empty
+    type: container
+    container: empty
+    state: running
+`
+	r := Lint([]byte(input), Options{})
+	if r.OK() {
+		t.Fatal("expected error for state=running with no image source")
+	}
+	if !containsError(r, "needs 'image' or 'artifact'") {
+		t.Errorf("expected missing-source error; got %v", r.Errors)
+	}
+}
+
+func TestLint_ContainerImageSource_NeitherSet_Absent(t *testing.T) {
+	input := `name: m
+resources:
+  - name: gone
+    type: container
+    container: gone
+    state: absent
+`
+	r := Lint([]byte(input), Options{})
+	if finding := findFinding(r, "container-image-source"); finding != nil {
+		t.Errorf("state=absent should not require image source; got %+v", finding)
+	}
+}
+
+func TestLint_ContainerImageSource_ArtifactOnly(t *testing.T) {
+	input := `name: m
+resources:
+  - name: redis
+    type: container
+    container: redis
+    artifact: "alexander4/redis:7.2-alpine"
+    state: running
+`
+	r := Lint([]byte(input), Options{})
+	if finding := findFinding(r, "container-image-source"); finding != nil {
+		t.Errorf("artifact alone is valid; got %+v", finding)
+	}
+}
+
 // --- file-content-source-conflict ---
 
 func TestLint_FileContentSourceConflict(t *testing.T) {

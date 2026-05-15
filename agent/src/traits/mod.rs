@@ -6,6 +6,7 @@
 
 pub mod agent_self;
 pub mod cached;
+pub mod host_containers;
 pub mod host_self;
 pub mod network_device;
 
@@ -301,6 +302,12 @@ pub enum CollectorKind {
     /// server enough signal to flag "this host is about to fall over"
     /// before the agent itself is killed.
     HostSelf,
+    /// Per-container state on the local Docker daemon — name, image,
+    /// image_id, state, health, restart_count, oom_killed. Pairs with
+    /// the existing `docker` collector (daemon-level metadata) to give
+    /// the server a full picture of container workloads on the envoy.
+    /// Linux + macOS. Used by the `container:` resource type.
+    HostContainers,
 }
 
 impl CollectorKind {
@@ -352,6 +359,7 @@ impl CollectorKind {
             Self::Lockbox => "lockbox",
             Self::AgentSelf => "agent_self",
             Self::HostSelf => "host_self",
+            Self::HostContainers => "host_containers",
         }
     }
 
@@ -389,6 +397,7 @@ impl CollectorKind {
             Self::Lockbox => lockbox::collect(),
             Self::AgentSelf => agent_self::collect(),
             Self::HostSelf => host_self::collect(),
+            Self::HostContainers => host_containers::collect(),
 
             // Unix implementations.
             #[cfg(unix)]
@@ -656,6 +665,7 @@ impl CollectorKind {
             "lockbox" => Some(Self::Lockbox),
             "agent_self" => Some(Self::AgentSelf),
             "host_self" => Some(Self::HostSelf),
+            "host_containers" => Some(Self::HostContainers),
             _ => None,
         }
     }
@@ -709,6 +719,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::Lockbox,
         CollectorKind::AgentSelf,
         CollectorKind::HostSelf,
+        CollectorKind::HostContainers,
     ]
 }
 
@@ -732,6 +743,7 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::Lockbox,
         CollectorKind::AgentSelf,
         CollectorKind::HostSelf,
+        CollectorKind::HostContainers,
     ]
 }
 
@@ -842,7 +854,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 45);
+        assert_eq!(default_collectors().len(), 46);
     }
 
     #[test]
