@@ -169,7 +169,7 @@ func TestEveryExecutorHasDocPage(t *testing.T) {
 	// but their doc pages use the platform-qualified name (e.g.,
 	// "registry_windows.md"). Accept either the exact name or any
 	// <name>_<platform>.md variant.
-	docsDir := filepath.Join(root, "docs", "reference", "executors")
+	docsDir := filepath.Join(root, "docs", "reference", "vigo", "resources")
 
 	// Build a set of all available doc page base names (without .md).
 	docEntries, _ := os.ReadDir(docsDir)
@@ -201,7 +201,7 @@ func TestEveryExecutorHasDocPage(t *testing.T) {
 
 	sort.Strings(missing)
 	if len(missing) > 0 {
-		t.Errorf("executors missing doc pages in docs/executors/:\n  %s", strings.Join(missing, "\n  "))
+		t.Errorf("executors missing doc pages in docs/reference/vigo/resources/:\n  %s", strings.Join(missing, "\n  "))
 	}
 }
 
@@ -623,22 +623,22 @@ func TestExecutorCountConsistent(t *testing.T) {
 		}
 	}
 
-	// Also check docs/reference/executors/_index.md.
-	execIndexPath := filepath.Join(root, "docs", "reference", "executors", "_index.md")
+	// Also check docs/reference/vigo/resources/_index.md.
+	execIndexPath := filepath.Join(root, "docs", "reference", "vigo", "resources", "_index.md")
 	execIndexData, err := os.ReadFile(execIndexPath)
 	if err != nil {
-		t.Logf("could not read docs/executors/_index.md: %v", err)
+		t.Logf("could not read docs/reference/vigo/resources/_index.md: %v", err)
 		return
 	}
 
 	em := countRe.FindStringSubmatch(string(execIndexData))
 	if em == nil {
-		t.Log("could not find executor count in docs/executors/_index.md, skipping")
+		t.Log("could not find executor count in docs/reference/vigo/resources/_index.md, skipping")
 	} else {
 		var execDocCount int
 		fmt.Sscanf(em[1], "%d", &execDocCount)
 		if codeCount != execDocCount {
-			t.Errorf("executor count mismatch: code has %d unique types, docs/executors/_index.md claims %d",
+			t.Errorf("executor count mismatch: code has %d unique types, docs/reference/vigo/resources/_index.md claims %d",
 				codeCount, execDocCount)
 		}
 	}

@@ -171,6 +171,7 @@ func (m *ManifestStore) persist() error {
 		return fmt.Errorf("write tmp: %w", err)
 	}
 	if err := os.Rename(tmp, m.persistPath); err != nil {
+		// best-effort cleanup — the rename error is what the caller acts on.
 		_ = os.Remove(tmp)
 		return fmt.Errorf("rename: %w", err)
 	}

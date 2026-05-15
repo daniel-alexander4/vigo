@@ -146,7 +146,7 @@ func startServer(t *testing.T, modules map[string]string, envoysYAML string) *te
 		t.Fatal(err)
 	}
 
-	srv, _, _, _, _, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	srv, _, _, _, _, _, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:    filepath.Join(testCertDir, "server.crt"),
 		KeyFile:     filepath.Join(testCertDir, "server.key"),
 		CAFile:      filepath.Join(testCertDir, "ca.crt"),
