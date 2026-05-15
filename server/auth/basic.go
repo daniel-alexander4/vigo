@@ -59,24 +59,8 @@ func (p *BasicProvider) SetAuditWriter(w auditRecorder) { p.auditWriter = w }
 
 func (p *BasicProvider) Method() string { return "basic" }
 
-// needsSetup returns true when the admin user exists but has no password set.
-// This is the state after first startup — the server seeds an admin account
-// but the operator hasn't run `vigocli secrets set password vigo/web/auth/admin` yet.
-func (p *BasicProvider) needsSetup(ctx context.Context) bool {
-	count, err := p.userStore.CountUsers(ctx)
-	if err != nil || count == 0 {
-		return true
-	}
-	// Check if the admin user has a password secret.
-	if _, err := p.secrets.Get(ctx, "vigo/web/auth/admin"); err != nil {
-		return true
-	}
-	return false
-}
-
-// Middleware checks for a valid session or API token. When the admin account
-// has no password, all non-public requests redirect to /setup. Otherwise,
-// unauthenticated UI requests redirect to /login; API requests get 401.
+// Middleware checks for a valid session or API token.
+// Unauthenticated UI requests redirect to /login; API requests get 401.
 func (p *BasicProvider) Middleware(next http.Handler) http.Handler {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if IsPublicPath(r.URL.Path) {
@@ -127,18 +111,6 @@ func (p *BasicProvider) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Not authenticated — check if setup is needed (admin has no password).
-		if p.needsSetup(r.Context()) {
-			if isAPIPath(r.URL.Path) {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusUnauthorized)
-				json.NewEncoder(w).Encode(map[string]string{"error": "setup required", "setup_url": "/setup"})
-				return
-			}
-			http.Redirect(w, r, "/setup", http.StatusFound)
-			return
-		}
-
 		if isAPIPath(r.URL.Path) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
@@ -163,14 +135,13 @@ func (p *BasicProvider) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-// RegisterRoutes mounts /login, /logout, /totp, and /setup.
+// RegisterRoutes mounts /login, /logout, and /totp.
 func (p *BasicProvider) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /login", p.handleLoginPage)
 	mux.HandleFunc("POST /login", p.handleLogin)
 	mux.HandleFunc("GET /totp", p.handleTOTPPage)
 	mux.HandleFunc("POST /totp", p.handleTOTPVerify)
 	mux.HandleFunc("POST /logout", p.handleLogout)
-	mux.HandleFunc("GET /setup", p.handleSetupPage)
 }
 
 func (p *BasicProvider) handleLoginPage(w http.ResponseWriter, r *http.Request) {
@@ -178,11 +149,6 @@ func (p *BasicProvider) handleLoginPage(w http.ResponseWriter, r *http.Request) 
 	user := p.sessions.GetUser(r.Context())
 	if user != nil {
 		http.Redirect(w, r, "/", http.StatusFound)
-		return
-	}
-	// If admin has no password, redirect to setup.
-	if p.needsSetup(r.Context()) {
-		http.Redirect(w, r, "/setup", http.StatusFound)
 		return
 	}
 	serveLoginPage(w, "")
@@ -346,14 +312,6 @@ func (p *BasicProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
 
-func (p *BasicProvider) handleSetupPage(w http.ResponseWriter, r *http.Request) {
-	if !p.needsSetup(r.Context()) {
-		http.Redirect(w, r, "/login", http.StatusFound)
-		return
-	}
-	serveSetupPage(w)
-}
-
 // serveLoginPage renders the login form with an optional error message.
 func serveLoginPage(w http.ResponseWriter, errMsg string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -431,36 +389,3 @@ func serveTOTPPage(w http.ResponseWriter, errMsg string) {
 </html>`))
 }
 
-// serveSetupPage renders the password setup page.
-// The admin account is auto-created at server startup — just needs a password.
-func serveSetupPage(w http.ResponseWriter) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Write([]byte(`<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Vigo - Set Admin Password</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <div class="login-container">
-        <div class="login-card" style="max-width:480px">
-            <img src="/static/img/logo.svg" alt="Vigo" style="height:36px;margin-bottom:0.5rem">
-            <p class="login-subtitle">Set Admin Password</p>
-            <p style="color:#6c757d;text-align:center;margin-bottom:1.5rem;font-size:0.9rem">
-                An <strong>admin</strong> account has been created. Set its password to sign in.
-            </p>
-            <div style="background:#1e1e2e;color:#cdd6f4;border-radius:6px;padding:1rem;font-family:monospace;font-size:0.85rem;line-height:1.6;margin-bottom:1rem">
-                <div>vigocli secrets unlock</div>
-                <div>vigocli secrets set password vigo/web/auth/admin</div>
-            </div>
-            <hr style="border:none;border-top:1px solid #e0e0e0;margin:1.5rem 0">
-            <p style="color:#6c757d;text-align:center;font-size:0.85rem">
-                Once set, <a href="/login">sign in here</a>.
-            </p>
-        </div>
-    </div>
-</body>
-</html>`))
-}

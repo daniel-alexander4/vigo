@@ -95,7 +95,6 @@ var publicPaths = map[string]bool{
 	"/healthz":                true,
 	"/login":                  true,
 	"/totp":                   true,
-	"/setup":                  true,
 	"/api/v1/bootstrap":       true,
 	"/api/v1/secrets/rotated": true,
 	// fleet/pubkeys and swarm/puddle/names are public-by-construction:

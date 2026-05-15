@@ -920,15 +920,29 @@ func run() error {
 	tokensHandler := api.NewTokensHandler(tokenStore, authMethod)
 	tokensHandler.SetAuditWriter(auditWriter)
 
-	// Seed default admin account on first startup (no password — must be set via CLI).
-	if count, err := userStore.CountUsers(ctx); err == nil && count == 0 {
-		if _, err := userStore.Create(ctx, db.InsertUserParams{
-			Username: "admin",
-			Role:     "admin",
-		}); err != nil {
-			slog.Warn("failed to seed admin user", "error", err)
-		} else {
-			slog.Info("seeded default admin account (no password — run: vigocli secrets unlock && vigocli secrets set password vigo/web/auth/admin)")
+	// Admin-user posture check at startup. The bootstrap `admin` row is no
+	// longer auto-seeded — admin webusers are explicitly created via
+	// `vigocli webusers create <yourname> --role admin` and must map 1:1
+	// with a human OS user on the server host. Warn loud if either (a) no
+	// admin role user exists yet (fresh install, operator hasn't run the
+	// create command), or (b) the legacy `admin` row from a pre-0.53.0
+	// deployment is still around and should be retired.
+	if users, err := userStore.List(ctx); err == nil {
+		adminCount := 0
+		hasLegacyAdmin := false
+		for _, u := range users {
+			if u.Role == "admin" {
+				adminCount++
+			}
+			if u.Username == "admin" {
+				hasLegacyAdmin = true
+			}
+		}
+		if adminCount == 0 {
+			slog.Warn("no admin web users — create one with `vigocli webusers create <yourname> --role admin` from the server host (requires a matching human OS user)")
+		}
+		if hasLegacyAdmin {
+			slog.Warn("legacy `admin` web user present from pre-0.53.0 install — create a per-operator admin (vigocli webusers create <yourname> --role admin) and delete this row when ready (vigocli webusers delete admin)")
 		}
 	}
 

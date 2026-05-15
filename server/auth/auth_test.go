@@ -21,7 +21,6 @@ func TestIsPublicPath(t *testing.T) {
 		{"/metrics", true},
 		{"/healthz", true},
 		{"/login", true},
-		{"/setup", true},
 		{"/auth/callback", true},
 		{"/auth/isowebauth/challenge", true},
 		{"/static/css/style.css", true},

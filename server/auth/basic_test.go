@@ -48,10 +48,8 @@ func setupBasicProvider(t *testing.T) (*BasicProvider, *SessionManager, *UserSto
 	userStore := NewUserStore(queries)
 	tokenStore := NewTokenStore(queries)
 
-	// Seed an admin user so needsSetup() returns false for unauthenticated
-	// fall-through paths. Provider uses NullProvider which returns
-	// ("", nil) — needsSetup treats a nil error as "password set" and
-	// returns false.
+	// Seed an admin user so the auth middleware has something to authenticate
+	// against. Provider uses NullProvider for secrets.
 	admin, err := userStore.Create(context.Background(), db.InsertUserParams{
 		Username: "alice",
 		Role:     "admin",
