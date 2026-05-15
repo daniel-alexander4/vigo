@@ -235,8 +235,12 @@ func removeSentinel() error {
 // requireUnlocked is wired to secretsCmd.PersistentPreRunE. Lets exempt verbs
 // (init/generate-certs/unlock/lock/rotate/reset) through unconditionally;
 // every other verb requires a present, unexpired sentinel and bumps the
-// expiry on success.
+// expiry on success. SilenceUsage is set up-front so a gate refusal prints
+// only the diagnostic — cobra's default would otherwise dump the per-verb
+// usage banner because the root's PersistentPreRun (which silences usage)
+// never runs when PersistentPreRunE returns an error.
 func requireUnlocked(cmd *cobra.Command, _ []string) error {
+	cmd.SilenceUsage = true
 	if gateExemptVerbs[cmd.Name()] {
 		return nil
 	}
