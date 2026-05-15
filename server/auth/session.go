@@ -42,12 +42,13 @@ func NewSessionManager(sqlDB *sql.DB, idleTimeout time.Duration) *SessionManager
 
 // session key constants
 const (
-	sessionKeyUserID      = "user_id"
-	sessionKeyUsername    = "username"
-	sessionKeyDisplayName = "display_name"
-	sessionKeyEmail       = "email"
-	sessionKeyRole        = "role"
-	sessionKeyCSRFToken   = "csrf_token"
+	sessionKeyUserID       = "user_id"
+	sessionKeyUsername     = "username"
+	sessionKeyDisplayName  = "display_name"
+	sessionKeyEmail        = "email"
+	sessionKeyRole         = "role"
+	sessionKeySSHPublicKey = "ssh_public_key"
+	sessionKeyCSRFToken    = "csrf_token"
 )
 
 // PutUser stores the user in the session.
@@ -57,20 +58,24 @@ func (sm *SessionManager) PutUser(ctx context.Context, u *User) {
 	sm.Put(ctx, sessionKeyDisplayName, u.DisplayName)
 	sm.Put(ctx, sessionKeyEmail, u.Email)
 	sm.Put(ctx, sessionKeyRole, u.Role)
+	sm.Put(ctx, sessionKeySSHPublicKey, u.SSHPublicKey)
 }
 
 // GetUser retrieves the user from the session. Returns nil if no user is stored.
+// Rotated fields (role, email, ssh_public_key) require the operator to re-login
+// for changes to take effect — same contract for every cached field.
 func (sm *SessionManager) GetUser(ctx context.Context) *User {
 	id := sm.GetString(ctx, sessionKeyUserID)
 	if id == "" {
 		return nil
 	}
 	return &User{
-		ID:          id,
-		Username:    sm.GetString(ctx, sessionKeyUsername),
-		DisplayName: sm.GetString(ctx, sessionKeyDisplayName),
-		Email:       sm.GetString(ctx, sessionKeyEmail),
-		Role:        sm.GetString(ctx, sessionKeyRole),
+		ID:           id,
+		Username:     sm.GetString(ctx, sessionKeyUsername),
+		DisplayName:  sm.GetString(ctx, sessionKeyDisplayName),
+		Email:        sm.GetString(ctx, sessionKeyEmail),
+		Role:         sm.GetString(ctx, sessionKeyRole),
+		SSHPublicKey: sm.GetString(ctx, sessionKeySSHPublicKey),
 	}
 }
 
