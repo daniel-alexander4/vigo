@@ -96,8 +96,8 @@ bootstrap:
 
 # ── Authentication ────────────────────────────────────────────────────────
 # Web UI and REST API auth. Default: basic (username/password).
-# Passwords stored as bcrypt hashes in the local secrets provider
-# at vigo/web/auth/<username>. Set via: vigocli secrets set web
+# Passwords stored verbatim in the unlock-gated secrets vault at
+# vigo/web/auth/<username>. Set via: vigocli secrets set password
 
 # auth:
 #   method: basic                              # basic | none | oidc | isowebauth

@@ -30,7 +30,7 @@ resources:
     type: user
     username: dan
     comment: "Dan Smith"
-    password: "secret:vigo/users/dan-password-hash"
+    password: "secret:vigo/users/dan-password"
     shell: /bin/bash
     groups: "docker"
     purge_groups: "true"
