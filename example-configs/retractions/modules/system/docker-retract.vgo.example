@@ -16,9 +16,6 @@ resources:
     state: stopped
     enabled: false
 
-  # docker_image: pull-ubuntu — run docker rmi ubuntu:24.04 manually
-  # docker_image: pull-alpine — run docker rmi alpine:latest manually
-
   - name: remove-docker-daemon-json
     type: file
     target_path: /etc/docker/daemon.json

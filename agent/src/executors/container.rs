@@ -1,30 +1,40 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Docker container executor — manages Docker containers idempotently.
+//! Container executor — idempotent lifecycle for OCI containers via a local
+//! runtime. Docker today; Podman / containerd land as alternate runtimes when
+//! those backends are added (they'll thread through a `runtime:` field; the
+//! abstraction stays absent until there's a second implementation).
 
 use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
 use std::collections::HashMap;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-pub struct DockerContainerExecutor {
+const DOCKER: &str = "docker";
+
+/// Hard timeout on every Docker daemon call. Long enough for cold-cache image
+/// inspect; short enough that a hung daemon doesn't stall convergence.
+const DAEMON_TIMEOUT: Duration = Duration::from_secs(10);
+
+pub struct ContainerExecutor {
     pub runner: Box<dyn CommandRunner>,
 }
 
-impl DockerContainerExecutor {
+impl ContainerExecutor {
     pub fn new() -> Self {
         Self {
             runner: Box::new(DefaultRunner),
         }
     }
 
+    fn run(&self, args: &[&str]) -> std::io::Result<std::process::Output> {
+        self.runner
+            .run_niced_timeout(DOCKER, args, 0, DAEMON_TIMEOUT)
+    }
+
     fn container_status(&self, name: &str) -> Option<String> {
         let output = self
-            .runner
-            .run(
-                "docker",
-                &["inspect", "--format", "{{.State.Status}}", name],
-            )
+            .run(&["inspect", "--format", "{{.State.Status}}", name])
             .ok()?;
         if output.status.success() {
             Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
@@ -35,11 +45,7 @@ impl DockerContainerExecutor {
 
     fn container_image(&self, name: &str) -> Option<String> {
         let output = self
-            .runner
-            .run(
-                "docker",
-                &["inspect", "--format", "{{.Config.Image}}", name],
-            )
+            .run(&["inspect", "--format", "{{.Config.Image}}", name])
             .ok()?;
         if output.status.success() {
             Some(String::from_utf8_lossy(&output.stdout).trim().to_string())
@@ -105,18 +111,15 @@ impl DockerContainerExecutor {
     }
 }
 
-impl Executor for DockerContainerExecutor {
+impl Executor for ContainerExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let name = params
-            .get("container")
-            .cloned()
-            .unwrap_or_default();
+        let name = params.get("container").cloned().unwrap_or_default();
 
-        let mut result = ResourceResult::new("docker_container", &name);
+        let mut result = ResourceResult::new("container", &name);
 
         if name.is_empty() {
-            result.error = Some("docker_container executor: container param is required".into());
+            result.error = Some("container executor: container param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -132,13 +135,13 @@ impl Executor for DockerContainerExecutor {
         match state {
             "running" => {
                 if image.is_empty() {
-                    result.error = Some("docker_container executor: image required for state=running".into());
+                    result.error =
+                        Some("container executor: image required for state=running".into());
                     result.duration_ms = start.elapsed().as_millis() as i32;
                     return result;
                 }
 
                 if exists && running {
-                    // Check if image changed.
                     let current_image = self.container_image(&name).unwrap_or_default();
                     if current_image == image {
                         result.action = Action::None;
@@ -146,7 +149,6 @@ impl Executor for DockerContainerExecutor {
                         return result;
                     }
 
-                    // Image changed — recreate.
                     result.action = Action::Updated;
                     result.changed = true;
 
@@ -155,10 +157,9 @@ impl Executor for DockerContainerExecutor {
                         return result;
                     }
 
-                    let _ = self.runner.run("docker", &["stop", &name]);
-                    let _ = self.runner.run("docker", &["rm", &name]);
+                    let _ = self.run(&["stop", &name]);
+                    let _ = self.run(&["rm", &name]);
                 } else if exists {
-                    // Container exists but not running — start it.
                     result.action = Action::Updated;
                     result.changed = true;
 
@@ -167,7 +168,7 @@ impl Executor for DockerContainerExecutor {
                         return result;
                     }
 
-                    match self.runner.run("docker", &["start", &name]) {
+                    match self.run(&["start", &name]) {
                         Ok(o) if !o.status.success() => {
                             let stderr = String::from_utf8_lossy(&o.stderr);
                             result.error = Some(format!("docker start: {}", stderr));
@@ -187,15 +188,13 @@ impl Executor for DockerContainerExecutor {
                     return result;
                 }
 
-                // Pull image if needed.
                 if pull == "always" || (pull == "missing" && !exists) {
-                    let _ = self.runner.run("docker", &["pull", &image]);
+                    let _ = self.run(&["pull", &image]);
                 }
 
-                // Create container.
                 let create_args = self.build_create_args(&name, &image, params);
                 let arg_refs: Vec<&str> = create_args.iter().map(|s| s.as_str()).collect();
-                match self.runner.run("docker", &arg_refs) {
+                match self.run(&arg_refs) {
                     Ok(o) if !o.status.success() => {
                         let stderr = String::from_utf8_lossy(&o.stderr);
                         result.error = Some(format!("docker create: {}", stderr));
@@ -210,44 +209,13 @@ impl Executor for DockerContainerExecutor {
                     _ => {}
                 }
 
-                // Start container.
-                match self.runner.run("docker", &["start", &name]) {
+                match self.run(&["start", &name]) {
                     Ok(o) if !o.status.success() => {
                         let stderr = String::from_utf8_lossy(&o.stderr);
                         result.error = Some(format!("docker start: {}", stderr));
                     }
                     Err(e) => result.error = Some(format!("docker start: {}", e)),
                     _ => {}
-                }
-            }
-            "present" => {
-                if exists {
-                    result.action = Action::None;
-                } else {
-                    if image.is_empty() {
-                        result.error = Some("docker_container executor: image required for state=present".into());
-                        result.duration_ms = start.elapsed().as_millis() as i32;
-                        return result;
-                    }
-
-                    result.action = Action::Created;
-                    result.changed = true;
-
-                    if !dry_run {
-                        if pull != "never" {
-                            let _ = self.runner.run("docker", &["pull", &image]);
-                        }
-                        let create_args = self.build_create_args(&name, &image, params);
-                        let arg_refs: Vec<&str> = create_args.iter().map(|s| s.as_str()).collect();
-                        match self.runner.run("docker", &arg_refs) {
-                            Ok(o) if !o.status.success() => {
-                                let stderr = String::from_utf8_lossy(&o.stderr);
-                                result.error = Some(format!("docker create: {}", stderr));
-                            }
-                            Err(e) => result.error = Some(format!("docker create: {}", e)),
-                            _ => {}
-                        }
-                    }
                 }
             }
             "stopped" => {
@@ -257,7 +225,7 @@ impl Executor for DockerContainerExecutor {
                     result.action = Action::Updated;
                     result.changed = true;
                     if !dry_run {
-                        match self.runner.run("docker", &["stop", &name]) {
+                        match self.run(&["stop", &name]) {
                             Ok(o) if !o.status.success() => {
                                 let stderr = String::from_utf8_lossy(&o.stderr);
                                 result.error = Some(format!("docker stop: {}", stderr));
@@ -276,9 +244,9 @@ impl Executor for DockerContainerExecutor {
                     result.changed = true;
                     if !dry_run {
                         if running {
-                            let _ = self.runner.run("docker", &["stop", &name]);
+                            let _ = self.run(&["stop", &name]);
                         }
-                        match self.runner.run("docker", &["rm", &name]) {
+                        match self.run(&["rm", &name]) {
                             Ok(o) if !o.status.success() => {
                                 let stderr = String::from_utf8_lossy(&o.stderr);
                                 result.error = Some(format!("docker rm: {}", stderr));
@@ -290,7 +258,8 @@ impl Executor for DockerContainerExecutor {
                 }
             }
             _ => {
-                result.error = Some(format!("docker_container executor: unknown state {:?}", state));
+                result.error =
+                    Some(format!("container executor: unknown state {:?}", state));
             }
         }
 
@@ -309,13 +278,17 @@ mod tests {
     #[test]
     fn missing_name_errors() {
         let mock = MockRunner::new(vec![]);
-        let exec = DockerContainerExecutor {
+        let exec = ContainerExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(&make_params(&[]), false);
         assert!(result.error.is_some());
         assert!(
-            result.error.as_deref().unwrap().contains("container param is required"),
+            result
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("container param is required"),
             "unexpected error: {:?}",
             result.error
         );
@@ -323,14 +296,12 @@ mod tests {
 
     #[test]
     fn running_container_already_running_same_image() {
-        // container_status() -> docker inspect --format {{.State.Status}} -> "running"
-        // container_image()  -> docker inspect --format {{.Config.Image}} -> "nginx:latest"
         let mock = MockRunner::new(vec![
             ok_output("running\n"),
             ok_output("nginx:latest\n"),
         ]);
         let calls = Arc::clone(&mock.calls);
-        let exec = DockerContainerExecutor {
+        let exec = ContainerExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
@@ -346,23 +317,20 @@ mod tests {
         assert!(result.error.is_none());
         let calls = calls.lock().unwrap();
         assert_eq!(calls.len(), 2);
-        // Both calls are docker inspect
         assert_eq!(calls[0].0, "docker");
         assert_eq!(calls[1].0, "docker");
     }
 
     #[test]
     fn create_and_start_new_container() {
-        // container_status() -> inspect fails (not exists)
-        // pull, create, start
         let mock = MockRunner::new(vec![
-            fail_output("No such container"),  // inspect (status)
-            ok_output(""),                      // docker pull
-            ok_output(""),                      // docker create
-            ok_output(""),                      // docker start
+            fail_output("No such container"),
+            ok_output(""),
+            ok_output(""),
+            ok_output(""),
         ]);
         let calls = Arc::clone(&mock.calls);
-        let exec = DockerContainerExecutor {
+        let exec = ContainerExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
@@ -375,10 +343,14 @@ mod tests {
         );
         assert_eq!(result.action, Action::Created);
         assert!(result.changed);
-        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(
+            result.error.is_none(),
+            "unexpected error: {:?}",
+            result.error
+        );
         let calls = calls.lock().unwrap();
         assert_eq!(calls.len(), 4);
-        assert_eq!(calls[0].0, "docker"); // inspect
+        assert_eq!(calls[0].0, "docker");
         assert_eq!(calls[1].1[0], "pull");
         assert_eq!(calls[2].1[0], "create");
         assert_eq!(calls[3].1[0], "start");
@@ -386,14 +358,9 @@ mod tests {
 
     #[test]
     fn start_stopped_container() {
-        // container_status() -> "exited" (exists but not running)
-        // docker start
-        let mock = MockRunner::new(vec![
-            ok_output("exited\n"),  // inspect (status)
-            ok_output(""),           // docker start
-        ]);
+        let mock = MockRunner::new(vec![ok_output("exited\n"), ok_output("")]);
         let calls = Arc::clone(&mock.calls);
-        let exec = DockerContainerExecutor {
+        let exec = ContainerExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
@@ -414,21 +381,13 @@ mod tests {
 
     #[test]
     fn stop_running_container() {
-        // container_status() -> "running"
-        // docker stop
-        let mock = MockRunner::new(vec![
-            ok_output("running\n"),  // inspect (status)
-            ok_output(""),            // docker stop
-        ]);
+        let mock = MockRunner::new(vec![ok_output("running\n"), ok_output("")]);
         let calls = Arc::clone(&mock.calls);
-        let exec = DockerContainerExecutor {
+        let exec = ContainerExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
-            &make_params(&[
-                ("container", "web"),
-                ("state", "stopped"),
-            ]),
+            &make_params(&[("container", "web"), ("state", "stopped")]),
             false,
         );
         assert_eq!(result.action, Action::Updated);
@@ -441,22 +400,17 @@ mod tests {
 
     #[test]
     fn absent_stops_and_removes() {
-        // container_status() -> "running"
-        // docker stop, docker rm
         let mock = MockRunner::new(vec![
-            ok_output("running\n"),  // inspect (status)
-            ok_output(""),            // docker stop
-            ok_output(""),            // docker rm
+            ok_output("running\n"),
+            ok_output(""),
+            ok_output(""),
         ]);
         let calls = Arc::clone(&mock.calls);
-        let exec = DockerContainerExecutor {
+        let exec = ContainerExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
-            &make_params(&[
-                ("container", "web"),
-                ("state", "absent"),
-            ]),
+            &make_params(&[("container", "web"), ("state", "absent")]),
             false,
         );
         assert_eq!(result.action, Action::Deleted);
@@ -470,18 +424,12 @@ mod tests {
 
     #[test]
     fn absent_noop_when_missing() {
-        // container_status() -> None (inspect fails)
-        let mock = MockRunner::new(vec![
-            fail_output("No such container"),
-        ]);
-        let exec = DockerContainerExecutor {
+        let mock = MockRunner::new(vec![fail_output("No such container")]);
+        let exec = ContainerExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
-            &make_params(&[
-                ("container", "web"),
-                ("state", "absent"),
-            ]),
+            &make_params(&[("container", "web"), ("state", "absent")]),
             false,
         );
         assert_eq!(result.action, Action::None);
@@ -491,13 +439,9 @@ mod tests {
 
     #[test]
     fn dry_run_does_not_create() {
-        // container_status() -> fails (not exists)
-        // dry_run=true: should not call pull/create/start
-        let mock = MockRunner::new(vec![
-            fail_output("No such container"),
-        ]);
+        let mock = MockRunner::new(vec![fail_output("No such container")]);
         let calls = Arc::clone(&mock.calls);
-        let exec = DockerContainerExecutor {
+        let exec = ContainerExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
@@ -511,8 +455,40 @@ mod tests {
         assert_eq!(result.action, Action::Created);
         assert!(result.changed);
         assert!(result.error.is_none());
-        // Only the inspect call should have been made
         let calls = calls.lock().unwrap();
-        assert_eq!(calls.len(), 1, "dry_run should only call inspect, got {:?}", *calls);
+        assert_eq!(
+            calls.len(),
+            1,
+            "dry_run should only call inspect, got {:?}",
+            *calls
+        );
+    }
+
+    #[test]
+    fn present_state_no_longer_accepted() {
+        // `present` was a Docker-API leakage. Vigo's three-state vocab is
+        // running / stopped / absent. Use depends_on for staged starts.
+        let mock = MockRunner::new(vec![fail_output("No such container")]);
+        let exec = ContainerExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("container", "web"),
+                ("image", "nginx:latest"),
+                ("state", "present"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(
+            result
+                .error
+                .as_deref()
+                .unwrap()
+                .contains("unknown state"),
+            "unexpected error: {:?}",
+            result.error
+        );
     }
 }

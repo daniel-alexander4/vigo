@@ -1,7 +1,7 @@
 
 # Executor Reference
 
-Vigo ships 70 built-in resource types that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
+Vigo ships 69 built-in resource types that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
 
 ## How Executors Work
 
@@ -16,7 +16,7 @@ Every resource in a `.vgo` config declares a `type:` field that maps to an execu
 | `Skipped` | Resource was skipped due to a guard condition. |
 | `Blocked` | Resource could not be applied due to an infrastructure issue (broken repo, expired GPG key, disk full). Maps to `diverged` convergence. |
 
-## Cross-Platform Executors (25)
+## Cross-Platform Executors (24)
 
 These executors compile and run on all seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows).
 
@@ -42,9 +42,8 @@ These executors compile and run on all seven supported platforms (Linux, macOS, 
 | `pip` | Manage Python packages via pip | [pip](pip.md) |
 | `gem` | Manage Ruby gems | [gem](gem.md) |
 | `npm` | Manage Node.js packages via npm | [npm](npm.md) |
+| `container` | Manage OCI containers (Docker today; Podman/containerd later) | [container](container.md) |
 | `docker_compose` | Manage Docker Compose stacks | [docker_compose](docker_compose.md) |
-| `docker_container` | Manage Docker containers | [docker_container](docker_container.md) |
-| `docker_image` | Manage Docker images | [docker_image](docker_image.md) |
 | `reboot` | Trigger or cancel system reboots | [reboot](reboot.md) |
 | `custom` | Run external scripts via JSON protocol | [custom](custom.md) |
 

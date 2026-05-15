@@ -166,7 +166,7 @@ resources:
     notify: [redis-container]
 
   - name: redis-container
-    type: docker_container
+    type: container
     container: redis
     image: redis:7-alpine
     state: running
@@ -388,7 +388,7 @@ nodes:
 | **Services** | `service`, `systemd_dropin` |
 | **Users & groups** | `user`, `group`, `sshkey` |
 | **System** | `exec`, `cron`, `hostname`, `timezone`, `sysctl`, `mount`, `swap`, `tmpfile`, `host`, `kernel_module`, `firewall`, `selinux`, `reboot`, `process` |
-| **Containers** | `docker_container`, `docker_image`, `docker_compose` |
+| **Containers** | `container`, `docker_compose` |
 | **Network devices** | `ssh_exec`, `network_config`, `cisco_vlan`, `cisco_interface`, `cisco_acl`, `junos_interface`, `network_ntp`, `network_syslog`, `network_snmp`, `network_user`, `network_banner`, `network_interface` |
 | **macOS** | `service_macos`, `user_macos`, `group_macos`, `hostname_macos`, `timezone_macos` |
 | **BSD** | `firewall_pf`, `hostname_bsd`, `mount_bsd`, `swap_bsd`, `sysctl_bsd`, `timezone_bsd`, `service_freebsd`, `user_freebsd`, `group_freebsd`, `kernel_module_freebsd`, `service_openbsd` |

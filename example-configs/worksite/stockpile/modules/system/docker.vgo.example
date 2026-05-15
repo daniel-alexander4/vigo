@@ -67,19 +67,6 @@ resources:
     depends_on: [install-docker]
     notify: [docker-service]
 
-  # Pre-pull common base images so first container starts don't stall
-  - name: pull-alpine
-    type: docker_image
-    image: alpine
-    tag: latest
-    depends_on: [docker-service]
-
-  - name: pull-ubuntu
-    type: docker_image
-    image: ubuntu
-    tag: "24.04"
-    depends_on: [docker-service]
-
   - name: docker-service
     type: service
     service: docker

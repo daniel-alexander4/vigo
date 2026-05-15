@@ -9,7 +9,7 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 
 - [Nginx Module](nginx-module.md) -- Package, config file, and service with notify chain
 - [Multi-Environment Setup](multi-env.md) -- Production/staging with `environments.vgo`
-- [Docker Stack Management](docker-stack.md) -- Container lifecycle with `docker_container` and `docker_image` executors
+- [Docker Stack Management](docker-stack.md) -- Container lifecycle with the `container` executor
 - [Security Hardening](security-hardening.md) -- Firewall, fail2ban, SSH, and sudo with `depends_on`
 - [Monitoring Stack](monitoring-stack.md) -- Prometheus, node_exporter, and Grafana
 - [Database Cluster](database-cluster.md) -- PostgreSQL with `secret:` references

@@ -1,7 +1,7 @@
 
 # Docker Stack Management
 
-This example uses the `docker_image`, `docker_container`, and `docker_compose` [executors](../reference/vigo/resources/_index.md) to manage containerized services.
+This example uses the `container` and `docker_compose` [executors](../reference/vigo/resources/_index.md) to manage containerized services. The `container` executor pulls images on demand — no separate image-pull resource is needed.
 
 ## Module Definition
 
@@ -14,21 +14,14 @@ vars:
   redis_port: "6379"
   redis_maxmemory: 256mb
 resources:
-  - name: redis-image
-    type: docker_image
-    image: redis
-    tag: "{{ .Vars.redis_version }}"
-    state: present
-
   - name: redis-container
-    type: docker_container
+    type: container
     container: redis
     image: "redis:{{ .Vars.redis_version }}"
     state: running
-    ports:
-      - "{{ .Vars.redis_port }}:6379"
+    ports: "{{ .Vars.redis_port }}:6379"
     command: "redis-server --maxmemory {{ .Vars.redis_maxmemory }}"
-    restart_policy: unless-stopped
+    restart: unless-stopped
 ```
 
 ## Multi-Container Stack
@@ -44,23 +37,14 @@ vars:
   app_tag: latest
   app_replicas: "1"
 resources:
-  - name: app-image
-    type: docker_image
-    image: "{{ .Vars.app_image }}"
-    tag: "{{ .Vars.app_tag }}"
-    state: present
-
   - name: app-container
-    type: docker_container
+    type: container
     container: webapp
     image: "{{ .Vars.app_image }}:{{ .Vars.app_tag }}"
     state: running
-    ports:
-      - "8080:8080"
-    environment:
-      REDIS_URL: "redis://localhost:{{ .Vars.redis_port }}"
-      DATABASE_URL: "secret:vigo/webapp/database_url"
-    restart_policy: unless-stopped
+    ports: "8080:8080"
+    env: "REDIS_URL=redis://localhost:{{ .Vars.redis_port }},DATABASE_URL=secret:vigo/webapp/database_url"
+    restart: unless-stopped
     depends_on:
       - redis-container
 ```
@@ -93,9 +77,8 @@ envoys:
 ## How It Works
 
 1. The `redis` module is applied first because `app-stack` declares `depends_on: [redis]`.
-2. Within each module, the `docker_image` resource ensures the image is pulled.
-3. The `docker_container` resource ensures the container is running with the specified configuration.
-4. If the image tag changes (e.g., deploying a new version), the container is recreated with the new image.
+2. Each `container` resource pulls its image (if missing) and creates + starts the container in one idempotent step.
+3. If the image tag changes (e.g., deploying a new version), the container is recreated with the new image.
 
 ## Rolling Deployments
 
@@ -117,7 +100,6 @@ vigocli task run \
 ```
 
 ## Using Docker Compose
-
 
 For multi-container stacks that already have a `docker-compose.yml`, use the `docker_compose` executor instead of managing individual containers:
 
@@ -157,10 +139,10 @@ The `docker_compose` executor checks if all services are running via `docker com
 
 ## Container Lifecycle
 
-The `docker_container` executor is idempotent:
+The `container` executor is idempotent:
 
-- If the container does not exist, it is created and started
-- If the container exists with the wrong configuration (image, ports, env), it is recreated
+- If the container does not exist, the image is pulled (if `pull: missing` or `always`) and the container is created and started
+- If the container exists with the wrong image, it is stopped, removed, and recreated
 - If the container exists and is stopped, it is started
 - If the container exists and matches the desired state, no action is taken
 ---
