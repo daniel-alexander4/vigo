@@ -358,7 +358,7 @@ Compliance claims and waivers use **distinct filenames in distinct trees** — f
 
 **Mixed keys are a hard error.** A `waivers:` block inside `stockpile/compliance.vgo`, or a `compliance:` block inside `stockpile/waivers.vgo` — both rejected by `vigocli config publish` with an actionable move hint, and rejected on reload if someone hand-edits `.live/`.
 
-**Claims** from a `stockpile/**/compliance.vgo` are unioned into every module defined anywhere beneath that file. A module at `stockpile/modules/users/dan.vgo` inherits claims from `stockpile/modules/users/compliance.vgo` AND from `stockpile/compliance.vgo` if both exist, plus whatever the module itself declares in its own inline `compliance:` block. All sources union with dedupe.
+**Claims** from a `stockpile/**/compliance.vgo` are unioned into every module defined anywhere beneath that file. A usercrate at `stockpile/usercrates/dan.vgo` inherits claims from `stockpile/usercrates/compliance.vgo` AND from `stockpile/compliance.vgo` if both exist, plus whatever the usercrate itself declares in its own inline `compliance:` block. All sources union with dedupe.
 
 **Waivers** apply only to envoys whose matchfile lives under the same directory subtree. `stockpile/customerA/waivers.vgo` waivers don't cross into `stockpile/customerB/`. Waived controls count as "accepted" in compliance scoring and render with a distinct "waived" badge on dashboards — not hidden.
 
@@ -370,7 +370,7 @@ compliance:
 ```
 
 ```yaml
-# stockpile/modules/users/compliance.vgo — claims scoped to user modules
+# stockpile/usercrates/compliance.vgo — claims scoped to usercrates
 compliance:
   cis: ["5.4.1"]
   nist-800-53: ["AC-3", "AC-6", "AC-6(1)", "IA-2", "IA-5"]
