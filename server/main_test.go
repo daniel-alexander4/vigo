@@ -6,7 +6,30 @@ package main
 import (
 	"reflect"
 	"testing"
+	"time"
 )
+
+func TestParseRetention(t *testing.T) {
+	day := 24 * time.Hour
+	tests := []struct {
+		input string
+		want  time.Duration
+	}{
+		{"", defaultRetention},
+		{"30d", 30 * day},
+		{"1d", day},
+		{"720h", 720 * time.Hour},
+		{"45m", 45 * time.Minute},
+		{"garbage", defaultRetention},
+		{"0d", defaultRetention},  // days must be > 0; falls through to ParseDuration which rejects "0d"
+		{"-5d", defaultRetention}, // same fall-through path
+	}
+	for _, tt := range tests {
+		if got := parseRetention(tt.input); got != tt.want {
+			t.Errorf("parseRetention(%q) = %v, want %v", tt.input, got, tt.want)
+		}
+	}
+}
 
 func TestParseMemoryLimit(t *testing.T) {
 	tests := []struct {

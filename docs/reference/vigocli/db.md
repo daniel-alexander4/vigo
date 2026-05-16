@@ -40,7 +40,7 @@ vigocli db vacuum --force
 
 ### prune
 
-Delete history rows older than a chosen age — runs, push_runs, workflow_runs, file_snapshots, convergence_history, compliance_history. Same query path as the daily background pruner. Use this once after enabling `database.retention` on a DB that has accumulated more history than the new retention window allows. Pair with `vigocli db vacuum` to return reclaimed pages to the OS.
+Delete history rows older than a chosen age — runs (cascades run_results), push_runs, workflow_runs, file_snapshots, convergence_history, compliance_history. Same query path as the daily background pruner. Use this when you want to reclaim space immediately — typically after lowering `database.retention` from a higher value, or on a DB whose accumulated history predates the current window. Pair with `vigocli db vacuum` to return reclaimed pages to the OS.
 
 ```bash
 vigocli db prune --older-than 30d

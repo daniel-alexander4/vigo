@@ -339,7 +339,7 @@ If you're completely locked out (can't sudo, can't push), you'll need console or
 4. Monitor `vigo_database_size_bytes` for database growth.
 
 **Mitigation:**
-- Configure `database.retention` to prune old records
+- Lower `database.retention` (default `30d`) to shrink the retained window
 - Use `run_store: database` instead of `memory` for large fleets
 
 ### Secret Resolution Failures
