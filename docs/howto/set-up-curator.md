@@ -142,6 +142,22 @@ Reading is **ungated** — artifacts are fleet-readable. `pull` materializes int
 
 The operator-moderation backstop is `vigocli swarm curator block <ref>` (admin-only). The server stops resolving/relaying the blocked artifact fleet-wide regardless of who published it. The signed entry still exists and gossips, and the DR bytes still sit on swarm-enabled envoys — only a publisher `vigo swarm curator rm` truly purges.
 
+### Leaving curator / decommissioning a user
+
+Unlike longdrawer/lockbox there's no per-user state under `/var/lib/vigo/` to orphan — curator's root-side state (`/var/lib/vigo/artifacts/catalog.json`, `cache.json`, materialized blob tree) is fleet-global, not user-partitioned. And `userdel -r <user>` removes `~/.vigo-curator/` along with the rest of the home dir, so the common case self-cleans.
+
+What DOES linger after a `userdel -r` if no pre-cleanup was done: this envoy's **manifest-side seed advertisements** for every blob the departed user published. Peers' fleet caches keep resolving those entries until the next manifest GC ages them out, and `vigocli swarm curator fleet` will keep listing the departed user as the seeder.
+
+**Pre-`userdel -r` workflow** — as the user, run:
+
+```bash
+vigo swarm curator purge --yes      # wipes ~/.vigo-curator/ + revokes this envoy's manifest seeds
+```
+
+Then `userdel -r` is safe. `purge` does NOT unpublish across the fleet — peers retain the last entry they saw. For full retraction of a specific artifact, the publisher runs `vigo swarm curator rm <artifact_id>` (signs and gossips a tombstone) BEFORE `purge`.
+
+If `userdel -r` already happened without prior `purge`: the user's `~/.vigo-curator/` is gone, the published entries are still in every peer's fleet catalog forever (until the publishing puddle's identity comes back to retract them — typically never). The operator-moderation `vigocli swarm curator block <ref>` is the only fleet-wide remedy.
+
 ### CLI surfaces
 
 Two thin clients of the same backend:
