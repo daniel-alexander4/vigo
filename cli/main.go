@@ -49,7 +49,6 @@ func init() {
 		traitsCmd,
 		cliLicenseCmd,
 		doctorCmd,
-		spannerCmd,
 		askCmd,
 		workflowCmd,
 		secretsCmd,
@@ -66,6 +65,6 @@ func init() {
 		scrierCmd,
 		swarmCmd,
 		sandgorgonCmd,
-		tungolCmd,
+		tungolCmd, // hosts tungol-wide status + steorra + ops-puddle subtrees; replaces the retired `vigocli spanner` namespace
 	)
 }

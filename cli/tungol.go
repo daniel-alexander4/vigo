@@ -8,22 +8,33 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"text/tabwriter"
 
 	"git.alexander4.io/vigo/server/puddle"
 	"git.alexander4.io/vigo/server/secrets"
 	"github.com/spf13/cobra"
 )
 
-// tungolCmd is the new top-level namespace for the spanner-redesign
-// surface (federated control-plane peer-equal model). For now it only
-// hosts ops-puddle lifecycle (ADR-025 Slice 2); the steorra verbs land
-// during the spanner→tungol rename slice of Phase 0.
+// tungolCmd is the top-level namespace for the federated control-plane
+// surface (peer-equal redesign of spanner). Hosts tungol-wide verbs
+// (status) and the per-noun groups (steorra, ops-puddle).
 var tungolCmd = &cobra.Command{
 	Use:   "tungol",
 	Short: "Federated control-plane operations (peer-equal redesign of spanner)",
-	Long: `Operations for the tungol (federation) and steorra (single vigosrv) primitives
-of the spanner-redesign architecture. Today this only hosts ops-puddle
-lifecycle — the broader tungol/steorra surface lands as the redesign progresses.`,
+	Long: `Operations for the tungol (federation) and steorra (single vigosrv)
+primitives of the spanner-redesign architecture. Hub-spoke is still
+the wire implementation underneath — the user surface (this CLI tree,
+the /tungol UI route, /api/v1/tungol/* REST routes) speaks the new
+vocabulary; the YAML config block keeps the legacy spanner: key
+through Phase 0 to avoid forcing every operator to re-edit their
+server.yaml mid-redesign.`,
+}
+
+var tungolStatusCmd = &cobra.Command{
+	Use:   "status",
+	Short: "Show this server's tungol role (standalone / hub / spoke) and steorra availability",
+	RunE:  runTungolStatus,
 }
 
 var tungolOpsPuddleCmd = &cobra.Command{
@@ -61,6 +72,8 @@ func init() {
 	tungolCmd.PersistentFlags().String("puddle-dir", puddle.DefaultDir, "Directory holding this vigosrv's service-account puddle")
 	tungolCmd.PersistentFlags().String("ops-puddle-dir", puddle.OpsDefaultDir, "Directory holding the ops-puddle wrap (per-host)")
 
+	tungolCmd.AddCommand(tungolStatusCmd)
+	tungolCmd.AddCommand(tungolSteorraCmd)
 	tungolCmd.AddCommand(tungolOpsPuddleCmd)
 	tungolOpsPuddleCmd.AddCommand(tungolOpsPuddleInitCmd)
 	tungolOpsPuddleCmd.AddCommand(tungolOpsPuddleStatusCmd)
@@ -165,4 +178,81 @@ func trimTrailingNewline(s string) string {
 		return s[:len(s)-1]
 	}
 	return s
+}
+
+// runTungolStatus is the migrated body of the old `vigocli spanner status`,
+// rewritten in tungol/steorra vocabulary. The server's hub-spoke
+// implementation backs this same way it did before — only the operator-
+// facing wording has changed.
+func runTungolStatus(cmd *cobra.Command, args []string) error {
+	client := newAPIClient()
+
+	var resp struct {
+		Role      string `json:"role"`
+		SteorraID string `json:"steorra_id"`
+		Steorras  []struct {
+			ID             string   `json:"id"`
+			Addr           string   `json:"addr"`
+			Patterns       []string `json:"patterns"`
+			Healthy        bool     `json:"healthy"`
+			EnvoyCount     int32    `json:"envoy_count"`
+			Converged      int32    `json:"converged"`
+			Relapsed       int32    `json:"relapsed"`
+			Diverged       int32    `json:"diverged"`
+			Failed         int32    `json:"failed"`
+			Offline        int32    `json:"offline"`
+			NoData         int32    `json:"no_data"`
+			ConvergencePct float32  `json:"compliance_pct"`
+			LatencyMs      int64    `json:"latency_ms"`
+			Error          string   `json:"error"`
+		} `json:"steorras"`
+	}
+
+	if err := client.get("/api/v1/tungol/status", &resp); err != nil {
+		return fmt.Errorf("cannot reach server: %w", err)
+	}
+
+	fmt.Printf("  Role: %s\n", bold(resp.Role))
+
+	if resp.SteorraID != "" {
+		fmt.Printf("  Steorra ID: %s\n", resp.SteorraID)
+	}
+
+	if resp.Role == "standalone" {
+		fmt.Println("  No tungol configured.")
+		return nil
+	}
+
+	if len(resp.Steorras) == 0 {
+		return nil
+	}
+
+	healthy := 0
+	var totalEnvoys int32
+	for _, s := range resp.Steorras {
+		if s.Healthy {
+			healthy++
+		}
+		totalEnvoys += s.EnvoyCount
+	}
+
+	fmt.Printf("  Steorras: %d (%d healthy)\n", len(resp.Steorras), healthy)
+	fmt.Printf("  Total Envoys: %d\n\n", totalEnvoys)
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("ADDRESS"), header("ENVOYS"), header("COMPLIANT"), header("COMPLIANCE"), header("LATENCY"), header("PATTERNS"), header("STATUS"))
+	for _, s := range resp.Steorras {
+		status := colorStatus("healthy")
+		if !s.Healthy {
+			status = colorStatus("unreachable")
+		}
+		patterns := strings.Join(s.Patterns, ", ")
+		compliant := fmt.Sprintf("%d/%d", s.Converged, s.EnvoyCount)
+		convPct := fmt.Sprintf("%.1f%%", s.ConvergencePct)
+		latency := fmt.Sprintf("%dms", s.LatencyMs)
+		fmt.Fprintf(w, "  %s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n", s.ID, s.Addr, s.EnvoyCount, compliant, convPct, latency, patterns, status)
+	}
+	w.Flush()
+
+	return nil
 }

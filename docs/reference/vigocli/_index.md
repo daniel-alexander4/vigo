@@ -40,8 +40,7 @@ Vigo has two CLI binaries:
 | [inventory](inventory.md) | Query envoys by traits |
 | [doctor](doctor.md) | Run health checks against the Vigo server |
 | [risk](risk.md) | Show fleet-wide or per-envoy risk scores |
-| [spanner](spanner.md) | Manage and inspect spanner status |
-| [tungol](tungol.md) | Federated control-plane operations (peer-equal redesign of spanner) |
+| [tungol](tungol.md) | Federated control-plane operations (replaces the retired `spanner` command) |
 | [ask](ask.md) | Ask the AI assistant a question about your fleet |
 | [config](config.md) | Config editing, inspection, publish history, rollback, and freeze |
 | [secrets](secrets.md) | Manage local encrypted secrets |

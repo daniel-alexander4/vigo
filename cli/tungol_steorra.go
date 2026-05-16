@@ -1,0 +1,488 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: LicenseRef-Proprietary
+
+package main
+
+import (
+	"fmt"
+	"os"
+	"strings"
+	"text/tabwriter"
+
+	"github.com/spf13/cobra"
+)
+
+// tungolSteorraCmd is the per-steorra noun group under `vigocli tungol`.
+// Hosts the verbs that today were `vigocli spanner spoke-*`, `reassign`,
+// `drain`, `add-spoke`, and `remove-spoke`. The underlying server is
+// still hub-spoke; only the operator surface speaks the new vocabulary.
+var tungolSteorraCmd = &cobra.Command{
+	Use:   "steorra",
+	Short: "Operate on individual steorras (formerly: spanner spokes)",
+	Long: `Verbs that target a single steorra — listing, inspecting, draining,
+reassigning envoys, and managing membership. The bare command (no verb)
+prints this help, per ADR-Phase-0 design — it does NOT default to 'list'.`,
+}
+
+var tungolSteorraListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List all registered steorras with status, latency, and envoy counts",
+	RunE:  runTungolSteorraList,
+}
+
+var tungolSteorraShowCmd = &cobra.Command{
+	Use:   "show <steorra-id>",
+	Short: "Show a steorra's compliance breakdown, envoy count, and recent activity",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runTungolSteorraShow,
+}
+
+var tungolSteorraEnvoysCmd = &cobra.Command{
+	Use:   "envoys <steorra-id>",
+	Short: "List all envoys managed by a specific steorra",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runTungolSteorraEnvoys,
+}
+
+var tungolSteorraRunsCmd = &cobra.Command{
+	Use:   "runs <steorra-id>",
+	Short: "List recent convergence runs on a specific steorra",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runTungolSteorraRuns,
+}
+
+var tungolSteorraPushCmd = &cobra.Command{
+	Use:   "push <steorra-id>",
+	Short: "Trigger immediate check-in for all envoys on a specific steorra",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runTungolSteorraPush,
+}
+
+var tungolSteorraReassignCmd = &cobra.Command{
+	Use:   "reassign <envoy-id>",
+	Short: "Move an envoy to a different steorra without re-enrollment",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runTungolSteorraReassign,
+}
+
+var tungolSteorraDrainCmd = &cobra.Command{
+	Use:   "drain <steorra-id>",
+	Short: "Migrate all envoys off a steorra to prepare it for maintenance or decommission",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runTungolSteorraDrain,
+}
+
+var tungolSteorraAddCmd = &cobra.Command{
+	Use:   "add <steorra-id>",
+	Short: "Register a new steorra with the tungol and generate a sample server.yaml for it",
+	Long: `Adds a steorra entry to the hub's server.yaml and generates a sample
+server.yaml for the new steorra pre-filled with its ID, hub address,
+and hostname patterns. The new steorra's Vigo server is deployed
+separately (Docker Compose); this command only configures the hub
+to recognize it.`,
+	Args: cobra.ExactArgs(1),
+	RunE: runTungolSteorraAdd,
+}
+
+var tungolSteorraRemoveCmd = &cobra.Command{
+	Use:   "remove <steorra-id>",
+	Short: "Drain and remove a steorra from the tungol configuration",
+	Long: `Drains all envoys from the steorra (reassigning to other steorras by
+pattern), then removes the steorra entry from the hub's server.yaml.`,
+	Args: cobra.ExactArgs(1),
+	RunE: runTungolSteorraRemove,
+}
+
+func init() {
+	tungolSteorraPushCmd.Flags().String("envoy-id", "", "Target a specific envoy by ID")
+
+	tungolSteorraReassignCmd.Flags().String("from", "", "Source steorra ID")
+	tungolSteorraReassignCmd.Flags().String("to", "", "Target steorra ID")
+	tungolSteorraReassignCmd.MarkFlagRequired("from")
+	tungolSteorraReassignCmd.MarkFlagRequired("to")
+
+	tungolSteorraDrainCmd.Flags().String("to", "", "Target steorra ID (optional, auto-route by pattern if empty)")
+
+	tungolSteorraAddCmd.Flags().String("addr", "", "Steorra gRPC address (host:port)")
+	tungolSteorraAddCmd.Flags().StringSlice("patterns", nil, "Hostname glob patterns routed to this steorra")
+	tungolSteorraAddCmd.Flags().String("output", "", "Write sample steorra server.yaml to this path (default: stdout)")
+	tungolSteorraAddCmd.MarkFlagRequired("addr")
+	tungolSteorraAddCmd.MarkFlagRequired("patterns")
+
+	tungolSteorraCmd.AddCommand(tungolSteorraListCmd)
+	tungolSteorraCmd.AddCommand(tungolSteorraShowCmd)
+	tungolSteorraCmd.AddCommand(tungolSteorraEnvoysCmd)
+	tungolSteorraCmd.AddCommand(tungolSteorraRunsCmd)
+	tungolSteorraCmd.AddCommand(tungolSteorraPushCmd)
+	tungolSteorraCmd.AddCommand(tungolSteorraReassignCmd)
+	tungolSteorraCmd.AddCommand(tungolSteorraDrainCmd)
+	tungolSteorraCmd.AddCommand(tungolSteorraAddCmd)
+	tungolSteorraCmd.AddCommand(tungolSteorraRemoveCmd)
+}
+
+func runTungolSteorraAdd(cmd *cobra.Command, args []string) error {
+	steorraID := args[0]
+	addr, _ := cmd.Flags().GetString("addr")
+	patterns, _ := cmd.Flags().GetStringSlice("patterns")
+	output, _ := cmd.Flags().GetString("output")
+
+	// Generate sample server.yaml for the new steorra. The YAML schema
+	// itself still uses the `spanner:` block with `role: spoke` and
+	// `spoke_id:` per the Phase-0 staged-overlap — the YAML field
+	// migration is Phases 1-3.
+	sample := fmt.Sprintf(`# Vigo Server Configuration — Steorra: %s
+# Generated by: vigocli tungol steorra add
+# Deploy this file as server.yaml on the new steorra's server.
+
+server:
+  grpc_listen: ":1530"
+  api_listen: ":8443"
+  tls:
+    cert_file: "tls/cert"
+    key_file: "tls/key"
+    ca_file: "tls/ca"
+    ca_key_file: "tls/ca_key"
+
+database:
+  dsn: "vigo.db"
+
+spanner:
+  role: spoke
+  spoke_id: "%s"
+  hub_addr: "%s"
+
+checkin:
+  interval: "15s"
+
+secrets:
+  backend: local
+`, steorraID, steorraID, addr)
+
+	client := newAPIClient()
+	var status struct {
+		Role string `json:"role"`
+	}
+	if err := client.get("/api/v1/tungol/status", &status); err != nil {
+		return fmt.Errorf("cannot reach hub: %w", err)
+	}
+	if status.Role != "hub" {
+		return fmt.Errorf("this server is %q, not a hub — run this command against the hub", status.Role)
+	}
+
+	if output != "" {
+		if err := os.WriteFile(output, []byte(sample), 0644); err != nil {
+			return fmt.Errorf("writing sample config: %w", err)
+		}
+		fmt.Printf("  Sample steorra config written to %s\n", output)
+	} else {
+		fmt.Println("  --- Sample steorra server.yaml ---")
+		fmt.Print(sample)
+		fmt.Println("  --------------------------------")
+	}
+
+	fmt.Println()
+	fmt.Printf("  Add this steorra entry to your hub's server.yaml:\n\n")
+	fmt.Printf("    spanner:\n")
+	fmt.Printf("      spokes:\n")
+	fmt.Printf("        - id: %q\n", steorraID)
+	fmt.Printf("          addr: %q\n", addr)
+	fmt.Printf("          patterns: [%s]\n", quotePatterns(patterns))
+	fmt.Println()
+	fmt.Println("  Then restart the hub to apply the change.")
+
+	return nil
+}
+
+func runTungolSteorraRemove(cmd *cobra.Command, args []string) error {
+	steorraID := args[0]
+
+	if !confirmAction(fmt.Sprintf("Remove steorra %q? This will drain all envoys first.", steorraID)) {
+		fmt.Println("Cancelled.")
+		return nil
+	}
+
+	client := newAPIClient()
+
+	var drainResp struct {
+		Moved  int32    `json:"Moved"`
+		Failed int32    `json:"Failed"`
+		Errors []string `json:"Errors"`
+	}
+	if err := client.post("/api/v1/tungol/steorras/"+steorraID+"/drain", map[string]string{}, &drainResp); err != nil {
+		return fmt.Errorf("drain failed: %w", err)
+	}
+
+	fmt.Printf("  Steorra %s drained: %d moved, %d failed.\n", steorraID, drainResp.Moved, drainResp.Failed)
+	for _, e := range drainResp.Errors {
+		fmt.Printf("  %s %s\n", red("Error:"), e)
+	}
+
+	fmt.Println()
+	fmt.Printf("  Remove the steorra entry from your hub's server.yaml:\n\n")
+	fmt.Printf("    # Remove from spanner.spokes:\n")
+	fmt.Printf("    #   - id: %q\n", steorraID)
+	fmt.Println()
+	fmt.Println("  Then restart the hub to apply the change.")
+
+	return nil
+}
+
+func quotePatterns(patterns []string) string {
+	quoted := make([]string, len(patterns))
+	for i, p := range patterns {
+		quoted[i] = fmt.Sprintf("%q", p)
+	}
+	return strings.Join(quoted, ", ")
+}
+
+func runTungolSteorraList(cmd *cobra.Command, args []string) error {
+	client := newAPIClient()
+
+	var resp struct {
+		Steorras []struct {
+			ID             string   `json:"id"`
+			Addr           string   `json:"addr"`
+			Patterns       []string `json:"patterns"`
+			Healthy        bool     `json:"healthy"`
+			EnvoyCount     int32    `json:"envoy_count"`
+			ConvergencePct float32  `json:"compliance_pct"`
+			LatencyMs      int64    `json:"latency_ms"`
+		} `json:"steorras"`
+	}
+
+	if err := client.get("/api/v1/tungol/status", &resp); err != nil {
+		return fmt.Errorf("cannot reach server: %w", err)
+	}
+
+	if len(resp.Steorras) == 0 {
+		fmt.Println("  No steorras configured.")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("ADDRESS"), header("ENVOYS"), header("COMPLIANCE"), header("LATENCY"), header("STATUS"))
+	for _, s := range resp.Steorras {
+		status := colorStatus("healthy")
+		if !s.Healthy {
+			status = colorStatus("unreachable")
+		}
+		fmt.Fprintf(w, "  %s\t%s\t%d\t%.1f%%\t%dms\t%s\n",
+			s.ID, s.Addr, s.EnvoyCount, s.ConvergencePct, s.LatencyMs, status)
+	}
+	w.Flush()
+	return nil
+}
+
+func runTungolSteorraShow(cmd *cobra.Command, args []string) error {
+	client := newAPIClient()
+	steorraID := args[0]
+
+	var resp struct {
+		ID             string   `json:"id"`
+		Addr           string   `json:"addr"`
+		Patterns       []string `json:"patterns"`
+		Healthy        bool     `json:"healthy"`
+		EnvoyCount     int32    `json:"envoy_count"`
+		Converged      int32    `json:"converged"`
+		Relapsed       int32    `json:"relapsed"`
+		Diverged       int32    `json:"diverged"`
+		Failed         int32    `json:"failed"`
+		Offline        int32    `json:"offline"`
+		NoData         int32    `json:"no_data"`
+		ConvergencePct float32  `json:"compliance_pct"`
+		LatencyMs      int64    `json:"latency_ms"`
+		Error          string   `json:"error"`
+	}
+
+	if err := client.get("/api/v1/tungol/steorras/"+steorraID, &resp); err != nil {
+		return fmt.Errorf("steorra %q not found or unreachable: %w", steorraID, err)
+	}
+
+	status := colorStatus("healthy")
+	if !resp.Healthy {
+		status = colorStatus("unreachable")
+	}
+
+	fmt.Printf("  Steorra: %s\n", bold(resp.ID))
+	fmt.Printf("  Address: %s\n", resp.Addr)
+	fmt.Printf("  Status: %s\n", status)
+	fmt.Printf("  Latency: %dms\n", resp.LatencyMs)
+	fmt.Printf("  Patterns: %s\n", strings.Join(resp.Patterns, ", "))
+	fmt.Println()
+	fmt.Printf("  Envoys: %d\n", resp.EnvoyCount)
+	fmt.Printf("  Compliance: %.1f%%\n", resp.ConvergencePct)
+	fmt.Printf("    Converged: %s\n", green(fmt.Sprintf("%d", resp.Converged)))
+	fmt.Printf("    Relapsed:        %s\n", yellow(fmt.Sprintf("%d", resp.Relapsed)))
+	fmt.Printf("    Diverged:        %s\n", red(fmt.Sprintf("%d", resp.Diverged)))
+	fmt.Printf("    Failed:          %s\n", red(fmt.Sprintf("%d", resp.Failed)))
+	fmt.Printf("    Offline:    %d\n", resp.Offline)
+	fmt.Printf("    No Data:         %d\n", resp.NoData)
+
+	if resp.Error != "" {
+		fmt.Printf("\n  Error: %s\n", red(resp.Error))
+	}
+
+	return nil
+}
+
+func runTungolSteorraEnvoys(cmd *cobra.Command, args []string) error {
+	client := newAPIClient()
+	steorraID := args[0]
+
+	var resp struct {
+		Envoys []struct {
+			ID        string `json:"id"`
+			Hostname  string `json:"hostname"`
+			IPAddress string `json:"ip_address"`
+			Revoked   bool   `json:"revoked"`
+			LastSeen  string `json:"last_seen,omitempty"`
+		} `json:"envoys"`
+	}
+
+	if err := client.get("/api/v1/tungol/steorras/"+steorraID+"/envoys", &resp); err != nil {
+		return fmt.Errorf("cannot list envoys for steorra %q: %w", steorraID, err)
+	}
+
+	if len(resp.Envoys) == 0 {
+		fmt.Printf("  No envoys on steorra %s.\n", steorraID)
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", header("ID"), header("HOSTNAME"), header("IP ADDRESS"), header("REVOKED"))
+	for _, t := range resp.Envoys {
+		revoked := ""
+		if t.Revoked {
+			revoked = red("yes")
+		}
+		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", t.ID, t.Hostname, t.IPAddress, revoked)
+	}
+	w.Flush()
+	return nil
+}
+
+func runTungolSteorraRuns(cmd *cobra.Command, args []string) error {
+	client := newAPIClient()
+	steorraID := args[0]
+
+	var resp struct {
+		Runs []struct {
+			ID           string `json:"id"`
+			EnvoyID      string `json:"envoy_id"`
+			Status       string `json:"status"`
+			ModuleCount  int32  `json:"module_count"`
+			ChangedCount int32  `json:"changed_count"`
+			FailedCount  int32  `json:"failed_count"`
+			StartedAt    string `json:"started_at,omitempty"`
+		} `json:"runs"`
+	}
+
+	if err := client.get("/api/v1/tungol/steorras/"+steorraID+"/runs", &resp); err != nil {
+		return fmt.Errorf("cannot list runs for steorra %q: %w", steorraID, err)
+	}
+
+	if len(resp.Runs) == 0 {
+		fmt.Printf("  No runs on steorra %s.\n", steorraID)
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("ENVOY"), header("STATUS"), header("MODULES"), header("CHANGED"), header("FAILED"))
+	for _, r := range resp.Runs {
+		fmt.Fprintf(w, "  %s\t%s\t%s\t%d\t%d\t%d\n",
+			r.ID, r.EnvoyID, r.Status, r.ModuleCount, r.ChangedCount, r.FailedCount)
+	}
+	w.Flush()
+	return nil
+}
+
+func runTungolSteorraPush(cmd *cobra.Command, args []string) error {
+	client := newAPIClient()
+	steorraID := args[0]
+
+	envoyID, _ := cmd.Flags().GetString("envoy-id")
+
+	var resp struct {
+		EnvoysNotified int32 `json:"envoys_notified"`
+	}
+
+	body := map[string]string{}
+	if envoyID != "" {
+		body["envoy_id"] = envoyID
+	}
+
+	if err := client.post("/api/v1/tungol/steorras/"+steorraID+"/push", body, &resp); err != nil {
+		return fmt.Errorf("cannot push to steorra %q: %w", steorraID, err)
+	}
+
+	fmt.Printf("  Force push sent to steorra %s: %d envoys notified.\n", steorraID, resp.EnvoysNotified)
+	return nil
+}
+
+func runTungolSteorraReassign(cmd *cobra.Command, args []string) error {
+	if !confirmAction("Reassign this envoy to a different steorra?") {
+		fmt.Println("Cancelled.")
+		return nil
+	}
+
+	client := newAPIClient()
+	envoyID := args[0]
+	fromSteorra, _ := cmd.Flags().GetString("from")
+	toSteorra, _ := cmd.Flags().GetString("to")
+
+	var resp struct {
+		NewEnvoyID string `json:"NewEnvoyID"`
+		TargetAddr string `json:"TargetAddr"`
+	}
+
+	body := map[string]string{
+		"envoy_id":        envoyID,
+		"from_steorra_id": fromSteorra,
+		"to_steorra_id":   toSteorra,
+	}
+
+	if err := client.post("/api/v1/tungol/reassign", body, &resp); err != nil {
+		return fmt.Errorf("reassign failed: %w", err)
+	}
+
+	fmt.Printf("  Envoy %s reassigned.\n", envoyID)
+	fmt.Printf("  New ID:     %s\n", resp.NewEnvoyID)
+	fmt.Printf("  Target:     %s\n", resp.TargetAddr)
+	fmt.Println("  The agent will reconnect on its next check-in.")
+
+	return nil
+}
+
+func runTungolSteorraDrain(cmd *cobra.Command, args []string) error {
+	if !confirmAction("Drain all envoys from this steorra? They will be migrated to other steorras.") {
+		fmt.Println("Cancelled.")
+		return nil
+	}
+
+	client := newAPIClient()
+	steorraID := args[0]
+	toSteorra, _ := cmd.Flags().GetString("to")
+
+	var resp struct {
+		Moved  int32    `json:"Moved"`
+		Failed int32    `json:"Failed"`
+		Errors []string `json:"Errors"`
+	}
+
+	body := map[string]string{}
+	if toSteorra != "" {
+		body["target_steorra_id"] = toSteorra
+	}
+
+	if err := client.post("/api/v1/tungol/steorras/"+steorraID+"/drain", body, &resp); err != nil {
+		return fmt.Errorf("drain failed: %w", err)
+	}
+
+	fmt.Printf("  Steorra %s drained: %d moved, %d failed.\n", steorraID, resp.Moved, resp.Failed)
+
+	for _, e := range resp.Errors {
+		fmt.Printf("  %s %s\n", red("Error:"), e)
+	}
+
+	return nil
+}

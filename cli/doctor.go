@@ -24,14 +24,14 @@ var doctorConfigFile string
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
-	Short: "Validate server health: config, TLS, secrets, database, license, and spanner",
+	Short: "Validate server health: config, TLS, secrets, database, license, and tungol",
 	Long: `Run health checks to verify the server is operating correctly.
 
 By default, queries the running server's /api/v1/doctor endpoint.
 
 With --pre-start, runs local checks without a running server:
   config_file, secrets_provider, secret_resolution, tls_certs,
-  config_dir, config_validation, spanner`,
+  config_dir, config_validation, tungol`,
 	RunE: runDoctor,
 }
 
@@ -145,20 +145,20 @@ func runDoctorPreStart() error {
 	// 6. config_validation — load all .vgo module files and validate
 	checks = append(checks, checkConfigValidation(configDir))
 
-	// 7. spanner
+	// 7. tungol
 	if serverCfg != nil {
 		if err := serverCfg.Tungol.Validate(); err != nil {
-			checks = append(checks, preStartCheck{"spanner", "fail", err.Error()})
+			checks = append(checks, preStartCheck{"tungol", "fail", err.Error()})
 			hasFailure = true
 		} else {
 			role := string(serverCfg.Tungol.Role)
 			if role == "" {
 				role = "standalone"
 			}
-			checks = append(checks, preStartCheck{"spanner", "pass", role})
+			checks = append(checks, preStartCheck{"tungol", "pass", role})
 		}
 	} else {
-		checks = append(checks, preStartCheck{"spanner", "skip", "config unavailable"})
+		checks = append(checks, preStartCheck{"tungol", "skip", "config unavailable"})
 	}
 
 	// Print results
