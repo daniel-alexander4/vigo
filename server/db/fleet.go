@@ -123,6 +123,69 @@ func (q *Queries) ListFleetConvergence(ctx context.Context) ([]EnvoyRecentRuns, 
 	return result, nil
 }
 
+// ModuleRunChange is a single (module, run) pair telling whether that
+// module had ANY resource that the agent reported `changed: true` for
+// during that run. The run-detail page feeds slices of these — one per
+// module, newest run first — into convergence.ComputeDrift to decide
+// whether the module is in DriftDiverged. Surfacing drift at the
+// module grain (not the envoy grain) lets the page paint a "Diverged"
+// pill on the right rows.
+type ModuleRunChange struct {
+	ModuleName string
+	RunID      string
+	StartedAt  time.Time
+	AnyChanged bool
+}
+
+// moduleChangesQuery returns rows for the last DivergedThreshold runs of
+// a given envoy ending at or before a supplied anchor timestamp (the
+// run currently being viewed). One row per (module, run); `AnyChanged`
+// is true iff at least one resource on that module in that run reported
+// `changed: true`. Joins so we can pull started_at without an extra
+// lookup; SQLite's MAX over an INTEGER column returns 0 or 1.
+var moduleChangesQuery = fmt.Sprintf(`
+SELECT rr.module_name, rr.run_id, r.started_at, MAX(rr.changed) AS any_changed
+FROM run_results rr
+JOIN runs r ON r.id = rr.run_id
+WHERE r.id IN (
+    SELECT id FROM runs
+    WHERE envoy_id = ?
+      AND started_at <= ?
+    ORDER BY started_at DESC
+    LIMIT %d
+)
+GROUP BY rr.module_name, rr.run_id, r.started_at
+ORDER BY rr.module_name, r.started_at DESC
+`, convergence.DivergedThreshold)
+
+// ListEnvoyModuleChangesRecent returns the module-change matrix for the
+// last convergence.DivergedThreshold runs of `envoyID`, ending at the
+// run whose `startedAt` is supplied (inclusive). Rows are ordered so
+// each module's runs appear newest-first — directly feedable to
+// convergence.ComputeDrift without another sort.
+func (q *Queries) ListEnvoyModuleChangesRecent(ctx context.Context, envoyID string, startedAt time.Time) ([]ModuleRunChange, error) {
+	rows, err := q.db.QueryContext(ctx, moduleChangesQuery, envoyID, startedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []ModuleRunChange
+	for rows.Next() {
+		var mc ModuleRunChange
+		var anyChanged int64
+		if err := rows.Scan(&mc.ModuleName, &mc.RunID, &mc.StartedAt, &anyChanged); err != nil {
+			return nil, err
+		}
+		mc.AnyChanged = anyChanged != 0
+		out = append(out, mc)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // EnvoyPagedRow is an envoy with its latest run info, returned by the paged query.
 type EnvoyPagedRow struct {
 	ID             string

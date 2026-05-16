@@ -37,6 +37,19 @@ type Renderer struct {
 	pages map[string]*template.Template
 }
 
+// isCRUDAction reports whether an action_taken value is one of the three
+// state-mutating verbs (created/updated/deleted). Used by the run-detail
+// Action column to decide whether a Diverged drift bucket should repaint
+// the pill — non-CRUD outcomes (settled/skipped/blocked/failed) keep
+// their own semantics and aren't repainted by drift.
+func isCRUDAction(action string) bool {
+	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "create", "created", "update", "updated", "delete", "deleted":
+		return true
+	}
+	return false
+}
+
 // funcMap returns the template FuncMap used across all templates.
 func funcMap() template.FuncMap {
 	return template.FuncMap{
@@ -159,7 +172,18 @@ func funcMap() template.FuncMap {
 		// every non-CRUD outcome to noop for drift-counting, which
 		// erases the visual distinction between "skipped because
 		// when:false" and "settled because state already matched."
-		"actionCSSClass": func(action string) string {
+		//
+		// driftLabel is the row's per-module drift bucket (one of "none"
+		// / "changed" / "diverged" / ""). When the module is Diverged AND
+		// the row's action is a CRUD verb, the cell repaints peach so
+		// the operator can spot the runs that are part of a persistent
+		// drift pattern. Failed and non-CRUD outcomes keep their own
+		// semantic colors — drift severity doesn't override "this thing
+		// is on fire" (red) or "agent skipped this on purpose" (muted).
+		"actionCSSClass": func(action, driftLabel string) string {
+			if convergence.ClassifyDrift(driftLabel) == convergence.DriftDiverged && isCRUDAction(action) {
+				return "diverged"
+			}
 			switch strings.ToLower(strings.TrimSpace(action)) {
 			case "create", "created":
 				return "success"
@@ -178,6 +202,19 @@ func funcMap() template.FuncMap {
 			default:
 				return "muted"
 			}
+		},
+		// actionLabel returns the text the run-detail Action pill renders.
+		// For CRUD verbs on a Diverged module the label flips to "Diverged"
+		// — the verb (Updated/Created/Deleted) is replaced because in the
+		// Diverged case the drift signal is what the operator needs to
+		// see first. For all other rows the raw action_taken string is
+		// preserved, so non-CRUD outcomes (settled/skipped/blocked/
+		// failed) carry their normal labels.
+		"actionLabel": func(action, driftLabel string) string {
+			if convergence.ClassifyDrift(driftLabel) == convergence.DriftDiverged && isCRUDAction(action) {
+				return "Diverged"
+			}
+			return action
 		},
 		"tracePathTree":  tracePathTree,
 		"traceGreenBg":   traceGreenBg,

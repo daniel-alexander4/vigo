@@ -239,6 +239,29 @@ func TestRenderFragment_NoCSP(t *testing.T) {
 	_ = rec.Result()
 }
 
+func TestIsCRUDAction(t *testing.T) {
+	cases := map[string]bool{
+		"create":    true,
+		"created":   true,
+		"update":    true,
+		"updated":   true,
+		"delete":    true,
+		"deleted":   true,
+		"  UPDATE ": true, // whitespace + case tolerance
+		"settled":   false,
+		"skipped":   false,
+		"blocked":   false,
+		"failed":    false,
+		"":          false,
+		"unknown":   false,
+	}
+	for action, want := range cases {
+		if got := isCRUDAction(action); got != want {
+			t.Errorf("isCRUDAction(%q) = %v, want %v", action, got, want)
+		}
+	}
+}
+
 func TestEmbedFS(t *testing.T) {
 	expected := []string{
 		"templates/base.html",

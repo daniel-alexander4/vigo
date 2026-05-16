@@ -48,8 +48,8 @@
                 <td class="mono">{{.ResourceType}}</td>
                 <td class="mono">{{.ResourceName}}</td>
                 <td>
-                    <span class="badge badge--{{actionCSSClass .ActionTaken}}">
-                        {{.ActionTaken}}
+                    <span class="badge badge--{{actionCSSClass .ActionTaken .DriftLabel}}">
+                        {{actionLabel .ActionTaken .DriftLabel}}
                     </span>
                 </td>
                 <td>{{if .Changed}}yes{{else}}-{{end}}</td>
@@ -87,8 +87,8 @@
             <td class="mono">{{.ResourceType}}</td>
             <td class="mono">{{.ResourceName}}</td>
             <td>
-                <span class="badge badge--{{actionCSSClass .ActionTaken}}">
-                    {{.ActionTaken}}
+                <span class="badge badge--{{actionCSSClass .ActionTaken .DriftLabel}}">
+                    {{actionLabel .ActionTaken .DriftLabel}}
                 </span>
             </td>
             <td>{{if .Changed}}yes{{else}}-{{end}}</td>

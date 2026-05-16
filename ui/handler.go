@@ -1256,6 +1256,12 @@ type RunResultRow struct {
 	Changed      bool
 	ErrorMessage string
 	DurationMs   int64
+	// Drift is the drift-axis bucket for this row's module as of the
+	// run being viewed (window: this run + DivergedThreshold-1 prior).
+	// Populated by RunDetailData. DriftLabel mirrors Drift.String() so
+	// templates stay method-free.
+	Drift      convergence.DriftLevel
+	DriftLabel string
 }
 
 // EnvoyDetailPageData holds data for the envoy detail page.
@@ -5983,12 +5989,37 @@ func (ds *dbDataSource) RunDetailData(runID string) (RunDetailPageData, error) {
 		return RunDetailPageData{}, fmt.Errorf("listing run results: %w", err)
 	}
 
+	// Per-module drift, computed over the window ending at this run's
+	// timestamp. Lets the Action column repaint to "Diverged" + peach for
+	// CRUD rows whose module has been changing for DivergedThreshold
+	// consecutive runs leading up to the run being viewed. Cheap: one
+	// extra DB round-trip + an O(M×N) classifier pass.
+	moduleDrift := make(map[string]convergence.DriftLevel)
+	if changes, err := ds.queries.ListEnvoyModuleChangesRecent(ctx, r.EnvoyID, r.StartedAt); err != nil {
+		// Don't fail the page render — just log and leave moduleDrift empty
+		// so pills fall through to their existing per-action colors.
+		slog.Warn("run-detail: per-module drift query failed", "run_id", runID, "error", err)
+	} else {
+		perModule := make(map[string][]convergence.RunInfo)
+		for _, c := range changes {
+			ci := int64(0)
+			if c.AnyChanged {
+				ci = 1
+			}
+			perModule[c.ModuleName] = append(perModule[c.ModuleName], convergence.RunInfo{ChangedCount: ci})
+		}
+		for name, runs := range perModule {
+			moduleDrift[name] = convergence.ComputeDrift(runs)
+		}
+	}
+
 	var results []RunResultRow
 	for _, res := range dbResults {
 		errMsg := ""
 		if res.ErrorMessage.Valid {
 			errMsg = res.ErrorMessage.String
 		}
+		drift := moduleDrift[res.ModuleName]
 		results = append(results, RunResultRow{
 			ModuleName:   res.ModuleName,
 			ResourceType: res.ResourceType,
@@ -5997,6 +6028,8 @@ func (ds *dbDataSource) RunDetailData(runID string) (RunDetailPageData, error) {
 			Changed:      res.Changed != 0,
 			ErrorMessage: errMsg,
 			DurationMs:   res.DurationMs,
+			Drift:        drift,
+			DriftLabel:   drift.String(),
 		})
 	}
 
