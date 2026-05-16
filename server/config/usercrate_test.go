@@ -13,7 +13,8 @@ import (
 
 // writeUsercrateDir writes a usercrate .vgo file under
 // <dir>/stockpile/<scope>/usercrates/<name>.vgo. scope == "" means the
-// root stockpile/usercrates/ directory.
+// root stockpile/usercrates/ directory. The crate declares exactly one
+// `type: user` resource (the 0.54.0 shape rule).
 func writeUsercrateDir(t *testing.T, dir, scope, name string) {
 	t.Helper()
 	usercrateDir := filepath.Join(dir, "stockpile", scope, "usercrates")
@@ -28,131 +29,6 @@ resources:
     username: %s
 `, name, name, name)
 	writeFile(t, filepath.Join(usercrateDir, name+".vgo"), content)
-}
-
-func TestUsercrate_RootScopeAppliesEverywhere(t *testing.T) {
-	dir := setupInheritanceDir(t)
-	writeUsercrateDir(t, dir, "", "admin")
-
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
-envoys:
-  - match: "plex"
-`)
-
-	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
-	if err != nil {
-		t.Fatalf("NewConfigStore: %v", err)
-	}
-	cfg := cs.Get("plex")
-	if cfg == nil {
-		t.Fatal("expected config")
-	}
-	if !hasModule(cfg.Modules, "admin") {
-		t.Errorf("root-level usercrate admin did not apply; modules = %v", moduleNames(cfg.Modules))
-	}
-}
-
-func TestUsercrate_ScopedOnlyAppliesInBranch(t *testing.T) {
-	dir := setupInheritanceDir(t)
-	writeUsercrateDir(t, dir, "", "admin")
-	writeUsercrateDir(t, dir, "customerA", "alice")
-	writeUsercrateDir(t, dir, "customerB", "bob")
-
-	if err := os.MkdirAll(filepath.Join(dir, "stockpile", "customerA"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(dir, "stockpile", "customerA", "envoys.vgo"), `
-envoys:
-  - match: "a01"
-`)
-
-	if err := os.MkdirAll(filepath.Join(dir, "stockpile", "customerB"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(dir, "stockpile", "customerB", "envoys.vgo"), `
-envoys:
-  - match: "b01"
-`)
-
-	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
-	if err != nil {
-		t.Fatalf("NewConfigStore: %v", err)
-	}
-
-	cfgA := cs.Get("a01")
-	if cfgA == nil {
-		t.Fatal("expected config for a01")
-	}
-	if !hasModule(cfgA.Modules, "admin") || !hasModule(cfgA.Modules, "alice") {
-		t.Errorf("a01 should have admin + alice; got %v", moduleNames(cfgA.Modules))
-	}
-	if hasModule(cfgA.Modules, "bob") {
-		t.Errorf("a01 must not pick up bob (customerB scope)")
-	}
-
-	cfgB := cs.Get("b01")
-	if cfgB == nil {
-		t.Fatal("expected config for b01")
-	}
-	if !hasModule(cfgB.Modules, "admin") || !hasModule(cfgB.Modules, "bob") {
-		t.Errorf("b01 should have admin + bob; got %v", moduleNames(cfgB.Modules))
-	}
-	if hasModule(cfgB.Modules, "alice") {
-		t.Errorf("b01 must not pick up alice (customerA scope)")
-	}
-}
-
-func TestUsercrate_ExcludeOnMatchBlock(t *testing.T) {
-	dir := setupInheritanceDir(t)
-	writeUsercrateDir(t, dir, "", "admin")
-	writeUsercrateDir(t, dir, "", "devops")
-
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
-envoys:
-  - match: "plex"
-    exclude_usercrates: [devops]
-`)
-
-	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
-	if err != nil {
-		t.Fatalf("NewConfigStore: %v", err)
-	}
-	cfg := cs.Get("plex")
-	if !hasModule(cfg.Modules, "admin") {
-		t.Error("admin should apply")
-	}
-	if hasModule(cfg.Modules, "devops") {
-		t.Errorf("exclude_usercrates did not drop devops; modules = %v", moduleNames(cfg.Modules))
-	}
-}
-
-func TestUsercrate_ExcludeOnCommon(t *testing.T) {
-	dir := setupInheritanceDir(t)
-	writeUsercrateDir(t, dir, "", "admin")
-	writeUsercrateDir(t, dir, "", "devops")
-
-	if err := os.MkdirAll(filepath.Join(dir, "stockpile", "rack1"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(dir, "stockpile", "rack1", "common.vgo"), `
-exclude_usercrates: [devops]
-`)
-	writeFile(t, filepath.Join(dir, "stockpile", "rack1", "envoys.vgo"), `
-envoys:
-  - match: "rack1-*"
-`)
-
-	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
-	if err != nil {
-		t.Fatalf("NewConfigStore: %v", err)
-	}
-	cfg := cs.Get("rack1-01")
-	if !hasModule(cfg.Modules, "admin") {
-		t.Error("admin should still apply (not excluded)")
-	}
-	if hasModule(cfg.Modules, "devops") {
-		t.Errorf("common.vgo exclude_usercrates failed to drop devops; modules = %v", moduleNames(cfg.Modules))
-	}
 }
 
 // writeUsercrateDirNoName writes a usercrate file with no `name:` field,
@@ -172,11 +48,11 @@ resources:
 	writeFile(t, filepath.Join(usercrateDir, filenameStem+".vgo"), content)
 }
 
-func TestUsercrate_DefaultsNameFromFilename(t *testing.T) {
+// --- Positive include path (5 tests) ---
+
+func TestUsercrate_InertWhenNotIncluded(t *testing.T) {
 	dir := setupInheritanceDir(t)
-	// usercrates/alice.vgo has no explicit name — loader must default
-	// it to the filename stem "alice".
-	writeUsercrateDirNoName(t, dir, "", "alice")
+	writeUsercrateDir(t, dir, "", "admin")
 
 	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
 envoys:
@@ -191,20 +67,20 @@ envoys:
 	if cfg == nil {
 		t.Fatal("expected config")
 	}
-	if !hasModule(cfg.Modules, "alice") {
-		t.Errorf("usercrate with defaulted name did not apply as `alice`; modules = %v", moduleNames(cfg.Modules))
+	if hasModule(cfg.Modules, "admin") {
+		t.Errorf("usercrate admin should NOT auto-apply; modules = %v", moduleNames(cfg.Modules))
 	}
 }
 
-func TestUsercrate_DefaultedNameHonorsExcludeUsercrates(t *testing.T) {
+func TestUsercrate_IncludedViaMatchBlock(t *testing.T) {
 	dir := setupInheritanceDir(t)
-	writeUsercrateDirNoName(t, dir, "", "alice")
-	writeUsercrateDirNoName(t, dir, "", "bob")
+	writeUsercrateDir(t, dir, "", "admin")
 
 	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
 envoys:
   - match: "plex"
-    exclude_usercrates: [alice]
+    usercrates:
+      - admin
 `)
 
 	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
@@ -212,11 +88,266 @@ envoys:
 		t.Fatalf("NewConfigStore: %v", err)
 	}
 	cfg := cs.Get("plex")
-	if hasModule(cfg.Modules, "alice") {
-		t.Errorf("exclude_usercrates [alice] should drop the defaulted-name crate; modules = %v", moduleNames(cfg.Modules))
+	if cfg == nil {
+		t.Fatal("expected config")
 	}
-	if !hasModule(cfg.Modules, "bob") {
-		t.Errorf("bob should still apply; modules = %v", moduleNames(cfg.Modules))
+	if !hasModule(cfg.Modules, "admin") {
+		t.Errorf("usercrate admin should be included via match-block usercrates:; modules = %v", moduleNames(cfg.Modules))
+	}
+}
+
+func TestUsercrate_IncludedViaCommon(t *testing.T) {
+	dir := setupInheritanceDir(t)
+	writeUsercrateDir(t, dir, "", "admin")
+
+	writeFile(t, filepath.Join(dir, "stockpile", "common.vgo"), `
+usercrates:
+  - admin
+`)
+
+	if err := os.MkdirAll(filepath.Join(dir, "stockpile", "branch"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(dir, "stockpile", "branch", "envoys.vgo"), `
+envoys:
+  - match: "a01"
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+	cfg := cs.Get("a01")
+	if cfg == nil {
+		t.Fatal("expected config for a01")
+	}
+	if !hasModule(cfg.Modules, "admin") {
+		t.Errorf("usercrate admin should be inherited via common.vgo usercrates:; modules = %v", moduleNames(cfg.Modules))
+	}
+}
+
+func TestUsercrate_IncludedViaEnvironment(t *testing.T) {
+	dir := setupInheritanceDir(t)
+	writeUsercrateDir(t, dir, "", "admin")
+
+	writeFile(t, filepath.Join(dir, "stockpile", "environments.vgo"), `
+env:
+  prod:
+    usercrates:
+      - admin
+`)
+	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+envoys:
+  - match: "plex"
+    environment: "prod"
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+	cfg := cs.Get("plex")
+	if cfg == nil {
+		t.Fatal("expected config")
+	}
+	if !hasModule(cfg.Modules, "admin") {
+		t.Errorf("usercrate admin should be added by environments.vgo usercrates:; modules = %v", moduleNames(cfg.Modules))
+	}
+}
+
+func TestUsercrate_IncludedViaRole(t *testing.T) {
+	dir := setupInheritanceDir(t)
+	writeUsercrateDir(t, dir, "", "admin")
+
+	writeRoles(t, dir, `
+- name: ops
+  usercrates:
+    - admin
+`)
+	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+envoys:
+  - match: "plex"
+    roles:
+      - ops
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+	cfg := cs.Get("plex")
+	if cfg == nil {
+		t.Fatal("expected config")
+	}
+	if !hasModule(cfg.Modules, "admin") {
+		t.Errorf("usercrate admin should be included via role usercrates:; modules = %v", moduleNames(cfg.Modules))
+	}
+}
+
+// --- Cross-kind rejection (2 tests) ---
+
+func TestUsercrate_RejectsModulesRefToUsercrate(t *testing.T) {
+	dir := setupInheritanceDir(t)
+	writeUsercrateDir(t, dir, "", "admin")
+
+	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+envoys:
+  - match: "plex"
+    modules:
+      - admin
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err == nil {
+		t.Fatal("expected cross-kind error for `modules: [admin]` referencing a usercrate, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "modules:") || !strings.Contains(msg, "usercrate") || !strings.Contains(msg, "admin") {
+		t.Errorf("error should name the field, the kind, and the offending ref; got: %v", err)
+	}
+}
+
+func TestUsercrate_RejectsUsercratesRefToModule(t *testing.T) {
+	dir := setupInheritanceDir(t)
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "sshd.vgo"), `
+name: sshd
+resources:
+  - name: install-sshd
+    type: package
+    package: openssh-server
+    state: present
+`)
+
+	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+envoys:
+  - match: "plex"
+    usercrates:
+      - sshd
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err == nil {
+		t.Fatal("expected cross-kind error for `usercrates: [sshd]` referencing a module, got nil")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "usercrates:") || !strings.Contains(msg, "module") || !strings.Contains(msg, "sshd") {
+		t.Errorf("error should name the field, the kind, and the offending ref; got: %v", err)
+	}
+}
+
+// --- Shape rule (2 tests) ---
+
+func TestUsercrate_RejectsUsercrateWithoutUserResource(t *testing.T) {
+	dir := setupInheritanceDir(t)
+	usercrateDir := filepath.Join(dir, "stockpile", "usercrates")
+	if err := os.MkdirAll(usercrateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(usercrateDir, "broken.vgo"), `
+name: broken
+resources:
+  - name: motd
+    type: file
+    path: /etc/motd
+    content: "hi"
+`)
+	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+envoys:
+  - match: "plex"
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err == nil {
+		t.Fatal("expected shape-rule error for usercrate with 0 user resources, got nil")
+	}
+	if !strings.Contains(err.Error(), "exactly one") || !strings.Contains(err.Error(), "user") {
+		t.Errorf("error should mention `exactly one` and `user`; got: %v", err)
+	}
+}
+
+func TestUsercrate_AllowsUsercrateWithExtraNonUserResources(t *testing.T) {
+	dir := setupInheritanceDir(t)
+	usercrateDir := filepath.Join(dir, "stockpile", "usercrates")
+	if err := os.MkdirAll(usercrateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(usercrateDir, "dan.vgo"), `
+name: dan
+resources:
+  - name: create-dan
+    type: user
+    username: dan
+  - name: dan-authorized-keys
+    type: file
+    path: /home/dan/.ssh/authorized_keys
+    content: "ssh-ed25519 ..."
+  - name: dan-shell-init
+    type: exec
+    command: "chsh -s /bin/bash dan"
+`)
+	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+envoys:
+  - match: "plex"
+    usercrates:
+      - dan
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("usercrate with user+file+exec should load; got: %v", err)
+	}
+	cfg := cs.Get("plex")
+	if cfg == nil || !hasModule(cfg.Modules, "dan") {
+		t.Errorf("usercrate dan should apply; modules = %v", moduleNames(cfg.Modules))
+	}
+}
+
+// --- Retired-field migration error (1 test) ---
+
+func TestUsercrate_RetiredFieldRejectsExcludeUsercrates(t *testing.T) {
+	dir := setupInheritanceDir(t)
+	writeUsercrateDir(t, dir, "", "admin")
+	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+envoys:
+  - match: "plex"
+    exclude_usercrates:
+      - admin
+`)
+
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err == nil {
+		t.Fatal("expected retired-field error for exclude_usercrates:, got nil")
+	}
+	if !strings.Contains(err.Error(), "removed in 0.54.0") || !strings.Contains(err.Error(), "exclude_usercrates") {
+		t.Errorf("error should mention removal in 0.54.0 and name the field; got: %v", err)
+	}
+}
+
+// --- Kept-and-adjusted (3 tests) ---
+
+func TestUsercrate_DefaultsNameFromFilename(t *testing.T) {
+	dir := setupInheritanceDir(t)
+	// usercrates/alice.vgo has no explicit name — loader must default
+	// it to the filename stem "alice".
+	writeUsercrateDirNoName(t, dir, "", "alice")
+
+	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+envoys:
+  - match: "plex"
+    usercrates:
+      - alice
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+	cfg := cs.Get("plex")
+	if cfg == nil {
+		t.Fatal("expected config")
+	}
+	if !hasModule(cfg.Modules, "alice") {
+		t.Errorf("usercrate with defaulted name `alice` should resolve when included; modules = %v", moduleNames(cfg.Modules))
 	}
 }
 
@@ -257,6 +388,8 @@ func TestUsercrate_TraceShowsUsercrateSource(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "stockpile", "customerA", "envoys.vgo"), `
 envoys:
   - match: "a01"
+    usercrates:
+      - alice
 `)
 
 	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
@@ -264,23 +397,31 @@ envoys:
 		t.Fatalf("NewConfigStore: %v", err)
 	}
 	trace := cs.Trace("a01")
+
+	// ModuleSources should point at the def's usercrates/<file>.vgo path
+	// (the canonical SourceFile), not at the carrier that included it.
 	src, ok := trace.ModuleSources["alice"]
 	if !ok {
 		t.Fatalf("trace.ModuleSources missing entry for alice; keys = %v", mapKeys(trace.ModuleSources))
 	}
-	if !strings.Contains(src, "usercrates") {
-		t.Errorf("alice source should reference usercrates/ path; got %q", src)
+	if !strings.Contains(src, "usercrates/alice.vgo") {
+		t.Errorf("alice source should point at the def's usercrates/<file>.vgo; got %q", src)
 	}
-	// At least one InheritanceLevel should carry the "usercrates/" marker.
-	found := false
+
+	// At least one InheritanceLevel should attribute alice via its
+	// Usercrates list (step 7 Kind plumbing: usercrates are attributed
+	// to inclusion sites, not a synthetic `usercrates/` level).
+	var found bool
 	for _, lvl := range trace.Inheritance {
-		if lvl.File == "usercrates/" {
-			found = true
-			break
+		for _, u := range lvl.Usercrates {
+			if u == "alice" {
+				found = true
+				break
+			}
 		}
 	}
 	if !found {
-		t.Error("trace.Inheritance should include a usercrates/ level")
+		t.Errorf("trace.Inheritance should attribute alice to a level's Usercrates list")
 	}
 }
 

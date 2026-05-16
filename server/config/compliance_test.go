@@ -535,6 +535,9 @@ resources:
 	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
+    usercrates:
+      - dan
+      - alice
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -593,10 +596,15 @@ resources:
 	writeFile(t, filepath.Join(dir, "stockpile", "customerA", "envoys.vgo"), `
 envoys:
   - match: "a01"
+    usercrates:
+      - alice
+      - globaladmin
 `)
 	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
 envoys:
   - match: "root01"
+    usercrates:
+      - globaladmin
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)

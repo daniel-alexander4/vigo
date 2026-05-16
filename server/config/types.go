@@ -948,11 +948,23 @@ type ResourceConfig struct {
 	CaseMatch   map[string]map[string]any `yaml:"-"` // case branch → attribute overrides
 }
 
+// ModuleKind distinguishes a regular module definition from a usercrate.
+// Both share one namespace and one map (moduleDefs); Kind is how the
+// resolver enforces that `modules:` only takes Module-kind defs and
+// `usercrates:` only takes Usercrate-kind defs.
+type ModuleKind string
+
+const (
+	ModuleKindModule    ModuleKind = ""          // zero value — regular module from stockpile/modules/
+	ModuleKindUsercrate ModuleKind = "usercrate" // loaded from a stockpile/**/usercrates/ dir
+)
+
 // ModuleDefinition is a reusable module loaded from config/modules/*.yaml.
 // It has a custom UnmarshalYAML that flattens conditional_block entries
 // in the resources list into plain ResourceConfig items.
 type ModuleDefinition struct {
 	Name       string              `yaml:"name"`
+	Kind       ModuleKind          `yaml:"-"` // set by loader: regular module vs usercrate
 	SourceFile string              `yaml:"-"` // stockpile-relative path, set by loader
 	DependsOn  []string            `yaml:"depends_on"`
 	Before     []string            `yaml:"before"`
@@ -1102,11 +1114,12 @@ func (r *RoleRef) UnmarshalYAML(value *yaml.Node) error {
 // Case provides conditional module sets — each case entry has a when: and
 // its own modules list. All matching cases contribute modules (not short-circuit).
 type RoleDefinition struct {
-	Name     string      `yaml:"name"`
-	When     string      `yaml:"when,omitempty"`
-	Includes []string    `yaml:"includes"`       // other role names to include (single level)
-	Modules  []ModuleRef `yaml:"modules"`        // unconditional modules
-	Case     []RoleCase  `yaml:"case,omitempty"` // conditional module groups
+	Name       string      `yaml:"name"`
+	When       string      `yaml:"when,omitempty"`
+	Includes   []string    `yaml:"includes"`           // other role names to include (single level)
+	Modules    []ModuleRef `yaml:"modules"`            // unconditional modules
+	Usercrates []ModuleRef `yaml:"usercrates"`         // positive include of usercrates (Kind == Usercrate); cross-kind enforced at resolve time
+	Case       []RoleCase  `yaml:"case,omitempty"`     // conditional module groups
 }
 
 // RoleCase is a conditional group of modules within a role definition.
@@ -1133,10 +1146,10 @@ type EnvoyEntry struct {
 	Environment       string         `yaml:"environment"`
 	Roles             []RoleRef      `yaml:"roles"`
 	Modules           []ModuleRef    `yaml:"modules"`
+	Usercrates        []ModuleRef    `yaml:"usercrates"`         // positive include of usercrates (Kind == Usercrate)
 	Vars              map[string]any `yaml:"vars"`
 	Tags              []string       `yaml:"tags"`               // static tags for targeting
 	ExcludeModules    []string       `yaml:"exclude_modules"`    // opt out of inherited modules
-	ExcludeUsercrates []string       `yaml:"exclude_usercrates"` // opt out of auto-applied usercrates from usercrates/ subdirs in the ancestor chain
 	ExcludeResources  []string       `yaml:"exclude_resources"`  // opt out of specific resources by name
 	ObserveOnly       bool           `yaml:"observe_only"`       // observe-only mode: report drift only, don't enforce
 
@@ -1148,11 +1161,12 @@ type EnvoyEntry struct {
 	// that defined this entry. Set by the loader for trace display.
 	SourceFile string `yaml:"-"`
 
-	// OwnModules/OwnRoles/OwnVars hold the entry's original values before
-	// inheritance merging. Set by applyInheritance for trace display.
-	OwnModules []ModuleRef    `yaml:"-"`
-	OwnRoles   []RoleRef      `yaml:"-"`
-	OwnVars    map[string]any `yaml:"-"`
+	// OwnModules/OwnRoles/OwnUsercrates/OwnVars hold the entry's original
+	// values before inheritance merging. Set by applyInheritance for trace.
+	OwnModules    []ModuleRef    `yaml:"-"`
+	OwnRoles      []RoleRef      `yaml:"-"`
+	OwnUsercrates []ModuleRef    `yaml:"-"`
+	OwnVars       map[string]any `yaml:"-"`
 
 	// Network device fields — set when this entry is a virtual envoy managed
 	// through a gateway. Gateway must be a real compute envoy.
@@ -1193,20 +1207,20 @@ type ComplianceConfig struct {
 // entries in subdirectories. Loaded from common.vgo files at each directory
 // level. Files without match: entries are treated as common configs.
 type CommonConfig struct {
-	Modules           []ModuleRef    `yaml:"modules"`
-	Roles             []RoleRef      `yaml:"roles"`
-	Vars              map[string]any `yaml:"vars"`
-	ExcludeUsercrates []string       `yaml:"exclude_usercrates"` // drop named usercrates for every entry at this directory level and below
-	DirPath           string         `yaml:"-"`                  // relative dir path (e.g., "production/web")
+	Modules    []ModuleRef    `yaml:"modules"`
+	Usercrates []ModuleRef    `yaml:"usercrates"` // positive include of usercrates for every entry at this dir and below
+	Roles      []RoleRef      `yaml:"roles"`
+	Vars       map[string]any `yaml:"vars"`
+	DirPath    string         `yaml:"-"` // relative dir path (e.g., "production/web")
 }
 
 // PerEnvOverrideBlock holds modules, vars, and exclusions for a single
 // environment within a environments.vgo file.
 type PerEnvOverrideBlock struct {
-	Modules           []ModuleRef    `yaml:"modules"`
-	ExcludeModules    []string       `yaml:"exclude_modules"`
-	ExcludeUsercrates []string       `yaml:"exclude_usercrates"`
-	Vars              map[string]any `yaml:"vars"`
+	Modules        []ModuleRef    `yaml:"modules"`
+	Usercrates     []ModuleRef    `yaml:"usercrates"` // positive include of usercrates in this environment
+	ExcludeModules []string       `yaml:"exclude_modules"`
+	Vars           map[string]any `yaml:"vars"`
 }
 
 // PerEnvOverridesConfig holds the parsed content of a environments.vgo file.
@@ -1246,6 +1260,12 @@ func (n *EnvoyEntry) UnmarshalYAML(value *yaml.Node) error {
 				return fmt.Errorf("decoding modules: %w", err)
 			}
 			n.Modules = append(n.Modules, extra...)
+		case "usercrates":
+			var extra []ModuleRef
+			if err := val.Decode(&extra); err != nil {
+				return fmt.Errorf("decoding usercrates: %w", err)
+			}
+			n.Usercrates = append(n.Usercrates, extra...)
 		case "vars":
 			if err := val.Decode(&n.Vars); err != nil {
 				return fmt.Errorf("decoding vars: %w", err)
@@ -1279,9 +1299,7 @@ func (n *EnvoyEntry) UnmarshalYAML(value *yaml.Node) error {
 				return fmt.Errorf("decoding exclude_modules: %w", err)
 			}
 		case "exclude_usercrates":
-			if err := val.Decode(&n.ExcludeUsercrates); err != nil {
-				return fmt.Errorf("decoding exclude_usercrates: %w", err)
-			}
+			return fmt.Errorf("`exclude_usercrates:` was removed in 0.54.0 — usercrates are now inert until positively included via `usercrates:` (see docs/reference/writing-modules.md)")
 		case "exclude_resources":
 			if err := val.Decode(&n.ExcludeResources); err != nil {
 				return fmt.Errorf("decoding exclude_resources: %w", err)

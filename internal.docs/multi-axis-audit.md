@@ -10,14 +10,14 @@ Source of pending item: `~/.claude/projects/-home-dan-cairn-vigo/memory/pending.
 
 The set of mechanisms that can compose into a single resolved module list + var set for an envoy at check-in:
 
-1. **Matchfiles** — `envoys:` blocks with hostname globs, first-match-wins. A match block can specify 12+ fields: `modules`, `roles`, `vars`, `vars_from`, `exclude_modules`, `exclude_usercrates`, `exclude_resources`, `tags`, `environment`, `environment_overrides`, `observe_only`, `match`, `node_type`.
-2. **Directory inheritance via `common.vgo`** — modules/roles/vars declared at a parent dir are inherited by every subdirectory; `exclude_modules:` and `exclude_usercrates:` for opt-out.
+1. **Matchfiles** — `envoys:` blocks with hostname globs, first-match-wins. A match block can specify 12+ fields: `modules`, `usercrates`, `roles`, `vars`, `vars_from`, `exclude_modules`, `exclude_resources`, `tags`, `environment`, `environment_overrides`, `observe_only`, `match`, `node_type`.
+2. **Directory inheritance via `common.vgo`** — modules/usercrates/roles/vars declared at a parent dir are inherited by every subdirectory; `exclude_modules:` for opt-out.
 3. **Roles** — defined in `roles.vgo` (or legacy `roles/`), supporting `when:` (role-wide conditional), `case:` (per-platform module groups), `includes:` (single-level role composition).
 4. **Per-environment overrides** — `environments.vgo` layered selection by env name.
 5. **Vars merging** — seven layers: module defaults < inherited common.vgo < envoy match-block < environment_overrides in match block < environments.vgo < conditional vars (`when:`-guarded) < match vars (`when:`-with-fallback).
 6. **vars_from:** — external var files loaded into match-block or common.vgo.
 7. **Conditional resources** — `when:` expressions on individual resources, evaluated server-side where possible, agent-side for trait-dependent predicates.
-8. **Usercrates** — user-scoped auto-apply-within-scope directory class (shipped 0.26.4).
+8. **Usercrates** — user-scoped module kind. The `stockpile/**/usercrates/` directory is a library; activation requires a positive `usercrates:` include on a carrier (same 4 carriers `modules:` lives on). Auto-apply was retired in 0.54.0.
 9. **Tag-based lookups** — per-tag/host/trait-keyed maps inside module fields (`shell: { tag:workstation: /bin/fish, default: /bin/bash }`).
 10. **Platform-keyed lookups** — same mechanism as tag lookups but keyed on `os_family:linux`, `distribution:debian`, etc.
 11. **Compliance attachment** — `compliance:` block inside a module OR `compliance.vgo` at a parent directory in the modules tree (claims merged into every module below).

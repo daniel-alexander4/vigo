@@ -70,8 +70,8 @@ type matchfile struct {
 // Extending the loader requires adding the new key here too.
 var matchfileKnownKeys = map[string]bool{
 	"match": true, "environment": true, "roles": true, "modules": true,
-	"vars": true, "tags": true, "exclude_modules": true,
-	"exclude_usercrates": true, "exclude_resources": true,
+	"usercrates": true, "vars": true, "tags": true,
+	"exclude_modules": true, "exclude_resources": true,
 	"observe_only": true, "when": true,
 	"gateway": true, "device_type": true, "credential": true,
 	"username": true, "port": true, "ip_address": true,

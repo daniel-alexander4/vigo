@@ -231,9 +231,9 @@ envoys:
 | `environment` | no | Environment name used to select the matching block in `environments.vgo` |
 | `roles` | no | List of role names to assign |
 | `modules` | no | Additional modules (beyond those from roles) |
+| `usercrates` | no | Positive include of usercrates (e.g., `[alice, dan]`); usercrates are inert until listed |
 | `vars` | no | Variable overrides (override module defaults and inherited `common.vgo` vars) |
 | `exclude_modules` | no | Opt out of specific inherited modules (e.g., `[monitoring]`) |
-| `exclude_usercrates` | no | Opt out of auto-applied usercrates (e.g., `[alice]`) |
 | `tags` | no | Static tags for targeting — referenced by `vigocli` as `tag:<name>` and by [lookup tables](#lookups) in resource attributes |
 
 ### Tags
@@ -293,55 +293,76 @@ Result for `web01.prod.example.com`: modules `sshd, ntp, monitoring, log-shippin
 
 ## Usercrates
 
-Usercrates are per-user modules (user account + home-dir config + dotfiles, typically) that live in a dedicated `stockpile/**/usercrates/` directory class and **auto-apply to every envoy within that directory's scope** — no need to list them in `common.vgo`. See the [Glossary](../glossary.md#usercrate) for what the term means and why it's distinct from a regular module.
+Usercrates are per-user modules (user account + home-dir config + dotfiles, typically) that live in a dedicated `stockpile/**/usercrates/` directory class. As of 0.54.0, **a usercrate is inert until it is positively included** by a carrier's `usercrates:` field — exactly like a regular module. The directory is a library, not an auto-apply zone. See the [Glossary](../glossary.md#usercrate) for why the kind is distinct from a regular module.
 
 ```
 stockpile/
   usercrates/
-    admin.vgo              # fleet-wide — applies to every envoy
+    admin.vgo              # defined here; inert until included
   customerA/
     envoys.vgo             # matchfile for customerA envoys
     usercrates/
-      alice.vgo            # only applies under customerA/
-  customerB/
-    envoys.vgo
-    usercrates/
-      bob.vgo              # only applies under customerB/
+      alice.vgo            # defined here; inert until included
+  common.vgo               # could include [admin, alice] for everyone under it
 ```
 
-Scope rule: a usercrate at `stockpile/<path>/usercrates/<name>.vgo` applies to every envoy whose matchfile lives at `stockpile/<path>/` or deeper. Mirrors the `common.vgo` inheritance chain, with one key difference: root-level usercrates at `stockpile/usercrates/` apply to root-level envoys too (unlike root `common.vgo`, which only applies to subdirectories).
+### Positive include — four sites
 
-### Auto-apply vs. explicit listing
+`usercrates:` is a positive include list. It lives on the same four carriers `modules:` lives on:
 
-Usercrates are the **only** auto-apply class. Regular modules still require explicit listing via `modules:` in `common.vgo` or a match block. The asymmetry is intentional: modules serve two purposes (direct application AND building blocks for roles), so they need explicit selection. Usercrates are always direct application — there's no "usercrate consumed by a role" pattern — so the filesystem path IS the scope.
-
-### Opt-out
-
-Drop a named usercrate from a specific envoy:
+| Carrier | YAML location | Scope |
+|---|---|---|
+| Match block | `envoys.vgo` | Single envoy |
+| `common.vgo` | Any directory | Every envoy at this dir and below |
+| `environments.vgo` per-env block | Any directory | Every envoy of that environment in scope |
+| Role | `stockpile/roles.vgo` | Every envoy that assigns the role |
 
 ```yaml
-# envoys.vgo
+# envoys.vgo — include directly on a match block
 envoys:
-  - match: "kiosk-*.example.com"
-    roles: [kiosk]
-    exclude_usercrates:
-      - users/dan     # kiosks don't need dev accounts
-      - users/alice
+  - match: "plex"
+    usercrates: [admin, dan]
 ```
-
-Drop a usercrate fleet-wide (or for everything under a subdirectory) by setting `exclude_usercrates:` on a `common.vgo`:
 
 ```yaml
-# stockpile/production/common.vgo
-exclude_usercrates:
-  - users/dev-only-account   # prod excludes this user everywhere
+# common.vgo — fleet-wide or subtree default
+usercrates: [anja, ann, dan, elena]
 ```
 
-`environments.vgo` blocks also support `exclude_usercrates:` with identical semantics.
+```yaml
+# stockpile/roles.vgo — bundle usercrates with a role
+roles:
+  - name: ops
+    modules: [sshd, ntp]
+    usercrates: [admin, oncall]
+```
+
+### Shape rule — exactly one `type: user` resource
+
+A usercrate file must declare **exactly one** `type: user` resource. Additional non-user resources (a `file` for `authorized_keys` or dotfiles, an `exec` for post-create setup) are permitted. A file with zero or multiple `user` resources fails to load with: `usercrate must declare exactly one type: user resource — found N. Move it to modules/ or restructure.`
+
+### Cross-kind validation
+
+`modules:` and `usercrates:` reference disjoint sets:
+
+- A `modules:` entry that names a usercrate fails to load with: `modules: references "alice" — that name is a usercrate defined at usercrates/alice.vgo; use \`usercrates:\` instead of \`modules:\``.
+- A `usercrates:` entry that names a regular module fails to load with the mirrored error.
+
+This is enforced at every reference site (envoy own, common.vgo chain, role expansion, role-include expansion, per-env override). All mismatches are surfaced in one publish attempt so operators can fix the whole stack in one pass.
 
 ### Name namespace
 
-Usercrates and regular modules share one namespace — the `name:` field in a usercrate must be globally unique across all modules and usercrates. Load-time collision is a fatal error with both source paths reported. This keeps `modules:` references in roles + common.vgo unambiguous (they resolve to a module OR a usercrate, never both).
+Usercrates and regular modules share one namespace — the `name:` field in a usercrate must be globally unique across all modules and usercrates. Load-time collision is a fatal error with both source paths reported. The cross-kind validation above ensures each reference site can only land on the right kind.
+
+The `name:` field is optional; when omitted, it defaults to the filename stem (`dan.vgo` → `dan`).
+
+### Unreferenced-usercrate warning
+
+If a usercrate is defined in `stockpile/**/usercrates/` but no carrier includes it, the loader emits a publish-time warning: `unreferenced usercrates — defined under stockpile/**/usercrates/ but not included by any envoy count=N names=[...]`. Either include it (positive `usercrates:` somewhere) or move/delete the file.
+
+### Migration from <0.54.0
+
+The pre-0.54.0 auto-apply rule and the `exclude_usercrates:` opt-out field are removed. A matchfile, common.vgo, or environments.vgo containing `exclude_usercrates:` on an envoy entry fails to load with: ``exclude_usercrates:` was removed in 0.54.0 — usercrates are now inert until positively included via `usercrates:` (see docs/reference/writing-modules.md)``. To migrate: delete the field and add a positive `usercrates:` list to each carrier (matchfile, common.vgo, role, or environments.vgo) that should pick up the usercrates that used to auto-apply.
 
 ### User management specifically
 
@@ -1344,8 +1365,8 @@ Operators edit `stockpile/`. Never `.live/`. Never edit `examples/` directly —
 | **Matchfiles** | `stockpile/**/envoys.vgo` (or any `.vgo` with an `envoys:` block, anywhere outside `modules/`/`templates/`/`tasks/`/`workflows/`/`usercrates/`) | Maps hostname patterns to roles + environment + tags + vars. First-match-wins. |
 | **Roles** | `stockpile/roles.vgo` | Named groupings of modules. Supports `when:` (role-wide) and `case:` (per-platform module groups). Single fleet-wide file at the stockpile root. |
 | **Modules** | `stockpile/modules/**/*.vgo` | Reusable resource sets. Declared once, referenced by roles or `common.vgo`. Directory name is `modules/` on disk; YAML keys and identifiers stay `module`. |
-| **Usercrates** | `stockpile/**/usercrates/*.vgo` | Per-user modules. Auto-apply within directory scope — no need to list in `common.vgo`. |
-| **Common defaults** | `stockpile/**/common.vgo` | Directory-inherited modules/roles/vars + `exclude_modules`/`exclude_usercrates`. |
+| **Usercrates** | `stockpile/**/usercrates/*.vgo` | Per-user modules. Inert until positively included via a carrier's `usercrates:` field (match block, common.vgo, role, or environments.vgo). |
+| **Common defaults** | `stockpile/**/common.vgo` | Directory-inherited modules/usercrates/roles/vars + `exclude_modules`. |
 | **Environment** | `environment:` field on match block | Cross-cutting env declaration. Orthogonal to directory structure. |
 | **Per-env overrides** | `stockpile/**/environments.vgo` | Env-specific module sets + vars. Scope follows ancestor chain. |
 | **Lookup tables** | Inside module fields (`tag:...`, `os_family:...`) | Per-trait or per-tag field variation. |
@@ -1394,9 +1415,9 @@ For an envoy `web01.customerA.example.com` checking in:
 │  2. Role modules (expand via roles.vgo; case: applied per OS)    │
 │       web-server → [nginx, php, tls]                             │
 │                                                                  │
-│  3. Usercrates (auto-apply, ancestor chain)                      │
-│       stockpile/usercrates/dan.vgo              → users/dan      │
-│       stockpile/customerA/usercrates/alice.vgo  → users/alice    │
+│  3. Usercrates (positive include — same 4 carriers as modules)   │
+│       common.vgo `usercrates: [dan]`            → users/dan      │
+│       match block `usercrates: [alice]`         → users/alice    │
 │                                                                  │
 │  4. environments.vgo (ancestor chain, env == "prod")             │
 │       stockpile/environments.vgo (prod)  → [audit-logging]       │
@@ -1407,9 +1428,8 @@ For an envoy `web01.customerA.example.com` checking in:
                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  Apply exclusions                                                │
-│    match block:  exclude_modules / exclude_usercrates            │
-│    common.vgo:   exclude_usercrates (dir scope and below)        │
-│    per_env:      exclude_modules / exclude_usercrates per env    │
+│    match block:  exclude_modules                                 │
+│    per_env:      exclude_modules per env                         │
 └──────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -1457,7 +1477,7 @@ For an envoy `web01.customerA.example.com` checking in:
 | How does config differ per env? | Declare `environment:` on the match block. Declare env-specific modules/vars in `stockpile/**/environments.vgo` at the appropriate directory level. Env is **cross-cutting** — orthogonal to the directory tree. Do NOT nest subdirectories by env. |
 | How does a module branch per OS / platform? | `case:` on the role (when whole modules differ per platform) OR platform-keyed lookup tables inside module fields (when only values differ). Never inline `when:` on a resource when the axis is platform — that's harder to read. |
 | How do vars resolve? | 3 layers, low-to-high: module defaults < common.vgo inherited vars < envoy match-block vars < environments.vgo vars. |
-| How is a user account configured? | A **usercrate** in `stockpile/usercrates/` (fleet-wide) or `stockpile/<scope>/usercrates/` (scoped). Auto-applies within the directory scope — no listing needed. See [User Management](#usercrates). |
+| How is a user account configured? | A **usercrate** in `stockpile/usercrates/` (fleet-wide) or `stockpile/<scope>/usercrates/` (scoped). The directory is a library — positively include via a `usercrates:` field on a carrier (match block, common.vgo, role, or environments.vgo). See [User Management](#usercrates). |
 | Where do compliance claims live? | `stockpile/**/compliance.vgo` — directory-level, inherited by every module and usercrate in the subtree. Inline `compliance:` on a module definition for module-specific exceptions. |
 | Where do waivers live? | `stockpile/**/waivers.vgo` — at any directory level, scoped by directory. Distinct filename from compliance claims. |
 | Where do I copy an example from? | `vigocli config examples list` to browse, then `vigocli config examples copy <name>` to materialize one into stockpile. |
