@@ -5,8 +5,6 @@ DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS workflow_step_results;
 DROP TABLE IF EXISTS workflow_runs;
-DROP TABLE IF EXISTS task_run_targets;
-DROP TABLE IF EXISTS task_runs;
 DROP TABLE IF EXISTS env_promotions;
 DROP TABLE IF EXISTS convergence_history;
 DROP TABLE IF EXISTS compliance_history;

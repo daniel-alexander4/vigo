@@ -165,44 +165,8 @@ CREATE TABLE IF NOT EXISTS env_promotions (
 );
 
 -- =============================================================================
--- Orchestration tables (task runs, workflows)
+-- Orchestration tables (push runs, workflows)
 -- =============================================================================
-
-CREATE TABLE IF NOT EXISTS task_runs (
-    id            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-    command       TEXT NOT NULL,
-    target_glob   TEXT NOT NULL,
-    operator      TEXT NOT NULL DEFAULT '',
-    status        TEXT NOT NULL CHECK (status IN ('pending', 'running', 'complete', 'failed', 'cancelled')) DEFAULT 'pending',
-    total_targets INTEGER NOT NULL DEFAULT 0,
-    created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    started_at    TIMESTAMP,
-    finished_at   TIMESTAMP,
-    timeout_secs  INTEGER NOT NULL DEFAULT 60,
-    batch_size    TEXT,
-    max_failures  TEXT
-);
-
-CREATE INDEX IF NOT EXISTS idx_task_runs_status ON task_runs (status);
-CREATE INDEX IF NOT EXISTS idx_task_runs_created_at ON task_runs (created_at);
-
-CREATE TABLE IF NOT EXISTS task_run_targets (
-    id           TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
-    task_run_id  TEXT NOT NULL REFERENCES task_runs (id) ON DELETE CASCADE,
-    envoy_id    TEXT NOT NULL REFERENCES envoys (id) ON DELETE CASCADE,
-    hostname     TEXT NOT NULL,
-    status       TEXT NOT NULL CHECK (status IN ('pending', 'dispatched', 'complete', 'failed', 'timeout', 'offline', 'rejected', 'skipped')) DEFAULT 'pending',
-    exit_code    INTEGER,
-    stdout       TEXT,
-    stderr       TEXT,
-    duration_ms  INTEGER,
-    error_msg    TEXT,
-    dispatched_at TIMESTAMP,
-    finished_at  TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_task_run_targets_task_run_id ON task_run_targets (task_run_id);
-CREATE INDEX IF NOT EXISTS idx_task_run_targets_envoy_id ON task_run_targets (envoy_id);
 
 CREATE TABLE IF NOT EXISTS workflow_runs (
     id              TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
@@ -224,7 +188,7 @@ CREATE TABLE IF NOT EXISTS workflow_step_results (
     workflow_run_id TEXT NOT NULL REFERENCES workflow_runs (id) ON DELETE CASCADE,
     step_index      INTEGER NOT NULL,
     step_name       TEXT NOT NULL,
-    task_run_id     TEXT REFERENCES task_runs (id),
+    push_run_id     TEXT REFERENCES push_runs (id),
     status          TEXT NOT NULL CHECK (status IN ('pending', 'running', 'complete', 'failed', 'skipped')) DEFAULT 'pending',
     started_at      TIMESTAMP,
     finished_at     TIMESTAMP

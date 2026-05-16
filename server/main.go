@@ -654,22 +654,11 @@ func run() error {
 	taskReaper := task.NewReaper(queries)
 	go taskReaper.Start(ctx)
 
-	// Start retention pruner (if configured).
-	if retention := parseRetention(cfg.Database.Retention); retention > 0 {
-		retentionPruner := db.NewRetentionPruner(queries, sqlDB, retention)
-		retentionPruner.SetPostgres(isPostgres)
-		go retentionPruner.Start(ctx, 24*time.Hour)
-		slog.Info("retention pruner enabled", "retention", retention, "interval", "24h")
-	} else if size, err := db.DatabaseSizeBytes(sqlDB); err == nil && size > 1024*1024*1024 {
-		// Unbounded growth on a database past 1 GiB is the same shape as the
-		// home-lab regression that surfaced in 0.38.x — a 31 GB DB making the
-		// dashboard's recent-activity query unrunnable. Log a one-shot warning
-		// so the operator notices before queries start crossing the browser
-		// timeout. One-shot at startup; not chatty.
-		slog.Warn("database retention pruning is disabled and DB is large",
-			"size_bytes", size,
-			"hint", "set database.retention in server.yaml (e.g. \"30d\") and run `vigocli db prune --older-than 30d` once to reclaim space")
-	}
+	retention := parseRetention(cfg.Database.Retention)
+	retentionPruner := db.NewRetentionPruner(queries, sqlDB, retention)
+	retentionPruner.SetPostgres(isPostgres)
+	go retentionPruner.Start(ctx, 24*time.Hour)
+	slog.Info("retention pruner enabled", "retention", retention, "interval", "24h")
 
 	// Start Litestream WAL replication (SQLite only, when backup.url is configured).
 	if !isPostgres && cfg.Backup.URL != "" {
@@ -1431,11 +1420,15 @@ func stringOrDefault(s, def string) string {
 }
 
 // parseDuration parses a duration string, returning def if s is empty or invalid.
-// parseRetention parses a retention string like "90d" or "2160h" into a
-// time.Duration. Supports "d" suffix for days. Returns 0 if empty or invalid.
+// parseRetention parses a retention string like "30d" or "720h" into a
+// time.Duration. Supports "d" suffix for days. Empty or invalid input
+// returns defaultRetention rather than disabling pruning — unbounded
+// run/run_results growth is what disabled-by-default lets through.
+const defaultRetention = 30 * 24 * time.Hour
+
 func parseRetention(s string) time.Duration {
 	if s == "" {
-		return 0
+		return defaultRetention
 	}
 	// Support "Nd" shorthand for days.
 	if len(s) > 1 && s[len(s)-1] == 'd' {
@@ -1446,8 +1439,8 @@ func parseRetention(s string) time.Duration {
 	}
 	d, err := time.ParseDuration(s)
 	if err != nil {
-		slog.Warn("invalid retention duration, pruning disabled", "value", s, "error", err)
-		return 0
+		slog.Warn("invalid retention duration, using default", "value", s, "default", defaultRetention, "error", err)
+		return defaultRetention
 	}
 	return d
 }
