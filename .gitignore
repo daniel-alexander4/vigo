@@ -57,3 +57,9 @@ loadtest
 github.token.txt
 tshoot/
 .gitback.yaml
+
+# Pre-restructure docs snapshot (see project memory entry docs_pre_restructure_archive)
+docs.old/
+
+# Rendered PDFs from the docify pipeline (build artifacts; markdown is source of truth)
+docs/**/_pdf/

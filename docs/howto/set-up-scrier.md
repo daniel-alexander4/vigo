@@ -59,7 +59,7 @@ sudo vigocli webusers delete --username dan
 sudo vigocli webusers create --username dan --role admin
 ```
 
-The recreate re-reads from `/home/dan/.ssh/id_*.pub`. (A dedicated `vigocli webusers update --role admin` that re-reads in place is on the pending list.) After recreating, sign out of the browser and sign back in — the session cache holds the pubkey snapshot from login time.
+The recreate re-reads from `/home/dan/.ssh/id_*.pub`. After recreating, sign out of the browser and sign back in — the session cache holds the pubkey snapshot from login time.
 
 For viewer / compliance users (no scrier access), the OS-user mapping doesn't apply — they can be created freely with `--ssh-key-file <path>` if isowebauth needs a pubkey, but they're not Scrier targets.
 

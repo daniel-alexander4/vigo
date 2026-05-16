@@ -3703,3 +3703,124 @@ envoys:
 	}
 }
 
+// --- Pending-features test suite ---
+//
+// These tests pin the contracts described in pending.md but document
+// behavior that isn't implemented yet. They use t.Skip so CI stays green;
+// implementer removes the t.Skip line after wiring the feature.
+
+// TestPending_ResolveModuleSecrets_EmbeddedRefs pins the contract from
+// pending.md "Embedded `secret:` refs inside compound attribute values
+// are not resolved" (Fixes & Testing #2).
+//
+// Today resolveModuleSecrets (loader.go:3715) only resolves attribute
+// values whose entire string starts with "secret:" — embedded refs inside
+// compound k=v strings (env, environment, cron environment, container
+// labels, etc.) pass through verbatim to the agent. Operators reasonably
+// expect substitution given the vault is the canonical secret-management
+// surface post-0.53.0; this test is the fixture that proves it works
+// when the loader walks compound strings token-by-token.
+func TestPending_ResolveModuleSecrets_EmbeddedRefs(t *testing.T) {
+	t.Skip("pending: see ~/.claude/projects/-home-dan-repos-vigo/memory/pending.md `Embedded secret refs inside compound attribute values are not resolved` — remove this line when resolveModuleSecrets walks compound strings")
+
+	dir := setupDir(t)
+
+	// container: resource with embedded secret in env; mirrors the
+	// pattern the docs example shows.
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "redis.vgo"), `
+name: redis
+resources:
+  - name: redis-cache
+    type: container
+    container: redis-cache
+    image: redis:7-alpine
+    state: running
+    env: "REDIS_PASSWORD=secret:vigo/redis/password,REDIS_DB=cache"
+`)
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "t.vgo"), `
+envoys:
+  - match: "redis-host"
+    modules: [redis]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{
+		"vigo/redis/password": "hunter2",
+	}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	_, cfg := store.Match("redis-host")
+	if cfg == nil {
+		t.Fatal("Match(redis-host) returned nil config")
+	}
+	if len(cfg.Modules) == 0 || len(cfg.Modules[0].Resources) == 0 {
+		t.Fatalf("expected one resource on the redis module, got %#v", cfg.Modules)
+	}
+	envAttr, _ := cfg.Modules[0].Resources[0].Attributes["env"].(string)
+
+	want := "REDIS_PASSWORD=hunter2,REDIS_DB=cache"
+	if envAttr != want {
+		t.Errorf("env attribute = %q, want %q (embedded `secret:` ref must be substituted)", envAttr, want)
+	}
+}
+
+// TestPending_EnvoysReferencingSecret_PlainSecretRef pins the contract
+// from pending.md "`secret:` rotation in module attributes doesn't
+// propagate without a module-content change" (Fixes & Testing #3).
+//
+// EnvoysReferencingSecret (loader.go:2543) currently relies on
+// moduleDefReferencesSecret, which (per the pending entry's analysis)
+// finds `watch_secret:`-declared references but not plain `secret:`
+// substitutions in normal attributes like `password:`. The agent's
+// natural convergence cycle picks up rotated values on the next bundle
+// build (~30s — verified live during the 0.53.x admin-slice work), but
+// `vigocli envoys push <host>` after a rotation does NOT trigger a
+// bundle invalidation for plain-secret consumers, so force-push surfaces
+// the stale value. Implicit-watch is the proposed fix.
+func TestPending_EnvoysReferencingSecret_PlainSecretRef(t *testing.T) {
+	t.Skip("pending: see ~/.claude/projects/-home-dan-repos-vigo/memory/pending.md `secret rotation in module attributes doesn't propagate` — remove this line when EnvoysReferencingSecret walks plain `secret:` substitutions")
+
+	dir := setupDir(t)
+
+	// `user:`-resource with password: secret:... and NO watch_secret: hint.
+	// This is the canonical "rotation should propagate via force-push"
+	// shape that the pending entry's reproducer uses.
+	writeFile(t, filepath.Join(dir, "stockpile", "modules", "ops-user.vgo"), `
+name: ops-user
+resources:
+  - name: ops-account
+    type: user
+    username: ops
+    password: "secret:vigo/os-users/ops"
+    shell: /bin/bash
+`)
+	writeFile(t, filepath.Join(dir, "stockpile", "default", "t.vgo"), `
+envoys:
+  - match: "host01"
+    modules: [ops-user]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{
+		"vigo/os-users/ops": "initial-password",
+	}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	got := store.EnvoysReferencingSecret("vigo/os-users/ops")
+	if len(got) == 0 {
+		t.Fatalf("EnvoysReferencingSecret(`vigo/os-users/ops`) = [] — expected [host01] because the ops-user module's password attribute references that secret. Plain `secret:` substitutions need to be tracked the same way `watch_secret:` declarations are; otherwise force-push after rotation surfaces stale values.")
+	}
+	found := false
+	for _, m := range got {
+		if m == "host01" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("EnvoysReferencingSecret returned %v, want it to include `host01`", got)
+	}
+}
+

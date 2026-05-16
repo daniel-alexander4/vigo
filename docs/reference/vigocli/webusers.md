@@ -56,7 +56,7 @@ sudo vigocli webusers delete --username dan
 sudo vigocli webusers create --username dan --role admin
 ```
 
-The recreate auto-reads the (new) pubkey from `/home/<username>/.ssh/id_*.pub`. Sign out and back in on the browser side so the session cache picks up the rotated key. A dedicated `webusers update` subcommand that re-reads in place is on the pending list.
+The recreate auto-reads the (new) pubkey from `/home/<username>/.ssh/id_*.pub`. Sign out and back in on the browser side so the session cache picks up the rotated key.
 
 ### Setting a password
 
