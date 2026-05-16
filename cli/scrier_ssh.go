@@ -84,6 +84,12 @@ func init() {
 // resolveOperatorPubkey walks the operator-pubkey discovery chain. First hit
 // wins; the chain is documented on scrierSSHCmd. Returns the normalized
 // pubkey ("type base64 [comment]") on success.
+//
+// On failure, each fallback contributes a one-line verdict naming what it
+// actually tried and what specifically failed (env var unset, file
+// unreadable, audit-uid unset, user-not-in-passwd, no pubkey in home,
+// etc.). The joined verdicts replace the prior "no X, no Y, no Z" template
+// that lied when SUDO_USER was set but the home-dir pubkey was missing.
 func resolveOperatorPubkey(explicitPath string) (string, error) {
 	if explicitPath != "" {
 		data, err := os.ReadFile(explicitPath)
@@ -97,46 +103,52 @@ func resolveOperatorPubkey(explicitPath string) (string, error) {
 		return key, nil
 	}
 
+	var verdicts []string
+
 	// $SSH_USER_AUTH — sshd writes "method <args>" lines for the auth
 	// methods used by THIS session. For pubkey auth: "publickey <type>
 	// <base64>". Requires ExposeAuthInfo=yes in sshd_config.
-	if path := os.Getenv("SSH_USER_AUTH"); path != "" {
-		if data, err := os.ReadFile(path); err == nil {
-			for _, line := range strings.Split(string(data), "\n") {
-				line = strings.TrimSpace(line)
-				if rest, ok := strings.CutPrefix(line, "publickey "); ok {
-					return rest, nil
-				}
+	if path := os.Getenv("SSH_USER_AUTH"); path == "" {
+		verdicts = append(verdicts, "SSH_USER_AUTH: not set (needs `ExposeAuthInfo yes` in sshd_config)")
+	} else if data, err := os.ReadFile(path); err != nil {
+		verdicts = append(verdicts, fmt.Sprintf("SSH_USER_AUTH: cannot read %s: %v", path, err))
+	} else {
+		for _, line := range strings.Split(string(data), "\n") {
+			if rest, ok := strings.CutPrefix(strings.TrimSpace(line), "publickey "); ok {
+				return rest, nil
 			}
 		}
+		verdicts = append(verdicts, fmt.Sprintf("SSH_USER_AUTH: %s has no `publickey` line", path))
 	}
 
 	// /proc/self/loginuid — Linux audit subsystem records the original
 	// login uid as a process attribute; survives every sudo/su/su-
 	// transition. "-1" / 4294967295 means unset (kernel without audit).
-	if data, err := os.ReadFile("/proc/self/loginuid"); err == nil {
-		s := strings.TrimSpace(string(data))
-		if s != "" && s != "-1" && s != "4294967295" {
-			if u, err := user.LookupId(s); err == nil {
-				if key, err := readDefaultSSHPubkey(u.HomeDir); err == nil {
-					return key, nil
-				}
-			}
-		}
+	if data, err := os.ReadFile("/proc/self/loginuid"); err != nil {
+		verdicts = append(verdicts, fmt.Sprintf("loginuid: cannot read /proc/self/loginuid: %v", err))
+	} else if s := strings.TrimSpace(string(data)); s == "" || s == "-1" || s == "4294967295" {
+		verdicts = append(verdicts, "loginuid: unset (audit subsystem not active)")
+	} else if u, err := user.LookupId(s); err != nil {
+		verdicts = append(verdicts, fmt.Sprintf("loginuid: uid %s not in passwd: %v", s, err))
+	} else if key, err := readDefaultSSHPubkey(u.HomeDir); err != nil {
+		verdicts = append(verdicts, fmt.Sprintf("loginuid: %s (uid %s) has %v", u.Username, s, err))
+	} else {
+		return key, nil
 	}
 
 	// $SUDO_USER — set by sudo, cleared by `su -`. Belt-and-suspenders.
-	if name := os.Getenv("SUDO_USER"); name != "" {
-		if u, err := user.Lookup(name); err == nil {
-			if key, err := readDefaultSSHPubkey(u.HomeDir); err == nil {
-				return key, nil
-			}
-		}
+	if name := os.Getenv("SUDO_USER"); name == "" {
+		verdicts = append(verdicts, "SUDO_USER: not set")
+	} else if u, err := user.Lookup(name); err != nil {
+		verdicts = append(verdicts, fmt.Sprintf("SUDO_USER: %q not in passwd: %v", name, err))
+	} else if key, err := readDefaultSSHPubkey(u.HomeDir); err != nil {
+		verdicts = append(verdicts, fmt.Sprintf("SUDO_USER: %s has %v", name, err))
+	} else {
+		return key, nil
 	}
 
-	return "", errors.New("cannot auto-detect your SSH pubkey " +
-		"(no SSH_USER_AUTH, no usable /proc/self/loginuid, no SUDO_USER); " +
-		"pass --ssh-key-file PATH, or set `ExposeAuthInfo yes` in /etc/ssh/sshd_config so sshd records the key you authenticated with")
+	return "", fmt.Errorf("cannot auto-detect your SSH pubkey (%s); pass --ssh-key-file PATH",
+		strings.Join(verdicts, "; "))
 }
 
 // readDefaultSSHPubkey tries the standard pubkey names in `<home>/.ssh/`,

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -234,6 +235,70 @@ func TestResolveOperatorPubkey_AllSourcesEmpty(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "--ssh-key-file") {
 		t.Errorf("error must mention the --ssh-key-file fallback hint: %v", err)
+	}
+	// Each fallback branch should contribute its own verdict — generic
+	// "no X, no Y, no Z" was the prior shape and misled operators.
+	for _, want := range []string{"SSH_USER_AUTH:", "loginuid:", "SUDO_USER:"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error must name the %s branch verdict; got: %v", want, err)
+		}
+	}
+}
+
+// TestResolveOperatorPubkey_SUDOUserSetButNoPubkey is the regression for
+// the 2026-05-15 misleading error: SUDO_USER was set but the operator's
+// home had no id_*.pub, and the chain reported "no SUDO_USER" — a lie.
+// The verdict must now name the actual failure (key file missing), not
+// claim the env var is unset.
+func TestResolveOperatorPubkey_SUDOUserSetButNoPubkey(t *testing.T) {
+	if _, err := user.Lookup("nobody"); err != nil {
+		t.Skip("`nobody` user not present on this system")
+	}
+	t.Setenv("SSH_USER_AUTH", "")
+	t.Setenv("SUDO_USER", "nobody")
+	_, err := resolveOperatorPubkey("")
+	if err == nil {
+		t.Skip("`nobody`'s home has discoverable SSH keys on this runner")
+	}
+	if strings.Contains(err.Error(), "SUDO_USER: not set") {
+		t.Errorf("verdict must NOT claim SUDO_USER is unset when SUDO_USER=nobody; got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "SUDO_USER: nobody") {
+		t.Errorf("verdict must name SUDO_USER=nobody and the read failure; got: %v", err)
+	}
+}
+
+// TestResolveOperatorPubkey_SUDOUserNotInPasswd covers the user.Lookup
+// failure path: SUDO_USER set, but no matching passwd entry.
+func TestResolveOperatorPubkey_SUDOUserNotInPasswd(t *testing.T) {
+	t.Setenv("SSH_USER_AUTH", "")
+	t.Setenv("SUDO_USER", "zzz-vigo-bogus-12345")
+	_, err := resolveOperatorPubkey("")
+	if err == nil {
+		t.Fatal("expected error for bogus SUDO_USER, got nil")
+	}
+	if !strings.Contains(err.Error(), `SUDO_USER: "zzz-vigo-bogus-12345" not in passwd`) {
+		t.Errorf("verdict must name the failing passwd lookup; got: %v", err)
+	}
+}
+
+// TestResolveOperatorPubkey_SSHUserAuthNoPubkeyLine covers the SSH_USER_AUTH
+// branch when sshd recorded auth methods but none were pubkey (e.g.,
+// password-only auth). The verdict must name the missing publickey line.
+func TestResolveOperatorPubkey_SSHUserAuthNoPubkeyLine(t *testing.T) {
+	dir := t.TempDir()
+	authPath := filepath.Join(dir, "auth.txt")
+	if err := os.WriteFile(authPath, []byte("password\nkeyboard-interactive\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SSH_USER_AUTH", authPath)
+	t.Setenv("SUDO_USER", "")
+	_, err := resolveOperatorPubkey("")
+	if err == nil {
+		t.Skip("test runner had a usable loginuid or SUDO_USER fallback")
+	}
+	if !strings.Contains(err.Error(), "no `publickey` line") {
+		t.Errorf("verdict must name the missing publickey line; got: %v", err)
 	}
 }
 
