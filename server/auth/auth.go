@@ -95,8 +95,16 @@ var publicPaths = map[string]bool{
 	"/healthz":                true,
 	"/login":                  true,
 	"/totp":                   true,
-	"/api/v1/bootstrap":       true,
-	"/api/v1/secrets/rotated": true,
+	"/api/v1/bootstrap": true,
+	// /api/v1/secrets/rotated is INTENTIONALLY NOT public. The route's own
+	// admin() wrapper (server/api/config.go) handles auth. Listing it here
+	// bypassed the auth middleware entirely (no user injected into context),
+	// then the per-route admin check rejected the missing-user request with
+	// 403 "admin role required" even for vigocli running on the server host
+	// — exact same shape as the /api/v1/config/reload comment below.
+	// TryPeerAuth handles the localhost case correctly: loopback admin gets
+	// injected and clears the permission gate.
+	//
 	// fleet/pubkeys and swarm/puddle/names are public-by-construction:
 	// hostname↔pubkey and name↔pubkey bindings, nothing secret (the
 	// pubkeys ride every multicast GITBACK: line; the names are the

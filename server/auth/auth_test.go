@@ -43,6 +43,12 @@ func TestIsPublicPath(t *testing.T) {
 		// Localhost callers get peer-auth → loopback admin → permission
 		// passes; remote callers without a token correctly get 401.
 		{"/api/v1/config/reload", false},
+		// /api/v1/secrets/rotated must NOT be public — same shape as
+		// /api/v1/config/reload above. The route's admin() wrapper handles
+		// auth; listing it public used to bypass user injection and return
+		// 403 "admin role required" to vigocli secrets set on the server
+		// host, silently breaking rotation propagation (0.53.8 regression).
+		{"/api/v1/secrets/rotated", false},
 		{"/", false},
 		{"/envoys", false},
 		{"/api/v1/users", false},

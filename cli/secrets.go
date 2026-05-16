@@ -252,10 +252,14 @@ func setRawSecret(cmd *cobra.Command, key string) error {
 	fmt.Printf("  Secret %q stored.\n", key)
 
 	// Notify the server so watch_secret resources trigger on next check-in.
+	// Surface failures: secret is stored locally, but envoys won't see the
+	// new value until the secret watcher's next poll (default 5 min) unless
+	// this notification lands.
 	client := newAPIClient()
-	if err := client.post("/api/v1/secrets/rotated", map[string]any{"path": key}, nil); err == nil {
-		fmt.Println("  Server notified — affected envoys will apply on next check-in.")
+	if err := client.post("/api/v1/secrets/rotated", map[string]any{"path": key}, nil); err != nil {
+		return fmt.Errorf("server notification failed (secret stored locally; envoys will pick it up at the next watcher poll, ~5 min): %w", err)
 	}
+	fmt.Println("  Server notified — affected envoys will apply on next check-in.")
 
 	return nil
 }
@@ -283,10 +287,12 @@ func setPasswordSecret(cmd *cobra.Command, key string) error {
 	fmt.Printf("  Password stored at %s.\n", key)
 
 	// Notify the server so affected envoys converge on the new value.
+	// Surface failures: see setRawSecret for the rationale.
 	client := newAPIClient()
-	if err := client.post("/api/v1/secrets/rotated", map[string]any{"path": key}, nil); err == nil {
-		fmt.Println("  Server notified — affected envoys will apply on next check-in.")
+	if err := client.post("/api/v1/secrets/rotated", map[string]any{"path": key}, nil); err != nil {
+		return fmt.Errorf("server notification failed (password stored locally; envoys will pick it up at the next watcher poll, ~5 min): %w", err)
 	}
+	fmt.Println("  Server notified — affected envoys will apply on next check-in.")
 
 	return nil
 }
@@ -305,9 +311,14 @@ func runSecretsGet(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println(val)
 
-	// Record secret access in the audit trail.
+	// Record secret access in the audit trail. Best-effort: the operator has
+	// already received the value, so failure here is a logged warning rather
+	// than a command error — but it must not be silent (would leave a hole in
+	// the audit chain that nobody sees).
 	client := newAPIClient()
-	_ = client.post("/api/v1/secrets/accessed", map[string]any{"path": key}, nil)
+	if err := client.post("/api/v1/secrets/accessed", map[string]any{"path": key}, nil); err != nil {
+		fmt.Fprintf(os.Stderr, "  Warning: audit recording failed: %v\n", err)
+	}
 
 	return nil
 }

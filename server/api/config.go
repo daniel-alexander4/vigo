@@ -170,8 +170,14 @@ func (h *ConfigHandler) SecretRotated(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reload config so the new secret value is resolved.
-	_ = h.configStore.Reload()
+	// Reload config so the new secret value is resolved. Surface failure: a
+	// swallowed error here would leave cs.entries with stale resolved values
+	// and the operator with no signal — same silent class as a /config/reload
+	// failure.
+	if err := h.configStore.Reload(); err != nil {
+		writeError(w, http.StatusInternalServerError, "config reload failed: "+err.Error())
+		return
+	}
 
 	// Find envoys referencing this secret via their match patterns.
 	patterns := h.configStore.EnvoysReferencingSecret(req.Path)
