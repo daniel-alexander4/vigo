@@ -6,11 +6,11 @@
 
 <div class="stat-cards">
     <div class="stat-card">
-        <div class="stat-card__value">{{.SpokeCount}}</div>
+        <div class="stat-card__value">{{.SteorraCount}}</div>
         <div class="stat-card__label">Steorras</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value text-{{if eq .HealthyCount .SpokeCount}}success{{else if gt .HealthyCount 0}}warning{{else}}danger{{end}}">{{.HealthyCount}}/{{.SpokeCount}}</div>
+        <div class="stat-card__value text-{{if eq .HealthyCount .SteorraCount}}success{{else if gt .HealthyCount 0}}warning{{else}}danger{{end}}">{{.HealthyCount}}/{{.SteorraCount}}</div>
         <div class="stat-card__label">Healthy</div>
     </div>
     <div class="stat-card">
@@ -39,7 +39,7 @@
     </div>
 </div>
 
-{{if .Spokes}}
+{{if .Steorras}}
 <div class="table-container">
     <table class="table">
         <thead>
@@ -56,7 +56,7 @@
             </tr>
         </thead>
         <tbody>
-            {{range .Spokes}}
+            {{range .Steorras}}
             <tr>
                 <td><a href="/tungol/steorras/{{.ID}}"><strong>{{.ID}}</strong></a></td>
                 <td class="text-muted">{{.Addr}}</td>

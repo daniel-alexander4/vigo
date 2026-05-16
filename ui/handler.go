@@ -745,7 +745,7 @@ type PageData struct {
 	CheckInInterval   string // configured check-in interval, e.g. "15s", "5m0s"
 	AIEnabled         bool
 	AIProviderName    string // "Claude", "Ollama", "OpenAI", etc.
-	SpannerEnabled    bool
+	TungolEnabled    bool
 	DocsEnabled       bool
 	PeerEnabled       bool
 	SwarmEnabled      bool
@@ -1979,7 +1979,7 @@ func (h *Handler) setCommon(pd *PageData) {
 			pd.AIProviderName = strings.ToUpper(name[:1]) + name[1:]
 		}
 	}
-	pd.SpannerEnabled = h.hub != nil
+	pd.TungolEnabled = h.hub != nil
 	pd.DocsEnabled = h.docsDir != ""
 	pd.PeerEnabled = h.peerSvc != nil
 	pd.SwarmEnabled = h.swarmTracker != nil
@@ -6721,8 +6721,8 @@ func workflowRowFromDB(w db.WorkflowRun) WorkflowRow {
 	return row
 }
 
-// SpannerSpokeRow represents a spoke in the spanner UI table.
-type SpannerSpokeRow struct {
+// TungolSteorraRow represents a spoke in the spanner UI table.
+type TungolSteorraRow struct {
 	ID             string
 	Addr           string
 	Patterns       []string
@@ -6740,10 +6740,10 @@ type SpannerSpokeRow struct {
 	Error          string
 }
 
-// SpannerPageData holds data for the spanner page.
-type SpannerPageData struct {
+// TungolPageData holds data for the tungol page.
+type TungolPageData struct {
 	PageData
-	SpokeCount          int
+	SteorraCount        int
 	HealthyCount        int
 	TotalEnvoys         int32
 	TotalConverged  int32
@@ -6751,7 +6751,7 @@ type SpannerPageData struct {
 	TotalDiverged   int32
 	TotalFailed     int32
 	ConvergencePct       float32
-	Spokes              []SpannerSpokeRow
+	Steorras            []TungolSteorraRow
 	// HA peer replication status
 	PeerEnabled       bool
 	PeerRole          string
@@ -6766,11 +6766,11 @@ type SpannerPageData struct {
 func (h *Handler) Tungol(w http.ResponseWriter, r *http.Request) {
 	statuses := h.hub.SpokeStatuses(r.Context())
 
-	var spokes []SpannerSpokeRow
+	var spokes []TungolSteorraRow
 	healthyCount := 0
 	var totalEnvoys, totalCompliant, totalRelapsed, totalDiverged, totalFailed int32
 	for _, s := range statuses {
-		spokes = append(spokes, SpannerSpokeRow{
+		spokes = append(spokes, TungolSteorraRow{
 			ID:             s.ID,
 			Addr:           s.Addr,
 			Patterns:       s.Patterns,
@@ -6802,9 +6802,9 @@ func (h *Handler) Tungol(w http.ResponseWriter, r *http.Request) {
 		convPct = float32(totalCompliant) / float32(totalEnvoys) * 100
 	}
 
-	data := SpannerPageData{
+	data := TungolPageData{
 		PageData:            PageData{Title: "Tungol", ActiveNav: "tungol"},
-		SpokeCount:          len(spokes),
+		SteorraCount:        len(spokes),
 		HealthyCount:        healthyCount,
 		TotalEnvoys:         totalEnvoys,
 		TotalConverged:      totalCompliant,
@@ -6812,7 +6812,7 @@ func (h *Handler) Tungol(w http.ResponseWriter, r *http.Request) {
 		TotalDiverged:       totalDiverged,
 		TotalFailed:         totalFailed,
 		ConvergencePct:       convPct,
-		Spokes:              spokes,
+		Steorras:            spokes,
 	}
 
 	// Add HA peer replication status if available.
@@ -6835,10 +6835,10 @@ func (h *Handler) Tungol(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "tungol", data)
 }
 
-// SpokeDetailPageData holds data for the spoke detail page.
-type SpokeDetailPageData struct {
+// SteorraDetailPageData holds data for the per-steorra detail page.
+type SteorraDetailPageData struct {
 	PageData
-	SpokeID        string
+	SteorraID      string
 	Addr           string
 	Healthy        bool
 	EnvoyCount    int32
@@ -6850,12 +6850,12 @@ type SpokeDetailPageData struct {
 	NoData         int32
 	ConvergencePct  float32
 	LatencyMs      int64
-	Envoys        []SpokeDetailEnvoyRow
-	Runs           []SpokeDetailRunRow
+	Envoys        []SteorraDetailEnvoyRow
+	Runs           []SteorraDetailRunRow
 }
 
-// SpokeDetailEnvoyRow is a envoy on a spoke.
-type SpokeDetailEnvoyRow struct {
+// SteorraDetailEnvoyRow is a envoy on a spoke.
+type SteorraDetailEnvoyRow struct {
 	ID        string
 	Hostname  string
 	IPAddress string
@@ -6863,8 +6863,8 @@ type SpokeDetailEnvoyRow struct {
 	Revoked   bool
 }
 
-// SpokeDetailRunRow is a run on a spoke.
-type SpokeDetailRunRow struct {
+// SteorraDetailRunRow is a run on a spoke.
+type SteorraDetailRunRow struct {
 	ID           string
 	EnvoyID     string
 	Status       string
@@ -6897,9 +6897,9 @@ func (h *Handler) SteorraDetail(w http.ResponseWriter, r *http.Request) {
 	envoys, _ := h.hub.SpokeListEnvoys(ctx, id)
 	runs, _ := h.hub.SpokeListRuns(ctx, id, 20)
 
-	var envoyRows []SpokeDetailEnvoyRow
+	var envoyRows []SteorraDetailEnvoyRow
 	for _, t := range envoys {
-		row := SpokeDetailEnvoyRow{
+		row := SteorraDetailEnvoyRow{
 			ID:        t.Id,
 			Hostname:  t.Hostname,
 			IPAddress: t.IpAddress,
@@ -6911,13 +6911,13 @@ func (h *Handler) SteorraDetail(w http.ResponseWriter, r *http.Request) {
 		envoyRows = append(envoyRows, row)
 	}
 
-	var runRows []SpokeDetailRunRow
+	var runRows []SteorraDetailRunRow
 	for _, run := range runs {
 		var spokePct float64
 		if run.ModuleCount > 0 {
 			spokePct = float64(run.FailedCount) / float64(run.ModuleCount) * 100
 		}
-		row := SpokeDetailRunRow{
+		row := SteorraDetailRunRow{
 			ID:           run.Id,
 			EnvoyID:     run.EnvoyId,
 			Status:       run.Status,
@@ -6932,9 +6932,9 @@ func (h *Handler) SteorraDetail(w http.ResponseWriter, r *http.Request) {
 		runRows = append(runRows, row)
 	}
 
-	data := SpokeDetailPageData{
+	data := SteorraDetailPageData{
 		PageData:       PageData{Title: "Steorra: " + id, ActiveNav: "tungol"},
-		SpokeID:        spoke.ID,
+		SteorraID:      spoke.ID,
 		Addr:           spoke.Addr,
 		Healthy:        spoke.Healthy,
 		EnvoyCount:    spoke.EnvoyCount,
