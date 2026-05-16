@@ -1498,7 +1498,7 @@ For an envoy `web01.customerA.example.com` checking in:
 │   │   ├── nginx.vgo
 │   │   ├── postgres.vgo
 │   │   └── compliance.vgo        ← claims inherited by every module beneath
-│   ├── usercrates/               ← fleet-wide users (auto-apply everywhere)
+│   ├── usercrates/               ← user-scoped library (include via `usercrates:` on a carrier)
 │   │   ├── dan.vgo
 │   │   └── compliance.vgo        ← claims inherited by every usercrate here
 │   ├── templates/                ← Go template files referenced by source: in modules
@@ -1539,7 +1539,7 @@ Key rules:
 
 The `user` executor is the most complex resource type Vigo manages: it reads and writes across `/etc/passwd`, `/etc/shadow`, `/etc/group`, `~/.ssh/authorized_keys`, `~/.xsession`, and `/etc/sudoers.d/<u>`; `groups:` is the only list field with both merge (`useradd -aG`) and replace (`purge_groups: true`) semantics; `authorized_keys:` deliberately preserves Scrier ephemeral lines across convergence; the executor kills user processes with `pkill -u` when `usermod` fails "user is currently used by process"; `system: true` auto-assigns a UID < 1000; and the four platform implementations (`user`, `user_macos`, `user_freebsd`, `user_windows`) diverge more than any other `type:`. Full reference at [reference/vigo/resources/user.md](../reference/vigo/resources/user.md).
 
-User accounts also vary per-envoy more than any other resource (per-host shell, per-host group sets, per-host `sudo_nopasswd`), have a multi-step lifecycle (joiners → key/group rotation → retirement), and need per-person audit history for compliance. That combination is why **usercrates** exist — see [Usercrates](#usercrates) for the layout and the auto-apply rules.
+User accounts also vary per-envoy more than any other resource (per-host shell, per-host group sets, per-host `sudo_nopasswd`), have a multi-step lifecycle (joiners → key/group rotation → retirement), and need per-person audit history for compliance. That combination is why **usercrates** exist — see [Usercrates](#usercrates) for the layout and the positive-include rules.
 
 ### Retirement two-phase (do not skip)
 
@@ -1555,8 +1555,8 @@ The convention:
 ### Things that look right but aren't
 
 - **User resources in general-purpose modules.** Don't put `type: user` in `modules/base.vgo`. Git blame becomes useless and per-person audit is impossible. Put it in a usercrate.
-- **Re-listing usercrates in `common.vgo` or match blocks.** They auto-apply by directory scope. Listing them explicitly is redundant and breaks on rename. Use `exclude_usercrates:` to opt out.
-- **One human across multiple files.** Splitting a human's config across files makes history noisier without benefit. The opposite — multiple humans per file (a team / role / on-call rotation crate) — is supported when the group genuinely moves together; `exclude_usercrates: [ops_team]` excludes the bundle as a unit.
+- **Dropping a file into `usercrates/` and assuming it applies.** As of 0.54.0 the directory is a library; a usercrate is inert until positively included via a carrier's `usercrates:` field. Include fleet-wide users in `stockpile/common.vgo`; scope-restricted users in the scoped carrier (subdir `common.vgo`, match block, role, or per-env override).
+- **One human across multiple files.** Splitting a human's config across files makes history noisier without benefit. The opposite — multiple humans per file (a team / role / on-call rotation crate) — is supported when the group genuinely moves together; drop the bundle from a carrier's `usercrates:` list to remove it cleanly.
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

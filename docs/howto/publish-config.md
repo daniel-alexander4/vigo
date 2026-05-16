@@ -17,7 +17,7 @@ Operators edit `.vgo` files in `stacks/stockpile/`. The `config publish` command
 /srv/vigo/stacks/
 ├── stockpile/                    ← operators edit here
 │   ├── modules/                  # Module definitions
-│   ├── usercrates/               # Per-user modules (auto-apply)
+│   ├── usercrates/               # Per-user modules (inert until included via `usercrates:`)
 │   ├── templates/                # Go template files for source: references
 │   ├── tasks/                    # Reusable task definitions
 │   ├── workflows/                # Workflow definitions

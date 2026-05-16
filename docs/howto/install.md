@@ -34,7 +34,7 @@ This populates `/srv/vigo/` with everything needed to run the server:
 ├── stacks/                  # config operation root
 │   ├── stockpile/           # operator-edited working tree
 │   │   ├── modules/         # reusable module definitions
-│   │   ├── usercrates/      # user-scoped auto-apply modules
+│   │   ├── usercrates/      # user-scoped modules (inert until included via `usercrates:`)
 │   │   ├── templates/       # Go template fragments
 │   │   ├── tasks/           # reusable task definitions
 │   │   ├── workflows/       # workflow definitions
