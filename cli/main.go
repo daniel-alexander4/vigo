@@ -66,5 +66,6 @@ func init() {
 		scrierCmd,
 		swarmCmd,
 		sandgorgonCmd,
+		tungolCmd,
 	)
 }
