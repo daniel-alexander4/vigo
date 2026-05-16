@@ -62,6 +62,9 @@ Pure peer-to-peer LAN feature. Envoys discover each other via UDP multicast and 
 | Delete a file | Tombstone propagates, file disappears on other machines within ~60s |
 | Re-add a deleted file | Newer mtime beats the tombstone, file reappears everywhere |
 | Conflicting edits on two machines | Last-write-wins by mtime (trust the OS clock — run NTP) |
+| `rm -rf ~/longdrawer/*` (wholesale empty) | **Does NOT propagate.** Peers keep their copies and refill this envoy on the next sync. Treat this as "clear my local copy," not "wipe everywhere." |
+| `rm -rf ~/longdrawer` (remove the dir entirely) | This envoy goes dormant for the user; peers continue without it. `mkdir ~/longdrawer/` later re-engages and re-syncs from peers. |
+| `userdel -r <user>` | This envoy's state for the user is swept on the next scan; reusing the username later starts fresh (no stale tombstones from the prior user). |
 
 ## Activation
 
@@ -70,11 +73,13 @@ No configuration. Longdrawer activates automatically when:
 1. The agent is running and has enrollment certificates (mTLS)
 2. A user has created `~/longdrawer/` in their home directory
 
-The directory is **not** created automatically — users opt in by creating it.
+The directory is **not** created automatically — users opt in by creating it. Symmetrically, if the directory is absent, the agent's receive path drops incoming peer announcements for that user (no silent re-creation) and the scan path skips the user entirely. To leave longdrawer on an envoy, remove `~/longdrawer/`.
 
 ## State Storage
 
 The agent keeps per-user state (file snapshots + tombstones) under `/var/lib/vigo/swarm/longdrawer/<user>.json`. This survives agent restarts. **Tombstones are garbage-collected after 30 days** — after that, a long-offline machine that still has the file will resurrect it on rejoin. If this matters to you, don't let machines stay offline for more than a month.
+
+The state file for a user is **deleted automatically** when that user is removed from `/etc/passwd` (e.g. via `userdel -r`). This prevents stale state from re-attaching to a same-name user later — a real risk if usernames get reused with different UIDs.
 
 ## Limits
 

@@ -130,6 +130,8 @@ Two paths, same end state:
 
 `vigo swarm lockbox purge --yes` is the local-only alternative: wipes `~/.lockbox/` + `~/lockbox/` for the calling user without gossiping. Peers age this envoy out via the 90-second staleness rule. Use it when you don't want to announce the leave; use `puddle leave` when you do.
 
+**Receive-side dormancy.** If `~/lockbox/` is absent on an envoy (the user has never enrolled, `rm -rf`'d it, or is between `purge` and re-`init`), `POST /lockbox/push/...` returns **HTTP 410 Gone** with `status: dormant`. The agent never silently re-creates `~/lockbox/` from a peer push — opt-in must come from the user side (running `vigo swarm lockbox … init` or `encrypt`). When the user is removed from `/etc/passwd` (e.g. `userdel -r`), the watcher's next reconcile fully nukes `/var/lib/vigo/swarm/lockbox/<user>/` (including `leaves.json`); this prevents stale state from re-attaching to a same-name user later.
+
 ### Limits
 
 | Limit | Value |
