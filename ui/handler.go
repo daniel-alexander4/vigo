@@ -692,10 +692,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/export/inventory-explore.ods", h.InventoryExploreODSExport)
 	mux.HandleFunc("GET /ui/fragments/health", h.HealthFragment)
 
-	// Spanner pages (only registered when running as hub)
+	// Tungol pages (only registered when running as hub). The /tungol
+	// route name follows the user-facing rename; underneath, `h.hub` is
+	// still the hub-spoke implementation in server/tungol/.
 	if h.hub != nil {
-		mux.HandleFunc("GET /spanner", h.Spanner)
-		mux.HandleFunc("GET /spanner/spokes/{id}", h.SpokeDetail)
+		mux.HandleFunc("GET /tungol", h.Tungol)
+		mux.HandleFunc("GET /tungol/steorras/{id}", h.SteorraDetail)
 	}
 
 	// Docs pages (only registered when docsDir is configured and exists)
@@ -6759,8 +6761,9 @@ type SpannerPageData struct {
 	PeerConfigVersion uint64
 }
 
-// Spanner renders the spanner hub status page.
-func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
+// Tungol renders the tungol federation status page (still hub-spoke
+// internally; the user-facing rename is part of Phase 0).
+func (h *Handler) Tungol(w http.ResponseWriter, r *http.Request) {
 	statuses := h.hub.SpokeStatuses(r.Context())
 
 	var spokes []SpannerSpokeRow
@@ -6800,7 +6803,7 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := SpannerPageData{
-		PageData:            PageData{Title: "Spanner", ActiveNav: "spanner"},
+		PageData:            PageData{Title: "Tungol", ActiveNav: "tungol"},
 		SpokeCount:          len(spokes),
 		HealthyCount:        healthyCount,
 		TotalEnvoys:         totalEnvoys,
@@ -6829,7 +6832,7 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "spanner", data)
+	h.renderer.Render(w, "tungol", data)
 }
 
 // SpokeDetailPageData holds data for the spoke detail page.
@@ -6872,8 +6875,8 @@ type SpokeDetailRunRow struct {
 	StartedAt    string
 }
 
-// SpokeDetail renders the spoke detail page with envoys and runs.
-func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
+// SteorraDetail renders the per-steorra detail page with envoys and runs.
+func (h *Handler) SteorraDetail(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	ctx := r.Context()
 
@@ -6886,7 +6889,7 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if spoke == nil {
-		http.Error(w, "spoke not found", http.StatusNotFound)
+		http.Error(w, "steorra not found", http.StatusNotFound)
 		return
 	}
 
@@ -6930,7 +6933,7 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := SpokeDetailPageData{
-		PageData:       PageData{Title: "Spoke: " + id, ActiveNav: "spanner"},
+		PageData:       PageData{Title: "Steorra: " + id, ActiveNav: "tungol"},
 		SpokeID:        spoke.ID,
 		Addr:           spoke.Addr,
 		Healthy:        spoke.Healthy,
@@ -6947,7 +6950,7 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 		Runs:           runRows,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "spoke-detail", data)
+	h.renderer.Render(w, "steorra-detail", data)
 }
 
 // SecurityDriftRow represents a package drift entry for the security page.

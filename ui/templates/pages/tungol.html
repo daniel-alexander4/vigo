@@ -1,13 +1,13 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Spanner</h1>
-    <p>Hub status and spoke health</p>
+    <h1>Tungol</h1>
+    <p>Federation status and steorra health</p>
 </div>
 
 <div class="stat-cards">
     <div class="stat-card">
         <div class="stat-card__value">{{.SpokeCount}}</div>
-        <div class="stat-card__label">Spokes</div>
+        <div class="stat-card__label">Steorras</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-{{if eq .HealthyCount .SpokeCount}}success{{else if gt .HealthyCount 0}}warning{{else}}danger{{end}}">{{.HealthyCount}}/{{.SpokeCount}}</div>
@@ -44,7 +44,7 @@
     <table class="table">
         <thead>
             <tr>
-                <th>Spoke ID</th>
+                <th>Steorra ID</th>
                 <th>Address</th>
                 <th>Patterns</th>
                 <th>Envoys</th>
@@ -58,7 +58,7 @@
         <tbody>
             {{range .Spokes}}
             <tr>
-                <td><a href="/spanner/spokes/{{.ID}}"><strong>{{.ID}}</strong></a></td>
+                <td><a href="/tungol/steorras/{{.ID}}"><strong>{{.ID}}</strong></a></td>
                 <td class="text-muted">{{.Addr}}</td>
                 <td>{{range $i, $p := .Patterns}}{{if $i}}, {{end}}<code>{{$p}}</code>{{end}}</td>
                 <td>{{.EnvoyCount}}</td>
@@ -79,7 +79,7 @@
     </table>
 </div>
 {{else}}
-<p class="text-muted">No spokes configured.</p>
+<p class="text-muted">No steorras configured.</p>
 {{end}}
 
 {{if .PeerEnabled}}

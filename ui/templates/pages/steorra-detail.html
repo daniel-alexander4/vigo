@@ -1,9 +1,9 @@
 {{define "page-content"}}
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/spanner">Spanner</a> &rsaquo; {{.SpokeID}}
+        <a href="/tungol">Tungol</a> &rsaquo; {{.SpokeID}}
     </div>
-    <h1>Spoke: {{.SpokeID}}</h1>
+    <h1>Steorra: {{.SpokeID}}</h1>
     <p class="mono">{{.Addr}}</p>
 </div>
 
@@ -87,7 +87,7 @@
             {{end}}
             {{if not .Envoys}}
             <tr>
-                <td colspan="4" class="text-muted" style="text-align:center; padding:40px;">No envoys on this spoke.</td>
+                <td colspan="4" class="text-muted" style="text-align:center; padding:40px;">No envoys on this steorra.</td>
             </tr>
             {{end}}
         </tbody>
@@ -122,7 +122,7 @@
             {{end}}
             {{if not .Runs}}
             <tr>
-                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No runs on this spoke.</td>
+                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No runs on this steorra.</td>
             </tr>
             {{end}}
         </tbody>
