@@ -892,7 +892,7 @@ func run() error {
 	// uiHandler swarm-config setters.
 	doctorHandler.SetSwarmConfig(cfg.Swarm)
 
-	spannerHandler := api.NewSpannerHandler(role, cfg.Tungol.SpokeID, hub)
+	tungolHandler := api.NewTungolHandler(role, cfg.Tungol.SpokeID, hub)
 	taskHandler := api.NewTaskHandler(queries, agentSvc, cfg.Task.RequireDefinition)
 	taskHandler.SetAuditWriter(auditWriter)
 	queryHandler := api.NewQueryHandler(agentSvc)
@@ -1051,7 +1051,7 @@ func run() error {
 		}
 		licenseHandler.RegisterRoutes(mux)
 		doctorHandler.RegisterRoutes(mux)
-		spannerHandler.RegisterRoutes(mux)
+		tungolHandler.RegisterRoutes(mux)
 		peerHandler.RegisterRoutes(mux)
 		taskHandler.RegisterRoutes(mux)
 		queryHandler.RegisterRoutes(mux)
@@ -1171,7 +1171,7 @@ func run() error {
 		uiHandler.SetFleetCache(fleetCache)
 		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
-		spannerHandler.RegisterRoutes(gwMux)
+		tungolHandler.RegisterRoutes(gwMux)
 		peerHandler.RegisterRoutes(gwMux)
 		taskHandler.RegisterRoutes(gwMux)
 		queryHandler.RegisterRoutes(gwMux)

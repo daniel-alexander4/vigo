@@ -161,7 +161,7 @@ secrets:
 	var status struct {
 		Role string `json:"role"`
 	}
-	if err := client.get("/api/v1/spanner/status", &status); err != nil {
+	if err := client.get("/api/v1/tungol/status", &status); err != nil {
 		return fmt.Errorf("cannot reach hub: %w", err)
 	}
 	if status.Role != "hub" {
@@ -209,7 +209,7 @@ func runSpannerRemoveSpoke(cmd *cobra.Command, args []string) error {
 		Failed int32    `json:"Failed"`
 		Errors []string `json:"Errors"`
 	}
-	if err := client.post("/api/v1/spanner/spokes/"+spokeID+"/drain", map[string]string{}, &drainResp); err != nil {
+	if err := client.post("/api/v1/tungol/steorras/"+spokeID+"/drain", map[string]string{}, &drainResp); err != nil {
 		return fmt.Errorf("drain failed: %w", err)
 	}
 
@@ -241,7 +241,7 @@ func runSpannerStatus(cmd *cobra.Command, args []string) error {
 
 	var resp struct {
 		Role    string `json:"role"`
-		SpokeID string `json:"spoke_id"`
+		SpokeID string `json:"steorra_id"`
 		Spokes  []struct {
 			ID             string   `json:"id"`
 			Addr           string   `json:"addr"`
@@ -257,10 +257,10 @@ func runSpannerStatus(cmd *cobra.Command, args []string) error {
 			ConvergencePct  float32  `json:"compliance_pct"`
 			LatencyMs      int64    `json:"latency_ms"`
 			Error          string   `json:"error"`
-		} `json:"spokes"`
+		} `json:"steorras"`
 	}
 
-	if err := client.get("/api/v1/spanner/status", &resp); err != nil {
+	if err := client.get("/api/v1/tungol/status", &resp); err != nil {
 		return fmt.Errorf("cannot reach server: %w", err)
 	}
 
@@ -322,10 +322,10 @@ func runSpannerSpokes(cmd *cobra.Command, args []string) error {
 			EnvoyCount   int32    `json:"envoy_count"`
 			ConvergencePct float32  `json:"compliance_pct"`
 			LatencyMs     int64    `json:"latency_ms"`
-		} `json:"spokes"`
+		} `json:"steorras"`
 	}
 
-	if err := client.get("/api/v1/spanner/status", &resp); err != nil {
+	if err := client.get("/api/v1/tungol/status", &resp); err != nil {
 		return fmt.Errorf("cannot reach server: %w", err)
 	}
 
@@ -369,7 +369,7 @@ func runSpannerSpokeDetail(cmd *cobra.Command, args []string) error {
 		Error          string   `json:"error"`
 	}
 
-	if err := client.get("/api/v1/spanner/spokes/"+spokeID, &resp); err != nil {
+	if err := client.get("/api/v1/tungol/steorras/"+spokeID, &resp); err != nil {
 		return fmt.Errorf("spoke %q not found or unreachable: %w", spokeID, err)
 	}
 
@@ -414,7 +414,7 @@ func runSpannerSpokeEnvoys(cmd *cobra.Command, args []string) error {
 		} `json:"envoys"`
 	}
 
-	if err := client.get("/api/v1/spanner/spokes/"+spokeID+"/envoys", &resp); err != nil {
+	if err := client.get("/api/v1/tungol/steorras/"+spokeID+"/envoys", &resp); err != nil {
 		return fmt.Errorf("cannot list envoys for spoke %q: %w", spokeID, err)
 	}
 
@@ -452,7 +452,7 @@ func runSpannerSpokeRuns(cmd *cobra.Command, args []string) error {
 		} `json:"runs"`
 	}
 
-	if err := client.get("/api/v1/spanner/spokes/"+spokeID+"/runs", &resp); err != nil {
+	if err := client.get("/api/v1/tungol/steorras/"+spokeID+"/runs", &resp); err != nil {
 		return fmt.Errorf("cannot list runs for spoke %q: %w", spokeID, err)
 	}
 
@@ -486,7 +486,7 @@ func runSpannerSpokePush(cmd *cobra.Command, args []string) error {
 		body["envoy_id"] = envoyID
 	}
 
-	if err := client.post("/api/v1/spanner/spokes/"+spokeID+"/push", body, &resp); err != nil {
+	if err := client.post("/api/v1/tungol/steorras/"+spokeID+"/push", body, &resp); err != nil {
 		return fmt.Errorf("cannot push to spoke %q: %w", spokeID, err)
 	}
 
@@ -512,11 +512,11 @@ func runSpannerReassign(cmd *cobra.Command, args []string) error {
 
 	body := map[string]string{
 		"envoy_id":     envoyID,
-		"from_spoke_id": fromSpoke,
-		"to_spoke_id":   toSpoke,
+		"from_steorra_id": fromSpoke,
+		"to_steorra_id":   toSpoke,
 	}
 
-	if err := client.post("/api/v1/spanner/reassign", body, &resp); err != nil {
+	if err := client.post("/api/v1/tungol/reassign", body, &resp); err != nil {
 		return fmt.Errorf("reassign failed: %w", err)
 	}
 
@@ -546,10 +546,10 @@ func runSpannerDrain(cmd *cobra.Command, args []string) error {
 
 	body := map[string]string{}
 	if toSpoke != "" {
-		body["target_spoke_id"] = toSpoke
+		body["target_steorra_id"] = toSpoke
 	}
 
-	if err := client.post("/api/v1/spanner/spokes/"+spokeID+"/drain", body, &resp); err != nil {
+	if err := client.post("/api/v1/tungol/steorras/"+spokeID+"/drain", body, &resp); err != nil {
 		return fmt.Errorf("drain failed: %w", err)
 	}
 

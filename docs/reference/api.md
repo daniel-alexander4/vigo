@@ -431,60 +431,62 @@ Query envoys by trait values.
 
 ---
 
-## Spanner
+## Tungol
 
-### GET /api/v1/spanner/status
+> Internally still implemented as hub-spoke (see `server/tungol/`); the REST surface speaks the peer-equal redesign's tungol/steorra vocabulary.
 
-**Permission:** `fleet.read`
-
-Returns spanner role and spoke statuses (hub mode only).
-
-### GET /api/v1/spanner/spokes/{id}
+### GET /api/v1/tungol/status
 
 **Permission:** `fleet.read`
 
-Returns detailed status for a single spoke.
+Returns tungol role and steorra statuses (hub mode only).
 
-### GET /api/v1/spanner/spokes/{id}/envoys
-
-**Permission:** `fleet.read`
-
-List envoys on a specific spoke.
-
-### GET /api/v1/spanner/spokes/{id}/runs
+### GET /api/v1/tungol/steorras/{id}
 
 **Permission:** `fleet.read`
 
-List recent runs on a specific spoke.
+Returns detailed status for a single steorra.
 
-### POST /api/v1/spanner/spokes/{id}/push
+### GET /api/v1/tungol/steorras/{id}/envoys
+
+**Permission:** `fleet.read`
+
+List envoys on a specific steorra.
+
+### GET /api/v1/tungol/steorras/{id}/runs
+
+**Permission:** `fleet.read`
+
+List recent runs on a specific steorra.
+
+### POST /api/v1/tungol/steorras/{id}/push
 
 **Permission:** Admin role
 
-Force-push to envoys on a specific spoke.
+Force-push to envoys on a specific steorra.
 
-### POST /api/v1/spanner/reassign
+### POST /api/v1/tungol/reassign
 
 **Permission:** Admin role
 
 
-Reassign a envoy from one spoke to another.
+Reassign an envoy from one steorra to another.
 
 **Request body:**
 
 ```json
 {
   "envoy_id": "...",
-  "from_spoke_id": "spoke-east",
-  "to_spoke_id": "spoke-west"
+  "from_steorra_id": "east-1",
+  "to_steorra_id": "west-1"
 }
 ```
 
-### POST /api/v1/spanner/spokes/{id}/drain
+### POST /api/v1/tungol/steorras/{id}/drain
 
 **Permission:** Admin role
 
-Drain all envoys from a spoke (move to target spoke or auto-route by patterns).
+Drain all envoys from a steorra (move to target steorra or auto-route by patterns).
 
 ---
 
