@@ -3721,8 +3721,6 @@ envoys:
 // surface post-0.53.0; this test is the fixture that proves it works
 // when the loader walks compound strings token-by-token.
 func TestPending_ResolveModuleSecrets_EmbeddedRefs(t *testing.T) {
-	t.Skip("pending: see ~/.claude/projects/-home-dan-repos-vigo/memory/pending.md `Embedded secret refs inside compound attribute values are not resolved` — remove this line when resolveModuleSecrets walks compound strings")
-
 	dir := setupDir(t)
 
 	// container: resource with embedded secret in env; mirrors the

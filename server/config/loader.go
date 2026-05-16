@@ -3711,7 +3711,9 @@ func (cs *ConfigStore) resolveVars(match string, vars map[string]any) []*SecretE
 }
 
 // resolveModuleSecrets resolves secret: prefixes in module resource attributes.
-// It collects all failures rather than stopping at the first.
+// It collects all failures rather than stopping at the first. Both whole-value
+// (`password: secret:vigo/db/pw`) and embedded (`env: "PW=secret:vigo/db/pw,DB=app"`)
+// occurrences are substituted via resolveSecretsInValue.
 func (cs *ConfigStore) resolveModuleSecrets(match string, mod *ModuleConfig) []*SecretError {
 	var errs []*SecretError
 	for i := range mod.Resources {
@@ -3721,25 +3723,101 @@ func (cs *ConfigStore) resolveModuleSecrets(match string, mod *ModuleConfig) []*
 			if !ok {
 				continue
 			}
-			if strings.HasPrefix(str, secretPrefix) {
-				key := strings.TrimPrefix(str, secretPrefix)
-				resolved, err := cs.provider.Get(context.Background(), key)
-				if err != nil {
-					errs = append(errs, &SecretError{
-						Match:    match,
-						Module:   mod.Name,
-						Resource: mod.Resources[i].Name,
-						Attr:     k,
-						Secret:   key,
-						Err:      err,
-					})
-					continue
-				}
+			if !strings.Contains(str, secretPrefix) {
+				continue
+			}
+			resolved, failures := cs.resolveSecretsInValue(str)
+			for _, f := range failures {
+				errs = append(errs, &SecretError{
+					Match:    match,
+					Module:   mod.Name,
+					Resource: mod.Resources[i].Name,
+					Attr:     k,
+					Secret:   f.key,
+					Err:      f.err,
+				})
+			}
+			if len(failures) == 0 {
 				attrs[k] = resolved
 			}
 		}
 	}
 	return errs
+}
+
+// secretResolveFailure captures a single unresolved secret reference inside
+// a compound attribute value. resolveSecretsInValue returns one per failed
+// lookup so the caller can decorate each with its surrounding context (match
+// / module / resource / attr).
+type secretResolveFailure struct {
+	key string
+	err error
+}
+
+// resolveSecretsInValue substitutes every `secret:<key>` substring in str
+// with its resolved value. A key runs from immediately after `secret:` up
+// to the next delimiter — comma, semicolon, whitespace, quote, or end of
+// string — so compound k=v values like `PW=secret:vigo/db/pw,DB=app` work
+// the same as whole-value references.
+//
+// Failures don't poison the whole string: any reference that fails to
+// resolve is left in place (as `secret:<key>`) and reported. The caller
+// only commits the substituted value when failures is empty.
+//
+// Resolved values are not re-scanned — a substituted string that happens
+// to contain `secret:...` won't trigger another lookup, matching the
+// "agent stays oblivious" model.
+func (cs *ConfigStore) resolveSecretsInValue(str string) (string, []secretResolveFailure) {
+	if !strings.Contains(str, secretPrefix) {
+		return str, nil
+	}
+	var b strings.Builder
+	b.Grow(len(str))
+	var failures []secretResolveFailure
+	i := 0
+	for i < len(str) {
+		rel := strings.Index(str[i:], secretPrefix)
+		if rel < 0 {
+			b.WriteString(str[i:])
+			break
+		}
+		b.WriteString(str[i : i+rel])
+		keyStart := i + rel + len(secretPrefix)
+		keyEnd := keyStart
+		for keyEnd < len(str) && !isSecretKeyDelim(str[keyEnd]) {
+			keyEnd++
+		}
+		key := str[keyStart:keyEnd]
+		if key == "" {
+			// Bare `secret:` with no key — preserve verbatim, advance past it.
+			b.WriteString(secretPrefix)
+			i = keyStart
+			continue
+		}
+		resolved, err := cs.provider.Get(context.Background(), key)
+		if err != nil {
+			failures = append(failures, secretResolveFailure{key: key, err: err})
+			b.WriteString(secretPrefix)
+			b.WriteString(key)
+		} else {
+			b.WriteString(resolved)
+		}
+		i = keyEnd
+	}
+	return b.String(), failures
+}
+
+// isSecretKeyDelim reports whether c terminates a `secret:<key>` reference
+// embedded in a compound attribute value. Conservative on purpose: only
+// characters that show up between fields in real compound strings (comma,
+// semicolon, whitespace, quotes) — keeps path-style keys with `/` `_` `-`
+// `.` intact.
+func isSecretKeyDelim(c byte) bool {
+	switch c {
+	case ',', ';', ' ', '\t', '\n', '\r', '"', '\'':
+		return true
+	}
+	return false
 }
 
 // resolveSourceFiles reads external template files referenced by the "source"
