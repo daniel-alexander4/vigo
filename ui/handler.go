@@ -995,7 +995,9 @@ type FleetRow struct {
 	LastSeen     time.Time
 	Status       string
 	// Drift mirrors EnvoyRow.Drift — drives the Diverged-row peach badge.
+	// DriftLabel is the precomputed string form so the template stays method-free.
 	Drift        convergence.DriftLevel
+	DriftLabel   string
 	LastRunID    string
 	FailurePct   float64
 	ChangedCount int64
@@ -1154,8 +1156,12 @@ type EnvoyRow struct {
 	// render the Diverged-envoy's convergence ratio in the same orange the
 	// filter chip uses — without it the per-row badge would only consider
 	// the failure axis and a Diverged envoy would look identical to any other
-	// Degraded one.
+	// Degraded one. DriftLabel is the precomputed lowercase string ("none" /
+	// "changed" / "diverged") so the template never has to call a method on
+	// a typed int — `.DriftLabel` is a plain string field and reflection
+	// surprises are off the table.
 	Drift        convergence.DriftLevel
+	DriftLabel   string
 	FailurePct   float64 // 0-100: failed_count / module_count * 100
 	ModuleCount  int64
 	FailedCount  int64
@@ -2254,6 +2260,7 @@ func (h *Handler) dashboardData() DashboardPageData {
 				LastSeen:     e.LastSeen,
 				Status:       e.Status,
 				Drift:        e.Drift,
+				DriftLabel:   e.Drift.String(),
 				LastRunID:    e.LastRunID,
 				FailurePct:   e.FailurePct,
 				ChangedCount: e.ChangedCount,
@@ -4148,6 +4155,7 @@ func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, s
 			LastRunID:           e.LastRunID,
 			Status:              e.Status,
 			Drift:               e.Drift,
+			DriftLabel:          e.Drift.String(),
 			FailurePct:          e.FailurePct,
 			ModuleCount:         e.ModuleCount,
 			FailedCount:         e.FailedCount,

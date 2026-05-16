@@ -6,7 +6,10 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
+
+	"git.alexander4.io/vigo/server/convergence"
 )
 
 // EnvoyRecentRuns holds an envoy plus its last N run statuses for convergence computation.
@@ -16,7 +19,12 @@ type EnvoyRecentRuns struct {
 	IPAddress    string
 	LastSeen     sql.NullTime
 	AgentVersion string
-	// Up to 3 most recent runs (newest first). Empty if no runs.
+	// Up to convergence.DivergedThreshold most recent runs (newest first).
+	// Sized to match the drift-axis classifier — fewer would mean
+	// ComputeDrift can never return DriftDiverged (the ring of recent
+	// runs would always undercount consecutive changes), so the row
+	// badge would silently disagree with the fleet pill count that the
+	// FleetIndex (which has a deeper history) reports.
 	Runs []RecentRun
 }
 
@@ -30,9 +38,13 @@ type RecentRun struct {
 	StartedAt    time.Time
 }
 
-// fleetConvergenceQuery fetches all active envoys with their last 3 runs in a
-// single query. Uses a correlated subquery with ROW_NUMBER emulation for SQLite.
-const fleetConvergenceQuery = `
+// fleetConvergenceQuery fetches all active envoys with their last N runs in a
+// single query, where N == convergence.DivergedThreshold so the row-level
+// ComputeDrift call sees the same history depth as the FleetIndex's ring
+// buffer — without this, the LIMIT silently caps drift detection below the
+// threshold and DriftDiverged is unreachable from the DB path. Uses a
+// correlated subquery with ROW_NUMBER emulation for SQLite.
+var fleetConvergenceQuery = fmt.Sprintf(`
 SELECT
     e.id, e.hostname, e.ip_address, e.last_seen, e.agent_version,
     r.id, r.status, r.changed_count, r.failed_count, r.module_count, r.started_at
@@ -42,14 +54,15 @@ LEFT JOIN runs r ON r.envoy_id = e.id
         SELECT r2.id FROM runs r2
         WHERE r2.envoy_id = e.id
         ORDER BY r2.started_at DESC
-        LIMIT 3
+        LIMIT %d
     )
 WHERE e.revoked = 0
 ORDER BY e.hostname, r.started_at DESC
-`
+`, convergence.DivergedThreshold)
 
-// ListFleetConvergence returns all active envoys with their last 3 runs.
-// This replaces the N+1 pattern of ListEnvoys + per-envoy ListRunsByEnvoy.
+// ListFleetConvergence returns all active envoys with up to
+// convergence.DivergedThreshold most-recent runs each. Replaces the N+1
+// pattern of ListEnvoys + per-envoy ListRunsByEnvoy.
 func (q *Queries) ListFleetConvergence(ctx context.Context) ([]EnvoyRecentRuns, error) {
 	rows, err := q.db.QueryContext(ctx, fleetConvergenceQuery)
 	if err != nil {
