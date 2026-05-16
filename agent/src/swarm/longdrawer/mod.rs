@@ -177,6 +177,42 @@ async fn run(
     }
 }
 
+/// Remove state JSON files for users no longer present in `/etc/passwd`.
+///
+/// After `userdel -r <user>` the per-user scan never iterates that user
+/// again (they're missing from `list_home_dirs()`), but their state file at
+/// `<state_dir>/<user>.json` would otherwise survive forever. Worse, if the
+/// username gets reused later (e.g. `useradd` with the same name, different
+/// UID), the stale state.json silently re-attaches to the new user — the
+/// reconciler would treat the new user as carrying the old user's file list
+/// and tombstones. This sweep keeps state hygiene aligned with system state.
+fn sweep_orphaned_state(state_dir: &std::path::Path, users: &[(String, std::path::PathBuf)]) {
+    let active: std::collections::HashSet<&str> =
+        users.iter().map(|(u, _)| u.as_str()).collect();
+    let entries = match std::fs::read_dir(state_dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = match path.file_stem().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        if active.contains(name) {
+            continue;
+        }
+        if let Err(e) = std::fs::remove_file(&path) {
+            warn!(path = %path.display(), error = %e, "longdrawer: failed to remove orphaned state");
+        } else {
+            info!(user = %name, "longdrawer: removed orphaned state for departed user");
+        }
+    }
+}
+
 /// Scan every user's `~/longdrawer/`, update state, and emit announcements.
 async fn scan_and_announce(
     machine: &str,
@@ -185,6 +221,7 @@ async fn scan_and_announce(
     extra_peer_tx: &tokio::sync::mpsc::UnboundedSender<ExtraPeerJob>,
 ) {
     let users = list_home_dirs();
+    sweep_orphaned_state(state_dir, &users);
     let now = now_secs();
 
     for (user, home) in users {
@@ -380,6 +417,16 @@ async fn handle_incoming(
     };
     let sync_dir = home.join("longdrawer");
 
+    // Opt-in symmetry with scan_and_announce: if the user's ~/longdrawer/ is
+    // absent, this envoy is dormant for that user and must not silently
+    // recreate the directory by fetching peer files into a freshly-created
+    // sync_dir (applier::fetch_file calls create_dir_all). Drop the
+    // announcement; on next user mkdir the receive path re-engages naturally.
+    if !sync_dir.is_dir() {
+        debug!(user = %user, "longdrawer: ~/longdrawer/ absent, dropping incoming announcement");
+        return;
+    }
+
     let mut local = UserState::load(state_dir, &user);
     // Cheap short-circuit: if the announcing peer's digest matches our
     // local state digest, we're already in sync with them — skip the
@@ -476,4 +523,55 @@ async fn handle_incoming(
 #[allow(dead_code)]
 fn _btreemap_marker() -> BTreeMap<String, PathBuf> {
     BTreeMap::new()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn sweep_removes_state_for_departed_users() {
+        let state_dir = tempfile::tempdir().unwrap();
+        fs::write(state_dir.path().join("alice.json"), b"{}").unwrap();
+        fs::write(state_dir.path().join("bob.json"), b"{}").unwrap();
+        fs::write(state_dir.path().join("carol.json"), b"{}").unwrap();
+
+        // Only alice still exists on the system.
+        let active = vec![("alice".to_string(), PathBuf::from("/home/alice"))];
+
+        sweep_orphaned_state(state_dir.path(), &active);
+
+        assert!(state_dir.path().join("alice.json").exists());
+        assert!(!state_dir.path().join("bob.json").exists());
+        assert!(!state_dir.path().join("carol.json").exists());
+    }
+
+    #[test]
+    fn sweep_ignores_non_json_files() {
+        // Operator notes, lockfiles, anything not a .json state file
+        // must not be touched even if the basename matches no active user.
+        let state_dir = tempfile::tempdir().unwrap();
+        fs::write(state_dir.path().join("README"), b"hi").unwrap();
+        fs::write(state_dir.path().join("alice.json.tmp"), b"{}").unwrap();
+        fs::write(state_dir.path().join("alice.json"), b"{}").unwrap();
+
+        // No active users at all.
+        let active: Vec<(String, PathBuf)> = vec![];
+
+        sweep_orphaned_state(state_dir.path(), &active);
+
+        assert!(state_dir.path().join("README").exists());
+        assert!(state_dir.path().join("alice.json.tmp").exists());
+        assert!(!state_dir.path().join("alice.json").exists());
+    }
+
+    #[test]
+    fn sweep_tolerates_missing_state_dir() {
+        let parent = tempfile::tempdir().unwrap();
+        let missing = parent.path().join("does-not-exist");
+        let active = vec![("alice".to_string(), PathBuf::from("/home/alice"))];
+        // Must not panic.
+        sweep_orphaned_state(&missing, &active);
+    }
 }

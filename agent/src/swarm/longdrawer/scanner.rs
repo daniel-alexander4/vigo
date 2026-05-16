@@ -11,6 +11,7 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use tracing::debug;
 
 use super::state::{FileEntry, Tombstone, UserState};
 
@@ -178,12 +179,28 @@ pub fn merge_scan(
     dir: &Path,
 ) {
     // Detect deletions: names in previous not in current → new tombstone.
-    for name in previous.keys() {
-        if !current.contains_key(name) {
-            state.tombstones.insert(
-                name.clone(),
-                Tombstone { deletion_time: now },
-            );
+    //
+    // Wholesale-empty guard: when current is empty but previous wasn't, the
+    // user has either `rm -rf ~/longdrawer/*`'d or just recreated the dir
+    // after a full delete. Auto-tombstoning every prior file would cascade a
+    // mass-delete to every peer — almost certainly not the user's intent for
+    // an accidental wipe. Skip the mint; peers will re-fill from their copies
+    // via the receive path on the next sync round. Bulk-propagate-delete is a
+    // distinct, intentional verb (pending) that would mint tombstones
+    // explicitly.
+    if current.is_empty() && !previous.is_empty() {
+        debug!(
+            previous_count = previous.len(),
+            "longdrawer: wholesale-empty scan; skipping tombstone-mint"
+        );
+    } else {
+        for name in previous.keys() {
+            if !current.contains_key(name) {
+                state.tombstones.insert(
+                    name.clone(),
+                    Tombstone { deletion_time: now },
+                );
+            }
         }
     }
 
@@ -294,21 +311,63 @@ mod tests {
     }
 
     #[test]
-    fn merge_scan_tombstones_deletions() {
+    fn merge_scan_tombstones_partial_deletions() {
+        // Previous has two files; current has one. The missing file should
+        // be tombstoned. Distinguishes partial from wholesale (covered below).
         let dir = tempfile::tempdir().unwrap();
         let mut state = UserState::empty("dan");
         let mut previous = BTreeMap::new();
         previous.insert(
-            "gone.txt".to_string(),
+            "keep.txt".to_string(),
             FileEntry { sha256: "a".into(), mtime: 10, size: 1 },
+        );
+        previous.insert(
+            "gone.txt".to_string(),
+            FileEntry { sha256: "b".into(), mtime: 10, size: 1 },
+        );
+        state.files = previous.clone();
+
+        let mut current = BTreeMap::new();
+        current.insert(
+            "keep.txt".to_string(),
+            FileEntry { sha256: "a".into(), mtime: 10, size: 1 },
+        );
+
+        merge_scan(&mut state, current, &previous, 100, dir.path());
+
+        assert!(state.files.contains_key("keep.txt"));
+        assert!(!state.files.contains_key("gone.txt"));
+        assert_eq!(state.tombstones.get("gone.txt").unwrap().deletion_time, 100);
+    }
+
+    #[test]
+    fn merge_scan_wholesale_empty_does_not_tombstone() {
+        // Previous had files; current is fully empty (user `rm -rf
+        // ~/longdrawer/*` or recreated the dir after a full delete). The
+        // wholesale-empty guard must skip the tombstone-mint to prevent a
+        // mass-delete cascade across peers. state.files still empties via
+        // the existing retain logic so the next scan starts clean.
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = UserState::empty("dan");
+        let mut previous = BTreeMap::new();
+        previous.insert(
+            "a.txt".to_string(),
+            FileEntry { sha256: "a".into(), mtime: 10, size: 1 },
+        );
+        previous.insert(
+            "b.txt".to_string(),
+            FileEntry { sha256: "b".into(), mtime: 10, size: 1 },
         );
         state.files = previous.clone();
 
         let current = BTreeMap::new();
         merge_scan(&mut state, current, &previous, 100, dir.path());
 
-        assert!(state.files.is_empty());
-        assert_eq!(state.tombstones.get("gone.txt").unwrap().deletion_time, 100);
+        assert!(state.files.is_empty(), "state.files cleared as usual");
+        assert!(
+            state.tombstones.is_empty(),
+            "wholesale-empty must NOT mint tombstones"
+        );
     }
 
     #[test]
