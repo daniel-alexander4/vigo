@@ -168,6 +168,7 @@ mod tests {
     use crate::swarm::curator::catalog::{ArtifactVersion, CatalogEntry, CatalogEntryBody, Platform};
     use crate::swarm::curator::catalog_cache;
     use crate::swarm::puddle::name::{NameClaim, NameClaimBody};
+    use anyhow::Result;
     use ed25519_dalek::SigningKey;
     use rand::rngs::OsRng;
     use sha2::{Digest, Sha256};

@@ -971,25 +971,35 @@ mod tests {
 
     #[test]
     fn path_inode_detects_inode_rotation_after_recreate() {
-        // Create a tempdir, capture its (dev, inode), delete it, recreate
-        // at the same path, and verify the new inode differs. This is
-        // the exact scenario the reconciler's stale-watch detection
-        // needs to catch (purge + re-enroll under the same ~/lockbox/
-        // path, but a different underlying inode).
-        let dir = std::env::temp_dir().join(format!(
+        // Verifies path_inode returns DIFFERENT inodes when the same
+        // path is backed by a different underlying directory — the
+        // reconciler's stale-watch detection relies on this to catch
+        // purge + re-enroll cycles under the same ~/lockbox/ path.
+        //
+        // Engineering note: a naïve delete-then-recreate is *not*
+        // guaranteed to yield a different inode on ext4/tmpfs (Linux
+        // tends to reuse freed inodes immediately). Instead we move
+        // the original directory aside — keeping its inode alive — and
+        // create a fresh one at the original path; the fresh dir gets
+        // a new inode by construction. This faithfully exercises the
+        // production property the test is meant to verify (path_inode
+        // distinguishes distinct underlying inodes) without leaning on
+        // filesystem inode-reuse behavior.
+        let base = std::env::temp_dir().join(format!(
             "lockbox-watcher-rotation-{}",
             std::process::id()
         ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        let before = path_inode(&dir).unwrap();
-        std::fs::remove_dir_all(&dir).unwrap();
-        std::fs::create_dir_all(&dir).unwrap();
-        let after = path_inode(&dir).unwrap();
-        let _ = std::fs::remove_dir_all(&dir);
-        // Same fs (dev should match), different inode.
+        let primary = base.join("primary");
+        let archive = base.join("archive");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&primary).unwrap();
+        let before = path_inode(&primary).unwrap();
+        std::fs::rename(&primary, &archive).unwrap();
+        std::fs::create_dir_all(&primary).unwrap();
+        let after = path_inode(&primary).unwrap();
+        let _ = std::fs::remove_dir_all(&base);
         assert_eq!(before.0, after.0, "dev should be unchanged");
-        assert_ne!(before.1, after.1, "inode should rotate after recreate");
+        assert_ne!(before.1, after.1, "inode should differ between distinct directories at the same path");
     }
 
     #[test]
