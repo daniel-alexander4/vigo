@@ -235,7 +235,7 @@ pub(super) fn set_mtime(path: &Path, mtime: i64) -> bool {
     };
     let times = [
         libc::timespec { tv_sec: 0, tv_nsec: libc::UTIME_OMIT },
-        libc::timespec { tv_sec: mtime as libc::time_t, tv_nsec: 0 },
+        libc::timespec { tv_sec: mtime as _, tv_nsec: 0 },
     ];
     let rc = unsafe {
         libc::utimensat(libc::AT_FDCWD, c_path.as_ptr(), times.as_ptr(), 0)

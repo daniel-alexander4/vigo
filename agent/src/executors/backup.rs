@@ -509,7 +509,7 @@ fn set_mtime(path: &Path, mtime: SystemTime) -> Result<(), String> {
         .duration_since(SystemTime::UNIX_EPOCH)
         .map_err(|e| e.to_string())?;
     let ts = libc::timespec {
-        tv_sec: dur.as_secs() as libc::time_t,
+        tv_sec: dur.as_secs() as _,
         tv_nsec: dur.subsec_nanos() as libc::c_long,
     };
     // UTIME_OMIT for atime — only set mtime.

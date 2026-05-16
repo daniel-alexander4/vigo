@@ -33,6 +33,7 @@ fn parse_uptime(content: &str) -> u64 {
         .unwrap_or(0)
 }
 
+#[allow(deprecated)]
 fn format_rfc3339_utc(timestamp: i64) -> String {
     unsafe {
         let t = timestamp as libc::time_t;

@@ -18,6 +18,7 @@ pub fn collect() -> Result<Value> {
     }))
 }
 
+#[allow(deprecated)]
 fn get_timezone_info() -> (String, i32) {
     unsafe {
         let mut t: libc::time_t = 0;

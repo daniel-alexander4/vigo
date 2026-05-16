@@ -31,6 +31,7 @@ struct TimeFields {
 }
 
 #[cfg(unix)]
+#[allow(deprecated)]
 fn local_and_utc_time() -> (TimeFields, TimeFields) {
     use std::mem::MaybeUninit;
     unsafe {

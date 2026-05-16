@@ -610,6 +610,7 @@ fn local_day_of_month() -> u32 {
 }
 
 /// Returns (hour, weekday 0=Sun..6=Sat, day_of_month, minute).
+#[allow(deprecated)]
 fn local_time() -> (u32, u32, u32, u32) {
     #[cfg(unix)]
     {

@@ -59,7 +59,6 @@
 
 use std::path::PathBuf;
 
-use anyhow::Result;
 use tracing::{debug, info, warn};
 
 use crate::swarm::curator::executor_resolver::{
