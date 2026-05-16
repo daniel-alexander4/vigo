@@ -9,25 +9,25 @@ import (
 
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
-	"git.alexander4.io/vigo/server/spanner"
+	"git.alexander4.io/vigo/server/tungol"
 )
 
 // SpannerStatus is the response for GET /api/v1/spanner/status.
 type SpannerStatus struct {
 	Role    string                  `json:"role"`
 	SpokeID string                 `json:"spoke_id,omitempty"`
-	Spokes  []spanner.SpokeStatus  `json:"spokes,omitempty"`
+	Spokes  []tungol.SpokeStatus  `json:"spokes,omitempty"`
 }
 
 // SpannerHandler serves spanner status endpoints.
 type SpannerHandler struct {
-	role    config.SpannerRole
+	role    config.TungolRole
 	spokeID string
-	hub     *spanner.Hub
+	hub     *tungol.Hub
 }
 
 // NewSpannerHandler creates a spanner handler.
-func NewSpannerHandler(role config.SpannerRole, spokeID string, hub *spanner.Hub) *SpannerHandler {
+func NewSpannerHandler(role config.TungolRole, spokeID string, hub *tungol.Hub) *SpannerHandler {
 	return &SpannerHandler{role: role, spokeID: spokeID, hub: hub}
 }
 

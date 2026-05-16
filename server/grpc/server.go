@@ -17,7 +17,7 @@ import (
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
-	"git.alexander4.io/vigo/server/spanner"
+	"git.alexander4.io/vigo/server/tungol"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/registry"
@@ -74,7 +74,7 @@ type ServerConfig struct {
 	KeepaliveTime       time.Duration // 0 → default 30s
 	KeepaliveTimeout    time.Duration // 0 → default 10s
 	StreamSendBuffer    int           // 0 → default 8
-	Hub              *spanner.Hub // non-nil when role=hub
+	Hub              *tungol.Hub // non-nil when role=hub
 	// SMTPNotifier removed — events route through Integrations dispatcher
 	LicenseEnforcer  *license.Enforcer
 	TaskStore        *task.Store

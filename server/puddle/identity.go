@@ -176,6 +176,7 @@ func writeFile(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	tmpName := tmp.Name()
+	// best-effort: cleanup runs only after we've already errored higher up.
 	cleanup := func() { _ = os.Remove(tmpName) }
 	if err := tmp.Chmod(mode); err != nil {
 		tmp.Close()

@@ -41,7 +41,7 @@ import (
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/peer"
-	"git.alexander4.io/vigo/server/spanner"
+	"git.alexander4.io/vigo/server/tungol"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
 	"git.alexander4.io/vigo/server/swarm/lockboxmesh"
 	"git.alexander4.io/vigo/server/swarm/gitbackmesh"
@@ -229,7 +229,7 @@ type Handler struct {
 	version       string
 	agentVersion  string
 	assistant     *ai.Assistant
-	hub           *spanner.Hub
+	hub           *tungol.Hub
 	docsDir       string
 	docsNav       []DocsNavSection
 	enforcer      *license.Enforcer
@@ -459,7 +459,7 @@ type CVERunningBinaryRef struct {
 // DB-backed DataSource (used by FleetIndex integration).
 // The docsDir parameter specifies the path to the docs directory for the
 // built-in documentation browser (pass "" to disable).
-func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *spanner.Hub, customDS DataSource, docsDir string, authMethod string, enforcer *license.Enforcer) (*Handler, error) {
+func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *tungol.Hub, customDS DataSource, docsDir string, authMethod string, enforcer *license.Enforcer) (*Handler, error) {
 	renderer, err := NewRenderer()
 	if err != nil {
 		return nil, err
@@ -6878,7 +6878,7 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	statuses := h.hub.SpokeStatuses(ctx)
-	var spoke *spanner.SpokeStatus
+	var spoke *tungol.SpokeStatus
 	for i := range statuses {
 		if statuses[i].ID == id {
 			spoke = &statuses[i]

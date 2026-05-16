@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"git.alexander4.io/vigo/server/config"
-	"git.alexander4.io/vigo/server/spanner"
+	"git.alexander4.io/vigo/server/tungol"
 )
 
 func TestSpannerStatusStandalone(t *testing.T) {
@@ -168,4 +168,4 @@ func TestSpannerStatusJSON(t *testing.T) {
 }
 
 // Verify the SpannerStatus type matches the expected JSON structure.
-var _ = spanner.SpokeStatus{} // ensure type is importable
+var _ = tungol.SpokeStatus{} // ensure type is importable

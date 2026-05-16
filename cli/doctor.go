@@ -147,11 +147,11 @@ func runDoctorPreStart() error {
 
 	// 7. spanner
 	if serverCfg != nil {
-		if err := serverCfg.Spanner.Validate(); err != nil {
+		if err := serverCfg.Tungol.Validate(); err != nil {
 			checks = append(checks, preStartCheck{"spanner", "fail", err.Error()})
 			hasFailure = true
 		} else {
-			role := string(serverCfg.Spanner.Role)
+			role := string(serverCfg.Tungol.Role)
 			if role == "" {
 				role = "standalone"
 			}

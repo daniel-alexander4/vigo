@@ -17,7 +17,7 @@ import (
 	"git.alexander4.io/vigo/server/integrations"
 	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/registry"
-	"git.alexander4.io/vigo/server/spanner"
+	"git.alexander4.io/vigo/server/tungol"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/task"
 	"git.alexander4.io/vigo/server/traits"
@@ -44,7 +44,7 @@ type AgentService struct {
 	taskRouter       *taskRouter
 	queryRouter      *queryRouter
 	taskStore        *task.Store
-	hub              *spanner.Hub    // non-nil when role=hub; routes enrollment to spokes
+	hub              *tungol.Hub    // non-nil when role=hub; routes enrollment to spokes
 	licenseEnforcer  *license.Enforcer
 	fleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
 	runBatcher       *fleet.RunBatcher  // async run persistence from delta events
@@ -215,7 +215,7 @@ type AdminService struct {
 	runStore      db.RunStore
 	configStore   *config.ConfigStore
 	baseInterval  time.Duration
-	hub           *spanner.Hub   // non-nil when role=hub; aggregates from spokes
+	hub           *tungol.Hub   // non-nil when role=hub; aggregates from spokes
 	fleetIndex    *fleet.FleetIndex // in-memory index for hot-path operations
 	reassignStore *ReassignStore    // pending envoy reassignments (spoke side)
 	auditWriter   auditRecorder    // tamper-evident audit writer (nil-safe)

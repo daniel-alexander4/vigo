@@ -19,7 +19,7 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/freshness"
-	"git.alexander4.io/vigo/server/spanner"
+	"git.alexander4.io/vigo/server/tungol"
 	"git.alexander4.io/vigo/server/license"
 )
 
@@ -73,9 +73,9 @@ type DoctorConfig struct {
 	ConfigStore    *config.ConfigStore
 	Queries        *db.Queries
 	Interval       time.Duration
-	Hub            *spanner.Hub
+	Hub            *tungol.Hub
 	Integrations   bool
-	Role           config.SpannerRole
+	Role           config.TungolRole
 	SecretsBackend string
 	// CycleLookup, when set, supplies the per-envoy observed cycle so
 	// the stale-envoys check uses the same per-envoy threshold the UI
@@ -92,9 +92,9 @@ type DoctorHandler struct {
 	configStore    *config.ConfigStore
 	queries        *db.Queries
 	baseInterval   time.Duration
-	hub            *spanner.Hub
+	hub            *tungol.Hub
 	integrations   bool
-	role           config.SpannerRole
+	role           config.TungolRole
 	secretsBackend string
 	cycleLookup    CycleLookup
 	swarmCfgMu     sync.RWMutex

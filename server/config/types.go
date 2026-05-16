@@ -14,24 +14,24 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// SpannerRole defines the server's role in a spanner deployment.
-type SpannerRole string
+// TungolRole defines the server's role in a spanner deployment.
+type TungolRole string
 
 const (
 	// RoleStandalone is the default: a single server handling everything.
-	RoleStandalone SpannerRole = "standalone"
+	RoleStandalone TungolRole = "standalone"
 	// RoleHub is the central server in a spanner deployment.
 	// Handles UI, webhooks, bootstrap, and aggregates data from spokes.
-	RoleHub SpannerRole = "hub"
+	RoleHub TungolRole = "hub"
 	// RoleSpoke is a partition server handling agent check-ins for a
 	// subset of envoys. Disables webhooks, bootstrap, and secret watcher.
-	RoleSpoke SpannerRole = "spoke"
+	RoleSpoke TungolRole = "spoke"
 )
 
-// SpannerSection configures hub-spoke spanner. Omit entirely
+// TungolSection configures hub-spoke spanner. Omit entirely
 // (or set role: standalone) for single-server deployments.
-type SpannerSection struct {
-	Role             SpannerRole        `yaml:"role" doc:"Server role in a spanner deployment." options:"standalone|hub|spoke" default:"standalone" example:"standalone"`
+type TungolSection struct {
+	Role             TungolRole        `yaml:"role" doc:"Server role in a spanner deployment." options:"standalone|hub|spoke" default:"standalone" example:"standalone"`
 	SpokeID          string             `yaml:"spoke_id" doc:"Unique spoke identifier (required when role is 'spoke')." example:"us-west-spoke, eu-spoke-01"`
 	HubAddr          string             `yaml:"hub_addr" doc:"Hub gRPC address (host:port) the spoke reports to." example:"vigo-hub.example.com:1530"`
 	HubFallbackAddrs []string           `yaml:"hub_fallback_addrs" doc:"Spoke-only: fallback hub addresses used when the primary hub is unreachable." example:"[vigo-hub-2:1530, vigo-hub-3:1530]"`
@@ -56,7 +56,7 @@ type SpokeEntry struct {
 }
 
 // Validate checks that spanner config is internally consistent.
-func (f SpannerSection) Validate() error {
+func (f TungolSection) Validate() error {
 	role := f.Role
 	if role == "" || role == RoleStandalone {
 		return nil
@@ -93,7 +93,7 @@ type ServerConfig struct {
 	Watcher      WatcherSection      `yaml:"watcher" docs:"concepts/secrets" doc:"Polls the secrets provider for rotations and force-pushes affected envoys." long:"Background task that polls the configured secrets provider on a schedule and, when a secret value changes, forces a push to every envoy that consumes it. Enables automatic secret rotation without waiting for the next regular check-in — critical when rotating database passwords, TLS keys, or API tokens with revocation expectations. Poll frequency trades detection speed for provider API load."`
 	Secrets      secrets.Config      `yaml:"secrets" docs:"concepts/secrets" doc:"Secrets provider backend and connection settings (local, isopass, vault, AWS, GCP, Azure)." long:"Selects which backend resolves 'secret:' references in module configs at agent check-in. Options: local (files under /srv/vigo/secrets, default for single-server), isopass (Alexander4 Isopass), vault (HashiCorp Vault), aws (AWS Secrets Manager), gcp (GCP Secret Manager), azure (Azure Key Vault). The server fails fast on startup if the backend is unreachable — it never serves a module with plaintext fallbacks."`
 	Bootstrap    BootstrapConfig     `yaml:"bootstrap" docs:"getting-started/bootstrap" doc:"Agent bootstrap enrollment — trusted hostname/CIDR patterns and issued cert validity." long:"Controls how new agents are enrolled into the fleet via the initial HTTPS bootstrap call. Define trusted hostname patterns and CIDR blocks that short-circuit the one-time-token flow (useful for automated provisioning), plus the validity window on auto-issued agent certs. Tighten these in production — a permissive trusted_enrollment is the difference between friction-free onboarding and an open door."`
-	Spanner      SpannerSection      `yaml:"spanner" docs:"concepts/spanner" doc:"Hub-spoke deployment — standalone, hub, or spoke role with auto-failover." long:"Deployment topology — standalone (one server runs the whole fleet), hub (MSP operator runs a rollup across many customer spokes), or spoke (customer-facing server reporting up to a hub). Set this when running an MSP deployment or a multi-region setup where one central server can't own all check-ins. Includes auto-failover tuning for when a hub's primary loses contact with its spokes."`
+	Tungol       TungolSection      `yaml:"spanner" docs:"concepts/spanner" doc:"Hub-spoke deployment — standalone, hub, or spoke role with auto-failover." long:"Deployment topology — standalone (one server runs the whole fleet), hub (MSP operator runs a rollup across many customer spokes), or spoke (customer-facing server reporting up to a hub). Set this when running an MSP deployment or a multi-region setup where one central server can't own all check-ins. Includes auto-failover tuning for when a hub's primary loses contact with its spokes."`
 	Tuning       TuningSection       `yaml:"tuning" docs:"operations/tuning" doc:"Operational tuning — timing windows, gRPC transport limits, and Go runtime memory caps." long:"Low-level knobs for operators who have hit a scaling ceiling and need to hand-tune. Includes gRPC send/receive limits, concurrent stream caps, timing windows for online-vs-offline envoy classification, and Go runtime memory ceilings (GOMEMLIMIT). Leave at defaults until you see a specific symptom — most fleets never touch this section."`
 	SMTP         SMTPSection         `yaml:"smtp" docs:"operations/integrations" doc:"Email relay for event notifications, digests, and scheduled evidence delivery." long:"SMTP relay used by event notifications, daily/weekly digests, and scheduled compliance evidence delivery. Most deployments should prefer the native integrations (Slack, PagerDuty, Jira) over SMTP — email is the least observable and least actionable channel. Keep this configured only when a recipient genuinely can't be reached any other way."`
 	AI           AISection           `yaml:"ai" docs:"operations/ai-providers" doc:"AI assistant provider (Claude, OpenAI, Ollama) for the Ask page and compliance tooling." long:"Wires the /security chat drawer and compliance-assist tooling to an LLM provider. Supports Claude (sharpest reasoning on Vigo-specific questions), OpenAI (cost/token trade-off), and Ollama (fully self-hosted, no third-party calls). Required for automatic .retract module drafting and for the AI-powered guardrail suggestions in the publish flow."`

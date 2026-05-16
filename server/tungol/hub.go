@@ -1,10 +1,15 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package spanner provides hub-spoke coordination for spanner deployments.
-// The Hub connects to spoke servers via gRPC and aggregates admin queries
-// (ListEnvoys, GetConvergenceSummary, ListRuns, ForcePush) across all spokes.
-package spanner
+// Package tungol provides hub-spoke coordination for what operators today
+// still configure as "spanner deployments" via the spanner: YAML block.
+// The hub-spoke implementation in this package is being retired across
+// the broader spanner→tungol redesign (peer-equal federation); during
+// Phase 0 the package wears the new name while the code inside still
+// implements the hub-spoke model. The Hub connects to spoke servers via
+// gRPC and aggregates admin queries (ListEnvoys, GetConvergenceSummary,
+// ListRuns, ForcePush) across all spokes.
+package tungol
 
 import (
 	"archive/tar"

@@ -9,11 +9,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func TestSpannerRole_UnmarshalYAML(t *testing.T) {
+func TestTungolRole_UnmarshalYAML(t *testing.T) {
 	tests := []struct {
 		name     string
 		yaml     string
-		wantRole SpannerRole
+		wantRole TungolRole
 	}{
 		{name: "standalone", yaml: `role: standalone`, wantRole: RoleStandalone},
 		{name: "hub", yaml: `role: hub`, wantRole: RoleHub},
@@ -23,7 +23,7 @@ func TestSpannerRole_UnmarshalYAML(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var fs SpannerSection
+			var fs TungolSection
 			if err := yaml.Unmarshal([]byte(tt.yaml), &fs); err != nil {
 				t.Fatalf("unmarshal: %v", err)
 			}
@@ -34,7 +34,7 @@ func TestSpannerRole_UnmarshalYAML(t *testing.T) {
 	}
 }
 
-func TestSpannerSection_FullSpokeParse(t *testing.T) {
+func TestTungolSection_FullSpokeParse(t *testing.T) {
 	input := `
 spanner:
   role: spoke
@@ -46,18 +46,18 @@ spanner:
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	if cfg.Spanner.Role != RoleSpoke {
-		t.Errorf("role = %q, want spoke", cfg.Spanner.Role)
+	if cfg.Tungol.Role != RoleSpoke {
+		t.Errorf("role = %q, want spoke", cfg.Tungol.Role)
 	}
-	if cfg.Spanner.SpokeID != "dc1" {
-		t.Errorf("spoke_id = %q, want dc1", cfg.Spanner.SpokeID)
+	if cfg.Tungol.SpokeID != "dc1" {
+		t.Errorf("spoke_id = %q, want dc1", cfg.Tungol.SpokeID)
 	}
-	if cfg.Spanner.HubAddr != "hub.example.com:1530" {
-		t.Errorf("hub_addr = %q, want hub.example.com:1530", cfg.Spanner.HubAddr)
+	if cfg.Tungol.HubAddr != "hub.example.com:1530" {
+		t.Errorf("hub_addr = %q, want hub.example.com:1530", cfg.Tungol.HubAddr)
 	}
 }
 
-func TestSpannerSection_FullHubParse(t *testing.T) {
+func TestTungolSection_FullHubParse(t *testing.T) {
 	input := `
 spanner:
   role: hub
@@ -72,39 +72,39 @@ spanner:
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	if cfg.Spanner.Role != RoleHub {
-		t.Errorf("role = %q, want hub", cfg.Spanner.Role)
+	if cfg.Tungol.Role != RoleHub {
+		t.Errorf("role = %q, want hub", cfg.Tungol.Role)
 	}
-	if len(cfg.Spanner.Spokes) != 2 {
-		t.Fatalf("spokes len = %d, want 2", len(cfg.Spanner.Spokes))
+	if len(cfg.Tungol.Spokes) != 2 {
+		t.Fatalf("spokes len = %d, want 2", len(cfg.Tungol.Spokes))
 	}
-	if cfg.Spanner.Spokes[0].ID != "dc1" {
-		t.Errorf("spokes[0].id = %q, want dc1", cfg.Spanner.Spokes[0].ID)
+	if cfg.Tungol.Spokes[0].ID != "dc1" {
+		t.Errorf("spokes[0].id = %q, want dc1", cfg.Tungol.Spokes[0].ID)
 	}
-	if cfg.Spanner.Spokes[1].Addr != "spoke2.example.com:1530" {
-		t.Errorf("spokes[1].addr = %q, want spoke2.example.com:1530", cfg.Spanner.Spokes[1].Addr)
+	if cfg.Tungol.Spokes[1].Addr != "spoke2.example.com:1530" {
+		t.Errorf("spokes[1].addr = %q, want spoke2.example.com:1530", cfg.Tungol.Spokes[1].Addr)
 	}
 }
 
-func TestSpannerSection_Validate(t *testing.T) {
+func TestTungolSection_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
-		section SpannerSection
+		section TungolSection
 		wantErr bool
 	}{
-		{name: "empty is valid", section: SpannerSection{}},
-		{name: "standalone", section: SpannerSection{Role: RoleStandalone}},
+		{name: "empty is valid", section: TungolSection{}},
+		{name: "standalone", section: TungolSection{Role: RoleStandalone}},
 		{
 			name: "hub with spokes",
-			section: SpannerSection{
+			section: TungolSection{
 				Role:   RoleHub,
 				Spokes: []SpokeEntry{{ID: "dc1", Addr: "spoke1:1530"}},
 			},
 		},
-		{name: "hub without spokes", section: SpannerSection{Role: RoleHub}, wantErr: true},
+		{name: "hub without spokes", section: TungolSection{Role: RoleHub}, wantErr: true},
 		{
 			name: "hub with spoke missing id",
-			section: SpannerSection{
+			section: TungolSection{
 				Role:   RoleHub,
 				Spokes: []SpokeEntry{{Addr: "spoke1:1530"}},
 			},
@@ -112,15 +112,15 @@ func TestSpannerSection_Validate(t *testing.T) {
 		},
 		{
 			name: "hub with spoke missing addr",
-			section: SpannerSection{
+			section: TungolSection{
 				Role:   RoleHub,
 				Spokes: []SpokeEntry{{ID: "dc1"}},
 			},
 			wantErr: true,
 		},
-		{name: "spoke with id", section: SpannerSection{Role: RoleSpoke, SpokeID: "dc1"}},
-		{name: "spoke without id", section: SpannerSection{Role: RoleSpoke}, wantErr: true},
-		{name: "invalid role", section: SpannerSection{Role: "bogus"}, wantErr: true},
+		{name: "spoke with id", section: TungolSection{Role: RoleSpoke, SpokeID: "dc1"}},
+		{name: "spoke without id", section: TungolSection{Role: RoleSpoke}, wantErr: true},
+		{name: "invalid role", section: TungolSection{Role: "bogus"}, wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -133,7 +133,7 @@ func TestSpannerSection_Validate(t *testing.T) {
 	}
 }
 
-func TestSpannerSection_OmittedDefaults(t *testing.T) {
+func TestTungolSection_OmittedDefaults(t *testing.T) {
 	input := `
 server:
   grpc_listen: ":1530"
@@ -143,13 +143,13 @@ server:
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	if cfg.Spanner.Role != "" {
-		t.Errorf("role should be empty when omitted, got %q", cfg.Spanner.Role)
+	if cfg.Tungol.Role != "" {
+		t.Errorf("role should be empty when omitted, got %q", cfg.Tungol.Role)
 	}
-	if cfg.Spanner.SpokeID != "" {
-		t.Errorf("spoke_id should be empty when omitted, got %q", cfg.Spanner.SpokeID)
+	if cfg.Tungol.SpokeID != "" {
+		t.Errorf("spoke_id should be empty when omitted, got %q", cfg.Tungol.SpokeID)
 	}
-	if len(cfg.Spanner.Spokes) != 0 {
-		t.Errorf("spokes should be empty when omitted, got %d", len(cfg.Spanner.Spokes))
+	if len(cfg.Tungol.Spokes) != 0 {
+		t.Errorf("spokes should be empty when omitted, got %d", len(cfg.Tungol.Spokes))
 	}
 }

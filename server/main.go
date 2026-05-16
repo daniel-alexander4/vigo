@@ -48,7 +48,7 @@ import (
 	"git.alexander4.io/vigo/server/grc"
 	"git.alexander4.io/vigo/server/publish"
 	"git.alexander4.io/vigo/server/db"
-	"git.alexander4.io/vigo/server/spanner"
+	"git.alexander4.io/vigo/server/tungol"
 	"git.alexander4.io/vigo/server/hardening"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/freshness"
@@ -163,11 +163,11 @@ func run() error {
 	licenseGraceDir := licenseDir
 
 	// Determine spanner role.
-	role := cfg.Spanner.Role
+	role := cfg.Tungol.Role
 	if role == "" {
 		role = config.RoleStandalone
 	}
-	if err := cfg.Spanner.Validate(); err != nil {
+	if err := cfg.Tungol.Validate(); err != nil {
 		return err
 	}
 
@@ -284,7 +284,7 @@ func run() error {
 	// Hub variable is declared here but assigned later (after config store).
 	// The closure captures the pointer and reads it at check time (hourly),
 	// which is well after hub initialization completes.
-	var hub *spanner.Hub
+	var hub *tungol.Hub
 
 	// fleetIndex is created further down (after the enforcer — it's what the
 	// enforcer reads for the active count). The closure captures the
@@ -484,7 +484,7 @@ func run() error {
 
 	// Connect to spokes (hub mode only).
 	if role == config.RoleHub {
-		hub, err = spanner.NewHub(ctx, cfg.Spanner.Spokes, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
+		hub, err = tungol.NewHub(ctx, cfg.Tungol.Spokes, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
 		if err != nil {
 			return fmt.Errorf("connecting to spokes: %w", err)
 		}
@@ -492,13 +492,13 @@ func run() error {
 		slog.Info("spanner hub initialized", "spokes", hub.SpokeCount())
 
 		// Start auto-failover if enabled.
-		if cfg.Spanner.AutoFailover.Enabled {
-			foThreshold := cfg.Spanner.AutoFailover.Threshold
+		if cfg.Tungol.AutoFailover.Enabled {
+			foThreshold := cfg.Tungol.AutoFailover.Threshold
 			if foThreshold <= 0 {
 				foThreshold = 3
 			}
-			foInterval := parseDuration(cfg.Spanner.AutoFailover.Interval, 30*time.Second)
-			failover := spanner.NewFailover(hub, foThreshold, foInterval)
+			foInterval := parseDuration(cfg.Tungol.AutoFailover.Interval, 30*time.Second)
+			failover := tungol.NewFailover(hub, foThreshold, foInterval)
 			go failover.Run(ctx)
 		}
 	}
@@ -892,7 +892,7 @@ func run() error {
 	// uiHandler swarm-config setters.
 	doctorHandler.SetSwarmConfig(cfg.Swarm)
 
-	spannerHandler := api.NewSpannerHandler(role, cfg.Spanner.SpokeID, hub)
+	spannerHandler := api.NewSpannerHandler(role, cfg.Tungol.SpokeID, hub)
 	taskHandler := api.NewTaskHandler(queries, agentSvc, cfg.Task.RequireDefinition)
 	taskHandler.SetAuditWriter(auditWriter)
 	queryHandler := api.NewQueryHandler(agentSvc)
@@ -1045,7 +1045,7 @@ func run() error {
 	}
 
 	if role == config.RoleSpoke {
-		mux, gwErr := api.NewSpokeGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Spanner.SpokeID)
+		mux, gwErr := api.NewSpokeGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Tungol.SpokeID)
 		if gwErr != nil {
 			return fmt.Errorf("creating spoke gateway: %w", gwErr)
 		}
@@ -1347,11 +1347,11 @@ func run() error {
 
 	if role == config.RoleSpoke {
 		// Start spoke status reporter if hub address is configured.
-		if cfg.Spanner.HubAddr != "" {
-			reporter := spanner.NewReporter(
-				cfg.Spanner.SpokeID,
-				cfg.Spanner.HubAddr,
-				cfg.Spanner.HubFallbackAddrs,
+		if cfg.Tungol.HubAddr != "" {
+			reporter := tungol.NewReporter(
+				cfg.Tungol.SpokeID,
+				cfg.Tungol.HubAddr,
+				cfg.Tungol.HubFallbackAddrs,
 				cfg.Server.TLS.CertFile,
 				cfg.Server.TLS.KeyFile,
 				cfg.Server.TLS.CAFile,
@@ -1363,7 +1363,7 @@ func run() error {
 		}
 
 		slog.Info("spoke ready",
-			"spoke_id", cfg.Spanner.SpokeID,
+			"spoke_id", cfg.Tungol.SpokeID,
 			"grpc", cfg.Server.GRPCListen,
 			"api", cfg.Server.APIListen,
 		)
