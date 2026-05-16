@@ -240,17 +240,20 @@ pub async fn handle_push(
         None => return not_found(),
     };
     let content_dir = home.join("lockbox");
-    // Create the content dir if missing — pushing to a freshly-enrolled
-    // envoy may arrive before the user runs `vigo swarm lockbox {fleet,standalone} init`
-    // locally (rare race but valid; the envoy can't decrypt without the
-    // identity but the ciphertext is still legal to store).
-    if let Err(e) = fs::create_dir_all(&content_dir) {
-        tracing::warn!(
+    // Opt-in gate: if the user's ~/lockbox/ doesn't exist, this envoy is
+    // dormant for the user (they've either never enrolled or `rm -rf`'d
+    // their lockbox dir). Don't auto-recreate; return 410 so the pusher
+    // can — eventually — back off. The watcher's reconcile will pull
+    // missing ciphertext from peers when the user re-enrolls. Note: the
+    // identity bootstrap (`vigo swarm lockbox {fleet,standalone} init`)
+    // creates ~/lockbox/, so legitimate first-time enrollment is unaffected.
+    if !content_dir.is_dir() {
+        tracing::debug!(
+            user = %user,
             dir = %content_dir.display(),
-            error = %e,
-            "lockbox push: cannot create content dir"
+            "lockbox push: ~/lockbox/ absent, returning 410 Gone"
         );
-        return internal_error("cannot create content dir");
+        return gone_dormant(&user);
     }
 
     let target = content_dir.join(&name);
@@ -904,6 +907,18 @@ fn gone_with_tombstone(filename: &str, deletion_time: i64) -> Response<Full<Byte
         .unwrap()
 }
 
+fn gone_dormant(user: &str) -> Response<Full<Bytes>> {
+    let body = format!(
+        r#"{{"status":"dormant","user":"{}","reason":"~/lockbox/ absent on receiver"}}"#,
+        user.replace('"', "'"),
+    );
+    Response::builder()
+        .status(StatusCode::GONE)
+        .header("Content-Type", "application/json")
+        .body(Full::new(Bytes::from(body)))
+        .unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -937,5 +952,16 @@ mod tests {
         assert_eq!(percent_decode("file%20name").as_deref(), Some("file name"));
         assert_eq!(percent_decode("bad%ZZ"), None);
         assert_eq!(percent_decode("trail%2"), None);
+    }
+
+    #[test]
+    fn gone_dormant_returns_410_with_dormant_status() {
+        // Sanity check the response shape: status code, content-type, and
+        // body marker. Distinguishes the dir-absent case from the tombstone
+        // case (which also returns 410 but with status="tombstoned").
+        let resp = gone_dormant("alice");
+        assert_eq!(resp.status(), StatusCode::GONE);
+        let ct = resp.headers().get("Content-Type").unwrap();
+        assert_eq!(ct.to_str().unwrap(), "application/json");
     }
 }

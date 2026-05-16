@@ -557,6 +557,72 @@ fn run_auto_encrypt_with_retry(user: &str, filename: &str, home: &Path) {
     }
 }
 
+/// Remove `/var/lib/vigo/swarm/lockbox/<user>/` for any user no longer
+/// in `/etc/passwd`. Without this sweep, `userdel -r <user>` leaves a
+/// permanent ghost state dir (peers.json, tombstones.json, leaves.json,
+/// resurrects.json, signing.key/.pub), and reusing the username later
+/// would silently re-attach all of that to the new user. Full nuke
+/// (including `leaves.json`) is correct here — when the user is gone
+/// from the system, the entire identity is gone, so the anti-resurrection
+/// list is no longer load-bearing.
+fn sweep_orphaned_state() {
+    let active = passwd_user_set();
+    let parent = std::path::Path::new("/var/lib/vigo/swarm/lockbox");
+    sweep_orphaned_state_at(parent, &active);
+}
+
+/// Testable inner: walk `parent`, remove subdirs whose name isn't in `active`.
+fn sweep_orphaned_state_at(parent: &Path, active: &std::collections::HashSet<String>) {
+    let entries = match std::fs::read_dir(parent) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+        if active.contains(&name) {
+            continue;
+        }
+        if let Err(e) = std::fs::remove_dir_all(&path) {
+            warn!(
+                user = %name,
+                path = %path.display(),
+                error = %e,
+                "lockbox watcher: failed to remove orphaned state dir"
+            );
+        } else {
+            info!(
+                user = %name,
+                "lockbox watcher: removed orphaned state for departed user"
+            );
+        }
+    }
+}
+
+/// Set of usernames currently present in `/etc/passwd`. Empty on read
+/// failure (the sweep then no-ops, which is safer than mass-deleting).
+fn passwd_user_set() -> std::collections::HashSet<String> {
+    let mut out = std::collections::HashSet::new();
+    let passwd = match std::fs::read_to_string("/etc/passwd") {
+        Ok(s) => s,
+        Err(_) => return out,
+    };
+    for line in passwd.lines() {
+        if let Some(name) = line.split(':').next() {
+            if !name.is_empty() {
+                out.insert(name.to_string());
+            }
+        }
+    }
+    out
+}
+
 /// Reconcile the watcher's active watches against the current set of
 /// enrolled users. Three actions per pass:
 ///   1. Drop watches for users no longer enrolled.
@@ -572,6 +638,12 @@ fn reconcile_watches(
     watcher: &mut notify::RecommendedWatcher,
     watches: &Arc<Mutex<HashMap<String, WatchEntry>>>,
 ) {
+    // Before reconciling watches, sweep agent state for users no longer
+    // on this system (post-`userdel`). Closes the orphan-state hole and
+    // prevents same-name UID-reuse from silently re-attaching old peer
+    // tables / tombstones / leaves to a new user.
+    sweep_orphaned_state();
+
     let desired: std::collections::HashSet<String> = match enrolled_users() {
         Ok(s) => s,
         Err(e) => {
@@ -918,5 +990,70 @@ mod tests {
         // Same fs (dev should match), different inode.
         assert_eq!(before.0, after.0, "dev should be unchanged");
         assert_ne!(before.1, after.1, "inode should rotate after recreate");
+    }
+
+    #[test]
+    fn sweep_removes_state_for_departed_users() {
+        let state_parent = tempfile::tempdir().unwrap();
+        for user in ["alice", "bob", "carol"] {
+            let d = state_parent.path().join(user);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("peers.json"), b"{}").unwrap();
+            std::fs::write(d.join("leaves.json"), b"[]").unwrap();
+        }
+        let mut active = std::collections::HashSet::new();
+        active.insert("alice".to_string());
+
+        sweep_orphaned_state_at(state_parent.path(), &active);
+
+        assert!(state_parent.path().join("alice").is_dir());
+        assert!(!state_parent.path().join("bob").exists());
+        assert!(!state_parent.path().join("carol").exists());
+    }
+
+    #[test]
+    fn sweep_full_nukes_user_dir_including_leaves() {
+        // Verify the entire user state dir is removed, not just a subset.
+        // This matters because the prior plan considered preserving leaves.json
+        // on partial cleanups; for userdel-style full-leave we want a clean wipe.
+        let state_parent = tempfile::tempdir().unwrap();
+        let user_dir = state_parent.path().join("alice");
+        std::fs::create_dir_all(&user_dir).unwrap();
+        std::fs::write(user_dir.join("leaves.json"), b"[]").unwrap();
+        std::fs::write(user_dir.join("tombstones.json"), b"{}").unwrap();
+        std::fs::write(user_dir.join("signing.key"), b"x").unwrap();
+
+        let active = std::collections::HashSet::new(); // alice is gone
+
+        sweep_orphaned_state_at(state_parent.path(), &active);
+
+        assert!(!user_dir.exists(), "user dir fully removed");
+    }
+
+    #[test]
+    fn sweep_skips_non_directories() {
+        // Stray files at the top of the state parent (e.g. README, lock
+        // files) must not be touched even if their basename has no
+        // matching user.
+        let state_parent = tempfile::tempdir().unwrap();
+        std::fs::write(state_parent.path().join("README"), b"x").unwrap();
+        let active = std::collections::HashSet::new();
+        sweep_orphaned_state_at(state_parent.path(), &active);
+        assert!(state_parent.path().join("README").exists());
+    }
+
+    #[test]
+    fn sweep_tolerates_missing_parent_dir() {
+        let parent = tempfile::tempdir().unwrap();
+        let missing = parent.path().join("does-not-exist");
+        let active = std::collections::HashSet::new();
+        sweep_orphaned_state_at(&missing, &active); // must not panic
+    }
+
+    #[test]
+    fn passwd_user_set_contains_root() {
+        // /etc/passwd always contains root; sanity-check the parser.
+        let set = passwd_user_set();
+        assert!(set.contains("root"), "/etc/passwd parser must yield root");
     }
 }
