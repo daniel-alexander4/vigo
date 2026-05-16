@@ -1044,9 +1044,9 @@ func local_request_VigoAdmin_SyncConfig_0(ctx context.Context, marshaler runtime
 	return msg, metadata, err
 }
 
-func request_VigoAdmin_ReportSpokeStatus_0(ctx context.Context, marshaler runtime.Marshaler, client VigoAdminClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_VigoAdmin_ReportSteorraStatus_0(ctx context.Context, marshaler runtime.Marshaler, client VigoAdminClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq SpokeStatusReport
+		protoReq SteorraStatusReport
 		metadata runtime.ServerMetadata
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
@@ -1055,19 +1055,19 @@ func request_VigoAdmin_ReportSpokeStatus_0(ctx context.Context, marshaler runtim
 	if req.Body != nil {
 		_, _ = io.Copy(io.Discard, req.Body)
 	}
-	msg, err := client.ReportSpokeStatus(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.ReportSteorraStatus(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
 
-func local_request_VigoAdmin_ReportSpokeStatus_0(ctx context.Context, marshaler runtime.Marshaler, server VigoAdminServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_VigoAdmin_ReportSteorraStatus_0(ctx context.Context, marshaler runtime.Marshaler, server VigoAdminServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq SpokeStatusReport
+		protoReq SteorraStatusReport
 		metadata runtime.ServerMetadata
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	msg, err := server.ReportSpokeStatus(ctx, &protoReq)
+	msg, err := server.ReportSteorraStatus(ctx, &protoReq)
 	return msg, metadata, err
 }
 
@@ -1778,25 +1778,25 @@ func RegisterVigoAdminHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 		}
 		forward_VigoAdmin_SyncConfig_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodPost, pattern_VigoAdmin_ReportSpokeStatus_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodPost, pattern_VigoAdmin_ReportSteorraStatus_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/vigo.v1.VigoAdmin/ReportSpokeStatus", runtime.WithHTTPPathPattern("/vigo.v1.VigoAdmin/ReportSpokeStatus"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/vigo.v1.VigoAdmin/ReportSteorraStatus", runtime.WithHTTPPathPattern("/vigo.v1.VigoAdmin/ReportSteorraStatus"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_VigoAdmin_ReportSpokeStatus_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_VigoAdmin_ReportSteorraStatus_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_VigoAdmin_ReportSpokeStatus_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_VigoAdmin_ReportSteorraStatus_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 
 	return nil
@@ -2482,22 +2482,22 @@ func RegisterVigoAdminHandlerClient(ctx context.Context, mux *runtime.ServeMux, 
 		}
 		forward_VigoAdmin_SyncConfig_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodPost, pattern_VigoAdmin_ReportSpokeStatus_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodPost, pattern_VigoAdmin_ReportSteorraStatus_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/vigo.v1.VigoAdmin/ReportSpokeStatus", runtime.WithHTTPPathPattern("/vigo.v1.VigoAdmin/ReportSpokeStatus"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/vigo.v1.VigoAdmin/ReportSteorraStatus", runtime.WithHTTPPathPattern("/vigo.v1.VigoAdmin/ReportSteorraStatus"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_VigoAdmin_ReportSpokeStatus_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_VigoAdmin_ReportSteorraStatus_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_VigoAdmin_ReportSpokeStatus_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_VigoAdmin_ReportSteorraStatus_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	return nil
 }
@@ -2526,7 +2526,7 @@ var (
 	pattern_VigoAdmin_EnrollEnvoy_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"vigo.v1.VigoAdmin", "EnrollEnvoy"}, ""))
 	pattern_VigoAdmin_SetReassignment_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"vigo.v1.VigoAdmin", "SetReassignment"}, ""))
 	pattern_VigoAdmin_SyncConfig_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"vigo.v1.VigoAdmin", "SyncConfig"}, ""))
-	pattern_VigoAdmin_ReportSpokeStatus_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"vigo.v1.VigoAdmin", "ReportSpokeStatus"}, ""))
+	pattern_VigoAdmin_ReportSteorraStatus_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"vigo.v1.VigoAdmin", "ReportSteorraStatus"}, ""))
 )
 
 var (
@@ -2553,7 +2553,7 @@ var (
 	forward_VigoAdmin_EnrollEnvoy_0           = runtime.ForwardResponseMessage
 	forward_VigoAdmin_SetReassignment_0       = runtime.ForwardResponseMessage
 	forward_VigoAdmin_SyncConfig_0            = runtime.ForwardResponseMessage
-	forward_VigoAdmin_ReportSpokeStatus_0     = runtime.ForwardResponseMessage
+	forward_VigoAdmin_ReportSteorraStatus_0   = runtime.ForwardResponseMessage
 )
 
 // RegisterVigoPeerHandlerFromEndpoint is same as RegisterVigoPeerHandler but

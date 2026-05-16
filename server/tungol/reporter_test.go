@@ -32,19 +32,19 @@ func (f *fakeConvergenceSource) ConvergenceCounts() (int, int, int, int, int, in
 	return f.total, f.converged, f.relapsed, f.diverged, f.degraded, f.errors, f.offline, f.noData
 }
 
-// countingAdminService counts ReportSpokeStatus calls and optionally fails.
+// countingAdminService counts ReportSteorraStatus calls and optionally fails.
 type countingAdminService struct {
 	pb.UnimplementedVigoAdminServer
 	calls   atomic.Int32
 	failErr error // if non-nil, all calls return this error
 }
 
-func (s *countingAdminService) ReportSpokeStatus(_ context.Context, _ *pb.SpokeStatusReport) (*pb.SpokeStatusAck, error) {
+func (s *countingAdminService) ReportSteorraStatus(_ context.Context, _ *pb.SteorraStatusReport) (*pb.SteorraStatusAck, error) {
 	s.calls.Add(1)
 	if s.failErr != nil {
 		return nil, s.failErr
 	}
-	return &pb.SpokeStatusAck{}, nil
+	return &pb.SteorraStatusAck{}, nil
 }
 
 // startReporterFakeHub starts a gRPC server for reporter tests.
@@ -235,7 +235,7 @@ func TestReporterFailover_ResetsOnSuccess(t *testing.T) {
 
 func TestReporterReport_SendsCorrectData(t *testing.T) {
 	// Verify the reporter sends correct compliance data.
-	var received *pb.SpokeStatusReport
+	var received *pb.SteorraStatusReport
 	svc := &pb.UnimplementedVigoAdminServer{}
 	_ = svc
 
@@ -269,8 +269,8 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 			if received != nil {
 				cancel()
 
-				if received.SpokeId != "spoke-east" {
-					t.Errorf("SpokeId = %q, want spoke-east", received.SpokeId)
+				if received.SteorraId != "spoke-east" {
+					t.Errorf("SteorraId = %q, want spoke-east", received.SteorraId)
 				}
 				if received.EnvoyCount != 100 {
 					t.Errorf("EnvoyCount = %d, want 100", received.EnvoyCount)
@@ -301,23 +301,23 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 	}
 }
 
-// capturingAdminService captures the last ReportSpokeStatus request.
+// capturingAdminService captures the last ReportSteorraStatus request.
 type capturingAdminService struct {
 	pb.UnimplementedVigoAdminServer
-	last atomic.Value // *pb.SpokeStatusReport
+	last atomic.Value // *pb.SteorraStatusReport
 }
 
-func (s *capturingAdminService) ReportSpokeStatus(_ context.Context, req *pb.SpokeStatusReport) (*pb.SpokeStatusAck, error) {
+func (s *capturingAdminService) ReportSteorraStatus(_ context.Context, req *pb.SteorraStatusReport) (*pb.SteorraStatusAck, error) {
 	s.last.Store(req)
-	return &pb.SpokeStatusAck{}, nil
+	return &pb.SteorraStatusAck{}, nil
 }
 
-func (s *capturingAdminService) lastReport() *pb.SpokeStatusReport {
+func (s *capturingAdminService) lastReport() *pb.SteorraStatusReport {
 	v := s.last.Load()
 	if v == nil {
 		return nil
 	}
-	return v.(*pb.SpokeStatusReport)
+	return v.(*pb.SteorraStatusReport)
 }
 
 func startCapturingFakeHub(t *testing.T, svc *capturingAdminService) string {

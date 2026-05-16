@@ -139,7 +139,7 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		Success:         true,
 		EnvoyId:        envoyID,
 		Message:         "registered successfully",
-		SpokeAddr:       spokeAddr,
+		SteorraAddr:       spokeAddr,
 		FallbackServers: s.fallbackServers,
 	}
 

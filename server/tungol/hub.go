@@ -37,7 +37,7 @@ import (
 // Hub manages gRPC connections to spoke servers and fans out admin queries.
 type Hub struct {
 	spokes       []spokeConn
-	spokeReports map[string]*pb.SpokeStatusReport // latest spoke self-reports, protected by mu
+	spokeReports map[string]*pb.SteorraStatusReport // latest spoke self-reports, protected by mu
 	mu           sync.RWMutex
 }
 
@@ -58,7 +58,7 @@ func NewHub(ctx context.Context, spokes []config.SpokeEntry, certFile, keyFile, 
 
 	h := &Hub{
 		spokes:       make([]spokeConn, 0, len(spokes)),
-		spokeReports: make(map[string]*pb.SpokeStatusReport),
+		spokeReports: make(map[string]*pb.SteorraStatusReport),
 	}
 
 	for _, s := range spokes {
@@ -406,15 +406,15 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 }
 
 // RecordSpokeReport stores a spoke's self-reported status. Called by the
-// ReportSpokeStatus gRPC handler on the hub.
-func (h *Hub) RecordSpokeReport(report *pb.SpokeStatusReport) {
+// ReportSteorraStatus gRPC handler on the hub.
+func (h *Hub) RecordSpokeReport(report *pb.SteorraStatusReport) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.spokeReports[report.SpokeId] = report
+	h.spokeReports[report.SteorraId] = report
 }
 
 // getSpokeReport returns the latest self-report for a spoke, or nil.
-func (h *Hub) getSpokeReport(spokeID string) *pb.SpokeStatusReport {
+func (h *Hub) getSpokeReport(spokeID string) *pb.SteorraStatusReport {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.spokeReports[spokeID]

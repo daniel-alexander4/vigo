@@ -521,8 +521,10 @@ fn save_envoy_id(data_dir: &std::path::Path, id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Save spoke address to <data-dir>/spoke.addr.
-fn save_spoke_addr(data_dir: &std::path::Path, addr: &str) -> Result<()> {
+/// Save steorra address to <data-dir>/spoke.addr. (The on-disk filename
+/// stays `spoke.addr` to avoid orphaning routing state on deployed
+/// envoys when they upgrade through this rename.)
+fn save_steorra_addr(data_dir: &std::path::Path, addr: &str) -> Result<()> {
     let path = data_dir.join("spoke.addr");
     if addr.is_empty() {
         let _ = std::fs::remove_file(&path);
@@ -532,8 +534,9 @@ fn save_spoke_addr(data_dir: &std::path::Path, addr: &str) -> Result<()> {
     Ok(())
 }
 
-/// Load spoke address. Returns empty string if not set.
-fn load_spoke_addr(data_dir: &std::path::Path) -> String {
+/// Load steorra address. Returns empty string if not set. See
+/// save_steorra_addr for the on-disk-filename rationale.
+fn load_steorra_addr(data_dir: &std::path::Path) -> String {
     let path = data_dir.join("spoke.addr");
     std::fs::read_to_string(path)
         .map(|s| s.trim().to_string())
@@ -628,14 +631,14 @@ async fn run_once(
 
     let (ca, cert, key) = resolve_tls_paths(cli, &cli.data_dir);
 
-    // Use spoke address if hub routed us to a spoke.
+    // Use steorra address if the receiving steorra routed us elsewhere.
     let addr = {
-        let spoke = load_spoke_addr(&cli.data_dir);
-        if spoke.is_empty() {
+        let steorra = load_steorra_addr(&cli.data_dir);
+        if steorra.is_empty() {
             cli.server.clone()
         } else {
-            info!(spoke_addr = %spoke, "using spoke address from enrollment routing");
-            spoke
+            info!(steorra_addr = %steorra, "using steorra address from enrollment routing");
+            steorra
         }
     };
 
@@ -1027,14 +1030,14 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     let envoy_id = load_envoy_id(&cli.data_dir)?;
     let (ca, cert, key) = resolve_tls_paths(cli, &cli.data_dir);
 
-    // Use spoke address if hub routed us to a spoke.
+    // Use steorra address if the receiving steorra routed us elsewhere.
     let addr = {
-        let spoke = load_spoke_addr(&cli.data_dir);
-        if spoke.is_empty() {
+        let steorra = load_steorra_addr(&cli.data_dir);
+        if steorra.is_empty() {
             cli.server.clone()
         } else {
-            info!(spoke_addr = %spoke, "using spoke address from enrollment routing");
-            spoke
+            info!(steorra_addr = %steorra, "using steorra address from enrollment routing");
+            steorra
         }
     };
 
@@ -1449,16 +1452,16 @@ fn run_status(cli: &Cli) -> Result<()> {
         fallbacks.join(", ")
     };
 
-    // Spoke address.
-    let spoke = load_spoke_addr(&cli.data_dir);
+    // Steorra address.
+    let steorra = load_steorra_addr(&cli.data_dir);
 
     let data_dir = cli.data_dir.display();
     let state_dir = platform::paths::default_state_dir();
 
     println!("Envoy ID:        {}", envoy_id);
     println!("Server:           {}", server);
-    if !spoke.is_empty() {
-        println!("Spoke:            {}", spoke);
+    if !steorra.is_empty() {
+        println!("Steorra:          {}", steorra);
     }
     println!("Fallback servers: {}", fallback_str);
     println!("Data directory:   {}", data_dir);
@@ -1715,9 +1718,9 @@ async fn async_main() -> Result<()> {
                 info!("stored server bundle-signing public key");
             }
 
-            if !resp.spoke_addr.is_empty() {
-                save_spoke_addr(&cli.data_dir, &resp.spoke_addr)?;
-                info!(spoke_addr = %resp.spoke_addr, "hub routed to spoke");
+            if !resp.steorra_addr.is_empty() {
+                save_steorra_addr(&cli.data_dir, &resp.steorra_addr)?;
+                info!(steorra_addr = %resp.steorra_addr, "tungol routed to steorra");
             }
 
             // Persist fallback servers for agent failover.

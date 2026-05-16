@@ -31,7 +31,7 @@ type ConvergenceSource interface {
 const failoverThreshold = 3
 
 // Reporter runs on spokes and periodically reports status to the hub via the
-// ReportSpokeStatus gRPC RPC. It is a background goroutine and does not
+// ReportSteorraStatus gRPC RPC. It is a background goroutine and does not
 // interfere with the check-in hot path.
 //
 // When hub_fallback_addrs are configured, the reporter automatically fails over
@@ -255,8 +255,8 @@ func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
 		convergencePct = float32(converged) / float32(activeTotal) * 100
 	}
 
-	req := &pb.SpokeStatusReport{
-		SpokeId:        r.spokeID,
+	req := &pb.SteorraStatusReport{
+		SteorraId:        r.spokeID,
 		EnvoyCount:    int32(total),
 		Converged:      int32(converged),
 		Relapsed:       int32(relapsed),
@@ -274,7 +274,7 @@ func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
 	rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	_, err := client.ReportSpokeStatus(rpcCtx, req)
+	_, err := client.ReportSteorraStatus(rpcCtx, req)
 	if err != nil {
 		// Log at debug level: spoke operates independently of hub connectivity.
 		slog.Debug("spoke reporter: failed to report status to hub",

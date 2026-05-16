@@ -199,22 +199,24 @@ service VigoAdmin {
     };
   }
 
-  // EnrollEnvoy creates a envoy record directly (hub→spoke internal RPC).
-  // Used during enrollment routing: the hub validates the token, then calls
-  // this on the target spoke to create the envoy without token re-validation.
+  // EnrollEnvoy creates a envoy record directly (tungol-internal RPC).
+  // Used during enrollment routing: the receiving steorra validates the
+  // token, then calls this on the target steorra to create the envoy
+  // without token re-validation.
   rpc EnrollEnvoy(EnrollEnvoyRequest) returns (EnrollEnvoyResponse);
 
-  // SetReassignment marks a envoy for reassignment to a different spoke.
-  // Called hub→spoke to set reassign_addr/reassign_id on the envoy.
+  // SetReassignment marks a envoy for reassignment to a different steorra.
+  // Called tungol-internal to set reassign_addr/reassign_id on the envoy.
   rpc SetReassignment(SetReassignmentRequest) returns (SetReassignmentResponse);
 
-  // SyncConfig pushes the hub's live config to a spoke as a tar.gz archive.
-  // Called hub→spoke after config publish to keep spokes in sync.
+  // SyncConfig pushes the publishing steorra's live config to another
+  // steorra as a tar.gz archive (legacy hub-spoke path; replaced by the
+  // gitback-based stockpile distribution in later slices).
   rpc SyncConfig(SyncConfigRequest) returns (SyncConfigResponse);
 
-  // ReportSpokeStatus receives periodic status reports from spokes.
-  // Called spoke→hub to push health/compliance metrics proactively.
-  rpc ReportSpokeStatus(SpokeStatusReport) returns (SpokeStatusAck);
+  // ReportSteorraStatus receives periodic status reports from steorras
+  // pushed proactively (push health/compliance metrics into the tungol).
+  rpc ReportSteorraStatus(SteorraStatusReport) returns (SteorraStatusAck);
 }
 
 // =============================================================================
@@ -233,7 +235,7 @@ message RegisterResponse {
   bool success = 1;
   string envoy_id = 2;       // UUID assigned by the server
   string message = 3;
-  string spoke_addr = 4;    // if set, agent should connect to this spoke for check-ins
+  string steorra_addr = 4;  // if set, agent should connect to this steorra for check-ins
   string server_pubkey_pem = 5; // server's ED25519 public key for bundle signature verification
   repeated string fallback_servers = 6; // peer server addresses for agent failover
 }
@@ -263,7 +265,7 @@ message CheckInResponse {
   PolicyBundle policy_bundle = 7;        // raw policy for agent-side evaluation
   uint64 policy_version = 8;            // current config version, always set
   string reassign_addr = 9;             // non-empty = agent should reconnect here
-  string reassign_id = 10;              // new UUID on target spoke
+  string reassign_id = 10;              // new UUID on target steorra
   bool stream_requested = 11;           // server wants agent to open AgentStream
   repeated string warnings = 12;        // config errors, missing modules, etc.
   repeated ProxiedDevice proxied_devices = 13;  // network devices this gateway manages
@@ -876,7 +878,7 @@ message PackageDrift {
 }
 
 // =============================================================================
-// Enrollment routing messages (hub→spoke internal)
+// Enrollment routing messages (tungol-internal: receiving steorra → target steorra)
 // =============================================================================
 
 message EnrollEnvoyRequest {
@@ -891,7 +893,7 @@ message EnrollEnvoyResponse {
 }
 
 // =============================================================================
-// Reassignment messages (hub→spoke)
+// Reassignment messages (tungol-internal)
 // =============================================================================
 
 message SetReassignmentRequest {
@@ -904,8 +906,8 @@ message SetReassignmentResponse {}
 
 message ReassignEnvoyRequest {
   string envoy_id = 1;
-  string from_spoke_id = 2;
-  string to_spoke_id = 3;
+  string from_steorra_id = 2;
+  string to_steorra_id = 3;
 }
 
 message ReassignEnvoyResponse {
@@ -913,19 +915,19 @@ message ReassignEnvoyResponse {
   string target_addr = 2;
 }
 
-message DrainSpokeRequest {
-  string spoke_id = 1;
-  string target_spoke_id = 2;  // optional: specific target. Empty = auto-route by patterns
+message DrainSteorraRequest {
+  string steorra_id = 1;
+  string target_steorra_id = 2;  // optional: specific target. Empty = auto-route by patterns
 }
 
-message DrainSpokeResponse {
+message DrainSteorraResponse {
   int32 moved = 1;
   int32 failed = 2;
   repeated string errors = 3;
 }
 
 // =============================================================================
-// Config sync messages (hub→spoke)
+// Config sync messages (tungol-internal; legacy hub-spoke path)
 // =============================================================================
 
 message SyncConfigRequest {
@@ -935,11 +937,11 @@ message SyncConfigRequest {
 message SyncConfigResponse {}
 
 // =============================================================================
-// Spoke status reporting messages (spoke→hub)
+// Steorra status reporting messages (steorra → tungol observer)
 // =============================================================================
 
-message SpokeStatusReport {
-  string spoke_id = 1;
+message SteorraStatusReport {
+  string steorra_id = 1;
   int32 envoy_count = 2;
   int32 converged = 3;
   int32 relapsed = 4;
@@ -952,7 +954,7 @@ message SpokeStatusReport {
   int32 degraded = 11;
 }
 
-message SpokeStatusAck {}
+message SteorraStatusAck {}
 
 // =============================================================================
 // Peer replication service (primary↔peer, port 1530)

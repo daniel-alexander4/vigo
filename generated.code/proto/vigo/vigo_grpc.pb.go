@@ -435,7 +435,7 @@ const (
 	VigoAdmin_EnrollEnvoy_FullMethodName           = "/vigo.v1.VigoAdmin/EnrollEnvoy"
 	VigoAdmin_SetReassignment_FullMethodName       = "/vigo.v1.VigoAdmin/SetReassignment"
 	VigoAdmin_SyncConfig_FullMethodName            = "/vigo.v1.VigoAdmin/SyncConfig"
-	VigoAdmin_ReportSpokeStatus_FullMethodName     = "/vigo.v1.VigoAdmin/ReportSpokeStatus"
+	VigoAdmin_ReportSteorraStatus_FullMethodName   = "/vigo.v1.VigoAdmin/ReportSteorraStatus"
 )
 
 // VigoAdminClient is the client API for VigoAdmin service.
@@ -482,19 +482,21 @@ type VigoAdminClient interface {
 	ListPackages(ctx context.Context, in *ListPackagesRequest, opts ...grpc.CallOption) (*ListPackagesResponse, error)
 	// ListPackageDrift lists packages where installed version differs from desired.
 	ListPackageDrift(ctx context.Context, in *ListPackageDriftRequest, opts ...grpc.CallOption) (*ListPackageDriftResponse, error)
-	// EnrollEnvoy creates a envoy record directly (hub→spoke internal RPC).
-	// Used during enrollment routing: the hub validates the token, then calls
-	// this on the target spoke to create the envoy without token re-validation.
+	// EnrollEnvoy creates a envoy record directly (tungol-internal RPC).
+	// Used during enrollment routing: the receiving steorra validates the
+	// token, then calls this on the target steorra to create the envoy
+	// without token re-validation.
 	EnrollEnvoy(ctx context.Context, in *EnrollEnvoyRequest, opts ...grpc.CallOption) (*EnrollEnvoyResponse, error)
-	// SetReassignment marks a envoy for reassignment to a different spoke.
-	// Called hub→spoke to set reassign_addr/reassign_id on the envoy.
+	// SetReassignment marks a envoy for reassignment to a different steorra.
+	// Called tungol-internal to set reassign_addr/reassign_id on the envoy.
 	SetReassignment(ctx context.Context, in *SetReassignmentRequest, opts ...grpc.CallOption) (*SetReassignmentResponse, error)
-	// SyncConfig pushes the hub's live config to a spoke as a tar.gz archive.
-	// Called hub→spoke after config publish to keep spokes in sync.
+	// SyncConfig pushes the publishing steorra's live config to another
+	// steorra as a tar.gz archive (legacy hub-spoke path; replaced by the
+	// gitback-based stockpile distribution in later slices).
 	SyncConfig(ctx context.Context, in *SyncConfigRequest, opts ...grpc.CallOption) (*SyncConfigResponse, error)
-	// ReportSpokeStatus receives periodic status reports from spokes.
-	// Called spoke→hub to push health/compliance metrics proactively.
-	ReportSpokeStatus(ctx context.Context, in *SpokeStatusReport, opts ...grpc.CallOption) (*SpokeStatusAck, error)
+	// ReportSteorraStatus receives periodic status reports from steorras
+	// pushed proactively (push health/compliance metrics into the tungol).
+	ReportSteorraStatus(ctx context.Context, in *SteorraStatusReport, opts ...grpc.CallOption) (*SteorraStatusAck, error)
 }
 
 type vigoAdminClient struct {
@@ -735,10 +737,10 @@ func (c *vigoAdminClient) SyncConfig(ctx context.Context, in *SyncConfigRequest,
 	return out, nil
 }
 
-func (c *vigoAdminClient) ReportSpokeStatus(ctx context.Context, in *SpokeStatusReport, opts ...grpc.CallOption) (*SpokeStatusAck, error) {
+func (c *vigoAdminClient) ReportSteorraStatus(ctx context.Context, in *SteorraStatusReport, opts ...grpc.CallOption) (*SteorraStatusAck, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SpokeStatusAck)
-	err := c.cc.Invoke(ctx, VigoAdmin_ReportSpokeStatus_FullMethodName, in, out, cOpts...)
+	out := new(SteorraStatusAck)
+	err := c.cc.Invoke(ctx, VigoAdmin_ReportSteorraStatus_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -789,19 +791,21 @@ type VigoAdminServer interface {
 	ListPackages(context.Context, *ListPackagesRequest) (*ListPackagesResponse, error)
 	// ListPackageDrift lists packages where installed version differs from desired.
 	ListPackageDrift(context.Context, *ListPackageDriftRequest) (*ListPackageDriftResponse, error)
-	// EnrollEnvoy creates a envoy record directly (hub→spoke internal RPC).
-	// Used during enrollment routing: the hub validates the token, then calls
-	// this on the target spoke to create the envoy without token re-validation.
+	// EnrollEnvoy creates a envoy record directly (tungol-internal RPC).
+	// Used during enrollment routing: the receiving steorra validates the
+	// token, then calls this on the target steorra to create the envoy
+	// without token re-validation.
 	EnrollEnvoy(context.Context, *EnrollEnvoyRequest) (*EnrollEnvoyResponse, error)
-	// SetReassignment marks a envoy for reassignment to a different spoke.
-	// Called hub→spoke to set reassign_addr/reassign_id on the envoy.
+	// SetReassignment marks a envoy for reassignment to a different steorra.
+	// Called tungol-internal to set reassign_addr/reassign_id on the envoy.
 	SetReassignment(context.Context, *SetReassignmentRequest) (*SetReassignmentResponse, error)
-	// SyncConfig pushes the hub's live config to a spoke as a tar.gz archive.
-	// Called hub→spoke after config publish to keep spokes in sync.
+	// SyncConfig pushes the publishing steorra's live config to another
+	// steorra as a tar.gz archive (legacy hub-spoke path; replaced by the
+	// gitback-based stockpile distribution in later slices).
 	SyncConfig(context.Context, *SyncConfigRequest) (*SyncConfigResponse, error)
-	// ReportSpokeStatus receives periodic status reports from spokes.
-	// Called spoke→hub to push health/compliance metrics proactively.
-	ReportSpokeStatus(context.Context, *SpokeStatusReport) (*SpokeStatusAck, error)
+	// ReportSteorraStatus receives periodic status reports from steorras
+	// pushed proactively (push health/compliance metrics into the tungol).
+	ReportSteorraStatus(context.Context, *SteorraStatusReport) (*SteorraStatusAck, error)
 	mustEmbedUnimplementedVigoAdminServer()
 }
 
@@ -881,8 +885,8 @@ func (UnimplementedVigoAdminServer) SetReassignment(context.Context, *SetReassig
 func (UnimplementedVigoAdminServer) SyncConfig(context.Context, *SyncConfigRequest) (*SyncConfigResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SyncConfig not implemented")
 }
-func (UnimplementedVigoAdminServer) ReportSpokeStatus(context.Context, *SpokeStatusReport) (*SpokeStatusAck, error) {
-	return nil, status.Error(codes.Unimplemented, "method ReportSpokeStatus not implemented")
+func (UnimplementedVigoAdminServer) ReportSteorraStatus(context.Context, *SteorraStatusReport) (*SteorraStatusAck, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportSteorraStatus not implemented")
 }
 func (UnimplementedVigoAdminServer) mustEmbedUnimplementedVigoAdminServer() {}
 func (UnimplementedVigoAdminServer) testEmbeddedByValue()                   {}
@@ -1319,20 +1323,20 @@ func _VigoAdmin_SyncConfig_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VigoAdmin_ReportSpokeStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SpokeStatusReport)
+func _VigoAdmin_ReportSteorraStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SteorraStatusReport)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VigoAdminServer).ReportSpokeStatus(ctx, in)
+		return srv.(VigoAdminServer).ReportSteorraStatus(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VigoAdmin_ReportSpokeStatus_FullMethodName,
+		FullMethod: VigoAdmin_ReportSteorraStatus_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).ReportSpokeStatus(ctx, req.(*SpokeStatusReport))
+		return srv.(VigoAdminServer).ReportSteorraStatus(ctx, req.(*SteorraStatusReport))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1437,8 +1441,8 @@ var VigoAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VigoAdmin_SyncConfig_Handler,
 		},
 		{
-			MethodName: "ReportSpokeStatus",
-			Handler:    _VigoAdmin_ReportSpokeStatus_Handler,
+			MethodName: "ReportSteorraStatus",
+			Handler:    _VigoAdmin_ReportSteorraStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

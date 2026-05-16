@@ -815,10 +815,10 @@ func extractConfigArchive(archive []byte, targetDir string) error {
 	return nil
 }
 
-// ---------- ReportSpokeStatus ----------
+// ---------- ReportSteorraStatus ----------
 
-func (s *AdminService) ReportSpokeStatus(ctx context.Context, req *pb.SpokeStatusReport) (*pb.SpokeStatusAck, error) {
-	if req.SpokeId == "" {
+func (s *AdminService) ReportSteorraStatus(ctx context.Context, req *pb.SteorraStatusReport) (*pb.SteorraStatusAck, error) {
+	if req.SteorraId == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "spoke_id is required")
 	}
 
@@ -830,12 +830,12 @@ func (s *AdminService) ReportSpokeStatus(ctx context.Context, req *pb.SpokeStatu
 	s.hub.RecordSpokeReport(req)
 
 	slog.Debug("received spoke status report",
-		"spoke_id", req.SpokeId,
+		"spoke_id", req.SteorraId,
 		"envoy_count", req.EnvoyCount,
 		"converged", req.Converged,
 	)
 
-	return &pb.SpokeStatusAck{}, nil
+	return &pb.SteorraStatusAck{}, nil
 }
 
 // ---------- Helpers ----------
