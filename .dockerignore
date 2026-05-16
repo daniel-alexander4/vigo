@@ -41,3 +41,6 @@ docs/getting-started/technical-comparison.md
 docs/getting-started/performance-1m.md
 docs/getting-started/performance-30s.md
 docs/getting-started/performance-15s.md
+
+# Internal engineering / strategy memos — never ship to operators.
+docs/internal.docs/

@@ -50,8 +50,19 @@ func TestDocLinksNotBroken(t *testing.T) {
 	var broken []string
 
 	err := filepath.Walk(docsDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".md") {
+		if err != nil {
 			return err
+		}
+		rel, _ := filepath.Rel(docsDir, path)
+		// docs/internal.docs/ holds engineering and strategy memos — not operator-facing, exempt from link checks.
+		if rel == "internal.docs" || strings.HasPrefix(rel, "internal.docs"+string(filepath.Separator)) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".md") {
+			return nil
 		}
 
 		data, err := os.ReadFile(path)

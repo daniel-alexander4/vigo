@@ -46,10 +46,20 @@ func LoadDocsCorpus(docsDir string) string {
 	var overflow []string                // files not matching any priority dir
 
 	_ = filepath.Walk(docsDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".md") {
+		if err != nil {
 			return nil
 		}
 		rel, _ := filepath.Rel(docsDir, path)
+		// docs/internal.docs/ holds engineering and strategy memos — never feed them to the operator-facing AI.
+		if rel == "internal.docs" || strings.HasPrefix(rel, "internal.docs"+string(filepath.Separator)) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".md") {
+			return nil
+		}
 		matched := false
 		for _, prefix := range docsPriority {
 			if strings.HasPrefix(rel, prefix+"/") || rel == prefix+".md" {
