@@ -369,9 +369,9 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			statuses[i].Error = r.err.Error()
 			if pr, ok := r.value.(*probeResult); ok {
 				statuses[i].LatencyMs = pr.latency.Milliseconds()
-				metrics.SpannerSpokeLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
+				metrics.TungolSteorraLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
 			}
-			metrics.SpannerSpokeUp.WithLabelValues(sc.id).Set(0)
+			metrics.TungolSteorraUp.WithLabelValues(sc.id).Set(0)
 
 			// If probe failed but we have a self-report from the spoke,
 			// populate compliance data so dashboards are not blank.
@@ -398,8 +398,8 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			statuses[i].NoData = pr.resp.NoData
 			statuses[i].ConvergencePct = pr.resp.ConvergencePct
 			statuses[i].LatencyMs = pr.latency.Milliseconds()
-			metrics.SpannerSpokeLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
-			metrics.SpannerSpokeUp.WithLabelValues(sc.id).Set(1)
+			metrics.TungolSteorraLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
+			metrics.TungolSteorraUp.WithLabelValues(sc.id).Set(1)
 		}
 	}
 	return statuses

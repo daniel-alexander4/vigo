@@ -145,20 +145,20 @@ var (
 		Help: "Total SMTP email sends by event and status.",
 	}, []string{"event", "status"})
 
-	// --- Spanner ---
+	// --- Tungol ---
 
-	// SpannerSpokeLatency observes spoke RPC latency by spoke ID.
-	SpannerSpokeLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "vigo_spanner_spoke_latency_seconds",
-		Help:    "Spanner spoke RPC latency in seconds.",
+	// TungolSteorraLatency observes per-steorra RPC latency.
+	TungolSteorraLatency = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "vigo_tungol_steorra_latency_seconds",
+		Help:    "Tungol per-steorra RPC latency in seconds.",
 		Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
-	}, []string{"spoke"})
+	}, []string{"steorra"})
 
-	// SpannerSpokeUp indicates spoke reachability (1=up, 0=down).
-	SpannerSpokeUp = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "vigo_spanner_spoke_up",
-		Help: "Whether a spanner spoke is reachable (1=up, 0=down).",
-	}, []string{"spoke"})
+	// TungolSteorraUp indicates per-steorra reachability (1=up, 0=down).
+	TungolSteorraUp = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "vigo_tungol_steorra_up",
+		Help: "Whether a tungol steorra is reachable (1=up, 0=down).",
+	}, []string{"steorra"})
 
 	// --- License ---
 

@@ -229,7 +229,7 @@ func TestDoctor_CheckScopes(t *testing.T) {
 		"tls":                 ScopeServer,
 		"secrets":             ScopeServer,
 		"license":             ScopeServer,
-		"spanner":             ScopeServer,
+		"tungol":              ScopeServer,
 		"integrations":        ScopeServer,
 		"config":              ScopeServer,
 		"swarm_pattern_order": ScopeServer,

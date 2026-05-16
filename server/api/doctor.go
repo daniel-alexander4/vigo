@@ -260,13 +260,13 @@ func (h *DoctorHandler) checkSpanner() DoctorCheck {
 	switch h.role {
 	case config.RoleHub:
 		if h.hub == nil {
-			return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusFail, Message: "hub mode but no spoke connections"}
+			return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusFail, Message: "hub mode but no spoke connections"}
 		}
-		return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusPass, Message: fmt.Sprintf("hub, %d spokes", h.hub.SpokeCount())}
+		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusPass, Message: fmt.Sprintf("hub, %d spokes", h.hub.SpokeCount())}
 	case config.RoleSpoke:
-		return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusPass, Message: "spoke"}
+		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusPass, Message: "spoke"}
 	default:
-		return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusSkip, Message: "standalone"}
+		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusSkip, Message: "standalone"}
 	}
 }
 

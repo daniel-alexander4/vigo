@@ -75,14 +75,14 @@ Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirecti
 |--------|------|--------|-------------|
 | `vigo_smtp_sends_total` | Counter | `event`, `status` | Email send attempts by event type and outcome (success, error) |
 
-### Spanner
+### Tungol
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `vigo_spanner_spoke_latency_seconds` | Histogram | `spoke` | Spoke RPC probe latency in seconds |
-| `vigo_spanner_spoke_up` | Gauge | `spoke` | Spoke reachability (1=up, 0=down) |
+| `vigo_tungol_steorra_latency_seconds` | Histogram | `steorra` | Per-steorra RPC probe latency in seconds |
+| `vigo_tungol_steorra_up` | Gauge | `steorra` | Per-steorra reachability (1=up, 0=down) |
 
-Only populated on hub servers. Updated each time `SpokeStatuses` is probed.
+Only populated on hub servers. Updated each time the hub probes the steorras under it.
 
 ### License
 
@@ -241,10 +241,10 @@ scrape_configs:
 - Alert on `increase(vigo_license_enforcement_errors_total[5m]) > 0` (internal enforcement errors — investigate, gate is failing closed)
 - Alert on `vigo_license_days_remaining < 30` (license expiring soon)
 
-### Spanner
+### Tungol
 
-- **Spoke latency**: `histogram_quantile(0.95, rate(vigo_spanner_spoke_latency_seconds_bucket[5m]))`
-- Alert on `vigo_spanner_spoke_up == 0` (spoke unreachable)
+- **Steorra latency**: `histogram_quantile(0.95, rate(vigo_tungol_steorra_latency_seconds_bucket[5m]))`
+- Alert on `vigo_tungol_steorra_up == 0` (steorra unreachable)
 
 ### Server Health
 
@@ -514,8 +514,8 @@ Only populated on hub servers.
 
 | Panel | Type | Metric |
 |-------|------|--------|
-| Spoke Availability | Stat with UP/DOWN mapping | `vigo_spanner_spoke_up` by `spoke_id` |
-| Spoke Latency (p50/p95) | Time series by spoke | `histogram_quantile` on `vigo_spanner_spoke_latency_seconds` |
+| Steorra Availability | Stat with UP/DOWN mapping | `vigo_tungol_steorra_up` by `steorra` |
+| Steorra Latency (p50/p95) | Time series by steorra | `histogram_quantile` on `vigo_tungol_steorra_latency_seconds` |
 
 ## Prometheus Configuration
 
@@ -569,12 +569,12 @@ groups:
         annotations:
           summary: "ED25519 signature verification failures detected"
 
-      - alert: VigoSpokeDown
-        expr: vigo_spanner_spoke_up == 0
+      - alert: VigoSteorraDown
+        expr: vigo_tungol_steorra_up == 0
         for: 5m
         labels: { severity: critical }
         annotations:
-          summary: "Spanner spoke {{ $labels.spoke_id }} is down"
+          summary: "Tungol steorra {{ $labels.steorra }} is down"
 ```
 
 ## What's next

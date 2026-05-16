@@ -188,10 +188,10 @@ func NewSpokeGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile st
 	invHandler := NewInventoryHandler(queries)
 	invHandler.RegisterRoutes(mux)
 
-	// Health endpoint for monitoring spoke status.
+	// Health endpoint for monitoring steorra status.
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","spoke_id":%q}`, spokeID)
+		fmt.Fprintf(w, `{"status":"ok","steorra_id":%q}`, spokeID)
 	})
 
 	// grpc-gateway catches /api/ paths (vigocli uses /api/v1/*).
