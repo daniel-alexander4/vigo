@@ -62,6 +62,7 @@ import (
 	"git.alexander4.io/vigo/server/integrations"
 	"git.alexander4.io/vigo/server/task"
 	"git.alexander4.io/vigo/server/peer"
+	"git.alexander4.io/vigo/server/puddle"
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
@@ -123,12 +124,26 @@ func run() error {
 	slog.Info("secrets provider initialized", "backend", secretsCfg.Backend)
 
 	// Auto-generate self-signed TLS certs on first start (local backend only).
-	if _, ok := provider.(*secrets.LocalProvider); ok {
+	if local, ok := provider.(*secrets.LocalProvider); ok {
 		tlsDir := filepath.Join(filepath.Dir(configFile), "tls")
 		extraSANs := config.LoadTLSSANs(configFile)
 		if err := secrets.EnsureTLSCerts(tlsDir, extraSANs...); err != nil {
 			return fmt.Errorf("auto-generating TLS certificates: %w", err)
 		}
+
+		// Service-account puddle identity (ADR-025 Slice 1). Generated on
+		// first boot under /srv/vigo/puddle/ and unwrapped via HKDF over
+		// the secrets master key — no operator unlock required. Held in
+		// memory for sibling subsystems that sign as the vigosrv puddle
+		// (gitback push of the ops-puddle's stockpile project, friendly-
+		// name claim, etc.) once those slices land. Isopass and other
+		// non-local backends cannot host the service-account puddle in
+		// v1; vigosrv runs without one in that mode.
+		puddleID, err := puddle.EnsureIdentity(local, puddle.DefaultDir)
+		if err != nil {
+			return fmt.Errorf("service-account puddle: %w", err)
+		}
+		slog.Info("service-account puddle ready", "pubkey", puddleID.PublicKeyText, "dir", puddle.DefaultDir)
 	}
 
 	// Load full server config with secret resolution (second pass).

@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"golang.org/x/crypto/hkdf"
 )
 
 // builtinDefaults are sane zero-config defaults for core secrets so the
@@ -43,7 +45,12 @@ func pathToEnvVar(key string) string {
 type LocalProvider struct {
 	secretsDir string
 	gcm        cipher.AEAD
-	mu         sync.RWMutex
+	// masterKey is the normalized 32-byte master key. Held in memory for
+	// HKDF-based subkey derivation (see DeriveKey) so callers like the
+	// service-account puddle (ADR-025) can derive wrap keys without ever
+	// touching the master-key file or material directly.
+	masterKey []byte
+	mu        sync.RWMutex
 }
 
 // Dir returns the secrets directory path.
@@ -99,7 +106,31 @@ func NewLocalProvider(keyFile, secretsDir string) (*LocalProvider, error) {
 	return &LocalProvider{
 		secretsDir: secretsDir,
 		gcm:        gcm,
+		masterKey:  key,
 	}, nil
+}
+
+// DeriveKey returns a subkey derived from the master key via HKDF-SHA256.
+// purpose is the HKDF info string (binds the derivation to a specific use,
+// e.g. "vigo-puddle-wrap-v1"); salt is the HKDF salt (typically a per-host
+// random value persisted alongside the consumer). outLen must be in
+// (0, 8160] — HKDF-SHA256's hard limit is 255×32 bytes.
+//
+// The master key itself never leaves the provider. Callers receive only
+// the derived subkey.
+func (p *LocalProvider) DeriveKey(purpose string, salt []byte, outLen int) ([]byte, error) {
+	if outLen <= 0 || outLen > 255*sha256.Size {
+		return nil, fmt.Errorf("invalid output length %d (must be 1..%d)", outLen, 255*sha256.Size)
+	}
+	if purpose == "" {
+		return nil, fmt.Errorf("purpose must not be empty")
+	}
+	out := make([]byte, outLen)
+	r := hkdf.New(sha256.New, p.masterKey, salt, []byte(purpose))
+	if _, err := io.ReadFull(r, out); err != nil {
+		return nil, fmt.Errorf("hkdf read: %w", err)
+	}
+	return out, nil
 }
 
 // Get retrieves and decrypts a secret by its path.
