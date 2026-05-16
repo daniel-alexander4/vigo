@@ -54,7 +54,7 @@ vigo swarm gitback project list                    # all projects you have a foo
 vigo swarm gitback project invite <other-puddle>   # for multi-member collaboration
 ```
 
-The full verb tree: `vigo swarm gitback {status,purge}` plus `project {init,invite,join,leave,list,status,revoke,reanchor,re-invite-all,rejoin,re-found}`. Operators rarely touch `reanchor` / `re-found` — those are recovery paths for compromised-key scenarios documented in [ADR-019](../adr/019-gitback-founder-rekey.md).
+The full verb tree: `vigo swarm gitback {status,purge,gc-orphans}` plus `project {init,invite,join,leave,list,status,revoke,reanchor,re-invite-all,rejoin,re-found}`. Operators rarely touch `reanchor` / `re-found` — those are recovery paths for compromised-key scenarios documented in [ADR-019](../adr/019-gitback-founder-rekey.md). `gc-orphans` is hygiene for the post-`userdel -r` case (see [Leaving a project](#leaving-a-project--decommissioning-a-user) below).
 
 
 ## How it works
@@ -108,6 +108,22 @@ Two layers gate gitback per envoy. Both must say yes:
 Removing `gitback: true` from a usercrate triggers a scrub on the next reconcile (`~/.vigo-gitback/` wiped for that user). Already-published projects on this envoy go away locally; other envoys keep their copies.
 
 **Confidentiality is explicitly not a goal.** Bytes-on-disk for gitback bare repos are root-readable on every target envoy. Gitback is for *availability* (your repo survives any one envoy disappearing); lockbox is the right tool when you need *confidentiality*.
+
+### Leaving a project / decommissioning a user
+
+`vigo swarm gitback project leave <project_id>` is the **only** path that emits a signed LEAVE envelope. It writes a `leave.pending` sentinel that the helper daemon signs and gossips; every peer drops your puddle pubkey from the project's member list. Running `rm -rf ~/.vigo-gitback/<project_id>/` is local-only — peers don't observe it, and on the next `git pull` against the project they'll happily re-sync your working state. That's deliberate: the per-project user-state dir is a working copy, and re-cloning is a routine recovery move that shouldn't ever signal "I'm leaving the project forever."
+
+**Recommended workflow before `userdel -r <user>`:** as that user, leave each project explicitly:
+
+```bash
+for pid in $(vigo swarm gitback project list --json | jq -r '.[].project_id'); do
+  vigo swarm gitback project leave "$pid" --yes
+done
+```
+
+Then `userdel -r` is safe.
+
+**If `userdel -r` already happened without prior leave:** the departed user's puddle identity went with their home dir, so the agent *cannot* auto-emit a LEAVE on their behalf — envelopes must be signed by the subject. The bare repo at `/var/lib/vigo/swarm/gitback/projects/<project_id>.git` is now orphaned locally: no user holds the working copy, but peers keep fanning out pushes to it. Run `vigo swarm gitback gc-orphans` (as root) to list bare repos with no local user holding the project, then `vigo swarm gitback gc-orphans --yes` to delete them. Caveat: if this envoy was acting as a fanout replicator for a project (bare repo only, no local working copy), the GC removes that replica from the puddle — only do this when you're sure no other envoy depends on this one for fanout availability.
 
 ### Where to look when it doesn't work
 

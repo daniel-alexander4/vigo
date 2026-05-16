@@ -64,6 +64,7 @@ Verbs that take a `<project_id>` argument also accept a unique handle prefix amo
 |------|---------|
 | `status` | Show envoy-wide gitback posture (publisher + receiver state, helper-daemon socket) |
 | `purge --yes` | Power-user wipe of local gitback state. As a non-root user: `~/.vigo-gitback/`. As root: also envoy-wide root-owned state. Distinct from per-project `leave --purge`; does not gossip. |
+| `gc-orphans [--yes]` | Root-only. List (or delete with `--yes`) bare repos under `/var/lib/vigo/swarm/gitback/projects/` that no user in `/etc/passwd` still holds a working copy for. Retroactive cleanup for the post-`userdel -r` case. |
 | `project init <handle> [--scope <kind>] [--repo <path>] [--no-push]` | Found a new project as the local fleet — and, from inside a git work tree, also add the `swarm` remote and `git push --all && --tags` to publish it |
 | `project push [<handle>] [--repo <path>]` | Publish (or re-publish) a project from its working repo: add the `swarm` remote if missing, or re-point it after a `re-found`/`reanchor`, then `git push swarm --all && --tags`. Idempotent |
 | `project invite <project_id> --puddle <fp> --role <role> [--expires <Nd>]` | Mint a child token for another fleet |
@@ -130,6 +131,41 @@ vigo swarm gitback purge --yes
 - If any `leave.pending` / `revoke.pending` sentinels existed at purge time, the verb prints a follow-up note so the operator knows that gossip never reached peers.
 
 **When to use it.** Decommissioning an envoy where you want every gitback byte gone immediately. For a graceful departure where peers learn of it, use `project leave` per project first.
+
+## `gc-orphans`
+
+Retroactive cleanup for the post-`userdel -r` case. Lists (and, with `--yes`, deletes) bare repos under `/var/lib/vigo/swarm/gitback/projects/` for which **no user in `/etc/passwd` still holds a `~/<user>/.vigo-gitback/<project_id>/` working-state dir**.
+
+```
+vigo swarm gitback gc-orphans          # dry-run; print orphan list
+vigo swarm gitback gc-orphans --yes    # delete the listed bare repos
+```
+
+**Root-only.** The bare-repo tree at `/var/lib/vigo/swarm/gitback/projects/` is root-owned (mode `0700`); non-root invocations refuse with a clear error.
+
+**Output (dry-run):**
+
+```
+2 orphan bare repo(s) under /var/lib/vigo/swarm/gitback/projects/ (no user in /etc/passwd holds the project):
+  4f0c2…<64 hex>  12.4 MiB  last-modified 3d ago  /var/lib/vigo/swarm/gitback/projects/4f0c…git
+  a1b2…<64 hex>     820 B   last-modified 47d ago /var/lib/vigo/swarm/gitback/projects/a1b2…git
+
+dry-run — nothing deleted. Re-run with --yes to remove these bare repos.
+```
+
+**When to use it.** A user got `userdel -r <user>`'d *without first running `vigo swarm gitback project leave`* for each project they were a member of. The departed user's puddle identity went with their home dir, so the agent can no longer auto-emit a LEAVE on their behalf (envelopes must be signed by the subject). The bare repo would otherwise sit forever, absorbing fanout pushes for a member who can't read them.
+
+**Caveat.** If this envoy was acting as a fanout replicator for a project — bare repo only, no local working copy ever — deleting it drops that replica from the puddle. Only run this when you're sure no other envoy depends on this one for fanout availability.
+
+**Preferred workflow (avoid needing `gc-orphans`):**
+
+```bash
+# as the user, BEFORE userdel -r
+for pid in $(vigo swarm gitback project list --json | jq -r '.[].project_id'); do
+  vigo swarm gitback project leave "$pid" --yes
+done
+# then it's safe to userdel -r
+```
 
 ## `project init`
 

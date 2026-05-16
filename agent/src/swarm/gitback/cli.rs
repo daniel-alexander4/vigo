@@ -72,6 +72,15 @@ pub fn run(args: Vec<String>) -> Result<()> {
         // mode wipes `~/.vigo-gitback/` for the caller; root mode
         // also wipes the envoy-wide root-owned state.
         "purge" => with_gitback_authz(|| cmd_purge(&args[1..])),
+        // Operator hygiene for the userdel-orphan case: lists (and
+        // optionally deletes) bare repos at /var/lib/vigo/swarm/
+        // gitback/projects/<id>.git that no local user in /etc/passwd
+        // still holds a working copy for. The leaving user's puddle
+        // identity is gone with their home dir, so an automatic LEAVE
+        // envelope is impossible — this is the retroactive cleanup
+        // path. See docs/howto/set-up-swarm.md for the recommended
+        // pre-userdel workflow that avoids this state.
+        "gc-orphans" => cmd_gc_orphans(&args[1..]),
         other => bail!(
             "unknown subcommand `vigo swarm gitback {}`. \
              Run `vigo swarm gitback --help` for usage.",
@@ -163,6 +172,10 @@ VERBS:
                         non-root user, scrubs ~/.vigo-gitback/ for the
                         calling user. As root, also scrubs the envoy-wide
                         root-owned state under /var/lib/vigo/swarm/gitback/.
+    gc-orphans [--yes]  Root-only. List (or with --yes, delete) bare repos
+                        under /var/lib/vigo/swarm/gitback/projects/ that
+                        no local user in /etc/passwd still holds a working
+                        copy for. Default is dry-run.
     project <verb>      Manage gitback projects. Run
                         `vigo swarm gitback project --help` for the
                         project verb tree.
@@ -2825,6 +2838,237 @@ fn do_purge<W: std::io::Write>(
     Ok(())
 }
 
+// ============================================================
+// gc-orphans — retroactive cleanup for bare repos with no local
+// user holding the project's working copy. Typically caused by
+// `userdel -r <user>` without a prior `project leave` — the user's
+// puddle identity is gone with their home dir, so we can never
+// auto-emit a LEAVE on their behalf, and the bare repo would
+// otherwise persist forever absorbing fanout pushes.
+// ============================================================
+
+fn cmd_gc_orphans(args: &[String]) -> Result<()> {
+    let mut yes = false;
+    for a in args {
+        match a.as_str() {
+            "--yes" | "-y" => yes = true,
+            "--help" | "-h" => {
+                eprintln!(
+                    "vigo swarm gitback gc-orphans — clean up bare repos with no local user\n\n\
+                     USAGE:\n    vigo swarm gitback gc-orphans [--yes]\n\n\
+                     Root-only. Walks /var/lib/vigo/swarm/gitback/projects/*.git and lists\n\
+                     each bare repo for which no user in /etc/passwd has a corresponding\n\
+                     ~/<user>/.vigo-gitback/<project_id>/ working-state dir. The default is\n\
+                     dry-run: print the orphan list and exit. Pass --yes to delete the listed\n\
+                     bare repos.\n\n\
+                     Caveat: if this envoy was acting as a fanout replicator for a project\n\
+                     without holding a local working copy, deleting drops that replica from\n\
+                     the puddle. Prefer `vigo swarm gitback project leave <project_id>`\n\
+                     BEFORE `userdel -r <user>` to emit a proper LEAVE envelope and let\n\
+                     peers drop the user cleanly."
+                );
+                return Ok(());
+            }
+            other if other.starts_with("--") => bail!("unknown flag: {}", other),
+            _ => bail!(
+                "vigo swarm gitback gc-orphans takes no positional arguments; got {}",
+                a
+            ),
+        }
+    }
+
+    let caller = resolve_caller()?;
+    if !caller.is_root {
+        bail!(
+            "gc-orphans is root-only — /var/lib/vigo/swarm/gitback/projects/ is root-owned. \
+             Run under sudo."
+        );
+    }
+    let users = list_system_users();
+    let base = crate::platform::paths::default_gitback_dir();
+    do_gc_orphans(&base, &users, yes, &mut std::io::stdout())
+}
+
+/// Test-friendly inner. Walks `projects_dir(base)` for `*.git` bare repos and
+/// reports (or, with `yes`, removes) any whose `project_id` is not held by
+/// any user in `users`. "Held" means `<home>/.vigo-gitback/<project_id>/`
+/// exists as a directory.
+fn do_gc_orphans<W: std::io::Write>(
+    base: &Path,
+    users: &[(String, PathBuf)],
+    yes: bool,
+    out: &mut W,
+) -> Result<()> {
+    let projects = project_state::projects_dir(base);
+    let entries = match fs::read_dir(&projects) {
+        Ok(e) => e,
+        Err(_) => {
+            writeln!(
+                out,
+                "nothing to scan — {} does not exist.",
+                projects.display()
+            )?;
+            return Ok(());
+        }
+    };
+
+    let mut orphans: Vec<(String, PathBuf, u64, std::time::SystemTime)> = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n,
+            None => continue,
+        };
+        let project_id = match name.strip_suffix(".git") {
+            Some(s) => s,
+            None => continue,
+        };
+        if !path.is_dir() {
+            continue;
+        }
+        // Held by any local user?
+        let held = users.iter().any(|(_, home)| {
+            home.join(".vigo-gitback").join(project_id).is_dir()
+        });
+        if held {
+            continue;
+        }
+        let size = dir_size_bytes(&path);
+        let mtime = path
+            .metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        orphans.push((project_id.to_string(), path, size, mtime));
+    }
+
+    if orphans.is_empty() {
+        writeln!(out, "no orphan bare repos under {}.", projects.display())?;
+        return Ok(());
+    }
+
+    orphans.sort_by(|a, b| a.0.cmp(&b.0));
+    writeln!(
+        out,
+        "{} orphan bare repo(s) under {} (no user in /etc/passwd holds the project):",
+        orphans.len(),
+        projects.display()
+    )?;
+    for (pid, path, size, mtime) in &orphans {
+        let age = humanize_age(*mtime);
+        writeln!(
+            out,
+            "  {}  {:>10}  last-modified {}  {}",
+            pid,
+            humanize_bytes(*size),
+            age,
+            path.display()
+        )?;
+    }
+
+    if !yes {
+        writeln!(
+            out,
+            "\ndry-run — nothing deleted. Re-run with --yes to remove these bare repos."
+        )?;
+        return Ok(());
+    }
+
+    let mut failed: Vec<String> = Vec::new();
+    for (pid, path, _, _) in &orphans {
+        match fs::remove_dir_all(path) {
+            Ok(()) => writeln!(out, "deleted {}", path.display())?,
+            Err(e) => {
+                writeln!(out, "FAIL {}: {}", path.display(), e)?;
+                failed.push(pid.clone());
+            }
+        }
+    }
+    if !failed.is_empty() {
+        bail!("gc-orphans incomplete — {} target(s) failed", failed.len());
+    }
+    Ok(())
+}
+
+/// All users currently in `/etc/passwd`, returned as (name, home) pairs.
+/// No UID filtering — root and system users can also hold gitback state in
+/// their homes, and treating any of them as "departed" would be wrong.
+fn list_system_users() -> Vec<(String, PathBuf)> {
+    let passwd = match fs::read_to_string("/etc/passwd") {
+        Ok(s) => s,
+        Err(_) => return Vec::new(),
+    };
+    let mut out = Vec::new();
+    for line in passwd.lines() {
+        let fields: Vec<&str> = line.split(':').collect();
+        if fields.len() < 7 {
+            continue;
+        }
+        let name = fields[0].to_string();
+        let home = PathBuf::from(fields[5]);
+        if name.is_empty() {
+            continue;
+        }
+        out.push((name, home));
+    }
+    out
+}
+
+fn dir_size_bytes(path: &Path) -> u64 {
+    let mut stack = vec![path.to_path_buf()];
+    let mut total: u64 = 0;
+    while let Some(p) = stack.pop() {
+        let entries = match fs::read_dir(&p) {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            match entry.file_type() {
+                Ok(ft) if ft.is_dir() => stack.push(path),
+                Ok(_) => {
+                    if let Ok(m) = entry.metadata() {
+                        total = total.saturating_add(m.len());
+                    }
+                }
+                Err(_) => continue,
+            }
+        }
+    }
+    total
+}
+
+fn humanize_bytes(n: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+    if n >= GB {
+        format!("{:.1} GiB", n as f64 / GB as f64)
+    } else if n >= MB {
+        format!("{:.1} MiB", n as f64 / MB as f64)
+    } else if n >= KB {
+        format!("{:.1} KiB", n as f64 / KB as f64)
+    } else {
+        format!("{} B", n)
+    }
+}
+
+fn humanize_age(t: std::time::SystemTime) -> String {
+    let now = std::time::SystemTime::now();
+    let delta = match now.duration_since(t) {
+        Ok(d) => d.as_secs(),
+        Err(_) => return "in the future".to_string(),
+    };
+    if delta < 60 {
+        format!("{}s ago", delta)
+    } else if delta < 3600 {
+        format!("{}m ago", delta / 60)
+    } else if delta < 86_400 {
+        format!("{}h ago", delta / 3600)
+    } else {
+        format!("{}d ago", delta / 86_400)
+    }
+}
+
 /// Count `leave.pending` and `revoke.pending` sentinels under
 /// `~/.vigo-gitback/<project_id>/`. Used by `purge` to warn the
 /// operator that running purge instead of `project leave` skips
@@ -3218,5 +3462,115 @@ mod tests {
         let out = String::from_utf8(buf).unwrap();
         assert!(out.contains("pending gossip sentinel"));
         assert!(out.contains("out-of-band"));
+    }
+
+    // ============================================================
+    // gc-orphans
+    // ============================================================
+
+    fn mkbare(base: &Path, project_id: &str) -> PathBuf {
+        let p = projects_dir(base).join(format!("{}.git", project_id));
+        fs::create_dir_all(&p).unwrap();
+        // Toss a small file in so dir_size_bytes returns something non-zero.
+        fs::write(p.join("HEAD"), b"ref: refs/heads/main\n").unwrap();
+        p
+    }
+
+    fn mkuser_state(home: &Path, project_id: &str) {
+        let p = home.join(".vigo-gitback").join(project_id);
+        fs::create_dir_all(&p).unwrap();
+        fs::write(p.join("project.json"), b"{}").unwrap();
+    }
+
+    #[test]
+    fn gc_orphans_lists_unheld_bare_repos() {
+        let base = tempfile::tempdir().unwrap();
+        let alice_home = tempfile::tempdir().unwrap();
+
+        mkbare(base.path(), &"a".repeat(64)); // held by alice
+        mkbare(base.path(), &"b".repeat(64)); // orphan
+        mkbare(base.path(), &"c".repeat(64)); // orphan
+        mkuser_state(alice_home.path(), &"a".repeat(64));
+
+        let users = vec![("alice".to_string(), alice_home.path().to_path_buf())];
+        let mut buf: Vec<u8> = Vec::new();
+        do_gc_orphans(base.path(), &users, false, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+
+        assert!(out.contains(&"b".repeat(64)), "orphan b should be listed");
+        assert!(out.contains(&"c".repeat(64)), "orphan c should be listed");
+        assert!(!out.contains(&"a".repeat(64)), "held a must not be listed");
+        assert!(out.contains("dry-run"));
+        // Dry-run: nothing deleted.
+        assert!(projects_dir(base.path()).join(format!("{}.git", "b".repeat(64))).exists());
+        assert!(projects_dir(base.path()).join(format!("{}.git", "c".repeat(64))).exists());
+    }
+
+    #[test]
+    fn gc_orphans_yes_deletes_orphans_and_preserves_held() {
+        let base = tempfile::tempdir().unwrap();
+        let alice_home = tempfile::tempdir().unwrap();
+
+        mkbare(base.path(), &"a".repeat(64));
+        mkbare(base.path(), &"b".repeat(64));
+        mkuser_state(alice_home.path(), &"a".repeat(64));
+
+        let users = vec![("alice".to_string(), alice_home.path().to_path_buf())];
+        let mut buf: Vec<u8> = Vec::new();
+        do_gc_orphans(base.path(), &users, true, &mut buf).unwrap();
+
+        assert!(projects_dir(base.path()).join(format!("{}.git", "a".repeat(64))).is_dir());
+        assert!(!projects_dir(base.path()).join(format!("{}.git", "b".repeat(64))).exists());
+    }
+
+    #[test]
+    fn gc_orphans_clean_when_every_repo_is_held() {
+        let base = tempfile::tempdir().unwrap();
+        let alice_home = tempfile::tempdir().unwrap();
+        let bob_home = tempfile::tempdir().unwrap();
+
+        mkbare(base.path(), &"a".repeat(64));
+        mkbare(base.path(), &"b".repeat(64));
+        mkuser_state(alice_home.path(), &"a".repeat(64));
+        mkuser_state(bob_home.path(), &"b".repeat(64));
+
+        let users = vec![
+            ("alice".to_string(), alice_home.path().to_path_buf()),
+            ("bob".to_string(), bob_home.path().to_path_buf()),
+        ];
+        let mut buf: Vec<u8> = Vec::new();
+        do_gc_orphans(base.path(), &users, false, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("no orphan bare repos"));
+    }
+
+    #[test]
+    fn gc_orphans_tolerates_missing_projects_dir() {
+        let base = tempfile::tempdir().unwrap();
+        // No projects/ subdir.
+        let users: Vec<(String, PathBuf)> = vec![];
+        let mut buf: Vec<u8> = Vec::new();
+        do_gc_orphans(base.path(), &users, true, &mut buf).unwrap();
+        let out = String::from_utf8(buf).unwrap();
+        assert!(out.contains("does not exist"));
+    }
+
+    #[test]
+    fn gc_orphans_ignores_non_git_entries() {
+        // Stray files / non-.git dirs under projects/ must not be touched.
+        let base = tempfile::tempdir().unwrap();
+        let projects = projects_dir(base.path());
+        fs::create_dir_all(&projects).unwrap();
+        fs::write(projects.join("README"), b"hi").unwrap();
+        fs::create_dir_all(projects.join("not-a-bare-repo")).unwrap();
+        mkbare(base.path(), &"a".repeat(64)); // genuine orphan
+
+        let users: Vec<(String, PathBuf)> = vec![];
+        let mut buf: Vec<u8> = Vec::new();
+        do_gc_orphans(base.path(), &users, true, &mut buf).unwrap();
+
+        assert!(projects.join("README").exists(), "README left alone");
+        assert!(projects.join("not-a-bare-repo").is_dir(), "non-.git dir left alone");
+        assert!(!projects.join(format!("{}.git", "a".repeat(64))).exists());
     }
 }
