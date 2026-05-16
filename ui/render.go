@@ -104,15 +104,24 @@ func funcMap() template.FuncMap {
 		"secSeverityNorm": func(sev string) string {
 			return cve.Norm(sev)
 		},
-		// convergenceBadgeClass maps a failure-axis status string to the
-		// `.badge--*` variant that paints the convergence ratio cell. By
-		// routing every per-row badge through the same classification
-		// the pill counts above the table use (convergence.Status), the
-		// row colors and the pill counts can never disagree about which
-		// envoys are Failed vs Degraded vs Converged. Empty / unknown
-		// status renders as `badge--unknown` so "no run data yet" cells
-		// stay visually quiet.
-		"convergenceBadgeClass": func(status string) string {
+		// convergenceBadgeClass maps the (failure-axis status, drift-axis
+		// level) pair to the `.badge--*` variant that paints the
+		// convergence ratio cell. Routing every per-row badge through the
+		// same classification the pill counts above the table use keeps
+		// the row colors and the pill counts in sync — no chance of one
+		// saying "Diverged 1" while the matching row renders identically
+		// to its non-Diverged neighbors.
+		//
+		// Drift overrides status: Diverged renders Peach regardless of
+		// the failure-axis bucket. That's the visual link an operator
+		// needs to spot the diverged envoy in the table; Status (Failed,
+		// Degraded, Converged) would otherwise win and Diverged would be
+		// invisible. Pass the empty string when drift isn't known —
+		// degrades to the pre-0.53.x behavior cleanly.
+		"convergenceBadgeClass": func(status, drift string) string {
+			if convergence.ClassifyDrift(drift) == convergence.DriftDiverged {
+				return "badge--diverged"
+			}
 			switch convergence.ClassifyStatus(status) {
 			case convergence.StatusConverged:
 				return "badge--converged"

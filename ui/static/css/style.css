@@ -34,6 +34,8 @@
     --color-success-bg: #e8f5e1;
     --color-warning: #df8e1d;         /* Latte Yellow */
     --color-warning-bg: #fcf0d9;
+    --color-peach: #fe640b;           /* Latte Peach — Diverged drift level (distinct from Yellow/Degraded) */
+    --color-peach-bg: #fde0d0;
     --color-danger: #d20f39;          /* Latte Red */
     --color-danger-bg: #f7e0e4;
     --color-muted: #9ca0b0;           /* Latte Overlay0 */
@@ -53,6 +55,8 @@
     --color-badge-info-text: #1e4dc2;
     --color-badge-warning-bg: #fcf0d9;
     --color-badge-warning-text: #8a5a12;
+    --color-badge-peach-bg: #fde0d0;
+    --color-badge-peach-text: #b04b08;
     --color-badge-danger-bg: #f7e0e4;
     --color-badge-danger-text: #a10d2c;
     --color-badge-neutral-bg: #e6e9ef;
@@ -2486,6 +2490,10 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     color: var(--color-warning);
 }
 
+.text-peach {
+    color: var(--color-peach);
+}
+
 .text-danger {
     color: var(--color-danger);
 }
@@ -2518,7 +2526,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 .badge--aborting { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
 .badge--healthy, .badge--pass, .badge--active, .badge--satisfied, .badge--available { background: var(--color-badge-success-bg); color: var(--color-badge-success-text); }
 .badge--warn, .badge--used { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
-.badge--diverged { background: var(--color-badge-danger-bg); color: var(--color-badge-danger-text); }
+.badge--diverged { background: var(--color-badge-peach-bg); color: var(--color-badge-peach-text); }
 .badge--unhealthy, .badge--fail, .badge--not_satisfied, .badge--inactive { background: var(--color-badge-danger-bg); color: var(--color-badge-danger-text); }
 .badge--no-data { background: var(--color-badge-neutral-bg); color: var(--color-badge-neutral-text); }
 .badge--new { background: var(--color-badge-info-bg); color: var(--color-badge-info-text); }
@@ -3822,6 +3830,8 @@ html.theme-dark {
     --color-success-bg: rgba(166, 227, 161, 0.12);
     --color-warning: #f9e2af;         /* Mocha Yellow */
     --color-warning-bg: rgba(249, 226, 175, 0.12);
+    --color-peach: #fab387;           /* Mocha Peach — Diverged drift level (distinct from Yellow/Degraded) */
+    --color-peach-bg: rgba(250, 179, 135, 0.12);
     --color-danger: #f38ba8;          /* Mocha Red */
     --color-danger-bg: rgba(243, 139, 168, 0.12);
     --color-muted: #7f849c;           /* Mocha Overlay1 */
@@ -3841,6 +3851,8 @@ html.theme-dark {
     --color-badge-info-text: #89b4fa;
     --color-badge-warning-bg: rgba(249, 226, 175, 0.18);
     --color-badge-warning-text: #f9e2af;
+    --color-badge-peach-bg: rgba(250, 179, 135, 0.18);
+    --color-badge-peach-text: #fab387;
     --color-badge-danger-bg: rgba(243, 139, 168, 0.18);
     --color-badge-danger-text: #f38ba8;
     --color-badge-neutral-bg: rgba(127, 132, 156, 0.18);
@@ -3989,6 +4001,7 @@ html.theme-dark input, html.theme-dark select, html.theme-dark textarea { backgr
 }
 .filter-count--success { background: var(--color-success-bg); color: var(--color-success); }
 .filter-count--warning { background: var(--color-warning-bg); color: var(--color-warning); }
+.filter-count--peach { background: var(--color-peach-bg); color: var(--color-peach); }
 .filter-count--danger { background: var(--color-danger-bg); color: var(--color-danger); }
 .filter-count--muted { background: var(--color-muted-bg); color: var(--color-text-muted); }
 .filter-count--info { background: var(--color-primary-bg); color: var(--color-brand); }

@@ -994,6 +994,8 @@ type FleetRow struct {
 	IP           string
 	LastSeen     time.Time
 	Status       string
+	// Drift mirrors EnvoyRow.Drift — drives the Diverged-row peach badge.
+	Drift        convergence.DriftLevel
 	LastRunID    string
 	FailurePct   float64
 	ChangedCount int64
@@ -1147,6 +1149,13 @@ type EnvoyRow struct {
 	LastRunAt    time.Time
 	LastRunID    string
 	Status       string
+	// Drift is the canonical drift-axis bucket from convergence.ComputeDrift
+	// (None / Changed / Diverged). Carried alongside Status so the table can
+	// render the Diverged-envoy's convergence ratio in the same orange the
+	// filter chip uses — without it the per-row badge would only consider
+	// the failure axis and a Diverged envoy would look identical to any other
+	// Degraded one.
+	Drift        convergence.DriftLevel
 	FailurePct   float64 // 0-100: failed_count / module_count * 100
 	ModuleCount  int64
 	FailedCount  int64
@@ -2244,6 +2253,7 @@ func (h *Handler) dashboardData() DashboardPageData {
 				IP:           e.IPAddress,
 				LastSeen:     e.LastSeen,
 				Status:       e.Status,
+				Drift:        e.Drift,
 				LastRunID:    e.LastRunID,
 				FailurePct:   e.FailurePct,
 				ChangedCount: e.ChangedCount,
@@ -4137,6 +4147,7 @@ func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, s
 			LastRunAt:           e.LastRunAt,
 			LastRunID:           e.LastRunID,
 			Status:              e.Status,
+			Drift:               e.Drift,
 			FailurePct:          e.FailurePct,
 			ModuleCount:         e.ModuleCount,
 			FailedCount:         e.FailedCount,

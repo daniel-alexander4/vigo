@@ -101,7 +101,7 @@
             <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
             <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
             <td><span class="status-pill status-pill--{{statusColor .Outcome}}">{{.Outcome}}</span></td>
-            <td>{{if eq .ModuleCount 0}}<span class="badge badge--unknown" title="No run data yet">0/0/0</span>{{else}}<a href="/runs/{{.ID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Outcome}}" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span></a>{{end}}</td>
+            <td>{{if eq .ModuleCount 0}}<span class="badge badge--unknown" title="No run data yet">0/0/0</span>{{else}}<a href="/runs/{{.ID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Outcome ""}}" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span></a>{{end}}</td>
             <td class="mono text-muted">{{if .TopFailedModule}}{{.TopFailedModule}}{{else}}-{{end}}</td>
             <td class="mono text-muted">{{if .DurationLabel}}{{.DurationLabel}}{{else}}-{{end}}</td>
             <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .StartedAt}}">{{timeAgo .StartedAt}}</span></td>
@@ -133,9 +133,9 @@
                 {{if eq .ModuleCount 0}}
                 <span class="badge badge--unknown" title="No run data yet">0/0/0</span>
                 {{else if .LastRunID}}
-                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Status}}" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span></a>
+                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge {{convergenceBadgeClass .Status .Drift.String}}" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span></a>
                 {{else}}
-                <span class="badge {{convergenceBadgeClass .Status}}" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span>
+                <span class="badge {{convergenceBadgeClass .Status .Drift.String}}" title="{{convergenceHover .ChangedCount .FailedCount .ModuleCount}}">{{convergenceRatio .ChangedCount .FailedCount .ModuleCount}}</span>
                 {{end}}
             </td>
         </tr>

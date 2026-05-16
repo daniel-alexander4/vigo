@@ -7,7 +7,7 @@
     <h1>Run {{truncUUID .Run.ID}}</h1>
     <p>
         Envoy: <a href="/envoys/{{.EnvoyID}}">{{.Run.Hostname}}</a>
-        &middot; {{if gt .Run.ModuleCount 0}}<span class="badge {{convergenceBadgeClass .Run.Outcome}}" title="{{convergenceHover .Run.ChangedCount .Run.FailedCount .Run.ModuleCount}}">{{convergenceRatio .Run.ChangedCount .Run.FailedCount .Run.ModuleCount}}</span>{{else}}{{template "status-badge" dict "Status" .Run.Status}}{{end}}
+        &middot; {{if gt .Run.ModuleCount 0}}<span class="badge {{convergenceBadgeClass .Run.Outcome ""}}" title="{{convergenceHover .Run.ChangedCount .Run.FailedCount .Run.ModuleCount}}">{{convergenceRatio .Run.ChangedCount .Run.FailedCount .Run.ModuleCount}}</span>{{else}}{{template "status-badge" dict "Status" .Run.Status}}{{end}}
         &middot; {{formatTime .Run.StartedAt}}
     </p>
 </div>
