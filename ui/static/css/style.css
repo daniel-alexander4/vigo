@@ -2526,7 +2526,10 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 .badge--aborting { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
 .badge--healthy, .badge--pass, .badge--active, .badge--satisfied, .badge--available { background: var(--color-badge-success-bg); color: var(--color-badge-success-text); }
 .badge--warn, .badge--used { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
-.badge--diverged { background: var(--color-badge-peach-bg); color: var(--color-badge-peach-text); }
+/* Drift-axis Diverged renders in Peach, matching the .filter-count--peach
+   chip token-for-token so the row badge and the pill above it are visually
+   identical — the operator can trace "Diverged 1" straight down to its row. */
+.badge--diverged { background: var(--color-peach-bg); color: var(--color-peach); }
 .badge--unhealthy, .badge--fail, .badge--not_satisfied, .badge--inactive { background: var(--color-badge-danger-bg); color: var(--color-badge-danger-text); }
 .badge--no-data { background: var(--color-badge-neutral-bg); color: var(--color-badge-neutral-text); }
 .badge--new { background: var(--color-badge-info-bg); color: var(--color-badge-info-text); }
