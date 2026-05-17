@@ -144,6 +144,13 @@ func readVerifier() (*verifier, error) {
 	return &v, nil
 }
 
+// vaultNotInitializedError is the canonical error returned by callers
+// that need to gate an operation on an initialized vault. The message
+// names the exact next command an operator should run.
+func vaultNotInitializedError() error {
+	return fmt.Errorf(`secrets vault not initialized — run "sudo vigocli secrets init" to initialize it`)
+}
+
 // verifierExists returns true iff a readable verifier file is present.
 func verifierExists() bool {
 	_, err := os.Stat(verifierPath())
@@ -245,7 +252,7 @@ func requireUnlocked(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 	if !verifierExists() {
-		return fmt.Errorf("secrets vault not initialized — run `vigocli secrets init` to set the master key and unlock passphrase")
+		return vaultNotInitializedError()
 	}
 	if !isUnlocked() {
 		return fmt.Errorf("secrets vault is locked — run `vigocli secrets unlock`")

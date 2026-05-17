@@ -128,7 +128,7 @@ func init() {
 func requireUnlockedAlways(cmd *cobra.Command, _ []string) error {
 	cmd.SilenceUsage = true
 	if !verifierExists() {
-		return fmt.Errorf("secrets vault not initialized — run `vigocli secrets init` to set the master key and unlock passphrase")
+		return vaultNotInitializedError()
 	}
 	if !isUnlocked() {
 		return fmt.Errorf("secrets vault is locked — run `vigocli secrets unlock`")

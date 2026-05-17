@@ -5,10 +5,14 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/user"
+	"strings"
 
+	"git.alexander4.io/vigo/server/secrets"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 // validRoles enumerates every role string the server accepts. Kept in
@@ -57,16 +61,18 @@ var webusersListCmd = &cobra.Command{
 }
 
 var (
-	userUsername    string
-	userDisplayName string
-	userEmail       string
-	userRole        string
-	userSSHKeyFile  string
+	userUsername      string
+	userDisplayName   string
+	userEmail         string
+	userRole          string
+	userSSHKeyFile    string
+	userPasswordStdin bool
+	userNoPassword    bool
 )
 
 var webusersCreateCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Create a new user account with a username, password, and admin/viewer role",
+	Short: "Create a new web/API user (admin, viewer, or compliance) and set its password",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if userUsername == "" {
 			return fmt.Errorf("--username is required")
@@ -76,6 +82,22 @@ var webusersCreateCmd = &cobra.Command{
 		}
 		if !isValidRole(userRole) {
 			return fmt.Errorf("invalid --role %q (valid: %v)", userRole, validRoles)
+		}
+
+		// Read the password BEFORE the server-side create. If the vault is
+		// locked or input is unusable, we'd rather fail here than leave a
+		// password-less user row on the server (the exact bug today).
+		// --no-password skips this for OIDC / API-token-only flows.
+		var password string
+		if !userNoPassword {
+			if err := requireVaultUnlockedForWebusers(); err != nil {
+				return err
+			}
+			pw, err := readWebuserPassword()
+			if err != nil {
+				return err
+			}
+			password = pw
 		}
 
 		body := map[string]string{
@@ -121,10 +143,109 @@ var webusersCreateCmd = &cobra.Command{
 			return err
 		}
 
+		// Password write must happen after the row exists. If it fails the
+		// row is real — tell the operator to retry with set-password
+		// instead of leaving them to guess.
+		if password != "" {
+			if err := writeWebuserPassword(result.Username, password); err != nil {
+				return fmt.Errorf("user %s created but writing password failed: %w — run `vigocli webusers set-password --username %s` to retry", result.Username, err, result.Username)
+			}
+		}
+
 		fmt.Printf("Created user %s (id=%s, role=%s)\n", result.Username, result.ID, result.Role)
+		if userNoPassword {
+			fmt.Printf("  No password set. Run `vigocli webusers set-password --username %s` if you need UI/basic-auth login.\n", result.Username)
+		}
 		return nil
 	},
 }
+
+var webusersSetPasswordCmd = &cobra.Command{
+	Use:   "set-password",
+	Short: "Set or change a web user's password (writes to the secrets vault)",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if userUsername == "" {
+			return fmt.Errorf("--username is required")
+		}
+		if err := requireVaultUnlockedForWebusers(); err != nil {
+			return err
+		}
+		password, err := readWebuserPassword()
+		if err != nil {
+			return err
+		}
+		if err := writeWebuserPassword(userUsername, password); err != nil {
+			return err
+		}
+		fmt.Printf("Password set for user %s.\n", userUsername)
+		return nil
+	},
+}
+
+// requireVaultUnlockedForWebusers gates webuser password operations behind
+// the same unlock verifier as `vigocli secrets set`. Bare two-check
+// primitive — no cobra plumbing — so it can be called from a RunE body
+// conditionally (e.g. `webusers create` skips it when --no-password).
+func requireVaultUnlockedForWebusers() error {
+	if !verifierExists() {
+		return vaultNotInitializedError()
+	}
+	if !isUnlocked() {
+		return fmt.Errorf("secrets vault is locked — run `vigocli secrets unlock`")
+	}
+	bumpSentinel()
+	return nil
+}
+
+// readWebuserPassword reads the password from --password-stdin if set,
+// otherwise prompts interactively. Refuses if stdin is not a TTY and the
+// stdin flag wasn't passed — operators get a clear error instead of an
+// invisible hang.
+func readWebuserPassword() (string, error) {
+	if userPasswordStdin {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", fmt.Errorf("reading password from stdin: %w", err)
+		}
+		pw := strings.TrimRight(string(data), "\n")
+		if err := validatePasswordComplexity(pw); err != nil {
+			return "", err
+		}
+		return pw, nil
+	}
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return "", fmt.Errorf("stdin is not a terminal — pass --password-stdin to read from stdin, or run interactively")
+	}
+	pw, err := promptPassword()
+	if err != nil {
+		return "", err
+	}
+	return string(pw), nil
+}
+
+// webuserPasswordKey is the canonical secrets-vault path basic auth reads
+// from (server/auth/basic.go:188). One source of truth; if this drifts,
+// passwords get written somewhere basic auth can't find — silent breakage.
+func webuserPasswordKey(username string) string {
+	return fmt.Sprintf("vigo/web/auth/%s", username)
+}
+
+// writeWebuserPassword stores the password at the canonical key the basic
+// auth provider reads from. secretsDir is parameterized so tests can use a
+// tmpdir; production callers pass defaultSecretsDir.
+func writeWebuserPassword(username, password string) error {
+	provider, err := secrets.NewLocalProvider("", defaultSecretsDir)
+	if err != nil {
+		return err
+	}
+	defer provider.Close()
+	return provider.Set(webuserPasswordKey(username), password)
+}
+
+// defaultSecretsDir matches the persistent --secrets-dir default on the
+// `secrets` command tree and the path vigosrv auto-generates the master
+// key under. Constant so tests can refer to the production value.
+const defaultSecretsDir = "/srv/vigo/secrets"
 
 var webusersDeleteCmd = &cobra.Command{
 	Use:   "delete",
@@ -176,10 +297,16 @@ func init() {
 	webusersCreateCmd.Flags().StringVar(&userEmail, "email", "", "Email address")
 	webusersCreateCmd.Flags().StringVar(&userRole, "role", "viewer", "Role (admin, viewer, or compliance)")
 	webusersCreateCmd.Flags().StringVar(&userSSHKeyFile, "ssh-key-file", "", "Path to SSH public key file")
+	webusersCreateCmd.Flags().BoolVar(&userPasswordStdin, "password-stdin", false, "Read password from stdin instead of prompting (for scripted use)")
+	webusersCreateCmd.Flags().BoolVar(&userNoPassword, "no-password", false, "Skip password set — for OIDC or API-token-only users")
+
+	webusersSetPasswordCmd.Flags().StringVar(&userUsername, "username", "", "Username (required)")
+	webusersSetPasswordCmd.Flags().BoolVar(&userPasswordStdin, "password-stdin", false, "Read password from stdin instead of prompting (for scripted use)")
 
 	webusersDeleteCmd.Flags().StringVar(&userUsername, "username", "", "Username (required)")
 
 	webusersCmd.AddCommand(webusersListCmd)
 	webusersCmd.AddCommand(webusersCreateCmd)
+	webusersCmd.AddCommand(webusersSetPasswordCmd)
 	webusersCmd.AddCommand(webusersDeleteCmd)
 }

@@ -31,7 +31,7 @@ var secretsCmd = &cobra.Command{
 }
 
 var secretsSetCmd = &cobra.Command{
-	Use:   "set <type> <key>",
+	Use:   "set <raw|password> <key>",
 	Short: "Encrypt and store a secret value",
 	Long: `Encrypt and store a secret value. The type determines how the value is
 read from the operator:
@@ -156,14 +156,17 @@ func validatePasswordComplexity(pw string) error {
 }
 
 func init() {
-	secretsCmd.PersistentFlags().String("key-file", "", "Path to master encryption key (omit to auto-generate)")
+	secretsCmd.PersistentFlags().String("key-file", "", "Master encryption key path (empty = <secrets-dir>/.master.key)")
 	secretsCmd.PersistentFlags().String("secrets-dir", "/srv/vigo/secrets", "Directory for secret files")
 	secretsCmd.PersistentPreRunE = requireUnlocked
 
 	secretsSetCmd.Flags().String("from-file", "", "Read secret value from a file")
 
-	secretsInitCmd.Flags().String("key-file", "", "Path to write the new master key")
-	secretsInitCmd.MarkFlagRequired("key-file")
+	// init writes a fresh master key + unlock verifier. The default points at
+	// the same path the server auto-generates on first boot, so a stock
+	// install just runs `sudo vigocli secrets init` with no flag — it picks
+	// up the server's existing key and only adds the unlock verifier.
+	secretsInitCmd.Flags().String("key-file", "/srv/vigo/secrets/.master.key", "Master encryption key path (created if missing)")
 
 	secretsGenerateCertsCmd.Flags().String("tls-dir", "/srv/vigo/tls", "Directory for TLS certificate files")
 	secretsGenerateCertsCmd.Flags().StringSlice("san", nil, "Additional SANs (DNS names or IPs)")
