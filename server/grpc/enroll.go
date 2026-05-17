@@ -15,9 +15,9 @@ import (
 )
 
 // SetReassignment handles the VigoAdmin.SetReassignment RPC. This is a
-// hub→spoke internal RPC: the hub calls this on the SOURCE spoke to mark a
-// envoy for reassignment. On the envoy's next check-in, the spoke returns
-// the reassign_addr and reassign_id so the agent can reconnect to the new spoke.
+// hub→steorra internal RPC: the hub calls this on the SOURCE steorra to mark
+// an envoy for reassignment. On the envoy's next check-in, the steorra returns
+// the reassign_addr and reassign_id so the agent can reconnect to the new steorra.
 func (s *AdminService) SetReassignment(ctx context.Context, req *pb.SetReassignmentRequest) (*pb.SetReassignmentResponse, error) {
 	if req.EnvoyId == "" || req.TargetAddr == "" || req.NewEnvoyId == "" {
 		return nil, status.Error(codes.InvalidArgument, "envoy_id, target_addr, and new_envoy_id are required")
@@ -38,11 +38,11 @@ func (s *AdminService) SetReassignment(ctx context.Context, req *pb.SetReassignm
 	return &pb.SetReassignmentResponse{}, nil
 }
 
-// EnrollEnvoy handles the VigoAdmin.EnrollEnvoy RPC. This is a hub→spoke
+// EnrollEnvoy handles the VigoAdmin.EnrollEnvoy RPC. This is a hub→steorra
 // internal RPC: the hub validates the enrollment token centrally, then calls
-// this on the target spoke to create the envoy record without re-validating
-// the token. The spoke still runs its own license gate inside
-// registry.CreateEnvoy so spoke-level node limits are enforced even on
+// this on the target steorra to create the envoy record without re-validating
+// the token. The steorra still runs its own license gate inside
+// registry.CreateEnvoy so steorra-level node limits are enforced even on
 // hub-routed enrollments.
 func (s *AdminService) EnrollEnvoy(ctx context.Context, req *pb.EnrollEnvoyRequest) (*pb.EnrollEnvoyResponse, error) {
 	hostname := req.GetHostname()

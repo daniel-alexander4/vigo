@@ -688,7 +688,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		resp.Warnings = append(resp.Warnings, "server config reload failed: "+reloadErr.Error())
 	}
 
-	// Check for pending reassignment (envoy moving to a different spoke).
+	// Check for pending reassignment (envoy moving to a different steorra).
 	if s.reassignStore != nil {
 		if info, ok := s.reassignStore.Pop(envoyID); ok {
 			resp.ReassignAddr = info.TargetAddr

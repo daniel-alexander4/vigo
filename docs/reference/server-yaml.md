@@ -330,27 +330,27 @@ grc:
 | `push_interval` | `6h` | How often to push evidence |
 | `frameworks` | (required) | Vigo standard key → GRC platform framework ID mapping |
 
-## spanner
+## tungol
 
-Hub-spoke control-plane sharding (the YAML block name stays `spanner:` through Phase 0 of the spanner→tungol redesign — the CLI / UI / REST surface speaks tungol/steorra; the on-disk config block migrates in Phase 1 and completes in Phase 3). See [Set up Tungol](../howto/set-up-tungol.md) for the walkthrough.
+Hub + steorras control-plane sharding. See [Set up Tungol](../howto/set-up-tungol.md) for the walkthrough.
 
 ```yaml
 # Hub
-spanner:
+tungol:
   role: hub
-  spokes:
+  steorras:
     - id: dc1
-      addr: "spoke1.example.com:1530"
+      addr: "steorra1.example.com:1530"
       patterns: ["*.dc1.*"]
   auto_failover:
     enabled: true
     threshold: 3
     interval: "30s"
 
-# Spoke (one steorra in the tungol)
-spanner:
+# Spoke role (this vigosrv is one steorra in the tungol)
+tungol:
   role: spoke
-  spoke_id: "dc1"
+  steorra_id: "dc1"
   hub_addr: "hub.example.com:1530"
   hub_fallback_addrs:
     - "hub-standby.example.com:1530"
@@ -359,10 +359,12 @@ spanner:
 | Field | Default | Description |
 |-------|---------|-------------|
 | `role` | `standalone` | `standalone`, `hub`, or `spoke` |
-| `spokes` | (hub only) | List of steorra connections with ID, address, hostname patterns |
+| `steorras` | (hub only) | List of steorra connections with ID, address, hostname patterns |
 | `auto_failover.enabled` | `false` | Auto-drain unhealthy steorras |
-| `spoke_id` | (spoke only) | Unique steorra identifier |
+| `steorra_id` | (spoke only) | Unique steorra identifier |
 | `hub_addr` | (spoke only) | Hub address for status reporting |
+
+> The old `spanner:` block name is rejected at startup with a one-line error pointing here. Operators must rename `spanner:` → `tungol:`, `spokes:` → `steorras:`, and `spoke_id:` → `steorra_id:` in one pass.
 
 ## peers
 

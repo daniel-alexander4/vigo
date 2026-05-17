@@ -1,14 +1,14 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package tungol provides hub-spoke coordination for what operators today
-// still configure as "spanner deployments" via the spanner: YAML block.
-// The hub-spoke implementation in this package is being retired across
-// the broader spanner→tungol redesign (peer-equal federation); during
-// Phase 0 the package wears the new name while the code inside still
-// implements the hub-spoke model. The Hub connects to spoke servers via
-// gRPC and aggregates admin queries (ListEnvoys, GetConvergenceSummary,
-// ListRuns, ForcePush) across all spokes.
+// Package tungol provides hub coordination for the tungol federation:
+// one Hub aggregates admin queries across a configured set of steorras
+// (peer vigosrvs that own their own envoy partition). The current
+// implementation is still hub-steorra (not yet the peer-equal redesign);
+// Phase 1+ will replace the Hub-centric model with peer-equal gossip.
+// The Hub connects to each steorra over mTLS gRPC and fans out admin
+// queries (ListEnvoys, GetConvergenceSummary, ListRuns, ForcePush)
+// across all of them.
 package tungol
 
 import (
@@ -34,34 +34,34 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// Hub manages gRPC connections to spoke servers and fans out admin queries.
+// Hub manages gRPC connections to steorras and fans out admin queries.
 type Hub struct {
-	spokes       []spokeConn
-	spokeReports map[string]*pb.SteorraStatusReport // latest spoke self-reports, protected by mu
-	mu           sync.RWMutex
+	steorras       []steorraConn
+	steorraReports map[string]*pb.SteorraStatusReport // latest steorra self-reports, protected by mu
+	mu             sync.RWMutex
 }
 
-type spokeConn struct {
+type steorraConn struct {
 	id       string
 	addr     string
-	patterns []string // hostname glob patterns routed to this spoke
+	patterns []string // hostname glob patterns routed to this steorra
 	conn     *grpc.ClientConn
 	admin    pb.VigoAdminClient
 }
 
-// NewHub creates a Hub that connects to each configured spoke via mTLS.
-func NewHub(ctx context.Context, spokes []config.SpokeEntry, certFile, keyFile, caFile string) (*Hub, error) {
+// NewHub creates a Hub that connects to each configured steorra via mTLS.
+func NewHub(ctx context.Context, steorras []config.SteorraEntry, certFile, keyFile, caFile string) (*Hub, error) {
 	tlsCreds, err := buildClientTLS(certFile, keyFile, caFile)
 	if err != nil {
-		return nil, fmt.Errorf("building spoke TLS credentials: %w", err)
+		return nil, fmt.Errorf("building steorra TLS credentials: %w", err)
 	}
 
 	h := &Hub{
-		spokes:       make([]spokeConn, 0, len(spokes)),
-		spokeReports: make(map[string]*pb.SteorraStatusReport),
+		steorras:       make([]steorraConn, 0, len(steorras)),
+		steorraReports: make(map[string]*pb.SteorraStatusReport),
 	}
 
-	for _, s := range spokes {
+	for _, s := range steorras {
 		conn, err := grpc.DialContext(ctx, s.Addr,
 			grpc.WithTransportCredentials(tlsCreds),
 			grpc.WithBlock(),
@@ -70,44 +70,44 @@ func NewHub(ctx context.Context, spokes []config.SpokeEntry, certFile, keyFile, 
 		if err != nil {
 			// Close any already-opened connections.
 			h.Close()
-			return nil, fmt.Errorf("connecting to spoke %s at %s: %w", s.ID, s.Addr, err)
+			return nil, fmt.Errorf("connecting to steorra %s at %s: %w", s.ID, s.Addr, err)
 		}
 
-		h.spokes = append(h.spokes, spokeConn{
+		h.steorras = append(h.steorras, steorraConn{
 			id:       s.ID,
 			addr:     s.Addr,
 			patterns: s.Patterns,
 			conn:     conn,
 			admin:    pb.NewVigoAdminClient(conn),
 		})
-		slog.Info("connected to spoke", "spoke_id", s.ID, "addr", s.Addr)
+		slog.Info("connected to steorra", "steorra_id", s.ID, "addr", s.Addr)
 	}
 
 	return h, nil
 }
 
-// Close shuts down all spoke connections.
+// Close shuts down all steorra connections.
 func (h *Hub) Close() {
-	for _, s := range h.spokes {
+	for _, s := range h.steorras {
 		if s.conn != nil {
 			s.conn.Close()
 		}
 	}
 }
 
-// SpokeCount returns the number of configured spokes.
-func (h *Hub) SpokeCount() int {
-	return len(h.spokes)
+// SteorraCount returns the number of configured steorras.
+func (h *Hub) SteorraCount() int {
+	return len(h.steorras)
 }
 
-// AggregateListEnvoys fans out ListEnvoys to all spokes and merges results.
+// AggregateListEnvoys fans out ListEnvoys to all steorras and merges results.
 func (h *Hub) AggregateListEnvoys(ctx context.Context) ([]*pb.Envoy, error) {
 	type result struct {
 		envoys []*pb.Envoy
 		err   error
 	}
 
-	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
+	results := h.fanOut(ctx, func(ctx context.Context, sc steorraConn) (any, error) {
 		resp, err := sc.admin.ListEnvoys(ctx, &pb.ListEnvoysRequest{})
 		if err != nil {
 			return nil, err
@@ -118,7 +118,7 @@ func (h *Hub) AggregateListEnvoys(ctx context.Context) ([]*pb.Envoy, error) {
 	var allNodes []*pb.Envoy
 	for _, r := range results {
 		if r.err != nil {
-			slog.Warn("spoke ListEnvoys failed", "spoke_id", r.spokeID, "error", r.err)
+			slog.Warn("steorra ListEnvoys failed", "steorra_id", r.steorraID, "error", r.err)
 			continue
 		}
 		allNodes = append(allNodes, r.value.([]*pb.Envoy)...)
@@ -126,18 +126,18 @@ func (h *Hub) AggregateListEnvoys(ctx context.Context) ([]*pb.Envoy, error) {
 	return allNodes, nil
 }
 
-// AggregateConvergenceSummary fans out GetConvergenceSummary to all spokes
+// AggregateConvergenceSummary fans out GetConvergenceSummary to all steorras
 // and sums the results.
 func (h *Hub) AggregateConvergenceSummary(ctx context.Context) (*pb.GetConvergenceSummaryResponse, error) {
-	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
+	results := h.fanOut(ctx, func(ctx context.Context, sc steorraConn) (any, error) {
 		return sc.admin.GetConvergenceSummary(ctx, &pb.GetConvergenceSummaryRequest{})
 	})
 
 	agg := &pb.GetConvergenceSummaryResponse{}
-	spokeCount := 0
+	steorraCount := 0
 	for _, r := range results {
 		if r.err != nil {
-			slog.Warn("spoke GetConvergenceSummary failed", "spoke_id", r.spokeID, "error", r.err)
+			slog.Warn("steorra GetConvergenceSummary failed", "steorra_id", r.steorraID, "error", r.err)
 			continue
 		}
 		resp := r.value.(*pb.GetConvergenceSummaryResponse)
@@ -148,7 +148,7 @@ func (h *Hub) AggregateConvergenceSummary(ctx context.Context) (*pb.GetConvergen
 		agg.Failed += resp.Failed
 		agg.Offline += resp.Offline
 		agg.NoData += resp.NoData
-		spokeCount++
+		steorraCount++
 	}
 
 	// Lost-contact envoys excluded from compliance percentage — they represent
@@ -161,10 +161,10 @@ func (h *Hub) AggregateConvergenceSummary(ctx context.Context) (*pb.GetConvergen
 	return agg, nil
 }
 
-// AggregateListRuns fans out ListRuns to all spokes and merges results.
-// If envoyID is non-empty, only queries spokes (all of them — fan-out is cheap).
+// AggregateListRuns fans out ListRuns to all steorras and merges results.
+// If envoyID is non-empty, only queries steorras (all of them — fan-out is cheap).
 func (h *Hub) AggregateListRuns(ctx context.Context, envoyID string, limit int32) ([]*pb.Run, error) {
-	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
+	results := h.fanOut(ctx, func(ctx context.Context, sc steorraConn) (any, error) {
 		resp, err := sc.admin.ListRuns(ctx, &pb.ListRunsRequest{
 			EnvoyId: envoyID,
 			Limit:  limit,
@@ -178,7 +178,7 @@ func (h *Hub) AggregateListRuns(ctx context.Context, envoyID string, limit int32
 	var allRuns []*pb.Run
 	for _, r := range results {
 		if r.err != nil {
-			slog.Warn("spoke ListRuns failed", "spoke_id", r.spokeID, "error", r.err)
+			slog.Warn("steorra ListRuns failed", "steorra_id", r.steorraID, "error", r.err)
 			continue
 		}
 		allRuns = append(allRuns, r.value.([]*pb.Run)...)
@@ -186,10 +186,10 @@ func (h *Hub) AggregateListRuns(ctx context.Context, envoyID string, limit int32
 	return allRuns, nil
 }
 
-// ForwardForcePush sends a ForcePush to all spokes (or targeted if envoyID
-// is non-empty). Returns total envoys notified across all spokes.
+// ForwardForcePush sends a ForcePush to all steorras (or targeted if envoyID
+// is non-empty). Returns total envoys notified across all steorras.
 func (h *Hub) ForwardForcePush(ctx context.Context, envoyID string) (int32, error) {
-	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
+	results := h.fanOut(ctx, func(ctx context.Context, sc steorraConn) (any, error) {
 		resp, err := sc.admin.ForcePush(ctx, &pb.ForcePushRequest{EnvoyId: envoyID})
 		if err != nil {
 			return nil, err
@@ -200,7 +200,7 @@ func (h *Hub) ForwardForcePush(ctx context.Context, envoyID string) (int32, erro
 	var total int32
 	for _, r := range results {
 		if r.err != nil {
-			slog.Warn("spoke ForcePush failed", "spoke_id", r.spokeID, "error", r.err)
+			slog.Warn("steorra ForcePush failed", "steorra_id", r.steorraID, "error", r.err)
 			continue
 		}
 		total += r.value.(int32)
@@ -208,16 +208,16 @@ func (h *Hub) ForwardForcePush(ctx context.Context, envoyID string) (int32, erro
 	return total, nil
 }
 
-// RouteHostname determines which spoke should handle a given hostname by
-// matching against each spoke's configured patterns. Returns the spoke's
+// RouteHostname determines which steorra should handle a given hostname by
+// matching against each steorra's configured patterns. Returns the steorra's
 // gRPC address and true if a match is found, or empty string and false if
-// no spoke pattern matches (the hub handles it locally).
+// no steorra pattern matches (the hub handles it locally).
 func (h *Hub) RouteHostname(hostname string) (addr string, ok bool) {
-	for _, sc := range h.spokes {
+	for _, sc := range h.steorras {
 		for _, pattern := range sc.patterns {
 			matched, err := filepath.Match(pattern, hostname)
 			if err != nil {
-				slog.Warn("invalid spoke pattern", "spoke_id", sc.id, "pattern", pattern, "error", err)
+				slog.Warn("invalid steorra pattern", "steorra_id", sc.id, "pattern", pattern, "error", err)
 				continue
 			}
 			if matched {
@@ -228,19 +228,19 @@ func (h *Hub) RouteHostname(hostname string) (addr string, ok bool) {
 	return "", false
 }
 
-// EnrollOnSpoke creates a envoy record on the target spoke via the EnrollEnvoy
-// admin RPC. Returns the envoy UUID assigned by the spoke.
-func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress, pubkeyPEM string, force bool) (string, error) {
-	// Find the spoke connection by address.
-	var target *spokeConn
-	for i := range h.spokes {
-		if h.spokes[i].addr == spokeAddr {
-			target = &h.spokes[i]
+// EnrollOnSteorra creates a envoy record on the target steorra via the EnrollEnvoy
+// admin RPC. Returns the envoy UUID assigned by the steorra.
+func (h *Hub) EnrollOnSteorra(ctx context.Context, steorraAddr, hostname, ipAddress, pubkeyPEM string, force bool) (string, error) {
+	// Find the steorra connection by address.
+	var target *steorraConn
+	for i := range h.steorras {
+		if h.steorras[i].addr == steorraAddr {
+			target = &h.steorras[i]
 			break
 		}
 	}
 	if target == nil {
-		return "", fmt.Errorf("no spoke connection for address %s", spokeAddr)
+		return "", fmt.Errorf("no steorra connection for address %s", steorraAddr)
 	}
 
 	resp, err := target.admin.EnrollEnvoy(ctx, &pb.EnrollEnvoyRequest{
@@ -250,73 +250,73 @@ func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress,
 		Force:     force,
 	})
 	if err != nil {
-		return "", fmt.Errorf("enroll on spoke %s: %w", target.id, err)
+		return "", fmt.Errorf("enroll on steorra %s: %w", target.id, err)
 	}
 
-	slog.Info("enrolled envoy on spoke", "spoke_id", target.id, "hostname", hostname, "envoy_id", resp.EnvoyId)
+	slog.Info("enrolled envoy on steorra", "steorra_id", target.id, "hostname", hostname, "envoy_id", resp.EnvoyId)
 	return resp.EnvoyId, nil
 }
 
-// SpokeByID returns the spoke connection for the given ID, or nil if not found.
-func (h *Hub) SpokeByID(id string) *spokeConn {
-	for i := range h.spokes {
-		if h.spokes[i].id == id {
-			return &h.spokes[i]
+// SteorraByID returns the steorra connection for the given ID, or nil if not found.
+func (h *Hub) SteorraByID(id string) *steorraConn {
+	for i := range h.steorras {
+		if h.steorras[i].id == id {
+			return &h.steorras[i]
 		}
 	}
 	return nil
 }
 
-// SpokeListEnvoys queries a single spoke for its envoy list.
-func (h *Hub) SpokeListEnvoys(ctx context.Context, spokeID string) ([]*pb.Envoy, error) {
-	sc := h.SpokeByID(spokeID)
+// SteorraListEnvoys queries a single steorra for its envoy list.
+func (h *Hub) SteorraListEnvoys(ctx context.Context, steorraID string) ([]*pb.Envoy, error) {
+	sc := h.SteorraByID(steorraID)
 	if sc == nil {
-		return nil, fmt.Errorf("spoke %q not found", spokeID)
+		return nil, fmt.Errorf("steorra %q not found", steorraID)
 	}
 	resp, err := sc.admin.ListEnvoys(ctx, &pb.ListEnvoysRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("ListEnvoys on spoke %s: %w", spokeID, err)
+		return nil, fmt.Errorf("ListEnvoys on steorra %s: %w", steorraID, err)
 	}
 	return resp.Envoys, nil
 }
 
-// SpokeListRuns queries a single spoke for its run list.
-func (h *Hub) SpokeListRuns(ctx context.Context, spokeID string, limit int32) ([]*pb.Run, error) {
-	sc := h.SpokeByID(spokeID)
+// SteorraListRuns queries a single steorra for its run list.
+func (h *Hub) SteorraListRuns(ctx context.Context, steorraID string, limit int32) ([]*pb.Run, error) {
+	sc := h.SteorraByID(steorraID)
 	if sc == nil {
-		return nil, fmt.Errorf("spoke %q not found", spokeID)
+		return nil, fmt.Errorf("steorra %q not found", steorraID)
 	}
 	resp, err := sc.admin.ListRuns(ctx, &pb.ListRunsRequest{Limit: limit})
 	if err != nil {
-		return nil, fmt.Errorf("ListRuns on spoke %s: %w", spokeID, err)
+		return nil, fmt.Errorf("ListRuns on steorra %s: %w", steorraID, err)
 	}
 	return resp.Runs, nil
 }
 
-// SpokeConvergenceSummary queries a single spoke for its compliance summary.
-func (h *Hub) SpokeConvergenceSummary(ctx context.Context, spokeID string) (*pb.GetConvergenceSummaryResponse, error) {
-	sc := h.SpokeByID(spokeID)
+// SteorraConvergenceSummary queries a single steorra for its compliance summary.
+func (h *Hub) SteorraConvergenceSummary(ctx context.Context, steorraID string) (*pb.GetConvergenceSummaryResponse, error) {
+	sc := h.SteorraByID(steorraID)
 	if sc == nil {
-		return nil, fmt.Errorf("spoke %q not found", spokeID)
+		return nil, fmt.Errorf("steorra %q not found", steorraID)
 	}
 	return sc.admin.GetConvergenceSummary(ctx, &pb.GetConvergenceSummaryRequest{})
 }
 
-// SpokeForcePush sends a ForcePush to a single spoke.
-func (h *Hub) SpokeForcePush(ctx context.Context, spokeID, envoyID string) (int32, error) {
-	sc := h.SpokeByID(spokeID)
+// SteorraForcePush sends a ForcePush to a single steorra.
+func (h *Hub) SteorraForcePush(ctx context.Context, steorraID, envoyID string) (int32, error) {
+	sc := h.SteorraByID(steorraID)
 	if sc == nil {
-		return 0, fmt.Errorf("spoke %q not found", spokeID)
+		return 0, fmt.Errorf("steorra %q not found", steorraID)
 	}
 	resp, err := sc.admin.ForcePush(ctx, &pb.ForcePushRequest{EnvoyId: envoyID})
 	if err != nil {
-		return 0, fmt.Errorf("ForcePush on spoke %s: %w", spokeID, err)
+		return 0, fmt.Errorf("ForcePush on steorra %s: %w", steorraID, err)
 	}
 	return resp.EnvoysNotified, nil
 }
 
-// SpokeStatus describes the health and summary of a single spoke.
-type SpokeStatus struct {
+// SteorraStatus describes the health and summary of a single steorra.
+type SteorraStatus struct {
 	ID             string   `json:"id"`
 	Addr           string   `json:"addr"`
 	Patterns       []string `json:"patterns"`
@@ -334,18 +334,18 @@ type SpokeStatus struct {
 	Error          string   `json:"error,omitempty"`
 }
 
-// probeResult carries both the compliance response and the latency from a spoke probe.
+// probeResult carries both the compliance response and the latency from a steorra probe.
 type probeResult struct {
 	resp    *pb.GetConvergenceSummaryResponse
 	latency time.Duration
 }
 
-// SpokeStatuses probes each spoke's health by calling GetConvergenceSummary
+// SteorraStatuses probes each steorra's health by calling GetConvergenceSummary
 // with a short timeout and returns the results with compliance breakdown and latency.
-// If a spoke is unreachable but has a recent self-report, the report data is
-// used but the spoke is still marked unhealthy.
-func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
-	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
+// If a steorra is unreachable but has a recent self-report, the report data is
+// used but the steorra is still marked unhealthy.
+func (h *Hub) SteorraStatuses(ctx context.Context) []SteorraStatus {
+	results := h.fanOut(ctx, func(ctx context.Context, sc steorraConn) (any, error) {
 		probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 		start := time.Now()
@@ -357,9 +357,9 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 		return &probeResult{resp: resp, latency: latency}, nil
 	})
 
-	statuses := make([]SpokeStatus, len(h.spokes))
-	for i, sc := range h.spokes {
-		statuses[i] = SpokeStatus{
+	statuses := make([]SteorraStatus, len(h.steorras))
+	for i, sc := range h.steorras {
+		statuses[i] = SteorraStatus{
 			ID:       sc.id,
 			Addr:     sc.addr,
 			Patterns: sc.patterns,
@@ -373,9 +373,9 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			}
 			metrics.TungolSteorraUp.WithLabelValues(sc.id).Set(0)
 
-			// If probe failed but we have a self-report from the spoke,
+			// If probe failed but we have a self-report from the steorra,
 			// populate compliance data so dashboards are not blank.
-			if report := h.getSpokeReport(sc.id); report != nil {
+			if report := h.getSteorraReport(sc.id); report != nil {
 				statuses[i].EnvoyCount = report.EnvoyCount
 				statuses[i].Converged = report.Converged
 				statuses[i].Relapsed = report.Relapsed
@@ -405,42 +405,42 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 	return statuses
 }
 
-// RecordSpokeReport stores a spoke's self-reported status. Called by the
+// RecordSteorraReport stores a steorra's self-reported status. Called by the
 // ReportSteorraStatus gRPC handler on the hub.
-func (h *Hub) RecordSpokeReport(report *pb.SteorraStatusReport) {
+func (h *Hub) RecordSteorraReport(report *pb.SteorraStatusReport) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.spokeReports[report.SteorraId] = report
+	h.steorraReports[report.SteorraId] = report
 }
 
-// getSpokeReport returns the latest self-report for a spoke, or nil.
-func (h *Hub) getSpokeReport(spokeID string) *pb.SteorraStatusReport {
+// getSteorraReport returns the latest self-report for a steorra, or nil.
+func (h *Hub) getSteorraReport(steorraID string) *pb.SteorraStatusReport {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return h.spokeReports[spokeID]
+	return h.steorraReports[steorraID]
 }
 
-// fanOutResult holds the response from one spoke.
+// fanOutResult holds the response from one steorra.
 type fanOutResult struct {
-	spokeID string
-	value   any
-	err     error
+	steorraID string
+	value     any
+	err       error
 }
 
-// fanOut executes fn on all spokes concurrently and collects results.
-func (h *Hub) fanOut(ctx context.Context, fn func(ctx context.Context, sc spokeConn) (any, error)) []fanOutResult {
+// fanOut executes fn on all steorras concurrently and collects results.
+func (h *Hub) fanOut(ctx context.Context, fn func(ctx context.Context, sc steorraConn) (any, error)) []fanOutResult {
 	var wg sync.WaitGroup
-	results := make([]fanOutResult, len(h.spokes))
+	results := make([]fanOutResult, len(h.steorras))
 
-	for i, sc := range h.spokes {
+	for i, sc := range h.steorras {
 		wg.Add(1)
-		go func(idx int, spoke spokeConn) {
+		go func(idx int, steorra steorraConn) {
 			defer wg.Done()
-			val, err := fn(ctx, spoke)
+			val, err := fn(ctx, steorra)
 			results[idx] = fanOutResult{
-				spokeID: spoke.id,
-				value:   val,
-				err:     err,
+				steorraID: steorra.id,
+				value:     val,
+				err:       err,
 			}
 		}(i, sc)
 	}
@@ -455,47 +455,47 @@ type ReassignResult struct {
 	TargetAddr  string
 }
 
-// ReassignEnvoy moves a envoy from one spoke to another.
-// 1. Gets envoy info from source spoke.
-// 2. Enrolls envoy on target spoke.
-// 3. Sets reassignment on source spoke so agent reconnects.
-func (h *Hub) ReassignEnvoy(ctx context.Context, envoyID, fromSpokeID, toSpokeID string) (*ReassignResult, error) {
-	from := h.SpokeByID(fromSpokeID)
+// ReassignEnvoy moves a envoy from one steorra to another.
+// 1. Gets envoy info from source steorra.
+// 2. Enrolls envoy on target steorra.
+// 3. Sets reassignment on source steorra so agent reconnects.
+func (h *Hub) ReassignEnvoy(ctx context.Context, envoyID, fromSteorraID, toSteorraID string) (*ReassignResult, error) {
+	from := h.SteorraByID(fromSteorraID)
 	if from == nil {
-		return nil, fmt.Errorf("source spoke %q not found", fromSpokeID)
+		return nil, fmt.Errorf("source steorra %q not found", fromSteorraID)
 	}
-	to := h.SpokeByID(toSpokeID)
+	to := h.SteorraByID(toSteorraID)
 	if to == nil {
-		return nil, fmt.Errorf("target spoke %q not found", toSpokeID)
+		return nil, fmt.Errorf("target steorra %q not found", toSteorraID)
 	}
 
 	// Get envoy info from source.
 	resp, err := from.admin.GetEnvoy(ctx, &pb.GetEnvoyRequest{Id: envoyID})
 	if err != nil {
-		return nil, fmt.Errorf("getting envoy from source spoke: %w", err)
+		return nil, fmt.Errorf("getting envoy from source steorra: %w", err)
 	}
 	envoy := resp.Envoy
 
-	// Enroll on target spoke.
-	newID, err := h.EnrollOnSpoke(ctx, to.addr, envoy.Hostname, envoy.IpAddress, "", true)
+	// Enroll on target steorra.
+	newID, err := h.EnrollOnSteorra(ctx, to.addr, envoy.Hostname, envoy.IpAddress, "", true)
 	if err != nil {
-		return nil, fmt.Errorf("enrolling on target spoke: %w", err)
+		return nil, fmt.Errorf("enrolling on target steorra: %w", err)
 	}
 
-	// Set reassignment on source spoke so agent reconnects on next check-in.
+	// Set reassignment on source steorra so agent reconnects on next check-in.
 	_, err = from.admin.SetReassignment(ctx, &pb.SetReassignmentRequest{
 		EnvoyId:    envoyID,
 		TargetAddr:  to.addr,
 		NewEnvoyId: newID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("setting reassignment on source spoke: %w", err)
+		return nil, fmt.Errorf("setting reassignment on source steorra: %w", err)
 	}
 
 	slog.Info("envoy reassigned",
 		"envoy_id", envoyID,
-		"from_spoke", fromSpokeID,
-		"to_spoke", toSpokeID,
+		"from_steorra", fromSteorraID,
+		"to_steorra", toSteorraID,
 		"new_envoy_id", newID,
 	)
 
@@ -505,26 +505,26 @@ func (h *Hub) ReassignEnvoy(ctx context.Context, envoyID, fromSpokeID, toSpokeID
 	}, nil
 }
 
-// DrainResult holds the outcome of draining a spoke.
+// DrainResult holds the outcome of draining a steorra.
 type DrainResult struct {
 	Moved  int32
 	Failed int32
 	Errors []string
 }
 
-// DrainSpoke moves all envoys from a spoke to other spokes.
-// If targetSpokeID is empty, routes each envoy by hostname pattern.
-// If targetSpokeID is set, all envoys go to that specific spoke.
-func (h *Hub) DrainSpoke(ctx context.Context, spokeID, targetSpokeID string) (*DrainResult, error) {
-	src := h.SpokeByID(spokeID)
+// DrainSteorra moves all envoys from a steorra to other steorras.
+// If targetSteorraID is empty, routes each envoy by hostname pattern.
+// If targetSteorraID is set, all envoys go to that specific steorra.
+func (h *Hub) DrainSteorra(ctx context.Context, steorraID, targetSteorraID string) (*DrainResult, error) {
+	src := h.SteorraByID(steorraID)
 	if src == nil {
-		return nil, fmt.Errorf("spoke %q not found", spokeID)
+		return nil, fmt.Errorf("steorra %q not found", steorraID)
 	}
 
-	// Get all envoys on source spoke.
-	envoys, err := h.SpokeListEnvoys(ctx, spokeID)
+	// Get all envoys on source steorra.
+	envoys, err := h.SteorraListEnvoys(ctx, steorraID)
 	if err != nil {
-		return nil, fmt.Errorf("listing envoys on spoke %s: %w", spokeID, err)
+		return nil, fmt.Errorf("listing envoys on steorra %s: %w", steorraID, err)
 	}
 
 	result := &DrainResult{}
@@ -533,11 +533,11 @@ func (h *Hub) DrainSpoke(ctx context.Context, spokeID, targetSpokeID string) (*D
 			continue
 		}
 
-		target := targetSpokeID
+		target := targetSteorraID
 		if target == "" {
-			// Auto-route by hostname against remaining spokes' patterns.
-			for _, sc := range h.spokes {
-				if sc.id == spokeID {
+			// Auto-route by hostname against remaining steorras' patterns.
+			for _, sc := range h.steorras {
+				if sc.id == steorraID {
 					continue
 				}
 				for _, pattern := range sc.patterns {
@@ -558,11 +558,11 @@ func (h *Hub) DrainSpoke(ctx context.Context, spokeID, targetSpokeID string) (*D
 
 		if target == "" {
 			result.Failed++
-			result.Errors = append(result.Errors, fmt.Sprintf("no target spoke for %s", t.Hostname))
+			result.Errors = append(result.Errors, fmt.Sprintf("no target steorra for %s", t.Hostname))
 			continue
 		}
 
-		_, err := h.ReassignEnvoy(ctx, t.Id, spokeID, target)
+		_, err := h.ReassignEnvoy(ctx, t.Id, steorraID, target)
 		if err != nil {
 			result.Failed++
 			result.Errors = append(result.Errors, fmt.Sprintf("reassign %s: %v", t.Hostname, err))
@@ -571,35 +571,35 @@ func (h *Hub) DrainSpoke(ctx context.Context, spokeID, targetSpokeID string) (*D
 		result.Moved++
 	}
 
-	slog.Info("spoke drained", "spoke_id", spokeID, "moved", result.Moved, "failed", result.Failed)
+	slog.Info("steorra drained", "steorra_id", steorraID, "moved", result.Moved, "failed", result.Failed)
 	return result, nil
 }
 
-// SyncConfigToSpokes creates a tar.gz archive of the config directory and
-// pushes it to all spokes via the SyncConfig RPC. Best-effort: logs failures
+// SyncConfigToSteorras creates a tar.gz archive of the config directory and
+// pushes it to all steorras via the SyncConfig RPC. Best-effort: logs failures
 // but returns nil on partial success. Only returns an error if the archive
 // cannot be created at all.
-func (h *Hub) SyncConfigToSpokes(ctx context.Context, configDir string) error {
+func (h *Hub) SyncConfigToSteorras(ctx context.Context, configDir string) error {
 	archive, err := createConfigArchive(configDir)
 	if err != nil {
 		return fmt.Errorf("creating config archive: %w", err)
 	}
 
-	slog.Info("syncing config to spokes", "archive_bytes", len(archive), "spokes", len(h.spokes))
+	slog.Info("syncing config to steorras", "archive_bytes", len(archive), "steorras", len(h.steorras))
 
-	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
-		spokeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	results := h.fanOut(ctx, func(ctx context.Context, sc steorraConn) (any, error) {
+		steorraCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
-		return sc.admin.SyncConfig(spokeCtx, &pb.SyncConfigRequest{
+		return sc.admin.SyncConfig(steorraCtx, &pb.SyncConfigRequest{
 			ConfigArchive: archive,
 		})
 	})
 
 	for _, r := range results {
 		if r.err != nil {
-			slog.Warn("config sync to spoke failed", "spoke_id", r.spokeID, "error", r.err)
+			slog.Warn("config sync to steorra failed", "steorra_id", r.steorraID, "error", r.err)
 		} else {
-			slog.Info("config synced to spoke", "spoke_id", r.spokeID)
+			slog.Info("config synced to steorra", "steorra_id", r.steorraID)
 		}
 	}
 
@@ -671,7 +671,7 @@ func createConfigArchive(dir string) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// buildClientTLS creates TLS credentials for the hub's connections to spokes.
+// buildClientTLS creates TLS credentials for the hub's connections to steorras.
 func buildClientTLS(certFile, keyFile, caFile string) (credentials.TransportCredentials, error) {
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {

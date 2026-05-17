@@ -64,6 +64,10 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 		return nil, err
 	}
 
+	if err := detectRetiredSpannerKey(data); err != nil {
+		return nil, err
+	}
+
 	// Defaults that diverge from Go zero-values land here before unmarshal.
 	// YAML keys that explicitly appear overwrite these; absent keys keep the
 	// pre-set value. (The `default:` struct tags in types.go are doc-only —
@@ -163,6 +167,24 @@ func detectRetiredSwarmShape(data []byte) error {
 func isBoolScalar(v any) bool {
 	_, ok := v.(bool)
 	return ok
+}
+
+// detectRetiredSpannerKey rejects server.yaml that still uses the top-level
+// `spanner:` key. The federation subsystem was renamed to `tungol:` and the
+// `spokes:` / `spoke_id:` sub-keys to `steorras:` / `steorra_id:` in the
+// same cutover; the operator must rename the block in one pass. No
+// translation, no shim — point at the migration target and refuse to start.
+func detectRetiredSpannerKey(data []byte) error {
+	var raw struct {
+		Spanner any `yaml:"spanner"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+	if raw.Spanner == nil {
+		return nil
+	}
+	return fmt.Errorf("server.yaml uses retired `spanner:` key — rename the entire block to `tungol:` and rename the sub-keys `spokes:` → `steorras:` and `spoke_id:` → `steorra_id:` in one pass (no translation layer is provided)")
 }
 
 // resolveServerSecrets resolves secret: prefixed values in the server config.

@@ -16,14 +16,12 @@ import (
 type TungolStatus struct {
 	Role      string               `json:"role"`
 	SteorraID string               `json:"steorra_id,omitempty"`
-	Steorras  []tungol.SpokeStatus `json:"steorras,omitempty"`
+	Steorras  []tungol.SteorraStatus `json:"steorras,omitempty"`
 }
 
 // TungolHandler serves tungol status endpoints. The underlying
-// implementation is still the hub-spoke model from server/tungol
-// (Hub + SpokeStatus + SpokeStatuses); the user-visible surface
-// (route paths, JSON field names, response struct) speaks the
-// peer-equal redesign's tungol/steorra vocabulary.
+// implementation is still the hub + steorras model from server/tungol;
+// Phase 1+ will replace it with peer-equal gossip.
 type TungolHandler struct {
 	role      config.TungolRole
 	steorraID string
@@ -66,7 +64,7 @@ func (h *TungolHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.hub != nil {
-		resp.Steorras = h.hub.SpokeStatuses(r.Context())
+		resp.Steorras = h.hub.SteorraStatuses(r.Context())
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -75,7 +73,7 @@ func (h *TungolHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 func (h *TungolHandler) handleSteorraDetail(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	statuses := h.hub.SpokeStatuses(r.Context())
+	statuses := h.hub.SteorraStatuses(r.Context())
 	for _, s := range statuses {
 		if s.ID == id {
 			w.Header().Set("Content-Type", "application/json")
@@ -88,7 +86,7 @@ func (h *TungolHandler) handleSteorraDetail(w http.ResponseWriter, r *http.Reque
 
 func (h *TungolHandler) handleSteorraEnvoys(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	envoys, err := h.hub.SpokeListEnvoys(r.Context(), id)
+	envoys, err := h.hub.SteorraListEnvoys(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -100,7 +98,7 @@ func (h *TungolHandler) handleSteorraEnvoys(w http.ResponseWriter, r *http.Reque
 func (h *TungolHandler) handleSteorraRuns(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	limit := int32(50)
-	runs, err := h.hub.SpokeListRuns(r.Context(), id, limit)
+	runs, err := h.hub.SteorraListRuns(r.Context(), id, limit)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -115,7 +113,7 @@ func (h *TungolHandler) handleSteorraPush(w http.ResponseWriter, r *http.Request
 		EnvoyID string `json:"envoy_id"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
-	count, err := h.hub.SpokeForcePush(r.Context(), id, req.EnvoyID)
+	count, err := h.hub.SteorraForcePush(r.Context(), id, req.EnvoyID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
@@ -156,7 +154,7 @@ func (h *TungolHandler) handleDrain(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 
-	result, err := h.hub.DrainSpoke(r.Context(), steorraID, req.TargetSteorraID)
+	result, err := h.hub.DrainSteorra(r.Context(), steorraID, req.TargetSteorraID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

@@ -100,11 +100,11 @@ The originating instance of a swarm blob on an envoy — the source of truth for
 
 ## spanner
 
-The legacy name for the hub-spoke control-plane sharding subsystem. Operator-visible surface (CLI, REST, UI, metrics, proto) speaks the new [tungol](#tungol) / [steorra](#steorra) vocabulary as of Phase 0 of the spanner→tungol redesign. The YAML config block in `server.yaml` keeps the `spanner:` key through Phase 0; it migrates in Phase 1 (both names accepted) and completes in Phase 3. See [Tungol](howto/set-up-tungol.md) for the current setup walkthrough.
+The retired name for the federated control-plane subsystem. All operator-facing surfaces (YAML, CLI, REST, UI, metrics, proto, on-disk filenames) speak the [tungol](#tungol) / [steorra](#steorra) vocabulary; the loader rejects the old `spanner:` YAML key at startup. The `role:` value `spoke` is retained as the architectural marker for "this vigosrv is one steorra in the tungol" until Phase 1+ retires the hub + steorras shape entirely. See [Tungol](howto/set-up-tungol.md).
 
 ## steorra
 
-The runtime entity formerly called a "spoke" — one `vigosrv` participating in a [tungol](#tungol) federation. Owns a hostname-pattern partition of the fleet; handles agent check-ins for its envoys; reports compliance metrics to the hub. Successor name to "spoke" on the wire, CLI, UI, REST routes, and metric labels. The YAML config still uses `role: spoke` / `spoke_id:` through Phase 0 of the redesign.
+One `vigosrv` participating in a [tungol](#tungol) federation. Owns a hostname-pattern partition of the fleet; handles agent check-ins for its envoys; reports compliance metrics to the hub. The YAML config uses `tungol.steorra_id:` and `role: spoke` (the role value is the architectural marker for "one of many steorras in the tungol"; the noun for the entity itself is steorra everywhere else).
 
 ## stockpile
 
@@ -124,7 +124,7 @@ A collected fact about an envoy, reported at check-in — OS, hardware, installe
 
 ## tungol
 
-The whole federated control plane — a constellation of [steorra](#steorra) servers cooperating to operate one fleet. Successor name to [spanner](#spanner) on the wire, CLI (`vigocli tungol`), UI route (`/tungol`), REST namespace (`/api/v1/tungol/*`), and metric prefix (`vigo_tungol_*`). The broader spanner→tungol redesign retires hub-spoke in favor of peer-equal federation; Phase 0 (in flight) renames the surface while preserving the hub-spoke implementation underneath. See [Set up Tungol](howto/set-up-tungol.md).
+The whole federated control plane — a constellation of [steorra](#steorra) servers cooperating to operate one fleet. CLI (`vigocli tungol`), UI route (`/tungol`), REST namespace (`/api/v1/tungol/*`), YAML key (`tungol:`), and metric prefix (`vigo_tungol_*`) all speak the tungol vocabulary. The current wire implementation is hub + steorras; Phase 1+ will replace it with peer-equal gossip. See [Set up Tungol](howto/set-up-tungol.md).
 
 ## usercrate
 

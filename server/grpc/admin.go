@@ -103,11 +103,11 @@ func (s *AdminService) RevokeApprovedPattern(ctx context.Context, req *pb.Revoke
 // ---------- Envoys ----------
 
 func (s *AdminService) ListEnvoys(ctx context.Context, req *pb.ListEnvoysRequest) (*pb.ListEnvoysResponse, error) {
-	// Hub mode: aggregate from all spokes.
+	// Hub mode: aggregate from all steorras.
 	if s.hub != nil {
 		envoys, err := s.hub.AggregateListEnvoys(ctx)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "aggregating envoys from spokes: %v", err)
+			return nil, status.Errorf(codes.Internal, "aggregating envoys from steorras: %v", err)
 		}
 		return &pb.ListEnvoysResponse{Envoys: envoys}, nil
 	}
@@ -260,11 +260,11 @@ func (s *AdminService) DeleteEnvoy(ctx context.Context, req *pb.DeleteEnvoyReque
 // ---------- ForcePush ----------
 
 func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) (*pb.ForcePushResponse, error) {
-	// Hub mode: forward to all spokes.
+	// Hub mode: forward to all steorras.
 	if s.hub != nil {
 		total, err := s.hub.ForwardForcePush(ctx, req.GetEnvoyId())
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "forwarding force push to spokes: %v", err)
+			return nil, status.Errorf(codes.Internal, "forwarding force push to steorras: %v", err)
 		}
 		return &pb.ForcePushResponse{EnvoysNotified: total}, nil
 	}
@@ -301,7 +301,7 @@ func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) 
 // ---------- Runs ----------
 
 func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*pb.ListRunsResponse, error) {
-	// Hub mode: aggregate from all spokes.
+	// Hub mode: aggregate from all steorras.
 	if s.hub != nil {
 		limit := req.Limit
 		if limit <= 0 {
@@ -309,7 +309,7 @@ func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*
 		}
 		runs, err := s.hub.AggregateListRuns(ctx, req.GetEnvoyId(), limit)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "aggregating runs from spokes: %v", err)
+			return nil, status.Errorf(codes.Internal, "aggregating runs from steorras: %v", err)
 		}
 		return &pb.ListRunsResponse{Runs: runs}, nil
 	}
@@ -471,7 +471,7 @@ func (s *AdminService) DeleteWebhook(ctx context.Context, _ *pb.DeleteWebhookReq
 // ---------- Convergence ----------
 
 func (s *AdminService) GetConvergenceSummary(ctx context.Context, _ *pb.GetConvergenceSummaryRequest) (*pb.GetConvergenceSummaryResponse, error) {
-	// Hub mode: aggregate from all spokes.
+	// Hub mode: aggregate from all steorras.
 	if s.hub != nil {
 		return s.hub.AggregateConvergenceSummary(ctx)
 	}
@@ -819,18 +819,18 @@ func extractConfigArchive(archive []byte, targetDir string) error {
 
 func (s *AdminService) ReportSteorraStatus(ctx context.Context, req *pb.SteorraStatusReport) (*pb.SteorraStatusAck, error) {
 	if req.SteorraId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "spoke_id is required")
+		return nil, status.Errorf(codes.InvalidArgument, "steorra_id is required")
 	}
 
-	// Only the hub stores spoke reports.
+	// Only the hub stores steorra reports.
 	if s.hub == nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "server is not a hub")
 	}
 
-	s.hub.RecordSpokeReport(req)
+	s.hub.RecordSteorraReport(req)
 
-	slog.Debug("received spoke status report",
-		"spoke_id", req.SteorraId,
+	slog.Debug("received steorra status report",
+		"steorra_id", req.SteorraId,
 		"envoy_count", req.EnvoyCount,
 		"converged", req.Converged,
 	)

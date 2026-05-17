@@ -14,74 +14,74 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TungolRole defines the server's role in a spanner deployment.
+// TungolRole defines the server's role in a tungol deployment.
 type TungolRole string
 
 const (
 	// RoleStandalone is the default: a single server handling everything.
 	RoleStandalone TungolRole = "standalone"
-	// RoleHub is the central server in a spanner deployment.
-	// Handles UI, webhooks, bootstrap, and aggregates data from spokes.
+	// RoleHub is the central server in a tungol deployment.
+	// Handles UI, webhooks, bootstrap, and aggregates data from steorras.
 	RoleHub TungolRole = "hub"
-	// RoleSpoke is a partition server handling agent check-ins for a
+	// RoleSpoke is a partition steorra handling agent check-ins for a
 	// subset of envoys. Disables webhooks, bootstrap, and secret watcher.
 	RoleSpoke TungolRole = "spoke"
 )
 
-// TungolSection configures hub-spoke spanner. Omit entirely
+// TungolSection configures the tungol federation. Omit entirely
 // (or set role: standalone) for single-server deployments.
 type TungolSection struct {
-	Role             TungolRole        `yaml:"role" doc:"Server role in a spanner deployment." options:"standalone|hub|spoke" default:"standalone" example:"standalone"`
-	SpokeID          string             `yaml:"spoke_id" doc:"Unique spoke identifier (required when role is 'spoke')." example:"us-west-spoke, eu-spoke-01"`
-	HubAddr          string             `yaml:"hub_addr" doc:"Hub gRPC address (host:port) the spoke reports to." example:"vigo-hub.example.com:1530"`
-	HubFallbackAddrs []string           `yaml:"hub_fallback_addrs" doc:"Spoke-only: fallback hub addresses used when the primary hub is unreachable." example:"[vigo-hub-2:1530, vigo-hub-3:1530]"`
-	Spokes           []SpokeEntry       `yaml:"spokes" doc:"Hub-only: list of spoke definitions (id, address, hostname patterns)." example:"see spokes.<id> fields"`
-	AutoFailover     AutoFailoverConfig `yaml:"auto_failover" doc:"Hub-only: automatic draining of spokes that fail health probes."`
+	Role             TungolRole         `yaml:"role" doc:"Server role in a tungol deployment." options:"standalone|hub|spoke" default:"standalone" example:"standalone"`
+	SteorraID        string             `yaml:"steorra_id" doc:"Unique steorra identifier (required when role is 'spoke')." example:"us-west-steorra, eu-steorra-01"`
+	HubAddr          string             `yaml:"hub_addr" doc:"Hub gRPC address (host:port) the steorra reports to." example:"vigo-hub.example.com:1530"`
+	HubFallbackAddrs []string           `yaml:"hub_fallback_addrs" doc:"Steorra-only: fallback hub addresses used when the primary hub is unreachable." example:"[vigo-hub-2:1530, vigo-hub-3:1530]"`
+	Steorras         []SteorraEntry     `yaml:"steorras" doc:"Hub-only: list of steorra definitions (id, address, hostname patterns)." example:"see steorras.<id> fields"`
+	AutoFailover     AutoFailoverConfig `yaml:"auto_failover" doc:"Hub-only: automatic draining of steorras that fail health probes."`
 }
 
-// AutoFailoverConfig controls automatic spoke failover on the hub.
-// When enabled, the hub periodically probes spoke health and drains
-// spokes that fail consecutively.
+// AutoFailoverConfig controls automatic steorra failover on the hub.
+// When enabled, the hub periodically probes steorra health and drains
+// steorras that fail consecutively.
 type AutoFailoverConfig struct {
-	Enabled   bool   `yaml:"enabled" doc:"Probe spokes and drain unhealthy ones automatically." default:"false" example:"true in multi-region setups"`
-	Threshold int    `yaml:"threshold" doc:"Consecutive failed probes before the spoke is drained." default:"3" example:"3 (prod), 5 (flaky networks)"`
+	Enabled   bool   `yaml:"enabled" doc:"Probe steorras and drain unhealthy ones automatically." default:"false" example:"true in multi-region setups"`
+	Threshold int    `yaml:"threshold" doc:"Consecutive failed probes before the steorra is drained." default:"3" example:"3 (prod), 5 (flaky networks)"`
 	Interval  string `yaml:"interval" doc:"Probe interval as a Go duration string (e.g. 30s, 1m)." default:"30s" example:"15s, 30s, 1m, 5m (accepts s, m, h)"`
 }
 
-// SpokeEntry defines a spoke server the hub aggregates from.
-type SpokeEntry struct {
-	ID       string   `yaml:"id" doc:"Unique spoke identifier (referenced by CLI and aggregate dashboards)." example:"us-west, eu-central, customer-acme"`
-	Addr     string   `yaml:"addr" doc:"Spoke gRPC address (host:port)." example:"spoke-01.example.com:1530"`
-	Patterns []string `yaml:"patterns" doc:"Hostname glob patterns routed to this spoke (first-match-wins)." example:"[*.us-west-1.internal, *.dc1.*]"`
+// SteorraEntry defines a steorra the hub aggregates from.
+type SteorraEntry struct {
+	ID       string   `yaml:"id" doc:"Unique steorra identifier (referenced by CLI and aggregate dashboards)." example:"us-west, eu-central, customer-acme"`
+	Addr     string   `yaml:"addr" doc:"Steorra gRPC address (host:port)." example:"steorra-01.example.com:1530"`
+	Patterns []string `yaml:"patterns" doc:"Hostname glob patterns routed to this steorra (first-match-wins)." example:"[*.us-west-1.internal, *.dc1.*]"`
 }
 
-// Validate checks that spanner config is internally consistent.
+// Validate checks that tungol config is internally consistent.
 func (f TungolSection) Validate() error {
 	role := f.Role
 	if role == "" || role == RoleStandalone {
 		return nil
 	}
 	if role == RoleHub {
-		if len(f.Spokes) == 0 {
-			return fmt.Errorf("spanner.spokes is required when role is 'hub'")
+		if len(f.Steorras) == 0 {
+			return fmt.Errorf("tungol.steorras is required when role is 'hub'")
 		}
-		for i, s := range f.Spokes {
+		for i, s := range f.Steorras {
 			if s.ID == "" {
-				return fmt.Errorf("spanner.spokes[%d].id is required", i)
+				return fmt.Errorf("tungol.steorras[%d].id is required", i)
 			}
 			if s.Addr == "" {
-				return fmt.Errorf("spanner.spokes[%d].addr is required", i)
+				return fmt.Errorf("tungol.steorras[%d].addr is required", i)
 			}
 		}
 		return nil
 	}
 	if role == RoleSpoke {
-		if f.SpokeID == "" {
-			return fmt.Errorf("spanner.spoke_id is required when role is 'spoke'")
+		if f.SteorraID == "" {
+			return fmt.Errorf("tungol.steorra_id is required when role is 'spoke'")
 		}
 		return nil
 	}
-	return fmt.Errorf("spanner.role must be standalone, hub, or spoke (got %q)", role)
+	return fmt.Errorf("tungol.role must be standalone, hub, or spoke (got %q)", role)
 }
 
 // ServerConfig represents the top-level server configuration from server.yaml.
@@ -93,7 +93,7 @@ type ServerConfig struct {
 	Watcher      WatcherSection      `yaml:"watcher" docs:"concepts/secrets" doc:"Polls the secrets provider for rotations and force-pushes affected envoys." long:"Background task that polls the configured secrets provider on a schedule and, when a secret value changes, forces a push to every envoy that consumes it. Enables automatic secret rotation without waiting for the next regular check-in — critical when rotating database passwords, TLS keys, or API tokens with revocation expectations. Poll frequency trades detection speed for provider API load."`
 	Secrets      secrets.Config      `yaml:"secrets" docs:"concepts/secrets" doc:"Secrets provider backend and connection settings (local, isopass, vault, AWS, GCP, Azure)." long:"Selects which backend resolves 'secret:' references in module configs at agent check-in. Options: local (files under /srv/vigo/secrets, default for single-server), isopass (Alexander4 Isopass), vault (HashiCorp Vault), aws (AWS Secrets Manager), gcp (GCP Secret Manager), azure (Azure Key Vault). The server fails fast on startup if the backend is unreachable — it never serves a module with plaintext fallbacks."`
 	Bootstrap    BootstrapConfig     `yaml:"bootstrap" docs:"getting-started/bootstrap" doc:"Agent bootstrap enrollment — trusted hostname/CIDR patterns and issued cert validity." long:"Controls how new agents are enrolled into the fleet via the initial HTTPS bootstrap call. Define trusted hostname patterns and CIDR blocks that short-circuit the one-time-token flow (useful for automated provisioning), plus the validity window on auto-issued agent certs. Tighten these in production — a permissive trusted_enrollment is the difference between friction-free onboarding and an open door."`
-	Tungol       TungolSection      `yaml:"spanner" docs:"concepts/spanner" doc:"Hub-spoke deployment — standalone, hub, or spoke role with auto-failover." long:"Deployment topology — standalone (one server runs the whole fleet), hub (MSP operator runs a rollup across many customer spokes), or spoke (customer-facing server reporting up to a hub). Set this when running an MSP deployment or a multi-region setup where one central server can't own all check-ins. Includes auto-failover tuning for when a hub's primary loses contact with its spokes."`
+	Tungol       TungolSection      `yaml:"tungol" docs:"howto/set-up-tungol" doc:"Tungol federation — standalone, hub, or spoke role with auto-failover." long:"Deployment topology — standalone (one server runs the whole fleet), hub (MSP operator runs a rollup across many customer steorras), or spoke (customer-facing steorra reporting up to a hub). Set this when running an MSP deployment or a multi-region setup where one central server can't own all check-ins. Includes auto-failover tuning for when a hub's primary loses contact with its steorras."`
 	Tuning       TuningSection       `yaml:"tuning" docs:"operations/tuning" doc:"Operational tuning — timing windows, gRPC transport limits, and Go runtime memory caps." long:"Low-level knobs for operators who have hit a scaling ceiling and need to hand-tune. Includes gRPC send/receive limits, concurrent stream caps, timing windows for online-vs-offline envoy classification, and Go runtime memory ceilings (GOMEMLIMIT). Leave at defaults until you see a specific symptom — most fleets never touch this section."`
 	SMTP         SMTPSection         `yaml:"smtp" docs:"operations/integrations" doc:"Email relay for event notifications, digests, and scheduled evidence delivery." long:"SMTP relay used by event notifications, daily/weekly digests, and scheduled compliance evidence delivery. Most deployments should prefer the native integrations (Slack, PagerDuty, Jira) over SMTP — email is the least observable and least actionable channel. Keep this configured only when a recipient genuinely can't be reached any other way."`
 	AI           AISection           `yaml:"ai" docs:"operations/ai-providers" doc:"AI assistant provider (Claude, OpenAI, Ollama) for the Ask page and compliance tooling." long:"Wires the /security chat drawer and compliance-assist tooling to an LLM provider. Supports Claude (sharpest reasoning on Vigo-specific questions), OpenAI (cost/token trade-off), and Ollama (fully self-hosted, no third-party calls). Required for automatic .retract module drafting and for the AI-powered guardrail suggestions in the publish flow."`
@@ -106,7 +106,7 @@ type ServerConfig struct {
 	Peers        PeersSection        `yaml:"peers" docs:"operations/peer-replication" doc:"Peer replication — primary or peer role plus the address list for server redundancy." long:"Active-passive replication that keeps one or more standby vigosrv instances file-synced with the primary, so a server outage doesn't strand the fleet. The primary streams config, secrets, and TLS files to each peer over gRPC; agents receive the peer list at enrollment and automatically fall back to one if the primary becomes unreachable. Configure this whenever the fleet is too large to tolerate an unplanned outage — promotion is then a single 'vigocli server promote' command on a surviving peer."`
 	Task         TaskSection         `yaml:"task" docs:"reference/cli/task" doc:"Task dispatch — optionally require a named definition for every ad-hoc task." long:"Controls ad-hoc task dispatch safety. When require_definition is on, every task sent via 'vigocli task dispatch' must reference a pre-reviewed task definition in /srv/vigo/stacks/stockpile/tasks — direct shell commands are refused. Enable this in production to force peer review of anything an operator can fan out to a fleet; leave it off in dev where quick one-off commands are the whole point."`
 	Branding     BrandingSection     `yaml:"branding" docs:"operations/branding" doc:"Custom org name, logo, favicon, and light/dark/auto UI theme." long:"White-label the web UI with the organization's name (shown in the title bar and in exported reports), a custom logo and favicon, and a forced light/dark theme or auto. The logo is inlined into cover blocks of generated PDFs so emailed attestations carry the customer's brand. Useful for MSPs per-customer and for enterprises who want their audit reports to wear their own logo."`
-	License      LicenseSection      `yaml:"license" docs:"operations/licensing" doc:"License enforcement mode — local count or aggregated across spanner spokes." long:"How node-count enforcement aggregates across your topology — 'local' counts envoys registered against this single vigosrv, 'aggregated' sums counts across every spoke in a spanner deployment and enforces a single fleet-wide cap. Pick aggregated on MSP hubs or enterprise spanner setups where one license covers the full customer base. Misconfiguring this either blocks legitimate enrollments (too strict) or silently lets the fleet drift past the contract (too loose)."`
+	License      LicenseSection      `yaml:"license" docs:"operations/licensing" doc:"License enforcement mode — local count or aggregated across tungol steorras." long:"How node-count enforcement aggregates across your topology — 'local' counts envoys registered against this single vigosrv, 'aggregated' sums counts across every steorra in a tungol deployment and enforces a single fleet-wide cap. Pick aggregated on MSP hubs or enterprise tungol setups where one license covers the full customer base. Misconfiguring this either blocks legitimate enrollments (too strict) or silently lets the fleet drift past the contract (too loose)."`
 	GRC          GRCSection          `yaml:"grc" docs:"operations/grc" doc:"GRC platform integrations (Vanta, Drata, ServiceNow) for pushing compliance evidence." long:"Outbound push of compliance evidence into third-party GRC platforms (Vanta, Drata, ServiceNow GRC, Hyperproof, and similar). Each GRC target has its own endpoint, token, and control-mapping block — the server translates Vigo's internal compliance state into whatever format the target expects. Configure this when the organization has already standardized on a GRC system and you want Vigo's evidence to land there without manual uploads."`
 	Integrations IntegrationsSection `yaml:"integrations" docs:"operations/integrations" doc:"Native external platform integrations — Slack, PagerDuty, Jira, ITSM, SIEM, and asset systems." long:"First-class integrations with operator-facing platforms — chat (Slack, Teams), paging (PagerDuty, Opsgenie), ticketing (Jira, Zendesk, Linear, ServiceNow, Freshservice), ITSM (ConnectWise, Autotask, NinjaRMM, Kaseya), SIEM/logging (Splunk, Elastic, Datadog, Sumo, Sentinel), and asset management (Device42, Snipe-IT). Each platform is its own subsection with its own toggle and credentials; prefer these over the legacy webhook path for anything important — native integrations carry context the webhook format can't."`
 	Risk         RiskSection         `yaml:"risk" docs:"concepts/risk-scoring" doc:"Risk quantification — optional NVD CVE API enrichment." long:"Controls the per-envoy risk scoring engine. An optional NVD CVE API key enriches risk input data with CVSS metrics and vendor-attributed advisories — without it, CVE severity comes from the scanner output alone. Risk scores drive the dashboard Risk Posture column, the cyber-insurance attestation PDF, and compliance-visible drift signals, so enable the NVD key if the deployment is subject to insurance or audit scrutiny."`
@@ -591,9 +591,9 @@ type SnipeITIntegration struct {
 type LicenseSection struct {
 	// Mode controls how nodes are counted for license enforcement.
 	// "local" (default): count enrolled nodes on this server only.
-	// "aggregate": count nodes across all spanner spokes (hub only).
-	// In aggregate mode, spokes skip license enforcement entirely.
-	Mode string `yaml:"mode" doc:"Counting mode for license enforcement." options:"local|aggregate" default:"local" example:"aggregate (hub in a spanner deployment)"`
+	// "aggregate": count nodes across all tungol steorras (hub only).
+	// In aggregate mode, steorras skip license enforcement entirely.
+	Mode string `yaml:"mode" doc:"Counting mode for license enforcement." options:"local|aggregate" default:"local" example:"aggregate (hub in a tungol deployment)"`
 }
 
 // BrandingSection configures custom branding for the web UI.

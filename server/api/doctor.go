@@ -146,7 +146,7 @@ func (h *DoctorHandler) RunChecks() (string, []DoctorCheck) {
 		h.checkTLS(),
 		h.checkSecrets(),
 		h.checkLicense(ctx),
-		h.checkSpanner(),
+		h.checkTungol(),
 		h.checkIntegrations(),
 		h.checkConfig(),
 		h.checkSwarmPatterns(),
@@ -173,7 +173,7 @@ func (h *DoctorHandler) handleDoctor(w http.ResponseWriter, r *http.Request) {
 		h.checkTLS(),
 		h.checkSecrets(),
 		h.checkLicense(ctx),
-		h.checkSpanner(),
+		h.checkTungol(),
 		h.checkIntegrations(),
 		h.checkConfig(),
 		h.checkSwarmPatterns(),
@@ -256,15 +256,15 @@ func (h *DoctorHandler) checkLicense(ctx context.Context) DoctorCheck {
 	}
 }
 
-func (h *DoctorHandler) checkSpanner() DoctorCheck {
+func (h *DoctorHandler) checkTungol() DoctorCheck {
 	switch h.role {
 	case config.RoleHub:
 		if h.hub == nil {
-			return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusFail, Message: "hub mode but no spoke connections"}
+			return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusFail, Message: "hub mode but no steorra connections"}
 		}
-		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusPass, Message: fmt.Sprintf("hub, %d spokes", h.hub.SpokeCount())}
+		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusPass, Message: fmt.Sprintf("hub, %d steorras", h.hub.SteorraCount())}
 	case config.RoleSpoke:
-		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusPass, Message: "spoke"}
+		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusPass, Message: "steorra"}
 	default:
 		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusSkip, Message: "standalone"}
 	}

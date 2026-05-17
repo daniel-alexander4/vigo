@@ -42,8 +42,8 @@ func TestTungolStatusStandalone(t *testing.T) {
 	}
 }
 
-func TestTungolStatusWithSpokeRole(t *testing.T) {
-	handler := NewTungolHandler(config.RoleSpoke, "spoke-east-1", nil)
+func TestTungolStatusWithSteorraRole(t *testing.T) {
+	handler := NewTungolHandler(config.RoleSpoke, "steorra-east-1", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -63,12 +63,12 @@ func TestTungolStatusWithSpokeRole(t *testing.T) {
 	if resp.Role != "spoke" {
 		t.Errorf("Role = %q, want spoke", resp.Role)
 	}
-	if resp.SteorraID != "spoke-east-1" {
-		t.Errorf("SteorraID = %q, want spoke-east-1", resp.SteorraID)
+	if resp.SteorraID != "steorra-east-1" {
+		t.Errorf("SteorraID = %q, want steorra-east-1", resp.SteorraID)
 	}
 }
 
-func TestTungolStatusHubNilSpokes(t *testing.T) {
+func TestTungolStatusHubNilSteorras(t *testing.T) {
 	// Hub role but nil hub -- no steorras connected. Status still returns role.
 	handler := NewTungolHandler(config.RoleHub, "", nil)
 	mux := http.NewServeMux()
@@ -162,4 +162,4 @@ func TestTungolStatusJSON(t *testing.T) {
 	}
 }
 
-var _ = tungol.SpokeStatus{} // ensure type is importable
+var _ = tungol.SteorraStatus{} // ensure type is importable

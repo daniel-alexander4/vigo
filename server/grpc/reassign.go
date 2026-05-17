@@ -6,7 +6,7 @@ package grpc
 import "sync"
 
 // ReassignStore holds pending reassignment info for envoys that are being
-// moved to a different spoke. The AdminService writes entries via the
+// moved to a different steorra. The AdminService writes entries via the
 // SetReassignment RPC, and the checkin handler pops them when the envoy
 // next checks in.
 type ReassignStore struct {

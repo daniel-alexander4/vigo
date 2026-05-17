@@ -193,32 +193,32 @@ watcher:
 #       - "pci"
 
 
-# ── Spanner ────────────────────────────────────────────────────────────
-# Hub-spoke scaling. Omit for single-server deployments.
+# ── Tungol ────────────────────────────────────────────────────────────
+# Hub + steorras federation. Omit for single-server deployments.
 
-# spanner:
+# tungol:
 #   role: standalone                           # standalone | hub | spoke
 #
-# --- Hub: aggregates admin queries from spokes ---
-# spanner:
+# --- Hub: aggregates admin queries from steorras ---
+# tungol:
 #   role: hub
-#   spokes:
+#   steorras:
 #     - id: dc1
-#       addr: "spoke1.example.com:1530"
+#       addr: "steorra1.example.com:1530"
 #       patterns: ["*.dc1.*"]
 #     - id: dc2
-#       addr: "spoke2.example.com:1530"
+#       addr: "steorra2.example.com:1530"
 #       patterns: ["*.dc2.*"]
 #   auto_failover:
-#     enabled: true                              # auto-drain unhealthy spokes
+#     enabled: true                              # auto-drain unhealthy steorras
 #     threshold: 3                               # consecutive failures before drain
 #     interval: "30s"                            # health check interval
 #
-# --- Spoke: handles agent check-ins only ---
-# spanner:
+# --- Spoke role: this vigosrv is one steorra in the tungol ---
+# tungol:
 #   role: spoke
-#   spoke_id: "dc1"
-#   hub_addr: "hub.example.com:1530"            # enables spoke→hub status reporting
+#   steorra_id: "dc1"
+#   hub_addr: "hub.example.com:1530"            # enables steorra→hub status reporting
 #   hub_fallback_addrs:                          # fallback hub addresses for failover
 #     - "hub-standby.example.com:1530"
 
@@ -557,9 +557,9 @@ watcher:
 #
 # license:
 #   mode: "local"      # "local" (default): count nodes on this server
-#                      # "aggregate": hub sums nodes across all spanner
-#                      #   spokes. Spokes skip enforcement entirely.
-#                      #   Only valid when spanner role is "hub".
+#                      # "aggregate": hub sums nodes across all tungol
+#                      #   steorras. Steorras skip enforcement entirely.
+#                      #   Only valid when tungol role is "hub".
 
 
 # ── Branding ──────────────────────────────────────────────────────────

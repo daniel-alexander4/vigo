@@ -25,7 +25,7 @@ func NewPeerHandler(peerSvc *peer.Service) *PeerHandler {
 }
 
 // RegisterRoutes mounts the peer endpoints on the given mux. Status
-// is fleet-read; promote (which flips a spoke to primary and
+// is fleet-read; promote (which flips a secondary peer to primary and
 // reshapes replication) is admin-only.
 func (h *PeerHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := auth.RequirePermission(auth.PermFleetRead)

@@ -16,18 +16,14 @@ import (
 )
 
 // tungolCmd is the top-level namespace for the federated control-plane
-// surface (peer-equal redesign of spanner). Hosts tungol-wide verbs
-// (status) and the per-noun groups (steorra, ops-puddle).
+// surface. Hosts tungol-wide verbs (status) and the per-noun groups
+// (steorra, ops-puddle).
 var tungolCmd = &cobra.Command{
 	Use:   "tungol",
-	Short: "Federated control-plane operations (peer-equal redesign of spanner)",
-	Long: `Operations for the tungol (federation) and steorra (single vigosrv)
-primitives of the spanner-redesign architecture. Hub-spoke is still
-the wire implementation underneath — the user surface (this CLI tree,
-the /tungol UI route, /api/v1/tungol/* REST routes) speaks the new
-vocabulary; the YAML config block keeps the legacy spanner: key
-through Phase 0 to avoid forcing every operator to re-edit their
-server.yaml mid-redesign.`,
+	Short: "Federated control-plane operations",
+	Long: `Operations for the tungol (federation) and steorra (one vigosrv
+in the tungol). The current wire implementation is hub + steorras;
+Phase 1+ will replace it with peer-equal gossip.`,
 }
 
 var tungolStatusCmd = &cobra.Command{
@@ -179,10 +175,8 @@ func trimTrailingNewline(s string) string {
 	return s
 }
 
-// runTungolStatus is the migrated body of the old `vigocli spanner status`,
-// rewritten in tungol/steorra vocabulary. The server's hub-spoke
-// implementation backs this same way it did before — only the operator-
-// facing wording has changed.
+// runTungolStatus prints this server's tungol role and (in hub mode)
+// the steorras it aggregates.
 func runTungolStatus(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 

@@ -329,7 +329,7 @@ Health check endpoint that validates server subsystems.
     {"name": "tls", "scope": "server", "status": "pass", "message": "expires 2027-03-13"},
     {"name": "secrets", "scope": "server", "status": "pass", "message": "local"},
     {"name": "license", "scope": "server", "status": "pass", "message": "compliant, 42/100 envoys"},
-    {"name": "spanner", "scope": "server", "status": "skip", "message": "standalone"},
+    {"name": "tungol", "scope": "server", "status": "skip", "message": "standalone"},
     {"name": "integrations", "scope": "server", "status": "skip", "message": "no integrations configured"},
     {"name": "config", "scope": "server", "status": "pass", "message": "15 modules, 8 entries"},
     {"name": "stale_envoys", "scope": "fleet", "status": "pass"}
@@ -1362,10 +1362,10 @@ Returns a simple health status. Useful for load balancer probes and monitoring.
 **Response:**
 
 ```json
-{"status":"ok","spoke_id":""}
+{"status":"ok","steorra_id":""}
 ```
 
-The `spoke_id` field is populated when the server runs in spoke mode.
+The `steorra_id` field is populated when the server runs in spoke mode (i.e. this vigosrv is one steorra in a tungol).
 
 ---
 

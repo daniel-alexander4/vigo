@@ -65,6 +65,6 @@ func init() {
 		scrierCmd,
 		swarmCmd,
 		sandgorgonCmd,
-		tungolCmd, // hosts tungol-wide status + steorra + ops-puddle subtrees; replaces the retired `vigocli spanner` namespace
+		tungolCmd, // tungol-wide status + steorra + ops-puddle subtrees
 	)
 }

@@ -47,9 +47,9 @@ func (f *fakeAdminService) ForcePush(_ context.Context, _ *pb.ForcePushRequest) 
 	return &pb.ForcePushResponse{EnvoysNotified: f.forcePush}, nil
 }
 
-// startFakeSpoke starts a gRPC server with a fake admin service and returns
+// startFakeSteorra starts a gRPC server with a fake admin service and returns
 // its address and a cleanup function.
-func startFakeSpoke(t *testing.T, svc *fakeAdminService) string {
+func startFakeSteorra(t *testing.T, svc *fakeAdminService) string {
 	t.Helper()
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -62,24 +62,24 @@ func startFakeSpoke(t *testing.T, svc *fakeAdminService) string {
 	return lis.Addr().String()
 }
 
-// newGRPCTestHub creates a Hub connected to test spokes via insecure transport.
+// newGRPCTestHub creates a Hub connected to test steorras via insecure transport.
 func newGRPCTestHub(t *testing.T, addrs []string) *Hub {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	h := &Hub{spokes: make([]spokeConn, 0, len(addrs))}
+	h := &Hub{steorras: make([]steorraConn, 0, len(addrs))}
 	for i, addr := range addrs {
 		conn, err := grpc.DialContext(ctx, addr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 			grpc.WithBlock(),
 		)
 		if err != nil {
-			t.Fatalf("connecting to fake spoke %d: %v", i, err)
+			t.Fatalf("connecting to fake steorra %d: %v", i, err)
 		}
 		t.Cleanup(func() { conn.Close() })
-		h.spokes = append(h.spokes, spokeConn{
-			id:    fmt.Sprintf("spoke%c", 'A'+i),
+		h.steorras = append(h.steorras, steorraConn{
+			id:    fmt.Sprintf("steorra%c", 'A'+i),
 			addr:  addr,
 			conn:  conn,
 			admin: pb.NewVigoAdminClient(conn),
@@ -198,9 +198,9 @@ func (m *mockAdminClient) SyncConfig(context.Context, *pb.SyncConfigRequest, ...
 	return &pb.SyncConfigResponse{}, nil
 }
 
-// newTestHub builds a Hub with mock spoke connections (no real gRPC).
-func newTestHub(spokes ...spokeConn) *Hub {
-	return &Hub{spokes: spokes}
+// newTestHub builds a Hub with mock steorra connections (no real gRPC).
+func newTestHub(steorras ...steorraConn) *Hub {
+	return &Hub{steorras: steorras}
 }
 
 // ---------------------------------------------------------------------------
@@ -210,20 +210,20 @@ func newTestHub(spokes ...spokeConn) *Hub {
 func TestHub_AggregateListEnvoys(t *testing.T) {
 	now := timestamppb.Now()
 
-	spokeA := &fakeAdminService{
+	steorraA := &fakeAdminService{
 		envoys: []*pb.Envoy{
 			{Id: "n1", Hostname: "web1.dc1", EnrolledAt: now},
 			{Id: "n2", Hostname: "web2.dc1", EnrolledAt: now},
 		},
 	}
-	spokeB := &fakeAdminService{
+	steorraB := &fakeAdminService{
 		envoys: []*pb.Envoy{
 			{Id: "n3", Hostname: "web1.dc2", EnrolledAt: now},
 		},
 	}
 
-	addrA := startFakeSpoke(t, spokeA)
-	addrB := startFakeSpoke(t, spokeB)
+	addrA := startFakeSteorra(t, steorraA)
+	addrB := startFakeSteorra(t, steorraB)
 	hub := newGRPCTestHub(t, []string{addrA, addrB})
 
 	envoys, err := hub.AggregateListEnvoys(context.Background())
@@ -246,19 +246,19 @@ func TestHub_AggregateListEnvoys(t *testing.T) {
 }
 
 func TestHub_AggregateConvergenceSummary(t *testing.T) {
-	spokeA := &fakeAdminService{
+	steorraA := &fakeAdminService{
 		convergence: &pb.GetConvergenceSummaryResponse{
 			Total: 10, Converged: 8, Relapsed: 1, Failed: 1,
 		},
 	}
-	spokeB := &fakeAdminService{
+	steorraB := &fakeAdminService{
 		convergence: &pb.GetConvergenceSummaryResponse{
 			Total: 5, Converged: 4, Offline: 1,
 		},
 	}
 
-	addrA := startFakeSpoke(t, spokeA)
-	addrB := startFakeSpoke(t, spokeB)
+	addrA := startFakeSteorra(t, steorraA)
+	addrB := startFakeSteorra(t, steorraB)
 	hub := newGRPCTestHub(t, []string{addrA, addrB})
 
 	resp, err := hub.AggregateConvergenceSummary(context.Background())
@@ -289,20 +289,20 @@ func TestHub_AggregateConvergenceSummary(t *testing.T) {
 
 func TestHub_AggregateListRuns(t *testing.T) {
 	now := timestamppb.Now()
-	spokeA := &fakeAdminService{
+	steorraA := &fakeAdminService{
 		runs: []*pb.Run{
 			{Id: "r1", EnvoyId: "n1", StartedAt: now, Status: "success"},
 		},
 	}
-	spokeB := &fakeAdminService{
+	steorraB := &fakeAdminService{
 		runs: []*pb.Run{
 			{Id: "r2", EnvoyId: "n3", StartedAt: now, Status: "failure"},
 			{Id: "r3", EnvoyId: "n3", StartedAt: now, Status: "success"},
 		},
 	}
 
-	addrA := startFakeSpoke(t, spokeA)
-	addrB := startFakeSpoke(t, spokeB)
+	addrA := startFakeSteorra(t, steorraA)
+	addrB := startFakeSteorra(t, steorraB)
 	hub := newGRPCTestHub(t, []string{addrA, addrB})
 
 	runs, err := hub.AggregateListRuns(context.Background(), "", 20)
@@ -315,11 +315,11 @@ func TestHub_AggregateListRuns(t *testing.T) {
 }
 
 func TestHub_ForwardForcePush(t *testing.T) {
-	spokeA := &fakeAdminService{forcePush: 5}
-	spokeB := &fakeAdminService{forcePush: 3}
+	steorraA := &fakeAdminService{forcePush: 5}
+	steorraB := &fakeAdminService{forcePush: 3}
 
-	addrA := startFakeSpoke(t, spokeA)
-	addrB := startFakeSpoke(t, spokeB)
+	addrA := startFakeSteorra(t, steorraA)
+	addrB := startFakeSteorra(t, steorraB)
 	hub := newGRPCTestHub(t, []string{addrA, addrB})
 
 	total, err := hub.ForwardForcePush(context.Background(), "")
@@ -331,18 +331,18 @@ func TestHub_ForwardForcePush(t *testing.T) {
 	}
 }
 
-func TestHub_SpokeCount(t *testing.T) {
-	hub := &Hub{spokes: make([]spokeConn, 3)}
-	if hub.SpokeCount() != 3 {
-		t.Errorf("SpokeCount() = %d, want 3", hub.SpokeCount())
+func TestHub_SteorraCount(t *testing.T) {
+	hub := &Hub{steorras: make([]steorraConn, 3)}
+	if hub.SteorraCount() != 3 {
+		t.Errorf("SteorraCount() = %d, want 3", hub.SteorraCount())
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Enriched spoke status tests (mock client, no real gRPC)
+// Enriched steorra status tests (mock client, no real gRPC)
 // ---------------------------------------------------------------------------
 
-func TestSpokeStatusCompliance(t *testing.T) {
+func TestSteorraStatusCompliance(t *testing.T) {
 	mock := &mockAdminClient{
 		convergenceResp: &pb.GetConvergenceSummaryResponse{
 			Total:          20,
@@ -355,27 +355,27 @@ func TestSpokeStatusCompliance(t *testing.T) {
 		},
 	}
 
-	hub := newTestHub(spokeConn{
-		id:       "spoke-east",
+	hub := newTestHub(steorraConn{
+		id:       "steorra-east",
 		addr:     "east.example.com:1530",
 		patterns: []string{"*.east.example.com"},
 		admin:    mock,
 	})
 
-	statuses := hub.SpokeStatuses(context.Background())
+	statuses := hub.SteorraStatuses(context.Background())
 	if len(statuses) != 1 {
 		t.Fatalf("expected 1 status, got %d", len(statuses))
 	}
 
 	s := statuses[0]
-	if s.ID != "spoke-east" {
-		t.Errorf("ID = %q, want spoke-east", s.ID)
+	if s.ID != "steorra-east" {
+		t.Errorf("ID = %q, want steorra-east", s.ID)
 	}
 	if s.Addr != "east.example.com:1530" {
 		t.Errorf("Addr = %q, want east.example.com:1530", s.Addr)
 	}
 	if !s.Healthy {
-		t.Error("expected spoke to be healthy")
+		t.Error("expected steorra to be healthy")
 	}
 	if s.EnvoyCount != 20 {
 		t.Errorf("EnvoyCount = %d, want 20", s.EnvoyCount)
@@ -406,18 +406,18 @@ func TestSpokeStatusCompliance(t *testing.T) {
 	}
 }
 
-func TestSpokeStatusLatency(t *testing.T) {
+func TestSteorraStatusLatency(t *testing.T) {
 	mock := &mockAdminClient{
 		convergenceResp: &pb.GetConvergenceSummaryResponse{Total: 5, Converged: 5},
 	}
 
-	hub := newTestHub(spokeConn{
-		id:    "spoke-west",
+	hub := newTestHub(steorraConn{
+		id:    "steorra-west",
 		addr:  "west.example.com:1530",
 		admin: mock,
 	})
 
-	statuses := hub.SpokeStatuses(context.Background())
+	statuses := hub.SteorraStatuses(context.Background())
 	if len(statuses) != 1 {
 		t.Fatalf("expected 1 status, got %d", len(statuses))
 	}
@@ -427,29 +427,29 @@ func TestSpokeStatusLatency(t *testing.T) {
 		t.Errorf("LatencyMs = %d, want >= 0", statuses[0].LatencyMs)
 	}
 	if !statuses[0].Healthy {
-		t.Error("expected spoke to be healthy")
+		t.Error("expected steorra to be healthy")
 	}
 }
 
-func TestSpokeStatusError(t *testing.T) {
+func TestSteorraStatusError(t *testing.T) {
 	mock := &mockAdminClient{
 		convergenceErr: fmt.Errorf("connection refused"),
 	}
 
-	hub := newTestHub(spokeConn{
-		id:    "spoke-down",
+	hub := newTestHub(steorraConn{
+		id:    "steorra-down",
 		addr:  "down:1530",
 		admin: mock,
 	})
 
-	statuses := hub.SpokeStatuses(context.Background())
+	statuses := hub.SteorraStatuses(context.Background())
 	if len(statuses) != 1 {
 		t.Fatalf("expected 1 status, got %d", len(statuses))
 	}
 
 	s := statuses[0]
 	if s.Healthy {
-		t.Error("expected spoke to be unhealthy")
+		t.Error("expected steorra to be unhealthy")
 	}
 	if s.Error == "" {
 		t.Error("expected Error to be populated")
@@ -459,50 +459,50 @@ func TestSpokeStatusError(t *testing.T) {
 	}
 }
 
-func TestMultipleSpokeStatuses(t *testing.T) {
+func TestMultipleSteorraStatuses(t *testing.T) {
 	hub := newTestHub(
-		spokeConn{id: "spoke-a", addr: "a:1530", admin: &mockAdminClient{
+		steorraConn{id: "steorra-a", addr: "a:1530", admin: &mockAdminClient{
 			convergenceResp: &pb.GetConvergenceSummaryResponse{Total: 10, Converged: 10, ConvergencePct: 100},
 		}},
-		spokeConn{id: "spoke-b", addr: "b:1530", admin: &mockAdminClient{
+		steorraConn{id: "steorra-b", addr: "b:1530", admin: &mockAdminClient{
 			convergenceResp: &pb.GetConvergenceSummaryResponse{Total: 5, Converged: 3, Relapsed: 2, ConvergencePct: 60},
 		}},
 	)
 
-	statuses := hub.SpokeStatuses(context.Background())
+	statuses := hub.SteorraStatuses(context.Background())
 	if len(statuses) != 2 {
 		t.Fatalf("expected 2 statuses, got %d", len(statuses))
 	}
 
-	// Order matches spoke order.
-	if statuses[0].ID != "spoke-a" || statuses[1].ID != "spoke-b" {
-		t.Errorf("status IDs = [%s, %s], want [spoke-a, spoke-b]", statuses[0].ID, statuses[1].ID)
+	// Order matches steorra order.
+	if statuses[0].ID != "steorra-a" || statuses[1].ID != "steorra-b" {
+		t.Errorf("status IDs = [%s, %s], want [steorra-a, steorra-b]", statuses[0].ID, statuses[1].ID)
 	}
 	if statuses[0].EnvoyCount != 10 {
-		t.Errorf("spoke-a EnvoyCount = %d, want 10", statuses[0].EnvoyCount)
+		t.Errorf("steorra-a EnvoyCount = %d, want 10", statuses[0].EnvoyCount)
 	}
 	if statuses[1].Relapsed != 2 {
-		t.Errorf("spoke-b Relapsed = %d, want 2", statuses[1].Relapsed)
+		t.Errorf("steorra-b Relapsed = %d, want 2", statuses[1].Relapsed)
 	}
 }
 
 // ---------------------------------------------------------------------------
-// SpokeByID tests
+// SteorraByID tests
 // ---------------------------------------------------------------------------
 
-func TestSpokeByID(t *testing.T) {
+func TestSteorraByID(t *testing.T) {
 	hub := newTestHub(
-		spokeConn{id: "spoke-a", addr: "a:1530", admin: &mockAdminClient{}},
-		spokeConn{id: "spoke-b", addr: "b:1530", admin: &mockAdminClient{}},
+		steorraConn{id: "steorra-a", addr: "a:1530", admin: &mockAdminClient{}},
+		steorraConn{id: "steorra-b", addr: "b:1530", admin: &mockAdminClient{}},
 	)
 
 	t.Run("found", func(t *testing.T) {
-		sc := hub.SpokeByID("spoke-a")
+		sc := hub.SteorraByID("steorra-a")
 		if sc == nil {
-			t.Fatal("expected spoke-a to be found")
+			t.Fatal("expected steorra-a to be found")
 		}
-		if sc.id != "spoke-a" {
-			t.Errorf("id = %q, want spoke-a", sc.id)
+		if sc.id != "steorra-a" {
+			t.Errorf("id = %q, want steorra-a", sc.id)
 		}
 		if sc.addr != "a:1530" {
 			t.Errorf("addr = %q, want a:1530", sc.addr)
@@ -510,18 +510,18 @@ func TestSpokeByID(t *testing.T) {
 	})
 
 	t.Run("not_found", func(t *testing.T) {
-		sc := hub.SpokeByID("spoke-nonexistent")
+		sc := hub.SteorraByID("steorra-nonexistent")
 		if sc != nil {
-			t.Fatal("expected nil for nonexistent spoke")
+			t.Fatal("expected nil for nonexistent steorra")
 		}
 	})
 }
 
 // ---------------------------------------------------------------------------
-// Single-spoke drill-down tests
+// Single-steorra drill-down tests
 // ---------------------------------------------------------------------------
 
-func TestSpokeListEnvoys(t *testing.T) {
+func TestSteorraListEnvoys(t *testing.T) {
 	mock := &mockAdminClient{
 		listEnvoysResp: &pb.ListEnvoysResponse{
 			Envoys: []*pb.Envoy{
@@ -531,9 +531,9 @@ func TestSpokeListEnvoys(t *testing.T) {
 		},
 	}
 
-	hub := newTestHub(spokeConn{id: "spoke-east", addr: "east:1530", admin: mock})
+	hub := newTestHub(steorraConn{id: "steorra-east", addr: "east:1530", admin: mock})
 
-	envoys, err := hub.SpokeListEnvoys(context.Background(), "spoke-east")
+	envoys, err := hub.SteorraListEnvoys(context.Background(), "steorra-east")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -548,7 +548,7 @@ func TestSpokeListEnvoys(t *testing.T) {
 	}
 }
 
-func TestSpokeListRuns(t *testing.T) {
+func TestSteorraListRuns(t *testing.T) {
 	mock := &mockAdminClient{
 		listRunsResp: &pb.ListRunsResponse{
 			Runs: []*pb.Run{
@@ -558,9 +558,9 @@ func TestSpokeListRuns(t *testing.T) {
 		},
 	}
 
-	hub := newTestHub(spokeConn{id: "spoke-east", addr: "east:1530", admin: mock})
+	hub := newTestHub(steorraConn{id: "steorra-east", addr: "east:1530", admin: mock})
 
-	runs, err := hub.SpokeListRuns(context.Background(), "spoke-east", 10)
+	runs, err := hub.SteorraListRuns(context.Background(), "steorra-east", 10)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -572,16 +572,16 @@ func TestSpokeListRuns(t *testing.T) {
 	}
 }
 
-func TestSpokeConvergenceSummary(t *testing.T) {
+func TestSteorraConvergenceSummary(t *testing.T) {
 	mock := &mockAdminClient{
 		convergenceResp: &pb.GetConvergenceSummaryResponse{
 			Total: 10, Converged: 8, Relapsed: 1, Failed: 1, ConvergencePct: 80.0,
 		},
 	}
 
-	hub := newTestHub(spokeConn{id: "spoke-east", addr: "east:1530", admin: mock})
+	hub := newTestHub(steorraConn{id: "steorra-east", addr: "east:1530", admin: mock})
 
-	resp, err := hub.SpokeConvergenceSummary(context.Background(), "spoke-east")
+	resp, err := hub.SteorraConvergenceSummary(context.Background(), "steorra-east")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -593,14 +593,14 @@ func TestSpokeConvergenceSummary(t *testing.T) {
 	}
 }
 
-func TestSpokeForcePush(t *testing.T) {
+func TestSteorraForcePush(t *testing.T) {
 	mock := &mockAdminClient{
 		forcePushResp: &pb.ForcePushResponse{EnvoysNotified: 5},
 	}
 
-	hub := newTestHub(spokeConn{id: "spoke-east", addr: "east:1530", admin: mock})
+	hub := newTestHub(steorraConn{id: "steorra-east", addr: "east:1530", admin: mock})
 
-	count, err := hub.SpokeForcePush(context.Background(), "spoke-east", "")
+	count, err := hub.SteorraForcePush(context.Background(), "steorra-east", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -609,37 +609,37 @@ func TestSpokeForcePush(t *testing.T) {
 	}
 }
 
-func TestSpokeNotFound(t *testing.T) {
-	hub := newTestHub(spokeConn{
-		id: "spoke-east", addr: "east:1530", admin: &mockAdminClient{},
+func TestSteorraNotFound(t *testing.T) {
+	hub := newTestHub(steorraConn{
+		id: "steorra-east", addr: "east:1530", admin: &mockAdminClient{},
 	})
 	ctx := context.Background()
 
-	t.Run("SpokeListEnvoys", func(t *testing.T) {
-		_, err := hub.SpokeListEnvoys(ctx, "spoke-missing")
+	t.Run("SteorraListEnvoys", func(t *testing.T) {
+		_, err := hub.SteorraListEnvoys(ctx, "steorra-missing")
 		if err == nil {
-			t.Fatal("expected error for missing spoke")
+			t.Fatal("expected error for missing steorra")
 		}
 	})
 
-	t.Run("SpokeListRuns", func(t *testing.T) {
-		_, err := hub.SpokeListRuns(ctx, "spoke-missing", 50)
+	t.Run("SteorraListRuns", func(t *testing.T) {
+		_, err := hub.SteorraListRuns(ctx, "steorra-missing", 50)
 		if err == nil {
-			t.Fatal("expected error for missing spoke")
+			t.Fatal("expected error for missing steorra")
 		}
 	})
 
-	t.Run("SpokeConvergenceSummary", func(t *testing.T) {
-		_, err := hub.SpokeConvergenceSummary(ctx, "spoke-missing")
+	t.Run("SteorraConvergenceSummary", func(t *testing.T) {
+		_, err := hub.SteorraConvergenceSummary(ctx, "steorra-missing")
 		if err == nil {
-			t.Fatal("expected error for missing spoke")
+			t.Fatal("expected error for missing steorra")
 		}
 	})
 
-	t.Run("SpokeForcePush", func(t *testing.T) {
-		_, err := hub.SpokeForcePush(ctx, "spoke-missing", "")
+	t.Run("SteorraForcePush", func(t *testing.T) {
+		_, err := hub.SteorraForcePush(ctx, "steorra-missing", "")
 		if err == nil {
-			t.Fatal("expected error for missing spoke")
+			t.Fatal("expected error for missing steorra")
 		}
 	})
 }
@@ -665,11 +665,11 @@ func TestReassignEnvoy(t *testing.T) {
 	}
 
 	hub := newTestHub(
-		spokeConn{id: "spoke-east", addr: "east:1530", admin: srcMock},
-		spokeConn{id: "spoke-west", addr: "west:1530", admin: dstMock},
+		steorraConn{id: "steorra-east", addr: "east:1530", admin: srcMock},
+		steorraConn{id: "steorra-west", addr: "west:1530", admin: dstMock},
 	)
 
-	result, err := hub.ReassignEnvoy(context.Background(), "envoy-1", "spoke-east", "spoke-west")
+	result, err := hub.ReassignEnvoy(context.Background(), "envoy-1", "steorra-east", "steorra-west")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -680,7 +680,7 @@ func TestReassignEnvoy(t *testing.T) {
 		t.Errorf("TargetAddr = %q, want west:1530", result.TargetAddr)
 	}
 
-	// Verify EnrollEnvoy was called on the target spoke.
+	// Verify EnrollEnvoy was called on the target steorra.
 	if len(dstMock.enrollCalls) != 1 {
 		t.Fatalf("expected 1 enroll call, got %d", len(dstMock.enrollCalls))
 	}
@@ -692,7 +692,7 @@ func TestReassignEnvoy(t *testing.T) {
 		t.Errorf("enroll IpAddress = %q, want 10.0.1.1", ec.IpAddress)
 	}
 
-	// Verify SetReassignment was called on the source spoke.
+	// Verify SetReassignment was called on the source steorra.
 	if len(srcMock.setReassignCalls) != 1 {
 		t.Fatalf("expected 1 set-reassign call, got %d", len(srcMock.setReassignCalls))
 	}
@@ -710,35 +710,35 @@ func TestReassignEnvoy(t *testing.T) {
 
 func TestReassignEnvoySourceNotFound(t *testing.T) {
 	hub := newTestHub(
-		spokeConn{id: "spoke-east", addr: "east:1530", admin: &mockAdminClient{}},
+		steorraConn{id: "steorra-east", addr: "east:1530", admin: &mockAdminClient{}},
 	)
 
-	_, err := hub.ReassignEnvoy(context.Background(), "envoy-1", "spoke-missing", "spoke-east")
+	_, err := hub.ReassignEnvoy(context.Background(), "envoy-1", "steorra-missing", "steorra-east")
 	if err == nil {
-		t.Fatal("expected error for missing source spoke")
+		t.Fatal("expected error for missing source steorra")
 	}
 }
 
 func TestReassignEnvoyTargetNotFound(t *testing.T) {
 	hub := newTestHub(
-		spokeConn{id: "spoke-east", addr: "east:1530", admin: &mockAdminClient{
+		steorraConn{id: "steorra-east", addr: "east:1530", admin: &mockAdminClient{
 			getEnvoyResp: &pb.GetEnvoyResponse{
 				Envoy: &pb.Envoy{Id: "envoy-1", Hostname: "web1.east.example.com"},
 			},
 		}},
 	)
 
-	_, err := hub.ReassignEnvoy(context.Background(), "envoy-1", "spoke-east", "spoke-missing")
+	_, err := hub.ReassignEnvoy(context.Background(), "envoy-1", "steorra-east", "steorra-missing")
 	if err == nil {
-		t.Fatal("expected error for missing target spoke")
+		t.Fatal("expected error for missing target steorra")
 	}
 }
 
 // ---------------------------------------------------------------------------
-// DrainSpoke tests
+// DrainSteorra tests
 // ---------------------------------------------------------------------------
 
-func TestDrainSpoke(t *testing.T) {
+func TestDrainSteorra(t *testing.T) {
 	srcMock := &mockAdminClient{
 		listEnvoysResp: &pb.ListEnvoysResponse{
 			Envoys: []*pb.Envoy{
@@ -758,12 +758,12 @@ func TestDrainSpoke(t *testing.T) {
 	}
 
 	hub := newTestHub(
-		spokeConn{id: "spoke-east", addr: "east:1530", admin: srcMock},
-		spokeConn{id: "spoke-west", addr: "west:1530", patterns: []string{"*.east.example.com"}, admin: dstMock},
+		steorraConn{id: "steorra-east", addr: "east:1530", admin: srcMock},
+		steorraConn{id: "steorra-west", addr: "west:1530", patterns: []string{"*.east.example.com"}, admin: dstMock},
 	)
 
-	// Drain with an explicit target spoke.
-	result, err := hub.DrainSpoke(context.Background(), "spoke-east", "spoke-west")
+	// Drain with an explicit target steorra.
+	result, err := hub.DrainSteorra(context.Background(), "steorra-east", "steorra-west")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -780,7 +780,7 @@ func TestDrainSpoke(t *testing.T) {
 	}
 }
 
-func TestDrainSpokeAutoRoute(t *testing.T) {
+func TestDrainSteorraAutoRoute(t *testing.T) {
 	srcMock := &mockAdminClient{
 		listEnvoysResp: &pb.ListEnvoysResponse{
 			Envoys: []*pb.Envoy{
@@ -798,12 +798,12 @@ func TestDrainSpokeAutoRoute(t *testing.T) {
 	}
 
 	hub := newTestHub(
-		spokeConn{id: "spoke-east", addr: "east:1530", patterns: []string{"*.east.example.com"}, admin: srcMock},
-		spokeConn{id: "spoke-west", addr: "west:1530", patterns: []string{"*.west.example.com"}, admin: dstMock},
+		steorraConn{id: "steorra-east", addr: "east:1530", patterns: []string{"*.east.example.com"}, admin: srcMock},
+		steorraConn{id: "steorra-west", addr: "west:1530", patterns: []string{"*.west.example.com"}, admin: dstMock},
 	)
 
 	// Drain without explicit target -- auto-route by hostname pattern.
-	result, err := hub.DrainSpoke(context.Background(), "spoke-east", "")
+	result, err := hub.DrainSteorra(context.Background(), "steorra-east", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -815,7 +815,7 @@ func TestDrainSpokeAutoRoute(t *testing.T) {
 	}
 }
 
-func TestDrainSpokePartialFailure(t *testing.T) {
+func TestDrainSteorraPartialFailure(t *testing.T) {
 	// Three envoys: two match a target pattern, one does not.
 	srcMock := &mockAdminClient{
 		listEnvoysResp: &pb.ListEnvoysResponse{
@@ -836,13 +836,13 @@ func TestDrainSpokePartialFailure(t *testing.T) {
 	}
 
 	hub := newTestHub(
-		spokeConn{id: "spoke-east", addr: "east:1530", patterns: []string{"*.east.example.com"}, admin: srcMock},
-		spokeConn{id: "spoke-west", addr: "west:1530", patterns: []string{"*.west.example.com"}, admin: dstMock},
+		steorraConn{id: "steorra-east", addr: "east:1530", patterns: []string{"*.east.example.com"}, admin: srcMock},
+		steorraConn{id: "steorra-west", addr: "west:1530", patterns: []string{"*.west.example.com"}, admin: dstMock},
 	)
 
 	// Drain without explicit target -- auto-route by hostname.
 	// "orphan.nowhere.example.com" matches no pattern, so it should fail.
-	result, err := hub.DrainSpoke(context.Background(), "spoke-east", "")
+	result, err := hub.DrainSteorra(context.Background(), "steorra-east", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -855,12 +855,12 @@ func TestDrainSpokePartialFailure(t *testing.T) {
 	if len(result.Errors) != 1 {
 		t.Fatalf("len(Errors) = %d, want 1", len(result.Errors))
 	}
-	if result.Errors[0] != "no target spoke for orphan.nowhere.example.com" {
-		t.Errorf("Errors[0] = %q, want 'no target spoke for orphan.nowhere.example.com'", result.Errors[0])
+	if result.Errors[0] != "no target steorra for orphan.nowhere.example.com" {
+		t.Errorf("Errors[0] = %q, want 'no target steorra for orphan.nowhere.example.com'", result.Errors[0])
 	}
 }
 
-func TestDrainSpokeSkipsRevoked(t *testing.T) {
+func TestDrainSteorraSkipsRevoked(t *testing.T) {
 	srcMock := &mockAdminClient{
 		listEnvoysResp: &pb.ListEnvoysResponse{
 			Envoys: []*pb.Envoy{
@@ -870,11 +870,11 @@ func TestDrainSpokeSkipsRevoked(t *testing.T) {
 	}
 
 	hub := newTestHub(
-		spokeConn{id: "spoke-east", addr: "east:1530", admin: srcMock},
-		spokeConn{id: "spoke-west", addr: "west:1530", patterns: []string{"*.west.example.com"}, admin: &mockAdminClient{}},
+		steorraConn{id: "steorra-east", addr: "east:1530", admin: srcMock},
+		steorraConn{id: "steorra-west", addr: "west:1530", patterns: []string{"*.west.example.com"}, admin: &mockAdminClient{}},
 	)
 
-	result, err := hub.DrainSpoke(context.Background(), "spoke-east", "spoke-west")
+	result, err := hub.DrainSteorra(context.Background(), "steorra-east", "steorra-west")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -886,18 +886,18 @@ func TestDrainSpokeSkipsRevoked(t *testing.T) {
 	}
 }
 
-func TestDrainSpokeNotFound(t *testing.T) {
+func TestDrainSteorraNotFound(t *testing.T) {
 	hub := newTestHub(
-		spokeConn{id: "spoke-east", addr: "east:1530", admin: &mockAdminClient{}},
+		steorraConn{id: "steorra-east", addr: "east:1530", admin: &mockAdminClient{}},
 	)
 
-	_, err := hub.DrainSpoke(context.Background(), "spoke-missing", "")
+	_, err := hub.DrainSteorra(context.Background(), "steorra-missing", "")
 	if err == nil {
-		t.Fatal("expected error for missing spoke")
+		t.Fatal("expected error for missing steorra")
 	}
 }
 
-func TestDrainSpokeReassignError(t *testing.T) {
+func TestDrainSteorraReassignError(t *testing.T) {
 	// Enrollment on target fails, so the envoy fails.
 	srcMock := &mockAdminClient{
 		listEnvoysResp: &pb.ListEnvoysResponse{
@@ -915,11 +915,11 @@ func TestDrainSpokeReassignError(t *testing.T) {
 	}
 
 	hub := newTestHub(
-		spokeConn{id: "spoke-east", addr: "east:1530", admin: srcMock},
-		spokeConn{id: "spoke-west", addr: "west:1530", admin: dstMock},
+		steorraConn{id: "steorra-east", addr: "east:1530", admin: srcMock},
+		steorraConn{id: "steorra-west", addr: "west:1530", admin: dstMock},
 	)
 
-	result, err := hub.DrainSpoke(context.Background(), "spoke-east", "spoke-west")
+	result, err := hub.DrainSteorra(context.Background(), "steorra-east", "steorra-west")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

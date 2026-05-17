@@ -200,7 +200,7 @@ func loadConfigForDoctor(path string) (secrets.Config, *config.ServerConfig, err
 		return secrets.Config{}, nil, err
 	}
 
-	// Also do a raw parse (without secret resolution) to get TLS/spanner fields.
+	// Also do a raw parse (without secret resolution) to get TLS/tungol fields.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return secretsCfg, nil, nil

@@ -57,7 +57,7 @@ type Collector struct {
 	baseInterval time.Duration
 }
 
-// NewCollector creates a new metrics collector. fleetSource may be nil (spoke mode).
+// NewCollector creates a new metrics collector. fleetSource may be nil (steorra mode).
 func NewCollector(queries *db.Queries, sqlDB *sql.DB, fleetSource FleetSource, baseInterval time.Duration) *Collector {
 	return &Collector{
 		queries:      queries,

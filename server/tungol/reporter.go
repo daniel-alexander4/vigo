@@ -18,7 +18,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// ConvergenceSource provides compliance counters for the spoke status reporter.
+// ConvergenceSource provides compliance counters for the steorra status reporter.
 // Implemented by *fleet.FleetIndex (via its ConvergenceSummary method wrapper).
 type ConvergenceSource interface {
 	// ConvergenceCounts returns the current convergence breakdown:
@@ -30,7 +30,7 @@ type ConvergenceSource interface {
 // address before the reporter tries the next fallback address.
 const failoverThreshold = 3
 
-// Reporter runs on spokes and periodically reports status to the hub via the
+// Reporter runs on steorras and periodically reports status to the hub via the
 // ReportSteorraStatus gRPC RPC. It is a background goroutine and does not
 // interfere with the check-in hot path.
 //
@@ -38,7 +38,7 @@ const failoverThreshold = 3
 // to fallback hub addresses after failoverThreshold consecutive failures on the
 // current address.
 type Reporter struct {
-	spokeID          string
+	steorraID          string
 	hubAddr          string   // primary hub address
 	hubFallbackAddrs []string // fallback hub addresses (tried in order)
 	certFile         string
@@ -60,7 +60,7 @@ type Reporter struct {
 
 // NewReporter creates a Reporter that will periodically send status to the hub.
 // hubFallbackAddrs may be nil for single-hub deployments.
-func NewReporter(spokeID, hubAddr string, hubFallbackAddrs []string, certFile, keyFile, caFile string, convergence ConvergenceSource, interval time.Duration) *Reporter {
+func NewReporter(steorraID, hubAddr string, hubFallbackAddrs []string, certFile, keyFile, caFile string, convergence ConvergenceSource, interval time.Duration) *Reporter {
 	if interval <= 0 {
 		interval = 30 * time.Second
 	}
@@ -71,7 +71,7 @@ func NewReporter(spokeID, hubAddr string, hubFallbackAddrs []string, certFile, k
 	allAddrs = append(allAddrs, hubFallbackAddrs...)
 
 	return &Reporter{
-		spokeID:          spokeID,
+		steorraID:          steorraID,
 		hubAddr:          hubAddr,
 		hubFallbackAddrs: hubFallbackAddrs,
 		certFile:         certFile,
@@ -89,11 +89,11 @@ func (r *Reporter) SetConfigVersion(fn func() uint64) {
 	r.configVersion = fn
 }
 
-// Run blocks until ctx is cancelled, periodically reporting spoke status to the
+// Run blocks until ctx is cancelled, periodically reporting steorra status to the
 // hub. Call as a goroutine: go reporter.Run(ctx).
 func (r *Reporter) Run(ctx context.Context) {
-	slog.Info("spoke status reporter started",
-		"spoke_id", r.spokeID,
+	slog.Info("steorra status reporter started",
+		"steorra_id", r.steorraID,
 		"hub_addr", r.hubAddr,
 		"hub_fallback_addrs", r.hubFallbackAddrs,
 		"interval", r.interval,
@@ -107,7 +107,7 @@ func (r *Reporter) Run(ctx context.Context) {
 		var err error
 		tlsCreds, err = buildReporterTLS(r.certFile, r.keyFile, r.caFile)
 		if err != nil {
-			slog.Error("spoke reporter: failed to build TLS credentials, aborting",
+			slog.Error("steorra reporter: failed to build TLS credentials, aborting",
 				"error", err,
 			)
 			return
@@ -117,7 +117,7 @@ func (r *Reporter) Run(ctx context.Context) {
 	// Establish initial connection.
 	conn, client, err := r.dial(ctx, r.currentAddr(), tlsCreds)
 	if err != nil {
-		slog.Error("spoke reporter: failed to dial hub, will retry on tick",
+		slog.Error("steorra reporter: failed to dial hub, will retry on tick",
 			"hub_addr", r.currentAddr(),
 			"error", err,
 		)
@@ -135,7 +135,7 @@ func (r *Reporter) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("spoke status reporter stopped", "spoke_id", r.spokeID)
+			slog.Info("steorra status reporter stopped", "steorra_id", r.steorraID)
 			return
 		case <-ticker.C:
 			if client == nil {
@@ -202,7 +202,7 @@ func (r *Reporter) recordFailure(ctx context.Context, tlsCreds credentials.Trans
 	r.mu.Unlock()
 
 	slog.Warn("hub unreachable, trying fallback",
-		"spoke_id", r.spokeID,
+		"steorra_id", r.steorraID,
 		"addr", newAddr,
 	)
 
@@ -215,7 +215,7 @@ func (r *Reporter) recordFailure(ctx context.Context, tlsCreds credentials.Trans
 
 	newConn, newClient, err := r.dial(ctx, newAddr, tlsCreds)
 	if err != nil {
-		slog.Warn("spoke reporter: failed to dial fallback hub",
+		slog.Warn("steorra reporter: failed to dial fallback hub",
 			"addr", newAddr,
 			"error", err,
 		)
@@ -256,7 +256,7 @@ func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
 	}
 
 	req := &pb.SteorraStatusReport{
-		SteorraId:        r.spokeID,
+		SteorraId:        r.steorraID,
 		EnvoyCount:    int32(total),
 		Converged:      int32(converged),
 		Relapsed:       int32(relapsed),
@@ -276,17 +276,17 @@ func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
 
 	_, err := client.ReportSteorraStatus(rpcCtx, req)
 	if err != nil {
-		// Log at debug level: spoke operates independently of hub connectivity.
-		slog.Debug("spoke reporter: failed to report status to hub",
-			"spoke_id", r.spokeID,
+		// Log at debug level: steorra operates independently of hub connectivity.
+		slog.Debug("steorra reporter: failed to report status to hub",
+			"steorra_id", r.steorraID,
 			"hub_addr", r.currentAddr(),
 			"error", err,
 		)
 		return false
 	}
 
-	slog.Debug("spoke status reported to hub",
-		"spoke_id", r.spokeID,
+	slog.Debug("steorra status reported to hub",
+		"steorra_id", r.steorraID,
 		"envoy_count", total,
 		"converged", converged,
 	)
@@ -299,7 +299,7 @@ func (r *Reporter) ActiveAddr() string {
 	return r.currentAddr()
 }
 
-// buildReporterTLS creates mTLS credentials for the spoke's connection to the hub.
+// buildReporterTLS creates mTLS credentials for the steorra's connection to the hub.
 func buildReporterTLS(certFile, keyFile, caFile string) (credentials.TransportCredentials, error) {
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {

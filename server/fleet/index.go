@@ -292,7 +292,7 @@ func (f *FleetIndex) ConvergenceSummary() ConvergenceCounters {
 
 // ConvergenceCounts returns the convergence breakdown as flat values
 // across the failure axis plus the drift axis plus reachability.
-// Satisfies the spanner.ConvergenceSource interface.
+// Satisfies the tungol.ConvergenceSource interface.
 func (f *FleetIndex) ConvergenceCounts() (total, converged, degraded, failed, noData, changed, diverged, offline int) {
 	c := f.ConvergenceSummary()
 	return c.Total, c.Converged, c.Degraded, c.Failed, c.NoData, c.Changed, c.Diverged, c.Offline

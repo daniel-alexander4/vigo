@@ -186,7 +186,7 @@ If envoys show as "offline" after restore, that's expected -- they'll transition
 
 ## Tungol Recovery
 
-In a hub-spoke tungol topology (the YAML config block is still named `spanner:` through Phase 0 of the spanner→tungol redesign — operator-facing CLI / UI / REST surface speaks tungol/steorra):
+In a hub + steorras tungol topology:
 
 - **Steorra failure**: Restore the steorra independently. Envoys enrolled to that steorra reconnect automatically. The hub will resume receiving aggregated data on the steorra's next heartbeat.
 - **Hub failure**: Restore the hub. Steorras will reconnect and resume tungol heartbeats. Envoy reassignments and drain operations should be re-verified after hub restore.

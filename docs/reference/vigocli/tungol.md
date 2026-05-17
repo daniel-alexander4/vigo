@@ -2,9 +2,7 @@
 
 # vigocli tungol
 
-Operations for the **tungol** (federation) and **steorra** (single vigosrv) primitives. Replaces the retired `vigocli spanner` command. The wire implementation underneath is still the hub-spoke control plane in `server/tungol/`; the user-facing CLI tree, REST routes (`/api/v1/tungol/*`), and UI route (`/tungol`) speak the peer-equal redesign's vocabulary.
-
-> The `spanner:` YAML config block keeps its name through Phase 0 of the redesign — operators don't need to re-edit their server.yaml mid-redesign. The block migrates in Phase 1 (both names accepted) and completes in Phase 3.
+Operations for the **tungol** (federation) and **steorra** (one vigosrv in the tungol) primitives. The current wire implementation is hub + steorras in `server/tungol/`; Phase 1+ will replace it with peer-equal gossip.
 
 ## Subcommands
 
@@ -70,11 +68,11 @@ Migrate every envoy off a steorra, either to a specified `--to` target or auto-r
 
 ### steorra add &lt;steorra-id&gt; --addr HOST:PORT --patterns GLOB,... \[--output PATH\]
 
-Print (or write, with `--output`) a sample `server.yaml` for a new steorra pre-filled with its ID, the hub address, and the hostname patterns it will own. Also prints the `spanner:` block to add to the hub's server.yaml. Hub-only — refused on standalone or spoke servers.
+Print (or write, with `--output`) a sample `server.yaml` for a new steorra pre-filled with its ID, the hub address, and the hostname patterns it will own. Also prints the `tungol:` block to add to the hub's server.yaml. Hub-only — refused on standalone or spoke servers.
 
 ### steorra remove &lt;steorra-id&gt;
 
-Drains the steorra, then prints the YAML lines to remove from the hub's `spanner.spokes:` list (operator-driven edit, then hub restart).
+Drains the steorra, then prints the YAML lines to remove from the hub's `tungol.steorras:` list (operator-driven edit, then hub restart).
 
 ## ops-puddle init &lt;friendly-name&gt;
 

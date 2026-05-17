@@ -162,7 +162,7 @@ func run() error {
 	licenseDir := stringOrDefault(cfg.Paths.LicenseDir, licfmt.DefaultLicenseDir)
 	licenseGraceDir := licenseDir
 
-	// Determine spanner role.
+	// Determine tungol role.
 	role := cfg.Tungol.Role
 	if role == "" {
 		role = config.RoleStandalone
@@ -269,16 +269,16 @@ func run() error {
 	//
 	// license.mode controls counting:
 	//   "local" (default): count enrolled nodes on this server only.
-	//   "aggregate": hub sums node counts across all spanner spokes.
-	//                spokes skip enforcement entirely.
+	//   "aggregate": hub sums node counts across all tungol steorras.
+	//                steorras skip enforcement entirely.
 	licenseMode := cfg.License.Mode
 	if licenseMode == "" {
 		licenseMode = "local"
 	}
 
-	// In aggregate mode, spokes skip enforcement — the hub handles it.
+	// In aggregate mode, steorras skip enforcement — the hub handles it.
 	if licenseMode == "aggregate" && role == config.RoleSpoke {
-		slog.Info("license mode aggregate: spoke skips enforcement (hub enforces)")
+		slog.Info("license mode aggregate: steorra skips enforcement (hub enforces)")
 	}
 
 	// Hub variable is declared here but assigned later (after config store).
@@ -293,10 +293,10 @@ func run() error {
 	var fleetIndex *fleet.FleetIndex
 
 	envoyCounter := func(ctx context.Context) (int, error) {
-		// Aggregate mode on hub: sum node counts from all spokes + local.
+		// Aggregate mode on hub: sum node counts from all steorras + local.
 		if licenseMode == "aggregate" && hub != nil {
 			total := 0
-			for _, s := range hub.SpokeStatuses(ctx) {
+			for _, s := range hub.SteorraStatuses(ctx) {
 				total += int(s.EnvoyCount)
 			}
 			if fleetIndex != nil {
@@ -317,7 +317,7 @@ func run() error {
 		return fleetIndex.ActiveCount(), nil
 	}
 
-	// Spokes in aggregate mode use a no-op enforcer that always passes.
+	// Steorras in aggregate mode use a no-op enforcer that always passes.
 	var enforcer *license.Enforcer
 	if licenseMode == "aggregate" && role == config.RoleSpoke {
 		enforcer, err = license.NewEnforcer(licenseDir, licenseGraceDir, cfg.Server.TLS.CAFile,
@@ -335,9 +335,9 @@ func run() error {
 		"stage", enforcer.GetStatus().Stage.String(),
 	)
 
-	// Spanner requires a paid license — reject hub/spoke on free tier.
+	// Tungol requires a paid license — reject hub/spoke on free tier.
 	if role != config.RoleStandalone && enforcer.IsFreeLicense() {
-		return fmt.Errorf("spanner (role %q) requires a paid license — the built-in free license does not support spanner", role)
+		return fmt.Errorf("tungol (role %q) requires a paid license — the built-in free license does not support tungol", role)
 	}
 
 	// Set up SIGHUP handler for license reload.
@@ -482,14 +482,14 @@ func run() error {
 	// (Scrier SSH auth is now resolved at session time from config modules —
 	// no sync step needed. Use "vigocli scrier users map" for username mappings.)
 
-	// Connect to spokes (hub mode only).
+	// Connect to steorras (hub mode only).
 	if role == config.RoleHub {
-		hub, err = tungol.NewHub(ctx, cfg.Tungol.Spokes, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
+		hub, err = tungol.NewHub(ctx, cfg.Tungol.Steorras, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
 		if err != nil {
-			return fmt.Errorf("connecting to spokes: %w", err)
+			return fmt.Errorf("connecting to steorras: %w", err)
 		}
 		defer hub.Close()
-		slog.Info("spanner hub initialized", "spokes", hub.SpokeCount())
+		slog.Info("tungol hub initialized", "steorras", hub.SteorraCount())
 
 		// Start auto-failover if enabled.
 		if cfg.Tungol.AutoFailover.Enabled {
@@ -864,7 +864,7 @@ func run() error {
 		})
 	}
 
-	// Start REST gateway (spoke serves API + metrics only; hub/standalone adds UI + bootstrap).
+	// Start REST gateway (steorra serves API + metrics only; hub/standalone adds UI + bootstrap).
 	var httpSrv *http.Server
 	licenseHandler := api.NewLicenseHandler(enforcer)
 	doctorHandler := api.NewDoctorHandler(api.DoctorConfig{
@@ -892,7 +892,7 @@ func run() error {
 	// uiHandler swarm-config setters.
 	doctorHandler.SetSwarmConfig(cfg.Swarm)
 
-	tungolHandler := api.NewTungolHandler(role, cfg.Tungol.SpokeID, hub)
+	tungolHandler := api.NewTungolHandler(role, cfg.Tungol.SteorraID, hub)
 	taskHandler := api.NewTaskHandler(queries, agentSvc, cfg.Task.RequireDefinition)
 	taskHandler.SetAuditWriter(auditWriter)
 	queryHandler := api.NewQueryHandler(agentSvc)
@@ -1045,9 +1045,9 @@ func run() error {
 	}
 
 	if role == config.RoleSpoke {
-		mux, gwErr := api.NewSpokeGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Tungol.SpokeID)
+		mux, gwErr := api.NewSteorraGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Tungol.SteorraID)
 		if gwErr != nil {
-			return fmt.Errorf("creating spoke gateway: %w", gwErr)
+			return fmt.Errorf("creating steorra gateway: %w", gwErr)
 		}
 		licenseHandler.RegisterRoutes(mux)
 		doctorHandler.RegisterRoutes(mux)
@@ -1346,10 +1346,10 @@ func run() error {
 	}()
 
 	if role == config.RoleSpoke {
-		// Start spoke status reporter if hub address is configured.
+		// Start steorra status reporter if hub address is configured.
 		if cfg.Tungol.HubAddr != "" {
 			reporter := tungol.NewReporter(
-				cfg.Tungol.SpokeID,
+				cfg.Tungol.SteorraID,
 				cfg.Tungol.HubAddr,
 				cfg.Tungol.HubFallbackAddrs,
 				cfg.Server.TLS.CertFile,
@@ -1362,8 +1362,8 @@ func run() error {
 			go reporter.Run(ctx)
 		}
 
-		slog.Info("spoke ready",
-			"spoke_id", cfg.Tungol.SpokeID,
+		slog.Info("steorra ready",
+			"steorra_id", cfg.Tungol.SteorraID,
 			"grpc", cfg.Server.GRPCListen,
 			"api", cfg.Server.APIListen,
 		)

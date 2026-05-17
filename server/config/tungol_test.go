@@ -34,11 +34,11 @@ func TestTungolRole_UnmarshalYAML(t *testing.T) {
 	}
 }
 
-func TestTungolSection_FullSpokeParse(t *testing.T) {
+func TestTungolSection_FullSteorraParse(t *testing.T) {
 	input := `
-spanner:
+tungol:
   role: spoke
-  spoke_id: dc1
+  steorra_id: dc1
   hub_addr: hub.example.com:1530
 `
 	var cfg ServerConfig
@@ -49,8 +49,8 @@ spanner:
 	if cfg.Tungol.Role != RoleSpoke {
 		t.Errorf("role = %q, want spoke", cfg.Tungol.Role)
 	}
-	if cfg.Tungol.SpokeID != "dc1" {
-		t.Errorf("spoke_id = %q, want dc1", cfg.Tungol.SpokeID)
+	if cfg.Tungol.SteorraID != "dc1" {
+		t.Errorf("steorra_id = %q, want dc1", cfg.Tungol.SteorraID)
 	}
 	if cfg.Tungol.HubAddr != "hub.example.com:1530" {
 		t.Errorf("hub_addr = %q, want hub.example.com:1530", cfg.Tungol.HubAddr)
@@ -59,13 +59,13 @@ spanner:
 
 func TestTungolSection_FullHubParse(t *testing.T) {
 	input := `
-spanner:
+tungol:
   role: hub
-  spokes:
+  steorras:
     - id: dc1
-      addr: spoke1.example.com:1530
+      addr: steorra1.example.com:1530
     - id: dc2
-      addr: spoke2.example.com:1530
+      addr: steorra2.example.com:1530
 `
 	var cfg ServerConfig
 	if err := yaml.Unmarshal([]byte(input), &cfg); err != nil {
@@ -75,14 +75,14 @@ spanner:
 	if cfg.Tungol.Role != RoleHub {
 		t.Errorf("role = %q, want hub", cfg.Tungol.Role)
 	}
-	if len(cfg.Tungol.Spokes) != 2 {
-		t.Fatalf("spokes len = %d, want 2", len(cfg.Tungol.Spokes))
+	if len(cfg.Tungol.Steorras) != 2 {
+		t.Fatalf("steorras len = %d, want 2", len(cfg.Tungol.Steorras))
 	}
-	if cfg.Tungol.Spokes[0].ID != "dc1" {
-		t.Errorf("spokes[0].id = %q, want dc1", cfg.Tungol.Spokes[0].ID)
+	if cfg.Tungol.Steorras[0].ID != "dc1" {
+		t.Errorf("steorras[0].id = %q, want dc1", cfg.Tungol.Steorras[0].ID)
 	}
-	if cfg.Tungol.Spokes[1].Addr != "spoke2.example.com:1530" {
-		t.Errorf("spokes[1].addr = %q, want spoke2.example.com:1530", cfg.Tungol.Spokes[1].Addr)
+	if cfg.Tungol.Steorras[1].Addr != "steorra2.example.com:1530" {
+		t.Errorf("steorras[1].addr = %q, want steorra2.example.com:1530", cfg.Tungol.Steorras[1].Addr)
 	}
 }
 
@@ -95,30 +95,30 @@ func TestTungolSection_Validate(t *testing.T) {
 		{name: "empty is valid", section: TungolSection{}},
 		{name: "standalone", section: TungolSection{Role: RoleStandalone}},
 		{
-			name: "hub with spokes",
+			name: "hub with steorras",
 			section: TungolSection{
-				Role:   RoleHub,
-				Spokes: []SpokeEntry{{ID: "dc1", Addr: "spoke1:1530"}},
+				Role:     RoleHub,
+				Steorras: []SteorraEntry{{ID: "dc1", Addr: "steorra1:1530"}},
 			},
 		},
-		{name: "hub without spokes", section: TungolSection{Role: RoleHub}, wantErr: true},
+		{name: "hub without steorras", section: TungolSection{Role: RoleHub}, wantErr: true},
 		{
-			name: "hub with spoke missing id",
+			name: "hub with steorra missing id",
 			section: TungolSection{
-				Role:   RoleHub,
-				Spokes: []SpokeEntry{{Addr: "spoke1:1530"}},
+				Role:     RoleHub,
+				Steorras: []SteorraEntry{{Addr: "steorra1:1530"}},
 			},
 			wantErr: true,
 		},
 		{
-			name: "hub with spoke missing addr",
+			name: "hub with steorra missing addr",
 			section: TungolSection{
-				Role:   RoleHub,
-				Spokes: []SpokeEntry{{ID: "dc1"}},
+				Role:     RoleHub,
+				Steorras: []SteorraEntry{{ID: "dc1"}},
 			},
 			wantErr: true,
 		},
-		{name: "spoke with id", section: TungolSection{Role: RoleSpoke, SpokeID: "dc1"}},
+		{name: "spoke with id", section: TungolSection{Role: RoleSpoke, SteorraID: "dc1"}},
 		{name: "spoke without id", section: TungolSection{Role: RoleSpoke}, wantErr: true},
 		{name: "invalid role", section: TungolSection{Role: "bogus"}, wantErr: true},
 	}
@@ -146,10 +146,10 @@ server:
 	if cfg.Tungol.Role != "" {
 		t.Errorf("role should be empty when omitted, got %q", cfg.Tungol.Role)
 	}
-	if cfg.Tungol.SpokeID != "" {
-		t.Errorf("spoke_id should be empty when omitted, got %q", cfg.Tungol.SpokeID)
+	if cfg.Tungol.SteorraID != "" {
+		t.Errorf("steorra_id should be empty when omitted, got %q", cfg.Tungol.SteorraID)
 	}
-	if len(cfg.Tungol.Spokes) != 0 {
-		t.Errorf("spokes should be empty when omitted, got %d", len(cfg.Tungol.Spokes))
+	if len(cfg.Tungol.Steorras) != 0 {
+		t.Errorf("steorras should be empty when omitted, got %d", len(cfg.Tungol.Steorras))
 	}
 }

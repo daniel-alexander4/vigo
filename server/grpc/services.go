@@ -48,7 +48,7 @@ type AgentService struct {
 	licenseEnforcer  *license.Enforcer
 	fleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
 	runBatcher       *fleet.RunBatcher  // async run persistence from delta events
-	reassignStore    *ReassignStore     // pending envoy reassignments (spoke side)
+	reassignStore    *ReassignStore     // pending envoy reassignments (steorra side)
 	bundleSigner     *BundleSigner     // signs policy bundles for agent verification
 	bundleMaxAge     uint32            // max_age_seconds for signed bundles (0 = forever)
 	bundlePubKeyPEM  string            // cached PEM of bundle signing public key
@@ -215,9 +215,9 @@ type AdminService struct {
 	runStore      db.RunStore
 	configStore   *config.ConfigStore
 	baseInterval  time.Duration
-	hub           *tungol.Hub   // non-nil when role=hub; aggregates from spokes
+	hub           *tungol.Hub   // non-nil when role=hub; aggregates from steorras
 	fleetIndex    *fleet.FleetIndex // in-memory index for hot-path operations
-	reassignStore *ReassignStore    // pending envoy reassignments (spoke side)
+	reassignStore *ReassignStore    // pending envoy reassignments (steorra side)
 	auditWriter   auditRecorder    // tamper-evident audit writer (nil-safe)
 	integrations  *integrations.Dispatcher
 	// swarmCleanup, when set, is invoked from RevokeEnvoy / DeleteEnvoy

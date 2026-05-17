@@ -295,7 +295,7 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 | **Security Posture** | 14 panels across 4 rows: CVE counts by severity, hardening score gauge + trend, threat detection (rootkits, malware, integrity), scan coverage | [vigo-security.json](#grafana-dashboards) |
 | **Convergence** | 9 panels across 3 rows: status pie chart + stat counters, compliance % + drift rate trends, check-in age heatmap | [vigo-convergence.json](#grafana-dashboards) |
 | **Risk Posture** | 8 panels across 3 rows: average + max risk scores, distribution by level (low/medium/high/critical), risk score trends over time | [vigo-risk.json](#grafana-dashboards) |
-| **Spanner** | 2 panels: spoke availability (UP/DOWN status map) and spoke latency (p50/p95 time series) | [vigo-spanner.json](#grafana-dashboards) |
+| **Tungol** | 2 panels: steorra availability (UP/DOWN status map) and steorra latency (p50/p95 time series) | [vigo-tungol.json](#grafana-dashboards) |
 
 ## Import
 
@@ -506,9 +506,9 @@ Fleet-wide risk scoring with distribution breakdown and trend tracking.
 |-------|------|--------|
 | Risk Score Over Time | Time series (average + maximum) | `vigo_risk_avg_score`, `vigo_risk_max_score` |
 
-## Spanner Dashboard
+## Tungol Dashboard
 
-[Download vigo-spanner.json](#grafana-dashboards)
+[Download vigo-tungol.json](#grafana-dashboards)
 
 Only populated on hub servers.
 

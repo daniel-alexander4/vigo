@@ -82,10 +82,10 @@ watcher:
 #   recipients:
 #     - "admin@example.com"
 
-# ── Spanner ────────────────────────────────────────────────────────────
-# Requires a paid license. See server.yaml.example for hub/spoke setup.
+# ── Tungol ────────────────────────────────────────────────────────────
+# Requires a paid license. See server.yaml.example for hub + steorras setup.
 #
-# spanner:
+# tungol:
 #   role: standalone                           # standalone | hub | spoke
 
 # ── AI Assistant ──────────────────────────────────────────────────────────

@@ -694,7 +694,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Tungol pages (only registered when running as hub). The /tungol
 	// route name follows the user-facing rename; underneath, `h.hub` is
-	// still the hub-spoke implementation in server/tungol/.
+	// still the hub + steorras implementation in server/tungol/.
 	if h.hub != nil {
 		mux.HandleFunc("GET /tungol", h.Tungol)
 		mux.HandleFunc("GET /tungol/steorras/{id}", h.SteorraDetail)
@@ -1958,7 +1958,7 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "docs", data)
 }
 
-// setCommon applies version, AI-enabled, spanner, auth, and license flags to page data.
+// setCommon applies version, AI-enabled, tungol, auth, and license flags to page data.
 func (h *Handler) setCommon(pd *PageData) {
 	pd.Version = h.version
 	poll := 30 * time.Second
@@ -6721,7 +6721,7 @@ func workflowRowFromDB(w db.WorkflowRun) WorkflowRow {
 	return row
 }
 
-// TungolSteorraRow represents a spoke in the spanner UI table.
+// TungolSteorraRow represents a steorra in the tungol UI table.
 type TungolSteorraRow struct {
 	ID             string
 	Addr           string
@@ -6761,16 +6761,17 @@ type TungolPageData struct {
 	PeerConfigVersion uint64
 }
 
-// Tungol renders the tungol federation status page (still hub-spoke
-// internally; the user-facing rename is part of Phase 0).
+// Tungol renders the tungol federation status page. The underlying
+// implementation is still hub + steorras; Phase 1+ will replace it
+// with peer-equal gossip.
 func (h *Handler) Tungol(w http.ResponseWriter, r *http.Request) {
-	statuses := h.hub.SpokeStatuses(r.Context())
+	statuses := h.hub.SteorraStatuses(r.Context())
 
-	var spokes []TungolSteorraRow
+	var steorras []TungolSteorraRow
 	healthyCount := 0
 	var totalEnvoys, totalCompliant, totalRelapsed, totalDiverged, totalFailed int32
 	for _, s := range statuses {
-		spokes = append(spokes, TungolSteorraRow{
+		steorras = append(steorras, TungolSteorraRow{
 			ID:             s.ID,
 			Addr:           s.Addr,
 			Patterns:       s.Patterns,
@@ -6804,7 +6805,7 @@ func (h *Handler) Tungol(w http.ResponseWriter, r *http.Request) {
 
 	data := TungolPageData{
 		PageData:            PageData{Title: "Tungol", ActiveNav: "tungol"},
-		SteorraCount:        len(spokes),
+		SteorraCount:        len(steorras),
 		HealthyCount:        healthyCount,
 		TotalEnvoys:         totalEnvoys,
 		TotalConverged:      totalCompliant,
@@ -6812,7 +6813,7 @@ func (h *Handler) Tungol(w http.ResponseWriter, r *http.Request) {
 		TotalDiverged:       totalDiverged,
 		TotalFailed:         totalFailed,
 		ConvergencePct:       convPct,
-		Steorras:            spokes,
+		Steorras:            steorras,
 	}
 
 	// Add HA peer replication status if available.
@@ -6854,7 +6855,7 @@ type SteorraDetailPageData struct {
 	Runs           []SteorraDetailRunRow
 }
 
-// SteorraDetailEnvoyRow is a envoy on a spoke.
+// SteorraDetailEnvoyRow is a envoy on a steorra.
 type SteorraDetailEnvoyRow struct {
 	ID        string
 	Hostname  string
@@ -6863,7 +6864,7 @@ type SteorraDetailEnvoyRow struct {
 	Revoked   bool
 }
 
-// SteorraDetailRunRow is a run on a spoke.
+// SteorraDetailRunRow is a run on a steorra.
 type SteorraDetailRunRow struct {
 	ID           string
 	EnvoyID     string
@@ -6880,22 +6881,22 @@ func (h *Handler) SteorraDetail(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	ctx := r.Context()
 
-	statuses := h.hub.SpokeStatuses(ctx)
-	var spoke *tungol.SpokeStatus
+	statuses := h.hub.SteorraStatuses(ctx)
+	var steorra *tungol.SteorraStatus
 	for i := range statuses {
 		if statuses[i].ID == id {
-			spoke = &statuses[i]
+			steorra = &statuses[i]
 			break
 		}
 	}
-	if spoke == nil {
+	if steorra == nil {
 		http.Error(w, "steorra not found", http.StatusNotFound)
 		return
 	}
 
-	// Fetch envoys and runs from this spoke.
-	envoys, _ := h.hub.SpokeListEnvoys(ctx, id)
-	runs, _ := h.hub.SpokeListRuns(ctx, id, 20)
+	// Fetch envoys and runs from this steorra.
+	envoys, _ := h.hub.SteorraListEnvoys(ctx, id)
+	runs, _ := h.hub.SteorraListRuns(ctx, id, 20)
 
 	var envoyRows []SteorraDetailEnvoyRow
 	for _, t := range envoys {
@@ -6913,9 +6914,9 @@ func (h *Handler) SteorraDetail(w http.ResponseWriter, r *http.Request) {
 
 	var runRows []SteorraDetailRunRow
 	for _, run := range runs {
-		var spokePct float64
+		var failPct float64
 		if run.ModuleCount > 0 {
-			spokePct = float64(run.FailedCount) / float64(run.ModuleCount) * 100
+			failPct = float64(run.FailedCount) / float64(run.ModuleCount) * 100
 		}
 		row := SteorraDetailRunRow{
 			ID:           run.Id,
@@ -6924,7 +6925,7 @@ func (h *Handler) SteorraDetail(w http.ResponseWriter, r *http.Request) {
 			ModuleCount:  run.ModuleCount,
 			ChangedCount: run.ChangedCount,
 			FailedCount:  run.FailedCount,
-			FailurePct:   spokePct,
+			FailurePct:   failPct,
 		}
 		if run.StartedAt != nil {
 			row.StartedAt = run.StartedAt.AsTime().Local().Format("2006-01-02 15:04:05")
@@ -6934,18 +6935,18 @@ func (h *Handler) SteorraDetail(w http.ResponseWriter, r *http.Request) {
 
 	data := SteorraDetailPageData{
 		PageData:       PageData{Title: "Steorra: " + id, ActiveNav: "tungol"},
-		SteorraID:      spoke.ID,
-		Addr:           spoke.Addr,
-		Healthy:        spoke.Healthy,
-		EnvoyCount:    spoke.EnvoyCount,
-		Converged:      spoke.Converged,
-		Relapsed:       spoke.Relapsed,
-		Diverged:       spoke.Diverged,
-		Failed:         spoke.Failed,
-		Offline:    spoke.Offline,
-		NoData:         spoke.NoData,
-		ConvergencePct:  spoke.ConvergencePct,
-		LatencyMs:      spoke.LatencyMs,
+		SteorraID:      steorra.ID,
+		Addr:           steorra.Addr,
+		Healthy:        steorra.Healthy,
+		EnvoyCount:    steorra.EnvoyCount,
+		Converged:      steorra.Converged,
+		Relapsed:       steorra.Relapsed,
+		Diverged:       steorra.Diverged,
+		Failed:         steorra.Failed,
+		Offline:    steorra.Offline,
+		NoData:         steorra.NoData,
+		ConvergencePct:  steorra.ConvergencePct,
+		LatencyMs:      steorra.LatencyMs,
 		Envoys:        envoyRows,
 		Runs:           runRows,
 	}

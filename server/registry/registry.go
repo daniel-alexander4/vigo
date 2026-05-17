@@ -6,7 +6,7 @@
 //
 // All three enrollment entry points — token-based Register (gRPC Register
 // handler), TrustedRegister (bootstrap HTTP + trusted CIDR patterns), and
-// CreateEnvoy (hub→spoke AdminService.EnrollEnvoy) — funnel through the same
+// CreateEnvoy (hub→steorra AdminService.EnrollEnvoy) — funnel through the same
 // internal chokepoint. That chokepoint holds the registry-wide mutex for the
 // duration of the license gate check, the DB insert, and the FleetIndex
 // update, which makes the operation atomic across all three paths: two
@@ -246,9 +246,9 @@ func (r *Registry) TrustedRegister(ctx context.Context, hostname, ip, pubkeyPEM 
 }
 
 // CreateEnvoy creates an envoy record without token validation. Used by
-// AdminService.EnrollEnvoy (hub→spoke enrollment routing) where the hub has
-// already validated the enrollment token before calling into the spoke.
-// Still runs the license gate so spoke-level limits are enforced.
+// AdminService.EnrollEnvoy (hub→steorra enrollment routing) where the hub has
+// already validated the enrollment token before calling into the steorra.
+// Still runs the license gate so steorra-level limits are enforced.
 func (r *Registry) CreateEnvoy(ctx context.Context, hostname, ip, pubkeyPEM string, force bool) (string, error) {
 	if hostname == "" {
 		return "", fmt.Errorf("hostname must not be empty")

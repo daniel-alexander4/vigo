@@ -30,10 +30,10 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 var _ = time.Now // used by format
 
-// configSyncer is implemented by spanner.Hub to push config to spokes.
+// configSyncer is implemented by tungol.Hub to push config to steorras.
 // Defined as an interface to avoid an import cycle.
 type configSyncer interface {
-	SyncConfigToSpokes(ctx context.Context, configDir string) error
+	SyncConfigToSteorras(ctx context.Context, configDir string) error
 }
 
 // auditRecorder is the interface for the tamper-evident audit writer.
@@ -121,7 +121,7 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 
 // ReloadConfig re-reads all config files from disk. Called by vigocli
 // after config publish syncs files to .live/. In hub mode, also pushes the
-// config to all spokes via gRPC (best-effort — spoke failures are logged
+// config to all steorras via gRPC (best-effort — steorra failures are logged
 // but do not fail the reload).
 //
 // When a compliance threshold is configured, starts a background monitor
@@ -133,11 +133,11 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In hub mode, push config to all spokes after successful local reload.
+	// In hub mode, push config to all steorras after successful local reload.
 	if h.hub != nil {
 		configDir := h.configStore.Dir()
-		if err := h.hub.SyncConfigToSpokes(r.Context(), configDir); err != nil {
-			slog.Error("config sync to spokes failed", "error", err)
+		if err := h.hub.SyncConfigToSteorras(r.Context(), configDir); err != nil {
+			slog.Error("config sync to steorras failed", "error", err)
 			// Best-effort: don't fail the reload response.
 		}
 	}

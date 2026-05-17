@@ -9,7 +9,7 @@ title: "ADR-025: stockpile-in-gitback — service-account puddle + ops-puddle ow
 
 ## Context
 
-Today's stockpile distribution is hub-mediated: `Hub.SyncConfigToSpokes` (`server/spanner/hub.go:577`) tars `stacks/.live/` and pushes the archive to every spoke via the hub-internal `SyncConfig` gRPC RPC after `vigocli config publish`. The hub is the canonical config origin; spokes are read-only mirrors. This is one of the five operational properties of hub-spoke spanner that motivated the tungol redesign — a failed hub blocks all publishes, partition tolerance is bolted on rather than structural, and there is no "publish from any peer" story.
+Today's stockpile distribution is hub-mediated: `Hub.SyncConfigToSteorras` (`server/tungol/hub.go`) tars `stacks/.live/` and pushes the archive to every steorra via the hub-internal `SyncConfig` gRPC RPC after `vigocli config publish`. The hub is the canonical config origin; steorras are read-only mirrors. This is one of the five operational properties of the hub + steorras shape that motivated the broader redesign — a failed hub blocks all publishes, partition tolerance is bolted on rather than structural, and there is no "publish from any peer" story.
 
 Phase 0 of the tungol redesign is **rename + config-in-gitback**: move `stockpile/` into a gitback project so every vigosrv clones, pulls on update, and triggers a config reload — retiring `SyncConfigToSpokes` entirely. The mechanical rename is straightforward; the gitback piece bumps into a real design issue.
 

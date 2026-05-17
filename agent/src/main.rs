@@ -521,11 +521,9 @@ fn save_envoy_id(data_dir: &std::path::Path, id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Save steorra address to <data-dir>/spoke.addr. (The on-disk filename
-/// stays `spoke.addr` to avoid orphaning routing state on deployed
-/// envoys when they upgrade through this rename.)
+/// Save steorra address to <data-dir>/steorra.addr.
 fn save_steorra_addr(data_dir: &std::path::Path, addr: &str) -> Result<()> {
-    let path = data_dir.join("spoke.addr");
+    let path = data_dir.join("steorra.addr");
     if addr.is_empty() {
         let _ = std::fs::remove_file(&path);
         return Ok(());
@@ -534,10 +532,9 @@ fn save_steorra_addr(data_dir: &std::path::Path, addr: &str) -> Result<()> {
     Ok(())
 }
 
-/// Load steorra address. Returns empty string if not set. See
-/// save_steorra_addr for the on-disk-filename rationale.
+/// Load steorra address. Returns empty string if not set.
 fn load_steorra_addr(data_dir: &std::path::Path) -> String {
-    let path = data_dir.join("spoke.addr");
+    let path = data_dir.join("steorra.addr");
     std::fs::read_to_string(path)
         .map(|s| s.trim().to_string())
         .unwrap_or_default()

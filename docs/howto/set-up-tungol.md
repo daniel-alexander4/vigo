@@ -1,35 +1,35 @@
 
-# Set up Tungol (hub-spoke federation)
+# Set up Tungol (hub + steorras federation)
 
 You'll finish this page with a hub server fronting one or more steorra servers — each steorra owning a hostname-pattern partition of the fleet, the hub aggregating their data and routing admin queries fleet-wide. Envoys keep checking in on whatever address they originally enrolled against; the hub's job is fan-out + aggregation, not steady-state traffic.
-
-> **Naming note.** The CLI, REST routes, UI route, and metrics speak the new tungol/steorra vocabulary (`vigocli tungol`, `/api/v1/tungol/*`, `/tungol`, `vigo_tungol_steorra_*`). The YAML config block in `server.yaml` keeps the legacy `spanner:` key with `role: hub|spoke|standalone` through Phase 0 of the broader spanner→tungol redesign — operators don't have to re-edit their server.yaml mid-redesign. The block migrates in Phase 1 (both names accepted) and completes in Phase 3.
 
 **When you'd use this:** when one server can no longer comfortably hold the fleet's check-in cadence, query load, or convergence-history retention. Practical inflection points are usually north of ~5,000 envoys per server, or when you want geographic partitioning so a regional outage doesn't take the whole control plane down.
 
 **When you'd skip this:** smaller fleets (a single-server `standalone` deployment is the default and the right answer for almost every operator); fleets that need HA but not horizontal sharding (use `server/peer/` primary/secondary replication instead — see the `peer:` section in `server.yaml`).
 
-> **License requirement:** Tungol needs a paid license. The built-in free license (100 envoys) does not support hub or spoke mode; the server refuses to start with `spanner.role` set to `hub` or `spoke` on the free license. Paid licenses are bound to a specific server via [machine fingerprint](troubleshoot.md#machine-fingerprint-binding) — migrating the hub to a new machine requires a new license.
+> **License requirement:** Tungol needs a paid license. The built-in free license (100 envoys) does not support hub or spoke mode; the server refuses to start with `tungol.role` set to `hub` or `spoke` on the free license. Paid licenses are bound to a specific server via [machine fingerprint](troubleshoot.md#machine-fingerprint-binding) — migrating the hub to a new machine requires a new license.
 
 ## Enable it
 
-Three roles: `standalone` (default — no tungol config), `hub` (aggregates steorras), and `spoke` (handles its partition). Pick the role per server in `server.yaml`:
+Three roles: `standalone` (default — no tungol config), `hub` (aggregates steorras), and `spoke` (this vigosrv is one steorra in the tungol). Pick the role per server in `server.yaml`:
 
 ```yaml
 # Hub server.yaml:
-spanner:
+tungol:
   role: hub
-  spokes:
-    - hostname: spoke-east.lab
-      partition: "*.east.example.com"
-    - hostname: spoke-west.lab
-      partition: "*.west.example.com"
+  steorras:
+    - id: east
+      addr: "steorra-east.lab:1530"
+      patterns: ["*.east.example.com"]
+    - id: west
+      addr: "steorra-west.lab:1530"
+      patterns: ["*.west.example.com"]
 
-# Spoke (steorra) server.yaml:
-spanner:
+# Steorra (role: spoke) server.yaml:
+tungol:
   role: spoke
-  hub: hub.lab
-  partition: "*.east.example.com"
+  steorra_id: "east"
+  hub_addr: "hub.lab:1530"
 ```
 
 Restart each server (hub first, steorras second). The hub will start health-checking each steorra and aggregating data.
@@ -60,14 +60,14 @@ The central server that:
 - Handles license enforcement
 
 ```yaml
-spanner:
+tungol:
   role: hub
-  spokes:
+  steorras:
     - id: dc1
-      addr: "spoke1.example.com:1530"
+      addr: "steorra1.example.com:1530"
       patterns: ["*.dc1.*"]
     - id: dc2
-      addr: "spoke2.example.com:1530"
+      addr: "steorra2.example.com:1530"
       patterns: ["*.dc2.*"]
 ```
 
@@ -80,9 +80,9 @@ A partition server that:
 - Does not serve the web UI, webhooks, or bootstrap
 
 ```yaml
-spanner:
+tungol:
   role: spoke
-  spoke_id: "dc1"
+  steorra_id: "dc1"
 ```
 
 ## Enrollment Routing
@@ -119,7 +119,7 @@ Return to CLI
 
 When `vigocli config publish` runs on the hub, the config is automatically pushed to all steorras. The hub creates a tar.gz of the `.live/` directory and sends it via the `SyncConfig` RPC. Steorras extract the archive, overwrite their local `.live/` directory, and reload. This is best-effort — if a steorra is unreachable, it's skipped and logged.
 
-> The config-sync RPC path is being retired in the broader tungol redesign (ADR-025) in favor of stockpile-in-gitback distribution. Phase 0 keeps the existing RPC; the migration ships in Phase 0's later slices.
+> The config-sync RPC path is being retired in the broader tungol redesign (ADR-025) in favor of stockpile-in-gitback distribution. The migration ships in Phase 0's later slices.
 
 ## Steorra Health
 
@@ -134,9 +134,9 @@ The hub monitors steorra health via periodic gRPC probes. Steorras can also push
 Steorras can proactively report their status to the hub:
 
 ```yaml
-spanner:
+tungol:
   role: spoke
-  spoke_id: "dc1"
+  steorra_id: "dc1"
   hub_addr: "hub.example.com:1530"  # enables steorra→hub reporting
 ```
 
@@ -147,9 +147,9 @@ The steorra sends compliance metrics to the hub every 30 seconds. If the hub is 
 When the hub has peer replication configured (see the `peer:` section in `server.yaml`), each steorra should list the hub's peer addresses as fallbacks. After 3 consecutive failures on the current hub address, the steorra automatically tries the next fallback:
 
 ```yaml
-spanner:
+tungol:
   role: spoke
-  spoke_id: "dc1"
+  steorra_id: "dc1"
   hub_addr: "hub.example.com:1530"
   hub_fallback_addrs:
     - "hub-standby.example.com:1530"
@@ -163,7 +163,7 @@ The steorra cycles through all addresses (primary, then fallbacks) until one res
 The hub can automatically drain unhealthy steorras:
 
 ```yaml
-spanner:
+tungol:
   role: hub
   auto_failover:
     enabled: true
@@ -202,17 +202,17 @@ The web UI has a steorra detail page at `/tungol/steorras/{id}` showing per-steo
 ## Related
 
 - [Architecture](../reference/_index.md) — System overview
-- [Server Configuration](../reference/server-yaml.md) — `spanner:` section (legacy key, see naming note above)
-- [ADR-025: stockpile-in-gitback](../adr/025-stockpile-in-gitback.md) — the broader tungol redesign that will retire the hub-spoke RPC path
+- [Server Configuration](../reference/server-yaml.md) — `tungol:` section
+- [ADR-025: stockpile-in-gitback](../adr/025-stockpile-in-gitback.md) — the broader tungol redesign that will retire the hub-mediated config-sync RPC path
 
 ## What's next
 
 - **HA for the hub itself** → `server/peer/` primary/secondary replication. Pair it with `hub_fallback_addrs:` on every steorra so failover is transparent.
 - **A steorra is wedged** → `vigocli tungol status` shows per-steorra health; the hub auto-drains after `threshold` consecutive misses. Manually drain with `vigocli tungol steorra drain <id> --to <other>`.
 - **License is too small** → tungol needs a paid license; see [license](../reference/server-yaml.md) and [troubleshoot.md#machine-fingerprint-binding](troubleshoot.md#machine-fingerprint-binding) for fingerprint rebinds.
-- **Cross-steorra admin queries are slow** → steorra health-probe interval is `30s` by default; reduce for tighter convergence on flapping steorras (`spanner.auto_failover.interval`).
+- **Cross-steorra admin queries are slow** → steorra health-probe interval is `30s` by default; reduce for tighter convergence on flapping steorras (`tungol.auto_failover.interval`).
 
 ---
-*Verified on Vigo 0.64.1 · 2026-05-17.*
+*Verified on Vigo 0.65.0 · 2026-05-17.*
 
 *Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*
