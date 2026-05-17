@@ -87,7 +87,7 @@ RUN apk add --no-cache file >/dev/null \
 
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates sqlite-libs libpq libarchive-tools \
+RUN apk add --no-cache ca-certificates libarchive-tools \
     weasyprint ttf-liberation font-dejavu
 
 # Install litestream for SQLite WAL replication (optional backup feature).
