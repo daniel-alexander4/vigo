@@ -390,49 +390,13 @@ if $NEED_IMAGE_REBUILD; then
     # Bust all caches to ensure fresh binaries in the runtime image.
     touch "$REPO_DIR/protobuf/vigo.proto" "$REPO_DIR/agent/src/main.rs" 2>/dev/null || true
 
-    # vigo's go.mod uses `replace git.alexander4.io/tessera => ../tessera`
-    # so building needs the sibling tessera repo visible inside the Docker
-    # build context. Docker build contexts can't reach outside their root,
-    # so stage a combined tree in a tempdir: vigo as the context root,
-    # tessera copied to `.build-deps/tessera/`, and rewrite the replace
-    # directive in the staged go.mod to point at the in-context path. The
-    # real repo's go.mod is untouched.
-    TESSERA_DIR="$(dirname "$REPO_DIR")/tessera"
-    if [ ! -d "$TESSERA_DIR" ]; then
-        echo "ERROR: sibling tessera repo not found at $TESSERA_DIR" >&2
-        echo "       vigo's go.mod requires it (replace => ../tessera)." >&2
-        echo "       Clone it next to vigo: cd $(dirname "$REPO_DIR") && git clone <tessera-url>" >&2
-        exit 1
-    fi
-
+    # Stage a self-contained build context (vigo + sibling tessera) so the
+    # Docker build can resolve `replace git.alexander4.io/tessera => ../tessera`
+    # from within its own context. The real repo's go.mod is untouched.
     STAGE_DIR="$(mktemp -d -t vigo-build-XXXXXX)"
     trap 'rm -rf "$STAGE_DIR"' EXIT
     echo "Staging Docker build context at $STAGE_DIR (includes tessera)..."
-    # Mirror the repo's .dockerignore exclusions: skip the Rust target dirs
-    # (54+ GiB), host build outputs, git history, TLS certs, IDE state,
-    # Claude scratch, and test/coverage artifacts.
-    rsync -a \
-        --exclude='agent/target/' \
-        --exclude='agent/.build/' \
-        --exclude='bin/' \
-        --exclude='dist/server/' \
-        --exclude='dist/cli/' \
-        --exclude='.git/' \
-        --exclude='certs/' \
-        --exclude='.vscode/' \
-        --exclude='.idea/' \
-        --exclude='*.out' \
-        --exclude='coverage.html' \
-        --exclude='full.docker.reset.sh' \
-        --exclude='.claude/' \
-        "$REPO_DIR/" "$STAGE_DIR/"
-    mkdir -p "$STAGE_DIR/.build-deps"
-    rsync -a --exclude='.git/' --exclude='bin/' \
-        "$TESSERA_DIR/" "$STAGE_DIR/.build-deps/tessera/"
-    # Rewrite the replace directive to target the in-context path so
-    # `go mod download` inside the builder resolves tessera without
-    # needing to reach outside the Docker context.
-    sed -i 's|=> \.\./tessera|=> ./.build-deps/tessera|' "$STAGE_DIR/go.mod"
+    "$SCRIPT_DIR/stage-build-context.sh" "$REPO_DIR" "$STAGE_DIR"
 
     echo "Building Docker image from source..."
     DOCKER_BUILDKIT=1 docker build \

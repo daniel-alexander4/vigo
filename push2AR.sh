@@ -52,8 +52,14 @@ done
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 VERSION_FILE="${ROOT}/VERSION"
 DOCKERFILE="${ROOT}/Dockerfile.server"
+STAGE_DIR=""
 
-trap 'rc=$?; [[ $rc -ne 0 ]] && echo "push2AR.sh: failed at line ${LINENO} (exit ${rc})" >&2' EXIT
+cleanup() {
+    local rc=$?
+    [[ -n "$STAGE_DIR" && -d "$STAGE_DIR" ]] && rm -rf "$STAGE_DIR"
+    [[ $rc -ne 0 ]] && echo "push2AR.sh: failed at line ${LINENO} (exit ${rc})" >&2
+}
+trap cleanup EXIT
 
 [[ -f "${VERSION_FILE}" ]] || { echo "missing VERSION at ${VERSION_FILE}" >&2; exit 1; }
 [[ -f "${DOCKERFILE}" ]]   || { echo "missing ${DOCKERFILE}" >&2; exit 1; }
@@ -113,6 +119,13 @@ echo "  ${IMAGE_VERSIONED}"
 echo "  ${IMAGE_FLOATING}"
 echo
 
+# Stage a self-contained build context (vigo + sibling tessera) so the
+# Docker build can resolve `replace git.alexander4.io/tessera => ../tessera`
+# from within its own context. Cleaned up by the EXIT trap.
+STAGE_DIR="$(mktemp -d -t vigo-build-XXXXXX)"
+echo "==> staging build context at ${STAGE_DIR}"
+"${ROOT}/scripts/stage-build-context.sh" "${ROOT}" "${STAGE_DIR}"
+
 # --platform linux/amd64 guarantees the pushed image runs on customer
 # x86 hosts regardless of what arch this script runs on (e.g. arm64 Mac).
 # --pull refreshes FROM images each build so security fixes in base
@@ -122,11 +135,11 @@ echo "==> docker build"
 docker build \
     --platform linux/amd64 \
     --pull \
-    --file "${DOCKERFILE}" \
+    --file "${STAGE_DIR}/Dockerfile.server" \
     --tag "${IMAGE_VERSIONED}" \
     --tag "${IMAGE_FLOATING}" \
     --build-arg "CACHEBUST=$(date +%s)" \
-    "${ROOT}"
+    "${STAGE_DIR}"
 
 echo "==> docker push ${IMAGE_VERSIONED}"
 docker push "${IMAGE_VERSIONED}"
