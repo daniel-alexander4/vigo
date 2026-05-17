@@ -1,6 +1,6 @@
 [package]
 name = "vigo"
-version = "0.65.2"
+version = "0.65.3"
 edition = "2021"
 description = "Vigo distributed state enforcement agent"
 license = "LicenseRef-Proprietary"
@@ -22,6 +22,7 @@ hostname = "0.4"
 p256 = { version = "0.13", features = ["pkcs8", "pem"] }
 sha2 = "0.10"
 sha-crypt = "0.5"
+hkdf = "0.12"
 hex = "0.4"
 base64 = "0.22"
 age = { version = "0.11", default-features = false }

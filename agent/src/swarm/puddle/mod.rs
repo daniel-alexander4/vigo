@@ -36,6 +36,11 @@
 //!   that runs in the daemon's swarm-server context.
 //! - `session.rs` — `setsid`-detached per-user session helper
 //!   holding the unwrapped Ed25519 SigningKey in memory.
+//! - `service_session.rs` — sibling helper for the vigosrv
+//!   service-account puddle (ADR-025 Slice 1b). System-wide socket
+//!   at `/var/run/vigo/puddle.sock`, unwraps `identity.wrapped`
+//!   from disk using an HKDF-derived wrap key from the secrets
+//!   master key, SO_PEERCRED-gated to the vigosrv runtime uid.
 
 pub mod cli;
 pub mod codes;
@@ -45,6 +50,7 @@ pub mod names_bootstrap;
 pub mod names_cache;
 pub mod pair;
 pub mod rekey;
+pub mod service_session;
 pub mod session;
 
 use std::path::Path;

@@ -3898,7 +3898,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vigo"
-version = "0.65.2"
+version = "0.65.3"
 dependencies = [
  "age",
  "anyhow",
@@ -3910,6 +3910,7 @@ dependencies = [
  "ed25519-dalek",
  "heed",
  "hex",
+ "hkdf",
  "hostname",
  "http-body-util",
  "hyper",

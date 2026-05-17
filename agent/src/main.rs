@@ -138,6 +138,16 @@ enum Commands {
     SelfFleetSessionDaemon {
         args: Vec<String>,
     },
+    /// Hidden: service-account puddle helper daemon (ADR-025 Slice 1b).
+    /// Started by the agent at boot if `/srv/vigo/puddle/identity.wrapped`
+    /// exists; unwraps the service-account Ed25519 identity using the
+    /// HKDF-derived wrap key from the secrets master key, binds
+    /// `/var/run/vigo/puddle.sock` (0600, SO_PEERCRED-gated to the
+    /// wrap-file owner uid), serves SIGN / PUBKEY / STATUS. No idle
+    /// timeout; reloads on identity / salt / master-key mtime change.
+    ServicePuddleDaemon {
+        args: Vec<String>,
+    },
     /// Hidden: fleet-wide swarm-cache cleanup. Dispatched by the
     /// server when an admin runs `vigocli swarm cleanup`. Walks the
     /// blob cache, removes dangling `files/<label>` symlinks (target
@@ -340,6 +350,9 @@ fn parse_args() -> Result<Cli> {
             }
             "puddle-session-daemon" => {
                 Commands::SelfFleetSessionDaemon { args: positional[1..].to_vec() }
+            }
+            "service-puddle-daemon" => {
+                Commands::ServicePuddleDaemon { args: positional[1..].to_vec() }
             }
             other => bail!("unknown command: {}\nRun with --help for usage", other),
         });
@@ -998,6 +1011,15 @@ fn print_trace(
 
 /// Run the daemon loop with polling + streaming modes.
 async fn run_daemon(cli: &Cli) -> Result<()> {
+    // Service-account puddle helper (ADR-025 Slice 1b). No-op on
+    // envoys that aren't co-located with a vigosrv (the wrap file
+    // won't exist). Idempotent: skipped if a live helper is already
+    // bound to /var/run/vigo/puddle.sock. Spawned detached so it
+    // outlives every agent restart and serves SIGN / PUBKEY to
+    // root-side helpers that need the service-account identity
+    // without re-deriving the wrap key per call.
+    vigo::swarm::puddle::service_session::try_spawn_helper();
+
     // Self-heal the systemd unit file at startup so envoys whose
     // binary was deployed via a path that bypassed `update::apply`
     // (manual `scp` + `systemctl restart`, package install, image
@@ -1764,6 +1786,13 @@ async fn async_main() -> Result<()> {
             // Hidden: puddle session helper daemon entry point.
             // Spawned by `vigo swarm puddle unlock`.
             vigo::swarm::puddle::session::daemon_main(args.clone()).await
+        }
+
+        Some(Commands::ServicePuddleDaemon { args }) => {
+            // Hidden: service-account puddle helper daemon entry point.
+            // Spawned at agent boot by `try_spawn_service_puddle_helper`
+            // when `/srv/vigo/puddle/identity.wrapped` exists.
+            vigo::swarm::puddle::service_session::daemon_main(args.clone()).await
         }
 
         Some(Commands::Curator { args }) => {
