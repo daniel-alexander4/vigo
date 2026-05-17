@@ -30,12 +30,6 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 
 var _ = time.Now // used by format
 
-// configSyncer is implemented by tungol.Hub to push config to steorras.
-// Defined as an interface to avoid an import cycle.
-type configSyncer interface {
-	SyncConfigToSteorras(ctx context.Context, configDir string) error
-}
-
 // auditRecorder is the interface for the tamper-evident audit writer.
 // Using an interface lets callers pass nil safely and avoids tight coupling.
 type auditRecorder interface {
@@ -54,13 +48,14 @@ func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, source,
 }
 
 // ConfigHandler provides REST endpoints for config publish history,
-// versioning, rollback, and reload.
+// versioning, rollback, and reload. In tungol mode stockpile
+// distribution is gitback-driven (per ADR-025 Slice 4) — the hub
+// no longer fans the stockpile out via gRPC.
 type ConfigHandler struct {
 	queries            *db.Queries
 	configStore        *config.ConfigStore
 	fleetIndex         *fleet.FleetIndex
-	hub                configSyncer // nil unless hub mode
-	convergenceMonitor  *publish.ConvergenceMonitor
+	convergenceMonitor *publish.ConvergenceMonitor
 	publishCfg         config.PublishSection
 	aiCfg              config.AISection
 	assistant          *ai.Assistant // nil when AI is not enabled
@@ -68,8 +63,8 @@ type ConfigHandler struct {
 }
 
 // NewConfigHandler creates a ConfigHandler.
-func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore, fleetIndex *fleet.FleetIndex, hub configSyncer) *ConfigHandler {
-	return &ConfigHandler{queries: queries, configStore: configStore, fleetIndex: fleetIndex, hub: hub}
+func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore, fleetIndex *fleet.FleetIndex) *ConfigHandler {
+	return &ConfigHandler{queries: queries, configStore: configStore, fleetIndex: fleetIndex}
 }
 
 // SetConvergenceMonitor configures the blast-radius compliance monitor and
@@ -107,6 +102,7 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("GET /api/v1/config/publishes", read(http.HandlerFunc(h.ListPublishes)))
 	mux.Handle("POST /api/v1/config/publishes", publish(http.HandlerFunc(h.RecordPublish)))
 	mux.Handle("GET /api/v1/config/publishes/{id}", read(http.HandlerFunc(h.GetPublish)))
+	mux.Handle("GET /api/v1/config/version", read(http.HandlerFunc(h.GetVersion)))
 	mux.Handle("GET /api/v1/config/versions", read(http.HandlerFunc(h.ListVersions)))
 	mux.Handle("POST /api/v1/config/rollback/{version}", rollback(http.HandlerFunc(h.Rollback)))
 	mux.Handle("POST /api/v1/config/freeze", publish(http.HandlerFunc(h.Freeze)))
@@ -119,10 +115,20 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/secrets/event", admin(http.HandlerFunc(h.SecretsLifecycleEvent)))
 }
 
+// GetVersion returns the current in-memory config-store version,
+// which monotonically increments on every successful reload. Used by
+// `vigocli config publish` in tungol mode to poll for "did the
+// gitback push land in .live/?" — operator sends publish, records
+// pre-version, then polls until version increments.
+func (h *ConfigHandler) GetVersion(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"version": h.configStore.Version(),
+	})
+}
+
 // ReloadConfig re-reads all config files from disk. Called by vigocli
-// after config publish syncs files to .live/. In hub mode, also pushes the
-// config to all steorras via gRPC (best-effort — steorra failures are logged
-// but do not fail the reload).
+// in standalone mode and by the stockpile watcher in tungol mode
+// (after bare→.live pull on every ref change).
 //
 // When a compliance threshold is configured, starts a background monitor
 // that watches fleet compliance for the rollback window. If compliance drops
@@ -131,15 +137,6 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 	if err := h.configStore.Reload(); err != nil {
 		writeError(w, http.StatusInternalServerError, "config reload failed: "+err.Error())
 		return
-	}
-
-	// In hub mode, push config to all steorras after successful local reload.
-	if h.hub != nil {
-		configDir := h.configStore.Dir()
-		if err := h.hub.SyncConfigToSteorras(r.Context(), configDir); err != nil {
-			slog.Error("config sync to steorras failed", "error", err)
-			// Best-effort: don't fail the reload response.
-		}
 	}
 
 	// Start blast-radius compliance monitor if threshold is configured.

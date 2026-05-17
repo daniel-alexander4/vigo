@@ -209,11 +209,6 @@ service VigoAdmin {
   // Called tungol-internal to set reassign_addr/reassign_id on the envoy.
   rpc SetReassignment(SetReassignmentRequest) returns (SetReassignmentResponse);
 
-  // SyncConfig pushes the publishing steorra's live config to another
-  // steorra as a tar.gz archive (legacy hub-spoke path; replaced by the
-  // gitback-based stockpile distribution in later slices).
-  rpc SyncConfig(SyncConfigRequest) returns (SyncConfigResponse);
-
   // ReportSteorraStatus receives periodic status reports from steorras
   // pushed proactively (push health/compliance metrics into the tungol).
   rpc ReportSteorraStatus(SteorraStatusReport) returns (SteorraStatusAck);
@@ -925,16 +920,6 @@ message DrainSteorraResponse {
   int32 failed = 2;
   repeated string errors = 3;
 }
-
-// =============================================================================
-// Config sync messages (tungol-internal; legacy hub-spoke path)
-// =============================================================================
-
-message SyncConfigRequest {
-  bytes config_archive = 1;  // tar.gz of the worksite/structure/ config directory
-}
-
-message SyncConfigResponse {}
 
 // =============================================================================
 // Steorra status reporting messages (steorra → tungol observer)

@@ -21,7 +21,7 @@ import (
 func TestConfig_RecordPublish(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), nil)
+	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex())
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -57,7 +57,7 @@ func TestConfig_ListPublishes(t *testing.T) {
 		}
 	}
 
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), nil)
+	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex())
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -91,7 +91,7 @@ func TestConfig_GetPublish(t *testing.T) {
 		t.Fatalf("insert publish: %v", err)
 	}
 
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), nil)
+	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex())
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -118,7 +118,7 @@ func TestConfig_GetPublish(t *testing.T) {
 func TestConfig_GetPublishNotFound(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), nil)
+	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex())
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -134,7 +134,7 @@ func TestConfig_GetPublishNotFound(t *testing.T) {
 func TestConfig_Freeze(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), nil)
+	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex())
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -167,7 +167,7 @@ func TestConfig_Freeze(t *testing.T) {
 func TestConfig_FreezeInvalidTimestamp(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), nil)
+	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex())
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -185,7 +185,7 @@ func TestConfig_FreezeInvalidTimestamp(t *testing.T) {
 func TestConfig_Unfreeze(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), nil)
+	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex())
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 

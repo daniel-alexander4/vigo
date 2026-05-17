@@ -167,4 +167,32 @@ Other ops-puddle members will receive the stockpile after the next push
 (landing in Slice 4 — today's init seeds the founder side only).
 ```
 
-Joining-vigosrv flow (`vigocli tungol stockpile join`) + cross-vigosrv distribution + the `vigocli config publish` behavior switch land in Slice 4.
+## stockpile join
+
+Creates local stockpile project state on a vigosrv that has just joined the ops-puddle (via `tungol ops-puddle join`). The `project_id` is deterministic from the ops-puddle pubkey + the fixed handle `"stockpile"`, so every member computes the same id and every member's chain verifies against the shared ops-puddle pubkey.
+
+After local state lands, the gitback catch-up reactor pulls the stockpile bytes from any reachable ops-puddle member (LAN multicast discovery or `cross_subnet_members`). The stockpile watcher then syncs bare→`.live` and triggers `configStore.Reload()` automatically.
+
+Preconditions:
+
+- `tungol.role != standalone`.
+- Ops-puddle exists locally (`tungol ops-puddle join --from <member> --code <c>` first).
+- No local stockpile state yet — re-running on an already-joined vigosrv errors with "already locally tracked".
+
+```
+$ vigocli tungol stockpile join
+Stockpile project state created
+  Project ID:    8f5e2b7c91d4a3f6e88c7d2b1a9f5e3d4c6b8a7f9e2d1c5b8a3f7e6d2c4b9a8f5
+  State dir:     /srv/vigo/ops-puddle/.vigo-gitback/8f5e2b7c…a8f5/
+
+The gitback catch-up reactor will pull stockpile bytes from a
+reachable ops-puddle member shortly (LAN multicast or cross-
+subnet members). The stockpile watcher syncs bare→.live and
+reloads on arrival.
+```
+
+## Publish flow in tungol mode (Slice 4)
+
+`vigocli config publish` detects tungol mode via `/api/v1/tungol/status` and switches to a gitback-driven push: clone the stockpile bare repo into a temp work tree, mirror this vigosrv's on-disk `/srv/vigo/stacks/stockpile/` into the work tree (delete-aware), `git add -A` + `git commit` + `git push` via `file://` to the bare repo. The push triggers the stockpile watcher's bare→`.live` pull + `configStore.Reload()`; vigocli polls `/api/v1/config/version` until it increments (30s timeout) to confirm the publish landed.
+
+Standalone mode (`tungol.role == standalone` or no tungol section) is unchanged: validate stockpile, write to `.live/` directly, POST `/api/v1/config/reload`. The pre-Slice-4 hub-fanout `SyncConfig` gRPC RPC + `Hub.SyncConfigToSteorras` are retired — tungol-mode publishes go through gitback exclusively.

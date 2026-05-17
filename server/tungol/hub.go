@@ -12,15 +12,10 @@
 package tungol
 
 import (
-	"archive/tar"
-	"bytes"
-	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io"
-	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -573,102 +568,6 @@ func (h *Hub) DrainSteorra(ctx context.Context, steorraID, targetSteorraID strin
 
 	slog.Info("steorra drained", "steorra_id", steorraID, "moved", result.Moved, "failed", result.Failed)
 	return result, nil
-}
-
-// SyncConfigToSteorras creates a tar.gz archive of the config directory and
-// pushes it to all steorras via the SyncConfig RPC. Best-effort: logs failures
-// but returns nil on partial success. Only returns an error if the archive
-// cannot be created at all.
-func (h *Hub) SyncConfigToSteorras(ctx context.Context, configDir string) error {
-	archive, err := createConfigArchive(configDir)
-	if err != nil {
-		return fmt.Errorf("creating config archive: %w", err)
-	}
-
-	slog.Info("syncing config to steorras", "archive_bytes", len(archive), "steorras", len(h.steorras))
-
-	results := h.fanOut(ctx, func(ctx context.Context, sc steorraConn) (any, error) {
-		steorraCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-		return sc.admin.SyncConfig(steorraCtx, &pb.SyncConfigRequest{
-			ConfigArchive: archive,
-		})
-	})
-
-	for _, r := range results {
-		if r.err != nil {
-			slog.Warn("config sync to steorra failed", "steorra_id", r.steorraID, "error", r.err)
-		} else {
-			slog.Info("config synced to steorra", "steorra_id", r.steorraID)
-		}
-	}
-
-	return nil
-}
-
-// createConfigArchive creates a tar.gz archive of the given directory in memory.
-// Files are archived with paths relative to the directory root.
-func createConfigArchive(dir string) ([]byte, error) {
-	var buf bytes.Buffer
-	gw := gzip.NewWriter(&buf)
-	tw := tar.NewWriter(gw)
-
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		rel, err := filepath.Rel(dir, path)
-		if err != nil {
-			return err
-		}
-		// Skip the root directory itself.
-		if rel == "." {
-			return nil
-		}
-
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-
-		header, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return err
-		}
-		// Use forward-slash relative paths in the archive.
-		header.Name = filepath.ToSlash(rel)
-
-		if err := tw.WriteHeader(header); err != nil {
-			return err
-		}
-
-		if d.IsDir() {
-			return nil
-		}
-
-		f, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		if _, err := io.Copy(tw, f); err != nil {
-			return err
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	if err := tw.Close(); err != nil {
-		return nil, err
-	}
-	if err := gw.Close(); err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
 }
 
 // buildClientTLS creates TLS credentials for the hub's connections to steorras.

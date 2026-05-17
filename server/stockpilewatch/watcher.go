@@ -24,8 +24,11 @@ package stockpilewatch
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -47,19 +50,31 @@ type ConfigReloader interface {
 // under a second.
 const QuiesceDebounce = 250 * time.Millisecond
 
-// Watcher monitors a single project's bare-repo refs dir.
+// Watcher monitors a single project's bare-repo refs dir and, on
+// detected ref change, pulls the project's HEAD content into the
+// `.live/` dir and triggers a config reload (ADR-025 Slice 4).
+//
+// `git archive HEAD | tar -x` is the pull mechanism — no working
+// git tree in `.live/`, just a snapshot of the latest commit. The
+// sync into `.live/` is delete-aware (files removed from the
+// stockpile are removed from `.live/`).
 type Watcher struct {
+	bareRepo string
+	liveDir  string
 	refsDir  string
 	reloader ConfigReloader
 }
 
-// New returns a Watcher for the project at projectsRoot/<projectIDHex>.git.
-// projectsRoot is typically `/var/lib/vigo/swarm/gitback/projects` and
-// projectIDHex is the hex of the stockpile project_id (looked up by
-// the caller from /srv/vigo/ops-puddle/.vigo-gitback/).
-func New(projectsRoot, projectIDHex string, reloader ConfigReloader) *Watcher {
+// New returns a Watcher for the project at projectsRoot/<projectIDHex>.git
+// whose HEAD content syncs into liveDir on every ref-change settle.
+// projectsRoot is typically `/var/lib/vigo/swarm/gitback/projects`,
+// projectIDHex is the hex of the stockpile project_id, and liveDir
+// is typically `/srv/vigo/stacks/.live`.
+func New(projectsRoot, projectIDHex, liveDir string, reloader ConfigReloader) *Watcher {
 	repoDir := filepath.Join(projectsRoot, projectIDHex+".git")
 	return &Watcher{
+		bareRepo: repoDir,
+		liveDir:  liveDir,
 		refsDir:  filepath.Join(repoDir, "refs"),
 		reloader: reloader,
 	}
@@ -145,13 +160,150 @@ func (w *Watcher) Run(ctx context.Context) error {
 			fireC = nil
 			quiesce = nil
 			start := time.Now()
+			if err := w.pullIntoLive(); err != nil {
+				slog.Error("stockpilewatch: bare→.live pull failed; skipping reload",
+					"error", err,
+					"bare_repo", w.bareRepo,
+					"live_dir", w.liveDir,
+				)
+				continue
+			}
 			if err := w.reloader.Reload(); err != nil {
 				slog.Error("stockpilewatch: config reload failed", "error", err)
 			} else {
-				slog.Info("stockpilewatch: config reload complete",
+				slog.Info("stockpilewatch: bare→.live pull + reload complete",
 					"elapsed_ms", time.Since(start).Milliseconds(),
 				)
 			}
 		}
 	}
+}
+
+// pullIntoLive runs `git archive HEAD | tar -x` from the bare repo
+// into a temp dir, then syncs the temp into `.live/` with
+// delete-awareness (anything in `.live/` not present in HEAD is
+// removed). No working git tree lands in `.live/` — operators
+// inspecting it still see plain YAML.
+//
+// On bare repos with no commits yet (e.g. between project founding
+// and the first push), `git archive HEAD` fails with a clear
+// error; the watcher logs and skips the reload — `.live/` keeps
+// whatever it had.
+func (w *Watcher) pullIntoLive() error {
+	tmp, err := os.MkdirTemp("", "vigo-stockpile-pull-*")
+	if err != nil {
+		return fmt.Errorf("creating temp pull dir: %w", err)
+	}
+	defer os.RemoveAll(tmp)
+
+	// `git archive --format=tar HEAD` writes a tarball of HEAD's
+	// tree to stdout. Pipe through `tar -x` to materialize in tmp.
+	// Use a single shell command so the pipe is set up by the
+	// shell — no Go-side plumbing needed.
+	archive := exec.Command("git", "--git-dir="+w.bareRepo, "archive", "--format=tar", "HEAD")
+	untar := exec.Command("tar", "-xf", "-", "-C", tmp)
+	pipeR, pipeW := io.Pipe()
+	archive.Stdout = pipeW
+	untar.Stdin = pipeR
+	if err := archive.Start(); err != nil {
+		return fmt.Errorf("starting git archive: %w", err)
+	}
+	if err := untar.Start(); err != nil {
+		archive.Process.Kill()
+		return fmt.Errorf("starting tar -x: %w", err)
+	}
+	// Close the writer once archive finishes so tar sees EOF.
+	go func() {
+		archive.Wait()
+		pipeW.Close()
+	}()
+	if err := untar.Wait(); err != nil {
+		return fmt.Errorf("tar -x: %w", err)
+	}
+	if err := archive.Wait(); err != nil {
+		return fmt.Errorf("git archive HEAD (no commits yet?): %w", err)
+	}
+
+	// Ensure live dir exists.
+	if err := os.MkdirAll(w.liveDir, 0o755); err != nil {
+		return fmt.Errorf("creating live dir %s: %w", w.liveDir, err)
+	}
+
+	// Delete files in live/ that aren't in tmp/.
+	if err := pruneMissing(w.liveDir, tmp); err != nil {
+		return fmt.Errorf("pruning live dir: %w", err)
+	}
+	// Copy tmp/ over live/ (adds + updates; preserved files are
+	// just overwritten with identical content — cheap).
+	if err := copyTree(tmp, w.liveDir); err != nil {
+		return fmt.Errorf("copying into live dir: %w", err)
+	}
+	return nil
+}
+
+// pruneMissing walks `dst` and removes any file or directory whose
+// relative path doesn't exist under `src`. Symmetric `git rm` for
+// the .live/ dir without depending on git.
+func pruneMissing(dst, src string) error {
+	return filepath.Walk(dst, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(dst, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		srcCounterpart := filepath.Join(src, rel)
+		if _, statErr := os.Stat(srcCounterpart); os.IsNotExist(statErr) {
+			if info.IsDir() {
+				if err := os.RemoveAll(path); err != nil {
+					return err
+				}
+				return filepath.SkipDir
+			}
+			return os.Remove(path)
+		}
+		return nil
+	})
+}
+
+// copyTree recursively copies src/* into dst/, preserving relative
+// paths. Used in lockstep with pruneMissing to achieve
+// rsync-with-delete semantics.
+func copyTree(src, dst string) error {
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		target := filepath.Join(dst, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, info.Mode().Perm())
+		}
+		if info.Mode().IsRegular() {
+			in, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer in.Close()
+			out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
+			if err != nil {
+				return err
+			}
+			defer out.Close()
+			_, err = io.Copy(out, in)
+			return err
+		}
+		// Symlinks / specials: skip (stockpile is plain files).
+		return nil
+	})
 }

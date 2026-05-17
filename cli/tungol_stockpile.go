@@ -51,6 +51,27 @@ and the bare repo at /var/lib/vigo/swarm/gitback/projects/<project-id>.git.`,
 	RunE: runTungolStockpileInit,
 }
 
+var tungolStockpileJoinCmd = &cobra.Command{
+	Use:   "join",
+	Short: "Create local stockpile gitback project state on a vigosrv that joined the ops-puddle",
+	Long: `For joining vigosrvs (post-ops-puddle-join). Calls the helper's
+FOUND_OPS_PROJECT to create local project state for the stockpile
+project — the project_id is deterministic (sha256(ops-puddle pubkey,
+"stockpile")) so every member computes the same id and chains all
+verify against the shared ops-puddle pubkey.
+
+After state lands, the existing gitback catch-up reactor pulls the
+bytes from any reachable peer (LAN multicast discovery or
+cross_subnet_members). The stockpile watcher then pulls bare→.live
+and triggers configStore.Reload().
+
+Preconditions:
+  - tungol.role != standalone
+  - ops-puddle exists locally (joined via 'tungol ops-puddle join')
+  - no local stockpile state yet`,
+	RunE: runTungolStockpileJoin,
+}
+
 func init() {
 	tungolStockpileInitCmd.Flags().String(
 		"source",
@@ -70,10 +91,12 @@ func init() {
 
 	tungolCmd.AddCommand(tungolStockpileCmd)
 	tungolStockpileCmd.AddCommand(tungolStockpileInitCmd)
+	tungolStockpileCmd.AddCommand(tungolStockpileJoinCmd)
 
-	// Init writes ops-puddle-derived state on disk — same operator-side
-	// gate as the other ops-puddle write verbs.
+	// Init + join both write ops-puddle-derived state on disk — same
+	// operator-side gate as the other ops-puddle write verbs.
 	tungolStockpileInitCmd.PreRunE = requireUnlockedAlways
+	tungolStockpileJoinCmd.PreRunE = requireUnlockedAlways
 }
 
 // stockpileHandle is the fixed handle for the stockpile gitback project.
@@ -322,5 +345,63 @@ func runGit(dir string, args ...string) error {
 	if err != nil {
 		return fmt.Errorf("git %s: %w (output: %s)", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
+	return nil
+}
+
+func runTungolStockpileJoin(cmd *cobra.Command, _ []string) error {
+	opsDir, _ := cmd.Flags().GetString("ops-puddle-dir")
+	socketPath, _ := cmd.Flags().GetString("helper-socket")
+
+	// Precondition: ops-puddle exists locally.
+	opsPubkeyPath := puddle.PubkeyPath(opsDir)
+	if _, err := os.Stat(opsPubkeyPath); err != nil {
+		return fmt.Errorf(
+			"no ops-puddle at %s: %w (run `vigocli tungol ops-puddle join --from <existing-member> --code <code>` first)",
+			opsDir, err,
+		)
+	}
+
+	// Precondition: tungol mode (not standalone).
+	client := newAPIClient()
+	var status struct {
+		Role string `json:"role"`
+	}
+	if err := client.get("/api/v1/tungol/status", &status); err != nil {
+		return fmt.Errorf("cannot reach local vigosrv to check tungol role: %w", err)
+	}
+	if status.Role == "" || status.Role == "standalone" {
+		return fmt.Errorf(
+			"this vigosrv is %q — stockpile join only applies in tungol mode",
+			status.Role,
+		)
+	}
+
+	// Call FOUND_OPS_PROJECT. project_id is deterministic from
+	// (ops-puddle pubkey, "stockpile") so the joiner ends up with
+	// the same id the founder used; both chains verify against the
+	// shared ops-puddle pubkey.
+	projectIDHex, err := callHelper(
+		socketPath,
+		fmt.Sprintf("FOUND_OPS_PROJECT %s %s", stockpileHandle, stockpileScope),
+	)
+	if err != nil {
+		// If the project state already exists locally the helper
+		// surfaces an "already exists" error from mint_founder_project;
+		// surface that distinctly so operators don't re-run pointlessly.
+		if strings.Contains(err.Error(), "already exists") {
+			return fmt.Errorf("stockpile project already locally tracked; nothing to join")
+		}
+		return fmt.Errorf("creating local stockpile project state: %w", err)
+	}
+	projectIDHex = strings.TrimSpace(projectIDHex)
+
+	fmt.Printf("Stockpile project state created\n")
+	fmt.Printf("  Project ID:    %s\n", projectIDHex)
+	fmt.Printf("  State dir:     %s/.vigo-gitback/%s/\n", opsDir, projectIDHex)
+	fmt.Println()
+	fmt.Printf("The gitback catch-up reactor will pull stockpile bytes from a\n")
+	fmt.Printf("reachable ops-puddle member shortly (LAN multicast or cross-\n")
+	fmt.Printf("subnet members). The stockpile watcher syncs bare→.live and\n")
+	fmt.Printf("reloads on arrival.\n")
 	return nil
 }

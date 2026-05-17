@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strings"
@@ -20,6 +21,7 @@ import (
 
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/publish"
+	"git.alexander4.io/vigo/server/puddle"
 	"github.com/spf13/cobra"
 )
 
@@ -357,12 +359,227 @@ func streamPublishSSE(body io.Reader) error {
 	return scanner.Err()
 }
 
-// reloadServer tells the server to re-read config from .live/ (best-effort).
+// reloadServer dispatches the post-publish reload either through the
+// legacy stockpile→.live local-write + REST-reload path (standalone)
+// or through the tungol-mode gitback push (which is what triggers
+// the stockpile watcher's bare→.live pull + reload). Detection is
+// via /api/v1/tungol/status; failure to detect falls back to the
+// legacy path so misconfigured deployments still get something.
 func reloadServer() {
+	client := newAPIClient()
+	var status struct {
+		Role string `json:"role"`
+	}
+	if err := client.get("/api/v1/tungol/status", &status); err != nil {
+		// Can't even talk to the server — keep the legacy fallback so
+		// operators see the same error they'd see today.
+		legacyReloadServer()
+		return
+	}
+	if status.Role == "" || status.Role == "standalone" {
+		legacyReloadServer()
+		return
+	}
+	if err := publishViaGitback(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: tungol gitback publish failed: %v\n", err)
+	}
+}
+
+func legacyReloadServer() {
 	client := newAPIClient()
 	if err := client.post("/api/v1/config/reload", nil, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: server reload failed (%v) — restart the server to pick up changes\n", err)
 	}
+}
+
+// publishViaGitback is the tungol-mode publish path (ADR-025 Slice 4):
+// clone the stockpile bare repo into a temp work tree, mirror this
+// vigosrv's on-disk stockpile/ into it (delete-aware), git add+commit+
+// push via file://, then poll the server's config version until the
+// stockpile watcher's bare→.live pull + Reload increments it. The
+// version-poll is the operator-visible signal that the publish landed.
+func publishViaGitback() error {
+	opsDir := puddle.OpsDefaultDir
+	projectIDHex, err := publishLookupStockpileProjectID(opsDir)
+	if err != nil {
+		return err
+	}
+	bareRepoPath := filepath.Join("/var/lib/vigo/swarm/gitback/projects", projectIDHex+".git")
+	if _, err := os.Stat(bareRepoPath); err != nil {
+		return fmt.Errorf("stockpile bare repo missing at %s: %w (run `vigocli tungol stockpile init` on the founding vigosrv first)", bareRepoPath, err)
+	}
+
+	preVersion, err := publishGetConfigVersion()
+	if err != nil {
+		return fmt.Errorf("reading pre-publish config version: %w", err)
+	}
+
+	workTree, err := os.MkdirTemp("", "vigo-publish-*")
+	if err != nil {
+		return fmt.Errorf("creating temp work tree: %w", err)
+	}
+	defer os.RemoveAll(workTree)
+
+	if err := publishRunGit("", "clone", bareRepoPath, workTree); err != nil {
+		return fmt.Errorf("cloning bare repo: %w", err)
+	}
+
+	// Mirror /srv/vigo/stacks/stockpile/ → workTree (delete-aware).
+	if err := publishMirrorIntoWorkTree(publish.StockpileDir, workTree); err != nil {
+		return fmt.Errorf("mirroring stockpile into work tree: %w", err)
+	}
+
+	// Configure committer identity (gitback verifies on signature, not
+	// these fields, but git refuses to commit without something here).
+	for _, kv := range [][]string{
+		{"user.name", "vigo config publish"},
+		{"user.email", "publish@vigo.local"},
+	} {
+		if err := publishRunGit(workTree, "config", kv[0], kv[1]); err != nil {
+			return fmt.Errorf("git config %s: %w", kv[0], err)
+		}
+	}
+	if err := publishRunGit(workTree, "add", "-A", "."); err != nil {
+		return fmt.Errorf("git add -A: %w", err)
+	}
+	// Anything staged? `diff --cached --quiet` exits 0 when there is
+	// nothing to commit, non-zero otherwise. Exit 0 = nothing to push.
+	if err := publishRunGit(workTree, "diff", "--cached", "--quiet"); err == nil {
+		fmt.Println("Nothing to publish — bare repo already matches stockpile.")
+		return nil
+	}
+	if err := publishRunGit(workTree, "commit", "-m", "publish"); err != nil {
+		return fmt.Errorf("git commit: %w", err)
+	}
+	if err := publishRunGit(workTree, "push", "origin", "main"); err != nil {
+		return fmt.Errorf("git push to bare repo: %w", err)
+	}
+
+	// Poll for the watcher to land the bare→.live pull + reload. The
+	// debounce is 250ms; reload itself is sub-100ms typical. 30s is
+	// generous for any reasonable stockpile size.
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		v, err := publishGetConfigVersion()
+		if err == nil && v > preVersion {
+			fmt.Printf("Published; watcher confirmed reload (config version %d → %d).\n", preVersion, v)
+			return nil
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	return fmt.Errorf("watcher did not confirm reload within 30s (pre-version %d); check `journalctl -u vigosrv` for stockpilewatch errors", preVersion)
+}
+
+func publishGetConfigVersion() (uint64, error) {
+	client := newAPIClient()
+	var resp struct {
+		Version uint64 `json:"version"`
+	}
+	if err := client.get("/api/v1/config/version", &resp); err != nil {
+		return 0, err
+	}
+	return resp.Version, nil
+}
+
+// publishLookupStockpileProjectID walks <opsDir>/.vigo-gitback/<id>/
+// project.json files for the entry whose handle is "stockpile".
+// Mirrors server/main.go's lookupStockpileProjectID — duplicated
+// rather than factored to keep cli/ free of imports from server/main.
+func publishLookupStockpileProjectID(opsDir string) (string, error) {
+	gitbackDir := filepath.Join(opsDir, ".vigo-gitback")
+	entries, err := os.ReadDir(gitbackDir)
+	if err != nil {
+		return "", fmt.Errorf("reading %s: %w", gitbackDir, err)
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		configPath := filepath.Join(gitbackDir, e.Name(), "project.json")
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			continue
+		}
+		var cfg struct {
+			Handle string `json:"handle"`
+		}
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			continue
+		}
+		if cfg.Handle == "stockpile" {
+			return e.Name(), nil
+		}
+	}
+	return "", fmt.Errorf("no stockpile project state under %s — run `vigocli tungol stockpile init` (founder) or `tungol stockpile join` (joiner)", gitbackDir)
+}
+
+// publishMirrorIntoWorkTree clears src out of workTree (preserving
+// .git/) then copies fresh src/ contents in. After this call the work
+// tree's HEAD vs disk diff reflects exactly the stockpile→bare delta.
+func publishMirrorIntoWorkTree(src, workTree string) error {
+	// Step 1: remove every top-level entry in workTree except .git.
+	entries, err := os.ReadDir(workTree)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if e.Name() == ".git" {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(workTree, e.Name())); err != nil {
+			return err
+		}
+	}
+	// Step 2: copy src/* into workTree.
+	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		if rel == ".git" && info.IsDir() {
+			return filepath.SkipDir
+		}
+		target := filepath.Join(workTree, rel)
+		if info.IsDir() {
+			return os.MkdirAll(target, info.Mode().Perm())
+		}
+		if info.Mode().IsRegular() {
+			in, err := os.Open(path)
+			if err != nil {
+				return err
+			}
+			defer in.Close()
+			out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
+			if err != nil {
+				return err
+			}
+			defer out.Close()
+			_, err = io.Copy(out, in)
+			return err
+		}
+		return nil
+	})
+}
+
+// publishRunGit is the publish-flow's git invocation helper —
+// parallel to tungol_stockpile.go's runGit; duplicated to keep this
+// file self-contained.
+func publishRunGit(dir string, args ...string) error {
+	cmd := exec.Command("git", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git %s: %w (output: %s)", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 // recordPublish sends publish metadata to the server for audit (best-effort).

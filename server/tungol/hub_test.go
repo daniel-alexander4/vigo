@@ -194,10 +194,6 @@ func (m *mockAdminClient) ListPackageDrift(context.Context, *pb.ListPackageDrift
 func (m *mockAdminClient) ReportSteorraStatus(context.Context, *pb.SteorraStatusReport, ...grpc.CallOption) (*pb.SteorraStatusAck, error) {
 	return nil, status.Error(codes.Unimplemented, "not mocked")
 }
-func (m *mockAdminClient) SyncConfig(context.Context, *pb.SyncConfigRequest, ...grpc.CallOption) (*pb.SyncConfigResponse, error) {
-	return &pb.SyncConfigResponse{}, nil
-}
-
 // newTestHub builds a Hub with mock steorra connections (no real gRPC).
 func newTestHub(steorras ...steorraConn) *Hub {
 	return &Hub{steorras: steorras}

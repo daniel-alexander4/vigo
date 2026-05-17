@@ -908,6 +908,7 @@ func run() error {
 			watcher := stockpilewatch.New(
 				"/var/lib/vigo/swarm/gitback/projects",
 				pid,
+				publish.LiveDir,
 				configStore,
 			)
 			go func() {

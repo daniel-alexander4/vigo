@@ -79,12 +79,11 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	configTraceHandler.RegisterRoutes(mux)
 
 	// Mount config publish history, versioning, rollback, and reload.
-	// Pass hub as configSyncer only if non-nil (nil *Hub wrapped in interface is non-nil).
-	var cfgSyncer configSyncer
-	if hub != nil {
-		cfgSyncer = hub
-	}
-	configHandler := NewConfigHandler(queries, configStore, fleetIndex, cfgSyncer)
+	// Tungol-mode stockpile distribution is gitback-driven (ADR-025
+	// Slice 4); the hub-fanout SyncConfig path retired with that
+	// slice. ConfigHandler no longer needs a hub reference.
+	_ = hub
+	configHandler := NewConfigHandler(queries, configStore, fleetIndex)
 	configHandler.SetAuditWriter(aw)
 	if assistant != nil {
 		configHandler.SetAI(assistant, config.AISection{Enabled: true})

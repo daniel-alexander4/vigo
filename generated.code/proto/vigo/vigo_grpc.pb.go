@@ -434,7 +434,6 @@ const (
 	VigoAdmin_ListPackageDrift_FullMethodName      = "/vigo.v1.VigoAdmin/ListPackageDrift"
 	VigoAdmin_EnrollEnvoy_FullMethodName           = "/vigo.v1.VigoAdmin/EnrollEnvoy"
 	VigoAdmin_SetReassignment_FullMethodName       = "/vigo.v1.VigoAdmin/SetReassignment"
-	VigoAdmin_SyncConfig_FullMethodName            = "/vigo.v1.VigoAdmin/SyncConfig"
 	VigoAdmin_ReportSteorraStatus_FullMethodName   = "/vigo.v1.VigoAdmin/ReportSteorraStatus"
 )
 
@@ -490,10 +489,6 @@ type VigoAdminClient interface {
 	// SetReassignment marks a envoy for reassignment to a different steorra.
 	// Called tungol-internal to set reassign_addr/reassign_id on the envoy.
 	SetReassignment(ctx context.Context, in *SetReassignmentRequest, opts ...grpc.CallOption) (*SetReassignmentResponse, error)
-	// SyncConfig pushes the publishing steorra's live config to another
-	// steorra as a tar.gz archive (legacy hub-spoke path; replaced by the
-	// gitback-based stockpile distribution in later slices).
-	SyncConfig(ctx context.Context, in *SyncConfigRequest, opts ...grpc.CallOption) (*SyncConfigResponse, error)
 	// ReportSteorraStatus receives periodic status reports from steorras
 	// pushed proactively (push health/compliance metrics into the tungol).
 	ReportSteorraStatus(ctx context.Context, in *SteorraStatusReport, opts ...grpc.CallOption) (*SteorraStatusAck, error)
@@ -727,16 +722,6 @@ func (c *vigoAdminClient) SetReassignment(ctx context.Context, in *SetReassignme
 	return out, nil
 }
 
-func (c *vigoAdminClient) SyncConfig(ctx context.Context, in *SyncConfigRequest, opts ...grpc.CallOption) (*SyncConfigResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SyncConfigResponse)
-	err := c.cc.Invoke(ctx, VigoAdmin_SyncConfig_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *vigoAdminClient) ReportSteorraStatus(ctx context.Context, in *SteorraStatusReport, opts ...grpc.CallOption) (*SteorraStatusAck, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SteorraStatusAck)
@@ -799,10 +784,6 @@ type VigoAdminServer interface {
 	// SetReassignment marks a envoy for reassignment to a different steorra.
 	// Called tungol-internal to set reassign_addr/reassign_id on the envoy.
 	SetReassignment(context.Context, *SetReassignmentRequest) (*SetReassignmentResponse, error)
-	// SyncConfig pushes the publishing steorra's live config to another
-	// steorra as a tar.gz archive (legacy hub-spoke path; replaced by the
-	// gitback-based stockpile distribution in later slices).
-	SyncConfig(context.Context, *SyncConfigRequest) (*SyncConfigResponse, error)
 	// ReportSteorraStatus receives periodic status reports from steorras
 	// pushed proactively (push health/compliance metrics into the tungol).
 	ReportSteorraStatus(context.Context, *SteorraStatusReport) (*SteorraStatusAck, error)
@@ -881,9 +862,6 @@ func (UnimplementedVigoAdminServer) EnrollEnvoy(context.Context, *EnrollEnvoyReq
 }
 func (UnimplementedVigoAdminServer) SetReassignment(context.Context, *SetReassignmentRequest) (*SetReassignmentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetReassignment not implemented")
-}
-func (UnimplementedVigoAdminServer) SyncConfig(context.Context, *SyncConfigRequest) (*SyncConfigResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method SyncConfig not implemented")
 }
 func (UnimplementedVigoAdminServer) ReportSteorraStatus(context.Context, *SteorraStatusReport) (*SteorraStatusAck, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportSteorraStatus not implemented")
@@ -1305,24 +1283,6 @@ func _VigoAdmin_SetReassignment_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VigoAdmin_SyncConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SyncConfigRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VigoAdminServer).SyncConfig(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: VigoAdmin_SyncConfig_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).SyncConfig(ctx, req.(*SyncConfigRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _VigoAdmin_ReportSteorraStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SteorraStatusReport)
 	if err := dec(in); err != nil {
@@ -1435,10 +1395,6 @@ var VigoAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetReassignment",
 			Handler:    _VigoAdmin_SetReassignment_Handler,
-		},
-		{
-			MethodName: "SyncConfig",
-			Handler:    _VigoAdmin_SyncConfig_Handler,
 		},
 		{
 			MethodName: "ReportSteorraStatus",
