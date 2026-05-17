@@ -425,11 +425,19 @@ pub fn verify_chain_for_push(
 /// `git bundle verify` + `git fetch` the bundle. Returns whether refs
 /// changed. The caller owns `bundle_path`'s lifecycle — this never
 /// unlinks it.
+///
+/// `dr_scope` enforcement (ADR-025 Slice 3): refuses ingest if the
+/// project isn't locally tracked under any puddle state root on
+/// this envoy. The existence of local state IS the v1 membership
+/// proof, so an envoy that never ran `init`/`join` (and therefore
+/// never wrote `project.json`) gets clean refusal instead of
+/// silently materializing a bare repo it shouldn't hold.
 pub fn ingest_bundle_file(
     gitback_base: &Path,
     project_id: &[u8; ID_LEN],
     bundle_path: &Path,
 ) -> Result<bool> {
+    super::dr_scope::ensure_locally_tracked(project_id)?;
     let repo = project_repo_path(gitback_base, project_id);
     ensure_bare_repo(&repo)?;
     let before = snapshot_refs(&repo).unwrap_or_default();
@@ -1270,9 +1278,16 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn ingest_bundle_file_idempotent_returns_no_change() {
         if !git_available() {
             return;
+        }
+        // SAFETY: serialized against the dr_scope refusal test that
+        // explicitly clears this var; pre-existing bundle-mechanics
+        // tests opt out of the gate to keep their setup minimal.
+        unsafe {
+            std::env::set_var("VIGO_GITBACK_DR_SCOPE_BYPASS", "1");
         }
         let dir = tempfile::tempdir().unwrap();
         let base = dir.path().to_path_buf();
@@ -1293,9 +1308,14 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn ingest_bundle_file_advances_empty_repo() {
         if !git_available() {
             return;
+        }
+        // SAFETY: serialized against the dr_scope refusal test.
+        unsafe {
+            std::env::set_var("VIGO_GITBACK_DR_SCOPE_BYPASS", "1");
         }
         let dir = tempfile::tempdir().unwrap();
         let base = dir.path().to_path_buf();
@@ -1313,9 +1333,14 @@ mod tests {
     }
 
     #[test]
+    #[serial_test::serial]
     fn ingest_bundle_streams_to_disk_and_enforces_cap() {
         if !git_available() {
             return;
+        }
+        // SAFETY: serialized against the dr_scope refusal test.
+        unsafe {
+            std::env::set_var("VIGO_GITBACK_DR_SCOPE_BYPASS", "1");
         }
         let dir = tempfile::tempdir().unwrap();
         let src = seed_repo(dir.path(), "src");

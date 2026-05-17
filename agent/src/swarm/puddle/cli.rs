@@ -338,7 +338,13 @@ fn adopt_founded_gitback_projects(home: &Path, my_pubkey: &[u8; 32]) {
             .dr_scope
             .parse()
             .unwrap_or(project_state::DrScope::SwarmWide);
-        match gitback_cli::mint_founder_project(home, &ap.handle, scope) {
+        match gitback_cli::mint_founder_project(
+            home,
+            &ap.handle,
+            scope,
+            *my_pubkey,
+            gitback_cli::sign_with_session,
+        ) {
             Ok(_) => println!(
                 "Adopted gitback project '{}' — the catch-up reactor will pull it shortly.",
                 ap.handle

@@ -59,6 +59,7 @@ use zeroize::Zeroizing;
 
 const WRAP_VERSION: u8 = 0x02;
 const HKDF_PURPOSE: &str = "vigo-puddle-wrap-v1";
+const OPS_HKDF_PURPOSE: &str = "vigo-ops-puddle-wrap-v1";
 const NONCE_LEN: usize = 24;
 const SEED_LEN: usize = 32;
 const TAG_LEN: usize = 16;
@@ -70,6 +71,7 @@ const ENVELOPE_MIN: usize = 1 + NONCE_LEN + SEED_LEN + TAG_LEN;
 
 pub const DEFAULT_SECRETS_DIR: &str = "/srv/vigo/secrets";
 pub const DEFAULT_PUDDLE_DIR: &str = "/srv/vigo/puddle";
+pub const DEFAULT_OPS_PUDDLE_DIR: &str = "/srv/vigo/ops-puddle";
 pub const DEFAULT_SOCKET_PATH: &str = "/var/run/vigo/puddle.sock";
 
 const WRAPPED_FILE: &str = "identity.wrapped";
@@ -184,9 +186,21 @@ fn read_master_key(key_file: &Path) -> Result<Zeroizing<[u8; 32]>> {
 }
 
 fn derive_wrap_key(master_key: &[u8; 32], salt: &[u8]) -> Result<Zeroizing<[u8; 32]>> {
+    derive_wrap_key_with_purpose(master_key, salt, HKDF_PURPOSE)
+}
+
+fn derive_ops_wrap_key(master_key: &[u8; 32], salt: &[u8]) -> Result<Zeroizing<[u8; 32]>> {
+    derive_wrap_key_with_purpose(master_key, salt, OPS_HKDF_PURPOSE)
+}
+
+fn derive_wrap_key_with_purpose(
+    master_key: &[u8; 32],
+    salt: &[u8],
+    purpose: &str,
+) -> Result<Zeroizing<[u8; 32]>> {
     let hk = Hkdf::<Sha256>::new(Some(salt), master_key);
     let mut out = [0u8; WRAP_KEY_LEN];
-    hk.expand(HKDF_PURPOSE.as_bytes(), &mut out)
+    hk.expand(purpose.as_bytes(), &mut out)
         .map_err(|e| anyhow::anyhow!("hkdf expand: {}", e))?;
     Ok(Zeroizing::new(out))
 }
@@ -228,6 +242,22 @@ struct Loaded {
     wrap_mtime: SystemTime,
     salt_mtime: SystemTime,
     key_mtime: SystemTime,
+    /// Ops-puddle is loaded lazily on first OPS_* request. Once
+    /// loaded, mtime-tracking mirrors the service-account path so
+    /// an operator-driven rewrap takes effect without a helper
+    /// restart. None until first successful load; the previous-
+    /// attempt error (if any) lives in `ops_last_err` for surfacing
+    /// in OPS_* responses.
+    ops: Option<OpsLoaded>,
+    ops_last_err: Option<String>,
+}
+
+struct OpsLoaded {
+    key: SigningKey,
+    pubkey_bytes: [u8; 32],
+    pubkey_b64: String,
+    wrap_mtime: SystemTime,
+    salt_mtime: SystemTime,
 }
 
 fn key_file_path(secrets_dir: &Path, override_path: Option<&Path>) -> PathBuf {
@@ -270,6 +300,45 @@ fn load_identity(
         wrap_mtime: fs::metadata(&wrap_path)?.modified()?,
         salt_mtime: fs::metadata(&salt_path)?.modified()?,
         key_mtime: fs::metadata(&key_path)?.modified()?,
+        ops: None,
+        ops_last_err: None,
+    })
+}
+
+fn load_ops_identity(
+    secrets_dir: &Path,
+    ops_dir: &Path,
+    key_file: Option<&Path>,
+) -> Result<OpsLoaded> {
+    let key_path = key_file_path(secrets_dir, key_file);
+    let wrap_path = ops_dir.join(WRAPPED_FILE);
+    let salt_path = ops_dir.join(SALT_FILE);
+
+    let master_key = read_master_key(&key_path)?;
+    let salt = fs::read(&salt_path)
+        .with_context(|| format!("reading ops-puddle salt {}", salt_path.display()))?;
+    if salt.len() != SALT_LEN {
+        bail!(
+            "ops-puddle salt at {} is {} bytes, expected {}",
+            salt_path.display(),
+            salt.len(),
+            SALT_LEN
+        );
+    }
+    let envelope = fs::read(&wrap_path)
+        .with_context(|| format!("reading ops-puddle wrapped identity {}", wrap_path.display()))?;
+    let wrap_key = derive_ops_wrap_key(&master_key, &salt)?;
+    let seed = unwrap_envelope(&envelope, &wrap_key)?;
+    let key = SigningKey::from_bytes(&*seed);
+    let pubkey_bytes = key.verifying_key().to_bytes();
+    let pubkey_b64 = B64.encode(pubkey_bytes);
+
+    Ok(OpsLoaded {
+        key,
+        pubkey_bytes,
+        pubkey_b64,
+        wrap_mtime: fs::metadata(&wrap_path)?.modified()?,
+        salt_mtime: fs::metadata(&salt_path)?.modified()?,
     })
 }
 
@@ -286,18 +355,22 @@ pub async fn daemon_main(args: Vec<String>) -> Result<()> {
         .unwrap_or_else(|_| DEFAULT_SECRETS_DIR.to_string());
     let puddle_dir = arg_value(&args, "--puddle-dir")
         .unwrap_or_else(|_| DEFAULT_PUDDLE_DIR.to_string());
+    let ops_puddle_dir = arg_value(&args, "--ops-puddle-dir")
+        .unwrap_or_else(|_| DEFAULT_OPS_PUDDLE_DIR.to_string());
     let key_file = arg_value(&args, "--key-file").ok();
     let socket_path_arg = arg_value(&args, "--socket")
         .unwrap_or_else(|_| DEFAULT_SOCKET_PATH.to_string());
 
     let secrets_dir = PathBuf::from(secrets_dir);
     let puddle_dir = PathBuf::from(puddle_dir);
+    let ops_puddle_dir = PathBuf::from(ops_puddle_dir);
     let key_file = key_file.map(PathBuf::from);
     let socket_path = PathBuf::from(socket_path_arg);
 
     // First load — fail fast on a misconfigured deployment so the
     // operator sees the error in the agent log rather than silent
-    // helper crashes on every accept.
+    // helper crashes on every accept. Ops-puddle is loaded lazily on
+    // first OPS_* request (envoys without one shouldn't fail boot).
     let loaded = load_identity(&secrets_dir, &puddle_dir, key_file.as_deref())?;
     let wrap_path = puddle_dir.join(WRAPPED_FILE);
     let allowed = allowed_uid(&wrap_path)?;
@@ -333,6 +406,7 @@ pub async fn daemon_main(args: Vec<String>) -> Result<()> {
         state,
         secrets_dir,
         puddle_dir,
+        ops_puddle_dir,
         key_file,
         allowed,
     )
@@ -348,6 +422,7 @@ async fn run_server(
     state: Arc<RwLock<Loaded>>,
     secrets_dir: PathBuf,
     puddle_dir: PathBuf,
+    ops_puddle_dir: PathBuf,
     key_file: Option<PathBuf>,
     allowed: u32,
 ) -> Result<()> {
@@ -369,17 +444,31 @@ async fn run_server(
             drop(stream);
             continue;
         }
-        if let Err(e) =
-            maybe_reload(&state, &secrets_dir, &puddle_dir, key_file.as_deref()).await
+        if let Err(e) = maybe_reload(
+            &state,
+            &secrets_dir,
+            &puddle_dir,
+            &ops_puddle_dir,
+            key_file.as_deref(),
+        )
+        .await
         {
             tracing::warn!(error = %e, "mtime-reload check failed; serving stale identity");
         }
-        let (key, pubkey_b64) = {
-            let s = state.read().await;
-            (s.key.clone(), s.pubkey_b64.clone())
-        };
+        let state_for_task = Arc::clone(&state);
+        let secrets_for_task = secrets_dir.clone();
+        let ops_for_task = ops_puddle_dir.clone();
+        let key_file_for_task = key_file.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_client(stream, key, pubkey_b64).await {
+            if let Err(e) = handle_client(
+                stream,
+                state_for_task,
+                secrets_for_task,
+                ops_for_task,
+                key_file_for_task,
+            )
+            .await
+            {
                 tracing::debug!(error = %e, "client session error");
             }
         });
@@ -388,12 +477,16 @@ async fn run_server(
 
 /// Stat the identity / salt / master-key files; if any mtime
 /// changed since the last load, re-derive and replace the held key.
-/// Skips reload on any individual stat error — the next accept will
-/// retry, and a permanent error eventually surfaces via load failure.
+/// Also re-checks the ops-puddle envelope mtimes if ops is already
+/// loaded — picks up operator-driven rewraps without a helper
+/// restart. Skips reload on any individual stat error: the next
+/// accept retries, and a permanent error eventually surfaces via
+/// load failure.
 async fn maybe_reload(
     state: &RwLock<Loaded>,
     secrets_dir: &Path,
     puddle_dir: &Path,
+    ops_puddle_dir: &Path,
     key_file: Option<&Path>,
 ) -> Result<()> {
     let key_path = key_file_path(secrets_dir, key_file);
@@ -404,24 +497,104 @@ async fn maybe_reload(
     let salt_m = fs::metadata(&salt_path)?.modified()?;
     let key_m = fs::metadata(&key_path)?.modified()?;
 
+    // Ops-puddle mtime targets — only checked if it's currently loaded.
+    let ops_wrap_path = ops_puddle_dir.join(WRAPPED_FILE);
+    let ops_salt_path = ops_puddle_dir.join(SALT_FILE);
+
+    // Quick check: is anything stale?
+    let (service_stale, ops_stale) = {
+        let s = state.read().await;
+        let service_stale =
+            s.wrap_mtime != wrap_m || s.salt_mtime != salt_m || s.key_mtime != key_m;
+        let ops_stale = if let Some(ops) = s.ops.as_ref() {
+            match (
+                fs::metadata(&ops_wrap_path).and_then(|m| m.modified()),
+                fs::metadata(&ops_salt_path).and_then(|m| m.modified()),
+            ) {
+                (Ok(ow), Ok(os)) => ops.wrap_mtime != ow || ops.salt_mtime != os,
+                _ => false, // can't stat — leave as-is rather than scrubbing
+            }
+        } else {
+            false
+        };
+        (service_stale, ops_stale)
+    };
+
+    if !service_stale && !ops_stale {
+        return Ok(());
+    }
+
+    let mut s = state.write().await;
+    if service_stale {
+        tracing::info!("service-account identity mtime changed; reloading");
+        let new_id = load_identity(secrets_dir, puddle_dir, key_file)?;
+        // Preserve already-loaded ops state across a service-only reload —
+        // the master key is the same, the ops wrap is still valid.
+        let preserved_ops = s.ops.take();
+        let preserved_ops_err = s.ops_last_err.take();
+        *s = new_id;
+        s.ops = preserved_ops;
+        s.ops_last_err = preserved_ops_err;
+    }
+    if ops_stale {
+        tracing::info!("ops-puddle identity mtime changed; reloading");
+        match load_ops_identity(secrets_dir, ops_puddle_dir, key_file) {
+            Ok(new_ops) => {
+                s.ops = Some(new_ops);
+                s.ops_last_err = None;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "ops-puddle reload failed; dropping loaded ops state");
+                s.ops = None;
+                s.ops_last_err = Some(format!("{:#}", e));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Ensure the ops-puddle is loaded (lazy-load on first OPS_* request).
+/// Returns Ok(()) when ops is present and usable; Err when the
+/// ops-puddle isn't on disk or unwrap failed. Caller surfaces the
+/// error to the operator over the wire so vigocli can tell them
+/// "no ops-puddle — run init first".
+async fn ensure_ops_loaded(
+    state: &RwLock<Loaded>,
+    secrets_dir: &Path,
+    ops_puddle_dir: &Path,
+    key_file: Option<&Path>,
+) -> Result<()> {
     {
         let s = state.read().await;
-        if s.wrap_mtime == wrap_m && s.salt_mtime == salt_m && s.key_mtime == key_m {
+        if s.ops.is_some() {
             return Ok(());
         }
     }
-
-    tracing::info!("identity / salt / master-key mtime changed; reloading");
-    let new_id = load_identity(secrets_dir, puddle_dir, key_file)?;
+    // Slow path: attempt load under the write lock. Double-checked
+    // so concurrent OPS_* don't all duplicate the load work.
     let mut s = state.write().await;
-    *s = new_id;
-    Ok(())
+    if s.ops.is_some() {
+        return Ok(());
+    }
+    match load_ops_identity(secrets_dir, ops_puddle_dir, key_file) {
+        Ok(ops) => {
+            s.ops = Some(ops);
+            s.ops_last_err = None;
+            Ok(())
+        }
+        Err(e) => {
+            s.ops_last_err = Some(format!("{:#}", e));
+            Err(e)
+        }
+    }
 }
 
 async fn handle_client(
     stream: tokio::net::UnixStream,
-    key: SigningKey,
-    pubkey_b64: String,
+    state: Arc<RwLock<Loaded>>,
+    secrets_dir: PathBuf,
+    ops_puddle_dir: PathBuf,
+    key_file: Option<PathBuf>,
 ) -> Result<()> {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     let (reader, mut writer) = stream.into_split();
@@ -431,14 +604,30 @@ async fn handle_client(
     if n == 0 {
         return Ok(());
     }
-    let line = line.trim_end_matches('\n');
+    let line = line.trim_end_matches('\n').to_string();
 
+    // Service-account verbs read straight from the always-loaded
+    // service key under the read lock. Ops verbs may need to lazy-
+    // load and take the write lock — gate them via ensure_ops_loaded.
     if line == "STATUS" {
-        let _ = writer.write_all(b"STATUS unlocked=true\n").await;
+        let s = state.read().await;
+        let ops_str = if s.ops.is_some() {
+            "loaded"
+        } else if s.ops_last_err.is_some() {
+            "error"
+        } else {
+            "unloaded"
+        };
+        let resp = format!("STATUS unlocked=true ops={}\n", ops_str);
+        let _ = writer.write_all(resp.as_bytes()).await;
         return Ok(());
     }
 
     if line == "PUBKEY" {
+        let pubkey_b64 = {
+            let s = state.read().await;
+            s.pubkey_b64.clone()
+        };
         let resp = format!("OK {}\n", pubkey_b64);
         let _ = writer.write_all(resp.as_bytes()).await;
         return Ok(());
@@ -452,8 +641,127 @@ async fn handle_client(
                 return Ok(());
             }
         };
+        let key = {
+            let s = state.read().await;
+            s.key.clone()
+        };
         let sig = key.sign(&payload);
         let resp = format!("OK {}\n", B64.encode(sig.to_bytes()));
+        let _ = writer.write_all(resp.as_bytes()).await;
+        let _ = writer.flush().await;
+        return Ok(());
+    }
+
+    if line == "OPS_PUBKEY" {
+        if let Err(e) =
+            ensure_ops_loaded(&state, &secrets_dir, &ops_puddle_dir, key_file.as_deref()).await
+        {
+            let resp = format!("ERR ops-puddle not available: {:#}\n", e);
+            let _ = writer.write_all(resp.as_bytes()).await;
+            return Ok(());
+        }
+        let pubkey_b64 = {
+            let s = state.read().await;
+            s.ops.as_ref().map(|o| o.pubkey_b64.clone()).unwrap_or_default()
+        };
+        let resp = format!("OK {}\n", pubkey_b64);
+        let _ = writer.write_all(resp.as_bytes()).await;
+        return Ok(());
+    }
+
+    if let Some(rest) = line.strip_prefix("OPS_SIGN ") {
+        let payload = match B64.decode(rest.trim()) {
+            Ok(b) => b,
+            Err(_) => {
+                let _ = writer.write_all(b"ERR bad base64 payload\n").await;
+                return Ok(());
+            }
+        };
+        if let Err(e) =
+            ensure_ops_loaded(&state, &secrets_dir, &ops_puddle_dir, key_file.as_deref()).await
+        {
+            let resp = format!("ERR ops-puddle not available: {:#}\n", e);
+            let _ = writer.write_all(resp.as_bytes()).await;
+            return Ok(());
+        }
+        let key = {
+            let s = state.read().await;
+            s.ops.as_ref().map(|o| o.key.clone())
+        };
+        let Some(key) = key else {
+            let _ = writer.write_all(b"ERR ops-puddle vanished between load and sign\n").await;
+            return Ok(());
+        };
+        let sig = key.sign(&payload);
+        let resp = format!("OK {}\n", B64.encode(sig.to_bytes()));
+        let _ = writer.write_all(resp.as_bytes()).await;
+        let _ = writer.flush().await;
+        return Ok(());
+    }
+
+    if let Some(rest) = line.strip_prefix("FOUND_OPS_PROJECT ") {
+        // Wire: FOUND_OPS_PROJECT <handle> <scope>
+        // Scope values mirror DrScope::from_str: "swarm-wide" | "members-only".
+        let parts: Vec<&str> = rest.trim().splitn(2, ' ').collect();
+        if parts.len() != 2 {
+            let _ = writer
+                .write_all(b"ERR usage: FOUND_OPS_PROJECT <handle> <scope>\n")
+                .await;
+            return Ok(());
+        }
+        let handle = parts[0].to_string();
+        let scope_str = parts[1].to_string();
+        let scope: crate::swarm::gitback::project_state::DrScope = match scope_str.parse() {
+            Ok(s) => s,
+            Err(e) => {
+                let resp = format!("ERR bad scope: {}\n", e);
+                let _ = writer.write_all(resp.as_bytes()).await;
+                return Ok(());
+            }
+        };
+
+        if let Err(e) =
+            ensure_ops_loaded(&state, &secrets_dir, &ops_puddle_dir, key_file.as_deref()).await
+        {
+            let resp = format!("ERR ops-puddle not available: {:#}\n", e);
+            let _ = writer.write_all(resp.as_bytes()).await;
+            return Ok(());
+        }
+        let (ops_key, ops_pub) = {
+            let s = state.read().await;
+            match s.ops.as_ref() {
+                Some(o) => (o.key.clone(), o.pubkey_bytes),
+                None => {
+                    let _ = writer
+                        .write_all(b"ERR ops-puddle vanished between load and use\n")
+                        .await;
+                    return Ok(());
+                }
+            }
+        };
+
+        // The signer runs synchronously in-process — no IPC.
+        let signer = move |bytes: &[u8]| -> anyhow::Result<[u8; 64]> {
+            Ok(ops_key.sign(bytes).to_bytes())
+        };
+        // State root is the ops-puddle dir; project state lands at
+        // <ops_puddle_dir>/.vigo-gitback/<project_id>/ per the per-user
+        // gitback convention reused for ops-puddle.
+        let project_id = match crate::swarm::gitback::cli::mint_founder_project(
+            &ops_puddle_dir,
+            &handle,
+            scope,
+            ops_pub,
+            signer,
+        ) {
+            Ok(pid) => pid,
+            Err(e) => {
+                let resp = format!("ERR mint_founder_project: {:#}\n", e);
+                let _ = writer.write_all(resp.as_bytes()).await;
+                return Ok(());
+            }
+        };
+        let resp = format!("OK {}\n", hex::encode(project_id));
         let _ = writer.write_all(resp.as_bytes()).await;
         let _ = writer.flush().await;
         return Ok(());

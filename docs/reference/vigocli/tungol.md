@@ -136,3 +136,35 @@ Ops-puddle joined
     - ed25519:559812a17c032f71e0b2f842980951b95cde184b43e5522d06d41eb44c2f6b52
     - ed25519:f81de2c4a8f1bb4d6e23b07c5b920fd1a2eb43d9a09f3e2b40c47ab9a83b66c1 (this vigosrv)
 ```
+
+## stockpile init
+
+Founds the ops-puddle-owned stockpile gitback project on this vigosrv and auto-imports the existing on-disk stockpile as the first commit (ADR-025 Slice 3).
+
+The command:
+1. Calls the service-account puddle helper at `/var/run/vigo/puddle.sock` (`FOUND_OPS_PROJECT stockpile members-only`) to mint a new gitback project owned by the ops-puddle.
+2. Auto-imports the contents of `--source` (default `/srv/vigo/stacks/stockpile`) into a temp work tree, runs `git init` + `git add .` + `git commit -m "stockpile init"`, and pushes via `file://` to the bare repo at `<--gitback-base>/projects/<project-id>.git`.
+
+Preconditions:
+
+- `tungol.role != standalone` (standalone deployments keep local-write + SIGHUP).
+- Ops-puddle exists at `--ops-puddle-dir` (run `tungol ops-puddle init <name>` first).
+- Unlocked secrets vault.
+- Service-account puddle helper running (auto-started by the agent when `/srv/vigo/puddle/identity.wrapped` exists).
+
+The project's `dr_scope` is fixed at `members-only`: only vigosrvs that hold ops-puddle membership materialize stockpile bytes. Non-ops-puddle envoys continue to receive resolved policy via the standard check-in gRPC stream from their steorra. The bundle-ingest gate in `agent/src/swarm/gitback/dr_scope.rs` enforces this — non-member envoys refuse stockpile bundles.
+
+```
+$ vigocli tungol stockpile init
+Stockpile project founded
+  URL:           gitback://alexander4-ops/stockpile
+  Project ID:    8f5e2b7c91d4a3f6e88c7d2b1a9f5e3d4c6b8a7f9e2d1c5b8a3f7e6d2c4b9a8f5
+  Source:        /srv/vigo/stacks/stockpile
+  Bare repo:     /var/lib/vigo/swarm/gitback/projects/8f5e2b7c…a8f5.git
+  Auto-imported: 1 commit, 24576 bytes
+
+Other ops-puddle members will receive the stockpile after the next push
+(landing in Slice 4 — today's init seeds the founder side only).
+```
+
+Joining-vigosrv flow (`vigocli tungol stockpile join`) + cross-vigosrv distribution + the `vigocli config publish` behavior switch land in Slice 4.

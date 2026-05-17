@@ -64,6 +64,7 @@ import (
 	"git.alexander4.io/vigo/server/peer"
 	"git.alexander4.io/vigo/server/puddle"
 	"git.alexander4.io/vigo/server/risk"
+	"git.alexander4.io/vigo/server/stockpilewatch"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
 	"git.alexander4.io/vigo/server/traits"
@@ -894,6 +895,30 @@ func run() error {
 
 	tungolHandler := api.NewTungolHandler(role, cfg.Tungol.SteorraID, hub)
 	opsPuddleHandler := api.NewTungolOpsPuddleHandler(provider, puddle.OpsDefaultDir, auditWriter)
+
+	// Stockpile watcher (ADR-025 Slice 3): watches the ops-puddle's
+	// stockpile gitback bare repo for ref changes and triggers
+	// configStore.Reload(). Lookup is best-effort — if the stockpile
+	// project hasn't been founded yet (vigocli tungol stockpile init)
+	// the watcher is skipped silently and a future SIGHUP / restart
+	// picks it up. Tungol-mode only; standalone keeps the local-write
+	// + SIGHUP shape.
+	if role != config.RoleStandalone {
+		if pid, ok := lookupStockpileProjectID(puddle.OpsDefaultDir); ok {
+			watcher := stockpilewatch.New(
+				"/var/lib/vigo/swarm/gitback/projects",
+				pid,
+				configStore,
+			)
+			go func() {
+				if err := watcher.Run(ctx); err != nil {
+					slog.Warn("stockpile watcher exited", "error", err)
+				}
+			}()
+		} else {
+			slog.Debug("stockpile project not founded yet; watcher skipped (run `vigocli tungol stockpile init` to bootstrap)")
+		}
+	}
 	taskHandler := api.NewTaskHandler(queries, agentSvc, cfg.Task.RequireDefinition)
 	taskHandler.SetAuditWriter(auditWriter)
 	queryHandler := api.NewQueryHandler(agentSvc)
@@ -2464,6 +2489,41 @@ func curatorEnvoyInputs(fleetIdx *fleet.FleetIndex) []curatormesh.EnvoyInput {
 // regardless of order or duplicates. Used by the publish hook to decide
 // whether a subsystem's authorization patterns materially changed across
 // a reload.
+// lookupStockpileProjectID returns the hex project_id of the
+// ops-puddle's stockpile gitback project on this vigosrv, by
+// walking <opsPuddleDir>/.vigo-gitback/<id>/project.json files
+// and matching on handle == "stockpile". Returns ("", false) when
+// no stockpile project state exists locally — startup uses this
+// to skip the watcher until the operator runs
+// `vigocli tungol stockpile init`.
+func lookupStockpileProjectID(opsPuddleDir string) (string, bool) {
+	gitbackDir := filepath.Join(opsPuddleDir, ".vigo-gitback")
+	entries, err := os.ReadDir(gitbackDir)
+	if err != nil {
+		return "", false
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		configPath := filepath.Join(gitbackDir, e.Name(), "project.json")
+		data, err := os.ReadFile(configPath)
+		if err != nil {
+			continue
+		}
+		var cfg struct {
+			Handle string `json:"handle"`
+		}
+		if err := json.Unmarshal(data, &cfg); err != nil {
+			continue
+		}
+		if cfg.Handle == "stockpile" {
+			return e.Name(), true
+		}
+	}
+	return "", false
+}
+
 func sameStringSet(a, b []string) bool {
 	if len(a) != len(b) {
 		// Length mismatch is sufficient when callers don't pass dups —

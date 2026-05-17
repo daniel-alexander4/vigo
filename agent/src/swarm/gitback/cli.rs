@@ -324,8 +324,10 @@ fn local_puddle_pubkey_bytes(home: &Path) -> Result<[u8; ID_LEN]> {
 /// Returns the raw 64-byte Ed25519 signature.
 ///
 /// Errors with a clear message when the helper isn't running — the
-/// user needs to `puddle unlock` first.
-fn sign_with_session(payload: &[u8]) -> Result<[u8; SIG_LEN]> {
+/// user needs to `puddle unlock` first. `pub(crate)` so the
+/// ADR-023 auto-adoption path in `puddle::cli::adopt_founded_gitback_projects`
+/// can pass it as the [`mint_founder_project`] signer argument.
+pub(crate) fn sign_with_session(payload: &[u8]) -> Result<[u8; SIG_LEN]> {
     let sig_vec = puddle::session::request_sign(payload).map_err(|e| {
         anyhow!(
             "could not sign with puddle identity: {}\n\
@@ -460,19 +462,32 @@ fn refuse_if_tombstoned(cfg: &ProjectConfig, verb: &str) -> Result<()> {
 /// token chain plus a [`ProjectConfig`] listing the founder as the
 /// sole member. Returns the project_id.
 ///
-/// Requires the puddle session helper to be running — it signs the
-/// canonical token bytes. The caller is expected to have already
-/// checked the project doesn't exist locally; this re-checks cheaply
-/// and bails rather than minting a second bootstrap with a fresh
-/// `issued_at` (which would silently change every member's
-/// authorization context).
-pub(crate) fn mint_founder_project(
+/// `founder_pub` is the 32-byte raw Ed25519 public key of the
+/// founding puddle (per-user: the local user's puddle; ops-puddle:
+/// the operator's ops-puddle). `signer` produces the 64-byte
+/// Ed25519 signature over the canonical token bytes — per-user
+/// passes [`sign_with_session`], the service-account helper passes
+/// an in-process closure that signs with the unwrapped ops-puddle
+/// key. `home` is the per-puddle state root; project state lands at
+/// `<home>/.vigo-gitback/<project_id>/` (the dot-subdir convention
+/// is reused for ops-puddle, so ops-puddle state lives at
+/// `/srv/vigo/ops-puddle/.vigo-gitback/<project_id>/`).
+///
+/// The caller is expected to have already checked the project
+/// doesn't exist locally; this re-checks cheaply and bails rather
+/// than minting a second bootstrap with a fresh `issued_at` (which
+/// would silently change every member's authorization context).
+pub(crate) fn mint_founder_project<S>(
     home: &Path,
     handle: &str,
     scope: DrScope,
-) -> Result<[u8; ID_LEN]> {
+    founder_pub: [u8; ID_LEN],
+    signer: S,
+) -> Result<[u8; ID_LEN]>
+where
+    S: Fn(&[u8]) -> Result<[u8; SIG_LEN]>,
+{
     validate_handle(handle)?;
-    let founder_pub = local_puddle_pubkey_bytes(home)?;
     let project_id = project_id_for(&founder_pub, handle);
     if project_state::ProjectConfig::load(home, &project_id)?.is_some() {
         bail!(
@@ -493,11 +508,11 @@ pub(crate) fn mint_founder_project(
         parent_token_id: None,
     };
     let bytes = canonical_bytes(&body);
-    let signature = sign_with_session(&bytes)?;
+    let signature = signer(&bytes)?;
     let bootstrap = Token { body, signature };
     bootstrap
         .verify_signature()
-        .context("bootstrap token failed self-verification (session helper malfunction?)")?;
+        .context("bootstrap token failed self-verification (signer / pubkey mismatch?)")?;
     let cfg = ProjectConfig {
         version: project_state::PROJECT_STATE_VERSION,
         project_id: hex_id(&project_id),
@@ -572,8 +587,17 @@ fn cmd_init(args: &[String]) -> Result<()> {
 
     // Mint + persist the founder bootstrap (admin token chain +
     // project config). Shared with the ADR-023 auto-adoption path in
-    // `vigo swarm puddle unlock`.
-    mint_founder_project(&caller.home, &handle, scope)?;
+    // `vigo swarm puddle unlock`. Per-user path: founder pubkey from
+    // the local puddle's identity.pub, signature via the session
+    // helper. (Ops-puddle callers in the Slice 1b service helper pass
+    // an in-process signer instead.)
+    mint_founder_project(
+        &caller.home,
+        &handle,
+        scope,
+        founder_pub,
+        sign_with_session,
+    )?;
 
     let hex_url = format!("gitback://{}/{}", hex_id(&project_id), handle);
     let friendly = local_puddle_friendly_name(&caller.home, &founder_pub);

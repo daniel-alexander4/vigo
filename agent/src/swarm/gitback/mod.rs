@@ -55,6 +55,7 @@
 //! collector now walks live per-user state directly.
 
 pub mod cli;
+pub mod dr_scope;
 pub mod envelopes;
 pub mod fan_out;
 pub mod gate;
