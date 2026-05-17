@@ -31,7 +31,7 @@ vigocli doctor
   tls .................. OK (expires 2027-01-15)
   secrets .............. OK
   license .............. OK
-  spanner .............. OK
+  tungol ............... OK
   integrations ......... OK
   config ............... OK
   swarm_pattern_order .. OK
@@ -60,7 +60,7 @@ Checks performed in pre-start mode:
 | `tls_certs` | Check cert files exist, parse, and verify expiry |
 | `config_dir` | Verify `stockpile/` exists with `modules/`, `roles/`, `envoys/` subdirs |
 | `config_validation` | Load and validate all `.vgo` module files |
-| `spanner` | Validate spanner configuration |
+| `tungol` | Validate tungol (hub-spoke federation) configuration |
 
 ### Example pre-start output
 
@@ -76,7 +76,7 @@ vigocli doctor --pre-start --config /srv/vigo/server.yaml
   tls_certs ............ WARN (expires in 28 days (2026-04-10))
   config_dir ........... OK (.live)
   config_validation .... OK (12 modules)
-  spanner ........... OK (standalone)
+  tungol ............ OK (standalone)
 
   Status: degraded
 ```

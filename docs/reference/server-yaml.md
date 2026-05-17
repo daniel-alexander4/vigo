@@ -332,7 +332,7 @@ grc:
 
 ## spanner
 
-Hub-spoke scaling for multi-site deployments.
+Hub-spoke control-plane sharding (the YAML block name stays `spanner:` through Phase 0 of the spanner→tungol redesign — the CLI / UI / REST surface speaks tungol/steorra; the on-disk config block migrates in Phase 1 and completes in Phase 3). See [Set up Tungol](../howto/set-up-tungol.md) for the walkthrough.
 
 ```yaml
 # Hub
@@ -347,7 +347,7 @@ spanner:
     threshold: 3
     interval: "30s"
 
-# Spoke
+# Spoke (one steorra in the tungol)
 spanner:
   role: spoke
   spoke_id: "dc1"
@@ -359,10 +359,9 @@ spanner:
 | Field | Default | Description |
 |-------|---------|-------------|
 | `role` | `standalone` | `standalone`, `hub`, or `spoke` |
-| `spokes` | (hub only) | List of spoke connections with ID, address, hostname patterns |
-
-| `auto_failover.enabled` | `false` | Auto-drain unhealthy spokes |
-| `spoke_id` | (spoke only) | Unique spoke identifier |
+| `spokes` | (hub only) | List of steorra connections with ID, address, hostname patterns |
+| `auto_failover.enabled` | `false` | Auto-drain unhealthy steorras |
+| `spoke_id` | (spoke only) | Unique steorra identifier |
 | `hub_addr` | (spoke only) | Hub address for status reporting |
 
 ## peers
@@ -393,7 +392,7 @@ license:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `mode` | `local` | `local`: count nodes on this server. `aggregate`: hub sums across all spokes |
+| `mode` | `local` | `local`: count nodes on this server. `aggregate`: hub sums across all steorras |
 
 ## publish
 

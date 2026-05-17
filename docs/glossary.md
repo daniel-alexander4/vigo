@@ -100,7 +100,11 @@ The originating instance of a swarm blob on an envoy — the source of truth for
 
 ## spanner
 
-Vigo's hub-spoke architecture for multi-server deployments. One `vigosrv` hub aggregates state from multiple spoke `vigosrv` instances via dedicated gRPC. Used for MSP deployments where each customer runs its own spoke and the MSP operator gets an aggregate dashboard at the hub. See [Spanner](howto/set-up-spanner.md).
+The legacy name for the hub-spoke control-plane sharding subsystem. Operator-visible surface (CLI, REST, UI, metrics, proto) speaks the new [tungol](#tungol) / [steorra](#steorra) vocabulary as of Phase 0 of the spanner→tungol redesign. The YAML config block in `server.yaml` keeps the `spanner:` key through Phase 0; it migrates in Phase 1 (both names accepted) and completes in Phase 3. See [Tungol](howto/set-up-tungol.md) for the current setup walkthrough.
+
+## steorra
+
+The runtime entity formerly called a "spoke" — one `vigosrv` participating in a [tungol](#tungol) federation. Owns a hostname-pattern partition of the fleet; handles agent check-ins for its envoys; reports compliance metrics to the hub. Successor name to "spoke" on the wire, CLI, UI, REST routes, and metric labels. The YAML config still uses `role: spoke` / `spoke_id:` through Phase 0 of the redesign.
 
 ## stockpile
 
@@ -117,6 +121,10 @@ The envoy-only P2P network substrate. Swarm is the transport layer that all P2P 
 ## trait
 
 A collected fact about an envoy, reported at check-in — OS, hardware, installed packages, listening ports, filesystem mounts, kernel modules, etc. Traits feed into `when:` expressions, compliance evaluation, inventory views, and trend analysis. Each trait has a dedicated collector in `agent/src/traits/`. See the [Trait Reference](reference/vigo/traits/).
+
+## tungol
+
+The whole federated control plane — a constellation of [steorra](#steorra) servers cooperating to operate one fleet. Successor name to [spanner](#spanner) on the wire, CLI (`vigocli tungol`), UI route (`/tungol`), REST namespace (`/api/v1/tungol/*`), and metric prefix (`vigo_tungol_*`). The broader spanner→tungol redesign retires hub-spoke in favor of peer-equal federation; Phase 0 (in flight) renames the surface while preserving the hub-spoke implementation underneath. See [Set up Tungol](howto/set-up-tungol.md).
 
 ## usercrate
 

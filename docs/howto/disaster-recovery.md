@@ -184,13 +184,13 @@ open https://<server-ip>:8443/
 If envoys show as "offline" after restore, that's expected -- they'll transition back to converged/relapsed after their next check-in.
 
 
-## Spanner Recovery
+## Tungol Recovery
 
-In a hub-spoke spanner topology:
+In a hub-spoke tungol topology (the YAML config block is still named `spanner:` through Phase 0 of the spanner→tungol redesign — operator-facing CLI / UI / REST surface speaks tungol/steorra):
 
-- **Spoke failure**: Restore the spoke independently. Envoys enrolled to that spoke reconnect automatically. The hub will resume receiving aggregated data on the spoke's next heartbeat.
-- **Hub failure**: Restore the hub. Spokes will reconnect and resume spanner heartbeats. Envoy reassignments and drain operations should be re-verified after hub restore.
-- **Hub and spoke have independent databases** — restoring one does not affect the other.
+- **Steorra failure**: Restore the steorra independently. Envoys enrolled to that steorra reconnect automatically. The hub will resume receiving aggregated data on the steorra's next heartbeat.
+- **Hub failure**: Restore the hub. Steorras will reconnect and resume tungol heartbeats. Envoy reassignments and drain operations should be re-verified after hub restore.
+- **Hub and steorra have independent databases** — restoring one does not affect the other.
 
 ## Best Practices
 
@@ -261,7 +261,7 @@ vigocli backup restore /backup/vigo-latest.tar.gz \
 ## What's next
 
 - **Schedule a quarterly DR drill** → restore a backup tarball to a throwaway host. Verify `/api/v1/health`, then walk an envoy through a check-in against the restored server. Treat untested backups as inoperable.
-- **You operate spanner hub-spoke** → restore each role independently (hub and spoke have separate databases). Re-verify reassignments and drains after hub restore.
+- **You operate a hub-spoke tungol** → restore each role independently (hub and steorra have separate databases). Re-verify reassignments and drains after hub restore.
 - **A restore step failed** → [Troubleshoot common issues](troubleshoot.md).
 
 ---

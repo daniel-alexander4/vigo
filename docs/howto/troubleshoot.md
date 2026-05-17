@@ -93,7 +93,7 @@ The `doctor` command checks all server subsystems and reports their health:
 vigocli doctor
 ```
 
-This runs 8 checks: database, TLS certificates, secrets provider, license, spanner, SMTP, config, and stale envoys. Each check reports `pass`, `warn`, `fail`, or `skip`.
+This runs 8 checks: database, TLS certificates, secrets provider, license, tungol, SMTP, config, and stale envoys. Each check reports `pass`, `warn`, `fail`, or `skip`.
 
 ### vigocli runs
 

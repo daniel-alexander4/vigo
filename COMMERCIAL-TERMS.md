@@ -169,15 +169,15 @@ clock reads year 10 (5 elapsed + 5 credit), so their rate is 24% off —
 ## Enterprise Agreements
 
 Enterprise agreements are available for organizations managing nodes
-across multiple sites, networks, or spanner instances under a single
+across multiple sites, networks, or tungol instances under a single
 contract.
 
 **Aggregate node counting:** Your tier and graduated bracket total are
 determined by the total number of managed nodes across all sites. A
 single license file is issued with the aggregate node count and
-deployed to the spanner hub, which enforces the limit across all
-connected spokes. Individual spokes do not require separate license
-files.
+deployed to the tungol hub, which enforces the limit across all
+connected steorras. Individual steorras do not require separate
+license files.
 
 **Node floor:** Enterprise agreements include a minimum node commitment
 across all sites. You are billed for the committed floor even if actual
@@ -207,7 +207,7 @@ Every paid tier includes:
 
 - A signed license file (`.lic`) unlocking your node count
 - Access to all current and future features for the license term
-- 15-second check-ins, hub-spoke spanner, AI assistant, compliance export with auto-rollback, RBAC, 100+ resource types across 8 platforms, verified binary distribution, all integrations
+- 15-second check-ins, hub-spoke tungol federation, AI assistant, compliance export with auto-rollback, RBAC, 100+ resource types across 8 platforms, verified binary distribution, all integrations
 - The same software, the same binary — no "community" vs "enterprise" split
 
 The Community tier (1–100 nodes) includes all features with no time limit.
@@ -378,8 +378,8 @@ termination.
 enforcement, all managed nodes continue to operate normally. Agents
 enforce their last-known policy indefinitely without server
 connectivity. Server shutdown only affects the ability to update
-modules, enroll new nodes, and view the management UI. In spanner
-deployments, spokes continue independent agent management if the hub
+modules, enroll new nodes, and view the management UI. In tungol
+deployments, steorras continue independent agent management if the hub
 shuts down.
 
 **Technical enforcement:** License enforcement actions described in
