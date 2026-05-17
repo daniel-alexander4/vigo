@@ -45,20 +45,39 @@ COPY . .
 
 # Hardened build flags:
 # -trimpath strips source paths, -s -w strips symbols/debug, -buildid= removes build ID.
-# -buildmode=pie enables Position Independent Executable (full ASLR).
+# -tags 'netgo osusergo' uses Go's pure-Go DNS + user resolvers (no libnss cgo dep).
+# -linkmode external -extldflags=-static produces a fully-static binary so the
+# host-installed vigocli runs on any Linux server without needing a musl loader
+# (stock GCP / AWS / Azure Debian / Ubuntu / RHEL images lack one). vigosrv gets
+# the same treatment for build symmetry — it never leaves the container, but a
+# single build pattern is cheaper to maintain than two. -buildmode=pie is
+# dropped for the static path: PIE + fully-static needs -static-pie which has
+# musl-toolchain edge cases; static binaries already get image-base ASLR.
 # CGO_CFLAGS/CGO_LDFLAGS: stack protectors, FORTIFY_SOURCE, full RELRO, no-execstack.
 ENV CGO_CFLAGS="-D_FORTIFY_SOURCE=2 -fstack-protector-strong -O2" \
     CGO_LDFLAGS="-Wl,-z,relro,-z,now,-z,noexecstack"
 
 RUN CGO_ENABLED=1 go build \
-    -buildmode=pie -trimpath \
-    -ldflags="-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
+    -tags 'netgo osusergo' -trimpath \
+    -ldflags="-s -w -buildid= -linkmode external -extldflags=-static -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
     -o vigosrv ./server
 
 RUN CGO_ENABLED=1 go build \
-    -buildmode=pie -trimpath \
-    -ldflags="-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
+    -tags 'netgo osusergo' -trimpath \
+    -ldflags="-s -w -buildid= -linkmode external -extldflags=-static -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
     -o vigocli ./cli
+
+# Guard against silent regressions: a future cgo dep sneaking back in via a
+# go.mod bump could re-introduce dynamic linkage and break host-installed
+# vigocli on stock cloud VMs all over again. Fail the build loudly here.
+RUN apk add --no-cache file >/dev/null \
+    && for bin in vigosrv vigocli; do \
+        if ! file "$bin" | grep -q 'statically linked'; then \
+            echo "FATAL: $bin is not statically linked — check go build flags." >&2; \
+            file "$bin" >&2; \
+            exit 1; \
+        fi; \
+    done
 
 # The license-manager binary (`tessera`) is an internal vendor-side tool
 # and lives in the separate tessera repo (git.alexander4.io/tessera) —

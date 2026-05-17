@@ -6,7 +6,8 @@ set -euo pipefail
 # Replaces:  container image, example-configs/, scripts/
 #
 # Usage:
-#   sudo scripts/upgrade.sh                  # pull latest image and restart
+#   sudo scripts/upgrade.sh                  # pull/build only — does NOT touch the running container
+#   sudo scripts/upgrade.sh --start          # also stop+start containers when work is done
 #   sudo scripts/upgrade.sh --build          # full rebuild (Go + agent linux amd64+arm64 + image)
 #   sudo scripts/upgrade.sh --server         # rebuild Go (server+CLI) only, fast
 #   sudo scripts/upgrade.sh --agent          # rebuild Rust agent only
@@ -16,8 +17,9 @@ set -euo pipefail
 #   sudo scripts/upgrade.sh --test           # run test suite after upgrade
 #
 # Flags can be combined:
-#   sudo scripts/upgrade.sh --server --test  # rebuild Go, test, restart
-#   sudo scripts/upgrade.sh --build --push   # full rebuild + push
+#   sudo scripts/upgrade.sh --build --start  # rebuild image AND deploy it now
+#   sudo scripts/upgrade.sh --server --test --start  # rebuild Go, test, restart
+#   sudo scripts/upgrade.sh --build --push   # full rebuild + push, leave running container alone
 #   sudo scripts/upgrade.sh --cross arm64 freebsd --push
 #
 # Cross-compile targets:
@@ -55,7 +57,7 @@ cd "$DATA_DIR"
 # labels (a disagreement = the agent's update guard aborts in a loop).
 # Empty string if the marker is missing (should never happen).
 agent_bin_version() {
-    grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' "$1" 2>/dev/null | head -1 | cut -d= -f2
+    grep -aoE -m1 'VIGO-BUILD-VERSION=[0-9.]+' "$1" 2>/dev/null | cut -d= -f2
 }
 
 # ---------------------------------------------------------------------------
@@ -67,6 +69,7 @@ BUILD_SERVER=false   # --server: rebuild Go binaries only, inject into container
 BUILD_AGENT=false    # --agent: rebuild Rust agent only
 PUSH=false           # --push: push image to GHCR
 RUN_TESTS=false      # --test: run test-cli.sh after upgrade
+START=false          # --start: stop+start containers when work is done (default: leave running state untouched)
 CROSS_TARGETS=()
 parsing_cross=false
 
@@ -77,6 +80,7 @@ for arg in "$@"; do
         --agent)   BUILD_AGENT=true; parsing_cross=false ;;
         --push)    PUSH=true; parsing_cross=false ;;
         --test)    RUN_TESTS=true; parsing_cross=false ;;
+        --start)   START=true; parsing_cross=false ;;
         --cross)   BUILD_AGENT=true; parsing_cross=true ;;
         *)
             if $parsing_cross; then
@@ -159,7 +163,7 @@ fi
 
 if [ -d "$REPO_DIR" ]; then
     VERSION_FILE="$(cat "$REPO_DIR/VERSION" 2>/dev/null | tr -d '[:space:]')"
-    CARGO_VERSION="$(grep -E '^version = ' "$REPO_DIR/agent/Cargo.toml" 2>/dev/null | head -1 | sed -E 's/version = "([^"]+)"/\1/')"
+    CARGO_VERSION="$(grep -E -m1 '^version = ' "$REPO_DIR/agent/Cargo.toml" 2>/dev/null | sed -E 's/version = "([^"]+)"/\1/')"
     if [ -n "$VERSION_FILE" ] && [ -n "$CARGO_VERSION" ] && [ "$VERSION_FILE" != "$CARGO_VERSION" ]; then
         echo "ERROR: VERSION and agent/Cargo.toml are out of sync." >&2
         echo "  VERSION            = $VERSION_FILE" >&2
@@ -178,7 +182,7 @@ fi
 # Stop containers
 # ---------------------------------------------------------------------------
 
-if $NEED_CONTAINER_RESTART; then
+if $NEED_CONTAINER_RESTART && $START; then
     echo "Stopping containers..."
     docker compose down --remove-orphans 2>/dev/null || true
 fi
@@ -218,7 +222,7 @@ echo 'Building linux/amd64...'
 CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
 mkdir -p /build/dist/agent/linux/amd64
 cp .build/x86_64-unknown-linux-musl/release/vigo /build/dist/agent/linux/amd64/vigo
-grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/amd64/vigo | head -1 | cut -d= -f2 > /build/dist/agent/linux/amd64/vigo.version"
+grep -aoE -m1 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/amd64/vigo | cut -d= -f2 > /build/dist/agent/linux/amd64/vigo.version"
                 ;;
             arm64)
                 RUST_TARGETS="$RUST_TARGETS aarch64-unknown-linux-musl"
@@ -230,7 +234,7 @@ CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc \
     cargo build --release --target aarch64-unknown-linux-musl
 mkdir -p /build/dist/agent/linux/arm64
 cp .build/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/vigo
-grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/arm64/vigo | head -1 | cut -d= -f2 > /build/dist/agent/linux/arm64/vigo.version"
+grep -aoE -m1 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/arm64/vigo | cut -d= -f2 > /build/dist/agent/linux/arm64/vigo.version"
                 ;;
             freebsd)
                 echo "  freebsd: using cargo-cross container"
@@ -240,7 +244,7 @@ grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/arm64/vigo | head
                         cargo build --release --target x86_64-unknown-freebsd 2>&1
                         mkdir -p /build/dist/agent/freebsd/amd64
                         cp .build/x86_64-unknown-freebsd/release/vigo /build/dist/agent/freebsd/amd64/vigo
-                        grep -aoE "VIGO-BUILD-VERSION=[0-9.]+" /build/dist/agent/freebsd/amd64/vigo | head -1 | cut -d= -f2 > /build/dist/agent/freebsd/amd64/vigo.version
+                        grep -aoE -m1 "VIGO-BUILD-VERSION=[0-9.]+" /build/dist/agent/freebsd/amd64/vigo | cut -d= -f2 > /build/dist/agent/freebsd/amd64/vigo.version
                     ') || echo "  WARN: freebsd cross-compile failed"
                 ;;
             windows)
@@ -251,7 +255,7 @@ grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/arm64/vigo | head
                         cargo build --release --target x86_64-pc-windows-msvc 2>&1
                         mkdir -p /build/dist/agent/windows/amd64
                         cp .build/x86_64-pc-windows-msvc/release/vigo.exe /build/dist/agent/windows/amd64/vigo.exe
-                        grep -aoE "VIGO-BUILD-VERSION=[0-9.]+" /build/dist/agent/windows/amd64/vigo.exe | head -1 | cut -d= -f2 > /build/dist/agent/windows/amd64/vigo.exe.version
+                        grep -aoE -m1 "VIGO-BUILD-VERSION=[0-9.]+" /build/dist/agent/windows/amd64/vigo.exe | cut -d= -f2 > /build/dist/agent/windows/amd64/vigo.exe.version
                     ') || echo "  WARN: windows cross-compile failed"
                 ;;
             darwin)
@@ -471,13 +475,17 @@ fi
 # Start containers
 # ---------------------------------------------------------------------------
 
-if $NEED_CONTAINER_RESTART; then
+if $NEED_CONTAINER_RESTART && $START; then
     echo "Starting containers..."
     docker compose up -d
 
     echo ""
     echo "Waiting for server..."
     timeout 60 docker compose logs -f vigo 2>&1 | grep -m1 "server ready" || true
+elif $NEED_CONTAINER_RESTART && ! $START; then
+    echo ""
+    echo "Built artifacts are ready; running container is untouched."
+    echo "Pass --start (or run 'docker compose up -d' from $DATA_DIR) to deploy."
 fi
 
 # Inject cross-compiled agent binaries into the running container so the
@@ -610,7 +618,7 @@ fi
 # still advertising the old versions and envoys won't update. Restart it
 # so it re-reads. (--build already brings the container up fresh from the
 # rebuilt image, after the cross-compile, so its snapshot is current.)
-if [ ${#CROSS_TARGETS[@]} -gt 0 ] && ! $BUILD_ALL && docker ps -q -f name=vigo | grep -q .; then
+if [ ${#CROSS_TARGETS[@]} -gt 0 ] && ! $BUILD_ALL && $START && docker ps -q -f name=vigo | grep -q .; then
     echo "Restarting vigo so it re-reads the injected agent versions..."
     (cd "$DATA_DIR" && docker compose restart vigo)
 fi
@@ -642,7 +650,7 @@ fi
 # mode — freshness is informational, not gated on rebuild intent.
 if [ -d "$REPO_DIR" ]; then
     SRV_VER=$(docker exec vigo vigosrv --version 2>/dev/null | awk '{print $NF}' || echo "unknown")
-    NEWEST_GO=$(find "$REPO_DIR/server" "$REPO_DIR/ui" "$REPO_DIR/cli" -name '*.go' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
+    NEWEST_GO=$(find "$REPO_DIR/server" "$REPO_DIR/ui" "$REPO_DIR/cli" -name '*.go' -printf '%T@\n' 2>/dev/null | awk 'BEGIN{m=0} $0>m{m=$0} END{if(m>0)print m}')
     NEWEST_GO=${NEWEST_GO%.*}
     CTR_VIGOSRV=$(docker exec vigo stat -c '%Y' /usr/local/sbin/vigosrv 2>/dev/null || echo 0)
     if [ -n "$NEWEST_GO" ] && [ "$NEWEST_GO" -gt "$CTR_VIGOSRV" ]; then
@@ -668,7 +676,7 @@ if [ -d "$REPO_DIR" ]; then
         for agent_path in $AGENT_PLATFORMS; do
             platform=$(echo "$agent_path" | sed 's|/dist/agent/||; s|/vigo.*||')
             cross_t=$(echo "$platform" | sed 's|^linux/||; s|/.*$||')   # linux/amd64 → amd64
-            BIN_VER=$(docker exec vigo sh -c "LC_ALL=C grep -oE 'VIGO-BUILD-VERSION=[0-9.]+' '$agent_path'" 2>/dev/null | head -1 | cut -d= -f2 || true)
+            BIN_VER=$(docker exec vigo sh -c "LC_ALL=C grep -oE -m1 'VIGO-BUILD-VERSION=[0-9.]+' '$agent_path'" 2>/dev/null | cut -d= -f2 || true)
             SIDE_VER=$(docker exec vigo sh -c "cat '$agent_path.version' 2>/dev/null" 2>/dev/null | tr -d '[:space:]' || true)
             [ -z "$BIN_VER" ] && BIN_VER="unknown"
             [ -z "$SIDE_VER" ] && SIDE_VER="(missing)"
