@@ -13,7 +13,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -236,7 +235,7 @@ func runCuratorStatus(cmd *cobra.Command, _ []string) error {
 	}
 	fmt.Printf("Curator — generated %s\n\n", gen.Local().Format("2006-01-02 15:04:05"))
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Artifacts"), artifacts)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Participants"), len(participants))
 	fmt.Fprintf(w, "%s\t%s\n", bold("Blocked"), curatorBlockedCount(len(list.Blocked)))
@@ -287,7 +286,7 @@ func renderCuratorList(list *curatorListResponse, out io.Writer) error {
 		return sorted[i].Body.FounderPuddlePubkey < sorted[j].Body.FounderPuddlePubkey
 	})
 
-	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(out)
 	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 		bold("NAME"), bold("VERSIONS"), bold("TAGS"), bold("PLATFORMS"),
 		bold("TARGET"), bold("STATUS"), bold("ARTIFACT_ID"))
@@ -408,7 +407,7 @@ func renderCuratorShow(resp *curatorInspectResponse, out io.Writer) error {
 		}
 
 		fmt.Fprintln(out, "Versions:")
-		w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(out)
 		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n",
 			bold("VERSION"), bold("TAGS"), bold("OS/ARCH"), bold("SIZE"), bold("SHA"))
 		for _, v := range verKeys {
@@ -482,7 +481,7 @@ func runCuratorVersions(cmd *cobra.Command, args []string) error {
 	}
 	sort.Strings(verKeys)
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "%s\t%s\t%s\n", bold("VERSION"), bold("TAGS"), bold("PLATFORMS"))
 	for _, v := range verKeys {
 		av := resp.Versions[v]
@@ -531,7 +530,7 @@ func runCuratorResolve(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Printf("Resolved %s/%s @ %s on %s/%s:\n\n",
 		shortSha(resp.ArtifactID), resp.SignedEntry.Body.Name, resp.Version, os_, arch)
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "%s\t%s\n", bold("Blob sha"), resp.BlobSha)
 	fmt.Fprintf(w, "%s\t%s\n", bold("Size"), formatBytes(int64(resp.Size)))
 	fmt.Fprintf(w, "%s\t%s\n", bold("Version"), resp.Version)

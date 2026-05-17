@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
@@ -46,7 +45,7 @@ var envoysListCmd = &cobra.Command{
 			return nil
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("HOSTNAME"), header("IP"), header("ENROLLED"), header("LAST SEEN"), header("STATUS"))
 		for _, c := range resp.Envoys {
 			status := "active"
@@ -350,7 +349,7 @@ Use --dry-run to preview what would be deleted without making changes.`,
 			return nil
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("ID"), header("HOSTNAME"), header("IP"), header("LAST SEEN"), header("STATUS"))
 		for _, d := range toDelete {
 			status := "active"

@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
@@ -54,7 +53,7 @@ Example:
 
 		fmt.Printf("  %s — %d host(s) affected\n\n", bold(cveID), result.TotalHosts)
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n",
 			header("HOSTNAME"), header("PACKAGE"), header("INSTALLED"), header("FIXED"), header("SEVERITY"), header("SCANNER"))
 		for _, h := range result.AffectedHosts {

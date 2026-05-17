@@ -6,7 +6,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
@@ -44,7 +43,7 @@ var packagesListCmd = &cobra.Command{
 			return err
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", header("ENVOY"), header("PACKAGE"), header("INSTALLED"), header("DESIRED"))
 		for _, p := range resp.Packages {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
@@ -78,7 +77,7 @@ var packagesDriftCmd = &cobra.Command{
 			return nil
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("ENVOY"), header("PACKAGE"), header("INSTALLED"), header("DESIRED"), header("DETECTED"))
 		for _, d := range resp.Drifts {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",

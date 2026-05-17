@@ -5,7 +5,6 @@ package main
 
 import (
 	"fmt"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
@@ -49,7 +48,7 @@ Examples:
 			return nil
 		}
 
-		w := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+		w := newAlignedTable(cmd.OutOrStdout())
 		fmt.Fprintln(w, "TRAIT\tSAMPLE VALUE")
 		for _, k := range resp.Keys {
 			fmt.Fprintf(w, "%s\t%s\n", k.Key, k.Sample)

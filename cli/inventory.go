@@ -10,7 +10,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
@@ -98,7 +97,7 @@ func renderTable(envoys []struct {
 	CollectedAt string         `json:"collected_at"`
 	Traits      map[string]any `json:"traits"`
 }, showFields []string) error {
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 
 	// Header: HOSTNAME + each show field.
 	header := "HOSTNAME"

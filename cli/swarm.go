@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -153,7 +152,7 @@ func runSwarmStatus(cmd *cobra.Command, _ []string) error {
 
 	fmt.Printf("Swarm substrate — generated %s\n\n", resp.GeneratedAt.Local().Format("2006-01-02 15:04:05"))
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "%s\t%d / %d\n", bold("Envoys online"), resp.EnvoysOnline, resp.EnvoysTotal)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Substrate active"), resp.EnvoysSubstrateActive)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Seeding envoys"), resp.EnvoysSeeding)
@@ -189,7 +188,7 @@ func runSwarmPeers(cmd *cobra.Command, _ []string) error {
 		resp.Sort,
 	)
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 		bold("HOSTNAME"),
 		bold("STATUS"),

@@ -6,7 +6,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 
@@ -72,7 +71,7 @@ func previewNode(idOrHostname string) error {
 		return nil
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "MODULE\tTYPE\tRESOURCE\tACTION\n")
 	for _, a := range resp.Actions {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",

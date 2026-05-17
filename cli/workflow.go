@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/user"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -124,7 +123,7 @@ var workflowListCmd = &cobra.Command{
 			return nil
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("ID"), header("NAME"), header("STATUS"), header("STEPS"), header("CREATED"))
 		for _, wf := range resp.Workflows {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%d/%d\t%s\n",
@@ -214,7 +213,7 @@ func printWorkflowResults(resp *workflowResponse) {
 	}
 
 	fmt.Println()
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", header("STEP"), header("NAME"), header("STATUS"), header("TASK RUN"))
 	for _, s := range resp.Steps {
 		taskID := dim("-")

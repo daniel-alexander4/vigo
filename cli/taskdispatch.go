@@ -191,51 +191,23 @@ var taskListCmd = &cobra.Command{
 			return nil
 		}
 
-		// Manual fixed-width formatting — text/tabwriter counts bytes,
-		// not visible chars, so it misaligns when ANSI-wrapped cells
-		// share a column with plain ones. `padR` runs on plain text
-		// before color is applied; visible widths then match.
-		const (
-			idW     = 36 // UUID
-			cmdW    = 42 // truncated to 40 + 2 sep
-			statusW = 8  // "complete"
-			countW  = 7  // "TARGETS" header
-			cmdMax  = 40 // truncation cap
-		)
-		// Target width: max of header + actual data values (hostnames
-		// or the literal "*"). Computed up front so every row aligns.
-		targetW := len("TARGET")
-		for _, t := range resp.TaskRuns {
-			if len(t.Target) > targetW {
-				targetW = len(t.Target)
-			}
-		}
-
-		fmt.Println(strings.Join([]string{
-			header(padR("ID", idW)),
-			header(padR("COMMAND", cmdW)),
-			header(padR("TARGET", targetW)),
-			header(padR("STATUS", statusW)),
-			header(padR("TARGETS", countW)),
-			header("CREATED"),
-		}, "  "))
-
+		const cmdMax = 40 // truncation cap
+		w := newAlignedTable(os.Stdout)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			header("ID"), header("COMMAND"), header("TARGET"),
+			header("STATUS"), header("TARGETS"), header("CREATED"))
 		for _, t := range resp.TaskRuns {
 			command := t.Command
 			if len(command) > cmdMax {
 				command = command[:cmdMax-3] + "..."
 			}
 			count := strconv.FormatInt(t.TotalTargets, 10)
-			fmt.Println(strings.Join([]string{
-				dim(padR(t.ID, idW)),
-				padR(command, cmdW),
-				padR(t.Target, targetW),
-				colorStatus(padR(t.Status, statusW)),
-				padR(count, countW),
-				dim(formatTimestamp(t.CreatedAt)),
-			}, "  "))
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				dim(t.ID), command, t.Target,
+				colorStatus(t.Status), count,
+				dim(formatTimestamp(t.CreatedAt)))
 		}
-		return nil
+		return w.Flush()
 	},
 }
 

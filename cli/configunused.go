@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/tabwriter"
 
 	"git.alexander4.io/vigo/server/publish"
 	"github.com/spf13/cobra"
@@ -70,7 +69,7 @@ func runConfigUnused(cmd *cobra.Command, args []string) error {
 
 	if totalModules > 0 {
 		fmt.Printf("\n%s  %d unused module(s)\n\n", amber("!"), totalModules)
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "  NAME\tFILE\n")
 		for _, m := range result.UnusedModules {
 			fmt.Fprintf(w, "  %s\t%s\n", amber(m.Name), medGray(m.SourceFile))
@@ -80,7 +79,7 @@ func runConfigUnused(cmd *cobra.Command, args []string) error {
 
 	if totalFiles > 0 {
 		fmt.Printf("\n%s  %d unused match file(s)\n\n", amber("!"), totalFiles)
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "  FILE\tPATTERNS\n")
 		for _, f := range result.UnusedMatchFiles {
 			fmt.Fprintf(w, "  %s\t%s\n", amber(f.Path), medGray(strings.Join(f.Patterns, ", ")))

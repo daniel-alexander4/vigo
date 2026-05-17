@@ -8,7 +8,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -115,7 +114,7 @@ func runEchoStatus(cmd *cobra.Command, _ []string) error {
 
 	fmt.Printf("Longdrawer fleet — generated %s\n\n", fleet.GeneratedAt.Local().Format("2006-01-02 15:04:05"))
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Users"), fleet.Totals.Users)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Envoys reporting"), fleet.Totals.Envoys)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Files"), fleet.Totals.Files)
@@ -144,7 +143,7 @@ func runEchoList(cmd *cobra.Command, _ []string) error {
 	sorted := append([]echoUserSummary(nil), fleet.Users...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].User < sorted[j].User })
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 		bold("USER"), bold("ENVOYS"), bold("FILES"), bold("SIZE"), bold("STATE"))
 	for _, u := range sorted {
@@ -200,7 +199,7 @@ func runEchoShow(cmd *cobra.Command, args []string) error {
 	sorted := append([]echoEnvoyPresence(nil), match.Envoys...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Hostname < sorted[j].Hostname })
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n",
 		bold("HOST"), bold("STATUS"), bold("FILES"), bold("REVOKED"), bold("LAST UPDATE"))
 	for _, e := range sorted {

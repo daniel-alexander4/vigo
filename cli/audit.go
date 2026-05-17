@@ -6,7 +6,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
@@ -56,7 +55,7 @@ var auditListCmd = &cobra.Command{
 			return nil
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", header("TIMESTAMP"), header("TYPE"), header("OPERATOR"), header("SUMMARY"))
 		for _, e := range resp.Events {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",

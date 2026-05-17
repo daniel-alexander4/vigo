@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/user"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
@@ -48,7 +47,7 @@ var webusersListCmd = &cobra.Command{
 			return err
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("ID"), header("USERNAME"), header("DISPLAY NAME"), header("EMAIL"), header("ROLE"))
 		for _, u := range users {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", dim(u.ID), u.Username, u.DisplayName, u.Email, u.Role)

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
@@ -54,7 +53,7 @@ var runsListCmd = &cobra.Command{
 			return nil
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("ENVOY"), header("STARTED"), header("STATUS"), header("CHANGED"), header("FAILED"))
 		for _, r := range resp.Runs {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\t%d\n",
@@ -110,7 +109,7 @@ var runsShowCmd = &cobra.Command{
 
 		if len(resp.Results) > 0 {
 			fmt.Println()
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			w := newAlignedTable(os.Stdout)
 			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("MODULE"), header("TYPE"), header("RESOURCE"), header("ACTION"), header("CHANGED"), header("ERROR"))
 			for _, res := range resp.Results {
 				errStr := dim("-")
@@ -248,7 +247,7 @@ var runsDriftCmd = &cobra.Command{
 			return nil
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
 			header("HOSTNAME"), header("MODULE"), header("TYPE"),
 			header("RESOURCE"), header("ACTION"), header("ERROR"))

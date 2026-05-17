@@ -6,7 +6,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
@@ -68,7 +67,7 @@ Examples:
 
 		fmt.Printf("%s %d redundancies found\n\n", amber("!"), len(filtered))
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "  TYPE\tNAME\tFILE\tREASON\n")
 		for _, f := range filtered {
 			typeLabel := f.Type

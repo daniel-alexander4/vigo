@@ -17,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"git.alexander4.io/vigo/server/secrets"
@@ -359,7 +358,7 @@ func runSecretsList(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "  %s\n", header("KEY"))
 	for _, k := range keys {
 		fmt.Fprintf(w, "  %s\n", k)

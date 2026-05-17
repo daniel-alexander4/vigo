@@ -6,7 +6,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -71,7 +70,7 @@ var authListTokensCmd = &cobra.Command{
 			return nil
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("ID"), header("NAME"), header("PREFIX"), header("CREATED"), header("EXPIRES"))
 		for _, t := range tokens {
 			expires := "never"

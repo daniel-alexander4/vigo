@@ -9,7 +9,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
@@ -548,7 +547,7 @@ func renderVarInheritance(levels []inheritanceLevel, varSources []struct {
 	if len(varSources) > 0 {
 		fmt.Println()
 		fmt.Printf("  %s\n\n", bold("Variable Final Resolution:"))
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "    VARIABLE\tVALUE\tSOURCE\n")
 		for _, vs := range varSources {
 			val := fmt.Sprintf("%v", vs.Value)
@@ -602,7 +601,7 @@ func renderPasswordInheritance(refs []secretTraceEntry, provider string) {
 
 // renderDependencyInheritance draws Section 5: dependency DAG as a table.
 func renderDependencyInheritance(deps []dependencyTraceEntry) {
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "    TYPE\tFROM\t \tTO\n")
 	for _, d := range deps {
 		level := ""
@@ -752,7 +751,7 @@ func renderConditionalInheritance(conds []conditionalTraceEntry) {
 			return
 		}
 		fmt.Printf("  %s %s\n\n", bold(label), medGray(fmt.Sprintf("(%d)", len(group))))
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "    RESOURCE\tWHEN\n")
 		for _, c := range group {
 			scope := c.Module

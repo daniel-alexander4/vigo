@@ -6,7 +6,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
@@ -64,7 +63,7 @@ var queryCmd = &cobra.Command{
 			resp.Counts.Responded, resp.Counts.TimedOut, resp.Counts.Offline)
 
 		if len(resp.Responded) > 0 {
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			w := newAlignedTable(os.Stdout)
 			fmt.Fprintf(w, "%s\t%s\t%s\n", header("HOSTNAME"), header("VALUE"), header("STATUS"))
 			for _, r := range resp.Responded {
 				val := r.Value
@@ -80,7 +79,7 @@ var queryCmd = &cobra.Command{
 			if len(resp.Responded) > 0 {
 				fmt.Println()
 			}
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			w := newAlignedTable(os.Stdout)
 			fmt.Fprintf(w, "%s\t%s\t%s\n", header("HOSTNAME"), header("VALUE"), header("STATUS"))
 			for _, o := range resp.Offline {
 				val := o.Value
@@ -100,7 +99,7 @@ var queryCmd = &cobra.Command{
 			if len(resp.Responded) > 0 || len(resp.Offline) > 0 {
 				fmt.Println()
 			}
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+			w := newAlignedTable(os.Stdout)
 			fmt.Fprintf(w, "%s\t%s\n", header("HOSTNAME"), header("STATUS"))
 			for _, t := range resp.TimedOut {
 				fmt.Fprintf(w, "%s\ttimed_out\n", t.Hostname)

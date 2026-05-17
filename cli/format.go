@@ -217,24 +217,6 @@ func header(s string) string {
 	return catBold + catSapphire + s + catReset
 }
 
-// padR right-pads a plain string to `width` visible characters with
-// spaces. Use BEFORE wrapping the result in ANSI color codes — the
-// padding then sits inside the colored region, and the visible cell
-// width matches `width` regardless of how many invisible escape bytes
-// the wrap adds. This is the pattern that makes hand-formatted tables
-// align correctly even with mixed ANSI/plain cells; `text/tabwriter`
-// can't be trusted there because it counts bytes, not visible chars.
-//
-// Strings already wider than `width` are returned unchanged (caller
-// should truncate first if a hard cap is needed).
-func padR(s string, width int) string {
-	n := len(s)
-	if n >= width {
-		return s
-	}
-	return s + strings.Repeat(" ", width-n)
-}
-
 // colorStatus applies Catppuccin colors to compliance/run status strings.
 // Convergence buckets dispatch through convergence.ClassifyStatus so the
 // vocabulary stays consistent with the SoT; non-convergence status strings

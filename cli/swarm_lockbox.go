@@ -8,7 +8,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -127,7 +126,7 @@ func runLockboxStatus(cmd *cobra.Command, _ []string) error {
 
 	fmt.Printf("Lockbox fleet — generated %s\n\n", fleet.GeneratedAt.Local().Format("2006-01-02 15:04:05"))
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Users"), fleet.Totals.Users)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Envoys reporting"), fleet.Totals.Envoys)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Ciphertext files"), fleet.Totals.Files)
@@ -158,7 +157,7 @@ func runLockboxList(cmd *cobra.Command, _ []string) error {
 	sorted := append([]lockboxUserSummary(nil), fleet.Users...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].User < sorted[j].User })
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
 		bold("USER"), bold("ENVOYS"), bold("FILES"), bold("SIZE"), bold("UNLOCKED"), bold("STATE"))
 	for _, u := range sorted {
@@ -224,7 +223,7 @@ func runLockboxShow(cmd *cobra.Command, args []string) error {
 	sorted := append([]lockboxEnvoyPresence(nil), match.Envoys...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Hostname < sorted[j].Hostname })
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n",
 		bold("HOST"), bold("STATUS"), bold("FILES"), bold("TOMBSTONES"), bold("SESSION"), bold("LAST UPDATE"))
 	for _, e := range sorted {
@@ -277,7 +276,7 @@ func runLockboxMembers(args []string) error {
 			continue
 		}
 		fmt.Printf("USER: %s\n", u.User)
-		tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		tw := newAlignedTable(os.Stdout)
 		fmt.Fprintln(tw, "HOST\tSTATUS\tFILES\tSESSION")
 		sort.Slice(u.Envoys, func(i, j int) bool { return u.Envoys[i].Hostname < u.Envoys[j].Hostname })
 		for _, e := range u.Envoys {

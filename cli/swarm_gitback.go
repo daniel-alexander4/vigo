@@ -10,7 +10,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -156,7 +155,7 @@ func runGitbackStatus(cmd *cobra.Command, _ []string) error {
 	fmt.Printf("Gitback fleet — generated %s\n\n",
 		fleet.GeneratedAt.Local().Format("2006-01-02 15:04:05"))
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Projects"), fleet.Totals.Projects)
 	fmt.Fprintf(w, "%s\t%d\n", bold("Hosts"), fleet.Totals.Hosts)
 	fmt.Fprintf(w, "%s\t%s\n", bold("Divergent refs"), gitbackCountWarn(fleet.Totals.DivergentRefs))
@@ -190,7 +189,7 @@ func runGitbackList(cmd *cobra.Command, _ []string) error {
 		return sorted[i].ProjectID < sorted[j].ProjectID
 	})
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 		bold("HANDLE"), bold("SCOPE"), bold("MEMBERS"),
 		bold("HOSTS"), bold("DIVERGENT"), bold("ENVELOPES"), bold("PROJECT_ID"))
@@ -262,7 +261,7 @@ func runGitbackShow(cmd *cobra.Command, args []string) error {
 		}
 		sort.Strings(refKeys)
 		fmt.Println("Refs:")
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "  %s\t%s\t%s\n", bold("REF"), bold("CONSENSUS"), bold("LAGGING"))
 		for _, r := range refKeys {
 			st := match.HeadRefs[r]
@@ -288,7 +287,7 @@ func runGitbackShow(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 	fmt.Println("Hosts:")
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n",
 		bold("HOST"), bold("BARE REPO"), bold("SIZE"),
 		bold("USERS"), bold("LEAF ROLE"), bold("LAST SEEN"))
@@ -359,7 +358,7 @@ func renderGitbackMembers(selected []fleetProjectSummary, asJSON bool, out io.Wr
 
 	for _, p := range selected {
 		fmt.Fprintf(out, "PROJECT: %s  (project_id %s)\n", p.Handle, shortSha(p.ProjectID))
-		w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(out)
 		fmt.Fprintf(w, "%s\t%s\n", bold("ROLE"), bold("FLEET-PUBKEY"))
 		for i, fp := range p.Members {
 			role := "member"

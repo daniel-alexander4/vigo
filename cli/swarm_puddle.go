@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -144,7 +143,7 @@ func runPuddleNamesList(cmd *cobra.Command, _ []string) error {
 	}
 	sort.Strings(names)
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", bold("NAME"), bold("PUDDLE PUBKEY"), bold("CLAIMED"), bold("STATUS"))
 	collisions := 0
 	for _, n := range names {

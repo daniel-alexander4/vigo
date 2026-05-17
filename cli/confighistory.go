@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
@@ -35,7 +34,7 @@ var configHistoryCmd = &cobra.Command{
 			return nil
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", header("ID"), header("OPERATOR"), header("PUBLISHED AT"), header("CHANGED"), header("REMOVED"))
 		for _, p := range resp.Publishes {
 			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%d\n",

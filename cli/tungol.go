@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/tabwriter"
 
 	"git.alexander4.io/vigo/server/puddle"
 	"git.alexander4.io/vigo/server/secrets"
@@ -239,7 +238,7 @@ func runTungolStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Steorras: %d (%d healthy)\n", len(resp.Steorras), healthy)
 	fmt.Printf("  Total Envoys: %d\n\n", totalEnvoys)
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("ADDRESS"), header("ENVOYS"), header("COMPLIANT"), header("COMPLIANCE"), header("LATENCY"), header("PATTERNS"), header("STATUS"))
 	for _, s := range resp.Steorras {
 		status := colorStatus("healthy")
