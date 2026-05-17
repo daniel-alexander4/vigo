@@ -488,6 +488,40 @@ Reassign an envoy from one steorra to another.
 
 Drain all envoys from a steorra (move to target steorra or auto-route by patterns).
 
+### POST /api/v1/tungol/ops-puddle/pair-claim
+
+**Permission:** Admin role
+
+Claim a pair offer minted by `vigocli tungol ops-puddle pair` on this vigosrv. Validates the pair code against the on-disk pending-pair record, marks it used, appends the joining vigosrv's pubkey to the ops-puddle member list, and returns the raw 32-byte Ed25519 seed (base64) + friendly name + updated members list so the joining vigosrv can re-wrap the seed under its own master-key-derived wrap key.
+
+Called by `vigocli tungol ops-puddle join --from <this-vigosrv> --code <code>` on the joining vigosrv. mTLS protects the seed in transit; the pair code is the authorization factor and is single-use with a 5-minute TTL.
+
+**Request body:**
+
+```json
+{
+  "code": "8h3K_z2pYvR4qLwx",
+  "joining_pubkey": "ed25519:f81de2c4a8f1bb4d6e23b07c5b920fd1a2eb43d9a09f3e2b40c47ab9a83b66c1"
+}
+```
+
+**Response:**
+
+```json
+{
+  "seed_b64": "<base64 of raw 32-byte Ed25519 seed>",
+  "friendly_name": "alexander4-ops",
+  "members": [
+    {"pubkey": "ed25519:...", "joined_at": "2026-05-17T21:55:03Z"},
+    {"pubkey": "ed25519:...", "joined_at": "2026-05-17T22:01:14Z"}
+  ]
+}
+```
+
+**Errors:** `404` (no pending offer), `410` (code expired or already used), `403` (code mismatch), `503` (secrets backend doesn't support HKDF — only the `local` backend does in v1).
+
+Emits the `tungol.ops_puddle.member_added` audit event on success.
+
 ---
 
 ## Config

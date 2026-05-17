@@ -4,11 +4,13 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"git.alexander4.io/vigo/server/puddle"
 	"git.alexander4.io/vigo/server/secrets"
@@ -61,25 +63,63 @@ var tungolOpsPuddleStatusCmd = &cobra.Command{
 	RunE:  runTungolOpsPuddleStatus,
 }
 
+var tungolOpsPuddlePairCmd = &cobra.Command{
+	Use:   "pair",
+	Short: "Mint a 5-minute pair code authorizing another vigosrv to join this ops-puddle",
+	Long: `Generates a single-use pair code with a 5-minute TTL and writes a
+pending-pair record to --ops-puddle-dir/pending-pair (0600). Prints
+the joining command (with --from <this-host> + the code) for the
+operator to paste on the joining vigosrv.
+
+Run this on a vigosrv that already holds ops-puddle membership.
+Running again overwrites any prior outstanding offer.`,
+	RunE: runTungolOpsPuddlePair,
+}
+
+var tungolOpsPuddleJoinCmd = &cobra.Command{
+	Use:   "join --from <https-url> --code <code>",
+	Short: "Join an existing ops-puddle using a pair code minted on an existing member",
+	Long: `Calls /api/v1/tungol/ops-puddle/pair-claim on the --from vigosrv,
+unwraps the returned ops-puddle seed, re-wraps it under THIS
+vigosrv's master-key-derived wrap key, and persists the ops-puddle
+state under --ops-puddle-dir.
+
+Both --from (existing-member URL) and --code (the code printed by
+'pair') are required. Admin auth against --from must already be
+configured (vigocli auth login --server <from> or environment).`,
+	RunE: runTungolOpsPuddleJoin,
+}
+
 func init() {
 	tungolCmd.PersistentFlags().String("key-file", "", "Path to master encryption key (omit to auto-detect inside --secrets-dir)")
 	tungolCmd.PersistentFlags().String("secrets-dir", "/srv/vigo/secrets", "Directory holding the secrets backend's master key")
 	tungolCmd.PersistentFlags().String("puddle-dir", puddle.DefaultDir, "Directory holding this vigosrv's service-account puddle")
 	tungolCmd.PersistentFlags().String("ops-puddle-dir", puddle.OpsDefaultDir, "Directory holding the ops-puddle wrap (per-host)")
 
+	tungolOpsPuddleJoinCmd.Flags().String("from", "", "HTTPS URL of an existing ops-puddle member vigosrv (e.g. https://hub.example.com:8443)")
+	tungolOpsPuddleJoinCmd.Flags().String("code", "", "Pair code printed by `vigocli tungol ops-puddle pair` on --from")
+	_ = tungolOpsPuddleJoinCmd.MarkFlagRequired("from")
+	_ = tungolOpsPuddleJoinCmd.MarkFlagRequired("code")
+
 	tungolCmd.AddCommand(tungolStatusCmd)
 	tungolCmd.AddCommand(tungolSteorraCmd)
 	tungolCmd.AddCommand(tungolOpsPuddleCmd)
 	tungolOpsPuddleCmd.AddCommand(tungolOpsPuddleInitCmd)
 	tungolOpsPuddleCmd.AddCommand(tungolOpsPuddleStatusCmd)
+	tungolOpsPuddleCmd.AddCommand(tungolOpsPuddlePairCmd)
+	tungolOpsPuddleCmd.AddCommand(tungolOpsPuddleJoinCmd)
 
-	// Init writes new master-key-derived state — same operator-side gate as
-	// `vigocli secrets set`. requireUnlocked uses an exempt-by-verb-name map
-	// scoped to `vigocli secrets`, where "init" is the bootstrap verb;
-	// dispatching through that name here would silently exempt this verb.
-	// Wrap it so the gate is unconditional for tungol verbs that need it.
-	// Status reads public files only and stays open.
+	// Init / join write new master-key-derived state — same operator-side
+	// gate as `vigocli secrets set`. requireUnlocked uses an exempt-by-verb-
+	// name map scoped to `vigocli secrets`, where "init" is the bootstrap
+	// verb; dispatching through that name here would silently exempt these
+	// verbs. Wrap them so the gate is unconditional. Pair only writes the
+	// pending-pair record (no key material), but also gates because the
+	// operator must be authorized to authorize a new member. Status reads
+	// public files only and stays open.
 	tungolOpsPuddleInitCmd.PreRunE = requireUnlockedAlways
+	tungolOpsPuddlePairCmd.PreRunE = requireUnlockedAlways
+	tungolOpsPuddleJoinCmd.PreRunE = requireUnlockedAlways
 }
 
 // requireUnlockedAlways calls the underlying gate primitives without the
@@ -173,6 +213,126 @@ func trimTrailingNewline(s string) string {
 		return s[:len(s)-1]
 	}
 	return s
+}
+
+// runTungolOpsPuddlePair mints a fresh pair code, persists the
+// pending-pair record under --ops-puddle-dir, and prints the
+// command the operator should paste on the joining vigosrv.
+func runTungolOpsPuddlePair(cmd *cobra.Command, _ []string) error {
+	opsDir, _ := cmd.Flags().GetString("ops-puddle-dir")
+
+	// Sanity: pair only makes sense if this vigosrv already holds
+	// ops-puddle membership. Check by stat — no need to unwrap.
+	if _, err := os.Stat(puddle.WrappedPath(opsDir)); err != nil {
+		return fmt.Errorf(
+			"no ops-puddle at %s: %w (run `vigocli tungol ops-puddle init <name>` to found one, or `join` to claim one)",
+			opsDir, err,
+		)
+	}
+
+	code, err := puddle.GeneratePairCode()
+	if err != nil {
+		return fmt.Errorf("generating pair code: %w", err)
+	}
+	pending := &puddle.PendingPair{
+		CodeHash:  puddle.HashPairCode(code),
+		ExpiresAt: time.Now().UTC().Add(puddle.PairCodeTTL),
+		Used:      false,
+	}
+	if err := puddle.WritePendingPair(opsDir, pending); err != nil {
+		return fmt.Errorf("writing pending pair: %w", err)
+	}
+
+	thisHost := localHostnameForPair()
+	expires := pending.ExpiresAt.Local().Format("15:04:05 MST")
+
+	fmt.Printf("Pair offer minted (expires %s, single-use)\n\n", expires)
+	fmt.Printf("  On the joining vigosrv, run:\n\n")
+	fmt.Printf("    vigocli tungol ops-puddle join \\\n")
+	fmt.Printf("      --from https://%s:8443 \\\n", thisHost)
+	fmt.Printf("      --code %s\n\n", code)
+	fmt.Printf("  (The operator on the joining vigosrv must already have admin\n")
+	fmt.Printf("   credentials for this vigosrv — run `vigocli auth login --server\n")
+	fmt.Printf("   https://%s:8443` first if not.)\n", thisHost)
+	return nil
+}
+
+// localHostnameForPair returns a best-effort identifier for this
+// vigosrv to show in the join command. Falls back to "<this-host>"
+// if hostname lookup fails — the operator can replace it manually.
+func localHostnameForPair() string {
+	h, err := os.Hostname()
+	if err != nil || h == "" {
+		return "<this-host>"
+	}
+	return h
+}
+
+// runTungolOpsPuddleJoin claims a pair offer from --from, unwraps
+// the returned seed, re-wraps it under THIS vigosrv's local wrap
+// key, and persists the ops-puddle state.
+func runTungolOpsPuddleJoin(cmd *cobra.Command, _ []string) error {
+	from, _ := cmd.Flags().GetString("from")
+	code, _ := cmd.Flags().GetString("code")
+	keyFile, _ := cmd.Flags().GetString("key-file")
+	secretsDir, _ := cmd.Flags().GetString("secrets-dir")
+	puddleDir, _ := cmd.Flags().GetString("puddle-dir")
+	opsDir, _ := cmd.Flags().GetString("ops-puddle-dir")
+
+	// Local secrets backend + service-account puddle (to identify
+	// ourselves as the joining member).
+	provider, err := secrets.NewLocalProvider(keyFile, secretsDir)
+	if err != nil {
+		return fmt.Errorf("opening secrets backend: %w", err)
+	}
+	defer provider.Close()
+
+	svc, err := puddle.LoadIdentity(provider, puddleDir)
+	if err != nil {
+		return fmt.Errorf(
+			"loading service-account puddle from %s: %w (vigosrv must have run at least once to generate the service-account puddle)",
+			puddleDir, err,
+		)
+	}
+
+	// Cross-vigosrv call: build a one-off client against --from.
+	client := newAPIClientFor(from)
+	body := map[string]string{
+		"code":           code,
+		"joining_pubkey": svc.PublicKeyText,
+	}
+	var resp struct {
+		SeedB64      string             `json:"seed_b64"`
+		FriendlyName string             `json:"friendly_name"`
+		Members      []puddle.OpsMember `json:"members"`
+	}
+	if err := client.post("/api/v1/tungol/ops-puddle/pair-claim", body, &resp); err != nil {
+		return fmt.Errorf("pair-claim against %s: %w", from, err)
+	}
+
+	seed, err := base64.StdEncoding.DecodeString(resp.SeedB64)
+	if err != nil {
+		return fmt.Errorf("decoding seed from %s: %w", from, err)
+	}
+
+	ops, err := puddle.IngestOpsPuddle(provider, opsDir, resp.FriendlyName, seed, resp.Members)
+	if err != nil {
+		return fmt.Errorf("ingesting ops-puddle locally: %w", err)
+	}
+
+	fmt.Printf("Ops-puddle joined\n")
+	fmt.Printf("  Friendly name: %s\n", ops.FriendlyName)
+	fmt.Printf("  Pubkey:        %s\n", ops.PublicKeyText)
+	fmt.Printf("  Dir:           %s\n", opsDir)
+	fmt.Printf("  Members (%d):\n", len(ops.Members))
+	for _, m := range ops.Members {
+		marker := ""
+		if m.Pubkey == svc.PublicKeyText {
+			marker = " (this vigosrv)"
+		}
+		fmt.Printf("    - %s%s\n", m.Pubkey, marker)
+	}
+	return nil
 }
 
 // runTungolStatus prints this server's tungol role and (in hub mode)

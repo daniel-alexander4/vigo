@@ -76,7 +76,7 @@ Drains the steorra, then prints the YAML lines to remove from the hub's `tungol.
 
 ## ops-puddle init &lt;friendly-name&gt;
 
-Generates the ops-puddle's Ed25519 keypair, wraps it under this vigosrv's master-key-derived wrap key, and persists it under `--ops-puddle-dir`. This vigosrv's service-account puddle becomes member zero. Other vigosrvs join via the pair flow (Slice 2b, pending).
+Generates the ops-puddle's Ed25519 keypair, wraps it under this vigosrv's master-key-derived wrap key, and persists it under `--ops-puddle-dir`. This vigosrv's service-account puddle becomes member zero. Other vigosrvs join via the pair flow.
 
 The friendly name participates in gitback URLs (`gitback://<name>/stockpile`) — pick something stable; renaming requires re-founding the ops-puddle. Name validation rules mirror the agent's per-user puddle rules: 1–64 ASCII alphanumeric + `-` `_` `.`, no leading dot, and no 64-hex-character `project_id` lookalike.
 
@@ -94,3 +94,45 @@ Ops-puddle founded
 ## ops-puddle status
 
 Reads the public files in `--ops-puddle-dir` (friendly name, pubkey, members list) without unwrapping the signing key. Safe to run on a locked vault.
+
+## ops-puddle pair
+
+Mints a single-use pair code (16 chars, base64url, ~96 bits of entropy) with a 5-minute TTL and writes a `pending-pair` record to `--ops-puddle-dir/pending-pair` (mode 0600, only the SHA-256 of the code lands on disk). Prints the `join` command for the operator to paste on the joining vigosrv. Running again overwrites any prior outstanding offer.
+
+Requires this vigosrv to already hold ops-puddle membership (run `init` first if not). Requires an unlocked secrets vault.
+
+```
+$ vigocli tungol ops-puddle pair
+Pair offer minted (expires 14:55:03 PDT, single-use)
+
+  On the joining vigosrv, run:
+
+    vigocli tungol ops-puddle join \
+      --from https://hub.example.com:8443 \
+      --code 8h3K_z2pYvR4qLwx
+
+  (The operator on the joining vigosrv must already have admin
+   credentials for this vigosrv — run `vigocli auth login --server
+   https://hub.example.com:8443` first if not.)
+```
+
+## ops-puddle join --from &lt;https-url&gt; --code &lt;code&gt;
+
+Claims a pair offer from the `--from` vigosrv: POSTs `/api/v1/tungol/ops-puddle/pair-claim` with the code + this vigosrv's service-account puddle pubkey, receives the ops-puddle seed + friendly name + updated members list, re-wraps the seed under THIS vigosrv's master-key-derived wrap key, and persists the ops-puddle state under `--ops-puddle-dir`.
+
+Both vigosrvs end up with the same Ed25519 private key but wrapped under different per-host keys — so a master-key rotation on one side doesn't invalidate the other's copy.
+
+Refuses to overwrite an existing ops-puddle at `--ops-puddle-dir`. Requires an unlocked secrets vault and admin credentials for `--from` (configure via `vigocli auth login --server <from>` first if needed).
+
+```
+$ vigocli tungol ops-puddle join \
+    --from https://hub.example.com:8443 \
+    --code 8h3K_z2pYvR4qLwx
+Ops-puddle joined
+  Friendly name: alexander4-ops
+  Pubkey:        ed25519:274438afd5550b90c720c405acf07d3194fcd75c4ba2038adb25f6e688082d48
+  Dir:           /srv/vigo/ops-puddle
+  Members (2):
+    - ed25519:559812a17c032f71e0b2f842980951b95cde184b43e5522d06d41eb44c2f6b52
+    - ed25519:f81de2c4a8f1bb4d6e23b07c5b920fd1a2eb43d9a09f3e2b40c47ab9a83b66c1 (this vigosrv)
+```

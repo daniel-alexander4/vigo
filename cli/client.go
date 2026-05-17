@@ -21,17 +21,25 @@ type apiClient struct {
 }
 
 func newAPIClient() *apiClient {
+	return newAPIClientFor(serverURL)
+}
+
+// newAPIClientFor builds an apiClient against an explicit base URL.
+// Used by cross-vigosrv calls (notably `vigocli tungol ops-puddle
+// join --from <other>`). Auth token resolution is the same as
+// newAPIClient — the operator is expected to have run `vigocli
+// auth login --server <baseURL>` against the target host first.
+func newAPIClientFor(baseURL string) *apiClient {
 	hc := &http.Client{Timeout: 30 * time.Second}
-	if isLocalhost(serverURL) {
+	if isLocalhost(baseURL) {
 		hc.Transport = &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}
 	}
 	c := &apiClient{
-		baseURL:    serverURL,
+		baseURL:    baseURL,
 		httpClient: hc,
 	}
-	// Load auth token from config file if present.
 	c.authToken = loadAuthToken()
 	return c
 }

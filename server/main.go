@@ -893,6 +893,7 @@ func run() error {
 	doctorHandler.SetSwarmConfig(cfg.Swarm)
 
 	tungolHandler := api.NewTungolHandler(role, cfg.Tungol.SteorraID, hub)
+	opsPuddleHandler := api.NewTungolOpsPuddleHandler(provider, puddle.OpsDefaultDir, auditWriter)
 	taskHandler := api.NewTaskHandler(queries, agentSvc, cfg.Task.RequireDefinition)
 	taskHandler.SetAuditWriter(auditWriter)
 	queryHandler := api.NewQueryHandler(agentSvc)
@@ -1052,6 +1053,7 @@ func run() error {
 		licenseHandler.RegisterRoutes(mux)
 		doctorHandler.RegisterRoutes(mux)
 		tungolHandler.RegisterRoutes(mux)
+		opsPuddleHandler.RegisterRoutes(mux)
 		peerHandler.RegisterRoutes(mux)
 		taskHandler.RegisterRoutes(mux)
 		queryHandler.RegisterRoutes(mux)
@@ -1172,6 +1174,7 @@ func run() error {
 		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
 		tungolHandler.RegisterRoutes(gwMux)
+		opsPuddleHandler.RegisterRoutes(gwMux)
 		peerHandler.RegisterRoutes(gwMux)
 		taskHandler.RegisterRoutes(gwMux)
 		queryHandler.RegisterRoutes(gwMux)
