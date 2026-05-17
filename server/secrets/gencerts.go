@@ -11,10 +11,12 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -34,25 +36,54 @@ func TLSCertPaths(tlsDir string) (ca, caKey, cert, key string) {
 		filepath.Join(tlsDir, tlsKey)
 }
 
-// EnsureTLSCerts checks whether the four TLS PEM files exist under tlsDir
-// and generates self-signed certificates if any are missing. extraSANs are
-// additional DNS names or IP addresses to include (e.g., the host's LAN IP
-// when running inside Docker). Files are written as plain PEM (not encrypted)
-// since they are loaded directly by the TLS stack.
+// EnsureTLSCerts makes the on-disk TLS state match the expected SAN set.
 //
-// Only called for the local backend — isopass manages certs externally.
+//	First run (any file missing): generate a new CA + server cert.
+//	Subsequent runs: if the on-disk server cert already covers every expected
+//	SAN, no-op. Otherwise refresh just the server cert, signing it with the
+//	existing CA so enrolled clients keep their trust chain.
+//
+// Expected SANs = localhost + hostname + non-loopback interface IPs + extraSANs.
+// extraSANs comes from server.yaml `server.tls_sans:`. Only called for the
+// local backend — isopass manages certs externally.
 func EnsureTLSCerts(tlsDir string, extraSANs ...string) error {
 	caPath, caKeyPath, certPath, keyPath := TLSCertPaths(tlsDir)
+	dnsNames, ips := buildExpectedSANs(extraSANs)
+
 	for _, f := range []string{caPath, caKeyPath, certPath, keyPath} {
 		if _, err := os.Stat(f); os.IsNotExist(err) {
-			return generateSelfSignedCerts(tlsDir, extraSANs)
+			if err := generateCAAndServerCert(tlsDir, dnsNames, ips); err != nil {
+				return err
+			}
+			slog.Info("TLS certs generated", "dns", dnsNames, "ips", ipsToStrings(ips))
+			return nil
 		}
 	}
+
+	serverCert, err := readCert(certPath)
+	if err != nil {
+		return fmt.Errorf("reading server cert: %w", err)
+	}
+	if certCoversSANs(serverCert, dnsNames, ips) {
+		return nil
+	}
+
+	caCert, caKey, err := loadCA(caPath, caKeyPath)
+	if err != nil {
+		return fmt.Errorf("loading CA: %w", err)
+	}
+	if err := writeServerCert(tlsDir, caCert, caKey, dnsNames, ips); err != nil {
+		return err
+	}
+	slog.Info("TLS server cert refreshed for updated SANs",
+		"dns", dnsNames, "ips", ipsToStrings(ips))
 	return nil
 }
 
-func generateSelfSignedCerts(tlsDir string, extraSANs []string) error {
-	// SAN list: localhost + hostname + 127.0.0.1 + all non-loopback interface IPs.
+// buildExpectedSANs returns the DNS names and IPs that the server cert should
+// cover: localhost + hostname + non-loopback interface IPs + caller-supplied
+// extras (typically server.yaml tls_sans).
+func buildExpectedSANs(extraSANs []string) ([]string, []net.IP) {
 	dnsNames := []string{"localhost"}
 	ips := []net.IP{net.IPv4(127, 0, 0, 1)}
 	if hostname, err := os.Hostname(); err == nil && hostname != "localhost" {
@@ -65,8 +96,6 @@ func generateSelfSignedCerts(tlsDir string, extraSANs []string) error {
 			}
 		}
 	}
-
-	// Add extra SANs from config (e.g., host LAN IP when running in Docker).
 	for _, san := range extraSANs {
 		if ip := net.ParseIP(san); ip != nil {
 			ips = append(ips, ip)
@@ -74,8 +103,40 @@ func generateSelfSignedCerts(tlsDir string, extraSANs []string) error {
 			dnsNames = append(dnsNames, san)
 		}
 	}
+	return dnsNames, ips
+}
 
-	// Generate CA.
+// certCoversSANs reports whether every expected DNS name and IP is already
+// listed in the cert. Extra SANs on the cert are tolerated — only missing
+// expected entries trigger a refresh.
+func certCoversSANs(cert *x509.Certificate, expectedDNS []string, expectedIPs []net.IP) bool {
+	have := make(map[string]struct{}, len(cert.DNSNames))
+	for _, name := range cert.DNSNames {
+		have[strings.ToLower(name)] = struct{}{}
+	}
+	for _, name := range expectedDNS {
+		if _, ok := have[strings.ToLower(name)]; !ok {
+			return false
+		}
+	}
+	for _, want := range expectedIPs {
+		matched := false
+		for _, got := range cert.IPAddresses {
+			if got.Equal(want) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	return true
+}
+
+// generateCAAndServerCert creates a new CA + server cert and writes all four
+// PEM files. Used on first run (any of the four files missing).
+func generateCAAndServerCert(tlsDir string, dnsNames []string, ips []net.IP) error {
 	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return fmt.Errorf("generating CA key: %w", err)
@@ -92,22 +153,42 @@ func generateSelfSignedCerts(tlsDir string, extraSANs []string) error {
 		IsCA:                  true,
 		BasicConstraintsValid: true,
 	}
-
 	caCertDER, err := x509.CreateCertificate(rand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey)
 	if err != nil {
 		return fmt.Errorf("creating CA certificate: %w", err)
 	}
 	caCert, _ := x509.ParseCertificate(caCertDER)
 
-	// Generate server cert signed by CA.
+	caPath, caKeyPath, _, _ := TLSCertPaths(tlsDir)
+	if err := os.MkdirAll(tlsDir, 0700); err != nil {
+		return fmt.Errorf("creating TLS directory: %w", err)
+	}
+	caCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caCertDER})
+	caKeyDER, _ := x509.MarshalECPrivateKey(caKey)
+	caKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: caKeyDER})
+	if err := os.WriteFile(caPath, caCertPEM, 0644); err != nil {
+		return fmt.Errorf("writing %s: %w", caPath, err)
+	}
+	if err := os.WriteFile(caKeyPath, caKeyPEM, 0600); err != nil {
+		return fmt.Errorf("writing %s: %w", caKeyPath, err)
+	}
+
+	return writeServerCert(tlsDir, caCert, caKey, dnsNames, ips)
+}
+
+// writeServerCert signs a fresh server cert with the supplied CA and writes
+// it (and its private key) to disk. Caller is responsible for ensuring tlsDir
+// already exists with the CA files in place.
+func writeServerCert(tlsDir string, caCert *x509.Certificate, caKey *ecdsa.PrivateKey, dnsNames []string, ips []net.IP) error {
 	serverKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return fmt.Errorf("generating server key: %w", err)
 	}
 
-	serverSerial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	serverTemplate := &x509.Certificate{
-		SerialNumber:          serverSerial,
+	serial, _ := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
+	now := time.Now()
+	template := &x509.Certificate{
+		SerialNumber:          serial,
 		Subject:               pkix.Name{CommonName: dnsNames[0]},
 		DNSNames:              dnsNames,
 		IPAddresses:           ips,
@@ -117,42 +198,72 @@ func generateSelfSignedCerts(tlsDir string, extraSANs []string) error {
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
 	}
-
-	serverCertDER, err := x509.CreateCertificate(rand.Reader, serverTemplate, caCert, &serverKey.PublicKey, caKey)
+	certDER, err := x509.CreateCertificate(rand.Reader, template, caCert, &serverKey.PublicKey, caKey)
 	if err != nil {
 		return fmt.Errorf("creating server certificate: %w", err)
 	}
 
-	// PEM encode.
-	caCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caCertDER})
-	caKeyDER, _ := x509.MarshalECPrivateKey(caKey)
-	caKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: caKeyDER})
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	keyDER, _ := x509.MarshalECPrivateKey(serverKey)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER})
 
-	serverCertPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: serverCertDER})
-	serverKeyDER, _ := x509.MarshalECPrivateKey(serverKey)
-	serverKeyPEM := pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: serverKeyDER})
-
-	// Write PEM files to the TLS directory.
-	caPath, caKeyPath, certPath, keyPath := TLSCertPaths(tlsDir)
-	if err := os.MkdirAll(tlsDir, 0700); err != nil {
-		return fmt.Errorf("creating TLS directory: %w", err)
+	_, _, certPath, keyPath := TLSCertPaths(tlsDir)
+	if err := os.WriteFile(certPath, certPEM, 0644); err != nil {
+		return fmt.Errorf("writing %s: %w", certPath, err)
 	}
-
-	files := []struct {
-		path string
-		data []byte
-		mode os.FileMode
-	}{
-		{caPath, caCertPEM, 0644},
-		{caKeyPath, caKeyPEM, 0600},
-		{certPath, serverCertPEM, 0644},
-		{keyPath, serverKeyPEM, 0600},
+	if err := os.WriteFile(keyPath, keyPEM, 0600); err != nil {
+		return fmt.Errorf("writing %s: %w", keyPath, err)
 	}
-	for _, f := range files {
-		if err := os.WriteFile(f.path, f.data, f.mode); err != nil {
-			return fmt.Errorf("writing %s: %w", f.path, err)
-		}
-	}
-
 	return nil
+}
+
+// loadCA parses the on-disk CA certificate and private key.
+func loadCA(caPath, caKeyPath string) (*x509.Certificate, *ecdsa.PrivateKey, error) {
+	certPEM, err := os.ReadFile(caPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("reading %s: %w", caPath, err)
+	}
+	block, _ := pem.Decode(certPEM)
+	if block == nil {
+		return nil, nil, fmt.Errorf("%s: no PEM block", caPath)
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parsing %s: %w", caPath, err)
+	}
+
+	keyPEM, err := os.ReadFile(caKeyPath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("reading %s: %w", caKeyPath, err)
+	}
+	keyBlock, _ := pem.Decode(keyPEM)
+	if keyBlock == nil {
+		return nil, nil, fmt.Errorf("%s: no PEM block", caKeyPath)
+	}
+	key, err := x509.ParseECPrivateKey(keyBlock.Bytes)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parsing %s: %w", caKeyPath, err)
+	}
+	return cert, key, nil
+}
+
+// readCert parses a single x509 certificate from a PEM file.
+func readCert(path string) (*x509.Certificate, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, fmt.Errorf("%s: no PEM block", path)
+	}
+	return x509.ParseCertificate(block.Bytes)
+}
+
+func ipsToStrings(ips []net.IP) []string {
+	out := make([]string, len(ips))
+	for i, ip := range ips {
+		out[i] = ip.String()
+	}
+	return out
 }

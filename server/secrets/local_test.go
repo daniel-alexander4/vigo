@@ -4,6 +4,7 @@
 package secrets
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/x509"
@@ -13,6 +14,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func setupLocalProvider(t *testing.T) (*LocalProvider, string) {
@@ -582,6 +584,93 @@ func TestEnsureTLSCertsExtraSANs(t *testing.T) {
 	}
 	if !foundDNS {
 		t.Errorf("cert DNSNames %v missing vigo.example.com", cert.DNSNames)
+	}
+}
+
+// TestEnsureTLSCertsRefreshesOnSANDrift verifies that adding a new SAN to
+// the expected set triggers a server-cert refresh, while leaving the CA
+// untouched so existing enrollments keep their trust chain. Uses DNS names
+// in the TEST-NET / RFC2606 documentation ranges so the test is independent
+// of the machine's actual network configuration.
+func TestEnsureTLSCertsRefreshesOnSANDrift(t *testing.T) {
+	tlsDir := t.TempDir()
+
+	if err := EnsureTLSCerts(tlsDir, "vigo-old.example.test"); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	caPath, caKeyPath, certPath, _ := TLSCertPaths(tlsDir)
+	caBefore, _ := os.ReadFile(caPath)
+	caKeyBefore, _ := os.ReadFile(caKeyPath)
+	certBefore, _ := os.ReadFile(certPath)
+
+	if err := EnsureTLSCerts(tlsDir, "vigo-new.example.test"); err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+	caAfter, _ := os.ReadFile(caPath)
+	caKeyAfter, _ := os.ReadFile(caKeyPath)
+	certAfter, _ := os.ReadFile(certPath)
+
+	if !bytes.Equal(caBefore, caAfter) {
+		t.Error("CA cert changed across SAN drift — should preserve the CA")
+	}
+	if !bytes.Equal(caKeyBefore, caKeyAfter) {
+		t.Error("CA key changed across SAN drift — should preserve the CA key")
+	}
+	if bytes.Equal(certBefore, certAfter) {
+		t.Error("server cert unchanged across SAN drift — should have been refreshed")
+	}
+
+	block, _ := pem.Decode(certAfter)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		t.Fatalf("ParseCertificate: %v", err)
+	}
+	found := false
+	for _, name := range cert.DNSNames {
+		if name == "vigo-new.example.test" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("refreshed cert DNSNames %v missing vigo-new.example.test", cert.DNSNames)
+	}
+
+	// The refreshed server cert must verify against the original CA.
+	caBlock, _ := pem.Decode(caBefore)
+	caCert, err := x509.ParseCertificate(caBlock.Bytes)
+	if err != nil {
+		t.Fatalf("ParseCertificate(CA): %v", err)
+	}
+	roots := x509.NewCertPool()
+	roots.AddCert(caCert)
+	if _, err := cert.Verify(x509.VerifyOptions{
+		Roots:       roots,
+		DNSName:     "vigo-new.example.test",
+		CurrentTime: time.Now(),
+		KeyUsages:   []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}); err != nil {
+		t.Errorf("refreshed cert not signed by original CA: %v", err)
+	}
+}
+
+// TestEnsureTLSCertsNoRefreshWhenCovered verifies that shrinking the expected
+// SAN set is a no-op — the on-disk cert is a superset of what's needed.
+func TestEnsureTLSCertsNoRefreshWhenCovered(t *testing.T) {
+	tlsDir := t.TempDir()
+
+	if err := EnsureTLSCerts(tlsDir, "vigo-a.example.test", "vigo-b.example.test"); err != nil {
+		t.Fatalf("first call: %v", err)
+	}
+	_, _, certPath, _ := TLSCertPaths(tlsDir)
+	before, _ := os.ReadFile(certPath)
+
+	if err := EnsureTLSCerts(tlsDir, "vigo-a.example.test"); err != nil {
+		t.Fatalf("second call: %v", err)
+	}
+	after, _ := os.ReadFile(certPath)
+
+	if !bytes.Equal(before, after) {
+		t.Error("server cert regenerated when expected SANs were already covered — should be a no-op")
 	}
 }
 
