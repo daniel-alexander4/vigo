@@ -563,8 +563,13 @@ if $NEED_HOST_UPDATE; then
         # --server: host CLI from local build, server binary from Docker image.
         cp "$REPO_DIR/bin/vigocli" /usr/local/bin/vigocli
     else
-        # Pull or full rebuild: extract from the new container.
-        docker cp vigo:/usr/local/bin/vigocli /usr/local/bin/vigocli
+        # Pull or full rebuild: extract from the IMAGE, not a running container —
+        # `--build` without `--start` leaves the old container down and the new
+        # one not yet up. `docker create` makes an unstarted container we can
+        # `docker cp` out of regardless of compose state.
+        cid=$(docker create "$IMAGE")
+        docker cp "$cid:/usr/local/bin/vigocli" /usr/local/bin/vigocli
+        docker rm "$cid" >/dev/null
     fi
     # Root-only: peer auth trusts any localhost caller, so file mode is the gate.
     chown root:root /usr/local/bin/vigocli
