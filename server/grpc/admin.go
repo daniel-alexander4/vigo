@@ -715,7 +715,13 @@ func (s *AdminService) ReportSteorraStatus(ctx context.Context, req *pb.SteorraS
 		return nil, status.Errorf(codes.FailedPrecondition, "server is not a hub")
 	}
 
-	s.hub.RecordSteorraReport(req)
+	if err := s.hub.RecordSteorraReport(ctx, req); err != nil {
+		// Phase 1: identity-verify or pin-mismatch failures reject
+		// the report with PermissionDenied so the steorra sees a
+		// distinct status code (vs Unavailable from a transport
+		// hiccup). Audit event already emitted by the hub.
+		return nil, status.Errorf(codes.PermissionDenied, "report rejected: %v", err)
+	}
 
 	slog.Debug("received steorra status report",
 		"steorra_id", req.SteorraId,

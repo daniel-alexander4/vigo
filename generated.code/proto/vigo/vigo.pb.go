@@ -6145,8 +6145,22 @@ type SteorraStatusReport struct {
 	ConfigVersion  uint64                 `protobuf:"varint,9,opt,name=config_version,json=configVersion,proto3" json:"config_version,omitempty"`
 	Diverged       int32                  `protobuf:"varint,10,opt,name=diverged,proto3" json:"diverged,omitempty"`
 	Degraded       int32                  `protobuf:"varint,11,opt,name=degraded,proto3" json:"degraded,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Phase 1 (ADR-tungol): per-steorra cryptographic identity.
+	// tungol_id is the operator-declared federation anchor (matches
+	// the hub's tungol_id). steorra_pubkey is the raw 32-byte Ed25519
+	// public key of this steorra (held in /srv/vigo/steorra/identity.*).
+	// signature is the 64-byte Ed25519 signature over the canonical
+	// serialization of fields 1-11 + 12 with steorra_pubkey + signature
+	// cleared (mirroring the PolicyBundle pattern in bundlesign.go).
+	// Hubs pin (tungol_id, steorra_id) → steorra_pubkey on first sight;
+	// mismatches on subsequent reports raise a tungol_steorra_pubkey_mismatch
+	// audit event and the report is rejected. Pre-Phase-1 reporters
+	// omit these fields; hubs treat absent fields as "legacy, log + skip".
+	TungolId      string `protobuf:"bytes,12,opt,name=tungol_id,json=tungolId,proto3" json:"tungol_id,omitempty"`
+	SteorraPubkey []byte `protobuf:"bytes,13,opt,name=steorra_pubkey,json=steorraPubkey,proto3" json:"steorra_pubkey,omitempty"`
+	Signature     []byte `protobuf:"bytes,14,opt,name=signature,proto3" json:"signature,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SteorraStatusReport) Reset() {
@@ -6254,6 +6268,27 @@ func (x *SteorraStatusReport) GetDegraded() int32 {
 		return x.Degraded
 	}
 	return 0
+}
+
+func (x *SteorraStatusReport) GetTungolId() string {
+	if x != nil {
+		return x.TungolId
+	}
+	return ""
+}
+
+func (x *SteorraStatusReport) GetSteorraPubkey() []byte {
+	if x != nil {
+		return x.SteorraPubkey
+	}
+	return nil
+}
+
+func (x *SteorraStatusReport) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
 }
 
 type SteorraStatusAck struct {
@@ -7911,7 +7946,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x14DrainSteorraResponse\x12\x14\n" +
 	"\x05moved\x18\x01 \x01(\x05R\x05moved\x12\x16\n" +
 	"\x06failed\x18\x02 \x01(\x05R\x06failed\x12\x16\n" +
-	"\x06errors\x18\x03 \x03(\tR\x06errors\"\xe2\x02\n" +
+	"\x06errors\x18\x03 \x03(\tR\x06errors\"\xc4\x03\n" +
 	"\x13SteorraStatusReport\x12\x1d\n" +
 	"\n" +
 	"steorra_id\x18\x01 \x01(\tR\tsteorraId\x12\x1f\n" +
@@ -7926,7 +7961,10 @@ const file_vigo_proto_rawDesc = "" +
 	"\x0econfig_version\x18\t \x01(\x04R\rconfigVersion\x12\x1a\n" +
 	"\bdiverged\x18\n" +
 	" \x01(\x05R\bdiverged\x12\x1a\n" +
-	"\bdegraded\x18\v \x01(\x05R\bdegraded\"\x12\n" +
+	"\bdegraded\x18\v \x01(\x05R\bdegraded\x12\x1b\n" +
+	"\ttungol_id\x18\f \x01(\tR\btungolId\x12%\n" +
+	"\x0esteorra_pubkey\x18\r \x01(\fR\rsteorraPubkey\x12\x1c\n" +
+	"\tsignature\x18\x0e \x01(\fR\tsignature\"\x12\n" +
 	"\x10SteorraStatusAck\"\xb8\x01\n" +
 	"\x0fPeerSyncMessage\x12:\n" +
 	"\vfile_change\x18\x01 \x01(\v2\x17.vigo.v1.PeerFileChangeH\x00R\n" +

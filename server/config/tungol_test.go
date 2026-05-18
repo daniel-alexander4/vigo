@@ -38,6 +38,7 @@ func TestTungolSection_FullSteorraParse(t *testing.T) {
 	input := `
 tungol:
   role: spoke
+  tungol_id: alexander4-prod
   steorra_id: dc1
   hub_addr: hub.example.com:1530
 `
@@ -48,6 +49,9 @@ tungol:
 
 	if cfg.Tungol.Role != RoleSpoke {
 		t.Errorf("role = %q, want spoke", cfg.Tungol.Role)
+	}
+	if cfg.Tungol.TungolID != "alexander4-prod" {
+		t.Errorf("tungol_id = %q, want alexander4-prod", cfg.Tungol.TungolID)
 	}
 	if cfg.Tungol.SteorraID != "dc1" {
 		t.Errorf("steorra_id = %q, want dc1", cfg.Tungol.SteorraID)
@@ -98,14 +102,30 @@ func TestTungolSection_Validate(t *testing.T) {
 			name: "hub with steorras",
 			section: TungolSection{
 				Role:     RoleHub,
+				TungolID: "alexander4-prod",
 				Steorras: []SteorraEntry{{ID: "dc1", Addr: "steorra1:1530"}},
 			},
 		},
-		{name: "hub without steorras", section: TungolSection{Role: RoleHub}, wantErr: true},
+		{
+			name:    "hub without tungol_id",
+			section: TungolSection{Role: RoleHub, Steorras: []SteorraEntry{{ID: "dc1", Addr: "x:1"}}},
+			wantErr: true,
+		},
+		{
+			name:    "hub with invalid tungol_id (has space)",
+			section: TungolSection{Role: RoleHub, TungolID: "bad name", Steorras: []SteorraEntry{{ID: "dc1", Addr: "x:1"}}},
+			wantErr: true,
+		},
+		{
+			name:    "hub without steorras",
+			section: TungolSection{Role: RoleHub, TungolID: "alexander4-prod"},
+			wantErr: true,
+		},
 		{
 			name: "hub with steorra missing id",
 			section: TungolSection{
 				Role:     RoleHub,
+				TungolID: "alexander4-prod",
 				Steorras: []SteorraEntry{{Addr: "steorra1:1530"}},
 			},
 			wantErr: true,
@@ -114,13 +134,18 @@ func TestTungolSection_Validate(t *testing.T) {
 			name: "hub with steorra missing addr",
 			section: TungolSection{
 				Role:     RoleHub,
+				TungolID: "alexander4-prod",
 				Steorras: []SteorraEntry{{ID: "dc1"}},
 			},
 			wantErr: true,
 		},
-		{name: "spoke with id", section: TungolSection{Role: RoleSpoke, SteorraID: "dc1"}},
-		{name: "spoke without id", section: TungolSection{Role: RoleSpoke}, wantErr: true},
-		{name: "invalid role", section: TungolSection{Role: "bogus"}, wantErr: true},
+		{
+			name:    "spoke with id and tungol_id",
+			section: TungolSection{Role: RoleSpoke, TungolID: "alexander4-prod", SteorraID: "dc1"},
+		},
+		{name: "spoke without tungol_id", section: TungolSection{Role: RoleSpoke, SteorraID: "dc1"}, wantErr: true},
+		{name: "spoke without steorra_id", section: TungolSection{Role: RoleSpoke, TungolID: "alexander4-prod"}, wantErr: true},
+		{name: "invalid role", section: TungolSection{Role: "bogus", TungolID: "alexander4-prod"}, wantErr: true},
 	}
 
 	for _, tt := range tests {

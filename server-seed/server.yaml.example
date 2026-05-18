@@ -202,6 +202,7 @@ watcher:
 # --- Hub: aggregates admin queries from steorras ---
 # tungol:
 #   role: hub
+#   tungol_id: "alexander4-prod"                # federation id (required for hub/spoke)
 #   steorras:
 #     - id: dc1
 #       addr: "steorra1.example.com:1530"
@@ -217,6 +218,7 @@ watcher:
 # --- Spoke role: this vigosrv is one steorra in the tungol ---
 # tungol:
 #   role: spoke
+#   tungol_id: "alexander4-prod"                # must match the hub's tungol_id
 #   steorra_id: "dc1"
 #   hub_addr: "hub.example.com:1530"            # enables steorra→hub status reporting
 #   hub_fallback_addrs:                          # fallback hub addresses for failover

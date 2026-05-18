@@ -64,6 +64,7 @@ import (
 	"git.alexander4.io/vigo/server/peer"
 	"git.alexander4.io/vigo/server/puddle"
 	"git.alexander4.io/vigo/server/risk"
+	"git.alexander4.io/vigo/server/steorra"
 	"git.alexander4.io/vigo/server/stockpilewatch"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
@@ -170,6 +171,34 @@ func run() error {
 	}
 	if err := cfg.Tungol.Validate(); err != nil {
 		return err
+	}
+
+	// Phase 1 (ADR-tungol): per-steorra Ed25519 identity. Generated
+	// on first boot under /srv/vigo/steorra/, wrapped via HKDF
+	// purpose `vigo-steorra-wrap-v1` over the secrets master key.
+	// Used by the reporter to sign every announcement so the hub
+	// can verify + pin (tungol_id, steorra_id) → pubkey. Only
+	// required in tungol mode + local secrets backend; isopass and
+	// other backends run without a steorra identity (legacy
+	// unsigned reports, accepted without pinning).
+	var steorraID *steorra.Identity
+	if role != config.RoleStandalone {
+		if local, ok := provider.(*secrets.LocalProvider); ok {
+			id, err := steorra.EnsureIdentity(local, steorra.DefaultDir)
+			if err != nil {
+				return fmt.Errorf("steorra identity: %w", err)
+			}
+			steorraID = id
+			slog.Info("steorra identity ready",
+				"pubkey", id.PublicKeyText,
+				"tungol_id", cfg.Tungol.TungolID,
+				"dir", steorra.DefaultDir,
+			)
+		} else {
+			slog.Warn("steorra identity skipped — non-local secrets backend; reports will be unsigned (mixed-version-compatible)",
+				"backend", secretsCfg.Backend,
+			)
+		}
 	}
 
 	slog.Info("server config loaded",
@@ -490,6 +519,8 @@ func run() error {
 			return fmt.Errorf("connecting to steorras: %w", err)
 		}
 		defer hub.Close()
+		// Phase 1: wire audit writer for tungol_steorra_pubkey_mismatch events.
+		hub.SetAuditWriter(auditWriter)
 		slog.Info("tungol hub initialized", "steorras", hub.SteorraCount())
 
 		// Start auto-failover if enabled.
@@ -893,7 +924,7 @@ func run() error {
 	// uiHandler swarm-config setters.
 	doctorHandler.SetSwarmConfig(cfg.Swarm)
 
-	tungolHandler := api.NewTungolHandler(role, cfg.Tungol.SteorraID, hub)
+	tungolHandler := api.NewTungolHandler(role, cfg.Tungol.TungolID, cfg.Tungol.SteorraID, formatLocalSteorraPubkey(steorraID), hub)
 	opsPuddleHandler := api.NewTungolOpsPuddleHandler(provider, puddle.OpsDefaultDir, auditWriter)
 
 	// Stockpile watcher (ADR-025 Slice 3): watches the ops-puddle's
@@ -1379,6 +1410,8 @@ func run() error {
 		if cfg.Tungol.HubAddr != "" {
 			reporter := tungol.NewReporter(
 				cfg.Tungol.SteorraID,
+				cfg.Tungol.TungolID,
+				steorraSigningKeyOrNil(steorraID),
 				cfg.Tungol.HubAddr,
 				cfg.Tungol.HubFallbackAddrs,
 				cfg.Server.TLS.CertFile,
@@ -2490,6 +2523,39 @@ func curatorEnvoyInputs(fleetIdx *fleet.FleetIndex) []curatormesh.EnvoyInput {
 // regardless of order or duplicates. Used by the publish hook to decide
 // whether a subsystem's authorization patterns materially changed across
 // a reload.
+// formatLocalSteorraPubkey returns the first-16-char hex of the
+// loaded steorra identity's raw 32-byte pubkey, or "" if no
+// identity is loaded. Surfaced in /api/v1/tungol/status as
+// `local_steorra_pubkey` for operator cross-check on alarms.
+func formatLocalSteorraPubkey(id *steorra.Identity) string {
+	if id == nil {
+		return ""
+	}
+	pk := []byte(id.PublicKey)
+	if len(pk) < 8 {
+		return ""
+	}
+	const out = 16
+	hexStr := make([]byte, 0, out)
+	const digits = "0123456789abcdef"
+	for _, b := range pk[:out/2] {
+		hexStr = append(hexStr, digits[b>>4], digits[b&0xf])
+	}
+	return string(hexStr)
+}
+
+// steorraSigningKeyOrNil returns the steorra identity's signing key
+// or nil when the identity wasn't loaded (non-tungol mode, or
+// non-local secrets backend). nil propagates through to
+// tungol.NewReporter, which produces legacy unsigned reports —
+// hubs accept those without pinning during mixed-version rollout.
+func steorraSigningKeyOrNil(id *steorra.Identity) ed25519.PrivateKey {
+	if id == nil {
+		return nil
+	}
+	return id.SigningKey
+}
+
 // lookupStockpileProjectID returns the hex project_id of the
 // ops-puddle's stockpile gitback project on this vigosrv, by
 // walking <opsPuddleDir>/.vigo-gitback/<id>/project.json files

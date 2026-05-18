@@ -50,11 +50,25 @@ type Identity struct {
 // ADR-018 or, in the degenerate single-vigosrv case, delete the
 // directory and re-init).
 func EnsureIdentity(deriver KeyDeriver, dir string) (*Identity, error) {
+	return EnsureIdentityWithPurpose(deriver, dir, HKDFPurpose)
+}
+
+// EnsureIdentityWithPurpose is the parameterized core of EnsureIdentity:
+// the HKDF purpose string binds the wrap-key derivation to a specific
+// use. Service-account puddles call EnsureIdentity (purpose
+// `vigo-puddle-wrap-v1`); sibling identity packages (server/steorra,
+// future per-role identities) call this directly with their own
+// purpose so a theoretical master-key leak that only exposes one
+// derivation cannot cross the role boundary.
+func EnsureIdentityWithPurpose(deriver KeyDeriver, dir, purpose string) (*Identity, error) {
 	if deriver == nil {
 		return nil, errors.New("puddle: nil key deriver")
 	}
 	if dir == "" {
 		return nil, errors.New("puddle: empty dir")
+	}
+	if purpose == "" {
+		return nil, errors.New("puddle: empty HKDF purpose")
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("puddle: creating %s: %w", dir, err)
@@ -65,24 +79,33 @@ func EnsureIdentity(deriver KeyDeriver, dir string) (*Identity, error) {
 	pubkeyPath := PubkeyPath(dir)
 
 	if _, err := os.Stat(wrappedPath); errors.Is(err, os.ErrNotExist) {
-		return initIdentity(deriver, dir, wrappedPath, saltPath, pubkeyPath)
+		return initIdentity(deriver, dir, purpose, wrappedPath, saltPath, pubkeyPath)
 	} else if err != nil {
 		return nil, fmt.Errorf("puddle: stat %s: %w", wrappedPath, err)
 	}
-	return loadIdentity(deriver, wrappedPath, saltPath, pubkeyPath)
+	return loadIdentity(deriver, purpose, wrappedPath, saltPath, pubkeyPath)
 }
 
 // LoadIdentity unwraps an existing identity. Errors if the wrapped
 // file is missing — callers wanting first-time generation use
 // EnsureIdentity.
 func LoadIdentity(deriver KeyDeriver, dir string) (*Identity, error) {
+	return LoadIdentityWithPurpose(deriver, dir, HKDFPurpose)
+}
+
+// LoadIdentityWithPurpose is the parameterized core of LoadIdentity;
+// see EnsureIdentityWithPurpose for the purpose-string contract.
+func LoadIdentityWithPurpose(deriver KeyDeriver, dir, purpose string) (*Identity, error) {
 	if deriver == nil {
 		return nil, errors.New("puddle: nil key deriver")
 	}
-	return loadIdentity(deriver, WrappedPath(dir), SaltPath(dir), PubkeyPath(dir))
+	if purpose == "" {
+		return nil, errors.New("puddle: empty HKDF purpose")
+	}
+	return loadIdentity(deriver, purpose, WrappedPath(dir), SaltPath(dir), PubkeyPath(dir))
 }
 
-func initIdentity(deriver KeyDeriver, dir, wrappedPath, saltPath, pubkeyPath string) (*Identity, error) {
+func initIdentity(deriver KeyDeriver, dir, purpose, wrappedPath, saltPath, pubkeyPath string) (*Identity, error) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("puddle: generate keypair: %w", err)
@@ -93,7 +116,7 @@ func initIdentity(deriver KeyDeriver, dir, wrappedPath, saltPath, pubkeyPath str
 	if err != nil {
 		return nil, fmt.Errorf("puddle: %w", err)
 	}
-	wrapKey, err := deriver.DeriveKey(HKDFPurpose, salt, wrapKeyLen)
+	wrapKey, err := deriver.DeriveKey(purpose, salt, wrapKeyLen)
 	if err != nil {
 		return nil, fmt.Errorf("puddle: derive wrap key: %w", err)
 	}
@@ -116,7 +139,7 @@ func initIdentity(deriver KeyDeriver, dir, wrappedPath, saltPath, pubkeyPath str
 	return &Identity{SigningKey: priv, PublicKey: pub, PublicKeyText: pubText}, nil
 }
 
-func loadIdentity(deriver KeyDeriver, wrappedPath, saltPath, pubkeyPath string) (*Identity, error) {
+func loadIdentity(deriver KeyDeriver, purpose, wrappedPath, saltPath, pubkeyPath string) (*Identity, error) {
 	envelope, err := os.ReadFile(wrappedPath)
 	if err != nil {
 		return nil, fmt.Errorf("puddle: reading %s: %w", wrappedPath, err)
@@ -128,7 +151,7 @@ func loadIdentity(deriver KeyDeriver, wrappedPath, saltPath, pubkeyPath string) 
 	if len(salt) != SaltLen {
 		return nil, fmt.Errorf("puddle: salt at %s is %d bytes, expected %d", saltPath, len(salt), SaltLen)
 	}
-	wrapKey, err := deriver.DeriveKey(HKDFPurpose, salt, wrapKeyLen)
+	wrapKey, err := deriver.DeriveKey(purpose, salt, wrapKeyLen)
 	if err != nil {
 		return nil, fmt.Errorf("puddle: derive wrap key: %w", err)
 	}

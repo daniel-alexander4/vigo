@@ -4,8 +4,10 @@
 package api
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/config"
@@ -13,24 +15,51 @@ import (
 )
 
 // TungolStatus is the response for GET /api/v1/tungol/status.
+//
+// Phase 1 additions: TungolID and LocalSteorraPubkey surface this
+// vigosrv's federation anchor + identity for operator cross-check
+// when an alarm fires. The per-steorra Steorras entries gain pinned
+// pubkey + pin timestamp populated from Hub.LookupSteorraPin.
 type TungolStatus struct {
-	Role      string               `json:"role"`
-	SteorraID string               `json:"steorra_id,omitempty"`
-	Steorras  []tungol.SteorraStatus `json:"steorras,omitempty"`
+	Role               string                 `json:"role"`
+	TungolID           string                 `json:"tungol_id,omitempty"`
+	SteorraID          string                 `json:"steorra_id,omitempty"`
+	LocalSteorraPubkey string                 `json:"local_steorra_pubkey,omitempty"`
+	Steorras           []tungol.SteorraStatus `json:"steorras,omitempty"`
+	SteorraPins        []SteorraPinView       `json:"steorra_pins,omitempty"`
+}
+
+// SteorraPinView is the operator-visible projection of a
+// Hub.SteorraPin record. Hex-encoded pubkey + RFC3339 timestamps
+// so vigocli renders them without further conversion.
+type SteorraPinView struct {
+	TungolID  string `json:"tungol_id"`
+	SteorraID string `json:"steorra_id"`
+	Pubkey    string `json:"pubkey"`
+	PinnedAt  string `json:"pinned_at"`
+	LastSeen  string `json:"last_seen"`
 }
 
 // TungolHandler serves tungol status endpoints. The underlying
 // implementation is still the hub + steorras model from server/tungol;
 // Phase 1+ will replace it with peer-equal gossip.
 type TungolHandler struct {
-	role      config.TungolRole
-	steorraID string
-	hub       *tungol.Hub
+	role         config.TungolRole
+	tungolID     string
+	steorraID    string
+	localPubkey  string // first-16-char hex of the local steorra identity (or "" if absent)
+	hub          *tungol.Hub
 }
 
 // NewTungolHandler creates a tungol handler.
-func NewTungolHandler(role config.TungolRole, steorraID string, hub *tungol.Hub) *TungolHandler {
-	return &TungolHandler{role: role, steorraID: steorraID, hub: hub}
+func NewTungolHandler(role config.TungolRole, tungolID, steorraID, localPubkey string, hub *tungol.Hub) *TungolHandler {
+	return &TungolHandler{
+		role:        role,
+		tungolID:    tungolID,
+		steorraID:   steorraID,
+		localPubkey: localPubkey,
+		hub:         hub,
+	}
 }
 
 // RegisterRoutes mounts tungol endpoints on the given mux. Mutations
@@ -59,16 +88,45 @@ func (h *TungolHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := TungolStatus{
-		Role:      role,
-		SteorraID: h.steorraID,
+		Role:               role,
+		TungolID:           h.tungolID,
+		SteorraID:          h.steorraID,
+		LocalSteorraPubkey: h.localPubkey,
 	}
 
 	if h.hub != nil {
 		resp.Steorras = h.hub.SteorraStatuses(r.Context())
+		// Surface pinned identities so operators can cross-check the
+		// hub's view against the local steorra pubkey on each spoke.
+		for _, s := range resp.Steorras {
+			pin := h.hub.LookupSteorraPin(h.tungolID, s.ID)
+			if pin == nil {
+				continue
+			}
+			resp.SteorraPins = append(resp.SteorraPins, SteorraPinView{
+				TungolID:  pin.TungolID,
+				SteorraID: pin.SteorraID,
+				Pubkey:    formatHexShort(pin.Pubkey),
+				PinnedAt:  pin.PinnedAt.UTC().Format(time.RFC3339),
+				LastSeen:  pin.LastSeen.UTC().Format(time.RFC3339),
+			})
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// formatHexShort returns first-16-char lowercase hex of pk.
+// Operators cross-reference this against the LocalSteorraPubkey
+// from the steorra's own /api/v1/tungol/status.
+func formatHexShort(pk []byte) string {
+	const wantHex = 16
+	const wantBytes = wantHex / 2
+	if len(pk) < wantBytes {
+		return hex.EncodeToString(pk)
+	}
+	return hex.EncodeToString(pk[:wantBytes])
 }
 
 func (h *TungolHandler) handleSteorraDetail(w http.ResponseWriter, r *http.Request) {

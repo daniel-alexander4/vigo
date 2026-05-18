@@ -937,6 +937,20 @@ message SteorraStatusReport {
   uint64 config_version = 9;
   int32 diverged = 10;
   int32 degraded = 11;
+  // Phase 1 (ADR-tungol): per-steorra cryptographic identity.
+  // tungol_id is the operator-declared federation anchor (matches
+  // the hub's tungol_id). steorra_pubkey is the raw 32-byte Ed25519
+  // public key of this steorra (held in /srv/vigo/steorra/identity.*).
+  // signature is the 64-byte Ed25519 signature over the canonical
+  // serialization of fields 1-11 + 12 with steorra_pubkey + signature
+  // cleared (mirroring the PolicyBundle pattern in bundlesign.go).
+  // Hubs pin (tungol_id, steorra_id) → steorra_pubkey on first sight;
+  // mismatches on subsequent reports raise a tungol_steorra_pubkey_mismatch
+  // audit event and the report is rejected. Pre-Phase-1 reporters
+  // omit these fields; hubs treat absent fields as "legacy, log + skip".
+  string tungol_id = 12;
+  bytes steorra_pubkey = 13;
+  bytes signature = 14;
 }
 
 message SteorraStatusAck {}

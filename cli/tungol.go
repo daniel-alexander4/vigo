@@ -341,9 +341,11 @@ func runTungolStatus(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 
 	var resp struct {
-		Role      string `json:"role"`
-		SteorraID string `json:"steorra_id"`
-		Steorras  []struct {
+		Role               string `json:"role"`
+		TungolID           string `json:"tungol_id"`
+		SteorraID          string `json:"steorra_id"`
+		LocalSteorraPubkey string `json:"local_steorra_pubkey"`
+		Steorras           []struct {
 			ID             string   `json:"id"`
 			Addr           string   `json:"addr"`
 			Patterns       []string `json:"patterns"`
@@ -359,6 +361,13 @@ func runTungolStatus(cmd *cobra.Command, args []string) error {
 			LatencyMs      int64    `json:"latency_ms"`
 			Error          string   `json:"error"`
 		} `json:"steorras"`
+		SteorraPins []struct {
+			TungolID  string `json:"tungol_id"`
+			SteorraID string `json:"steorra_id"`
+			Pubkey    string `json:"pubkey"`
+			PinnedAt  string `json:"pinned_at"`
+			LastSeen  string `json:"last_seen"`
+		} `json:"steorra_pins"`
 	}
 
 	if err := client.get("/api/v1/tungol/status", &resp); err != nil {
@@ -367,8 +376,17 @@ func runTungolStatus(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("  Role: %s\n", bold(resp.Role))
 
+	if resp.TungolID != "" {
+		fmt.Printf("  Tungol ID: %s\n", resp.TungolID)
+	}
 	if resp.SteorraID != "" {
 		fmt.Printf("  Steorra ID: %s\n", resp.SteorraID)
+	}
+	// Phase 1: local steorra pubkey for operator cross-check.
+	// On alarm, compare this short pubkey against the asserted
+	// pubkey in the hub's audit event.
+	if resp.LocalSteorraPubkey != "" {
+		fmt.Printf("  Local steorra pubkey: %s\n", resp.LocalSteorraPubkey)
 	}
 
 	if resp.Role == "standalone" {
@@ -389,11 +407,20 @@ func runTungolStatus(cmd *cobra.Command, args []string) error {
 		totalEnvoys += s.EnvoyCount
 	}
 
+	// Pinned-pubkey index for quick lookup when rendering the steorra table.
+	pinByID := make(map[string]string, len(resp.SteorraPins))
+	for _, p := range resp.SteorraPins {
+		pinByID[p.SteorraID] = p.Pubkey
+	}
+
 	fmt.Printf("  Steorras: %d (%d healthy)\n", len(resp.Steorras), healthy)
 	fmt.Printf("  Total Envoys: %d\n\n", totalEnvoys)
 
 	w := newAlignedTable(os.Stdout)
-	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("ADDRESS"), header("ENVOYS"), header("COMPLIANT"), header("COMPLIANCE"), header("LATENCY"), header("PATTERNS"), header("STATUS"))
+	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+		header("ID"), header("ADDRESS"), header("PUBKEY"), header("ENVOYS"),
+		header("COMPLIANT"), header("COMPLIANCE"), header("LATENCY"),
+		header("PATTERNS"), header("STATUS"))
 	for _, s := range resp.Steorras {
 		status := colorStatus("healthy")
 		if !s.Healthy {
@@ -403,7 +430,12 @@ func runTungolStatus(cmd *cobra.Command, args []string) error {
 		compliant := fmt.Sprintf("%d/%d", s.Converged, s.EnvoyCount)
 		convPct := fmt.Sprintf("%.1f%%", s.ConvergencePct)
 		latency := fmt.Sprintf("%dms", s.LatencyMs)
-		fmt.Fprintf(w, "  %s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n", s.ID, s.Addr, s.EnvoyCount, compliant, convPct, latency, patterns, status)
+		pubkey := pinByID[s.ID]
+		if pubkey == "" {
+			pubkey = "(unpinned)"
+		}
+		fmt.Fprintf(w, "  %s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
+			s.ID, s.Addr, pubkey, s.EnvoyCount, compliant, convPct, latency, patterns, status)
 	}
 	w.Flush()
 

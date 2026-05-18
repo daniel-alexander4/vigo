@@ -33,7 +33,47 @@ import (
 type Hub struct {
 	steorras       []steorraConn
 	steorraReports map[string]*pb.SteorraStatusReport // latest steorra self-reports, protected by mu
-	mu             sync.RWMutex
+	// steorraPins holds first-sighting (tungol_id, steorra_id) →
+	// steorra_pubkey records for Phase 1 identity pinning. In-memory
+	// only: lost on hub restart by design (Phase 2's CRDT layer
+	// adds the proper persisted signed-members set). Protected by mu.
+	steorraPins map[string]*SteorraPin
+	auditWriter PinAuditRecorder // nil-safe; emits mismatch events
+	mu          sync.RWMutex
+}
+
+// SteorraPin records the verified identity of a steorra on first
+// sighting. Subsequent reports from the same (tungol_id, steorra_id)
+// must carry the same pubkey or are rejected with an audit event.
+type SteorraPin struct {
+	TungolID  string
+	SteorraID string
+	Pubkey    []byte // 32-byte Ed25519 raw pubkey
+	PinnedAt  time.Time
+	LastSeen  time.Time
+}
+
+// PinAuditRecorder is the nil-safe interface the hub uses to emit
+// `tungol_steorra_pubkey_mismatch` audit events. Implemented by
+// *audit.Writer; tests pass a no-op or a recording stub.
+type PinAuditRecorder interface {
+	Record(ctx context.Context, eventType, actor, source, summary, payload string) error
+}
+
+// SetAuditWriter attaches the audit writer for pubkey-mismatch
+// events. nil-safe — calling without a writer just suppresses
+// audit records; pin enforcement still runs.
+func (h *Hub) SetAuditWriter(w PinAuditRecorder) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.auditWriter = w
+}
+
+// pinKey is the map key for steorraPins. (tungol_id, steorra_id)
+// pairs scoped: two tungols can each have a steorra with the same
+// steorra_id and they don't collide.
+func pinKey(tungolID, steorraID string) string {
+	return tungolID + "\x00" + steorraID
 }
 
 type steorraConn struct {
@@ -54,6 +94,7 @@ func NewHub(ctx context.Context, steorras []config.SteorraEntry, certFile, keyFi
 	h := &Hub{
 		steorras:       make([]steorraConn, 0, len(steorras)),
 		steorraReports: make(map[string]*pb.SteorraStatusReport),
+		steorraPins:    make(map[string]*SteorraPin),
 	}
 
 	for _, s := range steorras {
@@ -400,12 +441,165 @@ func (h *Hub) SteorraStatuses(ctx context.Context) []SteorraStatus {
 	return statuses
 }
 
-// RecordSteorraReport stores a steorra's self-reported status. Called by the
-// ReportSteorraStatus gRPC handler on the hub.
-func (h *Hub) RecordSteorraReport(report *pb.SteorraStatusReport) {
+// RecordSteorraReport stores a steorra's self-reported status. Called
+// by the ReportSteorraStatus gRPC handler on the hub.
+//
+// Phase 1 (ADR-tungol): when the report carries steorra_pubkey +
+// signature + tungol_id, the hub (1) verifies the signature against
+// the asserted pubkey, (2) on first sighting pins
+// (tungol_id, steorra_id) → pubkey, (3) on subsequent reports
+// requires the asserted pubkey to match the pinned one. Mismatch
+// emits a `tungol_steorra_pubkey_mismatch` audit event and the
+// report is REJECTED — neither stored nor folded into aggregates.
+//
+// Pre-Phase-1 reporters (no pubkey/signature fields) are accepted
+// without pinning, logged at info. Mixed-version fleet rollout is
+// safe; the pin starts on the first compliant report.
+//
+// Returns nil on success, error on rejection. The gRPC handler
+// surfaces the error to the caller as a non-zero status code.
+func (h *Hub) RecordSteorraReport(ctx context.Context, report *pb.SteorraStatusReport) error {
+	// Legacy (pre-Phase-1) report: no pubkey/signature, no pin.
+	if len(report.SteorraPubkey) == 0 && len(report.Signature) == 0 {
+		slog.Info("legacy steorra report (no signature) — accepted without pinning",
+			"steorra_id", report.SteorraId,
+			"tungol_id", report.TungolId,
+		)
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		h.steorraReports[report.SteorraId] = report
+		return nil
+	}
+
+	// Phase 1 report: must verify and pin.
+	if report.TungolId == "" {
+		return fmt.Errorf("signed report missing tungol_id (required for pinning)")
+	}
+	if err := VerifyReportSignature(report); err != nil {
+		slog.Warn("steorra report signature verify failed; rejecting",
+			"steorra_id", report.SteorraId,
+			"tungol_id", report.TungolId,
+			"error", err,
+		)
+		h.emitMismatchAudit(ctx, report, nil, "signature_verify_failed: "+err.Error())
+		return fmt.Errorf("signature verify: %w", err)
+	}
+
+	key := pinKey(report.TungolId, report.SteorraId)
+	now := time.Now().UTC()
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	pinned, ok := h.steorraPins[key]
+	if !ok {
+		// First sighting — pin.
+		pinCopy := make([]byte, len(report.SteorraPubkey))
+		copy(pinCopy, report.SteorraPubkey)
+		h.steorraPins[key] = &SteorraPin{
+			TungolID:  report.TungolId,
+			SteorraID: report.SteorraId,
+			Pubkey:    pinCopy,
+			PinnedAt:  now,
+			LastSeen:  now,
+		}
+		slog.Info("steorra pubkey pinned on first sighting",
+			"tungol_id", report.TungolId,
+			"steorra_id", report.SteorraId,
+			"pubkey_short", shortPubkey(report.SteorraPubkey),
+		)
+		h.steorraReports[report.SteorraId] = report
+		return nil
+	}
+
+	// Subsequent sighting — pubkey must match pin.
+	if !bytesEqual(pinned.Pubkey, report.SteorraPubkey) {
+		slog.Warn("steorra pubkey mismatch — rejecting report",
+			"tungol_id", report.TungolId,
+			"steorra_id", report.SteorraId,
+			"asserted_pubkey_short", shortPubkey(report.SteorraPubkey),
+			"pinned_pubkey_short", shortPubkey(pinned.Pubkey),
+			"pinned_at", pinned.PinnedAt,
+		)
+		// Drop the lock before emitting audit (audit writer may
+		// block on DB I/O; no point holding the report mutex).
+		h.mu.Unlock()
+		h.emitMismatchAudit(ctx, report, pinned, "pubkey_mismatch")
+		h.mu.Lock() // restore for defer
+		return fmt.Errorf("steorra pubkey for (tungol_id=%s, steorra_id=%s) does not match pinned identity", report.TungolId, report.SteorraId)
+	}
+
+	// Verified + matches pin — record + update last-seen.
+	pinned.LastSeen = now
 	h.steorraReports[report.SteorraId] = report
+	return nil
+}
+
+// emitMismatchAudit records a `tungol_steorra_pubkey_mismatch`
+// audit event with the asserted vs pinned pubkeys. nil-safe.
+func (h *Hub) emitMismatchAudit(ctx context.Context, report *pb.SteorraStatusReport, pinned *SteorraPin, reason string) {
+	if h.auditWriter == nil {
+		return
+	}
+	pinnedHex := ""
+	if pinned != nil {
+		pinnedHex = fmt.Sprintf("%x", pinned.Pubkey)
+	}
+	payload := fmt.Sprintf(
+		`{"tungol_id":%q,"steorra_id":%q,"asserted_pubkey":"%x","pinned_pubkey":%q,"reason":%q,"decision":"rejected"}`,
+		report.TungolId, report.SteorraId, report.SteorraPubkey, pinnedHex, reason,
+	)
+	summary := fmt.Sprintf("steorra pubkey mismatch on (tungol=%s, steorra=%s); report rejected", report.TungolId, report.SteorraId)
+	_ = h.auditWriter.Record(ctx, "tungol_steorra_pubkey_mismatch", "tungol", "grpc", summary, payload)
+}
+
+// shortPubkey is the first-8-bytes hex form used in log fields.
+// Operators cross-reference this against the local pubkey shown
+// by `vigocli tungol status`.
+func shortPubkey(pk []byte) string {
+	if len(pk) < 8 {
+		return fmt.Sprintf("%x", pk)
+	}
+	return fmt.Sprintf("%x", pk[:8])
+}
+
+// bytesEqual is a constant-time-not-required equality check used
+// for pubkey pin comparison. The pubkeys aren't secret — the
+// signature on the report already proves possession of the
+// private key — so constant-time isn't needed.
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// LookupSteorraPin returns the pinned identity for a (tungol_id,
+// steorra_id) pair, or nil if none is pinned. Used by the
+// /api/v1/tungol/status surface to show operators the verified
+// pubkey for each steorra.
+func (h *Hub) LookupSteorraPin(tungolID, steorraID string) *SteorraPin {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	pin, ok := h.steorraPins[pinKey(tungolID, steorraID)]
+	if !ok {
+		return nil
+	}
+	// Return a copy so callers can't mutate the pinned bytes under
+	// the hub's nose.
+	pkCopy := make([]byte, len(pin.Pubkey))
+	copy(pkCopy, pin.Pubkey)
+	return &SteorraPin{
+		TungolID:  pin.TungolID,
+		SteorraID: pin.SteorraID,
+		Pubkey:    pkCopy,
+		PinnedAt:  pin.PinnedAt,
+		LastSeen:  pin.LastSeen,
+	}
 }
 
 // getSteorraReport returns the latest self-report for a steorra, or nil.

@@ -14,7 +14,7 @@ import (
 )
 
 func TestTungolStatusStandalone(t *testing.T) {
-	handler := NewTungolHandler("", "", nil)
+	handler := NewTungolHandler("", "", "", "", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -43,7 +43,7 @@ func TestTungolStatusStandalone(t *testing.T) {
 }
 
 func TestTungolStatusWithSteorraRole(t *testing.T) {
-	handler := NewTungolHandler(config.RoleSpoke, "steorra-east-1", nil)
+	handler := NewTungolHandler(config.RoleSpoke, "test-tungol", "steorra-east-1", "", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -70,7 +70,7 @@ func TestTungolStatusWithSteorraRole(t *testing.T) {
 
 func TestTungolStatusHubNilSteorras(t *testing.T) {
 	// Hub role but nil hub -- no steorras connected. Status still returns role.
-	handler := NewTungolHandler(config.RoleHub, "", nil)
+	handler := NewTungolHandler(config.RoleHub, "test-tungol", "", "", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -96,7 +96,7 @@ func TestTungolStatusHubNilSteorras(t *testing.T) {
 }
 
 func TestTungolStatusResponseFormat(t *testing.T) {
-	handler := NewTungolHandler("", "", nil)
+	handler := NewTungolHandler("", "", "", "", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -111,7 +111,7 @@ func TestTungolStatusResponseFormat(t *testing.T) {
 }
 
 func TestSteorraDrilldownRoutesNotRegisteredWithoutHub(t *testing.T) {
-	handler := NewTungolHandler(config.RoleStandalone, "", nil)
+	handler := NewTungolHandler(config.RoleStandalone, "", "", "", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -141,7 +141,7 @@ func TestSteorraDrilldownRoutesNotRegisteredWithoutHub(t *testing.T) {
 }
 
 func TestTungolStatusJSON(t *testing.T) {
-	handler := NewTungolHandler(config.RoleSpoke, "east-1", nil)
+	handler := NewTungolHandler(config.RoleSpoke, "test-tungol", "east-1", "", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 

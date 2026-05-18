@@ -5,6 +5,7 @@ package tungol
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/protobuf/proto"
 )
 
 // ConvergenceSource provides compliance counters for the steorra status reporter.
@@ -38,13 +40,16 @@ const failoverThreshold = 3
 // to fallback hub addresses after failoverThreshold consecutive failures on the
 // current address.
 type Reporter struct {
-	steorraID          string
-	hubAddr          string   // primary hub address
-	hubFallbackAddrs []string // fallback hub addresses (tried in order)
+	steorraID        string
+	tungolID         string             // federation anchor; embedded in every report
+	signingKey       ed25519.PrivateKey // per-steorra identity (Phase 1); nil → unsigned legacy reports
+	pubkeyBytes      []byte             // 32-byte raw pubkey derived from signingKey at construction
+	hubAddr          string             // primary hub address
+	hubFallbackAddrs []string           // fallback hub addresses (tried in order)
 	certFile         string
 	keyFile          string
 	caFile           string
-	convergence       ConvergenceSource
+	convergence      ConvergenceSource
 	configVersion    func() uint64 // returns current config version; nil-safe
 	interval         time.Duration
 
@@ -53,14 +58,18 @@ type Reporter struct {
 
 	// Mutable state protected by mu.
 	mu        sync.Mutex
-	failCount int    // consecutive failures on current address
-	activeIdx int    // index into allAddrs (-1 means not yet connected)
+	failCount int      // consecutive failures on current address
+	activeIdx int      // index into allAddrs (-1 means not yet connected)
 	allAddrs  []string // hubAddr followed by hubFallbackAddrs
 }
 
 // NewReporter creates a Reporter that will periodically send status to the hub.
-// hubFallbackAddrs may be nil for single-hub deployments.
-func NewReporter(steorraID, hubAddr string, hubFallbackAddrs []string, certFile, keyFile, caFile string, convergence ConvergenceSource, interval time.Duration) *Reporter {
+// hubFallbackAddrs may be nil for single-hub deployments. tungolID + signingKey
+// are Phase 1 (ADR-tungol): if signingKey is non-nil, every report is signed
+// with it and the corresponding pubkey is embedded so hubs can verify +
+// pin-on-first-sight. A nil signingKey produces legacy unsigned reports —
+// hubs accept those without pinning (mixed-version fleet during rollout).
+func NewReporter(steorraID, tungolID string, signingKey ed25519.PrivateKey, hubAddr string, hubFallbackAddrs []string, certFile, keyFile, caFile string, convergence ConvergenceSource, interval time.Duration) *Reporter {
 	if interval <= 0 {
 		interval = 30 * time.Second
 	}
@@ -70,14 +79,25 @@ func NewReporter(steorraID, hubAddr string, hubFallbackAddrs []string, certFile,
 	allAddrs = append(allAddrs, hubAddr)
 	allAddrs = append(allAddrs, hubFallbackAddrs...)
 
+	var pubkeyBytes []byte
+	if signingKey != nil {
+		pub, ok := signingKey.Public().(ed25519.PublicKey)
+		if ok {
+			pubkeyBytes = []byte(pub)
+		}
+	}
+
 	return &Reporter{
-		steorraID:          steorraID,
+		steorraID:        steorraID,
+		tungolID:         tungolID,
+		signingKey:       signingKey,
+		pubkeyBytes:      pubkeyBytes,
 		hubAddr:          hubAddr,
 		hubFallbackAddrs: hubFallbackAddrs,
 		certFile:         certFile,
 		keyFile:          keyFile,
 		caFile:           caFile,
-		convergence:     convergence,
+		convergence:      convergence,
 		interval:         interval,
 		allAddrs:         allAddrs,
 		activeIdx:        0,
@@ -256,19 +276,37 @@ func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
 	}
 
 	req := &pb.SteorraStatusReport{
-		SteorraId:        r.steorraID,
-		EnvoyCount:    int32(total),
+		SteorraId:      r.steorraID,
+		TungolId:       r.tungolID,
+		EnvoyCount:     int32(total),
 		Converged:      int32(converged),
 		Relapsed:       int32(relapsed),
 		Diverged:       int32(diverged),
 		Degraded:       int32(degraded),
 		Failed:         int32(failed),
-		Offline:    int32(offline),
+		Offline:        int32(offline),
 		NoData:         int32(noData),
 		ConvergencePct: convergencePct,
 	}
 	if r.configVersion != nil {
 		req.ConfigVersion = r.configVersion()
+	}
+
+	// Phase 1 (ADR-tungol): sign the report so hubs can verify the
+	// asserted (tungol_id, steorra_id) → pubkey pin. Mirrors the
+	// PolicyBundle signing pattern in server/grpc/bundlesign.go —
+	// marshal the message with pubkey + signature fields cleared,
+	// sign that, then write both fields back. Pre-Phase-1 reporters
+	// (no signingKey) send unsigned reports; hubs accept those
+	// without pinning during mixed-version rollout.
+	if r.signingKey != nil {
+		canonical, err := marshalReportContent(req)
+		if err != nil {
+			slog.Error("steorra reporter: canonical marshal failed", "error", err)
+			return false
+		}
+		req.SteorraPubkey = r.pubkeyBytes
+		req.Signature = ed25519.Sign(r.signingKey, canonical)
 	}
 
 	rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -321,4 +359,53 @@ func buildReporterTLS(certFile, keyFile, caFile string) (credentials.TransportCr
 		RootCAs:      caPool,
 		MinVersion:   tls.VersionTLS13,
 	}), nil
+}
+
+// marshalReportContent serializes a SteorraStatusReport for signing.
+// Creates a copy with steorra_pubkey + signature zeroed so the
+// signature covers only content fields (mirrors the PolicyBundle
+// signing pattern in server/grpc/bundlesign.go). The proto3 default
+// for proto.Marshal is deterministic, which is required for
+// signature verification to be stable.
+func marshalReportContent(r *pb.SteorraStatusReport) ([]byte, error) {
+	content := &pb.SteorraStatusReport{
+		SteorraId:      r.SteorraId,
+		TungolId:       r.TungolId,
+		EnvoyCount:     r.EnvoyCount,
+		Converged:      r.Converged,
+		Relapsed:       r.Relapsed,
+		Diverged:       r.Diverged,
+		Degraded:       r.Degraded,
+		Failed:         r.Failed,
+		Offline:        r.Offline,
+		NoData:         r.NoData,
+		ConvergencePct: r.ConvergencePct,
+		ConfigVersion:  r.ConfigVersion,
+		// SteorraPubkey + Signature intentionally omitted (zeroed).
+	}
+	return proto.Marshal(content)
+}
+
+// VerifyReportSignature checks that a report's signature is valid
+// against the pubkey carried in the report itself. The hub uses
+// this for two distinct purposes: (1) prove the sender holds the
+// private key for the asserted pubkey; (2) compared to the pinned
+// pubkey for (tungol_id, steorra_id), detect identity substitution.
+// Returns nil on valid signature, or an error describing the
+// rejection cause.
+func VerifyReportSignature(r *pb.SteorraStatusReport) error {
+	if len(r.SteorraPubkey) != ed25519.PublicKeySize {
+		return fmt.Errorf("steorra_pubkey is %d bytes, expected %d", len(r.SteorraPubkey), ed25519.PublicKeySize)
+	}
+	if len(r.Signature) != ed25519.SignatureSize {
+		return fmt.Errorf("signature is %d bytes, expected %d", len(r.Signature), ed25519.SignatureSize)
+	}
+	canonical, err := marshalReportContent(r)
+	if err != nil {
+		return fmt.Errorf("canonical marshal: %w", err)
+	}
+	if !ed25519.Verify(ed25519.PublicKey(r.SteorraPubkey), canonical, r.Signature) {
+		return fmt.Errorf("ed25519 verify failed")
+	}
+	return nil
 }

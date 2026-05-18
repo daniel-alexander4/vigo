@@ -32,11 +32,51 @@ const (
 // (or set role: standalone) for single-server deployments.
 type TungolSection struct {
 	Role             TungolRole         `yaml:"role" doc:"Server role in a tungol deployment." options:"standalone|hub|spoke" default:"standalone" example:"standalone"`
+	TungolID         string             `yaml:"tungol_id" doc:"Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + - _ ., no leading dot)." example:"alexander4-prod, acme-staging"`
 	SteorraID        string             `yaml:"steorra_id" doc:"Unique steorra identifier (required when role is 'spoke')." example:"us-west-steorra, eu-steorra-01"`
 	HubAddr          string             `yaml:"hub_addr" doc:"Hub gRPC address (host:port) the steorra reports to." example:"vigo-hub.example.com:1530"`
 	HubFallbackAddrs []string           `yaml:"hub_fallback_addrs" doc:"Steorra-only: fallback hub addresses used when the primary hub is unreachable." example:"[vigo-hub-2:1530, vigo-hub-3:1530]"`
 	Steorras         []SteorraEntry     `yaml:"steorras" doc:"Hub-only: list of steorra definitions (id, address, hostname patterns)." example:"see steorras.<id> fields"`
 	AutoFailover     AutoFailoverConfig `yaml:"auto_failover" doc:"Hub-only: automatic draining of steorras that fail health probes."`
+}
+
+// validateTungolID enforces the same DNS-safe-name rules as
+// puddle.ValidateFriendlyName: 1-64 ASCII alphanumeric + - _ .,
+// no leading dot, and never the 64-hex-char shape that collides
+// with content-addressed IDs. Logic mirrored here (rather than
+// imported from puddle) to avoid a config→puddle dependency
+// direction; keep in sync with puddle.ValidateFriendlyName.
+func validateTungolID(name string) error {
+	const maxLen = 64
+	if name == "" || len(name) > maxLen {
+		return fmt.Errorf("tungol.tungol_id must be 1-%d characters", maxLen)
+	}
+	if name[0] == '.' {
+		return fmt.Errorf("tungol.tungol_id must not start with '.'")
+	}
+	if len(name) == 64 && isLowerHex(name) {
+		return fmt.Errorf("tungol.tungol_id must not look like a content-addressed id (64 lowercase hex characters)")
+	}
+	for _, r := range name {
+		ok := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.'
+		if !ok {
+			return fmt.Errorf(
+				"tungol.tungol_id %q contains invalid character %q; use ASCII alphanumeric + '-' '_' '.'",
+				name, r,
+			)
+		}
+	}
+	return nil
+}
+
+func isLowerHex(s string) bool {
+	for _, r := range s {
+		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')) {
+			return false
+		}
+	}
+	return true
 }
 
 // AutoFailoverConfig controls automatic steorra failover on the hub.
@@ -60,6 +100,15 @@ func (f TungolSection) Validate() error {
 	role := f.Role
 	if role == "" || role == RoleStandalone {
 		return nil
+	}
+	// tungol_id is required for every non-standalone role — it's the
+	// federation membership anchor that hubs and steorras must agree
+	// on before peer-trust attestations make sense (Phase 1+).
+	if f.TungolID == "" {
+		return fmt.Errorf("tungol.tungol_id is required when role is %q (DNS-safe operator-chosen identifier)", role)
+	}
+	if err := validateTungolID(f.TungolID); err != nil {
+		return err
 	}
 	if role == RoleHub {
 		if len(f.Steorras) == 0 {

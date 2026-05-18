@@ -338,6 +338,7 @@ Hub + steorras control-plane sharding. See [Set up Tungol](../howto/set-up-tungo
 # Hub
 tungol:
   role: hub
+  tungol_id: "alexander4-prod"        # federation id (required for hub/spoke)
   steorras:
     - id: dc1
       addr: "steorra1.example.com:1530"
@@ -350,6 +351,7 @@ tungol:
 # Spoke role (this vigosrv is one steorra in the tungol)
 tungol:
   role: spoke
+  tungol_id: "alexander4-prod"        # must match the hub's tungol_id
   steorra_id: "dc1"
   hub_addr: "hub.example.com:1530"
   hub_fallback_addrs:
@@ -359,10 +361,19 @@ tungol:
 | Field | Default | Description |
 |-------|---------|-------------|
 | `role` | `standalone` | `standalone`, `hub`, or `spoke` |
+| `tungol_id` | (required when role ≠ standalone) | Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + `-` `_` `.`, no leading dot). Must match across every hub + steorra in the tungol; embedded in every signed announcement (Phase 1) and the future CRDT admissions set. |
 | `steorras` | (hub only) | List of steorra connections with ID, address, hostname patterns |
 | `auto_failover.enabled` | `false` | Auto-drain unhealthy steorras |
 | `steorra_id` | (spoke only) | Unique steorra identifier |
 | `hub_addr` | (spoke only) | Hub address for status reporting |
+
+### Steorra identity (Phase 1)
+
+Each tungol-mode vigosrv generates a per-host Ed25519 keypair at `/srv/vigo/steorra/identity.wrapped` on first boot (HKDF purpose `vigo-steorra-wrap-v1`, mirrors the service-account puddle pattern). The reporter signs every `SteorraStatusReport` with this key; the hub verifies the signature against the asserted pubkey and pins `(tungol_id, steorra_id) → pubkey` on first sighting. Subsequent reports with a mismatched pubkey are rejected (`PermissionDenied`) and emit a `tungol_steorra_pubkey_mismatch` audit event.
+
+Pins are in-memory only — a hub restart clears them and the next round of announcements re-pins. Pre-Phase-1 reporters (no signature/pubkey fields) are accepted without pinning to keep mixed-version rollout safe. Legitimate key rotation (regenerate `/srv/vigo/steorra/`) requires a hub restart to clear the old pin.
+
+`vigocli tungol status` shows the local steorra's first-16-char pubkey for operator cross-check against the hub's audit event payload.
 
 > The old `spanner:` block name is rejected at startup with a one-line error pointing here. Operators must rename `spanner:` → `tungol:`, `spokes:` → `steorras:`, and `spoke_id:` → `steorra_id:` in one pass.
 
