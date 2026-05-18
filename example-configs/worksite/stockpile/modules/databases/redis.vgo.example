@@ -39,7 +39,7 @@ resources:
     type: logrotate
     path: /var/log/redis/*.log
     frequency: daily
-    rotate_count: "7"
+    rotate: "7"
     compress: "true"
     missingok: "true"
     notifempty: "true"

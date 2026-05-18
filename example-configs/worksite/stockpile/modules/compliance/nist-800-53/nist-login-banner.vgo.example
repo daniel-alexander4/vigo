@@ -1,7 +1,8 @@
 name: nist-login-banner
 compliance:
   nist-800-53: [AC-8]
-  cis: [1.4.1]
+  cis-ubuntu: [1.4.1]
+  cis-rhel: [1.4.1]
   pci-dss: [2.2.4]
   hitrust: [01.j]
   iso-27001: [A.9.4.2]

@@ -18,7 +18,9 @@
 # scoped carrier (customerA/common.vgo or envoys.vgo under customerA/).
 
 compliance:
-  cis:
+  cis-ubuntu:
+    - CIS-5.4.1    # Ensure password creation requirements are configured
+  cis-rhel:
     - CIS-5.4.1    # Ensure password creation requirements are configured
   nist-800-53:
     - AC-3         # Access Enforcement

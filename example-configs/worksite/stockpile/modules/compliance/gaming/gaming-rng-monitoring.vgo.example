@@ -7,9 +7,10 @@ name: gaming-rng-monitoring
 # Player protection mechanisms are application-level responsibilities.
 
 compliance:
-  gaming-nevada: [NGC-TS-4.1, NGC-TS-4.2]
-  gaming-mga: [MGA-RGR-6.1]
-  gaming-ukgc: [UKGC-RTS-6A]
+  # Vigo's framework catalog tracks gaming as one rollup; ID prefixes
+  # preserve the jurisdiction of origin (NGC-TS-* = Nevada, MGA-RGR-* =
+  # Malta, UKGC-RTS-* = United Kingdom).
+  gaming: [NGC-TS-4.1, NGC-TS-4.2, MGA-RGR-6.1, UKGC-RTS-6A]
 
 resources:
   - name: rng-service-check

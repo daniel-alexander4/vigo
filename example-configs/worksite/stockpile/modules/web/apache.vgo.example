@@ -152,7 +152,7 @@ resources:
     type: logrotate
     path: /var/log/apache2/*.log
     frequency: daily
-    rotate_count: "14"
+    rotate: "14"
     compress: "true"
     missingok: "true"
     notifempty: "true"
@@ -165,7 +165,7 @@ resources:
     type: logrotate
     path: /var/log/httpd/*log
     frequency: daily
-    rotate_count: "14"
+    rotate: "14"
     compress: "true"
     missingok: "true"
     notifempty: "true"

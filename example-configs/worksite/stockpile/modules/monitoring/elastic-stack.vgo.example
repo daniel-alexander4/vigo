@@ -124,7 +124,7 @@ resources:
     type: logrotate
     path: /var/log/elasticsearch/*.log
     frequency: daily
-    rotate_count: "7"
+    rotate: "7"
     compress: "true"
     missingok: "true"
     notifempty: "true"
@@ -135,7 +135,7 @@ resources:
     type: logrotate
     path: /var/log/logstash/*.log
     frequency: daily
-    rotate_count: "7"
+    rotate: "7"
     compress: "true"
     missingok: "true"
     notifempty: "true"

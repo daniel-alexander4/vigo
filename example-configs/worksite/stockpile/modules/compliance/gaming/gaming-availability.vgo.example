@@ -5,9 +5,10 @@ name: gaming-availability
 # monitored, and recoverable.
 
 compliance:
-  gaming-nevada: [NGC-TS-2.1, NGC-TS-2.2]
-  gaming-mga: [MGA-RGR-5.1, MGA-RGR-5.2]
-  gaming-ukgc: [UKGC-RTS-5A, UKGC-RTS-5B]
+  # Vigo's framework catalog tracks gaming as one rollup; ID prefixes
+  # preserve the jurisdiction of origin (NGC-TS-* = Nevada, MGA-RGR-* =
+  # Malta, UKGC-RTS-* = United Kingdom).
+  gaming: [NGC-TS-2.1, NGC-TS-2.2, MGA-RGR-5.1, MGA-RGR-5.2, UKGC-RTS-5A, UKGC-RTS-5B]
 
 resources:
   - name: monitoring-agent

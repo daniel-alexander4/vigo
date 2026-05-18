@@ -5,9 +5,10 @@ name: gaming-system-integrity
 # on gaming infrastructure (servers, not gaming devices/RNG directly).
 
 compliance:
-  gaming-nevada: [NGC-TS-1.1, NGC-TS-1.2, NGC-TS-3.1]
-  gaming-mga: [MGA-RGR-4.1, MGA-RGR-4.2]
-  gaming-ukgc: [UKGC-RTS-4A, UKGC-RTS-4B]
+  # Vigo's framework catalog tracks gaming as one rollup; ID prefixes
+  # preserve the jurisdiction of origin (NGC-TS-* = Nevada, MGA-RGR-* =
+  # Malta, UKGC-RTS-* = United Kingdom).
+  gaming: [NGC-TS-1.1, NGC-TS-1.2, NGC-TS-3.1, MGA-RGR-4.1, MGA-RGR-4.2, UKGC-RTS-4A, UKGC-RTS-4B]
 
 resources:
   - name: ssh-hardening
