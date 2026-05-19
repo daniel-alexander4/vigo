@@ -5,8 +5,11 @@ package tungol
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"fmt"
 	"net"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -331,4 +334,147 @@ func startCapturingFakeHub(t *testing.T, svc *capturingAdminService) string {
 	go srv.Serve(lis)
 	t.Cleanup(func() { srv.GracefulStop() })
 	return lis.Addr().String()
+}
+
+// ---------------------------------------------------------------------------
+// Pin-on-first-sighting — end-to-end integration
+// ---------------------------------------------------------------------------
+
+// hubAdminShim adapts a real *Hub to the VigoAdminServer interface
+// for integration tests. Mirrors server/grpc/admin.go::ReportSteorraStatus —
+// validates steorra_id, forwards to hub.RecordSteorraReport, and maps
+// hub-side rejection to PermissionDenied so the wire-visible behavior
+// matches production.
+type hubAdminShim struct {
+	pb.UnimplementedVigoAdminServer
+	hub   *Hub
+	calls atomic.Int32
+}
+
+func (s *hubAdminShim) ReportSteorraStatus(ctx context.Context, req *pb.SteorraStatusReport) (*pb.SteorraStatusAck, error) {
+	s.calls.Add(1)
+	if req.SteorraId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "steorra_id is required")
+	}
+	if err := s.hub.RecordSteorraReport(ctx, req); err != nil {
+		return nil, status.Errorf(codes.PermissionDenied, "report rejected: %v", err)
+	}
+	return &pb.SteorraStatusAck{}, nil
+}
+
+func startHubAdminShim(t *testing.T, h *Hub) (addr string, shim *hubAdminShim) {
+	t.Helper()
+	shim = &hubAdminShim{hub: h}
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := grpc.NewServer()
+	pb.RegisterVigoAdminServer(srv, shim)
+	go srv.Serve(lis)
+	t.Cleanup(func() { srv.GracefulStop() })
+	return lis.Addr().String(), shim
+}
+
+// insecureDial dials addr with insecure credentials, ignoring any TLS
+// creds the Reporter would otherwise build. Used as Reporter.dialFunc
+// in integration tests where the hub serves plaintext on loopback.
+func insecureDial(ctx context.Context, addr string, _ credentials.TransportCredentials) (*grpc.ClientConn, error) {
+	return grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+}
+
+// TestPinOnFirstSighting_Integration exercises the full Reporter → gRPC →
+// Hub.RecordSteorraReport path over loopback TCP. Asserts (a) first
+// sighting pins the asserted pubkey, and (b) a subsequent report under
+// the same (tungol_id, steorra_id) with a different signing key is
+// rejected and emits tungol_steorra_pubkey_mismatch via the audit
+// writer. pin_test.go covers the same logic at the unit level by
+// invoking Hub.RecordSteorraReport directly — this test extends that
+// coverage through the gRPC handler and the Reporter's signing path,
+// which is what the production wire actually exercises.
+func TestPinOnFirstSighting_Integration(t *testing.T) {
+	h, audit := newHubForPinTests(t)
+	addr, shim := startHubAdminShim(t, h)
+
+	const tungolID = "alexander4-prod"
+	const steorraID = "dc1"
+
+	_, priv1, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, priv2, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conv := &fakeConvergenceSource{total: 5, converged: 5}
+
+	// --- Phase 1: first sighting pins priv1's pubkey ---
+
+	r1 := NewReporter(steorraID, tungolID, priv1, addr, nil, "", "", "", conv, 30*time.Millisecond)
+	r1.dialFunc = insecureDial
+
+	ctx1, cancel1 := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel1()
+	go r1.Run(ctx1)
+
+	waitFor(t, 1500*time.Millisecond, "first sighting recorded", func() bool {
+		return shim.calls.Load() >= 1 && h.LookupSteorraPin(tungolID, steorraID) != nil
+	})
+	cancel1()
+
+	pin := h.LookupSteorraPin(tungolID, steorraID)
+	if pin == nil {
+		t.Fatal("expected pin after first sighting")
+	}
+	if !bytesEqual(pin.Pubkey, []byte(priv1.Public().(ed25519.PublicKey))) {
+		t.Error("pinned pubkey does not match priv1's pubkey")
+	}
+	if got := len(audit.events_("tungol_steorra_pubkey_mismatch")); got != 0 {
+		t.Errorf("first sighting should not emit mismatch events; got %d", got)
+	}
+
+	// --- Phase 2: same (tungol_id, steorra_id) under priv2 is rejected ---
+
+	beforeCalls := shim.calls.Load()
+	r2 := NewReporter(steorraID, tungolID, priv2, addr, nil, "", "", "", conv, 30*time.Millisecond)
+	r2.dialFunc = insecureDial
+
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel2()
+	go r2.Run(ctx2)
+
+	waitFor(t, 1500*time.Millisecond, "mismatch event recorded", func() bool {
+		return shim.calls.Load() > beforeCalls && len(audit.events_("tungol_steorra_pubkey_mismatch")) >= 1
+	})
+	cancel2()
+
+	mismatch := audit.events_("tungol_steorra_pubkey_mismatch")
+	if len(mismatch) < 1 {
+		t.Fatal("expected at least one mismatch event after priv2 report")
+	}
+	if !strings.Contains(mismatch[0].payload, `"decision":"rejected"`) {
+		t.Errorf("audit payload missing rejected decision: %s", mismatch[0].payload)
+	}
+
+	// Pin must still hold priv1's pubkey — the rejected report did not replace it.
+	pin = h.LookupSteorraPin(tungolID, steorraID)
+	if pin == nil || !bytesEqual(pin.Pubkey, []byte(priv1.Public().(ed25519.PublicKey))) {
+		t.Error("pin should still hold priv1's pubkey after priv2 rejection")
+	}
+}
+
+// waitFor polls cond every 10ms until it returns true or timeout elapses.
+// Fails the test with msg on timeout.
+func waitFor(t *testing.T, timeout time.Duration, msg string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for: %s", msg)
 }
