@@ -1,0 +1,27 @@
+#~ Windows password policy via Local Security Policy (or Group Policy
+#~ on domain hosts). Mirrors the Linux pwquality module's intent.
+name: pwquality-windows
+
+vars:
+  min_length: "14"
+  history: "24"
+  max_age_days: "90"
+
+resources:
+  - name: set-min-password-length
+    type: powershell
+    command: "net accounts /minpwlen:{{ .Vars.min_length }}"
+    skip_validation: true
+    when: "os_family('windows')"
+
+  - name: set-password-history
+    type: powershell
+    command: "net accounts /uniquepw:{{ .Vars.history }}"
+    skip_validation: true
+    when: "os_family('windows')"
+
+  - name: set-max-password-age
+    type: powershell
+    command: "net accounts /maxpwage:{{ .Vars.max_age_days }}"
+    skip_validation: true
+    when: "os_family('windows')"

@@ -1,0 +1,30 @@
+#~ Linux swap file configuration. Creates a swap file at the configured
+#~ path and adds an fstab entry. Skipped if vars.swap_size_mb is "0"
+#~ (some operators prefer swap-off on database hosts).
+name: swap-config
+
+vars:
+  swap_path: "/swapfile"
+  swap_size_mb: "2048"
+
+resources:
+  - name: create-swap-file
+    type: exec
+    command: 'fallocate -l {{ .Vars.swap_size_mb }}M {{ .Vars.swap_path }} && chmod 0600 {{ .Vars.swap_path }} && mkswap {{ .Vars.swap_path }}'
+    unless: "test -f {{ .Vars.swap_path }}"
+    when: "os_family('linux')"
+
+  - name: activate-swap
+    type: exec
+    command: "swapon {{ .Vars.swap_path }}"
+    unless: "swapon --show=NAME --noheadings | grep -q '^{{ .Vars.swap_path }}$'"
+    depends_on: [create-swap-file]
+    when: "os_family('linux')"
+
+  - name: swap-fstab
+    type: file_line
+    target_path: "/etc/fstab"
+    line: "{{ .Vars.swap_path }}  none  swap  sw  0  0"
+    match_pattern: "^{{ .Vars.swap_path }}\\s"
+    depends_on: [activate-swap]
+    when: "os_family('linux')"

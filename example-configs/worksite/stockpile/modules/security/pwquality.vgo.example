@@ -1,0 +1,39 @@
+#~ Linux password-strength policy via pam_pwquality. Enforces minlen,
+#~ class requirements, and dictionary checks for any pam-aware auth path
+#~ (passwd, su, sudo, login).
+name: pwquality
+
+compliance:
+  nist-800-53: [IA-5(1)]
+  iso-27001: [A.9.4.3]
+  pci-dss: ["8.3.6", "8.3.9"]
+
+vars:
+  minlen: "14"
+  difok: "5"
+  retry: "3"
+
+resources:
+  - name: install-libpam-pwquality
+    type: package
+    package: libpam-pwquality
+    state: present
+    when: "os_family('debian')"
+
+  - name: pwquality-conf
+    type: file
+    target_path: "/etc/security/pwquality.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      minlen = {{ .Vars.minlen }}
+      difok = {{ .Vars.difok }}
+      retry = {{ .Vars.retry }}
+      ucredit = -1
+      lcredit = -1
+      dcredit = -1
+      ocredit = -1
+      enforcing = 1
+    depends_on: [install-libpam-pwquality]
+    when: "os_family('linux')"

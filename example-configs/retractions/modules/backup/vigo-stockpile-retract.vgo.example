@@ -1,0 +1,35 @@
+name: vigo-stockpile-retract
+description: >-
+  Retraction module for vigo-stockpile. Removes the push cron, push
+  script, and deploy key. Does NOT remove the `.git/` directory inside
+  the stockpile — that contains the local history. Does NOT delete the
+  remote mirror or the secret-vault deploy-key entry — those are
+  operator-initiated.
+
+resources:
+  - name: remove-push-cron
+    type: cron
+    user: root
+    name: vigo-stockpile-push
+    command: "/usr/local/sbin/vigo-stockpile-push.sh"
+    schedule: "45 3 * * *"
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-push-script
+    type: file
+    target_path: "/usr/local/sbin/vigo-stockpile-push.sh"
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-deploy-key
+    type: file
+    target_path: "/srv/vigo/secrets/.stockpile-deploy.key"
+    state: absent
+    when: "os_family('linux')"
+
+  # /srv/vigo/stacks/stockpile/.git/ — not removed; local history is
+  # operator data. Drop manually with `rm -rf .git` if intended.
+  # Remote git mirror — operator must delete that separately.
+  # secret:vigo/backup/stockpile_deploy_key — leave intact; remove with
+  # `sudo vigocli secrets delete vigo/backup/stockpile_deploy_key` if intended.

@@ -1,0 +1,99 @@
+#~ Encrypted, deduplicated backup with Restic. Initialises the repository
+#~ on first run, then runs an hourly snapshot of the configured source
+#~ paths. Prune policy keeps hourly snapshots for 7 days, daily for
+#~ 30 days, weekly for 26 weeks, monthly for 12 months. Override
+#~ retention via vars.
+#~
+#~ Reads:
+#~   secret:vigo/backup/restic_password    (the repository encryption key)
+#~   secret:vigo/backup/restic_repo        (the repository URL — local
+#~                                         path, S3 URL, B2 URL, etc.)
+#~
+#~ Populate with:
+#~   sudo vigocli secrets set raw vigo/backup/restic_password
+#~   sudo vigocli secrets set raw vigo/backup/restic_repo
+name: restic
+
+compliance:
+  nist-800-53: [CP-9, CP-10, SC-28]
+  hipaa: [164.308(a)(7)(ii)(A), 164.310(d)(2)(iv)]
+  iso-27001: [A.12.3.1, A.10.1.1]
+  pci-dss: ["9.5.1", "3.4"]
+
+vars:
+  source_paths: "/etc /home /var/lib"
+  schedule: "0 * * * *"
+  retain_hourly: "7"
+  retain_daily: "30"
+  retain_weekly: "26"
+  retain_monthly: "12"
+  restic_password: "secret:vigo/backup/restic_password"
+  restic_repo: "secret:vigo/backup/restic_repo"
+
+resources:
+  - name: install-restic
+    type: package
+    package: restic
+    state: present
+    when: "os_family('linux')"
+
+  - name: restic-env
+    type: file
+    target_path: "/etc/restic/restic.env"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      RESTIC_PASSWORD={{ .Vars.restic_password }}
+      RESTIC_REPOSITORY={{ .Vars.restic_repo }}
+    when: "os_family('linux')"
+
+  - name: restic-init-script
+    type: file
+    target_path: "/usr/local/sbin/restic-init.sh"
+    owner: root
+    group: root
+    mode: "0750"
+    content: |
+      #!/bin/sh
+      set -eu
+      . /etc/restic/restic.env
+      export RESTIC_PASSWORD RESTIC_REPOSITORY
+      restic snapshots >/dev/null 2>&1 || restic init
+    when: "os_family('linux')"
+
+  - name: restic-init
+    type: exec
+    command: "/usr/local/sbin/restic-init.sh"
+    unless: "test -f /var/lib/restic/.initialized"
+    depends_on: [install-restic, restic-env, restic-init-script]
+    when: "os_family('linux')"
+
+  - name: restic-backup-script
+    type: file
+    target_path: "/usr/local/sbin/restic-backup.sh"
+    owner: root
+    group: root
+    mode: "0750"
+    content: |
+      #!/bin/sh
+      set -eu
+      . /etc/restic/restic.env
+      export RESTIC_PASSWORD RESTIC_REPOSITORY
+      restic backup {{ .Vars.source_paths }} --tag scheduled --quiet
+      restic forget \
+        --keep-hourly  {{ .Vars.retain_hourly }} \
+        --keep-daily   {{ .Vars.retain_daily }} \
+        --keep-weekly  {{ .Vars.retain_weekly }} \
+        --keep-monthly {{ .Vars.retain_monthly }} \
+        --prune --quiet
+    when: "os_family('linux')"
+
+  - name: restic-cron
+    type: cron
+    user: root
+    name: restic-scheduled
+    command: "/usr/local/sbin/restic-backup.sh"
+    schedule: "{{ .Vars.schedule }}"
+    depends_on: [restic-init, restic-backup-script]
+    when: "os_family('linux')"

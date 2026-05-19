@@ -1,0 +1,27 @@
+#~ Add a CA cert to the Windows Trusted Root CA store. PEM bytes pulled
+#~ from the secret vault and imported via certutil.
+name: ca-anchors-windows
+
+compliance:
+  nist-800-53: [SC-12, SC-17]
+  iso-27001: [A.10.1.2]
+
+vars:
+  internal_ca_pem: "secret:vigo/ca/internal_root_pem"
+
+resources:
+  - name: write-ca-temp
+    type: file
+    target_path: "C:\\ProgramData\\Vigo\\ca\\internal_root.crt"
+    owner: SYSTEM
+    group: Administrators
+    mode: "0644"
+    content: "{{ .Vars.internal_ca_pem }}"
+    when: "os_family('windows')"
+
+  - name: import-ca
+    type: powershell
+    command: 'certutil -addstore -f Root "C:\ProgramData\Vigo\ca\internal_root.crt"'
+    skip_validation: true
+    depends_on: [write-ca-temp]
+    when: "os_family('windows')"

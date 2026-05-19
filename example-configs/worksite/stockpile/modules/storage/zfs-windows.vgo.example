@@ -1,0 +1,5 @@
+#~ ZFSonWindows is in beta and not production-ready. Operators wanting
+#~ ZFS-like capabilities on Windows use Storage Spaces (built-in) or
+#~ Storage Spaces Direct (cluster); both have different semantics. Stub.
+name: zfs-windows
+resources: []

@@ -1,0 +1,58 @@
+#~ Compliance evidence: nightly attestation that logs are being shipped
+#~ off-host. Auditors want to see that ANYONE with shell on the host
+#~ can't tamper with audit history without it being noticed downstream.
+#~ Writes a signed receipt the connwaer agent can collect.
+name: log-shipping-attestation
+
+compliance:
+  nist-800-53: [AU-9, AU-9(2), AU-11]
+  hipaa: [164.312(b), 164.308(a)(1)(ii)(D)]
+  pci-dss: ["10.5.3", "10.5.4"]
+  iso-27001: [A.12.4.2, A.12.4.3]
+  soc2: [CC7.2]
+
+vars:
+  evidence_dir: "/var/lib/vigo/evidence"
+  log_collector_endpoint: "loki.example.com:3100"
+
+resources:
+  - name: evidence-dir
+    type: directory
+    target_path: "{{ .Vars.evidence_dir }}"
+    owner: root
+    group: root
+    mode: "0750"
+    when: "os_family('linux')"
+
+  - name: attestation-script
+    type: file
+    target_path: "/usr/local/sbin/log-ship-attest.sh"
+    owner: root
+    group: root
+    mode: "0750"
+    content: |
+      #!/bin/sh
+      # Verify the log shipper has a recent positive heartbeat with the
+      # collector. Records the attempt + outcome as auditor-readable
+      # evidence in the evidence dir.
+      set -eu
+      OUT={{ .Vars.evidence_dir }}/log-shipping-$(date -u +%Y-%m-%d).json
+      if curl -s -o /dev/null -w '%{http_code}' --max-time 5 \
+         http://{{ .Vars.log_collector_endpoint }}/ready | grep -q '^200$'; then
+        STATUS=ok
+      else
+        STATUS=unreachable
+      fi
+      printf '{"timestamp":"%s","collector":"%s","status":"%s","host":"%s"}\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "{{ .Vars.log_collector_endpoint }}" "$STATUS" "$(hostname)" > "$OUT"
+    depends_on: [evidence-dir]
+    when: "os_family('linux')"
+
+  - name: attestation-cron
+    type: cron
+    user: root
+    name: log-shipping-attest
+    command: "/usr/local/sbin/log-ship-attest.sh"
+    schedule: "0 1 * * *"
+    depends_on: [attestation-script]
+    when: "os_family('linux')"

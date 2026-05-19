@@ -1,0 +1,36 @@
+#~ step-ca on Windows. Smallstep ships native Windows binaries; this
+#~ module installs via chocolatey and registers a Windows service.
+name: step-ca-windows
+
+compliance:
+  nist-800-53: [SC-8, SC-12, SC-13, SC-17]
+  iso-27001: [A.10.1.1, A.10.1.2]
+  pci-dss: [3.5, 4.1]
+
+vars:
+  step_ca_dns: "ca.internal.example.com"
+  step_ca_address: ":9000"
+  step_ca_passphrase: "secret:vigo/step-ca/passphrase"
+
+resources:
+  - name: install-step-cli
+    type: package
+    package: step
+    state: present
+    when: "os_family('windows')"
+
+  # step-ca init on Windows runs the same step CLI; the operator stages
+  # the ca config under C:\ProgramData\step\ then registers it as a
+  # Windows service via the install-windows-service helper from Smallstep.
+  - name: step-ca-init
+    type: powershell
+    command: >-
+      $passFile = New-TemporaryFile;
+      Set-Content -Path $passFile -Value "{{ .Vars.step_ca_passphrase }}";
+      step ca init --dns="{{ .Vars.step_ca_dns }}" --address="{{ .Vars.step_ca_address }}"
+        --provisioner=admin --password-file=$passFile --deployment-type=standalone;
+      Remove-Item $passFile
+    onlyif: 'if (Test-Path "$env:USERPROFILE\.step\config\ca.json") { exit 1 } else { exit 0 }'
+    skip_validation: true
+    depends_on: [install-step-cli]
+    when: "os_family('windows')"

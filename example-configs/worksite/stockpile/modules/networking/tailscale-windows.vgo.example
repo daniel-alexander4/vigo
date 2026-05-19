@@ -1,0 +1,25 @@
+#~ Tailscale on Windows. Native MSI installer via chocolatey, enroll via
+#~ powershell with an authkey from the secret vault.
+name: tailscale-windows
+
+compliance:
+  nist-800-53: [AC-17, SC-8]
+  iso-27001: [A.13.1.1]
+
+vars:
+  tailscale_authkey: "secret:vigo/tailscale/authkey"
+
+resources:
+  - name: install-tailscale
+    type: package
+    package: tailscale
+    state: present
+    when: "os_family('windows')"
+
+  - name: tailscale-up
+    type: powershell
+    command: '& "C:\Program Files\Tailscale\tailscale.exe" up --authkey={{ .Vars.tailscale_authkey }} --accept-dns=false'
+    onlyif: 'if ((& "C:\Program Files\Tailscale\tailscale.exe" status --json 2>$null | ConvertFrom-Json).BackendState -ne "Running") { exit 0 } else { exit 1 }'
+    skip_validation: true
+    depends_on: [install-tailscale]
+    when: "os_family('windows')"

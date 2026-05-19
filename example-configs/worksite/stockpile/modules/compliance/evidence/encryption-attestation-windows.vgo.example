@@ -1,0 +1,43 @@
+#~ Windows analog: weekly attestation that BitLocker is on for the OS
+#~ volume + other fixed disks. JSON evidence in the evidence dir.
+name: encryption-attestation-windows
+
+compliance:
+  nist-800-53: [SC-28, SC-28(1)]
+  hipaa: [164.312(a)(2)(iv), 164.312(e)(2)(ii)]
+  pci-dss: ["3.4", "3.4.1"]
+  iso-27001: [A.10.1.1, A.10.1.2]
+  soc2: [CC6.1]
+
+vars:
+  evidence_dir: "C:\\ProgramData\\Vigo\\evidence"
+
+resources:
+  - name: encryption-attest-script
+    type: file
+    target_path: "C:\\ProgramData\\Vigo\\evidence\\encryption-attest.ps1"
+    owner: SYSTEM
+    group: Administrators
+    mode: "0750"
+    content: |
+      $out = "{{ .Vars.evidence_dir }}\encryption-$((Get-Date).ToString('yyyy-MM-dd')).json"
+      $vols = Get-BitLockerVolume -ErrorAction SilentlyContinue | Select-Object MountPoint, VolumeStatus, ProtectionStatus, EncryptionPercentage
+      $obj = @{
+        timestamp = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ" -AsUTC)
+        host = $env:COMPUTERNAME
+        bitlocker_volumes = $vols
+      }
+      $obj | ConvertTo-Json -Depth 4 | Set-Content -Path $out -Encoding UTF8
+    when: "os_family('windows')"
+
+  - name: encryption-attest-task
+    type: powershell
+    command: >-
+      Register-ScheduledTask -TaskName 'VigoEncryptionAttest' -Force
+      -Action (New-ScheduledTaskAction -Execute 'powershell.exe'
+        -Argument '-NoProfile -File C:\ProgramData\Vigo\evidence\encryption-attest.ps1')
+      -Trigger (New-ScheduledTaskTrigger -Weekly -At 01:30 -DaysOfWeek Sunday)
+      -RunLevel Highest -User SYSTEM
+    skip_validation: true
+    depends_on: [encryption-attest-script]
+    when: "os_family('windows')"

@@ -1,0 +1,9 @@
+name: locale-retract
+description: Retract locale. Removes /etc/locale.conf — falls back to /etc/default/locale or distro default.
+
+resources:
+  - name: remove-locale-conf
+    type: file
+    target_path: "/etc/locale.conf"
+    state: absent
+    when: "os_family('linux')"

@@ -1,0 +1,73 @@
+#~ Prometheus Alertmanager. Receives alerts from Prometheus and routes
+#~ them to receivers (email, Slack, PagerDuty, webhooks).
+name: alertmanager
+
+compliance:
+  nist-800-53: [SI-4, IR-4, IR-6]
+  iso-27001: [A.16.1.2, A.16.1.4]
+
+vars:
+  alertmanager_version: "0.27.0"
+  receiver_webhook: "secret:vigo/alertmanager/webhook_url"
+
+resources:
+  - name: install-alertmanager
+    type: source_package
+    url: "https://github.com/prometheus/alertmanager/releases/download/v{{ .Vars.alertmanager_version }}/alertmanager-{{ .Vars.alertmanager_version }}.linux-{{ .Traits.os.arch }}.tar.gz"
+    target_path: "/usr/local/bin/alertmanager"
+    binary_path: alertmanager
+    unless: "alertmanager --version 2>&1 | grep -q {{ .Vars.alertmanager_version }}"
+    when: "os_family('linux')"
+
+  - name: alertmanager-config
+    type: file
+    target_path: "/etc/alertmanager/alertmanager.yml"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      route:
+        receiver: default
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 4h
+      receivers:
+        - name: default
+          webhook_configs:
+            - url: {{ .Vars.receiver_webhook }}
+    when: "os_family('linux')"
+
+  - name: alertmanager-systemd-unit
+    type: file
+    target_path: "/etc/systemd/system/alertmanager.service"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Prometheus Alertmanager
+      After=network-online.target
+
+      [Service]
+      Type=simple
+      ExecStart=/usr/local/bin/alertmanager --config.file=/etc/alertmanager/alertmanager.yml
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+    depends_on: [install-alertmanager, alertmanager-config]
+    when: "os_family('linux')"
+
+  - name: alertmanager-daemon-reload
+    type: exec
+    command: "systemctl daemon-reload"
+    subscribes: [alertmanager-systemd-unit]
+    when: "os_family('linux')"
+
+  - name: alertmanager-service
+    type: service
+    service: alertmanager
+    enabled: true
+    state: running
+    depends_on: [alertmanager-daemon-reload]
+    when: "os_family('linux')"

@@ -1,0 +1,52 @@
+#~ WireGuard on Windows. Installs the official WireGuard for Windows
+#~ MSI via chocolatey, drops a tunnel config, and registers it as a
+#~ Windows service. Tunnel name = wg0.
+name: wireguard-windows
+
+compliance:
+  nist-800-53: [AC-17, SC-8, SC-13]
+  iso-27001: [A.13.1.1, A.13.2.1]
+  pci-dss: [4.1]
+
+vars:
+  wg_address: "10.99.0.1/24"
+  wg_listen_port: "51820"
+  wg_private_key: "secret:vigo/wireguard/private_key"
+  wg_peer_pubkey: "secret:vigo/wireguard/peer_pubkey"
+  wg_peer_endpoint: "vpn.example.com:51820"
+  wg_peer_allowed_ips: "10.99.0.2/32"
+
+resources:
+  - name: install-wireguard
+    type: package
+    package: wireguard
+    state: present
+    when: "os_family('windows')"
+
+  - name: wg0-conf
+    type: file
+    target_path: "C:\\ProgramData\\WireGuard\\wg0.conf"
+    owner: SYSTEM
+    group: Administrators
+    mode: "0600"
+    content: |
+      [Interface]
+      Address = {{ .Vars.wg_address }}
+      ListenPort = {{ .Vars.wg_listen_port }}
+      PrivateKey = {{ .Vars.wg_private_key }}
+
+      [Peer]
+      PublicKey = {{ .Vars.wg_peer_pubkey }}
+      Endpoint = {{ .Vars.wg_peer_endpoint }}
+      AllowedIPs = {{ .Vars.wg_peer_allowed_ips }}
+      PersistentKeepalive = 25
+    depends_on: [install-wireguard]
+    when: "os_family('windows')"
+
+  - name: register-tunnel
+    type: powershell
+    command: 'wireguard.exe /installtunnelservice "C:\ProgramData\WireGuard\wg0.conf"'
+    onlyif: 'if (Get-Service WireGuardTunnel$wg0 -ErrorAction SilentlyContinue) { exit 1 } else { exit 0 }'
+    skip_validation: true
+    depends_on: [wg0-conf]
+    when: "os_family('windows')"

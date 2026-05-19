@@ -1,0 +1,4 @@
+name: bind-windows-retract
+description: Retract bind-windows stub. No-op.
+
+resources: []

@@ -1,0 +1,43 @@
+#~ Linux audit framework rules — covers privileged commands, account
+#~ changes, network config, and system-call accounting. Ships a baseline
+#~ rule set; operators extend in /etc/audit/rules.d/.
+name: auditd-rules
+
+compliance:
+  nist-800-53: [AU-2, AU-3, AU-12]
+  hipaa: [164.312(b)]
+  iso-27001: [A.12.4.1, A.12.4.3]
+  pci-dss: ["10.2"]
+
+resources:
+  - name: install-auditd
+    type: package
+    package: auditd
+    state: present
+    when: "os_family('linux')"
+
+  - name: audit-baseline-rules
+    type: file
+    target_path: "/etc/audit/rules.d/vigo-baseline.rules"
+    owner: root
+    group: root
+    mode: "0640"
+    content: |
+      # Vigo baseline audit rules.
+      -w /etc/passwd     -p wa -k identity
+      -w /etc/group      -p wa -k identity
+      -w /etc/shadow     -p wa -k identity
+      -w /etc/sudoers    -p wa -k sudoers
+      -w /etc/sudoers.d/ -p wa -k sudoers
+      -w /var/log/sudo.log -p wa -k sudo-log
+      -a always,exit -F arch=b64 -S execve -F euid=0 -k root-exec
+      -a always,exit -F arch=b32 -S execve -F euid=0 -k root-exec
+    depends_on: [install-auditd]
+    when: "os_family('linux')"
+
+  - name: reload-auditd
+    type: service
+    service: auditd
+    state: restarted
+    subscribes: [audit-baseline-rules]
+    when: "os_family('linux')"

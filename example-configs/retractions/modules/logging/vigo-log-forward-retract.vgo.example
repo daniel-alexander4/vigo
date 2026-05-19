@@ -1,0 +1,20 @@
+name: vigo-log-forward-retract
+description: >-
+  Retraction module for vigo-log-forward. Removes /etc/docker/daemon.json
+  and restarts docker so containers fall back to the default `json-file`
+  log driver. Review before activating — restarting docker briefly
+  interrupts every running container on the host (including vigosrv).
+
+resources:
+  - name: remove-docker-daemon-json
+    type: file
+    target_path: "/etc/docker/daemon.json"
+    state: absent
+    when: "os_family('linux')"
+
+  - name: restart-docker
+    type: service
+    service: docker
+    state: restarted
+    subscribes: [remove-docker-daemon-json]
+    when: "os_family('linux')"

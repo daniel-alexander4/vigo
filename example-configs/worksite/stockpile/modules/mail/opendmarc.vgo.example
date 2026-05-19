@@ -1,0 +1,37 @@
+#~ OpenDMARC milter for inbound DMARC validation + reporting.
+name: opendmarc
+
+compliance:
+  nist-800-53: [SC-8, SI-3]
+  iso-27001: [A.13.2.3]
+
+resources:
+  - name: install-opendmarc
+    type: package
+    package: opendmarc
+    state: present
+    when: "os_family('linux')"
+
+  - name: opendmarc-conf
+    type: file
+    target_path: "/etc/opendmarc.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Syslog yes
+      UMask 002
+      Socket inet:8893@localhost
+      AutoRestart yes
+      RejectFailures false
+      RequiredHeaders true
+    depends_on: [install-opendmarc]
+    when: "os_family('linux')"
+
+  - name: opendmarc-service
+    type: service
+    service: opendmarc
+    enabled: true
+    state: running
+    subscribes: [opendmarc-conf]
+    when: "os_family('linux')"

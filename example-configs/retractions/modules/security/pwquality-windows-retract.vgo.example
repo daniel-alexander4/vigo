@@ -1,0 +1,21 @@
+name: pwquality-windows-retract
+description: Retract pwquality-windows. Restores Windows defaults.
+
+resources:
+  - name: reset-min-password-length
+    type: powershell
+    command: "net accounts /minpwlen:0"
+    skip_validation: true
+    when: "os_family('windows')"
+
+  - name: reset-password-history
+    type: powershell
+    command: "net accounts /uniquepw:0"
+    skip_validation: true
+    when: "os_family('windows')"
+
+  - name: reset-max-password-age
+    type: powershell
+    command: "net accounts /maxpwage:UNLIMITED"
+    skip_validation: true
+    when: "os_family('windows')"

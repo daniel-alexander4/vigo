@@ -1,0 +1,4 @@
+name: yubikey-pam-windows-retract
+description: Retract yubikey-pam-windows stub. No-op.
+
+resources: []

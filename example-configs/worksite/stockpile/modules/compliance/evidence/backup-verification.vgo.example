@@ -1,0 +1,54 @@
+#~ Compliance evidence: weekly verification that the backup is restorable
+#~ — runs a `restic check` (or equivalent) and records the outcome.
+#~ Pairs with backup/restic.
+name: backup-verification
+
+compliance:
+  nist-800-53: [CP-9, CP-10(2), CP-10(4)]
+  hipaa: [164.308(a)(7)(ii)(D)]
+  pci-dss: ["12.10.1"]
+  iso-27001: [A.12.3.1, A.17.1.3]
+  soc2: [A1.3]
+
+vars:
+  evidence_dir: "/var/lib/vigo/evidence"
+
+resources:
+  - name: evidence-dir
+    type: directory
+    target_path: "{{ .Vars.evidence_dir }}"
+    owner: root
+    group: root
+    mode: "0750"
+    when: "os_family('linux')"
+
+  - name: backup-verify-script
+    type: file
+    target_path: "/usr/local/sbin/backup-verify.sh"
+    owner: root
+    group: root
+    mode: "0750"
+    content: |
+      #!/bin/sh
+      set -eu
+      . /etc/restic/restic.env
+      export RESTIC_PASSWORD RESTIC_REPOSITORY
+      OUT={{ .Vars.evidence_dir }}/backup-verify-$(date -u +%Y-%m-%d).json
+      if restic check --read-data-subset=1G >/tmp/restic-check.out 2>&1; then
+        STATUS=ok
+      else
+        STATUS=fail
+      fi
+      printf '{"timestamp":"%s","host":"%s","status":"%s","repo":"%s"}\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(hostname)" "$STATUS" "$RESTIC_REPOSITORY" > "$OUT"
+    depends_on: [evidence-dir]
+    when: "os_family('linux')"
+
+  - name: backup-verify-cron
+    type: cron
+    user: root
+    name: backup-verify
+    command: "/usr/local/sbin/backup-verify.sh"
+    schedule: "0 3 * * 0"
+    depends_on: [backup-verify-script]
+    when: "os_family('linux')"

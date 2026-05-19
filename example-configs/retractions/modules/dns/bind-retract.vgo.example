@@ -1,0 +1,22 @@
+name: bind-retract
+description: Retract bind. Zone files at /etc/bind/zones/ NOT removed.
+
+resources:
+  - name: stop-bind9
+    type: service
+    service: bind9
+    state: stopped
+    enabled: false
+    when: "os_family('debian')"
+
+  - name: uninstall-bind9
+    type: package
+    package: bind9
+    state: absent
+    when: "os_family('debian')"
+
+  - name: uninstall-bind-rhel
+    type: package
+    package: bind
+    state: absent
+    when: "os_family('rhel')"

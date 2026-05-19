@@ -1,0 +1,4 @@
+name: apparmor-windows-retract
+description: Retract apparmor-windows stub. No-op.
+
+resources: []

@@ -1,0 +1,25 @@
+name: swap-config-retract
+description: Retract swap-config. Removes the swap file + fstab entry.
+
+resources:
+  - name: deactivate-swap
+    type: exec
+    command: "swapoff /swapfile"
+    unless: "! swapon --show=NAME --noheadings | grep -q '^/swapfile$'"
+    when: "os_family('linux')"
+
+  - name: remove-swap-fstab
+    type: file_line
+    target_path: "/etc/fstab"
+    line: "/swapfile  none  swap  sw  0  0"
+    match_pattern: "^/swapfile\\s"
+    state: absent
+    depends_on: [deactivate-swap]
+    when: "os_family('linux')"
+
+  - name: remove-swap-file
+    type: file
+    target_path: "/swapfile"
+    state: absent
+    depends_on: [remove-swap-fstab]
+    when: "os_family('linux')"

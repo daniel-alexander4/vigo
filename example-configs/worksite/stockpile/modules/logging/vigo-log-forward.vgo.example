@@ -1,0 +1,53 @@
+#~ Forwards vigosrv container logs to a remote syslog endpoint via Docker's
+#~ built-in syslog log driver. The driver is configured in
+#~ /etc/docker/daemon.json so it applies to every container that doesn't
+#~ override (vigosrv inherits unless its compose service sets `logging:`).
+#~
+#~ Default target is local journald (127.0.0.1:514). Override syslog_address
+#~ for a remote rsyslog/Loki+Promtail receiver. Default driver is `syslog`;
+#~ override `log_driver` to `journald` to keep logs local but still
+#~ structured.
+#~
+#~ Apply to the host running vigosrv. Linux-only — Docker's daemon.json
+#~ shape is Linux-only; Docker Desktop on macOS/Windows uses a different
+#~ config path.
+name: vigo-log-forward
+
+compliance:
+  nist-800-53: [AU-3, AU-4, AU-6, AU-12]
+  hipaa: [164.312(b), 164.308(a)(1)(ii)(D)]
+  iso-27001: [A.12.4.1, A.12.4.3]
+  pci-dss: ["10.2", "10.3", "10.5.4"]
+  soc2: [CC7.2, CC7.3]
+
+vars:
+  log_driver: "syslog"
+  syslog_address: "udp://127.0.0.1:514"
+  syslog_facility: "daemon"
+  syslog_format: "rfc5424"
+
+resources:
+  - name: docker-daemon-json
+    type: file
+    target_path: "/etc/docker/daemon.json"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      {
+        "log-driver": "{{ .Vars.log_driver }}",
+        "log-opts": {
+          "syslog-address": "{{ .Vars.syslog_address }}",
+          "syslog-facility": "{{ .Vars.syslog_facility }}",
+          "syslog-format": "{{ .Vars.syslog_format }}",
+          "tag": "{{`{{.Name}}/{{.ID}}`}}"
+        }
+      }
+    when: "os_family('linux')"
+
+  - name: reload-docker
+    type: service
+    service: docker
+    state: restarted
+    subscribes: [docker-daemon-json]
+    when: "os_family('linux')"

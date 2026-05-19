@@ -1,0 +1,14 @@
+#~ Windows analog of tuned — apply a Windows power scheme via powercfg.
+#~ Supported scheme GUIDs: SCHEME_BALANCED, SCHEME_MIN (high performance),
+#~ SCHEME_MAX (power saver). Use a UUID for custom schemes.
+name: tuned-windows
+
+vars:
+  power_scheme: "SCHEME_MIN"
+
+resources:
+  - name: apply-power-scheme
+    type: powershell
+    command: "powercfg /setactive {{ .Vars.power_scheme }}"
+    skip_validation: true
+    when: "os_family('windows')"

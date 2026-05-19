@@ -1,0 +1,4 @@
+#~ Windows uses native LDAP via secur32.dll (no client install needed).
+#~ For authoritative directory integration, join the domain instead.
+name: ldap-client-windows
+resources: []

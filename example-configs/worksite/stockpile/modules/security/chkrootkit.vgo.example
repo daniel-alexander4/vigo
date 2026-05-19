@@ -1,0 +1,24 @@
+#~ chkrootkit — alternative rootkit scanner. Complements rkhunter (the
+#~ two tools have non-overlapping signature databases). Daily check via
+#~ cron.
+name: chkrootkit
+
+compliance:
+  nist-800-53: [SI-3, SI-4]
+  iso-27001: [A.12.2.1]
+
+resources:
+  - name: install-chkrootkit
+    type: package
+    package: chkrootkit
+    state: present
+    when: "os_family('linux')"
+
+  - name: chkrootkit-cron
+    type: cron
+    user: root
+    name: chkrootkit-check
+    command: "chkrootkit -q"
+    schedule: "30 4 * * *"
+    depends_on: [install-chkrootkit]
+    when: "os_family('linux')"

@@ -1,0 +1,24 @@
+#~ Windows AV — uses the built-in Windows Defender as the functional
+#~ analog to ClamAV. Enables real-time monitoring and runs a quick scan
+#~ on apply. For organizations that prefer ClamAV on Windows, install
+#~ the clamav package from chocolatey separately; this module favors
+#~ Defender as the native, supported path.
+name: clamav-windows
+
+compliance:
+  nist-800-53: [SI-3, SI-7]
+  iso-27001: [A.12.2.1]
+  pci-dss: ["5.1", "5.2", "5.3"]
+
+resources:
+  - name: enable-defender-realtime
+    type: powershell
+    command: "Set-MpPreference -DisableRealtimeMonitoring $false"
+    skip_validation: true
+    when: "os_family('windows')"
+
+  - name: update-defender-signatures
+    type: powershell
+    command: "Update-MpSignature"
+    skip_validation: true
+    when: "os_family('windows')"

@@ -1,0 +1,35 @@
+#~ Ensures the Docker daemon is enabled and running on the host. If
+#~ Docker is down, the vigosrv container is down — and so is the
+#~ control-plane. This is belt-and-suspenders alongside whatever
+#~ systemd-level restart=on-failure the distro defaults provide.
+#~
+#~ Apply to the host running vigosrv. Linux-only — Docker Desktop on
+#~ macOS/Windows uses a different service model (the daemon is part
+#~ of the desktop app, not a systemd unit).
+name: vigo-docker-keepalive
+
+compliance:
+  nist-800-53: [CP-2, CP-10, SI-13]
+  iso-27001: [A.12.1.3, A.17.1.2]
+  soc2: [A1.2]
+
+vars:
+  compose_file: "/srv/vigo/docker-compose.yml"
+
+resources:
+  - name: ensure-docker-running
+    type: service
+    service: docker
+    enabled: true
+    state: running
+    when: "os_family('linux')"
+
+  #~ Sanity-check that the compose file vigosrv was bootstrapped with is
+  #~ still on disk. If it's been deleted, `docker compose restart` from
+  #~ vigo-healthcheck would fail silently — flag at convergence time
+  #~ instead. Uses exec rather than file (no content to manage).
+  - name: verify-compose-file-present
+    type: exec
+    command: 'test -f "{{ .Vars.compose_file }}"'
+    unless: 'test -f "{{ .Vars.compose_file }}"'
+    when: "os_family('linux')"

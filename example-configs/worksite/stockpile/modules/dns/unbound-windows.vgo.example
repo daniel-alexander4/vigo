@@ -1,0 +1,4 @@
+#~ Unbound has Windows binaries but Windows operators almost always use
+#~ Windows DNS Server (built-in) instead. Stub.
+name: unbound-windows
+resources: []

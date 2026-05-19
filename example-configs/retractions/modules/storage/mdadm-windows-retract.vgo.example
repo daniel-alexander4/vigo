@@ -1,0 +1,4 @@
+name: mdadm-windows-retract
+description: Retract mdadm-windows stub. No-op.
+
+resources: []

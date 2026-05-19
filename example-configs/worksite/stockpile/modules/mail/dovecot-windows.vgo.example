@@ -1,0 +1,7 @@
+#~ Dovecot has no Windows port. Operators running mail on Windows
+#~ typically use Microsoft Exchange or hMailServer; both have native
+#~ administration paradigms (Exchange Management Shell, hMailServer
+#~ console) that don't map cleanly to a Linux-style YAML resource set.
+#~ Document the Exchange/hMailServer choice in your operator runbook.
+name: dovecot-windows
+resources: []

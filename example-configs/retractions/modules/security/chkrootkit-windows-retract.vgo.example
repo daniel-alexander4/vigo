@@ -1,0 +1,4 @@
+name: chkrootkit-windows-retract
+description: Retract chkrootkit-windows stub. No-op.
+
+resources: []

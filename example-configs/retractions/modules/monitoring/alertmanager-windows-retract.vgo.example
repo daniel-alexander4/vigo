@@ -1,0 +1,4 @@
+name: alertmanager-windows-retract
+description: Retract alertmanager-windows stub. No-op.
+
+resources: []

@@ -1,0 +1,15 @@
+name: tailscale-windows-retract
+description: Retract tailscale-windows.
+
+resources:
+  - name: tailscale-logout
+    type: powershell
+    command: '& "C:\Program Files\Tailscale\tailscale.exe" logout'
+    skip_validation: true
+    when: "os_family('windows')"
+
+  - name: uninstall-tailscale
+    type: package
+    package: tailscale
+    state: absent
+    when: "os_family('windows')"

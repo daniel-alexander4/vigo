@@ -1,0 +1,22 @@
+name: tuned-retract
+description: Retract tuned. Reverts to no-tuning before uninstall.
+
+resources:
+  - name: clear-profile
+    type: exec
+    command: "tuned-adm off"
+    unless: "tuned-adm active | grep -q 'No current active profile'"
+    when: "os_family('linux')"
+
+  - name: stop-tuned
+    type: service
+    service: tuned
+    state: stopped
+    enabled: false
+    when: "os_family('linux')"
+
+  - name: uninstall-tuned
+    type: package
+    package: tuned
+    state: absent
+    when: "os_family('linux')"

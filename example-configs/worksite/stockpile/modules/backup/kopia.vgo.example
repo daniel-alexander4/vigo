@@ -1,0 +1,70 @@
+#~ Kopia — fast, encrypted, deduplicated backup with a built-in web UI.
+#~ Cross-platform; ships native binaries for Linux + Windows + macOS.
+#~ Reads repository URL + password from the secret vault.
+name: kopia
+
+compliance:
+  nist-800-53: [CP-9, CP-10, SC-28]
+  hipaa: [164.308(a)(7)(ii)(A)]
+  iso-27001: [A.12.3.1, A.10.1.1]
+  pci-dss: ["9.5.1", "3.4"]
+
+vars:
+  kopia_version: "0.17.0"
+  source_paths: "/etc /home /var/lib"
+  schedule: "15 2 * * *"
+  kopia_password: "secret:vigo/backup/kopia_password"
+  kopia_repo: "secret:vigo/backup/kopia_repo"
+
+resources:
+  - name: install-kopia
+    type: source_package
+    url: "https://github.com/kopia/kopia/releases/download/v{{ .Vars.kopia_version }}/kopia-{{ .Vars.kopia_version }}-linux-{{ .Traits.os.arch }}.tar.gz"
+    target_path: "/usr/local/bin/kopia"
+    binary_path: kopia
+    unless: "kopia --version 2>/dev/null | grep -q {{ .Vars.kopia_version }}"
+    when: "os_family('linux')"
+
+  - name: kopia-env
+    type: file
+    target_path: "/etc/kopia/kopia.env"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      KOPIA_PASSWORD={{ .Vars.kopia_password }}
+      KOPIA_CONFIG_PATH=/etc/kopia/repo.config
+    when: "os_family('linux')"
+
+  - name: kopia-init-script
+    type: file
+    target_path: "/usr/local/sbin/kopia-init.sh"
+    owner: root
+    group: root
+    mode: "0750"
+    content: |
+      #!/bin/sh
+      set -eu
+      . /etc/kopia/kopia.env
+      export KOPIA_PASSWORD KOPIA_CONFIG_PATH
+      if ! kopia repository status >/dev/null 2>&1; then
+        kopia repository create from-config --token "{{ .Vars.kopia_repo }}" 2>/dev/null \
+          || kopia repository connect from-config --token "{{ .Vars.kopia_repo }}"
+      fi
+    when: "os_family('linux')"
+
+  - name: kopia-init
+    type: exec
+    command: "/usr/local/sbin/kopia-init.sh"
+    unless: "test -f /etc/kopia/repo.config"
+    depends_on: [install-kopia, kopia-env, kopia-init-script]
+    when: "os_family('linux')"
+
+  - name: kopia-cron
+    type: cron
+    user: root
+    name: kopia-scheduled
+    command: ". /etc/kopia/kopia.env && export KOPIA_PASSWORD KOPIA_CONFIG_PATH && kopia snapshot create {{ .Vars.source_paths }}"
+    schedule: "{{ .Vars.schedule }}"
+    depends_on: [kopia-init]
+    when: "os_family('linux')"

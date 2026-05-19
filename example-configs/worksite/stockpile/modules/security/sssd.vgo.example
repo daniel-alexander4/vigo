@@ -1,0 +1,23 @@
+#~ SSSD — System Security Services Daemon. Caches identity + auth for
+#~ AD/LDAP/IPA backends. This module installs the package; operators
+#~ ship their domain-specific /etc/sssd/sssd.conf separately.
+name: sssd
+
+compliance:
+  nist-800-53: [IA-2, IA-5]
+  iso-27001: [A.9.2.1, A.9.4.2]
+
+resources:
+  - name: install-sssd
+    type: package
+    package: sssd
+    state: present
+    when: "os_family('linux')"
+
+  - name: sssd-service
+    type: service
+    service: sssd
+    enabled: true
+    state: running
+    depends_on: [install-sssd]
+    when: "os_family('linux')"

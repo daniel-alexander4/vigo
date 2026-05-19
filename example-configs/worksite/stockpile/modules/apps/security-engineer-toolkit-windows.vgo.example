@@ -1,0 +1,13 @@
+#~ Security-engineer toolkit for Windows. Chocolatey-installed equivalents.
+name: security-engineer-toolkit-windows
+
+vars:
+  packages: [wireshark, ngrep, trivy, age, gnupg, nmap, openssl, sysinternals]
+
+resources:
+  - name: security-engineer-toolkit-windows
+    type: package
+    foreach: packages
+    package: "{{ .Item }}"
+    state: present
+    when: "os_family('windows')"

@@ -1,0 +1,13 @@
+#~ Compliance-evidence toolkit for Windows.
+name: compliance-evidence-toolkit-windows
+
+vars:
+  packages: [jq, yq, gnupg, age, openssl]
+
+resources:
+  - name: compliance-evidence-toolkit-windows
+    type: package
+    foreach: packages
+    package: "{{ .Item }}"
+    state: present
+    when: "os_family('windows')"

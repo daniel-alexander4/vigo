@@ -1,0 +1,43 @@
+#~ Internal certificate authority via Smallstep step-ca. Useful for
+#~ private PKI (internal mTLS, service-to-service certs) where public
+#~ Let's Encrypt isn't appropriate. Reads root key passphrase from the
+#~ secret vault.
+name: step-ca
+
+compliance:
+  nist-800-53: [SC-8, SC-12, SC-13, SC-17]
+  iso-27001: [A.10.1.1, A.10.1.2]
+  pci-dss: [3.5, 4.1]
+
+vars:
+  step_ca_dns: "ca.internal.example.com"
+  step_ca_address: ":9000"
+  step_ca_passphrase: "secret:vigo/step-ca/passphrase"
+
+resources:
+  - name: install-step-ca
+    type: package
+    package: step-ca
+    state: present
+    when: "os_family('linux')"
+
+  - name: install-step-cli
+    type: package
+    package: step-cli
+    state: present
+    when: "os_family('linux')"
+
+  - name: step-ca-init
+    type: exec
+    command: 'step ca init --dns="{{ .Vars.step_ca_dns }}" --address="{{ .Vars.step_ca_address }}" --provisioner=admin --password-file=<(echo "{{ .Vars.step_ca_passphrase }}") --deployment-type=standalone'
+    unless: "test -f /root/.step/config/ca.json"
+    depends_on: [install-step-ca, install-step-cli]
+    when: "os_family('linux')"
+
+  - name: step-ca-service
+    type: service
+    service: step-ca
+    enabled: true
+    state: running
+    depends_on: [step-ca-init]
+    when: "os_family('linux')"

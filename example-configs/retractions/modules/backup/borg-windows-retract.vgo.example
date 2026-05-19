@@ -1,0 +1,6 @@
+name: borg-windows-retract
+description: >-
+  Retract borg-windows. The Windows borg module is a no-op marker;
+  there's nothing to undo.
+
+resources: []

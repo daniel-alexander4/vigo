@@ -1,0 +1,4 @@
+#~ Windows uses native AD integration — no SSSD analog needed. Domain
+#~ join via Add-Computer; auth is handled by the Windows logon stack.
+name: sssd-windows
+resources: []

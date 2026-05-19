@@ -1,0 +1,39 @@
+#~ Tailscale — zero-config WireGuard mesh VPN. Operator runs `tailscale up
+#~ --authkey=...` once with a key from the secret vault to enroll.
+name: tailscale
+
+compliance:
+  nist-800-53: [AC-17, SC-8]
+  iso-27001: [A.13.1.1]
+
+vars:
+  tailscale_authkey: "secret:vigo/tailscale/authkey"
+
+resources:
+  - name: install-tailscale-repo
+    type: exec
+    command: 'curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null && curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list >/dev/null && apt-get update'
+    unless: "test -f /usr/share/keyrings/tailscale-archive-keyring.gpg"
+    when: "os_family('debian')"
+
+  - name: install-tailscale
+    type: package
+    package: tailscale
+    state: present
+    depends_on: [install-tailscale-repo]
+    when: "os_family('linux')"
+
+  - name: tailscale-up
+    type: exec
+    command: 'tailscale up --authkey={{ .Vars.tailscale_authkey }} --accept-dns=false'
+    unless: "tailscale status --json 2>/dev/null | grep -q '\"BackendState\": \"Running\"'"
+    depends_on: [install-tailscale]
+    when: "os_family('linux')"
+
+  - name: tailscaled-service
+    type: service
+    service: tailscaled
+    enabled: true
+    state: running
+    depends_on: [install-tailscale]
+    when: "os_family('linux')"

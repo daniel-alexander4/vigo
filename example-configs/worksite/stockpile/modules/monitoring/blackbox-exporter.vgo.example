@@ -1,0 +1,77 @@
+#~ Prometheus blackbox-exporter. Synthetic HTTP/TCP/ICMP probes; Prometheus
+#~ scrapes /probe?target=... to record availability + latency.
+name: blackbox-exporter
+
+compliance:
+  nist-800-53: [SI-4, CA-7]
+  iso-27001: [A.12.1.3]
+
+vars:
+  blackbox_version: "0.25.0"
+
+resources:
+  - name: install-blackbox-exporter
+    type: source_package
+    url: "https://github.com/prometheus/blackbox_exporter/releases/download/v{{ .Vars.blackbox_version }}/blackbox_exporter-{{ .Vars.blackbox_version }}.linux-{{ .Traits.os.arch }}.tar.gz"
+    target_path: "/usr/local/bin/blackbox_exporter"
+    binary_path: blackbox_exporter
+    unless: "blackbox_exporter --version 2>&1 | grep -q {{ .Vars.blackbox_version }}"
+    when: "os_family('linux')"
+
+  - name: blackbox-config
+    type: file
+    target_path: "/etc/blackbox_exporter/blackbox.yml"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      modules:
+        http_2xx:
+          prober: http
+          timeout: 5s
+          http:
+            valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+            valid_status_codes: []
+            preferred_ip_protocol: ip4
+        tcp_connect:
+          prober: tcp
+          timeout: 5s
+        icmp:
+          prober: icmp
+          timeout: 5s
+    when: "os_family('linux')"
+
+  - name: blackbox-systemd-unit
+    type: file
+    target_path: "/etc/systemd/system/blackbox_exporter.service"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Blackbox Exporter
+      After=network-online.target
+
+      [Service]
+      Type=simple
+      ExecStart=/usr/local/bin/blackbox_exporter --config.file=/etc/blackbox_exporter/blackbox.yml
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+    depends_on: [install-blackbox-exporter, blackbox-config]
+    when: "os_family('linux')"
+
+  - name: blackbox-daemon-reload
+    type: exec
+    command: "systemctl daemon-reload"
+    subscribes: [blackbox-systemd-unit]
+    when: "os_family('linux')"
+
+  - name: blackbox-service
+    type: service
+    service: blackbox_exporter
+    enabled: true
+    state: running
+    depends_on: [blackbox-daemon-reload]
+    when: "os_family('linux')"

@@ -1,0 +1,32 @@
+name: borg-retract
+description: >-
+  Retract borg backup module. Repository data + secret-vault entries
+  are NOT removed — they're the only path to a restore.
+
+resources:
+  - name: remove-cron
+    type: cron
+    user: root
+    name: borgmatic-scheduled
+    command: "borgmatic --syslog-verbosity 1"
+    schedule: "30 1 * * *"
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-borgmatic-config
+    type: file
+    target_path: "/etc/borgmatic/config.yaml"
+    state: absent
+    when: "os_family('linux')"
+
+  - name: uninstall-borgmatic
+    type: package
+    package: borgmatic
+    state: absent
+    when: "os_family('linux')"
+
+  - name: uninstall-borg
+    type: package
+    package: borgbackup
+    state: absent
+    when: "os_family('linux')"

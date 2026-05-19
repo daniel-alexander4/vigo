@@ -1,0 +1,6 @@
+#~ No native Windows mdadm. Windows software RAID is delivered by
+#~ Storage Spaces (built-in). Configure with New-StoragePool /
+#~ New-VirtualDisk in PowerShell — the parameters are too site-specific
+#~ for a generic module. Stub.
+name: mdadm-windows
+resources: []

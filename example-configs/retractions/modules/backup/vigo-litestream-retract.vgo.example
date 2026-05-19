@@ -1,0 +1,43 @@
+name: vigo-litestream-retract
+description: >-
+  Retraction module for vigo-litestream. Stops the replication service,
+  removes the systemd unit + config, and removes the binary. Does NOT
+  delete the secret-vault entries (`vigo/litestream/*`) — operator
+  decision. Does NOT delete the S3 replica — operator must remove that
+  separately to terminate object-store costs.
+
+resources:
+  - name: stop-litestream-service
+    type: service
+    service: litestream
+    state: stopped
+    enabled: false
+    when: "os_family('linux')"
+
+  - name: remove-litestream-systemd-unit
+    type: file
+    target_path: "/etc/systemd/system/litestream.service"
+    state: absent
+    when: "os_family('linux')"
+
+  - name: litestream-daemon-reload
+    type: exec
+    command: "systemctl daemon-reload"
+    subscribes: [remove-litestream-systemd-unit]
+    when: "os_family('linux')"
+
+  - name: remove-litestream-config
+    type: file
+    target_path: "/etc/litestream.yml"
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-litestream-binary
+    type: file
+    target_path: "/usr/local/bin/litestream"
+    state: absent
+    when: "os_family('linux')"
+
+  # secret:vigo/litestream/* — not removed; operator runs
+  # `sudo vigocli secrets delete vigo/litestream/access_key_id` etc. by hand.
+  # S3 replica — operator must drop the bucket/path to stop incurring cost.

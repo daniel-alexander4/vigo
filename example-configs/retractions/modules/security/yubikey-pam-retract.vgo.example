@@ -1,0 +1,17 @@
+name: yubikey-pam-retract
+description: Retract yubikey-pam.
+
+resources:
+  - name: remove-pam-sshd-u2f
+    type: file_line
+    target_path: "/etc/pam.d/sshd"
+    line: "auth required pam_u2f.so cue"
+    match_pattern: "^auth\\s+required\\s+pam_u2f.so"
+    state: absent
+    when: "os_family('linux')"
+
+  - name: uninstall-libpam-u2f
+    type: package
+    package: libpam-u2f
+    state: absent
+    when: "os_family('debian')"

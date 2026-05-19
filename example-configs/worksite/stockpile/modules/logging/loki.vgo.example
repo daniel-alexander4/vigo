@@ -1,0 +1,90 @@
+#~ Grafana Loki log aggregation server. Single-binary mode; suitable for
+#~ small fleets. For multi-tenant or sharded setups, operators run their
+#~ own helm chart.
+name: loki
+
+compliance:
+  nist-800-53: [AU-3, AU-4, AU-6, AU-9]
+  iso-27001: [A.12.4.1, A.12.4.3]
+
+vars:
+  loki_version: "3.0.0"
+  loki_listen: "0.0.0.0:3100"
+  loki_storage_dir: "/var/lib/loki"
+
+resources:
+  - name: install-loki
+    type: source_package
+    url: "https://github.com/grafana/loki/releases/download/v{{ .Vars.loki_version }}/loki-linux-{{ .Traits.os.arch }}.zip"
+    target_path: "/usr/local/bin/loki"
+    binary_path: "loki-linux-{{ .Traits.os.arch }}"
+    unless: "loki --version 2>&1 | grep -q {{ .Vars.loki_version }}"
+    when: "os_family('linux')"
+
+  - name: loki-config
+    type: file
+    target_path: "/etc/loki/loki.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      auth_enabled: false
+      server:
+        http_listen_address: 0.0.0.0
+        http_listen_port: 3100
+      common:
+        path_prefix: {{ .Vars.loki_storage_dir }}
+        storage:
+          filesystem:
+            chunks_directory: {{ .Vars.loki_storage_dir }}/chunks
+            rules_directory: {{ .Vars.loki_storage_dir }}/rules
+        replication_factor: 1
+        ring:
+          kvstore:
+            store: inmemory
+      schema_config:
+        configs:
+          - from: 2024-01-01
+            store: tsdb
+            object_store: filesystem
+            schema: v13
+            index:
+              prefix: index_
+              period: 24h
+    when: "os_family('linux')"
+
+  - name: loki-systemd-unit
+    type: file
+    target_path: "/etc/systemd/system/loki.service"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Loki log aggregation
+      After=network-online.target
+
+      [Service]
+      Type=simple
+      ExecStart=/usr/local/bin/loki -config.file=/etc/loki/loki.yaml
+      Restart=on-failure
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+    depends_on: [install-loki, loki-config]
+    when: "os_family('linux')"
+
+  - name: loki-daemon-reload
+    type: exec
+    command: "systemctl daemon-reload"
+    subscribes: [loki-systemd-unit]
+    when: "os_family('linux')"
+
+  - name: loki-service
+    type: service
+    service: loki
+    enabled: true
+    state: running
+    depends_on: [loki-daemon-reload]
+    when: "os_family('linux')"

@@ -1,0 +1,42 @@
+#~ Adds operator-provided CA certificates to the system trust store.
+#~ Reads each cert PEM from the secret vault; operators rotate by
+#~ updating the secret entry.
+name: ca-anchors
+
+compliance:
+  nist-800-53: [SC-12, SC-17]
+  iso-27001: [A.10.1.2]
+
+vars:
+  internal_ca_pem: "secret:vigo/ca/internal_root_pem"
+
+resources:
+  - name: write-internal-ca
+    type: file
+    target_path: "/usr/local/share/ca-certificates/vigo-internal.crt"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ .Vars.internal_ca_pem }}"
+    when: "os_family('debian')"
+
+  - name: update-ca-certs-debian
+    type: exec
+    command: "update-ca-certificates"
+    subscribes: [write-internal-ca]
+    when: "os_family('debian')"
+
+  - name: write-internal-ca-rhel
+    type: file
+    target_path: "/etc/pki/ca-trust/source/anchors/vigo-internal.crt"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ .Vars.internal_ca_pem }}"
+    when: "os_family('rhel')"
+
+  - name: update-ca-certs-rhel
+    type: exec
+    command: "update-ca-trust extract"
+    subscribes: [write-internal-ca-rhel]
+    when: "os_family('rhel')"

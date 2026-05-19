@@ -1,0 +1,18 @@
+#~ BorgBackup has no native Windows port. Operators who want the same
+#~ properties (encrypted, deduplicated, repository-based, cross-platform
+#~ restore) should deploy restic-windows or kopia-windows alongside their
+#~ Linux borg hosts — both use a compatible mental model. This module is
+#~ a marker so the borg role can be applied to a mixed fleet without
+#~ erroring on Windows envoys; it installs nothing.
+name: borg-windows
+
+compliance:
+  nist-800-53: [CP-9]
+  iso-27001: [A.12.3.1]
+
+resources: []
+
+# No native Windows BorgBackup. Install restic-windows or kopia-windows for
+# the same use case. WSL2-hosted borg works but isn't supported here — the
+# operator surface diverges enough that mixing those hosts into the borg
+# role is misleading.

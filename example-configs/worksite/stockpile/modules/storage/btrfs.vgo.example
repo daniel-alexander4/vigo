@@ -1,0 +1,14 @@
+#~ Btrfs filesystem support — installs btrfs-progs. Does not format
+#~ devices (operator-specific).
+name: btrfs
+
+compliance:
+  nist-800-53: [CP-9]
+  iso-27001: [A.12.3.1]
+
+resources:
+  - name: install-btrfs-progs
+    type: package
+    package: btrfs-progs
+    state: present
+    when: "os_family('linux')"

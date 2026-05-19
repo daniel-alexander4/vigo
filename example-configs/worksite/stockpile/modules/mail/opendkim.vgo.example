@@ -1,0 +1,49 @@
+#~ OpenDKIM milter for outbound DKIM signing on postfix-style MTAs.
+name: opendkim
+
+compliance:
+  nist-800-53: [SC-8, SC-23]
+  iso-27001: [A.13.2.3]
+
+vars:
+  selector: "mail"
+  domain: "example.com"
+
+resources:
+  - name: install-opendkim
+    type: package
+    package: opendkim
+    state: present
+    when: "os_family('linux')"
+
+  - name: install-opendkim-tools
+    type: package
+    package: opendkim-tools
+    state: present
+    when: "os_family('linux')"
+
+  - name: opendkim-conf
+    type: file
+    target_path: "/etc/opendkim.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Syslog yes
+      UMask 002
+      Domain {{ .Vars.domain }}
+      KeyFile /etc/opendkim/keys/{{ .Vars.selector }}.private
+      Selector {{ .Vars.selector }}
+      Socket inet:8891@localhost
+      Mode sv
+      SignatureAlgorithm rsa-sha256
+    depends_on: [install-opendkim]
+    when: "os_family('linux')"
+
+  - name: opendkim-service
+    type: service
+    service: opendkim
+    enabled: true
+    state: running
+    subscribes: [opendkim-conf]
+    when: "os_family('linux')"

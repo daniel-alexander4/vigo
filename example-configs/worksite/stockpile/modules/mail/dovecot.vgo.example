@@ -1,0 +1,44 @@
+#~ Dovecot IMAP/POP3 server. Minimal config; operators typically extend
+#~ with their own auth backend + TLS cert paths.
+name: dovecot
+
+compliance:
+  nist-800-53: [AC-3, SC-8, SC-13]
+  iso-27001: [A.10.1.1, A.13.2.3]
+
+vars:
+  ssl_cert: "/etc/letsencrypt/live/mail.example.com/fullchain.pem"
+  ssl_key: "/etc/letsencrypt/live/mail.example.com/privkey.pem"
+
+resources:
+  - name: install-dovecot
+    type: package
+    package: dovecot-imapd
+    state: present
+    when: "os_family('linux')"
+
+  - name: dovecot-conf
+    type: file
+    target_path: "/etc/dovecot/local.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      protocols = imap
+      ssl = required
+      ssl_cert = <{{ .Vars.ssl_cert }}
+      ssl_key = <{{ .Vars.ssl_key }}
+      ssl_min_protocol = TLSv1.2
+      mail_location = maildir:~/Maildir
+      auth_mechanisms = plain login
+      disable_plaintext_auth = yes
+    when: "os_family('linux')"
+
+  - name: dovecot-service
+    type: service
+    service: dovecot
+    enabled: true
+    state: running
+    subscribes: [dovecot-conf]
+    depends_on: [install-dovecot]
+    when: "os_family('linux')"

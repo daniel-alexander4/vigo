@@ -1,0 +1,25 @@
+#~ Windows file-integrity monitoring. Uses Sysinternals Sysmon as the
+#~ functional analog of AIDE. Reads a config from the secret vault so
+#~ operators can ship customized rules.
+name: aide-windows
+
+compliance:
+  nist-800-53: [SI-7, CM-3]
+  hipaa: [164.312(c)(1)]
+  iso-27001: [A.12.4.1, A.14.2.4]
+  pci-dss: ["11.5"]
+
+resources:
+  - name: install-sysmon
+    type: package
+    package: sysinternals-sysmon
+    state: present
+    when: "os_family('windows')"
+
+  - name: sysmon-service
+    type: service
+    service: Sysmon64
+    enabled: true
+    state: running
+    depends_on: [install-sysmon]
+    when: "os_family('windows')"

@@ -47,6 +47,136 @@ roles:
   - name: disk-hygiene
     modules: [logrotate, journal-cap, tmp-aging, package-cache, docker-prune]
 
+  # ─── Compliance Evidence (T7) ───────────────────────────────────────
+  # Typically composed on top of a framework role (hipaa, pci-dss, etc.) to
+  # produce auditor-friendly artifacts: log-shipping attestation, weekly
+  # access review export, encryption status, backup restorability checks.
+  - name: compliance-evidence
+    case:
+      linux:
+        modules:
+          - log-shipping-attestation
+          - access-review-export
+          - encryption-attestation
+          - backup-verification
+          - compliance-evidence-toolkit
+      windows:
+        modules:
+          - log-shipping-attestation-windows
+          - access-review-export-windows
+          - encryption-attestation-windows
+          - backup-verification-windows
+          - compliance-evidence-toolkit-windows
+
+  # ─── Security Engineer (T1) ─────────────────────────────────────────
+  # Hardening + audit role: file integrity (aide/sysmon), audit rules,
+  # MAC, antivirus, rootkit scanners, AD/IPA/LDAP/Kerberos client wiring,
+  # YubiKey PAM, password policy, system crypto policy, custom CA anchors,
+  # and the security-engineer diagnostic toolkit.
+  - name: security-engineer
+    case:
+      linux:
+        modules:
+          - aide
+          - auditd-rules
+          - apparmor
+          - clamav
+          - rkhunter
+          - chkrootkit
+          - sssd
+          - freeipa-client
+          - ldap-client
+          - kerberos-client
+          - yubikey-pam
+          - pwquality
+          - crypto-policies
+          - ca-anchors
+          - security-engineer-toolkit
+      windows:
+        modules:
+          - aide-windows
+          - auditd-rules-windows
+          - clamav-windows
+          - pwquality-windows
+          - ca-anchors-windows
+          - security-engineer-toolkit-windows
+
+  # ─── Sysadmin (T2) ──────────────────────────────────────────────────
+  # General-purpose host role: backup, cert mgmt, mail, VPN, log shipping,
+  # monitoring, storage tools, system tuning, DNS, and the sysadmin
+  # diagnostic toolkit. case: dispatch swaps Linux modules for Windows
+  # functional analogs (where one exists; some are Linux-only stubs that
+  # do nothing on Windows by design).
+  - name: sysadmin
+    case:
+      linux:
+        modules:
+          - restic
+          - borg
+          - kopia
+          - certbot
+          - step-ca
+          - dovecot
+          - opendkim
+          - opendmarc
+          - rspamd
+          - wireguard
+          - tailscale
+          - fluentbit
+          - loki
+          - promtail
+          - alertmanager
+          - blackbox-exporter
+          - snmpd
+          - zfs
+          - btrfs
+          - iscsi-initiator
+          - mdadm
+          - tuned
+          - cpupower
+          - locale
+          - swap-config
+          - bind
+          - unbound
+          - sysadmin-toolkit
+      windows:
+        modules:
+          - restic-windows
+          - kopia-windows
+          - certbot-windows
+          - step-ca-windows
+          - wireguard-windows
+          - tailscale-windows
+          - fluentbit-windows
+          - promtail-windows
+          - blackbox-exporter-windows
+          - snmpd-windows
+          - iscsi-initiator-windows
+          - tuned-windows
+          - locale-windows
+          - swap-config-windows
+          - sysadmin-toolkit-windows
+
+  # ─── Vigo server host (T6) ──────────────────────────────────────────
+  # Assign to the Linux host running vigosrv. Bundles firewall, secret-
+  # vault perms, optional Let's Encrypt cert, three complementary backup
+  # tiers (filesystem snapshot, SQLite WAL replication, stockpile git
+  # push), a local health probe, container-log forwarding, the operator
+  # MOTD warning, Docker keepalive, and the diagnostic toolkit.
+  - name: vigo-server
+    modules:
+      - vigo-firewall
+      - vigo-secrets-perms
+      - vigo-tls-public
+      - vigo-server-backup
+      - vigo-litestream
+      - vigo-stockpile
+      - vigo-healthcheck
+      - vigo-log-forward
+      - vigo-motd
+      - vigo-docker-keepalive
+      - vigo-server-toolkit
+
   # ─── Compliance framework roles ─────────────────────────────────────
   # Assign one or more of these to envoys whose modules should satisfy
   # the named framework. Modules referenced below live under

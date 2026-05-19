@@ -1,0 +1,5 @@
+#~ Windows uses powercfg for CPU governor control (subsumed by power
+#~ schemes). The tuned-windows module already covers the equivalent
+#~ surface — use that instead.
+name: cpupower-windows
+resources: []

@@ -1,0 +1,33 @@
+#~ AIDE — Advanced Intrusion Detection Environment. File-integrity
+#~ monitoring; initializes the database on first run and emails diffs
+#~ via daily cron.
+name: aide
+
+compliance:
+  nist-800-53: [SI-7, CM-3]
+  hipaa: [164.312(c)(1)]
+  iso-27001: [A.12.4.1, A.14.2.4]
+  pci-dss: ["11.5"]
+
+resources:
+  - name: install-aide
+    type: package
+    package: aide
+    state: present
+    when: "os_family('linux')"
+
+  - name: aide-init
+    type: exec
+    command: "aideinit && mv /var/lib/aide/aide.db.new /var/lib/aide/aide.db"
+    unless: "test -f /var/lib/aide/aide.db"
+    depends_on: [install-aide]
+    when: "os_family('linux')"
+
+  - name: aide-cron
+    type: cron
+    user: root
+    name: aide-check
+    command: "aide --check"
+    schedule: "30 5 * * *"
+    depends_on: [aide-init]
+    when: "os_family('linux')"

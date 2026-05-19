@@ -1,0 +1,22 @@
+name: opendkim-retract
+description: Retract opendkim. Keys under /etc/opendkim/keys/ not removed.
+
+resources:
+  - name: stop-opendkim
+    type: service
+    service: opendkim
+    state: stopped
+    enabled: false
+    when: "os_family('linux')"
+
+  - name: uninstall-opendkim
+    type: package
+    package: opendkim
+    state: absent
+    when: "os_family('linux')"
+
+  - name: uninstall-opendkim-tools
+    type: package
+    package: opendkim-tools
+    state: absent
+    when: "os_family('linux')"

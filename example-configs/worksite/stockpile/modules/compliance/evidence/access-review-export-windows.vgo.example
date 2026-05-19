@@ -1,0 +1,49 @@
+#~ Windows analog: weekly export of local users + group memberships +
+#~ admin-group rosters. Auditors compare across windows.
+name: access-review-export-windows
+
+compliance:
+  nist-800-53: [AC-2, AC-2(7), AC-6]
+  hipaa: [164.308(a)(3)(ii)(C), 164.308(a)(4)(ii)(C)]
+  pci-dss: ["7.1.4", "7.2.1"]
+  iso-27001: [A.9.2.5]
+  soc2: [CC6.2, CC6.3]
+
+vars:
+  evidence_dir: "C:\\ProgramData\\Vigo\\evidence"
+
+resources:
+  - name: access-export-script
+    type: file
+    target_path: "C:\\ProgramData\\Vigo\\evidence\\access-review-export.ps1"
+    owner: SYSTEM
+    group: Administrators
+    mode: "0750"
+    content: |
+      $out = "{{ .Vars.evidence_dir }}\access-review-$((Get-Date).ToString('yyyy-MM-dd')).csv"
+      $users = Get-LocalUser | Select-Object Name, Enabled, SID, LastLogon, PasswordRequired
+      $admins = (Get-LocalGroupMember -Group 'Administrators' -ErrorAction SilentlyContinue) | Select-Object -ExpandProperty Name
+      $users | ForEach-Object {
+        $isAdmin = $admins -contains "$env:COMPUTERNAME\$($_.Name)"
+        [PSCustomObject]@{
+          User = $_.Name
+          Enabled = $_.Enabled
+          SID = $_.SID
+          LastLogon = $_.LastLogon
+          PasswordRequired = $_.PasswordRequired
+          IsAdmin = $isAdmin
+        }
+      } | Export-Csv -Path $out -NoTypeInformation -Encoding UTF8
+    when: "os_family('windows')"
+
+  - name: access-export-task
+    type: powershell
+    command: >-
+      Register-ScheduledTask -TaskName 'VigoAccessReviewExport' -Force
+      -Action (New-ScheduledTaskAction -Execute 'powershell.exe'
+        -Argument '-NoProfile -File C:\ProgramData\Vigo\evidence\access-review-export.ps1')
+      -Trigger (New-ScheduledTaskTrigger -Weekly -At 02:00 -DaysOfWeek Sunday)
+      -RunLevel Highest -User SYSTEM
+    skip_validation: true
+    depends_on: [access-export-script]
+    when: "os_family('windows')"

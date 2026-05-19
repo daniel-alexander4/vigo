@@ -1,0 +1,36 @@
+name: vigo-healthcheck-retract
+description: >-
+  Retraction module for vigo-healthcheck. Removes the cron entry, the
+  probe script, and the runtime state files. Leaves the log file at
+  /var/log/vigo-healthcheck.log intact for postmortems.
+
+resources:
+  - name: remove-healthcheck-cron
+    type: cron
+    user: root
+    name: vigo-healthcheck
+    command: "/usr/local/sbin/vigo-healthcheck.sh"
+    schedule: "* * * * *"
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-healthcheck-script
+    type: file
+    target_path: "/usr/local/sbin/vigo-healthcheck.sh"
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-healthcheck-state
+    type: file
+    target_path: "/run/vigo-healthcheck.state"
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-healthcheck-cooldown
+    type: file
+    target_path: "/run/vigo-healthcheck.cooldown"
+    state: absent
+    when: "os_family('linux')"
+
+  # /var/log/vigo-healthcheck.log — not removed; retains restart history.
+  # Drop manually if intended.

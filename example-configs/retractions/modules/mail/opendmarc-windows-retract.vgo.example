@@ -1,0 +1,4 @@
+name: opendmarc-windows-retract
+description: Retract opendmarc-windows stub. No-op.
+
+resources: []

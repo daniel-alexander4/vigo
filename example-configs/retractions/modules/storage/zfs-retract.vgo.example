@@ -1,0 +1,31 @@
+name: zfs-retract
+description: >-
+  Retract zfs. Does NOT export pools or destroy data — operator runs
+  `zpool export <pool>` manually before uninstall if needed.
+
+resources:
+  - name: stop-zfs-mount
+    type: service
+    service: zfs-mount
+    state: stopped
+    enabled: false
+    when: "os_family('linux')"
+
+  - name: stop-zfs-import
+    type: service
+    service: zfs-import-cache
+    state: stopped
+    enabled: false
+    when: "os_family('linux')"
+
+  - name: uninstall-zfsutils
+    type: package
+    package: zfsutils-linux
+    state: absent
+    when: "os_family('debian')"
+
+  - name: uninstall-zfs-rhel
+    type: package
+    package: zfs
+    state: absent
+    when: "os_family('rhel')"

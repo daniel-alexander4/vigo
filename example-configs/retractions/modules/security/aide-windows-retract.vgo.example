@@ -1,0 +1,16 @@
+name: aide-windows-retract
+description: Retract aide-windows.
+
+resources:
+  - name: stop-sysmon
+    type: service
+    service: Sysmon64
+    state: stopped
+    enabled: false
+    when: "os_family('windows')"
+
+  - name: uninstall-sysmon
+    type: package
+    package: sysinternals-sysmon
+    state: absent
+    when: "os_family('windows')"

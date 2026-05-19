@@ -1,0 +1,16 @@
+#~ Microsoft iSCSI Initiator on Windows — enables the built-in MSiSCSI
+#~ service. Target portal discovery is operator-driven (use Connect-IscsiTarget
+#~ in PowerShell or the iSCSI Initiator GUI).
+name: iscsi-initiator-windows
+
+compliance:
+  nist-800-53: [SC-8, SC-12]
+  iso-27001: [A.13.1.1]
+
+resources:
+  - name: msiscsi-service
+    type: service
+    service: MSiSCSI
+    enabled: true
+    state: running
+    when: "os_family('windows')"

@@ -1,0 +1,7 @@
+name: locale-windows-retract
+description: >-
+  Retract locale-windows. No clean revert — Windows doesn't surface a
+  "remove UI language override" verb. Operator runs
+  Set-WinUILanguageOverride manually with the original locale.
+
+resources: []

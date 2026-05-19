@@ -1,0 +1,26 @@
+name: step-ca-retract
+description: >-
+  Retract step-ca. Does NOT remove /root/.step/ — that holds the CA root
+  key. Operators must shred + remove manually after retiring the CA.
+
+resources:
+  - name: stop-step-ca
+    type: service
+    service: step-ca
+    state: stopped
+    enabled: false
+    when: "os_family('linux')"
+
+  - name: uninstall-step-ca
+    type: package
+    package: step-ca
+    state: absent
+    when: "os_family('linux')"
+
+  - name: uninstall-step-cli
+    type: package
+    package: step-cli
+    state: absent
+    when: "os_family('linux')"
+
+  # /root/.step/ — operator removes manually after CA retirement.

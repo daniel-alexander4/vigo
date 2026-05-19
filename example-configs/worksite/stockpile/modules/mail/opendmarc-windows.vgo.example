@@ -1,0 +1,5 @@
+#~ No native Windows OpenDMARC. Exchange Server has DMARC support via
+#~ third-party connectors (e.g. Mimecast, Proofpoint) or PowerShell-driven
+#~ transport rules. Configure there.
+name: opendmarc-windows
+resources: []

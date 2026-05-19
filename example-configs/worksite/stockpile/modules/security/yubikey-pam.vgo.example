@@ -1,0 +1,22 @@
+#~ YubiKey PAM integration via libpam-u2f. Operator pre-populates each
+#~ user's ~/.config/Yubico/u2f_keys; the module just installs the PAM
+#~ module + adds it to sshd's stack.
+name: yubikey-pam
+
+compliance:
+  nist-800-53: [IA-2(1), IA-5(11)]
+  iso-27001: [A.9.4.2]
+
+resources:
+  - name: install-libpam-u2f
+    type: package
+    package: libpam-u2f
+    state: present
+    when: "os_family('debian')"
+
+  - name: pam-sshd-u2f
+    type: file_line
+    target_path: "/etc/pam.d/sshd"
+    line: "auth required pam_u2f.so cue"
+    match_pattern: "^auth\\s+required\\s+pam_u2f.so"
+    when: "os_family('linux')"

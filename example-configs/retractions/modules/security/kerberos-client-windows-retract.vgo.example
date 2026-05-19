@@ -1,0 +1,4 @@
+name: kerberos-client-windows-retract
+description: Retract kerberos-client-windows stub. No-op.
+
+resources: []

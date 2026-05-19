@@ -1,0 +1,29 @@
+#~ tuned — Linux system performance profile daemon. Apply a named profile
+#~ via vars.tuned_profile (e.g. throughput-performance, virtual-guest,
+#~ powersave). See `tuned-adm list` for available profiles.
+name: tuned
+
+vars:
+  tuned_profile: "throughput-performance"
+
+resources:
+  - name: install-tuned
+    type: package
+    package: tuned
+    state: present
+    when: "os_family('linux')"
+
+  - name: tuned-service
+    type: service
+    service: tuned
+    enabled: true
+    state: running
+    depends_on: [install-tuned]
+    when: "os_family('linux')"
+
+  - name: apply-profile
+    type: exec
+    command: "tuned-adm profile {{ .Vars.tuned_profile }}"
+    unless: "tuned-adm active | grep -q 'Current active profile: {{ .Vars.tuned_profile }}'"
+    depends_on: [tuned-service]
+    when: "os_family('linux')"

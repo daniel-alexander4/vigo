@@ -1,0 +1,22 @@
+name: apparmor-retract
+description: Retract apparmor. Does NOT remove operator-authored profiles from /etc/apparmor.d/.
+
+resources:
+  - name: stop-apparmor
+    type: service
+    service: apparmor
+    state: stopped
+    enabled: false
+    when: "os_family('debian')"
+
+  - name: uninstall-apparmor-utils
+    type: package
+    package: apparmor-utils
+    state: absent
+    when: "os_family('debian')"
+
+  - name: uninstall-apparmor
+    type: package
+    package: apparmor
+    state: absent
+    when: "os_family('debian')"

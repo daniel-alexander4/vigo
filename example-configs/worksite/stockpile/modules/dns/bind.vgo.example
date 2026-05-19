@@ -1,0 +1,45 @@
+#~ BIND9 authoritative/recursive DNS server. Minimal default config; zone
+#~ files are operator-specific (drop them at /etc/bind/zones/).
+name: bind
+
+compliance:
+  nist-800-53: [SC-20, SC-21]
+  iso-27001: [A.13.1.1]
+
+resources:
+  - name: install-bind9
+    type: package
+    package: bind9
+    state: present
+    when: "os_family('debian')"
+
+  - name: install-bind-rhel
+    type: package
+    package: bind
+    state: present
+    when: "os_family('rhel')"
+
+  - name: named-conf-options
+    type: file
+    target_path: "/etc/bind/named.conf.options"
+    owner: root
+    group: bind
+    mode: "0644"
+    content: |
+      options {
+        directory "/var/cache/bind";
+        recursion yes;
+        allow-recursion { 127.0.0.1; 10.0.0.0/8; 192.168.0.0/16; };
+        dnssec-validation auto;
+        listen-on { any; };
+        listen-on-v6 { any; };
+      };
+    when: "os_family('debian')"
+
+  - name: bind-service
+    type: service
+    service: bind9
+    enabled: true
+    state: running
+    subscribes: [named-conf-options]
+    when: "os_family('debian')"

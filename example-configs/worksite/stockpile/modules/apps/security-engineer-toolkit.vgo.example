@@ -1,0 +1,22 @@
+#~ Security-engineer diagnostic CLI loadout. Pure packages; no service
+#~ config. Pulled in by the security-engineer composite role.
+name: security-engineer-toolkit
+
+vars:
+  packages_debian: [tshark, ngrep, lynis, ssh-audit, testssl.sh, trivy, age, gnupg, openvas-cli, debsecan]
+  packages_rhel: [wireshark-cli, ngrep, lynis, trivy, age, gnupg2, openvas-cli, dnf-plugins-core]
+
+resources:
+  - name: security-engineer-toolkit-debian
+    type: package
+    foreach: packages_debian
+    package: "{{ .Item }}"
+    state: present
+    when: "os_family('debian')"
+
+  - name: security-engineer-toolkit-rhel
+    type: package
+    foreach: packages_rhel
+    package: "{{ .Item }}"
+    state: present
+    when: "os_family('rhel')"

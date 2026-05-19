@@ -1,0 +1,17 @@
+#~ System locale + timezone. For full locale package generation use
+#~ `locale-gen` separately; this module sets the active LANG.
+name: locale
+
+vars:
+  system_lang: "en_US.UTF-8"
+
+resources:
+  - name: locale-conf
+    type: file
+    target_path: "/etc/locale.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      LANG={{ .Vars.system_lang }}
+    when: "os_family('linux')"

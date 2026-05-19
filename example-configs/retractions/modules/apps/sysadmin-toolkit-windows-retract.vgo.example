@@ -1,0 +1,4 @@
+name: sysadmin-toolkit-windows-retract
+description: Retract sysadmin-toolkit-windows intentionally no-op.
+
+resources: []

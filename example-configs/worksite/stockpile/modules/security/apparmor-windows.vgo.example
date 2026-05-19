@@ -1,0 +1,7 @@
+#~ Windows analog of AppArmor: Windows Defender Application Control
+#~ (WDAC) or AppLocker. Both have policy XML that's site-specific and
+#~ best generated via the AppLocker MMC snap-in or PowerShell
+#~ ConvertFrom-CIPolicy. This stub doesn't ship a default policy because
+#~ a default deny-all would lock out the operator.
+name: apparmor-windows
+resources: []

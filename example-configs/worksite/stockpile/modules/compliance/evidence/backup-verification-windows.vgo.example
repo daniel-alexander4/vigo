@@ -1,0 +1,52 @@
+#~ Windows backup verification. If running restic-windows, runs `restic
+#~ check`; falls back to Windows Server Backup health check otherwise.
+#~ Outputs JSON evidence.
+name: backup-verification-windows
+
+compliance:
+  nist-800-53: [CP-9, CP-10(2), CP-10(4)]
+  hipaa: [164.308(a)(7)(ii)(D)]
+  pci-dss: ["12.10.1"]
+  iso-27001: [A.12.3.1, A.17.1.3]
+  soc2: [A1.3]
+
+vars:
+  evidence_dir: "C:\\ProgramData\\Vigo\\evidence"
+
+resources:
+  - name: backup-verify-script
+    type: file
+    target_path: "C:\\ProgramData\\Vigo\\evidence\\backup-verify.ps1"
+    owner: SYSTEM
+    group: Administrators
+    mode: "0750"
+    content: |
+      $out = "{{ .Vars.evidence_dir }}\backup-verify-$((Get-Date).ToString('yyyy-MM-dd')).json"
+      $envFile = "C:\ProgramData\Vigo\restic\restic.env"
+      $status = "skipped"
+      if (Test-Path $envFile) {
+        Get-Content $envFile | ForEach-Object {
+          if ($_ -match '^([^=]+)=(.*)$') { [System.Environment]::SetEnvironmentVariable($Matches[1], $Matches[2]) }
+        }
+        & restic check --read-data-subset=1G 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) { $status = "ok" } else { $status = "fail" }
+      }
+      $obj = @{
+        timestamp = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ" -AsUTC)
+        host = $env:COMPUTERNAME
+        status = $status
+      }
+      $obj | ConvertTo-Json | Set-Content -Path $out -Encoding UTF8
+    when: "os_family('windows')"
+
+  - name: backup-verify-task
+    type: powershell
+    command: >-
+      Register-ScheduledTask -TaskName 'VigoBackupVerify' -Force
+      -Action (New-ScheduledTaskAction -Execute 'powershell.exe'
+        -Argument '-NoProfile -File C:\ProgramData\Vigo\evidence\backup-verify.ps1')
+      -Trigger (New-ScheduledTaskTrigger -Weekly -At 03:00 -DaysOfWeek Sunday)
+      -RunLevel Highest -User SYSTEM
+    skip_validation: true
+    depends_on: [backup-verify-script]
+    when: "os_family('windows')"

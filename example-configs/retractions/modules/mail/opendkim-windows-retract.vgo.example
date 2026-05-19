@@ -1,0 +1,4 @@
+name: opendkim-windows-retract
+description: Retract opendkim-windows stub. No-op.
+
+resources: []

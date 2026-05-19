@@ -1,0 +1,25 @@
+name: vigo-tls-public-retract
+description: >-
+  Retraction module for vigo-tls-public. Removes the renewal hook
+  and stops the certbot renewal timer. Does NOT revoke the cert or
+  remove the certbot package — those steps are operator-initiated
+  because a cert revocation is irreversible and may affect other
+  services that share the certbot install. Review before activating.
+
+resources:
+  - name: stop-certbot-timer
+    type: service
+    service: certbot.timer
+    state: stopped
+    enabled: false
+    when: "os_family('linux')"
+
+  - name: remove-renewal-hook
+    type: file
+    target_path: "/etc/letsencrypt/renewal-hooks/deploy/vigo-tls.sh"
+    state: absent
+    when: "os_family('linux')"
+
+  # certbot package + /etc/letsencrypt/ state intentionally not removed —
+  # revoking the cert is an operator decision (run `certbot revoke` manually
+  # if the hostname is being retired).

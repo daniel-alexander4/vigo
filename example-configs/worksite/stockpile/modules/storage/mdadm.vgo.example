@@ -1,0 +1,23 @@
+#~ mdadm — Linux software RAID management. Installs the package; does
+#~ NOT create arrays (operator-specific via `mdadm --create`). Operators
+#~ who need declarative arrays should add resources here.
+name: mdadm
+
+compliance:
+  nist-800-53: [CP-9, CP-10]
+  iso-27001: [A.12.3.1]
+
+resources:
+  - name: install-mdadm
+    type: package
+    package: mdadm
+    state: present
+    when: "os_family('linux')"
+
+  - name: mdmonitor-service
+    type: service
+    service: mdmonitor
+    enabled: true
+    state: running
+    depends_on: [install-mdadm]
+    when: "os_family('linux')"

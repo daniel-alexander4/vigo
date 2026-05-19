@@ -1,0 +1,16 @@
+name: sssd-retract
+description: Retract sssd. Operator should remove /etc/sssd/sssd.conf manually.
+
+resources:
+  - name: stop-sssd
+    type: service
+    service: sssd
+    state: stopped
+    enabled: false
+    when: "os_family('linux')"
+
+  - name: uninstall-sssd
+    type: package
+    package: sssd
+    state: absent
+    when: "os_family('linux')"

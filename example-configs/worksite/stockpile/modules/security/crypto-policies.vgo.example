@@ -1,0 +1,26 @@
+#~ RHEL system-wide crypto policy via update-crypto-policies. Sets the
+#~ minimum TLS + cipher baseline for OpenSSL, GnuTLS, BIND, OpenSSH, etc.
+#~ Available profiles: DEFAULT, LEGACY, FUTURE, FIPS.
+name: crypto-policies
+
+compliance:
+  nist-800-53: [SC-12, SC-13]
+  iso-27001: [A.10.1.1, A.13.2.1]
+  pci-dss: ["4.1"]
+
+vars:
+  policy: "FUTURE"
+
+resources:
+  - name: install-crypto-policies
+    type: package
+    package: crypto-policies
+    state: present
+    when: "os_family('rhel')"
+
+  - name: apply-policy
+    type: exec
+    command: "update-crypto-policies --set {{ .Vars.policy }}"
+    unless: "update-crypto-policies --show | grep -q '^{{ .Vars.policy }}$'"
+    depends_on: [install-crypto-policies]
+    when: "os_family('rhel')"

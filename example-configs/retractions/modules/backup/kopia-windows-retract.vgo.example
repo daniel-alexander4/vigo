@@ -1,0 +1,28 @@
+name: kopia-windows-retract
+description: >-
+  Retract kopia-windows.
+
+resources:
+  - name: remove-scheduled-task
+    type: powershell
+    command: "Unregister-ScheduledTask -TaskName 'VigoKopiaSnapshot' -Confirm:$false -ErrorAction SilentlyContinue"
+    skip_validation: true
+    when: "os_family('windows')"
+
+  - name: remove-snapshot-script
+    type: file
+    target_path: "C:\\ProgramData\\Vigo\\kopia\\kopia-snapshot.ps1"
+    state: absent
+    when: "os_family('windows')"
+
+  - name: remove-config
+    type: file
+    target_path: "C:\\ProgramData\\Vigo\\kopia\\kopia.env"
+    state: absent
+    when: "os_family('windows')"
+
+  - name: uninstall-kopia
+    type: package
+    package: kopia
+    state: absent
+    when: "os_family('windows')"

@@ -1,0 +1,57 @@
+#~ Fluent Bit log shipper. Tails /var/log/* and forwards to a downstream
+#~ collector (Loki, Elasticsearch, fluentd, etc.).
+name: fluentbit
+
+compliance:
+  nist-800-53: [AU-3, AU-4, AU-6]
+  iso-27001: [A.12.4.1, A.12.4.3]
+  pci-dss: ["10.2", "10.3"]
+
+vars:
+  forward_host: "loki.example.com"
+  forward_port: "3100"
+
+resources:
+  - name: install-fluentbit
+    type: package
+    package: fluent-bit
+    state: present
+    when: "os_family('linux')"
+
+  - name: fluentbit-conf
+    type: file
+    target_path: "/etc/fluent-bit/fluent-bit.conf"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [SERVICE]
+        Daemon Off
+        Log_Level info
+
+      [INPUT]
+        Name tail
+        Path /var/log/*.log
+        Tag host.*
+
+      [INPUT]
+        Name systemd
+        Tag systemd.*
+        Read_From_Tail On
+
+      [OUTPUT]
+        Name loki
+        Match *
+        Host {{ .Vars.forward_host }}
+        Port {{ .Vars.forward_port }}
+        Labels host=$HOSTNAME,job=fluentbit
+    when: "os_family('linux')"
+
+  - name: fluentbit-service
+    type: service
+    service: fluent-bit
+    enabled: true
+    state: running
+    subscribes: [fluentbit-conf]
+    depends_on: [install-fluentbit]
+    when: "os_family('linux')"

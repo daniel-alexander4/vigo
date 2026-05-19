@@ -1,0 +1,26 @@
+#~ FreeIPA client enrollment. ipa-client-install reads the domain + server
+#~ from vars and uses a one-time admin password (from the secret vault).
+name: freeipa-client
+
+compliance:
+  nist-800-53: [IA-2, IA-5]
+  iso-27001: [A.9.2.1]
+
+vars:
+  ipa_domain: "ipa.example.com"
+  ipa_server: "ipa01.example.com"
+  ipa_admin_password: "secret:vigo/ipa/admin_password"
+
+resources:
+  - name: install-freeipa-client
+    type: package
+    package: freeipa-client
+    state: present
+    when: "os_family('linux')"
+
+  - name: ipa-enroll
+    type: exec
+    command: 'ipa-client-install --unattended --domain="{{ .Vars.ipa_domain }}" --server="{{ .Vars.ipa_server }}" --principal=admin --password="{{ .Vars.ipa_admin_password }}"'
+    unless: "test -f /etc/ipa/default.conf"
+    depends_on: [install-freeipa-client]
+    when: "os_family('linux')"

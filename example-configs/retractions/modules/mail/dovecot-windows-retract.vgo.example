@@ -1,0 +1,4 @@
+name: dovecot-windows-retract
+description: Retract dovecot-windows stub. No-op.
+
+resources: []

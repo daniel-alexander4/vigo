@@ -1,0 +1,4 @@
+name: rkhunter-windows-retract
+description: Retract rkhunter-windows stub. No-op.
+
+resources: []

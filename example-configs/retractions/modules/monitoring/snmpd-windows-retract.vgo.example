@@ -1,0 +1,16 @@
+name: snmpd-windows-retract
+description: Retract snmpd-windows.
+
+resources:
+  - name: stop-snmp
+    type: service
+    service: SNMP
+    state: stopped
+    enabled: false
+    when: "os_family('windows')"
+
+  - name: disable-snmp-feature
+    type: powershell
+    command: 'Remove-WindowsCapability -Online -Name "SNMP.Client~~~~0.0.1.0"'
+    skip_validation: true
+    when: "os_family('windows')"

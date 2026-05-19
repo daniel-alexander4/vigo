@@ -1,0 +1,4 @@
+#~ No Windows analog of chkrootkit; rootkit detection on Windows is part
+#~ of Defender. See clamav-windows for the related module.
+name: chkrootkit-windows
+resources: []

@@ -1,0 +1,4 @@
+#~ Windows ships Kerberos as a built-in subsystem (Active Directory).
+#~ No standalone install needed.
+name: kerberos-client-windows
+resources: []

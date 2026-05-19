@@ -1,0 +1,4 @@
+name: clamav-windows-retract
+description: Retract clamav-windows. Defender real-time monitoring stays enabled (system default).
+
+resources: []

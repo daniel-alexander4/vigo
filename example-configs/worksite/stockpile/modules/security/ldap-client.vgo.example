@@ -1,0 +1,21 @@
+#~ LDAP client libraries + nss/pam wiring. Lets the host authenticate
+#~ against an LDAP directory. Operator-specific /etc/ldap/ldap.conf is
+#~ assumed handled by their site config.
+name: ldap-client
+
+compliance:
+  nist-800-53: [IA-2, IA-5]
+  iso-27001: [A.9.2.1]
+
+resources:
+  - name: install-ldap-utils
+    type: package
+    package: ldap-utils
+    state: present
+    when: "os_family('debian')"
+
+  - name: install-libnss-ldapd
+    type: package
+    package: libnss-ldapd
+    state: present
+    when: "os_family('debian')"

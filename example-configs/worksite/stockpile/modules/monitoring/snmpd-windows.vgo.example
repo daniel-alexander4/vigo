@@ -1,0 +1,33 @@
+#~ Windows SNMP Service — built-in Windows feature, enabled via DISM.
+#~ Configures one read-only community.
+name: snmpd-windows
+
+compliance:
+  nist-800-53: [SI-4, CA-7]
+  iso-27001: [A.12.1.3]
+
+vars:
+  snmp_community: "public"
+
+resources:
+  - name: enable-snmp-feature
+    type: powershell
+    command: 'Add-WindowsCapability -Online -Name "SNMP.Client~~~~0.0.1.0"; Add-WindowsCapability -Online -Name "WMI-SNMP-Provider.Client~~~~0.0.1.0"'
+    onlyif: 'if ((Get-WindowsCapability -Online -Name "SNMP.Client*").State -eq "Installed") { exit 1 } else { exit 0 }'
+    skip_validation: true
+    when: "os_family('windows')"
+
+  - name: configure-snmp-community
+    type: powershell
+    command: 'New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Services\SNMP\Parameters\ValidCommunities" -Name "{{ .Vars.snmp_community }}" -Value 4 -PropertyType DWORD -Force'
+    skip_validation: true
+    depends_on: [enable-snmp-feature]
+    when: "os_family('windows')"
+
+  - name: snmp-service
+    type: service
+    service: SNMP
+    enabled: true
+    state: running
+    depends_on: [configure-snmp-community]
+    when: "os_family('windows')"

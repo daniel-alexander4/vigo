@@ -1,0 +1,27 @@
+name: ca-anchors-retract
+description: Retract ca-anchors. Removes the vigo-shipped CA from the trust store.
+
+resources:
+  - name: remove-internal-ca
+    type: file
+    target_path: "/usr/local/share/ca-certificates/vigo-internal.crt"
+    state: absent
+    when: "os_family('debian')"
+
+  - name: update-ca-certs-debian
+    type: exec
+    command: "update-ca-certificates --fresh"
+    subscribes: [remove-internal-ca]
+    when: "os_family('debian')"
+
+  - name: remove-internal-ca-rhel
+    type: file
+    target_path: "/etc/pki/ca-trust/source/anchors/vigo-internal.crt"
+    state: absent
+    when: "os_family('rhel')"
+
+  - name: update-ca-certs-rhel
+    type: exec
+    command: "update-ca-trust extract"
+    subscribes: [remove-internal-ca-rhel]
+    when: "os_family('rhel')"

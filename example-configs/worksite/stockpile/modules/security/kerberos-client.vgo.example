@@ -1,0 +1,19 @@
+#~ Kerberos client libraries. Site-specific /etc/krb5.conf assumed.
+name: kerberos-client
+
+compliance:
+  nist-800-53: [IA-2, IA-5]
+  iso-27001: [A.9.4.2]
+
+resources:
+  - name: install-krb5-user
+    type: package
+    package: krb5-user
+    state: present
+    when: "os_family('debian')"
+
+  - name: install-krb5-workstation
+    type: package
+    package: krb5-workstation
+    state: present
+    when: "os_family('rhel')"

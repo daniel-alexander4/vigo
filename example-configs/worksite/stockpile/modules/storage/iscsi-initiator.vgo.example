@@ -1,0 +1,36 @@
+#~ Open-iSCSI initiator for connecting to iSCSI targets. Operator
+#~ provides target portal + IQN via vars or runs iscsiadm manually.
+name: iscsi-initiator
+
+compliance:
+  nist-800-53: [SC-8, SC-12]
+  iso-27001: [A.13.1.1]
+
+vars:
+  iscsi_initiator_name: "iqn.2024-01.example:host01"
+
+resources:
+  - name: install-open-iscsi
+    type: package
+    package: open-iscsi
+    state: present
+    when: "os_family('linux')"
+
+  - name: initiator-name
+    type: file
+    target_path: "/etc/iscsi/initiatorname.iscsi"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      InitiatorName={{ .Vars.iscsi_initiator_name }}
+    depends_on: [install-open-iscsi]
+    when: "os_family('linux')"
+
+  - name: iscsid-service
+    type: service
+    service: iscsid
+    enabled: true
+    state: running
+    subscribes: [initiator-name]
+    when: "os_family('linux')"

@@ -1,0 +1,4 @@
+#~ No native Windows rspamd. Windows mail-spam filtering ships with
+#~ Exchange (Content Filter Agent) or third-party (Trend Micro, Mimecast).
+name: rspamd-windows
+resources: []

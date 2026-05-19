@@ -1,0 +1,6 @@
+#~ Loki is typically run on Linux servers as the log-aggregation backend.
+#~ Operators running it on Windows can do so via the loki.exe binary +
+#~ scheduled task / Windows service, but the Linux deployment is the
+#~ recommended path. This stub documents the choice.
+name: loki-windows
+resources: []

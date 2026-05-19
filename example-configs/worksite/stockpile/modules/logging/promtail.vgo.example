@@ -1,0 +1,79 @@
+#~ Promtail — Grafana's log-tailing agent that forwards to Loki.
+name: promtail
+
+compliance:
+  nist-800-53: [AU-3, AU-4, AU-6]
+  iso-27001: [A.12.4.1, A.12.4.3]
+
+vars:
+  promtail_version: "3.0.0"
+  loki_host: "loki.example.com"
+  loki_port: "3100"
+
+resources:
+  - name: install-promtail
+    type: source_package
+    url: "https://github.com/grafana/loki/releases/download/v{{ .Vars.promtail_version }}/promtail-linux-{{ .Traits.os.arch }}.zip"
+    target_path: "/usr/local/bin/promtail"
+    binary_path: "promtail-linux-{{ .Traits.os.arch }}"
+    unless: "promtail --version 2>&1 | grep -q {{ .Vars.promtail_version }}"
+    when: "os_family('linux')"
+
+  - name: promtail-config
+    type: file
+    target_path: "/etc/promtail/promtail.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      server:
+        http_listen_port: 9080
+        grpc_listen_port: 0
+      positions:
+        filename: /var/lib/promtail/positions.yaml
+      clients:
+        - url: http://{{ .Vars.loki_host }}:{{ .Vars.loki_port }}/loki/api/v1/push
+      scrape_configs:
+        - job_name: system
+          static_configs:
+            - targets: [localhost]
+              labels:
+                job: varlogs
+                host: ${HOSTNAME}
+                __path__: /var/log/*.log
+    when: "os_family('linux')"
+
+  - name: promtail-systemd-unit
+    type: file
+    target_path: "/etc/systemd/system/promtail.service"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Promtail log shipper
+      After=network-online.target
+
+      [Service]
+      Type=simple
+      ExecStart=/usr/local/bin/promtail -config.file=/etc/promtail/promtail.yaml
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+    depends_on: [install-promtail, promtail-config]
+    when: "os_family('linux')"
+
+  - name: promtail-daemon-reload
+    type: exec
+    command: "systemctl daemon-reload"
+    subscribes: [promtail-systemd-unit]
+    when: "os_family('linux')"
+
+  - name: promtail-service
+    type: service
+    service: promtail
+    enabled: true
+    state: running
+    depends_on: [promtail-daemon-reload]
+    when: "os_family('linux')"

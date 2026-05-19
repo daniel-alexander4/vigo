@@ -1,0 +1,22 @@
+#~ Compliance-evidence toolkit: utilities for hashing, signing, and
+#~ validating evidence artifacts.
+name: compliance-evidence-toolkit
+
+vars:
+  packages_debian: [jq, yq, gnupg, age, coreutils, libopenscap8, debsums]
+  packages_rhel: [jq, yq, gnupg2, age, coreutils, openscap, rpm]
+
+resources:
+  - name: compliance-evidence-toolkit-debian
+    type: package
+    foreach: packages_debian
+    package: "{{ .Item }}"
+    state: present
+    when: "os_family('debian')"
+
+  - name: compliance-evidence-toolkit-rhel
+    type: package
+    foreach: packages_rhel
+    package: "{{ .Item }}"
+    state: present
+    when: "os_family('rhel')"

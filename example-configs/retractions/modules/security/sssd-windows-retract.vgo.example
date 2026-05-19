@@ -1,0 +1,4 @@
+name: sssd-windows-retract
+description: Retract sssd-windows stub. No-op.
+
+resources: []

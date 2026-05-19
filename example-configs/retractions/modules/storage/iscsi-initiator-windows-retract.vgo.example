@@ -1,0 +1,10 @@
+name: iscsi-initiator-windows-retract
+description: Retract iscsi-initiator-windows. Stops the MSiSCSI service.
+
+resources:
+  - name: stop-msiscsi
+    type: service
+    service: MSiSCSI
+    state: stopped
+    enabled: false
+    when: "os_family('windows')"

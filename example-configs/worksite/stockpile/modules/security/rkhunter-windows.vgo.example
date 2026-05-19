@@ -1,0 +1,5 @@
+#~ Windows rootkit detection is part of Defender Offline + Defender for
+#~ Endpoint EDR. No standalone rkhunter equivalent ships natively.
+#~ Sysinternals' Sigcheck/Autoruns are operator-driven, not daemon-style.
+name: rkhunter-windows
+resources: []

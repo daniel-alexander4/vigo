@@ -1,0 +1,19 @@
+#~ Windows system UI language override. Reboots are usually required for
+#~ the change to take full effect; this module just sets it.
+name: locale-windows
+
+vars:
+  ui_language: "en-US"
+
+resources:
+  - name: set-ui-language
+    type: powershell
+    command: "Set-WinUILanguageOverride -Language {{ .Vars.ui_language }}"
+    skip_validation: true
+    when: "os_family('windows')"
+
+  - name: set-system-locale
+    type: powershell
+    command: "Set-WinSystemLocale -SystemLocale {{ .Vars.ui_language }}"
+    skip_validation: true
+    when: "os_family('windows')"

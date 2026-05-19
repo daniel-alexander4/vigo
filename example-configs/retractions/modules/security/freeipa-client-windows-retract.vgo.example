@@ -1,0 +1,4 @@
+name: freeipa-client-windows-retract
+description: Retract freeipa-client-windows stub. No-op.
+
+resources: []

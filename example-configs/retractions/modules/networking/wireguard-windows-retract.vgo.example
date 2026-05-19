@@ -1,0 +1,21 @@
+name: wireguard-windows-retract
+description: Retract wireguard-windows.
+
+resources:
+  - name: uninstall-tunnel
+    type: powershell
+    command: 'wireguard.exe /uninstalltunnelservice wg0'
+    skip_validation: true
+    when: "os_family('windows')"
+
+  - name: remove-wg0-conf
+    type: file
+    target_path: "C:\\ProgramData\\WireGuard\\wg0.conf"
+    state: absent
+    when: "os_family('windows')"
+
+  - name: uninstall-wireguard
+    type: package
+    package: wireguard
+    state: absent
+    when: "os_family('windows')"

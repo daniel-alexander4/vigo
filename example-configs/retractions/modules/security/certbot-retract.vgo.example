@@ -1,0 +1,16 @@
+name: certbot-retract
+description: Retract certbot. Does NOT revoke the cert.
+
+resources:
+  - name: stop-certbot-timer
+    type: service
+    service: certbot.timer
+    state: stopped
+    enabled: false
+    when: "os_family('linux')"
+
+  - name: uninstall-certbot
+    type: package
+    package: certbot
+    state: absent
+    when: "os_family('linux')"

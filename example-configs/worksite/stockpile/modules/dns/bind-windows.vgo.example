@@ -1,0 +1,7 @@
+#~ BIND has a Windows port but in practice Windows DNS is delivered by
+#~ the built-in DNS Server role (Server only) or Active Directory's
+#~ integrated DNS. Configuration is via DNSCmd/DnsServer PowerShell
+#~ module; the parameter surface is too divergent for a generic module.
+#~ Stub.
+name: bind-windows
+resources: []

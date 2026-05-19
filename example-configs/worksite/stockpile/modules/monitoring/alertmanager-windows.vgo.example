@@ -1,0 +1,5 @@
+#~ Alertmanager is typically run on Linux servers as the alert-routing
+#~ backend (one per Prometheus deployment). Windows binary exists but
+#~ deploying there is unusual — Linux is the recommended path. Stub.
+name: alertmanager-windows
+resources: []

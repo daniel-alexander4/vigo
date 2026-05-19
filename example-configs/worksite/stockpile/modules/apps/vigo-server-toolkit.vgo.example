@@ -1,0 +1,30 @@
+#~ Diagnostic CLI loadout for the host running vigosrv. Pure package
+#~ installs — no service config, no compliance tags — so operators
+#~ debugging a stuck vigosrv have the tools to hand without
+#~ shell-hopping.
+#~
+#~ Includes the sysadmin core plus four tools specific to debugging the
+#~ running server: dig (DNS), curl (HTTPS checks), sqlite3 (DB poking),
+#~ jq (JSON pretty-print for /metrics, /healthz, audit log dumps).
+#~
+#~ Apply to the host running vigosrv. Linux-only.
+name: vigo-server-toolkit
+
+vars:
+  packages_debian: [dnsutils, curl, sqlite3, jq, yq, lsof, tcpdump, ngrep, ncdu, tree, htop, btop, psmisc, tmux, vim, ripgrep, fd-find, fzf, bat, rsync, p7zip-full, zstd, bash-completion]
+  packages_rhel: [bind-utils, curl, sqlite, jq, yq, lsof, tcpdump, ngrep, ncdu, tree, htop, btop, psmisc, tmux, vim, ripgrep, fd-find, fzf, bat, rsync, p7zip, zstd, bash-completion]
+
+resources:
+  - name: vigo-server-toolkit-debian
+    type: package
+    foreach: packages_debian
+    package: "{{ .Item }}"
+    state: present
+    when: "os_family('debian')"
+
+  - name: vigo-server-toolkit-rhel
+    type: package
+    foreach: packages_rhel
+    package: "{{ .Item }}"
+    state: present
+    when: "os_family('rhel')"

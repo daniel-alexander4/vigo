@@ -1,0 +1,18 @@
+name: backup-verification-retract
+description: Retract backup-verification.
+
+resources:
+  - name: remove-cron
+    type: cron
+    user: root
+    name: backup-verify
+    command: "/usr/local/sbin/backup-verify.sh"
+    schedule: "0 3 * * 0"
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-script
+    type: file
+    target_path: "/usr/local/sbin/backup-verify.sh"
+    state: absent
+    when: "os_family('linux')"

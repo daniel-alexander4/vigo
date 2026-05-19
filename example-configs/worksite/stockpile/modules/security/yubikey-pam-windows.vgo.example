@@ -1,0 +1,5 @@
+#~ Windows YubiKey integration via Windows Hello for Business (smart-card
+#~ logon) or the YubiKey Login MSI. Both are operator-configured (PIN +
+#~ enrollment) and don't fit a single module's resource set.
+name: yubikey-pam-windows
+resources: []

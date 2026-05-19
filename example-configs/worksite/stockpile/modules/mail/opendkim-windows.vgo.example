@@ -1,0 +1,5 @@
+#~ No native Windows OpenDKIM. Microsoft Exchange Server 2019+ has
+#~ built-in DKIM signing via Exchange admin center / Set-DkimSigningConfig.
+#~ Configure there, not via a Vigo module.
+name: opendkim-windows
+resources: []

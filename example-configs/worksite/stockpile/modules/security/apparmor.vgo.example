@@ -1,0 +1,29 @@
+#~ AppArmor mandatory-access-control profiles. Installs the toolchain and
+#~ enforces the default Ubuntu/Debian profile set. Custom profiles drop
+#~ in /etc/apparmor.d/.
+name: apparmor
+
+compliance:
+  nist-800-53: [AC-3, AC-6, SI-4]
+  iso-27001: [A.9.4.1, A.12.4.1]
+
+resources:
+  - name: install-apparmor
+    type: package
+    package: apparmor
+    state: present
+    when: "os_family('debian')"
+
+  - name: install-apparmor-utils
+    type: package
+    package: apparmor-utils
+    state: present
+    when: "os_family('debian')"
+
+  - name: apparmor-service
+    type: service
+    service: apparmor
+    enabled: true
+    state: running
+    depends_on: [install-apparmor]
+    when: "os_family('debian')"

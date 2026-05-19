@@ -1,0 +1,16 @@
+name: unbound-retract
+description: Retract unbound.
+
+resources:
+  - name: stop-unbound
+    type: service
+    service: unbound
+    state: stopped
+    enabled: false
+    when: "os_family('linux')"
+
+  - name: uninstall-unbound
+    type: package
+    package: unbound
+    state: absent
+    when: "os_family('linux')"

@@ -1,0 +1,16 @@
+name: auditd-rules-retract
+description: Retract auditd-rules. Removes vigo's rule file; preserves any operator-added rules.
+
+resources:
+  - name: remove-baseline-rules
+    type: file
+    target_path: "/etc/audit/rules.d/vigo-baseline.rules"
+    state: absent
+    when: "os_family('linux')"
+
+  - name: reload-auditd
+    type: service
+    service: auditd
+    state: restarted
+    subscribes: [remove-baseline-rules]
+    when: "os_family('linux')"

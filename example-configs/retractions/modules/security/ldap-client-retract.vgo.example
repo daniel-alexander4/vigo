@@ -1,0 +1,15 @@
+name: ldap-client-retract
+description: Retract ldap-client.
+
+resources:
+  - name: uninstall-libnss-ldapd
+    type: package
+    package: libnss-ldapd
+    state: absent
+    when: "os_family('debian')"
+
+  - name: uninstall-ldap-utils
+    type: package
+    package: ldap-utils
+    state: absent
+    when: "os_family('debian')"

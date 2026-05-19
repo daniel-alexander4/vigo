@@ -1,0 +1,13 @@
+name: vigo-motd-retract
+description: >-
+  Retraction module for vigo-motd. Removes /etc/motd. Some distros ship
+  a default motd; deleting it on those systems leaves no banner at all,
+  which is the safe behavior — the operator can re-author one themselves
+  if needed.
+
+resources:
+  - name: remove-motd
+    type: file
+    target_path: "/etc/motd"
+    state: absent
+    when: "os_family('linux')"

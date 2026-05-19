@@ -1,0 +1,4 @@
+#~ Windows uses native AD-DS join — FreeIPA has no Windows client. For
+#~ cross-realm trust to FreeIPA, configure AD trust on the FreeIPA side.
+name: freeipa-client-windows
+resources: []

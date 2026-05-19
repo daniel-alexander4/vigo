@@ -1,0 +1,6 @@
+#~ Windows analog: SSL Cipher Suite Order via Group Policy or registry
+#~ at HKLM\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\.
+#~ Site-specific; this stub doesn't ship a default to avoid breaking
+#~ Schannel for the operator's existing applications.
+name: crypto-policies-windows
+resources: []

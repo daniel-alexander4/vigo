@@ -1,0 +1,14 @@
+#~ Sysadmin toolkit for Windows. Chocolatey-installed equivalents to the
+#~ Linux loadout.
+name: sysadmin-toolkit-windows
+
+vars:
+  packages: [curl, wget, jq, yq, ripgrep, fd, fzf, bat, ncdu, tree, htop, sysinternals, putty, openssh, openssl, nmap, wireshark, ngrep, 7zip, zstd, vim, tmux, smartmontools]
+
+resources:
+  - name: sysadmin-toolkit-windows
+    type: package
+    foreach: packages
+    package: "{{ .Item }}"
+    state: present
+    when: "os_family('windows')"

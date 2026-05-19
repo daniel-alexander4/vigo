@@ -1,0 +1,28 @@
+name: promtail-windows-retract
+description: Retract promtail-windows.
+
+resources:
+  - name: stop-promtail
+    type: service
+    service: VigoPromtail
+    state: stopped
+    enabled: false
+    when: "os_family('windows')"
+
+  - name: remove-service
+    type: powershell
+    command: "Remove-Service -Name VigoPromtail -ErrorAction SilentlyContinue"
+    skip_validation: true
+    when: "os_family('windows')"
+
+  - name: remove-promtail-binary
+    type: file
+    target_path: "C:\\Program Files\\promtail\\promtail.exe"
+    state: absent
+    when: "os_family('windows')"
+
+  - name: remove-promtail-config
+    type: file
+    target_path: "C:\\ProgramData\\promtail\\promtail.yaml"
+    state: absent
+    when: "os_family('windows')"

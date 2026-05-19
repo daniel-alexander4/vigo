@@ -1,0 +1,24 @@
+#~ cpupower — Linux CPU governor + frequency scaling control.
+name: cpupower
+
+vars:
+  cpu_governor: "performance"
+
+resources:
+  - name: install-cpupower
+    type: package
+    package: linux-tools-common
+    state: present
+    when: "os_family('debian')"
+
+  - name: install-cpupower-rhel
+    type: package
+    package: cpupowerutils
+    state: present
+    when: "os_family('rhel')"
+
+  - name: apply-governor
+    type: exec
+    command: "cpupower frequency-set -g {{ .Vars.cpu_governor }}"
+    unless: "cpupower frequency-info -p | grep -q 'governor \"{{ .Vars.cpu_governor }}\"'"
+    when: "os_family('linux')"

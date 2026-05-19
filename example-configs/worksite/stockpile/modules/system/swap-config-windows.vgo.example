@@ -1,0 +1,23 @@
+#~ Windows pagefile config — equivalent to Linux swap. Disables automatic
+#~ management and sets a fixed-size pagefile. Reboot required for changes
+#~ to fully apply.
+name: swap-config-windows
+
+vars:
+  pagefile_path: "C:\\pagefile.sys"
+  pagefile_initial_mb: "2048"
+  pagefile_max_mb: "2048"
+
+resources:
+  - name: disable-automatic-pagefile
+    type: powershell
+    command: '(Get-WmiObject -Class Win32_ComputerSystem -EnableAllPrivileges).AutomaticManagedPagefile = $false; (Get-WmiObject -Class Win32_ComputerSystem -EnableAllPrivileges).Put()'
+    skip_validation: true
+    when: "os_family('windows')"
+
+  - name: configure-pagefile
+    type: powershell
+    command: 'Set-WmiInstance -Class Win32_PageFileSetting -Arguments @{Name="{{ .Vars.pagefile_path }}"; InitialSize={{ .Vars.pagefile_initial_mb }}; MaximumSize={{ .Vars.pagefile_max_mb }}}'
+    skip_validation: true
+    depends_on: [disable-automatic-pagefile]
+    when: "os_family('windows')"

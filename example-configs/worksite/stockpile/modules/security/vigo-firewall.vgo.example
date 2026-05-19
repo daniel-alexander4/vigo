@@ -1,0 +1,116 @@
+#~ Opens the ports the Vigo server itself needs to operate.
+#~ Apply to the host running vigosrv (the Linux Docker host), not to
+#~ envoy nodes. Envoy-side swarm-port opening is handled by the
+#~ existing networking/swarm-firewall module.
+#~
+#~ Ports opened (TCP unless noted):
+#~   22       — SSH (operator access)
+#~   1530     — gRPC agent stream
+#~   8443     — HTTPS UI + REST API
+#~   1531     — swarm content (mTLS chunk transfer)
+#~   1531/UDP — swarm peer discovery (multicast 224.0.0.42)
+#~   1532/UDP — longdrawer LAN sync (multicast 224.0.0.43)
+#~   1533/UDP — lockbox LAN sync (multicast 224.0.0.44)
+#~
+#~ Each port has a CIDR-override var; default is "any" (0.0.0.0/0). Tighten
+#~ in a match block when the operator network is known.
+#~
+#~ Linux only — vigosrv is Linux-host. Composite role: vigo-server.
+name: vigo-firewall
+
+compliance:
+  nist-800-53: [SC-7, AC-4]
+  iso-27001: [A.13.1.1]
+  cis-ubuntu: [3.4.1.1]
+
+vars:
+  ssh_from: "any"
+  grpc_from: "any"
+  https_from: "any"
+  swarm_from: "any"
+  longdrawer_from: "any"
+  lockbox_from: "any"
+
+resources:
+  - name: install-ufw
+    type: package
+    package: ufw
+    state: present
+    when: "os_family('linux')"
+
+  - name: enable-ufw
+    type: exec
+    command: 'echo "y" | ufw enable'
+    onlyif: "ufw status | grep -q inactive"
+    depends_on: [install-ufw]
+    when: "os_family('linux')"
+
+  - name: allow-ssh
+    type: firewall
+    port: "22"
+    proto: tcp
+    action: allow
+    from: "{{ .Vars.ssh_from }}"
+    comment: "vigo: SSH"
+    depends_on: [enable-ufw]
+    when: "os_family('linux')"
+
+  - name: allow-grpc
+    type: firewall
+    port: "1530"
+    proto: tcp
+    action: allow
+    from: "{{ .Vars.grpc_from }}"
+    comment: "vigo: gRPC agent stream"
+    depends_on: [enable-ufw]
+    when: "os_family('linux')"
+
+  - name: allow-https
+    type: firewall
+    port: "8443"
+    proto: tcp
+    action: allow
+    from: "{{ .Vars.https_from }}"
+    comment: "vigo: HTTPS UI + REST"
+    depends_on: [enable-ufw]
+    when: "os_family('linux')"
+
+  - name: allow-swarm-tcp
+    type: firewall
+    port: "1531"
+    proto: tcp
+    action: allow
+    from: "{{ .Vars.swarm_from }}"
+    comment: "vigo: swarm content (mTLS chunks)"
+    depends_on: [enable-ufw]
+    when: "os_family('linux')"
+
+  - name: allow-swarm-discovery
+    type: firewall
+    port: "1531"
+    proto: udp
+    action: allow
+    from: "{{ .Vars.swarm_from }}"
+    comment: "vigo: swarm multicast discovery (224.0.0.42)"
+    depends_on: [enable-ufw]
+    when: "os_family('linux')"
+
+  - name: allow-longdrawer
+    type: firewall
+    port: "1532"
+    proto: udp
+    action: allow
+    from: "{{ .Vars.longdrawer_from }}"
+    comment: "vigo: longdrawer LAN sync (224.0.0.43)"
+    depends_on: [enable-ufw]
+    when: "os_family('linux')"
+
+  - name: allow-lockbox
+    type: firewall
+    port: "1533"
+    proto: udp
+    action: allow
+    from: "{{ .Vars.lockbox_from }}"
+    comment: "vigo: lockbox LAN sync (224.0.0.44)"
+    depends_on: [enable-ufw]
+    when: "os_family('linux')"

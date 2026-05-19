@@ -1,0 +1,6 @@
+#~ Btrfs has no native Windows support (a WinBtrfs driver exists but is
+#~ read-only and experimental). Windows operators use ReFS (built-in
+#~ resilient filesystem) for snapshot/integrity features. Format with
+#~ `Format-Volume -FileSystem ReFS` on the target volume manually. Stub.
+name: btrfs-windows
+resources: []

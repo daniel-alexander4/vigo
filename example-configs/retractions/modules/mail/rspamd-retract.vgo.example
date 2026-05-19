@@ -1,0 +1,16 @@
+name: rspamd-retract
+description: Retract rspamd. Does NOT remove redis (other services may use it).
+
+resources:
+  - name: stop-rspamd
+    type: service
+    service: rspamd
+    state: stopped
+    enabled: false
+    when: "os_family('linux')"
+
+  - name: uninstall-rspamd
+    type: package
+    package: rspamd
+    state: absent
+    when: "os_family('linux')"

@@ -1,0 +1,67 @@
+#~ Encrypted, deduplicated backup with BorgBackup, via borgmatic wrapper
+#~ for cron scheduling + retention. Reads passphrase + repo URL from the
+#~ secret vault.
+name: borg
+
+compliance:
+  nist-800-53: [CP-9, CP-10, SC-28]
+  hipaa: [164.308(a)(7)(ii)(A)]
+  iso-27001: [A.12.3.1, A.10.1.1]
+  pci-dss: ["9.5.1", "3.4"]
+
+vars:
+  source_paths: "/etc /home /var/lib"
+  schedule: "30 1 * * *"
+  retain_daily: "7"
+  retain_weekly: "4"
+  retain_monthly: "12"
+  borg_passphrase: "secret:vigo/backup/borg_passphrase"
+  borg_repo: "secret:vigo/backup/borg_repo"
+
+resources:
+  - name: install-borg
+    type: package
+    package: borgbackup
+    state: present
+    when: "os_family('linux')"
+
+  - name: install-borgmatic
+    type: package
+    package: borgmatic
+    state: present
+    when: "os_family('linux')"
+
+  - name: borgmatic-config
+    type: file
+    target_path: "/etc/borgmatic/config.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      source_directories:
+        - {{ .Vars.source_paths }}
+      repositories:
+        - path: {{ .Vars.borg_repo }}
+      encryption_passphrase: {{ .Vars.borg_passphrase }}
+      keep_daily: {{ .Vars.retain_daily }}
+      keep_weekly: {{ .Vars.retain_weekly }}
+      keep_monthly: {{ .Vars.retain_monthly }}
+      compression: zstd,3
+    depends_on: [install-borgmatic]
+    when: "os_family('linux')"
+
+  - name: borg-init
+    type: exec
+    command: 'BORG_PASSPHRASE="{{ .Vars.borg_passphrase }}" borgmatic init --encryption repokey-blake2'
+    unless: 'BORG_PASSPHRASE="{{ .Vars.borg_passphrase }}" borgmatic info >/dev/null 2>&1'
+    depends_on: [borgmatic-config]
+    when: "os_family('linux')"
+
+  - name: borg-cron
+    type: cron
+    user: root
+    name: borgmatic-scheduled
+    command: "borgmatic --syslog-verbosity 1"
+    schedule: "{{ .Vars.schedule }}"
+    depends_on: [borg-init]
+    when: "os_family('linux')"

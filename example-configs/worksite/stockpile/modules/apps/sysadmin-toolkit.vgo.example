@@ -1,0 +1,23 @@
+#~ Sysadmin diagnostic + quality-of-life CLI loadout. Pure package
+#~ installs; no service config, no compliance tags. The sysadmin role
+#~ pulls this in alongside the rest of the T2 stack.
+name: sysadmin-toolkit
+
+vars:
+  packages_debian: [dnsutils, tcpdump, ngrep, nmap, ncat, socat, lsof, smartmontools, sysstat, iotop, ncdu, tree, htop, btop, psmisc, dmidecode, pciutils, usbutils, strace, ltrace, jq, yq, ripgrep, fd-find, fzf, bat, curl, wget, rsync, p7zip-full, zstd, tmux, vim, openssl, bash-completion]
+  packages_rhel: [bind-utils, tcpdump, ngrep, nmap, ncat, socat, lsof, smartmontools, sysstat, iotop, ncdu, tree, htop, btop, psmisc, dmidecode, pciutils, usbutils, strace, ltrace, jq, yq, ripgrep, fd-find, fzf, bat, curl, wget, rsync, p7zip, zstd, tmux, vim, openssl, bash-completion]
+
+resources:
+  - name: sysadmin-toolkit-debian
+    type: package
+    foreach: packages_debian
+    package: "{{ .Item }}"
+    state: present
+    when: "os_family('debian')"
+
+  - name: sysadmin-toolkit-rhel
+    type: package
+    foreach: packages_rhel
+    package: "{{ .Item }}"
+    state: present
+    when: "os_family('rhel')"

@@ -1,0 +1,18 @@
+name: access-review-export-retract
+description: Retract access-review-export. Evidence dir NOT cleaned.
+
+resources:
+  - name: remove-cron
+    type: cron
+    user: root
+    name: access-review-export
+    command: "/usr/local/sbin/access-review-export.sh"
+    schedule: "0 2 * * 0"
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-script
+    type: file
+    target_path: "/usr/local/sbin/access-review-export.sh"
+    state: absent
+    when: "os_family('linux')"

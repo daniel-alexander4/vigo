@@ -1,0 +1,16 @@
+name: fluentbit-windows-retract
+description: Retract fluentbit-windows.
+
+resources:
+  - name: stop-fluentbit
+    type: service
+    service: "fluent-bit"
+    state: stopped
+    enabled: false
+    when: "os_family('windows')"
+
+  - name: uninstall-fluentbit
+    type: package
+    package: fluent-bit
+    state: absent
+    when: "os_family('windows')"

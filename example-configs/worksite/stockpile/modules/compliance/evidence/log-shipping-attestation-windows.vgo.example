@@ -1,0 +1,50 @@
+#~ Windows analog: nightly attestation that the log shipper is reaching
+#~ the central collector. Output JSON in the evidence dir for auditor
+#~ collection.
+name: log-shipping-attestation-windows
+
+compliance:
+  nist-800-53: [AU-9, AU-9(2), AU-11]
+  hipaa: [164.312(b), 164.308(a)(1)(ii)(D)]
+  pci-dss: ["10.5.3", "10.5.4"]
+  iso-27001: [A.12.4.2, A.12.4.3]
+  soc2: [CC7.2]
+
+vars:
+  evidence_dir: "C:\\ProgramData\\Vigo\\evidence"
+  log_collector_endpoint: "loki.example.com:3100"
+
+resources:
+  - name: attestation-script
+    type: file
+    target_path: "C:\\ProgramData\\Vigo\\evidence\\log-ship-attest.ps1"
+    owner: SYSTEM
+    group: Administrators
+    mode: "0750"
+    content: |
+      $out = "{{ .Vars.evidence_dir }}\log-shipping-$((Get-Date).ToString('yyyy-MM-dd')).json"
+      $status = "unreachable"
+      try {
+        $resp = Invoke-WebRequest -Uri "http://{{ .Vars.log_collector_endpoint }}/ready" -TimeoutSec 5 -UseBasicParsing
+        if ($resp.StatusCode -eq 200) { $status = "ok" }
+      } catch {}
+      $obj = @{
+        timestamp = (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ" -AsUTC)
+        collector = "{{ .Vars.log_collector_endpoint }}"
+        status = $status
+        host = $env:COMPUTERNAME
+      }
+      $obj | ConvertTo-Json -Compress | Set-Content -Path $out -Encoding UTF8
+    when: "os_family('windows')"
+
+  - name: attestation-scheduled-task
+    type: powershell
+    command: >-
+      Register-ScheduledTask -TaskName 'VigoLogShipAttest' -Force
+      -Action (New-ScheduledTaskAction -Execute 'powershell.exe'
+        -Argument '-NoProfile -File C:\ProgramData\Vigo\evidence\log-ship-attest.ps1')
+      -Trigger (New-ScheduledTaskTrigger -Daily -At 01:00)
+      -RunLevel Highest -User SYSTEM
+    skip_validation: true
+    depends_on: [attestation-script]
+    when: "os_family('windows')"

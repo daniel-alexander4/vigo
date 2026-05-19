@@ -1,0 +1,98 @@
+#~ Continuous SQLite WAL replication for the Vigo database to S3 (or any
+#~ S3-compatible object store). Complements the snapshot-based
+#~ vigo-server-backup module: snapshots are point-in-time, Litestream is
+#~ continuous (RPO ~10s under normal load).
+#~
+#~ Reads S3 credentials and bucket URL from the secret vault:
+#~   secret:vigo/litestream/access_key_id
+#~   secret:vigo/litestream/secret_access_key
+#~   secret:vigo/litestream/replica_url    (e.g. s3://my-bucket/vigo-db)
+#~
+#~ Populate with:
+#~   sudo vigocli secrets set raw vigo/litestream/access_key_id
+#~   sudo vigocli secrets set raw vigo/litestream/secret_access_key
+#~   sudo vigocli secrets set raw vigo/litestream/replica_url
+#~
+#~ Apply to the host running vigosrv. Linux-only — the Litestream binary
+#~ shipped here is the Linux/musl static build.
+name: vigo-litestream
+
+compliance:
+  nist-800-53: [CP-9, CP-10, AU-9]
+  hipaa: [164.308(a)(7)(ii)(A), 164.310(d)(2)(iv)]
+  iso-27001: [A.12.3.1, A.17.1.2]
+  soc2: [A1.2, A1.3]
+  pci-dss: ["9.5.1", "9.5.1.2"]
+
+vars:
+  litestream_version: "0.3.13"
+  vigo_root: "/srv/vigo"
+  litestream_bin: "/usr/local/bin/litestream"
+  litestream_config: "/etc/litestream.yml"
+  litestream_access_key_id: "secret:vigo/litestream/access_key_id"
+  litestream_secret_access_key: "secret:vigo/litestream/secret_access_key"
+  litestream_replica_url: "secret:vigo/litestream/replica_url"
+
+resources:
+  - name: install-litestream
+    type: source_package
+    url: "https://github.com/benbjohnson/litestream/releases/download/v{{ .Vars.litestream_version }}/litestream-v{{ .Vars.litestream_version }}-linux-{{ .Traits.os.arch }}.tar.gz"
+    target_path: "{{ .Vars.litestream_bin }}"
+    binary_path: litestream
+    unless: "litestream version 2>/dev/null | grep -q {{ .Vars.litestream_version }}"
+    when: "os_family('linux')"
+
+  - name: litestream-config
+    type: file
+    target_path: "{{ .Vars.litestream_config }}"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      # Managed by vigo-litestream module. Hand-edit will be reverted.
+      access-key-id: {{ .Vars.litestream_access_key_id }}
+      secret-access-key: {{ .Vars.litestream_secret_access_key }}
+      dbs:
+        - path: {{ .Vars.vigo_root }}/db/vigo.db
+          replicas:
+            - url: {{ .Vars.litestream_replica_url }}
+    when: "os_family('linux')"
+
+  - name: litestream-systemd-unit
+    type: file
+    target_path: "/etc/systemd/system/litestream.service"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Litestream — Vigo SQLite WAL replication
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      ExecStart={{ .Vars.litestream_bin }} replicate -config {{ .Vars.litestream_config }}
+      Restart=always
+      RestartSec=10
+      Nice=10
+      IOSchedulingClass=idle
+
+      [Install]
+      WantedBy=multi-user.target
+    depends_on: [install-litestream, litestream-config]
+    when: "os_family('linux')"
+
+  - name: litestream-daemon-reload
+    type: exec
+    command: "systemctl daemon-reload"
+    subscribes: [litestream-systemd-unit]
+    when: "os_family('linux')"
+
+  - name: litestream-service
+    type: service
+    service: litestream
+    enabled: true
+    state: running
+    depends_on: [litestream-daemon-reload]
+    when: "os_family('linux')"

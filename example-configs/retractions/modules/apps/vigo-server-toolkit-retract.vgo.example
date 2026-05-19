@@ -1,0 +1,14 @@
+name: vigo-server-toolkit-retract
+description: >-
+  Retraction module for vigo-server-toolkit. Removes the diagnostic
+  packages — but in practice operators rarely want this; once installed,
+  these tools are useful baseline. Retract intentionally a no-op so
+  removing the role from a host doesn't strip away the operator's
+  debugging surface. Hand-uninstall specific packages with apt/dnf if
+  intended.
+
+resources: []
+
+# Install resources that needed no retraction:
+#   package (foreach): vigo-server-toolkit-debian
+#   package (foreach): vigo-server-toolkit-rhel

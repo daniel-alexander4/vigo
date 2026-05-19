@@ -1,0 +1,15 @@
+name: encryption-attestation-windows-retract
+description: Retract encryption-attestation-windows.
+
+resources:
+  - name: remove-task
+    type: powershell
+    command: "Unregister-ScheduledTask -TaskName 'VigoEncryptionAttest' -Confirm:$false -ErrorAction SilentlyContinue"
+    skip_validation: true
+    when: "os_family('windows')"
+
+  - name: remove-script
+    type: file
+    target_path: "C:\\ProgramData\\Vigo\\evidence\\encryption-attest.ps1"
+    state: absent
+    when: "os_family('windows')"

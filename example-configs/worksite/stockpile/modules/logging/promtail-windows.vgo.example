@@ -1,0 +1,64 @@
+#~ Promtail on Windows. Native binary from Grafana's releases, registered
+#~ as a Windows service. Tails the configured paths + reads the Windows
+#~ event log and forwards to Loki.
+name: promtail-windows
+
+compliance:
+  nist-800-53: [AU-3, AU-4, AU-6]
+  iso-27001: [A.12.4.1, A.12.4.3]
+
+vars:
+  promtail_version: "3.0.0"
+  loki_host: "loki.example.com"
+  loki_port: "3100"
+
+resources:
+  - name: install-promtail
+    type: source_package
+    url: "https://github.com/grafana/loki/releases/download/v{{ .Vars.promtail_version }}/promtail-windows-amd64.exe.zip"
+    target_path: "C:\\Program Files\\promtail\\promtail.exe"
+    binary_path: "promtail-windows-amd64.exe"
+    unless: 'if (Test-Path "C:\Program Files\promtail\promtail.exe") { & "C:\Program Files\promtail\promtail.exe" --version 2>$null | Select-String {{ .Vars.promtail_version }} | Out-Null; exit $LASTEXITCODE } else { exit 1 }'
+    skip_validation: true
+    when: "os_family('windows')"
+
+  - name: promtail-config
+    type: file
+    target_path: "C:\\ProgramData\\promtail\\promtail.yaml"
+    owner: SYSTEM
+    group: Administrators
+    mode: "0644"
+    content: |
+      server:
+        http_listen_port: 9080
+      positions:
+        filename: C:\ProgramData\promtail\positions.yaml
+      clients:
+        - url: http://{{ .Vars.loki_host }}:{{ .Vars.loki_port }}/loki/api/v1/push
+      scrape_configs:
+        - job_name: windows-event-log
+          windows_events:
+            use_incoming_timestamp: false
+            bookmark_path: C:\ProgramData\promtail\bookmark.xml
+            eventlog_name: Application
+            xpath_query: '*'
+            labels:
+              job: windows-events
+              host: ${HOSTNAME}
+    when: "os_family('windows')"
+
+  - name: install-promtail-service
+    type: powershell
+    command: 'New-Service -Name VigoPromtail -BinaryPathName ''"C:\Program Files\promtail\promtail.exe" -config.file=C:\ProgramData\promtail\promtail.yaml'' -StartupType Automatic'
+    onlyif: 'if (Get-Service VigoPromtail -ErrorAction SilentlyContinue) { exit 1 } else { exit 0 }'
+    skip_validation: true
+    depends_on: [install-promtail, promtail-config]
+    when: "os_family('windows')"
+
+  - name: promtail-service
+    type: service
+    service: VigoPromtail
+    enabled: true
+    state: running
+    depends_on: [install-promtail-service]
+    when: "os_family('windows')"

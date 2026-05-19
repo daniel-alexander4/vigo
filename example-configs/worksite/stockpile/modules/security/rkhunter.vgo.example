@@ -1,0 +1,22 @@
+#~ rkhunter — rootkit hunter. Updates signatures + runs a check daily.
+name: rkhunter
+
+compliance:
+  nist-800-53: [SI-3, SI-4]
+  iso-27001: [A.12.2.1]
+
+resources:
+  - name: install-rkhunter
+    type: package
+    package: rkhunter
+    state: present
+    when: "os_family('linux')"
+
+  - name: rkhunter-cron
+    type: cron
+    user: root
+    name: rkhunter-check
+    command: "rkhunter --update --quiet && rkhunter --check --skip-keypress --quiet"
+    schedule: "0 4 * * *"
+    depends_on: [install-rkhunter]
+    when: "os_family('linux')"
