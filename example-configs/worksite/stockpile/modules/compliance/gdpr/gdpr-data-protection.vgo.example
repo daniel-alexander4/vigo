@@ -55,14 +55,12 @@ resources:
     type: cron
     command: "find / -xdev -type f -perm -0002 -not -path '/proc/*' -not -path '/sys/*' 2>/dev/null | logger -t gdpr-world-writable"
     schedule: "0 2 * * *"
-    hour: "4"
-    minute: "0"
     user: root
 
   # Art 32(1)(b): Ensure ongoing confidentiality — restrict access to logs. Daily cron.
   - name: secure-log-permissions
     type: cron
+    user: root
     name: gdpr-log-permissions
     command: "chmod -R o-rwx /var/log/"
-    hour: "2"
-    minute: "45"
+    schedule: "45 2 * * *"

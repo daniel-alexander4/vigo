@@ -5,7 +5,6 @@ name: cis-rhel-maintenance
 
 compliance:
   cis-rhel: ["6.1.1", "6.1.2", "6.1.3", "6.1.4", "6.1.5", "6.1.6", "6.1.7", "6.1.8", "6.1.9", "6.1.10", "6.2.1", "6.2.2", "6.2.3", "6.2.5"]
-  cis-rhel: [6.1.x, 6.2.x]
   nist-800-53: [CM-6, AC-3]
   pci-dss: ["2.2.1", "7.1.1"]
 
@@ -55,10 +54,10 @@ resources:
   # CIS 6.1.10: No world-writable files — daily cron (expensive full-disk scan).
   - name: 6.1.10-no-world-writable
     type: cron
+    user: root
     name: cis-world-writable-scan
     command: "find / -xdev -type f -perm -0002 -exec chmod o-w {} + 2>/dev/null"
-    hour: "3"
-    minute: "0"
+    schedule: "0 3 * * *"
 
   # --- 6.2: User/group settings ---
 

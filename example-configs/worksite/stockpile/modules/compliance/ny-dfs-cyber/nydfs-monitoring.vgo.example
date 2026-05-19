@@ -27,6 +27,8 @@ resources:
 
   - name: aide-cron
     type: file
+    owner: root
+    group: root
     target_path: /etc/cron.daily/aide-check
     mode: "0755"
     content: |

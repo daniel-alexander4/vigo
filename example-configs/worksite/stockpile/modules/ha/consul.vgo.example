@@ -23,7 +23,7 @@ resources:
     type: source_package
     url: "https://releases.hashicorp.com/consul/{{ .Vars.consul_version }}/consul_{{ .Vars.consul_version }}_linux_{{ .Traits.os.arch }}.zip"
     target_path: /usr/local/bin/consul
-    binary: consul
+    binary_path: consul
     unless: "consul version | grep {{ .Vars.consul_version }}"
 
   # --- Data directory ---

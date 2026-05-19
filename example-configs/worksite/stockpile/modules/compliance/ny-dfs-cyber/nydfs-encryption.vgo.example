@@ -20,6 +20,9 @@ resources:
 
   - name: tls-min-version
     type: file
+    owner: root
+    group: root
+    mode: "0644"
     target_path: /etc/ssl/openssl-vigo.cnf
     content: |
       # 23 NYCRR 500 — Enforce TLS 1.2 minimum

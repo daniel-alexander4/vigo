@@ -1,7 +1,7 @@
 name: cis-windows-security-options-retract
 description: Retraction module for cis-windows-security-options. Removes all resources installed by the cis-windows-security-options module. Review before activating.
 
-resources:
+resources: []
   # windows_defender: defender-behavior-monitoring — manual cleanup required
 
   # windows_defender: defender-realtime-protection — manual cleanup required

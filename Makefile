@@ -60,6 +60,15 @@ lint:
 	golangci-lint run ./...
 	buf lint
 	cd agent && cargo clippy -- -D warnings
+	$(MAKE) lint-examples
+
+# Run modlint over every shipped .vgo.example. Catches drift between
+# the executor params, server/validate/schemas_gen.go, and the
+# operator-facing example modules. Regenerate the schema first
+# (`scripts/gen-executor-schemas.sh > server/validate/schemas_gen.go`)
+# if you've touched executor params.
+lint-examples:
+	go test ./server/modlint/... -run TestExampleModulesLintClean -count=1
 
 lint-agent:
 	cd agent && cargo clippy -- -D warnings

@@ -1,7 +1,7 @@
 name: cis-windows-components-retract
 description: Retraction module for cis-windows-components. Removes all resources installed by the cis-windows-components module. Review before activating.
 
-resources:
+resources: []
   # registry: credential-guard — remove or restore default registry value manually
 
   # windows_update: windows-update-auto — manual cleanup required

@@ -3,7 +3,7 @@ description: >-
   Retraction module for kernel-modules. Removes all resources installed by the
   kernel-modules module. Review before activating.
 
-resources:
+resources: []
   # reboot: reboot-after-kmod — manual cleanup required
 
   # kernel_module: disable-cramfs — unload with modprobe -r manually

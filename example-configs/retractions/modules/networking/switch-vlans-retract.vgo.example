@@ -3,7 +3,7 @@ description: >-
   Retraction module for switch-vlans. Removes all resources installed by the
   switch-vlans module. Review before activating.
 
-resources:
+resources: []
   # cisco_interface: server-port — manual cleanup required
   # cisco_interface: trunk-to-router — manual cleanup required
   # cisco_vlan: remove-vlan-999 — manual cleanup required

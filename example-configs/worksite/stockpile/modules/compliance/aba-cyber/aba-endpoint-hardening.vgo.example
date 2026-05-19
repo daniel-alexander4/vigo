@@ -16,6 +16,9 @@ resources:
 
   - name: usb-storage-disabled
     type: file
+    owner: root
+    group: root
+    mode: "0644"
     target_path: /etc/modprobe.d/usb-storage.conf
     content: |
       # ABA 477R — Disable USB mass storage to prevent data exfiltration

@@ -10,19 +10,19 @@ resources:
     type: source_package
     url: "https://github.com/sharkdp/bat/releases/download/v{{ .Vars.bat_version }}/bat-v{{ .Vars.bat_version }}-{{ .Traits.os.arch_raw }}-unknown-linux-musl.tar.gz"
     target_path: /usr/local/bin/bat
-    binary: bat
+    binary_path: bat
     unless: "bat --version | grep {{ .Vars.bat_version }}"
 
   - name: install-fd
     type: source_package
     url: "https://github.com/sharkdp/fd/releases/download/v{{ .Vars.fd_version }}/fd-v{{ .Vars.fd_version }}-{{ .Traits.os.arch_raw }}-unknown-linux-musl.tar.gz"
     target_path: /usr/local/bin/fd
-    binary: fd
+    binary_path: fd
     unless: "fd --version | grep {{ .Vars.fd_version }}"
 
   - name: install-ripgrep
     type: source_package
     url: "https://github.com/BurntSushi/ripgrep/releases/download/{{ .Vars.ripgrep_version }}/ripgrep-{{ .Vars.ripgrep_version }}-{{ .Traits.os.arch_raw }}-unknown-linux-musl.tar.gz"
     target_path: /usr/local/bin/rg
-    binary: rg
+    binary_path: rg
     unless: "rg --version | grep {{ .Vars.ripgrep_version }}"

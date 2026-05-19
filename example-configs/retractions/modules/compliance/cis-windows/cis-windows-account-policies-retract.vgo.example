@@ -1,7 +1,7 @@
 name: cis-windows-account-policies-retract
 description: Retraction module for cis-windows-account-policies. Removes all resources installed by the cis-windows-account-policies module. Review before activating.
 
-resources:
+resources: []
   # local_security_policy: lockout-reset — restore default policy value manually
 
   # local_security_policy: lockout-duration — restore default policy value manually

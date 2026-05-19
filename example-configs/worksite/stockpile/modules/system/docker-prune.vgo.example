@@ -23,7 +23,6 @@ resources:
     group: root
     mode: "0644"
     when: "has_command('docker')"
-    notify: [docker-prune-daemon-reload]
 
   - name: docker-prune-timer
     type: file
@@ -43,12 +42,11 @@ resources:
     group: root
     mode: "0644"
     when: "has_command('docker')"
-    notify: [docker-prune-daemon-reload]
 
   - name: docker-prune-daemon-reload
     type: exec
     command: "systemctl daemon-reload"
-    depends_on: [docker-prune-service, docker-prune-timer]
+    subscribes: [docker-prune-service, docker-prune-timer]
     when: "has_command('docker')"
     notify: [docker-prune-timer-enable]
 
@@ -57,5 +55,4 @@ resources:
     service: docker-prune.timer
     enabled: true
     state: running
-    depends_on: [docker-prune-daemon-reload]
     when: "has_command('docker')"

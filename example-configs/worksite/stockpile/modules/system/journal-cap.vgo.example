@@ -27,10 +27,9 @@ resources:
     group: root
     mode: "0644"
     depends_on: [journald-conf-dir]
-    notify: [restart-journald]
 
   - name: restart-journald
     type: service
     service: systemd-journald
     state: restarted
-    depends_on: [journald-size-limit]
+    subscribes: [journald-size-limit]

@@ -28,10 +28,10 @@ resources:
   # AC-3: Enforce permission bits on sensitive dirs — daily cron.
   - name: home-dir-permissions
     type: cron
+    user: root
     name: nist-home-dir-permissions
     command: "find /home -maxdepth 1 -mindepth 1 -type d -perm /g+w,o+rwx -exec chmod 750 {} +"
-    hour: "2"
-    minute: "15"
+    schedule: "15 2 * * *"
 
   # AC-11: Session lock on idle
   - name: vlock-package

@@ -4,6 +4,7 @@
 package validate
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -628,7 +629,11 @@ func TestFindingString_Format(t *testing.T) {
 
 // ── Cross-reference validation tests ────────────────────────────
 
-func TestDependsOn_UnknownResource_IsError(t *testing.T) {
+func TestDependsOn_UnknownResource_IsWarning(t *testing.T) {
+	// Unknown depends_on targets are Warning (not Error) because single-file
+	// lint can't see resources defined in sibling modules. Whole-stockpile
+	// resolution happens at publish time. Self-references are still Error
+	// (covered by other tests).
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
@@ -637,17 +642,17 @@ func TestDependsOn_UnknownResource_IsError(t *testing.T) {
 		},
 	}
 	findings := ValidateModule(mod)
-	if !HasErrors(findings) {
-		t.Fatal("expected error for depends_on referencing unknown resource")
+	if HasErrors(findings) {
+		t.Fatalf("expected only warnings for cross-module reference, got errors: %s", FormatFindings(findings))
 	}
 	found := false
 	for _, f := range findings {
-		if f.Severity == SeverityError && f.Message == `depends_on references unknown resource "nonexistent-pkg"` {
+		if f.Severity == SeverityWarning && strings.Contains(f.Message, `depends_on references unknown resource "nonexistent-pkg"`) {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("expected depends_on error, got: %s", FormatFindings(findings))
+		t.Errorf("expected depends_on warning, got: %s", FormatFindings(findings))
 	}
 }
 
@@ -686,7 +691,10 @@ func TestDependsOn_SelfReference_IsError(t *testing.T) {
 	}
 }
 
-func TestNotify_UnknownResource_IsError(t *testing.T) {
+func TestNotify_UnknownResource_IsWarning(t *testing.T) {
+	// Cross-module references are the dominant pattern (vhost → nginx's
+	// reload-nginx); single-file validation can't tell a typo from a
+	// cross-module hop. Whole-stockpile resolution happens at publish.
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
@@ -696,12 +704,21 @@ func TestNotify_UnknownResource_IsError(t *testing.T) {
 		},
 	}
 	findings := ValidateModule(mod)
-	if !HasErrors(findings) {
-		t.Fatal("expected error for notify referencing unknown resource")
+	if HasErrors(findings) {
+		t.Fatalf("expected only warnings, got errors: %s", FormatFindings(findings))
+	}
+	found := false
+	for _, f := range findings {
+		if f.Severity == SeverityWarning && strings.Contains(f.Message, "notify references unknown") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected notify warning, got: %s", FormatFindings(findings))
 	}
 }
 
-func TestSubscribes_UnknownResource_IsError(t *testing.T) {
+func TestSubscribes_UnknownResource_IsWarning(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
@@ -710,12 +727,21 @@ func TestSubscribes_UnknownResource_IsError(t *testing.T) {
 		},
 	}
 	findings := ValidateModule(mod)
-	if !HasErrors(findings) {
-		t.Fatal("expected error for subscribes referencing unknown resource")
+	if HasErrors(findings) {
+		t.Fatalf("expected only warnings, got errors: %s", FormatFindings(findings))
+	}
+	found := false
+	for _, f := range findings {
+		if f.Severity == SeverityWarning && strings.Contains(f.Message, "subscribes references unknown") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected subscribes warning, got: %s", FormatFindings(findings))
 	}
 }
 
-func TestBefore_UnknownResource_IsError(t *testing.T) {
+func TestBefore_UnknownResource_IsWarning(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
@@ -724,8 +750,17 @@ func TestBefore_UnknownResource_IsError(t *testing.T) {
 		},
 	}
 	findings := ValidateModule(mod)
-	if !HasErrors(findings) {
-		t.Fatal("expected error for before referencing unknown resource")
+	if HasErrors(findings) {
+		t.Fatalf("expected only warnings, got errors: %s", FormatFindings(findings))
+	}
+	found := false
+	for _, f := range findings {
+		if f.Severity == SeverityWarning && strings.Contains(f.Message, "before references unknown") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected before warning, got: %s", FormatFindings(findings))
 	}
 }
 

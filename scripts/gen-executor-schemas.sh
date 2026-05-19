@@ -54,8 +54,10 @@ for type_name in $(echo "${!TYPE_FILES[@]}" | tr ' ' '\n' | sort); do
     #   - direct  params.get("name")  calls (and the .get("name") shape generally)
     #   - helper-call shapes like  push_repeated(&mut args, params, "name", "-flag")
     #     or  push_single(&mut args, params, "name", "-flag")
+    #   - the  require_param!(params, "name", result)  macro used by the
+    #     network_common helpers (network_*, cisco_*, junos_* executors).
     # Join lines first to catch multi-line patterns.
-    params=$(cat $files 2>/dev/null | tr '\n' ' ' | grep -oP '(?:\.get\(\s*"|push_(?:repeated|single)\([^,]+,\s*params,\s*")\K[^"]+' | grep -v '^_' | sort -u || true)
+    params=$(cat $files 2>/dev/null | tr '\n' ' ' | grep -oP '(?:\.get\(\s*"|push_(?:repeated|single)\([^,]+,\s*params,\s*"|require_param!\(\s*[^,]+,\s*")\K[^"]+' | grep -v '^_' | sort -u || true)
     if [[ -z "$params" ]]; then
         echo "	\"$type_name\": {},"
     else

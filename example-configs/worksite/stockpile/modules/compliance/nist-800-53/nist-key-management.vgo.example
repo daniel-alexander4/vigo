@@ -11,10 +11,10 @@ resources:
   # SSH key permissions — daily cron.
   - name: ssh-key-permissions
     type: cron
+    user: root
     name: nist-ssh-key-permissions
     command: "find /home -name 'authorized_keys' -exec chmod 600 {} \\; && find /home -name '.ssh' -exec chmod 700 {} \\;"
-    hour: "2"
-    minute: "20"
+    schedule: "20 2 * * *"
 
   - name: root-ssh-key-permissions
     type: exec

@@ -144,10 +144,16 @@ var KnownTypes = map[string]bool{
 
 // universalAttrs are attributes allowed on any resource type. These are not
 // flagged as unknown regardless of type-specific schema.
+//
+// foreach + key are config-load-time expansion structurals — the parser
+// pulls them off into ResourceConfig.ForEach (server/config/parse.go:182)
+// but modlint's adapter sees the raw YAML and lands them in Attributes,
+// so the unknown-attribute pass needs to know they're legal anywhere.
 var universalAttrs = map[string]bool{
 	"state": true, "onlyif": true, "unless": true, "creates": true,
 	"skip_validation": true, "when": true, "timeout_secs": true,
 	"case": true, "match": true, "watch_secret": true,
+	"foreach": true, "key": true,
 }
 
 // ParamSpec describes a single attribute's validation constraints.
@@ -199,7 +205,12 @@ var requiredAttrs = map[string][]string{
 	"json_file":       {"target_path", "key"},
 	"logrotate":       {"path"},
 	"git":             {"repo", "path"},
-	"alternatives":    {"name", "path"},
+	// `name` is supplied by the runner from the resource's top-level name
+	// when the executor reads `params.get("name")` (agent/src/runner/mod.rs:
+	// the runner inserts the resource name into params if not already set).
+	// Marking it required would force operators to duplicate the resource
+	// name as an attribute. `path` is the only operator-supplied required.
+	"alternatives":    {"path"},
 	"pip":             {"package"},
 	"gem":             {"package"},
 	"npm":             {"package"},
@@ -218,7 +229,7 @@ var requiredAttrs = map[string][]string{
 // absPathAttrs defines which attributes must be absolute paths.
 var absPathAttrs = map[string][]string{
 	"file": {"target_path"}, "directory": {"target_path"}, "symlink": {"target_path"},
-	"source_package": {"target_path", "binary_path"}, "file_line": {"target_path"},
+	"source_package": {"target_path"}, "file_line": {"target_path"},
 	"mount": {"path"}, "swap": {"path"}, "tmpfile": {"path"},
 	"ini": {"target_path"}, "json_file": {"target_path"}, "logrotate": {"path"},
 	"git": {"path"}, "alternatives": {"path"}, "pip": {"virtualenv"},
@@ -319,11 +330,18 @@ func validateCrossReferences(mod Module) []Finding {
 			ResourceType: res.Type,
 		}
 
+		// Unknown-target findings are Warning, not Error: single-file
+		// lint cannot see resources defined in sibling modules, and
+		// cross-module notify/subscribes is the dominant pattern (e.g.
+		// a vhost module notifies the `reload-nginx` resource owned by
+		// the nginx module). Whole-stockpile resolution is the publish
+		// path's job. Self-references stay as Error — a resource that
+		// references itself is a real bug regardless of module scope.
 		for _, ref := range res.DependsOn {
 			if !names[ref] {
 				f := base
-				f.Severity = SeverityError
-				f.Message = fmt.Sprintf("depends_on references unknown resource %q", ref)
+				f.Severity = SeverityWarning
+				f.Message = fmt.Sprintf("depends_on references unknown resource %q (may resolve cross-module at publish)", ref)
 				findings = append(findings, f)
 			}
 			if ref == res.Name {
@@ -337,8 +355,8 @@ func validateCrossReferences(mod Module) []Finding {
 		for _, ref := range res.Before {
 			if !names[ref] {
 				f := base
-				f.Severity = SeverityError
-				f.Message = fmt.Sprintf("before references unknown resource %q", ref)
+				f.Severity = SeverityWarning
+				f.Message = fmt.Sprintf("before references unknown resource %q (may resolve cross-module at publish)", ref)
 				findings = append(findings, f)
 			}
 			if ref == res.Name {
@@ -352,8 +370,8 @@ func validateCrossReferences(mod Module) []Finding {
 		for _, ref := range res.Notify {
 			if !names[ref] {
 				f := base
-				f.Severity = SeverityError
-				f.Message = fmt.Sprintf("notify references unknown resource %q", ref)
+				f.Severity = SeverityWarning
+				f.Message = fmt.Sprintf("notify references unknown resource %q (may resolve cross-module at publish)", ref)
 				findings = append(findings, f)
 			}
 			if ref == res.Name {
@@ -367,8 +385,8 @@ func validateCrossReferences(mod Module) []Finding {
 		for _, ref := range res.Subscribes {
 			if !names[ref] {
 				f := base
-				f.Severity = SeverityError
-				f.Message = fmt.Sprintf("subscribes references unknown resource %q", ref)
+				f.Severity = SeverityWarning
+				f.Message = fmt.Sprintf("subscribes references unknown resource %q (may resolve cross-module at publish)", ref)
 				findings = append(findings, f)
 			}
 			if ref == res.Name {
@@ -554,7 +572,19 @@ func validateResource(moduleName string, res Resource) []Finding {
 
 // validateSchema runs data-driven validation from TypeSchemas: checks required
 // fields, flags unknown attributes, and validates absolute paths and modes.
+//
+// Resources with `skip_validation: true` bypass the schema entirely. The flag
+// originally only suppressed the unknown-type error (custom executors), but
+// some shipped executors — notably registry, windows_update, windows_defender
+// — have attribute namespaces that collide with structural YAML keys
+// (`name`, `type`) and force operators to write aspirational attribute names
+// (`value_name`, `value_type`, etc.) until the executor design is fixed. For
+// those, `skip_validation: true` is the operator's explicit acknowledgement
+// that the resource is non-canonical and shouldn't be schema-checked.
 func validateSchema(base Finding, res Resource) []Finding {
+	if attrBool(res.Attributes, "skip_validation") {
+		return nil
+	}
 	schema, ok := TypeSchemas[res.Type]
 	if !ok {
 		return nil // no schema defined — skip
@@ -810,6 +840,13 @@ func validateNonRepoPackage(base Finding, res Resource) []Finding {
 
 // requireAbsolutePath emits an error if the given attribute is present but not
 // an absolute path. Empty/missing values are skipped (caught by required-field checks).
+//
+// Path shapes accepted:
+//   - Unix absolute: filepath.IsAbs on Linux build hosts catches "/foo/bar".
+//   - Windows drive-letter (e.g. "C:\\Program Files\\Foo") — only when the
+//     resource's `when:` clause restricts to Windows. Linux-build's
+//     filepath.IsAbs returns false for drive-letter paths regardless of
+//     intent, so the cross-OS check is explicit.
 func requireAbsolutePath(base Finding, res Resource, field string) []Finding {
 	v := attrString(res.Attributes, field)
 	if v == "" {
@@ -819,13 +856,46 @@ func requireAbsolutePath(base Finding, res Resource, field string) []Finding {
 	if strings.Contains(v, "{{") {
 		return nil
 	}
-	if !filepath.IsAbs(v) {
-		f := base
-		f.Severity = SeverityError
-		f.Message = fmt.Sprintf("%s %q must be an absolute path", field, v)
-		return []Finding{f}
+	if filepath.IsAbs(v) {
+		return nil
 	}
-	return nil
+	if isWindowsAbsPath(v) && resourceIsWindowsGated(res) {
+		return nil
+	}
+	f := base
+	f.Severity = SeverityError
+	f.Message = fmt.Sprintf("%s %q must be an absolute path", field, v)
+	return []Finding{f}
+}
+
+// isWindowsAbsPath returns true for "C:\..." / "C:/..." style paths
+// regardless of build OS. filepath.IsAbs alone is not OS-portable for
+// validating cross-platform module configs.
+func isWindowsAbsPath(p string) bool {
+	if len(p) < 3 {
+		return false
+	}
+	c := p[0]
+	if !((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+		return false
+	}
+	if p[1] != ':' {
+		return false
+	}
+	return p[2] == '\\' || p[2] == '/'
+}
+
+// resourceIsWindowsGated returns true if the resource's `when:` clause
+// restricts it to Windows envoys. The conservative match looks for the
+// canonical `os_family('windows')` form in either quote style. A
+// resource without that gate writing a `C:\...` path is treated as a
+// bug — it would fail at runtime on a non-Windows envoy.
+func resourceIsWindowsGated(res Resource) bool {
+	if res.When == "" {
+		return false
+	}
+	return strings.Contains(res.When, "os_family('windows')") ||
+		strings.Contains(res.When, `os_family("windows")`)
 }
 
 // requireValidMode emits an error if the mode attribute is present but not a

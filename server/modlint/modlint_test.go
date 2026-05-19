@@ -371,7 +371,9 @@ resources:
 	}
 }
 
-func TestLint_DependsOnUnknown(t *testing.T) {
+func TestLint_DependsOnUnknown_IsWarning(t *testing.T) {
+	// Unknown depends_on targets emit a Warning, not an Error: see
+	// TestLint_NotifyUnknownTarget_IsWarning for the rationale.
 	input := `name: test
 resources:
   - name: pkg
@@ -380,11 +382,11 @@ resources:
     depends_on: [nonexistent]
 `
 	r := Lint([]byte(input), Options{})
-	if r.OK() {
-		t.Fatal("expected error for unknown depends_on target")
+	if !r.OK() {
+		t.Fatalf("expected no Error findings, got: %v", r.Errors)
 	}
-	if !containsError(r, "unknown resource") {
-		t.Error("expected unknown resource error")
+	if !containsWarning(r, "depends_on references unknown") {
+		t.Error("expected depends_on unknown resource warning")
 	}
 }
 
@@ -720,7 +722,11 @@ resources:
 	}
 }
 
-func TestLint_NotifyUnknownTarget(t *testing.T) {
+func TestLint_NotifyUnknownTarget_IsWarning(t *testing.T) {
+	// Unknown notify targets emit a Warning, not an Error: single-file
+	// lint can't see sibling modules and cross-module notify is the
+	// dominant pattern (vhost → nginx's reload-nginx, etc.). Whole-
+	// stockpile resolution happens at publish time.
 	input := `name: test
 resources:
   - name: conf
@@ -733,15 +739,15 @@ resources:
     notify: [ghost]
 `
 	r := Lint([]byte(input), Options{})
-	if r.OK() {
-		t.Fatal("expected error for notify to unknown target")
+	if !r.OK() {
+		t.Fatalf("expected no Error findings, got: %v", r.Errors)
 	}
-	if !containsError(r, "notify references unknown") {
-		t.Error("expected notify unknown resource error")
+	if !containsWarning(r, "notify references unknown") {
+		t.Error("expected notify unknown resource warning")
 	}
 }
 
-func TestLint_BeforeUnknownTarget(t *testing.T) {
+func TestLint_BeforeUnknownTarget_IsWarning(t *testing.T) {
 	input := `name: test
 resources:
   - name: pkg
@@ -750,11 +756,11 @@ resources:
     before: [nobody]
 `
 	r := Lint([]byte(input), Options{})
-	if r.OK() {
-		t.Fatal("expected error for before to unknown target")
+	if !r.OK() {
+		t.Fatalf("expected no Error findings, got: %v", r.Errors)
 	}
-	if !containsError(r, "before references unknown") {
-		t.Error("expected before unknown resource error")
+	if !containsWarning(r, "before references unknown") {
+		t.Error("expected before unknown resource warning")
 	}
 }
 
