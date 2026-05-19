@@ -21,6 +21,7 @@ import (
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	isgrpc "git.alexander4.io/vigo/server/grpc"
+	"git.alexander4.io/vigo/server/metrics"
 )
 
 // noopHandler is a grpc.UnaryHandler that records whether it was called and
@@ -101,7 +102,7 @@ func signReportTraits(envoyID string, traitsJSON []byte, ts time.Time, priv ed25
 // through the interceptor without any signature verification.
 func TestInterceptorRegisterBypasses(t *testing.T) {
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, nil)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, nil, metrics.NewTestMetrics())
 
 	called := false
 	handler := func(ctx context.Context, req any) (any, error) {
@@ -140,7 +141,7 @@ func TestInterceptorCheckInValidSignature(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	now := time.Now()
 	req := signCheckIn(envoyID, "fp-123", now, priv)
@@ -171,7 +172,7 @@ func TestInterceptorCheckInUnknownEnvoy(t *testing.T) {
 	fi := fleet.NewFleetIndex() // empty — envoy not present
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	now := time.Now()
 	req := signCheckIn(unknownID, "fp", now, priv)
@@ -204,7 +205,7 @@ func TestInterceptorCheckInExpiredTimestamp(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	// 10 minutes ago — well outside the 5-minute window.
 	staleTime := time.Now().Add(-10 * time.Minute)
@@ -239,7 +240,7 @@ func TestInterceptorCheckInWrongKey(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	now := time.Now()
 	req := signCheckIn(envoyID, "fp", now, wrongPriv) // signed with wrong key
@@ -272,7 +273,7 @@ func TestInterceptorCheckInTamperedPayload(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	now := time.Now()
 	// Sign "original-fp" but send "tampered-fp" in the request.
@@ -314,7 +315,7 @@ func TestInterceptorReportResultValidSignature(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	now := time.Now()
 	runID := uuid.New().String()
@@ -351,7 +352,7 @@ func TestInterceptorReportTraitsValidSignature(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	now := time.Now()
 	traitsJSON := []byte(`{"os_family":"debian","hostname":"traits.example.com"}`)
@@ -381,7 +382,7 @@ func TestInterceptorFleetIndexFastPath(t *testing.T) {
 	// Use the shared testDB — the envoy is NOT inserted into the DB.
 	// The interceptor should succeed via FleetIndex alone.
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	now := time.Now()
 	req := signCheckIn(envoyID, "fp-fast", now, priv)
@@ -413,7 +414,7 @@ func TestInterceptorDBFallback(t *testing.T) {
 	// Empty FleetIndex — envoy is NOT here.
 	fi := fleet.NewFleetIndex()
 
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	now := time.Now()
 	req := signCheckIn(envoy.ID, "fp-db-fallback", now, priv)
@@ -454,7 +455,7 @@ func TestInterceptorNilFleetIndex(t *testing.T) {
 	}
 
 	// Pass nil for FleetIndex.
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 0, nil)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 0, nil, metrics.NewTestMetrics())
 
 	now := time.Now()
 	req := signCheckIn(envoy.ID, "fp-nil-fi", now, priv)
@@ -481,7 +482,7 @@ func TestInterceptorDefaultSigWindow(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 0, fi) // 0 → default 5min
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 0, fi, metrics.NewTestMetrics()) // 0 → default 5min
 
 	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
@@ -523,7 +524,7 @@ func TestInterceptorCheckInMissingTimestamp(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	req := &pb.CheckInRequest{
 		EnvoyId:         envoyID,
@@ -551,7 +552,7 @@ func TestInterceptorCheckInMissingTimestamp(t *testing.T) {
 func TestInterceptorCheckInMalformedUUID(t *testing.T) {
 	queries := db.New(testDB)
 	fi := fleet.NewFleetIndex()
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	req := &pb.CheckInRequest{
 		EnvoyId:         "not-a-valid-uuid",
@@ -589,7 +590,7 @@ func TestInterceptorReportResultWrongKey(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	now := time.Now()
 	req := signReportResult(envoyID, "run-123", now, wrongPriv)
@@ -622,7 +623,7 @@ func TestInterceptorReportTraitsExpiredTimestamp(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	staleTime := time.Now().Add(-10 * time.Minute)
 	traitsJSON := []byte(`{"os":"linux"}`)
@@ -647,7 +648,7 @@ func TestInterceptorReportTraitsExpiredTimestamp(t *testing.T) {
 func TestInterceptorAdminRPCPassesThrough(t *testing.T) {
 	queries := db.New(testDB)
 	fi := fleet.NewFleetIndex()
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	called := false
 	handler := func(ctx context.Context, req any) (any, error) {
@@ -680,7 +681,7 @@ func TestInterceptorFutureTimestampRejected(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	// 10 minutes in the future.
 	futureTime := time.Now().Add(10 * time.Minute)
@@ -714,7 +715,7 @@ func TestInterceptorCustomSigWindow(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 1*time.Second, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 1*time.Second, fi, metrics.NewTestMetrics())
 
 	info := makeInfo(pb.VigoAgent_CheckIn_FullMethodName)
 
@@ -756,7 +757,7 @@ func TestInterceptorReportResultMissingTimestamp(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	req := &pb.ReportResultRequest{
 		EnvoyId:  envoyID,
@@ -793,7 +794,7 @@ func TestInterceptorReportTraitsMissingTimestamp(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	req := &pb.ReportTraitsRequest{
 		EnvoyId:   envoyID,
@@ -821,7 +822,7 @@ func TestInterceptorReportTraitsMissingTimestamp(t *testing.T) {
 func TestInterceptorReportResultMalformedUUID(t *testing.T) {
 	queries := db.New(testDB)
 	fi := fleet.NewFleetIndex()
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	req := &pb.ReportResultRequest{
 		EnvoyId:  "bad-uuid",
@@ -849,7 +850,7 @@ func TestInterceptorReportResultMalformedUUID(t *testing.T) {
 func TestInterceptorReportTraitsMalformedUUID(t *testing.T) {
 	queries := db.New(testDB)
 	fi := fleet.NewFleetIndex()
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	req := &pb.ReportTraitsRequest{
 		EnvoyId:   "bad-uuid",
@@ -889,7 +890,7 @@ func TestInterceptorDBFallbackReportResult(t *testing.T) {
 	}
 
 	fi := fleet.NewFleetIndex() // empty
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	now := time.Now()
 	runID := "run-db-fallback"
@@ -924,7 +925,7 @@ func TestInterceptorEmptySignature(t *testing.T) {
 	}, pub)
 
 	queries := db.New(testDB)
-	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi)
+	interceptor := isgrpc.SignatureVerifyInterceptor(queries, 5*time.Minute, fi, metrics.NewTestMetrics())
 
 	req := &pb.CheckInRequest{
 		EnvoyId:         envoyID,

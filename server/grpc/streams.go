@@ -23,6 +23,7 @@ type streamManager struct {
 	sendBufferSize   int                          // per-agent send channel capacity
 	pending          map[string][]*pendingPromotion // envoy_id → queued messages
 	fleetIndex       *fleet.FleetIndex
+	metrics          *metrics.Metrics // per-instance prometheus collectors
 	promotionTimeout time.Duration // default: 12 minutes
 }
 
@@ -42,7 +43,7 @@ type pendingPromotion struct {
 	timer     *time.Timer
 }
 
-func newStreamManager(sendBuf int, fleetIndex *fleet.FleetIndex, promotionTimeout time.Duration) *streamManager {
+func newStreamManager(sendBuf int, fleetIndex *fleet.FleetIndex, m *metrics.Metrics, promotionTimeout time.Duration) *streamManager {
 	if sendBuf <= 0 {
 		sendBuf = 8
 	}
@@ -54,6 +55,7 @@ func newStreamManager(sendBuf int, fleetIndex *fleet.FleetIndex, promotionTimeou
 		sendBufferSize:   sendBuf,
 		pending:          make(map[string][]*pendingPromotion),
 		fleetIndex:       fleetIndex,
+		metrics:          m,
 		promotionTimeout: promotionTimeout,
 	}
 }
@@ -96,7 +98,7 @@ func (sm *streamManager) register(envoyID, hostname string) (*agentStream, func(
 	}
 	sm.mu.Unlock()
 
-	metrics.StreamsActive.Set(float64(len(sm.streams)))
+	sm.metrics.StreamsActive.Set(float64(len(sm.streams)))
 	slog.Info("agent stream connected", "envoy_id", envoyID, "hostname", hostname,
 		"promoted", as.promoted)
 
@@ -106,7 +108,7 @@ func (sm *streamManager) register(envoyID, hostname string) (*agentStream, func(
 		if sm.streams[envoyID] == as {
 			delete(sm.streams, envoyID)
 		}
-		metrics.StreamsActive.Set(float64(len(sm.streams)))
+		sm.metrics.StreamsActive.Set(float64(len(sm.streams)))
 		sm.mu.Unlock()
 		slog.Info("agent stream disconnected", "envoy_id", envoyID, "hostname", hostname)
 	}

@@ -99,6 +99,7 @@ type Enforcer struct {
 	caFile       string // TLS CA cert path for fingerprint computation
 	counter      EnvoyCounter
 	shutdownFn   ShutdownFunc
+	metrics      *metrics.Metrics
 	stage        Stage
 	graceStart   *time.Time
 	violation    string
@@ -109,13 +110,15 @@ type Enforcer struct {
 // It validates the license immediately and returns an error if no valid
 // license is found or the license is at Stage 3 (service stop).
 // caFile is the path to the TLS CA cert (used for machine fingerprint validation).
-func NewEnforcer(licenseDir, graceDir, caFile string, counter EnvoyCounter, shutdownFn ShutdownFunc) (*Enforcer, error) {
+// m owns the license gauges/counters this enforcer mutates.
+func NewEnforcer(licenseDir, graceDir, caFile string, counter EnvoyCounter, shutdownFn ShutdownFunc, m *metrics.Metrics) (*Enforcer, error) {
 	e := &Enforcer{
 		licenseDir: licenseDir,
 		graceDir:   graceDir,
 		caFile:     caFile,
 		counter:    counter,
 		shutdownFn: shutdownFn,
+		metrics:    m,
 	}
 
 	if err := e.loadAndCheck(); err != nil {
@@ -182,13 +185,13 @@ func (e *Enforcer) RegistrationAllowedAt(currentCount int) error {
 // on a non-policy error so operators can distinguish genuine limit hits
 // from server-side bugs.
 func (e *Enforcer) RecordEnforcementError() {
-	metrics.LicenseEnforcementErrors.Inc()
+	e.metrics.LicenseEnforcementErrors.Inc()
 }
 
 // RecordEnrollmentBlocked increments the Prometheus counter tracking
 // enrollments rejected by the hard node-count gate specifically.
 func (e *Enforcer) RecordEnrollmentBlocked() {
-	metrics.LicenseEnrollmentsBlocked.Inc()
+	e.metrics.LicenseEnrollmentsBlocked.Inc()
 }
 
 // GetStatus returns the current enforcement status for the API.
@@ -374,17 +377,17 @@ func (e *Enforcer) evaluateLocked() error {
 // updateMetrics sets Prometheus gauges for current license state.
 // Must be called with e.mu held.
 func (e *Enforcer) updateMetrics() {
-	metrics.LicenseStage.Set(float64(e.stage))
+	e.metrics.LicenseStage.Set(float64(e.stage))
 	if e.license != nil {
-		metrics.LicenseEnvoysMax.Set(float64(e.license.MaxEnvoys))
+		e.metrics.LicenseEnvoysMax.Set(float64(e.license.MaxEnvoys))
 		if exp, err := e.license.ExpiresTime(); err == nil {
 			days := int(time.Until(exp).Hours() / 24)
-			metrics.LicenseDaysRemaining.Set(float64(days))
-			metrics.LicenseExpiryTimestamp.Set(float64(exp.Unix()))
+			e.metrics.LicenseDaysRemaining.Set(float64(days))
+			e.metrics.LicenseExpiryTimestamp.Set(float64(exp.Unix()))
 		}
 	}
 	if count, err := e.counter(context.Background()); err == nil {
-		metrics.LicenseEnvoysUsed.Set(float64(count))
+		e.metrics.LicenseEnvoysUsed.Set(float64(count))
 	}
 }
 

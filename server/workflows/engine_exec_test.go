@@ -74,7 +74,7 @@ func insertPushRunWithStatus(t *testing.T, sqlDB *sql.DB, id, status string) {
 func TestRunWorkflow_UnknownWorkflow(t *testing.T) {
 	sqlDB := openExecTestDB(t)
 	queries := db.New(sqlDB)
-	engine := NewEngine(queries, nil)
+	engine := NewEngine(queries, nil, nil)
 
 	_, err := engine.RunWorkflow(context.Background(), "nonexistent", "admin")
 	if err == nil {
@@ -95,7 +95,7 @@ func TestRunWorkflow_CreatesDBRecord(t *testing.T) {
 		},
 	}
 
-	engine := NewEngine(queries, runner)
+	engine := NewEngine(queries, runner, nil)
 	engine.mu.Lock()
 	engine.workflows["test-wf"] = &WorkflowDef{
 		Name: "test-wf",
@@ -149,7 +149,7 @@ func TestExecuteWorkflow_CompletesAllSteps(t *testing.T) {
 		},
 	}
 
-	engine := NewEngine(queries, runner)
+	engine := NewEngine(queries, runner, nil)
 
 	def := &WorkflowDef{
 		Name: "deploy",
@@ -239,7 +239,7 @@ func TestExecuteWorkflow_StepFailure_OnFailureBranch(t *testing.T) {
 		},
 	}
 
-	engine := NewEngine(queries, runner)
+	engine := NewEngine(queries, runner, nil)
 
 	def := &WorkflowDef{
 		Name: "deploy",
@@ -305,7 +305,7 @@ func TestExecuteWorkflow_StepFailure_NoOnFailure_WorkflowFails(t *testing.T) {
 		},
 	}
 
-	engine := NewEngine(queries, runner)
+	engine := NewEngine(queries, runner, nil)
 
 	def := &WorkflowDef{
 		Name: "simple",
@@ -345,7 +345,7 @@ func TestExecuteWorkflow_RespectsAbortFlag(t *testing.T) {
 	queries := db.New(sqlDB)
 
 	runner := &mockPushRunner{}
-	engine := NewEngine(queries, runner)
+	engine := NewEngine(queries, runner, nil)
 
 	def := &WorkflowDef{
 		Name: "deploy",
@@ -467,7 +467,7 @@ func TestExecuteWorkflow_OnSuccessBranching(t *testing.T) {
 		},
 	}
 
-	engine := NewEngine(queries, runner)
+	engine := NewEngine(queries, runner, nil)
 
 	def := &WorkflowDef{
 		Name: "branch",
@@ -530,7 +530,7 @@ func TestExecuteWorkflow_PollPushCompletion_Failed(t *testing.T) {
 		},
 	}
 
-	engine := NewEngine(queries, runner)
+	engine := NewEngine(queries, runner, nil)
 
 	def := &WorkflowDef{
 		Name: "failing",
@@ -578,7 +578,7 @@ func TestExecuteWorkflow_PollFailure_OnFailureBranch(t *testing.T) {
 		},
 	}
 
-	engine := NewEngine(queries, runner)
+	engine := NewEngine(queries, runner, nil)
 
 	def := &WorkflowDef{
 		Name: "deploy-with-cleanup",
@@ -631,7 +631,7 @@ func TestExecuteWorkflow_TaskParams(t *testing.T) {
 		},
 	}
 
-	engine := NewEngine(queries, runner)
+	engine := NewEngine(queries, runner, nil)
 
 	def := &WorkflowDef{
 		Name: "task-wf",
@@ -697,7 +697,7 @@ func TestExecuteWorkflow_RollingParams(t *testing.T) {
 		},
 	}
 
-	engine := NewEngine(queries, runner)
+	engine := NewEngine(queries, runner, nil)
 
 	def := &WorkflowDef{
 		Name: "rolling-wf",

@@ -23,6 +23,7 @@ import (
 type taskRouter struct {
 	mu      sync.Mutex
 	queries *db.Queries
+	metrics *metrics.Metrics // per-instance prometheus collectors
 
 	// taskRunID → envoyID → push_run_target.ID
 	pending map[string]map[string]string
@@ -31,9 +32,10 @@ type taskRouter struct {
 	notifiers map[string]map[string]chan struct{}
 }
 
-func newTaskRouter(queries *db.Queries) *taskRouter {
+func newTaskRouter(queries *db.Queries, m *metrics.Metrics) *taskRouter {
 	return &taskRouter{
 		queries:   queries,
+		metrics:   m,
 		pending:   make(map[string]map[string]string),
 		notifiers: make(map[string]map[string]chan struct{}),
 	}
@@ -238,7 +240,7 @@ func (r *taskRouter) maybeFinishTaskRun(ctx context.Context, taskRunID string) {
 		return
 	}
 
-	metrics.PushRunsTotal.WithLabelValues(status).Inc()
+	r.metrics.PushRunsTotal.WithLabelValues(status).Inc()
 
 	slog.Info("task run finished",
 		"task_run_id", taskRunID,

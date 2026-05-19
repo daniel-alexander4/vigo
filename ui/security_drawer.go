@@ -337,7 +337,7 @@ func (h *Handler) SecurityEnvoyFragment(w http.ResponseWriter, r *http.Request) 
 	// the operator can "try anyway" against a host that just recovered.
 	if lastSeen, cycle, ok := h.dataSource.EnvoyFreshness(envoyID); ok {
 		data.EnvoyLastSeen = lastSeen
-		data.EnvoyResponsive = freshness.IsResponsive(lastSeen, h.baseInterval, cycle)
+		data.EnvoyResponsive = freshness.IsResponsive(lastSeen, h.baseInterval, cycle, h.offlineThreshold)
 	}
 	// Certs aren't part of the security_scan trait — pull this host's
 	// expiring/expired certs separately for the always-present Certs tab.

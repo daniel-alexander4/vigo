@@ -19,10 +19,11 @@ import (
 
 // toolDeps holds the dependencies needed to execute tool calls.
 type toolDeps struct {
-	queries      *db.Queries
-	configStore  *config.ConfigStore
-	runStore     db.RunStore
-	baseInterval time.Duration
+	queries          *db.Queries
+	configStore      *config.ConfigStore
+	runStore         db.RunStore
+	baseInterval     time.Duration
+	offlineThreshold time.Duration
 }
 
 // dispatchTool executes a tool call and returns the result as a JSON string.

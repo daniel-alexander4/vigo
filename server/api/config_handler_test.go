@@ -21,7 +21,7 @@ import (
 func TestConfig_RecordPublish(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex())
+	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), &publish.State{}, "", "")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -57,7 +57,7 @@ func TestConfig_ListPublishes(t *testing.T) {
 		}
 	}
 
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex())
+	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), &publish.State{}, "", "")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -91,7 +91,7 @@ func TestConfig_GetPublish(t *testing.T) {
 		t.Fatalf("insert publish: %v", err)
 	}
 
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex())
+	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), &publish.State{}, "", "")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -118,7 +118,7 @@ func TestConfig_GetPublish(t *testing.T) {
 func TestConfig_GetPublishNotFound(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex())
+	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), &publish.State{}, "", "")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -134,7 +134,8 @@ func TestConfig_GetPublishNotFound(t *testing.T) {
 func TestConfig_Freeze(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex())
+	state := &publish.State{}
+	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), state, "", "")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -155,19 +156,16 @@ func TestConfig_Freeze(t *testing.T) {
 		t.Error("expected freeze_until to be set")
 	}
 
-	// Verify the global freeze is set.
-	if publish.FreezeUntil == nil {
-		t.Error("expected publish.FreezeUntil to be set")
+	// Verify the handler-scoped freeze is set.
+	if !state.Frozen() {
+		t.Error("expected publish state to report frozen after Freeze handler")
 	}
-
-	// Clean up.
-	publish.FreezeUntil = nil
 }
 
 func TestConfig_FreezeInvalidTimestamp(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex())
+	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), &publish.State{}, "", "")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -185,13 +183,13 @@ func TestConfig_FreezeInvalidTimestamp(t *testing.T) {
 func TestConfig_Unfreeze(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 
-	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex())
+	state := &publish.State{}
+	handler := NewConfigHandler(queries, nil, fleet.NewFleetIndex(), state, "", "")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
 	// Set a freeze first.
-	now := time.Now().Add(1 * time.Hour)
-	publish.FreezeUntil = &now
+	state.SetFreezeUntil(time.Now().Add(1 * time.Hour))
 
 	req := httptest.NewRequest("POST", "/api/v1/config/unfreeze", nil)
 	rec := httptest.NewRecorder()
@@ -201,7 +199,7 @@ func TestConfig_Unfreeze(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	if publish.FreezeUntil != nil {
-		t.Error("expected publish.FreezeUntil to be nil after unfreeze")
+	if state.Frozen() {
+		t.Error("expected publish state to report not-frozen after Unfreeze handler")
 	}
 }

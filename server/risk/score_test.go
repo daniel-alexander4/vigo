@@ -18,7 +18,7 @@ func TestScoreEnvoy_Clean(t *testing.T) {
 		ConvergenceStatus: "converged",
 		Traits:            map[string]string{},
 	}
-	r := ScoreEnvoy(es, 30*time.Second)
+	r := ScoreEnvoy(es, 30*time.Second, 0)
 	if r.Score != 0 {
 		t.Errorf("clean envoy score = %d, want 0", r.Score)
 	}
@@ -37,7 +37,7 @@ func TestScoreEnvoy_CriticalCVEs(t *testing.T) {
 			"security_scan.unique_high":     "2",
 		},
 	}
-	r := ScoreEnvoy(es, 30*time.Second)
+	r := ScoreEnvoy(es, 30*time.Second, 0)
 	// 3 critical × 10 = 30, 2 high × 5 = 10 → 40
 	if r.Score != 40 {
 		t.Errorf("CVE envoy score = %d, want 40", r.Score)
@@ -54,7 +54,7 @@ func TestScoreEnvoy_Offline(t *testing.T) {
 		LastSeen: time.Now().Add(-5 * time.Minute),
 		Traits:   map[string]string{},
 	}
-	r := ScoreEnvoy(es, 30*time.Second) // 2×30s = 60s threshold
+	r := ScoreEnvoy(es, 30*time.Second, 0) // 2×30s = 60s threshold
 	if r.Score != 20 {
 		t.Errorf("stale envoy score = %d, want 20", r.Score)
 	}
@@ -74,7 +74,7 @@ func TestScoreEnvoy_Capped(t *testing.T) {
 			"security_scan.aide.changed":        "5",
 		},
 	}
-	r := ScoreEnvoy(es, 30*time.Second)
+	r := ScoreEnvoy(es, 30*time.Second, 0)
 	if r.Score != 100 {
 		t.Errorf("bad envoy score = %d, want 100 (capped)", r.Score)
 	}
@@ -91,7 +91,7 @@ func TestScoreEnvoy_Revoked(t *testing.T) {
 			"security_scan.unique_critical": "10",
 		},
 	}
-	r := ScoreEnvoy(es, 30*time.Second)
+	r := ScoreEnvoy(es, 30*time.Second, 0)
 	if r.Score != 0 {
 		t.Errorf("revoked envoy score = %d, want 0", r.Score)
 	}
@@ -106,7 +106,7 @@ func TestScoreEnvoy_Hardening(t *testing.T) {
 			"security_scan.lynis.score": "60",
 		},
 	}
-	r := ScoreEnvoy(es, 30*time.Second)
+	r := ScoreEnvoy(es, 30*time.Second, 0)
 	// 100 - 60 = 40 points
 	if r.Score != 40 {
 		t.Errorf("hardening envoy score = %d, want 40", r.Score)
@@ -122,7 +122,7 @@ func TestScoreEnvoy_Diverged(t *testing.T) {
 		Drift:             convergence.DriftDiverged,
 		Traits:            map[string]string{},
 	}
-	r := ScoreEnvoy(es, 30*time.Second)
+	r := ScoreEnvoy(es, 30*time.Second, 0)
 	if r.Score != 15 {
 		t.Errorf("diverged envoy score = %d, want 15", r.Score)
 	}
@@ -141,7 +141,7 @@ func TestScoreEnvoy_OpenPorts(t *testing.T) {
 			"ports.listening.4": "3306",
 		},
 	}
-	r := ScoreEnvoy(es, 30*time.Second)
+	r := ScoreEnvoy(es, 30*time.Second, 0)
 	if r.Score != 5 {
 		t.Errorf("ports envoy score = %d, want 5", r.Score)
 	}
@@ -166,7 +166,7 @@ func TestScoreEnvoy_ExpiringCerts(t *testing.T) {
 			"cert_lifecycle.certificates.5.days_remaining": "unknown",
 		},
 	}
-	r := ScoreEnvoy(es, 30*time.Second)
+	r := ScoreEnvoy(es, 30*time.Second, 0)
 	// 20 + 5 + 1 = 26
 	if r.Score != 26 {
 		t.Errorf("expiring-cert envoy score = %d, want 26", r.Score)
@@ -201,7 +201,7 @@ func TestScoreEnvoy_NoExpiringCerts(t *testing.T) {
 			"cert_lifecycle.certificates.1.days_remaining": "365",
 		},
 	}
-	r := ScoreEnvoy(es, 30*time.Second)
+	r := ScoreEnvoy(es, 30*time.Second, 0)
 	for _, f := range r.Factors {
 		if f.Name == "Expiring Certificates" {
 			t.Errorf("did not expect Expiring Certificates factor, got %+v", f)
@@ -228,7 +228,7 @@ func TestScoreEnvoy_RunningCVEs(t *testing.T) {
 			"cve_running_correlation.summary.low":      "4", // low is ignored
 		},
 	}
-	r := ScoreEnvoy(es, 30*time.Second)
+	r := ScoreEnvoy(es, 30*time.Second, 0)
 	if r.Score != 42 {
 		t.Errorf("running-cves envoy score = %d, want 42", r.Score)
 	}
@@ -263,7 +263,7 @@ func TestScoreEnvoy_NoRunningCVEs(t *testing.T) {
 			"security_scan.unique_critical": "1",
 		},
 	}
-	r := ScoreEnvoy(es, 30*time.Second)
+	r := ScoreEnvoy(es, 30*time.Second, 0)
 	for _, f := range r.Factors {
 		if f.Name == "Running CVEs" {
 			t.Errorf("did not expect Running CVEs factor without correlation trait, got %+v", f)
@@ -301,7 +301,7 @@ func TestScoreFleet(t *testing.T) {
 		}},
 		{ID: "c", Hostname: "revoked.example.com", Revoked: true, Traits: map[string]string{}},
 	}
-	fr := ScoreFleet(envoys, 30*time.Second, 10)
+	fr := ScoreFleet(envoys, 30*time.Second, 0, 10)
 
 	if fr.TotalEnvoys != 3 {
 		t.Errorf("total = %d, want 3", fr.TotalEnvoys)

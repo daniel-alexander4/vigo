@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	vigoai "git.alexander4.io/vigo/server/ai"
@@ -25,6 +26,7 @@ import (
 	"git.alexander4.io/vigo/server/tungol"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/license"
+	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/peer"
 	"git.alexander4.io/vigo/server/publish"
 	"git.alexander4.io/vigo/ui"
@@ -35,7 +37,11 @@ import (
 // NewGateway creates an HTTP mux that proxies REST requests to the gRPC server
 // at the given address using mTLS credentials. It registers the VigoAdmin
 // service handlers on /api/ paths and mounts the web UI on /.
-func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, hub *tungol.Hub, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, error) {
+//
+// reg is the per-instance prometheus registry whose collectors the /metrics
+// endpoint exposes; m is the same registry's collector set, threaded into
+// subhandlers (bootstrap, etc.) that emit metrics.
+func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, hub *tungol.Hub, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, publishState *publish.State, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, error) {
 	// Build TLS credentials for the gateway's connection to gRPC.
 	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
 	if err != nil {
@@ -51,7 +57,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 
 	// Mount UI routes.
 	// When FleetIndex is available, use it as the data source for O(1) fleet queries.
@@ -59,7 +65,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	if fleetIndex != nil {
 		customDS = fleet.NewDataSource(fleetIndex, queries, runStore, configStore)
 	}
-	uiHandler, err := ui.NewHandler(queries, configStore, baseInterval, serverAddr, caFile, agentDir, version, assistant, hub, customDS, docsDir, authMethod, enforcer)
+	uiHandler, err := ui.NewHandler(queries, configStore, baseInterval, offlineThreshold, serverAddr, caFile, agentDir, version, assistant, hub, customDS, docsDir, authMethod, enforcer)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating UI handler: %w", err)
 	}
@@ -83,7 +89,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	// Slice 4); the hub-fanout SyncConfig path retired with that
 	// slice. ConfigHandler no longer needs a hub reference.
 	_ = hub
-	configHandler := NewConfigHandler(queries, configStore, fleetIndex)
+	configHandler := NewConfigHandler(queries, configStore, fleetIndex, publishState, publish.DefaultLiveDir, publish.DefaultHistoryDir)
 	configHandler.SetAuditWriter(aw)
 	if assistant != nil {
 		configHandler.SetAI(assistant, config.AISection{Enabled: true})
@@ -91,7 +97,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	if publishCfg.ConvergenceThreshold > 0 && fleetIndex != nil {
 		monitor := publish.NewConvergenceMonitor(fleetIndex, func() error {
 			return configStore.Reload()
-		})
+		}, publish.DefaultLiveDir, publish.DefaultHistoryDir)
 		configHandler.SetConvergenceMonitor(monitor, publishCfg)
 	}
 	configHandler.RegisterRoutes(mux)
@@ -110,7 +116,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	previewHandler.RegisterRoutes(mux)
 
 	// Mount risk scoring endpoints.
-	riskHandler := NewRiskHandler(fleetIndex, queries, baseInterval, version)
+	riskHandler := NewRiskHandler(fleetIndex, queries, baseInterval, offlineThreshold, version)
 	riskHandler.SetBranding(brandingCfg)
 	riskHandler.RegisterRoutes(mux)
 
@@ -146,7 +152,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	uiHandler.SetMesh(meshHandler)
 
 	// Mount bootstrap and agent distribution routes.
-	bh := bootstrap.NewHandler(serverAddr, caFile, agentDir, version)
+	bh := bootstrap.NewHandler(serverAddr, caFile, agentDir, version, m)
 	bh.SetFleetIndex(fleetIndex)
 	for _, opt := range gwOpts {
 		opt(bh)
@@ -164,8 +170,9 @@ type GatewayOption func(*bootstrap.Handler)
 
 // NewSteorraGateway creates a lightweight HTTP mux for a steorra (role: spoke).
 // It exposes the admin gRPC-gateway proxy (for vigocli), metrics, and traits
-// but omits the web UI and bootstrap routes.
-func NewSteorraGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, steorraID string) (*http.ServeMux, error) {
+// but omits the web UI and bootstrap routes. reg is the per-instance
+// prometheus registry served on /metrics.
+func NewSteorraGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, steorraID string, reg *prometheus.Registry) (*http.ServeMux, error) {
 	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
 	if err != nil {
 		return nil, fmt.Errorf("building gateway TLS: %w", err)
@@ -179,7 +186,7 @@ func NewSteorraGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile 
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
+	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 
 	// Traits and inventory endpoints for admin queries.
 	traitsHandler := NewTraitsHandler(queries)

@@ -7,7 +7,12 @@ You'll finish this page knowing how to ship a config change to the fleet safely:
 
 **When you'd skip this:** never, if you're authoring config. There's no other path; the server only reads `.live/`.
 
-Operators edit `.vgo` files in `stacks/stockpile/`. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then atomically syncs to `stacks/.live/stockpile/`, the locked-read-only directory the server reads from.
+Operators edit `.vgo` files in `stacks/stockpile/`. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then propagates to `stacks/.live/stockpile/` — the locked-read-only directory the server reads from. Propagation has two shapes:
+
+- **Standalone mode** — the CLI atomically syncs the validated tree into the local `.live/` and calls the REST reload trigger. One vigosrv, one filesystem; the publish is done when the swap completes.
+- **Tungol mode** — the CLI commits the validated tree to the ops-puddle's stockpile gitback project and pushes it to the local bare repo. The `stockpilewatch` background goroutine on every vigosrv (including the originating one) sees the new ref, archives `HEAD` into its local `.live/`, and reloads. The CLI then polls `GET /api/v1/config/version` until it increments before reporting success.
+
+Both modes share the same operator-visible verb (`vigocli config publish`) and the same validation pipeline. The mode is auto-detected via `GET /api/v1/tungol/status`.
 
 ![Per-envoy config-resolution view — which matchfile + role + module + environment override resolved which value](../img/screenshots/vigo.envoy-config.png)
 
@@ -64,22 +69,32 @@ vigocli config publish --skip-url-check
 
 ## How It Works
 
+The first six steps (validate + lint) are the same in both modes. The propagate step (7) splits on mode.
+
 ```mermaid
 flowchart LR
     A[stockpile/<br/>operator edits]
-    B[vigocli config publish<br/>validate]
+    B[vigocli config publish<br/>validate + lint]
     C{validates?}
+    M{tungol mode?}
     D[.live/<br/>atomic swap]
     E[server reload<br/>via REST trigger]
+    G[gitback commit + push<br/>to bare repo]
+    W[stockpilewatch on every vigosrv<br/>archive HEAD → .live/]
+    R[server reload]
     F[fan-out to<br/>envoys on<br/>next check-in]
-    G[convergence<br/>rollback monitor]
+    K[convergence<br/>rollback monitor]
     H{convergence<br/>below threshold?}
     I[auto-rollback<br/>to previous .live/]
     J[publish complete]
 
     A --> B --> C
     C -- "no: AI assistant<br/>suggests fixes" --> A
-    C -- "yes" --> D --> E --> F --> G --> H
+    C -- "yes" --> M
+    M -- "no (standalone)" --> D --> E
+    M -- "yes" --> G --> W --> R
+    E --> F --> K --> H
+    R --> F
     H -- "no" --> J
     H -- "yes" --> I --> E
 ```
@@ -89,9 +104,11 @@ flowchart LR
 3. Runs the **module linter** on changed/new module files (see below)
 4. Loads all `.vgo` files from a staging copy of stockpile using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because modules, roles, and envoy entries cross-reference each other.
 5. HTTP/HTTPS URLs in **changed modules only** are probed for aliveness (HEAD with GET fallback). Unchanged modules are skipped.
-6. If validation passes and `--dry-run` is not set, atomically syncs the staging tree into `.live/stockpile/`. Sibling subtrees of stockpile (`examples/`, `anti-examples/`) are never read by the publisher.
-7. The CLI calls `POST /api/v1/config/reload` to trigger a server-side config reload
-8. If nothing changed, the command reports "Nothing to publish" and does not touch `.live/`
+6. The CLI calls `GET /api/v1/tungol/status` to detect mode. Standalone vigosrvs go through step 7a; tungol-mode vigosrvs go through step 7b.
+7. **(7a, standalone)** Atomically syncs the staging tree into `.live/stockpile/` (see [Atomic sync — standalone mode](#atomic-sync--standalone-mode) below), then calls `POST /api/v1/config/reload` to trigger a server-side reload.
+   **(7b, tungol)** Commits the staging tree to the local clone of the ops-puddle's stockpile gitback project and pushes to the bare repo at `/var/lib/vigo/swarm/gitback/projects/<project_id>.git` via `file://`. The local `stockpilewatch` goroutine sees the new ref, archives `HEAD` into `.live/`, and reloads. The CLI polls `GET /api/v1/config/version` until it increments (30s timeout) before declaring success. Other vigosrvs in the tungol receive the bytes via the gitback substrate's peer-pull on the next reactor cycle and run the same watcher path locally.
+8. Sibling subtrees of stockpile (`examples/`, `anti-examples/`) are never read by the publisher.
+9. If nothing changed, the command reports "Nothing to publish" and does not touch `.live/`.
 
 ## Module Linter
 
@@ -163,9 +180,9 @@ resources:
 - `#` comments (without the tilde) are hand-written and **never touched** by the linter. Use these for your own notes.
 - Comments are derived from resource name, type, and attributes — they never restate what the YAML already says.
 
-## Atomic Sync
+## Atomic sync — standalone mode
 
-Each subdirectory is synced independently using a rename strategy:
+In standalone mode the CLI writes `.live/` directly. Each subdirectory is synced independently using a rename strategy:
 
 1. Copy stage subdir to a temp directory inside `.live/` (`.publish-tmp-*`)
 2. Rename existing `.live/` subdir to a backup (`.publish-backup-*`)
@@ -173,6 +190,17 @@ Each subdirectory is synced independently using a rename strategy:
 4. Remove backup on success; rollback on failure
 
 Subdirectories not present in stage are removed from `.live/` (sync is replacement, not additive).
+
+## Bare→.live archive — tungol mode
+
+In tungol mode the CLI never touches `.live/` directly — it pushes to the gitback bare repo and the `stockpilewatch` goroutine on every vigosrv (including this one) propagates the bytes:
+
+1. fsnotify on `<bare-repo>/refs/heads/` fires when the push lands; the watcher debounces 250ms so a multi-write push burst settles into one reload.
+2. The watcher pipes `git --git-dir=<bare-repo> archive --format=tar HEAD | tar -x -C <tmp>` to materialize HEAD's tree without a working git checkout under `.live/`.
+3. `pruneMissing` walks `.live/` and removes anything not present in `<tmp>`; `copyTree` walks `<tmp>` and writes into `.live/`. Together they give rsync-with-delete semantics, but without depending on git or rsync at runtime.
+4. The watcher calls `configStore.Reload()` — the same reload entry point the standalone path triggers via REST. From the server's perspective the two modes are indistinguishable past this step.
+
+Failed validation in tungol mode leaves the previous `.live/` content in place and the previous config running — same shape as a standalone publish that fails validation, just enforced one hop further down the pipeline.
 
 ## What Gets Validated
 
@@ -282,8 +310,10 @@ Published: 12 modules, 3 roles, 8 envoy entries (15 files synced)
 - **You want to trace why a particular envoy got a particular value** → `vigocli config trace <envoy> <module>` walks the resolution chain.
 - **A publish landed but rolled itself back** → the convergence-rollback monitor caught it; inspect the audit log via `vigocli config history`.
 - **You need to verify what's live** → `vigocli config tree` shows the entire resolved tree as the server sees it.
+- **You published in tungol mode and one steorra's `config_version` is lagging** → check that steorra's `journalctl -u vigosrv` for `stockpilewatch` lines. The watcher uses a 250ms quiesce-debounce per ref-change, so brief skew is normal; persistent lag points at a stale ops-puddle gitback fetch (the peer-pull reactor hasn't run) or an unresponsive puddle helper daemon (`/var/run/vigo/puddle.sock`).
+- **You want the architectural narrative for tungol-mode distribution** → see `docs/internal.docs/design-config-distribution.md`.
 
 ---
-*Verified on Vigo 0.51.6 · 2026-05-13.*
+*Verified on Vigo 0.65.10 · 2026-05-18.*
 
 *Confidential -- Alexander4, LLC. Not for redistribution. See [license](../legal/license.md).*

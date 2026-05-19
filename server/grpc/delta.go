@@ -11,7 +11,6 @@ import (
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/integrations"
-	"git.alexander4.io/vigo/server/metrics"
 )
 
 // handleDelta processes a DeltaEvent from the agent stream and returns an ack.
@@ -56,12 +55,12 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 
 	// Record metrics.
 	for _, result := range run.Results {
-		metrics.ModuleActions.WithLabelValues(result.GetResourceType(), result.GetActionTaken()).Inc()
+		s.metrics.ModuleActions.WithLabelValues(result.GetResourceType(), result.GetActionTaken()).Inc()
 		if result.GetChanged() {
-			metrics.DriftDetected.WithLabelValues(hostname, result.GetModuleName()).Inc()
+			s.metrics.DriftDetected.WithLabelValues(hostname, result.GetModuleName()).Inc()
 		}
 	}
-	metrics.RunDuration.WithLabelValues(hostname).Observe(0) // delta doesn't carry duration
+	s.metrics.RunDuration.WithLabelValues(hostname).Observe(0) // delta doesn't carry duration
 
 	// Build DB result params and submit to async batcher.
 	if s.runBatcher != nil {

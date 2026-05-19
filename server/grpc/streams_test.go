@@ -10,6 +10,7 @@ import (
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/metrics"
 )
 
 func testMsg(pushID string) *pb.ServerStreamMessage {
@@ -24,7 +25,7 @@ func TestStreamPromotionQueueAndDeliver(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, 5*time.Second)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second)
 
 	msg := testMsg("push-1")
 	sm.queueForPromotion("t1", msg, nil)
@@ -67,7 +68,7 @@ func TestStreamPromotionTimeout(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, 10*time.Millisecond)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 10*time.Millisecond)
 
 	timedOut := make(chan struct{}, 1)
 	sm.queueForPromotion("t1", testMsg("push-1"), func() {
@@ -99,7 +100,7 @@ func TestStreamReleaseOnWorkComplete(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, 5*time.Second)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second)
 
 	as, cleanup := sm.register("t1", "web1.example.com")
 	defer cleanup()
@@ -123,7 +124,7 @@ func TestStreamReleaseNotSentForUnpromoted(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, 5*time.Second)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second)
 
 	as, cleanup := sm.register("t1", "web1.example.com")
 	defer cleanup()
@@ -143,7 +144,7 @@ func TestStreamPromotionToAlreadyConnected(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, 5*time.Second)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second)
 
 	// Register stream first.
 	as, cleanup := sm.register("t1", "web1.example.com")
@@ -173,7 +174,7 @@ func TestStreamPromotionMultipleMessages(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, 5*time.Second)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second)
 
 	msg1 := testMsg("push-1")
 	msg2 := testMsg("push-2")
@@ -209,7 +210,7 @@ func TestWorkCompletedMultipleDispatch(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, 5*time.Second)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 5*time.Second)
 
 	as, cleanup := sm.register("t1", "web1.example.com")
 	defer cleanup()
@@ -244,7 +245,7 @@ func TestStreamPromotionTimeoutClearsFlag(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{ID: "t1", Hostname: "web1.example.com"}, nil)
 
-	sm := newStreamManager(8, fi, 10*time.Millisecond)
+	sm := newStreamManager(8, fi, metrics.NewTestMetrics(), 10*time.Millisecond)
 
 	timedOut := make(chan struct{}, 1)
 	sm.queueForPromotion("t1", testMsg("push-1"), func() {

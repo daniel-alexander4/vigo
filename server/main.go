@@ -71,6 +71,8 @@ import (
 	"git.alexander4.io/vigo/server/traits"
 	"git.alexander4.io/vigo/server/watcher"
 	"git.alexander4.io/vigo/server/workflows"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // version is set at build time via -ldflags="-X main.version=1.2.3".
@@ -104,6 +106,13 @@ func run() error {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	// Per-instance prometheus registry + collector set. Two *Server
+	// instances in one Go test process never share collector state —
+	// each builds its own *Metrics against a per-instance *Registry.
+	// In production there's exactly one of each per vigosrv process.
+	promReg := prometheus.NewRegistry()
+	promMetrics := metrics.NewMetrics(promReg)
 
 	// Determine config file path (the one env var that must remain — it
 	// bootstraps everything else).
@@ -158,8 +167,8 @@ func run() error {
 	migrationsDir := envOrDefault("VIGO_MIGRATIONS_DIR", stringOrDefault(cfg.Paths.Migrations, "migrations"))
 	traitsDir := envOrDefault("VIGO_CUSTOM_TRAITS_DIR", stringOrDefault(cfg.Paths.CustomTraits, "custom-traits"))
 	docsDir := envOrDefault("VIGO_DOCS_DIR", stringOrDefault(cfg.Paths.Docs, "/seed/docs"))
-	taskDir := envOrDefault("VIGO_TASK_DIR", stringOrDefault(cfg.Paths.Tasks, filepath.Join(publish.LiveDir, "tasks")))
-	workflowsDir := envOrDefault("VIGO_WORKFLOWS_DIR", stringOrDefault(cfg.Paths.Workflows, filepath.Join(publish.LiveDir, "workflows")))
+	taskDir := envOrDefault("VIGO_TASK_DIR", stringOrDefault(cfg.Paths.Tasks, filepath.Join(publish.DefaultLiveDir, "tasks")))
+	workflowsDir := envOrDefault("VIGO_WORKFLOWS_DIR", stringOrDefault(cfg.Paths.Workflows, filepath.Join(publish.DefaultLiveDir, "workflows")))
 	agentDir := envOrDefault("VIGO_AGENT_DIR", stringOrDefault(cfg.Paths.AgentDist, "dist/agent"))
 	licenseDir := stringOrDefault(cfg.Paths.LicenseDir, licfmt.DefaultLicenseDir)
 	licenseGraceDir := licenseDir
@@ -352,9 +361,9 @@ func run() error {
 	if licenseMode == "aggregate" && role == config.RoleSpoke {
 		enforcer, err = license.NewEnforcer(licenseDir, licenseGraceDir, cfg.Server.TLS.CAFile,
 			func(_ context.Context) (int, error) { return 0, nil }, // always zero — hub enforces
-			func() { cancel() })
+			func() { cancel() }, promMetrics)
 	} else {
-		enforcer, err = license.NewEnforcer(licenseDir, licenseGraceDir, cfg.Server.TLS.CAFile, envoyCounter, func() { cancel() })
+		enforcer, err = license.NewEnforcer(licenseDir, licenseGraceDir, cfg.Server.TLS.CAFile, envoyCounter, func() { cancel() }, promMetrics)
 	}
 	if err != nil {
 		return fmt.Errorf("license: %w", err)
@@ -409,20 +418,25 @@ func run() error {
 	// Initialize subsystems.
 	reg := registry.NewRegistry(queries)
 
+	// publishState holds the per-process mutable freeze deadline.
+	// Constructed once and threaded into ConfigHandler via NewGateway.
+	publishState := &publish.State{}
+
 	// Warn if .live directory has overly permissive permissions.
-	if warning := publish.CheckLivePermissions(publish.LiveDir); warning != "" {
+	if warning := publish.CheckLivePermissions(publish.DefaultLiveDir); warning != "" {
 		slog.Warn(warning)
 	}
 
-	configStore, err := config.NewConfigStore(publish.LiveDir, provider, false)
+	configStore, err := config.NewConfigStore(publish.DefaultLiveDir, provider, false)
 	if err != nil {
 		slog.Error("config loaded with errors — starting with empty config", "error", err)
-		configStore = config.NewEmptyConfigStore(publish.LiveDir, provider)
+		configStore = config.NewEmptyConfigStore(publish.DefaultLiveDir, provider)
 	}
 	configStore.SetBackend(secretsCfg.Backend)
 	configStore.SetServerYamlPath(configFile)
 	configStore.SetEnabledStandards(cfg.Compliance.Standards)
 	configStore.SetApprovedSources(cfg.Compliance.ApprovedSources)
+	configStore.SetMetrics(promMetrics)
 
 	// Parse base interval for compliance stale threshold.
 	baseInterval := 5 * time.Minute // default
@@ -432,15 +446,19 @@ func run() error {
 		}
 	}
 
-	// Optional staleness threshold override. When empty, the per-envoy
+	// Optional staleness threshold override. When zero, the per-envoy
 	// threshold defaults to 2.5 × max(configured_interval, observed_cycle)
 	// where observed_cycle is the agent's smoothed inter-CheckIn cadence.
 	// When set, this literal duration takes effect across every
 	// reachability surface (Offline pill, risk scorer, doctor API,
-	// stale-envoy notifier, fleet rehydrator). Single SoT, single override.
+	// stale-envoy notifier, fleet rehydrator). Threaded as an explicit
+	// parameter through every consumer rather than via a package global,
+	// so multiple servers in one process (tungol harness) keep
+	// independent thresholds.
+	var offlineThreshold time.Duration
 	if cfg.CheckIn.OfflineThreshold != "" {
 		if parsed, err := time.ParseDuration(cfg.CheckIn.OfflineThreshold); err == nil && parsed > 0 {
-			freshness.SetOverride(parsed)
+			offlineThreshold = parsed
 		} else if err != nil {
 			slog.Warn("invalid checkin.offline_threshold; falling back to per-envoy 2.5× cadence",
 				"value", cfg.CheckIn.OfflineThreshold, "error", err)
@@ -450,7 +468,7 @@ func run() error {
 	// TTL for resolved fleet: cross-node config lookups (default 30s).
 	if cfg.CheckIn.FleetLookupTTL != "" {
 		if parsed, err := time.ParseDuration(cfg.CheckIn.FleetLookupTTL); err == nil && parsed > 0 {
-			config.SetFleetLookupTTL(parsed)
+			configStore.SetFleetLookupTTL(parsed)
 		} else if err != nil {
 			slog.Warn("invalid checkin.fleet_lookup_ttl; using default 30s",
 				"value", cfg.CheckIn.FleetLookupTTL, "error", err)
@@ -471,7 +489,7 @@ func run() error {
 	slog.Info("freshness wiring",
 		"checkin.interval", baseInterval,
 		"checkin.offline_threshold_override", cfg.CheckIn.OfflineThreshold,
-		"freshness.bootstrap_threshold", freshness.StaleThresholdFromCycle(baseInterval, 0),
+		"freshness.bootstrap_threshold", freshness.StaleThresholdFromCycle(baseInterval, 0, offlineThreshold),
 		"freshness.max_reported_cycle", freshness.MaxReportedCycle,
 		"tuning.last_seen_flush", lastSeenFlush,
 	)
@@ -514,7 +532,7 @@ func run() error {
 
 	// Connect to steorras (hub mode only).
 	if role == config.RoleHub {
-		hub, err = tungol.NewHub(ctx, cfg.Tungol.Steorras, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
+		hub, err = tungol.NewHub(ctx, cfg.Tungol.Steorras, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, promMetrics)
 		if err != nil {
 			return fmt.Errorf("connecting to steorras: %w", err)
 		}
@@ -545,7 +563,7 @@ func run() error {
 	// Create and rehydrate FleetIndex. Assigns to the outer variable
 	// captured by envoyCounter above.
 	fleetIndex = fleet.NewFleetIndex()
-	if err := fleet.Rehydrate(ctx, fleetIndex, queries, runStore, baseInterval, configStore.ApprovedSources()); err != nil {
+	if err := fleet.Rehydrate(ctx, fleetIndex, queries, runStore, baseInterval, offlineThreshold, configStore.ApprovedSources()); err != nil {
 		return fmt.Errorf("rehydrating fleet index: %w", err)
 	}
 
@@ -604,6 +622,7 @@ func run() error {
 		Queries:              queries,
 		RunStore:             runStore,
 		Interval:             baseInterval,
+		OfflineThreshold:     offlineThreshold,
 		JitterPercent:        int32(cfg.CheckIn.JitterPercent),
 		Integrations:         integ,
 		TraitsDir:            traitsDir,
@@ -628,6 +647,7 @@ func run() error {
 		AuditWriter:         auditWriter,
 		ServerVersions:      agentVersions,
 		GlobalObserveOnly:   cfg.CheckIn.ObserveOnly,
+		Metrics:             promMetrics,
 		AgentBinAvailable: func() bool {
 			for _, goos := range []string{"linux", "darwin", "freebsd", "openbsd", "netbsd", "illumos", "windows"} {
 				for _, goarch := range []string{"amd64", "arm64"} {
@@ -689,7 +709,7 @@ func run() error {
 
 	// Start async flushers with staggered offsets to avoid SQLite write lock
 	// contention. For default 10s interval → offsets of 0s, ~3.3s, ~6.6s.
-	stateFlusher := fleet.NewStateFlusher(fleetIndex, queries)
+	stateFlusher := fleet.NewStateFlusher(fleetIndex, queries, promMetrics)
 	go stateFlusher.Start(ctx, lastSeenFlush, 0)
 	go runBatcher.Start(ctx, lastSeenFlush, lastSeenFlush/3)
 	go traitsBatch.Start(ctx, lastSeenFlush, 2*lastSeenFlush/3)
@@ -737,7 +757,7 @@ func run() error {
 					pollInterval = parsed
 				}
 			}
-			w := watcher.NewWatcher(vp, watcher.NewDBAdapter(queries), configStore, integ, pollInterval, watchPaths)
+			w := watcher.NewWatcher(vp, watcher.NewDBAdapter(queries), configStore, integ, promMetrics, pollInterval, watchPaths)
 			w.SetConfigReloader(configStore)
 			w.SetNotifyFunc(func(event string, details map[string]any) {
 				integ.Dispatch(integrations.Event{
@@ -771,13 +791,13 @@ func run() error {
 
 	// Set build info metric and start uptime tracker.
 	// version is set at package level via -ldflags at build time.
-	metrics.BuildInfo.WithLabelValues(version).Set(1)
+	promMetrics.BuildInfo.WithLabelValues(version).Set(1)
 	serverStartTime := time.Now()
 	go func() {
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		for {
-			metrics.UptimeSeconds.Set(time.Since(serverStartTime).Seconds())
+			promMetrics.UptimeSeconds.Set(time.Since(serverStartTime).Seconds())
 			select {
 			case <-ctx.Done():
 				return
@@ -791,11 +811,11 @@ func run() error {
 	if fleetIndex != nil {
 		fleetSource = &metricsFleetAdapter{fleetIndex: fleetIndex}
 	}
-	metricsCollector := metrics.NewCollector(queries, sqlDB, fleetSource, baseInterval)
+	metricsCollector := metrics.NewCollector(queries, sqlDB, fleetSource, promMetrics, baseInterval, offlineThreshold)
 	go metricsCollector.Run(ctx, metricsInterval)
 
 	// Start stale envoy checker — fires envoy.stale events on transition.
-	go runStaleChecker(ctx, queries, fleetIndex, integ, baseInterval)
+	go runStaleChecker(ctx, queries, fleetIndex, integ, baseInterval, offlineThreshold)
 
 	// Start compliance sparkline snapshotting (daily snapshot for the in-memory ring buffer + DB).
 	go func() {
@@ -817,7 +837,7 @@ func run() error {
 
 	// Start daily risk posture snapshotting.
 	go func() {
-		persistRiskSnapshot(ctx, queries, fleetIndex, baseInterval)
+		persistRiskSnapshot(ctx, queries, fleetIndex, baseInterval, offlineThreshold)
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 		for {
@@ -825,7 +845,7 @@ func run() error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				persistRiskSnapshot(ctx, queries, fleetIndex, baseInterval)
+				persistRiskSnapshot(ctx, queries, fleetIndex, baseInterval, offlineThreshold)
 			}
 		}
 	}()
@@ -851,7 +871,7 @@ func run() error {
 
 	// Start framework-aware drift alerter (background, not hot path).
 	// Scans recent runs every 5 minutes, enriches drift events with framework/control context.
-	go runFrameworkDriftAlerter(ctx, queries, configStore, integ, fleetIndex, baseInterval)
+	go runFrameworkDriftAlerter(ctx, queries, configStore, integ, fleetIndex, baseInterval, offlineThreshold)
 
 	// Evidence email scheduler removed — compliance evidence is delivered via
 	// GRC integrations (Vanta, Drata, etc.), not email.
@@ -874,7 +894,7 @@ func run() error {
 	// Start compliance threshold checker (threshold from checkin config, default 0 = disabled).
 	complianceThreshold := cfg.CheckIn.ComplianceThreshold
 	if complianceThreshold > 0 {
-		go runComplianceChecker(ctx, queries, runStore, fleetIndex, integ, baseInterval, complianceThreshold)
+		go runComplianceChecker(ctx, queries, runStore, fleetIndex, integ, baseInterval, offlineThreshold, complianceThreshold)
 	go runSecurityPostureSnapshot(ctx, queries, fleetIndex)
 	}
 
@@ -905,9 +925,10 @@ func run() error {
 		KeyFile:        cfg.Server.TLS.KeyFile,
 		Enforcer:       enforcer,
 		ConfigStore:    configStore,
-		Queries:        queries,
-		Interval:       baseInterval,
-		Hub:            hub,
+		Queries:          queries,
+		Interval:         baseInterval,
+		OfflineThreshold: offlineThreshold,
+		Hub:              hub,
 		Integrations:   integ.Enabled(),
 		Role:           role,
 		SecretsBackend: secretsCfg.Backend,
@@ -939,7 +960,7 @@ func run() error {
 			watcher := stockpilewatch.New(
 				"/var/lib/vigo/swarm/gitback/projects",
 				pid,
-				publish.LiveDir,
+				publish.DefaultLiveDir,
 				configStore,
 			)
 			go func() {
@@ -1011,7 +1032,7 @@ func run() error {
 	}
 
 	// Load workflow definitions and create engine.
-	workflowEngine := workflows.NewEngine(queries, agentSvc)
+	workflowEngine := workflows.NewEngine(queries, agentSvc, promMetrics)
 	if err := workflowEngine.Load(workflowsDir); err != nil {
 		return fmt.Errorf("loading workflows: %w", err)
 	}
@@ -1066,7 +1087,7 @@ func run() error {
 			fleetIndex,
 		)
 		agentSvc.SetTunnelManager(tm)
-		scrierHandler = vigoscrier.NewHandler(tm, fleetIndex, queries, version, baseInterval)
+		scrierHandler = vigoscrier.NewHandler(tm, fleetIndex, queries, version, baseInterval, offlineThreshold)
 		scrierHandler.SetAuditWriter(auditWriter)
 		slog.Info("scrier remote access enabled",
 			"guacd", cfg.Scrier.ScrierGuacdAddr(),
@@ -1087,7 +1108,7 @@ func run() error {
 		if aiErr != nil {
 			slog.Warn("AI assistant disabled: provider init failed", "error", aiErr)
 		} else {
-			assistant = vigoai.NewAssistant(aiProvider, queries, configStore, runStore, baseInterval, cfg.AI, docsDir)
+			assistant = vigoai.NewAssistant(aiProvider, queries, configStore, runStore, baseInterval, offlineThreshold, cfg.AI, docsDir, vigoai.NewMetrics(promReg))
 			if nvdEnricher != nil {
 				assistant.SetCVELookup(&cveLookupAdapter{enricher: nvdEnricher})
 			}
@@ -1103,7 +1124,7 @@ func run() error {
 	}
 
 	if role == config.RoleSpoke {
-		mux, gwErr := api.NewSteorraGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Tungol.SteorraID)
+		mux, gwErr := api.NewSteorraGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, offlineThreshold, cfg.Tungol.SteorraID, promReg)
 		if gwErr != nil {
 			return fmt.Errorf("creating steorra gateway: %w", gwErr)
 		}
@@ -1198,7 +1219,7 @@ func run() error {
 			}
 		}
 
-		gwMux, uiHandler, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, docsDir, assistant, hub, runStore, fleetIndex, authMethod, enforcer, cfg.Publish, cfg.Branding, peerSvc, auditWriter, complianceDocsStore, gwOpts...)
+		gwMux, uiHandler, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, offlineThreshold, cfg.Server.APIListen, agentDir, version, docsDir, assistant, hub, runStore, fleetIndex, authMethod, enforcer, cfg.Publish, cfg.Branding, peerSvc, auditWriter, complianceDocsStore, publishState, promReg, promMetrics, gwOpts...)
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
@@ -1225,7 +1246,7 @@ func run() error {
 		})
 		uiHandler.SetIntegrationsConfig(cfg.Integrations, cfg.GRC)
 		uiHandler.SetTraitLookup(&traitLookupAdapter{fleetIndex: fleetIndex})
-		fleetCache := ui.NewFleetCache(queries, configStore, cfg.CheckIn.ObserveOnly, baseInterval)
+		fleetCache := ui.NewFleetCache(queries, configStore, cfg.CheckIn.ObserveOnly, baseInterval, offlineThreshold)
 		fleetCache.SetFleetSource(&uiFleetSourceAdapter{fleetIndex: fleetIndex})
 		uiHandler.SetFleetCache(fleetCache)
 		licenseHandler.RegisterRoutes(gwMux)
@@ -1610,7 +1631,7 @@ func persistConvergenceSnapshot(ctx context.Context, queries *db.Queries, fleetI
 
 // persistRiskSnapshot computes the fleet-wide risk score and writes a daily
 // snapshot to the risk_posture_history table.
-func persistRiskSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex, baseInterval time.Duration) {
+func persistRiskSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex, baseInterval, offlineThreshold time.Duration) {
 	allEnvoys := fleetIdx.AllEnvoys()
 	if len(allEnvoys) == 0 {
 		return
@@ -1627,7 +1648,7 @@ func persistRiskSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fle
 			ObservedCycle:     fleetIdx.EnvoyCycle(es.ID),
 		}
 	}
-	fr := risk.ScoreFleet(inputs, baseInterval, 0)
+	fr := risk.ScoreFleet(inputs, baseInterval, offlineThreshold, 0)
 	if err := queries.UpsertRiskPostureSnapshot(ctx, db.UpsertRiskPostureSnapshotParams{
 		AvgScore:     int64(fr.AvgScore),
 		MaxScore:     int64(fr.MaxScore),
@@ -1872,7 +1893,7 @@ func computeAndStoreMTTR(ctx context.Context, queries *db.Queries) {
 // enriched notifications that include the affected framework controls.
 // Runs off the hot path — the check-in handler sends basic drift.detected;
 // this job adds framework context asynchronously.
-func runFrameworkDriftAlerter(ctx context.Context, queries *db.Queries, configStore *config.ConfigStore, integ *integrations.Dispatcher, fleetIdx *fleet.FleetIndex, interval time.Duration) {
+func runFrameworkDriftAlerter(ctx context.Context, queries *db.Queries, configStore *config.ConfigStore, integ *integrations.Dispatcher, fleetIdx *fleet.FleetIndex, interval, offlineThreshold time.Duration) {
 	if integ == nil || configStore == nil {
 		return
 	}
@@ -1968,7 +1989,7 @@ func runFrameworkDriftAlerter(ctx context.Context, queries *db.Queries, configSt
 // interval) and is shared with the UI, doctor, and risk scorer. The
 // checker runs at the base interval frequency. It always updates the
 // FleetIndex offline flag; SMTP notifications are optional.
-func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex, integ *integrations.Dispatcher, baseInterval time.Duration) {
+func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex, integ *integrations.Dispatcher, baseInterval, offlineThreshold time.Duration) {
 	wasStale := make(map[string]bool) // envoy ID → was stale last tick
 	canNotify := integ != nil
 
@@ -1988,7 +2009,7 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 					if ts.Revoked || ts.LastSeen.IsZero() {
 						continue
 					}
-					stale := freshness.IsStaleFromCycle(ts.LastSeen, baseInterval, fleetIdx.EnvoyCycle(ts.ID))
+					stale := freshness.IsStaleFromCycle(ts.LastSeen, baseInterval, fleetIdx.EnvoyCycle(ts.ID), offlineThreshold)
 					fleetIdx.SetOffline(ts.ID, stale)
 					if !stale {
 						continue
@@ -2052,7 +2073,7 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 				}
 				// DB-only fallback path (fleetIdx unavailable): no observed cycle
 				// data, so the threshold is derived from configured interval alone.
-				if !freshness.IsStaleFromCycle(t.LastSeen.Time, baseInterval, 0) {
+				if !freshness.IsStaleFromCycle(t.LastSeen.Time, baseInterval, 0, offlineThreshold) {
 					continue
 				}
 
@@ -2080,7 +2101,7 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 // runComplianceChecker periodically computes the convergence percentage across
 // all active envoys and fires a convergence.threshold SMTP notification when
 // it drops below the configured threshold. Only fires once per transition.
-func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.RunStore, fleetIdx *fleet.FleetIndex, integ *integrations.Dispatcher, baseInterval time.Duration, threshold int) {
+func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.RunStore, fleetIdx *fleet.FleetIndex, integ *integrations.Dispatcher, baseInterval, offlineThreshold time.Duration, threshold int) {
 	if integ == nil || threshold <= 0 {
 		return
 	}

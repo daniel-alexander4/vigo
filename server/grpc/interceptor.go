@@ -35,8 +35,9 @@ const defaultSignatureWindow = 5 * time.Minute
 // can reuse it without another lookup.
 //
 // sigWindow configures the maximum age of a signed request before rejection
-// for replay prevention. If zero, defaults to 5 minutes.
-func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fleetIdx *fleet.FleetIndex) grpc.UnaryServerInterceptor {
+// for replay prevention. If zero, defaults to 5 minutes. m owns the gRPC
+// request/sig-verify counters this interceptor mutates.
+func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) grpc.UnaryServerInterceptor {
 	if sigWindow == 0 {
 		sigWindow = defaultSignatureWindow
 	}
@@ -54,19 +55,19 @@ func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fl
 		// Only verify agent RPCs that carry signatures.
 		switch r := req.(type) {
 		case *pb.CheckInRequest:
-			newCtx, err := verifyCheckIn(ctx, queries, r, sigWindow, fleetIdx)
+			newCtx, err := verifyCheckIn(ctx, queries, r, sigWindow, fleetIdx, m)
 			if err != nil {
 				return nil, err
 			}
 			ctx = newCtx
 		case *pb.ReportResultRequest:
-			newCtx, err := verifyReportResultCtx(ctx, queries, r, sigWindow, fleetIdx)
+			newCtx, err := verifyReportResultCtx(ctx, queries, r, sigWindow, fleetIdx, m)
 			if err != nil {
 				return nil, err
 			}
 			ctx = newCtx
 		case *pb.ReportTraitsRequest:
-			if err := verifyReportTraits(ctx, queries, r, sigWindow, fleetIdx); err != nil {
+			if err := verifyReportTraits(ctx, queries, r, sigWindow, fleetIdx, m); err != nil {
 				return nil, err
 			}
 		default:
@@ -76,21 +77,21 @@ func SignatureVerifyInterceptor(queries *db.Queries, sigWindow time.Duration, fl
 		start := time.Now()
 		resp, err := handler(ctx, req)
 		code := status.Code(err)
-		metrics.GRPCRequestsTotal.WithLabelValues(info.FullMethod, code.String()).Inc()
-		metrics.GRPCRequestDuration.WithLabelValues(info.FullMethod).Observe(time.Since(start).Seconds())
+		m.GRPCRequestsTotal.WithLabelValues(info.FullMethod, code.String()).Inc()
+		m.GRPCRequestDuration.WithLabelValues(info.FullMethod).Observe(time.Since(start).Seconds())
 		return resp, err
 	}
 }
 
 // verifyCheckIn validates the signature on a CheckInRequest. On success, it
 // returns a context enriched with the looked-up envoy for handler reuse.
-func verifyCheckIn(ctx context.Context, queries *db.Queries, req *pb.CheckInRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex) (context.Context, error) {
+func verifyCheckIn(ctx context.Context, queries *db.Queries, req *pb.CheckInRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) (context.Context, error) {
 	if _, err := uuid.Parse(req.GetEnvoyId()); err != nil {
 		return ctx, status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
 	}
 	envoyID := req.GetEnvoyId()
 
-	envoy, pubKey, err := lookupEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx)
+	envoy, pubKey, err := lookupEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx, m)
 	if err != nil {
 		return ctx, err
 	}
@@ -109,7 +110,7 @@ func verifyCheckIn(ctx context.Context, queries *db.Queries, req *pb.CheckInRequ
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
 	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
-		metrics.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
+		m.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
 		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
 
@@ -119,13 +120,13 @@ func verifyCheckIn(ctx context.Context, queries *db.Queries, req *pb.CheckInRequ
 
 // verifyReportResultCtx validates the signature on a ReportResultRequest and
 // stores the envoy in context for handler reuse.
-func verifyReportResultCtx(ctx context.Context, queries *db.Queries, req *pb.ReportResultRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex) (context.Context, error) {
+func verifyReportResultCtx(ctx context.Context, queries *db.Queries, req *pb.ReportResultRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) (context.Context, error) {
 	if _, err := uuid.Parse(req.GetEnvoyId()); err != nil {
 		return ctx, status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
 	}
 	envoyID := req.GetEnvoyId()
 
-	envoy, pubKey, err := lookupEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx)
+	envoy, pubKey, err := lookupEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx, m)
 	if err != nil {
 		return ctx, err
 	}
@@ -143,7 +144,7 @@ func verifyReportResultCtx(ctx context.Context, queries *db.Queries, req *pb.Rep
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
 	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
-		metrics.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
+		m.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
 		return ctx, status.Error(codes.Unauthenticated, "signature verification failed")
 	}
 
@@ -151,13 +152,13 @@ func verifyReportResultCtx(ctx context.Context, queries *db.Queries, req *pb.Rep
 }
 
 // verifyReportTraits validates the signature on a ReportTraitsRequest.
-func verifyReportTraits(ctx context.Context, queries *db.Queries, req *pb.ReportTraitsRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex) error {
+func verifyReportTraits(ctx context.Context, queries *db.Queries, req *pb.ReportTraitsRequest, sigWindow time.Duration, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) error {
 	if _, err := uuid.Parse(req.GetEnvoyId()); err != nil {
 		return status.Errorf(codes.InvalidArgument, "invalid envoy_id: %v", err)
 	}
 	envoyID := req.GetEnvoyId()
 
-	_, pubKey, err := lookupEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx)
+	_, pubKey, err := lookupEnvoyAndPubKey(ctx, queries, envoyID, fleetIdx, m)
 	if err != nil {
 		return err
 	}
@@ -175,7 +176,7 @@ func verifyReportTraits(ctx context.Context, queries *db.Queries, req *pb.Report
 	tsStr := fmt.Sprintf("%d", tsTime.Unix())
 
 	if !verifyPayload(payload, tsStr, req.GetSignature(), pubKey) {
-		metrics.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
+		m.SigVerifyFailed.WithLabelValues("bad_signature").Inc()
 		return status.Error(codes.Unauthenticated, "signature verification failed")
 	}
 
@@ -185,7 +186,7 @@ func verifyReportTraits(ctx context.Context, queries *db.Queries, req *pb.Report
 // lookupEnvoyAndPubKey retrieves a envoy and its parsed ED25519 public key.
 // When a FleetIndex is available, the parsed pubkey is served from memory (O(1),
 // no PEM parse). Falls back to direct DB query.
-func lookupEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID string, fleetIdx *fleet.FleetIndex) (db.Envoy, ed25519.PublicKey, error) {
+func lookupEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID string, fleetIdx *fleet.FleetIndex, m *metrics.Metrics) (db.Envoy, ed25519.PublicKey, error) {
 	// Fast path: FleetIndex returns parsed pubkey from memory.
 	if fleetIdx != nil {
 		pubKey := fleetIdx.GetPubKey(envoyID)
@@ -202,7 +203,7 @@ func lookupEnvoyAndPubKey(ctx context.Context, queries *db.Queries, envoyID stri
 	// Slow path: direct DB query + parse.
 	envoy, err := queries.GetEnvoyByID(ctx, envoyID)
 	if err != nil {
-		metrics.SigVerifyFailed.WithLabelValues("envoy_not_found").Inc()
+		m.SigVerifyFailed.WithLabelValues("envoy_not_found").Inc()
 		slog.Error("envoy lookup failed", "envoy_id", envoyID, "error", err)
 		return db.Envoy{}, nil, status.Error(codes.Unauthenticated, "envoy not found")
 	}

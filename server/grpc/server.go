@@ -22,6 +22,7 @@ import (
 	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/registry"
 	"git.alexander4.io/vigo/server/integrations"
+	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/task"
 	"git.alexander4.io/vigo/server/traits"
 	"google.golang.org/grpc"
@@ -60,8 +61,9 @@ type ServerConfig struct {
 	ConfigStore     *config.ConfigStore
 	Queries         *db.Queries
 	RunStore        db.RunStore
-	Interval        time.Duration
-	JitterPercent   int32
+	Interval         time.Duration
+	OfflineThreshold time.Duration
+	JitterPercent    int32
 	Integrations    *integrations.Dispatcher
 	TraitsDir            string
 	SignatureWindow      time.Duration // 0 → default 5m
@@ -95,6 +97,7 @@ type ServerConfig struct {
 	ServerVersions     map[string]string
 	AgentBinAvailable  func() bool // if set, version-mismatch auto-update only fires when at least one binary exists
 	GlobalObserveOnly  bool              // global observe-only mode from server.yaml checkin.observe_only
+	Metrics            *metrics.Metrics // per-instance prometheus collectors
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -147,7 +150,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		kaTimeout = 10 * time.Second
 	}
 
-	sigInterceptor := SignatureVerifyInterceptor(cfg.Queries, cfg.SignatureWindow, cfg.FleetIndex)
+	sigInterceptor := SignatureVerifyInterceptor(cfg.Queries, cfg.SignatureWindow, cfg.FleetIndex, cfg.Metrics)
 
 	var interceptors []grpc.UnaryServerInterceptor
 	if cfg.RateLimit.Enabled {
@@ -198,8 +201,8 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		traitsBatch:   traitsBatch,
 		traitsPruner:  traitsPruner,
 		policyCache:   newPolicyCache(),
-		streamMgr:        newStreamManager(cfg.StreamSendBuffer, cfg.FleetIndex, 12*time.Minute),
-		taskRouter:       newTaskRouter(cfg.Queries),
+		streamMgr:        newStreamManager(cfg.StreamSendBuffer, cfg.FleetIndex, cfg.Metrics, 12*time.Minute),
+		taskRouter:       newTaskRouter(cfg.Queries, cfg.Metrics),
 		queryRouter:      newQueryRouter(),
 		taskStore:        cfg.TaskStore,
 		hub:              cfg.Hub,
@@ -210,12 +213,14 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		bundleSigner:     cfg.BundleSigner,
 		bundleMaxAge:     cfg.BundleMaxAge,
 		baseInterval:     cfg.Interval,
+		offlineThreshold: cfg.OfflineThreshold,
 		jitterPercent:    cfg.JitterPercent,
 		fallbackServers:  cfg.FallbackServers,
 		auditWriter:        cfg.AuditWriter,
 		serverVersions:     cfg.ServerVersions,
 		agentBinAvailable:  cfg.AgentBinAvailable,
 		globalObserveOnly:  cfg.GlobalObserveOnly,
+		metrics:            cfg.Metrics,
 	}
 	if cfg.BundleSigner != nil {
 		if pem, err := cfg.BundleSigner.PublicKeyPEM(); err == nil {
@@ -228,9 +233,11 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		registry:      cfg.Registry,
 		queries:       cfg.Queries,
 		runStore:      cfg.RunStore,
-		configStore:   cfg.ConfigStore,
-		baseInterval:  cfg.Interval,
-		hub:           cfg.Hub,
+		configStore:      cfg.ConfigStore,
+		metrics:          cfg.Metrics,
+		baseInterval:     cfg.Interval,
+		offlineThreshold: cfg.OfflineThreshold,
+		hub:              cfg.Hub,
 		fleetIndex:    cfg.FleetIndex,
 		reassignStore: reassignStore,
 		auditWriter:   cfg.AuditWriter,

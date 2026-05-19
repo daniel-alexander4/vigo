@@ -51,19 +51,25 @@ type FleetSource interface {
 // Collector periodically queries the database and fleet to update gauge metrics.
 // Runs in a background goroutine — never on the request hot path.
 type Collector struct {
-	queries      *db.Queries
-	sqlDB        *sql.DB
-	fleetSource  FleetSource
-	baseInterval time.Duration
+	queries          *db.Queries
+	sqlDB            *sql.DB
+	fleetSource      FleetSource
+	metrics          *Metrics
+	baseInterval     time.Duration
+	offlineThreshold time.Duration
 }
 
 // NewCollector creates a new metrics collector. fleetSource may be nil (steorra mode).
-func NewCollector(queries *db.Queries, sqlDB *sql.DB, fleetSource FleetSource, baseInterval time.Duration) *Collector {
+// The Metrics value is the per-instance collector set; the gauges it owns are
+// the ones this collector mutates each tick.
+func NewCollector(queries *db.Queries, sqlDB *sql.DB, fleetSource FleetSource, m *Metrics, baseInterval, offlineThreshold time.Duration) *Collector {
 	return &Collector{
-		queries:      queries,
-		sqlDB:        sqlDB,
-		fleetSource:  fleetSource,
-		baseInterval: baseInterval,
+		queries:          queries,
+		sqlDB:            sqlDB,
+		fleetSource:      fleetSource,
+		metrics:          m,
+		baseInterval:     baseInterval,
+		offlineThreshold: offlineThreshold,
 	}
 }
 
@@ -75,7 +81,7 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 	}
 
 	// Single pass: compute all envoy metrics from DB.
-	EnvoysTotal.Set(float64(len(envoys)))
+	c.metrics.EnvoysTotal.Set(float64(len(envoys)))
 
 	now := time.Now()
 	oneHourAgo := now.Add(-1 * time.Hour)
@@ -87,7 +93,7 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 			activeCount++
 		}
 		if n.LastSeen.Valid {
-			CheckinAgeDist.Observe(now.Sub(n.LastSeen.Time).Seconds())
+			c.metrics.CheckinAgeDist.Observe(now.Sub(n.LastSeen.Time).Seconds())
 		}
 		if n.Revoked == 0 {
 			totalNonRevoked++
@@ -96,18 +102,18 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 			}
 		}
 	}
-	EnvoysActive.Set(float64(activeCount))
+	c.metrics.EnvoysActive.Set(float64(activeCount))
 
 	if totalNonRevoked > 0 {
-		ConvergencePct.Set(float64(convergedCount) / float64(totalNonRevoked))
+		c.metrics.ConvergencePct.Set(float64(convergedCount) / float64(totalNonRevoked))
 	} else {
-		ConvergencePct.Set(0)
+		c.metrics.ConvergencePct.Set(0)
 	}
 
 	// Update database size metric.
 	if c.sqlDB != nil {
 		if size, err := db.DatabaseSizeBytes(c.sqlDB); err == nil {
-			DatabaseSizeBytes.Set(float64(size))
+			c.metrics.DatabaseSizeBytes.Set(float64(size))
 		}
 	}
 
@@ -115,18 +121,18 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 	if c.fleetSource != nil {
 		// Convergence breakdown — O(1) from pre-computed counters.
 		summary := c.fleetSource.ConvergenceSummary()
-		ConvergenceConverged.Set(float64(summary.Converged))
-		ConvergenceDegraded.Set(float64(summary.Degraded))
-		ConvergenceFailed.Set(float64(summary.Failed))
-		ConvergenceNoData.Set(float64(summary.NoData))
-		ConvergenceChanged.Set(float64(summary.Changed))
-		ConvergenceDiverged.Set(float64(summary.Diverged))
-		ConvergenceOffline.Set(float64(summary.Offline))
+		c.metrics.ConvergenceConverged.Set(float64(summary.Converged))
+		c.metrics.ConvergenceDegraded.Set(float64(summary.Degraded))
+		c.metrics.ConvergenceFailed.Set(float64(summary.Failed))
+		c.metrics.ConvergenceNoData.Set(float64(summary.NoData))
+		c.metrics.ConvergenceChanged.Set(float64(summary.Changed))
+		c.metrics.ConvergenceDiverged.Set(float64(summary.Diverged))
+		c.metrics.ConvergenceOffline.Set(float64(summary.Offline))
 
 		// Single snapshot — one RLock, reused for security + risk.
 		allEnvoys := c.fleetSource.AllEnvoySnapshots()
-		updateSecurityMetrics(allEnvoys)
-		updateRiskMetrics(allEnvoys, c.baseInterval)
+		updateSecurityMetrics(c.metrics, allEnvoys)
+		updateRiskMetrics(c.metrics, allEnvoys, c.baseInterval, c.offlineThreshold)
 	}
 
 	return nil
@@ -134,7 +140,7 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 
 // updateSecurityMetrics aggregates security_scan.* traits across all envoys.
 // Pure iteration — no locks, no I/O.
-func updateSecurityMetrics(envoys []EnvoySnapshot) {
+func updateSecurityMetrics(m *Metrics, envoys []EnvoySnapshot) {
 	var critical, high, medium, low, hardening, rootkit, malware, integrity int64
 	var scanned, hardeningCount int64
 
@@ -182,25 +188,25 @@ func updateSecurityMetrics(envoys []EnvoySnapshot) {
 		}
 	}
 
-	SecurityCVECritical.Set(float64(critical))
-	SecurityCVEHigh.Set(float64(high))
-	SecurityCVEMedium.Set(float64(medium))
-	SecurityCVELow.Set(float64(low))
-	SecurityRootkitWarnings.Set(float64(rootkit))
-	SecurityMalwareDetections.Set(float64(malware))
-	SecurityIntegrityIssues.Set(float64(integrity))
-	SecurityScannedHosts.Set(float64(scanned))
+	m.SecurityCVECritical.Set(float64(critical))
+	m.SecurityCVEHigh.Set(float64(high))
+	m.SecurityCVEMedium.Set(float64(medium))
+	m.SecurityCVELow.Set(float64(low))
+	m.SecurityRootkitWarnings.Set(float64(rootkit))
+	m.SecurityMalwareDetections.Set(float64(malware))
+	m.SecurityIntegrityIssues.Set(float64(integrity))
+	m.SecurityScannedHosts.Set(float64(scanned))
 
 	if hardeningCount > 0 {
-		SecurityHardeningAvg.Set(float64(hardening) / float64(hardeningCount))
+		m.SecurityHardeningAvg.Set(float64(hardening) / float64(hardeningCount))
 	} else {
-		SecurityHardeningAvg.Set(0)
+		m.SecurityHardeningAvg.Set(0)
 	}
 }
 
 // updateRiskMetrics computes fleet risk scores and sets Prometheus gauges.
 // Pure arithmetic — no I/O, no locks.
-func updateRiskMetrics(envoys []EnvoySnapshot, baseInterval time.Duration) {
+func updateRiskMetrics(m *Metrics, envoys []EnvoySnapshot, baseInterval, offlineThreshold time.Duration) {
 	inputs := make([]risk.EnvoyInput, 0, len(envoys))
 	for _, es := range envoys {
 		if es.Revoked {
@@ -216,14 +222,14 @@ func updateRiskMetrics(envoys []EnvoySnapshot, baseInterval time.Duration) {
 		})
 	}
 
-	fr := risk.ScoreFleet(inputs, baseInterval, 0)
+	fr := risk.ScoreFleet(inputs, baseInterval, offlineThreshold, 0)
 
-	RiskAvgScore.Set(fr.AvgScore)
-	RiskMaxScore.Set(float64(fr.MaxScore))
-	RiskDistribution.WithLabelValues("low").Set(float64(fr.Distribution[risk.LevelLow]))
-	RiskDistribution.WithLabelValues("medium").Set(float64(fr.Distribution[risk.LevelMedium]))
-	RiskDistribution.WithLabelValues("high").Set(float64(fr.Distribution[risk.LevelHigh]))
-	RiskDistribution.WithLabelValues("critical").Set(float64(fr.Distribution[risk.LevelCritical]))
+	m.RiskAvgScore.Set(fr.AvgScore)
+	m.RiskMaxScore.Set(float64(fr.MaxScore))
+	m.RiskDistribution.WithLabelValues("low").Set(float64(fr.Distribution[risk.LevelLow]))
+	m.RiskDistribution.WithLabelValues("medium").Set(float64(fr.Distribution[risk.LevelMedium]))
+	m.RiskDistribution.WithLabelValues("high").Set(float64(fr.Distribution[risk.LevelHigh]))
+	m.RiskDistribution.WithLabelValues("critical").Set(float64(fr.Distribution[risk.LevelCritical]))
 }
 
 // Run starts a periodic update loop that calls UpdateGauges at the given interval.

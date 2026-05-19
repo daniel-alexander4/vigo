@@ -60,6 +60,7 @@ type Handler struct {
 	// that arch (safer than mis-claiming a version and causing update loops).
 	agentVersions   map[string]string
 	cache           *checksumCache
+	metrics         *metrics.Metrics
 	ca              *ca.CA
 	registry        *registry.Registry
 	trustedPatterns []config.TrustedEnrollment
@@ -70,7 +71,7 @@ type Handler struct {
 }
 
 // NewHandler creates a Handler for serving bootstrap and agent distribution endpoints.
-func NewHandler(serverAddr, caFile, agentDir, version string) *Handler {
+func NewHandler(serverAddr, caFile, agentDir, version string, m *metrics.Metrics) *Handler {
 	h := &Handler{
 		serverAddr:    serverAddr,
 		caFile:        caFile,
@@ -78,6 +79,7 @@ func NewHandler(serverAddr, caFile, agentDir, version string) *Handler {
 		version:       version,
 		agentVersions: detectAgentVersions(agentDir),
 		cache:         newChecksumCache(),
+		metrics:       m,
 		certValidity:  365 * 24 * time.Hour, // default 1 year
 	}
 	return h
@@ -598,7 +600,7 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 			"hostname", req.Hostname,
 			"error", err,
 		)
-		metrics.EnrollmentsTotal.WithLabelValues("denied").Inc()
+		h.metrics.EnrollmentsTotal.WithLabelValues("denied").Inc()
 		// Surface license-gate rejections with 402 Payment Required so the
 		// curl one-liner can distinguish "licence full" from generic denial
 		// and print an actionable message. Other failures stay at 403.
@@ -619,12 +621,12 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 	signedCert, err := h.ca.SignCSR([]byte(req.CSRPEM), req.Hostname, h.certValidity)
 	if err != nil {
 		slog.Error("CSR signing failed", "hostname", req.Hostname, "error", err)
-		metrics.EnrollmentsTotal.WithLabelValues("error").Inc()
+		h.metrics.EnrollmentsTotal.WithLabelValues("error").Inc()
 		http.Error(w, "registration failed", http.StatusInternalServerError)
 		return
 	}
 
-	metrics.EnrollmentsTotal.WithLabelValues("success").Inc()
+	h.metrics.EnrollmentsTotal.WithLabelValues("success").Inc()
 	slog.Info("envoy bootstrapped",
 		"hostname", req.Hostname,
 		"envoy_id", envoyID,

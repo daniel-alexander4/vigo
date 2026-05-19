@@ -52,11 +52,11 @@ import (
 // DataSource abstracts data fetching for UI handlers.
 // Implemented by dbDataSource (production) and mockDataSource (test).
 type DataSource interface {
-	DashboardData(baseInterval time.Duration) DashboardPageData
-	ConvergenceData(baseInterval time.Duration) ConvergencePageData
-	DashboardStatsData(baseInterval time.Duration) DashboardStatsFragmentData
-	EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int, search string) EnvoysPageData
-	EnvoyDetailData(envoyID string, baseInterval time.Duration) (EnvoyDetailPageData, error)
+	DashboardData(baseInterval, offlineThreshold time.Duration) DashboardPageData
+	ConvergenceData(baseInterval, offlineThreshold time.Duration) ConvergencePageData
+	DashboardStatsData(baseInterval, offlineThreshold time.Duration) DashboardStatsFragmentData
+	EnvoysData(baseInterval, offlineThreshold time.Duration, statusFilter string, afterHostname string, limit int, search string) EnvoysPageData
+	EnvoyDetailData(envoyID string, baseInterval, offlineThreshold time.Duration) (EnvoyDetailPageData, error)
 	EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, error)
 	EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData, error)
 	RunsData(statusFilter string) RunsPageData
@@ -70,8 +70,8 @@ type DataSource interface {
 	// drawer handler which needs both to dispatch a live-detail query to the
 	// agent and to render operator-facing header chrome.
 	SecurityScanContext(envoyID string) (hostname string, traits map[string]string, ok bool)
-	RiskData(baseInterval time.Duration) RiskSummaryData
-	RiskPostureData(baseInterval time.Duration) RiskPosturePageData
+	RiskData(baseInterval, offlineThreshold time.Duration) RiskSummaryData
+	RiskPostureData(baseInterval, offlineThreshold time.Duration) RiskPosturePageData
 	CertExpirySummary() CertExpirySummary
 	// EnvoyCertDetails returns the expiring-or-expired certificates
 	// for a single envoy, sorted most-urgent first. Filter narrows to a
@@ -222,8 +222,9 @@ type Handler struct {
 	dataSource    DataSource
 	queries       *db.Queries // direct DB access for task/workflow pages
 	configStore   *config.ConfigStore
-	baseInterval  time.Duration
-	serverAddr    string
+	baseInterval     time.Duration
+	offlineThreshold time.Duration
+	serverAddr       string
 	caFile        string
 	agentDir      string
 	version       string
@@ -459,7 +460,7 @@ type CVERunningBinaryRef struct {
 // DB-backed DataSource (used by FleetIndex integration).
 // The docsDir parameter specifies the path to the docs directory for the
 // built-in documentation browser (pass "" to disable).
-func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *tungol.Hub, customDS DataSource, docsDir string, authMethod string, enforcer *license.Enforcer) (*Handler, error) {
+func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *tungol.Hub, customDS DataSource, docsDir string, authMethod string, enforcer *license.Enforcer) (*Handler, error) {
 	renderer, err := NewRenderer()
 	if err != nil {
 		return nil, err
@@ -473,12 +474,13 @@ func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterv
 	}
 
 	h := &Handler{
-		renderer:     renderer,
-		dataSource:   ds,
-		queries:      queries,
-		configStore:  configStore,
-		baseInterval: baseInterval,
-		serverAddr:   serverAddr,
+		renderer:         renderer,
+		dataSource:       ds,
+		queries:          queries,
+		configStore:      configStore,
+		baseInterval:     baseInterval,
+		offlineThreshold: offlineThreshold,
+		serverAddr:       serverAddr,
 		caFile:       caFile,
 		agentDir:     agentDir,
 		version:      version,
@@ -2107,7 +2109,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.TotalControls = stds.Total
 
 	// Enrich with risk posture data.
-	rsk := h.dataSource.RiskData(h.baseInterval)
+	rsk := h.dataSource.RiskData(h.baseInterval, h.offlineThreshold)
 	data.RiskAvgScore = rsk.AvgScore
 	data.RiskCritical = rsk.Critical
 	data.RiskHigh = rsk.High
@@ -2280,7 +2282,7 @@ func (h *Handler) dashboardData() DashboardPageData {
 		data.FleetRowsRemaining = counts.Total - len(worst)
 	} else {
 		// Fallback: use legacy DataSource (e.g. FleetIndex custom DS).
-		legacy := h.dataSource.DashboardData(h.baseInterval)
+		legacy := h.dataSource.DashboardData(h.baseInterval, h.offlineThreshold)
 		return legacy
 	}
 
@@ -2396,8 +2398,8 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 		data.CompFailed = counts.Failed
 		data.Offline = counts.Offline
 	} else {
-		d := h.dataSource.DashboardStatsData(h.baseInterval)
-		conv := h.dataSource.ConvergenceData(h.baseInterval)
+		d := h.dataSource.DashboardStatsData(h.baseInterval, h.offlineThreshold)
+		conv := h.dataSource.ConvergenceData(h.baseInterval, h.offlineThreshold)
 		d.ConvergencePct = conv.ConvergencePct
 		d.Converged = int(conv.Converged)
 		d.Degraded = int(conv.Degraded)
@@ -2422,7 +2424,7 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data.NotSatisfiedControls = stds.NotSatisfied
 	data.TotalControls = stds.Total
 
-	rsk := h.dataSource.RiskData(h.baseInterval)
+	rsk := h.dataSource.RiskData(h.baseInterval, h.offlineThreshold)
 	data.RiskAvgScore = rsk.AvgScore
 	data.RiskCritical = rsk.Critical
 	data.RiskHigh = rsk.High
@@ -2458,7 +2460,7 @@ func (h *Handler) DashboardFleet(w http.ResponseWriter, r *http.Request) {
 
 // DashboardActivity renders the recent activity table fragment for HTMX polling.
 func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
-	data := h.dataSource.DashboardData(h.baseInterval)
+	data := h.dataSource.DashboardData(h.baseInterval, h.offlineThreshold)
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-activity", data)
 }
 
@@ -3294,7 +3296,7 @@ func (h *Handler) ComplianceWaivers(w http.ResponseWriter, r *http.Request) {
 
 // RiskPosture renders the dedicated risk posture page.
 func (h *Handler) RiskPosture(w http.ResponseWriter, r *http.Request) {
-	data := h.dataSource.RiskPostureData(h.baseInterval)
+	data := h.dataSource.RiskPostureData(h.baseInterval, h.offlineThreshold)
 	data.PageData = PageData{Title: "Risk Posture", ActiveNav: "risk"}
 	levelFilter := r.URL.Query().Get("level")
 	data.LevelFilter = levelFilter
@@ -3523,7 +3525,7 @@ func (h *Handler) EvidenceSnapshotFragment(w http.ResponseWriter, r *http.Reques
 	snapshot, err := h.queries.GetConvergenceHistoryForDate(r.Context(), dateStr)
 	if err != nil {
 		// Fall back to live data
-		summary := h.dataSource.ConvergenceData(h.baseInterval)
+		summary := h.dataSource.ConvergenceData(h.baseInterval, h.offlineThreshold)
 		total := summary.Converged + summary.Degraded + summary.Failed + summary.NoData
 		pct := float64(0)
 		if total > 0 {
@@ -3771,7 +3773,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct, FailedCount: e.FailedCount, ModuleCount: e.ModuleCount})
 		}
 	} else {
-		for _, e := range h.dataSource.EnvoysData(h.baseInterval, "", "", 0, "").Envoys {
+		for _, e := range h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold,"", "", 0, "").Envoys {
 			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct, FailedCount: e.FailedCount, ModuleCount: e.ModuleCount})
 		}
 	}
@@ -3951,7 +3953,7 @@ func (h *Handler) EvidenceBundleDownload(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Fleet inventory CSV
-	envoyData := h.dataSource.EnvoysData(h.baseInterval, "", "", 100000, "")
+	envoyData := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold,"", "", 100000, "")
 	if len(envoyData.Envoys) > 0 {
 		if f, err := zw.Create("fleet-inventory.csv"); err == nil {
 			fmt.Fprintln(f, "hostname,id,ip_address,status,enrolled_at,last_seen,last_run")
@@ -4129,7 +4131,7 @@ func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, s
 		// can't compute fleet-wide convergence without trailing-run
 		// history. This branch is hit briefly during boot before
 		// SetFleetCache is called, then never again.
-		data := h.dataSource.EnvoysData(h.baseInterval, convFilter, "", envoysPageLimit, search)
+		data := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold,convFilter, "", envoysPageLimit, search)
 		data.ConvFilter = convFilter
 		data.DriftFilter = driftFilter
 		data.ReachFilter = reachFilter
@@ -4170,7 +4172,7 @@ func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, s
 			ChangedCount:        e.ChangedCount,
 			Offline:             e.Offline,
 			ObserveOnly:         e.ObserveOnly,
-			StaleThresholdLabel: friendlyDurationLabel(freshness.StaleThresholdFromCycle(h.baseInterval, e.ObservedCycle)),
+			StaleThresholdLabel: friendlyDurationLabel(freshness.StaleThresholdFromCycle(h.baseInterval, e.ObservedCycle, h.offlineThreshold)),
 			AgentVersion:        e.AgentVersion,
 		})
 	}
@@ -4227,7 +4229,7 @@ func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, s
 	// agent cadence yet); per-row values may differ. The table tooltip
 	// on each row's Last Seen cell shows the resolved threshold for
 	// that envoy.
-	data.OfflineThresholdLabel = friendlyDurationLabel(freshness.StaleThresholdFromCycle(h.baseInterval, 0))
+	data.OfflineThresholdLabel = friendlyDurationLabel(freshness.StaleThresholdFromCycle(h.baseInterval, 0, h.offlineThreshold))
 	return data
 }
 
@@ -4266,7 +4268,7 @@ func (h *Handler) EnvoyDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	data, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval, h.offlineThreshold)
 	if err != nil {
 		http.Error(w, "envoy not found", http.StatusNotFound)
 		return
@@ -4284,7 +4286,7 @@ func (h *Handler) EnvoyTrace(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval, h.offlineThreshold)
 	if err != nil {
 		http.Error(w, "envoy not found", http.StatusNotFound)
 		return
@@ -4353,7 +4355,7 @@ func (h *Handler) EnvoyConfigFragment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
 		return
 	}
-	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval, h.offlineThreshold)
 	if err != nil {
 		http.Error(w, "envoy not found", http.StatusNotFound)
 		return
@@ -4375,7 +4377,7 @@ func (h *Handler) EnvoyTraceFragment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
 		return
 	}
-	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval, h.offlineThreshold)
 	if err != nil {
 		http.Error(w, "envoy not found", http.StatusNotFound)
 		return
@@ -4539,7 +4541,7 @@ func (h *Handler) EnvoyScrierSessionsFragment(w http.ResponseWriter, r *http.Req
 
 func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
-	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval, h.offlineThreshold)
 	if err != nil {
 		http.Error(w, "envoy not found", http.StatusNotFound)
 		return
@@ -4570,7 +4572,7 @@ func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Requ
 		ConvergenceStatus: detail.Envoy.Status,
 		Traits:            flat,
 		ObservedCycle:     observedCycle,
-	}, h.baseInterval)
+	}, h.baseInterval, h.offlineThreshold)
 
 	data := AttackSurfaceData{
 		Hostname:       detail.Envoy.Hostname,
@@ -4702,7 +4704,7 @@ func (h *Handler) EnvoyComplianceFragment(w http.ResponseWriter, r *http.Request
 		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
 		return
 	}
-	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval, h.offlineThreshold)
 	if err != nil {
 		http.Error(w, "envoy not found", http.StatusNotFound)
 		return
@@ -4752,7 +4754,7 @@ func (h *Handler) EnvoyComplianceDetail(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval, h.offlineThreshold)
 	if err != nil {
 		http.Error(w, "envoy not found", http.StatusNotFound)
 		return
@@ -4795,7 +4797,7 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval, h.offlineThreshold)
 	if err != nil {
 		http.Error(w, "envoy not found", http.StatusNotFound)
 		return
@@ -5266,7 +5268,7 @@ func (ds *dbDataSource) envoyCycle(envoyID string) time.Duration {
 }
 
 // envoyComplianceInfo computes convergence status for an envoy using recent runs.
-func (ds *dbDataSource) envoyComplianceInfo(ctx context.Context, c db.Envoy, baseInterval time.Duration) (status string, runInfo *convergence.RunInfo) {
+func (ds *dbDataSource) envoyComplianceInfo(ctx context.Context, c db.Envoy, baseInterval, offlineThreshold time.Duration) (status string, runInfo *convergence.RunInfo) {
 	latestRuns, err := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 		EnvoyID: c.ID,
 		Limit:    int64(convergence.DivergedThreshold),
@@ -5290,7 +5292,7 @@ func (ds *dbDataSource) envoyComplianceInfo(ctx context.Context, c db.Envoy, bas
 	return convergence.ComputeConvergence(recent), runInfo
 }
 
-func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageData {
+func (ds *dbDataSource) DashboardData(baseInterval, offlineThreshold time.Duration) DashboardPageData {
 	ctx := context.Background()
 	envoys, err := ds.queries.ListEnvoys(ctx)
 	if err != nil {
@@ -5311,7 +5313,7 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 			activeCount++
 		}
 
-		status, _ := ds.envoyComplianceInfo(ctx, n, baseInterval)
+		status, _ := ds.envoyComplianceInfo(ctx, n, baseInterval, offlineThreshold)
 		if convergence.ClassifyStatus(status) == convergence.StatusFailed {
 			failureCount++
 		}
@@ -5354,7 +5356,7 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 		if n.Revoked != 0 {
 			continue
 		}
-		status, _ := ds.envoyComplianceInfo(ctx, n, baseInterval)
+		status, _ := ds.envoyComplianceInfo(ctx, n, baseInterval, offlineThreshold)
 		var lastSeen time.Time
 		if n.LastSeen.Valid {
 			lastSeen = n.LastSeen.Time
@@ -5379,7 +5381,7 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 	}
 }
 
-func (ds *dbDataSource) ConvergenceData(baseInterval time.Duration) ConvergencePageData {
+func (ds *dbDataSource) ConvergenceData(baseInterval, offlineThreshold time.Duration) ConvergencePageData {
 	ctx := context.Background()
 	envoys, err := ds.queries.ListEnvoys(ctx)
 	if err != nil {
@@ -5399,7 +5401,7 @@ func (ds *dbDataSource) ConvergenceData(baseInterval time.Duration) ConvergenceP
 			lastSeen = n.LastSeen.Time
 		}
 
-		status, _ := ds.envoyComplianceInfo(ctx, n, baseInterval)
+		status, _ := ds.envoyComplianceInfo(ctx, n, baseInterval, offlineThreshold)
 		statuses = append(statuses, status)
 
 		if status != "converged" {
@@ -5459,8 +5461,8 @@ func (ds *dbDataSource) ConvergenceData(baseInterval time.Duration) ConvergenceP
 	}
 }
 
-func (ds *dbDataSource) DashboardStatsData(baseInterval time.Duration) DashboardStatsFragmentData {
-	d := ds.DashboardData(baseInterval)
+func (ds *dbDataSource) DashboardStatsData(baseInterval, offlineThreshold time.Duration) DashboardStatsFragmentData {
+	d := ds.DashboardData(baseInterval, offlineThreshold)
 	return DashboardStatsFragmentData{
 		TotalEnvoys:     d.TotalEnvoys,
 		ActiveEnvoys:    d.ActiveEnvoys,
@@ -5469,7 +5471,7 @@ func (ds *dbDataSource) DashboardStatsData(baseInterval time.Duration) Dashboard
 	}
 }
 
-func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int, search string) EnvoysPageData {
+func (ds *dbDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, statusFilter string, afterHostname string, limit int, search string) EnvoysPageData {
 	ctx := context.Background()
 
 	// Fetch limit+1 to detect if there are more rows.
@@ -5529,7 +5531,7 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 			lastSeen = n.LastSeen.Time
 		}
 
-		lastSeenLabel, offline := envoyFreshness(lastSeen, baseInterval, ds.envoyCycle(n.ID))
+		lastSeenLabel, offline := envoyFreshness(lastSeen, baseInterval, offlineThreshold, ds.envoyCycle(n.ID))
 
 		// Filter: "offline" matches reachability, everything else matches convergence status.
 		if statusFilter == "offline" && !offline {
@@ -5599,7 +5601,7 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 	}
 }
 
-func (ds *dbDataSource) EnvoyDetailData(envoyID string, baseInterval time.Duration) (EnvoyDetailPageData, error) {
+func (ds *dbDataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThreshold time.Duration) (EnvoyDetailPageData, error) {
 	ctx := context.Background()
 	envoy, err := ds.queries.GetEnvoyByID(ctx, envoyID)
 	if err != nil {
@@ -5611,7 +5613,7 @@ func (ds *dbDataSource) EnvoyDetailData(envoyID string, baseInterval time.Durati
 		lastSeen = envoy.LastSeen.Time
 	}
 
-	status, _ := ds.envoyComplianceInfo(ctx, envoy, baseInterval)
+	status, _ := ds.envoyComplianceInfo(ctx, envoy, baseInterval, offlineThreshold)
 
 	// Extract cloud metadata from traits (best-effort, non-fatal).
 	var cloudProvider, cloudRegion, cloudZone, cloudInstanceType, cloudInstanceID, cloudAccountID string
@@ -5651,7 +5653,7 @@ func (ds *dbDataSource) EnvoyDetailData(envoyID string, baseInterval time.Durati
 			EnrolledAt:   envoy.EnrolledAt,
 			LastSeen:     lastSeen,
 			Status:       status,
-			Offline:      freshness.IsStaleFromCycle(lastSeen, baseInterval, ds.envoyCycle(envoyID)),
+			Offline:      freshness.IsStaleFromCycle(lastSeen, baseInterval, ds.envoyCycle(envoyID), offlineThreshold),
 			AgentVersion: envoy.AgentVersion,
 		},
 		CloudProvider:     cloudProvider,
@@ -6146,13 +6148,13 @@ func (ds *dbDataSource) EnvoyCertDetails(_, _ string) ([]CertDetail, string, boo
 	return nil, "", false
 }
 
-func (ds *dbDataSource) RiskData(_ time.Duration) RiskSummaryData {
+func (ds *dbDataSource) RiskData(_, _ time.Duration) RiskSummaryData {
 	// DB-backed datasource does not have access to flattened traits.
 	// Return empty data — fleet DataSource handles this.
 	return RiskSummaryData{}
 }
 
-func (ds *dbDataSource) RiskPostureData(_ time.Duration) RiskPosturePageData {
+func (ds *dbDataSource) RiskPostureData(_, _ time.Duration) RiskPosturePageData {
 	return RiskPosturePageData{}
 }
 
@@ -7033,7 +7035,7 @@ type SecurityHostRow struct {
 func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	convData := h.dataSource.ConvergenceData(h.baseInterval)
+	convData := h.dataSource.ConvergenceData(h.baseInterval, h.offlineThreshold)
 
 	var driftRows []SecurityDriftRow
 	if h.queries != nil {
@@ -7125,7 +7127,7 @@ func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	convData := h.dataSource.ConvergenceData(h.baseInterval)
+	convData := h.dataSource.ConvergenceData(h.baseInterval, h.offlineThreshold)
 
 	var driftRows []SecurityDriftRow
 	if h.queries != nil {

@@ -12,8 +12,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"text/template"
 	"time"
 
@@ -87,13 +85,6 @@ var fleetSelectorFuncs = map[string]bool{
 
 const defaultFleetLookupTTL = 30 * time.Second
 
-var (
-	fleetLookupTTL atomic.Int64 // nanoseconds; 0 → defaultFleetLookupTTL
-
-	fleetMemoMu sync.Mutex
-	fleetMemo   = map[string]fleetMemoEntry{}
-)
-
 type fleetMemoEntry struct {
 	value      any // string (joined) or []any (list)
 	computedAt time.Time
@@ -101,16 +92,16 @@ type fleetMemoEntry struct {
 
 // SetFleetLookupTTL configures how long a resolved fleet: lookup is reused
 // before recomputing (server.yaml: checkin.fleet_lookup_ttl). Non-positive
-// values reset to the default (30s). Called once at startup.
-func SetFleetLookupTTL(d time.Duration) {
+// values reset to the default (30s). Called once at startup, per ConfigStore.
+func (cs *ConfigStore) SetFleetLookupTTL(d time.Duration) {
 	if d <= 0 {
 		d = defaultFleetLookupTTL
 	}
-	fleetLookupTTL.Store(int64(d))
+	cs.fleetLookupTTL.Store(int64(d))
 }
 
-func fleetLookupTTLValue() time.Duration {
-	if v := fleetLookupTTL.Load(); v > 0 {
+func (cs *ConfigStore) fleetLookupTTLValue() time.Duration {
+	if v := cs.fleetLookupTTL.Load(); v > 0 {
 		return time.Duration(v)
 	}
 	return defaultFleetLookupTTL
@@ -231,12 +222,13 @@ func fleetSelectorFuncNames(expr conditionals.WhenExpr) []string {
 // members() is invoked at most once per call, and only when at least one lookup
 // is missing from the memo or past the TTL; isStale(m) reports whether an envoy
 // should be dropped (nil = keep all). MUST be called on a Clone()'d config —
-// it mutates cfg.Vars.
-func ResolveFleetLookupsInConfig(cfg *EnvoyConfig, members func() []FleetMember, isStale func(FleetMember) bool, now time.Time) error {
+// it mutates cfg.Vars. The memo is per-ConfigStore so two stores in one
+// process (test harness, multi-vigosrv lab) don't share resolution state.
+func (cs *ConfigStore) ResolveFleetLookupsInConfig(cfg *EnvoyConfig, members func() []FleetMember, isStale func(FleetMember) bool, now time.Time) error {
 	if cfg == nil || !cfg.HasFleetLookups {
 		return nil
 	}
-	ttl := fleetLookupTTLValue()
+	ttl := cs.fleetLookupTTLValue()
 	var snap []FleetMember
 	haveSnap := false
 
@@ -247,9 +239,9 @@ func ResolveFleetLookupsInConfig(cfg *EnvoyConfig, members func() []FleetMember,
 		}
 		key := fl.Where + "\x00" + fl.Select + "\x00" + fl.Join + "\x00" + strconv.FormatBool(fl.IncludeStale)
 
-		fleetMemoMu.Lock()
-		ent, hit := fleetMemo[key]
-		fleetMemoMu.Unlock()
+		cs.fleetMemoMu.Lock()
+		ent, hit := cs.fleetMemo[key]
+		cs.fleetMemoMu.Unlock()
 		if hit && now.Sub(ent.computedAt) < ttl {
 			cfg.Vars[name] = ent.value
 			continue
@@ -266,9 +258,9 @@ func ResolveFleetLookupsInConfig(cfg *EnvoyConfig, members func() []FleetMember,
 			return fmt.Errorf("resolving fleet: var %q: %w", name, err)
 		}
 
-		fleetMemoMu.Lock()
-		fleetMemo[key] = fleetMemoEntry{value: val, computedAt: now}
-		fleetMemoMu.Unlock()
+		cs.fleetMemoMu.Lock()
+		cs.fleetMemo[key] = fleetMemoEntry{value: val, computedAt: now}
+		cs.fleetMemoMu.Unlock()
 		cfg.Vars[name] = val
 	}
 	return nil

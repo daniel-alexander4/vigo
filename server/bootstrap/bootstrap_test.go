@@ -23,6 +23,7 @@ import (
 
 	"git.alexander4.io/vigo/server/ca"
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/metrics"
 )
 
 func TestBootstrapScript_ReturnsShellScript(t *testing.T) {
@@ -32,7 +33,7 @@ func TestBootstrapScript_ReturnsShellScript(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewHandler("https://server.example.com:8443", caFile, filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server.example.com:8443", caFile, filepath.Join(dir, "agents"), "1.0.0", metrics.NewTestMetrics())
 
 	req := httptest.NewRequest(http.MethodGet, "/bootstrap?token=mytoken123", nil)
 	w := httptest.NewRecorder()
@@ -64,7 +65,7 @@ func TestBootstrapScript_ContainsTokenAndServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewHandler("https://server.example.com:8443", caFile, filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server.example.com:8443", caFile, filepath.Join(dir, "agents"), "1.0.0", metrics.NewTestMetrics())
 
 	req := httptest.NewRequest(http.MethodGet, "/bootstrap?token=secret-token-42", nil)
 	w := httptest.NewRecorder()
@@ -88,7 +89,7 @@ func TestBootstrapScript_SingleQuotesInterpolatedValues(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewHandler("https://server.example.com:8443", caFile, filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server.example.com:8443", caFile, filepath.Join(dir, "agents"), "1.0.0", metrics.NewTestMetrics())
 
 	req := httptest.NewRequest(http.MethodGet, "/bootstrap?token=test-token", nil)
 	w := httptest.NewRecorder()
@@ -113,7 +114,7 @@ func TestBootstrapScript_WorksWithoutToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewHandler("https://server:8443", caFile, filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server:8443", caFile, filepath.Join(dir, "agents"), "1.0.0", metrics.NewTestMetrics())
 
 	req := httptest.NewRequest(http.MethodGet, "/bootstrap", nil)
 	w := httptest.NewRecorder()
@@ -143,7 +144,7 @@ func TestBootstrapScript_NoSubstrateNamesAsShellCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewHandler("https://server:8443", caFile, filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server:8443", caFile, filepath.Join(dir, "agents"), "1.0.0", metrics.NewTestMetrics())
 
 	req := httptest.NewRequest(http.MethodGet, "/bootstrap", nil)
 	w := httptest.NewRecorder()
@@ -184,7 +185,7 @@ func TestAgentLatest_ReturnsVersionJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewHandler("https://server:8443", "", agentDir, "1.2.3")
+	h := NewHandler("https://server:8443", "", agentDir, "1.2.3", metrics.NewTestMetrics())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/agent/latest?os=linux&arch=amd64", nil)
 	w := httptest.NewRecorder()
@@ -242,7 +243,7 @@ func TestAgentLatest_PerArchVersions(t *testing.T) {
 		}
 	}
 
-	h := NewHandler("https://server:8443", "", agentDir, "irrelevant-server-version")
+	h := NewHandler("https://server:8443", "", agentDir, "irrelevant-server-version", metrics.NewTestMetrics())
 
 	for _, want := range []struct {
 		arch    string
@@ -296,7 +297,7 @@ func TestAgentLatest_UnknownVersionReturnsEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewHandler("https://server:8443", "", agentDir, "fallback-version")
+	h := NewHandler("https://server:8443", "", agentDir, "fallback-version", metrics.NewTestMetrics())
 
 	req := httptest.NewRequest(http.MethodGet,
 		"/api/v1/agent/latest?os=freebsd&arch=arm64", nil)
@@ -330,7 +331,7 @@ func TestAgentDownload_ServesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h := NewHandler("https://server:8443", "", agentDir, "1.0.0")
+	h := NewHandler("https://server:8443", "", agentDir, "1.0.0", metrics.NewTestMetrics())
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -352,7 +353,7 @@ func TestAgentDownload_ServesFile(t *testing.T) {
 
 func TestAgentDownload_Returns404_WhenBinaryMissing(t *testing.T) {
 	dir := t.TempDir()
-	h := NewHandler("https://server:8443", "", filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server:8443", "", filepath.Join(dir, "agents"), "1.0.0", metrics.NewTestMetrics())
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)
@@ -367,7 +368,7 @@ func TestAgentDownload_Returns404_WhenBinaryMissing(t *testing.T) {
 }
 
 func TestBootstrapRegister_ReturnsServiceUnavailable_WithoutCA(t *testing.T) {
-	h := NewHandler("https://server:8443", "", "", "1.0.0")
+	h := NewHandler("https://server:8443", "", "", "1.0.0", metrics.NewTestMetrics())
 	// No CA or registry configured.
 
 	mux := http.NewServeMux()
@@ -465,7 +466,7 @@ func newTestHandlerWithCA(t *testing.T, dir string) *Handler {
 		t.Fatalf("load test CA: %v", err)
 	}
 
-	h := NewHandler("https://server:8443", certPath, filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server:8443", certPath, filepath.Join(dir, "agents"), "1.0.0", metrics.NewTestMetrics())
 	h.SetCA(authority)
 	h.SetTrustedPatterns([]config.TrustedEnrollment{})
 	return h
@@ -485,7 +486,7 @@ func generateTestCSR(t *testing.T, hostname string) []byte {
 
 func TestAgentDownload_RejectsInvalidOsArch(t *testing.T) {
 	dir := t.TempDir()
-	h := NewHandler("https://server:8443", "", filepath.Join(dir, "agents"), "1.0.0")
+	h := NewHandler("https://server:8443", "", filepath.Join(dir, "agents"), "1.0.0", metrics.NewTestMetrics())
 
 	mux := http.NewServeMux()
 	h.RegisterRoutes(mux)

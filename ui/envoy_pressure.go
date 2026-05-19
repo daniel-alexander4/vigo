@@ -34,7 +34,7 @@ func (h *Handler) EnvoyFootprintFragment(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval, h.offlineThreshold)
 	if err != nil {
 		http.Error(w, "envoy not found", http.StatusNotFound)
 		return

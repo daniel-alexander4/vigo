@@ -51,6 +51,7 @@ type Assistant struct {
 	cfg          config.AISection
 	rateLimiter  *rateLimiter
 	systemPrompt string
+	metrics      *Metrics
 	// cveLookup, when set, enriches structured CVE-bearing Ask-AI
 	// questions with the authoritative NVD record before the model
 	// turn. Wired in main.go via the risk-package NVD enricher.
@@ -59,8 +60,10 @@ type Assistant struct {
 
 // NewAssistant creates an assistant with the given provider and dependencies.
 // The docsDir parameter specifies the path to docs for system prompt injection
-// (controlled by cfg.DocsMode: "full", "condensed", or "off").
-func NewAssistant(provider Provider, queries *db.Queries, configStore *config.ConfigStore, runStore db.RunStore, baseInterval time.Duration, cfg config.AISection, docsDir string) *Assistant {
+// (controlled by cfg.DocsMode: "full", "condensed", or "off"). The metrics
+// struct is constructed against the server's per-instance prometheus registry
+// so two assistants in one Go test process don't share counter state.
+func NewAssistant(provider Provider, queries *db.Queries, configStore *config.ConfigStore, runStore db.RunStore, baseInterval, offlineThreshold time.Duration, cfg config.AISection, docsDir string, m *Metrics) *Assistant {
 	cfg = withDefaults(cfg)
 	var rl *rateLimiter
 	if cfg.RateLimit > 0 {
@@ -88,14 +91,16 @@ func NewAssistant(provider Provider, queries *db.Queries, configStore *config.Co
 	return &Assistant{
 		provider: provider,
 		tools: &toolDeps{
-			queries:      queries,
-			configStore:  configStore,
-			runStore:     runStore,
-			baseInterval: baseInterval,
+			queries:          queries,
+			configStore:      configStore,
+			runStore:         runStore,
+			baseInterval:     baseInterval,
+			offlineThreshold: offlineThreshold,
 		},
 		cfg:          cfg,
 		rateLimiter:  rl,
 		systemPrompt: buildSystemPrompt(docsCorpus),
+		metrics:      m,
 	}
 }
 
@@ -112,10 +117,14 @@ func (a *Assistant) Ask(ctx context.Context, req AskRequest) (*AskResponse, erro
 		return nil, fmt.Errorf("rate limit exceeded (%d requests/minute)", a.cfg.RateLimit)
 	}
 
-	aiRequestsTotal.Inc()
+	if a.metrics != nil {
+		a.metrics.RequestsTotal.Inc()
+	}
 	start := time.Now()
 	defer func() {
-		aiRequestDuration.Observe(time.Since(start).Seconds())
+		if a.metrics != nil {
+			a.metrics.RequestDuration.Observe(time.Since(start).Seconds())
+		}
 	}()
 
 	messages := []Message{
@@ -166,11 +175,15 @@ func (a *Assistant) Ask(ctx context.Context, req AskRequest) (*AskResponse, erro
 			Model:     a.cfg.Model,
 		})
 		if err != nil {
-			aiErrorsTotal.Inc()
+			if a.metrics != nil {
+				a.metrics.ErrorsTotal.Inc()
+			}
 			return nil, fmt.Errorf("LLM chat failed: %w", err)
 		}
 		totalTokens += resp.TokensUsed
-		aiTokensTotal.Add(float64(resp.TokensUsed))
+		if a.metrics != nil {
+			a.metrics.TokensTotal.Add(float64(resp.TokensUsed))
+		}
 
 		// No tool calls — we have the final answer.
 		if len(resp.ToolCalls) == 0 {
@@ -198,7 +211,9 @@ func (a *Assistant) Ask(ctx context.Context, req AskRequest) (*AskResponse, erro
 		messages = append(messages, assistantMsg)
 
 		for _, tc := range resp.ToolCalls {
-			aiToolCallsTotal.WithLabelValues(tc.Name).Inc()
+			if a.metrics != nil {
+				a.metrics.ToolCallsTotal.WithLabelValues(tc.Name).Inc()
+			}
 			toolsUsed = append(toolsUsed, tc.Name)
 
 			result, err := a.tools.dispatchTool(ctx, tc.Name, tc.Arguments)
@@ -232,10 +247,14 @@ func (a *Assistant) AskStream(ctx context.Context, req AskRequest, send func(SSE
 		return fmt.Errorf("rate limit exceeded (%d requests/minute)", a.cfg.RateLimit)
 	}
 
-	aiRequestsTotal.Inc()
+	if a.metrics != nil {
+		a.metrics.RequestsTotal.Inc()
+	}
 	start := time.Now()
 	defer func() {
-		aiRequestDuration.Observe(time.Since(start).Seconds())
+		if a.metrics != nil {
+			a.metrics.RequestDuration.Observe(time.Since(start).Seconds())
+		}
 	}()
 
 	messages := []Message{
@@ -283,11 +302,15 @@ func (a *Assistant) AskStream(ctx context.Context, req AskRequest, send func(SSE
 			Model:     a.cfg.Model,
 		})
 		if err != nil {
-			aiErrorsTotal.Inc()
+			if a.metrics != nil {
+				a.metrics.ErrorsTotal.Inc()
+			}
 			return fmt.Errorf("LLM chat failed: %w", err)
 		}
 		totalTokens += resp.TokensUsed
-		aiTokensTotal.Add(float64(resp.TokensUsed))
+		if a.metrics != nil {
+			a.metrics.TokensTotal.Add(float64(resp.TokensUsed))
+		}
 
 		if len(resp.ToolCalls) == 0 {
 			send(SSEEvent{Type: "delta", Text: resp.Content})
@@ -309,7 +332,9 @@ func (a *Assistant) AskStream(ctx context.Context, req AskRequest, send func(SSE
 		messages = append(messages, assistantMsg)
 
 		for _, tc := range resp.ToolCalls {
-			aiToolCallsTotal.WithLabelValues(tc.Name).Inc()
+			if a.metrics != nil {
+				a.metrics.ToolCallsTotal.WithLabelValues(tc.Name).Inc()
+			}
 			toolsUsed = append(toolsUsed, tc.Name)
 
 			result, err := a.tools.dispatchTool(ctx, tc.Name, tc.Arguments)

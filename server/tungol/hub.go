@@ -39,6 +39,7 @@ type Hub struct {
 	// adds the proper persisted signed-members set). Protected by mu.
 	steorraPins map[string]*SteorraPin
 	auditWriter PinAuditRecorder // nil-safe; emits mismatch events
+	metrics     *metrics.Metrics // per-instance prometheus collectors
 	mu          sync.RWMutex
 }
 
@@ -85,7 +86,8 @@ type steorraConn struct {
 }
 
 // NewHub creates a Hub that connects to each configured steorra via mTLS.
-func NewHub(ctx context.Context, steorras []config.SteorraEntry, certFile, keyFile, caFile string) (*Hub, error) {
+// m owns the per-steorra latency/up gauges.
+func NewHub(ctx context.Context, steorras []config.SteorraEntry, certFile, keyFile, caFile string, m *metrics.Metrics) (*Hub, error) {
 	tlsCreds, err := buildClientTLS(certFile, keyFile, caFile)
 	if err != nil {
 		return nil, fmt.Errorf("building steorra TLS credentials: %w", err)
@@ -95,6 +97,7 @@ func NewHub(ctx context.Context, steorras []config.SteorraEntry, certFile, keyFi
 		steorras:       make([]steorraConn, 0, len(steorras)),
 		steorraReports: make(map[string]*pb.SteorraStatusReport),
 		steorraPins:    make(map[string]*SteorraPin),
+		metrics:        m,
 	}
 
 	for _, s := range steorras {
@@ -405,9 +408,13 @@ func (h *Hub) SteorraStatuses(ctx context.Context) []SteorraStatus {
 			statuses[i].Error = r.err.Error()
 			if pr, ok := r.value.(*probeResult); ok {
 				statuses[i].LatencyMs = pr.latency.Milliseconds()
-				metrics.TungolSteorraLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
+				if h.metrics != nil {
+					h.metrics.TungolSteorraLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
+				}
 			}
-			metrics.TungolSteorraUp.WithLabelValues(sc.id).Set(0)
+			if h.metrics != nil {
+				h.metrics.TungolSteorraUp.WithLabelValues(sc.id).Set(0)
+			}
 
 			// If probe failed but we have a self-report from the steorra,
 			// populate compliance data so dashboards are not blank.
@@ -434,8 +441,10 @@ func (h *Hub) SteorraStatuses(ctx context.Context) []SteorraStatus {
 			statuses[i].NoData = pr.resp.NoData
 			statuses[i].ConvergencePct = pr.resp.ConvergencePct
 			statuses[i].LatencyMs = pr.latency.Milliseconds()
-			metrics.TungolSteorraLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
-			metrics.TungolSteorraUp.WithLabelValues(sc.id).Set(1)
+			if h.metrics != nil {
+				h.metrics.TungolSteorraLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
+				h.metrics.TungolSteorraUp.WithLabelValues(sc.id).Set(1)
+			}
 		}
 	}
 	return statuses

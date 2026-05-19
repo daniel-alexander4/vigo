@@ -12,10 +12,10 @@ import (
 	"git.alexander4.io/vigo/server/conditionals"
 )
 
-func resetFleetMemo() {
-	fleetMemoMu.Lock()
-	fleetMemo = map[string]fleetMemoEntry{}
-	fleetMemoMu.Unlock()
+func resetFleetMemo(cs *ConfigStore) {
+	cs.fleetMemoMu.Lock()
+	cs.fleetMemo = map[string]fleetMemoEntry{}
+	cs.fleetMemoMu.Unlock()
 }
 
 // --- detection / parsing ---
@@ -211,8 +211,8 @@ func TestResolveFleetLookup_Empty(t *testing.T) {
 }
 
 func TestResolveFleetLookupsInConfig_Memo(t *testing.T) {
-	resetFleetMemo()
-	SetFleetLookupTTL(time.Minute)
+	cs := NewEmptyConfigStore("", nil)
+	cs.SetFleetLookupTTL(time.Minute)
 	t0 := time.Now()
 
 	cfg := &EnvoyConfig{HasFleetLookups: true, Vars: map[string]any{}}
@@ -229,7 +229,7 @@ func TestResolveFleetLookupsInConfig_Memo(t *testing.T) {
 	}
 
 	// First resolve: miss → members() called.
-	if err := ResolveFleetLookupsInConfig(cfg, members, nil, t0); err != nil {
+	if err := cs.ResolveFleetLookupsInConfig(cfg, members, nil, t0); err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Vars["backends"] != "h1,h2" {
@@ -241,7 +241,7 @@ func TestResolveFleetLookupsInConfig_Memo(t *testing.T) {
 
 	// Second resolve within TTL: hit → members() NOT called again.
 	cfg2 := &EnvoyConfig{HasFleetLookups: true, Vars: map[string]any{"backends": fl}}
-	if err := ResolveFleetLookupsInConfig(cfg2, members, nil, t0.Add(10*time.Second)); err != nil {
+	if err := cs.ResolveFleetLookupsInConfig(cfg2, members, nil, t0.Add(10*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	if calls != 1 {
@@ -253,7 +253,7 @@ func TestResolveFleetLookupsInConfig_Memo(t *testing.T) {
 
 	// Past the TTL: miss → members() called again.
 	cfg3 := &EnvoyConfig{HasFleetLookups: true, Vars: map[string]any{"backends": fl}}
-	if err := ResolveFleetLookupsInConfig(cfg3, members, nil, t0.Add(2*time.Minute)); err != nil {
+	if err := cs.ResolveFleetLookupsInConfig(cfg3, members, nil, t0.Add(2*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
 	if calls != 2 {
@@ -301,12 +301,12 @@ envoys:
 	}
 
 	// Simulate the clone path: resolve the fleet lookup, then re-run ExpandForEach.
-	resetFleetMemo()
+	resetFleetMemo(store)
 	cloned := cfg.Clone()
 	members := func() []FleetMember {
 		return []FleetMember{{Hostname: "w1", IP: "10.0.0.1", Tags: []string{"web"}}, {Hostname: "w2", IP: "10.0.0.2", Tags: []string{"web"}}, {Hostname: "d1", IP: "10.0.0.9", Tags: []string{"db"}}}
 	}
-	if err := ResolveFleetLookupsInConfig(cloned, members, nil, time.Now()); err != nil {
+	if err := store.ResolveFleetLookupsInConfig(cloned, members, nil, time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	for i := range cloned.Modules {

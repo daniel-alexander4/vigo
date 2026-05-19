@@ -36,7 +36,7 @@ steps:
     target: "*.web.*"
 `)
 
-	engine := NewEngine(nil, nil)
+	engine := NewEngine(nil, nil, nil)
 	if err := engine.Load(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ steps:
     target: "*"
 `)
 
-	engine := NewEngine(nil, nil)
+	engine := NewEngine(nil, nil, nil)
 	if err := engine.Load(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ name: empty
 description: no steps
 `)
 
-	engine := NewEngine(nil, nil)
+	engine := NewEngine(nil, nil, nil)
 	err := engine.Load(dir)
 	if err == nil {
 		t.Error("expected error for workflow without steps")
@@ -102,7 +102,7 @@ description: no steps
 }
 
 func TestEngine_LoadMissingDir(t *testing.T) {
-	engine := NewEngine(nil, nil)
+	engine := NewEngine(nil, nil, nil)
 	if err := engine.Load("/nonexistent/path"); err != nil {
 		t.Errorf("expected nil error for missing dir, got: %v", err)
 	}
@@ -121,7 +121,7 @@ steps:
     health_check: "curl -s http://localhost/health"
 `)
 
-	engine := NewEngine(nil, nil)
+	engine := NewEngine(nil, nil, nil)
 	if err := engine.Load(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ steps:
 }
 
 func TestEngine_AbortFlag(t *testing.T) {
-	engine := NewEngine(nil, nil)
+	engine := NewEngine(nil, nil, nil)
 
 	if engine.isAborted("run-1") {
 		t.Error("should not be aborted initially")
@@ -177,7 +177,7 @@ steps:
     target: "*"
 `)
 
-	engine := NewEngine(nil, nil)
+	engine := NewEngine(nil, nil, nil)
 	if err := engine.Load(dir); err != nil {
 		t.Fatal(err)
 	}

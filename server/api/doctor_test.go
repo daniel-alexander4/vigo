@@ -25,6 +25,7 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/license"
+	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/secrets"
 )
 
@@ -71,7 +72,7 @@ func newTestLicenseEnforcer(t *testing.T) *license.Enforcer {
 	// LoadDir falls back to the built-in free license when no .lic files exist.
 	enforcer, err := license.NewEnforcer(licenseDir, graceDir, "", func(_ context.Context) (int, error) {
 		return 0, nil // 0 active envoys
-	}, nil)
+	}, nil, metrics.NewTestMetrics())
 	if err != nil {
 		t.Fatalf("new enforcer: %v", err)
 	}

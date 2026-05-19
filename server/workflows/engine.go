@@ -61,16 +61,19 @@ type PushRunner interface {
 type Engine struct {
 	queries    *db.Queries
 	runner     PushRunner
+	metrics    *metrics.Metrics
 	workflows  map[string]*WorkflowDef
 	mu         sync.RWMutex
 	abortFlags sync.Map // workflowRunID → struct{}
 }
 
-// NewEngine creates a workflow engine.
-func NewEngine(queries *db.Queries, runner PushRunner) *Engine {
+// NewEngine creates a workflow engine. m owns the workflow-run counters
+// and may be nil in tests that don't observe those metrics.
+func NewEngine(queries *db.Queries, runner PushRunner, m *metrics.Metrics) *Engine {
 	return &Engine{
 		queries:   queries,
 		runner:    runner,
+		metrics:   m,
 		workflows: make(map[string]*WorkflowDef),
 	}
 }
@@ -354,7 +357,9 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 		StartedAt:   now,
 		FinishedAt:  finished,
 	})
-	metrics.WorkflowRunsTotal.WithLabelValues("complete").Inc()
+	if e.metrics != nil {
+		e.metrics.WorkflowRunsTotal.WithLabelValues("complete").Inc()
+	}
 	slog.Info("workflow: completed", "workflow_run_id", runID)
 }
 
@@ -402,7 +407,9 @@ func (e *Engine) failWorkflow(ctx context.Context, runID string, step int, reaso
 		FinishedAt:    finished,
 		FailureReason: sql.NullString{String: reason, Valid: true},
 	})
-	metrics.WorkflowRunsTotal.WithLabelValues("failed").Inc()
+	if e.metrics != nil {
+		e.metrics.WorkflowRunsTotal.WithLabelValues("failed").Inc()
+	}
 	slog.Info("workflow: failed", "workflow_run_id", runID, "reason", reason)
 }
 

@@ -42,9 +42,9 @@ Examples:
 		antiExampleDir, _ := cmd.Flags().GetString("anti-example-dir")
 
 		if args[0] == "all" {
-			return runCopyAll(publish.StockpileDir, exampleDir, antiExampleDir)
+			return runCopyAll(publish.DefaultStockpileDir, exampleDir, antiExampleDir)
 		}
-		return runCopyOne(args[0], publish.StockpileDir, exampleDir, antiExampleDir)
+		return runCopyOne(args[0], publish.DefaultStockpileDir, exampleDir, antiExampleDir)
 	},
 }
 

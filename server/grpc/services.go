@@ -16,6 +16,7 @@ import (
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/integrations"
 	"git.alexander4.io/vigo/server/license"
+	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/registry"
 	"git.alexander4.io/vigo/server/tungol"
 	"git.alexander4.io/vigo/server/swarm"
@@ -52,7 +53,9 @@ type AgentService struct {
 	bundleSigner     *BundleSigner     // signs policy bundles for agent verification
 	bundleMaxAge     uint32            // max_age_seconds for signed bundles (0 = forever)
 	bundlePubKeyPEM  string            // cached PEM of bundle signing public key
+	metrics          *metrics.Metrics  // per-instance prometheus collectors
 	baseInterval     time.Duration     // base check-in interval (used for stale threshold)
+	offlineThreshold time.Duration     // operator-configured override for the stale boundary (0 = default formula)
 	jitterPercent    int32             // jitter percentage sent to agents
 	fallbackServers  []string          // peer server addresses returned to agents on registration
 	// serverVersions is a per-arch ("<goos>/<goarch>" → version) map of the
@@ -194,7 +197,7 @@ func (s *AgentService) isRecentlyActive(envoyID string) bool {
 	if !ok {
 		return false
 	}
-	return freshness.IsResponsive(ts.LastSeen, s.baseInterval, ts.ObservedCycle())
+	return freshness.IsResponsive(ts.LastSeen, s.baseInterval, ts.ObservedCycle(), s.offlineThreshold)
 }
 
 // recordAudit is a nil-safe helper that records an audit event.
@@ -213,9 +216,11 @@ type AdminService struct {
 	registry      *registry.Registry
 	queries       *db.Queries
 	runStore      db.RunStore
-	configStore   *config.ConfigStore
-	baseInterval  time.Duration
-	hub           *tungol.Hub   // non-nil when role=hub; aggregates from steorras
+	configStore      *config.ConfigStore
+	metrics          *metrics.Metrics // per-instance prometheus collectors
+	baseInterval     time.Duration
+	offlineThreshold time.Duration
+	hub              *tungol.Hub // non-nil when role=hub; aggregates from steorras
 	fleetIndex    *fleet.FleetIndex // in-memory index for hot-path operations
 	reassignStore *ReassignStore    // pending envoy reassignments (steorra side)
 	auditWriter   auditRecorder    // tamper-evident audit writer (nil-safe)

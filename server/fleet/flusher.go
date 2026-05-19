@@ -20,14 +20,16 @@ import (
 type StateFlusher struct {
 	fleet   *FleetIndex
 	queries *db.Queries
+	metrics *metrics.Metrics
 }
 
 // NewStateFlusher creates a flusher that writes dirty state from the FleetIndex
-// to SQLite.
-func NewStateFlusher(fleet *FleetIndex, queries *db.Queries) *StateFlusher {
+// to SQLite. m owns the FleetIndex flush gauges/histograms.
+func NewStateFlusher(fleet *FleetIndex, queries *db.Queries, m *metrics.Metrics) *StateFlusher {
 	return &StateFlusher{
 		fleet:   fleet,
 		queries: queries,
+		metrics: m,
 	}
 }
 
@@ -67,9 +69,9 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 	}
 
 	start := time.Now()
-	metrics.FleetIndexDirtyCount.Set(float64(len(dirty)))
+	sf.metrics.FleetIndexDirtyCount.Set(float64(len(dirty)))
 	defer func() {
-		metrics.FleetIndexFlushDuration.Observe(time.Since(start).Seconds())
+		sf.metrics.FleetIndexFlushDuration.Observe(time.Since(start).Seconds())
 	}()
 
 	// Collect IDs for batch last_seen update.

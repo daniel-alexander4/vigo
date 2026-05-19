@@ -13,7 +13,6 @@ import (
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/freshness"
-	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/registry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -47,16 +46,16 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 	if s.fleetIndex != nil {
 		ts, exists, revoked := s.fleetIndex.GetEnvoyLite(envoyID)
 		if !exists {
-			metrics.CheckinsTotal.WithLabelValues("error").Inc()
+			s.metrics.CheckinsTotal.WithLabelValues("error").Inc()
 			return nil, status.Error(codes.NotFound, "envoy not found")
 		}
 		if revoked {
-			metrics.CheckinsTotal.WithLabelValues("error").Inc()
+			s.metrics.CheckinsTotal.WithLabelValues("error").Inc()
 			return nil, status.Error(codes.PermissionDenied, "envoy is revoked")
 		}
 		envoy = fleetEnvoyToDB(ts)
 	} else if err := s.registry.ValidateEnvoy(ctx, envoyID); err != nil {
-		metrics.CheckinsTotal.WithLabelValues("error").Inc()
+		s.metrics.CheckinsTotal.WithLabelValues("error").Inc()
 		if errors.Is(err, registry.ErrEnvoyRevoked) {
 			return nil, status.Error(codes.PermissionDenied, "envoy is revoked")
 		}

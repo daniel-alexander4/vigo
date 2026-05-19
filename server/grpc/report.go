@@ -16,7 +16,6 @@ import (
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/integrations"
-	"git.alexander4.io/vigo/server/metrics"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -120,15 +119,15 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 
 	// Record metrics for each result.
 	for _, result := range req.GetResults() {
-		metrics.ModuleActions.WithLabelValues(result.GetResourceType(), result.GetActionTaken()).Inc()
+		s.metrics.ModuleActions.WithLabelValues(result.GetResourceType(), result.GetActionTaken()).Inc()
 		if result.GetChanged() {
-			metrics.DriftDetected.WithLabelValues(hostname, result.GetModuleName()).Inc()
+			s.metrics.DriftDetected.WithLabelValues(hostname, result.GetModuleName()).Inc()
 		}
 	}
 
 	// Record run duration (use the run we already created — no re-fetch needed).
 	duration := time.Since(run.StartedAt).Seconds()
-	metrics.RunDuration.WithLabelValues(hostname).Observe(duration)
+	s.metrics.RunDuration.WithLabelValues(hostname).Observe(duration)
 
 	// Update FleetIndex with run status + append to recent runs.
 	if s.fleetIndex != nil {

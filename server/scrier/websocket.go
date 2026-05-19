@@ -149,7 +149,7 @@ type Handler struct {
 }
 
 // NewHandler creates a Scrier handler.
-func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Queries, version string, checkinInterval time.Duration) *Handler {
+func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Queries, version string, checkinInterval, offlineThreshold time.Duration) *Handler {
 	tmplSSH := template.Must(template.New("scrier-ssh").Parse(scrierSessionSSHHTML))
 	tmplRDP := template.Must(template.New("scrier-rdp").Parse(scrierSessionRDPHTML))
 

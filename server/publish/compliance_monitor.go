@@ -16,18 +16,30 @@ import (
 // If convergence drops below threshold within the rollback window,
 // it triggers an automatic rollback to the previous config.
 type ConvergenceMonitor struct {
-	mu          sync.Mutex
-	cancel      context.CancelFunc // cancels the active monitoring goroutine
-	fleetIndex  *fleet.FleetIndex
-	onRollback  func() error // called after rollback to trigger config reload
+	mu         sync.Mutex
+	cancel     context.CancelFunc // cancels the active monitoring goroutine
+	fleetIndex *fleet.FleetIndex
+	onRollback func() error // called after rollback to trigger config reload
+	liveDir    string       // .live/ to roll back
+	historyDir string       // snapshot tarballs to restore from
 }
 
 // NewConvergenceMonitor creates a ConvergenceMonitor. The onRollback callback
-// is invoked after a successful rollback to reload the config store.
-func NewConvergenceMonitor(fleetIndex *fleet.FleetIndex, onRollback func() error) *ConvergenceMonitor {
+// is invoked after a successful rollback to reload the config store. The
+// liveDir and historyDir are the paths Rollback operates on; empty values
+// fall back to the Default* constants.
+func NewConvergenceMonitor(fleetIndex *fleet.FleetIndex, onRollback func() error, liveDir, historyDir string) *ConvergenceMonitor {
+	if liveDir == "" {
+		liveDir = DefaultLiveDir
+	}
+	if historyDir == "" {
+		historyDir = DefaultHistoryDir
+	}
 	return &ConvergenceMonitor{
 		fleetIndex: fleetIndex,
 		onRollback: onRollback,
+		liveDir:    liveDir,
+		historyDir: historyDir,
 	}
 }
 
@@ -106,7 +118,7 @@ func (m *ConvergenceMonitor) run(ctx context.Context, threshold int, window time
 
 func (m *ConvergenceMonitor) triggerRollback() {
 	// Find the most recent snapshot version to roll back to.
-	versions, err := ListVersions(HistoryDir)
+	versions, err := ListVersions(m.historyDir)
 	if err != nil || len(versions) == 0 {
 		slog.Error("convergence monitor: cannot rollback, no config snapshots available", "error", err)
 		return
@@ -123,7 +135,7 @@ func (m *ConvergenceMonitor) triggerRollback() {
 
 	slog.Info("convergence monitor: rolling back to previous config", "version", version)
 
-	if err := RollbackToVersion(HistoryDir, version, LiveDir); err != nil {
+	if err := RollbackToVersion(m.historyDir, version, m.liveDir); err != nil {
 		slog.Error("convergence monitor: rollback failed", "error", err)
 		return
 	}

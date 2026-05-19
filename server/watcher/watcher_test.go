@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"git.alexander4.io/vigo/server/metrics"
 )
 
 // mockVersionProvider implements VersionProvider for testing.
@@ -113,7 +115,7 @@ func TestRotationTrigger(t *testing.T) {
 	}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, metrics.NewTestMetrics(), 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -153,7 +155,7 @@ func TestNotifyFuncCalledOnRotation(t *testing.T) {
 	}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, metrics.NewTestMetrics(), 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	var mu sync.Mutex
 	var notified []string
@@ -192,7 +194,7 @@ func TestRotationAppendsRotatedSecret(t *testing.T) {
 	}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, metrics.NewTestMetrics(), 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
@@ -213,7 +215,7 @@ func TestNoActionWhenVersionsUnchanged(t *testing.T) {
 	database := &mockDB{nodesByHost: map[string]string{}}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, metrics.NewTestMetrics(), 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
@@ -233,7 +235,7 @@ func TestWatcherRunLoop(t *testing.T) {
 	database := &mockDB{nodesByHost: map[string]string{}}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 50*time.Millisecond, []string{"vigo/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, metrics.NewTestMetrics(), 50*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -274,7 +276,7 @@ func TestExponentialBackoffOnFailure(t *testing.T) {
 	database := &mockDB{nodesByHost: map[string]string{}}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, metrics.NewTestMetrics(), 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
@@ -311,7 +313,7 @@ func TestBackoffCapsAt32x(t *testing.T) {
 	database := &mockDB{nodesByHost: map[string]string{}}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, metrics.NewTestMetrics(), 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
@@ -344,7 +346,7 @@ func TestNoActionOnVersionDowngrade(t *testing.T) {
 	}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, metrics.NewTestMetrics(), 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
@@ -376,7 +378,7 @@ func TestNoActionOnSameVersion(t *testing.T) {
 	}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/db/dsn"})
+	w := NewWatcher(provider, database, store, dispatcher, metrics.NewTestMetrics(), 100*time.Millisecond, []string{"vigo/db/dsn"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)
@@ -410,7 +412,7 @@ func TestMultipleAffectedNodes(t *testing.T) {
 	}
 	dispatcher := &mockDispatcher{}
 
-	w := NewWatcher(provider, database, store, dispatcher, 100*time.Millisecond, []string{"vigo/tls/cert"})
+	w := NewWatcher(provider, database, store, dispatcher, metrics.NewTestMetrics(), 100*time.Millisecond, []string{"vigo/tls/cert"})
 
 	ctx := context.Background()
 	w.initVersions(ctx)

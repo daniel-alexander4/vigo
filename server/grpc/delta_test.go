@@ -10,6 +10,7 @@ import (
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/metrics"
 )
 
 func newTestDeltaService() (*AgentService, *fleet.FleetIndex, *fleet.RunBatcher) {
@@ -24,6 +25,7 @@ func newTestDeltaService() (*AgentService, *fleet.FleetIndex, *fleet.RunBatcher)
 	svc := &AgentService{
 		fleetIndex: idx,
 		runBatcher: batcher,
+		metrics:    metrics.NewTestMetrics(),
 	}
 	return svc, idx, batcher
 }

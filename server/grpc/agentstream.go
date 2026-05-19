@@ -20,7 +20,6 @@ import (
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/freshness"
-	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/registry"
 	"git.alexander4.io/vigo/server/swarm"
 	"google.golang.org/grpc/codes"
@@ -100,7 +99,7 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 		return err
 	}
 
-	metrics.CheckinsTotal.WithLabelValues("stream_connect").Inc()
+	s.metrics.CheckinsTotal.WithLabelValues("stream_connect").Inc()
 	slog.Info("agent stream established",
 		"envoy_id", envoyID,
 		"hostname", envoy.Hostname,
@@ -349,7 +348,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	}
 	if req.GetPolicyVersion() > 0 && req.GetPolicyVersion() == configVersion &&
 		!forcePush && !hasPending {
-		metrics.CheckinsTotal.WithLabelValues("no_change").Inc()
+		s.metrics.CheckinsTotal.WithLabelValues("no_change").Inc()
 
 		// Look up observe_only flag: global (server.yaml) OR per-entry (envoys.vgo).
 		// Also sync match-block tags into FleetIndex; the matchfile is the
@@ -428,7 +427,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		agentFingerprint == cfg.MerkleRoot &&
 		!hasModuleWhens &&
 		!forcePush && !hasPending {
-		metrics.CheckinsTotal.WithLabelValues("no_change_merkle").Inc()
+		s.metrics.CheckinsTotal.WithLabelValues("no_change_merkle").Inc()
 
 		resp := &pb.CheckInResponse{
 			NoChange:            true,
@@ -508,9 +507,9 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 				return out
 			}
 			isStale := func(m config.FleetMember) bool {
-				return freshness.IsStaleFromCycle(m.LastSeen, s.baseInterval, 0)
+				return freshness.IsStaleFromCycle(m.LastSeen, s.baseInterval, 0, s.offlineThreshold)
 			}
-			if err := config.ResolveFleetLookupsInConfig(cloned, members, isStale, time.Now()); err != nil {
+			if err := s.configStore.ResolveFleetLookupsInConfig(cloned, members, isStale, time.Now()); err != nil {
 				return nil, status.Errorf(codes.Internal, "resolving fleet lookups: %v", err)
 			}
 			// foreach: over a now-resolved fleet: var (a list) expands here.
@@ -667,7 +666,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 	}
 
-	metrics.CheckinsTotal.WithLabelValues("policy_bundle").Inc()
+	s.metrics.CheckinsTotal.WithLabelValues("policy_bundle").Inc()
 
 	resp := &pb.CheckInResponse{
 		PolicyBundle:        bundle,

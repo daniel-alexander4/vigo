@@ -59,7 +59,7 @@ func TestEnvoyAttackSurface_AgreesWithRiskScoreEnvoy(t *testing.T) {
 		LastSeen:          time.Now(),
 		ConvergenceStatus: "converged",
 		Traits:            flat,
-	}, time.Minute)
+	}, time.Minute, 0)
 
 	// Sanity: the canonical scorer must surface the factors we expect
 	// from this trait shape. Without these, the lock-step assertion

@@ -10,33 +10,25 @@ import (
 
 func TestStaleThresholdFromCycle(t *testing.T) {
 	tests := []struct {
-		name       string
-		configured time.Duration
-		observed   time.Duration
-		want       time.Duration
+		name             string
+		configured       time.Duration
+		observed         time.Duration
+		offlineThreshold time.Duration
+		want             time.Duration
 	}{
-		{"bootstrap (observed=0): use configured", 5 * time.Second, 0, 12500 * time.Millisecond},
-		{"observed below configured: use configured", 5 * time.Second, 2 * time.Second, 12500 * time.Millisecond},
-		{"observed above configured: use observed", 5 * time.Second, 60 * time.Second, 150 * time.Second},
-		{"5min interval, no observation", 5 * time.Minute, 0, 12*time.Minute + 30*time.Second},
-		{"30s interval, observed 45s", 30 * time.Second, 45 * time.Second, 112500 * time.Millisecond},
+		{"bootstrap (observed=0): use configured", 5 * time.Second, 0, 0, 12500 * time.Millisecond},
+		{"observed below configured: use configured", 5 * time.Second, 2 * time.Second, 0, 12500 * time.Millisecond},
+		{"observed above configured: use observed", 5 * time.Second, 60 * time.Second, 0, 150 * time.Second},
+		{"5min interval, no observation", 5 * time.Minute, 0, 0, 12*time.Minute + 30*time.Second},
+		{"30s interval, observed 45s", 30 * time.Second, 45 * time.Second, 0, 112500 * time.Millisecond},
+		{"offlineThreshold wins over formula", 5 * time.Second, 60 * time.Second, 20 * time.Second, 20 * time.Second},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := StaleThresholdFromCycle(tt.configured, tt.observed); got != tt.want {
-				t.Errorf("StaleThresholdFromCycle(%v, %v) = %v, want %v", tt.configured, tt.observed, got, tt.want)
+			if got := StaleThresholdFromCycle(tt.configured, tt.observed, tt.offlineThreshold); got != tt.want {
+				t.Errorf("StaleThresholdFromCycle(%v, %v, %v) = %v, want %v", tt.configured, tt.observed, tt.offlineThreshold, got, tt.want)
 			}
 		})
-	}
-}
-
-func TestStaleThresholdFromCycle_OverrideWins(t *testing.T) {
-	SetOverride(20 * time.Second)
-	defer SetOverride(0)
-
-	got := StaleThresholdFromCycle(5*time.Second, 60*time.Second)
-	if got != 20*time.Second {
-		t.Errorf("override should win: got %v, want 20s", got)
 	}
 }
 
@@ -61,7 +53,7 @@ func TestIsStaleFromCycle(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsStaleFromCycle(tt.lastSeen, tt.configured, tt.observed); got != tt.want {
+			if got := IsStaleFromCycle(tt.lastSeen, tt.configured, tt.observed, 0); got != tt.want {
 				t.Errorf("IsStaleFromCycle = %v, want %v", got, tt.want)
 			}
 		})
@@ -69,7 +61,7 @@ func TestIsStaleFromCycle(t *testing.T) {
 }
 
 func TestMaxReportedCycle(t *testing.T) {
-	got := StaleThresholdFromCycle(5*time.Second, MaxReportedCycle)
+	got := StaleThresholdFromCycle(5*time.Second, MaxReportedCycle, 0)
 	want := 75 * time.Minute
 	if got != want {
 		t.Errorf("StaleThresholdFromCycle at MaxReportedCycle = %v, want %v", got, want)
@@ -78,37 +70,29 @@ func TestMaxReportedCycle(t *testing.T) {
 
 func TestResponsiveThreshold(t *testing.T) {
 	tests := []struct {
-		name       string
-		configured time.Duration
-		observed   time.Duration
-		want       time.Duration
+		name             string
+		configured       time.Duration
+		observed         time.Duration
+		offlineThreshold time.Duration
+		want             time.Duration
 	}{
 		// 1.2× the stale threshold = 3× effective interval.
-		{"bootstrap: 1.2× of 2.5× = 3× configured", 5 * time.Second, 0, 15 * time.Second},
-		{"observed widens window proportionally", 5 * time.Second, 60 * time.Second, 180 * time.Second},
-		{"5m interval, no observation", 5 * time.Minute, 0, 15 * time.Minute},
+		{"bootstrap: 1.2× of 2.5× = 3× configured", 5 * time.Second, 0, 0, 15 * time.Second},
+		{"observed widens window proportionally", 5 * time.Second, 60 * time.Second, 0, 180 * time.Second},
+		{"5m interval, no observation", 5 * time.Minute, 0, 0, 15 * time.Minute},
 		// configured=0 + observed=0 + no override hits the
 		// fallback branch — preserve the pre-0.38.13 behavior.
-		{"zero-config fallback", 0, 0, 15 * time.Minute},
+		{"zero-config fallback", 0, 0, 0, 15 * time.Minute},
+		// Override flows through StaleThresholdFromCycle, so the
+		// responsive boundary is 1.2× of the override.
+		{"offlineThreshold drives 1.2× boundary", 5 * time.Second, 60 * time.Second, 20 * time.Second, 24 * time.Second},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := ResponsiveThreshold(tt.configured, tt.observed); got != tt.want {
-				t.Errorf("ResponsiveThreshold(%v, %v) = %v, want %v", tt.configured, tt.observed, got, tt.want)
+			if got := ResponsiveThreshold(tt.configured, tt.observed, tt.offlineThreshold); got != tt.want {
+				t.Errorf("ResponsiveThreshold(%v, %v, %v) = %v, want %v", tt.configured, tt.observed, tt.offlineThreshold, got, tt.want)
 			}
 		})
-	}
-}
-
-func TestResponsiveThreshold_OverrideWins(t *testing.T) {
-	SetOverride(20 * time.Second)
-	defer SetOverride(0)
-
-	// Override flows through StaleThresholdFromCycle, so the
-	// responsive boundary is 1.2× of the override (24s).
-	got := ResponsiveThreshold(5*time.Second, 60*time.Second)
-	if got != 24*time.Second {
-		t.Errorf("with override, ResponsiveThreshold should be 1.2× override: got %v, want 24s", got)
 	}
 }
 
@@ -133,7 +117,7 @@ func TestIsResponsive(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsResponsive(tt.lastSeen, tt.configured, tt.observed); got != tt.want {
+			if got := IsResponsive(tt.lastSeen, tt.configured, tt.observed, 0); got != tt.want {
 				t.Errorf("IsResponsive = %v, want %v", got, tt.want)
 			}
 		})
@@ -152,10 +136,10 @@ func TestIsResponsive_LooserThanIsStale(t *testing.T) {
 	// 13s ago is past 2.5×5 = 12.5s (stale) but inside 3×5 = 15s
 	// (responsive).
 	lastSeen := now.Add(-13 * time.Second)
-	if !IsStaleFromCycle(lastSeen, configured, 0) {
+	if !IsStaleFromCycle(lastSeen, configured, 0, 0) {
 		t.Fatal("test premise broken: 13s ago should be stale at 5s configured")
 	}
-	if !IsResponsive(lastSeen, configured, 0) {
+	if !IsResponsive(lastSeen, configured, 0, 0) {
 		t.Error("an envoy that's just barely stale must still be responsive")
 	}
 }

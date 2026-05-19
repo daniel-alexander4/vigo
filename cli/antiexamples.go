@@ -76,9 +76,9 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dir, _ := cmd.Flags().GetString("anti-example-dir")
 		if args[0] == "all" {
-			return runCopyAll(publish.StockpileDir, dir)
+			return runCopyAll(publish.DefaultStockpileDir, dir)
 		}
-		return runCopyOne(args[0], publish.StockpileDir, dir)
+		return runCopyOne(args[0], publish.DefaultStockpileDir, dir)
 	},
 }
 

@@ -63,7 +63,8 @@ func TestCollector_ConcurrentUpdateGauges(t *testing.T) {
 		insertEnvoy(t, sqlDB, fmt.Sprintf("t-%d", i), fmt.Sprintf("h-%d.example.com", i), ls, revoked)
 	}
 
-	c := NewCollector(db.New(sqlDB), sqlDB, nil, time.Minute)
+	m := NewTestMetrics()
+	c := NewCollector(db.New(sqlDB), sqlDB, nil, m, time.Minute, 0)
 	ctx := context.Background()
 
 	var wg sync.WaitGroup
@@ -104,7 +105,8 @@ func TestCollector_UpdateGaugesConsistency(t *testing.T) {
 	insertEnvoy(t, sqlDB, "t-3", "noseen.example.com", nil, false)
 	insertEnvoy(t, sqlDB, "t-4", "revoked.example.com", &seen4, true)
 
-	c := NewCollector(db.New(sqlDB), sqlDB, nil, time.Minute)
+	m := NewTestMetrics()
+	c := NewCollector(db.New(sqlDB), sqlDB, nil, m, time.Minute, 0)
 	ctx := context.Background()
 
 	if err := c.UpdateGauges(ctx); err != nil {
@@ -112,7 +114,7 @@ func TestCollector_UpdateGaugesConsistency(t *testing.T) {
 	}
 
 	// EnvoysTotal = 5 (all envoys, including revoked).
-	gotTotal := testutil.ToFloat64(EnvoysTotal)
+	gotTotal := testutil.ToFloat64(m.EnvoysTotal)
 	if gotTotal != 5 {
 		t.Errorf("EnvoysTotal = %v, want 5", gotTotal)
 	}
@@ -122,7 +124,7 @@ func TestCollector_UpdateGaugesConsistency(t *testing.T) {
 	// checks LastSeen).
 	// Actually the code checks recentlyActive for ALL envoys, revoked or not.
 	// t-0 (1 min), t-1 (30 min), t-4 (5 min) = 3 active.
-	gotActive := testutil.ToFloat64(EnvoysActive)
+	gotActive := testutil.ToFloat64(m.EnvoysActive)
 	if gotActive != 3 {
 		t.Errorf("EnvoysActive = %v, want 3", gotActive)
 	}
@@ -131,7 +133,7 @@ func TestCollector_UpdateGaugesConsistency(t *testing.T) {
 	// Non-revoked: t-0, t-1, t-2, t-3 (4 total).
 	// recentlyActive among non-revoked: t-0, t-1 (2 compliant).
 	// ConvergencePct = 2/4 = 0.5.
-	gotPct := testutil.ToFloat64(ConvergencePct)
+	gotPct := testutil.ToFloat64(m.ConvergencePct)
 	if math.Abs(gotPct-0.5) > 0.001 {
 		t.Errorf("ConvergencePct = %v, want 0.5", gotPct)
 	}

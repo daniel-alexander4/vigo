@@ -22,6 +22,7 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	isgrpc "git.alexander4.io/vigo/server/grpc"
+	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/registry"
 )
 
@@ -53,6 +54,7 @@ func startTestServerWithConfig(t *testing.T, configDir string) (string, *config.
 		Registry:    reg,
 		ConfigStore: configStore,
 		Queries:     queries,
+		Metrics:     metrics.NewTestMetrics(),
 	})
 	if err != nil {
 		t.Fatal(err)

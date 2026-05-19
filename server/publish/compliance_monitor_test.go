@@ -19,8 +19,8 @@ func TestConvergenceMonitorNoRollbackWhenHealthy(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		id := "id-" + string(rune('a'+i))
 		fi.AddEnvoy(fleet.EnvoyState{
-			ID:               id,
-			Hostname:         "host-" + id,
+			ID:                id,
+			Hostname:          "host-" + id,
 			ConvergenceStatus: "converged",
 		}, nil)
 	}
@@ -29,7 +29,7 @@ func TestConvergenceMonitorNoRollbackWhenHealthy(t *testing.T) {
 	m := NewConvergenceMonitor(fi, func() error {
 		rollbackCalled.Add(1)
 		return nil
-	})
+	}, "", "")
 
 	m.Start(50, 500*time.Millisecond)
 
@@ -46,16 +46,6 @@ func TestConvergenceMonitorTriggersRollback(t *testing.T) {
 	tmpDir := t.TempDir()
 	liveDir := filepath.Join(tmpDir, ".live")
 	histDir := filepath.Join(tmpDir, "history")
-
-	// Override package-level dirs.
-	origLive := LiveDir
-	origHist := HistoryDir
-	LiveDir = liveDir
-	HistoryDir = histDir
-	t.Cleanup(func() {
-		LiveDir = origLive
-		HistoryDir = origHist
-	})
 
 	// Create a live dir with some content and take two snapshots.
 	// Snapshots use second-level timestamps so we must space them apart.
@@ -82,16 +72,16 @@ func TestConvergenceMonitorTriggersRollback(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		id := "c-" + string(rune('a'+i))
 		fi.AddEnvoy(fleet.EnvoyState{
-			ID:               id,
-			Hostname:         "converged-" + id,
+			ID:                id,
+			Hostname:          "converged-" + id,
 			ConvergenceStatus: "converged",
 		}, nil)
 	}
 	for i := 0; i < 7; i++ {
 		id := "f-" + string(rune('a'+i))
 		fi.AddEnvoy(fleet.EnvoyState{
-			ID:               id,
-			Hostname:         "failed-" + id,
+			ID:                id,
+			Hostname:          "failed-" + id,
 			ConvergenceStatus: "failed",
 		}, nil)
 	}
@@ -100,7 +90,7 @@ func TestConvergenceMonitorTriggersRollback(t *testing.T) {
 	m := NewConvergenceMonitor(fi, func() error {
 		rollbackCalled.Add(1)
 		return nil
-	})
+	}, liveDir, histDir)
 
 	// Threshold 50% — fleet is at 30%, should trigger rollback.
 	m.Start(50, 30*time.Second)
@@ -125,8 +115,8 @@ func TestConvergenceMonitorTriggersRollback(t *testing.T) {
 func TestConvergenceMonitorCancelsPrevious(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{
-		ID:               "a",
-		Hostname:         "a.example.com",
+		ID:                "a",
+		Hostname:          "a.example.com",
 		ConvergenceStatus: "converged",
 	}, nil)
 
@@ -134,7 +124,7 @@ func TestConvergenceMonitorCancelsPrevious(t *testing.T) {
 	m := NewConvergenceMonitor(fi, func() error {
 		rollbackCalled.Add(1)
 		return nil
-	})
+	}, "", "")
 
 	// Start first monitor with long window.
 	m.Start(50, 10*time.Minute)
@@ -158,7 +148,7 @@ func TestConvergenceMonitorEmptyFleet(t *testing.T) {
 	m := NewConvergenceMonitor(fi, func() error {
 		rollbackCalled.Add(1)
 		return nil
-	})
+	}, "", "")
 
 	// Empty fleet — should not trigger rollback.
 	m.Start(90, 500*time.Millisecond)

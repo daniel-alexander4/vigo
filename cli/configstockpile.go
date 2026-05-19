@@ -31,7 +31,7 @@ stockpile/modules/system/ssh-hardening.vgo.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		exampleDir, _ := cmd.Flags().GetString("example-dir")
-		return runOrganize(publish.StockpileDir, exampleDir)
+		return runOrganize(publish.DefaultStockpileDir, exampleDir)
 	},
 }
 
@@ -48,7 +48,7 @@ Examples:
   vigocli config stockpile search /etc/ssh`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runStockpileSearch(args[0], publish.StockpileDir)
+		return runStockpileSearch(args[0], publish.DefaultStockpileDir)
 	},
 }
 

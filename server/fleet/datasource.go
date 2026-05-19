@@ -40,7 +40,7 @@ func NewDataSource(fleet *FleetIndex, queries *db.Queries, runStore db.RunStore,
 	}
 }
 
-func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPageData {
+func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration) ui.DashboardPageData {
 	allEnvoys := ds.fleet.AllEnvoys()
 
 	totalEnvoys := len(allEnvoys)
@@ -135,7 +135,7 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 	}
 }
 
-func (ds *DataSource) ConvergenceData(baseInterval time.Duration) ui.ConvergencePageData {
+func (ds *DataSource) ConvergenceData(baseInterval, offlineThreshold time.Duration) ui.ConvergencePageData {
 	summary := ds.fleet.ConvergenceSummary()
 	total := int64(summary.Total)
 
@@ -208,8 +208,8 @@ func (ds *DataSource) ConvergenceData(baseInterval time.Duration) ui.Convergence
 	}
 }
 
-func (ds *DataSource) DashboardStatsData(baseInterval time.Duration) ui.DashboardStatsFragmentData {
-	d := ds.DashboardData(baseInterval)
+func (ds *DataSource) DashboardStatsData(baseInterval, offlineThreshold time.Duration) ui.DashboardStatsFragmentData {
+	d := ds.DashboardData(baseInterval, offlineThreshold)
 	return ui.DashboardStatsFragmentData{
 		TotalEnvoys:   d.TotalEnvoys,
 		ActiveEnvoys:  d.ActiveEnvoys,
@@ -218,7 +218,7 @@ func (ds *DataSource) DashboardStatsData(baseInterval time.Duration) ui.Dashboar
 	}
 }
 
-func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int, search string) ui.EnvoysPageData {
+func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, statusFilter string, afterHostname string, limit int, search string) ui.EnvoysPageData {
 	envoys, hasMore := ds.fleet.PaginatedEnvoys(afterHostname, limit, statusFilter, search)
 
 	rows := make([]ui.EnvoyRow, 0, len(envoys))
@@ -268,7 +268,7 @@ func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string
 	}
 }
 
-func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval time.Duration) (ui.EnvoyDetailPageData, error) {
+func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThreshold time.Duration) (ui.EnvoyDetailPageData, error) {
 	// FleetIndex for header (shell only — runs and facts loaded via fragments).
 	ts := ds.fleet.GetEnvoy(envoyID)
 	if ts == nil {
@@ -777,7 +777,7 @@ func collectCVEEntries(traitMap map[string]string) []ui.CVEEntry {
 }
 
 // RiskData computes fleet-wide risk scores from the in-memory fleet index.
-func (ds *DataSource) RiskData(baseInterval time.Duration) ui.RiskSummaryData {
+func (ds *DataSource) RiskData(baseInterval, offlineThreshold time.Duration) ui.RiskSummaryData {
 	allEnvoys := ds.fleet.AllEnvoys()
 	inputs := make([]risk.EnvoyInput, len(allEnvoys))
 	for i, es := range allEnvoys {
@@ -791,7 +791,7 @@ func (ds *DataSource) RiskData(baseInterval time.Duration) ui.RiskSummaryData {
 			ObservedCycle:     ds.fleet.EnvoyCycle(es.ID),
 		}
 	}
-	fr := risk.ScoreFleet(inputs, baseInterval, 5)
+	fr := risk.ScoreFleet(inputs, baseInterval, offlineThreshold, 5)
 	var top []ui.RiskEnvoyRow
 	for _, er := range fr.TopRisks {
 		top = append(top, ui.RiskEnvoyRow{
@@ -836,7 +836,7 @@ func (ds *DataSource) RiskData(baseInterval time.Duration) ui.RiskSummaryData {
 	}
 }
 
-func (ds *DataSource) RiskPostureData(baseInterval time.Duration) ui.RiskPosturePageData {
+func (ds *DataSource) RiskPostureData(baseInterval, offlineThreshold time.Duration) ui.RiskPosturePageData {
 	allEnvoys := ds.fleet.AllEnvoys()
 	inputs := make([]risk.EnvoyInput, len(allEnvoys))
 	for i, es := range allEnvoys {
@@ -850,7 +850,7 @@ func (ds *DataSource) RiskPostureData(baseInterval time.Duration) ui.RiskPosture
 			ObservedCycle:     ds.fleet.EnvoyCycle(es.ID),
 		}
 	}
-	fr := risk.ScoreFleet(inputs, baseInterval, len(inputs))
+	fr := risk.ScoreFleet(inputs, baseInterval, offlineThreshold, len(inputs))
 
 	// Build envoy rows with top factor.
 	envoys := make([]ui.RiskEnvoyDetail, 0, len(fr.Envoys))

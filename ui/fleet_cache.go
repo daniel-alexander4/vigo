@@ -139,6 +139,7 @@ type FleetCache struct {
 	configStore       *config.ConfigStore
 	globalObserveOnly bool
 	baseInterval      time.Duration
+	offlineThreshold  time.Duration
 	// fleetSource, when set, supplies the live in-memory convergence
 	// counts so the dashboard pills do not drift from FleetIndex.
 	// Wired via SetFleetSource at server startup. Observing still
@@ -157,12 +158,13 @@ type FleetCache struct {
 // state via configStore.Match(hostname). globalObserveOnly comes from
 // server.yaml's checkin.observe_only field — when true, every envoy
 // is observe-only regardless of per-match config.
-func NewFleetCache(queries *db.Queries, configStore *config.ConfigStore, globalObserveOnly bool, baseInterval time.Duration) *FleetCache {
+func NewFleetCache(queries *db.Queries, configStore *config.ConfigStore, globalObserveOnly bool, baseInterval, offlineThreshold time.Duration) *FleetCache {
 	return &FleetCache{
 		queries:           queries,
 		configStore:       configStore,
 		globalObserveOnly: globalObserveOnly,
 		baseInterval:      baseInterval,
+		offlineThreshold:  offlineThreshold,
 	}
 }
 
@@ -294,7 +296,7 @@ func (fc *FleetCache) refresh() {
 		if fc.fleetSource != nil {
 			observedCycle = fc.fleetSource.EnvoyCycle(e.ID)
 		}
-		lastSeenLabel, offline := envoyFreshness(lastSeen, fc.baseInterval, observedCycle)
+		lastSeenLabel, offline := envoyFreshness(lastSeen, fc.baseInterval, fc.offlineThreshold, observedCycle)
 
 		// Per-envoy observe-only: global flag OR matching envoys.vgo
 		// block. Orthogonal to convergence status — the cache reports

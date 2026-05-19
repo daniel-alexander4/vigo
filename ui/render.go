@@ -870,11 +870,11 @@ func timeAgo(t time.Time) string {
 // would otherwise render as "just now" in the staleness color.
 // Printing precise seconds in that window keeps label and color
 // consistent.
-func envoyFreshness(lastSeen time.Time, baseInterval, observedCycle time.Duration) (label string, stale bool) {
+func envoyFreshness(lastSeen time.Time, baseInterval, offlineThreshold, observedCycle time.Duration) (label string, stale bool) {
 	if lastSeen.IsZero() {
 		return "-", false
 	}
-	stale = freshness.IsStaleFromCycle(lastSeen, baseInterval, observedCycle)
+	stale = freshness.IsStaleFromCycle(lastSeen, baseInterval, observedCycle, offlineThreshold)
 	age := time.Since(lastSeen)
 	if stale && age < 30*time.Second {
 		secs := int(age.Seconds())

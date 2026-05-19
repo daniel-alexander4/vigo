@@ -34,7 +34,7 @@ logic as the server's config loader. If valid, atomically syncs to %s.
 By default, all http/https URLs in changed modules are checked for aliveness.
 Use --skip-url-check to disable (e.g., in air-gapped environments).
 
-Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.LiveDir),
+Use --dry-run to validate without publishing.`, publish.DefaultStockpileDir, publish.DefaultLiveDir),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		skipURLCheck, _ := cmd.Flags().GetBool("skip-url-check")
@@ -62,7 +62,7 @@ Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.Li
 			if dryRun {
 				return fmt.Errorf("--file and --dry-run cannot be combined")
 			}
-			res, err := publish.PublishFile(filePath, opts)
+			res, err := publish.PublishFile(filePath, opts, nil)
 			if err != nil {
 				suggestFixes(err, !askAI)
 				return err
@@ -94,7 +94,7 @@ Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.Li
 			return nil
 		}
 
-		res, err := publish.Publish(opts)
+		res, err := publish.Publish(opts, nil)
 		if err != nil {
 			suggestFixes(err, !askAI)
 			return err
@@ -270,7 +270,7 @@ func buildGenericFixPrompt(err error) string {
 	if filePath != "" {
 		// Only read files within the config tree to prevent information disclosure.
 		cleaned := filepath.Clean(filePath)
-		if strings.HasPrefix(cleaned, publish.StockpileDir) || strings.HasPrefix(cleaned, publish.LiveDir) {
+		if strings.HasPrefix(cleaned, publish.DefaultStockpileDir) || strings.HasPrefix(cleaned, publish.DefaultLiveDir) {
 			data, readErr := os.ReadFile(cleaned)
 			if readErr == nil {
 				fmt.Fprintf(&b, "File: %s\n```yaml\n%s```\n", cleaned, string(data))
@@ -425,7 +425,7 @@ func publishViaGitback() error {
 	}
 
 	// Mirror /srv/vigo/stacks/stockpile/ → workTree (delete-aware).
-	if err := publishMirrorIntoWorkTree(publish.StockpileDir, workTree); err != nil {
+	if err := publishMirrorIntoWorkTree(publish.DefaultStockpileDir, workTree); err != nil {
 		return fmt.Errorf("mirroring stockpile into work tree: %w", err)
 	}
 
@@ -688,7 +688,7 @@ func handleRetractionPregen(res *publish.Result) {
 		if result.RetractYAML == "" {
 			continue
 		}
-		retractPath := filepath.Join(publish.StockpileDir, "modules", result.Name+".retract")
+		retractPath := filepath.Join(publish.DefaultStockpileDir, "modules", result.Name+".retract")
 		if err := os.WriteFile(retractPath, []byte(result.RetractYAML), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", retractPath, err)
 			continue
@@ -703,7 +703,7 @@ func handleRetractionPregen(res *publish.Result) {
 
 func printRetractionResult(result retractAPIResult) {
 	// Write the .retract file to stockpile/modules/.
-	retractPath := filepath.Join(publish.StockpileDir, "modules", result.Name+".retract")
+	retractPath := filepath.Join(publish.DefaultStockpileDir, "modules", result.Name+".retract")
 	if result.RetractYAML != "" {
 		if err := os.WriteFile(retractPath, []byte(result.RetractYAML), 0644); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", retractPath, err)

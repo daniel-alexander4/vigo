@@ -66,6 +66,7 @@ type Watcher struct {
 	configReloader      ConfigReloader
 	dispatcher          EventDispatcher
 	notifyFunc          NotifyFunc
+	metrics             *metrics.Metrics
 	pollInterval        time.Duration
 	watchPaths          []string
 	versions            map[string]int
@@ -74,12 +75,14 @@ type Watcher struct {
 }
 
 // NewWatcher creates a watcher that monitors the given secret paths for
-// version changes at the specified polling interval.
+// version changes at the specified polling interval. m owns the secret
+// rotation counter.
 func NewWatcher(
 	provider VersionProvider,
 	db DB,
 	configStore EnvoyStore,
 	dispatcher EventDispatcher,
+	m *metrics.Metrics,
 	pollInterval time.Duration,
 	watchPaths []string,
 ) *Watcher {
@@ -88,6 +91,7 @@ func NewWatcher(
 		db:           db,
 		configStore:  configStore,
 		dispatcher:   dispatcher,
+		metrics:      m,
 		pollInterval: pollInterval,
 		watchPaths:   watchPaths,
 		versions:     make(map[string]int),
@@ -180,7 +184,7 @@ func (w *Watcher) checkRotations(ctx context.Context) {
 			continue
 		}
 
-		metrics.SecretRotationsTotal.Inc()
+		w.metrics.SecretRotationsTotal.Inc()
 		slog.Info("secret rotated",
 			"path", path,
 			"old_version", lastVersion,

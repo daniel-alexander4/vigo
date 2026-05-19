@@ -15,6 +15,13 @@
 // achieve a slower actual cadence, and the staleness threshold has to
 // track reality. Bootstrap (no observed cycle yet) falls back to the
 // configured interval.
+//
+// Every public predicate takes an explicit `offlineThreshold` operator
+// override. Zero means "use the default 2.5× rule"; a positive value
+// replaces the formula with a literal duration. Callers thread the
+// configured override through their own state (typically a `*Server`
+// field) rather than reading from a package global, so multiple
+// servers in one process keep independent thresholds.
 package freshness
 
 import "time"
@@ -26,21 +33,6 @@ import "time"
 // 2.5×30min = 75min. Operators with genuinely slower cycles should
 // raise `checkin.interval` to match.
 const MaxReportedCycle = 30 * time.Minute
-
-// override, when non-zero, replaces the default 2.5× rule with a literal
-// duration. Set once at server startup from cfg.CheckIn.OfflineThreshold;
-// never mutated at runtime. Read-only after init so no mutex is needed.
-var override time.Duration
-
-// SetOverride installs a literal stale threshold that bypasses the
-// default 2.5×-the-effective-interval calculation. Pass 0 to clear the
-// override and revert to the default. Called from server startup wiring
-// based on the operator's `checkin.offline_threshold:` value in
-// server.yaml. Not safe to call after the server has started serving
-// traffic — the package-level read is unsynchronised on the hot path.
-func SetOverride(d time.Duration) {
-	override = d
-}
 
 // effectiveInterval returns the larger of configured and observed.
 // Configured is the operator's intent; observed is the agent's actual
@@ -57,11 +49,12 @@ func effectiveInterval(configured, observed time.Duration) time.Duration {
 // StaleThresholdFromCycle resolves the staleness boundary for one
 // envoy. Default is 2.5 × max(configured, observed) — a half-beat of
 // grace lets one missed check-in count as jitter; two missed beats is
-// a real signal. Operator override (`checkin.offline_threshold:`)
-// replaces the default with a literal duration when set.
-func StaleThresholdFromCycle(configured, observed time.Duration) time.Duration {
-	if override > 0 {
-		return override
+// a real signal. A positive offlineThreshold replaces the default
+// with a literal duration (operator's `checkin.offline_threshold:`
+// in server.yaml); zero means "use the default formula."
+func StaleThresholdFromCycle(configured, observed, offlineThreshold time.Duration) time.Duration {
+	if offlineThreshold > 0 {
+		return offlineThreshold
 	}
 	eff := effectiveInterval(configured, observed)
 	return 5 * eff / 2 // 2.5×, integer-safe
@@ -73,11 +66,11 @@ func StaleThresholdFromCycle(configured, observed time.Duration) time.Duration {
 // have never reported are handled by the caller, not by this
 // predicate. observed = 0 means "no cycle reported yet" (bootstrap),
 // in which case the threshold is derived from configured alone.
-func IsStaleFromCycle(lastSeen time.Time, configured, observed time.Duration) bool {
+func IsStaleFromCycle(lastSeen time.Time, configured, observed, offlineThreshold time.Duration) bool {
 	if lastSeen.IsZero() {
 		return false
 	}
-	return time.Since(lastSeen) > StaleThresholdFromCycle(configured, observed)
+	return time.Since(lastSeen) > StaleThresholdFromCycle(configured, observed, offlineThreshold)
 }
 
 // responsiveZeroConfigFallback is the threshold used when the caller
@@ -93,18 +86,19 @@ const responsiveZeroConfigFallback = 15 * time.Minute
 // boundary. Slightly looser than the staleness threshold (1.2×) — an
 // envoy that's strictly *stale* by the UI rule may still be worth a
 // best-effort dispatch attempt during the brief window before it
-// falls off the responsive list. Honors the same `SetOverride` knob
-// as the stale path; an operator who has tightened that to a literal
-// value gets the same value here too.
+// falls off the responsive list. Honors the same offlineThreshold
+// knob as the stale path; an operator who has tightened that to a
+// literal value gets the same value here too.
 //
-// When configured is zero (boot-order edge cases, tests), returns
+// When configured, observed, and offlineThreshold are all zero
+// (boot-order edge cases, tests), returns
 // `responsiveZeroConfigFallback` (15m) so the caller doesn't get a
 // degenerate zero-window predicate.
-func ResponsiveThreshold(configured, observed time.Duration) time.Duration {
-	if configured == 0 && observed == 0 && override == 0 {
+func ResponsiveThreshold(configured, observed, offlineThreshold time.Duration) time.Duration {
+	if configured == 0 && observed == 0 && offlineThreshold == 0 {
 		return responsiveZeroConfigFallback
 	}
-	stale := StaleThresholdFromCycle(configured, observed)
+	stale := StaleThresholdFromCycle(configured, observed, offlineThreshold)
 	// 1.2× the stale threshold. Multiply first to keep integer-safe
 	// when stale is small; division by 5 instead of float math to
 	// avoid bringing in math.Round behavior.
@@ -122,9 +116,9 @@ func ResponsiveThreshold(configured, observed time.Duration) time.Duration {
 // Same zero-lastSeen rule as IsStaleFromCycle: never-reported envoys
 // (zero LastSeen) are not responsive — fresh enrollments live in a
 // separate code path.
-func IsResponsive(lastSeen time.Time, configured, observed time.Duration) bool {
+func IsResponsive(lastSeen time.Time, configured, observed, offlineThreshold time.Duration) bool {
 	if lastSeen.IsZero() {
 		return false
 	}
-	return time.Since(lastSeen) <= ResponsiveThreshold(configured, observed)
+	return time.Since(lastSeen) <= ResponsiveThreshold(configured, observed, offlineThreshold)
 }

@@ -29,7 +29,7 @@ func openWorkflowTestDB(t *testing.T) *sql.DB {
 func TestWorkflowHandler_List(t *testing.T) {
 	sqlDB := openWorkflowTestDB(t)
 	queries := db.New(sqlDB)
-	engine := workflows.NewEngine(queries, nil)
+	engine := workflows.NewEngine(queries, nil, nil)
 	handler := NewWorkflowHandler(queries, engine)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -64,7 +64,7 @@ func TestWorkflowHandler_List(t *testing.T) {
 
 func TestWorkflowHandler_ListEmpty(t *testing.T) {
 	sqlDB := openWorkflowTestDB(t)
-	engine := workflows.NewEngine(db.New(sqlDB), nil)
+	engine := workflows.NewEngine(db.New(sqlDB), nil, nil)
 	handler := NewWorkflowHandler(db.New(sqlDB), engine)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -81,7 +81,7 @@ func TestWorkflowHandler_ListEmpty(t *testing.T) {
 func TestWorkflowHandler_Get(t *testing.T) {
 	sqlDB := openWorkflowTestDB(t)
 	queries := db.New(sqlDB)
-	engine := workflows.NewEngine(queries, nil)
+	engine := workflows.NewEngine(queries, nil, nil)
 	handler := NewWorkflowHandler(queries, engine)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -135,7 +135,7 @@ func TestWorkflowHandler_Get(t *testing.T) {
 
 func TestWorkflowHandler_GetNotFound(t *testing.T) {
 	sqlDB := openWorkflowTestDB(t)
-	engine := workflows.NewEngine(db.New(sqlDB), nil)
+	engine := workflows.NewEngine(db.New(sqlDB), nil, nil)
 	handler := NewWorkflowHandler(db.New(sqlDB), engine)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -151,7 +151,7 @@ func TestWorkflowHandler_GetNotFound(t *testing.T) {
 
 func TestWorkflowHandler_RunMissingName(t *testing.T) {
 	sqlDB := openWorkflowTestDB(t)
-	engine := workflows.NewEngine(db.New(sqlDB), nil)
+	engine := workflows.NewEngine(db.New(sqlDB), nil, nil)
 	handler := NewWorkflowHandler(db.New(sqlDB), engine)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -168,7 +168,7 @@ func TestWorkflowHandler_RunMissingName(t *testing.T) {
 
 func TestWorkflowHandler_RunUnknownWorkflow(t *testing.T) {
 	sqlDB := openWorkflowTestDB(t)
-	engine := workflows.NewEngine(db.New(sqlDB), nil)
+	engine := workflows.NewEngine(db.New(sqlDB), nil, nil)
 	handler := NewWorkflowHandler(db.New(sqlDB), engine)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -185,7 +185,7 @@ func TestWorkflowHandler_RunUnknownWorkflow(t *testing.T) {
 
 func TestWorkflowHandler_AbortNotFound(t *testing.T) {
 	sqlDB := openWorkflowTestDB(t)
-	engine := workflows.NewEngine(db.New(sqlDB), nil)
+	engine := workflows.NewEngine(db.New(sqlDB), nil, nil)
 	handler := NewWorkflowHandler(db.New(sqlDB), engine)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -202,7 +202,7 @@ func TestWorkflowHandler_AbortNotFound(t *testing.T) {
 func TestWorkflowHandler_AbortNotRunning(t *testing.T) {
 	sqlDB := openWorkflowTestDB(t)
 	queries := db.New(sqlDB)
-	engine := workflows.NewEngine(queries, nil)
+	engine := workflows.NewEngine(queries, nil, nil)
 	handler := NewWorkflowHandler(queries, engine)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)

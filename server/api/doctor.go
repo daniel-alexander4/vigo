@@ -71,9 +71,10 @@ type DoctorConfig struct {
 	KeyFile        string
 	Enforcer       *license.Enforcer
 	ConfigStore    *config.ConfigStore
-	Queries        *db.Queries
-	Interval       time.Duration
-	Hub            *tungol.Hub
+	Queries          *db.Queries
+	Interval         time.Duration
+	OfflineThreshold time.Duration
+	Hub              *tungol.Hub
 	Integrations   bool
 	Role           config.TungolRole
 	SecretsBackend string
@@ -90,9 +91,10 @@ type DoctorHandler struct {
 	keyFile        string
 	enforcer       *license.Enforcer
 	configStore    *config.ConfigStore
-	queries        *db.Queries
-	baseInterval   time.Duration
-	hub            *tungol.Hub
+	queries          *db.Queries
+	baseInterval     time.Duration
+	offlineThreshold time.Duration
+	hub              *tungol.Hub
 	integrations   bool
 	role           config.TungolRole
 	secretsBackend string
@@ -118,9 +120,10 @@ func NewDoctorHandler(cfg DoctorConfig) *DoctorHandler {
 		keyFile:        cfg.KeyFile,
 		enforcer:       cfg.Enforcer,
 		configStore:    cfg.ConfigStore,
-		queries:        cfg.Queries,
-		baseInterval:   cfg.Interval,
-		hub:            cfg.Hub,
+		queries:          cfg.Queries,
+		baseInterval:     cfg.Interval,
+		offlineThreshold: cfg.OfflineThreshold,
+		hub:              cfg.Hub,
 		integrations:   cfg.Integrations,
 		role:           cfg.Role,
 		secretsBackend: cfg.SecretsBackend,
@@ -336,7 +339,7 @@ func (h *DoctorHandler) checkStaleEnvoys(ctx context.Context) DoctorCheck {
 		if h.cycleLookup != nil {
 			observed = h.cycleLookup(t.ID)
 		}
-		if freshness.IsStaleFromCycle(t.LastSeen.Time, h.baseInterval, observed) {
+		if freshness.IsStaleFromCycle(t.LastSeen.Time, h.baseInterval, observed, h.offlineThreshold) {
 			stale = append(stale, t.Hostname)
 		}
 	}

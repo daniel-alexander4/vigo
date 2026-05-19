@@ -58,13 +58,32 @@ type ConfigHandler struct {
 	convergenceMonitor *publish.ConvergenceMonitor
 	publishCfg         config.PublishSection
 	aiCfg              config.AISection
-	assistant          *ai.Assistant // nil when AI is not enabled
-	auditWriter        auditRecorder // nil-safe tamper-evident audit writer
+	assistant          *ai.Assistant   // nil when AI is not enabled
+	auditWriter        auditRecorder   // nil-safe tamper-evident audit writer
+	publishState       *publish.State  // freeze deadline owner; required for Freeze/Unfreeze
+	liveDir            string          // .live/ path for rollback
+	historyDir         string          // history dir for rollback / list-versions
 }
 
-// NewConfigHandler creates a ConfigHandler.
-func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore, fleetIndex *fleet.FleetIndex) *ConfigHandler {
-	return &ConfigHandler{queries: queries, configStore: configStore, fleetIndex: fleetIndex}
+// NewConfigHandler creates a ConfigHandler. publishState carries the
+// per-process freeze deadline. liveDir / historyDir are the paths the
+// Rollback and ListVersions handlers operate on; empty values fall back
+// to the publish.Default* constants.
+func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore, fleetIndex *fleet.FleetIndex, publishState *publish.State, liveDir, historyDir string) *ConfigHandler {
+	if liveDir == "" {
+		liveDir = publish.DefaultLiveDir
+	}
+	if historyDir == "" {
+		historyDir = publish.DefaultHistoryDir
+	}
+	return &ConfigHandler{
+		queries:      queries,
+		configStore:  configStore,
+		fleetIndex:   fleetIndex,
+		publishState: publishState,
+		liveDir:      liveDir,
+		historyDir:   historyDir,
+	}
 }
 
 // SetConvergenceMonitor configures the blast-radius compliance monitor and
@@ -343,7 +362,7 @@ func (h *ConfigHandler) GetPublish(w http.ResponseWriter, r *http.Request) {
 
 // ListVersions returns available config snapshot versions for rollback.
 func (h *ConfigHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
-	versions, err := publish.ListVersions(publish.HistoryDir)
+	versions, err := publish.ListVersions(h.historyDir)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list versions")
 		return
@@ -400,13 +419,21 @@ func (h *ConfigHandler) Freeze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	publish.FreezeUntil = &t
+	if h.publishState == nil {
+		writeError(w, http.StatusInternalServerError, "publish state not configured")
+		return
+	}
+	h.publishState.SetFreezeUntil(t)
 	writeJSON(w, http.StatusOK, map[string]any{"freeze_until": t.Format(time.RFC3339)})
 }
 
 // Unfreeze removes the global config publish freeze.
 func (h *ConfigHandler) Unfreeze(w http.ResponseWriter, r *http.Request) {
-	publish.FreezeUntil = nil
+	if h.publishState == nil {
+		writeError(w, http.StatusInternalServerError, "publish state not configured")
+		return
+	}
+	h.publishState.ClearFreeze()
 	writeJSON(w, http.StatusOK, map[string]any{"status": "unfrozen"})
 }
 
@@ -419,7 +446,7 @@ func (h *ConfigHandler) Rollback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := publish.RollbackToVersion(publish.HistoryDir, version, publish.LiveDir); err != nil {
+	if err := publish.RollbackToVersion(h.historyDir, version, h.liveDir); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

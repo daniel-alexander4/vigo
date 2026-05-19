@@ -334,20 +334,20 @@ type footprintMock struct {
 	base DataSource
 }
 
-func (m *footprintMock) DashboardData(d time.Duration) DashboardPageData {
-	return m.base.DashboardData(d)
+func (m *footprintMock) DashboardData(d, o time.Duration) DashboardPageData {
+	return m.base.DashboardData(d, o)
 }
-func (m *footprintMock) ConvergenceData(d time.Duration) ConvergencePageData {
-	return m.base.ConvergenceData(d)
+func (m *footprintMock) ConvergenceData(d, o time.Duration) ConvergencePageData {
+	return m.base.ConvergenceData(d, o)
 }
-func (m *footprintMock) DashboardStatsData(d time.Duration) DashboardStatsFragmentData {
-	return m.base.DashboardStatsData(d)
+func (m *footprintMock) DashboardStatsData(d, o time.Duration) DashboardStatsFragmentData {
+	return m.base.DashboardStatsData(d, o)
 }
-func (m *footprintMock) EnvoysData(d time.Duration, s, a string, l int, q string) EnvoysPageData {
-	return m.base.EnvoysData(d, s, a, l, q)
+func (m *footprintMock) EnvoysData(d, o time.Duration, s, a string, l int, q string) EnvoysPageData {
+	return m.base.EnvoysData(d, o, s, a, l, q)
 }
-func (m *footprintMock) EnvoyDetailData(id string, d time.Duration) (EnvoyDetailPageData, error) {
-	return m.base.EnvoyDetailData(id, d)
+func (m *footprintMock) EnvoyDetailData(id string, d, o time.Duration) (EnvoyDetailPageData, error) {
+	return m.base.EnvoyDetailData(id, d, o)
 }
 func (m *footprintMock) EnvoyRunsData(id string) (EnvoyRunsFragmentData, error) {
 	return m.base.EnvoyRunsData(id)
@@ -370,9 +370,9 @@ func (m *footprintMock) SecurityScanTraits(id string) (map[string]string, bool) 
 func (m *footprintMock) SecurityScanContext(id string) (string, map[string]string, bool) {
 	return m.base.SecurityScanContext(id)
 }
-func (m *footprintMock) RiskData(d time.Duration) RiskSummaryData { return m.base.RiskData(d) }
-func (m *footprintMock) RiskPostureData(d time.Duration) RiskPosturePageData {
-	return m.base.RiskPostureData(d)
+func (m *footprintMock) RiskData(d, o time.Duration) RiskSummaryData { return m.base.RiskData(d, o) }
+func (m *footprintMock) RiskPostureData(d, o time.Duration) RiskPosturePageData {
+	return m.base.RiskPostureData(d, o)
 }
 func (m *footprintMock) CertExpirySummary() CertExpirySummary { return m.base.CertExpirySummary() }
 func (m *footprintMock) EnvoyCertDetails(id, b string) ([]CertDetail, string, bool) {
@@ -796,7 +796,7 @@ type mockDataSource struct {
 	data *testData
 }
 
-func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPageData {
+func (m *mockDataSource) DashboardData(baseInterval, offlineThreshold time.Duration) DashboardPageData {
 	totalEnvoys := len(m.data.envoys)
 	activeCount := 0
 	failureCount := 0
@@ -858,7 +858,7 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 	}
 }
 
-func (m *mockDataSource) ConvergenceData(baseInterval time.Duration) ConvergencePageData {
+func (m *mockDataSource) ConvergenceData(baseInterval, offlineThreshold time.Duration) ConvergencePageData {
 	total := len(m.data.envoys)
 	counts := map[string]int64{
 		"converged": 0, "relapsed": 0, "diverged": 0, "failed": 0, "stale": 0, "unknown": 0,
@@ -903,8 +903,8 @@ func (m *mockDataSource) ConvergenceData(baseInterval time.Duration) Convergence
 	}
 }
 
-func (m *mockDataSource) DashboardStatsData(baseInterval time.Duration) DashboardStatsFragmentData {
-	d := m.DashboardData(baseInterval)
+func (m *mockDataSource) DashboardStatsData(baseInterval, offlineThreshold time.Duration) DashboardStatsFragmentData {
+	d := m.DashboardData(baseInterval, offlineThreshold)
 	return DashboardStatsFragmentData{
 		TotalEnvoys:     d.TotalEnvoys,
 		ActiveEnvoys:    d.ActiveEnvoys,
@@ -913,7 +913,7 @@ func (m *mockDataSource) DashboardStatsData(baseInterval time.Duration) Dashboar
 	}
 }
 
-func (m *mockDataSource) EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int, search string) EnvoysPageData {
+func (m *mockDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, statusFilter string, afterHostname string, limit int, search string) EnvoysPageData {
 	var rows []EnvoyRow
 	for _, c := range m.data.envoys {
 		if statusFilter != "" && c.status != statusFilter {
@@ -941,7 +941,7 @@ func (m *mockDataSource) EnvoysData(baseInterval time.Duration, statusFilter str
 	}
 }
 
-func (m *mockDataSource) EnvoyDetailData(envoyID string, baseInterval time.Duration) (EnvoyDetailPageData, error) {
+func (m *mockDataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThreshold time.Duration) (EnvoyDetailPageData, error) {
 	var found *testEnvoy
 	for i := range m.data.envoys {
 		if m.data.envoys[i].id.String() == envoyID {
@@ -1170,11 +1170,11 @@ func (m *mockDataSource) EnvoyCertDetails(_, _ string) ([]CertDetail, string, bo
 	return nil, "", false
 }
 
-func (m *mockDataSource) RiskData(_ time.Duration) RiskSummaryData {
+func (m *mockDataSource) RiskData(_, _ time.Duration) RiskSummaryData {
 	return RiskSummaryData{}
 }
 
-func (m *mockDataSource) RiskPostureData(_ time.Duration) RiskPosturePageData {
+func (m *mockDataSource) RiskPostureData(_, _ time.Duration) RiskPosturePageData {
 	return RiskPosturePageData{}
 }
 

@@ -109,7 +109,7 @@ func runConfigUnused(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Printf("Files to delete from %s:\n", bold(publish.StockpileDir))
+	fmt.Printf("Files to delete from %s:\n", bold(publish.DefaultStockpileDir))
 	for path := range toDelete {
 		fmt.Printf("  %s\n", path)
 	}
@@ -122,7 +122,7 @@ func runConfigUnused(cmd *cobra.Command, args []string) error {
 
 	var deleted int
 	for path := range toDelete {
-		fullPath := filepath.Join(publish.StockpileDir, path)
+		fullPath := filepath.Join(publish.DefaultStockpileDir, path)
 		if err := os.Remove(fullPath); err != nil {
 			fmt.Fprintf(os.Stderr, "  %s  %s: %v\n", red("x"), path, err)
 		} else {

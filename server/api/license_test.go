@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"git.alexander4.io/vigo/server/license"
+	"git.alexander4.io/vigo/server/metrics"
 )
 
 func TestLicense_Status(t *testing.T) {
@@ -20,7 +21,7 @@ func TestLicense_Status(t *testing.T) {
 	// LoadDir falls back to the built-in free license.
 	enforcer, err := license.NewEnforcer(licenseDir, graceDir, "", func(_ context.Context) (int, error) {
 		return 5, nil // 5 active envoys out of 100
-	}, nil)
+	}, nil, metrics.NewTestMetrics())
 	if err != nil {
 		t.Fatalf("new enforcer: %v", err)
 	}
@@ -58,7 +59,7 @@ func TestLicense_StatusOverLimit(t *testing.T) {
 	// 120 envoys exceeds the free 100 limit — should be in grace.
 	enforcer, err := license.NewEnforcer(licenseDir, graceDir, "", func(_ context.Context) (int, error) {
 		return 120, nil
-	}, nil)
+	}, nil, metrics.NewTestMetrics())
 	if err != nil {
 		t.Fatalf("new enforcer: %v", err)
 	}

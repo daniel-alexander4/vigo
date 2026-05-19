@@ -20,7 +20,7 @@ import (
 // Any envoys with unparseable pubkeys are still loaded but won't have cached keys.
 // approvedSources is the compliance.approved_sources allowlist (nil or
 // empty disables package_source_audit annotation).
-func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStore db.RunStore, baseInterval time.Duration, approvedSources []string) error {
+func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStore db.RunStore, baseInterval, offlineThreshold time.Duration, approvedSources []string) error {
 	start := time.Now()
 
 	// Load all envoys with their latest run status in a single query.
@@ -173,7 +173,7 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		// (bootstrap) and the threshold is derived from configured interval
 		// alone. The threshold widens automatically once each envoy reports
 		// its first inter-CheckIn delta.
-		if !ts.Revoked && freshness.IsStaleFromCycle(ts.LastSeen, baseInterval, 0) {
+		if !ts.Revoked && freshness.IsStaleFromCycle(ts.LastSeen, baseInterval, 0, offlineThreshold) {
 			fi.SetOffline(ts.ID, true)
 		}
 	}

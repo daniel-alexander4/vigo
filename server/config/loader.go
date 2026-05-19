@@ -217,6 +217,31 @@ type ConfigStore struct {
 	enabledStandards map[string]bool // nil = all enabled; non-nil = only these standard keys
 	approvedSources  []string        // nil/empty = no annotation; non-empty = URL prefixes for package_source_audit trait
 	serverYamlPath   string          // path to server.yaml for re-reading compliance on reload
+
+	// fleet: lookup memoization. fleetLookupTTL is operator-set
+	// (cs.SetFleetLookupTTL); 0 means use defaultFleetLookupTTL. The memo
+	// caches the resolved {string | []any} for each (where, select, join,
+	// include_stale) key for one TTL window so a publish doesn't cause N
+	// fleet walks per check-in. Per-instance so two ConfigStores in one
+	// process (test harness, multi-vigosrv lab) don't cross-pollute.
+	fleetLookupTTL atomic.Int64 // nanoseconds
+	fleetMemoMu    sync.Mutex
+	fleetMemo      map[string]fleetMemoEntry
+
+	// metrics is the per-instance prometheus collector set; nil-safe.
+	// ConfigStores constructed without a *Metrics still load and reload —
+	// the metric calls are guarded.
+	metrics *metrics.Metrics
+}
+
+// SetMetrics attaches the per-instance prometheus collector set so
+// config-reload duration/error counters update. Call once at server
+// startup before the first reload; subsequent reloads pick up the
+// pointer atomically because reloads serialize on cs.mu.
+func (cs *ConfigStore) SetMetrics(m *metrics.Metrics) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	cs.metrics = m
 }
 
 // NewEmptyConfigStore creates a ConfigStore with no loaded config but a
@@ -241,6 +266,7 @@ func NewEmptyConfigStore(baseDir string, provider secrets.Provider) *ConfigStore
 		commonConfigs:   make(map[string]*CommonConfig),
 		perEnvOverrides: make(map[string]map[string]*PerEnvOverrideBlock),
 		provider:        provider,
+		fleetMemo:       make(map[string]fleetMemoEntry),
 	}
 }
 
@@ -357,6 +383,7 @@ func newConfigStore(baseDir string, provider secrets.Provider, dangerous, quiet 
 		complianceIndex: make(map[string]map[string][]string),
 		commonConfigs:   make(map[string]*CommonConfig),
 		perEnvOverrides: make(map[string]map[string]*PerEnvOverrideBlock),
+		fleetMemo:       make(map[string]fleetMemoEntry),
 	}
 	if err := cs.loadAll(); err != nil {
 		// Idempotency errors are non-fatal at startup — start with empty
@@ -1884,11 +1911,16 @@ func (cs *ConfigStore) loadAll() error {
 	cs.lastReloadErr = err
 	cs.mu.Unlock()
 
+	if cs.metrics != nil {
+		if err != nil {
+			cs.metrics.ConfigReloadErrors.Inc()
+		} else {
+			cs.metrics.ConfigReloadDuration.Observe(elapsed.Seconds())
+		}
+	}
 	if err != nil {
-		metrics.ConfigReloadErrors.Inc()
 		return err
 	}
-	metrics.ConfigReloadDuration.Observe(elapsed.Seconds())
 	return nil
 }
 
@@ -2556,8 +2588,10 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 	}
 
 	if len(secretErrs) > 0 {
-		for range secretErrs {
-			metrics.SecretResolutionErrorsTotal.Inc()
+		if cs.metrics != nil {
+			for range secretErrs {
+				cs.metrics.SecretResolutionErrorsTotal.Inc()
+			}
 		}
 		return nil, &SecretErrors{Errors: secretErrs, Backend: cs.backend}
 	}

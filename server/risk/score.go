@@ -73,7 +73,9 @@ type FleetRisk struct {
 
 // ScoreEnvoy computes the risk score for a single envoy.
 // baseInterval is the expected check-in interval (used for stale detection).
-func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
+// offlineThreshold (operator's `checkin.offline_threshold:` override; 0 = use
+// the default 2.5× rule) flows through to freshness.IsStaleFromCycle.
+func ScoreEnvoy(es EnvoyInput, baseInterval, offlineThreshold time.Duration) EnvoyRisk {
 	r := EnvoyRisk{
 		EnvoyID:  es.ID,
 		Hostname: es.Hostname,
@@ -203,7 +205,7 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 	}
 
 	// --- Stale check-in: +20 if offline ---
-	if freshness.IsStaleFromCycle(es.LastSeen, baseInterval, es.ObservedCycle) {
+	if freshness.IsStaleFromCycle(es.LastSeen, baseInterval, es.ObservedCycle, offlineThreshold) {
 		score += 20
 		r.Factors = append(r.Factors, Factor{"Offline", 20, "no check-in within 2.5× cadence"})
 	}
@@ -223,7 +225,8 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 
 // ScoreFleet computes the fleet-wide risk summary from a slice of envoy inputs.
 // topN controls how many highest-risk envoys are included in TopRisks (0 = default 10).
-func ScoreFleet(envoys []EnvoyInput, baseInterval time.Duration, topN int) FleetRisk {
+// offlineThreshold flows through to ScoreEnvoy for the stale-detection factor.
+func ScoreFleet(envoys []EnvoyInput, baseInterval, offlineThreshold time.Duration, topN int) FleetRisk {
 	if topN <= 0 {
 		topN = 10
 	}
@@ -238,7 +241,7 @@ func ScoreFleet(envoys []EnvoyInput, baseInterval time.Duration, topN int) Fleet
 		if es.Revoked {
 			continue
 		}
-		er := ScoreEnvoy(es, baseInterval)
+		er := ScoreEnvoy(es, baseInterval, offlineThreshold)
 		fr.Envoys = append(fr.Envoys, er)
 		fr.ScoredEnvoys++
 		totalScore += int64(er.Score)

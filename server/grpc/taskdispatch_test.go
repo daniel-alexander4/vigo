@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/metrics"
 )
 
 func TestPushRouterTrackAndLookup(t *testing.T) {
-	router := newTaskRouter(nil)
+	router := newTaskRouter(nil, metrics.NewTestMetrics())
 
 	router.trackTarget("run-1", "envoy-a", "target-1")
 	router.trackTarget("run-1", "envoy-b", "target-2")
@@ -46,7 +47,7 @@ func TestPushRouterTrackAndLookup(t *testing.T) {
 }
 
 func TestPushRouterRemoveTarget(t *testing.T) {
-	router := newTaskRouter(nil)
+	router := newTaskRouter(nil, metrics.NewTestMetrics())
 
 	router.trackTarget("run-1", "envoy-a", "target-1")
 	router.trackTarget("run-1", "envoy-b", "target-2")
@@ -73,7 +74,7 @@ func TestPushRouterRemoveTarget(t *testing.T) {
 }
 
 func TestStreamManagerIsConnected(t *testing.T) {
-	sm := newStreamManager(0, nil, 0)
+	sm := newStreamManager(0, nil, metrics.NewTestMetrics(), 0)
 
 	_, cleanup := sm.register("envoy-1", "host-1")
 	defer cleanup()
@@ -88,7 +89,7 @@ func TestStreamManagerIsConnected(t *testing.T) {
 }
 
 func TestStreamManagerConnectedEnvoyIDs(t *testing.T) {
-	sm := newStreamManager(0, nil, 0)
+	sm := newStreamManager(0, nil, metrics.NewTestMetrics(), 0)
 
 	_, cleanup1 := sm.register("envoy-1", "host-1")
 	defer cleanup1()
@@ -105,7 +106,7 @@ func TestStreamManagerConnectedEnvoyIDs(t *testing.T) {
 }
 
 func TestStreamManagerDispatchPush(t *testing.T) {
-	sm := newStreamManager(0, nil, 0)
+	sm := newStreamManager(0, nil, metrics.NewTestMetrics(), 0)
 
 	as, cleanup := sm.register("envoy-1", "host-1")
 	defer cleanup()
@@ -146,7 +147,7 @@ func TestStreamManagerDispatchPush(t *testing.T) {
 }
 
 func TestStreamManagerDispatchCleanup(t *testing.T) {
-	sm := newStreamManager(0, nil, 0)
+	sm := newStreamManager(0, nil, metrics.NewTestMetrics(), 0)
 
 	_, cleanup := sm.register("envoy-1", "host-1")
 	cleanup() // Disconnect.

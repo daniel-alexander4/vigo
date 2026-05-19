@@ -32,21 +32,23 @@ import (
 
 // RiskHandler serves fleet and per-envoy risk scoring endpoints.
 type RiskHandler struct {
-	fleetIndex   *fleet.FleetIndex
-	queries      *db.Queries
-	baseInterval time.Duration
-	version      string
+	fleetIndex       *fleet.FleetIndex
+	queries          *db.Queries
+	baseInterval     time.Duration
+	offlineThreshold time.Duration
+	version          string
 	orgName      string
 	logoPath     string
 }
 
 // NewRiskHandler creates a RiskHandler.
-func NewRiskHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, baseInterval time.Duration, version string) *RiskHandler {
+func NewRiskHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, baseInterval, offlineThreshold time.Duration, version string) *RiskHandler {
 	return &RiskHandler{
-		fleetIndex:   fleetIndex,
-		queries:      queries,
-		baseInterval: baseInterval,
-		version:      version,
+		fleetIndex:       fleetIndex,
+		queries:          queries,
+		baseInterval:     baseInterval,
+		offlineThreshold: offlineThreshold,
+		version:          version,
 	}
 }
 
@@ -82,7 +84,7 @@ func (h *RiskHandler) handleFleetRisk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	inputs := envoyInputs(h.fleetIndex.AllEnvoys())
-	fr := risk.ScoreFleet(inputs, h.baseInterval, 10)
+	fr := risk.ScoreFleet(inputs, h.baseInterval, h.offlineThreshold, 10)
 	fr.Envoys = nil // keep response concise
 
 	w.Header().Set("Content-Type", "application/json")
@@ -103,7 +105,7 @@ func (h *RiskHandler) handleEnvoyRisk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	er := risk.ScoreEnvoy(envoyToInput(*es), h.baseInterval)
+	er := risk.ScoreEnvoy(envoyToInput(*es), h.baseInterval, h.offlineThreshold)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(er)
@@ -195,7 +197,7 @@ func (h *RiskHandler) buildInsuranceReport(preparedBy string) (*InsuranceReport,
 
 	// Current live posture.
 	inputs := envoyInputs(h.fleetIndex.AllEnvoys())
-	fr := risk.ScoreFleet(inputs, h.baseInterval, 10)
+	fr := risk.ScoreFleet(inputs, h.baseInterval, h.offlineThreshold, 10)
 	fr.Envoys = nil
 
 	// 90-day trend from DB.

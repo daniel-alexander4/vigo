@@ -28,31 +28,25 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var (
-	// StacksDir is the parent directory for the Vigo config operation —
+const (
+	// DefaultStacksDir is the parent directory for the Vigo config operation —
 	// the whole construction site. Holds stockpile/ (where operators edit),
 	// .live/ (what the server reads), and examples/ (read-only reference
 	// templates seeded by the image), as sibling subdirectories.
-	StacksDir = "/srv/vigo/stacks"
+	DefaultStacksDir = "/srv/vigo/stacks"
 
-	// StockpileDir is where operators edit .vgo files. A sibling of
-	// LiveDir under StacksDir.
-	StockpileDir = "/srv/vigo/stacks/stockpile"
+	// DefaultStockpileDir is where operators edit .vgo files. A sibling of
+	// DefaultLiveDir under DefaultStacksDir.
+	DefaultStockpileDir = "/srv/vigo/stacks/stockpile"
 
-	// LiveDir is the validated output directory the server reads.
-	// Only the publish command writes here. A sibling of StockpileDir
-	// under StacksDir.
-	LiveDir = "/srv/vigo/stacks/.live"
+	// DefaultLiveDir is the validated output directory the server reads.
+	// Only the publish command writes here. A sibling of DefaultStockpileDir
+	// under DefaultStacksDir.
+	DefaultLiveDir = "/srv/vigo/stacks/.live"
+
+	// DefaultHistoryDir is the directory for config snapshots used by rollback.
+	DefaultHistoryDir = "/srv/vigo/config-history"
 )
-
-// setTestDirs overrides paths for testing. Not exported; used via _test.go.
-// Tests pass explicit paths and StacksDir is synthesized as the common
-// parent so the layout validator walks the right tree.
-func setTestDirs(stockpile, live string) {
-	StockpileDir = stockpile
-	LiveDir = live
-	StacksDir = filepath.Dir(stockpile)
-}
 
 // skipDirs are directories that should not be synced from stockpile to
 // .live/stockpile. The publish walker now roots at StockpileDir so
@@ -74,15 +68,39 @@ func (s *stubProvider) Get(_ context.Context, _ string) (string, error)      { r
 func (s *stubProvider) GetBytes(_ context.Context, _ string) ([]byte, error) { return []byte("stub"), nil }
 func (s *stubProvider) Close() error                                         { return nil }
 
-// HistoryDir is the directory for config snapshots used by rollback.
-var HistoryDir = "/srv/vigo/config-history"
-
 // Options controls publish/validation behavior.
 type Options struct {
 	CheckURLs  bool
 	URLTimeout time.Duration // default 10s if zero
 	Operator   string        // who performed this publish (defaults to $USER)
 	Diff       bool          // compute and print line-level diffs
+
+	// Paths — zero values fall back to the Default* constants. Tests
+	// pass explicit per-temp-dir values; production callers leave these
+	// unset and let resolvePaths() fill them in from the defaults.
+	StacksDir    string
+	StockpileDir string
+	LiveDir      string
+	HistoryDir   string
+}
+
+// resolvePaths returns a copy of opts with empty path fields populated
+// from the Default* constants. Called at the top of every entry point
+// that reads a path so internal helpers see a fully-populated struct.
+func (o Options) resolvePaths() Options {
+	if o.StacksDir == "" {
+		o.StacksDir = DefaultStacksDir
+	}
+	if o.StockpileDir == "" {
+		o.StockpileDir = DefaultStockpileDir
+	}
+	if o.LiveDir == "" {
+		o.LiveDir = DefaultLiveDir
+	}
+	if o.HistoryDir == "" {
+		o.HistoryDir = DefaultHistoryDir
+	}
+	return o
 }
 
 // Result holds summary info from a successful validation or publish.
@@ -156,10 +174,12 @@ func (r *Result) Cleanup() {
 // defer `res.Cleanup()` after a successful return — the staging tree
 // otherwise leaks under stockpile's parent.
 func ValidateSource(opts Options) (*Result, error) {
+	opts = opts.resolvePaths()
+
 	// Enforce canonical-filename rules across the stockpile tree.
 	// Fatal — blocks publish on any violation with an actionable
 	// remediation message.
-	if err := validateStockpileLayout(StockpileDir); err != nil {
+	if err := validateStockpileLayout(opts.StockpileDir); err != nil {
 		return nil, err
 	}
 
@@ -167,7 +187,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// owner-rw and group-readable, and directories are traversable.
 	// This fixes files created by editors or cp that end up with
 	// restrictive permissions (e.g., root-only 0600).
-	if err := normalizeStockpilePermissions(StockpileDir); err != nil {
+	if err := normalizeStockpilePermissions(opts.StockpileDir); err != nil {
 		return nil, fmt.Errorf("normalizing permissions: %w", err)
 	}
 
@@ -176,17 +196,17 @@ func ValidateSource(opts Options) (*Result, error) {
 	// This rewrites files in stockpile but only at the byte-stripping
 	// level — no content/structure mangling. Templates (.tmpl) are
 	// left alone; whitespace there can be intentional.
-	if err := normalizeWhitespace(StockpileDir); err != nil {
+	if err := normalizeWhitespace(opts.StockpileDir); err != nil {
 		return nil, fmt.Errorf("normalizing whitespace: %w", err)
 	}
 
-	liveStockpile := filepath.Join(LiveDir, "stockpile")
+	liveStockpile := filepath.Join(opts.LiveDir, "stockpile")
 
 	// Initial diff (raw stockpile vs .live/stockpile) identifies
 	// candidate files for linting. The "true" diff (staging vs live)
 	// is computed below after staging is built, since the canonical
 	// form may match live even when the raw source differs.
-	_, candidateChanged, removed, err := diffTrees(StockpileDir, liveStockpile)
+	_, candidateChanged, removed, err := diffTrees(opts.StockpileDir, liveStockpile)
 	if err != nil {
 		return nil, fmt.Errorf("computing diff: %w", err)
 	}
@@ -203,7 +223,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	candidateLintable = append(candidateLintable, filterScaffoldingFiles(candidateChanged)...)
 	var lintedOverrides map[string][]byte
 	if len(candidateLintable) > 0 {
-		lintedOverrides, err = lintModules(StockpileDir, candidateLintable)
+		lintedOverrides, err = lintModules(opts.StockpileDir, candidateLintable)
 		if err != nil {
 			return nil, fmt.Errorf("linting modules: %w", err)
 		}
@@ -212,7 +232,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// Build the staging dir (= stockpile + linted overrides via hardlinks
 	// for unchanged files + fresh writes for overrides). Used for both
 	// validation and the .live sync.
-	stagingDir, cleanup, err := buildStagingDir(StockpileDir, lintedOverrides)
+	stagingDir, cleanup, err := buildStagingDir(opts.StockpileDir, lintedOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +274,7 @@ func ValidateSource(opts Options) (*Result, error) {
 		var ie *config.IdempotencyErrors
 		if errors.As(reloadErr, &ie) {
 			for _, m := range ie.Modules {
-				fe := FileError{Path: rewriteStagingPath(m.Path, stagingStockpile, StockpileDir)}
+				fe := FileError{Path: rewriteStagingPath(m.Path, stagingStockpile, opts.StockpileDir)}
 				for _, f := range m.Findings {
 					fe.Messages = append(fe.Messages, fmt.Sprintf("%s (%s): %s", f.ResourceName, f.ResourceType, f.Message))
 				}
@@ -265,7 +285,7 @@ func ValidateSource(opts Options) (*Result, error) {
 
 	var urlWarning string
 	if opts.CheckURLs && len(candidateLintable) > 0 {
-		if err := checkURLs(StockpileDir, candidateLintable, opts.URLTimeout); err != nil {
+		if err := checkURLs(opts.StockpileDir, candidateLintable, opts.URLTimeout); err != nil {
 			urlWarning = err.Error()
 		}
 	}
@@ -296,21 +316,25 @@ func rewriteStagingPath(p, stagingDir, stockpileDir string) string {
 	return p
 }
 
-// FreezeUntil is set by the server when a global change freeze is active.
-// If non-nil and in the future, Publish() will reject.
-var FreezeUntil *time.Time
-
 // Publish validates stockpiled configs then atomically syncs them to .live.
 // After a successful sync, it snapshots .live for rollback support.
+//
+// The state parameter holds operator-controlled mutable publish state
+// (freeze deadline). A nil state bypasses the freeze check — used by the
+// CLI, which runs in a separate process and doesn't carry freeze
+// semantics across invocations. The server-side caller constructs a
+// *State once at startup and threads it through.
 //
 // Stockpile is never modified. The atomic sync runs against the staging
 // directory ValidateSource produced (= stockpile + linted modlint
 // overrides), so .live receives canonical bytes while the operator's
 // source files stay byte-stable.
-func Publish(opts Options) (*Result, error) {
-	if FreezeUntil != nil && time.Now().Before(*FreezeUntil) {
-		return nil, fmt.Errorf("config publish is frozen until %s", FreezeUntil.Format(time.RFC3339))
+func Publish(opts Options, state *State) (*Result, error) {
+	if state.Frozen() {
+		return nil, fmt.Errorf("config publish is frozen until %s", state.FreezeUntilTime().Format(time.RFC3339))
 	}
+
+	opts = opts.resolvePaths()
 
 	res, err := ValidateSource(opts)
 	if err != nil {
@@ -331,9 +355,9 @@ func Publish(opts Options) (*Result, error) {
 	if res.stagingDir != "" {
 		source = filepath.Join(res.stagingDir, "stockpile")
 	} else {
-		source = StockpileDir
+		source = opts.StockpileDir
 	}
-	liveStockpile := filepath.Join(LiveDir, "stockpile")
+	liveStockpile := filepath.Join(opts.LiveDir, "stockpile")
 
 	// Compute diff for DB attribution. Diff is staging-vs-live so paths
 	// match what's actually being synced; operators see them as
@@ -354,20 +378,20 @@ func Publish(opts Options) (*Result, error) {
 		res.ChangedModuleContent = ReadChangedModuleContent(source, changedMods)
 	}
 
-	unlockLiveDir(LiveDir)
+	unlockLiveDir(opts.LiveDir)
 	files, err := atomicSync(source, liveStockpile)
 	if err != nil {
-		lockdownLiveDir(LiveDir) // re-lock even on failure
+		lockdownLiveDir(opts.LiveDir) // re-lock even on failure
 		return nil, fmt.Errorf("sync failed: %w", err)
 	}
 	res.Files = files
 
 	// Lock down .live so only the publish command (running as root) can write.
 	// The server reads via the vigo group. Operators cannot write directly.
-	lockdownLiveDir(LiveDir)
+	lockdownLiveDir(opts.LiveDir)
 
 	// Snapshot .live for rollback support.
-	_, _ = SnapshotLive(LiveDir, HistoryDir, DefaultMaxVersions)
+	_, _ = SnapshotLive(opts.LiveDir, opts.HistoryDir, DefaultMaxVersions)
 
 	return res, nil
 }
@@ -850,41 +874,46 @@ func unlockLiveDir(live string) {
 // PublishFile copies a single .vgo file into stockpile/, validates the full
 // config tree, and syncs only that file to .live/. The file path must be
 // relative to the stockpile directory (e.g., "modules/nginx.vgo").
-func PublishFile(srcPath string, opts Options) (*Result, error) {
-	if FreezeUntil != nil && time.Now().Before(*FreezeUntil) {
-		return nil, fmt.Errorf("config publish is frozen until %s", FreezeUntil.Format(time.RFC3339))
+//
+// The state parameter holds operator-controlled mutable publish state
+// (freeze deadline). A nil state bypasses the freeze check — see Publish.
+func PublishFile(srcPath string, opts Options, state *State) (*Result, error) {
+	if state.Frozen() {
+		return nil, fmt.Errorf("config publish is frozen until %s", state.FreezeUntilTime().Format(time.RFC3339))
 	}
+
+	opts = opts.resolvePaths()
 
 	// Determine the relative path within the config tree.
 	// Accept either an absolute path or a relative path like "modules/nginx.vgo".
 	relPath := srcPath
 	if filepath.IsAbs(srcPath) {
 		// Check if the file is already inside the worksite source tree.
-		if rel, err := filepath.Rel(StacksDir, srcPath); err == nil && !strings.HasPrefix(rel, "..") {
+		if rel, err := filepath.Rel(opts.StacksDir, srcPath); err == nil && !strings.HasPrefix(rel, "..") {
 			relPath = rel
 		} else {
-			return nil, fmt.Errorf("file %s is not inside %s — copy it there first or use a relative path", srcPath, StacksDir)
+			return nil, fmt.Errorf("file %s is not inside %s — copy it there first or use a relative path", srcPath, opts.StacksDir)
 		}
 	}
 
 	// Validate the full config tree (cross-references require all files).
-	store, err := config.NewConfigStore(StacksDir, &stubProvider{}, false)
+	store, err := config.NewConfigStore(opts.StacksDir, &stubProvider{}, false)
 	if err != nil {
 		return nil, err
 	}
 
 	// Unlock .live/ for writing, re-lock after.
-	unlockLiveDir(LiveDir)
-	defer lockdownLiveDir(LiveDir)
+	unlockLiveDir(opts.LiveDir)
+	defer lockdownLiveDir(opts.LiveDir)
 
 	// Ensure the target subdirectory exists in .live/.
-	destPath := filepath.Join(LiveDir, relPath)
+	destPath := filepath.Join(opts.LiveDir, relPath)
 	if err := os.MkdirAll(filepath.Dir(destPath), 0o750); err != nil {
 		return nil, fmt.Errorf("creating target dir: %w", err)
 	}
 
 	// Read source and write to .live/.
-	data, err := os.ReadFile(filepath.Join(StacksDir, relPath))
+	data, err := os.ReadFile(filepath.Join(opts.StacksDir, relPath))
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", relPath, err)
 	}
