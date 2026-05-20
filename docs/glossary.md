@@ -104,7 +104,7 @@ The retired name for the federated control-plane subsystem. All operator-facing 
 
 ## steorra
 
-One `vigosrv` participating in a [tungol](#tungol) federation. Owns a hostname-pattern partition of the fleet; handles agent check-ins for its envoys; reports compliance metrics to the hub. The YAML config uses `tungol.steorra_id:` and `role: spoke` (the role value is the architectural marker for "one of many steorras in the tungol"; the noun for the entity itself is steorra everywhere else).
+One `vigosrv` participating in a [tungol](#tungol) federation. Owns a hostname-pattern partition of the fleet; handles agent check-ins for its envoys; participates as a peer in the gossiped admissions CRDT (ADR-026). The YAML config uses `tungol.mode: founder` (the bootstrap-discovery rendezvous in Phase 2 — Phase 3 retires the founder/joiner distinction entirely) or `tungol.mode: joiner` (a steorra that joined an existing tungol). Per-steorra identity is the Ed25519 pubkey from `server/steorra/`, not a YAML-configured ID.
 
 ## stockpile
 

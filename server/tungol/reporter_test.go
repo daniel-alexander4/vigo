@@ -65,7 +65,7 @@ func startReporterFakeHub(t *testing.T, svc *countingAdminService) string {
 }
 
 func TestReporterActiveAddr_NoFallback(t *testing.T) {
-	r := NewReporter("steorra1", "", nil, "hub.example.com:1530", nil,
+	r := NewReporter("steorra1", "", nil, []string{"hub.example.com:1530"},
 		"", "", "", &fakeConvergenceSource{}, 10*time.Second)
 
 	if r.ActiveAddr() != "hub.example.com:1530" {
@@ -74,8 +74,8 @@ func TestReporterActiveAddr_NoFallback(t *testing.T) {
 }
 
 func TestReporterActiveAddr_WithFallbacks(t *testing.T) {
-	r := NewReporter("steorra1", "", nil, "hub.example.com:1530",
-		[]string{"standby1.example.com:1530", "standby2.example.com:1530"},
+	r := NewReporter("steorra1", "", nil,
+		[]string{"hub.example.com:1530", "standby1.example.com:1530", "standby2.example.com:1530"},
 		"", "", "", &fakeConvergenceSource{}, 10*time.Second)
 
 	if r.ActiveAddr() != "hub.example.com:1530" {
@@ -94,7 +94,7 @@ func TestReporterFailover_RotatesAfterThreshold(t *testing.T) {
 	primaryAddr := startReporterFakeHub(t, primarySvc)
 	fallbackAddr := startReporterFakeHub(t, fallbackSvc)
 
-	r := NewReporter("steorra1", "", nil, primaryAddr, []string{fallbackAddr},
+	r := NewReporter("steorra1", "", nil, []string{primaryAddr, fallbackAddr},
 		"", "", "", &fakeConvergenceSource{total: 10, converged: 8},
 		50*time.Millisecond)
 
@@ -138,7 +138,7 @@ func TestReporterFailover_NoRotationWithSingleAddr(t *testing.T) {
 	failSvc := &countingAdminService{failErr: status.Error(codes.Unavailable, "down")}
 	addr := startReporterFakeHub(t, failSvc)
 
-	r := NewReporter("steorra1", "", nil, addr, nil,
+	r := NewReporter("steorra1", "", nil, []string{addr},
 		"", "", "", &fakeConvergenceSource{total: 5, converged: 5},
 		50*time.Millisecond)
 
@@ -170,7 +170,7 @@ func TestReporterFailover_CyclesBackToPrimary(t *testing.T) {
 	addr2 := startReporterFakeHub(t, svc2)
 	addr3 := startReporterFakeHub(t, svc3)
 
-	r := NewReporter("steorra1", "", nil, addr1, []string{addr2, addr3},
+	r := NewReporter("steorra1", "", nil, []string{addr1, addr2, addr3},
 		"", "", "", &fakeConvergenceSource{total: 1, converged: 1},
 		30*time.Millisecond)
 
@@ -209,7 +209,7 @@ func TestReporterFailover_ResetsOnSuccess(t *testing.T) {
 	fallbackSvc := &countingAdminService{}
 	fallbackAddr := startReporterFakeHub(t, fallbackSvc)
 
-	r := NewReporter("steorra1", "", nil, addr, []string{fallbackAddr},
+	r := NewReporter("steorra1", "", nil, []string{addr, fallbackAddr},
 		"", "", "", &fakeConvergenceSource{total: 5, converged: 5},
 		50*time.Millisecond)
 
@@ -246,7 +246,7 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 	captureSvc := &capturingAdminService{}
 	addr := startCapturingFakeHub(t, captureSvc)
 
-	r := NewReporter("steorra-east", "", nil, addr, nil,
+	r := NewReporter("steorra-east", "", nil, []string{addr},
 		"", "", "", &fakeConvergenceSource{
 			total: 100, converged: 80, relapsed: 10, errors: 5, offline: 3, noData: 2,
 		},
@@ -412,7 +412,7 @@ func TestPinOnFirstSighting_Integration(t *testing.T) {
 
 	// --- Phase 1: first sighting pins priv1's pubkey ---
 
-	r1 := NewReporter(steorraID, tungolID, priv1, addr, nil, "", "", "", conv, 30*time.Millisecond)
+	r1 := NewReporter(steorraID, tungolID, priv1, []string{addr}, "", "", "", conv, 30*time.Millisecond)
 	r1.dialFunc = insecureDial
 
 	ctx1, cancel1 := context.WithTimeout(context.Background(), 2*time.Second)
@@ -438,7 +438,7 @@ func TestPinOnFirstSighting_Integration(t *testing.T) {
 	// --- Phase 2: same (tungol_id, steorra_id) under priv2 is rejected ---
 
 	beforeCalls := shim.calls.Load()
-	r2 := NewReporter(steorraID, tungolID, priv2, addr, nil, "", "", "", conv, 30*time.Millisecond)
+	r2 := NewReporter(steorraID, tungolID, priv2, []string{addr}, "", "", "", conv, 30*time.Millisecond)
 	r2.dialFunc = insecureDial
 
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)

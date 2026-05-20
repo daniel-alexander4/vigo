@@ -55,15 +55,15 @@ func (s *Server) Run(ctx context.Context) error {
 	s.startHTTPServer()
 	s.startReporter(ctx)
 
-	if s.role == config.RoleSpoke {
+	if s.mode == config.ModeJoiner {
 		slog.Info("steorra ready",
-			"steorra_id", s.cfg.Tungol.SteorraID,
+			"steorra_pubkey", formatLocalSteorraPubkey(s.steorraID),
 			"grpc", s.cfg.Server.GRPCListen,
 			"api", s.cfg.Server.APIListen,
 		)
 	} else {
 		slog.Info("server ready",
-			"role", s.role,
+			"mode", s.mode,
 			"grpc", s.cfg.Server.GRPCListen,
 			"rest", s.cfg.Server.APIListen,
 		)
@@ -219,8 +219,8 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 		}
 	}()
 
-	// Start secret rotation watcher (hub and standalone only).
-	if s.role != config.RoleSpoke && s.cfg.Watcher.Enabled {
+	// Start secret rotation watcher (founder and standalone only).
+	if s.mode != config.ModeJoiner && s.cfg.Watcher.Enabled {
 		if vp, ok := s.provider.(watcher.VersionProvider); ok {
 			watchPaths := s.configStore.SecretPaths()
 			pollInterval := 5 * time.Minute
@@ -416,20 +416,21 @@ func (s *Server) startHTTPServer() {
 	}()
 }
 
-// startReporter runs the steorra status reporter on spoke nodes. The
+// startReporter runs the steorra status reporter on joiner nodes. The
 // reporter signs every announcement with the steorra identity loaded
 // during NewServer; nil signing key falls back to legacy unsigned
-// reports (accepted by hubs during mixed-version rollouts).
+// reports (accepted by peers during mixed-version rollouts). Bootstrap
+// peers come from tungol.transport.bootstrap_peers (ADR-026); gossip
+// will extend this set once 2A.2 wires the CRDT merge.
 func (s *Server) startReporter(ctx context.Context) {
-	if s.role != config.RoleSpoke || s.cfg.Tungol.HubAddr == "" {
+	if s.mode != config.ModeJoiner || len(s.cfg.Tungol.Transport.BootstrapPeers) == 0 {
 		return
 	}
 	reporter := tungol.NewReporter(
-		s.cfg.Tungol.SteorraID,
+		formatLocalSteorraPubkey(s.steorraID),
 		s.cfg.Tungol.TungolID,
 		steorraSigningKeyOrNil(s.steorraID),
-		s.cfg.Tungol.HubAddr,
-		s.cfg.Tungol.HubFallbackAddrs,
+		s.cfg.Tungol.Transport.BootstrapPeers,
 		s.cfg.Server.TLS.CertFile,
 		s.cfg.Server.TLS.KeyFile,
 		s.cfg.Server.TLS.CAFile,

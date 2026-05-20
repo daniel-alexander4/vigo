@@ -14,7 +14,7 @@ import (
 )
 
 func TestTungolStatusStandalone(t *testing.T) {
-	handler := NewTungolHandler("", "", "", "", nil)
+	handler := NewTungolHandler("", "", "", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -31,19 +31,16 @@ func TestTungolStatusStandalone(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if resp.Role != "standalone" {
-		t.Errorf("Role = %q, want standalone", resp.Role)
-	}
-	if resp.SteorraID != "" {
-		t.Errorf("SteorraID = %q, want empty", resp.SteorraID)
+	if resp.Mode != "standalone" {
+		t.Errorf("Mode = %q, want standalone", resp.Mode)
 	}
 	if resp.Steorras != nil {
 		t.Errorf("Steorras = %v, want nil", resp.Steorras)
 	}
 }
 
-func TestTungolStatusWithSteorraRole(t *testing.T) {
-	handler := NewTungolHandler(config.RoleSpoke, "test-tungol", "steorra-east-1", "", nil)
+func TestTungolStatusJoiner(t *testing.T) {
+	handler := NewTungolHandler(config.ModeJoiner, "test-tungol", "abcdef0123456789", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -60,17 +57,21 @@ func TestTungolStatusWithSteorraRole(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if resp.Role != "spoke" {
-		t.Errorf("Role = %q, want spoke", resp.Role)
+	if resp.Mode != "joiner" {
+		t.Errorf("Mode = %q, want joiner", resp.Mode)
 	}
-	if resp.SteorraID != "steorra-east-1" {
-		t.Errorf("SteorraID = %q, want steorra-east-1", resp.SteorraID)
+	if resp.TungolID != "test-tungol" {
+		t.Errorf("TungolID = %q, want test-tungol", resp.TungolID)
+	}
+	if resp.LocalSteorraPubkey != "abcdef0123456789" {
+		t.Errorf("LocalSteorraPubkey = %q, want abcdef0123456789", resp.LocalSteorraPubkey)
 	}
 }
 
-func TestTungolStatusHubNilSteorras(t *testing.T) {
-	// Hub role but nil hub -- no steorras connected. Status still returns role.
-	handler := NewTungolHandler(config.RoleHub, "test-tungol", "", "", nil)
+func TestTungolStatusFounderNilHub(t *testing.T) {
+	// Founder mode but nil hub -- no bootstrap peers connected.
+	// Status still returns mode.
+	handler := NewTungolHandler(config.ModeFounder, "test-tungol", "", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -87,8 +88,8 @@ func TestTungolStatusHubNilSteorras(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if resp.Role != "hub" {
-		t.Errorf("Role = %q, want hub", resp.Role)
+	if resp.Mode != "founder" {
+		t.Errorf("Mode = %q, want founder", resp.Mode)
 	}
 	if resp.Steorras != nil {
 		t.Errorf("Steorras = %v, want nil (no hub)", resp.Steorras)
@@ -96,7 +97,7 @@ func TestTungolStatusHubNilSteorras(t *testing.T) {
 }
 
 func TestTungolStatusResponseFormat(t *testing.T) {
-	handler := NewTungolHandler("", "", "", "", nil)
+	handler := NewTungolHandler("", "", "", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -111,7 +112,7 @@ func TestTungolStatusResponseFormat(t *testing.T) {
 }
 
 func TestSteorraDrilldownRoutesNotRegisteredWithoutHub(t *testing.T) {
-	handler := NewTungolHandler(config.RoleStandalone, "", "", "", nil)
+	handler := NewTungolHandler(config.ModeStandalone, "", "", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -141,7 +142,7 @@ func TestSteorraDrilldownRoutesNotRegisteredWithoutHub(t *testing.T) {
 }
 
 func TestTungolStatusJSON(t *testing.T) {
-	handler := NewTungolHandler(config.RoleSpoke, "test-tungol", "east-1", "", nil)
+	handler := NewTungolHandler(config.ModeJoiner, "test-tungol", "pubkey-x", nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -154,11 +155,11 @@ func TestTungolStatusJSON(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 
-	if _, ok := raw["role"]; !ok {
-		t.Error("missing 'role' key in response JSON")
+	if _, ok := raw["mode"]; !ok {
+		t.Error("missing 'mode' key in response JSON")
 	}
-	if _, ok := raw["steorra_id"]; !ok {
-		t.Error("missing 'steorra_id' key in response JSON")
+	if _, ok := raw["tungol_id"]; !ok {
+		t.Error("missing 'tungol_id' key in response JSON")
 	}
 }
 

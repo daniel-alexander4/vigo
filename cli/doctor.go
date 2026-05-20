@@ -151,11 +151,11 @@ func runDoctorPreStart() error {
 			checks = append(checks, preStartCheck{"tungol", "fail", err.Error()})
 			hasFailure = true
 		} else {
-			role := string(serverCfg.Tungol.Role)
-			if role == "" {
-				role = "standalone"
+			mode := string(serverCfg.Tungol.Mode)
+			if mode == "" {
+				mode = "standalone"
 			}
-			checks = append(checks, preStartCheck{"tungol", "pass", role})
+			checks = append(checks, preStartCheck{"tungol", "pass", mode})
 		}
 	} else {
 		checks = append(checks, preStartCheck{"tungol", "skip", "config unavailable"})

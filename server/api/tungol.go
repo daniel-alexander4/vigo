@@ -16,14 +16,13 @@ import (
 
 // TungolStatus is the response for GET /api/v1/tungol/status.
 //
-// Phase 1 additions: TungolID and LocalSteorraPubkey surface this
-// vigosrv's federation anchor + identity for operator cross-check
-// when an alarm fires. The per-steorra Steorras entries gain pinned
-// pubkey + pin timestamp populated from Hub.LookupSteorraPin.
+// Phase 2A (ADR-026): the operator surface uses `mode`
+// (founder|joiner|standalone) instead of the retired `role` field.
+// TungolID and LocalSteorraPubkey surface this vigosrv's federation
+// anchor + identity for operator cross-check when an alarm fires.
 type TungolStatus struct {
-	Role               string                 `json:"role"`
+	Mode               string                 `json:"mode"`
 	TungolID           string                 `json:"tungol_id,omitempty"`
-	SteorraID          string                 `json:"steorra_id,omitempty"`
 	LocalSteorraPubkey string                 `json:"local_steorra_pubkey,omitempty"`
 	Steorras           []tungol.SteorraStatus `json:"steorras,omitempty"`
 	SteorraPins        []SteorraPinView       `json:"steorra_pins,omitempty"`
@@ -40,23 +39,21 @@ type SteorraPinView struct {
 	LastSeen  string `json:"last_seen"`
 }
 
-// TungolHandler serves tungol status endpoints. The underlying
-// implementation is still the hub + steorras model from server/tungol;
-// Phase 1+ will replace it with peer-equal gossip.
+// TungolHandler serves tungol status endpoints. Phase 2A keeps the
+// hub-as-bootstrap-rendezvous shape for admin-routing under ADR-026;
+// Phase 3 retires the hub entirely.
 type TungolHandler struct {
-	role         config.TungolRole
-	tungolID     string
-	steorraID    string
-	localPubkey  string // first-16-char hex of the local steorra identity (or "" if absent)
-	hub          *tungol.Hub
+	mode        config.TungolMode
+	tungolID    string
+	localPubkey string // first-16-char hex of the local steorra identity (or "" if absent)
+	hub         *tungol.Hub
 }
 
 // NewTungolHandler creates a tungol handler.
-func NewTungolHandler(role config.TungolRole, tungolID, steorraID, localPubkey string, hub *tungol.Hub) *TungolHandler {
+func NewTungolHandler(mode config.TungolMode, tungolID, localPubkey string, hub *tungol.Hub) *TungolHandler {
 	return &TungolHandler{
-		role:        role,
+		mode:        mode,
 		tungolID:    tungolID,
-		steorraID:   steorraID,
 		localPubkey: localPubkey,
 		hub:         hub,
 	}
@@ -82,15 +79,14 @@ func (h *TungolHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (h *TungolHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
-	role := string(h.role)
-	if role == "" {
-		role = "standalone"
+	mode := string(h.mode)
+	if mode == "" {
+		mode = "standalone"
 	}
 
 	resp := TungolStatus{
-		Role:               role,
+		Mode:               mode,
 		TungolID:           h.tungolID,
-		SteorraID:          h.steorraID,
 		LocalSteorraPubkey: h.localPubkey,
 	}
 

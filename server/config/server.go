@@ -68,6 +68,10 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 		return nil, err
 	}
 
+	if err := detectRetiredTungolKeys(data); err != nil {
+		return nil, err
+	}
+
 	// Defaults that diverge from Go zero-values land here before unmarshal.
 	// YAML keys that explicitly appear overwrite these; absent keys keep the
 	// pre-set value. (The `default:` struct tags in types.go are doc-only —
@@ -185,6 +189,53 @@ func detectRetiredSpannerKey(data []byte) error {
 		return nil
 	}
 	return fmt.Errorf("server.yaml uses retired `spanner:` key — rename the entire block to `tungol:` and rename the sub-keys `spokes:` → `steorras:` and `spoke_id:` → `steorra_id:` in one pass (no translation layer is provided)")
+}
+
+// detectRetiredTungolKeys rejects server.yaml that still uses the
+// pre-Phase-2 hub/spoke field shape inside tungol:. The peer-equal
+// admissions model in ADR-026 retired role/steorra_id/hub_addr/
+// hub_fallback_addrs/steorras/auto_failover and replaced them with
+// mode/patterns/transport/snapshot/freshness/fallback_admin. No
+// translation layer — point at each retired key's replacement and
+// refuse to start.
+func detectRetiredTungolKeys(data []byte) error {
+	var raw struct {
+		Tungol struct {
+			Role             any `yaml:"role"`
+			SteorraID        any `yaml:"steorra_id"`
+			HubAddr          any `yaml:"hub_addr"`
+			HubFallbackAddrs any `yaml:"hub_fallback_addrs"`
+			Steorras         any `yaml:"steorras"`
+			AutoFailover     any `yaml:"auto_failover"`
+		} `yaml:"tungol"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+	var retired []string
+	if raw.Tungol.Role != nil {
+		retired = append(retired, "tungol.role — replaced by tungol.mode (values: standalone | founder | joiner)")
+	}
+	if raw.Tungol.SteorraID != nil {
+		retired = append(retired, "tungol.steorra_id — retired; steorras are identified by their Ed25519 pubkey (server/steorra/), not a YAML-configured string")
+	}
+	if raw.Tungol.HubAddr != nil {
+		retired = append(retired, "tungol.hub_addr — replaced by tungol.transport.bootstrap_peers (additive seed list for first-contact discovery)")
+	}
+	if raw.Tungol.HubFallbackAddrs != nil {
+		retired = append(retired, "tungol.hub_fallback_addrs — fold into tungol.transport.bootstrap_peers (additive seed list; gossip discovers the rest)")
+	}
+	if raw.Tungol.Steorras != nil {
+		retired = append(retired, "tungol.steorras — retired; per-steorra patterns + identity live in the gossiped admissions CRDT, not in server.yaml. Each vigosrv declares its own patterns via tungol.patterns")
+	}
+	if raw.Tungol.AutoFailover != nil {
+		retired = append(retired, "tungol.auto_failover — retired; failover is implicit in CRDT gossip + freshness thresholds (tungol.freshness.stale_after)")
+	}
+	if len(retired) == 0 {
+		return nil
+	}
+	return fmt.Errorf("server.yaml uses retired tungol shape (per ADR-026 Phase 2 peer-equal admissions):\n  - %s",
+		strings.Join(retired, "\n  - "))
 }
 
 // resolveServerSecrets resolves secret: prefixed values in the server config.

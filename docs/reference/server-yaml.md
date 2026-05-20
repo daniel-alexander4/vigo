@@ -335,37 +335,45 @@ grc:
 Hub + steorras control-plane sharding. See [Set up Tungol](../howto/set-up-tungol.md) for the walkthrough.
 
 ```yaml
-# Hub
+# Founder — the bootstrap-discovery rendezvous (Phase 2A only; Phase 3
+# retires the founder/joiner distinction). Owns a hostname-pattern partition
+# just like any other steorra.
 tungol:
-  role: hub
-  tungol_id: "alexander4-prod"        # federation id (required for hub/spoke)
-  steorras:
-    - id: dc1
-      addr: "steorra1.example.com:1530"
-      patterns: ["*.dc1.*"]
-  auto_failover:
-    enabled: true
-    threshold: 3
-    interval: "30s"
+  mode: founder
+  tungol_id: "alexander4-prod"
+  patterns: ["*.us-west.*"]
+  snapshot:
+    tier1_interval: 30s
+    tier2_interval: 5m
+  transport:
+    multicast_group: "224.0.0.45"
+    multicast_port: 1534
+  fallback_admin: local
 
-# Spoke role (this vigosrv is one steorra in the tungol)
+# Joiner — a steorra that joined an existing tungol via the admission ceremony.
 tungol:
-  role: spoke
-  tungol_id: "alexander4-prod"        # must match the hub's tungol_id
-  steorra_id: "dc1"
-  hub_addr: "hub.example.com:1530"
-  hub_fallback_addrs:
-    - "hub-standby.example.com:1530"
+  mode: joiner
+  tungol_id: "alexander4-prod"        # must match the founder's tungol_id
+  patterns: ["*.dc1.*"]
+  transport:
+    bootstrap_peers:
+      - "founder.example.com:1530"
+      - "founder-standby.example.com:1530"
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `role` | `standalone` | `standalone`, `hub`, or `spoke` |
-| `tungol_id` | (required when role ≠ standalone) | Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + `-` `_` `.`, no leading dot). Must match across every hub + steorra in the tungol; embedded in every signed announcement (Phase 1) and the future CRDT admissions set. |
-| `steorras` | (hub only) | List of steorra connections with ID, address, hostname patterns |
-| `auto_failover.enabled` | `false` | Auto-drain unhealthy steorras |
-| `steorra_id` | (spoke only) | Unique steorra identifier |
-| `hub_addr` | (spoke only) | Hub address for status reporting |
+| `mode` | `standalone` | `standalone`, `founder`, or `joiner` (per ADR-026 — replaces the retired hub/spoke role) |
+| `tungol_id` | (required when mode ≠ standalone) | Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + `-` `_` `.`, no leading dot). Must match across every steorra in the tungol; embedded in every signed announcement and admission row. |
+| `patterns` | (required when mode ≠ standalone) | Hostname glob patterns this steorra owns. First-match-wins across the tungol; loader refuses overlap with another steorra's patterns at publish time + boot time. |
+| `transport.bootstrap_peers` | (required for joiner) | Additive seed list of peer gRPC addresses for first-contact discovery. Gossip extends this list once any peer responds. |
+| `transport.multicast_group` | `224.0.0.45` | IPv4 multicast group for Tier-1 counter gossip. |
+| `transport.multicast_port` | `1534` | UDP port for Tier-1 counter gossip. |
+| `snapshot.tier1_interval` | `30s` | Tier-1 counter-gossip cadence. |
+| `snapshot.tier2_interval` | `5m` | Tier-2 roster-snapshot cadence. |
+| `fallback_admin` | `local` | Admin-query kill-switch: `local` (degrade gracefully) or `fanout` (best-effort fanout). |
+
+Steorras are identified by their Ed25519 pubkey (`server/steorra/identity.wrapped`), not a YAML-configured ID — the pre-Phase-2 `tungol.steorra_id` field is retired (loader hard-errors).
 
 ### Steorra identity (Phase 1)
 

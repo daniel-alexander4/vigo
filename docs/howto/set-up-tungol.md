@@ -1,38 +1,37 @@
 
-# Set up Tungol (hub + steorras federation)
+# Set up Tungol (peer-equal federation)
 
-You'll finish this page with a hub server fronting one or more steorra servers — each steorra owning a hostname-pattern partition of the fleet, the hub aggregating their data and routing admin queries fleet-wide. Envoys keep checking in on whatever address they originally enrolled against; the hub's job is fan-out + aggregation, not steady-state traffic.
+> **2A.1b YAML shape change (2026-05-19):** The pre-Phase-2 `role: hub|spoke` field and the per-steorra `steorras:` list are retired per [ADR-026](../adr/026-tungol-peer-equal-admissions.md). The loader hard-errors on `tungol.role`, `tungol.hub_addr`, `tungol.hub_fallback_addrs`, `tungol.steorras`, `tungol.auto_failover`, and `tungol.steorra_id`. The new shape uses `tungol.mode: founder|joiner|standalone`, per-vigosrv `tungol.patterns:`, and `tungol.transport.bootstrap_peers:` for first-contact discovery. The conceptual sections below ("Enrollment Routing", "Admin Query Fan-out", "Steorra Health") still describe how the founder behaves as a bootstrap-discovery rendezvous in Phase 2A — Phase 3 retires the founder/joiner distinction entirely and admin-routing becomes pure CRDT-driven.
+
+You'll finish this page with a founder server acting as a bootstrap-discovery rendezvous for one or more joiner servers — each peer owning a hostname-pattern partition of the fleet, peers sharing an admissions roster via CRDT gossip. Envoys keep checking in on whatever address they originally enrolled against.
 
 **When you'd use this:** when one server can no longer comfortably hold the fleet's check-in cadence, query load, or convergence-history retention. Practical inflection points are usually north of ~5,000 envoys per server, or when you want geographic partitioning so a regional outage doesn't take the whole control plane down.
 
 **When you'd skip this:** smaller fleets (a single-server `standalone` deployment is the default and the right answer for almost every operator); fleets that need HA but not horizontal sharding (use `server/peer/` primary/secondary replication instead — see the `peer:` section in `server.yaml`).
 
-> **License requirement:** Tungol needs a paid license. The built-in free license (100 envoys) does not support hub or spoke mode; the server refuses to start with `tungol.role` set to `hub` or `spoke` on the free license. Paid licenses are bound to a specific server via [machine fingerprint](troubleshoot.md#machine-fingerprint-binding) — migrating the hub to a new machine requires a new license.
+> **License requirement:** Tungol needs a paid license. The built-in free license (100 envoys) does not support founder or joiner mode; the server refuses to start with `tungol.mode` set to `founder` or `joiner` on the free license. Paid licenses are bound to a specific server via [machine fingerprint](troubleshoot.md#machine-fingerprint-binding) — migrating the founder to a new machine requires a new license.
 
 ## Enable it
 
-Three roles: `standalone` (default — no tungol config), `hub` (aggregates steorras), and `spoke` (this vigosrv is one steorra in the tungol). Pick the role per server in `server.yaml`:
+Three modes: `standalone` (default — no tungol config), `founder` (bootstrap-discovery rendezvous; also owns a pattern partition like any peer), and `joiner` (a peer that joined an existing tungol). Pick the mode per server in `server.yaml`:
 
 ```yaml
-# Hub server.yaml:
+# Founder server.yaml:
 tungol:
-  role: hub
-  steorras:
-    - id: east
-      addr: "steorra-east.lab:1530"
-      patterns: ["*.east.example.com"]
-    - id: west
-      addr: "steorra-west.lab:1530"
-      patterns: ["*.west.example.com"]
+  mode: founder
+  tungol_id: alexander4-prod
+  patterns: ["*.east.example.com"]
 
-# Steorra (role: spoke) server.yaml:
+# Joiner server.yaml:
 tungol:
-  role: spoke
-  steorra_id: "east"
-  hub_addr: "hub.lab:1530"
+  mode: joiner
+  tungol_id: alexander4-prod        # must match the founder's tungol_id
+  patterns: ["*.west.example.com"]
+  transport:
+    bootstrap_peers: ["founder.lab:1530"]
 ```
 
-Restart each server (hub first, steorras second). The hub will start health-checking each steorra and aggregating data.
+Restart each server (founder first, joiners second). Each joiner runs the admission ceremony with the founder via `JoinTungol` (Slice 2A.2+) and starts participating in the gossiped admissions CRDT.
 
 ## Use it
 
@@ -210,7 +209,7 @@ The web UI has a steorra detail page at `/tungol/steorras/{id}` showing per-steo
 - **HA for the hub itself** → `server/peer/` primary/secondary replication. Pair it with `hub_fallback_addrs:` on every steorra so failover is transparent.
 - **A steorra is wedged** → `vigocli tungol status` shows per-steorra health; the hub auto-drains after `threshold` consecutive misses. Manually drain with `vigocli tungol steorra drain <id> --to <other>`.
 - **License is too small** → tungol needs a paid license; see [license](../reference/server-yaml.md) and [troubleshoot.md#machine-fingerprint-binding](troubleshoot.md#machine-fingerprint-binding) for fingerprint rebinds.
-- **Cross-steorra admin queries are slow** → steorra health-probe interval is `30s` by default; reduce for tighter convergence on flapping steorras (`tungol.auto_failover.interval`).
+- **Cross-steorra admin queries are slow** → Tier-1 counter-gossip cadence is `30s` by default; reduce on the founder via `tungol.snapshot.tier1_interval` for tighter cross-steorra convergence on flapping peers.
 
 ---
 *Verified on Vigo 0.65.0 · 2026-05-17.*

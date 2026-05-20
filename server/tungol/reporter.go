@@ -40,18 +40,16 @@ const failoverThreshold = 3
 // to fallback hub addresses after failoverThreshold consecutive failures on the
 // current address.
 type Reporter struct {
-	steorraID        string
-	tungolID         string             // federation anchor; embedded in every report
-	signingKey       ed25519.PrivateKey // per-steorra identity (Phase 1); nil → unsigned legacy reports
-	pubkeyBytes      []byte             // 32-byte raw pubkey derived from signingKey at construction
-	hubAddr          string             // primary hub address
-	hubFallbackAddrs []string           // fallback hub addresses (tried in order)
-	certFile         string
-	keyFile          string
-	caFile           string
-	convergence      ConvergenceSource
-	configVersion    func() uint64 // returns current config version; nil-safe
-	interval         time.Duration
+	steorraID     string
+	tungolID      string             // federation anchor; embedded in every report
+	signingKey    ed25519.PrivateKey // per-steorra identity (Phase 1); nil → unsigned legacy reports
+	pubkeyBytes   []byte             // 32-byte raw pubkey derived from signingKey at construction
+	certFile      string
+	keyFile       string
+	caFile        string
+	convergence   ConvergenceSource
+	configVersion func() uint64 // returns current config version; nil-safe
+	interval      time.Duration
 
 	// dialFunc is used for establishing gRPC connections. Replaceable for testing.
 	dialFunc func(ctx context.Context, addr string, creds credentials.TransportCredentials) (*grpc.ClientConn, error)
@@ -60,24 +58,28 @@ type Reporter struct {
 	mu        sync.Mutex
 	failCount int      // consecutive failures on current address
 	activeIdx int      // index into allAddrs (-1 means not yet connected)
-	allAddrs  []string // hubAddr followed by hubFallbackAddrs
+	allAddrs  []string // bootstrap_peers list, additive — gossip extends this in 2A.2+
 }
 
-// NewReporter creates a Reporter that will periodically send status to the hub.
-// hubFallbackAddrs may be nil for single-hub deployments. tungolID + signingKey
-// are Phase 1 (ADR-tungol): if signingKey is non-nil, every report is signed
-// with it and the corresponding pubkey is embedded so hubs can verify +
-// pin-on-first-sight. A nil signingKey produces legacy unsigned reports —
-// hubs accept those without pinning (mixed-version fleet during rollout).
-func NewReporter(steorraID, tungolID string, signingKey ed25519.PrivateKey, hubAddr string, hubFallbackAddrs []string, certFile, keyFile, caFile string, convergence ConvergenceSource, interval time.Duration) *Reporter {
+// NewReporter creates a Reporter that periodically sends status to the
+// bootstrap-discovery peers (ADR-026: replaces the pre-Phase-2 single-hub
+// model with an additive peer list). The Reporter rotates through peers on
+// failure; gossip discovery will extend this list dynamically once 2A.2
+// lands the CRDT merge. tungolID + signingKey are Phase 1: if signingKey
+// is non-nil, every report is signed and the pubkey is embedded so peers
+// can verify + pin-on-first-sight. A nil signingKey produces legacy
+// unsigned reports (mixed-version fleets during rollout).
+//
+// steorraID is the public identifier (typically the hex-encoded Ed25519
+// pubkey from server/steorra/) that this peer announces itself as.
+func NewReporter(steorraID, tungolID string, signingKey ed25519.PrivateKey, bootstrapPeers []string, certFile, keyFile, caFile string, convergence ConvergenceSource, interval time.Duration) *Reporter {
 	if interval <= 0 {
 		interval = 30 * time.Second
 	}
 
-	// Build the full address list: primary first, then fallbacks.
-	allAddrs := make([]string, 0, 1+len(hubFallbackAddrs))
-	allAddrs = append(allAddrs, hubAddr)
-	allAddrs = append(allAddrs, hubFallbackAddrs...)
+	// Snapshot the bootstrap-peer list. Rotation across peers uses this
+	// slice; gossip-extended peers (post-2A.2) will append here.
+	allAddrs := append([]string(nil), bootstrapPeers...)
 
 	var pubkeyBytes []byte
 	if signingKey != nil {
@@ -88,19 +90,17 @@ func NewReporter(steorraID, tungolID string, signingKey ed25519.PrivateKey, hubA
 	}
 
 	return &Reporter{
-		steorraID:        steorraID,
-		tungolID:         tungolID,
-		signingKey:       signingKey,
-		pubkeyBytes:      pubkeyBytes,
-		hubAddr:          hubAddr,
-		hubFallbackAddrs: hubFallbackAddrs,
-		certFile:         certFile,
-		keyFile:          keyFile,
-		caFile:           caFile,
-		convergence:      convergence,
-		interval:         interval,
-		allAddrs:         allAddrs,
-		activeIdx:        0,
+		steorraID:   steorraID,
+		tungolID:    tungolID,
+		signingKey:  signingKey,
+		pubkeyBytes: pubkeyBytes,
+		certFile:    certFile,
+		keyFile:     keyFile,
+		caFile:      caFile,
+		convergence: convergence,
+		interval:    interval,
+		allAddrs:    allAddrs,
+		activeIdx:   0,
 	}
 }
 
@@ -114,8 +114,7 @@ func (r *Reporter) SetConfigVersion(fn func() uint64) {
 func (r *Reporter) Run(ctx context.Context) {
 	slog.Info("steorra status reporter started",
 		"steorra_id", r.steorraID,
-		"hub_addr", r.hubAddr,
-		"hub_fallback_addrs", r.hubFallbackAddrs,
+		"bootstrap_peers", r.allAddrs,
 		"interval", r.interval,
 	)
 

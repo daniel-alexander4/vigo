@@ -72,7 +72,7 @@ Print (or write, with `--output`) a sample `server.yaml` for a new steorra pre-f
 
 ### steorra remove &lt;steorra-id&gt;
 
-Drains the steorra, then prints the YAML lines to remove from the hub's `tungol.steorras:` list (operator-driven edit, then hub restart).
+Drains the steorra and signs a revocation row into the admissions CRDT (`tungol_steorras` table). The revocation gossips fleet-wide; the targeted steorra stops accepting new admissions immediately and is unrouteable for admin queries.
 
 ## ops-puddle init &lt;friendly-name&gt;
 
@@ -147,7 +147,7 @@ The command:
 
 Preconditions:
 
-- `tungol.role != standalone` (standalone deployments keep local-write + SIGHUP).
+- `tungol.mode != standalone` (standalone deployments keep local-write + SIGHUP).
 - Ops-puddle exists at `--ops-puddle-dir` (run `tungol ops-puddle init <name>` first).
 - Unlocked secrets vault.
 - Service-account puddle helper running (auto-started by the agent when `/srv/vigo/puddle/identity.wrapped` exists).
@@ -175,7 +175,7 @@ After local state lands, the gitback catch-up reactor pulls the stockpile bytes 
 
 Preconditions:
 
-- `tungol.role != standalone`.
+- `tungol.mode != standalone`.
 - Ops-puddle exists locally (`tungol ops-puddle join --from <member> --code <c>` first).
 - No local stockpile state yet — re-running on an already-joined vigosrv errors with "already locally tracked".
 
@@ -195,4 +195,4 @@ reloads on arrival.
 
 `vigocli config publish` detects tungol mode via `/api/v1/tungol/status` and switches to a gitback-driven push: clone the stockpile bare repo into a temp work tree, mirror this vigosrv's on-disk `/srv/vigo/stacks/stockpile/` into the work tree (delete-aware), `git add -A` + `git commit` + `git push` via `file://` to the bare repo. The push triggers the stockpile watcher's bare→`.live` pull + `configStore.Reload()`; vigocli polls `/api/v1/config/version` until it increments (30s timeout) to confirm the publish landed.
 
-Standalone mode (`tungol.role == standalone` or no tungol section) is unchanged: validate stockpile, write to `.live/` directly, POST `/api/v1/config/reload`. The pre-Slice-4 hub-fanout `SyncConfig` gRPC RPC + `Hub.SyncConfigToSteorras` are retired — tungol-mode publishes go through gitback exclusively.
+Standalone mode (`tungol.mode == standalone` or no tungol section) is unchanged: validate stockpile, write to `.live/` directly, POST `/api/v1/config/reload`. The pre-Slice-4 hub-fanout `SyncConfig` gRPC RPC + `Hub.SyncConfigToSteorras` are retired — tungol-mode publishes go through gitback exclusively.

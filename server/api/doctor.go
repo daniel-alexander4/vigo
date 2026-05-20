@@ -76,7 +76,7 @@ type DoctorConfig struct {
 	OfflineThreshold time.Duration
 	Hub              *tungol.Hub
 	Integrations   bool
-	Role           config.TungolRole
+	Mode           config.TungolMode
 	SecretsBackend string
 	// CycleLookup, when set, supplies the per-envoy observed cycle so
 	// the stale-envoys check uses the same per-envoy threshold the UI
@@ -96,7 +96,7 @@ type DoctorHandler struct {
 	offlineThreshold time.Duration
 	hub              *tungol.Hub
 	integrations   bool
-	role           config.TungolRole
+	mode           config.TungolMode
 	secretsBackend string
 	cycleLookup    CycleLookup
 	swarmCfgMu     sync.RWMutex
@@ -125,7 +125,7 @@ func NewDoctorHandler(cfg DoctorConfig) *DoctorHandler {
 		offlineThreshold: cfg.OfflineThreshold,
 		hub:              cfg.Hub,
 		integrations:   cfg.Integrations,
-		role:           cfg.Role,
+		mode:           cfg.Mode,
 		secretsBackend: cfg.SecretsBackend,
 		cycleLookup:    cfg.CycleLookup,
 	}
@@ -260,14 +260,18 @@ func (h *DoctorHandler) checkLicense(ctx context.Context) DoctorCheck {
 }
 
 func (h *DoctorHandler) checkTungol() DoctorCheck {
-	switch h.role {
-	case config.RoleHub:
+	switch h.mode {
+	case config.ModeFounder:
 		if h.hub == nil {
-			return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusFail, Message: "hub mode but no steorra connections"}
+			return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusFail, Message: "founder mode but no bootstrap connections"}
 		}
-		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusPass, Message: fmt.Sprintf("hub, %d steorras", h.hub.SteorraCount())}
-	case config.RoleSpoke:
-		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusPass, Message: "steorra"}
+		// Slice 2A.1b note: admin-query routing-by-pattern is degraded until
+		// the CRDT merge lands in 2A.2 — the bootstrap-discovery rendezvous
+		// itself still works. SteorraCount() reflects configured bootstrap
+		// peers, not the gossiped roster.
+		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusPass, Message: fmt.Sprintf("founder, %d bootstrap peer(s) (admin-routing degraded until 2A.2 CRDT merge)", h.hub.SteorraCount())}
+	case config.ModeJoiner:
+		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusPass, Message: "joiner"}
 	default:
 		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusSkip, Message: "standalone"}
 	}

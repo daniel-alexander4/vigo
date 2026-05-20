@@ -23,7 +23,6 @@ import (
 	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
-	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -85,23 +84,30 @@ type steorraConn struct {
 	admin    pb.VigoAdminClient
 }
 
-// NewHub creates a Hub that connects to each configured steorra via mTLS.
-// m owns the per-steorra latency/up gauges.
-func NewHub(ctx context.Context, steorras []config.SteorraEntry, certFile, keyFile, caFile string, m *metrics.Metrics) (*Hub, error) {
+// NewHub creates a Hub that connects to the configured bootstrap-discovery
+// peers via mTLS. Each address gets a long-lived gRPC client connection used
+// for admin-query fan-out + the JoinTungol rendezvous. After Slice 2A.2
+// wires the CRDT merge, the peer list is dynamic — gossip extends this
+// initial seed. m owns the per-peer latency/up gauges. The legacy
+// per-steorra config (id + patterns) lived in server.yaml pre-ADR-026; in
+// the peer-equal model that data lives in the gossiped admissions CRDT
+// (tungol_steorras table), so admin-query routing-by-pattern is degraded
+// in 2A.1b — RouteHostname returns no-route until 2A.2 lands the merge.
+func NewHub(ctx context.Context, bootstrapPeers []string, certFile, keyFile, caFile string, m *metrics.Metrics) (*Hub, error) {
 	tlsCreds, err := buildClientTLS(certFile, keyFile, caFile)
 	if err != nil {
 		return nil, fmt.Errorf("building steorra TLS credentials: %w", err)
 	}
 
 	h := &Hub{
-		steorras:       make([]steorraConn, 0, len(steorras)),
+		steorras:       make([]steorraConn, 0, len(bootstrapPeers)),
 		steorraReports: make(map[string]*pb.SteorraStatusReport),
 		steorraPins:    make(map[string]*SteorraPin),
 		metrics:        m,
 	}
 
-	for _, s := range steorras {
-		conn, err := grpc.DialContext(ctx, s.Addr,
+	for _, addr := range bootstrapPeers {
+		conn, err := grpc.DialContext(ctx, addr,
 			grpc.WithTransportCredentials(tlsCreds),
 			grpc.WithBlock(),
 			grpc.WithTimeout(5*time.Second),
@@ -109,17 +115,19 @@ func NewHub(ctx context.Context, steorras []config.SteorraEntry, certFile, keyFi
 		if err != nil {
 			// Close any already-opened connections.
 			h.Close()
-			return nil, fmt.Errorf("connecting to steorra %s at %s: %w", s.ID, s.Addr, err)
+			return nil, fmt.Errorf("connecting to bootstrap peer at %s: %w", addr, err)
 		}
 
+		// id stays empty until the peer announces its own pubkey via the
+		// signed SteorraStatusReport (Phase 1) and we pin it; patterns
+		// stay empty until the CRDT merge populates them.
 		h.steorras = append(h.steorras, steorraConn{
-			id:       s.ID,
-			addr:     s.Addr,
-			patterns: s.Patterns,
-			conn:     conn,
-			admin:    pb.NewVigoAdminClient(conn),
+			id:    addr, // temporary handle until pubkey lands via announcement
+			addr:  addr,
+			conn:  conn,
+			admin: pb.NewVigoAdminClient(conn),
 		})
-		slog.Info("connected to steorra", "steorra_id", s.ID, "addr", s.Addr)
+		slog.Info("connected to bootstrap peer", "addr", addr)
 	}
 
 	return h, nil

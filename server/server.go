@@ -99,8 +99,8 @@ type Server struct {
 	// --- Identity / secrets ---
 	provider  secrets.Provider
 	puddleID  *puddle.Identity  // non-nil only on local secrets backend
-	steorraID *steorra.Identity // non-nil only when role != standalone AND local backend
-	role      config.TungolRole
+	steorraID *steorra.Identity // non-nil only when mode != standalone AND local backend
+	mode      config.TungolMode
 
 	// --- Database ---
 	db          *sql.DB
@@ -326,10 +326,10 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	s.licenseDir = stringOrDefault(s.cfg.Paths.LicenseDir, licfmt.DefaultLicenseDir)
 	s.licenseGraceDir = s.licenseDir
 
-	// Determine tungol role.
-	s.role = s.cfg.Tungol.Role
-	if s.role == "" {
-		s.role = config.RoleStandalone
+	// Determine tungol mode.
+	s.mode = s.cfg.Tungol.Mode
+	if s.mode == "" {
+		s.mode = config.ModeStandalone
 	}
 	if err := s.cfg.Tungol.Validate(); err != nil {
 		return nil, err
@@ -338,12 +338,12 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// Phase 1 (ADR-tungol): per-steorra Ed25519 identity. Generated on
 	// first boot under /srv/vigo/steorra/, wrapped via HKDF purpose
 	// `vigo-steorra-wrap-v1` over the secrets master key. Used by the
-	// reporter to sign every announcement so the hub can verify + pin
-	// (tungol_id, steorra_id) → pubkey. Only required in tungol mode +
+	// reporter to sign every announcement so peers can verify + pin
+	// (tungol_id, steorra_pubkey). Only required in tungol mode +
 	// local secrets backend; isopass and other backends run without a
 	// steorra identity (legacy unsigned reports, accepted without
 	// pinning).
-	if s.role != config.RoleStandalone {
+	if s.mode != config.ModeStandalone {
 		if local, ok := s.provider.(*secrets.LocalProvider); ok {
 			id, err := steorra.EnsureIdentity(local, steorra.DefaultDir)
 			if err != nil {
@@ -363,7 +363,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 
 	slog.Info("server config loaded",
-		"role", s.role,
+		"mode", s.mode,
 		"grpc_listen", s.cfg.Server.GRPCListen,
 		"api_listen", s.cfg.Server.APIListen,
 	)
@@ -469,9 +469,9 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		s.licenseMode = "local"
 	}
 
-	// In aggregate mode, steorras skip enforcement — the hub handles it.
-	if s.licenseMode == "aggregate" && s.role == config.RoleSpoke {
-		slog.Info("license mode aggregate: steorra skips enforcement (hub enforces)")
+	// In aggregate mode, joiners skip enforcement — the founder handles it.
+	if s.licenseMode == "aggregate" && s.mode == config.ModeJoiner {
+		slog.Info("license mode aggregate: joiner skips enforcement (founder enforces)")
 	}
 
 	// envoyCounter closes over *Server. s.hub and s.fleetIndex stay nil
@@ -504,10 +504,10 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		return s.fleetIndex.ActiveCount(), nil
 	}
 
-	// Steorras in aggregate mode use a no-op enforcer that always passes.
-	if s.licenseMode == "aggregate" && s.role == config.RoleSpoke {
+	// Joiners in aggregate mode use a no-op enforcer that always passes.
+	if s.licenseMode == "aggregate" && s.mode == config.ModeJoiner {
 		s.enforcer, err = license.NewEnforcer(s.licenseDir, s.licenseGraceDir, s.cfg.Server.TLS.CAFile,
-			func(_ context.Context) (int, error) { return 0, nil }, // always zero — hub enforces
+			func(_ context.Context) (int, error) { return 0, nil }, // always zero — founder enforces
 			func() { s.cancel() }, s.metrics)
 	} else {
 		s.enforcer, err = license.NewEnforcer(s.licenseDir, s.licenseGraceDir, s.cfg.Server.TLS.CAFile, envoyCounter, func() { s.cancel() }, s.metrics)
@@ -516,9 +516,9 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		return nil, fmt.Errorf("license: %w", err)
 	}
 
-	// Tungol requires a paid license — reject hub/spoke on free tier.
-	if s.role != config.RoleStandalone && s.enforcer.IsFreeLicense() {
-		return nil, fmt.Errorf("tungol (role %q) requires a paid license — the built-in free license does not support tungol", s.role)
+	// Tungol requires a paid license — reject founder/joiner on free tier.
+	if s.mode != config.ModeStandalone && s.enforcer.IsFreeLicense() {
+		return nil, fmt.Errorf("tungol (mode %q) requires a paid license — the built-in free license does not support tungol", s.mode)
 	}
 
 	// --- Auth ---
@@ -652,14 +652,15 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		})
 	})
 
-	// --- Tungol hub (hub role only). The failover goroutine still starts
-	// from run(); construction lands here so the envoyCounter closure
-	// (assigned earlier in NewServer) sees s.hub before any enforcement
-	// tick fires. hub.Close() is called from (*Server).Close(). ---
-	if s.role == config.RoleHub {
-		hub, err := tungol.NewHub(ctx, s.cfg.Tungol.Steorras, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.metrics)
+	// --- Tungol hub (founder mode only — bootstrap-discovery rendezvous
+	// per ADR-026; full hub retirement is Phase 3). The failover goroutine
+	// still starts from run(); construction lands here so the envoyCounter
+	// closure (assigned earlier in NewServer) sees s.hub before any
+	// enforcement tick fires. hub.Close() is called from (*Server).Close().
+	if s.mode == config.ModeFounder {
+		hub, err := tungol.NewHub(ctx, s.cfg.Tungol.Transport.BootstrapPeers, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.metrics)
 		if err != nil {
-			return nil, fmt.Errorf("connecting to steorras: %w", err)
+			return nil, fmt.Errorf("connecting to bootstrap peers: %w", err)
 		}
 		s.hub = hub
 		// Phase 1: wire audit writer for tungol_steorra_pubkey_mismatch events.
@@ -774,7 +775,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// project has not been founded yet (vigocli tungol stockpile init)
 	// the watcher stays nil and a future SIGHUP / restart picks it up.
 	// Tungol-mode only; standalone keeps the local-write + SIGHUP shape. ---
-	if s.role != config.RoleStandalone {
+	if s.mode != config.ModeStandalone {
 		if pid, ok := lookupStockpileProjectID(puddle.OpsDefaultDir); ok {
 			s.stockpileWatcher = stockpilewatch.New(
 				"/var/lib/vigo/swarm/gitback/projects",
@@ -788,7 +789,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 
 	// --- Swarm substrate: peer-to-peer content distribution. The substrate
-	// runs on this server iff the role isn't a steorra spoke AND the
+	// runs on this server iff the mode isn't joiner AND the
 	// server-as-envoy hostname matches the swarm pattern list — the
 	// canonical assumption is the server hosts a local agent under
 	// cfg.Server.Hostname (CLAUDE.md). An empty pattern list disables
@@ -797,7 +798,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// that wire up to gwMux + the `go runCuratorFeed` reactor stay in
 	// run() and chunk 4. ManifestStore.Stop() is called from
 	// (*Server).Close(). ---
-	if s.role != config.RoleSpoke && config.HostMatchesPatterns(s.cfg.Server.Hostname, s.cfg.Swarm.Enabled) {
+	if s.mode != config.ModeJoiner && config.HostMatchesPatterns(s.cfg.Server.Hostname, s.cfg.Swarm.Enabled) {
 		seedDir := s.cfg.Swarm.SeedDir
 		if seedDir == "" {
 			seedDir = "/var/lib/vigo/swarm/seed"
@@ -908,16 +909,10 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		slog.Info("peer replication enabled", "role", peerRole, "peers", len(s.cfg.Peers.Servers))
 	}
 
-	// --- Hub auto-failover construction (hub role only). The `go
-	// failover.Run` goroutine stays in run(). ---
-	if s.role == config.RoleHub && s.cfg.Tungol.AutoFailover.Enabled {
-		foThreshold := s.cfg.Tungol.AutoFailover.Threshold
-		if foThreshold <= 0 {
-			foThreshold = 3
-		}
-		foInterval := parseDuration(s.cfg.Tungol.AutoFailover.Interval, 30*time.Second)
-		s.hubFailover = tungol.NewFailover(s.hub, foThreshold, foInterval)
-	}
+	// --- Hub auto-failover retired in 2A.1b (ADR-026): failover is now
+	// implicit via CRDT gossip + freshness thresholds (tungol.freshness),
+	// not a hub-side polling probe. The s.hubFailover field stays nil;
+	// run() no-ops when it's nil. ---
 
 	// --- Workflow engine. Load + RecoverInterrupted are one-shot sync
 	// calls so they fold into NewServer; the engine is wired into
@@ -1009,7 +1004,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		OfflineThreshold: s.offlineThreshold,
 		Hub:              s.hub,
 		Integrations:     s.integrations.Enabled(),
-		Role:             s.role,
+		Mode:             s.mode,
 		SecretsBackend:   s.secretsCfg.Backend,
 		CycleLookup: func(envoyID string) time.Duration {
 			if s.fleetIndex == nil {
@@ -1022,7 +1017,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// swarm_pattern_order check has data on the first /doctor call.
 	doctorHandler.SetSwarmConfig(s.cfg.Swarm)
 
-	tungolHandler := api.NewTungolHandler(s.role, s.cfg.Tungol.TungolID, s.cfg.Tungol.SteorraID, formatLocalSteorraPubkey(s.steorraID), s.hub)
+	tungolHandler := api.NewTungolHandler(s.mode, s.cfg.Tungol.TungolID, formatLocalSteorraPubkey(s.steorraID), s.hub)
 	opsPuddleHandler := api.NewTungolOpsPuddleHandler(s.provider, puddle.OpsDefaultDir, s.auditWriter)
 
 	taskHandler := api.NewTaskHandler(s.queries, s.agentSvc, s.cfg.Task.RequireDefinition)
@@ -1083,8 +1078,8 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	} else {
 		dbDriver = "sqlite"
 	}
-	if s.role == config.RoleSpoke {
-		mux, gwErr := api.NewSteorraGateway(ctx, s.cfg.Server.GRPCListen, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, s.cfg.Tungol.SteorraID, s.promReg)
+	if s.mode == config.ModeJoiner {
+		mux, gwErr := api.NewSteorraGateway(ctx, s.cfg.Server.GRPCListen, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, formatLocalSteorraPubkey(s.steorraID), s.promReg)
 		if gwErr != nil {
 			return nil, fmt.Errorf("creating steorra gateway: %w", gwErr)
 		}

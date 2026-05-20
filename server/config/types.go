@@ -14,30 +14,68 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TungolRole defines the server's role in a tungol deployment.
-type TungolRole string
+// TungolMode defines the server's mode in a tungol deployment. The three
+// modes are architectural states preserved from the pre-Phase-2 hub/spoke
+// distinction — founder runs the bootstrap-discovery rendezvous code,
+// joiner runs the reporter that announces to peers, and standalone is the
+// degenerate single-vigosrv case with no tungol participation. Phase 3
+// retires the mode distinction entirely; until then, this enum dispatches
+// startup behavior. Renamed in 0.65.16 from TungolRole (hub/spoke
+// terminology was the hub-spoke artifact; this is the peer-equal
+// vocabulary per ADR-026).
+type TungolMode string
 
 const (
-	// RoleStandalone is the default: a single server handling everything.
-	RoleStandalone TungolRole = "standalone"
-	// RoleHub is the central server in a tungol deployment.
-	// Handles UI, webhooks, bootstrap, and aggregates data from steorras.
-	RoleHub TungolRole = "hub"
-	// RoleSpoke is a partition steorra handling agent check-ins for a
-	// subset of envoys. Disables webhooks, bootstrap, and secret watcher.
-	RoleSpoke TungolRole = "spoke"
+	// ModeStandalone is the default: a single server handling everything.
+	ModeStandalone TungolMode = "standalone"
+	// ModeFounder is the vigosrv that founded the tungol; runs the
+	// bootstrap-discovery rendezvous in Phase 2A. Replaces the legacy
+	// hub role.
+	ModeFounder TungolMode = "founder"
+	// ModeJoiner is a vigosrv that joined an existing tungol via the
+	// admission ceremony. Replaces the legacy spoke role.
+	ModeJoiner TungolMode = "joiner"
 )
 
-// TungolSection configures the tungol federation. Omit entirely
-// (or set role: standalone) for single-server deployments.
+// TungolSection configures the tungol federation. Omit entirely (or set
+// mode: standalone) for single-server deployments. ADR-026 reshaped this
+// for Phase 2 peer-equal admissions; the legacy hub-spoke fields (role,
+// steorras, hub_addr, hub_fallback_addrs, auto_failover, steorra_id) are
+// retired and the loader hard-errors on them.
 type TungolSection struct {
-	Role             TungolRole         `yaml:"role" doc:"Server role in a tungol deployment." options:"standalone|hub|spoke" default:"standalone" example:"standalone"`
-	TungolID         string             `yaml:"tungol_id" doc:"Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + - _ ., no leading dot)." example:"alexander4-prod, acme-staging"`
-	SteorraID        string             `yaml:"steorra_id" doc:"Unique steorra identifier (required when role is 'spoke')." example:"us-west-steorra, eu-steorra-01"`
-	HubAddr          string             `yaml:"hub_addr" doc:"Hub gRPC address (host:port) the steorra reports to." example:"vigo-hub.example.com:1530"`
-	HubFallbackAddrs []string           `yaml:"hub_fallback_addrs" doc:"Steorra-only: fallback hub addresses used when the primary hub is unreachable." example:"[vigo-hub-2:1530, vigo-hub-3:1530]"`
-	Steorras         []SteorraEntry     `yaml:"steorras" doc:"Hub-only: list of steorra definitions (id, address, hostname patterns)." example:"see steorras.<id> fields"`
-	AutoFailover     AutoFailoverConfig `yaml:"auto_failover" doc:"Hub-only: automatic draining of steorras that fail health probes."`
+	Mode          TungolMode       `yaml:"mode" doc:"Server mode in a tungol deployment (peer-equal model, ADR-026)." options:"standalone|founder|joiner" default:"standalone" example:"founder"`
+	TungolID      string           `yaml:"tungol_id" doc:"Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + - _ ., no leading dot)." example:"alexander4-prod, acme-staging"`
+	Patterns      []string         `yaml:"patterns" doc:"Hostname glob patterns this steorra owns. First-match-wins across the tungol; loader refuses overlap with another steorra's patterns at publish time + boot time." example:"[*.us-west.*, *.dc1.*]"`
+	Snapshot      SnapshotConfig   `yaml:"snapshot" doc:"Two-tier snapshot cadence — Tier-1 counters via multicast, Tier-2 roster bytes via REST."`
+	Transport     TransportConfig  `yaml:"transport" doc:"Multicast gossip group + bootstrap-discovery peer list for first contact with the tungol."`
+	Freshness     FreshnessConfig  `yaml:"freshness" doc:"Liveness thresholds for declaring a steorra silent (consumes server/freshness/ defaults)."`
+	FallbackAdmin string           `yaml:"fallback_admin" doc:"Kill-switch for admin-query behavior on partition." options:"local|fanout" default:"local" example:"local"`
+}
+
+// SnapshotConfig governs Tier-1 (counters) + Tier-2 (roster) cadences for
+// the CRDT gossip per ADR-026. Tier-1 fires every 30s on the multicast
+// group; Tier-2 serves on REST every 5m or on counter-mismatch from a peer.
+type SnapshotConfig struct {
+	Tier1Interval string `yaml:"tier1_interval" doc:"Tier-1 counter-gossip interval as a Go duration." default:"30s" example:"30s, 1m"`
+	Tier2Interval string `yaml:"tier2_interval" doc:"Tier-2 roster-snapshot interval as a Go duration." default:"5m" example:"5m, 10m"`
+}
+
+// TransportConfig configures the multicast group (Tier-1) + bootstrap peer
+// addresses (first-contact rendezvous for newly-joining steorras) per
+// ADR-026. The multicast group sits alongside longdrawer (224.0.0.43:1532)
+// and lockbox (224.0.0.44:1533); the bootstrap peers are an additive seed
+// list — gossip discovery extends it once a peer responds.
+type TransportConfig struct {
+	MulticastGroup string   `yaml:"multicast_group" doc:"IPv4 multicast group for Tier-1 counter gossip." default:"224.0.0.45" example:"224.0.0.45"`
+	MulticastPort  int      `yaml:"multicast_port" doc:"UDP port for Tier-1 counter gossip." default:"1534" example:"1534"`
+	BootstrapPeers []string `yaml:"bootstrap_peers" doc:"Seed list of peer gRPC addresses for first-contact discovery (host:port). Additive — gossip extends this list once any peer responds. Required for joiner mode; optional for founder mode (founder is itself the rendezvous)." example:"[founder.example.com:1530]"`
+}
+
+// FreshnessConfig is the per-tungol override for the server/freshness/
+// thresholds. Empty fields fall back to the package defaults. Reserved
+// for Phase 2 wiring; consumers in 2A.1b ignore it.
+type FreshnessConfig struct {
+	StaleAfter string `yaml:"stale_after" doc:"Override the global staleness threshold for steorra liveness — Go duration string." example:"90s, 2m"`
 }
 
 // validateTungolID enforces the same DNS-safe-name rules as
@@ -79,58 +117,41 @@ func isLowerHex(s string) bool {
 	return true
 }
 
-// AutoFailoverConfig controls automatic steorra failover on the hub.
-// When enabled, the hub periodically probes steorra health and drains
-// steorras that fail consecutively.
-type AutoFailoverConfig struct {
-	Enabled   bool   `yaml:"enabled" doc:"Probe steorras and drain unhealthy ones automatically." default:"false" example:"true in multi-region setups"`
-	Threshold int    `yaml:"threshold" doc:"Consecutive failed probes before the steorra is drained." default:"3" example:"3 (prod), 5 (flaky networks)"`
-	Interval  string `yaml:"interval" doc:"Probe interval as a Go duration string (e.g. 30s, 1m)." default:"30s" example:"15s, 30s, 1m, 5m (accepts s, m, h)"`
-}
-
-// SteorraEntry defines a steorra the hub aggregates from.
-type SteorraEntry struct {
-	ID       string   `yaml:"id" doc:"Unique steorra identifier (referenced by CLI and aggregate dashboards)." example:"us-west, eu-central, customer-acme"`
-	Addr     string   `yaml:"addr" doc:"Steorra gRPC address (host:port)." example:"steorra-01.example.com:1530"`
-	Patterns []string `yaml:"patterns" doc:"Hostname glob patterns routed to this steorra (first-match-wins)." example:"[*.us-west-1.internal, *.dc1.*]"`
-}
-
 // Validate checks that tungol config is internally consistent.
 func (f TungolSection) Validate() error {
-	role := f.Role
-	if role == "" || role == RoleStandalone {
+	mode := f.Mode
+	if mode == "" || mode == ModeStandalone {
 		return nil
 	}
-	// tungol_id is required for every non-standalone role — it's the
-	// federation membership anchor that hubs and steorras must agree
-	// on before peer-trust attestations make sense (Phase 1+).
+	// tungol_id is required for every non-standalone mode — it's the
+	// federation membership anchor; admissions table rows are scoped to it.
 	if f.TungolID == "" {
-		return fmt.Errorf("tungol.tungol_id is required when role is %q (DNS-safe operator-chosen identifier)", role)
+		return fmt.Errorf("tungol.tungol_id is required when mode is %q (DNS-safe operator-chosen identifier)", mode)
 	}
 	if err := validateTungolID(f.TungolID); err != nil {
 		return err
 	}
-	if role == RoleHub {
-		if len(f.Steorras) == 0 {
-			return fmt.Errorf("tungol.steorras is required when role is 'hub'")
+	switch mode {
+	case ModeFounder:
+		// Founder is the bootstrap-discovery rendezvous; doesn't need any
+		// bootstrap_peers (it IS the rendezvous), but its own patterns
+		// must be present so it owns a slice of the fleet.
+		if len(f.Patterns) == 0 {
+			return fmt.Errorf("tungol.patterns is required when mode is 'founder' (hostname glob list for this steorra's partition)")
 		}
-		for i, s := range f.Steorras {
-			if s.ID == "" {
-				return fmt.Errorf("tungol.steorras[%d].id is required", i)
-			}
-			if s.Addr == "" {
-				return fmt.Errorf("tungol.steorras[%d].addr is required", i)
-			}
+		return nil
+	case ModeJoiner:
+		// Joiner needs at least one bootstrap peer for first-contact
+		// admission, plus its own patterns for the partition it owns.
+		if len(f.Patterns) == 0 {
+			return fmt.Errorf("tungol.patterns is required when mode is 'joiner' (hostname glob list for this steorra's partition)")
+		}
+		if len(f.Transport.BootstrapPeers) == 0 {
+			return fmt.Errorf("tungol.transport.bootstrap_peers must list at least one founder/peer address when mode is 'joiner'")
 		}
 		return nil
 	}
-	if role == RoleSpoke {
-		if f.SteorraID == "" {
-			return fmt.Errorf("tungol.steorra_id is required when role is 'spoke'")
-		}
-		return nil
-	}
-	return fmt.Errorf("tungol.role must be standalone, hub, or spoke (got %q)", role)
+	return fmt.Errorf("tungol.mode must be standalone, founder, or joiner (got %q)", mode)
 }
 
 // ServerConfig represents the top-level server configuration from server.yaml.
@@ -142,7 +163,7 @@ type ServerConfig struct {
 	Watcher      WatcherSection      `yaml:"watcher" docs:"concepts/secrets" doc:"Polls the secrets provider for rotations and force-pushes affected envoys." long:"Background task that polls the configured secrets provider on a schedule and, when a secret value changes, forces a push to every envoy that consumes it. Enables automatic secret rotation without waiting for the next regular check-in — critical when rotating database passwords, TLS keys, or API tokens with revocation expectations. Poll frequency trades detection speed for provider API load."`
 	Secrets      secrets.Config      `yaml:"secrets" docs:"concepts/secrets" doc:"Secrets provider backend and connection settings (local, isopass, vault, AWS, GCP, Azure)." long:"Selects which backend resolves 'secret:' references in module configs at agent check-in. Options: local (files under /srv/vigo/secrets, default for single-server), isopass (Alexander4 Isopass), vault (HashiCorp Vault), aws (AWS Secrets Manager), gcp (GCP Secret Manager), azure (Azure Key Vault). The server fails fast on startup if the backend is unreachable — it never serves a module with plaintext fallbacks."`
 	Bootstrap    BootstrapConfig     `yaml:"bootstrap" docs:"getting-started/bootstrap" doc:"Agent bootstrap enrollment — trusted hostname/CIDR patterns and issued cert validity." long:"Controls how new agents are enrolled into the fleet via the initial HTTPS bootstrap call. Define trusted hostname patterns and CIDR blocks that short-circuit the one-time-token flow (useful for automated provisioning), plus the validity window on auto-issued agent certs. Tighten these in production — a permissive trusted_enrollment is the difference between friction-free onboarding and an open door."`
-	Tungol       TungolSection      `yaml:"tungol" docs:"howto/set-up-tungol" doc:"Tungol federation — standalone, hub, or spoke role with auto-failover." long:"Deployment topology — standalone (one server runs the whole fleet), hub (MSP operator runs a rollup across many customer steorras), or spoke (customer-facing steorra reporting up to a hub). Set this when running an MSP deployment or a multi-region setup where one central server can't own all check-ins. Includes auto-failover tuning for when a hub's primary loses contact with its steorras."`
+	Tungol       TungolSection      `yaml:"tungol" docs:"howto/set-up-tungol" doc:"Tungol federation — peer-equal mode (founder/joiner/standalone) per ADR-026." long:"Deployment topology — standalone (one vigosrv runs the whole fleet) or a peer-equal tungol where multiple vigosrvs share an admissions roster via CRDT gossip. Founder mode is the bootstrap-discovery rendezvous for new joiners (Phase 2A only; Phase 3 retires the founder/joiner distinction entirely). Joiner mode obtains an admission via the founder, then participates as a write-equal peer in the CRDT. Each steorra owns a hostname-pattern partition; the loader refuses overlap between steorras at publish + boot time. Set this when running an MSP deployment or a multi-region setup where one central server can't own all check-ins."`
 	Tuning       TuningSection       `yaml:"tuning" docs:"operations/tuning" doc:"Operational tuning — timing windows, gRPC transport limits, and Go runtime memory caps." long:"Low-level knobs for operators who have hit a scaling ceiling and need to hand-tune. Includes gRPC send/receive limits, concurrent stream caps, timing windows for online-vs-offline envoy classification, and Go runtime memory ceilings (GOMEMLIMIT). Leave at defaults until you see a specific symptom — most fleets never touch this section."`
 	SMTP         SMTPSection         `yaml:"smtp" docs:"operations/integrations" doc:"Email relay for event notifications, digests, and scheduled evidence delivery." long:"SMTP relay used by event notifications, daily/weekly digests, and scheduled compliance evidence delivery. Most deployments should prefer the native integrations (Slack, PagerDuty, Jira) over SMTP — email is the least observable and least actionable channel. Keep this configured only when a recipient genuinely can't be reached any other way."`
 	AI           AISection           `yaml:"ai" docs:"operations/ai-providers" doc:"AI assistant provider (Claude, OpenAI, Ollama) for the Ask page and compliance tooling." long:"Wires the /security chat drawer and compliance-assist tooling to an LLM provider. Supports Claude (sharpest reasoning on Vigo-specific questions), OpenAI (cost/token trade-off), and Ollama (fully self-hosted, no third-party calls). Required for automatic .retract module drafting and for the AI-powered guardrail suggestions in the publish flow."`
