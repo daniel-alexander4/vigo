@@ -1,0 +1,50 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Config Tree</h1>
+    <p>Published configuration tree{{if .LiveDir}} at <code>{{.LiveDir}}</code>{{end}}. Edits under <code>stockpile/</code> are not active until <code>vigocli config publish</code>.</p>
+</div>
+
+{{if .Missing}}
+<div class="card">
+    <div class="card__body">
+        <p class="text-muted">No published configuration. Run <code>vigocli config publish</code> to publish the editable stockpile to <code>.live/</code>.</p>
+    </div>
+</div>
+{{else if .Root}}
+<div class="config-tree">
+    <div class="config-tree__root">
+        <span class="config-tree__dir-name">{{.Root.Name}}/</span>
+        {{if .Root.Children}}{{template "config-tree-children" .Root.Children}}{{end}}
+    </div>
+
+    <div class="config-tree__legend">
+        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--common"></span>common.vgo</span>
+        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--environments"></span>environments.vgo</span>
+        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--roles"></span>roles.vgo</span>
+        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--waivers"></span>waivers.vgo</span>
+        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--matchfile"></span>envoys.vgo (matchfile)</span>
+        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--module"></span>module</span>
+        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--usercrate"></span>usercrate</span>
+        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--vgo"></span>other .vgo</span>
+        <span class="config-tree__legend-item"><span class="config-tree__swatch config-tree__file--other"></span>other</span>
+    </div>
+</div>
+{{end}}
+{{end}}
+
+{{define "config-tree-children"}}
+<ul class="config-tree__list">
+    {{range .}}
+    <li class="config-tree__item">
+        {{if .IsDir}}
+        <details class="config-tree__dir">
+            <summary class="config-tree__summary"><span class="config-tree__dir-name">{{.Name}}/</span></summary>
+            {{if .Children}}{{template "config-tree-children" .Children}}{{end}}
+        </details>
+        {{else}}
+        <span class="config-tree__file config-tree__file--{{.Kind}}">{{.Name}}</span>
+        {{end}}
+    </li>
+    {{end}}
+</ul>
+{{end}}

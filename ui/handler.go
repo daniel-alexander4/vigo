@@ -592,6 +592,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /envoys/{id}", h.EnvoyDetail)
 	mux.HandleFunc("GET /envoys/{id}/trace", h.EnvoyTrace)
 	mux.HandleFunc("GET /envoys/{id}/trace/viz", h.EnvoyTraceViz)
+	mux.HandleFunc("GET /fleet/config-tree", h.ConfigTree)
 	mux.HandleFunc("GET /ui/fragments/envoy-swarm-load/{id}", h.EnvoySwarmLoadFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-footprint/{id}", h.EnvoyFootprintFragment)
 	mux.HandleFunc("GET /ui/fragments/dashboard-pressure", h.DashboardPressureFragment)

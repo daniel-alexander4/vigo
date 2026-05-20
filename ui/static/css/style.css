@@ -4436,3 +4436,96 @@ a.server-config-card:hover {
 .platform-compliance__pivot-list li .badge {
     margin-right: 6px;
 }
+
+/* === Config Tree page ===
+   Recursive <details>/<summary> directory tree under .live/. No JS;
+   collapse is native browser behavior. File-kind colors mirror the
+   Catppuccin Mocha palette declared canonically in server/uifmt/palette.go. */
+.config-tree {
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 14px 18px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+}
+.config-tree__root > .config-tree__dir-name {
+    font-weight: 600;
+}
+.config-tree__list {
+    list-style: none;
+    padding-left: 18px;
+    margin: 0;
+}
+.config-tree__item {
+    padding: 1px 0;
+}
+.config-tree__dir > .config-tree__summary {
+    list-style: none;
+    cursor: pointer;
+    user-select: none;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+.config-tree__dir > .config-tree__summary::-webkit-details-marker { display: none; }
+.config-tree__dir > .config-tree__summary::before {
+    content: "▸";
+    display: inline-block;
+    width: 10px;
+    color: var(--color-text-muted);
+    font-size: 10px;
+    transition: transform 0.12s ease;
+}
+.config-tree__dir[open] > .config-tree__summary::before {
+    transform: rotate(90deg);
+}
+.config-tree__dir > .config-tree__summary:hover {
+    background: var(--color-primary-tint-faint);
+}
+.config-tree__dir > .config-tree__summary:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: -2px;
+}
+.config-tree__dir-name {
+    color: var(--color-text);
+}
+.config-tree__file {
+    padding-left: 14px;
+}
+.config-tree__file--common       { color: #cba6f7; } /* mauve */
+.config-tree__file--environments { color: #fab387; } /* peach */
+.config-tree__file--roles        { color: #f9e2af; } /* yellow */
+.config-tree__file--waivers      { color: #f38ba8; } /* red */
+.config-tree__file--matchfile    { color: #89dceb; } /* sky */
+.config-tree__file--module       { color: #a6e3a1; } /* green */
+.config-tree__file--usercrate    { color: #94e2d5; } /* teal */
+.config-tree__file--vgo          { color: var(--color-text); }
+.config-tree__file--other        { color: #6c7086; } /* overlay0 */
+.config-tree__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin-top: 18px;
+    padding-top: 12px;
+    border-top: 1px solid var(--color-border);
+    font-family: var(--font-sans, inherit);
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+.config-tree__legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.config-tree__swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    padding-left: 0;
+    background-color: currentColor;
+}
