@@ -242,3 +242,31 @@ CREATE TABLE IF NOT EXISTS config_publishes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_config_publishes_published_at ON config_publishes (published_at);
+
+-- Tungol Slice 2A admission roster (ADR-026). See SQLite migration for
+-- the design notes. BIGINT for ms-since-epoch timestamps; BYTEA for the
+-- Ed25519 signature. Same column shape as the SQLite mirror so sqlc's
+-- pgcompat layer can round-trip without per-engine query variants.
+CREATE TABLE IF NOT EXISTS tungol_steorras (
+    pubkey      TEXT PRIMARY KEY,
+    tungol_id   TEXT NOT NULL,
+    hostname    TEXT NOT NULL DEFAULT '',
+    patterns    TEXT NOT NULL DEFAULT '[]',
+    revoked_at  BIGINT,
+    revoked_by  TEXT,
+    updated_at  BIGINT NOT NULL,
+    updated_by  TEXT NOT NULL,
+    signature   BYTEA NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tungol_steorras_tungol_id ON tungol_steorras (tungol_id);
+
+CREATE TABLE IF NOT EXISTS tungol_consumed_tokens (
+    token_hash                  TEXT PRIMARY KEY,
+    tungol_id                   TEXT NOT NULL,
+    consumed_at                 BIGINT NOT NULL,
+    consumed_by_steorra_pubkey  TEXT NOT NULL REFERENCES tungol_steorras (pubkey),
+    signature                   BYTEA NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tungol_consumed_tokens_tungol_id ON tungol_consumed_tokens (tungol_id);

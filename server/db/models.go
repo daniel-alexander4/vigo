@@ -384,6 +384,26 @@ type Session struct {
 	Expiry float64 `json:"expiry"`
 }
 
+type TungolConsumedToken struct {
+	TokenHash               string `json:"token_hash"`
+	TungolID                string `json:"tungol_id"`
+	ConsumedAt              int64  `json:"consumed_at"`
+	ConsumedBySteorraPubkey string `json:"consumed_by_steorra_pubkey"`
+	Signature               []byte `json:"signature"`
+}
+
+type TungolSteorra struct {
+	Pubkey    string         `json:"pubkey"`
+	TungolID  string         `json:"tungol_id"`
+	Hostname  string         `json:"hostname"`
+	Patterns  string         `json:"patterns"`
+	RevokedAt sql.NullInt64  `json:"revoked_at"`
+	RevokedBy sql.NullString `json:"revoked_by"`
+	UpdatedAt int64          `json:"updated_at"`
+	UpdatedBy string         `json:"updated_by"`
+	Signature []byte         `json:"signature"`
+}
+
 type User struct {
 	ID           string    `json:"id"`
 	Username     string    `json:"username"`

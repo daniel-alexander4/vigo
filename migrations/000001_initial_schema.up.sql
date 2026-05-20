@@ -365,3 +365,40 @@ CREATE TABLE IF NOT EXISTS compliance_waivers (
 
 CREATE INDEX IF NOT EXISTS idx_compliance_waivers_framework ON compliance_waivers (framework, control_id);
 CREATE INDEX IF NOT EXISTS idx_compliance_waivers_active ON compliance_waivers (active);
+
+-- Tungol Slice 2A admission roster (ADR-026). Peer-equal LWW-Map CRDT
+-- keyed by the steorra's Ed25519 pubkey. Revoke-wins: nullable
+-- revoked_at/revoked_by, with the merge rule "revoke is absorbing"
+-- enforced in the MergeSteorraLWW query (a revoked row cannot transition
+-- back to live regardless of updated_at). LWW arbitration on
+-- (updated_at, revoked_at IS NOT NULL) for the equal-timestamp tiebreaker.
+-- timestamps are INTEGER ms since epoch to mirror server/swarm/manifest.go
+-- semantics and stay deterministic across timezones/locales.
+CREATE TABLE IF NOT EXISTS tungol_steorras (
+    pubkey      TEXT PRIMARY KEY,
+    tungol_id   TEXT NOT NULL,
+    hostname    TEXT NOT NULL DEFAULT '',
+    patterns    TEXT NOT NULL DEFAULT '[]',
+    revoked_at  INTEGER,
+    revoked_by  TEXT,
+    updated_at  INTEGER NOT NULL,
+    updated_by  TEXT NOT NULL,
+    signature   BLOB NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tungol_steorras_tungol_id ON tungol_steorras (tungol_id);
+
+-- Tungol Slice 2A consumed-tokens G-Set (ADR-026). UNIQUE on token_hash
+-- enforces one-shot consumption fleet-wide. The FK to tungol_steorras
+-- enforces the atomic admission+consume invariant — a token can only be
+-- recorded as consumed by a steorra that exists in the roster, so the
+-- admission row MUST land in the same transaction (and ordered first).
+CREATE TABLE IF NOT EXISTS tungol_consumed_tokens (
+    token_hash                  TEXT PRIMARY KEY,
+    tungol_id                   TEXT NOT NULL,
+    consumed_at                 INTEGER NOT NULL,
+    consumed_by_steorra_pubkey  TEXT NOT NULL REFERENCES tungol_steorras (pubkey),
+    signature                   BLOB NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_tungol_consumed_tokens_tungol_id ON tungol_consumed_tokens (tungol_id);

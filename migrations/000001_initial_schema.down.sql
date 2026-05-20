@@ -1,3 +1,8 @@
+-- tungol_consumed_tokens before tungol_steorras (FK)
+DROP INDEX IF EXISTS idx_tungol_consumed_tokens_tungol_id;
+DROP TABLE IF EXISTS tungol_consumed_tokens;
+DROP INDEX IF EXISTS idx_tungol_steorras_tungol_id;
+DROP TABLE IF EXISTS tungol_steorras;
 DROP INDEX IF EXISTS idx_api_tokens_user_id;
 DROP TABLE IF EXISTS api_tokens;
 DROP INDEX IF EXISTS idx_sessions_expiry;
