@@ -211,7 +211,16 @@ func TestResolveFleetLookup_Empty(t *testing.T) {
 }
 
 func TestResolveFleetLookupsInConfig_Memo(t *testing.T) {
-	cs := NewEmptyConfigStore("", nil)
+	cs := &ConfigStore{
+		index:           buildPatternIndex(nil),
+		rawModules:      make(map[string]*ModuleDefinition),
+		roleDefs:        make(map[string]*RoleDefinition),
+		moduleDefs:      make(map[string]*ModuleDefinition),
+		complianceIndex: make(map[string]map[string][]string),
+		commonConfigs:   make(map[string]*CommonConfig),
+		perEnvOverrides: make(map[string]map[string]*PerEnvOverrideBlock),
+		fleetMemo:       make(map[string]fleetMemoEntry),
+	}
 	cs.SetFleetLookupTTL(time.Minute)
 	t0 := time.Now()
 
@@ -265,7 +274,7 @@ func TestResolveFleetLookupsInConfig_Memo(t *testing.T) {
 
 func TestForeachOverFleetVar_DeferredExpansion(t *testing.T) {
 	dir := setupDir(t)
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "allow.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "allow.vgo"), `
 name: allow
 resources:
   - name: "allow-{{ .Item }}"
@@ -274,7 +283,7 @@ resources:
     target_path: "/etc/allow.d/{{ .Item }}"
     content: "{{ .Item }}"
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "fw01"
     modules: [allow]
@@ -332,8 +341,8 @@ envoys:
 
 func TestForeachModule_FleetLoadError(t *testing.T) {
 	dir := setupDir(t)
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "m.vgo"), "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x\n    content: ok\n")
-	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "m.vgo"), "name: m\nresources:\n  - name: r\n    type: file\n    target_path: /x\n    content: ok\n")
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "h"
     modules: [m]

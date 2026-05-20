@@ -180,7 +180,7 @@ func TestExpandModuleInstanceResources_NestedForeachSkipped(t *testing.T) {
 
 func writeVhostModule(t *testing.T, dir string) {
 	t.Helper()
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "vhost.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "vhost.vgo"), `
 name: vhost
 vars:
   doc_root_base: "/var/www"
@@ -210,7 +210,7 @@ func storeFromDir(t *testing.T, dir string) *ConfigStore {
 func TestForeachModule_FromMatchBlock(t *testing.T) {
 	dir := setupDir(t)
 	writeVhostModule(t, dir)
-	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01"
     modules:
@@ -289,13 +289,13 @@ func TestForeachModule_FromRoleAndCommon(t *testing.T) {
       key: server_name
 `)
 	// vhosts var supplied via a common.vgo in the subtree.
-	writeFile(t, filepath.Join(dir, "stockpile", "default", "common.vgo"), `
+	writeFile(t, filepath.Join(dir, "default", "common.vgo"), `
 vars:
   vhosts:
     - server_name: a.example.com
     - server_name: b.example.com
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web*"
     roles: [webserver]
@@ -318,7 +318,7 @@ envoys:
 
 func TestForeachModule_FromEnvironments(t *testing.T) {
 	dir := setupDir(t)
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "site.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "site.vgo"), `
 name: site
 resources:
   - name: site-file
@@ -326,7 +326,7 @@ resources:
     target_path: "/srv/{{ .Each.name }}"
     content: "ok"
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "default", "environments.vgo"), `
+	writeFile(t, filepath.Join(dir, "default", "environments.vgo"), `
 env:
   production:
     modules:
@@ -338,7 +338,7 @@ env:
         - name: one
         - name: two
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "p1"
     environment: production
@@ -394,8 +394,8 @@ func TestForeachModule_LoadErrors(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := setupDir(t)
-			writeFile(t, filepath.Join(dir, "stockpile", "modules", "m.vgo"), tc.moduleVgo)
-			writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), tc.envoysVgo)
+			writeFile(t, filepath.Join(dir, "modules", "m.vgo"), tc.moduleVgo)
+			writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), tc.envoysVgo)
 			_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
 			if err == nil {
 				t.Fatalf("expected error containing %q", tc.want)
@@ -409,7 +409,7 @@ func TestForeachModule_LoadErrors(t *testing.T) {
 
 func TestForeachModule_BeforeFansOut(t *testing.T) {
 	dir := setupDir(t)
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
 name: base
 before: [app]
 resources:
@@ -418,7 +418,7 @@ resources:
     target_path: /etc/base
     content: ok
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "app.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: app-r
@@ -426,7 +426,7 @@ resources:
     target_path: "/srv/{{ .Each.name }}"
     content: ok
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: h
     modules:

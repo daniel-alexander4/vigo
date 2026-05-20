@@ -12,7 +12,7 @@ import (
 func TestConfigLoadDeviceEntry(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "switch-base.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "switch-base.vgo"), `
 name: switch-base
 resources:
   - name: set-hostname
@@ -20,7 +20,7 @@ resources:
     command: "hostname core-sw01"
 `)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "netmgmt01.example.com"
     modules: []
@@ -67,7 +67,7 @@ envoys:
 func TestConfigLoadDeviceEntryDefaultPort(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -75,7 +75,7 @@ resources:
     command: "true"
 `)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
     modules: []
@@ -108,7 +108,7 @@ envoys:
 func TestConfigValidateGatewayExists(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -116,7 +116,7 @@ resources:
     command: "true"
 `)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "sw01.example.com"
     device_type: cisco_ios
@@ -139,7 +139,7 @@ envoys:
 func TestConfigValidateGatewayCycle(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -147,7 +147,7 @@ resources:
     command: "true"
 `)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "sw01.example.com"
     device_type: cisco_ios
@@ -176,7 +176,7 @@ envoys:
 func TestConfigValidateDeviceTypeMissing(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
     modules: []
@@ -199,7 +199,7 @@ envoys:
 func TestConfigValidateUnsupportedDeviceType(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
     modules: []
@@ -223,7 +223,7 @@ envoys:
 func TestConfigValidateCredentialRequired(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
     modules: []
@@ -246,7 +246,7 @@ envoys:
 func TestConfigValidateCredentialSecretPrefix(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
     modules: []
@@ -270,14 +270,14 @@ envoys:
 func TestDevicesForGateway(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "switch-base.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "switch-base.vgo"), `
 name: switch-base
 resources:
   - name: set-hostname
     type: ssh_exec
     command: "hostname test"
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "router-base.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "router-base.vgo"), `
 name: router-base
 resources:
   - name: set-hostname
@@ -285,7 +285,7 @@ resources:
     command: "set system host-name test"
 `)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "netmgmt01.example.com"
     modules: []
@@ -375,7 +375,7 @@ envoys:
 func TestAllDeviceEntries(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
 name: base
 resources:
   - name: noop
@@ -383,7 +383,7 @@ resources:
     command: "true"
 `)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
     modules: []

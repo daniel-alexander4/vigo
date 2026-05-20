@@ -89,7 +89,7 @@ func newDoctorTestConfigStore(t *testing.T) *config.ConfigStore {
 		}
 	}
 	// Write an empty envoys.vgo
-	os.WriteFile(filepath.Join(dir, "stockpile", "envoys", "envoys.vgo"), []byte("envoys: []\n"), 0644)
+	os.WriteFile(filepath.Join(dir, "envoys", "envoys.vgo"), []byte("envoys: []\n"), 0644)
 
 	provider, err := secrets.NewLocalProvider("", t.TempDir())
 	if err != nil {

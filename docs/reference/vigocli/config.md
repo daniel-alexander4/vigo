@@ -14,7 +14,6 @@ Config inspection commands.
 | `config publish` | Validate and publish config from stage to live |
 | `config history` | View config publish history |
 | `config rollback` | Rollback to a previous config version |
-| `config unused` | Find unused modules and match files |
 | `config freeze` | Freeze config publishes until a specified time |
 | `config unfreeze` | Remove the config publish freeze |
 | `config examples list` | Show available install templates under `stacks/examples/` |
@@ -52,20 +51,36 @@ See [vi](vi.md) for syntax highlighting and validation details.
 
 ## config trace
 
-Shows the full directory inheritance chain for a hostname with colored output: which `common.vgo` files contributed modules and vars at each level, which vars override parent values, and where each module originated (inheritance, role, or direct assignment).
+Two directions, one command.
+
+**Forward (hostname-rooted).** Shows the full directory inheritance chain for a hostname with colored output: which `common.vgo` files contributed modules and vars at each level, which vars override parent values, and where each module originated.
+
+**Inverse (subject-rooted).** Answers "where is module/usercrate X applied?" — enumerates every enrolled envoy whose resolved config includes the subject, with the carrier (file path / role / environment override) that pulled it in. With `--include-tree`, additionally lists config-tree patterns that reference the subject but match no currently-enrolled envoy.
 
 ### Usage
 
 ```bash
+# Forward
 vigocli config trace <hostname>
 vigocli config trace <hostname> --module <module-name>
+vigocli config trace --host <hostname>
+
+# Inverse
+vigocli config trace --module <module-name>
+vigocli config trace --usercrate <usercrate-name>
+vigocli config trace --module <module-name> --include-tree
 ```
 
 ### Flags
 
 | Flag | Description |
 |------|-------------|
-| `--module` | Filter the trace to only show the inheritance branch relevant to a specific module |
+| `--host` | Hostname to trace (alias for the positional argument) |
+| `--module` | With a hostname: filter to that module's branch. Without a hostname: find where the module is applied across the fleet. |
+| `--usercrate` | Find where this usercrate is applied across the fleet (inverse mode only — cannot be combined with a hostname). |
+| `--include-tree` | Inverse mode only: also surface config-tree patterns that reference the subject but match no enrolled envoy. |
+
+Exactly one subject must be specified per invocation: the positional `<hostname>`, `--host`, `--module` (alone), or `--usercrate`.
 
 ### Example
 
@@ -188,7 +203,47 @@ The trace output has 8 sections, each using a green color ramp — lighter at th
 $ vigocli config trace web01.prod.example.com --module log-shipping
 ```
 
-When `--module` is specified, only inheritance levels that contribute that module are shown, along with the relevant role expansion.
+When `--module` is specified alongside a hostname, only inheritance levels that contribute that module are shown, along with the relevant role expansion.
+
+### Inverse mode — "where is this applied?"
+
+```
+$ vigocli config trace --module nginx
+
+module: nginx
+
+Enrolled envoys:
+
+    HOSTNAME              MATCH               ENV         CARRIER
+    plex.alex.lan         plex.alex.lan       —           default/envoys.vgo
+    web01.prod.example    web*.prod.example.. production  production/common.vgo
+
+  2 envoys.
+```
+
+`--include-tree` widens the inverse search to surface configured patterns that no enrolled envoy currently matches — useful for catching wiring you've authored but haven't deployed yet:
+
+```
+$ vigocli config trace --module nginx --include-tree
+
+module: nginx
+
+Enrolled envoys:
+    HOSTNAME              MATCH               ENV         CARRIER
+    plex.alex.lan         plex.alex.lan       —           default/envoys.vgo
+
+Config-tree patterns (no enrolled envoy matches):
+    MATCH                       ENV         CARRIER
+    staging-only.example.com    staging     staging/common.vgo
+
+  1 envoy, 1 config-tree pattern.
+```
+
+Usercrate inverse works the same way:
+
+```
+$ vigocli config trace --usercrate alexander4
+```
 
 ### No match
 
@@ -288,12 +343,14 @@ $ vigocli config search --var log_level
 
 ## config publish
 
-Validates `.vgo` files in `/srv/vigo/stacks/stockpile/` then atomically syncs to `/srv/vigo/stacks/.live/` (the hidden directory inside the stockpile that the server reads from). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../../howto/publish-config.md) for full details.
+Validates `.vgo` files in `/srv/vigo/stacks/stockpile/` then atomically syncs to `/srv/vigo/stacks/.live/` (the directory the server reads). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../../howto/publish-config.md) for full details.
+
+Publish carries forward only files some carrier — a role, role `case:` branch, role `includes:` chain, match block, `common.vgo`, or `environments.vgo` — can actually reach. Modules and usercrates with no inbound reference, and template files no module names via `source:`, are dropped from `.live/`. Structural files (matchfiles, `common.vgo`, `roles.vgo`, `environments.vgo`, `waivers.vgo`, task / workflow definitions) are always preserved. Use `--no-prune` to fall back to a verbatim mirror.
 
 ### Usage
 
 ```bash
-vigocli config publish [--dry-run] [--skip-url-check] [--url-timeout <duration>]
+vigocli config publish [--dry-run] [--skip-url-check] [--url-timeout <duration>] [--no-prune]
 ```
 
 ### Flags
@@ -306,6 +363,7 @@ vigocli config publish [--dry-run] [--skip-url-check] [--url-timeout <duration>]
 | `--operator` | `$USER` | Operator name for audit trail |
 | `--diff` | `false` | Show line-level diff for each changed file |
 | `--ask-ai` | `false` | Ask AI to suggest fixes for validation errors |
+| `--no-prune` | `false` | Publish every file in `stockpile/` verbatim — skip the reachability prune |
 
 ### Examples
 
@@ -379,59 +437,6 @@ Available versions:
 
 $ vigocli config rollback 20260312T091500Z
 Rolled back to version 20260312T091500Z
-```
-
-## config unused
-
-Find module definitions that are never referenced by any role, match entry, `common.vgo`, or `environments.vgo`, and match files whose patterns don't match any enrolled envoy.
-
-### Usage
-
-```bash
-vigocli config unused [--json] [--delete]
-```
-
-### Flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--json` | `false` | Output raw JSON |
-| `--delete` | `false` | Prompt to delete unused files from stockpile |
-
-### Examples
-
-```
-$ vigocli config unused
-
-!  2 unused module(s)
-
-  NAME              FILE
-  debug-tools       modules/system/debug-tools.vgo
-  old-monitoring    modules/legacy/old-monitoring.vgo
-
-!  1 unused match file(s)
-
-  FILE                    PATTERNS
-  staging/retired.vgo     retired-*.staging.example.com
-```
-
-With `--delete`, the command lists all files to be removed, asks for confirmation, deletes them from `/srv/vigo/stacks/stockpile/`, and reminds you to run `vigocli config publish` to sync the changes to `.live/`.
-
-```
-$ vigocli config unused --delete
-...
-Files to delete from /srv/vigo/stacks/stockpile:
-  modules/system/debug-tools.vgo
-  modules/legacy/old-monitoring.vgo
-  staging/retired.vgo
-
-Delete 3 file(s) from stockpile? [y/N] y
-  ✓  modules/system/debug-tools.vgo
-  ✓  modules/legacy/old-monitoring.vgo
-  ✓  staging/retired.vgo
-
-Deleted 3/3 files.
-Run vigocli config publish to sync changes to .live/
 ```
 
 ## config freeze

@@ -244,32 +244,6 @@ func (cs *ConfigStore) SetMetrics(m *metrics.Metrics) {
 	cs.metrics = m
 }
 
-// NewEmptyConfigStore creates a ConfigStore with no loaded config but a
-// known scan directory. Used when initial config loading fails so the
-// server can still start; the scan directory is preserved so subsequent
-// reloads (triggered by publishes or file watchers) can recover to a
-// loaded state once the underlying problem is fixed.
-//
-// Callers MUST pass the real stockpile/.live directory even on failure —
-// passing an empty string leaves the store in a broken state where
-// reloads walk the process's working directory instead of the live tree.
-func NewEmptyConfigStore(baseDir string, provider secrets.Provider) *ConfigStore {
-	return &ConfigStore{
-		dir:             baseDir,
-		entries:         nil,
-		index:           buildPatternIndex(nil),
-		rawModules:      make(map[string]*ModuleDefinition),
-		envoyEntries:    nil,
-		roleDefs:        make(map[string]*RoleDefinition),
-		moduleDefs:      make(map[string]*ModuleDefinition),
-		complianceIndex: make(map[string]map[string][]string),
-		commonConfigs:   make(map[string]*CommonConfig),
-		perEnvOverrides: make(map[string]map[string]*PerEnvOverrideBlock),
-		provider:        provider,
-		fleetMemo:       make(map[string]fleetMemoEntry),
-	}
-}
-
 // SetBackend sets the secrets backend name for diagnostic hints.
 func (cs *ConfigStore) SetBackend(backend string) {
 	cs.backend = backend
@@ -1839,6 +1813,282 @@ func (cs *ConfigStore) Search(query, moduleName, varName string) *SearchResult {
 	return result
 }
 
+// InverseTraceResult is the response shape for inverse-direction config trace
+// queries — "where is module/usercrate X applied?" — the dual of the
+// hostname-rooted Trace. Envoys lists enrolled hosts whose resolved config
+// includes the subject; TreeRefs (only populated when IncludeTree is true)
+// lists config-tree patterns that reference the subject but match no
+// currently-enrolled envoy.
+type InverseTraceResult struct {
+	Subject     string              `json:"subject"`               // "module" or "usercrate"
+	Value       string              `json:"value"`                 // the subject name being looked up
+	IncludeTree bool                `json:"include_tree"`
+	Envoys      []InverseEnvoyEntry `json:"envoys"`                // enrolled envoys whose resolved config includes the subject
+	TreeRefs    []InverseTreeRef    `json:"tree_refs,omitempty"`   // populated only when IncludeTree
+}
+
+// InverseEnvoyEntry is one enrolled envoy whose resolved config includes the
+// subject. Carrier mirrors the existing ModuleSources attribution shape
+// produced by forward-direction Trace.
+type InverseEnvoyEntry struct {
+	EnvoyID     string `json:"envoy_id"`
+	Hostname    string `json:"hostname"`
+	Match       string `json:"match"`
+	Environment string `json:"environment,omitempty"`
+	Carrier     string `json:"carrier"`
+}
+
+// InverseTreeRef is one envoyEntry pattern in the config tree that references
+// the subject but matches no enrolled envoy. Surfaces via --include-tree so
+// operators can spot wiring that hasn't landed on a real host yet.
+type InverseTreeRef struct {
+	Match       string `json:"match"`
+	Environment string `json:"environment,omitempty"`
+	Carrier     string `json:"carrier"`
+}
+
+// InverseEnvoyRef is the minimal envoy projection TraceInverse needs from the
+// FleetIndex — kept here so server/config does not import server/fleet and
+// create a cycle. The api/configtrace handler does the small projection.
+type InverseEnvoyRef struct {
+	ID       string
+	Hostname string
+}
+
+// TraceInverse answers "which enrolled envoys resolve to module/usercrate X?"
+// by walking each envoy's Trace and checking for the subject — the
+// ConfigStore stays the single source of truth for resolution. When
+// includeTree is true, also lists envoyEntries patterns that reference the
+// subject but match no enrolled envoy.
+//
+// subject must be "module" or "usercrate"; any other value returns an empty
+// result.
+func (cs *ConfigStore) TraceInverse(subject, value string, includeTree bool, envoys []InverseEnvoyRef) *InverseTraceResult {
+	result := &InverseTraceResult{
+		Subject:     subject,
+		Value:       value,
+		IncludeTree: includeTree,
+		Envoys:      []InverseEnvoyEntry{},
+	}
+	if value == "" || (subject != "module" && subject != "usercrate") {
+		return result
+	}
+
+	matchedPatterns := make(map[string]bool)
+
+	for _, e := range envoys {
+		trace := cs.Trace(e.Hostname)
+		if !trace.Matched {
+			continue
+		}
+		carrier, ok := traceCarrierFor(trace, subject, value)
+		if !ok {
+			continue
+		}
+		result.Envoys = append(result.Envoys, InverseEnvoyEntry{
+			EnvoyID:     e.ID,
+			Hostname:    e.Hostname,
+			Match:       trace.MatchPattern,
+			Environment: trace.Environment,
+			Carrier:     carrier,
+		})
+		matchedPatterns[trace.MatchPattern] = true
+	}
+
+	if includeTree {
+		cs.mu.RLock()
+		for i := range cs.envoyEntries {
+			ee := &cs.envoyEntries[i]
+			if matchedPatterns[ee.Match] {
+				continue
+			}
+			carrier := cs.inverseTreeCarrier(ee, subject, value)
+			if carrier == "" {
+				continue
+			}
+			result.TreeRefs = append(result.TreeRefs, InverseTreeRef{
+				Match:       ee.Match,
+				Environment: ee.Environment,
+				Carrier:     carrier,
+			})
+		}
+		cs.mu.RUnlock()
+	}
+
+	sort.Slice(result.Envoys, func(i, j int) bool {
+		return result.Envoys[i].Hostname < result.Envoys[j].Hostname
+	})
+	sort.Slice(result.TreeRefs, func(i, j int) bool {
+		return result.TreeRefs[i].Match < result.TreeRefs[j].Match
+	})
+
+	return result
+}
+
+// traceCarrierFor returns the carrier (file path / role / foreach attribution)
+// for the given subject within a Trace result, and whether the trace
+// contains it at all. Modules consult trace.ModuleSources directly;
+// usercrates walk inheritance and role expansion since the forward trace
+// tags those at the InheritanceLevel shape rather than the resolved-module
+// name shape.
+func traceCarrierFor(trace *ConfigTrace, subject, value string) (string, bool) {
+	switch subject {
+	case "module":
+		for _, m := range trace.Modules {
+			if m == value {
+				if src, ok := trace.ModuleSources[value]; ok {
+					return src, true
+				}
+				return "direct", true
+			}
+		}
+	case "usercrate":
+		for _, lvl := range trace.Inheritance {
+			for _, u := range lvl.Usercrates {
+				if u == value {
+					src := lvl.File
+					if lvl.Dir != "" {
+						src = lvl.Dir + "/" + lvl.File
+					}
+					return src, true
+				}
+			}
+		}
+		for _, rte := range trace.RoleExpansion {
+			for _, u := range rte.Usercrates {
+				if u == value {
+					return "role:" + rte.Role, true
+				}
+			}
+		}
+	}
+	return "", false
+}
+
+// inverseTreeCarrier returns the carrier for a subject within a raw
+// EnvoyEntry — used for the --include-tree path where the pattern matches no
+// enrolled envoy, so cs.Trace cannot be re-used. Mirrors the carrier
+// attribution priority in Trace: leaf entry, then inherited common.vgo
+// (parent→child), then roles (own + inherited), then per-environment
+// overrides. Caller must hold cs.mu (read).
+func (cs *ConfigStore) inverseTreeCarrier(entry *EnvoyEntry, subject, value string) string {
+	leafFile := entry.SourceFile
+	if leafFile == "" {
+		leafFile = "envoys.vgo"
+	}
+	leafSrc := leafFile
+	if entry.DirPath != "" {
+		leafSrc = entry.DirPath + "/" + leafFile
+	}
+
+	switch subject {
+	case "module":
+		for _, ref := range entry.OwnModules {
+			if ref.Name == value {
+				return leafSrc
+			}
+		}
+	case "usercrate":
+		for _, ref := range entry.OwnUsercrates {
+			if ref.Name == value {
+				return leafSrc
+			}
+		}
+	}
+
+	if entry.DirPath != "" && len(cs.commonConfigs) > 0 {
+		chain := inheritanceChain(entry.DirPath, cs.commonConfigs)
+		for _, cc := range chain {
+			refs := cc.Modules
+			if subject == "usercrate" {
+				refs = cc.Usercrates
+			}
+			for _, ref := range refs {
+				if ref.Name == value {
+					src := "common.vgo"
+					if cc.DirPath != "" {
+						src = cc.DirPath + "/common.vgo"
+					}
+					return src
+				}
+			}
+		}
+	}
+
+	allRoles := append([]RoleRef{}, entry.OwnRoles...)
+	if entry.DirPath != "" && len(cs.commonConfigs) > 0 {
+		chain := inheritanceChain(entry.DirPath, cs.commonConfigs)
+		for _, cc := range chain {
+			allRoles = append(allRoles, cc.Roles...)
+		}
+	}
+	for _, roleRef := range allRoles {
+		role, ok := cs.roleDefs[roleRef.Name]
+		if !ok {
+			continue
+		}
+		refs := role.Modules
+		if subject == "usercrate" {
+			refs = role.Usercrates
+		}
+		for _, ref := range refs {
+			if ref.Name == value {
+				return "role:" + roleRef.Name
+			}
+		}
+		for _, incName := range role.Includes {
+			inc, ok := cs.roleDefs[incName]
+			if !ok {
+				continue
+			}
+			incRefs := inc.Modules
+			if subject == "usercrate" {
+				incRefs = inc.Usercrates
+			}
+			for _, ref := range incRefs {
+				if ref.Name == value {
+					return "role:" + roleRef.Name
+				}
+			}
+		}
+	}
+
+	if entry.Environment != "" && len(cs.perEnvOverrides) > 0 {
+		pathDirs := []string{""}
+		if entry.DirPath != "" {
+			parts := strings.Split(entry.DirPath, "/")
+			for i := range parts {
+				pathDirs = append(pathDirs, strings.Join(parts[:i+1], "/"))
+			}
+		}
+		for _, dp := range pathDirs {
+			envMap, ok := cs.perEnvOverrides[dp]
+			if !ok {
+				continue
+			}
+			block, ok := envMap[entry.Environment]
+			if !ok {
+				continue
+			}
+			refs := block.Modules
+			if subject == "usercrate" {
+				refs = block.Usercrates
+			}
+			for _, ref := range refs {
+				if ref.Name == value {
+					src := "environments.vgo"
+					if dp != "" {
+						src = dp + "/environments.vgo"
+					}
+					return src + " (env: " + entry.Environment + ")"
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
 // getOrCreateNode ensures a TreeNode exists for the given directory path,
 // creating intermediate nodes as needed.
 func getOrCreateNode(nodes map[string]*TreeNode, root *TreeNode, dirPath string) *TreeNode {
@@ -1883,22 +2133,23 @@ func globContains(pattern, query string) bool {
 	return false
 }
 
-// stockpileSubdir returns the operator-edited working tree under cs.dir.
-// Contains every config primitive: modules/, usercrates/, templates/,
-// tasks/, workflows/, plus the assignment-tree files (roles.vgo,
-// envoys.vgo matchfiles, common.vgo, waivers.vgo, environments.vgo)
-// and directory-inherited compliance.vgo claim files. After 0.33.0
-// the prior scaffolding/ subtree is folded into here — there is one
-// operator-edited tree.
-func (cs *ConfigStore) stockpileSubdir() string { return filepath.Join(cs.dir, "stockpile") }
+// contentDir returns the directory the loader treats as the content root.
+// Holds every config primitive directly at the top level: modules/,
+// usercrates/, templates/, tasks/, workflows/, plus the assignment-tree
+// files (roles.vgo, envoys.vgo matchfiles, common.vgo, waivers.vgo,
+// environments.vgo) and directory-inherited compliance.vgo claim files.
+// For the editable side cs.dir points at /srv/vigo/stacks/stockpile/;
+// for the published side it points at /srv/vigo/stacks/.live/. The
+// loader is indifferent — both layouts are flat.
+func (cs *ConfigStore) contentDir() string { return cs.dir }
 
 // modulesDir returns the path to the modules directory (named "modules" on
 // disk; YAML keys and Go identifiers retain "module" for industry-standard
 // recognition).
-func (cs *ConfigStore) modulesDir() string { return filepath.Join(cs.dir, "stockpile", "modules") }
+func (cs *ConfigStore) modulesDir() string { return filepath.Join(cs.dir, "modules") }
 
 // templatesDir returns the path to the templates subdirectory.
-func (cs *ConfigStore) templatesDir() string { return filepath.Join(cs.dir, "stockpile", "templates") }
+func (cs *ConfigStore) templatesDir() string { return filepath.Join(cs.dir, "templates") }
 
 // loadAll reads module defs, role defs, and envoy YAML files, resolves
 // all entries, and atomically swaps the config.
@@ -1929,7 +2180,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	// published .live/ directory. Publish also runs this check, but
 	// the loader re-checks defensively: a violation here means we refuse
 	// the reload and keep the previous good config live.
-	if err := validateStockpileLayout(cs.stockpileSubdir()); err != nil {
+	if err := validateStockpileLayout(cs.contentDir()); err != nil {
 		return fmt.Errorf("config layout: %w", err)
 	}
 
@@ -1938,7 +2189,7 @@ func (cs *ConfigStore) loadAllInner() error {
 		return fmt.Errorf("loading modules: %w", err)
 	}
 
-	if err := resolveSourceFiles(moduleDefs, cs.stockpileSubdir()); err != nil {
+	if err := resolveSourceFiles(moduleDefs, cs.contentDir()); err != nil {
 		return fmt.Errorf("resolving source files: %w", err)
 	}
 
@@ -1947,7 +2198,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	// resolveEntry looks them up the same way. Name collisions with
 	// regular modules are fatal: usercrates share the same name namespace
 	// because they resolve through the same module-ref path.
-	usercrateDefs, err := loadUsercrateDefs(cs.stockpileSubdir())
+	usercrateDefs, err := loadUsercrateDefs(cs.contentDir())
 	if err != nil {
 		return fmt.Errorf("loading usercrates: %w", err)
 	}
@@ -1961,14 +2212,14 @@ func (cs *ConfigStore) loadAllInner() error {
 
 	// Walk the stockpile subtree for compliance.vgo files and union their
 	// claims into each module's effective Compliance block.
-	moduleComplianceByDir, moduleComplianceSources, err := loadModuleComplianceConfigs(cs.stockpileSubdir())
+	moduleComplianceByDir, moduleComplianceSources, err := loadModuleComplianceConfigs(cs.contentDir())
 	if err != nil {
 		return fmt.Errorf("loading module compliance: %w", err)
 	}
 	// Also walk every usercrates/ subtree for compliance.vgo files.
 	// Results are merged into the same byDir/sources so usercrates receive
 	// claim inheritance through the same pipeline that modules use.
-	usercrateComplianceByDir, usercrateComplianceSources, err := loadUsercrateComplianceConfigs(cs.stockpileSubdir())
+	usercrateComplianceByDir, usercrateComplianceSources, err := loadUsercrateComplianceConfigs(cs.contentDir())
 	if err != nil {
 		return fmt.Errorf("loading usercrate compliance: %w", err)
 	}
@@ -1989,24 +2240,24 @@ func (cs *ConfigStore) loadAllInner() error {
 	applyModuleComplianceInheritance(usercrateDefs, moduleComplianceByDir)
 
 	// Load roles from stockpile/roles.vgo (single fleet-wide file).
-	roleDefs, err := loadRolesFile(cs.stockpileSubdir())
+	roleDefs, err := loadRolesFile(cs.contentDir())
 	if err != nil {
 		return fmt.Errorf("loading roles: %w", err)
 	}
 
-	envoyEntries, commonConfigs, err := loadEnvoysDir(cs.stockpileSubdir())
+	envoyEntries, commonConfigs, err := loadEnvoysDir(cs.contentDir())
 	if err != nil {
 		return fmt.Errorf("loading envoys: %w", err)
 	}
 
 	// Waivers live in stockpile/**/waivers.vgo — distinct filename from
 	// stockpile's compliance.vgo claims (mixed-keys check enforces this).
-	waiverMap, waiverFiles, err := loadStockpileWaivers(cs.stockpileSubdir())
+	waiverMap, waiverFiles, err := loadStockpileWaivers(cs.contentDir())
 	if err != nil {
 		return fmt.Errorf("loading waivers: %w", err)
 	}
 
-	perEnvOverrides, err := loadPerEnvOverrides(cs.stockpileSubdir())
+	perEnvOverrides, err := loadPerEnvOverrides(cs.contentDir())
 	if err != nil {
 		return fmt.Errorf("loading environments.vgo: %w", err)
 	}
@@ -4050,6 +4301,11 @@ func resolveSourceFiles(defs map[string]*ModuleDefinition, baseDir string) error
 
 			attrs["content"] = string(data)
 			delete(attrs, "source")
+
+			// Record the reference so reachability analysis can tell
+			// which template files are live. Path is normalized to
+			// forward slashes and treated as stockpile-relative.
+			def.TemplateSources = append(def.TemplateSources, filepath.ToSlash(sourcePath))
 		}
 	}
 	return nil

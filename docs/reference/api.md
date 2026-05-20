@@ -530,14 +530,52 @@ Emits the `tungol.ops_puddle.member_added` audit event on success.
 
 **Permission:** `fleet.read`
 
-Trace config resolution for a hostname. Shows the full directory inheritance chain with vars and override markers at each level, which modules came from which files or roles, how roles expanded, and where each variable's final value originated.
+Two-direction config trace.
+
+**Forward (hostname-rooted)** — trace config resolution for one host. Shows the full directory inheritance chain with vars and override markers at each level, which modules came from which files or roles, how roles expanded, and where each variable's final value originated.
+
+**Inverse (subject-rooted)** — given a `?module=` or `?usercrate=` without a `?hostname=`, returns every enrolled envoy whose resolved config includes that subject, plus the carrier (file path / role / environment) that pulled it in. With `?include_tree=true`, additionally lists config-tree patterns that reference the subject but match no enrolled envoy. The response shape is `InverseTraceResult` (below) — distinct from the forward-mode `ConfigTrace`.
 
 **Query parameters:**
 
-| Parameter | Required | Description |
-|-----------|----------|-------------|
-| `hostname` | Yes | The hostname to trace |
-| `module` | No | Filter trace to only the branch relevant to this module |
+| Parameter | Description |
+|-----------|-------------|
+| `hostname` | Forward mode: the hostname to trace. |
+| `module` | With `hostname`: filter the forward trace to this module's branch. Without `hostname`: inverse subject — find where this module is applied. |
+| `usercrate` | Inverse subject (cannot be combined with `hostname` or `module`) — find where this usercrate is applied. |
+| `include_tree` | Inverse mode only. `true` widens the result to include config-tree patterns no enrolled envoy currently matches. |
+
+Exactly one subject must be specified: `hostname`, `module` alone, or `usercrate`. Combining `module` and `usercrate` is rejected with `400`.
+
+**Inverse response (`InverseTraceResult`):**
+
+```json
+{
+  "subject": "module",
+  "value": "nginx",
+  "include_tree": false,
+  "envoys": [
+    {
+      "envoy_id": "envoy-abc123",
+      "hostname": "web01.prod.example.com",
+      "match": "web*.prod.example.com",
+      "environment": "production",
+      "carrier": "production/common.vgo"
+    }
+  ],
+  "tree_refs": [
+    {
+      "match": "staging-only.example.com",
+      "environment": "staging",
+      "carrier": "staging/common.vgo"
+    }
+  ]
+}
+```
+
+`tree_refs` is omitted unless `include_tree=true` was requested.
+
+**Forward response (`ConfigTrace`):**
 
 **Response:**
 
@@ -2023,7 +2061,6 @@ These endpoints are documented at summary level; `curl -v` the running server fo
 ### Config
 
 - **GET /api/v1/config/dedup** — list configs whose contents deduplicate against other paths (operational hygiene).
-- **GET /api/v1/config/unused** — list published configs never matched by any envoy in the retention window.
 
 ### Envoys
 

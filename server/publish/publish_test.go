@@ -178,10 +178,10 @@ func TestPublish_SyncsFiles(t *testing.T) {
 		t.Error("expected files to be synced")
 	}
 
-	if _, err := os.Stat(filepath.Join(env.live, "stockpile", "modules", "nginx.vgo")); err != nil {
+	if _, err := os.Stat(filepath.Join(env.live, "modules", "nginx.vgo")); err != nil {
 		t.Error("nginx.vgo not synced to live modules/")
 	}
-	if _, err := os.Stat(filepath.Join(env.live, "stockpile", "envoys", "web.vgo")); err != nil {
+	if _, err := os.Stat(filepath.Join(env.live, "envoys", "web.vgo")); err != nil {
 		t.Error("web.vgo not synced to live envoys/")
 	}
 }
@@ -252,7 +252,7 @@ envoys:
 	// .live must contain the linted bytes — at minimum, the canonical
 	// Lint output. Round-trip stability is enough: if we lint the
 	// stockpile source ourselves and compare, .live should match.
-	livePath := filepath.Join(env.live, "stockpile", "modules", "users", "dan.vgo")
+	livePath := filepath.Join(env.live, "modules", "users", "dan.vgo")
 	liveBytes, err := os.ReadFile(livePath)
 	if err != nil {
 		t.Fatalf(".live dan.vgo missing: %v", err)
@@ -322,15 +322,15 @@ func TestPublish_RemovesFilesNotInProposed(t *testing.T) {
 	writeValidConfig(t, env.stacks)
 
 	// Pre-populate live with an extra file.
-	os.MkdirAll(filepath.Join(env.live, "stockpile", "modules"), 0o755)
-	writeFile(t, filepath.Join(env.live, "stockpile", "modules", "old.vgo"), "old content")
+	os.MkdirAll(filepath.Join(env.live, "modules"), 0o755)
+	writeFile(t, filepath.Join(env.live, "modules", "old.vgo"), "old content")
 
 	_, err := Publish(noURLOpts(env), nil)
 	if err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(env.live, "stockpile", "modules", "old.vgo")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(env.live, "modules", "old.vgo")); !os.IsNotExist(err) {
 		t.Error("old.vgo should have been removed from live")
 	}
 }
@@ -342,15 +342,15 @@ envoys:
   - match: "bad.example.com"
     modules: [nonexistent]
 `)
-	os.MkdirAll(filepath.Join(env.live, "stockpile", "modules"), 0o755)
-	writeFile(t, filepath.Join(env.live, "stockpile", "modules", "existing.vgo"), "keep me")
+	os.MkdirAll(filepath.Join(env.live, "modules"), 0o755)
+	writeFile(t, filepath.Join(env.live, "modules", "existing.vgo"), "keep me")
 
 	_, err := Publish(noURLOpts(env), nil)
 	if err == nil {
 		t.Fatal("expected validation failure")
 	}
 
-	data, readErr := os.ReadFile(filepath.Join(env.live, "stockpile", "modules", "existing.vgo"))
+	data, readErr := os.ReadFile(filepath.Join(env.live, "modules", "existing.vgo"))
 	if readErr != nil {
 		t.Fatal("live file should still exist")
 	}
@@ -388,15 +388,15 @@ func TestPublish_SkipsMissingProposedSubdirs(t *testing.T) {
 	env := withTestDirs(t)
 	writeValidConfig(t, env.stacks)
 
-	os.MkdirAll(filepath.Join(env.live, "stockpile", "vars"), 0o755)
-	writeFile(t, filepath.Join(env.live, "stockpile", "vars", "old.yaml"), "old")
+	os.MkdirAll(filepath.Join(env.live, "vars"), 0o755)
+	writeFile(t, filepath.Join(env.live, "vars", "old.yaml"), "old")
 
 	_, err := Publish(noURLOpts(env), nil)
 	if err != nil {
 		t.Fatalf("publish failed: %v", err)
 	}
 
-	if _, err := os.Stat(filepath.Join(env.live, "stockpile", "vars", "old.yaml")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(env.live, "vars", "old.yaml")); !os.IsNotExist(err) {
 		t.Error("vars/old.yaml should have been removed")
 	}
 }
@@ -429,10 +429,10 @@ func TestDiff_DetectsChanges(t *testing.T) {
 	writeValidConfig(t, env.stacks)
 
 	// Populate live with different content.
-	os.MkdirAll(filepath.Join(env.live, "stockpile", "modules"), 0o755)
-	writeFile(t, filepath.Join(env.live, "stockpile", "modules", "nginx.vgo"), "old content")
-	os.MkdirAll(filepath.Join(env.live, "stockpile", "modules"), 0o755)
-	writeFile(t, filepath.Join(env.live, "stockpile", "modules", "deleted.vgo"), "will be removed")
+	os.MkdirAll(filepath.Join(env.live, "modules"), 0o755)
+	writeFile(t, filepath.Join(env.live, "modules", "nginx.vgo"), "old content")
+	os.MkdirAll(filepath.Join(env.live, "modules"), 0o755)
+	writeFile(t, filepath.Join(env.live, "modules", "deleted.vgo"), "will be removed")
 
 	_, changed, removed, err := diffTrees(env.opts.StockpileDir, env.live)
 	if err != nil {
@@ -655,16 +655,16 @@ resources:
     target_path: "/opt/app"
 `, srv.URL)
 	writeFile(t, filepath.Join(env.stacks, "modules", "download.vgo"), badModule)
-	os.MkdirAll(filepath.Join(env.live, "stockpile", "modules"), 0o755)
-	writeFile(t, filepath.Join(env.live, "stockpile", "modules", "download.vgo"), badModule) // same content
+	os.MkdirAll(filepath.Join(env.live, "modules"), 0o755)
+	writeFile(t, filepath.Join(env.live, "modules", "download.vgo"), badModule) // same content
 
 	writeFile(t, filepath.Join(env.stacks, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [download]
 `)
-	os.MkdirAll(filepath.Join(env.live, "stockpile", "envoys"), 0o755)
-	writeFile(t, filepath.Join(env.live, "stockpile", "envoys", "all.vgo"), `
+	os.MkdirAll(filepath.Join(env.live, "envoys"), 0o755)
+	writeFile(t, filepath.Join(env.live, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [download]
@@ -674,5 +674,187 @@ envoys:
 	_, err := ValidateSource(urlCheckOpts(env))
 	if err != nil {
 		t.Fatalf("expected unchanged module to skip URL check, got: %v", err)
+	}
+}
+
+// --- prune ---
+
+// writePruneFixture lays out a stockpile with a mix of referenced and
+// unreferenced modules, usercrates, and templates so the prune test can
+// assert which files survive publish.
+func writePruneFixture(t *testing.T, env testEnv) {
+	t.Helper()
+
+	// Referenced module → kept.
+	writeFile(t, filepath.Join(env.stacks, "modules", "nginx.vgo"), `
+name: nginx
+resources:
+  - name: site
+    type: file
+    target_path: /etc/nginx/conf.d/site
+    owner: root
+    group: root
+    mode: "0644"
+    source: templates/nginx-site.tmpl
+`)
+	// Unreferenced module → pruned.
+	writeFile(t, filepath.Join(env.stacks, "modules", "orphan.vgo"), `
+name: orphan
+resources:
+  - name: noop
+    type: exec
+    command: "true"
+    unless: "true"
+`)
+
+	// Referenced usercrate → kept.
+	writeFile(t, filepath.Join(env.stacks, "stockpile", "usercrates", "alice.vgo"), `
+name: alice
+resources:
+  - name: alice
+    type: user
+    username: alice
+`)
+	// Unreferenced usercrate → pruned.
+	writeFile(t, filepath.Join(env.stacks, "stockpile", "usercrates", "bob.vgo"), `
+name: bob
+resources:
+  - name: bob
+    type: user
+    username: bob
+`)
+
+	// Templates: site.tmpl referenced by nginx module; orphan.tmpl not.
+	if err := os.MkdirAll(filepath.Join(env.stacks, "stockpile", "templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(env.stacks, "stockpile", "templates", "nginx-site.tmpl"), "server { listen 80; }\n")
+	writeFile(t, filepath.Join(env.stacks, "stockpile", "templates", "orphan.tmpl"), "no consumer\n")
+
+	writeFile(t, filepath.Join(env.stacks, "envoys", "web.vgo"), `
+envoys:
+  - match: "web.example.com"
+    modules: [nginx]
+    usercrates: [alice]
+`)
+}
+
+func TestPublish_PrunesUnreferenced(t *testing.T) {
+	env := withTestDirs(t)
+	writePruneFixture(t, env)
+
+	res, err := Publish(noURLOpts(env), nil)
+	if err != nil {
+		t.Fatalf("publish failed: %v", err)
+	}
+	if res.Files == 0 {
+		t.Fatal("expected files to be synced")
+	}
+
+	// Referenced files present.
+	for _, rel := range []string{
+		"modules/nginx.vgo",
+		"usercrates/alice.vgo",
+		"templates/nginx-site.tmpl",
+	} {
+		if _, err := os.Stat(filepath.Join(env.live, rel)); err != nil {
+			t.Errorf("expected %s in .live/, missing: %v", rel, err)
+		}
+	}
+
+	// Unreferenced files pruned.
+	for _, rel := range []string{
+		"modules/orphan.vgo",
+		"usercrates/bob.vgo",
+		"templates/orphan.tmpl",
+	} {
+		if _, err := os.Stat(filepath.Join(env.live, rel)); !os.IsNotExist(err) {
+			t.Errorf("expected %s pruned from .live/, still present (err=%v)", rel, err)
+		}
+	}
+
+	// Stockpile untouched — the operator's library stays whole.
+	for _, rel := range []string{
+		"modules/orphan.vgo",
+		"stockpile/usercrates/bob.vgo",
+		"stockpile/templates/orphan.tmpl",
+	} {
+		if _, err := os.Stat(filepath.Join(env.stacks, rel)); err != nil {
+			t.Errorf("stockpile %s should be untouched by prune, missing: %v", rel, err)
+		}
+	}
+}
+
+func TestPublish_NoPrunePreservesEverything(t *testing.T) {
+	env := withTestDirs(t)
+	writePruneFixture(t, env)
+	opts := noURLOpts(env)
+	opts.NoPrune = true
+
+	if _, err := Publish(opts, nil); err != nil {
+		t.Fatalf("publish failed: %v", err)
+	}
+
+	// Every fixture file lands in .live/.
+	for _, rel := range []string{
+		"modules/nginx.vgo",
+		"modules/orphan.vgo",
+		"usercrates/alice.vgo",
+		"usercrates/bob.vgo",
+		"templates/nginx-site.tmpl",
+		"templates/orphan.tmpl",
+	} {
+		if _, err := os.Stat(filepath.Join(env.live, rel)); err != nil {
+			t.Errorf("--no-prune: expected %s in .live/, missing: %v", rel, err)
+		}
+	}
+}
+
+func TestPublish_PrunePreservesStructuralFiles(t *testing.T) {
+	env := withTestDirs(t)
+
+	// One unreferenced module so the prune logic does something.
+	writeFile(t, filepath.Join(env.stacks, "modules", "lonely.vgo"), `
+name: lonely
+resources:
+  - name: noop
+    type: exec
+    command: "true"
+    unless: "true"
+`)
+
+	// Structural files at the stockpile top level — every one of these
+	// must survive prune even though they're not "referenced" in the
+	// modules/usercrates sense.
+	writeFile(t, filepath.Join(env.stacks, "stockpile", "common.vgo"), "modules: []\n")
+	writeFile(t, filepath.Join(env.stacks, "stockpile", "environments.vgo"), "environments:\n  prod: {}\n")
+	writeFile(t, filepath.Join(env.stacks, "stockpile", "waivers.vgo"), "waivers: {}\n")
+	writeFile(t, filepath.Join(env.stacks, "roles", "roles.vgo"), "roles: []\n")
+	writeFile(t, filepath.Join(env.stacks, "envoys", "envoys.vgo"), `
+envoys:
+  - match: "*"
+    modules: []
+`)
+
+	if _, err := Publish(noURLOpts(env), nil); err != nil {
+		t.Fatalf("publish failed: %v", err)
+	}
+
+	// Every structural file still present in .live/.
+	for _, rel := range []string{
+		"common.vgo",
+		"environments.vgo",
+		"waivers.vgo",
+		"roles/roles.vgo",
+		"envoys/envoys.vgo",
+	} {
+		if _, err := os.Stat(filepath.Join(env.live, rel)); err != nil {
+			t.Errorf("structural file %s must survive prune, missing: %v", rel, err)
+		}
+	}
+
+	// Unreferenced module pruned even on a structurals-only run.
+	if _, err := os.Stat(filepath.Join(env.live, "modules", "lonely.vgo")); !os.IsNotExist(err) {
+		t.Errorf("unreferenced module should be pruned, still present (err=%v)", err)
 	}
 }

@@ -43,6 +43,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStockpileDir, pub
 		showDiff, _ := cmd.Flags().GetBool("diff")
 		askAI, _ := cmd.Flags().GetBool("ask-ai")
 		filePath, _ := cmd.Flags().GetString("file")
+		noPrune, _ := cmd.Flags().GetBool("no-prune")
 
 		if operator == "" {
 			if u, err := user.Current(); err == nil {
@@ -55,6 +56,7 @@ Use --dry-run to validate without publishing.`, publish.DefaultStockpileDir, pub
 			URLTimeout: urlTimeout,
 			Operator:   operator,
 			Diff:       showDiff,
+			NoPrune:    noPrune,
 		}
 
 		// Single-file publish mode.
@@ -797,6 +799,7 @@ func init() {
 	configPublishCmd.Flags().Bool("diff", false, "show line-level diff for each changed file")
 	configPublishCmd.Flags().Bool("ask-ai", false, "ask AI to suggest fixes for validation errors")
 	configPublishCmd.Flags().String("file", "", "publish a single .vgo file (path relative to stockpile/)")
+	configPublishCmd.Flags().Bool("no-prune", false, "publish every file in stockpile/ verbatim — skip the reachability prune that drops modules, usercrates, and templates no carrier references")
 
 	configCmd.AddCommand(configPublishCmd)
 }

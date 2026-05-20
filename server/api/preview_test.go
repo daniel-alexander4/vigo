@@ -22,9 +22,7 @@ func newPreviewTestDeps(t *testing.T) (*config.ConfigStore, *fleet.FleetIndex) {
 	t.Helper()
 	dir := t.TempDir()
 
-	for _, sub := range []string{"stockpile/modules", "stockpile"} {
-		os.MkdirAll(filepath.Join(dir, sub), 0755)
-	}
+	os.MkdirAll(filepath.Join(dir, "modules"), 0755)
 
 	// Write envoys.vgo with entries (not common.vgo, which is for inheritance).
 	nodesYAML := `envoys:
@@ -38,7 +36,7 @@ func newPreviewTestDeps(t *testing.T) (*config.ConfigStore, *fleet.FleetIndex) {
     modules:
       - postgres
 `
-	os.WriteFile(filepath.Join(dir, "stockpile", "envoys.vgo"), []byte(nodesYAML), 0644)
+	os.WriteFile(filepath.Join(dir, "envoys.vgo"), []byte(nodesYAML), 0644)
 
 	moduleYAML := `name: nginx
 
@@ -47,7 +45,7 @@ resources:
     type: package
     package: nginx
 `
-	os.WriteFile(filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), []byte(moduleYAML), 0644)
+	os.WriteFile(filepath.Join(dir, "modules", "nginx.vgo"), []byte(moduleYAML), 0644)
 
 	pgYAML := `name: postgres
 
@@ -56,7 +54,7 @@ resources:
     type: package
     package: postgresql
 `
-	os.WriteFile(filepath.Join(dir, "stockpile", "modules", "postgres.vgo"), []byte(pgYAML), 0644)
+	os.WriteFile(filepath.Join(dir, "modules", "postgres.vgo"), []byte(pgYAML), 0644)
 
 	provider, err := secrets.NewLocalProvider("", t.TempDir())
 	if err != nil {

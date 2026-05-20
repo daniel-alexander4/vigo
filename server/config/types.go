@@ -1021,6 +1021,12 @@ type ModuleDefinition struct {
 	Resources  []ResourceConfig    `yaml:"resources"`
 	Vars       map[string]any      `yaml:"vars"`
 	Compliance map[string][]string `yaml:"compliance"`
+
+	// TemplateSources are stockpile-relative paths the module references
+	// via `source:` on any of its resources, captured by resolveSourceFiles
+	// before the source attribute is rewritten into content. Used by the
+	// reachability analysis to know which template files are live.
+	TemplateSources []string `yaml:"-"`
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler for ModuleDefinition.

@@ -21,11 +21,8 @@ func newConfigTraceTestStore(t *testing.T) *config.ConfigStore {
 	t.Helper()
 	dir := t.TempDir()
 
-	// Create directory structure.
-	for _, sub := range []string{"stockpile/modules", "stockpile"} {
-		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
-			t.Fatalf("mkdir %s: %v", sub, err)
-		}
+	if err := os.MkdirAll(filepath.Join(dir, "modules"), 0755); err != nil {
+		t.Fatalf("mkdir modules: %v", err)
 	}
 
 	// Write envoys.vgo with envoy entries (not common.vgo, which is for inheritance).
@@ -39,7 +36,7 @@ func newConfigTraceTestStore(t *testing.T) *config.ConfigStore {
       - nginx
     environment: staging
 `
-	if err := os.WriteFile(filepath.Join(dir, "stockpile", "envoys.vgo"), []byte(nodesYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "envoys.vgo"), []byte(nodesYAML), 0644); err != nil {
 		t.Fatalf("write envoys.vgo: %v", err)
 	}
 
@@ -51,7 +48,7 @@ resources:
     type: package
     package: nginx
 `
-	if err := os.WriteFile(filepath.Join(dir, "stockpile", "modules", "nginx.vgo"), []byte(moduleYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "modules", "nginx.vgo"), []byte(moduleYAML), 0644); err != nil {
 		t.Fatalf("write nginx.vgo: %v", err)
 	}
 

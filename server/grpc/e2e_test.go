@@ -73,19 +73,19 @@ func startTestServerWithConfig(t *testing.T, configDir string) (string, *config.
 // setupE2EConfig creates a temp config directory with the given modules and envoy entries.
 func setupE2EConfig(t *testing.T, modules map[string]string, envoysYAML string) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "examples")
-	for _, sub := range []string{"stockpile/modules", "stockpile/envoys", "stockpile/roles"} {
+	dir := filepath.Join(t.TempDir(), "examples", "stockpile")
+	for _, sub := range []string{"modules", "envoys", "roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatal(err)
 		}
 	}
 	for name, content := range modules {
-		if err := os.WriteFile(filepath.Join(dir, "stockpile", "modules", name+".vgo"), []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "modules", name+".vgo"), []byte(content), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if envoysYAML != "" {
-		if err := os.WriteFile(filepath.Join(dir, "stockpile", "envoys", "envoys.vgo"), []byte(envoysYAML), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "envoys", "envoys.vgo"), []byte(envoysYAML), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -222,7 +222,7 @@ envoys:
 	}
 
 	// Add a new module and update envoy config.
-	if err := os.WriteFile(filepath.Join(configDir, "stockpile", "modules", "certbot.vgo"), []byte(`
+	if err := os.WriteFile(filepath.Join(configDir, "modules", "certbot.vgo"), []byte(`
 name: certbot
 resources:
   - name: install-certbot
@@ -232,7 +232,7 @@ resources:
 `), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(configDir, "stockpile", "envoys", "envoys.vgo"), []byte(`
+	if err := os.WriteFile(filepath.Join(configDir, "envoys", "envoys.vgo"), []byte(`
 envoys:
   - match: "*.test.example.com"
     modules: [nginx, certbot]

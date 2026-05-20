@@ -7,7 +7,7 @@ You'll finish this page knowing how to ship a config change to the fleet safely:
 
 **When you'd skip this:** never, if you're authoring config. There's no other path; the server only reads `.live/`.
 
-Operators edit `.vgo` files in `stacks/stockpile/`. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then propagates to `stacks/.live/stockpile/` — the locked-read-only directory the server reads from. Propagation has two shapes:
+Operators edit `.vgo` files in `stacks/stockpile/`. The `config publish` command validates them using the same logic as the server's config loader, detects changes, then propagates to `stacks/.live/` — the locked-read-only directory the server reads from (contents mirror `stockpile/` directly; no inner namespace). Propagation has two shapes:
 
 - **Standalone mode** — the CLI atomically syncs the validated tree into the local `.live/` and calls the REST reload trigger. One vigosrv, one filesystem; the publish is done when the swap completes.
 - **Tungol mode** — the CLI commits the validated tree to the ops-puddle's stockpile gitback project and pushes it to the local bare repo. The `stockpilewatch` background goroutine on every vigosrv (including the originating one) sees the new ref, archives `HEAD` into its local `.live/`, and reloads. The CLI then polls `GET /api/v1/config/version` until it increments before reporting success.
@@ -37,8 +37,7 @@ Both modes share the same operator-visible verb (`vigocli config publish`) and t
 │       └── web/web.vgo           # Per-host matchfile
 ├── examples/                     ← read-only install templates (image-seeded)
 ├── anti-examples/                ← read-only retract templates (mirrors examples/modules)
-└── .live/                        ← server reads here (locked, do not edit)
-    └── stockpile/                ← canonical bytes synced from stockpile after modlint
+└── .live/                        ← server reads here (locked, do not edit) — mirrors stockpile/ contents directly
 ```
 
 The directory structure is both file organization and an inheritance hierarchy. See [Config Format: Directory Inheritance](../reference/writing-modules.md#directory-inheritance) for details.
@@ -100,12 +99,12 @@ flowchart LR
 ```
 
 1. Normalizes whitespace in all `.vgo` files (strip trailing spaces, fix line endings, replace tabs in YAML indentation, drop UTF-8 BOM). Templates (`.tmpl`) are not normalized — operators may rely on whitespace inside Go template directives.
-2. Diffs `stockpile/` against `.live/stockpile/` using SHA-256 hashes to find new, changed, and removed files. Only `.vgo` and `.tmpl` files are tracked; everything else under stockpile is invisible to publish.
+2. Diffs `stockpile/` against `.live/` using SHA-256 hashes to find new, changed, and removed files. Only `.vgo` and `.tmpl` files are tracked; everything else under stockpile is invisible to publish.
 3. Runs the **module linter** on changed/new module files (see below)
 4. Loads all `.vgo` files from a staging copy of stockpile using `config.NewConfigStore()` — the same code path the server uses. Full tree loading is required because modules, roles, and envoy entries cross-reference each other.
 5. HTTP/HTTPS URLs in **changed modules only** are probed for aliveness (HEAD with GET fallback). Unchanged modules are skipped.
 6. The CLI calls `GET /api/v1/tungol/status` to detect mode. Standalone vigosrvs go through step 7a; tungol-mode vigosrvs go through step 7b.
-7. **(7a, standalone)** Atomically syncs the staging tree into `.live/stockpile/` (see [Atomic sync — standalone mode](#atomic-sync--standalone-mode) below), then calls `POST /api/v1/config/reload` to trigger a server-side reload.
+7. **(7a, standalone)** Prunes the staging tree of any module / usercrate / template no carrier references (unless `--no-prune` is set), then atomically syncs it into `.live/` (see [Atomic sync — standalone mode](#atomic-sync--standalone-mode) below), and calls `POST /api/v1/config/reload` to trigger a server-side reload.
    **(7b, tungol)** Commits the staging tree to the local clone of the ops-puddle's stockpile gitback project and pushes to the bare repo at `/var/lib/vigo/swarm/gitback/projects/<project_id>.git` via `file://`. The local `stockpilewatch` goroutine sees the new ref, archives `HEAD` into `.live/`, and reloads. The CLI polls `GET /api/v1/config/version` until it increments (30s timeout) before declaring success. Other vigosrvs in the tungol receive the bytes via the gitback substrate's peer-pull on the next reactor cycle and run the same watcher path locally.
 8. Sibling subtrees of stockpile (`examples/`, `anti-examples/`) are never read by the publisher.
 9. If nothing changed, the command reports "Nothing to publish" and does not touch `.live/`.

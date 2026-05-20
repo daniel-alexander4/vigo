@@ -131,7 +131,7 @@ func startServer(t *testing.T, modules map[string]string, envoysYAML string) *te
 	// config primitive (modules, matchfiles, etc.). Config extension is
 	// .vgo; .yaml is not recognized.
 	configDir := filepath.Join(t.TempDir(), "stacks")
-	modulesDir := filepath.Join(configDir, "stockpile", "modules")
+	modulesDir := filepath.Join(configDir, "modules")
 	stockpileDir := filepath.Join(configDir, "stockpile")
 	os.MkdirAll(modulesDir, 0755)
 	os.MkdirAll(stockpileDir, 0755)

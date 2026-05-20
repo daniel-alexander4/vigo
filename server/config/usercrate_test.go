@@ -17,7 +17,7 @@ import (
 // `type: user` resource (the 0.54.0 shape rule).
 func writeUsercrateDir(t *testing.T, dir, scope, name string) {
 	t.Helper()
-	usercrateDir := filepath.Join(dir, "stockpile", scope, "usercrates")
+	usercrateDir := filepath.Join(dir, scope, "usercrates")
 	if err := os.MkdirAll(usercrateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ resources:
 // exercising the filename-stem default in the loader.
 func writeUsercrateDirNoName(t *testing.T, dir, scope, filenameStem string) {
 	t.Helper()
-	usercrateDir := filepath.Join(dir, "stockpile", scope, "usercrates")
+	usercrateDir := filepath.Join(dir, scope, "usercrates")
 	if err := os.MkdirAll(usercrateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestUsercrate_InertWhenNotIncluded(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	writeUsercrateDir(t, dir, "", "admin")
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
 envoys:
   - match: "plex"
 `)
@@ -76,7 +76,7 @@ func TestUsercrate_IncludedViaMatchBlock(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	writeUsercrateDir(t, dir, "", "admin")
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
 envoys:
   - match: "plex"
     usercrates:
@@ -100,15 +100,15 @@ func TestUsercrate_IncludedViaCommon(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	writeUsercrateDir(t, dir, "", "admin")
 
-	writeFile(t, filepath.Join(dir, "stockpile", "common.vgo"), `
+	writeFile(t, filepath.Join(dir, "common.vgo"), `
 usercrates:
   - admin
 `)
 
-	if err := os.MkdirAll(filepath.Join(dir, "stockpile", "branch"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "branch"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(dir, "stockpile", "branch", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "branch", "envoys.vgo"), `
 envoys:
   - match: "a01"
 `)
@@ -130,13 +130,13 @@ func TestUsercrate_IncludedViaEnvironment(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	writeUsercrateDir(t, dir, "", "admin")
 
-	writeFile(t, filepath.Join(dir, "stockpile", "environments.vgo"), `
+	writeFile(t, filepath.Join(dir, "environments.vgo"), `
 env:
   prod:
     usercrates:
       - admin
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
 envoys:
   - match: "plex"
     environment: "prod"
@@ -164,7 +164,7 @@ func TestUsercrate_IncludedViaRole(t *testing.T) {
   usercrates:
     - admin
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
 envoys:
   - match: "plex"
     roles:
@@ -190,7 +190,7 @@ func TestUsercrate_RejectsModulesRefToUsercrate(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	writeUsercrateDir(t, dir, "", "admin")
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
 envoys:
   - match: "plex"
     modules:
@@ -209,7 +209,7 @@ envoys:
 
 func TestUsercrate_RejectsUsercratesRefToModule(t *testing.T) {
 	dir := setupInheritanceDir(t)
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
 name: sshd
 resources:
   - name: install-sshd
@@ -218,7 +218,7 @@ resources:
     state: present
 `)
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
 envoys:
   - match: "plex"
     usercrates:
@@ -239,7 +239,7 @@ envoys:
 
 func TestUsercrate_RejectsUsercrateWithoutUserResource(t *testing.T) {
 	dir := setupInheritanceDir(t)
-	usercrateDir := filepath.Join(dir, "stockpile", "usercrates")
+	usercrateDir := filepath.Join(dir, "usercrates")
 	if err := os.MkdirAll(usercrateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ resources:
     path: /etc/motd
     content: "hi"
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
 envoys:
   - match: "plex"
 `)
@@ -267,7 +267,7 @@ envoys:
 
 func TestUsercrate_AllowsUsercrateWithExtraNonUserResources(t *testing.T) {
 	dir := setupInheritanceDir(t)
-	usercrateDir := filepath.Join(dir, "stockpile", "usercrates")
+	usercrateDir := filepath.Join(dir, "usercrates")
 	if err := os.MkdirAll(usercrateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +285,7 @@ resources:
     type: exec
     command: "chsh -s /bin/bash dan"
 `)
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
 envoys:
   - match: "plex"
     usercrates:
@@ -307,7 +307,7 @@ envoys:
 func TestUsercrate_RetiredFieldRejectsExcludeUsercrates(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	writeUsercrateDir(t, dir, "", "admin")
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
 envoys:
   - match: "plex"
     exclude_usercrates:
@@ -331,7 +331,7 @@ func TestUsercrate_DefaultsNameFromFilename(t *testing.T) {
 	// it to the filename stem "alice".
 	writeUsercrateDirNoName(t, dir, "", "alice")
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
 envoys:
   - match: "plex"
     usercrates:
@@ -355,7 +355,7 @@ func TestUsercrate_NameCollisionWithModule(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	// Both a regular module and a usercrate named "dan" — must fail to
 	// load with a clear error message.
-	writeFile(t, filepath.Join(dir, "stockpile", "modules", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "modules", "dan.vgo"), `
 name: dan
 resources:
   - name: placeholder
@@ -364,7 +364,7 @@ resources:
 `)
 	writeUsercrateDir(t, dir, "", "dan")
 
-	writeFile(t, filepath.Join(dir, "stockpile", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
 envoys:
   - match: "plex"
 `)
@@ -382,10 +382,10 @@ func TestUsercrate_TraceShowsUsercrateSource(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	writeUsercrateDir(t, dir, "customerA", "alice")
 
-	if err := os.MkdirAll(filepath.Join(dir, "stockpile", "customerA"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "customerA"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(dir, "stockpile", "customerA", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "customerA", "envoys.vgo"), `
 envoys:
   - match: "a01"
     usercrates:
