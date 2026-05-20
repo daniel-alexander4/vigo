@@ -388,6 +388,16 @@ async fn handle_request(
             tokio::task::block_in_place(|| crate::swarm::lockbox::server::handle_resurrects_list(p))
         }
 
+        // Lockbox: catch-up pull of the user's ciphertext file list
+        // (name + sha256 + size per entry). Peers that observe a
+        // `files_digest` mismatch on an announcement fetch this list,
+        // diff against their local set, and pull each missing blob
+        // via `/swarm/lockbox/pull/...`. Safety net for the empty-peers
+        // race in pusher.rs.
+        (&Method::GET, p) if p.starts_with("/swarm/lockbox/files/") => {
+            tokio::task::block_in_place(|| crate::swarm::lockbox::server::handle_files_list(p))
+        }
+
         // Puddle: receive a pair-claim from a peer envoy that ran
         // `vigo swarm puddle join --from <this-host>`. Validates
         // the incoming code against the ~/.vigo-puddle/pair.pending

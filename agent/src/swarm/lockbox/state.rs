@@ -522,6 +522,20 @@ pub struct Announcement {
     /// resurrects catch-up for this peer."
     #[serde(default)]
     pub resurrects_digest: String,
+    /// Hex-encoded 16-byte digest of the announcer's `~<user>/lockbox/`
+    /// ciphertext file set (`snapshot::digest_files` over the sorted
+    /// `name|sha256|size` tuples — same shape the trait payload uses).
+    /// Mirrors `tombstones_digest` / `leaves_digest` / `resurrects_digest`
+    /// — receivers compare against their local digest and pull the
+    /// announcer's full file list (and then any missing blobs) on
+    /// mismatch via `GET /swarm/lockbox/files/<user>` +
+    /// `GET /swarm/lockbox/pull/<user>/<filename>`. Closes the
+    /// empty-peers race in `pusher.rs` (push at zero-peers silently
+    /// drops; catch-up fires on the next announcement cycle and
+    /// pulls). Empty string from pre-0.65.17 peers; receivers treat
+    /// empty as "skip files catch-up for this peer."
+    #[serde(default)]
+    pub files_digest: String,
     /// Hex-encoded puddle Ed25519 pubkey for the announcing user
     /// (ADR-016). Empty string when the user is running standalone
     /// or the announce predates 0.35.x. Receivers under puddle mode
@@ -750,6 +764,7 @@ mod tests {
             tombstones_digest: String::new(),
             leaves_digest: String::new(),
             resurrects_digest: String::new(),
+            files_digest: String::new(),
             puddle_pubkey: String::new(),
             puddle_cert: None,
         };
@@ -774,6 +789,30 @@ mod tests {
         let parsed: Announcement = serde_json::from_slice(json).unwrap();
         assert_eq!(parsed.machine, "old");
         assert_eq!(parsed.puddle_pubkey, "");
+    }
+
+    /// Pre-0.65.17 announcements arrive without `files_digest`. Receivers
+    /// must accept the JSON and treat the field as empty (skip files
+    /// catch-up for this peer). Same regression-guard shape as the
+    /// puddle_pubkey acceptance test above.
+    #[test]
+    fn announcement_json_accepts_pre_files_digest_payload() {
+        let json = br#"{
+            "machine": "old",
+            "user": "dan",
+            "pubkey": "age1abc",
+            "emitted_at": 1700000000,
+            "port": 1531,
+            "tombstones_digest": "deadbeef",
+            "leaves_digest": "cafef00d",
+            "resurrects_digest": "abad1dea"
+        }"#;
+        let parsed: Announcement = serde_json::from_slice(json).unwrap();
+        assert_eq!(parsed.tombstones_digest, "deadbeef");
+        assert_eq!(
+            parsed.files_digest, "",
+            "missing files_digest must deserialize to empty string"
+        );
     }
 
     // ---- ADR-016 fleet-aware recipient resolution ----

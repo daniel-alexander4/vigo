@@ -17,10 +17,14 @@
 //! forever. Pushes run in `spawn_blocking` so the tokio runtime
 //! stays responsive.
 //!
-//! No retry on failure: the recipient will observe the blob missing
-//! on its next announcement cycle and pull via
-//! `GET /lockbox/pull/<user>/<filename>`. The pusher's job is
-//! best-effort proactive delivery, not guaranteed transport.
+//! No retry on failure: the receiver-side `maybe_catchup_files`
+//! handler in `mod.rs` watches the `files_digest` on every incoming
+//! announcement and pulls any missing blobs via
+//! `GET /swarm/lockbox/files/<user>` + `GET /swarm/lockbox/pull/<user>/<filename>`.
+//! The pusher's job is best-effort proactive delivery; catch-up is
+//! the safety net that closes the empty-peers race here at line 111
+//! (push fires with zero live peers → drops silently → next
+//! announcement cycle the receiver pulls and converges).
 
 use std::time::Duration;
 

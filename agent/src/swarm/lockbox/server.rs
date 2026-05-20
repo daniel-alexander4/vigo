@@ -753,6 +753,46 @@ pub fn handle_resurrects_list(path: &str) -> Response<Full<Bytes>> {
     }
 }
 
+// ---------- files list (GET /swarm/lockbox/files/{user}) ----------
+
+/// Return the announcer's `~<user>/lockbox/` ciphertext file set as
+/// JSON (`Vec<snapshot::FileEntry>`). Peers that observed a
+/// `files_digest` mismatch on an announcement pull this list, diff
+/// against their local set, and pull each missing blob via the
+/// existing `GET /swarm/lockbox/pull/{user}/{filename}` endpoint —
+/// the safety net for missed pushes (`pusher.rs` empty-peers race
+/// in particular). Walks the same on-disk state as the trait
+/// snapshot via `snapshot::local_files_for_user`, so the digest the
+/// announcer publishes and the list this endpoint serves always
+/// agree.
+pub fn handle_files_list(path: &str) -> Response<Full<Bytes>> {
+    let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    let user = match segments.as_slice() {
+        ["swarm", "lockbox", "files", user] => *user,
+        _ => return not_found(),
+    };
+    let user = match percent_decode(user) {
+        Some(s) => s,
+        None => return bad_request("invalid user encoding"),
+    };
+    if !valid_username(&user) {
+        return bad_request("invalid user");
+    }
+    let home = match user_home(&user) {
+        Some(h) => h,
+        None => return not_found(),
+    };
+    let files = super::snapshot::local_files_for_user(&user, &home);
+    match serde_json::to_vec(&files) {
+        Ok(body) => Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/json")
+            .body(Full::new(Bytes::from(body)))
+            .unwrap(),
+        Err(_) => internal_error("serialize files list"),
+    }
+}
+
 // ---------- announce (POST /swarm/lockbox/announce) ----------
 
 /// Handle `POST /swarm/lockbox/announce` — feed a unicast announcement

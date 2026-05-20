@@ -127,71 +127,7 @@ pub fn build_trait_payload() -> Result<TraitPayload> {
 /// Build the per-user snapshot. Shared between the trait collector
 /// and `vigo swarm lockbox list` via its re-exported accessors.
 pub fn build_user_snapshot(user: &str, home: &Path) -> Result<UserSnapshot> {
-    let content_dir = config::content_dir(home);
-    let mut files_all: Vec<FileEntry> = Vec::new();
-    if content_dir.is_dir() {
-        let mut cache = ShaCache::load(user);
-        let mut cache_dirty = false;
-        for entry in fs::read_dir(&content_dir)
-            .with_context(|| format!("reading {}", content_dir.display()))?
-        {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
-            let path = entry.path();
-            let name = match path.file_name().and_then(|n| n.to_str()) {
-                Some(n) if !n.starts_with('.') => n.to_string(),
-                _ => continue,
-            };
-            if !path.is_file() {
-                continue;
-            }
-            // Skip ADR-012 `.failed` artifacts. These are permanent
-            // local-only files (the watcher's resolve_event filter
-            // also drops them, so they never push). Including them
-            // in the trait would inflate file_count / total_bytes /
-            // files_digest on the producing envoy and present as a
-            // fleet-wide divergence on the mesh page when in fact
-            // the file is not part of the synced corpus.
-            if super::auto_encrypt::is_failed_artifact_name(&name) {
-                continue;
-            }
-            let meta = match entry.metadata() {
-                Ok(m) => m,
-                Err(_) => continue,
-            };
-            let size = meta.len();
-            let mtime = meta
-                .modified()
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs() as i64)
-                .unwrap_or(0);
-            let sha = match cache.lookup(&name, mtime, size) {
-                Some(s) => s,
-                None => {
-                    let s = match compute_sha(&path) {
-                        Ok(s) => s,
-                        Err(_) => continue,
-                    };
-                    cache.insert(&name, mtime, size, &s);
-                    cache_dirty = true;
-                    s
-                }
-            };
-            files_all.push(FileEntry { name, size, mtime, sha256: sha });
-        }
-        if cache_dirty {
-            if let Err(e) = cache.save(user) {
-                tracing::debug!(
-                    user = %user,
-                    error = %e,
-                    "lockbox: sha cache save failed (non-fatal)"
-                );
-            }
-        }
-    }
+    let mut files_all = local_files_for_user(user, home);
     let file_count = files_all.len();
     let total_bytes: u64 = files_all.iter().map(|f| f.size).sum();
     let files_digest = digest_files(&files_all);
@@ -244,7 +180,98 @@ pub fn build_user_snapshot(user: &str, home: &Path) -> Result<UserSnapshot> {
     })
 }
 
-fn digest_files(files: &[FileEntry]) -> String {
+/// Walk `~<user>/lockbox/` and return one `FileEntry` per ciphertext
+/// file (sha256 served from the per-user mtime+size cache when warm).
+/// Shared between the trait snapshot, the announcement `files_digest`
+/// computation, and the catch-up file-list endpoint — there is exactly
+/// one walker so the digest two peers compute over the same on-disk
+/// state agrees byte-for-byte.
+///
+/// Returns an empty vec if the lockbox dir doesn't exist or can't be
+/// read. The catch-up path interprets that as "I have nothing, pull
+/// everything"; the trait collector handles the empty case identically
+/// to the historical behavior.
+pub(super) fn local_files_for_user(user: &str, home: &Path) -> Vec<FileEntry> {
+    let content_dir = config::content_dir(home);
+    if !content_dir.is_dir() {
+        return Vec::new();
+    }
+    let read = match fs::read_dir(&content_dir) {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::debug!(
+                user = %user,
+                dir = %content_dir.display(),
+                error = %e,
+                "lockbox: read_dir failed; returning empty file set"
+            );
+            return Vec::new();
+        }
+    };
+    let mut cache = ShaCache::load(user);
+    let mut cache_dirty = false;
+    let mut out: Vec<FileEntry> = Vec::new();
+    for entry in read {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(_) => continue,
+        };
+        let path = entry.path();
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) if !n.starts_with('.') => n.to_string(),
+            _ => continue,
+        };
+        if !path.is_file() {
+            continue;
+        }
+        // Skip ADR-012 `.failed` artifacts. These are permanent
+        // local-only files (the watcher's resolve_event filter also
+        // drops them, so they never push). Including them in the
+        // walk would inflate file_count / total_bytes / files_digest
+        // on the producing envoy and present as a fleet-wide
+        // divergence on the mesh page when in fact the file is not
+        // part of the synced corpus.
+        if super::auto_encrypt::is_failed_artifact_name(&name) {
+            continue;
+        }
+        let meta = match entry.metadata() {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+        let size = meta.len();
+        let mtime = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        let sha = match cache.lookup(&name, mtime, size) {
+            Some(s) => s,
+            None => {
+                let s = match compute_sha(&path) {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
+                cache.insert(&name, mtime, size, &s);
+                cache_dirty = true;
+                s
+            }
+        };
+        out.push(FileEntry { name, size, mtime, sha256: sha });
+    }
+    if cache_dirty {
+        if let Err(e) = cache.save(user) {
+            tracing::debug!(
+                user = %user,
+                error = %e,
+                "lockbox: sha cache save failed (non-fatal)"
+            );
+        }
+    }
+    out
+}
+
+pub(super) fn digest_files(files: &[FileEntry]) -> String {
     // Stable, deterministic digest over the full file set. Peers
     // with identical logical state must produce identical digests
     // regardless of enumeration order.

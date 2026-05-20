@@ -589,6 +589,12 @@ async fn announce_all(
             hex::encode(leaves::LeavesTable::load(&user).digest());
         let resurrects_digest =
             hex::encode(resurrects::ResurrectsTable::load(&user).digest());
+        // Files digest: covers the announcer's ~<user>/lockbox/ ciphertext
+        // set. Receivers with a mismatching local digest pull the file
+        // list + any missing blobs via `maybe_catchup_files`. Closes the
+        // empty-peers push race that `pusher.rs` cannot retry around.
+        let files_digest =
+            snapshot::digest_files(&snapshot::local_files_for_user(&user, &home));
         // ADR-016: include the user's puddle pubkey when present
         // so peers can scope recipient resolution to the same fleet.
         // Empty when puddle isn't initialized for this user (the
@@ -612,6 +618,7 @@ async fn announce_all(
             tombstones_digest,
             leaves_digest,
             resurrects_digest,
+            files_digest,
             puddle_pubkey,
             puddle_cert,
         };
@@ -922,6 +929,20 @@ fn handle_incoming(inc: IncomingAnnouncement) {
     if !announcement.resurrects_digest.is_empty() {
         maybe_catchup_resurrects(&announcement.user, &announcement.machine, from,
             &announcement.resurrects_digest);
+    }
+
+    // Files catch-up: identical pattern, applied to the ciphertext
+    // file set itself. Closes the empty-peers push race in
+    // `pusher.rs` (PushJob fires before multicast has populated
+    // peers.json → push silently drops → file stranded). Receiver
+    // observes a digest mismatch on the next announcement cycle,
+    // pulls the announcer's file list, then pulls each missing
+    // blob via the existing `GET /swarm/lockbox/pull/...` path.
+    // Empty announcer digest skips (pre-0.65.17 peer that doesn't
+    // advertise one).
+    if !announcement.files_digest.is_empty() {
+        maybe_catchup_files(&announcement.user, &announcement.machine, from,
+            &announcement.files_digest);
     }
 }
 
@@ -1261,6 +1282,252 @@ async fn catchup_resurrects_from(user: &str, source_hostname: &str, url: &str) -
         );
     }
     Ok(())
+}
+
+/// Sibling of `maybe_catchup_tombstones` for the per-user ciphertext
+/// file set. Triggered when an announcer's `files_digest` disagrees
+/// with this envoy's local digest. Background pull of the announcer's
+/// file list, diff against local, then pull each missing blob via the
+/// existing `GET /swarm/lockbox/pull/<user>/<filename>` endpoint —
+/// the safety net for missed pushes (empty-peers race, offline-during-
+/// push, network blip, receiver restart mid-push).
+fn maybe_catchup_files(
+    user: &str,
+    source_hostname: &str,
+    source_addr: std::net::SocketAddr,
+    remote_digest_hex: &str,
+) {
+    let home = match home_for_user(user) {
+        Some(h) => h,
+        None => return,
+    };
+    let local = snapshot::local_files_for_user(user, &home);
+    let local_digest_hex = snapshot::digest_files(&local);
+    if local_digest_hex == remote_digest_hex {
+        return;
+    }
+    debug!(
+        user = %user,
+        source = %source_hostname,
+        local = %local_digest_hex,
+        remote = %remote_digest_hex,
+        "lockbox: files digest mismatch, triggering catch-up"
+    );
+
+    let user = user.to_string();
+    let source_hostname = source_hostname.to_string();
+    let list_url = format!(
+        "https://{}/swarm/lockbox/files/{}",
+        source_addr,
+        url_encode_seg(&user)
+    );
+    let source_addr_owned = source_addr;
+    tokio::spawn(async move {
+        if let Err(e) =
+            catchup_files_from(&user, &source_hostname, source_addr_owned, &list_url).await
+        {
+            debug!(
+                user = %user,
+                source = %source_hostname,
+                error = %e,
+                "lockbox: files catch-up failed"
+            );
+        }
+    });
+}
+
+async fn catchup_files_from(
+    user: &str,
+    source_hostname: &str,
+    source_addr: std::net::SocketAddr,
+    list_url: &str,
+) -> Result<()> {
+    let tls = match DAEMON_TLS.get() {
+        Some(t) => t.clone(),
+        None => anyhow::bail!("no TLS certs available for catch-up"),
+    };
+    let agent = pusher::build_agent_for_mod(&tls)?;
+
+    // Step 1: fetch the announcer's file list.
+    let list_url_owned = list_url.to_string();
+    let agent_for_list = agent.clone();
+    let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+        let mut resp = agent_for_list
+            .get(&list_url_owned)
+            .call()
+            .with_context(|| format!("GET {}", list_url_owned))?;
+        let status = resp.status();
+        if !status.is_success() {
+            anyhow::bail!("peer returned HTTP {}", status.as_u16());
+        }
+        let body = resp
+            .body_mut()
+            .read_to_vec()
+            .context("reading files list response body")?;
+        Ok(body)
+    })
+    .await
+    .context("catch-up join")??;
+    let remote: Vec<snapshot::FileEntry> =
+        serde_json::from_slice(&body).context("parsing files list response")?;
+
+    // Step 2: diff. Build a sha256 lookup over the current local set
+    // and a tombstone/resurrect gate so a file the operator deleted
+    // doesn't get resurrected by catch-up — the supersede goes via
+    // `vigo swarm lockbox resurrect`, not via re-pulling.
+    let home = match home_for_user(user) {
+        Some(h) => h,
+        None => return Ok(()),
+    };
+    let local = snapshot::local_files_for_user(user, &home);
+    let mut local_sha: std::collections::HashMap<String, String> =
+        std::collections::HashMap::with_capacity(local.len());
+    for f in &local {
+        local_sha.insert(f.name.clone(), f.sha256.clone());
+    }
+    let tombstones = TombstoneTable::load(user);
+    let resurrects_table = resurrects::ResurrectsTable::load(user);
+
+    let mut pulled = 0usize;
+    let mut skipped_tombstone = 0usize;
+    for rf in &remote {
+        if !valid_filename_for_catchup(&rf.name) {
+            debug!(user = %user, name = %rf.name, "lockbox: catch-up: skipping invalid filename");
+            continue;
+        }
+        if tombstones::effective_tombstone(&rf.name, &tombstones, &resurrects_table).is_some() {
+            skipped_tombstone += 1;
+            continue;
+        }
+        if local_sha.get(&rf.name).map(|s| s == &rf.sha256).unwrap_or(false) {
+            continue; // already have it with the same sha
+        }
+        if let Err(e) = pull_one_file(&agent, source_addr, user, &rf.name).await {
+            debug!(
+                user = %user,
+                name = %rf.name,
+                error = %e,
+                "lockbox: catch-up: pull failed (will retry on next announcement)"
+            );
+            continue;
+        }
+        pulled += 1;
+    }
+
+    if pulled > 0 || skipped_tombstone > 0 {
+        tracing::info!(
+            user = %user,
+            source = %source_hostname,
+            pulled = pulled,
+            skipped_tombstone = skipped_tombstone,
+            "lockbox: files catch-up complete"
+        );
+    }
+    Ok(())
+}
+
+/// Filename validator for catch-up — matches the server-side
+/// `valid_filename` shape (no `/`, no leading `.`, non-empty,
+/// bounded length). Defense in depth on the receiving end against
+/// a malformed file list from a misbehaving peer.
+fn valid_filename_for_catchup(name: &str) -> bool {
+    if name.is_empty() || name.len() > 255 {
+        return false;
+    }
+    if name.starts_with('.') {
+        return false;
+    }
+    !name.chars().any(|c| c == '/' || c == '\0')
+}
+
+async fn pull_one_file(
+    agent: &ureq::Agent,
+    source_addr: std::net::SocketAddr,
+    user: &str,
+    name: &str,
+) -> Result<()> {
+    let pull_url = format!(
+        "https://{}/swarm/lockbox/pull/{}/{}",
+        source_addr,
+        url_encode_seg(user),
+        url_encode_seg(name)
+    );
+    let agent = agent.clone();
+    let url_owned = pull_url.clone();
+    let bytes = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+        let mut resp = agent
+            .get(&url_owned)
+            .call()
+            .with_context(|| format!("GET {}", url_owned))?;
+        let status = resp.status();
+        if !status.is_success() {
+            anyhow::bail!("peer returned HTTP {}", status.as_u16());
+        }
+        let body = resp
+            .body_mut()
+            .read_to_vec()
+            .context("reading file body")?;
+        Ok(body)
+    })
+    .await
+    .context("pull join")??;
+
+    // Defense in depth: refuse anything that isn't an age envelope.
+    // Mirrors the server-side push handler's AGE magic check so the
+    // catch-up path can't be coerced into landing arbitrary bytes
+    // in ~<user>/lockbox/.
+    const AGE_MAGIC: &[u8] = b"age-encryption.org/v1\n";
+    if bytes.len() < AGE_MAGIC.len() || &bytes[..AGE_MAGIC.len()] != AGE_MAGIC {
+        anyhow::bail!("pulled body is not age-encrypted");
+    }
+
+    let home = home_for_user(user).context("no home for user")?;
+    let content_dir = config::content_dir(&home);
+    if !content_dir.is_dir() {
+        // Dormant — user hasn't enrolled or rm -rf'd ~/lockbox/.
+        // Same opt-in gate the push handler enforces; don't auto-
+        // recreate the dir from catch-up.
+        return Ok(());
+    }
+    let user_string = user.to_string();
+    let name_string = name.to_string();
+    let target = content_dir.join(&name_string);
+    let tmp = content_dir.join(format!(".{}.lockbox.catchup.tmp", name_string));
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        write_tmp_0600(&tmp, &bytes)
+            .with_context(|| format!("writing temp {}", tmp.display()))?;
+        if let Err(e) = finalize_user_ciphertext(&tmp, &target, &user_string) {
+            let _ = fs::remove_file(&tmp);
+            return Err(e).context("finalize ciphertext");
+        }
+        Ok(())
+    })
+    .await
+    .context("write join")??;
+    Ok(())
+}
+
+fn write_tmp_0600(tmp: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(tmp)?;
+        f.write_all(data)?;
+        f.sync_all().ok();
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    {
+        let mut f = fs::File::create(tmp)?;
+        f.write_all(data)?;
+        f.sync_all().ok();
+        Ok(())
+    }
 }
 
 fn remove_files_for_active_tombstones(user: &str, table: &TombstoneTable) {
@@ -2120,6 +2387,11 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
             hex::encode(leaves::LeavesTable::load(&user).digest());
         let resurrects_digest =
             hex::encode(resurrects::ResurrectsTable::load(&user).digest());
+        // Files digest — same shape and SoT helper the multicast
+        // announce-build uses; identical state must produce identical
+        // bytes here.
+        let files_digest =
+            snapshot::digest_files(&snapshot::local_files_for_user(&user, &home));
         // ADR-016: include the user's puddle pubkey when present
         // so peers can scope recipient resolution to the same fleet.
         // Empty when puddle isn't initialized for this user (the
@@ -2143,6 +2415,7 @@ async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) ->
             tombstones_digest,
             leaves_digest,
             resurrects_digest,
+            files_digest,
             puddle_pubkey,
             puddle_cert,
         };

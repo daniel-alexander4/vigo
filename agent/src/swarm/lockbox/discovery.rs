@@ -223,6 +223,7 @@ mod tests {
             tombstones_digest: String::new(),
             leaves_digest: String::new(),
             resurrects_digest: String::new(),
+            files_digest: String::new(),
             puddle_pubkey: String::new(),
             puddle_cert: None,
         };
