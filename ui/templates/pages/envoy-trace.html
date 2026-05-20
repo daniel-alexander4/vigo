@@ -205,28 +205,6 @@
 </div>
 {{end}}
 
-<!-- Dependency Inheritance -->
-{{if .Dependencies}}
-<div class="trace-group">
-    <h3 class="trace-group__title">Dependency Inheritance</h3>
-    <div class="trace-section__body">
-        <table class="table">
-            <thead><tr><th>Type</th><th>From</th><th></th><th>To</th></tr></thead>
-            <tbody>
-            {{range .Dependencies}}
-            <tr>
-                <td><span class="trace-dep-type">{{.Type}}</span></td>
-                <td><span class="trace-dep-from">{{.From}}</span></td>
-                <td style="color:var(--color-muted);">&#x25B6;</td>
-                <td><span class="trace-dep-to">{{.To}}</span>{{if eq .Level "resource"}} <span class="trace-dep-level">(resource)</span>{{end}}</td>
-            </tr>
-            {{end}}
-            </tbody>
-        </table>
-    </div>
-</div>
-{{end}}
-
 <!-- Compliance Inheritance -->
 {{if .ComplianceTags}}
 <div class="trace-group">
@@ -305,50 +283,6 @@
         {{if not (isLastIndex $i $wTotal)}}
         <div class="trace-arrow" style="{{traceGreenBord $i $wTotal}};">&#9474;<br>&#9660;</div>
         {{end}}
-        {{end}}
-    </div>
-</div>
-{{end}}
-
-<!-- Conditional Inheritance -->
-{{if .Conditionals}}
-<div class="trace-group">
-    <h3 class="trace-group__title">Conditional Inheritance</h3>
-    <div class="trace-section__body">
-        {{$serverConds := filterConds .Conditionals "server"}}
-        {{$agentConds := filterConds .Conditionals "agent"}}
-        {{if $serverConds}}
-        <h4 style="margin-bottom:8px;">Server-evaluated <span class="text-muted" style="font-weight:400;">({{len $serverConds}})</span></h4>
-        <table class="table" style="margin-bottom:16px;">
-            <thead><tr><th>Resource</th><th>When</th></tr></thead>
-            <tbody>
-            {{range $serverConds}}
-            <tr>
-                <td><span class="trace-cond-module">{{.Module}}{{if .Resource}}/{{.Resource}}{{end}}</span></td>
-                <td><span class="trace-cond-expr">{{.When}}</span></td>
-            </tr>
-            {{end}}
-            </tbody>
-        </table>
-        {{end}}
-        {{if $agentConds}}
-        <h4 style="margin-bottom:8px;">Agent-evaluated <span class="text-muted" style="font-weight:400;">({{len $agentConds}})</span></h4>
-        <table class="table">
-            <thead><tr><th>Resource</th><th>When</th></tr></thead>
-            <tbody>
-            {{range $agentConds}}
-            <tr>
-                <td><span class="trace-cond-module">{{.Module}}{{if .Resource}}/{{.Resource}}{{end}}</span></td>
-                <td>
-                    <span class="trace-cond-expr">{{.When}}</span>
-                    {{if and .ResolvedWhen (ne .ResolvedWhen .When)}}
-                    <div class="trace-source" style="margin-top:2px;">&#x21B3; {{.ResolvedWhen}}</div>
-                    {{end}}
-                </td>
-            </tr>
-            {{end}}
-            </tbody>
-        </table>
         {{end}}
     </div>
 </div>
