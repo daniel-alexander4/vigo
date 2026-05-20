@@ -41,6 +41,12 @@ The published config didn't pass one of the validation gates (YAML syntax, cross
 
 **Fix:** the built-in AI assistant streams fix suggestions to your terminal when validation fails. Read those. For specific gates, see [Publish your config](publish-config.md). To skip URL-aliveness checks in air-gapped environments, use `--skip-url-checks`.
 
+### vigosrv exits at startup with `config load failed`
+
+The published config tree at `/srv/vigo/stacks/.live/` has a structural error (typically duplicate names, YAML syntax, dangling references, or a layout violation). vigosrv refuses to start rather than run with no policy — a config-enforcement server with no config silently strands the fleet on its last-cached state, which is worse than a loud crash.
+
+**Fix:** repair the source under `/srv/vigo/stacks/stockpile/`, then `vigocli config publish` (the file ops run even when the server is down), then restart vigosrv. The startup error message names the failing rule.
+
 ### Module convergence loop — same resource changes every cycle
 
 A resource declares state that some external process keeps reverting (a package manager auto-rolls back the version, another tool rewrites the file, the OS updates a value).

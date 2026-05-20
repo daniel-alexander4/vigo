@@ -203,9 +203,15 @@ echo "Starter config files seeded."
 
 # Initial publish: sync stockpile/ into .live/ on first run so the
 # server has config available at startup. Subsequent changes go through
-# vigocli config publish.
-if [ ! -d "${VIGO_LIVE}/stockpile" ] && [ -d "${VIGO_STOCKPILE}" ]; then
-    cp -r "${VIGO_STOCKPILE}" "${VIGO_LIVE}/stockpile"
+# vigocli config publish. roles.vgo is the canonical scaffolding file
+# that every published .live/ carries, so its absence is a reliable
+# "this tree is uninitialized" marker; the trailing /. on the source
+# copies stockpile's CONTENTS into .live/ flat, not into a nested
+# .live/stockpile/ subdir (the pre-refactor layout, which the loader
+# would now see as a duplicate of the flat tree).
+if [ ! -f "${VIGO_LIVE}/roles.vgo" ] && [ -f "${VIGO_STOCKPILE}/roles.vgo" ]; then
+    mkdir -p "${VIGO_LIVE}"
+    cp -r "${VIGO_STOCKPILE}"/. "${VIGO_LIVE}/"
     chmod -R u=rwX,g=rX,o= "${VIGO_LIVE}"
     echo "Initial config published to .live/."
 fi

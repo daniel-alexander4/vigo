@@ -556,8 +556,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 
 	s.configStore, err = config.NewConfigStore(publish.DefaultLiveDir, s.provider, false)
 	if err != nil {
-		slog.Error("config loaded with errors — starting with empty config", "error", err)
-		s.configStore = config.NewEmptyConfigStore(publish.DefaultLiveDir, s.provider)
+		return nil, fmt.Errorf("config load failed at startup: %w — fix %s and restart (typically: vigocli config publish)", err, publish.DefaultLiveDir)
 	}
 	s.configStore.SetBackend(s.secretsCfg.Backend)
 	s.configStore.SetServerYamlPath(configFile)
