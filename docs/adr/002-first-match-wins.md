@@ -1,8 +1,8 @@
-# ADR-002: First-match-wins matchfile lookup
+# ADR-002: First-match-wins hostcrate lookup
 
 **Status:** Accepted
 **Date:** 2025-01-01 (retroactive)
-**Updated 2026-04-12:** Terminology refresh — "node" → "envoy", "node mapping" → "match block / matchfile". Original decision unchanged.
+**Updated 2026-04-12:** Terminology refresh — "node" → "envoy", "node mapping" → "match block / hostcrate". Original decision unchanged.
 
 ## Context
 
@@ -10,7 +10,7 @@ Envoys need to be mapped to roles and modules based on their hostname. The mappi
 
 ## Decision
 
-Matchfile lookup uses first-match-wins: the server walks `.vgo` files with `match:` blocks in definition order, and the first match block whose pattern matches the hostname wins. No merging of multiple matches.
+Hostcrate lookup uses first-match-wins: the server walks `.vgo` files with `match:` blocks in definition order, and the first match block whose pattern matches the hostname wins. No merging of multiple matches.
 
 ## Consequences
 

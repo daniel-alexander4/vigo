@@ -553,7 +553,7 @@ resources:
     type: user
     username: alice
 `)
-	// Matchfile scoped to customerA envoys.
+	// Hostcrate scoped to customerA envoys.
 	writeFile(t, filepath.Join(dir, "customerA", "envoys.vgo"), `
 envoys:
   - match: "a01"

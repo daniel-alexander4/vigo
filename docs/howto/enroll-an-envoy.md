@@ -21,7 +21,7 @@ sequenceDiagram
     S-->>N: install script
     N->>N: download `vigo` binary,<br/>generate ED25519 keypair,<br/>install per-OS service
     N->>S: Register (gRPC over mTLS)<br/>hostname, IP, pubkey, one-time token
-    Note right of S: matches hostname against<br/>matchfile patterns;<br/>validates token (bcrypt-hashed at rest)
+    Note right of S: matches hostname against<br/>hostcrate patterns;<br/>validates token (bcrypt-hashed at rest)
     S-->>N: client UUID + initial policy bundle
     N->>S: CheckIn (every checkin.interval)
     Note over N,S: steady state: ed25519-signed CheckIn ↔ signed response,<br/>both sides mTLS-pinned

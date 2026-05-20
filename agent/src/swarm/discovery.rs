@@ -917,7 +917,7 @@ struct AnnouncementResult {
     /// Parsed `GITBACK:` line if the announcer included one. Used by
     /// the listener to refresh the gitback peer table. Absence means
     /// the announcer is not gitback-enabled (dormant subsystem from
-    /// Phase 2's matchfile gate) — the peer table stays untouched.
+    /// Phase 2's hostcrate gate) — the peer table stays untouched.
     gitback_peer: Option<GitbackLocalInfo>,
     /// Parsed `GITBACKCLAIM:` lines. Each entry is a (label,
     /// host_list) pair naming which envoys the announcer has

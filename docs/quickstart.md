@@ -77,7 +77,7 @@ The simplest assignment — every envoy gets it:
 modules: [motd]
 ```
 
-For per-host assignment use a matchfile:
+For per-host assignment use a hostcrate:
 
 ```yaml
 # /srv/vigo/stacks/stockpile/envoys.vgo

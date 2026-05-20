@@ -92,7 +92,7 @@ At check-in time the server:
 4. Applies match-block vars (if any — in this example there are none).
 5. Applies `environments.vgo` vars for the block's `environment:` on top.
 
-`environments.vgo` is scoped by filesystem location: a file at `stockpile/customerA/environments.vgo` only affects envoys whose matchfile lives at `stockpile/customerA/` or deeper.
+`environments.vgo` is scoped by filesystem location: a file at `stockpile/customerA/environments.vgo` only affects envoys whose hostcrate lives at `stockpile/customerA/` or deeper.
 
 ## Separate Secrets per Environment
 

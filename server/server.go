@@ -689,7 +689,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	s.reg.SetFleetIndex(s.fleetIndex)
 	s.reg.SetEnrollmentGate(s.enforcer)
 
-	// Sync envoy tags from matchfile. Tags are derived from the matchfile
+	// Sync envoy tags from hostcrate. Tags are derived from the hostcrate
 	// (single source of truth) and kept only in FleetIndex; syncing at
 	// startup ensures targeting works before any envoy has checked in.
 	if s.configStore != nil {

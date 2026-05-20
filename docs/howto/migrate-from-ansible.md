@@ -1,7 +1,7 @@
 
 # Migrating from Ansible
 
-Ansible pushes configuration over SSH from a control node; Vigo runs a persistent agent on each envoy that pulls desired state from a central server. The biggest practical shifts when porting an Ansible setup: execution model (push → pull), template scope (Jinja2 everywhere → Go templates inside `content:` only), and inventory shape (`host_vars` / `group_vars` → matchfiles + roles + per-host vars).
+Ansible pushes configuration over SSH from a control node; Vigo runs a persistent agent on each envoy that pulls desired state from a central server. The biggest practical shifts when porting an Ansible setup: execution model (push → pull), template scope (Jinja2 everywhere → Go templates inside `content:` only), and inventory shape (`host_vars` / `group_vars` → hostcrates + roles + per-host vars).
 
 ## Architecture Differences
 

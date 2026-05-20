@@ -40,7 +40,7 @@ func (h *EnvoysHandler) RegisterRoutes(mux *http.ServeMux) {
 }
 
 // GetTags returns the tags for a envoy. Read-only — tags are derived from
-// the matchfile and synced into FleetIndex on every check-in.
+// the hostcrate and synced into FleetIndex on every check-in.
 func (h *EnvoysHandler) GetTags(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 

@@ -345,7 +345,7 @@ $ vigocli config search --var log_level
 
 Validates `.vgo` files in `/srv/vigo/stacks/stockpile/` then atomically syncs to `/srv/vigo/stacks/.live/` (the directory the server reads). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../../howto/publish-config.md) for full details.
 
-Publish carries forward only files some carrier — a role, role `case:` branch, role `includes:` chain, match block, `common.vgo`, or `environments.vgo` — can actually reach. Modules and usercrates with no inbound reference, and template files no module names via `source:`, are dropped from `.live/`. Structural files (matchfiles, `common.vgo`, `roles.vgo`, `environments.vgo`, `waivers.vgo`, task / workflow definitions) are always preserved. Use `--no-prune` to fall back to a verbatim mirror.
+Publish carries forward only files some carrier — a role, role `case:` branch, role `includes:` chain, match block, `common.vgo`, or `environments.vgo` — can actually reach. Modules and usercrates with no inbound reference, and template files no module names via `source:`, are dropped from `.live/`. Structural files (hostcrates, `common.vgo`, `roles.vgo`, `environments.vgo`, `waivers.vgo`, task / workflow definitions) are always preserved. Use `--no-prune` to fall back to a verbatim mirror.
 
 ### Usage
 

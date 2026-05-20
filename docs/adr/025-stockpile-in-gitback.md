@@ -55,7 +55,7 @@ gitback://alexander4-ops/stockpile/
   common.vgo
   environments.vgo
   waivers.vgo
-  matchfiles/
+  hostcrates/
 ```
 
 The same directory tree currently at `/srv/vigo/stacks/stockpile/` — git-tracked, history-preserved per commit. The `dr_scope: swarm-wide` (ADR-015 default for puddle-wide adoption per ADR-023) ensures every vigosrv that joins the ops-puddle gets a copy of the bytes; `recipients: ["*"]` (the gitback default) is irrelevant since the project is wholly internal to the ops-puddle.

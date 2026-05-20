@@ -351,7 +351,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		s.metrics.CheckinsTotal.WithLabelValues("no_change").Inc()
 
 		// Look up observe_only flag: global (server.yaml) OR per-entry (envoys.vgo).
-		// Also sync match-block tags into FleetIndex; the matchfile is the
+		// Also sync match-block tags into FleetIndex; the hostcrate is the
 		// only source of truth for envoy tags.
 		observeOnly := s.globalObserveOnly
 		if _, cfg := s.configStore.Match(envoy.Hostname); cfg != nil {
@@ -407,7 +407,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		pattern = ""
 	}
 	// Sync match-block tags into FleetIndex on every check-in so the
-	// matchfile remains the single source of truth for envoy tags.
+	// hostcrate remains the single source of truth for envoy tags.
 	if s.fleetIndex != nil {
 		s.fleetIndex.SetTags(envoyID, cfg.Tags)
 	}

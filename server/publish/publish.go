@@ -567,7 +567,7 @@ func filterUsercrates(paths []string) []string {
 
 // scaffoldingFileBasenames are the well-known per-directory scaffolding
 // files that the loader walks to assemble fleet-wide config:
-// matchfiles (envoys.vgo), role definitions (roles.vgo), compliance
+// hostcrates (envoys.vgo), role definitions (roles.vgo), compliance
 // waivers (waivers.vgo), and per-environment overrides
 // (environments.vgo). Each gets its own modlint entry point; this set
 // drives the dispatch in lintModules.
@@ -1168,7 +1168,7 @@ func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
 		var result *modlint.Result
 		switch filepath.Base(rel) {
 		case "envoys.vgo":
-			result = modlint.LintMatchfile(data, opts)
+			result = modlint.LintHostcrate(data, opts)
 		case "roles.vgo":
 			result = modlint.LintRolesFile(data, opts)
 		case "waivers.vgo":

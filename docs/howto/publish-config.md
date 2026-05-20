@@ -3,7 +3,7 @@
 
 You'll finish this page knowing how to ship a config change to the fleet safely: edit under `stockpile/`, validate without applying, publish atomically to `.live/`, and (when something's wrong post-publish) roll back to the previous live version with one command.
 
-**When you'd use this:** every time you add or change a module, role, matchfile, usercrate, environment override, waiver, or compliance claim. Validation runs locally before anything touches the fleet, so this is also how you sanity-check changes before pushing them through a CI gate.
+**When you'd use this:** every time you add or change a module, role, hostcrate, usercrate, environment override, waiver, or compliance claim. Validation runs locally before anything touches the fleet, so this is also how you sanity-check changes before pushing them through a CI gate.
 
 **When you'd skip this:** never, if you're authoring config. There's no other path; the server only reads `.live/`.
 
@@ -14,7 +14,7 @@ Operators edit `.vgo` files in `stacks/stockpile/`. The `config publish` command
 
 Both modes share the same operator-visible verb (`vigocli config publish`) and the same validation pipeline. The mode is auto-detected via `GET /api/v1/tungol/status`.
 
-![Per-envoy config-resolution view — which matchfile + role + module + environment override resolved which value](../img/screenshots/vigo.envoy-config.png)
+![Per-envoy config-resolution view — which hostcrate + role + module + environment override resolved which value](../img/screenshots/vigo.envoy-config.png)
 
 ## Directory Layout
 
@@ -30,11 +30,11 @@ Both modes share the same operator-visible verb (`vigocli config publish`) and t
 │   ├── common.vgo                # Fleet-wide directory-inherited defaults
 │   ├── waivers.vgo               # Fleet-wide compliance waivers
 │   ├── compliance.vgo            # Fleet-wide compliance claims
-│   ├── envoys.vgo                # Top-level matchfile (any .vgo with envoys: works)
+│   ├── envoys.vgo                # Top-level hostcrate (any .vgo with envoys: works)
 │   └── customerA/
 │       ├── common.vgo            # Inherited by customerA subtree
-│       ├── envoys.vgo            # Per-customer matchfile
-│       └── web/web.vgo           # Per-host matchfile
+│       ├── envoys.vgo            # Per-customer hostcrate
+│       └── web/web.vgo           # Per-host hostcrate
 ├── examples/                     ← read-only install templates (image-seeded)
 ├── anti-examples/                ← read-only retract templates (mirrors examples/modules)
 └── .live/                        ← server reads here (locked, do not edit) — mirrors stockpile/ contents directly

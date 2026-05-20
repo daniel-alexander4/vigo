@@ -126,7 +126,7 @@ func classifyConfigFile(name, relPath string) string {
 	case "waivers.vgo":
 		return "waivers"
 	case "envoys.vgo":
-		return "matchfile"
+		return "hostcrate"
 	}
 	if strings.HasSuffix(name, ".vgo") {
 		for _, p := range strings.Split(relPath, "/") {

@@ -38,7 +38,7 @@ This populates `/srv/vigo/` with everything needed to run the server:
 │   │   ├── templates/       # Go template fragments
 │   │   ├── tasks/           # reusable task definitions
 │   │   ├── workflows/       # workflow definitions
-│   │   ├── envoys.vgo       # matchfile (any .vgo with envoys: works)
+│   │   ├── envoys.vgo       # hostcrate (any .vgo with envoys: works)
 │   │   ├── roles.vgo        # role definitions (single, fleet-wide)
 │   │   ├── common.vgo       # directory-inherited defaults
 │   │   ├── waivers.vgo      # compliance waivers (any depth)

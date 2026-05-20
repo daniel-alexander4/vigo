@@ -129,7 +129,7 @@ The framework matrix tells you what controls each framework requires and which V
 
 ### HIPAA Security Rule checklist
 
-1. **Inventory PHI flows.** List every envoy that touches PHI; tag them with a `phi: true` matchfile label. Vigo doesn't infer PHI scope — you declare it.
+1. **Inventory PHI flows.** List every envoy that touches PHI; tag them with a `phi: true` hostcrate label. Vigo doesn't infer PHI scope — you declare it.
 2. **§164.312(a)(1) access control.** Run the `user` and `sudo` modules; tag them with the relevant HIPAA control. Verify with `vigocli compliance report compliance --format html --output verify.html` and drill into the per-envoy section.
 3. **§164.312(b) audit controls.** Vigo's hash-chained audit log satisfies the "audit mechanisms" requirement; export with `vigocli audit export --since 2026-01-01 --to 2026-03-31 --format pdf`.
 4. **§164.312(c) integrity controls.** File-integrity-monitoring modules; pair with Connwaer's WORM verification if you're using it.

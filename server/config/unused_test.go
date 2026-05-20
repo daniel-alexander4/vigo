@@ -59,13 +59,13 @@ envoys:
 		t.Errorf("expected source file 'modules/orphan.vgo', got %q", result.UnusedModules[0].SourceFile)
 	}
 
-	// No unused match files — both patterns match enrolled hostnames.
-	if len(result.UnusedMatchFiles) != 0 {
-		t.Errorf("expected 0 unused match files, got %d: %+v", len(result.UnusedMatchFiles), result.UnusedMatchFiles)
+	// No unused hostcrates — both patterns match enrolled hostnames.
+	if len(result.UnusedHostcrates) != 0 {
+		t.Errorf("expected 0 unused hostcrates, got %d: %+v", len(result.UnusedHostcrates), result.UnusedHostcrates)
 	}
 }
 
-func TestUnusedMatchFiles(t *testing.T) {
+func TestUnusedHostcrates(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
@@ -77,7 +77,7 @@ resources: []
   modules: [nginx]
 `)
 
-	// Two match files: one matches enrolled hosts, one doesn't.
+	// Two hostcrates: one matches enrolled hosts, one doesn't.
 	writeFile(t, filepath.Join(dir, "default", "active.vgo"), `
 envoys:
   - match: "web-*.example.com"
@@ -97,11 +97,11 @@ envoys:
 	// Only web-01 is enrolled — "retired" file's patterns match nothing.
 	result := store.Unused([]string{"web-01.example.com"})
 
-	if len(result.UnusedMatchFiles) != 1 {
-		t.Fatalf("expected 1 unused match file, got %d: %+v", len(result.UnusedMatchFiles), result.UnusedMatchFiles)
+	if len(result.UnusedHostcrates) != 1 {
+		t.Fatalf("expected 1 unused hostcrate, got %d: %+v", len(result.UnusedHostcrates), result.UnusedHostcrates)
 	}
-	if result.UnusedMatchFiles[0].Path != "default/retired.vgo" {
-		t.Errorf("expected path 'default/retired.vgo', got %q", result.UnusedMatchFiles[0].Path)
+	if result.UnusedHostcrates[0].Path != "default/retired.vgo" {
+		t.Errorf("expected path 'default/retired.vgo', got %q", result.UnusedHostcrates[0].Path)
 	}
 }
 
@@ -305,7 +305,7 @@ envoys:
 	if len(result.UnusedModules) != 0 {
 		t.Errorf("expected 0 unused modules, got %d", len(result.UnusedModules))
 	}
-	if len(result.UnusedMatchFiles) != 0 {
-		t.Errorf("expected 0 unused match files, got %d", len(result.UnusedMatchFiles))
+	if len(result.UnusedHostcrates) != 0 {
+		t.Errorf("expected 0 unused hostcrates, got %d", len(result.UnusedHostcrates))
 	}
 }

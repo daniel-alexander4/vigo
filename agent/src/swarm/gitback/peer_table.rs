@@ -37,7 +37,7 @@
 //! ### Capability semantics
 //!
 //! Presence in the table **is** the capability. A dormant
-//! gitback subsystem (matchfile var missing / false) never
+//! gitback subsystem (hostcrate var missing / false) never
 //! announces, so its envoy never lands in any peer's table.
 //! This collapses "announce + capability bit" into a single fact:
 //! if you see it, you can pick it.
@@ -66,7 +66,7 @@ pub struct PeerEntry {
     /// [`local_human_users`].
     pub users: Vec<String>,
     /// Tag list inherited from the peer's trait collection
-    /// (sourced from matchfile + custom trait collectors).
+    /// (sourced from hostcrate + custom trait collectors).
     pub tags: Vec<String>,
     /// Unix seconds the peer was last observed. Updated on every
     /// refresh; compared against [`PEER_TTL_SECS`] at prune time.

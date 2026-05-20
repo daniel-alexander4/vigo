@@ -12,11 +12,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// LintMatchfile validates and normalizes a matchfile (any .vgo with
+// LintHostcrate validates and normalizes a hostcrate (any .vgo with
 // an `envoys:` block — typically named envoys.vgo, but per-host
 // filenames like web01.vgo work too). The pipeline mirrors Lint():
 // repair → parse → rules → render. Output is the same shape as the
-// input (matchfiles aren't reformatted today; the goal is to catch
+// input (hostcrates aren't reformatted today; the goal is to catch
 // authoring errors before publish reaches the agent push path).
 //
 // Checks applied:
@@ -28,22 +28,22 @@ import (
 //     keeps the first; subsequent blocks are silently shadowed).
 //   - Reserved keys per block — unknown keys flagged as did-you-mean.
 //   - `environment:` is a non-empty string when present.
-func LintMatchfile(input []byte, _ Options) *Result {
+func LintHostcrate(input []byte, _ Options) *Result {
 	r := &Result{}
 	repaired := repair(input, r)
 
-	mf, err := parseMatchfile(repaired)
+	hc, err := parseHostcrate(repaired)
 	if err != nil {
 		r.Findings = append(r.Findings, Finding{
 			Severity: Error,
-			RuleID:   "matchfile-parse",
-			Message:  fmt.Sprintf("matchfile parse error: %s", err),
+			RuleID:   "hostcrate-parse",
+			Message:  fmt.Sprintf("hostcrate parse error: %s", err),
 		})
 		finalizeFindings(r)
 		return r
 	}
 
-	r.Findings = append(r.Findings, applyMatchfileRules(mf)...)
+	r.Findings = append(r.Findings, applyHostcrateRules(hc)...)
 	r.Output = string(repaired) // structural lint only — no reformatting yet
 
 	finalizeFindings(r)
@@ -53,22 +53,22 @@ func LintMatchfile(input []byte, _ Options) *Result {
 // matchEntry is the parsed form of one envoys[] block, with line/col
 // preserved for source-anchored findings.
 type matchEntry struct {
-	Match            string
-	Environment      string
-	When             string
-	AttrKeys         []string // every key seen in the block, in source order
-	Line             int
-	Column           int
+	Match       string
+	Environment string
+	When        string
+	AttrKeys    []string // every key seen in the block, in source order
+	Line        int
+	Column      int
 }
 
-type matchfile struct {
+type hostcrate struct {
 	Entries []matchEntry
 }
 
-// matchfileKnownKeys is the canonical set of keys allowed inside an
+// hostcrateKnownKeys is the canonical set of keys allowed inside an
 // `envoys: - ...` block. Mirrors EnvoyEntry in server/config/types.go.
 // Extending the loader requires adding the new key here too.
-var matchfileKnownKeys = map[string]bool{
+var hostcrateKnownKeys = map[string]bool{
 	"match": true, "environment": true, "roles": true, "modules": true,
 	"usercrates": true, "vars": true, "tags": true,
 	"exclude_modules": true, "exclude_resources": true,
@@ -77,7 +77,7 @@ var matchfileKnownKeys = map[string]bool{
 	"username": true, "port": true, "ip_address": true,
 }
 
-func parseMatchfile(data []byte) (*matchfile, error) {
+func parseHostcrate(data []byte) (*hostcrate, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(data, &doc); err != nil {
 		return nil, err
@@ -90,7 +90,7 @@ func parseMatchfile(data []byte) (*matchfile, error) {
 		return nil, fmt.Errorf("expected mapping at root")
 	}
 
-	mf := &matchfile{}
+	hc := &hostcrate{}
 	for i := 0; i < len(root.Content)-1; i += 2 {
 		key := root.Content[i].Value
 		val := root.Content[i+1]
@@ -118,26 +118,26 @@ func parseMatchfile(data []byte) (*matchfile, error) {
 					entry.When = v.Value
 				}
 			}
-			mf.Entries = append(mf.Entries, entry)
+			hc.Entries = append(hc.Entries, entry)
 		}
 	}
-	return mf, nil
+	return hc, nil
 }
 
-func applyMatchfileRules(mf *matchfile) []Finding {
+func applyHostcrateRules(hc *hostcrate) []Finding {
 	var out []Finding
 
 	// Track seen match patterns to flag duplicates.
 	seenMatches := make(map[string]int) // pattern → first-seen index
 
-	for i, e := range mf.Entries {
+	for i, e := range hc.Entries {
 		// match: required, must be a valid filepath.Match pattern.
 		if e.Match == "" {
 			out = append(out, Finding{
 				Severity: Error,
 				Line:     e.Line,
 				Column:   e.Column,
-				RuleID:   "matchfile-match-required",
+				RuleID:   "hostcrate-match-required",
 				Message:  fmt.Sprintf("envoys[%d]: 'match' is required", i),
 			})
 		} else {
@@ -149,7 +149,7 @@ func applyMatchfileRules(mf *matchfile) []Finding {
 					Severity: Error,
 					Line:     e.Line,
 					Column:   e.Column,
-					RuleID:   "matchfile-match-syntax",
+					RuleID:   "hostcrate-match-syntax",
 					Message: fmt.Sprintf(
 						"envoys[%d]: match pattern %q is not a valid glob — %s",
 						i, e.Match, err.Error(),
@@ -161,7 +161,7 @@ func applyMatchfileRules(mf *matchfile) []Finding {
 					Severity: Warning,
 					Line:     e.Line,
 					Column:   e.Column,
-					RuleID:   "matchfile-duplicate-match",
+					RuleID:   "hostcrate-duplicate-match",
 					Message: fmt.Sprintf(
 						"envoys[%d]: duplicate match pattern %q (first seen at envoys[%d]) — the loader keeps the first; this block is silently shadowed",
 						i, e.Match, firstIdx,
@@ -178,7 +178,7 @@ func applyMatchfileRules(mf *matchfile) []Finding {
 				Severity: Warning,
 				Line:     e.Line,
 				Column:   e.Column,
-				RuleID:   "matchfile-environment-empty",
+				RuleID:   "hostcrate-environment-empty",
 				Message: fmt.Sprintf(
 					"envoys[%d]: 'environment' is set to empty — drop the key or give it a value",
 					i,
@@ -193,7 +193,7 @@ func applyMatchfileRules(mf *matchfile) []Finding {
 					Severity: Error,
 					Line:     e.Line,
 					Column:   e.Column,
-					RuleID:   "matchfile-when-syntax",
+					RuleID:   "hostcrate-when-syntax",
 					Message: fmt.Sprintf(
 						"envoys[%d]: when: expression is malformed — %s",
 						i, err.Error(),
@@ -204,10 +204,10 @@ func applyMatchfileRules(mf *matchfile) []Finding {
 
 		// Unknown keys → did-you-mean.
 		for _, k := range e.AttrKeys {
-			if matchfileKnownKeys[k] {
+			if hostcrateKnownKeys[k] {
 				continue
 			}
-			knownList := mapKeysSorted(matchfileKnownKeys)
+			knownList := mapKeysSorted(hostcrateKnownKeys)
 			guess := closestKey(k, knownList)
 			msg := fmt.Sprintf("envoys[%d]: unknown key %q", i, k)
 			if guess != "" {
@@ -217,7 +217,7 @@ func applyMatchfileRules(mf *matchfile) []Finding {
 				Severity: Error,
 				Line:     e.Line,
 				Column:   e.Column,
-				RuleID:   "matchfile-unknown-key",
+				RuleID:   "hostcrate-unknown-key",
 				Message:  msg,
 			})
 		}

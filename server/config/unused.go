@@ -30,25 +30,25 @@ type UnusedTemplate struct {
 	Path string `json:"path"` // stockpile-relative path, e.g. "templates/nginx/site.tmpl"
 }
 
-// UnusedMatchFile describes a match file where no pattern matches any enrolled hostname.
-type UnusedMatchFile struct {
+// UnusedHostcrate describes a hostcrate where no pattern matches any enrolled hostname.
+type UnusedHostcrate struct {
 	Path     string   `json:"path"`     // stockpile-relative path, e.g. "staging/web/envoys.vgo"
 	Patterns []string `json:"patterns"` // the match: values in this file
 }
 
-// UnusedResult holds all unused defs and match files.
+// UnusedResult holds all unused defs and hostcrates.
 type UnusedResult struct {
 	UnusedModules    []UnusedModule    `json:"unused_modules"`
 	UnusedUsercrates []UnusedUsercrate `json:"unused_usercrates"`
 	UnusedTemplates  []UnusedTemplate  `json:"unused_templates"`
 
-	UnusedMatchFiles []UnusedMatchFile `json:"unused_match_files"`
+	UnusedHostcrates []UnusedHostcrate `json:"unused_hostcrates"`
 }
 
 // Unused scans the config tree for modules, usercrates, and templates
 // that are defined but never reachable through any carrier (role / case
 // branch / 1-level include / match-block / common.vgo / environments.vgo),
-// plus match files whose patterns don't match any currently enrolled
+// plus hostcrates whose patterns don't match any currently enrolled
 // hostname. Static analysis — no runtime trait evaluation; the result is
 // stable across check-ins and depends only on the published config.
 func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
@@ -160,7 +160,7 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 
 	result.UnusedTemplates = cs.unusedTemplates()
 
-	// --- Unused match files ---
+	// --- Unused hostcrates ---
 
 	hostnameSet := make(map[string]bool, len(enrolledHostnames))
 	for _, h := range enrolledHostnames {
@@ -207,15 +207,15 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 			}
 		}
 		if !matched {
-			result.UnusedMatchFiles = append(result.UnusedMatchFiles, UnusedMatchFile{
+			result.UnusedHostcrates = append(result.UnusedHostcrates, UnusedHostcrate{
 				Path:     path,
 				Patterns: fi.patterns,
 			})
 		}
 	}
 
-	sort.Slice(result.UnusedMatchFiles, func(i, j int) bool {
-		return result.UnusedMatchFiles[i].Path < result.UnusedMatchFiles[j].Path
+	sort.Slice(result.UnusedHostcrates, func(i, j int) bool {
+		return result.UnusedHostcrates[i].Path < result.UnusedHostcrates[j].Path
 	})
 
 	return result

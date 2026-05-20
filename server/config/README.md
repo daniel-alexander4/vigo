@@ -116,9 +116,9 @@ modules:
     when: "is_prod_host"
 ```
 
-## Matchfile Format
+## Hostcrate Format
 
-Matchfiles map hostname patterns to roles and modules. First match block wins -- order matters.
+Hostcrates map hostname patterns to roles and modules. First match block wins -- order matters.
 
 ```yaml
 nodes:

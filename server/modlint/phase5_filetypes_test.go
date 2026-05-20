@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-// --- LintMatchfile ---
+// --- LintHostcrate ---
 
-func TestLintMatchfile_Valid(t *testing.T) {
+func TestLintHostcrate_Valid(t *testing.T) {
 	input := `envoys:
   - match: "*.web.example.com"
     roles: [web-server]
@@ -20,66 +20,66 @@ func TestLintMatchfile_Valid(t *testing.T) {
     roles: [admin-laptop]
     when: "is_root"
 `
-	r := LintMatchfile([]byte(input), Options{})
+	r := LintHostcrate([]byte(input), Options{})
 	if !r.OK() {
 		t.Fatalf("expected no errors, got: %v", r.Errors)
 	}
 }
 
-func TestLintMatchfile_DuplicateMatch(t *testing.T) {
+func TestLintHostcrate_DuplicateMatch(t *testing.T) {
 	input := `envoys:
   - match: "web-*"
     roles: [a]
   - match: "web-*"
     roles: [b]
 `
-	r := LintMatchfile([]byte(input), Options{})
-	if findFinding(r, "matchfile-duplicate-match") == nil {
+	r := LintHostcrate([]byte(input), Options{})
+	if findFinding(r, "hostcrate-duplicate-match") == nil {
 		t.Errorf("expected duplicate-match finding; got %v", r.Findings)
 	}
 }
 
-func TestLintMatchfile_MissingMatch(t *testing.T) {
+func TestLintHostcrate_MissingMatch(t *testing.T) {
 	input := `envoys:
   - roles: [a]
 `
-	r := LintMatchfile([]byte(input), Options{})
-	if findFinding(r, "matchfile-match-required") == nil {
+	r := LintHostcrate([]byte(input), Options{})
+	if findFinding(r, "hostcrate-match-required") == nil {
 		t.Errorf("expected match-required error; got %v", r.Findings)
 	}
 }
 
-func TestLintMatchfile_MalformedGlob(t *testing.T) {
+func TestLintHostcrate_MalformedGlob(t *testing.T) {
 	// filepath.Match returns ErrBadPattern on `[abc` (unclosed range).
 	input := `envoys:
   - match: "[abc"
     roles: [a]
 `
-	r := LintMatchfile([]byte(input), Options{})
-	if findFinding(r, "matchfile-match-syntax") == nil {
+	r := LintHostcrate([]byte(input), Options{})
+	if findFinding(r, "hostcrate-match-syntax") == nil {
 		t.Errorf("expected match-syntax error; got %v", r.Findings)
 	}
 }
 
-func TestLintMatchfile_MalformedWhen(t *testing.T) {
+func TestLintHostcrate_MalformedWhen(t *testing.T) {
 	input := `envoys:
   - match: "x"
     when: "is_root and"
 `
-	r := LintMatchfile([]byte(input), Options{})
-	if findFinding(r, "matchfile-when-syntax") == nil {
+	r := LintHostcrate([]byte(input), Options{})
+	if findFinding(r, "hostcrate-when-syntax") == nil {
 		t.Errorf("expected when-syntax error; got %v", r.Findings)
 	}
 }
 
-func TestLintMatchfile_UnknownKey(t *testing.T) {
+func TestLintHostcrate_UnknownKey(t *testing.T) {
 	// `mathc` is one transposition from `match`.
 	input := `envoys:
   - mathc: "x"
     roles: [a]
 `
-	r := LintMatchfile([]byte(input), Options{})
-	f := findFinding(r, "matchfile-unknown-key")
+	r := LintHostcrate([]byte(input), Options{})
+	f := findFinding(r, "hostcrate-unknown-key")
 	if f == nil {
 		t.Fatalf("expected unknown-key finding; got %v", r.Findings)
 	}
@@ -88,13 +88,13 @@ func TestLintMatchfile_UnknownKey(t *testing.T) {
 	}
 }
 
-func TestLintMatchfile_EnvironmentEmpty(t *testing.T) {
+func TestLintHostcrate_EnvironmentEmpty(t *testing.T) {
 	input := `envoys:
   - match: "x"
     environment: ""
 `
-	r := LintMatchfile([]byte(input), Options{})
-	if findFinding(r, "matchfile-environment-empty") == nil {
+	r := LintHostcrate([]byte(input), Options{})
+	if findFinding(r, "hostcrate-environment-empty") == nil {
 		t.Errorf("expected environment-empty warning; got %v", r.Findings)
 	}
 }

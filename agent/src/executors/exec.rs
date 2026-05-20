@@ -674,7 +674,7 @@ mod tests {
 
     #[test]
     fn parse_duration_trims_whitespace() {
-        // Matchfiles often get string-quoted values with accidental
+        // Hostcrates often get string-quoted values with accidental
         // spaces; accept them rather than fail.
         assert_eq!(parse_duration("  2h  "), Some(Duration::from_secs(2 * 3600)));
     }

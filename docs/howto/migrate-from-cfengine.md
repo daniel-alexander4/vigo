@@ -1,7 +1,7 @@
 
 # Migrating from CFEngine
 
-CFEngine and Vigo both model desired state as declarative units that agents evaluate and converge locally. Vigo's resource model maps onto CFEngine promises, modules onto bundles, and `when:` expressions onto the class system. The shift is mostly notational (CFEngine policy language → YAML) plus a different identity model on the server side (matchfiles + roles + environments).
+CFEngine and Vigo both model desired state as declarative units that agents evaluate and converge locally. Vigo's resource model maps onto CFEngine promises, modules onto bundles, and `when:` expressions onto the class system. The shift is mostly notational (CFEngine policy language → YAML) plus a different identity model on the server side (hostcrates + roles + environments).
 
 ## Architecture Differences
 

@@ -128,7 +128,7 @@ func startServer(t *testing.T, modules map[string]string, envoysYAML string) *te
 	reg := registry.NewRegistry(queries)
 
 	// Build the stacks directory (0.33.0 layout): stockpile/ holds every
-	// config primitive (modules, matchfiles, etc.). Config extension is
+	// config primitive (modules, hostcrates, etc.). Config extension is
 	// .vgo; .yaml is not recognized.
 	configDir := filepath.Join(t.TempDir(), "stacks")
 	modulesDir := filepath.Join(configDir, "modules")

@@ -66,13 +66,13 @@ Administrator-pushed file distribution on top of the [swarm](#swarm) substrate. 
 
 The LWW-CRDT metadata store for swarm blobs, gossiped between envoys. Tracks which blobs exist, their targets, retention policies, and revocation tombstones. Each envoy holds a local manifest; version mismatches during multicast trigger manifest sync over the peer HTTPS channel. See [Swarm Manifest](howto/set-up-swarm.md#manifest).
 
-## matchfile
+## hostcrate
 
 Any `.vgo` file containing an `envoys:` block with `- match:` entries. Maps hostname patterns/globs to roles, modules, and vars. First-match-wins. Conventionally named `envoys.vgo` but the loader walks all `.vgo` files, so per-host filenames (`plex.vgo`, `web01.vgo`) also work. See [Multi-Axis Config](reference/writing-modules.md).
 
 ## module
 
-A reusable resource set in `stockpile/modules/*.vgo`. Declares resources, default vars, and optional compliance claims. Composed into [roles](#role), applied to [envoys](#envoy) via [matchfiles](#matchfile) or directory-level `common.vgo` inheritance. Modules are the primary composition unit for envoy-wide config. See [Config Format](reference/writing-modules.md) and [Resource Language](reference/writing-modules.md).
+A reusable resource set in `stockpile/modules/*.vgo`. Declares resources, default vars, and optional compliance claims. Composed into [roles](#role), applied to [envoys](#envoy) via [hostcrates](#hostcrate) or directory-level `common.vgo` inheritance. Modules are the primary composition unit for envoy-wide config. See [Config Format](reference/writing-modules.md) and [Resource Language](reference/writing-modules.md).
 
 ## resource
 
@@ -84,7 +84,7 @@ An auto-generated inverse of a module — file resources flipped to `state: abse
 
 ## role
 
-A named grouping of modules and vars defined in `roles.vgo` (or the legacy `roles/` directory). Supports `when:` (role-wide conditional), `case:` (per-platform module groups), and `includes:` (single-level role composition). Assigned to envoys via [matchfiles](#matchfile). See [Config Format](reference/writing-modules.md).
+A named grouping of modules and vars defined in `roles.vgo` (or the legacy `roles/` directory). Supports `when:` (role-wide conditional), `case:` (per-platform module groups), and `includes:` (single-level role composition). Assigned to envoys via [hostcrates](#hostcrate). See [Config Format](reference/writing-modules.md).
 
 ## sandgorgon
 
@@ -108,7 +108,7 @@ One `vigosrv` participating in a [tungol](#tungol) federation. Owns a hostname-p
 
 ## stockpile
 
-The single operator-edited tree under [stacks](#stacks), at `/srv/vigo/stacks/stockpile/`. Holds every config primitive: [modules](#stone) (module definitions), [usercrates](#usercrate), `templates/` (Go template files referenced by `source:`), `tasks/`, `workflows/`, plus the assignment files `envoys.vgo` matchfiles, `roles.vgo`, `common.vgo`, `waivers.vgo`, `environments.vgo`, and `compliance.vgo` claim-inheritance files. The 0.33.1 collapse merged the prior `stockpile/` subtree into stockpile — there is one tree now, and `vigocli config publish` syncs only this one to [.live](#live).
+The single operator-edited tree under [stacks](#stacks), at `/srv/vigo/stacks/stockpile/`. Holds every config primitive: [modules](#stone) (module definitions), [usercrates](#usercrate), `templates/` (Go template files referenced by `source:`), `tasks/`, `workflows/`, plus the assignment files `envoys.vgo` hostcrates, `roles.vgo`, `common.vgo`, `waivers.vgo`, `environments.vgo`, and `compliance.vgo` claim-inheritance files. The 0.33.1 collapse merged the prior `stockpile/` subtree into stockpile — there is one tree now, and `vigocli config publish` syncs only this one to [.live](#live).
 
 ## stone
 

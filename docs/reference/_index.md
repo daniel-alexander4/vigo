@@ -9,7 +9,7 @@ Lookup material. Not a tutorial — get the shape of what you need from the [how
 | [vigo/](vigo/) | The agent: flags, plus the full resource and trait vocabulary that you write modules in. |
 | [API](api.md) | REST API endpoints. Every `/api/v1/*` route in the codebase is documented here. |
 | [server.yaml](server-yaml.md) | The full server-config schema. |
-| [Writing modules](writing-modules.md) | The canonical module-authoring reference: YAML format, resource types, conditionals, templates, composition (roles / matchfiles / usercrates / common.vgo / environments.vgo), lookups, retraction, stream-edit. |
+| [Writing modules](writing-modules.md) | The canonical module-authoring reference: YAML format, resource types, conditionals, templates, composition (roles / hostcrates / usercrates / common.vgo / environments.vgo), lookups, retraction, stream-edit. |
 | [Compliance matrix](compliance-matrix.md) | Framework × control table; which Vigo modules / Connwaer traits satisfy each control. |
 
 ---

@@ -20,7 +20,7 @@ func TestClassifyConfigFile(t *testing.T) {
 		{"environments.vgo", "", "environments"},
 		{"roles.vgo", "scaffolding", "roles"},
 		{"waivers.vgo", "alexander4/us-west1", "waivers"},
-		{"envoys.vgo", "alexander4", "matchfile"},
+		{"envoys.vgo", "alexander4", "hostcrate"},
 		{"docker.vgo", "stockpile/modules/system", "module"},
 		{"docker-windows.vgo", "stockpile/modules/system", "module"},
 		{"alice.vgo", "stockpile/usercrates", "usercrate"},

@@ -7,7 +7,7 @@ import "path/filepath"
 
 // HostMatchesPatterns reports whether `hostname` is allowed by the swarm
 // authorization pattern list. The semantics are intentionally identical
-// to Vigo's matchfile rules (ADR-002):
+// to Vigo's hostcrate rules (ADR-002):
 //
 //   - Empty list  → false (default-deny when nothing is configured).
 //   - First match wins. Patterns evaluated in order; first hit decides.

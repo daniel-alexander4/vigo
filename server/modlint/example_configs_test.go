@@ -20,12 +20,12 @@ import (
 // dry-run can't ship again silently.
 //
 // Roots walked:
-//   - example-configs/worksite/stockpile  (modules + usercrates + common.vgo + matchfiles)
+//   - example-configs/worksite/stockpile  (modules + usercrates + common.vgo + hostcrates)
 //   - example-configs/retractions         (paired retract templates)
 //   - example-configs/worksite/scaffolding (roles.vgo + scaffolding common.vgo)
 //
 // Dispatch matches server/publish/publish.go: scaffolding-file basenames
-// route to LintMatchfile / LintRolesFile / LintWaiversFile /
+// route to LintHostcrate / LintRolesFile / LintWaiversFile /
 // LintEnvironmentsFile; compliance.vgo files are skipped (loaded by the
 // config layer, not modlint); usercrate files set IsUsercrate=true so
 // the filename-stem fallback for `name:` matches the loader.
@@ -77,7 +77,7 @@ func TestExampleModulesLintClean(t *testing.T) {
 			var res *Result
 			switch effective {
 			case "envoys.vgo":
-				res = LintMatchfile(data, opts)
+				res = LintHostcrate(data, opts)
 			case "roles.vgo":
 				res = LintRolesFile(data, opts)
 			case "waivers.vgo":

@@ -9,7 +9,7 @@ You'll finish this page with switches, routers, and firewalls under the same con
 
 ## Enable it
 
-Pick one envoy on the same management network as the device(s) — call it the **gateway envoy**. It'll SSH to each network device on Vigo's behalf. Declare the devices as envoys via the network-device matchfile shape, with the gateway specified:
+Pick one envoy on the same management network as the device(s) — call it the **gateway envoy**. It'll SSH to each network device on Vigo's behalf. Declare the devices as envoys via the network-device hostcrate shape, with the gateway specified:
 
 ```yaml
 # /srv/vigo/stacks/stockpile/envoys.vgo
@@ -27,7 +27,7 @@ The gateway envoy itself needs the matching `network_device` capability enabled 
 
 ## Use it
 
-Once the matchfile lands and the gateway envoy has converged, the network devices appear in `vigocli envoys list` like any other envoy. Modules targeting them run their resources via the gateway: e.g., a `cisco_vlan` resource declares "VLAN 100 should exist on this switch"; the gateway SSHs in, checks current state, applies the diff, reports back.
+Once the hostcrate lands and the gateway envoy has converged, the network devices appear in `vigocli envoys list` like any other envoy. Modules targeting them run their resources via the gateway: e.g., a `cisco_vlan` resource declares "VLAN 100 should exist on this switch"; the gateway SSHs in, checks current state, applies the diff, reports back.
 
 ## Architecture
 

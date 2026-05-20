@@ -39,7 +39,7 @@ type fleetOrigin struct {
 //   - Two modules with `file` resources writing to the same
 //     `target_path:` — same shape, applied to filesystem state.
 //
-// Cross-file checks against matchfiles / roles / waivers (do listed
+// Cross-file checks against hostcrates / roles / waivers (do listed
 // modules exist? do referenced roles resolve?) are not in scope here
 // — those need the full config-loader resolution to know about
 // inheritance and default usercrates, which lives a layer up. This

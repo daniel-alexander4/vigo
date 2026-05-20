@@ -11,7 +11,7 @@
 #~ cycle to retry.
 #~
 #~ Per-tool timeout ceilings are conservative defaults for a mid-sized
-#~ server. Override per-envoy in a matchfile var — e.g. for a NAS with
+#~ server. Override per-envoy in a hostcrate var — e.g. for a NAS with
 #~ a giant AIDE index, `vars: { aide_check_timeout: "12h" }`.
 #~
 #~ Results are collected by the built-in security_scan trait collector

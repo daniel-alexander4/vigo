@@ -195,8 +195,8 @@ type ConfigStore struct {
 	moduleDefs      map[string]*ModuleDefinition       // loaded modules for tracing
 	complianceIndex map[string]map[string][]string    // standard → control_id → []module_name
 	// coverageCache memoizes EnvoyStandardCoverage results at publish
-	// time keyed by (matchfile entry index, standard). Each entry's
-	// module set is fixed by the publish-time matchfile resolution, so
+	// time keyed by (hostcrate entry index, standard). Each entry's
+	// module set is fixed by the publish-time hostcrate resolution, so
 	// per-envoy coverage is purely a function of (entry, standard) and
 	// can be precomputed once. Eliminates the per-call walk previously
 	// done by EnvoyStandardCoverage. Built alongside complianceIndex.
@@ -1539,7 +1539,7 @@ func buildComplianceIndex(moduleDefs map[string]*ModuleDefinition) map[string]ma
 // standard an envoy covers through its assigned modules. The standard
 // parameter is a compliance tag key (e.g. "pci-dss"), not a URL slug.
 //
-// The result is precomputed at publish time keyed by (matchfile entry,
+// The result is precomputed at publish time keyed by (hostcrate entry,
 // standard); this method is now an O(1) cache lookup. An envoy whose
 // hostname matches no entry returns nil — same as before. A standard
 // with no entries in complianceIndex also returns nil.
@@ -1553,7 +1553,7 @@ func (cs *ConfigStore) EnvoyStandardCoverage(hostname, standard string) *Standar
 	}
 	i := cs.index.Lookup(hostname)
 	if i < 0 {
-		// No matchfile entry — return an empty-modules coverage so the
+		// No hostcrate entry — return an empty-modules coverage so the
 		// caller sees every control as missing rather than nil. Matches
 		// pre-cache behavior used by surfaces that need to render
 		// drilldowns for envoys that haven't been mapped yet.
@@ -2136,7 +2136,7 @@ func globContains(pattern, query string) bool {
 // contentDir returns the directory the loader treats as the content root.
 // Holds every config primitive directly at the top level: modules/,
 // usercrates/, templates/, tasks/, workflows/, plus the assignment-tree
-// files (roles.vgo, envoys.vgo matchfiles, common.vgo, waivers.vgo,
+// files (roles.vgo, envoys.vgo hostcrates, common.vgo, waivers.vgo,
 // environments.vgo) and directory-inherited compliance.vgo claim files.
 // For the editable side cs.dir points at /srv/vigo/stacks/stockpile/;
 // for the published side it points at /srv/vigo/stacks/.live/. The

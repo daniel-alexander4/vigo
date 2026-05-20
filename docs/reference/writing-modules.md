@@ -1,7 +1,7 @@
 
 # Writing modules
 
-This is the canonical reference for operators authoring Vigo modules. It covers the YAML format, every resource type, the conditional language, the templating engine, the composition primitives (roles, matchfiles, common.vgo, usercrates, environments.vgo), lookups, retraction, and stream-edit pipelines. If you're new, work through the [Quickstart](../quickstart.md) and [Write your first module](../howto/write-your-first-module.md) first; come back here when you need the full surface.
+This is the canonical reference for operators authoring Vigo modules. It covers the YAML format, every resource type, the conditional language, the templating engine, the composition primitives (roles, hostcrates, common.vgo, usercrates, environments.vgo), lookups, retraction, and stream-edit pipelines. If you're new, work through the [Quickstart](../quickstart.md) and [Write your first module](../howto/write-your-first-module.md) first; come back here when you need the full surface.
 
 ---
 ## Config Format
@@ -194,7 +194,7 @@ modules:
 
 Included role modules are prepended before the role's own modules. Includes are **single level only** — an included role cannot itself have `includes:`. Duplicate modules across includes and the role's own list are automatically deduplicated (first occurrence wins).
 
-## Matchfile (envoys.vgo)
+## Hostcrate (envoys.vgo)
 
 The `envoys.vgo` file maps envoy hostnames to roles and modules. **First match wins** — the server tries each entry in order and uses the first one whose `match` glob matches the envoy's hostname.
 
@@ -238,14 +238,14 @@ envoys:
 
 ### Tags
 
-Tags are labels attached to envoys at config-resolution time. They are the single source of truth for envoy classification — **the matchfile is the only writer**. There is no admin API to set tags out of band; editing this file and publishing is the only way to tag an envoy.
+Tags are labels attached to envoys at config-resolution time. They are the single source of truth for envoy classification — **the hostcrate is the only writer**. There is no admin API to set tags out of band; editing this file and publishing is the only way to tag an envoy.
 
 Tags are synced into the in-memory fleet index on every check-in. Once synced, they are available to:
 
 - Admin targeting (`vigocli task ... --target tag:webserver`, `vigocli query ... --target tag:database`)
 - Per-envoy field variation in resource attributes via [lookup tables](#lookups)
 
-Because the matchfile is the only writer, tagging is deterministic and reproducible. A fresh server restart rebuilds tags by matching envoy hostnames against the current matchfile — no DB state to drift from config.
+Because the hostcrate is the only writer, tagging is deterministic and reproducible. A fresh server restart rebuilds tags by matching envoy hostnames against the current hostcrate — no DB state to drift from config.
 
 ## Directory Inheritance
 
@@ -300,7 +300,7 @@ stockpile/
   usercrates/
     admin.vgo              # defined here; inert until included
   customerA/
-    envoys.vgo             # matchfile for customerA envoys
+    envoys.vgo             # hostcrate for customerA envoys
     usercrates/
       alice.vgo            # defined here; inert until included
   common.vgo               # could include [admin, alice] for everyone under it
@@ -362,7 +362,7 @@ If a usercrate is defined in `stockpile/**/usercrates/` but no carrier includes 
 
 ### Migration from <0.54.0
 
-The pre-0.54.0 auto-apply rule and the `exclude_usercrates:` opt-out field are removed. A matchfile, common.vgo, or environments.vgo containing `exclude_usercrates:` on an envoy entry fails to load with: ``exclude_usercrates:` was removed in 0.54.0 — usercrates are now inert until positively included via `usercrates:` (see docs/reference/writing-modules.md)``. To migrate: delete the field and add a positive `usercrates:` list to each carrier (matchfile, common.vgo, role, or environments.vgo) that should pick up the usercrates that used to auto-apply.
+The pre-0.54.0 auto-apply rule and the `exclude_usercrates:` opt-out field are removed. A hostcrate, common.vgo, or environments.vgo containing `exclude_usercrates:` on an envoy entry fails to load with: ``exclude_usercrates:` was removed in 0.54.0 — usercrates are now inert until positively included via `usercrates:` (see docs/reference/writing-modules.md)``. To migrate: delete the field and add a positive `usercrates:` list to each carrier (hostcrate, common.vgo, role, or environments.vgo) that should pick up the usercrates that used to auto-apply.
 
 ### User management specifically
 
@@ -381,7 +381,7 @@ Compliance claims and waivers use **distinct filenames in distinct trees** — f
 
 **Claims** from a `stockpile/**/compliance.vgo` are unioned into every module defined anywhere beneath that file. A usercrate at `stockpile/usercrates/dan.vgo` inherits claims from `stockpile/usercrates/compliance.vgo` AND from `stockpile/compliance.vgo` if both exist, plus whatever the usercrate itself declares in its own inline `compliance:` block. All sources union with dedupe.
 
-**Waivers** apply only to envoys whose matchfile lives under the same directory subtree. `stockpile/customerA/waivers.vgo` waivers don't cross into `stockpile/customerB/`. Waived controls count as "accepted" in compliance scoring and render with a distinct "waived" badge on dashboards — not hidden.
+**Waivers** apply only to envoys whose hostcrate lives under the same directory subtree. `stockpile/customerA/waivers.vgo` waivers don't cross into `stockpile/customerB/`. Waived controls count as "accepted" in compliance scoring and render with a distinct "waived" badge on dashboards — not hidden.
 
 ```yaml
 # stockpile/compliance.vgo — claims only
@@ -1348,21 +1348,21 @@ Vigo composes an envoy's effective config from **a small number of orthogonal ax
 
 The whole config operation lives under a single parent directory, **stacks** (`/srv/vigo/stacks/`). Inside it, three subtrees have distinct roles:
 
-- **`stockpile/`** — the operator's working tree. Holds *every* config primitive: `modules/` (definitions), `usercrates/`, `templates/`, `tasks/`, `workflows/`, plus the assignment files themselves (`envoys.vgo` matchfiles, `roles.vgo`, `common.vgo`, `waivers.vgo`, `environments.vgo`) and directory-inherited `compliance.vgo` claims. **There is one operator-edited tree.**
+- **`stockpile/`** — the operator's working tree. Holds *every* config primitive: `modules/` (definitions), `usercrates/`, `templates/`, `tasks/`, `workflows/`, plus the assignment files themselves (`envoys.vgo` hostcrates, `roles.vgo`, `common.vgo`, `waivers.vgo`, `environments.vgo`) and directory-inherited `compliance.vgo` claims. **There is one operator-edited tree.**
 - **`examples/`** — read-only install-template tree seeded by the image. Operators copy from here into stockpile via `vigocli config examples copy <name>`.
 - **`anti-examples/`** — read-only retract-template tree, mirroring `examples/modules/` one-for-one. Each install template `examples/modules/<cat>/<name>.vgo.example` has a paired retract at `anti-examples/modules/<cat>/<name>-retract.vgo.example`. Copy with `vigocli config anti-examples copy <name>`; verify completeness with `vigocli config anti-examples mirror-check`. Never read by the server, never published.
 - **`.live/`** — the validated published output. `vigocli config publish` lints stockpile and atomically syncs it here; the server reads `.live/` on every reload.
 
 Operators edit `stockpile/`. Never `.live/`. Never edit `examples/` directly — copy first, then edit your stockpile copy.
 
-> The 0.33.1 collapse merged the prior `worksite/{stockpile,scaffolding,structure}/` layout into the `stacks/{stockpile,examples,.live}/` shape. Existing installs migrate automatically on first boot. The `scaffolding/` tree is gone — its contents (matchfiles, roles, common.vgo, waivers, environments.vgo) live in stockpile alongside modules and usercrates.
+> The 0.33.1 collapse merged the prior `worksite/{stockpile,scaffolding,structure}/` layout into the `stacks/{stockpile,examples,.live}/` shape. Existing installs migrate automatically on first boot. The `scaffolding/` tree is gone — its contents (hostcrates, roles, common.vgo, waivers, environments.vgo) live in stockpile alongside modules and usercrates.
 
 ## The axes
 
 | Axis | Where | What it does |
 |---|---|---|
 | **Directory structure** | `stockpile/<org>/<site>/` | Organizes by business axis (customer, site, tenant). Inheritance via `common.vgo`. **Not used for env.** |
-| **Matchfiles** | `stockpile/**/envoys.vgo` (or any `.vgo` with an `envoys:` block, anywhere outside `modules/`/`templates/`/`tasks/`/`workflows/`/`usercrates/`) | Maps hostname patterns to roles + environment + tags + vars. First-match-wins. |
+| **Hostcrates** | `stockpile/**/envoys.vgo` (or any `.vgo` with an `envoys:` block, anywhere outside `modules/`/`templates/`/`tasks/`/`workflows/`/`usercrates/`) | Maps hostname patterns to roles + environment + tags + vars. First-match-wins. |
 | **Roles** | `stockpile/roles.vgo` | Named groupings of modules. Supports `when:` (role-wide) and `case:` (per-platform module groups). Single fleet-wide file at the stockpile root. |
 | **Modules** | `stockpile/modules/**/*.vgo` | Reusable resource sets. Declared once, referenced by roles or `common.vgo`. Directory name is `modules/` on disk; YAML keys and identifiers stay `module`. |
 | **Usercrates** | `stockpile/**/usercrates/*.vgo` | Per-user modules. Inert until positively included via a carrier's `usercrates:` field (match block, common.vgo, role, or environments.vgo). |
@@ -1394,7 +1394,7 @@ For an envoy `web01.customerA.example.com` checking in:
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  Match block lookup (first-match-wins, all matchfiles walked)    │
+│  Match block lookup (first-match-wins, all hostcrates walked)    │
 │                                                                  │
 │  stockpile/customerA/envoys.vgo:                                 │
 │    - match: "web01.customerA.*"                                  │
@@ -1442,7 +1442,7 @@ For an envoy `web01.customerA.example.com` checking in:
                               ▼
 ┌──────────────────────────────────────────────────────────────────┐
 │  Attach waivers (from stockpile/**/waivers.vgo) to the envoy,    │
-│  walking up the directory ancestor chain of the matchfile.       │
+│  walking up the directory ancestor chain of the hostcrate.       │
 └──────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -1472,7 +1472,7 @@ For an envoy `web01.customerA.example.com` checking in:
 
 | Question | Canonical answer |
 |---|---|
-| How does a module get assigned to an envoy? | Via a **role** (defined in `stockpile/roles.vgo`) that the matchfile assigns, OR via inheritance from `stockpile/**/common.vgo`. Inline `modules:` on a match block is allowed but warns at >4 entries — that's the signal you should define a role. |
+| How does a module get assigned to an envoy? | Via a **role** (defined in `stockpile/roles.vgo`) that the hostcrate assigns, OR via inheritance from `stockpile/**/common.vgo`. Inline `modules:` on a match block is allowed but warns at >4 entries — that's the signal you should define a role. |
 | How does a host get per-host config? | Tag the host in its match block; use tag-keyed lookup tables inside modules to vary field values. Separate match blocks only for genuinely bespoke hosts. |
 | How does config differ per env? | Declare `environment:` on the match block. Declare env-specific modules/vars in `stockpile/**/environments.vgo` at the appropriate directory level. Env is **cross-cutting** — orthogonal to the directory tree. Do NOT nest subdirectories by env. |
 | How does a module branch per OS / platform? | `case:` on the role (when whole modules differ per platform) OR platform-keyed lookup tables inside module fields (when only values differ). Never inline `when:` on a resource when the axis is platform — that's harder to read. |
@@ -1509,7 +1509,7 @@ For an envoy `web01.customerA.example.com` checking in:
 │       ├── common.vgo            ← customerA defaults
 │       ├── waivers.vgo           ← customerA waivers (scoped)
 │       ├── environments.vgo      ← customerA env overrides (optional)
-│       ├── envoys.vgo            ← matchfile: hostname → role + env + tags
+│       ├── envoys.vgo            ← hostcrate: hostname → role + env + tags
 │       └── usercrates/
 │           └── alice.vgo         ← customerA-only usercrate
 │

@@ -72,7 +72,7 @@ pub struct LoopConfig {
     pub swarm_manager: Option<crate::swarm::manager::SwarmManager>,
     /// Live on/off switch for the gitback subsystem. Re-evaluated after
     /// every accepted policy bundle so operators can flip `gitback: true`
-    /// in a matchfile without restarting the agent.
+    /// in a hostcrate without restarting the agent.
     pub gitback_gate: Option<crate::swarm::gitback::Gate>,
 }
 
