@@ -6,9 +6,9 @@ set -euo pipefail
 # Replaces:  container image, example-configs/, scripts/
 #
 # Usage:
-#   sudo scripts/upgrade.sh                  # pull/build only — does NOT touch the running container
-#   sudo scripts/upgrade.sh --start          # also stop+start containers when work is done
-#   sudo scripts/upgrade.sh --build          # full rebuild (Go + agent linux amd64+arm64 + image)
+#   sudo scripts/upgrade.sh                  # pull/build AND restart containers (default)
+#   sudo scripts/upgrade.sh --norun          # pull/build only — leave the running container alone
+#   sudo scripts/upgrade.sh --build          # full rebuild (Go + agent linux amd64+arm64 + image) + restart
 #   sudo scripts/upgrade.sh --server         # rebuild Go (server+CLI) only, fast
 #   sudo scripts/upgrade.sh --agent          # rebuild Rust agent only
 #   sudo scripts/upgrade.sh --cross          # cross-compile agent (linux amd64+arm64)
@@ -17,9 +17,9 @@ set -euo pipefail
 #   sudo scripts/upgrade.sh --test           # run test suite after upgrade
 #
 # Flags can be combined:
-#   sudo scripts/upgrade.sh --build --start  # rebuild image AND deploy it now
-#   sudo scripts/upgrade.sh --server --test --start  # rebuild Go, test, restart
-#   sudo scripts/upgrade.sh --build --push   # full rebuild + push, leave running container alone
+#   sudo scripts/upgrade.sh --build --norun  # rebuild image but leave the running container untouched
+#   sudo scripts/upgrade.sh --server --test  # rebuild Go, test, restart
+#   sudo scripts/upgrade.sh --build --push   # full rebuild + push, restart
 #   sudo scripts/upgrade.sh --cross arm64 freebsd --push
 #
 # Cross-compile targets:
@@ -69,7 +69,7 @@ BUILD_SERVER=false   # --server: rebuild Go binaries only, inject into container
 BUILD_AGENT=false    # --agent: rebuild Rust agent only
 PUSH=false           # --push: push image to GHCR
 RUN_TESTS=false      # --test: run test-cli.sh after upgrade
-START=false          # --start: stop+start containers when work is done (default: leave running state untouched)
+START=true           # --norun: skip the container stop+start at the end (default: restart containers when work is done)
 CROSS_TARGETS=()
 parsing_cross=false
 
@@ -80,7 +80,7 @@ for arg in "$@"; do
         --agent)   BUILD_AGENT=true; parsing_cross=false ;;
         --push)    PUSH=true; parsing_cross=false ;;
         --test)    RUN_TESTS=true; parsing_cross=false ;;
-        --start)   START=true; parsing_cross=false ;;
+        --norun)   START=false; parsing_cross=false ;;
         --cross)   BUILD_AGENT=true; parsing_cross=true ;;
         *)
             if $parsing_cross; then
@@ -197,6 +197,35 @@ if [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
     if command -v cargo > /dev/null 2>&1; then
         echo "Syncing agent Cargo.lock..."
         (cd "$REPO_DIR/agent" && cargo update -p vigo --quiet 2>/dev/null) || true
+    fi
+
+    # Pre-flight: detect stale cached binaries from a prior build at a
+    # different version. Cargo's incremental rebuild can miss
+    # CARGO_PKG_VERSION changes for workspace-root crates — a known
+    # flakiness in env!() invalidation — so a partial cache hit will
+    # quietly produce a binary with the previous version baked in even
+    # when Cargo.toml is correct. The post-build gate below catches this,
+    # but only after burning a full compile per arch; cheaper to clear the
+    # vigo crate's fingerprint here and let cargo rebuild from clean.
+    REPO_VERSION="$(cat "$REPO_DIR/VERSION" 2>/dev/null | tr -d '[:space:]')"
+    if [ -n "$REPO_VERSION" ]; then
+        for t in "${CROSS_TARGETS[@]}"; do
+            case "$t" in
+                amd64)   rust_target="x86_64-unknown-linux-musl"; bin_name="vigo" ;;
+                arm64)   rust_target="aarch64-unknown-linux-musl"; bin_name="vigo" ;;
+                freebsd) rust_target="x86_64-unknown-freebsd";    bin_name="vigo" ;;
+                windows) rust_target="x86_64-pc-windows-msvc";    bin_name="vigo.exe" ;;
+                *)       continue ;;
+            esac
+            cache_bin="$REPO_DIR/agent/.build/$rust_target/release/$bin_name"
+            [ -f "$cache_bin" ] || continue
+            cached_v="$(agent_bin_version "$cache_bin")"
+            if [ -n "$cached_v" ] && [ "$cached_v" != "$REPO_VERSION" ]; then
+                echo "Pre-flight: cached $t agent is $cached_v, VERSION says $REPO_VERSION — clearing stale vigo build."
+                rm -f "$cache_bin"
+                rm -rf "$REPO_DIR/agent/.build/$rust_target/release/.fingerprint/vigo-"*
+            fi
+        done
     fi
 
     echo "Cross-compiling agent for: ${CROSS_TARGETS[*]}"
@@ -449,7 +478,7 @@ if $NEED_CONTAINER_RESTART && $START; then
 elif $NEED_CONTAINER_RESTART && ! $START; then
     echo ""
     echo "Built artifacts are ready; running container is untouched."
-    echo "Pass --start (or run 'docker compose up -d' from $DATA_DIR) to deploy."
+    echo "Drop --norun (or run 'docker compose up -d' from $DATA_DIR) to deploy."
 fi
 
 # Inject cross-compiled agent binaries into the running container so the
@@ -528,7 +557,7 @@ if $NEED_HOST_UPDATE; then
         cp "$REPO_DIR/bin/vigocli" /usr/local/bin/vigocli
     else
         # Pull or full rebuild: extract from the IMAGE, not a running container —
-        # `--build` without `--start` leaves the old container down and the new
+        # `--build --norun` leaves the old container down and the new
         # one not yet up. `docker create` makes an unstarted container we can
         # `docker cp` out of regardless of compose state.
         cid=$(docker create "$IMAGE")
