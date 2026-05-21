@@ -371,7 +371,7 @@ spanner:
 | `transport.multicast_port` | `1534` | UDP port for Tier-1 counter gossip. |
 | `snapshot.tier1_interval` | `30s` | Tier-1 counter-gossip cadence. |
 | `snapshot.tier2_interval` | `5m` | Tier-2 roster-snapshot cadence. |
-| `fallback_admin` | `local` | Admin-query kill-switch: `local` (degrade gracefully) or `fanout` (best-effort fanout). |
+| `fallback_admin` | `local` | Fleet-wide admin-read source: `local` aggregates `ListEnvoys` / `GetConvergenceSummary` from the gossip-backed observability cache (every bolt's signed `/fleet-snapshot`); `fanout` queries every roster bolt's admin gRPC live and merges. Both produce identically-shaped responses. `ListRuns` is unaffected by this switch — runs are never gossiped, so a per-envoy query always routes to the owning bolt and a global runs list always fans out to every bolt. |
 
 Bolts are identified by their Ed25519 pubkey (`server/bolt/identity.wrapped`), not a YAML-configured ID — the pre-Phase-2 `spanner.bolt_id` field is retired (loader hard-errors).
 

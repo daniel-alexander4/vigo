@@ -745,6 +745,19 @@ func apiListenPort(apiListen string) string {
 	return "8443"
 }
 
+// grpcListenPort extracts the port from a grpc_listen address
+// (host:port, e.g. ":1530"). The spanner peer-equal fanout admin
+// path (Slice 2-ii-a) dials each roster bolt's admin gRPC at
+// <hostname>:<port> on the same-port assumption. Falls back to
+// "1530" — the documented default — when the address has no
+// parseable port.
+func grpcListenPort(grpcListen string) string {
+	if _, port, err := net.SplitHostPort(grpcListen); err == nil && port != "" {
+		return port
+	}
+	return "1530"
+}
+
 // lookupStockpileProjectID returns the hex project_id of the
 // ops-puddle's stockpile gitback project on this vigosrv, by
 // walking <opsPuddleDir>/.vigo-gitback/<id>/project.json files

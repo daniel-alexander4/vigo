@@ -945,6 +945,11 @@
         "diverged": {
           "type": "integer",
           "format": "int32"
+        },
+        "snapshotAgeSeconds": {
+          "type": "string",
+          "format": "int64",
+          "description": "snapshot_age_seconds is the age, in seconds, of the oldest peer\nfleet-snapshot that contributed to this aggregate (spanner Slice\n2-ii-a). Zero when the answer is purely local (standalone, or the\nhub-fan-out / fanout paths which query peers live). Operators read\nit to gauge how stale a gossip-aggregated answer is."
         }
       }
     },

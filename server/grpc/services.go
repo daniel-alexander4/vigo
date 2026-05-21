@@ -221,8 +221,14 @@ type AdminService struct {
 	baseInterval     time.Duration
 	offlineThreshold time.Duration
 	hub              *spanner.Hub      // non-nil when role=hub; aggregates from bolts
-	fleetIndex       *fleet.FleetIndex // in-memory index for hot-path operations
-	reassignStore    *ReassignStore    // pending envoy reassignments (bolt side)
+	// spannerAdmin drives the peer-equal fleet-observability admin
+	// reads (Slice 2-ii-a). Non-nil when this vigosrv is in a spanner
+	// (mode != standalone). The three fleet-wide reads dispatch:
+	// hub != nil → hub path; else spannerAdmin != nil → cache-aggregate
+	// (local) or fanout per fallback_admin; else → pure-local path.
+	spannerAdmin  *spanner.SpannerAdmin
+	fleetIndex    *fleet.FleetIndex // in-memory index for hot-path operations
+	reassignStore *ReassignStore    // pending envoy reassignments (bolt side)
 	auditWriter      auditRecorder     // tamper-evident audit writer (nil-safe)
 	integrations     *integrations.Dispatcher
 	// swarmCleanup, when set, is invoked from RevokeEnvoy / DeleteEnvoy
@@ -245,6 +251,14 @@ func (s *AdminService) SetAuditWriter(w auditRecorder) {
 // fired after RevokeEnvoy / DeleteEnvoy unless the request opts out.
 func (s *AdminService) SetSwarmCleanup(fn func(ctx context.Context, hostname string) error) {
 	s.swarmCleanup = fn
+}
+
+// SetSpannerAdmin attaches the peer-equal admin-read driver (Slice
+// 2-ii-a). Wired in main.go after the Gossiper is constructed (the
+// driver shares the Gossiper's observability cache). nil leaves the
+// three fleet-wide admin reads on their pure-local path.
+func (s *AdminService) SetSpannerAdmin(a *spanner.SpannerAdmin) {
+	s.spannerAdmin = a
 }
 
 // formatDuration formats a time.Duration as a Go-style string (e.g. "5m0s").

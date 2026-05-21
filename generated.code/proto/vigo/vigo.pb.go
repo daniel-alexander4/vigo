@@ -4955,8 +4955,14 @@ type GetConvergenceSummaryResponse struct {
 	NoData         int32                  `protobuf:"varint,6,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
 	ConvergencePct float32                `protobuf:"fixed32,7,opt,name=convergence_pct,json=convergencePct,proto3" json:"convergence_pct,omitempty"`
 	Diverged       int32                  `protobuf:"varint,8,opt,name=diverged,proto3" json:"diverged,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// snapshot_age_seconds is the age, in seconds, of the oldest peer
+	// fleet-snapshot that contributed to this aggregate (spanner Slice
+	// 2-ii-a). Zero when the answer is purely local (standalone, or the
+	// hub-fan-out / fanout paths which query peers live). Operators read
+	// it to gauge how stale a gossip-aggregated answer is.
+	SnapshotAgeSeconds int64 `protobuf:"varint,9,opt,name=snapshot_age_seconds,json=snapshotAgeSeconds,proto3" json:"snapshot_age_seconds,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *GetConvergenceSummaryResponse) Reset() {
@@ -5041,6 +5047,13 @@ func (x *GetConvergenceSummaryResponse) GetConvergencePct() float32 {
 func (x *GetConvergenceSummaryResponse) GetDiverged() int32 {
 	if x != nil {
 		return x.Diverged
+	}
+	return 0
+}
+
+func (x *GetConvergenceSummaryResponse) GetSnapshotAgeSeconds() int64 {
+	if x != nil {
+		return x.SnapshotAgeSeconds
 	}
 	return 0
 }
@@ -7859,7 +7872,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x16\n" +
 	"\x06active\x18\x05 \x01(\bR\x06active\"\x1e\n" +
-	"\x1cGetConvergenceSummaryRequest\"\xff\x01\n" +
+	"\x1cGetConvergenceSummaryRequest\"\xb1\x02\n" +
 	"\x1dGetConvergenceSummaryResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x1c\n" +
 	"\tconverged\x18\x02 \x01(\x05R\tconverged\x12\x1a\n" +
@@ -7868,7 +7881,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\aoffline\x18\x05 \x01(\x05R\aoffline\x12\x17\n" +
 	"\ano_data\x18\x06 \x01(\x05R\x06noData\x12'\n" +
 	"\x0fconvergence_pct\x18\a \x01(\x02R\x0econvergencePct\x12\x1a\n" +
-	"\bdiverged\x18\b \x01(\x05R\bdiverged\",\n" +
+	"\bdiverged\x18\b \x01(\x05R\bdiverged\x120\n" +
+	"\x14snapshot_age_seconds\x18\t \x01(\x03R\x12snapshotAgeSeconds\",\n" +
 	"\x1aGetEnvoyConvergenceRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x96\x01\n" +
 	"\x1bGetEnvoyConvergenceResponse\x12\x16\n" +

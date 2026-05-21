@@ -505,6 +505,12 @@ Returns the full admissions roster (every `spanner_bolts` row) so the membership
 
 Serves this server's full admissions roster + consumed-token G-Set as a signed CRDT snapshot. Peer bolts' roster gossipers pull this endpoint on the Tier-2 interval (`spanner.snapshot.tier2_interval`, default 5m) and CRDT-merge the result, so every bolt converges on one admissions roster. Each row carries its original Ed25519 admission signature; the pulling peer verifies every row before merging. Server-to-server, not operator-driven.
 
+### GET /api/v1/spanner/fleet-snapshot
+
+**Permission:** `fleet.read`
+
+Serves this bolt's fleet-observability snapshot — its envoy roster plus convergence counters — signed with the bolt's Ed25519 identity. Peer bolts pull this on the same Tier-2 cadence as `/snapshot` and verify the signature against the publishing bolt's roster pubkey before caching. The cache backs the peer-equal fleet-wide admin reads (`ListEnvoys`, `GetConvergenceSummary`) when `spanner.fallback_admin: local`. Kept separate from `/snapshot` — different consistency model (per-bolt facts, last-writer-wins) and size profile. Server-to-server, not operator-driven.
+
 ### GET /api/v1/spanner/bolts/{id}
 
 **Permission:** `fleet.read`

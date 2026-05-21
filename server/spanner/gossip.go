@@ -8,6 +8,7 @@ import (
 	"crypto/ed25519"
 	"crypto/tls"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -73,6 +74,34 @@ type Gossiper struct {
 	// pubkey-hex; allowTier1Pull enforces pullDebounceWindow against it.
 	pullDebounceMu sync.Mutex
 	pullDebounce   map[string]time.Time
+
+	// observ is the Slice 2-ii-a fleet-observability cache. The Tier-2
+	// cycle pulls each peer's signed /fleet-snapshot alongside the
+	// admissions /snapshot and stores the verified result here; the
+	// admin-read aggregators read it. nil disables fleet-snapshot
+	// pulling (standalone — there is no Gossiper there anyway).
+	observ *ObservabilityCache
+
+	// localCounters returns this bolt's own current convergence
+	// counters — stamped into every outbound Tier-1 digest so peers
+	// get 30s-fresh counters without waiting for the 5m Tier-2 pull.
+	// nil → Tier-1 digests carry a zero-valued ConvergenceCounters
+	// (still valid; the Tier-2 pull supplies the real counters).
+	localCounters func() ConvergenceCounters
+}
+
+// SetLocalCounters injects the source of this bolt's own convergence
+// counters for outbound Tier-1 digests. Wired in main.go where the
+// fleet index is in scope.
+func (g *Gossiper) SetLocalCounters(fn func() ConvergenceCounters) {
+	g.localCounters = fn
+}
+
+// ObservabilityCache returns the Gossiper's fleet-observability cache —
+// the source the cache-aggregating admin reads (Slice 2-ii-a) consult.
+// Never nil for a constructed Gossiper.
+func (g *Gossiper) ObservabilityCache() *ObservabilityCache {
+	return g.observ
 }
 
 // NewGossiper constructs a roster-replication Gossiper.
@@ -131,6 +160,7 @@ func NewGossiper(sqlDB *sql.DB, queries *db.Queries, ownPubkeyHex, httpsPort str
 		mcastPort:     mcastPort,
 		tier1Interval: tier1Interval,
 		pullDebounce:  make(map[string]time.Time),
+		observ:        NewObservabilityCache(),
 	}
 }
 
@@ -190,23 +220,112 @@ func (g *Gossiper) cycle(ctx context.Context) {
 
 	merged := 0
 	peers := 0
+	livePeers := make(map[string]bool, len(roster))
 	for _, b := range roster {
 		// Skip self and revoked peers — a revoked bolt is not a roster
 		// source.
 		if b.Pubkey == g.ownPubkey || b.RevokedAt.Valid {
 			continue
 		}
+		livePeers[b.Pubkey] = true
 		peers++
 		n, err := g.pullAndMerge(ctx, b.Hostname, founderPubkey)
 		if err != nil {
 			// One bad peer never aborts the cycle.
 			slog.Warn("spanner gossip: peer pull failed; continuing to next peer",
 				"peer", b.Hostname, "error", err)
-			continue
+		} else {
+			merged += n
 		}
-		merged += n
+
+		// Slice 2-ii-a: pull the peer's signed fleet-observability
+		// snapshot too — same peer, same cadence as the admissions
+		// pull. Independent of the admissions merge: a /snapshot
+		// failure must not skip the /fleet-snapshot pull and vice
+		// versa, so this is a separate best-effort call.
+		if err := g.pullFleetSnapshot(ctx, b.Hostname, b.Pubkey); err != nil {
+			slog.Warn("spanner gossip: peer fleet-snapshot pull failed; continuing",
+				"peer", b.Hostname, "error", err)
+		}
+	}
+
+	// Drop observability entries for bolts no longer live in the
+	// roster (revoked or removed) so their stale facts stop
+	// contributing to fleet-wide admin aggregates.
+	for _, peerKey := range g.observPeerKeys() {
+		if !livePeers[peerKey] {
+			g.observ.Forget(peerKey)
+		}
 	}
 	slog.Debug("spanner gossip: cycle complete", "peers", peers, "rows_merged", merged)
+}
+
+// observPeerKeys returns the pubkey-hex of every peer currently in the
+// observability cache — used by cycle to evict entries for bolts that
+// have left the roster.
+func (g *Gossiper) observPeerKeys() []string {
+	all := g.observ.All()
+	keys := make([]string, 0, len(all))
+	for k := range all {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// pullFleetSnapshot GETs one peer's signed /fleet-snapshot, verifies
+// the signature against that peer's roster pubkey (peerPubkeyHex —
+// NEVER a pubkey from the wire), and stores the verified result in the
+// observability cache. A bad signature is dropped and logged, not
+// cached.
+func (g *Gossiper) pullFleetSnapshot(ctx context.Context, peerHostname, peerPubkeyHex string) error {
+	url := fmt.Sprintf("https://%s:%s/api/v1/spanner/fleet-snapshot", peerHostname, g.httpsPort)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("building fleet-snapshot request: %w", err)
+	}
+	resp, err := g.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("calling peer /fleet-snapshot: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("peer /fleet-snapshot returned %d: %s", resp.StatusCode, string(body))
+	}
+
+	var snap FleetSnapshot
+	if err := json.NewDecoder(resp.Body).Decode(&snap); err != nil {
+		return fmt.Errorf("decoding peer /fleet-snapshot: %w", err)
+	}
+
+	if err := g.acceptFleetSnapshot(peerPubkeyHex, &snap); err != nil {
+		return err
+	}
+	return nil
+}
+
+// acceptFleetSnapshot verifies a received FleetSnapshot against the
+// peer's roster pubkey and, on success, stores it in the observability
+// cache. Isolated from the HTTP plumbing so unit tests can exercise the
+// verify + store decision without a socket. A bad signature returns an
+// error and the snapshot is NOT cached.
+func (g *Gossiper) acceptFleetSnapshot(peerPubkeyHex string, snap *FleetSnapshot) error {
+	peerPub, err := hex.DecodeString(peerPubkeyHex)
+	if err != nil || len(peerPub) != ed25519.PublicKeySize {
+		return fmt.Errorf("peer roster pubkey %q is not a 32-byte hex key", peerPubkeyHex)
+	}
+	if err := VerifyFleetSnapshot(ed25519.PublicKey(peerPub), snap); err != nil {
+		return fmt.Errorf("fleet-snapshot signature rejected: %w", err)
+	}
+	g.observ.UpdateFull(
+		peerPubkeyHex,
+		snap.Envoys,
+		snap.Convergence,
+		time.UnixMilli(snap.ServedAt),
+	)
+	return nil
 }
 
 // pullAndMerge GETs one peer's /snapshot, decodes it, and CRDT-merges

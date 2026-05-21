@@ -793,6 +793,12 @@ message GetConvergenceSummaryResponse {
   int32 no_data = 6;
   float convergence_pct = 7;
   int32 diverged = 8;
+  // snapshot_age_seconds is the age, in seconds, of the oldest peer
+  // fleet-snapshot that contributed to this aggregate (spanner Slice
+  // 2-ii-a). Zero when the answer is purely local (standalone, or the
+  // hub-fan-out / fanout paths which query peers live). Operators read
+  // it to gauge how stale a gossip-aggregated answer is.
+  int64 snapshot_age_seconds = 9;
 }
 
 message GetEnvoyConvergenceRequest {

@@ -13,11 +13,8 @@ package spanner
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"log/slog"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -25,7 +22,6 @@ import (
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/metrics"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 )
 
 // Hub manages gRPC connections to bolts and fans out admin queries.
@@ -94,7 +90,11 @@ type boltConn struct {
 // (spanner_bolts table), so admin-query routing-by-pattern is degraded
 // in 2A.1b — RouteHostname returns no-route until 2A.2 lands the merge.
 func NewHub(ctx context.Context, bootstrapPeers []string, certFile, keyFile, caFile string, m *metrics.Metrics) (*Hub, error) {
-	tlsCreds, err := buildClientTLS(certFile, keyFile, caFile)
+	// The bolt-to-bolt mTLS dialing now lives in PeerDialer (Slice
+	// 2-ii-a, server/spanner/peerconn.go) so it survives the Phase-3
+	// deletion of hub.go. The hub USES the dialer rather than dialing
+	// itself — behaviour is identical.
+	dialer, err := NewPeerDialer(certFile, keyFile, caFile)
 	if err != nil {
 		return nil, fmt.Errorf("building bolt TLS credentials: %w", err)
 	}
@@ -107,27 +107,27 @@ func NewHub(ctx context.Context, bootstrapPeers []string, certFile, keyFile, caF
 	}
 
 	for _, addr := range bootstrapPeers {
-		// NewClient is lazy: it never blocks and only errors on a
+		// PeerDialer.Dial is lazy: it never blocks and only errors on a
 		// malformed target. The connection opens on the first RPC and
 		// gRPC reconnects in the background, so an unreachable bootstrap
 		// peer no longer fails Hub construction.
-		conn, err := grpc.NewClient(addr,
-			grpc.WithTransportCredentials(tlsCreds),
-		)
+		//
+		// id stays the addr (temporary handle) until the peer announces
+		// its own pubkey via the signed BoltStatusReport (Phase 1) and
+		// we pin it; patterns stay empty until the CRDT merge populates
+		// them.
+		pc, err := dialer.Dial(addr, addr, nil)
 		if err != nil {
 			// Close any already-opened connections.
 			h.Close()
 			return nil, fmt.Errorf("connecting to bootstrap peer at %s: %w", addr, err)
 		}
 
-		// id stays empty until the peer announces its own pubkey via the
-		// signed BoltStatusReport (Phase 1) and we pin it; patterns
-		// stay empty until the CRDT merge populates them.
 		h.bolts = append(h.bolts, boltConn{
-			id:    addr, // temporary handle until pubkey lands via announcement
-			addr:  addr,
-			conn:  conn,
-			admin: pb.NewVigoAdminClient(conn),
+			id:    pc.ID,
+			addr:  pc.Addr,
+			conn:  pc.Conn,
+			admin: pc.Admin,
 		})
 		slog.Info("connected to bootstrap peer", "addr", addr)
 	}
@@ -776,28 +776,4 @@ func (h *Hub) DrainBolt(ctx context.Context, boltID, targetBoltID string) (*Drai
 
 	slog.Info("bolt drained", "bolt_id", boltID, "moved", result.Moved, "failed", result.Failed)
 	return result, nil
-}
-
-// buildClientTLS creates TLS credentials for the hub's connections to bolts.
-func buildClientTLS(certFile, keyFile, caFile string) (credentials.TransportCredentials, error) {
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, fmt.Errorf("loading cert/key: %w", err)
-	}
-
-	caCert, err := os.ReadFile(caFile)
-	if err != nil {
-		return nil, fmt.Errorf("reading CA file: %w", err)
-	}
-
-	caPool := x509.NewCertPool()
-	if !caPool.AppendCertsFromPEM(caCert) {
-		return nil, fmt.Errorf("failed to add CA cert to pool")
-	}
-
-	return credentials.NewTLS(&tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      caPool,
-		MinVersion:   tls.VersionTLS13,
-	}), nil
 }

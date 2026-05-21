@@ -21,6 +21,7 @@ import (
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/bolt"
 	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/spanner"
 )
 
@@ -42,7 +43,8 @@ import (
 // makes. The bundle's signature + single-use token are the
 // authorization factors.
 
-// SpannerAdmissionHandler serves the membership-ceremony endpoints.
+// SpannerAdmissionHandler serves the membership-ceremony endpoints
+// plus the Slice 2-ii-a fleet-observability snapshot endpoint.
 type SpannerAdmissionHandler struct {
 	sqlDB       *sql.DB // for the atomic ConsumeToken+InsertBolt transaction
 	queries     *db.Queries
@@ -52,6 +54,16 @@ type SpannerAdmissionHandler struct {
 	patterns    []string // this bolt's configured pattern claims
 	auditWriter auditRecorder
 	httpClient  *http.Client // for the cross-vigosrv /admit call from /join
+	// fleetIndex is the local observability source for the Slice
+	// 2-ii-a /fleet-snapshot endpoint. nil → /fleet-snapshot 503s.
+	fleetIndex *fleet.FleetIndex
+}
+
+// SetFleetIndex attaches the in-memory fleet index that backs the
+// Slice 2-ii-a /fleet-snapshot endpoint. Wired in main.go where the
+// index is in scope.
+func (h *SpannerAdmissionHandler) SetFleetIndex(fi *fleet.FleetIndex) {
+	h.fleetIndex = fi
 }
 
 // NewSpannerAdmissionHandler constructs the ceremony handler. boltID
@@ -100,6 +112,12 @@ func (h *SpannerAdmissionHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/spanner/bolt/join", admin(http.HandlerFunc(h.handleJoin)))
 	mux.Handle("GET /api/v1/spanner/roster", read(http.HandlerFunc(h.handleRoster)))
 	mux.Handle("GET /api/v1/spanner/snapshot", read(http.HandlerFunc(h.handleSnapshot)))
+	// Slice 2-ii-a: the signed fleet-observability snapshot. Kept
+	// SEPARATE from /snapshot (admissions) — different consistency
+	// model + size profile. A peer's gossiper GETs it on the Tier-2
+	// cadence and stores the verified result in its observability
+	// cache for cache-aggregated admin reads.
+	mux.Handle("GET /api/v1/spanner/fleet-snapshot", read(http.HandlerFunc(h.handleFleetSnapshot)))
 }
 
 // localPubkeyHex returns the local bolt pubkey as a lowercase hex

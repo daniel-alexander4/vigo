@@ -447,6 +447,72 @@ func TestTier1IgnoresOwnEcho(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------
+// Slice 2-ii-a — Tier-1 convergence-counter propagation into the
+// observability cache.
+// ---------------------------------------------------------------------
+
+// TestTier1CountersUpdateObservabilityCache verifies that a valid,
+// signed digest from a known roster member folds its convergence
+// counters into the listener's observability cache — the 30s-fresh
+// counter fast-path.
+func TestTier1CountersUpdateObservabilityCache(t *testing.T) {
+	f := newTier1Fixture(t)
+	peerPub, peerKey, _ := ed25519.GenerateKey(nil)
+	peerHex := hex.EncodeToString(peerPub)
+	f.seedRoster(f.signedRow(peerHex, "peer.example.com", 2, ""))
+
+	counters := ConvergenceCounters{Total: 42, Converged: 40, Failed: 2}
+	msg := &digestMessage{
+		SpannerID:    testSpannerID,
+		BoltPubkey:   peerHex,
+		RosterDigest: f.localDigest(), // matching digest — no pull, but counters still cache
+		Convergence:  counters,
+		SentAt:       time.Now().UnixMilli(),
+	}
+	if err := signDigestMessage(peerKey, msg); err != nil {
+		t.Fatalf("sign digest: %v", err)
+	}
+
+	f.handle(msg)
+
+	got := f.g.observ.Get(peerHex)
+	if got == nil {
+		t.Fatal("Tier-1 digest did not create an observability-cache entry")
+	}
+	if got.Convergence != counters {
+		t.Errorf("cached counters = %+v, want %+v", got.Convergence, counters)
+	}
+}
+
+// TestTier1BadSignatureDoesNotCacheCounters confirms a digest whose
+// signature does not verify never reaches the observability cache.
+func TestTier1BadSignatureDoesNotCacheCounters(t *testing.T) {
+	f := newTier1Fixture(t)
+	peerPub, _, _ := ed25519.GenerateKey(nil)
+	peerHex := hex.EncodeToString(peerPub)
+	f.seedRoster(f.signedRow(peerHex, "peer.example.com", 2, ""))
+
+	// Sign with the WRONG key.
+	_, wrongKey, _ := ed25519.GenerateKey(nil)
+	msg := &digestMessage{
+		SpannerID:    testSpannerID,
+		BoltPubkey:   peerHex,
+		RosterDigest: "x",
+		Convergence:  ConvergenceCounters{Total: 99},
+		SentAt:       time.Now().UnixMilli(),
+	}
+	if err := signDigestMessage(wrongKey, msg); err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+
+	f.handle(msg)
+
+	if f.g.observ.Get(peerHex) != nil {
+		t.Error("a bad-signature Tier-1 digest cached counters")
+	}
+}
+
+// ---------------------------------------------------------------------
 // Best-effort socket integration test — skips when multicast is
 // unavailable (CI/sandbox).
 // ---------------------------------------------------------------------

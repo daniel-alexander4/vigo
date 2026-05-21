@@ -27,6 +27,24 @@ type SpannerStatus struct {
 	LocalBoltPubkey string               `json:"local_bolt_pubkey,omitempty"`
 	Bolts           []spanner.BoltStatus `json:"bolts,omitempty"`
 	BoltPins        []BoltPinView        `json:"bolt_pins,omitempty"`
+	// PeerObservability surfaces the Slice 2-ii-a gossip-backed
+	// per-peer fleet facts in peer-equal mode (no hub). Empty when
+	// running with a hub or in standalone mode.
+	PeerObservability []SpannerPeerView `json:"peer_observability,omitempty"`
+}
+
+// SpannerPeerView is the operator-visible projection of one peer
+// bolt's cached observability entry — the envoy count, convergence
+// breakdown, and how stale the data is.
+type SpannerPeerView struct {
+	BoltPubkey         string `json:"bolt_pubkey"`
+	EnvoyCount         int    `json:"envoy_count"`
+	Converged          int    `json:"converged"`
+	Degraded           int    `json:"degraded"`
+	Failed             int    `json:"failed"`
+	NoData             int    `json:"no_data"`
+	Offline            int    `json:"offline"`
+	SnapshotAgeSeconds int64  `json:"snapshot_age_seconds"`
 }
 
 // BoltPinView is the operator-visible projection of a
@@ -42,12 +60,17 @@ type BoltPinView struct {
 
 // SpannerHandler serves spanner status endpoints. Phase 2A keeps the
 // hub-as-bootstrap-rendezvous shape for admin-routing under ADR-026;
-// Phase 3 retires the hub entirely.
+// Phase 3 retires the hub entirely. In peer-equal mode (no hub) the
+// bolt drill-downs are served from the Slice 2-ii-a observability
+// cache via spannerAdmin.
 type SpannerHandler struct {
 	mode        config.SpannerMode
 	spannerID   string
 	localPubkey string // first-16-char hex of the local bolt identity (or "" if absent)
 	hub         *spanner.Hub
+	// spannerAdmin drives the peer-equal observability surfaces (Slice
+	// 2-ii-a). nil in standalone mode or before it is wired.
+	spannerAdmin *spanner.SpannerAdmin
 }
 
 // NewSpannerHandler creates a spanner handler.
@@ -58,6 +81,13 @@ func NewSpannerHandler(mode config.SpannerMode, spannerID, localPubkey string, h
 		localPubkey: localPubkey,
 		hub:         hub,
 	}
+}
+
+// SetSpannerAdmin attaches the peer-equal admin-read driver (Slice
+// 2-ii-a) so the status + bolt-drilldown surfaces work in peer-equal
+// mode where there is no hub.
+func (h *SpannerHandler) SetSpannerAdmin(a *spanner.SpannerAdmin) {
+	h.spannerAdmin = a
 }
 
 // RegisterRoutes mounts spanner endpoints on the given mux. Mutations
@@ -76,6 +106,14 @@ func (h *SpannerHandler) RegisterRoutes(mux *http.ServeMux) {
 		mux.Handle("POST /api/v1/spanner/bolts/{id}/push", admin(http.HandlerFunc(h.handleBoltPush)))
 		mux.Handle("POST /api/v1/spanner/reassign", admin(http.HandlerFunc(h.handleReassign)))
 		mux.Handle("POST /api/v1/spanner/bolts/{id}/drain", admin(http.HandlerFunc(h.handleDrain)))
+	} else {
+		// Peer-equal mode (Slice 2-ii-a): the bolt drill-downs are
+		// served from the gossip-backed observability cache rather
+		// than a hub fan-out. envoys is the cached per-bolt roster;
+		// the mutating push/reassign/drain verbs are hub-only and
+		// stay retired here (gossip-driven action propagation is a
+		// later slice).
+		mux.Handle("GET /api/v1/spanner/bolts/{id}/envoys", read(http.HandlerFunc(h.handlePeerBoltEnvoys)))
 	}
 }
 
@@ -108,10 +146,47 @@ func (h *SpannerHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 				LastSeen:  pin.LastSeen.UTC().Format(time.RFC3339),
 			})
 		}
+	} else if h.spannerAdmin != nil {
+		// Peer-equal mode (Slice 2-ii-a): surface the gossip-backed
+		// per-peer observability instead of a hub fan-out.
+		now := time.Now()
+		for pubkey, p := range h.spannerAdmin.AllPeerObservability() {
+			view := SpannerPeerView{
+				BoltPubkey: pubkey,
+				EnvoyCount: len(p.Envoys),
+				Converged:  p.Convergence.Converged,
+				Degraded:   p.Convergence.Degraded,
+				Failed:     p.Convergence.Failed,
+				NoData:     p.Convergence.NoData,
+				Offline:    p.Convergence.Offline,
+			}
+			if !p.UpdatedAt.IsZero() {
+				view.SnapshotAgeSeconds = int64(now.Sub(p.UpdatedAt).Seconds())
+			}
+			resp.PeerObservability = append(resp.PeerObservability, view)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
+}
+
+// handlePeerBoltEnvoys serves one peer bolt's cached envoy roster in
+// peer-equal mode — the gossip-backed analog of the hub-fan-out
+// handleBoltEnvoys. The {id} path value is the peer bolt's pubkey-hex.
+func (h *SpannerHandler) handlePeerBoltEnvoys(w http.ResponseWriter, r *http.Request) {
+	if h.spannerAdmin == nil {
+		writeError(w, http.StatusServiceUnavailable, "spanner observability unavailable")
+		return
+	}
+	id := r.PathValue("id")
+	p := h.spannerAdmin.PeerObservability(id)
+	if p == nil {
+		writeError(w, http.StatusNotFound, "no cached observability for bolt "+id)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"envoys": p.Envoys})
 }
 
 // formatHexShort returns first-16-char lowercase hex of pk.

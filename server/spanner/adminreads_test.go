@@ -1,0 +1,283 @@
+// Copyright (c) 2026 Alexander4, LLC
+// SPDX-License-Identifier: LicenseRef-Proprietary
+
+package spanner
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/testutil"
+	"google.golang.org/grpc"
+)
+
+// Spanner Slice 2-ii-a — SpannerAdmin local-path + owning-bolt-routing
+// tests. The fanout path (gRPC fan-out) is covered by the multi-bolt
+// integration test in server/grpc, which has the mTLS test harness.
+
+// newAdminFixture builds a SpannerAdmin over a freshly migrated DB,
+// with a populated observability cache and local-bolt sources.
+func newAdminFixture(t *testing.T) *SpannerAdmin {
+	t.Helper()
+	sqlDB := testutil.OpenMigratedTestDB(t)
+	q := db.New(sqlDB)
+	a := NewSpannerAdmin(q, NewObservabilityCache(), nil, "ownbolt", FallbackAdminLocal, "1530")
+	return a
+}
+
+// TestAggregateEnvoysLocal folds the local bolt's roster together with
+// every cached peer's roster.
+func TestAggregateEnvoysLocal(t *testing.T) {
+	a := newAdminFixture(t)
+	a.SetLocalSources(
+		func() ConvergenceCounters { return ConvergenceCounters{Total: 1, Converged: 1} },
+		func() []EnvoyLite { return []EnvoyLite{{ID: "local-1", Hostname: "lh1"}} },
+	)
+	now := time.Now()
+	a.observ.UpdateFull("peerA", []EnvoyLite{{ID: "a-1"}, {ID: "a-2"}}, ConvergenceCounters{Total: 2}, now)
+	a.observ.UpdateFull("peerB", []EnvoyLite{{ID: "b-1"}}, ConvergenceCounters{Total: 1}, now.Add(-time.Minute))
+
+	envoys, oldest := a.AggregateEnvoysLocal()
+	if len(envoys) != 4 {
+		t.Fatalf("aggregated envoy count = %d, want 4 (1 local + 3 peer)", len(envoys))
+	}
+	// The oldest contributing peer snapshot is peerB's.
+	if !oldest.Equal(now.Add(-time.Minute)) {
+		t.Errorf("oldest = %v, want %v", oldest, now.Add(-time.Minute))
+	}
+}
+
+// TestAggregateConvergenceLocal sums the local bolt's counters with
+// every cached peer's counters.
+func TestAggregateConvergenceLocal(t *testing.T) {
+	a := newAdminFixture(t)
+	a.SetLocalSources(
+		func() ConvergenceCounters {
+			return ConvergenceCounters{Total: 10, Converged: 8, Failed: 2}
+		},
+		func() []EnvoyLite { return nil },
+	)
+	now := time.Now()
+	a.observ.UpdateFull("peerA", nil, ConvergenceCounters{Total: 5, Converged: 5}, now)
+	a.observ.UpdateFull("peerB", nil, ConvergenceCounters{Total: 3, Converged: 1, Degraded: 2}, now)
+
+	counters, _ := a.AggregateConvergenceLocal()
+	want := ConvergenceCounters{Total: 18, Converged: 14, Degraded: 2, Failed: 2}
+	if counters != want {
+		t.Errorf("aggregated counters = %+v, want %+v", counters, want)
+	}
+}
+
+// TestAggregateConvergenceLocalNoPeers — a bolt with no cached peers
+// reports only its own counters and a zero oldest-update.
+func TestAggregateConvergenceLocalNoPeers(t *testing.T) {
+	a := newAdminFixture(t)
+	a.SetLocalSources(
+		func() ConvergenceCounters { return ConvergenceCounters{Total: 4, Converged: 4} },
+		func() []EnvoyLite { return nil },
+	)
+	counters, oldest := a.AggregateConvergenceLocal()
+	if counters.Total != 4 || counters.Converged != 4 {
+		t.Errorf("counters = %+v, want only the local bolt's", counters)
+	}
+	if !oldest.IsZero() {
+		t.Error("oldest should be the zero time when no peers contribute")
+	}
+}
+
+// TestOwningBoltHostname resolves an envoy to its serving peer bolt
+// from the cached rosters, with the hostname read from the
+// authenticated spanner_bolts roster (not the gossiped data).
+func TestOwningBoltHostname(t *testing.T) {
+	sqlDB := testutil.OpenMigratedTestDB(t)
+	q := db.New(sqlDB)
+	a := NewSpannerAdmin(q, NewObservabilityCache(), nil, "ownbolt", FallbackAdminLocal, "1530")
+
+	// Seed a roster row for the peer so its hostname can be resolved.
+	peerHex := hexKey(0x11)
+	if err := q.InsertBolt(t.Context(), db.InsertBoltParams{
+		Pubkey:        peerHex,
+		Hostname:      "peer-one.example.com",
+		AdmittedAt:    1,
+		AdmittedBy:    peerHex,
+		PatternClaims: "[]",
+		Signature:     []byte("sig"),
+	}); err != nil {
+		t.Fatalf("InsertBolt: %v", err)
+	}
+	// The cache says peerHex serves envoy "e-remote".
+	a.observ.UpdateFull(peerHex, []EnvoyLite{{ID: "e-remote", Hostname: "rh"}}, ConvergenceCounters{}, time.Now())
+
+	pubkey, hostname, remote := a.OwningBoltHostname(context.Background(), "e-remote")
+	if !remote {
+		t.Fatal("OwningBoltHostname did not mark a cached peer's envoy as remote")
+	}
+	if pubkey != peerHex {
+		t.Errorf("owning pubkey = %q, want %q", pubkey, peerHex)
+	}
+	if hostname != "peer-one.example.com" {
+		t.Errorf("owning hostname = %q, want the roster value", hostname)
+	}
+
+	// An envoy not in any cached peer roster is not remote.
+	if _, _, r := a.OwningBoltHostname(context.Background(), "e-local"); r {
+		t.Error("a non-peer envoy was reported as remote")
+	}
+}
+
+// --- fanout-path + multi-bolt integration ---
+
+// stubAdminClient is a pb.VigoAdminClient that answers the three
+// fleet-wide reads from canned per-bolt data. Every other RPC panics
+// — the fanout path only calls these three.
+type stubAdminClient struct {
+	pb.VigoAdminClient
+	envoys []*pb.Envoy
+	runs   []*pb.Run
+	conv   *pb.GetConvergenceSummaryResponse
+}
+
+func (s *stubAdminClient) ListEnvoys(_ context.Context, _ *pb.ListEnvoysRequest, _ ...grpc.CallOption) (*pb.ListEnvoysResponse, error) {
+	return &pb.ListEnvoysResponse{Envoys: s.envoys}, nil
+}
+
+func (s *stubAdminClient) ListRuns(_ context.Context, _ *pb.ListRunsRequest, _ ...grpc.CallOption) (*pb.ListRunsResponse, error) {
+	return &pb.ListRunsResponse{Runs: s.runs}, nil
+}
+
+func (s *stubAdminClient) GetConvergenceSummary(_ context.Context, _ *pb.GetConvergenceSummaryRequest, _ ...grpc.CallOption) (*pb.GetConvergenceSummaryResponse, error) {
+	return s.conv, nil
+}
+
+// TestFanoutMultiBoltAggregation stands up a SpannerAdmin in fanout
+// mode over two simulated peer bolts (no hub) and asserts the
+// fleet-wide reads return the union of both bolts' data.
+func TestFanoutMultiBoltAggregation(t *testing.T) {
+	a := NewSpannerAdmin(nil, NewObservabilityCache(), nil, "ownbolt", FallbackAdminFanout, "1530")
+
+	boltA := &stubAdminClient{
+		envoys: []*pb.Envoy{{Id: "a1", Hostname: "a1.host"}, {Id: "a2", Hostname: "a2.host"}},
+		runs:   []*pb.Run{{Id: "ra1"}},
+		conv:   &pb.GetConvergenceSummaryResponse{Total: 2, Converged: 2},
+	}
+	boltB := &stubAdminClient{
+		envoys: []*pb.Envoy{{Id: "b1", Hostname: "b1.host"}},
+		runs:   []*pb.Run{{Id: "rb1"}, {Id: "rb2"}},
+		conv:   &pb.GetConvergenceSummaryResponse{Total: 3, Converged: 1, Failed: 2},
+	}
+	// Inject the two peer connections — bypasses the real dialer's
+	// same-port assumption (two in-process servers can't share a port).
+	a.dialPeers = func(_ context.Context) ([]*PeerConn, error) {
+		return []*PeerConn{
+			{ID: "boltA", Admin: boltA},
+			{ID: "boltB", Admin: boltB},
+		}, nil
+	}
+
+	envoys, err := a.AggregateEnvoysFanout(t.Context())
+	if err != nil {
+		t.Fatalf("AggregateEnvoysFanout: %v", err)
+	}
+	if len(envoys) != 3 {
+		t.Errorf("fanout envoy count = %d, want 3 (2 from A + 1 from B)", len(envoys))
+	}
+
+	conv, err := a.AggregateConvergenceFanout(t.Context())
+	if err != nil {
+		t.Fatalf("AggregateConvergenceFanout: %v", err)
+	}
+	if conv.Total != 5 || conv.Converged != 3 || conv.Failed != 2 {
+		t.Errorf("fanout convergence = %+v, want Total 5 / Converged 3 / Failed 2", conv)
+	}
+
+	runs, err := a.AggregateRunsFanout(t.Context(), "", 20)
+	if err != nil {
+		t.Fatalf("AggregateRunsFanout: %v", err)
+	}
+	if len(runs) != 3 {
+		t.Errorf("fanout run count = %d, want 3", len(runs))
+	}
+}
+
+// TestFanoutAndLocalShapeParity asserts the fanout and local paths
+// produce the same fleet-wide answer when fed equivalent data — the
+// operator may flip fallback_admin without the response changing
+// shape. The local path reads the observability cache; the fanout
+// path queries peers live. Here both see the same two-bolt fleet.
+func TestFanoutAndLocalShapeParity(t *testing.T) {
+	// Two peer bolts, plus the local bolt's own slice.
+	localEnvoys := []EnvoyLite{{ID: "L1", Hostname: "l1"}}
+	localConv := ConvergenceCounters{Total: 1, Converged: 1}
+	peerAEnvoys := []EnvoyLite{{ID: "a1"}, {ID: "a2"}}
+	peerAConv := ConvergenceCounters{Total: 2, Converged: 2}
+	peerBEnvoys := []EnvoyLite{{ID: "b1"}}
+	peerBConv := ConvergenceCounters{Total: 3, Converged: 1, Failed: 2}
+
+	// --- local path ---
+	local := NewSpannerAdmin(nil, NewObservabilityCache(), nil, "ownbolt", FallbackAdminLocal, "1530")
+	local.SetLocalSources(
+		func() ConvergenceCounters { return localConv },
+		func() []EnvoyLite { return localEnvoys },
+	)
+	now := time.Now()
+	local.observ.UpdateFull("peerA", peerAEnvoys, peerAConv, now)
+	local.observ.UpdateFull("peerB", peerBEnvoys, peerBConv, now)
+
+	localE, _ := local.AggregateEnvoysLocal()
+	localC, _ := local.AggregateConvergenceLocal()
+
+	// --- fanout path ---
+	fanout := NewSpannerAdmin(nil, NewObservabilityCache(), nil, "ownbolt", FallbackAdminFanout, "1530")
+	fanout.dialPeers = func(_ context.Context) ([]*PeerConn, error) {
+		return []*PeerConn{
+			{ID: "peerA", Admin: &stubAdminClient{
+				conv: &pb.GetConvergenceSummaryResponse{Total: int32(peerAConv.Total), Converged: int32(peerAConv.Converged)},
+			}},
+			{ID: "peerB", Admin: &stubAdminClient{
+				conv: &pb.GetConvergenceSummaryResponse{Total: int32(peerBConv.Total), Converged: int32(peerBConv.Converged), Failed: int32(peerBConv.Failed)},
+			}},
+		}, nil
+	}
+	fanoutC, err := fanout.AggregateConvergenceFanout(t.Context())
+	if err != nil {
+		t.Fatalf("AggregateConvergenceFanout: %v", err)
+	}
+	// fanout returns only the peer sums — the gRPC layer folds in the
+	// local bolt's own counters. Do the same fold here.
+	fanoutTotal := int(fanoutC.Total) + localConv.Total
+	fanoutConverged := int(fanoutC.Converged) + localConv.Converged
+	fanoutFailed := int(fanoutC.Failed) + localConv.Failed
+
+	// Both paths must see the same fleet-wide totals.
+	if localC.Total != fanoutTotal || localC.Converged != fanoutConverged || localC.Failed != fanoutFailed {
+		t.Errorf("local vs fanout convergence parity: local=%+v fanout=(Total %d, Converged %d, Failed %d)",
+			localC, fanoutTotal, fanoutConverged, fanoutFailed)
+	}
+	if localC.Total != 6 {
+		t.Errorf("aggregate total = %d, want 6 (1 local + 2 + 3 peers)", localC.Total)
+	}
+	// Local path also sees every envoy (cache + local source).
+	if len(localE) != 4 {
+		t.Errorf("local aggregate envoy count = %d, want 4", len(localE))
+	}
+}
+
+// TestFanoutFlag reflects the configured fallback_admin.
+func TestFanoutFlag(t *testing.T) {
+	local := NewSpannerAdmin(nil, NewObservabilityCache(), nil, "x", FallbackAdminLocal, "")
+	if local.Fanout() {
+		t.Error("local mode reported Fanout() true")
+	}
+	fanout := NewSpannerAdmin(nil, NewObservabilityCache(), nil, "x", FallbackAdminFanout, "")
+	if !fanout.Fanout() {
+		t.Error("fanout mode reported Fanout() false")
+	}
+	// Empty fallback_admin defaults to local.
+	def := NewSpannerAdmin(nil, NewObservabilityCache(), nil, "x", "", "")
+	if def.Fanout() {
+		t.Error("empty fallback_admin should default to local")
+	}
+}

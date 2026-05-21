@@ -1028,6 +1028,9 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// spanner, mints join invites, admits joining bolts. Needs the
 	// local bolt identity to sign admission rows + invite bundles.
 	spannerAdmissionHandler := api.NewSpannerAdmissionHandler(s.db, s.queries, s.boltID, s.cfg.Spanner.SpannerID, s.cfg.Server.Hostname, s.cfg.Spanner.Patterns, s.auditWriter, nil)
+	// Slice 2-ii-a: the in-memory fleet index backs the signed
+	// /fleet-snapshot endpoint a peer's gossiper pulls.
+	spannerAdmissionHandler.SetFleetIndex(s.fleetIndex)
 
 	// Spanner Slice 2-i-a + 2-i-b — roster-replication gossiper
 	// (ADR-026). On every non-standalone bolt: Tier-2 pulls each peer's
@@ -1059,6 +1062,44 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			tier1,
 			nil,
 		)
+		// Slice 2-ii-a: the local-counters source for outbound Tier-1
+		// digests — peers get 30s-fresh convergence counters without
+		// waiting for the 5m Tier-2 fleet-snapshot pull.
+		if s.fleetIndex != nil {
+			s.spannerGossip.SetLocalCounters(func() spanner.ConvergenceCounters {
+				return api.FleetCountersToSpanner(s.fleetIndex.ConvergenceSummary())
+			})
+		}
+
+		// Slice 2-ii-a: the peer-equal admin-read driver. Shares the
+		// Gossiper's observability cache; the fanout path dials peers
+		// through a PeerDialer. Attached to the AdminService so the
+		// three fleet-wide reads route through it instead of the
+		// pure-local path.
+		peerDialer, err := spanner.NewPeerDialer(s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile)
+		if err != nil {
+			return nil, fmt.Errorf("building spanner peer dialer: %w", err)
+		}
+		spannerAdmin := spanner.NewSpannerAdmin(
+			s.queries,
+			s.spannerGossip.ObservabilityCache(),
+			peerDialer,
+			fullBoltPubkeyHex(s.boltID),
+			s.cfg.Spanner.FallbackAdmin,
+			grpcListenPort(s.cfg.Server.GRPCListen),
+		)
+		if s.fleetIndex != nil {
+			spannerAdmin.SetLocalSources(
+				func() spanner.ConvergenceCounters {
+					return api.FleetCountersToSpanner(s.fleetIndex.ConvergenceSummary())
+				},
+				func() []spanner.EnvoyLite {
+					return api.FleetEnvoysToLite(s.fleetIndex.AllEnvoys())
+				},
+			)
+		}
+		s.adminSvc.SetSpannerAdmin(spannerAdmin)
+		spannerHandler.SetSpannerAdmin(spannerAdmin)
 	}
 
 	taskHandler := api.NewTaskHandler(s.queries, s.agentSvc, s.cfg.Task.RequireDefinition)

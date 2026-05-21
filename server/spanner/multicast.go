@@ -52,25 +52,34 @@ const multicastReadBuf = 4096
 // loops back to check ctx — the clean-shutdown poll interval.
 const multicastReadDeadline = 2 * time.Second
 
-// digestMessage is the signed Tier-1 roster-digest announcement a bolt
-// multicasts every snapshot.tier1_interval. It carries no hostname —
-// the pull target is resolved from the local roster, never the wire.
+// digestMessage is the signed Tier-1 announcement a bolt multicasts
+// every snapshot.tier1_interval. It carries no hostname — the pull
+// target is resolved from the local roster, never the wire.
+//
+// Slice 2-ii-a extends it with the sending bolt's convergence counters
+// (Convergence). A listener that accepts the message updates its
+// observability cache with these counters immediately — 30s-fresh
+// fleet-convergence data without waiting for the 5m Tier-2
+// /fleet-snapshot pull. The signature already covers the new field
+// because it is part of digestMessageContent below.
 type digestMessage struct {
-	SpannerID    string `json:"spanner_id"`    // federation anchor; must match the listener's
-	BoltPubkey   string `json:"bolt_pubkey"`   // sending bolt's pubkey-hex; looked up in the local roster
-	RosterDigest string `json:"roster_digest"` // RosterDigest of the sender's current roster
-	SentAt       int64  `json:"sent_at"`       // ms-since-epoch; observability only
-	Signature    []byte `json:"signature"`     // ed25519 over the content fields
+	SpannerID    string              `json:"spanner_id"`    // federation anchor; must match the listener's
+	BoltPubkey   string              `json:"bolt_pubkey"`   // sending bolt's pubkey-hex; looked up in the local roster
+	RosterDigest string              `json:"roster_digest"` // RosterDigest of the sender's current roster
+	Convergence  ConvergenceCounters `json:"convergence"`   // sender's fleet-convergence counters (Slice 2-ii-a)
+	SentAt       int64               `json:"sent_at"`       // ms-since-epoch; also the observability LWW key
+	Signature    []byte              `json:"signature"`     // ed25519 over the content fields
 }
 
 // digestMessageContent is the canonical content of a digestMessage —
 // every field except Signature. Marshalled deterministically for
 // sign/verify, mirroring admission.go's inviteBundleContent.
 type digestMessageContent struct {
-	SpannerID    string `json:"spanner_id"`
-	BoltPubkey   string `json:"bolt_pubkey"`
-	RosterDigest string `json:"roster_digest"`
-	SentAt       int64  `json:"sent_at"`
+	SpannerID    string              `json:"spanner_id"`
+	BoltPubkey   string              `json:"bolt_pubkey"`
+	RosterDigest string              `json:"roster_digest"`
+	Convergence  ConvergenceCounters `json:"convergence"`
+	SentAt       int64               `json:"sent_at"`
 }
 
 // marshalDigestContent serializes a digestMessage's content fields
@@ -80,6 +89,7 @@ func marshalDigestContent(m *digestMessage) ([]byte, error) {
 		SpannerID:    m.SpannerID,
 		BoltPubkey:   m.BoltPubkey,
 		RosterDigest: m.RosterDigest,
+		Convergence:  m.Convergence,
 		SentAt:       m.SentAt,
 	})
 }
@@ -193,10 +203,15 @@ func (g *Gossiper) sendDigest(ctx context.Context, addr *net.UDPAddr) {
 		slog.Warn("spanner tier-1 sender: listing local roster failed; skipping send", "error", err)
 		return
 	}
+	var counters ConvergenceCounters
+	if g.localCounters != nil {
+		counters = g.localCounters()
+	}
 	msg := &digestMessage{
 		SpannerID:    g.spannerID,
 		BoltPubkey:   g.ownPubkey,
 		RosterDigest: RosterDigest(roster),
+		Convergence:  counters,
 		SentAt:       time.Now().UnixMilli(),
 	}
 	if err := signDigestMessage(g.signingKey, msg); err != nil {
@@ -354,6 +369,15 @@ func (g *Gossiper) handleTier1Message(ctx context.Context, msg *digestMessage, f
 	if err := verifyDigestMessage(ed25519.PublicKey(senderPub), msg); err != nil {
 		slog.Warn("spanner tier-1: ignoring digest with an invalid signature", "sender", msg.BoltPubkey, "error", err)
 		return
+	}
+
+	// Slice 2-ii-a: the digest is verified and from a known member —
+	// fold its convergence counters into the observability cache so
+	// fleet-wide admin reads see 30s-fresh counters without waiting
+	// for the 5m Tier-2 /fleet-snapshot pull. The envoy roster (large,
+	// slow Tier-2 data) is left untouched. last-writer-wins by SentAt.
+	if g.observ != nil {
+		g.observ.UpdateCounters(msg.BoltPubkey, msg.Convergence, time.UnixMilli(msg.SentAt))
 	}
 
 	// (4) digest comparison — a match needs no pull.

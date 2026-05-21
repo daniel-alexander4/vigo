@@ -22,6 +22,7 @@ import (
 	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/integrations"
+	"git.alexander4.io/vigo/server/spanner"
 )
 
 // ---------- Approved Patterns ----------
@@ -96,13 +97,32 @@ func (s *AdminService) RevokeApprovedPattern(ctx context.Context, req *pb.Revoke
 // ---------- Envoys ----------
 
 func (s *AdminService) ListEnvoys(ctx context.Context, req *pb.ListEnvoysRequest) (*pb.ListEnvoysResponse, error) {
-	// Hub mode: aggregate from all bolts.
+	// Dispatch (Slice 2-ii-a):
+	//   (a) hub != nil           → hub fan-out (unchanged; until Phase 3)
+	//   (b) spannerAdmin, fanout → live fan-out to every roster bolt
+	//   (c) spannerAdmin, local  → aggregate from the observability cache
+	//   (d) standalone           → the pure-local path below
 	if s.hub != nil {
 		envoys, err := s.hub.AggregateListEnvoys(ctx)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "aggregating envoys from bolts: %v", err)
 		}
 		return &pb.ListEnvoysResponse{Envoys: envoys}, nil
+	}
+	if s.spannerAdmin != nil {
+		if s.spannerAdmin.Fanout() {
+			envoys, err := s.spannerAdmin.AggregateEnvoysFanout(ctx)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "fanning out envoys to bolts: %v", err)
+			}
+			// Fold in the local bolt's own envoys (fanout queries
+			// peers; the local bolt is not a peer of itself).
+			envoys = append(envoys, s.localEnvoysProto()...)
+			return &pb.ListEnvoysResponse{Envoys: envoys}, nil
+		}
+		// local path: (local fleetIndex) + (every cached peer).
+		lite, _ := s.spannerAdmin.AggregateEnvoysLocal()
+		return &pb.ListEnvoysResponse{Envoys: envoyLitesToProto(lite)}, nil
 	}
 
 	var envoys []db.Envoy
@@ -294,7 +314,7 @@ func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) 
 // ---------- Runs ----------
 
 func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*pb.ListRunsResponse, error) {
-	// Hub mode: aggregate from all bolts.
+	// Hub mode: aggregate from all bolts (unchanged; until Phase 3).
 	if s.hub != nil {
 		limit := req.Limit
 		if limit <= 0 {
@@ -305,6 +325,49 @@ func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*
 			return nil, status.Errorf(codes.Internal, "aggregating runs from bolts: %v", err)
 		}
 		return &pb.ListRunsResponse{Runs: runs}, nil
+	}
+
+	// Spanner peer-equal run reads (Slice 2-ii-a). Runs are NEVER
+	// gossiped — so there is no observability-cache path for runs:
+	//   - ListRuns(envoy_id): resolve the envoy's owning bolt from
+	//     the cached roster; if a remote peer serves it, gRPC ListRuns
+	//     to that bolt; if local (or unknown), the local path below.
+	//   - ListRuns() global: always a client-side parallel fan-out to
+	//     every roster bolt, merged with the local bolt's runs.
+	//     fallback_admin gates only the cacheable reads
+	//     (envoys/convergence); runs have no cache, so fan-out is
+	//     their sole fleet-wide path.
+	if s.spannerAdmin != nil {
+		spLimit := req.Limit
+		if spLimit <= 0 {
+			spLimit = 20
+		}
+		if req.EnvoyId != "" {
+			if _, err := uuid.Parse(req.EnvoyId); err != nil {
+				return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
+			}
+			if _, hostname, remote := s.spannerAdmin.OwningBoltHostname(ctx, req.EnvoyId); remote && hostname != "" {
+				runs, err := s.spannerAdmin.RunsFromBolt(ctx, hostname, req.EnvoyId, spLimit)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "fetching runs from owning bolt: %v", err)
+				}
+				return &pb.ListRunsResponse{Runs: runs}, nil
+			}
+			// Local (or unknown) envoy — fall through to the local path.
+		} else {
+			runs, err := s.spannerAdmin.AggregateRunsFanout(ctx, "", spLimit)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "fanning out runs to bolts: %v", err)
+			}
+			// Fold in the local bolt's own runs.
+			local, lErr := s.runStore.ListAllRuns(ctx, int64(spLimit))
+			if lErr != nil {
+				return nil, status.Errorf(codes.Internal, "listing local runs: %v", lErr)
+			}
+			runs = append(runs, dbRunsToProto(local)...)
+			return &pb.ListRunsResponse{Runs: runs}, nil
+		}
+		// Per-envoy local/unknown envoys fall through to the pure-local path.
 	}
 
 	limit := int64(req.Limit)
@@ -464,60 +527,40 @@ func (s *AdminService) DeleteWebhook(ctx context.Context, _ *pb.DeleteWebhookReq
 // ---------- Convergence ----------
 
 func (s *AdminService) GetConvergenceSummary(ctx context.Context, _ *pb.GetConvergenceSummaryRequest) (*pb.GetConvergenceSummaryResponse, error) {
-	// Hub mode: aggregate from all bolts.
+	// Dispatch (Slice 2-ii-a) — same four-way shape as ListEnvoys.
 	if s.hub != nil {
 		return s.hub.AggregateConvergenceSummary(ctx)
 	}
-
-	// Get all envoys from DB, then look up latest runs via RunStore.
-	envoys, err := s.queries.ListEnvoys(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing envoys: %v", err)
-	}
-
-	envoyIDs := make([]string, len(envoys))
-	for i, n := range envoys {
-		envoyIDs[i] = n.ID
-	}
-
-	latestRuns, err := s.runStore.LatestRunPerEnvoy(ctx, envoyIDs)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "fetching latest runs: %v", err)
-	}
-
-	counts := make(map[string]int32)
-	for _, n := range envoys {
-		var recent []convergence.RunInfo
-		if run, ok := latestRuns[n.ID]; ok {
-			recent = []convergence.RunInfo{{
-				Status:       run.Status,
-				ChangedCount: run.ChangedCount,
-			}}
+	if s.spannerAdmin != nil {
+		if s.spannerAdmin.Fanout() {
+			agg, err := s.spannerAdmin.AggregateConvergenceFanout(ctx)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "fanning out convergence to bolts: %v", err)
+			}
+			// Fold in the local bolt's own counters — fanout queries
+			// peers; the local bolt is not a peer of itself.
+			foldLocalConvergence(agg, s.localConvergenceCounters())
+			finalizeConvergencePct(agg)
+			return agg, nil
 		}
-
-		counts[convergence.ComputeConvergence(recent)]++
+		// local path: (local fleetIndex) + (every cached peer);
+		// snapshot_age_seconds carries the oldest contributing peer.
+		counters, oldest := s.spannerAdmin.AggregateConvergenceLocal()
+		resp := convergenceCountersToProto(counters)
+		if !oldest.IsZero() {
+			resp.SnapshotAgeSeconds = int64(time.Since(oldest).Seconds())
+		}
+		finalizeConvergencePct(resp)
+		return resp, nil
 	}
 
-	total := int32(len(envoys))
-
-	// Offline envoys excluded from convergence percentage — they represent
-	// powered-off or decommissioned nodes, not health problems.
-	activeTotal := total - counts["offline"]
-	var pct float32
-	if activeTotal > 0 {
-		pct = float32(counts["converged"]) / float32(activeTotal) * 100
-	}
-
-	return &pb.GetConvergenceSummaryResponse{
-		Total:          total,
-		Converged:      counts["converged"],
-		Relapsed:       counts["relapsed"],
-		Diverged:       counts["diverged"],
-		Failed:         counts["failed"],
-		Offline:        counts["offline"],
-		NoData:         counts["no data"],
-		ConvergencePct: pct,
-	}, nil
+	// Standalone path — no hub, no spanner. Source the fleet-wide
+	// counters from the canonical fleet index (the convergence
+	// single-source-of-truth) via the same helper + converter the
+	// spanner-local and fanout paths use, so all three paths agree.
+	resp := convergenceCountersToProto(s.localConvergenceCounters())
+	finalizeConvergencePct(resp)
+	return resp, nil
 }
 
 func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoyConvergenceRequest) (*pb.GetEnvoyConvergenceResponse, error) {
@@ -730,6 +773,121 @@ func (s *AdminService) ReportBoltStatus(ctx context.Context, req *pb.BoltStatusR
 	)
 
 	return &pb.BoltStatusAck{}, nil
+}
+
+// ---------- Spanner peer-equal admin-read helpers (Slice 2-ii-a) ----------
+
+// envoyLiteToProto projects one gossiped spanner.EnvoyLite into the
+// *pb.Envoy wire shape — the same shape dbEnvoyToProto produces, so
+// the local and cache-aggregate paths return identically-shaped
+// responses.
+func envoyLiteToProto(e spanner.EnvoyLite) *pb.Envoy {
+	pe := &pb.Envoy{
+		Id:           e.ID,
+		Hostname:     e.Hostname,
+		IpAddress:    e.IP,
+		Revoked:      e.Revoked,
+		AgentVersion: e.AgentVersion,
+	}
+	if e.EnrolledAtMs > 0 {
+		pe.EnrolledAt = timestamppb.New(time.UnixMilli(e.EnrolledAtMs))
+	}
+	if e.LastSeenMs > 0 {
+		pe.LastSeen = timestamppb.New(time.UnixMilli(e.LastSeenMs))
+	}
+	return pe
+}
+
+// envoyLitesToProto projects a slice of spanner.EnvoyLite.
+func envoyLitesToProto(lites []spanner.EnvoyLite) []*pb.Envoy {
+	out := make([]*pb.Envoy, 0, len(lites))
+	for _, e := range lites {
+		out = append(out, envoyLiteToProto(e))
+	}
+	return out
+}
+
+// localEnvoysProto returns the local bolt's own envoy roster as
+// []*pb.Envoy — folded into the fanout path's merged result (fanout
+// queries peers; the local bolt is not a peer of itself).
+func (s *AdminService) localEnvoysProto() []*pb.Envoy {
+	if s.fleetIndex == nil {
+		return nil
+	}
+	envoys := s.fleetIndex.AllEnvoys()
+	out := make([]*pb.Envoy, 0, len(envoys))
+	for _, es := range envoys {
+		pe := &pb.Envoy{
+			Id:           es.ID,
+			Hostname:     es.Hostname,
+			IpAddress:    es.IP,
+			Revoked:      es.Revoked,
+			AgentVersion: es.AgentVersion,
+		}
+		if !es.EnrolledAt.IsZero() {
+			pe.EnrolledAt = timestamppb.New(es.EnrolledAt)
+		}
+		if !es.LastSeen.IsZero() {
+			pe.LastSeen = timestamppb.New(es.LastSeen)
+		}
+		out = append(out, pe)
+	}
+	return out
+}
+
+// localConvergenceCounters returns the local bolt's own convergence
+// counters as a spanner.ConvergenceCounters.
+func (s *AdminService) localConvergenceCounters() spanner.ConvergenceCounters {
+	if s.fleetIndex == nil {
+		return spanner.ConvergenceCounters{}
+	}
+	c := s.fleetIndex.ConvergenceSummary()
+	return spanner.ConvergenceCounters{
+		Total:     c.Total,
+		Converged: c.Converged,
+		Degraded:  c.Degraded,
+		Failed:    c.Failed,
+		NoData:    c.NoData,
+		Changed:   c.Changed,
+		Diverged:  c.Diverged,
+		Offline:   c.Offline,
+	}
+}
+
+// convergenceCountersToProto projects a spanner.ConvergenceCounters
+// into a *pb.GetConvergenceSummaryResponse. The Relapsed field has no
+// counterpart in the counters axes (it is a legacy proto field) and is
+// left zero. ConvergencePct is filled by finalizeConvergencePct.
+func convergenceCountersToProto(c spanner.ConvergenceCounters) *pb.GetConvergenceSummaryResponse {
+	return &pb.GetConvergenceSummaryResponse{
+		Total:     int32(c.Total),
+		Converged: int32(c.Converged),
+		Failed:    int32(c.Failed),
+		Offline:   int32(c.Offline),
+		NoData:    int32(c.NoData),
+		Diverged:  int32(c.Diverged),
+	}
+}
+
+// foldLocalConvergence adds the local bolt's own counters into a
+// fanout aggregate so the response covers the whole spanner.
+func foldLocalConvergence(agg *pb.GetConvergenceSummaryResponse, local spanner.ConvergenceCounters) {
+	agg.Total += int32(local.Total)
+	agg.Converged += int32(local.Converged)
+	agg.Failed += int32(local.Failed)
+	agg.Offline += int32(local.Offline)
+	agg.NoData += int32(local.NoData)
+	agg.Diverged += int32(local.Diverged)
+}
+
+// finalizeConvergencePct computes ConvergencePct from the aggregate's
+// counters — Offline envoys excluded from the denominator, matching
+// the local and hub paths.
+func finalizeConvergencePct(resp *pb.GetConvergenceSummaryResponse) {
+	activeTotal := resp.Total - resp.Offline
+	if activeTotal > 0 {
+		resp.ConvergencePct = float32(resp.Converged) / float32(activeTotal) * 100
+	}
 }
 
 // ---------- Helpers ----------
