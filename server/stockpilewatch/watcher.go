@@ -212,16 +212,17 @@ func (w *Watcher) pullIntoLive() error {
 		_ = archive.Process.Kill() // best-effort cleanup; the start failure is already being returned
 		return fmt.Errorf("starting tar -x: %w", err)
 	}
-	// Close the writer once archive finishes so tar sees EOF.
-	go func() {
-		_ = archive.Wait()
-		pipeW.Close()
-	}()
-	if err := untar.Wait(); err != nil {
-		return fmt.Errorf("tar -x: %w", err)
+	// archive writes the tarball into the pipe; untar drains it
+	// concurrently. Wait for archive, close the write end so tar sees
+	// EOF, then wait for tar — each command waited exactly once.
+	archiveErr := archive.Wait()
+	pipeW.Close()
+	untarErr := untar.Wait()
+	if archiveErr != nil {
+		return fmt.Errorf("git archive HEAD (no commits yet?): %w", archiveErr)
 	}
-	if err := archive.Wait(); err != nil {
-		return fmt.Errorf("git archive HEAD (no commits yet?): %w", err)
+	if untarErr != nil {
+		return fmt.Errorf("tar -x: %w", untarErr)
 	}
 
 	// Ensure live dir exists.
