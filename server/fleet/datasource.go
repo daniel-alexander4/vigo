@@ -608,6 +608,20 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 			row.LynisSuggestions = parseInt64(v)
 		}
 
+		// SCAP / STIG compliance scan — fleet counts only (scanned, clean,
+		// high-severity failures). No averaged score: cross-profile averages
+		// are meaningless. The scan ran iff it reported a profile.
+		if _, ok := ts.Traits[traits.ScapProfile]; ok {
+			hasScan = true
+			data.ScapScanned++
+			if ts.Traits[traits.ScapClean] == "true" {
+				data.ScapClean++
+			}
+			if parseInt64(ts.Traits[traits.ScapHighFail]) > 0 {
+				data.ScapHighFail++
+			}
+		}
+
 		chkClean := ts.Traits[traits.ChkrootkitClean] != "false"
 		rkhClean := ts.Traits[traits.RkhunterClean] != "false"
 		if _, ok := ts.Traits[traits.ChkrootkitClean]; ok {

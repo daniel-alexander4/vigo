@@ -107,6 +107,10 @@
                 </div>
             </div>
 
+            {{if .Security.ScapScanned}}
+            <p class="text-muted" style="font-size:12px;margin:4px 0 0;">SCAP / STIG: {{.Security.ScapScanned}} scanned &middot; <span class="text-success">{{.Security.ScapClean}} clean</span> &middot; <span class="{{if .Security.ScapHighFail}}text-danger{{end}}">{{.Security.ScapHighFail}} with high-severity failures</span></p>
+            {{end}}
+
             {{/* ── Unique CVEs by Host panel ──
                  Single canonical "CVEs by host" panel. Targeted by the
                  Unique CVEs stat-card click and by every cross-page
@@ -483,6 +487,22 @@
         <span class="sec-card__sev">Score: {{.Score}}/100</span>
     </div>
     <div class="sec-card__body">Warnings: {{.Warnings}} &middot; Suggestions: {{.Suggestions}}</div>
+</div>
+{{end}}
+{{else if eq .Slug "scap"}}{{with .Cached.Scap}}
+<div class="sec-card {{if .Clean}}sec-card--info{{else}}sec-card--high{{end}}">
+    <div class="sec-card__header">
+        <span class="sec-card__cve">SCAP / STIG{{if .Profile}} &mdash; {{.Profile}}{{end}}</span>
+        <span class="sec-card__sev">Score: {{.Score}}/100</span>
+    </div>
+    <div class="sec-card__body">
+        <span class="text-success">{{.Pass}} pass</span> &middot;
+        <span class="{{if .Fail}}text-danger{{end}}">{{.Fail}} fail</span> &middot;
+        {{.NotApplicable}} N/A &middot;
+        {{.TotalRules}} total rule{{if ne .TotalRules 1}}s{{end}}
+    </div>
+    {{if .Fail}}<div class="sec-card__body">Failures by severity &mdash; High: <span class="text-danger">{{.HighFail}}</span> &middot; Medium: <span class="text-warning">{{.MediumFail}}</span> &middot; Low: {{.LowFail}}</div>{{end}}
+    {{if .LastScan}}<div class="sec-card__body text-muted" style="font-size:11px;">Last scan: {{.LastScan}}</div>{{end}}
 </div>
 {{end}}
 {{else if eq .Slug "chkrootkit"}}{{with .Cached.Chkrootkit}}

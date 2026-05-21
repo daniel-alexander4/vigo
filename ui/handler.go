@@ -7076,6 +7076,13 @@ type SecurityScanPageData struct {
 	ClamavInfected int64
 	AideClean      int64
 	AideChanged    int64
+	// SCAP/STIG fleet counts — counts only, never an averaged compliance
+	// score (cross-profile averages are meaningless). ScapScanned is hosts
+	// reporting any SCAP scan; ScapClean is those with no failed rules;
+	// ScapHighFail is those with at least one high-severity failure.
+	ScapScanned    int64
+	ScapClean      int64
+	ScapHighFail   int64
 	ScannedHosts   int64
 	TotalHosts     int64
 	CVEs           []CVEEntry        // deduplicated CVEs across fleet (one per CVE ID)

@@ -53,6 +53,19 @@ const (
 	LynisSuggestions = "security_scan.lynis.suggestions"
 	LynisLastScan    = "security_scan.lynis.last_scan"
 
+	// SCAP / STIG compliance scan summary.
+	ScapProfile       = "security_scan.scap.profile"
+	ScapScore         = "security_scan.scap.score"
+	ScapPass          = "security_scan.scap.pass"
+	ScapFail          = "security_scan.scap.fail"
+	ScapNotApplicable = "security_scan.scap.not_applicable"
+	ScapHighFail      = "security_scan.scap.high_fail"
+	ScapMediumFail    = "security_scan.scap.medium_fail"
+	ScapLowFail       = "security_scan.scap.low_fail"
+	ScapTotalRules    = "security_scan.scap.total_rules"
+	ScapClean         = "security_scan.scap.clean"
+	ScapLastScan      = "security_scan.scap.last_scan"
+
 	// Rootkit detection.
 	ChkrootkitClean    = "security_scan.chkrootkit.clean"
 	ChkrootkitInfected = "security_scan.chkrootkit.infected"

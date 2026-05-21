@@ -38,6 +38,7 @@ type SecurityDrawerCached struct {
 	Trivy      *TrivyCached
 	Debsecan   *DebsecanCached
 	Lynis      *LynisCached
+	Scap       *ScapCached           // nil when no SCAP/STIG scan reported
 	Chkrootkit *RootkitScannerCached // nil when chkrootkit didn't report
 	Rkhunter   *RootkitScannerCached // nil when rkhunter didn't report
 	ClamAV     *ClamAVCached
@@ -77,6 +78,24 @@ type LynisCached struct {
 	Score       int
 	Warnings    int
 	Suggestions int
+}
+
+// ScapCached is the cached-trait summary of a SCAP/STIG compliance scan,
+// projected from the flat security_scan.scap.* trait group. Mirrors
+// LynisCached — sourced from the regular security_scan check-in trait, not
+// the live security_scan_detail dispatch.
+type ScapCached struct {
+	Profile       string
+	Score         int
+	Pass          int
+	Fail          int
+	NotApplicable int
+	TotalRules    int
+	HighFail      int
+	MediumFail    int
+	LowFail       int
+	Clean         bool
+	LastScan      string
 }
 
 // RootkitScannerCached is one rootkit scanner's summary (chkrootkit or
@@ -648,6 +667,21 @@ func buildSecurityCached(flat map[string]string) SecurityDrawerCached {
 			Suggestions: getInt(traits.LynisSuggestions),
 		}
 	}
+	if has(traits.ScapProfile) {
+		out.Scap = &ScapCached{
+			Profile:       flat[traits.ScapProfile],
+			Score:         getInt(traits.ScapScore),
+			Pass:          getInt(traits.ScapPass),
+			Fail:          getInt(traits.ScapFail),
+			NotApplicable: getInt(traits.ScapNotApplicable),
+			TotalRules:    getInt(traits.ScapTotalRules),
+			HighFail:      getInt(traits.ScapHighFail),
+			MediumFail:    getInt(traits.ScapMediumFail),
+			LowFail:       getInt(traits.ScapLowFail),
+			Clean:         flat[traits.ScapClean] == "true",
+			LastScan:      flat[traits.ScapLastScan],
+		}
+	}
 	if has(traits.ChkrootkitClean) {
 		out.Chkrootkit = &RootkitScannerCached{
 			Clean:  flat[traits.ChkrootkitClean] != "false",
@@ -812,7 +846,7 @@ func drawerSections(cached SecurityDrawerCached, detail *SecurityScanDetail) []S
 		{"clamav", "ClamAV", cached.ClamAV != nil, live && detail.ClamAV != nil},
 		{"aide", "AIDE", cached.AIDE != nil, live && detail.AIDE != nil},
 		{"defender", "Windows Defender", false, live && detail.Defender != nil},
-		{"scap", "SCAP/STIG", false, live && detail.SCAP != nil},
+		{"scap", "SCAP/STIG", cached.Scap != nil, live && detail.SCAP != nil},
 	}
 	for _, s := range scanners {
 		if s.cachedOK || s.liveOK {
