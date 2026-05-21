@@ -23,6 +23,7 @@ The `security_scan` trait collector reads output from security scanning tools an
 | `debsecan` | Debian | Debian security tracker (CVE counts by severity) |
 | `windows_defender` | Windows | Windows Defender status and threat counts |
 | `windows_updates` | Windows | Pending Windows Update counts |
+| `scap` | All | SCAP/STIG compliance scan results (rule pass/fail counts, compliance score) |
 
 ## Trait Structure
 
@@ -59,6 +60,19 @@ The `security_scan` trait collector reads output from security scanning tools an
       "changed": 0,
       "added": 0,
       "removed": 0
+    },
+    "scap": {
+      "profile": "CIS_Ubuntu_22.04_L1",
+      "total_rules": 240,
+      "pass": 198,
+      "fail": 30,
+      "not_applicable": 12,
+      "high_fail": 4,
+      "medium_fail": 18,
+      "low_fail": 8,
+      "score": 86,
+      "clean": false,
+      "last_scan": "2026-05-10T13:01:54Z"
     },
     "cves": [
       {

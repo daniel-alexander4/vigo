@@ -909,7 +909,7 @@ fn detail_debsecan() -> Option<Value> {
             let inner = lines[j].trim();
             if let Some(rest) = inner.strip_prefix("installed:") {
                 // "installed: libfoo 1.2.3-4 (built from ...)"
-                let pkg = rest.trim().split_whitespace().next().unwrap_or("");
+                let pkg = rest.split_whitespace().next().unwrap_or("");
                 if !pkg.is_empty() {
                     package = pkg.to_string();
                 }
@@ -953,6 +953,75 @@ fn detail_debsecan() -> Option<Value> {
         "vulnerabilities": vulns,
         "truncated": best.len() > MAX_DETAIL_VULNS,
         "last_scan": file_mtime_iso(&path),
+    }))
+}
+
+/// Parse SCAP/STIG compliance scan results.
+/// Expects JSON output at {SCAN_DIR}/scap.json from:
+///   Unix: oscap xccdf eval --results-arf results.xml && oscap-report-to-json
+///   Windows: PowerShell DSC compliance export or SCAP scanner JSON output
+///
+/// Expected format:
+/// {
+///   "profile": "CIS_Windows_Server_2022_L1",
+///   "rules": [
+///     {"id": "xccdf_...", "title": "...", "result": "pass|fail|notapplicable", "severity": "high|medium|low"}
+///   ]
+/// }
+fn parse_scap() -> Option<Value> {
+    let path = Path::new(SCAN_DIR).join("scap.json");
+    let data = fs::read_to_string(&path).ok()?;
+    let parsed: Value = serde_json::from_str(&data).ok()?;
+    summarize_scap(&parsed, &file_mtime_iso(&path))
+}
+
+/// Summarize a parsed scap.json document into the `scap` trait value.
+/// Split from parse_scap so the rule-counting logic is unit-testable
+/// without an on-disk file at the hardcoded SCAN_DIR.
+fn summarize_scap(parsed: &Value, last_scan: &str) -> Option<Value> {
+    let profile = parsed.get("profile").and_then(|v| v.as_str()).unwrap_or("unknown");
+
+    let rules = parsed.get("rules").and_then(|v| v.as_array())?;
+    let mut pass = 0i64;
+    let mut fail = 0i64;
+    let mut notapplicable = 0i64;
+    let mut high_fail = 0i64;
+    let mut medium_fail = 0i64;
+    let mut low_fail = 0i64;
+
+    for rule in rules {
+        let result = rule.get("result").and_then(|v| v.as_str()).unwrap_or("");
+        let severity = rule.get("severity").and_then(|v| v.as_str()).unwrap_or("");
+        match result {
+            "pass" => pass += 1,
+            "fail" => {
+                fail += 1;
+                match severity {
+                    "high" => high_fail += 1,
+                    "medium" => medium_fail += 1,
+                    _ => low_fail += 1,
+                }
+            }
+            "notapplicable" => notapplicable += 1,
+            _ => {}
+        }
+    }
+
+    let total = pass + fail;
+    let score = if total > 0 { (pass * 100) / total } else { 0 };
+
+    Some(json!({
+        "profile": profile,
+        "total_rules": rules.len(),
+        "pass": pass,
+        "fail": fail,
+        "not_applicable": notapplicable,
+        "high_fail": high_fail,
+        "medium_fail": medium_fail,
+        "low_fail": low_fail,
+        "score": score,
+        "clean": fail == 0,
+        "last_scan": last_scan,
     }))
 }
 
@@ -1159,7 +1228,7 @@ CVE-2024-11111 (low urgency)\n\
             while j < lines.len() && !lines[j].trim().starts_with("CVE-") {
                 let inner = lines[j].trim();
                 if let Some(rest) = inner.strip_prefix("installed:") {
-                    let pkg = rest.trim().split_whitespace().next().unwrap_or("");
+                    let pkg = rest.split_whitespace().next().unwrap_or("");
                     if !pkg.is_empty() { package = pkg.to_string(); }
                     break;
                 }
@@ -1196,10 +1265,13 @@ CVE-2024-11111 (low urgency)\n\
         for line in data.lines() {
             let trimmed = line.trim();
             if !trimmed.starts_with("CVE-") { continue; }
-            if trimmed.contains("high urgency") {}
-            else if trimmed.contains("medium urgency") {}
-            else if trimmed.contains("low urgency") { low += 1; }
-            else { unassigned += 1; }
+            if trimmed.contains("high urgency") || trimmed.contains("medium urgency") {
+                // higher-urgency markers don't bump the low/unassigned counters
+            } else if trimmed.contains("low urgency") {
+                low += 1;
+            } else {
+                unassigned += 1;
+            }
         }
         assert_eq!(low, 1);
         assert_eq!(unassigned, 1);
@@ -1332,67 +1404,45 @@ CVE-2024-11111 (low urgency)\n\
         let severity = updates[0].get("Severity").and_then(|s| s.as_str()).unwrap_or("");
         assert_eq!(severity, "Critical");
     }
-}
 
-/// Parse SCAP/STIG compliance scan results.
-/// Expects JSON output at {SCAN_DIR}/scap.json from:
-///   Unix: oscap xccdf eval --results-arf results.xml && oscap-report-to-json
-///   Windows: PowerShell DSC compliance export or SCAP scanner JSON output
-///
-/// Expected format:
-/// {
-///   "profile": "CIS_Windows_Server_2022_L1",
-///   "rules": [
-///     {"id": "xccdf_...", "title": "...", "result": "pass|fail|notapplicable", "severity": "high|medium|low"}
-///   ]
-/// }
-fn parse_scap() -> Option<Value> {
-    let path = Path::new(SCAN_DIR).join("scap.json");
-    let data = fs::read_to_string(&path).ok()?;
-    let parsed: Value = serde_json::from_str(&data).ok()?;
-
-    let profile = parsed.get("profile").and_then(|v| v.as_str()).unwrap_or("unknown");
-
-    let rules = parsed.get("rules").and_then(|v| v.as_array())?;
-    let mut pass = 0i64;
-    let mut fail = 0i64;
-    let mut notapplicable = 0i64;
-    let mut high_fail = 0i64;
-    let mut medium_fail = 0i64;
-    let mut low_fail = 0i64;
-
-    for rule in rules {
-        let result = rule.get("result").and_then(|v| v.as_str()).unwrap_or("");
-        let severity = rule.get("severity").and_then(|v| v.as_str()).unwrap_or("");
-        match result {
-            "pass" => pass += 1,
-            "fail" => {
-                fail += 1;
-                match severity {
-                    "high" => high_fail += 1,
-                    "medium" => medium_fail += 1,
-                    _ => low_fail += 1,
-                }
-            }
-            "notapplicable" => notapplicable += 1,
-            _ => {}
-        }
+    #[test]
+    fn test_summarize_scap() {
+        let doc = serde_json::json!({
+            "profile": "CIS_Ubuntu_22.04_L1",
+            "rules": [
+                {"id": "x1", "result": "pass", "severity": "high"},
+                {"id": "x2", "result": "fail", "severity": "high"},
+                {"id": "x3", "result": "fail", "severity": "medium"},
+                {"id": "x4", "result": "fail", "severity": "unrecognized"},
+                {"id": "x5", "result": "notapplicable", "severity": "low"},
+            ]
+        });
+        let v = summarize_scap(&doc, "2026-05-21T00:00:00Z").unwrap();
+        assert_eq!(v["profile"], "CIS_Ubuntu_22.04_L1");
+        assert_eq!(v["total_rules"], 5);
+        assert_eq!(v["pass"], 1);
+        assert_eq!(v["fail"], 3);
+        assert_eq!(v["not_applicable"], 1);
+        assert_eq!(v["high_fail"], 1);
+        assert_eq!(v["medium_fail"], 1);
+        assert_eq!(v["low_fail"], 1); // unrecognized severity falls through to low
+        assert_eq!(v["score"], 25); // 1 pass of (pass+fail) 4
+        assert_eq!(v["clean"], false);
+        assert_eq!(v["last_scan"], "2026-05-21T00:00:00Z");
     }
 
-    let total = pass + fail;
-    let score = if total > 0 { (pass * 100) / total } else { 0 };
+    #[test]
+    fn test_summarize_scap_no_rules_is_none() {
+        // A document with no "rules" array is treated as "no SCAP data".
+        assert!(summarize_scap(&serde_json::json!({"profile": "x"}), "").is_none());
+    }
 
-    Some(json!({
-        "profile": profile,
-        "total_rules": rules.len(),
-        "pass": pass,
-        "fail": fail,
-        "not_applicable": notapplicable,
-        "high_fail": high_fail,
-        "medium_fail": medium_fail,
-        "low_fail": low_fail,
-        "score": score,
-        "clean": fail == 0,
-        "last_scan": file_mtime_iso(&path),
-    }))
+    #[test]
+    fn test_summarize_scap_all_pass() {
+        let doc = serde_json::json!({"rules": [{"result": "pass"}, {"result": "pass"}]});
+        let v = summarize_scap(&doc, "t").unwrap();
+        assert_eq!(v["score"], 100);
+        assert_eq!(v["clean"], true);
+        assert_eq!(v["profile"], "unknown"); // missing "profile" defaults
+    }
 }
