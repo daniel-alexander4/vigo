@@ -60,6 +60,30 @@ License files are validated locally and do not require network
 connectivity, internet access, or activation servers. Connwaer is fully
 operational in air-gapped and isolated network environments.
 
+## Ownership and Reservation of Rights
+
+All right, title, and interest in and to Connwaer — including all
+intellectual property rights, source code, object code, designs,
+algorithms, data structures, protocols, trademarks, trade names,
+service marks, logos, documentation, and any modifications,
+enhancements, improvements, or derivative works thereof, whether
+created by Alexander4, LLC or contributed by any other person — are and
+shall remain the exclusive property of Alexander4, LLC.
+
+A Connwaer license grants only a limited right to use the software and
+conveys no ownership, title, or other proprietary interest in it. Use
+of Connwaer, in any capacity and at any licensing tier (including the
+Community tier), creates no right, title, or interest in the software
+in favor of any user or organization. You acknowledge that you acquire
+no such interest by using Connwaer, and you waive and disclaim any
+claim of ownership, co-ownership, joint authorship, or other
+proprietary right in or to Connwaer, its trademarks and names, or any
+modification or derivative work of it.
+
+Nothing in these terms shall be construed as a transfer or assignment
+of any intellectual property right. All rights not expressly granted
+are reserved by Alexander4, LLC.
+
 ## Pricing
 
 All amounts are in United States Dollars (USD). Pricing is per managed
