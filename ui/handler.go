@@ -3764,7 +3764,7 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 			Evidence  string `json:"evidence"`
 		} `json:"controls"`
 	}
-	json.Unmarshal(raw, &parsed)
+	_ = json.Unmarshal(raw, &parsed) // malformed input yields empty controls
 
 	// Load active waivers: config-file waivers + DB waivers.
 	type waiverInfo struct {
@@ -9266,11 +9266,11 @@ func (h *Handler) InventoryExploreODSExport(w http.ResponseWriter, r *http.Reque
 	// mimetype must be first entry, stored uncompressed.
 	mh := &zip.FileHeader{Name: "mimetype", Method: zip.Store}
 	mf, _ := zw.CreateHeader(mh)
-	mf.Write([]byte("application/vnd.oasis.opendocument.spreadsheet"))
+	_, _ = mf.Write([]byte("application/vnd.oasis.opendocument.spreadsheet"))
 
 	// META-INF/manifest.xml
 	manf, _ := zw.Create("META-INF/manifest.xml")
-	manf.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+	_, _ = manf.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
  <manifest:file-entry manifest:full-path="/" manifest:version="1.2" manifest:media-type="application/vnd.oasis.opendocument.spreadsheet"/>
  <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
@@ -9324,7 +9324,7 @@ func (h *Handler) InventoryExploreODSExport(w http.ResponseWriter, r *http.Reque
 	}
 
 	buf.WriteString(`</table:table></office:spreadsheet></office:body></office:document-content>`)
-	cf.Write([]byte(buf.String()))
+	_, _ = cf.Write([]byte(buf.String()))
 }
 
 func (h *Handler) InventoryGroupFragment(w http.ResponseWriter, r *http.Request) {

@@ -183,8 +183,8 @@ func RollbackToVersion(historyDir, version, liveDir string) error {
 		}
 	}
 	if err := os.Rename(tmpDir, liveDir); err != nil {
-		// Try to restore backup.
-		os.Rename(backupDir, liveDir)
+		// Try to restore backup (best-effort; the swap failure is already being returned).
+		_ = os.Rename(backupDir, liveDir)
 		return fmt.Errorf("swapping live: %w", err)
 	}
 	os.RemoveAll(backupDir)

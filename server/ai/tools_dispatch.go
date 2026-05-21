@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/db"
 )
 
@@ -85,12 +85,12 @@ func (d *toolDeps) listEnvoys(ctx context.Context, args map[string]any) (string,
 	limit := intArg(args, "limit", 50)
 
 	type envoyInfo struct {
-		ID         string  `json:"id"`
-		Hostname   string  `json:"hostname"`
-		IP         string  `json:"ip_address"`
-		EnrolledAt string  `json:"enrolled_at"`
-		LastSeen   string  `json:"last_seen,omitempty"`
-		Status     string  `json:"status"`
+		ID         string `json:"id"`
+		Hostname   string `json:"hostname"`
+		IP         string `json:"ip_address"`
+		EnrolledAt string `json:"enrolled_at"`
+		LastSeen   string `json:"last_seen,omitempty"`
+		Status     string `json:"status"`
 	}
 
 	var results []envoyInfo
@@ -123,7 +123,7 @@ func (d *toolDeps) listEnvoys(ctx context.Context, args map[string]any) (string,
 	}
 
 	return marshalResult(map[string]any{
-		"count":   len(results),
+		"count":  len(results),
 		"envoys": results,
 	})
 }
@@ -201,7 +201,7 @@ func (d *toolDeps) listRuns(ctx context.Context, args map[string]any) (string, e
 		}
 		runs, err = d.runStore.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 			EnvoyID: t.ID,
-			Limit:    limit,
+			Limit:   limit,
 		})
 	} else {
 		runs, err = d.runStore.ListAllRuns(ctx, limit)
@@ -212,7 +212,7 @@ func (d *toolDeps) listRuns(ctx context.Context, args map[string]any) (string, e
 
 	type runInfo struct {
 		ID        string `json:"id"`
-		EnvoyID  string `json:"envoy_id"`
+		EnvoyID   string `json:"envoy_id"`
 		Status    string `json:"status"`
 		StartedAt string `json:"started_at"`
 		Changed   int64  `json:"changed"`
@@ -224,7 +224,7 @@ func (d *toolDeps) listRuns(ctx context.Context, args map[string]any) (string, e
 	for _, r := range runs {
 		results = append(results, runInfo{
 			ID:        r.ID,
-			EnvoyID:  r.EnvoyID,
+			EnvoyID:   r.EnvoyID,
 			Status:    r.Status,
 			StartedAt: r.StartedAt.Format(time.RFC3339),
 			Changed:   r.ChangedCount,
@@ -259,13 +259,13 @@ func (d *toolDeps) getRun(ctx context.Context, args map[string]any) (string, err
 	}
 
 	type resultInfo struct {
-		Module    string `json:"module"`
-		Type      string `json:"type"`
-		Name      string `json:"name"`
-		Action    string `json:"action"`
-		Changed   bool   `json:"changed"`
-		Error     string `json:"error,omitempty"`
-		DurationMs int64 `json:"duration_ms"`
+		Module     string `json:"module"`
+		Type       string `json:"type"`
+		Name       string `json:"name"`
+		Action     string `json:"action"`
+		Changed    bool   `json:"changed"`
+		Error      string `json:"error,omitempty"`
+		DurationMs int64  `json:"duration_ms"`
 	}
 
 	rr := make([]resultInfo, 0, len(results))
@@ -286,7 +286,7 @@ func (d *toolDeps) getRun(ctx context.Context, args map[string]any) (string, err
 
 	return marshalResult(map[string]any{
 		"id":         run.ID,
-		"envoy_id":  run.EnvoyID,
+		"envoy_id":   run.EnvoyID,
 		"status":     run.Status,
 		"started_at": run.StartedAt.Format(time.RFC3339),
 		"modules":    run.ModuleCount,
@@ -446,7 +446,7 @@ func (d *toolDeps) queryInventory(ctx context.Context, args map[string]any) (str
 	}
 
 	return marshalResult(map[string]any{
-		"count":   len(results),
+		"count":  len(results),
 		"envoys": results,
 	})
 }
@@ -513,7 +513,10 @@ func (d *toolDeps) getModuleDefinition(args map[string]any) (string, error) {
 
 	// Try subdirectories if not at top level.
 	if found == "" {
-		filepath.WalkDir(modulesDir, func(path string, entry os.DirEntry, err error) error {
+		// WalkDir errors only on an unreadable modulesDir; the callback
+		// never returns one. A bad root leaves found "" → caller reports
+		// not-found.
+		_ = filepath.WalkDir(modulesDir, func(path string, entry os.DirEntry, err error) error {
 			if err != nil || entry.IsDir() {
 				return nil
 			}
@@ -593,9 +596,9 @@ func (d *toolDeps) dryRun(_ context.Context, args map[string]any) (string, error
 	}
 
 	return marshalResult(map[string]any{
-		"hostname":    hostname,
-		"environment": cfg.Environment,
-		"modules":     modules,
+		"hostname":        hostname,
+		"environment":     cfg.Environment,
+		"modules":         modules,
 		"total_resources": countResources(cfg),
 	})
 }

@@ -39,9 +39,9 @@ type StepDef struct {
 
 // TriggerDef defines when a workflow should auto-execute based on trait changes.
 type TriggerDef struct {
-	On       string `yaml:"on"`         // "trait_change"
-	TraitKey string `yaml:"trait_key"`  // flattened trait key (e.g., "security_scan.chkrootkit.infected")
-	Value    string `yaml:"value"`      // trigger when trait changes TO this value (empty = any change)
+	On       string `yaml:"on"`        // "trait_change"
+	TraitKey string `yaml:"trait_key"` // flattened trait key (e.g., "security_scan.chkrootkit.infected")
+	Value    string `yaml:"value"`     // trigger when trait changes TO this value (empty = any change)
 }
 
 // WorkflowDef is a reusable workflow definition loaded from a YAML file.
@@ -235,23 +235,23 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 		if e.isAborted(runID) {
 			slog.Info("workflow: aborted", "workflow_run_id", runID, "at_step", step.Name)
 			now = sql.NullTime{Time: time.Now(), Valid: true}
-			e.queries.UpdateWorkflowRunStatus(ctx, db.UpdateWorkflowRunStatusParams{
+			persistErr(runID, e.queries.UpdateWorkflowRunStatus(ctx, db.UpdateWorkflowRunStatusParams{
 				ID:            runID,
 				Status:        "aborted",
 				CurrentStep:   int64(currentIdx),
 				FinishedAt:    now,
 				FailureReason: sql.NullString{String: "operator_abort", Valid: true},
-			})
+			}))
 			return
 		}
 
 		// Update current step.
-		e.queries.UpdateWorkflowRunStatus(ctx, db.UpdateWorkflowRunStatusParams{
+		persistErr(runID, e.queries.UpdateWorkflowRunStatus(ctx, db.UpdateWorkflowRunStatusParams{
 			ID:          runID,
 			Status:      "running",
 			CurrentStep: int64(currentIdx),
 			StartedAt:   now,
-		})
+		}))
 
 		// Create step result record.
 		stepResult, err := e.queries.CreateWorkflowStepResult(ctx, db.CreateWorkflowStepResultParams{
@@ -267,11 +267,11 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 
 		// Mark step as running.
 		stepNow := sql.NullTime{Time: time.Now(), Valid: true}
-		e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
+		persistErr(runID, e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
 			ID:        stepResult.ID,
 			Status:    "running",
 			StartedAt: stepNow,
-		})
+		}))
 
 		// Build dispatch params.
 		params := isgrpc.DispatchParams{
@@ -292,11 +292,11 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 		result, err := e.runner.DispatchPush(ctx, params)
 		if err != nil {
 			stepFinished := sql.NullTime{Time: time.Now(), Valid: true}
-			e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
+			persistErr(runID, e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
 				ID:         stepResult.ID,
 				Status:     "failed",
 				FinishedAt: stepFinished,
-			})
+			}))
 			if step.OnFailure != "" {
 				if idx, ok := stepIndex[step.OnFailure]; ok {
 					currentIdx = idx
@@ -308,24 +308,24 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 		}
 
 		// Update step with task run ID.
-		e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
+		persistErr(runID, e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
 			ID:        stepResult.ID,
 			Status:    "running",
 			PushRunID: sql.NullString{String: result.ID, Valid: result.ID != ""},
 			StartedAt: stepNow,
-		})
+		}))
 
 		// Poll for push completion.
 		stepStatus := e.pollPushCompletion(ctx, runID, result.ID)
 
 		stepFinished := sql.NullTime{Time: time.Now(), Valid: true}
-		e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
+		persistErr(runID, e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
 			ID:         stepResult.ID,
 			Status:     stepStatus,
 			PushRunID:  sql.NullString{String: result.ID, Valid: result.ID != ""},
 			StartedAt:  stepNow,
 			FinishedAt: stepFinished,
-		})
+		}))
 
 		if stepStatus == "complete" {
 			if step.OnSuccess != "" {
@@ -350,13 +350,13 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 
 	// All steps completed successfully.
 	finished := sql.NullTime{Time: time.Now(), Valid: true}
-	e.queries.UpdateWorkflowRunStatus(ctx, db.UpdateWorkflowRunStatusParams{
+	persistErr(runID, e.queries.UpdateWorkflowRunStatus(ctx, db.UpdateWorkflowRunStatusParams{
 		ID:          runID,
 		Status:      "complete",
 		CurrentStep: int64(len(def.Steps)),
 		StartedAt:   now,
 		FinishedAt:  finished,
-	})
+	}))
 	if e.metrics != nil {
 		e.metrics.WorkflowRunsTotal.WithLabelValues("complete").Inc()
 	}
@@ -397,16 +397,26 @@ func (e *Engine) pollPushCompletion(ctx context.Context, workflowRunID, pushRunI
 	}
 }
 
+// persistErr logs a failed workflow status / step-result write. These
+// writes are best-effort progress tracking — the workflow's authoritative
+// state is the running goroutine, so a failed write must not abort it,
+// but it should not be silent either.
+func persistErr(runID string, err error) {
+	if err != nil {
+		slog.Warn("workflow: failed to persist progress", "workflow_run_id", runID, "error", err)
+	}
+}
+
 // failWorkflow marks a workflow run as failed.
 func (e *Engine) failWorkflow(ctx context.Context, runID string, step int, reason string) {
 	finished := sql.NullTime{Time: time.Now(), Valid: true}
-	e.queries.UpdateWorkflowRunStatus(ctx, db.UpdateWorkflowRunStatusParams{
+	persistErr(runID, e.queries.UpdateWorkflowRunStatus(ctx, db.UpdateWorkflowRunStatusParams{
 		ID:            runID,
 		Status:        "failed",
 		CurrentStep:   int64(step),
 		FinishedAt:    finished,
 		FailureReason: sql.NullString{String: reason, Valid: true},
-	})
+	}))
 	if e.metrics != nil {
 		e.metrics.WorkflowRunsTotal.WithLabelValues("failed").Inc()
 	}

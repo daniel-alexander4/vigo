@@ -1,0 +1,38 @@
+# golangci-lint configuration.
+#
+# The repo's primary error-handling discipline is the TestNoIgnoredErrors
+# audit test (test/audit/audit_test.go), which scans server/ non-test code
+# for unjustified `_ =` discards of dangerous functions. errcheck here is
+# the complementary check for fully-unchecked calls.
+#
+# Exclusions mirror that discipline: the std-error-handling preset drops
+# the universally-best-effort calls (Close, Flush, Fprint*/print*,
+# os.Remove*), exclude-functions adds a few more in the same class, and
+# test files are exempt — as TestNoIgnoredErrors itself skips _test.go.
+# Genuinely consequential unchecked calls are fixed in code, not here.
+version: "2"
+
+linters:
+  settings:
+    errcheck:
+      exclude-functions:
+        - io.WriteString
+        - io.Copy
+        - fmt.Sscanf
+        - (*encoding/json.Encoder).Encode
+        - (*github.com/spf13/cobra.Command).MarkFlagRequired
+  exclusions:
+    presets:
+      - std-error-handling
+    rules:
+      # Test files are exempt from errcheck — consistent with
+      # TestNoIgnoredErrors, which skips _test.go by design.
+      - path: _test\.go
+        linters:
+          - errcheck
+      # Writes to an http.ResponseWriter are best-effort: a failed body
+      # write means the client is already gone and the handler — past
+      # the point of setting a status — cannot recover.
+      - linters:
+          - errcheck
+        text: 'Error return value of `w\.Write` is not checked'

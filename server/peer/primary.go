@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/config"
+	"github.com/fsnotify/fsnotify"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
@@ -183,7 +183,9 @@ func (p *Primary) watchLoop(ctx context.Context) {
 			// If a new directory is created inside a sync dir, watch it too.
 			if event.Has(fsnotify.Create) {
 				if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-					p.addWatchRecursive(event.Name)
+					if werr := p.addWatchRecursive(event.Name); werr != nil {
+						slog.Warn("peer: failed to watch new directory", "path", event.Name, "error", werr)
+					}
 				}
 			}
 
@@ -422,7 +424,7 @@ func (p *Primary) peerLoop(ctx context.Context, pc *peerConn) {
 		})
 		if err != nil {
 			slog.Error("peer primary: full sync send failed", "addr", pc.entry.Addr, "error", err)
-			stream.CloseSend()
+			_ = stream.CloseSend()
 			conn.Close()
 			if !p.backoffSleep(ctx, backoff) {
 				return
@@ -439,7 +441,7 @@ func (p *Primary) peerLoop(ctx context.Context, pc *peerConn) {
 			slog.Warn("peer primary: stream disconnected", "addr", pc.entry.Addr, "error", err)
 		}
 
-		stream.CloseSend()
+		_ = stream.CloseSend()
 		conn.Close()
 
 		// Reconnect with backoff.

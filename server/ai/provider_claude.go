@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -34,11 +35,11 @@ func (p *ClaudeProvider) Name() string { return "claude" }
 
 // Claude API types.
 type claudeRequest struct {
-	Model     string         `json:"model"`
-	MaxTokens int            `json:"max_tokens"`
-	System    string         `json:"system,omitempty"`
-	Messages  []claudeMsg    `json:"messages"`
-	Tools     []claudeTool   `json:"tools,omitempty"`
+	Model     string       `json:"model"`
+	MaxTokens int          `json:"max_tokens"`
+	System    string       `json:"system,omitempty"`
+	Messages  []claudeMsg  `json:"messages"`
+	Tools     []claudeTool `json:"tools,omitempty"`
 }
 
 type claudeMsg struct {
@@ -103,7 +104,9 @@ func (p *ClaudeProvider) Chat(ctx context.Context, req ChatRequest) (*ChatRespon
 				}
 				for _, tc := range m.ToolCalls {
 					var input any
-					json.Unmarshal([]byte(tc.Arguments), &input)
+					if err := json.Unmarshal([]byte(tc.Arguments), &input); err != nil {
+						slog.Warn("ai: tool-call arguments failed to parse", "tool", tc.Name, "error", err)
+					}
 					blocks = append(blocks, claudeContentBlock{
 						Type:  "tool_use",
 						ID:    tc.ID,

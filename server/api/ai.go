@@ -77,6 +77,6 @@ func (h *AIHandler) handleAskStream(w http.ResponseWriter, r *http.Request, req 
 		slog.Error("ai stream failed", "error", err)
 		// If we already started writing SSE, we can't send a JSON error.
 		// Send an error event instead.
-		sse.Send(ai.SSEEvent{Type: "error", Text: err.Error()})
+		_ = sse.Send(ai.SSEEvent{Type: "error", Text: err.Error()}) // client may have disconnected
 	}
 }

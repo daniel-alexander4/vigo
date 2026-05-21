@@ -209,12 +209,12 @@ func (w *Watcher) pullIntoLive() error {
 		return fmt.Errorf("starting git archive: %w", err)
 	}
 	if err := untar.Start(); err != nil {
-		archive.Process.Kill()
+		_ = archive.Process.Kill() // best-effort cleanup; the start failure is already being returned
 		return fmt.Errorf("starting tar -x: %w", err)
 	}
 	// Close the writer once archive finishes so tar sees EOF.
 	go func() {
-		archive.Wait()
+		_ = archive.Wait()
 		pipeW.Close()
 	}()
 	if err := untar.Wait(); err != nil {

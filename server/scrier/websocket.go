@@ -90,8 +90,8 @@ type scrierSession struct {
 	createdAt       time.Time
 
 	// Set during setup:
-	tunnelID   string
-	tunnelDone chan struct{}
+	tunnelID    string
+	tunnelDone  chan struct{}
 	sshUsername string
 
 	// SSH-specific (xterm.js path):
@@ -254,9 +254,14 @@ func (h *Handler) HandleSession(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	switch protocol {
 	case "ssh":
-		h.tmplSSH.Execute(w, data)
+		if err := h.tmplSSH.Execute(w, data); err != nil {
+			slog.Error("scrier: session template render failed", "protocol", protocol, "error", err)
+		}
 	default:
-		h.tmplRDP.Execute(w, data) // RDP and VNC both use the Guacamole template
+		// RDP and VNC both use the Guacamole template.
+		if err := h.tmplRDP.Execute(w, data); err != nil {
+			slog.Error("scrier: session template render failed", "protocol", protocol, "error", err)
+		}
 	}
 }
 
@@ -323,17 +328,17 @@ func (h *Handler) HandleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess := &scrierSession{
-		id:               uuid.New().String(),
-		envoyID:          req.EnvoyID,
-		hostname:         envoy.Hostname,
-		protocol:         req.Protocol,
-		port:             req.Port,
-		width:            width,
-		height:           height,
-		user:             user.Username,
-		requestedPubkey:  strings.TrimSpace(req.SSHPublicKey),
-		status:           statusWaiting,
-		createdAt:        time.Now(),
+		id:              uuid.New().String(),
+		envoyID:         req.EnvoyID,
+		hostname:        envoy.Hostname,
+		protocol:        req.Protocol,
+		port:            req.Port,
+		width:           width,
+		height:          height,
+		user:            user.Username,
+		requestedPubkey: strings.TrimSpace(req.SSHPublicKey),
+		status:          statusWaiting,
+		createdAt:       time.Now(),
 	}
 
 	h.sessionsMu.Lock()

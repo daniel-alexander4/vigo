@@ -78,7 +78,7 @@ func validateFile(path string) ([]validate.Finding, error) {
 	// Phase 2: detect file type — envoys file vs module file.
 	// A envoys file has a top-level "envoys:" key; a role file has "modules:" but no "resources:".
 	var probe map[string]any
-	yaml.Unmarshal(data, &probe)
+	_ = yaml.Unmarshal(data, &probe) // data already validated as YAML above
 
 	if _, isNodes := probe["envoys"]; isNodes {
 		// Envoys file — validate each entry has a "match" field.
@@ -151,11 +151,11 @@ func validateFile(path string) ([]validate.Finding, error) {
 	mod := validate.Module{Name: moduleName}
 	for _, r := range def.Resources {
 		mod.Resources = append(mod.Resources, validate.Resource{
-			Name:             r.Name,
-			Type:             r.Type,
-			Attributes:       r.Attributes,
-			Notify:           r.Notify,
-			Subscribes:       r.Subscribes,
+			Name:        r.Name,
+			Type:        r.Type,
+			Attributes:  r.Attributes,
+			Notify:      r.Notify,
+			Subscribes:  r.Subscribes,
 			WatchSecret: r.WatchSecret,
 		})
 	}

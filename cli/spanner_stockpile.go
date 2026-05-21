@@ -207,7 +207,7 @@ func callHelper(socketPath, line string) (string, error) {
 		return "", fmt.Errorf("connecting to helper at %s: %w (is the agent running with /srv/vigo/puddle/identity.wrapped on disk?)", socketPath, err)
 	}
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(30 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
 
 	if _, err := io.WriteString(conn, line+"\n"); err != nil {
 		return "", fmt.Errorf("sending request: %w", err)

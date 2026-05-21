@@ -64,9 +64,11 @@ var skipDirs = map[string]bool{
 // stubProvider accepts all secret refs so validation focuses on structure.
 type stubProvider struct{}
 
-func (s *stubProvider) Get(_ context.Context, _ string) (string, error)      { return "stub", nil }
-func (s *stubProvider) GetBytes(_ context.Context, _ string) ([]byte, error) { return []byte("stub"), nil }
-func (s *stubProvider) Close() error                                         { return nil }
+func (s *stubProvider) Get(_ context.Context, _ string) (string, error) { return "stub", nil }
+func (s *stubProvider) GetBytes(_ context.Context, _ string) ([]byte, error) {
+	return []byte("stub"), nil
+}
+func (s *stubProvider) Close() error { return nil }
 
 // Options controls publish/validation behavior.
 type Options struct {
@@ -848,7 +850,7 @@ func syncSubdir(stockpile, live, sub string) (int, error) {
 
 	if err := os.Rename(tmpDir, dst); err != nil {
 		if backupDir != "" {
-			os.Rename(backupDir, dst)
+			_ = os.Rename(backupDir, dst) // best-effort restore; the rename failure is already being returned
 		}
 		os.RemoveAll(tmpDir)
 		return 0, fmt.Errorf("rename %s: %w", sub, err)

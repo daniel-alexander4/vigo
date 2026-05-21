@@ -65,10 +65,11 @@ func (h *DatabaseHandler) handleStats(w http.ResponseWriter, r *http.Request) {
 
 		// Page count and size.
 		var pageCount, pageSize int64
-		h.sqlDB.QueryRow("PRAGMA page_count").Scan(&pageCount)
-		h.sqlDB.QueryRow("PRAGMA page_size").Scan(&pageSize)
-		stats["page_count"] = pageCount
-		stats["page_size"] = pageSize
+		if h.sqlDB.QueryRow("PRAGMA page_count").Scan(&pageCount) == nil &&
+			h.sqlDB.QueryRow("PRAGMA page_size").Scan(&pageSize) == nil {
+			stats["page_count"] = pageCount
+			stats["page_size"] = pageSize
+		}
 	}
 
 	// Table row counts.
@@ -111,7 +112,9 @@ func (h *DatabaseHandler) handleIntegrity(w http.ResponseWriter, r *http.Request
 			var violations []string
 			for rows.Next() {
 				var table, rowid, parent, fkidx string
-				rows.Scan(&table, &rowid, &parent, &fkidx)
+				if err := rows.Scan(&table, &rowid, &parent, &fkidx); err != nil {
+					continue
+				}
 				violations = append(violations, fmt.Sprintf("%s row %s → %s", table, rowid, parent))
 			}
 			rows.Close()
@@ -433,7 +436,9 @@ func (h *DatabaseHandler) tableRowCounts() (map[string]int64, error) {
 	tables := make(map[string]int64)
 	for rows.Next() {
 		var name string
-		rows.Scan(&name)
+		if err := rows.Scan(&name); err != nil {
+			continue
+		}
 		// Validate table name is alphanumeric+underscores only (defense in depth —
 		// names come from system catalog but we quote defensively).
 		safe := true
@@ -447,8 +452,9 @@ func (h *DatabaseHandler) tableRowCounts() (map[string]int64, error) {
 			continue
 		}
 		var count int64
-		h.sqlDB.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM \"%s\"", name)).Scan(&count)
-		tables[name] = count
+		if h.sqlDB.QueryRow(fmt.Sprintf("SELECT COUNT(*) FROM \"%s\"", name)).Scan(&count) == nil {
+			tables[name] = count
+		}
 	}
 	return tables, nil
 }

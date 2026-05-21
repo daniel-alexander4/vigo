@@ -43,10 +43,10 @@ func init() {
 
 // testDef is a parsed test definition file.
 type testDef struct {
-	Name   string            `yaml:"name"`
-	Envoy string            `yaml:"envoy"`
-	Traits map[string]any    `yaml:"traits"`
-	Expect testExpectations  `yaml:"expect"`
+	Name   string           `yaml:"name"`
+	Envoy  string           `yaml:"envoy"`
+	Traits map[string]any   `yaml:"traits"`
+	Expect testExpectations `yaml:"expect"`
 }
 
 type testExpectations struct {
@@ -312,7 +312,9 @@ func runOneTest(store *config.ConfigStore, td *testDef, verbose bool) []string {
 
 func discoverTests(dir string) []string {
 	var files []string
-	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	// Walk errors only on an unreadable root; the callback swallows
+	// per-entry errors. A bad root yields an empty list.
+	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
 			return nil
 		}

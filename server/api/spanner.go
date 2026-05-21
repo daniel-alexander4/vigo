@@ -6,6 +6,7 @@ package api
 import (
 	"encoding/hex"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
@@ -166,7 +167,10 @@ func (h *SpannerHandler) handleBoltPush(w http.ResponseWriter, r *http.Request) 
 	var req struct {
 		EnvoyID string `json:"envoy_id"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
 	count, err := h.hub.BoltForcePush(r.Context(), id, req.EnvoyID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
@@ -206,7 +210,10 @@ func (h *SpannerHandler) handleDrain(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		TargetBoltID string `json:"target_bolt_id"`
 	}
-	json.NewDecoder(r.Body).Decode(&req)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
 
 	result, err := h.hub.DrainBolt(r.Context(), boltID, req.TargetBoltID)
 	if err != nil {

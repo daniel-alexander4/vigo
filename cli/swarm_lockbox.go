@@ -29,9 +29,9 @@ import (
 // imported so the CLI stays decoupled from the server package
 // (matches the pattern in cli/gitback.go, cli/longdrawer.go).
 type lockboxFleet struct {
-	GeneratedAt  time.Time          `json:"generated_at"`
+	GeneratedAt  time.Time            `json:"generated_at"`
 	Users        []lockboxUserSummary `json:"users"`
-	Participants []string           `json:"participants"`
+	Participants []string             `json:"participants"`
 	Totals       lockboxTotals        `json:"totals"`
 }
 
@@ -46,13 +46,13 @@ type lockboxTotals struct {
 }
 
 type lockboxUserSummary struct {
-	User           string               `json:"user"`
+	User           string                 `json:"user"`
 	Envoys         []lockboxEnvoyPresence `json:"envoys"`
-	FileCount      int                  `json:"file_count"`
-	TotalBytes     int64                `json:"total_bytes"`
-	Divergences    []string             `json:"divergences,omitempty"`
-	RecipientDrift bool                 `json:"recipient_drift"`
-	ActiveSessions []string             `json:"active_sessions,omitempty"`
+	FileCount      int                    `json:"file_count"`
+	TotalBytes     int64                  `json:"total_bytes"`
+	Divergences    []string               `json:"divergences,omitempty"`
+	RecipientDrift bool                   `json:"recipient_drift"`
+	ActiveSessions []string               `json:"active_sessions,omitempty"`
 }
 
 type lockboxEnvoyPresence struct {
@@ -377,7 +377,7 @@ func runLockboxEvict(host, user string, allUsers, yes bool) error {
 		}
 		fmt.Print("Proceed? [y/N] ")
 		var resp string
-		fmt.Scanln(&resp)
+		_, _ = fmt.Scanln(&resp) // a read error leaves resp empty → treated as "no"
 		if strings.ToLower(strings.TrimSpace(resp)) != "y" {
 			fmt.Println("aborted.")
 			return nil
