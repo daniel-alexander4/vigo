@@ -6,10 +6,15 @@ package spanner
 import (
 	"context"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"hash"
 	"log/slog"
+	"sort"
+	"strconv"
 
 	"git.alexander4.io/vigo/server/db"
 )
@@ -165,6 +170,47 @@ func FounderPubkey(roster []db.SpannerBolt) (ed25519.PublicKey, error) {
 		return nil, fmt.Errorf("spanner crdt: founder pubkey is %d bytes, expected %d", len(raw), ed25519.PublicKeySize)
 	}
 	return ed25519.PublicKey(raw), nil
+}
+
+// RosterDigest returns a hex-encoded sha256 over the roster — the
+// Tier-1 change-detector (Slice 2-i-b). Rows are sorted by pubkey so
+// the digest is independent of DB row order, and each row contributes
+// (pubkey, admitted_at, revoked_at, signature): the fields a CRDT
+// merge can mutate. An unchanged roster always hashes to the same
+// value; any row added, re-admitted (admitted_at moved), revoked, or
+// re-signed changes it. A peer hearing a digest different from its
+// own fires the existing Tier-2 pullAndMerge immediately instead of
+// waiting for the 5m timer.
+func RosterDigest(roster []db.SpannerBolt) string {
+	sorted := make([]db.SpannerBolt, len(roster))
+	copy(sorted, roster)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Pubkey < sorted[j].Pubkey })
+
+	h := sha256.New()
+	for _, b := range sorted {
+		// Length-prefix every field so concatenation is unambiguous —
+		// no field boundary can be forged by shifting bytes between
+		// adjacent fields.
+		writeField(h, []byte(b.Pubkey))
+		writeField(h, []byte(strconv.FormatInt(b.AdmittedAt, 10)))
+		revokedAt := int64(0)
+		if b.RevokedAt.Valid {
+			revokedAt = b.RevokedAt.Int64
+		}
+		writeField(h, []byte(strconv.FormatInt(revokedAt, 10)))
+		writeField(h, b.Signature)
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// writeField hashes a length-prefixed field into h so the digest is
+// unambiguous across field boundaries — no byte can be shifted between
+// adjacent fields without changing the hash.
+func writeField(h hash.Hash, b []byte) {
+	var lenbuf [8]byte
+	binary.LittleEndian.PutUint64(lenbuf[:], uint64(len(b)))
+	_, _ = h.Write(lenbuf[:])
+	_, _ = h.Write(b)
 }
 
 // MergeSnapshot CRDT-merges a peer's Snapshot into the local DB and

@@ -420,8 +420,14 @@ func TestSpannerRosterGossipConvergence(t *testing.T) {
 	gossipClient := &http.Client{Transport: rewriteRoundTripper{base: founderSrv.URL, rt: http.DefaultTransport}}
 	// A short interval so the first tick fires well inside the poll
 	// deadline; production cadence is snapshot.tier2_interval (5m).
+	// Tier-1 multicast args: the listener cannot join a group in the
+	// test env (it logs + returns) and the 30s sender ticker never
+	// fires inside the short test window, so Tier-1 stays inert here —
+	// this test exercises the Tier-2 REST cycle only.
 	g := spanner.NewGossiper(joinerH.sqlDB, joinerH.queries,
-		hex.EncodeToString(joinerH.boltID.PublicKey), "8443", 50*time.Millisecond, gossipClient)
+		hex.EncodeToString(joinerH.boltID.PublicKey), "8443", 50*time.Millisecond,
+		"test-spanner", joinerH.boltID.SigningKey, "224.0.0.45", 1534, 30*time.Second,
+		gossipClient)
 
 	ctx, cancel := context.WithCancel(t.Context())
 	go g.Run(ctx)

@@ -1029,18 +1029,34 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// local bolt identity to sign admission rows + invite bundles.
 	spannerAdmissionHandler := api.NewSpannerAdmissionHandler(s.db, s.queries, s.boltID, s.cfg.Spanner.SpannerID, s.cfg.Server.Hostname, s.cfg.Spanner.Patterns, s.auditWriter, nil)
 
-	// Spanner Slice 2-i-a — roster-replication gossiper (ADR-026). On
-	// every non-standalone bolt, pulls each peer's /snapshot on the
-	// Tier-2 timer and CRDT-merges it so all bolts converge. The
-	// `go spannerGossip.Run` goroutine starts from run().
+	// Spanner Slice 2-i-a + 2-i-b — roster-replication gossiper
+	// (ADR-026). On every non-standalone bolt: Tier-2 pulls each peer's
+	// /snapshot on the 5m timer and CRDT-merges it; Tier-1 (2-i-b)
+	// multicasts a signed roster digest every 30s and fires a Tier-2
+	// pull early on a digest mismatch. The `go spannerGossip.Run`
+	// goroutine (all three sub-goroutines) starts from run().
 	if s.mode != config.ModeStandalone {
 		tier2 := parseDuration(s.cfg.Spanner.Snapshot.Tier2Interval, 5*time.Minute)
+		tier1 := parseDuration(s.cfg.Spanner.Snapshot.Tier1Interval, 30*time.Second)
+		mcastGroup := s.cfg.Spanner.Transport.MulticastGroup
+		if mcastGroup == "" {
+			mcastGroup = "224.0.0.45"
+		}
+		mcastPort := s.cfg.Spanner.Transport.MulticastPort
+		if mcastPort == 0 {
+			mcastPort = 1534
+		}
 		s.spannerGossip = spanner.NewGossiper(
 			s.db,
 			s.queries,
 			fullBoltPubkeyHex(s.boltID),
 			apiListenPort(s.cfg.Server.APIListen),
 			tier2,
+			s.cfg.Spanner.SpannerID,
+			boltSigningKeyOrNil(s.boltID),
+			mcastGroup,
+			mcastPort,
+			tier1,
 			nil,
 		)
 	}
