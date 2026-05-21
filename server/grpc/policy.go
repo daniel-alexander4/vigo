@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"google.golang.org/protobuf/proto"
+
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/config"
 )
@@ -245,13 +247,11 @@ func filterBundleByTraits(bundle *pb.PolicyBundle, traits map[string]any) *pb.Po
 }
 
 func shallowCopyModule(m *pb.PolicyModule) *pb.PolicyModule {
-	copy := *m
-	return &copy
+	return proto.Clone(m).(*pb.PolicyModule)
 }
 
 func shallowCopyResource(r *pb.PolicyResource) *pb.PolicyResource {
-	copy := *r
-	return &copy
+	return proto.Clone(r).(*pb.PolicyResource)
 }
 
 // streamEditPathsAllowed checks if all script paths in a stream_edit value
@@ -320,19 +320,13 @@ func injectSecretTriggers(bundle *pb.PolicyBundle, rotatedPaths []string) {
 			for _, sp := range res.WatchSecret {
 				if rotatedSet[sp] {
 					// Clone module + resource so the cache entry stays clean.
-					clonedMod := *mod
-					clonedMod.Resources = make([]*pb.PolicyResource, len(mod.Resources))
-					copy(clonedMod.Resources, mod.Resources)
-
-					clonedRes := *res
-					clonedRes.Attributes = make(map[string]string, len(res.Attributes)+1)
-					for k, v := range res.Attributes {
-						clonedRes.Attributes[k] = v
+					clonedMod := proto.Clone(mod).(*pb.PolicyModule)
+					clonedRes := clonedMod.Resources[ri]
+					if clonedRes.Attributes == nil {
+						clonedRes.Attributes = make(map[string]string, 1)
 					}
 					clonedRes.Attributes["_secret_triggered"] = "true"
-
-					clonedMod.Resources[ri] = &clonedRes
-					bundle.Modules[mi] = &clonedMod
+					bundle.Modules[mi] = clonedMod
 					break
 				}
 			}

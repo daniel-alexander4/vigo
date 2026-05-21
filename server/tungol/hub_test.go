@@ -110,8 +110,8 @@ type mockAdminClient struct {
 	setReassignErr  error
 
 	// Track calls for assertions.
-	enrollCalls      []pb.EnrollEnvoyRequest
-	setReassignCalls []pb.SetReassignmentRequest
+	enrollCalls      []*pb.EnrollEnvoyRequest
+	setReassignCalls []*pb.SetReassignmentRequest
 }
 
 func (m *mockAdminClient) GetConvergenceSummary(_ context.Context, _ *pb.GetConvergenceSummaryRequest, _ ...grpc.CallOption) (*pb.GetConvergenceSummaryResponse, error) {
@@ -135,12 +135,12 @@ func (m *mockAdminClient) GetEnvoy(_ context.Context, _ *pb.GetEnvoyRequest, _ .
 }
 
 func (m *mockAdminClient) EnrollEnvoy(_ context.Context, req *pb.EnrollEnvoyRequest, _ ...grpc.CallOption) (*pb.EnrollEnvoyResponse, error) {
-	m.enrollCalls = append(m.enrollCalls, *req)
+	m.enrollCalls = append(m.enrollCalls, req)
 	return m.enrollResp, m.enrollErr
 }
 
 func (m *mockAdminClient) SetReassignment(_ context.Context, req *pb.SetReassignmentRequest, _ ...grpc.CallOption) (*pb.SetReassignmentResponse, error) {
-	m.setReassignCalls = append(m.setReassignCalls, *req)
+	m.setReassignCalls = append(m.setReassignCalls, req)
 	return m.setReassignResp, m.setReassignErr
 }
 
