@@ -6,9 +6,16 @@
 #   <path>:<line>:<token>   exact-line allowlist
 #   <path>:*:<token>        whole-file allowlist (ignore every match in this file)
 #
+# Paths are matched exactly against `git ls-files` output, so they must
+# carry the full repo-relative path. The 2026-05-13 docs restructure
+# moved internal docs under docs/internal.docs/ — entries below reflect
+# that. If a doc moves again, its entry here must move with it or the
+# checker turns red on otherwise-allowlisted files.
+#
 # Lines starting with '#' and blank lines are comments.
-# The third field is the matched token regex as printed by the script
-# (e.g. `\bcairn\b`, `/var/lib/vigo/cairn\b`).
+# For whole-file entries the third field is cosmetic (the script keys
+# on the path only); for exact-line entries it must be the matched
+# token regex as printed by the script (e.g. `\bcairn\b`).
 #
 # Add a line here only when the legacy term is genuinely unavoidable —
 # typically: historical commit messages preserved in completed.md, the
@@ -17,45 +24,54 @@
 
 # completed.md is the historical record — every entry there is from
 # before its surrounding rename and stays as-it-was for accuracy.
-.claude/projects/-home-dan-cairn-vigo/memory/completed.md:*:cairn
-
 # Memory files live outside the repo working tree (in
-# ~/.claude/projects/...) so `git ls-files` doesn't return them.
-# Listed here as a safety net in case future tooling brings them in.
+# ~/.claude/projects/...) so `git ls-files` doesn't return them; this
+# entry is a safety net in case future tooling brings them in.
+.claude/projects/-home-dan-repos-vigo/memory/completed.md:*:cairn
 
 # The rename plan documents describe their renames — every legacy term
 # appears as part of the mapping description. Allowlisted wholesale.
-internal.docs/plan-substrate-rename.md:*:cairn
-internal.docs/plan-rename-2026-05.md:*:swarmgit
+docs/internal.docs/plan-substrate-rename.md:*:cairn
+docs/internal.docs/plan-rename-2026-05.md:*:swarmgit
 
 # The France GTM plan lists "Cairn" as a product name in its glossary
 # section; that prose was authored before the rename. Future pass.
-internal.docs/plan-france-linux-migration-gtm.md:*:cairn
+docs/internal.docs/plan-france-linux-migration-gtm.md:*:cairn
 
 # multi-axis-audit.md references the memory directory absolute path
-# `-home-dan-cairn-vigo` (Dan's literal workstation path).
-internal.docs/multi-axis-audit.md:*:cairn
+# (Dan's literal workstation path).
+docs/internal.docs/multi-axis-audit.md:*:cairn
 
-# Historical probe scripts under internal.docs/ targeting the old sigil
-# subsystem. They no longer run — vigo sigil verbs were folded into
-# `vigo swarm lockbox`. Kept as historical context until Dan deletes.
-internal.docs/sigil-peers-probe.sh:*:sigil
-internal.docs/sigil-tombstone-probe.sh:*:sigil
+# Historical probe scripts under docs/internal.docs/ targeting the old
+# sigil subsystem. They no longer run — vigo sigil verbs were folded
+# into `vigo swarm lockbox`. Kept as historical context until Dan
+# deletes.
+docs/internal.docs/sigil-peers-probe.sh:*:sigil
+docs/internal.docs/sigil-tombstone-probe.sh:*:sigil
 
 # Substrate audit + phase-rollout docs were authored under the legacy
 # vocabulary. They describe the substrate before this rename and stay
 # as-was for historical accuracy.
-internal.docs/substrate-audit.md:*:cairn
-internal.docs/substrate-livetest-all.sh:*:cairn
-internal.docs/substrate-livetests.md:*:cairn
-internal.docs/substrate-perms-repair.sh:*:cairn
-internal.docs/substrate-phase-b-deploy.sh:*:cairn
-internal.docs/substrate-phase-b-livetest.md:*:cairn
-internal.docs/substrate-phase-b-livetest.sh:*:cairn
-internal.docs/substrate-phase-b.md:*:cairn
-internal.docs/substrate-phase-c-livetest.sh:*:cairn
-internal.docs/substrate-phase-d-livetest.sh:*:cairn
-internal.docs/substrate-unified-plan.md:*:cairn
+docs/internal.docs/substrate-audit.md:*:cairn
+docs/internal.docs/substrate-livetest-all.sh:*:cairn
+docs/internal.docs/substrate-livetests.md:*:cairn
+docs/internal.docs/substrate-perms-repair.sh:*:cairn
+docs/internal.docs/substrate-phase-b-deploy.sh:*:cairn
+docs/internal.docs/substrate-phase-b-livetest.md:*:cairn
+docs/internal.docs/substrate-phase-b-livetest.sh:*:cairn
+docs/internal.docs/substrate-phase-b.md:*:cairn
+docs/internal.docs/substrate-phase-c-livetest.sh:*:cairn
+docs/internal.docs/substrate-phase-d-livetest.sh:*:cairn
+docs/internal.docs/substrate-unified-plan.md:*:cairn
+
+# Internal comparison + strategy docs authored before the 0.50.0 swarm
+# rename — they predate swarmgit→gitback / swarmcast→filecast and still
+# carry the old terms. These are product docs, not rename history, so
+# they are candidates for an actual term refresh (flagged for a future
+# pass); allowlisted for now to keep the checker green.
+docs/internal.docs/comparisons/vigo-vs-puppet-2026-05-10.md:*:swarmgit
+docs/internal.docs/comparisons/vigo-vs-ansible-2026-05-10.md:*:swarmgit
+docs/internal.docs/strategy/vigo-market-footprint-2026-05-11.md:*:swarmgit
 
 # scripts/migrate-0.30.sh handles upgrades from 0.29.x to 0.30.x and
 # references the older state-on-disk paths.
@@ -70,7 +86,6 @@ scripts/check-legacy-naming.sh:*:cairn
 # (its name can't change), and the prose pointing at it cites it by that
 # name. Not introduced by the 0.50.0 rename; allowlisted by line so the
 # checker stays green.
-server/grpc/agentstream.go:982:\bcairn\b
+server/grpc/agentstream.go:992:\bcairn\b
 server/swarm/manifest.go:54:\bcairn\b
-server/swarm/manifest.go:291:\bcairn\b
-docs/engineering/subsystems/swarm.md:168:\bcairn\b
+server/swarm/manifest.go:292:\bcairn\b

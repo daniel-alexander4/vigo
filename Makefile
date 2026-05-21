@@ -57,6 +57,7 @@ test-substrate:
 	test/swarm-substrate.sh --wipe
 
 lint:
+	bash scripts/check-legacy-naming.sh
 	golangci-lint run ./...
 	buf lint
 	cd agent && cargo clippy -- -D warnings
