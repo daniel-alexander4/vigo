@@ -107,9 +107,9 @@ impl Executor for FileLineExecutor {
                 } else {
                     // Exact line check (within region if specified).
                     let exists = if has_region && !lines.is_empty() {
-                        lines[region_lo..=region_hi].iter().any(|l| *l == line)
+                        lines[region_lo..=region_hi].contains(&line)
                     } else {
-                        lines.iter().any(|l| *l == line)
+                        lines.contains(&line)
                     };
 
                     if exists {
@@ -148,8 +148,13 @@ impl Executor for FileLineExecutor {
                             }
                         };
                         let mut to_remove = Vec::new();
-                        for i in region_lo..=region_hi {
-                            if re.is_match(&lines[i]) {
+                        for (i, l) in lines
+                            .iter()
+                            .enumerate()
+                            .take(region_hi + 1)
+                            .skip(region_lo)
+                        {
+                            if re.is_match(l) {
                                 to_remove.push(i);
                             }
                         }
@@ -158,8 +163,13 @@ impl Executor for FileLineExecutor {
                         }
                     } else if !line.is_empty() {
                         let mut to_remove = Vec::new();
-                        for i in region_lo..=region_hi {
-                            if lines[i] == line {
+                        for (i, l) in lines
+                            .iter()
+                            .enumerate()
+                            .take(region_hi + 1)
+                            .skip(region_lo)
+                        {
+                            if *l == line {
                                 to_remove.push(i);
                             }
                         }

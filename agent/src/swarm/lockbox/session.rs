@@ -465,7 +465,7 @@ async fn handle_client(
 
     if line == "STATUS" {
         let _ = activity.send(());
-        let msg = format!("STATUS unlocked=true\n");
+        let msg = "STATUS unlocked=true\n".to_string();
         let _ = writer.write_all(msg.as_bytes()).await;
         return Ok(());
     }
@@ -509,7 +509,7 @@ fn decrypt_bytes(ciphertext: &[u8], identity: &Identity) -> Result<Vec<u8>> {
 }
 
 fn escape_err(s: &str) -> String {
-    s.replace('\n', " ").replace('\r', " ")
+    s.replace(['\n', '\r'], " ")
 }
 
 /// Check `/proc/<pid>` on Linux, or use `kill(pid, 0)` elsewhere,
@@ -517,7 +517,7 @@ fn escape_err(s: &str) -> String {
 fn pid_alive(pid: u32) -> bool {
     #[cfg(target_os = "linux")]
     {
-        return std::path::Path::new(&format!("/proc/{}", pid)).exists();
+        std::path::Path::new(&format!("/proc/{}", pid)).exists()
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -554,7 +554,7 @@ fn peer_uid_matches(stream: &tokio::net::UnixStream, our_uid: u32) -> bool {
         if rc != 0 {
             return false;
         }
-        return cred.uid == our_uid;
+        cred.uid == our_uid
     }
     // macOS: LOCAL_PEEREID returns (uid, gid) pair via SOL_LOCAL.
     #[cfg(target_os = "macos")]

@@ -1353,7 +1353,7 @@ fn cmd_re_invite_all(args: &[String]) -> Result<()> {
         let cross_fleet_members: Vec<String> = cfg
             .members
             .iter()
-            .filter(|m| m.to_ascii_lowercase() != local_pub_hex.to_ascii_lowercase())
+            .filter(|m| !m.eq_ignore_ascii_case(&local_pub_hex))
             .cloned()
             .collect();
         if cross_fleet_members.is_empty() {
@@ -1680,7 +1680,7 @@ fn cmd_leave(args: &[String]) -> Result<()> {
         &project_id,
         &leaver_pub,
         leave_time,
-        |bytes| sign_with_session(bytes),
+        sign_with_session,
     )?;
     write_sentinel(&caller.home, &project_id, "leave.pending", &leave_envelope)?;
     println!("queued LEAVE for project '{}'", cfg.handle);
@@ -1752,8 +1752,8 @@ fn cmd_list(args: &[String]) -> Result<()> {
         return Ok(());
     }
     println!(
-        "{:<24} {:<14} {:<14} {:<8} {}",
-        "HANDLE", "SCOPE", "MEMBERS", "TOKENS", "PROJECT_ID"
+        "{:<24} {:<14} {:<14} {:<8} PROJECT_ID",
+        "HANDLE", "SCOPE", "MEMBERS", "TOKENS"
     );
     for p in &projects {
         let pid = parse_hex_id(&p.project_id).unwrap_or([0u8; ID_LEN]);
@@ -1998,7 +1998,7 @@ fn cmd_revoke(args: &[String]) -> Result<()> {
         revoked_at,
         &reason,
         &admin_pub,
-        |bytes| sign_with_session(bytes),
+        sign_with_session,
     )?;
     write_sentinel(&caller.home, &project_id, "revoke.pending", &envelope)?;
     println!("queued REVOKE of token {} on project '{}'", hex_id(&token_id), cfg.handle);

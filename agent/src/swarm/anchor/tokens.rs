@@ -756,7 +756,7 @@ mod tests {
         // Even if the receiver is told the *attacker* is the founder
         // (so the signer matches), the project_id won't reproduce from
         // sha256(attacker ‖ handle), so it's still rejected.
-        let r1 = verify_chain(&victim_project, &pub_bytes(&attacker), &[], &[forged.clone()], 200);
+        let r1 = verify_chain(&victim_project, &pub_bytes(&attacker), &[], std::slice::from_ref(&forged), 200);
         assert_eq!(r1, Err(ChainError::RootNotFounder));
         // And if the receiver is told the victim is the founder, the
         // bootstrap signer (attacker) ≠ founder → rejected too.
@@ -1079,7 +1079,7 @@ mod tests {
         let bootstrap = issue_bootstrap(&founder, "proj", 100, Some(150)).unwrap();
         let pid = project_id_for(&pub_bytes(&founder), "proj");
         // now=200, expiry=150 → expired
-        let err = verify_chain(&pid, &pub_bytes(&founder), &[], &[bootstrap.clone()], 200)
+        let err = verify_chain(&pid, &pub_bytes(&founder), &[], std::slice::from_ref(&bootstrap), 200)
             .unwrap_err();
         assert_eq!(
             err,

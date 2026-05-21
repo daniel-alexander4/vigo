@@ -34,7 +34,7 @@ impl Executor for SshExecExecutor {
 
         let ssh = match SshParams::from_params(params, result) {
             Ok(s) => s,
-            Err(r) => return r,
+            Err(r) => return *r,
         };
         result = ResourceResult::new("ssh_exec", params.get("name").map_or("", |s| s));
         let command = match params.get("command") {

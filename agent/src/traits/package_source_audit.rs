@@ -198,7 +198,7 @@ fn read_apt_deb822(path: &Path, out: &mut Vec<Value>) {
         let components_joined = components.join(" ");
 
         for uri in &uris {
-            for suite in suites.iter().cloned().collect::<Vec<_>>() {
+            for suite in &suites {
                 out.push(json!({
                     "type": "apt",
                     "kind": kind,

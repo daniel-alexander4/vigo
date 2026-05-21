@@ -54,7 +54,7 @@ pub fn collect() -> Result<Value> {
 
     #[cfg(target_os = "linux")]
     {
-        return Ok(collect_linux(uptime_secs));
+        Ok(collect_linux(uptime_secs))
     }
 
     #[cfg(target_os = "macos")]

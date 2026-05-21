@@ -510,7 +510,7 @@ fn extract_version(line: &str) -> Option<String> {
     let idx = lower.find("version ")?;
     let after = &line[idx + 8..];
     let ver = after
-        .split(|c: char| c == ',' || c == ' ' || c == '\t')
+        .split([',', ' ', '\t'])
         .next()?;
     if ver.is_empty() {
         None

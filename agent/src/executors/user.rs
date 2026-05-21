@@ -64,7 +64,7 @@ impl UserExecutor {
         let f = std::fs::File::open(&self.passwd_path)
             .map_err(|e| format!("open passwd: {}", e))?;
 
-        for line in BufReader::new(f).lines().flatten() {
+        for line in BufReader::new(f).lines().map_while(Result::ok) {
             let fields: Vec<&str> = line.split(':').collect();
             if fields.len() >= 7 && fields[0] == name {
                 return Ok(Some(PasswdEntry {
@@ -84,7 +84,7 @@ impl UserExecutor {
             Ok(f) => f,
             Err(e) => return Err(format!("open shadow: {}", e)),
         };
-        for line in BufReader::new(f).lines().flatten() {
+        for line in BufReader::new(f).lines().map_while(Result::ok) {
             let fields: Vec<&str> = line.splitn(3, ':').collect();
             if fields.len() >= 2 && fields[0] == name {
                 return Ok(fields[1].to_string());
@@ -191,9 +191,9 @@ impl UserExecutor {
             if let Ok(v) = serde_json::from_str::<Vec<serde_json::Value>>(s) {
                 let items: Vec<String> = v
                     .into_iter()
-                    .filter_map(|item| match item {
-                        serde_json::Value::String(g) => Some(g),
-                        other => Some(other.to_string()),
+                    .map(|item| match item {
+                        serde_json::Value::String(g) => g,
+                        other => other.to_string(),
                     })
                     .map(|g| g.trim().to_string())
                     .filter(|g| !g.is_empty())
@@ -390,7 +390,7 @@ impl UserExecutor {
             .map_err(|e| format!("open passwd: {}", e))?;
 
         let mut used = std::collections::HashSet::new();
-        for line in BufReader::new(f).lines().flatten() {
+        for line in BufReader::new(f).lines().map_while(Result::ok) {
             let fields: Vec<&str> = line.split(':').collect();
             if fields.len() >= 3 {
                 if let Ok(uid) = fields[2].parse::<i32>() {

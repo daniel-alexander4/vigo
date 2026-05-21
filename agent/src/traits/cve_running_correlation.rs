@@ -266,10 +266,9 @@ fn read_debsecan_package_cves(scan_dir: &str, mut emit: impl FnMut(&str, CveEntr
             "high"
         } else if trimmed.contains("medium urgency") {
             "medium"
-        } else if trimmed.contains("low urgency") {
-            "low"
         } else {
-            "low" // unassigned → low, matching security_scan behavior
+            // "low urgency" and unassigned both map to low, matching security_scan.
+            "low"
         };
         emit(
             pkg,

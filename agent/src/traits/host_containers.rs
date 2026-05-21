@@ -32,7 +32,7 @@ use std::process::Command;
 pub fn collect() -> Result<Value> {
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
-        return Ok(collect_docker());
+        Ok(collect_docker())
     }
 
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]

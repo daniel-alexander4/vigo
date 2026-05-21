@@ -50,7 +50,7 @@ fn collect_disk_gb() -> Value {
 
     for (mountpoint, _, _) in &mounts {
         if let Ok(stat) = nix::sys::statvfs::statvfs(mountpoint.as_str()) {
-            let total_gb = (stat.blocks() * stat.fragment_size() as u64) / (1024 * 1024 * 1024);
+            let total_gb = (stat.blocks() * stat.fragment_size()) / (1024 * 1024 * 1024);
             disks.insert(mountpoint.clone(), json!(total_gb));
         }
     }

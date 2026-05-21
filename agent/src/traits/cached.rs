@@ -51,9 +51,9 @@ impl CachedCollectors {
     pub async fn collect_all(&self) -> Value {
         let (run_stable, run_periodic, collectors) = {
             let mut state = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-            let run_stable = state.cached.is_none() || state.cycle % state.interval == 0;
+            let run_stable = state.cached.is_none() || state.cycle.is_multiple_of(state.interval);
             let run_periodic = state.periodic_cached.is_none()
-                || state.cycle % state.periodic_interval == 0;
+                || state.cycle.is_multiple_of(state.periodic_interval);
             state.cycle += 1;
 
             let mut collectors = self.volatile.clone();

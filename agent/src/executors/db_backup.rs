@@ -19,6 +19,9 @@ use std::path::Path;
 use std::time::Instant;
 use tracing::info;
 
+/// Builds the dump-tool argument vector given an output path.
+type DumpArgsFn = Box<dyn Fn(&str) -> Vec<String>>;
+
 pub struct DbBackupExecutor {
     pub runner: Box<dyn CommandRunner>,
 }
@@ -243,7 +246,7 @@ impl DbBackupExecutor {
         }
 
         // Resolve the dump tool.
-        let (tool, args_fn): (String, Box<dyn Fn(&str) -> Vec<String>>) =
+        let (tool, args_fn): (String, DumpArgsFn) =
             if let Some(cmd) = custom_command {
                 // Custom command — extract the tool name (first word) for validation.
                 let tool = cmd.split_whitespace().next().unwrap_or("").to_string();

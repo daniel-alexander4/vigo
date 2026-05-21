@@ -180,7 +180,7 @@ fn append_subfield(field: &str, value: &str, sep: &str) -> String {
         return value.to_string();
     }
     let parts: Vec<&str> = field.split(sep).collect();
-    if parts.iter().any(|p| *p == value) {
+    if parts.contains(&value) {
         return field.to_string(); // Already present — idempotent.
     }
     format!("{}{}{}", field, sep, value)
@@ -192,7 +192,7 @@ fn prepend_subfield(field: &str, value: &str, sep: &str) -> String {
         return value.to_string();
     }
     let parts: Vec<&str> = field.split(sep).collect();
-    if parts.iter().any(|p| *p == value) {
+    if parts.contains(&value) {
         return field.to_string(); // Already present — idempotent.
     }
     format!("{}{}{}", value, sep, field)

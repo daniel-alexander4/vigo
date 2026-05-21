@@ -226,7 +226,7 @@ mod tests {
         let pw = derive_puddle_wrap_password_for(fleet_key);
         let blob = wrap_identity(&id, pw.as_slice(), &salt).unwrap();
         std::fs::write(identity_path(home), &blob).unwrap();
-        std::fs::write(salt_path(home), &salt).unwrap();
+        std::fs::write(salt_path(home), salt).unwrap();
         id
     }
 

@@ -262,8 +262,7 @@ impl CatalogEntry {
         F: FnOnce(&[u8]) -> Result<[u8; SIG_LEN]>,
     {
         if body.delegations.is_empty()
-            && body.founder_puddle_pubkey.to_ascii_lowercase()
-                != body.signing_puddle_pubkey.to_ascii_lowercase()
+            && !body.founder_puddle_pubkey.eq_ignore_ascii_case(&body.signing_puddle_pubkey)
         {
             bail!(
                 "catalog entry has no delegation chain but signing_puddle_pubkey ({}) ≠ founder_puddle_pubkey ({}) — a rekeyed founder must carry the ADR-019 delegation chain",

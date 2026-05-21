@@ -160,7 +160,7 @@ pub fn reencrypt_pending_path(home: &Path) -> PathBuf {
 /// `$TMPDIR/lockbox-<uid>/` on macOS — opaque to root). The watcher
 /// uses this to gate auto-encrypt-on-write per ADR-012: file present
 /// + PID alive ⇒ session unlocked ⇒ encrypt; otherwise leave the
-/// plaintext in place for the unlock sweep to pick up.
+///   plaintext in place for the unlock sweep to pick up.
 pub fn session_unlocked_path(home: &Path) -> PathBuf {
     dot_dir(home).join("session.unlocked")
 }
@@ -388,9 +388,10 @@ mod tests {
     fn config_round_trips_through_save_load() {
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir_all(dot_dir(dir.path())).unwrap();
-        let mut cfg = UserConfig::default();
-        cfg.idle_timeout_minutes = 30;
-        cfg.cross_subnet_peers = vec!["host-a".to_string()];
+        let cfg = UserConfig {
+            idle_timeout_minutes: 30,
+            cross_subnet_peers: vec!["host-a".to_string()],
+        };
         save_config(dir.path(), &cfg, "tester").unwrap();
         let reloaded = load_config(dir.path());
         assert_eq!(reloaded.idle_timeout_minutes, 30);

@@ -126,10 +126,10 @@ pub fn save_retired(
 /// Return a reference to the active-session entry (most-recent
 /// retirement whose `expires_at` is still in the future) or `None`
 /// when no rekey session is currently live.
-pub fn active_session<'a>(
-    entries: &'a [RetiredPuddleEntry],
+pub fn active_session(
+    entries: &[RetiredPuddleEntry],
     now: i64,
-) -> Option<&'a RetiredPuddleEntry> {
+) -> Option<&RetiredPuddleEntry> {
     entries
         .iter()
         .filter(|e| e.expires_at > now)
@@ -400,7 +400,7 @@ pub async fn handle_rekey_claim(
 /// same predicate without re-implementing the path resolution.
 pub fn session_helper_running(home: &Path) -> bool {
     let path = config::session_unlocked_path(home);
-    matches!(fs::metadata(&path), Ok(_))
+    fs::metadata(&path).is_ok()
 }
 
 /// Local convenience for sibling subsystems / status output. Returns

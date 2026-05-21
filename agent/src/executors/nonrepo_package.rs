@@ -545,7 +545,7 @@ fn package_name_from_url(url: &str, format: PackageFormat) -> String {
             let ext = if format == PackageFormat::Pkg { ".pkg" } else { ".msi" };
             let base = filename.strip_suffix(ext).unwrap_or(filename);
             // Split on '-' or '_' and take segments until we hit a version-like part.
-            let parts: Vec<&str> = base.split(|c: char| c == '-' || c == '_').collect();
+            let parts: Vec<&str> = base.split(['-', '_']).collect();
             let mut name_end = parts.len();
             for (i, part) in parts.iter().enumerate() {
                 if part.chars().next().map(|c| c.is_ascii_digit()).unwrap_or(false) {

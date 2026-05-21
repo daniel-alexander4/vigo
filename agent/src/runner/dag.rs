@@ -22,13 +22,14 @@ pub struct ResourceNode {
     pub when: String,
 }
 
+/// Maps a resource name → list of resource names to notify when it changes.
+pub type NotifyMap = HashMap<String, Vec<String>>;
+
 /// Build the execution DAG from proto modules.
 ///
 /// Returns (resource_nodes, notify_map) where notify_map maps resource name →
 /// list of resource names to notify when it changes.
-pub fn build_dag(
-    modules: &[Module],
-) -> Result<(Vec<ResourceNode>, HashMap<String, Vec<String>>), String> {
+pub fn build_dag(modules: &[Module]) -> Result<(Vec<ResourceNode>, NotifyMap), String> {
     if modules.is_empty() {
         return Ok((Vec::new(), HashMap::new()));
     }

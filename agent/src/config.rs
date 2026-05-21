@@ -114,7 +114,7 @@ mod tests {
 
         let cfg = load(dir.path());
         assert_eq!(cfg.get("server").unwrap(), "10.0.0.1:1530");
-        assert!(cfg.get("log_level").is_none());
+        assert!(!cfg.contains_key("log_level"));
     }
 
     #[test]

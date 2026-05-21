@@ -595,7 +595,7 @@ pub fn free_space(path: &str) -> Option<u64> {
     unsafe {
         let mut stat: libc::statvfs = std::mem::zeroed();
         if libc::statvfs(c_path.as_ptr(), &mut stat) == 0 {
-            Some(stat.f_bavail as u64 * stat.f_frsize as u64)
+            Some(stat.f_bavail * stat.f_frsize)
         } else {
             None
         }

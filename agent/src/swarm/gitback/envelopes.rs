@@ -593,11 +593,10 @@ pub fn reap_all(gitback_base: &Path, now: i64, retention_secs: i64) -> Result<us
                     _ => None,
                 };
                 if let Some(ts) = ts {
-                    if ts < cutoff {
-                        if fs::remove_file(&p).is_ok() {
+                    if ts < cutoff
+                        && fs::remove_file(&p).is_ok() {
                             reaped += 1;
                         }
-                    }
                 }
             }
         }

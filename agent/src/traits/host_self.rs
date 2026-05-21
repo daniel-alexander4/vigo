@@ -34,7 +34,7 @@ use serde_json::{json, Value};
 pub fn collect() -> Result<Value> {
     #[cfg(target_os = "linux")]
     {
-        return Ok(collect_linux());
+        Ok(collect_linux())
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -212,7 +212,7 @@ mod tests {
         // process itself has stdio open) and a nonzero kernel ceiling.
         assert!(used > 0, "fd_used should be > 0 on a live host");
         assert!(max > used, "fd_max should be > fd_used");
-        assert!(pct >= 0.0 && pct <= 100.0, "fd_pct out of range: {}", pct);
+        assert!((0.0..=100.0).contains(&pct), "fd_pct out of range: {}", pct);
         assert!(proc_count > 0, "proc_count should see at least the test process");
         // oom_recent is 0 or 1 — our test shouldn't see anything unexpected.
         assert!(oom == 0 || oom == 1, "oom_recent must be 0 or 1, got {}", oom);

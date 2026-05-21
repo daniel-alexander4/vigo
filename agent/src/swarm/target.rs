@@ -64,7 +64,7 @@ fn match_single(hostname: &str, traits: &HashMap<String, String>, pat: &str) -> 
         return true;
     }
     if let Some((key, value)) = pat.split_once('=') {
-        return traits.get(key).map_or(false, |v| v == value);
+        return traits.get(key).is_some_and(|v| v == value);
     }
     if glob_match(pat, hostname) {
         return true;

@@ -1564,7 +1564,7 @@ mod tests {
             &pub_bytes(&new_founder),
             200,
         );
-        let header = encode_chain_header(&chain, &[delegation.clone()]).unwrap();
+        let header = encode_chain_header(&chain, std::slice::from_ref(&delegation)).unwrap();
         let parsed = decode_chain_header(&header).unwrap();
         assert_eq!(parsed.chain.len(), 1);
         assert_eq!(parsed.delegations.len(), 1);

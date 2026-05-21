@@ -202,7 +202,7 @@ impl Executor for NetworkDnsExecutor {
 
         let ssh = match SshParams::from_params(params, result) {
             Ok(s) => s,
-            Err(r) => return r,
+            Err(r) => return *r,
         };
         result = ResourceResult::new("network_dns", params.get("name").map_or("", |s| s));
         let device_type = match params.get("device_type") {

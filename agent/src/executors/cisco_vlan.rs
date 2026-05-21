@@ -60,7 +60,7 @@ impl Executor for CiscoVlanExecutor {
 
         let ssh = match SshParams::from_params(params, result) {
             Ok(s) => s,
-            Err(r) => return r,
+            Err(r) => return *r,
         };
         result = ResourceResult::new("cisco_vlan", params.get("name").map_or("", |s| s));
         let vlan_id = require_param!(params, "vlan_id", result);

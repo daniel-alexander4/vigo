@@ -238,8 +238,8 @@ fn cmd_seeds_list(_args: &[String]) -> Result<()> {
         println!("(no active seeds in manifest)");
         return Ok(());
     }
-    println!("{:<14} {:<20} {:<24} {:<8} {}",
-             "SHA", "LABEL", "TARGET", "AGE", "RETENTION");
+    println!("{:<14} {:<20} {:<24} {:<8} RETENTION",
+             "SHA", "LABEL", "TARGET", "AGE");
     for e in active {
         println!(
             "{:<14} {:<20} {:<24} {:<8} {}",

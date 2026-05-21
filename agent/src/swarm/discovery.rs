@@ -1143,7 +1143,7 @@ fn sync_manifest_from_peer(peer_addr: &str, manifest: &Manifest, agent: &Arc<ure
                 // Evict newly revoked blobs from cache + clean up symlinks
                 // and flush stale PeerMap entries so re-seeding the same SHA
                 // doesn't hit 404s from peers that already evicted the blob.
-                super::evict_revoked_blobs(&manifest, Some(peer_map));
+                super::evict_revoked_blobs(manifest, Some(peer_map));
             }
         }
         Err(e) => {
@@ -1299,7 +1299,7 @@ mod tests {
     fn test_manifest() -> Arc<Manifest> {
         let dir = tempfile::tempdir().unwrap();
         // Leak the tempdir so it lives for the test duration.
-        let path = dir.into_path();
+        let path = dir.keep();
         Manifest::load(&path)
     }
 
@@ -1366,11 +1366,11 @@ mod tests {
         let manifest = test_manifest();
         // With a HOST: line.
         let msg = "VIGO-SWARM\nMANIFEST:0\nADDR:192.168.1.2:1531\nHOST:danlap\n";
-        let result = parse_announcement(&msg, "192.168.1.2:1531".parse().unwrap(), &pm, &manifest);
+        let result = parse_announcement(msg, "192.168.1.2:1531".parse().unwrap(), &pm, &manifest);
         assert_eq!(result.host_name.as_deref(), Some("danlap"));
         // Without one (older agent) → None.
         let msg = "VIGO-SWARM\nMANIFEST:0\nADDR:192.168.1.2:1531\n";
-        let result = parse_announcement(&msg, "192.168.1.2:1531".parse().unwrap(), &pm, &manifest);
+        let result = parse_announcement(msg, "192.168.1.2:1531".parse().unwrap(), &pm, &manifest);
         assert!(result.host_name.is_none());
         // build_announcement always emits a HOST: line for this envoy.
         let cache_dir = tempfile::tempdir().unwrap();
@@ -1918,7 +1918,7 @@ mod tests {
             let data = format!("blob-{}", i);
             let sha = hex::encode(sha2::Sha256::digest(data.as_bytes()));
             cache.write_chunk(&sha, 0, data.as_bytes()).unwrap();
-            cache.assemble(&sha, data.as_bytes().len() as u64, 1).unwrap();
+            cache.assemble(&sha, data.len() as u64, 1).unwrap();
         }
 
         let li = GitbackLocalInfo {
@@ -2190,7 +2190,7 @@ mod tests {
             None,
             0,
         );
-        assert!(packets.len() >= 1);
+        assert!(!packets.is_empty());
         assert!(packets[0].contains(&format!("HAVE:{}:1/1", sha)),
             "primary packet must still carry HAVE lines when spillover is used");
     }

@@ -391,14 +391,13 @@ pub fn converge(
         }
 
         // Rollback file on error.
-        if result.error.is_some() && !opts.dry_run {
-            if FILE_EDITING_TYPES.contains(&node.resource_type.as_str()) {
+        if result.error.is_some() && !opts.dry_run
+            && FILE_EDITING_TYPES.contains(&node.resource_type.as_str()) {
                 if let Some(path) = extract_target_path(node) {
                     warn!(resource = %node.name, path = %path, "rolling back file after error");
                     tracker.rollback(&path);
                 }
             }
-        }
 
         // Track failures for dependency propagation and circuit breaker.
         if result.error.is_some() && result.action != Action::Blocked {
@@ -1351,6 +1350,79 @@ impl PackageExecutorWrapper {
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Package resource helpers
+// ---------------------------------------------------------------------------
+
+/// Returns true if a resource type is a package or repository resource.
+fn is_package_type(resource_type: &str) -> bool {
+    matches!(resource_type, "package" | "repository" | "nonrepo_package")
+}
+
+/// Attempt to free disk space by cleaning the package manager cache.
+/// Best-effort — errors are silently ignored.
+fn try_cleanup_package_cache() {
+    // Try apt-get clean (Debian/Ubuntu).
+    let _ = std::process::Command::new("apt-get")
+        .args(["clean"])
+        .output();
+    // Try dnf clean (RHEL/Fedora).
+    let _ = std::process::Command::new("dnf")
+        .args(["clean", "packages"])
+        .output();
+}
+
+// ---------------------------------------------------------------------------
+// Safety utilities
+// ---------------------------------------------------------------------------
+
+/// Returns the percentage of free disk space on the filesystem containing `path`.
+/// Returns None if the check fails (unsupported platform, path doesn't exist).
+#[cfg(unix)]
+fn disk_free_percent(path: &str) -> Option<f64> {
+    use std::ffi::CString;
+    use std::mem::MaybeUninit;
+
+    let c_path = CString::new(path).ok()?;
+    let mut stat = MaybeUninit::<libc::statvfs>::uninit();
+
+    let rc = unsafe { libc::statvfs(c_path.as_ptr(), stat.as_mut_ptr()) };
+    if rc != 0 {
+        return None;
+    }
+
+    let stat = unsafe { stat.assume_init() };
+    if stat.f_blocks == 0 {
+        return None;
+    }
+
+    let free_pct = (stat.f_bavail as f64 / stat.f_blocks as f64) * 100.0;
+    Some(free_pct)
+}
+
+#[cfg(not(unix))]
+fn disk_free_percent(_path: &str) -> Option<f64> {
+    None // Skip disk check on non-Unix platforms.
+}
+
+/// Returns free disk space in bytes on the filesystem containing `path`.
+#[cfg(unix)]
+fn disk_free_bytes(path: &str) -> Option<u64> {
+    use std::ffi::CString;
+    use std::mem::MaybeUninit;
+
+    let c_path = CString::new(path).ok()?;
+    let mut stat = MaybeUninit::<libc::statvfs>::uninit();
+
+    let rc = unsafe { libc::statvfs(c_path.as_ptr(), stat.as_mut_ptr()) };
+    if rc != 0 {
+        return None;
+    }
+
+    let stat = unsafe { stat.assume_init() };
+    Some(stat.f_bavail * stat.f_frsize)
 }
 
 #[cfg(test)]
@@ -3064,79 +3136,6 @@ mod tests {
         assert_eq!(recorded.len(), 1);
         assert_eq!(recorded[0].0, "upgrade_all");
     }
-}
-
-// ---------------------------------------------------------------------------
-// Package resource helpers
-// ---------------------------------------------------------------------------
-
-/// Returns true if a resource type is a package or repository resource.
-fn is_package_type(resource_type: &str) -> bool {
-    matches!(resource_type, "package" | "repository" | "nonrepo_package")
-}
-
-/// Attempt to free disk space by cleaning the package manager cache.
-/// Best-effort — errors are silently ignored.
-fn try_cleanup_package_cache() {
-    // Try apt-get clean (Debian/Ubuntu).
-    let _ = std::process::Command::new("apt-get")
-        .args(["clean"])
-        .output();
-    // Try dnf clean (RHEL/Fedora).
-    let _ = std::process::Command::new("dnf")
-        .args(["clean", "packages"])
-        .output();
-}
-
-// ---------------------------------------------------------------------------
-// Safety utilities
-// ---------------------------------------------------------------------------
-
-/// Returns the percentage of free disk space on the filesystem containing `path`.
-/// Returns None if the check fails (unsupported platform, path doesn't exist).
-#[cfg(unix)]
-fn disk_free_percent(path: &str) -> Option<f64> {
-    use std::ffi::CString;
-    use std::mem::MaybeUninit;
-
-    let c_path = CString::new(path).ok()?;
-    let mut stat = MaybeUninit::<libc::statvfs>::uninit();
-
-    let rc = unsafe { libc::statvfs(c_path.as_ptr(), stat.as_mut_ptr()) };
-    if rc != 0 {
-        return None;
-    }
-
-    let stat = unsafe { stat.assume_init() };
-    if stat.f_blocks == 0 {
-        return None;
-    }
-
-    let free_pct = (stat.f_bavail as f64 / stat.f_blocks as f64) * 100.0;
-    Some(free_pct)
-}
-
-#[cfg(not(unix))]
-fn disk_free_percent(_path: &str) -> Option<f64> {
-    None // Skip disk check on non-Unix platforms.
-}
-
-/// Returns free disk space in bytes on the filesystem containing `path`.
-#[cfg(unix)]
-fn disk_free_bytes(path: &str) -> Option<u64> {
-    use std::ffi::CString;
-    use std::mem::MaybeUninit;
-
-    let c_path = CString::new(path).ok()?;
-    let mut stat = MaybeUninit::<libc::statvfs>::uninit();
-
-    let rc = unsafe { libc::statvfs(c_path.as_ptr(), stat.as_mut_ptr()) };
-    if rc != 0 {
-        return None;
-    }
-
-    let stat = unsafe { stat.assume_init() };
-    Some(stat.f_bavail as u64 * stat.f_frsize as u64)
 }
 
 #[cfg(not(unix))]

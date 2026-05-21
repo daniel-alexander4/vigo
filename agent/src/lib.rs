@@ -25,5 +25,8 @@ pub mod tunnel;
 pub mod update;
 
 pub mod proto {
+    // Generated tonic/prost code; large_enum_variant is inherent to the
+    // proto shape and cannot be addressed without editing generated code.
+    #![allow(clippy::large_enum_variant)]
     tonic::include_proto!("vigo.v1");
 }

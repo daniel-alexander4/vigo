@@ -91,7 +91,7 @@ fn try_download(runner: &dyn CommandRunner, config: &DownloadConfig) -> Result<(
     curl_args.push(config.url);
 
     match runner.run("curl", &curl_args) {
-        Ok(o) if o.status.success() => return Ok(()),
+        Ok(o) if o.status.success() => Ok(()),
         Ok(o) => {
             let stderr = String::from_utf8_lossy(&o.stderr);
             // curl failed — try wget before giving up.
@@ -103,7 +103,7 @@ fn try_download(runner: &dyn CommandRunner, config: &DownloadConfig) -> Result<(
             wget_args.push(config.url);
 
             match runner.run("wget", &wget_args) {
-                Ok(o2) if o2.status.success() => return Ok(()),
+                Ok(o2) if o2.status.success() => Ok(()),
                 Ok(o2) => {
                     let stderr2 = String::from_utf8_lossy(&o2.stderr);
                     // Return the more informative error message.

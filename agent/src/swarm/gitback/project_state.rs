@@ -485,6 +485,11 @@ impl DelegationChain {
         self.delegations.len()
     }
 
+    /// True iff the chain has seen no founder rekey yet.
+    pub fn is_empty(&self) -> bool {
+        self.delegations.is_empty()
+    }
+
     /// True iff a further rekey would push the chain past
     /// [`DELEGATION_MAX_LEN`]. Pre-rotation hook checks this before
     /// signing.
@@ -1013,8 +1018,10 @@ mod tests {
         let rekey2 = fresh_key();
         let pid = project_id_for(&pub_bytes(&founder), "proj");
 
-        let mut chain = DelegationChain::default();
-        chain.version = PROJECT_STATE_VERSION;
+        let mut chain = DelegationChain {
+            version: PROJECT_STATE_VERSION,
+            ..Default::default()
+        };
 
         chain
             .append(
@@ -1046,8 +1053,10 @@ mod tests {
         let home = tempdir().unwrap();
         let founder = fresh_key();
         let pid = project_id_for(&pub_bytes(&founder), "proj");
-        let mut chain = DelegationChain::default();
-        chain.version = PROJECT_STATE_VERSION;
+        let mut chain = DelegationChain {
+            version: PROJECT_STATE_VERSION,
+            ..Default::default()
+        };
 
         let mut prev_signer = founder.clone();
         for i in 0..DELEGATION_MAX_LEN {
@@ -1120,8 +1129,10 @@ mod tests {
 
     #[test]
     fn delegation_chain_warn_band_predicates() {
-        let mut chain = DelegationChain::default();
-        chain.version = PROJECT_STATE_VERSION;
+        let mut chain = DelegationChain {
+            version: PROJECT_STATE_VERSION,
+            ..Default::default()
+        };
         // Empty chain → not in warn band.
         assert!(!chain.is_in_warn_band());
         // Synthesize entries by pushing zero-data delegations — we're

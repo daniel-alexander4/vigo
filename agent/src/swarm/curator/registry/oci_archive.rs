@@ -30,7 +30,7 @@
 //! both produce valid OCI archives.
 
 use std::fs::File;
-use std::io::{self, Read, Seek};
+use std::io::{Read, Seek};
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -151,7 +151,7 @@ fn read_named_entry<R: Read + Seek>(reader: R, name: &str) -> Result<Option<Vec<
         let same = path.to_str().map(|p| p == name).unwrap_or(false);
         if same {
             let mut buf = Vec::with_capacity(ent.size() as usize);
-            ent.read_to_end(&mut buf).map_err(io::Error::from)?;
+            ent.read_to_end(&mut buf)?;
             return Ok(Some(buf));
         }
     }

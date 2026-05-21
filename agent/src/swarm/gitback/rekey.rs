@@ -48,7 +48,7 @@
 //!   then the gossip is a status hint, never authority.
 //! - Does not handle multi-puddle member re-invitation. Foreign-puddle
 //!   members need a fresh OOB capability code (slice 4's `re-invite-all`
-//!   + `rejoin` flow); this module only updates the local user's own
+//!   plus `rejoin` flow); this module only updates the local user's own
 //!   member entry across all projects.
 
 use std::path::Path;

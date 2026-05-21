@@ -488,7 +488,7 @@ async fn handle_client(
 fn pid_alive(pid: u32) -> bool {
     #[cfg(target_os = "linux")]
     {
-        return std::path::Path::new(&format!("/proc/{}", pid)).exists();
+        std::path::Path::new(&format!("/proc/{}", pid)).exists()
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -521,7 +521,7 @@ fn peer_uid_matches(stream: &tokio::net::UnixStream, our_uid: u32) -> bool {
         if rc != 0 {
             return false;
         }
-        return cred.uid == our_uid;
+        cred.uid == our_uid
     }
     #[cfg(target_os = "macos")]
     {

@@ -133,7 +133,7 @@ impl Executor for NetworkBannerExecutor {
 
         let ssh = match SshParams::from_params(params, result) {
             Ok(s) => s,
-            Err(r) => return r,
+            Err(r) => return *r,
         };
         result = ResourceResult::new("network_banner", params.get("name").map_or("", |s| s));
         let device_type = require_param!(params, "device_type", result);

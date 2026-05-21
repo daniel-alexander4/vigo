@@ -645,7 +645,7 @@ fn format_millis(ms: i64) -> String {
     if ms <= 0 {
         return format!("(ms={ms})");
     }
-    let secs = (ms / 1000) as i64;
+    let secs = ms / 1000;
     let day_secs: i64 = 86_400;
     let mut days = secs / day_secs;
     let mut time_secs = secs % day_secs;

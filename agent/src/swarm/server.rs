@@ -1196,7 +1196,7 @@ async fn handle_gitback_push(
     // Both are self-reported over mTLS; we require them to agree
     // so a compromised (but fleet-enrolled) envoy cannot push a
     // mirror labeled as a different seeder.
-    if seeder_header.to_ascii_lowercase() != seeder.to_ascii_lowercase() {
+    if !seeder_header.eq_ignore_ascii_case(&seeder) {
         return forbidden(&format!(
             "seeder mismatch: header '{}' does not match label seeder '{}'",
             seeder_header, seeder,
@@ -1420,7 +1420,7 @@ fn parse_gitback_label(label: &str) -> Option<(String, String, String)> {
 
 /// Minimal URL-decoding for labels. We only need to handle `%3A`
 /// (colon) since label segments can legally contain only alphanum
-/// + `-` + `_` + `.`. Anything else we leave as-is and let the
+/// plus `-`, `_`, and `.`. Anything else we leave as-is and let the
 /// label parser reject.
 fn url_decode(s: &str) -> Option<String> {
     let mut out = String::with_capacity(s.len());

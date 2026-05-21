@@ -82,25 +82,25 @@ impl Executor for ReplaceExecutor {
         let mut changed = false;
         let mut first_done = false;
 
-        for i in region_lo..=region_hi {
+        for line_ref in lines.iter_mut().take(region_hi + 1).skip(region_lo) {
             if first_done && occurrences == "first" {
                 break;
             }
 
-            if !re.is_match(&lines[i]) {
+            if !re.is_match(line_ref) {
                 continue;
             }
 
             let replaced = if occurrences == "first" && !first_done {
                 first_done = true;
                 // Replace first occurrence within this line.
-                re.replace(&lines[i], replace_str.as_str()).to_string()
+                re.replace(line_ref, replace_str.as_str()).to_string()
             } else {
-                re.replace_all(&lines[i], replace_str.as_str()).to_string()
+                re.replace_all(line_ref, replace_str.as_str()).to_string()
             };
 
-            if replaced != lines[i] {
-                lines[i] = replaced;
+            if replaced != *line_ref {
+                *line_ref = replaced;
                 changed = true;
             }
 
@@ -270,10 +270,9 @@ mod tests {
         assert!(result.error.is_none(), "{:?}", result.error);
         assert!(result.changed);
 
-        let lines: Vec<&str> = std::fs::read_to_string(&path)
+        let _lines: Vec<&str> = std::fs::read_to_string(&path)
             .unwrap()
             .lines()
-            .map(|l| l)
             .collect::<Vec<_>>()
             .into_iter()
             .collect();

@@ -480,7 +480,14 @@ fn run_auto_encrypt_with_retry(user: &str, filename: &str, home: &Path) {
     };
 
     let mut last_err: Option<AutoEncryptError> = None;
-    for attempt in 0..=RETRY_BACKOFFS.len() {
+    // One attempt per backoff plus a final no-backoff attempt; `backoff` is
+    // None on that last pass.
+    let backoffs = RETRY_BACKOFFS
+        .iter()
+        .map(Some)
+        .chain(std::iter::once(None))
+        .enumerate();
+    for (attempt, backoff) in backoffs {
         match auto_encrypt::encrypt_in_place(home, user, filename, &recipients) {
             Ok(size) => {
                 info!(
@@ -517,7 +524,7 @@ fn run_auto_encrypt_with_retry(user: &str, filename: &str, home: &Path) {
                 return;
             }
             Err(AutoEncryptError::Transient(msg)) => {
-                if attempt < RETRY_BACKOFFS.len() {
+                if let Some(delay) = backoff {
                     warn!(
                         "lockbox watcher: encrypt attempt {}/3 failed for {}/{}: {}",
                         attempt + 1,
@@ -525,11 +532,9 @@ fn run_auto_encrypt_with_retry(user: &str, filename: &str, home: &Path) {
                         filename,
                         msg
                     );
-                    std::thread::sleep(RETRY_BACKOFFS[attempt]);
-                    last_err = Some(AutoEncryptError::Transient(msg));
-                } else {
-                    last_err = Some(AutoEncryptError::Transient(msg));
+                    std::thread::sleep(*delay);
                 }
+                last_err = Some(AutoEncryptError::Transient(msg));
             }
         }
     }
@@ -963,7 +968,7 @@ mod tests {
         // such that lookup distinguishes the actions.
         let mut m: HashMap<(String, String, EventAction), u32> = HashMap::new();
         m.insert(push_key.clone(), 1);
-        assert!(m.get(&delete_key).is_none(), "Push key must not collide with Delete key");
+        assert!(!m.contains_key(&delete_key), "Push key must not collide with Delete key");
         m.insert(delete_key.clone(), 2);
         assert_eq!(m.get(&push_key), Some(&1));
         assert_eq!(m.get(&delete_key), Some(&2));

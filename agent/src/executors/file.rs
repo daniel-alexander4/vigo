@@ -393,10 +393,9 @@ fn handle_present(
 
     // Apply ownership if specified.
     if desired_uid.is_some() || desired_gid.is_some() {
-        apply_ownership(path, desired_uid, desired_gid).map_err(|e| {
+        apply_ownership(path, desired_uid, desired_gid).inspect_err(|_e| {
             // Clean up temp on failure — but file is already renamed, so just report.
             let _ = fs::remove_file(&tmp_path_str);
-            e
         })?;
     }
 
@@ -590,7 +589,7 @@ fn stream_edit_fingerprint(content: &str, scripts: &[String]) -> [u8; 32] {
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap_or_default()
                     .as_secs();
-                hasher.update(&secs.to_le_bytes());
+                hasher.update(secs.to_le_bytes());
             }
         }
     }

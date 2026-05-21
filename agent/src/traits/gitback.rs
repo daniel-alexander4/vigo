@@ -265,7 +265,7 @@ pub(crate) fn collect_projects(passwd_body: &str, gitback_base: &Path) -> Vec<Pr
             .map(|v| v.len())
             .unwrap_or(0);
         let digest_hex = envelopes::project_digest(gitback_base, &pid)
-            .map(|d| hex::encode(d))
+            .map(hex::encode)
             .unwrap_or_default();
 
         let users_with_state: Vec<String> = acc.users.into_iter().collect();

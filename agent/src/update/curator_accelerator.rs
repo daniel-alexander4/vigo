@@ -69,10 +69,10 @@ use crate::swarm::puddle::names_cache::FleetNameMap;
 
 /// Production entry point — used inside `apply()` to try curator before REST.
 ///
-/// Builds a fresh resolver + name map from the agent's config, then delegates
-/// to [`fetch_via_curator_for`] which carries the test seam (explicit resolver
-/// + name map). Returns `None` on every failure path; the caller takes that
-/// as "use the REST `download_url`."
+/// Builds a fresh resolver and name map from the agent's config, then
+/// delegates to [`fetch_via_curator_for`] which carries the test seam
+/// (explicit resolver and name map). Returns `None` on every failure path;
+/// the caller takes that as "use the REST `download_url`."
 pub fn fetch_via_curator(
     version: &str,
     expected_sha: &str,

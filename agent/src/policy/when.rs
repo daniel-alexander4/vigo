@@ -12,6 +12,9 @@
 
 use anyhow::{bail, Result};
 
+/// Resolves a builtin function call (name + args) to a boolean.
+type FuncResolver<'a> = &'a dyn Fn(&str, &[String]) -> Result<bool>;
+
 // -- AST --
 
 #[derive(Debug, Clone, PartialEq)]
@@ -258,7 +261,7 @@ pub fn eval(expr: &WhenExpr, resolve: &dyn Fn(&str) -> bool) -> Result<bool> {
 pub fn eval_with_funcs(
     expr: &WhenExpr,
     resolve: &dyn Fn(&str) -> bool,
-    funcs: Option<&dyn Fn(&str, &[String]) -> Result<bool>>,
+    funcs: Option<FuncResolver>,
 ) -> Result<bool> {
     match expr {
         WhenExpr::BoolLit(v) => Ok(*v),
@@ -987,7 +990,7 @@ mod tests {
         let mut vars = serde_json::Map::new();
         vars.insert("enabled".to_string(), serde_json::Value::String("true".to_string()));
         vars.insert("disabled".to_string(), serde_json::Value::String("false".to_string()));
-        vars.insert("num".to_string(), serde_json::json!(42).into());
+        vars.insert("num".to_string(), serde_json::json!(42));
 
         assert!(when_var_is_true("enabled", &vars));
         assert!(!when_var_is_true("disabled", &vars));

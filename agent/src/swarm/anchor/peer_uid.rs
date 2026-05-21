@@ -39,7 +39,7 @@ pub fn peer_uid(stream: &UnixStream) -> Option<u32> {
         if rc != 0 {
             return None;
         }
-        return Some(cred.uid);
+        Some(cred.uid)
     }
     #[cfg(target_os = "macos")]
     {

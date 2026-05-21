@@ -64,7 +64,7 @@ pub fn classify_argv0(argv0: &OsStr) -> Option<MulticallMode> {
     // alone is platform-dependent — it splits on `\` only when
     // running on Windows.
     let basename = s
-        .rsplit(|c| c == '/' || c == '\\')
+        .rsplit(['/', '\\'])
         .next()
         .unwrap_or(s);
     // Drop empty + bare-dot inputs that survived the rsplit (e.g.

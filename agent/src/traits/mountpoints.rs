@@ -19,7 +19,7 @@ pub fn collect() -> Result<Value> {
 
     for (mountpoint, device, fstype) in &mounts {
         if let Ok(stat) = nix::sys::statvfs::statvfs(mountpoint.as_str()) {
-            let block_size = stat.fragment_size() as u64;
+            let block_size = stat.fragment_size();
             let total = stat.blocks() * block_size;
             let free = stat.blocks_free() * block_size;
             let avail = stat.blocks_available() * block_size;

@@ -57,7 +57,13 @@ impl Executor for ExecExecutor {
         let command = params.get("command").map(|s| s.as_str()).unwrap_or("");
         let mut result = ResourceResult::new("exec", command);
 
-        let res = execute_exec(&self.runner, params, dry_run, &mut result, &self.bg_pids);
+        let res = execute_exec(
+            self.runner.as_ref(),
+            params,
+            dry_run,
+            &mut result,
+            &self.bg_pids,
+        );
         result.duration_ms = start.elapsed().as_millis() as i32;
         if let Err(e) = res {
             result.error = Some(e);
@@ -228,7 +234,7 @@ fn parse_duration(s: &str) -> Option<std::time::Duration> {
 }
 
 fn execute_exec(
-    runner: &Box<dyn CommandRunner>,
+    runner: &dyn CommandRunner,
     params: &HashMap<String, String>,
     dry_run: bool,
     result: &mut ResourceResult,
@@ -607,7 +613,7 @@ fn execute_exec(
 
 /// Write secret to 0600 temp file, replace {{secret_file}} in command, run, cleanup.
 fn run_with_secret_file(
-    runner: &Box<dyn CommandRunner>,
+    runner: &dyn CommandRunner,
     command: &str,
     secret: &str,
     cwd: Option<&str>,

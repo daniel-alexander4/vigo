@@ -30,22 +30,32 @@ pub struct SshParams {
 
 impl SshParams {
     /// Extract SSH connection params from the executor param map.
-    /// Returns Err(ResourceResult) if required params are missing.
+    /// Returns `Err(Box<ResourceResult>)` if required params are missing —
+    /// boxed because `ResourceResult` is large and would bloat every
+    /// caller's `Result` otherwise.
     pub fn from_params(
         params: &HashMap<String, String>,
         result: ResourceResult,
-    ) -> Result<Self, ResourceResult> {
+    ) -> Result<Self, Box<ResourceResult>> {
         let host = match params.get("host") {
             Some(h) => h.clone(),
-            None => return Err(result.with_error("missing required param: host".into())),
+            None => return Err(Box::new(result.with_error("missing required param: host".into()))),
         };
         let username = match params.get("username") {
             Some(u) => u.clone(),
-            None => return Err(result.with_error("missing required param: username".into())),
+            None => {
+                return Err(Box::new(
+                    result.with_error("missing required param: username".into()),
+                ))
+            }
         };
         let credential = match params.get("credential") {
             Some(c) => c.clone(),
-            None => return Err(result.with_error("missing required param: credential".into())),
+            None => {
+                return Err(Box::new(
+                    result.with_error("missing required param: credential".into()),
+                ))
+            }
         };
         let port: u16 = params
             .get("port")
@@ -164,6 +174,6 @@ pub fn parse_port(params: &HashMap<String, String>) -> u16 {
 }
 
 /// Parse state from params, default "present".
-pub fn parse_state<'a>(params: &'a HashMap<String, String>) -> &'a str {
+pub fn parse_state(params: &HashMap<String, String>) -> &str {
     params.get("state").map_or("present", |s| s.as_str())
 }

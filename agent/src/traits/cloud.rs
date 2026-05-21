@@ -326,17 +326,17 @@ fn collect_digitalocean(metadata: &mut serde_json::Map<String, Value>) {
     let base = "http://169.254.169.254/metadata/v1";
     let h: &[(&str, &str)] = &[];
 
-    insert_if_some(metadata, "instance_id", imds_get(&agent, &format!("{base}/id"), &h));
-    insert_if_some(metadata, "instance_name", imds_get(&agent, &format!("{base}/hostname"), &h));
-    insert_if_some(metadata, "region", imds_get(&agent, &format!("{base}/region"), &h));
-    insert_if_some(metadata, "image_id", imds_get(&agent, &format!("{base}/image/slug"), &h));
-    insert_if_some(metadata, "public_ip", imds_get(&agent, &format!("{base}/interfaces/public/0/ipv4/address"), &h));
+    insert_if_some(metadata, "instance_id", imds_get(&agent, &format!("{base}/id"), h));
+    insert_if_some(metadata, "instance_name", imds_get(&agent, &format!("{base}/hostname"), h));
+    insert_if_some(metadata, "region", imds_get(&agent, &format!("{base}/region"), h));
+    insert_if_some(metadata, "image_id", imds_get(&agent, &format!("{base}/image/slug"), h));
+    insert_if_some(metadata, "public_ip", imds_get(&agent, &format!("{base}/interfaces/public/0/ipv4/address"), h));
 
     // DigitalOcean doesn't expose instance type directly via metadata.
     // Droplet size is available via the API but not IMDS.
 
     // Tags.
-    if let Some(tag_str) = imds_get(&agent, &format!("{base}/tags"), &h) {
+    if let Some(tag_str) = imds_get(&agent, &format!("{base}/tags"), h) {
         let mut tags = serde_json::Map::new();
         for tag in tag_str.lines() {
             let tag = tag.trim();
@@ -360,10 +360,10 @@ fn collect_hetzner(metadata: &mut serde_json::Map<String, Value>) {
     let h: &[(&str, &str)] = &[];
 
     // Hetzner returns YAML, but individual endpoints return plain text.
-    insert_if_some(metadata, "instance_id", imds_get(&agent, &format!("{base}/instance-id"), &h));
-    insert_if_some(metadata, "instance_name", imds_get(&agent, &format!("{base}/hostname"), &h));
-    insert_if_some(metadata, "region", imds_get(&agent, &format!("{base}/availability-zone"), &h));
-    insert_if_some(metadata, "public_ip", imds_get(&agent, &format!("{base}/public-ipv4"), &h));
+    insert_if_some(metadata, "instance_id", imds_get(&agent, &format!("{base}/instance-id"), h));
+    insert_if_some(metadata, "instance_name", imds_get(&agent, &format!("{base}/hostname"), h));
+    insert_if_some(metadata, "region", imds_get(&agent, &format!("{base}/availability-zone"), h));
+    insert_if_some(metadata, "public_ip", imds_get(&agent, &format!("{base}/public-ipv4"), h));
 }
 
 // ---------------------------------------------------------------------------

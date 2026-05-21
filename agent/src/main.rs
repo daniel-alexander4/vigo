@@ -1134,7 +1134,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         .unwrap_or(&cli.data_dir)
         .join("peers.json");
     let shared_peer_map = std::sync::Arc::new(swarm::peermap::PeerMap::load(&peers_path));
-    let shared_manifest = swarm::manifest::Manifest::load(&platform::paths::default_blobs_dir().parent().unwrap_or(&cli.data_dir));
+    let shared_manifest = swarm::manifest::Manifest::load(platform::paths::default_blobs_dir().parent().unwrap_or(&cli.data_dir));
 
     // Shared announce signal between the download scheduler and the multicast
     // announcer. Lets the scheduler fire an immediate announce on the first

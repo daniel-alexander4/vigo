@@ -16,7 +16,7 @@
 //!   (the deletion is newer than our copy).
 //! - If we have a local file with `mtime > deletion_time` → keep it
 //!   (file was re-added after the peer deleted it; our next announce
-//!    will propagate it back to them).
+//!   will propagate it back to them).
 //! - Merge the tombstone into our log so the info propagates further.
 //!
 //! **Ties** (same mtime, same deletion_time) break in favor of the existing

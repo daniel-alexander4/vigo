@@ -27,7 +27,7 @@ impl GroupExecutor {
             Err(_) => return (false, String::new()),
         };
 
-        for line in BufReader::new(f).lines().flatten() {
+        for line in BufReader::new(f).lines().map_while(Result::ok) {
             let parts: Vec<&str> = line.splitn(4, ':').collect();
             if parts.len() >= 3 && parts[0] == name {
                 return (true, parts[2].to_string());
@@ -43,7 +43,7 @@ impl GroupExecutor {
             Err(_) => return Vec::new(),
         };
 
-        for line in BufReader::new(f).lines().flatten() {
+        for line in BufReader::new(f).lines().map_while(Result::ok) {
             let parts: Vec<&str> = line.splitn(4, ':').collect();
             if parts.len() >= 4 && parts[0] == name {
                 let members_field = parts[3].trim();

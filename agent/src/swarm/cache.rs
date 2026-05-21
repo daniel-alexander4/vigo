@@ -460,7 +460,7 @@ fn available_disk_space(path: &Path) -> Result<u64> {
         bail!("statvfs failed: {}", std::io::Error::last_os_error());
     }
     let stat = unsafe { stat.assume_init() };
-    Ok(stat.f_bavail as u64 * stat.f_frsize as u64)
+    Ok(stat.f_bavail * stat.f_frsize)
 }
 
 #[cfg(windows)]
@@ -495,7 +495,7 @@ extern "system" {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
+    
 
     #[test]
     fn test_write_and_read_chunk() {

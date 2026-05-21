@@ -34,7 +34,7 @@ impl Executor for CiscoAclExecutor {
 
         let ssh = match SshParams::from_params(params, result) {
             Ok(s) => s,
-            Err(r) => return r,
+            Err(r) => return *r,
         };
         result = ResourceResult::new("cisco_acl", params.get("name").map_or("", |s| s));
         let acl_name = require_param!(params, "acl_name", result);

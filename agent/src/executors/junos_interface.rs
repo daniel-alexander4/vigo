@@ -38,7 +38,7 @@ impl Executor for JunosInterfaceExecutor {
 
         let ssh = match SshParams::from_params(params, result) {
             Ok(s) => s,
-            Err(r) => return r,
+            Err(r) => return *r,
         };
         result = ResourceResult::new("junos_interface", params.get("name").map_or("", |s| s));
         let interface = require_param!(params, "interface", result);

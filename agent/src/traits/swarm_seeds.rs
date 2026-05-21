@@ -28,10 +28,13 @@ struct SwarmManifest {
     retention: String,
 }
 
+/// SHA256 cache map keyed by (filename, size, mtime_secs) → hash.
+type HashCacheMap = HashMap<(String, u64, u64), String>;
+
 /// Cached SHA256 keyed by (filename, size, mtime_secs). Seeds don't change
 /// after creation, so recomputing the hash every cycle is wasteful for large files.
 /// Persisted to disk so cold starts (vigo run) don't rehash multi-GiB files.
-static HASH_CACHE: Mutex<Option<HashMap<(String, u64, u64), String>>> = Mutex::new(None);
+static HASH_CACHE: Mutex<Option<HashCacheMap>> = Mutex::new(None);
 
 /// Disk path for the persistent hash cache.
 fn hash_cache_path() -> std::path::PathBuf {
@@ -179,7 +182,7 @@ pub fn collect() -> Result<Value> {
 fn cached_hash(name: &str, size: u64, mtime_secs: u64, path: &Path) -> Result<String> {
     let key = (name.to_string(), size, mtime_secs);
     let mut guard = HASH_CACHE.lock().unwrap_or_else(|e| e.into_inner());
-    let cache = guard.get_or_insert_with(|| load_hash_cache_from_disk());
+    let cache = guard.get_or_insert_with(load_hash_cache_from_disk);
     if let Some(hash) = cache.get(&key) {
         return Ok(hash.clone());
     }

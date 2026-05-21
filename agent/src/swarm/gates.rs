@@ -137,7 +137,7 @@ fn is_truthy_or_absent(v: Option<&serde_json::Value>) -> bool {
             s.to_ascii_lowercase().as_str(),
             "false" | "no" | "0" | ""
         ),
-        Some(serde_json::Value::Number(n)) => n.as_i64().map_or(true, |i| i != 0),
+        Some(serde_json::Value::Number(n)) => n.as_i64() != Some(0),
         _ => true,
     }
 }
@@ -154,7 +154,7 @@ fn is_explicitly_true(v: Option<&serde_json::Value>) -> bool {
         Some(serde_json::Value::String(s)) => {
             matches!(s.to_ascii_lowercase().as_str(), "true" | "yes" | "1")
         }
-        Some(serde_json::Value::Number(n)) => n.as_i64().map_or(false, |i| i != 0),
+        Some(serde_json::Value::Number(n)) => n.as_i64().is_some_and(|i| i != 0),
         _ => false,
     }
 }

@@ -573,6 +573,22 @@ fn unix_seconds_now() -> i64 {
         .unwrap_or(0)
 }
 
+/// Check whether gitback should be active on this envoy right now.
+///
+/// Thin wrapper over [`crate::swarm::gates::substrate_active`] —
+/// applies the global `swarm_enabled` AND `swarm_gitback_enabled`
+/// rule from the cached `PolicyBundle.vars_json`. The server has
+/// already resolved `swarm.gitback.enabled` pattern matching for
+/// this envoy's hostname; the agent only sees the resolved bools.
+/// See `crate::swarm::gates` for the fail-open semantics and
+/// recognised value shapes.
+pub fn gitback_enabled_for_envoy(state_store: Option<&crate::state::StateStore>) -> bool {
+    crate::swarm::gates::substrate_active(
+        crate::swarm::gates::Substrate::Gitback,
+        state_store,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -697,20 +713,4 @@ mod tests {
         assert_eq!(envelopes::load_leaves(base.path(), &pid_a).unwrap().len(), 1);
         assert_eq!(envelopes::load_revokes(base.path(), &pid_b).unwrap().len(), 1);
     }
-}
-
-/// Check whether gitback should be active on this envoy right now.
-///
-/// Thin wrapper over [`crate::swarm::gates::substrate_active`] —
-/// applies the global `swarm_enabled` AND `swarm_gitback_enabled`
-/// rule from the cached `PolicyBundle.vars_json`. The server has
-/// already resolved `swarm.gitback.enabled` pattern matching for
-/// this envoy's hostname; the agent only sees the resolved bools.
-/// See `crate::swarm::gates` for the fail-open semantics and
-/// recognised value shapes.
-pub fn gitback_enabled_for_envoy(state_store: Option<&crate::state::StateStore>) -> bool {
-    crate::swarm::gates::substrate_active(
-        crate::swarm::gates::Substrate::Gitback,
-        state_store,
-    )
 }

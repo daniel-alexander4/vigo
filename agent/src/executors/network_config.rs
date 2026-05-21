@@ -88,7 +88,7 @@ impl Executor for NetworkConfigExecutor {
 
         let ssh = match SshParams::from_params(params, result) {
             Ok(s) => s,
-            Err(r) => return r,
+            Err(r) => return *r,
         };
         result = ResourceResult::new("network_config", params.get("name").map_or("", |s| s));
         let device_type = require_param!(params, "device_type", result);
@@ -98,7 +98,7 @@ impl Executor for NetworkConfigExecutor {
             .get("check_command")
             .map_or("show running-config", |s| s.as_str())
             .to_string();
-        let save = params.get("save").map_or(true, |s| s != "false");
+        let save = params.get("save").is_none_or(|s| s != "false");
         let timeout = DEFAULT_TIMEOUT;
 
         let dialect = match dialect(&device_type) {

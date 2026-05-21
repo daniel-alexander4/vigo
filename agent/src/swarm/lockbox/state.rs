@@ -457,9 +457,7 @@ impl PeerTable {
                 if accepted_puddle_pubkeys.is_empty() {
                     return true;
                 }
-                accepted_puddle_pubkeys
-                    .iter()
-                    .any(|fp| p.puddle_pubkey == *fp)
+                accepted_puddle_pubkeys.contains(&p.puddle_pubkey)
             })
             .map(|p| p.pubkey.clone())
             .collect();

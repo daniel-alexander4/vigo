@@ -32,7 +32,7 @@ pub fn chunks_for_size(size: u64) -> u32 {
         return 0;
     }
     let n = size / CHUNK_SIZE;
-    let rem = if size % CHUNK_SIZE != 0 { 1 } else { 0 };
+    let rem = if !size.is_multiple_of(CHUNK_SIZE) { 1 } else { 0 };
     (n + rem) as u32
 }
 

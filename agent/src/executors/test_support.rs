@@ -10,9 +10,12 @@ pub mod mock {
     use std::process::Output;
     use std::sync::{Arc, Mutex};
 
+    /// Shared, mutable log of recorded (command, args) calls.
+    pub type CallLog = Arc<Mutex<Vec<(String, Vec<String>)>>>;
+
     pub struct MockRunner {
         pub responses: Mutex<Vec<std::io::Result<Output>>>,
-        pub calls: Arc<Mutex<Vec<(String, Vec<String>)>>>,
+        pub calls: CallLog,
     }
 
     impl MockRunner {

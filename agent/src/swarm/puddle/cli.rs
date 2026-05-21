@@ -170,7 +170,7 @@ fn cmd_pubkey(_args: &[String]) -> Result<()> {
 /// Humanize an idle-timeout for the unlock confirmation: whole hours
 /// as `Nh`, otherwise `Nm`.
 fn fmt_idle(mins: u32) -> String {
-    if mins % 60 == 0 {
+    if mins.is_multiple_of(60) {
         format!("{}h", mins / 60)
     } else {
         format!("{}m", mins)

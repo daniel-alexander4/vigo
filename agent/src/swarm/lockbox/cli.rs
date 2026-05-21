@@ -215,6 +215,7 @@ fn cmd_puddle_renew_cert(_args: &[String]) -> Result<()> {
 /// Reads:
 ///   * the local age pubkey from `~/.lockbox/recipients.txt` (first line)
 ///   * the local puddle pubkey from `~/.vigo-puddle/identity.pub`
+///
 /// Signs via the puddle session helper (so the user's session
 /// must be unlocked when this runs). On success, writes the cert
 /// to `~/.lockbox/puddle_cert.json` and chowns it to the user.
@@ -677,27 +678,9 @@ fn cmd_status(_args: &[String]) -> Result<()> {
                 }
             }
             Err(_) => {
-                if crate::swarm::puddle::is_initialized(&home) {
-                    println!(
-                        "  recipients:       (recipients.txt missing) — encryption can't"
-                    );
-                    println!(
-                        "                    proceed without a recipient set. Re-run"
-                    );
-                    println!(
-                        "                    `vigo swarm lockbox puddle init` to repair."
-                    );
-                } else {
-                    println!(
-                        "  recipients:       (recipients.txt missing) — encryption can't"
-                    );
-                    println!(
-                        "                    proceed without a recipient set. Re-run"
-                    );
-                    println!(
-                        "                    `vigo swarm lockbox puddle init` to repair."
-                    );
-                }
+                println!("  recipients:       (recipients.txt missing) — encryption can't");
+                println!("                    proceed without a recipient set. Re-run");
+                println!("                    `vigo swarm lockbox puddle init` to repair.");
             }
         }
     }
@@ -1392,8 +1375,8 @@ fn cmd_list(args: &[String]) -> Result<()> {
 
     // Build the row set.
     let mut rows: Vec<ListRow> = Vec::new();
-    if !tombstones_only {
-        if content_dir.is_dir() {
+    if !tombstones_only
+        && content_dir.is_dir() {
             for entry in fs::read_dir(&content_dir)
                 .with_context(|| format!("reading {}", content_dir.display()))?
             {
@@ -1425,7 +1408,6 @@ fn cmd_list(args: &[String]) -> Result<()> {
                 });
             }
         }
-    }
 
     // Add tombstoned entries. Skip any filename already present as a
     // live file — would happen only during a (brief) race between

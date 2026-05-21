@@ -368,7 +368,7 @@ mod tests {
 
     #[test]
     fn classify_io_transient_on_unknown_kinds() {
-        let other = std::io::Error::new(ErrorKind::Other, "weird");
+        let other = std::io::Error::other("weird");
         match classify_io("read", &other) {
             AutoEncryptError::Transient(_) => {}
             unexpected => panic!("expected Transient, got {:?}", unexpected),

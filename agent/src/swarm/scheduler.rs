@@ -600,10 +600,8 @@ async fn download_and_assemble(
     // spawn time" (usually just the seeder) and never reconsidered. Scale
     // to every chunk_count/4 with a floor of 4 and a ceiling of 100 — a
     // 30-chunk blob refreshes every 8 chunks, a 1000-chunk blob stays at 100.
-    let refresh_interval: usize = std::cmp::min(
-        PEER_REFRESH_INTERVAL,
-        std::cmp::max(4, (meta.chunk_count as usize) / 4),
-    );
+    let refresh_interval: usize =
+        ((meta.chunk_count as usize) / 4).clamp(4, PEER_REFRESH_INTERVAL);
 
     let existing = cache.chunk_bitmap(&meta.sha256, meta.chunk_count);
     let missing: Vec<u32> = (0..meta.chunk_count)
@@ -731,7 +729,7 @@ async fn download_and_assemble(
             let endgame = run_endgame_round(
                 &meta.sha256,
                 cache,
-                &peer_agent,
+                peer_agent,
                 peer_map,
                 &remaining,
                 &availability,
@@ -991,7 +989,7 @@ async fn download_and_assemble(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::super::meta::CHUNK_SIZE;
+    
     use crate::swarm::peermap::{PeerInfo, PeerSource};
     use std::time::Instant;
 

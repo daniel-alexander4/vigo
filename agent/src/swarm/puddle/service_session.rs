@@ -291,7 +291,7 @@ fn load_identity(
         .with_context(|| format!("reading wrapped identity {}", wrap_path.display()))?;
     let wrap_key = derive_wrap_key(&master_key, &salt)?;
     let seed = unwrap_envelope(&envelope, &wrap_key)?;
-    let key = SigningKey::from_bytes(&*seed);
+    let key = SigningKey::from_bytes(&seed);
     let pubkey_b64 = B64.encode(key.verifying_key().to_bytes());
 
     Ok(Loaded {
@@ -329,7 +329,7 @@ fn load_ops_identity(
         .with_context(|| format!("reading ops-puddle wrapped identity {}", wrap_path.display()))?;
     let wrap_key = derive_ops_wrap_key(&master_key, &salt)?;
     let seed = unwrap_envelope(&envelope, &wrap_key)?;
-    let key = SigningKey::from_bytes(&*seed);
+    let key = SigningKey::from_bytes(&seed);
     let pubkey_bytes = key.verifying_key().to_bytes();
     let pubkey_b64 = B64.encode(pubkey_bytes);
 
@@ -791,7 +791,7 @@ fn peer_uid_matches(stream: &tokio::net::UnixStream, allowed: u32) -> bool {
         if rc != 0 {
             return false;
         }
-        return cred.uid == allowed;
+        cred.uid == allowed
     }
     #[cfg(target_os = "macos")]
     {
@@ -934,7 +934,7 @@ fn helper_already_running() -> bool {
 fn pid_alive(pid: u32) -> bool {
     #[cfg(target_os = "linux")]
     {
-        return std::path::Path::new(&format!("/proc/{}", pid)).exists();
+        std::path::Path::new(&format!("/proc/{}", pid)).exists()
     }
     #[cfg(not(target_os = "linux"))]
     {
@@ -1041,7 +1041,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join(".master.key");
         let raw_key: [u8; 32] = [0x77; 32];
-        fs::write(&path, &raw_key).unwrap();
+        fs::write(&path, raw_key).unwrap();
 
         let parsed = read_master_key(&path).unwrap();
         assert_eq!(&*parsed, &raw_key);

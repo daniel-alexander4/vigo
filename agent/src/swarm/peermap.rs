@@ -277,6 +277,12 @@ impl PeerMap {
         map.values().map(|m| m.len()).sum()
     }
 
+    /// True iff no peer entries are tracked.
+    pub fn is_empty(&self) -> bool {
+        let map = self.inner.read().unwrap();
+        map.values().all(|m| m.is_empty())
+    }
+
     /// Return (sha256, address, stored_etag) tuples for peer entries whose
     /// bitmap is older than `threshold`. Used by the refresh loop to pick
     /// candidates for an If-None-Match /meta probe. Entries past PEER_TTL

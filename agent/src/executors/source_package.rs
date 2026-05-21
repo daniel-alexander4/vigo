@@ -520,7 +520,7 @@ fn check_disk_space(target: &str) -> Result<(), String> {
         let check_path = closest_existing_ancestor(target);
         match nix::sys::statvfs::statvfs(check_path.as_str()) {
             Ok(stat) => {
-                let avail = stat.blocks_available() as u64 * stat.fragment_size() as u64;
+                let avail = stat.blocks_available() * stat.fragment_size();
                 if avail < MIN_DISK_SPACE {
                     let avail_mb = avail / (1024 * 1024);
                     return Err(format!(
@@ -1069,7 +1069,7 @@ mod tests {
         );
         let calls = calls.lock().unwrap();
         // First call should be curl with --max-time 60.
-        assert!(calls.len() >= 1);
+        assert!(!calls.is_empty());
         assert_eq!(calls[0].0, "curl");
         assert!(
             calls[0].1.contains(&"60".to_string()),
@@ -1101,7 +1101,7 @@ mod tests {
         );
         // Download will fail, but check that curl was called (meaning we got past pre-flight).
         let calls = calls.lock().unwrap();
-        assert!(calls.len() >= 1);
+        assert!(!calls.is_empty());
         assert_eq!(calls[0].0, "curl");
     }
 

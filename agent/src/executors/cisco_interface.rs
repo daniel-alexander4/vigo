@@ -69,25 +69,25 @@ fn build_change_commands(
 
     // Check each desired field against current.
     if let Some(desc) = desired.get("description") {
-        if current.get("description").map_or(true, |c| c != desc) {
+        if current.get("description") != Some(desc) {
             commands.push(format!("description {}", desc));
         }
     }
 
     if let Some(ip) = desired.get("ip_address") {
-        if current.get("ip_address").map_or(true, |c| c != ip) {
+        if current.get("ip_address") != Some(ip) {
             commands.push(format!("ip address {}", ip));
         }
     }
 
     if let Some(mode) = desired.get("switchport_mode") {
-        if current.get("switchport_mode").map_or(true, |c| c != mode) {
+        if current.get("switchport_mode") != Some(mode) {
             commands.push(format!("switchport mode {}", mode));
         }
     }
 
     if let Some(vlan) = desired.get("access_vlan") {
-        if current.get("access_vlan").map_or(true, |c| c != vlan) {
+        if current.get("access_vlan") != Some(vlan) {
             commands.push(format!("switchport access vlan {}", vlan));
         }
     }
@@ -127,7 +127,7 @@ impl Executor for CiscoInterfaceExecutor {
 
         let ssh = match SshParams::from_params(params, result) {
             Ok(s) => s,
-            Err(r) => return r,
+            Err(r) => return *r,
         };
         result = ResourceResult::new("cisco_interface", params.get("name").map_or("", |s| s));
         let interface = require_param!(params, "interface", result);

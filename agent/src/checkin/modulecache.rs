@@ -177,7 +177,7 @@ mod tests {
     fn merge_stubs_fills_from_cache() {
         let mut c = ModuleCache::new();
         let full = make_module("nginx", "abc", false);
-        c.update(&[full.clone()]);
+        c.update(std::slice::from_ref(&full));
 
         let stub = make_module("nginx", "abc", true);
         let merged = merge_stubs(vec![stub], &c);

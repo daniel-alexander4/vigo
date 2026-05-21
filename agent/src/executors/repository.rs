@@ -202,10 +202,10 @@ impl AptRepoManager {
     ) -> String {
         // Parse the deb line. Strip "deb " or "deb-src " prefix.
         let line = repo.trim();
-        let (types, rest) = if line.starts_with("deb-src ") {
-            ("deb-src", &line[8..])
-        } else if line.starts_with("deb ") {
-            ("deb", &line[4..])
+        let (types, rest) = if let Some(rest) = line.strip_prefix("deb-src ") {
+            ("deb-src", rest)
+        } else if let Some(rest) = line.strip_prefix("deb ") {
+            ("deb", rest)
         } else {
             // Not a recognizable deb line — write as-is in a comment.
             return format!("# Could not parse as deb line: {}\n", repo);
@@ -1100,10 +1100,15 @@ mod tests {
     // Mock repo manager
     // -----------------------------------------------------------------------
 
+    /// Recorded `add` arguments: (name, url, key, enabled, components, suites).
+    type AddCall = (String, String, String, bool, String, String);
+    /// Shared, mutable log of recorded `add` calls.
+    type AddCallLog = Arc<Mutex<Vec<AddCall>>>;
+
     struct MockRepoManager {
         present: Mutex<Vec<String>>,
         contents: Mutex<HashMap<String, String>>,
-        add_calls: Arc<Mutex<Vec<(String, String, String, bool, String, String)>>>,
+        add_calls: AddCallLog,
         remove_calls: Arc<Mutex<Vec<String>>>,
     }
 

@@ -401,7 +401,7 @@ fn read_response_line(stream: &mut UnixStream) -> Result<String> {
             bail!("helper response line exceeded {} bytes", MAX_RESPONSE_LINE);
         }
     }
-    Ok(String::from_utf8(buf).map_err(|_| anyhow!("helper response is not UTF-8"))?)
+    String::from_utf8(buf).map_err(|_| anyhow!("helper response is not UTF-8"))
 }
 
 fn read_line_capped<R: Read>(r: &mut R, buf: &mut Vec<u8>, cap: usize) -> Result<usize> {

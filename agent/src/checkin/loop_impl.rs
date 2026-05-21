@@ -1342,20 +1342,20 @@ async fn stream_loop(
     // Self-assignment and revocation are driven entirely by the manifest CRDT —
     // the server no longer pushes per-envoy assignments or retired-seed lists.
     let spawn_swarm = |resp: &CheckInResponse| {
-        if let Some(ref store) = state_store {
+        if let Some(store) = state_store {
             crate::swarm::evict_expired(store);
         }
         crate::swarm::cleanup_graveyard();
         if let Err(e) = crate::swarm::curator::catalog_cache::write_catalog(&resp.curator_catalog) {
             tracing::warn!(error = %e, "curator: failed to cache the fleet catalog");
         }
-        if let Some(ref m) = manifest {
+        if let Some(m) = manifest {
             crate::swarm::merge_manifest_entries(m, &resp.manifest_entries, peer_map);
             // Register local seeds into manifest for P2P gossip.
             crate::swarm::register_seeds_in_manifest(m, client.envoy_id(), crate::swarm::server::DEFAULT_PORT);
             // Trigger self-assignment evaluation after manifest update.
-            if let Some(ref mgr) = swarm_manager {
-                let mgr = (*mgr).clone();
+            if let Some(mgr) = swarm_manager {
+                let mgr = mgr.clone();
                 tokio::spawn(async move { mgr.manifest_updated().await });
             }
         }
