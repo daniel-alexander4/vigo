@@ -202,19 +202,119 @@ func TestConfigTrace_TraceNoMatch(t *testing.T) {
 	}
 }
 
-func TestConfigTrace_TraceMissingHostname(t *testing.T) {
+func TestConfigTrace_TraceNoSubject(t *testing.T) {
 	store := newConfigTraceTestStore(t)
 
 	handler := NewConfigTraceHandler(store, nil)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
+	// No hostname, no module, no usercrate — no subject at all.
 	req := httptest.NewRequest("GET", "/api/v1/config/trace", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, adminReq(req))
 
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for missing hostname, got %d", rec.Code)
+		t.Fatalf("expected 400 for missing subject, got %d", rec.Code)
+	}
+}
+
+// TestConfigTrace_InverseModule exercises the inverse (subject-rooted) branch:
+// ?module= without a hostname returns an InverseTraceResult rather than a
+// forward ConfigTrace.
+func TestConfigTrace_InverseModule(t *testing.T) {
+	store := newConfigTraceTestStore(t)
+
+	handler := NewConfigTraceHandler(store, nil)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/api/v1/config/trace?module=nginx", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var result config.InverseTraceResult
+	if err := json.NewDecoder(rec.Body).Decode(&result); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if result.Subject != "module" || result.Value != "nginx" {
+		t.Errorf("expected subject=module value=nginx, got %s/%s", result.Subject, result.Value)
+	}
+}
+
+// TestConfigTrace_InverseUsercrate confirms ?usercrate= selects the usercrate
+// subject.
+func TestConfigTrace_InverseUsercrate(t *testing.T) {
+	store := newConfigTraceTestStore(t)
+
+	handler := NewConfigTraceHandler(store, nil)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/api/v1/config/trace?usercrate=alexander4", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var result config.InverseTraceResult
+	json.NewDecoder(rec.Body).Decode(&result)
+	if result.Subject != "usercrate" || result.Value != "alexander4" {
+		t.Errorf("expected subject=usercrate value=alexander4, got %s/%s", result.Subject, result.Value)
+	}
+}
+
+// TestConfigTrace_InverseIncludeTree confirms include_tree widens the result
+// to config-tree patterns. With no fleet index there are no enrolled envoys,
+// so every envoyEntry that references nginx surfaces as an unmatched
+// config-tree pattern.
+func TestConfigTrace_InverseIncludeTree(t *testing.T) {
+	store := newConfigTraceTestStore(t)
+
+	handler := NewConfigTraceHandler(store, nil)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/api/v1/config/trace?module=nginx&include_tree=true", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var result config.InverseTraceResult
+	json.NewDecoder(rec.Body).Decode(&result)
+	if !result.IncludeTree {
+		t.Error("expected include_tree true")
+	}
+	// envoys.vgo has two entries (web01.prod, app01.staging), both pulling nginx.
+	if len(result.TreeRefs) != 2 {
+		t.Errorf("expected 2 config-tree refs, got %d", len(result.TreeRefs))
+	}
+}
+
+// TestConfigTrace_InverseModuleUsercrateConflict confirms ?module= and
+// ?usercrate= together are rejected — they each select a different subject.
+func TestConfigTrace_InverseModuleUsercrateConflict(t *testing.T) {
+	store := newConfigTraceTestStore(t)
+
+	handler := NewConfigTraceHandler(store, nil)
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	req := httptest.NewRequest("GET", "/api/v1/config/trace?module=nginx&usercrate=alexander4", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, adminReq(req))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for module+usercrate conflict, got %d", rec.Code)
 	}
 }
 

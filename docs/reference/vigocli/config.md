@@ -8,7 +8,7 @@ Config inspection commands.
 | Command | Description |
 |---------|-------------|
 | `config edit` | Open a .vgo file in an editor with validation on save |
-| `config trace` | Trace config resolution for a hostname |
+| `config trace` | Trace config resolution for a host, or find where a module/usercrate is applied |
 | `config tree` | Show the directory inheritance hierarchy |
 | `config search` | Search envoy entries by match pattern, module, or var |
 | `config publish` | Validate and publish config from stage to live |

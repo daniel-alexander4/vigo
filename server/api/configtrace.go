@@ -61,19 +61,63 @@ func (h *ConfigTraceHandler) HandleSearch(w http.ResponseWriter, r *http.Request
 	json.NewEncoder(w).Encode(result)
 }
 
-// HandleTrace returns detailed config resolution info for a hostname.
-// Optional ?module= parameter filters the trace to only show the branch
-// relevant to that module.
+// HandleTrace serves both forward (host-rooted) and inverse (subject-rooted)
+// config trace queries.
+//
+//   - ?hostname=H            → forward trace for H. ?module=M filters the
+//                              output to M's branch (existing behavior).
+//   - ?module=M              → inverse: enrolled envoys whose resolved config
+//                              includes module M, plus the carrier that pulled
+//                              it in.
+//   - ?usercrate=U           → inverse: same for usercrate U.
+//   - ?include_tree=true     → inverse only: additionally lists envoyEntries
+//                              patterns that reference the subject but match
+//                              no enrolled envoy.
+//
+// Exactly one subject must be specified (?hostname, ?module, or ?usercrate);
+// ?module+?usercrate combined is rejected since they each select a different
+// inverse subject.
 func (h *ConfigTraceHandler) HandleTrace(w http.ResponseWriter, r *http.Request) {
-	hostname := r.URL.Query().Get("hostname")
+	q := r.URL.Query()
+	hostname := q.Get("hostname")
+	module := q.Get("module")
+	usercrate := q.Get("usercrate")
+
 	if hostname == "" {
-		writeError(w, http.StatusBadRequest, "missing required ?hostname= parameter")
+		// Inverse mode — module XOR usercrate.
+		if module == "" && usercrate == "" {
+			writeError(w, http.StatusBadRequest, "specify one of ?hostname=, ?module=, or ?usercrate=")
+			return
+		}
+		if module != "" && usercrate != "" {
+			writeError(w, http.StatusBadRequest, "?module= and ?usercrate= are mutually exclusive")
+			return
+		}
+		subject, value := "module", module
+		if usercrate != "" {
+			subject, value = "usercrate", usercrate
+		}
+		includeTree := q.Get("include_tree") == "true"
+
+		var envoys []config.InverseEnvoyRef
+		if h.fleetIndex != nil {
+			for _, e := range h.fleetIndex.AllEnvoys() {
+				if e.Revoked {
+					continue
+				}
+				envoys = append(envoys, config.InverseEnvoyRef{ID: e.ID, Hostname: e.Hostname})
+			}
+		}
+
+		result := h.configStore.TraceInverse(subject, value, includeTree, envoys)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
 		return
 	}
 
+	// Forward mode.
 	trace := h.configStore.Trace(hostname)
-
-	if module := r.URL.Query().Get("module"); module != "" {
+	if module != "" {
 		trace = trace.FilterByModule(module)
 	}
 

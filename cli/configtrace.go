@@ -18,25 +18,71 @@ var configCmd = &cobra.Command{
 	Short: "Publish, inspect, freeze, approve, and rollback .vgo configuration",
 }
 
-var traceModuleFlag string
+var (
+	traceModuleFlag      string
+	traceHostFlag        string
+	traceUsercrateFlag   string
+	traceIncludeTreeFlag bool
+)
 
 var configTraceCmd = &cobra.Command{
-	Use:               "trace <hostname>",
-	Short:             "Show the directory inheritance chain, module sources, and var resolution for a hostname",
+	Use:               "trace [hostname]",
+	Short:             "Show config resolution for a hostname, or where a module/usercrate is applied across the fleet",
 	ValidArgsFunction: completeHostnames,
-	Long: `Traces config resolution for a hostname, showing the full directory
-inheritance chain with vars and overrides at each level, which modules
-came from which files, and where each var's final value originated.
+	Long: `Forward (hostname-rooted):
+  Traces config resolution for one hostname — directory inheritance, module
+  sources, var resolution, secret references, dependencies, compliance, and
+  conditional evaluation. Use --module to filter to a single module's branch.
 
-Use --module to filter the trace to a single module's branch.`,
-	Args: cobra.ExactArgs(1),
+Inverse (subject-rooted):
+  Use --module or --usercrate (without a hostname) to find every enrolled
+  envoy whose resolved config includes that module or usercrate, plus the
+  carrier (file/role/env) that pulled it in. Add --include-tree to also
+  surface config-tree patterns that reference the subject but match no
+  currently-enrolled envoy.
+
+Examples:
+  vigocli config trace danlap
+  vigocli config trace --host danlap --module nginx
+  vigocli config trace --module nginx
+  vigocli config trace --usercrate alexander4 --include-tree`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		hostname := args[0]
+		// Resolve the host subject: positional and --host are aliases.
+		host := traceHostFlag
+		if len(args) > 0 {
+			if host != "" && host != args[0] {
+				return fmt.Errorf("ambiguous host: positional %q and --host %q disagree", args[0], host)
+			}
+			host = args[0]
+		}
+
+		// Exactly one subject required: host, --module (inverse), or --usercrate (inverse).
+		// --module *with* a host is the existing per-host filter, not a separate subject.
+		inverseModule := host == "" && traceModuleFlag != ""
+		inverseUsercrate := host == "" && traceUsercrateFlag != ""
+
+		switch {
+		case host == "" && traceModuleFlag == "" && traceUsercrateFlag == "":
+			return fmt.Errorf("specify one of: <hostname>, --host, --module, --usercrate")
+		case host != "" && traceUsercrateFlag != "":
+			return fmt.Errorf("--usercrate is an inverse subject; remove the hostname to query it")
+		case inverseModule && inverseUsercrate:
+			return fmt.Errorf("--module and --usercrate are mutually exclusive in inverse mode")
+		case traceIncludeTreeFlag && host != "":
+			return fmt.Errorf("--include-tree only applies to inverse mode (no hostname)")
+		}
+
+		if inverseModule || inverseUsercrate {
+			return runInverseTrace(inverseModule, inverseUsercrate)
+		}
+
+		// Forward (hostname-rooted) trace.
 		client := newAPIClient()
 
 		var trace traceResult
 
-		apiURL := fmt.Sprintf("/api/v1/config/trace?hostname=%s", url.QueryEscape(hostname))
+		apiURL := fmt.Sprintf("/api/v1/config/trace?hostname=%s", url.QueryEscape(host))
 		if traceModuleFlag != "" {
 			apiURL += "&module=" + url.QueryEscape(traceModuleFlag)
 		}
@@ -46,7 +92,7 @@ Use --module to filter the trace to a single module's branch.`,
 		}
 
 		if !trace.Matched {
-			fmt.Printf("%s No config entry matches hostname %q\n", yellow("!"), hostname)
+			fmt.Printf("%s No config entry matches hostname %q\n", yellow("!"), host)
 			return nil
 		}
 
@@ -843,7 +889,116 @@ func colorBold(_ string) string {
 	return "\x1b[1m"
 }
 
+// inverseTraceResult mirrors server/config.InverseTraceResult on the wire.
+type inverseTraceResult struct {
+	Subject     string              `json:"subject"`
+	Value       string              `json:"value"`
+	IncludeTree bool                `json:"include_tree"`
+	Envoys      []inverseEnvoyEntry `json:"envoys"`
+	TreeRefs    []inverseTreeRef    `json:"tree_refs,omitempty"`
+}
+
+type inverseEnvoyEntry struct {
+	EnvoyID     string `json:"envoy_id"`
+	Hostname    string `json:"hostname"`
+	Match       string `json:"match"`
+	Environment string `json:"environment,omitempty"`
+	Carrier     string `json:"carrier"`
+}
+
+type inverseTreeRef struct {
+	Match       string `json:"match"`
+	Environment string `json:"environment,omitempty"`
+	Carrier     string `json:"carrier"`
+}
+
+// runInverseTrace fetches and renders an inverse trace — answers
+// "where is this module/usercrate applied?" across the fleet.
+func runInverseTrace(asModule, asUsercrate bool) error {
+	subject := "module"
+	value := traceModuleFlag
+	if asUsercrate {
+		subject = "usercrate"
+		value = traceUsercrateFlag
+	}
+	_ = asModule
+
+	params := url.Values{}
+	params.Set(subject, value)
+	if traceIncludeTreeFlag {
+		params.Set("include_tree", "true")
+	}
+
+	client := newAPIClient()
+	var result inverseTraceResult
+	if err := client.get("/api/v1/config/trace?"+params.Encode(), &result); err != nil {
+		return err
+	}
+
+	heading := fmt.Sprintf("%s %s", bold(subject+":"), amber(value))
+	fmt.Println(heading)
+	fmt.Println()
+
+	if len(result.Envoys) == 0 && len(result.TreeRefs) == 0 {
+		if traceIncludeTreeFlag {
+			fmt.Printf("  %s\n", medGray("Not applied on any enrolled envoy, and no config-tree pattern references it."))
+		} else {
+			fmt.Printf("  %s\n", medGray("Not applied on any enrolled envoy."))
+			fmt.Printf("  %s\n", medGray("(use --include-tree to also surface unmatched config-tree patterns.)"))
+		}
+		return nil
+	}
+
+	if len(result.Envoys) > 0 {
+		fmt.Println(bold("Enrolled envoys:"))
+		fmt.Println()
+		w := newAlignedTable(os.Stdout)
+		fmt.Fprintf(w, "    HOSTNAME\tMATCH\tENV\tCARRIER\n")
+		for _, e := range result.Envoys {
+			env := e.Environment
+			if env == "" {
+				env = medGray("—")
+			}
+			fmt.Fprintf(w, "    %s\t%s\t%s\t%s\n", e.Hostname, amber(e.Match), env, medGray(e.Carrier))
+		}
+		w.Flush()
+		fmt.Println()
+	}
+
+	if len(result.TreeRefs) > 0 {
+		fmt.Println(bold("Config-tree patterns (no enrolled envoy matches):"))
+		fmt.Println()
+		w := newAlignedTable(os.Stdout)
+		fmt.Fprintf(w, "    MATCH\tENV\tCARRIER\n")
+		for _, tr := range result.TreeRefs {
+			env := tr.Environment
+			if env == "" {
+				env = medGray("—")
+			}
+			fmt.Fprintf(w, "    %s\t%s\t%s\n", amber(tr.Match), env, medGray(tr.Carrier))
+		}
+		w.Flush()
+		fmt.Println()
+	}
+
+	summary := fmt.Sprintf("%d envoy", len(result.Envoys))
+	if len(result.Envoys) != 1 {
+		summary += "s"
+	}
+	if traceIncludeTreeFlag {
+		summary += fmt.Sprintf(", %d config-tree pattern", len(result.TreeRefs))
+		if len(result.TreeRefs) != 1 {
+			summary += "s"
+		}
+	}
+	fmt.Printf("  %s\n", medGray(summary+"."))
+	return nil
+}
+
 func init() {
-	configTraceCmd.Flags().StringVar(&traceModuleFlag, "module", "", "Filter trace to show only the branch for this module")
+	configTraceCmd.Flags().StringVar(&traceModuleFlag, "module", "", "With <hostname>: filter trace to this module's branch. Without <hostname>: find where this module is applied.")
+	configTraceCmd.Flags().StringVar(&traceHostFlag, "host", "", "Hostname to trace (alias for the positional argument)")
+	configTraceCmd.Flags().StringVar(&traceUsercrateFlag, "usercrate", "", "Find where this usercrate is applied across the fleet")
+	configTraceCmd.Flags().BoolVar(&traceIncludeTreeFlag, "include-tree", false, "Inverse mode only: also include config-tree patterns no enrolled envoy matches")
 	configCmd.AddCommand(configTraceCmd)
 }
