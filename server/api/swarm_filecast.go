@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -619,27 +618,6 @@ func parseLodeRetention(s string) time.Duration {
 	}
 	d, _ := time.ParseDuration(s)
 	return d
-}
-
-// matchLodeTarget checks whether an envoy matches a target spec.
-// Supports: "*" (all), hostname globs ("*.web.*"), trait filters ("key=value").
-func matchLodeTarget(envoy fleet.EnvoyState, spec string) bool {
-	if spec == "*" {
-		return true
-	}
-	// Trait filter: key=value
-	if strings.Contains(spec, "=") {
-		parts := strings.SplitN(spec, "=", 2)
-		if len(parts) == 2 {
-			return envoy.Traits[parts[0]] == parts[1]
-		}
-	}
-	// Hostname glob
-	if matched, _ := filepath.Match(spec, envoy.Hostname); matched {
-		return true
-	}
-	// Exact hostname match
-	return envoy.Hostname == spec
 }
 
 // BrokenSeeds returns broken seed manifests across all envoys.

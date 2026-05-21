@@ -733,7 +733,7 @@ func TestMatchesCIDR(t *testing.T) {
 	}
 
 	// Match: 172.16.x.x
-	id, err = reg.TrustedRegister(ctx, "b.example.com", "172.16.0.1", "pk2", patterns, "172.16.5.5", false)
+	_, err = reg.TrustedRegister(ctx, "b.example.com", "172.16.0.1", "pk2", patterns, "172.16.5.5", false)
 	if err != nil {
 		t.Fatalf("expected match for 172.16.x: %v", err)
 	}

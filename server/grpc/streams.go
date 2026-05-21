@@ -19,16 +19,16 @@ import (
 // When a force-push is requested, it signals the target agent's stream.
 type streamManager struct {
 	mu               sync.RWMutex
-	streams          map[string]*agentStream      // envoy_id → stream
-	sendBufferSize   int                          // per-agent send channel capacity
+	streams          map[string]*agentStream        // envoy_id → stream
+	sendBufferSize   int                            // per-agent send channel capacity
 	pending          map[string][]*pendingPromotion // envoy_id → queued messages
 	fleetIndex       *fleet.FleetIndex
 	metrics          *metrics.Metrics // per-instance prometheus collectors
-	promotionTimeout time.Duration // default: 12 minutes
+	promotionTimeout time.Duration    // default: 12 minutes
 }
 
 type agentStream struct {
-	envoyID  string
+	envoyID   string
 	hostname  string
 	send      chan *pb.ServerStreamMessage
 	done      chan struct{}
@@ -39,7 +39,7 @@ type agentStream struct {
 // pendingPromotion holds a message queued for delivery when an agent opens a stream.
 type pendingPromotion struct {
 	msg       *pb.ServerStreamMessage
-	onTimeout func()      // called if stream never opens
+	onTimeout func() // called if stream never opens
 	timer     *time.Timer
 }
 
@@ -63,7 +63,7 @@ func newStreamManager(sendBuf int, fleetIndex *fleet.FleetIndex, m *metrics.Metr
 // register adds an agent stream. Returns the stream and a cleanup function.
 func (sm *streamManager) register(envoyID, hostname string) (*agentStream, func()) {
 	as := &agentStream{
-		envoyID: envoyID,
+		envoyID:  envoyID,
 		hostname: hostname,
 		send:     make(chan *pb.ServerStreamMessage, sm.sendBufferSize),
 		done:     make(chan struct{}),
@@ -204,36 +204,6 @@ func (sm *streamManager) workCompleted(envoyID string) {
 	}
 }
 
-// pushPolicy sends a policy update to a specific agent. Non-blocking — if the
-// agent's send buffer is full, the message is dropped (agent will get it on
-// next check-in within the stream).
-func (sm *streamManager) pushPolicy(envoyID string, msg *pb.ServerStreamMessage) {
-	sm.mu.RLock()
-	as, ok := sm.streams[envoyID]
-	sm.mu.RUnlock()
-	if !ok {
-		return
-	}
-	select {
-	case as.send <- msg:
-	default:
-		slog.Warn("stream send buffer full, dropping policy push", "envoy_id", envoyID)
-	}
-}
-
-// pushPolicyAll sends a policy update to all connected agents. Non-blocking.
-func (sm *streamManager) pushPolicyAll(msg *pb.ServerStreamMessage) {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	for _, as := range sm.streams {
-		select {
-		case as.send <- msg:
-		default:
-			slog.Warn("stream send buffer full, dropping policy push", "envoy_id", as.envoyID)
-		}
-	}
-}
-
 // forcePush sends a force-push signal to a specific agent. If envoyID is empty,
 // sends to all connected agents.
 func (sm *streamManager) forcePush(envoyID string) int {
@@ -269,13 +239,6 @@ func (sm *streamManager) forcePush(envoyID string) int {
 		}
 	}
 	return count
-}
-
-// connectedCount returns the number of connected agent streams.
-func (sm *streamManager) connectedCount() int {
-	sm.mu.RLock()
-	defer sm.mu.RUnlock()
-	return len(sm.streams)
 }
 
 // isConnected returns true if the envoy has an active stream.

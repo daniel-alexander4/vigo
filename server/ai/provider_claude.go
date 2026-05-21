@@ -178,7 +178,7 @@ func (p *ClaudeProvider) Chat(ctx context.Context, req ChatRequest) (*ChatRespon
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Claude API returned %d: %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("claude API returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	var cResp claudeResponse
@@ -187,7 +187,7 @@ func (p *ClaudeProvider) Chat(ctx context.Context, req ChatRequest) (*ChatRespon
 	}
 
 	if cResp.Error != nil {
-		return nil, fmt.Errorf("Claude API error: %s", cResp.Error.Message)
+		return nil, fmt.Errorf("claude API error: %s", cResp.Error.Message)
 	}
 
 	result := &ChatResponse{

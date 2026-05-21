@@ -70,7 +70,7 @@ Examples:
 		w := newAlignedTable(os.Stdout)
 		fmt.Fprintf(w, "  TYPE\tNAME\tFILE\tREASON\n")
 		for _, f := range filtered {
-			typeLabel := f.Type
+			var typeLabel string
 			if f.Type == "module" {
 				typeLabel = amber("module")
 			} else {

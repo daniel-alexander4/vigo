@@ -147,18 +147,6 @@ func finalizeFindings(r *Result) {
 	}
 }
 
-// errorf appends an Error-severity finding. Helper used by the repair
-// pass and by inline checks that haven't been promoted to a Rule yet.
-// Line=0 means "module-level / no source location."
-func (r *Result) errorf(line int, ruleID, format string, args ...any) {
-	r.Findings = append(r.Findings, Finding{
-		Severity: Error,
-		Line:     line,
-		RuleID:   ruleID,
-		Message:  fmt.Sprintf(format, args...),
-	})
-}
-
 // warnf appends a Warning-severity finding. See errorf for parameter
 // semantics. Used for repair-pass auto-fixes ("converted tabs to
 // spaces") that the operator should be aware of but didn't have to
@@ -607,19 +595,18 @@ func toValidateModule(mod *module) vigovalidate.Module {
 	vm := vigovalidate.Module{Name: mod.Name}
 	for _, res := range mod.Resources {
 		vm.Resources = append(vm.Resources, vigovalidate.Resource{
-			Name:        res.Name,
-			Type:        res.Type,
-			When:        res.When,
-			Attributes:  res.Attrs,
-			DependsOn:   res.DependsOn,
-			Before:      res.Before,
-			Notify:      res.Notify,
-			Subscribes:  res.Subscribes,
+			Name:       res.Name,
+			Type:       res.Type,
+			When:       res.When,
+			Attributes: res.Attrs,
+			DependsOn:  res.DependsOn,
+			Before:     res.Before,
+			Notify:     res.Notify,
+			Subscribes: res.Subscribes,
 		})
 	}
 	return vm
 }
-
 
 // --- Step 4: Render ---
 
@@ -817,18 +804,18 @@ const flowLineWidthBudget = 80
 // resource attributes:
 //
 //   - Scalar         → emit via yamlScalar (handles strings, ints, bools,
-//                      newline-multilines, quoting). Falls back to the
-//                      raw `node.Value` only when the node has a tag the
-//                      scalar coercion doesn't recognize (rare edge case).
+//     newline-multilines, quoting). Falls back to the
+//     raw `node.Value` only when the node has a tag the
+//     scalar coercion doesn't recognize (rare edge case).
 //   - Sequence       → flow if all items are scalars and the resulting
-//                      line fits within `flowLineWidthBudget`; block
-//                      (`- item` per line) otherwise. Empty sequences
-//                      always use flow form `[]` to round-trip safely
-//                      (see TestLint_EmptyListAttr_RoundTrips).
+//     line fits within `flowLineWidthBudget`; block
+//     (`- item` per line) otherwise. Empty sequences
+//     always use flow form `[]` to round-trip safely
+//     (see TestLint_EmptyListAttr_RoundTrips).
 //   - Mapping        → preserve key order from `node.Content`. Empty
-//                      mappings emit as `{}`. Recurses into each value,
-//                      so a per-host lookup table whose values are
-//                      sequences gets nested flow handling automatically.
+//     mappings emit as `{}`. Recurses into each value,
+//     so a per-host lookup table whose values are
+//     sequences gets nested flow handling automatically.
 //
 // Multi-line literals (`|` block scalars) are emitted via the existing
 // yamlScalar string path so the existing authorized-keys / templated
@@ -1298,37 +1285,37 @@ func sortedKeys[V any](m map[string]V) []string {
 
 // typeKeyOrder defines the canonical attribute ordering per resource type.
 var typeKeyOrder = map[string][]string{
-	"file":             {"target_path", "content", "source", "owner", "group", "mode", "state", "stream_edit"},
-	"directory":        {"target_path", "owner", "group", "mode", "state", "recurse"},
-	"symlink":          {"target_path", "to", "state"},
-	"package":          {"package", "version", "state", "allow_downgrade", "purge", "update_cache", "lock_version", "post_cleanup", "flags", "timeout", "retries", "retry_delay"},
-	"service":          {"service", "state", "enabled"},
-	"user":             {"username", "uid", "group", "groups", "home", "shell", "state"},
-	"group":            {"group", "gid", "state"},
-	"exec":             {"command", "onlyif", "unless", "user", "cwd", "timeout_secs"},
-	"cron":             {"command", "schedule", "minute", "hour", "day", "month", "weekday", "user", "state"},
-	"file_line":        {"target_path", "line", "match_pattern", "state"},
-	"repository":       {"repository", "key_url", "state"},
-	"source_package":   {"url", "target_path", "checksum", "mode"},
-	"nonrepo_package":  {"url", "source", "package", "version", "state", "sha256", "lock_version", "allow_downgrade", "purge", "update_cache", "post_cleanup", "flags", "pre_install", "post_install", "headers", "timeout", "retries", "retry_delay"},
-	"git":              {"repo", "path", "branch", "depth"},
-	"sysctl":           {"key", "value", "state"},
-	"host":             {"hostname", "ip", "state"},
-	"mount":            {"path", "device", "fstype", "options", "state"},
-	"hostname":         {"hostname"},
-	"timezone":         {"timezone"},
-	"sshkey":           {"username", "sshkey_type", "sshkey"},
-	"firewall":         {"port", "protocol", "action", "state"},
-	"kernel_module":    {"module", "state"},
-	"swap":             {"path", "size", "state"},
-	"tmpfile":          {"path", "type", "mode", "age"},
-	"ini":              {"target_path", "section", "key", "value"},
-	"json_file":        {"target_path", "key", "value"},
-	"logrotate":        {"path", "frequency", "rotate_count"},
-	"reboot":           {"message", "reboot_required_file"},
-	"container":      {"container", "image", "artifact", "ports", "volumes", "state", "env", "network", "restart", "command", "pull", "tmpfs", "cap_drop", "cap_add", "labels", "log_driver", "log_options", "user", "read_only", "healthcheck_command", "healthcheck_interval", "healthcheck_timeout", "healthcheck_retries", "healthcheck_start_period"},
-	"replace":          {"target_path", "match_pattern", "replacement"},
-	"field_edit":       {"path", "line_match", "select_field", "field_value", "state"},
-	"systemd_dropin":   {"service", "section", "key", "value"},
-	"blockinfile":      {"target_path", "block", "marker_begin", "marker_end", "state"},
+	"file":            {"target_path", "content", "source", "owner", "group", "mode", "state", "stream_edit"},
+	"directory":       {"target_path", "owner", "group", "mode", "state", "recurse"},
+	"symlink":         {"target_path", "to", "state"},
+	"package":         {"package", "version", "state", "allow_downgrade", "purge", "update_cache", "lock_version", "post_cleanup", "flags", "timeout", "retries", "retry_delay"},
+	"service":         {"service", "state", "enabled"},
+	"user":            {"username", "uid", "group", "groups", "home", "shell", "state"},
+	"group":           {"group", "gid", "state"},
+	"exec":            {"command", "onlyif", "unless", "user", "cwd", "timeout_secs"},
+	"cron":            {"command", "schedule", "minute", "hour", "day", "month", "weekday", "user", "state"},
+	"file_line":       {"target_path", "line", "match_pattern", "state"},
+	"repository":      {"repository", "key_url", "state"},
+	"source_package":  {"url", "target_path", "checksum", "mode"},
+	"nonrepo_package": {"url", "source", "package", "version", "state", "sha256", "lock_version", "allow_downgrade", "purge", "update_cache", "post_cleanup", "flags", "pre_install", "post_install", "headers", "timeout", "retries", "retry_delay"},
+	"git":             {"repo", "path", "branch", "depth"},
+	"sysctl":          {"key", "value", "state"},
+	"host":            {"hostname", "ip", "state"},
+	"mount":           {"path", "device", "fstype", "options", "state"},
+	"hostname":        {"hostname"},
+	"timezone":        {"timezone"},
+	"sshkey":          {"username", "sshkey_type", "sshkey"},
+	"firewall":        {"port", "protocol", "action", "state"},
+	"kernel_module":   {"module", "state"},
+	"swap":            {"path", "size", "state"},
+	"tmpfile":         {"path", "type", "mode", "age"},
+	"ini":             {"target_path", "section", "key", "value"},
+	"json_file":       {"target_path", "key", "value"},
+	"logrotate":       {"path", "frequency", "rotate_count"},
+	"reboot":          {"message", "reboot_required_file"},
+	"container":       {"container", "image", "artifact", "ports", "volumes", "state", "env", "network", "restart", "command", "pull", "tmpfs", "cap_drop", "cap_add", "labels", "log_driver", "log_options", "user", "read_only", "healthcheck_command", "healthcheck_interval", "healthcheck_timeout", "healthcheck_retries", "healthcheck_start_period"},
+	"replace":         {"target_path", "match_pattern", "replacement"},
+	"field_edit":      {"path", "line_match", "select_field", "field_value", "state"},
+	"systemd_dropin":  {"service", "section", "key", "value"},
+	"blockinfile":     {"target_path", "block", "marker_begin", "marker_end", "state"},
 }

@@ -59,26 +59,18 @@ func ansi(hex string) string {
 }
 
 var (
-	catRed       = ansi(uifmt.HexRed)
-	catMaroon    = ansi(uifmt.HexMaroon)
-	catPeach     = ansi(uifmt.HexPeach)
-	catYellow    = ansi(uifmt.HexYellow)
-	catGreen     = ansi(uifmt.HexGreen)
-	catTeal      = ansi(uifmt.HexTeal)
-	catSky       = ansi(uifmt.HexSky)
-	catSapphire  = ansi(uifmt.HexSapphire)
-	catBlue      = ansi(uifmt.HexBlue)
-	catLavender  = ansi(uifmt.HexLavender)
-	catMauve     = ansi(uifmt.HexMauve)
-	catPink      = ansi(uifmt.HexPink)
-	catFlamingo  = ansi(uifmt.HexFlamingo)
-	catRosewater = ansi(uifmt.HexRosewater)
-	catText      = ansi(uifmt.HexText)
-	catSubtext1  = ansi(uifmt.HexSubtext1)
-	catSubtext0  = ansi(uifmt.HexSubtext0)
-	catOverlay2  = ansi(uifmt.HexOverlay2)
-	catOverlay1  = ansi(uifmt.HexOverlay1)
-	catOverlay0  = ansi(uifmt.HexOverlay0)
+	catRed      = ansi(uifmt.HexRed)
+	catPeach    = ansi(uifmt.HexPeach)
+	catYellow   = ansi(uifmt.HexYellow)
+	catGreen    = ansi(uifmt.HexGreen)
+	catTeal     = ansi(uifmt.HexTeal)
+	catSky      = ansi(uifmt.HexSky)
+	catSapphire = ansi(uifmt.HexSapphire)
+	catBlue     = ansi(uifmt.HexBlue)
+	catLavender = ansi(uifmt.HexLavender)
+	catPink     = ansi(uifmt.HexPink)
+	catOverlay2 = ansi(uifmt.HexOverlay2)
+	catOverlay1 = ansi(uifmt.HexOverlay1)
 )
 
 func cReset() string {
@@ -191,22 +183,6 @@ func teal(s string) string {
 		return s
 	}
 	return catTeal + s + catReset
-}
-
-// mauve wraps text in Catppuccin Mauve — used for purple accents.
-func mauve(s string) string {
-	if !useColor {
-		return s
-	}
-	return catMauve + s + catReset
-}
-
-// sapphire wraps text in Catppuccin Sapphire — used for informational accents.
-func sapphire(s string) string {
-	if !useColor {
-		return s
-	}
-	return catSapphire + s + catReset
 }
 
 // header wraps a table header in bold Sapphire.

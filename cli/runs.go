@@ -37,7 +37,7 @@ var runsListCmd = &cobra.Command{
 		var resp struct {
 			Runs []struct {
 				ID           string `json:"id"`
-				EnvoyID       string `json:"envoyId"`
+				EnvoyID      string `json:"envoyId"`
 				StartedAt    string `json:"startedAt"`
 				Status       string `json:"status"`
 				ChangedCount int32  `json:"changedCount"`
@@ -75,7 +75,7 @@ var runsShowCmd = &cobra.Command{
 		var resp struct {
 			Run struct {
 				ID           string `json:"id"`
-				EnvoyID       string `json:"envoyId"`
+				EnvoyID      string `json:"envoyId"`
 				StartedAt    string `json:"startedAt"`
 				FinishedAt   string `json:"finishedAt"`
 				Status       string `json:"status"`
@@ -287,7 +287,7 @@ var runsDriftCmd = &cobra.Command{
 			envoyNoun = "envoys"
 		}
 		fmt.Printf("\n%s %s across %d %s\n",
-			fmt.Sprintf("%s", strings.Join(parts, ", ")),
+			strings.Join(parts, ", "),
 			noun, driftingEnvoys, envoyNoun)
 
 		return nil

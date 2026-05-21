@@ -27,7 +27,7 @@ type TraceVizPageData struct {
 
 // InheritanceVizLevel is one level in the inheritance tree SVG.
 type InheritanceVizLevel struct {
-	Label     string   // file path (dir/file)
+	Label     string // file path (dir/file)
 	Modules   []string
 	Roles     []string
 	VarCount  int
@@ -57,7 +57,6 @@ type DepGraph struct {
 }
 
 const treeBoxWidth = 420
-const treeLabelX = 70
 const treeBoxX = 60
 const treeGap = 12 // gap between levels
 

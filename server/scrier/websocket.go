@@ -27,8 +27,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coder/websocket"
 	"golang.org/x/crypto/ssh"
-	"nhooyr.io/websocket"
 
 	vigoauth "git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"

@@ -54,14 +54,14 @@ func (f Finding) String() string {
 // Resource mirrors the fields of config.ResourceConfig that we need for
 // validation, avoiding a circular import. The caller maps from their types.
 type Resource struct {
-	Name             string
-	Type             string
-	When             string
-	Attributes       map[string]any
-	DependsOn        []string
-	Before           []string
-	Notify           []string
-	Subscribes       []string
+	Name        string
+	Type        string
+	When        string
+	Attributes  map[string]any
+	DependsOn   []string
+	Before      []string
+	Notify      []string
+	Subscribes  []string
 	WatchSecret []string
 }
 
@@ -74,45 +74,45 @@ type Module struct {
 // KnownTypes is the canonical set of valid resource types. Exported so
 // modlint can use the same list — there must be exactly one source of truth.
 var KnownTypes = map[string]bool{
-	"file":             true,
-	"directory":        true,
-	"symlink":          true,
-	"package":          true,
-	"service":          true,
-	"user":             true,
-	"exec":             true,
-	"repository":       true,
-	"source_package":   true,
-	"nonrepo_package":  true,
-	"cron":             true,
-	"process":          true,
-	"file_line":        true,
-	"group":            true,
-	"host":             true,
-	"sysctl":           true,
-	"mount":            true,
-	"hostname":         true,
-	"timezone":         true,
-	"sshkey":           true,
-	"firewall":         true,
-	"kernel_module":    true,
-	"swap":             true,
-	"tmpfile":          true,
-	"ini":              true,
-	"json_file":        true,
-	"logrotate":        true,
-	"git":              true,
-	"reboot":           true,
-	"alternatives":     true,
-	"pip":              true,
-	"gem":              true,
-	"npm":              true,
-	"blockinfile":      true,
-	"container":      true,
-	"replace":          true,
-	"field_edit":       true,
-	"systemd_dropin":   true,
-	"selinux":          true,
+	"file":            true,
+	"directory":       true,
+	"symlink":         true,
+	"package":         true,
+	"service":         true,
+	"user":            true,
+	"exec":            true,
+	"repository":      true,
+	"source_package":  true,
+	"nonrepo_package": true,
+	"cron":            true,
+	"process":         true,
+	"file_line":       true,
+	"group":           true,
+	"host":            true,
+	"sysctl":          true,
+	"mount":           true,
+	"hostname":        true,
+	"timezone":        true,
+	"sshkey":          true,
+	"firewall":        true,
+	"kernel_module":   true,
+	"swap":            true,
+	"tmpfile":         true,
+	"ini":             true,
+	"json_file":       true,
+	"logrotate":       true,
+	"git":             true,
+	"reboot":          true,
+	"alternatives":    true,
+	"pip":             true,
+	"gem":             true,
+	"npm":             true,
+	"blockinfile":     true,
+	"container":       true,
+	"replace":         true,
+	"field_edit":      true,
+	"systemd_dropin":  true,
+	"selinux":         true,
 	// Network device types.
 	"cisco_vlan": true, "cisco_interface": true, "network_banner": true,
 	"network_ntp": true, "network_syslog": true, "network_snmp": true,
@@ -134,8 +134,8 @@ var KnownTypes = map[string]bool{
 	"firewall_windows": true, "cron_windows": true, "hostname_windows": true,
 	"timezone_windows": true, "registry": true, "reboot_windows": true,
 	"local_security_policy": true,
-	"windows_update": true,
-	"windows_defender": true, "windows_env": true, "domain_membership": true,
+	"windows_update":        true,
+	"windows_defender":      true, "windows_env": true, "domain_membership": true,
 	"certificate_windows": true, "service_recovery_windows": true,
 	"powershell": true,
 	// Backup.
@@ -175,55 +175,57 @@ type TypeSchema struct {
 // TypeSchemas is populated at init time from generatedSchemas (auto-extracted
 // from Rust executor source code) plus semantic constraints (Required, AbsPath,
 // Mode) defined below. Regenerate after executor changes:
-//   scripts/gen-executor-schemas.sh > server/validate/schemas_gen.go
+//
+//	scripts/gen-executor-schemas.sh > server/validate/schemas_gen.go
 var TypeSchemas = map[string]TypeSchema{}
+
 // requiredAttrs defines which attributes are required per type.
 var requiredAttrs = map[string][]string{
-	"file":            {"target_path", "owner", "group", "mode"},
-	"directory":       {"target_path"},
-	"symlink":         {"target_path"},
-	"package":         {"package"},
-	"service":         {"service"},
-	"user":            {"username"},
-	"group":           {"group"},
-	"exec":            {"command"},
-	"source_package":  {"url"},
-	"cron":            {"command", "user"},
-	"process":         {"process"},
-	"file_line":       {"target_path"},
-	"host":            {"hostname"},
-	"sysctl":          {"key", "value"},
-	"mount":           {"path"},
-	"hostname":        {"hostname"},
-	"timezone":        {"timezone"},
-	"sshkey":          {"hostname", "sshkey"},
-	"firewall":        {"port"},
-	"kernel_module":   {"module"},
-	"swap":            {"path"},
-	"tmpfile":         {"path"},
-	"ini":             {"target_path", "key"},
-	"json_file":       {"target_path", "key"},
-	"logrotate":       {"path"},
-	"git":             {"repo", "path"},
+	"file":           {"target_path", "owner", "group", "mode"},
+	"directory":      {"target_path"},
+	"symlink":        {"target_path"},
+	"package":        {"package"},
+	"service":        {"service"},
+	"user":           {"username"},
+	"group":          {"group"},
+	"exec":           {"command"},
+	"source_package": {"url"},
+	"cron":           {"command", "user"},
+	"process":        {"process"},
+	"file_line":      {"target_path"},
+	"host":           {"hostname"},
+	"sysctl":         {"key", "value"},
+	"mount":          {"path"},
+	"hostname":       {"hostname"},
+	"timezone":       {"timezone"},
+	"sshkey":         {"hostname", "sshkey"},
+	"firewall":       {"port"},
+	"kernel_module":  {"module"},
+	"swap":           {"path"},
+	"tmpfile":        {"path"},
+	"ini":            {"target_path", "key"},
+	"json_file":      {"target_path", "key"},
+	"logrotate":      {"path"},
+	"git":            {"repo", "path"},
 	// `name` is supplied by the runner from the resource's top-level name
 	// when the executor reads `params.get("name")` (agent/src/runner/mod.rs:
 	// the runner inserts the resource name into params if not already set).
 	// Marking it required would force operators to duplicate the resource
 	// name as an attribute. `path` is the only operator-supplied required.
-	"alternatives":    {"path"},
-	"pip":             {"package"},
-	"gem":             {"package"},
-	"npm":             {"package"},
-	"blockinfile":     {"target_path", "block_content"},
-	"replace":         {"target_path", "match_pattern", "replacement"},
-	"field_edit":      {"path", "line_match", "select_field"},
-	"systemd_dropin":  {"unit", "content"},
+	"alternatives":   {"path"},
+	"pip":            {"package"},
+	"gem":            {"package"},
+	"npm":            {"package"},
+	"blockinfile":    {"target_path", "block_content"},
+	"replace":        {"target_path", "match_pattern", "replacement"},
+	"field_edit":     {"path", "line_match", "select_field"},
+	"systemd_dropin": {"unit", "content"},
 	// `container` requires `image` OR `artifact`; the mutual-exclusion +
 	// "at least one for state=running" enforcement lives in the
 	// container-image-source modlint rule, since requiredAttrs can't
 	// express the OR.
-	"backup":          {"source_dir", "target_path"},
-	"db_backup":       {"db_type", "source_db", "target_path"},
+	"backup":    {"source_dir", "target_path"},
+	"db_backup": {"db_type", "source_db", "target_path"},
 }
 
 // absPathAttrs defines which attributes must be absolute paths.
@@ -235,7 +237,7 @@ var absPathAttrs = map[string][]string{
 	"git": {"path"}, "alternatives": {"path"}, "pip": {"virtualenv"},
 	"blockinfile": {"target_path"}, "replace": {"target_path"}, "field_edit": {"path"},
 	"selinux": {"path"},
-	"backup": {"source_dir", "target_path"}, "db_backup": {"target_path"},
+	"backup":  {"source_dir", "target_path"}, "db_backup": {"target_path"},
 	"exec": {"cwd"},
 }
 
@@ -443,9 +445,7 @@ func validateCrossReferences(mod Module) []Finding {
 func detectCycles(resources []Resource) error {
 	adj := make(map[string][]string)
 	for _, res := range resources {
-		for _, dep := range res.DependsOn {
-			adj[res.Name] = append(adj[res.Name], dep)
-		}
+		adj[res.Name] = append(adj[res.Name], res.DependsOn...)
 		for _, b := range res.Before {
 			adj[b] = append(adj[b], res.Name)
 		}

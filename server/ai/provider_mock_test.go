@@ -5,7 +5,6 @@ package ai
 
 import (
 	"context"
-	"io"
 )
 
 // mockProvider is a test Provider that returns pre-configured responses.
@@ -38,20 +37,3 @@ func (m *mockProvider) ChatStream(_ context.Context, req ChatRequest) (EventStre
 	}
 	return &singleEventStream{resp: resp}, nil
 }
-
-// mockEventStream is a test EventStream.
-type mockEventStream struct {
-	events []StreamEvent
-	idx    int
-}
-
-func (s *mockEventStream) Next() (StreamEvent, error) {
-	if s.idx >= len(s.events) {
-		return StreamEvent{}, io.EOF
-	}
-	e := s.events[s.idx]
-	s.idx++
-	return e, nil
-}
-
-func (s *mockEventStream) Close() error { return nil }

@@ -33,7 +33,7 @@ func TestServerConfigSchema_DocTagsPresent(t *testing.T) {
 }
 
 func walkForDocTags(t reflect.Type, prefix string, visited map[reflect.Type]bool, missing *[]string) {
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct {
@@ -64,7 +64,7 @@ func walkForDocTags(t reflect.Type, prefix string, visited map[reflect.Type]bool
 
 		// Recurse into nested structs / pointer-to-struct / slices of struct.
 		ft := f.Type
-		for ft.Kind() == reflect.Ptr || ft.Kind() == reflect.Slice || ft.Kind() == reflect.Array {
+		for ft.Kind() == reflect.Pointer || ft.Kind() == reflect.Slice || ft.Kind() == reflect.Array {
 			ft = ft.Elem()
 		}
 		if ft.Kind() == reflect.Struct {

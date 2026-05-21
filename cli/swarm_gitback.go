@@ -265,7 +265,7 @@ func runGitbackShow(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(w, "  %s\t%s\t%s\n", bold("REF"), bold("CONSENSUS"), bold("LAGGING"))
 		for _, r := range refKeys {
 			st := match.HeadRefs[r]
-			consensus := "—"
+			var consensus string
 			if st.Sha != "" {
 				consensus = shortSha(st.Sha)
 			} else {

@@ -186,37 +186,37 @@ type resolvedEntry struct {
 // cascading inheritance. Secret references are resolved via a
 // secrets.Provider. Reload triggered by config publish via REST endpoint.
 type ConfigStore struct {
-	mu            sync.RWMutex
-	entries       []resolvedEntry
-	index         *patternIndex                // accelerated hostname lookup
-	rawModules    map[string]*ModuleDefinition // unresolved, for secret ref scanning
-	envoyEntries []EnvoyEntry                // original entries for tracing
-	roleDefs      map[string]*RoleDefinition   // loaded roles for tracing
-	moduleDefs      map[string]*ModuleDefinition       // loaded modules for tracing
-	complianceIndex map[string]map[string][]string    // standard → control_id → []module_name
+	mu              sync.RWMutex
+	entries         []resolvedEntry
+	index           *patternIndex                  // accelerated hostname lookup
+	rawModules      map[string]*ModuleDefinition   // unresolved, for secret ref scanning
+	envoyEntries    []EnvoyEntry                   // original entries for tracing
+	roleDefs        map[string]*RoleDefinition     // loaded roles for tracing
+	moduleDefs      map[string]*ModuleDefinition   // loaded modules for tracing
+	complianceIndex map[string]map[string][]string // standard → control_id → []module_name
 	// coverageCache memoizes EnvoyStandardCoverage results at publish
 	// time keyed by (hostcrate entry index, standard). Each entry's
 	// module set is fixed by the publish-time hostcrate resolution, so
 	// per-envoy coverage is purely a function of (entry, standard) and
 	// can be precomputed once. Eliminates the per-call walk previously
 	// done by EnvoyStandardCoverage. Built alongside complianceIndex.
-	coverageCache   map[int]map[string]*StandardCoverage
-	commonConfigs    map[string]*CommonConfig                    // dir path → common.vgo inheritance config
-	perEnvOverrides  map[string]map[string]*PerEnvOverrideBlock // dir path → env name → override block
-	waivers          map[string]map[string]*WaiverEntry         // standard → control_id → waiver
-	waiversByFile   []EnvoyWaiverFileEntry             // per-file waiver data for trace display
-	moduleComplianceSources []ModuleComplianceSource   // per-file modules-tree compliance.vgo entries for trace display
-	dir           string                       // examples directory
-	provider      secrets.Provider
-	backend       string // secrets backend name for diagnostic hints
-	dangerous       bool   // allow non-idempotent resources
-	version         atomic.Uint64 // incremented on each successful reload
-	onReloadFailure  func(err error) // optional callback on reload failure
-	onReloadSuccess  func()          // optional callback after successful reload
-	lastReloadErr    error // last reload error (nil if last reload succeeded)
-	enabledStandards map[string]bool // nil = all enabled; non-nil = only these standard keys
-	approvedSources  []string        // nil/empty = no annotation; non-empty = URL prefixes for package_source_audit trait
-	serverYamlPath   string          // path to server.yaml for re-reading compliance on reload
+	coverageCache           map[int]map[string]*StandardCoverage
+	commonConfigs           map[string]*CommonConfig                   // dir path → common.vgo inheritance config
+	perEnvOverrides         map[string]map[string]*PerEnvOverrideBlock // dir path → env name → override block
+	waivers                 map[string]map[string]*WaiverEntry         // standard → control_id → waiver
+	waiversByFile           []EnvoyWaiverFileEntry                     // per-file waiver data for trace display
+	moduleComplianceSources []ModuleComplianceSource                   // per-file modules-tree compliance.vgo entries for trace display
+	dir                     string                                     // examples directory
+	provider                secrets.Provider
+	backend                 string          // secrets backend name for diagnostic hints
+	dangerous               bool            // allow non-idempotent resources
+	version                 atomic.Uint64   // incremented on each successful reload
+	onReloadFailure         func(err error) // optional callback on reload failure
+	onReloadSuccess         func()          // optional callback after successful reload
+	lastReloadErr           error           // last reload error (nil if last reload succeeded)
+	enabledStandards        map[string]bool // nil = all enabled; non-nil = only these standard keys
+	approvedSources         []string        // nil/empty = no annotation; non-empty = URL prefixes for package_source_audit trait
+	serverYamlPath          string          // path to server.yaml for re-reading compliance on reload
 
 	// fleet: lookup memoization. fleetLookupTTL is operator-set
 	// (cs.SetFleetLookupTTL); 0 means use defaultFleetLookupTTL. The memo
@@ -428,7 +428,6 @@ func (cs *ConfigStore) ListRoleNames() []string {
 	return names
 }
 
-
 // Reload re-reads all config files from disk and re-resolves secrets.
 // Called by the REST API after config publish and by the secret rotation watcher.
 // On failure, the previous config is preserved and the onReloadFailure callback fires.
@@ -525,7 +524,7 @@ func (cs *ConfigStore) Get(hostname string) *EnvoyConfig {
 	}
 
 	return &EnvoyConfig{
-		Envoy:  hostname,
+		Envoy:   hostname,
 		Modules: []ModuleConfig{},
 	}
 }
@@ -565,29 +564,29 @@ func (cs *ConfigStore) MatchClone(hostname string) (string, *EnvoyConfig) {
 
 // ConfigTrace contains detailed resolution information for a hostname.
 type ConfigTrace struct {
-	Hostname        string                `json:"hostname"`
-	Matched         bool                  `json:"matched"`
-	MatchPattern    string                `json:"match_pattern,omitempty"`
-	PatternType     string                `json:"pattern_type,omitempty"` // "exact" or "glob"
-	Environment     string                `json:"environment,omitempty"`
-	Roles           []string              `json:"roles,omitempty"`
-	RoleExpansion   []RoleTraceEntry      `json:"role_expansion,omitempty"`
-	Inheritance     []InheritanceLevel    `json:"inheritance,omitempty"`
-	Modules         []string              `json:"modules"`
-	ModuleSources   map[string]string     `json:"module_sources,omitempty"` // module name → source file/role
-	VarSources      []VarSourceEntry      `json:"var_sources"`
-	FinalVars       map[string]any        `json:"final_vars"`
-	ResourceCount   int                   `json:"resource_count"`
+	Hostname      string             `json:"hostname"`
+	Matched       bool               `json:"matched"`
+	MatchPattern  string             `json:"match_pattern,omitempty"`
+	PatternType   string             `json:"pattern_type,omitempty"` // "exact" or "glob"
+	Environment   string             `json:"environment,omitempty"`
+	Roles         []string           `json:"roles,omitempty"`
+	RoleExpansion []RoleTraceEntry   `json:"role_expansion,omitempty"`
+	Inheritance   []InheritanceLevel `json:"inheritance,omitempty"`
+	Modules       []string           `json:"modules"`
+	ModuleSources map[string]string  `json:"module_sources,omitempty"` // module name → source file/role
+	VarSources    []VarSourceEntry   `json:"var_sources"`
+	FinalVars     map[string]any     `json:"final_vars"`
+	ResourceCount int                `json:"resource_count"`
 
 	// Password Inheritance
-	SecretRefs      []SecretTraceEntry      `json:"secret_refs,omitempty"`
-	SecretsProvider string                  `json:"secrets_provider,omitempty"`
+	SecretRefs      []SecretTraceEntry `json:"secret_refs,omitempty"`
+	SecretsProvider string             `json:"secrets_provider,omitempty"`
 
 	// Dependency Inheritance
-	Dependencies    []DependencyTraceEntry  `json:"dependencies,omitempty"`
+	Dependencies []DependencyTraceEntry `json:"dependencies,omitempty"`
 
 	// Compliance Inheritance
-	ComplianceTags  []ComplianceTraceEntry  `json:"compliance_tags,omitempty"`
+	ComplianceTags []ComplianceTraceEntry `json:"compliance_tags,omitempty"`
 
 	// Modules-tree compliance.vgo provenance — directory-level claim files
 	// that attached compliance tags to the modules this envoy runs.
@@ -598,15 +597,15 @@ type ConfigTrace struct {
 	// compliance.vgo. "Envoy" prefix signals the envoy's-view-of-the-
 	// inheritance-chain semantic, parallel to "Module" on the claims
 	// side.
-	EnvoyWaiverFiles []string                  `json:"envoy_waiver_files,omitempty"` // compliance.vgo paths in the envoy's inheritance chain
-	EnvoyWaivers     []EnvoyWaiverTraceEntry   `json:"envoy_waivers,omitempty"`
+	EnvoyWaiverFiles []string                `json:"envoy_waiver_files,omitempty"` // compliance.vgo paths in the envoy's inheritance chain
+	EnvoyWaivers     []EnvoyWaiverTraceEntry `json:"envoy_waivers,omitempty"`
 
 	// Per-Environment Overrides
-	EnvOverrideFiles []string               `json:"env_override_files,omitempty"` // environments.vgo paths in ancestry
-	EnvOverrideEnv   string                 `json:"env_override_env,omitempty"`   // which env block was applied
+	EnvOverrideFiles []string `json:"env_override_files,omitempty"` // environments.vgo paths in ancestry
+	EnvOverrideEnv   string   `json:"env_override_env,omitempty"`   // which env block was applied
 
 	// Conditional Inheritance
-	Conditionals    []ConditionalTraceEntry `json:"conditionals,omitempty"`
+	Conditionals []ConditionalTraceEntry `json:"conditionals,omitempty"`
 }
 
 // FilterByModule returns a copy of the trace filtered to only show
@@ -769,8 +768,8 @@ type ComplianceTraceEntry struct {
 // signals the envoy's-view-of-the-inheritance-chain semantic, parallel
 // to "Module" meaning modules-tree on the claims side.
 type EnvoyWaiverFileEntry struct {
-	RelPath string                      // e.g., "compliance.vgo" or "production/compliance.vgo"
-	Waivers map[string][]*WaiverEntry   // standard → entries
+	RelPath string                    // e.g., "compliance.vgo" or "production/compliance.vgo"
+	Waivers map[string][]*WaiverEntry // standard → entries
 }
 
 // EnvoyWaiverTraceEntry tracks a compliance waiver applied to an envoy
@@ -803,7 +802,6 @@ type ConditionalTraceEntry struct {
 	ResolvedWhen string `json:"resolved_when,omitempty"` // expression with vars replaced by resolved values
 	EvalSide     string `json:"eval_side"`               // "server" or "agent"
 }
-
 
 // Trace returns a detailed ConfigTrace for the given hostname, showing
 // MatchDirPaths returns a map of match pattern → directory path for all entries.
@@ -1500,14 +1498,14 @@ var StandardKeyForSlug = map[string]string{
 	"sox":             "sox",
 	"finra":           "finra",
 	"mifid2":          "mifid2",
-	"ccss":             "ccss",
-	"fda21cfr11":       "fda-21cfr11",
-	"gaming":           "gaming",
-	"ciswindows":        "cis-windows",
-	"cisubuntu":         "cis-ubuntu",
-	"cisrhel":           "cis-rhel",
-	"abacyber":          "aba-cyber",
-	"nydfscyber":        "ny-dfs-cyber",
+	"ccss":            "ccss",
+	"fda21cfr11":      "fda-21cfr11",
+	"gaming":          "gaming",
+	"ciswindows":      "cis-windows",
+	"cisubuntu":       "cis-ubuntu",
+	"cisrhel":         "cis-rhel",
+	"abacyber":        "aba-cyber",
+	"nydfscyber":      "ny-dfs-cyber",
 }
 
 // SlugForStandardKey is the inverse of StandardKeyForSlug.
@@ -1820,11 +1818,11 @@ func (cs *ConfigStore) Search(query, moduleName, varName string) *SearchResult {
 // lists config-tree patterns that reference the subject but match no
 // currently-enrolled envoy.
 type InverseTraceResult struct {
-	Subject     string              `json:"subject"`               // "module" or "usercrate"
-	Value       string              `json:"value"`                 // the subject name being looked up
+	Subject     string              `json:"subject"` // "module" or "usercrate"
+	Value       string              `json:"value"`   // the subject name being looked up
 	IncludeTree bool                `json:"include_tree"`
-	Envoys      []InverseEnvoyEntry `json:"envoys"`                // enrolled envoys whose resolved config includes the subject
-	TreeRefs    []InverseTreeRef    `json:"tree_refs,omitempty"`   // populated only when IncludeTree
+	Envoys      []InverseEnvoyEntry `json:"envoys"`              // enrolled envoys whose resolved config includes the subject
+	TreeRefs    []InverseTreeRef    `json:"tree_refs,omitempty"` // populated only when IncludeTree
 }
 
 // InverseEnvoyEntry is one enrolled envoy whose resolved config includes the
@@ -2749,21 +2747,21 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 	}
 
 	cfg := &EnvoyConfig{
-		Envoy:          entry.Match,
-		MatchPattern:    entry.Match,
-		Environment:     entry.Environment,
-		Roles:           roleRefNames(entry.Roles),
-		Modules:         modules,
-		Vars:            vars,
-		VarOrder:        varOrder,
-		Tags:            append([]string(nil), entry.Tags...),
-		ObserveOnly:     entry.ObserveOnly,
-		Gateway:         entry.Gateway,
-		DeviceType:      entry.DeviceType,
-		Credential:      entry.Credential,
-		Username:        entry.Username,
-		Port:            entry.Port,
-		IPAddress:       entry.IPAddress,
+		Envoy:        entry.Match,
+		MatchPattern: entry.Match,
+		Environment:  entry.Environment,
+		Roles:        roleRefNames(entry.Roles),
+		Modules:      modules,
+		Vars:         vars,
+		VarOrder:     varOrder,
+		Tags:         append([]string(nil), entry.Tags...),
+		ObserveOnly:  entry.ObserveOnly,
+		Gateway:      entry.Gateway,
+		DeviceType:   entry.DeviceType,
+		Credential:   entry.Credential,
+		Username:     entry.Username,
+		Port:         entry.Port,
+		IPAddress:    entry.IPAddress,
 	}
 
 	// Detect fleet: lookups in top-level vars. Parsing/validating here surfaces
@@ -3451,24 +3449,6 @@ func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig, perEn
 // down to (but not including) the entry's own directory level.
 // For an entry at "production/web", it returns commons for:
 // "" (root), "production" — in that order.
-// ancestorDirs returns the sequence of directory paths from the
-// stockpile root (empty string) down to dirPath, inclusive. Used by
-// applyInheritance to walk the chain for usercrates: a root-level
-// usercrate at stockpile/usercrates/ applies to every envoy regardless
-// of nesting depth, unlike common.vgo which deliberately skips root
-// for root-level entries. Parent → child order.
-func ancestorDirs(dirPath string) []string {
-	dirs := []string{""}
-	if dirPath == "" {
-		return dirs
-	}
-	parts := strings.Split(dirPath, string(filepath.Separator))
-	for i := range parts {
-		dirs = append(dirs, filepath.ToSlash(filepath.Join(parts[:i+1]...)))
-	}
-	return dirs
-}
-
 func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*CommonConfig {
 	if dirPath == "" {
 		// Root-level entries get no inheritance (common.vgo at root
@@ -3715,23 +3695,6 @@ func loadModuleComplianceConfigs(stockpileDir string) (map[string]map[string][]s
 	}
 
 	return byDir, sources, nil
-}
-
-// isInsideUsercratesDir reports whether a stockpile-relative path (slash
-// separated) points at a file living inside a usercrates/ directory at any
-// depth. Used by the envoys-tree walker to skip files that belong to the
-// usercrate tree, and to locate usercrate-scope compliance.vgo files.
-func isInsideUsercratesDir(relSlash string) bool {
-	parts := strings.Split(relSlash, "/")
-	for i, p := range parts {
-		// Require a "usercrates" segment that is not the leaf (leaf would
-		// be the directory itself walked as a file, which can't happen here
-		// but keeps the check defensive).
-		if p == "usercrates" && i < len(parts)-1 {
-			return true
-		}
-	}
-	return false
 }
 
 // loadUsercrateComplianceConfigs walks every usercrates/ subtree in the
@@ -4429,14 +4392,14 @@ func moduleToValidate(def *ModuleDefinition) validate.Module {
 	mod := validate.Module{Name: def.Name}
 	for _, r := range def.Resources {
 		mod.Resources = append(mod.Resources, validate.Resource{
-			Name:             r.Name,
-			Type:             r.Type,
-			When:             r.When,
-			Attributes:       r.Attributes,
-			DependsOn:        r.DependsOn,
-			Before:           r.Before,
-			Notify:           r.Notify,
-			Subscribes:       r.Subscribes,
+			Name:        r.Name,
+			Type:        r.Type,
+			When:        r.When,
+			Attributes:  r.Attributes,
+			DependsOn:   r.DependsOn,
+			Before:      r.Before,
+			Notify:      r.Notify,
+			Subscribes:  r.Subscribes,
 			WatchSecret: r.WatchSecret,
 		})
 	}

@@ -4,6 +4,7 @@
 package grpc
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -94,7 +95,7 @@ func TestHandleRunDelta(t *testing.T) {
 	}
 
 	// Verify batcher has pending entry.
-	batcher.Flush(nil)
+	batcher.Flush(context.TODO())
 }
 
 func TestHandleHeartbeat(t *testing.T) {

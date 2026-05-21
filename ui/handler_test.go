@@ -355,7 +355,7 @@ func (m *footprintMock) EnvoyRunsData(id string) (EnvoyRunsFragmentData, error) 
 func (m *footprintMock) EnvoyTraitsData(id string) (EnvoyTraitsFragmentData, error) {
 	return m.base.EnvoyTraitsData(id)
 }
-func (m *footprintMock) RunsData(s string) RunsPageData          { return m.base.RunsData(s) }
+func (m *footprintMock) RunsData(s string) RunsPageData { return m.base.RunsData(s) }
 func (m *footprintMock) RunDetailData(id string) (RunDetailPageData, error) {
 	return m.base.RunDetailData(id)
 }
@@ -399,8 +399,8 @@ func (m *footprintMock) EnvoyFreshness(id string) (time.Time, time.Duration, boo
 }
 func (m *footprintMock) EnvoyPressure(_ string) (fleetpressure.EnvoyPressure, bool) {
 	return fleetpressure.EnvoyPressure{
-		ID:       "00000000-0000-0000-0000-000000000001",
-		Hostname: "alpha.example.com",
+		ID:                "00000000-0000-0000-0000-000000000001",
+		Hostname:          "alpha.example.com",
 		RSSBytes:          fleetpressure.Metric{Value: 64 * 1024 * 1024, Present: true, Severity: fleetpressure.OK},
 		OpenFDs:           fleetpressure.Metric{Value: 640, Present: true, Severity: fleetpressure.Fail},
 		Threads:           fleetpressure.Metric{Value: 12, Present: true, Severity: fleetpressure.OK},
@@ -464,7 +464,7 @@ func TestRunsHandlerStatusFilter(t *testing.T) {
 	failRunID := uuid.New()
 	td.runs = append(td.runs, testRun{
 		id:          failRunID,
-		envoyID:    td.envoys[1].id,
+		envoyID:     td.envoys[1].id,
 		hostname:    "web-02.example.com",
 		startedAt:   time.Now().Add(-10 * time.Minute),
 		status:      "failure",
@@ -628,12 +628,11 @@ type testEnvoy struct {
 	enrolled  time.Time
 	lastSeen  time.Time
 	status    string
-	lastRun   *testRun
 }
 
 type testRun struct {
 	id           uuid.UUID
-	envoyID       uuid.UUID
+	envoyID      uuid.UUID
 	hostname     string
 	startedAt    time.Time
 	status       string
@@ -655,7 +654,7 @@ type testRunResult struct {
 
 type testPlan struct {
 	id       uuid.UUID
-	envoyID uuid.UUID
+	envoyID  uuid.UUID
 	hostname string
 	created  time.Time
 	results  []testPlanResult
@@ -669,18 +668,17 @@ type testPlanResult struct {
 }
 
 type testData struct {
-	envoys      []testEnvoy
-	runs       []testRun
-	history    []testConvergenceHistory
-	plans      []testPlan
-	configDir  string
-	traits     map[uuid.UUID]map[string]any
+	envoys    []testEnvoy
+	runs      []testRun
+	history   []testConvergenceHistory
+	plans     []testPlan
+	configDir string
+	traits    map[uuid.UUID]map[string]any
 }
 
 type testConvergenceHistory struct {
-	recordedAt string
-	total      int64
-	converged  int64
+	total     int64
+	converged int64
 }
 
 // defaultTestData builds the standard test dataset.
@@ -717,7 +715,7 @@ func defaultTestData() *testData {
 		runs: []testRun{
 			{
 				id:          runID,
-				envoyID:    envoy1ID,
+				envoyID:     envoy1ID,
 				hostname:    "web-01.example.com",
 				startedAt:   now.Add(-5 * time.Minute),
 				status:      "success",
@@ -737,7 +735,7 @@ func defaultTestData() *testData {
 		plans: []testPlan{
 			{
 				id:       planID,
-				envoyID: envoy1ID,
+				envoyID:  envoy1ID,
 				hostname: "web-01.example.com",
 				created:  now.Add(-1 * time.Hour),
 				results: []testPlanResult{
@@ -849,8 +847,8 @@ func (m *mockDataSource) DashboardData(baseInterval, offlineThreshold time.Durat
 			ActiveNav: "dashboard",
 			Version:   "test",
 		},
-		TotalEnvoys:     totalEnvoys,
-		ActiveEnvoys:    activeCount,
+		TotalEnvoys:    totalEnvoys,
+		ActiveEnvoys:   activeCount,
 		RecentFailures: failureCount,
 		DriftRate:      driftRate,
 		RecentRuns:     runs,
@@ -906,8 +904,8 @@ func (m *mockDataSource) ConvergenceData(baseInterval, offlineThreshold time.Dur
 func (m *mockDataSource) DashboardStatsData(baseInterval, offlineThreshold time.Duration) DashboardStatsFragmentData {
 	d := m.DashboardData(baseInterval, offlineThreshold)
 	return DashboardStatsFragmentData{
-		TotalEnvoys:     d.TotalEnvoys,
-		ActiveEnvoys:    d.ActiveEnvoys,
+		TotalEnvoys:    d.TotalEnvoys,
+		ActiveEnvoys:   d.ActiveEnvoys,
 		RecentFailures: d.RecentFailures,
 		DriftRate:      d.DriftRate,
 	}
@@ -1135,7 +1133,7 @@ func (m *mockDataSource) PlanDetailData(planID string) (PlanDetailPageData, erro
 					Version:   "test",
 				},
 				PlanID:      p.id.String(),
-				EnvoyID:      p.envoyID.String(),
+				EnvoyID:     p.envoyID.String(),
 				Hostname:    p.hostname,
 				CreatedAt:   p.created,
 				Results:     results,

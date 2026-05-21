@@ -113,7 +113,7 @@ func buildSection(f reflect.StructField, yamlName string) SchemaSection {
 func buildField(f reflect.StructField, yamlName string) SchemaField {
 	t := f.Type
 	// Unwrap pointer-to-scalar (e.g. *bool for StreamEditSection.Enabled).
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 
@@ -140,7 +140,7 @@ func buildField(f reflect.StructField, yamlName string) SchemaField {
 // unwrapStructType returns (structType, isPointer) for a struct or
 // pointer-to-struct type. Returns (nil, _) for non-struct types.
 func unwrapStructType(t reflect.Type) (reflect.Type, bool) {
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		if t.Elem().Kind() == reflect.Struct {
 			return t.Elem(), true
 		}
@@ -171,7 +171,7 @@ func yamlFieldName(f reflect.StructField) string {
 // (the pointer is an implementation detail of "optional section").
 func humanType(t reflect.Type) string {
 	switch t.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		return humanType(t.Elem())
 	case reflect.Slice, reflect.Array:
 		return "[]" + humanType(t.Elem())

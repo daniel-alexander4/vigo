@@ -42,7 +42,7 @@ func addAgentRedirects(parent *cobra.Command, subsystem, usercrateFlag string, v
 						"  Run `vigo swarm %s %s` on the publishing/holding envoy, as the Unix user\n"+
 						"  whose usercrate carries `%s: true` (NOT as root). `vigocli swarm %s` is\n"+
 						"  read-only + admin moderation; mutating verbs sign with the user's puddle\n"+
-						"  identity, which vigocli can't produce.",
+						"  identity, which vigocli can't produce",
 					subsystem, v, subsystem, v, usercrateFlag, subsystem,
 				)
 			},

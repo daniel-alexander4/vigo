@@ -254,6 +254,7 @@ func (r *Reporter) dial(ctx context.Context, addr string, creds credentials.Tran
 		return conn, pb.NewVigoAdminClient(conn), nil
 	}
 
+	//nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
 	conn, err := grpc.DialContext(ctx, addr,
 		grpc.WithTransportCredentials(creds),
 	)

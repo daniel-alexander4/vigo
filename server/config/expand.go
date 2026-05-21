@@ -251,7 +251,7 @@ func foreachInstanceKey(item any, keyField string) (string, error) {
 		}
 		kv, ok := v[keyField]
 		if !ok {
-			return "", fmt.Errorf("an item is missing the %q field named by key:", keyField)
+			return "", fmt.Errorf("an item is missing the %q field named by the key: setting", keyField)
 		}
 		return fmt.Sprintf("%v", kv), nil
 	default:

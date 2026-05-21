@@ -121,12 +121,8 @@ func (p *OpenAICompatProvider) chat(ctx context.Context, req ChatRequest, maxTok
 	var tools []oaiTool
 	for _, t := range req.Tools {
 		tools = append(tools, oaiTool{
-			Type: "function",
-			Function: oaiToolDef{
-				Name:        t.Name,
-				Description: t.Description,
-				Parameters:  t.Parameters,
-			},
+			Type:     "function",
+			Function: oaiToolDef(t),
 		})
 	}
 

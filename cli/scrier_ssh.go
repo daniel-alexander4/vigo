@@ -47,9 +47,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/coder/websocket"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
-	"nhooyr.io/websocket"
 )
 
 var scrierSSHCmd = &cobra.Command{
@@ -330,7 +330,7 @@ func runScrierSSH(ctx context.Context, envoyArg string, setupTimeout time.Durati
 	cause := <-endCh
 	restore()
 
-	// Classify the end. nhooyr's Read returns a CloseError on a clean
+	// Classify the end. The websocket Read returns a CloseError on a clean
 	// WS close; StatusNormalClosure + StatusGoingAway are normal ends
 	// (user typed `exit`, server shut down). Anything else is abnormal.
 	var closeErr websocket.CloseError
@@ -424,4 +424,3 @@ func scrierWebSocketURL(base, sessionID string) (string, error) {
 	u.RawQuery = ""
 	return u.String(), nil
 }
-

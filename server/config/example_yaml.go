@@ -239,7 +239,7 @@ func writeLine(b *strings.Builder, text, indent string, commented bool) {
 
 // unwrapType strips pointer layers to return the pointee type.
 func unwrapType(t reflect.Type) reflect.Type {
-	for t.Kind() == reflect.Ptr {
+	for t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	return t

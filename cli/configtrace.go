@@ -216,17 +216,17 @@ Examples:
 
 // traceResult is the CLI-side representation of the config trace API response.
 type traceResult struct {
-	Hostname        string                 `json:"hostname"`
-	Matched         bool                   `json:"matched"`
-	MatchPattern    string                 `json:"match_pattern"`
-	PatternType     string                 `json:"pattern_type"`
-	Environment     string                 `json:"environment"`
-	Roles           []string               `json:"roles"`
-	RoleExpansion   []roleExpansionEntry   `json:"role_expansion"`
-	Inheritance     []inheritanceLevel     `json:"inheritance"`
-	Modules         []string               `json:"modules"`
-	ModuleSources   map[string]string      `json:"module_sources"`
-	VarSources      []struct {
+	Hostname      string               `json:"hostname"`
+	Matched       bool                 `json:"matched"`
+	MatchPattern  string               `json:"match_pattern"`
+	PatternType   string               `json:"pattern_type"`
+	Environment   string               `json:"environment"`
+	Roles         []string             `json:"roles"`
+	RoleExpansion []roleExpansionEntry `json:"role_expansion"`
+	Inheritance   []inheritanceLevel   `json:"inheritance"`
+	Modules       []string             `json:"modules"`
+	ModuleSources map[string]string    `json:"module_sources"`
+	VarSources    []struct {
 		Key    string `json:"key"`
 		Value  any    `json:"value"`
 		Source string `json:"source"`
@@ -234,14 +234,14 @@ type traceResult struct {
 	ConditionalVars []string `json:"conditional_vars"`
 	ResourceCount   int      `json:"resource_count"`
 
-	SecretRefs            []secretTraceEntry           `json:"secret_refs"`
-	SecretsProvider       string                       `json:"secrets_provider"`
-	Dependencies          []dependencyTraceEntry       `json:"dependencies"`
-	ComplianceTags        []complianceTraceEntry       `json:"compliance_tags"`
-	ModuleComplianceFiles []moduleComplianceFileEntry  `json:"module_compliance_files"`
-	EnvoyWaiverFiles      []string                     `json:"envoy_waiver_files"`
-	EnvoyWaivers          []envoyWaiverTraceEntry      `json:"envoy_waivers"`
-	Conditionals          []conditionalTraceEntry      `json:"conditionals"`
+	SecretRefs            []secretTraceEntry          `json:"secret_refs"`
+	SecretsProvider       string                      `json:"secrets_provider"`
+	Dependencies          []dependencyTraceEntry      `json:"dependencies"`
+	ComplianceTags        []complianceTraceEntry      `json:"compliance_tags"`
+	ModuleComplianceFiles []moduleComplianceFileEntry `json:"module_compliance_files"`
+	EnvoyWaiverFiles      []string                    `json:"envoy_waiver_files"`
+	EnvoyWaivers          []envoyWaiverTraceEntry     `json:"envoy_waivers"`
+	Conditionals          []conditionalTraceEntry     `json:"conditionals"`
 }
 
 type moduleComplianceFileEntry = struct {
@@ -406,9 +406,8 @@ func renderInheritanceTree(levels []inheritanceLevel, waiverFiles []string) {
 
 		// Print directory name (except root which gets ● on its first file).
 		if dl.dir != "" {
-			dirName := dl.dir
 			parts := strings.Split(dl.dir, "/")
-			dirName = parts[len(parts)-1]
+			dirName := parts[len(parts)-1]
 			parentIndent := strings.Repeat("    ", depth-1)
 			fmt.Printf("  %s%s└── %s%s\n", parentIndent, color, dirName, rst)
 		}
@@ -614,10 +613,6 @@ func renderPasswordInheritance(refs []secretTraceEntry, provider string) {
 	}
 
 	// Group by module.
-	type group struct {
-		module string
-		refs   []secretTraceEntry
-	}
 	order := []string{}
 	byModule := map[string][]secretTraceEntry{}
 	for _, ref := range refs {

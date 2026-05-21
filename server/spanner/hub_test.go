@@ -70,9 +70,10 @@ func newGRPCTestHub(t *testing.T, addrs []string) *Hub {
 
 	h := &Hub{bolts: make([]boltConn, 0, len(addrs))}
 	for i, addr := range addrs {
+		//nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
 		conn, err := grpc.DialContext(ctx, addr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
+			grpc.WithBlock(), //nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
 		)
 		if err != nil {
 			t.Fatalf("connecting to fake bolt %d: %v", i, err)

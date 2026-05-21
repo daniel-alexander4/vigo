@@ -87,7 +87,7 @@ func runFilecastDistribute(cmd *cobra.Command, args []string) error {
   --target 'danlap,annlap'      just those two
   --target 'os.distro=ubuntu'   envoys whose os.distro trait is "ubuntu"
 
-Patterns: comma-separated; "-" prefix excludes; exclusions win; "host*" globs; "trait=value" matches.`)
+Patterns: comma-separated; "-" prefix excludes; exclusions win; "host*" globs; "trait=value" matches`)
 	}
 	label, _ := cmd.Flags().GetString("label")
 	retention, _ := cmd.Flags().GetString("retention")

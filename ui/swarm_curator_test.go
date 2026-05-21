@@ -5,7 +5,6 @@ package ui
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
@@ -51,19 +50,6 @@ func pubkeyHex(seed byte) string {
 		b[i] = seed
 	}
 	return hex.EncodeToString(b[:])
-}
-
-// expectedAID mirrors the agent's catalog::artifact_id_for so tests can
-// assert exact ids without dragging in ed25519_dalek.
-func expectedAID(seed byte, name string) string {
-	pk := make([]byte, 32)
-	for i := range pk {
-		pk[i] = seed
-	}
-	h := sha256.New()
-	h.Write(pk)
-	h.Write([]byte(name))
-	return hex.EncodeToString(h.Sum(nil))
 }
 
 func sampleEntry(seed byte, name string, issuedMillis int64) curatormesh.CatalogEntry {

@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -47,7 +46,7 @@ func sqlNullString(s string) sql.NullString {
 
 // Errors returned by Store operations.
 var (
-	ErrNotFound     = errors.New("compliance doc not found")
+	ErrNotFound       = errors.New("compliance doc not found")
 	ErrAlreadyDeleted = errors.New("compliance doc already soft-deleted")
 	ErrTooLarge       = errors.New("upload exceeds size cap")
 	ErrFrameworkFull  = errors.New("upload would exceed per-framework size cap")
@@ -518,13 +517,4 @@ func writeFileAtomic(path string, data []byte) error {
 		return err
 	}
 	return os.Rename(tmpName, path)
-}
-
-// streamEncrypt is reserved for the audit-bundle export path (Phase D)
-// where a multi-MB doc shouldn't be loaded into memory twice. Not used
-// by Put yet because typical uploads are small (PDFs, contracts), but
-// the signature is here so Phase D can wire to it without churning
-// the store contract.
-func streamEncrypt(_ Crypto, _ io.Reader, _ io.Writer) error {
-	return errors.New("not implemented — audit-bundle export will land in Phase D")
 }

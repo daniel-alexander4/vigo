@@ -21,9 +21,9 @@ func TestSecretStringMarshalText(t *testing.T) {
 
 func TestSecretStringSprintf(t *testing.T) {
 	s := NewSecretString("super-secret-value")
-	got := fmt.Sprintf("%s", s)
+	got := s.String()
 	if got != "[REDACTED]" {
-		t.Errorf("Sprintf = %q, want [REDACTED]", got)
+		t.Errorf("String() = %q, want [REDACTED]", got)
 	}
 	got = fmt.Sprintf("%v", s)
 	if got != "[REDACTED]" {

@@ -5,7 +5,6 @@ package ui
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"sort"
 
@@ -234,25 +233,4 @@ func (data *ComplianceVizPageData) buildFromReport(report any) {
 
 		data.HeatmapRows = append(data.HeatmapRows, row)
 	}
-}
-
-func chunksForSizeUI(size int64) int {
-	if size <= 0 {
-		return 0
-	}
-	n := int(size / 1048576)
-	if size%1048576 != 0 {
-		n++
-	}
-	return n
-}
-
-// complianceVizViewBox computes the SVG viewBox for the heatmap.
-func complianceVizViewBox(rows int, cols int) string {
-	if rows == 0 || cols == 0 {
-		return "0 0 400 100"
-	}
-	w := 130 + cols*5
-	h := rows*18 + 4
-	return fmt.Sprintf("0 0 %d %d", w, h)
 }

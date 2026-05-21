@@ -107,10 +107,11 @@ func NewHub(ctx context.Context, bootstrapPeers []string, certFile, keyFile, caF
 	}
 
 	for _, addr := range bootstrapPeers {
+		//nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
 		conn, err := grpc.DialContext(ctx, addr,
 			grpc.WithTransportCredentials(tlsCreds),
-			grpc.WithBlock(),
-			grpc.WithTimeout(5*time.Second),
+			grpc.WithBlock(),                //nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
+			grpc.WithTimeout(5*time.Second), //nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
 		)
 		if err != nil {
 			// Close any already-opened connections.
@@ -149,11 +150,6 @@ func (h *Hub) BoltCount() int {
 
 // AggregateListEnvoys fans out ListEnvoys to all bolts and merges results.
 func (h *Hub) AggregateListEnvoys(ctx context.Context) ([]*pb.Envoy, error) {
-	type result struct {
-		envoys []*pb.Envoy
-		err    error
-	}
-
 	results := h.fanOut(ctx, func(ctx context.Context, sc boltConn) (any, error) {
 		resp, err := sc.admin.ListEnvoys(ctx, &pb.ListEnvoysRequest{})
 		if err != nil {

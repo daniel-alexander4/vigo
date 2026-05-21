@@ -277,21 +277,12 @@ func queryPeerStatus(ctx context.Context, addr string, tlsCfg *tls.Config) (*pb.
 //
 // In practice, the demoted server will reconnect as a peer when it next
 // contacts the new primary.
-func demotePeer(ctx context.Context, addr string, tlsCfg *tls.Config) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(credentials.NewTLS(tlsCfg)))
-	if err != nil {
-		return fmt.Errorf("dial %s: %w", addr, err)
-	}
-	defer conn.Close()
-
-	// There is no dedicated Demote RPC in the proto, so we log the intent.
-	// The actual demotion happens naturally: the old primary will attempt to
-	// push to this (now-primary) server, get rejected, and fall back to peer
-	// mode. This is safe because the operator has explicitly promoted this
-	// server and its config version is higher.
+func demotePeer(_ context.Context, addr string, _ *tls.Config) error {
+	// There is no dedicated Demote RPC in the proto, so we only log the
+	// intent. The actual demotion happens naturally: the old primary will
+	// attempt to push to this (now-primary) server, get rejected, and fall
+	// back to peer mode. This is safe because the operator has explicitly
+	// promoted this server and its config version is higher.
 	slog.Info("demote: remote peer notified (will self-demote on next sync cycle)", "addr", addr)
 	return nil
 }

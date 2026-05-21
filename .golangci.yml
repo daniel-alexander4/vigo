@@ -36,3 +36,7 @@ linters:
       - linters:
           - errcheck
         text: 'Error return value of `w\.Write` is not checked'
+      # staticcheck QF* are opt-in "quickfix" style suggestions, not
+      # correctness findings — staticcheck does not run them by default.
+      - linters: [staticcheck]
+        text: 'QF[0-9]{4}'

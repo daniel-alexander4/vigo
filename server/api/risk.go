@@ -37,8 +37,8 @@ type RiskHandler struct {
 	baseInterval     time.Duration
 	offlineThreshold time.Duration
 	version          string
-	orgName      string
-	logoPath     string
+	orgName          string
+	logoPath         string
 }
 
 // NewRiskHandler creates a RiskHandler.
@@ -127,12 +127,12 @@ func (h *RiskHandler) handleRiskHistory(w http.ResponseWriter, r *http.Request) 
 	}
 
 	type historyEntry struct {
-		Date         string         `json:"date"`
-		AvgScore     int64          `json:"avg_score"`
-		MaxScore     int64          `json:"max_score"`
+		Date         string           `json:"date"`
+		AvgScore     int64            `json:"avg_score"`
+		MaxScore     int64            `json:"max_score"`
 		Distribution map[string]int64 `json:"distribution"`
-		ScoredEnvoys int64          `json:"scored_envoys"`
-		TotalEnvoys  int64          `json:"total_envoys"`
+		ScoredEnvoys int64            `json:"scored_envoys"`
+		TotalEnvoys  int64            `json:"total_envoys"`
 	}
 
 	entries := make([]historyEntry, 0, len(rows))
@@ -830,9 +830,4 @@ func envoyToInput(es fleet.EnvoyState) risk.EnvoyInput {
 		Traits:            es.Traits,
 		ObservedCycle:     es.ObservedCycle(),
 	}
-}
-
-// riskLevelClass returns a CSS class for the risk level.
-func riskLevelClass(level risk.Level) string {
-	return "level-" + strings.ToLower(string(level))
 }

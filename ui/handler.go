@@ -25,6 +25,9 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
 	licfmt "git.alexander4.io/tessera/license/products/vigo"
 	"git.alexander4.io/vigo/server/ai"
 	"git.alexander4.io/vigo/server/audit"
@@ -48,6 +51,10 @@ import (
 	"git.alexander4.io/vigo/server/traits"
 	"github.com/google/uuid"
 )
+
+// titleCaser title-cases ASCII display strings (section names, hardware
+// type labels). Replacement for the deprecated strings.Title.
+var titleCaser = cases.Title(language.Und)
 
 // DataSource abstracts data fetching for UI handlers.
 // Implemented by dbDataSource (production) and mockDataSource (test).
@@ -1589,7 +1596,7 @@ func buildDocsNav(docsDir string) []DocsNavSection {
 		sectionTitle := extractMDTitle(filepath.Join(docsDir, sectionPath, "_index.md"))
 		if sectionTitle == "" {
 			sectionTitle = strings.ReplaceAll(sectionPath, "-", " ")
-			sectionTitle = strings.Title(sectionTitle)
+			sectionTitle = titleCaser.String(sectionTitle)
 		}
 
 		// Read pages in this section.
@@ -1664,7 +1671,7 @@ func buildSubsection(docsDir, parentPath, dirName string) DocsNavSection {
 	subTitle := extractMDTitle(filepath.Join(docsDir, subPath, "_index.md"))
 	if subTitle == "" {
 		subTitle = strings.ReplaceAll(dirName, "-", " ")
-		subTitle = strings.Title(subTitle)
+		subTitle = titleCaser.String(subTitle)
 	}
 
 	pageFiles, err := os.ReadDir(filepath.Join(docsDir, subPath))
@@ -3954,16 +3961,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 		if items, err := h.complianceDocs.DocsForControl(r.Context(), standardKey, controlID); err == nil {
 			data.Docs = make([]EvidenceControlDoc, 0, len(items))
 			for _, it := range items {
-				data.Docs = append(data.Docs, EvidenceControlDoc{
-					ID:         it.ID,
-					Filename:   it.Filename,
-					DocType:    it.DocType,
-					MimeType:   it.MimeType,
-					SizeBytes:  it.SizeBytes,
-					SHA256:     it.SHA256,
-					UploadedBy: it.UploadedBy,
-					UploadedAt: it.UploadedAt,
-				})
+				data.Docs = append(data.Docs, EvidenceControlDoc(it))
 			}
 		}
 	}
@@ -5012,36 +5010,6 @@ func standardDisplayNameFromSlug(slug string) string {
 		return ""
 	}
 	return standardDisplayName(key)
-}
-
-// fwSlugMap maps framework display names to URL slugs (same as render.go fwSlug).
-func fwSlugMap(name string) string {
-	slugs := map[string]string{
-		"HIPAA":              "compliance",
-		"HITRUST CSF":        "hitrust",
-		"SOC 2":              "soc2",
-		"PCI DSS v4.0":       "pci",
-		"CIS Benchmarks":     "cis",
-		"NIST 800-53":        "nist",
-		"ISO 27001":          "iso27001",
-		"GDPR":               "gdpr",
-		"NERC CIP":           "nerccip",
-		"Cyber Essentials+":  "cyberessentials",
-		"IEC 62443":          "iec62443",
-		"SOX":                "sox",
-		"FINRA":              "finra",
-		"MiFID II":           "mifid2",
-		"CCSS":               "ccss",
-		"FDA 21 CFR Part 11": "fda21cfr11",
-		"Gaming Commission":  "gaming",
-		"CIS Windows":        "ciswindows",
-		"CIS Ubuntu":         "cisubuntu",
-		"CIS RHEL":           "cisrhel",
-	}
-	if s, ok := slugs[name]; ok {
-		return s
-	}
-	return strings.ToLower(strings.ReplaceAll(name, " ", ""))
 }
 
 // Runs renders the runs list page with optional status filter.
@@ -8135,7 +8103,7 @@ func (h *Handler) InventoryHardwareDetail(w http.ResponseWriter, r *http.Request
 			{"Architecture", "os.arch"},
 		}
 	default:
-		typeLabel = strings.Title(hwType)
+		typeLabel = titleCaser.String(hwType)
 		cols = []hwCol{
 			{"OS", "os.distro"},
 			{"Version", "os.version"},
@@ -8461,25 +8429,6 @@ func (h *Handler) enrichEnvoyRows(rows []EnvoyRow) {
 			rows[i].RepoStatus = "ok"
 		}
 	}
-}
-
-// statusBadgeCSS converts a failure-axis status string to a CSS class
-// suffix. "offline" is reachability rather than convergence and is
-// handled alongside the danger bucket because it warrants the same
-// operator attention as a hard failure.
-func statusBadgeCSS(status string) string {
-	switch convergence.ClassifyStatus(status) {
-	case convergence.StatusConverged:
-		return "success"
-	case convergence.StatusDegraded:
-		return "warning"
-	case convergence.StatusFailed:
-		return "danger"
-	}
-	if strings.ToLower(status) == "offline" {
-		return "danger"
-	}
-	return "info"
 }
 
 // InventoryFragment returns the fleet inventory table via HTMX, with trait
@@ -9662,31 +9611,6 @@ func inventoryAllGPUs(data map[string]any) []string {
 			continue
 		}
 		result = append(result, label)
-	}
-	return result
-}
-
-func inventoryAllArrayFields(data map[string]any, namespace, arrayKey, field string) []string {
-	ns, ok := data[namespace].(map[string]any)
-	if !ok {
-		return nil
-	}
-	arr, ok := ns[arrayKey].([]any)
-	if !ok || len(arr) == 0 {
-		return nil
-	}
-	var result []string
-	for _, elem := range arr {
-		m, ok := elem.(map[string]any)
-		if !ok {
-			continue
-		}
-		if val, ok := m[field]; ok {
-			s := fmt.Sprint(val)
-			if s != "" {
-				result = append(result, s)
-			}
-		}
 	}
 	return result
 }
