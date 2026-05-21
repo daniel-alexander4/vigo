@@ -22,39 +22,44 @@ func openSpannerTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 	d := testutil.OpenMigratedTestDB(t)
 	// FK enforcement is per-connection in SQLite and not enabled by the
-	// migrate harness; flip it on so the ConsumeToken FK to spanner_bolts
-	// is actually exercised under test.
+	// migrate harness; flip it on so the spanner_bolts.consumed_token_hash
+	// FK to spanner_consumed_tokens is actually exercised under test.
 	if _, err := d.Exec("PRAGMA foreign_keys = ON"); err != nil {
 		t.Fatalf("enable foreign_keys: %v", err)
 	}
 	return d
 }
 
-func insertParams(pubkey string, patterns string, revokedAt sql.NullInt64, updatedAt int64) InsertBoltParams {
+// boltParams builds an admission row with no consumed-token reference (a
+// pre-trusted entry). admittedAt doubles as the LWW arbitration clock.
+func boltParams(pubkey, patternClaims string, revokedAt sql.NullInt64, admittedAt int64) InsertBoltParams {
 	return InsertBoltParams{
-		Pubkey:    pubkey,
-		SpannerID: "test-spanner",
-		Hostname:  "bolt-" + pubkey[8:12],
-		Patterns:  patterns,
-		RevokedAt: revokedAt,
-		RevokedBy: sql.NullString{},
-		UpdatedAt: updatedAt,
-		UpdatedBy: pubA,
-		Signature: []byte{0xde, 0xad, 0xbe, 0xef},
+		Pubkey:            pubkey,
+		Hostname:          "bolt-" + pubkey[len(pubkey)-4:],
+		AdmittedAt:        admittedAt,
+		AdmittedBy:        pubA,
+		ConsumedTokenHash: sql.NullString{},
+		RevokedAt:         revokedAt,
+		RevokedBy:         sql.NullString{},
+		LastSnapshotAt:    sql.NullInt64{},
+		PatternClaims:     patternClaims,
+		Signature:         []byte{0xde, 0xad, 0xbe, 0xef},
 	}
 }
 
-func mergeParams(pubkey string, patterns string, revokedAt sql.NullInt64, updatedAt int64) MergeBoltLWWParams {
-	return MergeBoltLWWParams{
-		Pubkey:    pubkey,
-		SpannerID: "test-spanner",
-		Hostname:  "bolt-" + pubkey[8:12],
-		Patterns:  patterns,
-		RevokedAt: revokedAt,
-		RevokedBy: sql.NullString{},
-		UpdatedAt: updatedAt,
-		UpdatedBy: pubA,
-		Signature: []byte{0xde, 0xad, 0xbe, 0xef},
+// mergeParams is boltParams shaped for the gossip-replication entry point;
+// the two query param structs share an identical column list.
+func mergeParams(pubkey, patternClaims string, revokedAt sql.NullInt64, admittedAt int64) MergeBoltLWWParams {
+	return MergeBoltLWWParams(boltParams(pubkey, patternClaims, revokedAt, admittedAt))
+}
+
+func tokenParams(tokenHash string, consumedAt int64) ConsumeTokenParams {
+	return ConsumeTokenParams{
+		TokenHash:      tokenHash,
+		ConsumedAt:     consumedAt,
+		ConsumedBy:     pubA,
+		AdmittedPubkey: pubB,
+		ExpiresAt:      consumedAt + 86_400_000, // +24h
 	}
 }
 
@@ -63,18 +68,21 @@ func TestInsertAndGetBolt(t *testing.T) {
 	q := New(sqlDB)
 	ctx := context.Background()
 
-	if err := q.InsertBolt(ctx, insertParams(pubA, `["*.us-west.*"]`, sql.NullInt64{}, 1000)); err != nil {
+	if err := q.InsertBolt(ctx, boltParams(pubA, `["*.us-west.*"]`, sql.NullInt64{}, 1000)); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
 	got, err := q.GetBolt(ctx, pubA)
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if got.Pubkey != pubA || got.SpannerID != "test-spanner" || got.Patterns != `["*.us-west.*"]` || got.UpdatedAt != 1000 {
+	if got.Pubkey != pubA || got.PatternClaims != `["*.us-west.*"]` || got.AdmittedAt != 1000 {
 		t.Errorf("unexpected row: %+v", got)
 	}
 	if got.RevokedAt.Valid {
 		t.Errorf("expected revoked_at NULL, got %d", got.RevokedAt.Int64)
+	}
+	if got.ConsumedTokenHash.Valid {
+		t.Errorf("expected consumed_token_hash NULL for a pre-trusted entry")
 	}
 }
 
@@ -89,10 +97,10 @@ func TestListAndLiveBolts(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	must(q.InsertBolt(ctx, insertParams(pubA, `["a"]`, sql.NullInt64{}, 100)))
-	must(q.InsertBolt(ctx, insertParams(pubB, `["b"]`, sql.NullInt64{Int64: 200, Valid: true}, 200)))
+	must(q.InsertBolt(ctx, boltParams(pubA, `["a"]`, sql.NullInt64{}, 100)))
+	must(q.InsertBolt(ctx, boltParams(pubB, `["b"]`, sql.NullInt64{Int64: 200, Valid: true}, 200)))
 
-	all, err := q.ListBolts(ctx, "test-spanner")
+	all, err := q.ListBolts(ctx)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -100,12 +108,44 @@ func TestListAndLiveBolts(t *testing.T) {
 		t.Fatalf("ListBolts: want 2, got %d", len(all))
 	}
 
-	live, err := q.ListLiveBolts(ctx, "test-spanner")
+	live, err := q.ListLiveBolts(ctx)
 	if err != nil {
 		t.Fatalf("list live: %v", err)
 	}
 	if len(live) != 1 || live[0].Pubkey != pubA {
 		t.Errorf("ListLiveBolts: want [%s], got %+v", pubA, live)
+	}
+}
+
+func TestRevokeBolt(t *testing.T) {
+	sqlDB := openSpannerTestDB(t)
+	q := New(sqlDB)
+	ctx := context.Background()
+
+	if err := q.InsertBolt(ctx, boltParams(pubA, `["x"]`, sql.NullInt64{}, 100)); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+	if err := q.RevokeBolt(ctx, RevokeBoltParams{
+		Pubkey:    pubA,
+		RevokedAt: sql.NullInt64{Int64: 500, Valid: true},
+		RevokedBy: sql.NullString{String: pubB, Valid: true},
+		Signature: []byte{0x01},
+	}); err != nil {
+		t.Fatalf("revoke: %v", err)
+	}
+	got, err := q.GetBolt(ctx, pubA)
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if !got.RevokedAt.Valid || got.RevokedAt.Int64 != 500 {
+		t.Errorf("expected revoked_at=500, got %+v", got.RevokedAt)
+	}
+	live, err := q.ListLiveBolts(ctx)
+	if err != nil {
+		t.Fatalf("list live: %v", err)
+	}
+	if len(live) != 0 {
+		t.Errorf("ListLiveBolts: want 0 after revoke, got %d", len(live))
 	}
 }
 
@@ -183,8 +223,8 @@ func TestMergeBoltLWW(t *testing.T) {
 			if err != nil {
 				t.Fatalf("get: %v", err)
 			}
-			if row.Patterns != tc.wantPattern {
-				t.Errorf("patterns=%q, want %q", row.Patterns, tc.wantPattern)
+			if row.PatternClaims != tc.wantPattern {
+				t.Errorf("pattern_claims=%q, want %q", row.PatternClaims, tc.wantPattern)
 			}
 		})
 	}
@@ -206,17 +246,8 @@ func TestConsumeTokenAndIsConsumed(t *testing.T) {
 		t.Errorf("token reported consumed before insert, got %d", consumed)
 	}
 
-	// Admission must land first (FK target).
-	if err := q.InsertBolt(ctx, insertParams(pubA, `["x"]`, sql.NullInt64{}, 1)); err != nil {
-		t.Fatalf("insert admission: %v", err)
-	}
-	if err := q.ConsumeToken(ctx, ConsumeTokenParams{
-		TokenHash:            tokenHash,
-		SpannerID:            "test-spanner",
-		ConsumedAt:           42,
-		ConsumedByBoltPubkey: pubA,
-		Signature:            []byte{0x01},
-	}); err != nil {
+	// The consumed-tokens G-Set has no FK — a token row stands alone.
+	if err := q.ConsumeToken(ctx, tokenParams(tokenHash, 42)); err != nil {
 		t.Fatalf("consume: %v", err)
 	}
 	consumed, err = q.IsTokenConsumed(ctx, tokenHash)
@@ -227,82 +258,78 @@ func TestConsumeTokenAndIsConsumed(t *testing.T) {
 		t.Errorf("token not reported consumed after insert, got %d", consumed)
 	}
 
-	// Re-consume same token: PK collision.
-	if err := q.ConsumeToken(ctx, ConsumeTokenParams{
-		TokenHash:            tokenHash,
-		SpannerID:            "test-spanner",
-		ConsumedAt:           43,
-		ConsumedByBoltPubkey: pubA,
-		Signature:            []byte{0x02},
-	}); err == nil {
+	got, err := q.GetConsumedToken(ctx, tokenHash)
+	if err != nil {
+		t.Fatalf("get consumed token: %v", err)
+	}
+	if got.ConsumedBy != pubA || got.AdmittedPubkey != pubB {
+		t.Errorf("unexpected consumed-token row: %+v", got)
+	}
+
+	// Re-consume the same token: token_hash PK collision — one-shot.
+	if err := q.ConsumeToken(ctx, tokenParams(tokenHash, 43)); err == nil {
 		t.Error("expected PK conflict on second consume, got nil")
 	}
 }
 
-func TestConsumeTokenFKEnforced(t *testing.T) {
+// The FK runs spanner_bolts.consumed_token_hash -> spanner_consumed_tokens:
+// an admission may only reference a join token whose row already exists.
+func TestBoltConsumedTokenFKEnforced(t *testing.T) {
 	sqlDB := openSpannerTestDB(t)
 	q := New(sqlDB)
 	ctx := context.Background()
 
-	err := q.ConsumeToken(ctx, ConsumeTokenParams{
-		TokenHash:            "abcd",
-		SpannerID:            "test-spanner",
-		ConsumedAt:           1,
-		ConsumedByBoltPubkey: pubA, // no admission row exists
-		Signature:            []byte{0x01},
-	})
-	if err == nil {
-		t.Fatal("expected FK violation on consume without admission, got nil")
+	bad := boltParams(pubA, `["x"]`, sql.NullInt64{}, 1)
+	bad.ConsumedTokenHash = sql.NullString{String: "no-such-token", Valid: true}
+	if err := q.InsertBolt(ctx, bad); err == nil {
+		t.Fatal("expected FK violation admitting a bolt with an unknown token, got nil")
+	}
+
+	// With the token recorded first, the same admission satisfies the FK.
+	if err := q.ConsumeToken(ctx, tokenParams("real-token", 1)); err != nil {
+		t.Fatalf("consume token: %v", err)
+	}
+	ok := boltParams(pubA, `["x"]`, sql.NullInt64{}, 1)
+	ok.ConsumedTokenHash = sql.NullString{String: "real-token", Valid: true}
+	if err := q.InsertBolt(ctx, ok); err != nil {
+		t.Fatalf("insert admission with valid token ref: %v", err)
 	}
 }
 
-// Atomic admission+consume must land both or neither — rollback semantics
-// when the consume hits a duplicate.
+// Atomic admission+consume must land both or neither. The token INSERT is
+// ordered first (it is the FK target); a rollback drops both.
 func TestAdmissionAndConsumeAtomicity(t *testing.T) {
 	sqlDB := openSpannerTestDB(t)
 	q := New(sqlDB)
 	ctx := context.Background()
 
-	// Pre-consume a token so the second attempt collides.
-	if err := q.InsertBolt(ctx, insertParams(pubA, `["seed"]`, sql.NullInt64{}, 1)); err != nil {
-		t.Fatalf("seed bolt: %v", err)
-	}
-	if err := q.ConsumeToken(ctx, ConsumeTokenParams{
-		TokenHash:            "dup-token",
-		SpannerID:            "test-spanner",
-		ConsumedAt:           1,
-		ConsumedByBoltPubkey: pubA,
-		Signature:            []byte{0x01},
-	}); err != nil {
-		t.Fatalf("seed token: %v", err)
-	}
-
-	// Attempt to admit pubB and consume the already-consumed token in one tx.
 	tx, err := sqlDB.BeginTx(ctx, nil)
 	if err != nil {
 		t.Fatalf("begin: %v", err)
 	}
 	qtx := q.WithTx(tx)
-	if err := qtx.InsertBolt(ctx, insertParams(pubB, `["new"]`, sql.NullInt64{}, 2)); err != nil {
+	if err := qtx.ConsumeToken(ctx, tokenParams("tok-1", 1)); err != nil {
+		t.Fatalf("tx consume: %v", err)
+	}
+	admit := boltParams(pubB, `["new"]`, sql.NullInt64{}, 2)
+	admit.ConsumedTokenHash = sql.NullString{String: "tok-1", Valid: true}
+	if err := qtx.InsertBolt(ctx, admit); err != nil {
 		t.Fatalf("tx insert: %v", err)
 	}
-	consumeErr := qtx.ConsumeToken(ctx, ConsumeTokenParams{
-		TokenHash:            "dup-token",
-		SpannerID:            "test-spanner",
-		ConsumedAt:           2,
-		ConsumedByBoltPubkey: pubB,
-		Signature:            []byte{0x02},
-	})
-	if consumeErr == nil {
-		t.Fatal("expected consume PK collision; got nil")
-		tx.Rollback()
-	}
+	// A downstream failure rolls the whole tx back.
 	if err := tx.Rollback(); err != nil {
 		t.Fatalf("rollback: %v", err)
 	}
 
-	// After rollback, pubB must not appear in the roster.
+	// Neither the admission nor the token survived the rollback.
 	if _, err := q.GetBolt(ctx, pubB); err != sql.ErrNoRows {
 		t.Errorf("pubB landed despite rollback; got err=%v", err)
+	}
+	consumed, err := q.IsTokenConsumed(ctx, "tok-1")
+	if err != nil {
+		t.Fatalf("is consumed: %v", err)
+	}
+	if consumed != 0 {
+		t.Errorf("token landed despite rollback, got %d", consumed)
 	}
 }

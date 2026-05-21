@@ -12,32 +12,32 @@ import (
 
 const consumeToken = `-- name: ConsumeToken :exec
 INSERT INTO spanner_consumed_tokens (
-    token_hash, spanner_id, consumed_at, consumed_by_bolt_pubkey, signature
+    token_hash, consumed_at, consumed_by, admitted_pubkey, expires_at
 ) VALUES (?, ?, ?, ?, ?)
 `
 
 type ConsumeTokenParams struct {
-	TokenHash            string `json:"token_hash"`
-	SpannerID            string `json:"spanner_id"`
-	ConsumedAt           int64  `json:"consumed_at"`
-	ConsumedByBoltPubkey string `json:"consumed_by_bolt_pubkey"`
-	Signature            []byte `json:"signature"`
+	TokenHash      string `json:"token_hash"`
+	ConsumedAt     int64  `json:"consumed_at"`
+	ConsumedBy     string `json:"consumed_by"`
+	AdmittedPubkey string `json:"admitted_pubkey"`
+	ExpiresAt      int64  `json:"expires_at"`
 }
 
 func (q *Queries) ConsumeToken(ctx context.Context, arg ConsumeTokenParams) error {
 	_, err := q.db.ExecContext(ctx, consumeToken,
 		arg.TokenHash,
-		arg.SpannerID,
 		arg.ConsumedAt,
-		arg.ConsumedByBoltPubkey,
-		arg.Signature,
+		arg.ConsumedBy,
+		arg.AdmittedPubkey,
+		arg.ExpiresAt,
 	)
 	return err
 }
 
 const getBolt = `-- name: GetBolt :one
-SELECT pubkey, spanner_id, hostname, patterns, revoked_at, revoked_by,
-       updated_at, updated_by, signature
+SELECT pubkey, hostname, admitted_at, admitted_by, consumed_token_hash,
+       revoked_at, revoked_by, last_snapshot_at, pattern_claims, signature
 FROM spanner_bolts
 WHERE pubkey = ?
 `
@@ -47,20 +47,21 @@ func (q *Queries) GetBolt(ctx context.Context, pubkey string) (SpannerBolt, erro
 	var i SpannerBolt
 	err := row.Scan(
 		&i.Pubkey,
-		&i.SpannerID,
 		&i.Hostname,
-		&i.Patterns,
+		&i.AdmittedAt,
+		&i.AdmittedBy,
+		&i.ConsumedTokenHash,
 		&i.RevokedAt,
 		&i.RevokedBy,
-		&i.UpdatedAt,
-		&i.UpdatedBy,
+		&i.LastSnapshotAt,
+		&i.PatternClaims,
 		&i.Signature,
 	)
 	return i, err
 }
 
 const getConsumedToken = `-- name: GetConsumedToken :one
-SELECT token_hash, spanner_id, consumed_at, consumed_by_bolt_pubkey, signature
+SELECT token_hash, consumed_at, consumed_by, admitted_pubkey, expires_at
 FROM spanner_consumed_tokens
 WHERE token_hash = ?
 `
@@ -70,10 +71,10 @@ func (q *Queries) GetConsumedToken(ctx context.Context, tokenHash string) (Spann
 	var i SpannerConsumedToken
 	err := row.Scan(
 		&i.TokenHash,
-		&i.SpannerID,
 		&i.ConsumedAt,
-		&i.ConsumedByBoltPubkey,
-		&i.Signature,
+		&i.ConsumedBy,
+		&i.AdmittedPubkey,
+		&i.ExpiresAt,
 	)
 	return i, err
 }
@@ -81,41 +82,46 @@ func (q *Queries) GetConsumedToken(ctx context.Context, tokenHash string) (Spann
 const insertBolt = `-- name: InsertBolt :exec
 
 INSERT INTO spanner_bolts (
-    pubkey, spanner_id, hostname, patterns,
-    revoked_at, revoked_by, updated_at, updated_by, signature
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    pubkey, hostname, admitted_at, admitted_by, consumed_token_hash,
+    revoked_at, revoked_by, last_snapshot_at, pattern_claims, signature
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertBoltParams struct {
-	Pubkey    string         `json:"pubkey"`
-	SpannerID string         `json:"spanner_id"`
-	Hostname  string         `json:"hostname"`
-	Patterns  string         `json:"patterns"`
-	RevokedAt sql.NullInt64  `json:"revoked_at"`
-	RevokedBy sql.NullString `json:"revoked_by"`
-	UpdatedAt int64          `json:"updated_at"`
-	UpdatedBy string         `json:"updated_by"`
-	Signature []byte         `json:"signature"`
+	Pubkey            string         `json:"pubkey"`
+	Hostname          string         `json:"hostname"`
+	AdmittedAt        int64          `json:"admitted_at"`
+	AdmittedBy        string         `json:"admitted_by"`
+	ConsumedTokenHash sql.NullString `json:"consumed_token_hash"`
+	RevokedAt         sql.NullInt64  `json:"revoked_at"`
+	RevokedBy         sql.NullString `json:"revoked_by"`
+	LastSnapshotAt    sql.NullInt64  `json:"last_snapshot_at"`
+	PatternClaims     string         `json:"pattern_claims"`
+	Signature         []byte         `json:"signature"`
 }
 
-// Spanner Slice 2A admissions CRDT queries (ADR-026). spanner_bolts is a
-// peer-equal LWW-Map keyed by pubkey. spanner_consumed_tokens is a G-Set with
-// an FK to spanner_bolts enforcing the atomic admission+consume invariant.
-// Callers wrap InsertBolt + ConsumeToken in one sql.Tx via Queries.WithTx
-// so both land or neither does. MergeBoltLWW is the gossip-replication
-// entry point and encodes absolute revoke-wins: a revoked row never returns
-// to live, even with a strictly newer updated_at, since pubkey rotation is
-// forbidden by the canonical plan.
+// Spanner Slice 2A admissions CRDT queries (ADR-026 + the spanner-redesign
+// plan). spanner_bolts is a peer-equal LWW-Map keyed by pubkey;
+// spanner_consumed_tokens is a G-Set keyed by token_hash. An admission that
+// consumed a join token carries that token's hash in
+// spanner_bolts.consumed_token_hash, a nullable FK to
+// spanner_consumed_tokens.token_hash. Callers admitting a bolt via a token
+// wrap ConsumeToken + InsertBolt in one sql.Tx via Queries.WithTx, the token
+// INSERT ordered first because it is the FK target. MergeBoltLWW is the
+// gossip-replication entry point and encodes absolute revoke-wins: a revoked
+// row never returns to live, since pubkey rotation is forbidden by the
+// canonical plan.
 func (q *Queries) InsertBolt(ctx context.Context, arg InsertBoltParams) error {
 	_, err := q.db.ExecContext(ctx, insertBolt,
 		arg.Pubkey,
-		arg.SpannerID,
 		arg.Hostname,
-		arg.Patterns,
+		arg.AdmittedAt,
+		arg.AdmittedBy,
+		arg.ConsumedTokenHash,
 		arg.RevokedAt,
 		arg.RevokedBy,
-		arg.UpdatedAt,
-		arg.UpdatedBy,
+		arg.LastSnapshotAt,
+		arg.PatternClaims,
 		arg.Signature,
 	)
 	return err
@@ -133,15 +139,14 @@ func (q *Queries) IsTokenConsumed(ctx context.Context, tokenHash string) (int64,
 }
 
 const listBolts = `-- name: ListBolts :many
-SELECT pubkey, spanner_id, hostname, patterns, revoked_at, revoked_by,
-       updated_at, updated_by, signature
+SELECT pubkey, hostname, admitted_at, admitted_by, consumed_token_hash,
+       revoked_at, revoked_by, last_snapshot_at, pattern_claims, signature
 FROM spanner_bolts
-WHERE spanner_id = ?
 ORDER BY pubkey
 `
 
-func (q *Queries) ListBolts(ctx context.Context, spannerID string) ([]SpannerBolt, error) {
-	rows, err := q.db.QueryContext(ctx, listBolts, spannerID)
+func (q *Queries) ListBolts(ctx context.Context) ([]SpannerBolt, error) {
+	rows, err := q.db.QueryContext(ctx, listBolts)
 	if err != nil {
 		return nil, err
 	}
@@ -151,13 +156,14 @@ func (q *Queries) ListBolts(ctx context.Context, spannerID string) ([]SpannerBol
 		var i SpannerBolt
 		if err := rows.Scan(
 			&i.Pubkey,
-			&i.SpannerID,
 			&i.Hostname,
-			&i.Patterns,
+			&i.AdmittedAt,
+			&i.AdmittedBy,
+			&i.ConsumedTokenHash,
 			&i.RevokedAt,
 			&i.RevokedBy,
-			&i.UpdatedAt,
-			&i.UpdatedBy,
+			&i.LastSnapshotAt,
+			&i.PatternClaims,
 			&i.Signature,
 		); err != nil {
 			return nil, err
@@ -174,15 +180,15 @@ func (q *Queries) ListBolts(ctx context.Context, spannerID string) ([]SpannerBol
 }
 
 const listLiveBolts = `-- name: ListLiveBolts :many
-SELECT pubkey, spanner_id, hostname, patterns, revoked_at, revoked_by,
-       updated_at, updated_by, signature
+SELECT pubkey, hostname, admitted_at, admitted_by, consumed_token_hash,
+       revoked_at, revoked_by, last_snapshot_at, pattern_claims, signature
 FROM spanner_bolts
-WHERE spanner_id = ? AND revoked_at IS NULL
+WHERE revoked_at IS NULL
 ORDER BY pubkey
 `
 
-func (q *Queries) ListLiveBolts(ctx context.Context, spannerID string) ([]SpannerBolt, error) {
-	rows, err := q.db.QueryContext(ctx, listLiveBolts, spannerID)
+func (q *Queries) ListLiveBolts(ctx context.Context) ([]SpannerBolt, error) {
+	rows, err := q.db.QueryContext(ctx, listLiveBolts)
 	if err != nil {
 		return nil, err
 	}
@@ -192,13 +198,14 @@ func (q *Queries) ListLiveBolts(ctx context.Context, spannerID string) ([]Spanne
 		var i SpannerBolt
 		if err := rows.Scan(
 			&i.Pubkey,
-			&i.SpannerID,
 			&i.Hostname,
-			&i.Patterns,
+			&i.AdmittedAt,
+			&i.AdmittedBy,
+			&i.ConsumedTokenHash,
 			&i.RevokedAt,
 			&i.RevokedBy,
-			&i.UpdatedAt,
-			&i.UpdatedBy,
+			&i.LastSnapshotAt,
+			&i.PatternClaims,
 			&i.Signature,
 		); err != nil {
 			return nil, err
@@ -216,20 +223,21 @@ func (q *Queries) ListLiveBolts(ctx context.Context, spannerID string) ([]Spanne
 
 const mergeBoltLWW = `-- name: MergeBoltLWW :execrows
 INSERT INTO spanner_bolts (
-    pubkey, spanner_id, hostname, patterns,
-    revoked_at, revoked_by, updated_at, updated_by, signature
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    pubkey, hostname, admitted_at, admitted_by, consumed_token_hash,
+    revoked_at, revoked_by, last_snapshot_at, pattern_claims, signature
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(pubkey) DO UPDATE SET
-    spanner_id  = excluded.spanner_id,
-    hostname   = excluded.hostname,
-    patterns   = excluded.patterns,
-    revoked_at = excluded.revoked_at,
-    revoked_by = excluded.revoked_by,
-    updated_at = excluded.updated_at,
-    updated_by = excluded.updated_by,
-    signature  = excluded.signature
-WHERE (excluded.updated_at > spanner_bolts.updated_at
-       OR (excluded.updated_at = spanner_bolts.updated_at
+    hostname            = excluded.hostname,
+    admitted_at         = excluded.admitted_at,
+    admitted_by         = excluded.admitted_by,
+    consumed_token_hash = excluded.consumed_token_hash,
+    revoked_at          = excluded.revoked_at,
+    revoked_by          = excluded.revoked_by,
+    last_snapshot_at    = excluded.last_snapshot_at,
+    pattern_claims      = excluded.pattern_claims,
+    signature           = excluded.signature
+WHERE (excluded.admitted_at > spanner_bolts.admitted_at
+       OR (excluded.admitted_at = spanner_bolts.admitted_at
            AND excluded.revoked_at IS NOT NULL
            AND spanner_bolts.revoked_at IS NULL))
   AND NOT (spanner_bolts.revoked_at IS NOT NULL
@@ -237,27 +245,29 @@ WHERE (excluded.updated_at > spanner_bolts.updated_at
 `
 
 type MergeBoltLWWParams struct {
-	Pubkey    string         `json:"pubkey"`
-	SpannerID string         `json:"spanner_id"`
-	Hostname  string         `json:"hostname"`
-	Patterns  string         `json:"patterns"`
-	RevokedAt sql.NullInt64  `json:"revoked_at"`
-	RevokedBy sql.NullString `json:"revoked_by"`
-	UpdatedAt int64          `json:"updated_at"`
-	UpdatedBy string         `json:"updated_by"`
-	Signature []byte         `json:"signature"`
+	Pubkey            string         `json:"pubkey"`
+	Hostname          string         `json:"hostname"`
+	AdmittedAt        int64          `json:"admitted_at"`
+	AdmittedBy        string         `json:"admitted_by"`
+	ConsumedTokenHash sql.NullString `json:"consumed_token_hash"`
+	RevokedAt         sql.NullInt64  `json:"revoked_at"`
+	RevokedBy         sql.NullString `json:"revoked_by"`
+	LastSnapshotAt    sql.NullInt64  `json:"last_snapshot_at"`
+	PatternClaims     string         `json:"pattern_claims"`
+	Signature         []byte         `json:"signature"`
 }
 
 func (q *Queries) MergeBoltLWW(ctx context.Context, arg MergeBoltLWWParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, mergeBoltLWW,
 		arg.Pubkey,
-		arg.SpannerID,
 		arg.Hostname,
-		arg.Patterns,
+		arg.AdmittedAt,
+		arg.AdmittedBy,
+		arg.ConsumedTokenHash,
 		arg.RevokedAt,
 		arg.RevokedBy,
-		arg.UpdatedAt,
-		arg.UpdatedBy,
+		arg.LastSnapshotAt,
+		arg.PatternClaims,
 		arg.Signature,
 	)
 	if err != nil {
@@ -268,7 +278,7 @@ func (q *Queries) MergeBoltLWW(ctx context.Context, arg MergeBoltLWWParams) (int
 
 const revokeBolt = `-- name: RevokeBolt :exec
 UPDATE spanner_bolts
-SET revoked_at = ?2, revoked_by = ?3, updated_at = ?4, updated_by = ?5, signature = ?6
+SET revoked_at = ?2, revoked_by = ?3, signature = ?4
 WHERE pubkey = ?1
   AND revoked_at IS NULL
 `
@@ -277,8 +287,6 @@ type RevokeBoltParams struct {
 	Pubkey    string         `json:"pubkey"`
 	RevokedAt sql.NullInt64  `json:"revoked_at"`
 	RevokedBy sql.NullString `json:"revoked_by"`
-	UpdatedAt int64          `json:"updated_at"`
-	UpdatedBy string         `json:"updated_by"`
 	Signature []byte         `json:"signature"`
 }
 
@@ -287,8 +295,6 @@ func (q *Queries) RevokeBolt(ctx context.Context, arg RevokeBoltParams) error {
 		arg.Pubkey,
 		arg.RevokedAt,
 		arg.RevokedBy,
-		arg.UpdatedAt,
-		arg.UpdatedBy,
 		arg.Signature,
 	)
 	return err

@@ -243,30 +243,32 @@ CREATE TABLE IF NOT EXISTS config_publishes (
 
 CREATE INDEX IF NOT EXISTS idx_config_publishes_published_at ON config_publishes (published_at);
 
--- Spanner Slice 2A admission roster (ADR-026). See SQLite migration for
--- the design notes. BIGINT for ms-since-epoch timestamps; BYTEA for the
--- Ed25519 signature. Same column shape as the SQLite mirror so sqlc's
--- pgcompat layer can round-trip without per-engine query variants.
-CREATE TABLE IF NOT EXISTS spanner_bolts (
-    pubkey      TEXT PRIMARY KEY,
-    spanner_id   TEXT NOT NULL,
-    hostname    TEXT NOT NULL DEFAULT '',
-    patterns    TEXT NOT NULL DEFAULT '[]',
-    revoked_at  BIGINT,
-    revoked_by  TEXT,
-    updated_at  BIGINT NOT NULL,
-    updated_by  TEXT NOT NULL,
-    signature   BYTEA NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_spanner_bolts_spanner_id ON spanner_bolts (spanner_id);
-
+-- Spanner Slice 2A admissions CRDT (ADR-026 + the spanner-redesign plan).
+-- See the SQLite migration for the design notes. BIGINT for ms-since-epoch
+-- timestamps; BYTEA for the Ed25519 signature. Same column shape as the
+-- SQLite mirror so sqlc's pgcompat layer round-trips without per-engine
+-- query variants. spanner_consumed_tokens is created first - it is the FK
+-- target of spanner_bolts.consumed_token_hash.
 CREATE TABLE IF NOT EXISTS spanner_consumed_tokens (
-    token_hash                  TEXT PRIMARY KEY,
-    spanner_id                   TEXT NOT NULL,
-    consumed_at                 BIGINT NOT NULL,
-    consumed_by_bolt_pubkey  TEXT NOT NULL REFERENCES spanner_bolts (pubkey),
-    signature                   BYTEA NOT NULL
+    token_hash       TEXT PRIMARY KEY,
+    consumed_at      BIGINT NOT NULL,
+    consumed_by      TEXT NOT NULL,
+    admitted_pubkey  TEXT NOT NULL,
+    expires_at       BIGINT NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_spanner_consumed_tokens_spanner_id ON spanner_consumed_tokens (spanner_id);
+CREATE TABLE IF NOT EXISTS spanner_bolts (
+    pubkey               TEXT PRIMARY KEY,
+    hostname             TEXT NOT NULL DEFAULT '',
+    admitted_at          BIGINT NOT NULL,
+    admitted_by          TEXT NOT NULL,
+    consumed_token_hash  TEXT REFERENCES spanner_consumed_tokens (token_hash),
+    revoked_at           BIGINT,
+    revoked_by           TEXT,
+    last_snapshot_at     BIGINT,
+    pattern_claims       TEXT NOT NULL DEFAULT '[]',
+    signature            BYTEA NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_spanner_bolts_hostname_live
+    ON spanner_bolts (hostname) WHERE revoked_at IS NULL;

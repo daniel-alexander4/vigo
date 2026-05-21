@@ -385,23 +385,24 @@ type Session struct {
 }
 
 type SpannerBolt struct {
-	Pubkey    string         `json:"pubkey"`
-	SpannerID string         `json:"spanner_id"`
-	Hostname  string         `json:"hostname"`
-	Patterns  string         `json:"patterns"`
-	RevokedAt sql.NullInt64  `json:"revoked_at"`
-	RevokedBy sql.NullString `json:"revoked_by"`
-	UpdatedAt int64          `json:"updated_at"`
-	UpdatedBy string         `json:"updated_by"`
-	Signature []byte         `json:"signature"`
+	Pubkey            string         `json:"pubkey"`
+	Hostname          string         `json:"hostname"`
+	AdmittedAt        int64          `json:"admitted_at"`
+	AdmittedBy        string         `json:"admitted_by"`
+	ConsumedTokenHash sql.NullString `json:"consumed_token_hash"`
+	RevokedAt         sql.NullInt64  `json:"revoked_at"`
+	RevokedBy         sql.NullString `json:"revoked_by"`
+	LastSnapshotAt    sql.NullInt64  `json:"last_snapshot_at"`
+	PatternClaims     string         `json:"pattern_claims"`
+	Signature         []byte         `json:"signature"`
 }
 
 type SpannerConsumedToken struct {
-	TokenHash            string `json:"token_hash"`
-	SpannerID            string `json:"spanner_id"`
-	ConsumedAt           int64  `json:"consumed_at"`
-	ConsumedByBoltPubkey string `json:"consumed_by_bolt_pubkey"`
-	Signature            []byte `json:"signature"`
+	TokenHash      string `json:"token_hash"`
+	ConsumedAt     int64  `json:"consumed_at"`
+	ConsumedBy     string `json:"consumed_by"`
+	AdmittedPubkey string `json:"admitted_pubkey"`
+	ExpiresAt      int64  `json:"expires_at"`
 }
 
 type User struct {

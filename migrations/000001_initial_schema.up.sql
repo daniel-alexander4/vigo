@@ -366,39 +366,45 @@ CREATE TABLE IF NOT EXISTS compliance_waivers (
 CREATE INDEX IF NOT EXISTS idx_compliance_waivers_framework ON compliance_waivers (framework, control_id);
 CREATE INDEX IF NOT EXISTS idx_compliance_waivers_active ON compliance_waivers (active);
 
--- Spanner Slice 2A admission roster (ADR-026). Peer-equal LWW-Map CRDT
--- keyed by the bolt's Ed25519 pubkey. Revoke-wins: nullable
--- revoked_at/revoked_by, with the merge rule "revoke is absorbing"
--- enforced in the MergeBoltLWW query (a revoked row cannot transition
--- back to live regardless of updated_at). LWW arbitration on
--- (updated_at, revoked_at IS NOT NULL) for the equal-timestamp tiebreaker.
--- timestamps are INTEGER ms since epoch to mirror server/swarm/manifest.go
--- semantics and stay deterministic across timezones/locales.
-CREATE TABLE IF NOT EXISTS spanner_bolts (
-    pubkey      TEXT PRIMARY KEY,
-    spanner_id   TEXT NOT NULL,
-    hostname    TEXT NOT NULL DEFAULT '',
-    patterns    TEXT NOT NULL DEFAULT '[]',
-    revoked_at  INTEGER,
-    revoked_by  TEXT,
-    updated_at  INTEGER NOT NULL,
-    updated_by  TEXT NOT NULL,
-    signature   BLOB NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_spanner_bolts_spanner_id ON spanner_bolts (spanner_id);
-
--- Spanner Slice 2A consumed-tokens G-Set (ADR-026). UNIQUE on token_hash
--- enforces one-shot consumption fleet-wide. The FK to spanner_bolts
--- enforces the atomic admission+consume invariant — a token can only be
--- recorded as consumed by a bolt that exists in the roster, so the
--- admission row MUST land in the same transaction (and ordered first).
+-- Spanner Slice 2A consumed-tokens G-Set (ADR-026 + the spanner-redesign
+-- plan). Grow-only set keyed on token_hash - an append-only ledger of every
+-- consumed join token; the PRIMARY KEY enforces one-shot consumption
+-- fleet-wide. Created before spanner_bolts because the admissions table
+-- carries a nullable FK referencing token_hash, so this is the FK target
+-- and must exist first. timestamps are INTEGER ms since epoch (mirrors
+-- server/swarm/manifest.go semantics, deterministic across timezones).
 CREATE TABLE IF NOT EXISTS spanner_consumed_tokens (
-    token_hash                  TEXT PRIMARY KEY,
-    spanner_id                   TEXT NOT NULL,
-    consumed_at                 INTEGER NOT NULL,
-    consumed_by_bolt_pubkey  TEXT NOT NULL REFERENCES spanner_bolts (pubkey),
-    signature                   BLOB NOT NULL
+    token_hash       TEXT PRIMARY KEY,
+    consumed_at      INTEGER NOT NULL,
+    consumed_by      TEXT NOT NULL,
+    admitted_pubkey  TEXT NOT NULL,
+    expires_at       INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_spanner_consumed_tokens_spanner_id ON spanner_consumed_tokens (spanner_id);
+-- Spanner Slice 2A admission roster (ADR-026 + the spanner-redesign plan).
+-- Peer-equal LWW-Map CRDT keyed by the bolt's Ed25519 pubkey. One row per
+-- bolt ever admitted; revocation is non-null revoked_at/revoked_by on the
+-- existing row, not a separate row. Revoke-wins is absorbing - a revoked
+-- row never transitions back to live (pubkey rotation is forbidden by the
+-- plan). LWW arbitration is by admitted_at / revoked_at. consumed_token_hash
+-- references the join token consumed by this admission (NULL for pre-trusted
+-- entries added via approve) - the link the cross-peer replay-resolution
+-- merge follows to drop a losing admission. pattern_claims is display-only,
+-- never authoritative. timestamps are INTEGER ms since epoch.
+CREATE TABLE IF NOT EXISTS spanner_bolts (
+    pubkey               TEXT PRIMARY KEY,
+    hostname             TEXT NOT NULL DEFAULT '',
+    admitted_at          INTEGER NOT NULL,
+    admitted_by          TEXT NOT NULL,
+    consumed_token_hash  TEXT REFERENCES spanner_consumed_tokens (token_hash),
+    revoked_at           INTEGER,
+    revoked_by           TEXT,
+    last_snapshot_at     INTEGER,
+    pattern_claims       TEXT NOT NULL DEFAULT '[]',
+    signature            BLOB NOT NULL
+);
+
+-- hostname is unique among non-revoked bolts; a revoked bolt's hostname may
+-- later be re-admitted under a new pubkey.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_spanner_bolts_hostname_live
+    ON spanner_bolts (hostname) WHERE revoked_at IS NULL;

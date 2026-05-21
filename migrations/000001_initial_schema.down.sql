@@ -1,8 +1,6 @@
--- spanner_consumed_tokens before spanner_bolts (FK)
-DROP INDEX IF EXISTS idx_spanner_consumed_tokens_spanner_id;
-DROP TABLE IF EXISTS spanner_consumed_tokens;
-DROP INDEX IF EXISTS idx_spanner_bolts_spanner_id;
+-- spanner_bolts before spanner_consumed_tokens (FK: spanner_bolts.consumed_token_hash -> spanner_consumed_tokens.token_hash)
 DROP TABLE IF EXISTS spanner_bolts;
+DROP TABLE IF EXISTS spanner_consumed_tokens;
 DROP INDEX IF EXISTS idx_api_tokens_user_id;
 DROP TABLE IF EXISTS api_tokens;
 DROP INDEX IF EXISTS idx_sessions_expiry;
