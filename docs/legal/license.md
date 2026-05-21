@@ -36,10 +36,6 @@ You may:
 - Share this documentation with employees and contractors who are directly involved in operating or maintaining your Vigo installation, provided they are bound by confidentiality obligations no less protective than those in your license agreement.
 - Print copies for your own internal reference, provided all confidentiality notices are preserved.
 
-## Trade Secret Status
-
-This documentation contains trade secrets of Alexander4, LLC, including but not limited to: software architecture, implementation details, security mechanisms, protocol specifications, and operational procedures. Unauthorized disclosure of this documentation may cause irreparable harm to Alexander4, LLC and may be subject to legal action under the Oregon Uniform Trade Secrets Act (ORS 646.461-646.475) and applicable federal law.
-
 ## Confidentiality in Signed Agreements
 
 If you have executed a Commercial License Agreement, Design Partner Agreement, or NDA with Alexander4, LLC, the confidentiality obligations in that agreement apply to this documentation. Unauthorized sharing of documentation marked as confidential constitutes a breach of that agreement, subject to the cure and termination provisions therein.

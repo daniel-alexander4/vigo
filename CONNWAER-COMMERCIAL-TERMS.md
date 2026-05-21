@@ -14,35 +14,6 @@ application allowlisting, RNG statistical validation, kill switch
 testing, HSM key lifecycle auditing, capacity benchmarking, log review,
 and BCP/DR testing.
 
-## Why Connwaer Is a Separate Product
-
-Vigo is a configuration management engine. It declares desired state,
-enforces it idempotently, and reports whether the system matches. That
-is a well-defined scope, and everything Vigo does falls within it.
-
-Connwaer does something fundamentally different. It does not declare or
-enforce state — it conducts active experiments against live systems to
-answer questions that configuration alone cannot. Restoring a backup to
-prove it works is not configuration management. Running a statistical
-test suite against a random number generator is not configuration
-management. Attempting a write to a WORM volume to confirm immutability
-is not configuration management. These are empirical verification tasks:
-they execute real operations, measure real outcomes, and produce evidence
-that a control actually functions — not just that it is configured.
-
-Bundling Connwaer into Vigo would blur that boundary. Vigo's promise is
-simple: every feature is included in every tier, and a license unlocks a
-node count. Adding a specialized verification engine to that promise
-would force every customer to pay for capabilities most do not need,
-while making the product harder to reason about. Keeping them separate
-means each product does one thing, prices reflect actual value delivered,
-and operators who only need configuration management are not subsidizing
-compliance verification they never use.
-
-Connwaer requires Vigo — it depends on the Vigo agent's trait collection
-pipeline to report results to the server. An active Vigo license (any
-tier, including Community) is required.
-
 ## Licensing
 
 Vigo Connwaer is proprietary software. Copyright (c) 2026 Alexander4, LLC.
@@ -83,6 +54,22 @@ modification or derivative work of it.
 Nothing in these terms shall be construed as a transfer or assignment
 of any intellectual property right. All rights not expressly granted
 are reserved by Alexander4, LLC.
+
+For the avoidance of doubt, this section claims no right in your
+configuration files, modules, data, or other content you create or
+supply; those remain yours.
+
+## Application of the Vigo LICENSE
+
+Except where these terms expressly provide otherwise, all provisions of
+the Vigo LICENSE file — including without limitation its Grant,
+Ownership and Reservation of Rights, Confidentiality, Restrictions,
+Indemnification, Intellectual Property Indemnification, Audit, Export
+Controls, Use Prohibitions, Termination, No Warranty, Limitation of
+Liability, Governing Law, Dispute Resolution, Severability, and Entire
+Agreement sections — apply to Connwaer and to your use of it. For this
+purpose, references in the Vigo LICENSE to "the Software" are read to
+include Connwaer.
 
 ## Pricing
 

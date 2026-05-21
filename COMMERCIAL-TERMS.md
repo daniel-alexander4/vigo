@@ -174,9 +174,8 @@ contract.
 
 **Aggregate node counting:** Your tier and graduated bracket total are
 determined by the total number of managed nodes across all sites. A
-single license file is issued with the aggregate node count and
-deployed to the spanner hub, which enforces the limit across all
-connected bolts. Individual bolts do not require separate
+single license file is issued for the aggregate node count and
+governs the entire spanner; individual bolts do not require their own
 license files.
 
 **Node floor:** Enterprise agreements include a minimum node commitment
@@ -207,7 +206,7 @@ Every paid tier includes:
 
 - A signed license file (`.lic`) unlocking your node count
 - Access to all current and future features for the license term
-- 15-second check-ins, hub-spoke spanner federation, AI assistant, compliance export with auto-rollback, RBAC, 73 resource types across 8 platforms, verified binary distribution, all integrations
+- 15-second check-ins, spanner federation, AI assistant, compliance export with auto-rollback, RBAC, 73 resource types across 8 platforms, verified binary distribution, all integrations
 - The same software, the same binary — no "community" vs "enterprise" split
 
 The Community tier (1–100 nodes) includes all features with no time limit.
@@ -381,8 +380,8 @@ enforcement, all managed nodes continue to operate normally. Agents
 enforce their last-known policy indefinitely without server
 connectivity. Server shutdown only affects the ability to update
 modules, enroll new nodes, and view the management UI. In spanner
-deployments, bolts continue independent agent management if the hub
-shuts down.
+deployments, the other bolts continue independent agent management if
+any one server goes offline.
 
 **Technical enforcement:** License enforcement actions described in
 this section are implemented through the Software's technical controls
