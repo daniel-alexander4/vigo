@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"testing"
-	"time"
 
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"google.golang.org/grpc"
@@ -65,15 +64,10 @@ func startFakeBolt(t *testing.T, svc *fakeAdminService) string {
 // newGRPCTestHub creates a Hub connected to test bolts via insecure transport.
 func newGRPCTestHub(t *testing.T, addrs []string) *Hub {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
 	h := &Hub{bolts: make([]boltConn, 0, len(addrs))}
 	for i, addr := range addrs {
-		//nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
-		conn, err := grpc.DialContext(ctx, addr,
+		conn, err := grpc.NewClient(addr,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(), //nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
 		)
 		if err != nil {
 			t.Fatalf("connecting to fake bolt %d: %v", i, err)

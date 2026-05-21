@@ -107,11 +107,12 @@ func NewHub(ctx context.Context, bootstrapPeers []string, certFile, keyFile, caF
 	}
 
 	for _, addr := range bootstrapPeers {
-		//nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
-		conn, err := grpc.DialContext(ctx, addr,
+		// NewClient is lazy: it never blocks and only errors on a
+		// malformed target. The connection opens on the first RPC and
+		// gRPC reconnects in the background, so an unreachable bootstrap
+		// peer no longer fails Hub construction.
+		conn, err := grpc.NewClient(addr,
 			grpc.WithTransportCredentials(tlsCreds),
-			grpc.WithBlock(),                //nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
-			grpc.WithTimeout(5*time.Second), //nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
 		)
 		if err != nil {
 			// Close any already-opened connections.

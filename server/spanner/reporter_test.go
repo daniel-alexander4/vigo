@@ -100,7 +100,7 @@ func TestReporterFailover_RotatesAfterThreshold(t *testing.T) {
 
 	// Override dial to use insecure credentials for testing.
 	r.dialFunc = func(ctx context.Context, addr string, _ credentials.TransportCredentials) (*grpc.ClientConn, error) {
-		return grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials())) //nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
+		return grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -143,7 +143,7 @@ func TestReporterFailover_NoRotationWithSingleAddr(t *testing.T) {
 		50*time.Millisecond)
 
 	r.dialFunc = func(ctx context.Context, a string, _ credentials.TransportCredentials) (*grpc.ClientConn, error) {
-		return grpc.DialContext(ctx, a, grpc.WithTransportCredentials(insecure.NewCredentials())) //nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
+		return grpc.NewClient(a, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
@@ -175,7 +175,7 @@ func TestReporterFailover_CyclesBackToPrimary(t *testing.T) {
 		30*time.Millisecond)
 
 	r.dialFunc = func(ctx context.Context, a string, _ credentials.TransportCredentials) (*grpc.ClientConn, error) {
-		return grpc.DialContext(ctx, a, grpc.WithTransportCredentials(insecure.NewCredentials())) //nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
+		return grpc.NewClient(a, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -217,7 +217,7 @@ func TestReporterFailover_ResetsOnSuccess(t *testing.T) {
 	// This ensures we never hit 3 consecutive failures.
 	r.dialFunc = func(ctx context.Context, a string, _ credentials.TransportCredentials) (*grpc.ClientConn, error) {
 		callCount.Add(1)
-		return grpc.DialContext(ctx, a, grpc.WithTransportCredentials(insecure.NewCredentials())) //nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
+		return grpc.NewClient(a, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
@@ -253,7 +253,7 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 		50*time.Millisecond)
 
 	r.dialFunc = func(ctx context.Context, a string, _ credentials.TransportCredentials) (*grpc.ClientConn, error) {
-		return grpc.DialContext(ctx, a, grpc.WithTransportCredentials(insecure.NewCredentials())) //nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
+		return grpc.NewClient(a, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
@@ -380,7 +380,7 @@ func startHubAdminShim(t *testing.T, h *Hub) (addr string, shim *hubAdminShim) {
 // creds the Reporter would otherwise build. Used as Reporter.dialFunc
 // in integration tests where the hub serves plaintext on loopback.
 func insecureDial(ctx context.Context, addr string, _ credentials.TransportCredentials) (*grpc.ClientConn, error) {
-	return grpc.DialContext(ctx, addr, grpc.WithTransportCredentials(insecure.NewCredentials())) //nolint:staticcheck // SA1019: grpc.NewClient migration deferred — see pending.md
+	return grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 }
 
 // TestPinOnFirstSighting_Integration exercises the full Reporter → gRPC →
