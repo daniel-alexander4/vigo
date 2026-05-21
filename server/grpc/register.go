@@ -22,7 +22,7 @@ import (
 // registry, which runs the license gate, validates the one-time token against
 // approved patterns, inserts the envoy in the DB and FleetIndex, and returns
 // the envoy ID. In hub mode, after the hub's local registration succeeds, the
-// envoy is re-enrolled on the target steorra and the steorra address is returned
+// envoy is re-enrolled on the target bolt and the bolt address is returned
 // to the agent.
 //
 // All license enforcement lives inside registry.Register — this handler does
@@ -75,30 +75,30 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 	}
 
 	// Keep a handle to the hub-local envoy ID so we can clean up the hub's
-	// FleetIndex entry if the enrollment is routed to a steorra. envoyID may
-	// be reassigned to the steorra's ID below.
+	// FleetIndex entry if the enrollment is routed to a bolt. envoyID may
+	// be reassigned to the bolt's ID below.
 	hubLocalEnvoyID := envoyID
 
-	var steorraAddr string
+	var boltAddr string
 
-	// Hub mode: route the enrollment to the target steorra.
+	// Hub mode: route the enrollment to the target bolt.
 	if s.hub != nil {
 		addr, matched := s.hub.RouteHostname(req.GetHostname())
 		if matched {
-			steorraEnvoyID, enrollErr := s.hub.EnrollOnSteorra(ctx, addr, req.GetHostname(), req.GetIpAddress(), req.GetPubkeyPem(), req.GetForce())
+			boltEnvoyID, enrollErr := s.hub.EnrollOnBolt(ctx, addr, req.GetHostname(), req.GetIpAddress(), req.GetPubkeyPem(), req.GetForce())
 			if enrollErr != nil {
-				slog.Error("steorra enrollment failed, envoy registered on hub only",
+				slog.Error("bolt enrollment failed, envoy registered on hub only",
 					"hostname", req.GetHostname(),
-					"steorra_addr", addr,
+					"bolt_addr", addr,
 					"error", enrollErr,
 				)
 			} else {
-				// Steorra created the envoy — use the steorra's envoy ID and address.
-				envoyID = steorraEnvoyID
-				steorraAddr = addr
-				slog.Info("envoy enrolled on steorra",
+				// Bolt created the envoy — use the bolt's envoy ID and address.
+				envoyID = boltEnvoyID
+				boltAddr = addr
+				slog.Info("envoy enrolled on bolt",
 					"hostname", req.GetHostname(),
-					"steorra_addr", addr,
+					"bolt_addr", addr,
 					"envoy_id", envoyID,
 				)
 			}
@@ -107,10 +107,10 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 
 	// FleetIndex insertion is now handled inside registry.Register under the
 	// enrollment mutex, so we don't call AddEnvoy here. In hub mode where the
-	// enrollment was routed to a steorra, the hub's local FleetIndex entry is
-	// redundant — the steorra now owns this envoy — so remove it to keep the
+	// enrollment was routed to a bolt, the hub's local FleetIndex entry is
+	// redundant — the bolt now owns this envoy — so remove it to keep the
 	// hub-local active count accurate.
-	if s.fleetIndex != nil && steorraAddr != "" {
+	if s.fleetIndex != nil && boltAddr != "" {
 		s.fleetIndex.RemoveEnvoy(hubLocalEnvoyID)
 	}
 
@@ -137,9 +137,9 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 
 	resp := &pb.RegisterResponse{
 		Success:         true,
-		EnvoyId:        envoyID,
+		EnvoyId:         envoyID,
 		Message:         "registered successfully",
-		SteorraAddr:       steorraAddr,
+		BoltAddr:        boltAddr,
 		FallbackServers: s.fallbackServers,
 	}
 

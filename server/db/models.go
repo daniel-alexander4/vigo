@@ -384,17 +384,9 @@ type Session struct {
 	Expiry float64 `json:"expiry"`
 }
 
-type TungolConsumedToken struct {
-	TokenHash               string `json:"token_hash"`
-	TungolID                string `json:"tungol_id"`
-	ConsumedAt              int64  `json:"consumed_at"`
-	ConsumedBySteorraPubkey string `json:"consumed_by_steorra_pubkey"`
-	Signature               []byte `json:"signature"`
-}
-
-type TungolSteorra struct {
+type SpannerBolt struct {
 	Pubkey    string         `json:"pubkey"`
-	TungolID  string         `json:"tungol_id"`
+	SpannerID string         `json:"spanner_id"`
 	Hostname  string         `json:"hostname"`
 	Patterns  string         `json:"patterns"`
 	RevokedAt sql.NullInt64  `json:"revoked_at"`
@@ -402,6 +394,14 @@ type TungolSteorra struct {
 	UpdatedAt int64          `json:"updated_at"`
 	UpdatedBy string         `json:"updated_by"`
 	Signature []byte         `json:"signature"`
+}
+
+type SpannerConsumedToken struct {
+	TokenHash            string `json:"token_hash"`
+	SpannerID            string `json:"spanner_id"`
+	ConsumedAt           int64  `json:"consumed_at"`
+	ConsumedByBoltPubkey string `json:"consumed_by_bolt_pubkey"`
+	Signature            []byte `json:"signature"`
 }
 
 type User struct {

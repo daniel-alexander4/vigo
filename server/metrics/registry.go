@@ -53,10 +53,10 @@ type Metrics struct {
 
 	SMTPSendsTotal *prometheus.CounterVec
 
-	// --- Tungol ---
+	// --- Spanner ---
 
-	TungolSteorraLatency *prometheus.HistogramVec
-	TungolSteorraUp      *prometheus.GaugeVec
+	SpannerBoltLatency *prometheus.HistogramVec
+	SpannerBoltUp      *prometheus.GaugeVec
 
 	// --- License ---
 
@@ -229,17 +229,17 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Help: "Total SMTP email sends by event and status.",
 		}, []string{"event", "status"}),
 
-		// --- Tungol ---
+		// --- Spanner ---
 
-		TungolSteorraLatency: f.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "vigo_tungol_steorra_latency_seconds",
-			Help:    "Tungol per-steorra RPC latency in seconds.",
+		SpannerBoltLatency: f.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "vigo_spanner_bolt_latency_seconds",
+			Help:    "Spanner per-bolt RPC latency in seconds.",
 			Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
-		}, []string{"steorra"}),
-		TungolSteorraUp: f.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "vigo_tungol_steorra_up",
-			Help: "Whether a tungol steorra is reachable (1=up, 0=down).",
-		}, []string{"steorra"}),
+		}, []string{"bolt"}),
+		SpannerBoltUp: f.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "vigo_spanner_bolt_up",
+			Help: "Whether a spanner bolt is reachable (1=up, 0=down).",
+		}, []string{"bolt"}),
 
 		// --- License ---
 

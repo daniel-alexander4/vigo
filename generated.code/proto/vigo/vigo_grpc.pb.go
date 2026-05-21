@@ -434,7 +434,7 @@ const (
 	VigoAdmin_ListPackageDrift_FullMethodName      = "/vigo.v1.VigoAdmin/ListPackageDrift"
 	VigoAdmin_EnrollEnvoy_FullMethodName           = "/vigo.v1.VigoAdmin/EnrollEnvoy"
 	VigoAdmin_SetReassignment_FullMethodName       = "/vigo.v1.VigoAdmin/SetReassignment"
-	VigoAdmin_ReportSteorraStatus_FullMethodName   = "/vigo.v1.VigoAdmin/ReportSteorraStatus"
+	VigoAdmin_ReportBoltStatus_FullMethodName      = "/vigo.v1.VigoAdmin/ReportBoltStatus"
 )
 
 // VigoAdminClient is the client API for VigoAdmin service.
@@ -481,17 +481,17 @@ type VigoAdminClient interface {
 	ListPackages(ctx context.Context, in *ListPackagesRequest, opts ...grpc.CallOption) (*ListPackagesResponse, error)
 	// ListPackageDrift lists packages where installed version differs from desired.
 	ListPackageDrift(ctx context.Context, in *ListPackageDriftRequest, opts ...grpc.CallOption) (*ListPackageDriftResponse, error)
-	// EnrollEnvoy creates a envoy record directly (tungol-internal RPC).
-	// Used during enrollment routing: the receiving steorra validates the
-	// token, then calls this on the target steorra to create the envoy
+	// EnrollEnvoy creates a envoy record directly (spanner-internal RPC).
+	// Used during enrollment routing: the receiving bolt validates the
+	// token, then calls this on the target bolt to create the envoy
 	// without token re-validation.
 	EnrollEnvoy(ctx context.Context, in *EnrollEnvoyRequest, opts ...grpc.CallOption) (*EnrollEnvoyResponse, error)
-	// SetReassignment marks a envoy for reassignment to a different steorra.
-	// Called tungol-internal to set reassign_addr/reassign_id on the envoy.
+	// SetReassignment marks a envoy for reassignment to a different bolt.
+	// Called spanner-internal to set reassign_addr/reassign_id on the envoy.
 	SetReassignment(ctx context.Context, in *SetReassignmentRequest, opts ...grpc.CallOption) (*SetReassignmentResponse, error)
-	// ReportSteorraStatus receives periodic status reports from steorras
-	// pushed proactively (push health/compliance metrics into the tungol).
-	ReportSteorraStatus(ctx context.Context, in *SteorraStatusReport, opts ...grpc.CallOption) (*SteorraStatusAck, error)
+	// ReportBoltStatus receives periodic status reports from bolts
+	// pushed proactively (push health/compliance metrics into the spanner).
+	ReportBoltStatus(ctx context.Context, in *BoltStatusReport, opts ...grpc.CallOption) (*BoltStatusAck, error)
 }
 
 type vigoAdminClient struct {
@@ -722,10 +722,10 @@ func (c *vigoAdminClient) SetReassignment(ctx context.Context, in *SetReassignme
 	return out, nil
 }
 
-func (c *vigoAdminClient) ReportSteorraStatus(ctx context.Context, in *SteorraStatusReport, opts ...grpc.CallOption) (*SteorraStatusAck, error) {
+func (c *vigoAdminClient) ReportBoltStatus(ctx context.Context, in *BoltStatusReport, opts ...grpc.CallOption) (*BoltStatusAck, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SteorraStatusAck)
-	err := c.cc.Invoke(ctx, VigoAdmin_ReportSteorraStatus_FullMethodName, in, out, cOpts...)
+	out := new(BoltStatusAck)
+	err := c.cc.Invoke(ctx, VigoAdmin_ReportBoltStatus_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -776,17 +776,17 @@ type VigoAdminServer interface {
 	ListPackages(context.Context, *ListPackagesRequest) (*ListPackagesResponse, error)
 	// ListPackageDrift lists packages where installed version differs from desired.
 	ListPackageDrift(context.Context, *ListPackageDriftRequest) (*ListPackageDriftResponse, error)
-	// EnrollEnvoy creates a envoy record directly (tungol-internal RPC).
-	// Used during enrollment routing: the receiving steorra validates the
-	// token, then calls this on the target steorra to create the envoy
+	// EnrollEnvoy creates a envoy record directly (spanner-internal RPC).
+	// Used during enrollment routing: the receiving bolt validates the
+	// token, then calls this on the target bolt to create the envoy
 	// without token re-validation.
 	EnrollEnvoy(context.Context, *EnrollEnvoyRequest) (*EnrollEnvoyResponse, error)
-	// SetReassignment marks a envoy for reassignment to a different steorra.
-	// Called tungol-internal to set reassign_addr/reassign_id on the envoy.
+	// SetReassignment marks a envoy for reassignment to a different bolt.
+	// Called spanner-internal to set reassign_addr/reassign_id on the envoy.
 	SetReassignment(context.Context, *SetReassignmentRequest) (*SetReassignmentResponse, error)
-	// ReportSteorraStatus receives periodic status reports from steorras
-	// pushed proactively (push health/compliance metrics into the tungol).
-	ReportSteorraStatus(context.Context, *SteorraStatusReport) (*SteorraStatusAck, error)
+	// ReportBoltStatus receives periodic status reports from bolts
+	// pushed proactively (push health/compliance metrics into the spanner).
+	ReportBoltStatus(context.Context, *BoltStatusReport) (*BoltStatusAck, error)
 	mustEmbedUnimplementedVigoAdminServer()
 }
 
@@ -863,8 +863,8 @@ func (UnimplementedVigoAdminServer) EnrollEnvoy(context.Context, *EnrollEnvoyReq
 func (UnimplementedVigoAdminServer) SetReassignment(context.Context, *SetReassignmentRequest) (*SetReassignmentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetReassignment not implemented")
 }
-func (UnimplementedVigoAdminServer) ReportSteorraStatus(context.Context, *SteorraStatusReport) (*SteorraStatusAck, error) {
-	return nil, status.Error(codes.Unimplemented, "method ReportSteorraStatus not implemented")
+func (UnimplementedVigoAdminServer) ReportBoltStatus(context.Context, *BoltStatusReport) (*BoltStatusAck, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReportBoltStatus not implemented")
 }
 func (UnimplementedVigoAdminServer) mustEmbedUnimplementedVigoAdminServer() {}
 func (UnimplementedVigoAdminServer) testEmbeddedByValue()                   {}
@@ -1283,20 +1283,20 @@ func _VigoAdmin_SetReassignment_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VigoAdmin_ReportSteorraStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SteorraStatusReport)
+func _VigoAdmin_ReportBoltStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BoltStatusReport)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VigoAdminServer).ReportSteorraStatus(ctx, in)
+		return srv.(VigoAdminServer).ReportBoltStatus(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VigoAdmin_ReportSteorraStatus_FullMethodName,
+		FullMethod: VigoAdmin_ReportBoltStatus_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).ReportSteorraStatus(ctx, req.(*SteorraStatusReport))
+		return srv.(VigoAdminServer).ReportBoltStatus(ctx, req.(*BoltStatusReport))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1397,8 +1397,8 @@ var VigoAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VigoAdmin_SetReassignment_Handler,
 		},
 		{
-			MethodName: "ReportSteorraStatus",
-			Handler:    _VigoAdmin_ReportSteorraStatus_Handler,
+			MethodName: "ReportBoltStatus",
+			Handler:    _VigoAdmin_ReportBoltStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package tungol
+package spanner
 
 import (
 	"context"
@@ -47,9 +47,9 @@ func (r *recordingAudit) events_(eventType string) []recordedEvent {
 func newHubForPinTests(t *testing.T) (*Hub, *recordingAudit) {
 	t.Helper()
 	h := &Hub{
-		steorras:       nil,
-		steorraReports: make(map[string]*pb.SteorraStatusReport),
-		steorraPins:    make(map[string]*SteorraPin),
+		bolts:       nil,
+		boltReports: make(map[string]*pb.BoltStatusReport),
+		boltPins:    make(map[string]*BoltPin),
 	}
 	a := &recordingAudit{}
 	h.SetAuditWriter(a)
@@ -57,97 +57,97 @@ func newHubForPinTests(t *testing.T) (*Hub, *recordingAudit) {
 }
 
 // signReport mirrors the reporter's signing path for test fixtures.
-func signReport(t *testing.T, report *pb.SteorraStatusReport, priv ed25519.PrivateKey) {
+func signReport(t *testing.T, report *pb.BoltStatusReport, priv ed25519.PrivateKey) {
 	t.Helper()
 	canonical, err := marshalReportContent(report)
 	if err != nil {
 		t.Fatalf("marshalReportContent: %v", err)
 	}
-	report.SteorraPubkey = []byte(priv.Public().(ed25519.PublicKey))
+	report.BoltPubkey = []byte(priv.Public().(ed25519.PublicKey))
 	report.Signature = ed25519.Sign(priv, canonical)
 }
 
-func TestRecordSteorraReport_LegacyAcceptedWithoutPinning(t *testing.T) {
+func TestRecordBoltReport_LegacyAcceptedWithoutPinning(t *testing.T) {
 	h, audit := newHubForPinTests(t)
-	report := &pb.SteorraStatusReport{
-		SteorraId:  "dc1",
+	report := &pb.BoltStatusReport{
+		BoltId:     "dc1",
 		EnvoyCount: 5,
 	}
-	if err := h.RecordSteorraReport(context.Background(), report); err != nil {
+	if err := h.RecordBoltReport(context.Background(), report); err != nil {
 		t.Fatalf("legacy report rejected: %v", err)
 	}
-	if len(h.steorraPins) != 0 {
-		t.Errorf("legacy report should not have pinned anything; got %d pins", len(h.steorraPins))
+	if len(h.boltPins) != 0 {
+		t.Errorf("legacy report should not have pinned anything; got %d pins", len(h.boltPins))
 	}
-	if len(audit.events_("tungol_steorra_pubkey_mismatch")) != 0 {
+	if len(audit.events_("spanner_bolt_pubkey_mismatch")) != 0 {
 		t.Errorf("legacy report should not emit mismatch audit events")
 	}
 }
 
-func TestRecordSteorraReport_FirstSightingPins(t *testing.T) {
+func TestRecordBoltReport_FirstSightingPins(t *testing.T) {
 	h, audit := newHubForPinTests(t)
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
-	report := &pb.SteorraStatusReport{
-		SteorraId:  "dc1",
-		TungolId:   "alexander4-prod",
+	report := &pb.BoltStatusReport{
+		BoltId:     "dc1",
+		SpannerId:  "alexander4-prod",
 		EnvoyCount: 5,
 	}
 	signReport(t, report, priv)
 
-	if err := h.RecordSteorraReport(context.Background(), report); err != nil {
+	if err := h.RecordBoltReport(context.Background(), report); err != nil {
 		t.Fatalf("first sighting rejected: %v", err)
 	}
-	pin := h.LookupSteorraPin("alexander4-prod", "dc1")
+	pin := h.LookupBoltPin("alexander4-prod", "dc1")
 	if pin == nil {
 		t.Fatal("expected pin after first sighting")
 	}
 	if !bytesEqual(pin.Pubkey, []byte(priv.Public().(ed25519.PublicKey))) {
 		t.Error("pinned pubkey does not match asserted pubkey")
 	}
-	if len(audit.events_("tungol_steorra_pubkey_mismatch")) != 0 {
+	if len(audit.events_("spanner_bolt_pubkey_mismatch")) != 0 {
 		t.Error("first sighting should not emit mismatch event")
 	}
 }
 
-func TestRecordSteorraReport_SameKeyAcceptedTwice(t *testing.T) {
+func TestRecordBoltReport_SameKeyAcceptedTwice(t *testing.T) {
 	h, _ := newHubForPinTests(t)
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 	for i := 0; i < 2; i++ {
-		report := &pb.SteorraStatusReport{
-			SteorraId:  "dc1",
-			TungolId:   "alexander4-prod",
+		report := &pb.BoltStatusReport{
+			BoltId:     "dc1",
+			SpannerId:  "alexander4-prod",
 			EnvoyCount: int32(i),
 		}
 		signReport(t, report, priv)
-		if err := h.RecordSteorraReport(context.Background(), report); err != nil {
+		if err := h.RecordBoltReport(context.Background(), report); err != nil {
 			t.Fatalf("report %d rejected: %v", i, err)
 		}
 	}
 }
 
-func TestRecordSteorraReport_MismatchRejected(t *testing.T) {
+func TestRecordBoltReport_MismatchRejected(t *testing.T) {
 	h, audit := newHubForPinTests(t)
 	_, priv1, _ := ed25519.GenerateKey(rand.Reader)
 	_, priv2, _ := ed25519.GenerateKey(rand.Reader)
 
 	// First sighting pins priv1.
-	r1 := &pb.SteorraStatusReport{
-		SteorraId: "dc1", TungolId: "alexander4-prod", EnvoyCount: 5,
+	r1 := &pb.BoltStatusReport{
+		BoltId: "dc1", SpannerId: "alexander4-prod", EnvoyCount: 5,
 	}
 	signReport(t, r1, priv1)
-	if err := h.RecordSteorraReport(context.Background(), r1); err != nil {
+	if err := h.RecordBoltReport(context.Background(), r1); err != nil {
 		t.Fatalf("first sighting rejected: %v", err)
 	}
 
 	// Second report signed by priv2 — must be rejected.
-	r2 := &pb.SteorraStatusReport{
-		SteorraId: "dc1", TungolId: "alexander4-prod", EnvoyCount: 6,
+	r2 := &pb.BoltStatusReport{
+		BoltId: "dc1", SpannerId: "alexander4-prod", EnvoyCount: 6,
 	}
 	signReport(t, r2, priv2)
-	err := h.RecordSteorraReport(context.Background(), r2)
+	err := h.RecordBoltReport(context.Background(), r2)
 	if err == nil {
 		t.Fatal("mismatched-key report should be rejected")
 	}
@@ -155,7 +155,7 @@ func TestRecordSteorraReport_MismatchRejected(t *testing.T) {
 		t.Errorf("expected pinned-identity error, got: %v", err)
 	}
 	// Mismatch audit event should fire.
-	mismatch := audit.events_("tungol_steorra_pubkey_mismatch")
+	mismatch := audit.events_("spanner_bolt_pubkey_mismatch")
 	if len(mismatch) != 1 {
 		t.Fatalf("expected 1 mismatch event, got %d", len(mismatch))
 	}
@@ -164,7 +164,7 @@ func TestRecordSteorraReport_MismatchRejected(t *testing.T) {
 	}
 
 	// Pinned report should NOT be replaced by the rejected one.
-	stored, ok := h.steorraReports["dc1"]
+	stored, ok := h.boltReports["dc1"]
 	if !ok {
 		t.Fatal("first-sighting report should remain after mismatch reject")
 	}
@@ -173,62 +173,62 @@ func TestRecordSteorraReport_MismatchRejected(t *testing.T) {
 	}
 }
 
-func TestRecordSteorraReport_BadSignatureRejected(t *testing.T) {
+func TestRecordBoltReport_BadSignatureRejected(t *testing.T) {
 	h, audit := newHubForPinTests(t)
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 
-	report := &pb.SteorraStatusReport{
-		SteorraId: "dc1", TungolId: "alexander4-prod", EnvoyCount: 5,
+	report := &pb.BoltStatusReport{
+		BoltId: "dc1", SpannerId: "alexander4-prod", EnvoyCount: 5,
 	}
 	signReport(t, report, priv)
 	// Corrupt the signature.
 	report.Signature[0] ^= 0xff
 
-	err := h.RecordSteorraReport(context.Background(), report)
+	err := h.RecordBoltReport(context.Background(), report)
 	if err == nil {
 		t.Fatal("bad-signature report should be rejected")
 	}
 	if !strings.Contains(err.Error(), "signature verify") {
 		t.Errorf("expected signature-verify error, got: %v", err)
 	}
-	if len(audit.events_("tungol_steorra_pubkey_mismatch")) != 1 {
+	if len(audit.events_("spanner_bolt_pubkey_mismatch")) != 1 {
 		t.Error("bad-signature reject should emit mismatch audit event")
 	}
 }
 
-func TestRecordSteorraReport_DistinctTungolsDoNotCollide(t *testing.T) {
-	// Two tungols can each have a steorra named "dc1" without
+func TestRecordBoltReport_DistinctSpannersDoNotCollide(t *testing.T) {
+	// Two spanners can each have a bolt named "dc1" without
 	// the pins colliding.
 	h, _ := newHubForPinTests(t)
 	_, p1, _ := ed25519.GenerateKey(rand.Reader)
 	_, p2, _ := ed25519.GenerateKey(rand.Reader)
 
-	r1 := &pb.SteorraStatusReport{SteorraId: "dc1", TungolId: "tungol-a"}
+	r1 := &pb.BoltStatusReport{BoltId: "dc1", SpannerId: "spanner-a"}
 	signReport(t, r1, p1)
-	r2 := &pb.SteorraStatusReport{SteorraId: "dc1", TungolId: "tungol-b"}
+	r2 := &pb.BoltStatusReport{BoltId: "dc1", SpannerId: "spanner-b"}
 	signReport(t, r2, p2)
 
-	if err := h.RecordSteorraReport(context.Background(), r1); err != nil {
-		t.Fatalf("tungol-a report rejected: %v", err)
+	if err := h.RecordBoltReport(context.Background(), r1); err != nil {
+		t.Fatalf("spanner-a report rejected: %v", err)
 	}
-	if err := h.RecordSteorraReport(context.Background(), r2); err != nil {
-		t.Fatalf("tungol-b report rejected: %v", err)
+	if err := h.RecordBoltReport(context.Background(), r2); err != nil {
+		t.Fatalf("spanner-b report rejected: %v", err)
 	}
-	if pin := h.LookupSteorraPin("tungol-a", "dc1"); pin == nil || !bytesEqual(pin.Pubkey, []byte(p1.Public().(ed25519.PublicKey))) {
-		t.Error("tungol-a pin should hold p1's pubkey")
+	if pin := h.LookupBoltPin("spanner-a", "dc1"); pin == nil || !bytesEqual(pin.Pubkey, []byte(p1.Public().(ed25519.PublicKey))) {
+		t.Error("spanner-a pin should hold p1's pubkey")
 	}
-	if pin := h.LookupSteorraPin("tungol-b", "dc1"); pin == nil || !bytesEqual(pin.Pubkey, []byte(p2.Public().(ed25519.PublicKey))) {
-		t.Error("tungol-b pin should hold p2's pubkey")
+	if pin := h.LookupBoltPin("spanner-b", "dc1"); pin == nil || !bytesEqual(pin.Pubkey, []byte(p2.Public().(ed25519.PublicKey))) {
+		t.Error("spanner-b pin should hold p2's pubkey")
 	}
 }
 
-func TestRecordSteorraReport_SignedReportRequiresTungolID(t *testing.T) {
+func TestRecordBoltReport_SignedReportRequiresSpannerID(t *testing.T) {
 	h, _ := newHubForPinTests(t)
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
-	report := &pb.SteorraStatusReport{SteorraId: "dc1"} // TungolId omitted
+	report := &pb.BoltStatusReport{BoltId: "dc1"} // SpannerId omitted
 	signReport(t, report, priv)
-	err := h.RecordSteorraReport(context.Background(), report)
-	if err == nil || !strings.Contains(err.Error(), "missing tungol_id") {
-		t.Errorf("expected missing-tungol_id error, got: %v", err)
+	err := h.RecordBoltReport(context.Background(), report)
+	if err == nil || !strings.Contains(err.Error(), "missing spanner_id") {
+		t.Errorf("expected missing-spanner_id error, got: %v", err)
 	}
 }

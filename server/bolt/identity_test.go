@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package steorra
+package bolt
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ import (
 )
 
 // fakeDeriver mirrors puddle/identity_test.go's deriver — same shape,
-// independent test surface so steorra package tests don't depend on
+// independent test surface so bolt package tests don't depend on
 // puddle's internal test helpers.
 type fakeDeriver struct {
 	masterKey []byte
@@ -66,10 +66,10 @@ func TestEnsureIdentity_FirstCallGeneratesAndPersists(t *testing.T) {
 		}
 	}
 	// Sign-then-verify proves the wrap/unwrap chain end-to-end.
-	msg := []byte("steorra phase 1 round-trip")
+	msg := []byte("bolt phase 1 round-trip")
 	sig := ed25519.Sign(id.SigningKey, msg)
 	if !ed25519.Verify(id.PublicKey, msg, sig) {
-		t.Fatal("steorra signature did not verify against its pubkey")
+		t.Fatal("bolt signature did not verify against its pubkey")
 	}
 }
 
@@ -86,10 +86,10 @@ func TestEnsureIdentity_SecondCallLoadsSame(t *testing.T) {
 		t.Fatalf("second: %v", err)
 	}
 	if !bytes.Equal(first.PublicKey, second.PublicKey) {
-		t.Fatal("steorra pubkey changed across loads — identity is not stable")
+		t.Fatal("bolt pubkey changed across loads — identity is not stable")
 	}
 	if !bytes.Equal(first.SigningKey, second.SigningKey) {
-		t.Fatal("steorra signing key changed across loads")
+		t.Fatal("bolt signing key changed across loads")
 	}
 }
 
@@ -102,21 +102,21 @@ func TestLoadIdentity_FailsWithoutWrap(t *testing.T) {
 }
 
 func TestDistinctHKDFPurpose_FromPuddle(t *testing.T) {
-	// Both packages must use distinct purposes — a steorra wrap
+	// Both packages must use distinct purposes — a bolt wrap
 	// generated under puddle.HKDFPurpose would unwrap correctly via
 	// puddle.LoadIdentity, defeating the role boundary. Confirm the
 	// HKDF purpose strings differ at the constant level.
 	if HKDFPurpose == puddle.HKDFPurpose {
-		t.Fatal("steorra.HKDFPurpose must differ from puddle.HKDFPurpose")
+		t.Fatal("bolt.HKDFPurpose must differ from puddle.HKDFPurpose")
 	}
 	if HKDFPurpose == puddle.OpsHKDFPurpose {
-		t.Fatal("steorra.HKDFPurpose must differ from puddle.OpsHKDFPurpose")
+		t.Fatal("bolt.HKDFPurpose must differ from puddle.OpsHKDFPurpose")
 	}
 }
 
 func TestWrapPath_DotSubdirConvention(t *testing.T) {
 	// Catch accidental rename of the canonical filenames.
-	dir := "/srv/vigo/steorra"
+	dir := "/srv/vigo/bolt"
 	if got, want := WrappedPath(dir), filepath.Join(dir, "identity.wrapped"); got != want {
 		t.Errorf("WrappedPath = %q, want %q", got, want)
 	}

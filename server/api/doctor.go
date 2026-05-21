@@ -19,8 +19,8 @@ import (
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/freshness"
-	"git.alexander4.io/vigo/server/tungol"
 	"git.alexander4.io/vigo/server/license"
+	"git.alexander4.io/vigo/server/spanner"
 )
 
 // CheckStatus represents the outcome of a single health check.
@@ -66,41 +66,41 @@ type CycleLookup func(envoyID string) time.Duration
 
 // DoctorConfig holds the dependencies for the doctor handler.
 type DoctorConfig struct {
-	SQLDB          *sql.DB
-	CertFile       string
-	KeyFile        string
-	Enforcer       *license.Enforcer
-	ConfigStore    *config.ConfigStore
+	SQLDB            *sql.DB
+	CertFile         string
+	KeyFile          string
+	Enforcer         *license.Enforcer
+	ConfigStore      *config.ConfigStore
 	Queries          *db.Queries
 	Interval         time.Duration
 	OfflineThreshold time.Duration
-	Hub              *tungol.Hub
-	Integrations   bool
-	Mode           config.TungolMode
-	SecretsBackend string
+	Hub              *spanner.Hub
+	Integrations     bool
+	Mode             config.SpannerMode
+	SecretsBackend   string
 	// CycleLookup, when set, supplies the per-envoy observed cycle so
 	// the stale-envoys check uses the same per-envoy threshold the UI
 	// envoys page uses. nil → bootstrap (configured interval only).
-	CycleLookup    CycleLookup
+	CycleLookup CycleLookup
 }
 
 // DoctorHandler serves the /api/v1/doctor health check endpoint.
 type DoctorHandler struct {
-	sqlDB          *sql.DB
-	certFile       string
-	keyFile        string
-	enforcer       *license.Enforcer
-	configStore    *config.ConfigStore
+	sqlDB            *sql.DB
+	certFile         string
+	keyFile          string
+	enforcer         *license.Enforcer
+	configStore      *config.ConfigStore
 	queries          *db.Queries
 	baseInterval     time.Duration
 	offlineThreshold time.Duration
-	hub              *tungol.Hub
-	integrations   bool
-	mode           config.TungolMode
-	secretsBackend string
-	cycleLookup    CycleLookup
-	swarmCfgMu     sync.RWMutex
-	swarmCfg       config.SwarmSection
+	hub              *spanner.Hub
+	integrations     bool
+	mode             config.SpannerMode
+	secretsBackend   string
+	cycleLookup      CycleLookup
+	swarmCfgMu       sync.RWMutex
+	swarmCfg         config.SwarmSection
 }
 
 // SetSwarmConfig is called from main.go on startup and on every
@@ -115,19 +115,19 @@ func (h *DoctorHandler) SetSwarmConfig(s config.SwarmSection) {
 // NewDoctorHandler creates a doctor handler with the given dependencies.
 func NewDoctorHandler(cfg DoctorConfig) *DoctorHandler {
 	return &DoctorHandler{
-		sqlDB:          cfg.SQLDB,
-		certFile:       cfg.CertFile,
-		keyFile:        cfg.KeyFile,
-		enforcer:       cfg.Enforcer,
-		configStore:    cfg.ConfigStore,
+		sqlDB:            cfg.SQLDB,
+		certFile:         cfg.CertFile,
+		keyFile:          cfg.KeyFile,
+		enforcer:         cfg.Enforcer,
+		configStore:      cfg.ConfigStore,
 		queries:          cfg.Queries,
 		baseInterval:     cfg.Interval,
 		offlineThreshold: cfg.OfflineThreshold,
 		hub:              cfg.Hub,
-		integrations:   cfg.Integrations,
-		mode:           cfg.Mode,
-		secretsBackend: cfg.SecretsBackend,
-		cycleLookup:    cfg.CycleLookup,
+		integrations:     cfg.Integrations,
+		mode:             cfg.Mode,
+		secretsBackend:   cfg.SecretsBackend,
+		cycleLookup:      cfg.CycleLookup,
 	}
 }
 
@@ -149,7 +149,7 @@ func (h *DoctorHandler) RunChecks() (string, []DoctorCheck) {
 		h.checkTLS(),
 		h.checkSecrets(),
 		h.checkLicense(ctx),
-		h.checkTungol(),
+		h.checkSpanner(),
 		h.checkIntegrations(),
 		h.checkConfig(),
 		h.checkSwarmPatterns(),
@@ -176,7 +176,7 @@ func (h *DoctorHandler) handleDoctor(w http.ResponseWriter, r *http.Request) {
 		h.checkTLS(),
 		h.checkSecrets(),
 		h.checkLicense(ctx),
-		h.checkTungol(),
+		h.checkSpanner(),
 		h.checkIntegrations(),
 		h.checkConfig(),
 		h.checkSwarmPatterns(),
@@ -259,21 +259,21 @@ func (h *DoctorHandler) checkLicense(ctx context.Context) DoctorCheck {
 	}
 }
 
-func (h *DoctorHandler) checkTungol() DoctorCheck {
+func (h *DoctorHandler) checkSpanner() DoctorCheck {
 	switch h.mode {
 	case config.ModeFounder:
 		if h.hub == nil {
-			return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusFail, Message: "founder mode but no bootstrap connections"}
+			return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusFail, Message: "founder mode but no bootstrap connections"}
 		}
 		// Slice 2A.1b note: admin-query routing-by-pattern is degraded until
 		// the CRDT merge lands in 2A.2 — the bootstrap-discovery rendezvous
-		// itself still works. SteorraCount() reflects configured bootstrap
+		// itself still works. BoltCount() reflects configured bootstrap
 		// peers, not the gossiped roster.
-		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusPass, Message: fmt.Sprintf("founder, %d bootstrap peer(s) (admin-routing degraded until 2A.2 CRDT merge)", h.hub.SteorraCount())}
+		return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusPass, Message: fmt.Sprintf("founder, %d bootstrap peer(s) (admin-routing degraded until 2A.2 CRDT merge)", h.hub.BoltCount())}
 	case config.ModeJoiner:
-		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusPass, Message: "joiner"}
+		return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusPass, Message: "joiner"}
 	default:
-		return DoctorCheck{Name: "tungol", Scope: ScopeServer, Status: StatusSkip, Message: "standalone"}
+		return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusSkip, Message: "standalone"}
 	}
 }
 

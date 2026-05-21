@@ -96,11 +96,11 @@ func (s *AdminService) RevokeApprovedPattern(ctx context.Context, req *pb.Revoke
 // ---------- Envoys ----------
 
 func (s *AdminService) ListEnvoys(ctx context.Context, req *pb.ListEnvoysRequest) (*pb.ListEnvoysResponse, error) {
-	// Hub mode: aggregate from all steorras.
+	// Hub mode: aggregate from all bolts.
 	if s.hub != nil {
 		envoys, err := s.hub.AggregateListEnvoys(ctx)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "aggregating envoys from steorras: %v", err)
+			return nil, status.Errorf(codes.Internal, "aggregating envoys from bolts: %v", err)
 		}
 		return &pb.ListEnvoysResponse{Envoys: envoys}, nil
 	}
@@ -196,11 +196,11 @@ func (s *AdminService) RevokeEnvoy(ctx context.Context, req *pb.RevokeEnvoyReque
 	// Dispatch envoy.revoked event.
 	if s.integrations != nil {
 		s.integrations.Dispatch(integrations.Event{
-			Name:     "envoy.revoked",
+			Name:      "envoy.revoked",
 			Timestamp: time.Now(),
-			Hostname: hostname,
-			EnvoyID:  req.Id,
-			Summary:  fmt.Sprintf("%s revoked", hostname),
+			Hostname:  hostname,
+			EnvoyID:   req.Id,
+			Summary:   fmt.Sprintf("%s revoked", hostname),
 		})
 	}
 
@@ -253,11 +253,11 @@ func (s *AdminService) DeleteEnvoy(ctx context.Context, req *pb.DeleteEnvoyReque
 // ---------- ForcePush ----------
 
 func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) (*pb.ForcePushResponse, error) {
-	// Hub mode: forward to all steorras.
+	// Hub mode: forward to all bolts.
 	if s.hub != nil {
 		total, err := s.hub.ForwardForcePush(ctx, req.GetEnvoyId())
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "forwarding force push to steorras: %v", err)
+			return nil, status.Errorf(codes.Internal, "forwarding force push to bolts: %v", err)
 		}
 		return &pb.ForcePushResponse{EnvoysNotified: total}, nil
 	}
@@ -294,7 +294,7 @@ func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) 
 // ---------- Runs ----------
 
 func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*pb.ListRunsResponse, error) {
-	// Hub mode: aggregate from all steorras.
+	// Hub mode: aggregate from all bolts.
 	if s.hub != nil {
 		limit := req.Limit
 		if limit <= 0 {
@@ -302,7 +302,7 @@ func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*
 		}
 		runs, err := s.hub.AggregateListRuns(ctx, req.GetEnvoyId(), limit)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "aggregating runs from steorras: %v", err)
+			return nil, status.Errorf(codes.Internal, "aggregating runs from bolts: %v", err)
 		}
 		return &pb.ListRunsResponse{Runs: runs}, nil
 	}
@@ -319,7 +319,7 @@ func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*
 
 		runs, err := s.runStore.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 			EnvoyID: req.EnvoyId,
-			Limit:  limit,
+			Limit:   limit,
 		})
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "listing runs: %v", err)
@@ -413,7 +413,7 @@ func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.D
 	}
 
 	plan, err := s.queries.CreatePlan(ctx, db.CreatePlanParams{
-		EnvoyID:  envoyID,
+		EnvoyID: envoyID,
 		Modules: string(modulesJSON),
 	})
 	if err != nil {
@@ -464,7 +464,7 @@ func (s *AdminService) DeleteWebhook(ctx context.Context, _ *pb.DeleteWebhookReq
 // ---------- Convergence ----------
 
 func (s *AdminService) GetConvergenceSummary(ctx context.Context, _ *pb.GetConvergenceSummaryRequest) (*pb.GetConvergenceSummaryResponse, error) {
-	// Hub mode: aggregate from all steorras.
+	// Hub mode: aggregate from all bolts.
 	if s.hub != nil {
 		return s.hub.AggregateConvergenceSummary(ctx)
 	}
@@ -514,9 +514,9 @@ func (s *AdminService) GetConvergenceSummary(ctx context.Context, _ *pb.GetConve
 		Relapsed:       counts["relapsed"],
 		Diverged:       counts["diverged"],
 		Failed:         counts["failed"],
-		Offline:    counts["offline"],
+		Offline:        counts["offline"],
 		NoData:         counts["no data"],
-		ConvergencePct:  pct,
+		ConvergencePct: pct,
 	}, nil
 }
 
@@ -533,7 +533,7 @@ func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoy
 	var lastRunProto *pb.Run
 	runs, err := s.runStore.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 		EnvoyID: envoyID,
-		Limit:    int64(convergence.DivergedThreshold),
+		Limit:   int64(convergence.DivergedThreshold),
 	})
 	var recent []convergence.RunInfo
 	if err == nil && len(runs) > 0 {
@@ -590,7 +590,7 @@ func (s *AdminService) Rollback(ctx context.Context, req *pb.RollbackRequest) (*
 	// If a specific file_path is provided, verify snapshots exist.
 	if req.FilePath != "" {
 		snapshots, err := s.queries.ListFileSnapshots(ctx, db.ListFileSnapshotsParams{
-			EnvoyID:   envoyID,
+			EnvoyID:  envoyID,
 			FilePath: req.FilePath,
 		})
 		if err != nil {
@@ -639,7 +639,7 @@ func (s *AdminService) ListPackages(ctx context.Context, req *pb.ListPackagesReq
 		result := make([]*pb.PackageInfo, 0, len(pkgs))
 		for _, p := range pkgs {
 			pi := &pb.PackageInfo{
-				EnvoyId:      p.EnvoyID,
+				EnvoyId:     p.EnvoyID,
 				Hostname:    p.Hostname,
 				PackageName: p.PackageName,
 			}
@@ -662,7 +662,7 @@ func (s *AdminService) ListPackages(ctx context.Context, req *pb.ListPackagesReq
 	result := make([]*pb.PackageInfo, 0, len(pkgs))
 	for _, p := range pkgs {
 		pi := &pb.PackageInfo{
-			EnvoyId:      p.EnvoyID,
+			EnvoyId:     p.EnvoyID,
 			Hostname:    p.Hostname,
 			PackageName: p.PackageName,
 		}
@@ -686,7 +686,7 @@ func (s *AdminService) ListPackageDrift(ctx context.Context, _ *pb.ListPackageDr
 	resp := &pb.ListPackageDriftResponse{}
 	for _, d := range drifts {
 		pd := &pb.PackageDrift{
-			EnvoyId:      d.EnvoyID,
+			EnvoyId:     d.EnvoyID,
 			Hostname:    d.Hostname,
 			PackageName: d.PackageName,
 			DetectedAt:  timestamppb.New(d.DetectedAt),
@@ -703,33 +703,33 @@ func (s *AdminService) ListPackageDrift(ctx context.Context, _ *pb.ListPackageDr
 	return resp, nil
 }
 
-// ---------- ReportSteorraStatus ----------
+// ---------- ReportBoltStatus ----------
 
-func (s *AdminService) ReportSteorraStatus(ctx context.Context, req *pb.SteorraStatusReport) (*pb.SteorraStatusAck, error) {
-	if req.SteorraId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "steorra_id is required")
+func (s *AdminService) ReportBoltStatus(ctx context.Context, req *pb.BoltStatusReport) (*pb.BoltStatusAck, error) {
+	if req.BoltId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "bolt_id is required")
 	}
 
-	// Only the hub stores steorra reports.
+	// Only the hub stores bolt reports.
 	if s.hub == nil {
 		return nil, status.Errorf(codes.FailedPrecondition, "server is not a hub")
 	}
 
-	if err := s.hub.RecordSteorraReport(ctx, req); err != nil {
+	if err := s.hub.RecordBoltReport(ctx, req); err != nil {
 		// Phase 1: identity-verify or pin-mismatch failures reject
-		// the report with PermissionDenied so the steorra sees a
+		// the report with PermissionDenied so the bolt sees a
 		// distinct status code (vs Unavailable from a transport
 		// hiccup). Audit event already emitted by the hub.
 		return nil, status.Errorf(codes.PermissionDenied, "report rejected: %v", err)
 	}
 
-	slog.Debug("received steorra status report",
-		"steorra_id", req.SteorraId,
+	slog.Debug("received bolt status report",
+		"bolt_id", req.BoltId,
 		"envoy_count", req.EnvoyCount,
 		"converged", req.Converged,
 	)
 
-	return &pb.SteorraStatusAck{}, nil
+	return &pb.BoltStatusAck{}, nil
 }
 
 // ---------- Helpers ----------
@@ -760,7 +760,7 @@ func dbEnvoyToProto(n db.Envoy) *pb.Envoy {
 func dbRunToProto(r db.Run) *pb.Run {
 	pr := &pb.Run{
 		Id:           r.ID,
-		EnvoyId:       r.EnvoyID,
+		EnvoyId:      r.EnvoyID,
 		StartedAt:    timestamppb.New(r.StartedAt),
 		Status:       r.Status,
 		ModuleCount:  int32(r.ModuleCount),

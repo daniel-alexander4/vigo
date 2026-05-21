@@ -31,24 +31,24 @@ const MaxRecentRuns = 10
 // EnvoyState holds the in-memory state of a single envoy. All fields are
 // owned by the FleetIndex and protected by its mutex.
 type EnvoyState struct {
-	ID                    string
-	Hostname              string
-	IP                    string
-	PubkeyPEM             string
-	EnrolledAt            time.Time
-	LastSeen              time.Time
-	Revoked               bool
-	ConvergenceStatus      string
+	ID                string
+	Hostname          string
+	IP                string
+	PubkeyPEM         string
+	EnrolledAt        time.Time
+	LastSeen          time.Time
+	Revoked           bool
+	ConvergenceStatus string
 	// Drift is the drift-axis bucket for this envoy — orthogonal to
 	// ConvergenceStatus. None / Changed / Diverged. Recomputed on every
 	// UpdateRunStatus from the trailing run history. See server/convergence.
-	Drift                  convergence.DriftLevel
-	LastRunStatus         string
-	LastRunID             string
-	LastRunChangedCount   int64
-	LastRunFailedCount    int64
-	LastRunModuleCount    int64
-	LastRunAt             time.Time
+	Drift               convergence.DriftLevel
+	LastRunStatus       string
+	LastRunID           string
+	LastRunChangedCount int64
+	LastRunFailedCount  int64
+	LastRunModuleCount  int64
+	LastRunAt           time.Time
 	// RecentRuns holds the most-recent-first trailing run history used to
 	// compute ConvergenceStatus. Bounded to [MaxRecentRuns] entries so
 	// drift detection (relapsed/diverged) has enough signal without
@@ -58,22 +58,22 @@ type EnvoyState struct {
 	Traits                map[string]string // flattened key→value for trait index
 	PendingRotatedSecrets []string
 	ForcePush             bool
-	ForceUpdate           bool   // ephemeral: agent should download latest binary and restart
-	AgentVersion          string // agent binary version reported on check-in
-	StreamRequested       bool   // ephemeral: server wants agent to open stream (not persisted to DB)
-	TunnelRequested       bool   // ephemeral: server wants agent to open TunnelStream (Scrier)
-	FastPoll              bool   // ephemeral: next check-in response uses 1s interval (cleared after delivery)
-	Gateway               string // hostname of gateway envoy (empty for normal envoys)
-	DeviceType            string // network device type (empty for normal envoys)
-	Tags                  []string   // user-assigned tags for targeting
-	MaintenanceUntil      time.Time  // zero = not in maintenance
-	ObserveOnly           bool       // observe-only mode: report drift only
-	Offline               bool       // true when envoy hasn't checked in within 2×base interval
+	ForceUpdate           bool      // ephemeral: agent should download latest binary and restart
+	AgentVersion          string    // agent binary version reported on check-in
+	StreamRequested       bool      // ephemeral: server wants agent to open stream (not persisted to DB)
+	TunnelRequested       bool      // ephemeral: server wants agent to open TunnelStream (Scrier)
+	FastPoll              bool      // ephemeral: next check-in response uses 1s interval (cleared after delivery)
+	Gateway               string    // hostname of gateway envoy (empty for normal envoys)
+	DeviceType            string    // network device type (empty for normal envoys)
+	Tags                  []string  // user-assigned tags for targeting
+	MaintenanceUntil      time.Time // zero = not in maintenance
+	ObserveOnly           bool      // observe-only mode: report drift only
+	Offline               bool      // true when envoy hasn't checked in within 2×base interval
 	// recentCheckinDeltasMs is a 3-slot ring of agent-reported
 	// inter-CheckIn deltas (ms). Smoothing prevents a single bouncy
 	// cycle from flapping the staleness threshold by orders of
 	// magnitude. Zero entries are skipped by the EnvoyCycle resolver.
-	recentCheckinDeltasMs [3]uint32
+	recentCheckinDeltasMs  [3]uint32
 	recentCheckinDeltasIdx int8 // next slot to write
 }
 
@@ -104,7 +104,7 @@ type ConvergenceCounters struct {
 // RunSummary is a brief record of a completed run for the recent-runs ring buffer.
 type RunSummary struct {
 	RunID        string
-	EnvoyID     string
+	EnvoyID      string
 	Hostname     string
 	Status       string
 	ChangedCount int64
@@ -123,17 +123,17 @@ type ConvergenceSnapshot struct {
 // and pre-computed convergence counters. Write methods mark envoys dirty for
 // async flush to SQLite.
 type FleetIndex struct {
-	mu         sync.RWMutex
-	envoys    map[string]*EnvoyState       // ID → state
-	byHostname map[string]string             // hostname → ID
-	pubkeys    map[string]ed25519.PublicKey   // ID → parsed key
-	byStatus   map[string]map[string]bool    // status → set of IDs
-	byTrait    map[string]map[string]map[string]bool // trait_key → trait_value → set of IDs
-	byTag      map[string]map[string]bool              // tag → set of IDs
-	convergence ConvergenceCounters
-	recentRuns        *ringBuffer
+	mu                 sync.RWMutex
+	envoys             map[string]*EnvoyState                // ID → state
+	byHostname         map[string]string                     // hostname → ID
+	pubkeys            map[string]ed25519.PublicKey          // ID → parsed key
+	byStatus           map[string]map[string]bool            // status → set of IDs
+	byTrait            map[string]map[string]map[string]bool // trait_key → trait_value → set of IDs
+	byTag              map[string]map[string]bool            // tag → set of IDs
+	convergence        ConvergenceCounters
+	recentRuns         *ringBuffer
 	convergenceHistory *convergenceRing // rolling 30-day daily snapshots
-	dirty             map[string]bool // IDs with pending state changes
+	dirty              map[string]bool  // IDs with pending state changes
 
 	// Wake channels — separate mutex so blocking Wake RPCs don't hold the main lock.
 	wakeMu    sync.Mutex
@@ -143,16 +143,16 @@ type FleetIndex struct {
 // NewFleetIndex creates an empty FleetIndex.
 func NewFleetIndex() *FleetIndex {
 	return &FleetIndex{
-		envoys:    make(map[string]*EnvoyState),
-		byHostname: make(map[string]string),
-		pubkeys:    make(map[string]ed25519.PublicKey),
-		byStatus:   make(map[string]map[string]bool),
-		byTrait:    make(map[string]map[string]map[string]bool),
-		byTag:      make(map[string]map[string]bool),
-		recentRuns:        newRingBuffer(5000),
+		envoys:             make(map[string]*EnvoyState),
+		byHostname:         make(map[string]string),
+		pubkeys:            make(map[string]ed25519.PublicKey),
+		byStatus:           make(map[string]map[string]bool),
+		byTrait:            make(map[string]map[string]map[string]bool),
+		byTag:              make(map[string]map[string]bool),
+		recentRuns:         newRingBuffer(5000),
 		convergenceHistory: newConvergenceRing(30),
-		dirty:             make(map[string]bool),
-		wakeChans:         make(map[string]chan struct{}),
+		dirty:              make(map[string]bool),
+		wakeChans:          make(map[string]chan struct{}),
 	}
 }
 
@@ -279,7 +279,7 @@ func (f *FleetIndex) ListByTrait(key, value string) []TargetInfo {
 
 // TargetInfo is the minimal info returned by targeting queries.
 type TargetInfo struct {
-	EnvoyID string
+	EnvoyID  string
 	Hostname string
 }
 
@@ -292,7 +292,7 @@ func (f *FleetIndex) ConvergenceSummary() ConvergenceCounters {
 
 // ConvergenceCounts returns the convergence breakdown as flat values
 // across the failure axis plus the drift axis plus reachability.
-// Satisfies the tungol.ConvergenceSource interface.
+// Satisfies the spanner.ConvergenceSource interface.
 func (f *FleetIndex) ConvergenceCounts() (total, converged, degraded, failed, noData, changed, diverged, offline int) {
 	c := f.ConvergenceSummary()
 	return c.Total, c.Converged, c.Degraded, c.Failed, c.NoData, c.Changed, c.Diverged, c.Offline

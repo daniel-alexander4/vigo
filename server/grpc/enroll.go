@@ -15,9 +15,9 @@ import (
 )
 
 // SetReassignment handles the VigoAdmin.SetReassignment RPC. This is a
-// hub→steorra internal RPC: the hub calls this on the SOURCE steorra to mark
-// an envoy for reassignment. On the envoy's next check-in, the steorra returns
-// the reassign_addr and reassign_id so the agent can reconnect to the new steorra.
+// hub→bolt internal RPC: the hub calls this on the SOURCE bolt to mark
+// an envoy for reassignment. On the envoy's next check-in, the bolt returns
+// the reassign_addr and reassign_id so the agent can reconnect to the new bolt.
 func (s *AdminService) SetReassignment(ctx context.Context, req *pb.SetReassignmentRequest) (*pb.SetReassignmentResponse, error) {
 	if req.EnvoyId == "" || req.TargetAddr == "" || req.NewEnvoyId == "" {
 		return nil, status.Error(codes.InvalidArgument, "envoy_id, target_addr, and new_envoy_id are required")
@@ -25,7 +25,7 @@ func (s *AdminService) SetReassignment(ctx context.Context, req *pb.SetReassignm
 
 	if s.reassignStore != nil {
 		s.reassignStore.Set(req.EnvoyId, ReassignInfo{
-			TargetAddr:  req.TargetAddr,
+			TargetAddr: req.TargetAddr,
 			NewEnvoyID: req.NewEnvoyId,
 		})
 		slog.Info("reassignment set",
@@ -38,11 +38,11 @@ func (s *AdminService) SetReassignment(ctx context.Context, req *pb.SetReassignm
 	return &pb.SetReassignmentResponse{}, nil
 }
 
-// EnrollEnvoy handles the VigoAdmin.EnrollEnvoy RPC. This is a hub→steorra
+// EnrollEnvoy handles the VigoAdmin.EnrollEnvoy RPC. This is a hub→bolt
 // internal RPC: the hub validates the enrollment token centrally, then calls
-// this on the target steorra to create the envoy record without re-validating
-// the token. The steorra still runs its own license gate inside
-// registry.CreateEnvoy so steorra-level node limits are enforced even on
+// this on the target bolt to create the envoy record without re-validating
+// the token. The bolt still runs its own license gate inside
+// registry.CreateEnvoy so bolt-level node limits are enforced even on
 // hub-routed enrollments.
 func (s *AdminService) EnrollEnvoy(ctx context.Context, req *pb.EnrollEnvoyRequest) (*pb.EnrollEnvoyResponse, error) {
 	hostname := req.GetHostname()

@@ -251,7 +251,7 @@ fn check_reassignment(resp: &CheckInResponse) -> Result<()> {
         info!(
             target_addr = %resp.reassign_addr,
             new_id = %resp.reassign_id,
-            "reassignment received, agent should reconnect to new steorra"
+            "reassignment received, agent should reconnect to new bolt"
         );
         anyhow::bail!(
             "reassignment to {} with new ID {}",
@@ -566,7 +566,7 @@ pub async fn run_once_with_update(
         info!(
             target_addr = %resp.reassign_addr,
             new_id = %resp.reassign_id,
-            "reassignment received, agent should reconnect to new steorra"
+            "reassignment received, agent should reconnect to new bolt"
         );
         anyhow::bail!(
             "reassignment to {} with new ID {}",

@@ -330,17 +330,17 @@ grc:
 | `push_interval` | `6h` | How often to push evidence |
 | `frameworks` | (required) | Vigo standard key → GRC platform framework ID mapping |
 
-## tungol
+## spanner
 
-Hub + steorras control-plane sharding. See [Set up Tungol](../howto/set-up-tungol.md) for the walkthrough.
+Hub + bolts control-plane sharding. See [Set up Spanner](../howto/set-up-spanner.md) for the walkthrough.
 
 ```yaml
 # Founder — the bootstrap-discovery rendezvous (Phase 2A only; Phase 3
 # retires the founder/joiner distinction). Owns a hostname-pattern partition
-# just like any other steorra.
-tungol:
+# just like any other bolt.
+spanner:
   mode: founder
-  tungol_id: "alexander4-prod"
+  spanner_id: "alexander4-prod"
   patterns: ["*.us-west.*"]
   snapshot:
     tier1_interval: 30s
@@ -350,10 +350,10 @@ tungol:
     multicast_port: 1534
   fallback_admin: local
 
-# Joiner — a steorra that joined an existing tungol via the admission ceremony.
-tungol:
+# Joiner — a bolt that joined an existing spanner via the admission ceremony.
+spanner:
   mode: joiner
-  tungol_id: "alexander4-prod"        # must match the founder's tungol_id
+  spanner_id: "alexander4-prod"        # must match the founder's spanner_id
   patterns: ["*.dc1.*"]
   transport:
     bootstrap_peers:
@@ -364,8 +364,8 @@ tungol:
 | Field | Default | Description |
 |-------|---------|-------------|
 | `mode` | `standalone` | `standalone`, `founder`, or `joiner` (per ADR-026 — replaces the retired hub/spoke role) |
-| `tungol_id` | (required when mode ≠ standalone) | Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + `-` `_` `.`, no leading dot). Must match across every steorra in the tungol; embedded in every signed announcement and admission row. |
-| `patterns` | (required when mode ≠ standalone) | Hostname glob patterns this steorra owns. First-match-wins across the tungol; loader refuses overlap with another steorra's patterns at publish time + boot time. |
+| `spanner_id` | (required when mode ≠ standalone) | Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + `-` `_` `.`, no leading dot). Must match across every bolt in the spanner; embedded in every signed announcement and admission row. |
+| `patterns` | (required when mode ≠ standalone) | Hostname glob patterns this bolt owns. First-match-wins across the spanner; loader refuses overlap with another bolt's patterns at publish time + boot time. |
 | `transport.bootstrap_peers` | (required for joiner) | Additive seed list of peer gRPC addresses for first-contact discovery. Gossip extends this list once any peer responds. |
 | `transport.multicast_group` | `224.0.0.45` | IPv4 multicast group for Tier-1 counter gossip. |
 | `transport.multicast_port` | `1534` | UDP port for Tier-1 counter gossip. |
@@ -373,17 +373,17 @@ tungol:
 | `snapshot.tier2_interval` | `5m` | Tier-2 roster-snapshot cadence. |
 | `fallback_admin` | `local` | Admin-query kill-switch: `local` (degrade gracefully) or `fanout` (best-effort fanout). |
 
-Steorras are identified by their Ed25519 pubkey (`server/steorra/identity.wrapped`), not a YAML-configured ID — the pre-Phase-2 `tungol.steorra_id` field is retired (loader hard-errors).
+Bolts are identified by their Ed25519 pubkey (`server/bolt/identity.wrapped`), not a YAML-configured ID — the pre-Phase-2 `spanner.bolt_id` field is retired (loader hard-errors).
 
-### Steorra identity (Phase 1)
+### Bolt identity (Phase 1)
 
-Each tungol-mode vigosrv generates a per-host Ed25519 keypair at `/srv/vigo/steorra/identity.wrapped` on first boot (HKDF purpose `vigo-steorra-wrap-v1`, mirrors the service-account puddle pattern). The reporter signs every `SteorraStatusReport` with this key; the hub verifies the signature against the asserted pubkey and pins `(tungol_id, steorra_id) → pubkey` on first sighting. Subsequent reports with a mismatched pubkey are rejected (`PermissionDenied`) and emit a `tungol_steorra_pubkey_mismatch` audit event.
+Each spanner-mode vigosrv generates a per-host Ed25519 keypair at `/srv/vigo/bolt/identity.wrapped` on first boot (HKDF purpose `vigo-bolt-wrap-v1`, mirrors the service-account puddle pattern). The reporter signs every `BoltStatusReport` with this key; the hub verifies the signature against the asserted pubkey and pins `(spanner_id, bolt_id) → pubkey` on first sighting. Subsequent reports with a mismatched pubkey are rejected (`PermissionDenied`) and emit a `spanner_bolt_pubkey_mismatch` audit event.
 
-Pins are in-memory only — a hub restart clears them and the next round of announcements re-pins. Pre-Phase-1 reporters (no signature/pubkey fields) are accepted without pinning to keep mixed-version rollout safe. Legitimate key rotation (regenerate `/srv/vigo/steorra/`) requires a hub restart to clear the old pin.
+Pins are in-memory only — a hub restart clears them and the next round of announcements re-pins. Pre-Phase-1 reporters (no signature/pubkey fields) are accepted without pinning to keep mixed-version rollout safe. Legitimate key rotation (regenerate `/srv/vigo/bolt/`) requires a hub restart to clear the old pin.
 
-`vigocli tungol status` shows the local steorra's first-16-char pubkey for operator cross-check against the hub's audit event payload.
+`vigocli spanner status` shows the local bolt's first-16-char pubkey for operator cross-check against the hub's audit event payload.
 
-> The old `spanner:` block name is rejected at startup with a one-line error pointing here. Operators must rename `spanner:` → `tungol:`, `spokes:` → `steorras:`, and `spoke_id:` → `steorra_id:` in one pass.
+> The old `spanner:` block name is rejected at startup with a one-line error pointing here. Operators must rename `spanner:` → `spanner:`, `spokes:` → `bolts:`, and `spoke_id:` → `bolt_id:` in one pass.
 
 ## peers
 
@@ -413,7 +413,7 @@ license:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `mode` | `local` | `local`: count nodes on this server. `aggregate`: hub sums across all steorras |
+| `mode` | `local` | `local`: count nodes on this server. `aggregate`: hub sums across all bolts |
 
 ## publish
 

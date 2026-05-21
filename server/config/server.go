@@ -64,11 +64,11 @@ func LoadServerConfig(path string, provider secrets.Provider, backend string) (*
 		return nil, err
 	}
 
-	if err := detectRetiredSpannerKey(data); err != nil {
+	if err := detectRetiredTungolKey(data); err != nil {
 		return nil, err
 	}
 
-	if err := detectRetiredTungolKeys(data); err != nil {
+	if err := detectRetiredSpannerKeys(data); err != nil {
 		return nil, err
 	}
 
@@ -173,68 +173,68 @@ func isBoolScalar(v any) bool {
 	return ok
 }
 
-// detectRetiredSpannerKey rejects server.yaml that still uses the top-level
-// `spanner:` key. The federation subsystem was renamed to `tungol:` and the
-// `spokes:` / `spoke_id:` sub-keys to `steorras:` / `steorra_id:` in the
+// detectRetiredTungolKey rejects server.yaml that still uses the top-level
+// `tungol:` key. The federation subsystem was renamed back to `spanner:` and
+// the `steorras:` / `steorra_id:` sub-keys to `bolts:` / `bolt_id:` in the
 // same cutover; the operator must rename the block in one pass. No
 // translation, no shim — point at the migration target and refuse to start.
-func detectRetiredSpannerKey(data []byte) error {
+func detectRetiredTungolKey(data []byte) error {
 	var raw struct {
-		Spanner any `yaml:"spanner"`
+		Tungol any `yaml:"tungol"`
 	}
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil
 	}
-	if raw.Spanner == nil {
+	if raw.Tungol == nil {
 		return nil
 	}
-	return fmt.Errorf("server.yaml uses retired `spanner:` key — rename the entire block to `tungol:` and rename the sub-keys `spokes:` → `steorras:` and `spoke_id:` → `steorra_id:` in one pass (no translation layer is provided)")
+	return fmt.Errorf("server.yaml uses retired `tungol:` key — rename the entire block to `spanner:` and rename the sub-keys `steorras:` → `bolts:` and `steorra_id:` → `bolt_id:` in one pass (no translation layer is provided)")
 }
 
-// detectRetiredTungolKeys rejects server.yaml that still uses the
-// pre-Phase-2 hub/spoke field shape inside tungol:. The peer-equal
-// admissions model in ADR-026 retired role/steorra_id/hub_addr/
-// hub_fallback_addrs/steorras/auto_failover and replaced them with
+// detectRetiredSpannerKeys rejects server.yaml that still uses the
+// pre-Phase-2 hub/spoke field shape inside spanner:. The peer-equal
+// admissions model in ADR-026 retired role/bolt_id/hub_addr/
+// hub_fallback_addrs/bolts/auto_failover and replaced them with
 // mode/patterns/transport/snapshot/freshness/fallback_admin. No
 // translation layer — point at each retired key's replacement and
 // refuse to start.
-func detectRetiredTungolKeys(data []byte) error {
+func detectRetiredSpannerKeys(data []byte) error {
 	var raw struct {
-		Tungol struct {
+		Spanner struct {
 			Role             any `yaml:"role"`
-			SteorraID        any `yaml:"steorra_id"`
+			BoltID           any `yaml:"bolt_id"`
 			HubAddr          any `yaml:"hub_addr"`
 			HubFallbackAddrs any `yaml:"hub_fallback_addrs"`
-			Steorras         any `yaml:"steorras"`
+			Bolts            any `yaml:"bolts"`
 			AutoFailover     any `yaml:"auto_failover"`
-		} `yaml:"tungol"`
+		} `yaml:"spanner"`
 	}
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil
 	}
 	var retired []string
-	if raw.Tungol.Role != nil {
-		retired = append(retired, "tungol.role — replaced by tungol.mode (values: standalone | founder | joiner)")
+	if raw.Spanner.Role != nil {
+		retired = append(retired, "spanner.role — replaced by spanner.mode (values: standalone | founder | joiner)")
 	}
-	if raw.Tungol.SteorraID != nil {
-		retired = append(retired, "tungol.steorra_id — retired; steorras are identified by their Ed25519 pubkey (server/steorra/), not a YAML-configured string")
+	if raw.Spanner.BoltID != nil {
+		retired = append(retired, "spanner.bolt_id — retired; bolts are identified by their Ed25519 pubkey (server/bolt/), not a YAML-configured string")
 	}
-	if raw.Tungol.HubAddr != nil {
-		retired = append(retired, "tungol.hub_addr — replaced by tungol.transport.bootstrap_peers (additive seed list for first-contact discovery)")
+	if raw.Spanner.HubAddr != nil {
+		retired = append(retired, "spanner.hub_addr — replaced by spanner.transport.bootstrap_peers (additive seed list for first-contact discovery)")
 	}
-	if raw.Tungol.HubFallbackAddrs != nil {
-		retired = append(retired, "tungol.hub_fallback_addrs — fold into tungol.transport.bootstrap_peers (additive seed list; gossip discovers the rest)")
+	if raw.Spanner.HubFallbackAddrs != nil {
+		retired = append(retired, "spanner.hub_fallback_addrs — fold into spanner.transport.bootstrap_peers (additive seed list; gossip discovers the rest)")
 	}
-	if raw.Tungol.Steorras != nil {
-		retired = append(retired, "tungol.steorras — retired; per-steorra patterns + identity live in the gossiped admissions CRDT, not in server.yaml. Each vigosrv declares its own patterns via tungol.patterns")
+	if raw.Spanner.Bolts != nil {
+		retired = append(retired, "spanner.bolts — retired; per-bolt patterns + identity live in the gossiped admissions CRDT, not in server.yaml. Each vigosrv declares its own patterns via spanner.patterns")
 	}
-	if raw.Tungol.AutoFailover != nil {
-		retired = append(retired, "tungol.auto_failover — retired; failover is implicit in CRDT gossip + freshness thresholds (tungol.freshness.stale_after)")
+	if raw.Spanner.AutoFailover != nil {
+		retired = append(retired, "spanner.auto_failover — retired; failover is implicit in CRDT gossip + freshness thresholds (spanner.freshness.stale_after)")
 	}
 	if len(retired) == 0 {
 		return nil
 	}
-	return fmt.Errorf("server.yaml uses retired tungol shape (per ADR-026 Phase 2 peer-equal admissions):\n  - %s",
+	return fmt.Errorf("server.yaml uses retired spanner shape (per ADR-026 Phase 2 peer-equal admissions):\n  - %s",
 		strings.Join(retired, "\n  - "))
 }
 

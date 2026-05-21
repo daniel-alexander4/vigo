@@ -127,7 +127,7 @@ Displays:
 - **Envoy ID** -- the UUID assigned during registration, or `(not registered)` if the agent has not enrolled
 
 - **Server** -- the gRPC address the agent connects to
-- **Steorra** -- the steorra address if the agent was routed by a tungol hub
+- **Bolt** -- the bolt address if the agent was routed by a spanner hub
 - **Fallback servers** -- configured failover server addresses
 - **Data directory** -- path to the agent's config and key material
 - **State store** -- path to the LMDB state directory

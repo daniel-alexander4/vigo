@@ -33,6 +33,7 @@ import (
 	"git.alexander4.io/vigo/server/api"
 	"git.alexander4.io/vigo/server/audit"
 	vigoauth "git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/bolt"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
@@ -41,7 +42,6 @@ import (
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/secrets"
-	"git.alexander4.io/vigo/server/steorra"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/traits"
 	"git.alexander4.io/vigo/ui"
@@ -510,7 +510,6 @@ func buildPeerTLS(certFile, keyFile, caFile string) (*tls.Config, error) {
 	}, nil
 }
 
-
 // cveSearchAdapter adapts *api.CVEHandler to ui.CVESearcher.
 type cveSearchAdapter struct {
 	handler *api.CVEHandler
@@ -685,11 +684,11 @@ func parseLivenessTTL(s string) time.Duration {
 // regardless of order or duplicates. Used by the publish hook to decide
 // whether a subsystem's authorization patterns materially changed across
 // a reload.
-// formatLocalSteorraPubkey returns the first-16-char hex of the
-// loaded steorra identity's raw 32-byte pubkey, or "" if no
-// identity is loaded. Surfaced in /api/v1/tungol/status as
-// `local_steorra_pubkey` for operator cross-check on alarms.
-func formatLocalSteorraPubkey(id *steorra.Identity) string {
+// formatLocalBoltPubkey returns the first-16-char hex of the
+// loaded bolt identity's raw 32-byte pubkey, or "" if no
+// identity is loaded. Surfaced in /api/v1/spanner/status as
+// `local_bolt_pubkey` for operator cross-check on alarms.
+func formatLocalBoltPubkey(id *bolt.Identity) string {
 	if id == nil {
 		return ""
 	}
@@ -706,12 +705,12 @@ func formatLocalSteorraPubkey(id *steorra.Identity) string {
 	return string(hexStr)
 }
 
-// steorraSigningKeyOrNil returns the steorra identity's signing key
-// or nil when the identity wasn't loaded (non-tungol mode, or
+// boltSigningKeyOrNil returns the bolt identity's signing key
+// or nil when the identity wasn't loaded (non-spanner mode, or
 // non-local secrets backend). nil propagates through to
-// tungol.NewReporter, which produces legacy unsigned reports —
+// spanner.NewReporter, which produces legacy unsigned reports —
 // hubs accept those without pinning during mixed-version rollout.
-func steorraSigningKeyOrNil(id *steorra.Identity) ed25519.PrivateKey {
+func boltSigningKeyOrNil(id *bolt.Identity) ed25519.PrivateKey {
 	if id == nil {
 		return nil
 	}
@@ -724,7 +723,7 @@ func steorraSigningKeyOrNil(id *steorra.Identity) ed25519.PrivateKey {
 // and matching on handle == "stockpile". Returns ("", false) when
 // no stockpile project state exists locally — startup uses this
 // to skip the watcher until the operator runs
-// `vigocli tungol stockpile init`.
+// `vigocli spanner stockpile init`.
 func lookupStockpileProjectID(opsPuddleDir string) (string, bool) {
 	gitbackDir := filepath.Join(opsPuddleDir, ".vigo-gitback")
 	entries, err := os.ReadDir(gitbackDir)
@@ -858,4 +857,3 @@ func jsonStringArray(xs []string) string {
 	}
 	return string(b)
 }
-

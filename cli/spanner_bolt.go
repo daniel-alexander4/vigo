@@ -11,122 +11,122 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// tungolSteorraCmd is the per-steorra noun group under `vigocli tungol`.
+// spannerBoltCmd is the per-bolt noun group under `vigocli spanner`.
 // Hosts the listing, inspection, drain, reassign, and membership verbs.
-var tungolSteorraCmd = &cobra.Command{
-	Use:   "steorra",
-	Short: "Operate on individual steorras",
-	Long: `Verbs that target a single steorra — listing, inspecting, draining,
+var spannerBoltCmd = &cobra.Command{
+	Use:   "bolt",
+	Short: "Operate on individual bolts",
+	Long: `Verbs that target a single bolt — listing, inspecting, draining,
 reassigning envoys, and managing membership. The bare command (no verb)
 prints this help, per ADR-Phase-0 design — it does NOT default to 'list'.`,
 }
 
-var tungolSteorraListCmd = &cobra.Command{
+var spannerBoltListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all registered steorras with status, latency, and envoy counts",
-	RunE:  runTungolSteorraList,
+	Short: "List all registered bolts with status, latency, and envoy counts",
+	RunE:  runSpannerBoltList,
 }
 
-var tungolSteorraShowCmd = &cobra.Command{
-	Use:   "show <steorra-id>",
-	Short: "Show a steorra's compliance breakdown, envoy count, and recent activity",
+var spannerBoltShowCmd = &cobra.Command{
+	Use:   "show <bolt-id>",
+	Short: "Show a bolt's compliance breakdown, envoy count, and recent activity",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runTungolSteorraShow,
+	RunE:  runSpannerBoltShow,
 }
 
-var tungolSteorraEnvoysCmd = &cobra.Command{
-	Use:   "envoys <steorra-id>",
-	Short: "List all envoys managed by a specific steorra",
+var spannerBoltEnvoysCmd = &cobra.Command{
+	Use:   "envoys <bolt-id>",
+	Short: "List all envoys managed by a specific bolt",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runTungolSteorraEnvoys,
+	RunE:  runSpannerBoltEnvoys,
 }
 
-var tungolSteorraRunsCmd = &cobra.Command{
-	Use:   "runs <steorra-id>",
-	Short: "List recent convergence runs on a specific steorra",
+var spannerBoltRunsCmd = &cobra.Command{
+	Use:   "runs <bolt-id>",
+	Short: "List recent convergence runs on a specific bolt",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runTungolSteorraRuns,
+	RunE:  runSpannerBoltRuns,
 }
 
-var tungolSteorraPushCmd = &cobra.Command{
-	Use:   "push <steorra-id>",
-	Short: "Trigger immediate check-in for all envoys on a specific steorra",
+var spannerBoltPushCmd = &cobra.Command{
+	Use:   "push <bolt-id>",
+	Short: "Trigger immediate check-in for all envoys on a specific bolt",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runTungolSteorraPush,
+	RunE:  runSpannerBoltPush,
 }
 
-var tungolSteorraReassignCmd = &cobra.Command{
+var spannerBoltReassignCmd = &cobra.Command{
 	Use:   "reassign <envoy-id>",
-	Short: "Move an envoy to a different steorra without re-enrollment",
+	Short: "Move an envoy to a different bolt without re-enrollment",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runTungolSteorraReassign,
+	RunE:  runSpannerBoltReassign,
 }
 
-var tungolSteorraDrainCmd = &cobra.Command{
-	Use:   "drain <steorra-id>",
-	Short: "Migrate all envoys off a steorra to prepare it for maintenance or decommission",
+var spannerBoltDrainCmd = &cobra.Command{
+	Use:   "drain <bolt-id>",
+	Short: "Migrate all envoys off a bolt to prepare it for maintenance or decommission",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runTungolSteorraDrain,
+	RunE:  runSpannerBoltDrain,
 }
 
-var tungolSteorraAddCmd = &cobra.Command{
-	Use:   "add <steorra-id>",
-	Short: "Register a new steorra with the tungol and generate a sample server.yaml for it",
-	Long: `Adds a steorra entry to the hub's server.yaml and generates a sample
-server.yaml for the new steorra pre-filled with its ID, hub address,
-and hostname patterns. The new steorra's Vigo server is deployed
+var spannerBoltAddCmd = &cobra.Command{
+	Use:   "add <bolt-id>",
+	Short: "Register a new bolt with the spanner and generate a sample server.yaml for it",
+	Long: `Adds a bolt entry to the hub's server.yaml and generates a sample
+server.yaml for the new bolt pre-filled with its ID, hub address,
+and hostname patterns. The new bolt's Vigo server is deployed
 separately (Docker Compose); this command only configures the hub
 to recognize it.`,
 	Args: cobra.ExactArgs(1),
-	RunE: runTungolSteorraAdd,
+	RunE: runSpannerBoltAdd,
 }
 
-var tungolSteorraRemoveCmd = &cobra.Command{
-	Use:   "remove <steorra-id>",
-	Short: "Drain and remove a steorra from the tungol configuration",
-	Long: `Drains all envoys from the steorra (reassigning to other steorras by
-pattern), then removes the steorra entry from the hub's server.yaml.`,
+var spannerBoltRemoveCmd = &cobra.Command{
+	Use:   "remove <bolt-id>",
+	Short: "Drain and remove a bolt from the spanner configuration",
+	Long: `Drains all envoys from the bolt (reassigning to other bolts by
+pattern), then removes the bolt entry from the hub's server.yaml.`,
 	Args: cobra.ExactArgs(1),
-	RunE: runTungolSteorraRemove,
+	RunE: runSpannerBoltRemove,
 }
 
 func init() {
-	tungolSteorraPushCmd.Flags().String("envoy-id", "", "Target a specific envoy by ID")
+	spannerBoltPushCmd.Flags().String("envoy-id", "", "Target a specific envoy by ID")
 
-	tungolSteorraReassignCmd.Flags().String("from", "", "Source steorra ID")
-	tungolSteorraReassignCmd.Flags().String("to", "", "Target steorra ID")
-	tungolSteorraReassignCmd.MarkFlagRequired("from")
-	tungolSteorraReassignCmd.MarkFlagRequired("to")
+	spannerBoltReassignCmd.Flags().String("from", "", "Source bolt ID")
+	spannerBoltReassignCmd.Flags().String("to", "", "Target bolt ID")
+	spannerBoltReassignCmd.MarkFlagRequired("from")
+	spannerBoltReassignCmd.MarkFlagRequired("to")
 
-	tungolSteorraDrainCmd.Flags().String("to", "", "Target steorra ID (optional, auto-route by pattern if empty)")
+	spannerBoltDrainCmd.Flags().String("to", "", "Target bolt ID (optional, auto-route by pattern if empty)")
 
-	tungolSteorraAddCmd.Flags().String("addr", "", "Steorra gRPC address (host:port)")
-	tungolSteorraAddCmd.Flags().StringSlice("patterns", nil, "Hostname glob patterns routed to this steorra")
-	tungolSteorraAddCmd.Flags().String("output", "", "Write sample steorra server.yaml to this path (default: stdout)")
-	tungolSteorraAddCmd.MarkFlagRequired("addr")
-	tungolSteorraAddCmd.MarkFlagRequired("patterns")
+	spannerBoltAddCmd.Flags().String("addr", "", "Bolt gRPC address (host:port)")
+	spannerBoltAddCmd.Flags().StringSlice("patterns", nil, "Hostname glob patterns routed to this bolt")
+	spannerBoltAddCmd.Flags().String("output", "", "Write sample bolt server.yaml to this path (default: stdout)")
+	spannerBoltAddCmd.MarkFlagRequired("addr")
+	spannerBoltAddCmd.MarkFlagRequired("patterns")
 
-	tungolSteorraCmd.AddCommand(tungolSteorraListCmd)
-	tungolSteorraCmd.AddCommand(tungolSteorraShowCmd)
-	tungolSteorraCmd.AddCommand(tungolSteorraEnvoysCmd)
-	tungolSteorraCmd.AddCommand(tungolSteorraRunsCmd)
-	tungolSteorraCmd.AddCommand(tungolSteorraPushCmd)
-	tungolSteorraCmd.AddCommand(tungolSteorraReassignCmd)
-	tungolSteorraCmd.AddCommand(tungolSteorraDrainCmd)
-	tungolSteorraCmd.AddCommand(tungolSteorraAddCmd)
-	tungolSteorraCmd.AddCommand(tungolSteorraRemoveCmd)
+	spannerBoltCmd.AddCommand(spannerBoltListCmd)
+	spannerBoltCmd.AddCommand(spannerBoltShowCmd)
+	spannerBoltCmd.AddCommand(spannerBoltEnvoysCmd)
+	spannerBoltCmd.AddCommand(spannerBoltRunsCmd)
+	spannerBoltCmd.AddCommand(spannerBoltPushCmd)
+	spannerBoltCmd.AddCommand(spannerBoltReassignCmd)
+	spannerBoltCmd.AddCommand(spannerBoltDrainCmd)
+	spannerBoltCmd.AddCommand(spannerBoltAddCmd)
+	spannerBoltCmd.AddCommand(spannerBoltRemoveCmd)
 }
 
-func runTungolSteorraAdd(cmd *cobra.Command, args []string) error {
-	steorraID := args[0]
+func runSpannerBoltAdd(cmd *cobra.Command, args []string) error {
+	boltID := args[0]
 	addr, _ := cmd.Flags().GetString("addr")
 	patterns, _ := cmd.Flags().GetStringSlice("patterns")
 	output, _ := cmd.Flags().GetString("output")
 
-	// Generate sample server.yaml for the new steorra.
-	sample := fmt.Sprintf(`# Vigo Server Configuration — Steorra: %s
-# Generated by: vigocli tungol steorra add
-# Deploy this file as server.yaml on the new steorra's server.
+	// Generate sample server.yaml for the new bolt.
+	sample := fmt.Sprintf(`# Vigo Server Configuration — Bolt: %s
+# Generated by: vigocli spanner bolt add
+# Deploy this file as server.yaml on the new bolt's server.
 
 server:
   grpc_listen: ":1530"
@@ -140,9 +140,9 @@ server:
 database:
   dsn: "vigo.db"
 
-tungol:
+spanner:
   role: spoke
-  steorra_id: "%s"
+  bolt_id: "%s"
   hub_addr: "%s"
 
 checkin:
@@ -150,13 +150,13 @@ checkin:
 
 secrets:
   backend: local
-`, steorraID, steorraID, addr)
+`, boltID, boltID, addr)
 
 	client := newAPIClient()
 	var status struct {
 		Role string `json:"role"`
 	}
-	if err := client.get("/api/v1/tungol/status", &status); err != nil {
+	if err := client.get("/api/v1/spanner/status", &status); err != nil {
 		return fmt.Errorf("cannot reach hub: %w", err)
 	}
 	if status.Role != "hub" {
@@ -167,18 +167,18 @@ secrets:
 		if err := os.WriteFile(output, []byte(sample), 0644); err != nil {
 			return fmt.Errorf("writing sample config: %w", err)
 		}
-		fmt.Printf("  Sample steorra config written to %s\n", output)
+		fmt.Printf("  Sample bolt config written to %s\n", output)
 	} else {
-		fmt.Println("  --- Sample steorra server.yaml ---")
+		fmt.Println("  --- Sample bolt server.yaml ---")
 		fmt.Print(sample)
 		fmt.Println("  --------------------------------")
 	}
 
 	fmt.Println()
-	fmt.Printf("  Add this steorra entry to your hub's server.yaml:\n\n")
-	fmt.Printf("    tungol:\n")
-	fmt.Printf("      steorras:\n")
-	fmt.Printf("        - id: %q\n", steorraID)
+	fmt.Printf("  Add this bolt entry to your hub's server.yaml:\n\n")
+	fmt.Printf("    spanner:\n")
+	fmt.Printf("      bolts:\n")
+	fmt.Printf("        - id: %q\n", boltID)
 	fmt.Printf("          addr: %q\n", addr)
 	fmt.Printf("          patterns: [%s]\n", quotePatterns(patterns))
 	fmt.Println()
@@ -187,10 +187,10 @@ secrets:
 	return nil
 }
 
-func runTungolSteorraRemove(cmd *cobra.Command, args []string) error {
-	steorraID := args[0]
+func runSpannerBoltRemove(cmd *cobra.Command, args []string) error {
+	boltID := args[0]
 
-	if !confirmAction(fmt.Sprintf("Remove steorra %q? This will drain all envoys first.", steorraID)) {
+	if !confirmAction(fmt.Sprintf("Remove bolt %q? This will drain all envoys first.", boltID)) {
 		fmt.Println("Cancelled.")
 		return nil
 	}
@@ -202,19 +202,19 @@ func runTungolSteorraRemove(cmd *cobra.Command, args []string) error {
 		Failed int32    `json:"Failed"`
 		Errors []string `json:"Errors"`
 	}
-	if err := client.post("/api/v1/tungol/steorras/"+steorraID+"/drain", map[string]string{}, &drainResp); err != nil {
+	if err := client.post("/api/v1/spanner/bolts/"+boltID+"/drain", map[string]string{}, &drainResp); err != nil {
 		return fmt.Errorf("drain failed: %w", err)
 	}
 
-	fmt.Printf("  Steorra %s drained: %d moved, %d failed.\n", steorraID, drainResp.Moved, drainResp.Failed)
+	fmt.Printf("  Bolt %s drained: %d moved, %d failed.\n", boltID, drainResp.Moved, drainResp.Failed)
 	for _, e := range drainResp.Errors {
 		fmt.Printf("  %s %s\n", red("Error:"), e)
 	}
 
 	fmt.Println()
-	fmt.Printf("  Remove the steorra entry from your hub's server.yaml:\n\n")
-	fmt.Printf("    # Remove from tungol.steorras:\n")
-	fmt.Printf("    #   - id: %q\n", steorraID)
+	fmt.Printf("  Remove the bolt entry from your hub's server.yaml:\n\n")
+	fmt.Printf("    # Remove from spanner.bolts:\n")
+	fmt.Printf("    #   - id: %q\n", boltID)
 	fmt.Println()
 	fmt.Println("  Then restart the hub to apply the change.")
 
@@ -229,11 +229,11 @@ func quotePatterns(patterns []string) string {
 	return strings.Join(quoted, ", ")
 }
 
-func runTungolSteorraList(cmd *cobra.Command, args []string) error {
+func runSpannerBoltList(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 
 	var resp struct {
-		Steorras []struct {
+		Bolts []struct {
 			ID             string   `json:"id"`
 			Addr           string   `json:"addr"`
 			Patterns       []string `json:"patterns"`
@@ -241,21 +241,21 @@ func runTungolSteorraList(cmd *cobra.Command, args []string) error {
 			EnvoyCount     int32    `json:"envoy_count"`
 			ConvergencePct float32  `json:"compliance_pct"`
 			LatencyMs      int64    `json:"latency_ms"`
-		} `json:"steorras"`
+		} `json:"bolts"`
 	}
 
-	if err := client.get("/api/v1/tungol/status", &resp); err != nil {
+	if err := client.get("/api/v1/spanner/status", &resp); err != nil {
 		return fmt.Errorf("cannot reach server: %w", err)
 	}
 
-	if len(resp.Steorras) == 0 {
-		fmt.Println("  No steorras configured.")
+	if len(resp.Bolts) == 0 {
+		fmt.Println("  No bolts configured.")
 		return nil
 	}
 
 	w := newAlignedTable(os.Stdout)
 	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("ADDRESS"), header("ENVOYS"), header("COMPLIANCE"), header("LATENCY"), header("STATUS"))
-	for _, s := range resp.Steorras {
+	for _, s := range resp.Bolts {
 		status := colorStatus("healthy")
 		if !s.Healthy {
 			status = colorStatus("unreachable")
@@ -267,9 +267,9 @@ func runTungolSteorraList(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runTungolSteorraShow(cmd *cobra.Command, args []string) error {
+func runSpannerBoltShow(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
-	steorraID := args[0]
+	boltID := args[0]
 
 	var resp struct {
 		ID             string   `json:"id"`
@@ -288,8 +288,8 @@ func runTungolSteorraShow(cmd *cobra.Command, args []string) error {
 		Error          string   `json:"error"`
 	}
 
-	if err := client.get("/api/v1/tungol/steorras/"+steorraID, &resp); err != nil {
-		return fmt.Errorf("steorra %q not found or unreachable: %w", steorraID, err)
+	if err := client.get("/api/v1/spanner/bolts/"+boltID, &resp); err != nil {
+		return fmt.Errorf("bolt %q not found or unreachable: %w", boltID, err)
 	}
 
 	status := colorStatus("healthy")
@@ -297,7 +297,7 @@ func runTungolSteorraShow(cmd *cobra.Command, args []string) error {
 		status = colorStatus("unreachable")
 	}
 
-	fmt.Printf("  Steorra: %s\n", bold(resp.ID))
+	fmt.Printf("  Bolt: %s\n", bold(resp.ID))
 	fmt.Printf("  Address: %s\n", resp.Addr)
 	fmt.Printf("  Status: %s\n", status)
 	fmt.Printf("  Latency: %dms\n", resp.LatencyMs)
@@ -319,9 +319,9 @@ func runTungolSteorraShow(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runTungolSteorraEnvoys(cmd *cobra.Command, args []string) error {
+func runSpannerBoltEnvoys(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
-	steorraID := args[0]
+	boltID := args[0]
 
 	var resp struct {
 		Envoys []struct {
@@ -333,12 +333,12 @@ func runTungolSteorraEnvoys(cmd *cobra.Command, args []string) error {
 		} `json:"envoys"`
 	}
 
-	if err := client.get("/api/v1/tungol/steorras/"+steorraID+"/envoys", &resp); err != nil {
-		return fmt.Errorf("cannot list envoys for steorra %q: %w", steorraID, err)
+	if err := client.get("/api/v1/spanner/bolts/"+boltID+"/envoys", &resp); err != nil {
+		return fmt.Errorf("cannot list envoys for bolt %q: %w", boltID, err)
 	}
 
 	if len(resp.Envoys) == 0 {
-		fmt.Printf("  No envoys on steorra %s.\n", steorraID)
+		fmt.Printf("  No envoys on bolt %s.\n", boltID)
 		return nil
 	}
 
@@ -355,9 +355,9 @@ func runTungolSteorraEnvoys(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runTungolSteorraRuns(cmd *cobra.Command, args []string) error {
+func runSpannerBoltRuns(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
-	steorraID := args[0]
+	boltID := args[0]
 
 	var resp struct {
 		Runs []struct {
@@ -371,12 +371,12 @@ func runTungolSteorraRuns(cmd *cobra.Command, args []string) error {
 		} `json:"runs"`
 	}
 
-	if err := client.get("/api/v1/tungol/steorras/"+steorraID+"/runs", &resp); err != nil {
-		return fmt.Errorf("cannot list runs for steorra %q: %w", steorraID, err)
+	if err := client.get("/api/v1/spanner/bolts/"+boltID+"/runs", &resp); err != nil {
+		return fmt.Errorf("cannot list runs for bolt %q: %w", boltID, err)
 	}
 
 	if len(resp.Runs) == 0 {
-		fmt.Printf("  No runs on steorra %s.\n", steorraID)
+		fmt.Printf("  No runs on bolt %s.\n", boltID)
 		return nil
 	}
 
@@ -390,9 +390,9 @@ func runTungolSteorraRuns(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runTungolSteorraPush(cmd *cobra.Command, args []string) error {
+func runSpannerBoltPush(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
-	steorraID := args[0]
+	boltID := args[0]
 
 	envoyID, _ := cmd.Flags().GetString("envoy-id")
 
@@ -405,24 +405,24 @@ func runTungolSteorraPush(cmd *cobra.Command, args []string) error {
 		body["envoy_id"] = envoyID
 	}
 
-	if err := client.post("/api/v1/tungol/steorras/"+steorraID+"/push", body, &resp); err != nil {
-		return fmt.Errorf("cannot push to steorra %q: %w", steorraID, err)
+	if err := client.post("/api/v1/spanner/bolts/"+boltID+"/push", body, &resp); err != nil {
+		return fmt.Errorf("cannot push to bolt %q: %w", boltID, err)
 	}
 
-	fmt.Printf("  Force push sent to steorra %s: %d envoys notified.\n", steorraID, resp.EnvoysNotified)
+	fmt.Printf("  Force push sent to bolt %s: %d envoys notified.\n", boltID, resp.EnvoysNotified)
 	return nil
 }
 
-func runTungolSteorraReassign(cmd *cobra.Command, args []string) error {
-	if !confirmAction("Reassign this envoy to a different steorra?") {
+func runSpannerBoltReassign(cmd *cobra.Command, args []string) error {
+	if !confirmAction("Reassign this envoy to a different bolt?") {
 		fmt.Println("Cancelled.")
 		return nil
 	}
 
 	client := newAPIClient()
 	envoyID := args[0]
-	fromSteorra, _ := cmd.Flags().GetString("from")
-	toSteorra, _ := cmd.Flags().GetString("to")
+	fromBolt, _ := cmd.Flags().GetString("from")
+	toBolt, _ := cmd.Flags().GetString("to")
 
 	var resp struct {
 		NewEnvoyID string `json:"NewEnvoyID"`
@@ -430,12 +430,12 @@ func runTungolSteorraReassign(cmd *cobra.Command, args []string) error {
 	}
 
 	body := map[string]string{
-		"envoy_id":        envoyID,
-		"from_steorra_id": fromSteorra,
-		"to_steorra_id":   toSteorra,
+		"envoy_id":     envoyID,
+		"from_bolt_id": fromBolt,
+		"to_bolt_id":   toBolt,
 	}
 
-	if err := client.post("/api/v1/tungol/reassign", body, &resp); err != nil {
+	if err := client.post("/api/v1/spanner/reassign", body, &resp); err != nil {
 		return fmt.Errorf("reassign failed: %w", err)
 	}
 
@@ -447,15 +447,15 @@ func runTungolSteorraReassign(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runTungolSteorraDrain(cmd *cobra.Command, args []string) error {
-	if !confirmAction("Drain all envoys from this steorra? They will be migrated to other steorras.") {
+func runSpannerBoltDrain(cmd *cobra.Command, args []string) error {
+	if !confirmAction("Drain all envoys from this bolt? They will be migrated to other bolts.") {
 		fmt.Println("Cancelled.")
 		return nil
 	}
 
 	client := newAPIClient()
-	steorraID := args[0]
-	toSteorra, _ := cmd.Flags().GetString("to")
+	boltID := args[0]
+	toBolt, _ := cmd.Flags().GetString("to")
 
 	var resp struct {
 		Moved  int32    `json:"Moved"`
@@ -464,15 +464,15 @@ func runTungolSteorraDrain(cmd *cobra.Command, args []string) error {
 	}
 
 	body := map[string]string{}
-	if toSteorra != "" {
-		body["target_steorra_id"] = toSteorra
+	if toBolt != "" {
+		body["target_bolt_id"] = toBolt
 	}
 
-	if err := client.post("/api/v1/tungol/steorras/"+steorraID+"/drain", body, &resp); err != nil {
+	if err := client.post("/api/v1/spanner/bolts/"+boltID+"/drain", body, &resp); err != nil {
 		return fmt.Errorf("drain failed: %w", err)
 	}
 
-	fmt.Printf("  Steorra %s drained: %d moved, %d failed.\n", steorraID, resp.Moved, resp.Failed)
+	fmt.Printf("  Bolt %s drained: %d moved, %d failed.\n", boltID, resp.Moved, resp.Failed)
 
 	for _, e := range resp.Errors {
 		fmt.Printf("  %s %s\n", red("Error:"), e)

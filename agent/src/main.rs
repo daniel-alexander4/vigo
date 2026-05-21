@@ -534,9 +534,9 @@ fn save_envoy_id(data_dir: &std::path::Path, id: &str) -> Result<()> {
     Ok(())
 }
 
-/// Save steorra address to <data-dir>/steorra.addr.
-fn save_steorra_addr(data_dir: &std::path::Path, addr: &str) -> Result<()> {
-    let path = data_dir.join("steorra.addr");
+/// Save bolt address to <data-dir>/bolt.addr.
+fn save_bolt_addr(data_dir: &std::path::Path, addr: &str) -> Result<()> {
+    let path = data_dir.join("bolt.addr");
     if addr.is_empty() {
         let _ = std::fs::remove_file(&path);
         return Ok(());
@@ -545,9 +545,9 @@ fn save_steorra_addr(data_dir: &std::path::Path, addr: &str) -> Result<()> {
     Ok(())
 }
 
-/// Load steorra address. Returns empty string if not set.
-fn load_steorra_addr(data_dir: &std::path::Path) -> String {
-    let path = data_dir.join("steorra.addr");
+/// Load bolt address. Returns empty string if not set.
+fn load_bolt_addr(data_dir: &std::path::Path) -> String {
+    let path = data_dir.join("bolt.addr");
     std::fs::read_to_string(path)
         .map(|s| s.trim().to_string())
         .unwrap_or_default()
@@ -641,14 +641,14 @@ async fn run_once(
 
     let (ca, cert, key) = resolve_tls_paths(cli, &cli.data_dir);
 
-    // Use steorra address if the receiving steorra routed us elsewhere.
+    // Use bolt address if the receiving bolt routed us elsewhere.
     let addr = {
-        let steorra = load_steorra_addr(&cli.data_dir);
-        if steorra.is_empty() {
+        let bolt = load_bolt_addr(&cli.data_dir);
+        if bolt.is_empty() {
             cli.server.clone()
         } else {
-            info!(steorra_addr = %steorra, "using steorra address from enrollment routing");
-            steorra
+            info!(bolt_addr = %bolt, "using bolt address from enrollment routing");
+            bolt
         }
     };
 
@@ -1049,14 +1049,14 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     let envoy_id = load_envoy_id(&cli.data_dir)?;
     let (ca, cert, key) = resolve_tls_paths(cli, &cli.data_dir);
 
-    // Use steorra address if the receiving steorra routed us elsewhere.
+    // Use bolt address if the receiving bolt routed us elsewhere.
     let addr = {
-        let steorra = load_steorra_addr(&cli.data_dir);
-        if steorra.is_empty() {
+        let bolt = load_bolt_addr(&cli.data_dir);
+        if bolt.is_empty() {
             cli.server.clone()
         } else {
-            info!(steorra_addr = %steorra, "using steorra address from enrollment routing");
-            steorra
+            info!(bolt_addr = %bolt, "using bolt address from enrollment routing");
+            bolt
         }
     };
 
@@ -1471,16 +1471,16 @@ fn run_status(cli: &Cli) -> Result<()> {
         fallbacks.join(", ")
     };
 
-    // Steorra address.
-    let steorra = load_steorra_addr(&cli.data_dir);
+    // Bolt address.
+    let bolt = load_bolt_addr(&cli.data_dir);
 
     let data_dir = cli.data_dir.display();
     let state_dir = platform::paths::default_state_dir();
 
     println!("Envoy ID:        {}", envoy_id);
     println!("Server:           {}", server);
-    if !steorra.is_empty() {
-        println!("Steorra:          {}", steorra);
+    if !bolt.is_empty() {
+        println!("Bolt:          {}", bolt);
     }
     println!("Fallback servers: {}", fallback_str);
     println!("Data directory:   {}", data_dir);
@@ -1737,9 +1737,9 @@ async fn async_main() -> Result<()> {
                 info!("stored server bundle-signing public key");
             }
 
-            if !resp.steorra_addr.is_empty() {
-                save_steorra_addr(&cli.data_dir, &resp.steorra_addr)?;
-                info!(steorra_addr = %resp.steorra_addr, "tungol routed to steorra");
+            if !resp.bolt_addr.is_empty() {
+                save_bolt_addr(&cli.data_dir, &resp.bolt_addr)?;
+                info!(bolt_addr = %resp.bolt_addr, "spanner routed to bolt");
             }
 
             // Persist fallback servers for agent failover.

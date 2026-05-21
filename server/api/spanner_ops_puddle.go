@@ -17,7 +17,7 @@ import (
 	"git.alexander4.io/vigo/server/secrets"
 )
 
-// TungolOpsPuddleHandler serves the ops-puddle pair-claim endpoint
+// SpannerOpsPuddleHandler serves the ops-puddle pair-claim endpoint
 // on existing-member vigosrvs (ADR-025 Slice 2b). The joining
 // vigosrv's vigocli posts a pair code; we verify it against the
 // on-disk pending-pair record, unwrap the ops-puddle, append the
@@ -35,19 +35,19 @@ import (
 // the JSON response. mTLS protects the wire end-to-end (every
 // vigosrv runs HTTPS-only on :8443); the pair code is the
 // authorization factor and the single-use marker prevents replay.
-type TungolOpsPuddleHandler struct {
+type SpannerOpsPuddleHandler struct {
 	provider    secrets.Provider
 	opsDir      string
 	auditWriter auditRecorder
 }
 
-// NewTungolOpsPuddleHandler constructs the handler with everything
+// NewSpannerOpsPuddleHandler constructs the handler with everything
 // it needs to load + mutate the ops-puddle and audit the result.
 // provider must be the same secrets backend the puddle was wrapped
 // under (only `local` backend supports DeriveKey in v1; isopass
 // deployments don't host an ops-puddle).
-func NewTungolOpsPuddleHandler(provider secrets.Provider, opsDir string, auditWriter auditRecorder) *TungolOpsPuddleHandler {
-	return &TungolOpsPuddleHandler{
+func NewSpannerOpsPuddleHandler(provider secrets.Provider, opsDir string, auditWriter auditRecorder) *SpannerOpsPuddleHandler {
+	return &SpannerOpsPuddleHandler{
 		provider:    provider,
 		opsDir:      opsDir,
 		auditWriter: auditWriter,
@@ -57,14 +57,14 @@ func NewTungolOpsPuddleHandler(provider secrets.Provider, opsDir string, auditWr
 // RegisterRoutes mounts the pair-claim endpoint. Admin-gated —
 // joining vigosrvs aren't enrolled envoys, they're peer vigosrvs
 // whose operator is authenticated to this vigosrv.
-func (h *TungolOpsPuddleHandler) RegisterRoutes(mux *http.ServeMux) {
+func (h *SpannerOpsPuddleHandler) RegisterRoutes(mux *http.ServeMux) {
 	admin := auth.RequireAdmin("")
-	mux.Handle("POST /api/v1/tungol/ops-puddle/pair-claim", admin(http.HandlerFunc(h.handlePairClaim)))
+	mux.Handle("POST /api/v1/spanner/ops-puddle/pair-claim", admin(http.HandlerFunc(h.handlePairClaim)))
 }
 
 // pairClaimRequest is the body the joining vigocli sends.
 type pairClaimRequest struct {
-	// Code is the plaintext pair code minted by `vigocli tungol
+	// Code is the plaintext pair code minted by `vigocli spanner
 	// ops-puddle pair` on this (existing-member) vigosrv.
 	Code string `json:"code"`
 	// JoiningPubkey is the joining vigosrv's service-account puddle
@@ -85,7 +85,7 @@ type pairClaimResponse struct {
 	Members []puddle.OpsMember `json:"members"`
 }
 
-func (h *TungolOpsPuddleHandler) handlePairClaim(w http.ResponseWriter, r *http.Request) {
+func (h *SpannerOpsPuddleHandler) handlePairClaim(w http.ResponseWriter, r *http.Request) {
 	if h.provider == nil {
 		writeError(w, http.StatusServiceUnavailable, "ops-puddle pair flow requires the local secrets backend")
 		return
@@ -113,15 +113,15 @@ func (h *TungolOpsPuddleHandler) handlePairClaim(w http.ResponseWriter, r *http.
 		return
 	}
 	if pending == nil {
-		writeError(w, http.StatusNotFound, "no pending pair offer — run `vigocli tungol ops-puddle pair` on this vigosrv first")
+		writeError(w, http.StatusNotFound, "no pending pair offer — run `vigocli spanner ops-puddle pair` on this vigosrv first")
 		return
 	}
 	if pending.Used {
-		writeError(w, http.StatusGone, "pair code already used; mint a fresh one with `vigocli tungol ops-puddle pair`")
+		writeError(w, http.StatusGone, "pair code already used; mint a fresh one with `vigocli spanner ops-puddle pair`")
 		return
 	}
 	if time.Now().UTC().After(pending.ExpiresAt) {
-		writeError(w, http.StatusGone, "pair code expired; mint a fresh one with `vigocli tungol ops-puddle pair`")
+		writeError(w, http.StatusGone, "pair code expired; mint a fresh one with `vigocli spanner ops-puddle pair`")
 		return
 	}
 	if puddle.HashPairCode(req.Code) != pending.CodeHash {
@@ -166,7 +166,7 @@ func (h *TungolOpsPuddleHandler) handlePairClaim(w http.ResponseWriter, r *http.
 		Members:      members,
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "tungol.ops_puddle.member_added",
+	recordAudit(r.Context(), h.auditWriter, "spanner.ops_puddle.member_added",
 		actorFromRequest(r), "rest",
 		fmt.Sprintf("ops-puddle %s gained member %s (total now %d)", ops.FriendlyName, req.JoiningPubkey, len(members)),
 		fmt.Sprintf(`{"ops_puddle":%q,"joining_pubkey":%q,"member_count":%d}`, ops.FriendlyName, req.JoiningPubkey, len(members)),

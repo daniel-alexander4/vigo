@@ -26,27 +26,27 @@ import (
 	"time"
 
 	licfmt "git.alexander4.io/tessera/license/products/vigo"
-	"github.com/google/uuid"
 	"git.alexander4.io/vigo/server/ai"
 	"git.alexander4.io/vigo/server/audit"
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/compliance"
-	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleetpressure"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/license"
-	"git.alexander4.io/vigo/server/risk"
-	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/peer"
-	"git.alexander4.io/vigo/server/tungol"
+	"git.alexander4.io/vigo/server/risk"
+	"git.alexander4.io/vigo/server/spanner"
+	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
-	"git.alexander4.io/vigo/server/swarm/lockboxmesh"
 	"git.alexander4.io/vigo/server/swarm/gitbackmesh"
+	"git.alexander4.io/vigo/server/swarm/lockboxmesh"
 	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
 	"git.alexander4.io/vigo/server/traits"
+	"github.com/google/uuid"
 )
 
 // DataSource abstracts data fetching for UI handlers.
@@ -218,47 +218,47 @@ type ControlStatusRow struct {
 
 // Handler serves all UI pages.
 type Handler struct {
-	renderer      *Renderer
-	dataSource    DataSource
-	queries       *db.Queries // direct DB access for task/workflow pages
-	configStore   *config.ConfigStore
-	baseInterval     time.Duration
-	offlineThreshold time.Duration
-	serverAddr       string
-	caFile        string
-	agentDir      string
-	version       string
-	agentVersion  string
-	assistant     *ai.Assistant
-	hub           *tungol.Hub
-	docsDir       string
-	docsNav       []DocsNavSection
-	enforcer      *license.Enforcer
-	peerSvc       *peer.Service
-	authEnabled   bool
-	authMethod    string
-	reportBuilder  *ReportBuilder
-	integrationsCfg config.IntegrationsSection
-	grcCfg          config.GRCSection
-	branding        config.BrandingSection
-	cveSearcher        CVESearcher
-	healthChecker      HealthChecker
-	serverHostname     string
-	globalObserveOnly  bool
-	scrierEnabled      bool
-	serverConfigPath   string
-	swarmTracker       *swarm.PeerTracker
-	swarmFleetIndex    SwarmHostnameResolver
-	swarmConfig        config.SwarmSection
-	traitLookup        TraitLookup
-	fleetCache         *FleetCache
+	renderer          *Renderer
+	dataSource        DataSource
+	queries           *db.Queries // direct DB access for task/workflow pages
+	configStore       *config.ConfigStore
+	baseInterval      time.Duration
+	offlineThreshold  time.Duration
+	serverAddr        string
+	caFile            string
+	agentDir          string
+	version           string
+	agentVersion      string
+	assistant         *ai.Assistant
+	hub               *spanner.Hub
+	docsDir           string
+	docsNav           []DocsNavSection
+	enforcer          *license.Enforcer
+	peerSvc           *peer.Service
+	authEnabled       bool
+	authMethod        string
+	reportBuilder     *ReportBuilder
+	integrationsCfg   config.IntegrationsSection
+	grcCfg            config.GRCSection
+	branding          config.BrandingSection
+	cveSearcher       CVESearcher
+	healthChecker     HealthChecker
+	serverHostname    string
+	globalObserveOnly bool
+	scrierEnabled     bool
+	serverConfigPath  string
+	swarmTracker      *swarm.PeerTracker
+	swarmFleetIndex   SwarmHostnameResolver
+	swarmConfig       config.SwarmSection
+	traitLookup       TraitLookup
+	fleetCache        *FleetCache
 	gitbackFleet      GitbackFleetSource
 	curatorFleet      CuratorFleetSource
-	mesh               MeshSource
-	swarmAPI           SwarmSource
-	traitQuery         TraitQueryDispatcher
-	complianceDocs     ComplianceDocsListing
-	securityLive       *securityLiveCache // 24h cache of security_scan_detail dispatch results
+	mesh              MeshSource
+	swarmAPI          SwarmSource
+	traitQuery        TraitQueryDispatcher
+	complianceDocs    ComplianceDocsListing
+	securityLive      *securityLiveCache // 24h cache of security_scan_detail dispatch results
 }
 
 // DispatchOutcome categorizes the result of a single-envoy live trait
@@ -460,7 +460,7 @@ type CVERunningBinaryRef struct {
 // DB-backed DataSource (used by FleetIndex integration).
 // The docsDir parameter specifies the path to the docs directory for the
 // built-in documentation browser (pass "" to disable).
-func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *tungol.Hub, customDS DataSource, docsDir string, authMethod string, enforcer *license.Enforcer) (*Handler, error) {
+func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *spanner.Hub, customDS DataSource, docsDir string, authMethod string, enforcer *license.Enforcer) (*Handler, error) {
 	renderer, err := NewRenderer()
 	if err != nil {
 		return nil, err
@@ -481,16 +481,16 @@ func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterv
 		baseInterval:     baseInterval,
 		offlineThreshold: offlineThreshold,
 		serverAddr:       serverAddr,
-		caFile:       caFile,
-		agentDir:     agentDir,
-		version:      version,
-		assistant:    assistant,
-		hub:          hub,
-		docsDir:      docsDir,
-		enforcer:     enforcer,
-		authEnabled:  true,
-		authMethod:   authMethod,
-		securityLive: newSecurityLiveCache(),
+		caFile:           caFile,
+		agentDir:         agentDir,
+		version:          version,
+		assistant:        assistant,
+		hub:              hub,
+		docsDir:          docsDir,
+		enforcer:         enforcer,
+		authEnabled:      true,
+		authMethod:       authMethod,
+		securityLive:     newSecurityLiveCache(),
 	}
 
 	if docsDir != "" {
@@ -695,12 +695,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/export/inventory-explore.ods", h.InventoryExploreODSExport)
 	mux.HandleFunc("GET /ui/fragments/health", h.HealthFragment)
 
-	// Tungol pages (only registered when running as hub). The /tungol
+	// Spanner pages (only registered when running as hub). The /spanner
 	// route name follows the user-facing rename; underneath, `h.hub` is
-	// still the hub + steorras implementation in server/tungol/.
+	// still the hub + bolts implementation in server/spanner/.
 	if h.hub != nil {
-		mux.HandleFunc("GET /tungol", h.Tungol)
-		mux.HandleFunc("GET /tungol/steorras/{id}", h.SteorraDetail)
+		mux.HandleFunc("GET /spanner", h.Spanner)
+		mux.HandleFunc("GET /spanner/bolts/{id}", h.BoltDetail)
 	}
 
 	// Docs pages (only registered when docsDir is configured and exists)
@@ -739,27 +739,27 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 // PageData holds common fields for all page templates.
 type PageData struct {
-	Title             string
-	ActiveNav         string
-	BodyClass         string // extra CSS class on <body>
-	Version           string
-	PollInterval      string // HTMX polling interval, e.g. "30s" (2× check-in interval)
-	PollIntervalSlow  string // slower poll for less-critical fragments, e.g. "60s"
-	CheckInInterval   string // configured check-in interval, e.g. "15s", "5m0s"
-	AIEnabled         bool
-	AIProviderName    string // "Claude", "Ollama", "OpenAI", etc.
-	TungolEnabled    bool
-	DocsEnabled       bool
-	PeerEnabled       bool
-	SwarmEnabled      bool
-	AuthEnabled       bool
-	AuthMethod        string
-	CurrentUser       *AuthUser
-	LicenseWarning    string // non-empty when license is near or over limits
-	OrgName           string // custom org name from branding config
-	CustomLogo        bool   // true when a custom logo path is configured
-	CustomFavicon     bool   // true when a custom favicon path is configured
-	Theme             string // "light" (default), "dark", or "auto"
+	Title            string
+	ActiveNav        string
+	BodyClass        string // extra CSS class on <body>
+	Version          string
+	PollInterval     string // HTMX polling interval, e.g. "30s" (2× check-in interval)
+	PollIntervalSlow string // slower poll for less-critical fragments, e.g. "60s"
+	CheckInInterval  string // configured check-in interval, e.g. "15s", "5m0s"
+	AIEnabled        bool
+	AIProviderName   string // "Claude", "Ollama", "OpenAI", etc.
+	SpannerEnabled   bool
+	DocsEnabled      bool
+	PeerEnabled      bool
+	SwarmEnabled     bool
+	AuthEnabled      bool
+	AuthMethod       string
+	CurrentUser      *AuthUser
+	LicenseWarning   string // non-empty when license is near or over limits
+	OrgName          string // custom org name from branding config
+	CustomLogo       bool   // true when a custom logo path is configured
+	CustomFavicon    bool   // true when a custom favicon path is configured
+	Theme            string // "light" (default), "dark", or "auto"
 }
 
 // LicensePageData holds data for the license status page.
@@ -768,8 +768,8 @@ type LicensePageData struct {
 	Tier          string
 	CustomerName  string
 	LicenseID     string
-	MaxEnvoys    int
-	ActiveEnvoys int
+	MaxEnvoys     int
+	ActiveEnvoys  int
 	UsagePct      float64
 	ExpiresAt     string
 	DaysRemaining int
@@ -848,12 +848,12 @@ type AgentPlatform struct {
 // DashboardPageData holds data for the dashboard page.
 type DashboardPageData struct {
 	PageData
-	AgentVersion    string
-	AgentPlatforms  []AgentPlatform
-	TotalEnvoys     int
-	ActiveEnvoys    int
-	RecentFailures  int
-	DriftRate       float64
+	AgentVersion   string
+	AgentPlatforms []AgentPlatform
+	TotalEnvoys    int
+	ActiveEnvoys   int
+	RecentFailures int
+	DriftRate      float64
 	// LicenseCapacity drives the top-of-dashboard capacity banner. Empty
 	// LicenseCapacityLevel means the banner is not rendered. "warning"
 	// renders an orange notice (≥90% of cap), "critical" renders a red
@@ -862,10 +862,10 @@ type DashboardPageData struct {
 	LicenseCapacityMessage string
 	LicenseCapacityActive  int
 	LicenseCapacityMax     int
-	RecentRuns          []RunRow
-	FleetRows           []FleetRow
-	FleetRowsCapped     bool // true when fleet table is capped (more envoys exist)
-	FleetRowsRemaining  int  // how many envoys not shown
+	RecentRuns             []RunRow
+	FleetRows              []FleetRow
+	FleetRowsCapped        bool // true when fleet table is capped (more envoys exist)
+	FleetRowsRemaining     int  // how many envoys not shown
 	// Security posture
 	CVECritical     int64
 	CVEHigh         int64
@@ -882,18 +882,18 @@ type DashboardPageData struct {
 	CompFailed     int
 	Offline        int
 	// Standards compliance
-	StandardsPct      float64
-	SatisfiedControls int
-	WaivedControls    int
+	StandardsPct         float64
+	SatisfiedControls    int
+	WaivedControls       int
 	PartialControls      int
 	NotSatisfiedControls int
 	TotalControls        int
 	// Risk posture
-	RiskAvgScore    int
-	RiskCritical    int
-	RiskHigh        int
-	RiskMedium      int
-	RiskLow         int
+	RiskAvgScore  int
+	RiskCritical  int
+	RiskHigh      int
+	RiskMedium    int
+	RiskLow       int
 	RiskTopEnvoys []RiskEnvoyRow
 	// Convergence sparkline
 	ConvergenceSparklineData []float64
@@ -907,18 +907,18 @@ type DashboardPageData struct {
 	// dashboard landing page).
 	SwarmFiles []SwarmFileRow
 	// Certificate lifecycle — fleet-wide expiry counts.
-	CertsExpiringSoon  int
-	CertsExpired       int
-	CertsExpiringIn7   int
-	CertsExpiringIn30  int
-	CertHostsAffected  int
+	CertsExpiringSoon int
+	CertsExpired      int
+	CertsExpiringIn7  int
+	CertsExpiringIn30 int
+	CertHostsAffected int
 	// Running-CVE fleet aggregates.
-	RunningCVEsTotal         int
-	RunningCVEsCritical      int
-	RunningCVEsHigh          int
-	RunningCVEsMedium        int
-	RunningCVEsLow           int
-	RunningCVEHostsAffected  int
+	RunningCVEsTotal        int
+	RunningCVEsCritical     int
+	RunningCVEsHigh         int
+	RunningCVEsMedium       int
+	RunningCVEsLow          int
+	RunningCVEHostsAffected int
 }
 
 // SwarmFileRow is a summary row for a swarm file on the dashboard.
@@ -944,15 +944,15 @@ type RiskEnvoyRow struct {
 
 // RiskSummaryData holds fleet-wide risk data for the dashboard.
 type RiskSummaryData struct {
-	AvgScore       int
-	Critical       int
-	High           int
-	Medium         int
-	Low            int
-	TopRisks       []RiskEnvoyRow
-	SparklineData  []float64
-	SparklineMin   int
-	SparklineMax   int
+	AvgScore      int
+	Critical      int
+	High          int
+	Medium        int
+	Low           int
+	TopRisks      []RiskEnvoyRow
+	SparklineData []float64
+	SparklineMin  int
+	SparklineMax  int
 }
 
 // RiskPosturePageData holds data for the dedicated risk posture page.
@@ -987,18 +987,18 @@ type RiskEnvoyDetail struct {
 
 // RiskFactorSummary summarizes a risk factor across the fleet.
 type RiskFactorSummary struct {
-	Name       string
+	Name        string
 	TotalPoints int
-	EnvoyCount int
+	EnvoyCount  int
 }
 
 // FleetRow is a envoy row for the dashboard fleet status table.
 type FleetRow struct {
-	ID           string
-	Hostname     string
-	IP           string
-	LastSeen     time.Time
-	Status       string
+	ID       string
+	Hostname string
+	IP       string
+	LastSeen time.Time
+	Status   string
 	// Drift mirrors EnvoyRow.Drift — drives the Diverged-row peach badge.
 	// DriftLabel is the precomputed string form so the template stays method-free.
 	Drift        convergence.DriftLevel
@@ -1073,8 +1073,8 @@ type StandardsPageData struct {
 	NotSatisfiedControls int
 	TotalControls        int
 	// Waiver alerts.
-	TotalActiveWaivers   int
-	ExpiringWaivers      int // waivers expiring within 30 days
+	TotalActiveWaivers int
+	ExpiringWaivers    int // waivers expiring within 30 days
 }
 
 // ComplianceReportPageData holds data for a per-framework compliance report page.
@@ -1095,25 +1095,25 @@ type DashboardStatsFragmentData struct {
 	UniqueCVEs      int64
 	HardeningScore  int64
 	RootkitWarnings int64
-	ConvergencePct float64
-	Converged      int
-	Degraded       int
-	Diverged       int // drift-axis bucket
-	CompFailed     int
-	Offline        int
+	ConvergencePct  float64
+	Converged       int
+	Degraded        int
+	Diverged        int // drift-axis bucket
+	CompFailed      int
+	Offline         int
 	// Standards compliance
-	StandardsPct      float64
-	SatisfiedControls int
+	StandardsPct         float64
+	SatisfiedControls    int
 	WaivedControls       int
 	PartialControls      int
 	NotSatisfiedControls int
 	TotalControls        int
 	// Risk posture
-	RiskAvgScore    int
-	RiskCritical    int
-	RiskHigh        int
-	RiskMedium         int
-	RiskLow int
+	RiskAvgScore int
+	RiskCritical int
+	RiskHigh     int
+	RiskMedium   int
+	RiskLow      int
 	// Convergence sparkline
 	ConvergenceSparklineData []float64
 	ConvergenceSparklineMin  int
@@ -1124,38 +1124,38 @@ type DashboardStatsFragmentData struct {
 	ComplianceSparklineMax  int
 	// Certificate lifecycle — fleet-wide expiry counts surfaced on the
 	// Security Posture dashboard card.
-	CertsExpiringSoon  int
-	CertsExpired       int
-	CertsExpiringIn7   int
-	CertsExpiringIn30  int
-	CertHostsAffected  int
+	CertsExpiringSoon int
+	CertsExpired      int
+	CertsExpiringIn7  int
+	CertsExpiringIn30 int
+	CertHostsAffected int
 	// Running-CVE fleet aggregates from the cve_running_correlation
 	// trait. Surfaced as a dashboard stat card distinct from the
 	// installed-CVE counts above (UniqueCVEs et al.).
-	RunningCVEsTotal         int
-	RunningCVEsCritical      int
-	RunningCVEsHigh          int
-	RunningCVEsMedium        int
-	RunningCVEsLow           int
-	RunningCVEHostsAffected  int
+	RunningCVEsTotal        int
+	RunningCVEsCritical     int
+	RunningCVEsHigh         int
+	RunningCVEsMedium       int
+	RunningCVEsLow          int
+	RunningCVEHostsAffected int
 }
 
 // EnvoyRow is a single envoy displayed in the envoys table.
 type EnvoyRow struct {
-	ID           string
-	Hostname     string
-	IPAddress    string
-	EnrolledAt   time.Time
-	LastSeen     time.Time
+	ID         string
+	Hostname   string
+	IPAddress  string
+	EnrolledAt time.Time
+	LastSeen   time.Time
 	// LastSeenLabel is the precomputed "just now" / "Ns ago" / "Nm ago"
 	// rendering keyed off the same threshold that drives Offline below.
 	// Templates render this directly so the label and the staleness
 	// color can't disagree. Source of truth is envoyFreshness in
 	// render.go.
 	LastSeenLabel string
-	LastRunAt    time.Time
-	LastRunID    string
-	Status       string
+	LastRunAt     time.Time
+	LastRunID     string
+	Status        string
 	// Drift is the canonical drift-axis bucket from convergence.ComputeDrift
 	// (None / Changed / Diverged). Carried alongside Status so the table can
 	// render the Diverged-envoy's convergence ratio in the same orange the
@@ -1179,34 +1179,34 @@ type EnvoyRow struct {
 	// cadence yet) — the table renders the page-level
 	// OfflineThresholdLabel in that case.
 	StaleThresholdLabel string
-	AgentVersion string
-	DiskPercent  int    // root filesystem available percentage
-	DiskStatus   string // "ok", "warn", "critical"
-	RepoStatus   string // "ok", "degraded", ""
-	BrokenRepos  int    // number of broken package repos
+	AgentVersion        string
+	DiskPercent         int    // root filesystem available percentage
+	DiskStatus          string // "ok", "warn", "critical"
+	RepoStatus          string // "ok", "degraded", ""
+	BrokenRepos         int    // number of broken package repos
 }
 
 // EnvoysPageData holds data for the envoys list page.
 type EnvoysPageData struct {
 	PageData
-	Envoys       []EnvoyRow
+	Envoys []EnvoyRow
 	// Filter state — independent across the three axes. ConvFilter
 	// matches FleetStatusEntry.Status (failure axis); DriftFilter
 	// matches the drift bucket; ReachFilter matches reachability /
 	// observability flags. All three combine with AND.
-	ConvFilter   string
-	DriftFilter  string
-	ReachFilter  string
-	Search       string
-	SortColumn   string // active sort column (status, hostname, last_seen, last_run, ip)
-	SortDir      string // "asc" or "desc"
-	EnvoyCount   int    // rows on this page after filter+offset
-	MatchingTotal int   // total entries matching filter (across all pages)
-	TotalEnvoys  int    // fleet-wide total, regardless of filter
-	HasMore      bool
-	Offset       int
-	Limit        int
-	NextOffset   int
+	ConvFilter    string
+	DriftFilter   string
+	ReachFilter   string
+	Search        string
+	SortColumn    string // active sort column (status, hostname, last_seen, last_run, ip)
+	SortDir       string // "asc" or "desc"
+	EnvoyCount    int    // rows on this page after filter+offset
+	MatchingTotal int    // total entries matching filter (across all pages)
+	TotalEnvoys   int    // fleet-wide total, regardless of filter
+	HasMore       bool
+	Offset        int
+	Limit         int
+	NextOffset    int
 	// RenderedCap is true when the operator has paged to the hard DOM cap;
 	// the table footer renders a "refine your filter" sentinel instead of
 	// another load-more trigger so the DOM cannot grow unbounded.
@@ -1272,10 +1272,10 @@ type RunResultRow struct {
 // EnvoyDetailPageData holds data for the envoy detail page.
 type EnvoyDetailPageData struct {
 	PageData
-	Envoy          EnvoyRow
-	Runs           []EnvoyDetailRunRow
-	Traits         map[string]any
-	ScrierEnabled  bool
+	Envoy         EnvoyRow
+	Runs          []EnvoyDetailRunRow
+	Traits        map[string]any
+	ScrierEnabled bool
 	// Cloud metadata (populated from traits if available).
 	CloudProvider     string // "aws", "gcp", "azure", etc. or "" if not cloud
 	CloudRegion       string
@@ -1350,7 +1350,7 @@ type RunsPageData struct {
 type RunDetailPageData struct {
 	PageData
 	Run     RunRow
-	EnvoyID  string
+	EnvoyID string
 	Results []RunResultRow
 }
 
@@ -1433,7 +1433,7 @@ type PlanResultRow struct {
 type PlanDetailPageData struct {
 	PageData
 	PlanID      string
-	EnvoyID      string
+	EnvoyID     string
 	Hostname    string
 	CreatedAt   time.Time
 	Results     []PlanResultRow
@@ -1961,7 +1961,7 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "docs", data)
 }
 
-// setCommon applies version, AI-enabled, tungol, auth, and license flags to page data.
+// setCommon applies version, AI-enabled, spanner, auth, and license flags to page data.
 func (h *Handler) setCommon(pd *PageData) {
 	pd.Version = h.version
 	poll := 30 * time.Second
@@ -1982,7 +1982,7 @@ func (h *Handler) setCommon(pd *PageData) {
 			pd.AIProviderName = strings.ToUpper(name[:1]) + name[1:]
 		}
 	}
-	pd.TungolEnabled = h.hub != nil
+	pd.SpannerEnabled = h.hub != nil
 	pd.DocsEnabled = h.docsDir != ""
 	pd.PeerEnabled = h.peerSvc != nil
 	pd.SwarmEnabled = h.swarmTracker != nil
@@ -2591,31 +2591,115 @@ func (h *Handler) Integrations(w http.ResponseWriter, r *http.Request) {
 	e := func(s []string) int { return len(s) }
 
 	// Alerting / Chat
-	if cfg.Slack != nil { a("Slack", "slack", "Alerting / Chat", cfg.Slack.Enabled, e(cfg.Slack.Events)) } else { a("Slack", "slack", "Alerting / Chat", false, 0) }
-	if cfg.PagerDuty != nil { a("PagerDuty", "pagerduty", "Alerting / Chat", cfg.PagerDuty.Enabled, e(cfg.PagerDuty.Events)) } else { a("PagerDuty", "pagerduty", "Alerting / Chat", false, 0) }
-	if cfg.Opsgenie != nil { a("Opsgenie", "opsgenie", "Alerting / Chat", cfg.Opsgenie.Enabled, e(cfg.Opsgenie.Events)) } else { a("Opsgenie", "opsgenie", "Alerting / Chat", false, 0) }
-	if cfg.Teams != nil { a("Microsoft Teams", "teams", "Alerting / Chat", cfg.Teams.Enabled, e(cfg.Teams.Events)) } else { a("Microsoft Teams", "teams", "Alerting / Chat", false, 0) }
+	if cfg.Slack != nil {
+		a("Slack", "slack", "Alerting / Chat", cfg.Slack.Enabled, e(cfg.Slack.Events))
+	} else {
+		a("Slack", "slack", "Alerting / Chat", false, 0)
+	}
+	if cfg.PagerDuty != nil {
+		a("PagerDuty", "pagerduty", "Alerting / Chat", cfg.PagerDuty.Enabled, e(cfg.PagerDuty.Events))
+	} else {
+		a("PagerDuty", "pagerduty", "Alerting / Chat", false, 0)
+	}
+	if cfg.Opsgenie != nil {
+		a("Opsgenie", "opsgenie", "Alerting / Chat", cfg.Opsgenie.Enabled, e(cfg.Opsgenie.Events))
+	} else {
+		a("Opsgenie", "opsgenie", "Alerting / Chat", false, 0)
+	}
+	if cfg.Teams != nil {
+		a("Microsoft Teams", "teams", "Alerting / Chat", cfg.Teams.Enabled, e(cfg.Teams.Events))
+	} else {
+		a("Microsoft Teams", "teams", "Alerting / Chat", false, 0)
+	}
 	// ITSM / Ticketing
-	if cfg.ConnectWise != nil { a("ConnectWise", "connectwise", "ITSM / Ticketing", cfg.ConnectWise.Enabled, e(cfg.ConnectWise.Events)) } else { a("ConnectWise", "connectwise", "ITSM / Ticketing", false, 0) }
-	if cfg.Autotask != nil { a("Autotask", "autotask", "ITSM / Ticketing", cfg.Autotask.Enabled, e(cfg.Autotask.Events)) } else { a("Autotask", "autotask", "ITSM / Ticketing", false, 0) }
-	if cfg.ServiceNow != nil { a("ServiceNow", "servicenow", "ITSM / Ticketing", cfg.ServiceNow.Enabled, e(cfg.ServiceNow.Events)) } else { a("ServiceNow", "servicenow", "ITSM / Ticketing", false, 0) }
-	if cfg.Jira != nil { a("Jira", "jira", "ITSM / Ticketing", cfg.Jira.Enabled, e(cfg.Jira.Events)) } else { a("Jira", "jira", "ITSM / Ticketing", false, 0) }
-	if cfg.Zendesk != nil { a("Zendesk", "zendesk", "ITSM / Ticketing", cfg.Zendesk.Enabled, e(cfg.Zendesk.Events)) } else { a("Zendesk", "zendesk", "ITSM / Ticketing", false, 0) }
-	if cfg.Freshservice != nil { a("Freshservice", "freshservice", "ITSM / Ticketing", cfg.Freshservice.Enabled, e(cfg.Freshservice.Events)) } else { a("Freshservice", "freshservice", "ITSM / Ticketing", false, 0) }
-	if cfg.Linear != nil { a("Linear", "linear", "ITSM / Ticketing", cfg.Linear.Enabled, e(cfg.Linear.Events)) } else { a("Linear", "linear", "ITSM / Ticketing", false, 0) }
-	if cfg.GitHubIssues != nil { a("GitHub Issues", "github-issues", "ITSM / Ticketing", cfg.GitHubIssues.Enabled, e(cfg.GitHubIssues.Events)) } else { a("GitHub Issues", "github-issues", "ITSM / Ticketing", false, 0) }
+	if cfg.ConnectWise != nil {
+		a("ConnectWise", "connectwise", "ITSM / Ticketing", cfg.ConnectWise.Enabled, e(cfg.ConnectWise.Events))
+	} else {
+		a("ConnectWise", "connectwise", "ITSM / Ticketing", false, 0)
+	}
+	if cfg.Autotask != nil {
+		a("Autotask", "autotask", "ITSM / Ticketing", cfg.Autotask.Enabled, e(cfg.Autotask.Events))
+	} else {
+		a("Autotask", "autotask", "ITSM / Ticketing", false, 0)
+	}
+	if cfg.ServiceNow != nil {
+		a("ServiceNow", "servicenow", "ITSM / Ticketing", cfg.ServiceNow.Enabled, e(cfg.ServiceNow.Events))
+	} else {
+		a("ServiceNow", "servicenow", "ITSM / Ticketing", false, 0)
+	}
+	if cfg.Jira != nil {
+		a("Jira", "jira", "ITSM / Ticketing", cfg.Jira.Enabled, e(cfg.Jira.Events))
+	} else {
+		a("Jira", "jira", "ITSM / Ticketing", false, 0)
+	}
+	if cfg.Zendesk != nil {
+		a("Zendesk", "zendesk", "ITSM / Ticketing", cfg.Zendesk.Enabled, e(cfg.Zendesk.Events))
+	} else {
+		a("Zendesk", "zendesk", "ITSM / Ticketing", false, 0)
+	}
+	if cfg.Freshservice != nil {
+		a("Freshservice", "freshservice", "ITSM / Ticketing", cfg.Freshservice.Enabled, e(cfg.Freshservice.Events))
+	} else {
+		a("Freshservice", "freshservice", "ITSM / Ticketing", false, 0)
+	}
+	if cfg.Linear != nil {
+		a("Linear", "linear", "ITSM / Ticketing", cfg.Linear.Enabled, e(cfg.Linear.Events))
+	} else {
+		a("Linear", "linear", "ITSM / Ticketing", false, 0)
+	}
+	if cfg.GitHubIssues != nil {
+		a("GitHub Issues", "github-issues", "ITSM / Ticketing", cfg.GitHubIssues.Enabled, e(cfg.GitHubIssues.Events))
+	} else {
+		a("GitHub Issues", "github-issues", "ITSM / Ticketing", false, 0)
+	}
 	// SIEM / Observability
-	if cfg.Splunk != nil { a("Splunk", "splunk", "SIEM / Observability", cfg.Splunk.Enabled, e(cfg.Splunk.Events)) } else { a("Splunk", "splunk", "SIEM / Observability", false, 0) }
-	if cfg.Elastic != nil { a("Elasticsearch", "elastic", "SIEM / Observability", cfg.Elastic.Enabled, e(cfg.Elastic.Events)) } else { a("Elasticsearch", "elastic", "SIEM / Observability", false, 0) }
-	if cfg.Datadog != nil { a("Datadog", "datadog", "SIEM / Observability", cfg.Datadog.Enabled, e(cfg.Datadog.Events)) } else { a("Datadog", "datadog", "SIEM / Observability", false, 0) }
-	if cfg.SumoLogic != nil { a("Sumo Logic", "sumologic", "SIEM / Observability", cfg.SumoLogic.Enabled, e(cfg.SumoLogic.Events)) } else { a("Sumo Logic", "sumologic", "SIEM / Observability", false, 0) }
-	if cfg.Sentinel != nil { a("Microsoft Sentinel", "sentinel", "SIEM / Observability", cfg.Sentinel.Enabled, e(cfg.Sentinel.Events)) } else { a("Microsoft Sentinel", "sentinel", "SIEM / Observability", false, 0) }
+	if cfg.Splunk != nil {
+		a("Splunk", "splunk", "SIEM / Observability", cfg.Splunk.Enabled, e(cfg.Splunk.Events))
+	} else {
+		a("Splunk", "splunk", "SIEM / Observability", false, 0)
+	}
+	if cfg.Elastic != nil {
+		a("Elasticsearch", "elastic", "SIEM / Observability", cfg.Elastic.Enabled, e(cfg.Elastic.Events))
+	} else {
+		a("Elasticsearch", "elastic", "SIEM / Observability", false, 0)
+	}
+	if cfg.Datadog != nil {
+		a("Datadog", "datadog", "SIEM / Observability", cfg.Datadog.Enabled, e(cfg.Datadog.Events))
+	} else {
+		a("Datadog", "datadog", "SIEM / Observability", false, 0)
+	}
+	if cfg.SumoLogic != nil {
+		a("Sumo Logic", "sumologic", "SIEM / Observability", cfg.SumoLogic.Enabled, e(cfg.SumoLogic.Events))
+	} else {
+		a("Sumo Logic", "sumologic", "SIEM / Observability", false, 0)
+	}
+	if cfg.Sentinel != nil {
+		a("Microsoft Sentinel", "sentinel", "SIEM / Observability", cfg.Sentinel.Enabled, e(cfg.Sentinel.Events))
+	} else {
+		a("Microsoft Sentinel", "sentinel", "SIEM / Observability", false, 0)
+	}
 	// RMM
-	if cfg.NinjaRMM != nil { a("NinjaRMM", "ninjarmm", "RMM", cfg.NinjaRMM.Enabled, e(cfg.NinjaRMM.Events)) } else { a("NinjaRMM", "ninjarmm", "RMM", false, 0) }
-	if cfg.Kaseya != nil { a("Kaseya VSA", "kaseya", "RMM", cfg.Kaseya.Enabled, e(cfg.Kaseya.Events)) } else { a("Kaseya VSA", "kaseya", "RMM", false, 0) }
+	if cfg.NinjaRMM != nil {
+		a("NinjaRMM", "ninjarmm", "RMM", cfg.NinjaRMM.Enabled, e(cfg.NinjaRMM.Events))
+	} else {
+		a("NinjaRMM", "ninjarmm", "RMM", false, 0)
+	}
+	if cfg.Kaseya != nil {
+		a("Kaseya VSA", "kaseya", "RMM", cfg.Kaseya.Enabled, e(cfg.Kaseya.Events))
+	} else {
+		a("Kaseya VSA", "kaseya", "RMM", false, 0)
+	}
 	// Asset Management
-	if cfg.Device42 != nil { a("Device42", "device42", "Asset Management", cfg.Device42.Enabled, e(cfg.Device42.Events)) } else { a("Device42", "device42", "Asset Management", false, 0) }
-	if cfg.SnipeIT != nil { a("Snipe-IT", "snipeit", "Asset Management", cfg.SnipeIT.Enabled, e(cfg.SnipeIT.Events)) } else { a("Snipe-IT", "snipeit", "Asset Management", false, 0) }
+	if cfg.Device42 != nil {
+		a("Device42", "device42", "Asset Management", cfg.Device42.Enabled, e(cfg.Device42.Events))
+	} else {
+		a("Device42", "device42", "Asset Management", false, 0)
+	}
+	if cfg.SnipeIT != nil {
+		a("Snipe-IT", "snipeit", "Asset Management", cfg.SnipeIT.Enabled, e(cfg.SnipeIT.Events))
+	} else {
+		a("Snipe-IT", "snipeit", "Asset Management", false, 0)
+	}
 
 	// Group by category preserving order.
 	categoryOrder := []string{"Alerting / Chat", "ITSM / Ticketing", "SIEM / Observability", "RMM", "Asset Management"}
@@ -2671,10 +2755,10 @@ func (h *Handler) IntegrationDetailPage(w http.ResponseWriter, r *http.Request) 
 
 	data := struct {
 		PageData
-		Integration  IntegrationExample
-		Enabled      bool
-		EventCount   int
-		LiveYAML     string
+		Integration IntegrationExample
+		Enabled     bool
+		EventCount  int
+		LiveYAML    string
 	}{
 		PageData:    PageData{Title: example.Name + " Integration", ActiveNav: "integrations"},
 		Integration: example,
@@ -2716,87 +2800,129 @@ func (h *Handler) integrationLiveConfig(slug string) (bool, int, string) {
 	switch slug {
 	case "slack":
 		c := cfg.Slack
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  slack:\n    enabled: true\n    webhook_url: %q\n    events: %s\n    min_severity: %s", mask(c.WebhookURL), fmtEvents(c.Events), c.MinSeverity)
 	case "pagerduty":
 		c := cfg.PagerDuty
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  pagerduty:\n    enabled: true\n    routing_key: %q\n    events: %s\n    min_severity: %s\n    auto_resolve: %v", mask(c.RoutingKey), fmtEvents(c.Events), c.MinSeverity, c.AutoResolve)
 	case "opsgenie":
 		c := cfg.Opsgenie
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  opsgenie:\n    enabled: true\n    api_key: %q\n    events: %s\n    min_severity: %s", mask(c.APIKey), fmtEvents(c.Events), c.MinSeverity)
 	case "teams":
 		c := cfg.Teams
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  teams:\n    enabled: true\n    webhook_url: %q\n    events: %s\n    min_severity: %s", mask(c.WebhookURL), fmtEvents(c.Events), c.MinSeverity)
 	case "connectwise":
 		c := cfg.ConnectWise
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  connectwise:\n    enabled: true\n    url: %q\n    company_id: %s\n    public_key: %s\n    private_key: %q\n    board_id: %d\n    events: %s", c.URL, c.CompanyID, c.PublicKey, mask(c.PrivateKey), c.BoardID, fmtEvents(c.Events))
 	case "autotask":
 		c := cfg.Autotask
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  autotask:\n    enabled: true\n    url: %q\n    username: %s\n    password: %q\n    queue_id: %d\n    events: %s", c.URL, c.Username, mask(c.Password), c.QueueID, fmtEvents(c.Events))
 	case "servicenow":
 		c := cfg.ServiceNow
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  servicenow:\n    enabled: true\n    instance: %s\n    username: %s\n    password: %q\n    events: %s", c.Instance, c.Username, mask(c.Password), fmtEvents(c.Events))
 	case "jira":
 		c := cfg.Jira
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  jira:\n    enabled: true\n    url: %q\n    email: %s\n    api_token: %q\n    project: %s\n    issue_type: %s\n    events: %s", c.URL, c.Email, mask(c.APIToken), c.Project, c.IssueType, fmtEvents(c.Events))
 	case "zendesk":
 		c := cfg.Zendesk
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  zendesk:\n    enabled: true\n    subdomain: %s\n    email: %s\n    api_token: %q\n    events: %s", c.Subdomain, c.Email, mask(c.APIToken), fmtEvents(c.Events))
 	case "freshservice":
 		c := cfg.Freshservice
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  freshservice:\n    enabled: true\n    domain: %s\n    api_key: %q\n    events: %s", c.Domain, mask(c.APIKey), fmtEvents(c.Events))
 	case "linear":
 		c := cfg.Linear
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  linear:\n    enabled: true\n    api_key: %q\n    team_id: %s\n    events: %s", mask(c.APIKey), c.TeamID, fmtEvents(c.Events))
 	case "github-issues":
 		c := cfg.GitHubIssues
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  github_issues:\n    enabled: true\n    owner: %s\n    repo: %s\n    token: %q\n    events: %s", c.Owner, c.Repo, mask(c.Token), fmtEvents(c.Events))
 	case "splunk":
 		c := cfg.Splunk
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  splunk:\n    enabled: true\n    url: %q\n    token: %q\n    index: %s\n    events: %s", c.URL, mask(c.Token), c.Index, fmtEvents(c.Events))
 	case "elastic":
 		c := cfg.Elastic
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  elastic:\n    enabled: true\n    url: %q\n    index: %s\n    api_key: %q\n    events: %s", c.URL, c.Index, mask(c.APIKey), fmtEvents(c.Events))
 	case "datadog":
 		c := cfg.Datadog
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  datadog:\n    enabled: true\n    api_key: %q\n    site: %s\n    events: %s", mask(c.APIKey), c.Site, fmtEvents(c.Events))
 	case "sumologic":
 		c := cfg.SumoLogic
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  sumologic:\n    enabled: true\n    url: %q\n    events: %s", mask(c.URL), fmtEvents(c.Events))
 	case "sentinel":
 		c := cfg.Sentinel
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  sentinel:\n    enabled: true\n    workspace_id: %s\n    shared_key: %q\n    events: %s", c.WorkspaceID, mask(c.SharedKey), fmtEvents(c.Events))
 	case "ninjarmm":
 		c := cfg.NinjaRMM
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  ninjarmm:\n    enabled: true\n    url: %q\n    client_id: %s\n    client_secret: %q\n    events: %s", c.URL, c.ClientID, mask(c.ClientSecret), fmtEvents(c.Events))
 	case "kaseya":
 		c := cfg.Kaseya
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  kaseya:\n    enabled: true\n    url: %q\n    username: %s\n    password: %q\n    events: %s", c.URL, c.Username, mask(c.Password), fmtEvents(c.Events))
 	case "device42":
 		c := cfg.Device42
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  device42:\n    enabled: true\n    url: %q\n    username: %s\n    password: %q\n    events: %s", c.URL, c.Username, mask(c.Password), fmtEvents(c.Events))
 	case "snipeit":
 		c := cfg.SnipeIT
-		if c == nil || !c.Enabled { return false, 0, "" }
+		if c == nil || !c.Enabled {
+			return false, 0, ""
+		}
 		return true, len(c.Events), fmt.Sprintf("integrations:\n  snipeit:\n    enabled: true\n    url: %q\n    api_token: %q\n    events: %s", c.URL, mask(c.Token), fmtEvents(c.Events))
 	}
 	return false, 0, ""
@@ -2856,7 +2982,6 @@ var integrationExamples = map[string]IntegrationExample{
 	"snipeit": {Name: "Snipe-IT", Slug: "snipeit", Description: "Syncs envoy inventory as hardware assets in Snipe-IT.",
 		Events: "All event types", ExampleYAML: "integrations:\n  snipeit:\n    enabled: true\n    url: \"https://snipeit.example.com/api/v1\"\n    api_token: \"secret:vigo/snipeit/api-token\"\n    events: [\"envoy.enrolled\"]"},
 }
-
 
 // Compliance renders the standards compliance overview page.
 func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
@@ -3334,14 +3459,14 @@ func (h *Handler) ComplianceFramework(w http.ResponseWriter, r *http.Request) {
 		"sox":             {"SOX IT General Controls Report", "sox"},
 		"finra":           {"FINRA Compliance Report", "finra"},
 		"mifid2":          {"MiFID II RTS 7 Compliance Report", "mifid2"},
-		"ccss":             {"CCSS Cryptocurrency Security Report", "ccss"},
-		"fda21cfr11":       {"FDA 21 CFR Part 11 Compliance Report", "fda21cfr11"},
-		"gaming":           {"Gaming Commission Compliance Report", "gaming"},
-		"ciswindows":        {"CIS Windows Server Benchmark Report", "ciswindows"},
-		"cisubuntu":         {"CIS Ubuntu Linux Benchmark Report", "cisubuntu"},
-		"cisrhel":           {"CIS RHEL Benchmark Report", "cisrhel"},
-		"abacyber":          {"ABA Cybersecurity Compliance Report", "abacyber"},
-		"nydfscyber":        {"NY DFS 23 NYCRR 500 Compliance Report", "nydfscyber"},
+		"ccss":            {"CCSS Cryptocurrency Security Report", "ccss"},
+		"fda21cfr11":      {"FDA 21 CFR Part 11 Compliance Report", "fda21cfr11"},
+		"gaming":          {"Gaming Commission Compliance Report", "gaming"},
+		"ciswindows":      {"CIS Windows Server Benchmark Report", "ciswindows"},
+		"cisubuntu":       {"CIS Ubuntu Linux Benchmark Report", "cisubuntu"},
+		"cisrhel":         {"CIS RHEL Benchmark Report", "cisrhel"},
+		"abacyber":        {"ABA Cybersecurity Compliance Report", "abacyber"},
+		"nydfscyber":      {"NY DFS 23 NYCRR 500 Compliance Report", "nydfscyber"},
 	}
 
 	info, ok := frameworks[fw]
@@ -3411,7 +3536,7 @@ type EvidenceMTTRData struct {
 type EvidenceControlsData struct {
 	Slug           string
 	FrameworkTitle string
-	Controls []struct {
+	Controls       []struct {
 		ControlID string
 		Title     string
 		Status    string
@@ -3643,10 +3768,10 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 
 	// Load active waivers: config-file waivers + DB waivers.
 	type waiverInfo struct {
-		Reason  string
-		By      string
-		Expiry  string
-		ID      string // DB waivers have an ID
+		Reason string
+		By     string
+		Expiry string
+		ID     string // DB waivers have an ID
 	}
 	waiverMap := make(map[string]waiverInfo)
 	// Config-file waivers (envoys-tree compliance.vgo).
@@ -3691,10 +3816,10 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 		FrameworkTitle string
 		Controls       []controlWithWaiver
 		// Waiver summary
-		TotalWaivers    int
-		EnforcedWaived  int  // controls that are both satisfied and waived
-		WaivedOnly      int  // controls waived but not enforced
-		ExpiringSoon    int  // waivers expiring within 30 days
+		TotalWaivers   int
+		EnforcedWaived int // controls that are both satisfied and waived
+		WaivedOnly     int // controls waived but not enforced
+		ExpiringSoon   int // waivers expiring within 30 days
 	}{
 		Slug:           slug,
 		FrameworkTitle: standardDisplayNameFromSlug(slug),
@@ -3774,7 +3899,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct, FailedCount: e.FailedCount, ModuleCount: e.ModuleCount})
 		}
 	} else {
-		for _, e := range h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold,"", "", 0, "").Envoys {
+		for _, e := range h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, "", "", 0, "").Envoys {
 			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct, FailedCount: e.FailedCount, ModuleCount: e.ModuleCount})
 		}
 	}
@@ -3954,7 +4079,7 @@ func (h *Handler) EvidenceBundleDownload(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Fleet inventory CSV
-	envoyData := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold,"", "", 100000, "")
+	envoyData := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, "", "", 100000, "")
 	if len(envoyData.Envoys) > 0 {
 		if f, err := zw.Create("fleet-inventory.csv"); err == nil {
 			fmt.Fprintln(f, "hostname,id,ip_address,status,enrolled_at,last_seen,last_run")
@@ -4132,7 +4257,7 @@ func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, s
 		// can't compute fleet-wide convergence without trailing-run
 		// history. This branch is hit briefly during boot before
 		// SetFleetCache is called, then never again.
-		data := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold,convFilter, "", envoysPageLimit, search)
+		data := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, convFilter, "", envoysPageLimit, search)
 		data.ConvFilter = convFilter
 		data.DriftFilter = driftFilter
 		data.ReachFilter = reachFilter
@@ -4456,26 +4581,26 @@ type EnvoyStandardCoverageData struct {
 // CVE / hardening / rootkit / malware / cert factors, /envoys/{id}/trace
 // for convergence factors.
 type AttackSurfaceData struct {
-	Hostname           string
-	EnvoyID            string
-	RiskLevel          string
-	RiskScore          int
-	RiskURL            string
-	Factors            []AttackFactor
-	CVECritical        int
-	CVECriticalURL     string
-	CVEHigh            int
-	CVEHighURL         string
-	CVEMedium          int
-	CVEMediumURL       string
-	CVELow             int
-	CVELowURL          string
-	HardeningScore     int
-	HardeningURL       string
-	ListeningPorts     int
-	Ports              []string
-	Vulnerabilities    bool
-	HasData            bool
+	Hostname        string
+	EnvoyID         string
+	RiskLevel       string
+	RiskScore       int
+	RiskURL         string
+	Factors         []AttackFactor
+	CVECritical     int
+	CVECriticalURL  string
+	CVEHigh         int
+	CVEHighURL      string
+	CVEMedium       int
+	CVEMediumURL    string
+	CVELow          int
+	CVELowURL       string
+	HardeningScore  int
+	HardeningURL    string
+	ListeningPorts  int
+	Ports           []string
+	Vulnerabilities bool
+	HasData         bool
 }
 
 // AttackFactor wraps a [risk.Factor] with a drill-down URL pointing at
@@ -4869,10 +4994,10 @@ func standardDisplayName(key string) string {
 		"sox":              "SOX",
 		"finra":            "FINRA",
 		"mifid2":           "MiFID II",
-		"ccss":              "CCSS",
-		"fda-21cfr11":       "FDA 21 CFR Part 11",
-		"gaming":             "Gaming Commission",
-		"cis-windows":        "CIS Windows",
+		"ccss":             "CCSS",
+		"fda-21cfr11":      "FDA 21 CFR Part 11",
+		"gaming":           "Gaming Commission",
+		"cis-windows":      "CIS Windows",
 	}
 	if n, ok := names[key]; ok {
 		return n
@@ -4892,20 +5017,20 @@ func standardDisplayNameFromSlug(slug string) string {
 // fwSlugMap maps framework display names to URL slugs (same as render.go fwSlug).
 func fwSlugMap(name string) string {
 	slugs := map[string]string{
-		"HIPAA":             "compliance",
-		"HITRUST CSF":       "hitrust",
-		"SOC 2":             "soc2",
-		"PCI DSS v4.0":      "pci",
-		"CIS Benchmarks":    "cis",
-		"NIST 800-53":       "nist",
-		"ISO 27001":         "iso27001",
-		"GDPR":              "gdpr",
-		"NERC CIP":          "nerccip",
-		"Cyber Essentials+": "cyberessentials",
-		"IEC 62443":         "iec62443",
-		"SOX":               "sox",
-		"FINRA":             "finra",
-		"MiFID II":          "mifid2",
+		"HIPAA":              "compliance",
+		"HITRUST CSF":        "hitrust",
+		"SOC 2":              "soc2",
+		"PCI DSS v4.0":       "pci",
+		"CIS Benchmarks":     "cis",
+		"NIST 800-53":        "nist",
+		"ISO 27001":          "iso27001",
+		"GDPR":               "gdpr",
+		"NERC CIP":           "nerccip",
+		"Cyber Essentials+":  "cyberessentials",
+		"IEC 62443":          "iec62443",
+		"SOX":                "sox",
+		"FINRA":              "finra",
+		"MiFID II":           "mifid2",
 		"CCSS":               "ccss",
 		"FDA 21 CFR Part 11": "fda21cfr11",
 		"Gaming Commission":  "gaming",
@@ -5272,7 +5397,7 @@ func (ds *dbDataSource) envoyCycle(envoyID string) time.Duration {
 func (ds *dbDataSource) envoyComplianceInfo(ctx context.Context, c db.Envoy, baseInterval, offlineThreshold time.Duration) (status string, runInfo *convergence.RunInfo) {
 	latestRuns, err := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 		EnvoyID: c.ID,
-		Limit:    int64(convergence.DivergedThreshold),
+		Limit:   int64(convergence.DivergedThreshold),
 	})
 	if err != nil {
 		return convergence.ComputeConvergence(nil), nil
@@ -5373,8 +5498,8 @@ func (ds *dbDataSource) DashboardData(baseInterval, offlineThreshold time.Durati
 
 	return DashboardPageData{
 		PageData:       PageData{Title: "Dashboard", ActiveNav: "dashboard"},
-		TotalEnvoys:     totalEnvoys,
-		ActiveEnvoys:    activeCount,
+		TotalEnvoys:    totalEnvoys,
+		ActiveEnvoys:   activeCount,
 		RecentFailures: failureCount,
 		DriftRate:      driftRate,
 		RecentRuns:     recentRuns,
@@ -5409,7 +5534,7 @@ func (ds *dbDataSource) ConvergenceData(baseInterval, offlineThreshold time.Dura
 			lastRunStatus := ""
 			latestRuns, err := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 				EnvoyID: n.ID,
-				Limit:  1,
+				Limit:   1,
 			})
 			if err == nil && len(latestRuns) > 0 {
 				lastRunStatus = latestRuns[0].Status
@@ -5465,8 +5590,8 @@ func (ds *dbDataSource) ConvergenceData(baseInterval, offlineThreshold time.Dura
 func (ds *dbDataSource) DashboardStatsData(baseInterval, offlineThreshold time.Duration) DashboardStatsFragmentData {
 	d := ds.DashboardData(baseInterval, offlineThreshold)
 	return DashboardStatsFragmentData{
-		TotalEnvoys:     d.TotalEnvoys,
-		ActiveEnvoys:    d.ActiveEnvoys,
+		TotalEnvoys:    d.TotalEnvoys,
+		ActiveEnvoys:   d.ActiveEnvoys,
 		RecentFailures: d.RecentFailures,
 		DriftRate:      d.DriftRate,
 	}
@@ -5675,7 +5800,7 @@ func (ds *dbDataSource) EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, er
 
 	dbRuns, err := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 		EnvoyID: envoyID,
-		Limit:    20,
+		Limit:   20,
 	})
 	if err != nil {
 		slog.Error("failed to list runs for envoy", "error", err)
@@ -6040,7 +6165,7 @@ func (ds *dbDataSource) RunDetailData(runID string) (RunDetailPageData, error) {
 
 	return RunDetailPageData{
 		PageData: PageData{Title: "Run Detail", ActiveNav: "runs"},
-		EnvoyID:   envoy.ID,
+		EnvoyID:  envoy.ID,
 		Run: RunRow{
 			ID:           r.ID,
 			Hostname:     envoy.Hostname,
@@ -6115,7 +6240,7 @@ func (ds *dbDataSource) PlanDetailData(planID string) (PlanDetailPageData, error
 	return PlanDetailPageData{
 		PageData:    PageData{Title: "Plan Detail", ActiveNav: "envoys"},
 		PlanID:      p.ID,
-		EnvoyID:      envoy.ID,
+		EnvoyID:     envoy.ID,
 		Hostname:    envoy.Hostname,
 		CreatedAt:   p.CreatedAt,
 		Results:     results,
@@ -6243,9 +6368,9 @@ type WorkflowRow struct {
 // WorkflowsPageData holds data for the workflows list page.
 type WorkflowsPageData struct {
 	PageData
-	Workflows      []WorkflowRow
-	StatusFilter   string
-	WorkflowCount  int
+	Workflows     []WorkflowRow
+	StatusFilter  string
+	WorkflowCount int
 }
 
 // WorkflowStepRow is a step result in the workflow detail page.
@@ -6296,12 +6421,12 @@ type AuditEventRow struct {
 // OperationsPageData holds data for the combined tasks + workflows page.
 type OperationsPageData struct {
 	PageData
-	Tab            string
-	Tasks          []TaskRow
-	Workflows      []WorkflowRow
-	TaskCount      int
-	WorkflowCount  int
-	StatusFilter   string
+	Tab           string
+	Tasks         []TaskRow
+	Workflows     []WorkflowRow
+	TaskCount     int
+	WorkflowCount int
+	StatusFilter  string
 }
 
 // Operations renders the combined tasks + workflows page.
@@ -6724,37 +6849,37 @@ func workflowRowFromDB(w db.WorkflowRun) WorkflowRow {
 	return row
 }
 
-// TungolSteorraRow represents a steorra in the tungol UI table.
-type TungolSteorraRow struct {
+// SpannerBoltRow represents a bolt in the spanner UI table.
+type SpannerBoltRow struct {
 	ID             string
 	Addr           string
 	Patterns       []string
 	Healthy        bool
-	EnvoyCount    int32
+	EnvoyCount     int32
 	Converged      int32
 	Relapsed       int32
 	Diverged       int32
 	Failed         int32
-	Offline    int32
+	Offline        int32
 	NoData         int32
-	ConvergencePct  float32
+	ConvergencePct float32
 	LatencyMs      int64
 	ConfigVersion  string
 	Error          string
 }
 
-// TungolPageData holds data for the tungol page.
-type TungolPageData struct {
+// SpannerPageData holds data for the spanner page.
+type SpannerPageData struct {
 	PageData
-	SteorraCount        int
-	HealthyCount        int
-	TotalEnvoys         int32
-	TotalConverged  int32
-	TotalRelapsed   int32
-	TotalDiverged   int32
-	TotalFailed     int32
-	ConvergencePct       float32
-	Steorras            []TungolSteorraRow
+	BoltCount      int
+	HealthyCount   int
+	TotalEnvoys    int32
+	TotalConverged int32
+	TotalRelapsed  int32
+	TotalDiverged  int32
+	TotalFailed    int32
+	ConvergencePct float32
+	Bolts          []SpannerBoltRow
 	// HA peer replication status
 	PeerEnabled       bool
 	PeerRole          string
@@ -6764,29 +6889,29 @@ type TungolPageData struct {
 	PeerConfigVersion uint64
 }
 
-// Tungol renders the tungol federation status page. The underlying
-// implementation is still hub + steorras; Phase 1+ will replace it
+// Spanner renders the spanner federation status page. The underlying
+// implementation is still hub + bolts; Phase 1+ will replace it
 // with peer-equal gossip.
-func (h *Handler) Tungol(w http.ResponseWriter, r *http.Request) {
-	statuses := h.hub.SteorraStatuses(r.Context())
+func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
+	statuses := h.hub.BoltStatuses(r.Context())
 
-	var steorras []TungolSteorraRow
+	var bolts []SpannerBoltRow
 	healthyCount := 0
 	var totalEnvoys, totalCompliant, totalRelapsed, totalDiverged, totalFailed int32
 	for _, s := range statuses {
-		steorras = append(steorras, TungolSteorraRow{
+		bolts = append(bolts, SpannerBoltRow{
 			ID:             s.ID,
 			Addr:           s.Addr,
 			Patterns:       s.Patterns,
 			Healthy:        s.Healthy,
-			EnvoyCount:    s.EnvoyCount,
+			EnvoyCount:     s.EnvoyCount,
 			Converged:      s.Converged,
 			Relapsed:       s.Relapsed,
 			Diverged:       s.Diverged,
 			Failed:         s.Failed,
-			Offline:    s.Offline,
+			Offline:        s.Offline,
 			NoData:         s.NoData,
-			ConvergencePct:  s.ConvergencePct,
+			ConvergencePct: s.ConvergencePct,
 			LatencyMs:      s.LatencyMs,
 			ConfigVersion:  fmt.Sprintf("%d", s.ConfigVersion),
 			Error:          s.Error,
@@ -6806,17 +6931,17 @@ func (h *Handler) Tungol(w http.ResponseWriter, r *http.Request) {
 		convPct = float32(totalCompliant) / float32(totalEnvoys) * 100
 	}
 
-	data := TungolPageData{
-		PageData:            PageData{Title: "Tungol", ActiveNav: "tungol"},
-		SteorraCount:        len(steorras),
-		HealthyCount:        healthyCount,
-		TotalEnvoys:         totalEnvoys,
-		TotalConverged:      totalCompliant,
-		TotalRelapsed:       totalRelapsed,
-		TotalDiverged:       totalDiverged,
-		TotalFailed:         totalFailed,
-		ConvergencePct:       convPct,
-		Steorras:            steorras,
+	data := SpannerPageData{
+		PageData:       PageData{Title: "Spanner", ActiveNav: "spanner"},
+		BoltCount:      len(bolts),
+		HealthyCount:   healthyCount,
+		TotalEnvoys:    totalEnvoys,
+		TotalConverged: totalCompliant,
+		TotalRelapsed:  totalRelapsed,
+		TotalDiverged:  totalDiverged,
+		TotalFailed:    totalFailed,
+		ConvergencePct: convPct,
+		Bolts:          bolts,
 	}
 
 	// Add HA peer replication status if available.
@@ -6836,30 +6961,30 @@ func (h *Handler) Tungol(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "tungol", data)
+	h.renderer.Render(w, "spanner", data)
 }
 
-// SteorraDetailPageData holds data for the per-steorra detail page.
-type SteorraDetailPageData struct {
+// BoltDetailPageData holds data for the per-bolt detail page.
+type BoltDetailPageData struct {
 	PageData
-	SteorraID      string
+	BoltID         string
 	Addr           string
 	Healthy        bool
-	EnvoyCount    int32
+	EnvoyCount     int32
 	Converged      int32
 	Relapsed       int32
 	Diverged       int32
 	Failed         int32
-	Offline    int32
+	Offline        int32
 	NoData         int32
-	ConvergencePct  float32
+	ConvergencePct float32
 	LatencyMs      int64
-	Envoys        []SteorraDetailEnvoyRow
-	Runs           []SteorraDetailRunRow
+	Envoys         []BoltDetailEnvoyRow
+	Runs           []BoltDetailRunRow
 }
 
-// SteorraDetailEnvoyRow is a envoy on a steorra.
-type SteorraDetailEnvoyRow struct {
+// BoltDetailEnvoyRow is a envoy on a bolt.
+type BoltDetailEnvoyRow struct {
 	ID        string
 	Hostname  string
 	IPAddress string
@@ -6867,10 +6992,10 @@ type SteorraDetailEnvoyRow struct {
 	Revoked   bool
 }
 
-// SteorraDetailRunRow is a run on a steorra.
-type SteorraDetailRunRow struct {
+// BoltDetailRunRow is a run on a bolt.
+type BoltDetailRunRow struct {
 	ID           string
-	EnvoyID     string
+	EnvoyID      string
 	Status       string
 	ModuleCount  int32
 	ChangedCount int32
@@ -6879,31 +7004,31 @@ type SteorraDetailRunRow struct {
 	StartedAt    string
 }
 
-// SteorraDetail renders the per-steorra detail page with envoys and runs.
-func (h *Handler) SteorraDetail(w http.ResponseWriter, r *http.Request) {
+// BoltDetail renders the per-bolt detail page with envoys and runs.
+func (h *Handler) BoltDetail(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	ctx := r.Context()
 
-	statuses := h.hub.SteorraStatuses(ctx)
-	var steorra *tungol.SteorraStatus
+	statuses := h.hub.BoltStatuses(ctx)
+	var bolt *spanner.BoltStatus
 	for i := range statuses {
 		if statuses[i].ID == id {
-			steorra = &statuses[i]
+			bolt = &statuses[i]
 			break
 		}
 	}
-	if steorra == nil {
-		http.Error(w, "steorra not found", http.StatusNotFound)
+	if bolt == nil {
+		http.Error(w, "bolt not found", http.StatusNotFound)
 		return
 	}
 
-	// Fetch envoys and runs from this steorra.
-	envoys, _ := h.hub.SteorraListEnvoys(ctx, id)
-	runs, _ := h.hub.SteorraListRuns(ctx, id, 20)
+	// Fetch envoys and runs from this bolt.
+	envoys, _ := h.hub.BoltListEnvoys(ctx, id)
+	runs, _ := h.hub.BoltListRuns(ctx, id, 20)
 
-	var envoyRows []SteorraDetailEnvoyRow
+	var envoyRows []BoltDetailEnvoyRow
 	for _, t := range envoys {
-		row := SteorraDetailEnvoyRow{
+		row := BoltDetailEnvoyRow{
 			ID:        t.Id,
 			Hostname:  t.Hostname,
 			IPAddress: t.IpAddress,
@@ -6915,15 +7040,15 @@ func (h *Handler) SteorraDetail(w http.ResponseWriter, r *http.Request) {
 		envoyRows = append(envoyRows, row)
 	}
 
-	var runRows []SteorraDetailRunRow
+	var runRows []BoltDetailRunRow
 	for _, run := range runs {
 		var failPct float64
 		if run.ModuleCount > 0 {
 			failPct = float64(run.FailedCount) / float64(run.ModuleCount) * 100
 		}
-		row := SteorraDetailRunRow{
+		row := BoltDetailRunRow{
 			ID:           run.Id,
-			EnvoyID:     run.EnvoyId,
+			EnvoyID:      run.EnvoyId,
 			Status:       run.Status,
 			ModuleCount:  run.ModuleCount,
 			ChangedCount: run.ChangedCount,
@@ -6936,25 +7061,25 @@ func (h *Handler) SteorraDetail(w http.ResponseWriter, r *http.Request) {
 		runRows = append(runRows, row)
 	}
 
-	data := SteorraDetailPageData{
-		PageData:       PageData{Title: "Steorra: " + id, ActiveNav: "tungol"},
-		SteorraID:      steorra.ID,
-		Addr:           steorra.Addr,
-		Healthy:        steorra.Healthy,
-		EnvoyCount:    steorra.EnvoyCount,
-		Converged:      steorra.Converged,
-		Relapsed:       steorra.Relapsed,
-		Diverged:       steorra.Diverged,
-		Failed:         steorra.Failed,
-		Offline:    steorra.Offline,
-		NoData:         steorra.NoData,
-		ConvergencePct:  steorra.ConvergencePct,
-		LatencyMs:      steorra.LatencyMs,
-		Envoys:        envoyRows,
+	data := BoltDetailPageData{
+		PageData:       PageData{Title: "Bolt: " + id, ActiveNav: "spanner"},
+		BoltID:         bolt.ID,
+		Addr:           bolt.Addr,
+		Healthy:        bolt.Healthy,
+		EnvoyCount:     bolt.EnvoyCount,
+		Converged:      bolt.Converged,
+		Relapsed:       bolt.Relapsed,
+		Diverged:       bolt.Diverged,
+		Failed:         bolt.Failed,
+		Offline:        bolt.Offline,
+		NoData:         bolt.NoData,
+		ConvergencePct: bolt.ConvergencePct,
+		LatencyMs:      bolt.LatencyMs,
+		Envoys:         envoyRows,
 		Runs:           runRows,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "steorra-detail", data)
+	h.renderer.Render(w, "bolt-detail", data)
 }
 
 // SecurityDriftRow represents a package drift entry for the security page.
@@ -6985,8 +7110,8 @@ type SecurityScanPageData struct {
 	AideChanged    int64
 	ScannedHosts   int64
 	TotalHosts     int64
-	CVEs           []CVEEntry         // deduplicated CVEs across fleet (one per CVE ID)
-	PerHost        []SecurityHostRow  // per-envoy breakdown
+	CVEs           []CVEEntry        // deduplicated CVEs across fleet (one per CVE ID)
+	PerHost        []SecurityHostRow // per-envoy breakdown
 	// AnyTruncated is true when at least one host's per-severity unique
 	// counts (unique_critical+high+medium+low, agent-authoritative full
 	// totals) exceed the length of the host's CVE list (capped at the
@@ -7004,26 +7129,26 @@ type CVEEntry struct {
 
 // SecurityHostRow holds per-envoy security scan summary.
 type SecurityHostRow struct {
-	ID             string
-	Hostname       string
-	UniqueCritical int64 // distinct CVE IDs per severity, deduped across scanners (agent-authoritative)
-	UniqueHigh     int64
-	UniqueMedium   int64
-	UniqueLow      int64
-	LynisScore     int64
-	LynisWarnings  int64
-	LynisSuggestions int64
-	RootkitClean   bool
-	RkhunterWarnings int64
+	ID                 string
+	Hostname           string
+	UniqueCritical     int64 // distinct CVE IDs per severity, deduped across scanners (agent-authoritative)
+	UniqueHigh         int64
+	UniqueMedium       int64
+	UniqueLow          int64
+	LynisScore         int64
+	LynisWarnings      int64
+	LynisSuggestions   int64
+	RootkitClean       bool
+	RkhunterWarnings   int64
 	ChkrootkitInfected int64
-	ClamavClean    bool
-	ClamavInfected int64
-	AideClean      bool
-	AideAdded      int64
-	AideRemoved    int64
-	AideChanged    int64
-	CVEs           []CVEEntry
-	LastScan       string
+	ClamavClean        bool
+	ClamavInfected     int64
+	AideClean          bool
+	AideAdded          int64
+	AideRemoved        int64
+	AideChanged        int64
+	CVEs               []CVEEntry
+	LastScan           string
 	// Truncated is true when sum(UniqueCritical+High+Medium+Low) exceeds
 	// len(CVEs) — i.e., the agent's MAX_CVES cap dropped some entries
 	// from the wire. Per-host columns stay accurate; only the fleet
@@ -7195,11 +7320,11 @@ func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
 		Diverged:       convData.Diverged,
 		Offline:        convData.Offline,
 		DriftCount:     len(driftRows),
-		DriftRows:       driftRows,
-		Security:        secData,
-		Certs:           certData,
-		CVETrend:        cveTrend,
-		HardeningTrend:  hardeningTrend,
+		DriftRows:      driftRows,
+		Security:       secData,
+		Certs:          certData,
+		CVETrend:       cveTrend,
+		HardeningTrend: hardeningTrend,
 	}
 	h.renderer.RenderFragment(w, "security", "security-status", data)
 }
@@ -7395,7 +7520,6 @@ func planActionColor(action string) string {
 	}
 }
 
-
 // Admin handlers removed — all admin functions are CLI-only (vigocli).
 
 // License renders the license status page.
@@ -7516,11 +7640,11 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 	staleCutoff := time.Now().Add(-7 * 24 * time.Hour)
 
 	type parsedEnvoy struct {
-		ID       string
-		Hostname string
-		IP       string
-		Traits   map[string]any
-		Flat     map[string]string
+		ID        string
+		Hostname  string
+		IP        string
+		Traits    map[string]any
+		Flat      map[string]string
 		Collected time.Time
 	}
 	var parsed []parsedEnvoy
@@ -7563,10 +7687,10 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 
 	// --- Fleet health alerts ---
 	type healthAlert struct {
-		Level   string // "danger", "warning"
-		Title   string
-		Count   int
-		Hosts   []string
+		Level string // "danger", "warning"
+		Title string
+		Count int
+		Hosts []string
 	}
 	var alerts []healthAlert
 
@@ -7803,36 +7927,36 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 
 	data := struct {
 		PageData
-		Where        string
-		Show         string
-		GroupBy      string
-		GroupLabel   string
-		Total        int
-		StaleCount   int
-		OSSummary    []inventoryGroupRow
-		ArchCounts   map[string]int
-		Groups       []inventoryGroupRow
-		Changes      []inventoryChangeRow
-		ChangeCount  int
-		Alerts       []healthAlert
-		UniqueOS     int
-		UniqueArch   int
+		Where       string
+		Show        string
+		GroupBy     string
+		GroupLabel  string
+		Total       int
+		StaleCount  int
+		OSSummary   []inventoryGroupRow
+		ArchCounts  map[string]int
+		Groups      []inventoryGroupRow
+		Changes     []inventoryChangeRow
+		ChangeCount int
+		Alerts      []healthAlert
+		UniqueOS    int
+		UniqueArch  int
 	}{
-		PageData:     PageData{Title: "Inventory", ActiveNav: "inventory"},
-		Where:        where,
-		Show:         show,
-		GroupBy:      groupBy,
-		GroupLabel:   groupLabel,
-		Total:        totalEnvoys,
-		StaleCount:   staleCount,
-		OSSummary:    osSummary,
-		ArchCounts:   archCounts,
-		Groups:       groups,
-		Changes:      changes,
-		ChangeCount:  len(changes),
-		Alerts:       alerts,
-		UniqueOS:     uniqueOS,
-		UniqueArch:   uniqueArch,
+		PageData:    PageData{Title: "Inventory", ActiveNav: "inventory"},
+		Where:       where,
+		Show:        show,
+		GroupBy:     groupBy,
+		GroupLabel:  groupLabel,
+		Total:       totalEnvoys,
+		StaleCount:  staleCount,
+		OSSummary:   osSummary,
+		ArchCounts:  archCounts,
+		Groups:      groups,
+		Changes:     changes,
+		ChangeCount: len(changes),
+		Alerts:      alerts,
+		UniqueOS:    uniqueOS,
+		UniqueArch:  uniqueArch,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "inventory", data)
@@ -8644,8 +8768,8 @@ func (h *Handler) InventorySearchFragment(w http.ResponseWriter, r *http.Request
 		Sample string
 		Count  int
 	}
-	keyValues := map[string]string{}  // key → first non-empty sample value
-	keyCounts := map[string]int{}     // key → number of envoys reporting it
+	keyValues := map[string]string{} // key → first non-empty sample value
+	keyCounts := map[string]int{}    // key → number of envoys reporting it
 	for _, t := range all {
 		var traits map[string]any
 		if json.Unmarshal([]byte(t.Traits), &traits) != nil {
@@ -9227,14 +9351,14 @@ func (h *Handler) InventoryGroupFragment(w http.ResponseWriter, r *http.Request)
 	switch groupBy {
 	case "disk":
 		cols = []detailCol{
-			{"Device", ""},     // special: from blockdevices
+			{"Device", ""}, // special: from blockdevices
 			{"Model", ""},
 			{"Firmware", ""},
 			{"Size", ""},
 		}
 	case "gpu":
 		cols = []detailCol{
-			{"Name", ""},      // special: from gpu.devices
+			{"Name", ""}, // special: from gpu.devices
 			{"Driver", ""},
 			{"Firmware", ""},
 			{"Vendor", ""},

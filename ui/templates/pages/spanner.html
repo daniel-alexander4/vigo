@@ -1,16 +1,16 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Tungol</h1>
-    <p>Federation status and steorra health</p>
+    <h1>Spanner</h1>
+    <p>Federation status and bolt health</p>
 </div>
 
 <div class="stat-cards">
     <div class="stat-card">
-        <div class="stat-card__value">{{.SteorraCount}}</div>
-        <div class="stat-card__label">Steorras</div>
+        <div class="stat-card__value">{{.BoltCount}}</div>
+        <div class="stat-card__label">Bolts</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value text-{{if eq .HealthyCount .SteorraCount}}success{{else if gt .HealthyCount 0}}warning{{else}}danger{{end}}">{{.HealthyCount}}/{{.SteorraCount}}</div>
+        <div class="stat-card__value text-{{if eq .HealthyCount .BoltCount}}success{{else if gt .HealthyCount 0}}warning{{else}}danger{{end}}">{{.HealthyCount}}/{{.BoltCount}}</div>
         <div class="stat-card__label">Healthy</div>
     </div>
     <div class="stat-card">
@@ -39,12 +39,12 @@
     </div>
 </div>
 
-{{if .Steorras}}
+{{if .Bolts}}
 <div class="table-container">
     <table class="table">
         <thead>
             <tr>
-                <th>Steorra ID</th>
+                <th>Bolt ID</th>
                 <th>Address</th>
                 <th>Patterns</th>
                 <th>Envoys</th>
@@ -56,9 +56,9 @@
             </tr>
         </thead>
         <tbody>
-            {{range .Steorras}}
+            {{range .Bolts}}
             <tr>
-                <td><a href="/tungol/steorras/{{.ID}}"><strong>{{.ID}}</strong></a></td>
+                <td><a href="/spanner/bolts/{{.ID}}"><strong>{{.ID}}</strong></a></td>
                 <td class="text-muted">{{.Addr}}</td>
                 <td>{{range $i, $p := .Patterns}}{{if $i}}, {{end}}<code>{{$p}}</code>{{end}}</td>
                 <td>{{.EnvoyCount}}</td>
@@ -79,7 +79,7 @@
     </table>
 </div>
 {{else}}
-<p class="text-muted">No steorras configured.</p>
+<p class="text-muted">No bolts configured.</p>
 {{end}}
 
 {{if .PeerEnabled}}

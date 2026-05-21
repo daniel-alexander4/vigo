@@ -29,7 +29,6 @@ import (
 	"git.alexander4.io/vigo/server/secrets"
 )
 
-
 // generateTestCerts creates a temporary TLS cert+key pair valid for 365 days.
 func generateTestCerts(t *testing.T) (certFile, keyFile string) {
 	t.Helper()
@@ -230,7 +229,7 @@ func TestDoctor_CheckScopes(t *testing.T) {
 		"tls":                 ScopeServer,
 		"secrets":             ScopeServer,
 		"license":             ScopeServer,
-		"tungol":              ScopeServer,
+		"spanner":             ScopeServer,
 		"integrations":        ScopeServer,
 		"config":              ScopeServer,
 		"swarm_pattern_order": ScopeServer,

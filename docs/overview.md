@@ -38,7 +38,7 @@ Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows. Per-platform init syst
 ## Limits to know up front
 
 - **Pre-1.0.** APIs and YAML schema can change between minor versions; no backward-compatibility shims. Read the changelog before upgrading; pin versions in production until the project hits 1.0.
-- **One server process per control plane.** High-availability is via a primary→secondary peer-replication topology in `server/peer/`, plus optional hub + steorras sharding (`server/tungol/`) for very large fleets. No multi-master.
+- **One server process per control plane.** High-availability is via a primary→secondary peer-replication topology in `server/peer/`, plus optional hub + bolts sharding (`server/spanner/`) for very large fleets. No multi-master.
 - **Linux + macOS first.** New agent subsystems ship Linux and macOS at launch; Windows / BSD / illumos parity is a follow-up, prioritized against the rest of the backlog (per the Linux-first doctrine).
 - **No session recording (yet).** Scrier's `recording_enabled` is a schema placeholder; the relay does not currently write recordings.
 - **No SCP/file-transfer over Scrier.** Interactive shell only.

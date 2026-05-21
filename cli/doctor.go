@@ -24,14 +24,14 @@ var doctorConfigFile string
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
-	Short: "Validate server health: config, TLS, secrets, database, license, and tungol",
+	Short: "Validate server health: config, TLS, secrets, database, license, and spanner",
 	Long: `Run health checks to verify the server is operating correctly.
 
 By default, queries the running server's /api/v1/doctor endpoint.
 
 With --pre-start, runs local checks without a running server:
   config_file, secrets_provider, secret_resolution, tls_certs,
-  config_dir, config_validation, tungol`,
+  config_dir, config_validation, spanner`,
 	RunE: runDoctor,
 }
 
@@ -39,7 +39,6 @@ func init() {
 	doctorCmd.Flags().BoolVar(&doctorPreStart, "pre-start", false, "Run local pre-start checks (no server needed)")
 	doctorCmd.Flags().StringVar(&doctorConfigFile, "config", "server.yaml", "Path to server.yaml (for --pre-start)")
 }
-
 
 func runDoctor(cmd *cobra.Command, args []string) error {
 	if doctorPreStart {
@@ -145,20 +144,20 @@ func runDoctorPreStart() error {
 	// 6. config_validation — load all .vgo module files and validate
 	checks = append(checks, checkConfigValidation(configDir))
 
-	// 7. tungol
+	// 7. spanner
 	if serverCfg != nil {
-		if err := serverCfg.Tungol.Validate(); err != nil {
-			checks = append(checks, preStartCheck{"tungol", "fail", err.Error()})
+		if err := serverCfg.Spanner.Validate(); err != nil {
+			checks = append(checks, preStartCheck{"spanner", "fail", err.Error()})
 			hasFailure = true
 		} else {
-			mode := string(serverCfg.Tungol.Mode)
+			mode := string(serverCfg.Spanner.Mode)
 			if mode == "" {
 				mode = "standalone"
 			}
-			checks = append(checks, preStartCheck{"tungol", "pass", mode})
+			checks = append(checks, preStartCheck{"spanner", "pass", mode})
 		}
 	} else {
-		checks = append(checks, preStartCheck{"tungol", "skip", "config unavailable"})
+		checks = append(checks, preStartCheck{"spanner", "skip", "config unavailable"})
 	}
 
 	// Print results
@@ -200,7 +199,7 @@ func loadConfigForDoctor(path string) (secrets.Config, *config.ServerConfig, err
 		return secrets.Config{}, nil, err
 	}
 
-	// Also do a raw parse (without secret resolution) to get TLS/tungol fields.
+	// Also do a raw parse (without secret resolution) to get TLS/spanner fields.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return secretsCfg, nil, nil
@@ -305,11 +304,11 @@ func checkConfigValidation(dir string) preStartCheck {
 		mod := validate.Module{Name: def.Name}
 		for _, r := range def.Resources {
 			mod.Resources = append(mod.Resources, validate.Resource{
-				Name:             r.Name,
-				Type:             r.Type,
-				Attributes:       r.Attributes,
-				Notify:           r.Notify,
-				Subscribes:       r.Subscribes,
+				Name:        r.Name,
+				Type:        r.Type,
+				Attributes:  r.Attributes,
+				Notify:      r.Notify,
+				Subscribes:  r.Subscribes,
 				WatchSecret: r.WatchSecret,
 			})
 		}

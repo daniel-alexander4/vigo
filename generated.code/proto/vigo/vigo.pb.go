@@ -104,7 +104,7 @@ type RegisterResponse struct {
 	Success         bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
 	EnvoyId         string                 `protobuf:"bytes,2,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"` // UUID assigned by the server
 	Message         string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
-	SteorraAddr     string                 `protobuf:"bytes,4,opt,name=steorra_addr,json=steorraAddr,proto3" json:"steorra_addr,omitempty"`               // if set, agent should connect to this steorra for check-ins
+	BoltAddr        string                 `protobuf:"bytes,4,opt,name=bolt_addr,json=boltAddr,proto3" json:"bolt_addr,omitempty"`                        // if set, agent should connect to this bolt for check-ins
 	ServerPubkeyPem string                 `protobuf:"bytes,5,opt,name=server_pubkey_pem,json=serverPubkeyPem,proto3" json:"server_pubkey_pem,omitempty"` // server's ED25519 public key for bundle signature verification
 	FallbackServers []string               `protobuf:"bytes,6,rep,name=fallback_servers,json=fallbackServers,proto3" json:"fallback_servers,omitempty"`   // peer server addresses for agent failover
 	unknownFields   protoimpl.UnknownFields
@@ -162,9 +162,9 @@ func (x *RegisterResponse) GetMessage() string {
 	return ""
 }
 
-func (x *RegisterResponse) GetSteorraAddr() string {
+func (x *RegisterResponse) GetBoltAddr() string {
 	if x != nil {
-		return x.SteorraAddr
+		return x.BoltAddr
 	}
 	return ""
 }
@@ -326,7 +326,7 @@ type CheckInResponse struct {
 	PolicyBundle        *PolicyBundle          `protobuf:"bytes,7,opt,name=policy_bundle,json=policyBundle,proto3" json:"policy_bundle,omitempty"`                      // raw policy for agent-side evaluation
 	PolicyVersion       uint64                 `protobuf:"varint,8,opt,name=policy_version,json=policyVersion,proto3" json:"policy_version,omitempty"`                  // current config version, always set
 	ReassignAddr        string                 `protobuf:"bytes,9,opt,name=reassign_addr,json=reassignAddr,proto3" json:"reassign_addr,omitempty"`                      // non-empty = agent should reconnect here
-	ReassignId          string                 `protobuf:"bytes,10,opt,name=reassign_id,json=reassignId,proto3" json:"reassign_id,omitempty"`                           // new UUID on target steorra
+	ReassignId          string                 `protobuf:"bytes,10,opt,name=reassign_id,json=reassignId,proto3" json:"reassign_id,omitempty"`                           // new UUID on target bolt
 	StreamRequested     bool                   `protobuf:"varint,11,opt,name=stream_requested,json=streamRequested,proto3" json:"stream_requested,omitempty"`           // server wants agent to open AgentStream
 	Warnings            []string               `protobuf:"bytes,12,rep,name=warnings,proto3" json:"warnings,omitempty"`                                                 // config errors, missing modules, etc.
 	ProxiedDevices      []*ProxiedDevice       `protobuf:"bytes,13,rep,name=proxied_devices,json=proxiedDevices,proto3" json:"proxied_devices,omitempty"`               // network devices this gateway manages
@@ -5911,8 +5911,8 @@ func (*SetReassignmentResponse) Descriptor() ([]byte, []int) {
 type ReassignEnvoyRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
-	FromSteorraId string                 `protobuf:"bytes,2,opt,name=from_steorra_id,json=fromSteorraId,proto3" json:"from_steorra_id,omitempty"`
-	ToSteorraId   string                 `protobuf:"bytes,3,opt,name=to_steorra_id,json=toSteorraId,proto3" json:"to_steorra_id,omitempty"`
+	FromBoltId    string                 `protobuf:"bytes,2,opt,name=from_bolt_id,json=fromBoltId,proto3" json:"from_bolt_id,omitempty"`
+	ToBoltId      string                 `protobuf:"bytes,3,opt,name=to_bolt_id,json=toBoltId,proto3" json:"to_bolt_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5954,16 +5954,16 @@ func (x *ReassignEnvoyRequest) GetEnvoyId() string {
 	return ""
 }
 
-func (x *ReassignEnvoyRequest) GetFromSteorraId() string {
+func (x *ReassignEnvoyRequest) GetFromBoltId() string {
 	if x != nil {
-		return x.FromSteorraId
+		return x.FromBoltId
 	}
 	return ""
 }
 
-func (x *ReassignEnvoyRequest) GetToSteorraId() string {
+func (x *ReassignEnvoyRequest) GetToBoltId() string {
 	if x != nil {
-		return x.ToSteorraId
+		return x.ToBoltId
 	}
 	return ""
 }
@@ -6020,28 +6020,28 @@ func (x *ReassignEnvoyResponse) GetTargetAddr() string {
 	return ""
 }
 
-type DrainSteorraRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	SteorraId       string                 `protobuf:"bytes,1,opt,name=steorra_id,json=steorraId,proto3" json:"steorra_id,omitempty"`
-	TargetSteorraId string                 `protobuf:"bytes,2,opt,name=target_steorra_id,json=targetSteorraId,proto3" json:"target_steorra_id,omitempty"` // optional: specific target. Empty = auto-route by patterns
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+type DrainBoltRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BoltId        string                 `protobuf:"bytes,1,opt,name=bolt_id,json=boltId,proto3" json:"bolt_id,omitempty"`
+	TargetBoltId  string                 `protobuf:"bytes,2,opt,name=target_bolt_id,json=targetBoltId,proto3" json:"target_bolt_id,omitempty"` // optional: specific target. Empty = auto-route by patterns
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DrainSteorraRequest) Reset() {
-	*x = DrainSteorraRequest{}
+func (x *DrainBoltRequest) Reset() {
+	*x = DrainBoltRequest{}
 	mi := &file_vigo_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DrainSteorraRequest) String() string {
+func (x *DrainBoltRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DrainSteorraRequest) ProtoMessage() {}
+func (*DrainBoltRequest) ProtoMessage() {}
 
-func (x *DrainSteorraRequest) ProtoReflect() protoreflect.Message {
+func (x *DrainBoltRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -6053,26 +6053,26 @@ func (x *DrainSteorraRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DrainSteorraRequest.ProtoReflect.Descriptor instead.
-func (*DrainSteorraRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use DrainBoltRequest.ProtoReflect.Descriptor instead.
+func (*DrainBoltRequest) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{91}
 }
 
-func (x *DrainSteorraRequest) GetSteorraId() string {
+func (x *DrainBoltRequest) GetBoltId() string {
 	if x != nil {
-		return x.SteorraId
+		return x.BoltId
 	}
 	return ""
 }
 
-func (x *DrainSteorraRequest) GetTargetSteorraId() string {
+func (x *DrainBoltRequest) GetTargetBoltId() string {
 	if x != nil {
-		return x.TargetSteorraId
+		return x.TargetBoltId
 	}
 	return ""
 }
 
-type DrainSteorraResponse struct {
+type DrainBoltResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Moved         int32                  `protobuf:"varint,1,opt,name=moved,proto3" json:"moved,omitempty"`
 	Failed        int32                  `protobuf:"varint,2,opt,name=failed,proto3" json:"failed,omitempty"`
@@ -6081,20 +6081,20 @@ type DrainSteorraResponse struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DrainSteorraResponse) Reset() {
-	*x = DrainSteorraResponse{}
+func (x *DrainBoltResponse) Reset() {
+	*x = DrainBoltResponse{}
 	mi := &file_vigo_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DrainSteorraResponse) String() string {
+func (x *DrainBoltResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DrainSteorraResponse) ProtoMessage() {}
+func (*DrainBoltResponse) ProtoMessage() {}
 
-func (x *DrainSteorraResponse) ProtoReflect() protoreflect.Message {
+func (x *DrainBoltResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -6106,35 +6106,35 @@ func (x *DrainSteorraResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DrainSteorraResponse.ProtoReflect.Descriptor instead.
-func (*DrainSteorraResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use DrainBoltResponse.ProtoReflect.Descriptor instead.
+func (*DrainBoltResponse) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{92}
 }
 
-func (x *DrainSteorraResponse) GetMoved() int32 {
+func (x *DrainBoltResponse) GetMoved() int32 {
 	if x != nil {
 		return x.Moved
 	}
 	return 0
 }
 
-func (x *DrainSteorraResponse) GetFailed() int32 {
+func (x *DrainBoltResponse) GetFailed() int32 {
 	if x != nil {
 		return x.Failed
 	}
 	return 0
 }
 
-func (x *DrainSteorraResponse) GetErrors() []string {
+func (x *DrainBoltResponse) GetErrors() []string {
 	if x != nil {
 		return x.Errors
 	}
 	return nil
 }
 
-type SteorraStatusReport struct {
+type BoltStatusReport struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	SteorraId      string                 `protobuf:"bytes,1,opt,name=steorra_id,json=steorraId,proto3" json:"steorra_id,omitempty"`
+	BoltId         string                 `protobuf:"bytes,1,opt,name=bolt_id,json=boltId,proto3" json:"bolt_id,omitempty"`
 	EnvoyCount     int32                  `protobuf:"varint,2,opt,name=envoy_count,json=envoyCount,proto3" json:"envoy_count,omitempty"`
 	Converged      int32                  `protobuf:"varint,3,opt,name=converged,proto3" json:"converged,omitempty"`
 	Relapsed       int32                  `protobuf:"varint,4,opt,name=relapsed,proto3" json:"relapsed,omitempty"`
@@ -6145,38 +6145,38 @@ type SteorraStatusReport struct {
 	ConfigVersion  uint64                 `protobuf:"varint,9,opt,name=config_version,json=configVersion,proto3" json:"config_version,omitempty"`
 	Diverged       int32                  `protobuf:"varint,10,opt,name=diverged,proto3" json:"diverged,omitempty"`
 	Degraded       int32                  `protobuf:"varint,11,opt,name=degraded,proto3" json:"degraded,omitempty"`
-	// Phase 1 (ADR-tungol): per-steorra cryptographic identity.
-	// tungol_id is the operator-declared federation anchor (matches
-	// the hub's tungol_id). steorra_pubkey is the raw 32-byte Ed25519
-	// public key of this steorra (held in /srv/vigo/steorra/identity.*).
+	// Phase 1 (ADR-spanner): per-bolt cryptographic identity.
+	// spanner_id is the operator-declared federation anchor (matches
+	// the hub's spanner_id). bolt_pubkey is the raw 32-byte Ed25519
+	// public key of this bolt (held in /srv/vigo/bolt/identity.*).
 	// signature is the 64-byte Ed25519 signature over the canonical
-	// serialization of fields 1-11 + 12 with steorra_pubkey + signature
+	// serialization of fields 1-11 + 12 with bolt_pubkey + signature
 	// cleared (mirroring the PolicyBundle pattern in bundlesign.go).
-	// Hubs pin (tungol_id, steorra_id) → steorra_pubkey on first sight;
-	// mismatches on subsequent reports raise a tungol_steorra_pubkey_mismatch
+	// Hubs pin (spanner_id, bolt_id) → bolt_pubkey on first sight;
+	// mismatches on subsequent reports raise a spanner_bolt_pubkey_mismatch
 	// audit event and the report is rejected. Pre-Phase-1 reporters
 	// omit these fields; hubs treat absent fields as "legacy, log + skip".
-	TungolId      string `protobuf:"bytes,12,opt,name=tungol_id,json=tungolId,proto3" json:"tungol_id,omitempty"`
-	SteorraPubkey []byte `protobuf:"bytes,13,opt,name=steorra_pubkey,json=steorraPubkey,proto3" json:"steorra_pubkey,omitempty"`
+	SpannerId     string `protobuf:"bytes,12,opt,name=spanner_id,json=spannerId,proto3" json:"spanner_id,omitempty"`
+	BoltPubkey    []byte `protobuf:"bytes,13,opt,name=bolt_pubkey,json=boltPubkey,proto3" json:"bolt_pubkey,omitempty"`
 	Signature     []byte `protobuf:"bytes,14,opt,name=signature,proto3" json:"signature,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SteorraStatusReport) Reset() {
-	*x = SteorraStatusReport{}
+func (x *BoltStatusReport) Reset() {
+	*x = BoltStatusReport{}
 	mi := &file_vigo_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *SteorraStatusReport) String() string {
+func (x *BoltStatusReport) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*SteorraStatusReport) ProtoMessage() {}
+func (*BoltStatusReport) ProtoMessage() {}
 
-func (x *SteorraStatusReport) ProtoReflect() protoreflect.Message {
+func (x *BoltStatusReport) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -6188,129 +6188,129 @@ func (x *SteorraStatusReport) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SteorraStatusReport.ProtoReflect.Descriptor instead.
-func (*SteorraStatusReport) Descriptor() ([]byte, []int) {
+// Deprecated: Use BoltStatusReport.ProtoReflect.Descriptor instead.
+func (*BoltStatusReport) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{93}
 }
 
-func (x *SteorraStatusReport) GetSteorraId() string {
+func (x *BoltStatusReport) GetBoltId() string {
 	if x != nil {
-		return x.SteorraId
+		return x.BoltId
 	}
 	return ""
 }
 
-func (x *SteorraStatusReport) GetEnvoyCount() int32 {
+func (x *BoltStatusReport) GetEnvoyCount() int32 {
 	if x != nil {
 		return x.EnvoyCount
 	}
 	return 0
 }
 
-func (x *SteorraStatusReport) GetConverged() int32 {
+func (x *BoltStatusReport) GetConverged() int32 {
 	if x != nil {
 		return x.Converged
 	}
 	return 0
 }
 
-func (x *SteorraStatusReport) GetRelapsed() int32 {
+func (x *BoltStatusReport) GetRelapsed() int32 {
 	if x != nil {
 		return x.Relapsed
 	}
 	return 0
 }
 
-func (x *SteorraStatusReport) GetFailed() int32 {
+func (x *BoltStatusReport) GetFailed() int32 {
 	if x != nil {
 		return x.Failed
 	}
 	return 0
 }
 
-func (x *SteorraStatusReport) GetOffline() int32 {
+func (x *BoltStatusReport) GetOffline() int32 {
 	if x != nil {
 		return x.Offline
 	}
 	return 0
 }
 
-func (x *SteorraStatusReport) GetNoData() int32 {
+func (x *BoltStatusReport) GetNoData() int32 {
 	if x != nil {
 		return x.NoData
 	}
 	return 0
 }
 
-func (x *SteorraStatusReport) GetConvergencePct() float32 {
+func (x *BoltStatusReport) GetConvergencePct() float32 {
 	if x != nil {
 		return x.ConvergencePct
 	}
 	return 0
 }
 
-func (x *SteorraStatusReport) GetConfigVersion() uint64 {
+func (x *BoltStatusReport) GetConfigVersion() uint64 {
 	if x != nil {
 		return x.ConfigVersion
 	}
 	return 0
 }
 
-func (x *SteorraStatusReport) GetDiverged() int32 {
+func (x *BoltStatusReport) GetDiverged() int32 {
 	if x != nil {
 		return x.Diverged
 	}
 	return 0
 }
 
-func (x *SteorraStatusReport) GetDegraded() int32 {
+func (x *BoltStatusReport) GetDegraded() int32 {
 	if x != nil {
 		return x.Degraded
 	}
 	return 0
 }
 
-func (x *SteorraStatusReport) GetTungolId() string {
+func (x *BoltStatusReport) GetSpannerId() string {
 	if x != nil {
-		return x.TungolId
+		return x.SpannerId
 	}
 	return ""
 }
 
-func (x *SteorraStatusReport) GetSteorraPubkey() []byte {
+func (x *BoltStatusReport) GetBoltPubkey() []byte {
 	if x != nil {
-		return x.SteorraPubkey
+		return x.BoltPubkey
 	}
 	return nil
 }
 
-func (x *SteorraStatusReport) GetSignature() []byte {
+func (x *BoltStatusReport) GetSignature() []byte {
 	if x != nil {
 		return x.Signature
 	}
 	return nil
 }
 
-type SteorraStatusAck struct {
+type BoltStatusAck struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SteorraStatusAck) Reset() {
-	*x = SteorraStatusAck{}
+func (x *BoltStatusAck) Reset() {
+	*x = BoltStatusAck{}
 	mi := &file_vigo_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *SteorraStatusAck) String() string {
+func (x *BoltStatusAck) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*SteorraStatusAck) ProtoMessage() {}
+func (*BoltStatusAck) ProtoMessage() {}
 
-func (x *SteorraStatusAck) ProtoReflect() protoreflect.Message {
+func (x *BoltStatusAck) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -6322,8 +6322,8 @@ func (x *SteorraStatusAck) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SteorraStatusAck.ProtoReflect.Descriptor instead.
-func (*SteorraStatusAck) Descriptor() ([]byte, []int) {
+// Deprecated: Use BoltStatusAck.ProtoReflect.Descriptor instead.
+func (*BoltStatusAck) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{94}
 }
 
@@ -7474,12 +7474,12 @@ const file_vigo_proto_rawDesc = "" +
 	"\n" +
 	"pubkey_pem\x18\x03 \x01(\tR\tpubkeyPem\x12\x14\n" +
 	"\x05token\x18\x04 \x01(\tR\x05token\x12\x14\n" +
-	"\x05force\x18\x05 \x01(\bR\x05force\"\xdb\x01\n" +
+	"\x05force\x18\x05 \x01(\bR\x05force\"\xd5\x01\n" +
 	"\x10RegisterResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x19\n" +
 	"\benvoy_id\x18\x02 \x01(\tR\aenvoyId\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage\x12!\n" +
-	"\fsteorra_addr\x18\x04 \x01(\tR\vsteorraAddr\x12*\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\x12\x1b\n" +
+	"\tbolt_addr\x18\x04 \x01(\tR\bboltAddr\x12*\n" +
 	"\x11server_pubkey_pem\x18\x05 \x01(\tR\x0fserverPubkeyPem\x12)\n" +
 	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\xfb\x04\n" +
 	"\x0eCheckInRequest\x12\x19\n" +
@@ -7929,27 +7929,27 @@ const file_vigo_proto_rawDesc = "" +
 	"targetAddr\x12 \n" +
 	"\fnew_envoy_id\x18\x03 \x01(\tR\n" +
 	"newEnvoyId\"\x19\n" +
-	"\x17SetReassignmentResponse\"}\n" +
+	"\x17SetReassignmentResponse\"q\n" +
 	"\x14ReassignEnvoyRequest\x12\x19\n" +
-	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12&\n" +
-	"\x0ffrom_steorra_id\x18\x02 \x01(\tR\rfromSteorraId\x12\"\n" +
-	"\rto_steorra_id\x18\x03 \x01(\tR\vtoSteorraId\"Z\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12 \n" +
+	"\ffrom_bolt_id\x18\x02 \x01(\tR\n" +
+	"fromBoltId\x12\x1c\n" +
+	"\n" +
+	"to_bolt_id\x18\x03 \x01(\tR\btoBoltId\"Z\n" +
 	"\x15ReassignEnvoyResponse\x12 \n" +
 	"\fnew_envoy_id\x18\x01 \x01(\tR\n" +
 	"newEnvoyId\x12\x1f\n" +
 	"\vtarget_addr\x18\x02 \x01(\tR\n" +
-	"targetAddr\"`\n" +
-	"\x13DrainSteorraRequest\x12\x1d\n" +
-	"\n" +
-	"steorra_id\x18\x01 \x01(\tR\tsteorraId\x12*\n" +
-	"\x11target_steorra_id\x18\x02 \x01(\tR\x0ftargetSteorraId\"\\\n" +
-	"\x14DrainSteorraResponse\x12\x14\n" +
+	"targetAddr\"Q\n" +
+	"\x10DrainBoltRequest\x12\x17\n" +
+	"\abolt_id\x18\x01 \x01(\tR\x06boltId\x12$\n" +
+	"\x0etarget_bolt_id\x18\x02 \x01(\tR\ftargetBoltId\"Y\n" +
+	"\x11DrainBoltResponse\x12\x14\n" +
 	"\x05moved\x18\x01 \x01(\x05R\x05moved\x12\x16\n" +
 	"\x06failed\x18\x02 \x01(\x05R\x06failed\x12\x16\n" +
-	"\x06errors\x18\x03 \x03(\tR\x06errors\"\xc4\x03\n" +
-	"\x13SteorraStatusReport\x12\x1d\n" +
-	"\n" +
-	"steorra_id\x18\x01 \x01(\tR\tsteorraId\x12\x1f\n" +
+	"\x06errors\x18\x03 \x03(\tR\x06errors\"\xb7\x03\n" +
+	"\x10BoltStatusReport\x12\x17\n" +
+	"\abolt_id\x18\x01 \x01(\tR\x06boltId\x12\x1f\n" +
 	"\venvoy_count\x18\x02 \x01(\x05R\n" +
 	"envoyCount\x12\x1c\n" +
 	"\tconverged\x18\x03 \x01(\x05R\tconverged\x12\x1a\n" +
@@ -7961,11 +7961,13 @@ const file_vigo_proto_rawDesc = "" +
 	"\x0econfig_version\x18\t \x01(\x04R\rconfigVersion\x12\x1a\n" +
 	"\bdiverged\x18\n" +
 	" \x01(\x05R\bdiverged\x12\x1a\n" +
-	"\bdegraded\x18\v \x01(\x05R\bdegraded\x12\x1b\n" +
-	"\ttungol_id\x18\f \x01(\tR\btungolId\x12%\n" +
-	"\x0esteorra_pubkey\x18\r \x01(\fR\rsteorraPubkey\x12\x1c\n" +
-	"\tsignature\x18\x0e \x01(\fR\tsignature\"\x12\n" +
-	"\x10SteorraStatusAck\"\xb8\x01\n" +
+	"\bdegraded\x18\v \x01(\x05R\bdegraded\x12\x1d\n" +
+	"\n" +
+	"spanner_id\x18\f \x01(\tR\tspannerId\x12\x1f\n" +
+	"\vbolt_pubkey\x18\r \x01(\fR\n" +
+	"boltPubkey\x12\x1c\n" +
+	"\tsignature\x18\x0e \x01(\fR\tsignature\"\x0f\n" +
+	"\rBoltStatusAck\"\xb8\x01\n" +
 	"\x0fPeerSyncMessage\x12:\n" +
 	"\vfile_change\x18\x01 \x01(\v2\x17.vigo.v1.PeerFileChangeH\x00R\n" +
 	"fileChange\x12(\n" +
@@ -8050,7 +8052,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x13DownloadCustomTrait\x12#.vigo.v1.DownloadCustomTraitRequest\x1a$.vigo.v1.DownloadCustomTraitResponse\x12L\n" +
 	"\vAgentStream\x12\x1b.vigo.v1.AgentStreamMessage\x1a\x1c.vigo.v1.ServerStreamMessage(\x010\x01\x12N\n" +
 	"\fTunnelStream\x12\x1c.vigo.v1.TunnelClientMessage\x1a\x1c.vigo.v1.TunnelServerMessage(\x010\x01\x123\n" +
-	"\x04Wake\x12\x14.vigo.v1.WakeRequest\x1a\x15.vigo.v1.WakeResponse2\x8d\x13\n" +
+	"\x04Wake\x12\x14.vigo.v1.WakeRequest\x1a\x15.vigo.v1.WakeResponse2\x84\x13\n" +
 	"\tVigoAdmin\x12z\n" +
 	"\x12AddApprovedPattern\x12\".vigo.v1.AddApprovedPatternRequest\x1a#.vigo.v1.AddApprovedPatternResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/v1/approved\x12}\n" +
 	"\x14ListApprovedPatterns\x12$.vigo.v1.ListApprovedPatternsRequest\x1a%.vigo.v1.ListApprovedPatternsResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/approved\x12\x85\x01\n" +
@@ -8075,8 +8077,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\fListPackages\x12\x1c.vigo.v1.ListPackagesRequest\x1a\x1d.vigo.v1.ListPackagesResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/packages\x12w\n" +
 	"\x10ListPackageDrift\x12 .vigo.v1.ListPackageDriftRequest\x1a!.vigo.v1.ListPackageDriftResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/api/v1/packages/drift\x12H\n" +
 	"\vEnrollEnvoy\x12\x1b.vigo.v1.EnrollEnvoyRequest\x1a\x1c.vigo.v1.EnrollEnvoyResponse\x12T\n" +
-	"\x0fSetReassignment\x12\x1f.vigo.v1.SetReassignmentRequest\x1a .vigo.v1.SetReassignmentResponse\x12N\n" +
-	"\x13ReportSteorraStatus\x12\x1c.vigo.v1.SteorraStatusReport\x1a\x19.vigo.v1.SteorraStatusAck2\xd9\x01\n" +
+	"\x0fSetReassignment\x12\x1f.vigo.v1.SetReassignmentRequest\x1a .vigo.v1.SetReassignmentResponse\x12E\n" +
+	"\x10ReportBoltStatus\x12\x19.vigo.v1.BoltStatusReport\x1a\x16.vigo.v1.BoltStatusAck2\xd9\x01\n" +
 	"\bVigoPeer\x12D\n" +
 	"\n" +
 	"SyncStream\x12\x18.vigo.v1.PeerSyncMessage\x1a\x18.vigo.v1.PeerSyncMessage(\x010\x01\x12D\n" +
@@ -8188,10 +8190,10 @@ var file_vigo_proto_goTypes = []any{
 	(*SetReassignmentResponse)(nil),       // 88: vigo.v1.SetReassignmentResponse
 	(*ReassignEnvoyRequest)(nil),          // 89: vigo.v1.ReassignEnvoyRequest
 	(*ReassignEnvoyResponse)(nil),         // 90: vigo.v1.ReassignEnvoyResponse
-	(*DrainSteorraRequest)(nil),           // 91: vigo.v1.DrainSteorraRequest
-	(*DrainSteorraResponse)(nil),          // 92: vigo.v1.DrainSteorraResponse
-	(*SteorraStatusReport)(nil),           // 93: vigo.v1.SteorraStatusReport
-	(*SteorraStatusAck)(nil),              // 94: vigo.v1.SteorraStatusAck
+	(*DrainBoltRequest)(nil),              // 91: vigo.v1.DrainBoltRequest
+	(*DrainBoltResponse)(nil),             // 92: vigo.v1.DrainBoltResponse
+	(*BoltStatusReport)(nil),              // 93: vigo.v1.BoltStatusReport
+	(*BoltStatusAck)(nil),                 // 94: vigo.v1.BoltStatusAck
 	(*PeerSyncMessage)(nil),               // 95: vigo.v1.PeerSyncMessage
 	(*PeerFileChange)(nil),                // 96: vigo.v1.PeerFileChange
 	(*PeerSyncAck)(nil),                   // 97: vigo.v1.PeerSyncAck
@@ -8323,7 +8325,7 @@ var file_vigo_proto_depIdxs = []int32{
 	81,  // 103: vigo.v1.VigoAdmin.ListPackageDrift:input_type -> vigo.v1.ListPackageDriftRequest
 	85,  // 104: vigo.v1.VigoAdmin.EnrollEnvoy:input_type -> vigo.v1.EnrollEnvoyRequest
 	87,  // 105: vigo.v1.VigoAdmin.SetReassignment:input_type -> vigo.v1.SetReassignmentRequest
-	93,  // 106: vigo.v1.VigoAdmin.ReportSteorraStatus:input_type -> vigo.v1.SteorraStatusReport
+	93,  // 106: vigo.v1.VigoAdmin.ReportBoltStatus:input_type -> vigo.v1.BoltStatusReport
 	95,  // 107: vigo.v1.VigoPeer.SyncStream:input_type -> vigo.v1.PeerSyncMessage
 	99,  // 108: vigo.v1.VigoPeer.Promote:input_type -> vigo.v1.PeerPromoteRequest
 	101, // 109: vigo.v1.VigoPeer.Status:input_type -> vigo.v1.PeerStatusRequest
@@ -8357,7 +8359,7 @@ var file_vigo_proto_depIdxs = []int32{
 	82,  // 137: vigo.v1.VigoAdmin.ListPackageDrift:output_type -> vigo.v1.ListPackageDriftResponse
 	86,  // 138: vigo.v1.VigoAdmin.EnrollEnvoy:output_type -> vigo.v1.EnrollEnvoyResponse
 	88,  // 139: vigo.v1.VigoAdmin.SetReassignment:output_type -> vigo.v1.SetReassignmentResponse
-	94,  // 140: vigo.v1.VigoAdmin.ReportSteorraStatus:output_type -> vigo.v1.SteorraStatusAck
+	94,  // 140: vigo.v1.VigoAdmin.ReportBoltStatus:output_type -> vigo.v1.BoltStatusAck
 	95,  // 141: vigo.v1.VigoPeer.SyncStream:output_type -> vigo.v1.PeerSyncMessage
 	100, // 142: vigo.v1.VigoPeer.Promote:output_type -> vigo.v1.PeerPromoteResponse
 	102, // 143: vigo.v1.VigoPeer.Status:output_type -> vigo.v1.PeerStatusResponse

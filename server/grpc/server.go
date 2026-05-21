@@ -17,12 +17,12 @@ import (
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
-	"git.alexander4.io/vigo/server/tungol"
 	"git.alexander4.io/vigo/server/fleet"
-	"git.alexander4.io/vigo/server/license"
-	"git.alexander4.io/vigo/server/registry"
 	"git.alexander4.io/vigo/server/integrations"
+	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/metrics"
+	"git.alexander4.io/vigo/server/registry"
+	"git.alexander4.io/vigo/server/spanner"
 	"git.alexander4.io/vigo/server/task"
 	"git.alexander4.io/vigo/server/traits"
 	"google.golang.org/grpc"
@@ -53,40 +53,40 @@ func (cc *CertCache) GetCertificate(_ *tls.ClientHelloInfo) (*tls.Certificate, e
 
 // ServerConfig holds everything needed to construct the gRPC server.
 type ServerConfig struct {
-	CertFile        string
-	KeyFile         string
-	CAFile          string
-	GRPCPort        string
-	Registry        *registry.Registry
-	ConfigStore     *config.ConfigStore
-	Queries         *db.Queries
-	RunStore        db.RunStore
-	Interval         time.Duration
-	OfflineThreshold time.Duration
-	JitterPercent    int32
-	Integrations    *integrations.Dispatcher
+	CertFile             string
+	KeyFile              string
+	CAFile               string
+	GRPCPort             string
+	Registry             *registry.Registry
+	ConfigStore          *config.ConfigStore
+	Queries              *db.Queries
+	RunStore             db.RunStore
+	Interval             time.Duration
+	OfflineThreshold     time.Duration
+	JitterPercent        int32
+	Integrations         *integrations.Dispatcher
 	TraitsDir            string
 	SignatureWindow      time.Duration // 0 → default 5m
 	TraitsScannerTTL     time.Duration // 0 → default 30s
 	MaxConcurrentStreams uint32        // 0 → default 5000
-	GRPCReadBuffer      int           // 0 → gRPC default 32 KiB
-	GRPCWriteBuffer     int           // 0 → gRPC default 32 KiB
-	MaxConnectionAge    time.Duration // 0 → no forced reconnect
-	MaxConnectionIdle   time.Duration // 0 → default 15m
-	KeepaliveTime       time.Duration // 0 → default 30s
-	KeepaliveTimeout    time.Duration // 0 → default 10s
-	StreamSendBuffer    int           // 0 → default 8
-	Hub              *tungol.Hub // non-nil when role=hub
+	GRPCReadBuffer       int           // 0 → gRPC default 32 KiB
+	GRPCWriteBuffer      int           // 0 → gRPC default 32 KiB
+	MaxConnectionAge     time.Duration // 0 → no forced reconnect
+	MaxConnectionIdle    time.Duration // 0 → default 15m
+	KeepaliveTime        time.Duration // 0 → default 30s
+	KeepaliveTimeout     time.Duration // 0 → default 10s
+	StreamSendBuffer     int           // 0 → default 8
+	Hub                  *spanner.Hub  // non-nil when role=hub
 	// SMTPNotifier removed — events route through Integrations dispatcher
-	LicenseEnforcer  *license.Enforcer
-	TaskStore        *task.Store
-	FleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
-	RunBatcher       *fleet.RunBatcher  // async run persistence from delta events
-	BundleSigner     *BundleSigner     // signs policy bundles (nil = no signing)
-	BundleMaxAge     uint32            // max_age_seconds for signed bundles (0 = forever)
-	RateLimit        config.RateLimitSection // rate limiting config
-	FallbackServers  []string          // peer server addresses returned to agents on registration
-	AuditWriter        auditRecorder     // tamper-evident audit writer (nil-safe)
+	LicenseEnforcer *license.Enforcer
+	TaskStore       *task.Store
+	FleetIndex      *fleet.FleetIndex       // in-memory index for hot-path operations
+	RunBatcher      *fleet.RunBatcher       // async run persistence from delta events
+	BundleSigner    *BundleSigner           // signs policy bundles (nil = no signing)
+	BundleMaxAge    uint32                  // max_age_seconds for signed bundles (0 = forever)
+	RateLimit       config.RateLimitSection // rate limiting config
+	FallbackServers []string                // peer server addresses returned to agents on registration
+	AuditWriter     auditRecorder           // tamper-evident audit writer (nil-safe)
 	// ServerVersions is a per-arch map ("<goos>/<goarch>" → version) of the
 	// agent binary versions available for distribution. Auto-update is
 	// triggered only when an agent reports a version that differs from the
@@ -94,10 +94,10 @@ type ServerConfig struct {
 	// that caused the raspberrypi update loop) is no longer possible — an
 	// arm64 agent is now compared against the arm64 binary's version, not
 	// the server-arch binary's version.
-	ServerVersions     map[string]string
-	AgentBinAvailable  func() bool // if set, version-mismatch auto-update only fires when at least one binary exists
-	GlobalObserveOnly  bool              // global observe-only mode from server.yaml checkin.observe_only
-	Metrics            *metrics.Metrics // per-instance prometheus collectors
+	ServerVersions    map[string]string
+	AgentBinAvailable func() bool      // if set, version-mismatch auto-update only fires when at least one binary exists
+	GlobalObserveOnly bool             // global observe-only mode from server.yaml checkin.observe_only
+	Metrics           *metrics.Metrics // per-instance prometheus collectors
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -192,35 +192,35 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 	reassignStore := NewReassignStore()
 
 	agentSvc := &AgentService{
-		registry:      cfg.Registry,
-		configStore:   cfg.ConfigStore,
-		queries:       cfg.Queries,
-		runStore:      cfg.RunStore,
-		integrations:  cfg.Integrations,
-		traitsScanner: traits.NewScanner(cfg.TraitsDir, traitsScannerTTL),
-		traitsBatch:   traitsBatch,
-		traitsPruner:  traitsPruner,
-		policyCache:   newPolicyCache(),
-		streamMgr:        newStreamManager(cfg.StreamSendBuffer, cfg.FleetIndex, cfg.Metrics, 12*time.Minute),
-		taskRouter:       newTaskRouter(cfg.Queries, cfg.Metrics),
-		queryRouter:      newQueryRouter(),
-		taskStore:        cfg.TaskStore,
-		hub:              cfg.Hub,
-		licenseEnforcer:  cfg.LicenseEnforcer,
-		fleetIndex:       cfg.FleetIndex,
-		runBatcher:       cfg.RunBatcher,
-		reassignStore:    reassignStore,
-		bundleSigner:     cfg.BundleSigner,
-		bundleMaxAge:     cfg.BundleMaxAge,
-		baseInterval:     cfg.Interval,
-		offlineThreshold: cfg.OfflineThreshold,
-		jitterPercent:    cfg.JitterPercent,
-		fallbackServers:  cfg.FallbackServers,
-		auditWriter:        cfg.AuditWriter,
-		serverVersions:     cfg.ServerVersions,
-		agentBinAvailable:  cfg.AgentBinAvailable,
-		globalObserveOnly:  cfg.GlobalObserveOnly,
-		metrics:            cfg.Metrics,
+		registry:          cfg.Registry,
+		configStore:       cfg.ConfigStore,
+		queries:           cfg.Queries,
+		runStore:          cfg.RunStore,
+		integrations:      cfg.Integrations,
+		traitsScanner:     traits.NewScanner(cfg.TraitsDir, traitsScannerTTL),
+		traitsBatch:       traitsBatch,
+		traitsPruner:      traitsPruner,
+		policyCache:       newPolicyCache(),
+		streamMgr:         newStreamManager(cfg.StreamSendBuffer, cfg.FleetIndex, cfg.Metrics, 12*time.Minute),
+		taskRouter:        newTaskRouter(cfg.Queries, cfg.Metrics),
+		queryRouter:       newQueryRouter(),
+		taskStore:         cfg.TaskStore,
+		hub:               cfg.Hub,
+		licenseEnforcer:   cfg.LicenseEnforcer,
+		fleetIndex:        cfg.FleetIndex,
+		runBatcher:        cfg.RunBatcher,
+		reassignStore:     reassignStore,
+		bundleSigner:      cfg.BundleSigner,
+		bundleMaxAge:      cfg.BundleMaxAge,
+		baseInterval:      cfg.Interval,
+		offlineThreshold:  cfg.OfflineThreshold,
+		jitterPercent:     cfg.JitterPercent,
+		fallbackServers:   cfg.FallbackServers,
+		auditWriter:       cfg.AuditWriter,
+		serverVersions:    cfg.ServerVersions,
+		agentBinAvailable: cfg.AgentBinAvailable,
+		globalObserveOnly: cfg.GlobalObserveOnly,
+		metrics:           cfg.Metrics,
 	}
 	if cfg.BundleSigner != nil {
 		if pem, err := cfg.BundleSigner.PublicKeyPEM(); err == nil {
@@ -230,18 +230,18 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 	pb.RegisterVigoAgentServer(srv, agentSvc)
 
 	adminSvc := &AdminService{
-		registry:      cfg.Registry,
-		queries:       cfg.Queries,
-		runStore:      cfg.RunStore,
+		registry:         cfg.Registry,
+		queries:          cfg.Queries,
+		runStore:         cfg.RunStore,
 		configStore:      cfg.ConfigStore,
 		metrics:          cfg.Metrics,
 		baseInterval:     cfg.Interval,
 		offlineThreshold: cfg.OfflineThreshold,
 		hub:              cfg.Hub,
-		fleetIndex:    cfg.FleetIndex,
-		reassignStore: reassignStore,
-		auditWriter:   cfg.AuditWriter,
-		integrations:  cfg.Integrations,
+		fleetIndex:       cfg.FleetIndex,
+		reassignStore:    reassignStore,
+		auditWriter:      cfg.AuditWriter,
+		integrations:     cfg.Integrations,
 	}
 	pb.RegisterVigoAdminServer(srv, adminSvc)
 

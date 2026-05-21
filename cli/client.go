@@ -25,7 +25,7 @@ func newAPIClient() *apiClient {
 }
 
 // newAPIClientFor builds an apiClient against an explicit base URL.
-// Used by cross-vigosrv calls (notably `vigocli tungol ops-puddle
+// Used by cross-vigosrv calls (notably `vigocli spanner ops-puddle
 // join --from <other>`). Auth token resolution is the same as
 // newAPIClient — the operator is expected to have run `vigocli
 // auth login --server <baseURL>` against the target host first.

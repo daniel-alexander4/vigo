@@ -19,9 +19,9 @@ import (
 	"git.alexander4.io/vigo/server/integrations"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/peer"
+	"git.alexander4.io/vigo/server/spanner"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/task"
-	"git.alexander4.io/vigo/server/tungol"
 	"git.alexander4.io/vigo/server/watcher"
 )
 
@@ -56,8 +56,8 @@ func (s *Server) Run(ctx context.Context) error {
 	s.startReporter(ctx)
 
 	if s.mode == config.ModeJoiner {
-		slog.Info("steorra ready",
-			"steorra_pubkey", formatLocalSteorraPubkey(s.steorraID),
+		slog.Info("bolt ready",
+			"bolt_pubkey", formatLocalBoltPubkey(s.boltID),
 			"grpc", s.cfg.Server.GRPCListen,
 			"api", s.cfg.Server.APIListen,
 		)
@@ -364,7 +364,7 @@ func (s *Server) startNVDEnricher(ctx context.Context) {
 
 // startStockpileWatcher runs the ADR-025 Slice 3 stockpile-in-gitback
 // watcher. Nil when the stockpile project hasn't been founded yet
-// (vigocli tungol stockpile init) — a future SIGHUP / restart picks it
+// (vigocli spanner stockpile init) — a future SIGHUP / restart picks it
 // up.
 func (s *Server) startStockpileWatcher(ctx context.Context) {
 	if s.stockpileWatcher == nil {
@@ -416,21 +416,21 @@ func (s *Server) startHTTPServer() {
 	}()
 }
 
-// startReporter runs the steorra status reporter on joiner nodes. The
-// reporter signs every announcement with the steorra identity loaded
+// startReporter runs the bolt status reporter on joiner nodes. The
+// reporter signs every announcement with the bolt identity loaded
 // during NewServer; nil signing key falls back to legacy unsigned
 // reports (accepted by peers during mixed-version rollouts). Bootstrap
-// peers come from tungol.transport.bootstrap_peers (ADR-026); gossip
+// peers come from spanner.transport.bootstrap_peers (ADR-026); gossip
 // will extend this set once 2A.2 wires the CRDT merge.
 func (s *Server) startReporter(ctx context.Context) {
-	if s.mode != config.ModeJoiner || len(s.cfg.Tungol.Transport.BootstrapPeers) == 0 {
+	if s.mode != config.ModeJoiner || len(s.cfg.Spanner.Transport.BootstrapPeers) == 0 {
 		return
 	}
-	reporter := tungol.NewReporter(
-		formatLocalSteorraPubkey(s.steorraID),
-		s.cfg.Tungol.TungolID,
-		steorraSigningKeyOrNil(s.steorraID),
-		s.cfg.Tungol.Transport.BootstrapPeers,
+	reporter := spanner.NewReporter(
+		formatLocalBoltPubkey(s.boltID),
+		s.cfg.Spanner.SpannerID,
+		boltSigningKeyOrNil(s.boltID),
+		s.cfg.Spanner.Transport.BootstrapPeers,
 		s.cfg.Server.TLS.CertFile,
 		s.cfg.Server.TLS.KeyFile,
 		s.cfg.Server.TLS.CAFile,

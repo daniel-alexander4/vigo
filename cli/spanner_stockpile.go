@@ -24,16 +24,16 @@ import (
 // stockpile content as the first commit. The joining-vigosrv flow
 // + cross-vigosrv distribution land in Slice 4.
 
-var tungolStockpileCmd = &cobra.Command{
+var spannerStockpileCmd = &cobra.Command{
 	Use:   "stockpile",
 	Short: "Manage the stockpile gitback project owned by the ops-puddle",
 	Long: `The stockpile project is the gitback project that holds the operator's
 config tree (stacks/stockpile/) and distributes it across every vigosrv
-in the tungol via the swarm substrate. Founded once on a single vigosrv
+in the spanner via the swarm substrate. Founded once on a single vigosrv
 (usually the hub), then joined from each additional ops-puddle member.`,
 }
 
-var tungolStockpileInitCmd = &cobra.Command{
+var spannerStockpileInitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Found the stockpile gitback project on this vigosrv and auto-import the current stockpile",
 	Long: `Calls the service-account puddle helper at /var/run/vigo/puddle.sock
@@ -42,16 +42,16 @@ to mint a new gitback project owned by the ops-puddle (handle
 existing on-disk stockpile content as the first commit.
 
 Preconditions:
-  - tungol.role != standalone (standalone uses local-write + SIGHUP)
-  - ops-puddle exists at --ops-puddle-dir (run 'tungol ops-puddle init' first)
+  - spanner.role != standalone (standalone uses local-write + SIGHUP)
+  - ops-puddle exists at --ops-puddle-dir (run 'spanner ops-puddle init' first)
   - swarm.gitback machinery available on this host
 
 The project state lands under <ops-puddle-dir>/.vigo-gitback/<project-id>/
 and the bare repo at /var/lib/vigo/swarm/gitback/projects/<project-id>.git.`,
-	RunE: runTungolStockpileInit,
+	RunE: runSpannerStockpileInit,
 }
 
-var tungolStockpileJoinCmd = &cobra.Command{
+var spannerStockpileJoinCmd = &cobra.Command{
 	Use:   "join",
 	Short: "Create local stockpile gitback project state on a vigosrv that joined the ops-puddle",
 	Long: `For joining vigosrvs (post-ops-puddle-join). Calls the helper's
@@ -66,49 +66,49 @@ cross_subnet_members). The stockpile watcher then pulls bare→.live
 and triggers configStore.Reload().
 
 Preconditions:
-  - tungol.role != standalone
-  - ops-puddle exists locally (joined via 'tungol ops-puddle join')
+  - spanner.role != standalone
+  - ops-puddle exists locally (joined via 'spanner ops-puddle join')
   - no local stockpile state yet`,
-	RunE: runTungolStockpileJoin,
+	RunE: runSpannerStockpileJoin,
 }
 
 func init() {
-	tungolStockpileInitCmd.Flags().String(
+	spannerStockpileInitCmd.Flags().String(
 		"source",
 		"/srv/vigo/stacks/stockpile",
 		"Source directory whose contents are auto-imported as the first commit",
 	)
-	tungolStockpileInitCmd.Flags().String(
+	spannerStockpileInitCmd.Flags().String(
 		"helper-socket",
 		"/var/run/vigo/puddle.sock",
 		"Path to the service-account puddle helper Unix socket",
 	)
-	tungolStockpileInitCmd.Flags().String(
+	spannerStockpileInitCmd.Flags().String(
 		"gitback-base",
 		"/var/lib/vigo/swarm/gitback",
 		"Base dir for gitback bare repos (the bare repo lands at <base>/projects/<id>.git)",
 	)
 
-	tungolCmd.AddCommand(tungolStockpileCmd)
-	tungolStockpileCmd.AddCommand(tungolStockpileInitCmd)
-	tungolStockpileCmd.AddCommand(tungolStockpileJoinCmd)
+	spannerCmd.AddCommand(spannerStockpileCmd)
+	spannerStockpileCmd.AddCommand(spannerStockpileInitCmd)
+	spannerStockpileCmd.AddCommand(spannerStockpileJoinCmd)
 
 	// Init + join both write ops-puddle-derived state on disk — same
 	// operator-side gate as the other ops-puddle write verbs.
-	tungolStockpileInitCmd.PreRunE = requireUnlockedAlways
-	tungolStockpileJoinCmd.PreRunE = requireUnlockedAlways
+	spannerStockpileInitCmd.PreRunE = requireUnlockedAlways
+	spannerStockpileJoinCmd.PreRunE = requireUnlockedAlways
 }
 
 // stockpileHandle is the fixed handle for the stockpile gitback project.
-// Operators don't name it; there's exactly one per tungol.
+// Operators don't name it; there's exactly one per spanner.
 const stockpileHandle = "stockpile"
 
 // stockpileScope is fixed at members-only per ADR-025 Slice 3 decision.
 // Non-ops-puddle envoys don't hold stockpile bytes; their policy comes
-// through the standard check-in gRPC stream from their steorra.
+// through the standard check-in gRPC stream from their bolt.
 const stockpileScope = "members-only"
 
-func runTungolStockpileInit(cmd *cobra.Command, _ []string) error {
+func runSpannerStockpileInit(cmd *cobra.Command, _ []string) error {
 	opsDir, _ := cmd.Flags().GetString("ops-puddle-dir")
 	source, _ := cmd.Flags().GetString("source")
 	socketPath, _ := cmd.Flags().GetString("helper-socket")
@@ -118,7 +118,7 @@ func runTungolStockpileInit(cmd *cobra.Command, _ []string) error {
 	opsPubkeyPath := puddle.PubkeyPath(opsDir)
 	if _, err := os.Stat(opsPubkeyPath); err != nil {
 		return fmt.Errorf(
-			"no ops-puddle at %s: %w (run `vigocli tungol ops-puddle init <name>` first, or `join` to claim one)",
+			"no ops-puddle at %s: %w (run `vigocli spanner ops-puddle init <name>` first, or `join` to claim one)",
 			opsDir, err,
 		)
 	}
@@ -128,7 +128,7 @@ func runTungolStockpileInit(cmd *cobra.Command, _ []string) error {
 	}
 	friendlyName := strings.TrimRight(string(friendlyNameBytes), "\n")
 
-	// Precondition: tungol role isn't standalone (check via REST against
+	// Precondition: spanner role isn't standalone (check via REST against
 	// the local vigosrv). Failure to reach the server isn't fatal —
 	// standalone deployments may not even have the REST API up the way
 	// vigocli expects; surface a clear error rather than silently doing
@@ -137,15 +137,15 @@ func runTungolStockpileInit(cmd *cobra.Command, _ []string) error {
 	var status struct {
 		Role string `json:"role"`
 	}
-	if err := client.get("/api/v1/tungol/status", &status); err != nil {
+	if err := client.get("/api/v1/spanner/status", &status); err != nil {
 		return fmt.Errorf(
-			"cannot reach local vigosrv to check tungol role: %w (the stockpile project is for tungol-mode deployments only — standalone keeps local-write + SIGHUP)",
+			"cannot reach local vigosrv to check spanner role: %w (the stockpile project is for spanner-mode deployments only — standalone keeps local-write + SIGHUP)",
 			err,
 		)
 	}
 	if status.Role == "" || status.Role == "standalone" {
 		return fmt.Errorf(
-			"this vigosrv is %q — the stockpile gitback project is only for tungol-mode deployments (role: hub or spoke)",
+			"this vigosrv is %q — the stockpile gitback project is only for spanner-mode deployments (role: hub or spoke)",
 			status.Role,
 		)
 	}
@@ -267,7 +267,7 @@ func autoImport(source, bareRepoPath, opsFriendlyName string) (int, int64, error
 	// pubkeys do that).
 	for _, kv := range [][]string{
 		{"user.name", fmt.Sprintf("vigo ops-puddle: %s", opsFriendlyName)},
-		{"user.email", fmt.Sprintf("ops-puddle@%s.tungol.local", opsFriendlyName)},
+		{"user.email", fmt.Sprintf("ops-puddle@%s.spanner.local", opsFriendlyName)},
 	} {
 		if err := runGit(workTree, "config", kv[0], kv[1]); err != nil {
 			return 0, 0, fmt.Errorf("git config %s: %w", kv[0], err)
@@ -348,7 +348,7 @@ func runGit(dir string, args ...string) error {
 	return nil
 }
 
-func runTungolStockpileJoin(cmd *cobra.Command, _ []string) error {
+func runSpannerStockpileJoin(cmd *cobra.Command, _ []string) error {
 	opsDir, _ := cmd.Flags().GetString("ops-puddle-dir")
 	socketPath, _ := cmd.Flags().GetString("helper-socket")
 
@@ -356,22 +356,22 @@ func runTungolStockpileJoin(cmd *cobra.Command, _ []string) error {
 	opsPubkeyPath := puddle.PubkeyPath(opsDir)
 	if _, err := os.Stat(opsPubkeyPath); err != nil {
 		return fmt.Errorf(
-			"no ops-puddle at %s: %w (run `vigocli tungol ops-puddle join --from <existing-member> --code <code>` first)",
+			"no ops-puddle at %s: %w (run `vigocli spanner ops-puddle join --from <existing-member> --code <code>` first)",
 			opsDir, err,
 		)
 	}
 
-	// Precondition: tungol mode (not standalone).
+	// Precondition: spanner mode (not standalone).
 	client := newAPIClient()
 	var status struct {
 		Role string `json:"role"`
 	}
-	if err := client.get("/api/v1/tungol/status", &status); err != nil {
-		return fmt.Errorf("cannot reach local vigosrv to check tungol role: %w", err)
+	if err := client.get("/api/v1/spanner/status", &status); err != nil {
+		return fmt.Errorf("cannot reach local vigosrv to check spanner role: %w", err)
 	}
 	if status.Role == "" || status.Role == "standalone" {
 		return fmt.Errorf(
-			"this vigosrv is %q — stockpile join only applies in tungol mode",
+			"this vigosrv is %q — stockpile join only applies in spanner mode",
 			status.Role,
 		)
 	}

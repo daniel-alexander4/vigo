@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package tungol
+package spanner
 
 import (
 	"context"
@@ -35,19 +35,19 @@ func (f *fakeConvergenceSource) ConvergenceCounts() (int, int, int, int, int, in
 	return f.total, f.converged, f.relapsed, f.diverged, f.degraded, f.errors, f.offline, f.noData
 }
 
-// countingAdminService counts ReportSteorraStatus calls and optionally fails.
+// countingAdminService counts ReportBoltStatus calls and optionally fails.
 type countingAdminService struct {
 	pb.UnimplementedVigoAdminServer
 	calls   atomic.Int32
 	failErr error // if non-nil, all calls return this error
 }
 
-func (s *countingAdminService) ReportSteorraStatus(_ context.Context, _ *pb.SteorraStatusReport) (*pb.SteorraStatusAck, error) {
+func (s *countingAdminService) ReportBoltStatus(_ context.Context, _ *pb.BoltStatusReport) (*pb.BoltStatusAck, error) {
 	s.calls.Add(1)
 	if s.failErr != nil {
 		return nil, s.failErr
 	}
-	return &pb.SteorraStatusAck{}, nil
+	return &pb.BoltStatusAck{}, nil
 }
 
 // startReporterFakeHub starts a gRPC server for reporter tests.
@@ -65,7 +65,7 @@ func startReporterFakeHub(t *testing.T, svc *countingAdminService) string {
 }
 
 func TestReporterActiveAddr_NoFallback(t *testing.T) {
-	r := NewReporter("steorra1", "", nil, []string{"hub.example.com:1530"},
+	r := NewReporter("bolt1", "", nil, []string{"hub.example.com:1530"},
 		"", "", "", &fakeConvergenceSource{}, 10*time.Second)
 
 	if r.ActiveAddr() != "hub.example.com:1530" {
@@ -74,7 +74,7 @@ func TestReporterActiveAddr_NoFallback(t *testing.T) {
 }
 
 func TestReporterActiveAddr_WithFallbacks(t *testing.T) {
-	r := NewReporter("steorra1", "", nil,
+	r := NewReporter("bolt1", "", nil,
 		[]string{"hub.example.com:1530", "standby1.example.com:1530", "standby2.example.com:1530"},
 		"", "", "", &fakeConvergenceSource{}, 10*time.Second)
 
@@ -94,7 +94,7 @@ func TestReporterFailover_RotatesAfterThreshold(t *testing.T) {
 	primaryAddr := startReporterFakeHub(t, primarySvc)
 	fallbackAddr := startReporterFakeHub(t, fallbackSvc)
 
-	r := NewReporter("steorra1", "", nil, []string{primaryAddr, fallbackAddr},
+	r := NewReporter("bolt1", "", nil, []string{primaryAddr, fallbackAddr},
 		"", "", "", &fakeConvergenceSource{total: 10, converged: 8},
 		50*time.Millisecond)
 
@@ -138,7 +138,7 @@ func TestReporterFailover_NoRotationWithSingleAddr(t *testing.T) {
 	failSvc := &countingAdminService{failErr: status.Error(codes.Unavailable, "down")}
 	addr := startReporterFakeHub(t, failSvc)
 
-	r := NewReporter("steorra1", "", nil, []string{addr},
+	r := NewReporter("bolt1", "", nil, []string{addr},
 		"", "", "", &fakeConvergenceSource{total: 5, converged: 5},
 		50*time.Millisecond)
 
@@ -170,7 +170,7 @@ func TestReporterFailover_CyclesBackToPrimary(t *testing.T) {
 	addr2 := startReporterFakeHub(t, svc2)
 	addr3 := startReporterFakeHub(t, svc3)
 
-	r := NewReporter("steorra1", "", nil, []string{addr1, addr2, addr3},
+	r := NewReporter("bolt1", "", nil, []string{addr1, addr2, addr3},
 		"", "", "", &fakeConvergenceSource{total: 1, converged: 1},
 		30*time.Millisecond)
 
@@ -209,7 +209,7 @@ func TestReporterFailover_ResetsOnSuccess(t *testing.T) {
 	fallbackSvc := &countingAdminService{}
 	fallbackAddr := startReporterFakeHub(t, fallbackSvc)
 
-	r := NewReporter("steorra1", "", nil, []string{addr, fallbackAddr},
+	r := NewReporter("bolt1", "", nil, []string{addr, fallbackAddr},
 		"", "", "", &fakeConvergenceSource{total: 5, converged: 5},
 		50*time.Millisecond)
 
@@ -238,7 +238,7 @@ func TestReporterFailover_ResetsOnSuccess(t *testing.T) {
 
 func TestReporterReport_SendsCorrectData(t *testing.T) {
 	// Verify the reporter sends correct compliance data.
-	var received *pb.SteorraStatusReport
+	var received *pb.BoltStatusReport
 	svc := &pb.UnimplementedVigoAdminServer{}
 	_ = svc
 
@@ -246,7 +246,7 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 	captureSvc := &capturingAdminService{}
 	addr := startCapturingFakeHub(t, captureSvc)
 
-	r := NewReporter("steorra-east", "", nil, []string{addr},
+	r := NewReporter("bolt-east", "", nil, []string{addr},
 		"", "", "", &fakeConvergenceSource{
 			total: 100, converged: 80, relapsed: 10, errors: 5, offline: 3, noData: 2,
 		},
@@ -272,8 +272,8 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 			if received != nil {
 				cancel()
 
-				if received.SteorraId != "steorra-east" {
-					t.Errorf("SteorraId = %q, want steorra-east", received.SteorraId)
+				if received.BoltId != "bolt-east" {
+					t.Errorf("BoltId = %q, want bolt-east", received.BoltId)
 				}
 				if received.EnvoyCount != 100 {
 					t.Errorf("EnvoyCount = %d, want 100", received.EnvoyCount)
@@ -304,23 +304,23 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 	}
 }
 
-// capturingAdminService captures the last ReportSteorraStatus request.
+// capturingAdminService captures the last ReportBoltStatus request.
 type capturingAdminService struct {
 	pb.UnimplementedVigoAdminServer
-	last atomic.Value // *pb.SteorraStatusReport
+	last atomic.Value // *pb.BoltStatusReport
 }
 
-func (s *capturingAdminService) ReportSteorraStatus(_ context.Context, req *pb.SteorraStatusReport) (*pb.SteorraStatusAck, error) {
+func (s *capturingAdminService) ReportBoltStatus(_ context.Context, req *pb.BoltStatusReport) (*pb.BoltStatusAck, error) {
 	s.last.Store(req)
-	return &pb.SteorraStatusAck{}, nil
+	return &pb.BoltStatusAck{}, nil
 }
 
-func (s *capturingAdminService) lastReport() *pb.SteorraStatusReport {
+func (s *capturingAdminService) lastReport() *pb.BoltStatusReport {
 	v := s.last.Load()
 	if v == nil {
 		return nil
 	}
-	return v.(*pb.SteorraStatusReport)
+	return v.(*pb.BoltStatusReport)
 }
 
 func startCapturingFakeHub(t *testing.T, svc *capturingAdminService) string {
@@ -341,8 +341,8 @@ func startCapturingFakeHub(t *testing.T, svc *capturingAdminService) string {
 // ---------------------------------------------------------------------------
 
 // hubAdminShim adapts a real *Hub to the VigoAdminServer interface
-// for integration tests. Mirrors server/grpc/admin.go::ReportSteorraStatus —
-// validates steorra_id, forwards to hub.RecordSteorraReport, and maps
+// for integration tests. Mirrors server/grpc/admin.go::ReportBoltStatus —
+// validates bolt_id, forwards to hub.RecordBoltReport, and maps
 // hub-side rejection to PermissionDenied so the wire-visible behavior
 // matches production.
 type hubAdminShim struct {
@@ -351,15 +351,15 @@ type hubAdminShim struct {
 	calls atomic.Int32
 }
 
-func (s *hubAdminShim) ReportSteorraStatus(ctx context.Context, req *pb.SteorraStatusReport) (*pb.SteorraStatusAck, error) {
+func (s *hubAdminShim) ReportBoltStatus(ctx context.Context, req *pb.BoltStatusReport) (*pb.BoltStatusAck, error) {
 	s.calls.Add(1)
-	if req.SteorraId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "steorra_id is required")
+	if req.BoltId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "bolt_id is required")
 	}
-	if err := s.hub.RecordSteorraReport(ctx, req); err != nil {
+	if err := s.hub.RecordBoltReport(ctx, req); err != nil {
 		return nil, status.Errorf(codes.PermissionDenied, "report rejected: %v", err)
 	}
-	return &pb.SteorraStatusAck{}, nil
+	return &pb.BoltStatusAck{}, nil
 }
 
 func startHubAdminShim(t *testing.T, h *Hub) (addr string, shim *hubAdminShim) {
@@ -384,20 +384,20 @@ func insecureDial(ctx context.Context, addr string, _ credentials.TransportCrede
 }
 
 // TestPinOnFirstSighting_Integration exercises the full Reporter → gRPC →
-// Hub.RecordSteorraReport path over loopback TCP. Asserts (a) first
+// Hub.RecordBoltReport path over loopback TCP. Asserts (a) first
 // sighting pins the asserted pubkey, and (b) a subsequent report under
-// the same (tungol_id, steorra_id) with a different signing key is
-// rejected and emits tungol_steorra_pubkey_mismatch via the audit
+// the same (spanner_id, bolt_id) with a different signing key is
+// rejected and emits spanner_bolt_pubkey_mismatch via the audit
 // writer. pin_test.go covers the same logic at the unit level by
-// invoking Hub.RecordSteorraReport directly — this test extends that
+// invoking Hub.RecordBoltReport directly — this test extends that
 // coverage through the gRPC handler and the Reporter's signing path,
 // which is what the production wire actually exercises.
 func TestPinOnFirstSighting_Integration(t *testing.T) {
 	h, audit := newHubForPinTests(t)
 	addr, shim := startHubAdminShim(t, h)
 
-	const tungolID = "alexander4-prod"
-	const steorraID = "dc1"
+	const spannerID = "alexander4-prod"
+	const boltID = "dc1"
 
 	_, priv1, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -412,7 +412,7 @@ func TestPinOnFirstSighting_Integration(t *testing.T) {
 
 	// --- Phase 1: first sighting pins priv1's pubkey ---
 
-	r1 := NewReporter(steorraID, tungolID, priv1, []string{addr}, "", "", "", conv, 30*time.Millisecond)
+	r1 := NewReporter(boltID, spannerID, priv1, []string{addr}, "", "", "", conv, 30*time.Millisecond)
 	r1.dialFunc = insecureDial
 
 	ctx1, cancel1 := context.WithTimeout(context.Background(), 2*time.Second)
@@ -420,25 +420,25 @@ func TestPinOnFirstSighting_Integration(t *testing.T) {
 	go r1.Run(ctx1)
 
 	waitFor(t, 1500*time.Millisecond, "first sighting recorded", func() bool {
-		return shim.calls.Load() >= 1 && h.LookupSteorraPin(tungolID, steorraID) != nil
+		return shim.calls.Load() >= 1 && h.LookupBoltPin(spannerID, boltID) != nil
 	})
 	cancel1()
 
-	pin := h.LookupSteorraPin(tungolID, steorraID)
+	pin := h.LookupBoltPin(spannerID, boltID)
 	if pin == nil {
 		t.Fatal("expected pin after first sighting")
 	}
 	if !bytesEqual(pin.Pubkey, []byte(priv1.Public().(ed25519.PublicKey))) {
 		t.Error("pinned pubkey does not match priv1's pubkey")
 	}
-	if got := len(audit.events_("tungol_steorra_pubkey_mismatch")); got != 0 {
+	if got := len(audit.events_("spanner_bolt_pubkey_mismatch")); got != 0 {
 		t.Errorf("first sighting should not emit mismatch events; got %d", got)
 	}
 
-	// --- Phase 2: same (tungol_id, steorra_id) under priv2 is rejected ---
+	// --- Phase 2: same (spanner_id, bolt_id) under priv2 is rejected ---
 
 	beforeCalls := shim.calls.Load()
-	r2 := NewReporter(steorraID, tungolID, priv2, []string{addr}, "", "", "", conv, 30*time.Millisecond)
+	r2 := NewReporter(boltID, spannerID, priv2, []string{addr}, "", "", "", conv, 30*time.Millisecond)
 	r2.dialFunc = insecureDial
 
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 2*time.Second)
@@ -446,11 +446,11 @@ func TestPinOnFirstSighting_Integration(t *testing.T) {
 	go r2.Run(ctx2)
 
 	waitFor(t, 1500*time.Millisecond, "mismatch event recorded", func() bool {
-		return shim.calls.Load() > beforeCalls && len(audit.events_("tungol_steorra_pubkey_mismatch")) >= 1
+		return shim.calls.Load() > beforeCalls && len(audit.events_("spanner_bolt_pubkey_mismatch")) >= 1
 	})
 	cancel2()
 
-	mismatch := audit.events_("tungol_steorra_pubkey_mismatch")
+	mismatch := audit.events_("spanner_bolt_pubkey_mismatch")
 	if len(mismatch) < 1 {
 		t.Fatal("expected at least one mismatch event after priv2 report")
 	}
@@ -459,7 +459,7 @@ func TestPinOnFirstSighting_Integration(t *testing.T) {
 	}
 
 	// Pin must still hold priv1's pubkey — the rejected report did not replace it.
-	pin = h.LookupSteorraPin(tungolID, steorraID)
+	pin = h.LookupBoltPin(spannerID, boltID)
 	if pin == nil || !bytesEqual(pin.Pubkey, []byte(priv1.Public().(ed25519.PublicKey))) {
 		t.Error("pin should still hold priv1's pubkey after priv2 rejection")
 	}

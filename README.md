@@ -2,7 +2,7 @@
 
 Distributed state enforcement for servers, network devices, and workstations. Agents on managed nodes pull desired state from a central server via gRPC over mTLS, apply idempotent changes, and report results back.
 
-73 built-in resource types. 27 trait collectors. 7 operating systems (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows). Orchestration (ad-hoc tasks, workflows, rolling execution, live queries). Pluggable authentication (basic, OIDC, SSH key signing). Hub-spoke scaling via tungol. AI assistant. Web dashboard.
+73 built-in resource types. 27 trait collectors. 7 operating systems (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows). Orchestration (ad-hoc tasks, workflows, rolling execution, live queries). Pluggable authentication (basic, OIDC, SSH key signing). Hub-spoke scaling via spanner. AI assistant. Web dashboard.
 
 ## Quickstart
 
@@ -456,9 +456,9 @@ vars:
 
 Two backends: **local** (default, AES-256-GCM encrypted files on disk) and **isopass** (production, HTTP-based). Automatic re-convergence on secret rotation. Secrets never appear in plaintext in configs, logs, gRPC payloads, or run results.
 
-## Tungol
+## Spanner
 
-Hub-spoke scaling for large fleets. A hub aggregates data from steorras, each handling a partition of nodes. Per-steorra compliance metrics, drill-down views, and envoy reassignment with drain support. (The YAML config block in `server.yaml` is still named `spanner:` through Phase 0 of the spanner→tungol redesign — operator-facing CLI / UI / REST / metrics speak tungol/steorra.)
+Hub-spoke scaling for large fleets. A hub aggregates data from bolts, each handling a partition of nodes. Per-bolt compliance metrics, drill-down views, and envoy reassignment with drain support. (The YAML config block in `server.yaml` is still named `spanner:` through Phase 0 of the spanner→spanner redesign — operator-facing CLI / UI / REST / metrics speak spanner/bolt.)
 
 ## License
 

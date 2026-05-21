@@ -100,11 +100,11 @@ The originating instance of a swarm blob on an envoy — the source of truth for
 
 ## spanner
 
-The retired name for the federated control-plane subsystem. All operator-facing surfaces (YAML, CLI, REST, UI, metrics, proto, on-disk filenames) speak the [tungol](#tungol) / [steorra](#steorra) vocabulary; the loader rejects the old `spanner:` YAML key at startup. The `role:` value `spoke` is retained as the architectural marker for "this vigosrv is one steorra in the tungol" until Phase 1+ retires the hub + steorras shape entirely. See [Tungol](howto/set-up-tungol.md).
+The whole federated control plane — a constellation of [bolt](#bolt) servers cooperating to operate one fleet. CLI (`vigocli spanner`), UI route (`/spanner`), REST namespace (`/api/v1/spanner/*`), YAML key (`spanner:`), and metric prefix (`vigo_spanner_*`) all speak the spanner vocabulary. The current wire implementation is hub + bolts; Phase 1+ will replace it with peer-equal gossip. The loader rejects the retired `tungol:` YAML key at startup. See [Set up Spanner](howto/set-up-spanner.md).
 
-## steorra
+## bolt
 
-One `vigosrv` participating in a [tungol](#tungol) federation. Owns a hostname-pattern partition of the fleet; handles agent check-ins for its envoys; participates as a peer in the gossiped admissions CRDT (ADR-026). The YAML config uses `tungol.mode: founder` (the bootstrap-discovery rendezvous in Phase 2 — Phase 3 retires the founder/joiner distinction entirely) or `tungol.mode: joiner` (a steorra that joined an existing tungol). Per-steorra identity is the Ed25519 pubkey from `server/steorra/`, not a YAML-configured ID.
+One `vigosrv` participating in a [spanner](#spanner) federation. Owns a hostname-pattern partition of the fleet; handles agent check-ins for its envoys; participates as a peer in the gossiped admissions CRDT (ADR-026). The YAML config uses `spanner.mode: founder` (the bootstrap-discovery rendezvous in Phase 2 — Phase 3 retires the founder/joiner distinction entirely) or `spanner.mode: joiner` (a bolt that joined an existing spanner). Per-bolt identity is the Ed25519 pubkey from `server/bolt/`, not a YAML-configured ID.
 
 ## stockpile
 
@@ -121,10 +121,6 @@ The envoy-only P2P network substrate. Swarm is the transport layer that all P2P 
 ## trait
 
 A collected fact about an envoy, reported at check-in — OS, hardware, installed packages, listening ports, filesystem mounts, kernel modules, etc. Traits feed into `when:` expressions, compliance evaluation, inventory views, and trend analysis. Each trait has a dedicated collector in `agent/src/traits/`. See the [Trait Reference](reference/vigo/traits/).
-
-## tungol
-
-The whole federated control plane — a constellation of [steorra](#steorra) servers cooperating to operate one fleet. CLI (`vigocli tungol`), UI route (`/tungol`), REST namespace (`/api/v1/tungol/*`), YAML key (`tungol:`), and metric prefix (`vigo_tungol_*`) all speak the tungol vocabulary. The current wire implementation is hub + steorras; Phase 1+ will replace it with peer-equal gossip. See [Set up Tungol](howto/set-up-tungol.md).
 
 ## usercrate
 

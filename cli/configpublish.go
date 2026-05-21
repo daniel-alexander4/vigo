@@ -363,16 +363,16 @@ func streamPublishSSE(body io.Reader) error {
 
 // reloadServer dispatches the post-publish reload either through the
 // legacy stockpile→.live local-write + REST-reload path (standalone)
-// or through the tungol-mode gitback push (which is what triggers
+// or through the spanner-mode gitback push (which is what triggers
 // the stockpile watcher's bare→.live pull + reload). Detection is
-// via /api/v1/tungol/status; failure to detect falls back to the
+// via /api/v1/spanner/status; failure to detect falls back to the
 // legacy path so misconfigured deployments still get something.
 func reloadServer() {
 	client := newAPIClient()
 	var status struct {
 		Role string `json:"role"`
 	}
-	if err := client.get("/api/v1/tungol/status", &status); err != nil {
+	if err := client.get("/api/v1/spanner/status", &status); err != nil {
 		// Can't even talk to the server — keep the legacy fallback so
 		// operators see the same error they'd see today.
 		legacyReloadServer()
@@ -383,7 +383,7 @@ func reloadServer() {
 		return
 	}
 	if err := publishViaGitback(); err != nil {
-		fmt.Fprintf(os.Stderr, "warning: tungol gitback publish failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "warning: spanner gitback publish failed: %v\n", err)
 	}
 }
 
@@ -394,7 +394,7 @@ func legacyReloadServer() {
 	}
 }
 
-// publishViaGitback is the tungol-mode publish path (ADR-025 Slice 4):
+// publishViaGitback is the spanner-mode publish path (ADR-025 Slice 4):
 // clone the stockpile bare repo into a temp work tree, mirror this
 // vigosrv's on-disk stockpile/ into it (delete-aware), git add+commit+
 // push via file://, then poll the server's config version until the
@@ -408,7 +408,7 @@ func publishViaGitback() error {
 	}
 	bareRepoPath := filepath.Join("/var/lib/vigo/swarm/gitback/projects", projectIDHex+".git")
 	if _, err := os.Stat(bareRepoPath); err != nil {
-		return fmt.Errorf("stockpile bare repo missing at %s: %w (run `vigocli tungol stockpile init` on the founding vigosrv first)", bareRepoPath, err)
+		return fmt.Errorf("stockpile bare repo missing at %s: %w (run `vigocli spanner stockpile init` on the founding vigosrv first)", bareRepoPath, err)
 	}
 
 	preVersion, err := publishGetConfigVersion()
@@ -512,7 +512,7 @@ func publishLookupStockpileProjectID(opsDir string) (string, error) {
 			return e.Name(), nil
 		}
 	}
-	return "", fmt.Errorf("no stockpile project state under %s — run `vigocli tungol stockpile init` (founder) or `tungol stockpile join` (joiner)", gitbackDir)
+	return "", fmt.Errorf("no stockpile project state under %s — run `vigocli spanner stockpile init` (founder) or `spanner stockpile join` (joiner)", gitbackDir)
 }
 
 // publishMirrorIntoWorkTree clears src out of workTree (preserving
@@ -570,7 +570,7 @@ func publishMirrorIntoWorkTree(src, workTree string) error {
 }
 
 // publishRunGit is the publish-flow's git invocation helper —
-// parallel to tungol_stockpile.go's runGit; duplicated to keep this
+// parallel to spanner_stockpile.go's runGit; duplicated to keep this
 // file self-contained.
 func publishRunGit(dir string, args ...string) error {
 	cmd := exec.Command("git", args...)
@@ -603,15 +603,15 @@ func recordPublish(operator string, res *publish.Result) {
 
 // retractAPIResponse matches the server's retract endpoint response.
 type retractAPIResponse struct {
-	Enabled bool              `json:"enabled"`
-	Reason  string            `json:"reason,omitempty"`
+	Enabled bool               `json:"enabled"`
+	Reason  string             `json:"reason,omitempty"`
 	Results []retractAPIResult `json:"results,omitempty"`
 }
 
 type retractAPIResult struct {
-	Name          string `json:"name"`
+	Name        string `json:"name"`
 	RetractYAML string `json:"retract_yaml"`
-	Warnings      []struct {
+	Warnings    []struct {
 		Resource   string `json:"resource"`
 		Type       string `json:"type"`
 		Confidence string `json:"confidence"`

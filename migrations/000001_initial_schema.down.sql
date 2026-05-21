@@ -1,8 +1,8 @@
--- tungol_consumed_tokens before tungol_steorras (FK)
-DROP INDEX IF EXISTS idx_tungol_consumed_tokens_tungol_id;
-DROP TABLE IF EXISTS tungol_consumed_tokens;
-DROP INDEX IF EXISTS idx_tungol_steorras_tungol_id;
-DROP TABLE IF EXISTS tungol_steorras;
+-- spanner_consumed_tokens before spanner_bolts (FK)
+DROP INDEX IF EXISTS idx_spanner_consumed_tokens_spanner_id;
+DROP TABLE IF EXISTS spanner_consumed_tokens;
+DROP INDEX IF EXISTS idx_spanner_bolts_spanner_id;
+DROP TABLE IF EXISTS spanner_bolts;
 DROP INDEX IF EXISTS idx_api_tokens_user_id;
 DROP TABLE IF EXISTS api_tokens;
 DROP INDEX IF EXISTS idx_sessions_expiry;

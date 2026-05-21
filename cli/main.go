@@ -65,6 +65,6 @@ func init() {
 		scrierCmd,
 		swarmCmd,
 		sandgorgonCmd,
-		tungolCmd, // tungol-wide status + steorra + ops-puddle subtrees
+		spannerCmd, // spanner-wide status + bolt + ops-puddle subtrees
 	)
 }

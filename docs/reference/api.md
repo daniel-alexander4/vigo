@@ -329,7 +329,7 @@ Health check endpoint that validates server subsystems.
     {"name": "tls", "scope": "server", "status": "pass", "message": "expires 2027-03-13"},
     {"name": "secrets", "scope": "server", "status": "pass", "message": "local"},
     {"name": "license", "scope": "server", "status": "pass", "message": "compliant, 42/100 envoys"},
-    {"name": "tungol", "scope": "server", "status": "skip", "message": "standalone"},
+    {"name": "spanner", "scope": "server", "status": "skip", "message": "standalone"},
     {"name": "integrations", "scope": "server", "status": "skip", "message": "no integrations configured"},
     {"name": "config", "scope": "server", "status": "pass", "message": "15 modules, 8 entries"},
     {"name": "stale_envoys", "scope": "fleet", "status": "pass"}
@@ -431,70 +431,70 @@ Query envoys by trait values.
 
 ---
 
-## Tungol
+## Spanner
 
-> Internally still implemented as hub-spoke (see `server/tungol/`); the REST surface speaks the peer-equal redesign's tungol/steorra vocabulary.
+> Internally still implemented as hub-spoke (see `server/spanner/`); the REST surface speaks the peer-equal redesign's spanner/bolt vocabulary.
 
-### GET /api/v1/tungol/status
-
-**Permission:** `fleet.read`
-
-Returns tungol role and steorra statuses (hub mode only).
-
-### GET /api/v1/tungol/steorras/{id}
+### GET /api/v1/spanner/status
 
 **Permission:** `fleet.read`
 
-Returns detailed status for a single steorra.
+Returns spanner role and bolt statuses (hub mode only).
 
-### GET /api/v1/tungol/steorras/{id}/envoys
-
-**Permission:** `fleet.read`
-
-List envoys on a specific steorra.
-
-### GET /api/v1/tungol/steorras/{id}/runs
+### GET /api/v1/spanner/bolts/{id}
 
 **Permission:** `fleet.read`
 
-List recent runs on a specific steorra.
+Returns detailed status for a single bolt.
 
-### POST /api/v1/tungol/steorras/{id}/push
+### GET /api/v1/spanner/bolts/{id}/envoys
+
+**Permission:** `fleet.read`
+
+List envoys on a specific bolt.
+
+### GET /api/v1/spanner/bolts/{id}/runs
+
+**Permission:** `fleet.read`
+
+List recent runs on a specific bolt.
+
+### POST /api/v1/spanner/bolts/{id}/push
 
 **Permission:** Admin role
 
-Force-push to envoys on a specific steorra.
+Force-push to envoys on a specific bolt.
 
-### POST /api/v1/tungol/reassign
+### POST /api/v1/spanner/reassign
 
 **Permission:** Admin role
 
 
-Reassign an envoy from one steorra to another.
+Reassign an envoy from one bolt to another.
 
 **Request body:**
 
 ```json
 {
   "envoy_id": "...",
-  "from_steorra_id": "east-1",
-  "to_steorra_id": "west-1"
+  "from_bolt_id": "east-1",
+  "to_bolt_id": "west-1"
 }
 ```
 
-### POST /api/v1/tungol/steorras/{id}/drain
+### POST /api/v1/spanner/bolts/{id}/drain
 
 **Permission:** Admin role
 
-Drain all envoys from a steorra (move to target steorra or auto-route by patterns).
+Drain all envoys from a bolt (move to target bolt or auto-route by patterns).
 
-### POST /api/v1/tungol/ops-puddle/pair-claim
+### POST /api/v1/spanner/ops-puddle/pair-claim
 
 **Permission:** Admin role
 
-Claim a pair offer minted by `vigocli tungol ops-puddle pair` on this vigosrv. Validates the pair code against the on-disk pending-pair record, marks it used, appends the joining vigosrv's pubkey to the ops-puddle member list, and returns the raw 32-byte Ed25519 seed (base64) + friendly name + updated members list so the joining vigosrv can re-wrap the seed under its own master-key-derived wrap key.
+Claim a pair offer minted by `vigocli spanner ops-puddle pair` on this vigosrv. Validates the pair code against the on-disk pending-pair record, marks it used, appends the joining vigosrv's pubkey to the ops-puddle member list, and returns the raw 32-byte Ed25519 seed (base64) + friendly name + updated members list so the joining vigosrv can re-wrap the seed under its own master-key-derived wrap key.
 
-Called by `vigocli tungol ops-puddle join --from <this-vigosrv> --code <code>` on the joining vigosrv. mTLS protects the seed in transit; the pair code is the authorization factor and is single-use with a 5-minute TTL.
+Called by `vigocli spanner ops-puddle join --from <this-vigosrv> --code <code>` on the joining vigosrv. mTLS protects the seed in transit; the pair code is the authorization factor and is single-use with a 5-minute TTL.
 
 **Request body:**
 
@@ -520,7 +520,7 @@ Called by `vigocli tungol ops-puddle join --from <this-vigosrv> --code <code>` o
 
 **Errors:** `404` (no pending offer), `410` (code expired or already used), `403` (code mismatch), `503` (secrets backend doesn't support HKDF — only the `local` backend does in v1).
 
-Emits the `tungol.ops_puddle.member_added` audit event on success.
+Emits the `spanner.ops_puddle.member_added` audit event on success.
 
 ---
 
@@ -1434,10 +1434,10 @@ Returns a simple health status. Useful for load balancer probes and monitoring.
 **Response:**
 
 ```json
-{"status":"ok","steorra_id":""}
+{"status":"ok","bolt_id":""}
 ```
 
-The `steorra_id` field is populated when the server runs in spoke mode (i.e. this vigosrv is one steorra in a tungol).
+The `bolt_id` field is populated when the server runs in spoke mode (i.e. this vigosrv is one bolt in a spanner).
 
 ---
 

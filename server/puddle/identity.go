@@ -56,7 +56,7 @@ func EnsureIdentity(deriver KeyDeriver, dir string) (*Identity, error) {
 // EnsureIdentityWithPurpose is the parameterized core of EnsureIdentity:
 // the HKDF purpose string binds the wrap-key derivation to a specific
 // use. Service-account puddles call EnsureIdentity (purpose
-// `vigo-puddle-wrap-v1`); sibling identity packages (server/steorra,
+// `vigo-puddle-wrap-v1`); sibling identity packages (server/bolt,
 // future per-role identities) call this directly with their own
 // purpose so a theoretical master-key leak that only exposes one
 // derivation cannot cross the role boundary.

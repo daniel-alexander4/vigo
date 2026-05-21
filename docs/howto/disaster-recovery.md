@@ -184,13 +184,13 @@ open https://<server-ip>:8443/
 If envoys show as "offline" after restore, that's expected -- they'll transition back to converged/relapsed after their next check-in.
 
 
-## Tungol Recovery
+## Spanner Recovery
 
-In a hub + steorras tungol topology:
+In a hub + bolts spanner topology:
 
-- **Steorra failure**: Restore the steorra independently. Envoys enrolled to that steorra reconnect automatically. The hub will resume receiving aggregated data on the steorra's next heartbeat.
-- **Hub failure**: Restore the hub. Steorras will reconnect and resume tungol heartbeats. Envoy reassignments and drain operations should be re-verified after hub restore.
-- **Hub and steorra have independent databases** — restoring one does not affect the other.
+- **Bolt failure**: Restore the bolt independently. Envoys enrolled to that bolt reconnect automatically. The hub will resume receiving aggregated data on the bolt's next heartbeat.
+- **Hub failure**: Restore the hub. Bolts will reconnect and resume spanner heartbeats. Envoy reassignments and drain operations should be re-verified after hub restore.
+- **Hub and bolt have independent databases** — restoring one does not affect the other.
 
 ## Best Practices
 
@@ -261,7 +261,7 @@ vigocli backup restore /backup/vigo-latest.tar.gz \
 ## What's next
 
 - **Schedule a quarterly DR drill** → restore a backup tarball to a throwaway host. Verify `/api/v1/health`, then walk an envoy through a check-in against the restored server. Treat untested backups as inoperable.
-- **You operate a hub-spoke tungol** → restore each role independently (hub and steorra have separate databases). Re-verify reassignments and drains after hub restore.
+- **You operate a hub-spoke spanner** → restore each role independently (hub and bolt have separate databases). Re-verify reassignments and drains after hub restore.
 - **A restore step failed** → [Troubleshoot common issues](troubleshoot.md).
 
 ---

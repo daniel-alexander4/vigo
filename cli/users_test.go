@@ -10,7 +10,7 @@ import (
 
 // TestVaultNotInitializedErrorMessage pins the operator-facing message so
 // future edits don't quietly drop the "sudo vigocli secrets init"
-// guidance. Both call sites (cli/tungol.go, cli/secrets_unlock.go) route
+// guidance. Both call sites (cli/spanner.go, cli/secrets_unlock.go) route
 // through this helper, so one assertion covers them.
 func TestVaultNotInitializedErrorMessage(t *testing.T) {
 	got := vaultNotInitializedError().Error()

@@ -25,6 +25,7 @@ import (
 	"git.alexander4.io/vigo/server/api"
 	"git.alexander4.io/vigo/server/audit"
 	vigoauth "git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/bolt"
 	"git.alexander4.io/vigo/server/bootstrap"
 	"git.alexander4.io/vigo/server/ca"
 	"git.alexander4.io/vigo/server/compliancedocs"
@@ -44,12 +45,11 @@ import (
 	"git.alexander4.io/vigo/server/risk"
 	vigoscrier "git.alexander4.io/vigo/server/scrier"
 	"git.alexander4.io/vigo/server/secrets"
-	"git.alexander4.io/vigo/server/steorra"
+	"git.alexander4.io/vigo/server/spanner"
 	"git.alexander4.io/vigo/server/stockpilewatch"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
 	"git.alexander4.io/vigo/server/task"
-	"git.alexander4.io/vigo/server/tungol"
 	"git.alexander4.io/vigo/server/workflows"
 	"git.alexander4.io/vigo/ui"
 )
@@ -70,7 +70,7 @@ import (
 //     Safe to defer immediately after NewServer returns (idempotent).
 //
 // Per-instance shape so multiple servers can coexist in one Go test
-// process (the Phase 2 tungol harness wedge). Every field that would
+// process (the Phase 2 spanner harness wedge). Every field that would
 // otherwise live as a package global was refactored to a *Server field
 // in Phase A; see commit d5c0b4e4 + the audit at
 // /tmp/vigo-server-package-state-audit-2026-05-18.md for the catalog.
@@ -81,10 +81,10 @@ type Server struct {
 	aiMetrics *vigoai.Metrics
 
 	// --- Config ---
-	configFile string                // path passed to NewServer
-	serverRoot string                // filepath.Dir(configFile)
+	configFile string               // path passed to NewServer
+	serverRoot string               // filepath.Dir(configFile)
 	cfg        *config.ServerConfig // full config (second pass with secrets resolved)
-	secretsCfg secrets.Config        // first-pass secrets backend config
+	secretsCfg secrets.Config       // first-pass secrets backend config
 
 	// --- Resolved paths (env var > cfg.Paths.* > built-in default) ---
 	migrationsDir   string
@@ -97,10 +97,10 @@ type Server struct {
 	licenseGraceDir string
 
 	// --- Identity / secrets ---
-	provider  secrets.Provider
-	puddleID  *puddle.Identity  // non-nil only on local secrets backend
-	steorraID *steorra.Identity // non-nil only when mode != standalone AND local backend
-	mode      config.TungolMode
+	provider secrets.Provider
+	puddleID *puddle.Identity // non-nil only on local secrets backend
+	boltID   *bolt.Identity   // non-nil only when mode != standalone AND local backend
+	mode     config.SpannerMode
 
 	// --- Database ---
 	db          *sql.DB
@@ -187,7 +187,7 @@ type Server struct {
 	// callback) captures these by reading through the *Server. Both stay
 	// nil through the license-enforcer assignment and are populated
 	// during the hub-init + fleet-rehydrate stages farther down NewServer.
-	hub        *tungol.Hub
+	hub        *spanner.Hub
 	fleetIndex *fleet.FleetIndex
 
 	// --- gRPC server + services. Constructed in chunk 4. peerService is
@@ -201,9 +201,9 @@ type Server struct {
 	adminSvc     *isgrpc.AdminService
 
 	// --- Hub auto-failover (nil unless role == hub AND
-	// cfg.Tungol.AutoFailover.Enabled). The `go failover.Run` goroutine
+	// cfg.Spanner.AutoFailover.Enabled). The `go failover.Run` goroutine
 	// stays in chunk 5. ---
-	hubFailover *tungol.Failover
+	hubFailover *spanner.Failover
 
 	// --- Workflow engine. Construction + Load + RecoverInterrupted +
 	// agentSvc.SetWorkflowTrigger wiring all live here. ---
@@ -326,37 +326,37 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	s.licenseDir = stringOrDefault(s.cfg.Paths.LicenseDir, licfmt.DefaultLicenseDir)
 	s.licenseGraceDir = s.licenseDir
 
-	// Determine tungol mode.
-	s.mode = s.cfg.Tungol.Mode
+	// Determine spanner mode.
+	s.mode = s.cfg.Spanner.Mode
 	if s.mode == "" {
 		s.mode = config.ModeStandalone
 	}
-	if err := s.cfg.Tungol.Validate(); err != nil {
+	if err := s.cfg.Spanner.Validate(); err != nil {
 		return nil, err
 	}
 
-	// Phase 1 (ADR-tungol): per-steorra Ed25519 identity. Generated on
-	// first boot under /srv/vigo/steorra/, wrapped via HKDF purpose
-	// `vigo-steorra-wrap-v1` over the secrets master key. Used by the
+	// Phase 1 (ADR-spanner): per-bolt Ed25519 identity. Generated on
+	// first boot under /srv/vigo/bolt/, wrapped via HKDF purpose
+	// `vigo-bolt-wrap-v1` over the secrets master key. Used by the
 	// reporter to sign every announcement so peers can verify + pin
-	// (tungol_id, steorra_pubkey). Only required in tungol mode +
+	// (spanner_id, bolt_pubkey). Only required in spanner mode +
 	// local secrets backend; isopass and other backends run without a
-	// steorra identity (legacy unsigned reports, accepted without
+	// bolt identity (legacy unsigned reports, accepted without
 	// pinning).
 	if s.mode != config.ModeStandalone {
 		if local, ok := s.provider.(*secrets.LocalProvider); ok {
-			id, err := steorra.EnsureIdentity(local, steorra.DefaultDir)
+			id, err := bolt.EnsureIdentity(local, bolt.DefaultDir)
 			if err != nil {
-				return nil, fmt.Errorf("steorra identity: %w", err)
+				return nil, fmt.Errorf("bolt identity: %w", err)
 			}
-			s.steorraID = id
-			slog.Info("steorra identity ready",
+			s.boltID = id
+			slog.Info("bolt identity ready",
 				"pubkey", id.PublicKeyText,
-				"tungol_id", s.cfg.Tungol.TungolID,
-				"dir", steorra.DefaultDir,
+				"spanner_id", s.cfg.Spanner.SpannerID,
+				"dir", bolt.DefaultDir,
 			)
 		} else {
-			slog.Warn("steorra identity skipped — non-local secrets backend; reports will be unsigned (mixed-version-compatible)",
+			slog.Warn("bolt identity skipped — non-local secrets backend; reports will be unsigned (mixed-version-compatible)",
 				"backend", secretsCfg.Backend,
 			)
 		}
@@ -462,8 +462,8 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	//
 	// license.mode controls counting:
 	//   "local" (default): count enrolled nodes on this server only.
-	//   "aggregate": hub sums node counts across all tungol steorras.
-	//                steorras skip enforcement entirely.
+	//   "aggregate": hub sums node counts across all spanner bolts.
+	//                bolts skip enforcement entirely.
 	s.licenseMode = s.cfg.License.Mode
 	if s.licenseMode == "" {
 		s.licenseMode = "local"
@@ -480,10 +480,10 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// enforcement loop runs on a 1-hour ticker, so the real values are
 	// in place well before the first call.
 	envoyCounter := func(ctx context.Context) (int, error) {
-		// Aggregate mode on hub: sum node counts from all steorras + local.
+		// Aggregate mode on hub: sum node counts from all bolts + local.
 		if s.licenseMode == "aggregate" && s.hub != nil {
 			total := 0
-			for _, st := range s.hub.SteorraStatuses(ctx) {
+			for _, st := range s.hub.BoltStatuses(ctx) {
 				total += int(st.EnvoyCount)
 			}
 			if s.fleetIndex != nil {
@@ -516,9 +516,9 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		return nil, fmt.Errorf("license: %w", err)
 	}
 
-	// Tungol requires a paid license — reject founder/joiner on free tier.
+	// Spanner requires a paid license — reject founder/joiner on free tier.
 	if s.mode != config.ModeStandalone && s.enforcer.IsFreeLicense() {
-		return nil, fmt.Errorf("tungol (mode %q) requires a paid license — the built-in free license does not support tungol", s.mode)
+		return nil, fmt.Errorf("spanner (mode %q) requires a paid license — the built-in free license does not support spanner", s.mode)
 	}
 
 	// --- Auth ---
@@ -581,7 +581,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// reachability surface (Offline pill, risk scorer, doctor API,
 	// stale-envoy notifier, fleet rehydrator). Threaded as an explicit
 	// parameter through every consumer rather than via a package global,
-	// so multiple servers in one process (tungol harness) keep
+	// so multiple servers in one process (spanner harness) keep
 	// independent thresholds.
 	if s.cfg.CheckIn.OfflineThreshold != "" {
 		if parsed, err := time.ParseDuration(s.cfg.CheckIn.OfflineThreshold); err == nil && parsed > 0 {
@@ -652,20 +652,20 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		})
 	})
 
-	// --- Tungol hub (founder mode only — bootstrap-discovery rendezvous
+	// --- Spanner hub (founder mode only — bootstrap-discovery rendezvous
 	// per ADR-026; full hub retirement is Phase 3). The failover goroutine
 	// still starts from run(); construction lands here so the envoyCounter
 	// closure (assigned earlier in NewServer) sees s.hub before any
 	// enforcement tick fires. hub.Close() is called from (*Server).Close().
 	if s.mode == config.ModeFounder {
-		hub, err := tungol.NewHub(ctx, s.cfg.Tungol.Transport.BootstrapPeers, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.metrics)
+		hub, err := spanner.NewHub(ctx, s.cfg.Spanner.Transport.BootstrapPeers, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.metrics)
 		if err != nil {
 			return nil, fmt.Errorf("connecting to bootstrap peers: %w", err)
 		}
 		s.hub = hub
-		// Phase 1: wire audit writer for tungol_steorra_pubkey_mismatch events.
+		// Phase 1: wire audit writer for spanner_bolt_pubkey_mismatch events.
 		hub.SetAuditWriter(s.auditWriter)
-		slog.Info("tungol hub initialized", "steorras", hub.SteorraCount())
+		slog.Info("spanner hub initialized", "bolts", hub.BoltCount())
 	}
 
 	// --- Task definitions ---
@@ -772,9 +772,9 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// --- Stockpile watcher (ADR-025 Slice 3): watches the ops-puddle's
 	// stockpile gitback bare repo for ref changes and triggers
 	// configStore.Reload(). Lookup is best-effort — if the stockpile
-	// project has not been founded yet (vigocli tungol stockpile init)
+	// project has not been founded yet (vigocli spanner stockpile init)
 	// the watcher stays nil and a future SIGHUP / restart picks it up.
-	// Tungol-mode only; standalone keeps the local-write + SIGHUP shape. ---
+	// Spanner-mode only; standalone keeps the local-write + SIGHUP shape. ---
 	if s.mode != config.ModeStandalone {
 		if pid, ok := lookupStockpileProjectID(puddle.OpsDefaultDir); ok {
 			s.stockpileWatcher = stockpilewatch.New(
@@ -784,7 +784,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 				s.configStore,
 			)
 		} else {
-			slog.Debug("stockpile project not founded yet; watcher skipped (run `vigocli tungol stockpile init` to bootstrap)")
+			slog.Debug("stockpile project not founded yet; watcher skipped (run `vigocli spanner stockpile init` to bootstrap)")
 		}
 	}
 
@@ -910,7 +910,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 
 	// --- Hub auto-failover retired in 2A.1b (ADR-026): failover is now
-	// implicit via CRDT gossip + freshness thresholds (tungol.freshness),
+	// implicit via CRDT gossip + freshness thresholds (spanner.freshness),
 	// not a hub-side polling probe. The s.hubFailover field stays nil;
 	// run() no-ops when it's nil. ---
 
@@ -991,7 +991,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		}
 	}
 
-	// --- REST handlers (shared across hub/standalone and steorra modes). ---
+	// --- REST handlers (shared across hub/standalone and bolt modes). ---
 	licenseHandler := api.NewLicenseHandler(s.enforcer)
 	doctorHandler := api.NewDoctorHandler(api.DoctorConfig{
 		SQLDB:            s.db,
@@ -1017,8 +1017,8 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// swarm_pattern_order check has data on the first /doctor call.
 	doctorHandler.SetSwarmConfig(s.cfg.Swarm)
 
-	tungolHandler := api.NewTungolHandler(s.mode, s.cfg.Tungol.TungolID, formatLocalSteorraPubkey(s.steorraID), s.hub)
-	opsPuddleHandler := api.NewTungolOpsPuddleHandler(s.provider, puddle.OpsDefaultDir, s.auditWriter)
+	spannerHandler := api.NewSpannerHandler(s.mode, s.cfg.Spanner.SpannerID, formatLocalBoltPubkey(s.boltID), s.hub)
+	opsPuddleHandler := api.NewSpannerOpsPuddleHandler(s.provider, puddle.OpsDefaultDir, s.auditWriter)
 
 	taskHandler := api.NewTaskHandler(s.queries, s.agentSvc, s.cfg.Task.RequireDefinition)
 	taskHandler.SetAuditWriter(s.auditWriter)
@@ -1070,7 +1070,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		s.grcPusher = grc.NewPusher(s.cfg.GRC.Integrations, s.fleetIndex, s.configStore)
 	}
 
-	// --- REST gateway construction. Two branches: steorras serve API +
+	// --- REST gateway construction. Two branches: bolts serve API +
 	// metrics only; hub/standalone adds UI + bootstrap + swarm + many
 	// more routes. ---
 	if s.isPostgres {
@@ -1079,13 +1079,13 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		dbDriver = "sqlite"
 	}
 	if s.mode == config.ModeJoiner {
-		mux, gwErr := api.NewSteorraGateway(ctx, s.cfg.Server.GRPCListen, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, formatLocalSteorraPubkey(s.steorraID), s.promReg)
+		mux, gwErr := api.NewBoltGateway(ctx, s.cfg.Server.GRPCListen, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, formatLocalBoltPubkey(s.boltID), s.promReg)
 		if gwErr != nil {
-			return nil, fmt.Errorf("creating steorra gateway: %w", gwErr)
+			return nil, fmt.Errorf("creating bolt gateway: %w", gwErr)
 		}
 		licenseHandler.RegisterRoutes(mux)
 		doctorHandler.RegisterRoutes(mux)
-		tungolHandler.RegisterRoutes(mux)
+		spannerHandler.RegisterRoutes(mux)
 		opsPuddleHandler.RegisterRoutes(mux)
 		peerHandler.RegisterRoutes(mux)
 		taskHandler.RegisterRoutes(mux)
@@ -1208,7 +1208,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 
 		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
-		tungolHandler.RegisterRoutes(gwMux)
+		spannerHandler.RegisterRoutes(gwMux)
 		opsPuddleHandler.RegisterRoutes(gwMux)
 		peerHandler.RegisterRoutes(gwMux)
 		taskHandler.RegisterRoutes(gwMux)

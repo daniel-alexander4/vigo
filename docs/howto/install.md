@@ -120,7 +120,7 @@ TZ=America/New_York
 
 ### Configuration
 
-Edit `server.yaml` for server settings (check-in interval, TLS paths, tungol federation, SMTP, webhooks). Edit `.env` for optional services and environment variables. See [Server Configuration](../reference/server-yaml.md) for the full reference.
+Edit `server.yaml` for server settings (check-in interval, TLS paths, spanner federation, SMTP, webhooks). Edit `.env` for optional services and environment variables. See [Server Configuration](../reference/server-yaml.md) for the full reference.
 
 ### Upgrading
 
@@ -239,7 +239,7 @@ $ docker exec vigo /usr/local/bin/vigocli doctor
   tls ..................... OK (expires 2027-05-05)
   secrets ................. OK (local)
   license ................. OK (Compliant, 5/100 envoys)
-  tungol .................. SKIP (standalone)
+  spanner .................. SKIP (standalone)
   integrations ............ SKIP (no integrations configured)
   config .................. OK (43 modules, 5 entries)
   swarm_pattern_order ..... OK (all swarm.*.enabled pattern lists well-ordered)
@@ -247,7 +247,7 @@ $ docker exec vigo /usr/local/bin/vigocli doctor
   Status: healthy
 ```
 
-`SKIP` is expected for `tungol` (you're not running hub-spoke) and `integrations` (you haven't wired any external alerting yet). `database / tls / secrets / license / config` should all be `OK` on a fresh install. A `WARN` on `stale_envoys` after the first check-in cycle means at least one envoy hasn't reported in `2.5 × max(interval, observed_cycle)` seconds — go look at it.
+`SKIP` is expected for `spanner` (you're not running hub-spoke) and `integrations` (you haven't wired any external alerting yet). `database / tls / secrets / license / config` should all be `OK` on a fresh install. A `WARN` on `stale_envoys` after the first check-in cycle means at least one envoy hasn't reported in `2.5 × max(interval, observed_cycle)` seconds — go look at it.
 
 ## What's next
 

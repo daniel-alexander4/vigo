@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package tungol
+package spanner
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// ConvergenceSource provides compliance counters for the steorra status reporter.
+// ConvergenceSource provides compliance counters for the bolt status reporter.
 // Implemented by *fleet.FleetIndex (via its ConvergenceSummary method wrapper).
 type ConvergenceSource interface {
 	// ConvergenceCounts returns the current convergence breakdown:
@@ -32,17 +32,17 @@ type ConvergenceSource interface {
 // address before the reporter tries the next fallback address.
 const failoverThreshold = 3
 
-// Reporter runs on steorras and periodically reports status to the hub via the
-// ReportSteorraStatus gRPC RPC. It is a background goroutine and does not
+// Reporter runs on bolts and periodically reports status to the hub via the
+// ReportBoltStatus gRPC RPC. It is a background goroutine and does not
 // interfere with the check-in hot path.
 //
 // When hub_fallback_addrs are configured, the reporter automatically fails over
 // to fallback hub addresses after failoverThreshold consecutive failures on the
 // current address.
 type Reporter struct {
-	steorraID     string
-	tungolID      string             // federation anchor; embedded in every report
-	signingKey    ed25519.PrivateKey // per-steorra identity (Phase 1); nil → unsigned legacy reports
+	boltID        string
+	spannerID     string             // federation anchor; embedded in every report
+	signingKey    ed25519.PrivateKey // per-bolt identity (Phase 1); nil → unsigned legacy reports
 	pubkeyBytes   []byte             // 32-byte raw pubkey derived from signingKey at construction
 	certFile      string
 	keyFile       string
@@ -65,14 +65,14 @@ type Reporter struct {
 // bootstrap-discovery peers (ADR-026: replaces the pre-Phase-2 single-hub
 // model with an additive peer list). The Reporter rotates through peers on
 // failure; gossip discovery will extend this list dynamically once 2A.2
-// lands the CRDT merge. tungolID + signingKey are Phase 1: if signingKey
+// lands the CRDT merge. spannerID + signingKey are Phase 1: if signingKey
 // is non-nil, every report is signed and the pubkey is embedded so peers
 // can verify + pin-on-first-sight. A nil signingKey produces legacy
 // unsigned reports (mixed-version fleets during rollout).
 //
-// steorraID is the public identifier (typically the hex-encoded Ed25519
-// pubkey from server/steorra/) that this peer announces itself as.
-func NewReporter(steorraID, tungolID string, signingKey ed25519.PrivateKey, bootstrapPeers []string, certFile, keyFile, caFile string, convergence ConvergenceSource, interval time.Duration) *Reporter {
+// boltID is the public identifier (typically the hex-encoded Ed25519
+// pubkey from server/bolt/) that this peer announces itself as.
+func NewReporter(boltID, spannerID string, signingKey ed25519.PrivateKey, bootstrapPeers []string, certFile, keyFile, caFile string, convergence ConvergenceSource, interval time.Duration) *Reporter {
 	if interval <= 0 {
 		interval = 30 * time.Second
 	}
@@ -90,8 +90,8 @@ func NewReporter(steorraID, tungolID string, signingKey ed25519.PrivateKey, boot
 	}
 
 	return &Reporter{
-		steorraID:   steorraID,
-		tungolID:    tungolID,
+		boltID:      boltID,
+		spannerID:   spannerID,
 		signingKey:  signingKey,
 		pubkeyBytes: pubkeyBytes,
 		certFile:    certFile,
@@ -109,11 +109,11 @@ func (r *Reporter) SetConfigVersion(fn func() uint64) {
 	r.configVersion = fn
 }
 
-// Run blocks until ctx is cancelled, periodically reporting steorra status to the
+// Run blocks until ctx is cancelled, periodically reporting bolt status to the
 // hub. Call as a goroutine: go reporter.Run(ctx).
 func (r *Reporter) Run(ctx context.Context) {
-	slog.Info("steorra status reporter started",
-		"steorra_id", r.steorraID,
+	slog.Info("bolt status reporter started",
+		"bolt_id", r.boltID,
 		"bootstrap_peers", r.allAddrs,
 		"interval", r.interval,
 	)
@@ -126,7 +126,7 @@ func (r *Reporter) Run(ctx context.Context) {
 		var err error
 		tlsCreds, err = buildReporterTLS(r.certFile, r.keyFile, r.caFile)
 		if err != nil {
-			slog.Error("steorra reporter: failed to build TLS credentials, aborting",
+			slog.Error("bolt reporter: failed to build TLS credentials, aborting",
 				"error", err,
 			)
 			return
@@ -136,7 +136,7 @@ func (r *Reporter) Run(ctx context.Context) {
 	// Establish initial connection.
 	conn, client, err := r.dial(ctx, r.currentAddr(), tlsCreds)
 	if err != nil {
-		slog.Error("steorra reporter: failed to dial hub, will retry on tick",
+		slog.Error("bolt reporter: failed to dial hub, will retry on tick",
 			"hub_addr", r.currentAddr(),
 			"error", err,
 		)
@@ -154,7 +154,7 @@ func (r *Reporter) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("steorra status reporter stopped", "steorra_id", r.steorraID)
+			slog.Info("bolt status reporter stopped", "bolt_id", r.boltID)
 			return
 		case <-ticker.C:
 			if client == nil {
@@ -221,7 +221,7 @@ func (r *Reporter) recordFailure(ctx context.Context, tlsCreds credentials.Trans
 	r.mu.Unlock()
 
 	slog.Warn("hub unreachable, trying fallback",
-		"steorra_id", r.steorraID,
+		"bolt_id", r.boltID,
 		"addr", newAddr,
 	)
 
@@ -234,7 +234,7 @@ func (r *Reporter) recordFailure(ctx context.Context, tlsCreds credentials.Trans
 
 	newConn, newClient, err := r.dial(ctx, newAddr, tlsCreds)
 	if err != nil {
-		slog.Warn("steorra reporter: failed to dial fallback hub",
+		slog.Warn("bolt reporter: failed to dial fallback hub",
 			"addr", newAddr,
 			"error", err,
 		)
@@ -274,9 +274,9 @@ func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
 		convergencePct = float32(converged) / float32(activeTotal) * 100
 	}
 
-	req := &pb.SteorraStatusReport{
-		SteorraId:      r.steorraID,
-		TungolId:       r.tungolID,
+	req := &pb.BoltStatusReport{
+		BoltId:         r.boltID,
+		SpannerId:      r.spannerID,
 		EnvoyCount:     int32(total),
 		Converged:      int32(converged),
 		Relapsed:       int32(relapsed),
@@ -291,8 +291,8 @@ func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
 		req.ConfigVersion = r.configVersion()
 	}
 
-	// Phase 1 (ADR-tungol): sign the report so hubs can verify the
-	// asserted (tungol_id, steorra_id) → pubkey pin. Mirrors the
+	// Phase 1 (ADR-spanner): sign the report so hubs can verify the
+	// asserted (spanner_id, bolt_id) → pubkey pin. Mirrors the
 	// PolicyBundle signing pattern in server/grpc/bundlesign.go —
 	// marshal the message with pubkey + signature fields cleared,
 	// sign that, then write both fields back. Pre-Phase-1 reporters
@@ -301,29 +301,29 @@ func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
 	if r.signingKey != nil {
 		canonical, err := marshalReportContent(req)
 		if err != nil {
-			slog.Error("steorra reporter: canonical marshal failed", "error", err)
+			slog.Error("bolt reporter: canonical marshal failed", "error", err)
 			return false
 		}
-		req.SteorraPubkey = r.pubkeyBytes
+		req.BoltPubkey = r.pubkeyBytes
 		req.Signature = ed25519.Sign(r.signingKey, canonical)
 	}
 
 	rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	_, err := client.ReportSteorraStatus(rpcCtx, req)
+	_, err := client.ReportBoltStatus(rpcCtx, req)
 	if err != nil {
-		// Log at debug level: steorra operates independently of hub connectivity.
-		slog.Debug("steorra reporter: failed to report status to hub",
-			"steorra_id", r.steorraID,
+		// Log at debug level: bolt operates independently of hub connectivity.
+		slog.Debug("bolt reporter: failed to report status to hub",
+			"bolt_id", r.boltID,
 			"hub_addr", r.currentAddr(),
 			"error", err,
 		)
 		return false
 	}
 
-	slog.Debug("steorra status reported to hub",
-		"steorra_id", r.steorraID,
+	slog.Debug("bolt status reported to hub",
+		"bolt_id", r.boltID,
 		"envoy_count", total,
 		"converged", converged,
 	)
@@ -336,7 +336,7 @@ func (r *Reporter) ActiveAddr() string {
 	return r.currentAddr()
 }
 
-// buildReporterTLS creates mTLS credentials for the steorra's connection to the hub.
+// buildReporterTLS creates mTLS credentials for the bolt's connection to the hub.
 func buildReporterTLS(certFile, keyFile, caFile string) (credentials.TransportCredentials, error) {
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
@@ -360,16 +360,16 @@ func buildReporterTLS(certFile, keyFile, caFile string) (credentials.TransportCr
 	}), nil
 }
 
-// marshalReportContent serializes a SteorraStatusReport for signing.
-// Creates a copy with steorra_pubkey + signature zeroed so the
+// marshalReportContent serializes a BoltStatusReport for signing.
+// Creates a copy with bolt_pubkey + signature zeroed so the
 // signature covers only content fields (mirrors the PolicyBundle
 // signing pattern in server/grpc/bundlesign.go). The proto3 default
 // for proto.Marshal is deterministic, which is required for
 // signature verification to be stable.
-func marshalReportContent(r *pb.SteorraStatusReport) ([]byte, error) {
-	content := &pb.SteorraStatusReport{
-		SteorraId:      r.SteorraId,
-		TungolId:       r.TungolId,
+func marshalReportContent(r *pb.BoltStatusReport) ([]byte, error) {
+	content := &pb.BoltStatusReport{
+		BoltId:         r.BoltId,
+		SpannerId:      r.SpannerId,
 		EnvoyCount:     r.EnvoyCount,
 		Converged:      r.Converged,
 		Relapsed:       r.Relapsed,
@@ -380,7 +380,7 @@ func marshalReportContent(r *pb.SteorraStatusReport) ([]byte, error) {
 		NoData:         r.NoData,
 		ConvergencePct: r.ConvergencePct,
 		ConfigVersion:  r.ConfigVersion,
-		// SteorraPubkey + Signature intentionally omitted (zeroed).
+		// BoltPubkey + Signature intentionally omitted (zeroed).
 	}
 	return proto.Marshal(content)
 }
@@ -389,12 +389,12 @@ func marshalReportContent(r *pb.SteorraStatusReport) ([]byte, error) {
 // against the pubkey carried in the report itself. The hub uses
 // this for two distinct purposes: (1) prove the sender holds the
 // private key for the asserted pubkey; (2) compared to the pinned
-// pubkey for (tungol_id, steorra_id), detect identity substitution.
+// pubkey for (spanner_id, bolt_id), detect identity substitution.
 // Returns nil on valid signature, or an error describing the
 // rejection cause.
-func VerifyReportSignature(r *pb.SteorraStatusReport) error {
-	if len(r.SteorraPubkey) != ed25519.PublicKeySize {
-		return fmt.Errorf("steorra_pubkey is %d bytes, expected %d", len(r.SteorraPubkey), ed25519.PublicKeySize)
+func VerifyReportSignature(r *pb.BoltStatusReport) error {
+	if len(r.BoltPubkey) != ed25519.PublicKeySize {
+		return fmt.Errorf("bolt_pubkey is %d bytes, expected %d", len(r.BoltPubkey), ed25519.PublicKeySize)
 	}
 	if len(r.Signature) != ed25519.SignatureSize {
 		return fmt.Errorf("signature is %d bytes, expected %d", len(r.Signature), ed25519.SignatureSize)
@@ -403,7 +403,7 @@ func VerifyReportSignature(r *pb.SteorraStatusReport) error {
 	if err != nil {
 		return fmt.Errorf("canonical marshal: %w", err)
 	}
-	if !ed25519.Verify(ed25519.PublicKey(r.SteorraPubkey), canonical, r.Signature) {
+	if !ed25519.Verify(ed25519.PublicKey(r.BoltPubkey), canonical, r.Signature) {
 		return fmt.Errorf("ed25519 verify failed")
 	}
 	return nil

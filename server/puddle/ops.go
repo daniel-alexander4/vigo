@@ -296,7 +296,7 @@ func writeMembers(dir string, ms []OpsMember) error {
 // ---------- Slice 2b: pair flow ----------
 
 // PendingPairFile holds the in-flight pair record on the existing-
-// member vigosrv between `vigocli tungol ops-puddle pair` (which
+// member vigosrv between `vigocli spanner ops-puddle pair` (which
 // writes it) and the joining vigocli's pair-claim REST call (which
 // consumes it). Single pending pair at a time — running `pair`
 // again overwrites.
@@ -349,7 +349,7 @@ func HashPairCode(code string) string {
 
 // WritePendingPair persists a fresh pending-pair record at
 // <dir>/pending-pair. Overwrites any prior record. Called by
-// `vigocli tungol ops-puddle pair` on the existing-member.
+// `vigocli spanner ops-puddle pair` on the existing-member.
 func WritePendingPair(dir string, p *PendingPair) error {
 	b, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {

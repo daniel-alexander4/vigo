@@ -59,7 +59,7 @@ type Collector struct {
 	offlineThreshold time.Duration
 }
 
-// NewCollector creates a new metrics collector. fleetSource may be nil (steorra mode).
+// NewCollector creates a new metrics collector. fleetSource may be nil (bolt mode).
 // The Metrics value is the per-instance collector set; the gauges it owns are
 // the ones this collector mutates each tick.
 func NewCollector(queries *db.Queries, sqlDB *sql.DB, fleetSource FleetSource, m *Metrics, baseInterval, offlineThreshold time.Duration) *Collector {

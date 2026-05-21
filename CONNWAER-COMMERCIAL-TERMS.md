@@ -246,7 +246,7 @@ products under a single contract is available — contact us for details.
 ## Enterprise Agreements
 
 Enterprise agreements are available for organizations running Connwaer
-across multiple sites, networks, or tungol instances under a single
+across multiple sites, networks, or spanner instances under a single
 contract.
 
 **Aggregate node counting:** Your tier and per-node rate are determined

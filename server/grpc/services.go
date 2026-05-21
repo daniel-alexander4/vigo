@@ -18,7 +18,7 @@ import (
 	"git.alexander4.io/vigo/server/license"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/registry"
-	"git.alexander4.io/vigo/server/tungol"
+	"git.alexander4.io/vigo/server/spanner"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/task"
 	"git.alexander4.io/vigo/server/traits"
@@ -32,24 +32,24 @@ type auditRecorder interface {
 // AgentService implements the VigoAgent gRPC service.
 type AgentService struct {
 	pb.UnimplementedVigoAgentServer
-	registry       *registry.Registry
-	configStore    *config.ConfigStore
-	queries        *db.Queries
-	runStore       db.RunStore
-	integrations   *integrations.Dispatcher
-	traitsScanner   *traits.Scanner
-	traitsBatch    *db.TraitsBatcher
-	traitsPruner   *db.TraitsPruner
-	policyCache    *policyCache
+	registry         *registry.Registry
+	configStore      *config.ConfigStore
+	queries          *db.Queries
+	runStore         db.RunStore
+	integrations     *integrations.Dispatcher
+	traitsScanner    *traits.Scanner
+	traitsBatch      *db.TraitsBatcher
+	traitsPruner     *db.TraitsPruner
+	policyCache      *policyCache
 	streamMgr        *streamManager
 	taskRouter       *taskRouter
 	queryRouter      *queryRouter
 	taskStore        *task.Store
-	hub              *tungol.Hub    // non-nil when role=hub; routes enrollment to spokes
+	hub              *spanner.Hub // non-nil when role=hub; routes enrollment to spokes
 	licenseEnforcer  *license.Enforcer
-	fleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
-	runBatcher       *fleet.RunBatcher  // async run persistence from delta events
-	reassignStore    *ReassignStore     // pending envoy reassignments (steorra side)
+	fleetIndex       *fleet.FleetIndex // in-memory index for hot-path operations
+	runBatcher       *fleet.RunBatcher // async run persistence from delta events
+	reassignStore    *ReassignStore    // pending envoy reassignments (bolt side)
 	bundleSigner     *BundleSigner     // signs policy bundles for agent verification
 	bundleMaxAge     uint32            // max_age_seconds for signed bundles (0 = forever)
 	bundlePubKeyPEM  string            // cached PEM of bundle signing public key
@@ -62,16 +62,16 @@ type AgentService struct {
 	// agent binary versions available for distribution. Auto-update fires only
 	// when an agent reports a version that differs from the version known for
 	// THAT agent's arch. See bootstrap.detectAgentVersions for population.
-	serverVersions     map[string]string
-	agentBinAvailable  func() bool // checks whether at least one agent binary exists for distribution
-	auditWriter        auditRecorder     // tamper-evident audit writer (nil-safe)
-	workflowTrigger    workflowTriggerer // auto-trigger workflows on trait changes (nil-safe)
-	streamEdit         config.StreamEditSection // stream_edit guardrails config
-	globalObserveOnly  bool                     // global observe-only from server.yaml
-	tunnelMgr          *tunnelManager           // Scrier tunnel manager (nil when disabled)
-	peerTracker        *swarm.PeerTracker       // swarm peer tracker (nil when swarm disabled)
-	manifestStore      *swarm.ManifestStore     // swarm manifest CRDT (nil when swarm disabled)
-	swarmCfg           config.SwarmSection      // swarm config section (subsystem blacklists, etc.)
+	serverVersions    map[string]string
+	agentBinAvailable func() bool              // checks whether at least one agent binary exists for distribution
+	auditWriter       auditRecorder            // tamper-evident audit writer (nil-safe)
+	workflowTrigger   workflowTriggerer        // auto-trigger workflows on trait changes (nil-safe)
+	streamEdit        config.StreamEditSection // stream_edit guardrails config
+	globalObserveOnly bool                     // global observe-only from server.yaml
+	tunnelMgr         *tunnelManager           // Scrier tunnel manager (nil when disabled)
+	peerTracker       *swarm.PeerTracker       // swarm peer tracker (nil when swarm disabled)
+	manifestStore     *swarm.ManifestStore     // swarm manifest CRDT (nil when swarm disabled)
+	swarmCfg          config.SwarmSection      // swarm config section (subsystem blacklists, etc.)
 	// curatorCatalog holds the JSON-encoded fleet artifact catalog (ADR-024) —
 	// the same `[]curatormesh.CatalogEntry` the curator feed reactor (server/main.go)
 	// produces every cycle for the swarm.ManifestStore feed. Attached verbatim to
@@ -213,18 +213,18 @@ func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, source,
 // AdminService implements the VigoAdmin gRPC service.
 type AdminService struct {
 	pb.UnimplementedVigoAdminServer
-	registry      *registry.Registry
-	queries       *db.Queries
-	runStore      db.RunStore
+	registry         *registry.Registry
+	queries          *db.Queries
+	runStore         db.RunStore
 	configStore      *config.ConfigStore
 	metrics          *metrics.Metrics // per-instance prometheus collectors
 	baseInterval     time.Duration
 	offlineThreshold time.Duration
-	hub              *tungol.Hub // non-nil when role=hub; aggregates from steorras
-	fleetIndex    *fleet.FleetIndex // in-memory index for hot-path operations
-	reassignStore *ReassignStore    // pending envoy reassignments (steorra side)
-	auditWriter   auditRecorder    // tamper-evident audit writer (nil-safe)
-	integrations  *integrations.Dispatcher
+	hub              *spanner.Hub      // non-nil when role=hub; aggregates from bolts
+	fleetIndex       *fleet.FleetIndex // in-memory index for hot-path operations
+	reassignStore    *ReassignStore    // pending envoy reassignments (bolt side)
+	auditWriter      auditRecorder     // tamper-evident audit writer (nil-safe)
+	integrations     *integrations.Dispatcher
 	// swarmCleanup, when set, is invoked from RevokeEnvoy / DeleteEnvoy
 	// after the DB update lands and before the response returns. It
 	// dispatches lockbox recipient-list cleanup to every envoy so the

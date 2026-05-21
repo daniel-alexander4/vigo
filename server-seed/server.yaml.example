@@ -193,34 +193,34 @@ watcher:
 #       - "pci"
 
 
-# ── Tungol ────────────────────────────────────────────────────────────
-# Hub + steorras federation. Omit for single-server deployments.
+# ── Spanner ────────────────────────────────────────────────────────────
+# Hub + bolts federation. Omit for single-server deployments.
 
-# tungol:
+# spanner:
 #   role: standalone                           # standalone | hub | spoke
 #
-# --- Hub: aggregates admin queries from steorras ---
-# tungol:
+# --- Hub: aggregates admin queries from bolts ---
+# spanner:
 #   role: hub
-#   tungol_id: "alexander4-prod"                # federation id (required for hub/spoke)
-#   steorras:
+#   spanner_id: "alexander4-prod"                # federation id (required for hub/spoke)
+#   bolts:
 #     - id: dc1
-#       addr: "steorra1.example.com:1530"
+#       addr: "bolt1.example.com:1530"
 #       patterns: ["*.dc1.*"]
 #     - id: dc2
-#       addr: "steorra2.example.com:1530"
+#       addr: "bolt2.example.com:1530"
 #       patterns: ["*.dc2.*"]
 #   auto_failover:
-#     enabled: true                              # auto-drain unhealthy steorras
+#     enabled: true                              # auto-drain unhealthy bolts
 #     threshold: 3                               # consecutive failures before drain
 #     interval: "30s"                            # health check interval
 #
-# --- Spoke role: this vigosrv is one steorra in the tungol ---
-# tungol:
+# --- Spoke role: this vigosrv is one bolt in the spanner ---
+# spanner:
 #   role: spoke
-#   tungol_id: "alexander4-prod"                # must match the hub's tungol_id
-#   steorra_id: "dc1"
-#   hub_addr: "hub.example.com:1530"            # enables steorra→hub status reporting
+#   spanner_id: "alexander4-prod"                # must match the hub's spanner_id
+#   bolt_id: "dc1"
+#   hub_addr: "hub.example.com:1530"            # enables bolt→hub status reporting
 #   hub_fallback_addrs:                          # fallback hub addresses for failover
 #     - "hub-standby.example.com:1530"
 
@@ -549,9 +549,9 @@ watcher:
 #
 # license:
 #   mode: "local"      # "local" (default): count nodes on this server
-#                      # "aggregate": hub sums nodes across all tungol
-#                      #   steorras. Steorras skip enforcement entirely.
-#                      #   Only valid when tungol role is "hub".
+#                      # "aggregate": hub sums nodes across all spanner
+#                      #   bolts. Bolts skip enforcement entirely.
+#                      #   Only valid when spanner role is "hub".
 
 
 # ── Branding ──────────────────────────────────────────────────────────

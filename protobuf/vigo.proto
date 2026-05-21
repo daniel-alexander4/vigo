@@ -199,19 +199,19 @@ service VigoAdmin {
     };
   }
 
-  // EnrollEnvoy creates a envoy record directly (tungol-internal RPC).
-  // Used during enrollment routing: the receiving steorra validates the
-  // token, then calls this on the target steorra to create the envoy
+  // EnrollEnvoy creates a envoy record directly (spanner-internal RPC).
+  // Used during enrollment routing: the receiving bolt validates the
+  // token, then calls this on the target bolt to create the envoy
   // without token re-validation.
   rpc EnrollEnvoy(EnrollEnvoyRequest) returns (EnrollEnvoyResponse);
 
-  // SetReassignment marks a envoy for reassignment to a different steorra.
-  // Called tungol-internal to set reassign_addr/reassign_id on the envoy.
+  // SetReassignment marks a envoy for reassignment to a different bolt.
+  // Called spanner-internal to set reassign_addr/reassign_id on the envoy.
   rpc SetReassignment(SetReassignmentRequest) returns (SetReassignmentResponse);
 
-  // ReportSteorraStatus receives periodic status reports from steorras
-  // pushed proactively (push health/compliance metrics into the tungol).
-  rpc ReportSteorraStatus(SteorraStatusReport) returns (SteorraStatusAck);
+  // ReportBoltStatus receives periodic status reports from bolts
+  // pushed proactively (push health/compliance metrics into the spanner).
+  rpc ReportBoltStatus(BoltStatusReport) returns (BoltStatusAck);
 }
 
 // =============================================================================
@@ -230,7 +230,7 @@ message RegisterResponse {
   bool success = 1;
   string envoy_id = 2;       // UUID assigned by the server
   string message = 3;
-  string steorra_addr = 4;  // if set, agent should connect to this steorra for check-ins
+  string bolt_addr = 4;  // if set, agent should connect to this bolt for check-ins
   string server_pubkey_pem = 5; // server's ED25519 public key for bundle signature verification
   repeated string fallback_servers = 6; // peer server addresses for agent failover
 }
@@ -260,7 +260,7 @@ message CheckInResponse {
   PolicyBundle policy_bundle = 7;        // raw policy for agent-side evaluation
   uint64 policy_version = 8;            // current config version, always set
   string reassign_addr = 9;             // non-empty = agent should reconnect here
-  string reassign_id = 10;              // new UUID on target steorra
+  string reassign_id = 10;              // new UUID on target bolt
   bool stream_requested = 11;           // server wants agent to open AgentStream
   repeated string warnings = 12;        // config errors, missing modules, etc.
   repeated ProxiedDevice proxied_devices = 13;  // network devices this gateway manages
@@ -873,7 +873,7 @@ message PackageDrift {
 }
 
 // =============================================================================
-// Enrollment routing messages (tungol-internal: receiving steorra → target steorra)
+// Enrollment routing messages (spanner-internal: receiving bolt → target bolt)
 // =============================================================================
 
 message EnrollEnvoyRequest {
@@ -888,7 +888,7 @@ message EnrollEnvoyResponse {
 }
 
 // =============================================================================
-// Reassignment messages (tungol-internal)
+// Reassignment messages (spanner-internal)
 // =============================================================================
 
 message SetReassignmentRequest {
@@ -901,8 +901,8 @@ message SetReassignmentResponse {}
 
 message ReassignEnvoyRequest {
   string envoy_id = 1;
-  string from_steorra_id = 2;
-  string to_steorra_id = 3;
+  string from_bolt_id = 2;
+  string to_bolt_id = 3;
 }
 
 message ReassignEnvoyResponse {
@@ -910,23 +910,23 @@ message ReassignEnvoyResponse {
   string target_addr = 2;
 }
 
-message DrainSteorraRequest {
-  string steorra_id = 1;
-  string target_steorra_id = 2;  // optional: specific target. Empty = auto-route by patterns
+message DrainBoltRequest {
+  string bolt_id = 1;
+  string target_bolt_id = 2;  // optional: specific target. Empty = auto-route by patterns
 }
 
-message DrainSteorraResponse {
+message DrainBoltResponse {
   int32 moved = 1;
   int32 failed = 2;
   repeated string errors = 3;
 }
 
 // =============================================================================
-// Steorra status reporting messages (steorra → tungol observer)
+// Bolt status reporting messages (bolt → spanner observer)
 // =============================================================================
 
-message SteorraStatusReport {
-  string steorra_id = 1;
+message BoltStatusReport {
+  string bolt_id = 1;
   int32 envoy_count = 2;
   int32 converged = 3;
   int32 relapsed = 4;
@@ -937,23 +937,23 @@ message SteorraStatusReport {
   uint64 config_version = 9;
   int32 diverged = 10;
   int32 degraded = 11;
-  // Phase 1 (ADR-tungol): per-steorra cryptographic identity.
-  // tungol_id is the operator-declared federation anchor (matches
-  // the hub's tungol_id). steorra_pubkey is the raw 32-byte Ed25519
-  // public key of this steorra (held in /srv/vigo/steorra/identity.*).
+  // Phase 1 (ADR-spanner): per-bolt cryptographic identity.
+  // spanner_id is the operator-declared federation anchor (matches
+  // the hub's spanner_id). bolt_pubkey is the raw 32-byte Ed25519
+  // public key of this bolt (held in /srv/vigo/bolt/identity.*).
   // signature is the 64-byte Ed25519 signature over the canonical
-  // serialization of fields 1-11 + 12 with steorra_pubkey + signature
+  // serialization of fields 1-11 + 12 with bolt_pubkey + signature
   // cleared (mirroring the PolicyBundle pattern in bundlesign.go).
-  // Hubs pin (tungol_id, steorra_id) → steorra_pubkey on first sight;
-  // mismatches on subsequent reports raise a tungol_steorra_pubkey_mismatch
+  // Hubs pin (spanner_id, bolt_id) → bolt_pubkey on first sight;
+  // mismatches on subsequent reports raise a spanner_bolt_pubkey_mismatch
   // audit event and the report is rejected. Pre-Phase-1 reporters
   // omit these fields; hubs treat absent fields as "legacy, log + skip".
-  string tungol_id = 12;
-  bytes steorra_pubkey = 13;
+  string spanner_id = 12;
+  bytes bolt_pubkey = 13;
   bytes signature = 14;
 }
 
-message SteorraStatusAck {}
+message BoltStatusAck {}
 
 // =============================================================================
 // Peer replication service (primary↔peer, port 1530)

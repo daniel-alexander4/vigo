@@ -687,7 +687,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		resp.Warnings = append(resp.Warnings, "server config reload failed: "+reloadErr.Error())
 	}
 
-	// Check for pending reassignment (envoy moving to a different steorra).
+	// Check for pending reassignment (envoy moving to a different bolt).
 	if s.reassignStore != nil {
 		if info, ok := s.reassignStore.Pop(envoyID); ok {
 			resp.ReassignAddr = info.TargetAddr
@@ -778,11 +778,11 @@ func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
 	return &pb.SwarmRuntimeLimits{
 		FilecastMaxSizeBytes:         uint64(maxNonNeg(sc.Filecast.MaxSizeBytes)),
 		FilecastDefaultRetention:     sc.Filecast.DefaultRetention,
-		LockboxMaxFileBytes:           uint64(maxNonNeg(sc.Lockbox.MaxFileBytes)),
-		LockboxEnvelopeRetentionSecs:  durationSecsOrZero(sc.Lockbox.EnvelopeRetention),
+		LockboxMaxFileBytes:          uint64(maxNonNeg(sc.Lockbox.MaxFileBytes)),
+		LockboxEnvelopeRetentionSecs: durationSecsOrZero(sc.Lockbox.EnvelopeRetention),
 		GitbackMaxBundleBytes:        uint64(maxNonNeg(sc.Gitback.MaxBundleBytes)),
 		GitbackEnvelopeRetentionSecs: durationSecsOrZero(sc.Gitback.EnvelopeRetention),
-		LongdrawerMaxFileBytes:        uint64(maxNonNeg(sc.Longdrawer.MaxFileBytes)),
+		LongdrawerMaxFileBytes:       uint64(maxNonNeg(sc.Longdrawer.MaxFileBytes)),
 		CuratorMaxBytes:              uint64(maxNonNeg(sc.Curator.MaxBytes)),
 		CuratorRegistryPort:          sc.Curator.RegistryPort,
 	}

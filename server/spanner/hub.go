@@ -1,15 +1,15 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package tungol provides hub coordination for the tungol federation:
-// one Hub aggregates admin queries across a configured set of steorras
+// Package spanner provides hub coordination for the spanner federation:
+// one Hub aggregates admin queries across a configured set of bolts
 // (peer vigosrvs that own their own envoy partition). The current
-// implementation is still hub-steorra (not yet the peer-equal redesign);
+// implementation is still hub-bolt (not yet the peer-equal redesign);
 // Phase 1+ will replace the Hub-centric model with peer-equal gossip.
-// The Hub connects to each steorra over mTLS gRPC and fans out admin
+// The Hub connects to each bolt over mTLS gRPC and fans out admin
 // queries (ListEnvoys, GetConvergenceSummary, ListRuns, ForcePush)
 // across all of them.
-package tungol
+package spanner
 
 import (
 	"context"
@@ -28,33 +28,33 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// Hub manages gRPC connections to steorras and fans out admin queries.
+// Hub manages gRPC connections to bolts and fans out admin queries.
 type Hub struct {
-	steorras       []steorraConn
-	steorraReports map[string]*pb.SteorraStatusReport // latest steorra self-reports, protected by mu
-	// steorraPins holds first-sighting (tungol_id, steorra_id) →
-	// steorra_pubkey records for Phase 1 identity pinning. In-memory
+	bolts       []boltConn
+	boltReports map[string]*pb.BoltStatusReport // latest bolt self-reports, protected by mu
+	// boltPins holds first-sighting (spanner_id, bolt_id) →
+	// bolt_pubkey records for Phase 1 identity pinning. In-memory
 	// only: lost on hub restart by design (Phase 2's CRDT layer
 	// adds the proper persisted signed-members set). Protected by mu.
-	steorraPins map[string]*SteorraPin
+	boltPins    map[string]*BoltPin
 	auditWriter PinAuditRecorder // nil-safe; emits mismatch events
 	metrics     *metrics.Metrics // per-instance prometheus collectors
 	mu          sync.RWMutex
 }
 
-// SteorraPin records the verified identity of a steorra on first
-// sighting. Subsequent reports from the same (tungol_id, steorra_id)
+// BoltPin records the verified identity of a bolt on first
+// sighting. Subsequent reports from the same (spanner_id, bolt_id)
 // must carry the same pubkey or are rejected with an audit event.
-type SteorraPin struct {
-	TungolID  string
-	SteorraID string
+type BoltPin struct {
+	SpannerID string
+	BoltID    string
 	Pubkey    []byte // 32-byte Ed25519 raw pubkey
 	PinnedAt  time.Time
 	LastSeen  time.Time
 }
 
 // PinAuditRecorder is the nil-safe interface the hub uses to emit
-// `tungol_steorra_pubkey_mismatch` audit events. Implemented by
+// `spanner_bolt_pubkey_mismatch` audit events. Implemented by
 // *audit.Writer; tests pass a no-op or a recording stub.
 type PinAuditRecorder interface {
 	Record(ctx context.Context, eventType, actor, source, summary, payload string) error
@@ -69,41 +69,41 @@ func (h *Hub) SetAuditWriter(w PinAuditRecorder) {
 	h.auditWriter = w
 }
 
-// pinKey is the map key for steorraPins. (tungol_id, steorra_id)
-// pairs scoped: two tungols can each have a steorra with the same
-// steorra_id and they don't collide.
-func pinKey(tungolID, steorraID string) string {
-	return tungolID + "\x00" + steorraID
+// pinKey is the map key for boltPins. (spanner_id, bolt_id)
+// pairs scoped: two spanners can each have a bolt with the same
+// bolt_id and they don't collide.
+func pinKey(spannerID, boltID string) string {
+	return spannerID + "\x00" + boltID
 }
 
-type steorraConn struct {
+type boltConn struct {
 	id       string
 	addr     string
-	patterns []string // hostname glob patterns routed to this steorra
+	patterns []string // hostname glob patterns routed to this bolt
 	conn     *grpc.ClientConn
 	admin    pb.VigoAdminClient
 }
 
 // NewHub creates a Hub that connects to the configured bootstrap-discovery
 // peers via mTLS. Each address gets a long-lived gRPC client connection used
-// for admin-query fan-out + the JoinTungol rendezvous. After Slice 2A.2
+// for admin-query fan-out + the JoinSpanner rendezvous. After Slice 2A.2
 // wires the CRDT merge, the peer list is dynamic — gossip extends this
 // initial seed. m owns the per-peer latency/up gauges. The legacy
-// per-steorra config (id + patterns) lived in server.yaml pre-ADR-026; in
+// per-bolt config (id + patterns) lived in server.yaml pre-ADR-026; in
 // the peer-equal model that data lives in the gossiped admissions CRDT
-// (tungol_steorras table), so admin-query routing-by-pattern is degraded
+// (spanner_bolts table), so admin-query routing-by-pattern is degraded
 // in 2A.1b — RouteHostname returns no-route until 2A.2 lands the merge.
 func NewHub(ctx context.Context, bootstrapPeers []string, certFile, keyFile, caFile string, m *metrics.Metrics) (*Hub, error) {
 	tlsCreds, err := buildClientTLS(certFile, keyFile, caFile)
 	if err != nil {
-		return nil, fmt.Errorf("building steorra TLS credentials: %w", err)
+		return nil, fmt.Errorf("building bolt TLS credentials: %w", err)
 	}
 
 	h := &Hub{
-		steorras:       make([]steorraConn, 0, len(bootstrapPeers)),
-		steorraReports: make(map[string]*pb.SteorraStatusReport),
-		steorraPins:    make(map[string]*SteorraPin),
-		metrics:        m,
+		bolts:       make([]boltConn, 0, len(bootstrapPeers)),
+		boltReports: make(map[string]*pb.BoltStatusReport),
+		boltPins:    make(map[string]*BoltPin),
+		metrics:     m,
 	}
 
 	for _, addr := range bootstrapPeers {
@@ -119,9 +119,9 @@ func NewHub(ctx context.Context, bootstrapPeers []string, certFile, keyFile, caF
 		}
 
 		// id stays empty until the peer announces its own pubkey via the
-		// signed SteorraStatusReport (Phase 1) and we pin it; patterns
+		// signed BoltStatusReport (Phase 1) and we pin it; patterns
 		// stay empty until the CRDT merge populates them.
-		h.steorras = append(h.steorras, steorraConn{
+		h.bolts = append(h.bolts, boltConn{
 			id:    addr, // temporary handle until pubkey lands via announcement
 			addr:  addr,
 			conn:  conn,
@@ -133,28 +133,28 @@ func NewHub(ctx context.Context, bootstrapPeers []string, certFile, keyFile, caF
 	return h, nil
 }
 
-// Close shuts down all steorra connections.
+// Close shuts down all bolt connections.
 func (h *Hub) Close() {
-	for _, s := range h.steorras {
+	for _, s := range h.bolts {
 		if s.conn != nil {
 			s.conn.Close()
 		}
 	}
 }
 
-// SteorraCount returns the number of configured steorras.
-func (h *Hub) SteorraCount() int {
-	return len(h.steorras)
+// BoltCount returns the number of configured bolts.
+func (h *Hub) BoltCount() int {
+	return len(h.bolts)
 }
 
-// AggregateListEnvoys fans out ListEnvoys to all steorras and merges results.
+// AggregateListEnvoys fans out ListEnvoys to all bolts and merges results.
 func (h *Hub) AggregateListEnvoys(ctx context.Context) ([]*pb.Envoy, error) {
 	type result struct {
 		envoys []*pb.Envoy
-		err   error
+		err    error
 	}
 
-	results := h.fanOut(ctx, func(ctx context.Context, sc steorraConn) (any, error) {
+	results := h.fanOut(ctx, func(ctx context.Context, sc boltConn) (any, error) {
 		resp, err := sc.admin.ListEnvoys(ctx, &pb.ListEnvoysRequest{})
 		if err != nil {
 			return nil, err
@@ -165,7 +165,7 @@ func (h *Hub) AggregateListEnvoys(ctx context.Context) ([]*pb.Envoy, error) {
 	var allNodes []*pb.Envoy
 	for _, r := range results {
 		if r.err != nil {
-			slog.Warn("steorra ListEnvoys failed", "steorra_id", r.steorraID, "error", r.err)
+			slog.Warn("bolt ListEnvoys failed", "bolt_id", r.boltID, "error", r.err)
 			continue
 		}
 		allNodes = append(allNodes, r.value.([]*pb.Envoy)...)
@@ -173,18 +173,18 @@ func (h *Hub) AggregateListEnvoys(ctx context.Context) ([]*pb.Envoy, error) {
 	return allNodes, nil
 }
 
-// AggregateConvergenceSummary fans out GetConvergenceSummary to all steorras
+// AggregateConvergenceSummary fans out GetConvergenceSummary to all bolts
 // and sums the results.
 func (h *Hub) AggregateConvergenceSummary(ctx context.Context) (*pb.GetConvergenceSummaryResponse, error) {
-	results := h.fanOut(ctx, func(ctx context.Context, sc steorraConn) (any, error) {
+	results := h.fanOut(ctx, func(ctx context.Context, sc boltConn) (any, error) {
 		return sc.admin.GetConvergenceSummary(ctx, &pb.GetConvergenceSummaryRequest{})
 	})
 
 	agg := &pb.GetConvergenceSummaryResponse{}
-	steorraCount := 0
+	boltCount := 0
 	for _, r := range results {
 		if r.err != nil {
-			slog.Warn("steorra GetConvergenceSummary failed", "steorra_id", r.steorraID, "error", r.err)
+			slog.Warn("bolt GetConvergenceSummary failed", "bolt_id", r.boltID, "error", r.err)
 			continue
 		}
 		resp := r.value.(*pb.GetConvergenceSummaryResponse)
@@ -195,7 +195,7 @@ func (h *Hub) AggregateConvergenceSummary(ctx context.Context) (*pb.GetConvergen
 		agg.Failed += resp.Failed
 		agg.Offline += resp.Offline
 		agg.NoData += resp.NoData
-		steorraCount++
+		boltCount++
 	}
 
 	// Lost-contact envoys excluded from compliance percentage — they represent
@@ -208,13 +208,13 @@ func (h *Hub) AggregateConvergenceSummary(ctx context.Context) (*pb.GetConvergen
 	return agg, nil
 }
 
-// AggregateListRuns fans out ListRuns to all steorras and merges results.
-// If envoyID is non-empty, only queries steorras (all of them — fan-out is cheap).
+// AggregateListRuns fans out ListRuns to all bolts and merges results.
+// If envoyID is non-empty, only queries bolts (all of them — fan-out is cheap).
 func (h *Hub) AggregateListRuns(ctx context.Context, envoyID string, limit int32) ([]*pb.Run, error) {
-	results := h.fanOut(ctx, func(ctx context.Context, sc steorraConn) (any, error) {
+	results := h.fanOut(ctx, func(ctx context.Context, sc boltConn) (any, error) {
 		resp, err := sc.admin.ListRuns(ctx, &pb.ListRunsRequest{
 			EnvoyId: envoyID,
-			Limit:  limit,
+			Limit:   limit,
 		})
 		if err != nil {
 			return nil, err
@@ -225,7 +225,7 @@ func (h *Hub) AggregateListRuns(ctx context.Context, envoyID string, limit int32
 	var allRuns []*pb.Run
 	for _, r := range results {
 		if r.err != nil {
-			slog.Warn("steorra ListRuns failed", "steorra_id", r.steorraID, "error", r.err)
+			slog.Warn("bolt ListRuns failed", "bolt_id", r.boltID, "error", r.err)
 			continue
 		}
 		allRuns = append(allRuns, r.value.([]*pb.Run)...)
@@ -233,10 +233,10 @@ func (h *Hub) AggregateListRuns(ctx context.Context, envoyID string, limit int32
 	return allRuns, nil
 }
 
-// ForwardForcePush sends a ForcePush to all steorras (or targeted if envoyID
-// is non-empty). Returns total envoys notified across all steorras.
+// ForwardForcePush sends a ForcePush to all bolts (or targeted if envoyID
+// is non-empty). Returns total envoys notified across all bolts.
 func (h *Hub) ForwardForcePush(ctx context.Context, envoyID string) (int32, error) {
-	results := h.fanOut(ctx, func(ctx context.Context, sc steorraConn) (any, error) {
+	results := h.fanOut(ctx, func(ctx context.Context, sc boltConn) (any, error) {
 		resp, err := sc.admin.ForcePush(ctx, &pb.ForcePushRequest{EnvoyId: envoyID})
 		if err != nil {
 			return nil, err
@@ -247,7 +247,7 @@ func (h *Hub) ForwardForcePush(ctx context.Context, envoyID string) (int32, erro
 	var total int32
 	for _, r := range results {
 		if r.err != nil {
-			slog.Warn("steorra ForcePush failed", "steorra_id", r.steorraID, "error", r.err)
+			slog.Warn("bolt ForcePush failed", "bolt_id", r.boltID, "error", r.err)
 			continue
 		}
 		total += r.value.(int32)
@@ -255,16 +255,16 @@ func (h *Hub) ForwardForcePush(ctx context.Context, envoyID string) (int32, erro
 	return total, nil
 }
 
-// RouteHostname determines which steorra should handle a given hostname by
-// matching against each steorra's configured patterns. Returns the steorra's
+// RouteHostname determines which bolt should handle a given hostname by
+// matching against each bolt's configured patterns. Returns the bolt's
 // gRPC address and true if a match is found, or empty string and false if
-// no steorra pattern matches (the hub handles it locally).
+// no bolt pattern matches (the hub handles it locally).
 func (h *Hub) RouteHostname(hostname string) (addr string, ok bool) {
-	for _, sc := range h.steorras {
+	for _, sc := range h.bolts {
 		for _, pattern := range sc.patterns {
 			matched, err := filepath.Match(pattern, hostname)
 			if err != nil {
-				slog.Warn("invalid steorra pattern", "steorra_id", sc.id, "pattern", pattern, "error", err)
+				slog.Warn("invalid bolt pattern", "bolt_id", sc.id, "pattern", pattern, "error", err)
 				continue
 			}
 			if matched {
@@ -275,19 +275,19 @@ func (h *Hub) RouteHostname(hostname string) (addr string, ok bool) {
 	return "", false
 }
 
-// EnrollOnSteorra creates a envoy record on the target steorra via the EnrollEnvoy
-// admin RPC. Returns the envoy UUID assigned by the steorra.
-func (h *Hub) EnrollOnSteorra(ctx context.Context, steorraAddr, hostname, ipAddress, pubkeyPEM string, force bool) (string, error) {
-	// Find the steorra connection by address.
-	var target *steorraConn
-	for i := range h.steorras {
-		if h.steorras[i].addr == steorraAddr {
-			target = &h.steorras[i]
+// EnrollOnBolt creates a envoy record on the target bolt via the EnrollEnvoy
+// admin RPC. Returns the envoy UUID assigned by the bolt.
+func (h *Hub) EnrollOnBolt(ctx context.Context, boltAddr, hostname, ipAddress, pubkeyPEM string, force bool) (string, error) {
+	// Find the bolt connection by address.
+	var target *boltConn
+	for i := range h.bolts {
+		if h.bolts[i].addr == boltAddr {
+			target = &h.bolts[i]
 			break
 		}
 	}
 	if target == nil {
-		return "", fmt.Errorf("no steorra connection for address %s", steorraAddr)
+		return "", fmt.Errorf("no bolt connection for address %s", boltAddr)
 	}
 
 	resp, err := target.admin.EnrollEnvoy(ctx, &pb.EnrollEnvoyRequest{
@@ -297,83 +297,83 @@ func (h *Hub) EnrollOnSteorra(ctx context.Context, steorraAddr, hostname, ipAddr
 		Force:     force,
 	})
 	if err != nil {
-		return "", fmt.Errorf("enroll on steorra %s: %w", target.id, err)
+		return "", fmt.Errorf("enroll on bolt %s: %w", target.id, err)
 	}
 
-	slog.Info("enrolled envoy on steorra", "steorra_id", target.id, "hostname", hostname, "envoy_id", resp.EnvoyId)
+	slog.Info("enrolled envoy on bolt", "bolt_id", target.id, "hostname", hostname, "envoy_id", resp.EnvoyId)
 	return resp.EnvoyId, nil
 }
 
-// SteorraByID returns the steorra connection for the given ID, or nil if not found.
-func (h *Hub) SteorraByID(id string) *steorraConn {
-	for i := range h.steorras {
-		if h.steorras[i].id == id {
-			return &h.steorras[i]
+// BoltByID returns the bolt connection for the given ID, or nil if not found.
+func (h *Hub) BoltByID(id string) *boltConn {
+	for i := range h.bolts {
+		if h.bolts[i].id == id {
+			return &h.bolts[i]
 		}
 	}
 	return nil
 }
 
-// SteorraListEnvoys queries a single steorra for its envoy list.
-func (h *Hub) SteorraListEnvoys(ctx context.Context, steorraID string) ([]*pb.Envoy, error) {
-	sc := h.SteorraByID(steorraID)
+// BoltListEnvoys queries a single bolt for its envoy list.
+func (h *Hub) BoltListEnvoys(ctx context.Context, boltID string) ([]*pb.Envoy, error) {
+	sc := h.BoltByID(boltID)
 	if sc == nil {
-		return nil, fmt.Errorf("steorra %q not found", steorraID)
+		return nil, fmt.Errorf("bolt %q not found", boltID)
 	}
 	resp, err := sc.admin.ListEnvoys(ctx, &pb.ListEnvoysRequest{})
 	if err != nil {
-		return nil, fmt.Errorf("ListEnvoys on steorra %s: %w", steorraID, err)
+		return nil, fmt.Errorf("ListEnvoys on bolt %s: %w", boltID, err)
 	}
 	return resp.Envoys, nil
 }
 
-// SteorraListRuns queries a single steorra for its run list.
-func (h *Hub) SteorraListRuns(ctx context.Context, steorraID string, limit int32) ([]*pb.Run, error) {
-	sc := h.SteorraByID(steorraID)
+// BoltListRuns queries a single bolt for its run list.
+func (h *Hub) BoltListRuns(ctx context.Context, boltID string, limit int32) ([]*pb.Run, error) {
+	sc := h.BoltByID(boltID)
 	if sc == nil {
-		return nil, fmt.Errorf("steorra %q not found", steorraID)
+		return nil, fmt.Errorf("bolt %q not found", boltID)
 	}
 	resp, err := sc.admin.ListRuns(ctx, &pb.ListRunsRequest{Limit: limit})
 	if err != nil {
-		return nil, fmt.Errorf("ListRuns on steorra %s: %w", steorraID, err)
+		return nil, fmt.Errorf("ListRuns on bolt %s: %w", boltID, err)
 	}
 	return resp.Runs, nil
 }
 
-// SteorraConvergenceSummary queries a single steorra for its compliance summary.
-func (h *Hub) SteorraConvergenceSummary(ctx context.Context, steorraID string) (*pb.GetConvergenceSummaryResponse, error) {
-	sc := h.SteorraByID(steorraID)
+// BoltConvergenceSummary queries a single bolt for its compliance summary.
+func (h *Hub) BoltConvergenceSummary(ctx context.Context, boltID string) (*pb.GetConvergenceSummaryResponse, error) {
+	sc := h.BoltByID(boltID)
 	if sc == nil {
-		return nil, fmt.Errorf("steorra %q not found", steorraID)
+		return nil, fmt.Errorf("bolt %q not found", boltID)
 	}
 	return sc.admin.GetConvergenceSummary(ctx, &pb.GetConvergenceSummaryRequest{})
 }
 
-// SteorraForcePush sends a ForcePush to a single steorra.
-func (h *Hub) SteorraForcePush(ctx context.Context, steorraID, envoyID string) (int32, error) {
-	sc := h.SteorraByID(steorraID)
+// BoltForcePush sends a ForcePush to a single bolt.
+func (h *Hub) BoltForcePush(ctx context.Context, boltID, envoyID string) (int32, error) {
+	sc := h.BoltByID(boltID)
 	if sc == nil {
-		return 0, fmt.Errorf("steorra %q not found", steorraID)
+		return 0, fmt.Errorf("bolt %q not found", boltID)
 	}
 	resp, err := sc.admin.ForcePush(ctx, &pb.ForcePushRequest{EnvoyId: envoyID})
 	if err != nil {
-		return 0, fmt.Errorf("ForcePush on steorra %s: %w", steorraID, err)
+		return 0, fmt.Errorf("ForcePush on bolt %s: %w", boltID, err)
 	}
 	return resp.EnvoysNotified, nil
 }
 
-// SteorraStatus describes the health and summary of a single steorra.
-type SteorraStatus struct {
+// BoltStatus describes the health and summary of a single bolt.
+type BoltStatus struct {
 	ID             string   `json:"id"`
 	Addr           string   `json:"addr"`
 	Patterns       []string `json:"patterns"`
 	Healthy        bool     `json:"healthy"`
-	EnvoyCount    int32    `json:"envoy_count"`
+	EnvoyCount     int32    `json:"envoy_count"`
 	Converged      int32    `json:"converged"`
 	Relapsed       int32    `json:"relapsed"`
 	Diverged       int32    `json:"diverged"`
 	Failed         int32    `json:"failed"`
-	Offline    int32    `json:"offline"`
+	Offline        int32    `json:"offline"`
 	NoData         int32    `json:"no_data"`
 	ConvergencePct float32  `json:"compliance_pct"`
 	LatencyMs      int64    `json:"latency_ms"`
@@ -381,18 +381,18 @@ type SteorraStatus struct {
 	Error          string   `json:"error,omitempty"`
 }
 
-// probeResult carries both the compliance response and the latency from a steorra probe.
+// probeResult carries both the compliance response and the latency from a bolt probe.
 type probeResult struct {
 	resp    *pb.GetConvergenceSummaryResponse
 	latency time.Duration
 }
 
-// SteorraStatuses probes each steorra's health by calling GetConvergenceSummary
+// BoltStatuses probes each bolt's health by calling GetConvergenceSummary
 // with a short timeout and returns the results with compliance breakdown and latency.
-// If a steorra is unreachable but has a recent self-report, the report data is
-// used but the steorra is still marked unhealthy.
-func (h *Hub) SteorraStatuses(ctx context.Context) []SteorraStatus {
-	results := h.fanOut(ctx, func(ctx context.Context, sc steorraConn) (any, error) {
+// If a bolt is unreachable but has a recent self-report, the report data is
+// used but the bolt is still marked unhealthy.
+func (h *Hub) BoltStatuses(ctx context.Context) []BoltStatus {
+	results := h.fanOut(ctx, func(ctx context.Context, sc boltConn) (any, error) {
 		probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 		start := time.Now()
@@ -404,9 +404,9 @@ func (h *Hub) SteorraStatuses(ctx context.Context) []SteorraStatus {
 		return &probeResult{resp: resp, latency: latency}, nil
 	})
 
-	statuses := make([]SteorraStatus, len(h.steorras))
-	for i, sc := range h.steorras {
-		statuses[i] = SteorraStatus{
+	statuses := make([]BoltStatus, len(h.bolts))
+	for i, sc := range h.bolts {
+		statuses[i] = BoltStatus{
 			ID:       sc.id,
 			Addr:     sc.addr,
 			Patterns: sc.patterns,
@@ -417,16 +417,16 @@ func (h *Hub) SteorraStatuses(ctx context.Context) []SteorraStatus {
 			if pr, ok := r.value.(*probeResult); ok {
 				statuses[i].LatencyMs = pr.latency.Milliseconds()
 				if h.metrics != nil {
-					h.metrics.TungolSteorraLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
+					h.metrics.SpannerBoltLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
 				}
 			}
 			if h.metrics != nil {
-				h.metrics.TungolSteorraUp.WithLabelValues(sc.id).Set(0)
+				h.metrics.SpannerBoltUp.WithLabelValues(sc.id).Set(0)
 			}
 
-			// If probe failed but we have a self-report from the steorra,
+			// If probe failed but we have a self-report from the bolt,
 			// populate compliance data so dashboards are not blank.
-			if report := h.getSteorraReport(sc.id); report != nil {
+			if report := h.getBoltReport(sc.id); report != nil {
 				statuses[i].EnvoyCount = report.EnvoyCount
 				statuses[i].Converged = report.Converged
 				statuses[i].Relapsed = report.Relapsed
@@ -435,7 +435,7 @@ func (h *Hub) SteorraStatuses(ctx context.Context) []SteorraStatus {
 				statuses[i].Offline = report.Offline
 				statuses[i].NoData = report.NoData
 				statuses[i].ConvergencePct = report.ConvergencePct
-			statuses[i].ConfigVersion = report.ConfigVersion
+				statuses[i].ConfigVersion = report.ConfigVersion
 			}
 		} else {
 			pr := r.value.(*probeResult)
@@ -450,23 +450,23 @@ func (h *Hub) SteorraStatuses(ctx context.Context) []SteorraStatus {
 			statuses[i].ConvergencePct = pr.resp.ConvergencePct
 			statuses[i].LatencyMs = pr.latency.Milliseconds()
 			if h.metrics != nil {
-				h.metrics.TungolSteorraLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
-				h.metrics.TungolSteorraUp.WithLabelValues(sc.id).Set(1)
+				h.metrics.SpannerBoltLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
+				h.metrics.SpannerBoltUp.WithLabelValues(sc.id).Set(1)
 			}
 		}
 	}
 	return statuses
 }
 
-// RecordSteorraReport stores a steorra's self-reported status. Called
-// by the ReportSteorraStatus gRPC handler on the hub.
+// RecordBoltReport stores a bolt's self-reported status. Called
+// by the ReportBoltStatus gRPC handler on the hub.
 //
-// Phase 1 (ADR-tungol): when the report carries steorra_pubkey +
-// signature + tungol_id, the hub (1) verifies the signature against
+// Phase 1 (ADR-spanner): when the report carries bolt_pubkey +
+// signature + spanner_id, the hub (1) verifies the signature against
 // the asserted pubkey, (2) on first sighting pins
-// (tungol_id, steorra_id) → pubkey, (3) on subsequent reports
+// (spanner_id, bolt_id) → pubkey, (3) on subsequent reports
 // requires the asserted pubkey to match the pinned one. Mismatch
-// emits a `tungol_steorra_pubkey_mismatch` audit event and the
+// emits a `spanner_bolt_pubkey_mismatch` audit event and the
 // report is REJECTED — neither stored nor folded into aggregates.
 //
 // Pre-Phase-1 reporters (no pubkey/signature fields) are accepted
@@ -475,65 +475,65 @@ func (h *Hub) SteorraStatuses(ctx context.Context) []SteorraStatus {
 //
 // Returns nil on success, error on rejection. The gRPC handler
 // surfaces the error to the caller as a non-zero status code.
-func (h *Hub) RecordSteorraReport(ctx context.Context, report *pb.SteorraStatusReport) error {
+func (h *Hub) RecordBoltReport(ctx context.Context, report *pb.BoltStatusReport) error {
 	// Legacy (pre-Phase-1) report: no pubkey/signature, no pin.
-	if len(report.SteorraPubkey) == 0 && len(report.Signature) == 0 {
-		slog.Info("legacy steorra report (no signature) — accepted without pinning",
-			"steorra_id", report.SteorraId,
-			"tungol_id", report.TungolId,
+	if len(report.BoltPubkey) == 0 && len(report.Signature) == 0 {
+		slog.Info("legacy bolt report (no signature) — accepted without pinning",
+			"bolt_id", report.BoltId,
+			"spanner_id", report.SpannerId,
 		)
 		h.mu.Lock()
 		defer h.mu.Unlock()
-		h.steorraReports[report.SteorraId] = report
+		h.boltReports[report.BoltId] = report
 		return nil
 	}
 
 	// Phase 1 report: must verify and pin.
-	if report.TungolId == "" {
-		return fmt.Errorf("signed report missing tungol_id (required for pinning)")
+	if report.SpannerId == "" {
+		return fmt.Errorf("signed report missing spanner_id (required for pinning)")
 	}
 	if err := VerifyReportSignature(report); err != nil {
-		slog.Warn("steorra report signature verify failed; rejecting",
-			"steorra_id", report.SteorraId,
-			"tungol_id", report.TungolId,
+		slog.Warn("bolt report signature verify failed; rejecting",
+			"bolt_id", report.BoltId,
+			"spanner_id", report.SpannerId,
 			"error", err,
 		)
 		h.emitMismatchAudit(ctx, report, nil, "signature_verify_failed: "+err.Error())
 		return fmt.Errorf("signature verify: %w", err)
 	}
 
-	key := pinKey(report.TungolId, report.SteorraId)
+	key := pinKey(report.SpannerId, report.BoltId)
 	now := time.Now().UTC()
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	pinned, ok := h.steorraPins[key]
+	pinned, ok := h.boltPins[key]
 	if !ok {
 		// First sighting — pin.
-		pinCopy := make([]byte, len(report.SteorraPubkey))
-		copy(pinCopy, report.SteorraPubkey)
-		h.steorraPins[key] = &SteorraPin{
-			TungolID:  report.TungolId,
-			SteorraID: report.SteorraId,
+		pinCopy := make([]byte, len(report.BoltPubkey))
+		copy(pinCopy, report.BoltPubkey)
+		h.boltPins[key] = &BoltPin{
+			SpannerID: report.SpannerId,
+			BoltID:    report.BoltId,
 			Pubkey:    pinCopy,
 			PinnedAt:  now,
 			LastSeen:  now,
 		}
-		slog.Info("steorra pubkey pinned on first sighting",
-			"tungol_id", report.TungolId,
-			"steorra_id", report.SteorraId,
-			"pubkey_short", shortPubkey(report.SteorraPubkey),
+		slog.Info("bolt pubkey pinned on first sighting",
+			"spanner_id", report.SpannerId,
+			"bolt_id", report.BoltId,
+			"pubkey_short", shortPubkey(report.BoltPubkey),
 		)
-		h.steorraReports[report.SteorraId] = report
+		h.boltReports[report.BoltId] = report
 		return nil
 	}
 
 	// Subsequent sighting — pubkey must match pin.
-	if !bytesEqual(pinned.Pubkey, report.SteorraPubkey) {
-		slog.Warn("steorra pubkey mismatch — rejecting report",
-			"tungol_id", report.TungolId,
-			"steorra_id", report.SteorraId,
-			"asserted_pubkey_short", shortPubkey(report.SteorraPubkey),
+	if !bytesEqual(pinned.Pubkey, report.BoltPubkey) {
+		slog.Warn("bolt pubkey mismatch — rejecting report",
+			"spanner_id", report.SpannerId,
+			"bolt_id", report.BoltId,
+			"asserted_pubkey_short", shortPubkey(report.BoltPubkey),
 			"pinned_pubkey_short", shortPubkey(pinned.Pubkey),
 			"pinned_at", pinned.PinnedAt,
 		)
@@ -542,18 +542,18 @@ func (h *Hub) RecordSteorraReport(ctx context.Context, report *pb.SteorraStatusR
 		h.mu.Unlock()
 		h.emitMismatchAudit(ctx, report, pinned, "pubkey_mismatch")
 		h.mu.Lock() // restore for defer
-		return fmt.Errorf("steorra pubkey for (tungol_id=%s, steorra_id=%s) does not match pinned identity", report.TungolId, report.SteorraId)
+		return fmt.Errorf("bolt pubkey for (spanner_id=%s, bolt_id=%s) does not match pinned identity", report.SpannerId, report.BoltId)
 	}
 
 	// Verified + matches pin — record + update last-seen.
 	pinned.LastSeen = now
-	h.steorraReports[report.SteorraId] = report
+	h.boltReports[report.BoltId] = report
 	return nil
 }
 
-// emitMismatchAudit records a `tungol_steorra_pubkey_mismatch`
+// emitMismatchAudit records a `spanner_bolt_pubkey_mismatch`
 // audit event with the asserted vs pinned pubkeys. nil-safe.
-func (h *Hub) emitMismatchAudit(ctx context.Context, report *pb.SteorraStatusReport, pinned *SteorraPin, reason string) {
+func (h *Hub) emitMismatchAudit(ctx context.Context, report *pb.BoltStatusReport, pinned *BoltPin, reason string) {
 	if h.auditWriter == nil {
 		return
 	}
@@ -562,16 +562,16 @@ func (h *Hub) emitMismatchAudit(ctx context.Context, report *pb.SteorraStatusRep
 		pinnedHex = fmt.Sprintf("%x", pinned.Pubkey)
 	}
 	payload := fmt.Sprintf(
-		`{"tungol_id":%q,"steorra_id":%q,"asserted_pubkey":"%x","pinned_pubkey":%q,"reason":%q,"decision":"rejected"}`,
-		report.TungolId, report.SteorraId, report.SteorraPubkey, pinnedHex, reason,
+		`{"spanner_id":%q,"bolt_id":%q,"asserted_pubkey":"%x","pinned_pubkey":%q,"reason":%q,"decision":"rejected"}`,
+		report.SpannerId, report.BoltId, report.BoltPubkey, pinnedHex, reason,
 	)
-	summary := fmt.Sprintf("steorra pubkey mismatch on (tungol=%s, steorra=%s); report rejected", report.TungolId, report.SteorraId)
-	_ = h.auditWriter.Record(ctx, "tungol_steorra_pubkey_mismatch", "tungol", "grpc", summary, payload)
+	summary := fmt.Sprintf("bolt pubkey mismatch on (spanner=%s, bolt=%s); report rejected", report.SpannerId, report.BoltId)
+	_ = h.auditWriter.Record(ctx, "spanner_bolt_pubkey_mismatch", "spanner", "grpc", summary, payload)
 }
 
 // shortPubkey is the first-8-bytes hex form used in log fields.
 // Operators cross-reference this against the local pubkey shown
-// by `vigocli tungol status`.
+// by `vigocli spanner status`.
 func shortPubkey(pk []byte) string {
 	if len(pk) < 8 {
 		return fmt.Sprintf("%x", pk)
@@ -595,14 +595,14 @@ func bytesEqual(a, b []byte) bool {
 	return true
 }
 
-// LookupSteorraPin returns the pinned identity for a (tungol_id,
-// steorra_id) pair, or nil if none is pinned. Used by the
-// /api/v1/tungol/status surface to show operators the verified
-// pubkey for each steorra.
-func (h *Hub) LookupSteorraPin(tungolID, steorraID string) *SteorraPin {
+// LookupBoltPin returns the pinned identity for a (spanner_id,
+// bolt_id) pair, or nil if none is pinned. Used by the
+// /api/v1/spanner/status surface to show operators the verified
+// pubkey for each bolt.
+func (h *Hub) LookupBoltPin(spannerID, boltID string) *BoltPin {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	pin, ok := h.steorraPins[pinKey(tungolID, steorraID)]
+	pin, ok := h.boltPins[pinKey(spannerID, boltID)]
 	if !ok {
 		return nil
 	}
@@ -610,43 +610,43 @@ func (h *Hub) LookupSteorraPin(tungolID, steorraID string) *SteorraPin {
 	// the hub's nose.
 	pkCopy := make([]byte, len(pin.Pubkey))
 	copy(pkCopy, pin.Pubkey)
-	return &SteorraPin{
-		TungolID:  pin.TungolID,
-		SteorraID: pin.SteorraID,
+	return &BoltPin{
+		SpannerID: pin.SpannerID,
+		BoltID:    pin.BoltID,
 		Pubkey:    pkCopy,
 		PinnedAt:  pin.PinnedAt,
 		LastSeen:  pin.LastSeen,
 	}
 }
 
-// getSteorraReport returns the latest self-report for a steorra, or nil.
-func (h *Hub) getSteorraReport(steorraID string) *pb.SteorraStatusReport {
+// getBoltReport returns the latest self-report for a bolt, or nil.
+func (h *Hub) getBoltReport(boltID string) *pb.BoltStatusReport {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return h.steorraReports[steorraID]
+	return h.boltReports[boltID]
 }
 
-// fanOutResult holds the response from one steorra.
+// fanOutResult holds the response from one bolt.
 type fanOutResult struct {
-	steorraID string
-	value     any
-	err       error
+	boltID string
+	value  any
+	err    error
 }
 
-// fanOut executes fn on all steorras concurrently and collects results.
-func (h *Hub) fanOut(ctx context.Context, fn func(ctx context.Context, sc steorraConn) (any, error)) []fanOutResult {
+// fanOut executes fn on all bolts concurrently and collects results.
+func (h *Hub) fanOut(ctx context.Context, fn func(ctx context.Context, sc boltConn) (any, error)) []fanOutResult {
 	var wg sync.WaitGroup
-	results := make([]fanOutResult, len(h.steorras))
+	results := make([]fanOutResult, len(h.bolts))
 
-	for i, sc := range h.steorras {
+	for i, sc := range h.bolts {
 		wg.Add(1)
-		go func(idx int, steorra steorraConn) {
+		go func(idx int, bolt boltConn) {
 			defer wg.Done()
-			val, err := fn(ctx, steorra)
+			val, err := fn(ctx, bolt)
 			results[idx] = fanOutResult{
-				steorraID: steorra.id,
-				value:     val,
-				err:       err,
+				boltID: bolt.id,
+				value:  val,
+				err:    err,
 			}
 		}(i, sc)
 	}
@@ -658,79 +658,79 @@ func (h *Hub) fanOut(ctx context.Context, fn func(ctx context.Context, sc steorr
 // ReassignResult holds the outcome of a single envoy reassignment.
 type ReassignResult struct {
 	NewEnvoyID string
-	TargetAddr  string
+	TargetAddr string
 }
 
-// ReassignEnvoy moves a envoy from one steorra to another.
-// 1. Gets envoy info from source steorra.
-// 2. Enrolls envoy on target steorra.
-// 3. Sets reassignment on source steorra so agent reconnects.
-func (h *Hub) ReassignEnvoy(ctx context.Context, envoyID, fromSteorraID, toSteorraID string) (*ReassignResult, error) {
-	from := h.SteorraByID(fromSteorraID)
+// ReassignEnvoy moves a envoy from one bolt to another.
+// 1. Gets envoy info from source bolt.
+// 2. Enrolls envoy on target bolt.
+// 3. Sets reassignment on source bolt so agent reconnects.
+func (h *Hub) ReassignEnvoy(ctx context.Context, envoyID, fromBoltID, toBoltID string) (*ReassignResult, error) {
+	from := h.BoltByID(fromBoltID)
 	if from == nil {
-		return nil, fmt.Errorf("source steorra %q not found", fromSteorraID)
+		return nil, fmt.Errorf("source bolt %q not found", fromBoltID)
 	}
-	to := h.SteorraByID(toSteorraID)
+	to := h.BoltByID(toBoltID)
 	if to == nil {
-		return nil, fmt.Errorf("target steorra %q not found", toSteorraID)
+		return nil, fmt.Errorf("target bolt %q not found", toBoltID)
 	}
 
 	// Get envoy info from source.
 	resp, err := from.admin.GetEnvoy(ctx, &pb.GetEnvoyRequest{Id: envoyID})
 	if err != nil {
-		return nil, fmt.Errorf("getting envoy from source steorra: %w", err)
+		return nil, fmt.Errorf("getting envoy from source bolt: %w", err)
 	}
 	envoy := resp.Envoy
 
-	// Enroll on target steorra.
-	newID, err := h.EnrollOnSteorra(ctx, to.addr, envoy.Hostname, envoy.IpAddress, "", true)
+	// Enroll on target bolt.
+	newID, err := h.EnrollOnBolt(ctx, to.addr, envoy.Hostname, envoy.IpAddress, "", true)
 	if err != nil {
-		return nil, fmt.Errorf("enrolling on target steorra: %w", err)
+		return nil, fmt.Errorf("enrolling on target bolt: %w", err)
 	}
 
-	// Set reassignment on source steorra so agent reconnects on next check-in.
+	// Set reassignment on source bolt so agent reconnects on next check-in.
 	_, err = from.admin.SetReassignment(ctx, &pb.SetReassignmentRequest{
 		EnvoyId:    envoyID,
-		TargetAddr:  to.addr,
+		TargetAddr: to.addr,
 		NewEnvoyId: newID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("setting reassignment on source steorra: %w", err)
+		return nil, fmt.Errorf("setting reassignment on source bolt: %w", err)
 	}
 
 	slog.Info("envoy reassigned",
 		"envoy_id", envoyID,
-		"from_steorra", fromSteorraID,
-		"to_steorra", toSteorraID,
+		"from_bolt", fromBoltID,
+		"to_bolt", toBoltID,
 		"new_envoy_id", newID,
 	)
 
 	return &ReassignResult{
 		NewEnvoyID: newID,
-		TargetAddr:  to.addr,
+		TargetAddr: to.addr,
 	}, nil
 }
 
-// DrainResult holds the outcome of draining a steorra.
+// DrainResult holds the outcome of draining a bolt.
 type DrainResult struct {
 	Moved  int32
 	Failed int32
 	Errors []string
 }
 
-// DrainSteorra moves all envoys from a steorra to other steorras.
-// If targetSteorraID is empty, routes each envoy by hostname pattern.
-// If targetSteorraID is set, all envoys go to that specific steorra.
-func (h *Hub) DrainSteorra(ctx context.Context, steorraID, targetSteorraID string) (*DrainResult, error) {
-	src := h.SteorraByID(steorraID)
+// DrainBolt moves all envoys from a bolt to other bolts.
+// If targetBoltID is empty, routes each envoy by hostname pattern.
+// If targetBoltID is set, all envoys go to that specific bolt.
+func (h *Hub) DrainBolt(ctx context.Context, boltID, targetBoltID string) (*DrainResult, error) {
+	src := h.BoltByID(boltID)
 	if src == nil {
-		return nil, fmt.Errorf("steorra %q not found", steorraID)
+		return nil, fmt.Errorf("bolt %q not found", boltID)
 	}
 
-	// Get all envoys on source steorra.
-	envoys, err := h.SteorraListEnvoys(ctx, steorraID)
+	// Get all envoys on source bolt.
+	envoys, err := h.BoltListEnvoys(ctx, boltID)
 	if err != nil {
-		return nil, fmt.Errorf("listing envoys on steorra %s: %w", steorraID, err)
+		return nil, fmt.Errorf("listing envoys on bolt %s: %w", boltID, err)
 	}
 
 	result := &DrainResult{}
@@ -739,11 +739,11 @@ func (h *Hub) DrainSteorra(ctx context.Context, steorraID, targetSteorraID strin
 			continue
 		}
 
-		target := targetSteorraID
+		target := targetBoltID
 		if target == "" {
-			// Auto-route by hostname against remaining steorras' patterns.
-			for _, sc := range h.steorras {
-				if sc.id == steorraID {
+			// Auto-route by hostname against remaining bolts' patterns.
+			for _, sc := range h.bolts {
+				if sc.id == boltID {
 					continue
 				}
 				for _, pattern := range sc.patterns {
@@ -764,11 +764,11 @@ func (h *Hub) DrainSteorra(ctx context.Context, steorraID, targetSteorraID strin
 
 		if target == "" {
 			result.Failed++
-			result.Errors = append(result.Errors, fmt.Sprintf("no target steorra for %s", t.Hostname))
+			result.Errors = append(result.Errors, fmt.Sprintf("no target bolt for %s", t.Hostname))
 			continue
 		}
 
-		_, err := h.ReassignEnvoy(ctx, t.Id, steorraID, target)
+		_, err := h.ReassignEnvoy(ctx, t.Id, boltID, target)
 		if err != nil {
 			result.Failed++
 			result.Errors = append(result.Errors, fmt.Sprintf("reassign %s: %v", t.Hostname, err))
@@ -777,11 +777,11 @@ func (h *Hub) DrainSteorra(ctx context.Context, steorraID, targetSteorraID strin
 		result.Moved++
 	}
 
-	slog.Info("steorra drained", "steorra_id", steorraID, "moved", result.Moved, "failed", result.Failed)
+	slog.Info("bolt drained", "bolt_id", boltID, "moved", result.Moved, "failed", result.Failed)
 	return result, nil
 }
 
-// buildClientTLS creates TLS credentials for the hub's connections to steorras.
+// buildClientTLS creates TLS credentials for the hub's connections to bolts.
 func buildClientTLS(certFile, keyFile, caFile string) (credentials.TransportCredentials, error) {
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {

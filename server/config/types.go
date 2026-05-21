@@ -14,42 +14,42 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TungolMode defines the server's mode in a tungol deployment. The three
+// SpannerMode defines the server's mode in a spanner deployment. The three
 // modes are architectural states preserved from the pre-Phase-2 hub/spoke
 // distinction — founder runs the bootstrap-discovery rendezvous code,
 // joiner runs the reporter that announces to peers, and standalone is the
-// degenerate single-vigosrv case with no tungol participation. Phase 3
+// degenerate single-vigosrv case with no spanner participation. Phase 3
 // retires the mode distinction entirely; until then, this enum dispatches
-// startup behavior. Renamed in 0.65.16 from TungolRole (hub/spoke
+// startup behavior. Renamed in 0.65.16 from SpannerRole (hub/spoke
 // terminology was the hub-spoke artifact; this is the peer-equal
 // vocabulary per ADR-026).
-type TungolMode string
+type SpannerMode string
 
 const (
 	// ModeStandalone is the default: a single server handling everything.
-	ModeStandalone TungolMode = "standalone"
-	// ModeFounder is the vigosrv that founded the tungol; runs the
+	ModeStandalone SpannerMode = "standalone"
+	// ModeFounder is the vigosrv that founded the spanner; runs the
 	// bootstrap-discovery rendezvous in Phase 2A. Replaces the legacy
 	// hub role.
-	ModeFounder TungolMode = "founder"
-	// ModeJoiner is a vigosrv that joined an existing tungol via the
+	ModeFounder SpannerMode = "founder"
+	// ModeJoiner is a vigosrv that joined an existing spanner via the
 	// admission ceremony. Replaces the legacy spoke role.
-	ModeJoiner TungolMode = "joiner"
+	ModeJoiner SpannerMode = "joiner"
 )
 
-// TungolSection configures the tungol federation. Omit entirely (or set
+// SpannerSection configures the spanner federation. Omit entirely (or set
 // mode: standalone) for single-server deployments. ADR-026 reshaped this
 // for Phase 2 peer-equal admissions; the legacy hub-spoke fields (role,
-// steorras, hub_addr, hub_fallback_addrs, auto_failover, steorra_id) are
+// bolts, hub_addr, hub_fallback_addrs, auto_failover, bolt_id) are
 // retired and the loader hard-errors on them.
-type TungolSection struct {
-	Mode          TungolMode       `yaml:"mode" doc:"Server mode in a tungol deployment (peer-equal model, ADR-026)." options:"standalone|founder|joiner" default:"standalone" example:"founder"`
-	TungolID      string           `yaml:"tungol_id" doc:"Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + - _ ., no leading dot)." example:"alexander4-prod, acme-staging"`
-	Patterns      []string         `yaml:"patterns" doc:"Hostname glob patterns this steorra owns. First-match-wins across the tungol; loader refuses overlap with another steorra's patterns at publish time + boot time." example:"[*.us-west.*, *.dc1.*]"`
-	Snapshot      SnapshotConfig   `yaml:"snapshot" doc:"Two-tier snapshot cadence — Tier-1 counters via multicast, Tier-2 roster bytes via REST."`
-	Transport     TransportConfig  `yaml:"transport" doc:"Multicast gossip group + bootstrap-discovery peer list for first contact with the tungol."`
-	Freshness     FreshnessConfig  `yaml:"freshness" doc:"Liveness thresholds for declaring a steorra silent (consumes server/freshness/ defaults)."`
-	FallbackAdmin string           `yaml:"fallback_admin" doc:"Kill-switch for admin-query behavior on partition." options:"local|fanout" default:"local" example:"local"`
+type SpannerSection struct {
+	Mode          SpannerMode     `yaml:"mode" doc:"Server mode in a spanner deployment (peer-equal model, ADR-026)." options:"standalone|founder|joiner" default:"standalone" example:"founder"`
+	SpannerID     string          `yaml:"spanner_id" doc:"Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + - _ ., no leading dot)." example:"alexander4-prod, acme-staging"`
+	Patterns      []string        `yaml:"patterns" doc:"Hostname glob patterns this bolt owns. First-match-wins across the spanner; loader refuses overlap with another bolt's patterns at publish time + boot time." example:"[*.us-west.*, *.dc1.*]"`
+	Snapshot      SnapshotConfig  `yaml:"snapshot" doc:"Two-tier snapshot cadence — Tier-1 counters via multicast, Tier-2 roster bytes via REST."`
+	Transport     TransportConfig `yaml:"transport" doc:"Multicast gossip group + bootstrap-discovery peer list for first contact with the spanner."`
+	Freshness     FreshnessConfig `yaml:"freshness" doc:"Liveness thresholds for declaring a bolt silent (consumes server/freshness/ defaults)."`
+	FallbackAdmin string          `yaml:"fallback_admin" doc:"Kill-switch for admin-query behavior on partition." options:"local|fanout" default:"local" example:"local"`
 }
 
 // SnapshotConfig governs Tier-1 (counters) + Tier-2 (roster) cadences for
@@ -61,7 +61,7 @@ type SnapshotConfig struct {
 }
 
 // TransportConfig configures the multicast group (Tier-1) + bootstrap peer
-// addresses (first-contact rendezvous for newly-joining steorras) per
+// addresses (first-contact rendezvous for newly-joining bolts) per
 // ADR-026. The multicast group sits alongside longdrawer (224.0.0.43:1532)
 // and lockbox (224.0.0.44:1533); the bootstrap peers are an additive seed
 // list — gossip discovery extends it once a peer responds.
@@ -71,36 +71,36 @@ type TransportConfig struct {
 	BootstrapPeers []string `yaml:"bootstrap_peers" doc:"Seed list of peer gRPC addresses for first-contact discovery (host:port). Additive — gossip extends this list once any peer responds. Required for joiner mode; optional for founder mode (founder is itself the rendezvous)." example:"[founder.example.com:1530]"`
 }
 
-// FreshnessConfig is the per-tungol override for the server/freshness/
+// FreshnessConfig is the per-spanner override for the server/freshness/
 // thresholds. Empty fields fall back to the package defaults. Reserved
 // for Phase 2 wiring; consumers in 2A.1b ignore it.
 type FreshnessConfig struct {
-	StaleAfter string `yaml:"stale_after" doc:"Override the global staleness threshold for steorra liveness — Go duration string." example:"90s, 2m"`
+	StaleAfter string `yaml:"stale_after" doc:"Override the global staleness threshold for bolt liveness — Go duration string." example:"90s, 2m"`
 }
 
-// validateTungolID enforces the same DNS-safe-name rules as
+// validateSpannerID enforces the same DNS-safe-name rules as
 // puddle.ValidateFriendlyName: 1-64 ASCII alphanumeric + - _ .,
 // no leading dot, and never the 64-hex-char shape that collides
 // with content-addressed IDs. Logic mirrored here (rather than
 // imported from puddle) to avoid a config→puddle dependency
 // direction; keep in sync with puddle.ValidateFriendlyName.
-func validateTungolID(name string) error {
+func validateSpannerID(name string) error {
 	const maxLen = 64
 	if name == "" || len(name) > maxLen {
-		return fmt.Errorf("tungol.tungol_id must be 1-%d characters", maxLen)
+		return fmt.Errorf("spanner.spanner_id must be 1-%d characters", maxLen)
 	}
 	if name[0] == '.' {
-		return fmt.Errorf("tungol.tungol_id must not start with '.'")
+		return fmt.Errorf("spanner.spanner_id must not start with '.'")
 	}
 	if len(name) == 64 && isLowerHex(name) {
-		return fmt.Errorf("tungol.tungol_id must not look like a content-addressed id (64 lowercase hex characters)")
+		return fmt.Errorf("spanner.spanner_id must not look like a content-addressed id (64 lowercase hex characters)")
 	}
 	for _, r := range name {
 		ok := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
 			(r >= '0' && r <= '9') || r == '-' || r == '_' || r == '.'
 		if !ok {
 			return fmt.Errorf(
-				"tungol.tungol_id %q contains invalid character %q; use ASCII alphanumeric + '-' '_' '.'",
+				"spanner.spanner_id %q contains invalid character %q; use ASCII alphanumeric + '-' '_' '.'",
 				name, r,
 			)
 		}
@@ -117,18 +117,18 @@ func isLowerHex(s string) bool {
 	return true
 }
 
-// Validate checks that tungol config is internally consistent.
-func (f TungolSection) Validate() error {
+// Validate checks that spanner config is internally consistent.
+func (f SpannerSection) Validate() error {
 	mode := f.Mode
 	if mode == "" || mode == ModeStandalone {
 		return nil
 	}
-	// tungol_id is required for every non-standalone mode — it's the
+	// spanner_id is required for every non-standalone mode — it's the
 	// federation membership anchor; admissions table rows are scoped to it.
-	if f.TungolID == "" {
-		return fmt.Errorf("tungol.tungol_id is required when mode is %q (DNS-safe operator-chosen identifier)", mode)
+	if f.SpannerID == "" {
+		return fmt.Errorf("spanner.spanner_id is required when mode is %q (DNS-safe operator-chosen identifier)", mode)
 	}
-	if err := validateTungolID(f.TungolID); err != nil {
+	if err := validateSpannerID(f.SpannerID); err != nil {
 		return err
 	}
 	switch mode {
@@ -137,21 +137,21 @@ func (f TungolSection) Validate() error {
 		// bootstrap_peers (it IS the rendezvous), but its own patterns
 		// must be present so it owns a slice of the fleet.
 		if len(f.Patterns) == 0 {
-			return fmt.Errorf("tungol.patterns is required when mode is 'founder' (hostname glob list for this steorra's partition)")
+			return fmt.Errorf("spanner.patterns is required when mode is 'founder' (hostname glob list for this bolt's partition)")
 		}
 		return nil
 	case ModeJoiner:
 		// Joiner needs at least one bootstrap peer for first-contact
 		// admission, plus its own patterns for the partition it owns.
 		if len(f.Patterns) == 0 {
-			return fmt.Errorf("tungol.patterns is required when mode is 'joiner' (hostname glob list for this steorra's partition)")
+			return fmt.Errorf("spanner.patterns is required when mode is 'joiner' (hostname glob list for this bolt's partition)")
 		}
 		if len(f.Transport.BootstrapPeers) == 0 {
-			return fmt.Errorf("tungol.transport.bootstrap_peers must list at least one founder/peer address when mode is 'joiner'")
+			return fmt.Errorf("spanner.transport.bootstrap_peers must list at least one founder/peer address when mode is 'joiner'")
 		}
 		return nil
 	}
-	return fmt.Errorf("tungol.mode must be standalone, founder, or joiner (got %q)", mode)
+	return fmt.Errorf("spanner.mode must be standalone, founder, or joiner (got %q)", mode)
 }
 
 // ServerConfig represents the top-level server configuration from server.yaml.
@@ -163,7 +163,7 @@ type ServerConfig struct {
 	Watcher      WatcherSection      `yaml:"watcher" docs:"concepts/secrets" doc:"Polls the secrets provider for rotations and force-pushes affected envoys." long:"Background task that polls the configured secrets provider on a schedule and, when a secret value changes, forces a push to every envoy that consumes it. Enables automatic secret rotation without waiting for the next regular check-in — critical when rotating database passwords, TLS keys, or API tokens with revocation expectations. Poll frequency trades detection speed for provider API load."`
 	Secrets      secrets.Config      `yaml:"secrets" docs:"concepts/secrets" doc:"Secrets provider backend and connection settings (local, isopass, vault, AWS, GCP, Azure)." long:"Selects which backend resolves 'secret:' references in module configs at agent check-in. Options: local (files under /srv/vigo/secrets, default for single-server), isopass (Alexander4 Isopass), vault (HashiCorp Vault), aws (AWS Secrets Manager), gcp (GCP Secret Manager), azure (Azure Key Vault). The server fails fast on startup if the backend is unreachable — it never serves a module with plaintext fallbacks."`
 	Bootstrap    BootstrapConfig     `yaml:"bootstrap" docs:"getting-started/bootstrap" doc:"Agent bootstrap enrollment — trusted hostname/CIDR patterns and issued cert validity." long:"Controls how new agents are enrolled into the fleet via the initial HTTPS bootstrap call. Define trusted hostname patterns and CIDR blocks that short-circuit the one-time-token flow (useful for automated provisioning), plus the validity window on auto-issued agent certs. Tighten these in production — a permissive trusted_enrollment is the difference between friction-free onboarding and an open door."`
-	Tungol       TungolSection      `yaml:"tungol" docs:"howto/set-up-tungol" doc:"Tungol federation — peer-equal mode (founder/joiner/standalone) per ADR-026." long:"Deployment topology — standalone (one vigosrv runs the whole fleet) or a peer-equal tungol where multiple vigosrvs share an admissions roster via CRDT gossip. Founder mode is the bootstrap-discovery rendezvous for new joiners (Phase 2A only; Phase 3 retires the founder/joiner distinction entirely). Joiner mode obtains an admission via the founder, then participates as a write-equal peer in the CRDT. Each steorra owns a hostname-pattern partition; the loader refuses overlap between steorras at publish + boot time. Set this when running an MSP deployment or a multi-region setup where one central server can't own all check-ins."`
+	Spanner      SpannerSection      `yaml:"spanner" docs:"howto/set-up-spanner" doc:"Spanner federation — peer-equal mode (founder/joiner/standalone) per ADR-026." long:"Deployment topology — standalone (one vigosrv runs the whole fleet) or a peer-equal spanner where multiple vigosrvs share an admissions roster via CRDT gossip. Founder mode is the bootstrap-discovery rendezvous for new joiners (Phase 2A only; Phase 3 retires the founder/joiner distinction entirely). Joiner mode obtains an admission via the founder, then participates as a write-equal peer in the CRDT. Each bolt owns a hostname-pattern partition; the loader refuses overlap between bolts at publish + boot time. Set this when running an MSP deployment or a multi-region setup where one central server can't own all check-ins."`
 	Tuning       TuningSection       `yaml:"tuning" docs:"operations/tuning" doc:"Operational tuning — timing windows, gRPC transport limits, and Go runtime memory caps." long:"Low-level knobs for operators who have hit a scaling ceiling and need to hand-tune. Includes gRPC send/receive limits, concurrent stream caps, timing windows for online-vs-offline envoy classification, and Go runtime memory ceilings (GOMEMLIMIT). Leave at defaults until you see a specific symptom — most fleets never touch this section."`
 	SMTP         SMTPSection         `yaml:"smtp" docs:"operations/integrations" doc:"Email relay for event notifications, digests, and scheduled evidence delivery." long:"SMTP relay used by event notifications, daily/weekly digests, and scheduled compliance evidence delivery. Most deployments should prefer the native integrations (Slack, PagerDuty, Jira) over SMTP — email is the least observable and least actionable channel. Keep this configured only when a recipient genuinely can't be reached any other way."`
 	AI           AISection           `yaml:"ai" docs:"operations/ai-providers" doc:"AI assistant provider (Claude, OpenAI, Ollama) for the Ask page and compliance tooling." long:"Wires the /security chat drawer and compliance-assist tooling to an LLM provider. Supports Claude (sharpest reasoning on Vigo-specific questions), OpenAI (cost/token trade-off), and Ollama (fully self-hosted, no third-party calls). Required for automatic .retract module drafting and for the AI-powered guardrail suggestions in the publish flow."`
@@ -176,7 +176,7 @@ type ServerConfig struct {
 	Peers        PeersSection        `yaml:"peers" docs:"operations/peer-replication" doc:"Peer replication — primary or peer role plus the address list for server redundancy." long:"Active-passive replication that keeps one or more standby vigosrv instances file-synced with the primary, so a server outage doesn't strand the fleet. The primary streams config, secrets, and TLS files to each peer over gRPC; agents receive the peer list at enrollment and automatically fall back to one if the primary becomes unreachable. Configure this whenever the fleet is too large to tolerate an unplanned outage — promotion is then a single 'vigocli server promote' command on a surviving peer."`
 	Task         TaskSection         `yaml:"task" docs:"reference/cli/task" doc:"Task dispatch — optionally require a named definition for every ad-hoc task." long:"Controls ad-hoc task dispatch safety. When require_definition is on, every task sent via 'vigocli task dispatch' must reference a pre-reviewed task definition in /srv/vigo/stacks/stockpile/tasks — direct shell commands are refused. Enable this in production to force peer review of anything an operator can fan out to a fleet; leave it off in dev where quick one-off commands are the whole point."`
 	Branding     BrandingSection     `yaml:"branding" docs:"operations/branding" doc:"Custom org name, logo, favicon, and light/dark/auto UI theme." long:"White-label the web UI with the organization's name (shown in the title bar and in exported reports), a custom logo and favicon, and a forced light/dark theme or auto. The logo is inlined into cover blocks of generated PDFs so emailed attestations carry the customer's brand. Useful for MSPs per-customer and for enterprises who want their audit reports to wear their own logo."`
-	License      LicenseSection      `yaml:"license" docs:"operations/licensing" doc:"License enforcement mode — local count or aggregated across tungol steorras." long:"How node-count enforcement aggregates across your topology — 'local' counts envoys registered against this single vigosrv, 'aggregated' sums counts across every steorra in a tungol deployment and enforces a single fleet-wide cap. Pick aggregated on MSP hubs or enterprise tungol setups where one license covers the full customer base. Misconfiguring this either blocks legitimate enrollments (too strict) or silently lets the fleet drift past the contract (too loose)."`
+	License      LicenseSection      `yaml:"license" docs:"operations/licensing" doc:"License enforcement mode — local count or aggregated across spanner bolts." long:"How node-count enforcement aggregates across your topology — 'local' counts envoys registered against this single vigosrv, 'aggregated' sums counts across every bolt in a spanner deployment and enforces a single fleet-wide cap. Pick aggregated on MSP hubs or enterprise spanner setups where one license covers the full customer base. Misconfiguring this either blocks legitimate enrollments (too strict) or silently lets the fleet drift past the contract (too loose)."`
 	GRC          GRCSection          `yaml:"grc" docs:"operations/grc" doc:"GRC platform integrations (Vanta, Drata, ServiceNow) for pushing compliance evidence." long:"Outbound push of compliance evidence into third-party GRC platforms (Vanta, Drata, ServiceNow GRC, Hyperproof, and similar). Each GRC target has its own endpoint, token, and control-mapping block — the server translates Vigo's internal compliance state into whatever format the target expects. Configure this when the organization has already standardized on a GRC system and you want Vigo's evidence to land there without manual uploads."`
 	Integrations IntegrationsSection `yaml:"integrations" docs:"operations/integrations" doc:"Native external platform integrations — Slack, PagerDuty, Jira, ITSM, SIEM, and asset systems." long:"First-class integrations with operator-facing platforms — chat (Slack, Teams), paging (PagerDuty, Opsgenie), ticketing (Jira, Zendesk, Linear, ServiceNow, Freshservice), ITSM (ConnectWise, Autotask, NinjaRMM, Kaseya), SIEM/logging (Splunk, Elastic, Datadog, Sumo, Sentinel), and asset management (Device42, Snipe-IT). Each platform is its own subsection with its own toggle and credentials; prefer these over the legacy webhook path for anything important — native integrations carry context the webhook format can't."`
 	Risk         RiskSection         `yaml:"risk" docs:"concepts/risk-scoring" doc:"Risk quantification — optional NVD CVE API enrichment." long:"Controls the per-envoy risk scoring engine. An optional NVD CVE API key enriches risk input data with CVSS metrics and vendor-attributed advisories — without it, CVE severity comes from the scanner output alone. Risk scores drive the dashboard Risk Posture column, the cyber-insurance attestation PDF, and compliance-visible drift signals, so enable the NVD key if the deployment is subject to insurance or audit scrutiny."`
@@ -203,13 +203,13 @@ type SwarmSection struct {
 	Port                int                 `yaml:"port" doc:"TCP port on which agents serve blobs to each other over mTLS." default:"1531" example:"1-65535; must be open between envoys"`
 	MaxBandwidthPercent int                 `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50" example:"1-100; 25 for shared links, 80 for dedicated"`
 	ManifestLivenessTTL string              `yaml:"manifest_liveness_ttl" doc:"Active manifest entries unrefreshed for this duration are revoked by the retention pruner. Guards against orphaned entries when a publisher disappears. Empty / zero disables the sweep." default:"24h" example:"24h, 12h, 0 (disable)"`
-	Filecast           FilecastSection    `yaml:"filecast" doc:"Filecast (admin-pushed fleet file distribution) authorization." long:"Hostname pattern list controlling which envoys receive admin-pushed files. Distribution requests are refused at the API layer when the list is empty."`
+	Filecast            FilecastSection     `yaml:"filecast" doc:"Filecast (admin-pushed fleet file distribution) authorization." long:"Hostname pattern list controlling which envoys receive admin-pushed files. Distribution requests are refused at the API layer when the list is empty."`
 	Longdrawer          LongdrawerSection   `yaml:"longdrawer" doc:"Longdrawer (LAN plaintext directory mirror) authorization + per-file size cap." long:"Hostname pattern list controlling which envoys run the longdrawer daemon. Per-user opt-in still requires the user creating ~/longdrawer/. Plus a per-file size cap on LAN sync."`
 	Puddle              SwarmPuddleSection  `yaml:"puddle" doc:"Puddle (per-user identity) authorization. Lockbox derives ITS AUTHORIZATION from this section per ADR-020 — only operational tuning lives in lockbox below." long:"Hostname pattern list controlling which envoys can host puddle identity material. Lockbox's authorization (allow/deny) follows this list — a host allowed here can hold lockbox ciphertext for its locally-enrolled puddle members; a host denied here cannot use lockbox at all."`
 	Lockbox             SwarmLockboxSection `yaml:"lockbox" doc:"Lockbox operational tuning (size + envelope retention). Authorization derives from puddle above; this section is size/retention only." long:"Per-file ciphertext size cap and envelope (LEAVE/RESURRECT/TOMBSTONE) retention window. Authorization gating still derives from swarm.puddle.enabled per ADR-020 — there is no enabled field here."`
-	Gitback            GitbackSection     `yaml:"gitback" doc:"Gitback (git-over-swarm) authorization + bundle size + envelope retention." long:"Hostname pattern list controlling which envoys participate in gitback — both as publishers and as bundle holders. Plus per-bundle fan-out size cap and revoke/leave envelope retention."`
-	Curator         CuratorSection     `yaml:"curator" doc:"Curator (P2P artifact registry, ADR-024) authorization + per-blob size cap." long:"Hostname pattern list controlling which envoys participate in curator — both as publishers and as artifact-blob holders. Plus a per-blob (one {name,version,os,arch} artifact) size cap on the publish path. Publishing also requires a usercrate 'curator: true' flag and an unlocked puddle (a heavier grant than gitback)."`
-	Hostdox        bool                `yaml:"hostdox" doc:"When true, each swarm-enabled agent maintains a delimited block in /etc/hosts mapping every announced peer hostname to its LAN IP — additive name resolution for fleets whose DNS doesn't own the local domain. Default false (opt-in)." default:"false" example:"true to let agents edit /etc/hosts; false (or omit) to leave it alone"`
+	Gitback             GitbackSection      `yaml:"gitback" doc:"Gitback (git-over-swarm) authorization + bundle size + envelope retention." long:"Hostname pattern list controlling which envoys participate in gitback — both as publishers and as bundle holders. Plus per-bundle fan-out size cap and revoke/leave envelope retention."`
+	Curator             CuratorSection      `yaml:"curator" doc:"Curator (P2P artifact registry, ADR-024) authorization + per-blob size cap." long:"Hostname pattern list controlling which envoys participate in curator — both as publishers and as artifact-blob holders. Plus a per-blob (one {name,version,os,arch} artifact) size cap on the publish path. Publishing also requires a usercrate 'curator: true' flag and an unlocked puddle (a heavier grant than gitback)."`
+	Hostdox             bool                `yaml:"hostdox" doc:"When true, each swarm-enabled agent maintains a delimited block in /etc/hosts mapping every announced peer hostname to its LAN IP — additive name resolution for fleets whose DNS doesn't own the local domain. Default false (opt-in)." default:"false" example:"true to let agents edit /etc/hosts; false (or omit) to leave it alone"`
 }
 
 // SwarmPuddleSection authorizes the puddle (per-user identity) subsystem
@@ -661,9 +661,9 @@ type SnipeITIntegration struct {
 type LicenseSection struct {
 	// Mode controls how nodes are counted for license enforcement.
 	// "local" (default): count enrolled nodes on this server only.
-	// "aggregate": count nodes across all tungol steorras (hub only).
-	// In aggregate mode, steorras skip license enforcement entirely.
-	Mode string `yaml:"mode" doc:"Counting mode for license enforcement." options:"local|aggregate" default:"local" example:"aggregate (hub in a tungol deployment)"`
+	// "aggregate": count nodes across all spanner bolts (hub only).
+	// In aggregate mode, bolts skip license enforcement entirely.
+	Mode string `yaml:"mode" doc:"Counting mode for license enforcement." options:"local|aggregate" default:"local" example:"aggregate (hub in a spanner deployment)"`
 }
 
 // BrandingSection configures custom branding for the web UI.
@@ -1192,10 +1192,10 @@ func (r *RoleRef) UnmarshalYAML(value *yaml.Node) error {
 type RoleDefinition struct {
 	Name       string      `yaml:"name"`
 	When       string      `yaml:"when,omitempty"`
-	Includes   []string    `yaml:"includes"`           // other role names to include (single level)
-	Modules    []ModuleRef `yaml:"modules"`            // unconditional modules
-	Usercrates []ModuleRef `yaml:"usercrates"`         // positive include of usercrates (Kind == Usercrate); cross-kind enforced at resolve time
-	Case       []RoleCase  `yaml:"case,omitempty"`     // conditional module groups
+	Includes   []string    `yaml:"includes"`       // other role names to include (single level)
+	Modules    []ModuleRef `yaml:"modules"`        // unconditional modules
+	Usercrates []ModuleRef `yaml:"usercrates"`     // positive include of usercrates (Kind == Usercrate); cross-kind enforced at resolve time
+	Case       []RoleCase  `yaml:"case,omitempty"` // conditional module groups
 }
 
 // RoleCase is a conditional group of modules within a role definition.
@@ -1218,16 +1218,16 @@ var ValidDeviceTypes = map[string]bool{
 // that merges duplicate 'modules' and 'roles' keys (standard YAML would
 // silently keep only the last value).
 type EnvoyEntry struct {
-	Match             string         `yaml:"match"`
-	Environment       string         `yaml:"environment"`
-	Roles             []RoleRef      `yaml:"roles"`
-	Modules           []ModuleRef    `yaml:"modules"`
-	Usercrates        []ModuleRef    `yaml:"usercrates"`         // positive include of usercrates (Kind == Usercrate)
-	Vars              map[string]any `yaml:"vars"`
-	Tags              []string       `yaml:"tags"`               // static tags for targeting
-	ExcludeModules    []string       `yaml:"exclude_modules"`    // opt out of inherited modules
-	ExcludeResources  []string       `yaml:"exclude_resources"`  // opt out of specific resources by name
-	ObserveOnly       bool           `yaml:"observe_only"`       // observe-only mode: report drift only, don't enforce
+	Match            string         `yaml:"match"`
+	Environment      string         `yaml:"environment"`
+	Roles            []RoleRef      `yaml:"roles"`
+	Modules          []ModuleRef    `yaml:"modules"`
+	Usercrates       []ModuleRef    `yaml:"usercrates"` // positive include of usercrates (Kind == Usercrate)
+	Vars             map[string]any `yaml:"vars"`
+	Tags             []string       `yaml:"tags"`              // static tags for targeting
+	ExcludeModules   []string       `yaml:"exclude_modules"`   // opt out of inherited modules
+	ExcludeResources []string       `yaml:"exclude_resources"` // opt out of specific resources by name
+	ObserveOnly      bool           `yaml:"observe_only"`      // observe-only mode: report drift only, don't enforce
 
 	// DirPath is the relative directory path within the config tree where
 	// this entry was loaded from. Set by the loader for inheritance resolution.

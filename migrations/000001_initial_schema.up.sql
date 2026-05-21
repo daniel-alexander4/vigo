@@ -366,17 +366,17 @@ CREATE TABLE IF NOT EXISTS compliance_waivers (
 CREATE INDEX IF NOT EXISTS idx_compliance_waivers_framework ON compliance_waivers (framework, control_id);
 CREATE INDEX IF NOT EXISTS idx_compliance_waivers_active ON compliance_waivers (active);
 
--- Tungol Slice 2A admission roster (ADR-026). Peer-equal LWW-Map CRDT
--- keyed by the steorra's Ed25519 pubkey. Revoke-wins: nullable
+-- Spanner Slice 2A admission roster (ADR-026). Peer-equal LWW-Map CRDT
+-- keyed by the bolt's Ed25519 pubkey. Revoke-wins: nullable
 -- revoked_at/revoked_by, with the merge rule "revoke is absorbing"
--- enforced in the MergeSteorraLWW query (a revoked row cannot transition
+-- enforced in the MergeBoltLWW query (a revoked row cannot transition
 -- back to live regardless of updated_at). LWW arbitration on
 -- (updated_at, revoked_at IS NOT NULL) for the equal-timestamp tiebreaker.
 -- timestamps are INTEGER ms since epoch to mirror server/swarm/manifest.go
 -- semantics and stay deterministic across timezones/locales.
-CREATE TABLE IF NOT EXISTS tungol_steorras (
+CREATE TABLE IF NOT EXISTS spanner_bolts (
     pubkey      TEXT PRIMARY KEY,
-    tungol_id   TEXT NOT NULL,
+    spanner_id   TEXT NOT NULL,
     hostname    TEXT NOT NULL DEFAULT '',
     patterns    TEXT NOT NULL DEFAULT '[]',
     revoked_at  INTEGER,
@@ -386,19 +386,19 @@ CREATE TABLE IF NOT EXISTS tungol_steorras (
     signature   BLOB NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_tungol_steorras_tungol_id ON tungol_steorras (tungol_id);
+CREATE INDEX IF NOT EXISTS idx_spanner_bolts_spanner_id ON spanner_bolts (spanner_id);
 
--- Tungol Slice 2A consumed-tokens G-Set (ADR-026). UNIQUE on token_hash
--- enforces one-shot consumption fleet-wide. The FK to tungol_steorras
+-- Spanner Slice 2A consumed-tokens G-Set (ADR-026). UNIQUE on token_hash
+-- enforces one-shot consumption fleet-wide. The FK to spanner_bolts
 -- enforces the atomic admission+consume invariant — a token can only be
--- recorded as consumed by a steorra that exists in the roster, so the
+-- recorded as consumed by a bolt that exists in the roster, so the
 -- admission row MUST land in the same transaction (and ordered first).
-CREATE TABLE IF NOT EXISTS tungol_consumed_tokens (
+CREATE TABLE IF NOT EXISTS spanner_consumed_tokens (
     token_hash                  TEXT PRIMARY KEY,
-    tungol_id                   TEXT NOT NULL,
+    spanner_id                   TEXT NOT NULL,
     consumed_at                 INTEGER NOT NULL,
-    consumed_by_steorra_pubkey  TEXT NOT NULL REFERENCES tungol_steorras (pubkey),
+    consumed_by_bolt_pubkey  TEXT NOT NULL REFERENCES spanner_bolts (pubkey),
     signature                   BLOB NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_tungol_consumed_tokens_tungol_id ON tungol_consumed_tokens (tungol_id);
+CREATE INDEX IF NOT EXISTS idx_spanner_consumed_tokens_spanner_id ON spanner_consumed_tokens (spanner_id);

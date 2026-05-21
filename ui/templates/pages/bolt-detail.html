@@ -1,9 +1,9 @@
 {{define "page-content"}}
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/tungol">Tungol</a> &rsaquo; {{.SteorraID}}
+        <a href="/spanner">Spanner</a> &rsaquo; {{.BoltID}}
     </div>
-    <h1>Steorra: {{.SteorraID}}</h1>
+    <h1>Bolt: {{.BoltID}}</h1>
     <p class="mono">{{.Addr}}</p>
 </div>
 
@@ -87,7 +87,7 @@
             {{end}}
             {{if not .Envoys}}
             <tr>
-                <td colspan="4" class="text-muted" style="text-align:center; padding:40px;">No envoys on this steorra.</td>
+                <td colspan="4" class="text-muted" style="text-align:center; padding:40px;">No envoys on this bolt.</td>
             </tr>
             {{end}}
         </tbody>
@@ -122,7 +122,7 @@
             {{end}}
             {{if not .Runs}}
             <tr>
-                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No runs on this steorra.</td>
+                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No runs on this bolt.</td>
             </tr>
             {{end}}
         </tbody>

@@ -10,7 +10,7 @@ Vigo has two CLI binaries:
 
 ## vigocli
 
-`vigocli` communicates with the server's REST API to manage enrollment, envoys, operations, orchestration, secrets, and tungol.
+`vigocli` communicates with the server's REST API to manage enrollment, envoys, operations, orchestration, secrets, and spanner.
 
 ## Global Flags
 
@@ -40,7 +40,7 @@ Vigo has two CLI binaries:
 | [inventory](inventory.md) | Query envoys by traits |
 | [doctor](doctor.md) | Run health checks against the Vigo server |
 | [risk](risk.md) | Show fleet-wide or per-envoy risk scores |
-| [tungol](tungol.md) | Federated control-plane operations |
+| [spanner](spanner.md) | Federated control-plane operations |
 | [ask](ask.md) | Ask the AI assistant a question about your fleet |
 | [config](config.md) | Config editing, inspection, publish history, rollback, and freeze |
 | [secrets](secrets.md) | Manage local encrypted secrets |

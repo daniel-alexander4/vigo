@@ -75,14 +75,14 @@ Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirecti
 |--------|------|--------|-------------|
 | `vigo_smtp_sends_total` | Counter | `event`, `status` | Email send attempts by event type and outcome (success, error) |
 
-### Tungol
+### Spanner
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `vigo_tungol_steorra_latency_seconds` | Histogram | `steorra` | Per-steorra RPC probe latency in seconds |
-| `vigo_tungol_steorra_up` | Gauge | `steorra` | Per-steorra reachability (1=up, 0=down) |
+| `vigo_spanner_bolt_latency_seconds` | Histogram | `bolt` | Per-bolt RPC probe latency in seconds |
+| `vigo_spanner_bolt_up` | Gauge | `bolt` | Per-bolt reachability (1=up, 0=down) |
 
-Only populated on hub servers. Updated each time the hub probes the steorras under it.
+Only populated on hub servers. Updated each time the hub probes the bolts under it.
 
 ### License
 
@@ -241,10 +241,10 @@ scrape_configs:
 - Alert on `increase(vigo_license_enforcement_errors_total[5m]) > 0` (internal enforcement errors — investigate, gate is failing closed)
 - Alert on `vigo_license_days_remaining < 30` (license expiring soon)
 
-### Tungol
+### Spanner
 
-- **Steorra latency**: `histogram_quantile(0.95, rate(vigo_tungol_steorra_latency_seconds_bucket[5m]))`
-- Alert on `vigo_tungol_steorra_up == 0` (steorra unreachable)
+- **Bolt latency**: `histogram_quantile(0.95, rate(vigo_spanner_bolt_latency_seconds_bucket[5m]))`
+- Alert on `vigo_spanner_bolt_up == 0` (bolt unreachable)
 
 ### Server Health
 
@@ -295,7 +295,7 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 | **Security Posture** | 14 panels across 4 rows: CVE counts by severity, hardening score gauge + trend, threat detection (rootkits, malware, integrity), scan coverage | [vigo-security.json](#grafana-dashboards) |
 | **Convergence** | 9 panels across 3 rows: status pie chart + stat counters, compliance % + drift rate trends, check-in age heatmap | [vigo-convergence.json](#grafana-dashboards) |
 | **Risk Posture** | 8 panels across 3 rows: average + max risk scores, distribution by level (low/medium/high/critical), risk score trends over time | [vigo-risk.json](#grafana-dashboards) |
-| **Tungol** | 2 panels: steorra availability (UP/DOWN status map) and steorra latency (p50/p95 time series) | [vigo-tungol.json](#grafana-dashboards) |
+| **Spanner** | 2 panels: bolt availability (UP/DOWN status map) and bolt latency (p50/p95 time series) | [vigo-spanner.json](#grafana-dashboards) |
 
 ## Import
 
@@ -506,16 +506,16 @@ Fleet-wide risk scoring with distribution breakdown and trend tracking.
 |-------|------|--------|
 | Risk Score Over Time | Time series (average + maximum) | `vigo_risk_avg_score`, `vigo_risk_max_score` |
 
-## Tungol Dashboard
+## Spanner Dashboard
 
-[Download vigo-tungol.json](#grafana-dashboards)
+[Download vigo-spanner.json](#grafana-dashboards)
 
 Only populated on hub servers.
 
 | Panel | Type | Metric |
 |-------|------|--------|
-| Steorra Availability | Stat with UP/DOWN mapping | `vigo_tungol_steorra_up` by `steorra` |
-| Steorra Latency (p50/p95) | Time series by steorra | `histogram_quantile` on `vigo_tungol_steorra_latency_seconds` |
+| Bolt Availability | Stat with UP/DOWN mapping | `vigo_spanner_bolt_up` by `bolt` |
+| Bolt Latency (p50/p95) | Time series by bolt | `histogram_quantile` on `vigo_spanner_bolt_latency_seconds` |
 
 ## Prometheus Configuration
 
@@ -569,12 +569,12 @@ groups:
         annotations:
           summary: "ED25519 signature verification failures detected"
 
-      - alert: VigoSteorraDown
-        expr: vigo_tungol_steorra_up == 0
+      - alert: VigoBoltDown
+        expr: vigo_spanner_bolt_up == 0
         for: 5m
         labels: { severity: critical }
         annotations:
-          summary: "Tungol steorra {{ $labels.steorra }} is down"
+          summary: "Spanner bolt {{ $labels.bolt }} is down"
 ```
 
 ## What's next

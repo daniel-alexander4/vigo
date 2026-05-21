@@ -39,7 +39,7 @@ The 14 PNGs in `docs/img/screenshots/` were captured against Vigo 0.23.52 (vigo-
 | `vigo.gitback.png` | `/gitback` | Gitback fleet view — projects + ref divergence |
 | `vigo.longdrawer.png` | `/longdrawer` | Longdrawer fleet view — file presence matrix |
 | `vigo.audit.png` | `/audit` | Hash-chained audit log entries |
-| `vigo.swarm-tungol.png` | `/tungol/steorras/<id>` | Per-steorra detail (needs paid license + tungol topology) |
+| `vigo.swarm-spanner.png` | `/spanner/bolts/<id>` | Per-bolt detail (needs paid license + spanner topology) |
 
 ## Where they're embedded
 

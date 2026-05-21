@@ -17,24 +17,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// tungolCmd is the top-level namespace for the federated control-plane
-// surface. Hosts tungol-wide verbs (status) and the per-noun groups
-// (steorra, ops-puddle).
-var tungolCmd = &cobra.Command{
-	Use:   "tungol",
+// spannerCmd is the top-level namespace for the federated control-plane
+// surface. Hosts spanner-wide verbs (status) and the per-noun groups
+// (bolt, ops-puddle).
+var spannerCmd = &cobra.Command{
+	Use:   "spanner",
 	Short: "Federated control-plane operations",
-	Long: `Operations for the tungol (federation) and steorra (one vigosrv
-in the tungol). The current wire implementation is hub + steorras;
+	Long: `Operations for the spanner (federation) and bolt (one vigosrv
+in the spanner). The current wire implementation is hub + bolts;
 Phase 1+ will replace it with peer-equal gossip.`,
 }
 
-var tungolStatusCmd = &cobra.Command{
+var spannerStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show this server's tungol role (standalone / hub / spoke) and steorra availability",
-	RunE:  runTungolStatus,
+	Short: "Show this server's spanner role (standalone / hub / spoke) and bolt availability",
+	RunE:  runSpannerStatus,
 }
 
-var tungolOpsPuddleCmd = &cobra.Command{
+var spannerOpsPuddleCmd = &cobra.Command{
 	Use:   "ops-puddle",
 	Short: "Manage the ops-puddle — the puddle that owns the stockpile gitback project",
 	Long: `The ops-puddle is a shared puddle owned by every vigosrv that holds
@@ -42,7 +42,7 @@ authority to push stockpile updates. The first vigosrv founds it; later
 vigosrvs join via the pair flow. See ADR-025.`,
 }
 
-var tungolOpsPuddleInitCmd = &cobra.Command{
+var spannerOpsPuddleInitCmd = &cobra.Command{
 	Use:   "init <friendly-name>",
 	Short: "Found the ops-puddle on this vigosrv",
 	Long: `Generate the ops-puddle Ed25519 keypair, wrap it under this vigosrv's
@@ -54,16 +54,16 @@ The friendly name participates in gitback URLs (gitback://<name>/stockpile),
 so pick something stable — renaming is a destructive operation that requires
 re-founding the ops-puddle from scratch.`,
 	Args: cobra.ExactArgs(1),
-	RunE: runTungolOpsPuddleInit,
+	RunE: runSpannerOpsPuddleInit,
 }
 
-var tungolOpsPuddleStatusCmd = &cobra.Command{
+var spannerOpsPuddleStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show the ops-puddle's friendly name, pubkey, and current member set",
-	RunE:  runTungolOpsPuddleStatus,
+	RunE:  runSpannerOpsPuddleStatus,
 }
 
-var tungolOpsPuddlePairCmd = &cobra.Command{
+var spannerOpsPuddlePairCmd = &cobra.Command{
 	Use:   "pair",
 	Short: "Mint a 5-minute pair code authorizing another vigosrv to join this ops-puddle",
 	Long: `Generates a single-use pair code with a 5-minute TTL and writes a
@@ -73,13 +73,13 @@ operator to paste on the joining vigosrv.
 
 Run this on a vigosrv that already holds ops-puddle membership.
 Running again overwrites any prior outstanding offer.`,
-	RunE: runTungolOpsPuddlePair,
+	RunE: runSpannerOpsPuddlePair,
 }
 
-var tungolOpsPuddleJoinCmd = &cobra.Command{
+var spannerOpsPuddleJoinCmd = &cobra.Command{
 	Use:   "join --from <https-url> --code <code>",
 	Short: "Join an existing ops-puddle using a pair code minted on an existing member",
-	Long: `Calls /api/v1/tungol/ops-puddle/pair-claim on the --from vigosrv,
+	Long: `Calls /api/v1/spanner/ops-puddle/pair-claim on the --from vigosrv,
 unwraps the returned ops-puddle seed, re-wraps it under THIS
 vigosrv's master-key-derived wrap key, and persists the ops-puddle
 state under --ops-puddle-dir.
@@ -87,27 +87,27 @@ state under --ops-puddle-dir.
 Both --from (existing-member URL) and --code (the code printed by
 'pair') are required. Admin auth against --from must already be
 configured (vigocli auth login --server <from> or environment).`,
-	RunE: runTungolOpsPuddleJoin,
+	RunE: runSpannerOpsPuddleJoin,
 }
 
 func init() {
-	tungolCmd.PersistentFlags().String("key-file", "", "Path to master encryption key (omit to auto-detect inside --secrets-dir)")
-	tungolCmd.PersistentFlags().String("secrets-dir", "/srv/vigo/secrets", "Directory holding the secrets backend's master key")
-	tungolCmd.PersistentFlags().String("puddle-dir", puddle.DefaultDir, "Directory holding this vigosrv's service-account puddle")
-	tungolCmd.PersistentFlags().String("ops-puddle-dir", puddle.OpsDefaultDir, "Directory holding the ops-puddle wrap (per-host)")
+	spannerCmd.PersistentFlags().String("key-file", "", "Path to master encryption key (omit to auto-detect inside --secrets-dir)")
+	spannerCmd.PersistentFlags().String("secrets-dir", "/srv/vigo/secrets", "Directory holding the secrets backend's master key")
+	spannerCmd.PersistentFlags().String("puddle-dir", puddle.DefaultDir, "Directory holding this vigosrv's service-account puddle")
+	spannerCmd.PersistentFlags().String("ops-puddle-dir", puddle.OpsDefaultDir, "Directory holding the ops-puddle wrap (per-host)")
 
-	tungolOpsPuddleJoinCmd.Flags().String("from", "", "HTTPS URL of an existing ops-puddle member vigosrv (e.g. https://hub.example.com:8443)")
-	tungolOpsPuddleJoinCmd.Flags().String("code", "", "Pair code printed by `vigocli tungol ops-puddle pair` on --from")
-	_ = tungolOpsPuddleJoinCmd.MarkFlagRequired("from")
-	_ = tungolOpsPuddleJoinCmd.MarkFlagRequired("code")
+	spannerOpsPuddleJoinCmd.Flags().String("from", "", "HTTPS URL of an existing ops-puddle member vigosrv (e.g. https://hub.example.com:8443)")
+	spannerOpsPuddleJoinCmd.Flags().String("code", "", "Pair code printed by `vigocli spanner ops-puddle pair` on --from")
+	_ = spannerOpsPuddleJoinCmd.MarkFlagRequired("from")
+	_ = spannerOpsPuddleJoinCmd.MarkFlagRequired("code")
 
-	tungolCmd.AddCommand(tungolStatusCmd)
-	tungolCmd.AddCommand(tungolSteorraCmd)
-	tungolCmd.AddCommand(tungolOpsPuddleCmd)
-	tungolOpsPuddleCmd.AddCommand(tungolOpsPuddleInitCmd)
-	tungolOpsPuddleCmd.AddCommand(tungolOpsPuddleStatusCmd)
-	tungolOpsPuddleCmd.AddCommand(tungolOpsPuddlePairCmd)
-	tungolOpsPuddleCmd.AddCommand(tungolOpsPuddleJoinCmd)
+	spannerCmd.AddCommand(spannerStatusCmd)
+	spannerCmd.AddCommand(spannerBoltCmd)
+	spannerCmd.AddCommand(spannerOpsPuddleCmd)
+	spannerOpsPuddleCmd.AddCommand(spannerOpsPuddleInitCmd)
+	spannerOpsPuddleCmd.AddCommand(spannerOpsPuddleStatusCmd)
+	spannerOpsPuddleCmd.AddCommand(spannerOpsPuddlePairCmd)
+	spannerOpsPuddleCmd.AddCommand(spannerOpsPuddleJoinCmd)
 
 	// Init / join write new master-key-derived state — same operator-side
 	// gate as `vigocli secrets set`. requireUnlocked uses an exempt-by-verb-
@@ -117,13 +117,13 @@ func init() {
 	// pending-pair record (no key material), but also gates because the
 	// operator must be authorized to authorize a new member. Status reads
 	// public files only and stays open.
-	tungolOpsPuddleInitCmd.PreRunE = requireUnlockedAlways
-	tungolOpsPuddlePairCmd.PreRunE = requireUnlockedAlways
-	tungolOpsPuddleJoinCmd.PreRunE = requireUnlockedAlways
+	spannerOpsPuddleInitCmd.PreRunE = requireUnlockedAlways
+	spannerOpsPuddlePairCmd.PreRunE = requireUnlockedAlways
+	spannerOpsPuddleJoinCmd.PreRunE = requireUnlockedAlways
 }
 
 // requireUnlockedAlways calls the underlying gate primitives without the
-// `vigocli secrets`-scoped exemption list. Wired onto tungol verbs that
+// `vigocli secrets`-scoped exemption list. Wired onto spanner verbs that
 // write master-key-derived state (e.g. ops-puddle init).
 func requireUnlockedAlways(cmd *cobra.Command, _ []string) error {
 	cmd.SilenceUsage = true
@@ -137,7 +137,7 @@ func requireUnlockedAlways(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func runTungolOpsPuddleInit(cmd *cobra.Command, args []string) error {
+func runSpannerOpsPuddleInit(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	if err := puddle.ValidateFriendlyName(name); err != nil {
 		return err
@@ -175,7 +175,7 @@ func runTungolOpsPuddleInit(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runTungolOpsPuddleStatus(cmd *cobra.Command, _ []string) error {
+func runSpannerOpsPuddleStatus(cmd *cobra.Command, _ []string) error {
 	opsDir, _ := cmd.Flags().GetString("ops-puddle-dir")
 
 	// Status reads public files only. Pubkey + friendly name + members
@@ -215,17 +215,17 @@ func trimTrailingNewline(s string) string {
 	return s
 }
 
-// runTungolOpsPuddlePair mints a fresh pair code, persists the
+// runSpannerOpsPuddlePair mints a fresh pair code, persists the
 // pending-pair record under --ops-puddle-dir, and prints the
 // command the operator should paste on the joining vigosrv.
-func runTungolOpsPuddlePair(cmd *cobra.Command, _ []string) error {
+func runSpannerOpsPuddlePair(cmd *cobra.Command, _ []string) error {
 	opsDir, _ := cmd.Flags().GetString("ops-puddle-dir")
 
 	// Sanity: pair only makes sense if this vigosrv already holds
 	// ops-puddle membership. Check by stat — no need to unwrap.
 	if _, err := os.Stat(puddle.WrappedPath(opsDir)); err != nil {
 		return fmt.Errorf(
-			"no ops-puddle at %s: %w (run `vigocli tungol ops-puddle init <name>` to found one, or `join` to claim one)",
+			"no ops-puddle at %s: %w (run `vigocli spanner ops-puddle init <name>` to found one, or `join` to claim one)",
 			opsDir, err,
 		)
 	}
@@ -248,7 +248,7 @@ func runTungolOpsPuddlePair(cmd *cobra.Command, _ []string) error {
 
 	fmt.Printf("Pair offer minted (expires %s, single-use)\n\n", expires)
 	fmt.Printf("  On the joining vigosrv, run:\n\n")
-	fmt.Printf("    vigocli tungol ops-puddle join \\\n")
+	fmt.Printf("    vigocli spanner ops-puddle join \\\n")
 	fmt.Printf("      --from https://%s:8443 \\\n", thisHost)
 	fmt.Printf("      --code %s\n\n", code)
 	fmt.Printf("  (The operator on the joining vigosrv must already have admin\n")
@@ -268,10 +268,10 @@ func localHostnameForPair() string {
 	return h
 }
 
-// runTungolOpsPuddleJoin claims a pair offer from --from, unwraps
+// runSpannerOpsPuddleJoin claims a pair offer from --from, unwraps
 // the returned seed, re-wraps it under THIS vigosrv's local wrap
 // key, and persists the ops-puddle state.
-func runTungolOpsPuddleJoin(cmd *cobra.Command, _ []string) error {
+func runSpannerOpsPuddleJoin(cmd *cobra.Command, _ []string) error {
 	from, _ := cmd.Flags().GetString("from")
 	code, _ := cmd.Flags().GetString("code")
 	keyFile, _ := cmd.Flags().GetString("key-file")
@@ -306,7 +306,7 @@ func runTungolOpsPuddleJoin(cmd *cobra.Command, _ []string) error {
 		FriendlyName string             `json:"friendly_name"`
 		Members      []puddle.OpsMember `json:"members"`
 	}
-	if err := client.post("/api/v1/tungol/ops-puddle/pair-claim", body, &resp); err != nil {
+	if err := client.post("/api/v1/spanner/ops-puddle/pair-claim", body, &resp); err != nil {
 		return fmt.Errorf("pair-claim against %s: %w", from, err)
 	}
 
@@ -335,17 +335,17 @@ func runTungolOpsPuddleJoin(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-// runTungolStatus prints this server's tungol role and (in hub mode)
-// the steorras it aggregates.
-func runTungolStatus(cmd *cobra.Command, args []string) error {
+// runSpannerStatus prints this server's spanner role and (in hub mode)
+// the bolts it aggregates.
+func runSpannerStatus(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 
 	var resp struct {
-		Role               string `json:"role"`
-		TungolID           string `json:"tungol_id"`
-		SteorraID          string `json:"steorra_id"`
-		LocalSteorraPubkey string `json:"local_steorra_pubkey"`
-		Steorras           []struct {
+		Role            string `json:"role"`
+		SpannerID       string `json:"spanner_id"`
+		BoltID          string `json:"bolt_id"`
+		LocalBoltPubkey string `json:"local_bolt_pubkey"`
+		Bolts           []struct {
 			ID             string   `json:"id"`
 			Addr           string   `json:"addr"`
 			Patterns       []string `json:"patterns"`
@@ -360,60 +360,60 @@ func runTungolStatus(cmd *cobra.Command, args []string) error {
 			ConvergencePct float32  `json:"compliance_pct"`
 			LatencyMs      int64    `json:"latency_ms"`
 			Error          string   `json:"error"`
-		} `json:"steorras"`
-		SteorraPins []struct {
-			TungolID  string `json:"tungol_id"`
-			SteorraID string `json:"steorra_id"`
+		} `json:"bolts"`
+		BoltPins []struct {
+			SpannerID string `json:"spanner_id"`
+			BoltID    string `json:"bolt_id"`
 			Pubkey    string `json:"pubkey"`
 			PinnedAt  string `json:"pinned_at"`
 			LastSeen  string `json:"last_seen"`
-		} `json:"steorra_pins"`
+		} `json:"bolt_pins"`
 	}
 
-	if err := client.get("/api/v1/tungol/status", &resp); err != nil {
+	if err := client.get("/api/v1/spanner/status", &resp); err != nil {
 		return fmt.Errorf("cannot reach server: %w", err)
 	}
 
 	fmt.Printf("  Role: %s\n", bold(resp.Role))
 
-	if resp.TungolID != "" {
-		fmt.Printf("  Tungol ID: %s\n", resp.TungolID)
+	if resp.SpannerID != "" {
+		fmt.Printf("  Spanner ID: %s\n", resp.SpannerID)
 	}
-	if resp.SteorraID != "" {
-		fmt.Printf("  Steorra ID: %s\n", resp.SteorraID)
+	if resp.BoltID != "" {
+		fmt.Printf("  Bolt ID: %s\n", resp.BoltID)
 	}
-	// Phase 1: local steorra pubkey for operator cross-check.
+	// Phase 1: local bolt pubkey for operator cross-check.
 	// On alarm, compare this short pubkey against the asserted
 	// pubkey in the hub's audit event.
-	if resp.LocalSteorraPubkey != "" {
-		fmt.Printf("  Local steorra pubkey: %s\n", resp.LocalSteorraPubkey)
+	if resp.LocalBoltPubkey != "" {
+		fmt.Printf("  Local bolt pubkey: %s\n", resp.LocalBoltPubkey)
 	}
 
 	if resp.Role == "standalone" {
-		fmt.Println("  No tungol configured.")
+		fmt.Println("  No spanner configured.")
 		return nil
 	}
 
-	if len(resp.Steorras) == 0 {
+	if len(resp.Bolts) == 0 {
 		return nil
 	}
 
 	healthy := 0
 	var totalEnvoys int32
-	for _, s := range resp.Steorras {
+	for _, s := range resp.Bolts {
 		if s.Healthy {
 			healthy++
 		}
 		totalEnvoys += s.EnvoyCount
 	}
 
-	// Pinned-pubkey index for quick lookup when rendering the steorra table.
-	pinByID := make(map[string]string, len(resp.SteorraPins))
-	for _, p := range resp.SteorraPins {
-		pinByID[p.SteorraID] = p.Pubkey
+	// Pinned-pubkey index for quick lookup when rendering the bolt table.
+	pinByID := make(map[string]string, len(resp.BoltPins))
+	for _, p := range resp.BoltPins {
+		pinByID[p.BoltID] = p.Pubkey
 	}
 
-	fmt.Printf("  Steorras: %d (%d healthy)\n", len(resp.Steorras), healthy)
+	fmt.Printf("  Bolts: %d (%d healthy)\n", len(resp.Bolts), healthy)
 	fmt.Printf("  Total Envoys: %d\n\n", totalEnvoys)
 
 	w := newAlignedTable(os.Stdout)
@@ -421,7 +421,7 @@ func runTungolStatus(cmd *cobra.Command, args []string) error {
 		header("ID"), header("ADDRESS"), header("PUBKEY"), header("ENVOYS"),
 		header("COMPLIANT"), header("COMPLIANCE"), header("LATENCY"),
 		header("PATTERNS"), header("STATUS"))
-	for _, s := range resp.Steorras {
+	for _, s := range resp.Bolts {
 		status := colorStatus("healthy")
 		if !s.Healthy {
 			status = colorStatus("unreachable")

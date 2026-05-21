@@ -48,7 +48,7 @@ func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, source,
 }
 
 // ConfigHandler provides REST endpoints for config publish history,
-// versioning, rollback, and reload. In tungol mode stockpile
+// versioning, rollback, and reload. In spanner mode stockpile
 // distribution is gitback-driven (per ADR-025 Slice 4) — the hub
 // no longer fans the stockpile out via gRPC.
 type ConfigHandler struct {
@@ -58,11 +58,11 @@ type ConfigHandler struct {
 	convergenceMonitor *publish.ConvergenceMonitor
 	publishCfg         config.PublishSection
 	aiCfg              config.AISection
-	assistant          *ai.Assistant   // nil when AI is not enabled
-	auditWriter        auditRecorder   // nil-safe tamper-evident audit writer
-	publishState       *publish.State  // freeze deadline owner; required for Freeze/Unfreeze
-	liveDir            string          // .live/ path for rollback
-	historyDir         string          // history dir for rollback / list-versions
+	assistant          *ai.Assistant  // nil when AI is not enabled
+	auditWriter        auditRecorder  // nil-safe tamper-evident audit writer
+	publishState       *publish.State // freeze deadline owner; required for Freeze/Unfreeze
+	liveDir            string         // .live/ path for rollback
+	historyDir         string         // history dir for rollback / list-versions
 }
 
 // NewConfigHandler creates a ConfigHandler. publishState carries the
@@ -135,7 +135,7 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 
 // GetVersion returns the current in-memory config-store version,
 // which monotonically increments on every successful reload. Used by
-// `vigocli config publish` in tungol mode to poll for "did the
+// `vigocli config publish` in spanner mode to poll for "did the
 // gitback push land in .live/?" — operator sends publish, records
 // pre-version, then polls until version increments.
 func (h *ConfigHandler) GetVersion(w http.ResponseWriter, _ *http.Request) {
@@ -145,7 +145,7 @@ func (h *ConfigHandler) GetVersion(w http.ResponseWriter, _ *http.Request) {
 }
 
 // ReloadConfig re-reads all config files from disk. Called by vigocli
-// in standalone mode and by the stockpile watcher in tungol mode
+// in standalone mode and by the stockpile watcher in spanner mode
 // (after bare→.live pull on every ref change).
 //
 // When a compliance threshold is configured, starts a background monitor
@@ -467,16 +467,16 @@ type retractModuleInput struct {
 
 // retractResponse is the output from the retract endpoint.
 type retractResponse struct {
-	Enabled bool                   `json:"enabled"`
-	Reason  string                 `json:"reason,omitempty"`
-	Results []retractModuleResult  `json:"results,omitempty"`
+	Enabled bool                  `json:"enabled"`
+	Reason  string                `json:"reason,omitempty"`
+	Results []retractModuleResult `json:"results,omitempty"`
 }
 
 type retractModuleResult struct {
-	Name          string                   `json:"name"`
-	RetractYAML string                     `json:"retract_yaml"`
-	Warnings      []publish.RetractWarning `json:"warnings"`
-	Envoys        []retractEnvoyInfo       `json:"envoys"`
+	Name        string                   `json:"name"`
+	RetractYAML string                   `json:"retract_yaml"`
+	Warnings    []publish.RetractWarning `json:"warnings"`
+	Envoys      []retractEnvoyInfo       `json:"envoys"`
 }
 
 type retractEnvoyInfo struct {
@@ -608,4 +608,3 @@ Return ONLY the final YAML content of the retract module. No explanation, no mar
 
 	return improved
 }
-
