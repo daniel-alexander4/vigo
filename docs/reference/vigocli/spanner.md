@@ -9,7 +9,10 @@ Operations for the **spanner** (federation) and **bolt** (one vigosrv in the spa
 | Subcommand | Description |
 |------------|-------------|
 | `status` | Show this server's spanner role (standalone / hub / spoke) and bolt availability |
-| `bolt list` | List all registered bolts with status, latency, and envoy counts |
+| `init` | Found the spanner on this server (write the founder admission row) |
+| `bolt list` | List all bolts in the admissions roster |
+| `bolt invite` | Mint a signed invite bundle authorizing another server to join this spanner |
+| `bolt join` | Join an existing spanner using an invite bundle minted on a member |
 | `bolt show <id>` | Show a bolt's compliance breakdown, envoy count, and recent activity |
 | `bolt envoys <id>` | List all envoys managed by a specific bolt |
 | `bolt runs <id>` | List recent convergence runs on a specific bolt |
@@ -34,13 +37,31 @@ Operations for the **spanner** (federation) and **bolt** (one vigosrv in the spa
 
 Shows the deployment's spanner role and, when run against a hub, summary statistics for each registered bolt (envoy counts, compliance percentage, health, latency, hostname patterns). Standalone deployments report `No spanner configured.` and exit.
 
+## spanner init
+
+Founds the spanner on the local server. The server writes its founder self-admit row into the admissions roster, signed with its bolt identity. Requires `spanner.spanner_id` set in `server.yaml`; refuses if the server already holds a roster row. Calls `POST /api/v1/spanner/init`.
+
+After founding, invite other servers with `spanner bolt invite` (here) and `spanner bolt join` (there).
+
 ## spanner bolt
 
 The `bolt` group nests every per-bolt verb. The bare `vigocli spanner bolt` (no verb) prints help — it does NOT default to `list`; the explicit `list` verb is required.
 
 ### bolt list
 
-Compact one-line-per-bolt table. Calls `GET /api/v1/spanner/status` and presents only the bolt summary.
+One-line-per-bolt table of the admissions roster — pubkey, hostname, admitted-at, admitting bolt, and live/revoked status. Calls `GET /api/v1/spanner/roster`.
+
+### bolt invite \[--ttl DURATION\] \[--out PATH\]
+
+Mints a single-use, signed invite bundle authorizing another server to join this spanner. The bundle is minted server-side (it is signed with the local bolt identity) and carries a random token, the spanner ID, the local peer address, and an expiry. Calls `POST /api/v1/spanner/bolt/invite`.
+
+`--ttl` sets how long the bundle stays valid (default `24h`). `--out` writes the bundle to a file (mode 0600); without it the bundle prints to stdout. When stdout is a terminal, a stderr warning notes the bundle is a secret. Hand the bundle to the operator of the joining server.
+
+### bolt join --from &lt;url&gt; --code &lt;bundle&gt;
+
+Joins an existing spanner. The local server forwards its identity and the invite bundle to the inviting server's admit endpoint, receives a signed admission row plus the current roster, and stores the roster locally. Calls `POST /api/v1/spanner/bolt/join`.
+
+Both `--from` (the inviting server's URL) and `--code` (the bundle string from `bolt invite` on `--from`) are required.
 
 ### bolt show &lt;bolt-id&gt;
 

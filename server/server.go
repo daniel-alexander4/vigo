@@ -1019,6 +1019,10 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 
 	spannerHandler := api.NewSpannerHandler(s.mode, s.cfg.Spanner.SpannerID, formatLocalBoltPubkey(s.boltID), s.hub)
 	opsPuddleHandler := api.NewSpannerOpsPuddleHandler(s.provider, puddle.OpsDefaultDir, s.auditWriter)
+	// Spanner Slice 2A.2 — membership ceremony (ADR-026). Founds a
+	// spanner, mints join invites, admits joining bolts. Needs the
+	// local bolt identity to sign admission rows + invite bundles.
+	spannerAdmissionHandler := api.NewSpannerAdmissionHandler(s.db, s.queries, s.boltID, s.cfg.Spanner.SpannerID, s.cfg.Server.Hostname, s.cfg.Spanner.Patterns, s.auditWriter, nil)
 
 	taskHandler := api.NewTaskHandler(s.queries, s.agentSvc, s.cfg.Task.RequireDefinition)
 	taskHandler.SetAuditWriter(s.auditWriter)
@@ -1086,6 +1090,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		licenseHandler.RegisterRoutes(mux)
 		doctorHandler.RegisterRoutes(mux)
 		spannerHandler.RegisterRoutes(mux)
+		spannerAdmissionHandler.RegisterRoutes(mux)
 		opsPuddleHandler.RegisterRoutes(mux)
 		peerHandler.RegisterRoutes(mux)
 		taskHandler.RegisterRoutes(mux)
@@ -1209,6 +1214,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
 		spannerHandler.RegisterRoutes(gwMux)
+		spannerAdmissionHandler.RegisterRoutes(gwMux)
 		opsPuddleHandler.RegisterRoutes(gwMux)
 		peerHandler.RegisterRoutes(gwMux)
 		taskHandler.RegisterRoutes(gwMux)

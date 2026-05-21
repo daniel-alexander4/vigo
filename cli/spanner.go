@@ -34,6 +34,19 @@ var spannerStatusCmd = &cobra.Command{
 	RunE:  runSpannerStatus,
 }
 
+var spannerInitCmd = &cobra.Command{
+	Use:   "init",
+	Short: "Found the spanner on this server (write the founder admission row)",
+	Long: `Founds the spanner on the local server: writes the founder self-admit
+row into the admissions roster, signed with this server's bolt identity.
+
+Requires spanner.spanner_id to be set in server.yaml. Refuses if this
+server already holds a roster row. Other servers join the founded
+spanner via 'vigocli spanner bolt invite' (here) + 'vigocli spanner
+bolt join' (there).`,
+	RunE: runSpannerInit,
+}
+
 var spannerOpsPuddleCmd = &cobra.Command{
 	Use:   "ops-puddle",
 	Short: "Manage the ops-puddle — the puddle that owns the stockpile gitback project",
@@ -102,6 +115,7 @@ func init() {
 	_ = spannerOpsPuddleJoinCmd.MarkFlagRequired("code")
 
 	spannerCmd.AddCommand(spannerStatusCmd)
+	spannerCmd.AddCommand(spannerInitCmd)
 	spannerCmd.AddCommand(spannerBoltCmd)
 	spannerCmd.AddCommand(spannerOpsPuddleCmd)
 	spannerOpsPuddleCmd.AddCommand(spannerOpsPuddleInitCmd)
@@ -332,6 +346,29 @@ func runSpannerOpsPuddleJoin(cmd *cobra.Command, _ []string) error {
 		}
 		fmt.Printf("    - %s%s\n", m.Pubkey, marker)
 	}
+	return nil
+}
+
+// runSpannerInit founds the spanner on the local server by calling
+// POST /api/v1/spanner/init — the server writes + signs the founder
+// admission row with its bolt identity.
+func runSpannerInit(cmd *cobra.Command, _ []string) error {
+	client := newAPIClient()
+
+	var resp struct {
+		SpannerID     string `json:"spanner_id"`
+		FounderPubkey string `json:"founder_pubkey"`
+		Hostname      string `json:"hostname"`
+	}
+	if err := client.post("/api/v1/spanner/init", nil, &resp); err != nil {
+		return fmt.Errorf("founding spanner: %w", err)
+	}
+
+	fmt.Printf("Spanner founded\n")
+	fmt.Printf("  Spanner ID:     %s\n", resp.SpannerID)
+	fmt.Printf("  Founder pubkey: %s\n", resp.FounderPubkey)
+	fmt.Printf("  Hostname:       %s\n", resp.Hostname)
+	fmt.Printf("\n  Invite other servers with `vigocli spanner bolt invite`.\n")
 	return nil
 }
 

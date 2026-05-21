@@ -441,6 +441,64 @@ Query envoys by trait values.
 
 Returns spanner role and bolt statuses (hub mode only).
 
+### POST /api/v1/spanner/init
+
+**Permission:** Admin role
+
+Founds the spanner on this server: writes the founder self-admit row into the admissions roster, signed with this server's bolt identity. Requires `spanner.spanner_id` set in `server.yaml`. Refuses with 409 if this server already holds a roster row. Driven by `vigocli spanner init`.
+
+### POST /api/v1/spanner/bolt/invite
+
+**Permission:** Admin role
+
+Mints and signs a single-use invite bundle authorizing another server to join this spanner. The bundle carries a random token, the spanner ID, this server's peer address, and an expiry, all signed with the local bolt identity. Driven by `vigocli spanner bolt invite`.
+
+**Request body:**
+
+```json
+{
+  "ttl_seconds": 86400
+}
+```
+
+### POST /api/v1/spanner/bolt/admit
+
+**Permission:** Invite-bundle authenticated (not Bearer-gated — this is the server-to-server call a joining bolt makes).
+
+Admits a joining bolt. Verifies the invite bundle's signature + freshness, rejects a reused token (the token may be consumed exactly once), then in one transaction consumes the token and inserts the joining bolt's signed admission row. Returns the joiner's signed row plus the full current roster and its consumed-token rows.
+
+**Request body:**
+
+```json
+{
+  "joiner_pubkey": "...",
+  "hostname": "joiner.example.com",
+  "pattern_claims": ["*.us-east.*"],
+  "bundle": "..."
+}
+```
+
+### POST /api/v1/spanner/bolt/join
+
+**Permission:** Admin role
+
+Joins an existing spanner. Run on the joining server: forwards this server's identity + the invite bundle to the inviting server's `/api/v1/spanner/bolt/admit` endpoint, then persists the returned roster into the local admissions table. Driven by `vigocli spanner bolt join --from <url> --code <bundle>`.
+
+**Request body:**
+
+```json
+{
+  "from_addr": "https://srv1.example.com:8443",
+  "bundle": "..."
+}
+```
+
+### GET /api/v1/spanner/roster
+
+**Permission:** `fleet.read`
+
+Returns the full admissions roster (every `spanner_bolts` row) so the membership ceremony's result is inspectable. Backs `vigocli spanner bolt list`.
+
 ### GET /api/v1/spanner/bolts/{id}
 
 **Permission:** `fleet.read`
