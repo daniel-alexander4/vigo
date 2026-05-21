@@ -88,7 +88,9 @@ func NewSpannerAdmissionHandler(sqlDB *sql.DB, queries *db.Queries, boltID *bolt
 // RegisterRoutes mounts the ceremony endpoints. init/invite/join are
 // admin-gated (operator-driven). admit is bundle-authenticated, not
 // Bearer-gated — a joining vigosrv is a peer, not an enrolled envoy.
-// roster is read-gated.
+// roster + snapshot are read-gated. snapshot is the Slice 2-i-a
+// roster-replication pull endpoint — a peer's gossiper GETs it and
+// CRDT-merges the result.
 func (h *SpannerAdmissionHandler) RegisterRoutes(mux *http.ServeMux) {
 	read := auth.RequirePermission(auth.PermFleetRead)
 	admin := auth.RequireAdmin("")
@@ -97,6 +99,7 @@ func (h *SpannerAdmissionHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /api/v1/spanner/bolt/admit", http.HandlerFunc(h.handleAdmit))
 	mux.Handle("POST /api/v1/spanner/bolt/join", admin(http.HandlerFunc(h.handleJoin)))
 	mux.Handle("GET /api/v1/spanner/roster", read(http.HandlerFunc(h.handleRoster)))
+	mux.Handle("GET /api/v1/spanner/snapshot", read(http.HandlerFunc(h.handleSnapshot)))
 }
 
 // localPubkeyHex returns the local bolt pubkey as a lowercase hex
@@ -230,22 +233,14 @@ type admitRequest struct {
 // roster's bolt rows may carry a consumed_token_hash FK; the
 // matching consumed-token rows travel alongside so the joiner can
 // satisfy the foreign key (token row INSERTed first) when it
-// persists the roster locally. Slice 2's CRDT generalizes this
-// token-then-bolt pairing into the gossip merge.
+// persists the roster locally. Slice 2-i-a's CRDT generalizes this
+// token-then-bolt pairing into the gossip merge — the wire types
+// (RosterRow, ConsumedToken, Snapshot) are owned by server/spanner
+// so the handler and the gossiper share one shape.
 type admitResponse struct {
-	AdmittedRow    rosterRow           `json:"admitted_row"`    // the joiner's signed row
-	Roster         []rosterRow         `json:"roster"`          // full current roster
-	ConsumedTokens []consumedTokenWire `json:"consumed_tokens"` // G-Set rows the roster's FKs point at
-}
-
-// consumedTokenWire is the JSON projection of a
-// spanner_consumed_tokens row.
-type consumedTokenWire struct {
-	TokenHash      string `json:"token_hash"`
-	ConsumedAt     int64  `json:"consumed_at"`
-	ConsumedBy     string `json:"consumed_by"`
-	AdmittedPubkey string `json:"admitted_pubkey"`
-	ExpiresAt      int64  `json:"expires_at"`
+	AdmittedRow    spanner.RosterRow       `json:"admitted_row"`    // the joiner's signed row
+	Roster         []spanner.RosterRow     `json:"roster"`          // full current roster
+	ConsumedTokens []spanner.ConsumedToken `json:"consumed_tokens"` // G-Set rows the roster's FKs point at
 }
 
 // handleAdmit verifies the invite bundle, consumes its token, and
@@ -352,9 +347,9 @@ func (h *SpannerAdmissionHandler) handleAdmit(w http.ResponseWriter, r *http.Req
 
 // collectConsumedTokens fetches the spanner_consumed_tokens row for
 // every roster bolt that carries a consumed_token_hash, so the
-// joining side can satisfy the FK when it persists the roster.
-func (h *SpannerAdmissionHandler) collectConsumedTokens(ctx context.Context, roster []db.SpannerBolt) ([]consumedTokenWire, error) {
-	var out []consumedTokenWire
+// joining/merging side can satisfy the FK when it persists the roster.
+func (h *SpannerAdmissionHandler) collectConsumedTokens(ctx context.Context, roster []db.SpannerBolt) ([]spanner.ConsumedToken, error) {
+	var out []spanner.ConsumedToken
 	for _, b := range roster {
 		if !b.ConsumedTokenHash.Valid || b.ConsumedTokenHash.String == "" {
 			continue
@@ -363,7 +358,7 @@ func (h *SpannerAdmissionHandler) collectConsumedTokens(ctx context.Context, ros
 		if err != nil {
 			return nil, fmt.Errorf("token %s: %w", b.ConsumedTokenHash.String, err)
 		}
-		out = append(out, consumedTokenWire{
+		out = append(out, spanner.ConsumedToken{
 			TokenHash:      tok.TokenHash,
 			ConsumedAt:     tok.ConsumedAt,
 			ConsumedBy:     tok.ConsumedBy,
@@ -502,7 +497,7 @@ func (h *SpannerAdmissionHandler) handleJoin(w http.ResponseWriter, r *http.Requ
 			writeError(w, http.StatusBadGateway, "inviter roster rejected: row "+rr.Pubkey+" not admitted by the founder")
 			return
 		}
-		arow := rosterRowToAdmissionRow(rr)
+		arow := rr.AdmissionRowOf()
 		if err := spanner.VerifyAdmissionRow(ed25519.PublicKey(bundle.FounderPubkey), &arow, rr.Signature); err != nil {
 			recordAudit(r.Context(), h.auditWriter, "spanner_join_rejected", ownPubkey, r.RemoteAddr,
 				fmt.Sprintf("roster row %s failed signature verification: %v", rr.Pubkey, err), "")
@@ -539,7 +534,7 @@ func (h *SpannerAdmissionHandler) handleJoin(w http.ResponseWriter, r *http.Requ
 // persistRoster writes a peer roster into the local DB in one
 // transaction: consumed-token rows first (FK targets), then bolt
 // rows. Returns the number of bolt rows written.
-func (h *SpannerAdmissionHandler) persistRoster(ctx context.Context, tokens []consumedTokenWire, roster []rosterRow) (int, error) {
+func (h *SpannerAdmissionHandler) persistRoster(ctx context.Context, tokens []spanner.ConsumedToken, roster []spanner.RosterRow) (int, error) {
 	tx, err := h.sqlDB.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("begin tx: %w", err)
@@ -589,28 +584,40 @@ func (h *SpannerAdmissionHandler) handleRoster(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, map[string]any{"roster": boltsToRosterRows(roster)})
 }
 
-// --- roster row wire shape + conversion helpers ---
-
-// rosterRow is the JSON projection of a spanner_bolts row. Nullable
-// columns are flattened (consumed_token_hash + revoked_* may be ""),
-// signature is base64 std. This is the shape that crosses the wire on
-// /admit, /join, and /roster — a peer reconstructs the canonical
-// AdmissionRow from it to verify each signature end-to-end.
-type rosterRow struct {
-	Pubkey            string `json:"pubkey"`
-	Hostname          string `json:"hostname"`
-	AdmittedAt        int64  `json:"admitted_at"`
-	AdmittedBy        string `json:"admitted_by"`
-	ConsumedTokenHash string `json:"consumed_token_hash,omitempty"`
-	RevokedAt         int64  `json:"revoked_at,omitempty"`
-	RevokedBy         string `json:"revoked_by,omitempty"`
-	PatternClaims     string `json:"pattern_claims"`
-	Signature         []byte `json:"signature"`
+// handleSnapshot returns this bolt's full CRDT state — the
+// spanner_bolts roster plus the spanner_consumed_tokens G-Set rows
+// the roster's consumed_token_hash FKs point at. This is the
+// Slice 2-i-a roster-replication pull endpoint: a peer's gossiper
+// GETs it on a timer and CRDT-merges the result via
+// spanner.MergeSnapshot. The stored per-row signatures are served
+// verbatim — no re-signing, no version field.
+func (h *SpannerAdmissionHandler) handleSnapshot(w http.ResponseWriter, r *http.Request) {
+	roster, err := h.queries.ListBolts(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "listing roster: "+err.Error())
+		return
+	}
+	tokens, err := h.collectConsumedTokens(r.Context(), roster)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "collecting consumed tokens: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, spanner.Snapshot{
+		Roster:         boltsToRosterRows(roster),
+		ConsumedTokens: tokens,
+	})
 }
+
+// --- roster row conversion helpers ---
+//
+// The wire shape itself (spanner.RosterRow / ConsumedToken / Snapshot)
+// is owned by server/spanner so the ceremony handler, the /snapshot
+// endpoint, and the gossiper all share one definition. These helpers
+// bridge that shape to the sqlc-generated db params.
 
 // admissionRowToInsertParams builds InsertBoltParams for a freshly
 // signed admission row (founder self-admit or joiner). revoked_* and
-// last_snapshot_at are NULL — set later by the CRDT in Slice 2.
+// last_snapshot_at are NULL — set later by the CRDT merge.
 func admissionRowToInsertParams(row *spanner.AdmissionRow, sig []byte) db.InsertBoltParams {
 	return db.InsertBoltParams{
 		Pubkey:            row.Pubkey,
@@ -642,39 +649,22 @@ func admissionRowToBolt(row *spanner.AdmissionRow, sig []byte) db.SpannerBolt {
 }
 
 // boltToRosterRow projects a db.SpannerBolt into the wire shape.
-func boltToRosterRow(b db.SpannerBolt) rosterRow {
-	rr := rosterRow{
-		Pubkey:        b.Pubkey,
-		Hostname:      b.Hostname,
-		AdmittedAt:    b.AdmittedAt,
-		AdmittedBy:    b.AdmittedBy,
-		PatternClaims: b.PatternClaims,
-		Signature:     b.Signature,
-	}
-	if b.ConsumedTokenHash.Valid {
-		rr.ConsumedTokenHash = b.ConsumedTokenHash.String
-	}
-	if b.RevokedAt.Valid {
-		rr.RevokedAt = b.RevokedAt.Int64
-	}
-	if b.RevokedBy.Valid {
-		rr.RevokedBy = b.RevokedBy.String
-	}
-	return rr
+func boltToRosterRow(b db.SpannerBolt) spanner.RosterRow {
+	return spanner.RosterRowFromBolt(b)
 }
 
 // boltsToRosterRows projects a slice of db.SpannerBolt.
-func boltsToRosterRows(bolts []db.SpannerBolt) []rosterRow {
-	out := make([]rosterRow, 0, len(bolts))
+func boltsToRosterRows(bolts []db.SpannerBolt) []spanner.RosterRow {
+	out := make([]spanner.RosterRow, 0, len(bolts))
 	for _, b := range bolts {
-		out = append(out, boltToRosterRow(b))
+		out = append(out, spanner.RosterRowFromBolt(b))
 	}
 	return out
 }
 
 // rosterRowToInsertParams rebuilds InsertBoltParams from a wire
-// rosterRow received from a peer.
-func rosterRowToInsertParams(rr rosterRow) (db.InsertBoltParams, error) {
+// spanner.RosterRow received from a peer.
+func rosterRowToInsertParams(rr spanner.RosterRow) (db.InsertBoltParams, error) {
 	p := db.InsertBoltParams{
 		Pubkey:            rr.Pubkey,
 		Hostname:          rr.Hostname,
@@ -691,20 +681,6 @@ func rosterRowToInsertParams(rr rosterRow) (db.InsertBoltParams, error) {
 		p.RevokedBy = sql.NullString{String: rr.RevokedBy, Valid: true}
 	}
 	return p, nil
-}
-
-// rosterRowToAdmissionRow rebuilds the canonical spanner.AdmissionRow
-// from a wire rosterRow so its signature can be verified against the
-// admitting bolt's pubkey.
-func rosterRowToAdmissionRow(rr rosterRow) spanner.AdmissionRow {
-	return spanner.AdmissionRow{
-		Pubkey:            rr.Pubkey,
-		Hostname:          rr.Hostname,
-		AdmittedAt:        rr.AdmittedAt,
-		AdmittedBy:        rr.AdmittedBy,
-		ConsumedTokenHash: rr.ConsumedTokenHash,
-		PatternClaims:     rr.PatternClaims,
-	}
 }
 
 // nullStringIfSet returns a valid sql.NullString iff s is non-empty.

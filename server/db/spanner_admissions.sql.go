@@ -276,6 +276,35 @@ func (q *Queries) MergeBoltLWW(ctx context.Context, arg MergeBoltLWWParams) (int
 	return result.RowsAffected()
 }
 
+const mergeConsumedToken = `-- name: MergeConsumedToken :execrows
+INSERT INTO spanner_consumed_tokens (
+    token_hash, consumed_at, consumed_by, admitted_pubkey, expires_at
+) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(token_hash) DO NOTHING
+`
+
+type MergeConsumedTokenParams struct {
+	TokenHash      string `json:"token_hash"`
+	ConsumedAt     int64  `json:"consumed_at"`
+	ConsumedBy     string `json:"consumed_by"`
+	AdmittedPubkey string `json:"admitted_pubkey"`
+	ExpiresAt      int64  `json:"expires_at"`
+}
+
+func (q *Queries) MergeConsumedToken(ctx context.Context, arg MergeConsumedTokenParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, mergeConsumedToken,
+		arg.TokenHash,
+		arg.ConsumedAt,
+		arg.ConsumedBy,
+		arg.AdmittedPubkey,
+		arg.ExpiresAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const revokeBolt = `-- name: RevokeBolt :exec
 UPDATE spanner_bolts
 SET revoked_at = ?2, revoked_by = ?3, signature = ?4

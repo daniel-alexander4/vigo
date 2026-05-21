@@ -205,6 +205,11 @@ type Server struct {
 	// stays in chunk 5. ---
 	hubFailover *spanner.Failover
 
+	// --- Spanner roster gossiper (Slice 2-i-a; nil in standalone mode).
+	// Pulls every peer's /snapshot on the Tier-2 timer and CRDT-merges
+	// it. The `go spannerGossip.Run` goroutine starts from run(). ---
+	spannerGossip *spanner.Gossiper
+
 	// --- Workflow engine. Construction + Load + RecoverInterrupted +
 	// agentSvc.SetWorkflowTrigger wiring all live here. ---
 	workflowEngine *workflows.Engine
@@ -1023,6 +1028,22 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// spanner, mints join invites, admits joining bolts. Needs the
 	// local bolt identity to sign admission rows + invite bundles.
 	spannerAdmissionHandler := api.NewSpannerAdmissionHandler(s.db, s.queries, s.boltID, s.cfg.Spanner.SpannerID, s.cfg.Server.Hostname, s.cfg.Spanner.Patterns, s.auditWriter, nil)
+
+	// Spanner Slice 2-i-a — roster-replication gossiper (ADR-026). On
+	// every non-standalone bolt, pulls each peer's /snapshot on the
+	// Tier-2 timer and CRDT-merges it so all bolts converge. The
+	// `go spannerGossip.Run` goroutine starts from run().
+	if s.mode != config.ModeStandalone {
+		tier2 := parseDuration(s.cfg.Spanner.Snapshot.Tier2Interval, 5*time.Minute)
+		s.spannerGossip = spanner.NewGossiper(
+			s.db,
+			s.queries,
+			fullBoltPubkeyHex(s.boltID),
+			apiListenPort(s.cfg.Server.APIListen),
+			tier2,
+			nil,
+		)
+	}
 
 	taskHandler := api.NewTaskHandler(s.queries, s.agentSvc, s.cfg.Task.RequireDefinition)
 	taskHandler.SetAuditWriter(s.auditWriter)

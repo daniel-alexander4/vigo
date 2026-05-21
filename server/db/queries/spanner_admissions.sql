@@ -68,6 +68,12 @@ INSERT INTO spanner_consumed_tokens (
     token_hash, consumed_at, consumed_by, admitted_pubkey, expires_at
 ) VALUES (?, ?, ?, ?, ?);
 
+-- name: MergeConsumedToken :execrows
+INSERT INTO spanner_consumed_tokens (
+    token_hash, consumed_at, consumed_by, admitted_pubkey, expires_at
+) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(token_hash) DO NOTHING;
+
 -- name: IsTokenConsumed :one
 SELECT EXISTS (SELECT 1 FROM spanner_consumed_tokens WHERE token_hash = ?) AS consumed;
 

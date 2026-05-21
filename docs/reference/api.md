@@ -499,6 +499,12 @@ Joins an existing spanner. Run on the joining server: forwards this server's ide
 
 Returns the full admissions roster (every `spanner_bolts` row) so the membership ceremony's result is inspectable. Backs `vigocli spanner bolt list`.
 
+### GET /api/v1/spanner/snapshot
+
+**Permission:** `fleet.read`
+
+Serves this server's full admissions roster + consumed-token G-Set as a signed CRDT snapshot. Peer bolts' roster gossipers pull this endpoint on the Tier-2 interval (`spanner.snapshot.tier2_interval`, default 5m) and CRDT-merge the result, so every bolt converges on one admissions roster. Each row carries its original Ed25519 admission signature; the pulling peer verifies every row before merging. Server-to-server, not operator-driven.
+
 ### GET /api/v1/spanner/bolts/{id}
 
 **Permission:** `fleet.read`

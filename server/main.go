@@ -8,10 +8,12 @@ import (
 	"crypto/ed25519"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -715,6 +717,32 @@ func boltSigningKeyOrNil(id *bolt.Identity) ed25519.PrivateKey {
 		return nil
 	}
 	return id.SigningKey
+}
+
+// fullBoltPubkeyHex returns the full lowercase-hex encoding of the
+// loaded bolt identity's raw 32-byte pubkey, or "" if no identity is
+// loaded. This is the canonical identifier stored in
+// spanner_bolts.pubkey — the roster gossiper compares against it to
+// skip its own snapshot. (formatLocalBoltPubkey truncates to 16 hex
+// chars for operator display and must not be used for identity
+// matching.)
+func fullBoltPubkeyHex(id *bolt.Identity) string {
+	if id == nil {
+		return ""
+	}
+	return hex.EncodeToString(id.PublicKey)
+}
+
+// apiListenPort extracts the port from an api_listen address
+// (host:port, e.g. ":8443" or "0.0.0.0:8443"). The spanner roster
+// gossiper builds peer snapshot URLs as https://<host>:<port>/... on
+// the same-port assumption. Falls back to "8443" — the documented
+// default — when the address has no parseable port.
+func apiListenPort(apiListen string) string {
+	if _, port, err := net.SplitHostPort(apiListen); err == nil && port != "" {
+		return port
+	}
+	return "8443"
 }
 
 // lookupStockpileProjectID returns the hex project_id of the

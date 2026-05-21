@@ -54,6 +54,7 @@ func (s *Server) Run(ctx context.Context) error {
 	s.startSwarm(ctx)
 	s.startHTTPServer()
 	s.startReporter(ctx)
+	s.startSpannerGossip(ctx)
 
 	if s.mode == config.ModeJoiner {
 		slog.Info("bolt ready",
@@ -439,4 +440,16 @@ func (s *Server) startReporter(ctx context.Context) {
 	)
 	reporter.SetConfigVersion(s.configStore.Version)
 	go reporter.Run(ctx)
+}
+
+// startSpannerGossip runs the Slice 2-i-a roster-replication
+// gossiper. Constructed in NewServer for every non-standalone bolt;
+// nil in standalone mode. The gossiper pulls every peer's /snapshot
+// on the Tier-2 timer and CRDT-merges it so all bolts converge on one
+// admissions roster.
+func (s *Server) startSpannerGossip(ctx context.Context) {
+	if s.spannerGossip == nil {
+		return
+	}
+	go s.spannerGossip.Run(ctx)
 }

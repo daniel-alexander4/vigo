@@ -5,11 +5,13 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	neturl "net/url"
 	"testing"
 	"time"
 
@@ -252,9 +254,9 @@ func TestSpannerAdmitRejectsExpiredBundle(t *testing.T) {
 // InsecureSkipVerify default; a default-verifying client would fail
 // the handshake and the join would 502.
 func TestSpannerJoinReachesTLSFounder(t *testing.T) {
-	_, founderSrv, _ := newCeremonyServer(t, "test-spanner", "founder.example.com", nil, &http.Client{}, true)        // TLS founder
-	_, joinerSrv, joinerQ := newCeremonyServer(t, "test-spanner", "joiner.example.com", nil, nil, false)             // nil → InsecureSkipVerify default
-	founderClient := founderSrv.Client()                                                                            // trusts the test cert
+	_, founderSrv, _ := newCeremonyServer(t, "test-spanner", "founder.example.com", nil, &http.Client{}, true) // TLS founder
+	_, joinerSrv, joinerQ := newCeremonyServer(t, "test-spanner", "joiner.example.com", nil, nil, false)       // nil → InsecureSkipVerify default
+	founderClient := founderSrv.Client()                                                                       // trusts the test cert
 
 	if code := postJSONClient(t, founderClient, founderSrv.URL+"/api/v1/spanner/init", nil, nil); code != http.StatusOK {
 		t.Fatalf("init returned %d", code)
@@ -317,7 +319,7 @@ func TestSpannerJoinRejectsTamperedRoster(t *testing.T) {
 	// Fake inviter: its /admit returns the tampered roster.
 	fake := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(admitResponse{
-			Roster: []rosterRow{{
+			Roster: []spanner.RosterRow{{
 				Pubkey: founderHex, Hostname: "founder.example.com", AdmittedAt: 1,
 				AdmittedBy: founderHex, PatternClaims: "[]", Signature: sig,
 			}},
@@ -336,6 +338,136 @@ func TestSpannerJoinRejectsTamperedRoster(t *testing.T) {
 	}
 	if len(roster) != 0 {
 		t.Errorf("tampered roster persisted %d rows, want 0", len(roster))
+	}
+}
+
+// rewriteRoundTripper redirects every outbound request to a fixed
+// base URL, preserving the path. It lets a spanner.Gossiper — which
+// builds peer URLs from hostnames — reach an httptest server whose
+// hostname is not DNS-resolvable.
+type rewriteRoundTripper struct {
+	base string // e.g. the httptest server URL
+	rt   http.RoundTripper
+}
+
+func (rt rewriteRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	u, err := neturl.Parse(rt.base)
+	if err != nil {
+		return nil, err
+	}
+	req.URL.Scheme = u.Scheme
+	req.URL.Host = u.Host
+	return rt.rt.RoundTrip(req)
+}
+
+// TestSpannerRosterGossipConvergence runs the full Slice 1 ceremony
+// across two servers, mutates the founder's roster directly, then
+// runs one gossiper pull cycle on the joiner and asserts both DBs
+// hold an identical, signature-valid roster. This exercises the real
+// GET /api/v1/spanner/snapshot endpoint plus spanner.MergeSnapshot.
+func TestSpannerRosterGossipConvergence(t *testing.T) {
+	founderH, founderSrv, founderQ := newCeremonyServer(t, "test-spanner", "founder.example.com", []string{"*.us-west.*"}, &http.Client{}, false)
+	joinerH, joinerSrv, joinerQ := newCeremonyServer(t, "test-spanner", "joiner.example.com", []string{"*.us-east.*"}, &http.Client{}, false)
+
+	// --- ceremony: found → invite → join ---
+	if code := postJSON(t, founderSrv.URL+"/api/v1/spanner/init", nil, nil); code != http.StatusOK {
+		t.Fatalf("init returned %d", code)
+	}
+	var invResp struct {
+		Bundle string `json:"bundle"`
+	}
+	if code := postJSON(t, founderSrv.URL+"/api/v1/spanner/bolt/invite",
+		map[string]any{"ttl_seconds": 3600}, &invResp); code != http.StatusOK {
+		t.Fatalf("invite returned %d", code)
+	}
+	var joinResp struct {
+		RosterSize int `json:"roster_size"`
+	}
+	if code := postJSON(t, joinerSrv.URL+"/api/v1/spanner/bolt/join",
+		map[string]string{"from_addr": founderSrv.URL, "bundle": invResp.Bundle}, &joinResp); code != http.StatusOK {
+		t.Fatalf("join returned %d", code)
+	}
+	if joinResp.RosterSize != 2 {
+		t.Fatalf("post-join roster_size = %d, want 2", joinResp.RosterSize)
+	}
+
+	// --- mutate the founder's roster: admit a third bolt via a fresh
+	// invite, so the founder now has 3 rows and the joiner still 2. ---
+	if code := postJSON(t, founderSrv.URL+"/api/v1/spanner/bolt/invite",
+		map[string]any{"ttl_seconds": 3600}, &invResp); code != http.StatusOK {
+		t.Fatalf("second invite returned %d", code)
+	}
+	thirdPub := hex.EncodeToString(testBoltIdentity(t).PublicKey)
+	if code := postJSON(t, founderSrv.URL+"/api/v1/spanner/bolt/admit", map[string]any{
+		"joiner_pubkey":  thirdPub,
+		"hostname":       "third.example.com",
+		"pattern_claims": []string{"*.eu.*"},
+		"bundle":         invResp.Bundle,
+	}, nil); code != http.StatusOK {
+		t.Fatalf("admit of third bolt returned %d", code)
+	}
+
+	founderBefore, _ := founderQ.ListBolts(t.Context())
+	joinerBefore, _ := joinerQ.ListBolts(t.Context())
+	if len(founderBefore) != 3 || len(joinerBefore) != 2 {
+		t.Fatalf("pre-gossip sizes: founder=%d joiner=%d, want 3/2", len(founderBefore), len(joinerBefore))
+	}
+
+	// --- one gossiper pull cycle on the joiner ---
+	// The joiner's roster lists the founder by hostname
+	// "founder.example.com"; the rewrite transport redirects that to
+	// the founder's httptest server.
+	gossipClient := &http.Client{Transport: rewriteRoundTripper{base: founderSrv.URL, rt: http.DefaultTransport}}
+	// A short interval so the first tick fires well inside the poll
+	// deadline; production cadence is snapshot.tier2_interval (5m).
+	g := spanner.NewGossiper(joinerH.sqlDB, joinerH.queries,
+		hex.EncodeToString(joinerH.boltID.PublicKey), "8443", 50*time.Millisecond, gossipClient)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	go g.Run(ctx)
+	// Wait for the joiner's roster to converge to 3 rows, then stop.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		rows, err := joinerQ.ListBolts(t.Context())
+		if err != nil {
+			t.Fatalf("joiner ListBolts during poll: %v", err)
+		}
+		if len(rows) == 3 {
+			break
+		}
+		if time.Now().After(deadline) {
+			cancel()
+			t.Fatalf("joiner roster did not converge to 3 rows (got %d)", len(rows))
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	cancel()
+
+	// --- both DBs must now hold an identical 3-row roster ---
+	founderAfter, err := founderQ.ListBolts(t.Context())
+	if err != nil {
+		t.Fatalf("founder ListBolts: %v", err)
+	}
+	joinerAfter, err := joinerQ.ListBolts(t.Context())
+	if err != nil {
+		t.Fatalf("joiner ListBolts: %v", err)
+	}
+	if len(founderAfter) != 3 || len(joinerAfter) != 3 {
+		t.Fatalf("post-gossip sizes: founder=%d joiner=%d, want 3/3", len(founderAfter), len(joinerAfter))
+	}
+	founderPub := founderH.boltID.PublicKey
+	for i := range founderAfter {
+		if founderAfter[i].Pubkey != joinerAfter[i].Pubkey {
+			t.Errorf("row %d pubkey mismatch: %q != %q", i, founderAfter[i].Pubkey, joinerAfter[i].Pubkey)
+		}
+		if !bytes.Equal(founderAfter[i].Signature, joinerAfter[i].Signature) {
+			t.Errorf("row %d signature mismatch", i)
+		}
+		// Every row must verify against the founder (Slice-1 admitter).
+		row := boltToAdmissionRow(joinerAfter[i])
+		if err := spanner.VerifyAdmissionRow(founderPub, &row, joinerAfter[i].Signature); err != nil {
+			t.Errorf("joiner row %s failed signature verify: %v", joinerAfter[i].Pubkey, err)
+		}
 	}
 }
 
