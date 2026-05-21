@@ -65,7 +65,7 @@ The plan's "Open questions" list at lines 833–854 had 5 items still open. All 
 
 - **Multi-vigosrv test harness lands with this slice.** Slice 2D's "full multi-vigosrv test harness" is the deferral target for *exhaustive* multi-peer coverage; basic two-`*Server` integration tests covering CRDT replication, admission/revoke ordering, and pattern-overlap refusal land alongside Slice 2A code. The Phase A/B/C refactor (`d5c0b4e4`, `ab859797`, `796c5ecd`) is the foundation those tests build on.
 - **`spanner_bolts` table migration is in-place per the zero-users rule.** Phase 1's any-shape `bolt_pins` storage gets replaced; no incremental migration files, no parallel-table shim, no version negotiation.
-- **CRDT merge logic lives at `server/spanner/crdt.go` or similar.** Mirror the existing `server/swarm/manifest.go` LWW-Map semantics — same arbitration shape (`updated_at`, `updated_by`), same signature verification pattern. Don't reimplement the merge primitive; lift the helper if generalization is warranted, otherwise duplicate the small piece needed.
+- **CRDT merge logic lives at `server/spanner/crdt.go` or similar.** Mirror the existing `server/swarm/manifest.go` LWW-Map merge primitive and signature-verification pattern — but arbitrate on `spanner_bolts`'s own columns (`admitted_at` / `revoked_at`, revoke absorbing) per the canonical plan, not manifest.go's `updated_at`/`updated_by`. Don't reimplement the merge primitive; lift the helper if generalization is warranted, otherwise duplicate the small piece needed.
 - **Audit events get fresh slot in `server/audit/`.** No new event-type registry — add the seven new event names to the existing enum.
 
 ## Cross-references
