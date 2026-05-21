@@ -64,15 +64,6 @@ docs/internal.docs/substrate-phase-c-livetest.sh:*:cairn
 docs/internal.docs/substrate-phase-d-livetest.sh:*:cairn
 docs/internal.docs/substrate-unified-plan.md:*:cairn
 
-# Internal comparison + strategy docs authored before the 0.50.0 swarm
-# rename — they predate swarmgit→gitback / swarmcast→filecast and still
-# carry the old terms. These are product docs, not rename history, so
-# they are candidates for an actual term refresh (flagged for a future
-# pass); allowlisted for now to keep the checker green.
-docs/internal.docs/comparisons/vigo-vs-puppet-2026-05-10.md:*:swarmgit
-docs/internal.docs/comparisons/vigo-vs-ansible-2026-05-10.md:*:swarmgit
-docs/internal.docs/strategy/vigo-market-footprint-2026-05-11.md:*:swarmgit
-
 # scripts/migrate-0.30.sh handles upgrades from 0.29.x to 0.30.x and
 # references the older state-on-disk paths.
 scripts/migrate-0.30.sh:*:cairn
