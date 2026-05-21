@@ -89,6 +89,13 @@ type SpannerAdmin struct {
 	// servers — the same-port assumption the real dialer makes is not
 	// satisfiable with two in-process test servers.
 	dialPeers func(ctx context.Context) ([]*PeerConn, error)
+
+	// dialBoltFn is the single-bolt connection opener for the Slice
+	// 2-ii-b action-propagation paths (enrollment redirect, force-push,
+	// reassign, drain). Defaults to nil — dialBolt then falls through to
+	// the real PeerDialer. A test injects a stub here to exercise the
+	// action orchestration without an mTLS harness.
+	dialBoltFn func(boltHostname string) (*PeerConn, error)
 }
 
 // NewSpannerAdmin constructs the peer-equal admin-read driver.

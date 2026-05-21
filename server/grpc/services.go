@@ -46,6 +46,11 @@ type AgentService struct {
 	queryRouter      *queryRouter
 	taskStore        *task.Store
 	hub              *spanner.Hub // non-nil when role=hub; routes enrollment to spokes
+	// spannerAdmin drives the peer-equal enrollment routing (Slice
+	// 2-ii-b). Non-nil when this vigosrv is in a spanner (mode !=
+	// standalone). Register dispatches: hub != nil → hub routing;
+	// else spannerAdmin != nil → OwningBolt redirect; else local-only.
+	spannerAdmin     *spanner.SpannerAdmin
 	licenseEnforcer  *license.Enforcer
 	fleetIndex       *fleet.FleetIndex // in-memory index for hot-path operations
 	runBatcher       *fleet.RunBatcher // async run persistence from delta events
@@ -258,6 +263,14 @@ func (s *AdminService) SetSwarmCleanup(fn func(ctx context.Context, hostname str
 // driver shares the Gossiper's observability cache). nil leaves the
 // three fleet-wide admin reads on their pure-local path.
 func (s *AdminService) SetSpannerAdmin(a *spanner.SpannerAdmin) {
+	s.spannerAdmin = a
+}
+
+// SetSpannerAdmin attaches the peer-equal admin driver to the agent
+// service so Register can route enrollment via OwningBolt (Slice
+// 2-ii-b). Wired alongside the AdminService setter. nil leaves
+// enrollment on its pure-local path.
+func (s *AgentService) SetSpannerAdmin(a *spanner.SpannerAdmin) {
 	s.spannerAdmin = a
 }
 

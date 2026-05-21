@@ -107,13 +107,15 @@ func (h *SpannerHandler) RegisterRoutes(mux *http.ServeMux) {
 		mux.Handle("POST /api/v1/spanner/reassign", admin(http.HandlerFunc(h.handleReassign)))
 		mux.Handle("POST /api/v1/spanner/bolts/{id}/drain", admin(http.HandlerFunc(h.handleDrain)))
 	} else {
-		// Peer-equal mode (Slice 2-ii-a): the bolt drill-downs are
-		// served from the gossip-backed observability cache rather
-		// than a hub fan-out. envoys is the cached per-bolt roster;
-		// the mutating push/reassign/drain verbs are hub-only and
-		// stay retired here (gossip-driven action propagation is a
-		// later slice).
+		// Peer-equal mode: the bolt drill-downs are served from the
+		// gossip-backed observability cache rather than a hub fan-out
+		// (Slice 2-ii-a). The mutating push/reassign/drain verbs route
+		// point-to-point over the gossiped roster via SpannerAdmin
+		// (Slice 2-ii-b) — no hub, no gossiped intent channel.
 		mux.Handle("GET /api/v1/spanner/bolts/{id}/envoys", read(http.HandlerFunc(h.handlePeerBoltEnvoys)))
+		mux.Handle("POST /api/v1/spanner/bolts/{id}/push", admin(http.HandlerFunc(h.handlePeerBoltPush)))
+		mux.Handle("POST /api/v1/spanner/reassign", admin(http.HandlerFunc(h.handlePeerReassign)))
+		mux.Handle("POST /api/v1/spanner/bolts/{id}/drain", admin(http.HandlerFunc(h.handlePeerDrain)))
 	}
 }
 
@@ -187,6 +189,123 @@ func (h *SpannerHandler) handlePeerBoltEnvoys(w http.ResponseWriter, r *http.Req
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{"envoys": p.Envoys})
+}
+
+// handlePeerBoltPush is the peer-equal analog of handleBoltPush: it
+// routes a ForcePush to one bolt's envoys via a direct admin RPC over
+// the gossiped roster (Slice 2-ii-b). The {id} path value is the
+// target bolt's pubkey-hex; an empty body envoy_id means "every envoy
+// on that bolt".
+func (h *SpannerHandler) handlePeerBoltPush(w http.ResponseWriter, r *http.Request) {
+	if h.spannerAdmin == nil {
+		writeError(w, http.StatusServiceUnavailable, "spanner action propagation unavailable")
+		return
+	}
+	id := r.PathValue("id")
+	var req struct {
+		EnvoyID string `json:"envoy_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	hostname := h.spannerAdmin.BoltHostname(r.Context(), id)
+	if hostname == "" {
+		writeError(w, http.StatusNotFound, "no roster bolt for "+id)
+		return
+	}
+	count, err := h.spannerAdmin.ForcePushToBolt(r.Context(), hostname, req.EnvoyID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"envoys_notified": count})
+}
+
+// handlePeerReassign is the peer-equal analog of handleReassign: it
+// orchestrates an envoy move with three direct peer admin RPCs (Slice
+// 2-ii-b) instead of going through a hub. from_bolt_id / to_bolt_id
+// are bolt pubkey-hex; an empty to_bolt_id auto-routes the envoy by
+// hostname through OwningBolt.
+func (h *SpannerHandler) handlePeerReassign(w http.ResponseWriter, r *http.Request) {
+	if h.spannerAdmin == nil {
+		writeError(w, http.StatusServiceUnavailable, "spanner action propagation unavailable")
+		return
+	}
+	var req struct {
+		EnvoyID    string `json:"envoy_id"`
+		FromBoltID string `json:"from_bolt_id"`
+		ToBoltID   string `json:"to_bolt_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.EnvoyID == "" || req.FromBoltID == "" {
+		writeError(w, http.StatusBadRequest, "envoy_id and from_bolt_id are required")
+		return
+	}
+	fromHostname := h.spannerAdmin.BoltHostname(r.Context(), req.FromBoltID)
+	if fromHostname == "" {
+		writeError(w, http.StatusNotFound, "no roster bolt for source "+req.FromBoltID)
+		return
+	}
+	toHostname := ""
+	if req.ToBoltID != "" {
+		toHostname = h.spannerAdmin.BoltHostname(r.Context(), req.ToBoltID)
+		if toHostname == "" {
+			writeError(w, http.StatusNotFound, "no roster bolt for target "+req.ToBoltID)
+			return
+		}
+	}
+	result, err := h.spannerAdmin.ReassignEnvoy(r.Context(), req.EnvoyID, fromHostname, toHostname)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// handlePeerDrain is the peer-equal analog of handleDrain: it moves
+// every envoy off the {id} bolt onto other bolts via batched
+// peer-equal reassignment (Slice 2-ii-b). The {id} path value and the
+// optional target_bolt_id body field are bolt pubkey-hex; an empty
+// target auto-routes each envoy by hostname.
+func (h *SpannerHandler) handlePeerDrain(w http.ResponseWriter, r *http.Request) {
+	if h.spannerAdmin == nil {
+		writeError(w, http.StatusServiceUnavailable, "spanner action propagation unavailable")
+		return
+	}
+	boltID := r.PathValue("id")
+	var req struct {
+		TargetBoltID string `json:"target_bolt_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && err != io.EOF {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	fromHostname := h.spannerAdmin.BoltHostname(r.Context(), boltID)
+	if fromHostname == "" {
+		writeError(w, http.StatusNotFound, "no roster bolt for "+boltID)
+		return
+	}
+	toHostname := ""
+	if req.TargetBoltID != "" {
+		toHostname = h.spannerAdmin.BoltHostname(r.Context(), req.TargetBoltID)
+		if toHostname == "" {
+			writeError(w, http.StatusNotFound, "no roster bolt for target "+req.TargetBoltID)
+			return
+		}
+	}
+	result, err := h.spannerAdmin.DrainBolt(r.Context(), fromHostname, toHostname)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 // formatHexShort returns first-16-char lowercase hex of pk.

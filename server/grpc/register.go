@@ -81,7 +81,13 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 
 	var boltAddr string
 
-	// Hub mode: route the enrollment to the target bolt.
+	// Enrollment routing. Two additive branches; the peer-equal path
+	// (Slice 2-ii-b) is the effective one — the hub's RouteHostname is
+	// degraded (returns no-route) under ADR-026, so the hub branch
+	// no-ops on every hostname until Slice 2-ii-c retires the hub.
+	//
+	// Hub mode (legacy; retired by Slice 2-ii-c): route to the target
+	// bolt the hub's pattern table picks.
 	if s.hub != nil {
 		addr, matched := s.hub.RouteHostname(req.GetHostname())
 		if matched {
@@ -99,6 +105,40 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 				slog.Info("envoy enrolled on bolt",
 					"hostname", req.GetHostname(),
 					"bolt_addr", addr,
+					"envoy_id", envoyID,
+				)
+			}
+		}
+	}
+
+	// Peer-equal mode (Slice 2-ii-b): resolve which roster bolt owns
+	// this hostname via OwningBolt (the ADR-002 pattern matcher over
+	// the gossiped admissions roster). When a DIFFERENT bolt owns it,
+	// create the envoy record on that bolt via a direct EnrollEnvoy
+	// admin RPC and return its address — the agent persists bolt_addr
+	// and checks in there with the bolt-assigned envoy ID (the redirect
+	// mechanism; no agent re-registration). When this bolt owns the
+	// hostname (or no roster bolt claims it), the local registration
+	// already done above stands.
+	if boltAddr == "" && s.spannerAdmin != nil {
+		ownerPubkey, ownerHostname, owned := s.spannerAdmin.OwningBolt(ctx, req.GetHostname())
+		if owned && !s.spannerAdmin.OwnsLocally(ownerPubkey) && ownerHostname != "" {
+			boltEnvoyID, enrollErr := s.spannerAdmin.EnrollOnPeerBolt(ctx, ownerHostname, req.GetHostname(), req.GetIpAddress(), req.GetPubkeyPem(), req.GetForce())
+			if enrollErr != nil {
+				slog.Error("spanner bolt enrollment failed, envoy registered locally only",
+					"hostname", req.GetHostname(),
+					"owning_bolt", ownerHostname,
+					"error", enrollErr,
+				)
+			} else {
+				// The owning bolt created the envoy — redirect the agent
+				// there with the bolt's envoy ID and gRPC address.
+				envoyID = boltEnvoyID
+				boltAddr = ownerHostname + ":" + s.spannerAdmin.GRPCPort()
+				slog.Info("envoy routed to owning bolt (peer-equal)",
+					"hostname", req.GetHostname(),
+					"owning_bolt", ownerHostname,
+					"bolt_addr", boltAddr,
 					"envoy_id", envoyID,
 				)
 			}

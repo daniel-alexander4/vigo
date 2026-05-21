@@ -287,6 +287,22 @@ func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) 
 		if _, err := uuid.Parse(req.EnvoyId); err != nil {
 			return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
 		}
+
+		// Spanner peer-equal force-push routing (Slice 2-ii-b). If the
+		// cached roster shows a remote peer serves this envoy, route the
+		// ForcePush to that bolt via a direct admin RPC — mirrors how
+		// ListRuns(envoy_id) routes to the owning bolt via RunsFromBolt.
+		// A local (or unknown) envoy uses the local flag-set path below.
+		if s.spannerAdmin != nil {
+			if _, hostname, remote := s.spannerAdmin.OwningBoltHostname(ctx, req.EnvoyId); remote && hostname != "" {
+				count, err := s.spannerAdmin.ForcePushToBolt(ctx, hostname, req.EnvoyId)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "force push on owning bolt: %v", err)
+				}
+				return &pb.ForcePushResponse{EnvoysNotified: count}, nil
+			}
+		}
+
 		if err := s.queries.SetForcePush(ctx, req.EnvoyId); err != nil {
 			return nil, status.Errorf(codes.Internal, "setting force push: %v", err)
 		}

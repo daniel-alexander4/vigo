@@ -1099,6 +1099,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			)
 		}
 		s.adminSvc.SetSpannerAdmin(spannerAdmin)
+		s.agentSvc.SetSpannerAdmin(spannerAdmin)
 		spannerHandler.SetSpannerAdmin(spannerAdmin)
 	}
 
