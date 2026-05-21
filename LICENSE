@@ -1,6 +1,6 @@
 Vigo — Proprietary License
 
-Effective 2026-03-16.
+Effective 2026-03-16. Last updated 2026-05-20.
 
 Vigo is a distributed state enforcement engine. A central server defines
 desired state for managed infrastructure; lightweight agents on each node
@@ -190,7 +190,7 @@ retain the higher limit for as long as they continuously use the Software.
 THE COMMUNITY TIER IS PROVIDED WITHOUT ANY SUPPORT OBLIGATION WHATSOEVER.
 ALEXANDER4, LLC IS NOT OBLIGATED TO RESPOND TO BUG REPORTS, FEATURE
 REQUESTS, CONFIGURATION QUESTIONS, OR ANY OTHER INQUIRY FROM COMMUNITY
-TIER USERS. COMMUNITY SUPPORT VIA GITHUB ISSUES IS PROVIDED ON A
+TIER USERS. COMMUNITY SUPPORT VIA EMAIL IS PROVIDED ON A
 VOLUNTARY, BEST-EFFORT BASIS AND MAY BE DISCONTINUED AT ANY TIME WITHOUT
 NOTICE.
 

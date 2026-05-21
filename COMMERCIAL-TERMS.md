@@ -6,7 +6,7 @@ tools with a single system that enforces desired state, tracks compliance
 against regulatory frameworks, and provides real-time fleet visibility —
 all self-hosted, with no external dependencies.
 
-Effective 2026-03-16. Alexander4, LLC reserves the right to update these
+Effective 2026-03-16. Last updated 2026-05-20. Alexander4, LLC reserves the right to update these
 terms. Changes apply to new license terms and renewals only. Existing
 agreements, including multi-year commitments, are governed by the terms
 in effect at the time of signing for the duration of that agreement.
@@ -207,7 +207,7 @@ Every paid tier includes:
 
 - A signed license file (`.lic`) unlocking your node count
 - Access to all current and future features for the license term
-- 15-second check-ins, hub-spoke spanner federation, AI assistant, compliance export with auto-rollback, RBAC, 100+ resource types across 8 platforms, verified binary distribution, all integrations
+- 15-second check-ins, hub-spoke spanner federation, AI assistant, compliance export with auto-rollback, RBAC, 73 resource types across 8 platforms, verified binary distribution, all integrations
 - The same software, the same binary — no "community" vs "enterprise" split
 
 The Community tier (1–100 nodes) includes all features with no time limit.
@@ -289,13 +289,15 @@ For guaranteed delivery of a specific feature, custom development is
 available as a separate engagement, scoped and quoted individually.
 Contact us for details.
 
-## Prohibited Use
+## Use Prohibitions
 
 This software may not be used by, for, or on behalf of:
 
-- Any military organization, department of defense, armed forces, defense
-  contractor, intelligence agency, or entity primarily engaged in military
-  or weapons-related activities.
+- Any military organization, department of defense, armed forces,
+  defense contractor, intelligence agency, or any entity primarily
+  engaged in military or weapons-related activities. This includes but
+  is not limited to the United States Department of Defense, its
+  branches, agencies, and contractors operating under defense contracts.
 - Any manufacturer, distributor, or retailer of firearms, ammunition,
   weapons, or weapons components.
 - Any manufacturer, distributor, or retailer of pesticides, herbicides,

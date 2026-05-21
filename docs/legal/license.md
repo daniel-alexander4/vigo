@@ -1,6 +1,8 @@
 
 # Documentation License
 
+Last updated 2026-05-13.
+
 ## Proprietary and Confidential
 
 This documentation is the proprietary and confidential property of Alexander4, LLC. It is provided exclusively to licensed users of Vigo and Connwaer for the purpose of operating and maintaining the software.

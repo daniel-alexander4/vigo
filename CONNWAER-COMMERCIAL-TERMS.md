@@ -1,6 +1,6 @@
 # Vigo Connwaer Commercial Terms
 
-Effective 2026-03-22. Alexander4, LLC reserves the right to update these
+Effective 2026-03-22. Last updated 2026-05-20. Alexander4, LLC reserves the right to update these
 terms. Changes apply to new license terms and renewals only. Existing
 agreements, including multi-year commitments, are governed by the terms
 in effect at the time of signing for the duration of that agreement.
@@ -327,13 +327,15 @@ For guaranteed delivery of a specific capability or integration, custom
 development is available as a separate engagement, scoped and quoted
 individually. Contact us for details.
 
-## Prohibited Use
+## Use Prohibitions
 
 This software may not be used by, for, or on behalf of:
 
-- Any military organization, department of defense, armed forces, defense
-  contractor, intelligence agency, or entity primarily engaged in military
-  or weapons-related activities.
+- Any military organization, department of defense, armed forces,
+  defense contractor, intelligence agency, or any entity primarily
+  engaged in military or weapons-related activities. This includes but
+  is not limited to the United States Department of Defense, its
+  branches, agencies, and contractors operating under defense contracts.
 - Any manufacturer, distributor, or retailer of firearms, ammunition,
   weapons, or weapons components.
 - Any manufacturer, distributor, or retailer of pesticides, herbicides,
