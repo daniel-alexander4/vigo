@@ -175,7 +175,7 @@ type workflowResponse struct {
 		ID         string `json:"id"`
 		StepIndex  int64  `json:"stepIndex"`
 		StepName   string `json:"stepName"`
-		PushRunID  string `json:"pushRunId"`
+		TaskRunID  string `json:"taskRunId"`
 		Status     string `json:"status"`
 		StartedAt  string `json:"startedAt"`
 		FinishedAt string `json:"finishedAt"`
@@ -217,8 +217,8 @@ func printWorkflowResults(resp *workflowResponse) {
 	fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", header("STEP"), header("NAME"), header("STATUS"), header("TASK RUN"))
 	for _, s := range resp.Steps {
 		taskID := dim("-")
-		if s.PushRunID != "" {
-			taskID = s.PushRunID
+		if s.TaskRunID != "" {
+			taskID = s.TaskRunID
 		}
 		fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", s.StepIndex, s.StepName, colorStatus(s.Status), taskID)
 	}

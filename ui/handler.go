@@ -6358,7 +6358,7 @@ type WorkflowsPageData struct {
 type WorkflowStepRow struct {
 	StepIndex  int64
 	StepName   string
-	PushRunID  string
+	TaskRunID  string
 	Status     string
 	StartedAt  time.Time
 	FinishedAt time.Time
@@ -6423,8 +6423,8 @@ func (h *Handler) Operations(w http.ResponseWriter, r *http.Request) {
 	var workflowRows []WorkflowRow
 
 	if tab == "tasks" {
-		pushRuns, _ := h.queries.ListPushRuns(ctx, 100)
-		for _, t := range pushRuns {
+		taskRuns, _ := h.queries.ListTaskRuns(ctx, 100)
+		for _, t := range taskRuns {
 			if statusFilter != "" && t.Status != statusFilter {
 				continue
 			}
@@ -6458,13 +6458,13 @@ func (h *Handler) TaskList(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	ctx := r.Context()
 
-	pushRuns, err := h.queries.ListPushRuns(ctx, 100)
+	taskRuns, err := h.queries.ListTaskRuns(ctx, 100)
 	if err != nil {
 		slog.Error("failed to list task runs", "error", err)
 	}
 
 	var rows []TaskRow
-	for _, t := range pushRuns {
+	for _, t := range taskRuns {
 		if statusFilter != "" && t.Status != statusFilter {
 			continue
 		}
@@ -6486,13 +6486,13 @@ func (h *Handler) TaskDetail(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	ctx := r.Context()
 
-	pushRun, err := h.queries.GetPushRun(ctx, id)
+	taskRun, err := h.queries.GetTaskRun(ctx, id)
 	if err != nil {
 		http.Error(w, "task run not found", http.StatusNotFound)
 		return
 	}
 
-	targets, err := h.queries.ListPushRunTargets(ctx, id)
+	targets, err := h.queries.ListTaskRunTargets(ctx, id)
 	if err != nil {
 		slog.Error("failed to list task run targets", "error", err)
 	}
@@ -6525,9 +6525,9 @@ func (h *Handler) TaskDetail(w http.ResponseWriter, r *http.Request) {
 
 	data := TaskDetailPageData{
 		PageData:  PageData{Title: "Task Detail", ActiveNav: "task"},
-		Task:      taskRowFromDB(pushRun),
+		Task:      taskRowFromDB(taskRun),
 		Targets:   tgtRows,
-		IsRunning: pushRun.Status == "running" || pushRun.Status == "pending",
+		IsRunning: taskRun.Status == "running" || taskRun.Status == "pending",
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "task-detail", data)
@@ -6585,8 +6585,8 @@ func (h *Handler) WorkflowDetail(w http.ResponseWriter, r *http.Request) {
 			StepName:  s.StepName,
 			Status:    s.Status,
 		}
-		if s.PushRunID.Valid {
-			row.PushRunID = s.PushRunID.String
+		if s.TaskRunID.Valid {
+			row.TaskRunID = s.TaskRunID.String
 		}
 		if s.StartedAt.Valid {
 			row.StartedAt = s.StartedAt.Time
@@ -6668,9 +6668,9 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Task runs.
-	pushRuns, err := h.queries.ListPushRuns(ctx, 100)
+	taskRuns, err := h.queries.ListTaskRuns(ctx, 100)
 	if err == nil {
-		for _, pr := range pushRuns {
+		for _, pr := range taskRuns {
 			allEvents = append(allEvents, AuditEventRow{
 				Timestamp: pr.CreatedAt.Local().Format("2006-01-02 15:04:05"),
 				Type:      "task_run",
@@ -6793,8 +6793,8 @@ func (h *Handler) AuditVerify(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, b.String())
 }
 
-// taskRowFromDB converts a DB PushRun to a TaskRow.
-func taskRowFromDB(t db.PushRun) TaskRow {
+// taskRowFromDB converts a DB TaskRun to a TaskRow.
+func taskRowFromDB(t db.TaskRun) TaskRow {
 	row := TaskRow{
 		ID:           t.ID,
 		Command:      t.Command,

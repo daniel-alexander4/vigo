@@ -34,8 +34,8 @@ func TestRetentionPruner_PrunesOldRows(t *testing.T) {
 	sqlDB.Exec(`INSERT INTO runs (envoy_id, started_at, status) VALUES ('t1', ?, 'running')`, old)
 
 	// Old and recent task runs (migration CHECK allows: pending, running, complete, failed, cancelled).
-	sqlDB.Exec(`INSERT INTO push_runs (command, target_glob, status, total_targets, created_at) VALUES ('longdrawer', '*', 'complete', 1, ?)`, old)
-	sqlDB.Exec(`INSERT INTO push_runs (command, target_glob, status, total_targets, created_at) VALUES ('longdrawer', '*', 'complete', 1, ?)`, recent)
+	sqlDB.Exec(`INSERT INTO task_runs (command, target_glob, status, total_targets, created_at) VALUES ('longdrawer', '*', 'complete', 1, ?)`, old)
+	sqlDB.Exec(`INSERT INTO task_runs (command, target_glob, status, total_targets, created_at) VALUES ('longdrawer', '*', 'complete', 1, ?)`, recent)
 
 	// Old and recent workflow runs (migration CHECK allows: pending, running, complete, failed, aborted).
 	sqlDB.Exec(`INSERT INTO workflow_runs (workflow_name, status, total_steps, created_at) VALUES ('w1', 'complete', 1, ?)`, old)
@@ -61,10 +61,10 @@ func TestRetentionPruner_PrunesOldRows(t *testing.T) {
 		t.Errorf("runs count = %d, want 2 (recent + running)", runCount)
 	}
 
-	var pushRunCount int
-	sqlDB.QueryRow("SELECT COUNT(*) FROM push_runs").Scan(&pushRunCount)
-	if pushRunCount != 1 {
-		t.Errorf("push_runs count = %d, want 1", pushRunCount)
+	var taskRunCount int
+	sqlDB.QueryRow("SELECT COUNT(*) FROM task_runs").Scan(&taskRunCount)
+	if taskRunCount != 1 {
+		t.Errorf("task_runs count = %d, want 1", taskRunCount)
 	}
 
 	var workflowRunCount int

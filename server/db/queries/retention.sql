@@ -3,8 +3,8 @@ DELETE FROM runs
 WHERE started_at < ?
   AND status NOT IN ('running', 'pending');
 
--- name: PrunePushRunsByAge :execrows
-DELETE FROM push_runs
+-- name: PruneTaskRunsByAge :execrows
+DELETE FROM task_runs
 WHERE created_at < ?
   AND status NOT IN ('running', 'pending');
 

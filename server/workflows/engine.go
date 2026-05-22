@@ -52,15 +52,15 @@ type WorkflowDef struct {
 	Steps       []StepDef   `yaml:"steps"`
 }
 
-// PushRunner dispatches push commands and returns results.
-type PushRunner interface {
+// TaskRunner dispatches push commands and returns results.
+type TaskRunner interface {
 	DispatchPush(ctx context.Context, params isgrpc.DispatchParams) (*isgrpc.DispatchResult, error)
 }
 
 // Engine executes workflows.
 type Engine struct {
 	queries    *db.Queries
-	runner     PushRunner
+	runner     TaskRunner
 	metrics    *metrics.Metrics
 	workflows  map[string]*WorkflowDef
 	mu         sync.RWMutex
@@ -69,7 +69,7 @@ type Engine struct {
 
 // NewEngine creates a workflow engine. m owns the workflow-run counters
 // and may be nil in tests that don't observe those metrics.
-func NewEngine(queries *db.Queries, runner PushRunner, m *metrics.Metrics) *Engine {
+func NewEngine(queries *db.Queries, runner TaskRunner, m *metrics.Metrics) *Engine {
 	return &Engine{
 		queries:   queries,
 		runner:    runner,
@@ -311,7 +311,7 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 		persistErr(runID, e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
 			ID:        stepResult.ID,
 			Status:    "running",
-			PushRunID: sql.NullString{String: result.ID, Valid: result.ID != ""},
+			TaskRunID: sql.NullString{String: result.ID, Valid: result.ID != ""},
 			StartedAt: stepNow,
 		}))
 
@@ -322,7 +322,7 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 		persistErr(runID, e.queries.UpdateWorkflowStepResult(ctx, db.UpdateWorkflowStepResultParams{
 			ID:         stepResult.ID,
 			Status:     stepStatus,
-			PushRunID:  sql.NullString{String: result.ID, Valid: result.ID != ""},
+			TaskRunID:  sql.NullString{String: result.ID, Valid: result.ID != ""},
 			StartedAt:  stepNow,
 			FinishedAt: stepFinished,
 		}))
@@ -363,8 +363,8 @@ func (e *Engine) executeWorkflow(runID string, def *WorkflowDef) {
 	slog.Info("workflow: completed", "workflow_run_id", runID)
 }
 
-// pollPushCompletion polls a push run until it finishes or the workflow is aborted.
-func (e *Engine) pollPushCompletion(ctx context.Context, workflowRunID, pushRunID string) string {
+// pollPushCompletion polls a task run until it finishes or the workflow is aborted.
+func (e *Engine) pollPushCompletion(ctx context.Context, workflowRunID, taskRunID string) string {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
@@ -377,13 +377,13 @@ func (e *Engine) pollPushCompletion(ctx context.Context, workflowRunID, pushRunI
 				return "aborted"
 			}
 
-			pushRun, err := e.queries.GetPushRun(ctx, pushRunID)
+			taskRun, err := e.queries.GetTaskRun(ctx, taskRunID)
 			if err != nil {
-				slog.Error("workflow: failed to poll push run", "push_run_id", pushRunID, "error", err)
+				slog.Error("workflow: failed to poll task run", "task_run_id", taskRunID, "error", err)
 				continue
 			}
 
-			switch pushRun.Status {
+			switch taskRun.Status {
 			case "complete":
 				return "complete"
 			case "failed":
@@ -391,7 +391,7 @@ func (e *Engine) pollPushCompletion(ctx context.Context, workflowRunID, pushRunI
 			case "running", "pending":
 				continue
 			default:
-				return pushRun.Status
+				return taskRun.Status
 			}
 		}
 	}

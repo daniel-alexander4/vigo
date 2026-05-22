@@ -189,7 +189,7 @@ func (s *AgentService) runRollingExecution(
 
 			if !s.streamMgr.dispatchPush(tr.info.EnvoyID, msg) {
 				// Stream closed between target creation and dispatch.
-				if err := s.queries.UpdatePushRunTarget(ctx, db.UpdatePushRunTargetParams{
+				if err := s.queries.UpdateTaskRunTarget(ctx, db.UpdateTaskRunTargetParams{
 					ID:         tr.targetID,
 					Status:     "offline",
 					FinishedAt: now,
@@ -259,7 +259,7 @@ func (s *AgentService) runRollingExecution(
 
 // countFailedTargets returns the number of failed/timeout/rejected targets.
 func (s *AgentService) countFailedTargets(ctx context.Context, taskRunID string) int {
-	counts, err := s.queries.CountPushRunTargetsByStatus(ctx, taskRunID)
+	counts, err := s.queries.CountTaskRunTargetsByStatus(ctx, taskRunID)
 	if err != nil {
 		return 0
 	}
@@ -278,7 +278,7 @@ func (s *AgentService) skipRemainingBatches(ctx context.Context, taskRunID strin
 	now := sql.NullTime{Time: time.Now(), Valid: true}
 	for _, batch := range batches {
 		for _, tr := range batch {
-			if err := s.queries.UpdatePushRunTarget(ctx, db.UpdatePushRunTargetParams{
+			if err := s.queries.UpdateTaskRunTarget(ctx, db.UpdateTaskRunTargetParams{
 				ID:         tr.targetID,
 				Status:     "skipped",
 				ErrorMsg:   sql.NullString{String: "skipped: rolling execution aborted", Valid: true},

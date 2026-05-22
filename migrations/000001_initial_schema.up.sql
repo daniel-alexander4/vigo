@@ -203,7 +203,7 @@ CREATE TABLE IF NOT EXISTS env_promotions (
 -- Orchestration tables (push runs, workflows)
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS push_runs (
+CREATE TABLE IF NOT EXISTS task_runs (
     id            TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
     command       TEXT NOT NULL,
     target_glob   TEXT NOT NULL,
@@ -218,12 +218,12 @@ CREATE TABLE IF NOT EXISTS push_runs (
     max_failures  TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_push_runs_status ON push_runs (status);
-CREATE INDEX IF NOT EXISTS idx_push_runs_created_at ON push_runs (created_at);
+CREATE INDEX IF NOT EXISTS idx_task_runs_status ON task_runs (status);
+CREATE INDEX IF NOT EXISTS idx_task_runs_created_at ON task_runs (created_at);
 
-CREATE TABLE IF NOT EXISTS push_run_targets (
+CREATE TABLE IF NOT EXISTS task_run_targets (
     id           TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
-    push_run_id  TEXT NOT NULL REFERENCES push_runs (id) ON DELETE CASCADE,
+    task_run_id  TEXT NOT NULL REFERENCES task_runs (id) ON DELETE CASCADE,
     envoy_id    TEXT NOT NULL REFERENCES envoys (id) ON DELETE CASCADE,
     hostname     TEXT NOT NULL,
     status       TEXT NOT NULL CHECK (status IN ('pending', 'dispatched', 'complete', 'failed', 'timeout', 'offline', 'rejected', 'skipped')) DEFAULT 'pending',
@@ -236,8 +236,8 @@ CREATE TABLE IF NOT EXISTS push_run_targets (
     finished_at  DATETIME
 );
 
-CREATE INDEX IF NOT EXISTS idx_push_run_targets_push_run_id ON push_run_targets (push_run_id);
-CREATE INDEX IF NOT EXISTS idx_push_run_targets_envoy_id ON push_run_targets (envoy_id);
+CREATE INDEX IF NOT EXISTS idx_task_run_targets_task_run_id ON task_run_targets (task_run_id);
+CREATE INDEX IF NOT EXISTS idx_task_run_targets_envoy_id ON task_run_targets (envoy_id);
 
 CREATE TABLE IF NOT EXISTS workflow_runs (
     id              TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
@@ -259,7 +259,7 @@ CREATE TABLE IF NOT EXISTS workflow_step_results (
     workflow_run_id TEXT NOT NULL REFERENCES workflow_runs (id) ON DELETE CASCADE,
     step_index      INTEGER NOT NULL,
     step_name       TEXT NOT NULL,
-    push_run_id     TEXT REFERENCES push_runs (id),
+    task_run_id     TEXT REFERENCES task_runs (id),
     status          TEXT NOT NULL CHECK (status IN ('pending', 'running', 'complete', 'failed', 'skipped')) DEFAULT 'pending',
     started_at      DATETIME,
     finished_at     DATETIME

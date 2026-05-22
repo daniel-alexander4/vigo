@@ -89,21 +89,21 @@ func TestAudit_ListEventsWithTypeFilter(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Second)
 	insertAuditEntry(t, sqlDB, "", "config.reload", "alice", "config reloaded", now)
 
-	// Insert a push run.
+	// Insert a task run.
 	_, err := sqlDB.Exec(
-		`INSERT INTO push_runs (id, command, target_glob, operator, status) VALUES (?, ?, ?, ?, ?)`,
+		`INSERT INTO task_runs (id, command, target_glob, operator, status) VALUES (?, ?, ?, ?, ?)`,
 		"pr-001", "uptime", "*.web.*", "bob", "complete",
 	)
 	if err != nil {
-		t.Fatalf("insert push run: %v", err)
+		t.Fatalf("insert task run: %v", err)
 	}
 
 	handler := NewAuditHandler(queries)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	// Filter by push_run type only.
-	req := httptest.NewRequest("GET", "/api/v1/audit?type=push_run", nil)
+	// Filter by task_run type only.
+	req := httptest.NewRequest("GET", "/api/v1/audit?type=task_run", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, adminReq(req))
 
@@ -117,10 +117,10 @@ func TestAudit_ListEventsWithTypeFilter(t *testing.T) {
 	json.NewDecoder(rec.Body).Decode(&resp)
 
 	if len(resp.Events) != 1 {
-		t.Fatalf("expected 1 push_run event, got %d", len(resp.Events))
+		t.Fatalf("expected 1 task_run event, got %d", len(resp.Events))
 	}
-	if resp.Events[0].Type != "push_run" {
-		t.Errorf("expected push_run type, got %s", resp.Events[0].Type)
+	if resp.Events[0].Type != "task_run" {
+		t.Errorf("expected task_run type, got %s", resp.Events[0].Type)
 	}
 }
 

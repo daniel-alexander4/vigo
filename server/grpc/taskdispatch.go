@@ -25,7 +25,7 @@ type taskRouter struct {
 	queries *db.Queries
 	metrics *metrics.Metrics // per-instance prometheus collectors
 
-	// taskRunID → envoyID → push_run_target.ID
+	// taskRunID → envoyID → task_run_target.ID
 	pending map[string]map[string]string
 
 	// taskRunID → envoyID → done channel (closed on completion)
@@ -41,7 +41,7 @@ func newTaskRouter(queries *db.Queries, m *metrics.Metrics) *taskRouter {
 	}
 }
 
-// trackTarget registers a push_run_target so incoming results can be routed.
+// trackTarget registers a task_run_target so incoming results can be routed.
 func (r *taskRouter) trackTarget(taskRunID, envoyID, targetID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -53,7 +53,7 @@ func (r *taskRouter) trackTarget(taskRunID, envoyID, targetID string) {
 	targets[envoyID] = targetID
 }
 
-// lookupTarget returns the push_run_target ID for a given push+envoy.
+// lookupTarget returns the task_run_target ID for a given push+envoy.
 func (r *taskRouter) lookupTarget(taskRunID, envoyID string) (string, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -135,7 +135,7 @@ func (r *taskRouter) handleTaskAck(ctx context.Context, envoyID string, ack *pb.
 	if !ack.Accepted {
 		// Agent rejected the task.
 		now := sql.NullTime{Time: time.Now(), Valid: true}
-		if err := r.queries.UpdatePushRunTarget(ctx, db.UpdatePushRunTargetParams{
+		if err := r.queries.UpdateTaskRunTarget(ctx, db.UpdateTaskRunTargetParams{
 			ID:         targetID,
 			Status:     "rejected",
 			ErrorMsg:   sql.NullString{String: ack.RejectReason, Valid: ack.RejectReason != ""},
@@ -152,7 +152,7 @@ func (r *taskRouter) handleTaskAck(ctx context.Context, envoyID string, ack *pb.
 
 	// Agent accepted — update dispatched_at timestamp.
 	now := sql.NullTime{Time: time.Now(), Valid: true}
-	if err := r.queries.UpdatePushRunTarget(ctx, db.UpdatePushRunTargetParams{
+	if err := r.queries.UpdateTaskRunTarget(ctx, db.UpdateTaskRunTargetParams{
 		ID:           targetID,
 		Status:       "dispatched",
 		DispatchedAt: now,
@@ -172,7 +172,7 @@ func (r *taskRouter) handleTaskResult(ctx context.Context, envoyID string, resul
 	}
 
 	now := sql.NullTime{Time: time.Now(), Valid: true}
-	if err := r.queries.UpdatePushRunTarget(ctx, db.UpdatePushRunTargetParams{
+	if err := r.queries.UpdateTaskRunTarget(ctx, db.UpdateTaskRunTargetParams{
 		ID:         targetID,
 		Status:     result.Status,
 		ExitCode:   sql.NullInt64{Int64: int64(result.ExitCode), Valid: true},
@@ -200,9 +200,9 @@ func (r *taskRouter) handleTaskResult(ctx context.Context, envoyID string, resul
 }
 
 // maybeFinishTaskRun checks if all targets for a task run are done and
-// updates the push_run status accordingly.
+// updates the task_run status accordingly.
 func (r *taskRouter) maybeFinishTaskRun(ctx context.Context, taskRunID string) {
-	counts, err := r.queries.CountPushRunTargetsByStatus(ctx, taskRunID)
+	counts, err := r.queries.CountTaskRunTargetsByStatus(ctx, taskRunID)
 	if err != nil {
 		slog.Error("failed to count task run targets", "task_run_id", taskRunID, "error", err)
 		return
@@ -231,7 +231,7 @@ func (r *taskRouter) maybeFinishTaskRun(ctx context.Context, taskRunID string) {
 	}
 
 	now := sql.NullTime{Time: time.Now(), Valid: true}
-	if err := r.queries.UpdatePushRunStatus(ctx, db.UpdatePushRunStatusParams{
+	if err := r.queries.UpdateTaskRunStatus(ctx, db.UpdateTaskRunStatusParams{
 		ID:         taskRunID,
 		Status:     status,
 		FinishedAt: now,
@@ -240,7 +240,7 @@ func (r *taskRouter) maybeFinishTaskRun(ctx context.Context, taskRunID string) {
 		return
 	}
 
-	r.metrics.PushRunsTotal.WithLabelValues(status).Inc()
+	r.metrics.TaskRunsTotal.WithLabelValues(status).Inc()
 
 	slog.Info("task run finished",
 		"task_run_id", taskRunID,
@@ -344,7 +344,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 	}
 
 	// Create the task run record.
-	taskRun, err := s.queries.CreatePushRun(ctx, db.CreatePushRunParams{
+	taskRun, err := s.queries.CreateTaskRun(ctx, db.CreateTaskRunParams{
 		Command:      params.Command,
 		TargetGlob:   params.TargetSpec,
 		Operator:     params.Operator,
@@ -361,8 +361,8 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 
 	// Create offline target records.
 	for _, t := range offlineTargets {
-		if _, err := s.queries.CreatePushRunTarget(ctx, db.CreatePushRunTargetParams{
-			PushRunID: taskRun.ID,
+		if _, err := s.queries.CreateTaskRunTarget(ctx, db.CreateTaskRunTargetParams{
+			TaskRunID: taskRun.ID,
 			EnvoyID:  t.EnvoyID,
 			Hostname:  t.Hostname,
 			Status:    "offline",
@@ -381,8 +381,8 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		for i, batch := range batches {
 			batchRecords[i] = make([]targetRecord, 0, len(batch))
 			for _, t := range batch {
-				target, err := s.queries.CreatePushRunTarget(ctx, db.CreatePushRunTargetParams{
-					PushRunID: taskRun.ID,
+				target, err := s.queries.CreateTaskRunTarget(ctx, db.CreateTaskRunTargetParams{
+					TaskRunID: taskRun.ID,
 					EnvoyID:  t.EnvoyID,
 					Hostname:  t.Hostname,
 					Status:    "pending",
@@ -396,7 +396,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 			}
 		}
 
-		if err := s.queries.UpdatePushRunStatus(ctx, db.UpdatePushRunStatusParams{
+		if err := s.queries.UpdateTaskRunStatus(ctx, db.UpdateTaskRunStatusParams{
 			ID:        taskRun.ID,
 			Status:    "running",
 			StartedAt: now,
@@ -409,8 +409,8 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		// Non-batched: dispatch all targets inline (original behavior).
 		dispatched := 0
 		for _, t := range onlineTargets {
-			target, err := s.queries.CreatePushRunTarget(ctx, db.CreatePushRunTargetParams{
-				PushRunID: taskRun.ID,
+			target, err := s.queries.CreateTaskRunTarget(ctx, db.CreateTaskRunTargetParams{
+				TaskRunID: taskRun.ID,
 				EnvoyID:  t.EnvoyID,
 				Hostname:  t.Hostname,
 				Status:    "pending",
@@ -439,7 +439,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 				dispatched++
 			} else {
 				// Stream closed between check and send — mark offline.
-				if err := s.queries.UpdatePushRunTarget(ctx, db.UpdatePushRunTargetParams{
+				if err := s.queries.UpdateTaskRunTarget(ctx, db.UpdateTaskRunTargetParams{
 					ID:         target.ID,
 					Status:     "offline",
 					FinishedAt: now,
@@ -453,8 +453,8 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 
 		// Queue promotable targets for stream promotion.
 		for _, t := range promotableTargets {
-			target, err := s.queries.CreatePushRunTarget(ctx, db.CreatePushRunTargetParams{
-				PushRunID: taskRun.ID,
+			target, err := s.queries.CreateTaskRunTarget(ctx, db.CreateTaskRunTargetParams{
+				TaskRunID: taskRun.ID,
 				EnvoyID:  t.EnvoyID,
 				Hostname:  t.Hostname,
 				Status:    "pending",
@@ -489,7 +489,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 			}
 
 			s.streamMgr.queueForPromotion(t.EnvoyID, msg, func() {
-				if err := s.queries.UpdatePushRunTarget(context.Background(), db.UpdatePushRunTargetParams{
+				if err := s.queries.UpdateTaskRunTarget(context.Background(), db.UpdateTaskRunTargetParams{
 					ID:         targetID,
 					Status:     "offline",
 					FinishedAt: sql.NullTime{Time: time.Now(), Valid: true},
@@ -503,7 +503,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		}
 
 		// Update task run to running.
-		if err := s.queries.UpdatePushRunStatus(ctx, db.UpdatePushRunStatusParams{
+		if err := s.queries.UpdateTaskRunStatus(ctx, db.UpdateTaskRunStatusParams{
 			ID:        taskRun.ID,
 			Status:    "running",
 			StartedAt: now,

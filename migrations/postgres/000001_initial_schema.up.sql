@@ -188,7 +188,7 @@ CREATE TABLE IF NOT EXISTS workflow_step_results (
     workflow_run_id TEXT NOT NULL REFERENCES workflow_runs (id) ON DELETE CASCADE,
     step_index      INTEGER NOT NULL,
     step_name       TEXT NOT NULL,
-    push_run_id     TEXT REFERENCES push_runs (id),
+    task_run_id     TEXT REFERENCES task_runs (id),
     status          TEXT NOT NULL CHECK (status IN ('pending', 'running', 'complete', 'failed', 'skipped')) DEFAULT 'pending',
     started_at      TIMESTAMP,
     finished_at     TIMESTAMP

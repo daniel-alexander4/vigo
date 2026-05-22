@@ -174,7 +174,7 @@ func TestTaskHandler_List(t *testing.T) {
 	// Insert task runs directly.
 	for i := 0; i < 3; i++ {
 		_, err := sqlDB.Exec(
-			`INSERT INTO push_runs (id, command, target_glob, operator, status, total_targets) VALUES (?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO task_runs (id, command, target_glob, operator, status, total_targets) VALUES (?, ?, ?, ?, ?, ?)`,
 			uuid.New().String(), fmt.Sprintf("cmd-%d", i), "*.web.*", "admin", "complete", 2,
 		)
 		if err != nil {
@@ -232,7 +232,7 @@ func TestTaskHandler_Get(t *testing.T) {
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 
 	_, err := sqlDB.Exec(
-		`INSERT INTO push_runs (id, command, target_glob, operator, status, total_targets, started_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO task_runs (id, command, target_glob, operator, status, total_targets, started_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		taskRunID, "uptime", "*.web.*", "admin", "complete", 2, now,
 	)
 	if err != nil {
@@ -250,7 +250,7 @@ func TestTaskHandler_Get(t *testing.T) {
 
 	targetID := uuid.New().String()
 	_, err = sqlDB.Exec(
-		`INSERT INTO push_run_targets (id, push_run_id, envoy_id, hostname, status, exit_code, stdout, duration_ms, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO task_run_targets (id, task_run_id, envoy_id, hostname, status, exit_code, stdout, duration_ms, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		targetID, taskRunID, envoyID, "web01.prod", "complete", 0, " 10:30:00 up 5 days\n", 42, now,
 	)
 	if err != nil {

@@ -16,8 +16,8 @@ import (
 	"git.alexander4.io/vigo/server/testutil"
 )
 
-// mockPushRunner records DispatchPush calls and returns configurable results.
-type mockPushRunner struct {
+// mockTaskRunner records DispatchPush calls and returns configurable results.
+type mockTaskRunner struct {
 	mu      sync.Mutex
 	calls   []isgrpc.DispatchParams
 	results []mockPushResult
@@ -29,7 +29,7 @@ type mockPushResult struct {
 	err    error
 }
 
-func (m *mockPushRunner) DispatchPush(_ context.Context, params isgrpc.DispatchParams) (*isgrpc.DispatchResult, error) {
+func (m *mockTaskRunner) DispatchPush(_ context.Context, params isgrpc.DispatchParams) (*isgrpc.DispatchResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.calls = append(m.calls, params)
@@ -41,13 +41,13 @@ func (m *mockPushRunner) DispatchPush(_ context.Context, params isgrpc.DispatchP
 	return &isgrpc.DispatchResult{ID: fmt.Sprintf("push-%d", m.idx), Status: "running"}, nil
 }
 
-func (m *mockPushRunner) callCount() int {
+func (m *mockTaskRunner) callCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.calls)
 }
 
-func (m *mockPushRunner) getCall(i int) isgrpc.DispatchParams {
+func (m *mockTaskRunner) getCall(i int) isgrpc.DispatchParams {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.calls[i]
@@ -59,15 +59,15 @@ func openExecTestDB(t *testing.T) *sql.DB {
 	return testutil.OpenMigratedTestDB(t)
 }
 
-// insertPushRunWithStatus inserts a push_run with the given ID and status.
-func insertPushRunWithStatus(t *testing.T, sqlDB *sql.DB, id, status string) {
+// insertTaskRunWithStatus inserts a task_run with the given ID and status.
+func insertTaskRunWithStatus(t *testing.T, sqlDB *sql.DB, id, status string) {
 	t.Helper()
 	_, err := sqlDB.Exec(
-		`INSERT INTO push_runs (id, command, target_glob, operator, status) VALUES (?, 'longdrawer test', '*', 'test', ?)`,
+		`INSERT INTO task_runs (id, command, target_glob, operator, status) VALUES (?, 'longdrawer test', '*', 'test', ?)`,
 		id, status,
 	)
 	if err != nil {
-		t.Fatalf("insert push_run: %v", err)
+		t.Fatalf("insert task_run: %v", err)
 	}
 }
 
@@ -89,7 +89,7 @@ func TestRunWorkflow_CreatesDBRecord(t *testing.T) {
 	sqlDB := openExecTestDB(t)
 	queries := db.New(sqlDB)
 
-	runner := &mockPushRunner{
+	runner := &mockTaskRunner{
 		results: []mockPushResult{
 			{result: &isgrpc.DispatchResult{ID: "push-1", Status: "running"}, err: nil},
 		},
@@ -105,8 +105,8 @@ func TestRunWorkflow_CreatesDBRecord(t *testing.T) {
 	}
 	engine.mu.Unlock()
 
-	// Pre-insert a completed push_run so pollPushCompletion can find it.
-	insertPushRunWithStatus(t, sqlDB, "push-1", "complete")
+	// Pre-insert a completed task_run so pollPushCompletion can find it.
+	insertTaskRunWithStatus(t, sqlDB, "push-1", "complete")
 
 	runID, err := engine.RunWorkflow(context.Background(), "test-wf", "admin")
 	if err != nil {
@@ -141,7 +141,7 @@ func TestExecuteWorkflow_CompletesAllSteps(t *testing.T) {
 	sqlDB := openExecTestDB(t)
 	queries := db.New(sqlDB)
 
-	runner := &mockPushRunner{
+	runner := &mockTaskRunner{
 		results: []mockPushResult{
 			{result: &isgrpc.DispatchResult{ID: "push-1", Status: "running"}, err: nil},
 			{result: &isgrpc.DispatchResult{ID: "push-2", Status: "running"}, err: nil},
@@ -163,10 +163,10 @@ func TestExecuteWorkflow_CompletesAllSteps(t *testing.T) {
 	engine.workflows["deploy"] = def
 	engine.mu.Unlock()
 
-	// Pre-insert push_runs as complete so pollPushCompletion returns immediately.
-	insertPushRunWithStatus(t, sqlDB, "push-1", "complete")
-	insertPushRunWithStatus(t, sqlDB, "push-2", "complete")
-	insertPushRunWithStatus(t, sqlDB, "push-3", "complete")
+	// Pre-insert task_runs as complete so pollPushCompletion returns immediately.
+	insertTaskRunWithStatus(t, sqlDB, "push-1", "complete")
+	insertTaskRunWithStatus(t, sqlDB, "push-2", "complete")
+	insertTaskRunWithStatus(t, sqlDB, "push-3", "complete")
 
 	// Create the workflow run record.
 	run, err := queries.CreateWorkflowRun(context.Background(), db.CreateWorkflowRunParams{
@@ -230,7 +230,7 @@ func TestExecuteWorkflow_StepFailure_OnFailureBranch(t *testing.T) {
 	sqlDB := openExecTestDB(t)
 	queries := db.New(sqlDB)
 
-	runner := &mockPushRunner{
+	runner := &mockTaskRunner{
 		results: []mockPushResult{
 			// First step dispatch fails.
 			{result: nil, err: fmt.Errorf("dispatch error: host unreachable")},
@@ -253,8 +253,8 @@ func TestExecuteWorkflow_StepFailure_OnFailureBranch(t *testing.T) {
 	engine.workflows["deploy"] = def
 	engine.mu.Unlock()
 
-	// Pre-insert push_run for rollback step.
-	insertPushRunWithStatus(t, sqlDB, "push-rollback", "complete")
+	// Pre-insert task_run for rollback step.
+	insertTaskRunWithStatus(t, sqlDB, "push-rollback", "complete")
 
 	run, err := queries.CreateWorkflowRun(context.Background(), db.CreateWorkflowRunParams{
 		WorkflowName: "deploy",
@@ -299,7 +299,7 @@ func TestExecuteWorkflow_StepFailure_NoOnFailure_WorkflowFails(t *testing.T) {
 	sqlDB := openExecTestDB(t)
 	queries := db.New(sqlDB)
 
-	runner := &mockPushRunner{
+	runner := &mockTaskRunner{
 		results: []mockPushResult{
 			{result: nil, err: fmt.Errorf("dispatch failed")},
 		},
@@ -344,7 +344,7 @@ func TestExecuteWorkflow_RespectsAbortFlag(t *testing.T) {
 	sqlDB := openExecTestDB(t)
 	queries := db.New(sqlDB)
 
-	runner := &mockPushRunner{}
+	runner := &mockTaskRunner{}
 	engine := NewEngine(queries, runner, nil)
 
 	def := &WorkflowDef{
@@ -458,7 +458,7 @@ func TestExecuteWorkflow_OnSuccessBranching(t *testing.T) {
 	sqlDB := openExecTestDB(t)
 	queries := db.New(sqlDB)
 
-	runner := &mockPushRunner{
+	runner := &mockTaskRunner{
 		results: []mockPushResult{
 			// "check" step succeeds → on_success branches to "notify" (skips "deploy").
 			{result: &isgrpc.DispatchResult{ID: "push-check", Status: "running"}, err: nil},
@@ -481,9 +481,9 @@ func TestExecuteWorkflow_OnSuccessBranching(t *testing.T) {
 	engine.workflows["branch"] = def
 	engine.mu.Unlock()
 
-	// Pre-insert push_runs.
-	insertPushRunWithStatus(t, sqlDB, "push-check", "complete")
-	insertPushRunWithStatus(t, sqlDB, "push-notify", "complete")
+	// Pre-insert task_runs.
+	insertTaskRunWithStatus(t, sqlDB, "push-check", "complete")
+	insertTaskRunWithStatus(t, sqlDB, "push-notify", "complete")
 
 	run, err := queries.CreateWorkflowRun(context.Background(), db.CreateWorkflowRunParams{
 		WorkflowName: "branch",
@@ -524,7 +524,7 @@ func TestExecuteWorkflow_PollPushCompletion_Failed(t *testing.T) {
 	sqlDB := openExecTestDB(t)
 	queries := db.New(sqlDB)
 
-	runner := &mockPushRunner{
+	runner := &mockTaskRunner{
 		results: []mockPushResult{
 			{result: &isgrpc.DispatchResult{ID: "push-fail", Status: "running"}, err: nil},
 		},
@@ -542,8 +542,8 @@ func TestExecuteWorkflow_PollPushCompletion_Failed(t *testing.T) {
 	engine.workflows["failing"] = def
 	engine.mu.Unlock()
 
-	// Pre-insert push_run as failed so pollPushCompletion returns "failed".
-	insertPushRunWithStatus(t, sqlDB, "push-fail", "failed")
+	// Pre-insert task_run as failed so pollPushCompletion returns "failed".
+	insertTaskRunWithStatus(t, sqlDB, "push-fail", "failed")
 
 	run, err := queries.CreateWorkflowRun(context.Background(), db.CreateWorkflowRunParams{
 		WorkflowName: "failing",
@@ -569,9 +569,9 @@ func TestExecuteWorkflow_PollFailure_OnFailureBranch(t *testing.T) {
 	sqlDB := openExecTestDB(t)
 	queries := db.New(sqlDB)
 
-	runner := &mockPushRunner{
+	runner := &mockTaskRunner{
 		results: []mockPushResult{
-			// First step dispatches successfully but push run will be found as "failed".
+			// First step dispatches successfully but task run will be found as "failed".
 			{result: &isgrpc.DispatchResult{ID: "push-1", Status: "running"}, err: nil},
 			// On-failure branch (cleanup) dispatches successfully.
 			{result: &isgrpc.DispatchResult{ID: "push-cleanup", Status: "running"}, err: nil},
@@ -592,8 +592,8 @@ func TestExecuteWorkflow_PollFailure_OnFailureBranch(t *testing.T) {
 	engine.mu.Unlock()
 
 	// Push 1 failed, push cleanup succeeded.
-	insertPushRunWithStatus(t, sqlDB, "push-1", "failed")
-	insertPushRunWithStatus(t, sqlDB, "push-cleanup", "complete")
+	insertTaskRunWithStatus(t, sqlDB, "push-1", "failed")
+	insertTaskRunWithStatus(t, sqlDB, "push-cleanup", "complete")
 
 	run, err := queries.CreateWorkflowRun(context.Background(), db.CreateWorkflowRunParams{
 		WorkflowName: "deploy-with-cleanup",
@@ -625,7 +625,7 @@ func TestExecuteWorkflow_TaskParams(t *testing.T) {
 	sqlDB := openExecTestDB(t)
 	queries := db.New(sqlDB)
 
-	runner := &mockPushRunner{
+	runner := &mockTaskRunner{
 		results: []mockPushResult{
 			{result: &isgrpc.DispatchResult{ID: "push-task", Status: "running"}, err: nil},
 		},
@@ -649,7 +649,7 @@ func TestExecuteWorkflow_TaskParams(t *testing.T) {
 	engine.workflows["task-wf"] = def
 	engine.mu.Unlock()
 
-	insertPushRunWithStatus(t, sqlDB, "push-task", "complete")
+	insertTaskRunWithStatus(t, sqlDB, "push-task", "complete")
 
 	run, err := queries.CreateWorkflowRun(context.Background(), db.CreateWorkflowRunParams{
 		WorkflowName: "task-wf",
@@ -691,7 +691,7 @@ func TestExecuteWorkflow_RollingParams(t *testing.T) {
 	sqlDB := openExecTestDB(t)
 	queries := db.New(sqlDB)
 
-	runner := &mockPushRunner{
+	runner := &mockTaskRunner{
 		results: []mockPushResult{
 			{result: &isgrpc.DispatchResult{ID: "push-rolling", Status: "running"}, err: nil},
 		},
@@ -716,7 +716,7 @@ func TestExecuteWorkflow_RollingParams(t *testing.T) {
 	engine.workflows["rolling-wf"] = def
 	engine.mu.Unlock()
 
-	insertPushRunWithStatus(t, sqlDB, "push-rolling", "complete")
+	insertTaskRunWithStatus(t, sqlDB, "push-rolling", "complete")
 
 	run, err := queries.CreateWorkflowRun(context.Background(), db.CreateWorkflowRunParams{
 		WorkflowName: "rolling-wf",

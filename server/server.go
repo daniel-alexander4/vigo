@@ -143,7 +143,7 @@ type Server struct {
 
 	// --- Run + integrations + task store ---
 	// (Workflow engine stays in run() for now — workflows.NewEngine
-	// requires the agentSvc PushRunner which is constructed in chunk 4.)
+	// requires the agentSvc TaskRunner which is constructed in chunk 4.)
 	runStore     db.RunStore
 	runBatcher   *fleet.RunBatcher
 	integrations *integrations.Dispatcher
@@ -738,7 +738,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 
 	// --- Workflow engine: construction is deferred to run() / chunk 4
-	// because workflows.NewEngine takes the agentSvc PushRunner as a
+	// because workflows.NewEngine takes the agentSvc TaskRunner as a
 	// mandatory argument and agentSvc is produced by isgrpc.NewServer
 	// (chunk 4 territory). Load + RecoverInterrupted stay paired with
 	// construction there. ---

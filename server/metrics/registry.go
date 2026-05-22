@@ -41,7 +41,7 @@ type Metrics struct {
 
 	// --- Orchestration ---
 
-	PushRunsTotal     *prometheus.CounterVec
+	TaskRunsTotal     *prometheus.CounterVec
 	WorkflowRunsTotal *prometheus.CounterVec
 
 	// --- Webhooks ---
@@ -230,9 +230,9 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 
 		// --- Orchestration ---
 
-		PushRunsTotal: f.NewCounterVec(prometheus.CounterOpts{
-			Name: "vigo_push_runs_total",
-			Help: "Total push runs by final status.",
+		TaskRunsTotal: f.NewCounterVec(prometheus.CounterOpts{
+			Name: "vigo_task_runs_total",
+			Help: "Total task runs by final status.",
 		}, []string{"status"}),
 		WorkflowRunsTotal: f.NewCounterVec(prometheus.CounterOpts{
 			Name: "vigo_workflow_runs_total",

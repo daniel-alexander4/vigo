@@ -165,7 +165,7 @@ on large databases. The server remains available during VACUUM.`,
 var dbPruneCmd = &cobra.Command{
 	Use:   "prune",
 	Short: "Delete runs/tasks/workflows/history older than --older-than (one-shot)",
-	Long: `Run a one-shot retention prune. Deletes from runs, push_runs,
+	Long: `Run a one-shot retention prune. Deletes from runs, task_runs,
 workflow_runs, file_snapshots, convergence_history, and compliance_history
 where the row is older than the given age. Same query path as the daily
 background pruner.
@@ -199,7 +199,7 @@ Examples:
 		fmt.Printf("Pruned rows older than %v (elapsed %vms):\n", result["older_than"], result["elapsed_ms"])
 		if deleted, ok := result["deleted"].(map[string]any); ok {
 			// Stable ordering: largest tables first, then alpha for the rest.
-			ordered := []string{"runs", "push_runs", "workflow_runs", "file_snapshots", "convergence_history", "compliance_history"}
+			ordered := []string{"runs", "task_runs", "workflow_runs", "file_snapshots", "convergence_history", "compliance_history"}
 			for _, name := range ordered {
 				if v, ok := deleted[name]; ok {
 					note := ""

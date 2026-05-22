@@ -144,7 +144,7 @@ func (h *TaskHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	taskRuns, err := h.queries.ListPushRuns(r.Context(), limit)
+	taskRuns, err := h.queries.ListTaskRuns(r.Context(), limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -203,7 +203,7 @@ func (h *TaskHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	ctx := r.Context()
 
-	taskRun, err := h.queries.GetPushRun(ctx, id)
+	taskRun, err := h.queries.GetTaskRun(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "task run not found")
@@ -213,7 +213,7 @@ func (h *TaskHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	targets, err := h.queries.ListPushRunTargets(ctx, id)
+	targets, err := h.queries.ListTaskRunTargets(ctx, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -288,11 +288,11 @@ func (h *TaskHandler) HandleCancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	if err := h.queries.CancelPushRun(ctx, id); err != nil {
+	if err := h.queries.CancelTaskRun(ctx, id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to cancel task: "+err.Error())
 		return
 	}
-	_ = h.queries.CancelPushRunTargets(ctx, id)
+	_ = h.queries.CancelTaskRunTargets(ctx, id)
 
 	writeJSON(w, http.StatusOK, map[string]any{"status": "cancelled", "id": id})
 }
@@ -302,17 +302,17 @@ func (h *TaskHandler) HandleCancelRunning(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 
 	// Get IDs of running tasks so we can cancel their targets too.
-	ids, err := h.queries.ListRunningPushRunIDs(ctx)
+	ids, err := h.queries.ListRunningTaskRunIDs(ctx)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list running tasks: "+err.Error())
 		return
 	}
 
 	for _, id := range ids {
-		_ = h.queries.CancelPushRunTargets(ctx, id)
+		_ = h.queries.CancelTaskRunTargets(ctx, id)
 	}
 
-	if err := h.queries.CancelAllRunningPushRuns(ctx); err != nil {
+	if err := h.queries.CancelAllRunningTaskRuns(ctx); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to cancel running tasks: "+err.Error())
 		return
 	}

@@ -41,7 +41,7 @@ func (r *Reaper) Start(ctx context.Context) {
 }
 
 func (r *Reaper) reap(ctx context.Context) {
-	ids, err := r.queries.TimeoutExpiredPushRuns(ctx)
+	ids, err := r.queries.TimeoutExpiredTaskRuns(ctx)
 	if err != nil {
 		slog.Error("task reaper: listing expired runs", "error", err)
 		return
@@ -51,8 +51,8 @@ func (r *Reaper) reap(ctx context.Context) {
 	}
 
 	for _, id := range ids {
-		_ = r.queries.TimeoutPushRunTargets(ctx, id)
-		_ = r.queries.TimeoutPushRun(ctx, id)
+		_ = r.queries.TimeoutTaskRunTargets(ctx, id)
+		_ = r.queries.TimeoutTaskRun(ctx, id)
 	}
 	slog.Info("task reaper: timed out expired runs", "count", len(ids))
 }

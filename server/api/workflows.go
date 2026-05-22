@@ -134,7 +134,7 @@ type stepDetail struct {
 	ID        string `json:"id"`
 	StepIndex int64  `json:"stepIndex"`
 	StepName  string `json:"stepName"`
-	PushRunID string `json:"pushRunId,omitempty"`
+	TaskRunID string `json:"taskRunId,omitempty"`
 	Status    string `json:"status"`
 	StartedAt string `json:"startedAt,omitempty"`
 	FinishedAt string `json:"finishedAt,omitempty"`
@@ -188,8 +188,8 @@ func (h *WorkflowHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 			StepName:  s.StepName,
 			Status:    s.Status,
 		}
-		if s.PushRunID.Valid {
-			sd.PushRunID = s.PushRunID.String
+		if s.TaskRunID.Valid {
+			sd.TaskRunID = s.TaskRunID.String
 		}
 		if s.StartedAt.Valid {
 			sd.StartedAt = s.StartedAt.Time.Format(time.RFC3339)

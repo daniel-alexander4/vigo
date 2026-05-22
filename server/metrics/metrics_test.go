@@ -23,7 +23,7 @@ func TestAllMetricsRegistered(t *testing.T) {
 	m.SigVerifyFailed.WithLabelValues("test").Add(0)
 	m.GRPCRequestsTotal.WithLabelValues("test", "test").Add(0)
 	m.GRPCRequestDuration.WithLabelValues("test").Observe(0)
-	m.PushRunsTotal.WithLabelValues("test").Add(0)
+	m.TaskRunsTotal.WithLabelValues("test").Add(0)
 	m.WorkflowRunsTotal.WithLabelValues("test").Add(0)
 	m.WebhookDeliveriesTotal.WithLabelValues("test").Add(0)
 	m.WebhookDuration.Observe(0)
@@ -62,7 +62,7 @@ func TestAllMetricsRegistered(t *testing.T) {
 		// New metrics.
 		"vigo_grpc_requests_total",
 		"vigo_grpc_request_duration_seconds",
-		"vigo_push_runs_total",
+		"vigo_task_runs_total",
 		"vigo_workflow_runs_total",
 		"vigo_webhook_deliveries_total",
 		"vigo_webhook_duration_seconds",
@@ -97,7 +97,7 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	m.DriftDetected.WithLabelValues("testnode", "testmodule").Inc()
 	m.ModuleActions.WithLabelValues("file", "create").Inc()
 	m.GRPCRequestsTotal.WithLabelValues("/vigo.VigoAgent/CheckIn", "OK").Inc()
-	m.PushRunsTotal.WithLabelValues("complete").Inc()
+	m.TaskRunsTotal.WithLabelValues("complete").Inc()
 	m.WorkflowRunsTotal.WithLabelValues("complete").Inc()
 	m.WebhookDeliveriesTotal.WithLabelValues("success").Inc()
 	m.SMTPSendsTotal.WithLabelValues("run.failure", "success").Inc()

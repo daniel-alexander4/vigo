@@ -12,7 +12,7 @@ import (
 )
 
 // RetentionPruner periodically deletes old rows from history tables
-// (runs, push_runs, workflow_runs, compliance_history, file_snapshots)
+// (runs, task_runs, workflow_runs, compliance_history, file_snapshots)
 // and runs VACUUM to reclaim disk space.
 type RetentionPruner struct {
 	queries    *Queries
@@ -85,7 +85,7 @@ func (p *RetentionPruner) Prune(ctx context.Context) PruneResult {
 		prune func(context.Context, time.Time) (int64, error)
 	}{
 		{"runs", p.queries.PruneRunsByAge},
-		{"push_runs", p.queries.PrunePushRunsByAge},
+		{"task_runs", p.queries.PruneTaskRunsByAge},
 		{"workflow_runs", p.queries.PruneWorkflowRunsByAge},
 		{"file_snapshots", p.queries.PruneFileSnapshotsByAge},
 	}

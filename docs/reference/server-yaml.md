@@ -54,7 +54,7 @@ database:
 |-------|---------|-------------|
 | `dsn` | (required) | Database connection string. Supports `secret:` prefix |
 | `driver` | `sqlite3` | Database driver: `sqlite3` or `postgres` |
-| `retention` | `30d` | Auto-prune data older than this duration. Applies to `runs` (cascades `run_results`), `push_runs`, `workflow_runs`, `file_snapshots`, `convergence_history`, `compliance_history`. `audit_entries` is never trimmed (tamper chain). |
+| `retention` | `30d` | Auto-prune data older than this duration. Applies to `runs` (cascades `run_results`), `task_runs`, `workflow_runs`, `file_snapshots`, `convergence_history`, `compliance_history`. `audit_entries` is never trimmed (tamper chain). |
 
 ## secrets
 

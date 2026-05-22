@@ -96,7 +96,7 @@ Idempotent — re-running yields zero changes. The agent prints a one-line summa
 |------|---------|-------------|
 | `--target` | `*` | Hostname pattern (`filepath.Match` glob) scoping the sweep. Default `*` = whole fleet. |
 
-The CLI returns a one-line dispatch summary plus the task-run ID for the cleanup dispatch — per-envoy results live under `vigocli task` (push runs are separate from convergence runs in `vigocli runs`):
+The CLI returns a one-line dispatch summary plus the task-run ID for the cleanup dispatch — per-envoy results live under `vigocli task` (task runs are separate from convergence runs in `vigocli runs`):
 
 ```
 $ vigocli swarm cleanup

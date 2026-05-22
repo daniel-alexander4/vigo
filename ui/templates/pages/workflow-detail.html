@@ -49,7 +49,7 @@
                 <td>{{.StepName}}</td>
                 <td>{{template "status-badge" dict "Status" .Status}}</td>
                 <td class="mono">
-                    {{if .PushRunID}}<a href="/task/{{.PushRunID}}">{{truncUUID .PushRunID}}</a>{{else}}-{{end}}
+                    {{if .TaskRunID}}<a href="/task/{{.TaskRunID}}">{{truncUUID .TaskRunID}}</a>{{else}}-{{end}}
                 </td>
                 <td class="text-muted">{{if not .StartedAt.IsZero}}{{formatTime .StartedAt}}{{else}}-{{end}}</td>
                 <td class="text-muted">{{if not .FinishedAt.IsZero}}{{formatTime .FinishedAt}}{{else}}-{{end}}</td>
