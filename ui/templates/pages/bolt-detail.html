@@ -1,10 +1,10 @@
 {{define "page-content"}}
 <div class="page-header">
     <div class="breadcrumb mb-1">
-        <a href="/spanner">Spanner</a> &rsaquo; {{.BoltID}}
+        <a href="/spanner">Spanner</a> &rsaquo; {{slice .BoltPubkey 0 16}}
     </div>
-    <h1>Bolt: {{.BoltID}}</h1>
-    <p class="mono">{{.Addr}}</p>
+    <h1>Bolt</h1>
+    <p class="mono">{{.BoltPubkey}}</p>
 </div>
 
 <div class="stat-cards">
@@ -17,18 +17,8 @@
         <div class="stat-card__label">Compliance</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value">{{.LatencyMs}}ms</div>
-        <div class="stat-card__label">Latency</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card__value">
-            {{if .Healthy}}
-                <span class="badge badge--success">healthy</span>
-            {{else}}
-                <span class="badge badge--danger">unreachable</span>
-            {{end}}
-        </div>
-        <div class="stat-card__label">Health</div>
+        <div class="stat-card__value text-muted">{{.SnapshotAgeSeconds}}s</div>
+        <div class="stat-card__label">Snapshot Age</div>
     </div>
 </div>
 
@@ -38,16 +28,12 @@
         <div class="stat-card__label">Converged</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value text-warning">{{.Relapsed}}</div>
-        <div class="stat-card__label">Relapsed</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card__value text-peach">{{.Diverged}}</div>
-        <div class="stat-card__label">Diverged</div>
+        <div class="stat-card__value text-warning">{{.Degraded}}</div>
+        <div class="stat-card__label">Degraded</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-danger">{{.Failed}}</div>
-        <div class="stat-card__label">Errors</div>
+        <div class="stat-card__label">Failed</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-warning">{{.Offline}}</div>
@@ -59,7 +45,7 @@
     </div>
 </div>
 
-<div class="table-container mb-2">
+<div class="table-container">
     <h3>Envoys</h3>
     <table class="table">
         <thead>
@@ -88,41 +74,6 @@
             {{if not .Envoys}}
             <tr>
                 <td colspan="4" class="text-muted" style="text-align:center; padding:40px;">No envoys on this bolt.</td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
-</div>
-
-<div class="table-container">
-    <h3>Recent Runs</h3>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Run</th>
-                <th>Envoy</th>
-                <th>Status</th>
-                <th>Modules</th>
-                <th>Changed</th>
-                <th>Failed</th>
-                <th>Time</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .Runs}}
-            <tr>
-                <td class="mono">{{truncUUID .ID}}</td>
-                <td class="mono">{{truncUUID .EnvoyID}}</td>
-                <td>{{if gt .ModuleCount 0}}<span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>{{else}}{{template "status-badge" dict "Status" .Status}}{{end}}</td>
-                <td>{{.ModuleCount}}</td>
-                <td>{{.ChangedCount}}</td>
-                <td>{{.FailedCount}}</td>
-                <td class="text-muted">{{.StartedAt}}</td>
-            </tr>
-            {{end}}
-            {{if not .Runs}}
-            <tr>
-                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No runs on this bolt.</td>
             </tr>
             {{end}}
         </tbody>

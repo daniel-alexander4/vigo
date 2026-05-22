@@ -83,10 +83,10 @@ watcher:
 #     - "admin@example.com"
 
 # ── Spanner ────────────────────────────────────────────────────────────
-# Requires a paid license. See server.yaml.example for hub + bolts setup.
+# Requires a paid license. See server.yaml.example for peer-equal setup.
 #
 # spanner:
-#   role: standalone                           # standalone | hub | spoke
+#   mode: standalone                           # standalone | spanner
 
 # ── AI Assistant ──────────────────────────────────────────────────────────
 # Also set VIGO_SERVICES=ollama in .env to start the Ollama container.

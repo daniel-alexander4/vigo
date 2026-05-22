@@ -13,11 +13,9 @@ import (
 	"git.alexander4.io/vigo/server/config"
 )
 
-// Spanner Slice 2-ii-b — peer-equal enrollment routing + action
-// propagation (ADR-026 + the spanner-redesign plan). This file adds
-// the hub-free replacements for the routing + force-push + reassign +
-// drain behaviours hub.go owns today, so the hub becomes vestigial
-// (Slice 2-ii-c deletes it).
+// Spanner peer-equal enrollment routing + action propagation
+// (ADR-026 + the spanner-redesign plan). This file holds the
+// peer-equal routing + force-push + reassign + drain behaviours.
 //
 // The design decision (Dan-approved, ADR-026 simplification): actions
 // are point-to-point commands routed by DIRECT peer gRPC over the
@@ -152,8 +150,7 @@ func (a *SpannerAdmin) dialBolt(boltHostname string) (*PeerConn, error) {
 }
 
 // EnrollOnPeerBolt creates an envoy record on a target bolt via a
-// direct EnrollEnvoy admin gRPC call over the PeerDialer — the
-// hub-free analog of Hub.EnrollOnBolt. boltHostname is the target
+// direct EnrollEnvoy admin gRPC call over the PeerDialer. boltHostname is the target
 // bolt's hostname (from the roster); the gRPC port is the
 // SpannerAdmin's configured peer port. Returns the envoy UUID the
 // target bolt assigned.

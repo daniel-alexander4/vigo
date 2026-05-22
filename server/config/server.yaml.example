@@ -194,35 +194,23 @@ watcher:
 
 
 # ── Spanner ────────────────────────────────────────────────────────────
-# Hub + bolts federation. Omit for single-server deployments.
+# Peer-equal control-plane federation (ADR-026). Omit for single-server
+# deployments. Every bolt's config has the same shape — one operator
+# founds the spanner with `vigocli spanner init`, the rest join with
+# `vigocli spanner join`. Peer discovery is gossip-driven; there is no
+# bootstrap-peer seed list.
 
 # spanner:
-#   role: standalone                           # standalone | hub | spoke
-#
-# --- Hub: aggregates admin queries from bolts ---
-# spanner:
-#   role: hub
-#   spanner_id: "alexander4-prod"                # federation id (required for hub/spoke)
-#   bolts:
-#     - id: dc1
-#       addr: "bolt1.example.com:1530"
-#       patterns: ["*.dc1.*"]
-#     - id: dc2
-#       addr: "bolt2.example.com:1530"
-#       patterns: ["*.dc2.*"]
-#   auto_failover:
-#     enabled: true                              # auto-drain unhealthy bolts
-#     threshold: 3                               # consecutive failures before drain
-#     interval: "30s"                            # health check interval
-#
-# --- Spoke role: this vigosrv is one bolt in the spanner ---
-# spanner:
-#   role: spoke
-#   spanner_id: "alexander4-prod"                # must match the hub's spanner_id
-#   bolt_id: "dc1"
-#   hub_addr: "hub.example.com:1530"            # enables bolt→hub status reporting
-#   hub_fallback_addrs:                          # fallback hub addresses for failover
-#     - "hub-standby.example.com:1530"
+#   mode: spanner                                # standalone | spanner
+#   spanner_id: "alexander4-prod"                # federation id (required when mode = spanner)
+#   patterns: ["*.dc1.*"]                        # hostname globs this bolt owns (no overlap with peers)
+#   snapshot:
+#     tier1_interval: "30s"                      # multicast counter-gossip cadence
+#     tier2_interval: "5m"                       # roster-snapshot cadence
+#   transport:
+#     multicast_group: "224.0.0.45"              # Tier-1 counter gossip group
+#     multicast_port: 1534
+#   fallback_admin: local                        # local (cache-aggregate) | fanout (live)
 
 
 # ── Peer Replication ──────────────────────────────────────────────────────
@@ -559,9 +547,9 @@ watcher:
 #
 # license:
 #   mode: "local"      # "local" (default): count nodes on this server
-#                      # "aggregate": hub sums nodes across all spanner
-#                      #   bolts. Bolts skip enforcement entirely.
-#                      #   Only valid when spanner role is "hub".
+#                      # "aggregate": every spanner bolt sums the fleet-wide
+#                      #   node count from the gossip-replicated roster and
+#                      #   enforces independently. Spanner mode only.
 
 
 # ── Branding ──────────────────────────────────────────────────────────

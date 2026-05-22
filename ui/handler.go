@@ -237,7 +237,7 @@ type Handler struct {
 	version           string
 	agentVersion      string
 	assistant         *ai.Assistant
-	hub               *spanner.Hub
+	spannerAdmin      *spanner.SpannerAdmin
 	docsDir           string
 	docsNav           []DocsNavSection
 	enforcer          *license.Enforcer
@@ -467,7 +467,7 @@ type CVERunningBinaryRef struct {
 // DB-backed DataSource (used by FleetIndex integration).
 // The docsDir parameter specifies the path to the docs directory for the
 // built-in documentation browser (pass "" to disable).
-func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, hub *spanner.Hub, customDS DataSource, docsDir string, authMethod string, enforcer *license.Enforcer) (*Handler, error) {
+func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, caFile, agentDir, version string, assistant *ai.Assistant, spannerAdmin *spanner.SpannerAdmin, customDS DataSource, docsDir string, authMethod string, enforcer *license.Enforcer) (*Handler, error) {
 	renderer, err := NewRenderer()
 	if err != nil {
 		return nil, err
@@ -492,7 +492,7 @@ func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterv
 		agentDir:         agentDir,
 		version:          version,
 		assistant:        assistant,
-		hub:              hub,
+		spannerAdmin:     spannerAdmin,
 		docsDir:          docsDir,
 		enforcer:         enforcer,
 		authEnabled:      true,
@@ -702,10 +702,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/export/inventory-explore.ods", h.InventoryExploreODSExport)
 	mux.HandleFunc("GET /ui/fragments/health", h.HealthFragment)
 
-	// Spanner pages (only registered when running as hub). The /spanner
-	// route name follows the user-facing rename; underneath, `h.hub` is
-	// still the hub + bolts implementation in server/spanner/.
-	if h.hub != nil {
+	// Spanner pages — registered only in spanner mode (peer-equal;
+	// standalone has no spanner admin and no federation to show).
+	if h.spannerAdmin != nil {
 		mux.HandleFunc("GET /spanner", h.Spanner)
 		mux.HandleFunc("GET /spanner/bolts/{id}", h.BoltDetail)
 	}
@@ -1989,7 +1988,7 @@ func (h *Handler) setCommon(pd *PageData) {
 			pd.AIProviderName = strings.ToUpper(name[:1]) + name[1:]
 		}
 	}
-	pd.SpannerEnabled = h.hub != nil
+	pd.SpannerEnabled = h.spannerAdmin != nil
 	pd.DocsEnabled = h.docsDir != ""
 	pd.PeerEnabled = h.peerSvc != nil
 	pd.SwarmEnabled = h.swarmTracker != nil
@@ -6817,36 +6816,30 @@ func workflowRowFromDB(w db.WorkflowRun) WorkflowRow {
 	return row
 }
 
-// SpannerBoltRow represents a bolt in the spanner UI table.
+// SpannerBoltRow represents one peer bolt in the spanner UI table.
+// Sourced from the gossip-backed observability cache (Slice 2-ii-a) —
+// peer bolts are identified by their Ed25519 pubkey-hex.
 type SpannerBoltRow struct {
-	ID             string
-	Addr           string
-	Patterns       []string
-	Healthy        bool
-	EnvoyCount     int32
-	Converged      int32
-	Relapsed       int32
-	Diverged       int32
-	Failed         int32
-	Offline        int32
-	NoData         int32
-	ConvergencePct float32
-	LatencyMs      int64
-	ConfigVersion  string
-	Error          string
+	BoltPubkey         string
+	EnvoyCount         int
+	Converged          int
+	Degraded           int
+	Failed             int
+	NoData             int
+	Offline            int
+	ConvergencePct     float64
+	SnapshotAgeSeconds int64
 }
 
 // SpannerPageData holds data for the spanner page.
 type SpannerPageData struct {
 	PageData
 	BoltCount      int
-	HealthyCount   int
-	TotalEnvoys    int32
-	TotalConverged int32
-	TotalRelapsed  int32
-	TotalDiverged  int32
-	TotalFailed    int32
-	ConvergencePct float32
+	TotalEnvoys    int
+	TotalConverged int
+	TotalDegraded  int
+	TotalFailed    int
+	ConvergencePct float64
 	Bolts          []SpannerBoltRow
 	// HA peer replication status
 	PeerEnabled       bool
@@ -6857,56 +6850,51 @@ type SpannerPageData struct {
 	PeerConfigVersion uint64
 }
 
-// Spanner renders the spanner federation status page. The underlying
-// implementation is still hub + bolts; Phase 1+ will replace it
-// with peer-equal gossip.
+// Spanner renders the spanner federation status page from the
+// gossip-backed observability cache — one row per peer bolt (ADR-026
+// peer-equal model). Registered only in spanner mode.
 func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
-	statuses := h.hub.BoltStatuses(r.Context())
-
 	var bolts []SpannerBoltRow
-	healthyCount := 0
-	var totalEnvoys, totalCompliant, totalRelapsed, totalDiverged, totalFailed int32
-	for _, s := range statuses {
-		bolts = append(bolts, SpannerBoltRow{
-			ID:             s.ID,
-			Addr:           s.Addr,
-			Patterns:       s.Patterns,
-			Healthy:        s.Healthy,
-			EnvoyCount:     s.EnvoyCount,
-			Converged:      s.Converged,
-			Relapsed:       s.Relapsed,
-			Diverged:       s.Diverged,
-			Failed:         s.Failed,
-			Offline:        s.Offline,
-			NoData:         s.NoData,
-			ConvergencePct: s.ConvergencePct,
-			LatencyMs:      s.LatencyMs,
-			ConfigVersion:  fmt.Sprintf("%d", s.ConfigVersion),
-			Error:          s.Error,
-		})
-		if s.Healthy {
-			healthyCount++
+	var totalEnvoys, totalConverged, totalDegraded, totalFailed, totalOffline int
+	now := time.Now()
+	for pubkey, p := range h.spannerAdmin.AllPeerObservability() {
+		row := SpannerBoltRow{
+			BoltPubkey: pubkey,
+			EnvoyCount: len(p.Envoys),
+			Converged:  p.Convergence.Converged,
+			Degraded:   p.Convergence.Degraded,
+			Failed:     p.Convergence.Failed,
+			NoData:     p.Convergence.NoData,
+			Offline:    p.Convergence.Offline,
 		}
-		totalEnvoys += s.EnvoyCount
-		totalCompliant += s.Converged
-		totalRelapsed += s.Relapsed
-		totalDiverged += s.Diverged
-		totalFailed += s.Failed
+		if active := row.EnvoyCount - row.Offline; active > 0 {
+			row.ConvergencePct = float64(row.Converged) / float64(active) * 100
+		}
+		if !p.UpdatedAt.IsZero() {
+			row.SnapshotAgeSeconds = int64(now.Sub(p.UpdatedAt).Seconds())
+		}
+		bolts = append(bolts, row)
+		totalEnvoys += row.EnvoyCount
+		totalConverged += row.Converged
+		totalDegraded += row.Degraded
+		totalFailed += row.Failed
+		totalOffline += row.Offline
 	}
+	// Stable order — map iteration is random; sort by pubkey.
+	sort.Slice(bolts, func(i, j int) bool { return bolts[i].BoltPubkey < bolts[j].BoltPubkey })
 
-	var convPct float32
-	if totalEnvoys > 0 {
-		convPct = float32(totalCompliant) / float32(totalEnvoys) * 100
+	// Lost-contact envoys excluded from the compliance percentage.
+	var convPct float64
+	if active := totalEnvoys - totalOffline; active > 0 {
+		convPct = float64(totalConverged) / float64(active) * 100
 	}
 
 	data := SpannerPageData{
 		PageData:       PageData{Title: "Spanner", ActiveNav: "spanner"},
 		BoltCount:      len(bolts),
-		HealthyCount:   healthyCount,
 		TotalEnvoys:    totalEnvoys,
-		TotalConverged: totalCompliant,
-		TotalRelapsed:  totalRelapsed,
-		TotalDiverged:  totalDiverged,
+		TotalConverged: totalConverged,
+		TotalDegraded:  totalDegraded,
 		TotalFailed:    totalFailed,
 		ConvergencePct: convPct,
 		Bolts:          bolts,
@@ -6932,26 +6920,23 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "spanner", data)
 }
 
-// BoltDetailPageData holds data for the per-bolt detail page.
+// BoltDetailPageData holds data for the per-bolt detail page — the
+// gossip-backed observability snapshot for one peer bolt.
 type BoltDetailPageData struct {
 	PageData
-	BoltID         string
-	Addr           string
-	Healthy        bool
-	EnvoyCount     int32
-	Converged      int32
-	Relapsed       int32
-	Diverged       int32
-	Failed         int32
-	Offline        int32
-	NoData         int32
-	ConvergencePct float32
-	LatencyMs      int64
-	Envoys         []BoltDetailEnvoyRow
-	Runs           []BoltDetailRunRow
+	BoltPubkey         string
+	EnvoyCount         int
+	Converged          int
+	Degraded           int
+	Failed             int
+	NoData             int
+	Offline            int
+	ConvergencePct     float64
+	SnapshotAgeSeconds int64
+	Envoys             []BoltDetailEnvoyRow
 }
 
-// BoltDetailEnvoyRow is a envoy on a bolt.
+// BoltDetailEnvoyRow is an envoy on a bolt.
 type BoltDetailEnvoyRow struct {
 	ID        string
 	Hostname  string
@@ -6960,91 +6945,48 @@ type BoltDetailEnvoyRow struct {
 	Revoked   bool
 }
 
-// BoltDetailRunRow is a run on a bolt.
-type BoltDetailRunRow struct {
-	ID           string
-	EnvoyID      string
-	Status       string
-	ModuleCount  int32
-	ChangedCount int32
-	FailedCount  int32
-	FailurePct   float64
-	StartedAt    string
-}
-
-// BoltDetail renders the per-bolt detail page with envoys and runs.
+// BoltDetail renders the per-bolt detail page from the gossip-backed
+// observability cache — convergence breakdown + the bolt's envoy
+// roster. Runs are never gossiped, so they are not shown here; use
+// `vigocli spanner bolt runs` or the per-envoy detail page.
 func (h *Handler) BoltDetail(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	ctx := r.Context()
-
-	statuses := h.hub.BoltStatuses(ctx)
-	var bolt *spanner.BoltStatus
-	for i := range statuses {
-		if statuses[i].ID == id {
-			bolt = &statuses[i]
-			break
-		}
-	}
-	if bolt == nil {
+	p := h.spannerAdmin.PeerObservability(id)
+	if p == nil {
 		http.Error(w, "bolt not found", http.StatusNotFound)
 		return
 	}
 
-	// Fetch envoys and runs from this bolt.
-	envoys, _ := h.hub.BoltListEnvoys(ctx, id)
-	runs, _ := h.hub.BoltListRuns(ctx, id, 20)
-
 	var envoyRows []BoltDetailEnvoyRow
-	for _, t := range envoys {
+	for _, e := range p.Envoys {
 		row := BoltDetailEnvoyRow{
-			ID:        t.Id,
-			Hostname:  t.Hostname,
-			IPAddress: t.IpAddress,
-			Revoked:   t.Revoked,
+			ID:        e.ID,
+			Hostname:  e.Hostname,
+			IPAddress: e.IP,
+			Revoked:   e.Revoked,
 		}
-		if t.LastSeen != nil {
-			row.LastSeen = t.LastSeen.AsTime().Local().Format("2006-01-02 15:04:05")
+		if e.LastSeenMs > 0 {
+			row.LastSeen = time.UnixMilli(e.LastSeenMs).Local().Format("2006-01-02 15:04:05")
 		}
 		envoyRows = append(envoyRows, row)
 	}
 
-	var runRows []BoltDetailRunRow
-	for _, run := range runs {
-		var failPct float64
-		if run.ModuleCount > 0 {
-			failPct = float64(run.FailedCount) / float64(run.ModuleCount) * 100
-		}
-		row := BoltDetailRunRow{
-			ID:           run.Id,
-			EnvoyID:      run.EnvoyId,
-			Status:       run.Status,
-			ModuleCount:  run.ModuleCount,
-			ChangedCount: run.ChangedCount,
-			FailedCount:  run.FailedCount,
-			FailurePct:   failPct,
-		}
-		if run.StartedAt != nil {
-			row.StartedAt = run.StartedAt.AsTime().Local().Format("2006-01-02 15:04:05")
-		}
-		runRows = append(runRows, row)
-	}
-
 	data := BoltDetailPageData{
-		PageData:       PageData{Title: "Bolt: " + id, ActiveNav: "spanner"},
-		BoltID:         bolt.ID,
-		Addr:           bolt.Addr,
-		Healthy:        bolt.Healthy,
-		EnvoyCount:     bolt.EnvoyCount,
-		Converged:      bolt.Converged,
-		Relapsed:       bolt.Relapsed,
-		Diverged:       bolt.Diverged,
-		Failed:         bolt.Failed,
-		Offline:        bolt.Offline,
-		NoData:         bolt.NoData,
-		ConvergencePct: bolt.ConvergencePct,
-		LatencyMs:      bolt.LatencyMs,
-		Envoys:         envoyRows,
-		Runs:           runRows,
+		PageData:   PageData{Title: "Bolt: " + id, ActiveNav: "spanner"},
+		BoltPubkey: id,
+		EnvoyCount: len(p.Envoys),
+		Converged:  p.Convergence.Converged,
+		Degraded:   p.Convergence.Degraded,
+		Failed:     p.Convergence.Failed,
+		NoData:     p.Convergence.NoData,
+		Offline:    p.Convergence.Offline,
+		Envoys:     envoyRows,
+	}
+	if active := data.EnvoyCount - data.Offline; active > 0 {
+		data.ConvergencePct = float64(data.Converged) / float64(active) * 100
+	}
+	if !p.UpdatedAt.IsZero() {
+		data.SnapshotAgeSeconds = int64(time.Since(p.UpdatedAt).Seconds())
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "bolt-detail", data)

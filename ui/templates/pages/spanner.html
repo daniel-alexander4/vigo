@@ -1,17 +1,13 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Spanner</h1>
-    <p>Federation status and bolt health</p>
+    <p>Peer-equal federation status — one row per bolt, from gossip-backed observability</p>
 </div>
 
 <div class="stat-cards">
     <div class="stat-card">
         <div class="stat-card__value">{{.BoltCount}}</div>
-        <div class="stat-card__label">Bolts</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card__value text-{{if eq .HealthyCount .BoltCount}}success{{else if gt .HealthyCount 0}}warning{{else}}danger{{end}}">{{.HealthyCount}}/{{.BoltCount}}</div>
-        <div class="stat-card__label">Healthy</div>
+        <div class="stat-card__label">Peer Bolts</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value">{{.TotalEnvoys}}</div>
@@ -22,16 +18,12 @@
         <div class="stat-card__label">Converged</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value text-warning">{{.TotalRelapsed}}</div>
-        <div class="stat-card__label">Relapsed</div>
+        <div class="stat-card__value text-warning">{{.TotalDegraded}}</div>
+        <div class="stat-card__label">Degraded</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value text-peach">{{.TotalDiverged}}</div>
-        <div class="stat-card__label">Diverged</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card__value text-danger">{{.TotalErrors}}</div>
-        <div class="stat-card__label">Errors</div>
+        <div class="stat-card__value text-danger">{{.TotalFailed}}</div>
+        <div class="stat-card__label">Failed</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value">{{printf "%.1f" .ConvergencePct}}%</div>
@@ -44,42 +36,34 @@
     <table class="table">
         <thead>
             <tr>
-                <th>Bolt ID</th>
-                <th>Address</th>
-                <th>Patterns</th>
+                <th>Bolt</th>
                 <th>Envoys</th>
                 <th>Converged</th>
+                <th>Degraded</th>
+                <th>Failed</th>
+                <th>Offline</th>
                 <th>Compliance</th>
-                <th>Config</th>
-                <th>Latency</th>
-                <th>Status</th>
+                <th>Snapshot Age</th>
             </tr>
         </thead>
         <tbody>
             {{range .Bolts}}
             <tr>
-                <td><a href="/spanner/bolts/{{.ID}}"><strong>{{.ID}}</strong></a></td>
-                <td class="text-muted">{{.Addr}}</td>
-                <td>{{range $i, $p := .Patterns}}{{if $i}}, {{end}}<code>{{$p}}</code>{{end}}</td>
+                <td><a href="/spanner/bolts/{{.BoltPubkey}}"><strong class="mono">{{slice .BoltPubkey 0 16}}</strong></a></td>
                 <td>{{.EnvoyCount}}</td>
-                <td>{{.Converged}}/{{.EnvoyCount}}</td>
+                <td class="text-success">{{.Converged}}</td>
+                <td class="text-warning">{{.Degraded}}</td>
+                <td class="text-danger">{{.Failed}}</td>
+                <td class="text-muted">{{.Offline}}</td>
                 <td>{{printf "%.1f" .ConvergencePct}}%</td>
-                <td>{{if gt .ConfigVersion 0}}v{{.ConfigVersion}}{{else}}<span class="text-muted">-</span>{{end}}</td>
-                <td>{{.LatencyMs}}ms</td>
-                <td>
-                    {{if .Healthy}}
-                        <span class="badge badge--success">healthy</span>
-                    {{else}}
-                        <span class="badge badge--danger" title="{{.Error}}">unreachable</span>
-                    {{end}}
-                </td>
+                <td class="text-muted">{{.SnapshotAgeSeconds}}s ago</td>
             </tr>
             {{end}}
         </tbody>
     </table>
 </div>
 {{else}}
-<p class="text-muted">No bolts configured.</p>
+<p class="text-muted">No peer bolts have reported yet. Gossip snapshots arrive within one Tier-2 interval of a peer joining the spanner.</p>
 {{end}}
 
 {{if .PeerEnabled}}

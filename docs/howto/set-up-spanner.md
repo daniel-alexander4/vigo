@@ -1,217 +1,131 @@
 
 # Set up Spanner (peer-equal federation)
 
-> **2A.1b YAML shape change (2026-05-19):** The pre-Phase-2 `role: hub|spoke` field and the per-bolt `bolts:` list are retired per [ADR-026](../adr/026-spanner-peer-equal-admissions.md). The loader hard-errors on `spanner.role`, `spanner.hub_addr`, `spanner.hub_fallback_addrs`, `spanner.bolts`, `spanner.auto_failover`, and `spanner.bolt_id`. The new shape uses `spanner.mode: founder|joiner|standalone`, per-vigosrv `spanner.patterns:`, and `spanner.transport.bootstrap_peers:` for first-contact discovery. The conceptual sections below ("Enrollment Routing", "Admin Query Fan-out", "Bolt Health") still describe how the founder behaves as a bootstrap-discovery rendezvous in Phase 2A — Phase 3 retires the founder/joiner distinction entirely and admin-routing becomes pure CRDT-driven.
-
-You'll finish this page with a founder server acting as a bootstrap-discovery rendezvous for one or more joiner servers — each peer owning a hostname-pattern partition of the fleet, peers sharing an admissions roster via CRDT gossip. Envoys keep checking in on whatever address they originally enrolled against.
+A spanner is a set of vigosrv servers — **bolts** — that share one fleet as peers. Every bolt owns a hostname-pattern partition of the envoys, holds the full admissions roster (CRDT-replicated over gossip), and answers fleet-wide admin queries by aggregating from that roster. There is no hub and no primary: every bolt runs identical code and is administered directly.
 
 **When you'd use this:** when one server can no longer comfortably hold the fleet's check-in cadence, query load, or convergence-history retention. Practical inflection points are usually north of ~5,000 envoys per server, or when you want geographic partitioning so a regional outage doesn't take the whole control plane down.
 
-**When you'd skip this:** smaller fleets (a single-server `standalone` deployment is the default and the right answer for almost every operator); fleets that need HA but not horizontal sharding (use `server/peer/` primary/secondary replication instead — see the `peer:` section in `server.yaml`).
+**When you'd skip this:** smaller fleets (a single-server `standalone` deployment is the default and the right answer for almost every operator); fleets that need HA but not horizontal sharding (use `server/peer/` primary/secondary replication instead — see the `peers:` section in `server.yaml`).
 
-> **License requirement:** Spanner needs a paid license. The built-in free license (100 envoys) does not support founder or joiner mode; the server refuses to start with `spanner.mode` set to `founder` or `joiner` on the free license. Paid licenses are bound to a specific server via [machine fingerprint](troubleshoot.md#machine-fingerprint-binding) — migrating the founder to a new machine requires a new license.
+> **License requirement:** Spanner needs a paid license. The built-in free license (100 envoys) does not support `spanner` mode; the server refuses to start with `spanner.mode: spanner` on the free license. Paid licenses are bound to a specific server via [machine fingerprint](troubleshoot.md#machine-fingerprint-binding) — moving a bolt to a new machine requires a new license.
 
-## Enable it
+## Modes
 
-Three modes: `standalone` (default — no spanner config), `founder` (bootstrap-discovery rendezvous; also owns a pattern partition like any peer), and `joiner` (a peer that joined an existing spanner). Pick the mode per server in `server.yaml`:
+Two modes, set per server in `server.yaml`:
+
+- `standalone` (default) — a single vigosrv handles the whole fleet. No spanner config needed.
+- `spanner` — this vigosrv is a peer-equal bolt: it owns a hostname-pattern partition and shares the admissions roster with every other bolt.
+
+The pre-Phase-3 `founder`/`joiner` modes are retired — "founder" was only ever "whoever ran `vigocli spanner init` first", a historical fact, not a runtime role. Every bolt's `server.yaml` has the same shape.
+
+## Configure each bolt
+
+Each bolt's `server.yaml`:
 
 ```yaml
-# Founder server.yaml:
 spanner:
-  mode: founder
-  spanner_id: alexander4-prod
-  patterns: ["*.east.example.com"]
-
-# Joiner server.yaml:
-spanner:
-  mode: joiner
-  spanner_id: alexander4-prod        # must match the founder's spanner_id
-  patterns: ["*.west.example.com"]
+  mode: spanner
+  spanner_id: alexander4-prod        # the federation id — identical on every bolt
+  patterns: ["*.east.example.com"]   # the hostname partition THIS bolt owns
+  snapshot:
+    tier1_interval: 30s
+    tier2_interval: 5m
   transport:
-    bootstrap_peers: ["founder.lab:1530"]
+    multicast_group: "224.0.0.45"
+    multicast_port: 1534
+  fallback_admin: local
 ```
 
-Restart each server (founder first, joiners second). Each joiner runs the admission ceremony with the founder via `JoinSpanner` (Slice 2A.2+) and starts participating in the gossiped admissions CRDT.
+`spanner_id` must match across every bolt. Each bolt's `patterns` must not overlap with any other bolt's — the loader refuses an overlapping config at publish time and at boot.
+
+Peer discovery is gossip-driven. There is no bootstrap-peer seed list in `server.yaml`: a joining bolt learns the roster through the admission ceremony below, and the CRDT-replicated roster is the peer list from then on.
+
+## Found the spanner
+
+On the first server, after setting `mode: spanner` + `spanner_id` + `patterns` and restarting:
+
+```bash
+vigocli spanner init
+```
+
+This writes the founding bolt's self-admission row, signed with the bolt's Ed25519 identity (`/srv/vigo/bolt/identity.wrapped`, generated on first boot in spanner mode).
+
+## Admit the other bolts
+
+For each additional server, run the admission ceremony. On any **existing member**, mint a single-use invite bundle:
+
+```bash
+vigocli spanner bolt invite --ttl 24h
+```
+
+The bundle is a secret — anyone holding it can join the spanner until it expires or is consumed. Hand it to the operator of the joining server out of band.
+
+On the **joining server** — after setting its `server.yaml` (`mode: spanner`, the shared `spanner_id`, its own non-overlapping `patterns`) and restarting:
+
+```bash
+vigocli spanner bolt join --from https://member.example.com:8443 --code "$(cat bundle.txt)"
+```
+
+The joining server presents the token to the member, receives a signed admission row plus the current roster, and starts participating in the gossiped admissions CRDT. The token is one-shot — the `consumed_tokens` G-Set guarantees it can never be consumed twice.
 
 ## Use it
 
-`vigocli spanner status` shows the spanner topology, per-bolt health, aggregated convergence + compliance + license usage. Cross-bolt admin queries (force-push, ad-hoc tasks, live queries) work through the hub: you talk to one place, the hub fans out to the right bolt(s).
-
-If a bolt health-checks N times in a row, the hub drains it by reassigning its envoys to the hub itself (envoys keep checking in; no data loss). Recovery is automatic when the bolt returns.
-
-## Architecture
-
-![Spanner Architecture](../img/spanner.svg)
-
-## Roles
-
-### standalone (default)
-
-Single server handles everything. No spanner config needed.
-
-### hub
-
-The central server that:
-- Serves the web UI, webhooks, bootstrap
-- Routes enrollment to the correct bolt based on hostname patterns
-- Fans out admin queries to all bolts and aggregates results
-- Aggregates compliance and fleet statistics
-- Handles license enforcement
-
-```yaml
-spanner:
-  role: hub
-  bolts:
-    - id: dc1
-      addr: "bolt1.example.com:1530"
-      patterns: ["*.dc1.*"]
-    - id: dc2
-      addr: "bolt2.example.com:1530"
-      patterns: ["*.dc2.*"]
-```
-
-### spoke (bolt)
-
-A partition server that:
-- Handles agent check-ins for its assigned envoys
-- Stores runs, traits, and results locally
-- Responds to admin queries from the hub
-- Does not serve the web UI, webhooks, or bootstrap
-
-```yaml
-spanner:
-  role: spoke
-  bolt_id: "dc1"
-```
-
-## Enrollment Routing
-
-When an envoy bootstraps through the hub, the hub routes the enrollment to the correct bolt based on hostname pattern matching:
-
-```
-Envoy: web3.dc1.example.com
-    ↓
-Hub: match "*.dc1.*" → route to bolt dc1
-    ↓
-Bolt dc1: complete enrollment, store pubkey
-```
-
-## Admin Query Fan-out
-
-CLI and API queries go through the hub, which fans out to all bolts:
+`vigocli spanner status` shows this bolt's mode, its identity pubkey, and the gossip-backed observability for every peer bolt — envoy count, convergence breakdown, and how stale each peer's last snapshot is.
 
 ```bash
-vigocli envoys list
+vigocli spanner bolt list            # the admissions roster
+vigocli spanner bolt show <pubkey>   # one bolt's convergence breakdown
+vigocli spanner bolt envoys <pubkey> # the envoys that bolt serves
 ```
 
-```
-Hub receives request
-    ↓
-Fan out to bolt dc1 + bolt dc2 (parallel)
-    ↓
-Merge results
-    ↓
-Return to CLI
-```
+Fleet-wide admin queries — `vigocli envoys list`, `vigocli runs`, force-push — work against any bolt. Each bolt answers by aggregating: `fallback_admin: local` (the default) merges the gossip-backed observability cache; `fallback_admin: fanout` queries every roster bolt's admin gRPC live. Both produce the same answer. (`vigocli runs` always fans out — runs are never gossiped.)
 
-## Config Sync
+## Enrollment routing
 
-When `vigocli config publish` runs on the hub, the config is automatically pushed to all bolts. The hub creates a tar.gz of the `.live/` directory and sends it via the `SyncConfig` RPC. Bolts extract the archive, overwrite their local `.live/` directory, and reload. This is best-effort — if a bolt is unreachable, it's skipped and logged.
+When an envoy bootstraps against any bolt, that bolt resolves which roster bolt owns the envoy's hostname (first-match-wins over each bolt's `patterns`, oldest-admitted bolt wins an overlap). If a **different** bolt owns it, the contacted bolt enrolls the envoy on the owning bolt and returns its address; the agent checks in there from then on. No hub mediates this — every bolt computes the same owner from the CRDT-replicated roster.
 
-> The config-sync RPC path is being retired in the broader spanner redesign (ADR-025) in favor of stockpile-in-gitback distribution. The migration ships in Phase 0's later slices.
+## Envoy reassignment and drain
 
-## Bolt Health
-
-The hub monitors bolt health via periodic gRPC probes. Bolts can also push their status to the hub if `hub_addr` is configured. The web UI shows:
-- Bolt status (online/offline)
-- Per-bolt compliance breakdown
-- Per-bolt latency metrics
-- Envoy count per bolt
-
-### Bolt Status Reporting
-
-Bolts can proactively report their status to the hub:
-
-```yaml
-spanner:
-  role: spoke
-  bolt_id: "dc1"
-  hub_addr: "hub.example.com:1530"  # enables bolt→hub reporting
-```
-
-The bolt sends compliance metrics to the hub every 30 seconds. If the hub is unreachable, the bolt continues operating normally.
-
-### Hub Failover for Bolts
-
-When the hub has peer replication configured (see the `peer:` section in `server.yaml`), each bolt should list the hub's peer addresses as fallbacks. After 3 consecutive failures on the current hub address, the bolt automatically tries the next fallback:
-
-```yaml
-spanner:
-  role: spoke
-  bolt_id: "dc1"
-  hub_addr: "hub.example.com:1530"
-  hub_fallback_addrs:
-    - "hub-standby.example.com:1530"
-```
-
-
-The bolt cycles through all addresses (primary, then fallbacks) until one responds. This ensures bolts reconnect to a promoted hub peer without manual intervention.
-
-### Auto-Failover
-
-The hub can automatically drain unhealthy bolts:
-
-```yaml
-spanner:
-  role: hub
-  auto_failover:
-    enabled: true
-    threshold: 3      # consecutive failures before drain (default 3)
-    interval: "30s"   # health check interval (default 30s)
-```
-
-When a bolt fails `threshold` consecutive health checks (default: 3 failures = 90 seconds), the hub automatically drains all its envoys to other bolts based on hostname pattern matching. When the bolt recovers, it's marked healthy again and can accept new envoys.
-
-## Envoy Reassignment
-
-Move envoys between bolts:
+Move an envoy between bolts (bolt ids are pubkey-hex from `vigocli spanner bolt list`):
 
 ```bash
-vigocli spanner bolt reassign <envoy-id> --from dc1 --to dc2
+vigocli spanner bolt reassign <envoy-id> --from <bolt-pubkey> --to <bolt-pubkey>
 ```
 
-Drain all envoys from a bolt:
+Drain every envoy off a bolt — for maintenance or decommission:
 
 ```bash
-vigocli spanner bolt drain dc1 --to dc2
+vigocli spanner bolt drain <bolt-pubkey>            # auto-route each envoy by hostname
+vigocli spanner bolt drain <bolt-pubkey> --to <bolt-pubkey>
 ```
 
-The agent handles reconnection automatically — on next check-in, it's redirected to the new bolt.
+The agent handles reconnection automatically — on its next check-in it is redirected to the new bolt.
 
-## Bolt Detail
+## Failure handling
 
-View detailed bolt information:
+There is no hub-side health probe and no auto-drain. A silent bolt is detected by the gossip freshness thresholds (`spanner.freshness.stale_after`) and surfaces in `vigocli spanner status` as a stale snapshot age. Recovery is automatic when the bolt resumes gossiping. To take a bolt out of service deliberately, drain it (above) before stopping it.
 
-```bash
-vigocli spanner bolt show dc1
-```
+## License enforcement
 
-The web UI has a bolt detail page at `/spanner/bolts/{id}` showing per-bolt compliance, recent runs, and envoy list.
+With `license.mode: aggregate`, every bolt independently sums the fleet-wide node count from the gossip-replicated roster and enforces against it — there is no designated enforcer. With `license.mode: local` (the default), each bolt counts only its own envoys.
+
+## Web UI
+
+The `/spanner` page shows one row per peer bolt from the gossip-backed observability cache; `/spanner/bolts/{pubkey}` drills into a bolt's convergence breakdown and envoy roster.
 
 ## Related
 
-- [Architecture](../reference/_index.md) — System overview
-- [Server Configuration](../reference/server-yaml.md) — `spanner:` section
-- [ADR-025: stockpile-in-gitback](../adr/025-stockpile-in-gitback.md) — the broader spanner redesign that will retire the hub-mediated config-sync RPC path
+- [Server Configuration](../reference/server-yaml.md) — the `spanner:` section
+- [ADR-026: peer-equal admissions](../adr/026-spanner-peer-equal-admissions.md) — the design
 
 ## What's next
 
-- **HA for the hub itself** → `server/peer/` primary/secondary replication. Pair it with `hub_fallback_addrs:` on every bolt so failover is transparent.
-- **A bolt is wedged** → `vigocli spanner status` shows per-bolt health; the hub auto-drains after `threshold` consecutive misses. Manually drain with `vigocli spanner bolt drain <id> --to <other>`.
-- **License is too small** → spanner needs a paid license; see [license](../reference/server-yaml.md) and [troubleshoot.md#machine-fingerprint-binding](troubleshoot.md#machine-fingerprint-binding) for fingerprint rebinds.
-- **Cross-bolt admin queries are slow** → Tier-1 counter-gossip cadence is `30s` by default; reduce on the founder via `spanner.snapshot.tier1_interval` for tighter cross-bolt convergence on flapping peers.
+- **HA for an individual bolt** → `server/peer/` primary/secondary replication, configured per bolt independently of the spanner.
+- **A bolt is wedged** → `vigocli spanner status` shows a stale snapshot age; drain it with `vigocli spanner bolt drain <pubkey>`.
+- **License is too small** → spanner needs a paid license; see [troubleshoot.md#machine-fingerprint-binding](troubleshoot.md#machine-fingerprint-binding) for fingerprint rebinds.
+- **Cross-bolt convergence lags** → the Tier-1 counter-gossip cadence is `30s` by default; reduce `spanner.snapshot.tier1_interval` for tighter cross-bolt convergence.
 
 ---
-*Verified on Vigo 0.65.0 · 2026-05-17.*
+*Verified on Vigo 0.66.12 · 2026-05-21.*
 
 *Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

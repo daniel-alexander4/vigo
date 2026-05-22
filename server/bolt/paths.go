@@ -1,14 +1,13 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package bolt implements the per-vigosrv bolt identity for
-// the spanner federation (Phase 1 of the spanner redesign). Each
-// vigosrv running in spanner mode (role: hub or spoke) holds an
+// Package bolt implements the per-vigosrv bolt identity for the
+// spanner federation. Each vigosrv running in spanner mode holds an
 // Ed25519 keypair distinct from the service-account puddle: the
-// puddle signs for ops-puddle authority (stockpile pushes), the
-// bolt identity signs the periodic BoltStatusReport
-// announcements so the hub can verify "this report really comes
-// from the bolt it claims to."
+// puddle signs for ops-puddle authority (stockpile pushes), the bolt
+// identity signs this bolt's admission row and every gossiped roster
+// snapshot so peers can verify "this really comes from the bolt it
+// claims to."
 //
 // On-disk shape mirrors server/puddle exactly — same XChaCha20-
 // Poly1305 envelope (version byte 0x02), same per-host HKDF salt

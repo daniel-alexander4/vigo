@@ -76,7 +76,6 @@ type ServerConfig struct {
 	KeepaliveTime        time.Duration // 0 → default 30s
 	KeepaliveTimeout     time.Duration // 0 → default 10s
 	StreamSendBuffer     int           // 0 → default 8
-	Hub                  *spanner.Hub          // non-nil when role=hub
 	SpannerAdmin         *spanner.SpannerAdmin // non-nil in a spanner (mode != standalone); drives peer-equal admin reads
 	// SMTPNotifier removed — events route through Integrations dispatcher
 	LicenseEnforcer *license.Enforcer
@@ -206,7 +205,6 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		taskRouter:        newTaskRouter(cfg.Queries, cfg.Metrics),
 		queryRouter:       newQueryRouter(),
 		taskStore:         cfg.TaskStore,
-		hub:               cfg.Hub,
 		licenseEnforcer:   cfg.LicenseEnforcer,
 		fleetIndex:        cfg.FleetIndex,
 		runBatcher:        cfg.RunBatcher,
@@ -238,7 +236,6 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		metrics:          cfg.Metrics,
 		baseInterval:     cfg.Interval,
 		offlineThreshold: cfg.OfflineThreshold,
-		hub:              cfg.Hub,
 		spannerAdmin:     cfg.SpannerAdmin,
 		fleetIndex:       cfg.FleetIndex,
 		reassignStore:    reassignStore,

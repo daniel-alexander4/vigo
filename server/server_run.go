@@ -13,13 +13,11 @@ import (
 
 	vigoai "git.alexander4.io/vigo/server/ai"
 	"git.alexander4.io/vigo/server/backup"
-	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/integrations"
 	"git.alexander4.io/vigo/server/metrics"
 	"git.alexander4.io/vigo/server/peer"
-	"git.alexander4.io/vigo/server/spanner"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/task"
 	"git.alexander4.io/vigo/server/watcher"
@@ -53,22 +51,13 @@ func (s *Server) Run(ctx context.Context) error {
 	s.startAIWarmup()
 	s.startSwarm(ctx)
 	s.startHTTPServer()
-	s.startReporter(ctx)
 	s.startSpannerGossip(ctx)
 
-	if s.mode == config.ModeJoiner {
-		slog.Info("bolt ready",
-			"bolt_pubkey", formatLocalBoltPubkey(s.boltID),
-			"grpc", s.cfg.Server.GRPCListen,
-			"api", s.cfg.Server.APIListen,
-		)
-	} else {
-		slog.Info("server ready",
-			"mode", s.mode,
-			"grpc", s.cfg.Server.GRPCListen,
-			"rest", s.cfg.Server.APIListen,
-		)
-	}
+	slog.Info("server ready",
+		"mode", s.mode,
+		"grpc", s.cfg.Server.GRPCListen,
+		"rest", s.cfg.Server.APIListen,
+	)
 
 	<-ctx.Done()
 	slog.Info("shutting down...")
@@ -107,11 +96,6 @@ func (s *Server) startLicenseEnforcement(ctx context.Context) {
 		}
 	}
 
-	// Hub auto-failover: construction migrated into NewServer; only the
-	// goroutine start stays here.
-	if s.hubFailover != nil {
-		go s.hubFailover.Run(ctx)
-	}
 }
 
 // startAsyncFlushers starts the staggered SQLite write batchers
@@ -220,8 +204,8 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 		}
 	}()
 
-	// Start secret rotation watcher (founder and standalone only).
-	if s.mode != config.ModeJoiner && s.cfg.Watcher.Enabled {
+	// Start secret rotation watcher.
+	if s.cfg.Watcher.Enabled {
 		if vp, ok := s.provider.(watcher.VersionProvider); ok {
 			watchPaths := s.configStore.SecretPaths()
 			pollInterval := 5 * time.Minute
@@ -415,31 +399,6 @@ func (s *Server) startHTTPServer() {
 			slog.Error("REST gateway error", "error", err)
 		}
 	}()
-}
-
-// startReporter runs the bolt status reporter on joiner nodes. The
-// reporter signs every announcement with the bolt identity loaded
-// during NewServer; nil signing key falls back to legacy unsigned
-// reports (accepted by peers during mixed-version rollouts). Bootstrap
-// peers come from spanner.transport.bootstrap_peers (ADR-026); gossip
-// will extend this set once 2A.2 wires the CRDT merge.
-func (s *Server) startReporter(ctx context.Context) {
-	if s.mode != config.ModeJoiner || len(s.cfg.Spanner.Transport.BootstrapPeers) == 0 {
-		return
-	}
-	reporter := spanner.NewReporter(
-		formatLocalBoltPubkey(s.boltID),
-		s.cfg.Spanner.SpannerID,
-		boltSigningKeyOrNil(s.boltID),
-		s.cfg.Spanner.Transport.BootstrapPeers,
-		s.cfg.Server.TLS.CertFile,
-		s.cfg.Server.TLS.KeyFile,
-		s.cfg.Server.TLS.CAFile,
-		s.fleetIndex,
-		30*time.Second,
-	)
-	reporter.SetConfigVersion(s.configStore.Version)
-	go reporter.Run(ctx)
 }
 
 // startSpannerGossip runs the Slice 2-i-a roster-replication

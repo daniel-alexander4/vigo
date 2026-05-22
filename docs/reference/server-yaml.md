@@ -332,14 +332,16 @@ grc:
 
 ## spanner
 
-Hub + bolts control-plane sharding. See [Set up Spanner](../howto/set-up-spanner.md) for the walkthrough.
+Peer-equal control-plane federation (ADR-026). See [Set up Spanner](../howto/set-up-spanner.md) for the walkthrough.
 
 ```yaml
-# Founder — the bootstrap-discovery rendezvous (Phase 2A only; Phase 3
-# retires the founder/joiner distinction). Owns a hostname-pattern partition
-# just like any other bolt.
+# A spanner bolt — a peer-equal vigosrv that owns a hostname-pattern
+# partition and shares the admissions roster with every other bolt via
+# CRDT gossip. Every bolt's config has the same shape: one operator
+# founds the spanner with `vigocli spanner init`, the rest join with
+# `vigocli spanner join`.
 spanner:
-  mode: founder
+  mode: spanner
   spanner_id: "alexander4-prod"
   patterns: ["*.us-west.*"]
   snapshot:
@@ -349,41 +351,26 @@ spanner:
     multicast_group: "224.0.0.45"
     multicast_port: 1534
   fallback_admin: local
-
-# Joiner — a bolt that joined an existing spanner via the admission ceremony.
-spanner:
-  mode: joiner
-  spanner_id: "alexander4-prod"        # must match the founder's spanner_id
-  patterns: ["*.dc1.*"]
-  transport:
-    bootstrap_peers:
-      - "founder.example.com:1530"
-      - "founder-standby.example.com:1530"
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `mode` | `standalone` | `standalone`, `founder`, or `joiner` (per ADR-026 — replaces the retired hub/spoke role) |
-| `spanner_id` | (required when mode ≠ standalone) | Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + `-` `_` `.`, no leading dot). Must match across every bolt in the spanner; embedded in every signed announcement and admission row. |
-| `patterns` | (required when mode ≠ standalone) | Hostname glob patterns this bolt owns. First-match-wins across the spanner; loader refuses overlap with another bolt's patterns at publish time + boot time. |
-| `transport.bootstrap_peers` | (required for joiner) | Additive seed list of peer gRPC addresses for first-contact discovery. Gossip extends this list once any peer responds. |
+| `mode` | `standalone` | `standalone` (single vigosrv) or `spanner` (a peer-equal bolt). The pre-Phase-3 `founder`/`joiner` values are retired — the loader hard-errors on them. |
+| `spanner_id` | (required when mode = spanner) | Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + `-` `_` `.`, no leading dot). Must match across every bolt in the spanner; embedded in every signed admission row. |
+| `patterns` | (required when mode = spanner) | Hostname glob patterns this bolt owns. First-match-wins across the spanner; loader refuses overlap with another bolt's patterns at publish time + boot time. |
 | `transport.multicast_group` | `224.0.0.45` | IPv4 multicast group for Tier-1 counter gossip. |
 | `transport.multicast_port` | `1534` | UDP port for Tier-1 counter gossip. |
 | `snapshot.tier1_interval` | `30s` | Tier-1 counter-gossip cadence. |
 | `snapshot.tier2_interval` | `5m` | Tier-2 roster-snapshot cadence. |
 | `fallback_admin` | `local` | Fleet-wide admin-read source: `local` aggregates `ListEnvoys` / `GetConvergenceSummary` from the gossip-backed observability cache (every bolt's signed `/fleet-snapshot`); `fanout` queries every roster bolt's admin gRPC live and merges. Both produce identically-shaped responses. `ListRuns` is unaffected by this switch — runs are never gossiped, so a per-envoy query always routes to the owning bolt and a global runs list always fans out to every bolt. |
 
-Bolts are identified by their Ed25519 pubkey (`server/bolt/identity.wrapped`), not a YAML-configured ID — the pre-Phase-2 `spanner.bolt_id` field is retired (loader hard-errors).
+Peer discovery is gossip-driven — there is no `bootstrap_peers` seed list. A joining bolt learns the roster through the `vigocli spanner join` admission ceremony, and the CRDT-replicated roster is the peer list from then on. Bolts are identified by their Ed25519 pubkey (`server/bolt/identity.wrapped`), not a YAML-configured ID.
 
-### Bolt identity (Phase 1)
+### Bolt identity
 
-Each spanner-mode vigosrv generates a per-host Ed25519 keypair at `/srv/vigo/bolt/identity.wrapped` on first boot (HKDF purpose `vigo-bolt-wrap-v1`, mirrors the service-account puddle pattern). The reporter signs every `BoltStatusReport` with this key; the hub verifies the signature against the asserted pubkey and pins `(spanner_id, bolt_id) → pubkey` on first sighting. Subsequent reports with a mismatched pubkey are rejected (`PermissionDenied`) and emit a `spanner_bolt_pubkey_mismatch` audit event.
+Each spanner-mode vigosrv generates a per-host Ed25519 keypair at `/srv/vigo/bolt/identity.wrapped` on first boot (HKDF purpose `vigo-bolt-wrap-v1`, mirrors the service-account puddle pattern). The bolt signs its admission row and every gossiped roster snapshot with this key; peers verify signatures end-to-end and pin each bolt's pubkey at admission time. `vigocli spanner status` shows the local bolt's first-16-char pubkey for operator cross-check.
 
-Pins are in-memory only — a hub restart clears them and the next round of announcements re-pins. Pre-Phase-1 reporters (no signature/pubkey fields) are accepted without pinning to keep mixed-version rollout safe. Legitimate key rotation (regenerate `/srv/vigo/bolt/`) requires a hub restart to clear the old pin.
-
-`vigocli spanner status` shows the local bolt's first-16-char pubkey for operator cross-check against the hub's audit event payload.
-
-> The old `spanner:` block name is rejected at startup with a one-line error pointing here. Operators must rename `spanner:` → `spanner:`, `spokes:` → `bolts:`, and `spoke_id:` → `bolt_id:` in one pass.
+> The retired hub-spoke keys (`role`, `bolt_id`, `hub_addr`, `hub_fallback_addrs`, `bolts`, `auto_failover`, `transport.bootstrap_peers`) and the retired `mode` values `founder`/`joiner` are rejected at startup with a one-line migration pointer.
 
 ## peers
 
@@ -413,7 +400,7 @@ license:
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `mode` | `local` | `local`: count nodes on this server. `aggregate`: hub sums across all bolts |
+| `mode` | `local` | `local`: count nodes on this server. `aggregate`: every spanner bolt sums the fleet-wide node count from the gossip-replicated roster and enforces independently |
 
 ## publish
 

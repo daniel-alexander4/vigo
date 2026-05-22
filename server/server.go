@@ -186,9 +186,10 @@ type Server struct {
 	// construction below). envoyCounter (the license enforcer's count
 	// callback) captures these by reading through the *Server. Both stay
 	// nil through the license-enforcer assignment and are populated
-	// during the hub-init + fleet-rehydrate stages farther down NewServer.
-	hub        *spanner.Hub
-	fleetIndex *fleet.FleetIndex
+	// during the fleet-rehydrate + spanner-admin stages farther down
+	// NewServer.
+	spannerAdmin *spanner.SpannerAdmin
+	fleetIndex   *fleet.FleetIndex
 
 	// --- gRPC server + services. Constructed in chunk 4. peerService is
 	// registered on grpcSrv after construction; the actual grpcSrv.Serve
@@ -199,11 +200,6 @@ type Server struct {
 	traitsPruner *db.TraitsPruner
 	agentSvc     *isgrpc.AgentService
 	adminSvc     *isgrpc.AdminService
-
-	// --- Hub auto-failover (nil unless role == hub AND
-	// cfg.Spanner.AutoFailover.Enabled). The `go failover.Run` goroutine
-	// stays in chunk 5. ---
-	hubFailover *spanner.Failover
 
 	// --- Spanner roster gossiper (Slice 2-i-a; nil in standalone mode).
 	// Pulls every peer's /snapshot on the Tier-2 timer and CRDT-merges
@@ -467,32 +463,31 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	//
 	// license.mode controls counting:
 	//   "local" (default): count enrolled nodes on this server only.
-	//   "aggregate": hub sums node counts across all spanner bolts.
-	//                bolts skip enforcement entirely.
+	//   "aggregate": sum node counts across the whole spanner. Every
+	//                peer-equal bolt enforces independently off the
+	//                gossip-replicated roster — there is no designated
+	//                enforcer (ADR-026 peer-equal model).
 	s.licenseMode = s.cfg.License.Mode
 	if s.licenseMode == "" {
 		s.licenseMode = "local"
 	}
 
-	// In aggregate mode, joiners skip enforcement — the founder handles it.
-	if s.licenseMode == "aggregate" && s.mode == config.ModeJoiner {
-		slog.Info("license mode aggregate: joiner skips enforcement (founder enforces)")
-	}
-
-	// envoyCounter closes over *Server. s.hub and s.fleetIndex stay nil
-	// through NewServer and are assigned later in run() during the
-	// hub-init + fleet-rehydrate stages still pending migration. The
+	// envoyCounter closes over *Server. s.spannerAdmin and s.fleetIndex
+	// stay nil through the license-enforcer assignment and are populated
+	// later in NewServer (fleet-rehydrate + spanner-admin stages). The
 	// enforcement loop runs on a 1-hour ticker, so the real values are
 	// in place well before the first call.
 	envoyCounter := func(ctx context.Context) (int, error) {
-		// Aggregate mode on hub: sum node counts from all bolts + local.
-		if s.licenseMode == "aggregate" && s.hub != nil {
+		// Aggregate mode: sum the whole spanner. AggregateEnvoysLocal
+		// folds the local fleet index together with every gossiped peer
+		// roster, so each bolt computes the same fleet-wide count.
+		if s.licenseMode == "aggregate" && s.spannerAdmin != nil {
+			envoys, _ := s.spannerAdmin.AggregateEnvoysLocal()
 			total := 0
-			for _, st := range s.hub.BoltStatuses(ctx) {
-				total += int(st.EnvoyCount)
-			}
-			if s.fleetIndex != nil {
-				total += s.fleetIndex.ActiveCount()
+			for _, e := range envoys {
+				if !e.Revoked {
+					total++
+				}
 			}
 			return total, nil
 		}
@@ -509,21 +504,14 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		return s.fleetIndex.ActiveCount(), nil
 	}
 
-	// Joiners in aggregate mode use a no-op enforcer that always passes.
-	if s.licenseMode == "aggregate" && s.mode == config.ModeJoiner {
-		s.enforcer, err = license.NewEnforcer(s.licenseDir, s.licenseGraceDir, s.cfg.Server.TLS.CAFile,
-			func(_ context.Context) (int, error) { return 0, nil }, // always zero — founder enforces
-			func() { s.cancel() }, s.metrics)
-	} else {
-		s.enforcer, err = license.NewEnforcer(s.licenseDir, s.licenseGraceDir, s.cfg.Server.TLS.CAFile, envoyCounter, func() { s.cancel() }, s.metrics)
-	}
+	s.enforcer, err = license.NewEnforcer(s.licenseDir, s.licenseGraceDir, s.cfg.Server.TLS.CAFile, envoyCounter, func() { s.cancel() }, s.metrics)
 	if err != nil {
 		return nil, fmt.Errorf("license: %w", err)
 	}
 
-	// Spanner requires a paid license — reject founder/joiner on free tier.
+	// Spanner requires a paid license — reject spanner mode on free tier.
 	if s.mode != config.ModeStandalone && s.enforcer.IsFreeLicense() {
-		return nil, fmt.Errorf("spanner (mode %q) requires a paid license — the built-in free license does not support spanner", s.mode)
+		return nil, fmt.Errorf("spanner mode requires a paid license — the built-in free license does not support spanner")
 	}
 
 	// --- Auth ---
@@ -657,22 +645,6 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		})
 	})
 
-	// --- Spanner hub (founder mode only — bootstrap-discovery rendezvous
-	// per ADR-026; full hub retirement is Phase 3). The failover goroutine
-	// still starts from run(); construction lands here so the envoyCounter
-	// closure (assigned earlier in NewServer) sees s.hub before any
-	// enforcement tick fires. hub.Close() is called from (*Server).Close().
-	if s.mode == config.ModeFounder {
-		hub, err := spanner.NewHub(ctx, s.cfg.Spanner.Transport.BootstrapPeers, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.metrics)
-		if err != nil {
-			return nil, fmt.Errorf("connecting to bootstrap peers: %w", err)
-		}
-		s.hub = hub
-		// Phase 1: wire audit writer for spanner_bolt_pubkey_mismatch events.
-		hub.SetAuditWriter(s.auditWriter)
-		slog.Info("spanner hub initialized", "bolts", hub.BoltCount())
-	}
-
 	// --- Task definitions ---
 	s.taskStore = task.NewStore()
 	if err := s.taskStore.Load(s.taskDir); err != nil {
@@ -794,16 +766,16 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 
 	// --- Swarm substrate: peer-to-peer content distribution. The substrate
-	// runs on this server iff the mode isn't joiner AND the
-	// server-as-envoy hostname matches the swarm pattern list — the
-	// canonical assumption is the server hosts a local agent under
-	// cfg.Server.Hostname (CLAUDE.md). An empty pattern list disables
-	// the substrate entirely. Only the bare substrate (peerTracker,
-	// manifestStore, curator aggregator) lands here; the API handlers
-	// that wire up to gwMux + the `go runCuratorFeed` reactor stay in
-	// run() and chunk 4. ManifestStore.Stop() is called from
-	// (*Server).Close(). ---
-	if s.mode != config.ModeJoiner && config.HostMatchesPatterns(s.cfg.Server.Hostname, s.cfg.Swarm.Enabled) {
+	// runs on this server iff the server-as-envoy hostname matches the
+	// swarm pattern list — the canonical assumption is the server hosts a
+	// local agent under cfg.Server.Hostname (CLAUDE.md). An empty pattern
+	// list disables the substrate entirely. Every spanner bolt is a
+	// full vigosrv, so the substrate runs in standalone and spanner mode
+	// alike. Only the bare substrate (peerTracker, manifestStore, curator
+	// aggregator) lands here; the API handlers that wire up to gwMux + the
+	// `go runCuratorFeed` reactor stay in run() and chunk 4.
+	// ManifestStore.Stop() is called from (*Server).Close(). ---
+	if config.HostMatchesPatterns(s.cfg.Server.Hostname, s.cfg.Swarm.Enabled) {
 		seedDir := s.cfg.Swarm.SeedDir
 		if seedDir == "" {
 			seedDir = "/var/lib/vigo/swarm/seed"
@@ -870,7 +842,6 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		KeepaliveTime:        s.kaTime,
 		KeepaliveTimeout:     s.kaTimeout,
 		StreamSendBuffer:     s.cfg.Tuning.StreamSendBuffer,
-		Hub:                  s.hub,
 		LicenseEnforcer:      s.enforcer,
 		TaskStore:            s.taskStore,
 		FleetIndex:           s.fleetIndex,
@@ -913,11 +884,6 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		pb.RegisterVigoPeerServer(s.grpcSrv, s.peerService)
 		slog.Info("peer replication enabled", "role", peerRole, "peers", len(s.cfg.Peers.Servers))
 	}
-
-	// --- Hub auto-failover retired in 2A.1b (ADR-026): failover is now
-	// implicit via CRDT gossip + freshness thresholds (spanner.freshness),
-	// not a hub-side polling probe. The s.hubFailover field stays nil;
-	// run() no-ops when it's nil. ---
 
 	// --- Workflow engine. Load + RecoverInterrupted are one-shot sync
 	// calls so they fold into NewServer; the engine is wired into
@@ -996,7 +962,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		}
 	}
 
-	// --- REST handlers (shared across hub/standalone and bolt modes). ---
+	// --- REST handlers (shared across standalone and spanner modes). ---
 	licenseHandler := api.NewLicenseHandler(s.enforcer)
 	doctorHandler := api.NewDoctorHandler(api.DoctorConfig{
 		SQLDB:            s.db,
@@ -1007,7 +973,6 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		Queries:          s.queries,
 		Interval:         s.baseInterval,
 		OfflineThreshold: s.offlineThreshold,
-		Hub:              s.hub,
 		Integrations:     s.integrations.Enabled(),
 		Mode:             s.mode,
 		SecretsBackend:   s.secretsCfg.Backend,
@@ -1022,7 +987,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// swarm_pattern_order check has data on the first /doctor call.
 	doctorHandler.SetSwarmConfig(s.cfg.Swarm)
 
-	spannerHandler := api.NewSpannerHandler(s.mode, s.cfg.Spanner.SpannerID, formatLocalBoltPubkey(s.boltID), s.hub)
+	spannerHandler := api.NewSpannerHandler(s.mode, s.cfg.Spanner.SpannerID, formatLocalBoltPubkey(s.boltID))
 	opsPuddleHandler := api.NewSpannerOpsPuddleHandler(s.provider, puddle.OpsDefaultDir, s.auditWriter)
 	// Spanner Slice 2A.2 — membership ceremony (ADR-026). Founds a
 	// spanner, mints join invites, admits joining bolts. Needs the
@@ -1080,7 +1045,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		if err != nil {
 			return nil, fmt.Errorf("building spanner peer dialer: %w", err)
 		}
-		spannerAdmin := spanner.NewSpannerAdmin(
+		s.spannerAdmin = spanner.NewSpannerAdmin(
 			s.queries,
 			s.spannerGossip.ObservabilityCache(),
 			peerDialer,
@@ -1089,7 +1054,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			grpcListenPort(s.cfg.Server.GRPCListen),
 		)
 		if s.fleetIndex != nil {
-			spannerAdmin.SetLocalSources(
+			s.spannerAdmin.SetLocalSources(
 				func() spanner.ConvergenceCounters {
 					return api.FleetCountersToSpanner(s.fleetIndex.ConvergenceSummary())
 				},
@@ -1098,9 +1063,9 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 				},
 			)
 		}
-		s.adminSvc.SetSpannerAdmin(spannerAdmin)
-		s.agentSvc.SetSpannerAdmin(spannerAdmin)
-		spannerHandler.SetSpannerAdmin(spannerAdmin)
+		s.adminSvc.SetSpannerAdmin(s.spannerAdmin)
+		s.agentSvc.SetSpannerAdmin(s.spannerAdmin)
+		spannerHandler.SetSpannerAdmin(s.spannerAdmin)
 	}
 
 	taskHandler := api.NewTaskHandler(s.queries, s.agentSvc, s.cfg.Task.RequireDefinition)
@@ -1153,48 +1118,15 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		s.grcPusher = grc.NewPusher(s.cfg.GRC.Integrations, s.fleetIndex, s.configStore)
 	}
 
-	// --- REST gateway construction. Two branches: bolts serve API +
-	// metrics only; hub/standalone adds UI + bootstrap + swarm + many
-	// more routes. ---
+	// --- REST gateway construction. Every vigosrv — standalone or a
+	// peer-equal spanner bolt — serves the full gateway: UI + bootstrap
+	// + swarm + the admin API. ---
 	if s.isPostgres {
 		dbDriver = "postgres"
 	} else {
 		dbDriver = "sqlite"
 	}
-	if s.mode == config.ModeJoiner {
-		mux, gwErr := api.NewBoltGateway(ctx, s.cfg.Server.GRPCListen, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, formatLocalBoltPubkey(s.boltID), s.promReg)
-		if gwErr != nil {
-			return nil, fmt.Errorf("creating bolt gateway: %w", gwErr)
-		}
-		licenseHandler.RegisterRoutes(mux)
-		doctorHandler.RegisterRoutes(mux)
-		spannerHandler.RegisterRoutes(mux)
-		spannerAdmissionHandler.RegisterRoutes(mux)
-		opsPuddleHandler.RegisterRoutes(mux)
-		peerHandler.RegisterRoutes(mux)
-		taskHandler.RegisterRoutes(mux)
-		queryHandler.RegisterRoutes(mux)
-		workflowHandler.RegisterRoutes(mux)
-		exportHandler.RegisterRoutes(mux)
-		s.reportHandler.RegisterRoutes(mux)
-		usersHandler.RegisterRoutes(mux)
-		tokensHandler.RegisterRoutes(mux)
-		if s.aiHandler != nil {
-			s.aiHandler.RegisterRoutes(mux)
-		}
-		s.authProvider.RegisterRoutes(mux)
-		if s.scrierHandler != nil {
-			s.scrierHandler.RegisterRoutes(mux)
-		}
-		// Serve license files so agents can download them during bootstrap.
-		mux.HandleFunc("GET /license/LICENSE", serveLicenseFile(s.serverRoot, "LICENSE"))
-		mux.HandleFunc("GET /license/COMMERCIAL-TERMS.md", serveLicenseFile(s.serverRoot, "COMMERCIAL-TERMS.md"))
-		s.gwMux = mux
-		s.httpSrv = &http.Server{
-			Addr:    s.cfg.Server.APIListen,
-			Handler: s.authProvider.Middleware(api.MaxBodyMiddleware(mux)),
-		}
-	} else {
+	{
 		// Load CA for bootstrap CSR signing (optional — only if ca_key_file is configured).
 		var gwOpts []api.GatewayOption
 		if s.cfg.Server.TLS.CAKeyFile != "" {
@@ -1256,7 +1188,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			}
 		}
 
-		gwMux, uiHandler, gwErr := api.NewGateway(ctx, s.cfg.Server.GRPCListen, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, s.cfg.Server.APIListen, s.agentDir, version, s.docsDir, s.assistant, s.hub, s.runStore, s.fleetIndex, s.authMethod, s.enforcer, s.cfg.Publish, s.cfg.Branding, s.peerService, s.auditWriter, s.complianceDocsStore, s.publishState, s.promReg, s.metrics, gwOpts...)
+		gwMux, uiHandler, gwErr := api.NewGateway(ctx, s.cfg.Server.GRPCListen, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, s.cfg.Server.APIListen, s.agentDir, version, s.docsDir, s.assistant, s.spannerAdmin, s.runStore, s.fleetIndex, s.authMethod, s.enforcer, s.cfg.Publish, s.cfg.Branding, s.peerService, s.auditWriter, s.complianceDocsStore, s.publishState, s.promReg, s.metrics, gwOpts...)
 		if gwErr != nil {
 			return nil, fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
@@ -1427,9 +1359,6 @@ func (s *Server) Close() error {
 	}
 	if s.manifestStore != nil {
 		s.manifestStore.Stop()
-	}
-	if s.hub != nil {
-		s.hub.Close()
 	}
 	if s.db != nil {
 		_ = s.db.Close()

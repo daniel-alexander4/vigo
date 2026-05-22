@@ -10,11 +10,10 @@ import (
 	"testing"
 
 	"git.alexander4.io/vigo/server/config"
-	"git.alexander4.io/vigo/server/spanner"
 )
 
 func TestSpannerStatusStandalone(t *testing.T) {
-	handler := NewSpannerHandler("", "", "", nil)
+	handler := NewSpannerHandler("", "", "")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -34,13 +33,13 @@ func TestSpannerStatusStandalone(t *testing.T) {
 	if resp.Mode != "standalone" {
 		t.Errorf("Mode = %q, want standalone", resp.Mode)
 	}
-	if resp.Bolts != nil {
-		t.Errorf("Bolts = %v, want nil", resp.Bolts)
+	if resp.PeerObservability != nil {
+		t.Errorf("PeerObservability = %v, want nil", resp.PeerObservability)
 	}
 }
 
-func TestSpannerStatusJoiner(t *testing.T) {
-	handler := NewSpannerHandler(config.ModeJoiner, "test-spanner", "abcdef0123456789", nil)
+func TestSpannerStatusSpanner(t *testing.T) {
+	handler := NewSpannerHandler(config.ModeSpanner, "test-spanner", "abcdef0123456789")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -57,8 +56,8 @@ func TestSpannerStatusJoiner(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 
-	if resp.Mode != "joiner" {
-		t.Errorf("Mode = %q, want joiner", resp.Mode)
+	if resp.Mode != "spanner" {
+		t.Errorf("Mode = %q, want spanner", resp.Mode)
 	}
 	if resp.SpannerID != "test-spanner" {
 		t.Errorf("SpannerID = %q, want test-spanner", resp.SpannerID)
@@ -68,36 +67,8 @@ func TestSpannerStatusJoiner(t *testing.T) {
 	}
 }
 
-func TestSpannerStatusFounderNilHub(t *testing.T) {
-	// Founder mode but nil hub -- no bootstrap peers connected.
-	// Status still returns mode.
-	handler := NewSpannerHandler(config.ModeFounder, "test-spanner", "", nil)
-	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
-
-	req := httptest.NewRequest("GET", "/api/v1/spanner/status", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, adminReq(req))
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var resp SpannerStatus
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-
-	if resp.Mode != "founder" {
-		t.Errorf("Mode = %q, want founder", resp.Mode)
-	}
-	if resp.Bolts != nil {
-		t.Errorf("Bolts = %v, want nil (no hub)", resp.Bolts)
-	}
-}
-
 func TestSpannerStatusResponseFormat(t *testing.T) {
-	handler := NewSpannerHandler("", "", "", nil)
+	handler := NewSpannerHandler("", "", "")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -111,8 +82,10 @@ func TestSpannerStatusResponseFormat(t *testing.T) {
 	}
 }
 
-func TestBoltDrilldownRoutesNotRegisteredWithoutHub(t *testing.T) {
-	handler := NewSpannerHandler(config.ModeStandalone, "", "", nil)
+// In standalone mode the bolt drill-down routes are registered but
+// have no spanner admin behind them, so every one returns non-200.
+func TestBoltDrilldownRoutesInertWithoutSpannerAdmin(t *testing.T) {
+	handler := NewSpannerHandler(config.ModeStandalone, "", "")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -135,14 +108,14 @@ func TestBoltDrilldownRoutesNotRegisteredWithoutHub(t *testing.T) {
 			mux.ServeHTTP(rec, adminReq(req))
 
 			if rec.Code == http.StatusOK {
-				t.Errorf("expected non-200 for %s %s without hub, got %d", ep.method, ep.path, rec.Code)
+				t.Errorf("expected non-200 for %s %s without spanner admin, got %d", ep.method, ep.path, rec.Code)
 			}
 		})
 	}
 }
 
 func TestSpannerStatusJSON(t *testing.T) {
-	handler := NewSpannerHandler(config.ModeJoiner, "test-spanner", "pubkey-x", nil)
+	handler := NewSpannerHandler(config.ModeSpanner, "test-spanner", "pubkey-x")
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
@@ -162,5 +135,3 @@ func TestSpannerStatusJSON(t *testing.T) {
 		t.Error("missing 'spanner_id' key in response JSON")
 	}
 }
-
-var _ = spanner.BoltStatus{} // ensure type is importable

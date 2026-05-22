@@ -45,11 +45,10 @@ type AgentService struct {
 	taskRouter       *taskRouter
 	queryRouter      *queryRouter
 	taskStore        *task.Store
-	hub              *spanner.Hub // non-nil when role=hub; routes enrollment to spokes
 	// spannerAdmin drives the peer-equal enrollment routing (Slice
 	// 2-ii-b). Non-nil when this vigosrv is in a spanner (mode !=
-	// standalone). Register dispatches: hub != nil → hub routing;
-	// else spannerAdmin != nil → OwningBolt redirect; else local-only.
+	// standalone). Register dispatches: spannerAdmin != nil →
+	// OwningBolt redirect; else local-only.
 	spannerAdmin     *spanner.SpannerAdmin
 	licenseEnforcer  *license.Enforcer
 	fleetIndex       *fleet.FleetIndex // in-memory index for hot-path operations
@@ -225,12 +224,11 @@ type AdminService struct {
 	metrics          *metrics.Metrics // per-instance prometheus collectors
 	baseInterval     time.Duration
 	offlineThreshold time.Duration
-	hub              *spanner.Hub      // non-nil when role=hub; aggregates from bolts
 	// spannerAdmin drives the peer-equal fleet-observability admin
 	// reads (Slice 2-ii-a). Non-nil when this vigosrv is in a spanner
 	// (mode != standalone). The three fleet-wide reads dispatch:
-	// hub != nil → hub path; else spannerAdmin != nil → cache-aggregate
-	// (local) or fanout per fallback_admin; else → pure-local path.
+	// spannerAdmin != nil → cache-aggregate (local) or fanout per
+	// fallback_admin; else → pure-local path.
 	spannerAdmin  *spanner.SpannerAdmin
 	fleetIndex    *fleet.FleetIndex // in-memory index for hot-path operations
 	reassignStore *ReassignStore    // pending envoy reassignments (bolt side)

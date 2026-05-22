@@ -28,8 +28,6 @@ func TestAllMetricsRegistered(t *testing.T) {
 	m.WebhookDeliveriesTotal.WithLabelValues("test").Add(0)
 	m.WebhookDuration.Observe(0)
 	m.SMTPSendsTotal.WithLabelValues("test", "test").Add(0)
-	m.SpannerBoltLatency.WithLabelValues("test").Observe(0)
-	m.SpannerBoltUp.WithLabelValues("test").Set(0)
 	m.FleetIndexFlushDuration.Observe(0)
 	m.BuildInfo.WithLabelValues("test").Set(1)
 	m.EnrollmentsTotal.WithLabelValues("test").Add(0)
@@ -69,8 +67,6 @@ func TestAllMetricsRegistered(t *testing.T) {
 		"vigo_webhook_deliveries_total",
 		"vigo_webhook_duration_seconds",
 		"vigo_smtp_sends_total",
-		"vigo_spanner_bolt_latency_seconds",
-		"vigo_spanner_bolt_up",
 		"vigo_license_envoys_used",
 		"vigo_license_envoys_max",
 		"vigo_license_stage",
@@ -122,7 +118,6 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	m.UptimeSeconds.Set(3600)
 	m.BuildInfo.WithLabelValues("dev").Set(1)
 	m.StreamsActive.Set(5)
-	m.SpannerBoltUp.WithLabelValues("dc1").Set(1)
 	m.FleetIndexDirtyCount.Set(42)
 
 	// Verify histograms can observe.
@@ -130,6 +125,5 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	m.RunDuration.WithLabelValues("testnode").Observe(1.5)
 	m.GRPCRequestDuration.WithLabelValues("/vigo.VigoAgent/CheckIn").Observe(0.05)
 	m.WebhookDuration.Observe(0.5)
-	m.SpannerBoltLatency.WithLabelValues("dc1").Observe(0.1)
 	m.FleetIndexFlushDuration.Observe(0.01)
 }

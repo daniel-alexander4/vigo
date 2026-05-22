@@ -15,18 +15,15 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// Spanner Slice 2-ii-a — the peer-conn layer (ADR-026 + the
-// spanner-redesign plan). This file lifts the bolt-to-bolt admin-gRPC
-// dialing out of hub.go so it survives Slice 2-ii-b's deletion of the
-// hub: the peer-equal `fanout` admin path (the kill-switch in
-// spanner.fallback_admin) needs to dial every roster bolt's surviving
-// per-bolt admin RPCs without a Hub to drive it.
+// Spanner peer-conn layer (ADR-026 + the spanner-redesign plan). The
+// peer-equal admin paths — the `fanout` admin reads, enrollment
+// routing, force-push, reassign, drain — all need to dial roster
+// bolts' per-bolt admin RPCs directly.
 //
 // PeerConn is one long-lived mTLS gRPC connection to a peer bolt's
 // VigoAdmin surface. PeerDialer builds the shared mTLS credentials
-// once and hands out PeerConns. hub.go now USES PeerDialer rather than
-// constructing connections itself — behaviour is identical, the
-// dialing code just lives in one reusable place.
+// once and hands out PeerConns — the dialing code lives in one
+// reusable place.
 
 // PeerConn is one bolt-to-bolt admin-gRPC connection. It wraps the
 // raw *grpc.ClientConn plus a ready-to-use VigoAdminClient. id and
@@ -89,9 +86,8 @@ func (d *PeerDialer) Dial(id, addr string, patterns []string) (*PeerConn, error)
 	}, nil
 }
 
-// buildClientTLS creates TLS credentials for bolt-to-bolt admin gRPC.
-// Shared by PeerDialer and the legacy Hub constructor — both dial the
-// same fleet-CA-signed mTLS surface.
+// buildClientTLS creates TLS credentials for bolt-to-bolt admin gRPC
+// against the fleet-CA-signed mTLS surface.
 func buildClientTLS(certFile, keyFile, caFile string) (credentials.TransportCredentials, error) {
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {

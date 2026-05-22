@@ -207,6 +207,9 @@ func detectRetiredSpannerKeys(data []byte) error {
 			HubFallbackAddrs any `yaml:"hub_fallback_addrs"`
 			Bolts            any `yaml:"bolts"`
 			AutoFailover     any `yaml:"auto_failover"`
+			Transport        struct {
+				BootstrapPeers any `yaml:"bootstrap_peers"`
+			} `yaml:"transport"`
 		} `yaml:"spanner"`
 	}
 	if err := yaml.Unmarshal(data, &raw); err != nil {
@@ -214,22 +217,25 @@ func detectRetiredSpannerKeys(data []byte) error {
 	}
 	var retired []string
 	if raw.Spanner.Role != nil {
-		retired = append(retired, "spanner.role — replaced by spanner.mode (values: standalone | founder | joiner)")
+		retired = append(retired, "spanner.role — replaced by spanner.mode (values: standalone | spanner)")
 	}
 	if raw.Spanner.BoltID != nil {
 		retired = append(retired, "spanner.bolt_id — retired; bolts are identified by their Ed25519 pubkey (server/bolt/), not a YAML-configured string")
 	}
 	if raw.Spanner.HubAddr != nil {
-		retired = append(retired, "spanner.hub_addr — replaced by spanner.transport.bootstrap_peers (additive seed list for first-contact discovery)")
+		retired = append(retired, "spanner.hub_addr — retired; the hub is gone. Join a spanner with the `vigocli spanner join` admission ceremony — the CRDT-replicated roster is the peer list")
 	}
 	if raw.Spanner.HubFallbackAddrs != nil {
-		retired = append(retired, "spanner.hub_fallback_addrs — fold into spanner.transport.bootstrap_peers (additive seed list; gossip discovers the rest)")
+		retired = append(retired, "spanner.hub_fallback_addrs — retired; peer discovery is gossip-driven. Join a spanner with `vigocli spanner join`")
 	}
 	if raw.Spanner.Bolts != nil {
 		retired = append(retired, "spanner.bolts — retired; per-bolt patterns + identity live in the gossiped admissions CRDT, not in server.yaml. Each vigosrv declares its own patterns via spanner.patterns")
 	}
 	if raw.Spanner.AutoFailover != nil {
 		retired = append(retired, "spanner.auto_failover — retired; failover is implicit in CRDT gossip + freshness thresholds (spanner.freshness.stale_after)")
+	}
+	if raw.Spanner.Transport.BootstrapPeers != nil {
+		retired = append(retired, "spanner.transport.bootstrap_peers — retired; peer discovery is gossip-driven. A joining bolt learns the roster through `vigocli spanner join`, and the CRDT-replicated roster is the peer list from then on")
 	}
 	if len(retired) == 0 {
 		return nil

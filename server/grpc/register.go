@@ -21,9 +21,9 @@ import (
 // Register handles the VigoAgent.Register RPC. It delegates to the enrollment
 // registry, which runs the license gate, validates the one-time token against
 // approved patterns, inserts the envoy in the DB and FleetIndex, and returns
-// the envoy ID. In hub mode, after the hub's local registration succeeds, the
-// envoy is re-enrolled on the target bolt and the bolt address is returned
-// to the agent.
+// the envoy ID. In a spanner, when another roster bolt owns the hostname's
+// pattern partition the envoy is re-enrolled on that bolt and its address is
+// returned to the agent (the peer-equal redirect, Slice 2-ii-b).
 //
 // All license enforcement lives inside registry.Register — this handler does
 // not call licenseEnforcer.RegistrationAllowedAt directly. That way the gate
@@ -74,53 +74,24 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		}
 	}
 
-	// Keep a handle to the hub-local envoy ID so we can clean up the hub's
-	// FleetIndex entry if the enrollment is routed to a bolt. envoyID may
-	// be reassigned to the bolt's ID below.
-	hubLocalEnvoyID := envoyID
+	// Keep a handle to the locally-registered envoy ID so we can clean
+	// up this server's FleetIndex entry if the enrollment is routed to
+	// another bolt. envoyID may be reassigned to the owning bolt's ID
+	// below.
+	localEnvoyID := envoyID
 
 	var boltAddr string
 
-	// Enrollment routing. Two additive branches; the peer-equal path
-	// (Slice 2-ii-b) is the effective one — the hub's RouteHostname is
-	// degraded (returns no-route) under ADR-026, so the hub branch
-	// no-ops on every hostname until Slice 2-ii-c retires the hub.
-	//
-	// Hub mode (legacy; retired by Slice 2-ii-c): route to the target
-	// bolt the hub's pattern table picks.
-	if s.hub != nil {
-		addr, matched := s.hub.RouteHostname(req.GetHostname())
-		if matched {
-			boltEnvoyID, enrollErr := s.hub.EnrollOnBolt(ctx, addr, req.GetHostname(), req.GetIpAddress(), req.GetPubkeyPem(), req.GetForce())
-			if enrollErr != nil {
-				slog.Error("bolt enrollment failed, envoy registered on hub only",
-					"hostname", req.GetHostname(),
-					"bolt_addr", addr,
-					"error", enrollErr,
-				)
-			} else {
-				// Bolt created the envoy — use the bolt's envoy ID and address.
-				envoyID = boltEnvoyID
-				boltAddr = addr
-				slog.Info("envoy enrolled on bolt",
-					"hostname", req.GetHostname(),
-					"bolt_addr", addr,
-					"envoy_id", envoyID,
-				)
-			}
-		}
-	}
-
-	// Peer-equal mode (Slice 2-ii-b): resolve which roster bolt owns
-	// this hostname via OwningBolt (the ADR-002 pattern matcher over
-	// the gossiped admissions roster). When a DIFFERENT bolt owns it,
-	// create the envoy record on that bolt via a direct EnrollEnvoy
-	// admin RPC and return its address — the agent persists bolt_addr
-	// and checks in there with the bolt-assigned envoy ID (the redirect
-	// mechanism; no agent re-registration). When this bolt owns the
-	// hostname (or no roster bolt claims it), the local registration
-	// already done above stands.
-	if boltAddr == "" && s.spannerAdmin != nil {
+	// Peer-equal enrollment routing (Slice 2-ii-b): resolve which
+	// roster bolt owns this hostname via OwningBolt (the ADR-002
+	// pattern matcher over the gossiped admissions roster). When a
+	// DIFFERENT bolt owns it, create the envoy record on that bolt via
+	// a direct EnrollEnvoy admin RPC and return its address — the agent
+	// persists bolt_addr and checks in there with the bolt-assigned
+	// envoy ID (the redirect mechanism; no agent re-registration). When
+	// this bolt owns the hostname (or no roster bolt claims it), the
+	// local registration already done above stands.
+	if s.spannerAdmin != nil {
 		ownerPubkey, ownerHostname, owned := s.spannerAdmin.OwningBolt(ctx, req.GetHostname())
 		if owned && !s.spannerAdmin.OwnsLocally(ownerPubkey) && ownerHostname != "" {
 			boltEnvoyID, enrollErr := s.spannerAdmin.EnrollOnPeerBolt(ctx, ownerHostname, req.GetHostname(), req.GetIpAddress(), req.GetPubkeyPem(), req.GetForce())
@@ -145,13 +116,13 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		}
 	}
 
-	// FleetIndex insertion is now handled inside registry.Register under the
-	// enrollment mutex, so we don't call AddEnvoy here. In hub mode where the
-	// enrollment was routed to a bolt, the hub's local FleetIndex entry is
-	// redundant — the bolt now owns this envoy — so remove it to keep the
-	// hub-local active count accurate.
+	// FleetIndex insertion is now handled inside registry.Register under
+	// the enrollment mutex, so we don't call AddEnvoy here. When the
+	// enrollment was routed to another roster bolt, this server's local
+	// FleetIndex entry is redundant — the owning bolt now holds the
+	// envoy — so remove it to keep the local active count accurate.
 	if s.fleetIndex != nil && boltAddr != "" {
-		s.fleetIndex.RemoveEnvoy(hubLocalEnvoyID)
+		s.fleetIndex.RemoveEnvoy(localEnvoyID)
 	}
 
 	slog.Info("envoy registered",

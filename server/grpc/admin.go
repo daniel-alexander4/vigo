@@ -98,17 +98,9 @@ func (s *AdminService) RevokeApprovedPattern(ctx context.Context, req *pb.Revoke
 
 func (s *AdminService) ListEnvoys(ctx context.Context, req *pb.ListEnvoysRequest) (*pb.ListEnvoysResponse, error) {
 	// Dispatch (Slice 2-ii-a):
-	//   (a) hub != nil           → hub fan-out (unchanged; until Phase 3)
-	//   (b) spannerAdmin, fanout → live fan-out to every roster bolt
-	//   (c) spannerAdmin, local  → aggregate from the observability cache
-	//   (d) standalone           → the pure-local path below
-	if s.hub != nil {
-		envoys, err := s.hub.AggregateListEnvoys(ctx)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "aggregating envoys from bolts: %v", err)
-		}
-		return &pb.ListEnvoysResponse{Envoys: envoys}, nil
-	}
+	//   (a) spannerAdmin, fanout → live fan-out to every roster bolt
+	//   (b) spannerAdmin, local  → aggregate from the observability cache
+	//   (c) standalone           → the pure-local path below
 	if s.spannerAdmin != nil {
 		if s.spannerAdmin.Fanout() {
 			envoys, err := s.spannerAdmin.AggregateEnvoysFanout(ctx)
@@ -273,15 +265,6 @@ func (s *AdminService) DeleteEnvoy(ctx context.Context, req *pb.DeleteEnvoyReque
 // ---------- ForcePush ----------
 
 func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) (*pb.ForcePushResponse, error) {
-	// Hub mode: forward to all bolts.
-	if s.hub != nil {
-		total, err := s.hub.ForwardForcePush(ctx, req.GetEnvoyId())
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "forwarding force push to bolts: %v", err)
-		}
-		return &pb.ForcePushResponse{EnvoysNotified: total}, nil
-	}
-
 	if req.EnvoyId != "" {
 		// Single envoy
 		if _, err := uuid.Parse(req.EnvoyId); err != nil {
@@ -330,19 +313,6 @@ func (s *AdminService) ForcePush(ctx context.Context, req *pb.ForcePushRequest) 
 // ---------- Runs ----------
 
 func (s *AdminService) ListRuns(ctx context.Context, req *pb.ListRunsRequest) (*pb.ListRunsResponse, error) {
-	// Hub mode: aggregate from all bolts (unchanged; until Phase 3).
-	if s.hub != nil {
-		limit := req.Limit
-		if limit <= 0 {
-			limit = 20
-		}
-		runs, err := s.hub.AggregateListRuns(ctx, req.GetEnvoyId(), limit)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "aggregating runs from bolts: %v", err)
-		}
-		return &pb.ListRunsResponse{Runs: runs}, nil
-	}
-
 	// Spanner peer-equal run reads (Slice 2-ii-a). Runs are NEVER
 	// gossiped — so there is no observability-cache path for runs:
 	//   - ListRuns(envoy_id): resolve the envoy's owning bolt from
@@ -543,10 +513,7 @@ func (s *AdminService) DeleteWebhook(ctx context.Context, _ *pb.DeleteWebhookReq
 // ---------- Convergence ----------
 
 func (s *AdminService) GetConvergenceSummary(ctx context.Context, _ *pb.GetConvergenceSummaryRequest) (*pb.GetConvergenceSummaryResponse, error) {
-	// Dispatch (Slice 2-ii-a) — same four-way shape as ListEnvoys.
-	if s.hub != nil {
-		return s.hub.AggregateConvergenceSummary(ctx)
-	}
+	// Dispatch (Slice 2-ii-a) — same three-way shape as ListEnvoys.
 	if s.spannerAdmin != nil {
 		if s.spannerAdmin.Fanout() {
 			agg, err := s.spannerAdmin.AggregateConvergenceFanout(ctx)
@@ -760,35 +727,6 @@ func (s *AdminService) ListPackageDrift(ctx context.Context, _ *pb.ListPackageDr
 	}
 
 	return resp, nil
-}
-
-// ---------- ReportBoltStatus ----------
-
-func (s *AdminService) ReportBoltStatus(ctx context.Context, req *pb.BoltStatusReport) (*pb.BoltStatusAck, error) {
-	if req.BoltId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "bolt_id is required")
-	}
-
-	// Only the hub stores bolt reports.
-	if s.hub == nil {
-		return nil, status.Errorf(codes.FailedPrecondition, "server is not a hub")
-	}
-
-	if err := s.hub.RecordBoltReport(ctx, req); err != nil {
-		// Phase 1: identity-verify or pin-mismatch failures reject
-		// the report with PermissionDenied so the bolt sees a
-		// distinct status code (vs Unavailable from a transport
-		// hiccup). Audit event already emitted by the hub.
-		return nil, status.Errorf(codes.PermissionDenied, "report rejected: %v", err)
-	}
-
-	slog.Debug("received bolt status report",
-		"bolt_id", req.BoltId,
-		"envoy_count", req.EnvoyCount,
-		"converged", req.Converged,
-	)
-
-	return &pb.BoltStatusAck{}, nil
 }
 
 // ---------- Spanner peer-equal admin-read helpers (Slice 2-ii-a) ----------

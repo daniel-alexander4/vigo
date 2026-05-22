@@ -14,40 +14,38 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// SpannerMode defines the server's mode in a spanner deployment. The three
-// modes are architectural states preserved from the pre-Phase-2 hub/spoke
-// distinction — founder runs the bootstrap-discovery rendezvous code,
-// joiner runs the reporter that announces to peers, and standalone is the
-// degenerate single-vigosrv case with no spanner participation. Phase 3
-// retires the mode distinction entirely; until then, this enum dispatches
-// startup behavior. Renamed in 0.65.16 from SpannerRole (hub/spoke
-// terminology was the hub-spoke artifact; this is the peer-equal
-// vocabulary per ADR-026).
+// SpannerMode defines the server's mode in a spanner deployment. Two
+// modes: standalone is the default single-vigosrv case with no spanner
+// participation; spanner means this vigosrv is a peer-equal bolt in a
+// federation, owning a hostname-pattern partition and sharing the
+// admissions roster via CRDT gossip (ADR-026). The pre-Phase-3
+// founder/joiner distinction is retired — "founder" was only ever
+// "whoever ran `vigocli spanner init` first", a historical fact, not a
+// runtime role; once the hub-spoke runtime was deleted every bolt runs
+// identical code.
 type SpannerMode string
 
 const (
 	// ModeStandalone is the default: a single server handling everything.
 	ModeStandalone SpannerMode = "standalone"
-	// ModeFounder is the vigosrv that founded the spanner; runs the
-	// bootstrap-discovery rendezvous in Phase 2A. Replaces the legacy
-	// hub role.
-	ModeFounder SpannerMode = "founder"
-	// ModeJoiner is a vigosrv that joined an existing spanner via the
-	// admission ceremony. Replaces the legacy spoke role.
-	ModeJoiner SpannerMode = "joiner"
+	// ModeSpanner is a peer-equal bolt in a spanner federation — it owns
+	// a hostname-pattern partition and shares the admissions roster with
+	// every other bolt via CRDT gossip.
+	ModeSpanner SpannerMode = "spanner"
 )
 
 // SpannerSection configures the spanner federation. Omit entirely (or set
 // mode: standalone) for single-server deployments. ADR-026 reshaped this
-// for Phase 2 peer-equal admissions; the legacy hub-spoke fields (role,
-// bolts, hub_addr, hub_fallback_addrs, auto_failover, bolt_id) are
-// retired and the loader hard-errors on them.
+// for peer-equal admissions; the legacy hub-spoke fields (role, bolts,
+// hub_addr, hub_fallback_addrs, auto_failover, bolt_id,
+// transport.bootstrap_peers) are retired and the loader hard-errors on
+// them.
 type SpannerSection struct {
-	Mode          SpannerMode     `yaml:"mode" doc:"Server mode in a spanner deployment (peer-equal model, ADR-026)." options:"standalone|founder|joiner" default:"standalone" example:"founder"`
+	Mode          SpannerMode     `yaml:"mode" doc:"Server mode in a spanner deployment (peer-equal model, ADR-026)." options:"standalone|spanner" default:"standalone" example:"spanner"`
 	SpannerID     string          `yaml:"spanner_id" doc:"Federation identifier — operator-chosen, immutable, DNS-safe (1-64 ASCII alphanumeric + - _ ., no leading dot)." example:"alexander4-prod, acme-staging"`
 	Patterns      []string        `yaml:"patterns" doc:"Hostname glob patterns this bolt owns. First-match-wins across the spanner; loader refuses overlap with another bolt's patterns at publish time + boot time." example:"[*.us-west.*, *.dc1.*]"`
 	Snapshot      SnapshotConfig  `yaml:"snapshot" doc:"Two-tier snapshot cadence — Tier-1 counters via multicast, Tier-2 roster bytes via REST."`
-	Transport     TransportConfig `yaml:"transport" doc:"Multicast gossip group + bootstrap-discovery peer list for first contact with the spanner."`
+	Transport     TransportConfig `yaml:"transport" doc:"Multicast gossip group for Tier-1 counter gossip."`
 	Freshness     FreshnessConfig `yaml:"freshness" doc:"Liveness thresholds for declaring a bolt silent (consumes server/freshness/ defaults)."`
 	FallbackAdmin string          `yaml:"fallback_admin" doc:"Kill-switch for admin-query behavior on partition." options:"local|fanout" default:"local" example:"local"`
 }
@@ -60,15 +58,15 @@ type SnapshotConfig struct {
 	Tier2Interval string `yaml:"tier2_interval" doc:"Tier-2 roster-snapshot interval as a Go duration." default:"5m" example:"5m, 10m"`
 }
 
-// TransportConfig configures the multicast group (Tier-1) + bootstrap peer
-// addresses (first-contact rendezvous for newly-joining bolts) per
-// ADR-026. The multicast group sits alongside longdrawer (224.0.0.43:1532)
-// and lockbox (224.0.0.44:1533); the bootstrap peers are an additive seed
-// list — gossip discovery extends it once a peer responds.
+// TransportConfig configures the multicast group for Tier-1 counter
+// gossip per ADR-026. The group sits alongside longdrawer
+// (224.0.0.43:1532) and lockbox (224.0.0.44:1533). Peer discovery is
+// otherwise gossip-driven: a joining bolt learns the roster through the
+// `vigocli spanner join` admission ceremony, and the CRDT-replicated
+// roster is the peer list from then on — there is no server.yaml seed.
 type TransportConfig struct {
-	MulticastGroup string   `yaml:"multicast_group" doc:"IPv4 multicast group for Tier-1 counter gossip." default:"224.0.0.45" example:"224.0.0.45"`
-	MulticastPort  int      `yaml:"multicast_port" doc:"UDP port for Tier-1 counter gossip." default:"1534" example:"1534"`
-	BootstrapPeers []string `yaml:"bootstrap_peers" doc:"Seed list of peer gRPC addresses for first-contact discovery (host:port). Additive — gossip extends this list once any peer responds. Required for joiner mode; optional for founder mode (founder is itself the rendezvous)." example:"[founder.example.com:1530]"`
+	MulticastGroup string `yaml:"multicast_group" doc:"IPv4 multicast group for Tier-1 counter gossip." default:"224.0.0.45" example:"224.0.0.45"`
+	MulticastPort  int    `yaml:"multicast_port" doc:"UDP port for Tier-1 counter gossip." default:"1534" example:"1534"`
 }
 
 // FreshnessConfig is the per-spanner override for the server/freshness/
@@ -131,27 +129,15 @@ func (f SpannerSection) Validate() error {
 	if err := validateSpannerID(f.SpannerID); err != nil {
 		return err
 	}
-	switch mode {
-	case ModeFounder:
-		// Founder is the bootstrap-discovery rendezvous; doesn't need any
-		// bootstrap_peers (it IS the rendezvous), but its own patterns
-		// must be present so it owns a slice of the fleet.
-		if len(f.Patterns) == 0 {
-			return fmt.Errorf("spanner.patterns is required when mode is 'founder' (hostname glob list for this bolt's partition)")
-		}
-		return nil
-	case ModeJoiner:
-		// Joiner needs at least one bootstrap peer for first-contact
-		// admission, plus its own patterns for the partition it owns.
-		if len(f.Patterns) == 0 {
-			return fmt.Errorf("spanner.patterns is required when mode is 'joiner' (hostname glob list for this bolt's partition)")
-		}
-		if len(f.Transport.BootstrapPeers) == 0 {
-			return fmt.Errorf("spanner.transport.bootstrap_peers must list at least one founder/peer address when mode is 'joiner'")
-		}
-		return nil
+	if mode != ModeSpanner {
+		return fmt.Errorf("spanner.mode must be standalone or spanner (got %q); the founder/joiner modes were retired in Phase 3 — every bolt is a peer-equal 'spanner'", mode)
 	}
-	return fmt.Errorf("spanner.mode must be standalone, founder, or joiner (got %q)", mode)
+	// A spanner bolt owns a hostname-pattern partition; its patterns
+	// must be present.
+	if len(f.Patterns) == 0 {
+		return fmt.Errorf("spanner.patterns is required when mode is 'spanner' (hostname glob list for this bolt's partition)")
+	}
+	return nil
 }
 
 // ServerConfig represents the top-level server configuration from server.yaml.
@@ -163,7 +149,7 @@ type ServerConfig struct {
 	Watcher      WatcherSection      `yaml:"watcher" docs:"concepts/secrets" doc:"Polls the secrets provider for rotations and force-pushes affected envoys." long:"Background task that polls the configured secrets provider on a schedule and, when a secret value changes, forces a push to every envoy that consumes it. Enables automatic secret rotation without waiting for the next regular check-in — critical when rotating database passwords, TLS keys, or API tokens with revocation expectations. Poll frequency trades detection speed for provider API load."`
 	Secrets      secrets.Config      `yaml:"secrets" docs:"concepts/secrets" doc:"Secrets provider backend and connection settings (local, isopass, vault, AWS, GCP, Azure)." long:"Selects which backend resolves 'secret:' references in module configs at agent check-in. Options: local (files under /srv/vigo/secrets, default for single-server), isopass (Alexander4 Isopass), vault (HashiCorp Vault), aws (AWS Secrets Manager), gcp (GCP Secret Manager), azure (Azure Key Vault). The server fails fast on startup if the backend is unreachable — it never serves a module with plaintext fallbacks."`
 	Bootstrap    BootstrapConfig     `yaml:"bootstrap" docs:"getting-started/bootstrap" doc:"Agent bootstrap enrollment — trusted hostname/CIDR patterns and issued cert validity." long:"Controls how new agents are enrolled into the fleet via the initial HTTPS bootstrap call. Define trusted hostname patterns and CIDR blocks that short-circuit the one-time-token flow (useful for automated provisioning), plus the validity window on auto-issued agent certs. Tighten these in production — a permissive trusted_enrollment is the difference between friction-free onboarding and an open door."`
-	Spanner      SpannerSection      `yaml:"spanner" docs:"howto/set-up-spanner" doc:"Spanner federation — peer-equal mode (founder/joiner/standalone) per ADR-026." long:"Deployment topology — standalone (one vigosrv runs the whole fleet) or a peer-equal spanner where multiple vigosrvs share an admissions roster via CRDT gossip. Founder mode is the bootstrap-discovery rendezvous for new joiners (Phase 2A only; Phase 3 retires the founder/joiner distinction entirely). Joiner mode obtains an admission via the founder, then participates as a write-equal peer in the CRDT. Each bolt owns a hostname-pattern partition; the loader refuses overlap between bolts at publish + boot time. Set this when running an MSP deployment or a multi-region setup where one central server can't own all check-ins."`
+	Spanner      SpannerSection      `yaml:"spanner" docs:"howto/set-up-spanner" doc:"Spanner federation — peer-equal mode (standalone/spanner) per ADR-026." long:"Deployment topology — standalone (one vigosrv runs the whole fleet) or a peer-equal spanner where multiple vigosrvs share an admissions roster via CRDT gossip. In spanner mode every bolt is a write-equal peer: one operator runs 'vigocli spanner init' to found the federation, the rest join via the 'vigocli spanner join' admission ceremony, and from then on every bolt holds the same CRDT-replicated roster. Each bolt owns a hostname-pattern partition; the loader refuses overlap between bolts at publish + boot time. Set this when running an MSP deployment or a multi-region setup where one central server can't own all check-ins."`
 	Tuning       TuningSection       `yaml:"tuning" docs:"operations/tuning" doc:"Operational tuning — timing windows, gRPC transport limits, and Go runtime memory caps." long:"Low-level knobs for operators who have hit a scaling ceiling and need to hand-tune. Includes gRPC send/receive limits, concurrent stream caps, timing windows for online-vs-offline envoy classification, and Go runtime memory ceilings (GOMEMLIMIT). Leave at defaults until you see a specific symptom — most fleets never touch this section."`
 	SMTP         SMTPSection         `yaml:"smtp" docs:"operations/integrations" doc:"Email relay for event notifications, digests, and scheduled evidence delivery." long:"SMTP relay used by event notifications, daily/weekly digests, and scheduled compliance evidence delivery. Most deployments should prefer the native integrations (Slack, PagerDuty, Jira) over SMTP — email is the least observable and least actionable channel. Keep this configured only when a recipient genuinely can't be reached any other way."`
 	AI           AISection           `yaml:"ai" docs:"operations/ai-providers" doc:"AI assistant provider (Claude, OpenAI, Ollama) for the Ask page and compliance tooling." long:"Wires the /security chat drawer and compliance-assist tooling to an LLM provider. Supports Claude (sharpest reasoning on Vigo-specific questions), OpenAI (cost/token trade-off), and Ollama (fully self-hosted, no third-party calls). Required for automatic .retract module drafting and for the AI-powered guardrail suggestions in the publish flow."`

@@ -53,11 +53,6 @@ type Metrics struct {
 
 	SMTPSendsTotal *prometheus.CounterVec
 
-	// --- Spanner ---
-
-	SpannerBoltLatency *prometheus.HistogramVec
-	SpannerBoltUp      *prometheus.GaugeVec
-
 	// --- License ---
 
 	LicenseEnvoysUsed         prometheus.Gauge
@@ -228,18 +223,6 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 			Name: "vigo_smtp_sends_total",
 			Help: "Total SMTP email sends by event and status.",
 		}, []string{"event", "status"}),
-
-		// --- Spanner ---
-
-		SpannerBoltLatency: f.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "vigo_spanner_bolt_latency_seconds",
-			Help:    "Spanner per-bolt RPC latency in seconds.",
-			Buckets: []float64{0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
-		}, []string{"bolt"}),
-		SpannerBoltUp: f.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "vigo_spanner_bolt_up",
-			Help: "Whether a spanner bolt is reachable (1=up, 0=down).",
-		}, []string{"bolt"}),
 
 		// --- License ---
 

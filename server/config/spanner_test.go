@@ -16,8 +16,7 @@ func TestSpannerMode_UnmarshalYAML(t *testing.T) {
 		wantMode SpannerMode
 	}{
 		{name: "standalone", yaml: `mode: standalone`, wantMode: ModeStandalone},
-		{name: "founder", yaml: `mode: founder`, wantMode: ModeFounder},
-		{name: "joiner", yaml: `mode: joiner`, wantMode: ModeJoiner},
+		{name: "spanner", yaml: `mode: spanner`, wantMode: ModeSpanner},
 		{name: "empty defaults to empty string", yaml: `{}`, wantMode: ""},
 	}
 
@@ -34,38 +33,10 @@ func TestSpannerMode_UnmarshalYAML(t *testing.T) {
 	}
 }
 
-func TestSpannerSection_FullJoinerParse(t *testing.T) {
+func TestSpannerSection_FullSpannerParse(t *testing.T) {
 	input := `
 spanner:
-  mode: joiner
-  spanner_id: alexander4-prod
-  patterns: ["*.dc1.*"]
-  transport:
-    bootstrap_peers: ["founder.example.com:1530"]
-`
-	var cfg ServerConfig
-	if err := yaml.Unmarshal([]byte(input), &cfg); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-
-	if cfg.Spanner.Mode != ModeJoiner {
-		t.Errorf("mode = %q, want joiner", cfg.Spanner.Mode)
-	}
-	if cfg.Spanner.SpannerID != "alexander4-prod" {
-		t.Errorf("spanner_id = %q, want alexander4-prod", cfg.Spanner.SpannerID)
-	}
-	if got, want := cfg.Spanner.Patterns, []string{"*.dc1.*"}; len(got) != 1 || got[0] != want[0] {
-		t.Errorf("patterns = %v, want %v", got, want)
-	}
-	if got := cfg.Spanner.Transport.BootstrapPeers; len(got) != 1 || got[0] != "founder.example.com:1530" {
-		t.Errorf("bootstrap_peers = %v, want [founder.example.com:1530]", got)
-	}
-}
-
-func TestSpannerSection_FullFounderParse(t *testing.T) {
-	input := `
-spanner:
-  mode: founder
+  mode: spanner
   spanner_id: alexander4-prod
   patterns: ["*.us-west.*", "*.us-east.*"]
   snapshot:
@@ -81,8 +52,11 @@ spanner:
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	if cfg.Spanner.Mode != ModeFounder {
-		t.Errorf("mode = %q, want founder", cfg.Spanner.Mode)
+	if cfg.Spanner.Mode != ModeSpanner {
+		t.Errorf("mode = %q, want spanner", cfg.Spanner.Mode)
+	}
+	if cfg.Spanner.SpannerID != "alexander4-prod" {
+		t.Errorf("spanner_id = %q, want alexander4-prod", cfg.Spanner.SpannerID)
 	}
 	if len(cfg.Spanner.Patterns) != 2 {
 		t.Fatalf("patterns len = %d, want 2", len(cfg.Spanner.Patterns))
@@ -99,19 +73,11 @@ spanner:
 }
 
 func TestSpannerSection_Validate(t *testing.T) {
-	founderSection := func() SpannerSection {
+	spannerSection := func() SpannerSection {
 		return SpannerSection{
-			Mode:      ModeFounder,
+			Mode:      ModeSpanner,
 			SpannerID: "alexander4-prod",
 			Patterns:  []string{"*.us-west.*"},
-		}
-	}
-	joinerSection := func() SpannerSection {
-		return SpannerSection{
-			Mode:      ModeJoiner,
-			SpannerID: "alexander4-prod",
-			Patterns:  []string{"*.dc1.*"},
-			Transport: TransportConfig{BootstrapPeers: []string{"founder:1530"}},
 		}
 	}
 
@@ -122,49 +88,35 @@ func TestSpannerSection_Validate(t *testing.T) {
 	}{
 		{name: "empty is valid", section: SpannerSection{}},
 		{name: "standalone", section: SpannerSection{Mode: ModeStandalone}},
-		{name: "founder full", section: founderSection()},
+		{name: "spanner full", section: spannerSection()},
 		{
-			name: "founder without spanner_id",
+			name: "spanner without spanner_id",
 			section: SpannerSection{
-				Mode:     ModeFounder,
+				Mode:     ModeSpanner,
 				Patterns: []string{"*.us-west.*"},
 			},
 			wantErr: true,
 		},
 		{
-			name: "founder with invalid spanner_id (has space)",
+			name: "spanner with invalid spanner_id (has space)",
 			section: SpannerSection{
-				Mode:      ModeFounder,
+				Mode:      ModeSpanner,
 				SpannerID: "bad name",
 				Patterns:  []string{"*.us-west.*"},
 			},
 			wantErr: true,
 		},
 		{
-			name: "founder without patterns",
+			name: "spanner without patterns",
 			section: SpannerSection{
-				Mode:      ModeFounder,
+				Mode:      ModeSpanner,
 				SpannerID: "alexander4-prod",
 			},
 			wantErr: true,
 		},
-		{name: "joiner full", section: joinerSection()},
 		{
-			name: "joiner without bootstrap_peers",
-			section: SpannerSection{
-				Mode:      ModeJoiner,
-				SpannerID: "alexander4-prod",
-				Patterns:  []string{"*.dc1.*"},
-			},
-			wantErr: true,
-		},
-		{
-			name: "joiner without patterns",
-			section: SpannerSection{
-				Mode:      ModeJoiner,
-				SpannerID: "alexander4-prod",
-				Transport: TransportConfig{BootstrapPeers: []string{"founder:1530"}},
-			},
+			name:    "retired founder mode rejected",
+			section: SpannerSection{Mode: "founder", SpannerID: "alexander4-prod", Patterns: []string{"*.dc1.*"}},
 			wantErr: true,
 		},
 		{
@@ -200,12 +152,9 @@ server:
 	if len(cfg.Spanner.Patterns) != 0 {
 		t.Errorf("patterns should be empty when omitted, got %d", len(cfg.Spanner.Patterns))
 	}
-	if len(cfg.Spanner.Transport.BootstrapPeers) != 0 {
-		t.Errorf("bootstrap_peers should be empty when omitted, got %d", len(cfg.Spanner.Transport.BootstrapPeers))
-	}
 }
 
-// Loader hard-errors on retired pre-Phase-2 keys per ADR-026.
+// Loader hard-errors on retired pre-peer-equal keys per ADR-026.
 func TestDetectRetiredSpannerKeys(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -214,7 +163,7 @@ func TestDetectRetiredSpannerKeys(t *testing.T) {
 		wantSub string // substring expected in the error message
 	}{
 		{name: "clean (no spanner section)", yaml: `server:\n  grpc_listen: :1530\n`},
-		{name: "clean (new shape only)", yaml: "spanner:\n  mode: founder\n"},
+		{name: "clean (new shape only)", yaml: "spanner:\n  mode: spanner\n"},
 		{
 			name:    "retired role",
 			yaml:    "spanner:\n  role: hub\n",
@@ -250,6 +199,12 @@ func TestDetectRetiredSpannerKeys(t *testing.T) {
 			yaml:    "spanner:\n  bolt_id: dc1\n",
 			wantErr: true,
 			wantSub: "spanner.bolt_id",
+		},
+		{
+			name:    "retired transport.bootstrap_peers",
+			yaml:    "spanner:\n  transport:\n    bootstrap_peers: [founder:1530]\n",
+			wantErr: true,
+			wantSub: "spanner.transport.bootstrap_peers",
 		},
 	}
 

@@ -41,7 +41,7 @@ import (
 // reg is the per-instance prometheus registry whose collectors the /metrics
 // endpoint exposes; m is the same registry's collector set, threaded into
 // subhandlers (bootstrap, etc.) that emit metrics.
-func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, hub *spanner.Hub, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, publishState *publish.State, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, error) {
+func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, spannerAdmin *spanner.SpannerAdmin, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, brandingCfg config.BrandingSection, peerSvc *peer.Service, aw auditRecorder, complianceDocsStore *compliancedocs.Store, publishState *publish.State, reg *prometheus.Registry, m *metrics.Metrics, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, error) {
 	// Build TLS credentials for the gateway's connection to gRPC.
 	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
 	if err != nil {
@@ -65,7 +65,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	if fleetIndex != nil {
 		customDS = fleet.NewDataSource(fleetIndex, queries, runStore, configStore)
 	}
-	uiHandler, err := ui.NewHandler(queries, configStore, baseInterval, offlineThreshold, serverAddr, caFile, agentDir, version, assistant, hub, customDS, docsDir, authMethod, enforcer)
+	uiHandler, err := ui.NewHandler(queries, configStore, baseInterval, offlineThreshold, serverAddr, caFile, agentDir, version, assistant, spannerAdmin, customDS, docsDir, authMethod, enforcer)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating UI handler: %w", err)
 	}
@@ -86,9 +86,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 
 	// Mount config publish history, versioning, rollback, and reload.
 	// Spanner-mode stockpile distribution is gitback-driven (ADR-025
-	// Slice 4); the hub-fanout SyncConfig path retired with that
-	// slice. ConfigHandler no longer needs a hub reference.
-	_ = hub
+	// Slice 4).
 	configHandler := NewConfigHandler(queries, configStore, fleetIndex, publishState, publish.DefaultLiveDir, publish.DefaultHistoryDir)
 	configHandler.SetAuditWriter(aw)
 	if assistant != nil {
@@ -167,44 +165,6 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 
 // GatewayOption configures optional features on the bootstrap handler.
 type GatewayOption func(*bootstrap.Handler)
-
-// NewBoltGateway creates a lightweight HTTP mux for a bolt (role: spoke).
-// It exposes the admin gRPC-gateway proxy (for vigocli), metrics, and traits
-// but omits the web UI and bootstrap routes. reg is the per-instance
-// prometheus registry served on /metrics.
-func NewBoltGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval, offlineThreshold time.Duration, boltID string, reg *prometheus.Registry) (*http.ServeMux, error) {
-	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
-	if err != nil {
-		return nil, fmt.Errorf("building gateway TLS: %w", err)
-	}
-
-	gwMux := runtime.NewServeMux()
-	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(tlsCreds)}
-
-	if err := pb.RegisterVigoAdminHandlerFromEndpoint(ctx, gwMux, grpcAddr, dialOpts); err != nil {
-		return nil, fmt.Errorf("registering admin gateway: %w", err)
-	}
-
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
-
-	// Traits and inventory endpoints for admin queries.
-	traitsHandler := NewTraitsHandler(queries)
-	traitsHandler.RegisterRoutes(mux)
-	invHandler := NewInventoryHandler(queries)
-	invHandler.RegisterRoutes(mux)
-
-	// Health endpoint for monitoring bolt status.
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"status":"ok","bolt_id":%q}`, boltID)
-	})
-
-	// grpc-gateway catches /api/ paths (vigocli uses /api/v1/*).
-	mux.Handle("/api/", gwMux)
-
-	return mux, nil
-}
 
 const maxRequestBodySize = 1 << 20 // 1 MB
 

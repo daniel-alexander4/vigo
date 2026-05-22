@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+	"sort"
 	"time"
 
 	"git.alexander4.io/vigo/server/puddle"
@@ -372,107 +372,69 @@ func runSpannerInit(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-// runSpannerStatus prints this server's spanner role and (in hub mode)
-// the bolts it aggregates.
+// runSpannerStatus prints this server's spanner mode and, in spanner
+// mode, the gossip-backed observability for every peer bolt.
 func runSpannerStatus(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 
 	var resp struct {
-		Role            string `json:"role"`
-		SpannerID       string `json:"spanner_id"`
-		BoltID          string `json:"bolt_id"`
-		LocalBoltPubkey string `json:"local_bolt_pubkey"`
-		Bolts           []struct {
-			ID             string   `json:"id"`
-			Addr           string   `json:"addr"`
-			Patterns       []string `json:"patterns"`
-			Healthy        bool     `json:"healthy"`
-			EnvoyCount     int32    `json:"envoy_count"`
-			Converged      int32    `json:"converged"`
-			Relapsed       int32    `json:"relapsed"`
-			Diverged       int32    `json:"diverged"`
-			Failed         int32    `json:"failed"`
-			Offline        int32    `json:"offline"`
-			NoData         int32    `json:"no_data"`
-			ConvergencePct float32  `json:"compliance_pct"`
-			LatencyMs      int64    `json:"latency_ms"`
-			Error          string   `json:"error"`
-		} `json:"bolts"`
-		BoltPins []struct {
-			SpannerID string `json:"spanner_id"`
-			BoltID    string `json:"bolt_id"`
-			Pubkey    string `json:"pubkey"`
-			PinnedAt  string `json:"pinned_at"`
-			LastSeen  string `json:"last_seen"`
-		} `json:"bolt_pins"`
+		Mode              string `json:"mode"`
+		SpannerID         string `json:"spanner_id"`
+		LocalBoltPubkey   string `json:"local_bolt_pubkey"`
+		PeerObservability []struct {
+			BoltPubkey         string `json:"bolt_pubkey"`
+			EnvoyCount         int    `json:"envoy_count"`
+			Converged          int    `json:"converged"`
+			Degraded           int    `json:"degraded"`
+			Failed             int    `json:"failed"`
+			NoData             int    `json:"no_data"`
+			Offline            int    `json:"offline"`
+			SnapshotAgeSeconds int64  `json:"snapshot_age_seconds"`
+		} `json:"peer_observability"`
 	}
 
 	if err := client.get("/api/v1/spanner/status", &resp); err != nil {
 		return fmt.Errorf("cannot reach server: %w", err)
 	}
 
-	fmt.Printf("  Role: %s\n", bold(resp.Role))
+	fmt.Printf("  Mode: %s\n", bold(resp.Mode))
 
 	if resp.SpannerID != "" {
 		fmt.Printf("  Spanner ID: %s\n", resp.SpannerID)
 	}
-	if resp.BoltID != "" {
-		fmt.Printf("  Bolt ID: %s\n", resp.BoltID)
-	}
-	// Phase 1: local bolt pubkey for operator cross-check.
-	// On alarm, compare this short pubkey against the asserted
-	// pubkey in the hub's audit event.
+	// Local bolt pubkey for operator cross-check — compare against the
+	// asserted pubkey in any spanner audit event.
 	if resp.LocalBoltPubkey != "" {
 		fmt.Printf("  Local bolt pubkey: %s\n", resp.LocalBoltPubkey)
 	}
 
-	if resp.Role == "standalone" {
+	if resp.Mode == "standalone" || resp.Mode == "" {
 		fmt.Println("  No spanner configured.")
 		return nil
 	}
 
-	if len(resp.Bolts) == 0 {
+	if len(resp.PeerObservability) == 0 {
+		fmt.Println("  No peer bolts have reported yet.")
 		return nil
 	}
 
-	healthy := 0
-	var totalEnvoys int32
-	for _, s := range resp.Bolts {
-		if s.Healthy {
-			healthy++
-		}
-		totalEnvoys += s.EnvoyCount
-	}
+	sort.Slice(resp.PeerObservability, func(i, j int) bool {
+		return resp.PeerObservability[i].BoltPubkey < resp.PeerObservability[j].BoltPubkey
+	})
 
-	// Pinned-pubkey index for quick lookup when rendering the bolt table.
-	pinByID := make(map[string]string, len(resp.BoltPins))
-	for _, p := range resp.BoltPins {
-		pinByID[p.BoltID] = p.Pubkey
-	}
-
-	fmt.Printf("  Bolts: %d (%d healthy)\n", len(resp.Bolts), healthy)
-	fmt.Printf("  Total Envoys: %d\n\n", totalEnvoys)
+	fmt.Printf("  Peer bolts: %d\n\n", len(resp.PeerObservability))
 
 	w := newAlignedTable(os.Stdout)
-	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-		header("ID"), header("ADDRESS"), header("PUBKEY"), header("ENVOYS"),
-		header("COMPLIANT"), header("COMPLIANCE"), header("LATENCY"),
-		header("PATTERNS"), header("STATUS"))
-	for _, s := range resp.Bolts {
-		status := colorStatus("healthy")
-		if !s.Healthy {
-			status = colorStatus("unreachable")
+	fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+		header("BOLT"), header("ENVOYS"), header("CONVERGED"), header("DEGRADED"),
+		header("FAILED"), header("OFFLINE"), header("SNAPSHOT AGE"))
+	for _, s := range resp.PeerObservability {
+		pubkey := s.BoltPubkey
+		if len(pubkey) > 16 {
+			pubkey = pubkey[:16]
 		}
-		patterns := strings.Join(s.Patterns, ", ")
-		compliant := fmt.Sprintf("%d/%d", s.Converged, s.EnvoyCount)
-		convPct := fmt.Sprintf("%.1f%%", s.ConvergencePct)
-		latency := fmt.Sprintf("%dms", s.LatencyMs)
-		pubkey := pinByID[s.ID]
-		if pubkey == "" {
-			pubkey = "(unpinned)"
-		}
-		fmt.Fprintf(w, "  %s\t%s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n",
-			s.ID, s.Addr, pubkey, s.EnvoyCount, compliant, convPct, latency, patterns, status)
+		fmt.Fprintf(w, "  %s\t%d\t%d\t%d\t%d\t%d\t%ds\n",
+			pubkey, s.EnvoyCount, s.Converged, s.Degraded, s.Failed, s.Offline, s.SnapshotAgeSeconds)
 	}
 	w.Flush()
 

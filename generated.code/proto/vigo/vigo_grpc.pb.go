@@ -434,7 +434,6 @@ const (
 	VigoAdmin_ListPackageDrift_FullMethodName      = "/vigo.v1.VigoAdmin/ListPackageDrift"
 	VigoAdmin_EnrollEnvoy_FullMethodName           = "/vigo.v1.VigoAdmin/EnrollEnvoy"
 	VigoAdmin_SetReassignment_FullMethodName       = "/vigo.v1.VigoAdmin/SetReassignment"
-	VigoAdmin_ReportBoltStatus_FullMethodName      = "/vigo.v1.VigoAdmin/ReportBoltStatus"
 )
 
 // VigoAdminClient is the client API for VigoAdmin service.
@@ -489,9 +488,6 @@ type VigoAdminClient interface {
 	// SetReassignment marks a envoy for reassignment to a different bolt.
 	// Called spanner-internal to set reassign_addr/reassign_id on the envoy.
 	SetReassignment(ctx context.Context, in *SetReassignmentRequest, opts ...grpc.CallOption) (*SetReassignmentResponse, error)
-	// ReportBoltStatus receives periodic status reports from bolts
-	// pushed proactively (push health/compliance metrics into the spanner).
-	ReportBoltStatus(ctx context.Context, in *BoltStatusReport, opts ...grpc.CallOption) (*BoltStatusAck, error)
 }
 
 type vigoAdminClient struct {
@@ -722,16 +718,6 @@ func (c *vigoAdminClient) SetReassignment(ctx context.Context, in *SetReassignme
 	return out, nil
 }
 
-func (c *vigoAdminClient) ReportBoltStatus(ctx context.Context, in *BoltStatusReport, opts ...grpc.CallOption) (*BoltStatusAck, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(BoltStatusAck)
-	err := c.cc.Invoke(ctx, VigoAdmin_ReportBoltStatus_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // VigoAdminServer is the server API for VigoAdmin service.
 // All implementations must embed UnimplementedVigoAdminServer
 // for forward compatibility.
@@ -784,9 +770,6 @@ type VigoAdminServer interface {
 	// SetReassignment marks a envoy for reassignment to a different bolt.
 	// Called spanner-internal to set reassign_addr/reassign_id on the envoy.
 	SetReassignment(context.Context, *SetReassignmentRequest) (*SetReassignmentResponse, error)
-	// ReportBoltStatus receives periodic status reports from bolts
-	// pushed proactively (push health/compliance metrics into the spanner).
-	ReportBoltStatus(context.Context, *BoltStatusReport) (*BoltStatusAck, error)
 	mustEmbedUnimplementedVigoAdminServer()
 }
 
@@ -862,9 +845,6 @@ func (UnimplementedVigoAdminServer) EnrollEnvoy(context.Context, *EnrollEnvoyReq
 }
 func (UnimplementedVigoAdminServer) SetReassignment(context.Context, *SetReassignmentRequest) (*SetReassignmentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetReassignment not implemented")
-}
-func (UnimplementedVigoAdminServer) ReportBoltStatus(context.Context, *BoltStatusReport) (*BoltStatusAck, error) {
-	return nil, status.Error(codes.Unimplemented, "method ReportBoltStatus not implemented")
 }
 func (UnimplementedVigoAdminServer) mustEmbedUnimplementedVigoAdminServer() {}
 func (UnimplementedVigoAdminServer) testEmbeddedByValue()                   {}
@@ -1283,24 +1263,6 @@ func _VigoAdmin_SetReassignment_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VigoAdmin_ReportBoltStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(BoltStatusReport)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VigoAdminServer).ReportBoltStatus(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: VigoAdmin_ReportBoltStatus_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).ReportBoltStatus(ctx, req.(*BoltStatusReport))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // VigoAdmin_ServiceDesc is the grpc.ServiceDesc for VigoAdmin service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1395,10 +1357,6 @@ var VigoAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetReassignment",
 			Handler:    _VigoAdmin_SetReassignment_Handler,
-		},
-		{
-			MethodName: "ReportBoltStatus",
-			Handler:    _VigoAdmin_ReportBoltStatus_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

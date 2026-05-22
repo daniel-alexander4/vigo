@@ -33,9 +33,10 @@ import (
 // roster bolt. fallback_admin gates only the cacheable reads
 // (envoys/convergence); runs have no cache.
 //
-// SpannerAdmin holds no Hub reference — it survives the Phase-3
-// deletion of hub.go. The gRPC layer (server/grpc/admin.go) keeps the
-// hub path as a third dispatch branch until Phase 3 retires the hub.
+// SpannerAdmin is the sole driver of fleet-wide admin reads in a
+// spanner — the gRPC layer (server/grpc/admin.go) dispatches to it
+// whenever this vigosrv is a spanner bolt, and to the pure-local path
+// otherwise.
 
 // FallbackAdminLocal / FallbackAdminFanout are the spanner.fallback_admin
 // values. local aggregates from the observability cache; fanout queries
@@ -248,8 +249,8 @@ func (a *SpannerAdmin) dialRosterPeersReal(ctx context.Context) ([]*PeerConn, er
 }
 
 // fanOut runs fn against every roster peer concurrently and collects
-// the results — mirrors Hub.fanOut, driven via the PeerDialer instead
-// of a Hub. Each call gets its own short timeout so one slow bolt
+// the results — a client-side parallel fan-out driven via the
+// PeerDialer. Each call gets its own short timeout so one slow bolt
 // cannot stall the merge.
 func (a *SpannerAdmin) fanOut(ctx context.Context, fn func(ctx context.Context, pc *PeerConn) (any, error)) ([]fanOutAdminResult, error) {
 	conns, err := a.dialPeers(ctx)

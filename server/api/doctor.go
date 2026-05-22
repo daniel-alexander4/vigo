@@ -20,7 +20,6 @@ import (
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/license"
-	"git.alexander4.io/vigo/server/spanner"
 )
 
 // CheckStatus represents the outcome of a single health check.
@@ -74,7 +73,6 @@ type DoctorConfig struct {
 	Queries          *db.Queries
 	Interval         time.Duration
 	OfflineThreshold time.Duration
-	Hub              *spanner.Hub
 	Integrations     bool
 	Mode             config.SpannerMode
 	SecretsBackend   string
@@ -94,7 +92,6 @@ type DoctorHandler struct {
 	queries          *db.Queries
 	baseInterval     time.Duration
 	offlineThreshold time.Duration
-	hub              *spanner.Hub
 	integrations     bool
 	mode             config.SpannerMode
 	secretsBackend   string
@@ -123,7 +120,6 @@ func NewDoctorHandler(cfg DoctorConfig) *DoctorHandler {
 		queries:          cfg.Queries,
 		baseInterval:     cfg.Interval,
 		offlineThreshold: cfg.OfflineThreshold,
-		hub:              cfg.Hub,
 		integrations:     cfg.Integrations,
 		mode:             cfg.Mode,
 		secretsBackend:   cfg.SecretsBackend,
@@ -260,21 +256,10 @@ func (h *DoctorHandler) checkLicense(ctx context.Context) DoctorCheck {
 }
 
 func (h *DoctorHandler) checkSpanner() DoctorCheck {
-	switch h.mode {
-	case config.ModeFounder:
-		if h.hub == nil {
-			return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusFail, Message: "founder mode but no bootstrap connections"}
-		}
-		// Slice 2A.1b note: admin-query routing-by-pattern is degraded until
-		// the CRDT merge lands in 2A.2 — the bootstrap-discovery rendezvous
-		// itself still works. BoltCount() reflects configured bootstrap
-		// peers, not the gossiped roster.
-		return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusPass, Message: fmt.Sprintf("founder, %d bootstrap peer(s) (admin-routing degraded until 2A.2 CRDT merge)", h.hub.BoltCount())}
-	case config.ModeJoiner:
-		return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusPass, Message: "joiner"}
-	default:
-		return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusSkip, Message: "standalone"}
+	if h.mode == config.ModeSpanner {
+		return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusPass, Message: "spanner — peer-equal bolt"}
 	}
+	return DoctorCheck{Name: "spanner", Scope: ScopeServer, Status: StatusSkip, Message: "standalone"}
 }
 
 func (h *DoctorHandler) checkIntegrations() DoctorCheck {

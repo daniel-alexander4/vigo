@@ -208,10 +208,6 @@ service VigoAdmin {
   // SetReassignment marks a envoy for reassignment to a different bolt.
   // Called spanner-internal to set reassign_addr/reassign_id on the envoy.
   rpc SetReassignment(SetReassignmentRequest) returns (SetReassignmentResponse);
-
-  // ReportBoltStatus receives periodic status reports from bolts
-  // pushed proactively (push health/compliance metrics into the spanner).
-  rpc ReportBoltStatus(BoltStatusReport) returns (BoltStatusAck);
 }
 
 // =============================================================================
@@ -926,40 +922,6 @@ message DrainBoltResponse {
   int32 failed = 2;
   repeated string errors = 3;
 }
-
-// =============================================================================
-// Bolt status reporting messages (bolt → spanner observer)
-// =============================================================================
-
-message BoltStatusReport {
-  string bolt_id = 1;
-  int32 envoy_count = 2;
-  int32 converged = 3;
-  int32 relapsed = 4;
-  int32 failed = 5;
-  int32 offline = 6;
-  int32 no_data = 7;
-  float convergence_pct = 8;
-  uint64 config_version = 9;
-  int32 diverged = 10;
-  int32 degraded = 11;
-  // Phase 1 (ADR-spanner): per-bolt cryptographic identity.
-  // spanner_id is the operator-declared federation anchor (matches
-  // the hub's spanner_id). bolt_pubkey is the raw 32-byte Ed25519
-  // public key of this bolt (held in /srv/vigo/bolt/identity.*).
-  // signature is the 64-byte Ed25519 signature over the canonical
-  // serialization of fields 1-11 + 12 with bolt_pubkey + signature
-  // cleared (mirroring the PolicyBundle pattern in bundlesign.go).
-  // Hubs pin (spanner_id, bolt_id) → bolt_pubkey on first sight;
-  // mismatches on subsequent reports raise a spanner_bolt_pubkey_mismatch
-  // audit event and the report is rejected. Pre-Phase-1 reporters
-  // omit these fields; hubs treat absent fields as "legacy, log + skip".
-  string spanner_id = 12;
-  bytes bolt_pubkey = 13;
-  bytes signature = 14;
-}
-
-message BoltStatusAck {}
 
 // =============================================================================
 // Peer replication service (primary↔peer, port 1530)
