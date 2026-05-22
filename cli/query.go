@@ -116,7 +116,7 @@ var queryCmd = &cobra.Command{
 }
 
 func init() {
-	queryCmd.Flags().String("target", "", "Target spec: hostname, glob (*.web.*), UUID, or trait filter (os.distro=ubuntu)")
+	queryCmd.Flags().String("target", "", "Target spec: hostname, glob ('*.web.*'), UUID, or trait filter (os.distro=ubuntu)")
 	queryCmd.Flags().Int("timeout", 10, "Query timeout in seconds")
 	traitsCmd.AddCommand(queryCmd)
 }

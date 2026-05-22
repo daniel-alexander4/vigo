@@ -362,7 +362,7 @@ var taskCancelCmd = &cobra.Command{
 }
 
 func init() {
-	taskRunCmd.Flags().String("target", "", "Target spec: hostname, glob (*.web.*), UUID, or trait filter (os.distro=ubuntu)")
+	taskRunCmd.Flags().String("target", "", "Target spec: hostname, glob ('*.web.*'), UUID, or trait filter (os.distro=ubuntu)")
 	taskRunCmd.Flags().Int("timeout", 60, "Command timeout in seconds")
 	taskRunCmd.Flags().Int("nice", 0, "CPU/IO priority 0-19 (0=normal, 19=lowest)")
 	taskRunCmd.Flags().String("operator", "", "Operator name for audit (default: current user)")
