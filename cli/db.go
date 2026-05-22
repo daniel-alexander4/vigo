@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -39,32 +40,39 @@ var dbStatsCmd = &cobra.Command{
 		if v, ok := stats["page_count"]; ok {
 			fmt.Printf("Pages:      %v (size: %v bytes)\n", v, stats["page_size"])
 		}
-		if tables, ok := stats["tables"].(map[string]any); ok {
-			fmt.Println("\nTables:")
-			for name, count := range tables {
-				fmt.Printf("  %-30s %v rows\n", name, count)
+		if tables, ok := stats["tables"].(map[string]any); ok && len(tables) > 0 {
+			fmt.Printf("\n%-30s %s\n", "TABLE", "ROWS")
+			fmt.Printf("%-30s %s\n", "-----", "----")
+			for _, t := range sortedTableCounts(tables) {
+				fmt.Printf("%-30s %s\n", t.Name, formatInt(t.Rows))
 			}
 		}
 		return nil
 	},
 }
 
-var dbTablesCmd = &cobra.Command{
-	Use:   "tables",
-	Short: "List all database tables with their current row counts",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		client := newAPIClient()
-		var tables map[string]any
-		if err := client.get("/api/v1/db/tables", &tables); err != nil {
-			return err
+// tableCount pairs a table name with its row count for sorted display.
+type tableCount struct {
+	Name string
+	Rows int64
+}
+
+// sortedTableCounts flattens the {name: count} table map from the
+// db-stats endpoint into a slice ordered by row count descending, then
+// name — the largest tables (the ones that matter when inspecting disk
+// use) come first, and the listing is stable across calls.
+func sortedTableCounts(tables map[string]any) []tableCount {
+	out := make([]tableCount, 0, len(tables))
+	for name, count := range tables {
+		out = append(out, tableCount{Name: name, Rows: toInt64(count)})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Rows != out[j].Rows {
+			return out[i].Rows > out[j].Rows
 		}
-		fmt.Printf("%-30s %s\n", "TABLE", "ROWS")
-		fmt.Printf("%-30s %s\n", "-----", "----")
-		for name, count := range tables {
-			fmt.Printf("%-30s %v\n", name, count)
-		}
-		return nil
-	},
+		return out[i].Name < out[j].Name
+	})
+	return out
 }
 
 var dbIntegrityCmd = &cobra.Command{
@@ -354,7 +362,6 @@ func init() {
 
 	dbCmd.AddCommand(
 		dbStatsCmd,
-		dbTablesCmd,
 		dbIntegrityCmd,
 		dbVacuumCmd,
 		dbPruneCmd,

@@ -38,7 +38,6 @@ func NewDatabaseHandler(sqlDB *sql.DB, queries *db.Queries, driver, dsn string) 
 func (h *DatabaseHandler) RegisterRoutes(mux *http.ServeMux) {
 	admin := auth.RequireAdmin("")
 	mux.Handle("GET /api/v1/db/stats", admin(http.HandlerFunc(h.handleStats)))
-	mux.Handle("GET /api/v1/db/tables", admin(http.HandlerFunc(h.handleTables)))
 	mux.Handle("GET /api/v1/db/integrity", admin(http.HandlerFunc(h.handleIntegrity)))
 	mux.Handle("POST /api/v1/db/vacuum", admin(http.HandlerFunc(h.handleVacuum)))
 	mux.Handle("POST /api/v1/db/checkpoint", admin(http.HandlerFunc(h.handleCheckpoint)))
@@ -78,17 +77,6 @@ func (h *DatabaseHandler) handleStats(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(stats)
-}
-
-// handleTables returns all tables with row counts.
-func (h *DatabaseHandler) handleTables(w http.ResponseWriter, r *http.Request) {
-	tables, err := h.tableRowCounts()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(tables)
 }
 
 // handleIntegrity runs PRAGMA integrity_check (SQLite) or checks connection health.

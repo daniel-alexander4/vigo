@@ -13,14 +13,6 @@ Show database file size, WAL size, page count, and per-table row counts.
 vigocli db stats
 ```
 
-### tables
-
-List all tables in the database.
-
-```bash
-vigocli db tables
-```
-
 ### integrity
 
 Run SQLite integrity checks (`PRAGMA integrity_check` and `PRAGMA foreign_key_check`).

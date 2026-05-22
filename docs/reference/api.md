@@ -1538,23 +1538,6 @@ Returns database statistics including file size, WAL size, page count, page size
 }
 ```
 
-### GET /api/v1/db/tables
-
-**Permission:** Admin role
-
-Returns all tables with their row counts.
-
-**Response:**
-
-
-```json
-{
-  "envoys": 42,
-  "runs": 1250,
-  "envoy_traits": 42
-}
-```
-
 ### GET /api/v1/db/integrity
 
 **Permission:** Admin role

@@ -70,28 +70,6 @@ func TestDatabase_Stats(t *testing.T) {
 	}
 }
 
-func TestDatabase_Tables(t *testing.T) {
-	sqlDB, queries := openDatabaseTestDB(t)
-
-	handler := NewDatabaseHandler(sqlDB, queries, "sqlite", ":memory:")
-	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
-
-	req := httptest.NewRequest("GET", "/api/v1/db/tables", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, adminReq(req))
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var tables map[string]float64
-	json.NewDecoder(rec.Body).Decode(&tables)
-	if tables["test_items"] != 3 {
-		t.Errorf("expected 3 rows in test_items, got %v", tables["test_items"])
-	}
-}
-
 func TestDatabase_Integrity(t *testing.T) {
 	sqlDB, queries := openDatabaseTestDB(t)
 
