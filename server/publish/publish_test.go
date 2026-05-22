@@ -858,3 +858,61 @@ envoys:
 		t.Errorf("unreferenced module should be pruned, still present (err=%v)", err)
 	}
 }
+
+// TestFleetFindings_SkipsUnreachableModules verifies that fleet
+// collision checks ignore modules no carrier can route to an envoy: a
+// clash among unreachable modules can't physically happen, so it must
+// not generate publish-time noise. A clash among reachable modules
+// still warns.
+func TestFleetFindings_SkipsUnreachableModules(t *testing.T) {
+	dir := t.TempDir()
+	mod := func(rel, pkg string) {
+		full := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		name := strings.TrimSuffix(filepath.Base(rel), ".vgo")
+		body := fmt.Sprintf("name: %s\nresources:\n  - name: %s-pkg\n    type: package\n    package: %s\n    state: present\n", name, name, pkg)
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// redis: two reachable modules collide — must warn.
+	mod("modules/reach-a.vgo", "redis")
+	mod("modules/reach-b.vgo", "redis")
+	// nginx: two unreachable modules collide — must NOT warn.
+	mod("modules/lib-a.vgo", "nginx")
+	mod("modules/lib-b.vgo", "nginx")
+	// mysql: one reachable + one unreachable — must NOT warn; with only
+	// one envoy-reachable side the clash can't physically happen.
+	mod("modules/reach-c.vgo", "mysql")
+	mod("modules/lib-c.vgo", "mysql")
+
+	relPaths := []string{
+		"modules/reach-a.vgo", "modules/reach-b.vgo",
+		"modules/lib-a.vgo", "modules/lib-b.vgo",
+		"modules/reach-c.vgo", "modules/lib-c.vgo",
+	}
+	unreachable := map[string]bool{
+		"modules/lib-a.vgo": true,
+		"modules/lib-b.vgo": true,
+		"modules/lib-c.vgo": true,
+	}
+
+	findings := fleetFindings(dir, relPaths, unreachable)
+
+	if len(findings) != 1 {
+		t.Fatalf("expected exactly 1 finding (the redis collision), got %d: %v", len(findings), findings)
+	}
+	f := findings[0]
+	if f.RuleID != "fleet-duplicate-package" {
+		t.Errorf("RuleID = %q, want fleet-duplicate-package", f.RuleID)
+	}
+	if !strings.Contains(f.Message, "redis") {
+		t.Errorf("finding should be the redis collision; got %q", f.Message)
+	}
+	if strings.Contains(f.Message, "nginx") || strings.Contains(f.Message, "mysql") {
+		t.Errorf("unreachable collisions must be suppressed; got %q", f.Message)
+	}
+}

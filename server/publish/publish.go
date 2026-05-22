@@ -294,12 +294,35 @@ func ValidateSource(opts Options) (*Result, error) {
 		}
 	}
 
+	// Carrier-graph reachability: which modules / usercrates / templates
+	// no role, match block, common.vgo, or environments.vgo can route to
+	// an envoy. Shared by the fleet-collision check and the prune below.
+	unused := store.Unused(nil)
+
+	// Cross-module fleet collisions (two modules managing the same
+	// package or target_path). Computed here — after the loader resolved
+	// the carrier graph — so unreachable library modules, which the
+	// prune drops from .live anyway, don't generate publish-time noise.
+	// Warnings only; never block publish.
+	unreachable := make(map[string]bool)
+	for _, m := range unused.UnusedModules {
+		unreachable[m.SourceFile] = true
+	}
+	for _, u := range unused.UnusedUsercrates {
+		unreachable[u.SourceFile] = true
+	}
+	for _, f := range fleetFindings(opts.StockpileDir, candidateLintable, unreachable) {
+		slog.Warn("modlint fleet finding",
+			"rule", f.RuleID,
+			"severity", string(f.Severity),
+			"message", f.Message)
+	}
+
 	// Prune unreachable modules / usercrates / templates from staging so
 	// .live/ carries only files some carrier can actually consume. The
 	// recomputed diff after the prune lets res.Removed surface every
 	// dropped file in the publish summary.
 	if !opts.NoPrune {
-		unused := store.Unused(nil)
 		if err := pruneStaging(stagingDir, unused); err != nil {
 			cleanupOnError()
 			return nil, fmt.Errorf("pruning staging: %w", err)
@@ -1200,25 +1223,18 @@ func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
 		return nil, fmt.Errorf("module validation failed:\n%s", strings.Join(lintErrors, "\n"))
 	}
 
-	// Cross-module collisions (two modules managing the same package
-	// or writing to the same target_path). Surfaces only on the
-	// candidate-changed module set — this catches the case where a
-	// publish introduces a collision, without the cost of re-scanning
-	// the entire stockpile every time. Findings are warnings, so
-	// they're appended to lintErrors only when severity is Error
-	// (which fleetDuplicate-* are not, today). They're emitted via
-	// slog so operators see the warning in the publish log.
-	emitFleetWarnings(baseDir, relPaths)
-
 	return overrides, nil
 }
 
-// emitFleetWarnings runs the fleet-level cross-module checks and
-// logs any findings via slog.Warn. Designed for the publish hot path:
-// it does NOT block publish on warning-severity findings, only logs
-// them so the operator sees the collision report alongside the
-// per-file lint output.
-func emitFleetWarnings(baseDir string, relPaths []string) {
+// fleetFindings runs the fleet-level cross-module checks and returns
+// any findings — the caller logs them; they never block publish.
+//
+// Modules and usercrates that no carrier can route to a real envoy
+// are dropped via the unreachable set (built from ConfigStore.Unused,
+// the same reachability the .live/ prune uses). A collision among
+// files none of which can reach an envoy can't physically happen, so
+// reporting it would just be publish-time noise.
+func fleetFindings(baseDir string, relPaths []string, unreachable map[string]bool) []modlint.Finding {
 	files := make([]modlint.FleetFile, 0, len(relPaths))
 	for _, rel := range relPaths {
 		// Skip non-module file types — LintFleet only inspects modules.
@@ -1228,18 +1244,19 @@ func emitFleetWarnings(baseDir string, relPaths []string) {
 		if filepath.Base(rel) == "compliance.vgo" {
 			continue
 		}
+		// Skip modules/usercrates no carrier can reach — the prune
+		// drops them from .live anyway, so they can never collide on a
+		// real envoy.
+		if unreachable[rel] {
+			continue
+		}
 		data, err := os.ReadFile(filepath.Join(baseDir, rel))
 		if err != nil {
 			continue
 		}
 		files = append(files, modlint.FleetFile{Path: rel, Data: data})
 	}
-	for _, f := range modlint.LintFleet(files) {
-		slog.Warn("modlint fleet finding",
-			"rule", f.RuleID,
-			"severity", string(f.Severity),
-			"message", f.Message)
-	}
+	return modlint.LintFleet(files)
 }
 
 // isUsercratePath reports whether rel (slash-separated, stockpile-relative)
