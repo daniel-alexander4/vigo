@@ -826,8 +826,7 @@ type SMTPDigestConfig struct {
 // and default to sensible values when omitted from server.yaml.
 type TuningSection struct {
 	SignatureWindow      string        `yaml:"signature_window" doc:"Clock-skew tolerance for request signatures." default:"5m" example:"5m (default), 15m (loose NTP)"`
-	LastSeenFlush        string        `yaml:"last_seen_flush" doc:"How often the last-seen timestamp is flushed to the database." default:"10s" example:"5s, 10s, 30s (accepts s, m)"`
-	TraitsPruneInterval  string        `yaml:"traits_prune_interval" doc:"How often stale trait rows are pruned." default:"5m" example:"5m, 15m, 1h (accepts s, m, h)"`
+	LastSeenFlush        string        `yaml:"last_seen_flush" doc:"How often the last-seen timestamp is flushed to the database; also drives the batched trait insert+prune cadence." default:"10s" example:"5s, 10s, 30s (accepts s, m)"`
 	MetricsInterval      string        `yaml:"metrics_interval" doc:"Prometheus gauge refresh interval." default:"30s" example:"15s, 30s, 1m (match scrape_interval)"`
 	TraitsScannerTTL     string        `yaml:"traits_scanner_ttl" doc:"How long agent-side trait scanner caches remain valid." default:"30s" example:"30s (default), 5m (lighten disk)"`
 	RunStore             string        `yaml:"run_store" doc:"Where convergence runs are persisted." options:"database|memory" default:"database" example:"database (prod), memory (ephemeral test)"`

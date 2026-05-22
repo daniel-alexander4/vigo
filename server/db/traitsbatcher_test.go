@@ -4,7 +4,11 @@
 package db
 
 import (
+	"context"
+	"fmt"
 	"testing"
+
+	"git.alexander4.io/vigo/server/testutil"
 )
 
 func TestTraitsBatcher_MarkDeduplicates(t *testing.T) {
@@ -98,5 +102,41 @@ func TestTraitsBatcher_FlushResetsForNewTraits(t *testing.T) {
 
 	if count != 1 {
 		t.Fatalf("expected 1 pending after new traits, got %d", count)
+	}
+}
+
+// TestTraitsBatcher_FlushPrunesToRetentionCap verifies that each flush
+// inserts the pending snapshot and prunes the envoy back to the
+// 10-snapshot retention cap (DB-04) — the count never sawtooths above
+// the cap, regardless of how many flushes accumulate.
+func TestTraitsBatcher_FlushPrunesToRetentionCap(t *testing.T) {
+	sqlDB := testutil.OpenMigratedTestDB(t)
+	queries := New(sqlDB)
+	ctx := context.Background()
+
+	sqlDB.Exec(`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES ('e1', 'h1', '10.0.0.1', 'key')`)
+
+	b := NewTraitsBatcher(queries)
+
+	// 15 flushes, each with distinct traits so the hash dedup doesn't
+	// skip the insert. Each flush adds one row then prunes — the stored
+	// count must never exceed the cap.
+	for i := 0; i < 15; i++ {
+		b.Mark("e1", fmt.Sprintf(`{"n":%d}`, i))
+		b.Flush(ctx)
+
+		var count int
+		if err := sqlDB.QueryRow(`SELECT COUNT(*) FROM envoy_traits WHERE envoy_id = 'e1'`).Scan(&count); err != nil {
+			t.Fatalf("count query after flush %d: %v", i+1, err)
+		}
+		if count > 10 {
+			t.Fatalf("after flush %d: envoy_traits count = %d, want <= 10", i+1, count)
+		}
+	}
+
+	var final int
+	sqlDB.QueryRow(`SELECT COUNT(*) FROM envoy_traits WHERE envoy_id = 'e1'`).Scan(&final)
+	if final != 10 {
+		t.Errorf("final envoy_traits count = %d, want 10", final)
 	}
 }

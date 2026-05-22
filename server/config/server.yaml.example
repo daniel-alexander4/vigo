@@ -521,7 +521,6 @@ watcher:
 # tuning:
 #   signature_window: "5m"
 #   last_seen_flush: "10s"
-#   traits_prune_interval: "5m"
 #   metrics_interval: "30s"
 #   traits_scanner_ttl: "30s"
 #   run_store: "database"                      # "database" or "memory"

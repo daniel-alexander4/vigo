@@ -39,7 +39,6 @@ type AgentService struct {
 	integrations     *integrations.Dispatcher
 	traitsScanner    *traits.Scanner
 	traitsBatch      *db.TraitsBatcher
-	traitsPruner     *db.TraitsPruner
 	policyCache      *policyCache
 	streamMgr        *streamManager
 	taskRouter       *taskRouter

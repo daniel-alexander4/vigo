@@ -12,7 +12,6 @@ import (
 
 	"github.com/google/uuid"
 	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
-	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/integrations"
 	"git.alexander4.io/vigo/server/traits"
@@ -44,22 +43,13 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 		return nil, status.Errorf(codes.InvalidArgument, "traits validation: %v", err)
 	}
 
-	// Store the traits.
-	_, err := s.queries.InsertEnvoyTraits(ctx, db.InsertEnvoyTraitsParams{
-		EnvoyID: envoyID,
-		Traits: string(traitsJSON),
-	})
-	if err != nil {
-		slog.Error("failed to insert envoy traits",
-			"envoy_id", envoyID,
-			"error", err,
-		)
-		return nil, status.Errorf(codes.Internal, "storing traits: %v", err)
-	}
-
-	// Schedule async pruning to enforce 10-snapshot retention.
-	if s.traitsPruner != nil {
-		s.traitsPruner.Mark(envoyID)
+	// Queue the snapshot for the batched insert+prune path — the same
+	// path the stream-inline traits use (hash-deduplicated, 10-snapshot
+	// retention enforced on flush). The FleetIndex update below is
+	// inline, so the trait values are operator-visible immediately
+	// regardless of when the history row lands.
+	if s.traitsBatch != nil {
+		s.traitsBatch.Mark(envoyID, string(traitsJSON))
 	}
 
 	// Update in-memory FleetIndex so the UI sees current traits immediately.

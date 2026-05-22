@@ -475,8 +475,7 @@ Advanced performance tuning. All fields optional.
 ```yaml
 tuning:
   signature_window: "5m"             # signature verification time window
-  last_seen_flush: "10s"             # batch DB writes for last_seen timestamps
-  traits_prune_interval: "5m"        # clean up stale trait data
+  last_seen_flush: "10s"             # batch cadence for last_seen + trait insert/prune
   run_store: "database"              # "database" or "memory"
   run_store_capacity: 20             # per-envoy run depth in memory mode
   max_concurrent_streams: 5000       # gRPC concurrent stream limit

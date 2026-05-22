@@ -22,7 +22,9 @@ type TraitsFlushHook func(batch map[string]string)
 // TraitsBatcher accumulates envoy traits and flushes inserts periodically,
 // removing per-check-in DB write latency from the hot path. Traits are
 // deduplicated by SHA-256 hash — if a envoy's traits haven't changed since
-// the last insert, the write is skipped entirely.
+// the last insert, the write is skipped entirely. Each flush also prunes
+// old snapshots for every envoy it just inserted, enforcing the
+// 10-snapshot retention cap (DB-04) coupled to the insert.
 type TraitsBatcher struct {
 	mu      sync.Mutex
 	pending map[string]string    // envoy_id → traits JSON
@@ -106,6 +108,19 @@ func (b *TraitsBatcher) Flush(ctx context.Context) {
 	if err := b.batchInsertTraits(ctx, batch); err != nil {
 		slog.Error("failed to batch flush traits", "count", len(batch), "error", err)
 		return
+	}
+
+	// Prune old snapshots for every envoy that just got a new row,
+	// enforcing the 10-snapshot retention cap (DB-04). Coupling the
+	// prune to the insert keeps the cap tight without putting DELETE
+	// latency on the per-check-in hot path.
+	for envoyID := range batch {
+		if err := b.queries.PruneEnvoyTraits(ctx, PruneEnvoyTraitsParams{
+			EnvoyID:   envoyID,
+			EnvoyID_2: envoyID,
+		}); err != nil {
+			slog.Error("failed to prune envoy traits", "envoy_id", envoyID, "error", err)
+		}
 	}
 
 	// Update in-memory indexes (e.g., FleetIndex) so traits are visible

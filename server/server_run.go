@@ -107,7 +107,6 @@ func (s *Server) startAsyncFlushers(ctx context.Context) {
 	go stateFlusher.Start(ctx, s.lastSeenFlush, 0)
 	go s.runBatcher.Start(ctx, s.lastSeenFlush, s.lastSeenFlush/3)
 	go s.traitsBatch.Start(ctx, s.lastSeenFlush, 2*s.lastSeenFlush/3)
-	go s.traitsPruner.Start(ctx, s.traitsPruneInterval)
 }
 
 // startRetentionAndBackup starts the task-run timeout reaper, the

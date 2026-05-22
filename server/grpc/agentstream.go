@@ -252,9 +252,6 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		if s.traitsBatch != nil {
 			s.traitsBatch.Mark(envoyID, string(inlineTraits))
 		}
-		if s.traitsPruner != nil {
-			s.traitsPruner.Mark(envoyID)
-		}
 
 		// Update swarm peer tracker when agents report cached blobs.
 		if s.peerTracker != nil {

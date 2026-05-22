@@ -102,12 +102,12 @@ type ServerConfig struct {
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
 // TLS 1.3 minimum, client certificate required and verified against CA.
-// Returns the server, a CertCache for TLS hot reload, a TraitsBatcher,
-// and a TraitsPruner whose Start methods should be called in goroutines.
-func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *db.TraitsPruner, *AgentService, *AdminService, error) {
+// Returns the server, a CertCache for TLS hot reload, and a
+// TraitsBatcher whose Start method should be called in a goroutine.
+func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *AgentService, *AdminService, error) {
 	tlsCfg, certCache, err := buildTLSConfig(cfg.CertFile, cfg.KeyFile, cfg.CAFile)
 	if err != nil {
-		return nil, nil, nil, nil, nil, nil, fmt.Errorf("building TLS config: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("building TLS config: %w", err)
 	}
 
 	creds := credentials.NewTLS(tlsCfg)
@@ -131,8 +131,6 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 			}
 		})
 	}
-	traitsPruner := db.NewTraitsPruner(cfg.Queries)
-
 	maxStreams := cfg.MaxConcurrentStreams
 	if maxStreams == 0 {
 		maxStreams = 5000
@@ -199,7 +197,6 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		integrations:      cfg.Integrations,
 		traitsScanner:     traits.NewScanner(cfg.TraitsDir, traitsScannerTTL),
 		traitsBatch:       traitsBatch,
-		traitsPruner:      traitsPruner,
 		policyCache:       newPolicyCache(),
 		streamMgr:         newStreamManager(cfg.StreamSendBuffer, cfg.FleetIndex, cfg.Metrics, 12*time.Minute),
 		taskRouter:        newTaskRouter(cfg.Queries, cfg.Metrics),
@@ -244,7 +241,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 	}
 	pb.RegisterVigoAdminServer(srv, adminSvc)
 
-	return srv, certCache, traitsBatch, traitsPruner, agentSvc, adminSvc, nil
+	return srv, certCache, traitsBatch, agentSvc, adminSvc, nil
 }
 
 // buildTLSConfig creates a tls.Config requiring client certificates verified

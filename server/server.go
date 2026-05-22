@@ -132,10 +132,9 @@ type Server struct {
 	offlineThreshold time.Duration
 
 	// --- Tuning parsed durations (computed once at construction) ---
-	sigWindow           time.Duration
-	lastSeenFlush       time.Duration
-	traitsPruneInterval time.Duration
-	metricsInterval     time.Duration
+	sigWindow       time.Duration
+	lastSeenFlush   time.Duration
+	metricsInterval time.Duration
 	traitsScannerTTL    time.Duration
 	maxConnAge          time.Duration
 	maxConnIdle         time.Duration
@@ -197,7 +196,6 @@ type Server struct {
 	grpcSrv      *grpc.Server
 	certCache    *isgrpc.CertCache
 	traitsBatch  *db.TraitsBatcher
-	traitsPruner *db.TraitsPruner
 	agentSvc     *isgrpc.AgentService
 	adminSvc     *isgrpc.AdminService
 
@@ -611,7 +609,6 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// --- Tuning durations (all optional; zero values use the listed defaults) ---
 	s.sigWindow = parseDuration(s.cfg.Tuning.SignatureWindow, 0)
 	s.lastSeenFlush = parseDuration(s.cfg.Tuning.LastSeenFlush, 10*time.Second)
-	s.traitsPruneInterval = parseDuration(s.cfg.Tuning.TraitsPruneInterval, 5*time.Minute)
 	s.metricsInterval = parseDuration(s.cfg.Tuning.MetricsInterval, 30*time.Second)
 	s.traitsScannerTTL = parseDuration(s.cfg.Tuning.TraitsScannerTTL, 0)
 	s.maxConnAge = parseDuration(s.cfg.Tuning.MaxConnectionAge, 0)
@@ -816,9 +813,9 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	}
 
 	// --- gRPC server + services (chunk 4). All goroutine starts
-	// (grpcSrv.Serve, traitsBatch.Start, traitsPruner.Start, peer primary
-	// push, hub failover Run, etc.) stay in run() / chunk 5. ---
-	grpcSrv, certCache, traitsBatch, traitsPruner, agentSvc, adminSvc, err := isgrpc.NewServer(isgrpc.ServerConfig{
+	// (grpcSrv.Serve, traitsBatch.Start, peer primary push, etc.) stay
+	// in run() / chunk 5. ---
+	grpcSrv, certCache, traitsBatch, agentSvc, adminSvc, err := isgrpc.NewServer(isgrpc.ServerConfig{
 		CertFile:             s.cfg.Server.TLS.CertFile,
 		KeyFile:              s.cfg.Server.TLS.KeyFile,
 		CAFile:               s.cfg.Server.TLS.CAFile,
@@ -870,7 +867,6 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	s.grpcSrv = grpcSrv
 	s.certCache = certCache
 	s.traitsBatch = traitsBatch
-	s.traitsPruner = traitsPruner
 	s.agentSvc = agentSvc
 	s.adminSvc = adminSvc
 
