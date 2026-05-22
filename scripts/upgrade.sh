@@ -1,34 +1,43 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Upgrade the Vigo server to the latest container image.
+# Rebuild and redeploy the Vigo server and agent binaries.
 # Preserves: server.yaml, .env, db/, secrets/, tls/, license/, config-history/
-# Replaces:  container image, example-configs/, scripts/
 #
 # Usage:
-#   sudo scripts/upgrade.sh                  # pull/build AND restart containers (default)
-#   sudo scripts/upgrade.sh --norun          # pull/build only — leave the running container alone
-#   sudo scripts/upgrade.sh --build          # full rebuild (Go + agent linux amd64+arm64 + image) + restart
-#   sudo scripts/upgrade.sh --server         # rebuild Go (server+CLI) only, fast
-#   sudo scripts/upgrade.sh --agent          # rebuild Rust agent only
-#   sudo scripts/upgrade.sh --cross          # cross-compile agent (linux amd64+arm64)
-#   sudo scripts/upgrade.sh --cross all      # cross-compile all platforms
-#   sudo scripts/upgrade.sh --push           # push image to GHCR after build
-#   sudo scripts/upgrade.sh --test           # run test suite after upgrade
+#   sudo scripts/upgrade.sh [components...] [--norun] [--push]
 #
-# Flags can be combined:
-#   sudo scripts/upgrade.sh --build --norun  # rebuild image but leave the running container untouched
-#   sudo scripts/upgrade.sh --server --test  # rebuild Go, test, restart
-#   sudo scripts/upgrade.sh --build --push   # full rebuild + push, restart
-#   sudo scripts/upgrade.sh --cross arm64 freebsd --push
+# Components — presence-based: name it to build it, omit it to skip it.
+#   ui       Rebuild vigosrv and hot-swap it into the running container.
+#            Fast; ephemeral (a container recreate reverts it). For UI /
+#            handler / API changes — no agent rebuild.
+#   server   Full Docker image rebuild (vigosrv + vigocli + amd64 agent),
+#            redeploy from the new image. Durable; installs host vigocli.
+#   amd64    Cross-compile the linux/amd64 agent, inject it into the
+#            running container.
+#   arm64    Cross-compile the linux/arm64 agent, inject it.
+#   (darwin / freebsd / windows are also accepted as agent cross-targets.)
 #
-# Cross-compile targets:
-#   amd64      Linux x86_64 (musl static)
-#   arm64      Linux aarch64 (musl static)
-#   darwin     macOS x86_64 + arm64 (requires osxcross in PATH)
-#   freebsd    FreeBSD x86_64 (via cross)
-#   windows    Windows x86_64 (via cross)
-#   all        All of the above
+# Modifiers:
+#   --norun  Build/swap but do not restart or redeploy the container.
+#   --push   Push the rebuilt image to the registry (requires `server`).
+#
+# Rules:
+#   - No components  → defaults to `server amd64 arm64` (full durable build).
+#   - `server` already rebuilds vigosrv and the amd64 agent (the Dockerfile
+#     rust-builder stage), so `ui` and `amd64` are deduped when `server` is
+#     present.
+#   - `server` does NOT rebuild arm64 — it bakes whatever is in
+#     dist/agent/linux/arm64/ and warns if that is stale. Add `arm64` to
+#     refresh it in the same build.
+#   - Unknown arguments are rejected.
+#
+# Examples:
+#   sudo scripts/upgrade.sh ui              # fast vigosrv hot-swap
+#   sudo scripts/upgrade.sh server arm64    # full image with a fresh arm64
+#   sudo scripts/upgrade.sh arm64           # cross-compile + inject arm64
+#   sudo scripts/upgrade.sh                 # = server amd64 arm64
+#   sudo scripts/upgrade.sh server --push   # full image, push to registry
 
 DATA_DIR="/srv/vigo"
 IMAGE="us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest"
@@ -48,6 +57,25 @@ export GOPATH="${GOPATH:-/home/dan/go}"
 
 cd "$DATA_DIR"
 
+usage() {
+    cat >&2 <<'EOF'
+Usage: sudo scripts/upgrade.sh [components...] [--norun] [--push]
+
+Components (name it to build it, omit it to skip it):
+  ui       hot-swap vigosrv into the running container (fast, ephemeral)
+  server   full Docker image rebuild + redeploy (durable; rebuilds amd64 agent)
+  amd64    cross-compile + inject the linux/amd64 agent
+  arm64    cross-compile + inject the linux/arm64 agent
+           (darwin / freebsd / windows are also accepted)
+
+Modifiers:
+  --norun  build/swap but do not restart the container
+  --push   push the rebuilt image to the registry (requires `server`)
+
+No components → defaults to `server amd64 arm64`.
+EOF
+}
+
 # Extract an agent binary's compiled-in version from its embedded
 # VIGO-BUILD-VERSION marker (the #[used]/#[no_mangle] static in
 # agent/src/main.rs, section .vigo_version) — works for any target arch
@@ -60,93 +88,93 @@ agent_bin_version() {
     grep -aoE -m1 'VIGO-BUILD-VERSION=[0-9.]+' "$1" 2>/dev/null | cut -d= -f2
 }
 
+# Block until vigosrv logs "server ready" (or 60s elapse).
+wait_for_server() {
+    echo "Waiting for server..."
+    timeout 60 docker compose logs -f vigo 2>&1 | grep -m1 "server ready" || true
+}
+
+# Copy an agent binary + its .version sidecar into the running container.
+# The sidecar MUST travel with the binary — the server reads it at startup
+# to learn the binary's compiled-in version (it can't run a foreign-arch
+# binary itself). Without the sidecar the server disables auto-update for
+# that arch (safe); with a stale-or-missing one, cross-arch envoys can get
+# stuck in update loops — see tshoot/log-archive-rpi-update-loop-*.md.
+inject_with_sidecar() {
+    # $1 = host path to binary, $2 = container path
+    local src="$1"
+    local dst="$2"
+    docker cp "$src" "vigo:$dst"
+    if [ -f "$src.version" ]; then
+        docker cp "$src.version" "vigo:$dst.version"
+    fi
+}
+
 # ---------------------------------------------------------------------------
-# Parse flags
+# Parse arguments
 # ---------------------------------------------------------------------------
 
-BUILD_ALL=false      # --build: full Docker image rebuild (Go + Rust + image)
-BUILD_SERVER=false   # --server: rebuild Go binaries only, inject into container
-BUILD_AGENT=false    # --agent: rebuild Rust agent only
-PUSH=false           # --push: push image to GHCR
-RUN_TESTS=false      # --test: run test-cli.sh after upgrade
-START=true           # --norun: skip the container stop+start at the end (default: restart containers when work is done)
-CROSS_TARGETS=()
-parsing_cross=false
+DO_UI=false
+DO_SERVER=false
+DO_AMD64=false
+DO_ARM64=false
+DO_DARWIN=false
+DO_FREEBSD=false
+DO_WINDOWS=false
+START=true           # --norun clears this
+PUSH=false           # --push sets this
+n_components=0
 
 for arg in "$@"; do
     case "$arg" in
-        --build)   BUILD_ALL=true; parsing_cross=false ;;
-        --server)  BUILD_SERVER=true; parsing_cross=false ;;
-        --agent)   BUILD_AGENT=true; parsing_cross=false ;;
-        --push)    PUSH=true; parsing_cross=false ;;
-        --test)    RUN_TESTS=true; parsing_cross=false ;;
-        --norun)   START=false; parsing_cross=false ;;
-        --cross)   BUILD_AGENT=true; parsing_cross=true ;;
+        ui)       DO_UI=true;      n_components=$((n_components + 1)) ;;
+        server)   DO_SERVER=true;  n_components=$((n_components + 1)) ;;
+        amd64)    DO_AMD64=true;   n_components=$((n_components + 1)) ;;
+        arm64)    DO_ARM64=true;   n_components=$((n_components + 1)) ;;
+        darwin)   DO_DARWIN=true;  n_components=$((n_components + 1)) ;;
+        freebsd)  DO_FREEBSD=true; n_components=$((n_components + 1)) ;;
+        windows)  DO_WINDOWS=true; n_components=$((n_components + 1)) ;;
+        --norun)  START=false ;;
+        --push)   PUSH=true ;;
         *)
-            if $parsing_cross; then
-                CROSS_TARGETS+=("$arg")
-            fi
+            echo "ERROR: unknown argument: $arg" >&2
+            echo "" >&2
+            usage
+            exit 1
             ;;
     esac
 done
 
-# --cross with no args defaults to amd64+arm64.
-if $parsing_cross && [ ${#CROSS_TARGETS[@]} -eq 0 ]; then
-    CROSS_TARGETS=(amd64 arm64)
+# No components → full durable build.
+if [ "$n_components" -eq 0 ]; then
+    DO_SERVER=true
+    DO_AMD64=true
+    DO_ARM64=true
 fi
 
-# Expand "all".
-expanded=()
-for t in "${CROSS_TARGETS[@]+"${CROSS_TARGETS[@]}"}"; do
-    if [ "$t" = "all" ]; then
-        expanded=(amd64 arm64 darwin freebsd windows)
-        break
-    fi
-    expanded+=("$t")
-done
-CROSS_TARGETS=("${expanded[@]+"${expanded[@]}"}")
-
-# --build rebuilds the Docker image, which COPYs the host's dist/agent/
-# tree in (Dockerfile.server) — so any stale arch left in dist/agent/ gets
-# baked into the image and the fleet splits versions / loops on update.
-# Make --build self-contained: cross-compile the deployed Linux arches
-# first so the tree is fresh and internally consistent before the image
-# build. (--cross all / --cross arm64 etc. still override this.)
-if $BUILD_ALL && [ ${#CROSS_TARGETS[@]} -eq 0 ]; then
-    CROSS_TARGETS=(amd64 arm64)
+# --push only means something with an image rebuild.
+if $PUSH && ! $DO_SERVER; then
+    echo "ERROR: --push requires the 'server' component — nothing to push otherwise." >&2
+    exit 1
 fi
 
-# --build does a full Docker image rebuild. Go and Rust are both compiled
-# inside the Dockerfile — no local toolchain needed. --server and --agent
-# are for fast local rebuilds outside of Docker.
-# Don't set BUILD_SERVER/BUILD_AGENT from --build — those mean "local build".
-
-# Determine what kind of upgrade this is.
-NEED_IMAGE_REBUILD=false
-NEED_CONTAINER_RESTART=false
-NEED_HOST_UPDATE=false
-
-if $BUILD_ALL; then
-    NEED_IMAGE_REBUILD=true
-    NEED_CONTAINER_RESTART=true
-    NEED_HOST_UPDATE=true
-elif $BUILD_SERVER; then
-    # Server binary runs inside Alpine (musl). Must rebuild the Docker image
-    # so Go compiles in the Alpine build stage. Local build is host-only (CLI).
-    NEED_IMAGE_REBUILD=true
-    NEED_CONTAINER_RESTART=true
-    NEED_HOST_UPDATE=true
-elif $BUILD_AGENT; then
-    NEED_CONTAINER_RESTART=true
-    NEED_HOST_UPDATE=true
-elif [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
-    NEED_HOST_UPDATE=true
-else
-    # Pull mode — pull latest image, restart.
-    NEED_IMAGE_REBUILD=false
-    NEED_CONTAINER_RESTART=true
-    NEED_HOST_UPDATE=true
+# `server` already rebuilds vigosrv (→ ui) and recompiles the amd64 agent
+# in-image (Dockerfile.server's rust-builder stage), so a standalone `ui` or
+# `amd64` step would be redundant — dedupe them silently.
+if $DO_SERVER; then
+    DO_UI=false
+    DO_AMD64=false
 fi
+
+# Agent cross-compile targets. amd64 is absent here whenever `server` is set
+# (built in-image); arm64/darwin/freebsd/windows always need an explicit
+# cross-compile to reach dist/agent/.
+CROSS_TARGETS=()
+if $DO_AMD64;   then CROSS_TARGETS+=(amd64);   fi
+if $DO_ARM64;   then CROSS_TARGETS+=(arm64);   fi
+if $DO_DARWIN;  then CROSS_TARGETS+=(darwin);  fi
+if $DO_FREEBSD; then CROSS_TARGETS+=(freebsd); fi
+if $DO_WINDOWS; then CROSS_TARGETS+=(windows); fi
 
 # ---------------------------------------------------------------------------
 # Version consistency check
@@ -179,16 +207,7 @@ if [ -d "$REPO_DIR" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Stop containers
-# ---------------------------------------------------------------------------
-
-if $NEED_CONTAINER_RESTART && $START; then
-    echo "Stopping containers..."
-    docker compose down --remove-orphans 2>/dev/null || true
-fi
-
-# ---------------------------------------------------------------------------
-# Cross-compile agent binaries (before Docker build so dist/ is populated)
+# Cross-compile agent binaries (before the Docker build so dist/ is populated)
 # ---------------------------------------------------------------------------
 
 if [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
@@ -296,7 +315,7 @@ grep -aoE -m1 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/arm64/vigo | 
                 fi
                 ;;
             *)
-                echo "  Unknown target: $t (valid: amd64, arm64, freebsd, windows, darwin, all)"
+                echo "  Unknown target: $t (valid: amd64, arm64, freebsd, windows, darwin)"
                 ;;
         esac
     done
@@ -375,57 +394,76 @@ grep -aoE -m1 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/arm64/vigo | 
 fi
 
 # ---------------------------------------------------------------------------
-# Build Go binaries locally (--server or --build)
+# Stage a self-contained Docker build context (shared by `ui` and `server`)
 # ---------------------------------------------------------------------------
+#
+# vigo's go.mod has `replace git.alexander4.io/tessera => ../tessera`, but a
+# Docker build context can't reach a sibling dir — stage-build-context.sh
+# copies vigo + tessera into a temp dir and rewrites the replace directive.
 
-if $BUILD_SERVER; then
-    echo "Building Go binaries..."
-    cd "$REPO_DIR"
-    VIGO_VERSION=$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo dev)
-    CGO_ENABLED=1 go build -ldflags="-X main.version=$VIGO_VERSION" -o bin/vigosrv ./server
-    CGO_ENABLED=1 go build -ldflags="-X main.version=$VIGO_VERSION" -o bin/vigocli ./cli
-    echo "  vigosrv:              $(ls -lh bin/vigosrv | awk '{print $5}')"
-    echo "  vigocli:               $(ls -lh bin/vigocli | awk '{print $5}')"
-    cd "$DATA_DIR"
-fi
-
-# ---------------------------------------------------------------------------
-# Build Rust agent locally (--agent without --cross)
-# ---------------------------------------------------------------------------
-
-if $BUILD_AGENT && [ ${#CROSS_TARGETS[@]} -eq 0 ]; then
-    echo "Building Rust agent..."
-    cd "$REPO_DIR/agent"
-    cargo build --release
-    mkdir -p "$REPO_DIR/bin"
-    cp .build/release/vigo "$REPO_DIR/bin/vigo"
-    echo "  vigo:     $(ls -lh "$REPO_DIR/bin/vigo" | awk '{print $5}')"
-    # Non-cross local build also runs as root under sudo; hand
-    # ownership of agent/.build and the vigo binary back to the
-    # invoking user so subsequent `cargo check` and `bin/vigo`
-    # usage don't hit EACCES.
-    if [ -n "$SUDO_USER" ]; then
-        chown -R "$SUDO_USER:$SUDO_USER" "$REPO_DIR/agent/.build" 2>/dev/null || true
-        chown "$SUDO_USER:$SUDO_USER" "$REPO_DIR/bin/vigo" 2>/dev/null || true
-    fi
-    cd "$DATA_DIR"
-fi
-
-# ---------------------------------------------------------------------------
-# Docker image: full rebuild or pull
-# ---------------------------------------------------------------------------
-
-if $NEED_IMAGE_REBUILD; then
-    # Bust all caches to ensure fresh binaries in the runtime image.
-    touch "$REPO_DIR/protobuf/vigo.proto" "$REPO_DIR/agent/src/main.rs" 2>/dev/null || true
-
-    # Stage a self-contained build context (vigo + sibling tessera) so the
-    # Docker build can resolve `replace git.alexander4.io/tessera => ../tessera`
-    # from within its own context. The real repo's go.mod is untouched.
+STAGE_DIR=""
+if $DO_UI || $DO_SERVER; then
     STAGE_DIR="$(mktemp -d -t vigo-build-XXXXXX)"
     trap 'rm -rf "$STAGE_DIR"' EXIT
     echo "Staging Docker build context at $STAGE_DIR (includes tessera)..."
     "$SCRIPT_DIR/stage-build-context.sh" "$REPO_DIR" "$STAGE_DIR"
+fi
+
+# ---------------------------------------------------------------------------
+# ui — hot-swap vigosrv into the running container
+# ---------------------------------------------------------------------------
+#
+# The UI templates + CSS are //go:embed'd into vigosrv, so a UI change means
+# recompiling the binary. Build it via Dockerfile.server's go-builder stage
+# (same prod build environment + flags; `--target go-builder` skips the Rust
+# stage entirely) and docker-cp it over the running container's vigosrv.
+# Ephemeral: a container recreate (docker compose up) reverts to the image's
+# binary — that's `server`'s job.
+
+if $DO_UI; then
+    if ! docker ps -q -f name=vigo | grep -q .; then
+        echo "ERROR: the vigo container is not running — 'ui' hot-swaps vigosrv into it." >&2
+        echo "       Start it with 'docker compose up -d', or run 'upgrade.sh server'." >&2
+        exit 1
+    fi
+    echo "Building vigosrv (go-builder stage)..."
+    DOCKER_BUILDKIT=1 docker build \
+        --target go-builder \
+        -f "$STAGE_DIR/Dockerfile.server" -t vigo-uibuild:latest "$STAGE_DIR"
+    cid="$(docker create vigo-uibuild:latest)"
+    docker cp "$cid:/build/vigosrv" "$STAGE_DIR/vigosrv"
+    docker rm "$cid" >/dev/null
+    docker cp "$STAGE_DIR/vigosrv" vigo:/usr/local/sbin/vigosrv
+    echo "  vigosrv → container ($(ls -lh "$STAGE_DIR/vigosrv" | awk '{print $5}'))"
+    echo "  (ephemeral — a container recreate reverts to the image's vigosrv)"
+fi
+
+# ---------------------------------------------------------------------------
+# server — full Docker image rebuild + redeploy
+# ---------------------------------------------------------------------------
+
+if $DO_SERVER; then
+    # The image build COPYs the host's dist/agent/ tree in (Dockerfile.server)
+    # and recompiles only the amd64 agent in its rust-builder stage. arm64 is
+    # baked from dist/ as-is — warn if it's stale, but proceed (the operator
+    # can re-run with `arm64` to refresh it).
+    if ! $DO_ARM64; then
+        arm_bin="$REPO_DIR/dist/agent/linux/arm64/vigo"
+        repo_v="$(cat "$REPO_DIR/VERSION" 2>/dev/null | tr -d '[:space:]')"
+        if [ -f "$arm_bin" ]; then
+            arm_v="$(agent_bin_version "$arm_bin")"
+            if [ -n "$repo_v" ] && [ -n "$arm_v" ] && [ "$arm_v" != "$repo_v" ]; then
+                echo "WARNING: dist/agent/linux/arm64 is $arm_v, repo VERSION is $repo_v —"
+                echo "         the image will bake this stale arm64 agent and arm64 envoys"
+                echo "         will lag. Re-run as 'upgrade.sh server arm64' to refresh it."
+                echo ""
+            fi
+        else
+            echo "WARNING: no dist/agent/linux/arm64/vigo — the image will ship no arm64"
+            echo "         agent. Run 'upgrade.sh server arm64' if you have arm64 envoys."
+            echo ""
+        fi
+    fi
 
     echo "Building Docker image from source..."
     DOCKER_BUILDKIT=1 docker build \
@@ -437,72 +475,54 @@ if $NEED_IMAGE_REBUILD; then
         docker push "$IMAGE"
         echo "Pushed $IMAGE"
     fi
-elif ! $BUILD_SERVER && ! $BUILD_AGENT && ! $BUILD_ALL; then
-    # Pull mode.
-    echo "Pulling latest image..."
-    docker compose pull vigo
-fi
 
-# ---------------------------------------------------------------------------
-# Seed scripts from the image (or repo for --server)
-# Docs stay inside the container at /seed/docs/ — not copied to bind mount.
-# ---------------------------------------------------------------------------
-
-echo "Updating scripts and compose file..."
-if $BUILD_SERVER || $BUILD_AGENT || $BUILD_ALL; then
-    # Copy directly from repo — faster than spinning up a container.
+    # Keep the deployed scripts + compose file in sync with the repo.
+    echo "Updating scripts and compose file..."
     mkdir -p "$DATA_DIR/scripts"
-    # Copy all scripts that work without the source tree.
-    for s in test-cli.sh upgrade.sh example2stockpile.sh reset-envoy.sh; do
+    for s in test-cli.sh upgrade.sh stage-build-context.sh example2stockpile.sh reset-envoy.sh; do
         [ -f "$REPO_DIR/scripts/$s" ] && cp "$REPO_DIR/scripts/$s" "$DATA_DIR/scripts/$s"
     done
     chmod +x "$DATA_DIR"/scripts/*.sh 2>/dev/null || true
-    # Keep docker-compose.yml in sync with the repo.
     cp "$REPO_DIR/docker-compose.prod.yml" "$DATA_DIR/docker-compose.yml"
-else
-    # Pull mode — seed from the image.
-    docker run --rm -v "$DATA_DIR:$DATA_DIR" "$IMAGE" --seed-only 2>/dev/null || true
-fi
 
-# ---------------------------------------------------------------------------
-# Start containers
-# ---------------------------------------------------------------------------
-
-if $NEED_CONTAINER_RESTART && $START; then
-    echo "Starting containers..."
-    docker compose up -d
-
-    echo ""
-    echo "Waiting for server..."
-    timeout 60 docker compose logs -f vigo 2>&1 | grep -m1 "server ready" || true
-elif $NEED_CONTAINER_RESTART && ! $START; then
-    echo ""
-    echo "Built artifacts are ready; running container is untouched."
-    echo "Drop --norun (or run 'docker compose up -d' from $DATA_DIR) to deploy."
-fi
-
-# Inject cross-compiled agent binaries into the running container so the
-# bootstrap endpoint serves the freshly built binaries (not stale ones baked
-# into the image). Must happen after the container starts.
-#
-# The .version sidecar files MUST be copied alongside each binary — the
-# server reads them at startup to learn the binary's compiled-in version
-# (it can't run a foreign-arch binary itself). Without the sidecar, the
-# server disables auto-update for that arch (safe), but envoys never get
-# new binaries. With a stale-or-missing sidecar, cross-arch envoys can
-# get stuck in update loops — see tshoot/log-archive-rpi-update-loop-*.md.
-inject_with_sidecar() {
-    # $1 = host path to binary, $2 = container path
-    local src="$1"
-    local dst="$2"
-    docker cp "$src" "vigo:$dst"
-    if [ -f "$src.version" ]; then
-        docker cp "$src.version" "vigo:$dst.version"
+    if $START; then
+        echo "Redeploying container from the new image..."
+        docker compose down --remove-orphans 2>/dev/null || true
+        docker compose up -d
+        echo ""
+        wait_for_server
+    else
+        echo ""
+        echo "Image built; the running container is untouched (--norun)."
+        echo "Run 'docker compose up -d' from $DATA_DIR to deploy."
     fi
-}
 
-if [ ${#CROSS_TARGETS[@]} -gt 0 ] && docker ps -q -f name=vigo | grep -q .; then
-    echo "Injecting cross-compiled agent binaries into container..."
+    # Host vigocli — extracted from the freshly built image (works whether or
+    # not the container is up). Root-only: peer auth trusts any localhost
+    # caller, so the 0700 file mode is the gate.
+    echo "Updating host vigocli..."
+    cid="$(docker create "$IMAGE")"
+    docker cp "$cid:/usr/local/bin/vigocli" /usr/local/bin/vigocli
+    docker rm "$cid" >/dev/null
+    chown root:root /usr/local/bin/vigocli
+    chmod 0700 /usr/local/bin/vigocli
+
+    # The local envoy's agent binary is NOT installed here — it arrives via
+    # auto-update (the server detects the version mismatch on check-in and
+    # sends force_update), same as every other envoy.
+fi
+
+# ---------------------------------------------------------------------------
+# Inject cross-compiled agent binaries into the running container
+# ---------------------------------------------------------------------------
+#
+# Only when NOT rebuilding the image — a `server` build bakes the dist tree
+# in via COPY (and recompiles amd64 in-Dockerfile), so an inject would be
+# redundant. Must run while the container is up; the restart below makes the
+# server re-read the injected .version sidecars.
+
+if [ ${#CROSS_TARGETS[@]} -gt 0 ] && ! $DO_SERVER && docker ps -q -f name=vigo | grep -q .; then
+    echo "Injecting cross-compiled agent binaries into the container..."
     for t in "${CROSS_TARGETS[@]}"; do
         case "$t" in
             amd64)
@@ -546,31 +566,24 @@ if [ ${#CROSS_TARGETS[@]} -gt 0 ] && docker ps -q -f name=vigo | grep -q .; then
 fi
 
 # ---------------------------------------------------------------------------
-# Install binaries to host
+# Activate non-server swaps (ui hot-swap / agent inject)
 # ---------------------------------------------------------------------------
+#
+# A swapped vigosrv binary or injected agent does nothing until vigosrv
+# restarts — it re-execs the new binary and re-reads the agent .version
+# sidecars. `server` already redeployed above, so this is non-server only.
 
-if $NEED_HOST_UPDATE; then
-    echo "Updating host binaries..."
-
-    if $BUILD_SERVER; then
-        # --server: host CLI from local build, server binary from Docker image.
-        cp "$REPO_DIR/bin/vigocli" /usr/local/bin/vigocli
-    else
-        # Pull or full rebuild: extract from the IMAGE, not a running container —
-        # `--build --norun` leaves the old container down and the new
-        # one not yet up. `docker create` makes an unstarted container we can
-        # `docker cp` out of regardless of compose state.
-        cid=$(docker create "$IMAGE")
-        docker cp "$cid:/usr/local/bin/vigocli" /usr/local/bin/vigocli
-        docker rm "$cid" >/dev/null
+if ! $DO_SERVER && { $DO_UI || [ ${#CROSS_TARGETS[@]} -gt 0 ]; }; then
+    if ! $START; then
+        echo ""
+        echo "Binaries swapped into the container but not activated (--norun)."
+        echo "Run 'docker compose restart vigo' from $DATA_DIR to activate."
+    elif docker ps -q -f name=vigo | grep -q .; then
+        echo "Restarting vigo to activate the swap..."
+        docker compose restart vigo
+        echo ""
+        wait_for_server
     fi
-    # Root-only: peer auth trusts any localhost caller, so file mode is the gate.
-    chown root:root /usr/local/bin/vigocli
-    chmod 0700 /usr/local/bin/vigocli
-
-    # Agent binary: NOT installed to the host here. The local envoy receives
-    # the new binary via auto-update (server detects version mismatch on
-    # check-in and sends force_update), same as all other envoys.
 fi
 
 echo ""
@@ -580,7 +593,7 @@ docker compose ps
 # Config health check
 # ---------------------------------------------------------------------------
 
-if $NEED_CONTAINER_RESTART && docker ps -q -f name=vigo | grep -q .; then
+if docker ps -q -f name=vigo | grep -q .; then
     echo ""
     echo "Checking config health..."
     LIVE_DIR="/srv/vigo/stacks/.live"
@@ -603,22 +616,6 @@ if $NEED_CONTAINER_RESTART && docker ps -q -f name=vigo | grep -q .; then
     else
         echo "  No .live/ config — run: vigocli config publish"
     fi
-fi
-
-# ---------------------------------------------------------------------------
-# Re-read agent versions in the server (after a --cross-only inject)
-# ---------------------------------------------------------------------------
-#
-# vigosrv snapshots per-arch agent versions (detectAgentVersions) once, at
-# startup, from the dist tree's vigo.version sidecars. When --cross fired
-# WITHOUT a full image rebuild, the inject step above changed the running
-# container's /dist/agent/ tree AFTER that snapshot — so the server is
-# still advertising the old versions and envoys won't update. Restart it
-# so it re-reads. (--build already brings the container up fresh from the
-# rebuilt image, after the cross-compile, so its snapshot is current.)
-if [ ${#CROSS_TARGETS[@]} -gt 0 ] && ! $BUILD_ALL && $START && docker ps -q -f name=vigo | grep -q .; then
-    echo "Restarting vigo so it re-reads the injected agent versions..."
-    (cd "$DATA_DIR" && docker compose restart vigo)
 fi
 
 # ---------------------------------------------------------------------------
@@ -679,10 +676,10 @@ if [ -d "$REPO_DIR" ]; then
             [ -z "$BIN_VER" ] && BIN_VER="unknown"
             [ -z "$SIDE_VER" ] && SIDE_VER="(missing)"
             if [ "$SIDE_VER" != "$BIN_VER" ]; then
-                echo "  MISMATCH agent $platform  binary=$BIN_VER  sidecar=$SIDE_VER  (server advertises the wrong version — envoys loop; re-run with --cross $cross_t)"
+                echo "  MISMATCH agent $platform  binary=$BIN_VER  sidecar=$SIDE_VER  (server advertises the wrong version — envoys loop; re-run: upgrade.sh $cross_t)"
                 STALE=1
             elif [ -n "$REPO_VERSION" ] && [ "$BIN_VER" != "$REPO_VERSION" ]; then
-                echo "  STALE  agent $platform  version=$BIN_VER  (repo is $REPO_VERSION — re-run with --cross $cross_t)"
+                echo "  STALE  agent $platform  version=$BIN_VER  (repo is $REPO_VERSION — re-run: upgrade.sh $cross_t)"
                 STALE=1
             else
                 echo "  OK     agent $platform  version=$BIN_VER"
@@ -707,17 +704,7 @@ echo ""
 if [ "$STALE" -eq 0 ]; then
     echo "All files are fresh."
 else
-    echo "NOTE: Some files are stale. Use --build for a full image rebuild."
-fi
-
-# ---------------------------------------------------------------------------
-# Run tests if requested
-# ---------------------------------------------------------------------------
-
-if $RUN_TESTS; then
-    echo ""
-    echo "Running CLI test suite..."
-    "$DATA_DIR/scripts/test-cli.sh" --server "https://localhost:8443"
+    echo "NOTE: Some files are stale. Run 'upgrade.sh server' for a full image rebuild."
 fi
 
 echo ""
