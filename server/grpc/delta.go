@@ -38,6 +38,14 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 	skippedCount := int64(run.SkippedCount)
 	moduleCount := int64(run.TotalCount)
 
+	// Attribute the run: "force-push" if the server force-pushed the
+	// bundle this convergence applied, else "scheduled". Consumed once
+	// here (one-shot) and reused for the FleetIndex ring + the DB row.
+	trigger := "scheduled"
+	if s.fleetIndex != nil {
+		trigger = s.fleetIndex.ConsumeRunTrigger(envoyID)
+	}
+
 	// Update FleetIndex with run status + append to recent runs.
 	now := time.Now()
 	if s.fleetIndex != nil {
@@ -47,6 +55,7 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 			EnvoyID:     envoyID,
 			Hostname:     hostname,
 			Status:       runStatus,
+			Trigger:      trigger,
 			ChangedCount: changedCount,
 			FailedCount:  failedCount,
 			FinishedAt:   now,
@@ -82,6 +91,7 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 			EnvoyID:     envoyID,
 			Hostname:     hostname,
 			Status:       runStatus,
+			Trigger:      trigger,
 			ModuleCount:  int64(run.TotalCount),
 			ChangedCount: changedCount,
 			FailedCount:  failedCount,

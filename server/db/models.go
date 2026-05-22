@@ -252,6 +252,7 @@ type Run struct {
 	StartedAt    time.Time    `json:"started_at"`
 	FinishedAt   sql.NullTime `json:"finished_at"`
 	Status       string       `json:"status"`
+	Trigger      string       `json:"trigger"`
 	ModuleCount  int64        `json:"module_count"`
 	ChangedCount int64        `json:"changed_count"`
 	FailedCount  int64        `json:"failed_count"`

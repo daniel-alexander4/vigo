@@ -81,6 +81,7 @@ func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration
 			Hostname:     r.Hostname,
 			StartedAt:    r.FinishedAt,
 			Status:       r.Status,
+			Trigger:      r.Trigger,
 			ChangedCount: r.ChangedCount,
 			FailedCount:  r.FailedCount,
 		})
@@ -101,6 +102,7 @@ func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration
 					Hostname:     envoyMap[r.EnvoyID],
 					StartedAt:    r.StartedAt,
 					Status:       r.Status,
+					Trigger:      r.Trigger,
 					ModuleCount:  r.ModuleCount,
 					ChangedCount: r.ChangedCount,
 					FailedCount:  r.FailedCount,
@@ -473,6 +475,7 @@ func (ds *DataSource) RunDetailData(runID string) (ui.RunDetailPageData, error) 
 			Hostname:     hostname,
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
+			Trigger:      r.Trigger,
 			ModuleCount:  r.ModuleCount,
 			ChangedCount: r.ChangedCount,
 			FailedCount:  r.FailedCount,

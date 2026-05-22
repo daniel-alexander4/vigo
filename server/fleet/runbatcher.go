@@ -30,6 +30,7 @@ type RunBatchEntry struct {
 	EnvoyID     string
 	Hostname     string
 	Status       string
+	Trigger      string // "scheduled" | "force-push"; empty defaults to "scheduled"
 	ModuleCount  int64
 	ChangedCount int64
 	FailedCount  int64
@@ -114,9 +115,14 @@ func (rb *RunBatcher) Flush(ctx context.Context) {
 
 // persistEntry writes a single run and its results to the database.
 func (rb *RunBatcher) persistEntry(ctx context.Context, entry RunBatchEntry) error {
+	trigger := entry.Trigger
+	if trigger == "" {
+		trigger = "scheduled"
+	}
 	run, err := rb.store.CreateRun(ctx, db.CreateRunParams{
-		EnvoyID:    entry.EnvoyID,
+		EnvoyID:     entry.EnvoyID,
 		Status:      "running",
+		Trigger:     trigger,
 		ModuleCount: entry.ModuleCount,
 	})
 	if err != nil {

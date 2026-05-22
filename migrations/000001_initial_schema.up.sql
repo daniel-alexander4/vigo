@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS runs (
     started_at    DATETIME NOT NULL DEFAULT (datetime('now')),
     finished_at   DATETIME,
     status        TEXT NOT NULL CHECK (status IN ('running', 'success', 'failure', 'partial')),
+    trigger       TEXT NOT NULL DEFAULT 'scheduled' CHECK (trigger IN ('scheduled', 'force-push')),
     module_count  INTEGER NOT NULL DEFAULT 0,
     changed_count INTEGER NOT NULL DEFAULT 0,
     failed_count  INTEGER NOT NULL DEFAULT 0,

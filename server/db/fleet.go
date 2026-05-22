@@ -252,6 +252,7 @@ type RunWithHostname struct {
 	StartedAt       time.Time
 	FinishedAt      sql.NullTime
 	Status          string
+	Trigger         string
 	ModuleCount     int64
 	ChangedCount    int64
 	FailedCount     int64
@@ -261,7 +262,7 @@ type RunWithHostname struct {
 
 const listRunsWithHostname = `
 SELECT r.id, r.envoy_id, e.hostname, r.started_at, r.finished_at,
-       r.status, r.module_count, r.changed_count, r.failed_count, r.skipped_count,
+       r.status, r.trigger, r.module_count, r.changed_count, r.failed_count, r.skipped_count,
        COALESCE((
          SELECT rr.module_name FROM run_results rr
          WHERE rr.run_id = r.id
@@ -290,7 +291,7 @@ func (q *Queries) ListRunsWithHostname(ctx context.Context, limit int64) ([]RunW
 	for rows.Next() {
 		var r RunWithHostname
 		if err := rows.Scan(&r.ID, &r.EnvoyID, &r.Hostname, &r.StartedAt, &r.FinishedAt,
-			&r.Status, &r.ModuleCount, &r.ChangedCount, &r.FailedCount, &r.SkippedCount,
+			&r.Status, &r.Trigger, &r.ModuleCount, &r.ChangedCount, &r.FailedCount, &r.SkippedCount,
 			&r.TopFailedModule); err != nil {
 			return nil, err
 		}

@@ -470,3 +470,26 @@ func TestConvergencePercent(t *testing.T) {
 		t.Errorf("ConvergencePercent = %f, want 50.0", pct)
 	}
 }
+
+func TestConsumeRunTrigger(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddEnvoy(EnvoyState{ID: "e1"}, genKey(t))
+
+	// Unmarked → scheduled.
+	if got := fi.ConsumeRunTrigger("e1"); got != "scheduled" {
+		t.Errorf("unmarked: got %q, want scheduled", got)
+	}
+	// MarkRunForced → the next consume reports force-push.
+	fi.MarkRunForced("e1")
+	if got := fi.ConsumeRunTrigger("e1"); got != "force-push" {
+		t.Errorf("after MarkRunForced: got %q, want force-push", got)
+	}
+	// One-shot: the flag is cleared, so the next consume is scheduled.
+	if got := fi.ConsumeRunTrigger("e1"); got != "scheduled" {
+		t.Errorf("second consume: got %q, want scheduled", got)
+	}
+	// Unknown envoy → scheduled, no panic.
+	if got := fi.ConsumeRunTrigger("nonexistent"); got != "scheduled" {
+		t.Errorf("unknown envoy: got %q, want scheduled", got)
+	}
+}

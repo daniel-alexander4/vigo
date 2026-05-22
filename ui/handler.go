@@ -1024,6 +1024,10 @@ type RunRow struct {
 	StartedAt    time.Time
 	FinishedAt   time.Time // zero when still running; powers DurationLabel
 	Status       string
+	// Trigger is what kicked off the run — "scheduled" (normal cycle)
+	// or "force-push" (operator-initiated). Lets the dashboard pick
+	// operator actions out of the scheduled heartbeat.
+	Trigger      string
 	ModuleCount  int64
 	ChangedCount int64
 	FailedCount  int64
@@ -2347,6 +2351,7 @@ func (h *Handler) dashboardData() DashboardPageData {
 			StartedAt:       r.StartedAt,
 			FinishedAt:      finished,
 			Status:          r.Status,
+			Trigger:         r.Trigger,
 			ModuleCount:     r.ModuleCount,
 			ChangedCount:    r.ChangedCount,
 			FailedCount:     r.FailedCount,
@@ -5438,6 +5443,7 @@ func (ds *dbDataSource) DashboardData(baseInterval, offlineThreshold time.Durati
 			Hostname:     envoyMap[r.EnvoyID],
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
+			Trigger:      r.Trigger,
 			ModuleCount:  r.ModuleCount,
 			ChangedCount: r.ChangedCount,
 			FailedCount:  r.FailedCount,
@@ -6138,6 +6144,7 @@ func (ds *dbDataSource) RunDetailData(runID string) (RunDetailPageData, error) {
 			Hostname:     envoy.Hostname,
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
+			Trigger:      r.Trigger,
 			ModuleCount:  r.ModuleCount,
 			ChangedCount: r.ChangedCount,
 			FailedCount:  r.FailedCount,

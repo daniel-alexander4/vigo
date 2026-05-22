@@ -83,11 +83,16 @@ func (s *MemRunStore) findRunShard(runID string) (*runShard, *memRun) {
 }
 
 func (s *MemRunStore) CreateRun(_ context.Context, arg CreateRunParams) (Run, error) {
+	trigger := arg.Trigger
+	if trigger == "" {
+		trigger = "scheduled"
+	}
 	run := Run{
 		ID:          uuid.New().String(),
 		EnvoyID:    arg.EnvoyID,
 		StartedAt:   time.Now(),
 		Status:      arg.Status,
+		Trigger:     trigger,
 		ModuleCount: arg.ModuleCount,
 	}
 

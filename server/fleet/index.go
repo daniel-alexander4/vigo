@@ -63,6 +63,7 @@ type EnvoyState struct {
 	StreamRequested       bool      // ephemeral: server wants agent to open stream (not persisted to DB)
 	TunnelRequested       bool      // ephemeral: server wants agent to open TunnelStream (Scrier)
 	FastPoll              bool      // ephemeral: next check-in response uses 1s interval (cleared after delivery)
+	RunForced             bool      // ephemeral: the run the agent will next report was force-triggered; consumed by ConsumeRunTrigger at run-create. Not persisted.
 	Gateway               string    // hostname of gateway envoy (empty for normal envoys)
 	DeviceType            string    // network device type (empty for normal envoys)
 	Tags                  []string  // user-assigned tags for targeting
@@ -107,6 +108,7 @@ type RunSummary struct {
 	EnvoyID      string
 	Hostname     string
 	Status       string
+	Trigger      string // "scheduled" | "force-push"
 	ChangedCount int64
 	FailedCount  int64
 	FinishedAt   time.Time
@@ -680,6 +682,35 @@ func (f *FleetIndex) SetForcePush(id string, val bool) {
 	}
 	ts.ForcePush = val
 	f.dirty[id] = true
+}
+
+// MarkRunForced records that the bundle just delivered to this envoy
+// was force-pushed, so the run the agent reports back is attributed to
+// the operator's force-push rather than a scheduled cycle. Ephemeral —
+// ConsumeRunTrigger reads and clears it at run-create time.
+func (f *FleetIndex) MarkRunForced(id string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if ts, ok := f.envoys[id]; ok {
+		ts.RunForced = true
+	}
+}
+
+// ConsumeRunTrigger returns the trigger for the run an envoy is now
+// reporting — "force-push" when MarkRunForced armed it (the flag is
+// cleared), "scheduled" otherwise. A run is created from exactly one
+// report, so the consume is one-shot.
+func (f *FleetIndex) ConsumeRunTrigger(id string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	ts, ok := f.envoys[id]
+	if !ok || !ts.RunForced {
+		return "scheduled"
+	}
+	ts.RunForced = false
+	return "force-push"
 }
 
 // SetForceUpdate sets the ForceUpdate flag on a single envoy.

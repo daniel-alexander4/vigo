@@ -28,10 +28,19 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	}
 	envoyID := req.GetEnvoyId()
 
+	// Attribute the run: "force-push" if the server force-pushed the
+	// bundle this convergence applied, else "scheduled". One run per
+	// report, so the consume is one-shot.
+	trigger := "scheduled"
+	if s.fleetIndex != nil {
+		trigger = s.fleetIndex.ConsumeRunTrigger(envoyID)
+	}
+
 	// Create the run record (server generates the UUID).
 	run, err := s.runStore.CreateRun(ctx, db.CreateRunParams{
 		EnvoyID:      envoyID,
 		Status:      "running",
+		Trigger:     trigger,
 		ModuleCount: int64(len(req.GetResults())),
 	})
 	if err != nil {
@@ -139,6 +148,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 			EnvoyID:     envoyID,
 			Hostname:     hostname,
 			Status:       runStatus,
+			Trigger:      trigger,
 			ChangedCount: changedCount,
 			FailedCount:  failedCount,
 			FinishedAt:   now,

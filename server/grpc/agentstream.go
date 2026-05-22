@@ -623,6 +623,9 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			// Clear force_push flag now that the agent has received the fresh bundle.
 			if freshState.ForcePush {
 				s.fleetIndex.SetForcePush(envoyID, false)
+				// Attribute the run the agent reports back to this
+				// force-push rather than a scheduled cycle.
+				s.fleetIndex.MarkRunForced(envoyID)
 			}
 		}
 	} else {
@@ -651,6 +654,13 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			if freshEnvoy.ForcePush != 0 {
 				if err := s.queries.ClearForcePush(ctx, envoyID); err != nil {
 					slog.Warn("failed to clear force_push", "envoy_id", envoyID, "error", err)
+				}
+				// Attribute the reported run to this force-push.
+				// Best-effort: a no-op if the envoy isn't in the
+				// FleetIndex, in which case the run defaults to
+				// "scheduled".
+				if s.fleetIndex != nil {
+					s.fleetIndex.MarkRunForced(envoyID)
 				}
 			}
 		}

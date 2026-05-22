@@ -250,3 +250,38 @@ func TestMemRunStore_ListRunResults_NotFound(t *testing.T) {
 		t.Fatal("expected error for missing run")
 	}
 }
+
+func TestMemRunStore_Trigger(t *testing.T) {
+	s := NewMemRunStore(10)
+	ctx := context.Background()
+	envoyID := uuid.New().String()
+
+	forced, err := s.CreateRun(ctx, CreateRunParams{
+		EnvoyID:     envoyID,
+		Status:      "running",
+		Trigger:     "force-push",
+		ModuleCount: 1,
+	})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	if forced.Trigger != "force-push" {
+		t.Errorf("CreateRun Trigger = %q, want force-push", forced.Trigger)
+	}
+	got, err := s.GetRunByID(ctx, forced.ID)
+	if err != nil {
+		t.Fatalf("GetRunByID: %v", err)
+	}
+	if got.Trigger != "force-push" {
+		t.Errorf("GetRunByID Trigger = %q, want force-push", got.Trigger)
+	}
+
+	// An empty trigger defaults to "scheduled" — mirrors the DB DEFAULT.
+	def, err := s.CreateRun(ctx, CreateRunParams{EnvoyID: envoyID, Status: "running", ModuleCount: 1})
+	if err != nil {
+		t.Fatalf("CreateRun (default): %v", err)
+	}
+	if def.Trigger != "scheduled" {
+		t.Errorf("empty Trigger defaulted to %q, want scheduled", def.Trigger)
+	}
+}
