@@ -1,7 +1,7 @@
 
 # Set up monitoring
 
-You'll finish this page with a Prometheus instance scraping the Vigo server, the five bundled Grafana dashboards loaded, and alert rules firing on the conditions that matter: stale envoys, convergence failures, license drift, CVE counts, and (if you run hub-spoke) spoke health.
+You'll finish this page with a Prometheus instance scraping the Vigo server, the four bundled Grafana dashboards loaded, and alert rules firing on the conditions that matter: stale envoys, convergence failures, license drift, and CVE counts.
 
 **When you'd use this:** any deployment where someone other than you needs to know about fleet anomalies. For a single-operator home lab, `vigocli doctor` + the Web UI dashboard is enough; Prometheus + Grafana starts paying for itself around five envoys or when you need history.
 
@@ -74,15 +74,6 @@ Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirecti
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `vigo_smtp_sends_total` | Counter | `event`, `status` | Email send attempts by event type and outcome (success, error) |
-
-### Spanner
-
-| Metric | Type | Labels | Description |
-|--------|------|--------|-------------|
-| `vigo_spanner_bolt_latency_seconds` | Histogram | `bolt` | Per-bolt RPC probe latency in seconds |
-| `vigo_spanner_bolt_up` | Gauge | `bolt` | Per-bolt reachability (1=up, 0=down) |
-
-Only populated on hub servers. Updated each time the hub probes the bolts under it.
 
 ### License
 
@@ -241,11 +232,6 @@ scrape_configs:
 - Alert on `increase(vigo_license_enforcement_errors_total[5m]) > 0` (internal enforcement errors — investigate, gate is failing closed)
 - Alert on `vigo_license_days_remaining < 30` (license expiring soon)
 
-### Spanner
-
-- **Bolt latency**: `histogram_quantile(0.95, rate(vigo_spanner_bolt_latency_seconds_bucket[5m]))`
-- Alert on `vigo_spanner_bolt_up == 0` (bolt unreachable)
-
 ### Server Health
 
 - **Uptime**: `vigo_uptime_seconds` (detects restarts in Grafana)
@@ -291,15 +277,14 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 
 | Dashboard | Panels | Download |
 |-----------|--------|----------|
-| **Fleet Overview** | 40 panels across 11 rows: fleet stats, compliance breakdown, check-ins & gRPC latency, convergence & drift, operations, infrastructure, webhooks & SMTP, secrets, AI assistant, security posture, risk posture | [vigo-overview.json](#grafana-dashboards) |
-| **Security Posture** | 14 panels across 4 rows: CVE counts by severity, hardening score gauge + trend, threat detection (rootkits, malware, integrity), scan coverage | [vigo-security.json](#grafana-dashboards) |
-| **Convergence** | 9 panels across 3 rows: status pie chart + stat counters, compliance % + drift rate trends, check-in age heatmap | [vigo-convergence.json](#grafana-dashboards) |
-| **Risk Posture** | 8 panels across 3 rows: average + max risk scores, distribution by level (low/medium/high/critical), risk score trends over time | [vigo-risk.json](#grafana-dashboards) |
-| **Spanner** | 2 panels: bolt availability (UP/DOWN status map) and bolt latency (p50/p95 time series) | [vigo-spanner.json](#grafana-dashboards) |
+| **Fleet Overview** | 40 panels across 11 rows: fleet stats, compliance breakdown, check-ins & gRPC latency, convergence & drift, operations, infrastructure, webhooks & SMTP, secrets, AI assistant, security posture, risk posture | [vigo-overview.json](grafana/vigo-overview.json) |
+| **Security Posture** | 14 panels across 4 rows: CVE counts by severity, hardening score gauge + trend, threat detection (rootkits, malware, integrity), scan coverage | [vigo-security.json](grafana/vigo-security.json) |
+| **Convergence** | 9 panels across 3 rows: status pie chart + stat counters, compliance % + drift rate trends, check-in age heatmap | [vigo-convergence.json](grafana/vigo-convergence.json) |
+| **Risk Posture** | 8 panels across 3 rows: average + max risk scores, distribution by level (low/medium/high/critical), risk score trends over time | [vigo-risk.json](grafana/vigo-risk.json) |
 
 ## Import
 
-1. Download the JSON file using the link above (or from the docs browser at `/docs/operations/grafana/vigo-overview.json`)
+1. Download the JSON file using the link in the table above
 2. Open Grafana (typically http://localhost:3000)
 3. Go to **Dashboards → Import**
 4. Upload the JSON file or paste its contents
@@ -307,7 +292,7 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 
 ## Fleet Overview Dashboard
 
-[Download vigo-overview.json](#grafana-dashboards)
+[Download vigo-overview.json](grafana/vigo-overview.json)
 
 ### Row 1 — Fleet Overview
 
@@ -411,7 +396,7 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 
 ## Security Posture Dashboard
 
-[Download vigo-security.json](#grafana-dashboards)
+[Download vigo-security.json](grafana/vigo-security.json)
 
 Dedicated security monitoring dashboard with CVE tracking, hardening scores, and threat detection.
 
@@ -448,7 +433,7 @@ Dedicated security monitoring dashboard with CVE tracking, hardening scores, and
 
 ## Convergence Dashboard
 
-[Download vigo-convergence.json](#grafana-dashboards)
+[Download vigo-convergence.json](grafana/vigo-convergence.json)
 
 Per-envoy convergence status breakdown, compliance trends, and check-in health.
 
@@ -480,7 +465,7 @@ Per-envoy convergence status breakdown, compliance trends, and check-in health.
 
 ## Risk Posture Dashboard
 
-[Download vigo-risk.json](#grafana-dashboards)
+[Download vigo-risk.json](grafana/vigo-risk.json)
 
 Fleet-wide risk scoring with distribution breakdown and trend tracking.
 
@@ -505,17 +490,6 @@ Fleet-wide risk scoring with distribution breakdown and trend tracking.
 | Panel | Type | Metric |
 |-------|------|--------|
 | Risk Score Over Time | Time series (average + maximum) | `vigo_risk_avg_score`, `vigo_risk_max_score` |
-
-## Spanner Dashboard
-
-[Download vigo-spanner.json](#grafana-dashboards)
-
-Only populated on hub servers.
-
-| Panel | Type | Metric |
-|-------|------|--------|
-| Bolt Availability | Stat with UP/DOWN mapping | `vigo_spanner_bolt_up` by `bolt` |
-| Bolt Latency (p50/p95) | Time series by bolt | `histogram_quantile` on `vigo_spanner_bolt_latency_seconds` |
 
 ## Prometheus Configuration
 
@@ -568,13 +542,6 @@ groups:
         labels: { severity: critical }
         annotations:
           summary: "ED25519 signature verification failures detected"
-
-      - alert: VigoBoltDown
-        expr: vigo_spanner_bolt_up == 0
-        for: 5m
-        labels: { severity: critical }
-        annotations:
-          summary: "Spanner bolt {{ $labels.bolt }} is down"
 ```
 
 ## What's next
