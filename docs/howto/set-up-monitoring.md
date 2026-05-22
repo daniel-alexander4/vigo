@@ -172,11 +172,15 @@ Defined in `server/ai/metrics.go`, registered separately.
 
 ## Scrape Configuration
 
-Add the Vigo server to your Prometheus scrape config:
+Add the Vigo server to your Prometheus scrape config. The metrics endpoint is on the REST port (8443), which is HTTPS — the job needs `scheme: https` and a `tls_config` that accepts the server's self-signed certificate. `/metrics` requires no authentication.
 
 ```yaml
 scrape_configs:
   - job_name: vigo
+    scheme: https
+    metrics_path: /metrics
+    tls_config:
+      insecure_skip_verify: true   # self-signed server cert
     static_configs:
       - targets: ['vigo-server:8443']
     scrape_interval: 30s
@@ -493,14 +497,17 @@ Fleet-wide risk scoring with distribution breakdown and trend tracking.
 
 ## Prometheus Configuration
 
-Add the Vigo server as a scrape target in `prometheus.yml`:
+Add the Vigo server as a scrape target in `prometheus.yml`. `:8443` is HTTPS, so the job needs `scheme: https` plus a `tls_config` for the self-signed certificate:
 
 ```yaml
 scrape_configs:
   - job_name: vigo
+    scheme: https
+    metrics_path: /metrics
+    tls_config:
+      insecure_skip_verify: true   # self-signed server cert
     static_configs:
       - targets: ['vigo-server:8443']
-    metrics_path: /metrics
     scrape_interval: 30s
 ```
 
