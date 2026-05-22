@@ -43,10 +43,6 @@ func TestDigestMessageSignVerifyRoundTrip(t *testing.T) {
 	if err := signDigestMessage(priv, msg); err != nil {
 		t.Fatalf("signDigestMessage: %v", err)
 	}
-	if msg.SentAt == 0 && time.Now().UnixMilli() != 0 {
-		// SentAt is informational; signDigestMessage does not set it,
-		// the sender does. Just confirm the signature is present.
-	}
 	if len(msg.Signature) != ed25519.SignatureSize {
 		t.Fatalf("signature is %d bytes, want %d", len(msg.Signature), ed25519.SignatureSize)
 	}
@@ -184,7 +180,13 @@ func TestRosterDigestStable(t *testing.T) {
 	if RosterDigest(a) != RosterDigest(b) {
 		t.Error("RosterDigest is not order-independent")
 	}
-	if RosterDigest(a) != RosterDigest(a) {
+	// Same rows, same order, separately constructed — the digest must
+	// match, proving it depends only on roster contents.
+	c := []db.SpannerBolt{
+		boltRow(0x11, "b1", 100),
+		boltRow(0x22, "b2", 200),
+	}
+	if RosterDigest(a) != RosterDigest(c) {
 		t.Error("RosterDigest is not deterministic for an unchanged roster")
 	}
 }
