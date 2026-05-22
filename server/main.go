@@ -45,6 +45,11 @@ import (
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/secrets"
 	"git.alexander4.io/vigo/server/swarm"
+	"git.alexander4.io/vigo/server/swarm/curatormesh"
+	"git.alexander4.io/vigo/server/swarm/gitbackmesh"
+	"git.alexander4.io/vigo/server/swarm/lockboxmesh"
+	"git.alexander4.io/vigo/server/swarm/longdrawermesh"
+	"git.alexander4.io/vigo/server/swarmview"
 	"git.alexander4.io/vigo/server/traits"
 	"git.alexander4.io/vigo/ui"
 )
@@ -280,6 +285,122 @@ func (a *metricsFleetAdapter) AllEnvoySnapshots() []metrics.EnvoySnapshot {
 		}
 	}
 	return snapshots
+}
+
+// metricsSwarmAdapter satisfies metrics.SwarmSource by folding the
+// swarmview substrate rollup, the four content-subsystem fleet
+// aggregators, and the spanner bolt roster into fleet-total counts.
+// The gitback/lockbox/longdrawer aggregators are constructed here and
+// reused — each is a thin cache over the envoy_traits table, so the
+// metrics path gets its own and never contends with the API handlers'
+// caches; curator reuses the server's shared aggregator.
+type metricsSwarmAdapter struct {
+	queries       *db.Queries
+	fleetIndex    *fleet.FleetIndex
+	peerTracker   *swarm.PeerTracker
+	manifestStore *swarm.ManifestStore
+	gitback       *gitbackmesh.Aggregator
+	lockbox       *lockboxmesh.Aggregator
+	longdrawer    *longdrawermesh.Aggregator
+	curator       *curatormesh.Aggregator
+}
+
+func newMetricsSwarmAdapter(s *Server) *metricsSwarmAdapter {
+	return &metricsSwarmAdapter{
+		queries:       s.queries,
+		fleetIndex:    s.fleetIndex,
+		peerTracker:   s.peerTracker,
+		manifestStore: s.manifestStore,
+		gitback:       gitbackmesh.NewAggregator(s.queries),
+		lockbox:       lockboxmesh.NewAggregator(s.queries),
+		longdrawer:    longdrawermesh.NewAggregator(s.queries),
+		curator:       s.curatorAgg,
+	}
+}
+
+// meshInputs adapts the fleet roster to whichever content-subsystem
+// EnvoyInput type mk returns — the four packages each declare their own
+// identical {ID, Hostname, Revoked} shape.
+func meshInputs[T any](envoys []fleet.EnvoyState, mk func(id, hostname string, revoked bool) T) []T {
+	out := make([]T, 0, len(envoys))
+	for _, e := range envoys {
+		out = append(out, mk(e.ID, e.Hostname, e.Revoked))
+	}
+	return out
+}
+
+func (a *metricsSwarmAdapter) SwarmSnapshot(ctx context.Context) metrics.SwarmSnapshot {
+	var out metrics.SwarmSnapshot
+	envoys := a.fleetIndex.AllEnvoys()
+
+	// Substrate rollup — pure in-memory iteration over PeerTracker +
+	// ManifestStore (swarmview nil-checks both, so a swarm-disabled
+	// server just yields zeros).
+	status := swarmview.SnapshotStatus(swarmview.Sources{
+		Tracker:       a.peerTracker,
+		ManifestStore: a.manifestStore,
+		FleetSource: func() []swarmview.EnvoyInput {
+			si := make([]swarmview.EnvoyInput, 0, len(envoys))
+			for _, e := range envoys {
+				si = append(si, swarmview.EnvoyInput{
+					ID:       e.ID,
+					Hostname: e.Hostname,
+					LastSeen: e.LastSeen,
+					Revoked:  e.Revoked,
+					Offline:  e.Offline,
+				})
+			}
+			return si
+		},
+	})
+	out.SubstrateEnvoys = status.EnvoysSubstrateActive
+	out.ManifestActive = status.ManifestEntriesActive
+	out.FootprintBytes = status.TotalFootprintBytes
+
+	// Content subsystems — each Snapshot() rebuilds from envoy_traits.
+	if f, err := a.gitback.Snapshot(ctx, meshInputs(envoys, func(id, h string, r bool) gitbackmesh.EnvoyInput {
+		return gitbackmesh.EnvoyInput{ID: id, Hostname: h, Revoked: r}
+	})); err == nil {
+		out.GitbackProjects = f.Totals.Projects
+		out.GitbackEnvoys = f.Totals.Hosts
+		out.GitbackDivergentRefs = f.Totals.DivergentRefs
+	}
+	if f, err := a.lockbox.Snapshot(ctx, meshInputs(envoys, func(id, h string, r bool) lockboxmesh.EnvoyInput {
+		return lockboxmesh.EnvoyInput{ID: id, Hostname: h, Revoked: r}
+	})); err == nil {
+		out.LockboxUsers = f.Totals.Users
+		out.LockboxFiles = f.Totals.Files
+		out.LockboxDivergentFiles = f.Totals.Divergences
+	}
+	if f, err := a.longdrawer.Snapshot(ctx, meshInputs(envoys, func(id, h string, r bool) longdrawermesh.EnvoyInput {
+		return longdrawermesh.EnvoyInput{ID: id, Hostname: h, Revoked: r}
+	})); err == nil {
+		out.LongdrawerUsers = f.Totals.Users
+		out.LongdrawerFiles = f.Totals.Files
+		out.LongdrawerDivergentFiles = f.Totals.Divergences
+	}
+	if a.curator != nil {
+		if cat, err := a.curator.Snapshot(ctx, meshInputs(envoys, func(id, h string, r bool) curatormesh.EnvoyInput {
+			return curatormesh.EnvoyInput{ID: id, Hostname: h, Revoked: r}
+		})); err == nil {
+			out.CuratorArtifacts = len(cat.Artifacts)
+			out.CuratorPublishers = len(cat.Participants)
+		}
+	}
+
+	// Spanner roster — active vs revoked bolts. An empty spanner_bolts
+	// table (standalone server) yields zeros.
+	if bolts, err := a.queries.ListBolts(ctx); err == nil {
+		for _, b := range bolts {
+			if b.RevokedAt.Valid {
+				out.SpannerBoltsRevoked++
+			} else {
+				out.SpannerBoltsActive++
+			}
+		}
+	}
+
+	return out
 }
 
 // uiFleetSourceAdapter adapts *fleet.FleetIndex to ui.FleetSource so

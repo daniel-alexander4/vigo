@@ -1,7 +1,7 @@
 
 # Set up monitoring
 
-You'll finish this page with a Prometheus instance scraping the Vigo server, the four bundled Grafana dashboards loaded, and alert rules firing on the conditions that matter: stale envoys, convergence failures, license drift, and CVE counts.
+You'll finish this page with a Prometheus instance scraping the Vigo server, the five bundled Grafana dashboards loaded, and alert rules firing on the conditions that matter: stale envoys, convergence failures, license drift, and CVE counts.
 
 **When you'd use this:** any deployment where someone other than you needs to know about fleet anomalies. For a single-operator home lab, `vigocli doctor` + the Web UI dashboard is enough; Prometheus + Grafana starts paying for itself around five envoys or when you need history.
 
@@ -158,6 +158,31 @@ Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirecti
 | `vigo_config_reload_duration_seconds` | Histogram | Duration of config reloads |
 | `vigo_config_reload_errors_total` | Counter | Config reload failures |
 
+### Swarm & Spanner
+
+Fleet-total gauges for the swarm substrate, the content subsystems, and the spanner roster. All are fleet-wide totals with no per-entity labels. They refresh every 5 minutes (independent of `metrics_interval`) — the underlying aggregators rebuild from per-envoy traits, and swarm counts change slowly.
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `vigo_swarm_envoys_substrate_active` | Gauge | Envoys actively participating in the blob substrate |
+| `vigo_swarm_manifest_entries_active` | Gauge | Active (non-revoked) seed-manifest entries |
+| `vigo_swarm_footprint_bytes` | Gauge | Total cached blob bytes across the fleet |
+| `vigo_gitback_projects` | Gauge | Distinct gitback projects across the fleet |
+| `vigo_gitback_envoys` | Gauge | Envoys hosting at least one gitback project |
+| `vigo_gitback_divergent_refs` | Gauge | Gitback refs whose SHA disagrees across hosts |
+| `vigo_curator_artifacts` | Gauge | Distinct artifacts in the fleet curator catalog |
+| `vigo_curator_publishers` | Gauge | Envoys publishing curator artifacts |
+| `vigo_lockbox_users` | Gauge | Users with lockbox state across the fleet |
+| `vigo_lockbox_files` | Gauge | Total encrypted files across all lockbox users |
+| `vigo_lockbox_divergent_files` | Gauge | Lockbox files whose hash/size disagrees across envoys |
+| `vigo_longdrawer_users` | Gauge | Users with longdrawer sync state across the fleet |
+| `vigo_longdrawer_files` | Gauge | Total synced files across all longdrawer users |
+| `vigo_longdrawer_divergent_files` | Gauge | Longdrawer files whose hash/size disagrees across envoys |
+| `vigo_spanner_bolts_active` | Gauge | Active (non-revoked) bolts in the spanner roster |
+| `vigo_spanner_bolts_revoked` | Gauge | Revoked bolts retained in the spanner roster |
+
+The `*_divergent_*` gauges are the health signal — a non-zero value means envoys disagree on content that should be identical, which warrants investigation.
+
 ## AI Assistant Metrics
 
 Defined in `server/ai/metrics.go`, registered separately.
@@ -285,6 +310,7 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 | **Security Posture** | 14 panels across 4 rows: CVE counts by severity, hardening score gauge + trend, threat detection (rootkits, malware, integrity), scan coverage | [vigo-security.json](grafana/vigo-security.json) |
 | **Convergence** | 9 panels across 3 rows: status pie chart + stat counters, compliance % + drift rate trends, check-in age heatmap | [vigo-convergence.json](grafana/vigo-convergence.json) |
 | **Risk Posture** | 8 panels across 3 rows: average + max risk scores, distribution by level (low/medium/high/critical), risk score trends over time | [vigo-risk.json](grafana/vigo-risk.json) |
+| **Swarm & Spanner** | 13 panels across 5 rows: substrate footprint, content-subsystem counts (gitback/curator/lockbox/longdrawer), cross-envoy divergence, spanner bolt roster | [vigo-swarm.json](grafana/vigo-swarm.json) |
 
 ## Import
 

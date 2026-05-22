@@ -7,4 +7,16 @@
 <div hx-get="/ui/fragments/health" hx-trigger="load" hx-swap="outerHTML">
     <div class="loading">Loading diagnostics...</div>
 </div>
+
+{{if .GrafanaDashboards}}
+<div class="card" style="margin-top: 1rem;">
+    <h3>Grafana dashboards</h3>
+    <p>Metric dashboards for this fleet, served by your configured Grafana instance.</p>
+    <ul>
+        {{range .GrafanaDashboards}}
+        <li><a href="{{.URL}}" target="_blank" rel="noopener">{{.Name}}</a></li>
+        {{end}}
+    </ul>
+</div>
+{{end}}
 {{end}}

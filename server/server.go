@@ -132,14 +132,14 @@ type Server struct {
 	offlineThreshold time.Duration
 
 	// --- Tuning parsed durations (computed once at construction) ---
-	sigWindow       time.Duration
-	lastSeenFlush   time.Duration
-	metricsInterval time.Duration
-	traitsScannerTTL    time.Duration
-	maxConnAge          time.Duration
-	maxConnIdle         time.Duration
-	kaTime              time.Duration
-	kaTimeout           time.Duration
+	sigWindow        time.Duration
+	lastSeenFlush    time.Duration
+	metricsInterval  time.Duration
+	traitsScannerTTL time.Duration
+	maxConnAge       time.Duration
+	maxConnIdle      time.Duration
+	kaTime           time.Duration
+	kaTimeout        time.Duration
 
 	// --- Run + integrations + task store ---
 	// (Workflow engine stays in run() for now — workflows.NewEngine
@@ -193,11 +193,11 @@ type Server struct {
 	// --- gRPC server + services. Constructed in chunk 4. peerService is
 	// registered on grpcSrv after construction; the actual grpcSrv.Serve
 	// goroutine still starts from run() in chunk 5. ---
-	grpcSrv      *grpc.Server
-	certCache    *isgrpc.CertCache
-	traitsBatch  *db.TraitsBatcher
-	agentSvc     *isgrpc.AgentService
-	adminSvc     *isgrpc.AdminService
+	grpcSrv     *grpc.Server
+	certCache   *isgrpc.CertCache
+	traitsBatch *db.TraitsBatcher
+	agentSvc    *isgrpc.AgentService
+	adminSvc    *isgrpc.AdminService
 
 	// --- Spanner roster gossiper (Slice 2-i-a; nil in standalone mode).
 	// Pulls every peer's /snapshot on the Tier-2 timer and CRDT-merges
@@ -1194,6 +1194,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		// Wire branding, hostname, observe-only, and CVE searcher into UI handler.
 		uiHandler.SetAgentVersion(s.agentVersion)
 		uiHandler.SetBranding(s.cfg.Branding)
+		uiHandler.SetGrafana(s.cfg.Grafana)
 		uiHandler.SetTraitQueryDispatcher(&traitQueryAdapter{agentSvc: s.agentSvc})
 		uiHandler.SetServerHostname(s.cfg.Server.Hostname)
 		uiHandler.SetServerConfigPath(s.configFile)

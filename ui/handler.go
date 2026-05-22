@@ -248,6 +248,7 @@ type Handler struct {
 	integrationsCfg   config.IntegrationsSection
 	grcCfg            config.GRCSection
 	branding          config.BrandingSection
+	grafana           config.GrafanaSection
 	cveSearcher       CVESearcher
 	healthChecker     HealthChecker
 	serverHostname    string
@@ -538,6 +539,12 @@ func (h *Handler) SetHealthChecker(hc HealthChecker) {
 // SetBranding configures custom branding for the web UI.
 func (h *Handler) SetBranding(b config.BrandingSection) {
 	h.branding = b
+}
+
+// SetGrafana stores the optional Grafana URL. When set, the /health
+// page shows deep links to the bundled Vigo dashboards.
+func (h *Handler) SetGrafana(g config.GrafanaSection) {
+	h.grafana = g
 }
 
 // SetServerHostname sets the hostname used to identify the server's own envoy
@@ -1018,12 +1025,12 @@ type FleetRow struct {
 
 // RunRow is a single run displayed in a table.
 type RunRow struct {
-	ID           string
-	EnvoyID      string
-	Hostname     string
-	StartedAt    time.Time
-	FinishedAt   time.Time // zero when still running; powers DurationLabel
-	Status       string
+	ID         string
+	EnvoyID    string
+	Hostname   string
+	StartedAt  time.Time
+	FinishedAt time.Time // zero when still running; powers DurationLabel
+	Status     string
 	// Trigger is what kicked off the run — "scheduled" (normal cycle)
 	// or "force-push" (operator-initiated). Lets the dashboard pick
 	// operator actions out of the scheduled heartbeat.
@@ -7029,13 +7036,13 @@ type SecurityScanPageData struct {
 	// score (cross-profile averages are meaningless). ScapScanned is hosts
 	// reporting any SCAP scan; ScapClean is those with no failed rules;
 	// ScapHighFail is those with at least one high-severity failure.
-	ScapScanned    int64
-	ScapClean      int64
-	ScapHighFail   int64
-	ScannedHosts   int64
-	TotalHosts     int64
-	CVEs           []CVEEntry        // deduplicated CVEs across fleet (one per CVE ID)
-	PerHost        []SecurityHostRow // per-envoy breakdown
+	ScapScanned  int64
+	ScapClean    int64
+	ScapHighFail int64
+	ScannedHosts int64
+	TotalHosts   int64
+	CVEs         []CVEEntry        // deduplicated CVEs across fleet (one per CVE ID)
+	PerHost      []SecurityHostRow // per-envoy breakdown
 	// AnyTruncated is true when at least one host's per-severity unique
 	// counts (unique_critical+high+medium+low, agent-authoritative full
 	// totals) exceed the length of the host's CVE list (capped at the
@@ -8319,10 +8326,49 @@ func csvEscape(s string) string {
 	return s
 }
 
+// GrafanaDashboard is one bundled-dashboard deep link for the /health page.
+type GrafanaDashboard struct {
+	Name string
+	URL  string
+}
+
+// HealthPageData extends PageData with the optional Grafana dashboard
+// links, shown only when a Grafana URL is configured.
+type HealthPageData struct {
+	PageData
+	GrafanaDashboards []GrafanaDashboard
+}
+
+// bundledDashboards is the fixed uid/name set Vigo ships under
+// docs/howto/grafana/. The /health page deep-links each at
+// <grafana.url>/d/<uid> when a Grafana URL is configured.
+var bundledDashboards = []struct{ UID, Name string }{
+	{"vigo-overview", "Fleet Overview"},
+	{"vigo-convergence", "Convergence"},
+	{"vigo-risk", "Risk Posture"},
+	{"vigo-security", "Security Posture"},
+	{"vigo-swarm", "Swarm & Spanner"},
+}
+
+// grafanaDashboards returns the bundled-dashboard deep links, or nil
+// when no Grafana URL is configured.
+func (h *Handler) grafanaDashboards() []GrafanaDashboard {
+	base := strings.TrimRight(h.grafana.URL, "/")
+	if base == "" {
+		return nil
+	}
+	out := make([]GrafanaDashboard, len(bundledDashboards))
+	for i, d := range bundledDashboards {
+		out[i] = GrafanaDashboard{Name: d.Name, URL: base + "/d/" + d.UID}
+	}
+	return out
+}
+
 // Health renders the Vigo Health diagnostics page.
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
-	data := PageData{Title: "Vigo Health", ActiveNav: "health"}
-	h.setCommonWithRequest(&data, r)
+	data := HealthPageData{PageData: PageData{Title: "Vigo Health", ActiveNav: "health"}}
+	h.setCommonWithRequest(&data.PageData, r)
+	data.GrafanaDashboards = h.grafanaDashboards()
 	h.renderer.Render(w, "health", data)
 }
 

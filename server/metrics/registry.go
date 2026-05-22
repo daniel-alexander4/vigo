@@ -116,6 +116,40 @@ type Metrics struct {
 	// --- Reachability ---
 
 	ConvergenceOffline prometheus.Gauge
+
+	// --- Swarm substrate ---
+
+	SwarmSubstrateEnvoys prometheus.Gauge
+	SwarmManifestActive  prometheus.Gauge
+	SwarmFootprintBytes  prometheus.Gauge
+
+	// --- Swarm: gitback ---
+
+	GitbackProjects      prometheus.Gauge
+	GitbackEnvoys        prometheus.Gauge
+	GitbackDivergentRefs prometheus.Gauge
+
+	// --- Swarm: curator ---
+
+	CuratorArtifacts  prometheus.Gauge
+	CuratorPublishers prometheus.Gauge
+
+	// --- Swarm: lockbox ---
+
+	LockboxUsers          prometheus.Gauge
+	LockboxFiles          prometheus.Gauge
+	LockboxDivergentFiles prometheus.Gauge
+
+	// --- Swarm: longdrawer ---
+
+	LongdrawerUsers          prometheus.Gauge
+	LongdrawerFiles          prometheus.Gauge
+	LongdrawerDivergentFiles prometheus.Gauge
+
+	// --- Spanner ---
+
+	SpannerBoltsActive  prometheus.Gauge
+	SpannerBoltsRevoked prometheus.Gauge
 }
 
 // NewMetrics constructs the collector set, registering each into the
@@ -389,6 +423,88 @@ func NewMetrics(reg prometheus.Registerer) *Metrics {
 		ConvergenceOffline: f.NewGauge(prometheus.GaugeOpts{
 			Name: "vigo_convergence_offline",
 			Help: "Number of envoys past the staleness threshold.",
+		}),
+
+		// --- Swarm substrate ---
+
+		SwarmSubstrateEnvoys: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_swarm_envoys_substrate_active",
+			Help: "Number of envoys actively participating in the blob substrate.",
+		}),
+		SwarmManifestActive: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_swarm_manifest_entries_active",
+			Help: "Number of active (non-revoked) seed-manifest entries.",
+		}),
+		SwarmFootprintBytes: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_swarm_footprint_bytes",
+			Help: "Total cached blob bytes across the fleet.",
+		}),
+
+		// --- Swarm: gitback ---
+
+		GitbackProjects: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_gitback_projects",
+			Help: "Number of distinct gitback projects across the fleet.",
+		}),
+		GitbackEnvoys: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_gitback_envoys",
+			Help: "Number of envoys hosting at least one gitback project.",
+		}),
+		GitbackDivergentRefs: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_gitback_divergent_refs",
+			Help: "Number of gitback refs whose SHA disagrees across hosts.",
+		}),
+
+		// --- Swarm: curator ---
+
+		CuratorArtifacts: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_curator_artifacts",
+			Help: "Number of distinct artifacts in the fleet curator catalog.",
+		}),
+		CuratorPublishers: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_curator_publishers",
+			Help: "Number of envoys publishing curator artifacts.",
+		}),
+
+		// --- Swarm: lockbox ---
+
+		LockboxUsers: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_lockbox_users",
+			Help: "Number of users with lockbox state across the fleet.",
+		}),
+		LockboxFiles: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_lockbox_files",
+			Help: "Total encrypted files across all lockbox users.",
+		}),
+		LockboxDivergentFiles: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_lockbox_divergent_files",
+			Help: "Lockbox files whose hash/size disagrees across envoys.",
+		}),
+
+		// --- Swarm: longdrawer ---
+
+		LongdrawerUsers: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_longdrawer_users",
+			Help: "Number of users with longdrawer sync state across the fleet.",
+		}),
+		LongdrawerFiles: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_longdrawer_files",
+			Help: "Total synced files across all longdrawer users.",
+		}),
+		LongdrawerDivergentFiles: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_longdrawer_divergent_files",
+			Help: "Longdrawer files whose hash/size disagrees across envoys.",
+		}),
+
+		// --- Spanner ---
+
+		SpannerBoltsActive: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_spanner_bolts_active",
+			Help: "Number of active (non-revoked) bolts in the spanner roster.",
+		}),
+		SpannerBoltsRevoked: f.NewGauge(prometheus.GaugeOpts{
+			Name: "vigo_spanner_bolts_revoked",
+			Help: "Number of revoked bolts retained in the spanner roster.",
 		}),
 	}
 }

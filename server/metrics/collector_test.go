@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"git.alexander4.io/vigo/server/db"
@@ -64,7 +65,7 @@ func TestCollector_ConcurrentUpdateGauges(t *testing.T) {
 	}
 
 	m := NewTestMetrics()
-	c := NewCollector(db.New(sqlDB), sqlDB, nil, m, time.Minute, 0)
+	c := NewCollector(db.New(sqlDB), sqlDB, nil, nil, m, time.Minute, 0)
 	ctx := context.Background()
 
 	var wg sync.WaitGroup
@@ -106,7 +107,7 @@ func TestCollector_UpdateGaugesConsistency(t *testing.T) {
 	insertEnvoy(t, sqlDB, "t-4", "revoked.example.com", &seen4, true)
 
 	m := NewTestMetrics()
-	c := NewCollector(db.New(sqlDB), sqlDB, nil, m, time.Minute, 0)
+	c := NewCollector(db.New(sqlDB), sqlDB, nil, nil, m, time.Minute, 0)
 	ctx := context.Background()
 
 	if err := c.UpdateGauges(ctx); err != nil {
@@ -136,5 +137,57 @@ func TestCollector_UpdateGaugesConsistency(t *testing.T) {
 	gotPct := testutil.ToFloat64(m.ConvergencePct)
 	if math.Abs(gotPct-0.5) > 0.001 {
 		t.Errorf("ConvergencePct = %v, want 0.5", gotPct)
+	}
+}
+
+func TestUpdateSwarmMetrics(t *testing.T) {
+	m := NewTestMetrics()
+	snap := SwarmSnapshot{
+		SubstrateEnvoys:          1,
+		ManifestActive:           2,
+		FootprintBytes:           3,
+		GitbackProjects:          4,
+		GitbackEnvoys:            5,
+		GitbackDivergentRefs:     6,
+		CuratorArtifacts:         7,
+		CuratorPublishers:        8,
+		LockboxUsers:             9,
+		LockboxFiles:             10,
+		LockboxDivergentFiles:    11,
+		LongdrawerUsers:          12,
+		LongdrawerFiles:          13,
+		LongdrawerDivergentFiles: 14,
+		SpannerBoltsActive:       15,
+		SpannerBoltsRevoked:      16,
+	}
+	updateSwarmMetrics(m, snap)
+
+	// Distinct values per gauge so a mis-wired field is caught.
+	checks := []struct {
+		name string
+		g    prometheus.Gauge
+		want float64
+	}{
+		{"swarm_envoys_substrate_active", m.SwarmSubstrateEnvoys, 1},
+		{"swarm_manifest_entries_active", m.SwarmManifestActive, 2},
+		{"swarm_footprint_bytes", m.SwarmFootprintBytes, 3},
+		{"gitback_projects", m.GitbackProjects, 4},
+		{"gitback_envoys", m.GitbackEnvoys, 5},
+		{"gitback_divergent_refs", m.GitbackDivergentRefs, 6},
+		{"curator_artifacts", m.CuratorArtifacts, 7},
+		{"curator_publishers", m.CuratorPublishers, 8},
+		{"lockbox_users", m.LockboxUsers, 9},
+		{"lockbox_files", m.LockboxFiles, 10},
+		{"lockbox_divergent_files", m.LockboxDivergentFiles, 11},
+		{"longdrawer_users", m.LongdrawerUsers, 12},
+		{"longdrawer_files", m.LongdrawerFiles, 13},
+		{"longdrawer_divergent_files", m.LongdrawerDivergentFiles, 14},
+		{"spanner_bolts_active", m.SpannerBoltsActive, 15},
+		{"spanner_bolts_revoked", m.SpannerBoltsRevoked, 16},
+	}
+	for _, c := range checks {
+		if got := testutil.ToFloat64(c.g); got != c.want {
+			t.Errorf("%s = %v, want %v", c.name, got, c.want)
+		}
 	}
 }

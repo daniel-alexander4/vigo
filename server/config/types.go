@@ -170,6 +170,7 @@ type ServerConfig struct {
 	Compliance   ComplianceSection   `yaml:"compliance" docs:"concepts/compliance" doc:"Which compliance frameworks are active in this deployment (empty = all)." long:"Scopes which compliance frameworks this deployment reports against. An empty list activates every framework Vigo knows — HIPAA, SOC 2, PCI DSS, ISO 27001, NIST 800-53, CIS, GDPR, and the rest. An explicit list restricts dashboards, reports, and waiver tooling to that subset — useful when the organization is only audited against one or two frameworks and seeing the full catalog adds noise."`
 	Scrier       ScrierSection       `yaml:"scrier" docs:"concepts/scrier" doc:"Scrier browser-based remote access — SSH and RDP via guacd tunnel." long:"Browser-based remote access to any enrolled envoy — interactive SSH, Windows RDP, or console-shadow VNC, all routed through the envoy's outbound agent stream so no inbound ports are required on the target side. Every session is logged in scrier_sessions and an audit event is emitted on disconnect. Configure this when administrators need ad-hoc access to envoys behind customer firewalls without punching holes in them."`
 	Swarm        SwarmSection        `yaml:"swarm" docs:"concepts/swarm" doc:"Peer-to-peer content distribution — seed directory, port, bandwidth cap." long:"Peer-to-peer content distribution between envoys over mTLS on port 1531 (agent-to-agent, not server-to-agent). Configures the seed directory the server writes into and the bandwidth cap as a percentage of detected link speed (so swarm transfers don't starve real workloads). Essential for fleets large enough that pulling every blob from the server would saturate its uplink."`
+	Grafana      GrafanaSection      `yaml:"grafana" docs:"howto/set-up-monitoring" doc:"Optional Grafana URL — surfaces dashboard links on the /health page." long:"Points the web UI at an external Grafana instance so the /health page can link operators straight to the bundled Vigo dashboards. Vigo does not run, manage, or authenticate against Grafana — the only field is a base URL, and it is purely a link target. Leave unset if you don't run Grafana or prefer not to advertise it in the UI."`
 }
 
 // SwarmSection configures peer-to-peer content distribution. The four
@@ -660,6 +661,14 @@ type BrandingSection struct {
 	LogoPath    string `yaml:"logo_path" doc:"Absolute path to a custom sidebar logo image. Unset = embedded Vigo logo." example:"/srv/vigo/branding/logo.svg  (SVG or PNG; ~120×40 works well)"`
 	FaviconPath string `yaml:"favicon_path" doc:"Absolute path to a custom favicon. Unset = embedded Vigo favicon." example:"/srv/vigo/branding/favicon.ico"`
 	Theme       string `yaml:"theme" doc:"Default UI theme." options:"light|dark|auto" default:"light" example:"auto (follows system), dark (force Mocha)"`
+}
+
+// GrafanaSection points the web UI at an external Grafana instance.
+// When URL is set, the /health page shows links to the bundled Vigo
+// dashboards. Vigo neither runs nor manages Grafana — this is a link
+// target only.
+type GrafanaSection struct {
+	URL string `yaml:"url" doc:"Base URL of a Grafana instance. When set, the /health page links to the bundled Vigo dashboards at <url>/d/<uid>. Unset = no links shown." example:"https://grafana.example.com:3000"`
 }
 
 // GRCSection configures GRC platform integrations for pushing compliance

@@ -182,10 +182,12 @@ func (s *Server) startMetricsAndHealthChecks(ctx context.Context) {
 
 	// Start metrics collector in background.
 	var fleetSource metrics.FleetSource
+	var swarmSource metrics.SwarmSource
 	if s.fleetIndex != nil {
 		fleetSource = &metricsFleetAdapter{fleetIndex: s.fleetIndex}
+		swarmSource = newMetricsSwarmAdapter(s)
 	}
-	metricsCollector := metrics.NewCollector(s.queries, s.db, fleetSource, s.metrics, s.baseInterval, s.offlineThreshold)
+	metricsCollector := metrics.NewCollector(s.queries, s.db, fleetSource, swarmSource, s.metrics, s.baseInterval, s.offlineThreshold)
 	go metricsCollector.Run(ctx, s.metricsInterval)
 
 	// Start stale envoy checker — fires envoy.stale events on transition.

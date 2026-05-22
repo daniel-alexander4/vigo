@@ -468,6 +468,19 @@ branding:
 | `favicon_path` | embedded default | Browser tab icon |
 | `theme` | `light` | Fleet-wide default color theme: `light` (Catppuccin Latte), `dark` (Catppuccin Mocha), or `auto` (follow the user's OS `prefers-color-scheme`). Individual operators can override via the top-navbar toggle; their choice persists per-browser in `localStorage`. |
 
+## grafana
+
+Optional. Points the web UI at an external Grafana instance — when set, the `/health` page links to the bundled Vigo dashboards. Vigo neither runs nor manages Grafana; this is purely a link target.
+
+```yaml
+grafana:
+  url: "https://grafana.example.com:3000"
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `url` | (none) | Base URL of a Grafana instance. When set, the `/health` page links to each bundled dashboard at `<url>/d/<uid>`. Unset = no links shown. |
+
 ## tuning
 
 Advanced performance tuning. All fields optional.

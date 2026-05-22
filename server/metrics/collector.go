@@ -48,25 +48,75 @@ type FleetSource interface {
 	AllEnvoySnapshots() []EnvoySnapshot
 }
 
+// SwarmSnapshot holds fleet-total counts for the swarm substrate, the
+// content subsystems, and the spanner roster. Every value is a
+// fleet-wide total — no per-entity labels (cardinality, and /metrics is
+// a public endpoint, so no user/project/host identifiers).
+type SwarmSnapshot struct {
+	SubstrateEnvoys int   // envoys participating in the blob substrate
+	ManifestActive  int   // active seed-manifest entries
+	FootprintBytes  int64 // total cached blob bytes fleet-wide
+
+	GitbackProjects      int
+	GitbackEnvoys        int
+	GitbackDivergentRefs int
+
+	CuratorArtifacts  int
+	CuratorPublishers int
+
+	LockboxUsers          int
+	LockboxFiles          int
+	LockboxDivergentFiles int
+
+	LongdrawerUsers          int
+	LongdrawerFiles          int
+	LongdrawerDivergentFiles int
+
+	SpannerBoltsActive  int
+	SpannerBoltsRevoked int
+}
+
+// SwarmSource provides fleet-total swarm + spanner counts for the
+// metrics collector. Declared here as an interface so this package
+// doesn't import the swarm/spanner packages; implemented by an adapter
+// in main.go. May be nil (the collector then skips the swarm gauges).
+type SwarmSource interface {
+	SwarmSnapshot(ctx context.Context) SwarmSnapshot
+}
+
+// swarmRefreshInterval gates the swarm/spanner gauge refresh. The
+// content-subsystem aggregators rebuild from per-envoy DB traits, and
+// their own 30s cache never helps a poller whose cadence equals the
+// TTL — so the refresh is deliberately decoupled from the (faster)
+// gauge tick. Swarm counts change slowly; 5 minutes stays plenty fresh.
+const swarmRefreshInterval = 5 * time.Minute
+
 // Collector periodically queries the database and fleet to update gauge metrics.
 // Runs in a background goroutine — never on the request hot path.
 type Collector struct {
 	queries          *db.Queries
 	sqlDB            *sql.DB
 	fleetSource      FleetSource
+	swarmSource      SwarmSource
 	metrics          *Metrics
 	baseInterval     time.Duration
 	offlineThreshold time.Duration
+
+	// lastSwarmRefresh gates the swarm/spanner gauge refresh to
+	// swarmRefreshInterval. Mutated only from the single Run goroutine.
+	lastSwarmRefresh time.Time
 }
 
-// NewCollector creates a new metrics collector. fleetSource may be nil (bolt mode).
-// The Metrics value is the per-instance collector set; the gauges it owns are
-// the ones this collector mutates each tick.
-func NewCollector(queries *db.Queries, sqlDB *sql.DB, fleetSource FleetSource, m *Metrics, baseInterval, offlineThreshold time.Duration) *Collector {
+// NewCollector creates a new metrics collector. fleetSource and swarmSource
+// may be nil (bolt mode / swarm disabled). The Metrics value is the
+// per-instance collector set; the gauges it owns are the ones this collector
+// mutates each tick.
+func NewCollector(queries *db.Queries, sqlDB *sql.DB, fleetSource FleetSource, swarmSource SwarmSource, m *Metrics, baseInterval, offlineThreshold time.Duration) *Collector {
 	return &Collector{
 		queries:          queries,
 		sqlDB:            sqlDB,
 		fleetSource:      fleetSource,
+		swarmSource:      swarmSource,
 		metrics:          m,
 		baseInterval:     baseInterval,
 		offlineThreshold: offlineThreshold,
@@ -135,7 +185,43 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 		updateRiskMetrics(c.metrics, allEnvoys, c.baseInterval, c.offlineThreshold)
 	}
 
+	// Swarm + spanner gauges. The content-subsystem aggregators rebuild
+	// from per-envoy DB traits, so the refresh is gated to
+	// swarmRefreshInterval rather than run on every (faster) gauge tick.
+	// The zero-value lastSwarmRefresh makes the first tick after boot
+	// refresh.
+	if c.swarmSource != nil && time.Since(c.lastSwarmRefresh) >= swarmRefreshInterval {
+		updateSwarmMetrics(c.metrics, c.swarmSource.SwarmSnapshot(ctx))
+		c.lastSwarmRefresh = time.Now()
+	}
+
 	return nil
+}
+
+// updateSwarmMetrics sets the swarm-substrate, content-subsystem, and
+// spanner gauges from a SwarmSnapshot. Pure assignment — no I/O.
+func updateSwarmMetrics(m *Metrics, s SwarmSnapshot) {
+	m.SwarmSubstrateEnvoys.Set(float64(s.SubstrateEnvoys))
+	m.SwarmManifestActive.Set(float64(s.ManifestActive))
+	m.SwarmFootprintBytes.Set(float64(s.FootprintBytes))
+
+	m.GitbackProjects.Set(float64(s.GitbackProjects))
+	m.GitbackEnvoys.Set(float64(s.GitbackEnvoys))
+	m.GitbackDivergentRefs.Set(float64(s.GitbackDivergentRefs))
+
+	m.CuratorArtifacts.Set(float64(s.CuratorArtifacts))
+	m.CuratorPublishers.Set(float64(s.CuratorPublishers))
+
+	m.LockboxUsers.Set(float64(s.LockboxUsers))
+	m.LockboxFiles.Set(float64(s.LockboxFiles))
+	m.LockboxDivergentFiles.Set(float64(s.LockboxDivergentFiles))
+
+	m.LongdrawerUsers.Set(float64(s.LongdrawerUsers))
+	m.LongdrawerFiles.Set(float64(s.LongdrawerFiles))
+	m.LongdrawerDivergentFiles.Set(float64(s.LongdrawerDivergentFiles))
+
+	m.SpannerBoltsActive.Set(float64(s.SpannerBoltsActive))
+	m.SpannerBoltsRevoked.Set(float64(s.SpannerBoltsRevoked))
 }
 
 // updateSecurityMetrics aggregates security_scan.* traits across all envoys.

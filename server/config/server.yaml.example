@@ -562,6 +562,15 @@ watcher:
 #   theme: "light"                             # "light" (default), "dark", "auto" (OS preference)
 
 
+# ── Grafana ───────────────────────────────────────────────────────────
+# Optional. Point the web UI at an external Grafana instance — when set,
+# the /health page links to the bundled Vigo dashboards (<url>/d/<uid>).
+# Vigo neither runs nor manages Grafana; this is purely a link target.
+#
+# grafana:
+#   url: "https://grafana.example.com:3000"
+
+
 # ── GRC Integration ──────────────────────────────────────────────────
 # Push compliance evidence to external GRC platforms on a schedule.
 # Each integration runs independently with its own endpoint and interval.
