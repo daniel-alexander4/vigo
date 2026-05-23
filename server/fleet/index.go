@@ -443,6 +443,14 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	// Capture the drift level the prior entry contributed to the fleet
+	// counters (DriftNone if no prior entry or it was revoked — revoked
+	// envoys don't contribute). Reconciled with the new contribution in a
+	// single bumpDriftCounters call below so initialization and
+	// re-enrollment go through the same transition arithmetic
+	// UpdateRunStatus uses.
+	oldDrift := convergence.DriftNone
+
 	// Remove old hostname mapping if it changed.
 	if old, ok := f.envoys[ts.ID]; ok {
 		if old.Hostname != ts.Hostname {
@@ -457,6 +465,7 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 			if old.Offline {
 				f.convergence.Offline--
 			}
+			oldDrift = old.Drift
 		}
 	}
 
@@ -467,6 +476,7 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 		f.pubkeys[ts.ID] = pubKey
 	}
 
+	newDrift := convergence.DriftNone
 	if !ts.Revoked {
 		f.addToStatus(ts.ID, ts.ConvergenceStatus)
 		f.addToTraits(ts.ID, ts.Traits)
@@ -476,7 +486,9 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 		if ts.Offline {
 			f.convergence.Offline++
 		}
+		newDrift = ts.Drift
 	}
+	f.bumpDriftCounters(oldDrift, newDrift)
 }
 
 // RemoveEnvoy removes a envoy from the index entirely.
@@ -500,6 +512,7 @@ func (f *FleetIndex) RemoveEnvoy(id string) {
 		if ts.Offline {
 			f.convergence.Offline--
 		}
+		f.bumpDriftCounters(ts.Drift, convergence.DriftNone)
 	}
 	delete(f.envoys, id)
 	delete(f.dirty, id)
@@ -543,11 +556,13 @@ func (f *FleetIndex) SetRevoked(id string, revoked bool) {
 		f.removeFromStatus(id, ts.ConvergenceStatus)
 		f.convergence.Total--
 		f.decrementCounter(ts.ConvergenceStatus)
+		f.bumpDriftCounters(ts.Drift, convergence.DriftNone)
 	} else if wasRevoked && !revoked {
 		// Becoming active again: add to counters.
 		f.addToStatus(id, ts.ConvergenceStatus)
 		f.convergence.Total++
 		f.incrementCounter(ts.ConvergenceStatus)
+		f.bumpDriftCounters(convergence.DriftNone, ts.Drift)
 	}
 }
 

@@ -161,3 +161,94 @@ func TestConvergenceCounters_DegradedBucket(t *testing.T) {
 		t.Errorf("NoData counter = %d, want 0 (must not be misbucketed)", c.NoData)
 	}
 }
+
+// TestAddEnvoy_InitializesDriftCountersFromState pins the rehydrate
+// invariant: an envoy added with a non-None Drift contributes to the
+// fleet drift counters immediately, without waiting for the next
+// UpdateRunStatus call. Before this was wired, Rehydrate booted envoys
+// with the correct RecentRuns history but ts.Drift = DriftNone and
+// counter = 0 — the row pill and chip both read "no drift" until the
+// next agent report.
+func TestAddEnvoy_InitializesDriftCountersFromState(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddEnvoy(EnvoyState{
+		ID:                "e1",
+		Hostname:          "e1.example.com",
+		ConvergenceStatus: "degraded",
+		Drift:             convergence.DriftDiverged,
+	}, nil)
+
+	c := fi.ConvergenceSummary()
+	// Diverged ⊆ Changed: the Diverged envoy counts toward both buckets.
+	if c.Diverged != 1 {
+		t.Errorf("Diverged counter = %d, want 1", c.Diverged)
+	}
+	if c.Changed != 1 {
+		t.Errorf("Changed counter = %d, want 1 (Diverged ⊆ Changed)", c.Changed)
+	}
+}
+
+// TestAddEnvoy_RevokedDoesNotContribute pins that a revoked envoy added
+// at boot doesn't pollute the drift counters even if its stored Drift
+// is non-None — only active envoys count toward fleet buckets.
+func TestAddEnvoy_RevokedDoesNotContribute(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddEnvoy(EnvoyState{
+		ID:                "e1",
+		Hostname:          "e1.example.com",
+		ConvergenceStatus: "degraded",
+		Drift:             convergence.DriftDiverged,
+		Revoked:           true,
+	}, nil)
+
+	c := fi.ConvergenceSummary()
+	if c.Diverged != 0 || c.Changed != 0 {
+		t.Errorf("revoked envoy contributed to drift counters: Diverged=%d, Changed=%d", c.Diverged, c.Changed)
+	}
+}
+
+// TestRemoveEnvoy_DecrementsDriftCounters pins that deleting an envoy
+// from the index releases its drift contribution. Otherwise the chip
+// counts would over-report after envoy decommissioning.
+func TestRemoveEnvoy_DecrementsDriftCounters(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddEnvoy(EnvoyState{
+		ID:                "e1",
+		Hostname:          "e1.example.com",
+		ConvergenceStatus: "degraded",
+		Drift:             convergence.DriftDiverged,
+	}, nil)
+
+	fi.RemoveEnvoy("e1")
+
+	c := fi.ConvergenceSummary()
+	if c.Diverged != 0 || c.Changed != 0 {
+		t.Errorf("RemoveEnvoy left drift counters non-zero: Diverged=%d, Changed=%d", c.Diverged, c.Changed)
+	}
+}
+
+// TestSetRevoked_TogglesDriftCounters pins that revoke/un-revoke
+// toggles the drift contribution symmetrically with the failure-axis
+// counters. Revoking a Diverged envoy must drop both Changed and
+// Diverged by 1; un-revoking must restore them.
+func TestSetRevoked_TogglesDriftCounters(t *testing.T) {
+	fi := NewFleetIndex()
+	fi.AddEnvoy(EnvoyState{
+		ID:                "e1",
+		Hostname:          "e1.example.com",
+		ConvergenceStatus: "degraded",
+		Drift:             convergence.DriftDiverged,
+	}, nil)
+
+	fi.SetRevoked("e1", true)
+	c := fi.ConvergenceSummary()
+	if c.Diverged != 0 || c.Changed != 0 {
+		t.Errorf("after revoke: Diverged=%d, Changed=%d, want both 0", c.Diverged, c.Changed)
+	}
+
+	fi.SetRevoked("e1", false)
+	c = fi.ConvergenceSummary()
+	if c.Diverged != 1 || c.Changed != 1 {
+		t.Errorf("after un-revoke: Diverged=%d, Changed=%d, want both 1", c.Diverged, c.Changed)
+	}
+}
