@@ -995,11 +995,10 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 		// (introduced via the authoritative admin-push API). This guards
 		// against the re-poisoning footgun where a freshly-restarted
 		// server's empty manifest gets re-populated from agents' cached
-		// `swarm_seeds` traits within seconds (see
-		// tshoot/log-archive-cairn-resolved-20260424-124050.md, fixed
-		// 0.38.12). ErrUnknownSeed is logged at INFO and the report is
-		// silently skipped — the agent will eventually GC the cached
-		// blob via its own staleness rules.
+		// `swarm_seeds` traits within seconds (the re-poisoning
+		// regression fixed in 0.38.12). ErrUnknownSeed is logged at
+		// INFO and the report is silently skipped — the agent will
+		// eventually GC the cached blob via its own staleness rules.
 		if s.manifestStore != nil {
 			if err := s.manifestStore.RecordSeedFromAgent(seed.SHA256, seed.Label, seed.Target, seed.Retention, envoyID, seed.Size); err != nil {
 				slog.Info("swarm: dropping unknown seed reported by agent",
