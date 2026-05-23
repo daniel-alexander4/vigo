@@ -9,8 +9,6 @@ package auth
 
 import (
 	"context"
-	"log/slog"
-	"net"
 	"net/http"
 	"strings"
 )
@@ -102,8 +100,8 @@ var publicPaths = map[string]bool{
 	// then the per-route admin check rejected the missing-user request with
 	// 403 "admin role required" even for vigocli running on the server host
 	// — exact same shape as the /api/v1/config/reload comment below.
-	// TryPeerAuth handles the localhost case correctly: loopback admin gets
-	// injected and clears the permission gate.
+	// The local-admin token handles the server-host case: vigocli sends it
+	// as a bearer, the admin user gets injected, and the gate clears.
 	//
 	// fleet/pubkeys and swarm/puddle/names are public-by-construction:
 	// hostname↔pubkey and name↔pubkey bindings, nothing secret (the
@@ -126,8 +124,8 @@ var publicPaths = map[string]bool{
 	// it here bypassed the auth middleware entirely (no user injected
 	// into context), then the per-route permission check rejected the
 	// missing-user request with 401 even for vigocli running on the
-	// server host. TryPeerAuth handles the localhost case correctly:
-	// loopback admin gets injected and clears the permission gate.
+	// server host. The local-admin token handles the server-host case:
+	// vigocli sends it as a bearer and the admin user gets injected.
 }
 
 // IsPublicPath returns true if the given URL path should be accessible
@@ -149,72 +147,15 @@ func isAPIPath(path string) bool {
 	return strings.HasPrefix(path, "/api/")
 }
 
-// isLocalRequest returns true if the request originates from the server host.
-// Checks for loopback (127.0.0.1, ::1) and Docker bridge networks (172.16-31.x.x).
-// This grants implicit admin access to CLI tools on the server host — if you
-// have shell access, you already have full access to config, secrets, and the
-// database (same model as PostgreSQL peer auth).
-func isLocalRequest(r *http.Request) bool {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
-	}
-	ip := net.ParseIP(host)
-	if ip == nil {
-		return false
-	}
-	if ip.IsLoopback() {
-		return true
-	}
-	// Docker bridge: 172.16.0.0/12 — host requests arrive from the gateway IP
-	// (e.g., 172.17.0.1) when the server runs in a container.
-	_, dockerNet, _ := net.ParseCIDR("172.16.0.0/12")
-	return dockerNet.Contains(ip)
-}
-
-// loopbackAdmin is the synthetic admin user injected for localhost API requests.
-var loopbackAdmin = &User{
+// localAdminUser is the synthetic admin identity resolved for a request
+// bearing the local-admin token (see localadmin.go). It is not a row in
+// the users table — it is the runtime identity of "root on the server
+// host", the only caller that can read the 0600 token file. It replaces
+// the former source-IP "peer auth", which trusted any loopback or
+// Docker-bridge caller and so handed admin to non-root local users.
+var localAdminUser = &User{
 	ID:          "localhost",
 	Username:    "localhost",
 	Role:        "admin",
 	Permissions: AllPermissions,
-}
-
-// TryPeerAuth is the shared peer-auth fallback called by every auth
-// provider. Returns the synthetic loopback admin when (and only when):
-//   - the request targets a /api/v1/* path OR a /ws/* path, AND
-//   - the request originates from loopback or the Docker bridge,
-//
-// otherwise returns nil. Providers call this AFTER their token and
-// session checks — a real user's cookie or token must always take
-// precedence. See basic_test.go:77 for the regression that pins the
-// ordering invariant.
-//
-// The /ws/* prefix is included so the CLI's WebSocket dial in
-// `vigocli scrier ssh` works the same way its `/api/v1/scrier/*`
-// REST calls already do — both are CLI-on-server-host traffic.
-// Browser WS dials carry a session cookie and authenticate before
-// peer-auth runs, so they're unaffected.
-//
-// Caller is responsible for injecting the returned user into the
-// request context (ContextWithUser) and serving the downstream
-// handler — this function doesn't write to the response.
-func TryPeerAuth(r *http.Request) *User {
-	if !peerAuthEligiblePath(r.URL.Path) || !isLocalRequest(r) {
-		return nil
-	}
-	slog.Info("peer-auth granted loopback admin",
-		"path", r.URL.Path,
-		"remote", r.RemoteAddr,
-	)
-	return loopbackAdmin
-}
-
-// peerAuthEligiblePath returns true for the URL prefixes that peer-auth
-// is allowed to grant on: the REST API (/api/v1/*) and the WebSocket
-// endpoints (/ws/*). Other paths (login pages, marketing pages, static
-// assets) are deliberately excluded — peer-auth fallthrough to those
-// would short-circuit the browser-side /login flow.
-func peerAuthEligiblePath(path string) bool {
-	return isAPIPath(path) || strings.HasPrefix(path, "/ws/")
 }

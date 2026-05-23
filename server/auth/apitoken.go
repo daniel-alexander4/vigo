@@ -48,11 +48,16 @@ func ValidateAPIToken(plaintext, hash string) bool {
 // TokenStore provides API token CRUD operations.
 type TokenStore struct {
 	queries *db.Queries
+	// localAdminToken is the root-only credential minted at boot
+	// (localadmin.go). A bearer equal to it resolves to localAdminUser —
+	// the server-host admin identity that replaced source-IP peer auth.
+	localAdminToken string
 }
 
-// NewTokenStore creates a TokenStore.
-func NewTokenStore(queries *db.Queries) *TokenStore {
-	return &TokenStore{queries: queries}
+// NewTokenStore creates a TokenStore. localAdminToken is the boot-minted
+// local-admin token (empty disables it — e.g. in tests).
+func NewTokenStore(queries *db.Queries, localAdminToken string) *TokenStore {
+	return &TokenStore{queries: queries, localAdminToken: localAdminToken}
 }
 
 // CreateToken generates a new API token for the given user.
@@ -86,6 +91,14 @@ func (ts *TokenStore) CreateToken(ctx context.Context, userID, name string, expi
 func (ts *TokenStore) ValidateAndResolve(ctx context.Context, plaintext string, userStore *UserStore) (*User, error) {
 	if !strings.HasPrefix(plaintext, apiTokenPrefix) {
 		return nil, nil
+	}
+
+	// The local-admin token resolves to the synthetic server-host admin.
+	// It is never stored in api_tokens (the schema requires a real
+	// user_id) — it is the 0600 root-only credential minted at boot.
+	if ts.localAdminToken != "" &&
+		subtle.ConstantTimeCompare([]byte(plaintext), []byte(ts.localAdminToken)) == 1 {
+		return localAdminUser, nil
 	}
 
 	tokens, err := ts.queries.ListAllAPITokens(ctx)

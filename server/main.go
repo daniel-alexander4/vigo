@@ -530,7 +530,9 @@ func createAIProvider(ctx context.Context, cfg config.AISection) (vigoai.Provide
 }
 
 // createAuthProvider builds the appropriate auth provider from config.
-func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sql.DB, queries *db.Queries, secretsProvider secrets.Provider) (vigoauth.Provider, error) {
+// localAdminToken is the boot-minted root-only credential each TokenStore
+// honors so server-host vigocli authenticates as admin.
+func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sql.DB, queries *db.Queries, secretsProvider secrets.Provider, localAdminToken string) (vigoauth.Provider, error) {
 	method := cfg.Auth.Method
 	if method == "" {
 		method = "basic"
@@ -550,13 +552,13 @@ func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sq
 	case "basic":
 		sessions := vigoauth.NewSessionManager(sqlDB, idleTimeout)
 		userStore := vigoauth.NewUserStore(queries)
-		tokenStore := vigoauth.NewTokenStore(queries)
+		tokenStore := vigoauth.NewTokenStore(queries, localAdminToken)
 		return vigoauth.NewBasicProvider(sessions, userStore, tokenStore, secretsProvider), nil
 
 	case "oidc":
 		sessions := vigoauth.NewSessionManager(sqlDB, idleTimeout)
 		userStore := vigoauth.NewUserStore(queries)
-		tokenStore := vigoauth.NewTokenStore(queries)
+		tokenStore := vigoauth.NewTokenStore(queries, localAdminToken)
 		return vigoauth.NewOIDCProvider(ctx, vigoauth.OIDCConfig{
 			Issuer:       cfg.Auth.OIDC.Issuer,
 			ClientID:     cfg.Auth.OIDC.ClientID,
@@ -568,7 +570,7 @@ func createAuthProvider(ctx context.Context, cfg *config.ServerConfig, sqlDB *sq
 	case "isowebauth":
 		sessions := vigoauth.NewSessionManager(sqlDB, idleTimeout)
 		userStore := vigoauth.NewUserStore(queries)
-		tokenStore := vigoauth.NewTokenStore(queries)
+		tokenStore := vigoauth.NewTokenStore(queries, localAdminToken)
 		return vigoauth.NewIsowebauthProvider(vigoauth.IsowebauthConfig{
 			Namespace: cfg.Auth.Isowebauth.Namespace,
 		}, sessions, userStore, tokenStore)

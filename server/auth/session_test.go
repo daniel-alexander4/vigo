@@ -18,8 +18,8 @@ import (
 // "no session data in context" and the WebSocket handshake dies before any
 // HTTP response, surfacing to the CLI as EOF.
 //
-// The fallthrough that the middleware relies on (TryPeerAuth grants loopback
-// admin for the CLI case) only runs if GetUser returns nil cleanly.
+// The token check the middleware then runs (the CLI dial carries the
+// local-admin bearer) only proceeds if GetUser returns nil cleanly.
 func TestLoadSessionReadOnly_NoCookie_GetUserDoesNotPanic(t *testing.T) {
 	_, sm, _, _, _ := setupBasicProvider(t)
 

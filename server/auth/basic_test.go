@@ -46,7 +46,7 @@ func setupBasicProvider(t *testing.T) (*BasicProvider, *SessionManager, *UserSto
 
 	sm := NewSessionManager(sqlDB, 0)
 	userStore := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries)
+	tokenStore := NewTokenStore(queries, testLocalAdminToken)
 
 	// Seed an admin user so the auth middleware has something to authenticate
 	// against. Provider uses NullProvider for secrets.
@@ -86,12 +86,9 @@ func runMiddleware(provider *BasicProvider, req *http.Request) (sawUser *User, r
 	return
 }
 
-// TestBasicMiddleware_SessionWinsOverPeerAuth_LocalAPI is the regression case
-// that caused the Scrier 519 bug: a browser running on the server host POSTs
-// an API request with a valid session cookie. Before the fix, peer-auth
-// short-circuited to the synthetic "localhost" admin. After the fix, the
-// real session user wins.
-func TestBasicMiddleware_SessionWinsOverPeerAuth_LocalAPI(t *testing.T) {
+// TestBasicMiddleware_Session_LocalAPI confirms a session cookie on an API
+// request resolves to the real session user.
+func TestBasicMiddleware_Session_LocalAPI(t *testing.T) {
 	provider, sm, _, _, alice := setupBasicProvider(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/envoys", nil)
@@ -101,13 +98,12 @@ func TestBasicMiddleware_SessionWinsOverPeerAuth_LocalAPI(t *testing.T) {
 	got, rec := runMiddleware(provider, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.NotNil(t, got)
-	assert.Equal(t, "alice", got.Username, "local API request with session cookie must resolve to the session user, not the loopback admin")
+	assert.Equal(t, "alice", got.Username, "an API request with a session cookie must resolve to the session user")
 }
 
-// TestBasicMiddleware_TokenWinsOverPeerAuth_LocalAPI is the parallel latent
-// bug: a bearer token from localhost should identify the token's user, not
-// the synthetic "localhost" admin. Audit records were previously wrong.
-func TestBasicMiddleware_TokenWinsOverPeerAuth_LocalAPI(t *testing.T) {
+// TestBasicMiddleware_Token_LocalAPI confirms a bearer token resolves to the
+// token's owning user.
+func TestBasicMiddleware_Token_LocalAPI(t *testing.T) {
 	provider, _, _, tokenStore, alice := setupBasicProvider(t)
 
 	plain, _, err := tokenStore.CreateToken(context.Background(), alice.ID, "test-token", nil)
@@ -120,44 +116,59 @@ func TestBasicMiddleware_TokenWinsOverPeerAuth_LocalAPI(t *testing.T) {
 	got, rec := runMiddleware(provider, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.NotNil(t, got)
-	assert.Equal(t, "alice", got.Username, "local API request with valid bearer token must resolve to the token user, not the loopback admin")
+	assert.Equal(t, "alice", got.Username, "an API request with a valid bearer token must resolve to the token user")
 }
 
-// TestBasicMiddleware_NoAuth_LocalAPI_FallsToPeerAuth confirms the CLI path
-// still works: vigocli sends no cookie and no bearer token, arrives from
-// loopback or the Docker bridge, and must land on the implicit admin.
-func TestBasicMiddleware_NoAuth_LocalAPI_FallsToPeerAuth(t *testing.T) {
+// TestBasicMiddleware_NoAuth_LocalAPI_Returns401 is the regression for the
+// peer-auth hole: a request from loopback with no credential must NOT be
+// granted admin. Source IP is not proof of root — a non-root shell user on
+// the server host could otherwise curl the API as admin.
+func TestBasicMiddleware_NoAuth_LocalAPI_Returns401(t *testing.T) {
 	provider, _, _, _, _ := setupBasicProvider(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/envoys", nil)
 	req.RemoteAddr = "127.0.0.1:52002"
 
 	got, rec := runMiddleware(provider, req)
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.NotNil(t, got)
-	assert.Equal(t, "localhost", got.Username, "CLI (no cookie, no token, from loopback) must land on peer-auth loopback admin")
-	assert.Equal(t, "admin", got.Role)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, "loopback alone must not grant admin")
+	assert.Nil(t, got, "an uncredentialed loopback request must reach no downstream handler")
 }
 
-// TestBasicMiddleware_NoAuth_DockerBridge_FallsToPeerAuth confirms peer-auth
-// also fires for requests from the Docker bridge (172.16/12). This is what
-// happens when vigocli runs on the server host but inside the vigo container
-// talks back out via the bridge gateway IP.
-func TestBasicMiddleware_NoAuth_DockerBridge_FallsToPeerAuth(t *testing.T) {
+// TestBasicMiddleware_NoAuth_DockerBridge_Returns401 is the same regression
+// for the Docker bridge (172.16/12) — the other range the retired source-IP
+// peer auth trusted. It too must now 401 without a credential.
+func TestBasicMiddleware_NoAuth_DockerBridge_Returns401(t *testing.T) {
 	provider, _, _, _, _ := setupBasicProvider(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/envoys", nil)
 	req.RemoteAddr = "172.17.0.1:40000" // Docker bridge gateway
 
 	got, rec := runMiddleware(provider, req)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, "the Docker bridge alone must not grant admin")
+	assert.Nil(t, got)
+}
+
+// TestBasicMiddleware_LocalAdminToken_GrantsAdmin confirms the credential
+// that replaced peer auth: a request bearing the boot-minted local-admin
+// token resolves to the synthetic server-host admin — regardless of source
+// IP, since the token, not the address, is the gate. This is how vigocli on
+// the server host authenticates.
+func TestBasicMiddleware_LocalAdminToken_GrantsAdmin(t *testing.T) {
+	provider, _, _, _, _ := setupBasicProvider(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/envoys", nil)
+	req.RemoteAddr = "8.8.8.8:40000" // deliberately non-local: the token is the gate
+	req.Header.Set("Authorization", "Bearer "+testLocalAdminToken)
+
+	got, rec := runMiddleware(provider, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.NotNil(t, got)
 	assert.Equal(t, "localhost", got.Username)
+	assert.Equal(t, "admin", got.Role)
 }
 
-// TestBasicMiddleware_NoAuth_RemoteAPI_Returns401 confirms remote requests
-// without any credential are rejected (peer-auth must NOT fire for
-// non-local addresses).
+// TestBasicMiddleware_NoAuth_RemoteAPI_Returns401 confirms a remote request
+// without any credential is rejected.
 func TestBasicMiddleware_NoAuth_RemoteAPI_Returns401(t *testing.T) {
 	provider, _, _, _, _ := setupBasicProvider(t)
 
@@ -184,9 +195,8 @@ func TestBasicMiddleware_Session_RemoteAPI(t *testing.T) {
 	assert.Equal(t, "alice", got.Username)
 }
 
-// TestBasicMiddleware_NoAuth_LocalUIPath_RedirectsLogin confirms peer-auth
-// is API-only. A local browser hitting a UI path without a session still
-// bounces to /login (not silently granted loopback admin).
+// TestBasicMiddleware_NoAuth_LocalUIPath_RedirectsLogin confirms a browser
+// hitting a UI path without a session bounces to /login.
 func TestBasicMiddleware_NoAuth_LocalUIPath_RedirectsLogin(t *testing.T) {
 	provider, _, _, _, _ := setupBasicProvider(t)
 
@@ -200,7 +210,7 @@ func TestBasicMiddleware_NoAuth_LocalUIPath_RedirectsLogin(t *testing.T) {
 }
 
 // TestBasicMiddleware_PublicPath_Skipped confirms public paths never touch
-// any auth branch — no cookie check, no token check, no peer-auth.
+// any auth branch — no cookie check, no token check.
 func TestBasicMiddleware_PublicPath_Skipped(t *testing.T) {
 	provider, _, _, _, _ := setupBasicProvider(t)
 
@@ -213,15 +223,13 @@ func TestBasicMiddleware_PublicPath_Skipped(t *testing.T) {
 }
 
 // TestBasicMiddleware_InvalidToken_API_Returns401 confirms an invalid bearer
-// token short-circuits to 401 for API paths — it does NOT silently fall
-// through to peer-auth. A client that sent a bad token meant to use a
-// specific identity; falling through to the loopback admin would mask the
-// error.
+// token short-circuits to 401 for API paths rather than being treated as
+// unauthenticated — a client that sent a bad token meant a specific identity.
 func TestBasicMiddleware_InvalidToken_API_Returns401(t *testing.T) {
 	provider, _, _, _, _ := setupBasicProvider(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/envoys", nil)
-	req.RemoteAddr = "127.0.0.1:52004" // local — peer-auth would otherwise apply
+	req.RemoteAddr = "127.0.0.1:52004"
 	req.Header.Set("Authorization", "Bearer vgot_invalid")
 
 	got, rec := runMiddleware(provider, req)
@@ -238,7 +246,7 @@ func setupBasicProviderWithSecrets(t *testing.T, values map[string]string) *Basi
 
 	sm := NewSessionManager(sqlDB, 0)
 	userStore := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries)
+	tokenStore := NewTokenStore(queries, testLocalAdminToken)
 
 	_, err := userStore.Create(context.Background(), db.InsertUserParams{
 		Username: "alice",

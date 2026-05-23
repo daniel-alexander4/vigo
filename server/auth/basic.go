@@ -95,22 +95,6 @@ func (p *BasicProvider) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Fallback: trust local API requests — CLI on the server host
-		// gets implicit admin access (same as PostgreSQL peer auth).
-		// Placed AFTER token + session checks so a real user's cookie or
-		// token takes precedence. Without this ordering, a browser
-		// running on the server host is authenticated as the synthetic
-		// loopback admin instead of its logged-in session user, and any
-		// API endpoint that keys on user identity (Scrier session
-		// ownership, audit trail, per-user queries) misattributes the
-		// request. Shared helper lives in auth.go so oidc.go and
-		// isowebauth.go call the same code path.
-		if u := TryPeerAuth(r); u != nil {
-			ctx := ContextWithUser(r.Context(), u)
-			next.ServeHTTP(w, r.WithContext(ctx))
-			return
-		}
-
 		if isAPIPath(r.URL.Path) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)

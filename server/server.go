@@ -85,6 +85,10 @@ type Server struct {
 	// --- Config ---
 	configFile string               // path passed to NewServer
 	serverRoot string               // filepath.Dir(configFile)
+	// localAdminToken is the root-only credential (serverRoot/cli-admin-token,
+	// 0600) that lets vigocli on the server host authenticate as admin —
+	// minted at boot, see auth.LoadOrCreateLocalAdminToken.
+	localAdminToken string
 	cfg        *config.ServerConfig // full config (second pass with secrets resolved)
 	secretsCfg secrets.Config       // first-pass secrets backend config
 
@@ -518,8 +522,15 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 
 	// --- Auth ---
 
+	// Mint (or load) the local-admin token before building the auth
+	// provider — it gates server-host vigocli, replacing source-IP peer auth.
+	s.localAdminToken, err = vigoauth.LoadOrCreateLocalAdminToken(filepath.Join(s.serverRoot, "cli-admin-token"))
+	if err != nil {
+		return nil, fmt.Errorf("initializing local-admin token: %w", err)
+	}
+
 	// Initialize auth provider.
-	s.authProvider, err = createAuthProvider(ctx, s.cfg, s.db, s.queries, s.provider)
+	s.authProvider, err = createAuthProvider(ctx, s.cfg, s.db, s.queries, s.provider, s.localAdminToken)
 	if err != nil {
 		return nil, fmt.Errorf("initializing auth: %w", err)
 	}
@@ -1079,7 +1090,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 
 	// Auth-related API handlers.
 	userStore := vigoauth.NewUserStore(s.queries)
-	tokenStore := vigoauth.NewTokenStore(s.queries)
+	tokenStore := vigoauth.NewTokenStore(s.queries, s.localAdminToken)
 	usersHandler := api.NewUsersHandler(userStore, s.authMethod)
 	usersHandler.SetAuditWriter(s.auditWriter)
 	usersHandler.SetSecretsProvider(s.provider)

@@ -27,7 +27,7 @@ func setupOIDCProvider(t *testing.T) (*OIDCProvider, *SessionManager, *User) {
 
 	sm := NewSessionManager(sqlDB, 0)
 	userStore := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries)
+	tokenStore := NewTokenStore(queries, testLocalAdminToken)
 
 	alice, err := userStore.Create(context.Background(), db.InsertUserParams{
 		Username: "alice",
@@ -54,42 +54,54 @@ func runOIDCMiddleware(provider *OIDCProvider, req *http.Request) (*User, *httpt
 	return sawUser, rec
 }
 
-// TestOIDCMiddleware_NoAuth_LocalAPI_FallsToPeerAuth confirms the bug
-// described in pending.md: on OIDC-configured servers, localhost vigocli
-// must still work via peer-auth fallback instead of failing with 401.
-func TestOIDCMiddleware_NoAuth_LocalAPI_FallsToPeerAuth(t *testing.T) {
+// TestOIDCMiddleware_NoAuth_LocalAPI_Returns401 is the peer-auth-hole
+// regression under OIDC: a loopback request with no credential must not be
+// granted admin — source IP is not proof of root.
+func TestOIDCMiddleware_NoAuth_LocalAPI_Returns401(t *testing.T) {
 	provider, _, _ := setupOIDCProvider(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/envoys", nil)
 	req.RemoteAddr = "127.0.0.1:52100"
 
 	got, rec := runOIDCMiddleware(provider, req)
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.NotNil(t, got)
-	assert.Equal(t, "localhost", got.Username, "vigocli on OIDC server must hit peer-auth fallback")
-	assert.Equal(t, "admin", got.Role)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, "loopback alone must not grant admin under OIDC")
+	assert.Nil(t, got)
 }
 
-// TestOIDCMiddleware_SessionWinsOverPeerAuth_LocalAPI pins the ordering
-// invariant: a browser on the server host with a valid session cookie
-// must be attributed to the session user, not the synthetic localhost
-// admin. Same regression as basic.go's Scrier 519 bug.
-func TestOIDCMiddleware_SessionWinsOverPeerAuth_LocalAPI(t *testing.T) {
-	provider, sm, alice := setupOIDCProvider(t)
+// TestOIDCMiddleware_LocalAdminToken_GrantsAdmin confirms the local-admin
+// token resolves to the server-host admin under OIDC — the credential that
+// replaced source-IP peer auth works regardless of the configured method.
+func TestOIDCMiddleware_LocalAdminToken_GrantsAdmin(t *testing.T) {
+	provider, _, _ := setupOIDCProvider(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/envoys", nil)
 	req.RemoteAddr = "127.0.0.1:52101"
+	req.Header.Set("Authorization", "Bearer "+testLocalAdminToken)
+
+	got, rec := runOIDCMiddleware(provider, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NotNil(t, got)
+	assert.Equal(t, "localhost", got.Username)
+	assert.Equal(t, "admin", got.Role)
+}
+
+// TestOIDCMiddleware_Session_LocalAPI confirms a session cookie resolves to
+// the real session user under OIDC.
+func TestOIDCMiddleware_Session_LocalAPI(t *testing.T) {
+	provider, sm, alice := setupOIDCProvider(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/envoys", nil)
+	req.RemoteAddr = "127.0.0.1:52102"
 	req.AddCookie(newSessionCookie(t, sm, alice))
 
 	got, rec := runOIDCMiddleware(provider, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.NotNil(t, got)
-	assert.Equal(t, "alice", got.Username, "local API request with session cookie under OIDC must resolve to the session user, not the loopback admin")
+	assert.Equal(t, "alice", got.Username, "an API request with a session cookie under OIDC must resolve to the session user")
 }
 
-// TestOIDCMiddleware_NoAuth_RemoteAPI_Returns401 confirms peer-auth is
-// local-only under OIDC — a remote request without a session or token
-// still gets 401, no accidental admin grant.
+// TestOIDCMiddleware_NoAuth_RemoteAPI_Returns401 confirms a remote request
+// without a session or token gets 401.
 func TestOIDCMiddleware_NoAuth_RemoteAPI_Returns401(t *testing.T) {
 	provider, _, _ := setupOIDCProvider(t)
 

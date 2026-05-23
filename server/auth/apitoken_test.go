@@ -5,6 +5,7 @@ package auth
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,7 +32,7 @@ func TestGenerateAPIToken(t *testing.T) {
 func TestTokenCreateAndValidate(t *testing.T) {
 	queries := setupTestDB(t)
 	userStore := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries)
+	tokenStore := NewTokenStore(queries, testLocalAdminToken)
 	ctx := context.Background()
 
 	// Create a user first.
@@ -68,7 +69,7 @@ func TestTokenCreateAndValidate(t *testing.T) {
 func TestTokenExpiry(t *testing.T) {
 	queries := setupTestDB(t)
 	userStore := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries)
+	tokenStore := NewTokenStore(queries, testLocalAdminToken)
 	ctx := context.Background()
 
 	u, err := userStore.Create(ctx, db.InsertUserParams{
@@ -91,7 +92,7 @@ func TestTokenExpiry(t *testing.T) {
 func TestTokenListAndDelete(t *testing.T) {
 	queries := setupTestDB(t)
 	userStore := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries)
+	tokenStore := NewTokenStore(queries, testLocalAdminToken)
 	ctx := context.Background()
 
 	u, err := userStore.Create(ctx, db.InsertUserParams{
@@ -125,4 +126,34 @@ func TestExtractBearerToken(t *testing.T) {
 	assert.Equal(t, "", ExtractBearerToken(""))
 	assert.Equal(t, "", ExtractBearerToken("Basic abc"))
 	assert.Equal(t, "", ExtractBearerToken("Bear"))
+}
+
+// TestValidateAndResolve_LocalAdminToken pins the credential that replaced
+// source-IP peer auth: a bearer equal to the boot-minted local-admin token
+// resolves to the synthetic server-host admin, and nothing else does.
+func TestValidateAndResolve_LocalAdminToken(t *testing.T) {
+	queries := setupTestDB(t)
+	userStore := NewUserStore(queries)
+	ctx := context.Background()
+
+	tokenStore := NewTokenStore(queries, testLocalAdminToken)
+
+	// The local-admin token resolves to the synthetic admin — no users row,
+	// admin role, full permissions.
+	resolved, err := tokenStore.ValidateAndResolve(ctx, testLocalAdminToken, userStore)
+	require.NoError(t, err)
+	require.NotNil(t, resolved)
+	assert.Equal(t, "localhost", resolved.Username)
+	assert.Equal(t, "admin", resolved.Role)
+
+	// A different vgot_ token is not the local-admin token.
+	resolved, err = tokenStore.ValidateAndResolve(ctx, "vgot_"+strings.Repeat("b", 64), userStore)
+	require.NoError(t, err)
+	assert.Nil(t, resolved)
+
+	// With no local-admin token configured, even the fixture is rejected.
+	bare := NewTokenStore(queries, "")
+	resolved, err = bare.ValidateAndResolve(ctx, testLocalAdminToken, userStore)
+	require.NoError(t, err)
+	assert.Nil(t, resolved)
 }

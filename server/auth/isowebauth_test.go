@@ -25,7 +25,7 @@ func setupIsowebauthProvider(t *testing.T) (*IsowebauthProvider, *SessionManager
 
 	sm := NewSessionManager(sqlDB, 0)
 	userStore := NewUserStore(queries)
-	tokenStore := NewTokenStore(queries)
+	tokenStore := NewTokenStore(queries, testLocalAdminToken)
 
 	alice, err := userStore.Create(context.Background(), db.InsertUserParams{
 		Username: "alice",
@@ -52,39 +52,53 @@ func runIsowebauthMiddleware(provider *IsowebauthProvider, req *http.Request) (*
 	return sawUser, rec
 }
 
-// TestIsowebauthMiddleware_NoAuth_LocalAPI_FallsToPeerAuth confirms the
-// bug described in pending.md: on isowebauth-configured servers,
-// localhost vigocli must still work via peer-auth fallback.
-func TestIsowebauthMiddleware_NoAuth_LocalAPI_FallsToPeerAuth(t *testing.T) {
+// TestIsowebauthMiddleware_NoAuth_LocalAPI_Returns401 is the peer-auth-hole
+// regression under isowebauth: a loopback request with no credential must
+// not be granted admin.
+func TestIsowebauthMiddleware_NoAuth_LocalAPI_Returns401(t *testing.T) {
 	provider, _, _ := setupIsowebauthProvider(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/envoys", nil)
 	req.RemoteAddr = "127.0.0.1:52200"
 
 	got, rec := runIsowebauthMiddleware(provider, req)
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.NotNil(t, got)
-	assert.Equal(t, "localhost", got.Username, "vigocli on isowebauth server must hit peer-auth fallback")
-	assert.Equal(t, "admin", got.Role)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code, "loopback alone must not grant admin under isowebauth")
+	assert.Nil(t, got)
 }
 
-// TestIsowebauthMiddleware_SessionWinsOverPeerAuth_LocalAPI pins the
-// ordering invariant under isowebauth.
-func TestIsowebauthMiddleware_SessionWinsOverPeerAuth_LocalAPI(t *testing.T) {
-	provider, sm, alice := setupIsowebauthProvider(t)
+// TestIsowebauthMiddleware_LocalAdminToken_GrantsAdmin confirms the
+// local-admin token resolves to the server-host admin under isowebauth.
+func TestIsowebauthMiddleware_LocalAdminToken_GrantsAdmin(t *testing.T) {
+	provider, _, _ := setupIsowebauthProvider(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/envoys", nil)
 	req.RemoteAddr = "127.0.0.1:52201"
+	req.Header.Set("Authorization", "Bearer "+testLocalAdminToken)
+
+	got, rec := runIsowebauthMiddleware(provider, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.NotNil(t, got)
+	assert.Equal(t, "localhost", got.Username)
+	assert.Equal(t, "admin", got.Role)
+}
+
+// TestIsowebauthMiddleware_Session_LocalAPI confirms a session cookie
+// resolves to the real session user under isowebauth.
+func TestIsowebauthMiddleware_Session_LocalAPI(t *testing.T) {
+	provider, sm, alice := setupIsowebauthProvider(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/envoys", nil)
+	req.RemoteAddr = "127.0.0.1:52202"
 	req.AddCookie(newSessionCookie(t, sm, alice))
 
 	got, rec := runIsowebauthMiddleware(provider, req)
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.NotNil(t, got)
-	assert.Equal(t, "alice", got.Username, "local API request with session cookie under isowebauth must resolve to the session user, not the loopback admin")
+	assert.Equal(t, "alice", got.Username, "an API request with a session cookie under isowebauth must resolve to the session user")
 }
 
-// TestIsowebauthMiddleware_NoAuth_RemoteAPI_Returns401 confirms
-// peer-auth is local-only under isowebauth.
+// TestIsowebauthMiddleware_NoAuth_RemoteAPI_Returns401 confirms a remote
+// request without a session or token gets 401.
 func TestIsowebauthMiddleware_NoAuth_RemoteAPI_Returns401(t *testing.T) {
 	provider, _, _ := setupIsowebauthProvider(t)
 

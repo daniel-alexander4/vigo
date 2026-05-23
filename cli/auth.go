@@ -101,17 +101,28 @@ func tokenFilePath() string {
 	return filepath.Join(home, ".config", "vigo", "token")
 }
 
-// loadAuthToken reads the API token from the config file.
+// localAdminTokenPath is the server-host fallback credential: the 0600
+// root-only token vigosrv mints in its data dir (server/auth/localadmin.go).
+// vigocli reads it when no per-user token is configured, so `sudo vigocli`
+// on the server host works with zero setup. A non-root user can't read it
+// — which is the point: it replaced source-IP "peer auth".
+const localAdminTokenPath = "/srv/vigo/cli-admin-token"
+
+// loadAuthToken reads the API token: the per-user token file first, then
+// the server-host local-admin token. Returns empty when neither is present
+// (a remote admin host that has not run `vigocli auth set-token`).
 func loadAuthToken() string {
-	p := tokenFilePath()
-	if p == "" {
-		return ""
+	if p := tokenFilePath(); p != "" {
+		if data, err := os.ReadFile(p); err == nil {
+			if tok := strings.TrimSpace(string(data)); tok != "" {
+				return tok
+			}
+		}
 	}
-	data, err := os.ReadFile(p)
-	if err != nil {
-		return ""
+	if data, err := os.ReadFile(localAdminTokenPath); err == nil {
+		return strings.TrimSpace(string(data))
 	}
-	return strings.TrimSpace(string(data))
+	return ""
 }
 
 // saveAuthToken writes the API token to the config file (0600 permissions).

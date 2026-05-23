@@ -87,15 +87,13 @@ vigocli secrets set password vigo/web/auth/alice
 vigocli secrets set password vigo/web/auth/<username>
 ```
 
-### CLI Access (Localhost Trust)
+### CLI Access (Local-Admin Token)
 
-When the CLI runs on the same host as the server (or Docker host), API requests are automatically trusted with admin privileges — no token needed. This works like PostgreSQL's `peer` authentication: shell access to the server host implies full access.
+When `vigocli` runs on the server host it authenticates with the **local-admin token** — a credential the server mints on first boot and persists at `/srv/vigo/cli-admin-token` (mode `0600`, `root`-owned). `vigocli` reads it automatically when no per-user token is configured, so `sudo vigocli ...` works on the server host with no setup. Remote CLI access still requires a per-user API token via `vigocli auth set-token`.
 
-Local and container-network connections are trusted. Remote CLI access requires an API token via `vigocli auth set-token`.
+The token gates on the *filesystem*, not the connecting IP: only a caller that can read the `0600` root-owned file is admin. A non-root user with a shell on the server host — who cannot read the file — gets `401`. This is the same gate that already protects the secrets master key and the `vigocli` binary itself.
 
-**Root-only on the server.** Because peer auth grants admin to any local caller by IP, the `vigocli` binary on the server host is installed at `/usr/local/bin/vigocli` with mode `0700` owned by `root:root`. Non-root users cannot execute it, which keeps implicit admin out of their reach. The install paths (`Dockerfile.server`, `entrypoint.sh`, `scripts/upgrade.sh`) all enforce this mode — if you package vigocli onto a server by any other route, set the same mode by hand. Members of the `docker` group are effectively root on the host and can still run vigocli via `docker exec`; keep that group restricted.
-
-**Reverse proxy warning:** Localhost trust relies on `RemoteAddr` from the Go HTTP server, which reflects the actual TCP connection source. If Vigo is behind a reverse proxy (nginx, HAProxy), all requests appear to come from the proxy's IP, not the original client. Do not deploy behind a reverse proxy that forwards to `localhost:8443` from an untrusted network — the proxy's requests would be trusted as local.
+**Root-only on the server.** The `vigocli` binary on the server host is installed at `/usr/local/bin/vigocli` with mode `0700` owned by `root:root`, and the local-admin token file is `0600 root`. Non-root users can read neither, so admin stays out of their reach. The install paths (`Dockerfile.server`, `entrypoint.sh`, `scripts/upgrade.sh`) enforce the binary mode — if you package vigocli onto a server by any other route, set the same mode by hand. Members of the `docker` group are effectively root on the host and can still run vigocli via `docker exec`; keep that group restricted.
 
 ## OIDC (OpenID Connect)
 
