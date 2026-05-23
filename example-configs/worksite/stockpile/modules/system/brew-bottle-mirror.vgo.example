@@ -1,0 +1,88 @@
+name: brew-bottle-mirror
+
+# Local Homebrew bottle cache for macOS clients. Different shape from
+# the other *-mirror modules: Homebrew bottles live as OCI blobs on
+# ghcr.io rather than on a traditional rsync-able mirror tree, so the
+# operational pattern is a transparent caching reverse proxy — nginx
+# with `proxy_cache_path` fronting ghcr.io. First fetch goes upstream,
+# every subsequent fetch is served from local disk.
+#
+# Pair with the `nginx` module on the same host: this module drops a
+# server block into /etc/nginx/conf.d/ and notifies the nginx service
+# for reload. On each client envoy, set:
+#
+#   export HOMEBREW_BOTTLE_DOMAIN=http://{{ .Vars.server_name }}
+#
+# in /etc/profile.d/brew-bottle-mirror.sh (or wherever your shell-env
+# module lives) and `brew install` will fetch through the mirror.
+#
+# Notes:
+# - No offline-from-day-one: the first cache miss must reach upstream.
+#   Operationally, that's a feature — the cache fills in response to
+#   demand and your disk footprint stays bounded by what the fleet
+#   actually installs.
+# - The cache host can run on Linux even though clients are macOS.
+#   Nginx + proxy_cache is platform-portable; only the HOMEBREW_BOTTLE_DOMAIN
+#   export is macOS-side. We `when: os_family('darwin')` this example
+#   because the operator-intent is "the fleet's macOS package story" —
+#   if you're running the mirror on a Linux host, copy the nginx site
+#   resource into a Linux-flavored module.
+
+vars:
+  cache_path:    "/var/cache/nginx/brew-bottles"
+  cache_size:    "50g"
+  cache_inactive: "30d"
+  upstream:      "https://ghcr.io"
+  schedule:      "0 4 * * *"
+  server_name:   "brew-mirror.lab.local"
+
+resources:
+  - name: brew-cache-dir
+    type: directory
+    target_path: "{{ .Vars.cache_path }}"
+    owner: nginx
+    group: nginx
+    mode: "0755"
+    when: "os_family('darwin')"
+
+  - name: mirror-nginx-site
+    type: file
+    target_path: /etc/nginx/conf.d/brew-bottle-mirror.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Vigo — do not edit manually
+      proxy_cache_path {{ .Vars.cache_path }}
+          levels=1:2
+          keys_zone=brew_bottles:100m
+          max_size={{ .Vars.cache_size }}
+          inactive={{ .Vars.cache_inactive }}
+          use_temp_path=off;
+
+      server {
+          listen 80;
+          server_name {{ .Vars.server_name }};
+
+          access_log /var/log/nginx/brew-bottle-mirror.access.log;
+          resolver 1.1.1.1 8.8.8.8 ipv6=off valid=300s;
+
+          # Homebrew bottles are addressed at ghcr.io/v2/homebrew/core/*
+          # and HOMEBREW_BOTTLE_DOMAIN replaces the scheme+host prefix.
+          location / {
+              proxy_pass {{ .Vars.upstream }};
+              proxy_ssl_server_name on;
+              proxy_set_header Host ghcr.io;
+
+              proxy_cache brew_bottles;
+              proxy_cache_valid 200 206 30d;
+              proxy_cache_use_stale error timeout http_500 http_502 http_503 http_504;
+              proxy_cache_lock on;
+
+              # Bottles are content-addressed by SHA — safe to cache aggressively.
+              proxy_ignore_headers Cache-Control Expires Set-Cookie;
+              add_header X-Cache-Status $upstream_cache_status;
+          }
+      }
+    when: "os_family('darwin')"
+    notify: [nginx-service]

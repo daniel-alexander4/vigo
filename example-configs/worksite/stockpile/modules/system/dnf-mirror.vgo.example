@@ -1,0 +1,101 @@
+name: dnf-mirror
+
+# Local RHEL/Fedora-family dnf mirror. `reposync` pulls each configured
+# upstream repo into a local tree; `createrepo_c` (re)generates the
+# repodata after sync; nginx serves the tree over HTTP for the rest of
+# the fleet to consume via dnf/yum.
+#
+# Pair with the `nginx` module on the same host: this module drops a
+# server block into /etc/nginx/conf.d/ and notifies the nginx service
+# for reload. Clients on other envoys point their .repo files at:
+#
+#   baseurl=http://{{ .Vars.server_name }}/{{ .Vars.repoid }}/
+#
+# Works for RHEL, Rocky Linux, AlmaLinux, Fedora, Amazon Linux — any
+# distro whose package manager is dnf/yum. Configure the upstream
+# repos on the mirror host as normal (via the `repository` module);
+# this module mirrors whatever dnf can see.
+
+vars:
+  base_path:    "/var/spool/dnf-mirror"
+  repoid:       "baseos"
+  schedule:     "0 4 * * *"
+  newest_only:  "true"
+  delete:       "true"
+  server_name:  "mirror.lab.local"
+
+resources:
+  - name: install-dnf-utils
+    type: package
+    package: dnf-utils
+    state: present
+    when: "os_family('rhel')"
+
+  - name: install-createrepo-c
+    type: package
+    package: createrepo_c
+    state: present
+    when: "os_family('rhel')"
+
+  - name: mirror-tree-dir
+    type: directory
+    target_path: "{{ .Vars.base_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    when: "os_family('rhel')"
+
+  - name: dnf-mirror-sync-script
+    type: file
+    target_path: /usr/local/sbin/dnf-mirror-sync
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      # Managed by Vigo — do not edit manually.
+      set -eu
+      REPOID="{{ .Vars.repoid }}"
+      DEST="{{ .Vars.base_path }}"
+      reposync \
+          --repoid="$REPOID" \
+          --download-path="$DEST" \
+          {{ if eq .Vars.newest_only "true" }}--newest-only{{ end }} \
+          {{ if eq .Vars.delete "true" }}--delete{{ end }} \
+          --download-metadata
+      # createrepo_c is idempotent — it regenerates repodata in place.
+      createrepo_c --update "$DEST/$REPOID"
+    when: "os_family('rhel')"
+    depends_on: [install-dnf-utils, install-createrepo-c]
+
+  - name: dnf-mirror-cron
+    type: cron
+    command: "/usr/local/sbin/dnf-mirror-sync"
+    schedule: "{{ .Vars.schedule }}"
+    user: root
+    state: present
+    when: "os_family('rhel')"
+    depends_on: [dnf-mirror-sync-script]
+
+  - name: mirror-nginx-site
+    type: file
+    target_path: /etc/nginx/conf.d/dnf-mirror.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Vigo — do not edit manually
+      server {
+          listen 80;
+          server_name {{ .Vars.server_name }};
+
+          root {{ .Vars.base_path }};
+          autoindex on;
+          access_log /var/log/nginx/dnf-mirror.access.log;
+
+          location / {
+              try_files $uri $uri/ =404;
+          }
+      }
+    when: "os_family('rhel')"
+    notify: [nginx-service]

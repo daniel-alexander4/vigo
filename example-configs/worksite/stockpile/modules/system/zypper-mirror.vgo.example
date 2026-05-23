@@ -1,0 +1,97 @@
+name: zypper-mirror
+
+# Local openSUSE/SLES zypper mirror. Same rpm-md shape as dnf-mirror —
+# zypper consumes the same repodata format dnf does — but the upstream
+# URLs and the conventional layout differ enough to warrant a separate
+# file. `dnf reposync` works against SUSE repos when given the right
+# configuration; alternatively a pure `rsync` against an openSUSE
+# rsync mirror produces a serveable tree directly.
+#
+# This example uses the rsync shape because openSUSE publishes
+# rsync-able mirrors and the result is byte-for-byte identical to
+# upstream (no createrepo_c re-derivation step). Pair with the `nginx`
+# module on the same host. Clients on other envoys point their
+# /etc/zypp/repos.d/<repo>.repo files at:
+#
+#   baseurl=http://{{ .Vars.server_name }}/{{ .Vars.suse_path }}/
+#
+# Works for openSUSE Leap, Tumbleweed, and SLES so long as the
+# operator's account on the SUSE side has rsync access to the matching
+# tree.
+
+vars:
+  base_path:    "/var/spool/zypper-mirror"
+  upstream:     "rsync://stage.opensuse.org/opensuse-full/opensuse/distribution/leap/15.6/repo/oss/"
+  suse_path:    "opensuse/distribution/leap/15.6/repo/oss"
+  schedule:     "0 4 * * *"
+  server_name:  "mirror.lab.local"
+
+resources:
+  - name: install-rsync
+    type: package
+    package: rsync
+    state: present
+    when: "os_family('suse')"
+
+  - name: mirror-tree-dir
+    type: directory
+    target_path: "{{ .Vars.base_path }}/{{ .Vars.suse_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    when: "os_family('suse')"
+
+  - name: zypper-mirror-sync-script
+    type: file
+    target_path: /usr/local/sbin/zypper-mirror-sync
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      # Managed by Vigo — do not edit manually.
+      set -eu
+      rsync \
+          --archive \
+          --update \
+          --hard-links \
+          --delete \
+          --delete-after \
+          --timeout=600 \
+          --contimeout=60 \
+          "{{ .Vars.upstream }}" \
+          "{{ .Vars.base_path }}/{{ .Vars.suse_path }}/"
+    when: "os_family('suse')"
+    depends_on: [install-rsync]
+
+  - name: zypper-mirror-cron
+    type: cron
+    command: "/usr/local/sbin/zypper-mirror-sync"
+    schedule: "{{ .Vars.schedule }}"
+    user: root
+    state: present
+    when: "os_family('suse')"
+    depends_on: [zypper-mirror-sync-script]
+
+  - name: mirror-nginx-site
+    type: file
+    target_path: /etc/nginx/conf.d/zypper-mirror.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Vigo — do not edit manually
+      server {
+          listen 80;
+          server_name {{ .Vars.server_name }};
+
+          root {{ .Vars.base_path }};
+          autoindex on;
+          access_log /var/log/nginx/zypper-mirror.access.log;
+
+          location / {
+              try_files $uri $uri/ =404;
+          }
+      }
+    when: "os_family('suse')"
+    notify: [nginx-service]
