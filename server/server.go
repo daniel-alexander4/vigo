@@ -286,7 +286,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	// Auto-generate self-signed TLS certs on first start (local backend only).
 	if local, ok := s.provider.(*secrets.LocalProvider); ok {
 		tlsDir := filepath.Join(s.serverRoot, "tls")
-		extraSANs := config.LoadTLSSANs(configFile)
+		extraSANs := config.LoadServerCertSANs(configFile)
 		if err := secrets.EnsureTLSCerts(tlsDir, extraSANs...); err != nil {
 			return nil, fmt.Errorf("auto-generating TLS certificates: %w", err)
 		}

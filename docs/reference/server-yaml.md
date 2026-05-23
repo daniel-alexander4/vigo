@@ -32,12 +32,12 @@ server:
 |-------|---------|-------------|
 | `grpc_listen` | `:1530` | gRPC listen address for agent communication (mTLS) |
 | `api_listen` | `:8443` | REST API, web UI, and metrics listen address (TLS) |
-| `hostname` | (auto) | Server's enrolled envoy hostname. The compliance page uses this to show the server's own standards compliance separately. Falls back to `VIGO_HOSTNAME` env var, then `os.Hostname()`. Set this when running in Docker. |
+| `hostname` | (auto) | Server's enrolled envoy hostname, and the address agents are told to dial (`GET /bootstrap` advertises it). Set this when running in Docker — the container's own hostname is its container ID, not a name agents can reach. It is automatically added to the auto-generated server cert's SANs, so you do not also need to list it under `tls_sans`. |
 | `tls.cert_file` | `tls/cert` | Path to server TLS certificate |
 | `tls.key_file` | `tls/key` | Path to server TLS private key |
 | `tls.ca_file` | `tls/ca` | Path to CA certificate for mTLS verification |
 | `tls.ca_key_file` | (optional) | CA private key — enables bootstrap enrollment and CSR signing |
-| `tls_sans` | (empty) | Additional Subject Alternative Names for auto-generated certs |
+| `tls_sans` | (empty) | Additional Subject Alternative Names for auto-generated certs. `localhost`, the host's interface IPs, and `server.hostname` are already included automatically — list only names/IPs beyond those. |
 
 ## database
 

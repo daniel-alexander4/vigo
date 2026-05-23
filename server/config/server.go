@@ -33,22 +33,34 @@ func LoadSecretsConfig(path string) (secrets.Config, error) {
 	return raw.Secrets, nil
 }
 
-// LoadTLSSANs reads just the server.tls_sans list from server.yaml.
-// Called before the full config load so EnsureTLSCerts can include extra SANs.
-func LoadTLSSANs(path string) []string {
+// LoadServerCertSANs reads the Subject Alternative Names the auto-generated
+// server cert must carry from server.yaml: the configured server.hostname
+// (the address agents are told to dial — GET /bootstrap advertises it) plus
+// any server.tls_sans extras. Called before the full config load so
+// EnsureTLSCerts can apply them. Returns nil on any read/parse error — cert
+// generation falls back to its built-in localhost + interface-IP SANs.
+func LoadServerCertSANs(path string) []string {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil
 	}
 	var raw struct {
 		Server struct {
-			TLSSANs []string `yaml:"tls_sans"`
+			Hostname string   `yaml:"hostname"`
+			TLSSANs  []string `yaml:"tls_sans"`
 		} `yaml:"server"`
 	}
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil
 	}
-	return raw.Server.TLSSANs
+	sans := raw.Server.TLSSANs
+	// localhost is already a built-in SAN; os.Hostname() is added by
+	// buildExpectedSANs. Only the explicitly configured hostname needs
+	// supplying here.
+	if h := raw.Server.Hostname; h != "" && h != "localhost" {
+		sans = append(sans, h)
+	}
+	return sans
 }
 
 // LoadServerConfig reads server.yaml from the given path and resolves any
