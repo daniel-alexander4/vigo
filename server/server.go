@@ -1230,7 +1230,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		})
 		uiHandler.SetIntegrationsConfig(s.cfg.Integrations, s.cfg.GRC)
 		uiHandler.SetTraitLookup(&traitLookupAdapter{fleetIndex: s.fleetIndex})
-		fleetCache := ui.NewFleetCache(s.queries, s.configStore, s.cfg.CheckIn.ObserveOnly, s.baseInterval, s.offlineThreshold)
+		fleetCache := ui.NewFleetCache(s.configStore, s.cfg.CheckIn.ObserveOnly, s.baseInterval, s.offlineThreshold)
 		fleetCache.SetFleetSource(&uiFleetSourceAdapter{fleetIndex: s.fleetIndex})
 		uiHandler.SetFleetCache(fleetCache)
 

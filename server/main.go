@@ -433,6 +433,41 @@ func (a *uiFleetSourceAdapter) EnvoyCycle(id string) time.Duration {
 	return a.fleetIndex.EnvoyCycle(id)
 }
 
+// EnvoyEntries maps the live FleetIndex into ui.FleetStatusEntry rows.
+// The convergence-axis fields (Status, Drift) and the last-run summary
+// are read straight off each EnvoyState — the canonical classification
+// computed once at run-ingest. The freshness fields (LastSeenLabel,
+// Offline) and ObserveOnly are left zero: FleetCache.refresh() fills
+// them, since they depend on the UI's freshness predicate and the
+// config store.
+func (a *uiFleetSourceAdapter) EnvoyEntries() []ui.FleetStatusEntry {
+	states := a.fleetIndex.SnapshotEnvoys()
+	out := make([]ui.FleetStatusEntry, 0, len(states))
+	for _, es := range states {
+		var failurePct float64
+		if es.LastRunModuleCount > 0 {
+			failurePct = float64(es.LastRunFailedCount) / float64(es.LastRunModuleCount) * 100
+		}
+		out = append(out, ui.FleetStatusEntry{
+			ID:            es.ID,
+			Hostname:      es.Hostname,
+			IPAddress:     es.IP,
+			LastSeen:      es.LastSeen,
+			ObservedCycle: es.ObservedCycle(),
+			AgentVersion:  es.AgentVersion,
+			Status:        es.ConvergenceStatus,
+			Drift:         es.Drift,
+			FailurePct:    failurePct,
+			FailedCount:   es.LastRunFailedCount,
+			ModuleCount:   es.LastRunModuleCount,
+			ChangedCount:  es.LastRunChangedCount,
+			LastRunID:     es.LastRunID,
+			LastRunAt:     es.LastRunAt,
+		})
+	}
+	return out
+}
+
 // nvdCacheAdapter adapts db.Queries to the risk.NVDCache interface. The
 // CWE list and references slice are stored as newline-joined strings in
 // the schema's TEXT columns — keeps the schema flat and the queries

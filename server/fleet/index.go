@@ -372,6 +372,23 @@ func (f *FleetIndex) PaginatedEnvoys(afterHostname string, limit int, statusFilt
 	return candidates, hasMore
 }
 
+// SnapshotEnvoys returns a copy of every non-revoked envoy's state under a
+// single read lock. Each EnvoyState already carries the canonical
+// convergence classification (ConvergenceStatus, Drift) computed at
+// run-ingest — callers read it rather than re-deriving from run history.
+func (f *FleetIndex) SnapshotEnvoys() []EnvoyState {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	out := make([]EnvoyState, 0, len(f.envoys))
+	for _, ts := range f.envoys {
+		if ts.Revoked {
+			continue
+		}
+		out = append(out, *ts)
+	}
+	return out
+}
+
 // RecentRuns returns the last n run summaries (most recent first).
 func (f *FleetIndex) RecentRuns(n int) []RunSummary {
 	f.mu.RLock()

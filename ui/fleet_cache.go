@@ -4,8 +4,6 @@
 package ui
 
 import (
-	"context"
-	"log/slog"
 	"sort"
 	"strings"
 	"sync"
@@ -13,25 +11,30 @@ import (
 
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/convergence"
-	"git.alexander4.io/vigo/server/db"
 )
 
 // fleetCacheTTL controls how long cached fleet data is reused.
 // Multiple HTMX fragments polling in the same cycle share one computation.
 const fleetCacheTTL = 10 * time.Second
 
-// FleetSource exposes pre-computed convergence counters from the live
-// in-memory fleet index. When wired, FleetCache.Counts() returns these
-// counts for the convergence and reachability buckets directly,
-// eliminating the drift that previously existed between the dashboard
-// pills (FleetCache, rebuilt every ~10s from the DB) and the metrics
-// collector (which already consumed fleet.FleetIndex.ConvergenceSummary).
+// FleetSource exposes the live in-memory fleet index to the UI layer:
+// the per-envoy entry set, the pre-computed convergence counters, and
+// per-envoy check-in cadence. FleetCache is built entirely from this —
+// rows and pills both trace to FleetIndex, the one place convergence is
+// classified (at run-ingest). Redefined as a ui-package interface so
+// FleetCache need not import server/fleet; implemented in main.go via a
+// tiny adapter around *fleet.FleetIndex.
 //
-// Implemented in main.go via a tiny adapter around *fleet.FleetIndex.
-// Observing is intentionally absent from the interface: it is per-envoy
-// state derived by iterating FleetCache's enriched entry set, not a
-// counter the FleetIndex tracks.
+// Observing is intentionally absent: it is per-envoy state FleetCache
+// derives from the config store, not a counter the FleetIndex tracks.
 type FleetSource interface {
+	// EnvoyEntries returns one FleetStatusEntry per non-revoked envoy
+	// with the identity and convergence-axis fields filled from
+	// FleetIndex. LastSeenLabel, Offline, and ObserveOnly are left zero
+	// — FleetCache fills them, since they depend on the UI freshness
+	// predicate and the config store.
+	EnvoyEntries() []FleetStatusEntry
+	// ConvergenceSummary returns the live fleet-wide convergence counters.
 	ConvergenceSummary() FleetSummary
 	// EnvoyCycle returns the agent's smoothed inter-CheckIn cadence for
 	// one envoy (max-of-3 of recent reported deltas, in nanoseconds).
@@ -135,15 +138,14 @@ type FleetStatusCounts struct {
 // they previously diverged on changed/diverged convergence.
 type FleetCache struct {
 	mu                sync.RWMutex
-	queries           *db.Queries
 	configStore       *config.ConfigStore
 	globalObserveOnly bool
 	baseInterval      time.Duration
 	offlineThreshold  time.Duration
-	// fleetSource, when set, supplies the live in-memory convergence
-	// counts so the dashboard pills do not drift from FleetIndex.
-	// Wired via SetFleetSource at server startup. Observing still
-	// comes from per-entry iteration of the cached entries.
+	// fleetSource supplies the live in-memory fleet index — every cached
+	// entry and counter is built from it, so rows and pills can't drift
+	// from FleetIndex. Wired via SetFleetSource at server startup; until
+	// then refresh is a no-op and the cache stays empty.
 	fleetSource FleetSource
 
 	// Cached data.
@@ -152,15 +154,15 @@ type FleetCache struct {
 	updatedAt time.Time
 }
 
-// NewFleetCache creates a fleet cache backed by the given queries.
+// NewFleetCache creates a fleet cache. Call SetFleetSource at startup to
+// wire the live FleetIndex — the cache is empty until then.
 //
 // configStore is consulted at refresh time for per-envoy observe-only
 // state via configStore.Match(hostname). globalObserveOnly comes from
 // server.yaml's checkin.observe_only field — when true, every envoy
 // is observe-only regardless of per-match config.
-func NewFleetCache(queries *db.Queries, configStore *config.ConfigStore, globalObserveOnly bool, baseInterval, offlineThreshold time.Duration) *FleetCache {
+func NewFleetCache(configStore *config.ConfigStore, globalObserveOnly bool, baseInterval, offlineThreshold time.Duration) *FleetCache {
 	return &FleetCache{
-		queries:           queries,
 		configStore:       configStore,
 		globalObserveOnly: globalObserveOnly,
 		baseInterval:      baseInterval,
@@ -263,98 +265,45 @@ func (fc *FleetCache) refresh() {
 		return
 	}
 
-	ctx := context.Background()
-	fleet, err := fc.queries.ListFleetConvergence(ctx)
-	if err != nil {
-		slog.Error("fleet cache: failed to load fleet convergence", "error", err)
+	if fc.fleetSource == nil {
+		// No fleet index wired yet (pre-SetFleetSource window, or tests).
+		// Production wires one at startup; until then the cache is empty.
 		return
 	}
 
-	entries := make([]FleetStatusEntry, 0, len(fleet))
+	// Convergence classification (Status, Drift) and the last-run summary
+	// come straight off FleetIndex — the one place it is computed, at
+	// run-ingest. FleetCache only adds the UI-side enrichment below.
+	raw := fc.fleetSource.EnvoyEntries()
+	entries := make([]FleetStatusEntry, 0, len(raw))
 	var counts FleetStatusCounts
 
-	for _, e := range fleet {
-		runs := make([]convergence.RunInfo, 0, len(e.Runs))
-		for _, r := range e.Runs {
-			runs = append(runs, convergence.RunInfo{
-				Status:       r.Status,
-				ChangedCount: r.ChangedCount,
-				FailedCount:  r.FailedCount,
-				ModuleCount:  r.ModuleCount,
-			})
-		}
-
-		status := convergence.ComputeConvergence(runs)
-		drift := convergence.ComputeDrift(runs)
-
-		var lastSeen time.Time
-		if e.LastSeen.Valid {
-			lastSeen = e.LastSeen.Time
-		}
-
-		var observedCycle time.Duration
-		if fc.fleetSource != nil {
-			observedCycle = fc.fleetSource.EnvoyCycle(e.ID)
-		}
-		lastSeenLabel, offline := envoyFreshness(lastSeen, fc.baseInterval, fc.offlineThreshold, observedCycle)
+	for _, e := range raw {
+		// Freshness: LastSeenLabel + Offline from the one predicate, so
+		// the freshness text and color can never disagree on a row.
+		e.LastSeenLabel, e.Offline = envoyFreshness(e.LastSeen, fc.baseInterval, fc.offlineThreshold, e.ObservedCycle)
 
 		// Per-envoy observe-only: global flag OR matching envoys.vgo
-		// block. Orthogonal to convergence status — the cache reports
-		// it as a flag on each entry rather than overriding Status,
-		// so the envoys table can show real convergence next to an
-		// "obs" badge.
-		observeOnly := fc.globalObserveOnly
-		if !observeOnly && fc.configStore != nil {
+		// block. Orthogonal to convergence status — reported as a flag,
+		// so the table can show real convergence next to an "obs" badge.
+		e.ObserveOnly = fc.globalObserveOnly
+		if !e.ObserveOnly && fc.configStore != nil {
 			if _, cfg := fc.configStore.Match(e.Hostname); cfg != nil {
-				observeOnly = cfg.ObserveOnly
+				e.ObserveOnly = cfg.ObserveOnly
 			}
 		}
 
-		var lastRunID string
-		var lastRunAt time.Time
-		var failurePct float64
-		var failedCount, moduleCount, changedCount int64
-		if len(e.Runs) > 0 {
-			lastRunID = e.Runs[0].ID
-			lastRunAt = e.Runs[0].StartedAt
-			failedCount = e.Runs[0].FailedCount
-			moduleCount = e.Runs[0].ModuleCount
-			changedCount = e.Runs[0].ChangedCount
-			if moduleCount > 0 {
-				failurePct = float64(failedCount) / float64(moduleCount) * 100
-			}
-		}
-
-		entry := FleetStatusEntry{
-			ID:            e.ID,
-			Hostname:      e.Hostname,
-			IPAddress:     e.IPAddress,
-			LastSeen:      lastSeen,
-			ObservedCycle: observedCycle,
-			LastSeenLabel: lastSeenLabel,
-			AgentVersion:  e.AgentVersion,
-			Status:        status,
-			Drift:         drift,
-			FailurePct:    failurePct,
-			FailedCount:   failedCount,
-			ModuleCount:   moduleCount,
-			ChangedCount:  changedCount,
-			LastRunID:     lastRunID,
-			LastRunAt:     lastRunAt,
-			Offline:       offline,
-			ObserveOnly:   observeOnly,
-		}
-		entries = append(entries, entry)
+		entries = append(entries, e)
 
 		counts.Total++
-		if offline {
+		if e.Offline {
 			counts.Offline++
 		}
-		if observeOnly {
+		if e.ObserveOnly {
 			counts.Observing++
 		}
 		// Failure axis (mutually exclusive).
-		switch convergence.ClassifyStatus(status) {
+		switch convergence.ClassifyStatus(e.Status) {
 		case convergence.StatusConverged:
 			counts.Converged++
 		case convergence.StatusDegraded:
@@ -365,10 +314,10 @@ func (fc *FleetCache) refresh() {
 			counts.NoData++
 		}
 		// Drift axis (overlapping). Diverged ⊆ Changed.
-		if drift == convergence.DriftChanged || drift == convergence.DriftDiverged {
+		if e.Drift == convergence.DriftChanged || e.Drift == convergence.DriftDiverged {
 			counts.Changed++
 		}
-		if drift == convergence.DriftDiverged {
+		if e.Drift == convergence.DriftDiverged {
 			counts.Diverged++
 		}
 	}
