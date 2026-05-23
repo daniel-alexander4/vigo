@@ -778,7 +778,7 @@ func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
 	if sc.Filecast.MaxSizeBytes == 0 && sc.Filecast.DefaultRetention == "" &&
 		sc.Lockbox.MaxFileBytes == 0 && sc.Lockbox.EnvelopeRetention == "" &&
 		sc.Gitback.MaxBundleBytes == 0 && sc.Gitback.EnvelopeRetention == "" &&
-		sc.Curator.MaxBytes == 0 && sc.Curator.RegistryPort == 0 &&
+		sc.Curator.MaxBytes == 0 && sc.Curator.LocalPort == 0 &&
 		sc.Longdrawer.MaxFileBytes == 0 {
 		return nil
 	}
@@ -791,7 +791,7 @@ func (s *AgentService) buildSwarmRuntimeLimits() *pb.SwarmRuntimeLimits {
 		GitbackEnvelopeRetentionSecs: durationSecsOrZero(sc.Gitback.EnvelopeRetention),
 		LongdrawerMaxFileBytes:       uint64(maxNonNeg(sc.Longdrawer.MaxFileBytes)),
 		CuratorMaxBytes:              uint64(maxNonNeg(sc.Curator.MaxBytes)),
-		CuratorRegistryPort:          sc.Curator.RegistryPort,
+		CuratorLocalPort:             sc.Curator.LocalPort,
 	}
 }
 

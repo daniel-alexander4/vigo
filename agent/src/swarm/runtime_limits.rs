@@ -45,7 +45,7 @@ pub struct SwarmLimits {
     pub gitback_envelope_retention_secs: Option<u64>,
     pub longdrawer_max_file_bytes: Option<u64>,
     pub curator_max_bytes: Option<u64>,
-    pub curator_registry_port: Option<u32>,
+    pub curator_local_port: Option<u32>,
 }
 
 fn cell() -> &'static RwLock<SwarmLimits> {
@@ -66,7 +66,7 @@ pub fn update_from_proto(msg: &crate::proto::SwarmRuntimeLimits) {
         gitback_envelope_retention_secs: opt_nonzero_u64(msg.gitback_envelope_retention_secs),
         longdrawer_max_file_bytes: opt_nonzero_u64(msg.longdrawer_max_file_bytes),
         curator_max_bytes: opt_nonzero_u64(msg.curator_max_bytes),
-        curator_registry_port: opt_nonzero_u32(msg.curator_registry_port),
+        curator_local_port: opt_nonzero_u32(msg.curator_local_port),
     };
     let mut w = cell().write().expect("swarm runtime limits cache poisoned");
     *w = new;
@@ -97,7 +97,7 @@ pub fn reset_for_tests() {
 /// Without this, the pre-fix code path was: a test called
 /// `update_from_proto(...)` to install non-default limits, never
 /// reset, and the next test in the same module that *read* the limits
-/// (e.g. through `curator_max_bytes()` or `curator_registry_port()`)
+/// (e.g. through `curator_max_bytes()` or `curator_local_port()`)
 /// saw the leaked value. Cargo's parallel test runner exposed it as a
 /// race: tests passed in isolation but failed when run together. The
 /// observable symptoms were `curator::helper::tests::rejects_oversize_blob`
@@ -207,13 +207,14 @@ pub fn curator_max_bytes() -> u64 {
         .unwrap_or(crate::swarm::curator::DEFAULT_MAX_BYTES)
 }
 
-/// Curator: localhost OCI Distribution v2 shim port (ADR-024 slice 7).
+/// Curator: localhost HTTP port for the agent-local facades — the OCI
+/// Distribution v2 registry shim and the apt/dnf/apk package-repo server.
 /// `None` here = the server hasn't published yet *or* the operator set
-/// `swarm.curator.registry_port: 0` to disable the shim. Callers decide
-/// whether to skip binding the listener (port disabled) or use a default
-/// (e.g. 5000) — there's no single right answer at this layer.
-pub fn curator_registry_port() -> Option<u32> {
-    current().curator_registry_port
+/// `swarm.curator.local_port: 0` to disable both. Callers decide whether to
+/// skip binding the listener (port disabled) or use a default — there's no
+/// single right answer at this layer.
+pub fn curator_local_port() -> Option<u32> {
+    current().curator_local_port
 }
 
 #[cfg(test)]
@@ -235,7 +236,7 @@ mod tests {
         );
         assert_eq!(longdrawer_max_file_bytes(), None);
         assert_eq!(curator_max_bytes(), crate::swarm::curator::DEFAULT_MAX_BYTES);
-        assert_eq!(curator_registry_port(), None);
+        assert_eq!(curator_local_port(), None);
     }
 
     #[test]
@@ -250,7 +251,7 @@ mod tests {
             gitback_envelope_retention_secs: 500,
             longdrawer_max_file_bytes: 600,
             curator_max_bytes: 700,
-            curator_registry_port: 5050,
+            curator_local_port: 5050,
         });
         assert_eq!(lockbox_max_file_bytes(), 200);
         assert_eq!(lockbox_envelope_retention_secs(), 300);
@@ -258,7 +259,7 @@ mod tests {
         assert_eq!(gitback_envelope_retention_secs(), 500);
         assert_eq!(longdrawer_max_file_bytes(), Some(600));
         assert_eq!(curator_max_bytes(), 700);
-        assert_eq!(curator_registry_port(), Some(5050));
+        assert_eq!(curator_local_port(), Some(5050));
         assert_eq!(current().filecast_max_size_bytes, Some(100));
         assert_eq!(current().filecast_default_retention.as_deref(), Some("30d"));
     }
@@ -275,7 +276,7 @@ mod tests {
             gitback_envelope_retention_secs: 0,
             longdrawer_max_file_bytes: 0,
             curator_max_bytes: 0,
-            curator_registry_port: 0,
+            curator_local_port: 0,
         });
         // Zero / empty server values become None internally — read
         // helpers return their compile-time defaults.
@@ -287,6 +288,6 @@ mod tests {
         assert_eq!(curator_max_bytes(), crate::swarm::curator::DEFAULT_MAX_BYTES);
         // Port 0 means "disabled" — distinct from "unset". Both surface
         // as None to callers; they decide whether to bind a default.
-        assert_eq!(curator_registry_port(), None);
+        assert_eq!(curator_local_port(), None);
     }
 }

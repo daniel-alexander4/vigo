@@ -8,9 +8,9 @@
 //!
 //! `image:` references a normal registry URL. `artifact:` references a curator
 //! artifact (ADR-024) and routes the pull through the local Docker Registry v2
-//! shim on `127.0.0.1:<curator_registry_port>/<repo>:<tag>`. The two are
+//! shim on `127.0.0.1:<curator_local_port>/<repo>:<tag>`. The two are
 //! mutually exclusive; the shim port must be enabled via
-//! `swarm.curator.registry_port` for `artifact:` to work.
+//! `swarm.curator.local_port` for `artifact:` to work.
 
 use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
 use std::collections::HashMap;
@@ -273,12 +273,12 @@ impl Executor for ContainerExecutor {
         // Resolve `artifact:` (curator) to a registry-shim URL up front so
         // the rest of the executor speaks a single `image` string.
         let image = if !artifact_param.is_empty() {
-            let port = match crate::swarm::runtime_limits::curator_registry_port() {
+            let port = match crate::swarm::runtime_limits::curator_local_port() {
                 Some(p) => p,
                 None => {
                     result.error = Some(
                         "container executor: `artifact:` requires the curator registry shim — \
-                         set `swarm.curator.registry_port` to a non-zero value in server.yaml"
+                         set `swarm.curator.local_port` to a non-zero value in server.yaml"
                             .into(),
                     );
                     result.duration_ms = start.elapsed().as_millis() as i32;
@@ -895,7 +895,7 @@ mod tests {
         assert!(result.error.is_some());
         let msg = result.error.as_deref().unwrap();
         assert!(
-            msg.contains("curator registry shim") && msg.contains("registry_port"),
+            msg.contains("curator registry shim") && msg.contains("local_port"),
             "unexpected error: {}",
             msg
         );
@@ -913,7 +913,7 @@ mod tests {
             gitback_envelope_retention_secs: 0,
             longdrawer_max_file_bytes: 0,
             curator_max_bytes: 0,
-            curator_registry_port: 5050,
+            curator_local_port: 5050,
         });
         // inspect (not exists) → pull (shim URL) → create → start
         let mock = MockRunner::new(vec![

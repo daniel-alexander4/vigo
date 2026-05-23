@@ -5,7 +5,7 @@
 //!
 //! Bind decision lives in two places:
 //!
-//! 1. The server publishes `swarm.curator.registry_port` on every CheckIn (zero
+//! 1. The server publishes `swarm.curator.local_port` on every CheckIn (zero
 //!    = disabled; non-zero = bind on `127.0.0.1:<port>`).
 //! 2. This supervisor polls the cached value every [`SUPERVISOR_TICK`] and
 //!    starts / restarts / stops the listener as the published port changes —
@@ -34,7 +34,7 @@ use super::routes::{handle, ShimState};
 const SUPERVISOR_TICK: Duration = Duration::from_secs(5);
 
 /// Spawn-target for `curator::spawn`. Watches
-/// [`crate::swarm::runtime_limits::curator_registry_port`] and (re)spawns the
+/// [`crate::swarm::runtime_limits::curator_local_port`] and (re)spawns the
 /// HTTP accept loop when the value changes. Returns only when the parent
 /// `cancel` is fired.
 pub async fn run_supervisor(cancel: CancellationToken) {
@@ -60,7 +60,7 @@ pub async fn run_supervisor(cancel: CancellationToken) {
             _ = tokio::time::sleep(SUPERVISOR_TICK) => {}
         }
 
-        let desired = crate::swarm::runtime_limits::curator_registry_port()
+        let desired = crate::swarm::runtime_limits::curator_local_port()
             .and_then(|p| if p > 0 && p <= u16::MAX as u32 { Some(p as u16) } else { None });
 
         if current_port == desired {
@@ -164,7 +164,7 @@ mod tests {
             gitback_envelope_retention_secs: 0,
             longdrawer_max_file_bytes: 0,
             curator_max_bytes: 0,
-            curator_registry_port: port as u32,
+            curator_local_port: port as u32,
         });
 
         let cancel = CancellationToken::new();

@@ -185,7 +185,7 @@ This is opportunistic. You never have to publish `vigo-agent` for the fleet to u
 
 ### Pulling container images through curator
 
-When `swarm.curator.registry_port` is set to a non-zero value in `server.yaml`, the agent exposes a local OCI Distribution v2 shim on `127.0.0.1:<port>` that serves curator artifacts as a Docker registry. That means a `container:` resource can use `artifact:` instead of `image:`:
+When `swarm.curator.local_port` is set to a non-zero value in `server.yaml`, the agent exposes a local OCI Distribution v2 shim on `127.0.0.1:<port>` that serves curator artifacts as a Docker registry. That means a `container:` resource can use `artifact:` instead of `image:`:
 
 ```yaml
 - name: redis-cache
@@ -198,7 +198,41 @@ When `swarm.curator.registry_port` is set to a non-zero value in `server.yaml`, 
   restart: unless-stopped
 ```
 
-The agent translates `artifact: <ns>/<name>:<tag>` to `docker pull 127.0.0.1:<port>/<ns>/<name>:<tag>` at apply time. To publish container images, push them as OCI archives (`docker save --format=oci`) and `vigo swarm curator push` them like any other artifact. `image:` (a normal registry reference) and `artifact:` are mutually exclusive — pick one per resource. See [`container`](../reference/vigo/resources/container.md) for the full parameter surface.
+The agent translates `artifact: <ns>/<name>:<tag>` to `docker pull 127.0.0.1:<port>/<ns>/<name>:<tag>` at apply time. To publish container images, push them as OCI archives (`docker save --format=oci`) with `--kind oci-archive`, and `vigo swarm curator push` them like any other artifact. `image:` (a normal registry reference) and `artifact:` are mutually exclusive — pick one per resource. See [`container`](../reference/vigo/resources/container.md) for the full parameter surface.
+
+### Hosting a private package repository
+
+The same `swarm.curator.local_port` listener also serves a **package-repo facade** at `http://127.0.0.1:<port>/repo/<name>/…` — a private apt/dnf/apk repository, distributed P2P, with no repo server (no Aptly, reprepro, Pulp, or nginx). Use it to host *your own* `.deb`/`.rpm`/`.apk` packages — in-house builds, vendored third-party, air-gapped sets. (Pointing hosts at an *upstream* distro repo stays the [`repository`](../reference/vigo/resources/repository.md) resource's job; this is for repos *you* publish.)
+
+**Publish.** Build and GPG-sign the repo tree with the standard tools (`dpkg-scanpackages` / `apt-ftparchive` + `gpg` for Debian; `createrepo_c` + `gpg` for RPM), pack it as a **plain, uncompressed `.tar`**, and push it as a curator artifact of kind `apt-repo` (or `dnf-repo` / `apk-repo`):
+
+```sh
+# ./acme-repo/ holds a built + signed Debian repo tree. Include the public
+# signing key as a file in the tree (e.g. ./acme-repo/key.asc) so consumers
+# can fetch it from the same facade.
+tar -cf acme-repo.tar -C acme-repo .
+
+vigo swarm curator push acme-repo \
+    --file acme-repo.tar --version 2026-05-22 --tag latest \
+    --os linux --arch all \
+    --kind apt-repo
+```
+
+`--kind` is set once at first publish and is immutable. A repo tarball is architecture-agnostic (one tree holds every `binary-*`), so `--os linux --arch all` is just a placeholder — the facade ignores it. apt/dnf/apk URLs carry no tag, so the facade always serves the `latest` tag.
+
+**Consume.** Point a `repository` resource at the facade — no new resource type, the existing one already imports a signing key and writes the source entry:
+
+```yaml
+- name: acme-internal
+  type: repository
+  repository: acme-internal
+  repo: "deb http://127.0.0.1:5000/repo/alexander4/acme-repo stable main"
+  key_url: "http://127.0.0.1:5000/repo/alexander4/acme-repo/key.asc"
+```
+
+From there it is native `apt`: `apt update` then `apt install <your-package>` resolves dependencies and pulls `.deb`s from the curator-hosted repo. `dnf` and `apk` work the same way against a `dnf-repo` / `apk-repo` artifact. Pointing an `apt` host at a `dnf-repo` (or vice versa) fails fast with a clear kind-mismatch error rather than a confusing 404.
+
+**Caveat.** A repo is one tarball artifact — adding a package means rebuilding and re-publishing the whole repo as a new artifact version. Fine for modest private repos; raise `swarm.curator.max_bytes` for large ones.
 
 ### Where to look when it doesn't work
 
@@ -215,6 +249,6 @@ The agent translates `artifact: <ns>/<name>:<tag>` to `docker pull 127.0.0.1:<po
 - **`pull` hangs or sha-mismatches** → [Troubleshoot common issues](troubleshoot.md).
 
 ---
-*Verified on Vigo 0.51.8 · 2026-05-13.*
+*Verified on Vigo 0.66.26 · 2026-05-22.*
 
 *Confidential — Alexander4, LLC. Not for redistribution. See [../legal/license.md](../legal/license.md).*

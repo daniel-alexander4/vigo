@@ -228,9 +228,9 @@ type GitbackSection struct {
 // gitback: publishing also requires a usercrate `curator: true` flag
 // and an unlocked puddle.
 type CuratorSection struct {
-	Enabled      []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run curator — publishers and artifact-blob holders." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
-	MaxBytes     int64    `yaml:"max_bytes" doc:"Per-blob (one {name,version,os,arch} artifact) size cap, in bytes, enforced on the publish path. 0 / unset = the 2 GiB compile-time default. There is no uncapped mode." default:"2147483648" example:"2147483648 (2 GiB), 5368709120 (5 GiB), 21474836480 (20 GiB, large container images)"`
-	RegistryPort uint32   `yaml:"registry_port" doc:"Localhost-only OCI Distribution v2 registry shim port (ADR-024 slice 7). Lets 'docker pull 127.0.0.1:<port>/<puddle-name>/<artifact>:<tag>' and docker-compose 'image:' references work against curator-published OCI archives. 0 (or unset) disables the shim; set to 5000 (the conventional registry port) or any free port to enable. The agent binds 127.0.0.1 only — never an external interface." default:"0" example:"5000, 5050, 0 (disable the shim entirely)"`
+	Enabled   []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run curator — publishers and artifact-blob holders." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\", \"girlslaptop\"]"`
+	MaxBytes  int64    `yaml:"max_bytes" doc:"Per-blob (one {name,version,os,arch} artifact) size cap, in bytes, enforced on the publish path. 0 / unset = the 2 GiB compile-time default. There is no uncapped mode." default:"2147483648" example:"2147483648 (2 GiB), 5368709120 (5 GiB), 21474836480 (20 GiB, large container images)"`
+	LocalPort uint32   `yaml:"local_port" doc:"Localhost-only HTTP port for curator's agent-local facades — the OCI Distribution v2 registry shim ('docker pull 127.0.0.1:<port>/<puddle-name>/<artifact>:<tag>', docker-compose 'image:') and the apt/dnf/apk package-repository server ('http://127.0.0.1:<port>/repo/<name>/...', consumed by a 'repository' resource). 0 (or unset) disables both facades; set to 5000 or any free port to enable. The agent binds 127.0.0.1 only — never an external interface." default:"0" example:"5000, 5050, 0 (disable)"`
 }
 
 // LongdrawerSection authorizes the longdrawer subsystem per envoy

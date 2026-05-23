@@ -14,7 +14,7 @@ Manages containers idempotently against a local container runtime. Docker today;
 
 ### Curator-backed images
 
-For `artifact:`, the operator must opt the envoy into the curator registry shim by setting `swarm.curator.registry_port` to a non-zero value in `server.yaml`. `artifact:` accepts the same value forms as the `artifact:` param on `nonrepo_package` and `source_package`:
+For `artifact:`, the operator must opt the envoy into the curator registry shim by setting `swarm.curator.local_port` to a non-zero value in `server.yaml`. `artifact:` accepts the same value forms as the `artifact:` param on `nonrepo_package` and `source_package`:
 
 | Form | Example |
 |------|---------|

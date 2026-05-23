@@ -87,7 +87,7 @@ const SENTINEL_SCAN_INTERVAL: std::time::Duration = std::time::Duration::from_se
 ///
 /// - **Helper daemon** ([`helper::run`]) — listens on `/var/run/vigo/curator.sock`; validates a re-signed [`catalog::CatalogEntry`] + the blob bytes pushed by a `curator: true` user, stages the blob into the swarm cache, records a `Manifest` entry with the artifact's `target`, and drops the entry as `~<user>/.vigo-curator/<artifact_id>/entry.json.pending`.
 /// - **Sentinel reactor** ([`run_sentinel_reactor`]) — periodically re-verifies each `entry.json.pending` and promotes it (last-write-wins on `issued_at`) to `entry.json`, the single canonical copy the `swarm_curator` trait collector reads.
-/// - **Registry shim supervisor** ([`registry::listener::run_supervisor`], ADR-024 slice 7) — watches the server-published `swarm.curator.registry_port` cap and binds `127.0.0.1:<port>` to the Docker Registry v2 surface in [`registry::routes`]. Disabled (no listener) when the server-side port is 0 / unset; re-binds when the operator flips the value at runtime.
+/// - **Registry shim supervisor** ([`registry::listener::run_supervisor`], ADR-024 slice 7) — watches the server-published `swarm.curator.local_port` cap and binds `127.0.0.1:<port>` to the Docker Registry v2 surface in [`registry::routes`]. Disabled (no listener) when the server-side port is 0 / unset; re-binds when the operator flips the value at runtime.
 ///
 /// `envoy_id` is this envoy's enrollment id (used as the manifest seeder id);
 /// `manifest` is the shared swarm manifest CRDT.

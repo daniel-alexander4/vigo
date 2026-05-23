@@ -105,12 +105,22 @@ impl OciArchive {
     }
 
     fn read_entry(&self, name: &str) -> Result<Vec<u8>> {
-        let f = File::open(&self.path)
-            .with_context(|| format!("opening {}", self.path.display()))?;
-        read_named_entry(f, name)
-            .with_context(|| format!("looking up {name} in {}", self.path.display()))?
+        read_tar_file(&self.path, name)?
             .ok_or_else(|| anyhow!("entry {name} not found in {}", self.path.display()))
     }
+}
+
+/// Read a file by its exact path from a plain (uncompressed) tar archive on
+/// disk. `Ok(None)` when the path isn't in the archive. The generic kernel
+/// under [`OciArchive`]'s blob reads and the curator package-repo facade
+/// ([`super::repo`]) — the OCI shim addresses entries by `blobs/sha256/<hex>`,
+/// the repo facade by arbitrary repo-tree paths (`dists/stable/InRelease`, …),
+/// but both are "find one named entry and hand back its bytes".
+pub(crate) fn read_tar_file(tarball: &Path, inner_path: &str) -> Result<Option<Vec<u8>>> {
+    let f = File::open(tarball)
+        .with_context(|| format!("opening {}", tarball.display()))?;
+    read_named_entry(f, inner_path)
+        .with_context(|| format!("looking up {inner_path} in {}", tarball.display()))
 }
 
 fn format_of<R: Read>(reader: R) -> Result<ArchiveFormat> {

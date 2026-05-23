@@ -74,13 +74,25 @@ pub async fn handle(
     let method = req.method().clone();
     let path = req.uri().path().to_string();
     let resp = route(&method, &path, &state).await;
-    Ok(with_common_headers(resp))
+    // The Docker-Distribution-API-Version sentinel belongs only on the v2
+    // registry shim's responses; the package-repo facade speaks plain HTTP.
+    let resp = if path.starts_with("/v2") {
+        with_common_headers(resp)
+    } else {
+        resp
+    };
+    Ok(resp)
 }
 
 async fn route(method: &Method, path: &str, state: &ShimState) -> Response<Full<Bytes>> {
     let head_only = method == Method::HEAD;
     if method != Method::GET && method != Method::HEAD {
         return method_not_allowed();
+    }
+
+    // `/repo/*` → the package-repo facade; `/v2/*` → the Docker shim.
+    if let Some(rest) = path.strip_prefix("/repo/") {
+        return super::repo::handle(rest, state, head_only).await;
     }
 
     match parse_v2_path(path) {
@@ -159,21 +171,21 @@ fn require_oci_entry(
     repo: &str,
     aid_hex: &str,
     state: &ShimState,
-) -> Result<CatalogEntry, Response<Full<Bytes>>> {
+) -> Result<CatalogEntry, Box<Response<Full<Bytes>>>> {
     let entries = catalog_cache::load_catalog_in(state.resolver.artifacts_dir());
     let entry = match catalog_cache::lookup_verified(&entries, aid_hex) {
         Some(e) => e.clone(),
-        None => return Err(name_unknown(repo, "no verifiable cached catalog entry")),
+        None => return Err(Box::new(name_unknown(repo, "no verifiable cached catalog entry"))),
     };
     if entry.body.kind != KIND_OCI_ARCHIVE {
-        return Err(name_unknown(
+        return Err(Box::new(name_unknown(
             repo,
             &format!(
                 "artifact is kind `{}`, not `oci-archive` — the Docker registry shim \
                  serves only OCI image artifacts",
                 entry.body.kind
             ),
-        ));
+        )));
     }
     Ok(entry)
 }
@@ -190,7 +202,7 @@ async fn handle_manifest(
         Err(e) => return name_unknown(repo, &format!("{e:#}")),
     };
     if let Err(resp) = require_oci_entry(repo, &aid_hex, state) {
-        return resp;
+        return *resp;
     }
     let (os, arch) = current_platform();
 
@@ -276,7 +288,7 @@ async fn handle_blob(
     };
     let entry = match require_oci_entry(repo, &aid_hex, state) {
         Ok(e) => e,
-        Err(resp) => return resp,
+        Err(resp) => return *resp,
     };
     let (os, arch) = current_platform();
 
@@ -330,7 +342,7 @@ async fn handle_tags(repo: &str, state: &ShimState, head_only: bool) -> Response
     };
     let entry = match require_oci_entry(repo, &aid_hex, state) {
         Ok(e) => e,
-        Err(resp) => return resp,
+        Err(resp) => return *resp,
     };
 
     #[derive(Serialize)]
