@@ -397,6 +397,7 @@ watcher:
 #     enabled: ["*"]
 #     max_bytes: 2147483648                     # 2 GiB per-blob cap. 0 = the 2 GiB compile-time default; raise for large container images.
 #     local_port: 5000                          # Localhost-only HTTP port for curator's agent-local facades — the OCI Distribution v2 registry shim (`docker pull 127.0.0.1:5000/<puddle-name>/<artifact>:<tag>`, docker-compose `image:`) and the apt/dnf/apk package-repository server (`http://127.0.0.1:5000/repo/<name>/...`, consumed by a `repository` resource). 0 (or unset) disables both facades; set to 5000 or any free port to enable. The agent binds 127.0.0.1 only — never an external interface.
+#     s3_port: 9000                             # HTTPS port for the read-only S3-compatible object API (ADR-027) — lets non-envoy S3 clients (CI runners, dev laptops, `aws s3 cp`) fetch curator artifacts. 0 (or unset) disables it. SigV4-authenticated against credentials minted by `vigocli swarm curator s3-credentials`; reuses the server TLS material. Requires the `local` secrets backend.
 #
 #   # hostdox — when true, each swarm-enabled agent maintains a
 #   # delimited block in /etc/hosts mapping every announced peer hostname to

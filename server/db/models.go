@@ -114,6 +114,13 @@ type CuratorBlockedArtifact struct {
 	Reason     string    `json:"reason"`
 }
 
+type CuratorS3Credential struct {
+	AccessKeyID string    `json:"access_key_id"`
+	Scope       string    `json:"scope"`
+	Name        string    `json:"name"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type CveCvssCache struct {
 	CveID       string    `json:"cve_id"`
 	CvssScore   float64   `json:"cvss_score"`
