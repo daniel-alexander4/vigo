@@ -1310,7 +1310,11 @@ func tracePathTree(levels []config.InheritanceLevel, waiverFiles []string) templ
 	}
 
 	for i, dl := range dirLevels {
-		color := traceGreenText(i, total)
+		// traceGreenText emits the --tc-l/--tc-d custom-property pair; the
+		// .trace-path-line CSS rule turns it into a themed color, the same
+		// indirection the trace cards use. (Do not interpolate it into
+		// `color:` directly — it is not a color value.)
+		tcStyle := traceGreenText(i, total)
 
 		depth := 0
 		if dl.dir != "" {
@@ -1322,12 +1326,12 @@ func tracePathTree(levels []config.InheritanceLevel, waiverFiles []string) templ
 			parts := strings.Split(dl.dir, "/")
 			dirName := parts[len(parts)-1]
 			parentIndent := indent(depth - 1)
-			fmt.Fprintf(&b, `<div style="color:%s;font-weight:700;">%s└── %s</div>`, color, parentIndent, template.HTMLEscapeString(dirName))
+			fmt.Fprintf(&b, `<div class="trace-path-line" style="%s;">%s└── %s</div>`, tcStyle, parentIndent, template.HTMLEscapeString(dirName))
 		}
 
 		// Print root header.
 		if i == 0 && dl.dir == "" {
-			fmt.Fprintf(&b, `<div style="color:%s;font-weight:700;">● .live</div>`, color)
+			fmt.Fprintf(&b, `<div class="trace-path-line" style="%s;">● .live</div>`, tcStyle)
 		}
 
 		// Print files at this level.
@@ -1338,12 +1342,12 @@ func tracePathTree(levels []config.InheritanceLevel, waiverFiles []string) templ
 			if isLast {
 				connector = "└── "
 			}
-			fmt.Fprintf(&b, `<div style="color:%s;font-weight:700;">%s%s%s</div>`, color, ind, connector, template.HTMLEscapeString(file))
+			fmt.Fprintf(&b, `<div class="trace-path-line" style="%s;">%s%s%s</div>`, tcStyle, ind, connector, template.HTMLEscapeString(file))
 		}
 
 		// Vertical connector to next level.
 		if dl.hasChild {
-			fmt.Fprintf(&b, `<div style="color:%s;">%s│</div>`, color, ind)
+			fmt.Fprintf(&b, `<div class="trace-path-line" style="%s;">%s│</div>`, tcStyle, ind)
 		}
 	}
 

@@ -340,3 +340,28 @@ func TestRender_EnvoyTrace(t *testing.T) {
 		t.Error("envoy-trace render is incomplete — missing </html> (template aborted mid-render)")
 	}
 }
+
+// TestTracePathTree_ThemedColor pins that the Path Inheritance tree colors
+// itself the way the rest of the trace page does: each line carries the
+// --tc-* custom-property pair in its style and the .trace-path-line class
+// that resolves it per theme. The bug it guards: traceGreenText returns a
+// custom-property pair, not a color — interpolating it into `color:` yields
+// malformed CSS and the tree falls back to the inherited default.
+func TestTracePathTree_ThemedColor(t *testing.T) {
+	out := string(tracePathTree([]config.InheritanceLevel{
+		{Dir: "", File: "common.vgo"},
+		{Dir: "alexander4", File: "common.vgo"},
+	}, nil))
+	if out == "" {
+		t.Fatal("tracePathTree returned empty for non-empty levels")
+	}
+	if !strings.Contains(out, `class="trace-path-line"`) {
+		t.Errorf("tracePathTree output missing the .trace-path-line class:\n%s", out)
+	}
+	if !strings.Contains(out, "--tc-") {
+		t.Errorf("tracePathTree output missing the --tc-* custom properties:\n%s", out)
+	}
+	if strings.Contains(out, "color:--tc") {
+		t.Errorf("tracePathTree emits malformed CSS — color set to a custom-property pair:\n%s", out)
+	}
+}

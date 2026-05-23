@@ -3719,6 +3719,10 @@ html.theme-dark .trace-card { border-left-color: var(--tb-d, var(--trace-gray));
 }
 .trace-card__file { font-weight: 700; color: var(--tc-l, var(--trace-text)); }
 html.theme-dark .trace-card__file { color: var(--tc-d, var(--trace-text)); }
+/* One line of the Path Inheritance tree. Carries the --tc-l/--tc-d pair
+   inline (from traceGreenText); these rules resolve it to a themed color. */
+.trace-path-line { font-weight: 700; color: var(--tc-l, var(--trace-text)); }
+html.theme-dark .trace-path-line { color: var(--tc-d, var(--trace-text)); }
 .trace-card__badge {
     display: inline-block;
     padding: 1px 6px;
