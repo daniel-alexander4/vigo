@@ -8,36 +8,37 @@ set -euo pipefail
 #   sudo scripts/upgrade.sh [components...] [--norun] [--push]
 #
 # Components — presence-based: name it to build it, omit it to skip it.
-#   ui       Rebuild vigosrv and hot-swap it into the running container.
-#            Fast; ephemeral (a container recreate reverts it). For UI /
-#            handler / API changes — no agent rebuild.
-#   server   Full Docker image rebuild (vigosrv + vigocli + amd64 agent),
-#            redeploy from the new image. Durable; installs host vigocli.
-#   amd64    Cross-compile the linux/amd64 agent, inject it into the
-#            running container.
-#   arm64    Cross-compile the linux/arm64 agent, inject it.
+#   server-only  Rebuild vigosrv and hot-swap it into the running
+#                container. Fast; ephemeral (a container recreate reverts
+#                it). For UI / handler / API changes — no agent rebuild.
+#   full         Full Docker image rebuild (vigosrv + vigocli + amd64
+#                agent), redeploy from the new image. Durable; installs
+#                host vigocli.
+#   amd64        Cross-compile the linux/amd64 agent, inject it into the
+#                running container.
+#   arm64        Cross-compile the linux/arm64 agent, inject it.
 #   (darwin / freebsd / windows are also accepted as agent cross-targets.)
 #
 # Modifiers:
 #   --norun  Build/swap but do not restart or redeploy the container.
-#   --push   Push the rebuilt image to the registry (requires `server`).
+#   --push   Push the rebuilt image to the registry (requires `full`).
 #
 # Rules:
-#   - No components  → defaults to `server amd64 arm64` (full durable build).
-#   - `server` already rebuilds vigosrv and the amd64 agent (the Dockerfile
-#     rust-builder stage), so `ui` and `amd64` are deduped when `server` is
-#     present.
-#   - `server` does NOT rebuild arm64 — it bakes whatever is in
+#   - No components  → defaults to `full amd64 arm64` (full durable build).
+#   - `full` already rebuilds vigosrv and the amd64 agent (the Dockerfile
+#     rust-builder stage), so `server-only` and `amd64` are deduped when
+#     `full` is present.
+#   - `full` does NOT rebuild arm64 — it bakes whatever is in
 #     dist/agent/linux/arm64/ and warns if that is stale. Add `arm64` to
 #     refresh it in the same build.
 #   - Unknown arguments are rejected.
 #
 # Examples:
-#   sudo scripts/upgrade.sh ui              # fast vigosrv hot-swap
-#   sudo scripts/upgrade.sh server arm64    # full image with a fresh arm64
+#   sudo scripts/upgrade.sh server-only     # fast vigosrv hot-swap
+#   sudo scripts/upgrade.sh full arm64      # full image with a fresh arm64
 #   sudo scripts/upgrade.sh arm64           # cross-compile + inject arm64
-#   sudo scripts/upgrade.sh                 # = server amd64 arm64
-#   sudo scripts/upgrade.sh server --push   # full image, push to registry
+#   sudo scripts/upgrade.sh                 # = full amd64 arm64
+#   sudo scripts/upgrade.sh full --push     # full image, push to registry
 
 DATA_DIR="/srv/vigo"
 IMAGE="us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest"
@@ -62,17 +63,17 @@ usage() {
 Usage: sudo scripts/upgrade.sh [components...] [--norun] [--push]
 
 Components (name it to build it, omit it to skip it):
-  ui       hot-swap vigosrv into the running container (fast, ephemeral)
-  server   full Docker image rebuild + redeploy (durable; rebuilds amd64 agent)
-  amd64    cross-compile + inject the linux/amd64 agent
-  arm64    cross-compile + inject the linux/arm64 agent
-           (darwin / freebsd / windows are also accepted)
+  server-only  hot-swap vigosrv into the running container (fast, ephemeral)
+  full         full Docker image rebuild + redeploy (durable; rebuilds amd64 agent)
+  amd64        cross-compile + inject the linux/amd64 agent
+  arm64        cross-compile + inject the linux/arm64 agent
+               (darwin / freebsd / windows are also accepted)
 
 Modifiers:
   --norun  build/swap but do not restart the container
-  --push   push the rebuilt image to the registry (requires `server`)
+  --push   push the rebuilt image to the registry (requires `full`)
 
-No components → defaults to `server amd64 arm64`.
+No components → defaults to `full amd64 arm64`.
 EOF
 }
 
@@ -114,8 +115,8 @@ inject_with_sidecar() {
 # Parse arguments
 # ---------------------------------------------------------------------------
 
-DO_UI=false
-DO_SERVER=false
+DO_SERVERONLY=false
+DO_FULL=false
 DO_AMD64=false
 DO_ARM64=false
 DO_DARWIN=false
@@ -127,15 +128,15 @@ n_components=0
 
 for arg in "$@"; do
     case "$arg" in
-        ui)       DO_UI=true;      n_components=$((n_components + 1)) ;;
-        server)   DO_SERVER=true;  n_components=$((n_components + 1)) ;;
-        amd64)    DO_AMD64=true;   n_components=$((n_components + 1)) ;;
-        arm64)    DO_ARM64=true;   n_components=$((n_components + 1)) ;;
-        darwin)   DO_DARWIN=true;  n_components=$((n_components + 1)) ;;
-        freebsd)  DO_FREEBSD=true; n_components=$((n_components + 1)) ;;
-        windows)  DO_WINDOWS=true; n_components=$((n_components + 1)) ;;
-        --norun)  START=false ;;
-        --push)   PUSH=true ;;
+        server-only) DO_SERVERONLY=true; n_components=$((n_components + 1)) ;;
+        full)        DO_FULL=true;       n_components=$((n_components + 1)) ;;
+        amd64)       DO_AMD64=true;      n_components=$((n_components + 1)) ;;
+        arm64)       DO_ARM64=true;      n_components=$((n_components + 1)) ;;
+        darwin)      DO_DARWIN=true;     n_components=$((n_components + 1)) ;;
+        freebsd)     DO_FREEBSD=true;    n_components=$((n_components + 1)) ;;
+        windows)     DO_WINDOWS=true;    n_components=$((n_components + 1)) ;;
+        --norun)     START=false ;;
+        --push)      PUSH=true ;;
         *)
             echo "ERROR: unknown argument: $arg" >&2
             echo "" >&2
@@ -147,26 +148,26 @@ done
 
 # No components → full durable build.
 if [ "$n_components" -eq 0 ]; then
-    DO_SERVER=true
+    DO_FULL=true
     DO_AMD64=true
     DO_ARM64=true
 fi
 
 # --push only means something with an image rebuild.
-if $PUSH && ! $DO_SERVER; then
-    echo "ERROR: --push requires the 'server' component — nothing to push otherwise." >&2
+if $PUSH && ! $DO_FULL; then
+    echo "ERROR: --push requires the 'full' component — nothing to push otherwise." >&2
     exit 1
 fi
 
-# `server` already rebuilds vigosrv (→ ui) and recompiles the amd64 agent
-# in-image (Dockerfile.server's rust-builder stage), so a standalone `ui` or
-# `amd64` step would be redundant — dedupe them silently.
-if $DO_SERVER; then
-    DO_UI=false
+# `full` already rebuilds vigosrv (→ server-only) and recompiles the amd64
+# agent in-image (Dockerfile.server's rust-builder stage), so a standalone
+# `server-only` or `amd64` step would be redundant — dedupe them silently.
+if $DO_FULL; then
+    DO_SERVERONLY=false
     DO_AMD64=false
 fi
 
-# Agent cross-compile targets. amd64 is absent here whenever `server` is set
+# Agent cross-compile targets. amd64 is absent here whenever `full` is set
 # (built in-image); arm64/darwin/freebsd/windows always need an explicit
 # cross-compile to reach dist/agent/.
 CROSS_TARGETS=()
@@ -394,7 +395,7 @@ grep -aoE -m1 'VIGO-BUILD-VERSION=[0-9.]+' /build/dist/agent/linux/arm64/vigo | 
 fi
 
 # ---------------------------------------------------------------------------
-# Stage a self-contained Docker build context (shared by `ui` and `server`)
+# Stage a self-contained Docker build context (shared by `server-only` and `full`)
 # ---------------------------------------------------------------------------
 #
 # vigo's go.mod has `replace git.alexander4.io/tessera => ../tessera`, but a
@@ -402,7 +403,7 @@ fi
 # copies vigo + tessera into a temp dir and rewrites the replace directive.
 
 STAGE_DIR=""
-if $DO_UI || $DO_SERVER; then
+if $DO_SERVERONLY || $DO_FULL; then
     STAGE_DIR="$(mktemp -d -t vigo-build-XXXXXX)"
     trap 'rm -rf "$STAGE_DIR"' EXIT
     echo "Staging Docker build context at $STAGE_DIR (includes tessera)..."
@@ -410,7 +411,7 @@ if $DO_UI || $DO_SERVER; then
 fi
 
 # ---------------------------------------------------------------------------
-# ui — hot-swap vigosrv into the running container
+# server-only — hot-swap vigosrv into the running container
 # ---------------------------------------------------------------------------
 #
 # The UI templates + CSS are //go:embed'd into vigosrv, so a UI change means
@@ -418,12 +419,12 @@ fi
 # (same prod build environment + flags; `--target go-builder` skips the Rust
 # stage entirely) and docker-cp it over the running container's vigosrv.
 # Ephemeral: a container recreate (docker compose up) reverts to the image's
-# binary — that's `server`'s job.
+# binary — that's `full`'s job.
 
-if $DO_UI; then
+if $DO_SERVERONLY; then
     if ! docker ps -q -f name=vigo | grep -q .; then
-        echo "ERROR: the vigo container is not running — 'ui' hot-swaps vigosrv into it." >&2
-        echo "       Start it with 'docker compose up -d', or run 'upgrade.sh server'." >&2
+        echo "ERROR: the vigo container is not running — 'server-only' hot-swaps vigosrv into it." >&2
+        echo "       Start it with 'docker compose up -d', or run 'upgrade.sh full'." >&2
         exit 1
     fi
     echo "Building vigosrv (go-builder stage)..."
@@ -439,10 +440,10 @@ if $DO_UI; then
 fi
 
 # ---------------------------------------------------------------------------
-# server — full Docker image rebuild + redeploy
+# full — full Docker image rebuild + redeploy
 # ---------------------------------------------------------------------------
 
-if $DO_SERVER; then
+if $DO_FULL; then
     # The image build COPYs the host's dist/agent/ tree in (Dockerfile.server)
     # and recompiles only the amd64 agent in its rust-builder stage. arm64 is
     # baked from dist/ as-is — warn if it's stale, but proceed (the operator
@@ -455,12 +456,12 @@ if $DO_SERVER; then
             if [ -n "$repo_v" ] && [ -n "$arm_v" ] && [ "$arm_v" != "$repo_v" ]; then
                 echo "WARNING: dist/agent/linux/arm64 is $arm_v, repo VERSION is $repo_v —"
                 echo "         the image will bake this stale arm64 agent and arm64 envoys"
-                echo "         will lag. Re-run as 'upgrade.sh server arm64' to refresh it."
+                echo "         will lag. Re-run as 'upgrade.sh full arm64' to refresh it."
                 echo ""
             fi
         else
             echo "WARNING: no dist/agent/linux/arm64/vigo — the image will ship no arm64"
-            echo "         agent. Run 'upgrade.sh server arm64' if you have arm64 envoys."
+            echo "         agent. Run 'upgrade.sh full arm64' if you have arm64 envoys."
             echo ""
         fi
     fi
@@ -516,12 +517,12 @@ fi
 # Inject cross-compiled agent binaries into the running container
 # ---------------------------------------------------------------------------
 #
-# Only when NOT rebuilding the image — a `server` build bakes the dist tree
+# Only when NOT rebuilding the image — a `full` build bakes the dist tree
 # in via COPY (and recompiles amd64 in-Dockerfile), so an inject would be
 # redundant. Must run while the container is up; the restart below makes the
 # server re-read the injected .version sidecars.
 
-if [ ${#CROSS_TARGETS[@]} -gt 0 ] && ! $DO_SERVER && docker ps -q -f name=vigo | grep -q .; then
+if [ ${#CROSS_TARGETS[@]} -gt 0 ] && ! $DO_FULL && docker ps -q -f name=vigo | grep -q .; then
     echo "Injecting cross-compiled agent binaries into the container..."
     for t in "${CROSS_TARGETS[@]}"; do
         case "$t" in
@@ -566,14 +567,15 @@ if [ ${#CROSS_TARGETS[@]} -gt 0 ] && ! $DO_SERVER && docker ps -q -f name=vigo |
 fi
 
 # ---------------------------------------------------------------------------
-# Activate non-server swaps (ui hot-swap / agent inject)
+# Activate non-full swaps (server-only hot-swap / agent inject)
 # ---------------------------------------------------------------------------
 #
 # A swapped vigosrv binary or injected agent does nothing until vigosrv
 # restarts — it re-execs the new binary and re-reads the agent .version
-# sidecars. `server` already redeployed above, so this is non-server only.
+# sidecars. `full` already redeployed above, so this only runs for
+# non-`full` builds.
 
-if ! $DO_SERVER && { $DO_UI || [ ${#CROSS_TARGETS[@]} -gt 0 ]; }; then
+if ! $DO_FULL && { $DO_SERVERONLY || [ ${#CROSS_TARGETS[@]} -gt 0 ]; }; then
     if ! $START; then
         echo ""
         echo "Binaries swapped into the container but not activated (--norun)."
@@ -704,7 +706,7 @@ echo ""
 if [ "$STALE" -eq 0 ]; then
     echo "All files are fresh."
 else
-    echo "NOTE: Some files are stale. Run 'upgrade.sh server' for a full image rebuild."
+    echo "NOTE: Some files are stale. Run 'upgrade.sh full' for a full image rebuild."
 fi
 
 echo ""
