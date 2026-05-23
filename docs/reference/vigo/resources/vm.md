@@ -185,4 +185,4 @@ State changes don't lose data — the overlay is preserved. Switching back to `s
 These are clean follow-on scopes — none of the v1 architecture forecloses them.
 
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../../legal/license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [license](../../../legal/license.md).*
