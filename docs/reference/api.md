@@ -2209,6 +2209,9 @@ The P2P artifact registry. Catalog reads are server-mediated; blob fetches go P2
 - **GET /api/v1/swarm/curator/fleet** — fleet-wide aggregator view: who's published what, who's pulled what, blocked-artifact set, retention state. _(fleet.read)_
 - **POST /api/v1/swarm/curator/block/{artifact_id}** — operator-block: server refuses to resolve or relay this artifact even if it's still in the catalog. Local-on-envoy bytes aren't reached (the block is a control-plane veto). _(admin)_
 - **POST /api/v1/swarm/curator/unblock/{artifact_id}** — reverse a prior block. _(admin)_
+- **POST /api/v1/swarm/curator/s3-credentials** — mint a SigV4 credential for the curator S3 object API (ADR-027). Body `{name, scope}`; the `secret_access_key` is returned once and never stored (derived). Returns 503 unless the server runs the `local` secrets backend. _(admin)_
+- **GET /api/v1/swarm/curator/s3-credentials** — list S3 credential metadata (access key id, scope, name, created-at — no secrets). _(admin)_
+- **DELETE /api/v1/swarm/curator/s3-credentials/{access_key_id}** — revoke an S3 credential. _(admin)_
 
 ## Database maintenance
 

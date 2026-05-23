@@ -30,6 +30,7 @@ import (
 	"git.alexander4.io/vigo/server/ca"
 	"git.alexander4.io/vigo/server/compliancedocs"
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/curators3"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/freshness"
@@ -1082,6 +1083,11 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 	usersHandler.SetAdminValidation(s.queries, s.cfg.Server.Hostname)
 	tokensHandler := api.NewTokensHandler(tokenStore, s.authMethod)
 	tokensHandler.SetAuditWriter(s.auditWriter)
+	// Curator S3 API (ADR-027) credential management. The store is wired
+	// below only under the `local` secrets backend (SetStore); the routes
+	// 503 otherwise.
+	s3CredentialsHandler := api.NewS3CredentialsHandler(nil)
+	s3CredentialsHandler.SetAuditWriter(s.auditWriter)
 
 	// Admin-user posture check at startup. The bootstrap `admin` row is no
 	// longer auto-seeded — admin webusers are explicitly created via
@@ -1182,6 +1188,11 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 					"dir", docsCfg.ComplianceDocsDir(),
 					"max_doc_bytes", docsCfg.ComplianceMaxDocBytes())
 			}
+
+			// Curator S3 API SigV4 credential store (ADR-027) — derive-don't-
+			// store, rooted in the LocalProvider master key. local-backend-only.
+			s3CredentialsHandler.SetStore(curators3.NewCredStore(s.queries, lp))
+			slog.Info("curator S3 credential store ready")
 		}
 
 		gwMux, uiHandler, gwErr := api.NewGateway(ctx, s.cfg.Server.GRPCListen, s.cfg.Server.TLS.CertFile, s.cfg.Server.TLS.KeyFile, s.cfg.Server.TLS.CAFile, s.queries, s.configStore, s.baseInterval, s.offlineThreshold, s.cfg.Server.APIListen, s.agentDir, version, s.docsDir, s.assistant, s.spannerAdmin, s.runStore, s.fleetIndex, s.authMethod, s.enforcer, s.cfg.Publish, s.cfg.Branding, s.peerService, s.auditWriter, s.complianceDocsStore, s.publishState, s.promReg, s.metrics, gwOpts...)
@@ -1233,6 +1244,7 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		cveHandler.RegisterRoutes(gwMux)
 		usersHandler.RegisterRoutes(gwMux)
 		tokensHandler.RegisterRoutes(gwMux)
+		s3CredentialsHandler.RegisterRoutes(gwMux)
 		// Fleet pubkey distribution. Lives outside the swarm-enabled gate
 		// so agents can bootstrap their gitback peer-pubkey TOFU cache
 		// regardless of whether THIS server has the swarm substrate
