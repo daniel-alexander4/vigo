@@ -153,7 +153,7 @@ func TestEnvoyFreshness(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// observedCycle=0 (bootstrap): preserves existing
 			// configured-only threshold semantics for these test cases.
-			label, stale := envoyFreshness(tt.lastSeen, tt.baseInterval, 0, 0)
+			label, stale := EnvoyFreshness(tt.lastSeen, tt.baseInterval, 0, 0)
 			if label != tt.wantLabel {
 				t.Errorf("label = %q, want %q", label, tt.wantLabel)
 			}

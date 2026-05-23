@@ -11,11 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/convergence"
 	"git.alexander4.io/vigo/server/cve"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleetpressure"
+	"git.alexander4.io/vigo/server/freshness"
 	"git.alexander4.io/vigo/server/risk"
 	"git.alexander4.io/vigo/server/traits"
 	"git.alexander4.io/vigo/ui"
@@ -40,101 +41,101 @@ func NewDataSource(fleet *FleetIndex, queries *db.Queries, runStore db.RunStore,
 	}
 }
 
-func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration) ui.DashboardPageData {
-	allEnvoys := ds.fleet.AllEnvoys()
-
-	totalEnvoys := len(allEnvoys)
-	activeCount := 0
-	driftCount := 0
-	failureCount := 0
-
-	for _, ts := range allEnvoys {
-		if ts.Revoked {
-			continue
+// envoyRows builds the full freshness-stamped EnvoyRow set from the live
+// FleetIndex snapshot — the shared basis for the envoys page and the
+// dashboard worst-list.
+func (ds *DataSource) envoyRows(baseInterval, offlineThreshold time.Duration) []ui.EnvoyRow {
+	states := ds.fleet.SnapshotEnvoys()
+	rows := make([]ui.EnvoyRow, 0, len(states))
+	for _, ts := range states {
+		var failurePct float64
+		if ts.LastRunModuleCount > 0 {
+			failurePct = float64(ts.LastRunFailedCount) / float64(ts.LastRunModuleCount) * 100
 		}
-		if !ts.LastSeen.IsZero() && time.Since(ts.LastSeen) < time.Hour {
-			activeCount++
-		}
-		// Failure axis: contributes to failureCount.
-		switch convergence.ClassifyStatus(ts.ConvergenceStatus) {
-		case convergence.StatusFailed, convergence.StatusDegraded:
-			failureCount++
-		}
-		// Drift axis: contributes to driftCount when modules keep
-		// mutating across recent runs (subset of Changed).
-		if ts.Drift == convergence.DriftDiverged {
-			driftCount++
-		}
+		observedCycle := ts.ObservedCycle()
+		lastSeenLabel, offline := ui.EnvoyFreshness(ts.LastSeen, baseInterval, offlineThreshold, observedCycle)
+		rows = append(rows, ui.EnvoyRow{
+			ID:                  ts.ID,
+			Hostname:            ts.Hostname,
+			IPAddress:           ts.IP,
+			EnrolledAt:          ts.EnrolledAt,
+			LastSeen:            ts.LastSeen,
+			LastSeenLabel:       lastSeenLabel,
+			Offline:             offline,
+			LastRunAt:           ts.LastRunAt,
+			LastRunID:           ts.LastRunID,
+			Status:              ts.ConvergenceStatus,
+			Drift:               ts.Drift,
+			DriftLabel:          ts.Drift.String(),
+			FailurePct:          failurePct,
+			ModuleCount:         ts.LastRunModuleCount,
+			FailedCount:         ts.LastRunFailedCount,
+			ChangedCount:        ts.LastRunChangedCount,
+			ObserveOnly:         ts.ObserveOnly,
+			StaleThresholdLabel: ui.FriendlyDurationLabel(freshness.StaleThresholdFromCycle(baseInterval, observedCycle, offlineThreshold)),
+			AgentVersion:        ts.AgentVersion,
+		})
 	}
+	return rows
+}
+
+func (ds *DataSource) DashboardData(baseInterval, offlineThreshold time.Duration) ui.DashboardPageData {
+	summary := ds.fleet.ConvergenceSummary()
 
 	driftRate := float64(0)
-	if totalEnvoys > 0 {
-		driftRate = float64(driftCount) / float64(totalEnvoys) * 100
+	if summary.Total > 0 {
+		driftRate = float64(summary.Diverged) / float64(summary.Total) * 100
+	}
+	convPct := float64(0)
+	if summary.Total > 0 {
+		convPct = float64(summary.Converged) / float64(summary.Total) * 100
 	}
 
-	// Recent runs from ring buffer.
-	recentFleetRuns := ds.fleet.RecentRuns(10)
-	recentRuns := make([]ui.RunRow, 0, len(recentFleetRuns))
-	for _, r := range recentFleetRuns {
-		recentRuns = append(recentRuns, ui.RunRow{
-			ID:           r.RunID,
-			Hostname:     r.Hostname,
-			StartedAt:    r.FinishedAt,
-			Status:       r.Status,
-			Trigger:      r.Trigger,
-			ChangedCount: r.ChangedCount,
-			FailedCount:  r.FailedCount,
-		})
+	// Fleet table: worst 50 envoys, triage-ordered.
+	all := ds.envoyRows(baseInterval, offlineThreshold)
+	sortByWorstStatus(all)
+	capped := len(all) > 50
+	worst := all
+	if capped {
+		worst = all[:50]
 	}
-
-	// If ring buffer is empty, fall back to DB.
-	if len(recentRuns) == 0 {
-		ctx := context.Background()
-		dbRuns, err := ds.queries.ListAllRuns(ctx, 10)
-		if err == nil {
-			envoyMap := make(map[string]string, len(allEnvoys))
-			for _, ts := range allEnvoys {
-				envoyMap[ts.ID] = ts.Hostname
-			}
-			for _, r := range dbRuns {
-				recentRuns = append(recentRuns, ui.RunRow{
-					ID:           r.ID,
-					Hostname:     envoyMap[r.EnvoyID],
-					StartedAt:    r.StartedAt,
-					Status:       r.Status,
-					Trigger:      r.Trigger,
-					ModuleCount:  r.ModuleCount,
-					ChangedCount: r.ChangedCount,
-					FailedCount:  r.FailedCount,
-				})
-			}
-		}
-	}
-
-	fleetRows := make([]ui.FleetRow, 0, len(allEnvoys))
-	for _, ts := range allEnvoys {
-		if ts.Revoked {
-			continue
-		}
+	fleetRows := make([]ui.FleetRow, 0, len(worst))
+	for _, e := range worst {
 		fleetRows = append(fleetRows, ui.FleetRow{
-			ID:        ts.ID,
-			Hostname:  ts.Hostname,
-			IP:        ts.IP,
-			LastSeen:  ts.LastSeen,
-			Status:    ts.ConvergenceStatus,
-			LastRunID: ts.LastRunID,
+			ID:           e.ID,
+			Hostname:     e.Hostname,
+			IP:           e.IPAddress,
+			LastSeen:     e.LastSeen,
+			Status:       e.Status,
+			Drift:        e.Drift,
+			DriftLabel:   e.Drift.String(),
+			LastRunID:    e.LastRunID,
+			FailurePct:   e.FailurePct,
+			ChangedCount: e.ChangedCount,
+			FailedCount:  e.FailedCount,
+			ModuleCount:  e.ModuleCount,
 		})
 	}
 
-	return ui.DashboardPageData{
+	data := ui.DashboardPageData{
 		PageData:       ui.PageData{Title: "Dashboard", ActiveNav: "dashboard"},
-		TotalEnvoys:   totalEnvoys,
-		ActiveEnvoys:  activeCount,
-		RecentFailures: failureCount,
+		TotalEnvoys:    summary.Total,
+		ActiveEnvoys:   summary.Total - summary.Offline,
+		RecentFailures: summary.Failed,
 		DriftRate:      driftRate,
-		RecentRuns:     recentRuns,
+		ConvergencePct: convPct,
+		Converged:      summary.Converged,
+		Degraded:       summary.Degraded,
+		Diverged:       summary.Diverged,
+		CompFailed:     summary.Failed,
+		Offline:        summary.Offline,
 		FleetRows:      fleetRows,
 	}
+	data.FleetRowsCapped = capped
+	if capped {
+		data.FleetRowsRemaining = summary.Total - 50
+	}
+	return data
 }
 
 func (ds *DataSource) ConvergenceData(baseInterval, offlineThreshold time.Duration) ui.ConvergencePageData {
@@ -213,52 +214,71 @@ func (ds *DataSource) ConvergenceData(baseInterval, offlineThreshold time.Durati
 func (ds *DataSource) DashboardStatsData(baseInterval, offlineThreshold time.Duration) ui.DashboardStatsFragmentData {
 	d := ds.DashboardData(baseInterval, offlineThreshold)
 	return ui.DashboardStatsFragmentData{
-		TotalEnvoys:   d.TotalEnvoys,
-		ActiveEnvoys:  d.ActiveEnvoys,
+		TotalEnvoys:    d.TotalEnvoys,
+		ActiveEnvoys:   d.ActiveEnvoys,
 		RecentFailures: d.RecentFailures,
 		DriftRate:      d.DriftRate,
+		ConvergencePct: d.ConvergencePct,
+		Converged:      d.Converged,
+		Degraded:       d.Degraded,
+		Diverged:       d.Diverged,
+		CompFailed:     d.CompFailed,
+		Offline:        d.Offline,
 	}
 }
 
-func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, statusFilter string, afterHostname string, limit int, search string) ui.EnvoysPageData {
-	envoys, hasMore := ds.fleet.PaginatedEnvoys(afterHostname, limit, statusFilter, search)
+// EnvoysData builds the envoys-list page data from the live FleetIndex
+// snapshot — the single source of truth for both the table rows and the
+// filter-pill counts above them.
+func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, sortCol, sortDir string, offset, limit int) ui.EnvoysPageData {
+	all := ds.envoyRows(baseInterval, offlineThreshold)
 
-	rows := make([]ui.EnvoyRow, 0, len(envoys))
-	for _, ts := range envoys {
-		var failurePct float64
-		if ts.LastRunModuleCount > 0 {
-			failurePct = float64(ts.LastRunFailedCount) / float64(ts.LastRunModuleCount) * 100
+	// Fleet-wide Module Health + observe-only count over the full set,
+	// before filtering — these are fleet totals, not page totals.
+	var fleetFailed, fleetTotal int64
+	var observing int
+	for _, e := range all {
+		fleetFailed += e.FailedCount
+		fleetTotal += e.ModuleCount
+		if e.ObserveOnly {
+			observing++
 		}
-		rows = append(rows, ui.EnvoyRow{
-			ID:           ts.ID,
-			Hostname:     ts.Hostname,
-			IPAddress:    ts.IP,
-			EnrolledAt:   ts.EnrolledAt,
-			LastSeen:     ts.LastSeen,
-			LastRunAt:    ts.LastRunAt,
-			LastRunID:    ts.LastRunID,
-			Status:       ts.ConvergenceStatus,
-			FailedCount:  ts.LastRunFailedCount,
-			ModuleCount:  ts.LastRunModuleCount,
-			FailurePct:   failurePct,
-			Offline:      ts.Offline,
-			AgentVersion: ts.AgentVersion,
-		})
 	}
 
-	// Populate filter-bar counts from the FleetIndex's precomputed
-	// counters — the same source feeding the row statuses above, so
-	// the buttons can never disagree with what's rendered below them.
+	filtered := filterEnvoyRows(all, convFilter, driftFilter, reachFilter, search)
+	total := len(filtered)
+	sortEnvoyRows(filtered, sortCol, sortDir)
+
+	if offset < 0 {
+		offset = 0
+	}
+	var page []ui.EnvoyRow
+	var hasMore bool
+	if offset < total {
+		end := total
+		if limit > 0 && offset+limit < total {
+			end = offset + limit
+			hasMore = true
+		}
+		page = filtered[offset:end]
+	}
+
 	counts := ds.fleet.ConvergenceSummary()
-	return ui.EnvoysPageData{
+	data := ui.EnvoysPageData{
 		PageData:       ui.PageData{Title: "Envoys", ActiveNav: "envoys"},
-		Envoys:         rows,
-		ConvFilter:     statusFilter,
+		Envoys:         page,
+		ConvFilter:     convFilter,
+		DriftFilter:    driftFilter,
+		ReachFilter:    reachFilter,
 		Search:         search,
-		EnvoyCount:     len(rows),
+		SortColumn:     sortCol,
+		SortDir:        sortDir,
+		EnvoyCount:     len(page),
+		MatchingTotal:  total,
 		HasMore:        hasMore,
+		Offset:         offset,
 		Limit:          limit,
-		NextOffset:     len(rows),
+		NextOffset:     offset + len(page),
 		TotalEnvoys:    counts.Total,
 		CountConverged: counts.Converged,
 		CountDegraded:  counts.Degraded,
@@ -267,6 +287,166 @@ func (ds *DataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, s
 		CountChanged:   counts.Changed,
 		CountDiverged:  counts.Diverged,
 		CountOffline:   counts.Offline,
+		CountObserving: observing,
+
+		FleetFailedModules: fleetFailed,
+		FleetTotalModules:  fleetTotal,
+	}
+	data.ActiveEnvoys = data.TotalEnvoys - data.CountOffline
+	if data.TotalEnvoys > 0 {
+		data.DriftRate = float64(data.CountDiverged) / float64(data.TotalEnvoys) * 100
+	}
+	if data.FleetTotalModules > 0 {
+		data.ModuleHealthPct = float64(data.FleetFailedModules) / float64(data.FleetTotalModules) * 100
+	}
+	data.OfflineThresholdLabel = ui.FriendlyDurationLabel(freshness.StaleThresholdFromCycle(baseInterval, 0, offlineThreshold))
+	return data
+}
+
+// filterEnvoyRows returns the subset of rows matching the given axis
+// filters. Filter semantics (combined with AND across axes; empty =
+// match all):
+//   - convFilter: "" / "converged" / "degraded" / "failed" / "no data"
+//   - driftFilter: "" / "changed" / "diverged" (Diverged ⊆ Changed;
+//     clicking Changed includes Diverged envoys)
+//   - reachFilter: "" / "offline" / "observing"
+//
+// search is a case-insensitive substring match on hostname.
+func filterEnvoyRows(rows []ui.EnvoyRow, convFilter, driftFilter, reachFilter, search string) []ui.EnvoyRow {
+	searchLower := strings.ToLower(search)
+	out := make([]ui.EnvoyRow, 0, len(rows))
+	for _, e := range rows {
+		if matchesEnvoyFilter(e, convFilter, driftFilter, reachFilter, searchLower) {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+func matchesEnvoyFilter(e ui.EnvoyRow, convFilter, driftFilter, reachFilter, searchLower string) bool {
+	if convFilter != "" && e.Status != convFilter {
+		return false
+	}
+	switch driftFilter {
+	case "":
+		// no drift filter
+	case "changed":
+		// Diverged ⊆ Changed; both buckets satisfy the Changed filter.
+		if e.Drift != convergence.DriftChanged && e.Drift != convergence.DriftDiverged {
+			return false
+		}
+	case "diverged":
+		if e.Drift != convergence.DriftDiverged {
+			return false
+		}
+	default:
+		// unknown drift filter — fall through, match nothing safely
+		return false
+	}
+	switch reachFilter {
+	case "":
+		// no reach filter
+	case "offline":
+		if !e.Offline {
+			return false
+		}
+	case "observing":
+		if !e.ObserveOnly {
+			return false
+		}
+	}
+	if searchLower != "" {
+		if !strings.Contains(strings.ToLower(e.Hostname), searchLower) {
+			return false
+		}
+	}
+	return true
+}
+
+// statusPriority returns a sort key: lower = worse. Sorts on the
+// failure axis only — drift is reflected in the dedicated drift pills,
+// not in row sort order. Diverged envoys with zero failures still sort
+// near the bottom because they're functionally healthy from the
+// "is anything broken right now" perspective.
+func statusPriority(s string) int {
+	switch convergence.ClassifyStatus(s) {
+	case convergence.StatusFailed:
+		return 0
+	case convergence.StatusDegraded:
+		return 1
+	case convergence.StatusNoData:
+		return 2
+	case convergence.StatusConverged:
+		return 3
+	default:
+		return 4
+	}
+}
+
+func sortByWorstStatus(rows []ui.EnvoyRow) {
+	sort.SliceStable(rows, func(i, j int) bool {
+		return worstStatusLess(rows[i], rows[j])
+	})
+}
+
+// worstStatusLess orders rows by triage priority: worst convergence
+// status first, then highest failure percentage, then hostname for
+// stable tiebreaking. Used both by the dashboard worst-list and by the
+// envoys list when the operator picks "Worst first" — the same
+// comparator keeps the two surfaces consistent.
+func worstStatusLess(a, b ui.EnvoyRow) bool {
+	pa, pb := statusPriority(a.Status), statusPriority(b.Status)
+	if pa != pb {
+		return pa < pb
+	}
+	if a.FailurePct != b.FailurePct {
+		return a.FailurePct > b.FailurePct
+	}
+	return a.Hostname < b.Hostname
+}
+
+// sortEnvoyRows reorders rows in place per the operator's sort choice.
+// The "status" column means triage-first when ascending — that is the
+// default landing experience for /envoys at scale, where the
+// alphabetically-first envoy is rarely the one the operator came to
+// fix. "last_run" defaults to newest-first when descending; "hostname"
+// / "ip" / "last_seen" follow the obvious lexicographic / temporal
+// order.
+func sortEnvoyRows(rows []ui.EnvoyRow, col, dir string) {
+	switch col {
+	case "", "status":
+		sortByWorstStatus(rows)
+		if dir == "desc" {
+			reverseEnvoyRows(rows)
+		}
+	case "hostname":
+		sort.SliceStable(rows, func(i, j int) bool { return rows[i].Hostname < rows[j].Hostname })
+		if dir == "desc" {
+			reverseEnvoyRows(rows)
+		}
+	case "ip":
+		sort.SliceStable(rows, func(i, j int) bool { return rows[i].IPAddress < rows[j].IPAddress })
+		if dir == "desc" {
+			reverseEnvoyRows(rows)
+		}
+	case "last_seen":
+		sort.SliceStable(rows, func(i, j int) bool { return rows[i].LastSeen.Before(rows[j].LastSeen) })
+		if dir != "asc" {
+			reverseEnvoyRows(rows)
+		}
+	case "last_run":
+		sort.SliceStable(rows, func(i, j int) bool { return rows[i].LastRunAt.Before(rows[j].LastRunAt) })
+		if dir != "asc" {
+			reverseEnvoyRows(rows)
+		}
+	default:
+		sortByWorstStatus(rows)
+	}
+}
+
+func reverseEnvoyRows(rows []ui.EnvoyRow) {
+	for i, j := 0, len(rows)-1; i < j; i, j = i+1, j-1 {
+		rows[i], rows[j] = rows[j], rows[i]
 	}
 }
 
@@ -290,11 +470,11 @@ func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval, offlineThres
 		}
 		convStatus := convergence.ComputeConvergence(recent)
 		ts = &EnvoyState{
-			ID:               envoy.ID,
-			Hostname:         envoy.Hostname,
-			IP:               envoy.IpAddress,
-			EnrolledAt:       envoy.EnrolledAt,
-			LastSeen:         lastSeen,
+			ID:                envoy.ID,
+			Hostname:          envoy.Hostname,
+			IP:                envoy.IpAddress,
+			EnrolledAt:        envoy.EnrolledAt,
+			LastSeen:          lastSeen,
 			ConvergenceStatus: convStatus,
 		}
 	}
@@ -323,7 +503,7 @@ func (ds *DataSource) EnvoyRunsData(envoyID string) (ui.EnvoyRunsFragmentData, e
 	ctx := context.Background()
 	dbRuns, err := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 		EnvoyID: envoyID,
-		Limit:    20,
+		Limit:   20,
 	})
 	if err != nil {
 		slog.Error("failed to list runs for envoy", "error", err)
@@ -469,7 +649,7 @@ func (ds *DataSource) RunDetailData(runID string) (ui.RunDetailPageData, error) 
 
 	return ui.RunDetailPageData{
 		PageData: ui.PageData{Title: "Run Detail", ActiveNav: "runs"},
-		EnvoyID: envoyID,
+		EnvoyID:  envoyID,
 		Run: ui.RunRow{
 			ID:           r.ID,
 			Hostname:     hostname,
@@ -551,7 +731,7 @@ func (ds *DataSource) PlanDetailData(planID string) (ui.PlanDetailPageData, erro
 	return ui.PlanDetailPageData{
 		PageData:    ui.PageData{Title: "Plan Detail", ActiveNav: "envoys"},
 		PlanID:      p.ID,
-		EnvoyID:    p.EnvoyID,
+		EnvoyID:     p.EnvoyID,
 		Hostname:    hostname,
 		CreatedAt:   p.CreatedAt,
 		Results:     results,

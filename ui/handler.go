@@ -62,7 +62,7 @@ type DataSource interface {
 	DashboardData(baseInterval, offlineThreshold time.Duration) DashboardPageData
 	ConvergenceData(baseInterval, offlineThreshold time.Duration) ConvergencePageData
 	DashboardStatsData(baseInterval, offlineThreshold time.Duration) DashboardStatsFragmentData
-	EnvoysData(baseInterval, offlineThreshold time.Duration, statusFilter string, afterHostname string, limit int, search string) EnvoysPageData
+	EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, sortCol, sortDir string, offset, limit int) EnvoysPageData
 	EnvoyDetailData(envoyID string, baseInterval, offlineThreshold time.Duration) (EnvoyDetailPageData, error)
 	EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, error)
 	EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData, error)
@@ -259,7 +259,6 @@ type Handler struct {
 	swarmFleetIndex   SwarmHostnameResolver
 	swarmConfig       config.SwarmSection
 	traitLookup       TraitLookup
-	fleetCache        *FleetCache
 	gitbackFleet      GitbackFleetSource
 	curatorFleet      CuratorFleetSource
 	mesh              MeshSource
@@ -1215,7 +1214,7 @@ type EnvoysPageData struct {
 	PageData
 	Envoys []EnvoyRow
 	// Filter state — independent across the three axes. ConvFilter
-	// matches FleetStatusEntry.Status (failure axis); DriftFilter
+	// matches EnvoyRow.Status (failure axis); DriftFilter
 	// matches the drift bucket; ReachFilter matches reachability /
 	// observability flags. All three combine with AND.
 	ConvFilter    string
@@ -1987,9 +1986,9 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 
 // noEnvoys reports whether zero envoys are enrolled — the first-run state
 // that drives the dashboard enrollment panel and the collapsed nav. Backed
-// by the O(1) FleetCache convergence counter.
+// by the O(1) FleetIndex convergence counter via the data source.
 func (h *Handler) noEnvoys() bool {
-	return h.fleetCache != nil && h.fleetCache.Counts().Total == 0
+	return h.dataSource.DashboardStatsData(h.baseInterval, h.offlineThreshold).TotalEnvoys == 0
 }
 
 // setCommon applies version, AI-enabled, spanner, auth, and license flags to page data.
@@ -2281,57 +2280,11 @@ func sparklineBounds(data []float64) (min, max int) {
 	return int(mn + 0.5), int(mx + 0.5)
 }
 
-// dashboardData builds dashboard page data using the fleet cache (single query)
-// instead of loading all envoys + N+1 per-envoy run queries.
+// dashboardData builds dashboard page data from the live FleetIndex
+// via the data source (single in-memory snapshot, no N+1 queries),
+// then layers on the license banner and recent-runs DB query.
 func (h *Handler) dashboardData() DashboardPageData {
-	data := DashboardPageData{
-		PageData: PageData{Title: "Dashboard", ActiveNav: "dashboard"},
-	}
-
-	if h.fleetCache != nil {
-		counts := h.fleetCache.Counts()
-		data.TotalEnvoys = counts.Total
-		data.ActiveEnvoys = counts.Total - counts.Offline
-		data.RecentFailures = counts.Failed
-		if counts.Total > 0 {
-			data.DriftRate = float64(counts.Diverged) / float64(counts.Total) * 100
-		}
-		data.ConvergencePct = 0
-		if counts.Total > 0 {
-			data.ConvergencePct = float64(counts.Converged) / float64(counts.Total) * 100
-		}
-		data.Converged = counts.Converged
-		data.Degraded = counts.Degraded
-		data.Diverged = counts.Diverged
-		data.CompFailed = counts.Failed
-		data.Offline = counts.Offline
-
-		// Fleet table: worst 50 envoys.
-		worst := h.fleetCache.WorstEntries(50)
-		data.FleetRows = make([]FleetRow, 0, len(worst))
-		for _, e := range worst {
-			data.FleetRows = append(data.FleetRows, FleetRow{
-				ID:           e.ID,
-				Hostname:     e.Hostname,
-				IP:           e.IPAddress,
-				LastSeen:     e.LastSeen,
-				Status:       e.Status,
-				Drift:        e.Drift,
-				DriftLabel:   e.Drift.String(),
-				LastRunID:    e.LastRunID,
-				FailurePct:   e.FailurePct,
-				ChangedCount: e.ChangedCount,
-				FailedCount:  e.FailedCount,
-				ModuleCount:  e.ModuleCount,
-			})
-		}
-		data.FleetRowsCapped = len(worst) < counts.Total
-		data.FleetRowsRemaining = counts.Total - len(worst)
-	} else {
-		// Fallback: use legacy DataSource (e.g. FleetIndex custom DS).
-		legacy := h.dataSource.DashboardData(h.baseInterval, h.offlineThreshold)
-		return legacy
-	}
+	data := h.dataSource.DashboardData(h.baseInterval, h.offlineThreshold)
 
 	// License capacity banner: render once we know the live count and the
 	// license cap. Orange at ≥90% of cap, red at 100% (next enrollment
@@ -2354,11 +2307,17 @@ func (h *Handler) dashboardData() DashboardPageData {
 		}
 	}
 
-	// Recent runs (always from DB, lightweight query).
-	ctx := context.Background()
-	allRuns, err := h.queries.ListRunsWithHostname(ctx, 10)
-	if err != nil {
-		slog.Error("failed to list recent runs", "error", err)
+	// Recent runs (always from DB, lightweight query). h.queries is nil
+	// only in the early-boot window and unit tests — skip the query
+	// rather than panic; the rest of the dashboard still renders.
+	var allRuns []db.RunWithHostname
+	if h.queries != nil {
+		ctx := context.Background()
+		var err error
+		allRuns, err = h.queries.ListRunsWithHostname(ctx, 10)
+		if err != nil {
+			slog.Error("failed to list recent runs", "error", err)
+		}
 	}
 	data.RecentRuns = make([]RunRow, 0, len(allRuns))
 	for _, r := range allRuns {
@@ -2372,7 +2331,7 @@ func (h *Handler) dashboardData() DashboardPageData {
 		}
 		var dur string
 		if !finished.IsZero() && !r.StartedAt.IsZero() {
-			dur = friendlyDurationLabel(finished.Sub(r.StartedAt))
+			dur = FriendlyDurationLabel(finished.Sub(r.StartedAt))
 		}
 		outcome := convergence.ComputeStatus(convergence.RunInfo{
 			Status:       r.Status,
@@ -2429,33 +2388,7 @@ func (h *Handler) swarmFiles() []SwarmFileRow {
 
 // DashboardStats renders just the stat cards fragment for HTMX polling.
 func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
-	var data DashboardStatsFragmentData
-
-	if h.fleetCache != nil {
-		counts := h.fleetCache.Counts()
-		data.TotalEnvoys = counts.Total
-		data.ActiveEnvoys = counts.Total - counts.Offline
-		data.RecentFailures = counts.Failed
-		if counts.Total > 0 {
-			data.DriftRate = float64(counts.Diverged) / float64(counts.Total) * 100
-			data.ConvergencePct = float64(counts.Converged) / float64(counts.Total) * 100
-		}
-		data.Converged = counts.Converged
-		data.Degraded = counts.Degraded
-		data.Diverged = counts.Diverged
-		data.CompFailed = counts.Failed
-		data.Offline = counts.Offline
-	} else {
-		d := h.dataSource.DashboardStatsData(h.baseInterval, h.offlineThreshold)
-		conv := h.dataSource.ConvergenceData(h.baseInterval, h.offlineThreshold)
-		d.ConvergencePct = conv.ConvergencePct
-		d.Converged = int(conv.Converged)
-		d.Degraded = int(conv.Degraded)
-		d.Diverged = int(conv.Diverged)
-		d.CompFailed = int(conv.Failed)
-		d.Offline = int(conv.Offline)
-		data = d
-	}
+	data := h.dataSource.DashboardStatsData(h.baseInterval, h.offlineThreshold)
 
 	sec := h.dataSource.SecurityScanData()
 	data.CVECritical = sec.UniqueCritical
@@ -3941,14 +3874,8 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 		ModuleCount int64
 	}
 	var allEnvoys []envoyInfo
-	if h.fleetCache != nil {
-		for _, e := range h.fleetCache.Entries() {
-			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct, FailedCount: e.FailedCount, ModuleCount: e.ModuleCount})
-		}
-	} else {
-		for _, e := range h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, "", "", 0, "").Envoys {
-			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct, FailedCount: e.FailedCount, ModuleCount: e.ModuleCount})
-		}
+	for _, e := range h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, "", "", "", "", "", "", 0, 0).Envoys {
+		allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct, FailedCount: e.FailedCount, ModuleCount: e.ModuleCount})
 	}
 
 	for _, t := range allEnvoys {
@@ -4117,7 +4044,7 @@ func (h *Handler) EvidenceBundleDownload(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Fleet inventory CSV
-	envoyData := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, "", "", 100000, "")
+	envoyData := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, "", "", "", "", "", "", 0, 100000)
 	if len(envoyData.Envoys) > 0 {
 		if f, err := zw.Create("fleet-inventory.csv"); err == nil {
 			fmt.Fprintln(f, "hostname,id,ip_address,status,enrolled_at,last_seen,last_run")
@@ -4284,28 +4211,12 @@ func normalizeEnvoySort(col, dir string) (string, string) {
 	return col, dir
 }
 
-// envoysPageData builds EnvoysPageData from the fleet cache — single
-// source of truth for both the rows in the table AND the counts in
-// the pills above it. Falls back to dbDataSource.EnvoysData when the
-// cache isn't initialized (very early startup); in that fallback the
-// pill counts will be unavailable but the table renders.
+// envoysPageData builds EnvoysPageData from the data source — the
+// single source of truth for both the rows in the table AND the counts
+// in the pills above it. The hard render cap (envoysRenderedCap) is
+// applied here, handler-side: the request limit is clamped before the
+// data-source call and the load-more sentinel is set after.
 func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, sortCol, sortDir string, offset int) EnvoysPageData {
-	if h.fleetCache == nil {
-		// Fallback: use the DB path. Pills will be empty since we
-		// can't compute fleet-wide convergence without trailing-run
-		// history. This branch is hit briefly during boot before
-		// SetFleetCache is called, then never again.
-		data := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, convFilter, "", envoysPageLimit, search)
-		data.ConvFilter = convFilter
-		data.DriftFilter = driftFilter
-		data.ReachFilter = reachFilter
-		data.SortColumn = sortCol
-		data.SortDir = sortDir
-		data.Offset = offset
-		data.Limit = envoysPageLimit
-		return data
-	}
-
 	// Cap the request at the hard render limit. Past envoysRenderedCap
 	// rows we stop emitting load-more triggers and surface a sentinel.
 	limit := envoysPageLimit
@@ -4316,93 +4227,26 @@ func (h *Handler) envoysPageData(convFilter, driftFilter, reachFilter, search, s
 		}
 	}
 
-	entries, total, hasMore := h.fleetCache.PaginatedEntries(offset, limit, convFilter, driftFilter, reachFilter, search, sortCol, sortDir)
-	rows := make([]EnvoyRow, 0, len(entries))
-	for _, e := range entries {
-		rows = append(rows, EnvoyRow{
-			ID:                  e.ID,
-			Hostname:            e.Hostname,
-			IPAddress:           e.IPAddress,
-			LastSeen:            e.LastSeen,
-			LastSeenLabel:       e.LastSeenLabel,
-			LastRunAt:           e.LastRunAt,
-			LastRunID:           e.LastRunID,
-			Status:              e.Status,
-			Drift:               e.Drift,
-			DriftLabel:          e.Drift.String(),
-			FailurePct:          e.FailurePct,
-			ModuleCount:         e.ModuleCount,
-			FailedCount:         e.FailedCount,
-			ChangedCount:        e.ChangedCount,
-			Offline:             e.Offline,
-			ObserveOnly:         e.ObserveOnly,
-			StaleThresholdLabel: friendlyDurationLabel(freshness.StaleThresholdFromCycle(h.baseInterval, e.ObservedCycle, h.offlineThreshold)),
-			AgentVersion:        e.AgentVersion,
-		})
-	}
+	data := h.dataSource.EnvoysData(h.baseInterval, h.offlineThreshold, convFilter, driftFilter, reachFilter, search, sortCol, sortDir, offset, limit)
 
-	counts := h.fleetCache.Counts()
-	nextOffset := offset + len(rows)
-	renderedCap := nextOffset >= envoysRenderedCap && nextOffset < total
-
-	data := EnvoysPageData{
-		PageData:       PageData{Title: "Envoys", ActiveNav: "envoys"},
-		Envoys:         rows,
-		ConvFilter:     convFilter,
-		DriftFilter:    driftFilter,
-		ReachFilter:    reachFilter,
-		Search:         search,
-		SortColumn:     sortCol,
-		SortDir:        sortDir,
-		EnvoyCount:     len(rows),
-		MatchingTotal:  total,
-		HasMore:        hasMore && !renderedCap,
-		Offset:         offset,
-		Limit:          envoysPageLimit,
-		NextOffset:     nextOffset,
-		RenderedCap:    renderedCap,
-		RenderedCapMax: envoysRenderedCap,
-
-		TotalEnvoys:    counts.Total,
-		CountConverged: counts.Converged,
-		CountDegraded:  counts.Degraded,
-		CountFailed:    counts.Failed,
-		CountNoData:    counts.NoData,
-		CountChanged:   counts.Changed,
-		CountDiverged:  counts.Diverged,
-		CountOffline:   counts.Offline,
-		CountObserving: counts.Observing,
-	}
-	data.ActiveEnvoys = data.TotalEnvoys - data.CountOffline
-	if data.TotalEnvoys > 0 {
-		data.DriftRate = float64(data.CountDiverged) / float64(data.TotalEnvoys) * 100
-	}
-	// Fleet-wide Module Health: sum across every cached entry's last
-	// run. Cheap (single pass over a typically-small in-memory slice)
-	// and means the card stays consistent with the table on the same
-	// refresh cycle.
-	for _, e := range h.fleetCache.Entries() {
-		data.FleetFailedModules += e.FailedCount
-		data.FleetTotalModules += e.ModuleCount
-	}
-	if data.FleetTotalModules > 0 {
-		data.ModuleHealthPct = float64(data.FleetFailedModules) / float64(data.FleetTotalModules) * 100
-	}
-	// Per-envoy threshold (2.5× max(configured, observed_cycle)) means
-	// the page header shows the bootstrap value (configured-only, no
-	// agent cadence yet); per-row values may differ. The table tooltip
-	// on each row's Last Seen cell shows the resolved threshold for
-	// that envoy.
-	data.OfflineThresholdLabel = friendlyDurationLabel(freshness.StaleThresholdFromCycle(h.baseInterval, 0, h.offlineThreshold))
+	// Render-cap sentinel: when paging reaches the hard DOM cap, the
+	// footer renders a "refine your filter" notice instead of another
+	// load-more trigger so the DOM cannot grow unbounded.
+	nextOffset := offset + len(data.Envoys)
+	renderedCap := nextOffset >= envoysRenderedCap && nextOffset < data.MatchingTotal
+	data.HasMore = data.HasMore && !renderedCap
+	data.Limit = envoysPageLimit
+	data.RenderedCap = renderedCap
+	data.RenderedCapMax = envoysRenderedCap
 	return data
 }
 
-// friendlyDurationLabel renders a Duration in the most compact form
+// FriendlyDurationLabel renders a Duration in the most compact form
 // that's still operator-readable. Bare seconds for sub-minute values,
 // bare minutes for round minutes, "MmSs" for the awkward middle, hours
 // where appropriate. Used by the Offline pill title and any other
 // surface that needs a short threshold display.
-func friendlyDurationLabel(d time.Duration) string {
+func FriendlyDurationLabel(d time.Duration) string {
 	d = d.Round(time.Second)
 	if d < time.Minute {
 		return fmt.Sprintf("%ds", int(d.Seconds()))
@@ -4725,8 +4569,8 @@ func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Requ
 	}
 
 	var observedCycle time.Duration
-	if h.fleetCache != nil {
-		observedCycle = h.fleetCache.EnvoyCycle(idStr)
+	if _, oc, ok := h.dataSource.EnvoyFreshness(idStr); ok {
+		observedCycle = oc
 	}
 	er := risk.ScoreEnvoy(risk.EnvoyInput{
 		ID:                idStr,
@@ -5370,9 +5214,10 @@ func (h *Handler) EnvoysStats(w http.ResponseWriter, r *http.Request) {
 // --- Production data source ---
 
 // cycleLookup resolves an envoy's smoothed observed inter-CheckIn
-// cadence. Both *FleetCache and FleetSource adapters satisfy it; the
-// smaller interface lets dbDataSource consume cycle data without
-// pulling in ConvergenceSummary.
+// cadence — a minimal interface so dbDataSource can consume cycle data
+// without pulling in the whole fleet index. Currently unwired (the
+// FleetCache that supplied it was retired); dbDataSource's field stays
+// nil, so its freshness checks fall back to the configured interval.
 type cycleLookup interface {
 	EnvoyCycle(id string) time.Duration
 }
@@ -5383,9 +5228,8 @@ type dbDataSource struct {
 	globalObserveOnly bool
 	// cycleLookup, when wired, supplies the agent's smoothed
 	// inter-CheckIn cadence used by per-envoy freshness checks.
-	// Wired by the Handler at SetFleetCache so envoy-detail handlers
-	// inherit the same per-envoy threshold the envoys-page table
-	// uses. nil → bootstrap fallback (configured interval only).
+	// Currently always nil — no wiring since FleetCache was retired —
+	// so freshness checks fall back to the configured interval.
 	cycleLookup cycleLookup
 }
 
@@ -5452,8 +5296,8 @@ func (ds *dbDataSource) DashboardData(baseInterval, offlineThreshold time.Durati
 			failureCount++
 		}
 		// driftCount stays 0 in this fallback path — drift requires a
-		// trailing-run history we don't load here. The primary path goes
-		// through fleetCache which does compute drift via ComputeDrift.
+		// trailing-run history we don't load here. The primary path
+		// (fleet.DataSource) computes drift via ComputeDrift.
 	}
 
 	driftRate := float64(0)
@@ -5586,8 +5430,8 @@ func (ds *dbDataSource) ConvergenceData(baseInterval, offlineThreshold time.Dura
 		Failed:         int64(summary["failed"]),
 		NoData:         int64(summary["no data"]),
 		// Drift-axis counts are not available in the DB-fallback path
-		// (no trailing-run history); set 0. The fleetCache primary
-		// path computes them via ComputeDrift.
+		// (no trailing-run history); set 0. The fleet.DataSource
+		// primary path computes them via ComputeDrift.
 		Changed:       0,
 		Diverged:      0,
 		Offline:       int64(summary["offline"]),
@@ -5606,17 +5450,19 @@ func (ds *dbDataSource) DashboardStatsData(baseInterval, offlineThreshold time.D
 	}
 }
 
-func (ds *dbDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, statusFilter string, afterHostname string, limit int, search string) EnvoysPageData {
+// EnvoysData is the early-boot DB fallback for the envoys page. It is
+// only hit before the FleetIndex-backed DataSource is wired; the
+// production path is fleet.DataSource.EnvoysData. convFilter is treated
+// as the failure-axis status filter; driftFilter / reachFilter /
+// sortCol / sortDir are ignored (the DB paged view has no trailing-run
+// history to classify drift, and the boot window is too short to
+// matter). offset / limit paginate the in-memory result.
+func (ds *dbDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, sortCol, sortDir string, offset, limit int) EnvoysPageData {
 	ctx := context.Background()
 
-	// Fetch limit+1 to detect if there are more rows.
-	fetchLimit := int64(limit + 1)
-	if limit <= 0 {
-		fetchLimit = 100001
-	}
-
-	// Single query: envoys joined with their latest run (no N+1).
-	envoys, err := ds.queries.ListEnvoysPagedWithRun(ctx, afterHostname, search, fetchLimit)
+	// Single query: every matching envoy joined with its latest run
+	// (no N+1, no cursor — pagination happens in-memory below).
+	envoys, err := ds.queries.ListEnvoysPagedWithRun(ctx, "", search, 100001)
 	if err != nil {
 		slog.Error("failed to list envoys", "error", err)
 		return EnvoysPageData{PageData: PageData{Title: "Envoys", ActiveNav: "envoys"}}
@@ -5624,15 +5470,10 @@ func (ds *dbDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration,
 
 	var rows []EnvoyRow
 	for _, n := range envoys {
-		if limit > 0 && len(rows) >= limit {
-			break
-		}
-
 		// Compute convergence from the latest run. The paged view has only
 		// one run, so it classifies the failure axis (converged/degraded/
 		// failed/no-data) and the drift broad bucket (changed) — never
-		// diverged, which needs the consecutive-run history. The fleet
-		// cache provides the accurate counts for the filter buttons.
+		// diverged, which needs the consecutive-run history.
 		var status string
 		if !n.LastRunStatus.Valid {
 			status = "no data"
@@ -5665,12 +5506,12 @@ func (ds *dbDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration,
 			lastSeen = n.LastSeen.Time
 		}
 
-		lastSeenLabel, offline := envoyFreshness(lastSeen, baseInterval, offlineThreshold, ds.envoyCycle(n.ID))
+		lastSeenLabel, offline := EnvoyFreshness(lastSeen, baseInterval, offlineThreshold, ds.envoyCycle(n.ID))
 
 		// Filter: "offline" matches reachability, everything else matches convergence status.
-		if statusFilter == "offline" && !offline {
+		if convFilter == "offline" && !offline {
 			continue
-		} else if statusFilter != "" && statusFilter != "offline" && status != statusFilter {
+		} else if convFilter != "" && convFilter != "offline" && status != convFilter {
 			continue
 		}
 
@@ -5721,17 +5562,36 @@ func (ds *dbDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration,
 		})
 	}
 
-	hasMore := len(envoys) > limit && limit > 0
+	total := len(rows)
+	if offset < 0 {
+		offset = 0
+	}
+	var page []EnvoyRow
+	var hasMore bool
+	if offset < total {
+		end := total
+		if limit > 0 && offset+limit < total {
+			end = offset + limit
+			hasMore = true
+		}
+		page = rows[offset:end]
+	}
 
 	return EnvoysPageData{
-		PageData:   PageData{Title: "Envoys", ActiveNav: "envoys"},
-		Envoys:     rows,
-		ConvFilter: statusFilter,
-		Search:     search,
-		EnvoyCount: len(rows),
-		HasMore:    hasMore,
-		Limit:      limit,
-		NextOffset: len(rows),
+		PageData:      PageData{Title: "Envoys", ActiveNav: "envoys"},
+		Envoys:        page,
+		ConvFilter:    convFilter,
+		DriftFilter:   driftFilter,
+		ReachFilter:   reachFilter,
+		Search:        search,
+		SortColumn:    sortCol,
+		SortDir:       sortDir,
+		EnvoyCount:    len(page),
+		MatchingTotal: total,
+		HasMore:       hasMore,
+		Offset:        offset,
+		Limit:         limit,
+		NextOffset:    offset + len(page),
 	}
 }
 
@@ -7491,16 +7351,12 @@ func (h *Handler) License(w http.ResponseWriter, r *http.Request) {
 		s := h.enforcer.GetStatus()
 		data.StageNum = int(s.Stage)
 		data.Stage = s.Stage.String()
-		// Source ActiveEnvoys from the FleetCache when available so
-		// this page agrees with the dashboard's License Capacity
-		// banner frame-for-frame. The enforcer's own counter runs an
+		// Source ActiveEnvoys from the live FleetIndex so this page
+		// agrees with the dashboard's License Capacity banner
+		// frame-for-frame. The enforcer's own counter runs an
 		// independent CountActiveEnvoys query which can lag the
-		// cache by a few seconds after enrollment events.
-		if h.fleetCache != nil {
-			data.ActiveEnvoys = h.fleetCache.Counts().Total
-		} else {
-			data.ActiveEnvoys = s.ActiveEnvoys
-		}
+		// in-memory index by a few seconds after enrollment events.
+		data.ActiveEnvoys = h.dataSource.DashboardStatsData(h.baseInterval, h.offlineThreshold).TotalEnvoys
 		data.MaxEnvoys = s.MaxEnvoys
 		data.ExpiresAt = s.ExpiresAt
 		data.DaysRemaining = s.DaysRemaining
@@ -8403,18 +8259,6 @@ func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 // SetTraitLookup sets the trait provider for envoy health indicators.
 func (h *Handler) SetTraitLookup(tl TraitLookup) {
 	h.traitLookup = tl
-}
-
-// SetFleetCache attaches the precomputed fleet status cache.
-// Call after NewHandler — required for efficient dashboard/envoys rendering.
-// Also wires the cache as the dbDataSource's fleet source so envoy-detail
-// handlers consume the same per-envoy cycle data the envoys-page table
-// uses.
-func (h *Handler) SetFleetCache(fc *FleetCache) {
-	h.fleetCache = fc
-	if ds, ok := h.dataSource.(*dbDataSource); ok {
-		ds.cycleLookup = fc
-	}
 }
 
 // enrichEnvoyRows populates disk and repo health fields from traits.

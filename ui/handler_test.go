@@ -343,8 +343,8 @@ func (m *footprintMock) ConvergenceData(d, o time.Duration) ConvergencePageData 
 func (m *footprintMock) DashboardStatsData(d, o time.Duration) DashboardStatsFragmentData {
 	return m.base.DashboardStatsData(d, o)
 }
-func (m *footprintMock) EnvoysData(d, o time.Duration, s, a string, l int, q string) EnvoysPageData {
-	return m.base.EnvoysData(d, o, s, a, l, q)
+func (m *footprintMock) EnvoysData(d, o time.Duration, conv, drift, reach, q, sortCol, sortDir string, offset, limit int) EnvoysPageData {
+	return m.base.EnvoysData(d, o, conv, drift, reach, q, sortCol, sortDir, offset, limit)
 }
 func (m *footprintMock) EnvoyDetailData(id string, d, o time.Duration) (EnvoyDetailPageData, error) {
 	return m.base.EnvoyDetailData(id, d, o)
@@ -911,10 +911,10 @@ func (m *mockDataSource) DashboardStatsData(baseInterval, offlineThreshold time.
 	}
 }
 
-func (m *mockDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, statusFilter string, afterHostname string, limit int, search string) EnvoysPageData {
+func (m *mockDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration, convFilter, driftFilter, reachFilter, search, sortCol, sortDir string, offset, limit int) EnvoysPageData {
 	var rows []EnvoyRow
 	for _, c := range m.data.envoys {
-		if statusFilter != "" && c.status != statusFilter {
+		if convFilter != "" && c.status != convFilter {
 			continue
 		}
 		rows = append(rows, EnvoyRow{
@@ -927,15 +927,38 @@ func (m *mockDataSource) EnvoysData(baseInterval, offlineThreshold time.Duration
 		})
 	}
 
+	total := len(rows)
+	if offset < 0 {
+		offset = 0
+	}
+	page := rows
+	if offset < total {
+		end := total
+		if limit > 0 && offset+limit < total {
+			end = offset + limit
+		}
+		page = rows[offset:end]
+	} else {
+		page = nil
+	}
+
 	return EnvoysPageData{
 		PageData: PageData{
 			Title:     "Envoys",
 			ActiveNav: "envoys",
 			Version:   "test",
 		},
-		Envoys:     rows,
-		ConvFilter: statusFilter,
-		EnvoyCount: len(rows),
+		Envoys:        page,
+		ConvFilter:    convFilter,
+		DriftFilter:   driftFilter,
+		ReachFilter:   reachFilter,
+		Search:        search,
+		SortColumn:    sortCol,
+		SortDir:       sortDir,
+		EnvoyCount:    len(page),
+		MatchingTotal: total,
+		Offset:        offset,
+		Limit:         limit,
 	}
 }
 

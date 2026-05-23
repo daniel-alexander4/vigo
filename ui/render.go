@@ -852,7 +852,7 @@ func timeAgo(t time.Time) string {
 	}
 }
 
-// envoyFreshness pairs the canonical freshness predicate with the
+// EnvoyFreshness pairs the canonical freshness predicate with the
 // matching human-readable last-seen label. The threshold derives
 // per-envoy from freshness.IsStaleFromCycle: 2.5 × max(configured,
 // observed) where observed is the agent's smoothed inter-CheckIn
@@ -870,7 +870,7 @@ func timeAgo(t time.Time) string {
 // would otherwise render as "just now" in the staleness color.
 // Printing precise seconds in that window keeps label and color
 // consistent.
-func envoyFreshness(lastSeen time.Time, baseInterval, offlineThreshold, observedCycle time.Duration) (label string, stale bool) {
+func EnvoyFreshness(lastSeen time.Time, baseInterval, offlineThreshold, observedCycle time.Duration) (label string, stale bool) {
 	if lastSeen.IsZero() {
 		return "-", false
 	}
