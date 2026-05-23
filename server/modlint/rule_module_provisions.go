@@ -75,57 +75,11 @@ func (moduleProvisionsRule) apply(mod *module, _ Options) []Finding {
 		}
 	}
 
-	// Surface (framework, control) pairs covered by both a known
-	// provision and the module's explicit `compliance:` block.
-	if len(mod.Compliance) > 0 {
-		provided := make(map[string]map[string]string) // framework → control → provision_id
-		for _, prov := range mod.Provides {
-			if !knownSet[prov] {
-				continue
-			}
-			for framework, controls := range compliance.ResolveProvision(prov) {
-				if provided[framework] == nil {
-					provided[framework] = make(map[string]string)
-				}
-				for _, cid := range controls {
-					provided[framework][cid] = prov
-				}
-			}
-		}
-		type dup struct{ framework, control, prov string }
-		var dups []dup
-		for framework, controls := range mod.Compliance {
-			byCID, ok := provided[framework]
-			if !ok {
-				continue
-			}
-			for _, cid := range controls {
-				if prov, hit := byCID[cid]; hit {
-					dups = append(dups, dup{framework, cid, prov})
-				}
-			}
-		}
-		sort.Slice(dups, func(i, j int) bool {
-			if dups[i].framework != dups[j].framework {
-				return dups[i].framework < dups[j].framework
-			}
-			return dups[i].control < dups[j].control
-		})
-		for _, d := range dups {
-			out = append(out, Finding{
-				Severity: Warning,
-				Line:     mod.Line,
-				Column:   mod.Column,
-				RuleID:   "module-provisions",
-				Message: fmt.Sprintf(
-					"redundant: compliance.%s[%q] is already covered by provides:[%s] — drop it from the explicit block",
-					d.framework, d.control, d.prov,
-				),
-			})
-		}
-	}
-
-	// Stable order across findings for golden-style tests.
+	// Stable order across findings for golden-style tests. (The
+	// redundancy check that lived here pre-0.66.48 — "compliance:[X]
+	// is already covered by provides:[Y]" — was retired with the
+	// per-module `compliance:` key itself. moduleComplianceKeyRetiredRule
+	// fires the only valid error when the key appears at all.)
 	sort.SliceStable(out, func(i, j int) bool {
 		return strings.Compare(out[i].Message, out[j].Message) < 0
 	})

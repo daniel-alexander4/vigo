@@ -79,6 +79,15 @@ func ParseModuleFile(data []byte) (*ModuleDefinition, error) {
 			}
 			def.Resources = resources
 		case "compliance":
+			// Retired 0.66.48 — per-module `compliance:` is no
+			// longer a valid operator-facing key. modlint
+			// (rule_module_compliance_key_retired) reports this as
+			// an Error so `vigocli config publish` refuses the
+			// module. The loader still decodes the value so
+			// downstream consumers (Trace, buildComplianceIndex)
+			// see the claim — that keeps test fixtures and
+			// in-flight operator migrations loading through; the
+			// lint gate is what enforces the new shape.
 			if err := val.Decode(&def.Compliance); err != nil {
 				return nil, fmt.Errorf("decoding compliance: %w", err)
 			}

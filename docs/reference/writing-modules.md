@@ -99,12 +99,19 @@ resources:
 | `depends_on` | no | Other modules this module depends on (module-level ordering) |
 | `before` | no | Modules that must run after this module |
 | `resources` | yes | List of resources to manage |
-| `provides` | no | Provision tags (e.g. `[time-sync, audit-trail]`) that the loader expands into framework → control coverage via the Vigo-curated catalog. See [Provisions](#provisions) below — preferred mechanism for common compliance attribution. |
-| `compliance` | no | Explicit framework → control IDs map. Valid for the long tail where the provision catalog doesn't cover the case; unioned with `provides:`-derived controls. |
+| `provides` | no | Provision tags (e.g. `[time-sync, audit-trail]`) — functional capability the module delivers. The loader expands each tag through `server/compliance/provisions.go` into framework → control coverage. See [Compliance authoring](#compliance-authoring) below. |
+| `bundle` | no | Framework-bundle tags (e.g. `[cis-ubuntu-access]`, `[ce-firewalls]`) — module exists to implement one section of a specific framework. The loader expands each tag through `server/compliance/bundles.go`. See [Compliance authoring](#compliance-authoring) below. |
 
-### Provisions
+> **Retired (0.66.48):** the per-module `compliance:` key is gone. Modules declare compliance through `provides:` / `bundle:` only — modlint errors on any module YAML that carries `compliance:` (`module-compliance-key-retired` rule). Directory-level `compliance.vgo` files still accept `compliance:` for inheritance (a different file shape, not a module YAML).
 
-A **provision** is a kebab-case tag a module declares to claim a functional capability — `time-sync`, `audit-trail`, `log-shipping`, `host-firewall`. The Vigo-curated catalog at `server/compliance/provisions.go` maps each provision to its framework cross-walks (HIPAA / PCI / NIST / ISO / CIS / SOC 2 / …). The loader expands each tag at config-load time and unions the result with the module's explicit `compliance:` block.
+### Compliance authoring
+
+Two YAML keys, two Vigo-curated catalogs, one mental-model split:
+
+- **`provides:`** — functional capability tag. The module ships a chrony daemon ⇒ `provides: [time-sync]`. The catalog (`server/compliance/provisions.go`) maps each tag to controls it satisfies across multiple frameworks; the module doesn't care which frameworks. Use this for cross-framework functional claims.
+- **`bundle:`** — framework-scope-cut tag. The module exists to implement CIS-Ubuntu §5 access controls ⇒ `bundle: [cis-ubuntu-access]`. The catalog (`server/compliance/bundles.go`) carries the framework's published cross-walks for that scope. Use this when the module is authored against a specific framework section.
+
+A module may declare both — `provides:` for the functional layer + `bundle:` for the explicit framework targeting. The loader unions the controls from both catalogs into the module's effective coverage.
 
 ```yaml
 name: chrony
@@ -116,22 +123,25 @@ resources:
     state: present
 ```
 
-That `provides: [time-sync]` is equivalent to a hand-rolled:
+That `provides: [time-sync]` is equivalent to the hand-rolled `compliance:` block this module used to carry — `cis-ubuntu [2.1.1.1, 2.1.1.2]`, `cis-rhel [2.1.1.1, 2.1.1.2]`, `iso-27001 [A.12.4.4]`, `nist-800-53 [AU-8]`, `pci-dss [10.6.1, 10.6.2, 10.6.3]` — captured once in the catalog instead of repeated in every time-sync module.
 
 ```yaml
-compliance:
-  cis-ubuntu:  [2.1.1.1, 2.1.1.2]
-  cis-rhel:    [2.1.1.1, 2.1.1.2]
-  iso-27001:   [A.12.4.4]
-  nist-800-53: [AU-8]
-  pci-dss:     [10.6.1, 10.6.2, 10.6.3]
+name: cis-ubuntu-access
+bundle: [cis-ubuntu-access]
+resources:
+  - name: pam-faillock
+    type: file
+    target_path: /etc/pam.d/common-auth-faillock
+    ...
 ```
 
-Run `vigocli compliance provisions` to list every known tag; `vigocli compliance provisions --show <name>` to see one tag's full framework → controls map. `vigocli config trace <hostname>` attributes each control to its source (`(via time-sync)` for provision-derived, no annotation for explicit).
+Operator surface:
 
-**When to use `provides:` vs explicit `compliance:`** — prefer `provides:` for any common cross-walk the catalog covers. Use an explicit `compliance:` block for module-specific controls that aren't in the catalog, or to add extras on top of a provision (e.g. a log shipper that also parses claims `provides: [log-shipping]` + extras in `compliance:`). `modlint` warns when a `compliance:` entry duplicates a `provides:`-covered control.
+- `vigocli compliance provisions` — list provisions (`--show <name>` for one tag's full framework → controls).
+- `vigocli compliance bundles` — list bundles (`--show <name>` for one tag's full framework → controls).
+- `vigocli config trace <hostname>` — per-control source attribution. Each row carries `(via <provision>)` or `(via bundle:<id>)` so an audit reviewer can walk every claim back to its catalog entry.
 
-Unknown provision tags are flagged as errors at module load (with did-you-mean suggestions) and contribute nothing to coverage. Extending the catalog is a code change — propose a PR with the new tag + its framework cross-walks.
+Unknown tags in either field are caught at module load (modlint Error with did-you-mean suggestion) and contribute nothing to coverage. Extending either catalog is a code change — propose a PR with the new tag + its framework cross-walks.
 
 ## Roles
 

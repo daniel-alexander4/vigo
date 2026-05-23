@@ -71,54 +71,9 @@ func (moduleBundleRule) apply(mod *module, _ Options) []Finding {
 		}
 	}
 
-	if len(mod.Compliance) > 0 {
-		bundled := make(map[string]map[string]string)
-		for _, b := range mod.Bundle {
-			if !knownSet[b] {
-				continue
-			}
-			for framework, controls := range compliance.ResolveBundle(b) {
-				if bundled[framework] == nil {
-					bundled[framework] = make(map[string]string)
-				}
-				for _, cid := range controls {
-					bundled[framework][cid] = b
-				}
-			}
-		}
-		type dup struct{ framework, control, bundle string }
-		var dups []dup
-		for framework, controls := range mod.Compliance {
-			byCID, ok := bundled[framework]
-			if !ok {
-				continue
-			}
-			for _, cid := range controls {
-				if b, hit := byCID[cid]; hit {
-					dups = append(dups, dup{framework, cid, b})
-				}
-			}
-		}
-		sort.Slice(dups, func(i, j int) bool {
-			if dups[i].framework != dups[j].framework {
-				return dups[i].framework < dups[j].framework
-			}
-			return dups[i].control < dups[j].control
-		})
-		for _, d := range dups {
-			out = append(out, Finding{
-				Severity: Warning,
-				Line:     mod.Line,
-				Column:   mod.Column,
-				RuleID:   "module-bundle",
-				Message: fmt.Sprintf(
-					"redundant: compliance.%s[%q] is already covered by bundle:[%s] — drop it from the explicit block",
-					d.framework, d.control, d.bundle,
-				),
-			})
-		}
-	}
-
+	// Redundancy check retired with the per-module `compliance:`
+	// key in 0.66.48 — moduleComplianceKeyRetiredRule is now the
+	// single error path for any `compliance:` block in a module YAML.
 	sort.SliceStable(out, func(i, j int) bool {
 		return strings.Compare(out[i].Message, out[j].Message) < 0
 	})

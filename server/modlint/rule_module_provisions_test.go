@@ -44,64 +44,13 @@ func TestModuleProvisions_UnknownTagWithDidYouMean(t *testing.T) {
 	}
 }
 
-// TestModuleProvisions_RedundantDeclarationWarns catches the noise:
-// a module declares both `provides: [time-sync]` and a `compliance:`
-// block listing the same (framework, control) pair the provision
-// already covers. The block isn't broken — but the redundancy hides
-// the operator's actual intent. Warning, not Error: explicit claims
-// remain valid.
-func TestModuleProvisions_RedundantDeclarationWarns(t *testing.T) {
-	mod := &module{
-		Name:     "chrony",
-		Provides: []string{"time-sync"},
-		Compliance: map[string][]string{
-			"pci-dss": {"10.6.1"}, // time-sync covers this
-		},
-	}
-	findings := moduleProvisionsRule{}.apply(mod, Options{})
-	if len(findings) != 1 {
-		t.Fatalf("expected 1 finding, got %d: %v", len(findings), findings)
-	}
-	if findings[0].Severity != Warning {
-		t.Errorf("expected Warning severity for redundant claim, got %v", findings[0].Severity)
-	}
-	if !strings.Contains(findings[0].Message, "redundant") {
-		t.Errorf("expected redundant in message, got: %s", findings[0].Message)
-	}
-	if !strings.Contains(findings[0].Message, "10.6.1") || !strings.Contains(findings[0].Message, "time-sync") {
-		t.Errorf("expected (10.6.1, time-sync) in message, got: %s", findings[0].Message)
-	}
-}
-
-// TestModuleProvisions_ExplicitExtrasAllowed pins the load-bearing
-// design point: an explicit compliance block that lists controls
-// NOT covered by the provision is fine — operators use this to layer
-// extras on top of a provision (e.g. fluentbit using log-shipping
-// + extras). No findings for the non-overlap controls.
-func TestModuleProvisions_ExplicitExtrasAllowed(t *testing.T) {
-	mod := &module{
-		Name:     "fluentbit",
-		Provides: []string{"log-shipping"},
-		Compliance: map[string][]string{
-			// log-shipping covers pci-dss [10.5.3]; these are extras
-			// that fluentbit legitimately adds.
-			"pci-dss":     {"10.2", "10.3"},
-			"nist-800-53": {"AU-4", "AU-6"},
-		},
-	}
-	findings := moduleProvisionsRule{}.apply(mod, Options{})
-	for _, f := range findings {
-		if f.Severity == Error {
-			t.Errorf("unexpected Error: %s", f.Message)
-		}
-		if f.Severity == Warning && strings.Contains(f.Message, "redundant") {
-			// A redundant warning would mean one of the explicit
-			// controls overlapped — but the test fixture is
-			// disjoint by construction.
-			t.Errorf("unexpected redundant warning: %s", f.Message)
-		}
-	}
-}
+// Redundancy-warning + explicit-extras tests retired with the
+// per-module `compliance:` key in 0.66.48 —
+// moduleComplianceKeyRetiredRule is the single error path now, and
+// `provides:` no longer interacts with an explicit `compliance:` block
+// at the module level (only at the directory-inheritance level via
+// `compliance.vgo`, which isn't a module YAML and doesn't go through
+// this rule).
 
 // TestModuleProvisions_NoProvidesNoFindings pins that the rule is a
 // no-op for modules without a provides: field — existing modules with

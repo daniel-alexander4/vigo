@@ -1053,6 +1053,17 @@ type ModuleDefinition struct {
 	Defaults   map[string]any      `yaml:"defaults"`
 	Resources  []ResourceConfig    `yaml:"resources"`
 	Vars       map[string]any      `yaml:"vars"`
+	// Compliance carries framework → control IDs claimed by this
+	// module. As of 0.66.48 the per-module `compliance:` YAML key is
+	// retired — modlint (rule_module_compliance_key_retired) errors
+	// on any module that uses it, so `vigocli config publish` refuses
+	// such modules. The field is retained because (a) the loader
+	// continues to decode the YAML key so historical fixtures + in-
+	// flight operator migrations don't crash before modlint runs,
+	// and (b) directory-level `compliance.vgo` inheritance
+	// (`loadComplianceConfigs` + `applyModuleComplianceInheritance`)
+	// still writes into it. Operator-facing per-module compliance
+	// authoring is `provides:` / `bundle:` exclusively.
 	Compliance map[string][]string `yaml:"compliance"`
 
 	// Provides lists Vigo-curated provision tags (e.g. "time-sync",
@@ -1128,6 +1139,11 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 			}
 			m.Resources = resources
 		case "compliance":
+			// Retired 0.66.48 — modlint
+			// (rule_module_compliance_key_retired) errors on it.
+			// Loader keeps decoding so historical fixtures + in-
+			// flight operator migrations load through; the lint gate
+			// is what enforces the new shape.
 			if err := val.Decode(&m.Compliance); err != nil {
 				return fmt.Errorf("decoding compliance: %w", err)
 			}
