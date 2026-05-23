@@ -672,3 +672,45 @@ envoys:
 		}
 	}
 }
+
+// Case U5: the config-trace "Compliance Sources" list shows each
+// compliance.vgo once. Regression for the duplicate-card bug — a
+// usercrates/compliance.vgo was collected by loadModuleComplianceConfigs and
+// a redundant loadUsercrateComplianceConfigs, whose source slices were
+// concatenated without dedup, producing two identical trace entries.
+func TestCompliance_TraceListsEachComplianceSourceOnce(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "usercrates", "compliance.vgo"), `
+compliance:
+  cis: ["5.4.1"]
+`)
+	writeFile(t, filepath.Join(dir, "usercrates", "dan.vgo"), `
+resources:
+  - name: dan
+    type: user
+    username: dan
+`)
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
+  - match: "*"
+    usercrates:
+      - dan
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	trace := store.Trace("any.host")
+	count := 0
+	for _, mcf := range trace.ModuleComplianceFiles {
+		if mcf.SourceFile == "usercrates/compliance.vgo" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("usercrates/compliance.vgo appears %d times in trace.ModuleComplianceFiles, want exactly 1", count)
+	}
+}
