@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"git.alexander4.io/vigo/server/config"
 )
 
 func TestNewRenderer(t *testing.T) {
@@ -309,5 +311,32 @@ func TestEmbedFS(t *testing.T) {
 		if err != nil {
 			t.Errorf("embedded FS missing %q: %v", path, err)
 		}
+	}
+}
+
+// TestRender_EnvoyTrace renders the config-trace page end to end. trace-body
+// dereferences config.ConfigTrace fields directly, so a template that names a
+// field the struct no longer has fails only at execution — this exercises it
+// against a matched trace. Render writes "template error" into the body on an
+// ExecuteTemplate failure, so its absence (plus a complete </html>) proves the
+// page rendered clean.
+func TestRender_EnvoyTrace(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer() error: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	r.Render(rec, "envoy-trace", EnvoyTracePageData{
+		PageData: PageData{Title: "Config Trace"},
+		Hostname: "danlap",
+		EnvoyID:  "00000000-0000-0000-0000-000000000000",
+		Trace:    &config.ConfigTrace{Hostname: "danlap", Matched: true},
+	})
+	body := rec.Body.String()
+	if strings.Contains(body, "template error") {
+		t.Errorf("envoy-trace render hit a template execution error:\n%s", body)
+	}
+	if !strings.Contains(body, "</html>") {
+		t.Error("envoy-trace render is incomplete — missing </html> (template aborted mid-render)")
 	}
 }
