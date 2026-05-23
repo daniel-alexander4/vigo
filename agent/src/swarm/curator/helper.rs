@@ -83,6 +83,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
+use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
@@ -115,6 +116,14 @@ const MAX_PUSH_HEADER_BYTES: usize = 4 * 1024 * 1024;
 /// stream is bounded by `blob_size`, not a timeout (a 2 GiB image over a slow
 /// link is legitimate).
 const NEGOTIATE_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// Concurrent client-handler ceiling. The curator helper is operator-facing
+/// (`vigocli swarm curator push` over the local Unix socket); steady-state
+/// volume is 1 client at a time, so 32 is comfortably above any realistic
+/// burst while keeping a runaway fan-out (CI bulk publish, fleet ops script)
+/// from spawning unbounded handler tasks. Mirrors `swarm/server.rs`'s
+/// `MAX_CONNECTIONS` shape.
+const HELPER_MAX_CONNECTIONS: usize = 32;
 
 /// `record_seed`'s retention slot for an artifact blob: empty ⇒ never
 /// auto-expired by the retention pruner (which only expires entries with a
@@ -169,6 +178,7 @@ pub async fn run(envoy_id: String, cancel: CancellationToken, manifest: Arc<Mani
     let listener = bind_listener()?;
     info!(path = %socket_path().display(), envoy_id = %envoy_id, "curator helper daemon listening");
     let envoy_id = Arc::new(envoy_id);
+    let semaphore = Arc::new(Semaphore::new(HELPER_MAX_CONNECTIONS));
     loop {
         tokio::select! {
             _ = cancel.cancelled() => {
@@ -184,10 +194,21 @@ pub async fn run(envoy_id: String, cancel: CancellationToken, manifest: Arc<Mani
                         continue;
                     }
                 };
+                // Bound concurrent client handlers. `acquire_owned().await` queues
+                // the accept loop when at saturation (operator-facing local socket;
+                // queue-on-full is friendlier than reject-on-full at this volume).
+                let permit = match semaphore.clone().acquire_owned().await {
+                    Ok(p) => p,
+                    Err(_) => {
+                        // Semaphore closed — only happens at shutdown.
+                        continue;
+                    }
+                };
                 let cache = cache.clone();
                 let manifest = manifest.clone();
                 let envoy_id = envoy_id.clone();
                 tokio::spawn(async move {
+                    let _permit = permit; // held for connection lifetime
                     if let Err(e) = handle_client(stream, &cache, &manifest, &envoy_id).await {
                         warn!(error = %e, "curator helper client error");
                     }

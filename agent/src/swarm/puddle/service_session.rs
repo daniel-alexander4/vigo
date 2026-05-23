@@ -52,7 +52,7 @@ use chacha20poly1305::{KeyInit, XChaCha20Poly1305, XNonce};
 use ed25519_dalek::{Signer, SigningKey};
 use hkdf::Hkdf;
 use sha2::{Digest, Sha256};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Semaphore};
 use zeroize::Zeroizing;
 
 // ---------- wire / on-disk constants (must match server/puddle/wrap.go) ----------
@@ -417,6 +417,14 @@ pub async fn daemon_main(args: Vec<String>) -> Result<()> {
     result
 }
 
+/// Concurrent client-handler ceiling for the service-account puddle
+/// helper's accept loop. Matches the cap shipped in 0.66.59 for the
+/// root-side helpers (`swarm/curator/helper.rs`, `swarm/gitback/helper.rs`)
+/// so the five helper daemons stay uniform; volume here is even smaller
+/// (single-uid caller: the local vigosrv process) so 32 is a
+/// runaway-prevention ceiling, not a load match.
+const HELPER_MAX_CONNECTIONS: usize = 32;
+
 async fn run_server(
     listener: tokio::net::UnixListener,
     state: Arc<RwLock<Loaded>>,
@@ -431,6 +439,7 @@ async fn run_server(
         "service-account puddle helper started"
     );
 
+    let semaphore = Arc::new(Semaphore::new(HELPER_MAX_CONNECTIONS));
     loop {
         let (stream, _addr) = match listener.accept().await {
             Ok(v) => v,
@@ -455,11 +464,18 @@ async fn run_server(
         {
             tracing::warn!(error = %e, "mtime-reload check failed; serving stale identity");
         }
+        // Bound concurrent client handlers; queue-on-saturation
+        // (operator-facing local socket).
+        let permit = match semaphore.clone().acquire_owned().await {
+            Ok(p) => p,
+            Err(_) => continue, // semaphore closed — shutdown
+        };
         let state_for_task = Arc::clone(&state);
         let secrets_for_task = secrets_dir.clone();
         let ops_for_task = ops_puddle_dir.clone();
         let key_file_for_task = key_file.clone();
         tokio::spawn(async move {
+            let _permit = permit; // held for connection lifetime
             if let Err(e) = handle_client(
                 stream,
                 state_for_task,

@@ -9,14 +9,21 @@
 
 use super::{Action, Executor, ResourceResult};
 use crate::snapshots;
+use lru::LruCache;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::io::{Read, Write};
+use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tracing::{info, warn};
+
+/// Upper bound on `stream_edit_cache` entries. Cache is keyed by
+/// `target_path`, so 1024 covers fleet-realistic file-resource counts with
+/// plenty of headroom while keeping a long-lived agent's memory bounded.
+const STREAM_EDIT_CACHE_CAP: usize = 1024;
 
 /// Cached result of a stream_edit pipeline run.
 #[derive(Clone)]
@@ -38,14 +45,16 @@ struct StreamEditCacheEntry {
 /// re-execution when input content and scripts haven't changed.
 pub struct FileExecutor {
     pub snapshot_mgr: Option<snapshots::Manager>,
-    stream_edit_cache: Mutex<HashMap<String, StreamEditCacheEntry>>,
+    stream_edit_cache: Mutex<LruCache<String, StreamEditCacheEntry>>,
 }
 
 impl FileExecutor {
     pub fn new(snapshot_mgr: Option<snapshots::Manager>) -> Self {
         Self {
             snapshot_mgr,
-            stream_edit_cache: Mutex::new(HashMap::new()),
+            stream_edit_cache: Mutex::new(LruCache::new(
+                NonZeroUsize::new(STREAM_EDIT_CACHE_CAP).expect("cache cap is non-zero"),
+            )),
         }
     }
 }
@@ -76,7 +85,7 @@ fn execute_file(
     dry_run: bool,
     result: &mut ResourceResult,
     snapshot_mgr: &Option<snapshots::Manager>,
-    stream_edit_cache: &Mutex<HashMap<String, StreamEditCacheEntry>>,
+    stream_edit_cache: &Mutex<LruCache<String, StreamEditCacheEntry>>,
 ) -> Result<(), String> {
     let path = params
         .get("target_path")
@@ -121,7 +130,7 @@ fn handle_present(
     result: &mut ResourceResult,
     snapshot_mgr: &Option<snapshots::Manager>,
     run_id: &str,
-    stream_edit_cache: &Mutex<HashMap<String, StreamEditCacheEntry>>,
+    stream_edit_cache: &Mutex<LruCache<String, StreamEditCacheEntry>>,
 ) -> Result<(), String> {
     // Resolve content: either from `source` (local file) or inline `content`.
     // These are mutually exclusive.
@@ -190,7 +199,7 @@ fn handle_present(
             if let Some(entry) = stream_edit_cache
                 .lock()
                 .ok()
-                .and_then(|c| c.get(path).cloned())
+                .and_then(|mut c| c.get(path).cloned())
             {
                 if entry.input_fingerprint == fingerprint {
                     let current_hash = file_hash(path)
@@ -217,7 +226,7 @@ fn handle_present(
         // Update cache with the new output hash.
         let output_hash = sha256_hex(content.as_bytes());
         if let Ok(mut cache) = stream_edit_cache.lock() {
-            cache.insert(
+            cache.put(
                 path.to_string(),
                 StreamEditCacheEntry {
                     input_fingerprint: fingerprint,
@@ -1119,6 +1128,44 @@ mod tests {
         );
         assert_eq!(result2.action, Action::None);
         assert!(!result2.changed);
+    }
+
+    #[test]
+    fn stream_edit_cache_evicts_oldest_when_over_capacity() {
+        // Pin the cache cap via the LruCache::put API directly — this asserts
+        // the bound rather than driving 1024+ pipeline executions (which would
+        // be a multi-minute test).
+        let fe = FileExecutor::new(None);
+        let mut cache = fe.stream_edit_cache.lock().unwrap();
+
+        // Fill the cache to exactly the cap.
+        for i in 0..STREAM_EDIT_CACHE_CAP {
+            cache.put(
+                format!("/tmp/file{}", i),
+                StreamEditCacheEntry {
+                    input_fingerprint: [0u8; 32],
+                    output_hash: String::new(),
+                },
+            );
+        }
+        assert_eq!(cache.len(), STREAM_EDIT_CACHE_CAP);
+        assert!(cache.get(&"/tmp/file0".to_string()).is_some());
+
+        // One more insert must evict the least-recently-used entry. Because
+        // the per-iteration `put` above bumps the LRU order to that key, the
+        // oldest entry (file0) hasn't been touched since insertion — but the
+        // last `get(file0)` above just moved it to the front, so the next
+        // eviction target is `file1`.
+        cache.put(
+            "/tmp/file_overflow".to_string(),
+            StreamEditCacheEntry {
+                input_fingerprint: [0u8; 32],
+                output_hash: String::new(),
+            },
+        );
+        assert_eq!(cache.len(), STREAM_EDIT_CACHE_CAP);
+        assert!(cache.get(&"/tmp/file1".to_string()).is_none());
+        assert!(cache.get(&"/tmp/file_overflow".to_string()).is_some());
     }
 
     #[test]

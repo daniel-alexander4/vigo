@@ -72,6 +72,7 @@ use std::time::Duration;
 use anyhow::{anyhow, bail, Context, Result};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
+use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
 use super::envelopes::is_token_revoked;
@@ -101,6 +102,14 @@ const MAX_HEADER_BYTES: usize = 4 * 1024;
 /// timeouts are removed because git's pkt-line protocol can sit
 /// idle on huge fetches.
 const NEGOTIATE_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Concurrent client-handler ceiling. The gitback helper is operator-facing
+/// (per-user `git-remote-gitback` and `vigocli swarm gitback` over the local
+/// Unix socket); steady-state volume is a handful of client invocations at a
+/// time. 32 is comfortably above any realistic burst while keeping a runaway
+/// fan-out (CI bulk push, fleet ops script) from spawning unbounded handler
+/// tasks. Mirrors `swarm/server.rs`'s `MAX_CONNECTIONS` shape.
+const HELPER_MAX_CONNECTIONS: usize = 32;
 
 /// Recognized service names. Matches the verb git's smart-HTTP
 /// transport uses, and what `git-receive-pack` / `git-upload-pack`
@@ -147,6 +156,7 @@ pub async fn run(cancel: CancellationToken, tls: Option<TlsCerts>) -> Result<()>
     let listener = bind_listener()?;
     tracing::info!(path = %socket_path().display(), "gitback helper daemon listening");
     let tls = std::sync::Arc::new(tls);
+    let semaphore = std::sync::Arc::new(Semaphore::new(HELPER_MAX_CONNECTIONS));
     loop {
         tokio::select! {
             _ = cancel.cancelled() => {
@@ -162,8 +172,16 @@ pub async fn run(cancel: CancellationToken, tls: Option<TlsCerts>) -> Result<()>
                         continue;
                     }
                 };
+                // Bound concurrent client handlers. `acquire_owned().await` queues
+                // the accept loop when at saturation; the operator-facing local
+                // socket profile makes queue-on-full friendlier than reject.
+                let permit = match semaphore.clone().acquire_owned().await {
+                    Ok(p) => p,
+                    Err(_) => continue, // semaphore closed — shutdown
+                };
                 let tls = tls.clone();
                 tokio::spawn(async move {
+                    let _permit = permit; // held for connection lifetime
                     if let Err(e) = handle_client(stream, tls).await {
                         tracing::warn!(error = %e, "gitback helper client error");
                     }

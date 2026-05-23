@@ -29,8 +29,17 @@ use anyhow::{bail, Context, Result};
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use ed25519_dalek::{Signer, SigningKey};
-use tokio::sync::mpsc;
+use std::sync::Arc;
+use tokio::sync::{mpsc, Semaphore};
 use zeroize::Zeroizing;
+
+/// Concurrent client-handler ceiling for the per-user puddle session
+/// helper's accept loop. Matches the cap shipped in 0.66.59 for the
+/// root-side helpers (`swarm/curator/helper.rs`, `swarm/gitback/helper.rs`)
+/// so the five helper daemons stay uniform; volume here is even smaller
+/// (single-uid, XDG_RUNTIME_DIR socket) so 32 is a runaway-prevention
+/// ceiling, not a load match.
+const HELPER_MAX_CONNECTIONS: usize = 32;
 
 /// Default idle-timeout for the puddle session helper, in minutes.
 /// The helper re-locks (scrubs the in-RAM key) after this much
@@ -399,6 +408,7 @@ async fn run_server(
         }
     });
 
+    let semaphore = Arc::new(Semaphore::new(HELPER_MAX_CONNECTIONS));
     loop {
         tokio::select! {
             _ = shutdown_rx.recv() => return Ok(()),
@@ -415,10 +425,17 @@ async fn run_server(
                     drop(stream);
                     continue;
                 }
+                // Bound concurrent client handlers; queue-on-saturation
+                // (operator-facing local socket).
+                let permit = match semaphore.clone().acquire_owned().await {
+                    Ok(p) => p,
+                    Err(_) => continue, // semaphore closed — shutdown
+                };
                 let key = key.clone();
                 let act = activity_tx.clone();
                 let sd = shutdown_tx.clone();
                 tokio::spawn(async move {
+                    let _permit = permit; // held for connection lifetime
                     if let Err(e) = handle_client(stream, key, act, sd).await {
                         tracing::debug!(error = %e, "client session error");
                     }
