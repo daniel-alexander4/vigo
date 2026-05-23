@@ -70,6 +70,24 @@ var (
 	userNoPassword    bool
 )
 
+// readAdminPubkey resolves the SSH public key for an admin webuser from the
+// matching OS user's standard key location on the server host. Admin
+// webusers map 1:1 to a human OS user; the pubkey backs browser-scrier
+// landing and audit attribution, so it is auto-read rather than supplied by
+// hand. Run on the server host (as root, or via sudo) where the OS user's
+// home is readable. Shared by `webusers create` and `webusers set-role`.
+func readAdminPubkey(username string) (string, error) {
+	osUser, err := user.Lookup(username)
+	if err != nil {
+		return "", fmt.Errorf("admin role requires a matching OS user on the server host — %q not found locally (%w). Run this command on the server host as root after the OS user has been created", username, err)
+	}
+	pubkey, err := readDefaultSSHPubkey(osUser.HomeDir)
+	if err != nil {
+		return "", fmt.Errorf("admin pubkey auto-read: %w (generate a key for OS user %q first: `sudo -u %s ssh-keygen -t ed25519`)", err, username, username)
+	}
+	return pubkey, nil
+}
+
 var webusersCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new web/API user (admin, viewer, or compliance) and set its password",
@@ -116,13 +134,9 @@ var webusersCreateCmd = &cobra.Command{
 			if userSSHKeyFile != "" {
 				return fmt.Errorf("--ssh-key-file is not allowed for --role admin; the pubkey is auto-read from the matching OS user's ~/.ssh/id_ed25519.pub (fallback id_rsa.pub). Drop the flag and run again from the server host as root or via sudo")
 			}
-			osUser, err := user.Lookup(userUsername)
+			pubkey, err := readAdminPubkey(userUsername)
 			if err != nil {
-				return fmt.Errorf("admin role requires a matching OS user on the server host — %q not found locally (%w). Run this command on the server host as root after the OS user has been created", userUsername, err)
-			}
-			pubkey, err := readDefaultSSHPubkey(osUser.HomeDir)
-			if err != nil {
-				return fmt.Errorf("admin pubkey auto-read: %w (generate a key for OS user %q first: `sudo -u %s ssh-keygen -t ed25519`)", err, userUsername, userUsername)
+				return err
 			}
 			body["ssh_public_key"] = pubkey
 		} else if userSSHKeyFile != "" {
@@ -217,20 +231,33 @@ var webusersSetRoleCmd = &cobra.Command{
 		if userID == "" {
 			return fmt.Errorf("user %q not found", userUsername)
 		}
-		if currentRole == userRole {
+
+		body := map[string]string{"role": userRole}
+		if userRole == "admin" {
+			// Admin webusers map 1:1 to an OS user and carry that user's SSH
+			// pubkey (browser-scrier landing + audit attribution). Seed it
+			// here — for a promotion AND for re-seeding an existing admin
+			// after an SSH key rotation — so --role admin is never a no-op.
+			// The handler preserves display name and email (omitted here).
+			pubkey, err := readAdminPubkey(userUsername)
+			if err != nil {
+				return err
+			}
+			body["ssh_public_key"] = pubkey
+		} else if currentRole == userRole {
 			fmt.Printf("User %s is already role %s — no change.\n", userUsername, userRole)
 			return nil
 		}
 
-		// Promotion to admin must map 1:1 with a human OS user on the server
-		// host — the server validates this and rejects with a remediation
-		// message if it fails. Send only the role; the handler preserves
-		// display name, email, and the SSH key.
-		body := map[string]string{"role": userRole}
 		if err := client.put("/api/v1/users/"+userID, body, nil); err != nil {
 			return err
 		}
 
+		if currentRole == userRole {
+			// Reachable only for --role admin — non-admin no-ops returned above.
+			fmt.Printf("Re-seeded the SSH pubkey for admin %s (role unchanged).\n", userUsername)
+			return nil
+		}
 		fmt.Printf("User %s role changed from %s to %s.\n", userUsername, currentRole, userRole)
 		if userRole != "admin" && currentRole == "admin" {
 			fmt.Printf("  %s is no longer an admin — existing sessions keep admin until next login.\n", userUsername)

@@ -75,18 +75,21 @@ Change an existing user's role. Permissions are recalculated from the new role a
 ```bash
 vigocli webusers set-role --username alice --role compliance
 
-# Promoting to admin — run from the server host. The username must
-# match a human OS account (same constraint as `create --role admin`);
-# the server rejects the change with a remediation message otherwise.
+# Promoting to admin — run from the server host. The username must match
+# a human OS account (same constraint as `create --role admin`), and the
+# command auto-reads that OS user's ~/.ssh/id_ed25519.pub (fallback
+# id_rsa.pub) into the user's DB-side SSH pubkey.
 sudo vigocli webusers set-role --username dan --role admin
 ```
 
-Only the role changes — display name, email, and the SSH public key are preserved. Demoting an operator out of `admin` takes effect at their next login; sessions already open keep their elevated permissions until then.
+For a demotion or a switch between `viewer` and `compliance`, only the role changes — display name, email, and the SSH public key are preserved. Demoting an operator out of `admin` takes effect at their next login; sessions already open keep their elevated permissions until then.
+
+For `--role admin` the command also **seeds (or re-seeds) the SSH public key** from the matching OS user's standard key location — admin webusers must carry one to back browser-scrier landing and audit attribution. Re-running `set-role --role admin` on a user who is *already* admin is therefore not a no-op: it refreshes the stored pubkey, which is how you update Vigo after rotating that OS user's SSH key.
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--username` | — | Username (required) |
-| `--role` | — | New role: `admin`, `viewer`, or `compliance` (required). Promotion to `admin` requires a matching human OS user on the server host. |
+| `--role` | — | New role: `admin`, `viewer`, or `compliance` (required). `admin` requires a matching human OS user on the server host with an `~/.ssh/id_ed25519.pub` (or `id_rsa.pub`); the pubkey is auto-read. |
 
 ### delete
 

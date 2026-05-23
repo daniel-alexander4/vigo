@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -62,6 +63,39 @@ func TestUsers_CreateUser(t *testing.T) {
 	}
 	if user.ID == "" {
 		t.Error("expected user ID to be set")
+	}
+}
+
+// TestUsers_Update_AdminWithoutPubkey_Rejected pins the invariant guard: an
+// admin webuser must carry an SSH pubkey. A pubkey-less admin row — the
+// broken state a viewer→admin promotion left behind before the set-role fix
+// — must not survive an update; the handler rejects it rather than silently
+// storing it for browser scrier to fail on later.
+func TestUsers_Update_AdminWithoutPubkey_Rejected(t *testing.T) {
+	queries := db.New(openMigratedTestDB(t))
+	store := vigoauth.NewUserStore(queries)
+	handler := NewUsersHandler(store, "none")
+	mux := http.NewServeMux()
+	handler.RegisterRoutes(mux)
+
+	u, err := store.Create(context.Background(), db.InsertUserParams{
+		Username: "dan",
+		Role:     "admin",
+	})
+	if err != nil {
+		t.Fatalf("seeding pubkey-less admin: %v", err)
+	}
+
+	body := `{"display_name":"Dan A"}`
+	req := userRequestWithUser("PUT", "/api/v1/users/"+u.ID, []byte(body), "admin-id", "admin", "admin")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for an admin with no SSH pubkey, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "SSH public key") {
+		t.Errorf("expected an SSH-pubkey-requirement error, got: %s", rec.Body.String())
 	}
 }
 
@@ -176,7 +210,10 @@ func TestUsers_AdminValidation_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	body := `{"username":"dan","role":"admin"}`
+	// An admin webuser must carry an SSH pubkey — the CLI auto-seeds it
+	// from the OS user's home; supply one here so the create satisfies the
+	// invariant the handler enforces.
+	body := `{"username":"dan","role":"admin","ssh_public_key":"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEQiISM8yaMfJhysMR7ZM80c0w4lnwe/lgyPyzeSCEKI test@vigo"}`
 	req := userRequestWithUser("POST", "/api/v1/users", []byte(body), "admin-id", "admin", "admin")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)

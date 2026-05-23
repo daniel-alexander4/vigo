@@ -183,6 +183,13 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		// An admin webuser must carry an SSH pubkey — it backs browser-scrier
+		// landing and audit attribution. The CLI auto-seeds it; reject here
+		// so no client can land a pubkey-less admin.
+		if pubkey == "" {
+			writeError(w, http.StatusBadRequest, "admin role requires an SSH public key — create with `vigocli webusers create --username "+req.Username+" --role admin` on the server host so the pubkey is auto-seeded from the OS user's ~/.ssh/id_ed25519.pub")
+			return
+		}
 	}
 
 	user, err := h.store.Create(r.Context(), db.InsertUserParams{
@@ -282,6 +289,15 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 	sshKey := existing.SSHPublicKey
 	if req.SSHPublicKey != "" {
 		sshKey = req.SSHPublicKey
+	}
+
+	// An admin webuser must carry an SSH pubkey — it backs browser-scrier
+	// landing and audit attribution. Reject a promotion (or any update)
+	// that would leave an admin without one, at the source rather than
+	// surfacing later as a failed scrier session.
+	if role == "admin" && sshKey == "" {
+		writeError(w, http.StatusBadRequest, "admin role requires an SSH public key — run `vigocli webusers set-role --username "+existing.Username+" --role admin` on the server host so the pubkey is auto-seeded from the OS user's ~/.ssh/id_ed25519.pub")
+		return
 	}
 
 	if err := h.store.Update(r.Context(), db.UpdateUserParams{

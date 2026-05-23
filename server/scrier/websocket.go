@@ -377,8 +377,9 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 	//     it and use it for THIS session.
 	//   Browser path — no pubkey in the request; we use the stored
 	//     users.ssh_public_key, which is set canonically by
-	//     `vigocli webusers create|update --role admin` (admin webusers
-	//     auto-read it from the matching OS user's home dir).
+	//     `vigocli webusers create --role admin` (new user) or
+	//     `vigocli webusers set-role --role admin` (existing user) —
+	//     both auto-read it from the matching OS user's home dir.
 	//
 	// No write-through: persisting per-user state from an opportunistic
 	// runtime side-effect was previously a silent fail for peer-authed
@@ -398,7 +399,7 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 		}
 		if verifyPubkey == "" {
 			sess.setStatus(statusError,
-				"no SSH pubkey available — for browser scrier, run `vigocli webusers create|update <yourname> --role admin` from the server host to seed your DB-side pubkey from your OS user's ~/.ssh/id_*.pub. For CLI scrier, the CLI auto-detects and sends inline.")
+				"no SSH pubkey available — for browser scrier, run `vigocli webusers set-role --username <yourname> --role admin` (existing user) or `vigocli webusers create --username <yourname> --role admin` (new user) from the server host; both seed your DB-side pubkey from your OS user's ~/.ssh/id_*.pub. For CLI scrier, the CLI auto-detects and sends inline.")
 			return
 		}
 		ephPriv, ephPub, err := GenerateEphemeralSSHKey()
