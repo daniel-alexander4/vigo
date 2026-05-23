@@ -759,19 +759,22 @@ type DependencyTraceEntry struct {
 }
 
 // ComplianceTraceEntry tracks compliance framework tags on a resolved
-// module. Frameworks carries the union of explicit `compliance:` entries
-// and capabilities-derived controls (resolved via
-// compliance.ModuleProvisions). ControlSources, when populated,
-// attributes each (framework, control) pair to its origin —
-// "provides:time-sync" or "explicit" — so `vigocli config trace` can
-// answer "which control came from where" without a second walk.
-// ControlSources is sparse: present only when the module has either a
-// provides: tag or a control declared via both paths.
+// module. Frameworks carries the union of explicit `compliance:`
+// entries, controls resolved through each `provides:` tag, and
+// controls resolved through each `bundle:` tag. ControlSources, when
+// populated, attributes each (framework, control) pair to its origin
+// — "provides:<id>", "bundle:<id>", or "explicit" — so
+// `vigocli config trace` can answer "which control came from where"
+// without a second walk. ControlSources is sparse: present only when
+// the module has a provides: or bundle: tag (otherwise every source
+// would be "explicit" — emit nothing and keep the renderer's legacy
+// compact form).
 type ComplianceTraceEntry struct {
 	Module         string                       `json:"module"`
 	Provides       []string                     `json:"provides,omitempty"`        // the module's raw provides: list (kept for renderer headers)
-	Frameworks     map[string][]string          `json:"frameworks"`                // framework → control IDs (union of explicit + provides)
-	ControlSources map[string]map[string]string `json:"control_sources,omitempty"` // framework → control_id → "provides:<id>" or "explicit"
+	Bundle         []string                     `json:"bundle,omitempty"`          // the module's raw bundle: list
+	Frameworks     map[string][]string          `json:"frameworks"`                // framework → control IDs (union of explicit + provides + bundle)
+	ControlSources map[string]map[string]string `json:"control_sources,omitempty"` // framework → control_id → "provides:<id>" | "bundle:<id>" | "explicit"
 }
 
 // EnvoyWaiverFileEntry stores per-file waiver data for trace display.
@@ -1269,12 +1272,15 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	// the explicit author intent wins for attribution.
 	for _, mod := range cfg.Modules {
 		def, ok := cs.moduleDefs[mod.Name]
-		if !ok || (len(def.Compliance) == 0 && len(def.Provides) == 0) {
+		if !ok || (len(def.Compliance) == 0 && len(def.Provides) == 0 && len(def.Bundle) == 0) {
 			continue
 		}
 		entry := ComplianceTraceEntry{Module: mod.Name}
 		if len(def.Provides) > 0 {
 			entry.Provides = append([]string(nil), def.Provides...)
+		}
+		if len(def.Bundle) > 0 {
+			entry.Bundle = append([]string(nil), def.Bundle...)
 		}
 		fw := make(map[string][]string)
 		src := make(map[string]map[string]string)
@@ -1291,9 +1297,9 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 				}
 				src[standard][cid] = source
 			}
-			// Explicit overrides a provides: tag for attribution
-			// purposes — operators reading the trace want the
-			// "operator wrote this" signal preserved.
+			// Explicit overrides a provides:/bundle: tag for
+			// attribution purposes — operators reading the trace
+			// want the "operator wrote this" signal preserved.
 			if source == "explicit" && src[standard] != nil {
 				src[standard][cid] = "explicit"
 			}
@@ -1305,13 +1311,20 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 				}
 			}
 		}
+		for _, b := range def.Bundle {
+			for standard, controlIDs := range compliance.ResolveBundle(b) {
+				for _, cid := range controlIDs {
+					addControl(standard, cid, "bundle:"+b)
+				}
+			}
+		}
 		for standard, controlIDs := range def.Compliance {
 			for _, cid := range controlIDs {
 				addControl(standard, cid, "explicit")
 			}
 		}
 		entry.Frameworks = fw
-		if len(def.Provides) > 0 {
+		if len(def.Provides) > 0 || len(def.Bundle) > 0 {
 			entry.ControlSources = src
 		}
 		trace.ComplianceTags = append(trace.ComplianceTags, entry)
@@ -1576,12 +1589,14 @@ var SlugForStandardKey = func() map[string]string {
 }()
 
 // buildComplianceIndex creates a reverse index from module compliance
-// tags. Each module's controls are the UNION of two sources: the
-// explicit `compliance:` block, and the controls implied by each
-// `provides:` tag resolved through compliance.ModuleProvisions. The
-// per-control []module_names slice is deduped — without that, a module
-// declaring the same (framework, control) via both `provides:` and
-// `compliance:` would appear twice in coverage drilldowns.
+// tags. Each module's controls are the UNION of three sources: the
+// explicit `compliance:` block, the controls implied by each
+// `provides:` tag (resolved through compliance.ModuleProvisions), and
+// the controls implied by each `bundle:` tag (resolved through
+// compliance.ModuleBundles). The per-control []module_names slice is
+// deduped — without that, a module declaring the same
+// (framework, control) via two paths would appear twice in coverage
+// drilldowns.
 func buildComplianceIndex(moduleDefs map[string]*ModuleDefinition) map[string]map[string][]string {
 	idx := make(map[string]map[string][]string)
 	// Track which (standard, control, module) tuples we've already
@@ -1607,6 +1622,13 @@ func buildComplianceIndex(moduleDefs map[string]*ModuleDefinition) map[string]ma
 	for _, mod := range moduleDefs {
 		for _, prov := range mod.Provides {
 			for standard, controlIDs := range compliance.ResolveProvision(prov) {
+				for _, cid := range controlIDs {
+					add(standard, cid, mod.Name)
+				}
+			}
+		}
+		for _, b := range mod.Bundle {
+			for standard, controlIDs := range compliance.ResolveBundle(b) {
 				for _, cid := range controlIDs {
 					add(standard, cid, mod.Name)
 				}

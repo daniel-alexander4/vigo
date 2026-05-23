@@ -175,6 +175,7 @@ type module struct {
 	Before          []string
 	Defaults        map[string]any
 	Provides        []string
+	Bundle          []string
 	Compliance      map[string][]string
 	ComplianceOrder []string // preserve original framework key order
 	Vars            map[string]any
@@ -468,6 +469,10 @@ func parse(data []byte) (*module, error) {
 		case "provides":
 			if err := val.Decode(&mod.Provides); err != nil {
 				return nil, fmt.Errorf("decoding provides: %w", err)
+			}
+		case "bundle":
+			if err := val.Decode(&mod.Bundle); err != nil {
+				return nil, fmt.Errorf("decoding bundle: %w", err)
 			}
 		case "vars":
 			if val.Kind == yaml.MappingNode {

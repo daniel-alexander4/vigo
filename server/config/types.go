@@ -1064,6 +1064,18 @@ type ModuleDefinition struct {
 	// they don't fail the load.
 	Provides []string `yaml:"provides"`
 
+	// Bundle lists Vigo-curated framework-bundle tags (e.g.
+	// "cis-ubuntu-access-baseline", "ce-firewalls") that the module
+	// implements. Bundles are the framework-scope-cut sibling of
+	// Provides — Provides names what a module *does* across frameworks;
+	// Bundle names *which framework section* a module satisfies. The
+	// loader expands each tag through compliance.ModuleBundles and
+	// unions the result alongside Provides + Compliance. Two YAML keys,
+	// two catalogs, two different operator mental models — the conceptual
+	// split is intentional (ADR-style decision recorded in CLAUDE.md
+	// "Module System" section).
+	Bundle []string `yaml:"bundle"`
+
 	// TemplateSources are stockpile-relative paths the module references
 	// via `source:` on any of its resources, captured by resolveSourceFiles
 	// before the source attribute is rewritten into content. Used by the
@@ -1122,6 +1134,10 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 		case "provides":
 			if err := val.Decode(&m.Provides); err != nil {
 				return fmt.Errorf("decoding provides: %w", err)
+			}
+		case "bundle":
+			if err := val.Decode(&m.Bundle); err != nil {
+				return fmt.Errorf("decoding bundle: %w", err)
 			}
 		}
 	}

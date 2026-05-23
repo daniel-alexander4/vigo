@@ -267,6 +267,7 @@ type dependencyTraceEntry = struct {
 type complianceTraceEntry = struct {
 	Module         string                       `json:"module"`
 	Provides       []string                     `json:"provides,omitempty"`
+	Bundle         []string                     `json:"bundle,omitempty"`
 	Frameworks     map[string][]string          `json:"frameworks"`
 	ControlSources map[string]map[string]string `json:"control_sources,omitempty"`
 }
@@ -658,16 +659,21 @@ func renderDependencyInheritance(deps []dependencyTraceEntry) {
 }
 
 // renderComplianceInheritance draws Section 6: compliance framework
-// tags per module. When the module declares `provides:`, each control
-// is annotated with its source — `(via <provision>)` for catalog-
-// derived controls, no suffix for explicit `compliance:` claims. The
-// module header lists the provision tags so the operator sees "this
-// module declared time-sync" before reading the expanded controls.
+// tags per module. When the module declares `provides:` or `bundle:`,
+// each control is annotated with its source — `(via <provision>)` /
+// `(via bundle:<id>)` for catalog-derived controls, no suffix for
+// explicit `compliance:` claims. The module header lists the
+// provides/bundle tags so the operator sees "this module declared
+// time-sync" / "this module implements cis-ubuntu-access" before
+// reading the expanded controls.
 func renderComplianceInheritance(tags []complianceTraceEntry) {
 	for _, ct := range tags {
 		header := amber(ct.Module)
 		if len(ct.Provides) > 0 {
 			header = header + dim("  provides: ["+strings.Join(ct.Provides, ", ")+"]")
+		}
+		if len(ct.Bundle) > 0 {
+			header = header + dim("  bundle: ["+strings.Join(ct.Bundle, ", ")+"]")
 		}
 		fmt.Printf("  %s\n", header)
 
@@ -681,8 +687,8 @@ func renderComplianceInheritance(tags []complianceTraceEntry) {
 		for _, fw := range fwNames {
 			controls := ct.Frameworks[fw]
 			if len(ct.ControlSources) == 0 {
-				// No provides on this module — render the legacy
-				// compact form (all controls one line).
+				// No provides/bundle on this module — render the
+				// legacy compact form (all controls one line).
 				fmt.Printf("    %s  %s\n", bold(fw+":"), strings.Join(controls, ", "))
 				continue
 			}
@@ -693,8 +699,11 @@ func renderComplianceInheritance(tags []complianceTraceEntry) {
 			for _, cid := range sortedControls {
 				src := ct.ControlSources[fw][cid]
 				suffix := ""
-				if strings.HasPrefix(src, "provides:") {
+				switch {
+				case strings.HasPrefix(src, "provides:"):
 					suffix = "  " + dim("(via "+strings.TrimPrefix(src, "provides:")+")")
+				case strings.HasPrefix(src, "bundle:"):
+					suffix = "  " + dim("(via bundle:"+strings.TrimPrefix(src, "bundle:")+")")
 				}
 				fmt.Printf("    %s  %s%s\n", bold(fw+":"), cid, suffix)
 			}
