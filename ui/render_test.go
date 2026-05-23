@@ -228,6 +228,42 @@ func TestRender_CSPHeader(t *testing.T) {
 	}
 }
 
+func TestRender_FirstRunEmptyState(t *testing.T) {
+	r, err := NewRenderer()
+	if err != nil {
+		t.Fatalf("NewRenderer() error: %v", err)
+	}
+	admin := &AuthUser{Role: "admin"}
+
+	// Zero envoys: the dashboard renders the enrollment panel with the
+	// bootstrap command, and the operational nav is suppressed.
+	rec := httptest.NewRecorder()
+	r.Render(rec, "dashboard", DashboardPageData{
+		PageData:         PageData{Title: "Dashboard", NoEnvoys: true, CurrentUser: admin},
+		BootstrapCommand: "curl -sSfk https://vigo.test:8443/bootstrap | sudo sh",
+	})
+	body := rec.Body.String()
+	if !strings.Contains(body, "No envoys enrolled yet") {
+		t.Error("first-run panel heading missing")
+	}
+	if !strings.Contains(body, "curl -sSfk https://vigo.test:8443/bootstrap | sudo sh") {
+		t.Error("bootstrap command missing from first-run panel")
+	}
+	if strings.Contains(body, `href="/envoys"`) {
+		t.Error("operational nav rendered in the zero-envoy first-run state")
+	}
+
+	// With envoys enrolled, the operational nav is present again.
+	rec2 := httptest.NewRecorder()
+	r.Render(rec2, "dashboard", DashboardPageData{
+		PageData:    PageData{Title: "Dashboard", NoEnvoys: false, CurrentUser: admin},
+		TotalEnvoys: 3,
+	})
+	if !strings.Contains(rec2.Body.String(), `href="/envoys"`) {
+		t.Error("operational nav missing when envoys are enrolled")
+	}
+}
+
 func TestRenderFragment_NoCSP(t *testing.T) {
 	// Fragments are HTMX partials — no CSP needed since the parent page has it.
 	r, err := NewRenderer()

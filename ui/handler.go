@@ -767,12 +767,16 @@ type PageData struct {
 	SwarmEnabled     bool
 	AuthEnabled      bool
 	AuthMethod       string
-	CurrentUser      *AuthUser
-	LicenseWarning   string // non-empty when license is near or over limits
-	OrgName          string // custom org name from branding config
-	CustomLogo       bool   // true when a custom logo path is configured
-	CustomFavicon    bool   // true when a custom favicon path is configured
-	Theme            string // "light" (default), "dark", or "auto"
+	// NoEnvoys is true when zero envoys are enrolled — the first-run
+	// state. The shared nav partial collapses to the brand block only,
+	// and the dashboard renders the enrollment panel.
+	NoEnvoys       bool
+	CurrentUser    *AuthUser
+	LicenseWarning string // non-empty when license is near or over limits
+	OrgName        string // custom org name from branding config
+	CustomLogo     bool   // true when a custom logo path is configured
+	CustomFavicon  bool   // true when a custom favicon path is configured
+	Theme          string // "light" (default), "dark", or "auto"
 }
 
 // LicensePageData holds data for the license status page.
@@ -863,10 +867,13 @@ type DashboardPageData struct {
 	PageData
 	AgentVersion   string
 	AgentPlatforms []AgentPlatform
-	TotalEnvoys    int
-	ActiveEnvoys   int
-	RecentFailures int
-	DriftRate      float64
+	// BootstrapCommand is the agent-enrollment one-liner shown on the
+	// first-run panel, addressed to the server's configured hostname.
+	BootstrapCommand string
+	TotalEnvoys      int
+	ActiveEnvoys     int
+	RecentFailures   int
+	DriftRate        float64
 	// LicenseCapacity drives the top-of-dashboard capacity banner. Empty
 	// LicenseCapacityLevel means the banner is not rendered. "warning"
 	// renders an orange notice (≥90% of cap), "critical" renders a red
@@ -1978,6 +1985,13 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "docs", data)
 }
 
+// noEnvoys reports whether zero envoys are enrolled — the first-run state
+// that drives the dashboard enrollment panel and the collapsed nav. Backed
+// by the O(1) FleetCache convergence counter.
+func (h *Handler) noEnvoys() bool {
+	return h.fleetCache != nil && h.fleetCache.Counts().Total == 0
+}
+
 // setCommon applies version, AI-enabled, spanner, auth, and license flags to page data.
 func (h *Handler) setCommon(pd *PageData) {
 	pd.Version = h.version
@@ -2012,6 +2026,9 @@ func (h *Handler) setCommon(pd *PageData) {
 	if pd.Theme == "" {
 		pd.Theme = "light"
 	}
+
+	// NoEnvoys gates the first-run UI — empty nav + dashboard enrollment panel.
+	pd.NoEnvoys = h.noEnvoys()
 
 	if h.enforcer != nil {
 		s := h.enforcer.GetStatus()
@@ -2092,7 +2109,10 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 // /compliance instead — the dashboard is a fleet-state surface and
 // has no compliance-shaped fallback worth rendering.
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
-	if h.authEnabled {
+	// In the first-run (zero-envoy) state the dashboard is universal
+	// onboarding — show the enrollment panel to every operator, including
+	// roles without fleet.read that are otherwise routed to /compliance.
+	if h.authEnabled && !h.noEnvoys() {
 		if u := auth.UserFromContext(r.Context()); u != nil && !u.HasPermission(auth.PermFleetRead) {
 			http.Redirect(w, r, "/compliance", http.StatusFound)
 			return
@@ -2106,6 +2126,15 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		data.AgentVersion = h.version
 	}
 	data.AgentPlatforms = h.agentPlatforms()
+
+	// First-run enrollment command, addressed to the server's configured
+	// hostname so it's deterministic regardless of how the operator
+	// reached the UI. Rendered by the dashboard's no-envoys panel.
+	bootstrapHost := h.serverHostname
+	if bootstrapHost == "" {
+		bootstrapHost = "localhost"
+	}
+	data.BootstrapCommand = fmt.Sprintf("curl -sSfk https://%s:8443/bootstrap | sudo sh", bootstrapHost)
 
 	// Enrich with security posture data (all CVE counts are unique/deduplicated).
 	sec := h.dataSource.SecurityScanData()

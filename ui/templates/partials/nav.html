@@ -20,6 +20,7 @@
         </button>
     </div>
     <nav class="sidebar__nav">
+        {{if not .NoEnvoys}}
         {{if .CurrentUser.HasPermission "fleet.read"}}
         <a href="/" class="nav-link{{if eq .ActiveNav "dashboard"}} nav-link--active{{end}}">
             Dashboard
@@ -137,6 +138,7 @@
         <a href="/support" class="nav-link{{if eq .ActiveNav "support"}} nav-link--active{{end}}">
             Support
         </a>
+        {{end}}
     </nav>
 </aside>
 {{end}}

@@ -70,6 +70,8 @@ The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS �
 
 Sign in at `https://localhost:8443/login` as `<yourname>`. The default `admin` user is deliberately not auto-created — admin webusers map 1:1 with real OS users so audit attribution always names a real human and browser scrier sessions seed your pubkey automatically. If you need multiple operators, repeat step 3 for each.
 
+If no envoy has checked in yet, the dashboard shows a first-run panel with the step-2 bootstrap command and an otherwise-empty nav — both fill in automatically once the first envoy enrolls.
+
 ### 3. Verify
 
 ```bash

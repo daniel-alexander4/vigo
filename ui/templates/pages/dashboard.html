@@ -45,17 +45,18 @@
 </div>
 {{end}}
 
-{{if eq .TotalEnvoys 0}}
+{{if .NoEnvoys}}
 <div class="welcome-card">
-    <h2>Welcome to Vigo</h2>
-    <p>No envoys enrolled yet. Get started by enrolling your first managed node.</p>
-    <ol class="welcome-steps">
-        <li>Generate an enrollment token: <code>vigocli tokens generate --pattern "*.example.com"</code></li>
-        <li>Install the agent on a managed node and enroll with the token</li>
-        <li>Write your first module in <code>/srv/vigo/stockpile/modules/</code></li>
-        <li>Publish config: <code>vigocli config publish</code></li>
-    </ol>
-    <p class="welcome-card__cta"><a href="/docs" class="btn btn--primary btn--sm">Read the docs</a></p>
+    <h2>No envoys enrolled yet</h2>
+    <p>Vigo manages a fleet of <em>envoys</em>, and there are none yet. Start by enrolling this server's own host as the first envoy. Run this <strong>on the server host</strong> — enrollment from the local network auto-signs, no token needed:</p>
+    <div class="yaml-block">
+        <button type="button" class="btn btn--sm yaml-block__copy" data-copy-target="bootstrap-cmd">Copy</button>
+        <pre class="server-config-yaml"><code id="bootstrap-cmd">{{.BootstrapCommand}}</code></pre>
+    </div>
+    <p>It installs the <code>vigo</code> agent on this host and enrolls it into the fleet. Once it checks in, this page becomes your fleet dashboard.</p>
+    <p class="welcome-card__cta">
+        {{if .DocsEnabled}}<a href="/docs" class="btn btn--sm">Documentation</a> {{end}}<a href="/support" class="btn btn--sm">Support</a>
+    </p>
 </div>
 {{else}}
 <div id="stats"
