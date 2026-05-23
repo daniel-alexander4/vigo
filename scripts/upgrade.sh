@@ -16,6 +16,10 @@ set -euo pipefail
 #   full         Full Docker image rebuild (vigosrv + vigocli + amd64
 #                agent), redeploy from the new image. Durable; installs
 #                host vigocli.
+#   both         Shorthand for `full arm64` — full image plus a fresh
+#                arm64 cross-compile in the same run.
+#   all          Shorthand for `full arm64 darwin freebsd windows` —
+#                full image plus every supported cross-target.
 #   amd64        Cross-compile the linux/amd64 agent, inject it into the
 #                running container.
 #   arm64        Cross-compile the linux/arm64 agent, inject it.
@@ -37,7 +41,8 @@ set -euo pipefail
 #
 # Examples:
 #   sudo scripts/upgrade.sh server-only     # fast vigosrv hot-swap
-#   sudo scripts/upgrade.sh full arm64      # full image with a fresh arm64
+#   sudo scripts/upgrade.sh both            # = full arm64
+#   sudo scripts/upgrade.sh all             # = full arm64 darwin freebsd windows
 #   sudo scripts/upgrade.sh arm64           # cross-compile + inject arm64
 #   sudo scripts/upgrade.sh                 # = full amd64 arm64
 #   sudo scripts/upgrade.sh full --push     # full image, push to registry
@@ -67,6 +72,8 @@ Usage: sudo scripts/upgrade.sh [components...] [--norun] [--push]
 Components (name it to build it, omit it to skip it):
   server-only  hot-swap vigosrv + refresh vigocli (container + host); fast
   full         full Docker image rebuild + redeploy (durable; rebuilds amd64 agent)
+  both         shorthand for `full arm64`
+  all          shorthand for `full arm64 darwin freebsd windows` (every cross-target)
   amd64        cross-compile + inject the linux/amd64 agent
   arm64        cross-compile + inject the linux/arm64 agent
                (darwin / freebsd / windows are also accepted)
@@ -132,6 +139,8 @@ for arg in "$@"; do
     case "$arg" in
         server-only) DO_SERVERONLY=true; n_components=$((n_components + 1)) ;;
         full)        DO_FULL=true;       n_components=$((n_components + 1)) ;;
+        both)        DO_FULL=true; DO_ARM64=true; n_components=$((n_components + 1)) ;;
+        all)         DO_FULL=true; DO_ARM64=true; DO_DARWIN=true; DO_FREEBSD=true; DO_WINDOWS=true; n_components=$((n_components + 1)) ;;
         amd64)       DO_AMD64=true;      n_components=$((n_components + 1)) ;;
         arm64)       DO_ARM64=true;      n_components=$((n_components + 1)) ;;
         darwin)      DO_DARWIN=true;     n_components=$((n_components + 1)) ;;

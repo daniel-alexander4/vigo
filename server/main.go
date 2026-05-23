@@ -187,6 +187,28 @@ func parseRetention(s string) time.Duration {
 	return d
 }
 
+// parsePoolqRetention is parseRetention's sibling for `swarm.poolq.retention`
+// — returns 0 (not the 30-day db-row default) on empty/invalid input so
+// `poolqmesh.NewAggregator` can substitute its own 7-day compile-time
+// default rather than the wrong subsystem's value. Same "Nd" shorthand.
+func parsePoolqRetention(s string) time.Duration {
+	if s == "" {
+		return 0
+	}
+	if len(s) > 1 && s[len(s)-1] == 'd' {
+		var days int
+		if _, err := fmt.Sscanf(s, "%dd", &days); err == nil && days > 0 {
+			return time.Duration(days) * 24 * time.Hour
+		}
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		slog.Warn("invalid swarm.poolq.retention, using poolqmesh default", "value", s, "error", err)
+		return 0
+	}
+	return d
+}
+
 func parseDuration(s string, def time.Duration) time.Duration {
 	if s == "" {
 		return def

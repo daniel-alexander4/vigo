@@ -130,6 +130,13 @@ enum Commands {
     Curator {
         args: Vec<String>,
     },
+    /// Poolq ordered-log CLI (ADR-029). Dispatched from `vigo swarm poolq ...`.
+    /// Read verbs (topics/subscribe/read/tail/seek/offset/status) need only
+    /// the agent's bootstrap TLS; `post` additionally needs `poolq: true`
+    /// on the usercrate and an unlocked per-user puddle.
+    Poolq {
+        args: Vec<String>,
+    },
     /// Hidden: puddle session helper daemon. Invoked by `unlock`
     /// (and the join flow) via `current_exe()` + `setsid()`; never
     /// by a human. Reads the 32-byte Ed25519 key from stdin, binds
@@ -323,6 +330,7 @@ fn parse_args() -> Result<Cli> {
                 Some("lockbox") => Commands::Lockbox { args: positional[2..].to_vec() },
                 Some("puddle") => Commands::SelfFleet { args: positional[2..].to_vec() },
                 Some("curator") => Commands::Curator { args: positional[2..].to_vec() },
+                Some("poolq") => Commands::Poolq { args: positional[2..].to_vec() },
                 // Read-only diagnostic verbs (0.41.1+): substrate
                 // status, seed inventory, peer table, hostdox posture.
                 // Read against /var/lib/vigo/swarm/{state,manifest,
@@ -403,6 +411,8 @@ COMMANDS:
                           init | enroll | status | unlock | lock | encrypt | decrypt | forget | reencrypt
     swarm curator     P2P artifact registry (ADR-024)
                           status | list | inspect | versions | resolve | pull
+    swarm poolq       P2P ordered-log queue (ADR-029)
+                          post | topics | subscribe | read | tail | seek | offset | status
 
 With no command, runs as a daemon.
 
@@ -1802,6 +1812,16 @@ async fn async_main() -> Result<()> {
             // for resolve/pull (server-mediated with a cached-catalog
             // fallback). Mutating verbs land in slice 4c.
             vigo::swarm::curator::cli::run(args.clone())
+        }
+
+        Some(Commands::Poolq { args }) => {
+            // `vigo swarm poolq <verb>` — ADR-029 founder + consumer CLI.
+            // Read verbs (topics / subscribe / read / tail / seek / offset
+            // / status) hit the public REST endpoints with the agent's
+            // bootstrap TLS; `post` signs via the per-user puddle session
+            // helper and writes under ~/.vigo-poolq/. No helper daemon —
+            // see ADR-029 "No root helper daemon".
+            vigo::swarm::poolq::cli::run(args.clone())
         }
 
         Some(Commands::SwarmApplyCleanup) => {

@@ -196,6 +196,7 @@ type SwarmSection struct {
 	Lockbox             SwarmLockboxSection `yaml:"lockbox" doc:"Lockbox operational tuning (size + envelope retention). Authorization derives from puddle above; this section is size/retention only." long:"Per-file ciphertext size cap and envelope (LEAVE/RESURRECT/TOMBSTONE) retention window. Authorization gating still derives from swarm.puddle.enabled per ADR-020 — there is no enabled field here."`
 	Gitback             GitbackSection      `yaml:"gitback" doc:"Gitback (git-over-swarm) authorization + bundle size + envelope retention." long:"Hostname pattern list controlling which envoys participate in gitback — both as publishers and as bundle holders. Plus per-bundle fan-out size cap and revoke/leave envelope retention."`
 	Curator             CuratorSection      `yaml:"curator" doc:"Curator (P2P artifact registry, ADR-024) authorization + per-blob size cap." long:"Hostname pattern list controlling which envoys participate in curator — both as publishers and as artifact-blob holders. Plus a per-blob (one {name,version,os,arch} artifact) size cap on the publish path. Publishing also requires a usercrate 'curator: true' flag and an unlocked puddle (a heavier grant than gitback)."`
+	Poolq               PoolqSection        `yaml:"poolq" doc:"Poolq (P2P ordered-log queue, ADR-029) authorization + retention + per-message size cap." long:"Hostname pattern list controlling which envoys participate in poolq — publishers (founders) and log-holders. Plus a per-message size cap and a retention window (messages older than the window are pruned, and stale-on-ingest messages are refused). Publishing additionally requires a usercrate 'poolq: true' flag and an unlocked puddle (same heavier grant as curator)."`
 	Hostdox             bool                `yaml:"hostdox" doc:"When true, each swarm-enabled agent maintains a delimited block in /etc/hosts mapping every announced peer hostname to its LAN IP — additive name resolution for fleets whose DNS doesn't own the local domain. Default false (opt-in)." default:"false" example:"true to let agents edit /etc/hosts; false (or omit) to leave it alone"`
 }
 
@@ -232,6 +233,21 @@ type CuratorSection struct {
 	MaxBytes  int64    `yaml:"max_bytes" doc:"Per-blob (one {name,version,os,arch} artifact) size cap, in bytes, enforced on the publish path. 0 / unset = the 2 GiB compile-time default. There is no uncapped mode." default:"2147483648" example:"2147483648 (2 GiB), 5368709120 (5 GiB), 21474836480 (20 GiB, large container images)"`
 	LocalPort uint32   `yaml:"local_port" doc:"Localhost-only HTTP port for curator's agent-local facades — the OCI Distribution v2 registry shim ('docker pull 127.0.0.1:<port>/<puddle-name>/<artifact>:<tag>', docker-compose 'image:') and the apt/dnf/apk package-repository server ('http://127.0.0.1:<port>/repo/<name>/...', consumed by a 'repository' resource). 0 (or unset) disables both facades; set to 5000 or any free port to enable. The agent binds 127.0.0.1 only — never an external interface." default:"0" example:"5000, 5050, 0 (disable)"`
 	S3Port    uint32   `yaml:"s3_port" doc:"HTTPS port for the read-only S3-compatible object API (ADR-027) — exposes curator artifacts to non-envoy S3 clients (CI runners, dev laptops, any S3 SDK). 0 (or unset) disables the listener. Authenticated with AWS SigV4 against credentials minted by 'vigocli swarm curator s3-credentials'; reuses the server TLS material. Requires the 'local' secrets backend (the SigV4 secret derivation roots in the master key)." default:"0" example:"9000, 9443, 0 (disable)"`
+}
+
+// PoolqSection authorizes the poolq subsystem per envoy and caps
+// per-message size + retention window (ADR-029). `Enabled` gates which
+// envoys participate — as publishers (founders) and as log-holders;
+// `MaxMsgBytes` caps an individual message body on the publish path;
+// `Retention` is the per-topic age window — messages older than this
+// are pruned by the mesh aggregator, and stale-on-ingest messages are
+// refused (flap-stable pruning, no tombstones). Poolq is a heavier
+// grant than gitback: publishing also requires a usercrate `poolq: true`
+// flag and an unlocked puddle — same posture as curator.
+type PoolqSection struct {
+	Enabled     []string `yaml:"enabled" doc:"Hostname pattern list (first-match-wins; \"-\" prefix denies; empty list disables) of envoys allowed to run poolq — publishers (founders) and log-holders." default:"[]" example:"[\"*\"], [\"-rasp1\", \"*\"], [\"annlap\", \"plex\"]"`
+	Retention   string   `yaml:"retention" doc:"Per-topic message-age retention window — messages older than this are pruned, and stale-on-ingest messages are refused. Empty = compile-time default (7d)." default:"7d" example:"7d, 24h, 30d"`
+	MaxMsgBytes int64    `yaml:"max_msg_bytes" doc:"Per-message body size cap on the publish path, in bytes. 0 / unset = the 16 KiB compile-time default. The hard ceiling is 64 KiB — bigger payloads belong in a curator artifact." default:"16384" example:"16384 (16 KiB), 4096 (4 KiB), 65536 (64 KiB ceiling)"`
 }
 
 // LongdrawerSection authorizes the longdrawer subsystem per envoy

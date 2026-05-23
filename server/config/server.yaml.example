@@ -399,6 +399,18 @@ watcher:
 #     local_port: 5000                          # Localhost-only HTTP port for curator's agent-local facades — the OCI Distribution v2 registry shim (`docker pull 127.0.0.1:5000/<puddle-name>/<artifact>:<tag>`, docker-compose `image:`) and the apt/dnf/apk package-repository server (`http://127.0.0.1:5000/repo/<name>/...`, consumed by a `repository` resource). 0 (or unset) disables both facades; set to 5000 or any free port to enable. The agent binds 127.0.0.1 only — never an external interface.
 #     s3_port: 9000                             # HTTPS port for the read-only S3-compatible object API (ADR-027) — lets non-envoy S3 clients (CI runners, dev laptops, `aws s3 cp`) fetch curator artifacts. 0 (or unset) disables it. SigV4-authenticated against credentials minted by `vigocli swarm curator s3-credentials`; reuses the server TLS material. Requires the `local` secrets backend.
 #
+#   # Poolq (P2P ordered-log queue, ADR-029). Founder + log-holder gate.
+#   # Reading is gated by `enabled`; posting additionally requires `poolq: true`
+#   # on the user's usercrate AND an unlocked puddle (same heavier-grant
+#   # posture as curator). Per-message body size is capped (default 16 KiB,
+#   # hard ceiling 64 KiB — pair with a curator artifact for larger payloads);
+#   # messages older than `retention` are pruned and stale-on-ingest messages
+#   # are refused.
+#   poolq:
+#     enabled: ["*"]
+#     retention: "7d"                           # message-age retention window. Empty = compile-time default (7d).
+#     max_msg_bytes: 16384                      # 16 KiB per-message cap. 0 = the 16 KiB compile-time default; hard ceiling 65536.
+#
 #   # hostdox — when true, each swarm-enabled agent maintains a
 #   # delimited block in /etc/hosts mapping every announced peer hostname to
 #   # its LAN IP. Additive only: lines outside the managed block are

@@ -18,7 +18,7 @@ import (
 type SwarmPatternFinding struct {
 	// Subsystem is the friendly name of the pattern list — "swarm" for
 	// the substrate-level list, or "puddle"/"gitback"/"curator"/
-	// "longdrawer"/"filecast" for the per-subsystem lists.
+	// "poolq"/"longdrawer"/"filecast" for the per-subsystem lists.
 	Subsystem string
 	// Index is the zero-based position of the offending deny entry in
 	// the list. Stable across reorders so the operator can find it.
@@ -59,6 +59,7 @@ func ValidateSwarmPatternOrder(s SwarmSection) []SwarmPatternFinding {
 	out = append(out, checkPatternList("puddle", s.Puddle.Enabled)...)
 	out = append(out, checkPatternList("gitback", s.Gitback.Enabled)...)
 	out = append(out, checkPatternList("curator", s.Curator.Enabled)...)
+	out = append(out, checkPatternList("poolq", s.Poolq.Enabled)...)
 	out = append(out, checkPatternList("longdrawer", s.Longdrawer.Enabled)...)
 	out = append(out, checkPatternList("filecast", s.Filecast.Enabled)...)
 	return out

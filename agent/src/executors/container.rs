@@ -914,6 +914,8 @@ mod tests {
             longdrawer_max_file_bytes: 0,
             curator_max_bytes: 0,
             curator_local_port: 5050,
+            poolq_max_msg_bytes: 0,
+            poolq_retention_secs: 0,
         });
         // inspect (not exists) → pull (shim URL) → create → start
         let mock = MockRunner::new(vec![

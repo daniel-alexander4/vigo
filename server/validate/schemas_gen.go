@@ -156,7 +156,7 @@ var generatedSchemas = map[string][]string{
 	"systemd_dropin": {"content","dropin","state","unit"},
 	"timezone": {"timezone"},
 	"tmpfile": {"age","entry_type","group","mode","name","path","state","user"},
-	"user": {"authorized_keys","comment","curator","expiredate","gid","gitback","group","groups","home","manage_home","password","password_max_age","puddle","purge_groups","shell","state","sudo_nopasswd","sudo_passwd","system","uid","username"},
+	"user": {"authorized_keys","comment","curator","expiredate","gid","gitback","group","groups","home","manage_home","password","password_max_age","poolq","puddle","purge_groups","shell","state","sudo_nopasswd","sudo_passwd","system","uid","username"},
 	"vm": {"artifact","cloud_init_user_data","disk_path","disk_size_gib","memory_mib","network_bridge","state","vcpu","vm_name"},
 	"windows_defender": {"DisableRealtimeMonitoring","exclusion_extension","ExclusionExtension","exclusion_path","ExclusionPath","exclusion_process","ExclusionProcess","real_time_protection","scan_schedule_day","ScanScheduleDay","ScanScheduleQuickScanTime","scan_schedule_time","state"},
 	"windows_env": {"state","target","value","variable"},

@@ -165,6 +165,8 @@ mod tests {
             longdrawer_max_file_bytes: 0,
             curator_max_bytes: 0,
             curator_local_port: port as u32,
+            poolq_max_msg_bytes: 0,
+            poolq_retention_secs: 0,
         });
 
         let cancel = CancellationToken::new();

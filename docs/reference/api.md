@@ -2234,6 +2234,17 @@ The P2P artifact registry. Catalog reads are server-mediated; blob fetches go P2
 - **GET /api/v1/swarm/curator/s3-credentials** — list S3 credential metadata (access key id, scope, name, created-at — no secrets). _(admin)_
 - **DELETE /api/v1/swarm/curator/s3-credentials/{access_key_id}** — revoke an S3 credential. _(admin)_
 
+### Poolq (ADR-029)
+
+The P2P ordered-log queue — Kafka-style retained messages with founder-monotonic seq, founder-only-writable in v1, fleet-readable. All reads are public-by-construction (mTLS is the transport guard); messages are explicitly fleet-readable per ADR-029. See [howto/set-up-poolq.md](../howto/set-up-poolq.md) for operator usage and [adr/029-poolq.md](../adr/029-poolq.md) for the design.
+
+- **GET /api/v1/swarm/poolq/topics** — every topic the fleet's `poolqmesh` aggregator knows about, with per-topic summary (head seq, message count, first/last posted-at) and a `blocked` flag. Includes a separate `blocked` array for topic_ids that are blocked but have no current catalog entry (publisher cleared them after the block landed). _(no auth)_
+- **GET /api/v1/swarm/poolq/topic/{topic_id}/head** — per-topic summary without the messages (cheap "is there new content?" probe). Returns even for blocked topics so consumers see the block status. _(no auth)_
+- **GET /api/v1/swarm/poolq/topic/{topic_id}/range?from=N&to=N** — message slice in `[from, to]` seq range. `to=0` (or omitted) = "to head". Refuses (404) on a blocked topic. _(no auth)_
+- **GET /api/v1/swarm/poolq/topic/{topic_id}/log** — full topic with every retained message. Convenience for operator views; consumers in steady state should use `/range` with offsets. Refuses (404) on a blocked topic. _(no auth)_
+- **POST /api/v1/swarm/poolq/block/{topic_id}?reason=...** — operator-block: server refuses to serve the topic's `/range` and `/log` fleet-wide regardless of who founded it. Signed messages still exist in posting users' state — only a `rm -rf` on the founder's `~/.vigo-poolq/<topic_id>/` truly purges. _(admin)_
+- **POST /api/v1/swarm/poolq/unblock/{topic_id}** — reverse a prior block. The 30s `poolqmesh` cache is invalidated by both block and unblock so moderation takes effect immediately. _(admin)_
+
 ## Database maintenance
 
 Server-internal maintenance verbs. Same role-gate as the rest of the `vigocli db …` surface.

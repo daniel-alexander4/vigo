@@ -7,8 +7,9 @@
 //! `/var/lib/vigo/usercrate-policy/<username>.json` at every reconcile
 //! pass that touches the user (present state). The file mirrors the
 //! authorization flags from the user resource — `puddle: bool`,
-//! `gitback: bool`, and `curator: bool` (ADR-024) — so user-mode CLI
-//! verbs can decide whether to proceed without contacting the server.
+//! `gitback: bool`, `curator: bool` (ADR-024), and `poolq: bool`
+//! (ADR-029) — so user-mode CLI verbs can decide whether to proceed
+//! without contacting the server.
 //!
 //! Daemon-canonical + user-readable. Root writes (mode 0644); CLI
 //! verbs read. Same shape as the existing peers.json / tombstones.json
@@ -17,9 +18,9 @@
 //! Refusal on missing cache is intentional. It surfaces the
 //! "user provisioned via raw useradd, never enrolled in a Vigo
 //! usercrate" case rather than silently allowing puddle / gitback /
-//! curator verbs that the operator didn't authorize. The error message
-//! points at the cache path so the operator knows which file the
-//! agent is looking for.
+//! curator / poolq verbs that the operator didn't authorize. The error
+//! message points at the cache path so the operator knows which file
+//! the agent is looking for.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -34,9 +35,10 @@ pub const POLICY_DIR: &str = "/var/lib/vigo/usercrate-policy";
 /// Authorization flags resolved from the user's usercrate. All
 /// default to `false` — the user can use a swarm subsystem only when
 /// the matching flag is explicitly set in the usercrate AND the
-/// envoy-level pattern list matches this host. `curator` is the
-/// heaviest grant (publish to the fleet's registry, fleet-readable by
-/// default — ADR-024) and additionally requires an unlocked puddle.
+/// envoy-level pattern list matches this host. `curator` and `poolq`
+/// are heavier grants (publish to the fleet's registry / post into the
+/// fleet's ordered logs, fleet-readable by default — ADR-024,
+/// ADR-029) and additionally require an unlocked puddle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct UserPolicy {
     #[serde(default)]
@@ -45,6 +47,8 @@ pub struct UserPolicy {
     pub gitback: bool,
     #[serde(default)]
     pub curator: bool,
+    #[serde(default)]
+    pub poolq: bool,
 }
 
 /// Path to the on-disk policy file for `username` under `dir`.
@@ -230,6 +234,34 @@ pub fn require_curator(username: &str) -> Result<()> {
     Ok(())
 }
 
+/// Refuse early in a CLI verb if the invoking user lacks the poolq
+/// authorization flag, OR if the envoy itself is denied by the
+/// `swarm.poolq.enabled` pattern list. See [`require_puddle`] for the
+/// two-layer rationale. Note: `poolq: true` does not by itself let
+/// the user post — the helper daemon also requires an unlocked puddle
+/// (the signing key) per ADR-029; this check is the cheap up-front
+/// "is this user/envoy even allowed to try" gate.
+pub fn require_poolq(username: &str) -> Result<()> {
+    refuse_root("poolq", username)?;
+    let policy = read_user_policy(username)?;
+    if !policy.poolq {
+        bail!(
+            "user {username} is not authorized to use poolq on this envoy. \
+             Set `poolq: true` on the user resource in the usercrate, \
+             publish the config, and wait for the agent to reconcile."
+        );
+    }
+    if !envoy_layer_allows("poolq") {
+        bail!(
+            "user {username} is authorized but this envoy is not in the \
+             poolq pattern list. Add this hostname to \
+             `swarm.poolq.enabled` in server.yaml, publish, and wait \
+             for the agent to check in."
+        );
+    }
+    Ok(())
+}
+
 /// Refuse a per-user swarm verb invocation when the resolved invoking user
 /// is `root`. The CLI's user-resolver returns `"root"` only when uid == 0,
 /// `SUDO_USER` is unset/empty/`root`, and `USER=root` — i.e. an interactive
@@ -273,6 +305,7 @@ fn envoy_layer_allows_at(path: &std::path::Path, subsystem: &str) -> bool {
         "puddle" => state.gates.puddle,
         "gitback" => state.gates.gitback,
         "curator" => state.gates.curator,
+        "poolq" => state.gates.poolq,
         _ => true,
     }
 }
@@ -283,7 +316,7 @@ mod tests {
 
     #[test]
     fn user_policy_round_trips_through_json() {
-        let p = UserPolicy { puddle: true, gitback: false, curator: true };
+        let p = UserPolicy { puddle: true, gitback: false, curator: true, poolq: true };
         let json = serde_json::to_string(&p).unwrap();
         let q: UserPolicy = serde_json::from_str(&json).unwrap();
         assert_eq!(p, q);
@@ -293,16 +326,19 @@ mod tests {
     fn missing_fields_default_to_false() {
         // A future field added to UserPolicy must not break existing
         // on-disk files. Empty {} parses as all-false. (This also
-        // covers the pre-curator on-disk file an upgraded agent would
-        // read for one reconcile cycle.)
+        // covers the pre-curator / pre-poolq on-disk file an upgraded
+        // agent would read for one reconcile cycle.)
         let p: UserPolicy = serde_json::from_str("{}").unwrap();
         assert!(!p.puddle);
         assert!(!p.gitback);
         assert!(!p.curator);
-        // A pre-curator file with the two old keys present must parse
-        // and leave curator at its safe default (false / deny).
-        let old: UserPolicy = serde_json::from_str(r#"{"puddle": true, "gitback": true}"#).unwrap();
-        assert!(old.puddle && old.gitback && !old.curator);
+        assert!(!p.poolq);
+        // A pre-poolq file with three old keys present must parse
+        // and leave poolq at its safe default (false / deny).
+        let old: UserPolicy = serde_json::from_str(
+            r#"{"puddle": true, "gitback": true, "curator": true}"#,
+        ).unwrap();
+        assert!(old.puddle && old.gitback && old.curator && !old.poolq);
     }
 
     #[test]
@@ -310,12 +346,13 @@ mod tests {
         // Tolerate extra keys an older agent might encounter from a
         // newer user-executor write.
         let p: UserPolicy = serde_json::from_str(
-            r#"{"puddle": true, "gitback": false, "curator": true, "future_thing": 42}"#,
+            r#"{"puddle": true, "gitback": false, "curator": true, "poolq": true, "future_thing": 42}"#,
         )
         .unwrap();
         assert!(p.puddle);
         assert!(!p.gitback);
         assert!(p.curator);
+        assert!(p.poolq);
     }
 
     #[test]
@@ -334,10 +371,11 @@ mod tests {
         assert!(refuse_root("puddle", "dan").is_ok());
         assert!(refuse_root("gitback", "alice").is_ok());
         assert!(refuse_root("curator", "ann").is_ok());
+        assert!(refuse_root("poolq", "bob").is_ok());
 
         // Root bails for each feature with a tailored message that
         // names the right flag and the fix.
-        for feature in ["puddle", "gitback", "curator"] {
+        for feature in ["puddle", "gitback", "curator", "poolq"] {
             let err = refuse_root(feature, "root").unwrap_err();
             let msg = format!("{err:#}");
             assert!(msg.contains("cannot run as root"), "feature={feature} msg={msg}");
@@ -368,6 +406,7 @@ mod tests {
         assert!(envoy_layer_allows_at(&path, "puddle"));
         assert!(envoy_layer_allows_at(&path, "gitback"));
         assert!(envoy_layer_allows_at(&path, "curator"));
+        assert!(envoy_layer_allows_at(&path, "poolq"));
         // Unknown subsystem name — defensive default-true.
         assert!(envoy_layer_allows_at(&path, "payload"));
     }

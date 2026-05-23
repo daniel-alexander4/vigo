@@ -627,7 +627,7 @@ mod tests {
             Caller {
                 username: "dan".into(),
                 home: self.home.clone(),
-                policy: UserPolicy { puddle: true, gitback: false, curator },
+                policy: UserPolicy { puddle: true, gitback: false, curator, poolq: false },
             }
         }
     }
@@ -793,6 +793,8 @@ mod tests {
             longdrawer_max_file_bytes: 0,
             curator_max_bytes: 4,
             curator_local_port: 0,
+            poolq_max_msg_bytes: 0,
+            poolq_retention_secs: 0,
         });
         let k = fresh_key();
         let blob = b"too big for the cap".to_vec();

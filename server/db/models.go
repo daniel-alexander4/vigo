@@ -210,6 +210,13 @@ type PlanResult struct {
 	PlannedAction string `json:"planned_action"`
 }
 
+type PoolqBlockedTopic struct {
+	TopicID   string    `json:"topic_id"`
+	BlockedAt time.Time `json:"blocked_at"`
+	BlockedBy string    `json:"blocked_by"`
+	Reason    string    `json:"reason"`
+}
+
 type RiskPostureHistory struct {
 	ID           string `json:"id"`
 	SnapshotDate string `json:"snapshot_date"`
@@ -229,11 +236,11 @@ type Run struct {
 	StartedAt    time.Time    `json:"started_at"`
 	FinishedAt   sql.NullTime `json:"finished_at"`
 	Status       string       `json:"status"`
-	Trigger      string       `json:"trigger"`
 	ModuleCount  int64        `json:"module_count"`
 	ChangedCount int64        `json:"changed_count"`
 	FailedCount  int64        `json:"failed_count"`
 	SkippedCount int64        `json:"skipped_count"`
+	Trigger      string       `json:"trigger"`
 }
 
 type RunResult struct {

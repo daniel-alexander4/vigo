@@ -444,6 +444,7 @@ impl UserExecutor {
             puddle: parse_bool_flag(params.get("puddle")),
             gitback: parse_bool_flag(params.get("gitback")),
             curator: parse_bool_flag(params.get("curator")),
+            poolq: parse_bool_flag(params.get("poolq")),
         };
         // Read the previously-cached policy so we can detect flag
         // flips. Missing-or-unreadable cache is treated as all-false:
@@ -463,6 +464,13 @@ impl UserExecutor {
         // scrub when puddle stays on but `curator:` was withdrawn.
         if old_policy.curator && !new_policy.curator && new_policy.puddle {
             errors.extend(self.scrub_swarm_state(username, ScrubScope::Curator));
+        }
+        // Same logic for poolq (ADR-029): a `puddle: true→false` scrub
+        // already wiped ~/.vigo-poolq/ via ScrubScope::PuddleAndLockbox
+        // below; only run the poolq-only scrub when puddle stays on but
+        // `poolq:` was withdrawn.
+        if old_policy.poolq && !new_policy.poolq && new_policy.puddle {
+            errors.extend(self.scrub_swarm_state(username, ScrubScope::Poolq));
         }
 
         if let Err(e) =
@@ -500,6 +508,7 @@ impl UserExecutor {
         let scrub_puddle = matches!(scope, ScrubScope::PuddleAndLockbox);
         let scrub_gitback = matches!(scope, ScrubScope::Gitback);
         let scrub_curator = matches!(scope, ScrubScope::Curator);
+        let scrub_poolq = matches!(scope, ScrubScope::Poolq);
 
         if scrub_puddle {
             // Queue lockbox LEAVE for live peers. Skip if the user
@@ -517,7 +526,7 @@ impl UserExecutor {
                     ));
                 }
             }
-            for dir in [".vigo-puddle", ".lockbox", "lockbox", ".vigo-gitback", ".vigo-curator"] {
+            for dir in [".vigo-puddle", ".lockbox", "lockbox", ".vigo-gitback", ".vigo-curator", ".vigo-poolq"] {
                 let path = home.join(dir);
                 if path.exists() {
                     if let Err(e) = std::fs::remove_dir_all(&path) {
@@ -554,6 +563,18 @@ impl UserExecutor {
             }
         }
 
+        if scrub_poolq {
+            let pq = home.join(".vigo-poolq");
+            if pq.exists() {
+                if let Err(e) = std::fs::remove_dir_all(&pq) {
+                    errors.push(format!(
+                        "removing {} for {username}: {e}",
+                        pq.display()
+                    ));
+                }
+            }
+        }
+
         errors
     }
 }
@@ -561,20 +582,22 @@ impl UserExecutor {
 /// Scope of a swarm-state scrub triggered by a usercrate flag flip.
 ///
 /// `PuddleAndLockbox` covers the heavier removal: puddle keypair,
-/// lockbox identity + ciphertext, the per-user gitback state dir, and
-/// the per-user curator publish-state dir (gitback projects and
-/// curator artifacts are both puddle-anchored — losing puddle means
-/// losing them).
+/// lockbox identity + ciphertext, the per-user gitback state dir, the
+/// per-user curator publish-state dir, and the per-user poolq state
+/// dir (gitback projects, curator artifacts, and poolq topics are all
+/// puddle-anchored — losing puddle means losing them).
 ///
 /// `Gitback` covers only `~/.vigo-gitback/`; `Curator` covers only
-/// `~/.vigo-curator/`. A user who keeps `puddle: true` but loses one
-/// of `gitback: true` / `curator: true` retains everything else
-/// (already-published artifacts/projects stay — losing a flag doesn't
-/// recall them, per ADR-024).
+/// `~/.vigo-curator/`; `Poolq` covers only `~/.vigo-poolq/`. A user
+/// who keeps `puddle: true` but loses one of `gitback: true` /
+/// `curator: true` / `poolq: true` retains everything else
+/// (already-published artifacts / projects / messages stay — losing a
+/// flag doesn't recall them, per ADR-024 / ADR-029).
 enum ScrubScope {
     PuddleAndLockbox,
     Gitback,
     Curator,
+    Poolq,
 }
 
 /// Parse a boolean usercrate flag. Accepts `"true"` / `"false"`;
@@ -2336,7 +2359,7 @@ mod tests {
         crate::swarm::policy::write_user_policy_at(
             &policy_dir,
             "ghost",
-            &crate::swarm::policy::UserPolicy { puddle: true, gitback: true, curator: true },
+            &crate::swarm::policy::UserPolicy { puddle: true, gitback: true, curator: true, poolq: true },
         )
         .unwrap();
         assert!(policy_dir.join("ghost.json").exists());

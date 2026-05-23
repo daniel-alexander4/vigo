@@ -33,6 +33,7 @@ pub mod peer_client;
 pub mod peer_health;
 pub mod peermap;
 pub mod policy;
+pub mod poolq;
 pub mod prober;
 pub mod runtime_limits;
 pub mod scheduler;

@@ -74,26 +74,27 @@ func TestValidateSwarmPatternOrder(t *testing.T) {
 }
 
 func TestValidateSwarmPatternOrder_AllSubsystems(t *testing.T) {
-	// Confirm each pattern list (substrate + 5 sub-subsystems) is
-	// walked. Bad pattern in each list — should produce 6 findings.
+	// Confirm each pattern list (substrate + 6 sub-subsystems) is
+	// walked. Bad pattern in each list — should produce 7 findings.
 	bad := []string{"*", "-host"}
 	s := SwarmSection{
-		Enabled:   bad,
-		Puddle:    SwarmPuddleSection{Enabled: bad},
-		Gitback: GitbackSection{Enabled: bad},
-		Curator: CuratorSection{Enabled: bad},
-		Longdrawer:  LongdrawerSection{Enabled: bad},
+		Enabled:    bad,
+		Puddle:     SwarmPuddleSection{Enabled: bad},
+		Gitback:    GitbackSection{Enabled: bad},
+		Curator:    CuratorSection{Enabled: bad},
+		Poolq:      PoolqSection{Enabled: bad},
+		Longdrawer: LongdrawerSection{Enabled: bad},
 		Filecast:   FilecastSection{Enabled: bad},
 	}
 	findings := ValidateSwarmPatternOrder(s)
-	if len(findings) != 6 {
-		t.Fatalf("expected one finding per subsystem (6), got %d: %v", len(findings), findings)
+	if len(findings) != 7 {
+		t.Fatalf("expected one finding per subsystem (7), got %d: %v", len(findings), findings)
 	}
 	seen := make(map[string]bool)
 	for _, f := range findings {
 		seen[f.Subsystem] = true
 	}
-	for _, sub := range []string{"swarm", "puddle", "gitback", "curator", "longdrawer", "filecast"} {
+	for _, sub := range []string{"swarm", "puddle", "gitback", "curator", "poolq", "longdrawer", "filecast"} {
 		if !seen[sub] {
 			t.Errorf("missing finding for subsystem %q", sub)
 		}

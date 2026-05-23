@@ -81,6 +81,12 @@ var publicPrefixes = []string{
 	// transport guard. The handler scopes it to curator artifact blobs
 	// only, so it isn't a back door to relay filecast/lockbox/gitback bytes.
 	"/api/v1/swarm/curator/blob/",
+	// Poolq (ADR-029) read endpoints — messages are fleet-readable
+	// (confidentiality is not a goal; pair with lockbox for confidential
+	// payloads), so reads are public-by-construction like curator's
+	// blob/resolve. mTLS is the transport guard. Block/unblock admin
+	// moderation is registered separately with its own admin() wrapper.
+	"/api/v1/swarm/poolq/",
 }
 
 // publicPaths are exact URL paths that never require authentication.

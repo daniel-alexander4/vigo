@@ -50,6 +50,7 @@ import (
 	"git.alexander4.io/vigo/server/stockpilewatch"
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/swarm/curatormesh"
+	"git.alexander4.io/vigo/server/swarm/poolqmesh"
 	"git.alexander4.io/vigo/server/swarm/gitbackmesh"
 	"git.alexander4.io/vigo/server/task"
 	"git.alexander4.io/vigo/server/workflows"
@@ -173,6 +174,7 @@ type Server struct {
 	peerTracker   *swarm.PeerTracker
 	manifestStore *swarm.ManifestStore
 	curatorAgg    *curatormesh.Aggregator
+	poolqAgg      *poolqmesh.Aggregator
 
 	// --- Stockpile watcher (nil in standalone mode or when the ops-puddle
 	// stockpile project has not been founded yet). ---
@@ -841,6 +843,12 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 		// Curator (ADR-024): read-side aggregator. The feed reactor +
 		// handler-route wiring still live in run() / chunk 4.
 		s.curatorAgg = curatormesh.NewAggregator(s.queries)
+		// Poolq (ADR-029): read-side aggregator. Same shape as curatorAgg;
+		// retention comes from server.yaml `swarm.poolq.retention` and is
+		// hot-swappable via `SetRetention` on a config reload. A zero or
+		// unparseable retention string falls back to `poolqmesh.DefaultRetention`
+		// (7 days, per ADR-029).
+		s.poolqAgg = poolqmesh.NewAggregator(s.queries, parsePoolqRetention(s.cfg.Swarm.Poolq.Retention))
 		s.swarmEnabled = true
 	}
 
@@ -1313,6 +1321,12 @@ func NewServer(ctx context.Context, cancel context.CancelFunc, configFile string
 			curatorHandler := api.NewCuratorHandler(s.curatorAgg, s.queries, s.fleetIndex, blobsDir)
 			curatorHandler.RegisterRoutes(gwMux)
 			uiHandler.SetCuratorFleet(curatorHandler)
+
+			// Poolq (ADR-029) — read-only fleet log endpoints. The agent +
+			// vigocli + admin UI all consume the same routes; per-topic
+			// block/unblock admin moderation lands in Slice 5.
+			poolqHandler := api.NewPoolqHandler(s.poolqAgg, s.queries, s.fleetIndex)
+			poolqHandler.RegisterRoutes(gwMux)
 
 			// Curator S3 API (ADR-027): an opt-in HTTPS listener exposing
 			// curator artifacts to non-envoy S3 clients. Requires an

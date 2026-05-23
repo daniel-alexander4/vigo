@@ -492,6 +492,31 @@ grafana:
 |-------|---------|-------------|
 | `url` | (none) | Base URL of a Grafana instance. When set, the `/health` page links to each bundled dashboard at `<url>/d/<uid>`. Unset = no links shown. |
 
+## swarm
+
+Peer-to-peer content distribution (six content subsystems: filecast, gitback, longdrawer, lockbox, curator, poolq). Each subsystem documents the full field set in its howto — the section below covers **poolq** (ADR-029); see [`server.yaml.example`](https://github.com/alexander4/vigo/blob/main/server/config/server.yaml.example) for the full template plus the other subsystems.
+
+```yaml
+swarm:
+  enabled: ["*"]                       # substrate-level gate (pattern list)
+  poolq:
+    enabled: ["*"]                     # which envoys may run poolq (founders + log-holders)
+    retention: "7d"                    # per-topic age window; older messages prune
+    max_msg_bytes: 16384               # per-message body cap (default 16 KiB; hard ceiling 64 KiB)
+```
+
+### `swarm.poolq`
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `enabled` | `[]` | Hostname pattern list (first-match-wins; `-` prefix denies; empty list disables) of envoys allowed to run poolq — publishers (founders) and log-holders. |
+| `retention` | `"7d"` | Per-topic message-age retention window. Messages older than this are pruned by the mesh aggregator, and stale-on-ingest messages are refused — together that's flap-stable pruning without tombstones. Accepts `Nd` / standard Go duration strings. Empty / unparseable falls back to `poolqmesh.DefaultRetention` (7d). |
+| `max_msg_bytes` | `16384` | Per-message body size cap on the publish path, in bytes. `0` (or unset) = the 16 KiB compile-time default. Hard ceiling 65536 (64 KiB) — bigger payloads belong in a curator artifact that the message references by id. |
+
+Publishing additionally requires `poolq: true` on the user's usercrate AND an unlocked puddle (a heavier grant than `gitback:`). Reading is ungated — messages are fleet-readable.
+
+The admin moderation backstop is `vigocli swarm poolq block <topic_id>`: the server stops serving the topic's `/range` and `/log` endpoints fleet-wide. See the [poolq howto](../howto/set-up-poolq.md) for the publish + consume flow.
+
 ## tuning
 
 Advanced performance tuning. All fields optional.

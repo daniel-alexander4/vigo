@@ -45,6 +45,7 @@ The trait paths and structure are identical across platforms so `when:` expressi
 | Swarm Cache | `swarm` | Cached blobs, chunk sources, per-chunk timing, download duration | [swarm.md](../../../howto/set-up-swarm.md) |
 | Swarm Seeds | `swarm_seeds` | Seed files and broken manifests for envoy-originated distribution | — |
 | Gitback | `gitback` | Publisher-side state (active sources, per-source sha, discovery/publish errors) plus receiver-side materialized mirrors | [gitback.md](gitback.md) |
+| Poolq | `poolq` | Per-user signed poolq messages (ADR-029): walks `~/.vigo-poolq/<topic_id>/messages/*.json` across users and emits the verifying ones verbatim for the server's `poolqmesh` aggregator | [poolq.md](poolq.md) |
 | Agent Self | `agent_self` | Vigo agent's own resource footprint: RSS, VSZ, threads, open FDs, direct-descendant count + descendant FD total, uptime | [agent_self.md](agent_self.md) |
 | Package Source Audit | `package_source_audit` | Linux-only: apt/yum/dnf package sources with URL (credentials stripped), suite, components, enabled state | [package_source_audit.md](package_source_audit.md) |
 | Kernel Module Attestation | `kernel_module_attestation` | Linux-only: loaded kernel modules with signature status (signed / unsigned / bad_signature) from `/proc/modules` + sysfs taint | [kernel_module_attestation.md](kernel_module_attestation.md) |

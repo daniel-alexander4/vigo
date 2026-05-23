@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Shared gate-evaluation helper for the five swarm content subsystems
-//! (payload, gitback, curator, lockbox, longdrawer).
+//! Shared gate-evaluation helper for the six swarm content subsystems
+//! (payload, gitback, curator, poolq, lockbox, longdrawer).
 //!
 //! Every subsystem reads two bits from `PolicyBundle.vars_json`,
 //! cached in the LMDB state store on each accepted check-in:
@@ -57,6 +57,7 @@ pub enum Substrate {
     Payload,
     Gitback,
     Curator,
+    Poolq,
     Lockbox,
     Longdrawer,
 }
@@ -67,6 +68,7 @@ impl Substrate {
             Substrate::Payload => "swarm_filecast_enabled",
             Substrate::Gitback => "swarm_gitback_enabled",
             Substrate::Curator => "swarm_curator_enabled",
+            Substrate::Poolq => "swarm_poolq_enabled",
             // Lockbox derives from puddle — single source of truth
             // per ADR-020. The server emits only `swarm_puddle_enabled`;
             // there is no `swarm_lockbox_enabled` in 0.41.0+.
@@ -82,6 +84,7 @@ impl Substrate {
             Substrate::Payload => "payload",
             Substrate::Gitback => "gitback",
             Substrate::Curator => "curator",
+            Substrate::Poolq => "poolq",
             Substrate::Lockbox => "lockbox",
             Substrate::Longdrawer => "longdrawer",
         }
@@ -247,13 +250,14 @@ mod tests {
 
     #[test]
     fn enabled_keys_are_distinct_except_lockbox_aliases_puddle() {
-        // Payload, Gitback, Curator, Longdrawer each have their own key.
+        // Payload, Gitback, Curator, Poolq, Longdrawer each have their own key.
         // Lockbox intentionally aliases the puddle key — single
         // source of truth.
         let keys = [
             Substrate::Payload.enabled_key(),
             Substrate::Gitback.enabled_key(),
             Substrate::Curator.enabled_key(),
+            Substrate::Poolq.enabled_key(),
             Substrate::Longdrawer.enabled_key(),
         ];
         for (i, a) in keys.iter().enumerate() {
@@ -262,6 +266,7 @@ mod tests {
             }
         }
         assert_eq!(Substrate::Curator.enabled_key(), "swarm_curator_enabled");
+        assert_eq!(Substrate::Poolq.enabled_key(), "swarm_poolq_enabled");
     }
 
     #[test]
@@ -270,6 +275,7 @@ mod tests {
             Substrate::Payload,
             Substrate::Gitback,
             Substrate::Curator,
+            Substrate::Poolq,
             Substrate::Lockbox,
             Substrate::Longdrawer,
         ];

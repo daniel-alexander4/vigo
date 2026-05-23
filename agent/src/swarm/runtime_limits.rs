@@ -8,7 +8,7 @@
 //! here so subsystem-level enforcement sites can read the operator's
 //! current intent without re-plumbing the response through every
 //! call path. This is the agent-side end of the
-//! `server.yaml swarm.{filecast,lockbox,gitback,curator,longdrawer}.*` →
+//! `server.yaml swarm.{filecast,lockbox,gitback,curator,poolq,longdrawer}.*` →
 //! `CheckInResponse.swarm_runtime_limits` → enforcement-point flow.
 //!
 //! ### Design
@@ -46,6 +46,8 @@ pub struct SwarmLimits {
     pub longdrawer_max_file_bytes: Option<u64>,
     pub curator_max_bytes: Option<u64>,
     pub curator_local_port: Option<u32>,
+    pub poolq_max_msg_bytes: Option<u64>,
+    pub poolq_retention_secs: Option<u64>,
 }
 
 fn cell() -> &'static RwLock<SwarmLimits> {
@@ -67,6 +69,8 @@ pub fn update_from_proto(msg: &crate::proto::SwarmRuntimeLimits) {
         longdrawer_max_file_bytes: opt_nonzero_u64(msg.longdrawer_max_file_bytes),
         curator_max_bytes: opt_nonzero_u64(msg.curator_max_bytes),
         curator_local_port: opt_nonzero_u32(msg.curator_local_port),
+        poolq_max_msg_bytes: opt_nonzero_u64(msg.poolq_max_msg_bytes),
+        poolq_retention_secs: opt_nonzero_u64(msg.poolq_retention_secs),
     };
     let mut w = cell().write().expect("swarm runtime limits cache poisoned");
     *w = new;
@@ -217,6 +221,28 @@ pub fn curator_local_port() -> Option<u32> {
     current().curator_local_port
 }
 
+/// Poolq: per-message body cap, in bytes. Falls back to the compile-time
+/// default (16 KiB) when the server hasn't published a limit yet or the
+/// operator left `swarm.poolq.max_msg_bytes` at 0/unset. The hard ceiling
+/// (64 KiB) is enforced at the helper-daemon publish path independently of
+/// this cap — operators tune within `[0, 64 KiB]`; bigger payloads belong
+/// in a curator artifact.
+pub fn poolq_max_msg_bytes() -> u64 {
+    current().poolq_max_msg_bytes.unwrap_or(16 * 1024)
+}
+
+/// Poolq: per-topic retention window, in seconds. Falls back to the
+/// compile-time default (7d) when the server hasn't published a value yet
+/// or the operator left `swarm.poolq.retention` empty. Messages older than
+/// this are pruned by the mesh aggregator, and stale-on-ingest messages
+/// are refused — together that's "flap-stable pruning, no tombstones."
+pub fn poolq_retention_secs() -> i64 {
+    current()
+        .poolq_retention_secs
+        .map(|v| v as i64)
+        .unwrap_or(7 * 24 * 60 * 60)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -237,6 +263,8 @@ mod tests {
         assert_eq!(longdrawer_max_file_bytes(), None);
         assert_eq!(curator_max_bytes(), crate::swarm::curator::DEFAULT_MAX_BYTES);
         assert_eq!(curator_local_port(), None);
+        assert_eq!(poolq_max_msg_bytes(), 16 * 1024);
+        assert_eq!(poolq_retention_secs(), 7 * 24 * 60 * 60);
     }
 
     #[test]
@@ -252,6 +280,8 @@ mod tests {
             longdrawer_max_file_bytes: 600,
             curator_max_bytes: 700,
             curator_local_port: 5050,
+            poolq_max_msg_bytes: 8192,
+            poolq_retention_secs: 86400,
         });
         assert_eq!(lockbox_max_file_bytes(), 200);
         assert_eq!(lockbox_envelope_retention_secs(), 300);
@@ -260,6 +290,8 @@ mod tests {
         assert_eq!(longdrawer_max_file_bytes(), Some(600));
         assert_eq!(curator_max_bytes(), 700);
         assert_eq!(curator_local_port(), Some(5050));
+        assert_eq!(poolq_max_msg_bytes(), 8192);
+        assert_eq!(poolq_retention_secs(), 86400);
         assert_eq!(current().filecast_max_size_bytes, Some(100));
         assert_eq!(current().filecast_default_retention.as_deref(), Some("30d"));
     }
@@ -277,6 +309,8 @@ mod tests {
             longdrawer_max_file_bytes: 0,
             curator_max_bytes: 0,
             curator_local_port: 0,
+            poolq_max_msg_bytes: 0,
+            poolq_retention_secs: 0,
         });
         // Zero / empty server values become None internally — read
         // helpers return their compile-time defaults.
@@ -289,5 +323,7 @@ mod tests {
         // Port 0 means "disabled" — distinct from "unset". Both surface
         // as None to callers; they decide whether to bind a default.
         assert_eq!(curator_local_port(), None);
+        assert_eq!(poolq_max_msg_bytes(), 16 * 1024);
+        assert_eq!(poolq_retention_secs(), 7 * 24 * 60 * 60);
     }
 }

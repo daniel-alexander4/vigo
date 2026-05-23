@@ -22,6 +22,7 @@ mod time_collector;
 mod lockbox;
 pub(crate) mod gitback;
 pub(crate) mod curator;
+pub(crate) mod poolq;
 mod longdrawer;
 
 // Shared sysctl utility for macOS/BSD collectors.
@@ -265,6 +266,10 @@ pub enum CollectorKind {
     /// `~/.vigo-curator/<artifact_id>/entry.json` and emits their signed
     /// `CatalogEntry`s verbatim for the server's `curatormesh` aggregator.
     Curator,
+    /// Reports poolq-posted messages (ADR-029): walks each user's
+    /// `~/.vigo-poolq/<topic_id>/messages/*.json` and emits their signed
+    /// `Message`s verbatim for the server's `poolqmesh` aggregator.
+    Poolq,
     /// Enumerates apt/yum/dnf package sources configured on the host.
     /// Emits per-source rows with URL (credentials stripped), suite,
     /// components, and enabled state. Linux-only. Server-side compares
@@ -358,6 +363,7 @@ impl CollectorKind {
             Self::SwarmSeeds => "swarm_seeds",
             Self::Gitback => "gitback",
             Self::Curator => "curator",
+            Self::Poolq => "poolq",
             Self::PackageSourceAudit => "package_source_audit",
             Self::KernelModuleAttestation => "kernel_module_attestation",
             Self::Listeners => "listeners",
@@ -401,6 +407,7 @@ impl CollectorKind {
             Self::SwarmSeeds => swarm_seeds::collect(),
             Self::Gitback => gitback::collect(),
             Self::Curator => curator::collect(),
+            Self::Poolq => poolq::collect(),
             Self::Longdrawer => longdrawer::collect(),
             Self::Lockbox => lockbox::collect(),
             Self::AgentSelf => agent_self::collect(),
@@ -667,6 +674,7 @@ impl CollectorKind {
             "swarm_seeds" => Some(Self::SwarmSeeds),
             "gitback" => Some(Self::Gitback),
             "curator" => Some(Self::Curator),
+            "poolq" => Some(Self::Poolq),
             "package_source_audit" => Some(Self::PackageSourceAudit),
             "kernel_module_attestation" => Some(Self::KernelModuleAttestation),
             "listeners" => Some(Self::Listeners),
@@ -722,6 +730,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::SwarmSeeds,
         CollectorKind::Gitback,
         CollectorKind::Curator,
+        CollectorKind::Poolq,
         CollectorKind::PackageSourceAudit,
         CollectorKind::KernelModuleAttestation,
         CollectorKind::Listeners,
@@ -751,6 +760,7 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::SwarmSeeds,
         CollectorKind::Gitback,
         CollectorKind::Curator,
+        CollectorKind::Poolq,
         CollectorKind::Longdrawer,
         CollectorKind::Lockbox,
         CollectorKind::AgentSelf,
@@ -867,7 +877,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 47);
+        assert_eq!(default_collectors().len(), 48);
     }
 
     #[test]

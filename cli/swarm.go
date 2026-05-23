@@ -75,6 +75,7 @@ under 'vigocli swarm distribute' etc., see:
   vigocli swarm longdrawer      — per-user plaintext directory sync mesh
   vigocli swarm lockbox     — per-user encrypted directory sync mesh
   vigocli swarm curator     — P2P artifact registry fleet view
+  vigocli swarm poolq       — P2P ordered-log queue fleet view
 
 Subcommands here report substrate health: who is reachable, who has a
 blob cache, who is seeding, total footprint across the fleet.`,
@@ -257,5 +258,5 @@ func init() {
 	}
 	swarmCleanupCmd.Flags().String("target", "*", "Hostname pattern (filepath.Match glob) to scope the sweep; default '*' = whole fleet")
 	swarmCmd.AddCommand(swarmStatusCmd, swarmPeersCmd, swarmCleanupCmd)
-	swarmCmd.AddCommand(filecastCmd, gitbackCmd, longdrawerCmd, lockboxCmd, puddleCmd, curatorCmd)
+	swarmCmd.AddCommand(filecastCmd, gitbackCmd, longdrawerCmd, lockboxCmd, puddleCmd, curatorCmd, poolqCmd)
 }
