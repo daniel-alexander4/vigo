@@ -29,13 +29,13 @@ Open `https://localhost:8443` — accept the self-signed cert, you'll land on th
 
 ## 2. Enroll envoys
 
-**The server's own host first.** Every Vigo server runs a co-hosted `vigo` agent so it can participate in swarm operations alongside its envoys. From the server host:
+**The server's own host first.** Every Vigo server runs a co-hosted `vigo` agent so it can participate in swarm operations alongside its envoys. From the server host — **use the IPv4 loopback literal `127.0.0.1`, not `localhost` and not the host's own hostname**; the agent dials whatever address the curl URL used on every subsequent check-in, and only loopback is resolver-independent:
 
 ```bash
-curl -sSfk https://localhost:8443/bootstrap | sudo sh
+curl -sSfk https://127.0.0.1:8443/bootstrap | sudo sh
 ```
 
-Then any other machine you want to manage:
+Then any *other* machine you want to manage — note this is a separate command shape, by design, because remote envoys reach the server by hostname / LAN IP while the server's own envoy reaches itself by loopback:
 
 ```bash
 # On the envoy:

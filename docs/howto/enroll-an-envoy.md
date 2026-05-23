@@ -3,9 +3,11 @@
 
 You'll finish this page with a new machine running the Vigo agent, signed in to the server, visible in the Web UI's envoy list, and checking in on its configured interval. One shell line on the new machine does all of it.
 
-**When you'd use this:** any time you want a new machine under Vigo management — a new laptop, a fresh VM, a freshly-imaged hardware node, the server host itself (yes, the server runs an agent for its own host).
+**When you'd use this:** any time you want a *remote* machine under Vigo management — a new laptop, a fresh VM, a freshly-imaged hardware node. The remote envoy dials the server by hostname or LAN IP, which is what the rest of this page documents.
 
-**When you'd skip this:** never, for the host you're managing. The agent is how Vigo applies state.
+**When you'd skip this:** the server's *own* host is a separate procedure — it enrolls itself over IPv4 loopback (`127.0.0.1`) so the path doesn't depend on hostname resolution. See [Install the Vigo server § Enroll the server's own envoy](install.md#4-enroll-the-servers-own-envoy-do-this-first). Do that one first, then come back here for every other machine.
+
+**When you'd skip this entirely:** never, for any host you want under management. The agent is how Vigo applies state.
 
 Bootstrap is the process by which a new machine becomes a managed envoy. The server provides a one-line bootstrap script that handles agent installation and enrollment.
 
