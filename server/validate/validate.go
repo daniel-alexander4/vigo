@@ -71,76 +71,16 @@ type Module struct {
 	Resources []Resource
 }
 
-// KnownTypes is the canonical set of valid resource types. Exported so
-// modlint can use the same list — there must be exactly one source of truth.
-var KnownTypes = map[string]bool{
-	"file":            true,
-	"directory":       true,
-	"symlink":         true,
-	"package":         true,
-	"service":         true,
-	"user":            true,
-	"exec":            true,
-	"repository":      true,
-	"source_package":  true,
-	"nonrepo_package": true,
-	"cron":            true,
-	"process":         true,
-	"file_line":       true,
-	"group":           true,
-	"host":            true,
-	"sysctl":          true,
-	"mount":           true,
-	"hostname":        true,
-	"timezone":        true,
-	"sshkey":          true,
-	"firewall":        true,
-	"kernel_module":   true,
-	"swap":            true,
-	"tmpfile":         true,
-	"ini":             true,
-	"json_file":       true,
-	"logrotate":       true,
-	"git":             true,
-	"reboot":          true,
-	"alternatives":    true,
-	"pip":             true,
-	"gem":             true,
-	"npm":             true,
-	"blockinfile":     true,
-	"container":       true,
-	"replace":         true,
-	"field_edit":      true,
-	"systemd_dropin":  true,
-	"selinux":         true,
-	// Network device types.
-	"cisco_vlan": true, "cisco_interface": true, "network_banner": true,
-	"network_ntp": true, "network_syslog": true, "network_snmp": true,
-	"junos_interface": true, "ssh_exec": true, "network_acl": true,
-	"network_static_route": true, "network_user": true,
-	"network_config": true, "cisco_acl": true,
-	"network_interface": true, "network_vlan": true, "network_dns": true,
-	// macOS/BSD.
-	"service_macos": true, "user_macos": true, "group_macos": true,
-	"hostname_macos": true, "timezone_macos": true,
-	"service_freebsd": true, "user_freebsd": true, "group_freebsd": true,
-	"kernel_module_freebsd": true, "service_openbsd": true,
-	"firewall_pf": true, "hostname_bsd": true, "mount_bsd": true,
-	"swap_bsd": true, "sysctl_bsd": true, "timezone_bsd": true,
-	// illumos.
-	"service_illumos": true, "timezone_illumos": true,
-	// Windows.
-	"service_windows": true, "package_windows": true, "user_windows": true,
-	"firewall_windows": true, "cron_windows": true, "hostname_windows": true,
-	"timezone_windows": true, "registry": true, "reboot_windows": true,
-	"local_security_policy": true,
-	"windows_update":        true,
-	"windows_defender":      true, "windows_env": true, "domain_membership": true,
-	"certificate_windows": true, "service_recovery_windows": true,
-	"powershell": true,
-	// Backup.
-	"backup": true, "db_backup": true,
-}
+// KnownTypes is the canonical set of valid resource types. Single source of
+// truth: it aliases `generatedKnownTypes` (auto-derived by
+// `scripts/gen-executor-schemas.sh` from `executors.insert(...)` calls in the
+// agent runner). To add a new type: register a Rust executor + insert it in
+// `agent/src/runner/mod.rs`, then `make` regenerates `schemas_gen.go`. No
+// hand-edit here.
+//
+// Exported so modlint can read it — there must be exactly one source of
+// truth, and this is it.
+var KnownTypes = generatedKnownTypes
 
 // universalAttrs are attributes allowed on any resource type. These are not
 // flagged as unknown regardless of type-specific schema.
@@ -179,86 +119,84 @@ type TypeSchema struct {
 //	scripts/gen-executor-schemas.sh > server/validate/schemas_gen.go
 var TypeSchemas = map[string]TypeSchema{}
 
-// requiredAttrs defines which attributes are required per type.
-var requiredAttrs = map[string][]string{
-	"file":           {"target_path", "owner", "group", "mode"},
-	"directory":      {"target_path"},
-	"symlink":        {"target_path"},
-	"package":        {"package"},
-	"service":        {"service"},
-	"user":           {"username"},
-	"group":          {"group"},
-	"exec":           {"command"},
-	"source_package": {"url"},
-	"cron":           {"command", "user"},
-	"process":        {"process"},
-	"file_line":      {"target_path"},
-	"host":           {"hostname"},
-	"sysctl":         {"key", "value"},
-	"mount":          {"path"},
-	"hostname":       {"hostname"},
-	"timezone":       {"timezone"},
-	"sshkey":         {"hostname", "sshkey"},
-	"firewall":       {"port"},
-	"kernel_module":  {"module"},
-	"swap":           {"path"},
-	"tmpfile":        {"path"},
-	"ini":            {"target_path", "key"},
-	"json_file":      {"target_path", "key"},
-	"logrotate":      {"path"},
-	"git":            {"repo", "path"},
-	// `name` is supplied by the runner from the resource's top-level name
-	// when the executor reads `params.get("name")` (agent/src/runner/mod.rs:
-	// the runner inserts the resource name into params if not already set).
-	// Marking it required would force operators to duplicate the resource
-	// name as an attribute. `path` is the only operator-supplied required.
-	"alternatives":   {"path"},
-	"pip":            {"package"},
-	"gem":            {"package"},
-	"npm":            {"package"},
-	"blockinfile":    {"target_path", "block_content"},
-	"replace":        {"target_path", "match_pattern", "replacement"},
-	"field_edit":     {"path", "line_match", "select_field"},
-	"systemd_dropin": {"unit", "content"},
-	// `container` requires `image` OR `artifact`; the mutual-exclusion +
-	// "at least one for state=running" enforcement lives in the
-	// container-image-source modlint rule, since requiredAttrs can't
-	// express the OR.
-	"backup":    {"source_dir", "target_path"},
-	"db_backup": {"db_type", "source_db", "target_path"},
+// TypeConstraints carries the per-type semantic validation rules — what the
+// auto-extractor in `gen-executor-schemas.sh` can't see by greping
+// `params.get(...)`. Hand-maintained, but co-located per type so adding a
+// new resource type is a single edit (the prior shape spread the same
+// type's rules across four separate maps).
+//
+// Required:     attribute must be present and non-empty
+// AbsPath:      attribute (if present) must be an absolute path
+// Mode:         attribute (if present) must be a valid octal mode
+// Supplemental: attribute names the generator can't extract (variable-key
+//               lookups, cross-platform unions, runner-injected params)
+type TypeConstraints struct {
+	Required     []string
+	AbsPath      []string
+	Mode         []string
+	Supplemental []string
 }
 
-// absPathAttrs defines which attributes must be absolute paths.
-var absPathAttrs = map[string][]string{
-	"file": {"target_path"}, "directory": {"target_path"}, "symlink": {"target_path"},
-	"source_package": {"target_path"}, "file_line": {"target_path"},
-	"mount": {"path"}, "swap": {"path"}, "tmpfile": {"path"},
-	"ini": {"target_path"}, "json_file": {"target_path"}, "logrotate": {"path"},
-	"git": {"path"}, "alternatives": {"path"}, "pip": {"virtualenv"},
-	"blockinfile": {"target_path"}, "replace": {"target_path"}, "field_edit": {"path"},
-	"selinux": {"path"},
-	"backup":  {"source_dir", "target_path"}, "db_backup": {"target_path"},
-	"exec": {"cwd"},
-}
-
-// modeAttrs defines which attributes must be valid octal modes.
-var modeAttrs = map[string][]string{
-	"file": {"mode"}, "directory": {"mode"}, "tmpfile": {"mode"},
-	"blockinfile": {"mode"}, "source_package": {"mode"},
-}
-
-// supplementalAttrs adds params that the generator can't auto-detect
-// (e.g., variable-key access like params.get(*k) in a loop).
-// supplementalAttrs adds params that the generator can't auto-detect
-// (variable-key access, runner-level params, cross-platform unions).
-var supplementalAttrs = map[string][]string{
-	"cron":    {"minute", "hour", "day", "month", "weekday"},
-	"package": {"package", "name", "version", "allow_downgrade", "lock_version", "purge", "post_cleanup", "update_cache"},
+// typeConstraints lists every type that needs semantic constraints beyond
+// the auto-extracted attribute set. Types whose constraint block is `{}`
+// or absent get a plain TypeSchema with the generated attrs and nothing
+// else. Keep alphabetical for legibility.
+//
+// Note: `container` requires `image` OR `artifact`, and `vm` requires
+// `disk_path` OR `artifact` — those one-of constraints can't be expressed
+// in `Required` (which is AND-semantics) and live in dedicated modlint
+// rules.
+var typeConstraints = map[string]TypeConstraints{
+	"alternatives":   {Required: []string{"path"}, AbsPath: []string{"path"}},
+	"backup":         {Required: []string{"source_dir", "target_path"}, AbsPath: []string{"source_dir", "target_path"}},
+	"blockinfile":    {Required: []string{"target_path", "block_content"}, AbsPath: []string{"target_path"}, Mode: []string{"mode"}},
+	"cron":           {Required: []string{"command", "user"}, Supplemental: []string{"minute", "hour", "day", "month", "weekday"}},
+	"db_backup":      {Required: []string{"db_type", "source_db", "target_path"}, AbsPath: []string{"target_path"}},
+	"directory":      {Required: []string{"target_path"}, AbsPath: []string{"target_path"}, Mode: []string{"mode"}},
+	"exec":           {Required: []string{"command"}, AbsPath: []string{"cwd"}},
+	"field_edit":     {Required: []string{"path", "line_match", "select_field"}, AbsPath: []string{"path"}},
+	"file":           {Required: []string{"target_path", "owner", "group", "mode"}, AbsPath: []string{"target_path"}, Mode: []string{"mode"}},
+	"file_line":      {Required: []string{"target_path"}, AbsPath: []string{"target_path"}},
+	"firewall":       {Required: []string{"port"}},
+	"gem":            {Required: []string{"package"}},
+	"git":            {Required: []string{"repo", "path"}, AbsPath: []string{"path"}},
+	"group":          {Required: []string{"group"}},
+	"host":           {Required: []string{"hostname"}},
+	"hostname":       {Required: []string{"hostname"}},
+	"ini":            {Required: []string{"target_path", "key"}, AbsPath: []string{"target_path"}},
+	"json_file":      {Required: []string{"target_path", "key"}, AbsPath: []string{"target_path"}},
+	"kernel_module":  {Required: []string{"module"}},
+	"logrotate":      {Required: []string{"path"}, AbsPath: []string{"path"}},
+	"mount":          {Required: []string{"path"}, AbsPath: []string{"path"}},
+	"npm":            {Required: []string{"package"}},
+	// `package`: Required guards against missing scrape; Supplemental
+	// covers variable-key reads + runner-injected values the gen can't see.
+	"package":        {Required: []string{"package"}, Supplemental: []string{"package", "name", "version", "allow_downgrade", "lock_version", "purge", "post_cleanup", "update_cache"}},
+	"pip":            {Required: []string{"package"}, AbsPath: []string{"virtualenv"}},
+	"process":        {Required: []string{"process"}},
+	"replace":        {Required: []string{"target_path", "match_pattern", "replacement"}, AbsPath: []string{"target_path"}},
+	"selinux":        {AbsPath: []string{"path"}},
+	"service":        {Required: []string{"service"}},
+	"source_package": {Required: []string{"url"}, AbsPath: []string{"target_path"}, Mode: []string{"mode"}},
+	"sshkey":         {Required: []string{"hostname", "sshkey"}},
+	"swap":           {Required: []string{"path"}, AbsPath: []string{"path"}},
+	"symlink":        {Required: []string{"target_path"}, AbsPath: []string{"target_path"}},
+	"sysctl":         {Required: []string{"key", "value"}},
+	"systemd_dropin": {Required: []string{"unit", "content"}},
+	"timezone":       {Required: []string{"timezone"}},
+	"tmpfile":        {Required: []string{"path"}, AbsPath: []string{"path"}, Mode: []string{"mode"}},
+	"user":           {Required: []string{"username"}},
+	// `vm`: the `disk_path` OR `artifact` one-of is enforced at runtime by
+	// the vm executor (see `agent/src/executors/vm.rs`) and in a dedicated
+	// modlint rule. The unconditional scalars are listed here.
+	"vm": {Required: []string{"vm_name", "memory_mib", "vcpu"}, AbsPath: []string{"disk_path"}},
 }
 
 func init() {
-	// Build TypeSchemas from generatedSchemas (auto-extracted from Rust source)
-	// plus semantic constraints (Required, AbsPath, Mode) and supplemental attrs.
+	// Build TypeSchemas from generatedSchemas (auto-extracted from Rust
+	// source) merged with typeConstraints (hand-maintained semantic rules).
+	// Every known type goes through this loop — KnownTypes is the
+	// generated source of truth.
 	for typeName := range KnownTypes {
 		schema := TypeSchema{Attrs: make(map[string]ParamSpec)}
 
@@ -271,24 +209,27 @@ func init() {
 			schema.AllowExtra = true
 		}
 
-		// Add supplemental attrs the generator can't detect.
-		for _, p := range supplementalAttrs[typeName] {
+		constraints := typeConstraints[typeName]
+
+		// Supplemental attrs the generator can't detect (variable-key
+		// reads, runner-injected values, cross-platform unions).
+		for _, p := range constraints.Supplemental {
 			if _, exists := schema.Attrs[p]; !exists {
 				schema.Attrs[p] = ParamSpec{}
 			}
 		}
 
-		for _, attr := range requiredAttrs[typeName] {
+		for _, attr := range constraints.Required {
 			spec := schema.Attrs[attr]
 			spec.Required = true
 			schema.Attrs[attr] = spec
 		}
-		for _, attr := range absPathAttrs[typeName] {
+		for _, attr := range constraints.AbsPath {
 			spec := schema.Attrs[attr]
 			spec.AbsPath = true
 			schema.Attrs[attr] = spec
 		}
-		for _, attr := range modeAttrs[typeName] {
+		for _, attr := range constraints.Mode {
 			spec := schema.Attrs[attr]
 			spec.Mode = true
 			schema.Attrs[attr] = spec

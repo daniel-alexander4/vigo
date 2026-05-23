@@ -18,6 +18,7 @@ pub mod db_backup;
 pub mod custom;
 pub mod directory;
 pub mod container;
+pub mod vm;
 pub mod exec;
 pub mod field_edit;
 pub mod file;

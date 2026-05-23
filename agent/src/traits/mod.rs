@@ -90,6 +90,8 @@ mod uptime;
 mod users;
 #[cfg(target_os = "linux")]
 mod virt;
+#[cfg(target_os = "linux")]
+mod hypervisor;
 
 // macOS-specific collectors.
 #[cfg(target_os = "macos")]
@@ -308,6 +310,11 @@ pub enum CollectorKind {
     /// the server a full picture of container workloads on the envoy.
     /// Linux + macOS. Used by the `container:` resource type.
     HostContainers,
+    /// Host-side hypervisor detection — flips `host_is_libvirt: true` when
+    /// the libvirt daemon's Unix socket is present. Sibling to `virt` (which
+    /// answers "am I a *guest*"). Linux-only. Gate `vm:` resources with
+    /// `when: "host_is_libvirt"`.
+    Hypervisor,
 }
 
 impl CollectorKind {
@@ -360,6 +367,7 @@ impl CollectorKind {
             Self::AgentSelf => "agent_self",
             Self::HostSelf => "host_self",
             Self::HostContainers => "host_containers",
+            Self::Hypervisor => "hypervisor",
         }
     }
 
@@ -420,6 +428,8 @@ impl CollectorKind {
             Self::Identity => identity::collect(),
             #[cfg(target_os = "linux")]
             Self::Virtual => virt::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Hypervisor => hypervisor::collect(),
             #[cfg(target_os = "linux")]
             Self::Uptime => uptime::collect(),
             #[cfg(target_os = "linux")]
@@ -569,13 +579,13 @@ impl CollectorKind {
             #[cfg(target_os = "illumos")]
             Self::BlockDevices | Self::Timezone | Self::Systemd | Self::SELinux |
             Self::PackageSourceAudit | Self::KernelModuleAttestation | Self::Listeners |
-            Self::CveRunningCorrelation => Ok(Value::Null),
+            Self::CveRunningCorrelation | Self::Hypervisor => Ok(Value::Null),
 
             // Linux-only concepts — return null on BSD/macOS.
             #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
             Self::Systemd | Self::SELinux |
             Self::PackageSourceAudit | Self::KernelModuleAttestation | Self::Listeners |
-            Self::CveRunningCorrelation => Ok(Value::Null),
+            Self::CveRunningCorrelation | Self::Hypervisor => Ok(Value::Null),
 
             // Windows implementations.
             #[cfg(windows)]
@@ -613,7 +623,7 @@ impl CollectorKind {
             Self::BlockDevices | Self::Systemd | Self::SELinux |
             Self::Locale | Self::Gpu | Self::CertLifecycle | Self::Ports |
             Self::PackageSourceAudit | Self::KernelModuleAttestation |
-            Self::Listeners | Self::CveRunningCorrelation => Ok(Value::Null),
+            Self::Listeners | Self::CveRunningCorrelation | Self::Hypervisor => Ok(Value::Null),
         }
     }
 
@@ -666,6 +676,7 @@ impl CollectorKind {
             "agent_self" => Some(Self::AgentSelf),
             "host_self" => Some(Self::HostSelf),
             "host_containers" => Some(Self::HostContainers),
+            "hypervisor" => Some(Self::Hypervisor),
             _ => None,
         }
     }
@@ -720,6 +731,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::AgentSelf,
         CollectorKind::HostSelf,
         CollectorKind::HostContainers,
+        CollectorKind::Hypervisor,
     ]
 }
 
@@ -775,6 +787,7 @@ pub fn stable_collectors() -> Vec<CollectorKind> {
         CollectorKind::PackageSourceAudit,
         CollectorKind::KernelModuleAttestation,
         CollectorKind::Listeners,
+        CollectorKind::Hypervisor,
     ]
 }
 
@@ -854,7 +867,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 46);
+        assert_eq!(default_collectors().len(), 47);
     }
 
     #[test]

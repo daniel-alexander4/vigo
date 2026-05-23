@@ -43,6 +43,7 @@ These executors compile and run on all seven supported platforms (Linux, macOS, 
 | `gem` | Manage Ruby gems | [gem](gem.md) |
 | `npm` | Manage Node.js packages via npm | [npm](npm.md) |
 | `container` | Manage OCI containers (Docker today; Podman/containerd later) | [container](container.md) |
+| `vm` | Manage libvirt KVM virtual machines (Linux hypervisor hosts only) | [vm](vm.md) |
 | `reboot` | Trigger or cancel system reboots | [reboot](reboot.md) |
 | `custom` | Run external scripts via JSON protocol | [custom](custom.md) |
 

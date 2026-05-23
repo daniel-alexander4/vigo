@@ -1,18 +1,26 @@
 name: cis-windows-firewall-retract
-description: Retraction module for cis-windows-firewall. Removes all resources installed by the cis-windows-firewall module. Review before activating.
+description: |
+  Retraction module for cis-windows-firewall. Removes all resources installed
+  by the cis-windows-firewall module. Review before activating. Each resource
+  carries skip_validation=true because `firewall_windows` is a placeholder
+  for a future profile-aware Windows-firewall executor (see the paired
+  worksite module for context).
 
 resources:
   - name: remove-firewall-public-on
     type: firewall_windows
+    skip_validation: true
     profile: public
     state: absent
 
   - name: remove-firewall-private-on
     type: firewall_windows
+    skip_validation: true
     profile: private
     state: absent
 
   - name: remove-firewall-domain-on
     type: firewall_windows
+    skip_validation: true
     profile: domain
     state: absent

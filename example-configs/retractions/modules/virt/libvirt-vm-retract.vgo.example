@@ -1,0 +1,12 @@
+name: libvirt-vm-retract
+description: Retraction module for libvirt-vm. Destroys the running domain and removes it from libvirt, deleting the managed overlay + cloud-init seed ISO under /var/lib/libvirt/images/. The curator-materialized base image stays in place (other VMs may share it). Review before activating.
+
+vars:
+  vm_name: "vigo-libvirt-example"
+
+resources:
+  - name: undefine-vm
+    type: vm
+    vm_name: "{{ .Vars.vm_name }}"
+    state: absent
+    when: "host_is_libvirt"

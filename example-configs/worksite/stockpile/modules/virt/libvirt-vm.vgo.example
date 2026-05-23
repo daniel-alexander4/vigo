@@ -1,0 +1,54 @@
+name: libvirt-vm
+
+# A libvirt KVM virtual machine. Single virtio disk (qcow2 overlay backed by
+# a curator-published base image), single bridged NIC, cloud-init seeded.
+# Gate the carrying role with `when: "host_is_libvirt"` so the module only
+# lands on hypervisor hosts.
+#
+# Curator: the base image is published once as `kind: generic`
+# (`vigo swarm curator push --kind generic --file ubuntu-22.04-cloud.qcow2 \
+#  --name ubuntu-22.04-cloud --version 1.4 …`) and the agent's curator
+# resolver materializes it at `/var/lib/vigo/artifacts/...`. Every VM from
+# this base shares those bytes; per-VM divergence lives in the qcow2 overlay
+# at `/var/lib/libvirt/images/<vm_name>.qcow2`.
+#
+# Cloud-init: the agent builds a NoCloud seed ISO from `cloud_init_user_data`
+# and attaches it as a second CD-ROM. Edit the user-data and the seed ISO
+# rebuilds (its filename hashes the content) — the domain redefines and the
+# VM restarts on next convergence.
+
+vars:
+  base_image: "alexander4/ubuntu-22.04-cloud:1.4"
+  vm_name: "vigo-libvirt-example"
+  memory_mib: "2048"
+  vcpu: "2"
+  disk_size_gib: "20"
+  network_bridge: "br0"
+  ssh_authorized_key: "ssh-ed25519 AAAA-replace-with-your-pubkey operator@workstation"
+
+resources:
+  - name: vigo-libvirt-example
+    type: vm
+    vm_name: "{{ .Vars.vm_name }}"
+    state: running
+    memory_mib: "{{ .Vars.memory_mib }}"
+    vcpu: "{{ .Vars.vcpu }}"
+    artifact: "{{ .Vars.base_image }}"
+    disk_size_gib: "{{ .Vars.disk_size_gib }}"
+    network_bridge: "{{ .Vars.network_bridge }}"
+    cloud_init_user_data: |
+      #cloud-config
+      hostname: {{ .Vars.vm_name }}
+      manage_etc_hosts: true
+      users:
+        - name: ops
+          sudo: ALL=(ALL) NOPASSWD:ALL
+          shell: /bin/bash
+          ssh_authorized_keys:
+            - {{ .Vars.ssh_authorized_key }}
+      ssh_pwauth: false
+      package_update: true
+      package_upgrade: true
+      runcmd:
+        - [systemctl, disable, --now, snapd.service]
+    when: "host_is_libvirt"

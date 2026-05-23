@@ -754,6 +754,7 @@ pub fn build_executors_with_snapshots(
     executors.insert("gem".to_string(), Box::new(gem::GemExecutor::new()));
     executors.insert("npm".to_string(), Box::new(npm::NpmExecutor::new()));
     executors.insert("container".to_string(), Box::new(container::ContainerExecutor::new()));
+    executors.insert("vm".to_string(), Box::new(vm::VmExecutor::new()));
     executors.insert("replace".to_string(), Box::new(replace::ReplaceExecutor));
     executors.insert("field_edit".to_string(), Box::new(field_edit::FieldEditExecutor));
 
